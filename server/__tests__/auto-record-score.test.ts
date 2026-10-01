@@ -18,6 +18,7 @@ import {
   autoRecordForLesson,
   evaluateAutoRecord,
   findActiveLessonForStudent,
+  markStudentAbsent,
   normalizePercentScore,
   promoteAttemptToGrade,
 } from '../utils/auto-record-score.js';
@@ -83,6 +84,16 @@ function enableRule(minCompletion = 0) {
   });
 }
 
+/** 记录某学生在本课节的考勤状态（缺考联动测试用） */
+function seedAttendance(studentId: string, status: string) {
+  db.prepare(
+    'INSERT OR IGNORE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run('sched_1', CLASS_ID, LESSON, '2026-01-01', Date.now());
+  db.prepare(
+    'INSERT OR REPLACE INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
+  ).run('sched_1', studentId, status, Date.now());
+}
+
 beforeEach(() => {
   dbPath = path.join(
     os.tmpdir(),
@@ -131,6 +142,16 @@ beforeEach(() => {
     CREATE TABLE classroom_sessions (
       id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, class_id TEXT, stage TEXT,
       created_at INTEGER NOT NULL
+    );
+    CREATE TABLE schedules (
+      id TEXT PRIMARY KEY, class_id TEXT NOT NULL, lesson_id TEXT NOT NULL,
+      scheduled_date TEXT NOT NULL, time_slot TEXT, status TEXT, notes TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE attendance (
+      schedule_id TEXT NOT NULL, student_id TEXT NOT NULL,
+      status TEXT NOT NULL, recorded_at INTEGER NOT NULL,
+      PRIMARY KEY (schedule_id, student_id)
     );
   `);
 
@@ -432,7 +453,14 @@ describe('autoRecordForLesson 批量补录', () => {
   });
 
   it('highest 策略：新分不高于已录分数时保持原分（not-higher）', () => {
-    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    const now = Date.now();
+    // 显式时间戳保证 att_a 先发生且是首次补录的唯一 attempt
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a', 'cw_1', 's1', now - 10000, now - 9000, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a', 'att_a', 90, 'ok', 1, '{}');
     enableRule();
     saveScoreConfig(db as any, { coursewareId: '*', autoRecordStrategy: 'highest' });
 
@@ -441,7 +469,12 @@ describe('autoRecordForLesson 批量补录', () => {
     expect(submissionRow('分数乐园', 's1').score).toBe(90);
 
     // 学生重做，分更低 → 保持 90
-    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 70 });
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a2', 'cw_1', 's1', now - 1000, now, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a2', 'att_a2', 70, 'ok', 1, '{}');
     const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
     expect(second.recorded).toBe(0);
     expect(second.skipped).toBe(1);
@@ -450,14 +483,26 @@ describe('autoRecordForLesson 批量补录', () => {
   });
 
   it('highest 策略：新分更高时正常覆盖', () => {
-    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 70 });
+    const now = Date.now();
+    // 显式时间戳保证 att_a2 是最新 attempt（同毫秒排序不稳定）
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a', 'cw_1', 's1', now - 10000, now - 9000, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a', 'att_a', 70, 'ok', 1, '{}');
     enableRule();
     saveScoreConfig(db as any, { coursewareId: '*', autoRecordStrategy: 'highest' });
 
     autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
     expect(submissionRow('分数乐园', 's1').score).toBe(70);
 
-    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a2', 'cw_1', 's1', now - 1000, now, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a2', 'att_a2', 95, 'ok', 1, '{}');
     autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
     expect(submissionRow('分数乐园', 's1').score).toBe(95);
   });
@@ -563,5 +608,94 @@ describe('findActiveLessonForStudent', () => {
 
   it('查不到时不报错', () => {
     expect(findActiveLessonForStudent(db as any, 'unknown')).toBeNull();
+  });
+});
+
+describe('markStudentAbsent 标缺考', () => {
+  it('写入 status=absent、score=NULL、source=manual 的成绩行（幂等）', () => {
+    const first = markStudentAbsent(db as any, {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      studentId: 's1',
+      coursewareId: 'cw_1',
+    });
+    expect(first.ok).toBe(true);
+    expect(first.coursewareName).toBe('分数乐园');
+
+    const row = submissionRow('分数乐园', 's1');
+    expect(row.status).toBe('absent');
+    expect(row.score).toBeNull();
+    expect(row.source).toBe('manual');
+
+    // 幂等：重复标记不产生重复行
+    markStudentAbsent(db as any, { lessonId: LESSON, classId: CLASS_ID, studentId: 's1', coursewareId: 'cw_1' });
+    const count = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM assignment_submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE a.lesson_id = ? AND s.student_id = 's1'`,
+      )
+      .get(LESSON) as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('课件不存在 / 学生不在班级时拒绝', () => {
+    expect(
+      markStudentAbsent(db as any, {
+        lessonId: LESSON,
+        classId: CLASS_ID,
+        studentId: 's1',
+        coursewareId: 'cw_none',
+      }).reason,
+    ).toBe('courseware-not-found');
+    expect(
+      markStudentAbsent(db as any, {
+        lessonId: LESSON,
+        classId: CLASS_ID,
+        studentId: 's_none',
+        coursewareId: 'cw_1',
+      }).reason,
+    ).toBe('student-not-in-class');
+  });
+});
+
+describe('考勤联动生成缺考行', () => {
+  it('缺考学生自动生成 absent 行；出勤学生不生成；重复补录不重复生成', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    seedAttendance('s1', 'present');
+    seedAttendance('s2', 'absent');
+    enableRule();
+
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(report.recorded).toBe(1);
+    expect(report.absentGenerated).toBe(1);
+
+    const row2 = submissionRow('分数乐园', 's2');
+    expect(row2.status).toBe('absent');
+    expect(row2.score).toBeNull();
+    expect(row2.source).toBe('manual');
+
+    // 出勤学生不被生成缺考行
+    const row1 = submissionRow('分数乐园', 's1');
+    expect(row1.status).toBe('graded');
+
+    // 重复补录：absent 行已存在 → 不再生成
+    const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(second.absentGenerated).toBeUndefined();
+  });
+
+  it('缺考行受自动规则保护：学生补交后 auto 路径跳过（absent-protected）', () => {
+    // s2 做了 cw_1（使该课件进入本批），s1 缺考 → 联动生成 s1 的缺考行
+    seedAttempt({ attemptId: 'att_a', studentId: 's2', score: 88 });
+    seedAttendance('s1', 'absent');
+    enableRule();
+    autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(submissionRow('分数乐园', 's1').status).toBe('absent');
+
+    // 学生 s1 事后补交（教师允许）→ 自动规则不得冲掉缺考标记
+    seedAttempt({ attemptId: 'att_makeup', studentId: 's1', score: 92 });
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    const makeup = report.details.find((d) => d.attemptId === 'att_makeup');
+    expect(makeup?.reason).toBe('absent-protected');
+    expect(submissionRow('分数乐园', 's1').status).toBe('absent');
   });
 });

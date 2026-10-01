@@ -182,10 +182,11 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
         | { score: number | null; status: string | null; source: string | null }
         | undefined;
       if (existing) {
+        // 教师标记的缺考行受保护（自动规则不覆盖；教师改判走手动路径显式覆盖）。
+        // 注意缺考行（含考勤联动生成）的 source 也是 'manual'，必须先于 source 判定。
+        if (existing.status === 'absent') return { skipReason: 'absent-protected' };
         // 教师手动录入/改判的分数受保护，自动规则绝不覆盖（否则手改分会被课件分冲掉）
         if (existing.source === 'manual') return { skipReason: 'manual-protected' };
-        // 教师标记的缺考行受保护（教师改判走手动路径显式覆盖）
-        if (existing.status === 'absent') return { skipReason: 'absent-protected' };
         // highest 策略：仅新分更高才覆盖（无已录分数视为可覆盖）
         if (
           strategy === 'highest' &&
@@ -198,25 +199,14 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       }
     }
 
-    const existingAssignment = db
-      .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
-      .get(classId, lessonId, assignmentTitle) as { id: string } | undefined;
-
-    let assignmentId = existingAssignment?.id;
-    if (!assignmentId) {
-      assignmentId = 'ast-cw-' + randomHex(8);
-      db.prepare(
-        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).run(
-        assignmentId,
-        classId,
-        lessonId,
-        assignmentTitle,
-        `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
-        JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
-        now,
-      );
-    }
+    const assignmentId = findOrCreateCoursewareAssignment(
+      db,
+      classId,
+      lessonId,
+      coursewareName,
+      JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
+      now,
+    );
 
     // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）
     db.prepare(
@@ -277,6 +267,77 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   };
 }
 
+/** 教师把学生标记为缺考的结果 */
+export interface MarkAbsentResult {
+  ok: boolean;
+  /** 失败原因：课件不存在 / 学生不在该班级 */
+  reason?: 'courseware-not-found' | 'student-not-in-class';
+  studentId?: string;
+  coursewareName?: string;
+}
+
+/**
+ * 教师手动标记缺考：写一行 status='absent'、score=NULL、source='manual' 的成绩。
+ * source='manual' 使其受自动规则保护 —— 学生之后补交课件也不会冲掉缺考标记；
+ * 教师改判（允许该生成绩）走手动「录入成绩」路径显式覆盖。
+ */
+export function markStudentAbsent(
+  db: SqliteLike,
+  options: { lessonId: string; classId: string; studentId: string; coursewareId: string },
+): MarkAbsentResult {
+  const { lessonId, classId, studentId, coursewareId } = options;
+  if (!lessonId || !classId || !studentId || !coursewareId) {
+    return { ok: false, reason: 'courseware-not-found' };
+  }
+  if (PLACEHOLDER_STUDENT_IDS.has(studentId)) {
+    return { ok: false, reason: 'student-not-in-class', studentId };
+  }
+
+  let coursewareName: string | null = null;
+  try {
+    const cw = db.prepare('SELECT name FROM courseware WHERE id = ?').get(coursewareId) as
+      | { name: string }
+      | undefined;
+    coursewareName = cw?.name ?? null;
+  } catch {
+    coursewareName = null;
+  }
+  if (!coursewareName) {
+    return { ok: false, reason: 'courseware-not-found', studentId };
+  }
+
+  try {
+    const inClass = db
+      .prepare('SELECT 1 AS hit FROM class_students WHERE class_id = ? AND student_id = ?')
+      .get(classId, studentId);
+    if (!inClass) {
+      return { ok: false, reason: 'student-not-in-class', studentId, coursewareName };
+    }
+  } catch {
+    return { ok: false, reason: 'student-not-in-class', studentId, coursewareName };
+  }
+
+  const run = (): void => {
+    const now = Date.now();
+    const assignmentId = findOrCreateCoursewareAssignment(db, classId, lessonId, coursewareName as string, '{}', now);
+    // 幂等：重复标记只更新同一行；教师重复点击不会产生重复成绩
+    db.prepare(
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
+       VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual')
+       ON CONFLICT(assignment_id, student_id) DO UPDATE SET
+         score = excluded.score,
+         feedback = excluded.feedback,
+         graded_at = excluded.graded_at,
+         status = 'absent',
+         source = 'manual'`,
+    ).run(assignmentId, studentId, '教师标记缺考（无分数，学期结算按 0 分计）', now, now);
+  };
+  if (typeof (db as any).transaction === 'function') (db as any).transaction(run)();
+  else run();
+
+  return { ok: true, studentId, coursewareName };
+}
+
 function randomHex(bytes: number): string {
   // Node 与 Worker 两侧都可用；避免为 8 个字节引入 node:crypto 依赖
   let out = '';
@@ -285,6 +346,35 @@ function randomHex(bytes: number): string {
       .toString(16)
       .padStart(2, '0');
   return out;
+}
+
+/** 查找或创建「互动课件: {name}」作业壳行（自动录入与缺考标记共用同一套作业定位口径） */
+function findOrCreateCoursewareAssignment(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  coursewareName: string,
+  content: string,
+  createdAt: number,
+): string {
+  const title = `互动课件: ${coursewareName}`;
+  const existing = db
+    .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
+    .get(classId, lessonId, title) as { id: string } | undefined;
+  if (existing?.id) return existing.id;
+  const id = 'ast-cw-' + randomHex(8);
+  db.prepare(
+    'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(
+    id,
+    classId,
+    lessonId,
+    title,
+    `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
+    content,
+    createdAt,
+  );
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +458,8 @@ export interface AutoRecordReport {
     recorded: boolean;
     reason?: PromoteResult['reason'];
   }>;
+  /** 考勤联动：为本课节缺考且无成绩行的学生自动生成的缺考成绩行数 */
+  absentGenerated?: number;
 }
 
 /**
@@ -388,7 +480,7 @@ export function autoRecordForLesson(
   try {
     rows = db
       .prepare(
-        `SELECT a.id AS attempt_id, a.student_id, cw.name AS courseware_name,
+        `SELECT a.id AS attempt_id, a.student_id, cw.id AS courseware_id, cw.name AS courseware_name,
                 r.score, r.completion
          FROM courseware_attempt a
          JOIN courseware cw ON a.courseware_id = cw.id
@@ -438,22 +530,9 @@ export function autoRecordForLesson(
     const studentId = String(row.student_id);
     const coursewareName = String(row.courseware_name ?? '互动课件');
 
-    // 已有成绩行时按来源/状态判定：手动行与缺考行受保护；
-    // auto 行不再硬跳过 —— latest 策略需要刷新为最新分（migration 013 行为变更）。
+    // 已有成绩行时按状态/来源判定：缺考行与手动行受保护（缺考行 source 也是
+    // 'manual'，故先判 status）；auto 行不再硬跳过 —— latest 策略需要刷新为最新分。
     const existingGrade = getRecordedGrade(db, classId, lessonId, coursewareName, studentId);
-    if (existingGrade?.source === 'manual') {
-      report.skipped += 1;
-      report.details.push({
-        attemptId,
-        studentId,
-        studentName: studentNames.get(studentId) ?? studentId,
-        coursewareName,
-        score: normalizePercentScore(row.score),
-        recorded: false,
-        reason: 'manual-protected',
-      });
-      continue;
-    }
     if (existingGrade?.status === 'absent') {
       report.skipped += 1;
       report.details.push({
@@ -464,6 +543,19 @@ export function autoRecordForLesson(
         score: normalizePercentScore(row.score),
         recorded: false,
         reason: 'absent-protected',
+      });
+      continue;
+    }
+    if (existingGrade?.source === 'manual') {
+      report.skipped += 1;
+      report.details.push({
+        attemptId,
+        studentId,
+        studentName: studentNames.get(studentId) ?? studentId,
+        coursewareName,
+        score: normalizePercentScore(row.score),
+        recorded: false,
+        reason: 'manual-protected',
       });
       continue;
     }
@@ -485,7 +577,84 @@ export function autoRecordForLesson(
     });
   }
 
+  // 考勤联动：把本课节缺考且无成绩行的学生生成为缺考成绩行（见 generateAttendanceAbsentRows）
+  const involvedCoursewares = new Map<string, string>();
+  for (const row of dedupedRows) {
+    if (row.courseware_id && !involvedCoursewares.has(String(row.courseware_name ?? ''))) {
+      involvedCoursewares.set(String(row.courseware_name ?? ''), String(row.courseware_id));
+    }
+  }
+  generateAttendanceAbsentRows(
+    db,
+    classId,
+    lessonId,
+    Array.from(involvedCoursewares, ([name, id]) => ({ id, name })),
+    studentNames,
+    report,
+  );
+
   return report;
+}
+
+/**
+ * 考勤联动：对本批涉及的每个课件，把本课节考勤为缺考（attendance.status='absent'）
+ * 且没有任何成绩行的学生生成为缺考成绩行（status='absent'、score=NULL、source='manual'）。
+ *
+ * source='manual' 使缺考标记受自动规则保护 —— 学生之后补交课件不会冲掉标记；
+ * 教师改判走手动「录入成绩」路径显式覆盖。缺席行计入 report.absentGenerated。
+ */
+function generateAttendanceAbsentRows(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  involvedCoursewares: Array<{ id: string; name: string }>,
+  studentNames: Map<string, string>,
+  report: AutoRecordReport,
+): void {
+  if (involvedCoursewares.length === 0) return;
+  let absentStudents: Array<{ student_id: string }>;
+  try {
+    absentStudents = db
+      .prepare(
+        `SELECT DISTINCT cs.student_id
+         FROM schedules s
+         JOIN attendance att ON att.schedule_id = s.id
+         JOIN class_students cs ON cs.class_id = s.class_id AND cs.student_id = att.student_id
+         WHERE s.class_id = ? AND s.lesson_id = ? AND att.status = 'absent'`,
+      )
+      .all(classId, lessonId) as Array<{ student_id: string }>;
+  } catch (e) {
+    // schedules/attendance 表缺失（老库未建考勤数据）时静默跳过，不阻断补录
+    return;
+  }
+  if (absentStudents.length === 0) return;
+
+  const now = Date.now();
+  let generated = 0;
+  for (const cw of involvedCoursewares) {
+    for (const { student_id: studentId } of absentStudents) {
+      if (getRecordedGrade(db, classId, lessonId, cw.name, studentId)) continue;
+      try {
+        const assignmentId = findOrCreateCoursewareAssignment(db, classId, lessonId, cw.name, '{}', now);
+        db.prepare(
+          `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
+           VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual')`,
+        ).run(assignmentId, studentId, '由考勤缺考记录自动生成（教师改判请手动录入覆盖）', now, now);
+        generated += 1;
+        report.details.push({
+          attemptId: `absent:${cw.id}:${studentId}`,
+          studentId,
+          studentName: studentNames.get(studentId) ?? studentId,
+          coursewareName: cw.name,
+          score: null,
+          recorded: true,
+        });
+      } catch (e) {
+        // 单行生成失败不阻断其余缺考行
+      }
+    }
+  }
+  if (generated > 0) report.absentGenerated = (report.absentGenerated ?? 0) + generated;
 }
 
 /** 该（课节, 班级, 课件, 学生）的已有成绩行（含来源/状态，供自动路径守卫判定；无则 null） */

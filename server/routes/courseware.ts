@@ -15,6 +15,7 @@ import {
   autoRecordForLesson,
   describePromoteReason,
   findActiveLessonForStudent,
+  markStudentAbsent,
   promoteAttemptToGrade,
 } from '../utils/auto-record-score.js';
 
@@ -386,7 +387,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const coursewareUuid = typeof req.query.coursewareUuid === 'string' ? req.query.coursewareUuid.trim() : '';
       const baseSql = `
         SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
-               cw.name as coursewareName, cw.uuid as coursewareUuid,
+               cw.id as coursewareId, cw.name as coursewareName, cw.uuid as coursewareUuid,
                COALESCE(s.name, CASE WHEN a.student_id = 'teacher' THEN 'Teacher (Test)' WHEN a.student_id = 'guest' THEN 'Guest Student' ELSE a.student_id END) as studentName,
                a.student_id as studentId,
                r.score, r.comment, r.completion, r.extra_json,
@@ -505,6 +506,26 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       });
     } catch (e: any) {
       sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/courseware/attempts/mark-absent', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const { lessonId, classId, studentId, coursewareId } = req.body ?? {};
+      if (!lessonId || !classId || !studentId || !coursewareId) {
+        return res.status(400).json({ error: 'Missing lessonId, classId, studentId or coursewareId' });
+      }
+      const result = markStudentAbsent(kernelContainer.db as any, { lessonId, classId, studentId, coursewareId });
+      if (!result.ok) {
+        const text =
+          result.reason === 'student-not-in-class'
+            ? '该学生不在所选班级中，无法标记缺考'
+            : '课件不存在，无法标记缺考';
+        return res.status(422).json({ success: false, error: text, reason: result.reason });
+      }
+      return res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'Failed to mark absent' });
     }
   });
 

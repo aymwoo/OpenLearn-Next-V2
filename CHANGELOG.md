@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **缺考语义与考勤联动：手动标缺考 + 批量补录自动生成 (`server/utils/auto-record-score.ts`, `server/routes/courseware.ts`, `server/routes/grading.ts`, `LiveClassroomView.tsx`)**：
+  - **问题**（2026-09-30 审计教学缺口 2c）：成绩体系完全没有缺考语义 —— 教师无法把缺席学生标为缺考，自动录入也不会为缺考学生留痕，结算前只能靠人工记忆。
+  - **手动标缺考**：新增 `markStudentAbsent` + `POST /api/courseware/attempts/mark-absent`，写入 `status='absent'`、`score=NULL`、`source='manual'` 的成绩行（幂等）；课堂页「学生提交数据」每行新增「标缺考」按钮。
+  - **考勤联动**：批量补录时对「本课节考勤缺考（attendance.status='absent'）且无任何成绩行」的学生自动生成缺考成绩行（`report.absentGenerated` 计数）。
+  - **保护链**：自动路径遇 absent 行跳过（absent-protected）—— 学生补交不会冲掉缺考标记；教师改判走手动「录入成绩」显式覆盖。学期结算对 absent 行按 0 分计（与「缺考计 0 分」口径一致，防 NULL 进 reduce 产生 NaN）。
+  - **测试**：`auto-record-score.test.ts` 新增 4 例（标缺考写入与幂等、入参校验、考勤联动生成与去重、补交后 absent 保护）。
+
 - **成绩录入来源保护与更新策略：manual/auto 分流 + 最新/最高策略 (`migrations/013`, `server/utils/auto-record-score.ts`, `packages/plugins/courseware-score.ts`, `LiveClassroomView.tsx`)**：
   - **问题**（2026-09-30 审计教学缺口 2a/2b）：实时自动录入无条件 upsert 覆盖 → 教师手改分会被课件分冲掉；批量补录只要已有成绩行就跳过 → 学生重做课件后自动录入的旧分永不更新。根因是成绩行无法区分手动/自动来源。
   - **来源分流**：新增 `assignment_submissions.source` 列（'manual'/'auto'，按 feedback 前缀回填存量）。自动路径遇 manual 行跳过（manual-protected）——手改分永远受保护；手动路径总是覆盖并写 manual（教师显式改判优先）。

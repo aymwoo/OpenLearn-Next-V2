@@ -433,7 +433,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const assignmentMap = new Map<string, number[]>();
       assignmentSubmissions.forEach((a) => {
         if (!assignmentMap.has(a.student_id)) assignmentMap.set(a.student_id, []);
-        assignmentMap.get(a.student_id)!.push(a.score);
+        // 缺考行（status='absent'，score 为 NULL）按 0 分计入 —— 与「缺考计 0 分」口径一致，
+        // 否则 NULL 直接进 reduce 会产生 NaN。
+        assignmentMap.get(a.student_id)!.push(typeof a.score === 'number' ? a.score : 0);
       });
 
       const examMap = new Map<string, { score: number; max: number }[]>();

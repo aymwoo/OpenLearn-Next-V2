@@ -505,6 +505,60 @@ export function LiveClassroomView({
     }
   };
 
+  /** 教师把该学生该课件标记为缺考（写入 status='absent' 成绩行，学期结算按 0 分计） */
+  const handleMarkAbsent = async (studentId: string, coursewareId: string | undefined) => {
+    if (!selectedLesson || !liveClassSelectedClassId) {
+      addToast(
+        lang === 'zh' ? '⚠️ 无法操作' : '⚠️ Action Prevented',
+        lang === 'zh' ? '请先在顶部栏选择要绑定的课节和班级。' : 'Please select lesson and class first.',
+        'warning',
+      );
+      return;
+    }
+    if (!coursewareId) {
+      addToast(
+        lang === 'zh' ? '⚠️ 无法标记缺考' : '⚠️ Cannot Mark Absent',
+        lang === 'zh' ? '该提交缺少课件标识。' : 'Missing courseware identity.',
+        'warning',
+      );
+      return;
+    }
+    try {
+      const res = await fetch('/api/courseware/attempts/mark-absent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lessonId: selectedLesson,
+          classId: liveClassSelectedClassId,
+          studentId,
+          coursewareId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        addToast(
+          lang === 'zh' ? '✓ 已标记缺考' : '✓ Marked Absent',
+          lang === 'zh'
+            ? `已将【${data.coursewareName ?? '该课件'}】成绩标记为缺考（结算按 0 分计）。学生补交不会自动覆盖，教师改判请手动录入。`
+            : `Marked as absent for ${data.coursewareName ?? 'the courseware'}. Manual recording overrides this.`,
+          'success',
+        );
+        fetchAttempts();
+        if (fetchStudents) {
+          fetchStudents();
+        }
+      } else {
+        throw new Error(data.error || 'Server error');
+      }
+    } catch (err: any) {
+      addToast(
+        lang === 'zh' ? '❌ 标记缺考失败' : '❌ Mark Absent Failed',
+        err.message || 'Error occurred while marking absent.',
+        'warning',
+      );
+    }
+  };
+
   // ── 自动录入规则：读取（全局默认行 '*'）与保存 ────────────────────────
   const loadAutoRecordRule = useCallback(async () => {
     try {
@@ -2268,24 +2322,44 @@ export function LiveClassroomView({
                                               {lang === 'zh' ? '已归档' : 'Saved'}
                                             </span>
                                           ) : (
-                                            <button
-                                              onClick={() => handlePromoteAttempt(a.attemptId)}
-                                              disabled={!canRecord}
-                                              className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                                                canRecord
-                                                  ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
-                                                  : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
-                                              }`}
-                                              title={
-                                                recordDisabledReason ??
-                                                (lang === 'zh'
-                                                  ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
-                                                  : 'Save to DB & Semester grade')
-                                              }
-                                            >
-                                              <Database size={11} />
-                                              <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
-                                            </button>
+                                            <>
+                                              <button
+                                                onClick={() => handlePromoteAttempt(a.attemptId)}
+                                                disabled={!canRecord}
+                                                className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                                                  canRecord
+                                                    ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
+                                                    : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
+                                                }`}
+                                                title={
+                                                  recordDisabledReason ??
+                                                  (lang === 'zh'
+                                                    ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
+                                                    : 'Save to DB & Semester grade')
+                                                }
+                                              >
+                                                <Database size={11} />
+                                                <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  const confirmed = window.confirm(
+                                                    lang === 'zh'
+                                                      ? `确定把【${a.studentName}】的「${a.coursewareName}」标记为缺考吗？\n缺考按 0 分计入学期成绩；学生补交不会自动覆盖，教师改判请手动录入。`
+                                                      : `Mark ${a.studentName} as absent for "${a.coursewareName}"?\nAbsent counts as 0 in semester grades; resubmission won't override it — use manual recording instead.`,
+                                                  );
+                                                  if (confirmed) void handleMarkAbsent(a.studentId, a.coursewareId);
+                                                }}
+                                                className="px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border bg-surface text-muted hover:text-red-600 hover:border-red-200 border-theme"
+                                                title={
+                                                  lang === 'zh'
+                                                    ? '该生未参加本次课件学习（如缺席），成绩按 0 分计'
+                                                    : 'Student did not participate (e.g. absent); counts as 0'
+                                                }
+                                              >
+                                                <span>{lang === 'zh' ? '标缺考' : 'Absent'}</span>
+                                              </button>
+                                            </>
                                           )}
                                         </div>
                                       </td>
