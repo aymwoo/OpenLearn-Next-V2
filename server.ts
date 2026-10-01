@@ -68,6 +68,7 @@ import {
   enforcePasswordChanged,
   socketAuthMiddleware,
 } from './server/middleware/auth.js';
+import { csrfGuard } from './server/middleware/csrf.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -248,6 +249,9 @@ async function startServer() {
     }
     next();
   });
+  // Phase B1 CSRF: 全局写请求跨站来源门控（Sec-Fetch-Site/Dest 判定 + 豁免清单，
+  // 见 server/middleware/csrf.ts 判定表；SameSite=Lax cookie 兜底）
+  app.use(csrfGuard);
   // SEC-FIX: uploads 静态资源需鉴权（防匿名枚举已上传课件/头像），plugins 保持只读但阻断敏感文件
   app.use(
     '/uploads',
