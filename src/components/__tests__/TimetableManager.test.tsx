@@ -48,10 +48,17 @@ describe('TimetableManager Component', () => {
             json: async () => [{ id: 'p1', name: 'OpenAI Provider' }],
           });
         }
-        if (url.includes('/api/schedules') || url.includes('/schedules')) {
+        // A7: 集合级 /api/schedules 返回信封；子资源 /api/classes/:id/schedules 维持裸数组
+        if (url.includes('/classes/') && url.includes('/schedules')) {
           return Promise.resolve({
             ok: true,
             json: async () => mockSchedules,
+          });
+        }
+        if (url.includes('/api/schedules')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ data: mockSchedules, total: mockSchedules.length, page: 1, pageSize: 50 }),
           });
         }
         return Promise.resolve({

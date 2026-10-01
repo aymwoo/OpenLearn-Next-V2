@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { listFromEnvelope } from '../utils/listEnvelope.js';
 import {
   LayoutTemplate,
   Plus,
@@ -97,10 +98,11 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     if (propsClasses && propsClasses.length > 0) {
       setInternalClasses(propsClasses);
     } else {
-      fetch('/api/classes')
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data)) setInternalClasses(data);
+      fetch('/api/classes?pageSize=all')
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((body) => {
+          const data = listFromEnvelope<any>(body);
+          if (data.length > 0 || Array.isArray(body?.data)) setInternalClasses(data);
         })
         .catch((err) => console.error('Failed to fetch classes in ComputerLabManager:', err));
     }

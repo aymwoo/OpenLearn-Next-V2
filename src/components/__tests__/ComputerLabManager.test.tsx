@@ -54,10 +54,10 @@ describe('ComputerLabManager (Unified Computer Lab Seating)', () => {
 
   beforeEach(() => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (url === '/api/classes') {
+      if (url.startsWith('/api/classes') && !url.includes('/seats') && !url.includes('/students')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockClasses),
+          json: () => Promise.resolve({ data: mockClasses, total: mockClasses.length, page: 1, pageSize: 50 }),
         });
       }
       if (url === '/api/classes/class_1/seats') {

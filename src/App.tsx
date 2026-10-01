@@ -1,6 +1,7 @@
 import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
+import { listFromEnvelope } from './utils/listEnvelope.js';
 import { translations } from './i18n';
 import { LoginPage } from './components/LoginPage';
 import { AppHeader } from './components/AppHeader';
@@ -543,12 +544,12 @@ export default function App() {
 
   const fetchLessons = async () => {
     try {
-      const res = await fetch('/api/lessons');
+      const res = await fetch('/api/lessons?pageSize=all');
       if (res.ok) {
-        const data = await res.json();
-        setLessons(data);
-        if (!appStore.getState().selectedLesson && data.length > 0) {
-          setSelectedLesson(data[0].id);
+        const lessons = listFromEnvelope<any>(await res.json());
+        setLessons(lessons);
+        if (!appStore.getState().selectedLesson && lessons.length > 0) {
+          setSelectedLesson(lessons[0].id);
         }
       }
     } catch (e) {
@@ -993,15 +994,15 @@ export default function App() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch('/api/classes');
-      if (res.ok) setClasses(await res.json());
+      const res = await fetch('/api/classes?pageSize=all');
+      if (res.ok) setClasses(listFromEnvelope<any>(await res.json()));
     } catch (e) {}
   };
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch('/api/students');
-      if (res.ok) setStudents(await res.json());
+      const res = await fetch('/api/students?pageSize=all');
+      if (res.ok) setStudents(listFromEnvelope<any>(await res.json()));
     } catch (e) {}
   };
 

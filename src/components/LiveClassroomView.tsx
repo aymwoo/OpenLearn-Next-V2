@@ -43,6 +43,7 @@ import {
 import * as Icons from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
+import { listFromEnvelope } from '../utils/listEnvelope.js';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
@@ -433,9 +434,9 @@ export function LiveClassroomView({
   const fetchAttempts = useCallback(async () => {
     setLoadingAttempts(true);
     try {
-      const res = await fetch('/api/courseware/attempts');
+      const res = await fetch('/api/courseware/attempts?pageSize=all');
       if (res.ok) {
-        const data = await res.json();
+        const data = listFromEnvelope<any>(await res.json());
         setAttempts(data);
       }
     } catch (e) {

@@ -11,6 +11,7 @@
  *      如果已经过期，学生是看得见的，必须让教师能发现）。
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { listFromEnvelope } from '../../../utils/listEnvelope.js';
 import { StageDisplayPanel } from './StageDisplayPanel';
 import { NoticeStack, useNoticeQueue } from './StageNoticeStack';
 import { useStageDisplayFeed, type StageDisplayData } from './useStageDisplayFeed';
@@ -38,8 +39,8 @@ export function StageDisplayView({ lessonId, lessonTitle = '互动课堂', lang 
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/courseware/attempts');
-        if (res.ok && !cancelled) setAttempts(await res.json());
+        const res = await fetch('/api/courseware/attempts?pageSize=all');
+        if (res.ok && !cancelled) setAttempts(listFromEnvelope<any>(await res.json()));
       } catch {
         /* 无数据时保持空态 */
       }

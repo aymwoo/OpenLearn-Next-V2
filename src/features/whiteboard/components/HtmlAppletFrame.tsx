@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
+import { listFromEnvelope } from '../../../utils/listEnvelope.js';
 import { coursewareSourceRegistry } from '../courseware/courseware-source-registry';
 import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter';
 import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
@@ -162,10 +163,10 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     let cancelled = false;
 
     const fetchAttempts = () => {
-      fetch(`/api/courseware/attempts?coursewareUuid=${encodeURIComponent(uuid)}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows: CoursewareAttempt[]) => {
-          if (!cancelled) setAttempts(Array.isArray(rows) ? rows : []);
+      fetch(`/api/courseware/attempts?coursewareUuid=${encodeURIComponent(uuid)}&pageSize=all`)
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((body: unknown) => {
+          if (!cancelled) setAttempts(listFromEnvelope<CoursewareAttempt>(body));
         })
         .catch(() => {});
     };

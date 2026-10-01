@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle } from 'lucide-react';
+import { listFromEnvelope } from '../utils/listEnvelope.js';
 
 interface Student {
   id: string;
@@ -49,9 +50,9 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
     // Fetch students list for easy sandbox entry
     const fetchStudents = async () => {
       try {
-        const res = await fetch('/api/students');
+        const res = await fetch('/api/students?pageSize=all');
         if (res.ok) {
-          const data = await res.json();
+          const data = listFromEnvelope<any>(await res.json());
           setStudents(data);
           if (data.length > 0) {
             setSelectedStudentId(data[0].id);

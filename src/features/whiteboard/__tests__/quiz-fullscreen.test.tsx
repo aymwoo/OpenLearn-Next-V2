@@ -199,8 +199,8 @@ describe('QuizFullscreenView', () => {
           json: async () => ({ session: { id: 'stu-current', studentId: 'stu-current', role: 'student' } }),
         };
       }
-      if (url === '/api/students') {
-        return { ok: true, json: async () => [] };
+      if (url.startsWith('/api/students')) {
+        return { ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) };
       }
       if (url.includes('/quiz-submit')) {
         return {
@@ -256,8 +256,8 @@ describe('QuizFullscreenView', () => {
           json: async () => ({ session: { id: 't-1', userId: 't-1', role: 'teacher' } }),
         };
       }
-      if (url === '/api/students') {
-        return { ok: true, json: async () => [{ id: 'stu-a', name: '张三' }] };
+      if (url.startsWith('/api/students')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'stu-a', name: '张三' }], total: 1, page: 1, pageSize: 50 }) };
       }
       if (url.includes('/quiz-submissions')) {
         return {

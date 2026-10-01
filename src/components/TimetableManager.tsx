@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { listFromEnvelope } from '../utils/listEnvelope.js';
 import {
   Calendar,
   Check,
@@ -275,11 +276,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     try {
       let all: ScheduleType[] = [];
       if (selectedClassId === 'all') {
-        const res = await fetch('/api/schedules');
+        // A7: 集合级端点返回 { data, ... } 信封
+        const res = await fetch('/api/schedules?pageSize=all');
         if (res.ok) {
-          all = (await res.json()) as ScheduleType[];
+          all = listFromEnvelope<ScheduleType>(await res.json());
         }
       } else {
+        // 注意：子资源端点 /api/classes/:id/schedules 暂维持裸数组（A7 未覆盖）
         const cls = classes.find((c) => c.id === selectedClassId);
         if (cls) {
           const res = await fetch(`/api/classes/${cls.id}/schedules`);

@@ -27,7 +27,7 @@ beforeEach(() => {
     socketHandlers[k].clear();
   }
   global.fetch = fetchMock as any;
-  fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) });
   setSocketInstance(mockSocket as any);
 });
 
@@ -50,7 +50,7 @@ function mintOk() {
 
 describe('HtmlAppletFrame score overlay', () => {
   it('does not render score toggle when there are no attempts', async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) });
     render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
     // No toggle button when attempts array is empty (showOverlay guard)
     await waitFor(() => {
@@ -68,7 +68,8 @@ describe('HtmlAppletFrame score overlay', () => {
       if (String(url).includes('/access-token')) return mintOk();
       return Promise.resolve({
         ok: true,
-        json: async () => [
+        json: async () => ({
+          data: [
           {
             attemptId: 'a-1',
             studentId: 's-1',
@@ -89,7 +90,11 @@ describe('HtmlAppletFrame score overlay', () => {
             finished_at: 1735689700000,
             status: 'finished',
           },
-        ],
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 50,
+        }),
       });
     });
 
@@ -99,7 +104,7 @@ describe('HtmlAppletFrame score overlay', () => {
     await waitFor(() => {
       expect(attemptsCalls()).toHaveLength(1);
     });
-    expect(String(attemptsCalls()[0][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-123');
+    expect(String(attemptsCalls()[0][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-123&pageSize=all');
 
     // 订阅了 socket
     expect(mockSocket.on).toHaveBeenCalledWith('courseware-attempt-updated', expect.any(Function));
@@ -131,7 +136,8 @@ describe('HtmlAppletFrame score overlay', () => {
       if (String(url).includes('/access-token')) return mintOk();
       return Promise.resolve({
         ok: true,
-        json: async () => [
+        json: async () => ({
+          data: [
           {
             attemptId: 'a-1',
             studentId: 's-1',
@@ -142,7 +148,11 @@ describe('HtmlAppletFrame score overlay', () => {
             finished_at: 2,
             status: 'finished',
           },
-        ],
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        }),
       });
     });
     render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-456' }} lessonId="lesson-1" />);
@@ -156,11 +166,11 @@ describe('HtmlAppletFrame score overlay', () => {
     await waitFor(() => {
       expect(attemptsCalls()).toHaveLength(2);
     });
-    expect(String(attemptsCalls()[1][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-456');
+    expect(String(attemptsCalls()[1][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-456&pageSize=all');
   });
 
   it('unsubscribes on unmount to avoid memory leak', async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) });
     const { unmount } = render(
       <HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-789' }} lessonId="lesson-1" />,
     );

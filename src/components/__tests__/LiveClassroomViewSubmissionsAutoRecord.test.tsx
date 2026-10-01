@@ -131,7 +131,7 @@ beforeEach(() => {
         return { ok: true, json: async () => ({ success: true, result: { success: true } }) } as any;
       }
       if (url.includes('/api/courseware/attempts')) {
-        return { ok: true, json: async () => attempts } as any;
+        return { ok: true, json: async () => ({ data: attempts, total: attempts.length, page: 1, pageSize: 50 }) } as any;
       }
       // 课堂会话：必须返回 IN_CLASS_TEACHING，否则 LiveClassroomView 会停在
       // PRE_CLASS_READY 视图（PreClassReadyView），中间列的 tab 根本不会渲染

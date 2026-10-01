@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { FullscreenRendererProps } from './FullscreenRendererRegistry';
+import { listFromEnvelope } from '../../../utils/listEnvelope.js';
 
 interface QuizSubmission {
   answer?: number | string;
@@ -61,12 +62,13 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/students')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((arr: Array<{ id: string; name: string }>) => {
+    fetch('/api/students?pageSize=all')
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((body) => {
         if (cancelled) return;
+        const arr = listFromEnvelope<{ id: string; name: string }>(body);
         const map: Record<string, string> = {};
-        for (const s of Array.isArray(arr) ? arr : []) map[s.id] = s.name;
+        for (const s of arr) map[s.id] = s.name;
         setStudentMap(map);
       })
       .catch(() => {});
