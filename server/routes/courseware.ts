@@ -10,6 +10,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { extractScoreCommentCompletion } from '../utils/score-extract.js';
 import { mintCoursewareToken, verifyCoursewareToken } from '../utils/courseware-access.js';
+import { parsePagination } from '../utils/pagination.js';
 import {
   autoRecordAttempt,
   autoRecordForLesson,
@@ -403,22 +404,32 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         LEFT JOIN submission_result r ON a.id = r.attempt_id
       `;
       const sql = coursewareUuid
-        ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC`
-        : `${baseSql} ORDER BY a.started_at DESC`;
+        ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC LIMIT ? OFFSET ?`
+        : `${baseSql} ORDER BY a.started_at DESC LIMIT ? OFFSET ?`;
+      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
+      const pg = parsePagination(req.query as any);
+      const countSql = coursewareUuid
+        ? `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id WHERE cw.uuid = ?`
+        : `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id`;
+      const total = (kernelContainer.db.prepare(countSql).get(...(coursewareUuid ? [coursewareUuid] : [])) as any).n;
       const stmt = kernelContainer.db.prepare(sql);
-      const rows = (coursewareUuid ? stmt.all(coursewareUuid) : stmt.all()) as Array<Record<string, any>>;
-      if (isStaff) {
-        res.json(rows);
-        return;
-      }
-      res.json(
-        rows.map((row) => {
-          const sanitized = { ...row };
-          delete sanitized.extra_json;
-          delete sanitized.comment;
-          return sanitized;
-        }),
-      );
+      const rows = (
+        coursewareUuid ? stmt.all(coursewareUuid, pg.isAll ? -1 : pg.pageSize, pg.offset) : stmt.all(pg.isAll ? -1 : pg.pageSize, pg.offset)
+      ) as Array<Record<string, any>>;
+      const envelope = {
+        data: isStaff
+          ? rows
+          : rows.map((row) => {
+              const sanitized = { ...row };
+              delete sanitized.extra_json;
+              delete sanitized.comment;
+              return sanitized;
+            }),
+        total,
+        page: pg.page,
+        pageSize: pg.isAll ? total : pg.pageSize,
+      };
+      res.json(envelope);
     } catch (e: any) {
       sendSafeError(res, e);
     }

@@ -7,6 +7,7 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packag
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { emitClassroomEvent } from '../presence.js';
 import type { ServerContext } from '../context.js';
@@ -39,6 +40,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes', requireAuth(), (req, res) => {
     try {
+      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
+      const pg = parsePagination(req.query as any);
+      const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM classes').get() as any).n;
       const classes = kernelContainer.db
         .prepare(
           `
@@ -48,10 +52,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
           (SELECT COUNT(*) FROM assignments WHERE class_id = c.id) AS assignment_count
         FROM classes c
         ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
       `,
         )
-        .all();
-      res.json(classes);
+        .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+      res.json({ data: classes, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -60,12 +65,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/students', requireAuth(), (req, res) => {
     try {
       // SEC-FIX: Never expose password hashes via API; explicit column list
+      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
+      const pg = parsePagination(req.query as any);
+      const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n;
       const students = kernelContainer.db
         .prepare(
-          'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC',
+          'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
         )
-        .all();
-      res.json(students);
+        .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+      res.json({ data: students, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
     } catch (e: any) {
       sendSafeError(res, e);
     }

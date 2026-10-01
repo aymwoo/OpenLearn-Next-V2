@@ -4,6 +4,7 @@ import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, req
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { classRoom } from '../presence.js';
+import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -165,6 +166,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
   app.get('/api/lessons', requireAuth(), (req, res) => {
+    // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
+    const pg = parsePagination(req.query as any);
+    const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM lessons').get() as any).n;
     const lessons = kernelContainer.db
       .prepare(
         `
@@ -173,10 +177,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       FROM lessons l
       LEFT JOIN users u ON l.creator_id = u.id
       ORDER BY l.created_at DESC
+      LIMIT ? OFFSET ?
     `,
       )
-      .all();
-    res.json(lessons);
+      .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+    res.json({ data: lessons, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
   });
 
   // ── 作业上传与互评插�? API ──────────────────────────────────────────────

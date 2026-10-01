@@ -110,7 +110,7 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
   it('returns ALL attempts when coursewareUuid is omitted (backward compatibility)', async () => {
     const res = await fetch(`${baseUrl}/api/courseware/attempts`, { headers: cookie(teacherToken) });
     expect(res.status).toBe(200);
-    const rows = (await res.json()) as Array<{ attemptId: string }>;
+    const rows = ((await res.json()) as any).data as Array<{ attemptId: string }>;
     const ids = rows.map((r) => r.attemptId);
     expect(ids).toContain('att-A-1');
     expect(ids).toContain('att-A-2');
@@ -122,7 +122,10 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       headers: cookie(teacherToken),
     });
     expect(res.status).toBe(200);
-    const rows = (await res.json()) as Array<{
+    const envelope: any = await res.json();
+    expect(envelope.total).toBe(2);
+    expect(envelope.page).toBe(1);
+    const rows = envelope.data as Array<{
       attemptId: string;
       coursewareUuid: string;
       coursewareName: string;
@@ -146,7 +149,7 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       headers: cookie(teacherToken),
     });
     expect(res.status).toBe(200);
-    const rows = (await res.json()) as Array<{ attemptId: string; score: number }>;
+    const rows = ((await res.json()) as any).data as Array<{ attemptId: string; score: number }>;
     expect(rows.length).toBe(1);
     expect(rows[0].attemptId).toBe('att-B-1');
     expect(rows[0].score).toBe(60);
@@ -158,9 +161,9 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       { headers: cookie(teacherToken) },
     );
     expect(res.status).toBe(200);
-    const rows = (await res.json()) as unknown[];
-    expect(Array.isArray(rows)).toBe(true);
-    expect((rows as Array<unknown>).length).toBe(0);
+    const body: any = await res.json();
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.total).toBe(0);
   });
 
   it('rejects unauthenticated callers (成绩榜必须登录后可见)', async () => {
@@ -173,7 +176,7 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       headers: cookie(studentToken),
     });
     expect(studentRes.status).toBe(200);
-    const studentRows = (await studentRes.json()) as Array<Record<string, any>>;
+    const studentRows = ((await studentRes.json()) as any).data as Array<Record<string, any>>;
     const studentRow = studentRows.find((r) => r.attemptId === 'att-A-1')!;
     expect(studentRow).toBeDefined();
     // 榜单字段仍在
@@ -187,7 +190,7 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       headers: cookie(teacherToken),
     });
     expect(teacherRes.status).toBe(200);
-    const teacherRows = (await teacherRes.json()) as Array<Record<string, any>>;
+    const teacherRows = ((await teacherRes.json()) as any).data as Array<Record<string, any>>;
     const teacherRow = teacherRows.find((r) => r.attemptId === 'att-A-1')!;
     expect(teacherRow.comment).toBe('教师评语：不错');
     expect(teacherRow.extra_json).toContain('answers');

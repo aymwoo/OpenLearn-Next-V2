@@ -3,6 +3,7 @@ import { decryptApiKey } from '../utils/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext, StoredAIProvider } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { parsePagination } from '../utils/pagination.js';
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -44,18 +45,23 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
 
   app.get('/api/schedules', requireAuth(), (req, res) => {
     try {
+      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）；
+      // 子资源端点 /api/classes/:classId/schedules 暂维持裸数组（前端消费路径可区分）
+      const pg = parsePagination(req.query as any);
+      const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM schedules').get() as any).n;
       const schedules = kernelContainer.db
         .prepare(
           `
-        SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         LEFT JOIN classes c ON s.class_id = c.id
         ORDER BY s.scheduled_date DESC, s.time_slot ASC
+        LIMIT ? OFFSET ?
       `,
         )
-        .all();
-      res.json(schedules);
+        .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+      res.json({ data: schedules, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
     } catch (e: any) {
       sendSafeError(res, e);
     }

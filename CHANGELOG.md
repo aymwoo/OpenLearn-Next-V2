@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Breaking Changes**：
+  - **列表端点分页信封（A7）**：`GET /api/lessons`、`/api/students`、`/api/classes`、`/api/schedules`、`/api/courseware/attempts` 响应从裸数组改为 `{ data, total, page, pageSize }` 信封。新增 `?page=`（默认 1）与 `?pageSize=`（默认 50，上限 500，`all` 返回全量）参数。需要全量数据的消费方传 `pageSize=all`；前端 10 处消费点已同步追平。子资源端点（如 `/api/classes/:classId/schedules`）本轮维持裸数组。
+
 - **性能：eval-grades 与 assignment.list N+1 查询消除 (`server/routes/lessons.ts`, `packages/plugins/assignment-eval.ts`)**：
   - **问题**（路线图 A5-a/b）：eval-grades 循环内对每条提交各查一次互评与评分（1+2N，200 条提交 = 401 次查询）；assignment.list 的 studentId 分支同样 1+2N。
   - **整改**：改为按 id 分批 500（SQLite 参数上限保护）的 `IN (...)` 批量查询 + Map 归并，聚合语义不变。
