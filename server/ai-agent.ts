@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
+import { fetchWithRetry } from '../packages/core/ai/utils/fetch-with-retry.js';
 import { lessonActiveSegments } from './shared-state.js';
 import { collectAIContextSlices } from './ai-context-registry.js';
 import { getAIPersona } from './ai-persona-registry.js';
@@ -231,7 +232,8 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   let loopCount = 0;
 
   while (loopCount < MAX_LOOPS) {
-    const response = await fetch(chatUrl, {
+    // Phase B5: 超时 + 指数退避重试（30s 超时，429/5xx/网络错误最多 3 次）
+    const response = await fetchWithRetry(chatUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -242,11 +244,6 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
         temperature: 0.1,
       }),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI provider request failed (${response.status}): ${errorText || response.statusText}`);
-    }
 
     const data = await response.json();
     const assistantMessage = data.choices?.[0]?.message;

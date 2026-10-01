@@ -5,6 +5,7 @@
 
 import { AIProviderConfig, AIGenerateOptions } from '../types/index.js';
 import { AIEventBus } from '../event/ai-event-bus.js';
+import { fetchWithRetry } from '../utils/fetch-with-retry.js';
 
 export class AIProviderGateway {
   private eventBus: AIEventBus;
@@ -65,7 +66,8 @@ export class AIProviderGateway {
     }
     messages.push({ role: 'user', content: prompt });
 
-    const response = await fetch(cleanUrl, {
+    // Phase B5: 超时 + 指数退避重试（30s 超时，429/5xx/网络错误最多 3 次）
+    const response = await fetchWithRetry(cleanUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -75,11 +77,6 @@ export class AIProviderGateway {
         max_tokens: options?.maxTokens,
       }),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI Provider Request Failed (${response.status}): ${errorText || response.statusText}`);
-    }
 
     const data = (await response.json()) as {
       choices?: { message?: { content?: string } }[];
