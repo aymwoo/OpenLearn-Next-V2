@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **数据完整性：七处多步写操作事务化 + 补五个高频查询索引 (`roster.ts`, `lessons.ts`, `schedules.ts`, `admin.ts`, `migrations/014`)**：
+  - **问题**（v0.4.0 路线图 A1/A6，2026-10-01 核实仍未整改）：学生删除（12 条 DELETE）、GDPR 删除、白板 reset、Lab 删除、座位表保存、课表删除、班级导入共七处多步写操作无事务保护 —— 中途失败留下半截数据（如删学生删到一半失败，剩余表残留孤儿行）。
+  - **事务化**：全部包裹 better-sqlite3 `db.transaction`；学生删除与 GDPR 删除抽公共 `deleteStudentCascade`（消灭两份 12 条 DELETE 的重复实现，防止口径漂移）。
+  - **索引**：migration 014 补 vfs_nodes(parent_id)、plugin_submissions(lesson_id)、student_point_logs(student_id)、student_rollcalls(class_id/student_id)。
+  - **测试**：新增 `transactions.test.ts` 3 例（级联删除 12 表无残留、班级导入 UNIQUE 冲突整批回滚、正常导入不受影响）。
+
 - **SSRF 字面量增强 + Socket 层默认密码握手全拒 (`server/utils/url-safety.ts`, `server/middleware/auth.ts`, `server.ts`)**：
   - **SSRF（2026-09-30 审计低危遗留 2）**：`isSafeExternalUrl` 原先只识别点分十进制 IPv4，`[::ffff:127.0.0.1]`（IPv4 映射）、`[fd00::1]`（ULA）、纯十进制整数 `2130706433`、十六进制/八进制编码（`0x7f.0.0.1`、`0177.0.0.1`）等字面量全部放行。补齐：IPv6 括号字面量解析（loopback/未指定/::ffff: 映射/ULA fc00::/7/链路本地 fe80::/10/组播）；inet_aton 语义的整段与四段数值编码归一化（含八进制显式选进制 —— `Number('0177')===177` 的十进制陷阱）。同步签名不变，7 处调用方零改动；普通含数字域名（abc123.com、1x.dev）不误伤。
   - **Socket 改密兜底（2026-09-30 审计低危遗留 3）**：Socket.IO 握手鉴权抽为 `socketAuthMiddleware`（server.ts 与测试共用），带 `mustChangePassword` 标记的会话握手直接拒绝（错误码 FORBIDDEN_DEFAULT_PASSWORD，与 HTTP 层 enforcePasswordChanged 同码）；改密/登出走 HTTP 豁免路径不受影响；test 环境无 token 放行口径原样保留。

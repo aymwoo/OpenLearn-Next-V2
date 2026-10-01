@@ -26,3 +26,5 @@
 | 010  | 010_class_groups.sql              | 小组（class_groups）                                                                                                                                                                            |
 | 011  | 011_classroom_feed.sql            | 课堂动态流（classroom_feed）                                                                                                                                                                     |
 | 012  | 012_auto_record_score.sql         | `courseware_score_config` 补自动录入规则列（auto_record_enabled / auto_record_min_completion），把「学生提交数据」页的逐条手动「录入成绩」升级为按规则自动录入 |
+| 013  | 013_score_source_strategy.sql     | `assignment_submissions` 补 source 列（manual/auto 来源分流，自动路径遇 manual/缺考行受保护）+ `courseware_score_config` 补 auto_record_strategy（latest/highest 更新策略）                |
+| 014  | 014_performance_indexes.sql       | 五个高频查询索引（vfs_nodes.parent_id、plugin_submissions.lesson_id、student_point_logs.student_id、student_rollcalls.class_id/student_id）                                                |

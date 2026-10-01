@@ -470,22 +470,26 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       if (count > 0) {
         // Revert to snapshot
-        // 1. Delete all current elements for this lesson
-        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+        // DATA-INT-01: 删除→回插多步写操作包事务，防止中途失败留下半清空白板
+        const revertTx = kernelContainer.db.transaction(() => {
+          // 1. Delete all current elements for this lesson
+          kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
 
-        // 2. Fetch all snapshot elements (excluding the marker)
-        const snapshotElements = kernelContainer.db
-          .prepare("SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'")
-          .all(snapshotId) as any[];
+          // 2. Fetch all snapshot elements (excluding the marker)
+          const snapshotElements = kernelContainer.db
+            .prepare("SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'")
+            .all(snapshotId) as any[];
 
-        // 3. Re-insert them into the active lesson whiteboard
-        const insertStmt = kernelContainer.db.prepare(
-          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-        );
-        for (const el of snapshotElements) {
-          const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
-          insertStmt.run(originalId, id, el.type, el.data, el.created_at);
-        }
+          // 3. Re-insert them into the active lesson whiteboard
+          const insertStmt = kernelContainer.db.prepare(
+            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
+          );
+          for (const el of snapshotElements) {
+            const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
+            insertStmt.run(originalId, id, el.type, el.data, el.created_at);
+          }
+        });
+        revertTx();
         res.json({ success: true, message: 'Lesson whiteboard reset to start state' });
       } else {
         // If no snapshot exists, just clear it

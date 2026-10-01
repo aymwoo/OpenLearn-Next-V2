@@ -146,10 +146,14 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
 
   app.delete('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      kernelContainer.db
-        .prepare('DELETE FROM schedules WHERE id = ? AND class_id = ?')
-        .run(req.params.scheduleId, req.params.classId);
-      kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
+      // DATA-INT-01: 级联删除包事务
+      const tx = kernelContainer.db.transaction(() => {
+        kernelContainer.db
+          .prepare('DELETE FROM schedules WHERE id = ? AND class_id = ?')
+          .run(req.params.scheduleId, req.params.classId);
+        kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
+      });
+      tx();
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);

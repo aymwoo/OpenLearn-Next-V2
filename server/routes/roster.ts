@@ -11,6 +11,29 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { emitClassroomEvent } from '../presence.js';
 import type { ServerContext } from '../context.js';
 
+/**
+ * 学生级联删除（DATA-INT-01）：12 张子表 + students 本体，单事务执行。
+ * 学生删除与 GDPR 完整删除共用同一份级联口径，防止两处漂移；
+ * 中途任何一条失败整体回滚，不残留孤儿数据。
+ */
+function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string): void {
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM attendance WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM exam_scores WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM student_semester_reports WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM plugin_submissions WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(studentId);
+    db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(studentId);
+    db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+  });
+  tx();
+}
+
 export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
 
@@ -969,8 +992,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.delete('/api/labs/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      kernelContainer.db.prepare('DELETE FROM computer_labs WHERE id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(req.params.id);
+      // DATA-INT-01: 级联删除包事务
+      const tx = kernelContainer.db.transaction(() => {
+        kernelContainer.db.prepare('DELETE FROM computer_labs WHERE id = ?').run(req.params.id);
+        kernelContainer.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(req.params.id);
+      });
+      tx();
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1003,17 +1030,21 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const { lab_id, seats } = req.body;
 
-      kernelContainer.db.prepare('UPDATE classes SET lab_id = ? WHERE id = ?').run(lab_id || null, req.params.classId);
-      kernelContainer.db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(req.params.classId);
+      // DATA-INT-01: 更新班级+清空+重插座位包事务，防止中途失败留下空座位表
+      const tx = kernelContainer.db.transaction(() => {
+        kernelContainer.db.prepare('UPDATE classes SET lab_id = ? WHERE id = ?').run(lab_id || null, req.params.classId);
+        kernelContainer.db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(req.params.classId);
 
-      if (lab_id && Array.isArray(seats)) {
-        const insertStmt = kernelContainer.db.prepare(
-          'INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
-        );
-        for (const s of seats) {
-          insertStmt.run(req.params.classId, s.student_id, lab_id, s.row_idx, s.col_idx);
+        if (lab_id && Array.isArray(seats)) {
+          const insertStmt = kernelContainer.db.prepare(
+            'INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
+          );
+          for (const s of seats) {
+            insertStmt.run(req.params.classId, s.student_id, lab_id, s.row_idx, s.col_idx);
+          }
         }
-      }
+      });
+      tx();
 
       res.json({ success: true });
     } catch (e: any) {
@@ -1102,19 +1133,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.delete('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      // 完整级联删除，与 gdpr-delete 保持一致，避免残留孤儿数据
-      kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM attendance WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM exam_scores WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_semester_reports WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
+      // 完整级联删除（单事务），与 gdpr-delete 共用同一实现，避免残留孤儿数据
+      deleteStudentCascade(kernelContainer.db, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1184,19 +1204,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
       }
 
-      // 级联删除所有关联数据
-      kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM attendance WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM exam_scores WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM student_semester_reports WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(studentId);
-      kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+      // 级联删除所有关联数据（单事务，与学生删除共用同一实现）
+      deleteStudentCascade(kernelContainer.db, studentId);
 
       console.log(`[GDPR] Complete data deletion for student ${studentId}`);
       res.json({ success: true, message: 'All student data has been permanently deleted.' });

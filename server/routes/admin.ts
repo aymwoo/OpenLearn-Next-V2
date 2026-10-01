@@ -119,47 +119,51 @@ export function registerAdminRoutes(ctx: ServerContext) {
 
       const imported = [];
 
-      for (const cls of classes) {
-        const clsName = cls.name || cls.className;
-        const clsDesc = cls.description || cls.classDescription || '';
-        if (!clsName) continue;
+      // DATA-INT-01: 整批导入包事务 —— 任一学生落库失败整体回滚，不残留半截班级
+      const importTx = db.transaction(() => {
+        for (const cls of classes) {
+          const clsName = cls.name || cls.className;
+          const clsDesc = cls.description || cls.classDescription || '';
+          if (!clsName) continue;
 
-        // Generate a random ID for the class
-        const classId = Math.random().toString(36).slice(2);
-        insertClass.run(classId, clsName, clsDesc, Date.now());
+          // Generate a random ID for the class
+          const classId = Math.random().toString(36).slice(2);
+          insertClass.run(classId, clsName, clsDesc, Date.now());
 
-        const studentsList = cls.students || [];
-        const importedStudents = [];
+          const studentsList = cls.students || [];
+          const importedStudents = [];
 
-        for (const st of studentsList) {
-          const stName = st.name || st.studentName;
-          const stEmail = st.email || st.studentEmail || '';
-          if (!stName) continue;
+          for (const st of studentsList) {
+            const stName = st.name || st.studentName;
+            const stEmail = st.email || st.studentEmail || '';
+            if (!stName) continue;
 
-          let studentId = '';
-          if (stEmail) {
-            const existing = findStudentByEmail.get(stEmail) as { id: string } | undefined;
-            if (existing) {
-              studentId = existing.id;
+            let studentId = '';
+            if (stEmail) {
+              const existing = findStudentByEmail.get(stEmail) as { id: string } | undefined;
+              if (existing) {
+                studentId = existing.id;
+              }
             }
+
+            if (!studentId) {
+              studentId = Math.random().toString(36).slice(2);
+              const studentNumber = generateStudentNumber(db) || `ST_${studentId}`;
+              insertStudent.run(studentId, studentNumber, stName, stEmail, Date.now());
+            }
+
+            insertClassStudent.run(classId, studentId, Date.now());
+            importedStudents.push({ id: studentId, name: stName, email: stEmail });
           }
 
-          if (!studentId) {
-            studentId = Math.random().toString(36).slice(2);
-            const studentNumber = generateStudentNumber(db) || `ST_${studentId}`;
-            insertStudent.run(studentId, studentNumber, stName, stEmail, Date.now());
-          }
-
-          insertClassStudent.run(classId, studentId, Date.now());
-          importedStudents.push({ id: studentId, name: stName, email: stEmail });
+          imported.push({
+            id: classId,
+            name: clsName,
+            studentsCount: importedStudents.length,
+          });
         }
-
-        imported.push({
-          id: classId,
-          name: clsName,
-          studentsCount: importedStudents.length,
-        });
-      }
+      });
+      importTx();
 
       res.json({ success: true, imported });
     } catch (e: any) {
