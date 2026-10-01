@@ -218,13 +218,16 @@ describe('setupPresence', () => {
     ]);
   });
 
-  it('teacher-pick-student broadcasts student-picked globally and to lesson/class room', () => {
+  it('teacher-pick-student broadcasts student-picked exactly once (global superset, no room duplicates)', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket.trigger('teacher-pick-student', { studentId: 's1', studentName: 'Alice', lessonId: 'L1', classId: 'c1' });
 
+    // 历史版本三重投递（lesson 房间 + class 房间 + 全局），学生同时命中多房间会收到 2-3 次重复弹窗。
+    // 现收敛为单次全局广播：io.emit 是任何房间定向投递的超集，语义等价。
     const pickedEvents = m.globalEmitted.filter((e) => e.event === 'student-picked');
-    expect(pickedEvents.length).toBeGreaterThanOrEqual(1);
+    expect(pickedEvents.length).toBe(1);
+    expect(pickedEvents[0].scope).toBe('global');
     expect(pickedEvents[0].payload).toMatchObject({
       studentId: 's1',
       studentName: 'Alice',

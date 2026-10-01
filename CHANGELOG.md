@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **修复：抽人弹窗重复 —— `student-picked` 广播收敛单次投递 (`server/presence.ts`, `src/hooks/useClassroomSocket.ts`)**：
+  - **问题**（2026-09-30 审计教学缺口 1）：`teacher-pick-student` 对同一事件做 lesson 房间 + class 房间 + 全局三重投递，学生 socket 同时命中多房间时收到 2-3 次相同事件 → 被抽中学生全屏弹窗/Toast 重复弹出。
+  - **服务端**：删除两个房间定向 emit，仅保留 `io.emit`（全局广播本就是前两者的超集，语义等价、每端恰好一次）。白板 rollcall 的独立 emit 保留（独立触发源，已有 DB 幂等）。
+  - **客户端兜底**：`useClassroomSocket` 按 `(studentId, pickedTime)` 做 10s 短窗去重，防 rollcall 双发与未来回归；live feed 不去重（条目 id 天然含 pickedTime）。
+  - **测试**：`presence.test.ts` 改断言为恰 1 次投递；`useClassroomSocket.test.tsx` 新增 2 例（三连投递只弹一次 + 不同 pickedTime 不误伤连续抽人）。
+
 - **架构分层修复：logger 下沉至 core，消灭 core→server 反向依赖 (`packages/core/observability/logger.ts`, `server/utils/logger.ts`, `layering.test.ts`)**：
   - **问题**（2026-09-25 审计 H-7，2026-09-30 审计架构高危 1，拖逾一版）：`packages/core/worker-runtime/worker-manager.ts` 与 `plugin-host/context-builder.ts` 反向 import `server/utils/logger.js` —— 依赖方向必须是「应用 → 内核」，绝不能反向。
   - **整改**：logger 实现下沉至 `packages/core/observability/logger.ts`（pino multistream，无应用层特有逻辑），`server/utils/logger.ts` 改为兼容 re-export（server 侧当前无生产消费者，仅存量路径保留）。顺带修正 dev pino-pretty `translateTime` 缺失分钟段的笔误（`SYS:HH:ss.l` → `SYS:HH:mm:ss.l`）。

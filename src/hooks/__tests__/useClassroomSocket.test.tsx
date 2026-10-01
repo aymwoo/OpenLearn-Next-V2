@@ -306,6 +306,49 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
         'info',
       );
     });
+
+    it('同一 (studentId, pickedTime) 重复投递只触发一次弹窗/播报（live feed 仍逐条记录）', () => {
+      const setPickedAlertData = vi.fn();
+      const addToast = vi.fn();
+      const setLiveClassFeed = vi.fn();
+      const options = makeOptions({
+        activeRole: 'student',
+        activeStudentId: 'stu-1',
+        setPickedAlertData,
+        addToast,
+        setLiveClassFeed,
+      });
+      renderHook(() => useClassroomSocket(options));
+
+      // 模拟服务端历史三重投递 / 白板 rollcall 独立补发：相同事件到达 3 次
+      const duplicatedPayload = { studentId: 'stu-1', studentName: 'Alice', lessonId: 'l1', pickedTime: 1700000000000 };
+      trigger('student-picked', duplicatedPayload);
+      trigger('student-picked', duplicatedPayload);
+      trigger('student-picked', duplicatedPayload);
+
+      expect(setPickedAlertData).toHaveBeenCalledTimes(1);
+      expect(addToast).toHaveBeenCalledTimes(1);
+      // live feed 不去重：id 天然含 pickedTime，重复条目由 feed 自身幂等
+      expect(setLiveClassFeed).toHaveBeenCalledTimes(3);
+    });
+
+    it('不同 pickedTime 的事件各自正常触发（10s 短窗不误伤连续抽人）', () => {
+      const setPickedAlertData = vi.fn();
+      const addToast = vi.fn();
+      const options = makeOptions({
+        activeRole: 'student',
+        activeStudentId: 'stu-1',
+        setPickedAlertData,
+        addToast,
+      });
+      renderHook(() => useClassroomSocket(options));
+
+      trigger('student-picked', { studentId: 'stu-1', studentName: 'Alice', pickedTime: 1700000000000 });
+      trigger('student-picked', { studentId: 'stu-1', studentName: 'Alice', pickedTime: 1700000001000 });
+
+      expect(setPickedAlertData).toHaveBeenCalledTimes(2);
+      expect(addToast).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

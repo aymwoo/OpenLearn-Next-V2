@@ -489,12 +489,8 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           classId: data.classId,
           pickedTime: Date.now(),
         };
-        if (data.lessonId) {
-          io.to(data.lessonId).emit('student-picked', payload);
-        }
-        if (data.classId) {
-          io.to(classRoom(data.classId)).emit('student-picked', payload);
-        }
+        // 单次全局广播：io.emit 是任何房间定向投递的超集。
+        // 历史上曾对 lesson 房间 + class 房间 + 全局三重投递，学生同时命中多房间时会收到 2-3 次重复事件（弹窗重复）。
         io.emit('student-picked', payload);
       },
     );

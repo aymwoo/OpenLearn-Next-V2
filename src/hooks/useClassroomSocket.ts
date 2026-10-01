@@ -87,6 +87,10 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   const selectedLessonRef = useRef(selectedLesson);
   const selectedAssignmentRef = useRef<any>(null);
   const studentViewStatusRef = useRef(studentViewStatus);
+  // 抽人事件去重：key = `${studentId}:${pickedTime}` → 首次收到的时间戳。
+  // 服务端历史版本对同一事件三重投递（房间+班级+全局），白板 rollcall 也可能独立补发；
+  // 10s 短窗内相同 (studentId, pickedTime) 只触发一次弹窗/toast，live feed 不去重（id 天然含 pickedTime）。
+  const pickedDedupRef = useRef<Map<string, number>>(new Map());
   const studentLessonTabRef = useRef(studentLessonTab);
   const setPickedAlertDataRef = useRef(setPickedAlertData);
   const setPickedAnnouncementRef = useRef(setPickedAnnouncement);
@@ -316,12 +320,24 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     });
 
     socket.on('student-picked', (data: any) => {
+      // 短窗去重：同一 (studentId, pickedTime) 10s 内只处理一次弹窗/播报
+      const dedupKey = `${data.studentId}:${data.pickedTime ?? ''}`;
+      const now = Date.now();
+      const firstSeen = pickedDedupRef.current.get(dedupKey);
+      const isDuplicate = firstSeen !== undefined && now - firstSeen < 10_000;
+      if (!isDuplicate) {
+        pickedDedupRef.current.set(dedupKey, now);
+        for (const [k, t] of pickedDedupRef.current) {
+          if (now - t >= 10_000) pickedDedupRef.current.delete(k);
+        }
+      }
+
       const isCurrentStudent =
         activeRoleRef.current === 'student' &&
         activeStudentIdRef.current &&
         data.studentId === activeStudentIdRef.current;
 
-      if (isCurrentStudent) {
+      if (isCurrentStudent && !isDuplicate) {
         // 1. 被抽中的学生：屏幕级强提示（全屏抽中弹窗 + 提示音效 + 强提醒Toast）。
         //    刻意不写入通知消息列表——点名是即时互动，需要的是屏幕级提醒而非铃铛里的一条静默记录。
         setPickedAlertDataRef.current?.({
@@ -338,7 +354,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         addToast(langRef.current === 'zh' ? '⚡️ 闪电抽问：老师抽中了你！' : '⚡️ Classroom Pick Alert', msg, 'warning');
 
         fetchStudentDashboard(activeStudentIdRef.current);
-      } else if (activeRoleRef.current === 'student') {
+      } else if (activeRoleRef.current === 'student' && !isCurrentStudent && !isDuplicate) {
         // 2. 全班其他学生：向全班提示被抽中的学生
         const studentName = data.studentName || '同学';
         setPickedAnnouncementRef.current?.({ studentName, studentId: data.studentId });
