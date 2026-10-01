@@ -162,7 +162,7 @@ function withLatestVersion(row: any): any {
 }
 
 export function registerLessonsRoutes(ctx: ServerContext) {
-  const { app, io } = ctx;
+  const { app } = ctx;
 
   app.get('/api/lessons', requireAuth(), (req, res) => {
     const lessons = kernelContainer.db
@@ -620,54 +620,34 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         score = isCorrect ? 100 : 0;
       }
 
-      // Record submission
-      if (!dataObj.submissions) dataObj.submissions = {};
-      dataObj.submissions[studentId] = { answer, score, isCorrect, time: Date.now() };
-
-      // Persist updated data
+      // CONCUR-01：关系型原子 upsert，唯一权威数据源。
+      // 历史上此处还把 submissions 写回 whiteboard_elements.data JSON —— 该读-改-写
+      // 在同题多名学生并发提交时互相覆盖丢成绩（2026-10-01 数据完整性整改根治），
+      // 现已移除；白板元素 data 中的 submissions 仅作为存量历史数据保留展示兜底。
       kernelContainer.db
-        .prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
-        .run(JSON.stringify(dataObj), elementId);
-
-      // CONCUR-01：关系型原子 upsert。
-      // 上方 JSON 写入是 read-modify-write（并发时同题多名学生互相覆盖），
-      // 这里以 (lesson_id, element_id, student_id) 为唯一键做行级原子写入，
-      // 作为学情统计（全景简报 / 随堂练习正确率）的权威数据源。
-      try {
-        kernelContainer.db
-          .prepare(
-            `INSERT INTO lesson_quiz_submissions
-               (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
-               answer = excluded.answer,
-               score = excluded.score,
-               is_correct = excluded.is_correct,
-               time_spent_ms = excluded.time_spent_ms,
-               submitted_at = excluded.submitted_at`,
-          )
-          .run(
-            `lqs-${lessonId}-${elementId}-${studentId}`,
-            lessonId,
-            elementId,
-            studentId,
-            session.studentName || session.name || null,
-            typeof answer === 'string' ? answer : JSON.stringify(answer),
-            score,
-            isCorrect ? 1 : 0,
-            Number(req.body?.timeSpentMs) || 0,
-            Date.now(),
-          );
-      } catch (relErr: any) {
-        // 迁移 007 尚未落库时退化为旧的 JSON 覆盖式写入，不阻断学生作答。
-        console.warn('[classroom] relational quiz upsert skipped:', relErr?.message || relErr);
-      }
-
-      // Broadcast refresh to whiteboard room.
-      // FIX: 原先这里 join 的房间名是 `lesson-${lessonId}`，而学生端在
-      // `server/presence.ts:83` 加入的房间就是 `lessonId` 本身 —— 前缀导致
-      // 这次刷新从来没被任何人收到。改为与学生端一致的房间名。
-      io.to(lessonId).emit('whiteboard-sync', { type: 'element-updated', elementId });
+        .prepare(
+          `INSERT INTO lesson_quiz_submissions
+             (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
+             answer = excluded.answer,
+             score = excluded.score,
+             is_correct = excluded.is_correct,
+             time_spent_ms = excluded.time_spent_ms,
+             submitted_at = excluded.submitted_at`,
+        )
+        .run(
+          `lqs-${lessonId}-${elementId}-${studentId}`,
+          lessonId,
+          elementId,
+          studentId,
+          session.studentName || session.name || null,
+          typeof answer === 'string' ? answer : JSON.stringify(answer),
+          score,
+          isCorrect ? 1 : 0,
+          Number(req.body?.timeSpentMs) || 0,
+          Date.now(),
+        );
 
       // 随堂练习作答 → 经内核事件总线广播给教师/学生面板摄取。
       await publishClassroomEvent(
@@ -688,6 +668,22 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       );
 
       res.json({ success: true, isCorrect, score, studentId });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // ── Quiz submission counts (all authenticated roles) ───────────────────────
+  // 白板测验卡片「N 人已交」计数的轻量数据源：仅返回计数，不含题目答案与学生
+  // 明细（学生端也渲染该卡片；明细与 correctAnswer 走 teacher/admin 专属的
+  // /quiz-submissions，防越权读答案）。
+  app.get('/api/lessons/:id/quiz-counts', requireAuth(), (req, res) => {
+    try {
+      const { id: lessonId } = req.params;
+      const rows = kernelContainer.db
+        .prepare('SELECT element_id, COUNT(*) AS n FROM lesson_quiz_submissions WHERE lesson_id = ? GROUP BY element_id')
+        .all(lessonId) as Array<{ element_id: string; n: number }>;
+      res.json({ quizzes: rows.map((r) => ({ elementId: r.element_id, submissionCount: r.n })) });
     } catch (e: any) {
       sendSafeError(res, e);
     }

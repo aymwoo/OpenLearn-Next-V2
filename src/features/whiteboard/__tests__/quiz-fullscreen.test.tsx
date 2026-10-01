@@ -247,4 +247,83 @@ describe('QuizFullscreenView', () => {
     // 提交后展示正确答案标签
     expect(screen.getByText('✓ 正确答案')).toBeDefined();
   });
+
+  it('DATA-INT-02: 教师打开时从 /quiz-submissions 关系表合并成绩明细', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session' || url === '/api/auth/me') {
+        return {
+          ok: true,
+          json: async () => ({ session: { id: 't-1', userId: 't-1', role: 'teacher' } }),
+        };
+      }
+      if (url === '/api/students') {
+        return { ok: true, json: async () => [{ id: 'stu-a', name: '张三' }] };
+      }
+      if (url.includes('/quiz-submissions')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            quizzes: [
+              {
+                elementId: 'el-quiz-001',
+                submissions: {
+                  'stu-a': { answer: 'A', score: 100, isCorrect: true, time: 1700000000000 },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: true, json: async () => [] };
+    });
+
+    render(
+      <QuizFullscreenView
+        {...baseProps}
+        elementId="el-quiz-001"
+        data={{
+          question: '光合作用产物？',
+          options: ['氧气', '二氧化碳'],
+          correctIndex: 0,
+          // data JSON 不再有 submissions（服务端已停止写入），全部来自关系表
+          submissions: {},
+        }}
+      />,
+    );
+
+    // 关系表明细合并渲染：张三的行出现
+    await waitFor(() => {
+      expect(screen.getByTestId('quiz-row-stu-a')).toBeDefined();
+      expect(screen.getByText('张三')).toBeDefined();
+    });
+  });
+
+  it('DATA-INT-02: 学生不请求 /quiz-submissions（明细含他人答案，不外露）', async () => {
+    const called: string[] = [];
+    fetchMock.mockImplementation(async (url: string) => {
+      called.push(url);
+      if (url === '/api/auth/session' || url === '/api/auth/me') {
+        return {
+          ok: true,
+          json: async () => ({ session: { id: 'stu-current', studentId: 'stu-current', role: 'student' } }),
+        };
+      }
+      return { ok: true, json: async () => [] };
+    });
+
+    render(
+      <QuizFullscreenView
+        {...baseProps}
+        elementId="el-quiz-001"
+        data={{ question: 'Q', options: ['A', 'B'], correctIndex: 0, submissions: {} }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(called.some((u) => u.includes('/quiz-submissions'))).toBe(false);
+    });
+    // 学生也看不到成绩明细表
+    expect(screen.queryByTestId('quiz-submissions-table')).toBeNull();
+  });
 });

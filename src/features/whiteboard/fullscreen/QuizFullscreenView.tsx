@@ -38,6 +38,27 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
     setLocalSubmissions((data.submissions || {}) as Record<string, QuizSubmission>);
   }, [data.submissions]);
 
+  // DATA-INT-02: 服务端 quiz-submit 已不再写 data JSON（并发读改写丢成绩），
+  // 教师视图的成绩明细改从关系表权威接口 /quiz-submissions 拉取合并。
+  // 学生不拉取（接口为 teacher/admin 专属，且明细含他人答案不应外露）。
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'student') return;
+    if (!lessonId) return;
+    let cancelled = false;
+    fetch(`/api/lessons/${encodeURIComponent(lessonId)}/quiz-submissions`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j?.quizzes) return;
+        const quiz = j.quizzes.find((q: any) => q.elementId === (elementId || data.id));
+        if (!quiz?.submissions) return;
+        setLocalSubmissions((prev) => ({ ...prev, ...quiz.submissions }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, lessonId, elementId]);
+
   useEffect(() => {
     let cancelled = false;
     fetch('/api/students')
@@ -243,10 +264,13 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
         </div>
       )}
 
-      {submittedCount === 0 ? (
-        <div className="mt-4 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-400">暂无学生提交</div>
-      ) : (
-        <div className="mt-4 space-y-4">
+      {/* 成绩统计与明细（DATA-INT-02: 仅教师/管理员可见 —— 明细含他人答案与学生身份，
+          学生提交后经 submitFeedback 获得个人反馈即可） */}
+      {!isStudent &&
+        (submittedCount === 0 ? (
+          <div className="mt-4 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-400">暂无学生提交</div>
+        ) : (
+          <div className="mt-4 space-y-4">
           <div className="grid grid-cols-4 gap-3" data-testid="quiz-summary">
             <div className="bg-gray-50 rounded-xl p-3 text-center">
               <div className="text-xs text-gray-400">提交</div>
@@ -310,7 +334,8 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
             </table>
           </div>
         </div>
-      )}
+          )
+        )}
     </div>
   );
 };

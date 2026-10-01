@@ -267,4 +267,47 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     expect(quiz.submissions[studentId].isCorrect).toBe(true);
     expect(quiz.submissions[studentId].score).toBe(100);
   });
+
+  it('DATA-INT-02: quiz-submit 不再写白板 JSON，lesson_quiz_submissions 为唯一权威', async () => {
+    // 提交一条新答案（覆盖该学生的旧答案）
+    const studentToken = (globalThis as any).__quizE2EStudentToken;
+    const res = await fetch(`${baseUrl}/api/lessons/${lessonId}/quiz-submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie: `edu_os_token=${studentToken}` },
+      body: JSON.stringify({ elementId, answer: 'A' }),
+    });
+    expect(res.ok).toBe(true);
+
+    // 白板元素 data JSON 中的 submissions 不再被更新（并发读改写已移除）
+    const row = kernelContainer.db
+      .prepare('SELECT data FROM whiteboard_elements WHERE id = ?')
+      .get(elementId) as any;
+    const parsed = JSON.parse(row.data);
+    expect(parsed.submissions?.[studentId]).toBeUndefined();
+
+    // 关系表为唯一权威
+    const rel = kernelContainer.db
+      .prepare('SELECT answer, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
+      .get(lessonId, elementId, studentId) as any;
+    expect(rel).toBeDefined();
+    expect(rel.answer).toBe('A');
+    expect(rel.is_correct).toBe(0);
+  });
+
+  it('DATA-INT-02: GET /quiz-counts 返回计数且不泄露答案明细', async () => {
+    // 学生 token 可访问
+    const studentToken = (globalThis as any).__quizE2EStudentToken;
+    const res = await fetch(`${baseUrl}/api/lessons/${lessonId}/quiz-counts`, {
+      headers: { Cookie: `edu_os_token=${studentToken}` },
+    });
+    expect(res.status).toBe(200);
+    const json: any = await res.json();
+    expect(Array.isArray(json.quizzes)).toBe(true);
+    const quiz = json.quizzes.find((q: any) => q.elementId === elementId);
+    expect(quiz).toBeDefined();
+    expect(quiz.submissionCount).toBeGreaterThanOrEqual(1);
+    // 仅计数，无明细/答案字段
+    expect(JSON.stringify(json)).not.toContain('correctAnswer');
+    expect(JSON.stringify(json)).not.toContain('studentId');
+  });
 });

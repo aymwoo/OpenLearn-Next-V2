@@ -169,7 +169,7 @@ import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelect
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
 import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
-import { WhiteboardEventPanel } from './events';
+import { WhiteboardEventPanel, useWhiteboardEventListener } from './events';
 import { propertyEditorRegistry } from './properties/PropertyEditorRegistry';
 import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-registry';
 
@@ -697,6 +697,30 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       Record<string, { option: string; score?: number; isCorrect?: boolean }>
     >({});
     const [quizSubmitting, setQuizSubmitting] = useState<Record<string, boolean>>({});
+    // DATA-INT-02: 白板测验「N 人已交」计数 —— 以 lesson_quiz_submissions 关系表为
+    // 权威数据源：挂载时从 /quiz-counts 拉初始值，quiz.answered 事件实时递增。
+    // 服务端 quiz-submit 已不再写 element.data JSON（并发读改写会互相覆盖丢成绩）。
+    const [quizCounts, setQuizCounts] = useState<Record<string, number>>({});
+    useEffect(() => {
+      if (!lessonId) return;
+      let cancelled = false;
+      fetch(`/api/lessons/${encodeURIComponent(lessonId)}/quiz-counts`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j?.quizzes || cancelled) return;
+          const map: Record<string, number> = {};
+          for (const q of j.quizzes) map[q.elementId] = q.submissionCount;
+          setQuizCounts(map);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [lessonId]);
+    useWhiteboardEventListener({ types: ['quiz.answered'] }, (e) => {
+      if (!e.elementId || e.lessonId !== lessonId) return;
+      setQuizCounts((prev) => ({ ...prev, [e.elementId as string]: (prev[e.elementId as string] ?? 0) + 1 }));
+    });
     // Fullscreen: when set, only this element is rendered full-viewport
     const [fullscreenElementId, setFullscreenElementId] = useState<string | null>(null);
     // 整个浏览器全屏（脱离白板 + 原生全屏）的本地状态
@@ -2977,7 +3001,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
         if (el.type === 'quiz') {
           const quizOptions = Array.isArray(data.options) ? data.options : [];
-          const submissionCount = Object.keys(data.submissions || {}).length;
+          // DATA-INT-02: 计数以 lesson_quiz_submissions 关系表为权威（quiz-counts 拉取
+          // + quiz.answered 事件实时递增）；data.submissions 为存量历史数据兜底
+          const submissionCount =
+            quizCounts[el.id] ?? Object.keys(data.submissions || {}).length;
           return (
             <Group key={el.id}>
               <Html

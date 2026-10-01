@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **随堂练习并发竞态根治：白板测验计数改事件驱动，新增 quiz-counts 轻量端点 (`server/routes/lessons.ts`, `InteractiveWhiteboard.tsx`, `QuizFullscreenView.tsx`)**：
+  - **问题**（路线图 A2 残留）：quiz-submit 仍保留白板元素 data JSON 的读-改-写 —— 同题多名学生并发提交时互相覆盖丢成绩；此前已把权威数据迁入 `lesson_quiz_submissions` 原子 upsert，但 JSON 写入路径未摘除。
+  - **后端**：彻底移除 JSON 读改写与降级 catch，关系表为唯一权威；新增 `GET /api/lessons/:id/quiz-counts`（所有登录角色可访问，仅返回各测验元素提交计数，不含答案与学生明细，防学生越权读答案）；删除无人消费的 `whiteboard-sync element-updated` 广播。
+  - **前端**：白板测验卡片「N 人已交」计数改为 quiz-counts 拉初始值 + `quiz.answered` 事件实时递增（data.submissions 保留一个版本周期作存量兜底）；QuizFullscreenView 教师成绩明细改从 /quiz-submissions 关系表合并。
+  - **行为变更**：全屏测验成绩明细表收窄为教师/管理员可见（明细含他人答案与学生身份，学生可见属越权）；学生提交反馈不变。
+  - **测试**：quiz-answered-e2e 新增 2 例（JSON 不再写入 + quiz-counts 无泄露）；quiz-fullscreen 新增 2 例（教师合并、学生不请求明细）。
+
 - **数据完整性：七处多步写操作事务化 + 补五个高频查询索引 (`roster.ts`, `lessons.ts`, `schedules.ts`, `admin.ts`, `migrations/014`)**：
   - **问题**（v0.4.0 路线图 A1/A6，2026-10-01 核实仍未整改）：学生删除（12 条 DELETE）、GDPR 删除、白板 reset、Lab 删除、座位表保存、课表删除、班级导入共七处多步写操作无事务保护 —— 中途失败留下半截数据（如删学生删到一半失败，剩余表残留孤儿行）。
   - **事务化**：全部包裹 better-sqlite3 `db.transaction`；学生删除与 GDPR 删除抽公共 `deleteStudentCascade`（消灭两份 12 条 DELETE 的重复实现，防止口径漂移）。
