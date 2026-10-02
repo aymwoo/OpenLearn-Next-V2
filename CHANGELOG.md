@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R1）：App.tsx 内联 fetch 全部服务化**：
+  - 29 个内联 fetch 迁入 7 个纯 fetch 封装 service：`sessionService`（resources/db-status/auth session/site-settings/logout）、`lessonService`（lessons CRUD/clone/whiteboard）、`rosterService`（classes/students/class students）、`dashboardService`（class progress/dashboard、student dashboard）、`progressService`（student progress、live progress、read_notifications）、`assignmentService`（submissions、generate）、`systemService`（commands/vfs/processes/logs/schedules POST）。
+  - appStore 新增 `loadLessons/loadClasses/loadStudents` action，App.tsx 三个列表拉取改为 action 薄封装（签名不变，useAppPolling/TeacherView props 契约不受影响）。
+  - 纯搬移不改行为：各端点响应包裹差异（裸数组/信封/{success,result}）原样保留在 service 层；分支、setState、toast 留在调用方。为 C1-R2（局部函数下沉 hooks）与 R3（AppShell 227 props 收敛）铺路。
+
 - **CSRF 门控 + 错误处理统一 + ID 安全化 + 内存泄漏治理 + AI Provider 可靠性（路线图 Phase B1-B5）**：
   - **B1 CSRF**：新增全局写请求门控 `server/middleware/csrf.ts`（复用 bridge.ts Sec-Fetch-Site/Dest 判定模式）—— cross-site 写请求 403；豁免沙箱课件直连端点（attempts log/submit/adopt，Origin:null）与 /api/auth/login；头缺失放行由 SameSite=Lax 兜底。cookie 原有 HttpOnly+SameSite=Lax 不变。
   - **B2 错误处理**：classroom.ts 32 处裸泄 `e.message` 改 `sendSafeError`；roster.ts 6 处非标准 550 改 500（前端无依赖）；server.ts 新增四参全局 error handler 兜底，生产 500 不泄露内部信息。
