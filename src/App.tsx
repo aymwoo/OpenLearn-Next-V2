@@ -9,6 +9,7 @@ import { getStudentReadNotifications, postStudentReadNotification, postStudentPr
 import { postAssignmentSubmission } from './services/assignmentService.js';
 import { getClassStudents } from './services/rosterService.js';
 import { useClassroomLive } from './hooks/useClassroomLive';
+import { AppDataProvider, type AppDataValue } from './context/AppDataContext';
 import { useSessionBootstrap } from './hooks/useSessionBootstrap';
 import { useStudentViewState } from './hooks/useStudentViewState';
 import { useStudentOps } from './hooks/useStudentOps';
@@ -172,6 +173,7 @@ export default function App() {
   const lessons = useAppStore((s) => s.lessons);
   const setLessons = useAppStore((s) => s.setLessons);
   // ── Hook: 课程筛选、搜索与排序 ──
+  const lessonFilteringData = useLessonFiltering(lessons);
   const {
     lessonsSearchQuery,
     setLessonsSearchQuery,
@@ -186,7 +188,7 @@ export default function App() {
     copyingLessonId,
     setCopyingLessonId,
     filteredAndSortedLessons,
-  } = useLessonFiltering(lessons);
+  } = lessonFilteringData;
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
   const elements = useAppStore((s) => s.elements);
@@ -202,6 +204,7 @@ export default function App() {
   const setStudents = useAppStore((s) => s.setStudents);
 
   // ── Hook: 机房座位与排课管理 ──
+  const labAndScheduleData = useLabAndSchedule();
   const {
     computerLabs,
     setComputerLabs,
@@ -228,17 +231,19 @@ export default function App() {
     setNewScheduleDate,
     newScheduleLessonId,
     setNewScheduleLessonId,
-  } = useLabAndSchedule();
+  } = labAndScheduleData;
 
   // ── C1-R2c: 课程/班级 hooks ──────────────────────────────────────────────
   const { addToast } = useToast();
+  const lessonCrudData = useLessonCrud({ lang, addToast, setCopyingLessonId });
   const {
     fetchLessons,
     handleQuickCreateLesson,
     handleDeleteCourse,
     handleCopyCourse,
     fetchElements,
-  } = useLessonCrud({ lang, addToast, setCopyingLessonId });
+  } = lessonCrudData;
+  const classOpsData = useClassOps({ fetchClassSchedules });
   const {
     classStudentsMap,
     setClassStudentsMap,
@@ -258,7 +263,7 @@ export default function App() {
     fetchLiveClassStudentProgress,
     handleQuickScheduleClass,
     handleQuickGenerateAssignment,
-  } = useClassOps({ fetchClassSchedules });
+  } = classOpsData;
 
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
   const setExpandedClassId = (id: string | null) => {
@@ -289,6 +294,7 @@ export default function App() {
   const fetchStudents = async () => {
     await appStore.getState().loadStudents();
   };
+  const sessionBootstrapData = useSessionBootstrap({ fetchStudents });
   const {
     activeRole,
     setActiveRole,
@@ -301,9 +307,10 @@ export default function App() {
     handleLoginSuccess,
     handleLogout,
     toggleLanguage,
-  } = useSessionBootstrap({ fetchStudents });
+  } = sessionBootstrapData;
 
   // ── C1-R2f: 实时课堂互动横幅/动态流/在线名册 ─────────────────────────────
+  const classroomLiveData = useClassroomLive();
   const {
     pickedAlertData,
     setPickedAlertData,
@@ -319,7 +326,7 @@ export default function App() {
     setOnlineStudentIds,
     activeStudentLessons,
     setActiveStudentLessons,
-  } = useClassroomLive();
+  } = classroomLiveData;
   const siteInfo = useAppStore((s) => s.siteInfo);
   const setSiteInfo = useAppStore((s) => s.setSiteInfo);
 
@@ -425,6 +432,11 @@ export default function App() {
     }
   }, [teacherTab]);
   // ── Hook: 课程时间线与备课编辑器 ──
+  const lessonTimelineData = useLessonTimeline({
+    selectedLesson,
+    lessons,
+    setLessons,
+  });
   const {
     timelineSegments,
     setTimelineSegments,
@@ -441,11 +453,7 @@ export default function App() {
     editorPanelsExpanded,
     setEditorPanelsExpanded,
     saveTimeline,
-  } = useLessonTimeline({
-    selectedLesson,
-    lessons,
-    setLessons,
-  });
+  } = lessonTimelineData;
 
   const [liveClassFocusLocked, setLiveClassFocusLocked] = useState(false);
   // 锁定期间强制跟随教师步调；具体在 studentViewStatus 声明处统一生效
@@ -455,6 +463,7 @@ export default function App() {
   };
 
   // ── C1-R2b: 叶子 hooks（系统数据 / 资源库与导入） ─────────────────────────
+  const systemData = useSystemData(session);
   const {
     registeredCommands,
     setRegisteredCommands,
@@ -474,7 +483,8 @@ export default function App() {
     fetchVfs,
     fetchProcesses,
     fetchProcessLogs,
-  } = useSystemData(session);
+  } = systemData;
+  const resourceLibraryData = useResourceLibrary({ lang, session, fetchClasses, fetchStudents, fetchLessons, addToast });
   const {
     isCloudDriveOpen,
     setIsCloudDriveOpen,
@@ -520,7 +530,7 @@ export default function App() {
     setImportSuccess,
     downloadCSVTemplate,
     handleImportFile,
-  } = useResourceLibrary({ lang, session, fetchClasses, fetchStudents, fetchLessons, addToast });
+  } = resourceLibraryData;
 
   const chatLogUpdaterRef = useRef<(updater: any) => void>(() => {});
 
@@ -552,6 +562,15 @@ export default function App() {
   } = courseWizard;
 
   // ── Hook: 插件与 AI 提供商生命周期管理 ──
+  const pluginManagementData = usePluginManagement({
+    session,
+    host,
+    lang,
+    addToast,
+    setChatLog: (updater: any) => chatLogUpdaterRef.current(updater),
+    setTeacherTab,
+    fetchLessons,
+  });
   const {
     plugins,
     setPlugins,
@@ -598,15 +617,7 @@ export default function App() {
     handleDeletePlugin,
     handleApprove,
     handleReject,
-  } = usePluginManagement({
-    session,
-    host,
-    lang,
-    addToast,
-    setChatLog: (updater: any) => chatLogUpdaterRef.current(updater),
-    setTeacherTab,
-    fetchLessons,
-  });
+  } = pluginManagementData;
 
   const [agentProviderId, setAgentProviderId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
@@ -648,6 +659,15 @@ export default function App() {
   } = quizGenerator;
 
   // ── C1-R2d: 学生域 hooks ─────────────────────────────────────────────────
+  const studentViewStateData = useStudentViewState({
+    activeStudentId,
+    activeRole,
+    students,
+    liveClassFocusLocked,
+    setIsFollowingTeacher,
+    lang,
+    addToast,
+  });
   const {
     studentViewStatus,
     setStudentViewStatus,
@@ -661,14 +681,14 @@ export default function App() {
     isStudentLessonContentCollapsed,
     setIsStudentLessonContentCollapsed,
     notifyLockedNavigation,
-  } = useStudentViewState({
+  } = studentViewStateData;
+  const studentOpsData = useStudentOps({
     activeStudentId,
     activeRole,
+    selectedLesson,
     students,
-    liveClassFocusLocked,
-    setIsFollowingTeacher,
-    lang,
-    addToast,
+    quizStudentAnswersRef,
+    setStudentViewStatus,
   });
   const {
     studentDashboardData,
@@ -681,14 +701,7 @@ export default function App() {
     fetchStudentProgress,
     updateStudentProgress,
     submitQuizAssignment,
-  } = useStudentOps({
-    activeStudentId,
-    activeRole,
-    selectedLesson,
-    students,
-    quizStudentAnswersRef,
-    setStudentViewStatus,
-  });
+  } = studentOpsData;
 
   const [rosterSearchQuery, setRosterSearchQuery] = useState('');
   const [rosterTagFilter, setRosterTagFilter] = useState<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>(
@@ -951,6 +964,20 @@ export default function App() {
 
   useLmsBridge(session);
 
+  const agentChatData = useAgentChat({
+    lang,
+    t,
+    selectedLesson,
+    effectiveAgentProviderId,
+    expandedClassId,
+    fetchLessons,
+    fetchClasses,
+    fetchStudents,
+    fetchClassStudents,
+    fetchClassProgress,
+    fetchClassDashboard,
+    fetchElements,
+  });
   const {
     personaId,
     setPersonaId,
@@ -966,20 +993,7 @@ export default function App() {
     handleChatDrop,
     handleSend,
     handleClearAgentMemory,
-  } = useAgentChat({
-    lang,
-    t,
-    selectedLesson,
-    effectiveAgentProviderId,
-    expandedClassId,
-    fetchLessons,
-    fetchClasses,
-    fetchStudents,
-    fetchClassStudents,
-    fetchClassProgress,
-    fetchClassDashboard,
-    fetchElements,
-  });
+  } = agentChatData;
 
   chatLogUpdaterRef.current = setChatLog;
 
@@ -1184,36 +1198,82 @@ export default function App() {
     };
   }, [isStudentLiveMode, isFollowingTeacher, activeStudentId, liveStudentParam, lang]);
 
+
+  // ── C1-R3: AppData 组装（全部 hooks 返回值 + App 局部值） ─────────────────
+  // value 为每渲染新对象：全库仅 LoginPage 使用 React.memo，各 tab 本就随 App
+  // 渲染而重渲染，context 传递不劣于现状；未来引入 memo 时再按领域拆分 context。
+  const appData: AppDataValue = {
+    addToast,
+    ...systemData,
+    ...resourceLibraryData,
+    ...lessonCrudData,
+    ...classOpsData,
+    ...studentViewStateData,
+    ...studentOpsData,
+    ...sessionBootstrapData,
+    ...classroomLiveData,
+    ...labAndScheduleData,
+    ...pluginManagementData,
+    ...agentChatData,
+    ...quizGenerator,
+    ...courseWizard,
+    ...classBatch,
+    ...lessonTimelineData,
+    ...studentNotificationsHook,
+    ...gradeExport,
+    ...lessonFilteringData,
+    t,
+    isApprovalsCollapsed,
+    setIsApprovalsCollapsed,
+    isProcessesCollapsed,
+    setIsProcessesCollapsed,
+    whiteboardRef,
+    paletteEdit,
+    handlePaletteActivate,
+    handlePaletteConfirm,
+    setPaletteEdit,
+    session,
+  };
+
   if (sessionLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-        <Loader2 size={48} className="text-indigo-500 animate-spin" />
-        <span className="text-white text-sm mt-4 font-semibold tracking-wide">
-          {lang === 'zh' ? '正在连接安全核心数据库...' : 'Connecting Secure OS Core Database...'}
-        </span>
-      </div>
+      <AppDataProvider value={appData}>
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+          <Loader2 size={48} className="text-indigo-500 animate-spin" />
+          <span className="text-white text-sm mt-4 font-semibold tracking-wide">
+            {lang === 'zh' ? '正在连接安全核心数据库...' : 'Connecting Secure OS Core Database...'}
+          </span>
+        </div>
+      </AppDataProvider>
     );
   }
 
   if (!session) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />;
+    return (
+      <AppDataProvider value={appData}>
+        <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />
+      </AppDataProvider>
+    );
   }
 
   // SEC-AUTH-06: 默认密码强制改密门 —— 种子账号（admin/admin、teacher/teacher）改密前
   // 不渲染应用外壳；服务端 enforcePasswordChanged 对写操作兜底拦截
   if (session.mustChangePassword) {
     return (
-      <ForcedPasswordChangeGate
-        lang={lang}
-        username={session.username}
-        onDone={() => setSession({ ...session, mustChangePassword: false })}
-        onLogout={handleLogout}
-      />
+      <AppDataProvider value={appData}>
+        <ForcedPasswordChangeGate
+          lang={lang}
+          username={session.username}
+          onDone={() => setSession({ ...session, mustChangePassword: false })}
+          onLogout={handleLogout}
+        />
+      </AppDataProvider>
     );
   }
 
   return (
-    <>
+    <AppDataProvider value={appData}>
+      <>
       {/* 大屏展台独立窗口：占满整个视口，不渲染平台外壳（导航/侧栏/顶栏都无意义） */}
       {isStageDisplayMode && (
         <StageDisplayView
@@ -1872,6 +1932,7 @@ export default function App() {
           <SystemErrorCenterModal />
         </div>
       )}
-    </>
+      </>
+    </AppDataProvider>
   );
 }

@@ -30,6 +30,7 @@ export default defineConfig({
       'src/services/__tests__/**/*.test.{ts,tsx}',
       'src/store/__tests__/**/*.test.{ts,tsx}',
       'src/hooks/**/__tests__/**/*.test.{ts,tsx}',
+      'src/context/**/__tests__/**/*.test.{ts,tsx}',
     ],
 
     // CHANGELOG[v0.3.21]：lti-provider-plugin.test.ts 引用 v2_plugins/*/*源码、
