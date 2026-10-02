@@ -133,15 +133,7 @@ export interface TeacherViewProps {
   // ── TimetableView ───────────────────────────────────────────────────
   onSchedulesUpdated: () => Promise<void>;
 
-  // ── AdminDirectoryView ──────────────────────────────────────────────
-  onLogout: () => void;
-  aiProviders: AIProvider[];
-  testingProviderId: string | null;
-  onAIProvidersChanged: () => void;
-  onTriggerTour?: () => void;
-  siteInfo?: any;
-  onSiteInfoChanged?: (info: any) => void;
-
+  // ── AdminDirectoryView：C1-R3 后全部数据经 AppDataContext 取数 ──
   // ── ComputerLabView ─────────────────────────────────────────────────
   computerLabs: any[];
   onRefresh: () => Promise<void>;
@@ -399,7 +391,7 @@ export function TeacherView(props: TeacherViewProps) {
           ) : teacherTab === 'timetable' ? (
             <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
           ) : teacherTab === 'admin_directory' ? (
-            <AdminDirectoryView {...props} />
+            <AdminDirectoryView />
           ) : teacherTab === 'computer_labs' ? (
             <ComputerLabView computerLabs={computerLabs} onRefresh={onRefresh} lang={lang} classes={classes} />
           ) : teacherTab === 'help' ? (

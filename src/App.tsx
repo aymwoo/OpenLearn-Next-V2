@@ -1222,6 +1222,8 @@ export default function App() {
     ...studentNotificationsHook,
     ...gradeExport,
     ...lessonFilteringData,
+    onLogout: handleLogout,
+    onAIProvidersChanged: fetchAIProviders,
     t,
     lessons,
     classes,
@@ -1597,13 +1599,6 @@ export default function App() {
               setFilterThisMonth={setFilterThisMonth}
               copyingLessonId={copyingLessonId}
               onSchedulesUpdated={fetchTodaySchedules}
-              onLogout={handleLogout}
-              aiProviders={aiProviders}
-              testingProviderId={testingProviderId}
-              onAIProvidersChanged={fetchAIProviders}
-              onTriggerTour={() => setIsTourOpen(true)}
-              siteInfo={siteInfo}
-              onSiteInfoChanged={setSiteInfo}
               computerLabs={computerLabs}
               onRefresh={fetchLabs}
               registeredCommands={registeredCommands}

@@ -65,6 +65,9 @@ export type AppExtras = Pick<
   setIsApprovalsCollapsed: (v: boolean) => void;
   isProcessesCollapsed: boolean;
   setIsProcessesCollapsed: (v: boolean) => void;
+  /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders） */
+  onLogout: () => void;
+  onAIProvidersChanged: () => void;
 };
 
 export type AppDataValue = ReturnType<typeof useToast> &
