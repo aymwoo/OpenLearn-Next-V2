@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **插件系统深度演进与防护增强（Worker 积分 RPC + 路由防碰撞 + SHA-256 完整性校验）**：
+  - **Worker RPC 结构化克隆安全过滤与积分 Token 支持**：
+    - `packages/core/worker-runtime/service-host.ts`：引入 `sanitizeClonableValue` 清洗逻辑并在 `handleInvoke` 捕获 `DataCloneError` 时自动安全降级，剥离无法通过跨线程结构化克隆传递的函数与不可枚举类属性，彻底阻断线程通信崩溃；
+    - `packages/core/worker-runtime/worker-manager.ts`：将 `@openlearn/core:IPointsDimensionRegistry` 与 `@openlearn/core:IPointsLedgerService` 纳入 `ALL_SERVICE_TOKENS` 允许清单，开放积分 RPC 互通能力。
+  - **静态路由命名空间与防碰撞防护**：
+    - `packages/core/plugin-host/index.ts`：为插件声明的 `deploy.staticRoute` 增加三层安全校验门禁：
+      - `SEC-ROUTE-01`：强制要求静态路由以 `/` 起始且严禁含路径穿越符 `..`；
+      - `SEC-ROUTE-02`：禁止挂载系统保留路径与前缀（阻断 `/`、`/api`、`/socket.io`、`/runtime`、`/docs`、`/admin`、`/health` 等）；
+      - `SEC-ROUTE-03`：多插件冲突检测，防止不同插件互相抢占覆盖相同的静态路由命名空间，并在插件卸载时安全释放路由。
+  - **分发包 SHA-256 完整性哈希比对校验**：
+    - `packages/core/plugin-host/plugin-distribution-manager.ts`：在 `PluginPackageMetadata` 中增加可选 `integrity` 字段，分发仓库拉取插件包时支持比对 `sha256-<base64>` 或 64 位十六进制散列值，一旦哈希不匹配立即抛错阻断安装，杜绝传输劫持与恶意篡改。
+  - **测试覆盖与质量验证**：
+    - 在 `service-host.test.ts`、`plugin-distribution-manager.test.ts` 与 `plugin-hardening.test.ts` 中补充覆盖克隆降级、哈希校验、路由格式与冲突防御的完备单测，全模块测试通过率 100%（243/243 passed）。
+
 ## [0.5.0] - 2026-10-02
 
 - **插件体系与微前端深化（阶段 P）：EventBus 订阅精准退订 + 沙箱 Bridge 消息防爆**：

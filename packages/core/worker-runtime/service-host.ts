@@ -65,6 +65,40 @@ import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '
 /** Maximum length of serialized stack trace in characters. */
 const STACK_CAP = 4096;
 
+/**
+ * 递归清洗不可结构化克隆的值（如函数属性、循环引用、未知复杂对象原型）。
+ * 用于 postMessage 序列化降级，防止 DataCloneError。
+ */
+export function sanitizeClonableValue(val: unknown, depth = 0, seen = new WeakSet()): unknown {
+  if (depth > 12) return null;
+  if (val === null || val === undefined) return val;
+  const t = typeof val;
+  if (t === 'function') return undefined;
+  if (t === 'symbol' || t === 'bigint') return val.toString();
+  if (t !== 'object') return val;
+
+  if (ArrayBuffer.isView(val) || val instanceof ArrayBuffer) return val;
+  if (val instanceof Date) return new Date(val.getTime());
+  if (val instanceof RegExp) return new RegExp(val.source, val.flags);
+
+  if (seen.has(val as object)) return '[Circular]';
+  seen.add(val as object);
+
+  if (Array.isArray(val)) {
+    return val.map((item) => sanitizeClonableValue(item, depth + 1, seen));
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+    if (typeof v === 'function') continue;
+    const clean = sanitizeClonableValue(v, depth + 1, seen);
+    if (clean !== undefined) {
+      out[k] = clean;
+    }
+  }
+  return out;
+}
+
 // ── ServiceHost ────────────────────────────────────────────────────────────
 
 /**
@@ -778,11 +812,21 @@ export class ServiceHost {
       const result = await method.apply(service, msg.args);
 
       // ── Return result to Worker ───────────────────────────────────
-      transport.postMessage({
-        type: 'result',
-        invokeId: msg.invokeId,
-        value: result,
-      });
+      try {
+        transport.postMessage({
+          type: 'result',
+          invokeId: msg.invokeId,
+          value: result,
+        });
+      } catch (cloneErr: any) {
+        // DataCloneError 兜底降级：清洗不可克隆的原型与函数属性
+        const safeValue = sanitizeClonableValue(result);
+        transport.postMessage({
+          type: 'result',
+          invokeId: msg.invokeId,
+          value: safeValue,
+        });
+      }
     } catch (err: unknown) {
       // ── Serialize error with stack capped at STACK_CAP ─────────────
       const error = err instanceof Error ? err : new Error(String(err));

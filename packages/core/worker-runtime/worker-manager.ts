@@ -73,6 +73,8 @@ export const ALL_SERVICE_TOKENS = [
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
   '@openlearn/core:IPluginHost',
+  '@openlearn/core:IPointsDimensionRegistry',
+  '@openlearn/core:IPointsLedgerService',
 ];
 
 /** 最大并行 Worker 数（T-05-09: DoS 缓解）。 */

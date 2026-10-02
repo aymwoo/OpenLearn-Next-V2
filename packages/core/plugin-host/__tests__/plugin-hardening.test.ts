@@ -51,15 +51,25 @@ function createTestDb(): Database.Database {
   return db;
 }
 
-async function createMockZip(manifestId: string, name: string): Promise<Buffer> {
+async function createMockZip(
+  manifestId: string,
+  name: string,
+  deploy?: { staticRoute?: string; staticDir?: string; script?: string },
+): Promise<Buffer> {
   const zip = new JSZip();
-  const manifest = {
+  const manifest: any = {
     id: manifestId,
     name: name,
     version: '1.0.0',
     main: 'index.js',
     requires: [],
   };
+  if (deploy) {
+    manifest.deploy = deploy;
+    if (deploy.staticDir) {
+      zip.file(path.posix.join(deploy.staticDir, 'index.html'), '<h1>Static App</h1>');
+    }
+  }
   zip.file('manifest.json', JSON.stringify(manifest));
   zip.file(
     'index.js',
@@ -267,5 +277,78 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
         value: 'dark',
       }),
     );
+  });
+
+  // 4. SEC-ROUTE-01: Static Route Format Validation
+  it('should reject staticRoute with invalid format (missing leading slash or path traversal)', async () => {
+    const mockApp = { use: vi.fn() };
+    host.setExpressApp(mockApp);
+
+    // Missing leading slash
+    const zip1 = await createMockZip('ext-invalid-route-1', 'Invalid Route 1', {
+      staticRoute: 'custom/app',
+      staticDir: 'public',
+    });
+    await expect(host.installPluginFromZip(zip1)).rejects.toThrow(
+      'must start with "/" and cannot contain ".."',
+    );
+
+    // Path traversal
+    const zip2 = await createMockZip('ext-invalid-route-2', 'Invalid Route 2', {
+      staticRoute: '/custom/../etc',
+      staticDir: 'public',
+    });
+    await expect(host.installPluginFromZip(zip2)).rejects.toThrow(
+      'must start with "/" and cannot contain ".."',
+    );
+  });
+
+  // 5. SEC-ROUTE-02: System Reserved Route Protection
+  it('should reject staticRoute targeting reserved system routes', async () => {
+    const mockApp = { use: vi.fn() };
+    host.setExpressApp(mockApp);
+
+    const reservedRoutes = ['/', '/api', '/api/v1', '/socket.io', '/admin/dashboard', '/health'];
+    for (const reserved of reservedRoutes) {
+      const zip = await createMockZip(`ext-reserved-${reserved.replace(/[^a-z0-9]/gi, '_')}`, 'Reserved Plugin', {
+        staticRoute: reserved,
+        staticDir: 'public',
+      });
+      await expect(host.installPluginFromZip(zip)).rejects.toThrow(
+        /Security Violation: Plugin ".*" cannot register reserved system route/,
+      );
+    }
+  });
+
+  // 6. SEC-ROUTE-03: Static Route Conflict Detection & Release upon Uninstall
+  it('should prevent route conflicts between plugins and release route upon uninstall', async () => {
+    const mockApp = { use: vi.fn(), _router: { stack: [] } };
+    host.setExpressApp(mockApp);
+
+    const zipA = await createMockZip('ext-plugin-a', 'Plugin A', {
+      staticRoute: '/ext/my-dashboard',
+      staticDir: 'storage/dist',
+    });
+    const zipB = await createMockZip('ext-plugin-b', 'Plugin B', {
+      staticRoute: '/ext/my-dashboard',
+      staticDir: 'storage/dist',
+    });
+
+    // 1. Install Plugin A successfully
+    const manifestA = await host.installPluginFromZip(zipA);
+    expect(manifestA.id).toBe('ext-plugin-a');
+    expect(mockApp.use).toHaveBeenCalledWith('/ext/my-dashboard', expect.any(Function), expect.any(Function));
+
+    // 2. Install Plugin B with conflicting route should fail
+    await expect(host.installPluginFromZip(zipB)).rejects.toThrow(
+      'Static route conflict: "/ext/my-dashboard" is already registered by plugin "ext-plugin-a"',
+    );
+
+    // 3. Uninstall Plugin A to release the route
+    await host.uninstallPlugin('ext-plugin-a');
+
+    // 4. Install Plugin B now succeeds
+    const manifestB = await host.installPluginFromZip(zipB);
+    expect(manifestB.id).toBe('ext-plugin-b');
   });
 });

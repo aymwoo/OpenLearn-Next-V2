@@ -59,6 +59,55 @@ describe('PluginDistributionManager (P7-B7 EU-01)', () => {
     expect(mockHost.installPluginFromZip).toHaveBeenCalled();
   });
 
+  it('should verify SHA-256 integrity when specified on package metadata', async () => {
+    const mockHost = createMockPluginHost();
+    const manager = new PluginDistributionManager(mockHost);
+    const repo = new LocalRepositoryAdapter('repo_secure', 'Secure Repo');
+
+    const zipBuffer = Buffer.from('secure_payload_bytes');
+    const crypto = await import('node:crypto');
+    const validHash = crypto.createHash('sha256').update(zipBuffer).digest('hex');
+
+    repo.addPackage(
+      {
+        id: 'ext-secure',
+        name: 'Secure Plugin',
+        version: '1.0.0',
+        description: 'Secure plugin',
+        repositoryId: 'repo_secure',
+        integrity: validHash,
+      },
+      zipBuffer,
+    );
+    manager.registerRepository(repo);
+
+    const res = await manager.installFromRepository('repo_secure', 'ext-secure');
+    expect(res.pluginId).toBe('ext-quiz-test');
+  });
+
+  it('should reject installation if SHA-256 integrity hash does not match (anti-tamper)', async () => {
+    const mockHost = createMockPluginHost();
+    const manager = new PluginDistributionManager(mockHost);
+    const repo = new LocalRepositoryAdapter('repo_tampered', 'Tampered Repo');
+
+    repo.addPackage(
+      {
+        id: 'ext-tampered',
+        name: 'Tampered Plugin',
+        version: '1.0.0',
+        description: 'Tampered plugin',
+        repositoryId: 'repo_tampered',
+        integrity: 'sha256-invalid_digest_base64_tampered==',
+      },
+      Buffer.from('tampered_content'),
+    );
+    manager.registerRepository(repo);
+
+    await expect(manager.installFromRepository('repo_tampered', 'ext-tampered')).rejects.toThrow(
+      /Integrity verification failed for plugin "ext-tampered"/i,
+    );
+  });
+
   it('should report health and register in PluginCompositionModule', () => {
     const mockHost = createMockPluginHost();
     const manager = new PluginDistributionManager(mockHost);

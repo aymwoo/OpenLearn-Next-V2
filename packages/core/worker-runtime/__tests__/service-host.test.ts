@@ -726,5 +726,64 @@ describe('ServiceHost ActionRegistry tracking', () => {
         'CREATE TABLE IF NOT EXISTS plugin_research_activities (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
       );
     });
+
+    it('should sanitize non-clonable functions and complex return objects to prevent DataCloneError', async () => {
+      class CustomService {
+        async getComplexData() {
+          return {
+            points: 100,
+            dimension: 'homework',
+            helperMethod: () => 'do-not-clone',
+            nested: {
+              active: true,
+              innerFn: function () {},
+            },
+          };
+        }
+      }
+
+      const svc = new CustomService();
+      const registry = createMockServiceRegistry({
+        '@openlearn/core:IPointsLedgerService': svc,
+      });
+      const capGuard = { assertAllowed: vi.fn() };
+      const host = new ServiceHost(registry as any, capGuard as any, 'plugin:test', ['points:read']);
+
+      // 模拟一个对原始含函数对象抛出 DataCloneError 的 transport
+      const messages: any[] = [];
+      const transport: any = {
+        postMessage(msg: any) {
+          // 第一次如果 value 包含 function 则模拟 V8 postMessage 抛出 DataCloneError
+          if (typeof msg?.value?.helperMethod === 'function') {
+            const err = new Error('function () { [native code] } could not be cloned');
+            err.name = 'DataCloneError';
+            throw err;
+          }
+          messages.push(msg);
+        },
+      };
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-points-1',
+          token: '@openlearn/core:IPointsLedgerService',
+          method: 'getComplexData',
+          args: [],
+        },
+        transport,
+      );
+
+      expect(messages.length).toBe(1);
+      expect(messages[0].type).toBe('result');
+      expect(messages[0].invokeId).toBe('inv-points-1');
+      expect(messages[0].value).toEqual({
+        points: 100,
+        dimension: 'homework',
+        nested: {
+          active: true,
+        },
+      });
+    });
   });
 });

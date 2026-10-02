@@ -17,6 +17,7 @@ export interface PluginPackageMetadata {
   readonly repositoryId: string;
   readonly downloadUrl?: string;
   readonly manifest?: Manifest;
+  readonly integrity?: string;
 }
 
 export interface IPluginRepositoryAdapter {
@@ -139,7 +140,30 @@ export class PluginDistributionManager implements IPluginDistributionManager {
       throw new Error(`Repository "${repoId}" not found`);
     }
 
+    const pkgMeta = await repo.getPackage(pluginId);
     const zipBuffer = await repo.fetchZipBuffer(pluginId);
+
+    // SEC-INTEGRITY: 如果元数据中声明了 integrity，强校验 SHA-256 哈希
+    if (pkgMeta?.integrity) {
+      const crypto = await import('node:crypto');
+      const hash = crypto.createHash('sha256').update(zipBuffer);
+      const expected = pkgMeta.integrity.trim();
+      let matches = false;
+      if (expected.startsWith('sha256-')) {
+        const base64Digest = hash.digest('base64');
+        matches = expected.slice(7) === base64Digest;
+      } else {
+        const hexDigest = hash.digest('hex');
+        matches = expected.toLowerCase() === hexDigest.toLowerCase();
+      }
+      if (!matches) {
+        throw new Error(
+          `[PluginDistributionManager] Integrity verification failed for plugin "${pluginId}". ` +
+            `Downloaded ZIP checksum does not match repository metadata.`,
+        );
+      }
+    }
+
     return this.installFromZip(zipBuffer);
   }
 

@@ -2059,7 +2059,32 @@ export class PluginHost {
       }
       // 4d. Register static route if declared in manifest
       if (manifest.deploy?.staticRoute && manifest.deploy?.staticDir && this.expressApp) {
-        const route = manifest.deploy.staticRoute;
+        const route = manifest.deploy.staticRoute.trim();
+        // SEC-ROUTE-01: 静态路由必须以 '/' 开头且不能包含 '..'
+        if (!route.startsWith('/') || route.includes('..')) {
+          throw new Error(
+            `[PluginHost] Invalid staticRoute "${route}" for plugin "${manifest.id}": must start with "/" and cannot contain ".."`,
+          );
+        }
+        // SEC-ROUTE-02: 禁止注册系统核心保留前缀
+        const normalized = route.toLowerCase();
+        const SYSTEM_RESERVED_ROUTES = ['/api', '/socket.io', '/runtime', '/docs', '/admin', '/health'];
+        if (
+          route === '/' ||
+          SYSTEM_RESERVED_ROUTES.some((res) => normalized === res || normalized.startsWith(res + '/'))
+        ) {
+          throw new Error(
+            `[PluginHost] Security Violation: Plugin "${manifest.id}" cannot register reserved system route "${route}"`,
+          );
+        }
+        // SEC-ROUTE-03: 检查已有插件路由冲突
+        for (const [ownerId, existingRoute] of this._registeredRoutes.entries()) {
+          if (ownerId !== manifest.id && existingRoute.toLowerCase() === normalized) {
+            throw new Error(
+              `[PluginHost] Static route conflict: "${route}" is already registered by plugin "${ownerId}"`,
+            );
+          }
+        }
         const absDir = path.join(pluginDir, manifest.deploy.staticDir);
         if (fs.existsSync(absDir)) {
           this.expressApp.use(route, ...createPluginStaticMiddleware(absDir));
