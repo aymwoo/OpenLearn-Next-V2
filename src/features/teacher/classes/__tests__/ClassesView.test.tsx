@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { ClassesView } from '../ClassesView';
+import { AppDataProvider } from '../../../../context/AppDataContext';
 import { translations } from '../../../../i18n';
 import type { ClassType, StudentType } from '../../../../types/app';
 
@@ -140,12 +141,20 @@ afterEach(() => {
 
 describe('ClassesView', () => {
   it('renders the School Management header with classes & students labels', () => {
-    render(<ClassesView {...makeProps()} />);
+    render(
+      <AppDataProvider value={makeProps() as any}>
+        <ClassesView />
+      </AppDataProvider>
+    );
     expect(screen.getByText('班级管理 & 学生管理')).toBeTruthy();
   });
 
   it('renders the batch mode toggle button', () => {
-    render(<ClassesView {...makeProps()} />);
+    render(
+      <AppDataProvider value={makeProps() as any}>
+        <ClassesView />
+      </AppDataProvider>
+    );
     expect(screen.getByText('批量管理')).toBeTruthy();
   });
 });
