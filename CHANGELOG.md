@@ -10,7 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Features
+- **传输安全与 AI 服务韧性熔断加固（阶段 B1/B5：CSRF 纵深防御 + AI 出站请求超时熔断与重试）**：
+  - **专项 B1：CSRF 纵深防御（Origin/Referer 双重源回退校验）**：
+    - `server/middleware/csrf.ts`：针对浏览器未发送 `Sec-Fetch-Site`（如旧版浏览器、部分代理或特定同源跳转）的边缘场景，增加基于 `Origin` 与 `Referer` 头部的二级源校验门禁；
+    - 对 POST/PUT/PATCH/DELETE 变异请求进行严格的 Host 比对，坚决拦截非法跨站伪造来源（403 `FORBIDDEN_CROSS_SITE`），同时保持沙箱 iframe 豁免端点与同源调用的完全兼容；
+    - 扩充 `server/__tests__/csrf.test.ts`，新增 5 项针对 Origin/Referer 拦截与放行的单测（13/13 passed）。
+  - **专项 B5：AI 出站请求超时熔断与重试全覆盖**：
+    - 消除 `server/routes/` 中残留的原生裸 `fetch` 与失控长超时定时器，统一收敛至 Core `fetchWithRetry` 机制；
+    - `server/routes/plugins.ts`：`/api/ai-providers/test` 挂载 10s 快速熔断超时与 504 `AI_GATEWAY_TIMEOUT` 友好转换；
+    - `server/routes/grading.ts`：AI 打分与评语生成挂载 30s 超时与 2 次指数退避重试（带抖动 Jitter）；
+    - `server/routes/schedules.ts`：AI 排课 OCR/规则提取挂载 60s 超时与 2 次指数退避重试，移除旧版 300s 冗长定时器；
+    - 新增 `server/__tests__/ai-resilience-routes.test.ts`，验证超时熔断与正常流转的端点级表现（2/2 passed）。
 
 - **前端与内核状态治理（阶段 C2/C3：Store 镜像环路解耦 + 课时引擎有限状态机）**：
   - **专项 C2：`appStore` 与 `uiStore` 镜像解耦与单一事实源确立**：

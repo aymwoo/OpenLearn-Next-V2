@@ -51,7 +51,50 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
     return;
   }
 
-  // Sec-Fetch-Site 缺失：非浏览器客户端（curl/API）或老浏览器 —— 放行，
-  // SameSite=Lax 承担兜底（见文件头注释判定表）。
+  // Sec-Fetch-Site 缺失时：降级到 Origin / Referer 双重校验（OWASP 防御纵深）
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  const host = req.headers.host;
+  const path = req.path;
+
+  // 1. 如果带有 Origin 头
+  if (typeof origin === 'string' && origin !== '') {
+    if (origin === 'null') {
+      // opaque origin（如非同源沙箱 iframe）仅允许豁免路径
+      if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
+        res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Opaque origin write request blocked' });
+        return;
+      }
+    } else {
+      try {
+        const originHost = new URL(origin).host;
+        if (host && originHost.toLowerCase() !== host.toLowerCase()) {
+          if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
+            res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Cross-site write request blocked (Origin mismatch)' });
+            return;
+          }
+        }
+      } catch {
+        res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Invalid Origin header' });
+        return;
+      }
+    }
+  } else if (typeof referer === 'string' && referer !== '') {
+    // 2. 无 Origin 但带有 Referer
+    try {
+      const refererHost = new URL(referer).host;
+      if (host && refererHost.toLowerCase() !== host.toLowerCase()) {
+        if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
+          res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Cross-site write request blocked (Referer mismatch)' });
+          return;
+        }
+      }
+    } catch {
+      res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Invalid Referer header' });
+      return;
+    }
+  }
+
+  // Sec-Fetch-Site、Origin 与 Referer 均无：非浏览器客户端（curl/API）或内部直接调用，放行
   next();
 }

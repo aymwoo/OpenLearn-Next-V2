@@ -9,6 +9,7 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl } from '../utils/url-safety.js';
+import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import {
   COMMUNITY_REGISTRY_ENV,
   fetchCommunityRegistry,
@@ -841,9 +842,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
       let cleanUrl = api_url.trim();
       if (!cleanUrl.endsWith('/chat/completions')) {
         cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
@@ -854,20 +852,31 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: `Blocked unsafe AI provider URL: ${urlSafety.reason}` });
       }
 
-      const response = await fetch(cleanUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${api_key || ''}`,
-        },
-        body: JSON.stringify({
-          model: model_name,
-          messages: [{ role: 'user', content: 'Say connected' }],
-          max_tokens: 5,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      let response: Response;
+      try {
+        response = await fetchWithRetry(cleanUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${api_key || ''}`,
+          },
+          body: JSON.stringify({
+            model: model_name,
+            messages: [{ role: 'user', content: 'Say connected' }],
+            max_tokens: 5,
+          }),
+          timeoutMs: 10_000,
+          maxAttempts: 1,
+        });
+      } catch (err: any) {
+        if (err instanceof AIFetchTimeoutError) {
+          return res.status(504).json({
+            success: false,
+            error: 'AI Provider request timed out after 10000ms. Please verify the URL or provider availability.',
+          });
+        }
+        throw err;
+      }
 
       const responseText = await response.text();
       if (response.ok) {

@@ -81,4 +81,33 @@ describe('B1: CSRF Sec-Fetch 门控', () => {
     const res = await get('/api/sample/read', { 'Sec-Fetch-Site': 'cross-site' });
     expect(res.status).toBe(200);
   });
+
+  it('无 Sec-Fetch-Site 时：跨站 Origin POST 被拒绝（403 FORBIDDEN_CROSS_SITE）', async () => {
+    const res = await post('/api/sample/write', { Origin: 'https://attacker.com' });
+    expect(res.status).toBe(403);
+    const body: any = await res.json();
+    expect(body.code).toBe('FORBIDDEN_CROSS_SITE');
+  });
+
+  it('无 Sec-Fetch-Site 时：同源 Origin POST 放行', async () => {
+    const res = await post('/api/sample/write', { Origin: baseUrl });
+    expect(res.status).toBe(200);
+  });
+
+  it('无 Sec-Fetch-Site 时：跨站 Referer POST 被拒绝（403 FORBIDDEN_CROSS_SITE）', async () => {
+    const res = await post('/api/sample/write', { Referer: 'https://attacker.com/malicious.html' });
+    expect(res.status).toBe(403);
+    const body: any = await res.json();
+    expect(body.code).toBe('FORBIDDEN_CROSS_SITE');
+  });
+
+  it('无 Sec-Fetch-Site 时：同源 Referer POST 放行', async () => {
+    const res = await post('/api/sample/write', { Referer: `${baseUrl}/index.html` });
+    expect(res.status).toBe(200);
+  });
+
+  it('无 Sec-Fetch-Site 时：豁免路径跨站 Origin 放行', async () => {
+    const res = await post('/api/auth/login', { Origin: 'https://remote-client.org' });
+    expect(res.status).toBe(200);
+  });
 });

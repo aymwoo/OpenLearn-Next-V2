@@ -5,6 +5,7 @@ import type { ServerContext, StoredAIProvider } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
+import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -285,41 +286,27 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
           },
         ];
 
-        const controller = new AbortController();
-        let timeoutTriggered = false;
-        const timeout = setTimeout(() => {
-          timeoutTriggered = true;
-          console.warn(`[OCR Timeout] AI OCR request to ${provider.name} timed out after 300 seconds (300000ms)`);
-          controller.abort();
-        }, 300000); // 300s timeout
-
         try {
           console.log(`[OCR Request] Sending fetch request to AI Provider...`);
-          const response = await fetch(chatUrl, {
+          const response = await fetchWithRetry(chatUrl, {
             method: 'POST',
             headers,
-            signal: controller.signal,
             body: JSON.stringify({
               model: provider.model_name,
               messages,
               temperature: 0.1,
               max_tokens: 8192,
             }),
+            timeoutMs: 60_000,
+            maxAttempts: 2,
           });
 
-          clearTimeout(timeout);
           console.log(`[OCR Response] Received response. Status: ${response.status} ${response.statusText}`);
 
           const responseText = await response.text();
           console.log(
             `[OCR Response Body] Length: ${responseText?.length || 0} bytes. Preview: ${responseText?.substring(0, 500)}`,
           );
-
-          if (!response.ok) {
-            throw new Error(
-              `AI Provider (${provider.name}) request failed (${response.status}): ${responseText || response.statusText}`,
-            );
-          }
 
           if (!responseText || !responseText.trim()) {
             throw new Error(
@@ -349,13 +336,11 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
             );
           }
         } catch (fetchErr: any) {
-          clearTimeout(timeout);
           console.error(`[OCR Fetch Error] Detailed Error:`, {
             name: fetchErr.name,
             message: fetchErr.message,
             stack: fetchErr.stack,
             cause: fetchErr.cause,
-            timeoutTriggered,
           });
           throw fetchErr;
         }

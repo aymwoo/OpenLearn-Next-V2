@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext, StoredAIProvider } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
+import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
 
 export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -726,7 +727,7 @@ ${examsText}
             Authorization: `Bearer ${provider.api_key.trim()}`,
           };
 
-          const response = await fetch(chatUrl, {
+          const response = await fetchWithRetry(chatUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -735,12 +736,9 @@ ${examsText}
               temperature: 0.7,
               max_tokens: 1024,
             }),
+            timeoutMs: 30_000,
+            maxAttempts: 2,
           });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`AI request failed (${response.status}): ${errorText}`);
-          }
 
           const data = await response.json();
           text = data.choices?.[0]?.message?.content?.trim() || '';
