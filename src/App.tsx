@@ -10,6 +10,8 @@ import {
 import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
 import { postAssignmentSubmission } from './services/assignmentService.js';
 import { getClassStudents } from './services/rosterService.js';
+import { useStudentViewState } from './hooks/useStudentViewState';
+import { useStudentOps } from './hooks/useStudentOps';
 import { useLessonCrud } from './hooks/useLessonCrud';
 import { useClassOps } from './hooks/useClassOps';
 import { useToast } from './hooks/useToast';
@@ -503,24 +505,7 @@ export default function App() {
   });
 
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
-  const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
   const [liveClassFocusLocked, setLiveClassFocusLocked] = useState(false);
-  // ── 全班专注锁定：学生被教师锁定时，只读跟随当前授课 ──────────────────────
-  // 锁定状态由 students 表中的 locked_lesson_id 派生，或由 ClassroomSyncChannel 广播实时下发。
-  const isStudentLocked =
-    activeRole === 'student' &&
-    ((!!activeStudentId && !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id) || liveClassFocusLocked);
-
-  const notifyLockedNavigation = () => {
-    addToast(
-      lang === 'zh' ? '🔒 全班专注锁定' : '🔒 Class Focus Locked',
-      lang === 'zh'
-        ? '老师已开启全班专注锁定，暂时无法切换页面，请跟随教师当前授课内容。'
-        : 'The teacher locked the class focus. Navigation is disabled — please follow the current lesson.',
-      'warning',
-    );
-  };
-
   // 锁定期间强制跟随教师步调；具体在 studentViewStatus 声明处统一生效
 
   const fetchClasses = async () => {
@@ -692,54 +677,6 @@ export default function App() {
     ? agentProviderId
     : aiProviders[0]?.id || '';
   const selectedAgentProvider = aiProviders.find((provider) => provider.id === effectiveAgentProviderId) || null;
-  const [studentViewStatus, setStudentViewStatusState] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
-
-  // 锁定状态 / 当前视图的最新值：供长期存活的回调（socket、轮询）读取，避免闭包过期
-  const isStudentLockedRef = useRef(isStudentLocked);
-  const studentViewStatusRef = useRef<'dashboard' | 'lesson' | 'assignment'>(studentViewStatus);
-  useEffect(() => {
-    isStudentLockedRef.current = isStudentLocked;
-    studentViewStatusRef.current = studentViewStatus;
-  }, [isStudentLocked, studentViewStatus]);
-
-  // 锁定期间强制跟随教师步调，并确保学生落在课节视图，不会被困在其他页面上
-  useEffect(() => {
-    if (!isStudentLocked) return;
-    setIsFollowingTeacher(true);
-    setStudentViewStatusState('lesson');
-  }, [isStudentLocked]);
-
-  /**
-   * 学生端视图切换的唯一收口点。
-   * 全班专注锁定期间只放行 'lesson'（教师当前授课），其余跳转
-   * （Dashboard、作业工作区、通知直达等）一律拦截并提示。
-   */
-  const setStudentViewStatus = (
-    next:
-      | 'dashboard'
-      | 'lesson'
-      | 'assignment'
-      | ((prev: 'dashboard' | 'lesson' | 'assignment') => 'dashboard' | 'lesson' | 'assignment'),
-  ) => {
-    const resolved = typeof next === 'function' ? next(studentViewStatusRef.current) : next;
-    if (isStudentLockedRef.current && resolved !== 'lesson') {
-      notifyLockedNavigation();
-      return;
-    }
-    setStudentViewStatusState(next as 'dashboard' | 'lesson' | 'assignment');
-  };
-  const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment'>('whiteboard');
-  const [studentSelectedCourseware, setStudentSelectedCourseware] = useState<string | null>(null);
-  const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
-  const [studentFullscreenPanel, setStudentFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
-  const [isStudentLessonContentCollapsed, setIsStudentLessonContentCollapsed] = useState(true);
-
-  // Reset Lesson Content to collapsed when leaving student lesson view
-  useEffect(() => {
-    if (studentViewStatus !== 'lesson') {
-      setIsStudentLessonContentCollapsed(true);
-    }
-  }, [studentViewStatus]);
 
   // ── Hook: AI 目标测验生成器 (Quiz Generator) ──
   const quizGenerator = useQuizGenerator();
@@ -770,6 +707,49 @@ export default function App() {
     subAssignmentTab,
     setSubAssignmentTab,
   } = quizGenerator;
+
+  // ── C1-R2d: 学生域 hooks ─────────────────────────────────────────────────
+  const {
+    studentViewStatus,
+    setStudentViewStatus,
+    isStudentLocked,
+    studentLessonTab,
+    setStudentLessonTab,
+    studentSelectedCourseware,
+    setStudentSelectedCourseware,
+    studentFullscreenPanel,
+    setStudentFullscreenPanel,
+    isStudentLessonContentCollapsed,
+    setIsStudentLessonContentCollapsed,
+    notifyLockedNavigation,
+  } = useStudentViewState({
+    activeStudentId,
+    activeRole,
+    students,
+    liveClassFocusLocked,
+    setIsFollowingTeacher,
+    lang,
+    addToast,
+  });
+  const {
+    studentDashboardData,
+    setStudentDashboardData,
+    studentProgressMap,
+    setStudentProgressMap,
+    selectedAssignment,
+    setSelectedAssignment,
+    fetchStudentDashboard,
+    fetchStudentProgress,
+    updateStudentProgress,
+    submitQuizAssignment,
+  } = useStudentOps({
+    activeStudentId,
+    activeRole,
+    selectedLesson,
+    students,
+    quizStudentAnswersRef,
+    setStudentViewStatus,
+  });
 
   const [rosterSearchQuery, setRosterSearchQuery] = useState('');
   const [rosterTagFilter, setRosterTagFilter] = useState<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>(
@@ -811,7 +791,6 @@ export default function App() {
   const setExpandedStudentId = (id: string | null) => {
     _setExpandedStudentId(id);
   };
-  const [studentProgressMap, setStudentProgressMap] = useState<Record<string, StudentProgressType[]>>({});
   const [isGeneratingAssignment, setIsGeneratingAssignment] = useState<string | null>(null);
   const [assignmentSortOrder, setAssignmentSortOrder] = useState<'dueDate' | 'status' | 'avgScore'>('dueDate');
 
@@ -916,55 +895,6 @@ export default function App() {
     confirmBatchPicker,
   } = classBatch;
 
-  const fetchStudentDashboard = async (id: string) => {
-    try {
-      const { ok, data } = await getStudentDashboard(id);
-      if (ok) {
-        setStudentDashboardData(data);
-        if (data.profile && data.profile.locked_lesson_id) {
-          setSelectedLesson(data.profile.locked_lesson_id);
-          setStudentViewStatus('lesson');
-        }
-      }
-    } catch (e) {}
-  };
-
-  const submitQuizAssignment = async (isTimeLimitExpired = false) => {
-    if (!selectedAssignment) return;
-    const isMcq =
-      selectedAssignment?.content && selectedAssignment.content.startsWith('{"quizType":"mcq_learning_objectives"');
-    const contentToSubmit = isMcq ? JSON.stringify(quizStudentAnswersRef.current) : 'Submitted via Whiteboard';
-
-    try {
-      const { ok } = await postAssignmentSubmission(selectedAssignment.id, {
-        studentId: activeStudentId,
-        content: contentToSubmit,
-      });
-      if (ok) {
-        if (isTimeLimitExpired) {
-          alert('Time is up! Your assessment was successfully submitted automatically.');
-        }
-        await fetchStudentDashboard(activeStudentId!);
-        setStudentViewStatus('dashboard');
-        setSelectedAssignment(null);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    if (!session) return;
-    if (activeRole === 'student' && activeStudentId) {
-      fetchStudentDashboard(activeStudentId);
-      const student = students.find((s) => s.id === activeStudentId);
-      if (student && student.locked_lesson_id) {
-        setSelectedLesson(student.locked_lesson_id);
-        setStudentViewStatus('lesson');
-      }
-    }
-  }, [session, activeRole, activeStudentId, students]);
-
   const activatingPluginsRef = useRef<Set<string>>(new Set());
 
   // Synchronize backend active plugins to frontend PluginHost
@@ -1066,20 +996,6 @@ export default function App() {
     }
   }, [plugins, host]);
 
-  const updateStudentProgress = async (progressVal: number) => {
-    if (activeRole === 'student' && activeStudentId && selectedLesson) {
-      try {
-        await postStudentProgress(activeStudentId, {
-          lessonId: selectedLesson,
-          completed: progressVal === 100,
-          progressPercent: progressVal,
-        });
-      } catch (e) {
-        console.error('Failed to update student progress:', e);
-      }
-    }
-  };
-
   useEffect(() => {
     if (liveClassSelectedClassId && selectedLesson) {
       fetchLiveClassStudentProgress(liveClassSelectedClassId, selectedLesson);
@@ -1093,15 +1009,6 @@ export default function App() {
       fetchClassStudents(liveClassSelectedClassId);
     }
   }, [liveClassSelectedClassId]);
-
-  const fetchStudentProgress = async (id: string) => {
-    try {
-      const { ok, data } = await getStudentProgress(id);
-      if (ok) {
-        setStudentProgressMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
 
   useLmsBridge(session);
 
