@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 import { TeacherView } from '../TeacherView';
+import { AppDataProvider } from '../../../context/AppDataContext';
 
 afterEach(() => {
   cleanup();

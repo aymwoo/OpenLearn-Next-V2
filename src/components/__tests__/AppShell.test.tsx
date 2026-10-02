@@ -4,6 +4,7 @@ import { PluginHostProvider } from '../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../plugin-host/plugin-host';
 import { setSocketInstance } from '../../services/socket-service';
 import { AppShell, AppShellProps } from '../AppShell';
+import { AppDataProvider } from '../../context/AppDataContext';
 
 beforeEach(() => {
   setSocketInstance({
@@ -282,7 +283,9 @@ function makeProps(overrides: Record<string, unknown> = {}): AppShellProps {
 const renderAppShell = (overrides: Record<string, unknown> = {}) =>
   render(
     <PluginHostProvider host={new FrontendPluginHost()}>
-      <AppShell {...makeProps(overrides)} />
+      <AppDataProvider value={makeProps(overrides) as any}>
+        <AppShell {...makeProps(overrides)} />
+      </AppDataProvider>
     </PluginHostProvider>,
   );
 
