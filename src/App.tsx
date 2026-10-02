@@ -332,10 +332,8 @@ export default function App() {
   } = useLabAndSchedule();
 
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
-  const expandedClassIdRef = useRef<string | null>(null);
   const setExpandedClassId = (id: string | null) => {
     _setExpandedClassId(id);
-    expandedClassIdRef.current = id;
   };
   const [classStudentsMap, setClassStudentsMap] = useState<Record<string, StudentType[]>>({});
   const [expandedStudentId, _setExpandedStudentId] = useState<string | null>(null);
@@ -777,10 +775,8 @@ export default function App() {
     }
   }, [activeStudentId]);
 
-  const expandedStudentIdRef = useRef<string | null>(null);
   const setExpandedStudentId = (id: string | null) => {
     _setExpandedStudentId(id);
-    expandedStudentIdRef.current = id;
   };
   const [studentProgressMap, setStudentProgressMap] = useState<Record<string, StudentProgressType[]>>({});
   const [classProgressMap, setClassProgressMap] = useState<
@@ -791,10 +787,6 @@ export default function App() {
   const [isGeneratingAssignment, setIsGeneratingAssignment] = useState<string | null>(null);
   const [assignmentSortOrder, setAssignmentSortOrder] = useState<'dueDate' | 'status' | 'avgScore'>('dueDate');
 
-  const [expandedAssignmentId, _setExpandedAssignmentId] = useState<string | null>(null);
-  const setExpandedAssignmentId = (id: string | null) => {
-    _setExpandedAssignmentId(id);
-  };
   const [isGrading, setIsGrading] = useState<Record<string, boolean>>({});
 
   // Class/Student Bulk Import State variables
@@ -804,10 +796,8 @@ export default function App() {
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
   const [currentVfsParent, _setCurrentVfsParent] = useState<string | null>(null);
-  const currentVfsParentRef = useRef<string | null>(null);
   const setCurrentVfsParent = (id: string | null) => {
     _setCurrentVfsParent(id);
-    currentVfsParentRef.current = id;
   };
 
   useEffect(() => {
@@ -1100,15 +1090,6 @@ export default function App() {
     confirmBatchPicker,
   } = classBatch;
 
-  const fetchAssignmentSubmissions = async (id: string) => {
-    try {
-      const { ok, data } = await getAssignmentSubmissions(id);
-      if (ok) {
-        setAssignmentSubmissionsMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
   const fetchStudentDashboard = async (id: string) => {
     try {
       const { ok, data } = await getStudentDashboard(id);
@@ -1158,29 +1139,7 @@ export default function App() {
     }
   }, [session, activeRole, activeStudentId, students]);
 
-  const activeRoleRef = useRef(activeRole);
-  const activeStudentIdRef = useRef(activeStudentId);
-  const langRef = useRef(lang);
-  const studentsRef = useRef(students);
-  const addToastRef = useRef(addToast);
   const activatingPluginsRef = useRef<Set<string>>(new Set());
-  const togglingPluginsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    activeRoleRef.current = activeRole;
-  }, [activeRole]);
-  useEffect(() => {
-    activeStudentIdRef.current = activeStudentId;
-  }, [activeStudentId]);
-  useEffect(() => {
-    langRef.current = lang;
-  }, [lang]);
-  useEffect(() => {
-    studentsRef.current = students;
-  }, [students]);
-  useEffect(() => {
-    addToastRef.current = addToast;
-  }, [addToast]);
 
   // Synchronize backend active plugins to frontend PluginHost
   useEffect(() => {
@@ -1351,18 +1310,6 @@ export default function App() {
       // ignore
     }
   };
-
-  const selectedLessonRef = useRef<string | null>(null);
-  const lastSelectedLessonRef = useRef<string | null>(null);
-  const selectedAssignmentRef = useRef<any | null>(null);
-
-  useEffect(() => {
-    selectedLessonRef.current = selectedLesson;
-  }, [selectedLesson]);
-
-  useEffect(() => {
-    selectedAssignmentRef.current = selectedAssignment;
-  }, [selectedAssignment]);
 
   useLmsBridge(session);
 
