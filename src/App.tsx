@@ -8,9 +8,10 @@ import {
   postLogout,
 } from './services/sessionService.js';
 import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
-import { getAssignmentSubmissions, postAssignmentSubmission, postGenerateAssignment } from './services/assignmentService.js';
-import { postClassSchedule } from './services/systemService.js';
+import { postAssignmentSubmission } from './services/assignmentService.js';
 import { getClassStudents } from './services/rosterService.js';
+import { useLessonCrud } from './hooks/useLessonCrud';
+import { useClassOps } from './hooks/useClassOps';
 import { useToast } from './hooks/useToast';
 import { useSystemData } from './hooks/useSystemData';
 import { useResourceLibrary } from './hooks/useResourceLibrary';
@@ -186,7 +187,6 @@ export default function App() {
   const host = usePluginHost();
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [activeStudentLessons, setActiveStudentLessons] = useState<Record<string, string>>({});
-  const [liveClassStudentProgress, setLiveClassStudentProgress] = useState<any[]>([]);
   const [localProgressPercent, setLocalProgressPercent] = useState<number>(0);
 
 
@@ -274,11 +274,40 @@ export default function App() {
     setNewScheduleLessonId,
   } = useLabAndSchedule();
 
+  // ── C1-R2c: 课程/班级 hooks ──────────────────────────────────────────────
+  const { addToast } = useToast();
+  const {
+    fetchLessons,
+    handleQuickCreateLesson,
+    handleDeleteCourse,
+    handleCopyCourse,
+    fetchElements,
+  } = useLessonCrud({ lang, addToast, setCopyingLessonId });
+  const {
+    classStudentsMap,
+    setClassStudentsMap,
+    classProgressMap,
+    setClassProgressMap,
+    classDashboardMap,
+    setClassDashboardMap,
+    classAssignmentsMap,
+    setClassAssignmentsMap,
+    assignmentSubmissionsMap,
+    setAssignmentSubmissionsMap,
+    liveClassStudentProgress,
+    setLiveClassStudentProgress,
+    fetchClassStudents,
+    fetchClassProgress,
+    fetchClassDashboard,
+    fetchLiveClassStudentProgress,
+    handleQuickScheduleClass,
+    handleQuickGenerateAssignment,
+  } = useClassOps({ fetchClassSchedules });
+
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
   const setExpandedClassId = (id: string | null) => {
     _setExpandedClassId(id);
   };
-  const [classStudentsMap, setClassStudentsMap] = useState<Record<string, StudentType[]>>({});
   const [expandedStudentId, _setExpandedStudentId] = useState<string | null>(null);
 
   // ── 备课画板：点击卡片预编辑后添加到白板 ──
@@ -494,12 +523,6 @@ export default function App() {
 
   // 锁定期间强制跟随教师步调；具体在 studentViewStatus 声明处统一生效
 
-  // C1-R1e: 列表拉取迁移为 appStore action，此处保留同名薄封装（签名不变，
-  // useAppPolling / TeacherView 的 props 契约不受影响）
-  const fetchLessons = async () => {
-    await appStore.getState().loadLessons();
-  };
-
   const fetchClasses = async () => {
     await appStore.getState().loadClasses();
   };
@@ -507,8 +530,7 @@ export default function App() {
   const fetchStudents = async () => {
     await appStore.getState().loadStudents();
   };
-  // ── C1-R2b: 叶子 hooks（Toast / 系统数据 / 资源库与导入） ──────────────────
-  const { addToast } = useToast();
+  // ── C1-R2b: 叶子 hooks（系统数据 / 资源库与导入） ─────────────────────────
   const {
     registeredCommands,
     setRegisteredCommands,
@@ -790,11 +812,6 @@ export default function App() {
     _setExpandedStudentId(id);
   };
   const [studentProgressMap, setStudentProgressMap] = useState<Record<string, StudentProgressType[]>>({});
-  const [classProgressMap, setClassProgressMap] = useState<
-    Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>
-  >({});
-  const [classAssignmentsMap, setClassAssignmentsMap] = useState<Record<string, AssignmentType[]>>({});
-  const [assignmentSubmissionsMap, setAssignmentSubmissionsMap] = useState<Record<string, SubmissionType[]>>({});
   const [isGeneratingAssignment, setIsGeneratingAssignment] = useState<string | null>(null);
   const [assignmentSortOrder, setAssignmentSortOrder] = useState<'dueDate' | 'status' | 'avgScore'>('dueDate');
 
@@ -815,120 +832,7 @@ export default function App() {
     }
   }, [aiProviders, agentProviderId]);
 
-  const handleQuickScheduleClass = async (classId: string, lessonId: string, date: string): Promise<boolean> => {
-    try {
-      const { ok } = await postClassSchedule(classId, { lessonId, scheduledDate: date });
-      if (ok) {
-        await fetchClassSchedules(classId);
-        return true;
-      }
-    } catch (e) {
-      console.error('Quick schedule class failed', e);
-    }
-    return false;
-  };
 
-  const handleQuickGenerateAssignment = async (
-    classId: string,
-    title: string,
-    desc?: string,
-  ): Promise<string | null> => {
-    try {
-      const topic = title || desc || 'Assignment';
-      const { ok, data } = await postGenerateAssignment(classId, topic);
-      if (ok) {
-        await fetchClassDashboard(classId);
-        return data.id || 'assignment-created';
-      }
-    } catch (e) {
-      console.error('Quick generate assignment failed', e);
-    }
-    return null;
-  };
-
-  const handleQuickCreateLesson = async (title: string, content: string): Promise<string> => {
-    try {
-      const { ok, data } = await postLesson({ title, content });
-      if (ok) {
-        await fetchLessons();
-        return data.id || 'lesson-created';
-      }
-    } catch (e) {
-      console.error('Quick create lesson failed', e);
-    }
-    return '';
-  };
-
-  const handleDeleteCourse = async (lessonId: string) => {
-    const { ok, data } = await deleteLesson(lessonId);
-    if (!ok) {
-      throw new Error(data.error || 'Failed to delete course');
-    }
-    await fetchLessons();
-    if (selectedLesson === lessonId) {
-      setSelectedLesson(null);
-    }
-    addToast(
-      lang === 'zh' ? '课程已删除' : 'Course Deleted',
-      lang === 'zh' ? '课程及其所有关联数据已被删除。' : 'The course and all associated data have been deleted.',
-      'success',
-    );
-  };
-
-  const handleCopyCourse = async (lessonId: string) => {
-    setCopyingLessonId(lessonId);
-    try {
-      const { ok, data } = await postCloneLesson(lessonId);
-      if (!ok) {
-        throw new Error(data.error || 'Failed to copy course');
-      }
-      await fetchLessons();
-      addToast(
-        lang === 'zh' ? '复制成功' : 'Course Copied',
-        lang === 'zh' ? '课程已成功复制。' : 'Course has been copied successfully.',
-        'success',
-      );
-    } catch (e: any) {
-      addToast(
-        lang === 'zh' ? '复制失败' : 'Copy Failed',
-        e.message || (lang === 'zh' ? '复制课程时发生错误。' : 'An error occurred while copying the course.'),
-        'error',
-      );
-    } finally {
-      setCopyingLessonId(null);
-    }
-  };
-
-
-
-  const fetchClassStudents = async (id: string) => {
-    try {
-      const { ok, data } = await getClassStudents(id);
-      if (ok) {
-        setClassStudentsMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const fetchClassProgress = async (id: string) => {
-    try {
-      const { ok, data } = await getClassProgress(id);
-      if (ok) {
-        setClassProgressMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const [classDashboardMap, setClassDashboardMap] = useState<Record<string, any>>({});
-
-  const fetchClassDashboard = async (id: string) => {
-    try {
-      const { ok, data } = await getClassDashboard(id);
-      if (ok) {
-        setClassDashboardMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
 
   // ── Hook: 成绩导出与学情报表管理 ──
   const gradeExport = useGradeExport({
@@ -1176,15 +1080,6 @@ export default function App() {
     }
   };
 
-  const fetchLiveClassStudentProgress = async (classId: string, lessonId: string) => {
-    try {
-      const { ok, data } = await getClassLessonProgress(classId, lessonId);
-      if (ok) {
-        setLiveClassStudentProgress(data);
-      }
-    } catch (e) {}
-  };
-
   useEffect(() => {
     if (liveClassSelectedClassId && selectedLesson) {
       fetchLiveClassStudentProgress(liveClassSelectedClassId, selectedLesson);
@@ -1206,21 +1101,6 @@ export default function App() {
         setStudentProgressMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
-  };
-
-  const lastElementsJsonRef = useRef<string>('');
-  const fetchElements = async (lessonId: string) => {
-    try {
-      const { ok, data } = await getLessonWhiteboard(lessonId);
-      if (!ok) return;
-      const jsonStr = JSON.stringify(data);
-      if (jsonStr !== lastElementsJsonRef.current) {
-        lastElementsJsonRef.current = jsonStr;
-        setElements(data);
-      }
-    } catch {
-      // ignore
-    }
   };
 
   useLmsBridge(session);
