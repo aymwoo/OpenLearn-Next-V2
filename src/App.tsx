@@ -1224,6 +1224,15 @@ export default function App() {
     ...lessonFilteringData,
     onLogout: handleLogout,
     onAIProvidersChanged: fetchAIProviders,
+    onDeleteCourse: handleDeleteCourse,
+    onCopyCourse: handleCopyCourse,
+    setSelectedLesson,
+    setTeacherTab,
+    teacherTab,
+    onViewCourse: (lessonId: string) => {
+      setTeacherTab('lesson_editor');
+      setSelectedLesson(lessonId);
+    },
     t,
     lessons,
     classes,
@@ -1568,36 +1577,6 @@ export default function App() {
               onZipUpload={handleZipPluginUpload}
               onToggle={handleTogglePlugin}
               onDelete={handleDeletePlugin}
-              lessonsSearchQuery={lessonsSearchQuery}
-              setLessonsSearchQuery={setLessonsSearchQuery}
-              lessonsSortOrder={lessonsSortOrder}
-              setLessonsSortOrder={setLessonsSortOrder}
-              filteredLessons={filteredAndSortedLessons}
-              onOpenImportLessons={() => {
-                setImportStatus('idle');
-                setImportProgress(0);
-                setImportProgressTotal(0);
-                setImportErrorMsg('');
-                setPreviewImportData([]);
-                setIsImportLessonsOpen(true);
-              }}
-              onOpenCourseWizard={() => {
-                setWizardStep(1);
-                setIsCourseWizardOpen(true);
-              }}
-              onViewCourse={(lessonId) => {
-                setTeacherTab('lesson_editor');
-                setSelectedLesson(lessonId);
-              }}
-              onDeleteCourse={handleDeleteCourse}
-              onCopyCourse={handleCopyCourse}
-              filterEnrollment={filterEnrollment}
-              setFilterEnrollment={setFilterEnrollment}
-              filterHasContent={filterHasContent}
-              setFilterHasContent={setFilterHasContent}
-              filterThisMonth={filterThisMonth}
-              setFilterThisMonth={setFilterThisMonth}
-              copyingLessonId={copyingLessonId}
               onSchedulesUpdated={fetchTodaySchedules}
               computerLabs={computerLabs}
               onRefresh={fetchLabs}

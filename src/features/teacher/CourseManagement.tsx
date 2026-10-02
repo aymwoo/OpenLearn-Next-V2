@@ -19,6 +19,7 @@ import {
 import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
+import { useAppData } from '../../context/AppDataContext';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -27,53 +28,37 @@ interface CourseStats {
   assignmentCount: number;
 }
 
-interface CourseManagementProps {
-  lang: string;
-  session?: SessionType | null;
-  lessons: Lesson[];
-  lessonsSearchQuery: string;
-  setLessonsSearchQuery: (q: string) => void;
-  lessonsSortOrder: 'recent' | 'alphabetical' | 'enrollment';
-  setLessonsSortOrder: (o: 'recent' | 'alphabetical' | 'enrollment') => void;
-  filteredLessons: Lesson[];
-  onOpenImportLessons: () => void;
-  onOpenCourseWizard: () => void;
-  onViewCourse: (lessonId: string) => void;
-  onDeleteCourse: (lessonId: string) => Promise<void>;
-  onCopyCourse: (lessonId: string) => Promise<void>;
-  filterEnrollment: boolean;
-  setFilterEnrollment: (v: boolean) => void;
-  filterHasContent: boolean;
-  setFilterHasContent: (v: boolean) => void;
-  filterThisMonth: boolean;
-  setFilterThisMonth: (v: boolean) => void;
-  copyingLessonId: string | null;
-}
+export function CourseManagement() {
+  // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
+  const {
+    lang,
+    session,
+    lessons,
+    lessonsSearchQuery,
+    setLessonsSearchQuery,
+    lessonsSortOrder,
+    setLessonsSortOrder,
+    filteredAndSortedLessons: filteredLessons,
+    isImportLessonsOpen,
+    setIsImportLessonsOpen,
+    isCourseWizardOpen,
+    setIsCourseWizardOpen,
+    onViewCourse,
+    onDeleteCourse,
+    onCopyCourse,
+    filterEnrollment,
+    setFilterEnrollment,
+    filterHasContent,
+    setFilterHasContent,
+    filterThisMonth,
+    setFilterThisMonth,
+    copyingLessonId,
+  } = useAppData();
 
-export function CourseManagement({
-  lang,
-  session,
-  lessons,
-  lessonsSearchQuery,
-  setLessonsSearchQuery,
-  lessonsSortOrder,
-  setLessonsSortOrder,
-  filteredLessons,
-  onOpenImportLessons,
-  onOpenCourseWizard,
-  onViewCourse,
-  onDeleteCourse,
-  onCopyCourse,
-  filterEnrollment,
-  setFilterEnrollment,
-  filterHasContent,
-  setFilterHasContent,
-  filterThisMonth,
-  setFilterThisMonth,
-  copyingLessonId,
-}: CourseManagementProps) {
-  const appSession = useAppStore((s) => s.session);
-  const effectiveSession = session || appSession;
+  // 原回调 prop 的闭包封装（onClick 直接传 setter 会把 MouseEvent 误写入状态）
+  const onOpenImportLessons = () => setIsImportLessonsOpen(true);
+  const onOpenCourseWizard = () => setIsCourseWizardOpen(true);
+  const effectiveSession = session;
   const isAdmin =
     effectiveSession?.username === 'admin' ||
     effectiveSession?.userId === 'usr_admin' ||

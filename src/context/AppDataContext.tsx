@@ -60,14 +60,20 @@ export type AppExtras = Pick<
   | 'setEditorLastSavedTime'
   | 'editorPanelsExpanded'
   | 'setEditorPanelsExpanded'
+  | 'setSelectedLesson'
+  | 'setTeacherTab'
+  | 'teacherTab'
 > & {
+  onViewCourse: (lessonId: string) => void;
   isApprovalsCollapsed: boolean;
   setIsApprovalsCollapsed: (v: boolean) => void;
   isProcessesCollapsed: boolean;
   setIsProcessesCollapsed: (v: boolean) => void;
-  /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders） */
+  /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders / useLessonCrud） */
   onLogout: () => void;
   onAIProvidersChanged: () => void;
+  onDeleteCourse: (lessonId: string) => Promise<void>;
+  onCopyCourse: (lessonId: string) => Promise<void>;
 };
 
 export type AppDataValue = ReturnType<typeof useToast> &

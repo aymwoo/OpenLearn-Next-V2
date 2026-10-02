@@ -111,25 +111,7 @@ export interface TeacherViewProps {
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 
-  // ── CourseManagement ────────────────────────────────────────────────
-  lessonsSearchQuery: string;
-  setLessonsSearchQuery: (q: string) => void;
-  lessonsSortOrder: 'recent' | 'alphabetical' | 'enrollment';
-  setLessonsSortOrder: (o: 'recent' | 'alphabetical' | 'enrollment') => void;
-  filteredLessons: Lesson[];
-  onOpenImportLessons: () => void;
-  onOpenCourseWizard: () => void;
-  onViewCourse: (lessonId: string) => void;
-  onDeleteCourse: (lessonId: string) => Promise<void>;
-  onCopyCourse: (lessonId: string) => Promise<void>;
-  filterEnrollment: boolean;
-  setFilterEnrollment: (v: boolean) => void;
-  filterHasContent: boolean;
-  setFilterHasContent: (v: boolean) => void;
-  filterThisMonth: boolean;
-  setFilterThisMonth: (v: boolean) => void;
-  copyingLessonId: string | null;
-
+  // ── CourseManagement：C1-R3 后全部数据经 AppDataContext 取数 ──
   // ── TimetableView ───────────────────────────────────────────────────
   onSchedulesUpdated: () => Promise<void>;
 
@@ -385,7 +367,7 @@ export function TeacherView(props: TeacherViewProps) {
           ) : teacherTab === 'plugins' ? (
             <PluginView {...props} />
           ) : teacherTab === 'courses' ? (
-            <CourseManagement {...props} />
+            <CourseManagement />
           ) : teacherTab === 'classes' ? (
             <ClassesView {...props} />
           ) : teacherTab === 'timetable' ? (
