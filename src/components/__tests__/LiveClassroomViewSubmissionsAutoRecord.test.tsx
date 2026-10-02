@@ -9,6 +9,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { LiveClassroomView } from '../LiveClassroomView';
+import { AppDataProvider } from '../../context/AppDataContext';
 
 vi.mock('../LazyWhiteboard', () => ({ LazyWhiteboard: () => <div data-testid="lazy-whiteboard" /> }));
 vi.mock('../TeacherAssignmentGradePanel', () => ({ TeacherAssignmentGradePanel: () => <div /> }));
@@ -42,6 +43,13 @@ let ruleEnabled = false;
 let ruleMinCompletion = 0;
 
 const baseProps = {
+  classStudentsMap: {
+    [CLASS_ID]: [
+      { id: 's101', name: '张小明', class_id: CLASS_ID },
+      { id: 's102', name: '李华', class_id: CLASS_ID },
+    ],
+  },
+  fetchClassStudents: vi.fn().mockResolvedValue(undefined),
   selectedLesson: LESSON,
   setSelectedLesson: vi.fn(),
   lessons: [{ id: LESSON, title: '物理探究实验课' }],
@@ -102,6 +110,7 @@ beforeEach(() => {
         autoRecordCalls.push({ lessonId: body.lessonId, classId: body.classId });
         return { ok: true, json: async () => ({ success: true, recorded: 1, skipped: 0, details: [] }) } as any;
       }
+      console.log('[DEBUG] fetch:', url);
       // /api/commands 的真实契约：请求体 { commandType, payload }，响应 { success, result }。
       // 严格按契约 mock —— 若前端误用 type，mock 会 500，从而真正拦住这类契约漂移。
       if (url.includes('/api/commands')) {
@@ -166,7 +175,7 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
   it('【历史 bug】completed 状态的记录按钮可点击（同文件筛选下拉也认这个状态）', async () => {
     // 数据库实际写入的终态就是 completed
     attempts = [attempt({ attemptId: 'att-c', status: 'completed', score: 92 })];
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -175,7 +184,7 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('无分数的记录按钮禁用，且提示不会凭空记分', async () => {
     attempts = [attempt({ attemptId: 'att-ns', status: 'completed', score: null })];
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -185,7 +194,7 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('进行中的记录按钮禁用，提示需先完成', async () => {
     attempts = [attempt({ attemptId: 'att-a', status: 'active', score: 90 })];
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -195,7 +204,7 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('已录入的记录显示「已归档」而非按钮（不重复录入）', async () => {
     attempts = [attempt({ attemptId: 'att-d', status: 'completed', score: 95, isPromoted: 1 })];
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     expect(await screen.findByText('已归档')).toBeTruthy();
@@ -205,7 +214,7 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 describe('学生提交数据 · 自动录入规则', () => {
   it('规则关闭时不自动补录', async () => {
     ruleEnabled = false;
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     await screen.findByText('自动录入成绩');
@@ -217,7 +226,7 @@ describe('学生提交数据 · 自动录入规则', () => {
 
   it('规则开启时进入页面自动补录一次（不多次）', async () => {
     ruleEnabled = true;
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     await screen.findByText('自动录入成绩');
@@ -233,7 +242,7 @@ describe('学生提交数据 · 自动录入规则', () => {
   });
 
   it('勾选开关会把规则保存到全局默认行', async () => {
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     const checkbox = (await screen.findByText('自动录入成绩')).closest('label')?.querySelector('input');
@@ -245,7 +254,7 @@ describe('学生提交数据 · 自动录入规则', () => {
   });
 
   it('【契约】请求 /api/commands 时必须用 commandType，不能用 type', async () => {
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
     await screen.findByText('自动录入成绩');
 
@@ -262,7 +271,7 @@ describe('学生提交数据 · 自动录入规则', () => {
 
   it('「立即补录」按钮可手动重跑', async () => {
     ruleEnabled = true;
-    render(<LiveClassroomView {...baseProps} />);
+    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
     await openSubmissionsTab();
 
     const runBtn = await screen.findByText('立即补录');

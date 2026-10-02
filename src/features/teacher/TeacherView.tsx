@@ -316,53 +316,7 @@ export function TeacherView(props: TeacherViewProps) {
             <LessonEditorView />
           ) : teacherTab === 'live_class' ? (
             <div className="flex-grow flex-1 flex flex-col min-h-0 min-w-0">
-              <LiveClassroomView
-                selectedLesson={selectedLesson}
-                setSelectedLesson={setSelectedLesson}
-                setTeacherTab={setTeacherTab}
-                lessons={lessons}
-                classes={classes}
-                students={liveClassSelectedClassId ? classStudentsMap[liveClassSelectedClassId] || [] : []}
-                plugins={plugins}
-                lang={lang}
-                timelineSegments={timelineSegments}
-                activeSegmentId={activeSegmentId}
-                setActiveSegmentId={setActiveSegmentId}
-                liveClassSelectedClassId={liveClassSelectedClassId}
-                setLiveClassSelectedClassId={setLiveClassSelectedClassId}
-                liveClassIsActive={liveClassIsActive}
-                setLiveClassIsActive={setLiveClassIsActive}
-                liveClassTimeRemaining={liveClassTimeRemaining}
-                setLiveClassTimeRemaining={setLiveClassTimeRemaining}
-                liveClassFeed={liveClassFeed}
-                setLiveClassFeed={setLiveClassFeed}
-                liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-                setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
-                elements={elements}
-                fetchElements={fetchElements}
-                fetchStudents={async () => {
-                  await fetchStudents();
-                  if (liveClassSelectedClassId) {
-                    await fetchClassStudents(liveClassSelectedClassId);
-                  }
-                }}
-                addToast={addToast}
-                onlineStudentIds={onlineStudentIds}
-                activeStudentLessons={activeStudentLessons}
-                liveClassStudentProgress={liveClassStudentProgress}
-                onPingStudent={(studentId, message) => {
-                  if (socketRef.current) {
-                    socketRef.current.emit('teacher-ping-student', {
-                      studentId,
-                      lessonId: selectedLesson,
-                      message,
-                    });
-                  }
-                }}
-                onOpenCoursewareHub={() => setShowCoursewareHub(true)}
-                activeRole={activeRole}
-                setActiveRole={setActiveRole}
-              />
+                            <LiveClassroomView />
             </div>
           ) : teacherTab === 'plugins' ? (
             <PluginView {...props} />

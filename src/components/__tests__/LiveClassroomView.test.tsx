@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { LiveClassroomView, type LiveClassroomViewProps } from '../LiveClassroomView';
+import { LiveClassroomView } from '../LiveClassroomView';
+import { AppDataProvider } from '../../context/AppDataContext';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -32,7 +33,14 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   let openMock: ReturnType<typeof vi.fn>;
   let broadcastPostMock: ReturnType<typeof vi.fn>;
 
-  const defaultProps: LiveClassroomViewProps = {
+  const defaultProps: Record<string, any> = {
+    classStudentsMap: {
+      'class-g1': [
+        { id: 's101', name: '张小明', class_id: 'class-g1' },
+        { id: 's102', name: '李华', class_id: 'class-g1' },
+      ],
+    },
+    fetchClassStudents: vi.fn().mockResolvedValue(undefined),
     selectedLesson: 'lesson-101',
     setSelectedLesson: vi.fn(),
     lessons: [{ id: 'lesson-101', title: '物理探究实验课' }],
@@ -106,7 +114,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   });
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
-    render(<LiveClassroomView {...defaultProps} />);
+    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     // Old role toggle buttons should not exist
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
@@ -124,7 +132,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     };
     openMock.mockReturnValue(fakeTab);
 
-    render(<LiveClassroomView {...defaultProps} />);
+    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -156,7 +164,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     openMock.mockReturnValue(null); // Simulated browser popup blocker
     const addToastMock = vi.fn();
 
-    render(<LiveClassroomView {...defaultProps} addToast={addToastMock} />);
+    render(<AppDataProvider value={{ ...defaultProps, addToast: addToastMock } as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -177,7 +185,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<LiveClassroomView {...defaultProps} />);
+    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     expect(await screen.findByTestId('pre-class-ready-view')).toBeTruthy();
   });
@@ -203,7 +211,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<LiveClassroomView {...defaultProps} />);
+    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     // Should display the sidebar outline section title
     await waitFor(() => {
@@ -223,7 +231,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   });
 
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
-    render(<LiveClassroomView {...defaultProps} />);
+    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     // Topbar title is "🔴 在线课堂"
     expect(screen.getByText('🔴 在线课堂')).toBeTruthy();
@@ -239,7 +247,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const setSelectedLessonMock = vi.fn();
     const fetchElementsMock = vi.fn().mockResolvedValue(undefined);
 
-    const propsWithTwoLessons: LiveClassroomViewProps = {
+    const propsWithTwoLessons: Record<string, any> = {
+    classStudentsMap: {},
+    fetchClassStudents: vi.fn().mockResolvedValue(undefined),
       ...defaultProps,
       setSelectedLesson: setSelectedLessonMock,
       fetchElements: fetchElementsMock,
@@ -249,7 +259,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       ],
     };
 
-    render(<LiveClassroomView {...propsWithTwoLessons} />);
+    render(<AppDataProvider value={propsWithTwoLessons as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
@@ -299,7 +309,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     );
 
     const setLiveClassFeedMock = vi.fn();
-    const props: LiveClassroomViewProps = {
+    const props: Record<string, any> = {
+    classStudentsMap: {},
+    fetchClassStudents: vi.fn().mockResolvedValue(undefined),
       ...defaultProps,
       liveClassFeed: [
         { id: '1', time: '10:00:01', type: 'info', message: '张小明 进入了课堂' },
@@ -308,7 +320,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       setLiveClassFeed: setLiveClassFeedMock,
     };
 
-    render(<LiveClassroomView {...props} />);
+    render(<AppDataProvider value={props as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
 
     // 1. Student focus console header & pick button
     await waitFor(() => {

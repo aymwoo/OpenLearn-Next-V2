@@ -41,7 +41,8 @@ import {
   Zap,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
-import { useAppStore } from '../store/appStore';
+import { useAppStore, appStore } from '../store/appStore';
+import { useAppData } from '../context/AppDataContext';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
 import { listFromEnvelope } from '../utils/listEnvelope.js';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
@@ -78,81 +79,69 @@ function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
   return React.createElement(IconComponent, props);
 }
 
-export interface LiveClassroomViewProps {
-  selectedLesson: string | null;
-  setSelectedLesson: (id: string | null) => void;
-  lessons: any[];
-  classes: any[];
-  students: any[];
-  plugins: any[];
-  lang: string;
-  timelineSegments: any[];
-  activeSegmentId: string | null;
-  setActiveSegmentId: (id: string | null) => void;
-  liveClassSelectedClassId: string | null;
-  setLiveClassSelectedClassId: (id: string | null) => void;
-  liveClassIsActive: boolean;
-  setLiveClassIsActive: (active: boolean) => void;
-  liveClassTimeRemaining: number;
-  setLiveClassTimeRemaining: (seconds: number) => void;
-  liveClassFeed: any[];
-  setLiveClassFeed: React.Dispatch<React.SetStateAction<any[]>>;
-  liveClassAcknowledgedMap: Map<string, boolean>;
-  setLiveClassAcknowledgedMap: React.Dispatch<React.SetStateAction<Map<string, boolean>>>;
-  elements: any[];
-  fetchElements: (lessonId: string) => Promise<void>;
-  fetchStudents: () => Promise<void>;
-  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
-  onlineStudentIds: string[];
-  activeStudentLessons: Record<string, string>;
-  liveClassStudentProgress: any[];
-  onPingStudent?: (studentId: string, message?: string) => void;
-  onOpenCoursewareHub?: () => void;
-  activeRole?: string;
-  setActiveRole?: (role: 'teacher' | 'student') => void;
-  setTeacherTab?: (tab: string) => void;
-  /**
-   * 是否先展示「课堂启动门户」。默认 true —— 教师进入互动课堂先确认
-   * 课程 / 班级 / 教学模式。既有单测需直接断言授课视图时传 false。
-   */
-  initialPortalOpen?: boolean;
-}
-
 export function LiveClassroomView({
-  selectedLesson,
-  setSelectedLesson,
-  setTeacherTab,
-  lessons,
-  classes,
-  students,
-  plugins,
-  lang,
-  timelineSegments,
-  activeSegmentId,
-  setActiveSegmentId,
-  liveClassSelectedClassId,
-  setLiveClassSelectedClassId,
-  liveClassIsActive,
-  setLiveClassIsActive,
-  liveClassTimeRemaining,
-  setLiveClassTimeRemaining,
-  liveClassFeed,
-  setLiveClassFeed,
-  liveClassAcknowledgedMap,
-  setLiveClassAcknowledgedMap,
-  elements,
-  fetchElements,
-  fetchStudents,
-  addToast,
-  onlineStudentIds,
-  activeStudentLessons,
-  liveClassStudentProgress,
-  onPingStudent,
-  onOpenCoursewareHub,
-  activeRole,
-  setActiveRole,
   initialPortalOpen = true,
-}: LiveClassroomViewProps) {
+}: {
+  /** 是否先展示「课堂启动门户」。默认 true —— 教师进入互动课堂先确认课程/班级/教学模式。 */
+  initialPortalOpen?: boolean;
+}) {
+  // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
+  const {
+    selectedLesson,
+    setSelectedLesson,
+    setTeacherTab,
+    lessons,
+    classes,
+    plugins,
+    lang,
+    timelineSegments,
+    activeSegmentId,
+    setActiveSegmentId,
+    liveClassSelectedClassId,
+    setLiveClassSelectedClassId,
+    liveClassIsActive,
+    setLiveClassIsActive,
+    liveClassTimeRemaining,
+    setLiveClassTimeRemaining,
+    liveClassFeed,
+    setLiveClassFeed,
+    liveClassAcknowledgedMap,
+    setLiveClassAcknowledgedMap,
+    elements,
+    fetchElements,
+    addToast,
+    onlineStudentIds,
+    activeStudentLessons,
+    liveClassStudentProgress,
+    classStudentsMap,
+    fetchClassStudents,
+    socketRef,
+    session,
+    showCoursewareHub,
+    setShowCoursewareHub,
+  } = useAppData();
+
+  // 学生名单：按当前选中班级过滤（原 TeacherView 透传逻辑随迁）
+  const students = liveClassSelectedClassId ? classStudentsMap[liveClassSelectedClassId] || [] : [];
+
+  const fetchStudents = async () => {
+    await appStore.getState().loadStudents();
+    if (liveClassSelectedClassId) {
+      await fetchClassStudents(liveClassSelectedClassId);
+    }
+  };
+
+  const onPingStudent = (studentId: string, message?: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit('teacher-ping-student', {
+        studentId,
+        lessonId: selectedLesson,
+        message,
+      });
+    }
+  };
+
+  const onOpenCoursewareHub = () => setShowCoursewareHub(true);
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [hoveredStudentId, setHoveredStudentId] = useState<string | null>(null);

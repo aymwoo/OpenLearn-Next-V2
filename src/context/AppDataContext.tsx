@@ -63,6 +63,11 @@ export type AppExtras = Pick<
   | 'editorPanelsExpanded'
   | 'setEditorPanelsExpanded'
   | 'setSelectedLesson'
+  | 'socketRef'
+  | 'liveClassSelectedClassId'
+  | 'setLiveClassSelectedClassId'
+  | 'liveClassIsActive'
+  | 'setLiveClassIsActive'
   | 'setTeacherTab'
   | 'teacherTab'
 > & {
