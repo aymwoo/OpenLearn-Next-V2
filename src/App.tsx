@@ -16,6 +16,8 @@ import {
   fetchProcessLogs as fetchProcessLogsApi,
   postClassSchedule,
 } from './services/systemService.js';
+import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
+import { getAssignmentSubmissions, postAssignmentSubmission, postGenerateAssignment } from './services/assignmentService.js';
 import { getClasses, getStudents, getClassStudents } from './services/rosterService.js';
 import { getClassProgress, getClassDashboard, getStudentDashboard } from './services/dashboardService.js';
 import {
@@ -775,10 +777,9 @@ export default function App() {
 
   useEffect(() => {
     if (activeStudentId) {
-      fetch(`/api/students/${activeStudentId}/read_notifications`)
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          setReadNotifications(new Set(data));
+      getStudentReadNotifications(activeStudentId)
+        .then(({ ok, data }) => {
+          setReadNotifications(ok && Array.isArray(data) ? new Set(data) : new Set());
         })
         .catch((err) => {
           console.warn('Failed to load read notifications from DB', err);
@@ -852,13 +853,8 @@ export default function App() {
   ): Promise<string | null> => {
     try {
       const topic = title || desc || 'Assignment';
-      const res = await fetch(`/api/classes/${classId}/assignments/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic }),
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
+      const { ok, data } = await postGenerateAssignment(classId, topic);
+      if (ok) {
         await fetchClassDashboard(classId);
         return data.id || 'assignment-created';
       }
@@ -1123,9 +1119,8 @@ export default function App() {
 
   const fetchAssignmentSubmissions = async (id: string) => {
     try {
-      const res = await fetch(`/api/assignments/${id}/submissions`);
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await getAssignmentSubmissions(id);
+      if (ok) {
         setAssignmentSubmissionsMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
@@ -1151,12 +1146,11 @@ export default function App() {
     const contentToSubmit = isMcq ? JSON.stringify(quizStudentAnswersRef.current) : 'Submitted via Whiteboard';
 
     try {
-      const res = await fetch(`/api/assignments/${selectedAssignment.id}/submissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: activeStudentId, content: contentToSubmit }),
+      const { ok } = await postAssignmentSubmission(selectedAssignment.id, {
+        studentId: activeStudentId,
+        content: contentToSubmit,
       });
-      if (res.ok) {
+      if (ok) {
         if (isTimeLimitExpired) {
           alert('Time is up! Your assessment was successfully submitted automatically.');
         }
@@ -1307,14 +1301,10 @@ export default function App() {
   const updateStudentProgress = async (progressVal: number) => {
     if (activeRole === 'student' && activeStudentId && selectedLesson) {
       try {
-        await fetch(`/api/students/${activeStudentId}/progress`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lessonId: selectedLesson,
-            completed: progressVal === 100,
-            progressPercent: progressVal,
-          }),
+        await postStudentProgress(activeStudentId, {
+          lessonId: selectedLesson,
+          completed: progressVal === 100,
+          progressPercent: progressVal,
         });
       } catch (e) {
         console.error('Failed to update student progress:', e);
@@ -1324,9 +1314,9 @@ export default function App() {
 
   const fetchLiveClassStudentProgress = async (classId: string, lessonId: string) => {
     try {
-      const res = await fetch(`/api/classes/${classId}/lessons/${lessonId}/progress`);
-      if (res.ok) {
-        setLiveClassStudentProgress(await res.json());
+      const { ok, data } = await getClassLessonProgress(classId, lessonId);
+      if (ok) {
+        setLiveClassStudentProgress(data);
       }
     } catch (e) {}
   };
@@ -1347,9 +1337,8 @@ export default function App() {
 
   const fetchStudentProgress = async (id: string) => {
     try {
-      const res = await fetch(`/api/students/${id}/progress`);
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await getStudentProgress(id);
+      if (ok) {
         setStudentProgressMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
@@ -2324,11 +2313,7 @@ export default function App() {
                       if (pickedAlertData.rollcallId) {
                         const rollcallId = pickedAlertData.rollcallId;
                         if (activeStudentId) {
-                          fetch(`/api/students/${activeStudentId}/read_notifications`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ notificationId: rollcallId }),
-                          }).catch(console.error);
+                          postStudentReadNotification(activeStudentId, rollcallId).catch(console.error);
                         }
                         setReadNotifications((prev) => new Set(prev).add(rollcallId));
                       }
