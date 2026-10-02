@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（阶段 C2）：LiveClassroomView 巨石解耦（拆分 LiveSubmissionsPanel 与 ClassroomToolbarQuickActions）**：
+  - **LiveSubmissionsPanel 领域下沉**：将 `LiveClassroomView` 中 360+ 行的学生交互课件提交记录、自动录入成绩、按班级/状态过滤、分数字段校验、补录与标缺考功能整体下沉至 `src/features/classroom/LiveSubmissionsPanel.tsx`，保持 Props 契约与单元测试 100% 兼容。
+  - **ClassroomToolbarQuickActions 抽取**：将 7 个流程扩展按钮（异常告警、AI 学情预测、随堂协作、投屏对比、家校通知、宏动作编排、硬件网关）与倒计时组件收敛为 `ClassroomToolbarQuickActions.tsx`。
+  - **组件精简**：`LiveClassroomView.tsx` 净减少 404 行代码，大幅提升虚拟 DOM 渲染效率与模块可维护性。
+
+
 - **运行时可靠性与安全收口（阶段 B）：B3 安全随机标识 + B4 内存治理 + B2 统一错误响应 + B5 AI端点防护**：
   - **B3 业务 ID 安全随机化**：彻底淘汰非安全随机数生成（`Math.random().toString(36)`）。
     - `server/presence.ts` 与 `server/routes/workspace.ts`：错误事件 ID 统一采用 `randomId('evt_err_')` 强随机生成器；
