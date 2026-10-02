@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **关键业务路由集成测试网与健壮性保护（阶段 D1：Roster / Admin / Schedules 集成测试与权限边界）**：
+  - **专项 D1b：学生名册与花名册路由集成测试（`server/__tests__/roster-routes.test.ts`）**：
+    - 覆盖学生与班级核心生命周期（创建、分页查询、更名、密码重置、删除与级联清理）；
+    - 严格验证基于 Session 的角色隔离与 IDOR 越权拦截（学生尝试越权修改他人信息与班级被 403 阻断）；
+    - 覆盖点名评价上报（`/api/rollcalls/evaluate`）与学生画像看板关联检索；
+    - 10/10 tests 全部通过。
+  - **专项 D1c：管理员控制面与批量导入测试（`server/__tests__/admin-routes.test.ts`）**：
+    - 验证超级管理员专属接口（`/api/admin/seed-demo`、文档导出等）对普通教师（403）及未登录访客（401）的严格权限门禁；
+    - 覆盖班级与学生名册批量导入（`POST /api/classes/import`、`POST /api/students/import`）的输入校验与事务落库；
+    - 7/7 tests 全部通过。
+  - **专项 D1d：课表调度与排课级联测试（`server/__tests__/schedules-routes.test.ts`）**：
+    - 覆盖排课条目的创建、更新、分页查询与批量排课（`POST /api/classes/:id/schedules/batch`）；
+    - 验证未授权 401 与学生越权 403 阻断；
+    - 验证删除排课项时联动清理关联考勤（`attendance`）的 `DATA-INT-01` 事务级联安全性；
+    - 7/7 tests 全部通过。
+
 - **传输安全与 AI 服务韧性熔断加固（阶段 B1/B5：CSRF 纵深防御 + AI 出站请求超时熔断与重试）**：
   - **专项 B1：CSRF 纵深防御（Origin/Referer 双重源回退校验）**：
     - `server/middleware/csrf.ts`：针对浏览器未发送 `Sec-Fetch-Site`（如旧版浏览器、部分代理或特定同源跳转）的边缘场景，增加基于 `Origin` 与 `Referer` 头部的二级源校验门禁；
