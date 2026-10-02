@@ -4,12 +4,11 @@ import { parseCSV } from './utils/pluginParsers.js';
 import {
   fetchDbStatus,
   fetchAuthSession,
-  fetchSiteSettings as fetchSiteSettingsApi,
-  postLogout,
 } from './services/sessionService.js';
 import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
 import { postAssignmentSubmission } from './services/assignmentService.js';
 import { getClassStudents } from './services/rosterService.js';
+import { useSessionBootstrap } from './hooks/useSessionBootstrap';
 import { useStudentViewState } from './hooks/useStudentViewState';
 import { useStudentOps } from './hooks/useStudentOps';
 import { useLessonCrud } from './hooks/useLessonCrud';
@@ -329,42 +328,28 @@ export default function App() {
   // Role & Student View
   const session = useAppStore((s) => s.session);
   const setSession = useAppStore((s) => s.setSession);
+  const [sessionLoading, setSessionLoading] = useState(true);
+
+  // ── C1-R2e: 会话引导 hook（session 恢复 effect 仍留在 App，因其依赖 student 视图收口）──
+  const fetchStudents = async () => {
+    await appStore.getState().loadStudents();
+  };
+  const {
+    activeRole,
+    setActiveRole,
+    activeStudentId,
+    setActiveStudentId,
+    dbConnected,
+    dbStatus,
+    profileOpen,
+    setProfileOpen,
+    handleLoginSuccess,
+    handleLogout,
+    toggleLanguage,
+  } = useSessionBootstrap({ fetchStudents });
   const siteInfo = useAppStore((s) => s.siteInfo);
   const setSiteInfo = useAppStore((s) => s.setSiteInfo);
 
-  const [activeRole, setActiveRole] = useState<'teacher' | 'student'>('teacher');
-  const [sessionLoading, setSessionLoading] = useState(true);
-  const [dbConnected, setDbConnected] = useState<boolean>(true);
-  const [dbStatus, setDbStatus] = useState<'normal' | 'warning' | 'error'>('normal');
-
-  useEffect(() => {
-    if (!session) return;
-    const checkDb = async () => {
-      try {
-        const { ok, status, data } = await fetchDbStatus();
-        if (ok) {
-          if (data.status === 'warning' || data.warning) {
-            setDbStatus('warning');
-          } else {
-            setDbStatus('normal');
-          }
-          setDbConnected(true);
-        } else if (status === 429 || status === 503) {
-          setDbStatus('warning');
-          setDbConnected(true);
-        } else {
-          setDbStatus('error');
-          setDbConnected(false);
-        }
-      } catch (err) {
-        setDbStatus('error');
-        setDbConnected(false);
-      }
-    };
-    checkDb();
-    const interval = setInterval(checkDb, 5000);
-    return () => clearInterval(interval);
-  }, [session]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -401,21 +386,6 @@ export default function App() {
       }
     };
     checkSession();
-  }, []);
-
-  // Load platform site settings (logo / name / slogan) so branding slots render globally
-  useEffect(() => {
-    const fetchSiteSettings = async () => {
-      try {
-        const { ok, data } = await fetchSiteSettingsApi();
-        if (ok) {
-          setSiteInfo({ siteName: data.siteName || '', slogan: data.slogan || '', logoUrl: data.logoUrl || null });
-        }
-      } catch (err) {
-        console.warn('Failed to fetch site settings:', err);
-      }
-    };
-    fetchSiteSettings();
   }, []);
 
   const teacherTab = useAppStore((state) => state.teacherTab);
@@ -504,7 +474,6 @@ export default function App() {
     setLessons,
   });
 
-  const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [liveClassFocusLocked, setLiveClassFocusLocked] = useState(false);
   // 锁定期间强制跟随教师步调；具体在 studentViewStatus 声明处统一生效
 
@@ -512,9 +481,6 @@ export default function App() {
     await appStore.getState().loadClasses();
   };
 
-  const fetchStudents = async () => {
-    await appStore.getState().loadStudents();
-  };
   // ── C1-R2b: 叶子 hooks（系统数据 / 资源库与导入） ─────────────────────────
   const {
     registeredCommands,
@@ -1100,33 +1066,6 @@ export default function App() {
     setPickedAnnouncement,
   });
 
-  const toggleLanguage = () => {
-    setLang(lang === 'zh' ? 'en' : 'zh');
-  };
-
-  const handleLoginSuccess = useCallback((newSession: any) => {
-    setSession(newSession);
-    if (newSession.role === 'teacher') {
-      setActiveRole('teacher');
-      // 教师/管理员登录后的默认首页：互动课堂（管理员 role 同为 teacher，靠 subRole 区分）
-      setTeacherTab('live_class');
-    } else {
-      setActiveRole('student');
-      setActiveStudentId(newSession.studentId);
-      fetchStudents();
-    }
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await postLogout();
-    } catch (e) {
-      console.error('Logout failed', e);
-    }
-    setSession(null);
-  };
-
-  const [profileOpen, setProfileOpen] = useState(false);
 
   // ── 互动课堂：独立学生端跨窗口实时协同信道 (ClassroomSyncChannel) ────────────
   useEffect(() => {
