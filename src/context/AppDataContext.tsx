@@ -123,6 +123,22 @@ export type AppExtras = {
   onAIProvidersChanged: () => void;
   onDeleteCourse: (lessonId: string) => Promise<void>;
   onCopyCourse: (lessonId: string) => Promise<void>;
+
+  // ── RightSidebar 局部状态 ──────────────────────────────────────────
+  showRightSidebar: boolean;
+  setShowRightSidebar: Dispatch<SetStateAction<boolean>>;
+  rightSidebarTab: 'agent' | 'shell';
+  setRightSidebarTab: Dispatch<SetStateAction<'agent' | 'shell'>>;
+  agentProviderId: string;
+  setAgentProviderId: Dispatch<SetStateAction<string>>;
+  effectiveAgentProviderId: string;
+  selectedAgentProvider: any | null;
+
+  // ── AppModals 局部状态 ─────────────────────────────────────────────
+  isTourOpen: boolean;
+  setIsTourOpen: Dispatch<SetStateAction<boolean>>;
+  handleSeedSuccess: (data: { classId: string; scheduleId: string; lessonId: string }) => Promise<void>;
+  generateTemplateContent?: (title: string, category: string) => string;
 };
 
 export type AppDataValue = ReturnType<typeof useToast> &

@@ -41,9 +41,11 @@ const CoursewareHubPanel = lazy(() =>
   import('../features/teacher/CoursewareHubPanel').then((m) => ({ default: m.CoursewareHubPanel })),
 );
 
+import { useOptionalAppData } from '../context/AppDataContext';
+
 export interface AppModalsProps {
-  lang: 'zh' | 'en';
-  t: any;
+  lang?: 'zh' | 'en';
+  t?: any;
 
   // Grouped Hook Bundles (Optional)
   courseWizard?: ReturnType<typeof useCourseWizard>;
@@ -200,87 +202,89 @@ export interface AppModalsProps {
   setShowCoursewareHub?: (v: boolean) => void;
 }
 
-export function AppModals(props: AppModalsProps) {
+export function AppModals(props: AppModalsProps = {}) {
+  const a = useOptionalAppData();
+
   const {
-    lang,
-    t,
-    showImportModal = false,
-    setShowImportModal = () => {},
-    handleImportFile = () => {},
-    importError = null,
-    importSuccess = null,
-    isImporting = false,
-    downloadCSVTemplate = () => {},
-    addToast = () => {},
-    generateTemplateContent = () => '',
-    isImportLessonsOpen = false,
-    setIsImportLessonsOpen = () => {},
-    importStatus = 'idle',
-    setIsDraggingImport = () => {},
-    handleCSVFileChange = () => {},
-    downloadCsvTemplate = () => {},
-    isDraggingImport = false,
-    previewImportData = [],
-    setPreviewImportData = () => {},
-    setImportStatus = () => {},
-    importProgress = 0,
-    importProgressTotal = 0,
-    importErrorMsg = '',
-    setImportErrorMsg = () => {},
-    handleCSVImportSubmit = () => {},
-    lessons = [],
-    fetchClassDashboard = () => {},
+    lang = (a?.lang as 'zh' | 'en') ?? 'zh',
+    t = a?.t ?? {},
+    showImportModal = a?.showImportModal ?? false,
+    setShowImportModal = a?.setShowImportModal ?? (() => {}),
+    handleImportFile = a?.handleImportFile ?? (() => {}),
+    importError = a?.importError ?? null,
+    importSuccess = a?.importSuccess ?? null,
+    isImporting = a?.isImporting ?? false,
+    downloadCSVTemplate = a?.downloadCSVTemplate ?? (() => {}),
+    addToast = a?.addToast ?? (() => {}),
+    generateTemplateContent = a?.generateTemplateContent ?? (() => ''),
+    isImportLessonsOpen = a?.isImportLessonsOpen ?? false,
+    setIsImportLessonsOpen = a?.setIsImportLessonsOpen ?? (() => {}),
+    importStatus = a?.importStatus ?? 'idle',
+    setIsDraggingImport = a?.setIsDraggingImport ?? (() => {}),
+    handleCSVFileChange = a?.handleCSVFileChange ?? (() => {}),
+    downloadCsvTemplate = a?.downloadCsvTemplate ?? (() => {}),
+    isDraggingImport = a?.isDraggingImport ?? false,
+    previewImportData = a?.previewImportData ?? [],
+    setPreviewImportData = a?.setPreviewImportData ?? (() => {}),
+    setImportStatus = a?.setImportStatus ?? (() => {}),
+    importProgress = a?.importProgress ?? 0,
+    importProgressTotal = a?.importProgressTotal ?? 0,
+    importErrorMsg = a?.importErrorMsg ?? '',
+    setImportErrorMsg = a?.setImportErrorMsg ?? (() => {}),
+    handleCSVImportSubmit = a?.handleCSVImportSubmit ?? (() => {}),
+    lessons = a?.lessons ?? [],
+    fetchClassDashboard = a?.fetchClassDashboard ?? (() => {}),
     // VFS 浏览状态（Cloud Drive / System Resource Library 共用）
-    currentVfsParent = null,
-    setCurrentVfsParent = () => {},
-    vfsNodes = [],
-    showProcessLogs = null,
-    setShowProcessLogs = () => {},
-    processLogsContent = '',
-    isCloudDriveOpen = false,
-    setIsCloudDriveOpen = () => {},
-    cloudDrivePreviewNode = null,
-    setCloudDrivePreviewNode = () => {},
-    isSystemResourceLibraryOpen = false,
-    setIsSystemResourceLibraryOpen = () => {},
-    systemResourceTab = 'system',
-    setSystemResourceTab = () => {},
-    selectedLibraryResourceId = null,
-    setSelectedLibraryResourceId = () => {},
-    loadingLibraryResources = false,
-    libraryResources = [],
-    fetchLibraryResources = () => {},
-    classes = [],
-    expandedClassId = null,
-    isExportWeightModalOpen = false,
-    setIsExportWeightModalOpen = () => {},
-    quizzesWeight = 40,
-    setQuizzesWeight = () => {},
-    assignmentsWeight = 60,
-    setAssignmentsWeight = () => {},
-    handleQuizzesWeightChange = () => {},
-    handleAssignmentsWeightChange = () => {},
-    customCategoryOverrides = {},
-    setCustomCategoryOverrides = () => {},
-    classDashboardMap = {},
-    exportClassId = '',
-    exportClassName = '',
-    csvPreviewData = null,
-    handleExportGrades = () => {},
-    setSelectedAssignment = () => {},
-    setStudentViewStatus = () => {},
-    setQuizStudentAnswers = () => {},
-    setSubAssignmentTab = () => {},
-    isTourOpen = false,
-    setIsTourOpen = () => {},
-    handleSeedSuccess = () => {},
-    setTeacherTab = () => {},
-    showCoursewareHub = false,
-    setShowCoursewareHub = () => {},
+    currentVfsParent = a?.currentVfsParent ?? null,
+    setCurrentVfsParent = a?.setCurrentVfsParent ?? (() => {}),
+    vfsNodes = a?.vfsNodes ?? [],
+    showProcessLogs = a?.showProcessLogs ?? null,
+    setShowProcessLogs = a?.setShowProcessLogs ?? (() => {}),
+    processLogsContent = a?.processLogsContent ?? '',
+    isCloudDriveOpen = a?.isCloudDriveOpen ?? false,
+    setIsCloudDriveOpen = a?.setIsCloudDriveOpen ?? (() => {}),
+    cloudDrivePreviewNode = a?.cloudDrivePreviewNode ?? null,
+    setCloudDrivePreviewNode = a?.setCloudDrivePreviewNode ?? (() => {}),
+    isSystemResourceLibraryOpen = a?.isSystemResourceLibraryOpen ?? false,
+    setIsSystemResourceLibraryOpen = a?.setIsSystemResourceLibraryOpen ?? (() => {}),
+    systemResourceTab = a?.systemResourceTab ?? 'system',
+    setSystemResourceTab = a?.setSystemResourceTab ?? (() => {}),
+    selectedLibraryResourceId = a?.selectedLibraryResourceId ?? null,
+    setSelectedLibraryResourceId = a?.setSelectedLibraryResourceId ?? (() => {}),
+    loadingLibraryResources = a?.loadingLibraryResources ?? false,
+    libraryResources = a?.libraryResources ?? [],
+    fetchLibraryResources = a?.fetchLibraryResources ?? (() => {}),
+    classes = a?.classes ?? [],
+    expandedClassId = a?.expandedClassId ?? null,
+    isExportWeightModalOpen = a?.isExportWeightModalOpen ?? false,
+    setIsExportWeightModalOpen = a?.setIsExportWeightModalOpen ?? (() => {}),
+    quizzesWeight = a?.quizzesWeight ?? 40,
+    setQuizzesWeight = a?.setQuizzesWeight ?? (() => {}),
+    assignmentsWeight = a?.assignmentsWeight ?? 60,
+    setAssignmentsWeight = a?.setAssignmentsWeight ?? (() => {}),
+    handleQuizzesWeightChange = a?.handleQuizzesWeightChange ?? (() => {}),
+    handleAssignmentsWeightChange = a?.handleAssignmentsWeightChange ?? (() => {}),
+    customCategoryOverrides = a?.customCategoryOverrides ?? {},
+    setCustomCategoryOverrides = a?.setCustomCategoryOverrides ?? (() => {}),
+    classDashboardMap = a?.classDashboardMap ?? {},
+    exportClassId = a?.exportClassId ?? '',
+    exportClassName = a?.exportClassName ?? '',
+    csvPreviewData = a?.csvPreviewData ?? null,
+    handleExportGrades = a?.handleExportGrades ?? (() => {}),
+    setSelectedAssignment = a?.setSelectedAssignment ?? (() => {}),
+    setStudentViewStatus = a?.setStudentViewStatus ?? (() => {}),
+    setQuizStudentAnswers = a?.setQuizStudentAnswers ?? (() => {}),
+    setSubAssignmentTab = a?.setSubAssignmentTab ?? (() => {}),
+    isTourOpen = a?.isTourOpen ?? false,
+    setIsTourOpen = a?.setIsTourOpen ?? (() => {}),
+    handleSeedSuccess = a?.handleSeedSuccess ?? (() => {}),
+    setTeacherTab = a?.setTeacherTab ?? (() => {}),
+    showCoursewareHub = a?.showCoursewareHub ?? false,
+    setShowCoursewareHub = a?.setShowCoursewareHub ?? (() => {}),
   } = props;
 
   // Course Wizard Resolution
-  const cw = props.courseWizard;
+  const cw = props.courseWizard ?? a;
   const isCourseWizardOpen = cw?.isCourseWizardOpen ?? props.isCourseWizardOpen ?? false;
   const setIsCourseWizardOpen = cw?.setIsCourseWizardOpen ?? props.setIsCourseWizardOpen ?? (() => {});
   const wizardStep = cw?.wizardStep ?? props.wizardStep ?? 1;
@@ -299,7 +303,7 @@ export function AppModals(props: AppModalsProps) {
   const handleDeployWizardCourse = cw?.handleDeployWizardCourse ?? props.handleDeployWizardCourse ?? (() => {});
 
   // Quiz Generator Resolution
-  const qg = props.quizGenerator;
+  const qg = props.quizGenerator ?? a;
   const isQuizGeneratorOpen = qg?.isQuizGeneratorOpen ?? props.isQuizGeneratorOpen ?? false;
   const setIsQuizGeneratorOpen = qg?.setIsQuizGeneratorOpen ?? props.setIsQuizGeneratorOpen ?? (() => {});
   const quizGenMode = qg?.quizGenMode ?? props.quizGenMode ?? 'scan_lesson';
@@ -321,7 +325,7 @@ export function AppModals(props: AppModalsProps) {
   const quizGeneratorClassId = qg?.quizGeneratorClassId ?? props.quizGeneratorClassId ?? null;
 
   // Batch Picker Resolution
-  const cb = props.classBatch;
+  const cb = props.classBatch ?? a;
   const batchPicker = cb?.batchPicker ?? props.batchPicker ?? null;
   const setBatchPicker = cb?.setBatchPicker ?? props.setBatchPicker ?? (() => {});
   const batchPickerLesson = cb?.batchPickerLesson ?? props.batchPickerLesson ?? '';
@@ -333,7 +337,7 @@ export function AppModals(props: AppModalsProps) {
   const confirmBatchPicker = cb?.confirmBatchPicker ?? props.confirmBatchPicker ?? (() => {});
 
   // Student Notifications Resolution
-  const sn = props.studentNotificationsHook;
+  const sn = props.studentNotificationsHook ?? a;
   const selectedNotificationForModal = sn?.selectedNotificationForModal ?? props.selectedNotificationForModal ?? null;
   const setSelectedNotificationForModal =
     sn?.setSelectedNotificationForModal ?? props.setSelectedNotificationForModal ?? (() => {});

@@ -1296,6 +1296,18 @@ export default function App() {
     handlePaletteConfirm,
     setPaletteEdit,
     session,
+    showRightSidebar,
+    setShowRightSidebar,
+    rightSidebarTab,
+    setRightSidebarTab,
+    agentProviderId,
+    setAgentProviderId,
+    effectiveAgentProviderId,
+    selectedAgentProvider,
+    isTourOpen,
+    setIsTourOpen,
+    handleSeedSuccess,
+    generateTemplateContent,
   };
 
   if (sessionLoading) {
@@ -1542,104 +1554,9 @@ export default function App() {
             <AppShell activeRole={activeRole} />
           </div>
 
-          <RightSidebar
-            showRightSidebar={showRightSidebar}
-            setShowRightSidebar={setShowRightSidebar}
-            rightSidebarTab={rightSidebarTab}
-            setRightSidebarTab={setRightSidebarTab}
-            effectiveAgentProviderId={effectiveAgentProviderId}
-            agentProviderId={agentProviderId}
-            setAgentProviderId={setAgentProviderId}
-            personaId={personaId}
-            setPersonaId={setPersonaId}
-            aiProviders={aiProviders}
-            selectedAgentProvider={selectedAgentProvider}
-            chatLog={chatLog}
-            loading={loading}
-            input={input}
-            setInput={setInput}
-            handleSend={handleSend}
-            chatAttachments={chatAttachments}
-            setChatAttachments={setChatAttachments}
-            handleChatFileChange={handleChatFileChange}
-            handleChatDrop={handleChatDrop}
-            onClearAgentMemory={handleClearAgentMemory}
-            events={events}
-            lang={lang}
-            t={t}
-          />
+          <RightSidebar />
 
-          <AppModals
-            lang={lang as 'zh' | 'en'}
-            t={t}
-            courseWizard={courseWizard}
-            quizGenerator={quizGenerator}
-            classBatch={classBatch}
-            studentNotificationsHook={studentNotificationsHook}
-            showImportModal={showImportModal}
-            setShowImportModal={setShowImportModal}
-            handleImportFile={handleImportFile}
-            importError={importError}
-            importSuccess={importSuccess}
-            isImporting={isImporting}
-            downloadCSVTemplate={downloadCSVTemplate}
-            addToast={addToast}
-            generateTemplateContent={generateTemplateContent}
-            isImportLessonsOpen={isImportLessonsOpen}
-            setIsImportLessonsOpen={setIsImportLessonsOpen}
-            importStatus={importStatus}
-            setIsDraggingImport={setIsDraggingImport}
-            handleCSVFileChange={handleCSVFileChange}
-            downloadCsvTemplate={downloadCsvTemplate}
-            isDraggingImport={isDraggingImport}
-            previewImportData={previewImportData}
-            setPreviewImportData={setPreviewImportData}
-            setImportStatus={setImportStatus}
-            importProgress={importProgress}
-            importProgressTotal={importProgressTotal}
-            importErrorMsg={importErrorMsg}
-            setImportErrorMsg={setImportErrorMsg}
-            handleCSVImportSubmit={handleCSVImportSubmit}
-            lessons={lessons}
-            fetchClassDashboard={fetchClassDashboard}
-            isCloudDriveOpen={isCloudDriveOpen}
-            setIsCloudDriveOpen={setIsCloudDriveOpen}
-            cloudDrivePreviewNode={cloudDrivePreviewNode}
-            setCloudDrivePreviewNode={setCloudDrivePreviewNode}
-            isSystemResourceLibraryOpen={isSystemResourceLibraryOpen}
-            setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
-            systemResourceTab={systemResourceTab}
-            setSystemResourceTab={setSystemResourceTab}
-            selectedLibraryResourceId={selectedLibraryResourceId}
-            setSelectedLibraryResourceId={setSelectedLibraryResourceId}
-            loadingLibraryResources={loadingLibraryResources}
-            libraryResources={libraryResources}
-            fetchLibraryResources={fetchLibraryResources}
-            classes={classes}
-            expandedClassId={expandedClassId}
-            isExportWeightModalOpen={isExportWeightModalOpen}
-            setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-            quizzesWeight={quizzesWeight}
-            setQuizzesWeight={setQuizzesWeight}
-            assignmentsWeight={assignmentsWeight}
-            setAssignmentsWeight={setAssignmentsWeight}
-            handleQuizzesWeightChange={handleQuizzesWeightChange}
-            handleAssignmentsWeightChange={handleAssignmentsWeightChange}
-            customCategoryOverrides={customCategoryOverrides}
-            setCustomCategoryOverrides={setCustomCategoryOverrides}
-            classDashboardMap={classDashboardMap}
-            exportClassId={exportClassId}
-            exportClassName={exportClassName}
-            csvPreviewData={csvPreviewData}
-            handleExportGrades={handleExportGrades}
-            setStudentViewStatus={setStudentViewStatus}
-            isTourOpen={isTourOpen}
-            setIsTourOpen={setIsTourOpen}
-            handleSeedSuccess={handleSeedSuccess}
-            setTeacherTab={setTeacherTab}
-            showCoursewareHub={showCoursewareHub}
-            setShowCoursewareHub={setShowCoursewareHub}
-          />
+          <AppModals />
 
           {/* 全班随机抽问结果通知横幅 (Classroom Pick Announcement Banner) */}
           {pickedAnnouncement && !pickedAlertData && (

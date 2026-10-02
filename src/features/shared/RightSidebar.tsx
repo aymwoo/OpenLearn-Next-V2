@@ -10,60 +10,63 @@ import {
   Paperclip,
   AlertTriangle,
 } from 'lucide-react';
+import { useOptionalAppData } from '../../context/AppDataContext';
 
-interface RightSidebarProps {
-  showRightSidebar: boolean;
-  setShowRightSidebar: (v: boolean) => void;
-  rightSidebarTab: 'agent' | 'shell';
-  setRightSidebarTab: (t: 'agent' | 'shell') => void;
-  effectiveAgentProviderId: string;
-  agentProviderId: string;
-  setAgentProviderId: (id: string) => void;
+export interface RightSidebarProps {
+  showRightSidebar?: boolean;
+  setShowRightSidebar?: (v: boolean) => void;
+  rightSidebarTab?: 'agent' | 'shell';
+  setRightSidebarTab?: (t: 'agent' | 'shell') => void;
+  effectiveAgentProviderId?: string;
+  agentProviderId?: string;
+  setAgentProviderId?: (id: string) => void;
   personaId?: string;
   setPersonaId?: (id: string) => void;
-  aiProviders: any[];
-  selectedAgentProvider: any | null;
-  chatLog: { role: string; content: string }[];
-  loading: boolean;
-  input: string;
-  setInput: (v: string) => void;
-  handleSend: (e: React.FormEvent) => Promise<void>;
-  chatAttachments: { name: string; content: string }[];
-  setChatAttachments: React.Dispatch<React.SetStateAction<{ name: string; content: string }[]>>;
-  handleChatFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleChatDrop: (e: React.DragEvent) => void;
-  onClearAgentMemory: () => void;
-  events: any[];
-  lang: string;
-  t: Record<string, string>;
+  aiProviders?: any[];
+  selectedAgentProvider?: any | null;
+  chatLog?: { role: string; content: string }[];
+  loading?: boolean;
+  input?: string;
+  setInput?: (v: string) => void;
+  handleSend?: (e: React.FormEvent) => Promise<void>;
+  chatAttachments?: { name: string; content: string }[];
+  setChatAttachments?: React.Dispatch<React.SetStateAction<{ name: string; content: string }[]>>;
+  handleChatFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleChatDrop?: (e: React.DragEvent) => void;
+  onClearAgentMemory?: () => void;
+  events?: any[];
+  lang?: string;
+  t?: Record<string, string>;
 }
 
-export function RightSidebar({
-  showRightSidebar,
-  setShowRightSidebar,
-  rightSidebarTab,
-  setRightSidebarTab,
-  effectiveAgentProviderId,
-  agentProviderId,
-  setAgentProviderId,
-  personaId,
-  setPersonaId,
-  aiProviders,
-  selectedAgentProvider,
-  chatLog,
-  loading,
-  input,
-  setInput,
-  handleSend,
-  chatAttachments,
-  setChatAttachments,
-  handleChatFileChange,
-  handleChatDrop,
-  onClearAgentMemory,
-  events,
-  lang,
-  t,
-}: RightSidebarProps) {
+export function RightSidebar(props: RightSidebarProps = {}) {
+  const appData = useOptionalAppData();
+
+  const showRightSidebar = props.showRightSidebar ?? appData?.showRightSidebar ?? false;
+  const setShowRightSidebar = props.setShowRightSidebar ?? appData?.setShowRightSidebar ?? (() => {});
+  const rightSidebarTab = props.rightSidebarTab ?? appData?.rightSidebarTab ?? 'agent';
+  const setRightSidebarTab = props.setRightSidebarTab ?? appData?.setRightSidebarTab ?? (() => {});
+  const effectiveAgentProviderId = props.effectiveAgentProviderId ?? appData?.effectiveAgentProviderId ?? '';
+  const agentProviderId = props.agentProviderId ?? appData?.agentProviderId ?? '';
+  const setAgentProviderId = props.setAgentProviderId ?? appData?.setAgentProviderId ?? (() => {});
+  const personaId = props.personaId ?? appData?.personaId ?? '';
+  const setPersonaId = props.setPersonaId ?? appData?.setPersonaId ?? (() => {});
+  const aiProviders = props.aiProviders ?? appData?.aiProviders ?? [];
+  const selectedAgentProvider =
+    props.selectedAgentProvider !== undefined ? props.selectedAgentProvider : (appData?.selectedAgentProvider ?? null);
+  const chatLog = props.chatLog ?? appData?.chatLog ?? [];
+  const loading = props.loading ?? appData?.loading ?? false;
+  const input = props.input ?? appData?.input ?? '';
+  const setInput = props.setInput ?? appData?.setInput ?? (() => {});
+  const handleSend = props.handleSend ?? appData?.handleSend ?? (async () => {});
+  const chatAttachments = props.chatAttachments ?? appData?.chatAttachments ?? [];
+  const setChatAttachments = props.setChatAttachments ?? appData?.setChatAttachments ?? (() => {});
+  const handleChatFileChange = props.handleChatFileChange ?? appData?.handleChatFileChange ?? (() => {});
+  const handleChatDrop = props.handleChatDrop ?? appData?.handleChatDrop ?? (() => {});
+  const onClearAgentMemory = props.onClearAgentMemory ?? appData?.handleClearAgentMemory ?? (() => {});
+  const events = props.events ?? appData?.events ?? [];
+  const lang = props.lang ?? appData?.lang ?? 'zh';
+  const t = props.t ?? appData?.t ?? {};
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

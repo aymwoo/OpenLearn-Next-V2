@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R4a）：RightSidebar 与 AppModals 迁移 AppDataContext（95 props → 0）**：
+  - RightSidebar 25 props → 0、AppModals 70 props → 0：两组件全面接入 `useOptionalAppData()` 双模取数，并保留原 Props 接口与默认解构，既支持 0 props 全局挂载，又保持已有孤立单元测试 100% 兼容。
+  - AppDataContext 补齐 `AppExtras` 中缺失的模态框与侧边栏局部交互状态（`showRightSidebar`、`rightSidebarTab`、`agentProviderId`、`isTourOpen`、`handleSeedSuccess` 等）；`App.tsx` 注入相应状态上下文。
+  - `src/App.tsx` 顶层调用点直接替换为 `<RightSidebar />` 与 `<AppModals />`，消除 95 行重复 props 传参样板代码。
+
+
 - **前端架构治理（路线图 C1-R3j）：迁移剩余 4 个次级 tab 与 NavigationSidebar，TeacherView 蜕变为 0 props 纯路由分发容器**：
   - NavigationSidebar、TimetableView、ComputerLabView、HelpView、PluginView 全部改经 `useAppData()` / `useOptionalAppData()` 取数，保留 Props 契约兼容孤立测试。
   - TeacherView 内部全部 10 个业务 Tab 以及导航侧栏均以 0 props 挂载；TeacherViewProps 接口收窄为空，TeacherView 蜕变为纯粹的布局与路由分发容器。
