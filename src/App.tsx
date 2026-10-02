@@ -16,6 +16,13 @@ import {
   fetchProcessLogs as fetchProcessLogsApi,
   postClassSchedule,
 } from './services/systemService.js';
+import {
+  getLessons,
+  postLesson,
+  deleteLesson,
+  postCloneLesson,
+  getLessonWhiteboard,
+} from './services/lessonService.js';
 import { translations } from './i18n';
 import { LoginPage } from './components/LoginPage';
 import { AppHeader } from './components/AppHeader';
@@ -554,9 +561,9 @@ export default function App() {
 
   const fetchLessons = async () => {
     try {
-      const res = await fetch('/api/lessons?pageSize=all');
-      if (res.ok) {
-        const lessons = listFromEnvelope<any>(await res.json());
+      const { ok, data } = await getLessons();
+      if (ok) {
+        const lessons = listFromEnvelope<any>(data);
         setLessons(lessons);
         if (!appStore.getState().selectedLesson && lessons.length > 0) {
           setSelectedLesson(lessons[0].id);
@@ -861,13 +868,8 @@ export default function App() {
 
   const handleQuickCreateLesson = async (title: string, content: string): Promise<string> => {
     try {
-      const res = await fetch('/api/lessons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
+      const { ok, data } = await postLesson({ title, content });
+      if (ok) {
         await fetchLessons();
         return data.id || 'lesson-created';
       }
@@ -919,9 +921,8 @@ export default function App() {
   };
 
   const handleDeleteCourse = async (lessonId: string) => {
-    const res = await fetch(`/api/lessons/${lessonId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+    const { ok, data } = await deleteLesson(lessonId);
+    if (!ok) {
       throw new Error(data.error || 'Failed to delete course');
     }
     await fetchLessons();
@@ -938,9 +939,8 @@ export default function App() {
   const handleCopyCourse = async (lessonId: string) => {
     setCopyingLessonId(lessonId);
     try {
-      const res = await fetch(`/api/lessons/${lessonId}/clone`, { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+      const { ok, data } = await postCloneLesson(lessonId);
+      if (!ok) {
         throw new Error(data.error || 'Failed to copy course');
       }
       await fetchLessons();
@@ -1370,9 +1370,8 @@ export default function App() {
   const lastElementsJsonRef = useRef<string>('');
   const fetchElements = async (lessonId: string) => {
     try {
-      const res = await fetch(`/api/lessons/${lessonId}/whiteboard`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const { ok, data } = await getLessonWhiteboard(lessonId);
+      if (!ok) return;
       const jsonStr = JSON.stringify(data);
       if (jsonStr !== lastElementsJsonRef.current) {
         lastElementsJsonRef.current = jsonStr;
