@@ -2,22 +2,18 @@ import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw, X }
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
 import {
-  fetchLibraryResources as fetchLibraryResourcesApi,
   fetchDbStatus,
   fetchAuthSession,
   fetchSiteSettings as fetchSiteSettingsApi,
   postLogout,
 } from './services/sessionService.js';
-import {
-  fetchRegisteredCommands as fetchRegisteredCommandsApi,
-  fetchVfsNodes as fetchVfsNodesApi,
-  fetchProcesses as fetchProcessesApi,
-  fetchProcessLogs as fetchProcessLogsApi,
-  postClassSchedule,
-} from './services/systemService.js';
 import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
 import { getAssignmentSubmissions, postAssignmentSubmission, postGenerateAssignment } from './services/assignmentService.js';
+import { postClassSchedule } from './services/systemService.js';
 import { getClassStudents } from './services/rosterService.js';
+import { useToast } from './hooks/useToast';
+import { useSystemData } from './hooks/useSystemData';
+import { useResourceLibrary } from './hooks/useResourceLibrary';
 import { getClassProgress, getClassDashboard, getStudentDashboard } from './services/dashboardService.js';
 import {
   postLesson,
@@ -87,12 +83,6 @@ import { useLessonTimeline } from './hooks/useLessonTimeline';
 import { useStudentNotifications } from './hooks/useStudentNotifications';
 import { useGradeExport } from './hooks/useGradeExport';
 import { useLessonFiltering } from './hooks/useLessonFiltering';
-import {
-  downloadCSVTemplate as downloadCSVTemplateService,
-  parseAndImportClassesOrStudents,
-  parseLessonCSV,
-  submitCSVLessons,
-} from './services/bulkImportService';
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
 import { StageDisplayView } from './features/classroom/stage-display/StageDisplayView';
 import { useGlobalErrorCapture } from './hooks/useGlobalErrorCapture';
@@ -199,33 +189,6 @@ export default function App() {
   const [liveClassStudentProgress, setLiveClassStudentProgress] = useState<any[]>([]);
   const [localProgressPercent, setLocalProgressPercent] = useState<number>(0);
 
-  const [isCloudDriveOpen, setIsCloudDriveOpen] = useState(false);
-  const [cloudDrivePreviewNode, setCloudDrivePreviewNode] = useState<{
-    id: string;
-    name: string;
-    content: string;
-  } | null>(null);
-
-  const [isSystemResourceLibraryOpen, setIsSystemResourceLibraryOpen] = useState(false);
-  const [systemResourceTab, setSystemResourceTab] = useState<'system' | 'cloud'>('system');
-  const [selectedLibraryResourceId, setSelectedLibraryResourceId] = useState<string | null>(null);
-  const [libraryResources, setLibraryResources] = useState<any[]>([]);
-  const [loadingLibraryResources, setLoadingLibraryResources] = useState(false);
-  const [showCoursewareHub, setShowCoursewareHub] = useState(false);
-
-  const fetchLibraryResources = async () => {
-    try {
-      setLoadingLibraryResources(true);
-      const { ok, data } = await fetchLibraryResourcesApi();
-      if (ok) {
-        setLibraryResources(data);
-      }
-    } catch (e) {
-      console.warn('Error fetching library resources:', e);
-    } finally {
-      setLoadingLibraryResources(false);
-    }
-  };
 
   React.useEffect(() => {
     useThemeStore.getState().initTheme();
@@ -250,12 +213,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  React.useEffect(() => {
-    if (isSystemResourceLibraryOpen) {
-      fetchLibraryResources();
-    }
-  }, [isSystemResourceLibraryOpen]);
-
   const lessons = useAppStore((s) => s.lessons);
   const setLessons = useAppStore((s) => s.setLessons);
   // ── Hook: 课程筛选、搜索与排序 ──
@@ -274,29 +231,15 @@ export default function App() {
     setCopyingLessonId,
     filteredAndSortedLessons,
   } = useLessonFiltering(lessons);
-  const [registeredCommands, setRegisteredCommands] = useState<any[]>([]);
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
   const elements = useAppStore((s) => s.elements);
   const setElements = useAppStore((s) => s.setElements);
 
-  // Import Lessons states
-  const [isImportLessonsOpen, setIsImportLessonsOpen] = useState(false);
-  const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'importing' | 'success' | 'error'>('idle');
-  const [importProgress, setImportProgress] = useState(0);
-  const [importProgressTotal, setImportProgressTotal] = useState(0);
-  const [importErrorMsg, setImportErrorMsg] = useState('');
-  const [previewImportData, setPreviewImportData] = useState<{ title: string; content: string }[]>([]);
-  const [isDraggingImport, setIsDraggingImport] = useState(false);
 
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
 
-  const [showLogs, setShowLogs] = useState(false);
-  const [vfsNodes, setVfsNodes] = useState<VFSNode[]>([]);
-  const [processes, setProcesses] = useState<ProcessType[]>([]);
-  const [showProcessLogs, setShowProcessLogs] = useState<string | null>(null);
-  const [processLogsContent, setProcessLogsContent] = useState('');
   const classes = useAppStore((s) => s.classes);
   const setClasses = useAppStore((s) => s.setClasses);
   const students = useAppStore((s) => s.students);
@@ -533,14 +476,6 @@ export default function App() {
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
   const [liveClassFocusLocked, setLiveClassFocusLocked] = useState(false);
-  const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    appStore.getState().addToast({ id, title, message, type });
-    setTimeout(() => {
-      appStore.getState().removeToast(id);
-    }, 6000);
-  };
-
   // ── 全班专注锁定：学生被教师锁定时，只读跟随当前授课 ──────────────────────
   // 锁定状态由 students 表中的 locked_lesson_id 派生，或由 ClassroomSyncChannel 广播实时下发。
   const isStudentLocked =
@@ -564,6 +499,82 @@ export default function App() {
   const fetchLessons = async () => {
     await appStore.getState().loadLessons();
   };
+
+  const fetchClasses = async () => {
+    await appStore.getState().loadClasses();
+  };
+
+  const fetchStudents = async () => {
+    await appStore.getState().loadStudents();
+  };
+  // ── C1-R2b: 叶子 hooks（Toast / 系统数据 / 资源库与导入） ──────────────────
+  const { addToast } = useToast();
+  const {
+    registeredCommands,
+    setRegisteredCommands,
+    vfsNodes,
+    setVfsNodes,
+    processes,
+    setProcesses,
+    showProcessLogs,
+    setShowProcessLogs,
+    processLogsContent,
+    setProcessLogsContent,
+    showLogs,
+    setShowLogs,
+    currentVfsParent,
+    setCurrentVfsParent,
+    fetchRegisteredCommands,
+    fetchVfs,
+    fetchProcesses,
+    fetchProcessLogs,
+  } = useSystemData(session);
+  const {
+    isCloudDriveOpen,
+    setIsCloudDriveOpen,
+    cloudDrivePreviewNode,
+    setCloudDrivePreviewNode,
+    isSystemResourceLibraryOpen,
+    setIsSystemResourceLibraryOpen,
+    systemResourceTab,
+    setSystemResourceTab,
+    selectedLibraryResourceId,
+    setSelectedLibraryResourceId,
+    libraryResources,
+    setLibraryResources,
+    loadingLibraryResources,
+    setLoadingLibraryResources,
+    showCoursewareHub,
+    setShowCoursewareHub,
+    fetchLibraryResources,
+    isImportLessonsOpen,
+    setIsImportLessonsOpen,
+    importStatus,
+    setImportStatus,
+    importProgress,
+    setImportProgress,
+    importProgressTotal,
+    setImportProgressTotal,
+    importErrorMsg,
+    setImportErrorMsg,
+    previewImportData,
+    setPreviewImportData,
+    isDraggingImport,
+    setIsDraggingImport,
+    downloadCsvTemplate,
+    handleCSVFileChange,
+    handleCSVImportSubmit,
+    showImportModal,
+    setShowImportModal,
+    isImporting,
+    setIsImporting,
+    importError,
+    setImportError,
+    importSuccess,
+    setImportSuccess,
+    downloadCSVTemplate,
+    handleImportFile,
+  } = useResourceLibrary({ lang, session, fetchClasses, fetchStudents, fetchLessons, addToast });
 
   const chatLogUpdaterRef = useRef<(updater: any) => void>(() => {});
 
@@ -790,15 +801,7 @@ export default function App() {
   const [isGrading, setIsGrading] = useState<Record<string, boolean>>({});
 
   // Class/Student Bulk Import State variables
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
-  const [currentVfsParent, _setCurrentVfsParent] = useState<string | null>(null);
-  const setCurrentVfsParent = (id: string | null) => {
-    _setCurrentVfsParent(id);
-  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -856,47 +859,6 @@ export default function App() {
     return '';
   };
 
-  const downloadCsvTemplate = () => {
-    downloadCSVTemplateService('class', lang);
-  };
-
-  const handleCSVFileChange = async (file: File) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setImportStatus('error');
-      setImportErrorMsg(lang === 'zh' ? '只支持包含 .csv 后缀名的文件！' : 'Only files ending in .csv are supported!');
-      return;
-    }
-    setImportStatus('parsing');
-    setImportErrorMsg('');
-    try {
-      const parsedList = await parseLessonCSV(file, lang);
-      setPreviewImportData(parsedList);
-      setImportStatus('idle');
-    } catch (err: any) {
-      setImportStatus('error');
-      setImportErrorMsg(err.message || String(err));
-    }
-  };
-
-  const handleCSVImportSubmit = async () => {
-    if (previewImportData.length === 0) return;
-    setImportStatus('importing');
-    setImportProgress(0);
-    setImportProgressTotal(previewImportData.length);
-    const result = await submitCSVLessons(previewImportData, {
-      lang,
-      setImportProgress,
-      fetchLessons,
-    });
-    if (result.success) {
-      setImportStatus('success');
-    } else {
-      setImportStatus('error');
-      setImportErrorMsg(result.errorMsg || '');
-    }
-  };
-
   const handleDeleteCourse = async (lessonId: string) => {
     const { ok, data } = await deleteLesson(lessonId);
     if (!ok) {
@@ -937,47 +899,7 @@ export default function App() {
     }
   };
 
-  const fetchRegisteredCommands = async () => {
-    try {
-      const { ok, data, contentType } = await fetchRegisteredCommandsApi();
-      if (ok && contentType && contentType.includes('application/json')) {
-        if (Array.isArray(data)) {
-          setRegisteredCommands(data);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch registered commands', e);
-    }
-  };
 
-  const fetchVfs = async (parentId: string | null) => {
-    if (!session) return;
-    try {
-      const { ok, data } = await fetchVfsNodesApi(parentId);
-      if (ok) {
-        setVfsNodes(data);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch VFS nodes', e);
-    }
-  };
-
-  const fetchProcesses = async () => {
-    try {
-      const { ok, data } = await fetchProcessesApi();
-      if (ok) {
-        setProcesses(data);
-      }
-    } catch (e) {}
-  };
-
-  const fetchClasses = async () => {
-    await appStore.getState().loadClasses();
-  };
-
-  const fetchStudents = async () => {
-    await appStore.getState().loadStudents();
-  };
 
   const fetchClassStudents = async (id: string) => {
     try {
@@ -1286,16 +1208,6 @@ export default function App() {
     } catch (e) {}
   };
 
-  const fetchProcessLogs = async (id: string) => {
-    try {
-      const { ok, data } = await fetchProcessLogsApi(id);
-      if (ok) {
-        setProcessLogsContent(data.logs || '');
-        setShowProcessLogs(id);
-      }
-    } catch (e) {}
-  };
-
   const lastElementsJsonRef = useRef<string>('');
   const fetchElements = async (lessonId: string) => {
     try {
@@ -1400,28 +1312,6 @@ export default function App() {
     setPickedAlertData,
     setPickedAnnouncement,
   });
-
-  const downloadCSVTemplate = (type: 'class' | 'student') => {
-    downloadCSVTemplateService(type, lang);
-  };
-
-  const handleImportFile = async (file: File) => {
-    setIsImporting(true);
-    setImportError(null);
-    setImportSuccess(null);
-    try {
-      const res = await parseAndImportClassesOrStudents(file, {
-        lang,
-        fetchClasses,
-        fetchStudents,
-      });
-      setImportSuccess(res.message);
-    } catch (err: any) {
-      setImportError(err.message || String(err));
-    } finally {
-      setIsImporting(false);
-    }
-  };
 
   const toggleLanguage = () => {
     setLang(lang === 'zh' ? 'en' : 'zh');
