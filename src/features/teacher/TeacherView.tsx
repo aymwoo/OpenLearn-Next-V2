@@ -47,32 +47,12 @@ export interface TeacherViewProps {
   session: SessionType | null;
   todaySchedules: ScheduleType[];
 
-  // ── Dashboard ───────────────────────────────────────────────────────
+  // ── Dashboard：C1-R3 后改经 AppDataContext 取数，仅保留多 tab 共享字段 ──
   t: any;
   lessons: Lesson[];
   classes: ClassType[];
   students: StudentType[];
-  approvals: any[];
-  processes: ProcessType[];
-  isApprovalsCollapsed: boolean;
-  setIsApprovalsCollapsed: (v: boolean) => void;
-  isProcessesCollapsed: boolean;
-  setIsProcessesCollapsed: (v: boolean) => void;
-  scoreOverrides: Record<string, number>;
-  setScoreOverrides: (v: Record<string, number>) => void;
-  handleApprove: (id: string, overrides?: any) => Promise<void>;
-  handleReject: (id: string) => Promise<void>;
-  showLogs: boolean;
-  setShowLogs: (v: boolean) => void;
-  processLogsContent: string;
-  showProcessLogs: string | null;
-  fetchProcessLogs: (id: string) => Promise<void>;
-  setShowProcessLogs: (id: string | null) => void;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
-  handleQuickScheduleClass: (classId: string, lessonId: string, date: string) => Promise<boolean>;
-  handleQuickGenerateAssignment: (classId: string, title: string, desc: string) => Promise<string | null>;
-  handleQuickCreateLesson: (title: string, content: string) => Promise<string>;
-
   // ── LessonEditorView ────────────────────────────────────────────────
   selectedLesson: string | null;
   activeRole: 'teacher' | 'student';
@@ -357,7 +337,7 @@ export function TeacherView(props: TeacherViewProps) {
           }
         >
           {teacherTab === 'dashboard' ? (
-            <Dashboard {...props} />
+            <Dashboard />
           ) : teacherTab === 'lesson_editor' ? (
             <LessonEditorView {...props} />
           ) : teacherTab === 'live_class' ? (

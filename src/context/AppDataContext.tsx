@@ -35,15 +35,14 @@ import type { useGradeExport } from '../hooks/useGradeExport';
 import type { useLessonFiltering } from '../hooks/useLessonFiltering';
 import type { TeacherViewProps } from '../features/teacher/TeacherView';
 
-/** App 局部 state / 派生值（不在任何 hook 返回值内），类型从 TeacherViewProps 精选 */
+/** App 局部 state / 派生值：既有的从 TeacherViewProps 精选，其余手写 */
 export type AppExtras = Pick<
   TeacherViewProps,
   | 't'
-  | 'isApprovalsCollapsed'
-  | 'setIsApprovalsCollapsed'
-  | 'isProcessesCollapsed'
-  | 'setIsProcessesCollapsed'
-  | 'setShowProcessLogs'
+  | 'lessons'
+  | 'classes'
+  | 'students'
+  | 'session'
   | 'whiteboardRef'
   | 'paletteEdit'
   | 'handlePaletteActivate'
@@ -61,9 +60,12 @@ export type AppExtras = Pick<
   | 'setEditorLastSavedTime'
   | 'editorPanelsExpanded'
   | 'setEditorPanelsExpanded'
-  | 'onPingStudent'
-  | 'onOpenCoursewareHub'
->;
+> & {
+  isApprovalsCollapsed: boolean;
+  setIsApprovalsCollapsed: (v: boolean) => void;
+  isProcessesCollapsed: boolean;
+  setIsProcessesCollapsed: (v: boolean) => void;
+};
 
 export type AppDataValue = ReturnType<typeof useToast> &
   ReturnType<typeof useSystemData> &

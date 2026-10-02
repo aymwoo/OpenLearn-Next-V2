@@ -26,40 +26,10 @@ import { ClassroomMoodTracker } from './ClassroomMoodTracker';
 import { TopPerformersWidget } from './TopPerformersWidget';
 import { ClassroomCountdownWidget } from '../classroom/ClassroomCountdownWidget';
 import { ClassSummaryStats } from './ClassSummaryStats';
+import { useAppData } from '../../context/AppDataContext';
 
-interface DashboardProps {
-  lang: 'zh' | 'en';
-  t: Record<string, string>;
-  lessons: Lesson[];
-  classes: ClassType[];
-  students: StudentType[];
-  todaySchedules: ScheduleType[];
-  approvals: any[];
-  processes: ProcessType[];
-  isApprovalsCollapsed: boolean;
-  setIsApprovalsCollapsed: (v: boolean) => void;
-  isProcessesCollapsed: boolean;
-  setIsProcessesCollapsed: (v: boolean) => void;
-  scoreOverrides: Record<string, number>;
-  setScoreOverrides:
-    | React.Dispatch<React.SetStateAction<Record<string, number>>>
-    | ((v: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void);
-  handleApprove: (id: string, overrides?: any) => Promise<void>;
-  handleReject: (id: string) => Promise<void>;
-  showLogs: boolean;
-  setShowLogs: (v: boolean) => void;
-  processLogsContent: string;
-  showProcessLogs: string | null;
-  fetchProcessLogs: (id: string) => Promise<void>;
-  setShowProcessLogs: (id: string | null) => void;
-  addToast: (title: string, msg: string, type?: string) => void;
-  handleQuickScheduleClass: (classId: string, lessonId: string, date: string) => Promise<boolean>;
-  handleQuickGenerateAssignment: (classId: string, title: string, desc: string) => Promise<string | null>;
-  handleQuickCreateLesson: (title: string, content: string) => Promise<string>;
-  classDashboardMap: Record<string, any>;
-}
-
-export function Dashboard(props: DashboardProps) {
+export function Dashboard() {
+  // C1-R3: 全部数据来自 AppDataContext（不再经 TeacherView props 透传）
   const {
     lang,
     t,
@@ -88,7 +58,7 @@ export function Dashboard(props: DashboardProps) {
     handleQuickGenerateAssignment,
     handleQuickCreateLesson,
     classDashboardMap,
-  } = props;
+  } = useAppData();
 
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'classroom'>('overview');
   const [activeClassroomLessonId, setActiveClassroomLessonId] = useState<string | null>(null);

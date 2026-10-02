@@ -1223,6 +1223,9 @@ export default function App() {
     ...gradeExport,
     ...lessonFilteringData,
     t,
+    lessons,
+    classes,
+    students,
     isApprovalsCollapsed,
     setIsApprovalsCollapsed,
     isProcessesCollapsed,
@@ -1525,25 +1528,6 @@ export default function App() {
               todaySchedules={todaySchedules}
               t={t}
               classes={classes}
-              approvals={approvals}
-              processes={processes}
-              isApprovalsCollapsed={isApprovalsCollapsed}
-              setIsApprovalsCollapsed={setIsApprovalsCollapsed}
-              isProcessesCollapsed={isProcessesCollapsed}
-              setIsProcessesCollapsed={setIsProcessesCollapsed}
-              scoreOverrides={scoreOverrides}
-              setScoreOverrides={setScoreOverrides}
-              handleApprove={handleApprove}
-              handleReject={handleReject}
-              showLogs={showLogs}
-              setShowLogs={setShowLogs}
-              processLogsContent={processLogsContent}
-              showProcessLogs={showProcessLogs}
-              fetchProcessLogs={fetchProcessLogs}
-              setShowProcessLogs={setShowProcessLogs}
-              handleQuickScheduleClass={handleQuickScheduleClass}
-              handleQuickGenerateAssignment={handleQuickGenerateAssignment}
-              handleQuickCreateLesson={handleQuickCreateLesson}
               setActiveRole={setActiveRole}
               editorSaveStatus={editorSaveStatus}
               setEditorSaveStatus={setEditorSaveStatus}
@@ -1783,9 +1767,6 @@ export default function App() {
             currentVfsParent={currentVfsParent}
             setCurrentVfsParent={setCurrentVfsParent}
             vfsNodes={vfsNodes}
-            showProcessLogs={showProcessLogs}
-            setShowProcessLogs={setShowProcessLogs}
-            processLogsContent={processLogsContent}
             isCloudDriveOpen={isCloudDriveOpen}
             setIsCloudDriveOpen={setIsCloudDriveOpen}
             cloudDrivePreviewNode={cloudDrivePreviewNode}
