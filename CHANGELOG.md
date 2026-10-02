@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R4b 终态）：App.tsx 极简入口蜕变（1764 行 → 130 行），下沉业务浮层与数据编排 Hook**：
+  - **AppHeader 35 props → 0**：`AppHeader` 升级为 `useOptionalAppData()` 双模取数，并内置 `StudentLiveHeader` 自动路由，支持 0 props 挂载。
+  - **独立浮层下沉**：抽取 `ClassroomOverlays`（整合抽问横幅、学生抽中回答模态框、学生端实时互动浮层）与 `ImpersonationBanner`（学生模拟提示条），全面经 Context 消费。
+  - **编排逻辑彻底解耦（`useAppComposer`）**：将 App.tsx 内部 10 个 Hook 的依赖组合、信道（ClassroomSyncChannel）、Socket 与长轮询调度、以及 `appData` 对象拼装整体下沉至 `src/hooks/useAppComposer.ts`。
+  - **极简入口达成**：`src/App.tsx` 蜕变为纯粹的 Provider 包裹 + 根布局容器（Root View Shell），行数从 1764 行压缩至 **130 行**（压缩率达 92.6%），完全达成 C1 终态 `<500 行` 目标。
+
+
 - **前端架构治理（路线图 C1-R4a）：RightSidebar 与 AppModals 迁移 AppDataContext（95 props → 0）**：
   - RightSidebar 25 props → 0、AppModals 70 props → 0：两组件全面接入 `useOptionalAppData()` 双模取数，并保留原 Props 接口与默认解构，既支持 0 props 全局挂载，又保持已有孤立单元测试 100% 兼容。
   - AppDataContext 补齐 `AppExtras` 中缺失的模态框与侧边栏局部交互状态（`showRightSidebar`、`rightSidebarTab`、`agentProviderId`、`isTourOpen`、`handleSeedSuccess` 等）；`App.tsx` 注入相应状态上下文。

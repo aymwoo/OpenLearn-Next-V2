@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useOptionalAppData } from '../context/AppDataContext';
 import {
   Bell,
   Globe,
@@ -15,40 +16,41 @@ import {
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
 import { FontSizeSelector } from './FontSizeSelector';
+import { StudentLiveHeader } from './StudentLiveHeader';
 
 export interface AppHeaderProps {
-  activeRole: 'teacher' | 'student';
+  activeRole?: 'teacher' | 'student';
   setActiveRole?: Dispatch<SetStateAction<'teacher' | 'student'>> | ((role: 'teacher' | 'student') => void);
   /**
    * 当前页是课程编辑器「学生视角」开出的独立预览标签页：
    * 退出动作为「关闭标签页」而非「返回教师端」（该标签页内不存在教师端）。
    */
   studentPreviewTab?: boolean;
-  lang: 'zh' | 'en';
-  teacherTab: string;
-  studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
-  session: any;
-  activeStudentId: string | null;
-  students: any[];
-  studentDashboardData: any;
-  isNotificationsOpen: boolean;
-  studentNotifications: any[];
-  unreadNotifications: any[];
-  readNotifications: Set<string>;
-  selectedNotificationForModal: any;
-  dbConnected: boolean;
-  dbStatus: 'normal' | 'warning' | 'error';
-  siteInfo: any;
-  setActiveStudentId: Dispatch<SetStateAction<string | null>>;
-  setReadNotifications: Dispatch<SetStateAction<Set<string>>>;
-  setIsSystemResourceLibraryOpen: Dispatch<SetStateAction<boolean>>;
-  setProfileOpen: Dispatch<SetStateAction<boolean>>;
-  setTeacherTab: (tab: string) => void;
-  setStudentViewStatus: Dispatch<SetStateAction<'dashboard' | 'lesson' | 'assignment'>>;
-  setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>;
-  setSelectedNotificationForModal: Dispatch<SetStateAction<any | null>>;
-  handleLogout: () => void;
-  toggleLanguage: () => void;
+  lang?: 'zh' | 'en';
+  teacherTab?: string;
+  studentViewStatus?: 'dashboard' | 'lesson' | 'assignment';
+  session?: any;
+  activeStudentId?: string | null;
+  students?: any[];
+  studentDashboardData?: any;
+  isNotificationsOpen?: boolean;
+  studentNotifications?: any[];
+  unreadNotifications?: any[];
+  readNotifications?: Set<string>;
+  selectedNotificationForModal?: any;
+  dbConnected?: boolean;
+  dbStatus?: 'normal' | 'warning' | 'error';
+  siteInfo?: any;
+  setActiveStudentId?: Dispatch<SetStateAction<string | null>>;
+  setReadNotifications?: Dispatch<SetStateAction<Set<string>>> | ((updater: (prev: Set<string>) => Set<string>) => void);
+  setIsSystemResourceLibraryOpen?: Dispatch<SetStateAction<boolean>>;
+  setProfileOpen?: Dispatch<SetStateAction<boolean>>;
+  setTeacherTab?: (tab: string) => void;
+  setStudentViewStatus?: Dispatch<SetStateAction<'dashboard' | 'lesson' | 'assignment'>>;
+  setIsNotificationsOpen?: Dispatch<SetStateAction<boolean>>;
+  setSelectedNotificationForModal?: Dispatch<SetStateAction<any | null>>;
+  handleLogout?: () => void;
+  toggleLanguage?: () => void;
   /** 全班专注锁定中：学生端禁止切换页面 */
   isStudentLocked?: boolean;
   /** 锁定期间尝试导航时的回调（用于弹出提示） */
@@ -56,37 +58,43 @@ export interface AppHeaderProps {
 }
 
 export function AppHeader(props: AppHeaderProps) {
-  const {
-    activeRole,
-    studentPreviewTab = false,
-    lang,
-    teacherTab,
-    studentViewStatus,
-    session,
-    activeStudentId,
-    students,
-    studentDashboardData,
-    isNotificationsOpen,
-    studentNotifications,
-    unreadNotifications,
-    readNotifications,
-    dbConnected,
-    dbStatus,
-    siteInfo,
-    setActiveStudentId,
-    setReadNotifications,
-    setIsSystemResourceLibraryOpen,
-    setProfileOpen,
-    setTeacherTab,
-    setStudentViewStatus,
-    setIsNotificationsOpen,
-    setSelectedNotificationForModal,
-    handleLogout,
-    toggleLanguage,
-    setActiveRole,
-    isStudentLocked = false,
-    onBlockedNavigate,
-  } = props;
+  const appData = useOptionalAppData();
+
+  const activeRole = props.activeRole ?? appData?.activeRole ?? 'teacher';
+  const studentPreviewTab = props.studentPreviewTab ?? appData?.isStudentPreviewMode ?? false;
+  const lang = (props.lang ?? appData?.lang ?? 'zh') as 'zh' | 'en';
+  const teacherTab = props.teacherTab ?? appData?.teacherTab ?? 'live_class';
+  const studentViewStatus = props.studentViewStatus ?? appData?.studentViewStatus ?? 'dashboard';
+  const session = props.session !== undefined ? props.session : appData?.session;
+  const activeStudentId = props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
+  const students = props.students ?? appData?.students ?? [];
+  const studentDashboardData = props.studentDashboardData ?? appData?.studentDashboardData ?? null;
+  const isNotificationsOpen = props.isNotificationsOpen ?? appData?.isNotificationsOpen ?? false;
+  const studentNotifications = props.studentNotifications ?? appData?.studentNotifications ?? [];
+  const unreadNotifications = props.unreadNotifications ?? appData?.unreadNotifications ?? [];
+  const readNotifications = props.readNotifications ?? appData?.readNotifications ?? new Set<string>();
+  const selectedNotificationForModal = props.selectedNotificationForModal !== undefined ? props.selectedNotificationForModal : (appData?.selectedNotificationForModal ?? null);
+  const dbConnected = props.dbConnected ?? appData?.dbConnected ?? false;
+  const dbStatus = props.dbStatus ?? appData?.dbStatus ?? 'normal';
+  const siteInfo = props.siteInfo ?? appData?.siteInfo;
+  const setActiveStudentId = props.setActiveStudentId ?? appData?.setActiveStudentId ?? (() => {});
+  const setReadNotifications = props.setReadNotifications ?? appData?.setReadNotifications ?? (() => {});
+  const setIsSystemResourceLibraryOpen = props.setIsSystemResourceLibraryOpen ?? appData?.setIsSystemResourceLibraryOpen ?? (() => {});
+  const setProfileOpen = props.setProfileOpen ?? appData?.setProfileOpen ?? (() => {});
+  const setTeacherTab = props.setTeacherTab ?? appData?.setTeacherTab ?? (() => {});
+  const setStudentViewStatus = props.setStudentViewStatus ?? appData?.setStudentViewStatus ?? (() => {});
+  const setIsNotificationsOpen = props.setIsNotificationsOpen ?? appData?.setIsNotificationsOpen ?? (() => {});
+  const setSelectedNotificationForModal = props.setSelectedNotificationForModal ?? appData?.setSelectedNotificationForModal ?? (() => {});
+  const handleLogout = props.handleLogout ?? appData?.handleLogout ?? appData?.onLogout ?? (() => {});
+  const toggleLanguage = props.toggleLanguage ?? appData?.toggleLanguage ?? (() => {});
+  const setActiveRole = props.setActiveRole ?? appData?.setActiveRole ?? (() => {});
+  const isStudentLocked = props.isStudentLocked ?? appData?.isStudentLocked ?? false;
+  const onBlockedNavigate = props.onBlockedNavigate ?? appData?.notifyLockedNavigation;
+
+  // 独立弹窗模式下渲染轻量化互动课堂专属 Header
+  if (appData?.isStudentLiveMode) {
+    return <StudentLiveHeader />;
+  }
 
   // 学生端被全班专注锁定时，禁止跳转到首页（品牌区 / 系统总览按钮）
   const isStudentNavigationBlocked = activeRole === 'student' && isStudentLocked;

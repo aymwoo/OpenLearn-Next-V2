@@ -139,6 +139,25 @@ export type AppExtras = {
   setIsTourOpen: Dispatch<SetStateAction<boolean>>;
   handleSeedSuccess: (data: { classId: string; scheduleId: string; lessonId: string }) => Promise<void>;
   generateTemplateContent?: (title: string, category: string) => string;
+
+  // ── AppHeader 局部状态 ─────────────────────────────────────────────
+  activeRole?: 'teacher' | 'student';
+  setActiveRole?: Dispatch<SetStateAction<'teacher' | 'student'>> | ((role: 'teacher' | 'student') => void);
+  isStudentPreviewMode?: boolean;
+  isNotificationsOpen?: boolean;
+  setIsNotificationsOpen?: Dispatch<SetStateAction<boolean>>;
+  selectedNotificationForModal?: any;
+  setSelectedNotificationForModal?: Dispatch<SetStateAction<any | null>>;
+  setProfileOpen?: Dispatch<SetStateAction<boolean>>;
+  notifyLockedNavigation?: () => void;
+  handleLogout?: () => void;
+  toggleLanguage?: () => void;
+  setIsSystemResourceLibraryOpen?: Dispatch<SetStateAction<boolean>>;
+  siteInfo?: any;
+  isStudentLiveMode?: boolean;
+  liveStudentParam?: string | null;
+  isFollowingTeacher?: boolean;
+  setIsFollowingTeacher?: Dispatch<SetStateAction<boolean>>;
 };
 
 export type AppDataValue = ReturnType<typeof useToast> &
