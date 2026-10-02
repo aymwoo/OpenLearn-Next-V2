@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R3 第一轮）：AppContext 地基 + Dashboard/Admin 迁移**：
+  - 新增 `src/context/AppDataContext.tsx`：`AppDataProvider` + `useAppData()`。App 仍为唯一数据源（显式构造 AppDataValue 传入，不移动 state 位置）；类型由 9 个 R2 hooks 与既有 hooks 的 `ReturnType` 交集 ∪ AppExtras（Pick 自 TeacherViewProps）推导，零漂移。
+  - Dashboard 27 props → 0、AdminDirectoryView 9 props → 0：全部经 `useAppData()` 取用；TeacherViewProps 删除对应字段段（保留 t/lessons/classes/students/addToast 等多 tab 共享字段）。
+  - `useAppData` 无 Provider 时抛错防漏接；vitest include 补 `src/context/**`。
+  - 后续批次：LessonEditor/LiveClassroom/CourseManagement/ClassesView/StudentView 逐 tab 迁移。
+  - 已知取舍：context value 为每渲染新对象（无 memo 受害者，已评估）；onLogout/onAIProvidersChanged 为语义别名。
+
 - **前端架构治理（路线图 C1-R2）：App.tsx 局部函数下沉 9 个自定义 hooks**：
   - `useToast` / `useSystemData` / `useResourceLibrary`（叶子：系统数据、资源库、CSV 与批量导入）
   - `useLessonCrud` / `useClassOps`（课时 CRUD、班级学情五 Map、快捷排课/生成作业）
