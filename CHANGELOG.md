@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R2）：App.tsx 局部函数下沉 9 个自定义 hooks**：
+  - `useToast` / `useSystemData` / `useResourceLibrary`（叶子：系统数据、资源库、CSV 与批量导入）
+  - `useLessonCrud` / `useClassOps`（课时 CRUD、班级学情五 Map、快捷排课/生成作业）
+  - `useStudentViewState`（学生视图状态机：锁定收口 setStudentViewStatus）/ `useStudentOps`（看板/进度/作业提交）
+  - `useSessionBootstrap`（DB 心跳、站点设置、登录/登出/语言切换）/ `useClassroomLive`（抽问横幅、提示音、动态流、在线名册）
+  - 前置死代码清理：8 个仅写 ref、7 个同步 effect、死函数 fetchAssignmentSubmissions、死 state expandedAssignmentId
+  - App.tsx 2341 → 1878 行；hook 间单向依赖（App 冒泡注入）、useAppPolling/useClassroomSocket 签名逐字不变；ClassroomSyncChannel 三处实例与惰性补挂语义保留（红线）
+  - 后续：R3 AppShell 227 props 收敛、R4 App.tsx 终态 <500 行
+
 - **前端架构治理（路线图 C1-R1）：App.tsx 内联 fetch 全部服务化**：
   - 29 个内联 fetch 迁入 7 个纯 fetch 封装 service：`sessionService`（resources/db-status/auth session/site-settings/logout）、`lessonService`（lessons CRUD/clone/whiteboard）、`rosterService`（classes/students/class students）、`dashboardService`（class progress/dashboard、student dashboard）、`progressService`（student progress、live progress、read_notifications）、`assignmentService`（submissions、generate）、`systemService`（commands/vfs/processes/logs/schedules POST）。
   - appStore 新增 `loadLessons/loadClasses/loadStudents` action，App.tsx 三个列表拉取改为 action 薄封装（签名不变，useAppPolling/TeacherView props 契约不受影响）。
