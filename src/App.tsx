@@ -16,6 +16,8 @@ import {
   fetchProcessLogs as fetchProcessLogsApi,
   postClassSchedule,
 } from './services/systemService.js';
+import { getClasses, getStudents, getClassStudents } from './services/rosterService.js';
+import { getClassProgress, getClassDashboard, getStudentDashboard } from './services/dashboardService.js';
 import {
   getLessons,
   postLesson,
@@ -996,21 +998,21 @@ export default function App() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch('/api/classes?pageSize=all');
-      if (res.ok) setClasses(listFromEnvelope<any>(await res.json()));
+      const { ok, data } = await getClasses();
+      if (ok) setClasses(listFromEnvelope<any>(data));
     } catch (e) {}
   };
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch('/api/students?pageSize=all');
-      if (res.ok) setStudents(listFromEnvelope<any>(await res.json()));
+      const { ok, data } = await getStudents();
+      if (ok) setStudents(listFromEnvelope<any>(data));
     } catch (e) {}
   };
 
   const fetchClassStudents = async (id: string) => {
     try {
-      const res = await fetch(`/api/classes/${id}/students`);
+      const { ok, data } = await getClassStudents(id);
       if (res.ok) {
         const data = await res.json();
         setClassStudentsMap((prev) => ({ ...prev, [id]: data }));
@@ -1020,7 +1022,7 @@ export default function App() {
 
   const fetchClassProgress = async (id: string) => {
     try {
-      const res = await fetch(`/api/classes/${id}/progress`);
+      const { ok, data } = await getClassProgress(id);
       if (res.ok) {
         const data = await res.json();
         setClassProgressMap((prev) => ({ ...prev, [id]: data }));
@@ -1032,7 +1034,7 @@ export default function App() {
 
   const fetchClassDashboard = async (id: string) => {
     try {
-      const res = await fetch(`/api/classes/${id}/dashboard`);
+      const { ok, data } = await getClassDashboard(id);
       if (res.ok) {
         const data = await res.json();
         setClassDashboardMap((prev) => ({ ...prev, [id]: data }));
@@ -1134,9 +1136,8 @@ export default function App() {
 
   const fetchStudentDashboard = async (id: string) => {
     try {
-      const res = await fetch(`/api/students/${id}/dashboard`);
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await getStudentDashboard(id);
+      if (ok) {
         setStudentDashboardData(data);
         if (data.profile && data.profile.locked_lesson_id) {
           setSelectedLesson(data.profile.locked_lesson_id);
