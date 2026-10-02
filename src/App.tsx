@@ -1235,6 +1235,8 @@ export default function App() {
     },
     t,
     lessons,
+    selectedLesson,
+    elements,
     classes,
     students,
     isApprovalsCollapsed,

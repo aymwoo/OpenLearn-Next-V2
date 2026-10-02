@@ -40,6 +40,8 @@ export type AppExtras = Pick<
   TeacherViewProps,
   | 't'
   | 'lessons'
+  | 'selectedLesson'
+  | 'elements'
   | 'classes'
   | 'students'
   | 'session'

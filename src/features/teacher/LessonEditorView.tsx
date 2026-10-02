@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, type MutableRefObject } from 
 import type { Lesson, WhiteboardElement } from '../../store/appStore';
 import type { SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
+import { useAppData } from '../../context/AppDataContext';
 import { Wand2, Loader2, CheckCircle2, X, Database, PenTool, AlertTriangle, Copy } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
@@ -14,65 +15,37 @@ import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoS
 import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
-export interface LessonEditorViewProps {
-  lang: 'zh' | 'en';
-  session?: SessionType | null;
-  onCopyCourse?: (lessonId: string) => Promise<void>;
-  lessons: Lesson[];
-  selectedLesson: string | null;
-  activeRole: 'teacher' | 'student';
-  setActiveRole: (role: 'teacher' | 'student') => void;
-  editorSaveStatus: 'none' | 'saving' | 'saved' | 'error';
-  setEditorSaveStatus: (status: 'none' | 'saving' | 'saved' | 'error') => void;
-  editorLastSavedTime: Date | null;
-  setEditorLastSavedTime: (time: Date | null) => void;
-  setTeacherTab: (value: string) => void;
-  handlePaletteActivate: (type: string) => void;
-  timelineSegments: any[];
-  activeSegmentId: string | null;
-  setActiveSegmentId: (value: string | null) => void;
-  draggedSegmentIdx: number | null;
-  setDraggedSegmentIdx: (value: number | null) => void;
-  saveTimeline: (lessonId: string, newSegments: any[]) => Promise<void>;
-  editorPanelsExpanded: boolean;
-  setEditorPanelsExpanded: (value: boolean) => void;
-  fetchElements: (lessonId: string) => Promise<void>;
-  whiteboardRef: MutableRefObject<any>;
-  elements: WhiteboardElement[];
-  paletteEdit: { type: string; data: Record<string, any> } | null;
-  handlePaletteConfirm: (data: Record<string, any>) => Promise<void>;
-  setPaletteEdit: (value: { type: string; data: Record<string, any> } | null) => void;
-}
-
-export function LessonEditorView({
-  lang,
-  session,
-  onCopyCourse,
-  lessons,
-  selectedLesson,
-  activeRole,
-  setActiveRole,
-  editorSaveStatus,
-  setEditorSaveStatus,
-  editorLastSavedTime,
-  setEditorLastSavedTime,
-  setTeacherTab,
-  handlePaletteActivate,
-  timelineSegments,
-  activeSegmentId,
-  setActiveSegmentId,
-  draggedSegmentIdx,
-  setDraggedSegmentIdx,
-  saveTimeline,
-  editorPanelsExpanded,
-  setEditorPanelsExpanded,
-  fetchElements,
-  whiteboardRef,
-  elements,
-  paletteEdit,
-  handlePaletteConfirm,
-  setPaletteEdit,
-}: LessonEditorViewProps) {
+export function LessonEditorView() {
+  // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
+  const {
+    lang,
+    session,
+    onCopyCourse,
+    lessons,
+    selectedLesson,
+    activeRole,
+    setActiveRole,
+    editorSaveStatus,
+    setEditorSaveStatus,
+    editorLastSavedTime,
+    setEditorLastSavedTime,
+    setTeacherTab,
+    handlePaletteActivate,
+    timelineSegments,
+    activeSegmentId,
+    setActiveSegmentId,
+    draggedSegmentIdx,
+    setDraggedSegmentIdx,
+    saveTimeline,
+    editorPanelsExpanded,
+    setEditorPanelsExpanded,
+    fetchElements,
+    whiteboardRef,
+    elements,
+    paletteEdit,
+    handlePaletteConfirm,
+    setPaletteEdit,
+  } = useAppData();
   const appSession = useAppStore((s) => s.session);
   const effectiveSession = session || appSession;
   const currentLesson = lessons.find((l) => l.id === selectedLesson);

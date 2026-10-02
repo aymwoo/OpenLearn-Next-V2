@@ -313,7 +313,7 @@ export function TeacherView(props: TeacherViewProps) {
           {teacherTab === 'dashboard' ? (
             <Dashboard />
           ) : teacherTab === 'lesson_editor' ? (
-            <LessonEditorView {...props} />
+            <LessonEditorView />
           ) : teacherTab === 'live_class' ? (
             <div className="flex-grow flex-1 flex flex-col min-h-0 min-w-0">
               <LiveClassroomView
