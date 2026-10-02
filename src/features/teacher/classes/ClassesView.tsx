@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations, type Language } from '../../../i18n';
+import { useAppData } from '../../../context/AppDataContext';
 import type {
   ClassType,
   StudentType,
@@ -83,7 +84,6 @@ export interface ClassesViewProps {
   setStudents: (students: StudentType[]) => void;
   fetchClassStudents: (id: string) => Promise<void>;
   fetchStudents: () => Promise<void>;
-  parseCSV: typeof parseCSV;
   setImportError: Dispatch<SetStateAction<string | null>>;
   setImportSuccess: Dispatch<SetStateAction<string | null>>;
   setShowImportModal: Dispatch<SetStateAction<boolean>>;
@@ -141,7 +141,9 @@ export interface ClassesViewProps {
   toggleClassSelection: (id: string) => void;
 }
 
-export function ClassesView(props: ClassesViewProps) {
+export function ClassesView() {
+  // C1-R3: 全部数据经 AppDataContext 取用；保留 ClassesViewProps 作为依赖契约类型
+  const props = useAppData() as unknown as ClassesViewProps;
   const [isExportingAttendance, setIsExportingAttendance] = useState(false);
 
   const handleExportCurrentClassAttendance = async () => {
@@ -595,7 +597,7 @@ export function ClassesView(props: ClassesViewProps) {
                           setClassStudentsMap={props.setClassStudentsMap}
                           fetchClassStudents={props.fetchClassStudents}
                           fetchStudents={props.fetchStudents}
-                          parseCSV={props.parseCSV}
+                          parseCSV={parseCSV}
                         />
 
                         {(props.classActiveTabs[cls.id] || 'students').startsWith('plugin:') && (

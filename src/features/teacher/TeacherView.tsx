@@ -124,101 +124,7 @@ export interface TeacherViewProps {
   registeredCommands: any[];
   fetchRegisteredCommands: () => void;
 
-  // ── ClassesView ─────────────────────────────────────────────────────
-  batchMode: boolean;
-  selectedClassIds: Set<string>;
-  setSelectedClassIds: Dispatch<SetStateAction<Set<string>>>;
-  setSelectedStudentIds: Dispatch<SetStateAction<Set<string>>>;
-  setBatchMode: Dispatch<SetStateAction<boolean>>;
-  expandedClassId: string | null;
-  setExpandedClassId: (id: string | null) => void;
-  exportTooltipOpen: boolean;
-  setExportTooltipOpen: Dispatch<SetStateAction<boolean>>;
-  exportDropdownOpen: boolean;
-  setExportDropdownOpen: Dispatch<SetStateAction<boolean>>;
-  isExportingAllCombined: boolean;
-  loadingExportClassId: string | null;
-  classStudentsMap: Record<string, StudentType[]>;
-  setClassStudentsMap: Dispatch<SetStateAction<Record<string, StudentType[]>>>;
-  expandedStudentId: string | null;
-  setExpandedStudentId: Dispatch<SetStateAction<string | null>>;
-  selectedStudentIds: Set<string>;
-  rosterViewMode: 'grid' | 'list';
-  setRosterViewMode: Dispatch<SetStateAction<'grid' | 'list'>>;
-  rosterSearchQuery: string;
-  setRosterSearchQuery: Dispatch<SetStateAction<string>>;
-  rosterTagFilter: 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
-  setRosterTagFilter: Dispatch<SetStateAction<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>>;
-  toggleSelectAllStudents: (list: StudentType[]) => void;
-  handleBatchDeleteStudents: () => Promise<void>;
-  handleBatchResetPassword: () => Promise<void>;
-  handleBatchTransferStudents: () => void;
-  handleBatchSetLockedLesson: () => void;
-  toggleStudentSelection: (id: string) => void;
-  get30DayAverageWarning: (studentId: string, classId: string) => number | null;
-  studentProgressMap: Record<string, StudentProgressType[]>;
-  studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
-  setStudentActiveTabs: Dispatch<SetStateAction<Record<string, 'progress' | 'settings' | 'notes'>>>;
-  setStudents: (students: StudentType[]) => void;
-  fetchClassStudents: (id: string) => Promise<void>;
-  fetchStudents: () => Promise<void>;
-  parseCSV: any;
-  setImportError: Dispatch<SetStateAction<string | null>>;
-  setImportSuccess: Dispatch<SetStateAction<string | null>>;
-  setShowImportModal: Dispatch<SetStateAction<boolean>>;
-  fetchClasses: () => Promise<void>;
-  classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
-  setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
-  classActiveTabs: Record<string, ClassTabKey>;
-  setClassActiveTabs: Dispatch<
-    SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>
-  >;
-  classProgressMap: Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>;
-  classSchedulesMap: Record<string, ScheduleType[]>;
-  classDashboardMap: Record<string, any>;
-  assignmentSortOrder: 'dueDate' | 'status' | 'avgScore';
-  setAssignmentSortOrder: Dispatch<SetStateAction<'dueDate' | 'status' | 'avgScore'>>;
-  isGeneratingPDFReport: Record<string, boolean>;
-  handleGeneratePDFReport: (classId: string, className: string) => Promise<void>;
-  setExportClassId: Dispatch<SetStateAction<string>>;
-  setExportClassName: Dispatch<SetStateAction<string>>;
-  setQuizzesWeight: Dispatch<SetStateAction<number>>;
-  setAssignmentsWeight: Dispatch<SetStateAction<number>>;
-  setCustomCategoryOverrides: Dispatch<SetStateAction<Record<string, 'quiz' | 'assignment'>>>;
-  setIsExportWeightModalOpen: Dispatch<SetStateAction<boolean>>;
-  isGeneratingAssignment: string | null;
-  setQuizGeneratorClassId: Dispatch<SetStateAction<string | null>>;
-  setQuizGenMode: Dispatch<SetStateAction<'scan_lesson' | 'topic'>>;
-  setQuizGenSelectedLessonId: Dispatch<SetStateAction<string>>;
-  setQuizGenTopic: Dispatch<SetStateAction<string>>;
-  setSuggestedObjectives: Dispatch<SetStateAction<string[]>>;
-  setSuggestedQuestions: Dispatch<SetStateAction<any[]>>;
-  setIsQuizGeneratorOpen: Dispatch<SetStateAction<boolean>>;
-  setActiveStudentId: Dispatch<SetStateAction<string | null>>;
-  setSelectedAssignment: Dispatch<SetStateAction<any | null>>;
-  setStudentViewStatus: Dispatch<SetStateAction<'dashboard' | 'lesson' | 'assignment'>>;
-  isGrading: Record<string, boolean>;
-  setIsGrading: Dispatch<SetStateAction<Record<string, boolean>>>;
-  fetchClassDashboard: (id: string) => Promise<void>;
-  newScheduleDate: string;
-  setNewScheduleDate: Dispatch<SetStateAction<string>>;
-  newScheduleLessonId: string;
-  setNewScheduleLessonId: Dispatch<SetStateAction<string>>;
-  expandedScheduleId: string | null;
-  setExpandedScheduleId: Dispatch<SetStateAction<string | null>>;
-  fetchScheduleAttendance: (id: string) => Promise<void>;
-  scheduleAttendanceMap: Record<string, AttendanceType[]>;
-  toggleSelectAllClasses: () => void;
-  handleBatchDeleteClasses: () => Promise<void>;
-  handleBatchExportClasses: () => Promise<void>;
-  handleBatchSetPasscode: () => Promise<void>;
-  handleBatchScheduleClasses: () => void;
-  handleExportAllClassesCombined: (...args: any[]) => Promise<void>;
-  triggerExportForClass: (classId: string, className: string) => Promise<void>;
-  fetchClassProgress: (id: string) => Promise<void>;
-  fetchClassSchedules: (id: string) => Promise<void>;
-  fetchStudentProgress: (id: string) => Promise<void>;
-  toggleClassSelection: (id: string) => void;
+  // ── ClassesView：C1-R3 后全部数据经 AppDataContext 取数 ──
 
   // ── Extra identifiers referenced only by App's inline expressions ────
   socketRef: MutableRefObject<any>;
@@ -239,7 +145,6 @@ export function TeacherView(props: TeacherViewProps) {
     setShowCoursewareHub,
     selectedLesson,
     setSelectedLesson,
-    classStudentsMap,
     lessons,
     classes,
     plugins,
@@ -262,8 +167,6 @@ export function TeacherView(props: TeacherViewProps) {
     onlineStudentIds,
     activeStudentLessons,
     liveClassStudentProgress,
-    fetchStudents,
-    fetchClassStudents,
     activeRole,
     setActiveRole,
     onRefresh,
@@ -323,7 +226,7 @@ export function TeacherView(props: TeacherViewProps) {
           ) : teacherTab === 'courses' ? (
             <CourseManagement />
           ) : teacherTab === 'classes' ? (
-            <ClassesView {...props} />
+            <ClassesView />
           ) : teacherTab === 'timetable' ? (
             <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
           ) : teacherTab === 'admin_directory' ? (

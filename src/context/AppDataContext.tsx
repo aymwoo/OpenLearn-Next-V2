@@ -34,6 +34,9 @@ import type { useStudentNotifications } from '../hooks/useStudentNotifications';
 import type { useGradeExport } from '../hooks/useGradeExport';
 import type { useLessonFiltering } from '../hooks/useLessonFiltering';
 import type { TeacherViewProps } from '../features/teacher/TeacherView';
+import type { Dispatch, SetStateAction } from 'react';
+import type { StudentType } from '../types/app';
+import type { ClassTabKey } from '../features/teacher/classes/ClassTabs';
 
 /** App 局部 state / 派生值：既有的从 TeacherViewProps 精选，其余手写 */
 export type AppExtras = Pick<
@@ -71,7 +74,41 @@ export type AppExtras = Pick<
   | 'setTeacherTab'
   | 'teacherTab'
 > & {
-  readNotifications: Set<string>;
+  batchMode: boolean;
+  setBatchMode: Dispatch<SetStateAction<boolean>>;
+  selectedClassIds: Set<string>;
+  setSelectedClassIds: Dispatch<SetStateAction<Set<string>>>;
+  setSelectedStudentIds: Dispatch<SetStateAction<Set<string>>>;
+  expandedClassId: string | null;
+  setExpandedClassId: (id: string | null) => void;
+  exportTooltipOpen: boolean;
+  setExportTooltipOpen: Dispatch<SetStateAction<boolean>>;
+  exportDropdownOpen: boolean;
+  setExportDropdownOpen: Dispatch<SetStateAction<boolean>>;
+  expandedStudentId: string | null;
+  setExpandedStudentId: Dispatch<SetStateAction<string | null>>;
+  selectedStudentIds: Set<string>;
+  rosterViewMode: 'grid' | 'list';
+  setRosterViewMode: Dispatch<SetStateAction<'grid' | 'list'>>;
+  rosterSearchQuery: string;
+  setRosterSearchQuery: Dispatch<SetStateAction<string>>;
+  rosterTagFilter: 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
+  setRosterTagFilter: Dispatch<SetStateAction<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>>;
+  classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
+  setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
+  classActiveTabs: Record<string, ClassTabKey>;
+  setClassActiveTabs: Dispatch<SetStateAction<Record<string, ClassTabKey>>>;
+  assignmentSortOrder: 'dueDate' | 'status' | 'avgScore';
+  setAssignmentSortOrder: Dispatch<SetStateAction<'dueDate' | 'status' | 'avgScore'>>;
+  isGeneratingAssignment: string | null;
+  isGrading: Record<string, boolean>;
+  setIsGrading: Dispatch<SetStateAction<Record<string, boolean>>>;
+  setStudents: (students: StudentType[]) => void;
+  fetchStudents: () => Promise<void>;
+  setImportError: (v: string | null) => void;
+  setImportSuccess: (v: string | null) => void;
+  setShowImportModal: (v: boolean) => void;
+  /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders / useLessonCrud） */
   setReadNotifications: (updater: (prev: Set<string>) => Set<string>) => void;
   localProgressPercent: number;
   setLocalProgressPercent: (v: number) => void;
@@ -80,6 +117,8 @@ export type AppExtras = Pick<
   setIsApprovalsCollapsed: (v: boolean) => void;
   isProcessesCollapsed: boolean;
   setIsProcessesCollapsed: (v: boolean) => void;
+  studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
+  setStudentActiveTabs: (updater: (prev: Record<string, 'progress' | 'settings' | 'notes'>) => Record<string, 'progress' | 'settings' | 'notes'>) => void;
   /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders / useLessonCrud） */
   onLogout: () => void;
   onAIProvidersChanged: () => void;

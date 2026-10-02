@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R3 第二轮）：剩余全部 tab 迁移 AppData**：
+  - LiveClassroomView 33 props → 1（仅 initialPortalOpen；students 改为组件内按 classStudentsMap 派生，fetchStudents 组合闭包随迁，onPingStudent 经 context 的 socketRef）
+  - CourseManagement 20 props → 0、LessonEditorView 27 props → 0、StudentView 40 props → 0、ClassesView 98 props → 0（保留 ClassesViewProps 作为依赖契约类型，组件内重绑 props = useAppData()）
+  - AppExtras 补齐 ClassesView 所需 App 局部字段（roster/batch/expanded/selected 组、classSubmissionFilters、classActiveTabs、assignmentSortOrder、isGrading、studentActiveTabs、setStudents、fetchStudents、setImportError/Success/ShowImportModal）与语义别名（onDeleteCourse/onCopyCourse）
+  - AppShellProps 收敛为 TeacherViewProps & { activeRole }；App→AppShell 装配删除全部已迁实参
+  - 至此 TeacherView/StudentView 全部 tab 均经 AppDataContext 取数；App.tsx 2341 → 1829 行
+
 - **前端架构治理（路线图 C1-R3 第一轮）：AppContext 地基 + Dashboard/Admin 迁移**：
   - 新增 `src/context/AppDataContext.tsx`：`AppDataProvider` + `useAppData()`。App 仍为唯一数据源（显式构造 AppDataValue 传入，不移动 state 位置）；类型由 9 个 R2 hooks 与既有 hooks 的 `ReturnType` 交集 ∪ AppExtras（Pick 自 TeacherViewProps）推导，零漂移。
   - Dashboard 27 props → 0、AdminDirectoryView 9 props → 0：全部经 `useAppData()` 取用；TeacherViewProps 删除对应字段段（保留 t/lessons/classes/students/addToast 等多 tab 共享字段）。

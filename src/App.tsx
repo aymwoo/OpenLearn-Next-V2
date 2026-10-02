@@ -1222,6 +1222,42 @@ export default function App() {
     ...studentNotificationsHook,
     ...gradeExport,
     ...lessonFilteringData,
+    batchMode,
+    setBatchMode,
+    selectedClassIds,
+    setSelectedClassIds,
+    setSelectedStudentIds,
+    expandedClassId,
+    setExpandedClassId,
+    exportTooltipOpen,
+    setExportTooltipOpen,
+    exportDropdownOpen,
+    setExportDropdownOpen,
+    expandedStudentId,
+    setExpandedStudentId,
+    selectedStudentIds,
+    rosterViewMode,
+    setRosterViewMode,
+    rosterSearchQuery,
+    setRosterSearchQuery,
+    rosterTagFilter,
+    setRosterTagFilter,
+    classSubmissionFilters,
+    setClassSubmissionFilters,
+    classActiveTabs,
+    setClassActiveTabs,
+    assignmentSortOrder,
+    setAssignmentSortOrder,
+    isGeneratingAssignment,
+    isGrading,
+    setIsGrading,
+    setStudents,
+    setImportError,
+    setImportSuccess,
+    setShowImportModal,
+    studentActiveTabs,
+    setStudentActiveTabs,
+    fetchStudents,
     onLogout: handleLogout,
     onAIProvidersChanged: fetchAIProviders,
     onDeleteCourse: handleDeleteCourse,
@@ -1502,13 +1538,11 @@ export default function App() {
             />
 
             <AppShell
+              setActiveRole={setActiveRole}
               students={students}
-              fetchStudents={fetchStudents}
-              setSelectedAssignment={setSelectedAssignment}
               addToast={addToast}
               lang={lang}
               setSelectedLesson={setSelectedLesson}
-              setStudentViewStatus={setStudentViewStatus}
               lessons={lessons}
               selectedLesson={selectedLesson}
               timelineSegments={timelineSegments}
@@ -1525,7 +1559,6 @@ export default function App() {
               todaySchedules={todaySchedules}
               t={t}
               classes={classes}
-              setActiveRole={setActiveRole}
               editorSaveStatus={editorSaveStatus}
               setEditorSaveStatus={setEditorSaveStatus}
               editorLastSavedTime={editorLastSavedTime}
@@ -1568,95 +1601,6 @@ export default function App() {
               onRefresh={fetchLabs}
               registeredCommands={registeredCommands}
               fetchRegisteredCommands={fetchRegisteredCommands}
-              batchMode={batchMode}
-              selectedClassIds={selectedClassIds}
-              setSelectedClassIds={setSelectedClassIds}
-              setSelectedStudentIds={setSelectedStudentIds}
-              setBatchMode={setBatchMode}
-              expandedClassId={expandedClassId}
-              setExpandedClassId={setExpandedClassId}
-              exportTooltipOpen={exportTooltipOpen}
-              setExportTooltipOpen={setExportTooltipOpen}
-              exportDropdownOpen={exportDropdownOpen}
-              setExportDropdownOpen={setExportDropdownOpen}
-              isExportingAllCombined={isExportingAllCombined}
-              loadingExportClassId={loadingExportClassId}
-              classStudentsMap={classStudentsMap}
-              setClassStudentsMap={setClassStudentsMap}
-              expandedStudentId={expandedStudentId}
-              setExpandedStudentId={setExpandedStudentId}
-              selectedStudentIds={selectedStudentIds}
-              rosterViewMode={rosterViewMode}
-              setRosterViewMode={setRosterViewMode}
-              rosterSearchQuery={rosterSearchQuery}
-              setRosterSearchQuery={setRosterSearchQuery}
-              rosterTagFilter={rosterTagFilter}
-              setRosterTagFilter={setRosterTagFilter}
-              toggleSelectAllStudents={toggleSelectAllStudents}
-              handleBatchDeleteStudents={handleBatchDeleteStudents}
-              handleBatchResetPassword={handleBatchResetPassword}
-              handleBatchTransferStudents={handleBatchTransferStudents}
-              handleBatchSetLockedLesson={handleBatchSetLockedLesson}
-              toggleStudentSelection={toggleStudentSelection}
-              get30DayAverageWarning={get30DayAverageWarning}
-              studentProgressMap={studentProgressMap}
-              studentActiveTabs={studentActiveTabs}
-              setStudentActiveTabs={setStudentActiveTabs}
-              setStudents={setStudents}
-              fetchClassStudents={fetchClassStudents}
-              parseCSV={parseCSV}
-              setImportError={setImportError}
-              setImportSuccess={setImportSuccess}
-              setShowImportModal={setShowImportModal}
-              fetchClasses={fetchClasses}
-              classSubmissionFilters={classSubmissionFilters}
-              setClassSubmissionFilters={setClassSubmissionFilters}
-              classActiveTabs={classActiveTabs}
-              setClassActiveTabs={setClassActiveTabs}
-              classProgressMap={classProgressMap}
-              classSchedulesMap={classSchedulesMap}
-              classDashboardMap={classDashboardMap}
-              assignmentSortOrder={assignmentSortOrder}
-              setAssignmentSortOrder={setAssignmentSortOrder}
-              isGeneratingPDFReport={isGeneratingPDFReport}
-              handleGeneratePDFReport={handleGeneratePDFReport}
-              setExportClassId={setExportClassId}
-              setExportClassName={setExportClassName}
-              setQuizzesWeight={setQuizzesWeight}
-              setAssignmentsWeight={setAssignmentsWeight}
-              setCustomCategoryOverrides={setCustomCategoryOverrides}
-              setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-              isGeneratingAssignment={isGeneratingAssignment}
-              setQuizGeneratorClassId={setQuizGeneratorClassId}
-              setQuizGenMode={setQuizGenMode}
-              setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
-              setQuizGenTopic={setQuizGenTopic}
-              setSuggestedObjectives={setSuggestedObjectives}
-              setSuggestedQuestions={setSuggestedQuestions}
-              setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
-              setActiveStudentId={setActiveStudentId}
-              isGrading={isGrading}
-              setIsGrading={setIsGrading}
-              fetchClassDashboard={fetchClassDashboard}
-              newScheduleDate={newScheduleDate}
-              setNewScheduleDate={setNewScheduleDate}
-              newScheduleLessonId={newScheduleLessonId}
-              setNewScheduleLessonId={setNewScheduleLessonId}
-              expandedScheduleId={expandedScheduleId}
-              setExpandedScheduleId={setExpandedScheduleId}
-              fetchScheduleAttendance={fetchScheduleAttendance}
-              scheduleAttendanceMap={scheduleAttendanceMap}
-              toggleSelectAllClasses={toggleSelectAllClasses}
-              handleBatchDeleteClasses={handleBatchDeleteClasses}
-              handleBatchExportClasses={handleBatchExportClasses}
-              handleBatchSetPasscode={handleBatchSetPasscode}
-              handleBatchScheduleClasses={handleBatchScheduleClasses}
-              handleExportAllClassesCombined={handleExportAllClassesCombined}
-              triggerExportForClass={triggerExportForClass}
-              fetchClassProgress={fetchClassProgress}
-              fetchClassSchedules={fetchClassSchedules}
-              fetchStudentProgress={fetchStudentProgress}
-              toggleClassSelection={toggleClassSelection}
               socketRef={socketRef}
               setShowCoursewareHub={setShowCoursewareHub}
               fetchTodaySchedules={fetchTodaySchedules}
