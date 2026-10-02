@@ -1,7 +1,6 @@
 import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
-import { listFromEnvelope } from './utils/listEnvelope.js';
 import {
   fetchLibraryResources as fetchLibraryResourcesApi,
   fetchDbStatus,
@@ -18,10 +17,9 @@ import {
 } from './services/systemService.js';
 import { getStudentReadNotifications, postStudentReadNotification, postStudentProgress, getClassLessonProgress, getStudentProgress } from './services/progressService.js';
 import { getAssignmentSubmissions, postAssignmentSubmission, postGenerateAssignment } from './services/assignmentService.js';
-import { getClasses, getStudents, getClassStudents } from './services/rosterService.js';
+import { getClassStudents } from './services/rosterService.js';
 import { getClassProgress, getClassDashboard, getStudentDashboard } from './services/dashboardService.js';
 import {
-  getLessons,
   postLesson,
   deleteLesson,
   postCloneLesson,
@@ -563,19 +561,10 @@ export default function App() {
 
   // 锁定期间强制跟随教师步调；具体在 studentViewStatus 声明处统一生效
 
+  // C1-R1e: 列表拉取迁移为 appStore action，此处保留同名薄封装（签名不变，
+  // useAppPolling / TeacherView 的 props 契约不受影响）
   const fetchLessons = async () => {
-    try {
-      const { ok, data } = await getLessons();
-      if (ok) {
-        const lessons = listFromEnvelope<any>(data);
-        setLessons(lessons);
-        if (!appStore.getState().selectedLesson && lessons.length > 0) {
-          setSelectedLesson(lessons[0].id);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch lessons', e);
-    }
+    await appStore.getState().loadLessons();
   };
 
   const chatLogUpdaterRef = useRef<(updater: any) => void>(() => {});
@@ -993,17 +982,11 @@ export default function App() {
   };
 
   const fetchClasses = async () => {
-    try {
-      const { ok, data } = await getClasses();
-      if (ok) setClasses(listFromEnvelope<any>(data));
-    } catch (e) {}
+    await appStore.getState().loadClasses();
   };
 
   const fetchStudents = async () => {
-    try {
-      const { ok, data } = await getStudents();
-      if (ok) setStudents(listFromEnvelope<any>(data));
-    } catch (e) {}
+    await appStore.getState().loadStudents();
   };
 
   const fetchClassStudents = async (id: string) => {

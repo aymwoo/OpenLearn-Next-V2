@@ -1,5 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
+import { listFromEnvelope } from '../utils/listEnvelope.js';
+import { getLessons } from '../services/lessonService.js';
+import { getClasses, getStudents } from '../services/rosterService.js';
 import { Language } from '../i18n';
 import type {
   Lesson,
@@ -91,6 +94,10 @@ export interface AppState {
   setLiveClassSelectedClassId: (id: string | null) => void;
   setLiveClassIsActive: (isActive: boolean) => void;
   setTeacherTab: (tab: string) => void;
+  // ── C1-R1e: 服务端列表拉取 action（原 App.tsx 内联 fetch 迁入） ──────────
+  loadLessons: () => Promise<void>;
+  loadClasses: () => Promise<void>;
+  loadStudents: () => Promise<void>;
 
   // Shared data setters
   setAiProviders: (providers: AIProvider[]) => void;
@@ -218,6 +225,42 @@ export const appStore = createStore<AppState>((set) => ({
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
   setTeacherTab: (teacherTab) => {
     uiStore.getState().setTeacherTab(teacherTab);
+  },
+
+  // ── C1-R1e: 服务端列表拉取 action（原 App.tsx 内联 fetch 迁入） ──────────
+  loadLessons: async () => {
+    try {
+      const { ok, data } = await getLessons();
+      if (ok) {
+        const lessons = listFromEnvelope<Lesson>(data);
+        set((state) => ({
+          lessons,
+          selectedLesson: state.selectedLesson ?? (lessons.length > 0 ? lessons[0].id : state.selectedLesson),
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to fetch lessons', e);
+    }
+  },
+  loadClasses: async () => {
+    try {
+      const { ok, data } = await getClasses();
+      if (ok) {
+        set({ classes: listFromEnvelope<ClassType>(data) });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch classes', e);
+    }
+  },
+  loadStudents: async () => {
+    try {
+      const { ok, data } = await getStudents();
+      if (ok) {
+        set({ students: listFromEnvelope<StudentType>(data) });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch students', e);
+    }
   },
 
   // ── Shared data setters ───────────────────────────────────────────────
