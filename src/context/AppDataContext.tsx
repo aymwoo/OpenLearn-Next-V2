@@ -71,6 +71,10 @@ export type AppExtras = Pick<
   | 'setTeacherTab'
   | 'teacherTab'
 > & {
+  readNotifications: Set<string>;
+  setReadNotifications: (updater: (prev: Set<string>) => Set<string>) => void;
+  localProgressPercent: number;
+  setLocalProgressPercent: (v: number) => void;
   onViewCourse: (lessonId: string) => void;
   isApprovalsCollapsed: boolean;
   setIsApprovalsCollapsed: (v: boolean) => void;

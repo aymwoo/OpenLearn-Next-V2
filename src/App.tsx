@@ -1239,6 +1239,10 @@ export default function App() {
       setSelectedLesson(lessonId);
     },
     t,
+    readNotifications,
+    setReadNotifications,
+    localProgressPercent,
+    setLocalProgressPercent,
     lessons,
     selectedLesson,
     elements,
@@ -1499,45 +1503,20 @@ export default function App() {
 
             <AppShell
               students={students}
-              activeStudentId={activeStudentId}
-              isStudentLocked={isStudentLocked}
-              studentViewStatus={studentViewStatus}
-              studentDashboardData={studentDashboardData}
-              readNotifications={readNotifications}
-              setReadNotifications={setReadNotifications}
+              fetchStudents={fetchStudents}
+              setSelectedAssignment={setSelectedAssignment}
               addToast={addToast}
               lang={lang}
               setSelectedLesson={setSelectedLesson}
               setStudentViewStatus={setStudentViewStatus}
-              setSelectedAssignment={setSelectedAssignment}
-              setQuizStudentAnswers={setQuizStudentAnswers}
-              setSubAssignmentTab={setSubAssignmentTab}
               lessons={lessons}
               selectedLesson={selectedLesson}
-              studentFullscreenPanel={studentFullscreenPanel}
-              setStudentFullscreenPanel={setStudentFullscreenPanel}
               timelineSegments={timelineSegments}
               activeSegmentId={activeSegmentId}
               setActiveSegmentId={setActiveSegmentId}
-              localProgressPercent={localProgressPercent}
-              setLocalProgressPercent={setLocalProgressPercent}
-              updateStudentProgress={updateStudentProgress}
-              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-              setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-              studentLessonTab={studentLessonTab}
-              setStudentLessonTab={setStudentLessonTab}
               elements={elements}
               activeRole={activeRole}
               fetchElements={fetchElements}
-              currentVfsParent={currentVfsParent}
-              setCurrentVfsParent={setCurrentVfsParent}
-              vfsNodes={vfsNodes}
-              studentSelectedCourseware={studentSelectedCourseware}
-              setStudentSelectedCourseware={setStudentSelectedCourseware}
-              selectedAssignment={selectedAssignment}
-              quizStudentAnswers={quizStudentAnswers}
-              submitQuizAssignment={submitQuizAssignment}
-              subAssignmentTab={subAssignmentTab}
               mainNavCollapsed={mainNavCollapsed}
               setMainNavCollapsed={setMainNavCollapsed}
               teacherTab={teacherTab}
@@ -1625,7 +1604,6 @@ export default function App() {
               setStudentActiveTabs={setStudentActiveTabs}
               setStudents={setStudents}
               fetchClassStudents={fetchClassStudents}
-              fetchStudents={fetchStudents}
               parseCSV={parseCSV}
               setImportError={setImportError}
               setImportSuccess={setImportSuccess}
@@ -1745,9 +1723,6 @@ export default function App() {
             handleCSVImportSubmit={handleCSVImportSubmit}
             lessons={lessons}
             fetchClassDashboard={fetchClassDashboard}
-            currentVfsParent={currentVfsParent}
-            setCurrentVfsParent={setCurrentVfsParent}
-            vfsNodes={vfsNodes}
             isCloudDriveOpen={isCloudDriveOpen}
             setIsCloudDriveOpen={setIsCloudDriveOpen}
             cloudDrivePreviewNode={cloudDrivePreviewNode}
@@ -1778,10 +1753,7 @@ export default function App() {
             exportClassName={exportClassName}
             csvPreviewData={csvPreviewData}
             handleExportGrades={handleExportGrades}
-            setSelectedAssignment={setSelectedAssignment}
             setStudentViewStatus={setStudentViewStatus}
-            setQuizStudentAnswers={setQuizStudentAnswers}
-            setSubAssignmentTab={setSubAssignmentTab}
             isTourOpen={isTourOpen}
             setIsTourOpen={setIsTourOpen}
             handleSeedSuccess={handleSeedSuccess}

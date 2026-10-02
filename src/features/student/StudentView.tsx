@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Users, Loader2 } from 'lucide-react';
 import type { StudentType, Lesson } from '../../types/app';
+import { useAppData } from '../../context/AppDataContext';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
 
 const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
@@ -9,53 +10,8 @@ const StudentAssignmentView = lazy(() =>
   import('./StudentAssignmentView').then((m) => ({ default: m.StudentAssignmentView })),
 );
 
-export interface StudentViewProps {
-  students: StudentType[];
-  activeStudentId: string | null;
-  /** 全班专注锁定中：学生端进入只读跟随模式 */
-  isStudentLocked?: boolean;
-  studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
-  studentDashboardData: any;
-  readNotifications: Set<string>;
-  setReadNotifications: (updater: (prev: Set<string>) => Set<string>) => void;
-  addToast: (title: string, description: string, type: string) => void;
-  lang: 'zh' | 'en';
-  setSelectedLesson: (id: string | null) => void;
-  setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
-  setSelectedAssignment: (ast: any | null) => void;
-  setQuizStudentAnswers: (updater: (prev: any) => any) => void;
-  setSubAssignmentTab: (tab: any) => void;
-
-  lessons: Lesson[];
-  selectedLesson: string | null;
-  studentFullscreenPanel: 'left' | 'right' | 'none';
-  setStudentFullscreenPanel: Dispatch<SetStateAction<'left' | 'right' | 'none'>>;
-  timelineSegments: any[];
-  activeSegmentId: string | null;
-  setActiveSegmentId: (id: string) => void;
-  localProgressPercent: number;
-  setLocalProgressPercent: (v: number) => void;
-  updateStudentProgress: (percent: number) => void;
-  isStudentLessonContentCollapsed: boolean;
-  setIsStudentLessonContentCollapsed: (b: boolean) => void;
-  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
-  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
-  elements: any[];
-  activeRole: 'student' | 'teacher';
-  fetchElements: (lessonId: string) => void;
-  currentVfsParent: string | null;
-  setCurrentVfsParent: (id: string | null) => void;
-  vfsNodes: any[];
-  studentSelectedCourseware: string | null;
-  setStudentSelectedCourseware: (id: string | null) => void;
-
-  selectedAssignment: any;
-  quizStudentAnswers: any;
-  submitQuizAssignment: (isFinal: boolean) => void;
-  subAssignmentTab: 'quiz' | 'whiteboard';
-}
-
-export function StudentView(props: StudentViewProps) {
+export function StudentView() {
+  // C1-R3: 全部数据经 AppDataContext 取用（不再经 AppShell props 透传）
   const {
     students,
     activeStudentId,
@@ -97,7 +53,7 @@ export function StudentView(props: StudentViewProps) {
     quizStudentAnswers,
     submitQuizAssignment,
     subAssignmentTab,
-  } = props;
+  } = useAppData();
 
   return (
     <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
@@ -160,7 +116,7 @@ export function StudentView(props: StudentViewProps) {
               quizStudentAnswers={quizStudentAnswers}
               submitQuizAssignment={submitQuizAssignment}
               subAssignmentTab={subAssignmentTab}
-              setSubAssignmentTab={setSubAssignmentTab}
+              setSubAssignmentTab={(tab: any) => setSubAssignmentTab(tab)}
               setQuizStudentAnswers={setQuizStudentAnswers}
               elements={elements}
               activeRole={activeRole}
@@ -180,7 +136,7 @@ export function StudentView(props: StudentViewProps) {
               setStudentViewStatus={setStudentViewStatus}
               setSelectedAssignment={setSelectedAssignment}
               setQuizStudentAnswers={setQuizStudentAnswers}
-              setSubAssignmentTab={setSubAssignmentTab}
+              setSubAssignmentTab={(tab: any) => setSubAssignmentTab(tab)}
             />
           )}
         </Suspense>

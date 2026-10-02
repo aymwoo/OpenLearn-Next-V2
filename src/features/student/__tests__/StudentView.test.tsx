@@ -5,6 +5,7 @@ import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 import { setSocketInstance } from '../../../services/socket-service';
 import { StudentView } from '../StudentView';
+import { AppDataProvider } from '../../../context/AppDataContext';
 
 if (typeof global.ResizeObserver === 'undefined') {
   global.ResizeObserver = class {
@@ -79,7 +80,9 @@ const baseProps = {
 const renderView = (props = {}) =>
   render(
     <PluginHostProvider host={new FrontendPluginHost()}>
-      <StudentView {...baseProps} {...props} />
+      <AppDataProvider value={{ ...baseProps, ...props } as any}>
+        <StudentView />
+      </AppDataProvider>
     </PluginHostProvider>,
   );
 
