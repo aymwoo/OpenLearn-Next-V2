@@ -12,6 +12,8 @@ import { WhiteboardStageAdapter } from './whiteboard-stage-adapter.js';
 import { LessonReplayer } from './replayer.js';
 import { LessonAIInterface } from './ai-interface.js';
 import { EventBusPort, PlatformEvent } from '../event-bus/index.js';
+import { LessonStateMachine, InvalidLessonStateTransitionError } from './state-machine.js';
+import { LessonStatus } from './types.js';
 
 export interface LessonEngineOptions {
   eventBus?: EventBusPort;
@@ -25,6 +27,7 @@ export class LessonRuntime {
   public readonly whiteboardAdapter: WhiteboardStageAdapter;
   public readonly replayer: LessonReplayer;
   public readonly aiInterface: LessonAIInterface;
+  public readonly stateMachine: LessonStateMachine;
 
   private currentLesson: Lesson | null = null;
   private activeFlow: Flow | null = null;
@@ -42,6 +45,16 @@ export class LessonRuntime {
     this.whiteboardAdapter = new WhiteboardStageAdapter();
     this.replayer = new LessonReplayer();
     this.aiInterface = new LessonAIInterface();
+    this.stateMachine = new LessonStateMachine('idle');
+
+    this.stateMachine.onTransition((from, to, lessonId) => {
+      this.publishEvent('LessonStateChanged', {
+        lessonId,
+        previousStatus: from,
+        currentStatus: to,
+        timestamp: Date.now(),
+      });
+    });
 
     // Wire timeline change events to context and stage runtime
     this.timeline.subscribe(async (state) => {
@@ -73,7 +86,24 @@ export class LessonRuntime {
 
   // ── Lesson Lifecycle Operations ────────────────────────────────────────
 
+  public getStatus(): LessonStatus {
+    return this.stateMachine.status;
+  }
+
   public async startLesson(lesson: Lesson, flowId?: string): Promise<void> {
+    // Prevent double-starting the same active lesson
+    if (this.currentLesson && this.currentLesson.id === lesson.id && this.stateMachine.status === 'active') {
+      throw new InvalidLessonStateTransitionError(
+        lesson.id,
+        this.stateMachine.status,
+        'active',
+        ['paused', 'completed'],
+      );
+    }
+
+    this.stateMachine.setLessonId(lesson.id);
+    this.stateMachine.transitionTo('active');
+
     this.currentLesson = { ...lesson, status: 'active', updatedAt: Date.now() };
     const targetFlow = flowId
       ? lesson.flows.find((f) => f.id === flowId) || lesson.flows[0]
@@ -104,7 +134,11 @@ export class LessonRuntime {
   }
 
   public async pauseLesson(): Promise<void> {
-    if (!this.currentLesson || this.currentLesson.status !== 'active') return;
+    if (!this.currentLesson) {
+      throw new Error('[LessonRuntime] Cannot pause without an active lesson.');
+    }
+
+    this.stateMachine.transitionTo('paused');
     this.currentLesson.status = 'paused';
     this.currentLesson.updatedAt = Date.now();
 
@@ -119,7 +153,11 @@ export class LessonRuntime {
   }
 
   public async resumeLesson(): Promise<void> {
-    if (!this.currentLesson || this.currentLesson.status !== 'paused') return;
+    if (!this.currentLesson) {
+      throw new Error('[LessonRuntime] Cannot resume without a lesson.');
+    }
+
+    this.stateMachine.transitionTo('active');
     this.currentLesson.status = 'active';
     this.currentLesson.updatedAt = Date.now();
 
@@ -136,6 +174,7 @@ export class LessonRuntime {
   public async stopLesson(): Promise<StageAnalytics | null> {
     if (!this.currentLesson) return null;
 
+    this.stateMachine.transitionTo('completed');
     this.currentLesson.status = 'completed';
     this.currentLesson.updatedAt = Date.now();
     this.isLive = false;
@@ -151,6 +190,15 @@ export class LessonRuntime {
 
     this.takeSnapshot();
     return analytics;
+  }
+
+  public reset(): void {
+    this.stateMachine.reset();
+    this.currentLesson = null;
+    this.activeFlow = null;
+    this.isLive = false;
+    this.startTime = 0;
+    this.timeline.stopTimer();
   }
 
   public takeSnapshot(): LessonSnapshot {

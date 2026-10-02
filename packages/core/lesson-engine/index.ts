@@ -11,3 +11,4 @@ export * from './whiteboard-stage-adapter.js';
 export * from './replayer.js';
 export * from './ai-interface.js';
 export * from './lesson-runtime.js';
+export * from './state-machine.js';

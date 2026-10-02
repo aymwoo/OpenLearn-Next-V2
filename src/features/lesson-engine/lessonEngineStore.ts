@@ -12,12 +12,14 @@ import {
   UserRef,
   StageAnalytics,
   LessonSnapshot,
+  LessonStatus,
 } from '../../../packages/core/lesson-engine/types.js';
 import { LessonRuntime } from '../../../packages/core/lesson-engine/lesson-runtime.js';
 import { frontendEventBus } from '../../services/event-bus.js';
 
 interface LessonEngineStoreState {
   runtime: LessonRuntime;
+  status: LessonStatus;
   currentLesson: Lesson | null;
   activeFlow: Flow | null;
   currentStage: Stage | null;
@@ -36,6 +38,7 @@ interface LessonEngineStoreState {
   pauseLesson: () => Promise<void>;
   resumeLesson: () => Promise<void>;
   stopLesson: () => Promise<StageAnalytics | null>;
+  resetLesson: () => void;
   nextStage: () => boolean;
   backStage: () => boolean;
   jumpStage: (stageTarget: number | string, activityTarget?: number | string) => boolean;
@@ -69,6 +72,11 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
     });
   });
 
+  // Subscribe to stateMachine transitions
+  coreRuntime.stateMachine.onTransition((_from, to) => {
+    set({ status: to });
+  });
+
   // Subscribe to context updates
   coreRuntime.contextManager.subscribe((ctx) => {
     set({
@@ -78,6 +86,7 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
 
   return {
     runtime: coreRuntime,
+    status: coreRuntime.getStatus(),
     currentLesson: null,
     activeFlow: null,
     currentStage: null,
@@ -91,8 +100,12 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
     currentUser: defaultUser,
 
     initializeLesson: async (lesson: Lesson, flowId?: string) => {
+      if (coreRuntime.getStatus() === 'completed') {
+        coreRuntime.reset();
+      }
       await coreRuntime.startLesson(lesson, flowId);
       set({
+        status: coreRuntime.getStatus(),
         currentLesson: coreRuntime.getCurrentLesson(),
         activeFlow: coreRuntime.getActiveFlow(),
       });
@@ -101,25 +114,55 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
     startLesson: async () => {
       const lesson = get().currentLesson;
       if (lesson) {
+        if (coreRuntime.getStatus() === 'completed') {
+          coreRuntime.reset();
+        }
         await coreRuntime.startLesson(lesson);
-        set({ currentLesson: coreRuntime.getCurrentLesson() });
+        set({
+          status: coreRuntime.getStatus(),
+          currentLesson: coreRuntime.getCurrentLesson(),
+        });
       }
     },
 
     pauseLesson: async () => {
       await coreRuntime.pauseLesson();
-      set({ currentLesson: coreRuntime.getCurrentLesson() });
+      set({
+        status: coreRuntime.getStatus(),
+        currentLesson: coreRuntime.getCurrentLesson(),
+      });
     },
 
     resumeLesson: async () => {
       await coreRuntime.resumeLesson();
-      set({ currentLesson: coreRuntime.getCurrentLesson() });
+      set({
+        status: coreRuntime.getStatus(),
+        currentLesson: coreRuntime.getCurrentLesson(),
+      });
     },
 
     stopLesson: async () => {
       const analytics = await coreRuntime.stopLesson();
-      set({ currentLesson: coreRuntime.getCurrentLesson() });
+      set({
+        status: coreRuntime.getStatus(),
+        currentLesson: coreRuntime.getCurrentLesson(),
+      });
       return analytics;
+    },
+
+    resetLesson: () => {
+      coreRuntime.reset();
+      set({
+        status: 'idle',
+        currentLesson: null,
+        activeFlow: null,
+        currentStage: null,
+        currentActivity: null,
+        currentStageIndex: 0,
+        currentActivityIndex: 0,
+        stageElapsedSeconds: 0,
+        totalElapsedSeconds: 0,
+      });
     },
 
     nextStage: () => {

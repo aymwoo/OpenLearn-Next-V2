@@ -12,6 +12,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **前端与内核状态治理（阶段 C2/C3：Store 镜像环路解耦 + 课时引擎有限状态机）**：
+  - **专项 C2：`appStore` 与 `uiStore` 镜像解耦与单一事实源确立**：
+    - `src/store/appStore.ts`：彻底移除 `uiStore.subscribe` 全量反向 `setState` 的粗暴订阅环路，改由 action 显式幂等更新本地状态并协同 `uiStore`，杜绝整库级联重绘与状态微任务竞争；
+    - 补充 `src/store/__tests__/appStoreDecoupling.test.ts` 验证同步解耦的无环流转。
+  - **专项 C3：`packages/core/lesson-engine/` 引入有限状态机（FSM）**：
+    - 新增 `packages/core/lesson-engine/state-machine.ts`：规范定义状态集合（`idle → draft → ready → active ⇄ paused → completed → idle`）与 `VALID_LESSON_TRANSITIONS` 状态跃迁表；
+    - 引入结构化异常 `InvalidLessonStateTransitionError`，阻断非法跳变与双重启动（Double-start）；
+    - `packages/core/lesson-engine/lesson-runtime.ts` 全生命周期接入状态机守护（`startLesson`、`pauseLesson`、`resumeLesson`、`stopLesson`、`reset`、`getStatus`），并新增 `LessonStateChanged` 事件广播；
+    - `src/features/lesson-engine/lessonEngineStore.ts` 对接状态机通知，向前端界面暴露权威 `status` 状态响应。
+  - **测试覆盖与配置收敛**：
+    - 新增 `packages/core/lesson-engine/__tests__/state-machine.test.ts`、`lesson-runtime.test.ts` 以及 `src/features/lesson-engine/__tests__/lessonEngineStore.test.ts`，测试通过率 100%；
+    - `vitest.config.ts` 正式纳入 `packages/core/lesson-engine/__tests__/` 测试流水线。
+
 - **插件系统深度演进与防护增强（Worker 积分 RPC + 路由防碰撞 + SHA-256 完整性校验）**：
   - **Worker RPC 结构化克隆安全过滤与积分 Token 支持**：
     - `packages/core/worker-runtime/service-host.ts`：引入 `sanitizeClonableValue` 清洗逻辑并在 `handleInvoke` 捕获 `DataCloneError` 时自动安全降级，剥离无法通过跨线程结构化克隆传递的函数与不可枚举类属性，彻底阻断线程通信崩溃；

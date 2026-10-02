@@ -211,6 +211,7 @@ export const appStore = createStore<AppState>((set) => ({
 
   setLang: (lang) => {
     uiStore.getState().setLang(lang);
+    set({ lang });
   },
   setSession: (session) => set({ session }),
   setLessons: (lessons) =>
@@ -225,6 +226,7 @@ export const appStore = createStore<AppState>((set) => ({
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
   setTeacherTab: (teacherTab) => {
     uiStore.getState().setTeacherTab(teacherTab);
+    set({ teacherTab });
   },
 
   // ── C1-R1e: 服务端列表拉取 action（原 App.tsx 内联 fetch 迁入） ──────────
@@ -319,25 +321,18 @@ export const appStore = createStore<AppState>((set) => ({
 
   addToast: (toast) => {
     uiStore.getState().addToast(toast);
+    set({ toasts: uiStore.getState().toasts });
   },
   removeToast: (id) => {
     uiStore.getState().removeToast(id);
+    set({ toasts: uiStore.getState().toasts });
   },
 
   setSiteInfo: (siteInfo) => {
     uiStore.getState().setSiteInfo(siteInfo);
+    set({ siteInfo });
   },
 }));
-
-// Sync changes from uiStore into appStore
-uiStore.subscribe((uiState) => {
-  appStore.setState({
-    lang: uiState.lang,
-    teacherTab: uiState.teacherTab,
-    toasts: uiState.toasts,
-    siteInfo: uiState.siteInfo,
-  });
-});
 
 // ── React-bound hook ───────────────────────────────────────────────────────
 

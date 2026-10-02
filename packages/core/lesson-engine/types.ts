@@ -2,7 +2,7 @@
  * OpenLearn Lesson Flow Engine - Domain Types
  */
 
-export type LessonStatus = 'draft' | 'ready' | 'active' | 'paused' | 'completed';
+export type LessonStatus = 'idle' | 'draft' | 'ready' | 'active' | 'paused' | 'completed';
 export type StageCompletionStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
 export type ActivityStatus = 'idle' | 'active' | 'paused' | 'completed' | 'skipped';
 export type UserRole = 'teacher' | 'student' | 'administrator' | 'assistant';

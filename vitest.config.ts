@@ -17,6 +17,7 @@ export default defineConfig({
       'packages/core/worker-runtime/__tests__/**/*.test.ts',
       'packages/plugins/__tests__/**/*.test.ts',
       'packages/core/event-bus/__tests__/**/*.test.ts',
+      'packages/core/lesson-engine/__tests__/**/*.test.ts',
       'packages/core/__tests__/**/*.test.ts',
       'packages/plugin-sdk/__tests__/**/*.test.ts',
       'packages/activity-ecosystem/__tests__/**/*.test.ts',
