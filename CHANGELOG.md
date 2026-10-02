@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R3i）：清理 TeacherViewProps 与 AppShell 残留死 props**：
+  - AppDataContext 与 TeacherViewProps 解耦：AppExtras 从 `Pick<TeacherViewProps, ...>` 改为直接显式定义独立类型，消除循环类型寄生。
+  - TeacherViewProps 深度净化：删除 LessonEditorView、LiveClassroomView 与已迁 tab 的 40+ 个残留死字段（selectedLesson/elements/paletteEdit/liveClassFeed/liveClassStudentProgress 等）；TeacherView 仅保留自身直接渲染所需的 24 个导航与次级 tab 属性。
+  - App→AppShell 装配瘦身：清除 App.tsx 向 AppShell 传递的全部死属性（实参行数 68 → 25）；TimetableView 统一传 onSchedulesUpdated，PluginView 明确属性传参。
+
 - **前端架构治理（路线图 C1-R3 第二轮）：剩余全部 tab 迁移 AppData**：
   - LiveClassroomView 33 props → 1（仅 initialPortalOpen；students 改为组件内按 classStudentsMap 派生，fetchStudents 组合闭包随迁，onPingStudent 经 context 的 socketRef）
   - CourseManagement 20 props → 0、LessonEditorView 27 props → 0、StudentView 40 props → 0、ClassesView 98 props → 0（保留 ClassesViewProps 作为依赖契约类型，组件内重绑 props = useAppData()）

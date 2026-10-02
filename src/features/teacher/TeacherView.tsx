@@ -47,56 +47,8 @@ export interface TeacherViewProps {
   session: SessionType | null;
   todaySchedules: ScheduleType[];
 
-  // ── Dashboard：C1-R3 后改经 AppDataContext 取数，仅保留多 tab 共享字段 ──
-  t: any;
-  lessons: Lesson[];
-  classes: ClassType[];
-  students: StudentType[];
-  addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
-  // ── LessonEditorView ────────────────────────────────────────────────
-  selectedLesson: string | null;
-  activeRole: 'teacher' | 'student';
-  setActiveRole: Dispatch<SetStateAction<'teacher' | 'student'>>;
-  editorSaveStatus: 'none' | 'saving' | 'saved' | 'error';
-  setEditorSaveStatus: (status: 'none' | 'saving' | 'saved' | 'error') => void;
-  editorLastSavedTime: Date | null;
-  setEditorLastSavedTime: (time: Date | null) => void;
-  handlePaletteActivate: (type: string) => void;
-  timelineSegments: any[];
-  activeSegmentId: string | null;
-  setActiveSegmentId: (value: string | null) => void;
-  draggedSegmentIdx: number | null;
-  setDraggedSegmentIdx: (value: number | null) => void;
-  saveTimeline: (lessonId: string, newSegments: any[]) => Promise<void>;
-  editorPanelsExpanded: boolean;
-  setEditorPanelsExpanded: (value: boolean) => void;
-  fetchElements: (lessonId: string) => Promise<void>;
-  whiteboardRef: MutableRefObject<any>;
-  elements: any[];
-  paletteEdit: { type: string; data: Record<string, any> } | null;
-  handlePaletteConfirm: (data: Record<string, any>) => Promise<void>;
-  setPaletteEdit: (value: { type: string; data: Record<string, any> } | null) => void;
-
-  // ── LiveClassroomView ───────────────────────────────────────────────
-  setSelectedLesson: (id: string | null) => void;
-  plugins: any[];
-  liveClassSelectedClassId: string | null;
-  setLiveClassSelectedClassId: (id: string | null) => void;
-  liveClassIsActive: boolean;
-  setLiveClassIsActive: (active: boolean) => void;
-  liveClassTimeRemaining: number;
-  setLiveClassTimeRemaining: (seconds: number) => void;
-  liveClassFeed: any[];
-  setLiveClassFeed: Dispatch<SetStateAction<any[]>>;
-  liveClassAcknowledgedMap: Map<string, boolean>;
-  setLiveClassAcknowledgedMap: Dispatch<SetStateAction<Map<string, boolean>>>;
-  onlineStudentIds: string[];
-  activeStudentLessons: Record<string, string>;
-  liveClassStudentProgress: any[];
-  onPingStudent?: (studentId: string, message?: string) => void;
-  onOpenCoursewareHub?: () => void;
-
   // ── PluginView ──────────────────────────────────────────────────────
+  plugins: any[];
   storeTab: 'logs' | 'store' | 'dev' | 'widgets' | 'community';
   setStoreTab: (tab: any) => void;
   pluginCode: string;
@@ -111,11 +63,11 @@ export interface TeacherViewProps {
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 
-  // ── CourseManagement：C1-R3 后全部数据经 AppDataContext 取数 ──
   // ── TimetableView ───────────────────────────────────────────────────
+  classes: ClassType[];
+  lessons: Lesson[];
   onSchedulesUpdated: () => Promise<void>;
 
-  // ── AdminDirectoryView：C1-R3 后全部数据经 AppDataContext 取数 ──
   // ── ComputerLabView ─────────────────────────────────────────────────
   computerLabs: any[];
   onRefresh: () => Promise<void>;
@@ -123,13 +75,6 @@ export interface TeacherViewProps {
   // ── HelpView ────────────────────────────────────────────────────────
   registeredCommands: any[];
   fetchRegisteredCommands: () => void;
-
-  // ── ClassesView：C1-R3 后全部数据经 AppDataContext 取数 ──
-
-  // ── Extra identifiers referenced only by App's inline expressions ────
-  socketRef: MutableRefObject<any>;
-  setShowCoursewareHub: Dispatch<SetStateAction<boolean>>;
-  fetchTodaySchedules: () => Promise<void>;
 }
 
 export function TeacherView(props: TeacherViewProps) {
@@ -141,39 +86,23 @@ export function TeacherView(props: TeacherViewProps) {
     lang,
     session,
     todaySchedules,
-    socketRef,
-    setShowCoursewareHub,
-    selectedLesson,
-    setSelectedLesson,
+    plugins,
+    storeTab,
+    setStoreTab,
+    pluginCode,
+    setPluginCode,
+    installingPlugin,
+    onInstall,
+    onZipUpload,
+    onToggle,
+    onDelete,
     lessons,
     classes,
-    plugins,
-    timelineSegments,
-    activeSegmentId,
-    setActiveSegmentId,
-    liveClassSelectedClassId,
-    setLiveClassSelectedClassId,
-    liveClassIsActive,
-    setLiveClassIsActive,
-    liveClassTimeRemaining,
-    setLiveClassTimeRemaining,
-    liveClassFeed,
-    setLiveClassFeed,
-    liveClassAcknowledgedMap,
-    setLiveClassAcknowledgedMap,
-    elements,
-    fetchElements,
-    addToast,
-    onlineStudentIds,
-    activeStudentLessons,
-    liveClassStudentProgress,
-    activeRole,
-    setActiveRole,
-    onRefresh,
+    onSchedulesUpdated,
     computerLabs,
-    fetchTodaySchedules,
-    fetchRegisteredCommands,
+    onRefresh,
     registeredCommands,
+    fetchRegisteredCommands,
   } = props;
 
   return (
@@ -222,13 +151,25 @@ export function TeacherView(props: TeacherViewProps) {
                             <LiveClassroomView />
             </div>
           ) : teacherTab === 'plugins' ? (
-            <PluginView {...props} />
+            <PluginView
+              plugins={plugins}
+              lang={lang}
+              storeTab={storeTab}
+              setStoreTab={setStoreTab}
+              pluginCode={pluginCode}
+              setPluginCode={setPluginCode}
+              installingPlugin={installingPlugin}
+              onInstall={onInstall}
+              onZipUpload={onZipUpload}
+              onToggle={onToggle}
+              onDelete={onDelete}
+            />
           ) : teacherTab === 'courses' ? (
             <CourseManagement />
           ) : teacherTab === 'classes' ? (
             <ClassesView />
           ) : teacherTab === 'timetable' ? (
-            <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
+            <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={onSchedulesUpdated} />
           ) : teacherTab === 'admin_directory' ? (
             <AdminDirectoryView />
           ) : teacherTab === 'computer_labs' ? (

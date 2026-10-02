@@ -33,47 +33,44 @@ import type { useLessonTimeline } from '../hooks/useLessonTimeline';
 import type { useStudentNotifications } from '../hooks/useStudentNotifications';
 import type { useGradeExport } from '../hooks/useGradeExport';
 import type { useLessonFiltering } from '../hooks/useLessonFiltering';
-import type { TeacherViewProps } from '../features/teacher/TeacherView';
-import type { Dispatch, SetStateAction } from 'react';
-import type { StudentType } from '../types/app';
+import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
+import type { Lesson, ClassType, StudentType, SessionType } from '../types/app';
 import type { ClassTabKey } from '../features/teacher/classes/ClassTabs';
 
-/** App 局部 state / 派生值：既有的从 TeacherViewProps 精选，其余手写 */
-export type AppExtras = Pick<
-  TeacherViewProps,
-  | 't'
-  | 'lessons'
-  | 'selectedLesson'
-  | 'elements'
-  | 'classes'
-  | 'students'
-  | 'session'
-  | 'whiteboardRef'
-  | 'paletteEdit'
-  | 'handlePaletteActivate'
-  | 'handlePaletteConfirm'
-  | 'setPaletteEdit'
-  | 'activeSegmentId'
-  | 'setActiveSegmentId'
-  | 'timelineSegments'
-  | 'draggedSegmentIdx'
-  | 'setDraggedSegmentIdx'
-  | 'saveTimeline'
-  | 'editorSaveStatus'
-  | 'setEditorSaveStatus'
-  | 'editorLastSavedTime'
-  | 'setEditorLastSavedTime'
-  | 'editorPanelsExpanded'
-  | 'setEditorPanelsExpanded'
-  | 'setSelectedLesson'
-  | 'socketRef'
-  | 'liveClassSelectedClassId'
-  | 'setLiveClassSelectedClassId'
-  | 'liveClassIsActive'
-  | 'setLiveClassIsActive'
-  | 'setTeacherTab'
-  | 'teacherTab'
-> & {
+/** App 局部 state / 派生值 */
+export type AppExtras = {
+  t: any;
+  lessons: Lesson[];
+  selectedLesson: string | null;
+  elements: any[];
+  classes: ClassType[];
+  students: StudentType[];
+  session: SessionType | null;
+  whiteboardRef: MutableRefObject<any>;
+  paletteEdit: { type: string; data: Record<string, any> } | null;
+  handlePaletteActivate: (type: string) => void;
+  handlePaletteConfirm: (data: Record<string, any>) => Promise<void>;
+  setPaletteEdit: (value: { type: string; data: Record<string, any> } | null) => void;
+  activeSegmentId: string | null;
+  setActiveSegmentId: (value: string | null) => void;
+  timelineSegments: any[];
+  draggedSegmentIdx: number | null;
+  setDraggedSegmentIdx: (value: number | null) => void;
+  saveTimeline: (lessonId: string, newSegments: any[]) => Promise<void>;
+  editorSaveStatus: 'none' | 'saving' | 'saved' | 'error';
+  setEditorSaveStatus: (status: 'none' | 'saving' | 'saved' | 'error') => void;
+  editorLastSavedTime: Date | null;
+  setEditorLastSavedTime: (time: Date | null) => void;
+  editorPanelsExpanded: boolean;
+  setEditorPanelsExpanded: (value: boolean) => void;
+  setSelectedLesson: (id: string | null) => void;
+  socketRef: MutableRefObject<any>;
+  liveClassSelectedClassId: string | null;
+  setLiveClassSelectedClassId: (id: string | null) => void;
+  liveClassIsActive: boolean;
+  setLiveClassIsActive: (active: boolean) => void;
+  setTeacherTab: (tab: string) => void;
+  teacherTab: string;
   batchMode: boolean;
   setBatchMode: Dispatch<SetStateAction<boolean>>;
   selectedClassIds: Set<string>;

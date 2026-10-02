@@ -1538,55 +1538,15 @@ export default function App() {
             />
 
             <AppShell
-              setActiveRole={setActiveRole}
-              students={students}
-              addToast={addToast}
-              lang={lang}
-              setSelectedLesson={setSelectedLesson}
-              lessons={lessons}
-              selectedLesson={selectedLesson}
-              timelineSegments={timelineSegments}
-              activeSegmentId={activeSegmentId}
-              setActiveSegmentId={setActiveSegmentId}
-              elements={elements}
               activeRole={activeRole}
-              fetchElements={fetchElements}
               mainNavCollapsed={mainNavCollapsed}
               setMainNavCollapsed={setMainNavCollapsed}
               teacherTab={teacherTab}
               setTeacherTab={setTeacherTab}
+              lang={lang}
               session={session}
               todaySchedules={todaySchedules}
-              t={t}
-              classes={classes}
-              editorSaveStatus={editorSaveStatus}
-              setEditorSaveStatus={setEditorSaveStatus}
-              editorLastSavedTime={editorLastSavedTime}
-              setEditorLastSavedTime={setEditorLastSavedTime}
-              handlePaletteActivate={handlePaletteActivate}
-              draggedSegmentIdx={draggedSegmentIdx}
-              setDraggedSegmentIdx={setDraggedSegmentIdx}
-              saveTimeline={saveTimeline}
-              editorPanelsExpanded={editorPanelsExpanded}
-              setEditorPanelsExpanded={setEditorPanelsExpanded}
-              whiteboardRef={whiteboardRef}
-              paletteEdit={paletteEdit}
-              handlePaletteConfirm={handlePaletteConfirm}
-              setPaletteEdit={setPaletteEdit}
               plugins={plugins}
-              liveClassSelectedClassId={liveClassSelectedClassId}
-              setLiveClassSelectedClassId={setLiveClassSelectedClassId}
-              liveClassIsActive={liveClassIsActive}
-              setLiveClassIsActive={setLiveClassIsActive}
-              liveClassTimeRemaining={liveClassTimeRemaining}
-              setLiveClassTimeRemaining={setLiveClassTimeRemaining}
-              liveClassFeed={liveClassFeed}
-              setLiveClassFeed={setLiveClassFeed}
-              liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-              setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
-              onlineStudentIds={onlineStudentIds}
-              activeStudentLessons={activeStudentLessons}
-              liveClassStudentProgress={liveClassStudentProgress}
               storeTab={storeTab}
               setStoreTab={setStoreTab}
               pluginCode={pluginCode}
@@ -1596,14 +1556,13 @@ export default function App() {
               onZipUpload={handleZipPluginUpload}
               onToggle={handleTogglePlugin}
               onDelete={handleDeletePlugin}
+              classes={classes}
+              lessons={lessons}
               onSchedulesUpdated={fetchTodaySchedules}
               computerLabs={computerLabs}
               onRefresh={fetchLabs}
               registeredCommands={registeredCommands}
               fetchRegisteredCommands={fetchRegisteredCommands}
-              socketRef={socketRef}
-              setShowCoursewareHub={setShowCoursewareHub}
-              fetchTodaySchedules={fetchTodaySchedules}
             />
           </div>
 
