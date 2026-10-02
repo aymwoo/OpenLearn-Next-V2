@@ -536,7 +536,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
       return res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
     } catch (err: any) {
-      return res.status(500).json({ error: err?.message || 'Failed to mark absent' });
+      sendSafeError(res, err);
     }
   });
 

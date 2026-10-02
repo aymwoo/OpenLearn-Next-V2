@@ -89,6 +89,11 @@ const dispatchChain = new AsyncLocalStorage<DispatchChain>();
 function randomEventId(): string {
   const c: Crypto | undefined = (globalThis as { crypto?: Crypto }).crypto;
   if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeCrypto = require('node:crypto');
+    if (typeof nodeCrypto?.randomUUID === 'function') return nodeCrypto.randomUUID();
+  } catch {}
   return `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 

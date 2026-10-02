@@ -89,7 +89,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       try {
         files = JSON.parse(resource.content || '[]');
       } catch (err) {
-        return res.status(500).send('Failed to parse folder content');
+        return sendSafeError(res, err, 500, 'Failed to parse folder content');
       }
 
       // Find index file
@@ -191,7 +191,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       try {
         files = JSON.parse(resource.content || '[]');
       } catch (err) {
-        return res.status(500).send('Failed to parse folder content');
+        return sendSafeError(res, err, 500, 'Failed to parse folder content');
       }
 
       // If no subpath is specified, serve index.html or first html file

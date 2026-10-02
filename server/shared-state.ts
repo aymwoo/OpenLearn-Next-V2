@@ -45,4 +45,15 @@ export function cacheSetMfRemote(name: string, entry: string, meta: Record<strin
 
 // ── Lesson Active Segments ──────────────────────────────────────────────────
 /** Active timeline segments for lessons, shared with agents to bind new items */
+const MAX_ACTIVE_SEGMENTS = 500;
 export const lessonActiveSegments = new Map<string, string>(); // lessonId -> activeSegmentId
+
+export function setActiveSegment(lessonId: string, segmentId: string): void {
+  lessonActiveSegments.set(lessonId, segmentId);
+  while (lessonActiveSegments.size > MAX_ACTIVE_SEGMENTS) {
+    const oldest = lessonActiveSegments.keys().next().value;
+    if (oldest === undefined) break;
+    lessonActiveSegments.delete(oldest);
+  }
+}
+

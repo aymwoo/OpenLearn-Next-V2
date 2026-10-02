@@ -3,6 +3,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 import { cacheGetMfRemote, cacheSetMfRemote } from '../shared-state.js';
 
 // ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
@@ -79,7 +80,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       );
 
       kernelContainer.eventBus.publish({
-        id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: randomId('evt_err_'),
         type: 'student.client_error',
         source: 'student_client',
         payload: {

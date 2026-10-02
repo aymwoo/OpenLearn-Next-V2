@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **运行时可靠性与安全收口（阶段 B）：B3 安全随机标识 + B4 内存治理 + B2 统一错误响应 + B5 AI端点防护**：
+  - **B3 业务 ID 安全随机化**：彻底淘汰非安全随机数生成（`Math.random().toString(36)`）。
+    - `server/presence.ts` 与 `server/routes/workspace.ts`：错误事件 ID 统一采用 `randomId('evt_err_')` 强随机生成器；
+    - `packages/core/worker-runtime/service-host.ts`：Worker 连接响应 ID 采用 `crypto.randomUUID()`；
+    - `packages/plugins/builtin.ts`：系统资产与资源生成 ID 采用 `crypto.randomBytes(6).toString('hex')`；
+    - `packages/plugins/management.ts`：课表与日程编排采用有序安全主键 `uuidv7()`；
+    - `packages/core/event-bus/index.ts`：随机事件 ID 优先采用 `node:crypto.randomUUID()`，并在浏览器无 WebCrypto 环境下安全回退。
+  - **B4 课时生命周期与内存防爆**：
+    - `server/shared-state.ts`：封装 `setActiveSegment(lessonId, segmentId)`，引入 FIFO 500 容量上限与防溢出淘汰机制，杜绝长周期运行内存泄漏；
+    - `server/presence.ts`：统一由 `setActiveSegment` 驱动广播段位同步；`DELETE /api/lessons/:id` 联动清理对应课时驻留状态。
+  - **B2 错误响应统一与脱敏**：
+    - `server/routes/courseware.ts` 与 `server/routes/resources.ts`：收敛遗留的 3 处裸写 500 响应，统一接入 `sendSafeError()`，实现生产环境敏感栈脱敏与开发环境错误透明。
+  - **B5 AI 端点限流与稳健保护**：
+    - `server/routes/plugins.ts`：为 `/api/ai-providers/test` 挂载 `safeAiLimiter` 限流中间件（带单元测试优雅降级兼容），防止针对大模型探测端点的暴力枚举与连击耗尽资源。
+
+
 - **前端架构治理（路线图 C1-R4b 终态）：App.tsx 极简入口蜕变（1764 行 → 130 行），下沉业务浮层与数据编排 Hook**：
   - **AppHeader 35 props → 0**：`AppHeader` 升级为 `useOptionalAppData()` 双模取数，并内置 `StudentLiveHeader` 自动路由，支持 0 props 挂载。
   - **独立浮层下沉**：抽取 `ClassroomOverlays`（整合抽问横幅、学生抽中回答模态框、学生端实时互动浮层）与 `ImpersonationBanner`（学生模拟提示条），全面经 Context 消费。

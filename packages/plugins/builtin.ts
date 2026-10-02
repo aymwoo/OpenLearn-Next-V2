@@ -1096,7 +1096,7 @@ export const BuiltinPlugin = {
           throw new Error('Username is already taken');
         }
 
-        const id = 'usr_' + Math.random().toString(36).slice(2, 10);
+        const id = 'usr_' + crypto.randomBytes(6).toString('hex');
         const hash = crypto.createHash('sha256').update(password).digest('hex');
 
         db.prepare(

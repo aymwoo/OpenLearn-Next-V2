@@ -680,7 +680,7 @@ export const ManagementPlugin = {
     await commandBus.registerHandler(scheduleCreateCmd, {
       async execute(command) {
         const payload = command.payload as any;
-        const id = 'sch-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const id = 'sch-' + uuidv7();
         db.prepare(
           `
           INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
@@ -699,7 +699,7 @@ export const ManagementPlugin = {
 
         // Dispatch schedule.created event so notification systems can respond
         await eventBus.publish({
-          id: 'evt-' + Math.random().toString(36).slice(2, 10),
+          id: 'evt-' + uuidv7(),
           type: 'schedule.created',
           source: 'management.schedule',
           payload: { id, ...payload },

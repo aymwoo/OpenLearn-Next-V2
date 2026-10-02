@@ -71,8 +71,16 @@ function listInstalledManifestVersions(): Map<string, string> {
 }
 
 export function registerPluginsRoutes(ctx: ServerContext) {
-  const { app, buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl, runGeminiAgentChat, runOpenAIAgentChat } =
-    ctx;
+  const {
+    app,
+    aiLimiter,
+    buildOpenAITools,
+    executeAgentToolCall,
+    buildOpenAIChatUrl,
+    runGeminiAgentChat,
+    runOpenAIAgentChat,
+  } = ctx;
+  const safeAiLimiter = typeof aiLimiter === 'function' ? aiLimiter : (_req: any, _res: any, next: any) => next();
 
   app.get('/api/docs/plugin-guide', (req, res) => {
     try {
@@ -814,7 +822,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/ai-providers/test', requireAuth('administrator'), async (req, res) => {
+  app.post('/api/ai-providers/test', requireAuth('administrator'), safeAiLimiter, async (req, res) => {
     try {
       const { api_url, api_key: providedKey, model_name } = req.body;
       if (!api_url || !model_name) {

@@ -57,6 +57,7 @@ import type { ServiceRegistry } from '../di/service-registry.js';
 import type { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
+import crypto from 'node:crypto';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
@@ -676,7 +677,7 @@ export class ServiceHost {
           const [event] = msg.args as [any];
           const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
           const enrichedEvent = {
-            id: event.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+            id: event.id || `evt_${Date.now()}_${crypto.randomUUID()}`,
             timestamp: event.timestamp || Date.now(),
             ...event,
             source: event.source ? `plugin:${pluginId}.${event.source}` : `plugin:${pluginId}`,

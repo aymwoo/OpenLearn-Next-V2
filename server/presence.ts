@@ -1,6 +1,7 @@
 import type { Server } from 'socket.io';
 import type { EventBusPort } from '../packages/core/event-bus/index.js';
-import { lessonActiveSegments } from './shared-state.js';
+import { lessonActiveSegments, setActiveSegment } from './shared-state.js';
+import { randomId } from './utils/id.js';
 
 export interface PresenceDeps {
   io: Server;
@@ -348,7 +349,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
 
         // 2. 发布到 EventBus 自动记录在 events 审计日志表中
         eventBus.publish({
-          id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          id: randomId('evt_err_'),
           type: 'student.client_error',
           source: 'student_client',
           payload: {
@@ -408,8 +409,8 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         console.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
       }
-      // Store the active segment in memory
-      lessonActiveSegments.set(data.lessonId, data.activeSegmentId);
+      // Store the active segment in memory with capacity guard
+      setActiveSegment(data.lessonId, data.activeSegmentId);
       // Broadcast to everyone in the lesson room (including the teacher client)
       io.to(data.lessonId).emit('student-active-segment-changed', data);
     });
