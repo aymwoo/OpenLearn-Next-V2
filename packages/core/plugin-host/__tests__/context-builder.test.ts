@@ -237,6 +237,27 @@ describe('buildContext', () => {
     expect(rawEventBus.unsubscribe).toHaveBeenCalled();
   });
 
+  it('Test 5b: 包装的 eventBus.unsubscribe 能够使用原始函数引用成功退订', async () => {
+    const tracker = new ResourceTracker();
+    const registry = await setupRegistry();
+    const rawEventBus = await registry.resolve(IEventBusServiceToken);
+    const ctx = await setupContext({ registry, tracker });
+
+    const originalListener = vi.fn();
+    await ctx.services.eventBus.subscribe('test.event', originalListener);
+
+    // 取得注册给 rawEventBus 的 safeSubscriber 引用
+    const registeredWrapper = (rawEventBus.subscribe as any).mock.calls[0][1];
+    expect(typeof registeredWrapper).toBe('function');
+    expect(registeredWrapper).not.toBe(originalListener);
+
+    // 调用 ctx.services.eventBus.unsubscribe 并传入 originalListener
+    await ctx.services.eventBus.unsubscribe('test.event', originalListener);
+
+    // rawEventBus.unsubscribe 必须接收到 registeredWrapper，确保底层成功卸载
+    expect(rawEventBus.unsubscribe).toHaveBeenCalledWith('test.event', registeredWrapper);
+  });
+
   // ── Test 6 ──────────────────────────────────────────────────────────
 
   it('Test 6: 包装的 processManager.registerHandler 在 tracker 中注册 dispose', async () => {

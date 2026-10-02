@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **插件体系与微前端深化（阶段 P）：EventBus 订阅精准退订 + 沙箱 Bridge 消息防爆**：
+  - **EventBus 订阅退订闭环**：修复 `packages/core/plugin-host/context-builder.ts` 中 `wrapEventBus` 因闭包代理导致插件使用原始函数引用调用 `unsubscribe` 时无法命中注销目标的缺陷，建立 `WeakMap` 映射使主动退订与 `tracker.disposeAll()` 自动回收皆能 100% 卸载监听器。
+  - **沙箱跨窗口通信防爆**：在 `src/services/lms-bridge.ts` 的 `processLmsMessage` 引入 512KB 单包尺寸校验与循环引用防御，丢弃过大异常 payload，保护宿主主线程不被阻塞或发生内存溢出。
+  - **质量单测**：补齐 `context-builder.test.ts` 中 `Test 5b` 原型引用精准退订的单元测试用例。
+
+
 - **前端架构治理（阶段 C2）：LiveClassroomView 巨石解耦（拆分 LiveSubmissionsPanel 与 ClassroomToolbarQuickActions）**：
   - **LiveSubmissionsPanel 领域下沉**：将 `LiveClassroomView` 中 360+ 行的学生交互课件提交记录、自动录入成绩、按班级/状态过滤、分数字段校验、补录与标缺考功能整体下沉至 `src/features/classroom/LiveSubmissionsPanel.tsx`，保持 Props 契约与单元测试 100% 兼容。
   - **ClassroomToolbarQuickActions 抽取**：将 7 个流程扩展按钮（异常告警、AI 学情预测、随堂协作、投屏对比、家校通知、宏动作编排、硬件网关）与倒计时组件收敛为 `ClassroomToolbarQuickActions.tsx`。

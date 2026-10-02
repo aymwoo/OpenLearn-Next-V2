@@ -242,6 +242,8 @@ function wrapCommandBus(
  * 迁移自 PluginRuntime lines 266-296。
  */
 function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, pluginId: string): IEventBusService {
+  const subscriberMap = new WeakMap<any, any>();
+
   return {
     subscribe: createSafeFunction((eventType: string, subscriber: any) => {
       const safeSubscriber = (event: any) => {
@@ -251,6 +253,9 @@ function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, plug
           console.error(`[Plugin:${pluginId}] Error in event subscriber for ${eventType}:`, e);
         }
       };
+      if (typeof subscriber === 'function') {
+        subscriberMap.set(subscriber, safeSubscriber);
+      }
       return Promise.resolve(eventBus.subscribe(eventType, safeSubscriber)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
@@ -260,7 +265,10 @@ function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, plug
       });
     }),
     unsubscribe: createSafeFunction((eventType: string, subscriber: any) => {
-      return eventBus.unsubscribe(eventType, subscriber);
+      const targetSubscriber = typeof subscriber === 'function' && subscriberMap.has(subscriber)
+        ? subscriberMap.get(subscriber)
+        : subscriber;
+      return eventBus.unsubscribe(eventType, targetSubscriber);
     }),
     publish: createSafeFunction(async (event: any) => {
       const enrichedEvent = {

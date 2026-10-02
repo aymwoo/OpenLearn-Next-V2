@@ -91,6 +91,17 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
+  // 防御性安全：限制跨窗口消息体最大尺寸（512KB），防御超大 payload 阻塞主线程或造成 OOM
+  try {
+    const rawLen = typeof data === 'string' ? data.length : JSON.stringify(data).length;
+    if (rawLen > 512 * 1024) {
+      console.warn('[LMS Bridge] Dropped oversized postMessage (>512KB)');
+      return;
+    }
+  } catch {
+    return;
+  }
+
   // Security: 仅接受受管辖课件 iframe（data-lms-bridge）或同窗口自身的消息，
   // 丢弃未知外部窗口 / 弹窗 / 未标记 iframe 的消息
   if (typeof window !== 'undefined' && event.source) {
