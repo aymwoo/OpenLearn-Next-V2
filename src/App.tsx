@@ -1013,8 +1013,7 @@ export default function App() {
   const fetchClassStudents = async (id: string) => {
     try {
       const { ok, data } = await getClassStudents(id);
-      if (res.ok) {
-        const data = await res.json();
+      if (ok) {
         setClassStudentsMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
@@ -1023,8 +1022,7 @@ export default function App() {
   const fetchClassProgress = async (id: string) => {
     try {
       const { ok, data } = await getClassProgress(id);
-      if (res.ok) {
-        const data = await res.json();
+      if (ok) {
         setClassProgressMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
@@ -1035,8 +1033,7 @@ export default function App() {
   const fetchClassDashboard = async (id: string) => {
     try {
       const { ok, data } = await getClassDashboard(id);
-      if (res.ok) {
-        const data = await res.json();
+      if (ok) {
         setClassDashboardMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
