@@ -2,6 +2,20 @@ import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw, X }
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
 import { listFromEnvelope } from './utils/listEnvelope.js';
+import {
+  fetchLibraryResources as fetchLibraryResourcesApi,
+  fetchDbStatus,
+  fetchAuthSession,
+  fetchSiteSettings as fetchSiteSettingsApi,
+  postLogout,
+} from './services/sessionService.js';
+import {
+  fetchRegisteredCommands as fetchRegisteredCommandsApi,
+  fetchVfsNodes as fetchVfsNodesApi,
+  fetchProcesses as fetchProcessesApi,
+  fetchProcessLogs as fetchProcessLogsApi,
+  postClassSchedule,
+} from './services/systemService.js';
 import { translations } from './i18n';
 import { LoginPage } from './components/LoginPage';
 import { AppHeader } from './components/AppHeader';
@@ -193,9 +207,8 @@ export default function App() {
   const fetchLibraryResources = async () => {
     try {
       setLoadingLibraryResources(true);
-      const res = await fetch('/api/resources');
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await fetchLibraryResourcesApi();
+      if (ok) {
         setLibraryResources(data);
       }
     } catch (e) {
@@ -347,16 +360,15 @@ export default function App() {
     if (!session) return;
     const checkDb = async () => {
       try {
-        const res = await fetch('/api/db-status');
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
+        const { ok, status, data } = await fetchDbStatus();
+        if (ok) {
           if (data.status === 'warning' || data.warning) {
             setDbStatus('warning');
           } else {
             setDbStatus('normal');
           }
           setDbConnected(true);
-        } else if (res.status === 429 || res.status === 503) {
+        } else if (status === 429 || status === 503) {
           setDbStatus('warning');
           setDbConnected(true);
         } else {
@@ -376,9 +388,8 @@ export default function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const data = await res.json();
+        const { ok, data } = await fetchAuthSession();
+        if (ok && data) {
           if (data.session) {
             setSession(data.session);
             if (isStudentTabMode) {
@@ -415,9 +426,8 @@ export default function App() {
   useEffect(() => {
     const fetchSiteSettings = async () => {
       try {
-        const res = await fetch('/api/site-settings');
-        if (res.ok) {
-          const data = await res.json();
+        const { ok, data } = await fetchSiteSettingsApi();
+        if (ok) {
           setSiteInfo({ siteName: data.siteName || '', slogan: data.slogan || '', logoUrl: data.logoUrl || null });
         }
       } catch (err) {
@@ -815,12 +825,8 @@ export default function App() {
 
   const handleQuickScheduleClass = async (classId: string, lessonId: string, date: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/classes/${classId}/schedules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lessonId, scheduledDate: date }),
-      });
-      if (res.ok) {
+      const { ok } = await postClassSchedule(classId, { lessonId, scheduledDate: date });
+      if (ok) {
         await fetchClassSchedules(classId);
         return true;
       }
@@ -956,11 +962,8 @@ export default function App() {
 
   const fetchRegisteredCommands = async () => {
     try {
-      const res = await fetch('/api/commands/registered');
-      if (!res.ok) return;
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
+      const { ok, data, contentType } = await fetchRegisteredCommandsApi();
+      if (ok && contentType && contentType.includes('application/json')) {
         if (Array.isArray(data)) {
           setRegisteredCommands(data);
         }
@@ -973,9 +976,8 @@ export default function App() {
   const fetchVfs = async (parentId: string | null) => {
     if (!session) return;
     try {
-      const res = await fetch(`/api/vfs${parentId ? `?parentId=${parentId}` : ''}`);
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await fetchVfsNodesApi(parentId);
+      if (ok) {
         setVfsNodes(data);
       }
     } catch (e) {
@@ -985,9 +987,9 @@ export default function App() {
 
   const fetchProcesses = async () => {
     try {
-      const res = await fetch('/api/processes');
-      if (res.ok) {
-        setProcesses(await res.json());
+      const { ok, data } = await fetchProcessesApi();
+      if (ok) {
+        setProcesses(data);
       }
     } catch (e) {}
   };
@@ -1357,9 +1359,8 @@ export default function App() {
 
   const fetchProcessLogs = async (id: string) => {
     try {
-      const res = await fetch(`/api/processes/${id}/logs`);
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await fetchProcessLogsApi(id);
+      if (ok) {
         setProcessLogsContent(data.logs || '');
         setShowProcessLogs(id);
       }
@@ -1525,7 +1526,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await postLogout();
     } catch (e) {
       console.error('Logout failed', e);
     }
