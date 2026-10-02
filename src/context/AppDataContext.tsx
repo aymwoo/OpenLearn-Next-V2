@@ -71,6 +71,8 @@ export type AppExtras = {
   setLiveClassIsActive: (active: boolean) => void;
   setTeacherTab: (tab: string) => void;
   teacherTab: string;
+  mainNavCollapsed: boolean;
+  setMainNavCollapsed: Dispatch<SetStateAction<boolean>>;
   batchMode: boolean;
   setBatchMode: Dispatch<SetStateAction<boolean>>;
   selectedClassIds: Set<string>;
@@ -144,7 +146,7 @@ export type AppDataValue = ReturnType<typeof useToast> &
   ReturnType<typeof useLessonFiltering> &
   AppExtras;
 
-const AppDataContext = createContext<AppDataValue | null>(null);
+export const AppDataContext = createContext<AppDataValue | null>(null);
 
 export function AppDataProvider({ value, children }: { value: AppDataValue; children: ReactNode }) {
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
@@ -157,4 +159,9 @@ export function useAppData(): AppDataValue {
     throw new Error('useAppData must be used within <AppDataProvider>');
   }
   return ctx;
+}
+
+/** 消费 App 级数据；若未挂载 Provider 则返回 null（用于双模组件兼容独立单测） */
+export function useOptionalAppData(): AppDataValue | null {
+  return useContext(AppDataContext);
 }

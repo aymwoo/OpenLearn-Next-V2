@@ -5,8 +5,8 @@ import type { TeacherViewProps } from '../features/teacher/TeacherView';
 const StudentView = lazy(() => import('../features/student/StudentView').then((m) => ({ default: m.StudentView })));
 const TeacherView = lazy(() => import('../features/teacher/TeacherView').then((m) => ({ default: m.TeacherView })));
 
-export type AppShellProps = TeacherViewProps & {
-  /** C1-R3: StudentView 已改经 AppDataContext 取数，此处仅存角色分发所需字段 */
+export type AppShellProps = {
+  /** C1-R3: StudentView 与 TeacherView 均已改经 AppDataContext 取数，此处仅存角色分发所需字段 */
   activeRole: 'teacher' | 'student';
 };
 
@@ -21,7 +21,7 @@ export function AppShell(props: AppShellProps) {
         </div>
       }
     >
-      {activeRole === 'student' ? <StudentView /> : <TeacherView {...props} />}
+      {activeRole === 'student' ? <StudentView /> : <TeacherView />}
     </Suspense>
   );
 }

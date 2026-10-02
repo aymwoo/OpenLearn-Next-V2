@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **前端架构治理（路线图 C1-R3j）：迁移剩余 4 个次级 tab 与 NavigationSidebar，TeacherView 蜕变为 0 props 纯路由分发容器**：
+  - NavigationSidebar、TimetableView、ComputerLabView、HelpView、PluginView 全部改经 `useAppData()` / `useOptionalAppData()` 取数，保留 Props 契约兼容孤立测试。
+  - TeacherView 内部全部 10 个业务 Tab 以及导航侧栏均以 0 props 挂载；TeacherViewProps 接口收窄为空，TeacherView 蜕变为纯粹的布局与路由分发容器。
+  - AppShellProps 收缩为仅 `{ activeRole: 'teacher' | 'student' }`；App.tsx 向 AppShell 装配实参彻底收敛（25 props → 1 prop: `activeRole`）；App.tsx 从 1817 行下降至 1752 行。
+
 - **前端架构治理（路线图 C1-R3i）：清理 TeacherViewProps 与 AppShell 残留死 props**：
   - AppDataContext 与 TeacherViewProps 解耦：AppExtras 从 `Pick<TeacherViewProps, ...>` 改为直接显式定义独立类型，消除循环类型寄生。
   - TeacherViewProps 深度净化：删除 LessonEditorView、LiveClassroomView 与已迁 tab 的 40+ 个残留死字段（selectedLesson/elements/paletteEdit/liveClassFeed/liveClassStudentProgress 等）；TeacherView 仅保留自身直接渲染所需的 24 个导航与次级 tab 属性。

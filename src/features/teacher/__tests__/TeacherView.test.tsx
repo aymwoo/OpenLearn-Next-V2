@@ -243,12 +243,16 @@ const baseProps: any = {
   fetchTodaySchedules: vi.fn(),
 };
 
-const renderView = (props: Record<string, unknown> = {}) =>
-  render(
+const renderView = (props: Record<string, unknown> = {}) => {
+  const merged = { ...baseProps, ...props };
+  return render(
     <PluginHostProvider host={new FrontendPluginHost()}>
-      <TeacherView {...baseProps} {...props} />
+      <AppDataProvider value={merged as any}>
+        <TeacherView {...props} />
+      </AppDataProvider>
     </PluginHostProvider>,
   );
+};
 
 describe('TeacherView', () => {
   it('renders the wrapper and the NavigationSidebar for teacherTab="dashboard"', () => {

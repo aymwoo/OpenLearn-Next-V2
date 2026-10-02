@@ -1222,6 +1222,8 @@ export default function App() {
     ...studentNotificationsHook,
     ...gradeExport,
     ...lessonFilteringData,
+    mainNavCollapsed,
+    setMainNavCollapsed,
     batchMode,
     setBatchMode,
     selectedClassIds,
@@ -1537,33 +1539,7 @@ export default function App() {
               }}
             />
 
-            <AppShell
-              activeRole={activeRole}
-              mainNavCollapsed={mainNavCollapsed}
-              setMainNavCollapsed={setMainNavCollapsed}
-              teacherTab={teacherTab}
-              setTeacherTab={setTeacherTab}
-              lang={lang}
-              session={session}
-              todaySchedules={todaySchedules}
-              plugins={plugins}
-              storeTab={storeTab}
-              setStoreTab={setStoreTab}
-              pluginCode={pluginCode}
-              setPluginCode={setPluginCode}
-              installingPlugin={installingPlugin}
-              onInstall={handleInstallPlugin}
-              onZipUpload={handleZipPluginUpload}
-              onToggle={handleTogglePlugin}
-              onDelete={handleDeletePlugin}
-              classes={classes}
-              lessons={lessons}
-              onSchedulesUpdated={fetchTodaySchedules}
-              computerLabs={computerLabs}
-              onRefresh={fetchLabs}
-              registeredCommands={registeredCommands}
-              fetchRegisteredCommands={fetchRegisteredCommands}
-            />
+            <AppShell activeRole={activeRole} />
           </div>
 
           <RightSidebar

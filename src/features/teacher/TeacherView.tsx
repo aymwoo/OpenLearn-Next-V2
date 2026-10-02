@@ -29,93 +29,24 @@ const AdminDirectoryView = lazy(() => import('./AdminDirectoryView').then((m) =>
 const ComputerLabView = lazy(() => import('./ComputerLabView').then((m) => ({ default: m.ComputerLabView })));
 const HelpView = lazy(() => import('./HelpView').then((m) => ({ default: m.HelpView })));
 
+import { useOptionalAppData } from '../../context/AppDataContext';
+
 /**
- * TeacherView is the single wrapper for the entire `teacher` branch of App.tsx.
- * TeacherViewProps is a flat composition of every child component's prop bag
- * (mirroring the StudentView precedent). Shared props are typed to the greatest
- * lower bound across the children that declare them, and the few extra
- * identifiers referenced only by App's inline expressions (socketRef,
- * setShowCoursewareHub, fetchTodaySchedules) are added explicitly.
+ * TeacherView is the single routing wrapper for the entire `teacher` branch of App.tsx.
+ * C1-R3j: 全部 tab 组件与 NavigationSidebar 均已改经 AppDataContext 取数。
+ * TeacherView 自身成为 0 props 的纯路由与布局分发容器。
  */
 export interface TeacherViewProps {
-  // ── NavigationSidebar ───────────────────────────────────────────────
-  mainNavCollapsed: boolean;
-  setMainNavCollapsed: (v: boolean) => void;
-  teacherTab: string;
-  setTeacherTab: (tab: string) => void;
-  lang: 'zh' | 'en';
-  session: SessionType | null;
-  todaySchedules: ScheduleType[];
-
-  // ── PluginView ──────────────────────────────────────────────────────
-  plugins: any[];
-  storeTab: 'logs' | 'store' | 'dev' | 'widgets' | 'community';
-  setStoreTab: (tab: any) => void;
-  pluginCode: string;
-  setPluginCode: (code: string) => void;
-  installingPlugin: boolean;
-  onInstall: (code: string) => Promise<void>;
-  onZipUpload: (
-    file: File,
-    executionMode: 'worker' | 'inline',
-    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
-  ) => Promise<void>;
-  onToggle: (id: string) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-
-  // ── TimetableView ───────────────────────────────────────────────────
-  classes: ClassType[];
-  lessons: Lesson[];
-  onSchedulesUpdated: () => Promise<void>;
-
-  // ── ComputerLabView ─────────────────────────────────────────────────
-  computerLabs: any[];
-  onRefresh: () => Promise<void>;
-
-  // ── HelpView ────────────────────────────────────────────────────────
-  registeredCommands: any[];
-  fetchRegisteredCommands: () => void;
+  [key: string]: any;
 }
 
-export function TeacherView(props: TeacherViewProps) {
-  const {
-    mainNavCollapsed,
-    setMainNavCollapsed,
-    teacherTab,
-    setTeacherTab,
-    lang,
-    session,
-    todaySchedules,
-    plugins,
-    storeTab,
-    setStoreTab,
-    pluginCode,
-    setPluginCode,
-    installingPlugin,
-    onInstall,
-    onZipUpload,
-    onToggle,
-    onDelete,
-    lessons,
-    classes,
-    onSchedulesUpdated,
-    computerLabs,
-    onRefresh,
-    registeredCommands,
-    fetchRegisteredCommands,
-  } = props;
+export function TeacherView(_props: TeacherViewProps = {}) {
+  const appData = useOptionalAppData();
+  const teacherTab = _props.teacherTab ?? appData?.teacherTab ?? 'dashboard';
 
   return (
     <div className="flex-1 overflow-hidden flex bg-gray-50">
-      <NavigationSidebar
-        mainNavCollapsed={mainNavCollapsed}
-        setMainNavCollapsed={setMainNavCollapsed}
-        teacherTab={teacherTab}
-        setTeacherTab={setTeacherTab}
-        lang={lang}
-        session={session}
-        todaySchedules={todaySchedules}
-      />
+      <NavigationSidebar />
 
       <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
         {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
@@ -148,34 +79,22 @@ export function TeacherView(props: TeacherViewProps) {
             <LessonEditorView />
           ) : teacherTab === 'live_class' ? (
             <div className="flex-grow flex-1 flex flex-col min-h-0 min-w-0">
-                            <LiveClassroomView />
+              <LiveClassroomView />
             </div>
           ) : teacherTab === 'plugins' ? (
-            <PluginView
-              plugins={plugins}
-              lang={lang}
-              storeTab={storeTab}
-              setStoreTab={setStoreTab}
-              pluginCode={pluginCode}
-              setPluginCode={setPluginCode}
-              installingPlugin={installingPlugin}
-              onInstall={onInstall}
-              onZipUpload={onZipUpload}
-              onToggle={onToggle}
-              onDelete={onDelete}
-            />
+            <PluginView />
           ) : teacherTab === 'courses' ? (
             <CourseManagement />
           ) : teacherTab === 'classes' ? (
             <ClassesView />
           ) : teacherTab === 'timetable' ? (
-            <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={onSchedulesUpdated} />
+            <TimetableView />
           ) : teacherTab === 'admin_directory' ? (
             <AdminDirectoryView />
           ) : teacherTab === 'computer_labs' ? (
-            <ComputerLabView computerLabs={computerLabs} onRefresh={onRefresh} lang={lang} classes={classes} />
+            <ComputerLabView />
           ) : teacherTab === 'help' ? (
-            <HelpView registeredCommands={registeredCommands} onRefresh={fetchRegisteredCommands} />
+            <HelpView />
           ) : null}
         </Suspense>
       </div>

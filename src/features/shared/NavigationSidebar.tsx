@@ -18,15 +18,16 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import type { SessionType, ScheduleType } from '../../store/appStore';
 import { useAppStore } from '../../store/appStore';
+import { useOptionalAppData } from '../../context/AppDataContext';
 
-interface NavigationSidebarProps {
-  mainNavCollapsed: boolean;
-  setMainNavCollapsed: (v: boolean) => void;
-  teacherTab: string;
-  setTeacherTab: (tab: string) => void;
-  lang: string;
-  session: SessionType | null;
-  todaySchedules: ScheduleType[];
+export interface NavigationSidebarProps {
+  mainNavCollapsed?: boolean;
+  setMainNavCollapsed?: (v: boolean) => void;
+  teacherTab?: string;
+  setTeacherTab?: (tab: string) => void;
+  lang?: string;
+  session?: SessionType | null;
+  todaySchedules?: ScheduleType[];
 }
 
 const STORAGE_KEY = 'openlearn_nav_collapsed_groups';
@@ -50,15 +51,16 @@ const isScheduleUpcoming = (sch: any) => {
   }
 };
 
-export function NavigationSidebar({
-  mainNavCollapsed,
-  setMainNavCollapsed,
-  teacherTab,
-  setTeacherTab,
-  lang,
-  session,
-  todaySchedules,
-}: NavigationSidebarProps) {
+export function NavigationSidebar(props: NavigationSidebarProps = {}) {
+  const appData = useOptionalAppData();
+  const mainNavCollapsed = props.mainNavCollapsed ?? appData?.mainNavCollapsed ?? false;
+  const setMainNavCollapsed = props.setMainNavCollapsed ?? appData?.setMainNavCollapsed ?? (() => {});
+  const teacherTab = props.teacherTab ?? appData?.teacherTab ?? 'dashboard';
+  const setTeacherTab = props.setTeacherTab ?? appData?.setTeacherTab ?? (() => {});
+  const lang = props.lang ?? appData?.lang ?? 'zh';
+  const session = props.session !== undefined ? props.session : (appData?.session ?? null);
+  const todaySchedules = props.todaySchedules ?? appData?.todaySchedules ?? [];
+
   const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
   const pluginTabs = extensionPoints.get('teacher.tab' as any) || [];
   const siteInfo = useAppStore((s) => s.siteInfo);

@@ -6,12 +6,17 @@ import { SdkGuideViewer } from './help/SdkGuideViewer';
 import { UserGuideViewer } from './help/UserGuideViewer';
 import { PluginDocsViewer } from './help/PluginDocsViewer';
 
-interface HelpViewProps {
-  registeredCommands: any[];
-  onRefresh: () => void;
+import { useOptionalAppData } from '../../context/AppDataContext';
+
+export interface HelpViewProps {
+  registeredCommands?: any[];
+  onRefresh?: () => void;
 }
 
-export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
+export function HelpView(props: HelpViewProps = {}) {
+  const appData = useOptionalAppData();
+  const registeredCommands = props.registeredCommands ?? appData?.registeredCommands ?? [];
+  const onRefresh = props.onRefresh ?? appData?.fetchRegisteredCommands ?? (() => {});
   const lang = useAppStore((s) => s.lang);
   const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide' | 'plugin_docs'>('commands');
   const [copiedId, setCopiedId] = useState<string | null>(null);
