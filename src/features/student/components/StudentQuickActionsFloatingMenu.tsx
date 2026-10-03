@@ -19,6 +19,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useScreenResize, ScreenResizeInfo } from '../../../hooks/useScreenResize';
+import { useCustomEvent } from '../../../hooks/useEventBus';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { StudentQuickActionItem, studentQuickActionsRegistry, QuickActionBadgeVariant } from '../types/quickActions';
 
@@ -185,30 +186,17 @@ export function StudentQuickActionsFloatingMenu({
     return unsub;
   }, [enablePluginRegistry]);
 
-  // Listen to programmatic DOM events from plugins
-  useEffect(() => {
-    const handleCollapse = () => setIsOpen(false);
-    const handleOpen = () => setIsOpen(true);
-    const handleToggleCompact = () => setUserCompactOverride((prev) => (prev === null ? !screenInfo.isMobile : !prev));
-    const handleRegisterAction = (e: Event) => {
-      const customEvent = e as CustomEvent<StudentQuickActionItem>;
-      if (customEvent.detail && customEvent.detail.id) {
-        studentQuickActionsRegistry.registerAction(customEvent.detail);
-      }
-    };
-
-    window.addEventListener('openlearn:student_quick_actions:collapse', handleCollapse);
-    window.addEventListener('openlearn:student_quick_actions:open', handleOpen);
-    window.addEventListener('openlearn:student_quick_actions:toggle_compact', handleToggleCompact);
-    window.addEventListener('openlearn:student_quick_action:register', handleRegisterAction);
-
-    return () => {
-      window.removeEventListener('openlearn:student_quick_actions:collapse', handleCollapse);
-      window.removeEventListener('openlearn:student_quick_actions:open', handleOpen);
-      window.removeEventListener('openlearn:student_quick_actions:toggle_compact', handleToggleCompact);
-      window.removeEventListener('openlearn:student_quick_action:register', handleRegisterAction);
-    };
-  }, [screenInfo.isMobile]);
+  // Listen to programmatic DOM events from plugins via declarative hooks
+  useCustomEvent('openlearn:student_quick_actions:collapse', () => setIsOpen(false));
+  useCustomEvent('openlearn:student_quick_actions:open', () => setIsOpen(true));
+  useCustomEvent('openlearn:student_quick_actions:toggle_compact', () =>
+    setUserCompactOverride((prev) => (prev === null ? !screenInfo.isMobile : !prev)),
+  );
+  useCustomEvent('openlearn:student_quick_action:register', (detail) => {
+    if (detail && detail.id) {
+      studentQuickActionsRegistry.registerAction(detail);
+    }
+  });
 
   const schedules = studentDashboardData?.schedules || [];
   const assignments = studentDashboardData?.assignments || [];

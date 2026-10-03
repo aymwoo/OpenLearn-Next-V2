@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Volume2, VolumeX, ChevronUp, ChevronDown, Sparkles, CheckCircle2 } from 'lucide-react';
 import { ClassroomSyncChannel, type ClassroomCountdownState } from '../../services/classroom-sync-channel';
 import { onSocketInstance } from '../../services/socket-service';
+import { useCustomEvent } from '../../hooks/useEventBus';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface StudentCountdownBannerProps {
@@ -118,14 +119,6 @@ export function StudentCountdownBanner({
       detachSocket = () => socket.off('classroom:countdown_updated', onCountdownUpdated);
     });
 
-    // 监听全局 window 事件
-    const onCountdownUpdated = (e: any) => {
-      if (e.detail) {
-        setCountdown(e.detail);
-      }
-    };
-    window.addEventListener('openlearn:countdown:updated', onCountdownUpdated);
-
     return () => {
       unsub?.();
       offSocket();
@@ -133,9 +126,15 @@ export function StudentCountdownBanner({
       if (!propSyncChannel && typeof syncChannel?.destroy === 'function') {
         syncChannel.destroy();
       }
-      window.removeEventListener('openlearn:countdown:updated', onCountdownUpdated);
     };
   }, [lessonId, lang]);
+
+  // 监听全局 DOM 自定义事件 (Layer 3)
+  useCustomEvent('openlearn:countdown:updated', (detail) => {
+    if (detail) {
+      setCountdown(detail);
+    }
+  });
 
   /**
    * 复位「已响过结束提示音」的标记。

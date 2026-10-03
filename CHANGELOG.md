@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **统一三层事件总线治理与类型安全门禁（P1-3）**：
+  - **全局强类型前端事件字典契约（`src/types/events.ts`）**：
+    - 确立 `FrontendEventMap` 规范，对白板生命周期（`whiteboard.autosave.*`、`whiteboard.element_*`）、课堂互动（`rollcall.*`）、倒计时控制（`openlearn:countdown:*`）与学生端快捷菜单（`openlearn:student_quick_actions:*`）实现 100% 编译期参数校验与代码补全；
+  - **增强型进程内总线（`src/services/event-bus.ts`）**：
+    - 升级 `FrontendEventBus` 保持 100% 向后兼容现有 `PlatformEvent` 调用，同时支持强类型重载、`emit` 自动装配元数据、`subscribePayload` 简化载荷解构、`once` 单次监听与异常隔离机制；
+  - **声明式 React Hooks 体系（`src/hooks/useEventBus.ts`）**：
+    - 推出 `useEventBus`、`useCustomEvent` 与 `useEventPublish`，通过 `useRef` 包装有效防范 stale closure，自动管理组件挂载/卸载时的监听生命周期，消除手动清理遗漏导致的内存泄漏隐患；
+  - **业务组件平滑重构**：
+    - 试点将 `StudentQuickActionsFloatingMenu.tsx` 与 `StudentCountdownBanner.tsx` 内分散的手工 DOM 事件绑定收敛至 `useCustomEvent`，大幅精简模板代码并提升容错能力；
+  - **完整测试套件**：
+    - 新增 `src/hooks/__tests__/useEventBus.test.ts` 并扩充 `src/services/__tests__/event-bus.test.ts`，相关 46 项用例 100% 自动化通过。
+
+
 - **首屏体积轻量化与 ModulePreload 分包预加载优化（P1-2）**：
   - **解耦 CSV 纯工具函数并异步化 PDF 生成库**：
     - 新增 `src/utils/csv.ts` 与配套单测 `src/utils/__tests__/csv.test.ts`，将 `escapeCSV` 从 `gradeReportService.ts` 中解耦为独立轻量纯函数；
