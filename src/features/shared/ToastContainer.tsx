@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileBadge, AlertCircle, AlertTriangle, Info, CheckCircle2, X, Copy, Check } from 'lucide-react';
-import { useAppStore, type Toast } from '../../store/appStore';
-import { appStore } from '../../store/appStore';
+import { useUIStore, uiStore } from '../../store/uiStore';
+import type { Toast } from '../../types/app';
 import { copyToClipboard } from '../../utils/clipboard';
 
 export function ToastContainer() {
-  const toasts = useAppStore((s) => s.toasts);
+  const toasts = useUIStore((s) => s.toasts);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopyToast = async (e: React.MouseEvent, toast: Toast) => {
@@ -98,7 +98,7 @@ export function ToastContainer() {
 
               <button
                 type="button"
-                onClick={() => appStore.getState().removeToast(toast.id)}
+                onClick={() => uiStore.getState().removeToast(toast.id)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded p-1 h-fit transition-colors shrink-0 cursor-pointer"
               >
                 <X size={14} />

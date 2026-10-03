@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   app:
     build: .
@@ -10,6 +9,7 @@ services:
       - backup_data:/app/backups
     environment:
       - NODE_ENV=production
+      - OPENLEARN_DB_PATH=/app/packages/core/db/educational_os.db
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - LOG_LEVEL=info
       - BACKUP_DIR=/app/backups

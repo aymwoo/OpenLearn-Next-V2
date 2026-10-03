@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **容器化部署、运维凭证安全与前端状态单一真源修复（P0-2 / P0-3 / P0-4 / P1-1）**：
+  - **Dockerfile & docker-compose 容器化构建加固（P0-2）**：
+    - 将 Dockerfile 构建阶段升级为使用 pnpm 锁文件机制（`pnpm install --frozen-lockfile`）并引入 Alpine 原生模块编译工具链；
+    - 移除错误的 `COPY ... 2>/dev/null || true` shell 重定向语法；
+    - 生产运行阶段明确补充 `COPY --from=build /app/migrations ./migrations`，确保容器启动时 SQL 迁移自动执行；
+    - 显式声明 `OPENLEARN_DB_PATH=/app/packages/core/db/educational_os.db`，并在运行前预建持久化目录及配置非 root 用户 `node` 运行与健康检查探针；
+    - 升级 `docker-compose.yml` 环境变量与数据卷对齐。
+  - **生产部署密钥安全隔离（P0-3）**：
+    - `ecosystem.config.cjs` 头部引入 `dotenv` 动态读取，将 `ENCRYPTION_KEY` 与 `ALLOWED_ORIGINS` 配置为从环境变量/`.env` 安全读取；
+    - `deploy.sh` 移除通过 `sed -i` 直接向被版本控制跟踪的 `ecosystem.config.cjs` 写入真实 AES 主密钥的风险代码，防范 git commit 造成的生产凭证泄漏。
+  - **ToastContainer 状态单一真源收敛（P0-4 / P1-1）**：
+    - `src/features/shared/ToastContainer.tsx` 依赖源收敛至 `uiStore`，消除由于读取 `appStore` 镜像副本导致的状态失步；
+    - `src/features/shared/__tests__/ToastContainer.test.tsx` 2 项单测全部恢复 100% 绿灯（2/2 passed）。
+
 - **插件系统与 Worker 沙箱能力面安全加固（SEC-TOKEN-01：动态 Token 白名单与 RPC 隔离门禁）**：
   - **按 Manifest 动态计算 Worker 授权 Token 清单**：
     - `packages/core/worker-runtime/worker-manager.ts`：将全量无脑静态暴露的 `ALL_SERVICE_TOKENS` 改造为两级机制，确立 9 个通用基础设施为 `BASE_WORKER_SERVICE_TOKENS`；

@@ -1,3 +1,9 @@
+const path = require('path');
+const dotenv = require('dotenv');
+
+// 从同目录 .env 文件动态加载环境变量，避免明文硬编码提交到版本库
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 module.exports = {
   apps: [
     {
@@ -10,9 +16,8 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 9000,
         LOG_LEVEL: 'info',
-        // 以下由 deploy.sh 从 .env 自动注入，请勿手动修改
-        ENCRYPTION_KEY: '',
-        ALLOWED_ORIGINS: '',
+        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '',
+        ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || '',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       error_file: 'logs/err.log',

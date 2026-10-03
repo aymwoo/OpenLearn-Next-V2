@@ -109,7 +109,11 @@ echo "✅ nginx.generated.conf 已生成"
 
 # ── 2. 构建 ──────────────────────────────────────────────
 echo "⏳ 构建中..."
-npm run build
+if command -v pnpm &> /dev/null; then
+    pnpm run build
+else
+    npm run build
+fi
 echo "✅ 构建完成"
 
 # ── 3. 配置 Nginx ────────────────────────────────────────
@@ -136,6 +140,12 @@ else
 fi
 
 # ── 4. 环境变量 ──────────────────────────────────────────
+# 确保 .env 文件存在
+if [ ! -f "$APP_ROOT/.env" ] && [ -f "$APP_ROOT/.env.example" ]; then
+    cp "$APP_ROOT/.env.example" "$APP_ROOT/.env"
+    echo "ℹ️ 已基于 .env.example 创建 .env"
+fi
+
 # 生成 ENCRYPTION_KEY（用于 AI Provider API Key AES-256 加密）
 if ! grep -q "^ENCRYPTION_KEY=." "$APP_ROOT/.env" 2>/dev/null; then
     ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
@@ -143,15 +153,8 @@ if ! grep -q "^ENCRYPTION_KEY=." "$APP_ROOT/.env" 2>/dev/null; then
     echo "✅ ENCRYPTION_KEY 已写入 .env"
 fi
 
-# 从 .env 读取值写入 ecosystem.config.cjs（PM2 env 块优先级 > dotenv）
-set -a; source "$APP_ROOT/.env" 2>/dev/null; set +a
-for key in ENCRYPTION_KEY ALLOWED_ORIGINS; do
-    val="${!key}"
-    if [ -n "$val" ]; then
-        sed -i "s|${key}: ''|${key}: '${val}'|" "$APP_ROOT/ecosystem.config.cjs"
-    fi
-done
-echo "✅ 环境变量已注入 ecosystem.config.cjs"
+# 密钥与配置仅通过 .env 安全维护，ecosystem.config.cjs 运行时动态读取，避免向被 git 跟踪的文件写入明文
+echo "✅ 环境变量由 .env 安全维护，ecosystem.config.cjs 动态读取已生效"
 
 # ── 5. PM2 启动/重启 ────────────────────────────────────
 if command -v pm2 &> /dev/null; then
