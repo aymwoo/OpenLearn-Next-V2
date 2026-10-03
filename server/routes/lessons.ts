@@ -169,10 +169,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons', requireAuth(), (req, res) => {
     // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
     const pg = parsePagination(req.query as any);
-    const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM lessons').get() as any).n;
-    const lessons = kernelContainer.db
-      .prepare(
-        `
+    const total = kernelContainer.queryReadOne<{ n: number }>('SELECT COUNT(*) AS n FROM lessons')?.n || 0;
+    const lessons = kernelContainer.queryRead(
+      `
       SELECT l.*, u.name as creator_name,
         (SELECT COUNT(*) FROM student_lesson_progress WHERE lesson_id = l.id) as enrollment_count
       FROM lessons l
@@ -180,8 +179,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       ORDER BY l.created_at DESC
       LIMIT ? OFFSET ?
     `,
-      )
-      .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+      pg.isAll ? -1 : pg.pageSize,
+      pg.offset,
+    );
     res.json({ data: lessons, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
   });
 

@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **数据库连接池与并发 I/O 隔离优化（P1-1）**：
+  - **SQLite Pragma 工业级参数加固（`packages/core/db/index.ts`）**：
+    - 引入 `applyPragmas` 与 `applyReadPragmas`，显式配置 `busy_timeout = 5000`，彻底根除高并发批量写场景下偶发的 `SQLITE_BUSY: database is locked`；
+    - 配置 `cache_size = -64000`（64MB 专用内存缓存页，较默认 2MB 提升 32 倍）、`temp_store = MEMORY`（临时表与排序全在内存执行）以及 `mmap_size = 268435456`（256MB 内存映射 I/O），大幅压降底层文件系统系统调用与磁盘穿透；
+  - **轻量级只读连接池与读写分离（ReadPool）**：
+    - 新增 `ReadConnectionPool`，基于 CPU 核心数维护 2~4 个独立 `readonly: true` 连接句柄并提供轮询复用，打破了此前单 handle 导致 WAL 读写在 Node 同步驱动层串行互斥的瓶颈；
+    - 导出便捷高阶查询工具 `queryRead<T>()`、`queryReadOne<T>()` 与 `getReadDb()`，并在 `server/routes/workspace.ts`（工作区事件与课时列表）和 `server/routes/lessons.ts`（全校课时列表与白板加载）中试点应用，使高频只读请求与后台写事务完全物理互不阻塞；
+  - **WAL Checkpoint 守护与长事务微批切片（Micro-batching）**：
+    - 提供 `checkpoint(mode)` 刷盘工具（支持 PASSIVE / TRUNCATE），并在进程正常退出时优雅落盘截断 WAL 文件；
+    - 引入 `batchExecute(items, batchSize, handler, delayMs)` 微批事务切片工具，自动在批次间通过 `setImmediate` 让出 Node 事件循环，防止大批量写操作持续独占写锁造成 Socket.IO 实时心跳卡顿；
+  - **完整测试套件**：
+    - 新增 `packages/core/db/__tests__/db-pool.test.ts`（7 项用例 100% 自动化通过），覆盖 Pragma 生效验证、只读池防写保护、长事务下的非阻塞并发读、WAL Checkpoint 与微批切片。
+
+
 - **白板渲染性能与 JSON.parse 缓存优化（P1-3）**：
   - **元素数据 LRU 高速缓存（`src/features/whiteboard/utils/element-cache.ts`）**：
     - 引入基于 Map 的轻量级 LRU 解析结果缓存 `parseElementData<T>(el, fallback?)`，容量封顶 1000 项，带安全的 try-catch 兜底逻辑；

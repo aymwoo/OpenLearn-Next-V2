@@ -36,6 +36,7 @@
     "plugins",
     "packages/core/esm-loader/__tests__/fixtures",
     "packages/plugin-sdk/scaffold/templates",
-    "packages/core/__tests__/lti-provider-plugin.test.ts"
+    "packages/core/__tests__/lti-provider-plugin.test.ts",
+    "scratch"
   ]
 }

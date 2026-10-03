@@ -17,7 +17,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
 
   app.get('/api/events', requireAuth('administrator', 'teacher'), (req, res) => {
     try {
-      const events = kernelContainer.db.prepare('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50').all();
+      const events = kernelContainer.queryRead('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50');
       res.json(events);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -167,7 +167,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       let nodes: any[] = [];
 
       if (parentId === 'virtual-lessons') {
-        const lessons = kernelContainer.db.prepare('SELECT id, title, content FROM lessons').all() as any[];
+        const lessons = kernelContainer.queryRead('SELECT id, title, content FROM lessons');
         nodes = lessons.map((l) => ({
           id: `lesson-${l.id}`,
           parent_id: 'virtual-lessons',
