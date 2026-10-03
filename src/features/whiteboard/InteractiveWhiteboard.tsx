@@ -80,6 +80,7 @@ import {
   type DropZoneActionType,
   type StackDirection,
 } from './utils/auto-tiling';
+import { parseElementData } from './utils/element-cache';
 import {
   belongsToPage,
   filterCurrentPageElements,
@@ -390,8 +391,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     }: InteractiveWhiteboardProps,
     ref,
   ) => {
-    // 防御：确保 elements 始终是数组（极端情况下 Zustand store 可能返回非数组值）
-    const safeElements = Array.isArray(elements) ? elements : [];
+    // 防御：确保 elements 始终是数组，并使用 useMemo 稳定数组引用防击穿下游
+    const safeElements = useMemo(() => (Array.isArray(elements) ? elements : []), [elements]);
 
     // 全局主题系统响应与白板引擎桥接
     const currentGlobalTheme = useThemeStore((s) => s.theme);
@@ -462,13 +463,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     useEffect(() => {
       const metaEl = safeElements.find((el) => el.type === 'page_meta');
       if (metaEl) {
-        try {
-          const parsed = JSON.parse(metaEl.data);
-          if (Array.isArray(parsed.pages) && parsed.pages.length > 0) {
-            setPages(parsed.pages);
-          }
-        } catch (e) {
-          console.error('Failed to parse whiteboard page_meta:', e);
+        const parsed = parseElementData(metaEl);
+        if (Array.isArray(parsed?.pages) && parsed.pages.length > 0) {
+          setPages(parsed.pages);
         }
       }
     }, [elements]);
@@ -491,10 +488,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     );
 
     /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
-    const getCurrentPageElements = useCallback(
+    const currentPageElements = useMemo(
       (): WhiteboardElement[] =>
         filterCurrentPageElements(safeElements, currentPage, pages, activeSegmentId) as WhiteboardElement[],
       [safeElements, currentPage, pages, activeSegmentId],
+    );
+    const getCurrentPageElements = useCallback(
+      (): WhiteboardElement[] => currentPageElements,
+      [currentPageElements],
     );
 
     // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
@@ -884,13 +885,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       for (const el of elements) {
         const overlay = localGeometryRef.current.get(el.id);
         if (!overlay) continue;
-        try {
-          const data = JSON.parse(el.data);
-          const keys = Object.keys(overlay);
-          if (sameGeometry(data, overlay, keys)) {
-            localGeometryRef.current.delete(el.id);
-          }
-        } catch {
+        const data = parseElementData(el, null);
+        if (!data) {
+          localGeometryRef.current.delete(el.id);
+          continue;
+        }
+        const keys = Object.keys(overlay);
+        if (sameGeometry(data, overlay, keys)) {
           localGeometryRef.current.delete(el.id);
         }
       }
@@ -1041,11 +1042,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           } else {
             lastSelectedCoursewareElementRef.current = null;
           }
-          try {
-            setEditingProperties(JSON.parse(selectedEl.data));
-          } catch (e) {
-            setEditingProperties({});
-          }
+          setEditingProperties(parseElementData(selectedEl, {}));
         } else {
           lastSelectedCoursewareElementRef.current = null;
           setEditingProperties(null);
@@ -1061,10 +1058,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const handleUpdateElementData = async (updatedFields: any) => {
       const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
       if (!selectedEl) return;
-      let parsedData = {};
-      try {
-        parsedData = JSON.parse(selectedEl.data);
-      } catch (err) {}
+      const parsedData = parseElementData(selectedEl, {});
 
       const updatedData = {
         ...parsedData,
@@ -2237,12 +2231,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         let detectedStackDir: StackDirection | undefined = forcedStackDirection ?? tileSplitPreferenceRef.current;
 
         for (const el of tileableElements) {
-          let data: Record<string, any>;
-          try {
-            data = JSON.parse(el.data);
-          } catch {
-            continue;
-          }
+          const data = parseElementData(el, null);
+          if (!data) continue;
           if (!detectedStackDir && data.tileStackDir) {
             detectedStackDir = data.tileStackDir;
           }
@@ -2336,14 +2326,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const elB = safeElements.find((el) => el.id === idB);
         if (!elA || !elB) return;
 
-        let dataA: Record<string, any>;
-        let dataB: Record<string, any>;
-        try {
-          dataA = JSON.parse(elA.data);
-          dataB = JSON.parse(elB.data);
-        } catch {
-          return;
-        }
+        const dataA = parseElementData(elA, null);
+        const dataB = parseElementData(elB, null);
+        if (!dataA || !dataB) return;
 
         const geoA = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
         const geoB = extractGeometry(dataB, elB.type === 'circle' ? 'circle' : 'rect');
@@ -2409,13 +2394,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       const restores: { id: string; patch: Record<string, any> }[] = [];
 
       for (const el of safeElements) {
-        let data: Record<string, any>;
-        try {
-          data = JSON.parse(el.data);
-        } catch {
-          continue;
-        }
-        if (!data.__preTile) continue;
+        const data = parseElementData(el, null);
+        if (!data || !data.__preTile) continue;
         const { __preTile, __tiled, tileOrder, ...rest } = data;
         const keys = geometryKeys(el.type === 'circle' ? 'circle' : 'rect');
         // 几何仍是我们写入的值 → 用户没动过，安全还原
@@ -2465,10 +2445,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
         const visibleElements = getCurrentPageElements().filter((el) => isTileableType(el.type));
         const currentBoxes: BoxWithId[] = visibleElements.map((el) => {
-          let data: Record<string, any> = {};
-          try {
-            data = JSON.parse(el.data);
-          } catch {}
+          const data = parseElementData(el);
           const defaultSize = getDefaultElementSize(el.type, data);
           const overlay = localGeometryRef.current.get(el.id);
           return {
@@ -2511,14 +2488,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             Object.entries(patches).map(async ([id, patch]) => {
               const el = safeElements.find((item) => item.id === id);
               if (!el) return;
-              try {
-                const data = JSON.parse(el.data);
+                const data = parseElementData(el, {});
                 const shape = el.type === 'circle' ? 'circle' : 'rect';
                 const baseGeo = extractGeometry(data, shape);
                 const updatedGeo = { ...baseGeo, ...patch };
                 setLocalGeometry(id, updatedGeo);
                 await onElementUpdate(id, { ...data, ...patch, __tiled: updatedGeo });
-              } catch {}
             }),
           );
 
@@ -2645,7 +2620,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       opts?: { fullscreen?: { width: number; height: number; padding: number } },
     ) => {
       try {
-        const data = JSON.parse(el.data);
+        const data = parseElementData(el);
         // localGeometryVersion 仅用于让覆盖层的增删触发重渲染
         void localGeometryVersion;
         const overlay = localGeometryRef.current.get(el.id);
@@ -4371,10 +4346,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       }
                       return null;
                     }
-                    let bfsData: Record<string, any> = {};
-                    try {
-                      bfsData = JSON.parse(bfsEl.data);
-                    } catch (_) {}
+                    const bfsData = parseElementData(bfsEl);
                     return (
                       <BrowserFullscreenHost
                         elementId={browserFullscreenElementId}
@@ -4415,10 +4387,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       }
                       return null;
                     }
-                    let fsData: any = {};
-                    try {
-                      fsData = JSON.parse(fsEl.data);
-                    } catch (_) {}
+                    const fsData = parseElementData(fsEl);
                     const typeLabel: Record<string, string> = {
                       quiz: '📝 随堂测验',
                       timer: '⏱ 计时器',

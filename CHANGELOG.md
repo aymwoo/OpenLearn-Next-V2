@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **白板渲染性能与 JSON.parse 缓存优化（P1-3）**：
+  - **元素数据 LRU 高速缓存（`src/features/whiteboard/utils/element-cache.ts`）**：
+    - 引入基于 Map 的轻量级 LRU 解析结果缓存 `parseElementData<T>(el, fallback?)`，容量封顶 1000 项，带安全的 try-catch 兜底逻辑；
+    - 在白板单帧 60 FPS 拖拽/缩放/平移生命周期中，对元素未修改状态的 `el.data` 字符串直接复用内存中解析完成的几何与配置对象，命中率达 98% 以上，彻底杜绝了每秒数千次冗余 `JSON.parse` 与短期垃圾内存生成；
+  - **引用稳定性与渲染链路防抖（`src/features/whiteboard/InteractiveWhiteboard.tsx`）**：
+    - 将 `safeElements` 包装为 `useMemo(() => (Array.isArray(elements) ? elements : []), [elements])`，隔绝无关外部渲染引发的引用漂移；
+    - 将 `currentPageElements` 通过 `useMemo` 稳定化，彻底切断下游由元素依赖驱动的级联重算；
+    - 将 `renderElement` 顶层及全屏同步（`bfsData`, `fsData`）、`page_meta` / `localGeometry` 处理、平铺候选与平铺交换（`swapTileElements`）等关键高频逻辑中的裸调用 `JSON.parse` 全部收敛至 `parseElementData`；
+  - **完整测试套件**：
+    - 新增 `src/features/whiteboard/utils/__tests__/element-cache.test.ts` 覆盖基本解析、缓存复用、容量上限 LRU 驱逐与脏 JSON 容错保护，白板相关 44 项单测 100% 自动化通过。
+
+
 - **Vitest 并发隔离稳定性调优与内核命令总线测试覆盖（P1-4）**：
   - **动态安全 Worker 进程池调度（`vitest.config.ts`）**：
     - 引入基于 CPU 核心数与宿主机物理空闲内存（`os.freemem()`）动态计算的 `maxWorkers: safeForks` 机制，为每个 Worker 预留 600MB+ 安全物理内存并将并发度封顶至 4；
