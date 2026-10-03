@@ -9,6 +9,9 @@
 
 export * from './types';
 export * from './service-registry';
+export * from './allowed-tokens';
+export * from './method-policy';
+export * from './capabilities';
 export * from './plugin-host-store';
 export * from './plugin-host'; // Created in Task 3
 export * from './plugin-host-context'; // Created in Task 3

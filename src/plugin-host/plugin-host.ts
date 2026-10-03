@@ -155,6 +155,9 @@ export class FrontendPluginHost {
       version: manifest.version,
       state: PluginState.INSTALLED,
       executionMode: 'inline',
+      // 保留 manifest 声明的 capabilitiesProposed —— 之后若该插件被切到
+      // worker 模式激活，Barrier 2 需要它来决定是否放行非 get* 方法。
+      capabilitiesProposed: Array.isArray(manifest.capabilitiesProposed) ? [...manifest.capabilitiesProposed] : [],
     });
   }
 
@@ -334,10 +337,17 @@ export class FrontendPluginHost {
     }
 
     // Build manifest from source or stored data
+    // 关键：必须带上插件真实声明的 capabilitiesProposed ——
+    // ServiceHost 的 Security Barrier 2 按此判定（为空时只允许 get* 只读方法），
+    // BrowserWorkerManager.createWorker 也据此计算 Token 白名单。
+    // 缺失时安全回退为空数组（= 最严只读分支）。
     const manifest: FrontendPluginManifest = {
       id: pluginId,
       name: pluginInfo.name,
       version: pluginInfo.version,
+      capabilitiesProposed: Array.isArray(pluginInfo.capabilitiesProposed)
+        ? [...pluginInfo.capabilitiesProposed]
+        : [],
     };
 
     store.updatePluginState(pluginId, PluginState.ACTIVATING);

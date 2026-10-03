@@ -43,6 +43,7 @@ function hashToTab(hash: string): string | null {
 
 import { usePluginHost } from '../plugin-host/plugin-host-context';
 import { usePluginHostStore } from '../plugin-host/plugin-host-store';
+import { resolveDeclaredCapabilities } from '../plugin-host/capabilities';
 import { registerTeacherActivityCenter } from '../features/activity-ecosystem/registerTeacherExtension.js';
 
 registerTeacherActivityCenter();
@@ -871,13 +872,19 @@ export function useAppComposer() {
             version: plugin.version,
             state: PluginState.INSTALLED,
             executionMode: 'inline',
+            // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
+            // 决定是否放行非 get* 方法；缺失则回退为空数组（只读）。
+            capabilitiesProposed: resolveDeclaredCapabilities(plugin),
           });
         } else if (versionChanged) {
           // Keep store entry but refresh version stamp
           try {
+            const declaredCapabilities = resolveDeclaredCapabilities(plugin);
             usePluginHostStore.setState((s) => ({
               activePlugins: s.activePlugins.map((p) =>
-                p.id === plugin.id ? { ...p, version: plugin.version, name: plugin.name } : p,
+                p.id === plugin.id
+                  ? { ...p, version: plugin.version, name: plugin.name, capabilitiesProposed: declaredCapabilities }
+                  : p,
               ),
             }));
           } catch {

@@ -26,8 +26,20 @@
  *
  * ## Capability Enforcement
  *
- * If manifestCapabilities is empty, the plugin can ONLY call `'get'`
- * methods (read-only). Mutation methods are denied with error.
+ * Two barriers are enforced at the top of {@link handleInvoke}:
+ *
+ * 1. **Token Allowlist Guard** (Security Barrier 1) — when the constructor was
+ *    given `allowedTokens`, any service token not in that set is rejected before
+ *    resolution. This is the token-level sandbox mirroring the backend fix in
+ *    `packages/core/worker-runtime/service-host.ts`; the allowlist is computed
+ *    per manifest by `computeAllowedWorkerTokens` in `./allowed-tokens`.
+ * 2. **Manifest capability check** (Security Barrier 2) — if manifestCapabilities
+ *    is empty, the plugin can ONLY call `'get'` methods (read-only).
+ *    Mutation methods are denied with error.
+ *
+ * `allowedTokens` is optional for backward compatibility: when omitted the host
+ * keeps its previous (permissive) behavior, but every production entry point
+ * (`BrowserWorkerManager.createWorker`) passes a computed allowlist.
  *
  * ## Event Forwarding
  *
@@ -38,6 +50,7 @@
  * @module
  */
 
+import { checkMethodPolicy } from './method-policy';
 import type {
   IWorkerTransport,
   InvokeMessage,
@@ -63,17 +76,31 @@ export class ServiceHost {
   private subscriptions = new Map<string, () => void>();
 
   /**
+   * 授权的 Service Token 白名单（Security Barrier 1）。
+   * undefined = 未传入白名单，保持向后兼容的宽松行为。
+   */
+  private readonly allowedServiceTokens?: ReadonlySet<string>;
+
+  /**
    * @param serviceRegistry - FrontendServiceRegistry for resolving service instances
    * @param pluginActorId - Actor identity for all invokes
    * @param manifestCapabilities - Capability strings from manifest.capabilitiesProposed
    * @param socketService - Optional ISocketService for event forwarding
+   * @param allowedTokens - Optional service token allowlist; when provided, any
+   *   token outside the set is denied. Mirrors the backend `allowedTokens`
+   *   constructor argument (`packages/core/worker-runtime/service-host.ts`).
    */
   constructor(
     private readonly serviceRegistry: FrontendServiceRegistry,
     private readonly pluginActorId: string,
     private readonly manifestCapabilities: string[],
     private readonly socketService?: ISocketService,
-  ) {}
+    allowedTokens?: Iterable<string>,
+  ) {
+    if (allowedTokens) {
+      this.allowedServiceTokens = new Set(allowedTokens);
+    }
+  }
 
   // ── Public accessors ───────────────────────────────────────────────────
 
@@ -204,14 +231,44 @@ export class ServiceHost {
    */
   async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
-      // ── Capability guard (simplified frontend version) ──────────────
-      // If manifestCapabilities is empty, the Worker plugin has no
-      // declared capabilities. Allow only 'get' prefix methods.
+      // ── Security Barrier 1: Token 白名单门禁 ────────────────────────
+      // 严格 Token 级能力沙箱：拦截任何未显式授权给本 Worker 插件的服务 Token。
+      // 与后端 packages/core/worker-runtime/service-host.ts 的 Barrier 1 同构。
+      if (this.allowedServiceTokens && !this.allowedServiceTokens.has(msg.token)) {
+        const err = new Error(
+          `Access to service token '${msg.token}' denied: not in worker allowedTokens for ${this.pluginActorId}`,
+        );
+        err.name = 'WorkerCapabilityError';
+        throw err;
+      }
+
+      // ── Security Barrier 2: 空 manifest 能力检查 ─────────────────────
+      // manifestCapabilities 为空时，插件未声明任何能力，只允许 'get' 只读方法。
       if (this.manifestCapabilities.length === 0 && !msg.method.startsWith('get')) {
         throw new Error(
           `Capability denied for actor ${this.pluginActorId}: ` +
             `empty manifestCapabilities, only 'get' methods allowed`,
         );
+      }
+
+      // ── Security Barrier 3: 方法 / 路径级门禁（纵深防御）──────────────
+      // 前两道门禁的粒度分别是 Token 与"是否声明过任意能力"。数据链打通后
+      // Barrier 2 变为"按 manifest 声明判定"，而**声明是插件自己写的**，
+      // 且基础白名单含 IFrontendAPI（对任意 path 的同源 fetch）——
+      // 只要声明任意一条能力，就能对全部用户会话 API 发 post/del。
+      // 此处按方法与路径再收一道。
+      //
+      // 注意：这是**纵深防御，不是访问控制**。真正的权限边界在服务端
+      // （每个 REST 端点自己校验 session 与角色）。此处只降低"插件被诱导
+      // 或被植入恶意逻辑"时的爆炸半径。
+      const methodDenied = checkMethodPolicy(msg.token, msg.method, msg.args, this.manifestCapabilities);
+      if (methodDenied) {
+        const err = new Error(
+          `Call denied for actor ${this.pluginActorId}: ` +
+            `${msg.token}.${msg.method}() — ${methodDenied}`,
+        );
+        err.name = 'WorkerCapabilityError';
+        throw err;
       }
 
       // ── Resolve service by token name ──────────────────────────────

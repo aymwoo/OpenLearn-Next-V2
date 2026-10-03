@@ -151,8 +151,27 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // Plugin APIs
+  // 列表响应额外补齐 `capabilitiesProposed`（string[]）：内核 PluginInfo 只暴露
+  // manifest 原文，前端 plugin-host 需要这个扁平字段把能力声明送进 Worker 模式的
+  // ServiceHost Security Barrier 2。缺失时前端会回退解析 manifest 原文，再退化为
+  // 空数组（只读）。这里是纯展示层补字段，不改变内核的授权判定。
   app.get('/api/plugins', requireAuth(), (req, res) => {
-    res.json(kernelContainer.pluginLifecycleManager.listPlugins());
+    const list = kernelContainer.pluginLifecycleManager.listPlugins() as ReadonlyArray<Record<string, any>>;
+    res.json(
+      list.map((plugin) => {
+        if (Array.isArray(plugin.capabilitiesProposed)) return plugin;
+        let caps: string[] = [];
+        try {
+          const parsed = typeof plugin.manifest === 'string' ? JSON.parse(plugin.manifest) : plugin.manifest;
+          if (Array.isArray(parsed?.capabilitiesProposed)) {
+            caps = parsed.capabilitiesProposed.filter((c: unknown): c is string => typeof c === 'string');
+          }
+        } catch {
+          // manifest 解析失败 —— 回退为空数组（前端按只读处理）
+        }
+        return { ...plugin, capabilitiesProposed: caps };
+      }),
+    );
   });
 
   // Lookup installed plugin by logical manifest.id (for upgrade detection in the wizard)

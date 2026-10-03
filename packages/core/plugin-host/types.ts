@@ -230,7 +230,13 @@ export interface PluginContext {
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
-  /** 插件唯一标识符（manifest.id） */
+  /**
+   * 插件唯一标识符。
+   *
+   * 注意：这是 `plugins` 表的行 UUID，**不是** `manifest.id`。
+   * 命名空间相关的场景（如 `db.table()` 表前缀）在 inline / worker 两种模式下
+   * 取值规则不同，详见 docs/reference/plugin-database-api.md。
+   */
   pluginId: string;
   /** 插件 manifest 元数据 */
   manifest: Manifest;

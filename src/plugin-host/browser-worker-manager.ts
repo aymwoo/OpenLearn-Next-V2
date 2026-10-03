@@ -12,7 +12,7 @@
  *   -> BrowserWorkerManager.createWorker(pluginId, manifest, sourceCode, tokens)
  *     -> new Worker(blobUrl, { type: 'module' })
  *     -> BrowserWorkerTransport(worker)
- *     -> ServiceHost(registry, actorId, caps, socketService)
+ *     -> ServiceHost(registry, actorId, caps, socketService, allowedTokens)
  *     -> workerRegistry.set(pluginId, { worker, transport, serviceHost })
  *     -> transport.onMessage -> serviceHost.handleMessage
  *     -> transport.postMessage({ type: 'activate', ... })
@@ -30,6 +30,7 @@
 
 import { BrowserWorkerTransport } from './browser-worker-transport';
 import { ServiceHost } from './service-host';
+import { computeAllowedWorkerTokens } from './allowed-tokens';
 import type { FrontendServiceRegistry } from './service-registry';
 import type { FrontendPluginManifest, ISocketService } from './types';
 import type { IWorkerTransport } from '../../packages/core/worker-runtime/types';
@@ -116,6 +117,11 @@ export class BrowserWorkerManager {
     // 3. Build Worker bootstrap Blob URL
     const blobUrl = this.buildWorkerBlobUrl();
 
+    // 3.5 Dynamically compute the Token allowlist for this Worker (capability
+    // sandbox isolation) — mirrors the computeAllowedWorkerTokens() call site
+    // in backend worker-manager.ts.
+    const allowedTokens = computeAllowedWorkerTokens(manifest, serviceTokens);
+
     // 4. Create Worker
     let worker: Worker;
     try {
@@ -129,10 +135,10 @@ export class BrowserWorkerManager {
     // 5. Create Transport
     const transport = new BrowserWorkerTransport(worker);
 
-    // 6. Create ServiceHost
+    // 6. Create ServiceHost (with Token allowlist gate injected)
     const actorId = `plugin:${manifest.id}`;
     const manifestCaps = manifest.capabilitiesProposed ?? [];
-    const serviceHost = new ServiceHost(this.registry, actorId, manifestCaps, socketService);
+    const serviceHost = new ServiceHost(this.registry, actorId, manifestCaps, socketService, allowedTokens);
 
     // 7. Register and setup message routing
     this.workerRegistry.set(pluginId, { pluginId, worker, transport, serviceHost });
@@ -162,11 +168,13 @@ export class BrowserWorkerManager {
     });
 
     // 8. Send activate message
+    // 只把白名单内的 Token 注入 Worker，Worker 端连代理都拿不到越权服务
+    // （对应后端 workerData.serviceTokens = allowedTokens）
     transport.postMessage({
       type: 'activate',
       pluginCode: sourceCode,
       manifest,
-      serviceTokens,
+      serviceTokens: allowedTokens,
     });
 
     // 9. Wait for 'activated' response (10s timeout)

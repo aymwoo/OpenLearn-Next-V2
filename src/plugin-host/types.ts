@@ -63,6 +63,14 @@ export interface FrontendPluginInfo {
   version: string;
   state: PluginState;
   executionMode: 'inline' | 'worker' | 'legacy';
+  /**
+   * 插件 manifest 声明的 `capabilitiesProposed`（字符串数组）。
+   *
+   * 该字段是 worker 模式 Security Barrier 2（`service-host.ts`）的唯一输入：
+   * 缺失或为空数组时该插件在 Worker 内只能调用 `get*` 只读方法。
+   * 数据来源见 `./capabilities.ts` 的 `resolveDeclaredCapabilities`。
+   */
+  capabilitiesProposed?: string[];
 }
 
 // ── Extension Points ─────────────────────────────────────────────────────
