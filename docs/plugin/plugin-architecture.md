@@ -168,7 +168,19 @@ export interface Disposable {
 resourceTracker.disposeAll(pluginId);
 ```
 
-该操作会反向顺序执行该插件登记的所有 `dispose()` 方法，即使插件在 `deactivate()` 回调中发生超时或崩溃，`finally` 块也能保证 100% 强力清理，防止内存泄漏。
+该操作**按资源的原始登记（追加）顺序**依次调用每个资源的 `dispose()`——源码注释与 `disposeAll` 中的 `for (const disposable of list)` 正序遍历都是明写的，**不是 LIFO 逆序**。
+
+容错语义分两层，需分别理解：
+
+- **停用层**：`PluginHost.deactivatePlugin` 把插件的 `deactivate()` 放进 `Promise.race` 并设 5 秒超时（`DEACTIVATION_TIMEOUT_MS`），且该 `try` 带 `finally`，`finally` 中调用 `disposeAll`、置状态为 `INACTIVE`、删除实例、注销热重载、写回 DB 的 `inactive`，并 `capService.revokeAll(actorId)` 撤销能力。所以「`deactivate` 超时或抛错仍会进入强制清理」这一点是成立的。
+- **资源层**：`ResourceTracker.disposeAll` 内部**没有** `finally` 兜底。它对每个资源各自包一个 `try/catch`，某个 `dispose()` 抛错只 `console.error` 并继续，全部尝试结束后才 `resources.delete(pluginId)`。因此清理不具备原子性，中途失败不会中断也不会回滚已完成的清理。
+
+由此得到两条实践约束：
+
+- 若某个 `dispose()` 挂死（既不返回也不抛错），`disposeAll` 会一直阻塞在那里，后续资源不会被清理；`DEACTIVATION_TIMEOUT_MS` 只约束 `deactivate()` 本身，不会中断已在执行的 `disposeAll`。
+- 顺序是正序释放，**后注册的资源先于先注册的资源被释放**。若后注册资源持有先注册资源的引用（如「先建连接、后挂心跳定时器」），定时器会先被清理而连接仍在，通常安全；但反过来——先注册依赖者、后注册被依赖者——就会在依赖已被释放后访问失效对象。插件应让传给 `ResourceTracker` 的资源之间**互不依赖**，而不是依赖 LIFO 顺序。
+
+`pluginId` 不在追踪表中时 `disposeAll` 静默返回（幂等，无副作用）。
 
 ---
 

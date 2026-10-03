@@ -89,10 +89,10 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 
 ## 4. 打包规范（工具、配置、出错表现）
 
-- **打包工具：`esbuild`**（插件构建**不**使用 Vite/Rollup）。SDK 自有可发布 bundle 亦为 esbuild（`build.mjs:25`）。
+- **打包工具：`esbuild`**（插件构建**不**使用 Vite/Rollup）。SDK 自有可发布 bundle 亦为 esbuild（`packages/plugin-sdk/build.mjs` 的 `esbuild.build()` 调用）。
 - **配置/入口**：插件无独立 Vite/Rollup 配置文件。构建完全由 SDK CLI `openlearn-plugin-sdk build` 驱动（源码 `packages/plugin-sdk/cli.mjs`；二进制声明于 `packages/plugin-sdk/package.json:19-20`）。
 - **如何触发构建**：脚手架插件置 `"build": "openlearn-plugin-sdk build"`（`scaffold/templates/full-stack/package.json`）。
-- **externals 如何设置**：由 CLI **自动注入**，插件作者无需在打包器配置中声明。前端 externals 数组 `['react','react-dom','recharts','lucide-react']` 硬编码于 `cli.mjs:276,292`；服务端 bundle 另加 `@openlearn/plugin-sdk`（`cli.mjs:231`）。
+- **externals 如何设置**：由 CLI **自动注入**，插件作者无需在打包器配置中声明。前端 externals 数组 `['react','react-dom','recharts','lucide-react']` 硬编码于 `packages/plugin-sdk/cli.mjs` 的两处 `buildOpts(frontendEntry, ...)` 调用（构建与 watch 模式各一处）；服务端 bundle 另加 `@openlearn/plugin-sdk`。
 - **manifest 层声明**：脚手架模板声明 `peerDependencies: { "react": ">=17", "react-dom": ">=17" }`（`full-stack` 与 `frontend-only` 模板）。这是"插件消费宿主 React"的人类/清单信号，**不参与** externals 计算（externals 为硬编码）。
 - **若手动打包忘记 external**：未 externalize `react` / `react-dom` 会导致**第二个 React 实例**，表现为 "Invalid hook call" / Context 断裂。使用标准 `openlearn-plugin-sdk build` CLI 不会遗漏（数组被强制注入）；若使用手写打包工具，必须将白名单内的共享库列入 external。
 

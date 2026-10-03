@@ -1,5 +1,7 @@
 # Platform Service Registry 平台服务注册表
 
+> 📌 **本文为唯一真源**：`docs/core/service-registry.md` 旧版（2026-07-24）已废弃删除，内容以本文为准。
+
 `ServiceRegistryKernel` 位于 `packages/core/service-registry/`，为平台内部与插件之间提供服务暴露、动态查找、作用域生命周期管理及依赖检查功能。
 
 ---

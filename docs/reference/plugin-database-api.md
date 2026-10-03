@@ -15,6 +15,17 @@
 
 仅 4 个方法，所有表自动加前缀 `plugin_{pluginId}_`，互不干扰。
 
+> ⚠️ **`pluginId` 的取值取决于执行模式**（这是本页最容易踩的坑）：
+>
+> | 模式   | `pluginId` 实际取值            | 表前缀形态                                 |
+> | ------ | ----------------------------- | ------------------------------------------ |
+> | Inline | **`plugins` 表的行 UUID**      | `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_xxx` |
+> | Worker | **`manifest.id`（manifestId）** | `plugin_ext_raffle_vote_xxx`               |
+>
+> 前缀中所有非 `[A-Za-z0-9_]` 字符（UUID 的 `-`、`manifest.id` 的 `@`、`/`、`-`）一律替换为 `_`。
+> 之所以 Worker 侧用 `manifestId`：`ServiceHost.assertDatabaseAccessAllowed()` 的 DDL 命名空间守卫按命令命名空间（`manifest.id`）校验表前缀，若 Worker 用 UUID 前缀，插件在自己命名空间内建表也会被误判为越权 DDL。
+> 下文表格中的 `plugin_{pluginId}_` 为简写，实际按上表取值。
+
 ```typescript
 // packages/core/plugin-host/types.ts
 interface PluginDatabaseAPI {
@@ -43,7 +54,7 @@ interface PluginDatabaseAPI {
 | 表名格式    | 正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/` —— 字母/下划线开头，仅字母数字下划线，**最长 64 字符**（不允许连字符 `-`、点 `.`、`$`）            | `[SEC] Invalid SQL identifier for ensureTable(tableName): …`           |
 | schema 长度 | 非空字符串，**≤ 4000 字符**                                                                                                               | `[SEC] createTable schema must be a non-empty string (max 4000 chars)` |
 | schema 内容 | **禁止包含分号 `;`**（阻断多语句注入，如 `…); DROP TABLE events; --`）                                                                    | `[SEC] createTable schema must not contain ";" …`                      |
-| 表名前缀    | 实际表名为 `plugin_<pluginId>_` + tableName；pluginId 中非 `[A-Za-z0-9_]` 字符会被替换为 `_`（UUID 型 id 的前缀形如 `plugin_9f2c______`） | —                                                                      |
+| 表名前缀    | 实际表名为 `plugin_<pluginId>_` + tableName；pluginId 中非 `[A-Za-z0-9_]` 字符会被替换为 `_`（Inline 模式下为 UUID 型 id，前缀形如 `plugin_9f2c______`；Worker 模式下为 manifestId） | —                                                                      |
 
 另有两个配套防护：`dropAllTables()` 只清理本插件前缀的表、对 `sqlite_master` 返回的表名二次校验后才拼 DDL；ZIP 安装时有 300MB 解压总大小上限与路径穿越（`..` / 前导 `/`）检查。
 
@@ -75,7 +86,7 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
   真实用例：`packages/plugins/management.ts`、`packages/plugins/builtin.ts`。
 - **Worker（隔离）模式支持与安全守卫**：
   - **`exec` 异步转发与 DDL 守卫**：Worker 模式的 DB 代理正式支持 `exec` 跨线程 RPC 转发（如 `await db.exec(...)`），返回 Promise。所有操作均经过主侧 `assertDatabaseAccessAllowed` 安全守卫：
-    - **DDL 命名空间守卫**：第三方 Worker 插件建表 / 改表必须使用自身前缀 `plugin_{pluginId}_`；
+    - **DDL 命名空间守卫**：第三方 Worker 插件建表 / 改表必须使用自身前缀 `plugin_{manifestId}_`（守卫同时放行 `plugin_{pluginId}_` 即 UUID 前缀，以兼容既有表）；
     - **系统迁移表放行**：宿主已将 `plugin_migrations` 表纳入 DDL 白名单，允许 Worker 线程透明调用 `ctx.db.migrate()` 初始化并更新版本控制表，杜绝 `WorkerCapabilityError` 权限报错；
     - **核心数据表黑名单过滤**：严格禁止第三方插件对 `users`、`client_sessions` 等高危系统表执行越权 DDL。
   - **异步 Migration 队列时序保护 (`pendingPromises`)**：Worker 线程在执行 `ctx.db.migrate(v, fn)` 时，沙箱代理自动捕获内部所有未显式 `await` 的异步 DB 操作并统一 `Promise.all`，确保全部迁移 SQL 成功写入 SQLite 后再原子化持久化新版本号。
@@ -85,7 +96,7 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 
 ## 3. Migration / 版本升级范式
 
-插件自有表拥有**正式的 `migrate()` API**（v0.2.5+，`context-builder.ts:529-557`）：
+插件自有表拥有**正式的 `migrate()` API**（v0.2.5+，`buildContext()` 中构造的 `dbApi.migrate()`，见 `packages/core/plugin-host/context-builder.ts`）：
 
 ```typescript
 async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void) {
@@ -99,28 +110,34 @@ async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | voi
 }
 ```
 
-**行为**：在 `plugin_migrations` 表记录版本（`plugin_id` 主键）。`migrate(target, fn)` 读取当前版本（默认 0）；若 `current < target` 则执行 `upgradeFn(db)`（进程内原始 `better-sqlite3` 实例，可 `exec` / `prepare().run()` / `transaction()`），再写入 `target`。**幂等**。
+**行为**：在 `plugin_migrations` 表记录版本（`plugin_id` 主键）。`migrate(target, fn)` 读取当前版本（默认 0）；若 `current < target` 则执行 `upgradeFn(db)`（Inline 下为进程内原始 `better-sqlite3` 实例，可 `exec` / `prepare().run()` / `transaction()`；Worker 下为仅含 `prepare()` 的受限代理），再写入 `target`。**幂等**。
 
-**标准范式**（官方教程示例，`tutorials/plugin-development-tutorial.md:1460-1477`）：
+**标准范式**（官方教程 §8.6 声明式数据库迁移，见 [插件开发教程](../tutorials/plugin-development-tutorial.md)）：
 
 ```typescript
 export async function activate(ctx: PluginContext) {
-  // v1：建表
+  // v1：建表（用 prepare().run() 以同时兼容 Inline 与 Worker）
   await ctx.db.migrate(1, async (sqliteDb) => {
-    sqliteDb.exec(`CREATE TABLE IF NOT EXISTS my_table (id TEXT PRIMARY KEY, data TEXT)`);
+    sqliteDb
+      .prepare(`CREATE TABLE IF NOT EXISTS my_table (id TEXT PRIMARY KEY, data TEXT)`)
+      .run();
   });
   // v2：加列
   await ctx.db.migrate(2, async (sqliteDb) => {
-    sqliteDb.exec(`ALTER TABLE my_table ADD COLUMN extra TEXT DEFAULT ''`);
+    sqliteDb.prepare(`ALTER TABLE my_table ADD COLUMN extra TEXT DEFAULT ''`).run();
   });
   // v3：再加索引等
   await ctx.db.migrate(3, async (sqliteDb) => {
-    sqliteDb.exec(`CREATE INDEX IF NOT EXISTS idx_my_table_extra ON my_table(extra)`);
+    sqliteDb.prepare(`CREATE INDEX IF NOT EXISTS idx_my_table_extra ON my_table(extra)`).run();
   });
 }
 ```
 
 > 每次版本升级只需新增一个更高 `targetVersion` 的 `migrate` 调用；旧版本已应用过则自动跳过。
+
+> ⚠️ **不要在 `upgradeFn` 中使用 `sqliteDb.exec()`**：Worker 模式的 `upgradeFn` 只能拿到 `prepare()` 代理（无 `exec`、无 `transaction`），使用 `exec()` 的迁移脚本切换到 Worker 模式会直接报错。始终用 `prepare().run()` 即可两种模式通吃。
+>
+> ⚠️ `upgradeFn` 中的表名**不会**自动加 `plugin_{pluginId}_` 前缀（上例的 `my_table` 就是最终表名）；需要命名空间隔离请改用 `ctx.db.ensureTable()` / `ctx.db.table()`。
 
 **注意**：
 
@@ -132,20 +149,22 @@ export async function activate(ctx: PluginContext) {
 
 ## 4. 命名空间与获取方式
 
-| 项目     | 路径 A `ctx.db`                                                          | 路径 B `ctx.resolve(IDatabaseToken)` |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------ |
-| 命名空间 | 自动前缀 `plugin_{pluginId}_`（`pluginId` = `manifest.id`，非内核 UUID） | 无，整个平台库                       |
-| 暴露位置 | `types.ts:131` / `context-builder.ts:629`                                | `kernel/index.ts:211`                |
-| 适用     | 插件私有表                                                               | 跨表查询 / 读写平台表 / 事务         |
+| 项目     | 路径 A `ctx.db`                                                    | 路径 B `ctx.resolve(IDatabaseToken)` |
+| -------- | ------------------------------------------------------------------ | ------------------------------------ |
+| 命名空间 | 自动前缀 `plugin_{pluginId}_`；Inline 的 `pluginId` = `plugins` 表行 UUID，Worker 的 `pluginId` = `manifest.id`（见 §1 顶部说明） | 无，整个平台库                       |
+| 暴露位置 | `PluginContext.db`（`packages/core/plugin-host/types.ts`）/ `buildContext()` 构造的 `dbApi`（`packages/core/plugin-host/context-builder.ts`） | `ServiceRegistry` 注册 `IDatabaseToken`（`packages/core/kernel/index.ts` 的服务注册段） |
+| 适用     | 插件私有表                                                         | 跨表查询 / 读写平台表 / 事务         |
 
-**KV 存储（非 SQL）**：`ctx.services.storage`（`IStorageService` 的 `get` / `set` / `delete`）后端为 `plugin_storage` 表，**按 `plugin_id` 自动命名空间隔离**（`context-builder.ts:475`），适合简单键值，无需建表。
+**KV 存储（非 SQL）**：`ctx.services.storage`（`IStorageService` 的 `get` / `set` / `delete`）后端为 `plugin_storage` 表，**按 `plugin_id` 自动命名空间隔离**。注意此处 `plugin_id` 列写入的是 **`manifest.id`**（`buildContext()` 中 `wrapStorage()` 的实现，见 `packages/core/plugin-host/context-builder.ts`），**与 §1 的表前缀取值规则不同**——表前缀在 Inline 模式下是 UUID，KV 命名空间则始终是 manifestId。适合简单键值，无需建表。
 
 ---
 
 ## 5. 最佳实践
 
 - 优先用 `ctx.db.ensureTable()` + `ctx.db.table()` 管理插件私有表；精细控制（联表、事务、读写平台表）再落到 `ctx.resolve(IDatabaseToken)` 的原始实例。
-- 升级表结构一律走 `ctx.db.migrate(targetVersion, fn)`，保证幂等与版本可追溯。
+- 升级表结构一律走 `ctx.db.migrate(targetVersion, fn)`，保证幂等与版本可追溯；迁移脚本内只用 `prepare().run()`，以兼容 Worker 模式。
+- 迁移脚本中不要依赖 `upgradeFn` 自动加表前缀，需要隔离请用 `ctx.db.ensureTable()` / `ctx.db.table()`。
+- 不要依赖 Inline / Worker 两种模式产生相同的表名前缀（见 §1 顶部说明），也不要把表名硬编码进跨模式复用的 SQL。
 - Worker 隔离模式插件避免依赖事务与 `exec`。
 
-> 最后更新：2026-07-26
+> 最后更新：2026-10-03

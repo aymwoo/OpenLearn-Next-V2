@@ -1,25 +1,10 @@
-# Whiteboard Runtime 白板引擎与 Canvas 对象模型
+# Whiteboard Subsystems 白板子系统机制
 
-Whiteboard 引擎位于 `src/features/whiteboard/` 与 `packages/core/` 微前端适配模块中，提供高性能矢量画布渲染、Canvas 对象模型与跨终端实时协同绘制功能。
+Whiteboard 引擎位于 `src/features/whiteboard/` 与 `packages/core/` 微前端适配模块中。
 
----
-
-## Canvas 对象模型 (Canvas Object Model)
-
-画布中的每一个渲染元素均继承自统一的 `CanvasObject` 基础结构：
-
-```typescript
-export interface CanvasObject<T = any> {
-  id: string;
-  type: string; // 'path' | 'text' | 'shape' | 'geogebra-widget' | 'html-applet' | 'image' | 'custom'
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  rotation: number;
-  zIndex: number;
-  locked: boolean;
-  payload: T;
-}
-```
+> 📌 **Canvas 对象模型**的类型定义见 [whiteboard/canvas-object-model.md](../whiteboard/canvas-object-model.md)（唯一真源）。
+> 白板**运行时架构**（渲染管线、实时同步、扩展点）见 [whiteboard/whiteboard-runtime.md](../whiteboard/whiteboard-runtime.md)。
+> 本文聚焦白板子系统的机制与行为。
 
 ---
 
@@ -33,6 +18,8 @@ import { rendererRegistry } from '../features/whiteboard/canvas-model';
 // 注册渲染器
 rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
 ```
+
+> ⚠️ 历史上此处存在**两份 `rendererRegistry`**（`canvas-model/` 与 `rendering-engine/`），引用时须确认使用哪一份；当前以 `canvas-model/` 导出为准。
 
 ---
 

@@ -1,30 +1,62 @@
 # Real-time Presence & Collaboration 实时在线与协同引擎
 
+# Real-time Presence & Collaboration 实时在线与协同引擎
+
 OpenLearn V2 在 `packages/core/presence-engine/` 与 `packages/core/collaboration-engine/` 中提供了面向大规模智慧课堂的在线感知（Presence Engine）与多人分组协同（Collaboration Engine）。
 
 ---
 
 ## 1. Presence Engine (在线感知引擎)
 
-`PresenceEngineKernel` 负责捕捉与分析课堂中所有参与实体（实体类型包括 `Teacher`, `Student`, `AI`, `Plugin`, `Whiteboard`, `Stage`, `Group`）的状态变化。
+`PresenceEngineKernel` 负责捕捉与分析课堂中所有参与实体的状态变化。全部类型定义见 `packages/core/presence-engine/types.ts`。
+
+### 实体类型 (`EntityType`)
+
+共 **10** 个取值，**全部为小写**字符串字面量：
+
+```typescript
+export type EntityType =
+  | 'teacher' | 'student' | 'assistant' | 'ai' | 'plugin'
+  | 'whiteboard' | 'teaching_object' | 'lesson' | 'stage' | 'group';
+```
+
+> 注意大小写：`EntityType` 是小写，而同文件中的 `EntityRole`、`FocusState`、`ConnectionState` 等类型是 PascalCase 或小写混合，各不相同。实体在 `PresenceEntity.type` 字段上使用小写形式。
 
 ### 核心指标与感知维度
 
-- **FocusState**: 专注于课堂（`Focused`）、离屏/掉线（`Unfocused`）、离开界面（`Background`）。
-- **ConnectionState**: 在线（`Connected`）、重连中（`Reconnecting`）、离线（`Disconnected`）。
-- **Presence Dashboard Metrics**: 实时计算全班专注率、离屏人数、在路线率。
+- **`FocusState`**：共 **5** 个取值 —— `'Focused'`（专注）、`'Distracted'`（走神）、`'Inactive'`（不活跃）、`'Minimized'`（最小化）、`'Background'`（后台）。**不存在** `'Unfocused'`。
+- **`ConnectionState`**：共 **4** 个取值，**全部为小写** —— `'connected'`、`'reconnecting'`、`'disconnected'`、`'offline'`。与 `FocusState` 的 PascalCase 不同，且多一个 `offline`。
+- **`InteractionSignal`**：`'Raise Hand'` / `'Question'` / `'Agree'` / `'Disagree'` / `'Need Help'` / `'Finished'` / `'None'`。
+- **`PresenceDashboardMetrics`**：实时计算 `onlineCount`、`activeCount`、`focusCount`、`handRaiseCount`、`helpRequestCount`、`taskCompletionRate`、`aiWorkStatus`、`activePluginCount` 与 `timestamp`。
+- **`EntityStatus`**：是 `TeacherStatus` / `StudentStatus` / `AIStatus` / `PluginStatus` / `WhiteboardStatus` / `StageStatus` / `GroupStatus` 的并集再放宽为 `string`，因此各实体可携带各自领域的状态词（`TeacherStatus` 如 `'Preparing'` / `'Teaching'`，`StudentStatus` 如 `'Online'` / `'Coding'`，`StageStatus` 如 `'Running'` / `'Completed'` 等）。
 
 ---
 
 ## 2. Collaboration Engine (教学协同引擎)
 
-`CollaborationEngineKernel` 负责处理分组协作（Group Workspaces）、共享对象锁（ObjectLock）及实时数据同步消息（SyncMessage）。
+`CollaborationEngineKernel` 负责处理分组协作（Group Workspaces）、共享对象锁（ObjectLock）及实时数据同步消息（SyncMessage）。全部类型定义见 `packages/core/collaboration-engine/types.ts`。
 
-### 协同模式 (CollaborationMode)
+### 协同模式 (`CollaborationMode`)
 
-- `Broadcast`: 教师广播模式（学生只读）。
-- `InteractiveGroup`: 小组互动模式（组内自由编辑与对象锁定）。
-- `Individual`: 个人独立练习模式。
+共 **7** 个取值，**均为带空格的英文短语**（由 `CollaborationModeManager` 管理，构造时以 `'Teacher Presentation'` 为默认并立即套用其权限矩阵）：
+
+| 取值                    | 含义                       |
+| ----------------------- | -------------------------- |
+| `'Teacher Presentation'` | 教师讲授演示（默认模式）   |
+| `'Teacher + Student'`    | 师生共同操作               |
+| `'Student Independent'`  | 学生个人独立               |
+| `'Small Group'`          | 小组协同                   |
+| `'Whole Class'`          | 全班协同                   |
+| `'Teacher Review'`       | 教师评审                   |
+| `'AI Assisted'`          | AI 辅助模式                |
+
+> 代码中**不存在** `Broadcast` / `InteractiveGroup` / `Individual` 这三个标识符——`Broadcast` 是 `CollaborationPermission` 中的一个权限名，不是模式名。`CollaborationModeManager.setMode` 每次切换都会重新 `applyModePermissions(nextMode)` 并通知订阅者。
+
+### 参与者与权限
+
+- **`ParticipantRole`**：`'Teacher'` / `'Teaching Assistant'` / `'Student'` / `'Observer'` / `'AI Tutor'` / `'AI Assistant'` / `'Plugin'`。
+- **`CollaborationPermission`**：共 **12** 项 —— `'Whiteboard Edit'` / `'Whiteboard View'` / `'Comment'` / `'Annotation'` / `'Run Code'` / `'Submit Quiz'` / `'Create Object'` / `'Delete Object'` / `'Broadcast'` / `'Group Switch'` / `'Teacher Review'` / `'AI Operation'`，由 `PermissionMatrixManager` 按当前 `CollaborationMode` 套用。
+- **`SharedObjectData.mode`**：`'sync'` / `'copy'` / `'mirror'` / `'reference'`，控制小组间对象共享语义。
 
 ### 共享对象锁 (ObjectLock)
 
@@ -32,12 +64,18 @@ OpenLearn V2 在 `packages/core/presence-engine/` 与 `packages/core/collaborati
 
 ```typescript
 export interface ObjectLock {
-  objectId: string;
-  lockedBy: string; // 锁定者的 User ID
-  acquiredAt: number;
-  expiresAt: number;
+  readonly objectId: string;
+  readonly lockedBy: string; // 锁定者的 User ID
+  readonly lockedAt: number;
+  readonly expiresAt: number;
 }
 ```
+
+> 时间戳字段名是 **`lockedAt`**，不是 `acquiredAt`。该接口由 `SharedObjectManager` 持有，四字段全部 `readonly`。
+
+### 同步消息 (`SyncMessage`)
+
+`SyncType` 共 6 个取值：`'object_sync'` / `'selection_sync'` / `'viewport_sync'` / `'pointer_sync'` / `'stage_sync'` / `'lesson_sync'`，由 `SyncEngine` 分发。
 
 ---
 

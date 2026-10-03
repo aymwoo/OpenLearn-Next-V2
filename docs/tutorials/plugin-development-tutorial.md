@@ -53,7 +53,7 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 | **PluginHost**         | `packages/core/plugin-host/index.ts`            | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道                                    |
 | **ServiceRegistry**    | `packages/core/di/service-registry.ts`          | 依赖注入容器，Token 驱动，依赖图验证                                                    |
 | **ResourceTracker**    | `packages/core/plugin-host/resource-tracker.ts` | 按 pluginId 管理 Disposable 资源，保证精确清理                                          |
-| **WorkerManager**      | `packages/core/worker-manager/index.ts`         | Worker Thread 隔离模式管理                                                              |
+| **WorkerManager**      | `packages/core/worker-runtime/worker-manager.ts` | Worker Thread 隔离模式管理（`ACTIVATE_TIMEOUT_MS` 常量、dbApi 构造、Worker 引导脚本）      |
 | **FrontendPluginHost** | `src/plugin-host/plugin-host.ts`                | 前端插件生命周期管理，支持 inline/worker 模式                                           |
 
 ### 1.3 数据流
@@ -167,12 +167,17 @@ interface PluginContext {
   // V3.2: 声明式贡献点只读视图
   contributions: ContributionAccessor; // list(): 内省插件在 manifest 中声明的贡献点
 
+  // V5.2: 插件 RESTful 路由器（详见 5.15 ctx.http）
+  http: IPluginHttpRouter; // get/post/put/patch/delete/stream 端点声明
+
   // V2.5: 主应用共享模块引用（白名单控制）
   require(moduleName: string): any;
 }
 ```
 
 > ⚠️ **Worker 模式限制**：以上接口为 Inline 模式的完整 API。在 Worker Thread 隔离模式下，`ctx.config`、`ctx.provide()` 不可用，`ctx.db.migrate()` 回调仅暴露 `prepare()`，`eventBus` 使用 `subscribe()/unsubscribe()` 而非 `on()/off()`。详见 [8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
+>
+> ⚠️ **`ctx.pluginId` 的语义**：无论 Inline 还是 Worker 模式，`ctx.pluginId` 都是 **`plugins` 表的行 UUID**（如 `019fa0d4-2e31-76d9-...`），**不是** `manifest.id`。需要人类可读的稳定标识时读 `ctx.manifest.id`。该差异直接影响 `ctx.db.table()` 的表前缀，详见 §8.1.1 与 §8.6。
 
 ### 2.5 生命周期状态机
 
@@ -186,7 +191,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 ```
 
 - **INSTALLED**：源码已持久化，尚未激活
-- **ACTIVATING**：正在执行 `activate()`（瞬态，不超过 10 秒）
+- **ACTIVATING**：正在执行 `activate()`（瞬态，Inline 模式超时 5 秒 / Worker 模式超时 60 秒）
 - **ACTIVE**：正常运行中
 - **INACTIVE**：已停用，可通过 toggle 重新激活
 - **ERROR**：激活失败，可重试或卸载
@@ -984,7 +989,7 @@ interface PluginDatabaseAPI {
 
 **新增 `migrate()` 方法**：支持声明式数据库版本迁移，参数 `version` 表示目标版本号，若当前版本低于目标版本则执行 `upgradeFn`。
 
-示例：`ctx.db.table('polls')` 返回 `plugin_@openlearn/plugin-poll_polls`。
+示例：`ctx.db.table('polls')` 返回带前缀的完整表名。前缀来源**取决于执行模式**：Inline 模式为 `plugins` 表行 UUID（如 `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_polls`），Worker 模式为 `manifest.id`（如 `manifest.id = '@openlearn/plugin-poll'` 时返回 `plugin__openlearn_plugin_poll_polls`）——前缀中所有非 `[A-Za-z0-9_]` 字符（`@`、`/`、`-` 等）都会被替换为 `_`。完整规则见 §8.1.1「表前缀语义」。
 
 **从 DI 获取原始 Database 实例的方法限制：**
 
@@ -1717,7 +1722,7 @@ Worker 模式的特点：
 
 - 独立线程隔离，崩溃不影响主进程
 - 通过 RPC 代理访问内核服务（MethodProxy + EventBusProxy）
-- 10 秒激活超时
+- 60 秒激活超时（`ACTIVATE_TIMEOUT_MS` 默认值，可用环境变量 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 覆盖，下限 5000ms；Inline 模式为 5 秒 `ACTIVATION_TIMEOUT_MS`）
 - 崩溃后自动清理（dispose 强制回收）
 
 (worker-inline-mode-api)=
@@ -1732,14 +1737,27 @@ Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext
 | `ctx.services.eventBus`       | `on()` / `off()`             | `subscribe()` / `unsubscribe()`           | 方法名不同                                                           |
 | `ctx.services.actionRegistry` | 完整                         | `register()`                              | —                                                                    |
 | `ctx.http`                    | 完整 `PluginHttpRouter`      | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
-| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用       | `prepare().run/get/all` + `exec()`        | **（v0.3.9+ 补齐 exec）** 无 `transaction`                           |
-| `ctx.db.table()`              | 返回 manifest ID 前缀        | 返回 UUID 前缀                            | 同一次激活内一致，但切换模式会导致表名变化                           |
+| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用       | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**           |
+| `ctx.db.table()`              | 返回 UUID 前缀               | 返回 manifest ID 前缀                     | 两种模式前缀不同，切换执行模式会导致表名变化，详见下方说明           |
 | `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步) | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
 | `ctx.config`                  | 可用                         | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
 | `ctx.provide()`               | 可用                         | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
 | `ctx.log`                     | 可用                         | 可用                                      | —                                                                    |
-| `ctx.pluginId`                | manifest ID                  | UUID                                      | —                                                                    |
+| `ctx.pluginId`                | `plugins` 表行 UUID          | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                      |
 | `ctx.manifest`                | 可用                         | 可用                                      | —                                                                    |
+
+**`ctx.db.table()` 表前缀语义（易踩坑）：**
+
+| 模式   | 表前缀                  | 代码位置（符号名而非行号）                                                                                  |
+| ------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Inline | `plugin_<plugins.id>_`  | `buildContext()` 内的 `tablePrefix`（`packages/core/plugin-host/context-builder.ts`）                         |
+| Worker | `plugin_<manifest.id>_` | Worker 引导脚本内的 `tablePrefix`（`packages/core/worker-runtime/worker-manager.ts`）                        |
+
+两种模式的表前缀**不一致**，原因是 Worker 侧 `ServiceHost.assertDatabaseAccessAllowed()`（`packages/core/worker-runtime/service-host.ts`）的 DDL 命名空间守卫按命令命名空间（`manifest.id`）校验表前缀（`packages/core/worker-runtime/worker-manager.ts` 中构造 `tablePrefix` 处有显式注释说明这一点）：若 Worker 侧改用 UUID 前缀，插件在自己的命名空间内建表也会被误判为越权 DDL 并抛 `WorkerCapabilityError`。因此 Worker 模式固定使用 `manifestId`，Inline 模式则沿用 `plugins` 表行 UUID。
+
+实证：数据库中并存两类前缀——UUID 派生的形如 `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_attendance_records`（Inline 模式），manifestId 派生的形如 `plugin_ext_raffle_vote_`（`ext-raffle-vote`）与 `plugin__openlearn_plugin_interactive_courseware_`（`@openlearn/plugin-interactive-courseware`，`@`、`/`、`-` 均被替换为 `_`）。
+
+> **实践建议**：不要手工拼接 `plugin_` 前缀表名，一律通过 `ctx.db.table('xxx')` / `ctx.db.ensureTable('xxx', schema)` 获取；同时不要把拼好的表名硬编码进需要跨模式复用的 SQL 字符串。
 
 > **关键规则**：Worker 中 `commandBus.execute()` **不会**自动给 `type` 加 `manifest.id` 前缀（`registerHandler` 会）。从 Worker 内部调用另一个自己的命令时，必须手动拼接完整 type：
 >
@@ -1835,6 +1853,8 @@ await ctx.db.migrate(2, async (sqliteDb) => {
 ```
 
 > ⚠️ **Worker 兼容提示**：Worker 模式下 `migrate` 回调接收的是受限数据库代理，仅支持 `prepare().run()` / `prepare().get()` / `prepare().all()`。**不要使用 `sqliteDb.exec()`**（仅 Inline 模式可用）。建议始终使用 `prepare().run()` 编写迁移脚本以确保两种模式兼容。
+
+> ⚠️ **表名前缀不自动添加**：`upgradeFn` 拿到的是**原始 better-sqlite3 实例**（Worker 模式为受限代理），其中手写的表名**不会**被加 `plugin_<id>_` 前缀。上例中的 `my_table` 就是实际表名。若确实需要命名空间隔离，请用 `ctx.db.ensureTable()` / `ctx.db.table()` 建表与拼名。前缀规则见 §8.1.1。
 
 ### 8.7 自定义服务注册（V3.2）
 

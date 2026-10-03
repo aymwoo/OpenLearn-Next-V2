@@ -15,17 +15,17 @@
 ```typescript
 interface PluginContext {
   services: {
-    commandBus;
-    eventBus;
-    actionRegistry;
-    capability;
-    processManager;
-    storage;
-    ai;
-    pointsDimension;
-    pointsLedger;
+    commandBus: ICommandBusService;
+    eventBus: IEventBusService;
+    actionRegistry: IActionRegistryService;
+    capability: ICapabilityService;
+    processManager: IProcessService;
+    storage: IStorageService;
+    ai: IAIService;
+    pointsDimension: IPointsDimensionRegistry | null;
+    pointsLedger: IPointsLedgerService | null;
   };
-  pluginId: string;
+  pluginId: string;   // plugins 表的行 UUID，**不是** manifest.id
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;
   provide<T>(token: Token<T>, instance: T): Promise<void>;
@@ -34,10 +34,15 @@ interface PluginContext {
   config: IConfigService;
   contributions: ContributionAccessor;
   http: IPluginHttpRouter;
-  require(moduleName: string): unknown;
-  reportProgress?(stage?: string, message?: string): void;
+  require(moduleName: string): any;
 }
 ```
+
+> ⚠️ **没有 `reportProgress`**：`reportProgress?(stage?, message?)` **不在** `PluginContext` 的任何类型定义中。
+> 全仓库唯一出现处是 `packages/core/worker-runtime/worker-manager.ts` 构建 worker 引导期上下文对象时**运行时注入**的字段（内部向 `parentPort` 发 `activate-progress` 消息），它由宿主在 Worker 内现场组装，不经过 `PluginContext` 类型。
+> 因此在 `activate(ctx: PluginContext)` 中直接写 `ctx.reportProgress(...)` **会类型报错**（inline 模式下连该字段都不存在）。需要跨模式上报进度，请改用已类型化的 `ctx.log.info(...)`。
+
+> `services` 下的 `pointsDimension` 与 `pointsLedger` 类型为 `| null`，调用前需判空。
 
 ### `FrontendPluginContext`（前端）
 
@@ -70,7 +75,7 @@ interface FrontendPluginContext {
 | `ICapabilityService`        | 权限校验（grant / revokeAll / check）                                                                                                                                                                                                                                                                                |
 | `IProcessService`           | 受控后台进程（spawn / kill / registerHandler / registerInterval）                                                                                                                                                                                                                                                    |
 | `IStorageService`           | 键值存储（get / set / delete）                                                                                                                                                                                                                                                                                       |
-| `IAIService`                | AI 文本生成（generateText）                                                                                                                                                                                                                                                                                          |
+| `IAIService`                | AI 文本生成：`generateText`（必选）+ 5 个可选成员——`registerAIContextProvider?` / `unregisterAIContextProvider?`（AI 上下文切片提供者，**仅 inline 可用**，回调函数无法跨 Worker 序列化边界）；`registerAIPersona?` / `listAIPersonas?` / `unregisterAIPersona?`（AI Agent 角色模板，Inline / Worker 均可，builtin 角色不可注销）                                                                                                                                                                                                                                                |
 | `ISemesterGradeService`     | 学期成绩（saveSemesterGrade）                                                                                                                                                                                                                                                                                        |
 | `IAuthSessionBridgeService` | 统一安全会话桥接（createSession，用于 LTI 1.3 / SSO）                                                                                                                                                                                                                                                                |
 | `IPointsDimensionRegistry`  | 积分维度（registerDimension / getDimension / listDimensions）                                                                                                                                                                                                                                                        |

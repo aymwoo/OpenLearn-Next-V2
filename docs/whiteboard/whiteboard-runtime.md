@@ -2,6 +2,9 @@
 
 实现位于 `src/features/whiteboard/`，核心入口为 `InteractiveWhiteboard.tsx`。
 
+> 📌 本文为白板**运行时架构**唯一真源。相关文档：[Canvas 对象模型](canvas-object-model.md)、
+> [白板子系统机制（渲染器注册、html-applet、防抖自动保存、公平抽问）](../architecture/whiteboard-subsystems.md)。
+
 ## 架构概述
 
 ```
@@ -36,39 +39,28 @@ InteractiveWhiteboard.tsx (主组件)
 
 ### Konva 图元渲染 (`rendererRegistry`)
 
-位于 `src/features/whiteboard/rendering-engine/registry/`。所有可渲染到 Konva `<Stage>` 的图元（文本、形状、图片等）通过 `rendererRegistry.register(type, renderer)` 注册。
+平台实际使用的是 `src/features/whiteboard/rendering-engine/registry/renderer-registry.ts` 的 `rendererRegistry`（由 `InteractiveWhiteboard.tsx` 从 `./rendering-engine/index.js` 导入）。所有可渲染到 Konva `<Stage>` 的图元通过 `rendererRegistry.registerRenderer(renderer)` 注册 —— 签名接收**单个 `IRenderer<T>` 对象**（含 `type` 与 `render` 字段），不是 `(type, renderer)` 两参数。
+
+> ⚠️ **同名双份**：`src/features/whiteboard/canvas-model/registry/renderer-registry.ts` 另有一份同名导出 `rendererRegistry`，其 `registerRenderer(type, renderer)` 是**两参数**签名且渲染器为 React 组件。两者互不相干，按 `type` 值分派时用的是 `rendering-engine` 那份；`teaching-object/plugin-sdk/teaching-plugin-sdk.ts` 的 `registerRenderer(type, renderer)` 会包装后转调 `rendering-engine` 版本。
 
 ### 全屏渲染器 (`fullscreenRendererRegistry`)
 
 **文件**：`src/features/whiteboard/fullscreen/FullscreenRendererRegistry.tsx`
 
-为白板组件类型注册自定义全屏视图。当用户点击组件标题栏的最大化按钮时，系统优先查表；若无匹配，自动使用智能默认渲染器（按字段优先级检测 `data` 内容）。
+为白板组件类型注册自定义全屏视图。当用户点击组件标题栏的最大化按钮时，系统先查表（`getEffectiveRenderer`）；若无匹配，回落到 `FullscreenOverlay` 的 `renderContent` 宿主注入路径或 `DefaultFullscreenRenderer` 智能默认渲染器（按字段优先级检测 `data` 内容）。
 
 **API**：
 
 ```typescript
 import { fullscreenRendererRegistry } from '@/features/whiteboard/fullscreen';
 
-fullscreenRendererRegistry.register(type, (props) => <JSX />);
+fullscreenRendererRegistry.register(type, (props) => <JSX />, pluginId);
 // props: { elementType, data, onClose, containerSize, lessonId }
 ```
 
-全屏 overlay 通过 `createPortal` 渲染到 `document.body`，`fixed` 定位覆盖整个浏览器视口。默认渲染器按优先级自动识别：`code → markdown → question → text → url → src → coursewareUuid → equation → JSON`。
+> `getEffectiveRenderer` 只接受**带 `pluginId` 的插件注册**或 `registerHostBuiltin` 标记的条目；无 `pluginId` 的 `register` 调用**不生效**（`InteractiveWhiteboard.tsx` 目前只用 `registerHostBuiltin('quiz', QuizFullscreenView)` 标记了一个宿主内置渲染器）。这是为避免「逐类型手写的第二套实现」与画布内真实组件漂移而设。
 
-### 属性编辑器 (`propertyEditorRegistry`)
-
-**文件**：`src/features/whiteboard/properties/PropertyEditorRegistry.tsx`
-
-为白板组件类型注册自定义属性编辑器，在右侧属性面板中取代硬编码的 type-specific 编辑区。选中画布组件时触发。
-
-**API**：
-
-```typescript
-import { propertyEditorRegistry } from '@/features/whiteboard/properties';
-
-propertyEditorRegistry.register(type, (props) => <JSX />);
-// props: { elementId, elementType, data, updateData, lessonId, onClose }
-```
+全屏 overlay 通过 `createPortal` 渲染到 `document.body`，`fixed` 定位覆盖整个浏览器视口。默认渲染器按 `PRIORITY_FIELDS` 优先级自动识别：`text → markdown → code → question（需同时有 options）→ equation → url → src → coursewareUuid`，全部未命中则回落 JSON 预览。
 
 `updateData(partial)` 立即触发布局态更新 + 持久化到后端。通用属性（x/y/宽/高）和删除按钮由平台统一管理，插件编辑器接管剩余区域。
 
@@ -92,12 +84,16 @@ propertyEditorRegistry.register(type, (props) => <JSX />);
 
 1. **统一事件入口**：iframe postMessage、widget 行为、手动录入都不需要知道谁会订阅它们
 2. **可订阅 + 可重放**：教师面板 / AI 助手 / 调试面板能实时拿到事件，也能回放最近 N 条历史
-3. **不依赖后端**：纯前端队列（实时），同时兼容 `frontendEventBus` 转发到服务端 EventBus
+3. **不依赖后端**：纯前端队列（实时）；`ingest()` 会同步推一份到进程内 `frontendEventBus`，但**不会跨端**（见下方「数据流」）
 
 ### 核心 API
 
 ```typescript
-import { whiteboardEventSlot, useWhiteboardEvents } from '@/features/whiteboard/events';
+import {
+  whiteboardEventSlot,
+  useWhiteboardEvents,
+  useWhiteboardEventListener,
+} from '@/features/whiteboard/events';
 
 // 主动发送事件（widget / 手动代码）
 whiteboardEventSlot.ingest({
@@ -152,10 +148,15 @@ HtmlAppletFrame.messageHandler
    ↓ ingest({ source:'iframe.postMessage', type:'courseware.submitted', ... })
 WhiteboardEventSlot
    ├─→ 本地订阅者 (TeacherPanel / AI / 调试面板)
-   ├─→ frontendEventBus.publish (兼容 SOCKET_FORWARD_PREFIXES)
-   │      └─→ socket 转发 → server EventBus
-   └─→ 可选 IndexedDB 持久化 (默认关闭)
+   ├─→ frontendEventBus.publish (仅本进程内，不跨端)
+   └─→ 可选 IndexedDB 持久化 (persist 默认 false)
 ```
+
+> ⚠️ **不跨端**：`frontendEventBus`（`src/services/event-bus.ts` 的 `FrontendEventBus`）**只通知同浏览器进程内的订阅者**。该文件头部注释明确记载：曾有一个「把 `whiteboard.` / `courseware.` / `quiz.` / `rollcall.` 前缀转发到服务端」的 `setSocketBridge()` 注入点，但**全仓库零调用**，那段转发是死代码，已删除。因此事件槽产出的事件**不会**经 socket 到达服务端 EventBus。
+>
+> 需要真正跨端的信号走两条**已接线**的通路：
+> - 状态变更 → REST/命令总线（`PUT /api/lessons/:id/whiteboard/:elementId` → `whiteboard.update` 命令 → 服务端 `eventBus` → `server/realtime-bridge.ts` 的 `setupRealtimeBridge` 广播）
+> - 即时通知 → 直接用 socket（插件可用 `ctx.services.socketService`）
 
 ### 扩展：自定义事件源
 
@@ -167,10 +168,16 @@ WhiteboardEventSlot
 | -------------- | ------------------------------ | ------------------------------ | ----------------------- |
 | `text`         | `Text`+`Html`                  | 智能默认（text 字段）          | 文本/字体/颜色          |
 | `quiz`         | `Html`（题目标题+选项）        | 注册表（quiz renderer）        | 问题/选项/正确答案      |
-| `timer`        | `Html`（数码管计时）           | 注册表（timer renderer）       | 时长/标签               |
-| `assignment`   | `Html`（作业卡片）             | 注册表（assignment renderer）  | 标题/描述               |
+| `assignment`   | `Html`（作业卡片）             | 宿主注入真实组件               | 标题/描述               |
 | `code-sandbox` | `CodeSandboxWrapper`（IFrame） | 智能默认（code 字段）          | 代码编辑                |
-| `html-applet`  | `<iframe>`（Bridge SDK）       | 注册表（html-applet renderer） | UUID/资源/代码/ZIP 上传 |
+| `html-applet`  | `<iframe>`（Bridge SDK）       | 宿主注入真实组件               | UUID/资源/代码/ZIP 上传 |
+| `math-graph`   | `MathGraphWrapper`（Canvas）   | 智能默认（equation 字段）      | 公式输入                |
+| `presentation` | `RevealPresentationWrapper`    | 智能默认（markdown 字段）      | Markdown 编辑           |
+| `rollcall`     | `RollCallWrapper`（点名面板）  | 宿主注入真实组件               | 点名按钮                |
+| `plugin-*`     | `PluginCardRenderer`           | 可注册/智能默认                | 可注册/通用属性         |
+
+> `hello-world`（`HelloWorldWrapper`）为示例组件，无对应的全屏与属性编辑器注册。
+> 全屏列的「宿主注入真实组件」指 `FullscreenOverlay` 的 `renderContent` 回调 —— 见 `FullscreenRendererRegistry.tsx` 的 `getEffectiveRenderer`：只有**插件注册**（带 `pluginId`）或显式 `registerHostBuiltin`（当前仅 `quiz`）的渲染器才从注册表生效，其余走宿主注入的真实组件路径。
 
 ## iframe postMessage 监听（`HtmlAppletFrame`）
 
@@ -193,7 +200,3 @@ WhiteboardEventSlot
 ```
 
 同时 `lms-bridge.ts` 的全局监听器（`useLmsBridge(session)`）处理 `LMS_SUBMIT` 时也会同步写入事件槽，source 标记为 `iframe.bridge`（与 `HtmlAppletFrame` 局部监听互补，不冲突）。
-| `math-graph` | `MathGraphWrapper`（Canvas） | 智能默认（equation 字段） | 公式输入 |
-| `presentation` | `RevealPresentationWrapper` | 智能默认（markdown 字段） | Markdown 编辑 |
-| `rollcall` | `RollCallWrapper`（点名面板） | 注册表（rollcall renderer） | 点名按钮 |
-| `plugin-*` | `PluginCardRenderer` | 可注册/智能默认 | 可注册/通用属性 |

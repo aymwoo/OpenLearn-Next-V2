@@ -3,6 +3,9 @@
 > 范围：`whiteboard_elements` 的写入路径，及其对学生端可见性的影响。
 > 结论基于 2026-09-30 的代码走查，每条结论均标注可复核的代码位置。
 > 触发背景：随机点名（`rollcall`）教师端已抽中学生、学生端组件仍显示旧状态。
+> **当前状态（2026-10-03 复核）**：§4 的 P0 / P0.5 / P1 / P2 / P3 均已实施，本文档结论仍然成立
+> （死通道确已删除、`LAYOUT_ONLY_ELEMENT_TYPES` 确在 `server/event-routing.ts`、
+> `CodeSandboxWrapper` / `MathGraphWrapper` 的回填 effect 确在）。§4 P2 的重复草稿段已合并为单一「已实施」小节。
 
 ---
 
@@ -195,22 +198,6 @@ publish(event: PlatformEvent): Promise<void> {
 该隐患原本已存在于 `element_drawn`，本次扩大房间范围会放大它，因此补了
 `isRealLessonRoom()` 守卫：伪课节只投自己的房间。
 
-### P2 — 让组件消费 `data`，而不是缓存它
-
-本次已修 `RollCallWrapper`。走查发现**另有两处确认为同一类 bug**（见 §2.1），建议一并修：
-
-- `src/features/whiteboard/widgets/MathGraphWrapper.tsx:223` —— `equation`
-- `src/features/whiteboard/widgets/CodeSandboxWrapper.tsx:44` —— `code`
-
-修法照抄 `RevealPresentationWrapper.tsx:72-83` 的既有范式（它是仓库里唯一做对了的样本）。审计方法：
-
-```bash
-# ① 找出所有把 data 语义字段复制进 useState 的位置
-grep -n "useState(.*data\." src/features/whiteboard/widgets/*.tsx
-# ② 对每一处，确认是否存在对应的回填 effect（缺一即 bug）
-grep -n "useEffect" src/features/whiteboard/widgets/<File>.tsx
-```
-
 ### P2 — 让组件消费 `data`，而不是缓存它（✅ 已实施）
 
 修 `RollCallWrapper` 时走查发现另有两处同类 bug，均已修复：
@@ -252,17 +239,31 @@ grep -n "useEffect" src/features/whiteboard/widgets/<File>.tsx
 
 ## 6. 复核命令
 
+> 以下命令均**已排除注释行与测试文件**（注释里保留了 `setSocketBridge` 的历史说明，
+> `__tests__/event-bus.test.ts` 则**故意**断言该 API 不存在 —— 两者都不是「死通道复活」）。
+> 裸 grep 会把它们一并匹配进来，产生误报。
+
 ```bash
-# 死通道已删除（应无输出）
-grep -rn "setSocketBridge\|SOCKET_FORWARD_PREFIXES" --include=*.ts --include=*.tsx . | grep -v node_modules
+# ① 死通道已删除（应无输出）
+#    过滤器依次剔除：依赖目录 → 测试文件 → // 与 /* */ 注释行
+grep -rn "setSocketBridge\|SOCKET_FORWARD_PREFIXES" --include=*.ts --include=*.tsx . \
+  | grep -v node_modules \
+  | grep -vE "__tests__|\.test\.|\.spec\." \
+  | grep -vE "^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)"
 
-# whiteboard-event 仍无生产调用方（当前刷新由 whiteboard.update 路由承担）
-grep -rn "emit('whiteboard-event'" --include=*.ts --include=*.tsx . | grep -v node_modules
+# ② 回归测试确实在守护「API 不存在」（应命中 event-bus.test.ts 的断言）
+grep -rn "setSocketBridge" src/services/__tests__/event-bus.test.ts
 
-# 布局型/语义型清单（唯一的广播策略真源）
-grep -n -A 14 "LAYOUT_ONLY_ELEMENT_TYPES" server/event-routing.ts
+# ③ whiteboard-event 仍无生产调用方（应无输出；仅 presence.test.ts 用 socket.trigger 触发）
+grep -rn "emit('whiteboard-event'" --include=*.ts --include=*.tsx . \
+  | grep -v node_modules \
+  | grep -vE "__tests__|\.test\.|\.spec\."
 
-# 组件缓存 data 的候选（须逐个确认有无回填 effect，见 §4 P2）
+# ④ 布局型/语义型清单（唯一的广播策略真源）——锚定定义处，避免连带匹配 :220 的使用点
+grep -n -A 12 "^const LAYOUT_ONLY_ELEMENT_TYPES" server/event-routing.ts
+
+# ⑤ 组件缓存 data 的候选（须逐个确认有无回填 effect，见 §4 P2）
+#    注：RevealPresentationWrapper 是**已知误报**——它有回填 effect
 grep -n "useState(.*data\." src/features/whiteboard/widgets/*.tsx
 ```
 

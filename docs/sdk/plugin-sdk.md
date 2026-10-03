@@ -31,7 +31,7 @@ import {
 
 #### `ctx.services`
 
-包含 7 个受控内核核心服务的预解析代理：
+包含 **9 个**受控内核服务的预解析代理：
 
 - **`commandBus`**: `ICommandBusService` —— 注册与触发系统命令。
 - **`eventBus`**: `IEventBusService` —— 订阅与发布跨系统事件。
@@ -40,6 +40,12 @@ import {
 - **`processManager`**: `IProcessService` —— 管理受控后台进程。
 - **`storage`**: `IStorageService` —— 插件专属键值存储。
 - **`ai`**: `IAIService` —— 调用大语言模型（基于系统配置的 OpenAI 兼容 Provider）。
+- **`pointsDimension`**: `IPointsDimensionRegistry` | `null` —— 积分维度注册表，供插件声明自定义积分维度。
+- **`pointsLedger`**: `IPointsLedgerService` | `null` —— 积分账本服务，原子记账（发放/扣减 + 幂等键）。
+
+> Token 常量分别为 `IPointsDimensionRegistryToken` / `IPointsLedgerServiceToken`（`packages/core/di/interfaces.ts`）。
+>
+> ⚠️ **后两个服务是「可降级」的**：宿主只在 `serviceRegistry` 中确实注册了对应实现时才注入（`packages/core/plugin-host/context-builder.ts` 用 `tryResolve` 探测），否则该字段为 `null`。**插件必须在使用前做判空**，例如 `ctx.services.pointsLedger?.award(...)`，不能假设它一定存在。
 
 #### `ctx.pluginId`
 
@@ -55,7 +61,12 @@ import {
 
 - **`ensureTable(tableName: string, schema: string): Promise<void>`**: 保证表结构存在（幂等）。
 - **`table(tableName: string): string`**: 获取带前缀的完整物理表名。
-- **`migrate(targetVersion: number, upgradeFn: (db: any) => void): Promise<void>`**: 声明式版本迁移。
+- **`dropAllTables(): Promise<void>`**: 删除该插件创建的所有表。**通常由 `PluginHost` 在 uninstall 时自动调用**，一般无需插件手动调用；仅在插件自己的「清空数据」功能中才有意义。
+- **`migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>`**: 声明式版本迁移。`upgradeFn` **可以是同步或异步**（返回 `Promise<void> | void`），但 `migrate` 本身**一定返回 `Promise<void>`，必须 `await`**。版本号记录在 `plugin_migrations` 表，插件重启后不重复执行已应用的版本。
+
+  > ⚠️ worker 执行模式下 `db` 是 RPC 代理（不是 better-sqlite3 实例），**没有 `transaction()`**。需要事务时先探测再调用：`typeof db.transaction === 'function' ? db.transaction(fn)() : fn(db)`。平台自身代码就这么做（见 `server/utils/auto-record-score.ts` 的 `promoteAttemptToGrade`）。
+  >
+  > ⚠️ 表名前缀在两种执行模式下**相反**：inline 用 `plugin_{pluginId}_`（DB 行 UUID），worker 用 `plugin_{manifestId}_`。详见[插件数据库 API](../reference/plugin-database-api)。
 
 #### `ctx.log`
 
@@ -85,22 +96,52 @@ import {
 - **`ctx.http.get(path, handler)`**: 注册 HTTP GET 请求处理函数。
 - **`ctx.http.post(path, handler)`**: 注册 HTTP POST 请求处理函数。
 - **`ctx.http.put(path, handler)`**: 注册 HTTP PUT 请求处理函数。
-- **`ctx.http.delete(path, handler)`**: 注册 HTTP DELETE 请求处理函数。
 - **`ctx.http.patch(path, handler)`**: 注册 HTTP PATCH 请求处理函数。
-- **`ctx.http.stream(path, handler)`**: **（v0.3.12 新增）** 注册 Server-Sent Events (SSE) 流式响应端点（支持大模型流式生成，内置反向中断与看门狗超时保护）。
+- **`ctx.http.delete(path, handler)`**: 注册 HTTP DELETE 请求处理函数。
+- **`ctx.http.route(method, path, handler)`**: 注册任意 HTTP 动词的处理函数（动词在运行时传入）。
+- **`ctx.http.stream(path, handler)`**: **（v0.3.12 新增）** 注册 Server-Sent Events (SSE) 流式响应端点（**默认同时匹配 GET 与 POST**，内置反向中断与看门狗超时保护）。
+- **`ctx.http.stream(method, path, handler)`**: 同上，但指定单一 HTTP 动词。
 
-> 注意：路由器没有 `all()` 方法；流式端点另有 `ctx.http.stream(method, path, handler)` 双参数重载可同时匹配 GET/POST。
+> 注意：路由器**没有** `all()` 方法；不限动词的注册请用 `route(method, path, handler)`（动词由你显式给出）或 `stream` 的双参数重载。
+>
+> 完整签名见 `packages/core/plugin-host/types.ts` 的 `IPluginHttpRouter`。所有 handler 均为**同步返回**（返回 `PluginApiResponse` 或普通对象），异步逻辑请自行在 handler 内 `await`。
 
 ##### `PluginApiRequest` 请求对象接口：
 
-- `method: string`: HTTP 动词（`GET`, `POST` 等大写字符串）。
-- `path: string`: 匹配的相对路径。
-- `params: Record<string, string>`: 动态路由路径参数提取（如 `:studentId`）。
-- `query: Record<string, any>`: URL 查询参数。
-- `headers: Record<string, string>`: 请求头过滤只读字典。
-- `body: any`: 解析后的只读 JSON 请求体（或 null）。硬限制 ≤ 1MB。
-- `ip: string`: 客户端真实 IP。
-- `actor: PluginApiActor`: 当前调用方身份上下文（`actorId`, `userId`, `username`, `role`, `permissions`）。
+定义于 `packages/core/plugin-host/types.ts` 的 `PluginApiRequest<TBody, TQuery>`，SDK 只导出 `PluginApiRequest` 本身，**其 `actor` 字段是内联匿名对象类型、没有具名类型**。要写类型标注请用索引访问：
+
+```ts
+import type { PluginApiRequest } from '@openlearn/plugin-sdk';
+type Actor = PluginApiRequest['actor'];   // ✅ 正确写法
+// import type { PluginApiActor } from '@openlearn/plugin-sdk';  // ❌ SDK 未导出该名字，会编译报错
+```
+
+| 字段      | 类型                                                        | 说明                                        |
+| --------- | ----------------------------------------------------------- | ------------------------------------------- |
+| `method`  | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE' \| string`  | HTTP 动词（大写）                           |
+| `path`    | `string`                                                     | 插件命名空间下的相对路径（如 `/students/101`） |
+| `params`  | `Record<string, string>`                                     | 动态路由提取参数（如 `{ id: '101' }`）       |
+| `query`   | `Record<string, string \| string[]>`                        | 解析后的查询参数                            |
+| `headers` | `Record<string, string>`                                     | **经白名单清洗后**的安全请求头（只读）      |
+| `body`    | `TBody`（默认 `unknown`）                                    | 已解析的请求体；实际请求体上限由全局 `express.json({ limit: '10mb' })`（`server.ts`）决定 |
+| `ip`      | `string`                                                     | 客户端 IP                                   |
+| `actor`   | 内联匿名对象（只读）                                         | 宿主注入的发起者上下文，**不可伪造**         |
+
+`actor` 的完整形状：
+
+```ts
+{
+  readonly actorId: string;
+  readonly userId?: string;
+  readonly username?: string;
+  readonly role: 'administrator' | 'teacher' | 'student' | 'anonymous' | string;
+  readonly permissions?: string[];
+}
+```
+
+> ⚠️ **`role` 的联合里带了 `| string`**。这意味着 `role` 实际上是「任意字符串 + 已知值提示」——TypeScript 不会帮你把任意 role 判错，判角色必须**显式比对字面量**（`if (req.actor.role === 'administrator')`），不能靠类型收窄。已知值有四个：`administrator` / `teacher` / `student` / `anonymous`。
+>
+> ⚠️ 平台内部还存在 `admin` 这个别名，`requireAuth('admin')` 会被归一化为 `administrator`，所以从 actor 侧读到的一律是 `administrator`。
 
 ##### `PluginApiResponse` 返回对象接口：
 
