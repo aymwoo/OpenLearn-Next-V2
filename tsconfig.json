@@ -33,6 +33,7 @@
     "storage",
     "coverage",
     "v2_plugins",
+    "plugins",
     "packages/core/esm-loader/__tests__/fixtures",
     "packages/plugin-sdk/scaffold/templates",
     "packages/core/__tests__/lti-provider-plugin.test.ts"

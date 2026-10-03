@@ -11,27 +11,18 @@ const fromRepoRoot = (relativePath: string): string => fileURLToPath(new URL(rel
 export default defineConfig({
   test: {
     include: [
-      'packages/core/di/__tests__/**/*.test.ts',
-      'packages/core/esm-loader/__tests__/**/*.test.ts',
-      'packages/core/plugin-host/__tests__/**/*.test.ts',
-      'packages/core/worker-runtime/__tests__/**/*.test.ts',
-      'packages/plugins/__tests__/**/*.test.ts',
-      'packages/core/event-bus/__tests__/**/*.test.ts',
-      'packages/core/lesson-engine/__tests__/**/*.test.ts',
-      'packages/core/__tests__/**/*.test.ts',
-      'packages/plugin-sdk/__tests__/**/*.test.ts',
-      'packages/activity-ecosystem/__tests__/**/*.test.ts',
-      'server/__tests__/**/*.test.ts',
-      'v2_plugins/**/__tests__/**/*.test.ts', // 目录不存在时自动匹配为空；保留以支持未来 v2 插件仓库
-      'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
-      'src/mfe/__tests__/**/*.test.{ts,tsx}',
-      'src/features/**/__tests__/**/*.test.{ts,tsx}',
-      'src/components/**/__tests__/**/*.test.{ts,tsx}',
-      'src/utils/__tests__/**/*.test.{ts,tsx}',
-      'src/services/__tests__/**/*.test.{ts,tsx}',
-      'src/store/__tests__/**/*.test.{ts,tsx}',
-      'src/hooks/**/__tests__/**/*.test.{ts,tsx}',
-      'src/context/**/__tests__/**/*.test.{ts,tsx}',
+      // 广覆盖：任何 `__tests__` 下的 *.test.ts(x) 都应被执行。
+      //
+      // 此前这里是 20 条逐目录白名单，对**当时已存在**的目录覆盖是完整的
+      // （实测两种配置都收集 324 个文件）。但它是"新增目录必须手动登记"的
+      // 模式：把新测试放进未登记的目录（如 packages/core/ai-capability/__tests__/）
+      // 时，测试文件会被静默跳过 —— 写在磁盘上、tsc 能过、CI 全绿，唯独它不跑。
+      // 这类盲区没有任何报错，只能靠人发现。
+      //
+      // 改为通配后，新增子系统目录无需再改本文件。
+      'packages/**/__tests__/**/*.test.{ts,tsx}',
+      'server/**/__tests__/**/*.test.{ts,tsx}',
+      'src/**/__tests__/**/*.test.{ts,tsx}',
     ],
 
     // CHANGELOG[v0.3.21]：lti-provider-plugin.test.ts 引用 v2_plugins/*/*源码、

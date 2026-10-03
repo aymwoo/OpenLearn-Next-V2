@@ -55,6 +55,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "db:backup": "npx tsx scripts/backup-db.ts",
+    "db:restore": "npx tsx scripts/restore-db.ts",
     "db:clean-test-data": "node scripts/cleanup-test-data.mjs",
     "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run npm run dev to regenerate.\""
   },
