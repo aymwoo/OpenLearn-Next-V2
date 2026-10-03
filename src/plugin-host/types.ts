@@ -47,6 +47,7 @@ export interface FrontendPluginManifest {
   version: string;
   description?: string;
   author?: string;
+  icon?: string;
   capabilitiesProposed?: string[];
   classroomTools?: Array<{
     id: string;
@@ -63,6 +64,7 @@ export interface FrontendPluginInfo {
   version: string;
   state: PluginState;
   executionMode: 'inline' | 'worker' | 'legacy';
+  icon?: string;
   /**
    * 插件 manifest 声明的 `capabilitiesProposed`（字符串数组）。
    *
@@ -174,7 +176,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 export interface ExtensionPointConfig {
   id: string;
   label: string;
-  icon?: string;
+  icon?: string | React.ComponentType<{ size?: number; className?: string }>;
   component: () => Promise<{ default: React.ComponentType<any> }>;
   position?: number;
   pluginId: string;

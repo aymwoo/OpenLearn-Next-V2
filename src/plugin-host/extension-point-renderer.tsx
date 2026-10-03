@@ -20,6 +20,7 @@ import { Loader2, Puzzle } from 'lucide-react';
 import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
+import { PluginIconRenderer } from '../components/PluginIconRenderer';
 import type { ExtensionSlot } from './types';
 
 // ── LoadingSkeleton ──────────────────────────────────────────────────────────
@@ -286,6 +287,7 @@ export function ExtensionPointRenderer({
   // Hooks 顺序红线：全部无条件调用后再走早退分支（此前早退先于 hooks，
   // 触发 rules-of-hooks 存量违规）
   const host = useOptionalPluginHost();
+  const activePlugins = usePluginHostStore((s) => s.activePlugins);
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
@@ -312,6 +314,8 @@ export function ExtensionPointRenderer({
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.classActiveTab === tabValue;
           const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
           return (
             <button
               key={`${ext.pluginId}/${ext.id}`}
@@ -326,7 +330,7 @@ export function ExtensionPointRenderer({
               }`}
               title={label}
             >
-              <Puzzle size={12} />
+              <PluginIconRenderer icon={icon} size={12} className="shrink-0" alt={label} />
               <span>{label}</span>
             </button>
           );
@@ -365,23 +369,29 @@ export function ExtensionPointRenderer({
   // directly from extension metadata, bypassing plugin components entirely.
   // This guarantees pixel-perfect styling consistency with system NavButton.
   if (slot === 'teacher.tab' && slotProps?.renderType === 'button') {
+    const sortedExtensions = [...extensions].sort((a, b) => (a.position ?? 100) - (b.position ?? 100));
     return (
       <>
-        {extensions.map((ext) => {
+        {sortedExtensions.map((ext) => {
           const tabValue = `${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.teacherTab === tabValue;
           const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
           return (
             <button
               key={`${ext.pluginId}/${ext.id}`}
               onClick={() => slotProps?.setTeacherTab?.(tabValue)}
-              className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${
-                isActive ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
+              id={`nav_btn_${tabValue.replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+              className={`flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium rounded-xl cursor-pointer ${
+                isActive
+                  ? 'bg-primary-theme-light text-primary-theme font-bold'
+                  : 'text-muted hover:bg-surface-secondary hover:text-main'
               } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : ''}`}
               title={label}
             >
-              <Puzzle size={20} className="shrink-0" />
-              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block'}>{label}</span>
+              <PluginIconRenderer icon={icon} size={18} className="shrink-0" alt={label} />
+              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
             </button>
           );
         })}

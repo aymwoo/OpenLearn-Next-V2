@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **插件系统与左侧导航栏自定义图标支持（v0.5.1）**：
+  - **Manifest 与运行时动态图标规范**：
+    - `packages/core/esm-loader/manifest-schema.ts`：在 `manifestSchema` 与 `manifestSchemaV3` 中显式扩展 `icon`、`description` 与 `author` 字段校验；
+    - `src/plugin-host/types.ts`：为 `FrontendPluginManifest` 与 `FrontendPluginInfo` 增加 `icon?: string`，并将 `ExtensionPointConfig.icon` 扩展为 `string | React.ComponentType`；
+    - `src/plugin-host/plugin-host.ts`：在安装与激活插件时自动保留并传递 manifest 的 `icon` 属性至全局状态；
+  - **统一多源插件图标渲染器（`PluginIconRenderer`）**：
+    - 新增 `src/components/PluginIconRenderer.tsx`：自适应支持 Lucide 图标名称映射（支持 kebab-case / PascalCase）、Emoji 符号、图片/SVG 资源 URL 与 React 组件，并具备默认 `<Puzzle />` 安全降级；
+  - **左侧导航栏与 Tab 扩展槽点对齐**：
+    - `src/plugin-host/extension-point-renderer.tsx`：升级 `teacher.tab` 与 `class.tab` 的按钮形态渲染逻辑，优先消费 `ext.icon`，次级自动继承 `pluginInfo.icon`，对齐系统 `NavButton` 主题色与 18px 尺寸，并按 `position` 升序排列；
+  - **文档与示例补充**：
+    - `docs/tutorials/plugin-development-tutorial.md`：新增 § 6.5《插件自定义图标与左侧导航栏展示》，提供配置途径与完整示例代码；
+    - `docs/reference/plugin-ui-extension-slots.md`：更新 `teacher.tab` 按钮形态槽位关于图标与排序的最新规范。
+
 - **容器化部署、运维凭证安全与前端状态单一真源修复（P0-2 / P0-3 / P0-4 / P1-1）**：
   - **Dockerfile & docker-compose 容器化构建加固（P0-2）**：
     - 将 Dockerfile 构建阶段升级为使用 pnpm 锁文件机制（`pnpm install --frozen-lockfile`）并引入 Alpine 原生模块编译工具链；

@@ -241,7 +241,7 @@ React.createElement(resolveExtensionComponent(ext), {
 
 - **`student.view`**：`src/features/student/StudentDashboardPanel.tsx` 调用点额外注入 `{ studentId }`（注意 `src/features/student-workspace/widgets/student-default-widgets.tsx` 的 `StudentPluginWidgets` 调用点不注入 `studentId`）。
 - **`teacher.tab`**：
-  - `renderType === 'button'`（`src/plugin-host/extension-point-renderer.tsx`）：渲染器**不渲染插件组件**，而是自行合成 `<button>`。插件组件被绕过。
+  - `renderType === 'button'`（`src/plugin-host/extension-point-renderer.tsx`）：渲染器**不渲染插件主面板组件**，而是自行合成与系统内置 `NavButton` 视觉一致的侧边栏导航按钮。v0.5.1 起通过 `PluginIconRenderer` 解析并呈现插件自定义图标（优先取 `ext.icon`，次取 manifest `icon`，支持 Lucide 图标名、Emoji 符号、图片 URL 与 React 组件），且按 `position` 升序排列。
   - `renderType === 'panel'`（`src/components/PluginTabPanel.tsx`）：组件收到 `{ renderType: 'panel', lessonId, classId }`。
 - **`classroom.tool`**（`src/features/whiteboard/components/WhiteboardToolbar.tsx`）：`{ lessonId, classId, route? }`。
 - **`teacher.dashboard.widget`**（`src/features/teacher/Dashboard.tsx`）：`{ lessonId, classId, route? }`（可见性由 `dashboardVisibility` store 按插件控制）。

@@ -1404,7 +1404,67 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 
 **所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
-### 6.5 invokeCommand（自 V2.5 起可用）
+### 6.5 插件自定义图标与左侧导航栏展示（v0.5.1+）
+
+每个插件在开发时，都可以设置专属于自己的不同图标，并直接展示在系统左侧边栏导航（`NavigationSidebar`）的「扩展应用」列表中。
+
+#### 1. 配置途径与优先级
+系统支持声明式配置与动态编程式配置，优先级如下：
+1. **动态注册传参（最高优先级）**：调用 `ctx.ui.registerExtensionPoint('teacher.tab', { icon: 'BookOpen', ... })` 时传入；
+2. **Manifest 贡献点声明**：在 `manifest.json` 的 `contributes['teacher.tab'][i].icon` 中配置；
+3. **Manifest 插件主图标**：在 `manifest.json` 根级声明 `"icon": "BookOpen"`；
+4. **默认安全回退**：若未配置或解析失败，自动回退到系统标准的 `<Puzzle />` 图标。
+
+#### 2. 支持的图标格式
+- **Lucide 图标名称（推荐）**：支持常用的 Lucide 图标字符串（PascalCase 或 kebab-case 均可，如 `'BookOpen'`, `'Award'`, `'BarChart'`, `'GraduationCap'`, `'Calculator'`, `'FileText'`, `'HelpCircle'` 等）。
+- **Emoji 符号**：直接使用 Emoji 字符（如 `'📚'`, `'🧪'`, `'📊'`, `'⚡'`, `'🎯'`）。
+- **图片 / SVG 资源路径**：以 `http://`、`https://`、`data:image/` 或 `/` 开头的 URL 字符串。
+- **React 组件**：在前端代码中直接作为组件传入（如 `import { Award } from 'lucide-react'; ctx.ui.registerExtensionPoint('teacher.tab', { icon: Award })`）。
+
+#### 3. 示例代码
+
+**方式 A：前端动态注册时指定图标与展示排序：**
+```typescript
+export default {
+  activate: async (ctx: FrontendPluginContext) => {
+    ctx.ui.registerExtensionPoint('teacher.tab', {
+      id: 'quiz-hub',
+      label: '随堂测验中心',
+      icon: 'BookOpen', // 指定 Lucide 图标名，或使用 Emoji '📚'
+      position: 15,     // 决定在左侧导航栏扩展应用中的排列次序（数值越小越靠前）
+      component: () => import('./QuizHubView'),
+    });
+  },
+};
+```
+
+**方式 B：在 `manifest.json` 中配置：**
+```json
+{
+  "id": "@openlearn/plugin-quiz-hub",
+  "name": "随堂测验中心",
+  "version": "1.0.0",
+  "main": "index.js",
+  "icon": "BookOpen",
+  "contributes": {
+    "teacher.tab": [
+      {
+        "id": "quiz-hub",
+        "label": "随堂测验中心",
+        "icon": "BookOpen",
+        "position": 15
+      }
+    ]
+  }
+}
+```
+
+#### 4. 侧边栏交互与视觉特性
+- **与系统内置导航无缝对齐**：采用相同的 18px 矢量比例、圆角、悬停交互与主题动态变色；
+- **折叠态居中展示**：当用户点击侧边栏收起按钮时，文本自动隐藏，插件自定义图标居中对齐，鼠标悬浮时展示带有插件名称的浮窗提示（Tooltip）；
+- **按 `position` 升序排列**：多个已激活的第三方插件将依据开发者设置的 `position` 数值从小到大平滑排序。
+
+### 6.6 invokeCommand（自 V2.5 起可用）
 
 前端插件可以通过 `ctx.invokeCommand()` 调用后端已注册的 Command Handler：
 
@@ -1414,7 +1474,7 @@ const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
 // 命令类型会自动添加插件命名空间前缀
 ```
 
-### 6.6 宿主依赖共享网关 (HostSharedDeps) 与动态转译
+### 6.7 宿主依赖共享网关 (HostSharedDeps) 与动态转译
 
 为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)** 以及 **全形态 ESM 裸模块导入转译器 (`transformBareModuleImports`)**。全局 `window.HostSharedDeps` 暴露以下共享运行时：
 

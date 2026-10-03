@@ -155,6 +155,7 @@ export class FrontendPluginHost {
       version: manifest.version,
       state: PluginState.INSTALLED,
       executionMode: 'inline',
+      icon: manifest.icon,
       // 保留 manifest 声明的 capabilitiesProposed —— 之后若该插件被切到
       // worker 模式激活，Barrier 2 需要它来决定是否放行非 get* 方法。
       capabilitiesProposed: Array.isArray(manifest.capabilitiesProposed) ? [...manifest.capabilitiesProposed] : [],

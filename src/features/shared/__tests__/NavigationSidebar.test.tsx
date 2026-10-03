@@ -2,6 +2,9 @@ import React from 'react';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NavigationSidebar } from '../NavigationSidebar';
+import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
+import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
+import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 
 describe('NavigationSidebar (紧凑化与分类折叠)', () => {
   const defaultProps = {
@@ -16,6 +19,7 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    usePluginHostStore.setState({ extensionPoints: new Map() });
     vi.clearAllMocks();
   });
 
@@ -100,5 +104,27 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     const toggleBtn = screen.getByTitle('展开导航');
     fireEvent.click(toggleBtn);
     expect(setMainNavCollapsed).toHaveBeenCalledWith(false);
+  });
+
+  it('renders plugin tab in EXTENSIONS group with custom icon', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab', {
+      id: 'custom-tool',
+      label: '自定义扩展',
+      icon: 'Award',
+      pluginId: 'ext-custom',
+      component: () => Promise.resolve({ default: () => <div>Plugin Content</div> }),
+    });
+
+    const host = new FrontendPluginHost();
+    const { container } = render(
+      <PluginHostProvider host={host}>
+        <NavigationSidebar {...defaultProps} />
+      </PluginHostProvider>,
+    );
+
+    expect(screen.getByText('扩展应用')).toBeTruthy();
+    expect(screen.getByText('自定义扩展')).toBeTruthy();
+    const awardSvg = container.querySelector('svg.lucide-award');
+    expect(awardSvg).toBeTruthy();
   });
 });

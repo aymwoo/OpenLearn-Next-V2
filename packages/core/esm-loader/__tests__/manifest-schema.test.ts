@@ -61,6 +61,22 @@ describe('manifestSchema', () => {
     expect(() => manifestSchema.parse(manifest)).not.toThrow();
   });
 
+  it('should accept manifest with icon, description and author fields', () => {
+    const manifest = {
+      id: 'ext-custom-icon',
+      name: 'Custom Icon Plugin',
+      version: '1.0.0',
+      main: 'index.js',
+      icon: 'BookOpen',
+      description: 'A plugin with custom icon',
+      author: 'Tester',
+    };
+    const parsed = manifestSchema.parse(manifest);
+    expect(parsed.icon).toBe('BookOpen');
+    expect(parsed.description).toBe('A plugin with custom icon');
+    expect(parsed.author).toBe('Tester');
+  });
+
   it('should preserve anchor:* contribution keys via passthrough (v0.2.6)', () => {
     const manifest = {
       id: 'ext-anchor-demo',
