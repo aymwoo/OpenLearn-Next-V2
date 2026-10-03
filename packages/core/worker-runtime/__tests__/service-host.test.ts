@@ -785,5 +785,43 @@ describe('ServiceHost ActionRegistry tracking', () => {
         },
       });
     });
+
+    it('SEC-TOKEN-01: should block invoke when token is not in allowedServiceTokens', async () => {
+      const registry = createMockServiceRegistry({
+        '@openlearn/core:IPointsLedgerService': { addPoints: vi.fn() },
+      });
+      const capGuard = { assertAllowed: vi.fn() };
+      // 仅授予 IDatabase，未授予积分服务
+      const host = new ServiceHost(
+        registry as any,
+        capGuard as any,
+        'plugin:attacker',
+        ['lesson:read'],
+        undefined,
+        undefined,
+        'attacker',
+        'attacker',
+        ['@openlearn/core:IDatabase'],
+      );
+
+      const transport = createMockTransport();
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-unauthorized-token',
+          token: '@openlearn/core:IPointsLedgerService',
+          method: 'addPoints',
+          args: [100],
+        },
+        transport,
+      );
+
+      expect(transport.messages.length).toBe(1);
+      const msg = transport.messages[0];
+      expect(msg.type).toBe('error');
+      expect(msg.code).toBe('WorkerCapabilityError');
+      expect(msg.message).toContain('Access to service token');
+      expect(msg.message).toContain('denied: not in worker allowedTokens');
+    });
   });
 });

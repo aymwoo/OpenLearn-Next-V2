@@ -149,6 +149,8 @@ export class ServiceHost {
   >();
   private registeredRoutes: Array<{ method: string; pattern: string; isStream?: boolean }> = [];
 
+  private readonly allowedServiceTokens?: ReadonlySet<string>;
+
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
     private readonly capabilityGuard: CapabilityGuard,
@@ -158,7 +160,12 @@ export class ServiceHost {
     private eventForwarder?: EventForwarder,
     private readonly pluginId?: string,
     private readonly dbPluginId?: string,
-  ) {}
+    allowedTokens?: Iterable<string>,
+  ) {
+    if (allowedTokens) {
+      this.allowedServiceTokens = new Set(allowedTokens);
+    }
+  }
 
   // ── Public accessors ───────────────────────────────────────────────────
 
@@ -619,11 +626,21 @@ export class ServiceHost {
    */
   async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
-      // ── Phase 5 pragmatic capability guard ─────────────────────────
+      // ── Security Barrier 1: Token Allowlist Guard ───────────────────
+      // Strict token-level capability sandbox: block any service token
+      // not explicitly granted to this worker plugin.
+      if (this.allowedServiceTokens && !this.allowedServiceTokens.has(msg.token)) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          msg.token,
+          `Access to service token '${msg.token}' denied: not in worker allowedTokens for ${this.pluginActorId}`,
+        );
+      }
+
+      // ── Security Barrier 2: Capability check on empty manifest ─────
       // If manifestCapabilities is empty, the Worker plugin has no
       // declared capabilities. Block all mutation methods and only allow
       // read-only 'get' methods.
-      // Full per-method capability mapping is deferred (Plan 6+).
       if (this.manifestCapabilities.length === 0 && msg.method !== 'get') {
         throw new WorkerCapabilityError(
           this.pluginActorId,

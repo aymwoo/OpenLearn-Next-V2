@@ -48,22 +48,10 @@ import { IEventBusServiceToken } from '../di/index.js';
 
 /** 7 个内核服务 Token 名称字符串 — 用于 Worker 端 RPC 代理。 */
 /**
- * Worker 可解析的服务 token 白名单。
- *
- * ⚠️ 已知缺口：**不包含**积分系统的两个 token
- * （`@openlearn/core:IPointsDimensionRegistry` / `IPointsLedgerService`）。
- * 后果：WORKER 模式插件通过 `ctx.resolve()` 取积分服务时会得到
- * 「No provider registered for token」并降级为插件内自建积分（不阻塞激活）。
- *
- * 为什么暂不加入（2026-* 实测）：
- *   仅把 token 追加到此数组后，worker 插件（@ext/class-manager）在激活阶段
- *   抛 `function () { [native code] } could not be cloned` —— 说明 worker 侧
- *   RPC 的通用方法转发路径会尝试 postMessage 一个函数值。需要先修
- *   `service-host.ts` 的通用转发（只回传可结构化克隆的返回值 / 对函数值显式
- *   报错），再把 token 加入白名单。inline 模式已在
- *   `plugin-host/context-builder.ts` 完成转发（配合 `ServiceRegistry.tryResolve`）。
+ * 基础 Worker 服务白名单（9 个核心基础设施 Token）。
+ * 无需任何额外依赖或权限声明，所有 Worker 插件默认且仅允许使用这些基础服务。
  */
-export const ALL_SERVICE_TOKENS = [
+export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:ICommandBusService',
   '@openlearn/core:IEventBusService',
   '@openlearn/core:IActionRegistryService',
@@ -73,9 +61,53 @@ export const ALL_SERVICE_TOKENS = [
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
   '@openlearn/core:IPluginHost',
+]);
+
+/**
+ * 兼容性超集列表，保留供历史外部模块引用。
+ */
+export const ALL_SERVICE_TOKENS = [
+  ...BASE_WORKER_SERVICE_TOKENS,
   '@openlearn/core:IPointsDimensionRegistry',
   '@openlearn/core:IPointsLedgerService',
 ];
+
+/**
+ * 根据插件 Manifest 声明动态计算该 Worker 允许访问的 Service Tokens 白名单。
+ * 杜绝未声明权限的插件随意访问敏感领域服务（如积分账本）。
+ */
+export function computeAllowedWorkerTokens(
+  manifest?: Manifest,
+  requestedTokens?: Iterable<string>,
+): string[] {
+  const allowed = new Set<string>(BASE_WORKER_SERVICE_TOKENS);
+  if (manifest) {
+    const reqs = Array.isArray(manifest.requires) ? manifest.requires : [];
+    const opts = Array.isArray(manifest.optional) ? manifest.optional : [];
+    const allDeclared = [...reqs, ...opts];
+    const caps = Array.isArray(manifest.capabilitiesProposed) ? manifest.capabilitiesProposed : [];
+
+    // 积分服务：仅当插件在 requires/optional 或 capabilitiesProposed 明确声明 points 权限时授予
+    const hasPointsDep = allDeclared.some(
+      (dep) => typeof dep === 'string' && (dep.includes('IPointsLedgerService') || dep.includes('IPointsDimensionRegistry')),
+    );
+    const hasPointsCap = caps.some(
+      (c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:') || c === '*'),
+    );
+
+    if (hasPointsDep || hasPointsCap) {
+      allowed.add('@openlearn/core:IPointsDimensionRegistry');
+      allowed.add('@openlearn/core:IPointsLedgerService');
+    }
+  }
+
+  if (requestedTokens) {
+    const requestedSet = new Set(requestedTokens);
+    return Array.from(allowed).filter((t) => requestedSet.has(t));
+  }
+
+  return Array.from(allowed);
+}
 
 /** 最大并行 Worker 数（T-05-09: DoS 缓解）。 */
 const MAX_WORKERS = 32;
@@ -1263,6 +1295,9 @@ export class WorkerManager {
     const encodedBootstrap = Buffer.from(bootstrapCode, 'utf-8').toString('base64');
     const bootstrapDataUrl = `data:text/javascript;base64,${encodedBootstrap}`;
 
+    // 动态按 Manifest 计算当前插件被授权的 Tokens（能力沙箱隔离）
+    const allowedTokens = computeAllowedWorkerTokens(manifest, serviceTokens);
+
     // 4. 创建 Worker
     let worker: Worker;
     try {
@@ -1272,7 +1307,7 @@ export class WorkerManager {
         // and `manifestId` (used as the namespace prefix for command types).
         // The two diverge for ZIP-uploaded plugins whose DB id is a generated
         // UUID while manifest.id is the plugin author's chosen name.
-        workerData: { pluginId, manifestId: manifest.id, serviceTokens, pluginDir: resolvedPluginDir },
+        workerData: { pluginId, manifestId: manifest.id, serviceTokens: allowedTokens, pluginDir: resolvedPluginDir },
         eval: false,
         stdout: true,
         stderr: true,
@@ -1297,7 +1332,7 @@ export class WorkerManager {
     // 5. 创建 Transport
     const transport = new NodeWorkerTransport(worker);
 
-    // 6. 创建 ServiceHost（带可选的 EventBus 用于事件转发）
+    // 6. 创建 ServiceHost（带可选的 EventBus 用于事件转发与 Token 授权白名单）
     const actorId = `plugin:${manifest.id}`;
     const manifestCaps = manifest.capabilitiesProposed ?? [];
     const serviceHost = new ServiceHost(
@@ -1314,6 +1349,7 @@ export class WorkerManager {
       // see packages/core/plugin-host/plugin-namespace.ts.
       manifest.id,
       pluginId,
+      allowedTokens,
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）

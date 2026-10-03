@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **插件系统与 Worker 沙箱能力面安全加固（SEC-TOKEN-01：动态 Token 白名单与 RPC 隔离门禁）**：
+  - **按 Manifest 动态计算 Worker 授权 Token 清单**：
+    - `packages/core/worker-runtime/worker-manager.ts`：将全量无脑静态暴露的 `ALL_SERVICE_TOKENS` 改造为两级机制，确立 9 个通用基础设施为 `BASE_WORKER_SERVICE_TOKENS`；
+    - 引入 `computeAllowedWorkerTokens(manifest)`：对敏感领域服务（如 `@openlearn/core:IPointsDimensionRegistry` 与 `@openlearn/core:IPointsLedgerService`）按需动态授权，仅当插件在其 `requires` / `optional` 或 `capabilitiesProposed` 中显式声明了相关权限时才予以授予；
+  - **宿主端 ServiceHost Token 白名单硬拦截门禁**：
+    - `packages/core/worker-runtime/service-host.ts`：在 `handleInvoke` 入口增设第一道安全防线（`allowedServiceTokens` 校验），未授权 Token 的 IPC RPC 调用将被坚决拦截并抛出 `WorkerCapabilityError`，阻断越权提权后门；
+    - 补充 `SEC-TOKEN-01` 专用安全单测；
+  - **金丝雀 E2E 测试全绿修复**：
+    - 彻底修复 `server/__tests__/canary/canary.e2e.test.ts` 中针对未授权积分 Token 被意外解析的报警用例，金丝雀双模式 131 项全量测试 100% 绿灯（131/131 passed）。
+
 - **关键业务路由集成测试网与健壮性保护（阶段 D1：Roster / Admin / Schedules 集成测试与权限边界）**：
   - **专项 D1b：学生名册与花名册路由集成测试（`server/__tests__/roster-routes.test.ts`）**：
     - 覆盖学生与班级核心生命周期（创建、分页查询、更名、密码重置、删除与级联清理）；
