@@ -164,6 +164,8 @@ def write_markdown(
     docs_count: int,
     code_count: int,
     out_path: Path,
+    ref_drift: int = 0,
+    ref_md: Path | None = None,
 ) -> None:
     lines: list[str] = []
     lines.append("# Architecture Documentation Drift Report")
@@ -185,7 +187,10 @@ def write_markdown(
     lines.append("")
     lines.append(f"- 总事实点: docs={docs_count}, code={code_count}")
     lines.append(f"- 归一化后 canonical 数: {len(set(d.canonical for d in drifts)) + sum(1 for _ in drifts) - len(drifts)}")
-    lines.append(f"- 实际 drift 项: **{len(drifts)}**")
+    lines.append(f"- canonical-key drift 项: {len(drifts)}")
+    lines.append(f"- 引用完整性 drift 项: {ref_drift}")
+    # 保持既有格式（run.sh 依赖这一行 grep 数字），此处为全量合计
+    lines.append(f"- 实际 drift 项: **{len(drifts) + ref_drift}**")
     for k, v in sorted(by_kind.items()):
         lines.append(f"  - `{k}`: {v}")
     lines.append("")
@@ -234,6 +239,10 @@ def write_markdown(
             lines.append(f"- **建议**: {d.recommendation}")
             lines.append("")
 
+    # 追加新检查章节 (path-existence / doc-link / duplicate-docs)
+    if ref_md and ref_md.exists():
+        lines.append(ref_md.read_text(encoding="utf-8"))
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -256,11 +265,16 @@ def main() -> None:
     p.add_argument("--extracts", required=True, type=Path)
     p.add_argument("--out-md", required=True, type=Path)
     p.add_argument("--out-json", required=True, type=Path)
+    p.add_argument("--ref-md", type=Path, default=None,
+                   help="refchecks.py 产出的引用完整性 Markdown,追加到报告末尾")
+    p.add_argument("--ref-drift", type=int, default=0,
+                   help="refchecks.py 产出的 drift 项数,计入 Summary 合计")
     args = p.parse_args()
 
     docs, code = load_extracts(args.extracts)
     drifts = find_drift(docs, code)
-    write_markdown(drifts, len(docs), len(code), args.out_md)
+    write_markdown(drifts, len(docs), len(code), args.out_md,
+                   ref_drift=args.ref_drift, ref_md=args.ref_md)
     write_json(drifts, args.out_json)
     print(f"drift items: {len(drifts)}")
     print(f"  MISSING_IN_CODE: {sum(1 for d in drifts if d.kind == 'MISSING_IN_CODE')}")

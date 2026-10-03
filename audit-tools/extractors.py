@@ -57,23 +57,30 @@ class Extracts:
 # filename-stem is matched against basename without .md, lowercase.
 DOC_SUBSYSTEM_BY_FILE = {
     "platform-kernel":            ("kernel",                   "subsystem"),
-    "command-event-bus":          ("command-bus",              "subsystem"),
-    "command-event-bus":          ("event-bus",                "subsystem"),
+    "command-event-bus":          [("command-bus", "subsystem"),
+                                   ("event-bus", "subsystem")],
     "dependency-injection":       ("di",                       "subsystem"),
     "service-registry":           ("service-registry",         "subsystem"),
-    "capability-gateway":         ("capability",               "subsystem"),
-    "capability-gateway":         ("capability-runtime",       "subsystem"),
+    # 注意: capability-gateway.md 一篇同时描述三个子面（能力网关 / 运行时 / 治理）。
+    # 早先这里把同一个键写了三遍，Python 字典字面量只保留最后一个，前两个映射被静默
+    # 覆盖 —— 直接导致 capability / capability-runtime 被误报成"代码有文档无"。
+    # 现改为各自独立的文件名入口，避免重复键。
     "capability-gateway":         ("capability-governance",    "subsystem"),
+    "capability-system":          ("capability",               "subsystem"),
+    "capability-runtime":         ("capability-runtime",       "subsystem"),
     "composition-root":           ("bootstrap",                "subsystem"),
     "bootstrap-pipeline":         ("bootstrap",                "subsystem"),
+    # configuration.md 记录的恰恰是"平台没有集中配置子系统"这一事实
+    # （packages/core/configuration/ 已于 207ca36 作为死子系统整体删除）。
+    # 它不对应任何代码目录，因此**不**登记为 subsystem 事实 —— 否则工具会
+    # 永远报一个 MISSING_IN_CODE，而文档本身是正确的。
     "database-and-migrations":    ("db",                       "subsystem"),
-    "configuration":              ("configuration",            "subsystem"),
     "security-permissions":       ("capability",               "subsystem"),
     "workspace-runtime":          ("workspace-runtime",        "subsystem"),
     "whiteboard-runtime":         ("whiteboard-runtime",       "subsystem"),
     "lesson-runtime":             ("lesson-engine",            "subsystem"),
-    "presence-collaboration":     ("presence-engine",          "subsystem"),
-    "presence-collaboration":     ("collaboration-engine",     "subsystem"),
+    "presence-collaboration":     [("presence-engine", "subsystem"),
+                                   ("collaboration-engine", "subsystem")],
     "system-overview":            ("system",                   "subsystem"),
     "theming-system":             ("theming",                  "subsystem"),
     "layer-topology":             ("kernel",                   "subsystem"),
@@ -83,7 +90,13 @@ DOC_SUBSYSTEM_BY_FILE = {
 }
 
 
-def extract_doc_facts(docs_root: Path) -> list[DocFact]:
+def _kebab(name: str) -> str:
+    """把 CamelCase 目录名转成 kebab-case（与文档文件名的风格一致）。"""
+    s = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", name)
+    return s.replace("_", "-").lower()
+
+
+def extract_doc_facts(docs_root: Path, packages_root: Path) -> list[DocFact]:
     """Heuristic: each docs/architecture/<name>.md describes one subsystem.
 
     Also scans inline text for explicit subsystem mentions (kernel, di, etc).
@@ -96,26 +109,61 @@ def extract_doc_facts(docs_root: Path) -> list[DocFact]:
 
     seen: set[tuple[str, str, str]] = set()
 
+    # 代码侧真实存在的子系统名（packages/core/* 与 src/features/* 的顶层目录）。
+    # 用于判断"未登记的文档"是否真的在描述一个代码子系统：只有能对上代码目录的
+    # 文档才回退为子系统事实，否则它只是分类页/说明页，强行纳入只会制造噪声。
+    code_subsystems: set[str] = set()
+    for base in (packages_root / "packages" / "core", packages_root / "src" / "features"):
+        if base.exists():
+            for child in base.iterdir():
+                if child.is_dir() and not child.name.startswith(("__", ".")):
+                    code_subsystems.add(child.name.lower())
+                    code_subsystems.add(_kebab(child.name))
+    # 长名优先：canvas-object-model 应对上 whiteboard 而不是 canvas
+    code_subsystems_sorted = sorted(code_subsystems, key=len, reverse=True)
+
+    def _matches_code(stem: str) -> str | None:
+        """返回该文档 stem 命中的代码子系统 canonical key，未命中则 None。"""
+        head = stem.split("-")[0]
+        for cand in code_subsystems_sorted:
+            if cand == stem or cand == head or stem.startswith(cand + "-") or cand.startswith(stem + "-"):
+                return cand
+        return None
+
     # (1) File-based: one fact per architecture doc
     arch_dir = docs_root / "architecture"
     if arch_dir.exists():
         for md in sorted(arch_dir.glob("*.md")):
             stem = md.stem.lower()
+            # 映射表优先；未登记的文件不再被静默跳过，而是回退到由文件名推导的
+            # canonical key —— 但仅当它确实能对上某个代码子系统时才纳入比对，
+            # 避免"白名单外的文档完全不参与"与"分类页全部变噪声"两个极端。
+            targets: list[tuple[str, str]] = []
             if stem in DOC_SUBSYSTEM_BY_FILE:
-                canonical, kind = DOC_SUBSYSTEM_BY_FILE[stem]
+                entry = DOC_SUBSYSTEM_BY_FILE[stem]
+                # 一篇文档可能同时描述多个代码子系统（如 command-event-bus 同时覆盖
+                # command-bus 与 event-bus），因此允许映射值为"目标列表"。
+                targets = entry if isinstance(entry, list) else [entry]
+            else:
+                hit = _matches_code(stem)
+                if hit is not None:
+                    targets = [(hit, "subsystem")]
+            if not targets:
+                continue
+            # find first heading as excerpt
+            excerpt = ""
+            try:
+                for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if line.startswith("#"):
+                        excerpt = line.strip()[:160]
+                        break
+            except Exception:
+                pass
+            for canonical, kind in targets:
                 key = (canonical, kind, str(md))
                 if key in seen:
                     continue
                 seen.add(key)
-                # find first heading as excerpt
-                excerpt = ""
-                try:
-                    for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
-                        if line.startswith("#"):
-                            excerpt = line.strip()[:160]
-                            break
-                except Exception:
-                    pass
                 facts.append(DocFact(
                     name=canonical,
                     kind=kind,
@@ -144,7 +192,12 @@ def extract_doc_facts(docs_root: Path) -> list[DocFact]:
         # docs/reference/
         "activity-ecosystem": "activity-ecosystem",
         "plugin-capability-matrix": "esm-loader",  # 描述 plugin 能力矩阵, 涉及 esm-loader
-        # docs/core/
+        # docs/lesson/ 与 docs/workspace/ —— 文件名与代码目录不同名，需显式登记，
+        # 否则前缀匹配会漏掉这两个子系统（曾被误报为"有代码无文档"）。
+        "lesson-runtime": "lesson-engine",
+        "lesson-lifecycle": "lesson-engine",
+        "workspace-runtime": "workspace",
+        # docs/core/（已废弃删除，保留映射以兼容历史链接）
         "platform-kernel": "kernel",
     }
     for md in sorted(docs_root.rglob("*.md")):
@@ -154,27 +207,33 @@ def extract_doc_facts(docs_root: Path) -> list[DocFact]:
         if "architecture" in md.relative_to(docs_root).parts:
             continue
         stem = md.stem.lower()
+        # 同上：表未登记时，仅当能对上代码子系统才纳入，避免分类页造成噪声。
         if stem in FILE_NAME_TO_CANONICAL:
             canonical = FILE_NAME_TO_CANONICAL[stem]
-            key = (canonical, "subsystem", str(md))
-            if key in seen:
+        else:
+            hit = _matches_code(stem)
+            if hit is None:
                 continue
-            seen.add(key)
-            excerpt = ""
-            try:
-                for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
-                    if line.startswith("#"):
-                        excerpt = line.strip()[:160]
-                        break
-            except Exception:
-                pass
-            facts.append(DocFact(
-                name=canonical,
-                kind="subsystem",
-                source_path=str(md),
-                line=1,
-                excerpt=excerpt,
-            ))
+            canonical = hit
+        key = (canonical, "subsystem", str(md))
+        if key in seen:
+            continue
+        seen.add(key)
+        excerpt = ""
+        try:
+            for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.startswith("#"):
+                    excerpt = line.strip()[:160]
+                    break
+        except Exception:
+            pass
+        facts.append(DocFact(
+            name=canonical,
+            kind="subsystem",
+            source_path=str(md),
+            line=1,
+            excerpt=excerpt,
+        ))
 
     # (2) Inline mentions: scan all docs for capitalized subsystem names
     # (kernel, command-bus, event-bus, di, registry, db, ...)
@@ -326,7 +385,7 @@ def extract_code_facts(packages_root: Path) -> list[CodeFact]:
 
 def run(docs_root: Path, packages_root: Path, out_path: Path) -> Extracts:
     ex = Extracts()
-    ex.doc_facts = extract_doc_facts(docs_root)
+    ex.doc_facts = extract_doc_facts(docs_root, packages_root)
     ex.code_facts = extract_code_facts(packages_root)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

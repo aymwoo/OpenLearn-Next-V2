@@ -47,6 +47,10 @@ CANONICAL_OVERRIDES = {
     "capability-gateway": "capability",
     "capability": "capability",
     "capability-system": "capability",
+    # CapabilityRuntime 没有同名代码目录：它以 ICapabilityRuntimeService 的形式
+    # 声明在 packages/core/di/interfaces.ts 中。归一到最终 canonical（capability-
+    # system 自身也会被归一到 capability，故这里直接写最终值，避免归一方向不一致）。
+    "capability-runtime": "capability",
     "security-permissions": "capability",
     "ai-capability": "capability",
 

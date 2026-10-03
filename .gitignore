@@ -5,6 +5,10 @@ dist/
 coverage/
 .DS_Store
 *.log
+# 日志轮转产物（packages/core/observability/rotating-file-stream.ts）：
+# 形如 openlearn.log.1 / .2 …，不以 .log 结尾，必须单独忽略，
+# 否则 11MB+ 的轮转历史会被提交进版本库。
+*.log.*
 .env*
 !.env.example
 /packages/core/db/educational_os.db*
