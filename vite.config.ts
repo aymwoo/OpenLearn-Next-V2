@@ -50,7 +50,12 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    modulePreload: { polyfill: false },
+    modulePreload: {
+      polyfill: false,
+      resolveDependencies(_filename, deps) {
+        return deps.filter((dep) => !/vendor-(pdf|charts|pptx|reveal|konva)/i.test(dep));
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

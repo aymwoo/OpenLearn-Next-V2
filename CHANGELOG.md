@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **首屏体积轻量化与 ModulePreload 分包预加载优化（P1-2）**：
+  - **解耦 CSV 纯工具函数并异步化 PDF 生成库**：
+    - 新增 `src/utils/csv.ts` 与配套单测 `src/utils/__tests__/csv.test.ts`，将 `escapeCSV` 从 `gradeReportService.ts` 中解耦为独立轻量纯函数；
+    - 修改 `src/features/classroom/ClassroomBriefingView.tsx` 与 `src/services/attendanceExportService.ts` 改为从 `src/utils/csv.ts` 导入，阻断课堂与考勤组件对 `jsPDF` 的反向依赖污染；
+    - `src/services/gradeReportService.ts` 中的 `jsPDF` 与 `jspdf-autotable` 改为在 `generateClassPDFReport` 执行时动态 `await import()`，非导出流程完全不加载 PDF 核心库。
+  - **清理白板冗余依赖**：
+    - 移除 `src/features/whiteboard/InteractiveWhiteboard.tsx` 顶层未使用的 `import { init as initPptxPreview } from 'pptx-preview'`。
+  - **Vite ModulePreload 依赖过滤**：
+    - `vite.config.ts`：在 `build.modulePreload` 中配置 `resolveDependencies` 过滤器，从入口 `<head>` 排除非首屏必需的 `vendor-pdf`、`vendor-pptx`、`vendor-charts`、`vendor-reveal` 与 `vendor-konva`；
+    - **优化成效**：首屏入口预加载资源体积由 ~843 KB (gzip) 缩减至 ~442 KB (gzip)，首屏资源传输减重约 47.5%，且登录页完全杜绝图表与 PDF 重型运行时的无效静默加载。
+
+
 - **插件系统与左侧导航栏自定义图标支持（v0.5.1）**：
   - **Manifest 与运行时动态图标规范**：
     - `packages/core/esm-loader/manifest-schema.ts`：在 `manifestSchema` 与 `manifestSchemaV3` 中显式扩展 `icon`、`description` 与 `author` 字段校验；

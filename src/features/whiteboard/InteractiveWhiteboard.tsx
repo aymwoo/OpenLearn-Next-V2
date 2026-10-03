@@ -46,7 +46,6 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { Html } from 'react-konva-utils';
-import { init as initPptxPreview } from 'pptx-preview';
 import Reveal from 'reveal.js';
 import 'reveal.js/reveal.css';
 import 'reveal.js/theme/white.css';

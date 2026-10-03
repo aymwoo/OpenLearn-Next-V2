@@ -20,7 +20,7 @@ import {
   FileText,
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
-import { escapeCSV } from '../../services/gradeReportService';
+import { escapeCSV } from '../../utils/csv';
 import {
   generateCoPilotReflection,
   buildFollowupTiers,

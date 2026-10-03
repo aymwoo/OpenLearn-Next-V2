@@ -1,5 +1,5 @@
 import type { ClassType, StudentType, ScheduleType, AttendanceType } from '../types/app';
-import { escapeCSV } from './gradeReportService';
+import { escapeCSV } from '../utils/csv';
 
 export interface AttendanceRowData {
   className: string;

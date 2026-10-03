@@ -1,20 +1,11 @@
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import type { ClassType, StudentType } from '../types/app';
+import { escapeCSV } from '../utils/csv';
+export { escapeCSV };
 
 export interface CsvPreviewData {
   headers: string[];
   rows: string[][];
   totalStudents: number;
-}
-
-export function escapeCSV(val: string | number | null | undefined): string {
-  if (val === null || val === undefined) return '';
-  const stringified = String(val);
-  if (stringified.includes(',') || stringified.includes('"') || stringified.includes('\n')) {
-    return `"${stringified.replace(/"/g, '""')}"`;
-  }
-  return stringified;
 }
 
 export interface GeneratePDFReportOptions {
@@ -169,7 +160,9 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
       };
     });
 
-    // Initialize jsPDF Doc
+    // Initialize jsPDF Doc dynamically
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
     const doc = new jsPDF({
       orientation: 'p',
       unit: 'mm',
