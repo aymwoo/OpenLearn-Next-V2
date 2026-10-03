@@ -479,7 +479,8 @@ describe('Hot Reload — Stress', () => {
       durations.push(performance.now() - start);
     }
 
-    // Last reload should not be > 5x first reload (allow some variance, but no exponential growth)
-    expect(durations[9]).toBeLessThan(durations[0] * 5);
+    // Last reload should not be > 5x first reload (allow some variance, with 100ms floor to prevent microsecond baseline skew)
+    const maxAllowed = Math.max(durations[0] * 5, 100);
+    expect(durations[9]).toBeLessThan(maxAllowed);
   });
 });

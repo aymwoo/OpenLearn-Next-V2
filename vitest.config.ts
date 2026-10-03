@@ -1,5 +1,16 @@
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+/**
+ * Dynamically determine safe concurrency level based on memory and CPU limits.
+ * Each worker in JSDOM + Vite environment consumes ~400-600MB. Capping maxForks
+ * prevents memory thrashing, GC stalls, and worker IPC timeouts on machines with
+ * high core count but constrained memory.
+ */
+const cpus = os.cpus().length;
+const freeMemGb = os.freemem() / (1024 * 1024 * 1024);
+const safeForks = Math.max(1, Math.min(4, Math.floor(freeMemGb / 0.6), Math.ceil(cpus / 2)));
 
 /**
  * Resolve an in-repo path relative to this config file (the repo root), so the
@@ -10,6 +21,8 @@ const fromRepoRoot = (relativePath: string): string => fileURLToPath(new URL(rel
 
 export default defineConfig({
   test: {
+    pool: 'forks',
+    maxWorkers: process.env.VITEST_MAX_FORKS ? parseInt(process.env.VITEST_MAX_FORKS, 10) : safeForks,
     include: [
       // 广覆盖：任何 `__tests__` 下的 *.test.ts(x) 都应被执行。
       //

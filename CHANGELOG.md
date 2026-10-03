@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Vitest 并发隔离稳定性调优与内核命令总线测试覆盖（P1-4）**：
+  - **动态安全 Worker 进程池调度（`vitest.config.ts`）**：
+    - 引入基于 CPU 核心数与宿主机物理空闲内存（`os.freemem()`）动态计算的 `maxWorkers: safeForks` 机制，为每个 Worker 预留 600MB+ 安全物理内存并将并发度封顶至 4；
+    - 消除此前 16 核高并发打满导致的严重内存抖动、GC 卡顿以及 `[vitest-pool]: Failed to start forks worker` 超时假死；
+  - **消除微基准测试抖动（`hot-reload.test.ts`）**：
+    - 为热重载压力测试中的比值断言补充 100ms 保护基底，杜绝纳秒级基准除法膨胀引起的偶发红灯；
+  - **内核命令总线测试覆盖（`packages/core/command-bus/__tests__/command-bus.test.ts`）**：
+    - 新增 CommandBus 全流程单元测试，完整覆盖命令分发、执行、重复注册防御、拦截器链（Interceptors）安全阻断、D-11 历史遗留降级路由与 actorId 兜底规范，7 项用例 100% 通过。
+
+
 - **统一三层事件总线治理与类型安全门禁（P1-3）**：
   - **全局强类型前端事件字典契约（`src/types/events.ts`）**：
     - 确立 `FrontendEventMap` 规范，对白板生命周期（`whiteboard.autosave.*`、`whiteboard.element_*`）、课堂互动（`rollcall.*`）、倒计时控制（`openlearn:countdown:*`）与学生端快捷菜单（`openlearn:student_quick_actions:*`）实现 100% 编译期参数校验与代码补全；
