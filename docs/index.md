@@ -150,6 +150,7 @@ developer-guide/docs-drift-audit
 :caption: 🛡️ 管理员手册 (Administrator Guide)
 
 administrator-guide/admin-manual
+administrator-guide/demo-data
 ```
 
 ```{toctree}

@@ -95,6 +95,7 @@ import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
 import { registerAdminRoutes } from './server/routes/admin.js';
+import { registerDemoDataRoutes } from './server/routes/demo-data.js';
 import { registerRosterRoutes } from './server/routes/roster.js';
 import { registerAssignmentsRoutes } from './server/routes/assignments.js';
 import { registerAssignmentHubRoutes } from './server/routes/assignment-hub.js';
@@ -407,6 +408,7 @@ async function startServer() {
   // Approvals APIs
   registerProcessesRoutes(ctx);
   registerAdminRoutes(ctx);
+  registerDemoDataRoutes(ctx);
   registerRosterRoutes(ctx);
   registerAssignmentsRoutes(ctx);
   registerAssignmentHubRoutes(ctx);

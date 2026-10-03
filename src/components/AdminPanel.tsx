@@ -29,6 +29,7 @@ import {
   Milestone,
   Compass,
 } from 'lucide-react';
+import { DemoDataPanel } from '../features/admin/DemoDataPanel';
 
 interface TeacherUser {
   id: string;
@@ -1362,6 +1363,9 @@ export function AdminPanel({
               </div>
             </form>
           </div>
+
+          {/* 演示数据一键初始化 / 一键清理 */}
+          <DemoDataPanel lang={lang} />
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
