@@ -10,6 +10,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
+import { diagnosticService } from '../services/diagnostic-service.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -1951,136 +1952,9 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
-
-        // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
-        let rows: any[] = [];
-        try {
-          rows = db
-            .prepare(
-              `
-            SELECT 
-              s.student_id,
-              COALESCE(s.student_name, stu.name, s.student_id) as student_name,
-              SUM(s.score) as cumulative_score,
-              COUNT(s.id) as total_quizzes_answered,
-              SUM(s.is_correct) as correct_count,
-              ROUND(AVG(s.is_correct) * 100, 1) as accuracy,
-              ROUND(AVG(s.time_spent_ms), 0) as avg_time_spent_ms,
-              MAX(s.submitted_at) as last_submitted_at
-            FROM lesson_quiz_submissions s
-            LEFT JOIN students stu ON s.student_id = stu.id
-            WHERE s.lesson_id = ?
-            GROUP BY s.student_id
-            ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
-            LIMIT ?
-          `,
-            )
-            .all(lessonId, limit) as any[];
-        } catch (err: any) {
-          console.warn('[top-performers] query from lesson_quiz_submissions failed:', err?.message);
-        }
-
-        // 2. 如果关系表暂时无作答数据，补充从 whiteboard_elements (type='quiz') 摄取聚合
-        if (!rows || rows.length === 0) {
-          try {
-            const quizElements = db
-              .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'quiz'")
-              .all(lessonId) as { data: string }[];
-
-            if (quizElements.length > 0) {
-              const studentMap: Record<
-                string,
-                {
-                  studentId: string;
-                  studentName: string;
-                  cumulativeScore: number;
-                  totalQuizzesAnswered: number;
-                  correctCount: number;
-                  lastSubmittedAt: number;
-                }
-              > = {};
-
-              for (const el of quizElements) {
-                try {
-                  const parsed = JSON.parse(el.data || '{}');
-                  const subs = parsed.submissions || {};
-                  const correctAnswer = parsed.correctAnswer;
-                  for (const [stId, subData] of Object.entries(subs) as [string, any][]) {
-                    if (!studentMap[stId]) {
-                      const stRow = db.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
-                      studentMap[stId] = {
-                        studentId: stId,
-                        studentName: stRow?.name || stId,
-                        cumulativeScore: 0,
-                        totalQuizzesAnswered: 0,
-                        correctCount: 0,
-                        lastSubmittedAt: subData.time || Date.now(),
-                      };
-                    }
-                    const score =
-                      typeof subData.score === 'number' ? subData.score : subData.answer === correctAnswer ? 100 : 0;
-                    studentMap[stId].cumulativeScore += score;
-                    studentMap[stId].totalQuizzesAnswered += 1;
-                    if (score > 0) studentMap[stId].correctCount += 1;
-                    if (subData.time && subData.time > studentMap[stId].lastSubmittedAt) {
-                      studentMap[stId].lastSubmittedAt = subData.time;
-                    }
-                  }
-                } catch (_) {}
-              }
-
-              rows = Object.values(studentMap)
-                .map((s) => ({
-                  student_id: s.studentId,
-                  student_name: s.studentName,
-                  cumulative_score: s.cumulativeScore,
-                  total_quizzes_answered: s.totalQuizzesAnswered,
-                  correct_count: s.correctCount,
-                  accuracy:
-                    s.totalQuizzesAnswered > 0 ? Math.round((s.correctCount / s.totalQuizzesAnswered) * 100) : 0,
-                  avg_time_spent_ms: 12000,
-                  last_submitted_at: s.lastSubmittedAt,
-                }))
-                .sort((a, b) => b.cumulative_score - a.cumulative_score || b.accuracy - a.accuracy)
-                .slice(0, limit);
-            }
-          } catch (_) {}
-        }
-
-        // 3. 统计全班答题总览
-        let totalResponses = 0;
-        let averageScore = 0;
-        try {
-          const stats = db
-            .prepare(
-              'SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ?',
-            )
-            .get(lessonId) as any;
-          totalResponses = stats?.count || 0;
-          averageScore = Math.round(stats?.avg_score || 0);
-        } catch (_) {}
-
-        res.json({
-          success: true,
-          lessonId,
-          topPerformers: (rows || []).map((r, index) => ({
-            rank: index + 1,
-            studentId: r.student_id,
-            studentName: r.student_name || `Student ${String(r.student_id).slice(-4)}`,
-            cumulativeScore: Number(r.cumulative_score) || 0,
-            totalQuizzesAnswered: Number(r.total_quizzes_answered) || 0,
-            correctCount: Number(r.correct_count) || 0,
-            accuracy: Number(r.accuracy) || 0,
-            avgTimeSpentMs: Number(r.avg_time_spent_ms) || 0,
-            lastSubmittedAt: Number(r.last_submitted_at) || Date.now(),
-          })),
-          summary: {
-            totalParticipants: rows ? rows.length : 0,
-            totalResponses,
-            averageScore,
-          },
-        });
+        const limit = parseInt(req.query.limit as string) || 5;
+        const result = diagnosticService.getTopPerformers(lessonId, limit);
+        res.json(result);
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -2096,50 +1970,9 @@ export function registerClassroomRoutes(
         return res.redirect(`/api/classroom/sessions/${lessonId}/top-performers`);
       }
 
-      const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
-      const rows = db
-        .prepare(
-          `
-          SELECT 
-            s.student_id,
-            COALESCE(s.student_name, stu.name, s.student_id) as student_name,
-            SUM(s.score) as cumulative_score,
-            COUNT(s.id) as total_quizzes_answered,
-            SUM(s.is_correct) as correct_count,
-            ROUND(AVG(s.is_correct) * 100, 1) as accuracy,
-            ROUND(AVG(s.time_spent_ms), 0) as avg_time_spent_ms,
-            MAX(s.submitted_at) as last_submitted_at
-          FROM lesson_quiz_submissions s
-          LEFT JOIN students stu ON s.student_id = stu.id
-          GROUP BY s.student_id
-          ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
-          LIMIT ?
-        `,
-        )
-        .all(limit) as any[];
-
-      res.json({
-        success: true,
-        topPerformers: (rows || []).map((r, index) => ({
-          rank: index + 1,
-          studentId: r.student_id,
-          studentName: r.student_name || `Student ${String(r.student_id).slice(-4)}`,
-          cumulativeScore: Number(r.cumulative_score) || 0,
-          totalQuizzesAnswered: Number(r.total_quizzes_answered) || 0,
-          correctCount: Number(r.correct_count) || 0,
-          accuracy: Number(r.accuracy) || 0,
-          avgTimeSpentMs: Number(r.avg_time_spent_ms) || 0,
-          lastSubmittedAt: Number(r.last_submitted_at) || Date.now(),
-        })),
-        summary: {
-          totalParticipants: rows.length,
-          totalResponses: rows.reduce((acc, cur) => acc + (Number(cur.total_quizzes_answered) || 0), 0),
-          averageScore:
-            rows.length > 0
-              ? Math.round(rows.reduce((acc, cur) => acc + (Number(cur.cumulative_score) || 0), 0) / rows.length)
-              : 0,
-        },
-      });
+      const limit = parseInt(req.query.limit as string) || 5;
+      const result = diagnosticService.getTopPerformers(undefined, limit);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e, 500);
     }
@@ -2152,75 +1985,11 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const studentsList = db.prepare('SELECT id, name FROM students LIMIT 8').all() as {
-          id: string;
-          name: string;
-        }[];
-
-        if (studentsList.length === 0) {
-          return res.status(400).json({ error: 'No students found in system' });
-        }
-
-        const dummyElementId = `quiz_sim_${Date.now()}`;
-        const questions = [
-          'Newton Second Law F=ma',
-          'Kinetic Energy Formula 1/2mv^2',
-          'Gravitational Constant G',
-          'Conservation of Momentum',
-        ];
-        const chosenQuestion = questions[Math.floor(Math.random() * questions.length)];
-
-        const results = [];
-        for (const st of studentsList) {
-          const isCorrect = Math.random() > 0.2;
-          const score = isCorrect ? Math.floor(Math.random() * 20 + 80) : Math.floor(Math.random() * 40);
-          const timeSpent = Math.floor(Math.random() * 15000 + 4000);
-          const subId = `sim-quiz-${lessonId}-${st.id}-${Date.now()}`;
-
-          try {
-            db.prepare(
-              `
-            INSERT INTO lesson_quiz_submissions
-              (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
-              score = lesson_quiz_submissions.score + excluded.score,
-              is_correct = excluded.is_correct,
-              time_spent_ms = excluded.time_spent_ms,
-              submitted_at = excluded.submitted_at
-          `,
-            ).run(
-              subId,
-              lessonId,
-              dummyElementId,
-              st.id,
-              st.name,
-              'A',
-              score,
-              isCorrect ? 1 : 0,
-              timeSpent,
-              Date.now(),
-            );
-          } catch (_) {}
-
-          const eventPayload = {
-            lessonId,
-            elementId: dummyElementId,
-            studentId: st.id,
-            studentName: st.name,
-            answer: 'A',
-            score,
-            isCorrect,
-            time: Date.now(),
-            question: chosenQuestion,
-          };
-
+        const results = await diagnosticService.simulateQuizResponses(lessonId, (eventPayload) => {
           if (io) {
             emitClassroomEvent(io, lessonId, 'whiteboard-quiz-answered', eventPayload);
           }
-
-          results.push({ studentId: st.id, name: st.name, score, isCorrect });
-        }
+        });
 
         res.json({ success: true, count: results.length, submissions: results });
       } catch (e: any) {

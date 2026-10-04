@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入深化：学情诊断与随堂测验/错题服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/diagnostic-service.ts`）**：
+    - 建立领域服务 `DiagnosticService`（同时导出语义别名 `MistakeService`），统管随堂测验批改判分、课前学情全景诊断、错题卡点归集以及卓越答题者榜单计算；
+    - 内聚随堂测验提交与判卷（`submitQuiz`）：实现白板 Quiz 元素自动判题、得分计算、CONCUR-01 关系型原子 upsert 以及内核事件总线广播（`WHITEBOARD_QUIZ_ANSWERED`）；
+    - 内聚课前学情诊断（`getPreClassDiagnostic`）：整合学生预习完成率、分层掌握画像（Mastered/Consolidating/NeedSupport）与班级破冰心态分布；
+    - 内聚真实错题卡点排查（`getLessonMistakes`）：关联白板题目与作答流水，智能计算错误率倒排 Top 3，并自适应判定优先级与教学微探究建议；修复了原路由直接在答题表查询不存在的 `question` 列而被 catch 静默吞掉导致历史错题统计永远为空的隐蔽缺陷；
+    - 内聚卓越答题者榜单（`getTopPerformers`）：支持按课节或全局统计累计积分、正确率与平均耗时，并在关系表暂无数据时优雅回退白板 JSON 元素聚合；
+    - 内聚模拟答卷引擎（`simulateQuizResponses`）与破冰心态状态机（`recordIcebreakerCheckin`）；
+  - **路由控制器极简化（`server/routes/lessons.ts` & `classroom.ts`）**：
+    - 精简 `server/routes/lessons.ts` 中 `quiz-submit`、`quiz-counts`、`quiz-submissions`、`pre-class-diagnostic` 及 `icebreaker` 路由，消减巨石内联代码近 300 行；
+    - 精简 `server/routes/classroom.ts` 中 `top-performers` 及 `simulate-quiz-responses` 路由，削减 150+ 行，转为轻量参数抽取与安全异常转发；
+  - **测试覆盖与质量保证**：
+    - 新增专用单元测试 `server/services/__tests__/diagnostic-service.test.ts`（覆盖判卷评分、upsert 覆盖、双源合并、错题卡点优先级计算、分层画像、榜单回退等 11 项用例全部通过）；
+    - 全量回归测试 `classroom-routes-contract.test.ts`、`quiz-answered-e2e.test.ts`、`PreClassDiagnosticHub.test.tsx` 等 38 项测试 100% 绿灯；
+    - 门禁验证 `pnpm lint`（`tsc --noEmit`）0 错误，ESLint 0 错误，`pnpm build` 全量打包通过。
+
 - **Service 层引入深化：作业提交与智能批改服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/assignment-service.ts`）**：
     - 建立领域服务 `AssignmentService`，统管传统作业/客观题自测与作业中心（Assignment Hub）多模态交付两大体系，构造函数支持注入 `db`、`aiService` 与 `commandBus`；

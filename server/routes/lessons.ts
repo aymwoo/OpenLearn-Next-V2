@@ -7,6 +7,7 @@ import { classRoom } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import { lessonActiveSegments } from '../shared-state.js';
 import type { ServerContext } from '../context.js';
+import { diagnosticService } from '../services/diagnostic-service.js';
 
 /**
  * 校验当前用户对课程的管理权 (水平越权 IDOR 防护)
@@ -618,98 +619,32 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:id/quiz-submit', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { id: lessonId } = req.params;
-      const { elementId, answer } = req.body;
-      if (!elementId || answer === undefined) {
-        return res.status(400).json({ error: 'Missing elementId or answer' });
-      }
-
+      const { elementId, answer, timeSpentMs } = req.body;
       const session = (req as any).session;
       const studentId = session.studentId || session.userId || 'guest';
+      const studentName = session.studentName || session.name || null;
 
-      // Retrieve the quiz element
-      const row = kernelContainer.db
-        .prepare('SELECT data FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
-        .get(elementId, lessonId) as { data: string } | undefined;
-      if (!row) {
-        return res.status(404).json({ error: 'Quiz element not found' });
-      }
+      const result = await diagnosticService.submitQuiz({
+        lessonId,
+        elementId,
+        studentId,
+        studentName,
+        answer,
+        timeSpentMs,
+      });
 
-      const dataObj = JSON.parse(row.data);
-      const correctAnswer = dataObj.correctAnswer;
-
-      // Determine correctness
-      let isCorrect = false;
-      let score = 0;
-      if (correctAnswer) {
-        const normalize = (s: string) => String(s).trim().toLowerCase();
-        isCorrect = normalize(answer) === normalize(correctAnswer);
-        score = isCorrect ? 100 : 0;
-      }
-
-      // CONCUR-01：关系型原子 upsert，唯一权威数据源。
-      // 历史上此处还把 submissions 写回 whiteboard_elements.data JSON —— 该读-改-写
-      // 在同题多名学生并发提交时互相覆盖丢成绩（2026-10-01 数据完整性整改根治），
-      // 现已移除；白板元素 data 中的 submissions 仅作为存量历史数据保留展示兜底。
-      kernelContainer.db
-        .prepare(
-          `INSERT INTO lesson_quiz_submissions
-             (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
-             answer = excluded.answer,
-             score = excluded.score,
-             is_correct = excluded.is_correct,
-             time_spent_ms = excluded.time_spent_ms,
-             submitted_at = excluded.submitted_at`,
-        )
-        .run(
-          `lqs-${lessonId}-${elementId}-${studentId}`,
-          lessonId,
-          elementId,
-          studentId,
-          session.studentName || session.name || null,
-          typeof answer === 'string' ? answer : JSON.stringify(answer),
-          score,
-          isCorrect ? 1 : 0,
-          Number(req.body?.timeSpentMs) || 0,
-          Date.now(),
-        );
-
-      // 随堂练习作答 → 经内核事件总线广播给教师/学生面板摄取。
-      await publishClassroomEvent(
-        CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED,
-        {
-          lessonId,
-          elementId,
-          studentId,
-          studentName: session.studentName || session.name || null,
-          answer,
-          score,
-          isCorrect,
-          time: Date.now(),
-          correctAnswer: dataObj.correctAnswer || null,
-          question: dataObj.question || null,
-        },
-        { correlationId: lessonId },
-      );
-
-      res.json({ success: true, isCorrect, score, studentId });
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
   // ── Quiz submission counts (all authenticated roles) ───────────────────────
-  // 白板测验卡片「N 人已交」计数的轻量数据源：仅返回计数，不含题目答案与学生
-  // 明细（学生端也渲染该卡片；明细与 correctAnswer 走 teacher/admin 专属的
-  // /quiz-submissions，防越权读答案）。
   app.get('/api/lessons/:id/quiz-counts', requireAuth(), (req, res) => {
     try {
       const { id: lessonId } = req.params;
-      const rows = kernelContainer.db
-        .prepare('SELECT element_id, COUNT(*) AS n FROM lesson_quiz_submissions WHERE lesson_id = ? GROUP BY element_id')
-        .all(lessonId) as Array<{ element_id: string; n: number }>;
-      res.json({ quizzes: rows.map((r) => ({ elementId: r.element_id, submissionCount: r.n })) });
+      const quizzes = diagnosticService.getQuizCounts(lessonId);
+      res.json({ quizzes });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -719,79 +654,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:id/quiz-submissions', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { id: lessonId } = req.params;
-
-      const elements = kernelContainer.db
-        .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
-        .all(lessonId, 'quiz') as { id: string; type: string; data: string }[];
-
-      // 尝试从关系型原子表查询该课节所有作答，避免仅读 JSON 遭遇高并发竞争覆盖
-      let relationalRows: Array<{
-        element_id: string;
-        student_id: string;
-        student_name: string | null;
-        answer: string;
-        score: number;
-        is_correct: number;
-        time_spent_ms: number;
-        submitted_at: number;
-      }> = [];
-      try {
-        relationalRows = kernelContainer.db
-          .prepare(
-            `SELECT element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at
-             FROM lesson_quiz_submissions
-             WHERE lesson_id = ?`,
-          )
-          .all(lessonId) as any[];
-      } catch {
-        // 未迁移时平滑回退
-      }
-
-      const relByElement = new Map<string, typeof relationalRows>();
-      for (const row of relationalRows) {
-        let list = relByElement.get(row.element_id);
-        if (!list) {
-          list = [];
-          relByElement.set(row.element_id, list);
-        }
-        list.push(row);
-      }
-
-      const quizzes = elements.map((el) => {
-        let parsed: any = {};
-        try {
-          parsed = JSON.parse(el.data);
-        } catch (_) {}
-
-        const submissions: Record<string, any> = { ...(parsed.submissions || {}) };
-        const rows = relByElement.get(el.id) || [];
-        for (const row of rows) {
-          let parsedAnswer: any = row.answer;
-          try {
-            parsedAnswer = JSON.parse(row.answer);
-          } catch {
-            // keep as raw string
-          }
-          submissions[row.student_id] = {
-            answer: parsedAnswer,
-            score: row.score,
-            time: row.submitted_at,
-            studentName: row.student_name,
-            isCorrect: row.is_correct === 1,
-            timeSpentMs: row.time_spent_ms,
-          };
-        }
-
-        return {
-          elementId: el.id,
-          question: parsed.question || '',
-          options: parsed.options || [],
-          correctAnswer: parsed.correctAnswer || null,
-          submissions,
-          submissionCount: Object.keys(submissions).length,
-        };
-      });
-
+      const quizzes = diagnosticService.getQuizSubmissions(lessonId);
       res.json({ success: true, quizzes });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -993,140 +856,12 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   // --- Pre-Class Diagnostic Hub & Pre-flight Healthcheck APIs ---
 
-  // 内存中维护各班级当堂课前的心态破冰统计
-  const classIcebreakerMap = new Map<string, { fullPower: number; needCoffee: number; needHelp: number }>();
-
   app.get('/api/lessons/:lessonId/pre-class-diagnostic', requireAuth(), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
       const classId = req.query.classId as string | undefined;
-
-      const lesson = kernelContainer.db
-        .prepare('SELECT id, title, content FROM lessons WHERE id = ?')
-        .get(lessonId) as any;
-      if (!lesson) {
-        return res.status(404).json({ error: 'Lesson not found' });
-      }
-
-      // 获取班级总学生数
-      let totalStudents = 32;
-      if (classId) {
-        const countRow = kernelContainer.db
-          .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
-          .get(classId) as any;
-        if (countRow?.count > 0) totalStudents = countRow.count;
-      }
-
-      // 查询学生真实预习进度记录（绝不捏造 82% 假数据）
-      let completedCount = 0;
-      try {
-        const progRows = kernelContainer.db
-          .prepare(
-            `
-          SELECT COUNT(*) as completed
-          FROM student_lesson_progress
-          WHERE lesson_id = ? AND progress_percent >= 80
-        `,
-          )
-          .get(lessonId) as any;
-        completedCount = Math.min(totalStudents, Number(progRows?.completed) || 0);
-      } catch {
-        completedCount = 0;
-      }
-
-      const completionRate = totalStudents > 0 ? Math.round((completedCount / totalStudents) * 100) : 0;
-
-      // 真实聚合该课节对应的前置答题错题卡点（无错题则返回空数组，绝不硬编码假物理题）
-      let topMistakes: any[] = [];
-      try {
-        const mistakeRows = kernelContainer.db
-          .prepare(
-            `
-          SELECT 
-            element_id,
-            COALESCE(question, element_id) as concept,
-            COUNT(*) as total_attempts,
-            SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as wrong_count
-          FROM lesson_quiz_submissions
-          WHERE lesson_id = ?
-          GROUP BY element_id
-          HAVING wrong_count > 0
-          ORDER BY (wrong_count * 1.0 / total_attempts) DESC
-          LIMIT 3
-        `,
-          )
-          .all(lessonId) as any[];
-
-        if (Array.isArray(mistakeRows) && mistakeRows.length > 0) {
-          topMistakes = mistakeRows.map((r, idx) => {
-            const mistakeRate = Math.round((r.wrong_count / r.total_attempts) * 100);
-            return {
-              rank: idx + 1,
-              concept: r.concept || `难点题 #${idx + 1}`,
-              mistakeRate,
-              sampleQuestion: `前置测验错题（共 ${r.total_attempts} 人作答，${r.wrong_count} 人出错）`,
-              pedagogicalAdvice:
-                mistakeRate >= 50
-                  ? '建议课中开篇安排 3-5 分钟微探究直击前置卡点'
-                  : '建议在讲解对应环节利用白板进行针对性答疑',
-              status: mistakeRate >= 50 ? 'high_priority' : mistakeRate >= 30 ? 'medium_priority' : 'low_priority',
-            };
-          });
-        }
-      } catch {
-        topMistakes = [];
-      }
-
-      // 班级真实破冰心态统计（无打卡记录时全为 0）
-      const existingIcebreaker = classId ? classIcebreakerMap.get(classId) : null;
-      const icebreakerStats = existingIcebreaker || {
-        fullPower: 0,
-        needCoffee: 0,
-        needHelp: 0,
-      };
-
-      // 真实分层分布统计
-      let tierA_mastered = 0;
-      let tierB_consolidating = 0;
-      let tierC_needSupport = 0;
-      try {
-        const tiers = kernelContainer.db
-          .prepare(
-            `
-          SELECT 
-            SUM(CASE WHEN progress_percent >= 90 THEN 1 ELSE 0 END) as tier_a,
-            SUM(CASE WHEN progress_percent >= 60 AND progress_percent < 90 THEN 1 ELSE 0 END) as tier_b,
-            SUM(CASE WHEN progress_percent < 60 THEN 1 ELSE 0 END) as tier_c
-          FROM student_lesson_progress
-          WHERE lesson_id = ?
-        `,
-          )
-          .get(lessonId) as any;
-        tierA_mastered = Number(tiers?.tier_a) || 0;
-        tierB_consolidating = Number(tiers?.tier_b) || 0;
-        tierC_needSupport = Number(tiers?.tier_c) || 0;
-      } catch {
-        // default 0
-      }
-
-      res.json({
-        lessonId,
-        lessonTitle: lesson.title,
-        prepSummary: {
-          totalStudents,
-          completedCount,
-          pendingCount: Math.max(0, totalStudents - completedCount),
-          completionRate,
-          averageTimeSpentMins: completedCount > 0 ? 15 : 0,
-        },
-        topMistakes,
-        studentDistribution: {
-          tierA_mastered,
-          tierB_consolidating,
-          tierC_needSupport,
-        },
-        icebreakerStats,
-      });
+      const result = diagnosticService.getPreClassDiagnostic(lessonId, classId);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -1136,23 +871,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     try {
       const classId = req.params.classId;
       const { mood } = req.body; // 'fullPower' | 'needCoffee' | 'needHelp'
-
-      const current = classIcebreakerMap.get(classId) || { fullPower: 0, needCoffee: 0, needHelp: 0 };
-      if (mood === 'fullPower') current.fullPower += 1;
-      else if (mood === 'needCoffee') current.needCoffee += 1;
-      else if (mood === 'needHelp') current.needHelp += 1;
-
-      classIcebreakerMap.set(classId, current);
+      const current = diagnosticService.recordIcebreakerCheckin(classId, mood);
 
       if (ctx.io) {
-        // 班级维度事件 → 投班级房间。原为全局 io.emit，会把 A 班的破冰统计
-        // 推给全平台客户端。
-        //
-        // ⚠️ 消费方是**教师端**的 `PreClassDiagnosticHub`（在教师专属的
-        // LiveClassroomView → PreClassReadyView 内），学生只打卡、不看统计。
-        // 班级房间原先只有学生在 register-student 时加入，教师加房间是后补的 ——
-        // 若哪天教师端又没 join 班级房间，这个事件就会对唯一的消费方静默失效。
-        // 详见 docs/classroom-time-flow-audit.md。
+        // 班级维度事件 → 投班级房间。
         ctx.io.to(classRoom(classId)).emit('classroom:icebreaker_updated', {
           classId,
           stats: current,
