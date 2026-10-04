@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **僵尸总线运行时清理与架构文档修正（P2-4, P2-5）**：
+  - **废弃总线子系统安全退役（`packages/core/event-bus-runtime/`）**：
+    - 全面清理历史遗留且与内核主力 `packages/core/event-bus/` 重叠冗余的 `event-bus-runtime` 目录（14 个文件，约 30KB 代码）；
+    - 将唯一依赖方 `src/features/classroom-runtime/classroom-event-bus.ts` 平滑切换至标准总线实现（`packages/core/event-bus/index.js`），保证类型与运行时行为 100% 兼容；
+    - 清理关联的过时测试 `packages/core/__tests__/event-bus.test.ts`，更新 `event-bus-port.test.ts` 注释说明；
+  - **开发架构指南全面对齐（`CLAUDE.md`）**：
+    - 修正系统目录树与架构分层，剔除 `server.ts (5000+ 行)`、`App.tsx (11000+ 行 160 useState)` 等早期巨石单体历史描述，如实体现当前 `server/routes/` 模块化、`src/features/` 与 Zustand 领域状态、`packages/core/worker-runtime` 隔离运行时的现行架构；
+    - 统一开发包管理器指令为 `pnpm`，补充 `pnpm test`、`pnpm lint:eslint` 与 `pnpm format` 自动化质量工具链；
+    - 纠正关于“无测试框架/无代码检查”的历史漂移，明确记录包含 300+ 测试文件与工作线程独立 SQLite 隔离的 Vitest 自动化测试网。
+
 - **数据库灾难恢复（Restore）与备份调度闭环（P1-5）**：
   - **灾备内核模块化抽象（`packages/core/db/backup-manager.ts`）**：
     - 抽取可编程式灾难备份与恢复管理核心 API（`performBackup`、`performRestore`、`validateBackup`、`listBackups`、`pruneBackups`）；

@@ -1,9 +1,7 @@
 /**
- * Phase B4: EventBus（event-bus/index.ts Port 实现）订阅取消与泄漏告警。
+ * Phase B4: EventBus（packages/core/event-bus/index.ts）订阅取消与泄漏告警。
  *
- * 注：runtime 主实现（event-bus-runtime/EventBus.ts）的 subscribe 本就返回
- * EventSubscriber 对象（含 unsubscribe()）；本文件覆盖 index.ts 的轻量实现，
- * 其 subscribe 原先返回 void（无法退订 → 长生命周期调用方监听器无限累积）。
+ * 覆盖 index.ts 的轻量生产实现（退订函数与内存泄漏告警）。
  */
 import { describe, it, expect, vi } from 'vitest';
 import { EventBus } from '../event-bus/index.js';
