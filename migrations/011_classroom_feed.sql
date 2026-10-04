@@ -25,3 +25,9 @@ CREATE TABLE IF NOT EXISTS classroom_feed (
 
 CREATE INDEX IF NOT EXISTS idx_classroom_feed_lesson ON classroom_feed(lesson_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_classroom_feed_session ON classroom_feed(session_id, created_at);
+
+-- DOWN
+-- 回滚 011：删除课堂动态流表与索引
+DROP INDEX IF EXISTS idx_classroom_feed_lesson;
+DROP INDEX IF EXISTS idx_classroom_feed_session;
+DROP TABLE IF EXISTS classroom_feed;

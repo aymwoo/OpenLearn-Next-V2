@@ -31,7 +31,7 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 1. **命名格式**: `NNN_description.sql`（`NNN` 为三位序号升序执行）；
 2. **段落切分**: 使用 `-- UP` 声明正向迁移操作，使用 `-- DOWN` 声明回滚逆操作。`parseMigrationSql` 对二者均为可选：未匹配到 `-- UP` 时**整份文件内容**即视为 UP，未匹配到 `-- DOWN` 时 `down` 为空串。
    - 因此「缺少 DOWN 段」不会阻塞**正向**应用，但 `rollbackMigration` 会在该迁移上直接 `throw new Error('Migration ... does not provide a DOWN rollback script.')`。**若希望某个迁移可回滚，`-- DOWN` 段是硬性要求。**
-   - 当前 `migrations/` 下的实际情况：`000`–`008`、`010`、`012`–`014` 均带 `-- UP` / `-- DOWN` 段；`009_classroom_peer_review.sql` 与 `011_classroom_feed.sql` 使用中文注释分节（`-- 背景:` / `-- UP` 风格不一致），实测**无** `-- UP` / `-- DOWN` 标记，其全文被当作 UP 执行，且不可回滚。**待确认**：`009` / `011` 是否需要补齐 DOWN 段。
+   - `migrations/` 下 **16 个迁移全部**带 `-- UP` / `-- DOWN` 段（2026-10-04 补齐了 `009_classroom_peer_review.sql` 与 `011_classroom_feed.sql` 的 DOWN，二者此前整篇被当作 UP 执行且不可回滚）。有 DOWN 段后 `rollbackMigration()` 对全部迁移均可用。
 3. **元表追踪**: 引擎自动维护 `_migrations` 状态表：
    ```sql
    CREATE TABLE IF NOT EXISTS _migrations (
@@ -44,7 +44,8 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 ### 关键容错与幂等机制
 
 - **增量比对**: 启动时查询 `_migrations` 已有记录，仅应用增量脚本（按 `name` 精确匹配）。
-- **校验和仅记录、不校验**: `runMigrations` 在应用后把 UP 段的 `simpleChecksum` 写入 `_migrations.checksum`，但**启动路径不读取、不比对**已有记录的 checksum。因此它只是审计留痕，**不提供**「已执行脚本被篡改即报错」的保护。
+- ✅ **校验和已实际校验**（2026-10-04 修复）：`runMigrations` 现在读出 `_migrations.checksum` 并与磁盘上 UP 段的 `simpleChecksum` 比对，检出漂移时返回 `ChecksumDrift[]` 并打印醒目告警。设 `MIGRATION_CHECKSUM_STRICT=true` 可改为直接抛错阻断启动（默认不阻断 —— 已执行的部分无法靠抛错回退，拒绝启动并不能修复它）。迁移文件已从磁盘移除的情况会跳过，不误报。
+- ✅ **逐条事务**（2026-10-04 修复）：此前 UP 脚本逐条 `db.exec` 且**不在事务内**，中途失败会留下半应用状态，且 `_migrations` 行未写入 → 重启后重跑已执行过的语句。现将「执行 + 登记 checksum」放进同一个 `db.transaction`，失败即整体回滚。
 - **无事务包裹**: 单条迁移的 UP 段由 `executeSqlStatements` 逐句 `db.exec`，语句间不显式开事务；中途失败会留下「部分已执行」的中间态，而 `_migrations` 记录不会写入，重启后会重跑该迁移（依赖上面的 `duplicate column name` 容错才能不炸）。
 - **历史库平滑升级 (Duplicate Column Tolerate)**: 执行 DDL 时，若遇到旧版本已手工添加的列报错（`duplicate column name`），`executeSqlStatements` 打印 `console.warn` 并 `continue`，迁移器自动记录安全提示并继续执行，保障存量老库无痛过渡至版本化管理。
 

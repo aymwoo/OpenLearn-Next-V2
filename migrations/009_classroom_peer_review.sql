@@ -140,3 +140,19 @@ CREATE TABLE IF NOT EXISTS classroom_peer_rubric_dimensions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cprd_session ON classroom_peer_rubric_dimensions(session_id, sort_order);
+
+-- DOWN
+-- 回滚 009：删除课中全班大屏互评（Peer Review）相关表与索引
+DROP INDEX IF EXISTS idx_cprt_session;
+DROP INDEX IF EXISTS idx_cprt_reviewer;
+DROP INDEX IF EXISTS idx_cpr_session;
+DROP INDEX IF EXISTS idx_cpb_session;
+DROP INDEX IF EXISTS idx_cpn_session;
+DROP INDEX IF EXISTS idx_cd_session;
+DROP INDEX IF EXISTS idx_cprd_session;
+DROP TABLE IF EXISTS classroom_peer_rubric_dimensions;
+DROP TABLE IF EXISTS classroom_peer_nominations;
+DROP TABLE IF EXISTS classroom_peer_badges;
+DROP TABLE IF EXISTS classroom_danmaku;
+DROP TABLE IF EXISTS classroom_peer_reviews;
+DROP TABLE IF EXISTS classroom_peer_review_tasks;

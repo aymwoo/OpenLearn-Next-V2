@@ -452,6 +452,70 @@ def _normalize_title(t: str) -> str:
     return re.sub(r"\s+", " ", t.strip().lower())
 
 
+def check_release_consistency(
+    docs_root: Path, repo_root: Path
+) -> tuple[list[RefItem], dict]:
+    """版本发布记录的三载体一致性：git tag / docs/release-notes/*.md / CHANGELOG.md。
+
+    发布记录散落在三处且互不覆盖，双向缺口长期无人察觉：
+    某个版本可能只有 release-notes 没有 tag（发布流程断链），
+    或只有 tag 没有 release-notes（读者看不到该版本做了什么）。
+
+    这里只做**提示**，不计入 drift —— 补历史记录需要人来判断哪个载体才是真的。
+    """
+    items: list[RefItem] = []
+
+    # 从 release-notes 文件名提取版本号（v0.3.22.md -> v0.3.22）
+    rn_dir = docs_root / "release-notes"
+    from_notes: set[str] = set()
+    if rn_dir.exists():
+        for p in rn_dir.glob("*.md"):
+            from_notes.add(p.stem)
+
+    def _git_tags() -> set[str]:
+        import subprocess
+        try:
+            out = subprocess.run(
+                ["git", "tag", "-l"], cwd=str(repo_root),
+                capture_output=True, text=True, timeout=20,
+            )
+            if out.returncode != 0:
+                return set()
+            return {t.strip() for t in out.stdout.splitlines() if t.strip()}
+        except Exception:
+            return set()
+
+    tags = _git_tags()
+    changelog = repo_root / "CHANGELOG.md"
+    changelog_text = changelog.read_text(encoding="utf-8", errors="replace") if changelog.exists() else ""
+
+    for v in sorted(from_notes - tags):
+        in_cl = f"## [{v}]" in changelog_text or f"## {v}" in changelog_text
+        items.append(RefItem(
+            check="release-consistency",
+            status="NOTE_ONLY",
+            target=v,
+            source_path="docs/release-notes",
+            line=1,
+            rule="NOTES_WITHOUT_TAG",
+            reason=f"有 release-notes 但无同名 git tag（发布流程断链）；CHANGELOG{'有' if in_cl else '无'}对应条目",
+        ))
+    for v in sorted(tags - from_notes):
+        if v.startswith("v") and re.match(r"^v\d+\.\d+", v):
+            items.append(RefItem(
+                check="release-consistency",
+                status="NOTE_ONLY",
+                target=v,
+                source_path="git tag",
+                line=0,
+                rule="TAG_WITHOUT_NOTES",
+                reason="有 git tag 但无 release-notes（读者看不到该版本变更）",
+            ))
+
+    return items, {"tagged": len(tags), "with_notes": len(from_notes), "notes_only": len(from_notes - tags),
+                   "tags_only": len({t for t in tags - from_notes if t.startswith("v") and re.match(r"^v\d+\.\d+", t)})}
+
+
 def check_duplicate_docs(docs: list[Path]) -> tuple[list[RefItem], dict]:
     """同一内容在多个路径重复: 首个 # 标题相同 或 文件名 stem 相同。"""
     items: list[RefItem] = []
@@ -521,7 +585,7 @@ def render_markdown(rep: RefReport) -> str:
     by_check: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for it in rep.items:
         by_check[it.check][it.status] += 1
-    for check in ("path-existence", "doc-link", "duplicate-docs"):
+    for check in ("path-existence", "doc-link", "duplicate-docs", "release-consistency"):
         st = by_check.get(check)
         if st:
             L.append(f"- `{check}`: " + ", ".join(f"{k}={v}" for k, v in sorted(st.items())))
@@ -592,6 +656,13 @@ def render_markdown(rep: RefReport) -> str:
         "命中即提示两处内容应合并。",
     )
 
+    rel_items = [i for i in rep.items if i.check == "release-consistency"]
+    section(
+        "发布记录一致性 (release-consistency)", rel_items,
+        "> 比对 `git tag`、`docs/release-notes/*.md` 与 `CHANGELOG.md` 三个载体。"
+        "**仅提示、不计入 drift** —— 补历史记录需要判断哪个载体才是真的，工具不该替人决定。",
+    )
+
     return "\n".join(L)
 
 
@@ -614,6 +685,10 @@ def run(docs_root: Path, repo_root: Path) -> RefReport:
     dup_items, dup_stats = check_duplicate_docs(docs)
     rep.items.extend(dup_items)
     rep.stats["duplicate_docs"] = dup_stats
+
+    rel_items, rel_stats = check_release_consistency(docs_root, repo_root)
+    rep.items.extend(rel_items)
+    rep.stats["release_consistency"] = rel_stats
 
     # 待复核横幅台账（不计入 drift，只做可见性统计）
     banner_files = sorted(
