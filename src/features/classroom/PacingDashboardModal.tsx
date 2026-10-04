@@ -28,6 +28,7 @@ export interface PacingDashboardModalProps {
   signals: PacingSignals;
   onlineCount?: number;
   onClose: () => void;
+  activeSegmentTitle?: string | null;
 }
 
 const META = {
@@ -39,7 +40,14 @@ const META = {
 
 const SIGNAL_KEYS = ['CLEAR', 'CONFUSED', 'TOO_FAST', 'SLOW'] as const;
 
-export function PacingDashboardModal({ lessonId, lang, signals, onlineCount = 0, onClose }: PacingDashboardModalProps) {
+export function PacingDashboardModal({
+  lessonId,
+  lang,
+  signals,
+  onlineCount = 0,
+  onClose,
+  activeSegmentTitle,
+}: PacingDashboardModalProps) {
   const zh = lang === 'zh';
   const [windowSignals, setWindowSignals] = useState<PacingSignals>(signals);
 
@@ -114,7 +122,13 @@ export function PacingDashboardModal({ lessonId, lang, signals, onlineCount = 0,
                 </span>
               </h2>
               <p className="text-2xs text-muted mt-0.5">
-                {zh ? '近 5 分钟窗口 · 全班节奏反馈聚合' : 'Last 5 minutes · aggregated pace feedback'}
+                {activeSegmentTitle
+                  ? zh
+                    ? `当前教学环节: ${activeSegmentTitle} · 去重实时聚合`
+                    : `Active Segment: ${activeSegmentTitle} · Real-time`
+                  : zh
+                    ? '按环节去重 · 实时节奏反馈聚合'
+                    : 'Deduplicated real-time pacing feedback'}
               </p>
             </div>
           </div>

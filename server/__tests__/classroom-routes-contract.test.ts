@@ -202,19 +202,90 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     });
   });
 
-  describe('节奏信号字段名', () => {
+  describe('节奏信号字段名与分环节防刷票去重', () => {
     const summaryOf = (json: any) => json.summary;
 
     it('接受契约字段 signal 并写入数据库', async () => {
-      const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, { signal: 'CONFUSED' });
+      const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+        signal: 'CONFUSED',
+        segmentId: 'seg_intro',
+      });
       expect(res.status).toBe(200);
-      expect(summaryOf(await res.json()).CONFUSED).toBeGreaterThanOrEqual(1);
+      const json: any = await res.json();
+      expect(summaryOf(json).CONFUSED).toBe(1);
+      expect(json.currentSignal).toBe('CONFUSED');
+      expect(json.activeSegmentId).toBe('seg_intro');
     });
 
     it('兼容旧字段 signalType（既往前端体不再 400）', async () => {
-      const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, { signalType: 'TOO_FAST' });
+      const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+        signalType: 'TOO_FAST',
+        segmentId: 'seg_intro',
+      });
       expect(res.status).toBe(200);
-      expect(summaryOf(await res.json()).TOO_FAST).toBeGreaterThanOrEqual(1);
+      const json: any = await res.json();
+      // 同一学生同一环节，状态由 CONFUSED 迁移至 TOO_FAST，总票数不累加
+      expect(summaryOf(json).TOO_FAST).toBe(1);
+      expect(summaryOf(json).CONFUSED).toBe(0);
+      expect(json.currentSignal).toBe('TOO_FAST');
+    });
+
+    it('同一学生同一环节再次点击相同选项且 toggle=true 时，取消反馈', async () => {
+      const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+        signal: 'TOO_FAST',
+        segmentId: 'seg_intro',
+        toggle: true,
+      });
+      expect(res.status).toBe(200);
+      const json: any = await res.json();
+      expect(json.currentSignal).toBeNull();
+      expect(summaryOf(json).TOO_FAST).toBe(0);
+    });
+
+    it('不同环节之间独立反馈，各环节独立存储与聚合', async () => {
+      // 学生1在 seg_part1 投 CLEAR
+      const res1 = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+        signal: 'CLEAR',
+        segmentId: 'seg_part1',
+      });
+      expect(res1.status).toBe(200);
+
+      // 学生2在 seg_part1 投 CONFUSED
+      const res2 = await post(`/api/classroom/sessions/${lessonId}/pacing`, student2Token, {
+        signal: 'CONFUSED',
+        segmentId: 'seg_part1',
+      });
+      expect(res2.status).toBe(200);
+
+      // 学生1在 seg_part2 投 SLOW
+      const res3 = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+        signal: 'SLOW',
+        segmentId: 'seg_part2',
+      });
+      expect(res3.status).toBe(200);
+
+      // 验证 seg_part2 的当前环节统计
+      const json3: any = await res3.json();
+      expect(json3.summary.SLOW).toBe(1);
+      expect(json3.summary.CLEAR).toBe(0);
+
+      // 全课总览应包含各环节所有反馈
+      expect(json3.overallSummary.CLEAR).toBe(1);
+      expect(json3.overallSummary.CONFUSED).toBe(1);
+      expect(json3.overallSummary.SLOW).toBe(1);
+
+      // 通过 GET pacing-summary 查询 seg_part1 下的学生1状态和该环节汇总
+      const sumRes = await fetch(
+        `${baseUrl}/api/classroom/sessions/${lessonId}/pacing-summary?segmentId=seg_part1`,
+        { headers: cookie(studentToken) },
+      );
+      expect(sumRes.status).toBe(200);
+      const sumJson: any = await sumRes.json();
+      expect(sumJson.mySignal).toBe('CLEAR');
+      expect(sumJson.currentSegmentSummary.CLEAR).toBe(1);
+      expect(sumJson.currentSegmentSummary.CONFUSED).toBe(1);
+      expect(sumJson.segmentsBreakdown.seg_part1.CLEAR).toBe(1);
+      expect(sumJson.segmentsBreakdown.seg_part2.SLOW).toBe(1);
     });
 
     it('非法信号类型仍然 400', async () => {

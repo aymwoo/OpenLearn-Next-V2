@@ -56,7 +56,13 @@ export function ClassroomBriefingView({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportData, setReportData] = useState<any>(null);
-  const [pacingData, setPacingData] = useState({ TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 });
+  const [pacingData, setPacingData] = useState<{ TOO_FAST: number; SLOW: number; CONFUSED: number; CLEAR: number }>({
+    TOO_FAST: 0,
+    SLOW: 0,
+    CONFUSED: 0,
+    CLEAR: 0,
+  });
+  const [segmentNames, setSegmentNames] = useState<Record<string, string>>({});
   const [selectedStudentForDigest, setSelectedStudentForDigest] = useState<StudentPersonalDigest | null>(null);
 
   useEffect(() => {
@@ -70,10 +76,42 @@ export function ClassroomBriefingView({
       fetch(`/api/classroom/stage/${selectedLesson}/data`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
-    ]).then(([rep, stage]) => {
-      if (rep) setReportData(rep);
-      if (stage?.pacing) {
-        setPacingData(stage.pacing);
+      fetch(`/api/lessons/${selectedLesson}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([rep, stage, lessonRes]) => {
+      if (rep) {
+        setReportData(rep);
+        if (rep.metrics?.pacingOverall) {
+          setPacingData({
+            TOO_FAST: 0,
+            SLOW: 0,
+            CONFUSED: 0,
+            CLEAR: 0,
+            ...rep.metrics.pacingOverall,
+          });
+        }
+      }
+      if (stage?.pacing && (!rep || !rep.metrics?.pacingOverall)) {
+        setPacingData({
+          TOO_FAST: 0,
+          SLOW: 0,
+          CONFUSED: 0,
+          CLEAR: 0,
+          ...stage.pacing,
+        });
+      }
+      if (lessonRes?.timeline) {
+        try {
+          const raw = typeof lessonRes.timeline === 'string' ? JSON.parse(lessonRes.timeline) : lessonRes.timeline;
+          if (Array.isArray(raw)) {
+            const map: Record<string, string> = {};
+            raw.forEach((s: any) => {
+              if (s?.id && s?.title) map[s.id] = s.title;
+            });
+            setSegmentNames(map);
+          }
+        } catch (_) {}
       }
       setLoading(false);
     });
@@ -86,12 +124,15 @@ export function ClassroomBriefingView({
   const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? 0;
   const durationMin = reportData?.session?.durationMin ?? 0;
 
-  const rawPacingSum = pacingData.CLEAR + pacingData.CONFUSED + pacingData.TOO_FAST;
+  const rawPacingSum =
+    (pacingData.CLEAR || 0) + (pacingData.CONFUSED || 0) + (pacingData.TOO_FAST || 0) + (pacingData.SLOW || 0);
   const hasPacingData = rawPacingSum > 0;
   const totalPacing = hasPacingData ? rawPacingSum : 0;
-  const clearPercent = hasPacingData ? Math.round((pacingData.CLEAR / rawPacingSum) * 100) : 0;
-  const confusedPercent = hasPacingData ? Math.round((pacingData.CONFUSED / rawPacingSum) * 100) : 0;
-  const fastPercent = hasPacingData ? Math.max(0, 100 - clearPercent - confusedPercent) : 0;
+  const clearPercent = hasPacingData ? Math.round(((pacingData.CLEAR || 0) / rawPacingSum) * 100) : 0;
+  const confusedPercent = hasPacingData ? Math.round(((pacingData.CONFUSED || 0) / rawPacingSum) * 100) : 0;
+  const fastPercent = hasPacingData ? Math.round(((pacingData.TOO_FAST || 0) / rawPacingSum) * 100) : 0;
+  const slowPercent = hasPacingData ? Math.max(0, 100 - clearPercent - confusedPercent - fastPercent) : 0;
+  const pacingBySegment: Record<string, Record<string, number>> = reportData?.metrics?.pacingBySegment || {};
 
   /**
    * 逐生学情记录 —— 全部来自服务端 panoramic-report.students 真实聚合：
@@ -384,13 +425,96 @@ export function ClassroomBriefingView({
                   <div className="flex justify-between text-xs font-semibold mb-1">
                     <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">🐇 讲太快了 / 跟不上</span>
                     <span className="font-mono">
-                      {pacingData.TOO_FAST} 人 ({fastPercent}%)
+                      {pacingData.TOO_FAST || 0} 人 ({fastPercent}%)
                     </span>
                   </div>
                   <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
                     <div className="bg-rose-500 h-full" style={{ width: `${fastPercent}%` }} />
                   </div>
                 </div>
+
+                {(pacingData.SLOW || 0) > 0 && (
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold mb-1">
+                      <span className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                        🐢 讲太慢了 / 希望提速
+                      </span>
+                      <span className="font-mono">
+                        {pacingData.SLOW} 人 ({slowPercent}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
+                      <div className="bg-indigo-500 h-full" style={{ width: `${slowPercent}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* 分环节对比细明 */}
+                {Object.keys(pacingBySegment).length > 0 && (
+                  <div className="pt-3 border-t border-theme/60 mt-1 flex flex-col gap-2">
+                    <span className="text-3xs font-extrabold text-muted uppercase">
+                      {lang === 'zh' ? '各教学环节反馈对比:' : 'Breakdown by Segment:'}
+                    </span>
+                    <div className="space-y-1.5">
+                      {Object.entries(pacingBySegment).map(([segId, segCounts]) => {
+                        const totalSeg =
+                          (segCounts.CLEAR || 0) +
+                          (segCounts.CONFUSED || 0) +
+                          (segCounts.TOO_FAST || 0) +
+                          (segCounts.SLOW || 0);
+                        const segClearPercent =
+                          totalSeg > 0 ? Math.round(((segCounts.CLEAR || 0) / totalSeg) * 100) : 0;
+                        const segTitle =
+                          segmentNames[segId] ||
+                          (segId === 'default' ? (lang === 'zh' ? '课堂全段' : 'Default') : segId);
+
+                        return (
+                          <div
+                            key={segId}
+                            className="p-2 rounded-xl bg-surface-secondary/40 border border-theme/40 text-2xs flex flex-col gap-1"
+                          >
+                            <div className="flex items-center justify-between font-bold">
+                              <span className="text-main truncate max-w-[140px]">{segTitle}</span>
+                              <span className="text-muted font-mono">
+                                {totalSeg} 人反馈 · 掌握度 {segClearPercent}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-surface-secondary h-1.5 rounded-full overflow-hidden flex">
+                              <div
+                                className="bg-emerald-500 h-full"
+                                style={{
+                                  width: `${totalSeg > 0 ? ((segCounts.CLEAR || 0) / totalSeg) * 100 : 0}%`,
+                                }}
+                                title={`听懂了: ${segCounts.CLEAR || 0}`}
+                              />
+                              <div
+                                className="bg-amber-500 h-full"
+                                style={{
+                                  width: `${totalSeg > 0 ? ((segCounts.CONFUSED || 0) / totalSeg) * 100 : 0}%`,
+                                }}
+                                title={`困惑: ${segCounts.CONFUSED || 0}`}
+                              />
+                              <div
+                                className="bg-rose-500 h-full"
+                                style={{
+                                  width: `${totalSeg > 0 ? ((segCounts.TOO_FAST || 0) / totalSeg) * 100 : 0}%`,
+                                }}
+                                title={`太快: ${segCounts.TOO_FAST || 0}`}
+                              />
+                              <div
+                                className="bg-indigo-500 h-full"
+                                style={{
+                                  width: `${totalSeg > 0 ? ((segCounts.SLOW || 0) / totalSeg) * 100 : 0}%`,
+                                }}
+                                title={`太慢: ${segCounts.SLOW || 0}`}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -77,6 +77,9 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
     safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN is_correct INTEGER DEFAULT 0;');
     safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN tier_level TEXT DEFAULT "passed";');
     safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN challenge_answer TEXT;');
+
+    // 确保 classroom_pacing_signals 表具备教学环节字段
+    safeAddColumn('ALTER TABLE classroom_pacing_signals ADD COLUMN segment_id TEXT;');
   } catch (e) {
     console.error('Error ensuring student_rollcalls or classroom_exit_tickets table:', e);
   }

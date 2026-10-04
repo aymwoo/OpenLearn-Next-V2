@@ -3,6 +3,7 @@ import { Bell, Sparkles, TrendingUp, CheckCircle2, HelpCircle, Zap, Star, X } fr
 import { StudentCountdownBanner } from './StudentCountdownBanner';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
+import { getOptionalSocket } from '../../services/socket-service';
 
 export interface StudentInteractiveOverlayProps {
   lessonId: string | null;
@@ -20,6 +21,13 @@ export function StudentInteractiveOverlay({
   const [activePoll, setActivePoll] = useState<any>(null);
   const [activeBuzzer, setActiveBuzzer] = useState<any>(null);
   const [stage, setStage] = useState<string>('IN_CLASS_TEACHING');
+
+  // 教学环节与分环节节奏晴雨表状态
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [segmentTitles, setSegmentTitles] = useState<Record<string, string>>({});
+  const [currentPacingSignal, setCurrentPacingSignal] = useState<'TOO_FAST' | 'SLOW' | 'CONFUSED' | 'CLEAR' | null>(
+    null,
+  );
 
   // 作答与抢答状态
   const [selectedPollOption, setSelectedPollOption] = useState<string | null>(null);
@@ -76,6 +84,9 @@ export function StudentInteractiveOverlay({
           const json = await res.json();
           if (json.hasActiveSession) {
             setStage(json.stage);
+            if (json.session?.current_segment_id) {
+              setActiveSegmentId(json.session.current_segment_id);
+            }
 
             // 如果处于结课通票阶段且尚未提交，打开通票模态框
             if (json.stage === 'WRAP_UP_EXIT_TICKET' && !exitTicketSubmittedRef.current) {
@@ -155,26 +166,102 @@ export function StudentInteractiveOverlay({
     // 一律通过上面的 ref 读取：把它们放进依赖会导致自激轮询（见 activeBuzzerRef 注释）。
   }, [lessonId, studentId]);
 
+  // 监听教师广播的教学环节切换
+  useEffect(() => {
+    const socket = getOptionalSocket();
+    if (!socket || !lessonId) return;
+
+    const handleSegmentChanged = (data: any) => {
+      if (data?.lessonId === lessonId && data?.activeSegmentId) {
+        setActiveSegmentId(data.activeSegmentId);
+      }
+    };
+    socket.on('student-active-segment-changed', handleSegmentChanged);
+    return () => {
+      if (typeof socket.off === 'function') {
+        socket.off('student-active-segment-changed', handleSegmentChanged);
+      }
+    };
+  }, [lessonId]);
+
+  // 加载当前课节的大纲环节名称字典
+  useEffect(() => {
+    if (!lessonId) return;
+    fetch(`/api/lessons/${lessonId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.timeline) {
+          try {
+            const raw = typeof data.timeline === 'string' ? JSON.parse(data.timeline) : data.timeline;
+            if (Array.isArray(raw)) {
+              const map: Record<string, string> = {};
+              raw.forEach((s: any) => {
+                if (s?.id && s?.title) map[s.id] = s.title;
+              });
+              setSegmentTitles(map);
+            }
+          } catch (_) {}
+        }
+      })
+      .catch(() => {});
+  }, [lessonId]);
+
+  // 当环节变化或初次挂载时，查询当前学生在当前环节的反馈状态
+  useEffect(() => {
+    if (!lessonId) return;
+    const seg = activeSegmentId || 'default';
+    fetch(`/api/classroom/sessions/${lessonId}/pacing-summary?segmentId=${encodeURIComponent(seg)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.success) {
+          setCurrentPacingSignal(data.mySignal || null);
+        }
+      })
+      .catch(() => {});
+  }, [lessonId, activeSegmentId]);
+
   if (!lessonId) return null;
 
-  // 发送节奏信号
+  // 发送、切换或取消节奏信号（按当前环节去重）
   const sendPacingSignal = async (signalType: 'TOO_FAST' | 'SLOW' | 'CONFUSED' | 'CLEAR') => {
     try {
-      await fetch(`/api/classroom/sessions/${lessonId}/pacing`, {
+      const isToggleCancel = currentPacingSignal === signalType;
+      const res = await fetch(`/api/classroom/sessions/${lessonId}/pacing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signal: signalType }),
+        body: JSON.stringify({
+          signal: isToggleCancel ? null : signalType,
+          action: isToggleCancel ? 'cancel' : undefined,
+          toggle: true,
+          segmentId: activeSegmentId || 'default',
+        }),
       });
-      setPacingFeedback(
-        signalType === 'TOO_FAST'
-          ? '🐇 太快'
-          : signalType === 'SLOW'
-            ? '🐢 太慢'
-            : signalType === 'CONFUSED'
-              ? '❓ 困惑'
-              : '💡 听懂了',
-      );
-      setTimeout(() => setPacingFeedback(null), 2000);
+      if (res.ok) {
+        const json = await res.json();
+        setCurrentPacingSignal(json.currentSignal ?? null);
+        if (json.currentSignal) {
+          setPacingFeedback(
+            signalType === 'TOO_FAST'
+              ? lang === 'zh'
+                ? '已反馈: 🐇 讲太快'
+                : 'Pacing: Too Fast'
+              : signalType === 'SLOW'
+                ? lang === 'zh'
+                  ? '已反馈: 🐢 讲太慢'
+                  : 'Pacing: Too Slow'
+                : signalType === 'CONFUSED'
+                  ? lang === 'zh'
+                    ? '已反馈: ❓ 有疑问'
+                    : 'Pacing: Confused'
+                  : lang === 'zh'
+                    ? '已反馈: 💡 听懂了'
+                    : 'Pacing: Clear',
+          );
+        } else {
+          setPacingFeedback(lang === 'zh' ? '已取消反馈' : 'Feedback cleared');
+        }
+        setTimeout(() => setPacingFeedback(null), 2500);
+      }
     } catch (e) {
       // silent
     }
@@ -283,45 +370,85 @@ export function StudentInteractiveOverlay({
       {/* 悬浮学习节奏信号条 (底部浮动) */}
       <aside
         aria-label={lang === 'zh' ? '课堂互动工具栏' : 'Classroom interaction toolbar'}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-surface/95 backdrop-blur-md border border-border/80 p-2 rounded-2xl shadow-xl transition-all"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 bg-surface/95 backdrop-blur-md border border-theme p-2 rounded-2xl shadow-2xl transition-all"
       >
+        {/* 教学环节标签指示 */}
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-secondary/70 rounded-xl border border-theme text-2xs font-bold text-muted">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary-theme animate-pulse" />
+          <span className="truncate max-w-[120px]">
+            {activeSegmentId && segmentTitles[activeSegmentId]
+              ? segmentTitles[activeSegmentId]
+              : lang === 'zh'
+                ? '当前环节'
+                : 'Current Segment'}
+          </span>
+        </div>
+
         {pacingFeedback && (
-          <span className="text-xs font-bold text-primary-theme px-2 py-1 animate-fade-in">
-            {pacingFeedback} 已传达给老师
+          <span className="text-2xs font-bold text-primary-theme px-1.5 py-0.5 animate-fade-in whitespace-nowrap">
+            {pacingFeedback}
           </span>
         )}
+
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => sendPacingSignal('CLEAR')}
-            className="px-2.5 py-1.5 rounded-xl hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
-            title="听懂了，节奏适宜"
+            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
+              currentPacingSignal === 'CLEAR'
+                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 ring-2 ring-emerald-500/60 shadow-xs'
+                : 'hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            }`}
+            title={lang === 'zh' ? '听懂了，节奏适宜（再次点击取消）' : 'Clear & Optimal (Click again to cancel)'}
           >
             <span>💡</span>
             <span className="hidden sm:inline">{lang === 'zh' ? '听懂了' : 'Clear'}</span>
+            {currentPacingSignal === 'CLEAR' && <span className="text-3xs ml-0.5 font-bold">✓</span>}
           </button>
+
           <button
+            type="button"
             onClick={() => sendPacingSignal('CONFUSED')}
-            className="px-2.5 py-1.5 rounded-xl hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
-            title="有点困惑，希望老师点拨"
+            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
+              currentPacingSignal === 'CONFUSED'
+                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 ring-2 ring-amber-500/60 shadow-xs'
+                : 'hover:bg-amber-500/10 text-amber-600 dark:text-amber-400'
+            }`}
+            title={lang === 'zh' ? '有点困惑，希望老师点拨（再次点击取消）' : 'Confused (Click again to cancel)'}
           >
             <span>❓</span>
             <span className="hidden sm:inline">{lang === 'zh' ? '有疑问' : 'Confused'}</span>
+            {currentPacingSignal === 'CONFUSED' && <span className="text-3xs ml-0.5 font-bold">✓</span>}
           </button>
+
           <button
+            type="button"
             onClick={() => sendPacingSignal('TOO_FAST')}
-            className="px-2.5 py-1.5 rounded-xl hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
-            title="讲得太快了，希望能慢一点"
+            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
+              currentPacingSignal === 'TOO_FAST'
+                ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 ring-2 ring-rose-500/60 shadow-xs'
+                : 'hover:bg-rose-500/10 text-rose-600 dark:text-rose-400'
+            }`}
+            title={lang === 'zh' ? '讲得太快了，希望能慢一点（再次点击取消）' : 'Too fast (Click again to cancel)'}
           >
             <span>🐇</span>
             <span className="hidden sm:inline">{lang === 'zh' ? '讲太快' : 'Too Fast'}</span>
+            {currentPacingSignal === 'TOO_FAST' && <span className="text-3xs ml-0.5 font-bold">✓</span>}
           </button>
+
           <button
+            type="button"
             onClick={() => sendPacingSignal('SLOW')}
-            className="px-2.5 py-1.5 rounded-xl hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
-            title="讲太慢了，希望快一点"
+            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
+              currentPacingSignal === 'SLOW'
+                ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 ring-2 ring-indigo-500/60 shadow-xs'
+                : 'hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+            }`}
+            title={lang === 'zh' ? '讲太慢了，希望快一点（再次点击取消）' : 'Too slow (Click again to cancel)'}
           >
             <span>🐢</span>
             <span className="hidden sm:inline">{lang === 'zh' ? '讲太慢' : 'Too Slow'}</span>
+            {currentPacingSignal === 'SLOW' && <span className="text-3xs ml-0.5 font-bold">✓</span>}
           </button>
         </div>
       </aside>

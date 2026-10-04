@@ -908,53 +908,243 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const { signal, signalType } = req.body; // 'TOO_FAST' | 'CONFUSED' | 'CLEAR'
+        const { signal, signalType, segmentId, action, toggle } = req.body || {};
         const session = (req as any).session;
         const studentId = session.studentId || session.userId || getActorId(req) || 'student';
 
         // 兼容两种字段名（服务端契约为 signal，早期前端发的是 signalType）
-        const pacingSignal = signal ?? signalType;
+        const rawSignal = signal !== undefined ? signal : signalType;
+        const isCancelAction = action === 'cancel' || rawSignal === null || rawSignal === 'CANCEL';
+
         // TOO_FAST=讲太快(希望慢一点) / SLOW=讲太慢(希望快一点) / CONFUSED=困惑 / CLEAR=理解
-        if (!['TOO_FAST', 'SLOW', 'CONFUSED', 'CLEAR'].includes(pacingSignal)) {
+        if (!isCancelAction && !['TOO_FAST', 'SLOW', 'CONFUSED', 'CLEAR'].includes(rawSignal)) {
           return res.status(400).json({ error: 'Invalid pacing signal' });
         }
 
         const activeSession = db
-          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .prepare(
+            'SELECT id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
           .get(lessonId) as any;
         const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
 
-        const signalId = randomId('ps_');
-        db.prepare(
-          `
-        INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `,
-        ).run(signalId, sessionId, studentId, pacingSignal, Date.now());
+        // 环节标识：如果请求中指定则用指定的，否则使用当前课节正在进行的环节，未指定则归一化为 'default'
+        const targetSegmentId =
+          segmentId !== undefined && segmentId !== null && String(segmentId).trim()
+            ? String(segmentId).trim()
+            : activeSession?.current_segment_id || 'default';
 
-        // 计算过去 5 分钟内的信号聚合
-        const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
-        const counts = db
-          .prepare(
-            `
-        SELECT signal_type, COUNT(*) as count
-        FROM classroom_pacing_signals
-        WHERE session_id = ? AND created_at > ?
-        GROUP BY signal_type
-      `,
-          )
-          .all(sessionId, fiveMinsAgo) as { signal_type: string; count: number }[];
+        // 检查当前学生在当前环节是否已有记录（单生单环节唯一）
+        let existing: { id: string; signal_type: string } | undefined;
+        let hasSegmentCol = true;
+        try {
+          existing = db
+            .prepare(
+              "SELECT id, signal_type FROM classroom_pacing_signals WHERE session_id = ? AND student_id = ? AND (segment_id = ? OR (segment_id IS NULL AND ? = 'default')) LIMIT 1",
+            )
+            .get(sessionId, studentId, targetSegmentId, targetSegmentId) as any;
+        } catch (err: any) {
+          if (err?.message?.includes('segment_id') || err?.message?.includes('no such column')) {
+            hasSegmentCol = false;
+            existing = db
+              .prepare(
+                'SELECT id, signal_type FROM classroom_pacing_signals WHERE session_id = ? AND student_id = ? LIMIT 1',
+              )
+              .get(sessionId, studentId) as any;
+          } else {
+            throw err;
+          }
+        }
+
+        let currentSignal: string | null = null;
+        if (isCancelAction || (toggle && existing && existing.signal_type === rawSignal)) {
+          // 取消反馈
+          if (existing) {
+            db.prepare('DELETE FROM classroom_pacing_signals WHERE id = ?').run(existing.id);
+          }
+          currentSignal = null;
+        } else {
+          currentSignal = rawSignal;
+          const now = Date.now();
+          if (existing) {
+            if (hasSegmentCol) {
+              db.prepare(
+                'UPDATE classroom_pacing_signals SET signal_type = ?, created_at = ?, segment_id = ? WHERE id = ?',
+              ).run(rawSignal, now, targetSegmentId, existing.id);
+            } else {
+              db.prepare('UPDATE classroom_pacing_signals SET signal_type = ?, created_at = ? WHERE id = ?').run(
+                rawSignal,
+                now,
+                existing.id,
+              );
+            }
+          } else {
+            const signalId = randomId('ps_');
+            if (hasSegmentCol) {
+              db.prepare(
+                'INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at, segment_id) VALUES (?, ?, ?, ?, ?, ?)',
+              ).run(signalId, sessionId, studentId, rawSignal, now, targetSegmentId);
+            } else {
+              db.prepare(
+                'INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at) VALUES (?, ?, ?, ?, ?)',
+              ).run(signalId, sessionId, studentId, rawSignal, now);
+            }
+          }
+        }
+
+        // 计算当前环节内的去重聚合
+        let counts: { signal_type: string; count: number }[] = [];
+        if (hasSegmentCol) {
+          counts = db
+            .prepare(
+              `
+            SELECT signal_type, COUNT(*) as count
+            FROM classroom_pacing_signals
+            WHERE session_id = ? AND (segment_id = ? OR (segment_id IS NULL AND ? = 'default'))
+            GROUP BY signal_type
+          `,
+            )
+            .all(sessionId, targetSegmentId, targetSegmentId) as any[];
+        } else {
+          counts = db
+            .prepare(
+              `
+            SELECT signal_type, COUNT(*) as count
+            FROM classroom_pacing_signals
+            WHERE session_id = ?
+            GROUP BY signal_type
+          `,
+            )
+            .all(sessionId) as any[];
+        }
 
         const summary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
         counts.forEach((c) => {
           summary[c.signal_type] = c.count;
         });
 
+        // 计算整堂课的总体聚合
+        const overallRows = db
+          .prepare(
+            `
+          SELECT signal_type, COUNT(*) as count
+          FROM classroom_pacing_signals
+          WHERE session_id = ?
+          GROUP BY signal_type
+        `,
+          )
+          .all(sessionId) as { signal_type: string; count: number }[];
+        const overallSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+        overallRows.forEach((r) => {
+          overallSummary[r.signal_type] = r.count;
+        });
+
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:pacing_updated', { lessonId, summary });
+          emitClassroomEvent(io, lessonId, 'classroom:pacing_updated', {
+            lessonId,
+            segmentId: targetSegmentId,
+            summary,
+            overallSummary,
+          });
         }
 
-        res.json({ success: true, summary });
+        res.json({
+          success: true,
+          activeSegmentId: targetSegmentId,
+          currentSignal,
+          summary,
+          overallSummary,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // 查询当前课节按环节与全课维度的节奏晴雨表汇总及当前用户的选择状态
+  app.get(
+    '/api/classroom/sessions/:lessonId/pacing-summary',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { segmentId } = req.query;
+        const session = (req as any).session;
+        const studentId = session?.studentId || session?.userId || getActorId(req);
+
+        const activeSession = db
+          .prepare(
+            'SELECT id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId) as any;
+        if (!activeSession) {
+          return res.json({
+            success: true,
+            activeSegmentId: 'default',
+            mySignal: null,
+            currentSegmentSummary: { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 },
+            overallSummary: { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 },
+            segmentsBreakdown: {},
+          });
+        }
+        const sessionId = activeSession.id;
+        const targetSegmentId =
+          segmentId !== undefined && segmentId !== null && String(segmentId).trim()
+            ? String(segmentId).trim()
+            : activeSession.current_segment_id || 'default';
+
+        let mySignal: string | null = null;
+        if (studentId) {
+          try {
+            const row = db
+              .prepare(
+                "SELECT signal_type FROM classroom_pacing_signals WHERE session_id = ? AND student_id = ? AND (segment_id = ? OR (segment_id IS NULL AND ? = 'default')) LIMIT 1",
+              )
+              .get(sessionId, studentId, targetSegmentId, targetSegmentId) as any;
+            mySignal = row?.signal_type || null;
+          } catch (_) {
+            mySignal = null;
+          }
+        }
+
+        let segmentsRows: { segment_id: string | null; signal_type: string; count: number }[] = [];
+        try {
+          segmentsRows = db
+            .prepare(
+              `SELECT segment_id, signal_type, COUNT(*) as count
+               FROM classroom_pacing_signals
+               WHERE session_id = ?
+               GROUP BY segment_id, signal_type`,
+            )
+            .all(sessionId) as any[];
+        } catch (_) {
+          segmentsRows = [];
+        }
+
+        const segmentsBreakdown: Record<string, Record<string, number>> = {};
+        const overallSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+        const currentSegmentSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+
+        for (const row of segmentsRows) {
+          const segKey = row.segment_id || 'default';
+          if (!segmentsBreakdown[segKey]) {
+            segmentsBreakdown[segKey] = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+          }
+          segmentsBreakdown[segKey][row.signal_type] = row.count;
+          overallSummary[row.signal_type] = (overallSummary[row.signal_type] || 0) + row.count;
+          if (segKey === targetSegmentId) {
+            currentSegmentSummary[row.signal_type] = row.count;
+          }
+        }
+
+        res.json({
+          success: true,
+          activeSegmentId: targetSegmentId,
+          mySignal,
+          currentSegmentSummary,
+          overallSummary,
+          segmentsBreakdown,
+        });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -1519,6 +1709,29 @@ export function registerClassroomRoutes(
         // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
         for (const st of roster) pushStudent(st.id, st.name);
 
+        let pacingBreakdown: Record<string, Record<string, number>> = {};
+        const pacingOverall: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+        try {
+          const pRows = db
+            .prepare(
+              `SELECT segment_id, signal_type, COUNT(*) as count
+               FROM classroom_pacing_signals
+               WHERE session_id = ?
+               GROUP BY segment_id, signal_type`,
+            )
+            .all(session.id) as any[];
+          for (const pr of pRows) {
+            const seg = pr.segment_id || 'default';
+            if (!pacingBreakdown[seg]) {
+              pacingBreakdown[seg] = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+            }
+            pacingBreakdown[seg][pr.signal_type] = pr.count;
+            pacingOverall[pr.signal_type] = (pacingOverall[pr.signal_type] || 0) + pr.count;
+          }
+        } catch (_) {
+          pacingBreakdown = {};
+        }
+
         res.json({
           success: true,
           session: {
@@ -1537,6 +1750,8 @@ export function registerClassroomRoutes(
             exitTicketsCount: exitTickets.length,
             exitTicketsAvgRating: parseFloat(avgRating),
             topPuzzledConcepts: puzzledConcepts.slice(0, 10),
+            pacingOverall,
+            pacingBySegment: pacingBreakdown,
           },
           students: studentBreakdown,
         });

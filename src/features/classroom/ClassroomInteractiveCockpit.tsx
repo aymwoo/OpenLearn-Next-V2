@@ -30,6 +30,7 @@ import { useStageDisplayWindow } from './stage-display/useStageDisplayWindow';
 import { PacingDashboardModal } from './PacingDashboardModal';
 import { ClassroomAttributionModal } from './ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
+import { getOptionalSocket } from '../../services/socket-service';
 
 export interface ClassroomInteractiveCockpitProps {
   lessonId: string | null;
@@ -102,6 +103,8 @@ export function ClassroomInteractiveCockpit({
   const [activePoll, setActivePoll] = useState<any>(null);
   const [activeBuzzer, setActiveBuzzer] = useState<any>(null);
   const [pacingSignals, setPacingSignals] = useState({ TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 });
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [segmentTitles, setSegmentTitles] = useState<Record<string, string>>({});
   const [showPacingDashboard, setShowPacingDashboard] = useState(false);
   const [panoramicSummary, setPanoramicSummary] = useState<any>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -116,8 +119,11 @@ export function ClassroomInteractiveCockpit({
         const res = await fetch(`/api/classroom/sessions/${lessonId}`);
         if (res.ok && mounted) {
           const json = await res.json();
-          if (json.hasActiveSession && json.stage) {
-            setStage(json.stage);
+          if (json.hasActiveSession) {
+            if (json.stage) setStage(json.stage);
+            if (json.session?.current_segment_id) {
+              setActiveSegmentId(json.session.current_segment_id);
+            }
           }
           setActivePoll(json.activePoll || null);
           setActiveBuzzer(json.activeBuzzer || null);
@@ -138,6 +144,58 @@ export function ClassroomInteractiveCockpit({
     return () => {
       mounted = false;
       clearInterval(interval);
+    };
+  }, [lessonId]);
+
+  // 加载课节环节名称字典
+  useEffect(() => {
+    if (!lessonId) return;
+    fetch(`/api/lessons/${lessonId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.timeline) {
+          try {
+            const raw = typeof data.timeline === 'string' ? JSON.parse(data.timeline) : data.timeline;
+            if (Array.isArray(raw)) {
+              const map: Record<string, string> = {};
+              raw.forEach((s: any) => {
+                if (s?.id && s?.title) map[s.id] = s.title;
+              });
+              setSegmentTitles(map);
+            }
+          } catch (_) {}
+        }
+      })
+      .catch(() => {});
+  }, [lessonId]);
+
+  // 监听即时学习节奏信号与教学环节广播
+  useEffect(() => {
+    const socket = getOptionalSocket();
+    if (!socket || !lessonId) return;
+
+    const handlePacingUpdated = (payload: any) => {
+      if (payload?.lessonId === lessonId && payload?.summary) {
+        setPacingSignals(payload.summary);
+        if (payload?.segmentId) {
+          setActiveSegmentId(payload.segmentId);
+        }
+      }
+    };
+
+    const handleSegmentChanged = (data: any) => {
+      if (data?.lessonId === lessonId && data?.activeSegmentId) {
+        setActiveSegmentId(data.activeSegmentId);
+      }
+    };
+
+    socket.on('classroom:pacing_updated', handlePacingUpdated);
+    socket.on('student-active-segment-changed', handleSegmentChanged);
+    return () => {
+      if (typeof socket.off === 'function') {
+        socket.off('classroom:pacing_updated', handlePacingUpdated);
+        socket.off('student-active-segment-changed', handleSegmentChanged);
+      }
     };
   }, [lessonId]);
 
@@ -519,6 +577,11 @@ export function ClassroomInteractiveCockpit({
           <div className="flex items-center gap-1 text-[11px] font-semibold text-muted group-hover:text-main">
             <TrendingUp size={12} className="text-primary-theme" />
             <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
+            {activeSegmentId && segmentTitles[activeSegmentId] && (
+              <span className="text-[10px] text-primary-theme font-medium truncate max-w-[90px]">
+                [{segmentTitles[activeSegmentId]}]
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <span
@@ -557,6 +620,7 @@ export function ClassroomInteractiveCockpit({
           signals={pacingSignals}
           onlineCount={students?.filter((s) => s.online).length || 0}
           onClose={() => setShowPacingDashboard(false)}
+          activeSegmentTitle={activeSegmentId ? segmentTitles[activeSegmentId] : null}
         />
       )}
 
