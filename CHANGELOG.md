@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **数据库灾难恢复（Restore）与备份调度闭环（P1-5）**：
+  - **灾备内核模块化抽象（`packages/core/db/backup-manager.ts`）**：
+    - 抽取可编程式灾难备份与恢复管理核心 API（`performBackup`、`performRestore`、`validateBackup`、`listBackups`、`pruneBackups`）；
+    - 热备份基于 SQLite `VACUUM INTO` 无锁安全生成独立快照文件，自适应 `OPENLEARN_DB_PATH` 与 `BACKUP_DIR` 环境变量联动；
+    - 引入快照双重完整性校验（SQLite 16 字节魔数特征 + `PRAGMA integrity_check` + `lessons` 核心表存在性与行数统计），拦截空文件、损坏文件与伪造数据库；
+    - 引入快照保留轮转策略（`--keep N`，默认保留最新 10 份），防止历史备份无限累积填满磁盘；
+    - 灾难恢复提供完整安全底座（恢复前若原库存在且未加 `--force` 则自动留存 `pre_restore_*.db` 安全副本）、自动物理清理目标库残留的 `-wal` / `-shm` 侧车文件防止脏读，并在恢复完成后执行 `post-check` 自检；
+  - **运维 CLI 脚本与部署守卫增强**：
+    - 重构 `scripts/backup-db.ts` 与 `scripts/restore-db.ts` 接入核心层，支持 `--keep`、`--dir`、`--name`、`--list` 与 `--force` 参数；
+    - 在 `deploy.sh` 部署管线中新增发布前数据库安全热备份拦截守卫，防止版本发布与迁移过程中造成不可逆数据破坏；
+  - **自动化测试网覆盖**：
+    - 新增 `packages/core/db/__tests__/backup-restore.test.ts`，涵盖备份生成、快照修剪、破坏与恢复全流程数据一致性验证、损坏文件拦截等 10 项端到端单测。
+
+
 - **微前端通信性能微调与课件预览异步解耦（P2）**：
   - **微前端 iframe 通信 O(1) 注册表与协议快筛（`src/services/lms-bridge.ts`）**：
     - 引入 `registerManagedIframe(iframe)` 内存注册表并在 `InteractiveCoursewareViewer` / `HtmlAppletFrame` 挂载/卸载时自动维护，将跨域来源比对复杂度从全 DOM 扫描（`document.querySelectorAll`）降至 $O(1)$，并保留 DOM 查询作为安全兜底；

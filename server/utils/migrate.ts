@@ -79,7 +79,16 @@ export function executeSqlStatements(db: Database.Database, sql: string): void {
   }
 }
 
-export function runMigrations(db: Database.Database, migrations: Migration[]): void {
+/**
+ * 一致性检查结果，供调用方（与测试）消费。
+ */
+export interface ChecksumDrift {
+  name: string;
+  stored: string;
+  actual: string;
+}
+
+export function runMigrations(db: Database.Database, migrations: Migration[]): ChecksumDrift[] {
   // 确保 _migrations 元表存在
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -89,27 +98,66 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): v
     );
   `);
 
-  const applied = new Set((db.prepare('SELECT name FROM _migrations').all() as { name: string }[]).map((r) => r.name));
+  // 2026-10-04：此前只读取 `name`，写入的 checksum 从不回读校验 ——
+  // 已执行的迁移被事后篡改完全无法察觉。现改为读出并比对。
+  const appliedRows = db
+    .prepare('SELECT name, checksum FROM _migrations')
+    .all() as { name: string; checksum: string }[];
+  const applied = new Map(appliedRows.map((r) => [r.name, r.checksum]));
+
+  const byName = new Map(migrations.map((m) => [m.name, m]));
+
+  // ── 校验已执行迁移的 checksum 是否被改动 ──────────────────────────
+  const drift: ChecksumDrift[] = [];
+  for (const [name, stored] of applied) {
+    const migration = byName.get(name);
+    // 迁移文件已从磁盘移除（如从 v2_plugins 仓库迁移过来）：无从校验，跳过。
+    if (!migration) continue;
+    const actual = simpleChecksum(migration.up);
+    if (actual !== stored) {
+      drift.push({ name, stored, actual });
+    }
+  }
+
+  if (drift.length > 0) {
+    const detail = drift.map((d) => `  - ${d.name}: 记录 ${d.stored} → 当前文件 ${d.actual}`).join('\n');
+    const msg =
+      `[Migration] 已执行迁移的 UP 脚本在应用后被修改过：\n${detail}\n` +
+      '  这不会自动修复数据库 —— 已执行的部分无法回退。请确认是有意修改，' +
+      '或补一条新的迁移来修正。';
+    if (process.env.MIGRATION_CHECKSUM_STRICT === 'true') {
+      throw new Error(msg);
+    }
+    console.error(msg);
+  }
 
   for (const migration of migrations) {
     if (applied.has(migration.name)) continue;
 
     console.log(`[Migration] Applying: ${migration.name}`);
 
-    try {
+    // 2026-10-04：此前 UP 脚本逐条 exec 且不在事务内 ——
+    // 中途失败会留下半应用状态，且 _migrations 行未写入，重启后会重跑
+    // 已执行过的语句。现将「执行 + 登记」放进同一个事务。
+    const applyOne = db.transaction(() => {
       executeSqlStatements(db, migration.up);
-      const checksum = simpleChecksum(migration.up);
       db.prepare('INSERT INTO _migrations (name, applied_at, checksum) VALUES (?, ?, ?)').run(
         migration.name,
         Date.now(),
-        checksum,
+        simpleChecksum(migration.up),
       );
+    });
+
+    try {
+      applyOne();
       console.log(`[Migration] Applied: ${migration.name}`);
     } catch (err) {
       console.error(`[Migration] FAILED: ${migration.name}`, err);
       throw err;
     }
   }
+
+  return drift;
 }
 
 /**

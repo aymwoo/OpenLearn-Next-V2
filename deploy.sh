@@ -105,7 +105,15 @@ NGINX
 
 # 替换占位符为实际路径
 sed -i "s|\$APP_ROOT|$APP_ROOT|g" "$APP_ROOT/nginx.generated.conf"
-echo "✅ nginx.generated.conf 已生成"
+# ── 1.5 数据库部署前安全热备份 ───────────────────────────
+if [ -f "$APP_ROOT/packages/core/db/educational_os.db" ]; then
+    echo "💾 部署前执行 SQLite 数据库安全备份..."
+    if command -v pnpm &> /dev/null; then
+        pnpm run db:backup || echo "⚠️ 数据库备份告警，继续部署"
+    else
+        npm run db:backup || echo "⚠️ 数据库备份告警，继续部署"
+    fi
+fi
 
 # ── 2. 构建 ──────────────────────────────────────────────
 echo "⏳ 构建中..."

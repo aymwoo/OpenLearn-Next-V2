@@ -78,6 +78,10 @@ export function applyReadPragmas(instance: Database.Database): void {
   }
 }
 
+export function getDbPath(): string {
+  return dbPath;
+}
+
 export function createDatabase(customPath?: string): Database.Database {
   const targetPath = customPath || dbPath;
   mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -85,6 +89,8 @@ export function createDatabase(customPath?: string): Database.Database {
   applyPragmas(instance);
   return instance;
 }
+
+export * from './backup-manager.js';
 
 export const db = new Database(dbPath);
 
