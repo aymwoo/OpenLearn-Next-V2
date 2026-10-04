@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入深化：作业提交与智能批改服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/assignment-service.ts`）**：
+    - 建立领域服务 `AssignmentService`，统管传统作业/客观题自测与作业中心（Assignment Hub）多模态交付两大体系，构造函数支持注入 `db`、`aiService` 与 `commandBus`；
+    - 内聚传统班级作业 CRUD、LLM 智能命题（`generateQuizWithAi`、`suggestQuizWithAi`）、MCQ 客观题自动批改与主观题 AI 辅导建议（`gradeTraditionalAssignment`）；
+    - 内聚学生作业提交（`submitTraditionalAssignment`）、跨学生代交越权防范（`resolveTargetStudentId`）与班级归属安全拦截（`assertClassMembership`，外班拦截 403）；
+    - 内聚作业中心附件多重安全校验：严格白名单（`ALLOWED_ASSIGNMENT_EXT`）、Magic Bytes 识别、每作业扩展名限制（L1）、学生存储配额（`STUDENT_ASSIGNMENT_QUOTA_BYTES`）、异步落盘（M1）与单事务写库防并发突破（M2/TOCTOU）；
+    - 内聚附件安全下载（`path-guard` 防目录穿越）、软删除与后台物理 GC 清理调度（`gcSoftDeletedAssignmentFiles`）；
+  - **路由控制器极简化（`server/routes/assignments.ts` & `assignment-hub.ts`）**：
+    - 传统作业路由 `assignments.ts` 由 315 行精简至 102 行（缩减超 67%）；作业中心路由 `assignment-hub.ts` 由 577 行精简至 314 行（缩减超 45%），纯化为鉴权拦截、流式 raw 承接与结果包装；
+    - 所有 HTTP 端点、状态码（400/401/403/404/409/413）与数据契约 100% 保持向后兼容；
+  - **测试覆盖与质量保证**：
+    - 新增专用单元测试 `server/services/__tests__/assignment-service.test.ts`（包含 AI 出题打分、作答提交、格式与配额防御、物理 GC 等 7 项全功能覆盖）；
+    - 运行服务单元测试与原有作业中心全套集成回归套件 `assignment-hub-routes.test.ts` 共 31 项测试全部 100% 绿灯；全量类型检查（`pnpm lint` 0 错误）与生产打包（`pnpm build`）全部顺利通过。
+
 - **Service 层引入深化：花名册与学生领域服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/roster-service.ts`）**：
     - 建立领域服务 `RosterService`，彻底解耦班级全生命周期、学生管理、选课与排座业务，构造函数支持灵活注入数据库连接；
