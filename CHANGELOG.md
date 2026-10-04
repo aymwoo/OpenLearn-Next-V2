@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **数据库 Schema 单一真实来源（SSOT）统一（方向 4 攻坚，E1）**：
+  - **消灭内联 DDL 双重定义（净删 680 行死代码）**：
+    - 彻底移除 `packages/core/db/index.ts` 内部长达 650 行的内联 `CREATE TABLE / INDEX` 块及 30 多个分散脆弱的 `try/catch ALTER TABLE`；
+    - 将数据库初始化机制完全切换为基于 `migrations/` 目录的版本化迁移驱动，让 `migrations/` 成为平台 Schema 唯一的真实来源（Single Source of Truth）；
+  - **沉淀核心迁移引擎（`packages/core/db/migrator.ts`）**：
+    - 将版本化迁移加载、解析、事务执行与校验和防篡改校验下沉至内核层 `packages/core/db/migrator.ts`；
+    - `server/utils/migrate.ts` 重定向导出，保持服务层与测试环境契约完全向后兼容；
+    - 在无论是生产库、自定义库还是单元测试隔离库的创建阶段，统一自动执行 `initializeDatabase(db)`；
+  - **补齐遗漏 Schema 迁移（`migrations/016_preset_polls_and_passcode_expiry.sql`）**：
+    - 补齐此前遗漏在内联代码中的 `lesson_preset_polls` 表及索引 `idx_lpp_lesson`；
+    - 补齐 `classes.class_passcode_expires_at`、`student_rollcalls`（rating, score, reward_coins, difficulty）、`classroom_exit_tickets`（自适应梯级字段）的标准版本化迁移；
+    - 验证全新空数据库与历史升级数据库的表结构 100% 一致，全量测试与打包编译零告警零报错。
+
 - **内核 Capability 目录深度归并（方向 3 攻坚，E2）**：
   - **目录结构收敛与职责清晰化（≤ 3 个目录）**：
     - 将孤岛式的单个文件目录 `packages/core/capability-system/` 深度归并入核心模块 `packages/core/capability/guard/capability-guard.ts`；
