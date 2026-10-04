@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { v7 as uuidv7 } from 'uuid';
+import { frontendEventBus } from '../services/event-bus';
 
 export const FONT_SCALE_STORAGE_KEY = 'openlearn_font_scale';
 
@@ -51,12 +53,13 @@ export function applyFontScaleToDOM(scale: number): void {
 function notifyIframes(scale: number) {
   if (typeof window === 'undefined') return;
   try {
-    setTimeout(async () => {
-      try {
-        const { broadcastFontScaleToIframes } = await import('../services/lms-bridge');
-        broadcastFontScaleToIframes(scale);
-      } catch {}
-    }, 0);
+    void frontendEventBus.publish({
+      id: uuidv7(),
+      type: 'font-scale.changed',
+      source: 'font-size-store',
+      payload: { scale },
+      timestamp: Date.now(),
+    });
   } catch {}
 }
 

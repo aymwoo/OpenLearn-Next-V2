@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **微前端通信性能微调与课件预览异步解耦（P2）**：
+  - **微前端 iframe 通信 O(1) 注册表与协议快筛（`src/services/lms-bridge.ts`）**：
+    - 引入 `registerManagedIframe(iframe)` 内存注册表并在 `InteractiveCoursewareViewer` / `HtmlAppletFrame` 挂载/卸载时自动维护，将跨域来源比对复杂度从全 DOM 扫描（`document.querySelectorAll`）降至 $O(1)$，并保留 DOM 查询作为安全兜底；
+    - 增加协议特征轻量快筛，仅对具备 `LMS_` 前缀或 `attempt_id` 特征的消息执行深度校验与反序列化，彻底消除 Vite HMR、React Devtools 与浏览器扩展高频跨窗口消息对 `JSON.stringify(data).length`（512KB 防刷）的 CPU 与 GC 抖动开销；
+    - 主题（`theme.changed`）与字号（`font-scale.changed`）向微前端 iframe 跨域广播引入 50ms 聚合防抖，避免连续滑动字号滑块时的 postMessage 消息风暴；
+  - **架构分层倒置解耦与 Vite Rollup 分包警告根除**：
+    - `themeStore.ts` 与 `fontSizeStore.ts` 移除对底层服务 `lms-bridge.ts` 的反向动态导入，改为由 `frontendEventBus` 标准事件广播；
+    - `lms-bridge.ts` 移除对白板专有特性 `WhiteboardEventSlot.ts` 的业务侵入，由 `WhiteboardEventSlot` 自驱动订阅 EventBus 的 `courseware.*` 主题并安全摄取；
+    - 修复 `registerTeacherExtension.tsx` 中 `ActivityWorkspaceWidget` 静态导入阻碍分包的异味，彻底根除 Vite 生产构建日志中全部 `dynamic import will not move module into another chunk` 架构警告；
+  - **PPTX 预览引擎动态异步分包按需加载（`src/features/whiteboard/widgets/RevealPresentationWrapper.tsx`）**：
+    - 将庞大的 `pptx-preview`（~231 KB）从顶部静态导入重构为仅在 `fileType === 'pptx'` 且首次渲染幻灯片时异步 `await import('pptx-preview')`；
+    - 演示文稿初始打包体积与首屏网络传输大幅精简，Markdown 幻灯片用户零下载、零解析重型 PPTX 依赖；
+  - **测试覆盖**：
+    - 扩展 `src/services/__tests__/lms-bridge.test.ts` 覆盖 O(1) 注册表生命周期、协议快筛、EventBus 防抖广播；新增 `src/features/whiteboard/__tests__/reveal-presentation-wrapper.test.tsx` 验证 Markdown/PPTX 渲染与模式切换。
+
+
 - **数据库连接池与并发 I/O 隔离优化（P1-1）**：
   - **SQLite Pragma 工业级参数加固（`packages/core/db/index.ts`）**：
     - 引入 `applyPragmas` 与 `applyReadPragmas`，显式配置 `busy_timeout = 5000`，彻底根除高并发批量写场景下偶发的 `SQLITE_BUSY: database is locked`；

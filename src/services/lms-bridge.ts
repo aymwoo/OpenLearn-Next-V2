@@ -66,6 +66,44 @@ async function adoptAttempt(attemptId: string): Promise<string> {
   }
 }
 
+const managedIframes = new Set<HTMLIFrameElement>();
+
+/**
+ * 注册受管辖课件/小部件 iframe，提供 O(1) 跨窗口来源快速比对
+ */
+export function registerManagedIframe(iframe: HTMLIFrameElement): () => void {
+  managedIframes.add(iframe);
+  return () => {
+    managedIframes.delete(iframe);
+  };
+}
+
+export function clearManagedIframes(): void {
+  managedIframes.clear();
+}
+
+export function getManagedIframesCount(): number {
+  return managedIframes.size;
+}
+
+function findManagedIframeByWindow(source: MessageEventSource | null): HTMLIFrameElement | null {
+  if (!source) return null;
+  // 1. O(1) 优先检查已注册活跃 iframe
+  for (const iframe of managedIframes) {
+    if (iframe.contentWindow === source) return iframe;
+  }
+  // 2. DOM 兜底查找（兼容动态插入或未显式注记的 iframe）
+  if (typeof document !== 'undefined') {
+    try {
+      const managed = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]'));
+      return managed.find((f) => f.contentWindow === source) || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * 受管辖课件 iframe 判定：仅 `data-lms-bridge` 标记的 iframe（平台渲染课件/资源的宿主：
  * InteractiveCoursewareViewer / HtmlAppletFrame / SystemResourceLibraryModal）可与 LMS Bridge 通信。
@@ -76,12 +114,7 @@ async function adoptAttempt(attemptId: string): Promise<string> {
  */
 function isFromManagedIframe(source: MessageEventSource | null): boolean {
   if (typeof document === 'undefined' || !source) return false;
-  try {
-    const managed = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]'));
-    return managed.some((f) => f.contentWindow === source);
-  } catch {
-    return false;
-  }
+  return findManagedIframeByWindow(source) !== null;
 }
 
 /**
@@ -91,9 +124,22 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
+  // 协议特征快速预检：仅对 LMS 消息格式（包含 type 且以 LMS_ 开头，或是内置关键字段）继续解析
+  // 避免 Vite HMR / 第三方插件高频跨窗口通信时无差别触发 JSON.stringify 带来 CPU 与 GC 抖动
+  const type = typeof data.type === 'string' ? data.type : '';
+  const isLmsCandidate =
+    type.startsWith('LMS_') ||
+    type === 'submit' ||
+    type === 'finish' ||
+    type === 'completed' ||
+    type === 'saveProgress' ||
+    typeof data.attempt_id === 'string';
+
+  if (!isLmsCandidate) return;
+
   // 防御性安全：限制跨窗口消息体最大尺寸（512KB），防御超大 payload 阻塞主线程或造成 OOM
   try {
-    const rawLen = typeof data === 'string' ? data.length : JSON.stringify(data).length;
+    const rawLen = typeof data.length === 'number' ? data.length : JSON.stringify(data).length;
     if (rawLen > 512 * 1024) {
       console.warn('[LMS Bridge] Dropped oversized postMessage (>512KB)');
       return;
@@ -111,15 +157,12 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   }
 
   let attemptId = data.attempt_id;
-  const type = data.type || '';
   const payload = data.payload || data;
 
   // Try to extract attemptId from sending iframe if same-origin is accessible
   if (!attemptId && event.source) {
     try {
-      const iframe = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]')).find(
-        (f) => f.contentWindow === event.source,
-      );
+      const iframe = findManagedIframeByWindow(event.source);
       if (iframe && iframe.contentWindow) {
         const iframeWindow = iframe.contentWindow as any;
         if (iframeWindow.__LMS_STUDENT__?.attempt_id) {
@@ -267,25 +310,6 @@ function emitCoursewareEvent(type: string, attemptId: string, payload: unknown):
     timestamp: Date.now(),
     correlationId: attemptId,
   });
-  // 同步进入白板事件槽（纯前端，不依赖 socket）
-  try {
-    const payloadObj = (payload ?? {}) as Record<string, unknown>;
-    void import('../features/whiteboard/events/WhiteboardEventSlot').then(({ whiteboardEventSlot }) => {
-      whiteboardEventSlot.ingest({
-        source: 'iframe.bridge',
-        type,
-        attemptId,
-        coursewareUuid: typeof payloadObj.courseware_uuid === 'string' ? payloadObj.courseware_uuid : undefined,
-        payload: {
-          ...payloadObj,
-          attemptId,
-        },
-        raw: payload,
-      });
-    });
-  } catch {
-    // WhiteboardEventSlot 故障不应影响 EventBus 主路径
-  }
 }
 
 /**
@@ -335,12 +359,27 @@ export function useLmsBridge(session: SessionType | null): void {
 }
 
 /**
+ * 获取当前所有受管辖或页面中挂载的课件 / 微前端 iframe
+ */
+function getAllTargetIframes(): Set<HTMLIFrameElement> {
+  const targetIframes = new Set<HTMLIFrameElement>(managedIframes);
+  if (typeof document !== 'undefined') {
+    try {
+      document.querySelectorAll('iframe').forEach((iframe) => targetIframes.add(iframe));
+    } catch {
+      // 忽略 DOM 查询异常
+    }
+  }
+  return targetIframes;
+}
+
+/**
  * 向页面中所有已加载的课件 / 微前端 iframe 广播当前主题状态
  */
 export function broadcastThemeToIframes(theme: string, tokens: Record<string, string> = {}): void {
   if (typeof document === 'undefined') return;
   try {
-    const iframes = document.querySelectorAll('iframe');
+    const iframes = getAllTargetIframes();
     iframes.forEach((iframe) => {
       try {
         iframe.contentWindow?.postMessage(
@@ -375,7 +414,7 @@ export function broadcastFontScaleToIframes(scale: number): void {
   if (typeof document === 'undefined') return;
   try {
     const clampedScale = Math.min(140, Math.max(85, Math.round(scale)));
-    const iframes = document.querySelectorAll('iframe');
+    const iframes = getAllTargetIframes();
     iframes.forEach((iframe) => {
       try {
         iframe.contentWindow?.postMessage(
@@ -402,3 +441,30 @@ export function broadcastFontScaleToIframes(scale: number): void {
     // 忽略异常
   }
 }
+
+// ── 自动监听 EventBus 事件（支持 50ms 聚合防抖，解除 Store 侧对 lms-bridge 的直接依赖） ──
+let themeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let fontScaleDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+if (typeof window !== 'undefined') {
+  frontendEventBus.subscribe('theme.changed', (event) => {
+    if (themeDebounceTimer) clearTimeout(themeDebounceTimer);
+    themeDebounceTimer = setTimeout(() => {
+      const payload = event.payload as { theme: string; tokens?: Record<string, string> };
+      if (payload && typeof payload.theme === 'string') {
+        broadcastThemeToIframes(payload.theme, payload.tokens ?? {});
+      }
+    }, 50);
+  });
+
+  frontendEventBus.subscribe('font-scale.changed', (event) => {
+    if (fontScaleDebounceTimer) clearTimeout(fontScaleDebounceTimer);
+    fontScaleDebounceTimer = setTimeout(() => {
+      const payload = event.payload as { scale: number };
+      if (payload && typeof payload.scale === 'number') {
+        broadcastFontScaleToIframes(payload.scale);
+      }
+    }, 50);
+  });
+}
+

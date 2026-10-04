@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { init as initPptxPreview } from 'pptx-preview';
 import Markdown from 'react-markdown';
 import {
   Presentation,
@@ -104,6 +103,7 @@ export function RevealPresentationWrapper({
         if (pptxContainerRef.current) {
           pptxContainerRef.current.innerHTML = '';
           try {
+            const { init: initPptxPreview } = await import('pptx-preview');
             const previewer: any = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
             previewerInstanceRef.current = previewer;
             await previewer.load(ab);

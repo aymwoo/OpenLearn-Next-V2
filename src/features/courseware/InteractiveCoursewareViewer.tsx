@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Globe, Maximize2, Minimize2 } from 'lucide-react';
 import { useThemeStore, getThemeTokens } from '../../store/themeStore';
-import { broadcastThemeToIframes } from '../../services/lms-bridge';
+import { broadcastThemeToIframes, registerManagedIframe } from '../../services/lms-bridge';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 interface InteractiveCoursewareViewerProps {
@@ -13,7 +13,14 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const { theme } = useThemeStore();
+
+  useEffect(() => {
+    if (iframeRef.current) {
+      return registerManagedIframe(iframeRef.current);
+    }
+  }, [accessToken]);
 
   const handleIframeLoad = () => {
     broadcastThemeToIframes(theme, getThemeTokens(theme));
@@ -117,6 +124,7 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
         </div>
         {accessToken ? (
           <iframe
+            ref={iframeRef}
             src={`/api/courseware/${coursewareId}?ct=${encodeURIComponent(accessToken)}`}
             sandbox="allow-scripts allow-forms allow-downloads"
             data-lms-bridge="true"

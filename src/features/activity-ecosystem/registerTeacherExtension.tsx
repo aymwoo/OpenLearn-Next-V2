@@ -9,7 +9,6 @@
 
 import React from 'react';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store.js';
-import { ActivityWorkspaceWidget } from './ActivityWorkspaceWidget.js';
 
 let registered = false;
 
@@ -25,7 +24,7 @@ export function registerTeacherActivityCenter(): void {
   // dashboard), and the Activity Center never actually mounts.
   const activityCenterComponent = () =>
     import('./ActivityWorkspaceWidget.js').then((m) => ({
-      default: () => <ActivityWorkspaceWidget role="teacher" mode="status" />,
+      default: () => <m.ActivityWorkspaceWidget role="teacher" mode="status" />,
     }));
   (activityCenterComponent as unknown as { __isLazyFactory?: boolean }).__isLazyFactory = true;
 

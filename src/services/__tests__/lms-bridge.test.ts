@@ -1,5 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processLmsMessage } from '../lms-bridge';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  processLmsMessage,
+  registerManagedIframe,
+  clearManagedIframes,
+  getManagedIframesCount,
+} from '../lms-bridge';
+import { frontendEventBus } from '../event-bus';
+import { v7 as uuidv7 } from 'uuid';
 
 /**
  * LMS Bridge 消息来源校验（SEC-AUTH）回归测试：
@@ -109,5 +116,90 @@ describe('lms-bridge processLmsMessage source validation', () => {
     await processLmsMessage(makeEvent({ type: 'LMS_SAVE_PROGRESS', payload: { score: 1 } }, iframe.contentWindow));
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('registerManagedIframe 支持 O(1) 注册与注销生命周期', async () => {
+    clearManagedIframes();
+    expect(getManagedIframesCount()).toBe(0);
+
+    const unmanagedIframe = createUnmanagedIframe();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ attemptId: 'atk-reg' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    // 未注册时，丢弃消息
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_SUBMIT', attempt_id: 'atk-test', payload: { score: 95 } }, unmanagedIframe.contentWindow),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // 动态注册
+    const unregister = registerManagedIframe(unmanagedIframe);
+    expect(getManagedIframesCount()).toBe(1);
+
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_SUBMIT', attempt_id: 'atk-test', payload: { score: 95 } }, unmanagedIframe.contentWindow),
+    );
+    expect(fetchMock).toHaveBeenCalled();
+
+    // 注销后恢复不可达
+    fetchMock.mockClear();
+    unregister();
+    expect(getManagedIframesCount()).toBe(0);
+
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_SUBMIT', attempt_id: 'atk-test', payload: { score: 95 } }, unmanagedIframe.contentWindow),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('协议快速预检：非 LMS 协议消息在毫秒级快速退出，不触发任何请求', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const iframe = createManagedIframe();
+
+    // 模拟 Vite HMR / 第三方插件广播
+    await processLmsMessage(makeEvent({ type: 'vite:invalidate', path: '/src/main.ts' }, iframe.contentWindow));
+    await processLmsMessage(makeEvent({ randomKey: 'randomValue' }, iframe.contentWindow));
+    await processLmsMessage(makeEvent('string-message', iframe.contentWindow));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('EventBus 触发 theme.changed 与 font-scale.changed 时执行防抖广播', async () => {
+    vi.useFakeTimers();
+    const iframe = createManagedIframe();
+    const postMessageSpy = vi.fn();
+    Object.defineProperty(iframe, 'contentWindow', {
+      value: { postMessage: postMessageSpy },
+      writable: true,
+    });
+
+    // 密集触发 3 次 theme.changed
+    for (let i = 0; i < 3; i++) {
+      void frontendEventBus.publish({
+        id: uuidv7(),
+        type: 'theme.changed',
+        source: 'theme-store',
+        payload: { theme: `theme-${i}`, tokens: { '--color': '#fff' } },
+        timestamp: Date.now(),
+      });
+    }
+
+    // 50ms 防抖尚未触发
+    vi.advanceTimersByTime(20);
+    expect(postMessageSpy).not.toHaveBeenCalled();
+
+    // 推进满 50ms
+    vi.advanceTimersByTime(40);
+    expect(postMessageSpy).toHaveBeenCalled();
+    const themeCommands = postMessageSpy.mock.calls.filter(
+      (c) => c[0]?.event === 'theme:changed' || c[0]?.type === 'LMS_THEME_CHANGED',
+    );
+    // 只聚合广播了最后一次 theme-2
+    expect(themeCommands.some((c) => c[0]?.payload?.theme === 'theme-2' || c[0]?.theme === 'theme-2')).toBe(true);
+
+    vi.useRealTimers();
   });
 });

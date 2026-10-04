@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { v7 as uuidv7 } from 'uuid';
+import { frontendEventBus } from '../services/event-bus';
 
 export type BuiltinThemeId = 'light' | 'dark' | 'eyecare' | 'chalkboard';
 export type ThemeId = BuiltinThemeId | string;
@@ -169,13 +171,13 @@ function removeThemeCSSVars(themeId: string) {
 function notifyIframes(themeId: string) {
   if (typeof window === 'undefined') return;
   try {
-    // 异步延时广播，确保当前 DOM 及 CSS 变量完成应用
-    setTimeout(async () => {
-      try {
-        const { broadcastThemeToIframes } = await import('../services/lms-bridge');
-        broadcastThemeToIframes(themeId, getThemeTokens(themeId));
-      } catch {}
-    }, 0);
+    void frontendEventBus.publish({
+      id: uuidv7(),
+      type: 'theme.changed',
+      source: 'theme-store',
+      payload: { theme: themeId, tokens: getThemeTokens(themeId) },
+      timestamp: Date.now(),
+    });
   } catch {}
 }
 

@@ -6,7 +6,7 @@ import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter'
 import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
 import { useFontSizeStore } from '../../../store/fontSizeStore';
 import { useAppStore } from '../../../store/appStore';
-import { broadcastThemeToIframes, broadcastFontScaleToIframes } from '../../../services/lms-bridge';
+import { broadcastThemeToIframes, broadcastFontScaleToIframes, registerManagedIframe } from '../../../services/lms-bridge';
 import { getSocketInstance } from '../../../services/socket-service';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 import { whiteboardEventSlot } from '../events/WhiteboardEventSlot';
@@ -95,6 +95,7 @@ export function sortAttemptsByRank(attempts: CoursewareAttempt[], ranks: Map<str
  */
 export function HtmlAppletFrame({ data, lessonId, elementId, className, title, lazy = true }: HtmlAppletFrameProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const mounted = useCoursewareFrameMount(lazy, containerRef);
   const { theme } = useThemeStore();
   const { scale } = useFontSizeStore();
@@ -308,6 +309,14 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
         : (customSrc ??
           (inlineUuid ? `/runtime/${inlineUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}` : undefined));
 
+  useEffect(() => {
+    if (!mounted) return;
+    const iframe = iframeRef.current ?? containerRef.current?.querySelector('iframe');
+    if (iframe && iframe instanceof HTMLIFrameElement) {
+      return registerManagedIframe(iframe);
+    }
+  }, [mounted, src]);
+
   const submittedAttempts = attempts.filter((a) => a.finished_at !== null && a.finished_at !== undefined);
   const scoredAttempts = submittedAttempts.filter((a) => a.score !== null && a.score !== undefined);
   const avgScore =
@@ -334,6 +343,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     <div ref={containerRef} className={(className ?? 'w-full h-full') + ' relative'}>
       {mounted ? (
         <iframe
+          ref={iframeRef}
           className="w-full h-full border-none"
           src={src}
           srcDoc={src ? undefined : wrapSrcDocWithBridge(data.code || '', lessonId)}

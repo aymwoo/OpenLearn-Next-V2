@@ -43,7 +43,7 @@ export class WhiteboardEventSlot {
   }
 
   /** 入队一个事件（采集层或主动 emit） */
-  ingest(payload: WhiteboardEventPayload): WhiteboardEvent {
+  ingest(payload: WhiteboardEventPayload, options?: { skipBusSync?: boolean }): WhiteboardEvent {
     const event: WhiteboardEvent = {
       id: uuidv7(),
       timestamp: Date.now(),
@@ -60,14 +60,16 @@ export class WhiteboardEventSlot {
     this.dispatch(event);
 
     // 同步推送到全局 frontendEventBus（兼容 socket 转发链）
-    try {
-      const platformEvent = toPlatformEvent(event);
-      // 不 await：publish 是 fire-and-forget
-      void frontendEventBus.publish(platformEvent);
-    } catch (e) {
-      // frontendEventBus 故障不能影响 ingest 主流程
-      if (typeof console !== 'undefined') {
-        console.warn('[WhiteboardEventSlot] frontendEventBus publish failed:', e);
+    if (!options?.skipBusSync) {
+      try {
+        const platformEvent = toPlatformEvent(event);
+        // 不 await：publish 是 fire-and-forget
+        void frontendEventBus.publish(platformEvent);
+      } catch (e) {
+        // frontendEventBus 故障不能影响 ingest 主流程
+        if (typeof console !== 'undefined') {
+          console.warn('[WhiteboardEventSlot] frontendEventBus publish failed:', e);
+        }
       }
     }
 
@@ -241,3 +243,33 @@ export const whiteboardEventSlot = new WhiteboardEventSlot({
   capacity: DEFAULT_QUEUE_CAPACITY,
   persist: false,
 });
+
+// 自动订阅全局 frontendEventBus 中的 courseware.* 事件，解耦 lms-bridge 对本模块的直接依赖
+if (typeof window !== 'undefined') {
+  frontendEventBus.subscribe('courseware.*', (busEvent) => {
+    // 忽略白板自身向 EventBus 发布的事件（避免回环）
+    if (busEvent.source === 'whiteboard' || busEvent.source?.startsWith('whiteboard.')) {
+      return;
+    }
+    const busPayload = (busEvent.payload ?? {}) as { attemptId?: string; data?: unknown };
+    const rawData = busPayload.data ?? busPayload;
+    const payloadObj = (typeof rawData === 'object' && rawData !== null ? rawData : {}) as Record<string, unknown>;
+    const attemptId =
+      busPayload.attemptId || (typeof payloadObj.attemptId === 'string' ? payloadObj.attemptId : undefined);
+
+    whiteboardEventSlot.ingest(
+      {
+        source: 'iframe.bridge',
+        type: busEvent.type,
+        attemptId,
+        coursewareUuid: typeof payloadObj.courseware_uuid === 'string' ? payloadObj.courseware_uuid : undefined,
+        payload: {
+          ...payloadObj,
+          attemptId,
+        },
+        raw: rawData,
+      },
+      { skipBusSync: true },
+    );
+  });
+}
