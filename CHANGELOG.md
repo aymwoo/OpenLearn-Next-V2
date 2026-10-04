@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入：成绩管理服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/grading-service.ts`）**：
+    - 建立领域服务 `GradingService`，彻底解耦 Express HTTP 传输层，构造函数支持注入数据库连接（全面支持轻量单元测试）；
+    - 内聚考勤聚合（`getAttendanceSummary`、`getScheduleAttendance`、`recordAttendance`）、成绩权重标准化与严格校验（`getGradeWeights`、`saveGradeWeights`）；
+    - 内聚考试创建与成绩批量录入事务（`createExam`、`batchSaveExamScores`）、学期综合加权评分计算引擎（`computeSemesterGrades`）、学期报告归档事务（`archiveSemesterReports`）及 AI 期末评语生成（`generateSemesterAiEvaluation`）；
+  - **路由控制器极简化（`server/routes/grading.ts`）**：
+    - 原 759 行巨石路由精简至 210 行（净精简 549 行代码，代码量削减超 72%），完全降级为轻量的 HTTP 参数解析、身份鉴权与结果转发；
+    - 保持所有 HTTP 端点、异常状态码（400/404）与 JSON 数据契约 100% 向后兼容；
+  - **测试覆盖与质量保证**：
+    - 新增专用领域服务单元测试 `server/services/__tests__/grading-service.test.ts`（包含权重校验、考试录入事务、考勤聚合统计、加权等级分档计算及归档快照优先读取等 8 项测试）；
+    - 既有接口回归测试 `server/__tests__/grading-calculation.test.ts` 与新增服务测试共 14 项测试全部绿灯通过；全量类型检查（`tsc --noEmit`）与生产构建（`pnpm build`）无告警。
+
 - **微前端 iframe 跨域通信调优与课件预览体验升级（P2 体验攻坚）**：
   - **LMS Bridge 跨窗口通信性能调优（`src/services/lms-bridge.ts`）**：
     - 引入快速短路载荷尺寸校验器 `isPayloadOversized`，消除高频消息处理中对整颗对象树无条件 `JSON.stringify` 带来的 GC 内存颠簸与主线程卡顿；
