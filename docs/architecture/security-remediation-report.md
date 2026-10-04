@@ -3,7 +3,7 @@
 > **审计时间**：2026-09-25
 > **审计对象**：`openlearn-next@0.3.21` 全栈教学操作系统
 > **审计范围**：服务端安全、认证鉴权、依赖健康、构建配置、状态管理、数据库迁移
-> **前置审计**：[code-quality-audit-report.md](./code-quality-audit-report.md)（2026-09-21）
+> **前置审计**：2026-09-21 的代码质量审计（原文档已于 2026-10-04 随下载功能一并移除）
 
 ---
 
@@ -105,6 +105,10 @@
 | `GET /api/audit-report/download`                | administrator          | admin.ts     |
 | `GET /api/remediation-roadmap/download`         | administrator          | admin.ts     |
 | `GET /api/classroom-optimization-plan/download` | administrator          | admin.ts     |
+
+> ⚠️ **上表中的三个 download 端点已于 2026-10-04 移除**（管理后台的「下载审计报告 /
+> 下载修补路线 / 下载课堂优化方案」按钮及其对应的三份 md 一并下线）。本表保留
+> 2026-09-25 审计时的原始记录，不再反映当前端点清单。
 | `GET /api/commands/registered`                  | 任意认证用户           | os.ts        |
 | `GET /api/activities`                           | 任意认证用户           | os.ts        |
 | `POST /api/activities/:id/start`                | 任意认证用户           | os.ts        |

@@ -231,9 +231,6 @@
 | 方法 | 路径                                          | 鉴权                          | 说明                             |
 | ---- | --------------------------------------------- | ----------------------------- | -------------------------------- |
 | POST | `/api/admin/seed-demo`                        | `requireAuth('administrator')` | 播种演示班级 / 课节 / 学生       |
-| GET  | `/api/audit-report/download`                  | `requireAuth('administrator')` | 下载代码质量审计报告（md）       |
-| GET  | `/api/remediation-roadmap/download`           | `requireAuth('administrator')` | 下载整改路线图（md）             |
-| GET  | `/api/classroom-optimization-plan/download`   | `requireAuth('administrator')` | 下载课堂优化方案（md）           |
 
 > `seed-demo` 是**幂等**的：会先清理历史遗留的 `demo-class-%` 前缀班级（连带 `class_students` / `schedules`），再用固定 id `demo-class` / `demo-schedule` 重建。
 

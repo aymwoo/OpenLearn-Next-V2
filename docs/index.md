@@ -40,9 +40,6 @@ architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
 architecture/navigation-audit-report
 architecture/security-remediation-report
-architecture/code-quality-audit-report
-architecture/remediation-and-optimization-roadmap
-architecture/interactive-classroom-and-editor-optimization-plan
 ```
 
 ```{toctree}
