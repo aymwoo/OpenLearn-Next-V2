@@ -260,7 +260,34 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(res.summary.totalParticipants).toBe(0);
     });
 
-    it('模拟作答流程能批量生成答卷并调用事件钩子', async () => {
+    it('支持按 classId 过滤，只返回当前班级在册学生的作答', () => {
+      const singleClassId = 'cls-test-single-student';
+      db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+        singleClassId,
+        '单人测试班',
+        Date.now(),
+      );
+      db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+        singleClassId,
+        testStudentId1,
+        Date.now(),
+      );
+
+      // singleClassId 只绑定了 testStudentId1
+      const resWithClass = service.getTopPerformers(testLessonId, 5, singleClassId);
+      expect(resWithClass.success).toBe(true);
+      expect(resWithClass.topPerformers).toHaveLength(1);
+      expect(resWithClass.topPerformers[0].studentId).toBe(testStudentId1);
+
+      // 若传入不包含任何作答学生的空班级，诚实返回空列表
+      const emptyClassId = 'cls-empty-test';
+      const emptyRes = service.getTopPerformers(testLessonId, 5, emptyClassId);
+      expect(emptyRes.success).toBe(true);
+      expect(emptyRes.topPerformers).toHaveLength(0);
+      expect(emptyRes.summary.totalParticipants).toBe(0);
+    });
+
+    it('模拟作答流程能批量生成答卷并调用事件钩子，且生成的 sim-quiz 假数据被榜单过滤隔离', async () => {
       const simulatedEvents: any[] = [];
       const results = await service.simulateQuizResponses(testLessonId, (ev) => {
         simulatedEvents.push(ev);
@@ -269,6 +296,10 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(results.length).toBeGreaterThan(0);
       expect(simulatedEvents.length).toBe(results.length);
       expect(results[0]).toHaveProperty('score');
+
+      // 验证生成的 sim-quiz 假数据不会污染正式的 getTopPerformers 榜单
+      const cleanList = service.getTopPerformers(testLessonId, 10);
+      expect(cleanList.topPerformers.every((s) => !String(s.studentId).startsWith('sim-quiz'))).toBe(true);
     });
   });
 });

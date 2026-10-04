@@ -493,20 +493,28 @@ export class DiagnosticService {
   // ── 3. 学情榜单与卓越答题者计算 (Top Performers Engine) ───────────────────────
 
   /**
-   * 查询课节或全局卓越答题者榜单（包含双源摄取与优雅降级）
+   * 查询课节或全局卓越答题者榜单（包含双源摄取与优雅降级，支持班级过滤）
    */
-  public getTopPerformers(lessonId?: string, limit = 5): TopPerformersResult {
+  public getTopPerformers(lessonId?: string, limit = 5, classId?: string): TopPerformersResult {
     const safeLimit = Math.min(20, Math.max(1, limit));
 
     if (lessonId) {
-      return this.getLessonTopPerformers(lessonId, safeLimit);
+      return this.getLessonTopPerformers(lessonId, safeLimit, classId);
     }
-    return this.getGlobalTopPerformers(safeLimit);
+    return this.getGlobalTopPerformers(safeLimit, classId);
   }
 
-  private getLessonTopPerformers(lessonId: string, limit: number): TopPerformersResult {
+  private getLessonTopPerformers(lessonId: string, limit: number, classId?: string): TopPerformersResult {
     // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
+    // 过滤掉模拟假数据 (id NOT LIKE 'sim-quiz-%')，并支持按 classId 过滤
     let rows: any[] = [];
+    const classFilter = classId
+      ? 'AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
+      : '';
+    const queryParams = classId
+      ? [lessonId, classId, limit]
+      : [lessonId, limit];
+
     try {
       rows = this.db
         .prepare(
@@ -522,13 +530,14 @@ export class DiagnosticService {
           MAX(s.submitted_at) as last_submitted_at
         FROM lesson_quiz_submissions s
         LEFT JOIN students stu ON s.student_id = stu.id
-        WHERE s.lesson_id = ?
+        WHERE s.lesson_id = ? AND s.id NOT LIKE 'sim-quiz-%'
+        ${classFilter}
         GROUP BY s.student_id
         ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
         LIMIT ?
       `,
         )
-        .all(lessonId, limit) as any[];
+        .all(...queryParams) as any[];
     } catch (err: any) {
       console.warn('[DiagnosticService:top-performers] query from lesson_quiz_submissions failed:', err?.message);
     }
@@ -541,6 +550,14 @@ export class DiagnosticService {
           .all(lessonId) as Array<{ data: string }>;
 
         if (quizElements.length > 0) {
+          let classStudentSet: Set<string> | null = null;
+          if (classId) {
+            const classStus = this.db
+              .prepare('SELECT student_id FROM class_students WHERE class_id = ?')
+              .all(classId) as Array<{ student_id: string }>;
+            classStudentSet = new Set(classStus.map((c) => c.student_id));
+          }
+
           const studentMap: Record<
             string,
             {
@@ -559,6 +576,9 @@ export class DiagnosticService {
               const subs = parsed.submissions || {};
               const correctAnswer = parsed.correctAnswer;
               for (const [stId, subData] of Object.entries(subs) as [string, any][]) {
+                if (classStudentSet && !classStudentSet.has(stId)) {
+                  continue;
+                }
                 if (!studentMap[stId]) {
                   const stRow = this.db.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
                   studentMap[stId] = {
@@ -607,11 +627,20 @@ export class DiagnosticService {
     let totalResponses = 0;
     let averageScore = 0;
     try {
-      const stats = this.db
-        .prepare(
-          'SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ?',
-        )
-        .get(lessonId) as any;
+      const stats = classId
+        ? (this.db
+            .prepare(
+              `SELECT COUNT(*) as count, AVG(score) as avg_score 
+               FROM lesson_quiz_submissions s 
+               WHERE s.lesson_id = ? AND s.id NOT LIKE 'sim-quiz-%' 
+                 AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)`,
+            )
+            .get(lessonId, classId) as any)
+        : (this.db
+            .prepare(
+              "SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'",
+            )
+            .get(lessonId) as any);
       totalResponses = stats?.count || 0;
       averageScore = Math.round(stats?.avg_score || 0);
     } catch {
@@ -640,7 +669,12 @@ export class DiagnosticService {
     };
   }
 
-  private getGlobalTopPerformers(limit: number): TopPerformersResult {
+  private getGlobalTopPerformers(limit: number, classId?: string): TopPerformersResult {
+    const classFilter = classId
+      ? 'WHERE s.id NOT LIKE \'sim-quiz-%\' AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
+      : 'WHERE s.id NOT LIKE \'sim-quiz-%\'';
+    const queryParams = classId ? [classId, limit] : [limit];
+
     const rows = this.db
       .prepare(
         `
@@ -655,12 +689,13 @@ export class DiagnosticService {
         MAX(s.submitted_at) as last_submitted_at
       FROM lesson_quiz_submissions s
       LEFT JOIN students stu ON s.student_id = stu.id
+      ${classFilter}
       GROUP BY s.student_id
       ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
       LIMIT ?
     `,
       )
-      .all(limit) as any[];
+      .all(...queryParams) as any[];
 
     return {
       success: true,

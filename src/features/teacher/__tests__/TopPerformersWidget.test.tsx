@@ -208,4 +208,38 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
       'success',
     );
   });
+
+  it('当本课节无作答数据时诚实展示空态，严禁 fallback 到全局假数据', async () => {
+    const fetchSpy = vi.fn().mockImplementation(() => {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            topPerformers: [],
+            summary: { totalParticipants: 0, totalResponses: 0, averageScore: 0 },
+          }),
+      });
+    });
+    global.fetch = fetchSpy;
+
+    render(
+      <TopPerformersWidget
+        lang="zh"
+        lessonId="les-empty"
+        classId="cls-live-1"
+        lessons={mockLessons}
+        students={mockStudents as any}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('暂无随堂作答数据')).toBeTruthy();
+    });
+
+    // 关键断言：请求 URL 必须包含 classId，且绝不能发起 /api/classroom/top-performers 全局假数据拉取
+    expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('classId=cls-live-1'));
+    const calledUrls = fetchSpy.mock.calls.map((call) => call[0]);
+    expect(calledUrls.some((u: string) => u === '/api/classroom/top-performers?limit=5')).toBe(false);
+  });
 });

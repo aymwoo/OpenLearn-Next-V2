@@ -116,7 +116,8 @@ export function TopPerformersWidget({
 
       setLoading(true);
       try {
-        const res = await fetch(`/api/classroom/sessions/${activeId}/top-performers?limit=5`);
+        const classQuery = classId ? `&classId=${encodeURIComponent(classId)}` : '';
+        const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(activeId)}/top-performers?limit=5${classQuery}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.topPerformers) && data.topPerformers.length > 0) {
@@ -125,17 +126,7 @@ export function TopPerformersWidget({
               setSummary(data.summary);
             }
           } else {
-            // If server returned 0 records, try general top performers endpoint
-            const fallbackRes = await fetch(`/api/classroom/top-performers?limit=5`);
-            if (fallbackRes.ok) {
-              const fallbackData = await fallbackRes.json();
-              if (fallbackData.success && fallbackData.topPerformers?.length > 0) {
-                setTopPerformers(fallbackData.topPerformers);
-                if (fallbackData.summary) setSummary(fallbackData.summary);
-                return;
-              }
-            }
-            // 无数据时诚实展示空列表与零统计，坚决不伪造数据
+            // 无数据时诚实展示空列表与零统计，坚决不伪造数据，杜绝回退到全局假数据
             setTopPerformers([]);
             setSummary({ totalParticipants: 0, totalResponses: 0, averageScore: 0 });
           }
@@ -146,7 +137,7 @@ export function TopPerformersWidget({
         setLoading(false);
       }
     },
-    [selectedLessonId],
+    [selectedLessonId, classId],
   );
 
   // Initial and reactive fetch
@@ -154,7 +145,7 @@ export function TopPerformersWidget({
     if (selectedLessonId) {
       fetchTopPerformers(selectedLessonId);
     }
-  }, [selectedLessonId, fetchTopPerformers]);
+  }, [selectedLessonId, classId, fetchTopPerformers]);
 
   // Listen to real-time socket events for quiz responses
   useEffect(() => {
@@ -168,8 +159,13 @@ export function TopPerformersWidget({
         return;
       }
 
+      const studentId = payload.studentId || payload.id;
+      // 若当前视图绑定了班级学生列表，且作答学生不属于当前班级，予以过滤隔离
+      if (Array.isArray(students) && students.length > 0 && !students.some((s) => s.id === studentId)) {
+        return;
+      }
+
       setTopPerformers((prev) => {
-        const studentId = payload.studentId || payload.id;
         const studentName =
           payload.studentName ||
           students.find((s) => s.id === studentId)?.name ||

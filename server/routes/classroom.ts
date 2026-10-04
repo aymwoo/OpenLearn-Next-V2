@@ -1953,7 +1953,8 @@ export function registerClassroomRoutes(
       try {
         const { lessonId } = req.params;
         const limit = parseInt(req.query.limit as string) || 5;
-        const result = diagnosticService.getTopPerformers(lessonId, limit);
+        const classId = req.query.classId as string | undefined;
+        const result = diagnosticService.getTopPerformers(lessonId, limit, classId);
         res.json(result);
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -1965,13 +1966,15 @@ export function registerClassroomRoutes(
   app.get('/api/classroom/top-performers', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
       const lessonId = req.query.lessonId as string;
+      const classId = req.query.classId as string | undefined;
       if (lessonId) {
         // 重定向/复用具体课节查询逻辑
-        return res.redirect(`/api/classroom/sessions/${lessonId}/top-performers`);
+        const url = `/api/classroom/sessions/${lessonId}/top-performers${classId ? `?classId=${encodeURIComponent(classId)}` : ''}`;
+        return res.redirect(url);
       }
 
       const limit = parseInt(req.query.limit as string) || 5;
-      const result = diagnosticService.getTopPerformers(undefined, limit);
+      const result = diagnosticService.getTopPerformers(undefined, limit, classId);
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e, 500);
