@@ -67,16 +67,16 @@ export function PostClassWrapupView({
   // Exit ticket stats state
   const [exitTickets, setExitTickets] = useState<any[]>([]);
   const [exitTicketStats, setExitTicketStats] = useState({
-    avgRating: 4.8,
+    avgRating: 0,
     count: 0,
-    topConcepts: ['公式推导步骤', '动量与能量转化边界', '单位换算'],
+    topConcepts: [] as string[],
   });
   const [isKnowledgeTreeOpen, setIsKnowledgeTreeOpen] = useState(false);
   const [rawPuzzledConcepts, setRawPuzzledConcepts] = useState<string[]>([]);
   const [tierDistribution, setTierDistribution] = useState({
-    passed: 16,
-    remediation: 5,
-    challenge_done: 9,
+    passed: 0,
+    remediation: 0,
+    challenge_done: 0,
   });
 
   // Homework form state
@@ -99,12 +99,9 @@ export function PostClassWrapupView({
         .then((data) => {
           if (data?.metrics) {
             setExitTicketStats({
-              avgRating: data.metrics.exitTicketsAvgRating || 4.8,
+              avgRating: data.metrics.exitTicketsAvgRating || 0,
               count: data.metrics.exitTicketsCount || 0,
-              topConcepts:
-                data.metrics.topPuzzledConcepts?.length > 0
-                  ? data.metrics.topPuzzledConcepts
-                  : ['公式推导步骤', '动量与能量转化边界', '单位换算'],
+              topConcepts: data.metrics.topPuzzledConcepts || [],
             });
           }
         })
@@ -115,6 +112,7 @@ export function PostClassWrapupView({
         .then((data) => {
           if (data?.success) {
             if (data.tierDistribution) setTierDistribution(data.tierDistribution);
+            if (data.submissions) setExitTickets(data.submissions);
             if (data.puzzledConcepts && data.puzzledConcepts.length > 0) {
               setRawPuzzledConcepts(data.puzzledConcepts);
             }
@@ -122,7 +120,7 @@ export function PostClassWrapupView({
               setExitTicketStats((prev) => ({
                 ...prev,
                 count: data.totalCount,
-                avgRating: data.avgRating || prev.avgRating,
+                avgRating: data.avgRating ?? prev.avgRating,
               }));
             }
           }
@@ -474,29 +472,37 @@ export function PostClassWrapupView({
               </div>
 
               <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[360px] pr-1">
-                <div className="p-3 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col gap-1 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-main">张同学</span>
-                    <span className="text-[11px] text-amber-500 font-bold">5.0 ★</span>
+                {exitTickets.length === 0 ? (
+                  <div className="text-center py-12 text-xs text-muted italic">
+                    {lang === 'zh' ? '暂无学生课后反馈与留言' : 'No student feedback submissions yet'}
                   </div>
-                  <p className="text-muted">“老师今天白板上的受力分析图很清晰，但我还想多做两道关于复合场的例题。”</p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col gap-1 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-main">李同学</span>
-                    <span className="text-[11px] text-amber-500 font-bold">4.0 ★</span>
-                  </div>
-                  <p className="text-muted">“抢答和投票环节很有趣，希望课件练习的时间能稍微延长 2 分钟。”</p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col gap-1 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-main">王同学</span>
-                    <span className="text-[11px] text-amber-500 font-bold">5.0 ★</span>
-                  </div>
-                  <p className="text-muted">“课前的预习问题在课中得到了解答，整体节奏非常好！”</p>
-                </div>
+                ) : (
+                  exitTickets.map((t, idx) => (
+                    <div
+                      key={t.student_id || idx}
+                      className="p-3 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col gap-1 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-main">
+                          {t.student_name || t.student_id || (lang === 'zh' ? '匿名同学' : 'Anonymous')}
+                        </span>
+                        {t.rating !== undefined && t.rating !== null && (
+                          <span className="text-[11px] text-amber-500 font-bold">{Number(t.rating).toFixed(1)} ★</span>
+                        )}
+                      </div>
+                      {t.feedback ? (
+                        <p className="text-muted">“{t.feedback}”</p>
+                      ) : t.puzzled_concept ? (
+                        <p className="text-muted">
+                          “{lang === 'zh' ? '困惑知识点：' : 'Puzzled by: '}
+                          {t.puzzled_concept}”
+                        </p>
+                      ) : (
+                        <p className="text-muted/60 italic">{lang === 'zh' ? '（未填写留言）' : '(No written feedback)'}</p>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

@@ -8,7 +8,7 @@
  * 4. 匿名脱敏保护与全班大屏广播
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X,
   GitCompare,
@@ -69,15 +69,8 @@ export const ShowcaseDiffModal: React.FC<ShowcaseDiffModalProps> = ({
   const worksPool = useMemo<DiffStudentWork[]>(() => {
     if (propWorks && propWorks.length > 0) return propWorks;
 
-    const baseStudents =
-      availableStudents.length > 0
-        ? availableStudents
-        : [
-            { id: 'stu-1', name: '张子豪', seatNumber: 'A-01' },
-            { id: 'stu-2', name: '李晓彤', seatNumber: 'A-02' },
-            { id: 'stu-3', name: '王一诺', seatNumber: 'B-03' },
-            { id: 'stu-4', name: '赵梓涵', seatNumber: 'B-04' },
-          ];
+    const baseStudents = availableStudents;
+    if (!baseStudents || baseStudents.length === 0) return [];
 
     const templates = [
       {
@@ -153,6 +146,12 @@ const L = T - V; // 拉格朗日量
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
     return worksPool.slice(0, 2).map((w) => w.studentId);
   });
+
+  useEffect(() => {
+    if (selectedIds.length === 0 && worksPool.length > 0) {
+      setSelectedIds(worksPool.slice(0, 2).map((w) => w.studentId));
+    }
+  }, [worksPool]);
 
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isOverlayActive, setIsOverlayActive] = useState(true);
@@ -549,16 +548,32 @@ const L = T - V; // 拉格朗日量
             />
 
             {/* 多屏网格卡片容器 */}
-            <div
-              data-testid="showcase-diff-grid"
-              className={`w-full h-full grid gap-4 ${
-                layout === 'dual'
-                  ? 'grid-cols-1 md:grid-cols-2'
-                  : layout === 'triple'
-                    ? 'grid-cols-1 md:grid-cols-3'
-                    : 'grid-cols-1 md:grid-cols-2 grid-rows-2'
-              }`}
-            >
+            {activeWorks.length === 0 ? (
+              <div
+                data-testid="showcase-diff-empty"
+                className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-surface rounded-2xl border border-dashed border-theme"
+              >
+                <Users size={36} className="text-muted/40 mb-3" />
+                <h4 className="text-sm font-bold text-main">
+                  {lang === 'zh' ? '暂无可对比展示的学生作答' : 'No student works available for comparison'}
+                </h4>
+                <p className="text-xs text-muted mt-1 max-w-sm">
+                  {lang === 'zh'
+                    ? '请等待学生在白板或互动课件中提交作答，或点击上方“勾选对比”选择学生。'
+                    : 'Wait for students to submit whiteboard or courseware work, or select students from the drawer.'}
+                </p>
+              </div>
+            ) : (
+              <div
+                data-testid="showcase-diff-grid"
+                className={`w-full h-full grid gap-4 ${
+                  layout === 'dual'
+                    ? 'grid-cols-1 md:grid-cols-2'
+                    : layout === 'triple'
+                      ? 'grid-cols-1 md:grid-cols-3'
+                      : 'grid-cols-1 md:grid-cols-2 grid-rows-2'
+                }`}
+              >
               {activeWorks.map((work, idx) => {
                 const displayName = isAnonymous ? `作答方案 ${String.fromCharCode(65 + idx)}` : work.studentName;
 
@@ -639,6 +654,7 @@ const L = T - V; // 拉格朗日量
                 );
               })}
             </div>
+            )}
           </div>
         </div>
       </div>

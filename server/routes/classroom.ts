@@ -1109,7 +1109,7 @@ export function registerClassroomRoutes(
         const avgRating =
           totalCount > 0
             ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
-            : 5.0;
+            : 0;
 
         const tierDistribution = {
           passed: rows.filter((r) => r.tier_level === 'passed').length,

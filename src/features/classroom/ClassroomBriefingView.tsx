@@ -56,7 +56,7 @@ export function ClassroomBriefingView({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportData, setReportData] = useState<any>(null);
-  const [pacingData, setPacingData] = useState({ TOO_FAST: 1, CONFUSED: 3, CLEAR: 18 });
+  const [pacingData, setPacingData] = useState({ TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 });
   const [selectedStudentForDigest, setSelectedStudentForDigest] = useState<StudentPersonalDigest | null>(null);
 
   useEffect(() => {
@@ -86,10 +86,12 @@ export function ClassroomBriefingView({
   const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? 0;
   const durationMin = reportData?.session?.durationMin ?? 0;
 
-  const totalPacing = pacingData.CLEAR + pacingData.CONFUSED + pacingData.TOO_FAST || 1;
-  const clearPercent = Math.round((pacingData.CLEAR / totalPacing) * 100);
-  const confusedPercent = Math.round((pacingData.CONFUSED / totalPacing) * 100);
-  const fastPercent = Math.max(0, 100 - clearPercent - confusedPercent);
+  const rawPacingSum = pacingData.CLEAR + pacingData.CONFUSED + pacingData.TOO_FAST;
+  const hasPacingData = rawPacingSum > 0;
+  const totalPacing = hasPacingData ? rawPacingSum : 0;
+  const clearPercent = hasPacingData ? Math.round((pacingData.CLEAR / rawPacingSum) * 100) : 0;
+  const confusedPercent = hasPacingData ? Math.round((pacingData.CONFUSED / rawPacingSum) * 100) : 0;
+  const fastPercent = hasPacingData ? Math.max(0, 100 - clearPercent - confusedPercent) : 0;
 
   /**
    * 逐生学情记录 —— 全部来自服务端 panoramic-report.students 真实聚合：
@@ -313,8 +315,18 @@ export function ClassroomBriefingView({
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '教学节奏晴雨表' : 'Pacing Score'}
           </span>
-          <div className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono mt-1">{clearPercent}%</div>
-          <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '反馈节奏适宜' : 'Clear & Optimal'}</span>
+          <div className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono mt-1">
+            {hasPacingData ? `${clearPercent}%` : '—'}
+          </div>
+          <span className="text-[10px] text-muted mt-1">
+            {hasPacingData
+              ? lang === 'zh'
+                ? '反馈节奏适宜'
+                : 'Clear & Optimal'
+              : lang === 'zh'
+                ? '暂无反馈'
+                : 'No feedback'}
+          </span>
         </div>
       </div>
 
@@ -329,50 +341,58 @@ export function ClassroomBriefingView({
                 <TrendingUp size={14} className="text-primary-theme" />
                 <span>{lang === 'zh' ? '随堂节奏晴雨表分布' : 'Classroom Pacing Distribution'}</span>
               </span>
-              <span className="text-[11px] text-muted">{totalPacing} 次反馈</span>
+              <span className="text-[11px] text-muted">
+                {hasPacingData ? `${totalPacing} 次反馈` : lang === 'zh' ? '暂无反馈' : 'No feedback'}
+              </span>
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    💡 听懂了 / 节奏适宜
-                  </span>
-                  <span className="font-mono">
-                    {pacingData.CLEAR} 人 ({clearPercent}%)
-                  </span>
-                </div>
-                <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${clearPercent}%` }} />
-                </div>
+            {!hasPacingData ? (
+              <div className="py-8 text-center text-xs text-muted italic">
+                {lang === 'zh' ? '课堂中暂无学生提交节奏晴雨表反馈' : 'No student pacing feedback received yet'}
               </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      💡 听懂了 / 节奏适宜
+                    </span>
+                    <span className="font-mono">
+                      {pacingData.CLEAR} 人 ({clearPercent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full" style={{ width: `${clearPercent}%` }} />
+                  </div>
+                </div>
 
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    ❓ 有些困惑 / 需要细讲
-                  </span>
-                  <span className="font-mono">
-                    {pacingData.CONFUSED} 人 ({confusedPercent}%)
-                  </span>
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      ❓ 有些困惑 / 需要细讲
+                    </span>
+                    <span className="font-mono">
+                      {pacingData.CONFUSED} 人 ({confusedPercent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
+                    <div className="bg-amber-500 h-full" style={{ width: `${confusedPercent}%` }} />
+                  </div>
                 </div>
-                <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full" style={{ width: `${confusedPercent}%` }} />
-                </div>
-              </div>
 
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">🐇 讲太快了 / 跟不上</span>
-                  <span className="font-mono">
-                    {pacingData.TOO_FAST} 人 ({fastPercent}%)
-                  </span>
-                </div>
-                <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
-                  <div className="bg-rose-500 h-full" style={{ width: `${fastPercent}%` }} />
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">🐇 讲太快了 / 跟不上</span>
+                    <span className="font-mono">
+                      {pacingData.TOO_FAST} 人 ({fastPercent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
+                    <div className="bg-rose-500 h-full" style={{ width: `${fastPercent}%` }} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Quick Poll Breakdown */}

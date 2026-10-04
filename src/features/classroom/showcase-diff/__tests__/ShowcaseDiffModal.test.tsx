@@ -170,4 +170,11 @@ describe('ShowcaseDiffModal (Showcase & Dual-Screen Diff)', () => {
       'success',
     );
   });
+
+  it('当没有学生且无候选作答时，诚实呈现空态，不再虚构张子豪等假学生', () => {
+    renderModal({ availableStudents: [], candidateWorks: [] });
+    expect(screen.getByTestId('showcase-diff-empty')).toBeTruthy();
+    expect(screen.getByText('暂无可对比展示的学生作答')).toBeTruthy();
+    expect(screen.queryByText('张子豪')).toBeNull();
+  });
 });
