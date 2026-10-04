@@ -10,6 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入深化：花名册与学生领域服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/roster-service.ts`）**：
+    - 建立领域服务 `RosterService`，彻底解耦班级全生命周期、学生管理、选课与排座业务，构造函数支持灵活注入数据库连接；
+    - 内聚班级 CRUD、口令生成与级联删除事务（`deleteClassCascade`）；
+    - 内聚学生账号创建（自动生成 12 位高熵初始密码与 bcrypt 哈希存储）、资料更新、GDPR 数据导出（`exportStudentData`）与 12 张关联子表原子级联删除事务（`deleteStudentCascade`）；
+    - 内聚智能批量导入选课（`bulkEnrollStudents`，支持学号自增分配与已有邮箱去重复用）与机房排座单事务覆盖（`saveClassSeats`）；
+    - 内聚班级自动均分分组算法（`autoGroup`，随机洗牌、切片分片、首位组长自指派与方案原子替换）、分组更新与组长离组成员一致性保护（`updateGroup`）；
+    - 内聚公平抽问与分层候选人推荐池（`getPickerCandidates`）以及点名评价记录（`evaluateRollcall`）；
+  - **路由控制器极简化（`server/routes/roster.ts`）**：
+    - 原 2156 行巨石路由精简至 1445 行（削减 710+ 行代码，代码量削减超 33%），彻底转为轻量 HTTP 路由委托与 Socket.IO 事件广播；
+    - 严格保持所有 HTTP 端点、状态码与 JSON 数据契约 100% 兼容；
+  - **测试覆盖与质量保证**：
+    - 新增专用单元测试 `server/services/__tests__/roster-service.test.ts`（覆盖班级 CRUD、12 表级联事务删除、批量导入选课、机房排座覆盖、均分分组及点名评价等 9 项测试）；
+    - 运行 `roster-routes.test.ts` 与新建测试共 19 项测试 100% 绿灯通过；全量类型检查（`pnpm lint` 0 错误）与生产打包构建（`pnpm build`）全部顺利通过。
+
 - **Service 层引入深化：课件作答与沙箱认领服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/courseware-service.ts`）**：
     - 建立领域服务 `CoursewareService`，彻底解耦微前端 iframe 跨域通信与作答领域逻辑，构造函数支持注入数据库连接；
