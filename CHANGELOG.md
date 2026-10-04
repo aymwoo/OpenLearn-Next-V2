@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **交互白板巨石组件模块化拆解（方向 1 攻坚）**：
+  - **组件属性编辑侧栏解耦（`src/features/whiteboard/components/WhiteboardPropertiesSidebar.tsx`）**：
+    - 抽离原嵌入主文件的 340+ 行测验、作业、代码沙箱、互动课件、数学拟合、演示文稿、富文本与几何形状属性表单及插件属性扩展系统；
+    - 保持失焦与修改时的多端协同广播一致性，单组件维护复杂度显著下降；
+  - **全屏与空状态覆盖层抽离（`WhiteboardFullscreenOverlay.tsx` & `WhiteboardEmptyState.tsx`）**：
+    - 解耦浏览器全屏（`BrowserFullscreenHost`）与白板组件全屏渲染调度逻辑；
+    - 抽离空画布引导提示，主视口布局与舞台渲染结构完全解耦；
+  - **自动平铺领域状态机 Hook 化（`src/features/whiteboard/hooks/useAutoTilingState.ts`）**：
+    - 提取近 400 行 i3 风格 BSP 空间切分、分割线（Splitter）拖拽手势、双向组件位置互换与平铺快照还原算法；
+    - 抽离 `WhiteboardTilingOverlay.tsx` 交互把手与切分预览悬浮层；
+  - **成果度量**：
+    - `InteractiveWhiteboard.tsx` 单文件代码量由 5440 行精简至 4141 行（**净削减 1300 行**）；
+    - 全量 20 个白板自动化测试套件（211 个用例）全部保持 100% 绿灯。
+
 - **僵尸总线运行时清理与架构文档修正（P2-4, P2-5）**：
   - **废弃总线子系统安全退役（`packages/core/event-bus-runtime/`）**：
     - 全面清理历史遗留且与内核主力 `packages/core/event-bus/` 重叠冗余的 `event-bus-runtime` 目录（14 个文件，约 30KB 代码）；

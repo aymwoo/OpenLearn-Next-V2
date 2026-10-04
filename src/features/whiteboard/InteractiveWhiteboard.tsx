@@ -163,6 +163,11 @@ import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { AssignmentSubmitDialog } from './components/AssignmentSubmitDialog';
+import { WhiteboardPropertiesSidebar } from './components/WhiteboardPropertiesSidebar';
+import { WhiteboardEmptyState } from './components/WhiteboardEmptyState';
+import { WhiteboardFullscreenOverlay } from './components/WhiteboardFullscreenOverlay';
+import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
+import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTilingState';
 import { AssignmentBindingField } from './components/AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './components/AssignmentPeerProgressPanel';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
@@ -318,25 +323,7 @@ export const DEFAULT_WHITEBOARD_PAGES: WhiteboardPageItem[] = [
  * 元素类型的缺省尺寸表 —— 渲染与自动平铺共用同一份，避免两处尺寸规则漂移。
  * plugin 类型允许 data 覆盖，其余类型以本表为准。
  */
-const DEFAULT_ELEMENT_SIZE: Record<string, { width: number; height: number }> = {
-  'hello-world': { width: 160, height: 64 },
-  quiz: { width: 300, height: 280 },
-  rollcall: { width: 320, height: 310 },
-  assignment: { width: 310, height: 250 },
-  'html-applet': { width: 400, height: 300 },
-  'code-sandbox': { width: 400, height: 320 },
-  'math-graph': { width: 400, height: 350 },
-  presentation: { width: 600, height: 400 },
-  plugin: { width: 500, height: 400 },
-};
 
-function getDefaultElementSize(type: string, data: any): { width: number; height: number } {
-  const preset = DEFAULT_ELEMENT_SIZE[type];
-  if (preset) {
-    return { width: data?.width || preset.width, height: data?.height || preset.height };
-  }
-  return { width: data?.width || 300, height: data?.height || 300 };
-}
 
 /**
  * 判定「这是一次真正的拖拽」所需的最小指针位移（px）。
@@ -409,8 +396,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [highlighterColor, setHighlighterColor] = useState('#facc15');
     const [currentPage, setCurrentPage] = useState(0);
     const [showGrid, setShowGrid] = useState(true);
-    /** 自动平铺模式：开启后当前页组件按 i3 式 BSP 镶嵌布局重排，可随时切回自由拖拽 */
-    const [autoTileEnabled, setAutoTileEnabled] = useState(false);
     /** 平铺拖拽互换目标组件 ID（用于视觉指示与松手交换） */
     const [dragOverTileId, setDragOverTileId] = useState<string | null>(null);
     const dragOverTileIdRef = useRef<string | null>(null);
@@ -418,17 +403,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       dragOverTileIdRef.current = dragOverTileId;
     }, [dragOverTileId]);
     const swapTileElementsRef = useRef<((idA: string, idB: string) => Promise<void>) | null>(null);
-
-    /** 当前活动的分割条拖拽状态（支持拖动上下/左右分割区域） */
-    const [activeSplitterDrag, setActiveSplitterDrag] = useState<{
-      splitter: TilingSplitter;
-      startPointerPos: number;
-      initialBoxes: BoxWithId[];
-    } | null>(null);
-    const activeSplitterDragRef = useRef<typeof activeSplitterDrag>(null);
-    useEffect(() => {
-      activeSplitterDragRef.current = activeSplitterDrag;
-    }, [activeSplitterDrag]);
 
     /** 拖拽卡片边缘时的感应动作（上下左右切分或对调） */
     const [activeDropZoneAction, setActiveDropZoneAction] = useState<DropZoneAction | null>(null);
@@ -906,6 +880,44 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           customIdsOrder?: string[],
         ) => Promise<void>
       >(undefined);
+
+    const {
+      autoTileEnabled,
+      setAutoTileEnabled,
+      handleToggleAutoTile,
+      currentTilingBoxes,
+      tilingSplitters,
+      activeSplitterDrag,
+      setActiveSplitterDrag,
+      activeSplitterDragRef,
+      handleSplitterPointerDown,
+      applyAutoTiling,
+      applyAutoTilingForElements,
+      swapTileElements,
+      restoreAutoTiling,
+      insertTileInDirection,
+    } = useAutoTilingState({
+      containerSize,
+      safeElements,
+      getCurrentPageElements,
+      onElementUpdate,
+      lessonId,
+      readOnly,
+      setLocalGeometry,
+      localGeometryRef,
+      localGeometryVersion,
+      currentPage,
+      activeSegmentId,
+      pages,
+      tileSplitPreferenceRef,
+      setIsSyncing,
+    });
+
+    useEffect(() => {
+      applyAutoTilingForElementsRef.current = applyAutoTilingForElements;
+      swapTileElementsRef.current = swapTileElements;
+      insertTileInDirectionRef.current = insertTileInDirection;
+    }, [applyAutoTilingForElements, swapTileElements, insertTileInDirection]);
 
     const dragRef = useRef<{
       id: string;
@@ -1505,7 +1517,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               void insertTileInDirectionRef.current?.(elementId, dropAction.targetId, dropAction.type);
             }
           } else {
-            void applyAutoTilingRef.current?.();
+            void applyAutoTiling();
           }
           return;
         }
@@ -1544,80 +1556,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       };
     }, [activeDragElement, onElementUpdate, lessonId, setLocalGeometry, autoTileEnabled, getCurrentPageElements]);
 
-    // 分割线（Splitter）拖拽拉伸监听：支持上下与左右分割区域自由拖拽调高/调宽
-    useEffect(() => {
-      if (!activeSplitterDrag) return;
 
-      const onPointerMove = (e: PointerEvent) => {
-        if (!activeSplitterDragRef.current) return;
-        const { splitter, startPointerPos, initialBoxes } = activeSplitterDragRef.current;
-        const isHorizontal = splitter.orientation === 'horizontal';
-        const currentPos = isHorizontal ? e.clientY : e.clientX;
-        const delta = currentPos - startPointerPos;
-
-        const patches = applySplitterDrag(splitter, delta, initialBoxes);
-        for (const [id, patch] of Object.entries(patches)) {
-          const currentBox = initialBoxes.find((b) => b.id === id);
-          if (currentBox) {
-            setLocalGeometry(id, {
-              x: currentBox.x,
-              y: currentBox.y,
-              width: currentBox.width,
-              height: currentBox.height,
-              ...patch,
-            });
-          }
-        }
-      };
-
-      const onPointerUp = async (e: PointerEvent) => {
-        if (!activeSplitterDragRef.current) return;
-        const { splitter, startPointerPos, initialBoxes } = activeSplitterDragRef.current;
-        const isHorizontal = splitter.orientation === 'horizontal';
-        const currentPos = isHorizontal ? e.clientY : e.clientX;
-        const delta = currentPos - startPointerPos;
-
-        const patches = applySplitterDrag(splitter, delta, initialBoxes);
-        setActiveSplitterDrag(null);
-
-        if (onElementUpdate && Object.keys(patches).length > 0) {
-          setIsSyncing(true);
-          try {
-            await Promise.all(
-              Object.entries(patches).map(async ([id, patch]) => {
-                const el = safeElements.find((item) => item.id === id);
-                if (!el) return;
-                try {
-                  const data = JSON.parse(el.data);
-                  const shape = el.type === 'circle' ? 'circle' : 'rect';
-                  const baseGeo = extractGeometry(data, shape);
-                  const updatedGeo = { ...baseGeo, ...patch };
-                  setLocalGeometry(id, updatedGeo);
-                  await onElementUpdate(id, { ...data, ...patch, __tiled: updatedGeo });
-                } catch {}
-              }),
-            );
-            frontendEventBus.publish({
-              id: uuidv7(),
-              type: 'whiteboard.element_updated',
-              source: 'whiteboard',
-              payload: { lessonId },
-              timestamp: Date.now(),
-              correlationId: lessonId,
-            });
-          } finally {
-            setIsSyncing(false);
-          }
-        }
-      };
-
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-      return () => {
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-      };
-    }, [activeSplitterDrag, onElementUpdate, safeElements, lessonId, setLocalGeometry]);
 
     // Window-level resizing event listeners
     useEffect(() => {
@@ -2200,404 +2139,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const renderActiveDrawing = () =>
       renderDrawingRaw(currentDrawing ? { ...currentDrawing, page: currentPage, segmentId: activeSegmentId } : null);
 
-    // ── 自动平铺（Auto Tiling）────────────────────────────────────────────────
-    // 与 drawElement 拖拽提交走完全相同的两步（onElementUpdate + 事件广播），
-    // 因此平铺后的结果与用户手动拖动在持久化、广播、学生端同步上表现一致。
-
-    /**
-     * 画布上**全部**元素按页分组（自动平铺用）。
-     *
-     * 各页分别独立平铺是安全的：所有元素共用同一套扁平坐标，但画布一次只渲染
-     * 「当前页 + 当前环节」这一组，不同页永远不同屏，因此逐页平铺不会产生可见
-     * 重叠；每一页被查看时都能铺满整块画布。
-     *
-     * 刻意不按环节拆组：无环节标签的元素与当前环节元素会同屏渲染，若两者各自
-     * 铺满整块画布就会互相压住。按页平铺是既保证「每页铺满」又保证「不重叠」
-     * 的粒度。
-     */
-    /** 把指定的元素列表按 i3 autotiling 规则重排并落库 */
-    const applyAutoTilingForElements = useCallback(
-      async (targetElements: WhiteboardElement[], forcedStackDirection?: StackDirection, customIdsOrder?: string[]) => {
-        if (!onElementUpdate) return;
-        if (containerSize.width <= 0 || containerSize.height <= 0) return;
-
-        const tileableElements = targetElements.filter((el) => isTileableType(el.type));
-        if (tileableElements.length === 0) return;
-
-        const candidates: TileCandidate[] = [];
-        const rawDataById = new Map<string, Record<string, any>>();
-        const tileOrderMap = new Map<string, number | undefined>();
-
-        let detectedStackDir: StackDirection | undefined = forcedStackDirection ?? tileSplitPreferenceRef.current;
-
-        for (const el of tileableElements) {
-          const data = parseElementData(el, null);
-          if (!data) continue;
-          if (!detectedStackDir && data.tileStackDir) {
-            detectedStackDir = data.tileStackDir;
-          }
-          const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
-          if (!candidate) continue;
-          candidates.push(candidate);
-          rawDataById.set(el.id, data);
-          if (customIdsOrder) {
-            const idx = customIdsOrder.indexOf(el.id);
-            tileOrderMap.set(el.id, idx >= 0 ? idx : undefined);
-          } else {
-            tileOrderMap.set(el.id, typeof data.tileOrder === 'number' ? data.tileOrder : undefined);
-          }
-        }
-        if (candidates.length === 0) return;
-
-        const sortedCandidates = sortCandidatesForTiling(candidates, tileOrderMap);
-        const results = computeTiling(sortedCandidates, containerSize, {
-          stackDirection: detectedStackDir,
-        });
-        if (results.length === 0) return;
-
-        let changed = false;
-        setIsSyncing(true);
-        try {
-          for (let i = 0; i < sortedCandidates.length; i += 1) {
-            const candidate = sortedCandidates[i];
-            const current = rawDataById.get(candidate.id);
-            if (!current) continue;
-            const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
-            const keys = geometryKeys(candidate.shape);
-            if (
-              sameGeometry(current, geometry, keys) &&
-              current.tileOrder === i &&
-              current.tileStackDir === detectedStackDir
-            ) {
-              continue;
-            }
-            changed = true;
-            setLocalGeometry(candidate.id, geometry);
-            const patch: Record<string, any> = {
-              ...current,
-              ...geometry,
-              tileOrder: i,
-              tileStackDir: detectedStackDir,
-            };
-            if (!current.__preTile) {
-              patch.__preTile = extractGeometry(current, candidate.shape);
-            }
-            patch.__tiled = geometry;
-            const targetEl =
-              targetElements.find((e) => e.id === candidate.id) || safeElements.find((e) => e.id === candidate.id);
-            if (targetEl) {
-              targetEl.data = JSON.stringify(patch);
-            }
-            await onElementUpdate(candidate.id, patch);
-          }
-          if (!changed) return;
-          frontendEventBus.publish({
-            id: uuidv7(),
-            type: 'whiteboard.element_updated',
-            source: 'whiteboard',
-            payload: { lessonId },
-            timestamp: Date.now(),
-            correlationId: lessonId,
-          });
-        } finally {
-          setIsSyncing(false);
-        }
-      },
-      [onElementUpdate, containerSize, safeElements, lessonId, setLocalGeometry],
-    );
-
-    /** 把当前可见视口（当前页 + 当前环节）的可平铺元素按 i3 autotiling 重排并落库 */
-    const applyAutoTiling = useCallback(
-      async (forcedStackDirection?: StackDirection, customIdsOrder?: string[]) => {
-        const visibleElements = getCurrentPageElements().filter((el) => isTileableType(el.type));
-        await applyAutoTilingForElements(visibleElements, forcedStackDirection, customIdsOrder);
-      },
-      [getCurrentPageElements, applyAutoTilingForElements],
-    );
-
-    /**
-     * 交换两个平铺组件的平铺位置（对齐 Linux i3 窗口互换机制）。
-     * 原子互换两者的几何坐标与 tileOrder，并触发乐观渲染与持久化。
-     */
-    const swapTileElements = useCallback(
-      async (idA: string, idB: string) => {
-        if (!onElementUpdate || idA === idB) return;
-        const elA = safeElements.find((el) => el.id === idA);
-        const elB = safeElements.find((el) => el.id === idB);
-        if (!elA || !elB) return;
-
-        const dataA = parseElementData(elA, null);
-        const dataB = parseElementData(elB, null);
-        if (!dataA || !dataB) return;
-
-        const geoA = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
-        const geoB = extractGeometry(dataB, elB.type === 'circle' ? 'circle' : 'rect');
-        const localA = localGeometryRef.current.get(idA);
-        const localB = localGeometryRef.current.get(idB);
-        const effectiveGeoA = { ...geoA, ...(localA || {}) };
-        const effectiveGeoB = { ...geoB, ...(localB || {}) };
-
-        const currentTiles = getCurrentPageElements().filter((el) => isTileableType(el.type));
-        const indexA = currentTiles.findIndex((el) => el.id === idA);
-        const indexB = currentTiles.findIndex((el) => el.id === idB);
-        const orderA = typeof dataA.tileOrder === 'number' ? dataA.tileOrder : indexA >= 0 ? indexA : 0;
-        const orderB = typeof dataB.tileOrder === 'number' ? dataB.tileOrder : indexB >= 0 ? indexB : 1;
-
-        const patchA: Record<string, any> = {
-          ...dataA,
-          ...effectiveGeoB,
-          tileOrder: orderB,
-        };
-        const patchB: Record<string, any> = {
-          ...dataB,
-          ...effectiveGeoA,
-          tileOrder: orderA,
-        };
-
-        if (!dataA.__preTile) {
-          patchA.__preTile = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
-        }
-        if (!dataB.__preTile) {
-          patchB.__preTile = extractGeometry(dataB, elB.type === 'circle' ? 'circle' : 'rect');
-        }
-        patchA.__tiled = effectiveGeoB;
-        patchB.__tiled = effectiveGeoA;
-
-        setLocalGeometry(idA, effectiveGeoB);
-        setLocalGeometry(idB, effectiveGeoA);
-
-        setIsSyncing(true);
-        try {
-          await Promise.all([onElementUpdate(idA, patchA), onElementUpdate(idB, patchB)]);
-          frontendEventBus.publish({
-            id: uuidv7(),
-            type: 'whiteboard.element_updated',
-            source: 'whiteboard',
-            payload: { lessonId },
-            timestamp: Date.now(),
-            correlationId: lessonId,
-          });
-        } finally {
-          setIsSyncing(false);
-        }
-      },
-      [onElementUpdate, safeElements, getCurrentPageElements, setLocalGeometry, lessonId],
-    );
-
-    /**
-     * 关闭平铺模式时把元素还原到平铺前的几何。
-     * 被用户在平铺模式下手动拖动/缩放过的元素会被跳过（尊重用户意图，不覆盖其调整），
-     * 但快照字段仍会清除，避免下次平铺时误用过期基准。
-     */
-    const restoreAutoTiling = useCallback(async () => {
-      if (!onElementUpdate) return;
-      const restores: { id: string; patch: Record<string, any> }[] = [];
-
-      for (const el of safeElements) {
-        const data = parseElementData(el, null);
-        if (!data || !data.__preTile) continue;
-        const { __preTile, __tiled, tileOrder, ...rest } = data;
-        const keys = geometryKeys(el.type === 'circle' ? 'circle' : 'rect');
-        // 几何仍是我们写入的值 → 用户没动过，安全还原
-        const untouched = !__tiled || sameGeometry(data, __tiled, keys);
-        restores.push({ id: el.id, patch: untouched ? { ...rest, ...__preTile } : rest });
-      }
-      if (restores.length === 0) return;
-
-      setIsSyncing(true);
-      try {
-        for (const { id, patch } of restores) {
-          // 乐观更新：还原结果立刻反映到画布
-          const shape = patch.radius !== undefined ? 'circle' : 'rect';
-          setLocalGeometry(id, extractGeometry(patch, shape));
-          await onElementUpdate(id, patch);
-        }
-        frontendEventBus.publish({
-          id: uuidv7(),
-          type: 'whiteboard.element_updated',
-          source: 'whiteboard',
-          payload: { lessonId },
-          timestamp: Date.now(),
-          correlationId: lessonId,
-        });
-      } finally {
-        setIsSyncing(false);
-      }
-    }, [onElementUpdate, safeElements, lessonId, setLocalGeometry]);
-
-    // 用 ref 持有最新的平铺实现，使下面的自动触发 effect 只依赖真正需要的变化
-    const applyAutoTilingRef = useRef(applyAutoTiling);
-    useEffect(() => {
-      applyAutoTilingRef.current = applyAutoTiling;
-      applyAutoTilingForElementsRef.current = applyAutoTilingForElements;
-    }, [applyAutoTiling, applyAutoTilingForElements]);
-
-    useEffect(() => {
-      swapTileElementsRef.current = swapTileElements;
-    }, [swapTileElements]);
-
-    /**
-     * 将平铺组件定向切分插入到目标组件的上方/下方/左方/右方（类似 i3 / VS Code 边缘放置切分）。
-     */
-    const insertTileInDirection = useCallback(
-      async (sourceId: string, targetId: string, actionType: DropZoneActionType) => {
-        if (!onElementUpdate || sourceId === targetId) return;
-
-        const visibleElements = getCurrentPageElements().filter((el) => isTileableType(el.type));
-        const currentBoxes: BoxWithId[] = visibleElements.map((el) => {
-          const data = parseElementData(el);
-          const defaultSize = getDefaultElementSize(el.type, data);
-          const overlay = localGeometryRef.current.get(el.id);
-          return {
-            id: el.id,
-            x: overlay?.x ?? data.x ?? 0,
-            y: overlay?.y ?? data.y ?? 0,
-            width: overlay?.width ?? data.width ?? defaultSize.width,
-            height: overlay?.height ?? data.height ?? defaultSize.height,
-          };
-        });
-
-        const padding = 12;
-        const activeContainerArea = {
-          x: padding,
-          y: padding,
-          width: Math.max(0, containerSize.width - padding * 2),
-          height: Math.max(0, containerSize.height - padding * 2),
-        };
-
-        const patches = applyContainerSplit(sourceId, targetId, actionType, currentBoxes, activeContainerArea);
-
-        if (Object.keys(patches).length === 0) return;
-
-        setIsSyncing(true);
-        try {
-          for (const [id, patch] of Object.entries(patches)) {
-            const currentBox = currentBoxes.find((b) => b.id === id);
-            if (currentBox) {
-              setLocalGeometry(id, {
-                x: currentBox.x,
-                y: currentBox.y,
-                width: currentBox.width,
-                height: currentBox.height,
-                ...patch,
-              });
-            }
-          }
-
-          await Promise.all(
-            Object.entries(patches).map(async ([id, patch]) => {
-              const el = safeElements.find((item) => item.id === id);
-              if (!el) return;
-                const data = parseElementData(el, {});
-                const shape = el.type === 'circle' ? 'circle' : 'rect';
-                const baseGeo = extractGeometry(data, shape);
-                const updatedGeo = { ...baseGeo, ...patch };
-                setLocalGeometry(id, updatedGeo);
-                await onElementUpdate(id, { ...data, ...patch, __tiled: updatedGeo });
-            }),
-          );
-
-          frontendEventBus.publish({
-            id: uuidv7(),
-            type: 'whiteboard.element_updated',
-            source: 'whiteboard',
-            payload: { lessonId },
-            timestamp: Date.now(),
-            correlationId: lessonId,
-          });
-        } finally {
-          setIsSyncing(false);
-        }
-      },
-      [onElementUpdate, safeElements, getCurrentPageElements, containerSize, setLocalGeometry, lessonId],
-    );
-
-    useEffect(() => {
-      insertTileInDirectionRef.current = insertTileInDirection;
-    }, [insertTileInDirection]);
-
-    // 切换开关 / 增删元素 / 切换环节或页面后重排；同一视图下拖拽不改变 id 集合，因此不打断自由布局
-    const tileableIdsKey = useMemo(() => {
-      if (!autoTileEnabled) return '';
-      return getCurrentPageElements()
-        .filter((el) => isTileableType(el.type))
-        .map((el) => el.id)
-        .join('|');
-    }, [autoTileEnabled, safeElements, currentPage, activeSegmentId, pages]);
-
-    useEffect(() => {
-      if (!autoTileEnabled || !tileableIdsKey) return;
-      void applyAutoTilingRef.current();
-    }, [autoTileEnabled, tileableIdsKey]);
-
-    // 画布尺寸变化时重新平铺（防抖，避免拖拽窗口过程中写库风暴）
-    useEffect(() => {
-      if (!autoTileEnabled) return;
-      if (containerSize.width <= 0 || containerSize.height <= 0) return;
-      const timer = setTimeout(() => {
-        void applyAutoTilingRef.current();
-      }, 250);
-      return () => clearTimeout(timer);
-    }, [autoTileEnabled, containerSize.width, containerSize.height]);
-
-    /** 工具栏开关：开启即立刻重排并留下快照，关闭即还原到平铺前的布局 */
-    const handleToggleAutoTile = useCallback(() => {
-      if (autoTileEnabled) {
-        void restoreAutoTiling();
-      }
-      setAutoTileEnabled(!autoTileEnabled);
-    }, [autoTileEnabled, restoreAutoTiling]);
-
-    /** 当前所有处于平铺模式下的组件包围盒 */
-    const currentTilingBoxes = useMemo<BoxWithId[]>(() => {
-      if (!autoTileEnabled) return [];
-      const visible = getCurrentPageElements().filter((el) => isTileableType(el.type));
-      return visible.map((el) => {
-        let data: Record<string, any> = {};
-        try {
-          data = JSON.parse(el.data);
-        } catch {}
-        const defaultSize = getDefaultElementSize(el.type, data);
-        const overlay = localGeometryRef.current.get(el.id);
-        return {
-          id: el.id,
-          x: overlay?.x ?? data.x ?? 0,
-          y: overlay?.y ?? data.y ?? 0,
-          width: overlay?.width ?? data.width ?? defaultSize.width,
-          height: overlay?.height ?? data.height ?? defaultSize.height,
-        };
-      });
-    }, [
-      autoTileEnabled,
-      safeElements,
-      currentPage,
-      activeSegmentId,
-      pages,
-      localGeometryVersion,
-      getCurrentPageElements,
-    ]);
-
-    /** 平铺组件之间所有可拖拽调整尺寸的分割线（水平上下分割条与垂直左右分割条） */
-    const tilingSplitters = useMemo(() => {
-      if (!autoTileEnabled || currentTilingBoxes.length < 2) return [];
-      return detectTilingSplitters(currentTilingBoxes);
-    }, [autoTileEnabled, currentTilingBoxes]);
-
-    /** 鼠标按下分割条：启动分割条拖动调整 */
-    const handleSplitterPointerDown = useCallback(
-      (e: React.PointerEvent, splitter: TilingSplitter) => {
-        if (readOnly) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const startPointerPos = splitter.orientation === 'horizontal' ? e.clientY : e.clientX;
-        setActiveSplitterDrag({
-          splitter,
-          startPointerPos,
-          initialBoxes: currentTilingBoxes,
-        });
-      },
-      [readOnly, currentTilingBoxes],
-    );
 
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
@@ -4298,250 +3839,99 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             )}
 
             {/* Empty state hint */}
-            {safeElements.filter((el) => {
-              if (el.type === 'page_meta') return false;
-              try {
-                const d = JSON.parse(el.data);
-                const elPage = d.page ?? 0;
-                const currentObj = pages[currentPage];
-                const pageMatches = d.pageId && currentObj?.id ? d.pageId === currentObj.id : elPage === currentPage;
-                if (!pageMatches) return false;
-                if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
-                return true;
-              } catch {
-                return currentPage === 0;
+            <WhiteboardEmptyState
+              isVisible={
+                safeElements.filter((el) => {
+                  if (el.type === "page_meta") return false;
+                  try {
+                    const d = JSON.parse(el.data);
+                    const elPage = d.page ?? 0;
+                    const currentObj = pages[currentPage];
+                    const pageMatches = d.pageId && currentObj?.id ? d.pageId === currentObj.id : elPage === currentPage;
+                    if (!pageMatches) return false;
+                    if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
+                    return true;
+                  } catch {
+                    return currentPage === 0;
+                  }
+                }).length === 0 &&
+                !effectiveFullscreenElementId &&
+                !browserFullscreenElementId
               }
-            }).length === 0 &&
-              !effectiveFullscreenElementId &&
-              !browserFullscreenElementId && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-muted p-6 z-0">
-                  <div className="w-16 h-16 rounded-2xl bg-primary-theme-light border border-theme flex items-center justify-center mb-3 shadow-2xs">
-                    <Sparkles className="w-7 h-7 text-primary-theme animate-pulse" />
-                  </div>
-                  <p className="font-bold text-sm text-main mb-1">交互式备课白板</p>
-                  <p className="text-xs text-muted max-w-sm text-center">
-                    从左侧组件库拖拽组件至此处，或使用顶部工具栏插入画笔、几何图形与 AI 助教
-                  </p>
-                </div>
-              )}
+            />
 
             <div
               className="absolute inset-0 w-full h-full overflow-hidden"
               style={{ pointerEvents: isDragOverBoard || readOnly ? 'none' : 'auto' }}
             >
-              {containerSize.width > 0 &&
-                containerSize.height > 0 &&
-                (browserFullscreenElementId ? (
-                  // 浏览器全屏优先于白板全屏：它脱离白板、占满视口
-                  (() => {
-                    const bfsEl = safeElements.find((e) => e.id === browserFullscreenElementId);
-                    if (!bfsEl) {
-                      if (isRemoteBrowserFullscreen) {
-                        return (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-xs text-white">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mb-3" />
-                            <p className="text-xs font-medium text-slate-200">正在同步教师端的浏览器全屏组件...</p>
-                          </div>
-                        );
+              <WhiteboardFullscreenOverlay
+                containerSize={containerSize}
+                browserFullscreenElementId={browserFullscreenElementId}
+                isRemoteBrowserFullscreen={isRemoteBrowserFullscreen}
+                isBrowserFullscreenDismissible={isBrowserFullscreenDismissible}
+                browserFullscreen={browserFullscreen}
+                effectiveFullscreenElementId={effectiveFullscreenElementId}
+                isRemoteFullscreen={isRemoteFullscreen}
+                isFullscreenDismissible={isFullscreenDismissible}
+                applyFullscreen={applyFullscreen}
+                safeElements={safeElements}
+                lessonId={lessonId}
+                readOnly={readOnly}
+                renderElement={renderElement}
+              >
+                <Stage
+                  width={containerSize.width}
+                  height={containerSize.height}
+                  onMouseDown={handleMouseDown}
+                  onMousemove={handleMouseMove}
+                  onMouseup={handleMouseUp}
+                  onContextMenu={(e) => {
+                    e.evt.preventDefault();
+                    const containerRect = containerRef.current?.getBoundingClientRect();
+                    if (containerRect) {
+                      const x = e.evt.clientX - containerRect.left;
+                      const y = e.evt.clientY - containerRect.top;
+
+                      const node = e.target;
+                      const targetId = node.id();
+
+                      if (targetId) {
+                        setSelectedShapeId(targetId);
+                        setContextMenu({
+                          x,
+                          y,
+                          elementId: targetId,
+                        });
+                      } else {
+                        setContextMenu({
+                          x,
+                          y,
+                        });
                       }
-                      return null;
                     }
-                    const bfsData = parseElementData(bfsEl);
-                    return (
-                      <BrowserFullscreenHost
-                        elementId={browserFullscreenElementId}
-                        type={bfsEl.type}
-                        data={bfsData}
-                        lessonId={lessonId}
-                        readOnly={readOnly}
-                        dismissible={isBrowserFullscreenDismissible}
-                        onExit={() => void browserFullscreen.exit()}
-                        // 复用画布内已有的元素渲染，避免复制一份必然漂移；
-                        // 传入视口尺寸使元素在全屏下铺满（而非保持画布内尺寸）
-                        renderContent={(viewport) => (
-                          <WidgetFullscreenStage width={viewport.width} height={viewport.height}>
-                            {renderElement(bfsEl, {
-                              fullscreen: {
-                                width: viewport.width,
-                                height: viewport.height,
-                                padding: BROWSER_FULLSCREEN_PADDING,
-                              },
-                            })}
-                          </WidgetFullscreenStage>
-                        )}
-                      />
-                    );
-                  })()
-                ) : effectiveFullscreenElementId ? (
-                  (() => {
-                    const fsEl = safeElements.find((e) => e.id === effectiveFullscreenElementId);
-                    if (!fsEl) {
-                      // 元素尚未加载到学生端（异步网络拉取中）：显示优雅加载占位，避免白屏
-                      if (isRemoteFullscreen) {
-                        return (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-xs text-white">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mb-3" />
-                            <p className="text-xs font-medium text-slate-200">正在同步教师端全屏组件...</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }
-                    const fsData = parseElementData(fsEl);
-                    const typeLabel: Record<string, string> = {
-                      quiz: '📝 随堂测验',
-                      timer: '⏱ 计时器',
-                      assignment: '📋 作业',
-                      'code-sandbox': '💻 代码沙箱',
-                      'html-applet': '🌐 交互课件',
-                      rollcall: '🎲 随机点名',
-                      presentation: '📽 演示文稿',
-                      'math-graph': '📐 数学图形',
-                      text: '📝 文本',
-                    };
-                    return (
-                      <FullscreenOverlay
-                        type={fsEl.type}
-                        title={typeLabel[fsEl.type] || fsEl.type}
-                        data={fsData}
-                        containerSize={containerSize}
-                        dismissible={isFullscreenDismissible}
-                        onClose={() => applyFullscreen(null)}
-                        lessonId={lessonId}
-                        elementId={fsEl.id}
-                        readOnly={readOnly}
-                        // 渲染真实组件而非字段预览兜底：全屏里看到的就是它本来的样子
-                        // （此前互动课件退化成源码文本、作业退化成不可提交）
-                        renderContent={(size) => (
-                          <WidgetFullscreenStage width={size.width} height={size.height}>
-                            {renderElement(fsEl, {
-                              fullscreen: { width: size.width, height: size.height, padding: 0 },
-                            })}
-                          </WidgetFullscreenStage>
-                        )}
-                      />
-                    );
-                  })()
-                ) : (
-                  <Stage
-                    width={containerSize.width}
-                    height={containerSize.height}
-                    onMouseDown={handleMouseDown}
-                    onMousemove={handleMouseMove}
-                    onMouseup={handleMouseUp}
-                    onContextMenu={(e) => {
-                      e.evt.preventDefault();
-                      const containerRect = containerRef.current?.getBoundingClientRect();
-                      if (containerRect) {
-                        const x = e.evt.clientX - containerRect.left;
-                        const y = e.evt.clientY - containerRect.top;
-
-                        const node = e.target;
-                        const targetId = node.id();
-
-                        if (targetId) {
-                          setSelectedShapeId(targetId);
-                          setContextMenu({
-                            x,
-                            y,
-                            elementId: targetId,
-                          });
-                        } else {
-                          setContextMenu({
-                            x,
-                            y,
-                          });
-                        }
-                      }
-                    }}
-                    ref={stageRef}
-                    className="w-full h-full cursor-crosshair"
-                  >
-                    <Layer>
-                      {getCurrentPageElements().map((el) => renderElement(el))}
-                      {/* Show drawing in progress */}
-                      {renderActiveDrawing()}
-                      {/* Show remote drawings */}
-                      {renderRemoteDrawings()}
-                    </Layer>
-                  </Stage>
-                ))}
-
-              {/* 自动平铺分割条交互层（支持上下水平分割线与左右垂直分割线拖拽调高/调宽） */}
-              {autoTileEnabled && !readOnly && tilingSplitters.length > 0 && (
-                <div className="absolute inset-0 pointer-events-none z-30">
-                  {tilingSplitters.map((sp) => {
-                    const isHorizontal = sp.orientation === 'horizontal';
-                    const isDraggingThis = activeSplitterDrag?.splitter.id === sp.id;
-                    return (
-                      <div
-                        key={sp.id}
-                        data-testid={`splitter-${sp.orientation}-${sp.id}`}
-                        className={`absolute pointer-events-auto group flex items-center justify-center select-none ${
-                          isHorizontal ? 'cursor-row-resize' : 'cursor-col-resize'
-                        }`}
-                        style={{
-                          left: `${sp.x}px`,
-                          top: `${sp.y}px`,
-                          width: `${isHorizontal ? sp.length : sp.thickness}px`,
-                          height: `${isHorizontal ? sp.thickness : sp.length}px`,
-                        }}
-                        onPointerDown={(e) => handleSplitterPointerDown(e, sp)}
-                        title={isHorizontal ? '拖动调整上下分割高度' : '拖动调整左右分割宽度'}
-                      >
-                        {/* 交互把手视觉线 */}
-                        <div
-                          className={`rounded-full transition-all duration-150 ${
-                            isHorizontal
-                              ? `w-full h-1 my-auto ${
-                                  isDraggingThis
-                                    ? 'bg-indigo-500 h-1.5 shadow-md'
-                                    : 'bg-transparent group-hover:bg-indigo-400/80 group-hover:h-1.5'
-                                }`
-                              : `h-full w-1 mx-auto ${
-                                  isDraggingThis
-                                    ? 'bg-indigo-500 w-1.5 shadow-md'
-                                    : 'bg-transparent group-hover:bg-indigo-400/80 group-hover:w-1.5'
-                                }`
-                          }`}
-                        />
-                        {/* 中间微缩把手点 */}
-                        <div
-                          className={`absolute rounded-full transition-all duration-150 flex items-center justify-center ${
-                            isDraggingThis
-                              ? 'bg-indigo-600 text-white scale-110 shadow-lg'
-                              : 'opacity-0 group-hover:opacity-100 bg-white/95 dark:bg-slate-800/95 text-indigo-600 shadow border border-indigo-200 dark:border-indigo-700'
-                          } ${isHorizontal ? 'w-8 h-3.5' : 'h-8 w-3.5'}`}
-                        >
-                          <div className={`flex ${isHorizontal ? 'flex-row gap-0.5' : 'flex-col gap-0.5'}`}>
-                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
-                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
-                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* 智能切分全域虚线预览框（撑满当前整个区域，不再局限于单一组件下半截） */}
-              {autoTileEnabled && !readOnly && activeDropZoneAction && activeDropZoneAction.type !== 'swap' && (
-                <div
-                  data-testid="directional-split-preview"
-                  className="absolute pointer-events-none rounded-2xl border-3 border-dashed border-indigo-500 bg-indigo-500/20 backdrop-blur-[2px] shadow-2xl flex items-center justify-center transition-all duration-150 z-40 animate-in fade-in zoom-in-95"
-                  style={{
-                    left: `${activeDropZoneAction.previewRect.x}px`,
-                    top: `${activeDropZoneAction.previewRect.y}px`,
-                    width: `${activeDropZoneAction.previewRect.width}px`,
-                    height: `${activeDropZoneAction.previewRect.height}px`,
                   }}
+                  ref={stageRef}
+                  className="w-full h-full cursor-crosshair"
                 >
-                  <div className="bg-indigo-600 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 select-none animate-bounce">
-                    <span>{activeDropZoneAction.label}</span>
-                  </div>
-                </div>
-              )}
+                  <Layer>
+                    {getCurrentPageElements().map((el) => renderElement(el))}
+                    {/* Show drawing in progress */}
+                    {renderActiveDrawing()}
+                    {/* Show remote drawings */}
+                    {renderRemoteDrawings()}
+                  </Layer>
+                </Stage>
+              </WhiteboardFullscreenOverlay>
+
+              {/* 自动平铺分割条交互层与预览框 */}
+              <WhiteboardTilingOverlay
+                autoTileEnabled={autoTileEnabled}
+                readOnly={readOnly}
+                tilingSplitters={tilingSplitters}
+                activeSplitterDrag={activeSplitterDrag}
+                activeDropZoneAction={activeDropZoneAction}
+                handleSplitterPointerDown={handleSplitterPointerDown}
+              />
 
               {/* 原先此处会在选中组件上方浮出一层「类型 + 删除」的悬浮药丸，与组件
                   标题栏自带的删除按钮功能重复，已移除。删除入口保留在标题栏、右键
@@ -4713,727 +4103,38 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         {userRole === 'teacher' && lessonId && <WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />}
 
         {/* 注入右侧属性编辑器侧边栏 */}
-        {isEditMode &&
-          selectedShapeId &&
-          editingProperties &&
-          (() => {
-            const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
-            if (!selectedEl) return null;
-            // 窗体类小组件仅在用户显式点击标题栏“属性图标”或右键菜单“配置组件属性”时展开侧栏
-            const isWidget =
-              [
-                'plugin',
-                'hello-world',
-                'rollcall',
-                'quiz',
-                'assignment',
-                'html-applet',
-                'code-sandbox',
-                'math-graph',
-                'presentation',
-              ].includes(selectedEl.type) || paletteItemRegistry.has(selectedEl.type);
-            if (isWidget && activePropertiesElementId !== selectedShapeId) {
-              return null;
-            }
-
-            return (
-              <div
-                className="w-80 h-full max-h-full bg-surface border-l border-theme flex flex-col font-sans text-xs select-none shadow-xl shrink-0 z-20 animate-in slide-in-from-right duration-200 text-main"
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {/* 顶栏 */}
-                <div className="px-4 py-3 border-b border-theme bg-surface-secondary flex justify-between items-center shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Settings size={15} className="text-muted animate-spin" style={{ animationDuration: '6s' }} />
-                    <span className="font-bold text-main text-sm">属性编辑器</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-sans">
-                    {/* 撤销 (Undo) 按钮 */}
-                    <button
-                      onClick={handleUndoProp}
-                      disabled={(propertyUndoStack[selectedShapeId] || []).length === 0}
-                      className={`p-1 rounded-lg transition-all flex items-center justify-center gap-1 border border-transparent select-none cursor-pointer ${
-                        (propertyUndoStack[selectedShapeId] || []).length === 0
-                          ? 'text-subtle bg-transparent border-transparent opacity-40 cursor-not-allowed'
-                          : 'text-main bg-surface hover:bg-surface-secondary hover:border-theme active:bg-surface-secondary'
-                      }`}
-                      title="撤销属性修改"
-                    >
-                      <Undo2 size={13} />
-                      {(propertyUndoStack[selectedShapeId] || []).length > 0 && (
-                        <span className="text-xs font-bold text-muted">
-                          {(propertyUndoStack[selectedShapeId] || []).length}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* 重做 (Redo) 按钮 */}
-                    <button
-                      onClick={handleRedoProp}
-                      disabled={(propertyRedoStack[selectedShapeId] || []).length === 0}
-                      className={`p-1 rounded-lg transition-all flex items-center justify-center gap-1 border border-transparent select-none cursor-pointer ${
-                        (propertyRedoStack[selectedShapeId] || []).length === 0
-                          ? 'text-subtle bg-transparent border-transparent opacity-40 cursor-not-allowed'
-                          : 'text-main bg-surface hover:bg-surface-secondary hover:border-theme active:bg-surface-secondary'
-                      }`}
-                      title="重做属性修改"
-                    >
-                      <Redo2 size={13} />
-                      {(propertyRedoStack[selectedShapeId] || []).length > 0 && (
-                        <span className="text-xs font-bold text-muted">
-                          {(propertyRedoStack[selectedShapeId] || []).length}
-                        </span>
-                      )}
-                    </button>
-
-                    <div className="h-4 w-px bg-border-theme mx-0.5 shrink-0" />
-
-                    <button
-                      onClick={() => {
-                        setActivePropertiesElementId(null);
-                        setSelectedShapeId(null);
-                      }}
-                      className="text-muted hover:text-main hover:bg-surface-secondary p-1 rounded-full transition-all cursor-pointer"
-                      title="关闭属性编辑器"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 内容区 */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {/* 基本标签和信息 */}
-                  <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted text-xs font-bold uppercase tracking-wider">组件类型</span>
-                      <span className="px-2 py-0.5 bg-primary-theme-light text-primary-theme rounded text-xs font-bold uppercase tracking-wider">
-                        {selectedEl.type}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted text-xs font-bold uppercase tracking-wider">组件标识</span>
-                      <span className="font-mono text-muted text-xs truncate max-w-[155px]" title={selectedEl.id}>
-                        {selectedEl.id}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 通用属性: X, Y 坐标及宽高 */}
-                  <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                    <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">
-                      物理定位 & 尺寸
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">X 坐标</label>
-                        <input
-                          type="number"
-                          value={Math.round(editingProperties.x ?? 0)}
-                          onChange={(e) => handleLocalPropChange('x', parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => handleNumericPropBlur('x', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">Y 坐标</label>
-                        <input
-                          type="number"
-                          value={Math.round(editingProperties.y ?? 0)}
-                          onChange={(e) => handleLocalPropChange('y', parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => handleNumericPropBlur('y', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                      </div>
-                    </div>
-
-                    {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div>
-                          <label className="block text-xs text-muted font-semibold mb-1">宽度 (Width)</label>
-                          <input
-                            type="number"
-                            min="50"
-                            value={Math.round(editingProperties.width ?? 300)}
-                            onChange={(e) => handleLocalPropChange('width', parseFloat(e.target.value) || 50)}
-                            onBlur={(e) => handleNumericPropBlur('width', e.target.value)}
-                            className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-muted font-semibold mb-1">高度 (Height)</label>
-                          <input
-                            type="number"
-                            min="50"
-                            value={Math.round(editingProperties.height ?? 300)}
-                            onChange={(e) => handleLocalPropChange('height', parseFloat(e.target.value) || 50)}
-                            onBlur={(e) => handleNumericPropBlur('height', e.target.value)}
-                            className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedEl.type === 'circle' && (
-                      <div className="mt-2">
-                        <label className="block text-xs text-muted font-semibold mb-1">半径 (Radius)</label>
-                        <input
-                          type="number"
-                          min="5"
-                          value={Math.round(editingProperties.radius ?? 50)}
-                          onChange={(e) => handleLocalPropChange('radius', parseFloat(e.target.value) || 5)}
-                          onBlur={(e) => handleNumericPropBlur('radius', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 插件注册的属性编辑器 —— 优先于硬编码编辑器 */}
-                  {(() => {
-                    const PluginEditor = propertyEditorRegistry.get(selectedEl.type);
-                    if (PluginEditor) {
-                      return (
-                        <PluginEditor
-                          elementId={selectedEl.id}
-                          elementType={selectedEl.type}
-                          data={editingProperties}
-                          updateData={handlePropsUpdate}
-                          lessonId={lessonId}
-                          onClose={() => setSelectedShapeId(null)}
-                        />
-                      );
-                    }
-
-                    // 如果未注册专用属性编辑器，但存在 PaletteItemConfig，按其 editFields 自动渲染通用表单
-                    const pluginPaletteConfig = paletteItemRegistry.get(selectedEl.type);
-                    if (pluginPaletteConfig) {
-                      const fields = pluginPaletteConfig.editFields || [];
-                      return (
-                        <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                          <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center justify-between">
-                            <span>{pluginPaletteConfig.labelZh} 配置</span>
-                            <span className="text-xs text-muted font-normal">插件扩展</span>
-                          </h4>
-                          {fields.length === 0 ? (
-                            <div>
-                              <label className="block text-xs text-muted font-semibold mb-1">标题 (Title)</label>
-                              <input
-                                type="text"
-                                value={editingProperties.title || ''}
-                                onChange={(e) => handleLocalPropChange('title', e.target.value)}
-                                onBlur={(e) => handlePropBlur('title', e.target.value)}
-                                className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                                placeholder="组件标题..."
-                              />
-                            </div>
-                          ) : (
-                            fields.map((field) => {
-                              const val = editingProperties[field.key] ?? '';
-                              if (field.kind === 'textarea') {
-                                return (
-                                  <div key={field.key}>
-                                    <label className="block text-xs text-muted font-semibold mb-1">
-                                      {field.labelZh}
-                                    </label>
-                                    <textarea
-                                      value={val}
-                                      onChange={(e) => handleLocalPropChange(field.key, e.target.value)}
-                                      onBlur={(e) => handlePropBlur(field.key, e.target.value)}
-                                      className="w-full h-20 p-2 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main resize-none font-medium leading-relaxed"
-                                      placeholder={field.placeholderZh || ''}
-                                    />
-                                  </div>
-                                );
-                              }
-                              if (field.kind === 'select') {
-                                return (
-                                  <div key={field.key}>
-                                    <label className="block text-xs text-muted font-semibold mb-1">
-                                      {field.labelZh}
-                                    </label>
-                                    <select
-                                      value={val}
-                                      onChange={(e) => {
-                                        handleLocalPropChange(field.key, e.target.value);
-                                        handlePropBlur(field.key, e.target.value);
-                                      }}
-                                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs bg-surface text-main focus:outline-none focus:ring-1 focus:ring-primary-theme"
-                                    >
-                                      <option value="">请选择...</option>
-                                      {(field.options || []).map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                          {opt.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div key={field.key}>
-                                  <label className="block text-xs text-muted font-semibold mb-1">{field.labelZh}</label>
-                                  <input
-                                    type="text"
-                                    value={val}
-                                    onChange={(e) => handleLocalPropChange(field.key, e.target.value)}
-                                    onBlur={(e) => handlePropBlur(field.key, e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                                    placeholder={field.placeholderZh || ''}
-                                  />
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      );
-                    }
-
-                    return null;
-                  })()}
-
-                  {/* 1. QUIZ (测验配置) */}
-                  {selectedEl.type === 'quiz' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">随堂测验配置</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">测验题目 (Question)</label>
-                        <textarea
-                          value={editingProperties.question || ''}
-                          onChange={(e) => handleLocalPropChange('question', e.target.value)}
-                          onBlur={(e) => handlePropBlur('question', e.target.value)}
-                          className="w-full h-20 p-2 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main resize-none font-medium leading-relaxed"
-                          placeholder="编写问题描述..."
-                        />
-                      </div>
-
-                      {/* Correct answer selector */}
-                      {(editingProperties.options || []).length > 0 && (
-                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
-                          <label className="block text-xs text-amber-500 font-bold mb-1.5">
-                            ⚠️ 正确答案 (Correct Answer)
-                          </label>
-                          <select
-                            value={editingProperties.correctAnswer || ''}
-                            onChange={(e) => {
-                              handleLocalPropChange('correctAnswer', e.target.value);
-                              handlePropBlur('correctAnswer', e.target.value);
-                            }}
-                            className={`w-full px-2 py-1.5 border rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
-                              editingProperties.correctAnswer
-                                ? 'border-green-500/40 bg-green-500/10 text-green-600'
-                                : 'border-amber-500/40 bg-surface text-main'
-                            }`}
-                          >
-                            <option value="">-- 请选择正确答案 --</option>
-                            {(editingProperties.options || []).map((opt: string, idx: number) => (
-                              <option key={idx} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                          {!editingProperties.correctAnswer && (
-                            <p className="text-xs text-amber-500 mt-1">未设置正确答案将无法自动判分</p>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="block text-xs text-muted font-semibold">选项列表 (Options)</label>
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                          {(editingProperties.options || []).map((opt: string, idx: number) => {
-                            const optionLabels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                            const label = optionLabels[idx] || idx + 1;
-                            return (
-                              <div key={idx} className="flex items-center gap-1.5">
-                                <span className="font-bold text-main bg-surface-secondary rounded px-1.5 py-1 text-center shrink-0 min-w-[22px]">
-                                  {label}
-                                </span>
-                                <input
-                                  type="text"
-                                  value={opt || ''}
-                                  onChange={(e) => handleOptionChangeLocal(idx, e.target.value)}
-                                  onBlur={(e) => handleOptionBlur(idx, e.target.value)}
-                                  className="flex-1 px-2 py-1 border border-theme rounded-lg text-xs font-medium bg-surface text-main"
-                                />
-                                <button
-                                  onClick={() => handleRemoveOption(idx)}
-                                  title="删除选项"
-                                  className="text-muted hover:text-rose-500 hover:bg-rose-500/10 p-1 rounded-md shrink-0 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        <button
-                          onClick={handleAddOption}
-                          className="w-full mt-2 py-1 bg-surface-secondary hover:bg-surface-secondary text-main font-bold border border-theme rounded-lg flex items-center justify-center gap-1 transition-all text-xs cursor-pointer"
-                        >
-                          <Plus size={12} /> 添加选项
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2. ASSIGNMENT (作业配置) */}
-                  {selectedEl.type === 'assignment' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">作业选项配置</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">作业任务标题 (Title)</label>
-                        <input
-                          type="text"
-                          value={editingProperties.title || ''}
-                          onChange={(e) => handleLocalPropChange('title', e.target.value)}
-                          onBlur={(e) => handlePropBlur('title', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                          placeholder="作业名..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">详细作业要求描述</label>
-                        <textarea
-                          value={editingProperties.description || ''}
-                          onChange={(e) => handleLocalPropChange('description', e.target.value)}
-                          onBlur={(e) => handlePropBlur('description', e.target.value)}
-                          className="w-full h-24 p-2 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main resize-none font-medium leading-relaxed"
-                          placeholder="请输入详细的作业指南..."
-                        />
-                      </div>
-                      <AssignmentBindingField
-                        lessonId={lessonId}
-                        classId={classId || fullscreenBroadcastClassId || undefined}
-                        elementId={selectedEl.id}
-                        value={editingProperties.assignmentId || ''}
-                        draftTitle={editingProperties.title || ''}
-                        draftDescription={editingProperties.description || ''}
-                        onChange={(assignmentId) => {
-                          handleLocalPropChange('assignmentId', assignmentId);
-                          void handlePropBlur('assignmentId', assignmentId);
-                        }}
-                      />
-                      {editingProperties.assignmentId ? (
-                        <AssignmentPeerProgressPanel
-                          key={String(editingProperties.assignmentId)}
-                          assignmentId={String(editingProperties.assignmentId)}
-                        />
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* 3. CODE SANDBOX 和 HTML APPLET 和 Sandbox */}
-                  {(selectedEl.type === 'code-sandbox' || selectedEl.type === 'html-applet') && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex justify-between items-center">
-                        <span>动态运行代码定制</span>
-                        {selectedEl.type === 'html-applet' && (
-                          <span className="text-xs bg-primary-theme-light text-primary-theme px-1.5 py-0.5 rounded-full font-bold">
-                            HTML Applet
-                          </span>
-                        )}
-                      </h4>
-
-                      {selectedEl.type === 'html-applet' && (
-                        <div className="space-y-3 border-b border-theme pb-3">
-                          <div>
-                            <label className="block text-xs text-primary-theme font-bold mb-1">
-                              选择互动网络课件 (ZIP/HTML):
-                            </label>
-                            <select
-                              value={editingProperties.coursewareUuid || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                handlePropsUpdate({ coursewareUuid: val, resourceId: '' });
-                              }}
-                              className="w-full text-xs p-2 bg-surface-secondary border border-theme hover:border-primary-theme rounded-lg text-main focus:outline-none focus:ring-1 focus:ring-primary-theme transition-all font-semibold"
-                            >
-                              <option value="">-- 使用自定义沙箱代码 --</option>
-                              {coursewares.map((c) => (
-                                <option key={c.id} value={c.uuid}>
-                                  📁 [互动课件] {c.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-xs text-muted space-y-2">
-                            <span className="font-bold text-main block">上传新课件 (自动生成独立运行实例):</span>
-                            <label className="w-full flex flex-col items-center justify-center p-3 bg-indigo-50 hover:bg-indigo-100 border border-dashed border-indigo-300 hover:border-indigo-400 rounded-lg cursor-pointer text-center transition-all">
-                              <span className="font-bold text-indigo-700 text-xs">
-                                ✨ 上传互动网络课件 (.zip / .html)
-                              </span>
-                              <span className="text-xs text-indigo-500 mt-0.5">
-                                支持多文件打包 ZIP 或单页 HTML，自动接入 LMS Bridge
-                              </span>
-                              <input
-                                type="file"
-                                accept=".zip,.html,.htm"
-                                className="hidden"
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-
-                                  const reader = new FileReader();
-                                  reader.onload = async (event) => {
-                                    const result = event.target?.result as string;
-                                    try {
-                                      const res = await fetch('/api/courseware/upload', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          name: file.name.replace(/\.[^/.]+$/, ''),
-                                          filename: file.name,
-                                          base64Data: result,
-                                        }),
-                                      });
-                                      if (res.ok) {
-                                        const data = await res.json();
-                                        if (data.need_select_entry) {
-                                          setZipCandidates(data.candidates);
-                                          setZipUploadInfo({ uuid: data.uuid, name: data.name });
-                                          setShowEntrySelector(true);
-                                        } else {
-                                          handlePropsUpdate({ coursewareUuid: data.uuid, resourceId: '' });
-                                          // 上传成功后强制重拉，跳过 gate
-                                          fetchCoursewares({ force: true });
-                                        }
-                                      } else {
-                                        const errData = await res.json();
-                                        alert('上传失败: ' + (errData.error || res.statusText));
-                                      }
-                                    } catch (err) {
-                                      console.error('Courseware upload failed:', err);
-                                    }
-                                  };
-                                  reader.readAsDataURL(file);
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      )}
-
-                      {(!editingProperties.coursewareUuid || selectedEl.type === 'code-sandbox') && (
-                        <div>
-                          <label className="block text-xs text-slate-400 font-semibold mb-1">
-                            沙箱程序代码 (Source Code)
-                          </label>
-                          <textarea
-                            value={editingProperties.code || ''}
-                            onChange={(e) => handleLocalPropChange('code', e.target.value)}
-                            onBlur={(e) => handlePropBlur('code', e.target.value)}
-                            className="w-full h-48 p-3 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-900 text-slate-100 resize-none leading-relaxed"
-                            placeholder="// 编写交互沙箱代码..."
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 4. MATH GRAPH */}
-                  {selectedEl.type === 'math-graph' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">函数解析拟合</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">函数表达式 y = f(x)</label>
-                        <input
-                          type="text"
-                          value={editingProperties.equation || ''}
-                          onChange={(e) => handleLocalPropChange('equation', e.target.value)}
-                          onBlur={(e) => handlePropBlur('equation', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                        <p className="text-xs text-muted mt-1 leading-snug">
-                          支持标准 JS 表达式。 示例：
-                          <br />• <code className="bg-surface-secondary px-1 rounded">Math.sin(x)</code> 正负弦波形
-                          <br />• <code className="bg-surface-secondary px-1 rounded">Math.cos(x) * x</code> 振幅衰减
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 5. PRESENTATION */}
-                  {selectedEl.type === 'presentation' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">幻灯片 Markdown 文案</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">Markdown 源代码</label>
-                        <textarea
-                          value={editingProperties.markdown || ''}
-                          onChange={(e) => handleLocalPropChange('markdown', e.target.value)}
-                          onBlur={(e) => handlePropBlur('markdown', e.target.value)}
-                          className="w-full h-64 p-2.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme resize-none font-medium leading-relaxed bg-surface text-main"
-                          placeholder="修改 Markdown 内容..."
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 6. TEXT (文字颜色样式) */}
-                  {selectedEl.type === 'text' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">文字属性管理</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">文本内容</label>
-                        <input
-                          type="text"
-                          value={editingProperties.text || ''}
-                          onChange={(e) => handleLocalPropChange('text', e.target.value)}
-                          onBlur={(e) => handlePropBlur('text', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">文字大小 (FontSize)</label>
-                        <input
-                          type="number"
-                          min="10"
-                          max="100"
-                          value={editingProperties.fontSize || 16}
-                          onChange={(e) => handleLocalPropChange('fontSize', parseInt(e.target.value) || 10)}
-                          onBlur={(e) => handleNumericPropBlur('fontSize', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">文字填充颜色</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingProperties.color || '#000000'}
-                            onChange={(e) => handleLocalPropChange('color', e.target.value)}
-                            onBlur={(e) => handlePropBlur('color', e.target.value)}
-                            className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
-                          />
-                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#000000'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 7. RECTANGLE 和 SHAPE */}
-                  {(selectedEl.type === 'rectangle' || selectedEl.type === 'shape') && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">矩形样式配置</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">外边框颜色</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingProperties.stroke || '#000000'}
-                            onChange={(e) => handleLocalPropChange('stroke', e.target.value)}
-                            onBlur={(e) => handlePropBlur('stroke', e.target.value)}
-                            className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
-                          />
-                          <span className="font-mono text-xs text-muted">{editingProperties.stroke || '#000000'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 8. CIRCLE */}
-                  {selectedEl.type === 'circle' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">圆形样式配置</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">外边框颜色</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingProperties.stroke || '#000000'}
-                            onChange={(e) => handleLocalPropChange('stroke', e.target.value)}
-                            onBlur={(e) => handlePropBlur('stroke', e.target.value)}
-                            className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
-                          />
-                          <span className="font-mono text-xs text-muted">{editingProperties.stroke || '#000000'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 9. PEN */}
-                  {selectedEl.type === 'pen' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">线条样式配置</h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">折线颜色</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingProperties.color || '#000000'}
-                            onChange={(e) => handleLocalPropChange('color', e.target.value)}
-                            onBlur={(e) => handlePropBlur('color', e.target.value)}
-                            className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
-                          />
-                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#000000'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 10. HIGHLIGHTER */}
-                  {selectedEl.type === 'highlighter' && (
-                    <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-                      <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
-                        高亮荧光标记 (Highlighter)
-                      </h4>
-                      <div>
-                        <label className="block text-xs text-muted font-semibold mb-1">荧光笔颜色</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingProperties.color || '#facc15'}
-                            onChange={(e) => handleLocalPropChange('color', e.target.value)}
-                            onBlur={(e) => handlePropBlur('color', e.target.value)}
-                            className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
-                          />
-                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#facc15'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-muted text-center select-none pt-2 font-medium">
-                    提示：属性在失焦或修改时自动同步，多端可见。
-                  </div>
-                </div>
-
-                {/* 底部操作按钮 */}
-                <div className="p-3 border-t border-slate-200 bg-white flex flex-col gap-2 shrink-0">
-                  <button
-                    onClick={() => handleUpdateElementData(editingProperties)}
-                    disabled={isSyncing}
-                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-all shadow-sm hover:shadow active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 text-xs"
-                  >
-                    {isSyncing ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        正在广播同步...
-                      </>
-                    ) : (
-                      <>
-                        <Paintbrush size={13} />
-                        应用修改并强制同步
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleElementDelete(selectedShapeId);
-                      setSelectedShapeId(null);
-                    }}
-                    className="w-full py-2 bg-red-50 hover:bg-red-105 text-red-650 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 border border-red-200 cursor-pointer text-xs"
-                  >
-                    <Trash2 size={13} />
-                    删除当前组件
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+        <WhiteboardPropertiesSidebar
+          isEditMode={isEditMode}
+          selectedShapeId={selectedShapeId}
+          setSelectedShapeId={setSelectedShapeId}
+          activePropertiesElementId={activePropertiesElementId}
+          setActivePropertiesElementId={setActivePropertiesElementId}
+          safeElements={safeElements}
+          editingProperties={editingProperties}
+          handleLocalPropChange={handleLocalPropChange}
+          handlePropBlur={handlePropBlur}
+          handleNumericPropBlur={handleNumericPropBlur}
+          handlePropsUpdate={handlePropsUpdate}
+          handleUpdateElementData={handleUpdateElementData}
+          handleElementDelete={handleElementDelete}
+          handleUndoProp={handleUndoProp}
+          handleRedoProp={handleRedoProp}
+          propertyUndoStack={propertyUndoStack}
+          propertyRedoStack={propertyRedoStack}
+          isSyncing={isSyncing}
+          lessonId={lessonId}
+          classId={classId}
+          fullscreenBroadcastClassId={fullscreenBroadcastClassId}
+          coursewares={coursewares}
+          fetchCoursewares={fetchCoursewares}
+          setZipCandidates={setZipCandidates}
+          setZipUploadInfo={setZipUploadInfo}
+          setShowEntrySelector={setShowEntrySelector}
+          handleAddOption={handleAddOption}
+          handleRemoveOption={handleRemoveOption}
+          handleOptionChangeLocal={handleOptionChangeLocal}
+          handleOptionBlur={handleOptionBlur}
+        />
       </div>
     );
   },
