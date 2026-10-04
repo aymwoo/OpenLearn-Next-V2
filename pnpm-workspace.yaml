@@ -9,6 +9,7 @@ packages:
   - 'packages/core'
   - 'packages/plugin-sdk'
   - 'packages/plugin-test-kit'
+  - 'packages/bridge-sdk'
   - 'packages/mfe-whiteboard'
 
 overrides:

@@ -1,0 +1,8 @@
+{
+  "name": "@openlearn/bridge-sdk",
+  "version": "1.0.0",
+  "description": "LMS Bridge SDK for interactive courseware iframe sandboxes",
+  "main": "src/bridge.js",
+  "type": "module",
+  "license": "MIT"
+}

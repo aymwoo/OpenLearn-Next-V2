@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Bridge SDK 独立打包与巨石常量解耦（方向 2 攻坚，E4a）**：
+  - **独立沙箱源码包设立（`packages/bridge-sdk/`）**：
+    - 将 `server/utils/bridge-sdk.ts` 内部长达 780+ 行的硬编码 JavaScript 模板字符串抽离为独立的工程模块 `@openlearn/bridge-sdk`（`packages/bridge-sdk/src/bridge.js`）；
+    - 赋予跨域 iframe 沙箱 Bridge 原生 JavaScript 的完整高亮、格式化与语法检查能力，彻底消除在 TypeScript 模板字符串中写 JS 的反模式；
+  - **自动构建同步流水线（`scripts/build-bridge-sdk.mjs`）**：
+    - 引入专用的 Bridge 构建脚本，将其接入平台编译流水线（`pnpm build` 与 `pnpm build:bridge-sdk`）；
+    - 保持 `server/utils/bridge-sdk.ts` 导出的 `BRIDGE_SDK_CODE` 对外 100% 契约兼容，零破坏现有路由分发（`/bridge.js`）、课件注入与端到端测试；
+  - **工作区纳管**：在 `pnpm-workspace.yaml` 中将 `packages/bridge-sdk` 纳管为 monorepo 标准包。
+
 - **交互白板巨石组件模块化拆解（方向 1 攻坚）**：
   - **组件属性编辑侧栏解耦（`src/features/whiteboard/components/WhiteboardPropertiesSidebar.tsx`）**：
     - 抽离原嵌入主文件的 340+ 行测验、作业、代码沙箱、互动课件、数学拟合、演示文稿、富文本与几何形状属性表单及插件属性扩展系统；
