@@ -1,36 +1,18 @@
 import path from 'path';
 import fs from 'fs';
-import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
-import { aggregateAttemptScore, describeAggregation } from '../../packages/plugins/courseware-score.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
-import { extractScoreCommentCompletion } from '../utils/score-extract.js';
 import { mintCoursewareToken, verifyCoursewareToken } from '../utils/courseware-access.js';
-import { parsePagination } from '../utils/pagination.js';
-import {
-  autoRecordAttempt,
-  autoRecordForLesson,
-  describePromoteReason,
-  findActiveLessonForStudent,
-  markStudentAbsent,
-  promoteAttemptToGrade,
-} from '../utils/auto-record-score.js';
+import { CoursewareService } from '../services/courseware-service.js';
 
 export function registerCoursewareRoutes(ctx: ServerContext) {
-  const { app, io } = ctx;
+  const { app } = ctx;
+  const coursewareService = new CoursewareService();
 
-  /** 课件 attempt 变更的统一发布入口（log / submit / adopt 三类）。 */
-  const publishAttemptUpdated = (attemptId: string, type: 'log' | 'submit' | 'adopt') =>
-    publishClassroomEvent(
-      CLASSROOM_EVENTS.COURSEWARE_ATTEMPT_UPDATED,
-      { attemptId, type },
-      { correlationId: attemptId },
-    );
-
+  // ── 1. 基础课件包管理（CommandBus）────────────────────────────────────────
   app.post('/api/courseware/upload', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { name, filename, base64Data } = req.body;
@@ -81,118 +63,18 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── 2. 作答流水、认领与提交（委托给 CoursewareService）────────────────────
   app.post('/api/courseware/attempts/:attemptId/log', async (req, res) => {
     try {
       const { attemptId } = req.params;
       const { eventType, payload } = req.body;
-
-      // SEC-FIX: 会话与所属权检查，防止未授权恶意刷分/覆写日志
       const token = getCookieToken(req);
       const session = (req as any).session || (token ? getValidSession(token) : null);
-      if (!session) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-      if (session.role !== 'teacher' && session.role !== 'administrator') {
-        const attemptRow = kernelContainer.db
-          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-          .get(attemptId) as { student_id: string } | undefined;
-        if (attemptRow && attemptRow.student_id !== session.userId) {
-          return res.status(403).json({ error: 'Forbidden: Cannot modify logs for another student' });
-        }
-      }
 
-      const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
-      kernelContainer.db
-        .prepare(
-          'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(rawId, attemptId, eventType, JSON.stringify(payload), Date.now());
-
-      const extracted = extractScoreCommentCompletion(payload);
-      const comment = extracted.comment;
-      const completion = extracted.completion;
-
-      // 原生成绩归集：按课件成绩配置的策略（默认取最后一次）从样本历史算出官方成绩，
-      // 这样 «最高分» / «平均分» 之类的策略才能真正生效（此前只保留最后一次）。
-      let aggregatedScore: number | null = null;
-      let aggregationExtra: Record<string, unknown> = {};
-      try {
-        const aggregation = aggregateAttemptScore(kernelContainer.db as any, attemptId);
-        if (aggregation.finalScore !== null) aggregatedScore = aggregation.finalScore;
-        aggregationExtra = { score_aggregation: describeAggregation(aggregation) };
-      } catch (aggErr) {
-        console.warn('[courseware.log] score aggregation failed, fallback to latest score:', aggErr);
-      }
-
-      if (aggregatedScore !== null || comment !== undefined || completion !== undefined) {
-        let parsedScore: number | null = null;
-        if (extracted.score !== undefined && extracted.score !== null) {
-          const num = parseFloat(extracted.score);
-          if (!isNaN(num)) {
-            parsedScore = num;
-          }
-        }
-        let parsedCompletion: number | null = null;
-        if (completion !== undefined && completion !== null) {
-          const num = parseFloat(completion);
-          if (!isNaN(num)) {
-            parsedCompletion = num;
-          }
-        }
-
-        const existing = kernelContainer.db
-          .prepare('SELECT * FROM submission_result WHERE attempt_id = ?')
-          .get(attemptId) as any;
-        if (!existing) {
-          kernelContainer.db
-            .prepare(
-              'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
-            )
-            .run(
-              'res_' + crypto.randomBytes(8).toString('hex'),
-              attemptId,
-              aggregatedScore !== null ? aggregatedScore : parsedScore,
-              comment || null,
-              parsedCompletion,
-              JSON.stringify({
-                ...(payload && typeof payload === 'object' ? payload : {}),
-                ...aggregationExtra,
-              }),
-            );
-        } else {
-          const finalScore =
-            aggregatedScore !== null ? aggregatedScore : parsedScore !== null ? parsedScore : existing.score;
-          const finalComment = comment || existing.comment;
-          const finalCompletion = parsedCompletion !== null ? parsedCompletion : existing.completion;
-
-          let mergedExtra = {};
-          try {
-            mergedExtra = JSON.parse(existing.extra_json || '{}');
-          } catch (e) {}
-          if (payload && typeof payload === 'object') {
-            mergedExtra = { ...mergedExtra, ...payload };
-          }
-          mergedExtra = { ...mergedExtra, ...aggregationExtra };
-
-          kernelContainer.db
-            .prepare(
-              'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?',
-            )
-            .run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
-        }
-      }
-
-      await publishAttemptUpdated(attemptId, 'log');
-      void kernelContainer.eventBus.publish({
-        id: 'evt_' + crypto.randomBytes(8).toString('hex'),
-        type: 'courseware.event_logged',
-        source: 'builtin.courseware',
-        payload: { attemptId, eventType, payload },
-        timestamp: Date.now(),
-        correlationId: attemptId,
-      });
+      await coursewareService.logAttemptEvent(attemptId, session, eventType, payload);
       res.json({ success: true });
     } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ error: e.message });
       sendSafeError(res, e);
     }
   });
@@ -200,263 +82,62 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.post('/api/courseware/attempts/:attemptId/submit', async (req, res) => {
     try {
       const { attemptId } = req.params;
-      let { score, comment, completion, status, extra = {} } = req.body;
-
-      // SEC-FIX: 会话与所属权检查，防止未授权改分或冒名提交
       const token = getCookieToken(req);
       const session = (req as any).session || (token ? getValidSession(token) : null);
-      if (!session) {
-        return res.status(401).json({ error: 'Authentication required to submit attempt scores' });
-      }
-      const attemptRow = kernelContainer.db
-        .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-        .get(attemptId) as { student_id: string } | undefined;
-      if (session.role !== 'teacher' && session.role !== 'administrator') {
-        if (attemptRow && attemptRow.student_id !== session.userId) {
-          return res.status(403).json({ error: 'Forbidden: Cannot submit scores for another student' });
-        }
-      }
 
-      const extracted = extractScoreCommentCompletion({ ...req.body, ...extra });
-      if (score === undefined || score === null) score = extracted.score;
-      if (comment === undefined || comment === null) comment = extracted.comment;
-      if (completion === undefined || completion === null) completion = extracted.completion;
-
-      let parsedScore: number | null = null;
-      if (score !== undefined && score !== null) {
-        const num = parseFloat(score);
-        if (!isNaN(num)) {
-          parsedScore = num;
-        }
-      }
-      let parsedCompletion: number | null = null;
-      if (completion !== undefined && completion !== null) {
-        const num = parseFloat(completion);
-        if (!isNaN(num)) {
-          parsedCompletion = num;
-        }
-      }
-
-      // CapabilityGuard 的角色兜底依赖 actorId 的 `:role` 后缀（见 packages/core/capability-system）。
-      // 直接传裸 session.userId 会让 `courseware.submit_attempt` 的 student:write 校验失败，
-      // 学生真实提交与教师课件预览提交都会 500（历史缺陷，见 courseware-submit-actor.test.ts）。
-      const normalizedActorId = getActorId(req);
-      const actorId =
-        normalizedActorId && normalizedActorId !== 'anonymous'
-          ? normalizedActorId
-          : `user:${session.userId || session.studentId || 'student'}:${session.role || 'student'}`;
-      // 命令 payload 需剔空：validateJsonSchema 把显式 null 当作已提供值校验
-      // （`key in data && data[key] !== undefined`），completion/score 传 null 会 500 PayloadValidationError。
-      const payload: Record<string, any> = { attemptId };
-      if (parsedScore !== null) payload.score = parsedScore;
-      if (parsedCompletion !== null) payload.completion = parsedCompletion;
-      if (comment !== undefined && comment !== null) payload.comment = comment;
-      if (status !== undefined && status !== null) payload.status = status;
-      if (extra && typeof extra === 'object' && !Array.isArray(extra)) payload.extra = extra;
-
-      const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', payload, actorId);
-      const result = await kernelContainer.commandBus.execute(cmd);
-      await publishAttemptUpdated(attemptId, 'submit');
-
-      // 自动录入（实时路径）：教师预设规则后，学生提交即刻写入学期成绩。
-      //
-      // 安全边界：规则由教师在设置里开启；这里只会录入**调用者自己** attempt 的分数
-      // （上方已校验 attempt 归属），且 promoteAttemptToGrade 对同一 (作业, 学生) 幂等覆盖，
-      // 因此重复提交不会刷分、不会叠加。
-      // 任何异常都必须吞掉 —— 成绩录入是附加能力，绝不能让学生提交失败。
-      let autoRecord: { recorded: boolean; reason?: string } | null = null;
-      try {
-        const studentId = attemptRow?.student_id || session.userId || session.studentId;
-        const activeLesson = studentId ? findActiveLessonForStudent(kernelContainer.db as any, studentId) : null;
-        if (activeLesson) {
-          const outcome = autoRecordAttempt(kernelContainer.db as any, attemptId, activeLesson);
-          autoRecord = outcome.ok ? { recorded: true } : { recorded: false, reason: outcome.reason };
-        } else {
-          // 上课之外（或查不到进行中的课节）不实时录入，交由「学生提交数据」页补录兜底
-          autoRecord = { recorded: false, reason: 'no-active-lesson' };
-        }
-      } catch (autoErr) {
-        console.warn('[courseware.submit] auto-record skipped:', autoErr);
-        autoRecord = { recorded: false, reason: 'auto-record-error' };
-      }
-
+      const { result, autoRecord } = await coursewareService.submitAttempt(
+        attemptId,
+        session,
+        getActorId(req),
+        req.body,
+      );
       res.json({ ...(result as object), autoRecord });
     } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ error: e.message });
       sendSafeError(res, e);
     }
   });
 
-  /**
-   * POST /api/courseware/attempts/:attemptId/adopt
-   *
-   * 归属认领。
-   *
-   * 背景：课件 iframe 以 `credentialless` + `sandbox`（无 allow-same-origin）加载，
-   * 访问 `/runtime/:uuid/` 时**不携带会话 cookie**，`injectLmsSdk` 只能把访问者识别为匿名，
-   * 建出一条 `student_id='guest'` 的共享 attempt（同一课件的所有匿名访问者复用同一条）。
-   * 于是所有学生共用一个 attempt，真实学生 `POST /submit` 时因
-   * `attempt.student_id('guest') !== session.userId` 被 403 丢弃。
-   *
-   * 持有会话 cookie 的父窗口在转发上报前先调用本接口，把 attempt 认领到当前学生名下：
-   *   - 已是本人 attempt  → 原样返回（幂等）
-   *   - 无主 attempt（guest/teacher 哨兵）→ 直接改归属，保留已产生的原始流水
-   *   - 已被其他真实学生占用 → 为当前学生复用/新建自己的 active attempt，返回新 id
-   *
-   * 教师/管理员预览不受归属约束，原样返回。
-   */
   app.post('/api/courseware/attempts/:attemptId/adopt', async (req, res) => {
     try {
       const { attemptId } = req.params;
-
       const token = getCookieToken(req);
       const session = (req as any).session || (token ? getValidSession(token) : null);
-      if (!session) {
-        return res.status(401).json({ error: 'Authentication required to adopt an attempt' });
-      }
 
-      const db = kernelContainer.db;
-      const attemptRow = db
-        .prepare('SELECT id, courseware_id, student_id, status FROM courseware_attempt WHERE id = ?')
-        .get(attemptId) as { id: string; courseware_id: string; student_id: string; status: string } | undefined;
-      if (!attemptRow) {
-        return res.status(404).json({ error: 'Attempt not found' });
-      }
-
-      // 教师/管理员：预览用，不参与归属约束
-      if (session.role === 'teacher' || session.role === 'administrator') {
-        return res.json({ attemptId, adopted: false, reused: true, role: session.role });
-      }
-
-      const studentId = session.userId || session.studentId;
-      if (!studentId) {
-        return res.status(400).json({ error: 'Session has no student identity' });
-      }
-
-      // 已归属当前学生 → 幂等返回
-      if (attemptRow.student_id === studentId) {
-        return res.json({ attemptId, adopted: false, reused: true });
-      }
-
-      // 无主 attempt（injectLmsSdk 写入的匿名/预览哨兵）→ 直接认领，保留已产生的原始流水
-      const UNOWNED_OWNERS = ['guest', 'teacher', 'teacher_preview', ''];
-      if (UNOWNED_OWNERS.includes(attemptRow.student_id)) {
-        const info = db
-          .prepare(
-            "UPDATE courseware_attempt SET student_id = ? WHERE id = ? AND student_id IN ('guest','teacher','teacher_preview','')",
-          )
-          .run(studentId, attemptId);
-        if (info.changes > 0) {
-          await publishAttemptUpdated(attemptId, 'adopt');
-          return res.json({ attemptId, adopted: true, reused: true });
-        }
-      }
-
-      // attempt 已被其他真实学生占用 → 为当前学生复用/新建他自己的 active attempt
-      let own = db
-        .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
-        .get(attemptRow.courseware_id, studentId, 'active') as { id: string } | undefined;
-      if (!own) {
-        const newId = 'att_' + crypto.randomBytes(8).toString('hex');
-        db.prepare(
-          'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
-        ).run(newId, attemptRow.courseware_id, studentId, Date.now(), 'active');
-        own = { id: newId };
-      }
-      await publishAttemptUpdated(own.id, 'adopt');
-      return res.json({
-        attemptId: own.id,
-        adopted: false,
-        reused: true,
-        reason: 'attempt-owned-by-another-student',
-      });
+      const adoptResult = await coursewareService.adoptAttempt(attemptId, session);
+      res.json(adoptResult);
     } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ error: e.message });
       sendSafeError(res, e);
     }
   });
 
-  // 成绩榜对全班可见（白板课件元素的「查看成绩」浮层），但必须鉴权 + 按角色裁剪字段：
-  // 学生只需要榜单信息（姓名/分数/完成度/名次），绝不能拿到 extra_json（原始作答明细，
-  // 会被同学直接抄答案）与 comment（教师评语）。教师/管理员保持完整行。
+  // ── 3. 榜单查询与进度 ──────────────────────────────────────────────────────
   app.get('/api/courseware/attempts', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session as { role?: string; subRole?: string } | undefined;
       const isStaff =
         session?.role === 'teacher' || session?.role === 'administrator' || session?.subRole === 'administrator';
 
-      // ?coursewareUuid=<uuid> 用于白板 HtmlAppletFrame 在嵌入某个具体课件时只拉取该课件的成绩，
-      // 避免一次性回传整个 attempts 表（学生量大时会显著降低首屏 + 实时 socket 重拉的负载）。
-      const coursewareUuid = typeof req.query.coursewareUuid === 'string' ? req.query.coursewareUuid.trim() : '';
-      const baseSql = `
-        SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
-               cw.id as coursewareId, cw.name as coursewareName, cw.uuid as coursewareUuid,
-               COALESCE(s.name, CASE WHEN a.student_id = 'teacher' THEN 'Teacher (Test)' WHEN a.student_id = 'guest' THEN 'Guest Student' ELSE a.student_id END) as studentName,
-               a.student_id as studentId,
-               r.score, r.comment, r.completion, r.extra_json,
-               (
-                 SELECT COUNT(*) FROM assignment_submissions sub
-                 JOIN assignments ast ON sub.assignment_id = ast.id
-                 WHERE sub.student_id = a.student_id
-                   AND ast.title = '互动课件: ' || cw.name
-               ) as isPromoted
-        FROM courseware_attempt a
-        JOIN courseware cw ON a.courseware_id = cw.id
-        LEFT JOIN students s ON a.student_id = s.id
-        LEFT JOIN submission_result r ON a.id = r.attempt_id
-      `;
-      const sql = coursewareUuid
-        ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC LIMIT ? OFFSET ?`
-        : `${baseSql} ORDER BY a.started_at DESC LIMIT ? OFFSET ?`;
-      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
-      const pg = parsePagination(req.query as any);
-      const countSql = coursewareUuid
-        ? `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id WHERE cw.uuid = ?`
-        : `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id`;
-      const total = (kernelContainer.db.prepare(countSql).get(...(coursewareUuid ? [coursewareUuid] : [])) as any).n;
-      const stmt = kernelContainer.db.prepare(sql);
-      const rows = (
-        coursewareUuid ? stmt.all(coursewareUuid, pg.isAll ? -1 : pg.pageSize, pg.offset) : stmt.all(pg.isAll ? -1 : pg.pageSize, pg.offset)
-      ) as Array<Record<string, any>>;
-      const envelope = {
-        data: isStaff
-          ? rows
-          : rows.map((row) => {
-              const sanitized = { ...row };
-              delete sanitized.extra_json;
-              delete sanitized.comment;
-              return sanitized;
-            }),
-        total,
-        page: pg.page,
-        pageSize: pg.isAll ? total : pg.pageSize,
-      };
+      const envelope = coursewareService.listAttempts(req.query, isStaff);
       res.json(envelope);
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  app.post('/api/courseware/debug', requireAuth(), (req, res) => {
+  app.get('/api/courseware/attempts/:attemptId/progress', requireAuth(), (req, res) => {
     try {
-      const { msg, url, student, courseware } = req.body;
-      // SEC-FIX: limit log entry size to prevent disk fill / injection
-      const safeMsg = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000);
-      const safeUrl = typeof url === 'string' ? url.slice(0, 1000) : String(url).slice(0, 1000);
-      const logMsg = `[CLIENT DEBUG] ${safeMsg} | URL: ${safeUrl} | Student: ${JSON.stringify(student)?.slice(0, 1000)} | Courseware: ${JSON.stringify(courseware)?.slice(0, 1000)}`;
-      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${safeMsg}`);
-
-      const logFile = path.join(process.cwd(), 'client_debug.log');
-      fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
-
-      res.json({ success: true });
+      const { attemptId } = req.params;
+      const session = (req as any).session;
+      const progress = coursewareService.getAttemptProgress(attemptId, session);
+      res.json({ progress });
     } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ success: false, error: e.message });
       sendSafeError(res, e);
     }
   });
 
-  // 原始作答数据含学生答案明细：修复前无 requireAuth 且 actorId 硬编码 'teacher-demo'
-  // （种子能力含 lesson:*，恰满足该命令要求的 lesson:read），任何人凭 attemptId 即可越权读取。
-  // 现行口径：需登录；教师/管理员可读任意 attempt，其他角色（含学生）仅能读自己的，
-  // 与 /submit 的所属权口径一致 —— 这样既不放开跨学生读取，也不打断“看自己作答详情”的调用方。
   app.get('/api/courseware/attempts/:attemptId/raw', requireAuth(), async (req, res) => {
     try {
       const { attemptId } = req.params;
@@ -465,7 +146,6 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         const owner = kernelContainer.db
           .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
           .get(attemptId) as { student_id: string } | undefined;
-        // 不存在与非本人同样返回 403，避免用状态码枚举 attempt 是否存在
         if (!owner || owner.student_id !== (session.userId || session.studentId)) {
           return res.status(403).json({ error: 'Forbidden: Cannot read another student attempt' });
         }
@@ -482,61 +162,17 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts/:attemptId/progress', requireAuth(), (req, res) => {
-    try {
-      const { attemptId } = req.params;
-      const session = (req as any).session as
-        { role?: string; subRole?: string; userId?: string; studentId?: string } | undefined;
-      if (
-        session &&
-        session.role !== 'teacher' &&
-        session.role !== 'administrator' &&
-        session.subRole !== 'administrator'
-      ) {
-        const owner = kernelContainer.db
-          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-          .get(attemptId) as { student_id: string } | undefined;
-        if (!owner || owner.student_id !== (session.userId || session.studentId)) {
-          return res.status(403).json({ success: false, error: 'Forbidden: Cannot read another student attempt' });
-        }
-      }
-      const result = kernelContainer.db
-        .prepare('SELECT score, comment, completion, extra_json FROM submission_result WHERE attempt_id = ?')
-        .get(attemptId) as any;
-      if (!result) {
-        return res.json({ progress: null });
-      }
-      let extra = {};
-      try {
-        extra = JSON.parse(result.extra_json || '{}');
-      } catch {
-        /* ignore malformed extra */
-      }
-      res.json({
-        progress: { score: result.score, comment: result.comment, completion: result.completion, extra },
-      });
-    } catch (e: any) {
-      sendSafeError(res, e);
-    }
-  });
-
+  // ── 4. 成绩转录与自动补录 ──────────────────────────────────────────────────
   app.post('/api/courseware/attempts/mark-absent', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lessonId, classId, studentId, coursewareId } = req.body ?? {};
-      if (!lessonId || !classId || !studentId || !coursewareId) {
-        return res.status(400).json({ error: 'Missing lessonId, classId, studentId or coursewareId' });
+      const result = coursewareService.markAbsent({ lessonId, classId, studentId, coursewareId });
+      res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
+    } catch (e: any) {
+      if (e.status) {
+        return res.status(e.status).json({ success: false, error: e.message, reason: e.reason });
       }
-      const result = markStudentAbsent(kernelContainer.db as any, { lessonId, classId, studentId, coursewareId });
-      if (!result.ok) {
-        const text =
-          result.reason === 'student-not-in-class'
-            ? '该学生不在所选班级中，无法标记缺考'
-            : '课件不存在，无法标记缺考';
-        return res.status(422).json({ success: false, error: text, reason: result.reason });
-      }
-      return res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
-    } catch (err: any) {
-      sendSafeError(res, err);
+      sendSafeError(res, e);
     }
   });
 
@@ -544,115 +180,45 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const { attemptId } = req.params;
       const { lessonId, classId } = req.body;
-
-      if (!lessonId || !classId) {
-        return res.status(400).json({ error: 'Missing lessonId or classId' });
-      }
-
-      // 与「自动录入规则」共用同一落库实现，保证手动/自动两条路径口径一致。
-      // ignoreNotFinished / ignoreMinCompletion：手动录入是教师的显式判断，
-      // 不被规则的门槛与状态校验收窄能力（与改动前的行为保持一致）。
-      // 注意「没有分数」两条路径都拒绝 —— 无从搬运的分数绝不凭空生成。
-      const result = promoteAttemptToGrade(kernelContainer.db as any, attemptId, {
-        lessonId,
-        classId,
-        sourceLabel: '教师在课堂中保存录入',
-        source: 'manual',
-        ignoreMinCompletion: true,
-        ignoreNotFinished: true,
-      });
-
-      if (!result.ok) {
-        const status = result.reason === 'attempt-not-found' ? 404 : 422;
-        return res
-          .status(status)
-          .json({ success: false, error: describePromoteReason(result.reason), reason: result.reason });
-      }
-
-      await publishClassroomEvent(
-        CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
-        {
-          studentId: result.studentId,
-          lessonId,
-          progressPercent: 100,
-          completed: true,
-          completedSegments: [],
-        },
-        { correlationId: lessonId },
-      );
-
+      const result = await coursewareService.promoteAttempt(attemptId, lessonId, classId);
       res.json({ success: true, assignmentId: result.assignmentId, score: result.score });
     } catch (e: any) {
+      if (e.status) {
+        return res.status(e.status).json({ success: false, error: e.message, reason: e.reason });
+      }
       sendSafeError(res, e);
     }
   });
 
-  /**
-   * 自动录入成绩：把某课节 + 班级下已提交但尚未录入的 attempt 按规则补录。
-   * 教师打开「学生提交数据」页时自动调用，也可手动点「立即补录」强制重跑。
-   */
   app.post('/api/courseware/attempts/auto-record', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { lessonId, classId, limit } = req.body || {};
-      if (!lessonId || !classId) {
-        return res.status(400).json({ error: 'Missing lessonId or classId' });
-      }
-      const report = autoRecordForLesson(kernelContainer.db as any, { lessonId, classId, limit });
+      const report = coursewareService.autoRecordForLesson(lessonId, classId, limit);
       res.json({ success: true, ...report });
     } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ error: e.message });
       sendSafeError(res, e);
     }
   });
 
-  /**
-   * 铸造课件 HTML 访问 token：供已认证的父页面取回后拼进 iframe src（`?ct=`）。
-   * 沙箱 iframe 的请求不携带会话 cookie（见 server/utils/courseware-access.ts），
-   * 这是 `GET /api/courseware/:id` 唯一可行的鉴权通道。
-   */
+  // ── 5. 手写课件落库、Token 铸造与沙箱直出 ──────────────────────────────────
+  app.post('/api/courseware/inline', requireAuth(), (req, res) => {
+    try {
+      const code = typeof req.body?.code === 'string' ? req.body.code : '';
+      const uuid = coursewareService.saveInlineCourseware(code);
+      res.json({ uuid });
+    } catch (e: any) {
+      if (e.status) return res.status(e.status).json({ error: e.message });
+      sendSafeError(res, e);
+    }
+  });
+
   app.get('/api/courseware/:id/access-token', requireAuth(), (req, res) => {
     res.json({ token: mintCoursewareToken(req.params.id) });
   });
 
-  /**
-   * 手写 HTML 课件的服务端落库（SEC-NET-02 CSP 收紧的配套改造）。
-   *
-   * 背景：HtmlAppletFrame 原先用 `<iframe srcdoc>` 承载手写 HTML —— srcdoc 文档
-   * **继承父页面 CSP**，若全局 CSP 收紧（scriptSrc 去 'unsafe-inline'），课件内联
-   * 脚本会被拦。改造后前端把 code 经本端点落库（按内容 sha256 幂等去重），改走
-   * `/runtime/inline-<hash>/` 加载 —— 该路由有自有宽松 CSP（setCoursewareDocumentCsp），
-   * 课件内联脚本不受全局收紧影响。
-   *
-   * 鉴权：requireAuth()（任意登录角色）—— 学生端也要渲染同一元素，不能限教师；
-   * 内容幂等去重 + 512KB 上限限制存储滥用。
-   */
-  app.post('/api/courseware/inline', requireAuth(), (req, res) => {
-    try {
-      const code = typeof req.body?.code === 'string' ? req.body.code : '';
-      if (!code.trim()) {
-        return res.status(400).json({ error: 'Missing code' });
-      }
-      if (code.length > 512 * 1024) {
-        return res.status(413).json({ error: 'Inline courseware too large (512KB max)' });
-      }
-      const hash = crypto.createHash('sha256').update(code).digest('hex').slice(0, 16);
-      const uuid = `inline-${hash}`;
-      const existing = kernelContainer.db.prepare('SELECT id FROM system_resources WHERE id = ?').get(uuid);
-      if (!existing) {
-        kernelContainer.db
-          .prepare('INSERT OR REPLACE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
-          .run(uuid, 'index.html', 'html', code, Date.now());
-      }
-      res.json({ uuid });
-    } catch (e: any) {
-      sendSafeError(res, e);
-    }
-  });
-
   app.get('/api/courseware/:id', (req, res) => {
     try {
-      // SEC-AUTH: 沙箱 iframe 不带会话 cookie，无法 requireAuth；
-      // 改为验证父页面铸造的短时 HMAC token（与 :id 绑定 + 有效期），未带/无效一律 401，
-      // 同时挡住「未认证读取课件 HTML」与「未认证触发 courseware 行自动登记」两个面。
       if (!verifyCoursewareToken(req.params.id, typeof req.query.ct === 'string' ? req.query.ct : null)) {
         return res.status(401).send('Courseware access token missing or invalid');
       }
@@ -667,11 +233,26 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      // SEC-NET-02: 课件 HTML 是第三方内容直出，须用自有宽松 CSP 覆盖 helmet 全局头，
-      // 使平台自身文档的全局 CSP 得以收紧（scriptSrc 无 'unsafe-inline'）
       setCoursewareDocumentCsp(res);
       const html = injectLmsSdk(node.content || '', req, { id: node.id, name: node.name, uuid: node.id });
       res.send(html);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/courseware/debug', requireAuth(), (req, res) => {
+    try {
+      const { msg, url, student, courseware } = req.body;
+      const safeMsg = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000);
+      const safeUrl = typeof url === 'string' ? url.slice(0, 1000) : String(url).slice(0, 1000);
+      const logMsg = `[CLIENT DEBUG] ${safeMsg} | URL: ${safeUrl} | Student: ${JSON.stringify(student)?.slice(0, 1000)} | Courseware: ${JSON.stringify(courseware)?.slice(0, 1000)}`;
+      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${safeMsg}`);
+
+      const logFile = path.join(process.cwd(), 'client_debug.log');
+      fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
+
+      res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }

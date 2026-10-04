@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入深化：课件作答与沙箱认领服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/courseware-service.ts`）**：
+    - 建立领域服务 `CoursewareService`，彻底解耦微前端 iframe 跨域通信与作答领域逻辑，构造函数支持注入数据库连接；
+    - 内聚跨域沙箱 Attempt 归属认领状态机（`adoptAttempt`）：优雅处理 iframe 匿名访问时的 `guest`/`teacher` 哨兵尝试认领、多学生并发防串号隔离复用机制；
+    - 内聚原始作答流水持久化与成绩策略归集（`logAttemptEvent`）、作答提交与学期平时成绩实时录入（`submitAttempt`）、榜单分页与安全数据脱敏（`listAttempts`，自动屏蔽 `extra_json` 与 `comment`）、作答进度查询（`getAttemptProgress`）以及手写内联课件 SHA256 幂等落库（`saveInlineCourseware`）；
+  - **路由控制器极简化（`server/routes/courseware.ts`）**：
+    - 原 680 行巨石路由精简至 250 行（净精简 430 行代码，代码量削减超 63%），完全降级为纯粹的 HTTP 路径分发、身份鉴权拦截与错误格式化；
+    - 保持所有 HTTP 端点、状态码（400/401/403/404/413/422）与前后端通信协议 100% 向后兼容；
+  - **测试覆盖与质量保证**：
+    - 新增专用领域服务单元测试 `server/services/__tests__/courseware-service.test.ts`（包含认领状态机、榜单脱敏投影与手写课件落库等 11 项测试）；
+    - 全量执行 6 个课件相关测试套件共 46 项测试（含 E2E 提分、Token 校验、提分 Actor 角色及榜单过滤等）100% 绿灯；全量类型检查（`tsc --noEmit`）与生产构建（`pnpm build`）无告警。
+
 - **Service 层引入：成绩管理服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/grading-service.ts`）**：
     - 建立领域服务 `GradingService`，彻底解耦 Express HTTP 传输层，构造函数支持注入数据库连接（全面支持轻量单元测试）；
