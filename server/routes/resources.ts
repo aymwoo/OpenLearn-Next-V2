@@ -1,27 +1,16 @@
-import path from 'path';
-import fs from 'fs';
-import crypto from 'crypto';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import {
-  hasDataSubmission,
-  hasScoreDisplay,
-  injectScoreSubmissionUsingAI,
-} from '../../packages/plugins/ai-submit-injector.js';
-import { requireAuth } from '../middleware/auth.js';
-import { isPathInsideRoot } from '../utils/path-guard.js';
-import { randomId } from '../utils/id.js';
 import type { ServerContext } from '../context.js';
+import { requireAuth } from '../middleware/auth.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { resourceService } from '../services/resource-service.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 export function registerResourcesRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/resources', requireAuth(), (req, res) => {
+  app.get('/api/resources', requireAuth(), (_req, res) => {
     try {
-      const resources = kernelContainer.db
-        .prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC')
-        .all();
+      const resources = resourceService.listResources();
       res.json(resources);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -30,122 +19,16 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.get('/api/resources/:id', requireAuth(), (req, res) => {
     try {
-      const resource = kernelContainer.db
-        .prepare('SELECT * FROM system_resources WHERE id = ?')
-        .get(req.params.id) as any;
+      const resource = resourceService.getResource(req.params.id);
       if (!resource) return res.status(404).send('Resource not found');
 
-      if (resource.type === 'html') {
-        const entryName =
-          resource.name && (resource.name.endsWith('.html') || resource.name.endsWith('.htm'))
-            ? path.basename(resource.name.replace(/\\/g, '/'))
-            : 'index.html';
+      resourceService.prepareCoursewareCache(resource);
+      const resolved = resourceService.resolveResourceContent(resource);
 
-        // Dynamic registration into courseware
-        const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
-        if (!existingCw) {
-          kernelContainer.db
-            .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-            .run(resource.id, resource.id, resource.name, 'html', entryName, resource.created_at || Date.now());
-        }
-
-        // 确保 storage/courseware 物理目录就绪，同时写入命名文件与 index.html 双重兜底
-        try {
-          const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', resource.id);
-          if (!fs.existsSync(storageDir)) {
-            fs.mkdirSync(storageDir, { recursive: true });
-          }
-          const namedPath = path.resolve(storageDir, entryName);
-          if (!fs.existsSync(namedPath)) {
-            fs.writeFileSync(namedPath, resource.content || '', 'utf8');
-          }
-          const indexHtmlPath = path.resolve(storageDir, 'index.html');
-          if (!fs.existsSync(indexHtmlPath)) {
-            fs.writeFileSync(indexHtmlPath, resource.content || '', 'utf8');
-          }
-        } catch (storageErr) {
-          console.warn('[resources] Failed to write courseware storage cache:', storageErr);
-        }
-
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        // SEC-FIX: 防止首方存储型 XSS，为独立直出的 HTML 强制声明沙箱隔离策略，显式放行内联事件
-        setCoursewareDocumentCsp(res);
-        let html = resource.content || '';
-        const baseTag = `<base href="/api/resources/${req.params.id}/">`;
-        if (html.toLowerCase().includes('<head>')) {
-          html = html.replace(/<head>/i, `<head>${baseTag}`);
-        } else if (html.toLowerCase().includes('<html>')) {
-          html = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
-        } else {
-          html = baseTag + html;
-        }
-
-        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
-        return res.send(html);
-      }
-
-      // It's a folder, content is a JSON list of files: Array<{ path: string, content: string }>
-      let files: any[] = [];
-      try {
-        files = JSON.parse(resource.content || '[]');
-      } catch (err) {
-        return sendSafeError(res, err, 500, 'Failed to parse folder content');
-      }
-
-      // Find index file
-      const indexFile =
-        files.find((f) => {
-          const p = f.path.toLowerCase();
-          return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-        }) ||
-        files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
-        files[0];
-
-      if (!indexFile) {
-        return res.status(404).send('No index.html or entrypoint found in resource folder');
-      }
-
-      // Dynamic registration into courseware
-      const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
-      if (!existingCw) {
-        kernelContainer.db
-          .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-          .run(resource.id, resource.id, resource.name, 'folder', indexFile.path, resource.created_at || Date.now());
-      }
-
-      // 确保 storage/courseware 物理目录就绪
-      try {
-        const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', resource.id);
-        if (!fs.existsSync(storageDir)) {
-          fs.mkdirSync(storageDir, { recursive: true });
-          for (const f of files) {
-            if (f.path && f.content !== undefined) {
-              const cleanRel = f.path.replace(/\\/g, '/').replace(/^\/+/, '');
-              const target = path.resolve(storageDir, cleanRel);
-              // SEC-LOW-01: 严格根内判定（裸 startsWith 前缀可被同级目录逃逸）。
-              // 此处是磁盘缓存自愈（正文来自 DB），越界条目告警跳过、不阻塞出课。
-              if (!isPathInsideRoot(storageDir, target)) {
-                console.warn('[resources] skip path escape:', f.path);
-                continue;
-              }
-              fs.mkdirSync(path.dirname(target), { recursive: true });
-              const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
-              if (isBin) {
-                const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
-                fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
-              } else {
-                fs.writeFileSync(target, f.content, 'utf8');
-              }
-            }
-          }
-        }
-      } catch (storageErr) {
-        console.warn('[resources] Failed to unpack folder to storage cache:', storageErr);
-      }
-
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Type', resolved.contentType);
       setCoursewareDocumentCsp(res);
-      let html = indexFile.content || '';
+
+      let html = String(resolved.content || '');
       const baseTag = `<base href="/api/resources/${req.params.id}/">`;
       if (html.toLowerCase().includes('<head>')) {
         html = html.replace(/<head>/i, `<head>${baseTag}`);
@@ -164,120 +47,34 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.get('/api/resources/:id/*', requireAuth(), (req, res) => {
     try {
-      const resource = kernelContainer.db
-        .prepare('SELECT * FROM system_resources WHERE id = ?')
-        .get(req.params.id) as any;
+      const resource = resourceService.getResource(req.params.id);
       if (!resource) return res.status(404).send('Resource not found');
 
-      let subpath = req.params[0] || '';
-      // Remove leading slash if any
-      if (subpath.startsWith('/')) {
-        subpath = subpath.substring(1);
+      const subpath = req.params[0] || '';
+      const resolved = resourceService.resolveResourceContent(resource, subpath);
+
+      res.setHeader('Content-Type', resolved.contentType);
+
+      if (resolved.isBinary) {
+        return res.send(resolved.content);
       }
 
-      if (resource.type === 'html') {
-        if (subpath && subpath !== 'index.html') {
-          return res.status(404).send('Not found for single page HTML resource');
-        }
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      let content = String(resolved.content || '');
+      if (resolved.contentType.startsWith('text/html')) {
         setCoursewareDocumentCsp(res);
-        let html = resource.content || '';
-        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
-        return res.send(html);
-      }
-
-      // It's a folder, content is a JSON list of files: Array<{ path: string, content: string }>
-      let files: any[] = [];
-      try {
-        files = JSON.parse(resource.content || '[]');
-      } catch (err) {
-        return sendSafeError(res, err, 500, 'Failed to parse folder content');
-      }
-
-      // If no subpath is specified, serve index.html or first html file
-      if (!subpath || subpath === '') {
-        const indexFile =
-          files.find((f) => {
-            const p = f.path.toLowerCase();
-            return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-          }) ||
-          files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
-          files[0];
-
-        if (!indexFile) {
-          return res.status(404).send('No index.html or entrypoint found in resource folder');
+        if (!subpath || subpath === '' || subpath === 'index.html') {
+          const baseTag = `<base href="/api/resources/${req.params.id}/">`;
+          if (content.toLowerCase().includes('<head>')) {
+            content = content.replace(/<head>/i, `<head>${baseTag}`);
+          } else if (content.toLowerCase().includes('<html>')) {
+            content = content.replace(/<html>/i, `<html><head>${baseTag}</head>`);
+          } else {
+            content = baseTag + content;
+          }
         }
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        setCoursewareDocumentCsp(res);
-        let html = indexFile.content || '';
-        const baseTag = `<base href="/api/resources/${req.params.id}/">`;
-        if (html.toLowerCase().includes('<head>')) {
-          html = html.replace(/<head>/i, `<head>${baseTag}`);
-        } else if (html.toLowerCase().includes('<html>')) {
-          html = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
-        } else {
-          html = baseTag + html;
-        }
-        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
-        return res.send(html);
+        content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
       }
-
-      // Search for the requested subpath file
-      const normSubpath = subpath.toLowerCase().replace(/\\/g, '/');
-      const fileObj = files.find((f) => {
-        const p = f.path.toLowerCase().replace(/\\/g, '/');
-        return p === normSubpath || p.endsWith('/' + normSubpath);
-      });
-
-      if (!fileObj) {
-        return res.status(404).send(`File not found: ${subpath}`);
-      }
-
-      // Determine Content-Type
-      const filename = fileObj.path.split('/').pop() || '';
-      let contentType = 'text/plain; charset=utf-8';
-      if (filename.endsWith('.html') || filename.endsWith('.htm')) {
-        contentType = 'text/html; charset=utf-8';
-      } else if (filename.endsWith('.css')) {
-        contentType = 'text/css; charset=utf-8';
-      } else if (filename.endsWith('.js') || filename.endsWith('.mjs')) {
-        contentType = 'application/javascript; charset=utf-8';
-      } else if (filename.endsWith('.json')) {
-        contentType = 'application/json; charset=utf-8';
-      } else if (filename.endsWith('.svg')) {
-        contentType = 'image/svg+xml; charset=utf-8';
-      } else if (filename.endsWith('.png')) {
-        contentType = 'image/png';
-      } else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
-        contentType = 'image/jpeg';
-      } else if (filename.endsWith('.gif')) {
-        contentType = 'image/gif';
-      } else if (filename.endsWith('.webp')) {
-        contentType = 'image/webp';
-      } else if (filename.endsWith('.ico')) {
-        contentType = 'image/x-icon';
-      }
-
-      const isBinary =
-        filename.endsWith('.png') ||
-        filename.endsWith('.jpg') ||
-        filename.endsWith('.jpeg') ||
-        filename.endsWith('.gif') ||
-        filename.endsWith('.webp') ||
-        filename.endsWith('.ico');
-      res.setHeader('Content-Type', contentType);
-
-      if (isBinary) {
-        const cleanBase64 = fileObj.content.replace(/^data:[^;]+;base64,/, '');
-        return res.send(Buffer.from(cleanBase64, 'base64'));
-      } else {
-        let content = fileObj.content;
-        if (contentType.startsWith('text/html')) {
-          setCoursewareDocumentCsp(res);
-          content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
-        }
-        return res.send(content);
-      }
+      return res.send(content);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -285,68 +82,8 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.post('/api/resources', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const { name, type, content } = req.body;
-      if (!name || !type) {
-        return res.status(400).json({ error: 'Name and type are required' });
-      }
-
-      const id = randomId('res_');
-      const createdAt = Date.now();
-
-      kernelContainer.db
-        .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, name, type, content, createdAt);
-
-      // Try calling AI provider to create an auto-submit version if needed
-      try {
-        if (type === 'html') {
-          if (!hasDataSubmission(content) && hasScoreDisplay(content)) {
-            const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, content);
-            if (modified && modified !== content) {
-              const newId = randomId('res_');
-              const newName = `[自动提交版] ${name}`;
-              kernelContainer.db
-                .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
-                .run(newId, newName, type, modified, createdAt + 10);
-            }
-          }
-        } else if (type === 'folder') {
-          let files: any[] = [];
-          try {
-            files = JSON.parse(content || '[]');
-          } catch (err) {}
-          const indexFile =
-            files.find((f) => {
-              const p = f.path.toLowerCase();
-              return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-            }) ||
-            files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
-            files[0];
-
-          if (indexFile && indexFile.content) {
-            if (!hasDataSubmission(indexFile.content) && hasScoreDisplay(indexFile.content)) {
-              const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, indexFile.content);
-              if (modified && modified !== indexFile.content) {
-                const modifiedFiles = files.map((f) => {
-                  if (f.path === indexFile.path) {
-                    return { ...f, content: modified };
-                  }
-                  return f;
-                });
-                const newId = randomId('res_');
-                const newName = `[自动提交版] ${name}`;
-                kernelContainer.db
-                  .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
-                  .run(newId, newName, type, JSON.stringify(modifiedFiles), createdAt + 10);
-              }
-            }
-          }
-        }
-      } catch (aiErr) {
-        console.error('Failed to create AI modified version:', aiErr);
-      }
-
-      res.json({ success: true, id, name, type });
+      const result = await resourceService.createResource(req.body);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -354,29 +91,24 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.delete('/api/resources/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(req.params.id);
-      res.json({ success: true });
+      const deleted = resourceService.deleteResource(req.params.id);
+      res.json({ success: deleted });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
   // ── Resource command bus handlers (plugin accessible) ─────────────────
-  // Plugins call ctx.services.commandBus.execute('resource.list', {}) etc.
   const RESOURCE_HANDLERS = {
     'resource.list': {
-      execute: async (cmd: any) => {
-        const rows = kernelContainer.db
-          .prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC')
-          .all();
+      execute: async () => {
+        const rows = resourceService.listResources();
         return { resources: rows };
       },
     },
     'resource.get': {
       execute: async (cmd: any) => {
-        const row = kernelContainer.db
-          .prepare('SELECT * FROM system_resources WHERE id = ?')
-          .get(cmd.payload?.id) as any;
+        const row = resourceService.getResource(cmd.payload?.id);
         if (!row) return { error: 'not_found' };
         return { resource: row };
       },
@@ -384,28 +116,28 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     'resource.create': {
       execute: async (cmd: any) => {
         const { name, type, content } = cmd.payload || {};
-        if (!name || !type || content === undefined)
+        if (!name || !type || content === undefined) {
           return { error: 'invalid_params', message: 'name, type, content required' };
-        const id = globalThis.crypto.randomUUID();
-        kernelContainer.db
-          .prepare("INSERT INTO system_resources(id,name,type,content,created_at) VALUES(?,?,?,?,datetime('now'))")
-          .run(id, name, type, content);
-        return { success: true, id, name, type };
+        }
+        const result = await resourceService.createResource({ name, type, content });
+        return result;
       },
     },
     'resource.delete': {
       execute: async (cmd: any) => {
         if (!cmd.payload?.id) return { error: 'invalid_params', message: 'id required' };
-        kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(cmd.payload.id);
-        return { success: true };
+        const success = resourceService.deleteResource(cmd.payload.id);
+        return { success };
       },
     },
   };
+
   for (const [type, handler] of Object.entries(RESOURCE_HANDLERS)) {
     try {
       kernelContainer.commandBus.registerHandler(type, handler);
     } catch {
-      /* already registered �? harmless on server reload */
+      /* already registered */
     }
   }
 }
+

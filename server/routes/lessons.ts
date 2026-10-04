@@ -8,6 +8,7 @@ import { parsePagination } from '../utils/pagination.js';
 import { lessonActiveSegments } from '../shared-state.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
+import { whiteboardService } from '../services/whiteboard-service.js';
 
 /**
  * 校验当前用户对课程的管理权 (水平越权 IDOR 防护)
@@ -445,84 +446,18 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   // (getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId are now module-level imports)
 
   app.get('/api/lessons/:id/whiteboard', requireAuth(), (req, res) => {
-    const id = req.params.id;
-    const elements = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(id);
-
-    // Take a snapshot on first load if it's a regular lesson and no snapshot exists yet
-    if (!id.startsWith('assignment-') && !id.startsWith('snapshot-')) {
-      try {
-        const snapshotId = `snapshot-${id}`;
-        const markerCheck = kernelContainer.db
-          .prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
-          .get(snapshotId) as any;
-        const count = markerCheck ? markerCheck.count : 0;
-        if (count === 0) {
-          // Take snapshot
-          const insertStmt = kernelContainer.db.prepare(
-            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-          );
-
-          // Insert marker
-          insertStmt.run(`marker-${id}-${Date.now()}`, snapshotId, 'snapshot_marker', '{}', Date.now());
-
-          // Insert copies of all current elements
-          for (const el of elements as any[]) {
-            insertStmt.run(`snapshot-${el.id}`, snapshotId, el.type, el.data, el.created_at);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to create whiteboard snapshot:', err);
-      }
+    try {
+      const elements = whiteboardService.getWhiteboardElements(req.params.id);
+      res.json(elements);
+    } catch (e: any) {
+      sendSafeError(res, e);
     }
-
-    res.json(elements);
   });
 
   app.post('/api/lessons/:id/whiteboard/reset', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
-      const id = req.params.id;
-
-      // If it's an assignment whiteboard, reset means clearing it (making it empty)
-      if (id.startsWith('assignment-')) {
-        const deleteStmt = kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?');
-        deleteStmt.run(id);
-        return res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
-      }
-
-      const snapshotId = `snapshot-${id}`;
-      const hasSnapshot = kernelContainer.db
-        .prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
-        .get(snapshotId) as any;
-      const count = hasSnapshot ? hasSnapshot.count : 0;
-
-      if (count > 0) {
-        // Revert to snapshot
-        // DATA-INT-01: 删除→回插多步写操作包事务，防止中途失败留下半清空白板
-        const revertTx = kernelContainer.db.transaction(() => {
-          // 1. Delete all current elements for this lesson
-          kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
-
-          // 2. Fetch all snapshot elements (excluding the marker)
-          const snapshotElements = kernelContainer.db
-            .prepare("SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'")
-            .all(snapshotId) as any[];
-
-          // 3. Re-insert them into the active lesson whiteboard
-          const insertStmt = kernelContainer.db.prepare(
-            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-          );
-          for (const el of snapshotElements) {
-            const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
-            insertStmt.run(originalId, id, el.type, el.data, el.created_at);
-          }
-        });
-        revertTx();
-        res.json({ success: true, message: 'Lesson whiteboard reset to start state' });
-      } else {
-        // If no snapshot exists, just clear it
-        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
-        res.json({ success: true, message: 'Lesson whiteboard cleared (no snapshot)' });
-      }
+      const result = whiteboardService.resetWhiteboard(req.params.id);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -533,18 +468,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { id } = req.params;
       const { type, data } = req.body;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand(
-        'whiteboard.draw',
-        {
-          lessonId: id,
-          type,
-          data: JSON.stringify(data),
-        },
+      const result = await whiteboardService.drawElement({
+        lessonId: id,
+        type,
+        data,
         actorId,
-        { approved: true },
-      );
-
-      const result = await kernelContainer.commandBus.execute(cmd);
+      });
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -556,18 +485,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { id, elementId } = req.params;
       const { data } = req.body;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand(
-        'whiteboard.update',
-        {
-          lessonId: id,
-          elementId,
-          data: JSON.stringify(data),
-        },
+      const result = await whiteboardService.updateElement({
+        lessonId: id,
+        elementId,
+        data,
         actorId,
-        { approved: true },
-      );
-
-      const result = await kernelContainer.commandBus.execute(cmd);
+      });
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -578,16 +501,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { id } = req.params;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand(
-        'whiteboard.clear',
-        {
-          lessonId: id,
-        },
-        actorId,
-        { approved: true },
-      );
-
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const result = await whiteboardService.clearWhiteboard(id, actorId);
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -598,17 +512,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { id, elementId } = req.params;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand(
-        'whiteboard.delete',
-        {
-          lessonId: id,
-          elementId,
-        },
-        actorId,
-        { approved: true },
-      );
-
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const result = await whiteboardService.deleteElement(id, elementId, actorId);
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);

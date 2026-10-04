@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Service 层引入深化：公共资源库与白板领域服务解耦（轻路由、厚服务架构演进，E3）**：
+  - **领域服务抽取（`server/services/resource-service.ts` & `whiteboard-service.ts`）**：
+    - 建立领域服务 `ResourceService`，统管系统资源库、单 HTML 与 Folder 资源包多文件解析、磁盘缓存自愈（`storage/courseware/`）与目录逃逸防御、以及 AI 自动评测代码注入（派生 `[自动提交版]` 变体）；
+    - 建立领域服务 `WhiteboardService`，统管课节白板元素获取、首次访问自动快照备份（`snapshot-${id}`）、作业白板重置清空与常规课堂事务级原子回滚（DATA-INT-01），并通过 CommandBus 门面代理元素绘制、更新、删除与清空指令；
+  - **路由控制器极简化（`server/routes/resources.ts` & `lessons.ts`）**：
+    - 资源路由 `resources.ts` 由 412 行精简至 144 行（缩减超 65%），纯化为鉴权拦截、LMS SDK 动态注入及安全 CSP 响应头部设置；
+    - 课节路由 `lessons.ts` 中剔除 170 行白板 elements 内联读写与事务回滚逻辑，转为纯轻量控制器；
+  - **测试覆盖与质量保证**：
+    - 新增专用单元测试 `server/services/__tests__/resource-service.test.ts`（9 项用例）与 `server/services/__tests__/whiteboard-service.test.ts`（10 项用例）共 19 项测试 100% 绿灯通过；
+    - 全量回归测试 `whiteboard-platform-integration.test.ts`、`whiteboard-autosave.test.ts`、`courseware-e2e-flow.test.ts` 等全部 36 项测试 100% 绿灯；
+    - 门禁验证 `pnpm lint`（`tsc --noEmit`）0 错误，ESLint 0 错误，`pnpm build` 全量生产打包顺利通过。
+
 - **Service 层引入深化：学情诊断与随堂测验/错题服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/diagnostic-service.ts`）**：
     - 建立领域服务 `DiagnosticService`（同时导出语义别名 `MistakeService`），统管随堂测验批改判分、课前学情全景诊断、错题卡点归集以及卓越答题者榜单计算；
