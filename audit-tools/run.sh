@@ -14,6 +14,8 @@ OUT_DIR="audit-tools/reports"
 EXTRACT_JSON="${OUT_DIR}/extracts.json"
 DRIFT_MD="${OUT_DIR}/drift_report.md"
 DRIFT_JSON="${OUT_DIR}/drift_report.json"
+SYM_MD="${OUT_DIR}/symbol_report.md"
+SYM_JSON="${OUT_DIR}/symbol_report.json"
 REF_MD="${OUT_DIR}/ref_report.md"
 REF_JSON="${OUT_DIR}/ref_report.json"
 
@@ -34,12 +36,24 @@ python3 audit-tools/refchecks.py \
 
 REF_DRIFT=$(python3 -c "import json;print(json.load(open('${REF_JSON}'))['total'])")
 
+# --- 3. 符号存在性提示（L2 语义层）---
+# 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
+# 15-20% 精度（JS 全局、第三方包导出、历史文档引用已删除子系统）。
+# 当门禁会训练团队忽略告警，故只作为逐篇审阅的清单输出。
+python3 audit-tools/symbolcheck.py \
+  --docs docs \
+  --repo . \
+  --out-md "${SYM_MD}" \
+  --out-json "${SYM_JSON}" 2>/dev/null || true
+SYM_HINTS=$(python3 -c "import json;print(json.load(open('${SYM_JSON}'))['hint_count'])" 2>/dev/null || echo 0)
+
 python3 audit-tools/aligner.py \
   --extracts "${EXTRACT_JSON}" \
   --out-md "${DRIFT_MD}" \
   --out-json "${DRIFT_JSON}" \
   --ref-md "${REF_MD}" \
-  --ref-drift "${REF_DRIFT}"
+  --ref-drift "${REF_DRIFT}" \
+  --sym-md "${SYM_MD}"
 
 # 合计 drift 数。以 JSON 为准（robust），并与报告里的合计行交叉校验。
 DRIFT_COUNT=$(python3 -c "
@@ -74,6 +88,7 @@ print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\"
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
+echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${DRIFT_COUNT}"
 
 if [ "${DRIFT_COUNT}" -gt 0 ]; then

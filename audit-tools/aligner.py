@@ -166,6 +166,7 @@ def write_markdown(
     out_path: Path,
     ref_drift: int = 0,
     ref_md: Path | None = None,
+    sym_md: Path | None = None,
 ) -> None:
     lines: list[str] = []
     lines.append("# Architecture Documentation Drift Report")
@@ -242,6 +243,11 @@ def write_markdown(
     # 追加新检查章节 (path-existence / doc-link / duplicate-docs)
     if ref_md and ref_md.exists():
         lines.append(ref_md.read_text(encoding="utf-8"))
+    if sym_md and sym_md.exists():
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append(sym_md.read_text(encoding="utf-8"))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines), encoding="utf-8")
@@ -269,12 +275,14 @@ def main() -> None:
                    help="refchecks.py 产出的引用完整性 Markdown,追加到报告末尾")
     p.add_argument("--ref-drift", type=int, default=0,
                    help="refchecks.py 产出的 drift 项数,计入 Summary 合计")
+    p.add_argument("--sym-md", type=Path, default=None,
+                   help="symbolcheck.py 产出的符号提示 Markdown（不计入 drift）")
     args = p.parse_args()
 
     docs, code = load_extracts(args.extracts)
     drifts = find_drift(docs, code)
     write_markdown(drifts, len(docs), len(code), args.out_md,
-                   ref_drift=args.ref_drift, ref_md=args.ref_md)
+                   ref_drift=args.ref_drift, ref_md=args.ref_md, sym_md=args.sym_md)
     write_json(drifts, args.out_json)
     print(f"drift items: {len(drifts)}")
     print(f"  MISSING_IN_CODE: {sum(1 for d in drifts if d.kind == 'MISSING_IN_CODE')}")
