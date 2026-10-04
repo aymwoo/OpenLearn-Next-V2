@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { WhiteboardEventSlot } from '../events/WhiteboardEventSlot';
+import { WhiteboardEventSlot, whiteboardEventSlot } from '../events/WhiteboardEventSlot';
+import { frontendEventBus } from '../../../services/event-bus';
+import { processLmsMessage } from '../../../services/lms-bridge';
 
 describe('WhiteboardEventSlot', () => {
   let slot: WhiteboardEventSlot;
@@ -168,5 +170,119 @@ describe('WhiteboardEventSlot', () => {
     unsub();
     slot.emit('x', {});
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * 端到端断言：课件 iframe 消息 → lms-bridge → frontendEventBus(`courseware.*`) → 白板事件槽。
+ *
+ * Why: `WhiteboardEventSlot` 模块加载时以 `courseware.*` 通配符订阅前端 EventBus，
+ * `emitCoursewareEvent()` 只 publish 不再直接调用 `whiteboardEventSlot.ingest()`。
+ * 此前 EventBus 只支持精确订阅，转发目标不存在 —— 单元测试直接调 `slot.emit()` 全部绕过
+ * 这条链路，测试全绿但教师面板 / 调试面板永久收不到课件事件。
+ */
+describe('白板事件槽 ← 课件 iframe 事件（端到端）', () => {
+  function createManagedIframe(): HTMLIFrameElement {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('data-lms-bridge', 'true');
+    document.body.appendChild(iframe);
+    return iframe;
+  }
+
+  function makeEvent(data: unknown, source: MessageEventSource | null): MessageEvent {
+    return new MessageEvent('message', { data, source } as MessageEventInit);
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+    whiteboardEventSlot.clear();
+  });
+
+  it('LMS_SUBMIT 经 EventBus 通配符路由进入白板事件槽', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ attemptId: 'atk-adopted' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const iframe = createManagedIframe();
+
+    const handler = vi.fn();
+    const unsub = whiteboardEventSlot.subscribe({ types: ['courseware.submitted'] }, handler);
+
+    await processLmsMessage(
+      makeEvent(
+        { type: 'LMS_SUBMIT', attempt_id: 'atk-raw', payload: { score: 88, comment: 'good' } },
+        iframe.contentWindow,
+      ),
+    );
+
+    // 关键断言：slot 的订阅者确实通过 EventBus 收到了事件（而不是靠 slot.emit 直接调用）
+    expect(handler).toHaveBeenCalledTimes(1);
+    const ingested = handler.mock.calls[0][0];
+    expect(ingested.type).toBe('courseware.submitted');
+    expect(ingested.source).toBe('iframe.bridge');
+    expect(ingested.attemptId).toBe('atk-adopted');
+    expect(ingested.payload.score).toBe(88);
+    expect(ingested.payload.attemptId).toBe('atk-adopted');
+
+    // 队列中也可回溯查询
+    expect(whiteboardEventSlot.query({ types: ['courseware.submitted'] }).length).toBe(1);
+    unsub();
+  });
+
+  it('progress_saved / event_logged / config_reported 均进入白板事件槽', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ attemptId: 'atk-1' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const iframe = createManagedIframe();
+
+    const handler = vi.fn();
+    const unsub = whiteboardEventSlot.subscribe({}, handler);
+
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_SAVE_PROGRESS', attempt_id: 'atk-1', payload: { step: 3 } }, iframe.contentWindow),
+    );
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_CLICK', attempt_id: 'atk-1', payload: { target: 'btn' } }, iframe.contentWindow),
+    );
+    await processLmsMessage(
+      makeEvent({ type: 'LMS_CONFIG', attempt_id: 'atk-1', config: { courseware_uuid: 'cw-9' } }, iframe.contentWindow),
+    );
+
+    expect(handler.mock.calls.map((c) => c[0].type).sort()).toEqual([
+      'courseware.config_reported',
+      'courseware.event_logged',
+      'courseware.progress_saved',
+    ]);
+    expect(whiteboardEventSlot.stats().byType).toMatchObject({
+      'courseware.config_reported': 1,
+      'courseware.event_logged': 1,
+      'courseware.progress_saved': 1,
+    });
+    unsub();
+  });
+
+  it('非 courseware 命名空间的 EventBus 事件不会污染白板事件槽（通配符不越界）', async () => {
+    await frontendEventBus.publish({
+      id: 'evt-whiteboard-1',
+      type: 'whiteboard.element_updated',
+      source: 'whiteboard',
+      payload: { lessonId: 'L1' },
+      timestamp: Date.now(),
+    });
+
+    expect(whiteboardEventSlot.size()).toBe(0);
+  });
+
+  it('白板自身回灌 EventBus 不会形成回环', async () => {
+    const countBefore = whiteboardEventSlot.size();
+    await frontendEventBus.publish({
+      id: 'evt-wb-2',
+      type: 'courseware.submitted',
+      source: 'whiteboard',
+      payload: { attemptId: 'atk-loop', data: { score: 1 } },
+      timestamp: Date.now(),
+    });
+
+    expect(whiteboardEventSlot.size()).toBe(countBefore);
   });
 });

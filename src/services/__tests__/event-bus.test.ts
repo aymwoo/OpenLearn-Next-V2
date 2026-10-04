@@ -136,3 +136,190 @@ describe('frontendEventBus — 仅限本进程内', () => {
     unsub3();
   });
 });
+
+/**
+ * 通配符订阅回归测试。
+ *
+ * Why: `WhiteboardEventSlot` 以 `courseware.*` 订阅前端 EventBus，课件 iframe 的
+ * `courseware.submitted` 等事件要经此路由进白板事件槽。此前 publish 只做精确查找，
+ * 通配符订阅永远收不到事件（教师面板 / 调试面板永久静默失效）。
+ */
+describe('frontendEventBus — 前缀与全量通配符订阅', () => {
+  beforeEach(() => {
+    frontendEventBus.clear();
+  });
+
+  function publish(type: string): Promise<void> {
+    return frontendEventBus.publish({
+      id: `evt-${type}`,
+      type,
+      source: 'test',
+      payload: {},
+      timestamp: 1,
+    });
+  }
+
+  it('精确订阅保持精确语义，不会被其它事件触发', async () => {
+    const exact = vi.fn();
+    const other = vi.fn();
+    frontendEventBus.subscribe('courseware.submitted', exact);
+    frontendEventBus.subscribe('lesson.saved', other);
+
+    await publish('courseware.submitted');
+    expect(exact).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+
+    await publish('lesson.saved');
+    expect(other).toHaveBeenCalledTimes(1);
+    expect(exact).toHaveBeenCalledTimes(1);
+  });
+
+  it('精确订阅只命中字面量事件名，不被同名前缀的其它事件误触发', async () => {
+    const handler = vi.fn();
+    frontendEventBus.subscribe('courseware', handler);
+
+    await publish('courseware.submitted');
+    expect(handler).not.toHaveBeenCalled();
+
+    await publish('courseware');
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('courseware.* 收到同命名空间事件，但收不到其它命名空间事件', async () => {
+    const handler = vi.fn();
+    frontendEventBus.subscribe('courseware.*', handler);
+
+    await publish('courseware.submitted');
+    await publish('courseware.progress_saved');
+    await publish('courseware.event_logged');
+    await publish('courseware.config_reported');
+    expect(handler).toHaveBeenCalledTimes(4);
+
+    await publish('lesson.saved');
+    await publish('whiteboard.page_changed');
+    expect(handler).toHaveBeenCalledTimes(4);
+    expect(handler.mock.calls.map((c) => c[0].type)).toEqual([
+      'courseware.submitted',
+      'courseware.progress_saved',
+      'courseware.event_logged',
+      'courseware.config_reported',
+    ]);
+  });
+
+  it('多级前缀不会误匹配：courseware.* 不匹配 coursewareExtra.* 与 courseware', async () => {
+    const handler = vi.fn();
+    frontendEventBus.subscribe('courseware.*', handler);
+
+    await publish('coursewareExtra.saved');
+    await publish('courseware');
+    expect(handler).not.toHaveBeenCalled();
+
+    await publish('courseware.a.b.c');
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('* 订阅收到全部事件', async () => {
+    const handler = vi.fn();
+    frontendEventBus.subscribe('*', handler);
+
+    await publish('courseware.submitted');
+    await publish('lesson.saved');
+    await publish('whiteboard.page_changed');
+
+    expect(handler).toHaveBeenCalledTimes(3);
+  });
+
+  it('精确 + 前缀 + 全量订阅在同一次 publish 中各自被调用一次', async () => {
+    const exact = vi.fn();
+    const prefixed = vi.fn();
+    const global = vi.fn();
+    frontendEventBus.subscribe('courseware.submitted', exact);
+    frontendEventBus.subscribe('courseware.*', prefixed);
+    frontendEventBus.subscribe('*', global);
+
+    await publish('courseware.submitted');
+    expect(exact).toHaveBeenCalledTimes(1);
+    expect(prefixed).toHaveBeenCalledTimes(1);
+    expect(global).toHaveBeenCalledTimes(1);
+
+    // 同一 handler 重复以不同模式订阅时也只应被调用一次
+    const shared = vi.fn();
+    frontendEventBus.subscribe('courseware.submitted', shared);
+    frontendEventBus.subscribe('courseware.*', shared);
+    await publish('courseware.submitted');
+    expect(shared).toHaveBeenCalledTimes(1);
+  });
+
+  it('通配符取消订阅后不再收到事件（精确订阅不受影响）', async () => {
+    const prefixHandler = vi.fn();
+    const globalHandler = vi.fn();
+    const exactHandler = vi.fn();
+
+    const unsubPrefix = frontendEventBus.subscribe('courseware.*', prefixHandler);
+    const unsubGlobal = frontendEventBus.subscribe('*', globalHandler);
+    frontendEventBus.subscribe('courseware.submitted', exactHandler);
+
+    await publish('courseware.submitted');
+    expect(prefixHandler).toHaveBeenCalledTimes(1);
+    expect(globalHandler).toHaveBeenCalledTimes(1);
+
+    unsubPrefix();
+    unsubPrefix(); // 幂等：重复调用不应破坏索引
+    unsubGlobal();
+
+    await publish('courseware.submitted');
+    expect(prefixHandler).toHaveBeenCalledTimes(1);
+    expect(globalHandler).toHaveBeenCalledTimes(1);
+    expect(exactHandler).toHaveBeenCalledTimes(2);
+  });
+
+  it('listenerCount 覆盖通配符订阅，clear 可按模式或整体清理', async () => {
+    const unsubPrefix = frontendEventBus.subscribe('courseware.*', () => {});
+    frontendEventBus.subscribe('courseware.*', () => {});
+    frontendEventBus.subscribe('*', () => {});
+    frontendEventBus.subscribe('lesson.saved', () => {});
+
+    expect(frontendEventBus.listenerCount('courseware.*')).toBe(2);
+    expect(frontendEventBus.listenerCount('*')).toBe(1);
+    expect(frontendEventBus.listenerCount('lesson.saved')).toBe(1);
+    expect(frontendEventBus.listenerCount('courseware.submitted')).toBe(0);
+    expect(frontendEventBus.listenerCount()).toBe(4);
+
+    frontendEventBus.clear('courseware.*');
+    expect(frontendEventBus.listenerCount('courseware.*')).toBe(0);
+    expect(frontendEventBus.listenerCount()).toBe(2);
+
+    // 清理前缀后，新订阅的通配符仍可正常工作（wildcardCount 计数一致）
+    const reHandler = vi.fn();
+    const unsubRe = frontendEventBus.subscribe('courseware.*', reHandler);
+    await publish('courseware.submitted');
+    expect(reHandler).toHaveBeenCalledTimes(1);
+    unsubRe();
+
+    frontendEventBus.clear();
+    expect(frontendEventBus.listenerCount()).toBe(0);
+    unsubPrefix();
+  });
+
+  it('once 与 subscribePayload 对通配符同样生效', async () => {
+    const onceHandler = vi.fn();
+    const payloadHandler = vi.fn();
+    frontendEventBus.once('courseware.*', onceHandler);
+    frontendEventBus.subscribePayload('courseware.*', payloadHandler);
+
+    await publish('courseware.submitted');
+    await publish('courseware.progress_saved');
+
+    expect(onceHandler).toHaveBeenCalledTimes(1);
+    expect(payloadHandler).toHaveBeenCalledTimes(2);
+  });
+
+  it('非完整通配模式按字面量处理，不做前缀匹配', async () => {
+    const handler = vi.fn();
+    frontendEventBus.subscribe('courseware.sub*', handler);
+
+    await publish('courseware.submitted');
+    expect(handler).not.toHaveBeenCalled();
+    expect(frontendEventBus.listenerCount('courseware.sub*')).toBe(1);
+  });
+});

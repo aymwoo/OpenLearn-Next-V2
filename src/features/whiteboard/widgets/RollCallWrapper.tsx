@@ -38,6 +38,17 @@ export interface RollCallWrapperProps {
   onDelete: () => void;
   /** 只读跟随模式：隐藏删除等编辑按钮 */
   readOnly?: boolean;
+  /**
+   * 当前用户角色。
+   *
+   * 2026-10-04：评价（写入 `student_rollcalls` 并发放金币）**只能由教师/管理员发起**，
+   * 但原先仅用 `readOnly` 门控 —— 而 `readOnly` 来自「全班专注锁定」开关而非角色判断，
+   * 导致未开启锁定的学生端也会渲染出评价按钮。
+   * 服务端已加 `requireAuth('teacher','administrator')`，若前端不同步隐藏，
+   * 学生点击后会拿到 403，而 `handleEvaluate` 对 403 不抛错 → 继续本地
+   * `setEvaluation` + 本地加金币，造成「界面显示已评价已发币、服务端未落库」的静默不一致。
+   */
+  userRole?: 'teacher' | 'student' | 'administrator';
   isMinimized?: boolean;
   isMaximized?: boolean;
   /** 浏览器全屏时隐藏标题栏（宿主统一注入） */
@@ -62,6 +73,7 @@ export function RollCallWrapper({
   onPointerUp,
   onDelete,
   readOnly = false,
+  userRole = 'teacher',
   isMinimized = false,
   isMaximized = false,
   hidden = false,
@@ -285,6 +297,10 @@ export function RollCallWrapper({
   };
 
   // 教师打分并即时下发积分与成长金币
+  // 评价 = 写 student_rollcalls + 发放金币，仅教师/管理员可发起。
+  // 不能只看 readOnly —— 它是「全班专注锁定」而非角色判断。
+  const canEvaluate = userRole === 'teacher' || userRole === 'administrator';
+
   const handleEvaluate = async (rating: EvaluationRating) => {
     if (!selectedStudent || evaluation?.submitted) return;
 
@@ -376,7 +392,7 @@ export function RollCallWrapper({
         onMaximize={onMaximize}
         onDelete={onDelete}
         extraActions={
-          classes.length > 1 && !readOnly ? (
+          classes.length > 1 && canEvaluate ? (
             <div className="relative mr-1" onPointerDown={(e) => e.stopPropagation()}>
               <select
                 value={selectedClassId}
@@ -397,7 +413,7 @@ export function RollCallWrapper({
       {!isMinimized && (
         <>
           {/* 模式选择栏 */}
-          {!readOnly && (
+          {canEvaluate && (
             <div
               className="px-3 py-1.5 bg-indigo-950/40 border-b border-indigo-900/40 flex items-center justify-between gap-2 shrink-0 text-xs"
               onPointerDown={(e) => e.stopPropagation()}
@@ -508,7 +524,7 @@ export function RollCallWrapper({
                           +{evaluation.rewardCoins} 金币
                         </span>
                       </div>
-                    ) : !readOnly ? (
+                    ) : canEvaluate ? (
                       <div className="space-y-1">
                         <div className="text-2xs text-indigo-300/70 text-center font-medium">
                           作答表现评定与激励下发：

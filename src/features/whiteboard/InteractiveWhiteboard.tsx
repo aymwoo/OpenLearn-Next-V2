@@ -2499,6 +2499,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     lessonId={lessonId}
                     classId={fullscreenBroadcastClassId || (data && data.classId)}
                     readOnly={readOnly}
+                    userRole={userRole}
                     {...getWidgetTitleBarProps(
                       '随机点名助手 (分层抽问 Fair Picker)',
                       <Sparkles size={13} className="animate-pulse text-amber-400" />,

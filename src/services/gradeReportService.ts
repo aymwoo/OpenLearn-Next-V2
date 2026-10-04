@@ -160,9 +160,13 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
       };
     });
 
-    // Initialize jsPDF Doc dynamically
+    // Initialize jsPDF Doc dynamically.
+    // jspdf-autotable only self-registers against the UMD global (`window.jsPDF`),
+    // which the ESM build never sets — so the side-effect import leaves
+    // `doc.autoTable` undefined. Register the plugin explicitly instead.
     const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
+    const { applyPlugin } = await import('jspdf-autotable');
+    applyPlugin(jsPDF);
     const doc = new jsPDF({
       orientation: 'p',
       unit: 'mm',

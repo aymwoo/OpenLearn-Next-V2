@@ -129,36 +129,157 @@ function isFromManagedIframe(source: MessageEventSource | null): boolean {
 }
 
 /**
- * 快速短路载荷尺寸校验：避免为每次常规小消息执行全量 JSON.stringify(data)。
- * 仅在第一层深度累计长度；遇大数组/长键值或超限时及早短路返回。
+ * JSON 序列化尺寸估算。
+ *
+ * Why: `v.length` 严重低估字符串在 `JSON.stringify` 中的真实成本 —— 换行、Tab、引号、
+ * 反斜杠与其余控制字符都会额外膨胀 1-5 倍（换行输出 2 字符，NUL 输出 6 字符）。据此，
+ * 约 400KB 的转义密集载荷序列化后超过 1MB，却仍能通过 512KB 闸门。
+ *
+ * 这里不做全量 `JSON.stringify`：改为一次无分配的字符扫描计算真实序列化长度
+ * （孤立代理计 5 字符，合法代理对按 2 个码元计），复杂度 O(n) 且不产生大字符串。
+ * 超出估算能力（过深嵌套 / 非普通对象 / 访问器抛错）时回退全量序列化，保证不漏判；
+ * 循环引用无法序列化，沿用历史行为（不拦截）。
+ */
+
+/** 单个字符串序列化后的长度（含包裹引号） */
+function estimateStringSize(s: string): number {
+  const len = s.length;
+  let size = len + 2;
+  for (let i = 0; i < len; i++) {
+    const code = s.charCodeAt(i);
+    if (code === 0x22 || code === 0x5c) {
+      // 双引号 / 反斜杠：序列化后变为 2 字符
+      size += 1;
+    } else if (code < 0x20) {
+      // 退格 / Tab / 换行 / 换页 / 回车 输出 2 字符（+1），其余控制字符输出 6 字符（+5）
+      size += code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ? 1 : 5;
+    } else if (code >= 0xd800 && code <= 0xdfff) {
+      // 代理码元：合法代理对（Emoji）原样输出，其两个码元已计入 len
+      const next = i + 1 < len ? s.charCodeAt(i + 1) : 0;
+      if (code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+        i++;
+      } else {
+        size += 5; // 孤立代理会被转义为 6 字符
+      }
+    }
+  }
+  return size;
+}
+
+/** 估算终止标记：无法廉价估算，调用方需回退全量序列化 */
+const SIZE_UNKNOWN = -1;
+/** 估算终止标记：累计长度已确定超过 limit */
+const SIZE_OVER = -2;
+
+/** 估算深度上限：超过则回退全量序列化，避免在极端深层结构上做无意义遍历 */
+const MAX_ESTIMATE_DEPTH = 4;
+
+interface EstimateState {
+  /** 遍历过程中累计的序列化长度，用于超限及早短路 */
+  total: number;
+  limit: number;
+}
+
+function isPlainObjectOrArray(value: object): boolean {
+  if (Array.isArray(value)) return true;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return false; // Date / Map / 类实例可能带 toJSON
+  return typeof (value as { toJSON?: unknown }).toJSON !== 'function';
+}
+
+/**
+ * 估算 `JSON.stringify(value)` 的长度并把「本层自有」的长度累加到 state.total。
+ * 注意：子树的累加由子树自己完成，父层只累加逗号、键名等本层增量，否则会重复计数。
+ * 返回 SIZE_UNKNOWN / SIZE_OVER 表示提前终止；否则返回本次子树的长度。
+ */
+function walkJsonSize(value: unknown, depth: number, state: EstimateState): number {
+  if (value === null) return 4; // "null"
+  const type = typeof value;
+  if (type === 'boolean') return value === true ? 4 : 5;
+  if (type === 'number') {
+    const n = value as number;
+    return Number.isFinite(n) ? String(n).length : 4; // 非有限数序列化为 "null"
+  }
+  if (type === 'string') return estimateStringSize(value as string);
+  // function / undefined / symbol 被 JSON.stringify 丢弃
+  if (typeof value !== 'object') return 0;
+  if (depth >= MAX_ESTIMATE_DEPTH || !isPlainObjectOrArray(value)) return SIZE_UNKNOWN;
+
+  let size = 2; // [ ] 或 { }
+  let first = true;
+  /** 累加本层自有增量；返回 true 表示累计已确定超过 limit */
+  const addOwn = (delta: number): boolean => {
+    size += delta;
+    state.total += delta;
+    return state.total > state.limit;
+  };
+  /** 子树结果并入本层（子树已自行累加过 state.total） */
+  const takeSub = (sub: number): number | null => {
+    size += sub;
+    return state.total > state.limit ? SIZE_OVER : null;
+  };
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      if (!first && addOwn(1)) return SIZE_OVER; // 元素间逗号
+      first = false;
+
+      const item = value[i];
+      if (item === undefined || typeof item === 'function' || typeof item === 'symbol') {
+        if (addOwn(4)) return SIZE_OVER; // 数组中的 undefined / 函数 / 符号序列化为 null
+        continue;
+      }
+      const sub = walkJsonSize(item, depth + 1, state);
+      if (sub < 0) return sub; // 传播 SIZE_UNKNOWN / SIZE_OVER 终止标记
+      const over = takeSub(sub);
+      if (over !== null) return over;
+    }
+    return size;
+  }
+
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    let v: unknown;
+    try {
+      v = (value as Record<string, unknown>)[key];
+    } catch {
+      return SIZE_UNKNOWN; // 抛错的 getter
+    }
+    if (v === undefined || typeof v === 'function' || typeof v === 'symbol') continue; // 该键被丢弃
+
+    if (!first && addOwn(1)) return SIZE_OVER; // 属性间逗号
+    first = false;
+    if (addOwn(estimateStringSize(key) + 1)) return SIZE_OVER; // "key":
+
+    const sub = walkJsonSize(v, depth + 1, state);
+    if (sub < 0) return sub; // 传播 SIZE_UNKNOWN / SIZE_OVER 终止标记
+    const over = takeSub(sub);
+    if (over !== null) return over;
+  }
+  return size;
+}
+
+/**
+ * 跨窗口消息体的尺寸闸门：按真实序列化长度估算（而非 `v.length`），
+ * 超过 limit（默认 512KB）返回 true。
  */
 export function isPayloadOversized(data: unknown, limit = 512 * 1024): boolean {
   if (!data) return false;
-  if (typeof data === 'string') return data.length > limit;
   if (typeof data === 'number' || typeof data === 'boolean') return false;
+  if (typeof data === 'string') return estimateStringSize(data) > limit;
 
-  let estimatedSize = 0;
-  try {
-    const entries = Object.entries(data as Record<string, unknown>);
-    if (entries.length > 80) {
+  const state: EstimateState = { total: 0, limit };
+  const estimated = walkJsonSize(data, 0, state);
+
+  if (estimated === SIZE_OVER) return true;
+  if (estimated === SIZE_UNKNOWN) {
+    // 罕见路径：深层嵌套 / 非普通对象 —— 退回全量序列化以保证不漏判
+    try {
       return JSON.stringify(data).length > limit;
+    } catch {
+      return false;
     }
-    for (const [k, v] of entries) {
-      estimatedSize += k.length + 4;
-      if (typeof v === 'string') {
-        estimatedSize += v.length;
-      } else if (typeof v === 'number' || typeof v === 'boolean') {
-        estimatedSize += 8;
-      } else if (v && typeof v === 'object') {
-        const subStr = JSON.stringify(v);
-        estimatedSize += subStr.length;
-      }
-      if (estimatedSize > limit) return true;
-    }
-    return false;
-  } catch {
-    return false;
   }
+  return estimated > limit;
 }
 
 /**
@@ -507,4 +628,3 @@ if (typeof window !== 'undefined') {
     }, 50);
   });
 }
-

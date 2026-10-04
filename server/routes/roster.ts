@@ -64,7 +64,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.put('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, description, class_passcode, class_passcode_expires_at, lab_id } = req.body;
-      if (name) rosterService.updateClass(req.params.id, name, description, lab_id);
+      // 门控必须是"任一可更新字段出现"，而不是 `if (name)`：
+      // 只改 description / lab_id 的请求此前被整条丢弃（重构前的逐字段 if 已丢失）。
+      // updateClass 内部只为显式传入的字段生成 SET，未传的字段保持原值。
+      if (name !== undefined || description !== undefined || lab_id !== undefined) {
+        rosterService.updateClass(req.params.id, name, description, lab_id);
+      }
       if (class_passcode !== undefined) {
         kernelContainer.db
           .prepare('UPDATE classes SET class_passcode = ? WHERE id = ?')
@@ -1328,7 +1333,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/rollcalls/evaluate', requireAuth(), (req, res) => {
+  // SEC-ROLL-01（2026-10-04）：评价会写入 student_rollcalls 并发放金币，属教师操作。
+  // 此前只有 requireAuth()，任意已登录用户（含学生）都能对任意 studentId 写入并
+  // 触发 student:coins_awarded 广播。前端已同步按 userRole 隐藏评价按钮
+  // （RollCallWrapper 的 canEvaluate）—— 两端必须同时改，否则只改服务端会让
+  // 学生点击后拿到 403，而 handleEvaluate 对 403 不抛错 → 界面显示已评价已发币、
+  // 服务端未落库的静默不一致。
+  app.post('/api/rollcalls/evaluate', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const payload = rosterService.evaluateRollcall(req.body || {});
 
@@ -1428,8 +1439,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 删除分组
   app.delete('/api/classes/:id/groups/:groupId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      rosterService.deleteGroup(req.params.groupId);
-      publishGroupsChanged({ classId: req.params.id, scope: 'default' });
+      const classId = req.params.id;
+      rosterService.deleteGroup(classId, req.params.groupId);
+      publishGroupsChanged({ classId, scope: 'default' });
       res.json({ success: true });
     } catch (e: any) {
       if (e.message?.includes('not found')) return res.status(404).json({ error: e.message });

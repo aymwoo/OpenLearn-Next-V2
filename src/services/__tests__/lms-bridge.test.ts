@@ -62,9 +62,9 @@ describe('lms-bridge processLmsMessage source validation', () => {
   });
 
   it('处理来自受管辖 iframe 的 LMS_SUBMIT（adopt + submit）', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ attemptId: 'atk-adopted' }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ attemptId: 'atk-adopted' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const iframe = createManagedIframe();
 
@@ -87,28 +87,22 @@ describe('lms-bridge processLmsMessage source validation', () => {
 
     // 受管辖 iframe：取进度并定向回复
     await processLmsMessage(
-      makeEvent(
-        { type: 'LMS_GET_PROGRESS', attempt_id: 'atk-progress', requestId: 'req-1' },
-        managed.contentWindow,
-      ),
+      makeEvent({ type: 'LMS_GET_PROGRESS', attempt_id: 'atk-progress', requestId: 'req-1' }, managed.contentWindow),
     );
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/attempts/atk-progress/progress'))).toBe(true);
 
     // 未标记 iframe：直接丢弃，不取进度也不回复
     fetchMock.mockClear();
     await processLmsMessage(
-      makeEvent(
-        { type: 'LMS_GET_PROGRESS', attempt_id: 'atk-progress', requestId: 'req-2' },
-        unmanaged.contentWindow,
-      ),
+      makeEvent({ type: 'LMS_GET_PROGRESS', attempt_id: 'atk-progress', requestId: 'req-2' }, unmanaged.contentWindow),
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('attempt_id 缺失时可从受管辖 iframe 提取（跨域不可读时安全忽略）', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ attemptId: 'atk-extracted' }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ attemptId: 'atk-extracted' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const iframe = createManagedIframe();
 
@@ -124,9 +118,9 @@ describe('lms-bridge processLmsMessage source validation', () => {
     expect(getManagedIframesCount()).toBe(0);
 
     const unmanagedIframe = createUnmanagedIframe();
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ attemptId: 'atk-reg' }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ attemptId: 'atk-reg' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     // 未注册时，丢弃消息
@@ -225,3 +219,114 @@ describe('lms-bridge processLmsMessage source validation', () => {
   });
 });
 
+/**
+ * 载荷尺寸闸门回归：必须按**真实 JSON 序列化长度**判定，而非 `String.length`。
+ *
+ * Why: 转义密集载荷（换行 / 引号 / 控制字符）在 `JSON.stringify` 时会膨胀 1–5 倍。
+ * 旧实现按 `v.length` 估算，约 400KB 的换行密集载荷序列化后 >1MB 却仍能通过 512KB 闸门。
+ */
+describe('isPayloadOversized — 按序列化长度估算', () => {
+  it('换行密集载荷在序列化膨胀后超限即被拦截（历史漏判场景）', () => {
+    // 原始长度约 400KB < 512KB，但每 2 个字符序列化后变 3 个 → 约 600KB
+    const escapeDense = { type: 'LMS_SUBMIT', attempt_id: 'a-1', payload: { text: 'a\n'.repeat(200 * 1024) } };
+
+    // 前置确认：确实是「原始长度未超限」的漏判场景
+    expect(JSON.stringify(escapeDense).length).toBeGreaterThan(512 * 1024);
+    expect(escapeDense.payload.text.length).toBeLessThan(512 * 1024);
+
+    expect(isPayloadOversized(escapeDense)).toBe(true);
+  });
+
+  it('引号 / 反斜杠 / 控制字符膨胀同样被计入', () => {
+    // 原始 400KB < 512KB，但每个引号序列化后占 2 字符 → 约 600KB，应被拦截
+    expect(isPayloadOversized({ t: 'a"'.repeat(200 * 1024) })).toBe(true);
+    // 反斜杠同理
+    expect(isPayloadOversized({ t: 'a\\'.repeat(200 * 1024) })).toBe(true);
+    // 控制字符按 6 字符输出，最坏 6 倍膨胀：100KB 原始 → 600KB
+    expect(isPayloadOversized({ t: String.fromCharCode(0).repeat(100 * 1024) })).toBe(true);
+    // 换行按 2 字符输出
+    expect(isPayloadOversized({ t: '\n'.repeat(300 * 1024) })).toBe(true);
+  });
+
+  it('不误杀正常载荷：纯 ASCII / 中文 / Emoji 文本在限额内均放行', () => {
+    expect(isPayloadOversized({ text: 'a'.repeat(400 * 1024) })).toBe(false);
+    // 中文字符在 JSON 中原样输出（UTF-16 长度与序列化长度一致）
+    expect(isPayloadOversized({ text: '课'.repeat(300 * 1024) })).toBe(false);
+    // Emoji 为合法代理对，序列化后仍是 2 个码元
+    expect(isPayloadOversized({ text: '😀'.repeat(150 * 1024) })).toBe(false);
+  });
+
+  it('字符串直传按转义后长度判定', () => {
+    expect(isPayloadOversized('a'.repeat(100), 200)).toBe(false);
+    expect(isPayloadOversized('a'.repeat(300), 200)).toBe(true);
+    // 'a\n'.repeat(100) → 序列化后 302 字符（含包裹引号）
+    expect(isPayloadOversized('a\n'.repeat(100), 400)).toBe(false);
+    expect(isPayloadOversized('a\n'.repeat(100), 250)).toBe(true);
+  });
+
+  it('估算与真实序列化长度一致（双向边界断言）', () => {
+    const cases: unknown[] = [
+      { type: 'LMS_SUBMIT', score: 95, ok: true },
+      { text: 'line1\nline2\t"quoted"\\slash' },
+      { nested: { a: [1, 2, 3], b: { c: 'x'.repeat(50) } }, flag: false, nothing: null },
+      { arr: ['a\nb', { deep: { deeper: 'q"q' } }, 3.5, -0.0001, 1e21] },
+      { dropped: undefined, kept: 1, fn: () => 1 },
+      { arr2: [undefined, () => 1, 'z'] },
+      { empty: {}, emptyArr: [] },
+      { unicode: '中文 mixed 😀 with \u0000 null' },
+    ];
+
+    for (const data of cases) {
+      const actual = JSON.stringify(data).length;
+      expect(isPayloadOversized(data, actual - 1), `低于真实长度应判超限: ${actual}`).toBe(true);
+      expect(isPayloadOversized(data, actual), `等于真实长度不应判超限: ${actual}`).toBe(false);
+    }
+  });
+
+  it('深层嵌套 / 非普通对象回退全量序列化，不漏判', () => {
+    // 超过估算深度上限的深层结构
+    const deep: Record<string, unknown> = {};
+    let cursor = deep;
+    for (let i = 0; i < 12; i++) {
+      const next: Record<string, unknown> = {};
+      cursor.deep = next;
+      cursor = next;
+    }
+    cursor.big = 'x'.repeat(600 * 1024);
+    expect(isPayloadOversized(deep)).toBe(true);
+
+    // 带 toJSON 的 Date / 类实例：廉价估算不可靠 → 回退序列化
+    expect(isPayloadOversized({ at: new Date(0), v: 1 })).toBe(false);
+  });
+
+  it('循环引用沿用历史行为（不拦截，且不抛异常）', () => {
+    const cyclic: Record<string, unknown> = { type: 'LMS_SUBMIT' };
+    cyclic.self = cyclic;
+    expect(() => isPayloadOversized(cyclic)).not.toThrow();
+    expect(isPayloadOversized(cyclic)).toBe(false);
+  });
+
+  it('processLmsMessage 丢弃序列化后超 512KB 的转义密集消息（不触发请求）', async () => {
+    vi.restoreAllMocks();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const iframe = createManagedIframe();
+
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await processLmsMessage(
+      makeEvent(
+        {
+          type: 'LMS_SUBMIT',
+          attempt_id: 'atk-oversized',
+          payload: { text: 'a\n'.repeat(200 * 1024) },
+        },
+        iframe.contentWindow,
+      ),
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith('[LMS Bridge] Dropped oversized postMessage (>512KB)');
+    consoleSpy.mockRestore();
+  });
+});

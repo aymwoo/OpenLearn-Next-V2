@@ -289,4 +289,120 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       service.deleteStudentCascade(stu.id);
     });
   });
+
+  // ── 回归：归属校验丢失 + 全量覆盖（审计第 2 批）────────────────────────────
+  describe('6. deleteGroup 归属作用域与 updateClass 部分更新', () => {
+    const readClass = (id: string) => db.prepare('SELECT * FROM classes WHERE id = ?').get(id) as any;
+    const groupRow = (id: string) => db.prepare('SELECT * FROM class_groups WHERE id = ?').get(id) as any;
+
+    it('deleteGroup 跨班删除必须被拒，且一行都不能删（DELETE 缺 AND class_id = ? 的回归）', () => {
+      const classA = service.createClass('归属甲班');
+      const classB = service.createClass('归属乙班');
+      const groupB = service.createGroup(classB, { name: '乙班小组' });
+
+      // 用 A 班的 classId 去删 B 班的小组 —— 必须抛错
+      expect(() => service.deleteGroup(classA, groupB.id)).toThrow('Group not found');
+
+      // 关键断言：目标行必须仍在。修复前 SQL 是 `WHERE id = ?`，这里会 undefined。
+      expect(groupRow(groupB.id)).toBeDefined();
+      expect(groupRow(groupB.id).class_id).toBe(classB);
+      // 两个视角都应保持一致：A 班看不到它，B 班仍持有它
+      expect(service.listClassGroups(classA)).toHaveLength(0);
+      expect(service.listClassGroups(classB).map((g) => g.id)).toContain(groupB.id);
+
+      service.deleteClassCascade(classA);
+      service.deleteClassCascade(classB);
+    });
+
+    it('deleteGroup 同班删除应成功；不存在的 group 应报错', () => {
+      const clsId = service.createClass('归属同班');
+      const grp = service.createGroup(clsId, { name: '同班小组' });
+
+      service.deleteGroup(clsId, grp.id);
+      expect(groupRow(grp.id)).toBeUndefined();
+      expect(service.listClassGroups(clsId)).toHaveLength(0);
+
+      // 不存在的 group id
+      expect(() => service.deleteGroup(clsId, 'grp-does-not-exist')).toThrow('Group not found');
+      // 班级存在但小组属于别的班级（上一条已覆盖）；这里补"班级本身不存在"
+      expect(() => service.deleteGroup('cls-not-exist', grp.id)).toThrow('Group not found');
+
+      service.deleteClassCascade(clsId);
+    });
+
+    it('updateClass 只传 name 时，description 与 lab_id 必须原样保留', () => {
+      const clsId = service.createClass('部分更新甲班', '原始简介', testLabId);
+      expect(readClass(clsId).lab_id).toBe(testLabId);
+
+      // 只带 name —— 旧的全量覆盖写法会把 description / lab_id 一起清空
+      service.updateClass(clsId, '部分更新甲班-改名');
+
+      const after = readClass(clsId);
+      expect(after.name).toBe('部分更新甲班-改名');
+      expect(after.description).toBe('原始简介');
+      // lab_id 是班级↔机房绑定，getClassSeats 依赖它，置空后排座 UI 失效
+      expect(after.lab_id).toBe(testLabId);
+      expect(service.getClassSeats(clsId).lab_id).toBe(testLabId);
+
+      service.deleteClassCascade(clsId);
+    });
+
+    it('updateClass 只传 description 时应生效（回归重构前逐字段 if (x !== undefined)）', () => {
+      const clsId = service.createClass('部分更新乙班', '旧简介', testLabId);
+
+      // name / lab_id 均为 undefined：路由层旧门控 `if (name)` 会把这条请求整条丢弃
+      service.updateClass(clsId, undefined, '新简介');
+
+      const after = readClass(clsId);
+      expect(after.description).toBe('新简介');
+      expect(after.name).toBe('部分更新乙班');
+      expect(after.lab_id).toBe(testLabId);
+
+      service.deleteClassCascade(clsId);
+    });
+
+    it('updateClass 传全部字段时全部更新；空 name 报 400 语义错误；显式空串可清空', () => {
+      const clsId = service.createClass('部分更新丙班', '丙班简介', testLabId);
+
+      service.updateClass(clsId, '部分更新丙班-全量', '丙班新简介', '');
+      const after = readClass(clsId);
+      expect(after.name).toBe('部分更新丙班-全量');
+      expect(after.description).toBe('丙班新简介');
+      // 显式传 '' → 清空机房绑定（与"未传入"是两回事）
+      expect(after.lab_id).toBeNull();
+
+      // 空 name：400 语义，且不应改坏已有数据
+      let caught: any;
+      try {
+        service.updateClass(clsId, '   ');
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeDefined();
+      expect(caught.message).toContain('Class name is required');
+      expect(caught.status).toBe(400);
+      expect(readClass(clsId).name).toBe('部分更新丙班-全量');
+
+      // 一个字段都没传 → 400（而不是静默成功）
+      let empty: any;
+      try {
+        service.updateClass(clsId);
+      } catch (e) {
+        empty = e;
+      }
+      expect(empty?.status).toBe(400);
+
+      // 班级不存在 → 404
+      let missing: any;
+      try {
+        service.updateClass('cls-not-exist-xyz', '改名试试');
+      } catch (e) {
+        missing = e;
+      }
+      expect(missing?.message).toContain('Class not found');
+      expect(missing?.status).toBe(404);
+
+      service.deleteClassCascade(clsId);
+    });
+  });
 });

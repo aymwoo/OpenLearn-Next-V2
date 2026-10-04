@@ -140,12 +140,50 @@ export class RosterService {
     return classId;
   }
 
-  public updateClass(id: string, name: string, description?: string, labId?: string): void {
-    if (!name?.trim()) throw new Error('Class name is required');
-    const res = this.db
-      .prepare('UPDATE classes SET name = ?, description = ?, lab_id = ? WHERE id = ?')
-      .run(name.trim(), description || '', labId || null, id);
-    if (res.changes === 0) throw new Error('Class not found');
+  /**
+   * 部分更新：只为**显式传入**的字段生成 SET 子句（与 `updateGroup` 同一写法）。
+   *
+   * 此前是全量覆盖（`SET name = ?, description = ?, lab_id = ?`），任何只带 `name`
+   * 的请求都会把 `description` 与 `lab_id` 清空 —— `lab_id` 是班级↔机房绑定，
+   * `getClassSeats` 依赖它，置空后排座 UI 失效。同时"只改 description"的请求
+   * 会被路由层 `if (name)` 门控整条丢弃（旧代码是逐字段 `if (x !== undefined)`）。
+   *
+   * 约定：`undefined` = 不改该字段；`''` / `null` = 显式清空。
+   */
+  public updateClass(id: string, name?: string, description?: string, labId?: string): void {
+    const sets: string[] = [];
+    const args: unknown[] = [];
+
+    if (name !== undefined) {
+      if (!name?.trim()) {
+        const err = new Error('Class name is required') as Error & { status?: number };
+        err.status = 400;
+        throw err;
+      }
+      sets.push('name = ?');
+      args.push(name.trim());
+    }
+    if (description !== undefined) {
+      sets.push('description = ?');
+      args.push(description || '');
+    }
+    if (labId !== undefined) {
+      sets.push('lab_id = ?');
+      args.push(labId || null);
+    }
+
+    if (sets.length === 0) {
+      const err = new Error('没有可更新的字段') as Error & { status?: number };
+      err.status = 400;
+      throw err;
+    }
+
+    const res = this.db.prepare('UPDATE classes SET ' + sets.join(', ') + ' WHERE id = ?').run(...args, id);
+    if (res.changes === 0) {
+      const err = new Error('Class not found') as Error & { status?: number };
+      err.status = 404;
+      throw err;
+    }
   }
 
   public getClassPasscode(id: string): {
@@ -744,8 +782,13 @@ export class RosterService {
     return group;
   }
 
-  public deleteGroup(groupId: string): void {
-    const res = this.db.prepare('DELETE FROM class_groups WHERE id = ?').run(groupId);
+  /**
+   * 按 `class_id` 归属作用域删除。缺了 `AND class_id = ?` 的话
+   * `DELETE /api/classes/{A班}/groups/{B班的小组id}` 会成功删掉 B 班的小组，
+   * URL 里的班级 ID 沦为装饰（契约从 404 变 200）。与 `updateGroup` / `listClassGroups` 同口径。
+   */
+  public deleteGroup(classId: string, groupId: string): void {
+    const res = this.db.prepare('DELETE FROM class_groups WHERE id = ? AND class_id = ?').run(groupId, classId);
     if (res.changes === 0) throw new Error('Group not found');
   }
 
