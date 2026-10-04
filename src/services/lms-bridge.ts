@@ -24,6 +24,7 @@ export interface LmsMessagePayload {
  * 同一页面会话内只需认领一次，避免每条消息都多打一次请求。
  */
 const adoptedAttemptIds = new Map<string, string>();
+const pendingAdoptions = new Map<string, Promise<string>>();
 
 /**
  * 归属认领。
@@ -37,33 +38,43 @@ const adoptedAttemptIds = new Map<string, string>();
  * 认领到当前登录学生名下；若该 attempt 已归属其他学生，服务端会为当前学生新建/复用
  * 他自己的 attempt 并返回其 id。
  *
- * 失败（未登录 / 网络异常）时退回原始 attemptId，不阻断上报。
+ * 优化：增加并发 Promise 锁闭，防止多条消息并发时重复发送认领请求。
  */
 async function adoptAttempt(attemptId: string): Promise<string> {
   const cached = adoptedAttemptIds.get(attemptId);
   if (cached) return cached;
-  try {
-    const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/adopt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    if (!res.ok) {
-      if (res.status !== 401) {
-        console.warn(`[LMS Bridge] Attempt adopt failed: HTTP ${res.status}`);
+  const inFlight = pendingAdoptions.get(attemptId);
+  if (inFlight) return inFlight;
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/adopt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!res.ok) {
+        if (res.status !== 401) {
+          console.warn(`[LMS Bridge] Attempt adopt failed: HTTP ${res.status}`);
+        }
+        return attemptId;
+      }
+      const json = (await res.json()) as { attemptId?: string };
+      if (typeof json?.attemptId === 'string' && json.attemptId) {
+        adoptedAttemptIds.set(attemptId, json.attemptId);
+        return json.attemptId;
       }
       return attemptId;
+    } catch (e) {
+      console.warn('[LMS Bridge] Attempt adopt request failed:', e);
+      return attemptId;
+    } finally {
+      pendingAdoptions.delete(attemptId);
     }
-    const json = (await res.json()) as { attemptId?: string };
-    if (typeof json?.attemptId === 'string' && json.attemptId) {
-      adoptedAttemptIds.set(attemptId, json.attemptId);
-      return json.attemptId;
-    }
-    return attemptId;
-  } catch (e) {
-    console.warn('[LMS Bridge] Attempt adopt request failed:', e);
-    return attemptId;
-  }
+  })();
+
+  pendingAdoptions.set(attemptId, promise);
+  return promise;
 }
 
 const managedIframes = new Set<HTMLIFrameElement>();
@@ -118,6 +129,39 @@ function isFromManagedIframe(source: MessageEventSource | null): boolean {
 }
 
 /**
+ * 快速短路载荷尺寸校验：避免为每次常规小消息执行全量 JSON.stringify(data)。
+ * 仅在第一层深度累计长度；遇大数组/长键值或超限时及早短路返回。
+ */
+export function isPayloadOversized(data: unknown, limit = 512 * 1024): boolean {
+  if (!data) return false;
+  if (typeof data === 'string') return data.length > limit;
+  if (typeof data === 'number' || typeof data === 'boolean') return false;
+
+  let estimatedSize = 0;
+  try {
+    const entries = Object.entries(data as Record<string, unknown>);
+    if (entries.length > 80) {
+      return JSON.stringify(data).length > limit;
+    }
+    for (const [k, v] of entries) {
+      estimatedSize += k.length + 4;
+      if (typeof v === 'string') {
+        estimatedSize += v.length;
+      } else if (typeof v === 'number' || typeof v === 'boolean') {
+        estimatedSize += 8;
+      } else if (v && typeof v === 'object') {
+        const subStr = JSON.stringify(v);
+        estimatedSize += subStr.length;
+      }
+      if (estimatedSize > limit) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validates and processes incoming LMS messages from sandboxed courseware iframes.
  */
 export async function processLmsMessage(event: MessageEvent): Promise<void> {
@@ -138,13 +182,9 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   if (!isLmsCandidate) return;
 
   // 防御性安全：限制跨窗口消息体最大尺寸（512KB），防御超大 payload 阻塞主线程或造成 OOM
-  try {
-    const rawLen = typeof data.length === 'number' ? data.length : JSON.stringify(data).length;
-    if (rawLen > 512 * 1024) {
-      console.warn('[LMS Bridge] Dropped oversized postMessage (>512KB)');
-      return;
-    }
-  } catch {
+  // 优化：采用快速短路估算，避免每次全量序列化整颗对象树
+  if (isPayloadOversized(data, 512 * 1024)) {
+    console.warn('[LMS Bridge] Dropped oversized postMessage (>512KB)');
     return;
   }
 

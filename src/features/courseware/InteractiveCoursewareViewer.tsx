@@ -4,6 +4,14 @@ import { useThemeStore, getThemeTokens } from '../../store/themeStore';
 import { broadcastThemeToIframes, registerManagedIframe } from '../../services/lms-bridge';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
+interface TokenCacheEntry {
+  token: string;
+  expiresAt: number;
+}
+
+const tokenMemoryCache = new Map<string, TokenCacheEntry>();
+const TOKEN_CACHE_TTL_MS = 45 * 1000;
+
 interface InteractiveCoursewareViewerProps {
   coursewareId: string | null;
   onClose?: () => void;
@@ -38,14 +46,32 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
 
   // SEC-AUTH: 课件 HTML 路由要求短时访问 token（沙箱 iframe 不带会话 cookie，
   // 由持有会话的父页面先铸造，拼进 iframe src 的 ?ct= 参数）
+  // 优化：引入 45s 短生命周期内存缓存，相同课件切回时 0ms 秒开挂载
   useEffect(() => {
     let cancelled = false;
+    if (!coursewareId) {
+      setAccessToken(null);
+      return;
+    }
+
+    const cached = tokenMemoryCache.get(coursewareId);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      setAccessToken(cached.token);
+      return;
+    }
+
     setAccessToken(null);
-    if (!coursewareId) return;
     fetch(`/api/courseware/${encodeURIComponent(coursewareId)}/access-token`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((j: { token?: unknown }) => {
-        if (!cancelled && typeof j?.token === 'string' && j.token) setAccessToken(j.token);
+        if (!cancelled && typeof j?.token === 'string' && j.token) {
+          tokenMemoryCache.set(coursewareId, {
+            token: j.token,
+            expiresAt: Date.now() + TOKEN_CACHE_TTL_MS,
+          });
+          setAccessToken(j.token);
+        }
       })
       .catch((e) => {
         console.warn('[InteractiveCoursewareViewer] Failed to mint courseware access token:', e);
@@ -128,14 +154,22 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
             src={`/api/courseware/${coursewareId}?ct=${encodeURIComponent(accessToken)}`}
             sandbox="allow-scripts allow-forms allow-downloads"
             data-lms-bridge="true"
+            loading="lazy"
+            referrerPolicy="no-referrer"
             allowFullScreen
-            className="w-full h-full border-none"
+            className="w-full h-full border-none transition-opacity duration-300"
             title="Interactive Courseware"
             onLoad={handleIframeLoad}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 bg-slate-50">
-            课件加载中…
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 backdrop-blur-xs select-none">
+            <div className="relative flex items-center justify-center">
+              <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+              <Globe size={18} className="absolute text-indigo-500 opacity-80" />
+            </div>
+            <span className="mt-3 text-xs font-medium text-slate-500 tracking-wide animate-pulse">
+              正在准备课件沙箱环境…
+            </span>
           </div>
         )}
       </div>

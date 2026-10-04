@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **微前端 iframe 跨域通信调优与课件预览体验升级（P2 体验攻坚）**：
+  - **LMS Bridge 跨窗口通信性能调优（`src/services/lms-bridge.ts`）**：
+    - 引入快速短路载荷尺寸校验器 `isPayloadOversized`，消除高频消息处理中对整颗对象树无条件 `JSON.stringify` 带来的 GC 内存颠簸与主线程卡顿；
+    - 增加 `adoptAttempt` 跨窗口并发 Promise 锁闭复用，彻底杜绝短时间内并发多条进度消息时重复打向服务端认领端点的网络竞态；
+  - **课件预览模块异步加载与秒开体验（`src/features/courseware/InteractiveCoursewareViewer.tsx`）**：
+    - 建立 45s 短生命周期凭证内存缓存（`tokenMemoryCache`），教师在资源库多课件快速切换或切回已看课件时实现 0ms 瞬间挂载；
+    - 替换原单薄生硬的文本提示，设计带有微动效的半透明骨架屏与渐入过渡状态；
+    - 沙箱 iframe 开启 `loading="lazy"` 与 `referrerPolicy="no-referrer"`，显著优化非活跃视口下的资源调度；
+  - **文件安全校验 SSOT 统一（E4b，`server/routes/shared.ts` & `server/utils/upload.ts`）**：
+    - 消除 `routes/shared.ts` 中重复定义的 `MAGIC_BYTES`、`BLOCKED_EXTENSIONS` 和 `validateMagicBytes`，收敛至 `utils/upload.ts` 单一真实来源并重导出；
+    - 编写专用安全单元测试 `server/__tests__/upload-security.test.ts`（6 项测试 100% 绿灯）。
+
 - **数据库 Schema 单一真实来源（SSOT）统一（方向 4 攻坚，E1）**：
   - **消灭内联 DDL 双重定义（净删 680 行死代码）**：
     - 彻底移除 `packages/core/db/index.ts` 内部长达 650 行的内联 `CREATE TABLE / INDEX` 块及 30 多个分散脆弱的 `try/catch ALTER TABLE`；

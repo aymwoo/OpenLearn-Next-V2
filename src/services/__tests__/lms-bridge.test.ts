@@ -4,6 +4,7 @@ import {
   registerManagedIframe,
   clearManagedIframes,
   getManagedIframesCount,
+  isPayloadOversized,
 } from '../lms-bridge';
 import { frontendEventBus } from '../event-bus';
 import { v7 as uuidv7 } from 'uuid';
@@ -202,4 +203,25 @@ describe('lms-bridge processLmsMessage source validation', () => {
 
     vi.useRealTimers();
   });
+
+  it('isPayloadOversized 正确识别小载荷与超大载荷', () => {
+    // 基础小对象
+    expect(isPayloadOversized({ type: 'LMS_SUBMIT', score: 95 })).toBe(false);
+
+    // 较长字符串但在 512KB 内
+    const normalPayload = { text: 'a'.repeat(10 * 1024) };
+    expect(isPayloadOversized(normalPayload)).toBe(false);
+
+    // 超过 512KB 的超大载荷
+    const oversizedPayload = { data: 'x'.repeat(600 * 1024) };
+    expect(isPayloadOversized(oversizedPayload)).toBe(true);
+
+    // 多字段累加超限
+    const multiFieldOversized: Record<string, string> = {};
+    for (let i = 0; i < 60; i++) {
+      multiFieldOversized[`key_${i}`] = 'y'.repeat(10 * 1024);
+    }
+    expect(isPayloadOversized(multiFieldOversized)).toBe(true);
+  });
 });
+

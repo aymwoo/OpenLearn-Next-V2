@@ -5,24 +5,7 @@ import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/in
 import { getCookieToken } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 
-export function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
-  const MAGIC_BYTES: Record<string, number[][]> = {
-    '.pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
-    '.pptx': [[0x50, 0x4b, 0x03, 0x04]], // PK.. (ZIP)
-    '.zip': [[0x50, 0x4b, 0x03, 0x04]],
-    '.jpg': [[0xff, 0xd8, 0xff]],
-    '.jpeg': [[0xff, 0xd8, 0xff]],
-    '.png': [[0x89, 0x50, 0x4e, 0x47]], // .PNG
-    '.gif': [[0x47, 0x49, 0x46, 0x38]], // GIF8
-    '.webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF
-  };
-  const ext = path.extname(fileName || '').toLowerCase();
-  const signatures = MAGIC_BYTES[ext];
-  if (!signatures) return true; // 未知类型放过
-
-  return signatures.some((sig) => sig.every((byte, i) => buffer[i] === byte));
-}
-export const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1'];
+export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 
 /**
  * 课件/资源独立直出 HTML 的沙箱 CSP（SEC-NET-02）。
