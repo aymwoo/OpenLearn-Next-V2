@@ -6,7 +6,7 @@ import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
-import { CapabilityGuard } from '../capability-system/index.js';
+import { CapabilityGuard } from '../capability/index.js';
 import Database from 'better-sqlite3';
 import { pluginApiGatewayMiddleware } from '../../../server/routes/plugin-api-gateway.js';
 import { kernelContainer } from '../kernel/index.js';

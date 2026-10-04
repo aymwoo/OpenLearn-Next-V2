@@ -30,7 +30,7 @@ import {
 import { CommandBus } from '../../command-bus/index.js';
 import { EventBus } from '../../event-bus/index.js';
 import { ActionRegistry } from '../../registry/index.js';
-import { CapabilityGuard } from '../../capability-system/index.js';
+import { CapabilityGuard } from '../../capability/index.js';
 
 // ── TestEsmLoader: 控制注入的插件模块 ──────────────────────────────────
 

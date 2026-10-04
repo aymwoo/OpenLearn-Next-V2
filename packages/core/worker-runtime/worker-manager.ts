@@ -33,7 +33,7 @@ import type { Database } from 'better-sqlite3';
 import fs from 'fs';
 import path from 'node:path';
 import { ServiceRegistry } from '../di/service-registry.js';
-import { CapabilityGuard } from '../capability-system/index.js';
+import { CapabilityGuard } from '../capability/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { NodeWorkerTransport } from './transport.js';
 import type { IWorkerTransport } from './types.js';

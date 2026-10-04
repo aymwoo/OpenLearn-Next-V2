@@ -17,7 +17,7 @@ import {
 import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
-import { CapabilityGuard } from '../../core/capability-system/index.js';
+import { CapabilityGuard } from '../../core/capability/index.js';
 
 describe('ManagementPlugin', () => {
   let db: Database.Database;

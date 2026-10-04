@@ -24,7 +24,7 @@ import { PluginDistributionManager } from '../../core/plugin-host/plugin-distrib
 import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
-import { CapabilityGuard } from '../../core/capability-system/index.js';
+import { CapabilityGuard } from '../../core/capability/index.js';
 
 describe('BuiltinPlugin', () => {
   let db: Database.Database;

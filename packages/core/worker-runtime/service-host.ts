@@ -54,7 +54,7 @@ import type {
   RoutesRegisteredMessage,
 } from './types.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
-import type { CapabilityGuard } from '../capability-system/index.js';
+import type { CapabilityGuard } from '../capability/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
 import crypto from 'node:crypto';

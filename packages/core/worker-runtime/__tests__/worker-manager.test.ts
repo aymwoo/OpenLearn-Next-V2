@@ -16,7 +16,7 @@ import { NodeWorkerTransport } from '../transport.js';
 import type { IWorkerTransport } from '../types.js';
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
 import type { ServiceRegistry } from '../../di/service-registry.js';
-import type { CapabilityGuard } from '../../capability-system/index.js';
+import type { CapabilityGuard } from '../../capability/index.js';
 import type Database from 'better-sqlite3';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────

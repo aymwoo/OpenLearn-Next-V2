@@ -9,7 +9,7 @@ import type { PluginModule } from '../../esm-loader/esm-loader.js';
 import { PluginHost } from '../index.js';
 import { PluginState } from '../types.js';
 import { ServiceHost } from '../../worker-runtime/service-host.js';
-import { CapabilityGuard } from '../../capability-system/index.js';
+import { CapabilityGuard } from '../../capability/index.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,

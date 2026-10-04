@@ -1,7 +1,7 @@
 import { EventBus } from '../event-bus/index.js';
 import { CommandBus } from '../command-bus/index.js';
 import { ActionRegistry } from '../registry/index.js';
-import { CapabilityGuard } from '../capability-system/index.js';
+import { CapabilityGuard } from '../capability/index.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db, readPool, getReadDb, queryRead, queryReadOne, checkpoint } from '../db/index.js';

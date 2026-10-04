@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **内核 Capability 目录深度归并（方向 3 攻坚，E2）**：
+  - **目录结构收敛与职责清晰化（≤ 3 个目录）**：
+    - 将孤岛式的单个文件目录 `packages/core/capability-system/` 深度归并入核心模块 `packages/core/capability/guard/capability-guard.ts`；
+    - 在 `packages/core/capability/index.ts` 统一导出 RBAC 守卫 `CapabilityGuard`，与调用管线（Invocation Engine & Pipeline）浑然一体；
+    - 将顶级目录从原本混乱分散的 4 个收敛至职责边界清晰的 3 个：`capability/`（内核能力与安全访问守卫）、`capability-governance/`（能力治理与合规度量）、`ai-capability/`（AI 专有能力网关）；
+  - **平滑兼容与引用迁移**：
+    - `packages/core/capability-system/index.ts` 转型为标记 `@deprecated` 的向后兼容垫片（Shim），防止任何外部或第三方遗留插件破坏；
+    - 内核及插件测试（`kernel`、`worker-runtime`、`plugin-host`、`plugins/*` 等）所有直接引用点全部无缝切换至规范的 `packages/core/capability` 路径；
+    - 验证通过 TypeScript 严格类型检查（0 错误）与全量 Capability 及插件测试（12 个套件 63 项测试 100% 绿灯）。
+
 - **Bridge SDK 独立打包与巨石常量解耦（方向 2 攻坚，E4a）**：
   - **独立沙箱源码包设立（`packages/bridge-sdk/`）**：
     - 将 `server/utils/bridge-sdk.ts` 内部长达 780+ 行的硬编码 JavaScript 模板字符串抽离为独立的工程模块 `@openlearn/bridge-sdk`（`packages/bridge-sdk/src/bridge.js`）；
