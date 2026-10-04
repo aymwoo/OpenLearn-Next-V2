@@ -171,6 +171,7 @@ import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTiling
 import { AssignmentBindingField } from './components/AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './components/AssignmentPeerProgressPanel';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
+import { CoursewarePropertiesModal } from './components/CoursewarePropertiesModal';
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
 import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
@@ -379,7 +380,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     ref,
   ) => {
     // 防御：确保 elements 始终是数组，并使用 useMemo 稳定数组引用防击穿下游
-    const safeElements = useMemo(() => (Array.isArray(elements) ? elements : []), [elements]);
+    // 授课模式下支持临时课件属性覆盖（仅当前课堂会话生效，不持久化到后端课程设置）
+    const [temporaryElementOverrides, setTemporaryElementOverrides] = useState<Record<string, WhiteboardElement>>({});
+    const safeElements = useMemo(() => {
+      const base = Array.isArray(elements) ? elements : [];
+      if (Object.keys(temporaryElementOverrides).length === 0) return base;
+      return base.map((el) => temporaryElementOverrides[el.id] || el);
+    }, [elements, temporaryElementOverrides]);
 
     // 全局主题系统响应与白板引擎桥接
     const currentGlobalTheme = useThemeStore((s) => s.theme);
@@ -994,6 +1001,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [assignmentDialogId, setAssignmentDialogId] = useState<string | null>(null);
     const [editingProperties, setEditingProperties] = useState<any>(null);
     const [activePropertiesElementId, setActivePropertiesElementId] = useState<string | null>(null);
+    const [activeCoursewareModalElementId, setActiveCoursewareModalElementId] = useState<string | null>(null);
     const [propertyUndoStack, setPropertyUndoStack] = useState<{ [elementId: string]: string[] }>({});
     const [propertyRedoStack, setPropertyRedoStack] = useState<{ [elementId: string]: string[] }>({});
 
@@ -1111,6 +1119,56 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           if (onRefresh) onRefresh();
         } catch (e) {
           console.error('更新属性失败:', e);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    /** 课堂授课临时生效（仅本次授课在内存与本地画布生效，不向后端持久化） */
+    const handleApplyTemporaryCourseware = (elementId: string, updatedData: any) => {
+      const target = safeElements.find((e) => e.id === elementId);
+      if (!target) return;
+      const mergedDataStr = JSON.stringify(updatedData);
+      setTemporaryElementOverrides((prev) => ({
+        ...prev,
+        [elementId]: {
+          ...target,
+          data: mergedDataStr,
+        },
+      }));
+      frontendEventBus.publish({
+        id: uuidv7(),
+        type: 'whiteboard.element_updated',
+        source: 'whiteboard',
+        payload: { lessonId, elementId, temporary: true },
+        timestamp: Date.now(),
+        correlationId: lessonId,
+      });
+    };
+
+    /** 课堂授课永久生效（向后端写入，更新课程原始配置模板） */
+    const handleSavePermanentCourseware = async (elementId: string, updatedData: any) => {
+      setTemporaryElementOverrides((prev) => {
+        const next = { ...prev };
+        delete next[elementId];
+        return next;
+      });
+      if (onElementUpdate) {
+        setIsSyncing(true);
+        try {
+          await onElementUpdate(elementId, updatedData);
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId, elementId },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+          if (onRefresh) onRefresh();
+        } catch (e) {
+          console.error('保存课件属性失败:', e);
         } finally {
           setIsSyncing(false);
         }
@@ -2282,15 +2340,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           readOnly,
           isMinimized: !!data.isMinimized,
           isMaximized: effectiveFullscreenElementId === el.id,
-          isPropertiesOpen: activePropertiesElementId === el.id,
+          isPropertiesOpen: activePropertiesElementId === el.id || activeCoursewareModalElementId === el.id,
           themeColor,
           extraActions,
           onPointerDown: (e: React.PointerEvent) => !readOnly && handleElementDragStart(e, el.id, data),
           onPointerMove: !readOnly ? handleElementDragMove : undefined,
           onPointerUp: !readOnly ? handleElementDragEnd : undefined,
           onOpenProperties: () => {
-            setSelectedShapeId(el.id);
-            setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
+            if (!isEditMode && el.type === 'html-applet') {
+              fetchCoursewares();
+              setActiveCoursewareModalElementId(el.id);
+            } else {
+              setSelectedShapeId(el.id);
+              setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
+            }
           },
           onMinimize: async () => {
             if (onElementUpdate) {
@@ -4097,6 +4160,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             zipCandidates={zipCandidates}
             handlePropsUpdate={handlePropsUpdate}
             fetchCoursewares={fetchCoursewares}
+          />
+
+          {/* 交互课件临时/永久属性调整弹窗（在 live_class 授课模式下以浮层 Modal 显示，支持不覆盖课程设置） */}
+          <CoursewarePropertiesModal
+            isOpen={!!activeCoursewareModalElementId}
+            onClose={() => setActiveCoursewareModalElementId(null)}
+            element={safeElements.find((e) => e.id === activeCoursewareModalElementId) || null}
+            coursewares={coursewares}
+            fetchCoursewares={fetchCoursewares}
+            onApplyTemporary={handleApplyTemporaryCourseware}
+            onSavePermanent={handleSavePermanentCourseware}
           />
         </div>
 
