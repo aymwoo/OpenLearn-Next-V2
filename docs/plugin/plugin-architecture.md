@@ -79,7 +79,7 @@ graph TD
 - **适用场景**：第三方未信任插件、高 CPU 密集或不稳定插件。
 - **特点**：
   - **内存隔离**：无法访问主进程全局变量或未授权文件句柄。
-  - **RPC 消息转发**：通过 `WorkerTransport` 与 `MessageChannel` 传输 JSON/Structured-Clone 消息。
+  - **RPC 消息转发**：通过 `IWorkerTransport` 与 `MessageChannel` 传输 JSON/Structured-Clone 消息。
   - **崩溃容错**：Worker 崩溃不影响主进程或其他插件。
 
 ---

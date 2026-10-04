@@ -75,7 +75,7 @@ export interface ObjectLock {
 
 ### 同步消息 (`SyncMessage`)
 
-`SyncType` 共 6 个取值：`'object_sync'` / `'selection_sync'` / `'viewport_sync'` / `'pointer_sync'` / `'stage_sync'` / `'lesson_sync'`，由 `SyncEngine` 分发。
+`SyncType` 共 6 个取值：`'object_sync'` / `'selection_sync'` / `'viewport_sync'` / `'pointer_sync'` / `'stage_sync'` / `'lesson_sync'`，由前端的 `frontendEventBus` 按类型分发（**代码中不存在名为 `SyncEngine` 的类**——协作同步当前没有独立的引擎层）。
 
 ---
 

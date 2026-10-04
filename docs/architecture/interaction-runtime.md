@@ -135,7 +135,7 @@ svc.removeHandler('my-plugin.shortcut-ctrl-s');
 
 ## 在 Layer-2 中的位置
 
-参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`ClassroomRuntimeKernel`）。Interaction Runtime 是**前端独有的协作领域引擎**，与 Layer 2 中其他 runtime（`LessonRuntime` / `ClassroomRuntime` / `PresenceEngine` 等）平行存在；它**不参与课堂生命周期**，只负责低层交互事件归一化。
+参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`ClassroomRuntimeKernel`）。Interaction Runtime 是**前端独有的协作领域引擎**，与 Layer 2 中其他 runtime（`LessonEngine` / `ClassroomRuntimeKernel` / `PresenceEngineKernel` 等）平行存在；它**不参与课堂生命周期**，只负责低层交互事件归一化。
 
 | 维度   | Interaction Runtime          | Classroom Runtime            |
 | ------ | ---------------------------- | ---------------------------- |

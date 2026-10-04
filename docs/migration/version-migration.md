@@ -163,7 +163,7 @@ DROP TABLE IF EXISTS foo;
 migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>;
 ```
 
-定义于 `packages/core/plugin-host/types.ts` 的 `PluginDatabase` 接口，实现于 `packages/core/plugin-host/context-builder.ts`。**必须 `await`**——`upgradeFn` 可以是同步或异步，方法本身一定返回 Promise。
+定义于 `packages/core/plugin-host/types.ts` 的 `PluginDatabaseAPI` 接口，实现于 `packages/core/plugin-host/context-builder.ts`。**必须 `await`**——`upgradeFn` 可以是同步或异步，方法本身一定返回 Promise。
 
 ### 4.2 用法
 
@@ -242,7 +242,7 @@ sqlite3 packages/core/db/educational_os.db "PRAGMA integrity_check;"
 | `server/utils/migrate.ts`           | `loadMigrationsFromDirectory` / `runMigrations` / `rollbackMigration` / `simpleChecksum` |
 | `server.ts`                         | 启动时触发迁移（`startServer` 内）                     |
 | `packages/core/db/index.ts`         | `runStartupMigrations` / `ensureColumn` / `hashPassword` / `verifyPassword` |
-| `packages/core/plugin-host/types.ts` | `PluginDatabase.migrate` 签名                         |
+| `packages/core/plugin-host/types.ts` | `PluginDatabaseAPI.migrate` 签名                    |
 | `packages/core/plugin-host/context-builder.ts` | `migrate` 实现、插件 DB 前缀注入         |
 | `packages/core/di/interfaces.ts`    | `IPointsDimensionRegistryToken` / `IPointsLedgerServiceToken` |
 | `scripts/restore-db.ts`             | 备份枚举与恢复                                         |

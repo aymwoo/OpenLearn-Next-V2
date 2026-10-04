@@ -130,7 +130,7 @@
 
 ### 2.3 权限与能力声明 (`capabilitiesProposed`)
 
-字符串数组，声明插件运行所需的受控能力凭证。宿主仅在插件清单显式声明了对应 Capability 时才会通过 `CapabilityService` 授权：
+字符串数组，声明插件运行所需的受控能力凭证。宿主仅在插件清单显式声明了对应 Capability 时才会通过 `ICapabilityService` 授权：
 
 - `"vfs:read"`, `"vfs:write"`: 虚拟文件系统读写
 - `"storage:read"`, `"storage:write"`: 持久化存储

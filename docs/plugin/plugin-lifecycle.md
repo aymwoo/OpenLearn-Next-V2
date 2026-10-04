@@ -99,7 +99,7 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 3. **安全上下文构建 (`buildContext`)**：
    - 实例化 `PluginContext`。
    - 对不满足 `optional` 版本依赖的服务自动设为 `null`。
-4. **能力授权**：向 `CapabilityService` 批量申请 `manifest.capabilitiesProposed` 声明的能力。
+4. **能力授权**：向 `ICapabilityServiceToken` 对应的 `ICapabilityService` 批量申请 `manifest.capabilitiesProposed` 声明的能力（实现类为 `CapabilityGuard`，见 `packages/core/capability/guard/`）。
 5. **洋葱中间件前置管线 (`beforeActivate`)**：顺序执行已注册的生命周期中间件。
 6. **执行 `activate(ctx)` 回调**：使用 `Promise.race` 包装超时定时器与错误监听。
 7. **转换成功**：状态更改为 `ACTIVE`，更新 DB 记录。
