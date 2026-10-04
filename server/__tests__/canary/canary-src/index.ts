@@ -202,7 +202,8 @@ export default {
       '@openlearn/core:IStorageService',
       '@openlearn/core:IAIService',
       '@openlearn/core:IDatabase',
-      '@openlearn/core:IPluginHost',
+      // 2026-10-04：IPluginHost 已移出 worker 基础白名单（沙箱插件不应能安装/
+      // 激活其他插件）。内置插件仍可用 —— 它们默认 inline，不经过此白名单。
     ]);
 
     const sdkEntries = Object.entries(sdk as Record<string, unknown>).filter(

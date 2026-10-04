@@ -948,28 +948,43 @@ export class ServiceHost {
       'system_resources',
       'events',
       '_migrations',
+      // 2026-10-04 补充：实测 97 张表中原名单只覆盖 28 张，以下为审计发现的漏网核心表。
+      'site_settings',            // 站点级配置
+      'agent_conversations',      // AI Agent 会话记录
+      'classroom_sessions',       // 课堂会话
+      'lesson_quiz_submissions',  // 课堂测验提交
+      'courseware_score_config',  // 成绩计分策略
+      'demo_data_registry',       // 演示数据登记表
+      'whiteboard_elements',      // 白板内容
+      'student_point_logs',       // 积分台账
+      'lianyun_research_activities',
+      'lianyun_research_groups',
+      'lianyun_research_submissions',
+      'lianyun_research_reviews',
     ];
+    // 本插件被允许的 `plugin_*` 命名空间（DDL 与 DML 共用）。
+    const validNamespaces: string[] = [];
+    if (this.dbPluginId) {
+      validNamespaces.push(`plugin_${this.dbPluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
+    }
+    if (pluginId) {
+      validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
+    }
+    // Allow dedicated research ecosystem namespace for lianyun-course plugin
+    if (
+      pluginId === 'lianyun-course' ||
+      this.dbPluginId === '01a0b99f-efb7-7178-be2e-be3b1ad0cb53' ||
+      pluginId?.includes('lianyun') ||
+      pluginId?.includes('research')
+    ) {
+      validNamespaces.push('plugin_research_');
+    }
+
     // 先检查 DDL，优先抛出 DDL 具体的报错以与单元测试契约精确吻合
     const ddlMatch =
       /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
     if (ddlMatch) {
-      const table = ddlMatch[2];
-      const validNamespaces: string[] = [];
-      if (this.dbPluginId) {
-        validNamespaces.push(`plugin_${this.dbPluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
-      }
-      if (pluginId) {
-        validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
-      }
-      // Allow dedicated research ecosystem namespace for lianyun-course plugin
-      if (
-        pluginId === 'lianyun-course' ||
-        this.dbPluginId === '01a0b99f-efb7-7178-be2e-be3b1ad0cb53' ||
-        pluginId?.includes('lianyun') ||
-        pluginId?.includes('research')
-      ) {
-        validNamespaces.push('plugin_research_');
-      }
+      const table = ddlMatch[2]!;
       const isAllowed =
         validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
       if (!isAllowed) {
@@ -977,6 +992,41 @@ export class ServiceHost {
           this.pluginActorId,
           '@openlearn/core:IDatabase',
           `Worker plugin "${pluginId}" is not permitted to perform DDL on table "${table}"`,
+        );
+      }
+    }
+
+    // SEC-DB-03（2026-10-04）：**DML 命名空间隔离**。
+    // 此前命名空间校验只作用于 DDL（CREATE/DROP/ALTER TABLE），DML 完全没管 ——
+    // 任何 worker 插件都可以任意 SELECT/INSERT/UPDATE/DELETE **其他插件的私有表**
+    // （`plugin_<别的id>_*`）。实测 97 张表里有 19 张插件私有表，跨插件读写完全畅通。
+    //
+    // 规则：`plugin_` 前缀的**表**只允许操作自己命名空间下的。
+    // 注意：必须只从"表出现的位置"提取表名，不能全文搜 `plugin_` ——
+    // `plugin_id` 是常见**列名**（如 `INSERT INTO plugin_migrations (plugin_id, ...)`），
+    // 全文搜会把列名误判成表名。
+    const sharedPluginTables = new Set(['plugin_migrations', 'plugin_storage']);
+    const referencedTables = new Set<string>();
+    for (const re of [
+      /\bFROM\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+      /\bINTO\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+      /\bUPDATE\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+      /\bJOIN\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+      /\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+    ]) {
+      for (const m of sql.matchAll(re)) referencedTables.add(m[1]!);
+    }
+
+    for (const t of referencedTables) {
+      if (!/^plugin_/i.test(t)) continue;
+      if (sharedPluginTables.has(t.toLowerCase())) continue;
+      const isOwnNamespace = validNamespaces.some((ns) => t.startsWith(ns));
+      if (!isOwnNamespace) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          '@openlearn/core:IDatabase',
+          `Worker plugin "${pluginId}" is not permitted to access another plugin's table "${t}" ` +
+            `(仅允许 ${validNamespaces.join(' / ') || '<无>'} 命名空间)`,
         );
       }
     }

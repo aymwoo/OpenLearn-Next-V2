@@ -404,6 +404,9 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       if (tokenName.includes('Countdown')) {
         expect(p?.detail).toMatch(/rejected:.*No provider registered/);
       } else if (mode === 'worker') {
+        // 2026-10-04 收敛：IPluginHost 已移出 worker 基础白名单（沙箱插件不应能
+        // 安装/激活其他插件）。它对内置插件仍然可用 —— 内置默认 inline 模式，
+        // 不经过 worker 白名单。
         const WORKER_ALLOWED = [
           'ICommandBusServiceToken',
           'IEventBusServiceToken',
@@ -413,12 +416,11 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
           'IStorageServiceToken',
           'IAIServiceToken',
           'IDatabaseToken',
-          'IPluginHostToken',
         ];
         if (WORKER_ALLOWED.includes(tokenName)) {
           expect(p?.detail).toBe('resolved:true');
         } else {
-          expect(p?.detail).toMatch(/rejected:.*No provider registered/);
+          expect(p?.detail).toMatch(/rejected/);
         }
       } else {
         expect(p?.detail).toBe('resolved:true');

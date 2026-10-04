@@ -48,8 +48,19 @@ import { IEventBusServiceToken } from '../di/index.js';
 
 /** 7 个内核服务 Token 名称字符串 — 用于 Worker 端 RPC 代理。 */
 /**
- * 基础 Worker 服务白名单（9 个核心基础设施 Token）。
+ * 基础 Worker 服务白名单（7 个核心基础设施 Token）。
  * 无需任何额外依赖或权限声明，所有 Worker 插件默认且仅允许使用这些基础服务。
+ *
+ * 2026-10-04 收敛说明：
+ * - **移除了 `IPluginHost`**。`PluginHost` 暴露 `installPlugin` / `installPluginFromZip` /
+ *   `activatePlugin` / `uninstallPlugin`；沙箱化的插件本不该有能力安装并激活**其他**插件
+ *   ——那等于给了它一个可持久化的后门（装一个能在自身被卸载后继续存活的东西）。
+ *   内置插件需要它（`packages/plugins/builtin.ts` 通过 `ctx.resolve` 使用），但内置插件
+ *   默认以 **inline 模式**运行，不经过 worker 白名单，因此移除无功能影响。
+ *   需要它的 worker 插件应在 manifest 的 `requires` 中显式声明，走下面的条件授予分支。
+ * - `IDatabase` 保留，但**其访问范围由 `ServiceHost.assertDatabaseAccessAllowed` 在语句
+ *   级管控**：插件只能 DML 自己命名空间（`plugin_<自己id>_*`）下的表，核心表一律拒绝。
+ *   白名单只决定"能不能拿到这个服务句柄"，语句守卫决定"能用它做什么"。
  */
 export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:ICommandBusService',
@@ -60,7 +71,6 @@ export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:IStorageService',
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
-  '@openlearn/core:IPluginHost',
 ]);
 
 /**
