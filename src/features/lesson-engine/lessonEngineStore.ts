@@ -15,10 +15,13 @@ import {
   LessonStatus,
 } from '../../../packages/core/lesson-engine/types.js';
 import { LessonRuntime } from '../../../packages/core/lesson-engine/lesson-runtime.js';
+import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
+import type { StageGuard, StageGuardResult } from '../../../packages/core/di/interfaces.js';
 import { frontendEventBus } from '../../services/event-bus.js';
 
 interface LessonEngineStoreState {
   runtime: LessonRuntime;
+  stageGuardPipeline: StageGuardPipeline;
   status: LessonStatus;
   currentLesson: Lesson | null;
   activeFlow: Flow | null;
@@ -47,6 +50,9 @@ interface LessonEngineStoreState {
   setPresentationMode: (enabled: boolean) => void;
   setUser: (user: UserRef) => void;
   takeSnapshot: () => LessonSnapshot;
+  checkStageAccess: (targetStageId: string, studentId?: string) => Promise<StageGuardResult>;
+  registerStageGuard: (guard: StageGuard) => () => void;
+  unregisterStageGuard: (guardId: string) => void;
 }
 
 const defaultUser: UserRef = {
@@ -196,6 +202,30 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
 
     takeSnapshot: () => {
       return coreRuntime.takeSnapshot();
+    },
+
+    stageGuardPipeline: coreRuntime.stageGuard,
+
+    checkStageAccess: async (targetStageId: string, studentId?: string) => {
+      const state = get();
+      const currentStudentId = studentId || state.currentUser?.id || 'anonymous';
+      const lessonId = state.currentLesson?.id || '';
+      const currentStageId = state.currentStage?.id || null;
+
+      return coreRuntime.stageGuard.checkAccess({
+        studentId: currentStudentId,
+        lessonId,
+        currentStageId,
+        targetStageId,
+      });
+    },
+
+    registerStageGuard: (guard: StageGuard) => {
+      return coreRuntime.stageGuard.registerGuard(guard);
+    },
+
+    unregisterStageGuard: (guardId: string) => {
+      coreRuntime.stageGuard.unregisterGuard(guardId);
     },
   };
 });

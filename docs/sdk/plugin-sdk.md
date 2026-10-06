@@ -195,6 +195,7 @@ type Actor = PluginApiRequest['actor'];   // ✅ 正确写法
 | `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | 能力治理内核                                                                         |
 | `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | 平台服务注册表                                                                       |
 | `IActivityRegistryToken`             | `ActivityRegistry`                | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem)）                    |
+| `IStageGuardServiceToken`            | `IStageGuardService`              | 教学环节流转门禁服务（自定义测试/作业/探究达标守卫）                                 |
 
 ### 代码使用范例
 
@@ -284,6 +285,53 @@ export default {
         items: [{ score: 5, comment: '讲得很好' }],
       };
     });
+  },
+};
+```
+
+---
+
+## 5. 教学环节条件门禁守卫使用范例
+
+第三方插件可通过 `IStageGuardServiceToken` 注册环节准入守卫。当学生在课堂中尝试切换教学环节时，系统责任链将自动执行所有已注册守卫（遵循 AND 组合判定与 1500ms Fail-Open 容错降级）：
+
+```typescript
+import type { PluginContext, StageGuard } from '@openlearn/plugin-sdk';
+import { IStageGuardServiceToken } from '@openlearn/plugin-sdk';
+
+export default {
+  manifest: {
+    id: 'ext-quiz-gate',
+    name: '随堂测验门禁',
+    version: '1.0.0',
+    main: 'index.js',
+  },
+  activate: async (ctx: PluginContext) => {
+    const stageGuardService = await ctx.resolve(IStageGuardServiceToken);
+
+    const quizGuard: StageGuard = {
+      id: 'ext-quiz-gate-80',
+      name: '测验得分门禁 (≥80分)',
+      priority: 50,
+      async canEnterStage({ studentId, lessonId, targetStageId }) {
+        // 自定义业务判定逻辑
+        const score = await getStudentQuizScore(studentId, lessonId);
+        if (score < 80) {
+          return {
+            allowed: false,
+            reason: `进入下一环节需测验得分≥80分（当前得分：${score}分）`,
+            progress: { current: score, target: 80, unit: '分' },
+          };
+        }
+        return { allowed: true };
+      },
+    };
+
+    const unregister = stageGuardService.registerGuard(quizGuard);
+
+    return {
+      dispose: () => unregister(),
+    };
   },
 };
 ```

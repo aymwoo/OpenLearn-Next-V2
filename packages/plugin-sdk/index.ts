@@ -149,6 +149,7 @@ export {
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
   ICoursewareRuntimeScriptRegistryToken,
+  IStageGuardServiceToken,
 } from '../core/di/interfaces.js';
 
 export type {
@@ -158,6 +159,9 @@ export type {
   IPointsLedgerService,
   IAuthSessionBridgeService,
   AuthBridgeUser,
+  StageGuardContext,
+  StageGuard,
+  IStageGuardService,
 } from '../core/di/interfaces.js';
 
 export type {

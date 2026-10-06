@@ -708,6 +708,12 @@ export type ClassroomLifecycleStage =
 export interface StageGuardResult {
   allowed: boolean;
   reason?: string;
+  guardIds?: string[];
+  progress?: {
+    current: number;
+    target: number;
+    unit?: string;
+  };
 }
 
 export type ClassroomStageGuard = (
@@ -778,4 +784,35 @@ export interface IClassroomCountdownService {
 
 export const IClassroomCountdownServiceToken = new Token<IClassroomCountdownService>(
   '@openlearn/core:IClassroomCountdownService',
+);
+
+/**
+ * 教学环节流转门禁上下文与结果定义
+ */
+export interface StageGuardContext {
+  studentId: string;
+  lessonId: string;
+  currentStageId: string | null;
+  targetStageId: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StageGuard {
+  readonly id: string;
+  readonly name: string;
+  /** 优先级：数值越小越优先执行，默认 100 */
+  readonly priority?: number;
+  /** 核心判定逻辑 */
+  canEnterStage(ctx: StageGuardContext): Promise<StageGuardResult>;
+}
+
+export interface IStageGuardService {
+  registerGuard(guard: StageGuard): () => void;
+  unregisterGuard(guardId: string): void;
+  listGuards(): StageGuard[];
+  checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
+}
+
+export const IStageGuardServiceToken = new Token<IStageGuardService>(
+  '@openlearn/core:IStageGuardService',
 );

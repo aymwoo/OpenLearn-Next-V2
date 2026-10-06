@@ -141,6 +141,7 @@ interface PluginContext {
 | `IClassroomLifecycleServiceToken`       | `IClassroomLifecycleService`       | `@openlearn/core:IClassroomLifecycleService`       |
 | `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | `@openlearn/core:IInteractionRuntimeService`       |
 | `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | `@openlearn/core:IClassroomCountdownService`       |
+| `IStageGuardServiceToken`               | `IStageGuardService`               | `@openlearn/core:IStageGuardService`               |
 
 ---
 
@@ -425,6 +426,18 @@ interface AuthBridgeUser {
 ```
 
 > 特权认证服务，用于 LTI 1.3、SAML 等第三方 SSO 认证插件即时建档、生成会话并由安全网关自动写入跨域安全 Cookie。
+
+### `IStageGuardService`（`packages/core/di/interfaces.ts`）
+
+```typescript
+registerGuard(guard: StageGuard): () => void;
+unregisterGuard(guardId: string): void;
+listGuards(): StageGuard[];
+checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
+```
+
+> 教学环节流转门禁服务。支持第三方插件注册环节准入守卫（例如随堂测验达标、前置实验文件已提交等）。
+> 内核内置 **1500ms 超时容错降级 (Fail-Open)** 与 **多插件全部满足 (AND 组合判定)** 机制。
 
 ### 日志（`ctx.log`，无 Token）
 

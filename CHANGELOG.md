@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **教学环节条件门禁管道 (Stage Guard Pipeline) 与插件扩展能力引入**：
+  - **内核与 Plugin SDK 契约（`packages/core/di/interfaces.ts` & `packages/plugin-sdk/index.ts`）**：
+    - 引入 `StageGuard`、`StageGuardContext`、`StageGuardResult` 与 `IStageGuardServiceToken`，正式向第三方插件开放教学环节流转准入判定契约；
+    - 新增 `StageGuardPipeline`（`packages/core/lesson-engine/stage-guard-pipeline.ts`），实现责任链串联判定，严格落实 **1500ms 超时熔断降级 (Fail-Open)** 与 **多插件全部满足 (AND 组合判定)** 策略，杜绝插件异常导致课堂死锁；
+    - 挂载至 `LessonRuntime`（`runtime.stageGuard`）并注入全局 Store 与 DI 体系；
+  - **前端拦截管线与 UI 反馈（`StudentLessonContentPanel.tsx` & `lessonEngineStore.ts`）**：
+    - `useLessonEngineStore` 暴露 `checkStageAccess`、`registerStageGuard` 与 `stageGuardPipeline`；
+    - 学生端环节时间线按钮升级为具备门禁状态感知的卡片（未达标显示 🔒 锁图标并带未满足条件悬浮提示）；
+    - 学生点击未解锁环节时触发前置拦截，弹出警告 Toast 并展示友好的原因提示横幅（如测验得分不足、未提交报告等）；
+    - 监听 `QuizSubmitted` 与 `assignment.submitted` 事件，在学生交卷后自动重新求值并解锁；
+  - **文档与测试覆盖**：
+    - 更新 `docs/lesson/lesson-runtime.md`、`docs/sdk/plugin-sdk.md`、`docs/api/di-tokens.md` 与 `docs_plugin_guide.md`；
+    - 新增单元测试 `packages/core/lesson-engine/__tests__/stage-guard-pipeline.test.ts` 与集成测试 `src/features/lesson-engine/__tests__/stage-gating-integration.test.ts`，10 项测试用例全部通过。
+
 - **Service 层引入深化：公共资源库与白板领域服务解耦（轻路由、厚服务架构演进，E3）**：
   - **领域服务抽取（`server/services/resource-service.ts` & `whiteboard-service.ts`）**：
     - 建立领域服务 `ResourceService`，统管系统资源库、单 HTML 与 Folder 资源包多文件解析、磁盘缓存自愈（`storage/courseware/`）与目录逃逸防御、以及 AI 自动评测代码注入（派生 `[自动提交版]` 变体）；

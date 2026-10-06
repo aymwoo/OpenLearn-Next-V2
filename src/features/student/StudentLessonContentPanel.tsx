@@ -1,7 +1,9 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
-import { Activity, BookOpen, Minimize2, Maximize2 } from 'lucide-react';
+import { Activity, BookOpen, Minimize2, Maximize2, Lock, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { useLessonEngineStore } from '../lesson-engine/lessonEngineStore.js';
+import { frontendEventBus } from '../../services/event-bus.js';
 
 export interface StudentLessonContentPanelProps {
   students: StudentType[];
@@ -20,6 +22,7 @@ export interface StudentLessonContentPanelProps {
   selectedLesson: string | null;
   lessons: Lesson[];
   isStudentLessonContentCollapsed?: boolean;
+  addToast?: (title: string, description: string, type: string) => void;
 }
 
 export function StudentLessonContentPanel(props: StudentLessonContentPanelProps) {
@@ -39,7 +42,83 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
     selectedLesson,
     lessons,
     isStudentLessonContentCollapsed,
+    addToast,
   } = props;
+
+  const checkStageAccess = useLessonEngineStore((s) => s.checkStageAccess);
+
+  // 记录未满足门禁条件被拦截的提示状态
+  const [blockedNotice, setBlockedNotice] = useState<{
+    segmentId: string;
+    segmentTitle: string;
+    reason: string;
+  } | null>(null);
+
+  // 记录各环节访问权限缓存状态 (segmentId -> { allowed: boolean; reason?: string })
+  const [accessStateMap, setAccessStateMap] = useState<Record<string, { allowed: boolean; reason?: string }>>({});
+
+  // 批量异步预检查各环节门禁状态
+  const refreshStageAccess = useCallback(async () => {
+    if (!timelineSegments || timelineSegments.length === 0) return;
+    const currentStudent = activeStudentId || undefined;
+
+    const updates: Record<string, { allowed: boolean; reason?: string }> = {};
+    for (const seg of timelineSegments) {
+      if (!seg.id) continue;
+      const res = await checkStageAccess(seg.id, currentStudent);
+      updates[seg.id] = { allowed: res.allowed, reason: res.reason };
+    }
+    setAccessStateMap(updates);
+  }, [timelineSegments, activeStudentId, checkStageAccess]);
+
+  useEffect(() => {
+    refreshStageAccess();
+  }, [refreshStageAccess]);
+
+  // 监听测验提交或作业提交事件，自动重新评估门禁状态
+  useEffect(() => {
+    const handleRevalidate = () => {
+      refreshStageAccess();
+    };
+
+    const unsubQuiz = frontendEventBus.subscribe('QuizSubmitted', handleRevalidate);
+    const unsubAssignment = frontendEventBus.subscribe('assignment.submitted', handleRevalidate);
+
+    return () => {
+      unsubQuiz();
+      unsubAssignment();
+    };
+  }, [refreshStageAccess]);
+
+  // 点击环节处理（带门禁拦截）
+  const handleSegmentClick = async (seg: any) => {
+    if (activeSegmentId === seg.id) return;
+
+    const currentStudent = activeStudentId || undefined;
+    const res = await checkStageAccess(seg.id, currentStudent);
+
+    if (!res.allowed) {
+      const reasonMsg = res.reason || (lang === 'zh' ? '尚未满足进入该环节的前置条件' : 'Prerequisite conditions not met');
+      setBlockedNotice({
+        segmentId: seg.id,
+        segmentTitle: seg.title || seg.id,
+        reason: reasonMsg,
+      });
+
+      if (addToast) {
+        addToast(
+          lang === 'zh' ? '暂未解锁该教学环节' : 'Stage Locked',
+          reasonMsg,
+          'warning',
+        );
+      }
+      return;
+    }
+
+    // 达成条件，清除拦截提示并正常跳转
+    setBlockedNotice(null);
+    setActiveSegmentId(seg.id);
+  };
   return (
     <div
       className={`${
@@ -88,16 +167,51 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
                 {lang === 'zh' ? '教学环节 (点击切换)' : 'Timeline Segments'}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {timelineSegments.map((seg, idx) => (
-                  <button
-                    key={seg.id || idx}
-                    onClick={() => setActiveSegmentId(seg.id)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer shadow-3xs ${seg.color} ${activeSegmentId === seg.id ? 'ring-2 ring-indigo-500 scale-[1.02] shadow-sm border-indigo-400 font-bold' : 'opacity-85 hover:opacity-100'}`}
-                  >
-                    {seg.title} ({seg.duration})
-                  </button>
-                ))}
+                {timelineSegments.map((seg, idx) => {
+                  const access = accessStateMap[seg.id];
+                  const isLocked = access?.allowed === false;
+                  const isActive = activeSegmentId === seg.id;
+
+                  return (
+                    <button
+                      key={seg.id || idx}
+                      onClick={() => handleSegmentClick(seg)}
+                      title={isLocked ? `未解锁: ${access.reason || '未满足前置条件'}` : undefined}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer shadow-3xs flex items-center gap-1.5 ${
+                        seg.color
+                      } ${
+                        isActive
+                          ? 'ring-2 ring-indigo-500 scale-[1.02] shadow-sm border-indigo-400 font-bold'
+                          : isLocked
+                            ? 'opacity-70 hover:opacity-90 border-dashed border-amber-300'
+                            : 'opacity-85 hover:opacity-100'
+                      }`}
+                    >
+                      {isLocked && <Lock size={11} className="text-amber-600 shrink-0" />}
+                      <span>
+                        {seg.title} ({seg.duration})
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+
+              {blockedNotice && (
+                <div className="mt-2.5 p-2.5 bg-amber-50/90 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <ShieldAlert size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 leading-snug">
+                    <span className="font-bold">【{blockedNotice.segmentTitle}】暂未解锁：</span>
+                    <span>{blockedNotice.reason}</span>
+                  </div>
+                  <button
+                    onClick={() => setBlockedNotice(null)}
+                    className="text-amber-500 hover:text-amber-700 font-bold text-xs cursor-pointer ml-1 px-1 rounded hover:bg-amber-100"
+                    title={lang === 'zh' ? '关闭' : 'Dismiss'}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

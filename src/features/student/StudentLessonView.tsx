@@ -97,6 +97,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           selectedLesson={selectedLesson}
           lessons={lessons}
           isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+          addToast={addToast}
         />
         <StudentLessonInteractionPanel
           isStudentLocked={isStudentLocked}

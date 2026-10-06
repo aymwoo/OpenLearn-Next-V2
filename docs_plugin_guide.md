@@ -258,6 +258,7 @@ export declare const IProcessServiceToken: Token<IProcessService>;
 export declare const IStorageServiceToken: Token<IStorageService>;
 export declare const IAIServiceToken: Token<IAIService>;
 export declare const IDatabaseToken: Token<unknown>; // 解析出 raw better-sqlite3 Database 对象
+export declare const IStageGuardServiceToken: Token<IStageGuardService>; // 教学环节流转门禁服务
 ```
 
 ---
@@ -387,6 +388,40 @@ await pm.registerHandler('my_heavy_task', async (processId, payload, state, log,
 // 2. 派发生命周期进程
 const pid = await pm.spawn('数据转换进程', 'my_heavy_task', { file: '/path/to/data' });
 ```
+
+### 5.6 StageGuardService (教学环节流转门禁服务)
+
+第三方插件可通过 `IStageGuardServiceToken` 注册环节准入守卫。当学生自主点击切换环节时，系统将自动执行所有注册的门禁守卫：
+
+```typescript
+import { IStageGuardServiceToken } from '@openlearn/plugin-sdk';
+import type { StageGuard } from '@openlearn/plugin-sdk';
+
+const stageGuardService = await ctx.resolve(IStageGuardServiceToken);
+
+// 注册随堂测验及格门禁
+const unregister = stageGuardService.registerGuard({
+  id: 'my-quiz-gate',
+  name: '随堂测验及格门禁',
+  priority: 50,
+  async canEnterStage({ studentId, lessonId, targetStageId }) {
+    // 业务检查逻辑
+    const passed = await checkStudentQuizPassed(studentId, lessonId);
+    if (!passed) {
+      return {
+        allowed: false,
+        reason: '需要先完成随堂测验并及格方可解锁此环节',
+      };
+    }
+    return { allowed: true };
+  },
+});
+```
+
+> **系统保护机制**：
+> 1. **Fail-Open 容错**：守卫执行超时（1500ms）或抛出异常时自动降级放行并告警，杜绝第三方插件故障卡死课堂。
+> 2. **AND 全部满足**：多个插件配置门禁时，必须全部满足方可放行；未满足原因自动以分号汇总展示。
+> 3. **教师特权**：教师端广播跳转拥有最高控制权，可穿透门禁保证教学节奏。
 
 ---
 

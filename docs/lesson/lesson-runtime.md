@@ -145,3 +145,27 @@ stateDiagram-v2
 
 > 完整状态语义、监听器与异常字段见 [课程生命周期状态机](lesson-lifecycle)。
 
+---
+
+## 教学环节流转门禁管道 (Stage Guard Pipeline)
+
+为了支持**自主闯关学习（Mastery Learning）**与个性化学习节奏，`LessonRuntime` 内置了 `stageGuard`（`StageGuardPipeline`）责任链门禁管道，支持第三方插件向环节流转注册前置进入条件（如测验达标、文件提交等）：
+
+```typescript
+export interface StageGuard {
+  readonly id: string;
+  readonly name: string;
+  readonly priority?: number; // 优先级，升序执行，默认 100
+  canEnterStage(ctx: StageGuardContext): Promise<StageGuardResult>;
+}
+```
+
+### 核心运行规则
+
+1. **降级放行 (Fail-Open)**：
+   - 当某个第三方插件的守卫执行超时（默认 1500ms）或抛出未捕获异常时，系统记录告警日志并**自动放行**，防止第三方插件故障造成学生端卡死。
+2. **全部满足组合规则 (AND Conjunction)**：
+   - 环节切换时依次执行所有适用的守卫；所有守卫均返回 `allowed: true` 时才允许进入。
+   - 若有守卫拒绝，系统会自动将所有未满足的原因通过 `；` 聚合（例如 `“随堂测验需达到80分；尚未提交实验报告”`），并在学生端友好展示。
+3. **教师特权穿透 (Teacher Override)**：
+   - 教师端发起全班统一跳转（`TeacherJump` / `StudentSynced`）拥有最高优先权，可穿透学生个人门禁限制，确保课堂集中秩序可控。

@@ -812,6 +812,34 @@ type ClassroomLifecycleStage = 'PRE_CLASS_READY' | 'IN_CLASS_TEACHING' | 'WRAP_U
 interface StageGuardResult {
   allowed: boolean;
   reason?: string;
+  guardIds?: string[];
+  progress?: {
+    current: number;
+    target: number;
+    unit?: string;
+  };
+}
+
+interface StageGuardContext {
+  studentId: string;
+  lessonId: string;
+  currentStageId: string | null;
+  targetStageId: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface StageGuard {
+  readonly id: string;
+  readonly name: string;
+  readonly priority?: number;
+  canEnterStage(ctx: StageGuardContext): Promise<StageGuardResult>;
+}
+
+interface IStageGuardService {
+  registerGuard(guard: StageGuard): () => void;
+  unregisterGuard(guardId: string): void;
+  listGuards(): StageGuard[];
+  checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
 }
 
 type ClassroomStageGuard = (
@@ -916,6 +944,7 @@ declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScr
 declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
+declare const IStageGuardServiceToken: Token<IStageGuardService>;
 
 // ── Frontend Whiteboard Registries (V3.5) ────────────────────────────────
 // Type-only mirrors of the host runtime registries for third-party plugins.
@@ -1056,6 +1085,9 @@ export type {
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
+  StageGuardContext,
+  StageGuard,
+  IStageGuardService,
   IntegrationHealthStatus,
   IntegrationDescriptor,
   ActivityCategory,
@@ -1122,6 +1154,7 @@ export {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
+  IStageGuardServiceToken,
   IActivityRegistryToken,
   IAuthSessionBridgeToken,
 };

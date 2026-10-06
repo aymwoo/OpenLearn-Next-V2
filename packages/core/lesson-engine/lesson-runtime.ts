@@ -14,9 +14,11 @@ import { LessonAIInterface } from './ai-interface.js';
 import { EventBusPort, PlatformEvent } from '../event-bus/index.js';
 import { LessonStateMachine, InvalidLessonStateTransitionError } from './state-machine.js';
 import { LessonStatus } from './types.js';
+import { StageGuardPipeline, defaultStageGuardPipeline } from './stage-guard-pipeline.js';
 
 export interface LessonEngineOptions {
   eventBus?: EventBusPort;
+  stageGuard?: StageGuardPipeline;
 }
 
 export class LessonRuntime {
@@ -28,6 +30,7 @@ export class LessonRuntime {
   public readonly replayer: LessonReplayer;
   public readonly aiInterface: LessonAIInterface;
   public readonly stateMachine: LessonStateMachine;
+  public readonly stageGuard: StageGuardPipeline;
 
   private currentLesson: Lesson | null = null;
   private activeFlow: Flow | null = null;
@@ -38,6 +41,7 @@ export class LessonRuntime {
 
   constructor(options?: LessonEngineOptions) {
     this.eventBus = options?.eventBus;
+    this.stageGuard = options?.stageGuard ?? defaultStageGuardPipeline;
     this.activityRegistry = new ActivityRegistry();
     this.timeline = new TeachingTimeline();
     this.stageRuntime = new StageRuntime({ eventBus: this.eventBus });
