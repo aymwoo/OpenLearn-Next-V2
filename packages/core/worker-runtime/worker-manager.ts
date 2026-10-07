@@ -31,6 +31,7 @@
 import { Worker } from 'node:worker_threads';
 import { WorkerLivenessMonitor } from './liveness-monitor.js';
 import type { IWorkerIsolate } from './worker-isolate.js';
+import { spawnPluginChild } from './child-spawn.js';
 import { ThreadIsolate } from './thread-isolate.js';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
@@ -211,7 +212,6 @@ interface WorkerInstance {
 export class WorkerRegistry {
   /** pluginId → WorkerInstance */
   private workers = new Map<string, WorkerInstance>();
-
 
   /** pluginId → { count: number, lastTime: number } */
   private crashStats = new Map<string, { count: number; lastTime: number }>();
@@ -556,9 +556,49 @@ function generateBootstrapCode(): string {
   const rootPath = process.cwd().replace(/\\/g, '/');
   const requirePath = `${rootPath}/package.json`;
   return `
-import { parentPort, workerData } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 const requireFn = createRequire('${requirePath}');
+
+// ── 运行时 shim（P1 阶段 2）：同一份 bootstrap 同时支持 worker_threads 与子进程 ──
+//
+// 下面是本次唯一需要改的「通道接入」代码。实测过：worker_threads 与 child_process
+// 在 serialization:'advanced' 下语义完全一致（ipc-serialization-parity.test.ts 守着，
+// 13 个探针 0 个不一致），因此**不需要**自定义序列化层。
+//
+// 判别方式刻意用「worker_threads 能不能拿到 parentPort」而不是 isMainThread：
+// 主线程也拿得到 isMainThread（= true），判据会反过来。
+//
+// ⚠️ 这段代码在模板字符串里，写注释时**不能出现反引号** —— 会提前终止模板。
+const __wt = (() => {
+  try {
+    const wt = requireFn('node:worker_threads');
+    return wt.parentPort ? wt : null;
+  } catch {
+    return null;
+  }
+})();
+
+const parentPort = __wt
+  ? __wt.parentPort
+  : {
+      // 子进程：child_process 的 ipc 通道。没有 parentPort，用 process.send。
+      // 保持 postMessage / on / removeListener 三个方法同名，使下面**所有**调用点无需改动。
+      postMessage: (m) => {
+        if (process.send) process.send(m);
+      },
+      on: (ev, h) => process.on(ev, h),
+      // ⚠️ 这一项是补上去的：初版 shim 只提供 postMessage / on，漏了 removeListener，
+      // 而 bootstrap 的停用路径（handleDeactivate）会调用它。缺失时的表现是
+      // **unhandledRejection**，被 bootstrap 自己的处理器吞掉 —— 于是测试照常全绿，
+      // 只有 stderr 里一行警告。补 shim 时必须把 parentPort 的**全部**用到的方法对齐。
+      removeListener: (ev, h) => process.removeListener(ev, h),
+    };
+
+// workerData 在 worker_threads 里是结构化克隆过来的对象；在子进程里只能走环境变量
+// （跨进程只有字符串通道）。故用 JSON.parse 归一，两条路径拿到同一形状。
+const workerData = __wt
+  ? __wt.workerData
+  : JSON.parse(process.env.__PLUGIN_WORKER_DATA || '{}');
 
 /* __PROCESS_MASKING_START__ */
 // ── I-4：遮蔽 process（D-1 决策：平台要做第三方开发者生态）─────────────────────
@@ -1433,6 +1473,21 @@ export class WorkerManager {
    * 判据是 ping/pong 而非「多久没说话」：后者会误杀健康但空闲的插件。
    * 详见 `liveness-monitor.ts` 顶部注释（含两条被实测否决的替代判据）。
    */
+  /**
+   * 隔离原语类型（P1 阶段 2）。
+   *
+   * 默认 `'thread'` —— 与本项改造前**完全一致**。子进程模式是显式开启的，
+   * 因为它是行为变更（进程级隔离、启动更慢、stdout/stderr 走管道、env 白名单），
+   * 在拿到两种原语的全量行为对比数据之前不应改默认值。
+   *
+   * 可经 `OPENLEARN_WORKER_ISOLATE=process` 全局切换，便于灰度与对比。
+   */
+  private readonly isolateKind: 'thread' | 'process' =
+    process.env.OPENLEARN_WORKER_ISOLATE === 'process' ? 'process' : 'thread';
+
+  /** SIGKILL 之前的 SIGTERM 宽限期（ms）。0 = 立即强杀（保守默认，见 ChildProcessIsolate 注释） */
+  private readonly childTermGraceMs: number = Number(process.env.OPENLEARN_WORKER_TERM_GRACE_MS ?? 0) || 0;
+
   private liveness = new WorkerLivenessMonitor({
     listRunningPluginIds: () => this.registry.list(),
     sendPing: (pluginId, seq) => {
@@ -1563,68 +1618,111 @@ export class WorkerManager {
     // 动态按 Manifest 计算当前插件被授权的 Tokens（能力沙箱隔离）
     const allowedTokens = computeAllowedWorkerTokens(manifest, serviceTokens);
 
-    // 4. 创建 Worker
-    let worker: Worker;
+    // 4. 创建隔离原语
+    //
+    // P1 阶段 2：worker_threads（默认）与 child_process（可选）两条路径并存。
+    // 默认值不变 —— 子进程模式是**显式开启**的，因为它是行为变更（进程级隔离、
+    // 启动更慢、stdout/stderr 走管道），不应在未验证对比数据前切换默认值。
+    //
+    // 选择哪种原语由 `isolateKind` 决定，可经 `OPENLEARN_WORKER_ISOLATE=process` 全局切换。
+    const resolvedPluginDir = pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')) ? pluginDir : undefined;
+    const workerData = {
+      pluginId,
+      manifestId: manifest.id,
+      serviceTokens: allowedTokens,
+      pluginDir: resolvedPluginDir,
+    };
+
+    let worker: Worker | undefined;
+    let childProcess: import('node:child_process').ChildProcess | undefined;
+    let transport: IWorkerTransport;
+    let isolate: IWorkerIsolate;
+    let childLogger: { info: (m: string) => void; error: (m: string) => void } | undefined;
+
     try {
-      const resolvedPluginDir = pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')) ? pluginDir : undefined;
-      worker = new Worker(new URL(bootstrapDataUrl), {
-        // Pass both the DB id (`pluginId` — used as the actor/registry key)
-        // and `manifestId` (used as the namespace prefix for command types).
-        // The two diverge for ZIP-uploaded plugins whose DB id is a generated
-        // UUID while manifest.id is the plugin author's chosen name.
-        workerData: { pluginId, manifestId: manifest.id, serviceTokens: allowedTokens, pluginDir: resolvedPluginDir },
-        eval: false,
-        stdout: true,
-        stderr: true,
-        /**
-         * 用一段**实测结论**替换掉此前错误的断言（2026-10-07 收尾复核更正）。
-         *
-         * 此前这里写的是「worker_threads 是协作式的，terminate() 对同步死循环无效，
-         * 同步死循环无法被强制终止」—— **该断言是错的**，来源是我在 I-5 时的一次探针
-         * 缺陷：那次探针打印的「6s 未终止」测的是 `WorkerOptions.timeout` 选项有没有触发，
-         * 之后才调 terminate()，**从未单独验证 terminate 本身**。
-         *
-         * 复测（3 轮 × 2 种载荷，同一份脚本）：
-         *
-         *   模块体 while(true)         exit code=1@2ms  exit code=1@2ms  exit code=1@3ms
-         *   定时器内 while(true)        exit code=1@2ms  exit code=1@3ms  exit code=1@2ms
-         *   死循环期间主线程 300ms 内完成 29 次 tick → 主线程未被阻塞
-         *
-         * 结论：**terminate() 能可靠终止同步死循环的 worker**（worker 有独立 isolate，
-         * V8 侧销毁 isolate 不需要 JS 栈配合；这与 `Atomics.wait` 的协作式阻塞不同）。
-         *
-         * 那 CPU DoS 的真实缺口是什么？不是「杀不掉」，而是**没有人去杀**：
-         *   · 没有 CPU 时间配额 —— resourceLimits 只管堆
-         *   · watchdog 监听 `exit` 事件，而死循环**不产生 exit**，故永不触发
-         *   ⇒ 一个 `while(true)` 的插件会占住一个槽位直到进程结束，打满 32 个即 DoS
-         *
-         * 修法是**宿主侧的 CPU 看门狗**（超时未收到心跳即调 terminate()），
-         * 属低成本改动，不需要换隔离原语。真正的进程隔离另见 L-1 立项提案，
-         * 其理由是**纵深防御与爆炸半径**，不是「当前已可 RCE」。
-         */
-        // I-5（D-1 决策）：此处刻意不设 timeout —— 该选项在 @types/node@24 的
-        // WorkerOptions 中**不存在**，实测传入亦完全无效。CPU 侧的兜底靠宿主
-        // 看门狗调 terminate()，见上方说明。
-        resourceLimits: {
-          maxOldGenerationSizeMb: 128,
-          maxYoungGenerationSizeMb: 32,
-        },
-      });
-      const pluginLogger = createLogger(`Plugin:${manifest.id || pluginId}`);
-      worker.stdout.on('data', (chunk) => {
-        pluginLogger.info(chunk.toString().trim());
-      });
-      worker.stderr.on('data', (chunk) => {
-        pluginLogger.error(chunk.toString().trim());
-      });
+      if (this.isolateKind === 'process') {
+        const spawned = spawnPluginChild({
+          bootstrapCode,
+          data: workerData,
+          termGraceMs: this.childTermGraceMs,
+        });
+        childProcess = spawned.child;
+        transport = spawned.transport;
+        isolate = spawned.isolate;
+
+        const tag = `Plugin:${manifest.id || pluginId}`;
+        childLogger = {
+          info: (m: string) => console.log(`[${tag}] ${m}`),
+          error: (m: string) => console.error(`[${tag}] ${m}`),
+        };
+        childProcess.stdout?.on('data', (chunk: Buffer) => childLogger!.info(chunk.toString().trim()));
+        childProcess.stderr?.on('data', (chunk: Buffer) => childLogger!.error(chunk.toString().trim()));
+      } else {
+        worker = new Worker(new URL(bootstrapDataUrl), {
+          // Pass both the DB id (`pluginId` — used as the actor/registry key)
+          // and `manifestId` (used as the namespace prefix for command types).
+          // The two diverge for ZIP-uploaded plugins whose DB id is a generated
+          // UUID while manifest.id is the plugin author's chosen name.
+          workerData,
+          eval: false,
+          stdout: true,
+          stderr: true,
+          /**
+           * 用一段**实测结论**替换掉此前错误的断言（2026-10-07 收尾复核更正）。
+           *
+           * 此前这里写的是「worker_threads 是协作式的，terminate() 对同步死循环无效，
+           * 同步死循环无法被强制终止」—— **该断言是错的**，来源是我在 I-5 时的一次探针
+           * 缺陷：那次探针打印的「6s 未终止」测的是 `WorkerOptions.timeout` 选项有没有触发，
+           * 之后才调 terminate()，**从未单独验证 terminate 本身**。
+           *
+           * 复测（3 轮 × 2 种载荷，同一份脚本）：
+           *
+           *   模块体 while(true)         exit code=1@2ms  exit code=1@2ms  exit code=1@3ms
+           *   定时器内 while(true)        exit code=1@2ms  exit code=1@3ms  exit code=1@2ms
+           *   死循环期间主线程 300ms 内完成 29 次 tick → 主线程未被阻塞
+           *
+           * 结论：**terminate() 能可靠终止同步死循环的 worker**（worker 有独立 isolate，
+           * V8 侧销毁 isolate 不需要 JS 栈配合；这与 `Atomics.wait` 的协作式阻塞不同）。
+           *
+           * 那 CPU DoS 的真实缺口是什么？不是「杀不掉」，而是**没有人去杀**：
+           *   · 没有 CPU 时间配额 —— resourceLimits 只管堆
+           *   · watchdog 监听 `exit` 事件，而死循环**不产生 exit**，故永不触发
+           *   ⇒ 一个 `while(true)` 的插件会占住一个槽位直到进程结束，打满 32 个即 DoS
+           *
+           * 修法是**宿主侧的 CPU 看门狗**（超时未收到心跳即调 terminate()），
+           * 属低成本改动，不需要换隔离原语。真正的进程隔离另见 L-1 立项提案，
+           * 其理由是**纵深防御与爆炸半径**，不是「当前已可 RCE」。
+           */
+          // I-5（D-1 决策）：此处刻意不设 timeout —— 该选项在 @types/node@24 的
+          // WorkerOptions 中**不存在**，实测传入亦完全无效。CPU 侧的兜底靠宿主
+          // 看门狗调 terminate()，见上方说明。
+          resourceLimits: {
+            maxOldGenerationSizeMb: 128,
+            maxYoungGenerationSizeMb: 32,
+          },
+        });
+        const pluginLogger = createLogger(`Plugin:${manifest.id || pluginId}`);
+        worker.stdout.on('data', (chunk) => {
+          pluginLogger.info(chunk.toString().trim());
+        });
+        worker.stderr.on('data', (chunk) => {
+          pluginLogger.error(chunk.toString().trim());
+        });
+        transport = new NodeWorkerTransport(worker);
+        isolate = new ThreadIsolate(worker);
+      }
     } catch (err) {
+      // 子进程若已起来但后续失败，必须把它杀掉 —— 否则留下一个孤儿进程，
+      // 它会一直占着一个 CPU 槽位直到进程结束（正是 L-1 要防的形态）。
+      try {
+        childProcess?.kill('SIGKILL');
+      } catch {
+        /* 已经退出 */
+      }
       throw new WorkerActivateError(pluginId, 'Worker constructor failed', {
         cause: err instanceof Error ? err : undefined,
       });
     }
-
-    // 5. 创建 Transport
-    const transport = new NodeWorkerTransport(worker);
 
     // 6. 创建 ServiceHost（带可选的 EventBus 用于事件转发与 Token 授权白名单）
     const actorId = `plugin:${manifest.id}`;
@@ -1650,9 +1748,9 @@ export class WorkerManager {
     const createdAt = Date.now();
     this.registry.register(pluginId, {
       pluginId,
-      // P1 阶段 1：把 worker_threads 的 Worker 包成 IWorkerIsolate，
-      // 注册表从此只看接口，不再知道 threadId / on('exit') 这些专有形状。
-      isolate: new ThreadIsolate(worker),
+      // P1 阶段 1/2：把隔离原语包成 IWorkerIsolate，注册表只看接口，
+      // 不再知道 threadId / on('exit') 这类专有形状 —— 两种原语在此归一。
+      isolate,
       createdAt,
       status: 'activating',
       transport,
@@ -1727,12 +1825,15 @@ export class WorkerManager {
       }
     };
 
-    worker.once('exit', onWorkerExit);
-    worker.once('error', onWorkerError);
+    // P1 阶段 2：走 isolate 而非 worker —— 两种原语在此归一。
+    // 原本用 once/off 精确解绑；IWorkerIsolate 不提供 off，因为两种原语的
+    // exit/error 都**至多触发一次**，且下面的 activationReject/Resolve 置 null
+    // 已保证重复触发无害（不会二次 reject）。
+    isolate.onExit(onWorkerExit);
+    isolate.onError(onWorkerError);
 
     const cleanupActivationWorkerListeners = () => {
-      worker.off('exit', onWorkerExit);
-      worker.off('error', onWorkerError);
+      /* 见上：activate/terminate 路径靠置空 activationResolve/Reject 保证幂等 */
     };
 
     transport.onMessage((msg: unknown) => {
