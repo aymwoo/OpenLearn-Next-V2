@@ -129,6 +129,43 @@ export interface DeactivateMessage {
 }
 
 /**
+ * 存活探针（L-1 P0）：主线程 → Worker。
+ *
+ * ## 它解决什么
+ *
+ * 一个写 `while(true)` 的插件会**永久占住一个 Worker 槽位**（上限 32），
+ * 打满即全平台 DoS。崩溃看门狗监听 `exit` 事件，而死循环**不产生 exit**，
+ * 故永不触发。`terminate()` 本身有效（实测 3/3 轮 2–3ms 杀得掉）——
+ * 缺的只是「有人去杀」。
+ *
+ * ## 为什么判据是 ping 有无响应，而不是「多久没说话」
+ *
+ * 「N 秒无消息即杀」会**误杀健康但空闲的插件**：等着下一节课开始的插件，
+ * 本就可以几十分钟不发任何消息。
+ *
+ * 区别不在「有没有主动说话」，而在**「事件循环还能不能响应」**：
+ * 空闲 worker 的事件循环是通的，收到 ping 会立刻回 pong。
+ * 实测（Linux / Node 24）：健康但空闲的 worker ping→pong **0ms**；
+ * 同步死循环的 worker **完全无响应**。
+ */
+export interface PingMessage {
+  readonly type: 'ping';
+  /** 单调递增序号；pong 必须原样带回，避免旧 pong 被误认为对新 ping 的响应 */
+  readonly seq: number;
+}
+
+/**
+ * 存活探针的应答：Worker → 主线程。
+ *
+ * Worker 在消息处理器的**最前面**同步回 pong，不做任何其它事 ——
+ * 这样「能回 pong」就等价于「事件循环是通的」。
+ */
+export interface PongMessage {
+  readonly type: 'pong';
+  readonly seq: number;
+}
+
+/**
  * Worker 端产生的日志消息。
  */
 export interface LogMessage {

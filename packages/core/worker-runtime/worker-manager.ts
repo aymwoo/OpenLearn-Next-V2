@@ -29,6 +29,7 @@
  */
 
 import { Worker } from 'node:worker_threads';
+import { WorkerLivenessMonitor } from './liveness-monitor.js';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
 import path from 'node:path';
@@ -888,6 +889,20 @@ var pluginHttpRouter = createPluginHttpRouter();
 var activeWorkerStreams = new Map();
 
 parentPort.on('message', async function(msg) {
+  // 0. 存活探针（L-1 P0）—— 必须放在所有分支之前。
+  //
+  // 为什么在最前面：探针的判据是「事件循环还能不能响应」。
+  // 一旦插件进入同步死循环，本函数根本不会被再次调用，任何放在后面的处理都无意义；
+  // 而放在最前面能保证只要事件循环还转，pong 一定立刻返回。
+  //
+  // 为什么需要它：一个写 while(true) 的插件会永久占住一个 Worker 槽位（上限 32），
+  // 打满即全平台 DoS。崩溃看门狗监听 exit 事件，而死循环**不产生 exit**，故永不触发。
+  // terminate() 本身是有效的（实测 3/3 轮 2-3ms 杀得掉），缺的只是「有人去杀」。
+  if (msg && msg.type === 'ping') {
+    parentPort.postMessage({ type: 'pong', seq: msg.seq });
+    return;
+  }
+
   // 1. 转发的平台事件分发
   if (msg && msg.type === 'event' && eventBusProxy) {
     eventBusProxy.handleEvent(msg.subId, msg.event);
@@ -1402,10 +1417,55 @@ export class WorkerManager {
   private capabilityGuard: CapabilityGuard;
   private db: Database;
 
+  /**
+   * 存活探活器（L-1 P0）。
+   *
+   * 治的是「卡死但没崩溃」的 worker：一个 `while(true)` 的插件永久占住一个槽位
+   * （上限 32），而崩溃看门狗监听 `exit` —— 死循环不产生 exit，故永不触发。
+   *
+   * 判据是 ping/pong 而非「多久没说话」：后者会误杀健康但空闲的插件。
+   * 详见 `liveness-monitor.ts` 顶部注释（含两条被实测否决的替代判据）。
+   */
+  private liveness = new WorkerLivenessMonitor({
+    listRunningPluginIds: () => this.registry.list(),
+    sendPing: (pluginId, seq) => {
+      const inst = this.registry.get(pluginId);
+      if (!inst) throw new Error(`no worker instance for ${pluginId}`);
+      inst.transport.postMessage({ type: 'ping', seq });
+    },
+    // 走既有 terminateWorker → registry.terminate → exit 处理器
+    // → scheduleWatchdogRestart（指数退避 + 熔断），不另建崩溃通道。
+    terminate: (pluginId, reason) => {
+      console.error(`[WorkerManager] [L-1 P0] ${reason} —— 终止 worker 并交由崩溃看门狗处理`);
+      void this.terminateWorker(pluginId);
+    },
+  });
+
+  /**
+   * 探活器只读访问器（L-1 P0）。
+   *
+   * 存在的理由与 `PluginHost.contributions` 同源：探活的判定逻辑本身是一个
+   * 值得断言的不变量（「空闲不被误杀」「卡死必被杀」「终止只发生一次」），
+   * 而它的三个触发点分散在 activate / onMessage / terminate 三处。
+   * 用 `as any` 绕 private 也能测，但那样测不到「这是有意的公开契约」。
+   */
+  get livenessMonitor(): WorkerLivenessMonitor {
+    return this.liveness;
+  }
+
   constructor(serviceRegistry: ServiceRegistry, capabilityGuard: CapabilityGuard, db: Database) {
     this.serviceRegistry = serviceRegistry;
     this.capabilityGuard = capabilityGuard;
     this.db = db;
+
+    // 启动探活定时器（L-1 P0）。
+    //
+    // 在构造期就启动（而不是等第一个 worker 激活成功）是为了让「运行时长」不成为
+    // 隐性依赖；而它 `unref()` 过，不会让宿主进程保持存活，也不是业务必需路径。
+    // 默认 30s 一轮、15s 宽限 ⇒ 卡死后最多 ~45s 被终止。
+    // 可用 `OPENLEARN_WORKER_LIVENESS=off` 关闭，或用
+    // `OPENLEARN_WORKER_LIVENESS_INTERVAL_MS` / `_GRACE_MS` 调整。
+    this.liveness.start();
 
     // Set up supervisor watchdog callbacks for auto-recovery
     this.registry.recreateWorkerCallback = async (
@@ -1668,6 +1728,16 @@ export class WorkerManager {
 
     transport.onMessage((msg: unknown) => {
       const typed = msg as { type?: string; stage?: string; message?: string };
+
+      // 任何入站消息都是存活证据（L-1 P0），不只认 pong：
+      // RPC 响应、事件、日志、HTTP 流分片都说明事件循环在转。
+      // 只认 pong 会误杀高频通信但 pong 排在队列后面的插件。
+      if (typed.type === 'pong') {
+        this.liveness.notePong(pluginId, (msg as { seq: number }).seq);
+      } else {
+        this.liveness.noteActivity(pluginId);
+      }
+
       if (typed.type === 'activated') {
         clearActivationTimer();
         cleanupActivationWorkerListeners();
@@ -1675,6 +1745,12 @@ export class WorkerManager {
         if (instance) {
           instance.status = 'running';
         }
+        // 激活成功后才开始探活（L-1 P0）
+        //
+        // 刻意**不在 worker 一创建时就跟**：激活阶段已有 `ACTIVATE_TIMEOUT_MS`
+        // 与 `activate-progress` 滑动续期在管，两套超时并行会对
+        // 「正在慢慢迁移数据 / 建表」的插件产生误杀。
+        this.liveness.startTracking(pluginId);
         if (activationResolve) {
           activationResolve();
           activationResolve = null;
@@ -1757,6 +1833,12 @@ export class WorkerManager {
    * @param pluginId - 插件标识符
    */
   async terminateWorker(pluginId: string): Promise<any> {
+    // 停止探活（L-1 P0）：必须与取消看门狗定时器同批做，
+    // 否则会给已终止的插件继续发 ping，而它已不在 registry.list() 里，下轮自然被跳过 ——
+    // 但 pendingPing / lastSeen 会一直留在 Map 里（内存泄漏），且重启后的新实例
+    // 会继承旧的时间戳而立刻被判卡死。
+    this.liveness.stopTracking(pluginId);
+
     // 即使 workers map 中已无该插件（如已崩溃并 cleanup），也必须取消待执行的重启定时器，
     // 否则会给已停用/已卸载的插件「复活」（审计 C-6）。
     this.registry.cancelWatchdog(pluginId);

@@ -84,6 +84,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     ① `Kernel.migratePluginsToFilesystem()` **绕过**注入的 `pluginsDir`，自己又算了一遍 `cwd/plugins` —— 宿主日志只有一行 `[Migration] Failed to migrate ...`，而产物已落在工作树。现改为读 `pluginHost.getPluginsDir()`（**读宿主真实值而非重新推导**，两个来源不可能分叉）；
     ② `vitest.setup.ts` 里 **env 赋值排在了 `ensureTestSchema()` 之后** —— 后者会构造 Kernel，而 Kernel 构造时就要读该变量 ⇒ **所有 server 测试**一直拿到的都是 undefined、静默回落到工作树。已前移赋值顺序。
 
+- **插件 Worker 存活探活（L-1 P0）—— 卡死但没崩溃的 worker 现在会被终止**：
+  - 治的是：一个写 `while(true)` 的插件**永久占住一个 Worker 槽位**（上限 32），打满即全平台 DoS。崩溃看门狗监听 `exit`，而死循环**不产生 exit**，故永不触发；`terminate()` 本身有效（实测 3/3 轮 2–3ms 杀得掉）—— 缺的只是「没有人去杀」。
+  - ⚠️ **L-1 提案原文的 P0 设计（「60s 无消息即 terminate」）被实测否决**：它会**误杀健康但空闲的插件** —— 等着下一节课开始的插件本就可以几十分钟不发任何消息。这是功能性回归，不是保守取舍，故不采用。
+  - 另有两条替代判据同样被实测否决并留档：① **worker 自报 `process.cpuUsage()`** —— 自旋的 worker **发不出心跳**（事件循环被堵死，`setInterval` 停摆），而同步死循环正是要治的形态；② **`/proc/self/task/<tid>/stat` 按线程采样** —— `worker.threadId` 是 Node 内部 id（2、3、4…）而 `/proc` 用 OS tid（70 万级），两者无映射。进程级 `process.cpuUsage()` 区分度虽强（实测死循环 81.9% / 空闲 0.1%），但含宿主自身开销且无法归因到具体插件。
+  - **最终设计 ping/pong 探活**：判据是「**事件循环还能不能响应**」而非「有没有主动说话」。实测真实 Worker：健康但空闲的 ping→pong **0ms**，同步死循环**完全无响应**。
+  - 实现要点：ping 分支放在 worker bootstrap 消息处理器的**最前面**（放后面无效 —— 卡死后该函数不会再被调用）；任何入站消息都算存活证据（只认 pong 会误杀高频通信插件）；复用既有 `terminateWorker → exit → 崩溃看门狗`（指数退避 + 熔断）链路；`startTracking` 在**激活成功后**调用，避免与激活超时并行误杀慢启动插件；终止动作由探活器**自己**执行，避免「检测接上了、终止忘了接」这种最难发现的接线错误。
+  - 默认参数下卡死 **45s 内**被终止（30s 探活间隔 + 15s 宽限）。`OPENLEARN_WORKER_LIVENESS=off` 可关闭。
+  - ⚠️ **仍未覆盖**：「吃 CPU 但让出事件循环」的插件（异步重活）能回 pong 故被判为健康 —— 这类形态让进程级 CPU 升高但平台仍可响应，比死循环轻一档，留给 P1 的进程级配额。
+
 - **测试环境下不再静默回退到 `cwd/plugins`（H-1 收尾）**：`resolvePluginsDirOverride()` 在 `VITEST` 下拿不到 `OPENLEARN_PLUGINS_DIR` 时**直接抛错**并给出两种修法，不再回落到工作树。
   代价是某个测试若确实漏了注入，会从「静默污染工作树」变成「测试红」—— 这是想要的失败方向，且比 `git status` 看不见的磁盘垃圾容易定位得多。新增源码顺序约束断言盯住 `vitest.setup.ts` 内的赋值顺序。
 
