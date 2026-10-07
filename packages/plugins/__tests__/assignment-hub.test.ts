@@ -23,6 +23,7 @@ import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
 
 import { parseMigrationSql, executeSqlStatements } from '../../../server/utils/migrate.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 /** 旧库形态：先建 004 之前的表，再用 005 迁移，验证迁移真的把旧结构改造成新结构 */
 const MIGRATION_005 = path.resolve(process.cwd(), 'migrations/005_assignment_hub.sql');
@@ -94,6 +95,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
@@ -104,6 +106,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     commandBus.execute({ id: `cmd-${type}-${Math.random()}`, type, actorId, payload, timestamp: Date.now() });
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('assignment-hub');
     db = new Database(':memory:');
     db.exec(LEGACY_SCHEMA);
     applyMigration005(db);
@@ -117,6 +120,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
     `);
@@ -160,7 +164,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
       published.push({ type: event.type, payload: event.payload });
     });
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
     const pluginId = AssignmentEvalPlugin.manifest.id;
     pluginHost.registerPreloadedPlugin(pluginId, AssignmentEvalPlugin);
     db.prepare(
@@ -178,6 +182,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

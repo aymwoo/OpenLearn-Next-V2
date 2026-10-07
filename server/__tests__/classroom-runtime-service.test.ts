@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
@@ -263,5 +263,108 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ lesson_id: 'les_A', answer: 'B', score: 0 });
     expect(rows[1]).toMatchObject({ lesson_id: 'les_B', answer: 'C', score: 0 });
+  });
+});
+
+/**
+ * D-3 决策：门禁失效策略（默认 fail-close）
+ *
+ * 改动前这段代码是：
+ *   try { const check = await guard(currentStage, toStage, {...}); ... }
+ *   catch (err) { console.error(...); }      // ← 仅记日志，继续下一个 guard
+ *
+ * 两个问题，第二个比第一个严重：
+ *   ① 守卫抛异常被静默吞掉 —— 门禁形同不存在；
+ *   ② **根本没有超时** —— 插件 guard 挂起会让 transitionStage 永久挂起。
+ *      该方法由 `routes/classroom.ts` 的 `POST /api/classroom/sessions/:id/stage`
+ *      调用（教师鉴权端点），一个挂起的插件守卫就能让环节流转接口不可用。
+ */
+describe('门禁失效策略（D-3）', () => {
+  // 用**真实内存库**而非 mock —— transitionStage 放行路径要写会话行
+  // （SELECT → UPDATE / INSERT → 再 SELECT），mock 撑不住这条链，会死在
+  // `session.started_at` 上而不是测到门禁语义。
+  let db: Database.Database;
+  const mkService = (policy?: 'fail-close' | 'fail-open') =>
+    new ClassroomRuntimeService(db, undefined, policy ? { guardPolicy: policy } : undefined);
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    db.prepare(
+      "INSERT INTO users (id, username, name, password_hash, role, created_at) VALUES ('t1', 'teacher1', 'Teacher One', 'hash', 'teacher', 1000)",
+    ).run();
+    db.prepare(
+      "INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES ('les_101', 'Interactive Physics', 't1', 1000, 1000)",
+    ).run();
+  });
+
+  afterEach(() => db.close());
+
+  it('守卫超时后不再永久挂起（默认 1500ms 可用 env 缩短）', async () => {
+    const svc = mkService();
+    svc.registerStageGuard('hang-plugin', async () => {
+      await new Promise(() => {
+        /* 永不 resolve —— 模拟插件守卫挂起 */
+      });
+      return true;
+    });
+
+    const started = Date.now();
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    const elapsed = Date.now() - started;
+
+    // 有超时兜底：请求一定会返回，不会挂死
+    expect(res.success).toBe(false);
+    expect(res.reason).toContain('超时');
+    expect(elapsed).toBeLessThan(15_000);
+  }, 20_000);
+
+  it('守卫抛异常时拒绝流转，而不是静默放行', async () => {
+    const svc = mkService();
+    svc.registerStageGuard('boom-plugin', async () => {
+      throw new Error('plugin exploded');
+    });
+
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(res.success).toBe(false);
+    expect(res.reason).toContain('boom-plugin');
+  });
+
+  it('显式传 fail-open 可恢复旧行为（向后兼容逃生口）', async () => {
+    const svc = mkService('fail-open');
+    svc.registerStageGuard('boom-plugin', async () => {
+      throw new Error('plugin exploded');
+    });
+
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(res.success, '显式 fail-open 时守卫崩了仍放行').toBe(true);
+  });
+
+  it('守卫正常返回 false 时仍然阻断（策略不影响正常判定）', async () => {
+    const svc = mkService();
+    svc.registerStageGuard('strict-plugin', async () => ({ allowed: false, reason: '还没交作业' }));
+
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(res.success).toBe(false);
+    expect(res.reason).toBe('还没交作业');
+  });
+
+  it('守卫正常返回 true 时放行', async () => {
+    const svc = mkService();
+    svc.registerStageGuard('ok-plugin', async () => true);
+
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(res.success).toBe(true);
+  });
+
+  it('一个守卫失败即拒绝，不因后续守卫通过而放行', async () => {
+    const svc = mkService();
+    svc.registerStageGuard('a-broken', async () => {
+      throw new Error('broken');
+    });
+    svc.registerStageGuard('b-allow', async () => true);
+
+    const res = await svc.transitionStage('les_1', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(res.success).toBe(false);
   });
 });

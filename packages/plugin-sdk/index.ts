@@ -22,7 +22,6 @@ export type {
   PluginContext,
   PluginDatabaseAPI,
   PluginInfo,
-  PluginState,
   Disposable,
   IPluginLogger,
   ContributionAccessor,
@@ -33,6 +32,10 @@ export type {
   PluginStreamHandler,
   IPluginHttpRouter,
 } from '../core/plugin-host/types.js';
+
+// `PluginState` 在源码里是 **enum**（运行时值），必须走 value 再导出，
+// 否则消费侧 `PluginState.ACTIVE` 报 TS1362。
+export { PluginState } from '../core/plugin-host/types.js';
 
 export { PluginHttpRouter } from '../core/plugin-host/http-router.js';
 
@@ -47,6 +50,13 @@ export type {
   IPluginDistributionManager,
   CapabilityMetadata,
   ExtensionItemMetadata,
+} from '../core/plugin-host/index.js';
+
+// 以下 8 个在源码里是 **class**（运行时值）。早期被误放进上面的 `export type` 块，
+// 于是消费侧写 `new PluginLifecycleManager(...)` / `PluginRuntimeComposition` 作为值时
+// 报 `TS1362: cannot be used as a value because it was exported using 'export type'`。
+// 由 generate-dts.mjs 的反向体检发现。
+export {
   PluginRuntimeAdapter,
   PluginRuntimeComposition,
   PluginContextAdapter,
@@ -139,18 +149,29 @@ export {
   ILearningAnalyticsServiceToken,
   IAICapabilityServiceToken,
   ICapabilityRuntimeServiceToken,
-  ICapabilityGovernanceServiceToken,
   IPlatformServiceRegistryToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
-  IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
-  IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
   ICoursewareRuntimeScriptRegistryToken,
   IStageGuardServiceToken,
 } from '../core/di/interfaces.js';
+
+// ── 已收回对外承诺的 Token（@deprecated，随 SDK 3.8.0 移出导出）────────────
+//
+// 审计项 M-10 / F-3：`kernel/index.ts:224-226` 把这三个注册进 ServiceRegistry，
+// 但**零生产 resolve** —— 全仓唯一的提及是本文件顶部的一段注释示例。
+// D-2/D-6 决策：标 `@deprecated` 并移出导出。
+//
+// 影响面已核实：`grep -rlE "IUnifiedExtensionRegistry|IPluginCapabilityGateway|
+// IPluginRuntimeComposition" v2_plugins/ assets/` 零命中，三个脚手架模板也都没用到。
+//
+// 内核侧引用不受影响（走 packages/core 相对路径）。若将来接入真实消费者，把它们
+// 加回上面的 value 导出块，并同步恢复 openlearn.d.ts 末尾导出块里的对应名字
+// （generate-dts.mjs 会自动补齐 export 漏洞）。
+//
+// export type { ICapabilityGovernanceServiceToken }  ← 同 F-2，见下方注释
 
 export type {
   PointsDimensionSpec,
@@ -175,7 +196,8 @@ export type {
   IPluginCapability,
 } from '../core/ai-capability/index.js';
 
-export type { CapabilityRegistry } from '../core/ai-capability/registry/capability-registry.js';
+// `CapabilityRegistry` 在源码里是 **class**（运行时值），见 generate-dts.mjs 反向体检。
+export { CapabilityRegistry } from '../core/ai-capability/registry/capability-registry.js';
 
 export type {
   CapabilityDescriptor,
@@ -188,19 +210,17 @@ export type {
   ICapabilityProviderHandler,
 } from '../core/capability/index.js';
 
-export type {
-  GovernanceSpecification,
-  CapabilityLifecycleStatus,
-  GovernanceCategory,
-  ApprovalTier,
-  VisibilityTier,
-  CapabilityHealthMetrics,
-  CapabilitySearchResult,
-} from '../core/capability-governance/index.js';
+// ── Capability Governance (@experimental，已移出 SDK 导出) ────────────────
+//
+// 审计项 M-9 / F-2：capability-governance 子系统（529 行）在内核启动时被实例化并
+// 注册进 DI，但**零生产 resolve**。D-2 决策：标 `@experimental` 并收回对外承诺。
+//
+// 这段导出在 SDK 3.8.0 中移除。外部插件若曾 import 这些类型会编译失败 —— 这是有意的：
+// 对外承诺一个零消费者的 API 比不承诺更糟。若将来接入真实调用路径并稳定，把
+// `export type { … }` 加回并去掉 index.ts 里的 @experimental 注释即可。
 
 export type {
   ServiceDescriptor,
-  ServiceScope,
   ServiceLifecycleState,
   ServiceInspectionInfo,
   IAIServiceContract,
@@ -211,6 +231,9 @@ export type {
   IPluginServiceContract,
   IRuntimeServiceContract,
 } from '../core/service-registry/index.js';
+
+// `ServiceScope` 在源码里是 **class**（运行时值），见 generate-dts.mjs 反向体检。
+export { ServiceScope } from '../core/service-registry/index.js';
 
 // ── Learning Analytics Engine ───────────────────────────────────────────
 
@@ -333,6 +356,10 @@ export type {
   ActivityProvider,
   ActivityContext,
   ActivityClassroomContext,
+  // `defineActivityProvider` / `BaseActivityProvider` 的签名组成部分 ——
+  // 插件要传 descriptor + 生命周期钩子就必须能 import 到这两个类型。
+  ActivityEventName,
+  BaseActivityProviderOptions,
 } from '../activity-ecosystem/index.js';
 
 export {

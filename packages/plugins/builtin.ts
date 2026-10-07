@@ -1729,6 +1729,11 @@ export const BuiltinPlugin = {
       commandType: saveScoreConfigCmdType,
       description: '保存互动课件的成绩归集配置',
       capabilityRequired: 'lesson:write',
+      // 不暴露给 AI Agent：本命令会改写成绩计算规则（满分 / 权重 / 多次尝试取哪次 /
+      // 自动录入门槛），属于教师必须显式确认的评分口径，不应由 agent 自主决策。
+      // 注意 `isHighRisk` 管不了这件事 —— 它只决定是否需要人工审批，
+      // 不影响该命令是否出现在 getAgentTools() 的 functionDeclarations 中。
+      exposeToAgent: false,
       inputSchema: {
         type: 'OBJECT',
         properties: {
@@ -1752,6 +1757,9 @@ export const BuiltinPlugin = {
         },
         required: ['coursewareId'],
       },
+      // 运行时由 packages/core/registry/index.ts 的 getAgentTools() 消费。
+      // 此处无需 cast：H-3b 修复后 `@openlearn/plugin-sdk` 已通过 workspace:* 链接到
+      // 本地 packages/plugin-sdk，其 openlearn.d.ts 已含 exposeToAgent 声明。
     });
 
     await commandBus.registerHandler(saveScoreConfigCmdType, {

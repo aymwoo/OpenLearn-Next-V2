@@ -103,18 +103,18 @@
 | **C-2** | C | 抽 per-plugin 互斥锁，合并 `inflightActivate`/`inflightDeactivate`（**H-2**）；`reloadPlugin` 纳入串行化 |
 | **C-3** | C | activate/deactivate 超时引入 `AbortSignal`；`ResourceTracker` 支持「已关闭 pluginId 的后续 track 立即 dispose」（**H-3**） |
 | **C-4** | C | `reloadPlugin` 失败分支改用快照精确清理（**C-3 僵尸插件**） |
-| **C-5** | C | mode 作为显式参数贯穿停用链路，不再从 DB 二次读（**C-4 线程泄漏**） |
+| **C-5** | C | ⚠️ **方案已更正**：`terminate()` 的 finally 已无条件回收线程，mode 传递不是泄漏源。改为在 update 路径 deactivation 前按 workers map **兜底 terminate**，覆盖「非 ACTIVE 态被跳过」的场景（**C-4**，与 C-2 同根） |
 | **C-6** | C | `terminate()` 取消 watchdog 重启定时器（**C-5 僵尸复活**） |
-| **D-1** | D | 把 `registerAIPersona` / `registerAIContextProvider` / `registerDimension` 纳入 `tracker.track`（**M-1**） |
-| **D-2** | D | `deactivatePlugin` 注销 contribution（**M-2**）；`UnifiedExtensionRegistry` 补 `unregister`（**M-3**） |
-| **D-3** | D | `deploy.staticRoute` 在停用时摘除（**M-4**） |
+| **D-1** | D | 把 `registerAIPersona` / `registerAIContextProvider` / `registerDimension` 纳入 `tracker.track`（**M-1**，影响已验证为真实） |
+| **D-2** | D | `deactivatePlugin` 注销 contribution（**M-2**）；`UnifiedExtensionRegistry` 补 `unregister`（**M-3**）。⚠️ **风险已重估**：前端 UI 走独立链路且已自行清理，本项**不改变任何 UI 行为**，仅清理服务端死数据 |
+| **D-3** | D | ⚠️ **方案已更正**：`setExpressApp` 挂载时**跳过 `status !== 'active'` 的插件**，而非运行时摘除路由（后者依赖脆弱的 `_router.stack` 手术，且重启后会被覆盖回去）（**M-4**） |
 
 **退出标准**：C-0 的 10 个测试场景全绿；`ls plugins/` 在跑完全量测试后**不增长**（`vitest.setup.ts` 加守卫断言）。
 
 **风险**：
-- C-2 的互斥锁会改变现有并发行为，可能暴露此前被「静默 return」掩盖的调用方。`deactivatePluginExclusive:1510` 目前的静默 return 是**已在生产依赖的行为**（M-2 的 UI 残留可能就靠它），改动后 UI 行为会变化，需与前端确认。
+- ~~C-2 的互斥锁会改变现有并发行为~~ **该顾虑已被 2026-10-07 复核推翻**：`deactivatePluginExclusive` 的「非 ACTIVE 静默 return」**不是**被依赖的行为，而是**掩盖卸载竞态的 bug** —— `togglePlugin` 在决策前已 await 两个 inflight，故正常路径不会走到它；真正的触发场景是「装完立刻卸载」时 deactivate 被跳过、在飞的 activate 随后仍注册 handler，形成**已删除插件的命令泄漏**。因此 C-2 的正确修法不是「让它抛错」（会让双击报错），而是**等在飞的 activate 结束后再停用**，让用户意图真正生效。
 - C-1 会暴露 DB 里已有的 DB/内存分歧（worker 熔断写 DB 不写内存），可能有一批插件在启动时状态翻转。需先跑一次全量 DB 状态巡检。
-- D-2 补 `unregister` 后，M-2/M-3 的 UI 残留会**立即消失**。这是修好了，但要确认没有 UI 依赖「插件停用后按钮还在」的脏逻辑。
+- ~~D-2 补 `unregister` 后 UI 残留会立即消失，需确认没有 UI 依赖它~~ **该顾虑同样被复核推翻**：前端扩展点由插件 `activate()` 自行注册、停用时由 `unregisterPluginResources()` 清理，与服务端 contributionRegistry 无关。补 `unregister` 不会改变任何 UI 行为。
 
 **依赖**：C-0 阻塞全部。Batch 1 的 A-1 与本批次无冲突。
 

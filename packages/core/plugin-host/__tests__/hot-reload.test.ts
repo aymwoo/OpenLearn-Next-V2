@@ -39,6 +39,8 @@ import type {
   IPointsLedgerService,
 } from '../../di/interfaces.js';
 
+import { createPluginsDir, cleanupPluginsDir } from './helpers/plugins-dir.js';
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function createTestDb(): Database.Database {
@@ -48,6 +50,7 @@ function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY, name TEXT, manifest TEXT, source_code TEXT,
       file_path TEXT, status TEXT, created_at INTEGER, updated_at INTEGER,
       loader_version TEXT, execution_mode TEXT DEFAULT 'inline',
+      version TEXT,
       zip_package BLOB
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
@@ -89,6 +92,7 @@ function createMockServices(): Record<string, unknown> {
     ai: { generateText: vi.fn().mockResolvedValue('AI response') } as IAIService,
     pointsDimension: {
       registerDimension: vi.fn(),
+      unregisterDimension: vi.fn().mockReturnValue(true),
       getDimension: vi.fn().mockReturnValue(undefined),
       listDimensions: vi.fn().mockReturnValue([]),
     } as IPointsDimensionRegistry,
@@ -190,20 +194,23 @@ describe('Hot Reload — E2E', () => {
   let sr: ServiceRegistry;
   let services: Record<string, unknown>;
   let host: PluginHost;
+  let pluginsDir: string;
   let loadMap: Map<string, PluginModule>;
   let loader: TestEsmLoader;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('hot-reload');
     db = createTestDb();
     sr = new ServiceRegistry();
     services = createMockServices();
     await registerMockServices(sr, services);
     loadMap = new Map();
     loader = new TestEsmLoader(loadMap);
-    host = new PluginHost(sr, loader, db);
+    host = new PluginHost(sr, loader, db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 
@@ -334,20 +341,23 @@ describe('Hot Reload — Middleware Interaction', () => {
   let db: Database.Database;
   let sr: ServiceRegistry;
   let host: PluginHost;
+  let pluginsDir: string;
   let loadMap: Map<string, PluginModule>;
   let loader: TestEsmLoader;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('hot-reload');
     db = createTestDb();
     sr = new ServiceRegistry();
     const services = createMockServices();
     await registerMockServices(sr, services);
     loadMap = new Map();
     loader = new TestEsmLoader(loadMap);
-    host = new PluginHost(sr, loader, db);
+    host = new PluginHost(sr, loader, db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 
@@ -395,8 +405,15 @@ describe('Hot Reload — Middleware Interaction', () => {
     );
 
     await expect(host.reloadPlugin(pluginId, badSource)).rejects.toThrow();
-    // afterActivate should NOT have been called again (only from initial activation)
-    expect(afterCalls).toHaveLength(1);
+    // afterActivate 会被触发【第二次】—— 因为回滚会重新激活旧版本（审计 C-3 修复引入）。
+    //
+    // 修复前 reload 失败路径只 disposeAll 并保持状态 ACTIVE，导致「状态显示已启用、
+    // 但命令全部 404」的僵尸插件，且无自愈路径（再次 activate 被 validateTransition 拒绝）。
+    // 现在 rollbackReload() 把旧版本重新激活，会再走一遍完整的 activate 生命周期管道 ——
+    // 这正是「插件确实恢复了服务能力」的证据。
+    expect(afterCalls).toHaveLength(2);
+    // 且插件状态应与实际一致（ACTIVE 且确实可服务），而非僵尸态
+    expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE);
   });
 
   // ── Test 8: beforeDeactivate/afterDeactivate trigger on reload ──────
@@ -429,20 +446,23 @@ describe('Hot Reload — Stress', () => {
   let db: Database.Database;
   let sr: ServiceRegistry;
   let host: PluginHost;
+  let pluginsDir: string;
   let loadMap: Map<string, PluginModule>;
   let loader: TestEsmLoader;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('hot-reload');
     db = createTestDb();
     sr = new ServiceRegistry();
     const services = createMockServices();
     await registerMockServices(sr, services);
     loadMap = new Map();
     loader = new TestEsmLoader(loadMap);
-    host = new PluginHost(sr, loader, db);
+    host = new PluginHost(sr, loader, db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

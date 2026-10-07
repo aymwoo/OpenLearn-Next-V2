@@ -19,11 +19,13 @@ import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
 import { ProcessManager } from '../../core/process-manager/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('ProcessPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
@@ -31,6 +33,7 @@ describe('ProcessPlugin', () => {
   let processManager: ProcessManager;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('process');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -41,6 +44,7 @@ describe('ProcessPlugin', () => {
         status TEXT,
         created_at INTEGER,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
       CREATE TABLE IF NOT EXISTS processes (
@@ -52,7 +56,11 @@ describe('ProcessPlugin', () => {
         state TEXT,
         logs TEXT,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        -- B-5 / migration 018：进程归属列。内联建表的测试夹具必须与
+        -- migrations/018_processes_plugin_owner.sql 保持同步，否则
+        -- ProcessManager.spawn 会报 "table processes has no column named plugin_id"。
+        plugin_id TEXT
       );
     `);
 
@@ -82,10 +90,11 @@ describe('ProcessPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

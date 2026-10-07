@@ -25,17 +25,20 @@ import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('BuiltinPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
   let capabilityGuard: CapabilityGuard;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('builtin');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -46,6 +49,7 @@ describe('BuiltinPlugin', () => {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
 
@@ -133,7 +137,7 @@ describe('BuiltinPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
     serviceRegistry.register(IPluginHostToken, pluginHost);
     serviceRegistry.register(IPluginLifecycleManagerToken, new PluginLifecycleManager(pluginHost));
     serviceRegistry.register(IPluginDistributionManagerToken, new PluginDistributionManager(pluginHost));
@@ -142,6 +146,7 @@ describe('BuiltinPlugin', () => {
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

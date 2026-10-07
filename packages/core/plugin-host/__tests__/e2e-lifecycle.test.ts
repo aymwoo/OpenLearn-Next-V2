@@ -52,7 +52,8 @@ function createTables(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS plugins (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, manifest TEXT NOT NULL,
       source_code TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL,
-      loader_version TEXT, execution_mode TEXT, file_path TEXT
+      loader_version TEXT, execution_mode TEXT,
+      version TEXT, file_path TEXT
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
       plugin_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,

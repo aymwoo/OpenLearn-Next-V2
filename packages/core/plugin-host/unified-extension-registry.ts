@@ -24,6 +24,14 @@ export interface IUnifiedExtensionRegistry {
   getExtension<T = unknown>(category: string, id: string): T | undefined;
   listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
   listCategories(): ReadonlyArray<string>;
+  /**
+   * 注销某个 provider（插件）注册的全部扩展项（审计 D-2 / M-3）。
+   *
+   * 该注册表此前只有增无删，插件停用或卸载后其扩展项永久留存。
+   *
+   * @returns 被移除的扩展项数量
+   */
+  unregisterProvider(providerId: string): number;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
 }
@@ -89,6 +97,31 @@ export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
 
   public listCategories(): ReadonlyArray<string> {
     return Array.from(this._extensions.keys());
+  }
+
+  /**
+   * 注销某个 provider（插件）注册的全部扩展项（审计 D-2 / M-3）。
+   *
+   * 该注册表此前只有增/无删（`syncContributionRegistry` 单向只增、重复 id 直接跳过），
+   * 插件停用或卸载后其扩展项永久留存。补上对称的清理能力。
+   *
+   * @returns 被移除的扩展项数量
+   */
+  public unregisterProvider(providerId: string): number {
+    let removed = 0;
+    for (const [category, categoryMap] of this._extensions) {
+      for (const [id, meta] of categoryMap) {
+        if (meta.providerId === providerId) {
+          categoryMap.delete(id);
+          removed++;
+        }
+      }
+      // 分类空了就摘掉，避免 listCategories() 残留空分类
+      if (categoryMap.size === 0) {
+        this._extensions.delete(category);
+      }
+    }
+    return removed;
   }
 
   public syncContributionRegistry(contributionRegistry: {

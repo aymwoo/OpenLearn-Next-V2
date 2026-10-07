@@ -20,11 +20,13 @@ import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('AiSubmitInjectorPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
@@ -33,6 +35,7 @@ describe('AiSubmitInjectorPlugin', () => {
   const tempDir = path.resolve(process.cwd(), 'storage', 'courseware', 'temp-test-uuid');
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('ai-submit-injector');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -43,6 +46,7 @@ describe('AiSubmitInjectorPlugin', () => {
         status TEXT,
         created_at INTEGER,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
       CREATE TABLE IF NOT EXISTS courseware (
@@ -90,10 +94,11 @@ describe('AiSubmitInjectorPlugin', () => {
       delete: async () => {},
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
     fs.rmSync(path.resolve(process.cwd(), 'storage', 'courseware', 'temp-test-uuid'), { recursive: true, force: true });
     // Clean up any generated "[自动提交版]" files

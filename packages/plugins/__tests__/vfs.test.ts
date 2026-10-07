@@ -18,17 +18,20 @@ import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('VfsPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
   let capabilityGuard: CapabilityGuard;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('vfs');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -39,6 +42,7 @@ describe('VfsPlugin', () => {
         status TEXT,
         created_at INTEGER,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
       CREATE TABLE IF NOT EXISTS vfs_nodes (
@@ -79,10 +83,11 @@ describe('VfsPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

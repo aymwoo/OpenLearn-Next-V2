@@ -51,8 +51,8 @@ interface LessonEngineStoreState {
   setUser: (user: UserRef) => void;
   takeSnapshot: () => LessonSnapshot;
   checkStageAccess: (targetStageId: string, studentId?: string) => Promise<StageGuardResult>;
-  registerStageGuard: (guard: StageGuard) => () => void;
-  unregisterStageGuard: (guardId: string) => void;
+  /** 仅供离线预览/测试；checkStageAccess 不会回退到它 */
+  checkStageAccessLocally: (targetStageId: string, studentId?: string) => Promise<StageGuardResult>;
 }
 
 const defaultUser: UserRef = {
@@ -206,7 +206,69 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
 
     stageGuardPipeline: coreRuntime.stageGuard,
 
+    /**
+     * I-1：**服务端权威**门禁判定。
+     *
+     * 原实现直接在浏览器里跑 `coreRuntime.stageGuard.checkAccess()` ——
+     * `coreRuntime` 是 `new LessonRuntime({ eventBus: frontendEventBus })`，
+     * 整套管线在客户端，学生改 DevTools 本地 state 即可解锁任意环节。
+     *
+     * 现在改为调服务端 `POST /api/lessons/:id/stage-access`：守卫注册在内核 DI，
+     * 守卫实现读服务端状态，客户端无法伪造前置条件。
+     *
+     * **失败即拒绝**：网络错误、服务端 5xx、非 JSON 响应一律按 fail-close 处理
+     * （与 I-2 的默认语义一致）。这里**不做**「回退到本地管道」——
+     * 那等于把绕过方法又装回去。
+     */
     checkStageAccess: async (targetStageId: string, studentId?: string) => {
+      const state = get();
+      const currentStudentId = studentId || state.currentUser?.id || 'anonymous';
+      const lessonId = state.currentLesson?.id || '';
+      const currentStageId = state.currentStage?.id || null;
+
+      if (!lessonId) {
+        return {
+          allowed: false,
+          reason: '缺少 lessonId，无法校验环节门禁',
+        };
+      }
+
+      try {
+        const res = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/stage-access`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ currentStageId, targetStageId, metadata: { studentId: currentStudentId } }),
+        });
+
+        if (!res.ok) {
+          return {
+            allowed: false,
+            reason: `门禁服务不可用（HTTP ${res.status}）`,
+          };
+        }
+
+        const result = await res.json();
+        // 契约不符时也按拒绝处理 —— 解析失败绝不能当成「放行」
+        if (typeof result?.allowed !== 'boolean') {
+          return { allowed: false, reason: '门禁服务返回了无法识别的结果' };
+        }
+        return result;
+      } catch (err) {
+        return {
+          allowed: false,
+          reason: '门禁服务不可达，已拒绝进入该环节',
+        };
+      }
+    },
+
+    /**
+     * 仅供离线/降级预览用：本地管道判定。
+     *
+     * 刻意**不**在 checkStageAccess 失败时回退到这里 —— 那等于把绕过方法
+     * 重新装回去。此方法仅供测试与本地开发显式调用。
+     */
+    checkStageAccessLocally: async (targetStageId: string, studentId?: string) => {
       const state = get();
       const currentStudentId = studentId || state.currentUser?.id || 'anonymous';
       const lessonId = state.currentLesson?.id || '';
@@ -218,14 +280,6 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
         currentStageId,
         targetStageId,
       });
-    },
-
-    registerStageGuard: (guard: StageGuard) => {
-      return coreRuntime.stageGuard.registerGuard(guard);
-    },
-
-    unregisterStageGuard: (guardId: string) => {
-      coreRuntime.stageGuard.unregisterGuard(guardId);
     },
   };
 });

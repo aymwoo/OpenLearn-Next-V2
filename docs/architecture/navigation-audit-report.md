@@ -40,7 +40,7 @@ graph TD
     end
 
     subgraph ExtensionEngine["Plugin Host Extension Engine"]
-        ExtRegistry["ExtensionPointRegistry (src/plugin-host)"]
+        ExtRegistry["usePluginHostStore (src/plugin-host/plugin-host-store.ts)"]
         TeacherTabSlot["Slot: 'teacher.tab'"]
         TabRenderer["PluginTabPanel / ExtensionPointRenderer"]
     end
@@ -95,7 +95,12 @@ OpenLearn V2 Navigation Tree
 
 ## 4. Existing Navigation Extension Points
 
-Plugin navigation extensions are managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and `usePluginHostStore` (`src/plugin-host/plugin-host-store.ts`).
+Plugin navigation extensions are managed by `usePluginHostStore` (`src/plugin-host/plugin-host-store.ts`).
+
+> **更正（审计项 M-12 / F-1）**：本节原先称扩展点由 `ExtensionPointRegistry`
+> (`src/plugin-host/extension-points.ts`) 管理。该类**生产零引用**（唯一引用是它自己的
+> 测试文件），且与 `plugin-host-store.ts` 的重复注册语义**相反**（前者 throw，
+> 后者覆盖）—— 已于 2026-10-07 删除。真实扩展点注册走 `usePluginHostStore`。
 
 ### Supported Navigation Slot: `teacher.tab`
 

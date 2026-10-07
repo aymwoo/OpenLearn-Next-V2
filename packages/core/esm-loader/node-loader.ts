@@ -4,10 +4,20 @@
  * D-11: 使用 data:text/javascript;base64, URL 方案 + 原生 import() 实现。
  * Base64 编码（Claude's discretion）：binary-safe、更紧凑、处理所有 Unicode 字符。
  *
- * 关键安全特性：
- * - data: URL 模块在 Node.js 中无法访问 require/fs 等 CJS API
- * - import() 只能加载 ESM 模块，不会执行 CJS require
- * - 错误分类私有方法将原始 Error 映射为 EsmLoaderError 子类
+ * ⚠️ **无隔离**（原注释失实，已于 2026-10-06 更正 — 审计 L-4）：
+ * 原注释称「data: URL 模块在 Node.js 中无法访问 require/fs 等 CJS API」，**该说法不成立**。
+ * 实测 data: URL 模块可正常 `import fs from 'node:fs'`、也可 `import child_process`，
+ * 并能访问 `process.env`。本 loader 加载的代码运行在宿主主进程的同一地址空间，
+ * 因此它**不提供任何安全边界** —— 它唯一的价值是「按 ESM 语义执行字符串代码」。
+ *
+ * 真正的静态防线在**安装期**：`bundlePlugin()` 的 openlearn-token-enforcer +
+ * `assertPluginCodeSafe()`（见 esm-loader/install-utils.ts）。两道门都只做静态检查，
+ * 无法阻止运行期通过原型链、`globalThis` 等途径触达宿主对象。
+ *
+ * Worker 模式（worker_threads）同样**不是安全沙箱** —— 线程与主进程共享地址空间。
+ * 若需要真正的隔离，应改用 Node Permission Model 或子进程 + container（审计 D-1 / Batch 5 L-1）。
+ *
+ * 错误分类私有方法将原始 Error 映射为 EsmLoaderError 子类。
  *
  * D-14: 不在 NodeEsmLoader 层添加超时 — 超时由 PluginRuntime 的 Promise.race 处理。
  */

@@ -6,6 +6,7 @@ import { ServiceRegistry } from '../service-registry.js';
 import { db } from '../../db/index.js';
 import { SemesterGradeService } from '../semester-grade-service.js';
 import { Kernel } from '../../kernel/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('SemesterGradeService - Token Contracts', () => {
   it('should define ISemesterGradeServiceToken correctly', () => {
@@ -136,6 +137,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
   const testStudentId2 = 'student-bob';
   const testTeacherId = 'teacher-carol';
   let kernel: Kernel;
+  let pluginsDir: string;
 
   // 平台规范 actorId：`user:<students.id>:<role>`（也是线上 getActorId() 的产出格式）
   const student1Actor = `user:${testStudentId1}:student`;
@@ -143,7 +145,9 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
   const teacherActor = `user:${testTeacherId}:teacher`;
 
   beforeAll(async () => {
-    kernel = new Kernel();
+    // Kernel 默认写 <cwd>/plugins，必须显式引到临时目录（见 H-1）
+    pluginsDir = createPluginsDir('semester-grade');
+    kernel = new Kernel({ pluginsDir });
     await kernel.ready;
 
     // 刻意不做手工能力授权：actorId 采用平台规范的 `user:<id>:<role>` 形式，
@@ -168,6 +172,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
     db.prepare('DELETE FROM assignments WHERE id = ?').run(`plugin-lesson-${testLessonId}`);
     db.prepare('DELETE FROM assignment_submissions WHERE assignment_id = ?').run(`plugin-lesson-${testLessonId}`);
     db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(testLessonId);
+    cleanupPluginsDir(pluginsDir);
   });
 
   it('should verify that AssignmentEvalPlugin is registered and active', () => {

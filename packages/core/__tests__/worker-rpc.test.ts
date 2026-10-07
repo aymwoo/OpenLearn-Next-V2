@@ -2,12 +2,45 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Kernel } from '../kernel/index.js';
 import JSZip from 'jszip';
 import { IEventBusServiceToken } from '../di/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('Worker RPC and Event Forwarding', () => {
   let kernel: Kernel;
+  let pluginsDir: string;
+
+  /**
+   * 为测试夹具注册的插件命令补 action descriptor。
+   *
+   * 背景（G-1 / default-deny）：commandBus interceptor 现要求每个可派发的命令都有
+   * 已注册的 ActionDescriptor —— descriptor 是命令唯一的声明式授权点
+   * （capabilityRequired + isHighRisk + inputSchema）。本文件里的夹具插件
+   * 只`commandBus.registerHandler()` 而未登记 action，因此被 default-deny 拒绝。
+   *
+   * 这是**测试夹具的欠账**，不是产品缺陷：夹具插件不对应真实业务命令，
+   * 但仍需通过 interceptor 才能派发，因此在此集中补齐。
+   *
+   * actorId 注意：夹具原本以 `user-teacher` 派发，但 CapabilityGuard.extractRole 只认
+   * `user:<id>:<role>` 形态 —— `user-teacher` 取不到 teacher 角色、也无显式 grant，
+   * 补了 action 后就会撞上 `capabilityRequired` 检查。故本文件统一改用
+   * `role:administrator`，走 interceptor 的 isAdmin 豁免（该分支对 capabilityRequired 免检）。
+   *
+   * 注意：这是**为夹具降低断言强度**，不是产品行为变更。夹具的被测目标是
+   * worker RPC / 状态继承 / 看门狗，而非 capability 鉴权；后者由
+   * packages/core/__tests__/kernel-command-deny.test.ts 单独覆盖。
+   */
+  const registerTestAction = (commandType: string) => {
+    kernel.actionRegistry.register({
+      id: `test-action-${commandType}`,
+      commandType,
+      description: `测试夹具命令 ${commandType}`,
+      inputSchema: { type: 'OBJECT', properties: {}, required: [] },
+      capabilityRequired: 'lesson:read',
+    });
+  };
 
   beforeEach(async () => {
-    kernel = new Kernel();
+    pluginsDir = createPluginsDir('worker-rpc');
+    kernel = new Kernel({ pluginsDir });
     await kernel.ready;
     // Clean up test nodes/classes and old test plugins if any
     try {
@@ -25,6 +58,7 @@ describe('Worker RPC and Event Forwarding', () => {
   });
 
   afterEach(async () => {
+    cleanupPluginsDir(pluginsDir);
     const plugins = kernel.pluginHost.listPlugins();
     for (const p of plugins) {
       if (p.state === 'active') {
@@ -254,10 +288,13 @@ export default {
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
     // Run increment command to modify the count state in Worker (0 -> 10)
+    registerTestAction('ext-test-state-inherit.increment');
     const result1 = (await kernel.commandBus.execute({
       id: 'cmd-inc-1',
       type: 'ext-test-state-inherit.increment',
-      actorId: 'user-teacher',
+      // 走管理员豁免：夹具 actorId `user-teacher` 不是 `user:<id>:<role>` 形态，
+      // CapabilityGuard 取不到 teacher 角色（见 registerTestAction 上方注释）。
+      actorId: 'role:administrator',
       payload: {},
     })) as any;
     expect(result1.count).toBe(10);
@@ -298,7 +335,7 @@ export default {
     const result2 = (await kernel.commandBus.execute({
       id: 'cmd-inc-2',
       type: 'ext-test-state-inherit.increment',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     })) as any;
     expect(result2.count).toBe(15);
@@ -430,10 +467,12 @@ export default {
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
     // Query status
+    registerTestAction('ext-test-watchdog.get_run_status');
+    registerTestAction('ext-test-watchdog.crash_now');
     const res1 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc1',
       type: 'ext-test-watchdog.get_run_status',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator', // 同上：夹具 actorId 走管理员豁免
       payload: {},
     })) as any;
     expect(res1.status).toBe('ok');
@@ -452,7 +491,7 @@ export default {
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash1',
       type: 'ext-test-watchdog.crash_now',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     });
 
@@ -463,7 +502,7 @@ export default {
     const res2 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc2',
       type: 'ext-test-watchdog.get_run_status',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     })) as any;
     expect(res2.status).toBe('ok');
@@ -472,7 +511,7 @@ export default {
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash2',
       type: 'ext-test-watchdog.crash_now',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     });
 
@@ -483,7 +522,7 @@ export default {
     const res3 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc3',
       type: 'ext-test-watchdog.get_run_status',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     })) as any;
     expect(res3.status).toBe('ok');
@@ -492,7 +531,7 @@ export default {
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash3',
       type: 'ext-test-watchdog.crash_now',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     });
 
@@ -503,7 +542,7 @@ export default {
     const res4 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc4',
       type: 'ext-test-watchdog.get_run_status',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     })) as any;
     expect(res4.status).toBe('ok');
@@ -512,7 +551,7 @@ export default {
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash4',
       type: 'ext-test-watchdog.crash_now',
-      actorId: 'user-teacher',
+      actorId: 'role:administrator',
       payload: {},
     });
 

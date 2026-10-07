@@ -40,7 +40,8 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
         name TEXT,
         manifest TEXT,
         status TEXT,
-        loader_version TEXT
+        loader_version TEXT,
+        version TEXT
       );
     `);
     db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -51,7 +52,10 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       'Admin',
       Date.now(),
     );
-    db.prepare('INSERT INTO plugins VALUES (?, ?, ?, ?, ?)').run(
+    // 显式列名而非 `INSERT INTO plugins VALUES (...)`：位置式 INSERT 会随 schema
+    // 加列而失效（H-3 给 plugins 加了 version 列，位置式立刻报
+    // "table plugins has 6 columns but 5 values were supplied"）
+    db.prepare('INSERT INTO plugins (id, name, manifest, status, loader_version) VALUES (?, ?, ?, ?, ?)').run(
       'ext-courseware-preview',
       'Courseware Preview',
       JSON.stringify({ id: 'ext-courseware-preview', version: '1.2.0' }),
@@ -125,7 +129,8 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
 
       // 插入一个不兼容当前平台的插件 (要求 openlearn >= 9.0.0)
       const db = new Database(dbPath);
-      db.prepare('INSERT INTO plugins VALUES (?, ?, ?, ?, ?)').run(
+      // 显式列名，理由同上
+      db.prepare('INSERT INTO plugins (id, name, manifest, status, loader_version) VALUES (?, ?, ?, ?, ?)').run(
         'ext-future-plugin',
         'Future Plugin',
         JSON.stringify({ id: 'ext-future-plugin', version: '2.0.0', engines: { openlearn: '>=9.0.0' } }),

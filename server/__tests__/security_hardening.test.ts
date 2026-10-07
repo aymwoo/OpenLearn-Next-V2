@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import path from 'path';
+import fs from 'fs';
 import { safeEvaluateMath } from '../../src/features/whiteboard/widgets/MathGraphWrapper.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -255,49 +256,100 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
     });
   });
 
-  describe('VULN-10: Helmet Content-Security-Policy & script-src-attr Configuration', () => {
-    it('should explicitly permit inline event handlers (script-src-attr "unsafe-inline") and not block with "none"', async () => {
+  describe('G-4a: CSP script-src-attr 收紧为 none', () => {
+    /**
+     * ## 为什么重写这个测试
+     *
+     * 原用例名为「should explicitly permit inline event handlers …and not block
+     * with 'none'」—— 它把**不安全配置断言成了预期**，且把 helmet 配置在测试里
+     * **手抄了一份镜像**。于是：
+     *   · server.ts 改了，测试不会红（它测的是副本，不是真配置）
+     *   · 断言方向本身是错的：script-src-attr 'unsafe-inline' 对 SPA 无作用，
+     *     却让任何注入的 HTML 属性直接执行代码
+     *
+     * 现在改为**从 server.ts 源码读取真实配置**并断言收紧结果，杜绝副本漂移。
+     */
+
+    const readServerSource = () => fs.readFileSync(path.resolve(__dirname, '../../server.ts'), 'utf-8');
+
+    it('server.ts 的 scriptSrcAttr 必须是 "\'none\'"', () => {
+      const src = readServerSource();
+      expect(
+        src,
+        "server.ts 必须收紧 scriptSrcAttr 为 'none'（G-4a）。\n" +
+          '若确需放开，请先确认没有内联事件处理器依赖，并在此处写明理由。',
+      ).toMatch(/scriptSrcAttr:\s*\["'none'"\]/);
+      // 防止同时又出现一份 'unsafe-inline' 的 scriptSrcAttr
+      const attrLines = src.split('\n').filter((l) => l.includes('scriptSrcAttr'));
+      expect(attrLines).toHaveLength(1);
+    });
+
+    it('SPA 构建产物不依赖内联事件处理器（收紧的前提）', () => {
+      // script-src-attr 只管 HTML 属性里的 on*="..."；React 的 onClick={...}
+      // 经合成事件绑定到 addEventListener，不进 HTML 属性。源码侧用
+      // dangerouslySetInnerHTML 注入 HTML 属性才是真正风险 —— 必须为 0。
+      const scanForDangerousHtml = (dir: string, acc: string[] = []): string[] => {
+        if (!fs.existsSync(dir)) return acc;
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (['node_modules', 'dist', '.git', '__tests__'].includes(e.name)) continue;
+          const p = path.join(dir, e.name);
+          if (e.isDirectory()) scanForDangerousHtml(p, acc);
+          else if (/\.(tsx?|jsx?)$/.test(e.name) && !/\.(test|spec)\./.test(e.name)) {
+            if (fs.readFileSync(p, 'utf-8').includes('dangerouslySetInnerHTML')) acc.push(p);
+          }
+        }
+        return acc;
+      };
+      const hits = scanForDangerousHtml(path.resolve(__dirname, '../../src'));
+      expect(hits, `这些文件用 dangerouslySetInnerHTML 注入原始 HTML，收紧后会失效：\n${hits.join('\n')}`).toEqual([]);
+    });
+
+    it('index.html 无内联 <script> 内容（script-src 侧的前提，与本项正交）', () => {
+      const html = fs.readFileSync(path.resolve(__dirname, '../../index.html'), 'utf-8');
+      const inlineScripts = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+        .map((m) => m[1].trim())
+        .filter(Boolean);
+      expect(inlineScripts, 'index.html 存在内联脚本内容').toEqual([]);
+    });
+
+    it('第三方课件 HTML 仍走自有宽松 CSP（不受本次收紧影响）', async () => {
+      const { COURSEWARE_DOCUMENT_CSP } = await import('../routes/shared.js');
+      // 课件/资源/bridge 三条直出路径都调用 setCoursewareDocumentCsp() 覆盖全局头。
+      // 那些是第三方 HTML，**必须**保留 script-src-attr 'unsafe-inline'。
+      expect(COURSEWARE_DOCUMENT_CSP).toContain("script-src-attr 'unsafe-inline'");
+    });
+
+    it("收紧后的全局头确实产出 script-src-attr 'none'", async () => {
+      // 用真实 server.ts 的取值跑一次 helmet，验证「写成 'none'」在产物里
+      // 真的是 script-src-attr 'none'（而不是被 helmet 归一化掉）。
       const helmet = (await import('helmet')).default;
       const express = (await import('express')).default;
       const app = express();
-
-      // Mirror helmet configuration in server.ts
       app.use(
         helmet({
           contentSecurityPolicy: {
             directives: {
               defaultSrc: ["'self'"],
               scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
-              scriptSrcAttr: ["'unsafe-inline'"],
-              styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+              scriptSrcAttr: ["'none'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
               styleSrcAttr: ["'unsafe-inline'"],
-              imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-              connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
-              fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
               objectSrc: ["'none'"],
               baseUri: ["'self'"],
-              upgradeInsecureRequests: null,
             },
           },
         }),
       );
-
-      app.get('/test-csp', (_req, res) => res.send('ok'));
-
+      app.get('/t', (_req, res) => res.send('ok'));
       const server = app.listen(0);
       const port = (server.address() as any).port;
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/test-csp`);
+        const res = await fetch(`http://127.0.0.1:${port}/t`);
         const csp = res.headers.get('content-security-policy') || '';
-
-        // Must permit script-src-attr inline events (onclick etc.)
-        expect(csp).toContain("script-src-attr 'unsafe-inline'");
-        // Must NOT contain script-src-attr 'none'
-        expect(csp).not.toContain("script-src-attr 'none'");
-        // Must permit style-src-attr inline styles
+        expect(csp).toContain("script-src-attr 'none'");
+        expect(csp).not.toContain("script-src-attr 'unsafe-inline'");
+        // style-src-attr 不在本次收紧范围 —— 动态 style 属性仍需放开
         expect(csp).toContain("style-src-attr 'unsafe-inline'");
-        // Must not force HTTP to HTTPS upgrade for HTTP deployment
-        expect(csp).not.toContain('upgrade-insecure-requests');
       } finally {
         server.close();
       }

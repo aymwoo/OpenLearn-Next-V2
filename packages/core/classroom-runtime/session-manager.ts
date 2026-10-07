@@ -5,7 +5,7 @@
 
 import { UserParticipant, RuntimeEventMap } from './types.js';
 import { RuntimeEventBus } from './event-bus.js';
-import { RuntimeStateManager } from './state-manager.ts';
+import { RuntimeStateManager } from './state-manager.js';
 
 export interface ClassroomSessionData {
   readonly sessionId: string;

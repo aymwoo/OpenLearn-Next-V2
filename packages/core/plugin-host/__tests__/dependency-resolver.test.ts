@@ -78,13 +78,28 @@ describe('topologicalSort', () => {
     graph.set('ext-a', ['ext-b']); // ext-b 已安装但不在 active 集中
     graph.set('ext-b', []);
 
-    const { sorted, blocked } = topologicalSort(
+    const { sorted, blocked, cycles } = topologicalSort(
       graph,
       ['ext-a', 'ext-b'],
       new Set(['ext-a']), // 仅 ext-a 活跃，ext-b 不在集合中
     );
     expect(sorted).toEqual([]);
-    expect(blocked).toHaveLength(1);
+
+    // ⚠️ 本断言在 H-5 之前是 `toHaveLength(1)`，**那条断言编码的正是缺陷本身**：
+    // 只报 ext-b（自身未激活），而 ext-a（依赖未激活的 ext-b）被静默丢弃 ——
+    // 它不在 sorted、不在 blocked、也不在 cycles，三份结果里都查不到。
+    //
+    // 为什么当时没被发现：ext-a 的入度确实永远归不了零，数值上与「成环」无异，
+    // 于是它被塞进 cycles 报成「循环依赖」，而这条用例只检查 blocked 长度、不看 cycles。
+    // 两处遗漏叠加，缺陷就完整地藏住了。
+    //
+    // 现在：ext-a 报 blocked 且归因指向上游，且**不**进 cycles。
+    expect(blocked.map((b) => b.pluginId).sort()).toEqual(['ext-a', 'ext-b']);
+    expect(
+      blocked.find((b) => b.pluginId === 'ext-a')!.missingDeps.join(','),
+      'ext-a 的归因应指向上游被阻塞的 ext-b',
+    ).toMatch(/ext-b/);
+    expect(cycles, '缺依赖不是循环 —— 单节点的「环」在结构上不可能是真环').toEqual([]);
   });
 
   it('循环检测', () => {

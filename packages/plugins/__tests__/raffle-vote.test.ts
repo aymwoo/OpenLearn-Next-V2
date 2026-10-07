@@ -1,11 +1,19 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Kernel } from '../../core/kernel/index.js';
 import { IDatabaseToken } from '../../core/di/interfaces.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('Raffle & Vote Plugin Integration Test', () => {
   let kernel: Kernel;
+  let pluginsDir: string;
+
+  beforeEach(() => {
+    // Kernel 默认写 <cwd>/plugins，必须显式引到临时目录（见 H-1）
+    pluginsDir = createPluginsDir('raffle-vote');
+  });
 
   afterEach(async () => {
+    cleanupPluginsDir(pluginsDir);
     if (kernel) {
       const activePlugins = kernel.pluginHost.listPlugins();
       for (const plugin of activePlugins) {
@@ -24,7 +32,7 @@ describe('Raffle & Vote Plugin Integration Test', () => {
     db.prepare("DELETE FROM plugins WHERE id = 'ext-raffle-vote' OR manifest LIKE '%ext-raffle-vote%'").run();
 
     // 2. Initialize kernel
-    kernel = new Kernel();
+    kernel = new Kernel({ pluginsDir });
     await kernel.ready;
 
     const pluginId = '@openlearn/plugin-raffle-vote';

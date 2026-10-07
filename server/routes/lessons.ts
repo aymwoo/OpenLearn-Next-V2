@@ -9,6 +9,7 @@ import { lessonActiveSegments } from '../shared-state.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
+import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 
 /**
  * 校验当前用户对课程的管理权 (水平越权 IDOR 防护)
@@ -513,6 +514,56 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { id, elementId } = req.params;
       const actorId = getActorId(req) || 'user-frontend';
       const result = await whiteboardService.deleteElement(id, elementId, actorId);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * 教学环节门禁 —— **服务端权威判定**（I-1）
+   *
+   * ## 为什么必须有这个端点
+   *
+   * 原先 `StageGuardPipeline` 的唯一调用点是客户端 `lessonEngineStore.checkStageAccess`
+   * → `coreRuntime.stageGuard.checkAccess()`，而 `coreRuntime` 是
+   * `new LessonRuntime({ eventBus: frontendEventBus })`，**跑在浏览器里**。
+   * 学生只要在 DevTools 里改本地 state（或直接调 store 方法）就能解锁任意环节 ——
+   * I-2 把 fail-open 改成 fail-close 的语义，一行都没能落到服务端。
+   *
+   * 本端点让判定改由服务端执行：
+   *   · 守卫注册在内核 DI（`IStageGuardServiceToken` → `defaultStageGuardPipeline`）
+   *   · 守卫实现读服务端状态（如 `diagnosticService` 的提交记录），
+   *     客户端**无法伪造**「测验已通过」这类前置条件
+   *
+   * ## 仍然拦不住什么（诚实标注）
+   *
+   * 「进入环节」本身是纯客户端状态（`setActiveSegmentId`），没有任何服务端提交动作。
+   * 所以本端点提供的是**服务端权威的 UI 门禁**，不是资源级强制。
+   * 真正的强制点必须是「记录学习成果」的动作（如 quiz-submit 的成绩录入）——
+   * 那要求 timeline segment 能引用具体 element（当前 segment 结构是
+   * `{id,title,type,duration,color}`，**不含 element 引用**），属另一项改造。
+   */
+  app.post('/api/lessons/:id/stage-access', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
+    try {
+      const { id: lessonId } = req.params;
+      const session = (req as any).session;
+      const studentId = session.studentId || session.userId || 'guest';
+      const { currentStageId = null, targetStageId, metadata } = req.body ?? {};
+
+      if (typeof targetStageId !== 'string' || targetStageId.length === 0) {
+        return res.status(400).json({ error: 'targetStageId is required' });
+      }
+
+      const pipeline = await kernelContainer.serviceRegistry.resolve(IStageGuardServiceToken);
+      const result = await pipeline.checkAccess({
+        studentId,
+        lessonId,
+        currentStageId,
+        targetStageId,
+        metadata,
+      });
+
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);

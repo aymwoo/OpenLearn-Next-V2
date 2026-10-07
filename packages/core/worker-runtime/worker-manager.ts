@@ -82,14 +82,31 @@ export const ALL_SERVICE_TOKENS = [
   '@openlearn/core:IPointsLedgerService',
 ];
 
+/** 需要显式声明才授予的积分领域服务（与前端 `SENSITIVE_FRONTEND_SERVICE_TOKENS` 同构）。 */
+const POINTS_SERVICE_TOKENS = Object.freeze([
+  '@openlearn/core:IPointsDimensionRegistry',
+  '@openlearn/core:IPointsLedgerService',
+]);
+
+/**
+ * 规范化依赖条目用于**精确比较**。
+ *
+ * manifest 依赖写法为 `@openlearn/core:IPointsLedgerService@^1.0.0`（域:服务名@版本范围），
+ * 而上面的白名单常量只到服务名。剥掉版本范围后做全等比较，避免 `includes` 子串匹配
+ * 被 `IAmPointsLedgerServiceButFake` 之类伪造条目命中。
+ */
+function normalizeDepEntry(entry: string): string {
+  const slash = entry.indexOf('/');
+  if (slash === -1) return entry;
+  const versionAt = entry.indexOf('@', slash);
+  return versionAt === -1 ? entry : entry.slice(0, versionAt);
+}
+
 /**
  * 根据插件 Manifest 声明动态计算该 Worker 允许访问的 Service Tokens 白名单。
  * 杜绝未声明权限的插件随意访问敏感领域服务（如积分账本）。
  */
-export function computeAllowedWorkerTokens(
-  manifest?: Manifest,
-  requestedTokens?: Iterable<string>,
-): string[] {
+export function computeAllowedWorkerTokens(manifest?: Manifest, requestedTokens?: Iterable<string>): string[] {
   const allowed = new Set<string>(BASE_WORKER_SERVICE_TOKENS);
   if (manifest) {
     const reqs = Array.isArray(manifest.requires) ? manifest.requires : [];
@@ -98,16 +115,20 @@ export function computeAllowedWorkerTokens(
     const caps = Array.isArray(manifest.capabilitiesProposed) ? manifest.capabilitiesProposed : [];
 
     // 积分服务：仅当插件在 requires/optional 或 capabilitiesProposed 明确声明 points 权限时授予
-    const hasPointsDep = allDeclared.some(
-      (dep) => typeof dep === 'string' && (dep.includes('IPointsLedgerService') || dep.includes('IPointsDimensionRegistry')),
+    //
+    // B-2：原先用 `dep.includes('IPointsLedgerService')` 做**子串匹配**，可被伪造绕过 ——
+    // manifest 写 `requires: ['@evil/x:IAmPointsLedgerServiceButFake']` 即命中，
+    // 从而拿到积分账本写入权。改为剥掉版本范围后的**精确 Token 比较**。
+    const normalizedDeclared = new Set(
+      allDeclared.filter((d): d is string => typeof d === 'string').map(normalizeDepEntry),
     );
+    const hasPointsDep = POINTS_SERVICE_TOKENS.some((t) => normalizedDeclared.has(normalizeDepEntry(t)));
     const hasPointsCap = caps.some(
       (c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:') || c === '*'),
     );
 
     if (hasPointsDep || hasPointsCap) {
-      allowed.add('@openlearn/core:IPointsDimensionRegistry');
-      allowed.add('@openlearn/core:IPointsLedgerService');
+      for (const t of POINTS_SERVICE_TOKENS) allowed.add(t);
     }
   }
 
@@ -185,6 +206,20 @@ export class WorkerRegistry {
 
   /** pluginId → { count: number, lastTime: number } */
   private crashStats = new Map<string, { count: number; lastTime: number }>();
+
+  /**
+   * 看门狗重启的待执行定时器（审计 C-6）。
+   *
+   * 修复前 `setTimeout(...)` 的返回值被丢弃，`terminate()` 只做 `crashStats.delete(pluginId)`，
+   * **不取消该定时器**。后果：worker 崩溃后若插件在同一秒内被停用或卸载，
+   * 1–4 秒后回调仍会执行 `recreateWorkerCallback`，给已停用/已卸载的插件重建 Worker ——
+   * 即「僵尸复活」。且 `pluginInstances.workerRef` 不会更新，
+   * `dispatchHttpRequest` 与命令派发仍指向已死 transport。
+   *
+   * 用 `Set` 而非单个 Timer：连续多次崩溃会各自排定一次重启，
+   * 单槽设计会让后一次排定覆盖前一次，从而丢失已排定的重启。
+   */
+  private watchdogTimers = new Map<string, Set<NodeJS.Timeout>>();
 
   public recreateWorkerCallback?: (
     pluginId: string,
@@ -264,48 +299,84 @@ export class WorkerRegistry {
           this.cleanup(pluginId);
 
           if (manifest && sourceCode && serviceTokens) {
-            let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
-            const now = Date.now();
-            if (now - stats.lastTime > 300000) {
-              stats.count = 0;
-            }
-            stats.count += 1;
-            stats.lastTime = now;
-            this.crashStats.set(pluginId, stats);
-
-            if (stats.count <= 3) {
-              const delay = Math.pow(2, stats.count - 1) * 1000;
-              console.warn(
-                `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`,
-              );
-              setTimeout(async () => {
-                try {
-                  if (this.recreateWorkerCallback) {
-                    await this.recreateWorkerCallback(
-                      pluginId,
-                      manifest,
-                      sourceCode,
-                      serviceTokens,
-                      eventBus,
-                      pluginDir,
-                    );
-                  }
-                } catch (err) {
-                  console.error(`[WorkerRegistry] Watchdog recovery failed for "${pluginId}":`, err);
-                }
-              }, delay);
-            } else {
-              console.error(
-                `[WorkerRegistry] Worker for "${pluginId}" crashed ${stats.count} times in 5 mins. Circuit breaker triggered.`,
-              );
-              if (this.onCircuitBreakerTriggered) {
-                this.onCircuitBreakerTriggered(pluginId);
-              }
-            }
+            this.scheduleWatchdogRestart(pluginId, { manifest, sourceCode, serviceTokens, eventBus, pluginDir });
           }
         }
       }
     });
+  }
+
+  /**
+   * 崩溃后的看门狗重启调度（指数退避 1s / 2s / 4s，超过 3 次触发熔断）。
+   *
+   * 从 `createWorker` 的 exit 处理器里抽出为独立方法，原因有二：
+   * 1. **可测**：exit 处理器是闭包，无法在测试中触发（需要真实 Worker 崩溃）；
+   *    抽出后可直接测「排定 → terminate → 不复活」这个真正的安全不变量。
+   * 2. **单职责**：崩溃检测与重启策略本就是两件事。
+   *
+   * 审计 C-6：定时器句柄必须记录，否则 `terminate()` 无法取消，
+   * 会给已停用/已卸载的插件「复活」。
+   */
+  scheduleWatchdogRestart(
+    pluginId: string,
+    params: {
+      manifest: unknown;
+      sourceCode: string;
+      serviceTokens: string[];
+      eventBus: unknown;
+      pluginDir: string;
+    },
+  ): void {
+    let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
+    const now = Date.now();
+    if (now - stats.lastTime > 300000) {
+      stats.count = 0;
+    }
+    stats.count += 1;
+    stats.lastTime = now;
+    this.crashStats.set(pluginId, stats);
+
+    if (stats.count > 3) {
+      console.error(
+        `[WorkerRegistry] Worker for "${pluginId}" crashed ${stats.count} times in 5 mins. Circuit breaker triggered.`,
+      );
+      if (this.onCircuitBreakerTriggered) {
+        this.onCircuitBreakerTriggered(pluginId);
+      }
+      return;
+    }
+
+    const delay = Math.pow(2, stats.count - 1) * 1000;
+    console.warn(
+      `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`,
+    );
+
+    const timer = setTimeout(async () => {
+      // 触发时从 Set 摘除，避免堆积已执行的句柄
+      this.watchdogTimers.get(pluginId)?.delete(timer);
+      try {
+        if (this.recreateWorkerCallback) {
+          await this.recreateWorkerCallback(
+            pluginId,
+            params.manifest as never,
+            params.sourceCode,
+            params.serviceTokens,
+            params.eventBus as never,
+            params.pluginDir,
+          );
+        }
+      } catch (err) {
+        console.error(`[WorkerRegistry] Watchdog recovery failed for "${pluginId}":`, err);
+      }
+    }, delay);
+
+    // 记录句柄，供 terminateWorker()/terminate() 取消（审计 C-6 僵尸复活）
+    let timers = this.watchdogTimers.get(pluginId);
+    if (!timers) {
+      timers = new Set();
+      this.watchdogTimers.set(pluginId, timers);
+    }
+    timers.add(timer);
   }
 
   /**
@@ -331,10 +402,19 @@ export class WorkerRegistry {
    * @param timeoutMs - deactivate 等待超时（默认 3000ms）
    */
   async terminate(pluginId: string, timeoutMs = 3000): Promise<any> {
+    // 取消待执行的重启定时器（审计 C-6 僵尸复活）。
+    //
+    // 修复前只做 `crashStats.delete`，定时器仍在飞 —— 崩溃后立刻停用/卸载插件，
+    // 1–4 秒后回调仍会给已停用/已卸载的插件重建 Worker。
+    //
+    // **必须早于下面的 `if (!instance) return`**：崩溃路径已把实例移出 workers map，
+    // 而「崩溃后立刻停用」正是僵尸复活的触发场景，若放在早退之后就完全失效。
+    this.cancelWatchdog(pluginId);
+    this.crashStats.delete(pluginId);
+
     const instance = this.workers.get(pluginId);
     if (!instance) return;
 
-    this.crashStats.delete(pluginId);
     instance.status = 'terminating';
     let state: any = undefined;
 
@@ -398,6 +478,22 @@ export class WorkerRegistry {
     this.workers.delete(pluginId);
   }
 
+  /**
+   * 取消该插件待执行的看门狗重启定时器（审计 C-6）。
+   *
+   * 幂等；无待执行定时器时为无操作。由 terminate() 与 shutdownAll() 调用。
+   *
+   * 注意：crash 路径自身的 cleanup() **不能**承担此职责 ——
+   * crash handler 里 `cleanup()`（285 行）先于 `setTimeout()`（302 行）执行，
+   * 在 cleanup 里取消只会清掉「上一次崩溃」的句柄，对本次刚排的定时器无效。
+   */
+  cancelWatchdog(pluginId: string): void {
+    const timers = this.watchdogTimers.get(pluginId);
+    if (!timers) return;
+    for (const t of timers) clearTimeout(t);
+    this.watchdogTimers.delete(pluginId);
+  }
+
   /** 当前活跃 Worker 数量（用于 DoS 上限检测 T-05-09）。 */
   get activeCount(): number {
     return this.workers.size;
@@ -422,6 +518,32 @@ export class WorkerRegistry {
  * 2. type === 'activate' → 加载插件、创建代理、激活
  * 3. type === 'deactivate-request' → 停用、清理
  */
+/**
+ * 遮蔽块的定界标记。必须与 `generateBootstrapCode()` 模板里的字面量一致。
+ */
+const PROCESS_MASKING_START = '/* __PROCESS_MASKING_START__ */';
+const PROCESS_MASKING_END = '/* __PROCESS_MASKING_END__ */';
+
+/**
+ * 抽取 bootstrap 里那段「process 遮蔽」代码，供测试直接执行。
+ *
+ * 遮蔽逻辑写在**动态生成的代码字符串**里（无法 import 共享模块），这带来一个
+ * 天然的验证难题：它不在任何模块的导出面上，测试够不着。这里用一次真实调用
+ * 把那段文本切出来 —— 切点是两个稳定标记，与 `generateBootstrapCode()` 同源，
+ * 因此测试覆盖的**就是**生产实际执行的那段代码，而不是复制品。
+ */
+export function extractProcessMaskingBlock(): string {
+  const code = generateBootstrapCode();
+  const start = code.indexOf(PROCESS_MASKING_START);
+  const end = code.indexOf(PROCESS_MASKING_END, start + PROCESS_MASKING_START.length);
+  if (start === -1 || end === -1) {
+    throw new Error(
+      'process masking markers not found in bootstrap code — ' + 'sandbox-confinement.test.ts 依赖它们定位遮蔽块',
+    );
+  }
+  return code.slice(start + PROCESS_MASKING_START.length, end).trim();
+}
+
 function generateBootstrapCode(): string {
   const rootPath = process.cwd().replace(/\\/g, '/');
   const requirePath = `${rootPath}/package.json`;
@@ -429,6 +551,70 @@ function generateBootstrapCode(): string {
 import { parentPort, workerData } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 const requireFn = createRequire('${requirePath}');
+
+/* __PROCESS_MASKING_START__ */
+// ── I-4：遮蔽 process（D-1 决策：平台要做第三方开发者生态）─────────────────────
+//
+// worker_threads 与主进程**同进程同内存空间**，'process' 是裸全局 —— 插件不需要
+// 任何绕过手段就能读到宿主的全部环境变量。实测（'new Worker(url,{eval:false})'）：
+//   process.env          → 可读到 10+ 个密钥（ANTHROPIC_AUTH_TOKEN / *API_KEY …）
+//   process.kill/chdir   → 可用
+//   process.exit()       → 可用（只终结本线程，主进程存活）
+//
+// 安装期已有两道真门（esbuild 'platform:'neutral'' 拒绝一切裸 specifier、
+// assertPluginCodeSafe() 拦 eval / new Function / 计算式 import()），所以
+// 'await import('node:fs')' 这类路径插件作者绕不过。但 'process' 不需要绕 ——
+// 它就在全局作用域里。因此这里必须遮蔽。
+//
+// 遮蔽后插件仍能拿到：argv(仅 worker 启动参数)、version、platform、versions、
+// cwd/pid/hrtime 这类无敏感信息项。**环境变量一律不给**。
+// 真实的 exit 引用：bootstrap 自身的错误处理器需要真正退出 worker，
+// 但 process.exit 已对插件遮蔽。这里在遮蔽**之前**取出闭包，插件拿不到它。
+var realExit = process.exit.bind(process);
+
+// 不保留原 env 引用：留一份 'const __REAL_ENV = process.env' 在作用域里，
+// 插件可以闭包捕获它再读回来，等于遮蔽失效。
+Object.defineProperty(process, 'env', {
+  configurable: false,
+  writable: false,
+  value: Object.freeze(Object.create(null)),
+});
+process.exit = function(code) {
+  parentPort.postMessage({
+    type: 'error',
+    message: 'process.exit() is not available inside a plugin worker.'
+  });
+  throw new Error('[SecurityError] process.exit() is forbidden in plugin worker.');
+};
+// 名单里**刻意不含 chdir** —— 实测（I-4 落地时逐个试出来的）：
+// process.chdir 一旦被 redefine 成不可写属性，exceljs 的 require 链会在
+// Object.setPrototypeOf 上炸出 'Cyclic __proto__ value'。而 exceljs 在
+// PLUGIN_SHARED_MODULES 白名单里，是官方支持的插件依赖 —— 为了挡一个威胁
+// 有限的 API 而打断一条受支持的加载路径，是净损失。
+//
+// 名单只留三类真威胁：
+//   · kill / abort          —— 能杀宿主进程
+//   · setuid / setgid / seteuid / setegid —— 能改宿主进程身份
+//   · dlopen / binding      —— 低层原生入口，可绕过模块级 denylist
+for (const __blocked of ['kill', 'abort', 'setuid', 'setgid', 'seteuid', 'setegid', 'dlopen', 'binding']) {
+  try {
+    Object.defineProperty(process, __blocked, {
+      configurable: false,
+      writable: false,
+      value: function() {
+        throw new Error('[SecurityError] process.' + __blocked + '() is forbidden in plugin worker.');
+      }
+    });
+  } catch (__e) {
+    // 某些 Node 版本上这些属性可能不可重定义 —— 失败不应阻断整个 worker 启动，
+    // 但必须让运维知道遮蔽不完整。见下方 SELF_CHECK 报告。
+  }
+}
+// argv 里可能带宿主命令行参数（含路径、偶尔含内网地址）—— 只保留 worker 自身标识
+try {
+  process.argv = Object.freeze(['node', 'openlearn-plugin-worker']);
+} catch (__e) {}
+/* __PROCESS_MASKING_END__ */
 
 process.on('unhandledRejection', function(reason) {
   var msg = (reason && reason.message) ? reason.message : String(reason);
@@ -441,8 +627,10 @@ process.on('unhandledRejection', function(reason) {
       stack: stack
     });
   } catch (e) {}
+  // 用真正的进程退出而非 process.exit(1)：后者已被 I-4 遮蔽成抛错，
+  // 而错误处理器里再抛错会变成新的 unhandledRejection。
   setTimeout(function() {
-    process.exit(1);
+    realExit(1);
   }, 10);
 });
 
@@ -458,7 +646,7 @@ process.on('uncaughtException', function(err) {
     });
   } catch (e) {}
   setTimeout(function() {
-    process.exit(1);
+    realExit(1);
   }, 10);
 });
 
@@ -1321,6 +1509,35 @@ export class WorkerManager {
         eval: false,
         stdout: true,
         stderr: true,
+        /**
+         * 用一段**实测结论**替换掉此前错误的断言（2026-10-07 收尾复核更正）。
+         *
+         * 此前这里写的是「worker_threads 是协作式的，terminate() 对同步死循环无效，
+         * 同步死循环无法被强制终止」—— **该断言是错的**，来源是我在 I-5 时的一次探针
+         * 缺陷：那次探针打印的「6s 未终止」测的是 `WorkerOptions.timeout` 选项有没有触发，
+         * 之后才调 terminate()，**从未单独验证 terminate 本身**。
+         *
+         * 复测（3 轮 × 2 种载荷，同一份脚本）：
+         *
+         *   模块体 while(true)         exit code=1@2ms  exit code=1@2ms  exit code=1@3ms
+         *   定时器内 while(true)        exit code=1@2ms  exit code=1@3ms  exit code=1@2ms
+         *   死循环期间主线程 300ms 内完成 29 次 tick → 主线程未被阻塞
+         *
+         * 结论：**terminate() 能可靠终止同步死循环的 worker**（worker 有独立 isolate，
+         * V8 侧销毁 isolate 不需要 JS 栈配合；这与 `Atomics.wait` 的协作式阻塞不同）。
+         *
+         * 那 CPU DoS 的真实缺口是什么？不是「杀不掉」，而是**没有人去杀**：
+         *   · 没有 CPU 时间配额 —— resourceLimits 只管堆
+         *   · watchdog 监听 `exit` 事件，而死循环**不产生 exit**，故永不触发
+         *   ⇒ 一个 `while(true)` 的插件会占住一个槽位直到进程结束，打满 32 个即 DoS
+         *
+         * 修法是**宿主侧的 CPU 看门狗**（超时未收到心跳即调 terminate()），
+         * 属低成本改动，不需要换隔离原语。真正的进程隔离另见 L-1 立项提案，
+         * 其理由是**纵深防御与爆炸半径**，不是「当前已可 RCE」。
+         */
+        // I-5（D-1 决策）：此处刻意不设 timeout —— 该选项在 @types/node@24 的
+        // WorkerOptions 中**不存在**，实测传入亦完全无效。CPU 侧的兜底靠宿主
+        // 看门狗调 terminate()，见上方说明。
         resourceLimits: {
           maxOldGenerationSizeMb: 128,
           maxYoungGenerationSizeMb: 32,
@@ -1540,6 +1757,9 @@ export class WorkerManager {
    * @param pluginId - 插件标识符
    */
   async terminateWorker(pluginId: string): Promise<any> {
+    // 即使 workers map 中已无该插件（如已崩溃并 cleanup），也必须取消待执行的重启定时器，
+    // 否则会给已停用/已卸载的插件「复活」（审计 C-6）。
+    this.registry.cancelWatchdog(pluginId);
     const instance = this.registry.get(pluginId);
     if (instance) {
       await instance.serviceHost.dispose();

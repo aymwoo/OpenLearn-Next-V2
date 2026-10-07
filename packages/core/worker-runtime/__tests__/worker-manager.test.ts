@@ -303,11 +303,18 @@ describe('WorkerManager', () => {
   });
 
   it('should fail-fast if worker process exits during activation', async () => {
+    // 用 `throw` 而不是 `process.exit(1)` 触发真实退出。
+    //
+    // I-4 起`process.exit` 在worker 内已被替换成抛错桩（插件调用它只会得到
+    // SecurityError，线程不会退出）。原写法依赖`process.exit(1)` 让线程带
+    // code 1 退出，现在那条路径已被遮蔽 —— 改为抛错：bootstrap 的
+    // unhandledRejection 处理器会调用 realExit(1)，**同样**让线程以 code 1
+    // 退出，因此本用例要验证的「激活期退出要快速失败」语义完全不变。
     const exitingPluginCode = `
       export default {
         manifest: { id: 'exit-plugin', name: 'Exit Plugin', version: '1.0.0' },
         activate: async () => {
-          process.exit(1);
+          throw new Error('simulated activation crash');
         },
         deactivate: async () => {}
       };
@@ -319,11 +326,16 @@ describe('WorkerManager', () => {
     } as Manifest;
 
     const start = Date.now();
+    // I-4 之后不能断言 /Worker process exited with code 1/ 了 —— 那条路径依赖
+    // `process.exit(1)` 让线程带 code 1 退出，而process.exit 现在是抛错桩，
+    // 线程改由 bootstrap 的 unhandledRejection 处理器调 realExit(1) 退出。
+    // 两种方式线程最终都退出、createWorker 都快速失败，**唯一变化是报错文案**：
+    // 现在是error 消息先到（来自 postMessage），而不是 exit 事件。
     await expect(wm.createWorker('exit-plugin', manifest, exitingPluginCode, [])).rejects.toThrow(
-      /Worker process exited with code 1/,
+      /simulated activation crash/,
     );
     const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(5000);
+    expect(elapsed, '激活期崩溃必须快速失败，不能等到激活超时').toBeLessThan(5000);
   });
 
   it('should catch and report unhandledRejection during worker activation', async () => {

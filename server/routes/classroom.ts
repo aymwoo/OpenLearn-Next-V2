@@ -321,6 +321,83 @@ export function registerClassroomRoutes(
 
   // 注册命令总线处理器，使第三方插件可以通过 commandBus 控制倒计时
   try {
+    // ── Action descriptor ────────────────────────────────────────────────
+    // kernel 的 commandBus interceptor 采用 **default-deny**：命令类型若没有对应的
+    // action descriptor，将被拒绝派发（见 packages/core/kernel/index.ts）。
+    // 因此这里必须为每个 countdown 命令注册 action，否则本节暴露给插件的
+    // 「插件 → 倒计时」能力会在 default-deny 下全部失效。
+    //
+    // capability 取 `lesson:write`：倒计时直接改写课堂时间轴，与 lesson:write 同域；
+    // 且 CapabilityGuard 的 teacher 角色默认含 `lesson:*`，教师/AI 助教均可调用。
+    const actionRegistry = kernelContainer.actionRegistry;
+    const COUNTDOWN_ACTION_CAPABILITY = 'lesson:write';
+    const countdownLessonIdProp = {
+      lessonId: { type: 'STRING', description: '课程 ID' },
+    };
+    const countdownActionSpecs: Array<{
+      id: string;
+      commandType: string;
+      description: string;
+      properties: Record<string, unknown>;
+      required: string[];
+    }> = [
+      {
+        id: 'core-classroom-countdown-start',
+        commandType: 'classroom.countdown.start',
+        description: '启动课堂倒计时',
+        properties: {
+          ...countdownLessonIdProp,
+          duration: { type: 'INTEGER', description: '倒计时时长（秒）' },
+          label: { type: 'STRING', description: '倒计时标签，如「小组展示」' },
+        },
+        required: ['lessonId', 'duration'],
+      },
+      {
+        id: 'core-classroom-countdown-pause',
+        commandType: 'classroom.countdown.pause',
+        description: '暂停课堂倒计时',
+        properties: countdownLessonIdProp,
+        required: ['lessonId'],
+      },
+      {
+        id: 'core-classroom-countdown-resume',
+        commandType: 'classroom.countdown.resume',
+        description: '恢复被暂停的课堂倒计时',
+        properties: countdownLessonIdProp,
+        required: ['lessonId'],
+      },
+      {
+        id: 'core-classroom-countdown-reset',
+        commandType: 'classroom.countdown.reset',
+        description: '重置课堂倒计时',
+        properties: countdownLessonIdProp,
+        required: ['lessonId'],
+      },
+      {
+        id: 'core-classroom-countdown-add-time',
+        commandType: 'classroom.countdown.add_time',
+        description: '为课堂倒计时增加秒数（如回答问题延时）',
+        properties: {
+          ...countdownLessonIdProp,
+          addSeconds: { type: 'INTEGER', description: '增加的秒数（可为负以提前结束）' },
+        },
+        required: ['lessonId', 'addSeconds'],
+      },
+    ];
+    for (const spec of countdownActionSpecs) {
+      actionRegistry.register({
+        id: spec.id,
+        commandType: spec.commandType,
+        description: spec.description,
+        capabilityRequired: COUNTDOWN_ACTION_CAPABILITY,
+        inputSchema: {
+          type: 'OBJECT',
+          properties: spec.properties,
+          required: spec.required,
+        },
+      } as never);
+    }
+
     kernelContainer.commandBus.registerHandler('classroom.countdown.start', {
       execute: async (cmd: any) => {
         const { lessonId, duration, label } = cmd.payload || {};
@@ -1297,9 +1374,7 @@ export function registerClassroomRoutes(
 
         const totalCount = rows.length;
         const avgRating =
-          totalCount > 0
-            ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
-            : 0;
+          totalCount > 0 ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1)) : 0;
 
         const tierDistribution = {
           passed: rows.filter((r) => r.tier_level === 'passed').length,

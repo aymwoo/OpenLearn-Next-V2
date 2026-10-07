@@ -33,6 +33,7 @@ import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
 import type { ContributionSummary, ClassroomToolConfig } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
+import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import {
   checkMissingDeps,
   topologicalSort,
@@ -44,6 +45,7 @@ import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { compose } from './middleware.js';
 import { PluginState } from './types.js';
+import type { Disposable } from './types.js';
 import type {
   PluginContext,
   PluginInfo,
@@ -63,7 +65,13 @@ import {
   HotReloadError,
   HotReloadActivationError,
 } from './errors.js';
-import { ICapabilityServiceToken, IEventBusServiceToken } from '../di/interfaces.js';
+import {
+  ICapabilityServiceToken,
+  IEventBusServiceToken,
+  IStageGuardServiceToken,
+  IProcessServiceToken,
+} from '../di/interfaces.js';
+import type { IProcessService } from '../di/interfaces.js';
 import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import type { IWorkerTransport } from '../worker-runtime/types.js';
@@ -163,6 +171,20 @@ function resolveHostSdkDir(): string | null {
 
 // ── PluginHost ─────────────────────────────────────────────────────────────
 
+/**
+ * 活跃插件实例的形状。
+ *
+ * 提取为命名类型（原先是 pluginInstances 声明处的内联字面量），便于
+ * `disposeSnapshot` / `rollbackReload` 等方法在签名里引用，避免重复书写。
+ */
+interface PluginInstance {
+  manifest: Manifest;
+  activate: ((ctx: PluginContext) => Promise<void>) | undefined;
+  deactivate?: (() => Promise<void>) | undefined;
+  workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
+  context?: PluginContext;
+}
+
 export class PluginHost {
   // D-03: 插件状态追踪
   private pluginStates = new Map<string, PluginState>();
@@ -172,6 +194,28 @@ export class PluginHost {
 
   // V3.0: 贡献注册表 — 声明式 UI 贡献点存储
   private contributionRegistry = new ContributionRegistry();
+
+  /**
+   * 贡献注册表的**只读**访问器。
+   *
+   * ## 为什么需要暴露
+   *
+   * H-2 的教训：注册用的键是 `manifest.id`，而 DB 行主键是 UUID，两者不一致。
+   * 这个不一致此前**没有任何测试能覆盖** —— 因为唯一的调用点断言的是「卸载后为 0」，
+   * 无论键匹不匹配都通过。要写能真正区分的测试，就必须能**在注册侧建立前提**，
+   * 而三条注册路径（`installPlugin` / `installPluginFromZip` / `updatePluginFromZip`）
+   * 都要求完整的打包产物，在单测里搭建成本远高于被测行为本身。
+   *
+   * 故提供只读入口：让「键约定」这个**不变量**本身可被断言。
+   * 用 `as any` 绕过 `private` 也能做到，但那样测试就断言不了「这是有意的公开契约」，
+   * 且会掩盖将来把它改成 `private` 的破坏性变更。
+   *
+   * 只读：返回的是 registry 实例本身，调用方仍应只调用 `summary` / `allSummaries` /
+   * `getByPlugin` 等读方法。真正的写入口仍是三条 install 路径。
+   */
+  get contributions(): ContributionRegistry {
+    return this.contributionRegistry;
+  }
 
   // Phase 7: 中间件注册表 — 按生命周期阶段分组
   private middlewareRegistry = new Map<LifecyclePhase, Middleware[]>();
@@ -187,16 +231,7 @@ export class PluginHost {
   >();
 
   // 活跃插件实例引用（manifest + activate/deactivate 函数）
-  private pluginInstances = new Map<
-    string,
-    {
-      manifest: Manifest;
-      activate: ((ctx: PluginContext) => Promise<void>) | undefined;
-      deactivate?: (() => Promise<void>) | undefined;
-      workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
-      context?: PluginContext;
-    }
-  >();
+  private pluginInstances = new Map<string, PluginInstance>();
 
   /** Coalesce concurrent activate/deactivate calls per plugin (prevents activating→activating). */
   private inflightActivate = new Map<string, Promise<void>>();
@@ -223,6 +258,39 @@ export class PluginHost {
   private pluginsDir: string;
   private expressApp: any = null;
   private _registeredRoutes = new Map<string, string>();
+
+  /**
+   * 静态路由的**归一化形式**，用于冲突检测与保留前缀比对（G-4b）。
+   *
+   * ## 为什么必须归一化
+   *
+   * Express 把 `/foo` 与 `/foo/` 当成**同一个** mount point（先挂载者生效，
+   * 后者静默遮蔽），但字符串比较认为它们不同。原先只做 `toLowerCase()`，
+   * 于是两个插件分别声明 `/assets` 与 `/assets/` 时：
+   *   · 冲突检测放行
+   *   · Express 静默让先挂载的赢
+   *   · 后挂载插件的静态资源**永远 404，且没有任何日志或报错**
+   *
+   * 这类故障的排查成本极高：现象是「资源 404」，病因在两个插件的 manifest 里。
+   *
+   * ## 归一化规则
+   *
+   *   1. 转小写 —— URL 路径大小写不敏感（与既有 toLowerCase 行为一致）
+   *   2. 压缩重复斜杠 —— `//a` ≡ `/a`
+   *   3. 去掉末尾斜杠 —— `/a/` ≡ `/a`；根路径 `/` 例外，保留
+   *   4. 补前导斜杠 —— 使 `a/b` 与 `/a/b` 也等价
+   *
+   * 规则 1 沿用既有实现而非新引入：改动它会扩大影响面，而它本身不是缺陷。
+   */
+  private static normalizeStaticRoute(route: string): string {
+    const lowered = route.trim().toLowerCase();
+    const collapsed = lowered.replace(/\/{2,}/g, '/');
+    const withLeading = collapsed.startsWith('/') ? collapsed : `/${collapsed}`;
+    // 根路径 '/' 不能被削成 '' —— 它是合法的（虽然本处拒绝把 '/' 注册给插件，
+    // 见 SEC-ROUTE-02，但归一化函数本身应保持幂等与正确）
+    const withoutTrailing = withLeading.length > 1 ? withLeading.replace(/\/+$/, '') : withLeading;
+    return withoutTrailing || '/';
+  }
   private _socketIO: any = null;
 
   constructor(
@@ -237,19 +305,54 @@ export class PluginHost {
   setExpressApp(app: any): void {
     this.expressApp = app;
     // Restore static routes from installed plugins (survives server restart)
-    const allPlugins = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{
+    const allPlugins = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{
       id: string;
       manifest: string;
+      status: string;
     }>;
     for (const p of allPlugins) {
       try {
+        // 审计 D-3 / M-4：只为**活跃**插件挂载静态资源路由。
+        //
+        // 修复前对所有已安装插件（含 disabled / error / inactive）挂载，
+        // 导致停用插件的静态资源仍可下载。
+        //
+        // 为什么在挂载时过滤、而不是在停用时摘除路由：
+        //  1. `uninstallPlugin` 的摘除实现是遍历 `express._router.stack` 做 splice，
+        //     只能命中一个 layer，而 `expressApp.use()` 挂载的是多层中间件；
+        //  2. 本方法在**每次重启**都会重跑，任何运行时摘除都会被覆盖回去。
+        // 在挂载时过滤则保证重启与运行时行为一致，且不依赖脆弱的 stack 手术。
+        if (p.status !== 'active') continue;
         const m = JSON.parse(p.manifest);
         if (m.deploy?.staticRoute && m.deploy?.staticDir) {
           const pluginDir = this.getPluginDir(p.id);
           const absDir = path.join(pluginDir, m.deploy.staticDir);
           if (fs.existsSync(absDir)) {
+            // 归一化 + 冲突检测（G-4b）。
+            //
+            // 恢复路径原先**两者都没做**：存原始路由，且完全不查冲突。
+            // 后果是安装时检出（或未检出）的冲突在重启后被完全绕过 ——
+            // 两个等价路由同时挂载，先到先得，另一方的资源永久 404 且无任何日志。
+            const normalized = PluginHost.normalizeStaticRoute(m.deploy.staticRoute);
+            let conflictWith: string | undefined;
+            for (const [ownerId, existingRoute] of this._registeredRoutes.entries()) {
+              if (ownerId !== m.id && PluginHost.normalizeStaticRoute(existingRoute) === normalized) {
+                conflictWith = ownerId;
+                break;
+              }
+            }
+            if (conflictWith) {
+              // 不抛错：重启路径不宜因一个插件的路由冲突而整体失败。
+              // 但必须显式告警 —— 否则就是「静默遮蔽」，正是本项要消除的现象。
+              console.error(
+                `[PluginHost] Static route conflict on restore: "${m.deploy.staticRoute}" ` +
+                  `(normalized: "${normalized}") for plugin "${m.id}" is already registered by ` +
+                  `"${conflictWith}". 后者被遮蔽，其静态资源将 404。`,
+              );
+              continue;
+            }
             this.expressApp.use(m.deploy.staticRoute, ...createPluginStaticMiddleware(absDir));
-            this._registeredRoutes.set(m.id, m.deploy.staticRoute);
+            this._registeredRoutes.set(m.id, normalized);
             console.log(`[PluginHost] Restored static route "${m.deploy.staticRoute}" for plugin "${m.id}"`);
           }
         }
@@ -286,6 +389,19 @@ export class PluginHost {
   /** 获取插件的文件系统目录路径 */
   getPluginDir(pluginId: string): string {
     return path.join(this.pluginsDir, pluginId);
+  }
+
+  /**
+   * 本宿主实例实际使用的插件根目录。
+   *
+   * 供 `Kernel` 等调用方读取，避免它们各自重新推导 `cwd/plugins` ——
+   * 那正是 H-1 残留缺陷的成因：`Kernel` 构造器支持注入 `pluginsDir`，
+   * 但迁移函数绕过它、自己又算了一遍，测试的重定向因此失效。
+   *
+   * 读取宿主的真实值而不是复制推导逻辑，两个来源就不可能分叉。
+   */
+  getPluginsDir(): string {
+    return this.pluginsDir;
   }
 
   /** 获取插件入口 JS 文件路径 */
@@ -802,13 +918,51 @@ export class PluginHost {
    *
    * 无需激活插件即可枚举。用于管理后台预览插件将添加哪些 UI 元素。
    * 若未指定 pluginId，返回所有插件的贡献摘要。
+   *
+   * ## 关于参数形态（H-2）
+   *
+   * 本方法的两种输入形态（DB UUID 与 manifest.id）**都必须支持**，因为调用方
+   * 天然会有两种：HTTP 层拿到的多为 DB 主键，而依赖解析、命令行等内部路径
+   * 手上只有 manifest.id。
+   *
+   * 之所以要显式做双向映射：`contributionRegistry` 的两级索引是以
+   * **`manifest.id`** 为键的（见 `register()` 的 `@param pluginId`，以及
+   * contribution-registry.ts 的两级 Map），而 `getByPlugin()` 是纯
+   * `Map.get()`，**不做任何反向解析**。因此原实现两条路都错：
+   *
+   *   · 只传原样输入 → 传 UUID 时落空
+   *   · 只传 `resolvePluginUuid()` 的结果 → 把 manifest.id 主动改成了 UUID，落空
+   *
+   * 后者尤其隐蔽：**唯一语义正确的输入反而被改成了查不到的形式**。
+   * 而全仓唯一调用点（canary.step5）断言的是「卸载后为 0」，
+   * 无论命中空集合还是查错键落空，结果都是 0 —— 该缺陷因此长期未被察觉。
+   *
+   * 这里对所有候选键取并集（而非「先试原样、落空再回退」）：不依赖查询顺序，
+   * 也不在两个键恰好都注册过时产生歧义。并集按 slot 去重，
+   * 语义稳定为「该插件的全部贡献」。
    */
   listContributions(
     pluginId?: string,
   ): ContributionSummary[] | Array<{ pluginId: string; contributions: ContributionSummary[] }> {
     if (pluginId) {
-      const resolved = this.resolvePluginUuid(pluginId);
-      return this.contributionRegistry.summary(resolved);
+      // registry 的键是 manifest.id，入参可能是 UUID 或 manifest.id，两种都要覆盖
+      const candidates = new Set<string>([pluginId]);
+
+      const uuid = this.resolvePluginUuid(pluginId);
+      if (uuid) candidates.add(uuid);
+
+      // UUID → manifest.id 的反向解析：resolvePluginUuid 是单向的，缺这一步 UUID 入参永远查不到
+      const manifestId = this.resolveManifestId(pluginId);
+      if (manifestId) candidates.add(manifestId);
+
+      const merged = new Map<string, ContributionSummary>();
+      for (const key of candidates) {
+        for (const summary of this.contributionRegistry.summary(key)) {
+          // 按 slot 去重（候选集本身已去重，故不会重复计数）
+          if (!merged.has(summary.slot)) merged.set(summary.slot, summary);
+        }
+      }
+      return [...merged.values()];
     }
     return this.contributionRegistry.allSummaries();
   }
@@ -883,6 +1037,57 @@ export class PluginHost {
 
     // 3. 原样返回，让调用方自行处理"找不到"
     return idOrManifestId;
+  }
+
+  /**
+   * `resolvePluginUuid()` 的**反向**：把 DB 主键（或已是 manifest.id 的入参）解析为 manifest.id。
+   *
+   * ## 为什么需要它
+   *
+   * 宿主内部存在两套「插件标识符」命名空间，而两个方向的解析此前**只存在一个**：
+   *
+   * | 命名空间 | 典型值 | 谁在用 |
+   * |---|---|---|
+   * | DB 主键（UUID） | `11111111-…` | HTTP 路由参数、DB 行 |
+   * | manifest.id（别名） | `ext-canary` | `contributionRegistry` 的索引键、依赖解析 |
+   *
+   * `resolvePluginUuid()` 只做了「别名 → UUID」。而 `contributionRegistry` 的键
+   * 是 **manifest.id**，其 `getByPlugin()` 又是纯 `Map.get()`、不接受 UUID。
+   * 于是「查 registry」必须有「UUID → 别名」这一步，此前**不存在** —— 这就是 H-2：
+   * `listContributions()` 无论收到哪种输入都返回空。
+   *
+   * @param idOrManifestId - DB 主键或 manifest.id
+   * @returns manifest.id；查不到时返回空串（调用方据此跳过，不污染候选键集合）
+   */
+  resolveManifestId(idOrManifestId: string): string {
+    try {
+      // 1. 优先按主键查（O(1)，最常见路径）
+      const byId = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(idOrManifestId) as
+        { manifest: string } | undefined;
+      const fromPrimary = this.extractManifestId(byId?.manifest);
+      if (fromPrimary) return fromPrimary;
+
+      // 2. 回退：入参本身就是 manifest.id 别名
+      const byAlias = this.db
+        .prepare("SELECT manifest FROM plugins WHERE json_extract(manifest, '$.id') = ?")
+        .get(idOrManifestId) as { manifest: string } | undefined;
+      const fromAliasId = this.extractManifestId(byAlias?.manifest);
+      if (fromAliasId) return fromAliasId;
+    } catch {
+      // 表不存在 / SQL 不可用 —— 一律按「查不到」处理，不向上抛
+    }
+    return '';
+  }
+
+  /** 从 plugins.manifest 的 JSON 文本里取 `id` 字段；缺失或非法 JSON 返回空串 */
+  private extractManifestId(manifestJson: string | undefined): string {
+    if (!manifestJson) return '';
+    try {
+      const id = (JSON.parse(manifestJson) as { id?: unknown }).id;
+      return typeof id === 'string' ? id : '';
+    } catch {
+      return '';
+    }
   }
 
   /**
@@ -1018,19 +1223,55 @@ export class PluginHost {
     const manifestPath = this.getPluginManifestPath(pluginId);
 
     try {
-      // 4. 写入文件系统
+      // 4a. 词法静态门（A-1 / C-1 / C-6）
+      //
+      // 放在 bundlePlugin() **之前**，这样拒绝理由是明确的 PluginSecurity 错误，
+      // 而不是在 esbuild 报错里看到 `openlearn-token-enforcer`（那是 ZIP 路径的消息）。
+      // 两层门职责不同：词法门拦计算式 import / eval / 动态 require，
+      // esbuild enforcer 拦裸 specifier 与绝对路径。
+      const { assertPluginCodeSafe } = await import('../esm-loader/install-utils.js');
+      assertPluginCodeSafe(sourceCode);
+
+      // 4b. esbuild token enforcer + 绝对路径拦截
+      //
+      // 此前本方法把 `sourceCode` **原样落盘**，完全不经过 bundlePlugin() 与
+      // openlearn-token-enforcer —— 于是 `plugin.install`（源码安装）路径的静态防线
+      // 等于不存在，而 `plugin.install_zip` 路径却有一整套。两条安装路径强度严重不对称：
+      // 经审批的管理员用前者装插件，可直接 `import fs from 'node:fs'`。
+      //
+      // 现在两条路径共用同一组门。bundlePlugin 在此**只做校验、不落盘其产物**：
+      // inline 安装传入的是单文件源码字符串，本就不存在相对导入需要内联
+      // （多文件场景走 installPluginFromZip，那里落盘的才是 bundle）。
+      // 因此落盘的仍是原始 sourceCode —— 既拿到与 ZIP 路径一致的防线强度，
+      // 又不改变 activatePlugin 的读盘与 loader 既有契约。
+      const { bundlePlugin } = await import('../esm-loader/install-utils.js');
+      await bundlePlugin(sourceCode, pluginDir); // 抛错即拒绝安装
+
+      // 5. 写入文件系统
       fs.mkdirSync(pluginDir, { recursive: true });
       fs.writeFileSync(filePath, sourceCode, 'utf-8');
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 
-      // 5. INSERT 到 DB（source_code 留空，源码已迁移到文件系统）
+      // 6. INSERT 到 DB（source_code 留空，源码已迁移到文件系统）
+      // version 列是 H-3 新增的**加速索引**（真源仍是 manifest JSON），
+      // 漏写不会造成功能回归，但会让版本筛选查不到该行 —— 故此处同步写入。
       const stmt = this.db.prepare(
-        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
-      stmt.run(pluginId, manifest.name, JSON.stringify(manifest), '', filePath, 'installed', Date.now(), 'esm');
+      stmt.run(
+        pluginId,
+        manifest.name,
+        JSON.stringify(manifest),
+        '',
+        filePath,
+        'installed',
+        Date.now(),
+        'esm',
+        manifest.version,
+      );
 
-      // 6. 设置状态为 INSTALLED
-      this.pluginStates.set(pluginId, PluginState.INSTALLED);
+      // 7. 设置状态为 INSTALLED（上方 INSERT 已写入 status='installed'，此处只同步内存）
+      this.setPluginState(pluginId, PluginState.INSTALLED);
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed to ${filePath} (${pluginId})`);
       return manifest;
@@ -1093,10 +1334,17 @@ export class PluginHost {
   }
 
   private async activatePluginExclusive(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
+    // 进入新的生命周期：清除 ResourceTracker 的「已关闭」标记（审计 H-3）。
+    //
+    // 必须在此处（而非仅首次安装）调用 —— 上一次 activate 若因 5s 超时被 disposeAll，
+    // 该标记会保留；若不重置，本次 activate 注册的所有资源都会被立即 dispose，
+    // 插件将永远无法正常启动。
+    this.resourceTracker.reopen(pluginId);
+
     // Recover orphaned transient state left by a crashed/aborted previous attempt
     if (this.pluginStates.get(pluginId) === PluginState.ACTIVATING) {
       console.warn(`[PluginHost] Recovering stuck ACTIVATING state for "${pluginId}" → ERROR before retry`);
-      this.pluginStates.set(pluginId, PluginState.ERROR);
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
     }
 
     // Phase 5: Dual-mode activation — check if worker mode is requested
@@ -1110,7 +1358,7 @@ export class PluginHost {
     this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
 
     // 2. 设置状态为 ACTIVATING
-    this.pluginStates.set(pluginId, PluginState.ACTIVATING);
+    this.setPluginState(pluginId, PluginState.ACTIVATING);
 
     // Phase 8: Check if this is a preloaded inline plugin
     const preloaded = this.preloadedPlugins.get(pluginId);
@@ -1139,6 +1387,9 @@ export class PluginHost {
           );
         }
         const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
+        // B-5：在构建上下文**之前**声明进程归属，否则本插件 spawn 的任务会被
+        // 记到上一个声明者名下（归属列/内存 Map 都是同步写入，见 setPluginOwner 注释）。
+        await this.declareProcessOwnership(pluginId);
         const ctx = await buildContext(
           this.serviceRegistry,
           this.resourceTracker,
@@ -1188,12 +1439,10 @@ export class PluginHost {
         });
 
         this.pluginInstances.set(pluginId, { manifest, activate, deactivate, context: ctx });
-        this.pluginStates.set(pluginId, PluginState.ACTIVE);
-
-        this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
+        this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
       } catch (err: any) {
         console.error('[PluginHost] Preloaded plugin activation error stack:', err.stack);
-        this.pluginStates.set(pluginId, PluginState.ERROR);
+        this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
         this.resourceTracker.disposeAll(pluginId);
         try {
           const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
@@ -1210,7 +1459,7 @@ export class PluginHost {
     const row = this.db.prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?').get(pluginId) as
       { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
-      this.pluginStates.set(pluginId, currentState); // 回滚状态
+      this.setPluginState(pluginId, currentState);
       throw new PluginActivateError(pluginId, 'plugin not found in database');
     }
 
@@ -1219,7 +1468,7 @@ export class PluginHost {
     try {
       storedManifest = JSON.parse(row.manifest);
     } catch {
-      this.pluginStates.set(pluginId, currentState);
+      this.setPluginState(pluginId, currentState);
       throw new PluginActivateError(pluginId, 'invalid manifest JSON in database');
     }
 
@@ -1274,7 +1523,7 @@ export class PluginHost {
       // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
       const depCheck = this.checkPluginDependencies(mergedManifest);
       if (depCheck) {
-        this.pluginStates.set(pluginId, PluginState.ERROR);
+        this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
         throw new PluginActivateError(pluginId, depCheck);
       }
 
@@ -1347,14 +1596,13 @@ export class PluginHost {
         ]);
 
         // 11. 成功
-        this.pluginStates.set(pluginId, PluginState.ACTIVE);
         this.pluginInstances.set(pluginId, {
           manifest: mergedManifest,
           activate,
           deactivate: typeof deactivate === 'function' ? deactivate : undefined,
           context: ctx,
         });
-        this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
+        this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
 
         // 热重载接线：注册到 FileWatcher
         if (this._hotReloadController) {
@@ -1369,7 +1617,7 @@ export class PluginHost {
       });
     } catch (err) {
       // 11. D-12: 失败回滚
-      this.pluginStates.set(pluginId, PluginState.ERROR);
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
 
@@ -1397,12 +1645,12 @@ export class PluginHost {
   private async activateWorker(pluginId: string): Promise<void> {
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
-    this.pluginStates.set(pluginId, PluginState.ACTIVATING);
+    this.setPluginState(pluginId, PluginState.ACTIVATING);
 
     const row = this.db.prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?').get(pluginId) as
       { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
-      this.pluginStates.set(pluginId, currentState);
+      this.setPluginState(pluginId, currentState);
       throw new PluginActivateError(pluginId, 'plugin not found in database');
     }
 
@@ -1435,17 +1683,16 @@ export class PluginHost {
         this.getPluginDir(pluginId),
       );
 
-      this.pluginStates.set(pluginId, PluginState.ACTIVE);
       this.pluginInstances.set(pluginId, {
         manifest,
         activate: undefined,
         deactivate: undefined,
         workerRef: { transport, serviceHost },
       });
-      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
+      this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
       console.log(`[PluginHost] Plugin "${manifest.id}" activated in WORKER mode (${pluginId})`);
     } catch (err) {
-      this.pluginStates.set(pluginId, PluginState.ERROR);
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
       try {
@@ -1497,15 +1744,59 @@ export class PluginHost {
     }
   }
 
+  /**
+   * 等待指定插件当前在飞的生命周期操作（activate / deactivate）结束（审计 H-2）。
+   *
+   * 只等待、不改变状态。用于 reloadPlugin 这类**不参与 inflight 合并**的入口，
+   * 使其与其它入口串行，避免双方各自 `disposeAll` 互相踩踏。
+   *
+   * 有界等待：单个操作本身已有 5s 超时保护，故这里不会无限挂起；
+   * 仍加超时兜底，防止将来新增的入口引入无界 promise 时把 reload 拖死。
+   */
+  private async waitForLifecycleIdle(pluginId: string, timeoutMs = 10_000): Promise<void> {
+    for (let i = 0; i < 2; i++) {
+      const inflight =
+        (i === 0 ? this.inflightActivate.get(pluginId) : this.inflightDeactivate.get(pluginId)) ?? undefined;
+      if (!inflight) continue;
+      await Promise.race([
+        inflight.catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+      ]);
+    }
+  }
+
   private async deactivatePluginExclusive(pluginId: string): Promise<void> {
     // Heal orphaned DEACTIVATING
     if (this.pluginStates.get(pluginId) === PluginState.DEACTIVATING) {
       console.warn(`[PluginHost] Recovering stuck DEACTIVATING state for "${pluginId}" → INACTIVE before retry`);
-      this.pluginStates.set(pluginId, PluginState.INACTIVE);
+      this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
       return;
     }
 
-    // 1. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
+    // ── 1. 停用请求到达时插件仍在 ACTIVATING：等它跑完再停（审计 H-2）──────────
+    //
+    // 修复前此处直接落到下面的「非 ACTIVE 静默 return」，导致用户的停用意图被丢弃：
+    // 用户点「停用」，插件随后仍变成 ACTIVE。
+    //
+    // 真实危害场景是卸载竞态：`uninstallPlugin` 发现状态是 ACTIVATING（非 ACTIVE）
+    // 就跳过停用、直接 DELETE DB 行，而在飞的 activate 随后完成 → **已删除的插件
+    // 仍在 commandBus 上留着一批 handler**。
+    //
+    // 正确做法是**等**：activate 完成后状态变为 ACTIVE，此时再执行正常停用流程。
+    // 这样无论 activate 成功还是失败，下面的状态检查都会给出正确处置。
+    const pendingActivate = this.inflightActivate.get(pluginId);
+    if (pendingActivate && this.pluginStates.get(pluginId) === PluginState.ACTIVATING) {
+      try {
+        await pendingActivate;
+      } catch {
+        /* activate 失败 → 状态已是 ERROR/INSTALLED，下面会按状态正确处置 */
+      }
+    }
+
+    // 2. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
+    //
+    // 注意：此处「非 ACTIVE 静默 return」在修复后只剩两种正当场景 ——
+    // 插件本来就没激活（重复停用，幂等），或已卸载。不再有「掩盖竞态」的作用。
     const currentState = this.pluginStates.get(pluginId);
     if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) {
       return;
@@ -1515,7 +1806,7 @@ export class PluginHost {
     this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
 
     // 3. 设置状态为 DEACTIVATING
-    this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+    this.setPluginState(pluginId, PluginState.DEACTIVATING);
 
     // Phase 5: Check if this is a worker-mode plugin
     const mode = this.getExecutionMode(pluginId);
@@ -1578,16 +1869,13 @@ export class PluginHost {
         } finally {
           // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
           this.resourceTracker.disposeAll(pluginId);
-          this.pluginStates.set(pluginId, PluginState.INACTIVE);
           this.pluginInstances.delete(pluginId);
+          this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
           // 热重载注销
           if (this._hotReloadController) {
             this._hotReloadController.unregisterPlugin(pluginId);
           }
-
-          // DB UPDATE
-          this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
 
           // 撤销能力（T-04-20: finally 中强制撤销）
           if (actorId) {
@@ -1608,9 +1896,9 @@ export class PluginHost {
         pipelineErr,
       );
       this.resourceTracker.disposeAll(pluginId);
-      this.pluginStates.set(pluginId, PluginState.INACTIVE);
       this.pluginInstances.delete(pluginId);
-      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
+      this.revokePluginContributions(pluginId); // D-1/D-2：注销声明式贡献
+      this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
       if (actorId) {
         try {
           const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
@@ -1636,7 +1924,7 @@ export class PluginHost {
 
     if (currentState === PluginState.ACTIVE) {
       this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
-      this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+      this.setPluginState(pluginId, PluginState.DEACTIVATING);
     }
 
     let actorId: string | undefined;
@@ -1654,9 +1942,9 @@ export class PluginHost {
       // 都在 finally 中强制回收资源。此前只有 inline 路径调用 disposeAll，
       // 导致 worker 模式插件停用后命令、事件订阅、定时器、路由永久残留。
       this.resourceTracker.disposeAll(pluginId);
-      this.pluginStates.set(pluginId, PluginState.INACTIVE);
       this.pluginInstances.delete(pluginId);
-      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
+      this.revokePluginContributions(pluginId); // D-1/D-2：注销声明式贡献
+      this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
       if (actorId) {
         try {
@@ -1709,11 +1997,11 @@ export class PluginHost {
     if (currentState === PluginState.ACTIVATING) {
       console.warn(`[PluginHost] togglePlugin: healing stuck ACTIVATING for "${pluginId}" → ERROR`);
       currentState = PluginState.ERROR;
-      this.pluginStates.set(pluginId, currentState);
+      this.setPluginState(pluginId, currentState);
     } else if (currentState === PluginState.DEACTIVATING) {
       console.warn(`[PluginHost] togglePlugin: healing stuck DEACTIVATING for "${pluginId}" → INACTIVE`);
       currentState = PluginState.INACTIVE;
-      this.pluginStates.set(pluginId, currentState);
+      this.setPluginState(pluginId, currentState);
     }
 
     const newStatus = currentState === PluginState.ACTIVE ? 'disabled' : 'active';
@@ -1746,6 +2034,14 @@ export class PluginHost {
     if (pluginId.startsWith('@openlearn/') || this.preloadedPlugins.has(pluginId)) {
       throw new Error(`Cannot uninstall system plugin: ${pluginId}`);
     }
+
+    // 等待在飞的生命周期操作结束（审计 H-2）。
+    //
+    // 修复前：下方只判断 `currentState === ACTIVE`，若插件此刻正在 ACTIVATING 就跳过停用、
+    // 直接 DELETE DB 行，而在飞的 activate 随后完成 → **已删除的插件仍留在 commandBus 上**，
+    // 其 handler 永久泄漏。典型触发：装完插件立刻点卸载。
+    await this.waitForLifecycleIdle(pluginId);
+
     const currentState = this.pluginStates.get(pluginId);
 
     // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）
@@ -1852,7 +2148,7 @@ export class PluginHost {
     }
 
     // 6. 清理内存
-    this.pluginStates.set(pluginId, PluginState.UNINSTALLED);
+    this.setPluginState(pluginId, PluginState.UNINSTALLED);
     this.pluginInstances.delete(pluginId);
 
     // 6a. V3.0: 清理贡献注册
@@ -2000,30 +2296,22 @@ export class PluginHost {
       }
 
       // 4b. Auto-install declared dependencies if present
+      //
+      // H-4：**刻意不吞异常**。原实现是 `catch { console.error(...) }` 后继续执行 ——
+      // 部署脚本、贡献注册、DB 落库、状态机全都照常跑完，插件最终是 ACTIVE 的，
+      // 只是 node_modules 残缺。故障会以「插件运行时 MODULE_NOT_FOUND」的形式
+      // 在很久之后、别的上下文里出现。现在依赖装不上就让整个安装事务回滚。
+      //
+      // 参数拼装与 --ignore-scripts 统一在 dependency-install.ts，两条路径不再可能漂移。
       if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
         console.log(`[PluginHost] Installing dependencies for plugin "${manifest.id}" in ${pluginDir}...`);
-        try {
-          const pkgJsonPath = path.join(pluginDir, 'package.json');
-          const pkgJson = {
-            name: manifest.id,
-            version: manifest.version,
-            dependencies: manifest.dependencies,
-          };
-          fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2), 'utf-8');
-
-          const { execSync } = await import('node:child_process');
-          // SEC-RCE-01: 始终添加 --ignore-scripts 防止恶意 npm 包通过 postinstall 钩子执行任意命令
-          execSync(
-            'npm install --production --no-audit --no-fund --legacy-peer-deps --ignore-scripts --registry=https://registry.npmmirror.com',
-            {
-              cwd: pluginDir,
-              stdio: 'ignore',
-            },
-          );
-          console.log(`[PluginHost] Dependencies successfully installed for plugin "${manifest.id}"`);
-        } catch (installErr) {
-          console.error(`[PluginHost] Failed to install dependencies for plugin "${manifest.id}":`, installErr);
-        }
+        installPluginDependencies(pluginDir, {
+          pluginId: manifest.id,
+          // dependencies 不在 manifestSchema 里 → 类型 unknown，运行时窄化而非断言
+          dependencies: parsePluginDependencies(manifest.dependencies, manifest.id),
+          operation: 'install',
+        });
+        console.log(`[PluginHost] Dependencies successfully installed for plugin "${manifest.id}"`);
       }
 
       // 4c. Execute deploy script if declared in manifest
@@ -2067,7 +2355,7 @@ export class PluginHost {
           );
         }
         // SEC-ROUTE-02: 禁止注册系统核心保留前缀
-        const normalized = route.toLowerCase();
+        const normalized = PluginHost.normalizeStaticRoute(route);
         const SYSTEM_RESERVED_ROUTES = ['/api', '/socket.io', '/runtime', '/docs', '/admin', '/health'];
         if (
           route === '/' ||
@@ -2078,17 +2366,23 @@ export class PluginHost {
           );
         }
         // SEC-ROUTE-03: 检查已有插件路由冲突
+        //
+        // 两侧都归一化：`_registeredRoutes` 存的是归一化形式（见下面的 set），
+        // 但仍再归一化一次 —— 该 Map 也可能被 setExpressApp 的恢复路径写入，
+        // 双保险避免将来某条写入路径存了原始形式就静默失效。
         for (const [ownerId, existingRoute] of this._registeredRoutes.entries()) {
-          if (ownerId !== manifest.id && existingRoute.toLowerCase() === normalized) {
+          if (ownerId !== manifest.id && PluginHost.normalizeStaticRoute(existingRoute) === normalized) {
             throw new Error(
-              `[PluginHost] Static route conflict: "${route}" is already registered by plugin "${ownerId}"`,
+              `[PluginHost] Static route conflict: "${route}" (normalized: "${normalized}") ` +
+                `is already registered by plugin "${ownerId}" as "${existingRoute}"`,
             );
           }
         }
         const absDir = path.join(pluginDir, manifest.deploy.staticDir);
         if (fs.existsSync(absDir)) {
           this.expressApp.use(route, ...createPluginStaticMiddleware(absDir));
-          this._registeredRoutes.set(manifest.id, route);
+          // 存归一化形式，使后续比较不必依赖调用方记得归一
+          this._registeredRoutes.set(manifest.id, normalized);
           console.log(`[PluginHost] Registered static route "${route}" for plugin "${manifest.id}"`);
         } else {
           console.warn(
@@ -2101,8 +2395,9 @@ export class PluginHost {
       // Read executionMode from manifest (default: 'inline'), override if administrator specifies
       const executionMode =
         overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
+      // version 列说明同 installPlugin（H-3）：加速索引，真源是 manifest JSON
       const stmt = this.db.prepare(
-        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         pluginId,
@@ -2114,10 +2409,11 @@ export class PluginHost {
         Date.now(),
         'esm',
         executionMode,
+        manifest.version,
       );
 
-      // 6. 设置状态
-      this.pluginStates.set(pluginId, PluginState.INSTALLED);
+      // 6. 设置状态（同上：INSERT 已落 DB，这里只同步内存）
+      this.setPluginState(pluginId, PluginState.INSTALLED);
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
       this.emitProgress(manifest.id, 'complete', 'Installation complete');
@@ -2243,14 +2539,17 @@ export class PluginHost {
       throw new Error(`Cannot update system plugin: ${manifest.id}`);
     }
 
+    // version 在 SELECT 里：更新失败回滚时需要拿**旧** version 写回，
+    // 否则会留下「索引列比 manifest 新」的不一致（比 NULL 更难排查）。
     const existingRow = this.db
-      .prepare('SELECT id, name, status, manifest, execution_mode FROM plugins WHERE id = ?')
+      .prepare('SELECT id, name, status, manifest, execution_mode, version FROM plugins WHERE id = ?')
       .get(pluginId) as {
       id: string;
       name: string;
       status: string;
       manifest: string;
       execution_mode: string;
+      version: string | null;
     };
 
     const oldManifest = JSON.parse(existingRow.manifest) as Manifest;
@@ -2346,26 +2645,19 @@ export class PluginHost {
       // Optional dependency install
       if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
         try {
-          const pkgJsonPath = path.join(pluginDir, 'package.json');
-          fs.writeFileSync(
-            pkgJsonPath,
-            JSON.stringify(
-              { name: manifest.id, version: manifest.version, dependencies: manifest.dependencies },
-              null,
-              2,
-            ),
-            'utf-8',
-          );
-          const { execSync } = await import('node:child_process');
-          execSync(
-            'npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com',
-            {
-              cwd: pluginDir,
-              stdio: 'ignore',
-            },
-          );
+          // H-4：与安装路径共用同一实现。原先此处**缺 --ignore-scripts**（SEC-RCE-01），
+          // 等于「装一次安全、从市场更新一次就能跑 postinstall」—— 而更新是第三方插件
+          // 最常见的安装途径。现已由 dependency-install.ts 统一，不可能再漂移。
+          installPluginDependencies(pluginDir, {
+            pluginId: manifest.id,
+            dependencies: parsePluginDependencies(manifest.dependencies, manifest.id),
+            operation: 'update',
+          });
         } catch (installErr) {
+          // 依赖装不上 ⇒ 更新失败 ⇒ 回滚到旧版本并向上传播，让 DB 不落到「新版已装」的假象。
+          // 原实现只 console.error 就继续，把新 manifest 写进了 DB。
           console.error(`[PluginHost] Failed to install dependencies during update of "${manifest.id}":`, installErr);
+          throw installErr;
         }
       }
 
@@ -2381,9 +2673,18 @@ export class PluginHost {
       // Persist metadata — keep UUID; do not touch config/migrations tables
       this.db
         .prepare(
-          `UPDATE plugins SET name = ?, manifest = ?, file_path = ?, execution_mode = ?, loader_version = 'esm', updated_at = ? WHERE id = ?`,
+          `UPDATE plugins SET name = ?, manifest = ?, file_path = ?, execution_mode = ?, loader_version = 'esm', updated_at = ?, version = ? WHERE id = ?`,
         )
-        .run(manifest.name, JSON.stringify(manifest), filePath, executionMode, Date.now(), pluginId);
+        .run(
+          manifest.name,
+          JSON.stringify(manifest),
+          filePath,
+          executionMode,
+          Date.now(),
+          // version 是 H-3 的加速索引列：更新 manifest 的同时必须同步，否则版本停留在旧值
+          manifest.version,
+          pluginId,
+        );
 
       this.emitProgress(manifest.id, 'registering', 'Applying runtime update...');
 
@@ -2406,9 +2707,28 @@ export class PluginHost {
         if (currentState === PluginState.ACTIVE) {
           // inconsistent DB/memory — force deactivate path already handled above
         } else {
-          this.pluginStates.set(
+          // 兜底回收可能残留的 worker 线程（审计 C-4）。
+          //
+          // 修复前的成因判断有误（原以为是「mode 从 DB 二次读导致走错分支」）——
+          // `worker-manager.terminate()` 的 finally 块是**无条件**回收的，与 execution_mode 无关。
+          // 真实泄漏场景在这里：插件处于 ERROR / INACTIVE 态时执行更新，
+          // `wasActive` 为 false → 上面的 deactivate 分支整段被跳过 → 若此前崩溃或
+          // 其它路径留下了活跃 worker，其引用与 serviceHost 注册的命令转发无人回收；
+          // 之后再以 worker 模式激活会被 "Worker already exists" 拒绝。
+          //
+          // 此处无条件兜底（幂等）：无论当前是否真的有 worker，都调用一次。
+          try {
+            if (this.workerManager) {
+              await this.workerManager.terminateWorker(pluginId);
+            }
+          } catch (e) {
+            console.warn(`[PluginHost] Best-effort worker reclaim during update of "${pluginId}" failed:`, e);
+          }
+
+          this.setPluginState(
             pluginId,
             currentState === PluginState.UNINSTALLED ? PluginState.INSTALLED : currentState,
+            { persistDb: true },
           );
         }
       }
@@ -2440,9 +2760,12 @@ export class PluginHost {
             const b = path.join(backupDir, name);
             if (fs.existsSync(b)) fs.copyFileSync(b, path.join(pluginDir, name));
           }
+          // 回滚路径：写回的是旧 manifest，version 必须取**旧行**的值。
+          // 若这里填新 manifest 的 version，会造成「索引列比真源新」的不一致 ——
+          // 那比 version 列为 NULL 更难排查（NULL 语义明确是「未知」）。
           this.db
-            .prepare(`UPDATE plugins SET name = ?, manifest = ?, execution_mode = ? WHERE id = ?`)
-            .run(existingRow.name, existingRow.manifest, existingRow.execution_mode, pluginId);
+            .prepare(`UPDATE plugins SET name = ?, manifest = ?, execution_mode = ?, version = ? WHERE id = ?`)
+            .run(existingRow.name, existingRow.manifest, existingRow.execution_mode, existingRow.version, pluginId);
         }
       } catch (restoreErr) {
         console.error(`[PluginHost] Failed to restore backup after update error:`, restoreErr);
@@ -2533,10 +2856,40 @@ export class PluginHost {
       }
     }
 
-    // Activate sorted plugins first, then any remaining (blocked + cyclic) with best-effort
+    // ── 激活顺序（H-5）──
+    //
+    // 原实现把 blocked 与 cycles 一视同仁地「best-effort 激活」：
+    //   const orderedIds = [...sorted];
+    //   for (const b of blocked) orderedIds.push(b.pluginId);   // ← 缺依赖的插件被强行激活
+    //   for (const cycle of cycles) orderedIds.push(...cycle);
+    //
+    // 缺依赖的插件被激活后会在 `activate()` 里撞上 MODULE_NOT_FOUND，
+    // 状态机把它打成 ERROR —— 于是 DB 里出现一批「ERROR 状态的插件」，
+    // 而真实原因是「它的依赖压根没装」。重启一次就复现一次，且现象与病因不在一处。
+    //
+    // 现在区分三类：
+    //   · sorted  —— 依赖齐备，按拓扑序正常激活
+    //   · cycles  —— 依赖成环，**仍** best-effort 激活（无序保证，但能跑）
+    //   · blocked —— 依赖缺失/未激活，**不激活**，只记日志并保持 INSTALLED
+    //                 理由：成环的插件功能上通常仍可用；缺依赖的插件一定不可用，
+    //                 强行激活只会把「依赖没装」伪装成「插件自身报错」
     const orderedIds = [...sorted];
-    for (const b of blocked) orderedIds.push(b.pluginId);
     for (const cycle of cycles) orderedIds.push(...cycle);
+
+    if (blocked.length > 0) {
+      const blockedIds = new Set(blocked.map((b) => b.pluginId));
+      for (const b of blocked) {
+        console.warn(
+          `[PluginHost] Skipping activation of "${b.pluginId}": dependency not satisfied ` +
+            `(${b.missingDeps.join(', ')}). 插件保持 INSTALLED —— 强行激活只会把` +
+            `「依赖缺失」伪装成「插件自身报错」，重启后还会复现。`,
+        );
+      }
+      // 双保险：即便 orderedIds 里因其他路径混入了被阻塞插件，这里也剔除
+      for (let i = orderedIds.length - 1; i >= 0; i--) {
+        if (blockedIds.has(orderedIds[i])) orderedIds.splice(i, 1);
+      }
+    }
 
     for (const id of orderedIds) {
       const resolvedId = this.resolvePluginUuid(id);
@@ -2580,6 +2933,174 @@ export class PluginHost {
   }
 
   /**
+   * **插件状态的唯一写入点**（审计 H-4）。
+   *
+   * 修复前，`pluginStates`（内存）与 `plugins.status`（DB）由 16 处代码**各自独立**写入：
+   * - 激活失败只写内存 `ERROR`，不写 DB（成功路径才写 `status='active'`）
+   *   → 重启后 `restoreActivePlugins` 会重试一个已知失败的插件；
+   * - worker-manager 熔断直接 `UPDATE plugins SET status='error'`，
+   *   **不动** `pluginStates` → DB=error、内存=ACTIVE。
+   *
+   * 两个方向的分歧都会造成「重启前后行为不同」或「UI 与运行时不一致」。
+   * 收敛到本方法后，任何状态变更都必须显式声明是否持久化，
+   * 且两侧在同一函数内更新，物理上无法只改一边。
+   *
+   * @param pluginId 插件 id
+   * @param state 目标状态
+   * @param opts.persistDb 是否同步写入 DB（默认 false）。仅在状态确应跨重启存活时传 true
+   */
+  /**
+   * 插件转入非活跃态时，注销其**声明式贡献**（审计 D-1 / D-2）。
+   *
+   * `contributionRegistry` 的键是 `manifest.id`（而非 DB 主键 pluginId），
+   * 见 installPlugin 的 `register(manifest.id, manifest.contributes)`。
+   * 之前只有 `uninstallPlugin` 会注销，停用时不清 → 服务端贡献摘要长期包含
+   * 已停用插件的条目。
+   *
+   * 说明：这**不影响前端 UI** —— 前端扩展点由插件在 `activate()` 内自行注册、
+   * 停用时由前端宿主 `unregisterPluginResources()` 清理，走的是另一条链路。
+   * 这里清理的是服务端这份无人读取的死数据（审计 M-2 已更正其影响面）。
+   */
+  /**
+   * 声明本插件对 ProcessManager 的所有权（B-5）。
+   *
+   * 必须在 buildContext 之前调用：归属通过 ProcessManager 的同步字段写入，
+   * 顺序错了会把任务记到上一个插件名下。
+   *
+   * 失败不阻断激活 —— 归属声明只是 kill() 的归属校验依据，缺失时校验退化为
+   * 「不拦截」（与修复前一致），不该让插件因它起不来。
+   */
+  private async declareProcessOwnership(pluginId: string): Promise<void> {
+    try {
+      const pm = await this.serviceRegistry.resolve<IProcessService>(IProcessServiceToken);
+      if (typeof pm?.setPluginOwner === 'function') pm.setPluginOwner(pluginId);
+    } catch (e) {
+      console.warn(`[PluginHost] Failed to declare process ownership for "${pluginId}":`, e);
+    }
+  }
+
+  private revokePluginContributions(pluginId: string): void {
+    const manifestId = this.getPluginManifest(pluginId)?.id ?? pluginId;
+    try {
+      this.contributionRegistry.unregister(manifestId);
+    } catch (e) {
+      console.warn(`[PluginHost] Failed to unregister contributions for "${pluginId}":`, e);
+    }
+    void this.revokePluginStageGuards(pluginId, manifestId);
+  }
+
+  /**
+   * 回收该插件注册的教学环节门禁守卫（I-3）。
+   *
+   * 守卫注册在**内核 DI 的 StageGuardPipeline 单例**里，进程级存活 ——
+   * 插件停用/卸载时不清理，门禁会继续按已停用插件的规则判定。
+   * 旧实现里守卫没有 owner 字段，插件只能按 id 全局删，会误伤同名的他人守卫；
+   * I-3 给守卫加了 owner 后即可精确回收。
+   *
+   * 两侧 id 都试一遍：注册方可能传 pluginId（DB uuid）也可能传 manifestId，
+   * 取决于插件作者用了哪个。
+   */
+  private async revokePluginStageGuards(pluginId: string, manifestId: string): Promise<void> {
+    try {
+      const pipeline = await this.serviceRegistry.resolve(IStageGuardServiceToken);
+      if (!pipeline || typeof pipeline.unregisterByOwner !== 'function') return;
+      let removed = 0;
+      for (const owner of new Set([pluginId, manifestId])) {
+        removed += pipeline.unregisterByOwner(owner) ?? 0;
+      }
+      if (removed > 0) {
+        console.log(`[PluginHost] Revoked ${removed} stage guard(s) for plugin "${pluginId}"`);
+      }
+    } catch (e) {
+      console.warn(`[PluginHost] Failed to revoke stage guards for "${pluginId}":`, e);
+    }
+  }
+
+  private setPluginState(pluginId: string, state: PluginState, opts: { persistDb?: boolean } = {}): void {
+    this.pluginStates.set(pluginId, state);
+    if (!opts.persistDb) return;
+
+    // UNINSTALLED 走 DELETE 而非 status 更新（uninstallPlugin 会删行）
+    if (state === PluginState.UNINSTALLED) return;
+
+    // PluginState 值与 DB status 字符串一一对应（'installed'/'activating'/...）
+    const statusMap: Partial<Record<PluginState, string>> = {
+      [PluginState.INSTALLED]: 'installed',
+      [PluginState.ACTIVATING]: 'installed',
+      [PluginState.ACTIVE]: 'active',
+      [PluginState.DEACTIVATING]: 'active',
+      [PluginState.INACTIVE]: 'inactive',
+      [PluginState.ERROR]: 'error',
+    };
+    const status = statusMap[state];
+    if (!status) return;
+
+    try {
+      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run(status, pluginId);
+    } catch (e) {
+      // 测试库可能缺少 plugins 表；不因持久化失败而中断状态机
+      console.warn(`[PluginHost] Failed to persist status "${status}" for "${pluginId}":`, e);
+    }
+  }
+
+  /**
+   * 精确销毁快照中的一组 Disposable，并把它们从 ResourceTracker 中摘除。
+   *
+   * 与 `disposeAll` 的区别：disposeAll 销毁该插件**全部**资源；本方法只碰快照里的那些，
+   * 因此可在「新旧版本资源混在同一追踪表」的窗口里安全使用（热重载成功路径）。
+   */
+  private disposeSnapshot(pluginId: string, disposables: readonly Disposable[]): void {
+    for (const d of disposables) {
+      try {
+        d.dispose();
+      } catch (e) {
+        console.error(`[PluginHost] Error disposing old resource for "${pluginId}":`, e);
+      }
+    }
+    this.resourceTracker.reap(pluginId, disposables as Disposable[]);
+  }
+
+  /**
+   * 热重载失败回滚：让旧版本恢复到「可服务命令」的状态。
+   *
+   * 场景：新版本 activate 抛错。此刻 ResourceTracker 里同时存在旧资源（第 3 步快照）
+   * 与新版本 activate 期间注册的资源，**两者混在一个 list 中、无法逐一区分**。
+   *
+   * 因此采取「重建而非猜测」的策略：
+   * 1. `disposeAll` 清空全部追踪资源（含旧资源与新资源）；
+   * 2. **重新激活旧版本**（`activatePluginExclusive` 内部只新增不依赖历史状态，
+   *    且 activate 失败会再次 disposeAll，不会累积残留）。
+   *
+   * 为什么不像成功路径那样「只 dispose 新资源」：ResourceTracker 只保存 Disposable 数组，
+   * 不记录归属版本，没有可靠办法区分二者。要让回滚也精确，需在 ResourceTracker 上按版本
+   * 分桶 —— 属架构变更，本轮不做（见台账 Batch 2 备注）。
+   *
+   * 若重建也失败，则把状态置为 ERROR 并让 DB 同步 —— 宁可显示「已停用并报错」，
+   * 也不能留下「状态显示 active、命令全部 404」的僵尸态（审计 C-3）。
+   */
+  private async rollbackReload(pluginId: string, oldInstance: PluginInstance | undefined): Promise<void> {
+    this.resourceTracker.disposeAll(pluginId);
+
+    if (!oldInstance) {
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
+      return;
+    }
+
+    try {
+      // 回到 INSTALLED 再激活：validateTransition 不允许 ERROR→ACTIVE 之外的非法路径，
+      // 而此处旧实例仍可运行，语义上就是「仍是已安装状态、只是本次热重载失败」。
+      this.setPluginState(pluginId, PluginState.INSTALLED, { persistDb: true });
+      await this.activatePluginExclusive(pluginId);
+      console.warn(`[PluginHost] reload rollback for "${pluginId}": 旧版本已重新激活，插件恢复可用。`);
+    } catch (err) {
+      // 重建失败：进入 ERROR 并同步 DB，避免僵尸态
+      console.error(`[PluginHost] reload rollback failed for "${pluginId}":`, err);
+      this.resourceTracker.disposeAll(pluginId);
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
+    }
+  }
+
+  /**
    * Phase 7: 原子热重载插件。
    *
    * 策略（atomic new-before-old）：
@@ -2595,6 +3116,17 @@ export class PluginHost {
    */
   async reloadPlugin(pluginId: string, newSourceCode: string): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
+
+    // ── 并发串行化（审计 H-2）─────────────────────────────────────────────
+    //
+    // 修复前 reload **完全不经过** inflightActivate / inflightDeactivate 串行化，
+    // 也不检查 ACTIVATING/DEACTIVATING 中间态。与 deactivate 并发时，
+    // 两边各自 `disposeAll(pluginId)` 互相踩踏：reload 刚注册的新资源会被
+    // deactivate 的清理销毁，或反之，最终状态与实际注册情况不符。
+    //
+    // 这里等待在飞的生命周期操作结束后再进入 reload。
+    await this.waitForLifecycleIdle(pluginId);
+
     const currentState = this.pluginStates.get(pluginId);
 
     // 1. 状态检查
@@ -2689,8 +3221,18 @@ export class PluginHost {
         }
       });
     } catch (err) {
-      // 激活失败 — 清理新注册的临时 disposables，restore old manifest
-      this.resourceTracker.disposeAll(pluginId);
+      // 激活失败 —— 回滚（审计 C-3，async）
+      //
+      // 修复前是 `disposeAll(pluginId)`：销毁该插件**全部**已追踪资源，包括旧版本
+      // 仍在正常运行的 command handler / event 订阅 / interval / http 路由。而
+      // `pluginStates` 仍为 ACTIVE、`pluginInstances` 仍指向旧实例、DB 仍 'active'。
+      //
+      // 用户可见后果：插件中心显示「已启用」，但全部命令返回 "No handler registered"，
+      // 且**无自愈路径** —— 再次 activate 会因状态已是 ACTIVE 被 validateTransition 拒绝。
+      //
+      // 修复：走 rollbackReload()，把旧版本重新激活；重建失败则置 ERROR 并同步 DB，
+      // 任何路径下都不留下「状态与实际不一致」的僵尸态。
+      await this.rollbackReload(pluginId, oldInstance);
       throw new HotReloadActivationError(pluginId, filePath, err instanceof Error ? err : new Error(String(err)));
     }
 
@@ -2715,22 +3257,15 @@ export class PluginHost {
     }
 
     // 8. 精确清理旧资源（仅快照中的，不碰新注册的）
-    for (const d of oldDisposables) {
-      try {
-        d.dispose();
-      } catch (e) {
-        console.error(`[PluginHost] Error disposing old resource for "${pluginId}":`, e);
-      }
-    }
-    this.resourceTracker.reap(pluginId, oldDisposables);
+    this.disposeSnapshot(pluginId, oldDisposables);
 
     // 9. 替换实例引用
     this.pluginInstances.set(pluginId, newInstance);
 
     // 10. 更新 DB
     this.db
-      .prepare('UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ? WHERE id = ?')
-      .run(newSourceCode, JSON.stringify(newManifest), Date.now(), pluginId);
+      .prepare('UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ?, version = ? WHERE id = ?')
+      .run(newSourceCode, JSON.stringify(newManifest), Date.now(), newManifest.version, pluginId);
 
     const newVersion = newManifest.version ?? 'unknown';
     console.log(`[PluginHost] Hot reload succeeded for "${pluginId}" — old: ${oldVersion} → new: ${newVersion}`);

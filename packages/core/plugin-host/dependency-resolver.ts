@@ -152,11 +152,19 @@ export function topologicalSort(
   const queue: string[] = [];
   const sorted: string[] = [];
   const blocked: Array<{ pluginId: string; missingDeps: string[] }> = [];
+  /**
+   * 被阻塞的插件 id。
+   *
+   * 存在的理由（H-5）：见下方 cycle 检测处 —— 阻塞与循环是**两种不同的失败**，
+   * 混在一起会让运维把「依赖没装」误判成「依赖成环」，排查方向完全跑偏。
+   */
+  const blockedIds = new Set<string>();
 
   for (const [id, degree] of inDegree) {
-    // ponytail: if activeIds is provided, plugins not in it are blocked outright
+    // activeIds 给定时，不在其中即视为已阻塞（未激活或处于 ERROR 态）
     if (activeIds && !activeIds.has(id)) {
       blocked.push({ pluginId: id, missingDeps: [`${id} (inactive/error)`] });
+      blockedIds.add(id);
       continue;
     }
 
@@ -171,6 +179,7 @@ export function topologicalSort(
           pluginId: id,
           missingDeps: [...missing, ...failed.map((f) => `${f} (inactive/error)`)],
         });
+        blockedIds.add(id);
         // Don't add to queue — blocked plugins don't propagate
       } else {
         queue.push(id);
@@ -193,6 +202,7 @@ export function topologicalSort(
             pluginId: dependent,
             missingDeps: [`${dependent} (inactive/error)`],
           });
+          blockedIds.add(dependent);
           continue;
         }
 
@@ -206,6 +216,7 @@ export function topologicalSort(
             pluginId: dependent,
             missingDeps: [...missing, ...failed.map((f) => `${f} (inactive/error)`)],
           });
+          blockedIds.add(dependent);
         } else {
           queue.push(dependent);
         }
@@ -213,10 +224,20 @@ export function topologicalSort(
     }
   }
 
-  // Cycle detection: remaining non-zero in-degree nodes form cycles
+  // ── Cycle detection ──
+  //
+  // 只有「入度永远无法归零」的节点才可能成环。而**被阻塞的插件不在此列**：
+  // 它们的依赖没装/没激活，于是依赖节点永远不会进 queue、其入度也就永远不会被递减 ——
+  // 数值上与成环无法区分，但**语义上完全不同**。
+  //
+  // 实测（修复前）：`A 依赖 B、B 未激活` 得到 `cycles: [["ext-a"]]`。
+  // 单节点的「环」在结构上不可能是真环（真环要么 ≥2 节点，要么是显式自环），
+  // 这就是判据错误的直接证据 —— 缺依赖被误报成循环依赖。
   const cycles: string[][] = [];
+  /** 真正落在环里的节点 —— 用于把「被阻塞」与「成环」区分开 */
+  const cyclicIds = new Set<string>();
   const remaining = Array.from(inDegree.entries())
-    .filter(([, d]) => d > 0)
+    .filter(([id, d]) => d > 0 && !blockedIds.has(id))
     .map(([id]) => id);
 
   if (remaining.length > 0) {
@@ -237,7 +258,35 @@ export function topologicalSort(
           }
         }
       }
-      cycles.push(component);
+      // 自环（插件声明依赖自己）是真环，必须保留
+      const isSelfLoop = component.length === 1 && (graph.get(component[0]) ?? []).includes(component[0]);
+      if (component.length >= 2 || isSelfLoop) {
+        cycles.push(component);
+        for (const member of component) cyclicIds.add(member);
+      }
+    }
+
+    // ── 剩余未成环但入度未归零的节点 = **被阻塞**，不是成环 ──
+    //
+    // 典型形态：`A 依赖 B`，而 B 因缺自己的依赖或未激活被阻塞 ⇒ B 永不入 queue ⇒
+    // A 的入度永不递减 ⇒ 数值上与成环无异。
+    //
+    // 只把环排除出 cycles 还不够：若就此放过，这些插件会从三份结果里同时消失
+    // （既不在 sorted、不在 blocked、也不在 cycles），变成**静默丢弃** ——
+    // 比误报成循环更难排查，因为没有任何诊断信息。
+    // 所以这里补一次传递性归因：把上游被阻塞的原因写进 missingDeps。
+    for (const id of remaining) {
+      if (cyclicIds.has(id)) continue;
+      const blockedAlready = blocked.find((b) => b.pluginId === id);
+      if (blockedAlready) continue;
+
+      const upstream = (graph.get(id) ?? []).filter((d) => blockedIds.has(d) || blocked.some((b) => b.pluginId === d));
+      blocked.push({
+        pluginId: id,
+        missingDeps:
+          upstream.length > 0 ? upstream.map((d) => `${d} (blocked)`) : ['上游依赖未能解析（可能被阻塞或已失效）'],
+      });
+      blockedIds.add(id);
     }
   }
 

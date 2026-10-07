@@ -269,12 +269,15 @@ describe('buildContext', () => {
     // 注册 process handler — 应自动 tracker.track()
     await ctx.services.processManager.registerHandler('test.task', vi.fn());
 
-    // 验证原始 registerHandler 被调用
-    expect(rawProcess.registerHandler).toHaveBeenCalled();
+    // 验证原始 registerHandler 被调用，且 taskType 已被加上插件命名空间前缀（B-5）。
+    // 不加前缀时 ProcessManager.handlers 是全局 Map、后者顶掉前者 ——
+    // 实测两个插件都 registerHandler('shared-task') 后 handlers 表大小为 1，
+    // 先注册者的 handler 被调用 0 次。
+    expect(rawProcess.registerHandler).toHaveBeenCalledWith('plugin-id-123::test.task', expect.any(Function));
 
-    // 验证 disposeAll 会清理资源
+    // 验证 disposeAll 会清理资源，且用**同一个**带前缀的 key
     tracker.disposeAll('plugin-id-123');
-    expect(rawProcess.unregisterHandler).toHaveBeenCalledWith('test.task');
+    expect(rawProcess.unregisterHandler).toHaveBeenCalledWith('plugin-id-123::test.task');
   });
 
   // ── Test 7 ──────────────────────────────────────────────────────────

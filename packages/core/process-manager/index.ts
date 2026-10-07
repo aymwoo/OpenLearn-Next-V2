@@ -12,8 +12,43 @@ export type ProcessHandler = (
 export class ProcessManager {
   private activeTasks: Map<string, NodeJS.Timeout> = new Map();
   private handlers = new Map<string, ProcessHandler>();
+  /** 进程归属：processId → pluginId（B-5）。内存副本，权威来源是 processes.plugin_id 列。 */
+  private processOwners = new Map<string, string>();
+
+  /**
+   * 当前调用方的 pluginId。
+   *
+   * 用「同步注入」而非逐次传参，是因为 spawn / registerInterval 的签名
+   * 已由 IProcessService 接口固定，不能加参数；而 spawn 里还要求 owner 写进
+   * 事件广播前的 DB 行，同步字段是最小改动。
+   * 必须在插件激活**之前**调用（见 setPluginOwner）。
+   */
+  private currentOwner: string | undefined;
 
   constructor(private kernel: Kernel) {}
+
+  /**
+   * 声明某个 pluginId 对 processManager 的所有权。
+   *
+   * 必须在插件激活**之前**调用 —— 否则该插件 spawn 的任务会归属到上一个声明者。
+   * 与 ServiceHost / ResourceTracker 的注入时点一致。
+   */
+  public setPluginOwner(pluginId: string): void {
+    this.currentOwner = pluginId;
+  }
+
+  /** 查询进程归属；查不到返回 undefined（非插件进程、存量行或已清理）。 */
+  public getProcessOwner(processId: string): string | undefined {
+    const cached = this.processOwners.get(processId);
+    if (cached) return cached;
+    try {
+      const row = this.kernel.db.prepare('SELECT plugin_id FROM processes WHERE id = ?').get(processId) as
+        { plugin_id?: string } | undefined;
+      return row?.plugin_id ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
 
   public registerHandler(taskType: string, handler: ProcessHandler) {
     this.handlers.set(taskType, handler);
@@ -37,9 +72,22 @@ export class ProcessManager {
 
     this.kernel.db
       .prepare(
-        'INSERT INTO processes (id, name, status, task_type, payload, state, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO processes (id, name, status, task_type, payload, state, logs, created_at, updated_at, plugin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(processId, name, 'running', taskType, JSON.stringify(payload), null, '', Date.now(), Date.now());
+      .run(
+        processId,
+        name,
+        'running',
+        taskType,
+        JSON.stringify(payload),
+        null,
+        '',
+        Date.now(),
+        Date.now(),
+        this.currentOwner ?? null,
+      );
+
+    if (this.currentOwner) this.processOwners.set(processId, this.currentOwner);
 
     this.kernel.eventBus.publish({
       id: uuidv7(),
@@ -119,9 +167,11 @@ export class ProcessManager {
 
     this.kernel.db
       .prepare(
-        'INSERT INTO processes (id, name, status, task_type, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO processes (id, name, status, task_type, logs, created_at, updated_at, plugin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(processId, name, 'running', 'interval', '', Date.now(), Date.now());
+      .run(processId, name, 'running', 'interval', '', Date.now(), Date.now(), this.currentOwner ?? null);
+
+    if (this.currentOwner) this.processOwners.set(processId, this.currentOwner);
 
     this.kernel.eventBus.publish({
       id: uuidv7(),
@@ -159,6 +209,7 @@ export class ProcessManager {
       clearInterval(timer);
       this.activeTasks.delete(processId);
     }
+    this.processOwners.delete(processId);
 
     this.kernel.db
       .prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?')

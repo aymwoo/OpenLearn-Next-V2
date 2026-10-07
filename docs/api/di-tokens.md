@@ -94,10 +94,22 @@ interface PluginContext {
 | --------------------------------- | --------------------------- | -------------------------------------------- |
 | `IPluginLifecycleManagerToken`    | `PluginLifecycleManager`    | `@openlearn/core:IPluginLifecycleManager`    |
 | `IPluginDistributionManagerToken` | `PluginDistributionManager` | `@openlearn/core:IPluginDistributionManager` |
-| `IPluginRuntimeCompositionToken`  | `PluginRuntimeComposition`  | `@openlearn/core:IPluginRuntimeComposition`  |
-| `IUnifiedExtensionRegistryToken`  | `UnifiedExtensionRegistry`  | `@openlearn/core:IUnifiedExtensionRegistry`  |
-| `IPluginCapabilityGatewayToken`   | `PluginCapabilityGateway`   | `@openlearn/core:IPluginCapabilityGateway`   |
 | `ICapabilityRegistryToken`        | `CapabilityRegistry`        | `@openlearn/core:ICapabilityRegistry`        |
+
+> **⚠️ 已收回对外承诺的 Token（SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出）**
+>
+> 审计项 M-10 / F-3：`kernel/index.ts` 把它们注册进 `ServiceRegistry`，但**零生产
+> resolve** —— 全仓唯一提及是一段注释示例，`v2_plugins/` 与 `assets/` 均无引用。
+> 对外承诺一个零消费者的 API 比不承诺更糟，故收回导出。
+>
+> | Token                                | 解析类型                 | 标识字符串                                | 内核现状                |
+> | ------------------------------------ | ------------------------ | ----------------------------------------- | ----------------------- |
+> | `IPluginRuntimeCompositionToken`     | `PluginRuntimeComposition` | `@openlearn/core:IPluginRuntimeComposition` | 已注册，零 resolve      |
+> | `IUnifiedExtensionRegistryToken`     | `UnifiedExtensionRegistry` | `@openlearn/core:IUnifiedExtensionRegistry` | 已注册，零 resolve      |
+> | `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService` | `@openlearn/core:ICapabilityGovernanceService` | 子系统 529 行整体零 resolve |
+>
+> 内核侧引用不受影响（走 `packages/core` 相对路径）。若将来接入真实消费者，把它们
+> 加回 `packages/plugin-sdk/index.ts` 的 value 导出块即可。
 
 ### D. 积分 / 学期 Token
 
@@ -118,7 +130,6 @@ interface PluginContext {
 | `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | `@openlearn/core:ILearningAnalyticsService`       |
 | `IAICapabilityServiceToken`          | `IAICapabilityService`            | `@openlearn/core:IAICapabilityService`            |
 | `ICapabilityRuntimeServiceToken`     | `ICapabilityRuntimeService`       | `@openlearn/core:ICapabilityRuntimeService`       |
-| `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | `@openlearn/core:ICapabilityGovernanceService`    |
 | `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | `@openlearn/core:IPlatformServiceRegistryService` |
 
 ### F. 活动生态 Token
@@ -278,6 +289,11 @@ health(): IntegrationHealthStatus;
 metadata(): IntegrationDescriptor;
 ```
 
+> **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
+> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
+> 详见本文 C 区表格下方的撤回说明。
+
 ### `IPluginRuntimeCompositionToken` → `PluginRuntimeComposition`（`packages/core/plugin-host/plugin-runtime-composition.ts`）
 
 ```typescript
@@ -293,6 +309,11 @@ health(): IntegrationHealthStatus;
 metadata(): IntegrationDescriptor;
 ```
 
+> **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
+> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
+> 详见本文 C 区表格下方的撤回说明。
+
 ### `IUnifiedExtensionRegistryToken` → `UnifiedExtensionRegistry`（`packages/core/plugin-host/unified-extension-registry.ts`）
 
 ```typescript
@@ -304,6 +325,11 @@ listCategories(): ReadonlyArray<string>;
 health(): IntegrationHealthStatus;
 metadata(): IntegrationDescriptor;
 ```
+
+> **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
+> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
+> 详见本文 C 区表格下方的撤回说明。
 
 ### `IPluginCapabilityGatewayToken` → `PluginCapabilityGateway`（`packages/core/plugin-host/plugin-capability-gateway.ts`）
 
@@ -437,7 +463,8 @@ checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
 ```
 
 > 教学环节流转门禁服务。支持第三方插件注册环节准入守卫（例如随堂测验达标、前置实验文件已提交等）。
-> 内核内置 **1500ms 超时容错降级 (Fail-Open)** 与 **多插件全部满足 (AND 组合判定)** 机制。
+> 内核内置 **1500ms 超时**与 **多插件全部满足 (AND 组合判定)** 机制。
+> 守卫**超时或抛异常时拒绝进入**（Fail-Close，D-3 决策）；需恢复早期 Fail-Open 行为可传 `{ onGuardFailure: 'fail-open' }`。详见 [docs/lesson/lesson-runtime.md](../lesson/lesson-runtime.md)。
 
 ### 日志（`ctx.log`，无 Token）
 

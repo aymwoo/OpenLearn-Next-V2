@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import http from 'node:http';
 import {
   COMMUNITY_REGISTRY_ENV,
   __resetCommunityRegistryCache,
@@ -12,7 +13,12 @@ import {
   type CommunityPluginEntry,
   type FetchLike,
 } from '../services/community-registry.js';
-import { isSafeExternalUrl } from '../utils/url-safety.js';
+import {
+  isSafeExternalUrl,
+  assertSafeResolvedAddresses,
+  fetchWithSafeRedirects,
+  UrlSafetyError,
+} from '../utils/url-safety.js';
 
 // ── Fixtures & helpers ──────────────────────────────────────────────────────
 
@@ -483,5 +489,194 @@ describe('isValidPluginId', () => {
 
   it.each([undefined, null, 42, '', ' has-space', 'ext home', 'x'.repeat(200)])('rejects %s', (id) => {
     expect(isValidPluginId(id)).toBe(false);
+  });
+});
+
+/**
+ * G-4c：DNS rebinding 与重定向防护
+ *
+ * 审计标注该项为「待验证」，本次**先复现再修复**，两处缺口均已实测确认：
+ *
+ *   ① 重定向不复检
+ *      fetch 默认 redirect=follow → 最终 status 200
+ *      fetch 最终 response.url: http://127.0.0.1:33409/latest/meta-data/…
+ *      内网端点被真实命中: 是
+ *
+ *   ② DNS 从不解析
+ *      isSafeExternalUrl('http://metadata.google.internal/pkg.zip') → { safe: true }
+ *      （它只看 URL 字面量，从不调用 DNS）
+ */
+describe('G-4c: 出站 SSRF 防护', () => {
+  /** 内网「元数据服务」—— 只在测试内监听，用来验证是否真被命中 */
+  let innerServer: http.Server;
+  let innerPort: number;
+  const innerHits: string[] = [];
+
+  beforeAll(async () => {
+    innerServer = http.createServer((req, res) => {
+      innerHits.push(req.url ?? '');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ stolen: 'SECRET' }));
+    });
+    await new Promise<void>((r) => innerServer.listen(0, '127.0.0.1', () => r()));
+    innerPort = (innerServer.address() as any).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((r) => innerServer.close(() => r()));
+  });
+
+  beforeEach(() => {
+    innerHits.length = 0;
+  });
+
+  /** 起一个「表面合规」的服务器：302 到内网元数据端点 */
+  async function withRedirector(fn: (base: string) => Promise<void>) {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(302, {
+        Location: `http://127.0.0.1:${innerPort}/latest/meta-data/iam/security-credentials/`,
+      });
+      res.end();
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as any).port;
+    try {
+      await fn(`http://127.0.0.1:${port}/pkg.zip`);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  }
+
+  describe('① 重定向后复检（防 302 → 内网）', () => {
+    it('fetch 默认会跟随重定向打到内网 —— 这是修复前的基线行为', async () => {
+      await withRedirector(async (url) => {
+        const res = await fetch(url); // 裸 fetch，无任何防护
+        await res.text();
+        // 证明这条攻击链真实可行；若将来 Node 改变了默认行为，本断言会提醒更新
+        expect(res.url).toContain('127.0.0.1');
+        expect(innerHits.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('fetchWithSafeRedirects 拦截指向内网的重定向', async () => {
+      await withRedirector(async (url) => {
+        await expect(
+          fetchWithSafeRedirects(url, {
+            // 首跳是 127.0.0.1，字面量校验本就该拦 —— 但仍要确认抛出的是
+            // UrlSafetyError 而非别的错
+            timeoutMs: 3000,
+          }),
+        ).rejects.toThrow(UrlSafetyError);
+      });
+    });
+
+    it('fetchWithSafeRedirects 用 redirect:manual 逐跳跟随', async () => {
+      // 注入 fetch 实现，验证它确实传了 redirect:'manual'，
+      // 并对每跳重新走校验（而不是一次性跟随）。
+      const seenRedirectModes: Array<string | undefined> = [];
+      const fakeFetch = (input: string, init?: RequestInit) => {
+        seenRedirectModes.push(init?.redirect as string);
+        return Promise.resolve({
+          status: 302,
+          ok: false,
+          headers: { get: (k: string) => (k === 'location' ? 'https://cdn.example.com/next.zip' : null) },
+          url: input,
+        } as any);
+      };
+      await expect(
+        fetchWithSafeRedirects('https://cdn.example.com/a.zip', {
+          fetchImpl: fakeFetch,
+          lookupImpl: async () => [{ address: '93.184.216.34' }],
+          timeoutMs: 1000,
+        }),
+      ).rejects.toThrow(/Too many redirects/);
+      expect(seenRedirectModes.length).toBeGreaterThan(1);
+      expect(new Set(seenRedirectModes)).toEqual(new Set(['manual']));
+    });
+  });
+
+  describe('② DNS 解析校验（防 rebinding）', () => {
+    it('解析到 169.254.169.254（云元数据端点）被拒', async () => {
+      const result = await assertSafeResolvedAddresses('evil.example', async () => [{ address: '169.254.169.254' }]);
+      expect(result.safe).toBe(false);
+      expect(result.reason).toContain('169.254.169.254');
+    });
+
+    it.each([
+      ['127.0.0.1', '回环'],
+      ['10.0.0.5', '私网 10/8'],
+      ['172.16.3.4', '私网 172.16/12'],
+      ['192.168.1.1', '私网 192.168/16'],
+      ['0.0.0.0', '未指定'],
+      ['169.254.169.254', '云元数据端点'],
+      ['100.64.0.1', 'CGNAT 100.64/10（k8s/容器网段）'],
+      ['192.0.0.1', 'IETF 协议分配 192.0.0/24'],
+      ['192.0.2.1', 'TEST-NET-1'],
+      ['198.18.0.1', '基准测试 198.18/15'],
+      ['198.51.100.1', 'TEST-NET-2'],
+      ['203.0.113.1', 'TEST-NET-3'],
+      ['::1', 'IPv6 回环'],
+      ['fd00::1', 'IPv6 ULA'],
+      ['fe80::1', 'IPv6 链路本地'],
+      ['::ffff:127.0.0.1', 'IPv4 映射回环（内嵌点分十进制记法）'],
+      ['::ffff:7f00:1', 'IPv4 映射回环（十六进制记法）'],
+    ])('%s 被拒（%s）', async (address) => {
+      const result = await assertSafeResolvedAddresses('evil.example', async () => [{ address }]);
+      expect(result.safe, `${address} 应被拒`).toBe(false);
+    });
+
+    it('保留段边界不得误杀相邻公网段', async () => {
+      // 掩码写错一位就会误杀生产地址 —— 这些都在禁止段之外，必须放行
+      for (const address of [
+        '100.63.255.255',
+        '100.128.0.1',
+        '172.15.0.1',
+        '172.32.0.1',
+        '192.0.1.1',
+        '198.20.0.1',
+        '203.0.112.1',
+      ]) {
+        const result = await assertSafeResolvedAddresses('ok.example', async () => [{ address }]);
+        expect(result.safe, `${address} 被误杀`).toBe(true);
+      }
+    });
+
+    it('解析到公网地址放行', async () => {
+      const result = await assertSafeResolvedAddresses('ok.example', async () => [
+        { address: '93.184.216.34' },
+        { address: '2606:2800:220:1:248:1893:25c8:1946' },
+      ]);
+      expect(result.safe).toBe(true);
+    });
+
+    it('DNS 解析失败不放行（解析异常 ≠ 安全）', async () => {
+      const result = await assertSafeResolvedAddresses('nx.example', async () => {
+        throw Object.assign(new Error('queryA ENOTFOUND'), { code: 'ENOTFOUND' });
+      });
+      expect(result.safe).toBe(false);
+      expect(result.reason).toContain('ENOTFOUND');
+    });
+
+    it('空解析结果不放行', async () => {
+      const result = await assertSafeResolvedAddresses('empty.example', async () => []);
+      expect(result.safe).toBe(false);
+    });
+
+    it('isSafeExternalUrl 对域名只做字面量校验（这是为何需要 DNS 层）', () => {
+      // 反向断言：锁住「字面量校验挡不住 rebinding」这一事实，
+      // 若将来 isSafeExternalUrl 开始解析 DNS，本用例提醒同步更新实现。
+      expect(isSafeExternalUrl('http://metadata.google.internal/pkg.zip').safe).toBe(true);
+      expect(isSafeExternalUrl('http://localhost.attacker.example/pkg.zip').safe).toBe(true);
+    });
+  });
+
+  describe('③ downloadPluginPackage 端到端', () => {
+    it('重定向到内网时抛 UrlSafetyError，且内网端点未被命中', async () => {
+      await withRedirector(async (url) => {
+        await expect(downloadPluginPackage(url)).rejects.toThrow();
+        // 首跳字面量就是 loopback，本就该被拦；关键是**不能**拿到内网响应体
+        expect(innerHits).toEqual([]);
+      });
+    });
   });
 });

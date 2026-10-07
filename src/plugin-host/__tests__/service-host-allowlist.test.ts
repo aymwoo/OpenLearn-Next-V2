@@ -117,6 +117,19 @@ describe('computeAllowedWorkerTokens (前端等价实现)', () => {
     expect(allowed).not.toContain(SEMESTER_GRADE_SERVICE_TOKEN);
   });
 
+  it('伪造的相似服务名不再命中敏感白名单（B-2：原为 includes 子串匹配）', () => {
+    // 修复前：`dep.includes('ISemesterGradeService')` 会让以下条目命中
+    const forged = computeAllowedWorkerTokens({
+      requires: ['@evil/x:MyISemesterGradeServiceThing'],
+    });
+    expect(forged).not.toContain(SEMESTER_GRADE_SERVICE_TOKEN);
+
+    const forged2 = computeAllowedWorkerTokens({
+      optional: ['@evil/x:ISemesterGradeServiceExtra'],
+    });
+    expect(forged2).not.toContain(SEMESTER_GRADE_SERVICE_TOKEN);
+  });
+
   it('manifest 在 requires 中显式依赖时授予写成绩服务', () => {
     const allowed = computeAllowedWorkerTokens({ requires: ['@openlearn/frontend:ISemesterGradeService'] });
     expect(allowed).toContain(SEMESTER_GRADE_SERVICE_TOKEN);
@@ -131,10 +144,10 @@ describe('computeAllowedWorkerTokens (前端等价实现)', () => {
   });
 
   it('requestedTokens 与授权集取交集（请求方无法越权放大）', () => {
-    const allowed = computeAllowedWorkerTokens(
-      { capabilitiesProposed: ['grades'] },
-      [FRONTEND_API_TOKEN, POINTS_LEDGER_TOKEN],
-    );
+    const allowed = computeAllowedWorkerTokens({ capabilitiesProposed: ['grades'] }, [
+      FRONTEND_API_TOKEN,
+      POINTS_LEDGER_TOKEN,
+    ]);
     expect(allowed).toEqual([FRONTEND_API_TOKEN]);
   });
 });

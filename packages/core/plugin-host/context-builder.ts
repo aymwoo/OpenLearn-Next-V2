@@ -265,9 +265,8 @@ function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, plug
       });
     }),
     unsubscribe: createSafeFunction((eventType: string, subscriber: any) => {
-      const targetSubscriber = typeof subscriber === 'function' && subscriberMap.has(subscriber)
-        ? subscriberMap.get(subscriber)
-        : subscriber;
+      const targetSubscriber =
+        typeof subscriber === 'function' && subscriberMap.has(subscriber) ? subscriberMap.get(subscriber) : subscriber;
       return eventBus.unsubscribe(eventType, targetSubscriber);
     }),
     publish: createSafeFunction(async (event: any) => {
@@ -287,11 +286,49 @@ function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, plug
  *
  * 迁移自 PluginRuntime lines 326-358。
  */
-function wrapProcessManager(
+/**
+ * 导出原因：B-5 的跨插件边界（taskType 命名空间前缀 + kill 归属校验）需要被
+ * 直接断言，而这两条逻辑只在包装层、不在 ProcessManager 里。
+ * 未导出的包装层等于无法单测 —— 只能靠 e2e 间接观察。
+ */
+export function wrapProcessManager(
   processService: IProcessService,
   tracker: ResourceTracker,
   pluginId: string,
+  /** 用于归属校验的进程查询（可注入以便测试）；缺省走进程表 */
+  processOwnerLookup?: (processId: string) => string | undefined,
 ): IProcessService {
+  /**
+   * 任务类型加插件命名空间前缀（B-5）。
+   *
+   * 修复前的实测漏洞：`ProcessManager.handlers` 是**全局 Map**，`registerHandler`
+   * 直接 `set(taskType, handler)` —— 后注册者完全顶掉先注册者。
+   * 实测两个插件都 `registerHandler('shared-task')` 后：
+   *   handlers 表大小 = 1；spawn 派发时先注册者的 handler 调用 **0 次**。
+   * 即插件 A 的后台任务处理器被插件 B 无声吃掉。
+   *
+   * 加前缀后各插件的 taskType 互不冲突。派发侧（`spawn`）同样要加前缀，
+   * 否则自己 spawn 的任务会找不到自己的 handler —— 已在下方 spawn 处同步处理。
+   */
+  const scopedTaskType = (taskType: string) => `${pluginId}::${taskType}`;
+
+  // 归属查询默认走 IProcessService.getProcessOwner —— 不要求调用方显式传入，
+  // 否则直接调用本包装层的代码路径会静默退化成「不拦截」，等于把校验关掉了。
+  const ownerLookup =
+    processOwnerLookup ??
+    (typeof processService.getProcessOwner === 'function'
+      ? (processId: string) => processService.getProcessOwner!(processId)
+      : undefined);
+
+  /** 该进程是否属于本插件。无法判定归属时**保守放行自己创建的**（见下方注释）。 */
+  const isOwnProcess = (processId: string): boolean => {
+    if (!ownerLookup) return true;
+    const owner = ownerLookup(processId);
+    // 查不到归属时按「不属于自己」处理会误杀插件自己的进程（进程表已被清理等场景），
+    // 故仅在**明确查到他人 owner** 时拒绝。
+    return owner === undefined || owner === pluginId;
+  };
+
   return {
     registerHandler: createSafeFunction((taskType: string, handler: any) => {
       const safeHandler = async (processId: string, payload: any, state: any, log: any, updateState: any) => {
@@ -302,10 +339,11 @@ function wrapProcessManager(
           throw e;
         }
       };
-      return Promise.resolve(processService.registerHandler(taskType, safeHandler)).then(() => {
+      const scoped = scopedTaskType(taskType);
+      return Promise.resolve(processService.registerHandler(scoped, safeHandler)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            Promise.resolve(processService.unregisterHandler(taskType)).catch(() => {});
+            Promise.resolve(processService.unregisterHandler(scoped)).catch(() => {});
           },
         });
       });
@@ -328,14 +366,31 @@ function wrapProcessManager(
         return processId;
       });
     }),
+    /**
+     * B-5：kill 增加**归属校验**。
+     *
+     * 修复前的实测漏洞：`ProcessManager.kill(processId)` 只按 id UPDATE 进程表，
+     * **无 owner 校验**；而 processId 经**全局事件总线** `process.spawned` 广播，
+     * 任何插件订阅即可拿到他人进程 id —— 于是可以杀掉别的插件的后台任务。
+     */
     kill: createSafeFunction((processId: string) => {
+      if (!isOwnProcess(processId)) {
+        return Promise.reject(new Error(`[Plugin:${pluginId}] 无权终止不属于本插件的进程 ${processId}`));
+      }
       return processService.kill(processId);
     }),
+    /**
+     * B-5：spawn 的 taskType 同样加命名空间前缀，与 registerHandler 对齐 ——
+     * 否则自己 spawn 的任务会派发不到自己的 handler（前缀只在 register 时加了）。
+     *
+     * 传入的 taskType 若已带本插件前缀则不重复加。
+     */
     spawn: createSafeFunction((name: string, taskType: string, payload: unknown) => {
-      return processService.spawn(name, taskType, payload);
+      const scoped = taskType.startsWith(`${pluginId}::`) ? taskType : scopedTaskType(taskType);
+      return processService.spawn(name, scoped, payload);
     }),
     unregisterHandler: createSafeFunction((taskType: string) => {
-      return processService.unregisterHandler(taskType);
+      return processService.unregisterHandler(scopedTaskType(taskType));
     }),
     restore: createSafeFunction(() => {
       return processService.restore();
@@ -405,13 +460,30 @@ function wrapCapability(capabilityService: ICapabilityService): ICapabilityServi
  * 包装 IPointsDimensionRegistry：透传注册表查询操作。
  *
  * 这是点维度注册表本身的能力；插件调用 registerDimension 会被 CapabilityGuard
- * 另行校验（不是在这里拦截）。ResourceTracker 不需要介入——注册表是单例、
- * 无需按插件维度清理。
+ * 另行校验（不是在这里拦截）。
+ *
+ * 审计 D-1：原注释称「注册表是单例、无需按插件维度清理」——**该判断是错的**。
+ * `server/routes/grading.ts:148` 的 `listDimensions()` 会把结果计入学生档案雷达，
+ * 而单例意味着插件停用后其维度永久留存。现在 registerDimension 会登记一个
+ * disposer 到 ResourceTracker，停用/卸载时精确移除该插件注册的维度
+ * （内置维度受 `unregisterDimension` 保护，不受影响）。
  */
-function wrapPointsDimensionRegistry(registry: IPointsDimensionRegistry): IPointsDimensionRegistry {
+function wrapPointsDimensionRegistry(
+  registry: IPointsDimensionRegistry,
+  tracker: ResourceTracker,
+  pluginId: string,
+): IPointsDimensionRegistry {
   return {
     registerDimension: createSafeFunction((spec) => {
-      return registry.registerDimension(spec);
+      const dimensionId = spec?.id;
+      registry.registerDimension(spec);
+      if (dimensionId) {
+        tracker.track(pluginId, {
+          dispose: () => {
+            registry.unregisterDimension(dimensionId);
+          },
+        });
+      }
     }),
     getDimension: createSafeFunction((id) => {
       return registry.getDimension(id);
@@ -503,7 +575,7 @@ function wrapStorage(storageService: IStorageService, db: any, manifestId: strin
  * PluginRuntime 的 ai 包装器内联 AI 提供者逻辑，但 Phase 2 的 AIService
  * 已包含该逻辑，因此此处仅做安全代理。
  */
-function wrapAI(aiService: IAIService, pluginId: string): IAIService {
+function wrapAI(aiService: IAIService, pluginId: string, tracker: ResourceTracker): IAIService {
   return {
     generateText: createSafeFunction(
       async (prompt: string, options?: { systemInstruction?: string; temperature?: number }) => {
@@ -516,15 +588,34 @@ function wrapAI(aiService: IAIService, pluginId: string): IAIService {
       },
     ),
     // P2: ai.context.provider —— 插件注册 AI 上下文切片（可选方法）
+    //
+    // 审计 D-1：这两类注册此前**没有**登记 disposer，停用后永久留存 ——
+    //   · persona → server/ai-persona-registry 全局单例 → routes/os.ts:248 返回前端
+    //     → 停用插件的 AI 角色模板仍出现在 Agent 面板的角色下拉里；
+    //   · context provider → 每次 AI 请求都会被注入已停用插件的上下文。
+    // 且 `uninstallPlugin` 也不调注销，故卸载同样不清。
     registerAIContextProvider: createSafeFunction((id: string, fn: (lessonId: string | null) => string | null) => {
-      return (aiService as any).registerAIContextProvider?.(id, fn);
+      (aiService as any).registerAIContextProvider?.(id, fn);
+      tracker.track(pluginId, {
+        dispose: () => {
+          (aiService as any).unregisterAIContextProvider?.(id);
+        },
+      });
     }),
     unregisterAIContextProvider: createSafeFunction((id: string) => {
       return (aiService as any).unregisterAIContextProvider?.(id);
     }),
     // P2: ai.agent.persona —— 插件注册角色模板（registeredBy 记为插件 id，便于注销归属）
     registerAIPersona: createSafeFunction((persona: AIPersonaDefinition) => {
-      return (aiService as any).registerAIPersona?.({ ...persona, registeredBy: pluginId });
+      (aiService as any).registerAIPersona?.({ ...persona, registeredBy: pluginId });
+      const personaId = persona?.id;
+      if (personaId) {
+        tracker.track(pluginId, {
+          dispose: () => {
+            (aiService as any).unregisterAIPersona?.(personaId, pluginId);
+          },
+        });
+      }
     }),
     listAIPersonas: createSafeFunction(() => (aiService as any).listAIPersonas?.() ?? []),
     unregisterAIPersona: createSafeFunction((id: string) => {
@@ -575,13 +666,24 @@ export async function buildContext(
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
   const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id);
   const wrappedEventBus = wrapEventBus(eventBusService, tracker, pluginId);
-  const wrappedProcessManager = wrapProcessManager(processService, tracker, pluginId);
+  const wrappedProcessManager = wrapProcessManager(
+    processService,
+    tracker,
+    pluginId,
+    // 归属查询走 IProcessService.getProcessOwner（内存 Map + processes.plugin_id 列）。
+    // 可选方法，mock 或旧部署可缺省 —— 缺省时 isOwnProcess 退化为「不拦截」，与旧行为一致。
+    typeof processService.getProcessOwner === 'function'
+      ? (processId: string) => processService.getProcessOwner!(processId)
+      : undefined,
+  );
   const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId);
   const wrappedCapability = wrapCapability(capabilityService);
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
-  const wrappedAI = wrapAI(aiService, pluginId);
+  const wrappedAI = wrapAI(aiService, pluginId, tracker);
   // Points 包装仅在服务已注册时生效；未注册则取 null（plugin 可检查 === null 降级）。
-  const wrappedPointsDimension = pointsDimensionRegistry ? wrapPointsDimensionRegistry(pointsDimensionRegistry) : null;
+  const wrappedPointsDimension = pointsDimensionRegistry
+    ? wrapPointsDimensionRegistry(pointsDimensionRegistry, tracker, pluginId)
+    : null;
   const wrappedPointsLedger = pointsLedgerService ? wrapPointsLedgerService(pointsLedgerService) : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）

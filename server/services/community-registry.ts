@@ -1,5 +1,5 @@
 import semver from 'semver';
-import { isSafeExternalUrl } from '../utils/url-safety.js';
+import { isSafeExternalUrl, fetchWithSafeRedirects, UrlSafetyError } from '../utils/url-safety.js';
 
 /**
  * 社区插件注册表（Community Plugin Registry）。
@@ -305,14 +305,19 @@ export async function fetchCommunityRegistry(
     if (hit) return { ...hit, cached: true };
   }
 
-  const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
-
   let raw: unknown;
   try {
-    const response = await fetchImpl(url, {
-      headers: { Accept: 'application/json', 'User-Agent': 'OpenLearnV2-PluginRegistry/1.0' },
-      signal: AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS),
-    });
+    // G-4c：必须走 fetchWithSafeRedirects —— 它做 DNS 校验并逐跳复检重定向。
+    // 直接 fetch 时 redirect:'follow' 会把 302 目标引到内网且不复检（已实测复现）。
+    const response = options.fetchImpl
+      ? await options.fetchImpl(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'OpenLearnV2-PluginRegistry/1.0' },
+          signal: AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS),
+        })
+      : await fetchWithSafeRedirects(url, {
+          timeoutMs: REGISTRY_FETCH_TIMEOUT_MS,
+          headers: { Accept: 'application/json', 'User-Agent': 'OpenLearnV2-PluginRegistry/1.0' },
+        });
     if (!response.ok) {
       return failureResult(url, installed, `注册表返回 HTTP ${response.status}`);
     }
@@ -376,11 +381,18 @@ export async function downloadPluginPackage(
     throw new Error(`安全拦截: 非法下载地址 (${safety.reason})`);
   }
 
-  const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
-  const response = await fetchImpl(downloadUrl, {
-    headers: { 'User-Agent': 'OpenLearnV2-PluginInstaller/1.0', Accept: 'application/zip, application/octet-stream' },
-    signal: AbortSignal.timeout(PACKAGE_FETCH_TIMEOUT_MS),
-  });
+  const headers = {
+    'User-Agent': 'OpenLearnV2-PluginInstaller/1.0',
+    Accept: 'application/zip, application/octet-stream',
+  };
+  // G-4c：同上 —— DNS 校验 + 逐跳复检重定向。插件包下载是 SSRF 价值最高的路径
+  // （能读任意内网 HTTP 响应并落盘），不能只做字面量校验。
+  const response = options.fetchImpl
+    ? await options.fetchImpl(downloadUrl, {
+        headers,
+        signal: AbortSignal.timeout(PACKAGE_FETCH_TIMEOUT_MS),
+      })
+    : await fetchWithSafeRedirects(downloadUrl, { timeoutMs: PACKAGE_FETCH_TIMEOUT_MS, headers });
   if (!response.ok) {
     throw new Error(`下载插件包失败: HTTP ${response.status}`);
   }

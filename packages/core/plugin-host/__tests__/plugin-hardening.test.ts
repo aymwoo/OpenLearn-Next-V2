@@ -38,6 +38,7 @@ function createTestDb(): Database.Database {
       created_at INTEGER,
       loader_version TEXT,
       zip_package BLOB,
+      version TEXT,
       execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
@@ -340,8 +341,12 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     expect(mockApp.use).toHaveBeenCalledWith('/ext/my-dashboard', expect.any(Function), expect.any(Function));
 
     // 2. Install Plugin B with conflicting route should fail
+    //
+    // 报错文案在 G-4b 后多带了「归一化形式」与「已注册形式」，因为原先只报原始路由 ——
+    // 而 `/foo` 与 `/foo/` 这类冲突正是靠归一化才检出的，只报原始值会让人看不出差在哪。
     await expect(host.installPluginFromZip(zipB)).rejects.toThrow(
-      'Static route conflict: "/ext/my-dashboard" is already registered by plugin "ext-plugin-a"',
+      'Static route conflict: "/ext/my-dashboard" (normalized: "/ext/my-dashboard") ' +
+        'is already registered by plugin "ext-plugin-a" as "/ext/my-dashboard"',
     );
 
     // 3. Uninstall Plugin A to release the route
@@ -350,5 +355,37 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     // 4. Install Plugin B now succeeds
     const manifestB = await host.installPluginFromZip(zipB);
     expect(manifestB.id).toBe('ext-plugin-b');
+  });
+
+  // 7. G-4b: 等价路由（仅末尾斜杠 / 大小写不同）也必须被拒
+  //
+  // 这条是 G-4b 的核心场景，上一条完全覆盖不到 ——
+  // 上条两个插件声明的是**逐字符相同**的路由，改前改后都能检出。
+  //
+  // 而 Express 把 `/ext/x` 与 `/ext/x/` 当成同一个 mount point（先挂载者生效），
+  // 所以改前这两者会**双双通过检测**，然后一方资源永久 404 且无任何日志。
+  it('should reject routes that differ only by trailing slash or case (G-4b)', async () => {
+    const mockApp = { use: vi.fn(), _router: { stack: [] } };
+    host.setExpressApp(mockApp);
+
+    const zipBase = await createMockZip('ext-g4b-base', 'Base', {
+      staticRoute: '/ext/g4b',
+      staticDir: 'storage/dist',
+    });
+    await host.installPluginFromZip(zipBase);
+
+    // 仅末尾多一个斜杠
+    const zipSlash = await createMockZip('ext-g4b-slash', 'Slash', {
+      staticRoute: '/ext/g4b/',
+      staticDir: 'storage/dist',
+    });
+    await expect(host.installPluginFromZip(zipSlash)).rejects.toThrow(/Static route conflict/);
+
+    // 仅大小写不同
+    const zipCase = await createMockZip('ext-g4b-case', 'Case', {
+      staticRoute: '/EXT/G4B',
+      staticDir: 'storage/dist',
+    });
+    await expect(host.installPluginFromZip(zipCase)).rejects.toThrow(/Static route conflict/);
   });
 });

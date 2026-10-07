@@ -1,13 +1,22 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Kernel } from '../kernel/index.js';
 import { PluginState } from '../plugin-host/types.js';
+import { createPluginsDir, cleanupPluginsDir } from '../plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('Kernel System Plugins Auto-loading', () => {
   let kernel: Kernel;
+  let pluginsDir: string;
 
   beforeAll(async () => {
-    kernel = new Kernel();
+    // 必须传 pluginsDir：Kernel 默认写 <cwd>/plugins，会把插件产物堆进工作树
+    // （H-1：实测已积累 1705 个孤儿目录 / 24MB，且被 .gitignore 忽略故 git status 看不见）
+    pluginsDir = createPluginsDir('kernel-plugins');
+    kernel = new Kernel({ pluginsDir });
     await kernel.ready;
+  });
+
+  afterAll(() => {
+    cleanupPluginsDir(pluginsDir);
   });
 
   it('should automatically insert system plugins into the plugins table', () => {

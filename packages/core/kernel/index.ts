@@ -31,6 +31,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   ILessonEngineServiceToken,
+  IStageGuardServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
@@ -58,7 +59,7 @@ import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
-import { LessonRuntime } from '../lesson-engine/index.js';
+import { LessonRuntime, defaultStageGuardPipeline } from '../lesson-engine/index.js';
 import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
 import { PresenceEngineKernel } from '../presence-engine/index.js';
 import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
@@ -115,7 +116,23 @@ export class Kernel {
   public readonly platformServiceRegistryKernel: ServiceRegistryKernel;
   public readonly ready: Promise<void>;
 
-  constructor() {
+  /**
+   * @param opts.pluginsDir - 插件产物目录。生产默认 `<cwd>/plugins`；
+   *   测试**必须**显式传入临时目录，否则插件产物会落进工作树。
+   *
+   * ## 为什么要开这个口子（H-1）
+   *
+   * 原本这里硬编码 `path.resolve(process.cwd(), 'plugins')` 且不可覆盖。
+   * 后果不只是「测试会弄脏工作树」，更根本的是 **Kernel 在这个维度上不可测** ——
+   * 没有任何办法在测试里把插件产物引到别处，于是污染一直无人察觉：
+   * 实测仓库 `plugins/` 下积累了 **1705 个孤儿目录 / 24MB**，且每次 `pnpm test` 继续增长。
+   * 该目录被 `.gitignore` 忽略，所以 `git status` 完全看不见。
+   *
+   * 加可选参数后，生产行为**逐字节不变**（默认值相同），而测试可把产物引到
+   * `os.tmpdir()`。`vitest.setup.ts` 的全局守卫会把「仍写工作树」变成硬失败，
+   * 防止将来有人再引入同类调用。
+   */
+  constructor(opts?: { pluginsDir?: string }) {
     // Layer 0 — 无依赖
     this.eventBus = new EventBus();
     this.capabilityGuard = new CapabilityGuard();
@@ -167,7 +184,7 @@ export class Kernel {
     this.esmLoader = new NodeEsmLoader();
 
     // PluginHost — 依赖 ServiceRegistry + EsmLoader + db
-    const pluginsDir = path.resolve(process.cwd(), 'plugins');
+    const pluginsDir = opts?.pluginsDir ?? path.resolve(process.cwd(), 'plugins');
     fs.mkdirSync(pluginsDir, { recursive: true });
     this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db, pluginsDir);
 
@@ -257,6 +274,12 @@ export class Kernel {
     // （iframe 为 credentialless + 无 allow-same-origin，父窗口无法注入，只能由服务端渲染时拼接）
     this.serviceRegistry.register(ICoursewareRuntimeScriptRegistryToken, new CoursewareRuntimeScriptRegistry());
 
+    // 教学环节流转门禁（插件可注册守卫，如「随堂测验达标」「前置实验已提交」）。
+    // 必须注册**单例** `defaultStageGuardPipeline`：LessonRuntime 在未显式注入时
+    // 也回退到该单例（lesson-runtime.ts），若此处 new 一个新实例，
+    // 插件经 ctx.resolve() 注册的守卫与运行时实际校验的管道将不是同一个对象（split-brain）。
+    this.serviceRegistry.register(IStageGuardServiceToken, defaultStageGuardPipeline as any);
+
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
       const action = this.actionRegistry.getActionByCommandType(command.type);
@@ -312,6 +335,27 @@ export class Kernel {
             );
           }
         }
+      } else {
+        // ── Default-deny：未注册 action descriptor 的命令一律拒绝派发 ──────────
+        //
+        // 修复审计 H-1：此前 interceptor 写成 `if (action) { ... }` 且**无 else 分支**，
+        // 等价于 default-allow —— 任何只调用 `commandBus.registerHandler()` 而未在
+        // actionRegistry 登记的命令，对任意已登录角色（含 student）都**无任何授权检查**。
+        //
+        // 为什么必须 default-deny：action descriptor 是命令的**唯一声明式授权点**
+        // （capabilityRequired + isHighRisk + inputSchema 三者都在其中）。
+        // descriptor 缺失 ⇒ 没有任何可执行的授权意图 ⇒ 不能推定为放行。
+        //
+        // 修复方式：命令实现方补 actionRegistry.register()。
+        // 不要在此加豁免名单 —— 豁免只是把缺口从「静默」变成「显式且无人复审」。
+        //
+        // 排查提示：`scripts/plugin-command-audit.mjs` 可列出所有「有 handler 无 action」
+        // 的命令（历史上是 5 个 classroom.countdown.*，已在 server/routes/classroom.ts 补齐）。
+        throw new Error(
+          `[Security] Command "${command.type}" has no registered action descriptor and is denied by default. ` +
+            `Only commands registered via actionRegistry.register() may be dispatched. ` +
+            `If you own this command, register an ActionDescriptor (capabilityRequired + inputSchema).`,
+        );
       }
     });
 
@@ -427,7 +471,16 @@ export class Kernel {
 
     console.log(`[Migration] Found ${plugins.length} plugin(s) to migrate to filesystem`);
 
-    const pluginsDir = path.resolve(process.cwd(), 'plugins');
+    // 用 this.pluginHost.pluginsDir 而非再次 `path.resolve(process.cwd(),'plugins')`。
+    //
+    // 这里是 H-1 的一个残留：Kernel 构造器与 kernelContainer 的 env 覆盖都只作用于
+    // `this.pluginHost` 持有的那一份路径，本函数却自己又算了一遍 cwd/plugins ——
+    // 于是测试即便把 pluginHost 重定向到临时目录，迁移仍写进工作树。
+    // 症状很隐蔽：宿主日志里只有一行 `[Migration] Failed to migrate ...`，
+    // 而 `plugins/` 下悄悄多出目录（被 .gitignore 忽略，git status 看不见）。
+    //
+    // 读取宿主实际使用的那个值，而不是重新推导 —— 两个来源不可能再分叉。
+    const pluginsDir = this.pluginHost.getPluginsDir();
     for (const p of plugins) {
       const pluginDir = path.join(pluginsDir, p.id);
       const indexPath = path.join(pluginDir, 'index.js');
@@ -506,22 +559,72 @@ function extractEventLessonId(payload: unknown): string | null {
   return null;
 }
 
+/**
+ * 读取 `OPENLEARN_PLUGINS_DIR` 覆盖值。
+ *
+ * ## 为什么需要（H-1）
+ *
+ * `kernelContainer` 是懒加载单例，内部 `new Kernel()` 无参 ⇒ 用默认的
+ * `<cwd>/plugins`。而 `server/__tests__/` 与 `packages/core/__tests__/` 里有
+ * **数十个**测试文件 import 它，其中一部分会安装插件。这些测试无法逐个改造
+ * （单例是 import 进来的，没有注入点），于是插件产物一律落进工作树。
+ *
+ * 选环境变量而非改所有测试文件，理由：单例没有构造注入点，而 env 是唯一能在
+ * 「import 之前」生效的通道。`vitest.setup.ts` 在所有测试模块之前运行，正是
+ * 设置它的位置。
+ *
+ * 生产不设这个变量 ⇒ 行为与从前**逐字节相同**。
+ *
+ * ## 为什么在 Vitest 下改为抛错而非返回 undefined
+ *
+ * 原本查不到就返回 undefined、回落 `cwd/plugins`。全量实测仍留下一个残留目录：
+ * 某个 worker 在 setup 赋值**之前**就构造了 Kernel（`process.env` 赋值与模块求值的
+ * 先后在不同 pool 下并不稳定），迁移于是把插件产物写进了工作树。
+ *
+ * 那类静默写入正是 H-1 要消灭的东西本身 —— 且**守卫拦不住它**，
+ * 因为写入发生在守卫够不到的上下文里（子进程 / worker 线程各有自己的 `node:fs` 实例，
+ * patch 不传播过去）。
+ *
+ * 与其继续逐个 pool 追「哪个上下文抢跑」，不如把这条前提变成**显式契约**：
+ * 测试环境下拿不到 pluginsDir 就是配置错误，当场抛错并指明修法。
+ *
+ * 代价：某个测试若确实漏了注入，会从「静默污染工作树」变成「测试红」——
+ * 这是想要的失败方向，且比 `git status` 看不见的磁盘垃圾容易定位得多。
+ */
+function resolvePluginsDirOverride(): string | undefined {
+  const raw = process.env.OPENLEARN_PLUGINS_DIR;
+  if (typeof raw === 'string' && raw.length > 0) return raw;
+
+  if (process.env.VITEST) {
+    throw new Error(
+      '[H-1] 测试环境下未能确定插件目录，拒绝回退到 process.cwd()/plugins。\n' +
+        '  原因：回退会把插件产物写进仓库工作树；该目录被 .gitignore 忽略，污染完全隐形。\n' +
+        '  修法（择一）：\n' +
+        '    1. 该测试自己 new Kernel({ pluginsDir })，用 __tests__/helpers/plugins-dir 的\n' +
+        "       createPluginsDir('用途') 取得，并在 afterEach 里 cleanupPluginsDir；\n" +
+        '    2. 若用的是 kernelContainer 单例，确认它是在 vitest.setup.ts 赋值\n' +
+        '       OPENLEARN_PLUGINS_DIR 之后才被首次访问。',
+    );
+  }
+  return undefined;
+}
+
 // Singleton export - Lazy evaluated via Proxy to prevent instant creation during test imports
 let _kernelContainer: Kernel | undefined;
+function ensureKernelContainer(): Kernel {
+  if (!_kernelContainer) {
+    // 测试经 vitest.setup.ts 注入临时目录；生产无此变量，行为不变
+    _kernelContainer = new Kernel({ pluginsDir: resolvePluginsDirOverride() });
+    _kernelContainer.initAuditLog();
+  }
+  return _kernelContainer;
+}
 export const kernelContainer = new Proxy({} as Kernel, {
   get(target, prop, receiver) {
-    if (!_kernelContainer) {
-      _kernelContainer = new Kernel();
-      _kernelContainer.initAuditLog();
-    }
-    return Reflect.get(_kernelContainer, prop, receiver);
+    return Reflect.get(ensureKernelContainer(), prop, receiver);
   },
   set(target, prop, value, receiver) {
-    if (!_kernelContainer) {
-      _kernelContainer = new Kernel();
-      _kernelContainer.initAuditLog();
-    }
-    return Reflect.set(_kernelContainer, prop, value, receiver);
+    return Reflect.set(ensureKernelContainer(), prop, value, receiver);
   },
 });
 

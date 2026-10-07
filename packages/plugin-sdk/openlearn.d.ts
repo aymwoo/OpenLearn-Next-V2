@@ -125,6 +125,13 @@ interface ActionDescriptor {
   readonly inputSchema: unknown;
   readonly capabilityRequired: string;
   readonly isHighRisk?: boolean;
+  /**
+   * 是否暴露为 AI Agent 工具。默认 `true`；`false` = 仅程序化可达
+   * （HTTP 路由 / commandBus / ctx.invokeCommand），不出现在 agent 工具箱。
+   *
+   * 与 `isHighRisk` 正交：`isHighRisk` 只管人工审批，`exposeToAgent` 只管是否暴露给 AI。
+   */
+  readonly exposeToAgent?: boolean;
 }
 
 // ── Service Interfaces ───────────────────────────────────────────────────
@@ -210,6 +217,13 @@ interface IAIService {
   listAIPersonas?(): AIPersonaDefinition[];
   /** 注销插件注册的角色（宿主内置角色不可注销）。 */
   unregisterAIPersona?(id: string): void;
+  /**
+   * P2: ai.context.provider —— 注册 AI 上下文切片提供者。
+   * 宿主在每次 AI 请求前按 lessonId 调用，返回要注入的上下文文本。
+   */
+  registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
+  /** 注销上下文切片提供者。 */
+  unregisterAIContextProvider?(id: string): void;
 }
 
 // ── Logger ───────────────────────────────────────────────────────────────
@@ -374,6 +388,8 @@ interface IPluginHttpRouter {
   route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void;
   stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
   stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
+  /** 判断该 method+path 是否命中了一个流式（SSE）路由 */
+  isStream(method: string, path: string): boolean;
 }
 
 declare class PluginHttpRouter implements IPluginHttpRouter {
@@ -385,6 +401,7 @@ declare class PluginHttpRouter implements IPluginHttpRouter {
   route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void;
   stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
   stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
+  isStream(method: string, path: string): boolean;
   match(
     method: string,
     path: string,
@@ -435,6 +452,12 @@ interface PluginInfo {
   state: PluginState;
   status?: string;
   execution_mode?: string;
+  /** 原始 manifest 对象（插件可据此读取 contributes / classroomTools 等声明） */
+  manifest?: Record<string, unknown>;
+  /** 安装时间戳（epoch ms） */
+  created_at?: number;
+  /** 是否为前端插件（含 frontend 产物） */
+  has_frontend?: boolean;
 }
 
 // ── Inlined core service / host types (self-contained copy of kernel contracts) ──
@@ -468,6 +491,12 @@ interface ISemesterGradeService {
 
 interface IPointsDimensionRegistry {
   registerDimension(spec: PointsDimensionSpec): void;
+  /**
+   * 注销一个维度。`category === 'builtin'` 的内置维度受保护，不可注销。
+   * 宿主在插件停用/卸载时会自动调用，插件一般无需手动调用。
+   * @returns 是否真的移除了
+   */
+  unregisterDimension(id: string): boolean;
   getDimension(id: string): PointsDimensionSpec | undefined;
   listDimensions(): PointsDimensionSpec[];
 }
@@ -568,6 +597,67 @@ interface StartActivityResult {
   result?: unknown;
 }
 
+/** Canonical activity event names published on the (reused) Event Bus. */
+declare const ACTIVITY_EVENTS: {
+  readonly REGISTERED: 'activity.registered';
+  readonly INITIALIZED: 'activity.initialized';
+  readonly STARTED: 'activity.started';
+  readonly PAUSED: 'activity.paused';
+  readonly RESUMED: 'activity.resumed';
+  readonly FINISHED: 'activity.finished';
+  readonly DISPOSED: 'activity.disposed';
+};
+
+type ActivityEventName = (typeof ACTIVITY_EVENTS)[keyof typeof ACTIVITY_EVENTS];
+
+/** Optional lifecycle hooks supplied to `BaseActivityProvider`. */
+interface BaseActivityProviderOptions {
+  descriptor: ActivityProviderDescriptor;
+  onInitialize?: (context: ActivityContext) => void | Promise<void>;
+  /**
+   * Custom start hook. When provided it fully owns the start behaviour
+   * (e.g. call the command bus itself). When omitted, the provider falls back
+   * to dispatching `descriptor.commandType` (if set) and publishing the event.
+   */
+  onStart?: (context: ActivityContext, payload?: Record<string, unknown>) => unknown | Promise<unknown>;
+  onPause?: (context: ActivityContext) => void | Promise<void>;
+  onResume?: (context: ActivityContext) => void | Promise<void>;
+  onFinish?: (context: ActivityContext) => void | Promise<void>;
+  onDispose?: (context: ActivityContext) => void | Promise<void>;
+}
+
+/**
+ * Shared Activity Provider implementation used by BOTH official activities and
+ * third-party plugin activities. Implements the full lifecycle
+ * (register → initialize → start → pause → resume → finish → dispose) by
+ * reusing the existing Classroom Action API (Command Bus) and Event Bus.
+ */
+declare class BaseActivityProvider implements ActivityProvider {
+  constructor(options: BaseActivityProviderOptions);
+  readonly descriptor: ActivityProviderDescriptor;
+  readonly state: ActivityLifecycleState;
+  /** When the activity entered `running` (undefined before first start). */
+  readonly startedAt: number | undefined;
+  markRegistered(): void;
+  initialize(context: ActivityContext): Promise<void>;
+  start(context: ActivityContext, payload?: Record<string, unknown>): Promise<unknown>;
+  pause(context: ActivityContext): Promise<void>;
+  resume(context: ActivityContext): Promise<void>;
+  finish(context: ActivityContext): Promise<void>;
+  dispose(context: ActivityContext): Promise<void>;
+}
+
+/**
+ * Convenience factory for defining an Activity Provider. Accepts either a full
+ * `ActivityProvider` instance or a descriptor (+ optional hooks) and returns a
+ * `BaseActivityProvider`. Used by official activities and third-party plugins
+ * alike, so both share the exact same API.
+ */
+declare function defineActivityProvider(
+  input: ActivityProviderDescriptor | BaseActivityProviderOptions,
+  hooks?: Omit<BaseActivityProviderOptions, 'descriptor'>,
+): BaseActivityProvider;
+
 interface ActivityRegistry {
   registerProvider(provider: ActivityProvider): void;
   unregisterProvider(id: string): boolean;
@@ -643,7 +733,9 @@ interface IAICapability {
   };
 }
 
-interface CapabilityRegistry {
+// 源码里是 `export class CapabilityRegistry`，因此必须是 class 声明 —— index.ts
+// 已按 value 再导出它，interface 声明会让消费侧 `new CapabilityRegistry()` 报 TS2693。
+declare class CapabilityRegistry {
   registerCapability(capability: IAICapability): void;
   resolveCapability<T extends IAICapability = IAICapability>(capabilityId: string): T;
   hasCapability(capabilityId: string): boolean;
@@ -703,6 +795,16 @@ interface IUnifiedExtensionRegistry {
   hasExtension(category: string, id: string): boolean;
   getExtension<T = unknown>(category: string, id: string): T | undefined;
   listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
+  /**
+   * 注销某个 provider（插件）注册的全部扩展项（审计 D-2 / M-3）。
+   *
+   * 此前该注册表只增不减：插件停用或卸载后，其扩展项永久留存。
+   * 需要成批按 providerId 清理时使用。
+   *
+   * @param providerId 注册时的 providerId（贡献同步路径为 pluginId）
+   * @returns 被移除的扩展项数量
+   */
+  unregisterProvider(providerId: string): number;
   listCategories(): ReadonlyArray<string>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
@@ -716,6 +818,8 @@ interface PluginPackageMetadata {
   readonly repositoryId: string;
   readonly downloadUrl?: string;
   readonly manifest?: Manifest;
+  /** 包完整性校验值（形如 `sha256-<hex>`），来自 updateSource 声明 */
+  readonly integrity?: string;
 }
 
 interface IPluginRepositoryAdapter {
@@ -932,13 +1036,33 @@ declare const ITeachingCollaborationServiceToken: Token<ITeachingCollaborationSe
 declare const ILearningAnalyticsServiceToken: Token<ILearningAnalyticsService>;
 declare const IAICapabilityServiceToken: Token<IAICapabilityService>;
 declare const ICapabilityRuntimeServiceToken: Token<ICapabilityRuntimeService>;
+/**
+ * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
+ * F-2 / M-9：capability-governance 子系统零 resolve。已从 SDK 导出面移除。
+ * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
+ */
 declare const ICapabilityGovernanceServiceToken: Token<ICapabilityGovernanceService>;
 declare const IPlatformServiceRegistryToken: Token<IPlatformServiceRegistryService>;
 declare const ICapabilityRegistryToken: Token<CapabilityRegistry>;
 declare const IPluginLifecycleManagerToken: Token<IPluginLifecycleManager>;
+/**
+ * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
+ * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
+ * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
+ */
 declare const IPluginCapabilityGatewayToken: Token<IPluginCapabilityGateway>;
+/**
+ * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
+ * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
+ * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
+ */
 declare const IUnifiedExtensionRegistryToken: Token<IUnifiedExtensionRegistry>;
 declare const IPluginDistributionManagerToken: Token<IPluginDistributionManager>;
+/**
+ * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
+ * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
+ * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
+ */
 declare const IPluginRuntimeCompositionToken: Token<PluginRuntimeComposition>;
 declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScriptRegistry>;
 declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
@@ -1030,7 +1154,6 @@ export type {
   PluginContext,
   PluginDatabaseAPI,
   PluginInfo,
-  PluginState,
   Disposable,
   IPluginLogger,
   Manifest,
@@ -1062,7 +1185,6 @@ export type {
   ICapabilityGovernanceService,
   IPlatformServiceRegistryService,
   IAICapability,
-  CapabilityRegistry,
   CapabilityMetadata,
   ExtensionItemMetadata,
   IPluginLifecycleManager,
@@ -1073,7 +1195,6 @@ export type {
   PluginUpdateOptions,
   PluginUpdateResult,
   IPluginDistributionManager,
-  PluginRuntimeComposition,
   CoursewareRuntimeScript,
   IRegisteredCoursewareRuntimeScript,
   ICoursewareRuntimeScriptRegistry,
@@ -1098,6 +1219,8 @@ export type {
   ActivityContext,
   ActivityProviderDescriptor,
   ActivityProvider,
+  ActivityEventName,
+  BaseActivityProviderOptions,
   StartActivityResult,
   ActivityRegistry,
   PluginHost,
@@ -1142,14 +1265,10 @@ export {
   ILearningAnalyticsServiceToken,
   IAICapabilityServiceToken,
   ICapabilityRuntimeServiceToken,
-  ICapabilityGovernanceServiceToken,
   IPlatformServiceRegistryToken,
   ICapabilityRegistryToken,
   IPluginLifecycleManagerToken,
-  IPluginCapabilityGatewayToken,
-  IUnifiedExtensionRegistryToken,
   IPluginDistributionManagerToken,
-  IPluginRuntimeCompositionToken,
   ICoursewareRuntimeScriptRegistryToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
@@ -1157,6 +1276,14 @@ export {
   IStageGuardServiceToken,
   IActivityRegistryToken,
   IAuthSessionBridgeToken,
+  // Activity Ecosystem —— 运行时值。index.ts 以具名 value 再导出，,
+  // 必须在 d.ts 里同步声明，否则插件 import 即 TS2305 / TS2724。,
+  ACTIVITY_EVENTS,
+  BaseActivityProvider,
+  defineActivityProvider,
+  PluginState,
+  PluginRuntimeComposition,
+  CapabilityRegistry,
 };
 
 declare const IActivityRegistryToken: Token<ActivityRegistry>;

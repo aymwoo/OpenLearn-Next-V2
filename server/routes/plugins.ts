@@ -8,7 +8,7 @@ import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
-import { isSafeExternalUrl } from '../utils/url-safety.js';
+import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
 import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import {
   COMMUNITY_REGISTRY_ENV,
@@ -176,7 +176,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   // Lookup installed plugin by logical manifest.id (for upgrade detection in the wizard)
   // MUST be registered before /api/plugins/:id(*)
-  app.get('/api/plugins/by-manifest/:manifestId(*)', (req, res) => {
+  app.get('/api/plugins/by-manifest/:manifestId(*)', requireAuth(), (req, res) => {
     try {
       const manifestId = decodeURIComponent(req.params.manifestId);
       const found = kernelContainer.pluginHost.findByManifestId(manifestId);
@@ -397,9 +397,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         }
         // Server-side download with timeout fallback signal
         try {
-          const resp = await fetch(downloadUrl, {
+          // G-4c：走 fetchWithSafeRedirects（DNS 校验 + 逐跳复检重定向）。
+          // 这里只做了字面量校验就 fetch —— 实测 `redirect:'follow'` 会把 302
+          // 目标引到内网且不复检，构成完整 SSRF 链。
+          const resp = await fetchWithSafeRedirects(downloadUrl, {
+            timeoutMs: 15_000,
             headers: { 'User-Agent': 'OpenLearnV2-PluginUpdater/1.0' },
-            signal: AbortSignal.timeout(15000),
           });
           if (!resp.ok) {
             return res.status(400).json({
@@ -527,7 +530,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // GET single plugin by UUID or manifest.id alias (Placed AFTER /config, /toggle, /contributions)
-  app.get('/api/plugins/:id(*)', async (req, res, next) => {
+  // G-3：此前本路由**完全没有 requireAuth()**，而同文件其余 15 个插件路由都有。
+  // 后果：匿名可枚举全部插件的 id / manifestId / version / executionMode /
+  // capabilitiesProposed —— 即平台装了哪些插件、每个插件声明了什么能力，可被完整测绘。
+  // executionMode 与 capabilitiesProposed 尤其敏感：它们直接描述攻击面的形状。
+  app.get('/api/plugins/:id(*)', requireAuth(), async (req, res, next) => {
     // 插件 RESTful 网关（注册于本文件末尾）依赖 `/api/plugins/:pluginId/*` 匹配
     // 「多段 manifest id + 子路径」的 GET 请求（如
     // `/api/plugins/@openlearn/plugin-x/health`）。但本路由的 `:id(*)` 通配会先于
@@ -686,38 +693,34 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ success: false, error: 'Missing command type' });
       }
 
-      // Resolve the prefixed command type. Handlers are registered by the
-      // service-host with a plugin-UUID prefix (e.g. 019f6465-?:courseware.open_panel),
-      // but some callers (e.g. whiteboard toolbar buttons) may send the bare type.
-      // Fallback: if the bare type is not found, try suffix-matching against
-      // all registered handler keys.
-      let resolvedType = type;
+      // G-2：删除「后缀模糊匹配」。
+      //
+      // 此前当 `type` 未精确命中时，会遍历全部已注册 handler key，
+      // 用 `key.endsWith(':' + type) || key.endsWith('.' + type)` 找一个**后缀相同**的
+      // key 来派发。后果：调用方只需知道某个**裸**命令名（如 `open_panel`），
+      // 就能命中**任意插件**注册的 handler（含其他插件命名空间下的）——
+      // 把「我只能调我自己的命令」变成了「我能调所有后缀匹配的」。
+      //
+      // 正确做法：命令名要么就是完整的 namespaced commandType，
+      // 要么由插件宿主用已知的 pluginId + manifestId 正确加前缀后再派发
+      // （见 packages/core/plugin-host/plugin-namespace.ts，
+      //   ctx.invokeCommand 即走该路径）。本端点不做猜测。
+      const resolvedType = type;
       const bus = kernelContainer.commandBus as any;
       // service-host stores handlers in private 'handlers' / 'legacyHandlers' Maps
       const handlersMap = bus.handlers;
       const legacyMap = bus.legacyHandlers;
-      if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
-        for (const map of [handlersMap, legacyMap]) {
-          if (!map) continue;
-          for (const [key] of map) {
-            if (key.endsWith(':' + resolvedType) || key.endsWith('.' + resolvedType)) {
-              resolvedType = key;
-              break;
-            }
-          }
-          if (resolvedType !== type) break;
-        }
-      }
 
-      // Debug: log all registered handlers when lookup fails
+      // 精确命中失败即拒绝：不 fallback、不猜测命名空间。
+      // commandBus 的 interceptor 会再兜一层（未注册 action descriptor 的命令 default-deny）。
       if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
-        console.error('[execute-command] Handler NOT FOUND for type:', resolvedType);
-        console.error(
-          '[execute-command] Registered handlers:',
-          [...(handlersMap?.keys?.() ?? [])].join(', ') || '(none)',
-        );
-        const matching = [...(handlersMap?.keys?.() ?? [])].filter((k) => k.includes('courseware'));
-        console.error('[execute-command] Matching courseware keys:', matching.join(', ') || '(none)');
+        console.warn('[execute-command] no handler for command type:', resolvedType);
+        return res.status(404).json({
+          success: false,
+          error:
+            `No handler registered for command type "${resolvedType}". ` +
+            `Callers must send the fully-namespaced commandType (see plugin-namespace.ts).`,
+        });
       }
 
       const cmd = await kernelContainer.commandBus.createCommand(resolvedType, payload ?? {}, getActorId(req));
@@ -873,7 +876,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       let response: Response;
       try {
-        response = await fetchWithRetry(cleanUrl, {
+        // G-4c：fetchWithRetry 内部用裸 fetch（默认 redirect:'follow'），对
+        // 已过字面量校验的 URL 同样不做 DNS 校验与重定向复检 —— 同一类 SSRF。
+        // 这里改用 fetchWithSafeRedirects；该端点仅管理员可访问，风险面较小，
+        // 但修法一致，避免留一个「管理员可探测内网」的通道。
+        response = await fetchWithSafeRedirects(cleanUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -885,10 +892,19 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             max_tokens: 5,
           }),
           timeoutMs: 10_000,
-          maxAttempts: 1,
-        });
+        } as SafeFetchOptions);
       } catch (err: any) {
-        if (err instanceof AIFetchTimeoutError) {
+        // 超时判定不能只认 AIFetchTimeoutError —— G-4c 换成 fetchWithSafeRedirects 后，
+        // 超时由 AbortSignal.timeout 产生，错误形态是 DOMException：
+        //   · name === 'TimeoutError'（AbortSignal.timeout）
+        //   · name === 'AbortError'（测试注入的形态 / 手动 abort）
+        // 按错误形态判定比按错误类判定更稳，也保留了原有 504 契约。
+        const isTimeout =
+          err instanceof AIFetchTimeoutError ||
+          err?.name === 'TimeoutError' ||
+          err?.name === 'AbortError' ||
+          /abort|timeout/i.test(err?.message ?? '');
+        if (isTimeout) {
           return res.status(504).json({
             success: false,
             error: 'AI Provider request timed out after 10000ms. Please verify the URL or provider availability.',

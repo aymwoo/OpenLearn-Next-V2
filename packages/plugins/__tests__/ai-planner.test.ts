@@ -18,11 +18,13 @@ import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('AiPlannerPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
@@ -30,6 +32,7 @@ describe('AiPlannerPlugin', () => {
   let mockProcessManager: any;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('ai-planner');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -40,6 +43,7 @@ describe('AiPlannerPlugin', () => {
         status TEXT,
         created_at INTEGER,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
       CREATE TABLE IF NOT EXISTS processes (
@@ -51,7 +55,11 @@ describe('AiPlannerPlugin', () => {
         state TEXT,
         logs TEXT,
         created_at INTEGER,
-        updated_at INTEGER
+        updated_at INTEGER,
+        -- B-5 / migration 018：进程归属列。内联建表的测试夹具必须与
+        -- migrations/018_processes_plugin_owner.sql 保持同步，否则
+        -- ProcessManager.spawn 会报 "table processes has no column named plugin_id"。
+        plugin_id TEXT
       );
       CREATE TABLE IF NOT EXISTS lessons (
         id TEXT PRIMARY KEY,
@@ -109,10 +117,11 @@ describe('AiPlannerPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 
@@ -134,7 +143,13 @@ describe('AiPlannerPlugin', () => {
     expect(actions.find((a) => a.commandType === 'ai.apply_grade')).toBeDefined();
 
     // Verify process task handler registered
-    expect(mockProcessManager.registerHandler).toHaveBeenCalledWith('ai_planner_task', expect.any(Function));
+    // B-5：taskType 会被加上 `<pluginId>::` 命名空间前缀。修复前 ProcessManager.handlers
+    // 是全局 Map、后者顶掉前者 —— 实测两个插件注册同名 taskType 后先注册者的 handler
+    // 被调用 0 次。
+    expect(mockProcessManager.registerHandler).toHaveBeenCalledWith(
+      '@openlearn/plugin-ai-planner::ai_planner_task',
+      expect.any(Function),
+    );
 
     // Test: ai.start_generation command execution
     const spawnRes = await commandBus.execute({
@@ -153,11 +168,16 @@ describe('AiPlannerPlugin', () => {
       processId: 'mock-process-id',
       message: 'Process started in the background.',
     });
-    expect(mockProcessManager.spawn).toHaveBeenCalledWith('AI Generator: AI Ethics', 'ai_planner_task', {
-      taskType: 'lesson_material',
-      topic: 'AI Ethics',
-      classId: undefined,
-      duration: 3,
-    });
+    // spawn 必须用与 registerHandler 相同的前缀，否则任务派发不到自己的 handler
+    expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+      'AI Generator: AI Ethics',
+      '@openlearn/plugin-ai-planner::ai_planner_task',
+      {
+        taskType: 'lesson_material',
+        topic: 'AI Ethics',
+        classId: undefined,
+        duration: 3,
+      },
+    );
   });
 });

@@ -194,7 +194,29 @@ async function startServer() {
           // 手写 HTML 课件已改经 POST /api/courseware/inline 落库走 /runtime 加载
           // （srcdoc 会继承父页面 CSP，是此前无法收紧的根因）。
           scriptSrc: isProduction ? ["'self'", 'blob:'] : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
-          scriptSrcAttr: ["'unsafe-inline'"],
+          // G-4a：收紧 script-src-attr。'unsafe-inline' 在此仅覆盖 **HTML 属性里的
+          // 内联事件处理器**（onclick="..." / javascript: URL），不覆盖 <script> 块
+          //（那是 script-src 管）—— 所以它对 SPA 构建产物毫无作用，却能让任何被
+          // 注入的 HTML 属性直接执行代码。
+          //
+          // 收紧前的前置实测（2026-10-07，全部为「实际执行路径」而非源码猜测）：
+          //   ① 全新 `pnpm build` 后扫描 dist/：内联 handler 属性 **0 处**、
+          //      `javascript:` 协议 **0 处**（唯一命中在 vendor-react 的
+          //      "React has blocked a javascript: URL" 报错文案里，不是真实用法）
+          //   ② 源码 dangerouslySetInnerHTML：**0 处** —— 1788 个 JSX on* 属性
+          //      全部经 React 合成事件绑定到 addEventListener，**不进 HTML 属性**
+          //   ③ 三条服务端直出 HTML 的路径（routes/courseware.ts:236、
+          //      routes/resources.ts:28、routes/bridge.ts:265）**各自调用
+          //      setCoursewareDocumentCsp() 覆盖本头**，用的是宽松的
+          //      COURSEWARE_DOCUMENT_CSP（含 script-src-attr 'unsafe-inline'）
+          //      —— 第三方课件 HTML 不受本次收紧影响
+          //   ④ index.html 无任何内联 <script> 内容，只有一个 type="module" src
+          //
+          // 结论：SPA 侧可以安全收紧为 'none'。
+          //
+          // **不影响 script-src 的开发态宽松**：非生产环境 scriptSrc 仍含
+          // 'unsafe-eval'（Vite HMR 需要），那只影响 <script> 块，与本指令正交。
+          scriptSrcAttr: ["'none'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           styleSrcAttr: ["'unsafe-inline'"],
           imgSrc: ["'self'", 'data:', 'blob:'],

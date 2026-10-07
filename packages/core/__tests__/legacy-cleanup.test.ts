@@ -1,22 +1,35 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Kernel } from '../kernel/index.js';
 import fs from 'fs';
 import path from 'path';
+import { createPluginsDir, cleanupPluginsDir } from '../plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('Legacy Cleanup (Phase 8)', () => {
+  // Kernel 建在各个 it() 内部，故用 beforeEach/afterEach 而非 beforeAll/afterAll。
+  // 每个用例都 new Kernel()，所以每例都需要一份独立的 pluginsDir。
+  let pluginsDir: string;
+
+  beforeEach(() => {
+    pluginsDir = createPluginsDir('legacy-cleanup');
+  });
+
+  afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
+  });
+
   it('should not have packages/core/plugin-runtime directory', () => {
     const runtimePath = path.resolve(process.cwd(), 'packages', 'core', 'plugin-runtime');
     expect(fs.existsSync(runtimePath)).toBe(false);
   });
 
   it('should not expose pluginRuntime on Kernel instance', () => {
-    const kernel = new Kernel();
+    const kernel = new Kernel({ pluginsDir });
     expect((kernel as any).pluginRuntime).toBeUndefined();
     expect(kernel.pluginHost).toBeDefined();
   });
 
   it('should bootstrap the 6 built-in plugins automatically', async () => {
-    const kernel = new Kernel();
+    const kernel = new Kernel({ pluginsDir });
     await kernel.ready;
 
     const plugins = kernel.pluginHost.listPlugins();

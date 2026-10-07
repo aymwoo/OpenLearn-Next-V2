@@ -13,5 +13,5 @@ export * from './providers/lesson-capability-provider.js';
 export * from './providers/analytics-capability-provider.js';
 export * from './invocation/invocation-engine.js';
 export * from './guard/capability-guard.js';
-export * from './sdk/capability-sdk.ts';
+export * from './sdk/capability-sdk.js';
 export * from './capability-runtime-kernel.js';

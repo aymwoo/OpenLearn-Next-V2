@@ -36,6 +36,7 @@ import type {
   IPointsLedgerService,
 } from '../../di/interfaces.js';
 import { IPointsDimensionRegistryToken, IPointsLedgerServiceToken } from '../../di/interfaces.js';
+import { createPluginsDir, cleanupPluginsDir } from './helpers/plugins-dir.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ function createTestDb(): Database.Database {
       created_at INTEGER,
       loader_version TEXT,
       zip_package BLOB,
+      version TEXT,
       execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
@@ -195,6 +197,7 @@ function createMockServices(): Record<string, unknown> {
     } as IAIService,
     pointsDimension: {
       registerDimension: vi.fn(),
+      unregisterDimension: vi.fn().mockReturnValue(true),
       getDimension: vi.fn().mockReturnValue(undefined),
       listDimensions: vi.fn().mockReturnValue([]),
     } as IPointsDimensionRegistry,
@@ -291,20 +294,23 @@ describe('PluginHost — 完整生命周期', () => {
   let sr: ServiceRegistry;
   let services: Record<string, unknown>;
   let host: PluginHost;
+  let pluginsDir: string;
   let loader: TestEsmLoader;
   let loadMap: Map<string, PluginModule>;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('plugin-host');
     db = createTestDb();
     sr = new ServiceRegistry();
     services = createMockServices();
     await registerMockServices(sr, services);
     loadMap = new Map();
     loader = new TestEsmLoader(loadMap);
-    host = new PluginHost(sr, loader, db);
+    host = new PluginHost(sr, loader, db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 
@@ -545,9 +551,16 @@ describe('PluginHost — 完整生命周期', () => {
     expect(host.getPluginState(installed.id)).toBe(PluginState.ERROR);
     expect(disposeSpy).toHaveBeenCalledWith(installed.id);
 
-    // DB status 应保持不变（未更新为 active）
+    // DB status 必须与内存状态一致 = 'error'（审计 H-4）
+    //
+    // 修复前本断言写的是 `expect(row.status).toBe('installed')` —— 它把「激活失败只写
+    // 内存、不写 DB」当成预期行为固化了。后果：重启后 restoreActivePlugins 会看到一个
+    // status='installed' 的失败插件并重新尝试，而运行时已经判定它 ERROR，
+    // 造成「重启前后行为不同」。
+    //
+    // 现在状态写入统一走 setPluginState()，两侧必然一致。
     const row = db.prepare('SELECT status FROM plugins WHERE id = ?').get(installed.id) as any;
-    expect(row.status).toBe('installed');
+    expect(row.status).toBe('error');
   });
 
   // ── Test 11: 插件 A 激活失败不影响插件 B ─────────────────────────────

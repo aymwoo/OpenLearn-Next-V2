@@ -53,6 +53,24 @@ export class PointsDimensionRegistry implements IPointsDimensionRegistry {
     this.dimensions.set(spec.id, spec);
   }
 
+  /**
+   * 注销维度（审计 D-1）。
+   *
+   * 拒绝注销 `category === 'builtin'` 的内置维度 —— 平台的三个基础维度
+   * （progress / assignment / exam）是所有评分的分母，插件无权移除。
+   *
+   * @returns 是否真的移除了（内置维度或不存在时返回 false）
+   */
+  unregisterDimension(id: string): boolean {
+    const existing = this.dimensions.get(id);
+    if (!existing) return false;
+    if (existing.category === 'builtin') {
+      console.warn(`[PointsDimensionRegistry] 拒绝注销内置维度 "${id}"`);
+      return false;
+    }
+    return this.dimensions.delete(id);
+  }
+
   getDimension(id: string): PointsDimensionSpec | undefined {
     return this.dimensions.get(id);
   }

@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
-    "@openlearn/plugin-sdk": "^3.6.1",
+    "@openlearn/plugin-sdk": "workspace:*",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "chokidar": "^5.0.0",

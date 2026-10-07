@@ -293,7 +293,15 @@ export default {
 
 ## 5. 教学环节条件门禁守卫使用范例
 
-第三方插件可通过 `IStageGuardServiceToken` 注册环节准入守卫。当学生在课堂中尝试切换教学环节时，系统责任链将自动执行所有已注册守卫（遵循 AND 组合判定与 1500ms Fail-Open 容错降级）：
+第三方插件可通过 `IStageGuardServiceToken` 注册环节准入守卫。当学生在课堂中尝试切换教学环节时，系统责任链将自动执行所有已注册守卫（遵循 AND 组合判定，单守卫 1500ms 超时）。
+
+> **守卫失效时的行为（契约变更）**：守卫**超时或抛异常时，环节流转会被拒绝**（Fail-Close）。
+> 早期版本是 Fail-Open（放行），那意味着「插件慢或崩 → 学生直接跳过必修环节」。
+> 若你的插件有可能偶发变慢，请确保 `canEnterStage` 内部足够快 —— 超时会被判定为拒绝。
+> 部署方可在构造 `StageGuardPipeline` 时传 `{ onGuardFailure: 'fail-open' }` 恢复旧行为。
+
+守卫应保持轻量：它跑在学生点击切换环节的**同步路径**上，不适合做网络请求或重计算。
+
 
 ```typescript
 import type { PluginContext, StageGuard } from '@openlearn/plugin-sdk';

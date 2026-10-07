@@ -6,6 +6,86 @@
 - **规模**：插件相关源码 ~20,000 行；发现 **37 项**（Critical 6 / High 11 / Medium 12 / Low 8）
 - **注**：本报告所有 Critical 与大部分 High 条目均已由审计者**独立复核源码确认**，非二手结论。文末「局限」列出仍待验证项。
 
+> ## ⚠️ 更正记录（2026-10-07）
+>
+> 整改执行过程中对 4 条发现做了**重新核实**，其中 3 条的原描述有误。已就地标注，以下为汇总：
+>
+> | 条目 | 原描述的问题 | 核实结论 |
+> | --- | --- | --- |
+> | **M-2** | 称「停用插件的工具栏按钮 / Tab / 挂件**仍然可见**，点击即报错」 | **不成立**。服务端 `contributionRegistry` 与前端 UI 是两条独立链，前端 `unregisterPluginResources()`（`plugin-host.ts:466`）在停用时已清 6 类注册表。真实影响仅为「服务端摘要含已停用插件」 |
+> | **M-3** | 称「陈旧条目永久留存」暗示影响功能 | **降级**。该 registry 经核实零生产消费方，属接口不完整而非功能缺陷 |
+> | **M-4** | 定级 Medium，称「停用插件静态资源仍可下载」 | 行为成立但**定级过高**。静态资源不被执行；且原定「摘除路由」的方案本身脆弱（依赖 `_router.stack` 手术），而 `setExpressApp` 每次重启都会重新挂载 —— 应改为「挂载时跳过非 active 插件」 |
+> | **C-4** | 成因归结为「mode 从 DB 二次读导致走错分支 → worker 从不 terminate」 | **成因错误**。`worker-manager.ts:354-403` 的 `terminate()` 在 `finally` 中**无条件** `worker.terminate()` + `cleanup()`，与 execution_mode 无关。真实成因是 `deactivatePluginExclusive` 的「非 ACTIVE 静默 return」使两个分支都被跳过 —— 与 H-2 同根 |
+>
+> **教训**：这 3 条的错误有共性 —— **只查了写入侧（谁注册/谁没清理），没查读取侧（谁真的读它、UI 是否可见）**。
+> M-2/M-3 若在写报告时追到消费端（`server/routes/os.ts:248`、`grading.ts:148`）就能发现差异；
+> C-4 若不下钻到 `terminate()` 的 finally 就会误判成因。
+>
+> ---
+>
+> ## ⚠️ 整改期间的新增更正（2026-10-07，收尾复核）
+>
+> 整改执行过程中实测又推翻了**报告与台账的 8 处结论**。本节记录，因为它们同样属于「审计结论本身的缺陷」。
+>
+> | 对象 | 原结论 | 实测结论 |
+> | --- | --- | --- |
+> | **H-6** 漂移规模 | 「130 个幽灵类型 + 26 个反向漂移」 | **148 / 22，且原数字把大量假阳性算了进去**。漂移分析器自身有 5 个 bug（未跟随 `export * from`、把「模块图可达」当「已导出」、漏处理 `declare enum` / `ExportDeclaration` / 构造器参数属性）。修正后 **幽灵符号 145 → 0**，成员级 → 0 |
+> | 「反向漂移」定性 | 判为「本地红、线上红的反模式」，全部需修 | **仅对 class/const 等运行时值成立**。TypeScript 解析该包走 package.json 的 `types` → `dist/index.d.ts`，**不经过 index.ts**，故纯类型符号只在 d.ts 声明完全可用。实测 13 项里 12 项无害 |
+> | **H-9 / C-2**（worker 隔离） | 列为「可延后」 | 实测 `process.env` **零门槛**读到 10+ 个宿主密钥（`ANTHROPIC_AUTH_TOKEN` 等）。D-1 已决做第三方生态 → **必须立项** |
+> | **`WorkerOptions.timeout`**（整改中一度被写入代码） | 曾据它断言「CPU 无法上限、须换子进程」 | **该选项不存在且无效**（`@types/node@24` 的 WorkerOptions 无此字段）—— 这部分成立。但由此推出的「`terminate()` 对同步死循环无效、故必须换隔离原语」**是错的**（收尾复核时已推翻，见下行） |
+> | **「同步死循环无法被强制终止」**（写入过台账、CHANGELOG 与源码注释 3 处） | 判定 L-1 必须换子进程，且称「子进程 + 信号强杀是唯一解」 | **错误**。复测：`terminate()` 3/3 轮 2–3ms 杀干净（模块体与定时器内两种载荷），死循环期间主线程 300ms 完成 29 次 tick。错误来源：探针测的是 `timeout` 选项**有没有触发**，之后才调 terminate，**从未单独验证 terminate 本身**。真实缺口是**没有人去杀**（无 CPU 配额 + watchdog 监听 `exit` 而死循环不产生 `exit`）⇒ 拆为 P0 看门狗（~60 行）/ P1 子进程 / P2 Permission Model，已固化回归测试 `worker-terminability.test.ts` |
+> | **L-6 / H-2**（`listContributions` 键不匹配） | 称「registry 以 `manifest.id` 为键，查询用了 UUID，带 UUID 查询不再恒返回空」 | **双向都错**。原实现是 `resolvePluginUuid()` 后再查 —— 而该方法的职责正是「把 manifest.id **改成** UUID」。于是查一个以 manifest.id 为键的 Map，**manifest.id 与 UUID 两种输入都恒返回空**，唯一语义正确的输入反被改坏。根因是两套标识符命名空间之间**只有「别名→UUID」单向解析**，缺反向。已补 `resolveManifestId()` 并做候选键并集 |
+> | 「空转断言」这一模式 | 未识别 | 全仓唯一调用点 `canary.step5:311` 断言「卸载后为 0」，**键匹配与否都通过**。同类空转断言本轮已出现 3 次（`expect(typeof kill).not.toBe('function')`、canary.step5、漂移基线的硬编码数字） |
+> | 「安装期防线挡不住运行期动态 import」 | — | **过度表述**。用真实 `bundlePlugin()` 验证：静态 / 字面量动态 / 模板字面量动态 / 字符串拼接 / eval **五条逃逸路径全部被拒**（打包器 3 条 + 词法门 2 条）。故「运行期 `import('node:child_process')` 可用」**不可达** —— 运行期可达 ≠ 攻击面 |
+> | **H-5 / M-8**（门禁 fail-open） | 「fail-open 杜绝插件异常导致课堂死锁」，写进 CHANGELOG 与 3 处文档 | 旧测试**自证了矛盾语义**：守卫返回 `{allowed:false, reason:'应该被超时熔断'}`，断言却是 `allowed:true`。D-3 已决改为 fail-close |
+> | **M-8**（门禁仅客户端） | 称「客户端权威可绕过」 | 实测更严重：`coreRuntime = new LessonRuntime({eventBus: frontendEventBus})` **整条管线在浏览器里**，且进入环节是纯客户端 state、**零服务端调用** —— 学生不必绕过，因为没有关口 |
+> | **H-7**（scaffold 缺 `main`） | 列为 Medium | 实测为**生态阻断级**：`manifestSchema` 把 `main` 定为必填，而三个模板都没写 → **脚手架产出的插件装不上**。D-1 已决做生态，这是第一站的断裂 |
+> | **H-9 / M-10**（零消费者 facade） | 「删除，或补真实消费者」 | 需区分两类：F-1（`ExtensionPointRegistry`）真零引用 → 删；F-2/F-3 是**内核已注册但零 resolve** → 移出 SDK 导出面（对外承诺零消费者 API 比不承诺更糟），**不能直接删** |
+>
+> **共性教训**（比上一轮更普遍）：
+>
+> 1. **「看起来有配置」不等于配置生效** —— `WorkerOptions.timeout` 在类型里根本不存在，
+>    但不看 `@types/node` 就会以为它可用。
+> 2. **断言必须来自实测，不能来自推理** —— 本轮有 3 处（`timeout`、`expect(typeof kill).not.toBe('function')`、
+>    `192.0.0.0/24` 掩码写错成 /16）都是先写结论后验证，被自己的测试或实测推翻。
+> 3. **收尾必须回查代码** —— 台账有 6 项状态与实际不符（详见台账「收尾复核结论」），
+>    包括 1 项已修但被标成未做、以及 1 项标成已做但实际断裂。
+>
+> ---
+>
+> ## 📌 整改结果摘要（2026-10-07）
+>
+> | 指标 | 审计时 | 整改后 |
+> | --- | --- | --- |
+> | SDK 幽灵符号 | 145 | **0**（生成式 d.ts，从构造上消除漂移） |
+> | SDK 成员级漂移 | 9 | **0** |
+> | 发现项完成 | — | **31 / 38** |
+> | 出站 SSRF | 重定向不复检 + 无 DNS 校验 | 逐跳复检 + DNS 解析校验，并补齐 7 个漏网保留段 |
+> | 门禁判定位置 | 纯客户端 | 服务端权威（I-1） |
+> | 门禁失效语义 | fail-open | fail-close + 全局延迟上限 |
+> | 脚手架可用性 | 产出物过不了 schema，插件装不上 | 补 `main`，10 条用例守住 |
+> | 贡献点枚举 | **两种输入形态都恒返回空** | 双向映射，5 条用例 + 反向对照 |
+>
+> **仍未解决**：L-1（已出立项提案，拆为 P0/P1/P2）、L-2（前置冲突，见台账 D-11）。
+>
+> ### 收尾阶段的追加更正（2026-10-07，第二轮）
+>
+> 关闭 H-1 / H-3~H-5 / G-4b 时，实测又推翻了 4 处结论 —— 全部是**低估**：
+>
+> | 对象 | 原结论 | 实测结论 |
+> | --- | --- | --- |
+> | **H-8**（测试污染工作树） | 称 4 处 `new PluginHost` 漏传 `pluginsDir` | 实际是 **10 处**，另有 `Kernel` 构造函数硬编码 `path.resolve(process.cwd(),'plugins')`，且 `kernelContainer` 单例内部无参构造（无注入点）。规模：仓库 `plugins/` 已有 **1705 个孤儿目录 / 24MB**，被 `.gitignore` 忽略故 `git status` 看不见 |
+> | **L-3**（npm registry） | 只要求「移除硬编码 + 加 lockfile 校验 + 失败中止」 | **漏了一个漏洞**：更新路径**缺 `--ignore-scripts`**（安装路径有）。即「装一次安全、从市场更新一次就能跑 postinstall 钩子」，而更新是第三方插件最常见的安装途径 |
+> | **L-2**（静态路由冲突） | 只要求安装路径做归一化 | **`setExpressApp()` 重启恢复路径既不归一化也不查冲突** ⇒ 安装期检出的冲突在**重启后被完全绕过**。只修安装路径等于「只在半数时间生效」 |
+> | **M-11**（依赖阻塞 vs 循环） | 称「被阻塞的插件不进 cycles 且不强行激活」 | 前半**不成立**（实测修复前 `A 依赖 B、B 未激活` 确实得到 `cycles: [["ext-a"]]` —— 单节点的「环」在结构上不可能是真环，是判据错误的直接证据）。且**存在既有测试编码了缺陷**：`dependency-resolver.test.ts` 断言 `blocked` 长度为 1，即依赖未激活的插件被静默丢弃 |
+> | **H-7 / L-7**（新增 H-3 时） | — | 实施 `plugins.version` 时撞到：表达式索引 `ON plugins(json_extract(manifest,'$.id'))` 遇到**一条非法 JSON 行就整条 DDL 失败**（实测 SQLite 3.53.2）。改用 `WHERE json_valid(manifest)` 部分索引 |
+>
+> **共性**：这 4 处都是**原描述只覆盖了问题的一部分**，而实测发现另一半同样严重。
+> 与前两轮「把问题说重了 / 说错了」相反，这一轮是**说轻了** ——
+> 说明审计在「一处存在缺陷」时容易就地停止，不追问「同类代码还有几处」。
+> 可操作的做法：对每个缺陷都问一句「**同类代码路径有几条？它们是否都覆盖了？**」
+> 本轮 5 项里有 4 项是靠这个问题才发现漏修的。
+
 ---
 
 ## 0. 结论摘要
@@ -133,15 +213,25 @@ this.resourceTracker.reap(pluginId, oldDisposables);
 
 ---
 
-### C-4 | worker ↔ inline 执行模式切换泄漏 Worker 线程
+### C-4 | worker ↔ inline 执行模式切换泄漏 Worker 线程 ⚠️ **成因已于 2026-10-07 重新核实**
 
 **位置**：`packages/core/plugin-host/index.ts:2382-2391`（先写 DB）→ `1521` / `540-549`（再读 DB 决定分支）
 
 `updatePluginFromZip` **先**把新 `execution_mode` 写入 DB（2382-2386），**再**决定停用分支（2391）；而 `deactivatePluginExclusive:1521` 用 `getExecutionMode()` **读 DB**。
 
-worker→inline 时：外层按 `oldMode === 'worker'` 选了 `deactivateWorker`，但实际进入的是 `deactivatePlugin`，其内部读到 `'inline'` → 走 inline 分支 → **Worker 线程从不 `terminate`**，其 `serviceHost` 注册的命令与事件转发（仅 `terminateWorker:1545` 才 dispose）全部残留。随后若以 worker 模式再激活，会被 `createWorker:1294` 的 "Worker already exists" 拒绝。
+**原描述的成因链不成立。** 原文称 worker→inline 时「进入 `deactivatePlugin` 走 inline 分支 → worker 从不 terminate」。但复核发现
+`worker-manager.ts:331-345` 的 `terminateWorker()` **无条件**遍历 `workers` map 执行 `worker.terminate()`，不按 execution_mode 判断。
+因此**无论**走哪个分支，只要调用到 `terminateWorker`，线程都会被正确回收。
 
-**建议**：把 mode 作为显式参数贯穿停用链路，不从 DB 二次读取。
+**真实成因**：泄漏只发生在**两个分支都没走到 `terminateWorker`** 的情况下 ——
+即 `deactivatePluginExclusive:1536` 的「非 ACTIVE 静默 return」（见 H-2）。
+例如插件处于 ERROR / INACTIVE 态时执行 update，deactivation 被整段跳过，残留的 worker 引用与
+其 `serviceHost` 注册的命令转发全部无人回收；随后再以 worker 模式激活会被 `createWorker:1294`
+的 "Worker already exists" 拒绝。
+
+**修正后的建议**：不重构 mode 传递（那不是泄漏来源），而在 update 路径的 deactivation 之前，
+按 `workerManager` 实际的 workers map 做**兜底 terminate**，使「非 ACTIVE 态」也能回收。
+（与 H-2 的修复天然合并：两者根因都是那处静默 return。）
 
 ---
 
@@ -341,27 +431,61 @@ manifest 里写 `requires: ['@evil/x:MyISemesterGradeServiceThing']` 即可命�
 
 ## 4. Medium（12 项）
 
-### M-1 | 停用后残留：AI persona / AI context provider / points 维度未纳入 ResourceTracker
+### M-1 | 停用后残留：AI persona / AI context provider / points 维度未纳入 ResourceTracker ✅ 已复核成立
 
 **位置**：`packages/core/plugin-host/context-builder.ts:519-532`（AI provider / persona）、`411-423`（points 维度，注释称"单例无需清理"）
 
-`tracker.track` 在 context-builder 中只出现 8 处（200/260/306/323/359/723/755），**均不覆盖** `registerAIContextProvider`、`registerAIPersona`、`registerDimension`。这些注册进入模块级单例 `AIService` / points registry，跨插件存活 → **停用的插件继续向 AI 请求注入上下文与角色模板，学生档案雷达永久出现已停用插件的维度**。
+`tracker.track` 在 context-builder 中只出现 8 处（200/260/306/323/359/723/755），**均不覆盖** `registerAIContextProvider`、`registerAIPersona`、`registerDimension`。
 
-### M-2 | 声明式 UI contribution 停用不清 → 按钮可见但命令 404
+**影响已验证为真实**（沿注册链追到消费端）：
+- `registerAIPersona` → `AIService._personaDelegates` → `server/ai-persona-registry.ts` 全局单例 → `server/routes/os.ts:248` 的 personas 端点返回前端 → **停用插件的 AI 角色模板仍出现在 Agent 面板的角色下拉中**；
+- `registerDimension` → `PointsDimensionRegistry` → `server/routes/grading.ts:148` 的 `listDimensions()` → **停用插件的积分维度仍计入学生档案雷达**；
+- 且 `uninstallPlugin`（1855-1890）只调 `contributionRegistry.unregister`，**不调** `unregisterAIPersona` → 连卸载都不清。
+
+### M-2 | 声明式 UI contribution 停用不清 ⚠️ **本条影响描述已于 2026-10-06 更正（原描述错误）**
 
 **位置**：`index.ts:987 / 1907 / 2374`（注册，键为 `manifest.id`）vs `1859`（**仅 uninstall 注销**）
 
-`deactivatePlugin` 从不 `contributionRegistry.unregister`。用户停用插件后，其工具栏按钮 / 教师 Tab / Dashboard 挂件**仍然可见**，点击即报错。
+`deactivatePlugin` 从不 `contributionRegistry.unregister`。
 
-### M-3 | `UnifiedExtensionRegistry` 无 `unregister` API
+> **⚠️ 原描述错误，已更正。** 原文称「用户停用插件后，其工具栏按钮 / 教师 Tab / Dashboard 挂件**仍然可见**，点击即报错」。
+> **该用户可见后果不成立。** 服务端 `contributionRegistry` 与前端 UI 是**两条完全独立的链**：
+>
+> | | 服务端 `contributionRegistry` | 前端 `usePluginHostStore` |
+> |---|---|---|
+> | 谁注册 | `installPlugin` 读 `manifest.contributes`（`index.ts:987`） | 前端插件在 `activate()` 内部调 `registerExtensionPoint`（`src/plugin-host/plugin-host.ts:288/519`） |
+> | 停用时 | ❌ 不清（就是本条） | ✅ **`unregisterPluginResources()` 清 6 类注册表**（`plugin-host.ts:466`）：extensionPoints / fullscreenRenderer / propertyEditor / coursewareSource / paletteItem / assignmentQuestionRenderer |
+> | UI 读它吗 | **否** | 是 |
+>
+> 因此真实影响仅为：**服务端 contribution 摘要包含已停用插件**（只影响读该摘要的诊断/管理接口），
+> 而非 UI 缺陷。修复风险因此显著低于原估。
+
+### M-3 | `UnifiedExtensionRegistry` 无 `unregister` API ⚠️ **影响已降级（2026-06 复核）**
 
 **位置**：`packages/core/plugin-host/unified-extension-registry.ts:38-113`
 
 `syncContributionRegistry` 单向只增，重复 id 直接跳过。卸载或改配置后陈旧条目永久留存。
 
-### M-4 | `deploy.staticRoute` 停用不清 → 停用插件静态资源仍可下载
+**影响已降级**：该 registry 的 token（`IUnifiedExtensionRegistryToken`）经核实**零生产消费方**
+（见 M-10），因此其陈旧条目当前不会被任何生产路径读取。本条从「陈旧条目永久留存并影响功能」
+修正为「无消费者的注册表缺少对称的 unregister API，属接口不完整而非功能缺陷」。
 
-**位置**：`index.ts:1827-1843`（仅 uninstall 摘除）vs `setExpressApp:244-259`（对**所有已安装**插件挂载，含 disabled/error）
+### M-4 | `deploy.staticRoute` 在停用时未摘除 ⚠️ **严重度已下调（2026-06 复核）**
+
+**位置**：`index.ts:1827-1843`（仅 uninstall 摘除）vs `setExpressApp:248-265`（对**所有已安装**插件挂载，含 disabled/error）
+
+**复核结论**：原文「停用插件静态资源仍可下载」在**行为上成立**，但严重度定为 Medium 过高：
+
+1. `createPluginStaticMiddleware(absDir)` 提供的是**静态资源**（JS/CSS/图片），静态资源本身不被执行 ——
+   除非前端主动 `<script src>` 引入它，而前端扩展点已随停用被清（M-2 更正）；
+2. 摘除实现本身脆弱 —— `uninstallPlugin` 靠遍历 `express._router.stack` 并匹配
+   `layer.regexp.test(route + '/')` 来 splice，只能摘**一个** layer，而该路由通常由
+   `expressApp.use()` 挂载（多层中间件），未必能命中；
+3. 且 `setExpressApp` 在**每次重启**都会重新为所有已安装插件挂载，包括已停用的 ——
+   即「停用即摘除」在重启后会被覆盖回去，除非同时加「挂载时过滤 status」的规则。
+
+**建议改为**：不摘除路由，而是在 `setExpressApp` 挂载时**跳过 `status !== 'active'` 的插件**。
+这样重启与运行时行为一致，且不依赖脆弱的 stack 手术。
 
 ### M-5 | `/api/plugins/:id` 详情端点无鉴权 → 匿名枚举
 

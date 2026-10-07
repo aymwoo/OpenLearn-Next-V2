@@ -93,7 +93,9 @@ graph TD
 
 ## 3. Existing Extension Slots Audit
 
-The frontend UI extension subsystem is managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and exposed via `@openlearn/plugin-sdk@3.7.0`.
+The frontend UI extension subsystem is managed by `usePluginHostStore` (`src/plugin-host/plugin-host-store.ts`).
+
+> **更正（审计项 M-12 / F-1，2026-10-07）**：本节原称由 `ExtensionPointRegistry`（`src/plugin-host/extension-points.ts`）管理并经 SDK 暴露。该类**生产零引用**，且与 `plugin-host-store.ts` 重复注册语义相反（throw vs 覆盖），已删除；它也从未出现在 SDK 导出面。
 
 ### Supported Extension Slots
 
@@ -116,13 +118,11 @@ export type ExtensionSlot =
 ```mermaid
 sequenceDiagram
     participant Plugin as Worker Thread Plugin
-    participant Registry as ExtensionPointRegistry (src/plugin-host)
     participant Store as usePluginHostStore (Zustand)
     participant Renderer as ExtensionPointRenderer (src/plugin-host)
 
     Plugin->>Registry: ctx.ui.registerExtensionPoint(slot, config)
-    Note over Registry: Check duplicate slot + id<br/>Sort by position (default 100)
-    Registry->>Store: Update extensionPoints state Map
+    Note over Store: Check duplicate slot + id<br/>Sort by position (default 100)
     Store->>Renderer: Trigger re-render for slot
     Renderer->>Renderer: React.lazy() + Suspense + ErrorBoundary
 ```
@@ -217,7 +217,7 @@ graph TD
 
 1. **Compilation Bloat**: `src/App.tsx` bundle size is 481 KB due to importing all business panels and Recharts libraries directly.
 2. **Inflexible Navigation**: Adding or removing a tab (e.g. Timetable) requires editing hardcoded `activeTab === 'timetable'` conditional rendering branches inside `src/App.tsx`.
-3. **Bypassed Plugin Host**: These business features run as hardcoded React components in the main thread rather than going through `ExtensionPointRegistry` and DI Tokens.
+3. **Bypassed Plugin Host**: These business features run as hardcoded React components in the main thread rather than going through `usePluginHostStore` and DI Tokens.
 
 ---
 
@@ -253,11 +253,11 @@ Without modifying frozen architecture or rewriting existing code, the following 
 
 ### 1. View Provider Adapter Pattern
 
-Instead of hardcoding components in `src/App.tsx`, introduce a light registry adapter that registers built-in business features into `ExtensionPointRegistry` during system activation:
+Instead of hardcoding components in `src/App.tsx`, introduce a light registry adapter that registers built-in business features into `usePluginHostStore` during system activation:
 
 ```typescript
 // Built-in feature registration adapter (non-breaking)
-export function registerBuiltinFeatureAdapters(registry: ExtensionPointRegistry) {
+export function registerBuiltinFeatureAdapters(store: PluginHostStoreApi) {
   registry.register('teacher.tab', {
     id: 'builtin-timetable',
     label: 'Timetable',

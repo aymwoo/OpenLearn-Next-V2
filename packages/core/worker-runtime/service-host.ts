@@ -61,6 +61,22 @@ import crypto from 'node:crypto';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
+import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
+
+/**
+ * 后端 Worker 侧的 Token 名集合。
+ *
+ * 与浏览器侧 `@openlearn/frontend:*` 命名空间不同 —— 共享的只是**规则结构**，
+ * Token 名各自声明（审计项 B-4）。名字必须与 `worker-manager.ts` 的
+ * `BASE_WORKER_SERVICE_TOKENS` 保持一致，否则该 Token 会落到策略的
+ * `default` 分支（不裁决）而形同没有 Barrier 3。
+ */
+const CORE_WORKER_TOKENS: MethodPolicyTokens = Object.freeze({
+  storageService: '@openlearn/core:IStorageService',
+  aiService: '@openlearn/core:IAIService',
+  processService: '@openlearn/core:IProcessService',
+  actionRegistry: '@openlearn/core:IActionRegistryService',
+});
 
 /** Maximum length of serialized stack trace in characters. */
 const STACK_CAP = 4096;
@@ -641,12 +657,39 @@ export class ServiceHost {
       // If manifestCapabilities is empty, the Worker plugin has no
       // declared capabilities. Block all mutation methods and only allow
       // read-only 'get' methods.
-      if (this.manifestCapabilities.length === 0 && msg.method !== 'get') {
+      // B-3：此处与浏览器侧 `src/plugin-host/service-host.ts` 曾是同一道 Barrier 的**两种语义** ——
+      // 后端 `msg.method !== 'get'`（仅放行方法名恰好为 `get`）vs 前端 `!msg.method.startsWith('get')`
+      // （放行所有 get* 前缀方法）。后果：`getUserList` / `getAllActions` 这类
+      // 非 `get` 前缀的方法在 server worker 插件里被拒、在浏览器 worker 插件里放行。
+      //
+      // 统一为 `startsWith('get')`：Barrier 2 的意图是「manifest 未声明任何 capability 时降级为只读」，
+      // 而 getter 语义在两端都由 `get*` 命名约定承载。前端本已是该语义，故改后端。
+      if (this.manifestCapabilities.length === 0 && !msg.method.startsWith('get')) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '__rpc__',
           `Capability denied for actor ${this.pluginActorId}: ` +
             `empty manifestCapabilities, only 'get' methods allowed`,
+        );
+      }
+
+      // ── Security Barrier 3: Method / Path Policy (B-5) ─────────────
+      // 此前后端**只有** Barrier 1（Token 白名单）与 Barrier 2（空 manifest 只读），
+      // 没有方法级收窄 —— 与浏览器侧 `method-policy.ts` 各写一套，规则漂移无从察觉。
+      // 现两端共用 `packages/core/plugin-host/method-policy.ts`（审计项 B-4），
+      // 策略常量与判定逻辑只有一处真理源，本层只提供后端的 Token 名集合。
+      const methodDenial = checkMethodPolicy({
+        token: msg.token,
+        method: msg.method,
+        args: msg.args,
+        caps: this.manifestCapabilities,
+        tokens: CORE_WORKER_TOKENS,
+      });
+      if (methodDenial) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          msg.token,
+          `Method policy denied for actor ${this.pluginActorId}: ${methodDenial}`,
         );
       }
 
@@ -949,14 +992,14 @@ export class ServiceHost {
       'events',
       '_migrations',
       // 2026-10-04 补充：实测 97 张表中原名单只覆盖 28 张，以下为审计发现的漏网核心表。
-      'site_settings',            // 站点级配置
-      'agent_conversations',      // AI Agent 会话记录
-      'classroom_sessions',       // 课堂会话
-      'lesson_quiz_submissions',  // 课堂测验提交
-      'courseware_score_config',  // 成绩计分策略
-      'demo_data_registry',       // 演示数据登记表
-      'whiteboard_elements',      // 白板内容
-      'student_point_logs',       // 积分台账
+      'site_settings', // 站点级配置
+      'agent_conversations', // AI Agent 会话记录
+      'classroom_sessions', // 课堂会话
+      'lesson_quiz_submissions', // 课堂测验提交
+      'courseware_score_config', // 成绩计分策略
+      'demo_data_registry', // 演示数据登记表
+      'whiteboard_elements', // 白板内容
+      'student_point_logs', // 积分台账
       'lianyun_research_activities',
       'lianyun_research_groups',
       'lianyun_research_submissions',

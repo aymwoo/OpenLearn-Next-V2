@@ -73,6 +73,7 @@ function createTestDb(): Database.Database {
       created_at INTEGER,
       loader_version TEXT,
       zip_package BLOB,
+      version TEXT,
       execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (

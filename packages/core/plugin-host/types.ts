@@ -215,6 +215,13 @@ export interface IPluginHttpRouter {
    * 注册指定 HTTP 动词的 Server-Sent Events (SSE) 流式响应端点
    */
   stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
+
+  /**
+   * 判断该 method+path 是否命中了一个流式（SSE）路由。
+   *
+   * 宿主在把请求分派给插件前用它决定走 handle 还是 handleStream。
+   */
+  isStream(method: string, path: string): boolean;
 }
 
 export interface PluginContext {

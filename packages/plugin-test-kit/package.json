@@ -9,7 +9,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@openlearn/plugin-sdk": "^3.6.1"
+    "@openlearn/plugin-sdk": "workspace:*"
   },
   "peerDependencies": {
     "better-sqlite3": ">=12"

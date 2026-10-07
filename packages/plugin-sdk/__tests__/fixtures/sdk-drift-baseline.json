@@ -1,0 +1,33 @@
+{
+  "$comment": "SDK 契约漂移基线（由 scripts/sdk-drift-baseline.mts 生成，勿手工编辑）。修完一批后重跑该脚本收敛基线。",
+  "ghostWithMembers": [],
+  "ghostAll": [],
+  "reverseValues": [],
+  "reverseTypes": [
+    "ActivityRegistry",
+    "CoursewareSourceLoader",
+    "FullscreenRenderer",
+    "FullscreenRendererProps",
+    "ICapabilityGovernanceService",
+    "ICapabilityRuntimeService",
+    "IPlatformServiceRegistryService",
+    "IPluginRepositoryAdapter",
+    "ISemesterGradeService",
+    "IntegrationDescriptor",
+    "IntegrationHealthStatus",
+    "PaletteEditField",
+    "PaletteItemComponentProps",
+    "PaletteItemConfig",
+    "PaletteSelectOption",
+    "PluginHost",
+    "PluginPackageMetadata",
+    "PluginUpdateOptions",
+    "PluginUpdateResult",
+    "PropertyEditorComponent",
+    "PropertyEditorProps",
+    "SqliteDatabase",
+    "SqliteStatement",
+    "StartActivityResult"
+  ],
+  "memberDrift": []
+}

@@ -165,6 +165,26 @@ export interface ICapabilityService {
 
 export interface IProcessService {
   /**
+   * 查询进程归属（B-5）。
+   *
+   * 存在的理由：`processId` 经**全局事件总线** `process.spawned` 广播，
+   * 任何插件订阅即可拿到他人进程 id；而 `kill()` 在修复前只按 id UPDATE、
+   * 无归属校验。判定归属需要这层查询。
+   *
+   * 可选：mock 实现或旧部署可缺省，缺省时归属校验退化为「不拦截」。
+   */
+  getProcessOwner?(processId: string): string | undefined;
+
+  /**
+   * 声明调用方对 ProcessManager 的所有权（B-5）。
+   *
+   * spawn / registerInterval 会把 owner 写入 `processes.plugin_id`（内存另有副本），
+   * 供 kill() 的归属校验使用。因 spawn 的签名不能加参数，故用同步注入而非逐次传参。
+   * 必须在插件激活、构建上下文**之前**调用。
+   */
+  setPluginOwner?(pluginId: string): void;
+
+  /**
    * Spawn a new background process.
    * Corresponds to ProcessManager.spawn() — made async for cross-runtime compatibility.
    * Payload tightened from `any` to `unknown` per D-11.
@@ -468,6 +488,14 @@ export interface PointsDimensionSpec {
  */
 export interface IPointsDimensionRegistry {
   registerDimension(spec: PointsDimensionSpec): void;
+  /**
+   * 注销一个维度（审计 D-1）。
+   *
+   * 此前注册表只有增/查，插件停用后其维度永久留存 ——
+   * `server/routes/grading.ts` 的 `listDimensions()` 会把已停用插件的维度
+   * 一并计入学生档案雷达。**内置维度受保护，不可被插件注销**。
+   */
+  unregisterDimension(id: string): boolean;
   getDimension(id: string): PointsDimensionSpec | undefined;
   listDimensions(): PointsDimensionSpec[];
 }
@@ -807,12 +835,22 @@ export interface StageGuard {
 }
 
 export interface IStageGuardService {
-  registerGuard(guard: StageGuard): () => void;
-  unregisterGuard(guardId: string): void;
+  /**
+   * 注册守卫，返回注销函数。
+   *
+   * @param owner 注册方（通常是 pluginId）。**强烈建议提供**（I-3）：
+   *   守卫按 `owner + id` 复合键存储，跨插件同名不再互相覆盖。
+   *   旧实现只用 `guard.id` 作唯一键，实测两个插件都注册 `id:'gate'` 时
+   *   后者静默覆盖前者 —— **一个守卫的拒绝被另一个插件无声吃掉**。
+   *   省略 owner 时退化为旧语义并打告警。
+   */
+  registerGuard(guard: StageGuard, owner?: string): () => void;
+  /** 注销守卫。省略 owner 时按「无 owner」注销（兼容旧调用）。 */
+  unregisterGuard(guardId: string, owner?: string): void;
+  /** 按注册方批量注销 —— 插件停用 / 热重载时用（I-3）。 */
+  unregisterByOwner?(owner: string): number;
   listGuards(): StageGuard[];
   checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
 }
 
-export const IStageGuardServiceToken = new Token<IStageGuardService>(
-  '@openlearn/core:IStageGuardService',
-);
+export const IStageGuardServiceToken = new Token<IStageGuardService>('@openlearn/core:IStageGuardService');

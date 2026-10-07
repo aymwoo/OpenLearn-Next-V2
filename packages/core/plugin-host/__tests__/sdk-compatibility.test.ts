@@ -5,10 +5,14 @@ import {
   IEventBusServiceToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
+} from '../../../plugin-sdk/index.js';
+// M-10 / F-3（D-2 + D-6 决策）：这三个 token 已从 SDK 导出面移除（零生产 resolve），
+// 内核侧改从规范源导入。
+import {
   IPluginRuntimeCompositionToken,
   IUnifiedExtensionRegistryToken,
   IPluginCapabilityGatewayToken,
-} from '../../../plugin-sdk/index.js';
+} from '../../../core/di/interfaces.js';
 // Concrete host-runtime classes live in core/plugin-host; the SDK package only
 // re-exports their types (see plugin-sdk/index.ts). Host-process code and tests
 // import implementations from the canonical core path.

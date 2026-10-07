@@ -11,7 +11,7 @@
  * These tests verify the end-to-end DI wiring: Token creation → Kernel
  * construction → serviceRegistry registration → resolve path.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Kernel } from '../../kernel/index.js';
 import { ServiceRegistry } from '../service-registry.js';
 import {
@@ -36,6 +36,7 @@ import { PluginRuntimeComposition } from '../../plugin-host/plugin-runtime-compo
 import { UnifiedExtensionRegistry } from '../../plugin-host/unified-extension-registry.js';
 import { PluginCapabilityGateway } from '../../plugin-host/plugin-capability-gateway.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../plugin-host/__tests__/helpers/plugins-dir.js';
 
 // ── Test data ────────────────────────────────────────────────────────────────
 
@@ -74,9 +75,16 @@ describe('Token 命名格式 (SC-2)', () => {
 
 describe('Kernel IService 注册', () => {
   let kernel: Kernel;
+  let pluginsDir: string;
 
   beforeAll(() => {
-    kernel = new Kernel();
+    // Kernel 默认写 <cwd>/plugins，必须显式引到临时目录（见 H-1）
+    pluginsDir = createPluginsDir('di-interfaces-registry');
+    kernel = new Kernel({ pluginsDir });
+  });
+
+  afterAll(() => {
+    cleanupPluginsDir(pluginsDir);
   });
 
   it('应该通过 serviceRegistry.resolve 获取所有 7 个 IService 以及 Database（SC-3）', async () => {
@@ -170,9 +178,15 @@ describe('Kernel IService 注册', () => {
 
 describe('Kernel IService 内省', () => {
   let kernel: Kernel;
+  let pluginsDir: string;
 
   beforeAll(() => {
-    kernel = new Kernel();
+    pluginsDir = createPluginsDir('di-interfaces-introspect');
+    kernel = new Kernel({ pluginsDir });
+  });
+
+  afterAll(() => {
+    cleanupPluginsDir(pluginsDir);
   });
 
   it('serviceRegistry.list() 应包含全部 7 个 Token（SC-3）', () => {

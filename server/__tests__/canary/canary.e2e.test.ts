@@ -49,9 +49,11 @@ import {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
+  IStageGuardServiceToken,
   IPluginHostToken,
 } from '../../../packages/core/di/interfaces.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
+import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
 import { PROBE_MATRIX, MODE_DIFFS, TOKEN_SWEEP, REQUIRE_SWEEP } from './expectations';
 
@@ -73,6 +75,7 @@ function createTestDb(): Database.Database {
       created_at INTEGER,
       loader_version TEXT,
       zip_package BLOB,
+      version TEXT,
       execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
@@ -95,6 +98,9 @@ function createExtraServices(): Record<string, unknown> {
     teachingCollaboration: { getCollaborationEngine: vi.fn().mockResolvedValue({}) },
     learningAnalytics: { getAnalyticsEngine: vi.fn().mockResolvedValue({}) },
     aiCapability: { getCapabilityKernel: vi.fn().mockResolvedValue({}) },
+    // 用真实实现而非 stub：金丝雀的职责是验证 SDK 暴露的 Token 在**真实**注册表
+    // 形态下可解析，stub 会让 IStageGuardService 这类「新增即漏注册」的回归漏网。
+    stageGuard: new StageGuardPipeline(),
     capabilityRuntime: { getRuntimeKernel: vi.fn().mockResolvedValue({}) },
     capabilityGovernance: { getGovernanceKernel: vi.fn().mockResolvedValue({}) },
     platformServiceRegistry: { getServiceRegistryKernel: vi.fn().mockResolvedValue({}) },
@@ -291,6 +297,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       [IInteractionRuntimeServiceToken, extra.interactionRuntime],
       [IActivityRegistryToken, extra.activityRegistry],
       [IAuthSessionBridgeToken, extra.authSessionBridge],
+      [IStageGuardServiceToken, extra.stageGuard],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));

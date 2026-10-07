@@ -10,10 +10,148 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **教学环节守卫：命名空间隔离 / 并行执行 / 全局延迟上限（I-3）**：三项均先探针实测复现再修复：
+  - **命名空间冲突（判定正确性问题，非性能问题）**：旧实现用 `guard.id` 作唯一键，实测两个插件都注册 `id:'gate'` 时 `listGuards().length === 1`，**插件 A 的拒绝被插件 B 静默覆盖成放行**。现改为 `owner + id` 复合键，`registerGuard(guard, owner?)` 接受 owner；未声明 owner 时退化为旧语义但打告警（没有 owner 就无从区分，至少让它可见）；
+  - **无 owner 导致无法按插件回收**：守卫注册在内核 DI 的 `defaultStageGuardPipeline` 单例里、进程级存活，插件停用时不清理会导致门禁继续按已停用插件的规则判定。现新增 `unregisterByOwner()` / `listGuardsByOwner()`，并挂到 `PluginHost.revokePluginContributions()`（插件停用与更新的公共路径），`pluginId` 与 `manifestId` 两侧都试；
+  - **串行改并行**：总耗时从 Σ(各守卫) 降为 ≈ max(各守卫) —— 5 个守卫各 250ms 从 **1253ms → 251ms**；30 个卡死守卫从 **6011ms → 202ms**。聚合仍按 priority 升序，`reason` 拼接顺序稳定；
+  - **全局延迟上限**：新增 `totalTimeoutMs`，默认 `max(timeoutMs × 3, 3000)`，封顶「一批守卫都卡死」场景（修前随守卫数线性增长、无上限）。
+
+- **教学环节门禁改为服务端权威判定（I-1，架构级修复）**：
+  - **问题比审计描述更严重**：`coreRuntime = new LessonRuntime({ eventBus: frontendEventBus })` 意味着整条门禁管线**跑在浏览器里**，而点击环节的处理是 `setActiveSegmentId(seg.id)` —— **纯客户端 state，零服务端调用**。学生不必「绕过」任何东西，因为根本没有服务端关口。I-2 把 fail-open 改成 fail-close 的语义，此前一行也落不到服务端；
+  - 新增 `POST /api/lessons/:id/stage-access`，经内核 DI（`IStageGuardServiceToken` → `defaultStageGuardPipeline` 单例）执行判定；客户端 `checkStageAccess` 改为调该端点；
+  - **失败即拒绝**：网络错误、5xx、无法识别的响应体一律 `allowed:false`。刻意**不做**「回退本地管道」—— 那等于把绕过方法重新装回去；
+  - **移除** store 的 `registerStageGuard` / `unregisterStageGuard`：守卫是函数，无法跨进程传递，注册天然只能在服务端 in-process DI 完成（该 API 零生产调用方）。`checkStageAccessLocally` 作为离线预览通道保留，但 `checkStageAccess` 不回退到它；
+  - 新增 10 条服务端集成测试验证绕过无效：客户端谎称已进入、请求体冒名他人高分、守卫服务端注销后立即放行 —— 结论均由服务端状态决定；
+  - **已知局限（如实记录）**：「进入环节」本身无服务端提交动作，故本轮是**服务端权威的 UI 门禁**而非资源级强制。真正的强制点应是「记录学习成果」的动作，但 timeline segment 结构为 `{id,title,type,duration,color}`，**不含 element 引用**，服务端无法把 `quiz-submit` 的 `elementId` 映射回环节 —— 补齐该映射是后续改造项。
+
+### Security
+
+- **后端 Worker / inline 路径的方法级收窄与跨插件边界修复（B-4 / B-5）**：
+  - **B-4 抽共享模块**：策略规则常量与判定逻辑迁入 `packages/core/plugin-host/method-policy.ts`（纯数据 + 纯函数，不 import 任何一侧运行时），浏览器与 Node 共用同一份真理源；`src/plugin-host/method-policy.ts` 降为只传浏览器侧 Token 名的薄 re-export。此前策略只在浏览器侧存在，后端只有 Barrier 1/2，两端各写一套、规则漂移无从察觉；
+  - **B-5 后端落地 Barrier 3**（`service-host.ts`）。顺带用探针在真实 `ProcessManager` 上复现出两个更严重的问题并修复：
+    - **taskType 全局冲突**：`ProcessManager.handlers` 是全局 Map，`registerHandler` 直接 `set(taskType, handler)`。实测两个插件都注册 `'shared-task'` 后表大小为 1，**先注册者的 handler 被调用 0 次** —— 插件 A 的后台任务处理器被插件 B 无声吃掉。现 taskType 加 `<pluginId>::` 前缀，`registerHandler` / `spawn` / `unregisterHandler` 三处同步（spawn 不同步会派发不到自己的 handler）；
+    - **kill 无归属校验**：`processId` 经**全局事件总线** `process.spawned` 广播，任何插件订阅即可拿到他人进程 id，而 `kill()` 只按 id UPDATE 进程表。现新增迁移 `018_processes_plugin_owner.sql`（`processes.plugin_id` + 两个索引），`ProcessManager` 记 owner 并提供 `getProcessOwner()`，包装层 kill 前校验。存量行 `plugin_id` 为 NULL（内核自身任务）时**不拦截** —— 误杀内核任务比漏拦更糟；
+  - Barrier 3 的后端规则：`IProcessService.registerHandler/registerInterval/restore` 需 `task:register`（`restore` 会重放**全部**插件的 running 进程，原实现无 owner 过滤）；`IAIService.generateText/chat/complete` 需 `ai:invoke`；`IActionRegistryService.register` 且 `exposeToAgent !== false` 需 `agent:tool`；
+  - **影响面（如实标注）**：DB 内 7 个插件全为 inline，worker 侧 Barrier 3 当前零实际调用方，本轮当期行为影响接近 0，收益在于生态开放前的收口。新增的 4 项能力是**收紧** —— 未声明相应能力的插件会遇到 `WorkerCapabilityError`，这是有意的。
+
+### Security（补充）
+
+- **出站 SSRF 防护：DNS 校验 + 重定向逐跳复检（G-4c）**：
+  - 审计原标注该项为「待验证 —— 需先确认重定向行为」。**实测确认两条缺口均成立**：
+    - **① 重定向后不复检**：`fetch` 默认 `redirect:'follow'` 且不会把重定向后的 URL 再过一次校验 —— 实测「表面合规域名 → 302 → 内网元数据端点」构成完整 SSRF 链，内网端点被真实命中并返回了内容；
+    - **② DNS 从不解析**：`isSafeExternalUrl` 全程不调用 DNS，`http://metadata.google.internal/…`、`http://localhost.attacker.example/…` 一律放行。攻击者让 A 记录指向 `169.254.169.254` 即可绕过；
+  - 新增 `assertSafeResolvedAddresses()`（解析 DNS 并校验每个返回地址）与 `fetchWithSafeRedirects()`（`redirect:'manual'` 逐跳跟随，**每跳重新走字面量 + DNS 校验**，跳数上限 5）及独立的 `UrlSafetyError`；
+  - 4 个调用点改用新封装：社区注册表拉取、插件包下载、插件更新包下载、AI 供应商连通性测试；
+  - **顺带修复既有判定缺口**（由新用例实测暴露，原实现 1.1 全放行）：`isForbiddenIPv4` 漏掉 `100.64.0.0/10`（CGNAT，**k8s/容器网段可直接命中**）、`192.0.0.0/24`、`198.18.0.0/15` 与三个 TEST-NET 段；`expandIPv6()` 无法解析**内嵌点分十进制**记法（`::ffff:127.0.0.1`），`parseInt('127.0.0.1',16)` → NaN → 整段返回 null → 私网判定被跳过，而 `dns.lookup` 可能返回该形式；
+  - 边界验证：17 个应拒地址全拒、11 个相邻公网地址全放行（掩码写错一位即误杀生产地址）；
+  - **已知局限**：DNS 校验是 TOCTOU 缓解而非根治 —— 校验通过到真正建连之间攻击者仍可换 DNS 记录。彻底根治需把已校验 IP 固定到连接上（`undici` Agent + 自定义 `lookup`）。
+
+- **CSP `script-src-attr` 收紧为 `'none'`（G-4a）**：
+  - 该指令仅覆盖 **HTML 属性里的内联事件处理器**（`onclick="..."` / `javascript:` URL），不影响 `<script>` 块（那是 `script-src` 管）。对 SPA 构建产物而言它毫无作用，却让任何被注入的 HTML 属性直接执行代码；
+  - 收紧前完成前置实测（全部走实际执行路径，非源码猜测）：
+    - 全新 `pnpm build` 后扫描 `dist/`：内联 handler 属性 **0 处**、`javascript:` 协议 **0 处**；
+    - 源码 `dangerouslySetInnerHTML` **0 处** —— 1788 个 JSX `on*` 属性全部经 React 合成事件绑定到 `addEventListener`，**不进 HTML 属性**；
+    - 三条服务端直出 HTML 路径（`routes/courseware.ts`、`routes/resources.ts`、`routes/bridge.ts`）**各自调用 `setCoursewareDocumentCsp()` 覆盖全局头**，使用宽松的 `COURSEWARE_DOCUMENT_CSP`（含 `script-src-attr 'unsafe-inline'`），第三方课件 HTML 不受影响；
+    - `index.html` 无任何内联 `<script>` 内容，仅一个 `type="module" src`；
+  - **重写了一条把不安全配置断言成预期的测试**：原用例名为 `should explicitly permit inline event handlers …and not block with 'none'`，且在测试文件里**手抄了一份 helmet 配置副本** —— 改 `server.ts` 不会让它变红。现改为从 `server.ts` **源码读取真实配置**断言收紧结果，并补 4 条前提断言（`dangerouslySetInnerHTML` 为 0、`index.html` 无内联脚本、课件 CSP 仍宽松、helmet 实际产出 `'none'`）；
+  - 开发态 `script-src` 仍含 `'unsafe-eval'`（Vite HMR 需要），与本指令正交，不受影响。
+
+### Fixes
+
+- **插件门禁失效语义由 Fail-Open 改为 Fail-Close（D-3 决策，契约变更）**：
+  - **根因**：`StageGuardPipeline` 在守卫超时（1500ms）或抛异常时一律 `resolve({allowed:true})` —— 即便守卫本身要拒绝。旧测试直接把这个语义固化了：慢守卫返回 `{allowed:false, reason:'应该被超时熔断'}`，断言却是 `expect(allowed).toBe(true)`，即「应该被拒绝」被实现成了「放行」。对教学平台而言这意味着**插件慢或崩 → 学生直接跳过必修环节**；
+  - `StageGuardPipeline` 默认改为 **fail-close**，拒绝原因明确指出是哪个门禁插件超时/出错（不再显示「未满足进入下一环节的前置条件」，避免师生误判为自己没达标）；新增 `onFailure` 观察钩子区分「守卫判定不通过」与「守卫本身坏了」；
+  - **`ClassroomRuntimeService.transitionStage` 此前根本没有超时**：守卫挂起会让 `POST /api/classroom/sessions/:id/stage`（教师鉴权端点）请求永久挂起，抛异常则仅记日志后继续。现补 1500ms 超时 + fail-close；
+  - **向后兼容**：需旧行为的部署方显式传 `{ onGuardFailure: 'fail-open' }`（StageGuardPipeline）/ `{ guardPolicy: 'fail-open' }`（ClassroomRuntimeService）；
+  - 同步更新 `CHANGELOG.md` 历史条目与 `docs/{lesson/lesson-runtime,sdk/plugin-sdk,api/di-tokens}.md`。
+
+- **收回零消费者 API 的对外承诺（D-2 / D-6 决策）**：
+  - `ExtensionPointRegistry`（`src/plugin-host/extension-points.ts`，91 行）**删除** —— 生产零引用（唯一引用是它自己的测试），且与 `plugin-host-store.ts` 重复注册语义相反（throw vs 覆盖）；
+  - `capability-governance/` 子系统（529 行）与 3 个 P7 facade Token 标记 `@experimental`/`@deprecated` 并**移出 `@openlearn/plugin-sdk` 导出面** —— 它们在 `kernel/index.ts` 被注册但**零生产 resolve**。对外承诺一个零消费者的 API 比不承诺更糟；
+  - 影响面已核实：`v2_plugins/` 与 `assets/` 对这些符号零引用；内核侧引用全部走 `packages/core` 相对路径，不受影响；
+  - 新增三处「撤回名单一致性」门禁，防止名单过期后被误当作真实漂移。
+
+- **测试污染工作树：`plugins/` 下积累了 1705 个孤儿目录（H-1 / H-8）**：
+  - 规模超出原审计描述：不是 4 处，而是 **10 处** `new PluginHost(a,b,c)` 漏传 `pluginsDir`；此外 `Kernel` 构造函数**硬编码** `path.resolve(process.cwd(),'plugins')`，而 `kernelContainer` 单例内部无参构造 —— 它没有注入点；
+  - 该目录被 `.gitignore` 忽略，故这些污染在 `git status` 里**完全看不见**；实测 1705 个目录 / 24MB，且每次 `pnpm test` 继续增长；
+  - 三处修复：① 新增 `__tests__/helpers/plugins-dir.ts`（`createPluginsDir` / `cleanupPluginsDir`）供 16 个测试文件共用；② `Kernel` 构造加可选 `opts.pluginsDir`（**生产默认值不变**），`kernelContainer` 支持 `OPENLEARN_PLUGINS_DIR` 环境变量覆盖（单例无注入点，env 是唯一能在 import 之前生效的通道）；③ **`vitest.setup.ts` 全局守卫**把「写入仓库 `plugins/`」变成**硬失败**，让下一个漏传 `pluginsDir` 的调用点当场炸出来而不是安静堆垃圾；
+  - 守卫由 `h1-fs-guard.test.ts`（6 例）守住，其中包含「守卫自身确实在生效」的断言 —— monkey-patch `node:fs` 有静默失效的可能（若哪天 vite 改为内联 node:fs，patch 不再传播，守卫变成一段什么都不做的代码而所有测试依然全绿）；
+  - **验收**：清空后连跑两次全量，`plugins/` 目录数均为 **0**。
+  - ✅ 已清理历史积压：仓库 `plugins/` 下 1705 个孤儿目录（24MB）全部删除。删除前逐项核验过——顶层 1705 个条目**全为目录、无符号链接、无散落文件**，内容均为插件安装产物（`index.js` / `manifest.json` / `package.zip`）；开发库 `plugins` 表仅 7 行且全是内置插件、`file_path` 为 `null`（从 `packages/plugins/` 加载，不依赖 `plugins/`）；`ctx.require` 读的是内存 `sharedModules` 映射、`bootstrapSharedModules()` 从仓库自身 `node_modules` 解析，均不碰 `plugins/node_modules`。
+  - ⚠️ **清理后又冒出一个残留目录**，追出两处「重定向只做了一半」：
+    ① `Kernel.migratePluginsToFilesystem()` **绕过**注入的 `pluginsDir`，自己又算了一遍 `cwd/plugins` —— 宿主日志只有一行 `[Migration] Failed to migrate ...`，而产物已落在工作树。现改为读 `pluginHost.getPluginsDir()`（**读宿主真实值而非重新推导**，两个来源不可能分叉）；
+    ② `vitest.setup.ts` 里 **env 赋值排在了 `ensureTestSchema()` 之后** —— 后者会构造 Kernel，而 Kernel 构造时就要读该变量 ⇒ **所有 server 测试**一直拿到的都是 undefined、静默回落到工作树。已前移赋值顺序。
+
+- **测试环境下不再静默回退到 `cwd/plugins`（H-1 收尾）**：`resolvePluginsDirOverride()` 在 `VITEST` 下拿不到 `OPENLEARN_PLUGINS_DIR` 时**直接抛错**并给出两种修法，不再回落到工作树。
+  代价是某个测试若确实漏了注入，会从「静默污染工作树」变成「测试红」—— 这是想要的失败方向，且比 `git status` 看不见的磁盘垃圾容易定位得多。新增源码顺序约束断言盯住 `vitest.setup.ts` 内的赋值顺序。
+
+- **插件依赖安装的三处缺陷（H-4 / L-3）**：
+  - ⚠️ **审计漏了一个漏洞**：更新路径**缺 `--ignore-scripts`**（安装路径有，SEC-RCE-01 防 postinstall 钩子）。即「装一次安全、从市场更新一次就能跑 postinstall 执行任意命令」，而更新是第三方插件最常见的安装途径；
+  - 抽出 `plugin-host/dependency-install.ts` 统一两条安装路径 —— 行为参数不可能再漂移（原先正是这种漂移产生了上面的漏洞）；
+  - registry 不再硬编码 `registry.npmmirror.com`：改由 `OPENLEARN_PLUGINS_NPM_REGISTRY` 提供，**默认不传 `--registry`**（回归 npm 原生语义，支持私有源/内网源）；原先强制所有部署走同一家镜像，且供应链信任面被静默固定到第三方域名；
+  - 新增 lockfile 校验：**npm 退出码 0 不等于依赖都装上了**（registry 404 tarball、lockfile 不一致导致静默跳过等情形下 npm 仍可能以 0 退出）。校验存在性 / 合法性 / 每个声明依赖是否落盘；
+  - 安装失败**抛错并中止事务**，不再 `console.error` 后继续。原先部署脚本、贡献注册、DB 落库、状态机全都照常执行完，插件是 ACTIVE 的而 `node_modules` 残缺 —— 故障延迟到「插件运行时 MODULE_NOT_FOUND」才暴露；更新路径原先还会把新 manifest 写进 DB，留下「新版已装」的假象；
+  - `manifest.dependencies` 类型是 `unknown`（不在 schema 内，由插件作者自由书写），故用**运行时窄化** `parsePluginDependencies` 而非 `as` 断言 —— 形状非法直接拒绝，避免「依赖装不上也不报错」。
+
+- **依赖阻塞与循环依赖被混为一谈（H-5 / M-11）**：
+  - 实测确认原描述成立：修复前 `A 依赖 B、B 未激活` 得到 `cycles: [["ext-a"]]` —— **单节点的「环」在结构上不可能是真环**，这是判据错误的直接证据。根因是被阻塞插件的依赖永不入 Kahn queue，入度永不归零，数值上与成环无异；
+  - cycle 检测排除被阻塞节点，并**补传递性归因**（`A 依赖 B、B 被阻塞` ⇒ `A` 也报 blocked 并指明原因）。只排除环还不够：那样这些插件会从 `sorted` / `blocked` / `cycles` 三份结果里**同时消失**，变成静默丢弃 —— 比误报更难排查，因为没有任何诊断信息；
+  - `restoreActivePlugins` 不再把 blocked 塞进激活队列。成环插件**仍** best-effort 激活（功能上通常可用，只缺顺序保证）；缺依赖的插件**不**激活 —— 否则它在 `activate()` 里撞 `MODULE_NOT_FOUND` 后被状态机打成 ERROR，把「依赖没装」伪装成「插件自身报错」，且每次重启复现一次；
+  - 既有测试 `dependency-resolver.test.ts` 的 `blocked` 长度断言为 1，**该断言本身编码了缺陷**（依赖未激活的插件被静默丢弃），已更新并注明。
+
+- **`plugins` 表补 `version` 列（H-3 / L-7）**：新增 `migrations/019_plugins_version.sql`（含 `-- DOWN` 段）。原先版本只存在于 `manifest` JSON 里，导致无法走索引、无法做 SQL 级 DISTINCT/GROUP BY、无法加 CHECK 约束。该列定位为**加速索引而非唯一真源** —— 真源仍是 manifest JSON，漏写只是查不到、不造成功能回归；这是刻意取舍，因为「索引与真源不一致」比「索引缺行」更难排查。写入路径已同步 2 处 INSERT + 3 处 UPDATE（失败回滚路径写回**旧** version，否则会留下「索引比真源新」的不一致）。⚠️ 实施中撞到：**表达式索引 `ON plugins(json_extract(manifest,'$.id'))` 遇到一条非法 JSON 行就整条 DDL 失败**（实测 SQLite 3.53.2），改用 `WHERE json_valid(manifest)` 部分索引；刻意**不**用「先把非法 manifest 改写成 `{}`」的替代方案，那会销毁损坏数据的现场。
+
+- **静态路由冲突检测的归一化（G-4b / L-2）**：原先只做 `toLowerCase()`，而 Express 把 `/foo` 与 `/foo/` 当作同一个 mount point（先挂载者生效）⇒ 两个插件分别声明 `/assets` 与 `/assets/` 时检测放行，然后一方资源**永久 404 且无任何日志**。⚠️ 实测还发现**第二处更隐蔽的缺陷**：`setExpressApp()` 的重启恢复路径**既不归一化也不查冲突**，直接 `expressApp.use(原始路由)` ⇒ 安装期检出的冲突在重启后被完全绕过；只修安装路径等于「只在半数时间生效」。现两条路径统一经 `normalizeStaticRoute()`（小写 / 压缩重复斜杠 / 去末尾斜杠 / 补前导斜杠，根路径 `/` 幂等特例），SEC-ROUTE-02 保留前缀检查也改用归一化形式（否则 `/API/` 可绕过 `/api`），恢复路径检出冲突时显式告警而非静默遮蔽。
+
+- **脚手架产出的插件装不上（E-4 / H-7）**：`manifestSchema` 把 `main` 定为**必填**（`z.string().min(1)`），而 `scaffold/templates/{server-only,full-stack,frontend-only}/src/index.ts` 三个模板都只写了 id/name/version/description/author，**没有 `main`**。实测脚手架的实际产出被 schema 直接拒绝（`main: Invalid input: expected string, received undefined`）。这是第三方作者的第一站（`description`/`author` 早已在类型与 schema 中，仅模板未填）。已补 `main: 'index.js'`（与 DB 内既有插件一致），并新增 `scaffold-manifest.test.ts`（10 例）。
+
+- **贡献点枚举恒返回空（H-2 / L-6）**：`listContributions(pluginId)` 先调 `resolvePluginUuid()` 再查 `contributionRegistry`，但后者的两级索引是以 **`manifest.id`** 为键的（`getByPlugin()` 是纯 `Map.get()`，不做反向解析）。而 `resolvePluginUuid()` 的职责恰恰是「把 manifest.id **改成** UUID」⇒ **manifest.id 与 UUID 两种输入形态都返回空数组**，唯一语义正确的输入反被改坏。根因是两套标识符命名空间之间只有「别名→UUID」单向解析，缺反向。新增 `resolveManifestId()`（UUID→别名），`listContributions` 改用候选键并集并按 slot 去重；同时新增 `get contributions()` 只读访问器，使「键约定」这一不变量可被断言。**原有唯一调用点 `canary.step5:311` 断言的是「卸载后为 0」，键匹配与否都通过**，属空转断言 —— 新增的 5 条用例改为断言**非空**，并已做反向对照（还原旧实现后 2 例立即红）。
+
+- **Worker 沙箱：遮蔽 `process` 消除零门槛密钥泄漏（D-1 / I-4）**：
+  - 实测（`new Worker(url,{eval:false})`，与插件 worker 创建方式一致）：`process.env` 可读到 **10 个以上**宿主密钥（`ANTHROPIC_AUTH_TOKEN`、`IMA_OPENAPI_APIKEY`、`MINIMAX_API_KEY` 等），`process.kill/chdir/exit` 均可用 —— **无需任何绕过手段**；
+  - `worker-runtime/worker-manager.ts` 的 bootstrap 现遮蔽 `process`：`env` 置空（`configurable:false`，插件无法解冻写回）、`exit/kill/abort/setuid*/dlopen/binding` 替换为抛错桩、`argv` 收窄；保留 `version/platform/cwd/pid` 供排障；
+  - ⚠️ **`chdir` 被刻意排除**：实测把它 redefine 成不可写会让 `exceljs`（官方 `PLUGIN_SHARED_MODULES` 白名单依赖）的 require 链在 `Object.setPrototypeOf` 上炸 `Cyclic __proto__ value`。为挡一个威胁有限的 API 而打断受支持的加载路径是净损失；
+  - 新增 13 条实测用例：通过同源标记切出**生产实际执行的那段遮蔽代码**，放进真实 worker 验证 —— 测的是真货而非复制品。
+
+### Fixes（worker CPU 上限：实测结论，**非修复** + 一处自我更正）
+
+- 开发期曾尝试用 `WorkerOptions.timeout` 给插件 worker 加 CPU 上限，**实测证明该选项不存在且无效**：
+  - `@types/node@24` 的 `WorkerOptions` **无 `timeout` 字段**；
+  - `new Worker(src, { timeout: 1000 })` 完全无效 —— 同步死循环与异步空转都持续运行到被强杀。
+  - 已移除无效的 `timeout` 代码，改为在源码中记录完整实测结论。
+- ⚠️ **更正一条此前写入的错误断言**（2026-10-07 收尾复核）：曾记录「**worker_threads 是协作式的**，`terminate()` 对同步死循环 `while(true)` **无效**，故必须在 worker_threads 内换隔离原语」—— **该断言是错的**，已同步更正源码注释与台账。
+  - 错误来源：当时的探针打印的「6s 未终止」测的是 `timeout` 选项**有没有触发**，之后才调 `terminate()`，**从未单独验证 terminate 本身**。
+  - 复测（3 轮 × 2 种载荷）：模块体 `while(true)` 与定时器内 `while(true)` 均 `exit code=1@2~3ms`；死循环期间主线程 300ms 内完成 29 次 tick（未被阻塞）。worker 有独立 isolate，V8 销毁 isolate **不需要 JS 栈配合** —— 这与 `Atomics.wait` 的协作式阻塞不是一回事。
+  - **真实缺口不是「杀不掉」，而是「没有人去杀」**：无 CPU 时间配额（`resourceLimits` 只管堆），且 watchdog 监听 `exit` 事件而死循环不产生 `exit`，故永不触发。一个 `while(true)` 的插件会占住槽位直到进程结束，打满 32 个即 DoS。
+  - **处置**：拆为三层并立项 —— **P0** 宿主侧 CPU 看门狗（超时未收到心跳即 `terminate()`，~60 行，立即做）、**P1** 子进程替代 worker_thread（纵深防御，需重写 transport，单独立项）、**P2** Node Permission Model（限能力，不解 CPU）。详见 [`docs/architecture/plugin-worker-isolation-l1-proposal.md`](./docs/architecture/plugin-worker-isolation-l1-proposal.md)。
+
+### Refactor / Performance
+
+- **清理 4 处 `.ts` 扩展名 import（F-5）**：ESM 下 `.ts` 后缀在 Node 与打包器间行为不一致，与仓库「ESM 导入用 `.js` 扩展名」的约定冲突。已改为 `.js`（`capability/index.ts`、`capability/capability-runtime-kernel.ts`、`classroom-runtime/session-manager.ts`、`src/features/whiteboard/canvas-model/index.ts`），生产代码 `grep -rE "from '[^']*\.ts'"` 现为 **0 命中**。
+
+- **SDK 类型声明改为生成式，根治契约漂移（E-2 / E-3 / H-6）**：
+  - 新增 `packages/plugin-sdk/generate-dts.mjs`（TypeScript Compiler API，**零新依赖**）：发布用的 `dist/index.d.ts` 过去是手写镜像 `packages/core/` 源码的拷贝，源码一改即漂移 —— 这正是 H-6 的成因，也让漂移累积到 **145 个符号**。现由生成器从源码抽取声明，`build.mjs` 拼接 `openlearn.d.ts` + `generated.d.ts`；
+  - **幽灵符号 145 → 0，成员级漂移 → 0，反向漂移·值 → 0**；非字面量常量用 checker 求真实类型（`manifestSchemaV3` → `z.ZodObject<{…}>`，避免 `ManifestV3` 退化为 `any`）；
+  - 门禁同步收紧：从「不新增」升级为「**必须为空**」，并新增 `generated.d.ts` 与源码一致性断言，防止生成物陈旧。
+
+- **插件 SDK 契约漂移根治（审计 E-2 / E-3 / H-6）**：
+  - **生成式类型声明（`packages/plugin-sdk/generate-dts.mjs`，新增）**：
+    - 发布用的 `dist/index.d.ts` 过去是手写镜像 `packages/core/` 源码的拷贝，源码一改即漂移 —— 这是 H-6 的成因，也让漂移累积到 **145 个符号**。现改由 TypeScript Compiler API 从源码抽取声明，`build.mjs` 拼接 `openlearn.d.ts` + `generated.d.ts` 产出发布物，**幽灵符号 145 → 0、成员级漂移 → 0**，漂移不再可能再次累积；
+    - 非字面量常量用 checker 求真实类型（如 `manifestSchemaV3 = z.object({…})` → `z.ZodObject<{…}>`），避免 `ManifestV3` 退化为 `any` 而失去 schema 校验；
+    - 引用到发布包不具备的外部类型时（`better-sqlite3`、`pino`）自动降级并在 `--report` 中列出，不静默；
+  - **顺带修复 3 类消费侧编译失败（由生成器反向体检自动发现）**：
+    - `index.ts` 曾用 `export type` 再导出 **10 个** class / enum 运行时值，插件写 `PluginState.ACTIVE` 会报 `TS1362`；
+    - `openlearn.d.ts` 有 **16 个**符号声明了却漏进末尾导出块，插件报 `TS2459`；
+    - `CapabilityRegistry` 被声明成 interface 而实为 class，插件报 `TS2693`；
+  - **漂移门禁收紧（`packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts`）**：幽灵符号与成员级漂移由「不新增」升级为「**必须为空**」，并新增 `generated.d.ts` 与源码一致性断言，防止生成物陈旧。
+
 - **教学环节条件门禁管道 (Stage Guard Pipeline) 与插件扩展能力引入**：
   - **内核与 Plugin SDK 契约（`packages/core/di/interfaces.ts` & `packages/plugin-sdk/index.ts`）**：
     - 引入 `StageGuard`、`StageGuardContext`、`StageGuardResult` 与 `IStageGuardServiceToken`，正式向第三方插件开放教学环节流转准入判定契约；
-    - 新增 `StageGuardPipeline`（`packages/core/lesson-engine/stage-guard-pipeline.ts`），实现责任链串联判定，严格落实 **1500ms 超时熔断降级 (Fail-Open)** 与 **多插件全部满足 (AND 组合判定)** 策略，杜绝插件异常导致课堂死锁；
+    - 新增 `StageGuardPipeline`（`packages/core/lesson-engine/stage-guard-pipeline.ts`），实现责任链串联判定，落实 **1500ms 超时熔断** 与 **多插件全部满足 (AND 组合判定)** 策略；
+    - ⚠️ **其后 D-3 决策已将超时/异常语义由 Fail-Open 改为 Fail-Close**（见下方 Unreleased 条目），本条所述「杜绝插件异常导致课堂死锁」的 Fail-Open 策略**不再生效**；
     - 挂载至 `LessonRuntime`（`runtime.stageGuard`）并注入全局 Store 与 DI 体系；
   - **前端拦截管线与 UI 反馈（`StudentLessonContentPanel.tsx` & `lessonEngineStore.ts`）**：
     - `useLessonEngineStore` 暴露 `checkStageAccess`、`registerStageGuard` 与 `stageGuardPipeline`；

@@ -7,7 +7,7 @@ import { CapabilityFrameworkRegistry } from './registry/capability-framework-reg
 import { CapabilityPipeline } from './pipeline/capability-pipeline.js';
 import { InvocationEngine } from './invocation/invocation-engine.js';
 import { CapabilityEventBus } from './event/capability-event-bus.js';
-import { CapabilitySDK } from './sdk/capability-sdk.ts';
+import { CapabilitySDK } from './sdk/capability-sdk.js';
 import { AICapabilityKernel } from '../ai-capability/index.js';
 import { AICapabilityProviderHandler } from './providers/ai-capability-provider.js';
 import { LessonCapabilityProviderHandler } from './providers/lesson-capability-provider.js';

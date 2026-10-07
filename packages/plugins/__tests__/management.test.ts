@@ -18,17 +18,20 @@ import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
+import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
 
 describe('ManagementPlugin', () => {
   let db: Database.Database;
   let serviceRegistry: ServiceRegistry;
   let pluginHost: PluginHost;
+  let pluginsDir: string;
   let commandBus: CommandBus;
   let eventBus: EventBus;
   let actionRegistry: ActionRegistry;
   let capabilityGuard: CapabilityGuard;
 
   beforeEach(async () => {
+    pluginsDir = createPluginsDir('management');
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS plugins (
@@ -39,6 +42,7 @@ describe('ManagementPlugin', () => {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         loader_version TEXT,
+      version TEXT,
         execution_mode TEXT
       );
 
@@ -164,10 +168,11 @@ describe('ManagementPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db, pluginsDir);
   });
 
   afterEach(() => {
+    cleanupPluginsDir(pluginsDir);
     db.close();
   });
 

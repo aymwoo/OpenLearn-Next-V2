@@ -464,7 +464,10 @@ describe('ServiceHost ActionRegistry tracking', () => {
   });
 
   it('should track registered action descriptors and unregister them on dispose', async () => {
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap']);
+    // Barrier 3（B-5）：action 未设 exposeToAgent 时按默认 true 处理，即它会进入
+    // `getAgentTools()` 成为 AI 可调用工具，故需 manifest 声明 `agent:tool`。
+    // 本用例测的是**资源追踪**而非策略，故显式声明该能力而不是绕过策略。
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap', 'agent:tool']);
 
     // Call register
     await host.handleInvoke(

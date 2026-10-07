@@ -55,12 +55,25 @@ export const BASE_FRONTEND_WORKER_SERVICE_TOKENS: readonly string[] = Object.fre
  * `IPointsDimensionRegistry` / `IPointsLedgerService` 的按需授权；
  * 前端的对等领域服务是 `ISemesterGradeService`（写入学期成绩）。
  */
-export const SENSITIVE_FRONTEND_SERVICE_TOKENS: readonly string[] = Object.freeze([
-  SEMESTER_GRADE_SERVICE_TOKEN,
-]);
+export const SENSITIVE_FRONTEND_SERVICE_TOKENS: readonly string[] = Object.freeze([SEMESTER_GRADE_SERVICE_TOKEN]);
 
 /** 能授予敏感领域服务的 capability 前缀/字面量（与后端 points 的判定同构）。 */
 const SENSITIVE_CAPABILITY_NAMES: readonly string[] = Object.freeze(['grades']);
+
+/**
+ * 规范化依赖条目，用于**精确比较**。
+ *
+ * manifest 里的依赖写法为 `@openlearn/core:ISemesterGradeService@^1.0.0`
+ * （域:服务名@版本范围），而白名单常量只到服务名、不含版本范围。
+ * 此处剥掉版本范围后做全等比较，从而避免 `includes` 子串匹配可被
+ * `MyISemesterGradeServiceThing` 之类伪造条目命中。
+ */
+function normalizeDepEntry(entry: string): string {
+  const slash = entry.indexOf('/');
+  if (slash === -1) return entry;
+  const versionAt = entry.indexOf('@', slash);
+  return versionAt === -1 ? entry : entry.slice(0, versionAt);
+}
 
 // ── Manifest 形状（只取白名单计算所需字段） ───────────────────────────────────
 
@@ -103,10 +116,16 @@ export function computeAllowedWorkerTokens(
     const caps = Array.isArray(manifest.capabilitiesProposed) ? manifest.capabilitiesProposed : [];
 
     // 敏感领域服务：仅在显式依赖或显式声明能力时授予
-    const hasSensitiveDep = allDeclared.some(
-      (dep) =>
-        typeof dep === 'string' &&
-        SENSITIVE_FRONTEND_SERVICE_TOKENS.some((token) => dep.includes(token.slice(token.indexOf(':') + 1))),
+    //
+    // B-2：原先用 `dep.includes(tokenName)` 做**子串匹配**，可被伪造绕过：
+    // manifest 写 `requires: ['@evil/x:MyISemesterGradeServiceThing']` 即命中
+    // `ISemesterGradeService`，从而拿到写入学期成绩的权限。
+    // 改为对依赖条目做**精确 Token 匹配**（规范化后全等比较）。
+    const normalizedDeclared = new Set(
+      allDeclared.filter((d): d is string => typeof d === 'string').map(normalizeDepEntry),
+    );
+    const hasSensitiveDep = SENSITIVE_FRONTEND_SERVICE_TOKENS.some((token) =>
+      normalizedDeclared.has(normalizeDepEntry(token)),
     );
     const hasSensitiveCap = caps.some(
       (c) =>

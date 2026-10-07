@@ -32,6 +32,372 @@ export function getMaxUncompressedSize(): number {
 }
 
 /**
+ * 静态门拒绝的原因码。用于让调用方与测试能区分「哪种违规」，
+ * 避免所有失败都退化成一句无法定位的 "plugin code rejected"。
+ */
+export type PluginCodeViolation =
+  | 'computed-import' // 计算式动态 import()：可绕过 esbuild onResolve
+  | 'dynamic-require' // 运行时拼接的 require()
+  | 'eval' // eval / new Function
+  | 'absolute-path-import' // 绝对路径 import：可把宿主任意文件内联进产物
+  | 'bare-specifier'; // 裸包名（第三方 npm 包）
+
+export class PluginCodeSecurityError extends Error {
+  public readonly violation: PluginCodeViolation;
+  public readonly detail: string;
+
+  constructor(violation: PluginCodeViolation, detail: string) {
+    super(`[PluginSecurity] Plugin code rejected (${violation}): ${detail}`);
+    this.name = 'PluginCodeSecurityError';
+    this.violation = violation;
+    this.detail = detail;
+  }
+}
+
+/**
+ * 计算式 import / 动态 require 的匹配规则。
+ *
+ * 为什么必须做这一步：`bundlePlugin()` 里的 `openlearn-token-enforcer` 插件通过
+ * 一个「匹配全部路径」的 `build.onResolve` 过滤器拦截导入，而 **onResolve 只对 esbuild 能静态
+ * 解析的字面量 specifier 触发**。`await import('node:' + 'child_process')` 这类计算式导入
+ * esbuild 无法解析，只产生 warning 并**原样保留为运行时 `import()`**，
+ * 因此完全绕过该插件 —— 而 Worker 与主进程共享地址空间，拿到它即等价于宿主 RCE。
+ *
+ * 同时覆盖：
+ * - `new Function(...)` / `eval(...)`：动态代码执行；
+ * - 绝对路径 import（`/etc/passwd`）：可把宿主文件内容内联进插件产物后回传。
+ *
+ * 这是**词法级**检查（正则），不是完整 AST 分析。词法级已能覆盖上述主要绕过手法，
+ * 且无额外依赖；它的局限（注释内字符串、极端混淆）由「inline/worker 均非安全沙箱」
+ * 这一前提兜底 —— 见 docs/plugin/plugin-lifecycle.md。
+ */
+/**
+ * 词法扫描：产出「每个 import / export / require / eval 调用的参数起始片段」。
+ *
+ * 实现要点：必须**逐字符状态机**推进，不能简单地先剥字符串 —— 因为
+ * `import('node:' + 'child_process')` 里紧跟 `(` 的是字符串字面量，而
+ * `import('node:' + x)` 里是标识符，两者的区分依赖括号内的真实内容。
+ *
+ * 返回每处的 `{ kind, argStart, text }`：
+ * - `kind` ∈ import | export-from | require | eval | new-function
+ * - `argStart` 是 `(` 之后的偏移，供调用方自行判定字面量 / 计算式
+ * - `text` 是从 `(` 起截取的原始片段（未剥离字符串），用于提取绝对路径
+ */
+interface LexicalHit {
+  kind: 'import' | 'export-from' | 'require' | 'eval' | 'new-function';
+  argStart: number;
+  text: string;
+  /** 是否为 `obj.require(...)` 形态（成员调用），用于放行 SDK 的 ctx.require */
+  isMemberCall?: boolean;
+}
+
+const LEX_SCAN_LIMIT = 2_000_000; // 防御性上限，超长源码直接交给 esbuild 报错
+
+/**
+ * 从 `export`/`import` 关键字之后开始，解析本条声明的模块 specifier。
+ *
+ * `import x from 'p'`、`import 'p'`、`export { a } from 'p'`、`export * from 'p'`
+ * 四种形态都要覆盖。命中则产出 `export-from`（该 kind 的语义就是「静态模块路径」）。
+ */
+function scanImportSpecifier(src: string, from: number): LexicalHit[] {
+  // 跳过本条 import 语句（遇语句结束或 import(...) 形态即停）
+  let j = from;
+  let depth = 0;
+  while (j < src.length && j < from + 4000) {
+    const ch = src[j];
+    if (ch === '{' || ch === '(' || ch === '[') depth++;
+    else if (ch === '}' || ch === ')' || ch === ']') {
+      if (depth === 0) break; // 语句结束
+      depth--;
+    } else if (depth === 0 && (ch === '\n' || ch === ';')) {
+      break;
+    }
+    // 注：`import('x')` 形态已在标识符分支处理；此处若遇到 depth===0 的 '('，
+    // 说明语句里出现了非预期的顶层调用，交由后续 esbuild 报语法错即可。
+    j++;
+  }
+  const stmtEnd = j;
+  const out: LexicalHit[] = [];
+
+  const fromIdx = src.indexOf('from', from);
+  if (fromIdx !== -1 && fromIdx < stmtEnd) {
+    const q = skipTriviaAt(src, fromIdx + 4);
+    if (src[q] === "'" || src[q] === '"' || src[q] === '`') {
+      out.push({ kind: 'export-from', argStart: q, text: src.slice(q, q + 300) });
+      return out;
+    }
+  }
+
+  // 裸侧 import：import '<path>' / import '<path>' assert { ... }
+  // 注意必须排除 `import \`...\``（模板字符串里含 ${} 表达式 —— 那是计算式导入，
+  // 模板的整体文本会被 skipTriviaAt 之前的位置判成静态 specifier，需在此拦掉）。
+  const q = skipTriviaAt(src, from);
+  if (src[q] === "'" || src[q] === '"' || src[q] === '`') {
+    out.push({ kind: 'export-from', argStart: q, text: src.slice(q, q + 300) });
+  }
+  return out;
+}
+
+function scanExportSpecifier(src: string, from: number): LexicalHit[] {
+  const out: LexicalHit[] = [];
+  let j = from;
+  let depth = 0;
+  while (j < src.length && j < from + 4000) {
+    const ch = src[j];
+    if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') depth--;
+    else if (ch === '\n' || ch === ';') break;
+    j++;
+  }
+  const stmtEnd = j;
+  const fromIdx = src.indexOf('from', from);
+  if (fromIdx !== -1 && fromIdx < stmtEnd) {
+    const q = skipTriviaAt(src, fromIdx + 4);
+    if (src[q] === "'" || src[q] === '"' || src[q] === '`') {
+      out.push({ kind: 'export-from', argStart: q, text: src.slice(q, q + 300) });
+    }
+  }
+  return out;
+}
+
+/** 模块级跳过空白与注释 */
+function skipTriviaAt(src: string, from: number): number {
+  let j = from;
+  for (;;) {
+    while (j < src.length && /\s/.test(src[j])) j++;
+    if (src[j] === '/' && src[j + 1] === '*') {
+      const end = src.indexOf('*/', j + 2);
+      j = end === -1 ? src.length : end + 2;
+      continue;
+    }
+    if (src[j] === '/' && src[j + 1] === '/') {
+      const end = src.indexOf('\n', j + 2);
+      j = end === -1 ? src.length : end + 1;
+      continue;
+    }
+    return j;
+  }
+}
+
+function scanCode(code: string): LexicalHit[] {
+  const src = code.length > LEX_SCAN_LIMIT ? code.slice(0, LEX_SCAN_LIMIT) : code;
+  const hits: LexicalHit[] = [];
+  let i = 0;
+
+  /** 跳过 i 位置起的字符串字面量，返回其结束后的偏移；非字符串则返回 -1 */
+  const skipString = (from: number): number => {
+    const q = src[from];
+    if (q !== "'" && q !== '"' && q !== '`') return -1;
+    let j = from + 1;
+    while (j < src.length) {
+      const ch = src[j];
+      if (ch === '\\') {
+        j += 2;
+        continue;
+      }
+      if (ch === q) return j + 1;
+      // 模板字符串内的 ${} 可能嵌套字符串/模板，做一次粗略的嵌套计数
+      if (q === '`') {
+        let depth = 0;
+        while (j < src.length) {
+          const c2 = src[j];
+          if (c2 === '\\') {
+            j += 2;
+            continue;
+          }
+          if (c2 === '$' && src[j + 1] === '{') {
+            depth++;
+            j += 2;
+            continue;
+          }
+          if (c2 === '}' && depth > 0) {
+            depth--;
+            j++;
+            continue;
+          }
+          if (c2 === '`' && depth === 0) return j + 1;
+          j++;
+        }
+      }
+      j++;
+    }
+    return src.length;
+  };
+
+  /** 从 from 起跳过空白与注释，返回首个有效字符偏移 */
+  const skipTrivia = (from: number): number => {
+    let j = from;
+    for (;;) {
+      while (j < src.length && /\s/.test(src[j])) j++;
+      if (src[j] === '/' && src[j + 1] === '*') {
+        const end = src.indexOf('*/', j + 2);
+        j = end === -1 ? src.length : end + 2;
+        continue;
+      }
+      if (src[j] === '/' && src[j + 1] === '/') {
+        const end = src.indexOf('\n', j + 2);
+        j = end === -1 ? src.length : end + 1;
+        continue;
+      }
+      return j;
+    }
+  };
+
+  const wordAt = (pos: number): string => {
+    let j = pos;
+    while (j < src.length && /[A-Za-z0-9_$]/.test(src[j])) j++;
+    return src.slice(pos, j);
+  };
+
+  const isIdentBoundary = (pos: number): boolean => pos === 0 || !/[A-Za-z0-9_$]/.test(src[pos - 1]);
+
+  while (i < src.length) {
+    // 注释
+    if (src[i] === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end === -1 ? src.length : end + 2;
+      continue;
+    }
+    if (src[i] === '/' && src[i + 1] === '/') {
+      const end = src.indexOf('\n', i + 2);
+      i = end === -1 ? src.length : end + 1;
+      continue;
+    }
+    // 字符串：整体跳过（但保留 skipString 语义，供上面模板分支使用）
+    if (src[i] === "'" || src[i] === '"') {
+      i = skipString(i);
+      continue;
+    }
+    if (src[i] === '`') {
+      i = skipString(i);
+      continue;
+    }
+    // 标识符
+    if (/[A-Za-z_$]/.test(src[i]) && isIdentBoundary(i)) {
+      const w = wordAt(i);
+      const after = skipTrivia(i + w.length);
+
+      if (w === 'import' && src[after] === '(') {
+        hits.push({ kind: 'import', argStart: after + 1, text: src.slice(after + 1, after + 200) });
+      } else if (w === 'require' && src[after] === '(') {
+        // 接收者判定：`ctx.require(x)` / `a.b.require(x)` 是成员调用（SDK 白名单 API），
+        // 裸 `require(x)` 才是 CJS 动态加载。向前回看紧邻的 `.` 即可区分 ——
+        // 走到标识符分支时 i 必然是 require 的起始位置，前一个非空白字符若是 `.` 即成员调用。
+        let k = i - 1;
+        while (k >= 0 && /\s/.test(src[k])) k--;
+        const isMemberCall = k >= 0 && src[k] === '.';
+        hits.push({ kind: 'require', argStart: after + 1, text: src.slice(after + 1, after + 200), isMemberCall });
+      } else if (w === 'eval' && src[after] === '(') {
+        hits.push({ kind: 'eval', argStart: after + 1, text: src.slice(after + 1, after + 200) });
+      } else if (w === 'new') {
+        const kw = wordAt(after);
+        const kwAfter = skipTrivia(after + kw.length);
+        if (kw === 'Function' && src[kwAfter] === '(') {
+          hits.push({ kind: 'new-function', argStart: kwAfter + 1, text: src.slice(kwAfter + 1, kwAfter + 200) });
+        }
+      } else if (w === 'export') {
+        hits.push(...scanExportSpecifier(src, i + w.length));
+      } else if (w === 'import') {
+        hits.push(...scanImportSpecifier(src, i + w.length));
+      }
+      i += w.length;
+      continue;
+    }
+    i++;
+  }
+  return hits;
+}
+
+/**
+ * 判断片段是否**恰好**是一个字符串字面量（后面紧跟 `)` 或 `,`，无任何拼接/运算）。
+ *
+ * 不能只检查「首字符是引号」—— `import('node:' + 'child_process')` 首字符就是引号，
+ * 但它是字符串拼接，esbuild 不保证会静态折叠成字面量 specifier，因此仍属计算式导入。
+ */
+function isPureLiteralArg(text: string): boolean {
+  const t = text.trimStart();
+  const q = t[0];
+  if (q !== "'" && q !== '"' && q !== '`') return false;
+  const end = skipStringAt(t, 0);
+  if (end >= t.length) return true; // 片段被截断，按字面量处理（后续语法错误交给 esbuild）
+  // 模板字符串内含 ${expr} 即为计算式，静态导入不允许
+  if (q === '`' && /\$\{/.test(t.slice(1, end - 1))) return false;
+  const rest = t.slice(end).trimStart();
+  return rest.startsWith(')') || rest.startsWith(',');
+}
+
+/** 从片段中取出字符串字面量的内容 */
+function literalValue(text: string): string {
+  const t = text.trimStart();
+  const end = skipStringAt(t, 0);
+  return t.slice(1, end - 1);
+}
+
+function skipStringAt(s: string, from: number): number {
+  const q = s[from];
+  let j = from + 1;
+  while (j < s.length) {
+    if (s[j] === '\\') {
+      j += 2;
+      continue;
+    }
+    if (s[j] === q) return j + 1;
+    j++;
+  }
+  return s.length;
+}
+
+/**
+ * 插件代码静态安全门（A-1）。
+ *
+ * 在 `bundlePlugin()` 之后、代码落盘之前调用。抛 `PluginCodeSecurityError` 即拒绝安装。
+ */
+export function assertPluginCodeSafe(code: string): void {
+  const hits = scanCode(code);
+
+  for (const h of hits) {
+    if (h.kind === 'eval' || h.kind === 'new-function') {
+      throw new PluginCodeSecurityError(
+        'eval',
+        `检测到 ${h.kind === 'eval' ? 'eval' : 'new Function'} 调用。插件不得在宿主进程内动态执行代码。`,
+      );
+    }
+
+    // ── ctx.require(...) 例外 ────────────────────────────────────────────────────
+    //
+    // 插件 SDK 的 ctx.require(moduleName) 是**官方白名单加载 API**，其入参按设计就是
+    // 变量（金丝雀 canary-src/index.ts:246-260 就用 `for (const m of REQUIRE_OK) ctx.require(m)`）。
+    // 它本身已在 context-builder 中做过白名单校验，因此这里的词法扫描不能把它误判为
+    // 「运行时拼接 require」。
+    //
+    // 判别方式：require 的接收者。裸 `require(x)` 才危险；`ctx.require(x)` / `a.b.require(x)`
+    // 是方法调用，走 SDK 自己的白名单，不在本门管辖范围。
+    if (h.kind === 'require' && !isPureLiteralArg(h.text) && !h.isMemberCall) {
+      throw new PluginCodeSecurityError('dynamic-require', '检测到动态 require()。');
+    }
+
+    if (h.kind === 'import' && !isPureLiteralArg(h.text)) {
+      throw new PluginCodeSecurityError(
+        'computed-import',
+        `检测到计算式 import()（参数片段 "${h.text.slice(0, 60).replace(/\s+/g, ' ')}"）。` +
+          `动态 import 可绕过 esbuild 的静态导入白名单，插件只能 import 字面量路径或 @openlearn/* Token。`,
+      );
+    }
+
+    if (h.kind === 'export-from') {
+      const value = literalValue(h.text);
+      if (value.startsWith('/')) {
+        throw new PluginCodeSecurityError(
+          'absolute-path-import',
+          `检测到绝对路径 import "${value}"。绝对路径会被放行给 esbuild 解析，` +
+            `等于允许把宿主任意文件内联进插件产物后回传。`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * 将插件入口代码（含相对导入）通过 esbuild 打包为单 ESM bundle。
  *
  * D-07: esbuild 安装时打包 —— stdin API 接收代码字符串，bundle 选项
@@ -75,9 +441,21 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
               }
             }
 
-            // 相对路径和绝对路径由 esbuild 正常解析
-            if (args.path.startsWith('.') || args.path.startsWith('/')) {
-              return undefined; // 让 esbuild 自行处理
+            // 绝对路径：一律拒绝（A-3 / M-6）。
+            // 此前放行绝对路径等于允许插件把宿主文件（如 /etc/passwd、宿主 package.json）
+            // 内联进自身 bundle，再通过任意出网通道回传 —— 是真实的信息泄露面。
+            if (args.path.startsWith('/')) {
+              return {
+                errors: [
+                  {
+                    text: `Import of absolute path "${args.path}" is not allowed. Plugins may only import relative paths or @openlearn/* Token services.`,
+                  },
+                ],
+              };
+            }
+            // 相对路径由 esbuild 正常解析
+            if (args.path.startsWith('.')) {
+              return undefined;
             }
             // @openlearn Token 导入 — 标记为 external 保留
             if (args.path.startsWith('@openlearn')) {
@@ -97,7 +475,13 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
     ],
   });
 
-  return result.outputFiles[0].text;
+  const bundled = result.outputFiles[0].text;
+
+  // A-1：esbuild 的 onResolve 只拦得住可静态解析的字面量 specifier，
+  // 计算式 import() 会被原样保留为运行时 import()，故必须在打包后再过一道静态门。
+  assertPluginCodeSafe(bundled);
+
+  return bundled;
 }
 
 /**

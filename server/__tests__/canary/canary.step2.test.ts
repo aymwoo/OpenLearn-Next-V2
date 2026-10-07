@@ -49,9 +49,11 @@ import {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
+  IStageGuardServiceToken,
   IPluginHostToken,
 } from '../../../packages/core/di/interfaces.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
+import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
 
 const health = () => ({ isHealthy: true, details: {} });
@@ -70,6 +72,7 @@ function createTestDb(): Database.Database {
       created_at INTEGER,
       loader_version TEXT,
       zip_package BLOB,
+      version TEXT,
       execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
@@ -93,6 +96,8 @@ function createExtraServices(hostRef: { current: PluginHost | null }): Record<st
     teachingCollaboration: { getCollaborationEngine: vi.fn().mockResolvedValue({}) },
     learningAnalytics: { getAnalyticsEngine: vi.fn().mockResolvedValue({}) },
     aiCapability: { getCapabilityKernel: vi.fn().mockResolvedValue({}) },
+    // 用真实实现而非 stub：见 canary.e2e.test.ts 同处注释
+    stageGuard: new StageGuardPipeline(),
     capabilityRuntime: { getRuntimeKernel: vi.fn().mockResolvedValue({}) },
     capabilityGovernance: { getGovernanceKernel: vi.fn().mockResolvedValue({}) },
     platformServiceRegistry: { getServiceRegistryKernel: vi.fn().mockResolvedValue({}) },
@@ -292,6 +297,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
       [IInteractionRuntimeServiceToken, extra.interactionRuntime],
       [IActivityRegistryToken, extra.activityRegistry],
       [IAuthSessionBridgeToken, extra.authSessionBridge],
+      [IStageGuardServiceToken, extra.stageGuard],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));
