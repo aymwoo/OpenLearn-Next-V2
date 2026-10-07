@@ -30,6 +30,8 @@
 
 import { Worker } from 'node:worker_threads';
 import { WorkerLivenessMonitor } from './liveness-monitor.js';
+import type { IWorkerIsolate } from './worker-isolate.js';
+import { ThreadIsolate } from './thread-isolate.js';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
 import path from 'node:path';
@@ -176,7 +178,16 @@ const ACTIVATE_PROGRESS_SLIDE_MS = (() => {
  */
 interface WorkerInstance {
   pluginId: string;
-  worker: Worker;
+  /**
+   * 隔离原语（P1 阶段 1）。
+   *
+   * 此前这里是 `worker: Worker`（`node:worker_threads.Worker`），把注册表与
+   * worker_threads 焊死了 —— 即使消息通道已有 `IWorkerTransport` 抽象，
+   * 生命周期（threadId / on('exit') / terminate）仍是专有的，子进程接不进来。
+   *
+   * 保留一个只读的 `worker` getter 供过渡期使用；新代码一律走 `isolate`。
+   */
+  isolate: IWorkerIsolate;
   createdAt: number;
   status: 'activating' | 'running' | 'terminating' | 'crashed';
   transport: IWorkerTransport;
@@ -195,15 +206,12 @@ interface WorkerInstance {
  *
  * 职责：
  * - 按 pluginId 追踪活跃 Worker
- * - 通过 threadId → pluginId 反向映射
  * - 'exit' 事件监听器自动检测 Worker 崩溃并触发自动拉起监控
  */
 export class WorkerRegistry {
   /** pluginId → WorkerInstance */
   private workers = new Map<string, WorkerInstance>();
 
-  /** threadId → pluginId 反向映射（用于崩溃检测） */
-  private workerByThreadId = new Map<number, string>();
 
   /** pluginId → { count: number, lastTime: number } */
   private crashStats = new Map<string, { count: number; lastTime: number }>();
@@ -249,14 +257,13 @@ export class WorkerRegistry {
     }
 
     this.workers.set(pluginId, instance);
-    this.workerByThreadId.set(instance.worker.threadId, pluginId);
 
     // T-05-13: 自动崩溃检测 — 非零退出码且仍在追踪中时标记 crashed
-    instance.worker.on('error', (err) => {
+    instance.isolate.onError((err) => {
       console.error(`[WorkerRegistry] Worker for "${pluginId}" encountered error:`, err);
     });
 
-    instance.worker.on('exit', (code) => {
+    instance.isolate.onExit((code) => {
       if (this.workers.has(pluginId)) {
         const entry = this.workers.get(pluginId)!;
         if (entry.status === 'terminating') {
@@ -454,7 +461,7 @@ export class WorkerRegistry {
     } finally {
       // T-05-11: finally 块保证 Worker 终止
       try {
-        await instance.worker.terminate();
+        await instance.isolate.terminate();
       } catch (termErr) {
         console.error(`[WorkerRegistry] Worker terminate error for "${pluginId}":`, termErr);
       }
@@ -466,16 +473,16 @@ export class WorkerRegistry {
   /**
    * 清理 Worker 注册数据。
    *
-   * 从 workers 和 workerByThreadId 两个 Map 中移除。
    * 幂等操作 — 可重复调用。
+   *
+   * P1 阶段 1：原先这里还要从 `workerByThreadId` 删一条。该 Map 标注「用于崩溃检测」，
+   * 但全仓**只写不读**（只有 set / delete，没有任何读取点）—— 崩溃检测实际由
+   * `onExit` 回调完成。它是「注册表依赖 worker_threads 专有 threadId」的唯一来源，
+   * 故随本次抽象一并删除。删除前已用 grep 确认零读取，并补了回归用例。
    *
    * @param pluginId - 插件标识符
    */
   cleanup(pluginId: string): void {
-    const instance = this.workers.get(pluginId);
-    if (instance) {
-      this.workerByThreadId.delete(instance.worker.threadId);
-    }
     this.workers.delete(pluginId);
   }
 
@@ -1643,7 +1650,9 @@ export class WorkerManager {
     const createdAt = Date.now();
     this.registry.register(pluginId, {
       pluginId,
-      worker,
+      // P1 阶段 1：把 worker_threads 的 Worker 包成 IWorkerIsolate，
+      // 注册表从此只看接口，不再知道 threadId / on('exit') 这些专有形状。
+      isolate: new ThreadIsolate(worker),
       createdAt,
       status: 'activating',
       transport,

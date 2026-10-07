@@ -171,19 +171,33 @@ worker 有独立 isolate，V8 侧销毁 isolate **不需要 JS 栈配合** —�
 
 ### P1 —— 子进程替代 worker_thread（纵深防御）
 
+> ⚠️ **本节的成本评估已被实测修正**（2026-10-08）。两处**高估**、一处**低估**，
+> 且真正的接缝不在原判断的位置。修正后的分阶段方案见下。
+
 **收益**：爆炸半径从一个插件 → 一个进程；获得 OS 级强杀、rlimit、cgroup、独立 seccomp。
 
-**代价（必须诚实评估）**：
+#### 原评估 vs 实测
 
-| 项             | 影响                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| transport 重写 | `NodeWorkerTransport` 依赖 `Worker` 实例的 `postMessage/on/off/terminate`；子进程需改用 `child_process` 的 `ipc` + 手动序列化 |
-| 事件转发       | `EventForwarder` 依赖同一进程内的 `EventBus` 引用，跨进程需改为消息中继                                                       |
-| 性能           | IPC 序列化开销；worker_threads 的 `structuredClone` 快于子进程 JSON 通道（需评估 `v8.serialize`/`MessageChannel`）            |
-| DB 访问        | 现在 worker 通过 RPC 拿 `IDatabase` 代理 —— 跨进程仍走 RPC，**这块架构上已隔离，可直接复用**                                  |
-| 启动成本       | 子进程启动 ~50ms vs worker ~15ms                                                                                              |
+| 项             | 原评估                                                                      | 实测结论                                                                                                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| transport 重写 | 「需改用 `child_process` 的 ipc + 手动序列化」                              | **高估**。`IWorkerTransport` 抽象**早已存在**，且已有 Node / Browser 两个实现。bootstrap 侧实测只有 1 行 import + 8 处 `workerData` + 25 处 `parentPort.postMessage` + 1 处 `parentPort.on` —— 一个 ~10 行 shim 即可同时支持两种运行时，**不必逐处改写** |
+| 事件转发       | 「`EventForwarder` 依赖同一进程内的 `EventBus` 引用，跨进程需改为消息中继」 | **结论错误**。它是 `new EventForwarder(eventBus, transport)` —— 完全基于 transport、跑在宿主侧、向 worker 转发只走 transport。**无需重写**                                                                                                               |
+| 真正的接缝     | 未识别                                                                      | `WorkerRegistry.register()` **直接摸 `instance.worker`**（`threadId` / `on('exit')` / `on('error')` / `terminate()`），完全绕过 `IWorkerTransport`。这才是子进程接不进来的地方                                                                           |
+| 序列化         | 「worker_threads 的 structuredClone 快于子进程 JSON 通道（需评估）」        | **已排除为风险**。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**；`serialization:'advanced'`（v8.serialize）**0/13 不一致，与 structuredClone 完全一致**。见 `ipc-serialization-parity.test.ts`                                     |
+| DB 访问        | 「走 RPC，架构上已隔离，可直接复用」                                        | 成立                                                                                                                                                                                                                                                     |
+| 启动成本       | 「子进程 ~50ms vs worker ~15ms」                                            | 未实测，留待阶段 3                                                                                                                                                                                                                                       |
 
-**结论**：可行但**不是小改动**，必须单独立项、单独排期。
+#### 分阶段方案
+
+| 阶段  | 内容                                                                                                                                                                                                         | 状态          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| **1** | 抽出 `IWorkerIsolate`（`isolateId`/`onExit`/`onError`/`terminate`），把 `WorkerRegistry` 与 `node:worker_threads` 解耦；删除只写不读的 `workerByThreadId`                                                    | ✅ **已完成** |
+| **2** | 新增 `ChildProcessTransport` + `ChildProcessIsolate`，以及 bootstrap shim（`parentPort`→`process.send`、`workerData`→env），**显式 `serialization:'advanced'`**。仍默认走 worker_threads，子进程作为可选模式 | ☐             |
+| **3** | 让 `executionMode` 支持第三种取值，全量测试对比两种隔离原语的行为差异与启动成本                                                                                                                              | ☐             |
+
+**阶段 1 顺带清掉的历史包袱**：`workerByThreadId` 标注「用于崩溃检测」，但全仓**只写不读**
+（只有 `set`/`delete`，零读取点，grep 确认）—— 崩溃检测实际由 `onExit` 回调完成。
+它是「注册表依赖专有 `threadId`」的唯一来源，故随抽象一并删除。
 
 ### P2 —— Node Permission Model（能力面收敛）
 

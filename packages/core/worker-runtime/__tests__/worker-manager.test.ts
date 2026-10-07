@@ -80,6 +80,21 @@ function createMockWorkerInstance(
     emit: ee.emit.bind(ee),
   };
 
+  // P1 阶段 1：`WorkerInstance.worker` 已换成 `isolate`（IWorkerIsolate）。
+  // 这里刻意**不**复用 mockWorker，而是独立构造一个只实现 4 个成员的对象 ——
+  // 这样「注册表只依赖接口、不依赖 worker_threads 形状」这件事本身被测试守着。
+  // 若把 mockWorker 直接塞进去，将来给接口加成员时不会有任何编译期提醒。
+  const isolate = {
+    isolateId: `thread:${threadId}`,
+    onExit: (handler: (code: number | null) => void) => {
+      ee.on('exit', (code: number) => handler(code));
+    },
+    onError: (handler: (err: Error) => void) => {
+      ee.on('error', (err: Error) => handler(err));
+    },
+    terminate: (extra?.terminate ?? vi.fn().mockResolvedValue(undefined)) as () => Promise<unknown>,
+  };
+
   const serviceHost = {
     handleMessage: vi.fn().mockResolvedValue(undefined),
     actorId: `plugin:${pluginId}`,
@@ -87,7 +102,7 @@ function createMockWorkerInstance(
 
   return {
     pluginId,
-    worker: mockWorker as any,
+    isolate,
     createdAt: Date.now(),
     status: 'running' as const,
     transport,

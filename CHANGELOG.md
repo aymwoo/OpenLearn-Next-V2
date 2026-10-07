@@ -84,6 +84,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     ① `Kernel.migratePluginsToFilesystem()` **绕过**注入的 `pluginsDir`，自己又算了一遍 `cwd/plugins` —— 宿主日志只有一行 `[Migration] Failed to migrate ...`，而产物已落在工作树。现改为读 `pluginHost.getPluginsDir()`（**读宿主真实值而非重新推导**，两个来源不可能分叉）；
     ② `vitest.setup.ts` 里 **env 赋值排在了 `ensureTestSchema()` 之后** —— 后者会构造 Kernel，而 Kernel 构造时就要读该变量 ⇒ **所有 server 测试**一直拿到的都是 undefined、静默回落到工作树。已前移赋值顺序。
 
+- **插件 Worker 隔离原语抽象（L-1 P1 阶段 1，纯重构）**：
+  - 抽出 `IWorkerIsolate`（`isolateId` / `onExit` / `onError` / `terminate`）与 `ThreadIsolate` 实现，把 `WorkerRegistry` 从 `node:worker_threads.Worker` 解耦。此前注册表直接摸 `instance.worker.threadId` / `on('exit')` / `terminate()`，与 worker_threads **焊死**，导致「用子进程替代 worker_thread」在注册表这一层根本接不进来。
+  - 删除 `workerByThreadId`：标注「用于崩溃检测」，但**全仓只写不读**（零读取点）—— 崩溃检测实际由 `onExit` 回调完成。它是注册表依赖专有 `threadId` 的唯一来源。
+  - ⚠️ **实测更正了 L-1 提案对 P1 的两处成本高估**：① 「transport 重写」—— `IWorkerTransport` 抽象早已存在且已有 Node/Browser 两个实现，bootstrap 侧只有 1 行 import + 8 处 `workerData` + 25 处 `postMessage`，一个 ~10 行 shim 即可；② 「`EventForwarder` 依赖同进程 EventBus 引用、跨进程需改消息中继」—— **该结论错误**，它完全基于 transport、跑在宿主侧，**无需重写**。真正的接缝是 `WorkerRegistry` 直接摸 `instance.worker`，原评估未识别。
+  - ✅ **另一项前置风险已排除**：跨进程 IPC 的序列化差异。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**（Date→string、Map/Set/RegExp/Error→`{}`、undefined 字段被丢弃、NaN/Infinity→null、BigInt 与循环引用直接抛错）；而 `serialization:'advanced'`（v8.serialize）**0/13 不一致，与 worker_threads 的 structuredClone 完全一致**。已固化为 `ipc-serialization-parity.test.ts` —— 该选项若被去掉会立刻红，而失效后果是运行期静默数据损坏。
+  - **不改任何运行行为**：全量测试 381 files / 3217 tests 通过。
+
 - **插件 Worker 存活探活（L-1 P0）—— 卡死但没崩溃的 worker 现在会被终止**：
   - 治的是：一个写 `while(true)` 的插件**永久占住一个 Worker 槽位**（上限 32），打满即全平台 DoS。崩溃看门狗监听 `exit`，而死循环**不产生 exit**，故永不触发；`terminate()` 本身有效（实测 3/3 轮 2–3ms 杀得掉）—— 缺的只是「没有人去杀」。
   - ⚠️ **L-1 提案原文的 P0 设计（「60s 无消息即 terminate」）被实测否决**：它会**误杀健康但空闲的插件** —— 等着下一节课开始的插件本就可以几十分钟不发任何消息。这是功能性回归，不是保守取舍，故不采用。
