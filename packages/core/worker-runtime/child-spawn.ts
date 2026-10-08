@@ -30,6 +30,12 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { ChildProcessTransport } from './child-transport.js';
 import { ChildProcessIsolate } from './child-isolate.js';
+import {
+  buildPermissionArgs,
+  describePermissionPolicy,
+  normalizePermissionPolicy,
+  type PluginPermissionPolicy,
+} from './plugin-permission.js';
 
 /** 传给子进程的环境变量白名单 */
 const ENV_ALLOWLIST = [
@@ -97,6 +103,16 @@ export interface SpawnChildOptions {
   termGraceMs?: number;
   /** 工作目录，默认沿用宿主 cwd */
   cwd?: string;
+  /**
+   * 能力面收敛策略（L-1 P2）。不给则读 `OPENLEARN_PLUGIN_PERMISSION`。
+   *
+   * 刻意提供这个逃生舱：`off` 会让插件拿到宿主用户的全部文件与进程能力。
+   * 合法需要 spawn / 联网 / 写外部路径的插件只能走它 —— 因为本版本
+   * **没有** `--allow-net`，无法逐项放开网络。
+   */
+  permissionPolicy?: PluginPermissionPolicy;
+  /** 权限模式里的 fs 放行范围；不给则用 `data.pluginDir` 与 `process.cwd()` */
+  permissionPaths?: { pluginDir?: string; rootPath?: string };
 }
 
 /**
@@ -112,13 +128,26 @@ export interface SpawnChildOptions {
  * bootstrap 本身**不含密钥**（密钥只在 `__PLUGIN_WORKER_DATA` 里，且那里面
  * 只有 pluginId / token 名列表），故这个暴露面可接受。若将来 bootstrap 里
  * 出现了凭据，必须改回临时文件方案。
+ *
+ * ## 权限旗标放在 `--eval` 之前
+ *
+ * Node 要求权限相关旗标出现在**脚本之前**。实测把它们放在 `--eval` 之后会
+ * 报 `bad option` 或被静默忽略，因此顺序固定为
+ * `[...permissionArgs, '--input-type=module', '--eval', code]`。
  */
 export function spawnPluginChild(opts: SpawnChildOptions): {
   child: ChildProcess;
   transport: ChildProcessTransport;
   isolate: ChildProcessIsolate;
 } {
-  const child = spawn(process.execPath, ['--input-type=module', '--eval', opts.bootstrapCode], {
+  const policy = normalizePermissionPolicy(opts.permissionPolicy ?? process.env.OPENLEARN_PLUGIN_PERMISSION);
+  const permissionArgs = buildPermissionArgs({
+    policy,
+    pluginDir: opts.permissionPaths?.pluginDir ?? opts.data.pluginDir,
+    rootPath: opts.permissionPaths?.rootPath ?? process.cwd(),
+  });
+
+  const child = spawn(process.execPath, [...permissionArgs, '--input-type=module', '--eval', opts.bootstrapCode], {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     env: buildMinimalEnv(opts.data),
     cwd: opts.cwd,
@@ -131,4 +160,13 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
   const transport = new ChildProcessTransport(child);
   const isolate = new ChildProcessIsolate(child, opts.termGraceMs ?? 0);
   return { child, transport, isolate };
+}
+
+/** 诊断用：把当前生效的权限策略渲染成一行人类可读文本 */
+export function describeSpawnPermission(opts: { pluginDir?: string; policy?: PluginPermissionPolicy }): string {
+  return describePermissionPolicy({
+    policy: normalizePermissionPolicy(opts.policy ?? process.env.OPENLEARN_PLUGIN_PERMISSION),
+    pluginDir: opts.pluginDir,
+    rootPath: process.cwd(),
+  });
 }

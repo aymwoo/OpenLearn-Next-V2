@@ -115,6 +115,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - ✅ **另一项前置风险已排除**：跨进程 IPC 的序列化差异。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**（Date→string、Map/Set/RegExp/Error→`{}`、undefined 字段被丢弃、NaN/Infinity→null、BigInt 与循环引用直接抛错）；而 `serialization:'advanced'`（v8.serialize）**0/13 不一致，与 worker_threads 的 structuredClone 完全一致**。已固化为 `ipc-serialization-parity.test.ts` —— 该选项若被去掉会立刻红，而失效后果是运行期静默数据损坏。
   - **不改任何运行行为**：全量测试 381 files / 3217 tests 通过。
 
+- **插件能力面收敛：接入 Node 权限模型（L-1 P2）**：
+  - 新增 `OPENLEARN_PLUGIN_PERMISSION`，三档：`rw`（默认，可读自己的目录与共享依赖、可写自己的目录）、`ro`（同 `rw` 但不可写）、`off`（**逃生舱**，关闭权限模型）。仅对子进程原语生效。
+  - 任何档位都**不加** `--allow-child-process` / `--allow-worker` —— 那两个旗标会让插件拉起**不受权限模型约束**的执行单元，加上去等于沙箱失效。
+  - 旗标由 `spawnPluginChild` 注入而非 WorkerManager：放在 spawn 层可让**所有** spawn 路径自动受约束，不存在「这层记得传、别处忘了传」的口子。
+  - **与 `ctx.require` 白名单的协调**：共享模块（recharts / jspdf / exceljs 等）从仓库 `node_modules` 解析而不在 `pluginDir` 内，故额外放行 `<root>/node_modules/*` 只读 —— 否则插件作者的共享依赖在权限模式下全废。范围只到 `node_modules` 子树，宿主源码与 `.env` 仍不可读。
+  - 实测拦下：越界读文件、`eval`/`new Function`、`spawnSync` 子进程、创建 worker（`ERR_ACCESS_DENIED` / `EvalError`）。`--disallow-code-generation-from-strings` 是内核级保证，比原先那套源码正则 lint 更强 —— lint 靠匹配源码，而拼接出来的 eval 根本不在源码里。
+  - ⚠️ **本版本无法约束网络**：Node v24.1.0 **没有** `--allow-net` 旗标（逐个试过 9 个 `--allow-*`，`--allow-net`/`--allow-os-signal`/`--allow-inspector` 均不存在），出站连接与 DNS 始终放行。已写进 `.env.example`、诊断函数与一条专门的断言（把缺口钉住，Node 将来支持时会提醒更新代码）。
+  - ⚠️ **提案原文的 `--experimental-permission` 在 v24.1.0 已 `bad option`**（该前缀随权限模型在 Node 23.5.0 转正时被移除）。
+  - ⚠️ **代价是启动 +8.9ms（1.37×）**：子进程启动 24.1ms → 33.0ms，已实测钉成断言（上限 100ms）。这使上一条「子进程比 worker 快」的结论随之更正为 **1.35×** —— 两个数字都对，前提不同，引用时须带权限档位。
+
 - **插件执行模式新增第三种取值 `'process'`（L-1 P1 阶段 3）**：
   - `executionMode` 从 `'inline' | 'worker'` 扩为 `'inline' | 'worker' | 'process'`，收敛到具名类型 `PluginExecutionMode`。SDK 契约（`openlearn.d.ts` / `dist/index.d.ts`）与前端三处类型已同步。
   - `isolateKind` 从 WorkerManager 级单值改为**按实例覆盖** —— 否则一个进程内所有 worker 只能同种原语，`'process'` 就只是全局开关，而非 per-plugin 的执行模式。
@@ -371,7 +381,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **自动化测试网覆盖**：
     - 新增 `packages/core/db/__tests__/backup-restore.test.ts`，涵盖备份生成、快照修剪、破坏与恢复全流程数据一致性验证、损坏文件拦截等 10 项端到端单测。
 
-
 - **微前端通信性能微调与课件预览异步解耦（P2）**：
   - **微前端 iframe 通信 O(1) 注册表与协议快筛（`src/services/lms-bridge.ts`）**：
     - 引入 `registerManagedIframe(iframe)` 内存注册表并在 `InteractiveCoursewareViewer` / `HtmlAppletFrame` 挂载/卸载时自动维护，将跨域来源比对复杂度从全 DOM 扫描（`document.querySelectorAll`）降至 $O(1)$，并保留 DOM 查询作为安全兜底；
@@ -387,7 +396,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试覆盖**：
     - 扩展 `src/services/__tests__/lms-bridge.test.ts` 覆盖 O(1) 注册表生命周期、协议快筛、EventBus 防抖广播；新增 `src/features/whiteboard/__tests__/reveal-presentation-wrapper.test.tsx` 验证 Markdown/PPTX 渲染与模式切换。
 
-
 - **数据库连接池与并发 I/O 隔离优化（P1-1）**：
   - **SQLite Pragma 工业级参数加固（`packages/core/db/index.ts`）**：
     - 引入 `applyPragmas` 与 `applyReadPragmas`，显式配置 `busy_timeout = 5000`，彻底根除高并发批量写场景下偶发的 `SQLITE_BUSY: database is locked`；
@@ -401,7 +409,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **完整测试套件**：
     - 新增 `packages/core/db/__tests__/db-pool.test.ts`（7 项用例 100% 自动化通过），覆盖 Pragma 生效验证、只读池防写保护、长事务下的非阻塞并发读、WAL Checkpoint 与微批切片。
 
-
 - **白板渲染性能与 JSON.parse 缓存优化（P1-3）**：
   - **元素数据 LRU 高速缓存（`src/features/whiteboard/utils/element-cache.ts`）**：
     - 引入基于 Map 的轻量级 LRU 解析结果缓存 `parseElementData<T>(el, fallback?)`，容量封顶 1000 项，带安全的 try-catch 兜底逻辑；
@@ -413,7 +420,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **完整测试套件**：
     - 新增 `src/features/whiteboard/utils/__tests__/element-cache.test.ts` 覆盖基本解析、缓存复用、容量上限 LRU 驱逐与脏 JSON 容错保护，白板相关 44 项单测 100% 自动化通过。
 
-
 - **Vitest 并发隔离稳定性调优与内核命令总线测试覆盖（P1-4）**：
   - **动态安全 Worker 进程池调度（`vitest.config.ts`）**：
     - 引入基于 CPU 核心数与宿主机物理空闲内存（`os.freemem()`）动态计算的 `maxWorkers: safeForks` 机制，为每个 Worker 预留 600MB+ 安全物理内存并将并发度封顶至 4；
@@ -422,7 +428,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - 为热重载压力测试中的比值断言补充 100ms 保护基底，杜绝纳秒级基准除法膨胀引起的偶发红灯；
   - **内核命令总线测试覆盖（`packages/core/command-bus/__tests__/command-bus.test.ts`）**：
     - 新增 CommandBus 全流程单元测试，完整覆盖命令分发、执行、重复注册防御、拦截器链（Interceptors）安全阻断、D-11 历史遗留降级路由与 actorId 兜底规范，7 项用例 100% 通过。
-
 
 - **统一三层事件总线治理与类型安全门禁（P1-3）**：
   - **全局强类型前端事件字典契约（`src/types/events.ts`）**：
@@ -436,7 +441,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **完整测试套件**：
     - 新增 `src/hooks/__tests__/useEventBus.test.ts` 并扩充 `src/services/__tests__/event-bus.test.ts`，相关 46 项用例 100% 自动化通过。
 
-
 - **首屏体积轻量化与 ModulePreload 分包预加载优化（P1-2）**：
   - **解耦 CSV 纯工具函数并异步化 PDF 生成库**：
     - 新增 `src/utils/csv.ts` 与配套单测 `src/utils/__tests__/csv.test.ts`，将 `escapeCSV` 从 `gradeReportService.ts` 中解耦为独立轻量纯函数；
@@ -447,7 +451,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **Vite ModulePreload 依赖过滤**：
     - `vite.config.ts`：在 `build.modulePreload` 中配置 `resolveDependencies` 过滤器，从入口 `<head>` 排除非首屏必需的 `vendor-pdf`、`vendor-pptx`、`vendor-charts`、`vendor-reveal` 与 `vendor-konva`；
     - **优化成效**：首屏入口预加载资源体积由 ~843 KB (gzip) 缩减至 ~442 KB (gzip)，首屏资源传输减重约 47.5%，且登录页完全杜绝图表与 PDF 重型运行时的无效静默加载。
-
 
 - **插件系统与左侧导航栏自定义图标支持（v0.5.1）**：
   - **Manifest 与运行时动态图标规范**：
@@ -548,12 +551,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **沙箱跨窗口通信防爆**：在 `src/services/lms-bridge.ts` 的 `processLmsMessage` 引入 512KB 单包尺寸校验与循环引用防御，丢弃过大异常 payload，保护宿主主线程不被阻塞或发生内存溢出。
   - **质量单测**：补齐 `context-builder.test.ts` 中 `Test 5b` 原型引用精准退订的单元测试用例。
 
-
 - **前端架构治理（阶段 C2）：LiveClassroomView 巨石解耦（拆分 LiveSubmissionsPanel 与 ClassroomToolbarQuickActions）**：
   - **LiveSubmissionsPanel 领域下沉**：将 `LiveClassroomView` 中 360+ 行的学生交互课件提交记录、自动录入成绩、按班级/状态过滤、分数字段校验、补录与标缺考功能整体下沉至 `src/features/classroom/LiveSubmissionsPanel.tsx`，保持 Props 契约与单元测试 100% 兼容。
   - **ClassroomToolbarQuickActions 抽取**：将 7 个流程扩展按钮（异常告警、AI 学情预测、随堂协作、投屏对比、家校通知、宏动作编排、硬件网关）与倒计时组件收敛为 `ClassroomToolbarQuickActions.tsx`。
   - **组件精简**：`LiveClassroomView.tsx` 净减少 404 行代码，大幅提升虚拟 DOM 渲染效率与模块可维护性。
-
 
 - **运行时可靠性与安全收口（阶段 B）：B3 安全随机标识 + B4 内存治理 + B2 统一错误响应 + B5 AI端点防护**：
   - **B3 业务 ID 安全随机化**：彻底淘汰非安全随机数生成（`Math.random().toString(36)`）。
@@ -570,19 +571,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **B5 AI 端点限流与稳健保护**：
     - `server/routes/plugins.ts`：为 `/api/ai-providers/test` 挂载 `safeAiLimiter` 限流中间件（带单元测试优雅降级兼容），防止针对大模型探测端点的暴力枚举与连击耗尽资源。
 
-
 - **前端架构治理（路线图 C1-R4b 终态）：App.tsx 极简入口蜕变（1764 行 → 130 行），下沉业务浮层与数据编排 Hook**：
   - **AppHeader 35 props → 0**：`AppHeader` 升级为 `useOptionalAppData()` 双模取数，并内置 `StudentLiveHeader` 自动路由，支持 0 props 挂载。
   - **独立浮层下沉**：抽取 `ClassroomOverlays`（整合抽问横幅、学生抽中回答模态框、学生端实时互动浮层）与 `ImpersonationBanner`（学生模拟提示条），全面经 Context 消费。
   - **编排逻辑彻底解耦（`useAppComposer`）**：将 App.tsx 内部 10 个 Hook 的依赖组合、信道（ClassroomSyncChannel）、Socket 与长轮询调度、以及 `appData` 对象拼装整体下沉至 `src/hooks/useAppComposer.ts`。
   - **极简入口达成**：`src/App.tsx` 蜕变为纯粹的 Provider 包裹 + 根布局容器（Root View Shell），行数从 1764 行压缩至 **130 行**（压缩率达 92.6%），完全达成 C1 终态 `<500 行` 目标。
 
-
 - **前端架构治理（路线图 C1-R4a）：RightSidebar 与 AppModals 迁移 AppDataContext（95 props → 0）**：
   - RightSidebar 25 props → 0、AppModals 70 props → 0：两组件全面接入 `useOptionalAppData()` 双模取数，并保留原 Props 接口与默认解构，既支持 0 props 全局挂载，又保持已有孤立单元测试 100% 兼容。
   - AppDataContext 补齐 `AppExtras` 中缺失的模态框与侧边栏局部交互状态（`showRightSidebar`、`rightSidebarTab`、`agentProviderId`、`isTourOpen`、`handleSeedSuccess` 等）；`App.tsx` 注入相应状态上下文。
   - `src/App.tsx` 顶层调用点直接替换为 `<RightSidebar />` 与 `<AppModals />`，消除 95 行重复 props 传参样板代码。
-
 
 - **前端架构治理（路线图 C1-R3j）：迁移剩余 4 个次级 tab 与 NavigationSidebar，TeacherView 蜕变为 0 props 纯路由分发容器**：
   - NavigationSidebar、TimetableView、ComputerLabView、HelpView、PluginView 全部改经 `useAppData()` / `useOptionalAppData()` 取数，保留 Props 契约兼容孤立测试。
@@ -796,7 +794,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **回归与单元测试**：在 `server/__tests__/presence.test.ts`、`src/hooks/__tests__/useClassroomSocket.test.tsx`、`src/services/__tests__/classroom-sync-channel.test.ts` 补全 100% 覆盖的测试断言。
 
 - **测试数据清理加固与班级测试学生数据恢复 (`scripts/cleanup-test-data.mjs`, `e2e/classroom-interactive-flow.spec.ts`)**：
-  - **通配符误伤根因排查**：查明上一轮清理测试课程时清理脚本使用 SQLite `name LIKE '测试学生_%'`，由于 `_` 在 SQL LIKE 中代表单字符通配符，意外误删了系统示范班原有的正式测试学生 `测试学生A`~`测试学生E`（学号 `TEST001`~`TEST005`）。
+  - **通配符误伤根因排查**：查明上一轮清理测试课程时清理脚本使用 SQLite `name LIKE '测试学生_%'`，由于 `_` 在 SQL LIKE 中代表单字符通配符，意外误删了系统示范班原有的正式测试学生 `测试学生A`~~`测试学生E`（学号 `TEST001`~~`TEST005`）。
   - **无损数据恢复**：从系统插件元数据中提取原始快照，以原有 UUID、姓名与学号完整恢复 5 名学生，重新无缝连结其历史课堂点名、答题与加分记录；同时修复孤儿学生「小明」(`S001`) 的班级绑定，重新将 6 名学生完整关联至「人工智能与创意编程示范班」与「test」班。
   - **防护加固**：清理脚本与 E2E 规格中的测试学生过滤模式升级为严格匹配时间戳格式 `STU_%-%`，彻底杜绝自动化清理误伤常规学生数据。
 

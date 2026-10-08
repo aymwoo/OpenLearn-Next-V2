@@ -1655,6 +1655,12 @@ export class WorkerManager {
           bootstrapCode,
           data: workerData,
           termGraceMs: this.childTermGraceMs,
+          // L-1 P2：能力面收敛。刻意**不**往这层传 policy —— 它由
+          // spawnPluginChild 内部读 OPENLEARN_PLUGIN_PERMISSION，
+          // 这样任何 spawn 路径（含测试直接调 spawnPluginChild）都自动受约束，
+          // 而不存在「WorkerManager 记得传、别处忘了传」的口子。
+          // ⚠️ 仅对 process 原语生效；worker_threads 侧未启用（见 plugin-permission.ts）。
+          permissionPaths: { pluginDir: pluginDir, rootPath: process.cwd() },
         });
         childProcess = spawned.child;
         transport = spawned.transport;

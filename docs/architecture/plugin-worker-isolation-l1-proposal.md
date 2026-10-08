@@ -14,11 +14,11 @@
 
 本文给出一份**全部经实测**的能力面测量，以及三个层次的处理建议：
 
-| 层次   | 内容                                 | 性质         | 规模                         |
-| ------ | ------------------------------------ | ------------ | ---------------------------- |
-| **P0** | 宿主侧 CPU 看门狗                    | 真实缺陷修复 | 小（~60 行）                 |
-| **P1** | 进程隔离（子进程替代 worker_thread） | 纵深防御     | **大**（需重写 transport）   |
-| **P2** | Node Permission Model                | 能力面收敛   | 中（需评估 Node 版本可用性） |
+| 层次   | 内容                                 | 性质         | 规模                          |
+| ------ | ------------------------------------ | ------------ | ----------------------------- |
+| **P0** | 宿主侧 CPU 看门狗                    | 真实缺陷修复 | 小（~60 行）                  |
+| **P1** | 进程隔离（子进程替代 worker_thread） | 纵深防御     | **大**（需重写 transport）    |
+| **P2** | Node Permission Model                | 能力面收敛   | ✅ **已完成**（实测 v24.1.0） |
 
 **建议先做 P0**（它才是真正在造成 DoS 的缺口），P1/P2 走独立排期。
 
@@ -244,17 +244,74 @@ AdaptiveExitTicket 语义变更未同步测试），与隔离原语无关。
 （只有 `set`/`delete`，零读取点，grep 确认）—— 崩溃检测实际由 `onExit` 回调完成。
 它是「注册表依赖专有 `threadId`」的唯一来源，故随抽象一并删除。
 
-### P2 —— Node Permission Model（能力面收敛）
+### P2 —— Node Permission Model（能力面收敛） ✅ **已完成**
 
-`node --experimental-permission` 可限制 `fs` / `child_process` / `worker` 等能力。
+**动机**：P1 只解决了**崩溃**隔离（爆炸半径 = 一个进程）与**环境变量**泄漏
+（`buildMinimalEnv` 白名单）。但插件仍能在**宿主同一 OS 用户**的权限下任意读写文件、
+拉子进程、建 worker —— 宿主源码、`.env`、其它插件目录都在射程内，而进程隔离对
+「主动恶意」无效：一个进程能做的事，它的子进程也能做。
 
-**但要注意**：
+**实现**：`packages/core/worker-runtime/plugin-permission.ts`，按 `OPENLEARN_PLUGIN_PERMISSION`
+选档，旗标由 `spawnPluginChild` 注入（刻意不经过 WorkerManager —— 放在 spawn 层可让
+**所有** spawn 路径自动受约束，不存在「这层记得传、别处忘了传」的口子）。
 
-- 它**限能力，不解 CPU**（R1 仍需 P0）
-- 与 `bootstrapSharedModules()`（`ctx.require` 白名单）需要协调
-- Node 版本可用性需评估（当前环境 v24.1.0，该模型仍在演进）
+| 档位         | 旗标                                                                                                                                                      |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rw`（默认） | `--permission --disallow-code-generation-from-strings --allow-fs-read=<pluginDir>/* --allow-fs-read=<root>/node_modules/* --allow-fs-write=<pluginDir>/*` |
+| `ro`         | 同上，去掉 `--allow-fs-write`                                                                                                                             |
+| `off`        | 无（逃生舱）                                                                                                                                              |
 
-建议在 P1 落地时一并评估（子进程 + `--permission` 是天然组合）。
+**任何档位都不加 `--allow-child-process` / `--allow-worker`** —— 那两个旗标会让插件拉起
+**不受权限模型约束**的新执行单元，加上去等于沙箱失效。
+
+#### 实测（Node v24.1.0）—— 三处与提案原文不符
+
+1. **旗标名已变**：提案写的 `--experimental-permission` 在 v24.1.0 **直接报
+   `bad option`**（该前缀随权限模型在 23.5.0 转正时被移除）。统一用 `--permission`。
+2. **方案可落地**：data URL 动态 `import()`（**就是插件加载路径本身**）在权限模式下
+   **不被拦截** —— 这是整个方案的前提，实测放行。
+3. **不覆盖网络**：本版本**没有** `--allow-net` 旗标（逐个试过 `--allow-*` 共 9 个，
+   `--allow-net` 与 `--allow-os-signal`、`--allow-inspector` 均不存在）。
+   出站连接与 DNS 在权限模式下**始终放行**。这一点已写进 `.env.example`、
+   `describePermissionPolicy()` 与一条专门的测试断言（钉住缺口，Node 将来支持时提醒更新）。
+
+#### 与 `ctx.require` 白名单的协调（提案预期的那一处）
+
+bootstrap 里 `createRequire('<宿主 cwd>/package.json')` 意味着共享模块
+（`PLUGIN_SHARED_MODULES`：recharts / jspdf / exceljs …）从**仓库 `node_modules`** 解析，
+不在 `pluginDir` 内。故额外放行 `<root>/node_modules/*` 的**读**，否则插件作者的
+共享依赖在权限模式下全废。范围只到 `node_modules` 子树 —— 宿主源码与 `.env` 仍不可读。
+
+#### 实测的约束效果
+
+| 能力                    | `rw` 下         | 错误码              |
+| ----------------------- | --------------- | ------------------- |
+| 读 `/etc/hostname`      | ⛔              | `ERR_ACCESS_DENIED` |
+| 读宿主 `package.json`   | ⛔              | `ERR_ACCESS_DENIED` |
+| `eval` / `new Function` | ⛔              | `EvalError`         |
+| `spawnSync` 子进程      | ⛔              | `ERR_ACCESS_DENIED` |
+| 创建 worker             | ⛔              | `ERR_ACCESS_DENIED` |
+| 读 / 写 `pluginDir`     | ✅              |                     |
+| `ctx.require('uuid')`   | ✅              |                     |
+| **出站网络**            | ✅ **（缺口）** |                     |
+
+#### 代价：启动 +8.9ms（1.37×），已实测钉住
+
+```
+子进程启动  off 24.1ms  →  rw 33.0ms     开销 +8.9ms
+```
+
+**这使阶段 3 的成本结论过期**：阶段 3 测到的「child 0.88× worker」是在**权限模型之外**
+取得的；开启 P2 后是 **1.35×**。两处都已更正，且基准的日志行现在会打出当前档位，
+避免下一次直接引用过期数字。断言钉的是「开销 < 100ms」而非具体比值 ——
+比值依赖机器与并发负载，钉死会在 CI 上偶发失败。
+
+#### 仍不覆盖的两件事
+
+- **网络**：见上。
+- **CPU**：权限模型管「能做什么」，不是「能算多久」。吃 CPU 但让出事件循环的插件
+  仍能通过存活探活。要靠进程级资源配额（`--max-old-space-size` 之外的部分，
+  如 cgroups / `ulimit -t`），不是这里。
 
 ---
 
@@ -262,7 +319,7 @@ AdaptiveExitTicket 语义变更未同步测试），与隔离原语无关。
 
 1. ~~**立即**：P0 CPU 看门狗~~ → **已实现为 ping/pong 存活探活**（原设计的「静默计时器」会误杀空闲插件，见 §5 P0）
 2. **单独立项**：P1 进程隔离 —— 排期、影响面评估、分阶段（先 transport 抽象，再换实现）
-3. **P1 落地时**：评估 P2，以及 `--experimental-permission` 与 `ctx.require` 白名单的协调
+3. ~~**P1 落地时**：评估 P2~~ → **已完成**（见 §P2）。
 
 ---
 

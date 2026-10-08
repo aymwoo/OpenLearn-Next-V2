@@ -97,9 +97,13 @@ describe('L-1 P1 阶段 3 · 两种隔离原语的启动成本对比', () => {
     const tMed = median(thread);
     const pMed = median(process_);
 
+    // ⚠️ 必须把权限策略一起打出来：L-1 P2 之后子进程默认带 `--permission`，
+    // 实测那会加 ~10ms。阶段 3 测到的「child 0.88× worker」是在**权限模型之外**
+    // 取得的，直接引用那个数字会和本行输出对不上。
     // eslint-disable-next-line no-console
     console.log(
-      `[启动成本实测] worker_threads 中位数 ${tMed.toFixed(1)}ms ` +
+      `[启动成本实测 · 权限策略 ${process.env.OPENLEARN_PLUGIN_PERMISSION ?? 'rw（默认）'}] ` +
+        `worker_threads 中位数 ${tMed.toFixed(1)}ms ` +
         `(各轮: ${thread.map((x) => x.toFixed(0)).join(', ')}) | ` +
         `child_process 中位数 ${pMed.toFixed(1)}ms ` +
         `(各轮: ${process_.map((x) => x.toFixed(0)).join(', ')}) | ` +
@@ -116,6 +120,33 @@ describe('L-1 P1 阶段 3 · 两种隔离原语的启动成本对比', () => {
     expect(thread.length).toBe(5);
     expect(process_.length).toBe(5);
   }, 120_000);
+
+  it('权限模型的启动开销可量化（P2 的代价，不遮不掩）', async () => {
+    // P2 的权限模型不是零成本：实测子进程启动 23.0ms → 34.7ms（rw）。
+    // 这里把差值测出来并钉一个上限 —— 权限收敛应当是「花小钱买大安全」，
+    // 一旦开销涨到与启动同量级，就该重新审视它是否还值得默认开启。
+    const saved = process.env.OPENLEARN_PLUGIN_PERMISSION;
+
+    process.env.OPENLEARN_PLUGIN_PERMISSION = 'off';
+    const offMed = median(await bench('process', 5));
+
+    process.env.OPENLEARN_PLUGIN_PERMISSION = 'rw';
+    const rwMed = median(await bench('process', 5));
+
+    if (saved === undefined) delete process.env.OPENLEARN_PLUGIN_PERMISSION;
+    else process.env.OPENLEARN_PLUGIN_PERMISSION = saved;
+
+    const overhead = rwMed - offMed;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[权限模型开销] 子进程启动 off ${offMed.toFixed(1)}ms → rw ${rwMed.toFixed(1)}ms，` +
+        `开销 ${overhead >= 0 ? '+' : ''}${overhead.toFixed(1)}ms（${(rwMed / Math.max(offMed, 0.001)).toFixed(2)}×）`,
+    );
+
+    // 上限 100ms：超出说明权限模型的开销已经和隔离本身可比，
+    // 那时要重新权衡（而不是默默接受一个越来越贵的默认值）。
+    expect(overhead, `权限模型开销 ${overhead.toFixed(1)}ms 超过 100ms 上限`).toBeLessThan(100);
+  }, 180_000);
 });
 
 describe('L-1 P1 阶段 3 · 两种原语在同一进程内共存', () => {
