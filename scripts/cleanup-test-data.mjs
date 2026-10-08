@@ -186,6 +186,44 @@ const cleanupTx = db.transaction(() => {
   } catch (err) {
     console.warn('[cleanup-test-data] Warning cleaning up computer_labs:', err.message);
   }
+
+  // 5. 查找并清理所有 E2E / 金丝雀测试教工账号 (username LIKE 'e2e_%' OR '%canary%')，严格保护 admin/teacher 种子账号
+  try {
+    const testUsers = db
+      .prepare(
+        "SELECT id, username FROM users WHERE (username LIKE 'e2e_%' OR username LIKE '%canary%') AND username NOT IN ('admin', 'teacher')",
+      )
+      .all();
+
+    console.log(`[cleanup-test-data] Found ${testUsers.length} leftover test users:`);
+    if (testUsers.length > 0) {
+      const userIds = testUsers.map((u) => u.id);
+      const uPlaceholders = userIds.map(() => '?').join(',');
+
+      const delUsers = db.prepare(`DELETE FROM users WHERE id IN (${uPlaceholders})`).run(...userIds);
+      console.log(`  ✓ Successfully deleted ${delUsers.changes} test users.`);
+    }
+  } catch (err) {
+    console.warn('[cleanup-test-data] Warning cleaning up users:', err.message);
+  }
+
+  // 6. 查找并清理所有 E2E / 金丝雀测试 AI 提供商 (name LIKE 'E2E %' OR '%canary%')
+  try {
+    const testProviders = db
+      .prepare("SELECT id, name FROM ai_providers WHERE name LIKE 'E2E %' OR name LIKE '%canary%'")
+      .all();
+
+    console.log(`[cleanup-test-data] Found ${testProviders.length} leftover test AI providers:`);
+    if (testProviders.length > 0) {
+      const provIds = testProviders.map((p) => p.id);
+      const pPlaceholders = provIds.map(() => '?').join(',');
+
+      const delProv = db.prepare(`DELETE FROM ai_providers WHERE id IN (${pPlaceholders})`).run(...provIds);
+      console.log(`  ✓ Successfully deleted ${delProv.changes} test AI providers.`);
+    }
+  } catch (err) {
+    console.warn('[cleanup-test-data] Warning cleaning up ai_providers:', err.message);
+  }
 });
 
 try {
