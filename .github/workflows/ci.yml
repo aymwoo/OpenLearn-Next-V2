@@ -68,6 +68,77 @@ jobs:
 
   # 固定版本的真实插件作为宿主兼容性金丝雀。
   # 更新插件基线时同步修改下方三处 ref；每个门禁运行都可复现相同插件源码。
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Windows 平台探测（**非阻塞**）
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # 存在的理由：L-1（进程隔离）、L-2（bootstrap 与 PluginHost 拆分）全部在 Linux
+  # 上开发与验证 —— 此前本文件的 6 个 job **无一例外**是 ubuntu-latest，仓库里也
+  # 没有任何 Windows 平台分支、docs/README 里零处 Windows 提及。而产品的主要
+  # 用户据称在 Windows 上。
+  #
+  # 其中有几件事处于「未知」状态，任何一件为「否」都会让某个默认行为失效：
+  #
+  #   · `--permission` 不可用 → L-1 P2 的权限收敛整个失效。而 P2 把它**默认开启**，
+  #     后果是 Windows 上插件直接起不来。
+  #   · `--disallow-code-generation-from-strings` 不可用 → eval/new Function 禁令失效。
+  #   · 信号终止后 exit.code 不为 null → 现有集成测试会在 Windows 上红。
+  #
+  # 这些都无法在 Linux 上回答，所以本 job 的产物是**那张表变成有据**，而不是一个
+  # 绿色的勾。因此：
+  #
+  #   · `continue-on-error: true` —— 故意不卡合并。首跑大概率有红，红了才是信息。
+  #   · 先跑 `probe-platform-capabilities.mjs`：它只报告不改状态，输出人可读，
+  #     且作为 artifact 上传 —— 即使测试全红，报告也能回答「Windows 上能不能跑」。
+  #   · 再跑平台最敏感的两个测试目录（worker-runtime / plugin-host）。这两个目录
+  #     覆盖子进程 spawn、权限旗标、路径归一化、信号语义。
+  #
+  # ⚠️ 本 job 由 agent 在 Linux 上编写，**从未在 Windows 上跑过**。首次运行的结果
+  #    就是它存在的意义 —— 请把首次结果当作「Windows 支持现状」的第一次实测，
+  #    而不是回归失败。
+  #
+  # 待办：把首次红项分类（真缺陷 / 平台差异 / 探针自身写错），修完后移除
+  #       continue-on-error，转为阻塞门禁。
+  windows-platform-probe:
+    name: Windows platform probe (non-blocking)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Probe platform capabilities
+        run: node scripts/probe-platform-capabilities.mjs
+
+      - name: Upload capability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-capability-report-windows
+          path: dist/platform-capability-report.txt
+          if-no-files-found: warn
+
+      - name: Type check
+        run: pnpm lint
+
+      - name: Platform-sensitive unit tests
+        run: pnpm vitest run packages/core/worker-runtime packages/core/plugin-host
+
+      - name: Dump worker-runtime test output on failure
+        if: failure()
+        run: pnpm vitest run packages/core/worker-runtime --reporter=verbose
+
   plugin-compatibility:
     name: Third-party plugin compatibility
     runs-on: ubuntu-latest

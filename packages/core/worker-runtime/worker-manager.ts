@@ -33,6 +33,7 @@ import { WorkerLivenessMonitor } from './liveness-monitor.js';
 import type { IWorkerIsolate } from './worker-isolate.js';
 import { spawnPluginChild } from './child-spawn.js';
 import { composeBootstrapCode } from './bootstrap/index.js';
+import { DEFAULT_MAX_OLD_GENERATION_MB } from './plugin-limits.js';
 import { ThreadIsolate } from './thread-isolate.js';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
@@ -812,7 +813,11 @@ export class WorkerManager {
           // WorkerOptions 中**不存在**，实测传入亦完全无效。CPU 侧的兜底靠宿主
           // 看门狗调 terminate()，见上方说明。
           resourceLimits: {
-            maxOldGenerationSizeMb: 128,
+            // ★ 与子进程的 --max-old-space-size 取**同一个常量**（plugin-limits.ts）。
+            //   之前这里是硬编码 128，而子进程根本没有堆上限 —— 于是同一插件在两种
+            //   隔离原语下内存行为不同，且漂移表现为「worker 模式正常、process 模式
+            //   OOM」，极难排查。收敛到单一真源后不可能再漂移。
+            maxOldGenerationSizeMb: DEFAULT_MAX_OLD_GENERATION_MB,
             maxYoungGenerationSizeMb: 32,
           },
         });

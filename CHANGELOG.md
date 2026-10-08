@@ -125,6 +125,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `plugin-host-inheritance.test.ts`（6 例）钉住继承链的结构不变量：每层声明与 import 正确的父类、没有方法在两层里重复定义（防「复制一份塞进模块」的腐化）、单文件不超过 1200 行。已做反向对照：删掉父类 import、注入同名方法，两者均立即变红。
   - 另有 4 个既有测试读 `plugin-host/index.ts` 源码做文本断言，路径已随迁移更新（`execution-mode` / `static-route-normalization` / `dependency-install` / `dependency-blocked-vs-cycle` / `sprint1_security`）。
 
+- **插件进程堆上限 + Windows 平台探测 CI**：
+  - 新增 `OPENLEARN_PLUGIN_MAX_HEAP_MB`（默认 **128MB**），给子进程加 `--max-old-space-size`。**这是「内存失控」缺口，不是「CPU 燃烧」缺口** —— 后者实测不致命（16 核宿主带 8 个烧满 CPU 的插件：宿主吞吐仅降 23.6%、事件循环抖动 0.62ms），而前者可能让系统 OOM 把**宿主进程**一起带走。
+  - 取 128 不是拍数：沿用 `worker_threads` **既有**的 `resourceLimits.maxOldGenerationSizeMb` 值，并抽成 `plugin-limits.ts` 的唯一真源供两种原语共用 —— 否则漂移会表现为「同一插件在 worker 模式正常、在 process 模式 OOM」，极难排查。余量已实测：五个重型共享依赖全部加载后 `heapUsed=35MB`。
+  - 非法取值**落到默认值而非「无限制」**（如 `128MB`、`-1`、`16` 都归到 128），与权限策略同一原则：限制是更安全的那一侧，把拼错的配置解析成「无限制」等于静默关掉防护。关闭上限必须显式写 `0` 或 `off`。
+  - ⚠️ **更正一条我自己写错的注释**：我曾断言「`--max-old-space-size` 放在 `--eval` 之后会被静默忽略」。**实测是错的** —— 放在前面 1361ms FATAL ERROR，放在后面 1353ms FATAL ERROR，完全不给上限才存活（heapUsed=1236MB）。错因是当时的探针只执行一句 `console.log`、不做分配，**根本区分不了生效与否**。同样的一度断言 `--permission` 有位置要求，也一并更正：两个位置都生效。旗标位置按惯例统一放前段，但不再当作正确性依赖。
+  - 新增 `scripts/probe-platform-capabilities.mjs` + **非阻塞**的 Windows CI job：把 `--permission` 是否可用、`--disallow-code-generation-from-strings`、子进程 IPC + `serialization:'advanced'`、`createRequire(归一化路径)`、信号终止后 `exit.code`、worker_threads 这 6 项从「未知」变成「有据」。**此前 CI 的 6 个 job 全是 `ubuntu-latest`，而 L-1/L-2 全部在 Linux 上开发验证。** 该 job 刻意 `continue-on-error` —— 首跑大概率有红，红了才是信息。
+
 - **重构：Worker bootstrap 拆分（L-2 阶段 1）**：
   - `generateBootstrapCode()` 原本是**一个 881 行的模板字面量**，占 `worker-manager.ts` 的 44%。现拆成 5 个具名 section 模块（运行时 shim / `process` 遮蔽 / RPC 代理 / RESTful 路由 / 消息处理器），`worker-manager.ts` **2022 → 1122 行**。
   - 拆分方式是**程序化提取**（880 行手抄必然出错，且这类错误只在真跑 worker 时才暴露），并在提取前核实两个前提：模板体**零反引号**（放进新模板字面量不会被提前截断）、**仅 1 处 `${}` 且在 header**（故各 section 可做成无插值的纯常量）。拆分后逐字节比对：**31939 字节完全一致** —— 「零行为变更」是可验证的事实而非口头声明。

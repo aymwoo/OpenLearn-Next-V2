@@ -36,6 +36,7 @@ import {
   normalizePermissionPolicy,
   type PluginPermissionPolicy,
 } from './plugin-permission.js';
+import { buildHeapLimitArgs, describeHeapLimit } from './plugin-limits.js';
 
 /** 传给子进程的环境变量白名单 */
 const ENV_ALLOWLIST = [
@@ -113,6 +114,8 @@ export interface SpawnChildOptions {
   permissionPolicy?: PluginPermissionPolicy;
   /** 权限模式里的 fs 放行范围；不给则用 `data.pluginDir` 与 `process.cwd()` */
   permissionPaths?: { pluginDir?: string; rootPath?: string };
+  /** 堆上限（MB）。不给则读 `OPENLEARN_PLUGIN_MAX_HEAP_MB`；传 0 表示不设上限 */
+  maxHeapMb?: number;
 }
 
 /**
@@ -147,26 +150,43 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     rootPath: opts.permissionPaths?.rootPath ?? process.cwd(),
   });
 
-  const child = spawn(process.execPath, [...permissionArgs, '--input-type=module', '--eval', opts.bootstrapCode], {
-    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    env: buildMinimalEnv(opts.data),
-    cwd: opts.cwd,
-    // ★ 必须显式指定：默认 json 会静默降级 10/13 个探针（见模块注释与
-    //   ipc-serialization-parity.test.ts）。它是 spawn 选项，对双向生效。
-    serialization: 'advanced',
-    windowsHide: true,
-  });
+  // 堆上限与权限旗标放同一段（都在脚本参数之前）。
+  // 实测（2026-10-08 更正）：这两个旗标放在 `--eval` **之后同样生效** ——
+  //   --max-old-space-size=64  放在前 1361ms FATAL ERROR / 放在后 1353ms FATAL ERROR
+  //   完全不给上限 → 存活，heapUsed=1236MB
+  // 我曾断言「放在脚本之后会被静默忽略」，那是**错的**：当时的探针只跑了个
+  // console.log、不做分配，根本区分不了生效与否。位置按惯例统一放前段，
+  // 但**不要**把它当作正确性依赖 —— 真正的依赖见下方注释里指出的测试。
+  const heapArgs = buildHeapLimitArgs(opts.maxHeapMb);
+
+  const child = spawn(
+    process.execPath,
+    [...permissionArgs, ...heapArgs, '--input-type=module', '--eval', opts.bootstrapCode],
+    {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      env: buildMinimalEnv(opts.data),
+      cwd: opts.cwd,
+      // ★ 必须显式指定：默认 json 会静默降级 10/13 个探针（见模块注释与
+      //   ipc-serialization-parity.test.ts）。它是 spawn 选项，对双向生效。
+      serialization: 'advanced',
+      windowsHide: true,
+    },
+  );
 
   const transport = new ChildProcessTransport(child);
   const isolate = new ChildProcessIsolate(child, opts.termGraceMs ?? 0);
   return { child, transport, isolate };
 }
 
-/** 诊断用：把当前生效的权限策略渲染成一行人类可读文本 */
-export function describeSpawnPermission(opts: { pluginDir?: string; policy?: PluginPermissionPolicy }): string {
-  return describePermissionPolicy({
+/** 诊断用：把当前生效的权限策略与堆上限渲染成一行人类可读文本 */
+export function describeSpawnPermission(opts: {
+  pluginDir?: string;
+  policy?: PluginPermissionPolicy;
+  maxHeapMb?: number;
+}): string {
+  return `${describeHeapLimit(opts.maxHeapMb)}｜${describePermissionPolicy({
     policy: normalizePermissionPolicy(opts.policy ?? process.env.OPENLEARN_PLUGIN_PERMISSION),
     pluginDir: opts.pluginDir,
     rootPath: process.cwd(),
-  });
+  })}`;
 }
