@@ -107,6 +107,7 @@ export function TimelineRail({
     };
     saveTimeline(selectedLesson, [...segments, newSeg]);
     setActiveSegmentId(newSegId);
+    setEditorPanelsExpanded(true);
   };
 
   return (

@@ -364,6 +364,7 @@ export function useAppComposer() {
   // ── Hash-based routing: reflect teacherTab in the address bar ──
   // Deep link + back/forward support: read the active tab from the URL hash.
   useEffect(() => {
+    if (isStudentTabMode || isStageDisplayMode) return;
     const applyHash = () => {
       const tab = hashToTab(window.location.hash);
       if (tab && tab !== appStore.getState().teacherTab) {
@@ -374,15 +375,16 @@ export function useAppComposer() {
     const initial = hashToTab(window.location.hash);
     if (initial) setTeacherTab(initial);
     return () => window.removeEventListener('hashchange', applyHash);
-  }, [setTeacherTab]);
+  }, [setTeacherTab, isStudentTabMode, isStageDisplayMode]);
 
   // Write the active tab back into the URL hash so the address bar shows it.
   useEffect(() => {
+    if (isStudentTabMode || isStageDisplayMode) return;
     const desired = tabToHash(teacherTab);
     if (window.location.hash !== desired) {
       window.location.hash = desired;
     }
-  }, [teacherTab, setTeacherTab]);
+  }, [teacherTab, setTeacherTab, isStudentTabMode, isStageDisplayMode]);
 
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);

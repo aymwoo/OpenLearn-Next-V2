@@ -261,6 +261,18 @@ export default {
     }
 
     // ── 阶段 3：命令与事件 ──
+    if (ctx.services.actionRegistry) {
+      await (ctx.services.actionRegistry as any).register({
+        id: 'canary.ping',
+        commandType: 'canary.ping',
+        description: 'Ping canary probe',
+      });
+      await (ctx.services.actionRegistry as any).register({
+        id: 'canary.ping.prefixed',
+        commandType: 'ext-canary.canary.ping',
+        description: 'Ping canary probe (prefixed)',
+      });
+    }
     await (ctx.services.commandBus as any).registerHandler('canary.ping', {
       execute: async (cmd: any) => {
         return { pong: true, mode, src: cmd?.payload?.src ?? 'direct' };

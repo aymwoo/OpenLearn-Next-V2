@@ -8,7 +8,8 @@
     "@openlearn/core:ICommandBusService@^1.0.0",
     "@openlearn/core:IEventBusService@^1.0.0",
     "@openlearn/core:IDatabase@^1.0.0",
-    "@openlearn/core:IStorageService@^1.0.0"
+    "@openlearn/core:IStorageService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0"
   ],
   "optional": ["@openlearn/core:IAIService@^1.0.0"],
   "capabilitiesProposed": ["lesson:read", "lesson:write", "file:write"],

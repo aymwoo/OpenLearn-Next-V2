@@ -31,9 +31,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm dev',
+    command: 'PLAYWRIGHT_TEST=1 pnpm dev',
     url: 'http://localhost:9000',
     reuseExistingServer: true,
     timeout: 120_000,
+    env: {
+      PLAYWRIGHT_TEST: '1',
+    },
   },
 });

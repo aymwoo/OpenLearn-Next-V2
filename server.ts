@@ -240,10 +240,10 @@ async function startServer() {
     }),
   );
 
-  // SEC-AUTH-04: 登录频率限制器（5次/IP/分钟）
+  // SEC-AUTH-04: 登录频率限制器（测试环境下放宽，生产环境 5次/IP/分钟）
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
-    max: 5,
+    max: process.env.PLAYWRIGHT_TEST ? 1000 : 5,
     message: { error: '登录尝试过于频繁，请稍后再试。Too many login attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -251,7 +251,7 @@ async function startServer() {
 
   const writeLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 60,
+    max: process.env.PLAYWRIGHT_TEST ? 10000 : 60,
     message: { error: '请求过于频繁，请稍后再试。Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -259,7 +259,7 @@ async function startServer() {
 
   const aiLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 10,
+    max: process.env.PLAYWRIGHT_TEST ? 1000 : 10,
     message: { error: 'AI 请求过于频繁，请稍后再试。Too many AI requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

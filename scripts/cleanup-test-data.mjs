@@ -76,6 +76,9 @@ const cleanupTx = db.transaction(() => {
           db.prepare(`DELETE FROM classroom_feed WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
         } catch {}
         try {
+          db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
+        } catch {}
+        try {
           db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
         } catch {}
       }
@@ -163,6 +166,25 @@ const cleanupTx = db.transaction(() => {
 
     const delClasses = db.prepare(`DELETE FROM classes WHERE id IN (${cPlaceholders})`).run(...classIds);
     console.log(`  ✓ Successfully deleted ${delClasses.changes} test classes.`);
+  }
+
+  // 4. 查找并清理所有 E2E / 金丝雀测试机房 (room_number LIKE 'E2E %' OR '%canary%')
+  try {
+    const testLabs = db
+      .prepare("SELECT id, room_number FROM computer_labs WHERE room_number LIKE 'E2E %' OR room_number LIKE '%canary%'")
+      .all();
+
+    console.log(`[cleanup-test-data] Found ${testLabs.length} leftover test computer labs:`);
+    if (testLabs.length > 0) {
+      const labIds = testLabs.map((l) => l.id);
+      const lPlaceholders = labIds.map(() => '?').join(',');
+
+      db.prepare(`DELETE FROM student_seats WHERE lab_id IN (${lPlaceholders})`).run(...labIds);
+      const delLabs = db.prepare(`DELETE FROM computer_labs WHERE id IN (${lPlaceholders})`).run(...labIds);
+      console.log(`  ✓ Successfully deleted ${delLabs.changes} test computer labs.`);
+    }
+  } catch (err) {
+    console.warn('[cleanup-test-data] Warning cleaning up computer_labs:', err.message);
   }
 });
 

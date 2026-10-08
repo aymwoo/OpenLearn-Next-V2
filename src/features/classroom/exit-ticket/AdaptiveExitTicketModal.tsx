@@ -97,13 +97,17 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
         });
       }
       setSubmitted(true);
-      onSubmitSuccess?.();
     } catch (e) {
       // fallback graceful
       setSubmitted(true);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleFinish = () => {
+    onSubmitSuccess?.();
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -121,7 +125,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
             <span>{lang === 'zh' ? '60 秒自适应结课通票 (Adaptive Exit Ticket)' : '60s Adaptive Exit Ticket'}</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleFinish}
             className="text-muted hover:text-main rounded-lg p-1 cursor-pointer"
             aria-label="Close"
           >
@@ -143,7 +147,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
                 : 'Feedback synced to classroom dashboard.'}
             </p>
             <button
-              onClick={onClose}
+              onClick={handleFinish}
               className="mt-2 px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer"
             >
               {lang === 'zh' ? '完成' : 'Done'}

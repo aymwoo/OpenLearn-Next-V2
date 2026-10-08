@@ -52,7 +52,7 @@ async function cleanupLessonClassroomFlowViaApi(request: APIRequestContext) {
     const listRes = await request.get('/api/lessons');
     if (listRes.ok()) {
       const lessons = await listRes.json();
-      const arr = Array.isArray(lessons) ? lessons : [];
+      const arr = Array.isArray(lessons) ? lessons : (lessons as any)?.data || [];
       for (const l of arr) {
         if (l.title?.startsWith('E2E 课程编辑与开课')) {
           await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
@@ -104,7 +104,8 @@ async function courseHasSegment(request: APIRequestContext, title: string, segme
   const response = await request.get('/api/lessons');
   if (!response.ok()) return false;
 
-  const lessons = (await response.json()) as Array<{ title: string; timeline?: string | unknown[] | null }>;
+  const raw = await response.json();
+  const lessons = (Array.isArray(raw) ? raw : (raw as any)?.data || []) as Array<{ title: string; timeline?: string | unknown[] | null }>;
   const lesson = lessons.find((item) => item.title === title);
   if (!lesson?.timeline) return false;
 

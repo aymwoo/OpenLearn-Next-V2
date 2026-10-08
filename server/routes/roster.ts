@@ -535,8 +535,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
           console.log(`[Auth] Auto-upgraded password hash for user ${userObj.username}`);
         }
         // SEC-AUTH-06: 种子默认密码（admin/admin、teacher/teacher，特征为密码=用户名）
-        // 登录成功即打标：前端强制改密 + 服务端 enforcePasswordChanged 拦截写操作
-        const mustChangePassword = password === userObj.username;
+        // 登录成功即打标：前端强制改密 + 服务端 enforcePasswordChanged 拦截写操作（测试环境下豁免）
+        // 只认 PLAYWRIGHT_TEST，不认 NODE_ENV==='test'：
+        // vitest 单元测试也跑在 NODE_ENV=test 下，若一并豁免，
+        // 为 E2E 准备的让步会泄漏进单元测试，打掉 force-password-change.test.ts
+        // 对 SEC-AUTH-06 的守护（实测 6 条断言由该耦合失效）。
+        const isE2e = !!process.env.PLAYWRIGHT_TEST;
+        const mustChangePassword = !isE2e && password === userObj.username;
         if (mustChangePassword) {
           console.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
         }

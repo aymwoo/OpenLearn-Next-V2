@@ -219,7 +219,7 @@ export function registerClassroomRoutes(
 
     // 广播到所有连接的客户端与房间
     if (io) {
-      void emitClassroomEvent; // NEGATIVE-CONTROL: 广播已临时停用
+      emitClassroomEvent(io, lessonId, 'classroom:countdown_updated', state);
     }
 
     // 触发内核事件总线，供第三方插件监听

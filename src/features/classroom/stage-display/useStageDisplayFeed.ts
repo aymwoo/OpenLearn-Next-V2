@@ -13,7 +13,7 @@
  * 独立窗口与教师端同源（window.open），共享会话 cookie，因此无需额外鉴权。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getOptionalSocket } from '../../../services/socket-service';
+import { getOptionalSocket, onSocketInstance } from '../../../services/socket-service';
 
 export interface StageAttendance {
   /** 全平台在线学生数（不限本班） */
@@ -106,7 +106,7 @@ const LIVE_EVENTS = [
 ] as const;
 
 /** 对账轮询间隔：Socket 漏事件时的兜底，同时让倒计时/时钟类数据不会长时间不更新 */
-const RECONCILE_INTERVAL_MS = 20_000;
+const RECONCILE_INTERVAL_MS = 4_000;
 
 export function useStageDisplayFeed(
   lessonId: string | null,
@@ -161,13 +161,6 @@ export function useStageDisplayFeed(
   useEffect(() => {
     if (!enabled || !lessonId) return;
 
-    const socket = getOptionalSocket();
-    if (!socket) {
-      // 没有 socket 实例（测试环境 / 连接尚未建立）：退化为纯轮询，功能不缺失
-      setHealth('polling');
-      return;
-    }
-
     // 合并多个事件的同一次刷新，避免事件密集时打出一串请求
     let pending: ReturnType<typeof setTimeout> | null = null;
     const scheduleRefresh = () => {
@@ -178,40 +171,52 @@ export function useStageDisplayFeed(
       }, 120);
     };
 
-    const handlers = LIVE_EVENTS.map((evt) => {
-      const handler = (payload: any) => {
-        // 只关心本课节的事件（倒计时/部分事件不带 lessonId，一并接受）
-        const payloadLesson = payload?.lessonId;
-        if (payloadLesson && payloadLesson !== lessonId) return;
-        scheduleRefresh();
+    let cleanupSocket: (() => void) | null = null;
+
+    const unsubscribe = onSocketInstance((socket) => {
+      cleanupSocket?.();
+
+      // 确保展台独立窗口加入课节房间与常驻广播房间
+      socket.emit('join-room', lessonId);
+      socket.emit('join-room', 'classroom-broadcast');
+
+      const handlers = LIVE_EVENTS.map((evt) => {
+        const handler = (payload: any) => {
+          // 只关心本课节的事件（倒计时/部分事件不带 lessonId，一并接受）
+          const payloadLesson = payload?.lessonId;
+          if (payloadLesson && payloadLesson !== lessonId) return;
+          scheduleRefresh();
+        };
+        socket.on(evt, handler);
+        return [evt, handler] as const;
+      });
+
+      const onConnect = () => {
+        setHealth('live');
+        void refresh();
       };
-      socket.on(evt, handler);
-      return [evt, handler] as const;
+      const onDisconnect = () => setHealth('reconnecting');
+      const onConnectError = () => setHealth('reconnecting');
+
+      socket.on('connect', onConnect);
+      socket.on('disconnect', onDisconnect);
+      socket.on('connect_error', onConnectError);
+
+      if (socket.connected) {
+        setHealth('live');
+      }
+
+      cleanupSocket = () => {
+        for (const [evt, handler] of handlers) socket.off(evt, handler);
+        socket.off('connect', onConnect);
+        socket.off('disconnect', onDisconnect);
+        socket.off('connect_error', onConnectError);
+      };
     });
 
-    const onConnect = () => {
-      setHealth('live');
-      void refresh();
-    };
-    const onDisconnect = () => setHealth('reconnecting');
-    const onConnectError = () => setHealth('reconnecting');
-
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('connect_error', onConnectError);
-
-    // 已连接时标记为 live。
-    // 刻意**不**在这里再调一次 refresh：首次同步已由上面的轮询 effect 负责，
-    // 重复调用会让每次挂载都多打一个请求（曾被测试抓到）。
-    if (socket.connected) {
-      setHealth('live');
-    }
-
     return () => {
-      for (const [evt, handler] of handlers) socket.off(evt, handler);
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('connect_error', onConnectError);
+      unsubscribe();
+      cleanupSocket?.();
       if (pending) clearTimeout(pending);
     };
   }, [enabled, lessonId, refresh]);

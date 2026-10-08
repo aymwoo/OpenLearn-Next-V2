@@ -161,6 +161,7 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     const now = Date.now();
     const sid = 'stu-force-legacy';
     const classId = 'cls-force-legacy';
+    kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ? OR class_id = ?').run(sid, classId);
     kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(sid);
     kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
     kernelContainer.db
