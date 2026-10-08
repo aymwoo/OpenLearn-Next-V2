@@ -115,6 +115,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - ✅ **另一项前置风险已排除**：跨进程 IPC 的序列化差异。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**（Date→string、Map/Set/RegExp/Error→`{}`、undefined 字段被丢弃、NaN/Infinity→null、BigInt 与循环引用直接抛错）；而 `serialization:'advanced'`（v8.serialize）**0/13 不一致，与 worker_threads 的 structuredClone 完全一致**。已固化为 `ipc-serialization-parity.test.ts` —— 该选项若被去掉会立刻红，而失效后果是运行期静默数据损坏。
   - **不改任何运行行为**：全量测试 381 files / 3217 tests 通过。
 
+- **重构：Worker bootstrap 拆分（L-2 阶段 1）**：
+  - `generateBootstrapCode()` 原本是**一个 881 行的模板字面量**，占 `worker-manager.ts` 的 44%。现拆成 5 个具名 section 模块（运行时 shim / `process` 遮蔽 / RPC 代理 / RESTful 路由 / 消息处理器），`worker-manager.ts` **2022 → 1122 行**。
+  - 拆分方式是**程序化提取**（880 行手抄必然出错，且这类错误只在真跑 worker 时才暴露），并在提取前核实两个前提：模板体**零反引号**（放进新模板字面量不会被提前截断）、**仅 1 处 `${}` 且在 header**（故各 section 可做成无插值的纯常量）。拆分后逐字节比对：**31939 字节完全一致** —— 「零行为变更」是可验证的事实而非口头声明。
+  - **顺带修掉一处真实漂移**：bootstrap 里内联的 `resolvePluginCommandType` 缺少宿主侧 `plugin-namespace.ts` 的 UUID v7 短路。当时未暴露纯粹因为两边碰巧都传 `manifest.id` —— 「两边参数一致」是调用点的巧合，不是不变量。现由 `namespace-parity.test.ts` 把沙箱里那份实现**原样取出并执行**，与宿主模块跑同一组用例逐例比对。
+  - 新增 `bootstrap-section-lint.test.ts`：一个**零 import** 的静态 lint。反引号与 `${}` 这两条规则的破坏形式恰恰是**模块加载失败**（parse error / ReferenceError）—— 若断言写在会 import section 的文件里，它自己会先崩掉，只剩一句不透明的 `no tests`。零 import 的 lint 才能真正报出是哪一段、为什么（已实测两种注入均被干净捕获）。
+  - `extractProcessMaskingBlock()`（测试专用入口）随之从 `worker-manager.ts` 搬到遮蔽 section 模块，与被测代码同处一地。
+
 - **插件能力面收敛：接入 Node 权限模型（L-1 P2）**：
   - 新增 `OPENLEARN_PLUGIN_PERMISSION`，三档：`rw`（默认，可读自己的目录与共享依赖、可写自己的目录）、`ro`（同 `rw` 但不可写）、`off`（**逃生舱**，关闭权限模型）。仅对子进程原语生效。
   - 任何档位都**不加** `--allow-child-process` / `--allow-worker` —— 那两个旗标会让插件拉起**不受权限模型约束**的执行单元，加上去等于沙箱失效。

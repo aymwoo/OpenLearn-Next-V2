@@ -1,0 +1,28 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# 审计报告类 Markdown：故意不参与 prettier 格式化
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# 原因：这些文件的表格单元格里含有 markdown 表格语法**无法忠实表达**的内容 ——
+#   · TS 联合类型：`type X = | ;`
+#   · 嵌套的表格片段
+#   · 单元格内的字面 `\n`（此前由脚本插入日志时误写）
+#
+# prettier 的表格解析器遇到列数不一致的行会**重排**单元格，把内容拆到错误的列里
+# （实测：修复后每行 6 个分隔符，prettier 跑完又变回 7 个，且把相邻行的内容串了）。
+#
+# 这些文件是**工作日志**，不是生成物 —— 表格能正确渲染、内容不丢，比列宽对齐重要。
+# 手工维护时只需保证：每行以 `|` 开头结尾，且恰好 6 个**未转义**的 `|`。
+# 单元格内容里的字面 `|` 写成 `\|`。
+#
+# 校验方式：
+#   python3 -c "
+#   import io,re
+#   ls=io.open('plugin-system-remediation-tracker.md',encoding='utf-8').read().split(chr(10))
+#   up=lambda l:len(re.findall(r'(?<!\\\\)\|',l))
+#   s=next(i for i,l in enumerate(ls) if l.lstrip().startswith('| 日期'))
+#   print([ (s+1+i,up(l)) for i,l in enumerate(ls[s+1:s+80]) if l.strip() and l.startswith('|') and up(l)!=6 ])"
+#   → 期望输出 []
+# ══════════════════════════════════════════════════════════════════════════════
+
+plugin-system-remediation-tracker.md
+audit-plugin-system-2026-10-06.md

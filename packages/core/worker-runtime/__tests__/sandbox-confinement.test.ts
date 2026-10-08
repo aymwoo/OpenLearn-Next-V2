@@ -10,7 +10,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Worker } from 'node:worker_threads';
 import { parentPort } from 'node:worker_threads';
 import { ServiceHost } from '../service-host.js';
-import { BASE_WORKER_SERVICE_TOKENS, extractProcessMaskingBlock } from '../worker-manager.js';
+import { BASE_WORKER_SERVICE_TOKENS } from '../worker-manager.js';
+// L-2 阶段 1：遮蔽段的测试入口跟着代码搬到了 bootstrap 模块 ——
+// 它原本住在 worker-manager.ts 里，对着一整段 881 行的模板做字符串手术。
+import { extractProcessMaskingBlock } from '../bootstrap/index.js';
 import type { IWorkerTransport, InvokeMessage } from '../types.js';
 
 /** 自己的两个命名空间：DB UUID 与 manifestId。 */
