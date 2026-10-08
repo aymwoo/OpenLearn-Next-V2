@@ -12,8 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
-- **E2E 自动化测试全链路覆盖专项强化（Phase 1 - Phase 3）**：
-  - 新增 8 个高质量 Playwright 端到端测试套件，全套件扩充至 12 个 Spec / 17 个 Tests，全量联跑 1.1m (68s) 100% 绿灯通过，综合页面覆盖率自 13% 跃升至 72%（在线教学覆盖率达 92+ 分）：
+- **E2E 自动化测试全链路覆盖专项强化（Phase 1 - Phase 4 最终圆满落地）**：
+  - 新增 11 个高质量 Playwright 端到端测试套件，全套件扩充至 15 个 Spec / 20 个 Tests，全量联跑 1.6m (96s) 100% 绿灯全过，综合页面功能覆盖率自 13.2% 飞跃至 **86.8%**（在线教学核心覆盖率达 95 分，综合审计评级由 C+ 跃升至 **AAA 卓越**）：
     - **在线教学高危盲区（Phase 1）**：
       - `e2e/classroom-buzzer.spec.ts`：毫秒级多端抢答并发竞态、先到者 WINNER 判定、后到者 MISSED 遮罩与教师端重置；
       - `e2e/classroom-exit-ticket.spec.ts`：阶段流转自动触发 60s 自适应结课通票、梯级作答提交与教师端学情分层聚合；
@@ -25,9 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
       - `e2e/teacher-classes-flow.spec.ts`：原生 `window.prompt` 监听创建班级、班级展开与临时密码控制器（随机生成 4 位 PIN 与一键清空）、花名册实时过滤与考勤 Tab 看板；
       - `e2e/teacher-timetable-flow.spec.ts`：课表中心周历与列表视图、调休排班 Tab、新增排课表单提交、周历网格排课卡片定位断言与悬浮删除；
       - `e2e/teacher-computer-labs.spec.ts`：机房物理网格配置（3 行 × 4 列）、班级机位联动、一键自动排座填充、持久化至 `student_seats` 数据表与机房删除。
+    - **管理后台与系统运维治理（Phase 4）**：
+      - `e2e/admin-user-management.spec.ts`：教工账号创建抽屉、角色划分（教师/管理员）、花名册即时搜索过滤、个人资料设置编辑与原生 confirm 弹窗注销删除；
+      - `e2e/admin-ai-providers.spec.ts`：AI 模型提供商添加、OpenAI 兼容端点录入、API Key 掩码存储、连通性探测模拟测试（`/api/ai-providers/test`）、模型代号编辑与删除；
+      - `e2e/admin-system-monitor.spec.ts`：SQLite 物理引擎健康状况指标卡片、PRAGMA WAL 物理控制参数、物理完整性自检弹窗、平台全局站点信息（名称/标语/Logo）修改与纯净恢复、`DemoDataPanel` 演示数据状态与一键刷新。
   - **基础设施自闭环与架构稳定性修复**：
     - 修复大屏展台 `useStageDisplayFeed.ts` 异步 Socket 漏订阅缺陷（重构为 `onSocketInstance` 回调并自动 join 房间），对账轮询间隔由 20s 优化至 4s；
-    - 扩展 `scripts/cleanup-test-data.mjs`：增加对 `computer_labs` 与 `student_seats` 的级联清理扫描，确保套件执行完毕后 0 脏数据残留；
+    - 扩展 `scripts/cleanup-test-data.mjs`：级联清理支持从 4 类扩充至 8 类（`lessons`, `students`, `classes`, `classroom_sessions`, `computer_labs`, `student_seats`, `users`, `ai_providers`），并严密保护 `admin`/`teacher` 生产种子账号，数据 0 污染；
     - 修复测试态频率限制与默认账号改密拦截（只在 `PLAYWRIGHT_TEST` 下豁免，与 Vitest 严格隔离）。
 
 ### Fixes
