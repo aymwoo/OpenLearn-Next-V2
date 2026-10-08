@@ -63,7 +63,8 @@ export interface FrontendPluginInfo {
   name: string;
   version: string;
   state: PluginState;
-  executionMode: 'inline' | 'worker' | 'legacy';
+  /** L-1 P1 阶段 3：新增 'process'（子进程隔离）。'legacy' 是 vm 时代的残留取值。 */
+  executionMode: 'inline' | 'worker' | 'process' | 'legacy';
   icon?: string;
   /**
    * 插件 manifest 声明的 `capabilitiesProposed`（字符串数组）。

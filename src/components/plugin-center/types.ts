@@ -38,7 +38,7 @@ export interface PluginCenterProps {
   onInstall: () => void;
   onZipUpload: (
     file: File,
-    executionMode: 'worker' | 'inline',
+    executionMode: 'worker' | 'inline' | 'process',
     opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
   ) => Promise<void>;
   onToggle: (id: string) => void;

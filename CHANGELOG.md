@@ -115,6 +115,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - ✅ **另一项前置风险已排除**：跨进程 IPC 的序列化差异。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**（Date→string、Map/Set/RegExp/Error→`{}`、undefined 字段被丢弃、NaN/Infinity→null、BigInt 与循环引用直接抛错）；而 `serialization:'advanced'`（v8.serialize）**0/13 不一致，与 worker_threads 的 structuredClone 完全一致**。已固化为 `ipc-serialization-parity.test.ts` —— 该选项若被去掉会立刻红，而失效后果是运行期静默数据损坏。
   - **不改任何运行行为**：全量测试 381 files / 3217 tests 通过。
 
+- **插件执行模式新增第三种取值 `'process'`（L-1 P1 阶段 3）**：
+  - `executionMode` 从 `'inline' | 'worker'` 扩为 `'inline' | 'worker' | 'process'`，收敛到具名类型 `PluginExecutionMode`。SDK 契约（`openlearn.d.ts` / `dist/index.d.ts`）与前端三处类型已同步。
+  - `isolateKind` 从 WorkerManager 级单值改为**按实例覆盖** —— 否则一个进程内所有 worker 只能同种原语，`'process'` 就只是全局开关，而非 per-plugin 的执行模式。
+  - ⚠️ **本次最危险的失效形态**：模式收窄散落在 **11 处**（`plugin-host/index.ts` 5、`plugin-distribution-manager.ts` 3、`server/routes/plugins.ts` 3），写法是 `x === 'worker' || x === 'inline' ? x : undefined`。**漏改不产生任何编译错误**，而后果是：管理员选「进程隔离」→ 该入口判非法 → 返回 `undefined` → 默认 `inline` → **插件根本没进隔离路径，界面却显示已生效**。已用 `isValidExecutionMode()` 收敛，并加 `execution-mode.test.ts`（11 例）守住三处 API 入口，已做反向对照。
+  - ⚠️ **实测推翻 L-1 提案原先的成本估算**：提案写「子进程 ~50ms vs worker ~15ms」，走真实创建路径（`WorkerManager.createWorker`，含 bootstrap 编译与 activate 往返）5 轮中位数为 **child_process 21.9ms vs worker_threads 24.9ms，比值 0.88×** —— 子进程并不更慢（走 `--eval` 不写临时文件，省掉 isolate 配置开销）。基准固化为 `isolate-benchmark.test.ts`；适用边界是被测插件为空壳，真实插件加载 bundle 后平衡点可能移动。
+  - **全量行为对比**：两种原语下测试结果**完全一致**（386 files / 3245 tests）。唯一行为差异是 `transport.id` 前缀（`worker:<threadId>` vs `child:<pid>`）—— 既有用例硬编码 `/^worker/`，已改为按实际生效的原语断言（两种模式各 15/15 通过）。
+
 - **插件 Worker 存活探活（L-1 P0）—— 卡死但没崩溃的 worker 现在会被终止**：
   - 治的是：一个写 `while(true)` 的插件**永久占住一个 Worker 槽位**（上限 32），打满即全平台 DoS。崩溃看门狗监听 `exit`，而死循环**不产生 exit**，故永不触发；`terminate()` 本身有效（实测 3/3 轮 2–3ms 杀得掉）—— 缺的只是「没有人去杀」。
   - ⚠️ **L-1 提案原文的 P0 设计（「60s 无消息即 terminate」）被实测否决**：它会**误杀健康但空闲的插件** —— 等着下一节课开始的插件本就可以几十分钟不发任何消息。这是功能性回归，不是保守取舍，故不采用。

@@ -254,7 +254,7 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
 
   const handleZipPluginUpload = async (
     file: File,
-    executionMode: 'worker' | 'inline',
+    executionMode: 'worker' | 'inline' | 'process',
     opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
   ) => {
     setInstallingPlugin(true);

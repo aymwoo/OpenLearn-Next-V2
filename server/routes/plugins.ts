@@ -1,4 +1,5 @@
 import express from 'express';
+import { isValidExecutionMode, type PluginExecutionMode } from '../../packages/core/plugin-host/types.js';
 import path from 'path';
 import fs from 'fs';
 import semver from 'semver';
@@ -278,10 +279,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ success: false, error: `安全拦截: 非法下载地址 (${urlCheck.reason})` });
       }
 
-      const executionMode =
-        rawExecutionMode === 'worker' || rawExecutionMode === 'inline'
-          ? (rawExecutionMode as 'worker' | 'inline')
-          : undefined;
+      // 收窄到三种合法模式。用具名谓词而非内联比较 —— 加第四种模式时
+      // 漏改这一处的后果是「该模式静默降级为默认」，且不产生任何报错。
+      const executionMode = isValidExecutionMode(rawExecutionMode) ? rawExecutionMode : undefined;
 
       let pkg: DownloadedPackage;
       try {
@@ -595,10 +595,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           ? decodeURIComponent(req.headers['x-filename'] as string)
           : 'plugin.zip';
         const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
-        const executionMode =
-          executionModeHeader === 'worker' || executionModeHeader === 'inline'
-            ? (executionModeHeader as 'worker' | 'inline')
-            : undefined;
+        const executionMode = isValidExecutionMode(executionModeHeader)
+          ? (executionModeHeader as PluginExecutionMode)
+          : undefined;
         const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
         const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
         const targetPluginId = req.headers['x-target-plugin-id']
@@ -652,10 +651,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         const targetPluginId = decodeURIComponent(req.params.id);
         const zipBuffer = req.body;
         const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
-        const executionMode =
-          executionModeHeader === 'worker' || executionModeHeader === 'inline'
-            ? (executionModeHeader as 'worker' | 'inline')
-            : undefined;
+        const executionMode = isValidExecutionMode(executionModeHeader)
+          ? (executionModeHeader as PluginExecutionMode)
+          : undefined;
         const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
         if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
           return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });

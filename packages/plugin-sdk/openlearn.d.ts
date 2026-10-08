@@ -833,7 +833,12 @@ interface IPluginRepositoryAdapter {
 
 interface PluginUpdateOptions {
   targetPluginId?: string;
-  executionMode?: 'worker' | 'inline';
+  /**
+   * 执行模式。'process' 为 L-1 P1 阶段 3 新增的**进程级隔离**（子进程 + 最小 env）。
+   * 声明取自 `@openlearn/plugin-sdk` 的 `PluginExecutionMode`，此处手写镜像 ——
+   * 改这一处时须同步 `plugin-host/types.ts`，否则 SDK 与内核的模式集合会分叉。
+   */
+  executionMode?: 'worker' | 'inline' | 'process';
   allowDowngrade?: boolean;
 }
 
@@ -854,7 +859,7 @@ interface IPluginDistributionManager {
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
   installFromZip(
     zipBuffer: Buffer,
-    executionMode?: 'worker' | 'inline',
+    executionMode?: 'worker' | 'inline' | 'process',
   ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
   updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;

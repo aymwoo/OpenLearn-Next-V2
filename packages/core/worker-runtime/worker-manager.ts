@@ -1591,6 +1591,14 @@ export class WorkerManager {
    * @throws WorkerTimeoutError — 激活超时
    * @throws Error — 已存在或达到上限
    */
+  /**
+   * @param opts.isolateKind - 本次实例用哪种隔离原语。**不给则用 Manager 级默认值**
+   *   （`OPENLEARN_WORKER_ISOLATE`，默认 `'thread'`）。
+   *
+   *   L-1 P1 阶段 3：原先隔离原语是 Manager 级单值，一个进程内所有 worker 只能同种。
+   *   改成**按实例覆盖**，才能让 `'worker'` 与 `'process'` 两种模式的插件在同一
+   *   进程内共存 —— 这也是让 `executionMode` 真正有第三个取值的意义。
+   */
   async createWorker(
     pluginId: string,
     manifest: Manifest,
@@ -1599,6 +1607,7 @@ export class WorkerManager {
     eventBus?: EventBus,
     pluginDir?: string,
     prevState?: any,
+    opts?: { isolateKind?: 'thread' | 'process' },
   ): Promise<{ transport: IWorkerTransport; serviceHost: ServiceHost }> {
     // 1. 检查重复
     if (this.registry.get(pluginId)) {
@@ -1640,7 +1649,8 @@ export class WorkerManager {
     let childLogger: { info: (m: string) => void; error: (m: string) => void } | undefined;
 
     try {
-      if (this.isolateKind === 'process') {
+      const isolateKind = opts?.isolateKind ?? this.isolateKind;
+      if (isolateKind === 'process') {
         const spawned = spawnPluginChild({
           bootstrapCode,
           data: workerData,

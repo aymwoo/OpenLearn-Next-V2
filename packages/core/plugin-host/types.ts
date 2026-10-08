@@ -335,3 +335,52 @@ export interface MiddlewareContext {
  * 不调用 next() 则终止管道。
  */
 export type Middleware = (ctx: MiddlewareContext, next: () => Promise<void>) => Promise<void>;
+
+/**
+ * 插件的执行模式（L-1 P1 阶段 3）。
+ *
+ * | 值 | 隔离强度 | 说明 |
+ * |---|---|---|
+ * | `'inline'` | 无 | 与宿主同进程同线程运行。默认。 |
+ * | `'worker'` | 崩溃隔离 | `worker_threads.Worker` —— 独立 V8 isolate，但**同进程**，共享内存与 `process.env`。 |
+ * | `'process'` | **进程隔离** | `child_process` 子进程 + 最小 env 白名单 —— 爆炸半径为一个进程。见 `child-spawn.ts`。 |
+ *
+ * ## 为什么用具名类型而不是各处内联字面量联合
+ *
+ * 加第三个取值时，`'inline' | 'worker'` 这个字面量在 `plugin-host/index.ts`
+ * 里内联出现 5 处、`plugin-distribution-manager.ts` 3 处、`server/routes/plugins.ts`
+ * 3 处（API 层的入参收窄）。逐个改漏一处，那个入口就会**悄悄退回只认两种模式**：
+ * `'process'` 在收窄处被判为 `undefined` → 落到默认 `inline` → 插件**根本没进隔离路径**，
+ * 而类型系统不会报任何错（因为收窄本身是合法的）。
+ *
+ * 这个失效形态最坏的地方在于**它不报错**：管理员选了「进程隔离」，插件却跑在
+ * inline 里，界面上看着生效了。故收敛到单一来源，并配
+ * `execution-mode.test.ts` 守住「三处 API 入口都认得 process」。
+ */
+export type PluginExecutionMode = 'inline' | 'worker' | 'process';
+
+/** 需要进程级隔离（而非线程级）的模式 */
+export function requiresProcessIsolation(mode: PluginExecutionMode): boolean {
+  return mode === 'process';
+}
+
+/** 归一化任意来源（DB 字符串 / manifest 字段 / API 入参）到合法模式 */
+export function normalizeExecutionMode(raw: unknown): PluginExecutionMode {
+  if (raw === 'worker' || raw === 'process' || raw === 'inline') return raw;
+  return 'inline';
+}
+
+/**
+ * 运行时判据：给定值是否是合法的执行模式。
+ *
+ * 供 API 层收窄入参用（`server/routes/plugins.ts` 的三处）。
+ *
+ * 为什么必须有它、且必须与 {@link PluginExecutionMode} 同步：
+ * 那三处原本写成 `x === 'worker' || x === 'inline' ? x : undefined`。
+ * 收窄本身合法，所以**新增第三种模式时若漏改，编译器一声不吭**，
+ * 而管理员选了新模式会静默拿到 `undefined` → 默认 `inline` →
+ * **插件根本没进隔离路径，界面却显示已生效**。
+ */
+export function isValidExecutionMode(raw: unknown): raw is PluginExecutionMode {
+  return raw === 'inline' || raw === 'worker' || raw === 'process';
+}

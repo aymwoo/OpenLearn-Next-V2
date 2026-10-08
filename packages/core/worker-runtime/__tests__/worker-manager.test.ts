@@ -277,7 +277,16 @@ describe('WorkerManager', () => {
 
     expect(result.transport).toBeDefined();
     expect(result.serviceHost).toBeDefined();
-    expect(result.transport.id).toMatch(/^worker:/);
+    // L-1 P1 阶段 3：id 前缀**随隔离原语而变** ——
+    //   thread  → `worker:<threadId>`
+    //   process → `child:<pid>`
+    // 原先硬编码 `/^worker/`，于是整条用例在进程模式下红 —— 而那不是行为缺陷，
+    // 只是断言没考虑「现在有两种原语」。改为按实际生效的原语断言。
+    const expectedPrefix = process.env.OPENLEARN_WORKER_ISOLATE === 'process' ? /^child:/ : /^worker:/;
+    expect(
+      result.transport.id,
+      `transport.id 前缀应与生效的隔离原语一致（当前 OPENLEARN_WORKER_ISOLATE=${process.env.OPENLEARN_WORKER_ISOLATE ?? 'thread'}）`,
+    ).toMatch(expectedPrefix);
     expect(result.serviceHost.actorId).toBe('plugin:test-plugin');
   });
 

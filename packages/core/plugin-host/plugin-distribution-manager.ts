@@ -5,6 +5,7 @@
  */
 
 import type { PluginHost } from './index.js';
+import type { PluginExecutionMode } from './types.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
@@ -61,7 +62,7 @@ export class LocalRepositoryAdapter implements IPluginRepositoryAdapter {
 
 export interface PluginUpdateOptions {
   targetPluginId?: string;
-  executionMode?: 'worker' | 'inline';
+  executionMode?: PluginExecutionMode;
   allowDowngrade?: boolean;
 }
 
@@ -81,7 +82,7 @@ export interface IPluginDistributionManager {
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
   installFromZip(
     zipBuffer: Buffer,
-    executionMode?: 'worker' | 'inline',
+    executionMode?: PluginExecutionMode,
   ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
   updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
@@ -122,7 +123,7 @@ export class PluginDistributionManager implements IPluginDistributionManager {
 
   public async installFromZip(
     zipBuffer: Buffer,
-    executionMode?: 'worker' | 'inline',
+    executionMode?: PluginExecutionMode,
   ): Promise<{ pluginId: string; manifest: Manifest }> {
     const manifest = await this.pluginHost.installPluginFromZip(zipBuffer, executionMode);
     // installPluginFromZip returns Manifest & { pluginId: <DB UUID> }.

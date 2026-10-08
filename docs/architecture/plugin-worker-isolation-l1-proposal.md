@@ -185,7 +185,7 @@ worker 有独立 isolate，V8 侧销毁 isolate **不需要 JS 栈配合** —�
 | 真正的接缝     | 未识别                                                                      | `WorkerRegistry.register()` **直接摸 `instance.worker`**（`threadId` / `on('exit')` / `on('error')` / `terminate()`），完全绕过 `IWorkerTransport`。这才是子进程接不进来的地方                                                                           |
 | 序列化         | 「worker_threads 的 structuredClone 快于子进程 JSON 通道（需评估）」        | **已排除为风险**。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**；`serialization:'advanced'`（v8.serialize）**0/13 不一致，与 structuredClone 完全一致**。见 `ipc-serialization-parity.test.ts`                                     |
 | DB 访问        | 「走 RPC，架构上已隔离，可直接复用」                                        | 成立                                                                                                                                                                                                                                                     |
-| 启动成本       | 「子进程 ~50ms vs worker ~15ms」                                            | 未实测，留待阶段 3                                                                                                                                                                                                                                       |
+| 启动成本       | 「子进程 ~50ms vs worker ~15ms」（**估算**）                                | **实测推翻**：child_process 21.9ms vs worker_threads 24.9ms，**比值 0.88×**（子进程并不更慢）                                                                                                                                                            |
 
 #### 分阶段方案
 
@@ -193,7 +193,52 @@ worker 有独立 isolate，V8 侧销毁 isolate **不需要 JS 栈配合** —�
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
 | **1** | 抽出 `IWorkerIsolate`（`isolateId`/`onExit`/`onError`/`terminate`），把 `WorkerRegistry` 与 `node:worker_threads` 解耦；删除只写不读的 `workerByThreadId`                                                    | ✅ **已完成** |
 | **2** | 新增 `ChildProcessTransport` + `ChildProcessIsolate`，以及 bootstrap shim（`parentPort`→`process.send`、`workerData`→env），**显式 `serialization:'advanced'`**。仍默认走 worker_threads，子进程作为可选模式 | ☐             |
-| **3** | 让 `executionMode` 支持第三种取值，全量测试对比两种隔离原语的行为差异与启动成本                                                                                                                              | ☐             |
+| **3** | 让 `executionMode` 支持第三种取值，全量测试对比两种隔离原语的行为差异与启动成本                                                                                                                              | ✅ **已完成** |
+
+#### 阶段 3 实测结果
+
+**启动成本 —— 推翻了本提案原先的估算。** 早期写的是「子进程 ~50ms vs worker ~15ms」（3.3×）。
+走真实创建路径（`WorkerManager.createWorker`，含 bootstrap 编译、隔离原语启动、插件模块加载、
+activate 往返）实测 5 轮取中位数：
+
+| 隔离原语         | 中位启动耗时 | 各轮               |
+| ---------------- | ------------ | ------------------ |
+| `worker_threads` | **24.9ms**   | 25, 25, 25, 46, 23 |
+| `child_process`  | **21.9ms**   | 22, 22, 24, 22, 22 |
+
+比值 **0.88×** —— 子进程**并不更慢，反而略快**。原因：子进程侧走
+`node --input-type=module --eval <bootstrap>`，**不写临时文件**，省掉 worker 侧
+`resourceLimits` 的 isolate 配置开销。
+
+> ⚠️ **适用边界**：被测插件是**空壳**（`activate` 只返回一个字符串）。真实插件要加载
+> data URL 里的 bundle、要经 RPC 拿能力，平衡点可能移动。基准已固化为
+> `isolate-benchmark.test.ts`，插件变复杂后重跑即可。断言写成「记录事实 + 1500ms 宽松上限」
+> 而非钉死比值 —— 比值依赖机器与并发负载，钉死会在 CI 上偶发失败。
+
+**全量行为对比 —— 两种原语结果完全一致：**
+
+```
+thread （默认）  : 386 files / 3245 tests / 2 failed
+process          : 386 files / 3245 tests / 2 failed
+```
+
+两条失败均来自并行的 E2E 工作流在途改动（canary 撞 method-policy 门禁、
+AdaptiveExitTicket 语义变更未同步测试），与隔离原语无关。
+
+**发现的唯一行为差异**：`transport.id` 的前缀随原语变（`worker:<threadId>` vs
+`child:<pid>`）。既有用例硬编码 `/^worker/`，在进程模式下红 —— 那不是缺陷，是断言
+没考虑「现在有两种原语」。已改为按实际生效的原语断言（两种模式下各 15/15 通过）。
+
+**让 `'process'` 真正可用的关键改动**：`isolateKind` 从 Manager 级单值改为
+**按实例覆盖**，否则一个进程内所有 worker 只能同种 —— 那样 `'process'` 就只是个全局
+开关，而不是 per-plugin 的执行模式。
+
+**最危险的失效形态（已加测试守住）**：模式收窄散落在 **11 处**，写法是
+`x === 'worker' || x === 'inline' ? x : undefined`。**漏改不产生任何编译错误**，
+而后果是：管理员选「进程隔离」→ 该入口判非法 → 返回 `undefined` → 默认 `inline`
+→ **插件根本没进隔离路径，界面却显示已生效**。故引入具名类型
+`PluginExecutionMode` 收敛到单一真源，并用 `execution-mode.test.ts`（11 例）守住
+「三处 API 入口都认得 process」。已做反向对照：把两处退回旧写法后 3 例立即红。
 
 **阶段 1 顺带清掉的历史包袱**：`workerByThreadId` 标注「用于崩溃检测」，但全仓**只写不读**
 （只有 `set`/`delete`，零读取点，grep 确认）—— 崩溃检测实际由 `onExit` 回调完成。

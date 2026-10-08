@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：151 个（入口导出但手写 d.ts 未声明的 151 项及其类型引用闭包）
+ * 覆盖符号：152 个（入口导出但手写 d.ts 未声明的 152 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -801,7 +801,7 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
-  installFromZip(zipBuffer: Buffer, executionMode?: 'worker' | 'inline'): Promise<{
+  installFromZip(zipBuffer: Buffer, executionMode?: PluginExecutionMode): Promise<{
     pluginId: string;
     manifest: Manifest;
 }>;
@@ -816,6 +816,30 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
   metadata(): IntegrationDescriptor;
   readonly pluginHost: PluginHost;
 }
+
+/** @see packages/core/plugin-host/types.ts */
+/**
+ * 插件的执行模式（L-1 P1 阶段 3）。
+ *
+ * | 值 | 隔离强度 | 说明 |
+ * |---|---|---|
+ * | `'inline'` | 无 | 与宿主同进程同线程运行。默认。 |
+ * | `'worker'` | 崩溃隔离 | `worker_threads.Worker` —— 独立 V8 isolate，但**同进程**，共享内存与 `process.env`。 |
+ * | `'process'` | **进程隔离** | `child_process` 子进程 + 最小 env 白名单 —— 爆炸半径为一个进程。见 `child-spawn.ts`。 |
+ *
+ * ## 为什么用具名类型而不是各处内联字面量联合
+ *
+ * 加第三个取值时，`'inline' | 'worker'` 这个字面量在 `plugin-host/index.ts`
+ * 里内联出现 5 处、`plugin-distribution-manager.ts` 3 处、`server/routes/plugins.ts`
+ * 3 处（API 层的入参收窄）。逐个改漏一处，那个入口就会**悄悄退回只认两种模式**：
+ * `'process'` 在收窄处被判为 `undefined` → 落到默认 `inline` → 插件**根本没进隔离路径**，
+ * 而类型系统不会报任何错（因为收窄本身是合法的）。
+ *
+ * 这个失效形态最坏的地方在于**它不报错**：管理员选了「进程隔离」，插件却跑在
+ * inline 里，界面上看着生效了。故收敛到单一来源，并配
+ * `execution-mode.test.ts` 守住「三处 API 入口都认得 process」。
+ */
+type PluginExecutionMode = 'inline' | 'worker' | 'process';
 
 /** @see packages/core/plugin-host/plugin-lifecycle-manager.ts */
 declare class PluginLifecycleManager implements IPluginLifecycleManager {

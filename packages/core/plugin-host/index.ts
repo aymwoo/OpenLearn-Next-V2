@@ -33,6 +33,7 @@ import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
 import type { ContributionSummary, ClassroomToolConfig } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
+import { normalizeExecutionMode, requiresProcessIsolation, type PluginExecutionMode } from './types.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import {
   checkMissingDeps,
@@ -1315,7 +1316,7 @@ export class PluginHost {
    * @param pluginId - 插件标识符
    * @throws PluginActivateError / EsmActivationError / IllegalStateTransitionError
    */
-  async activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
+  async activatePlugin(pluginId: string, options?: { mode?: PluginExecutionMode }): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
 
     // Join in-flight activation instead of throwing activating → activating
@@ -1333,7 +1334,7 @@ export class PluginHost {
     }
   }
 
-  private async activatePluginExclusive(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
+  private async activatePluginExclusive(pluginId: string, options?: { mode?: PluginExecutionMode }): Promise<void> {
     // 进入新的生命周期：清除 ResourceTracker 的「已关闭」标记（审计 H-3）。
     //
     // 必须在此处（而非仅首次安装）调用 —— 上一次 activate 若因 5s 超时被 disposeAll，
@@ -1348,9 +1349,17 @@ export class PluginHost {
     }
 
     // Phase 5: Dual-mode activation — check if worker mode is requested
-    const mode = options?.mode ?? this.getExecutionMode(pluginId) ?? 'inline';
-    if (mode === 'worker') {
-      return this.activateWorker(pluginId);
+    // L-1 P1 阶段 3：mode 归一化后再分流。
+    //
+    // 归一化是必要的：mode 有三个来源（调用参数、DB 的 execution_mode 列、
+    // manifest.executionMode），后两者都是任意字符串。归一化把未知值收敛到
+    // 'inline'，避免一个脏字符串让插件悄悄走错隔离路径。
+    const mode = normalizeExecutionMode(options?.mode ?? this.getExecutionMode(pluginId));
+    // 'worker' 与 'process' 都走隔离路径，区别在 WorkerManager 选哪种原语。
+    // 刻意合成一个分支而不是各写一条：两条路径的激活前检查、能力授予、
+    // serviceHost 装配完全相同，拆开必然产生漂移。
+    if (mode === 'worker' || mode === 'process') {
+      return this.activateWorker(pluginId, mode);
     }
 
     // 1. 获取当前状态并验证转换
@@ -1642,7 +1651,10 @@ export class PluginHost {
    * 通过 WorkerManager.createWorker() 创建一个隔离的 Worker 线程，
    * 在 Worker 中加载并激活插件。激活失败时回滚状态。
    */
-  private async activateWorker(pluginId: string): Promise<void> {
+  private async activateWorker(
+    pluginId: string,
+    mode: 'worker' | 'process' = 'worker',
+  ): Promise<void> {
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
     this.setPluginState(pluginId, PluginState.ACTIVATING);
@@ -1681,6 +1693,10 @@ export class PluginHost {
         (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
         eventBus,
         this.getPluginDir(pluginId),
+        undefined,
+        // L-1 P1 阶段 3：把 executionMode 落到具体隔离原语。
+        // 'process' → 子进程（最小 env）；'worker' → thread（缺省，保持原行为）。
+        { isolateKind: requiresProcessIsolation(mode) ? 'process' : 'thread' },
       );
 
       this.pluginInstances.set(pluginId, {
@@ -2176,7 +2192,10 @@ export class PluginHost {
    * @param zipBuffer - ZIP 文件的原始字节
    * @returns manifest
    */
-  async installPluginFromZip(zipBuffer: Buffer, overrideExecutionMode?: 'worker' | 'inline'): Promise<Manifest> {
+  async installPluginFromZip(
+    zipBuffer: Buffer,
+    overrideExecutionMode?: PluginExecutionMode,
+  ): Promise<Manifest> {
     if (!this.esmLoader) {
       throw new Error('Cannot install ZIP plugin: no esmLoader injected');
     }
@@ -2491,7 +2510,7 @@ export class PluginHost {
     zipBuffer: Buffer,
     options: {
       targetPluginId?: string;
-      executionMode?: 'worker' | 'inline';
+      executionMode?: PluginExecutionMode;
       allowDowngrade?: boolean;
     } = {},
   ): Promise<{
@@ -2576,7 +2595,7 @@ export class PluginHost {
     const previousStatus = existingRow.status;
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
-    const oldMode = (this.getExecutionMode(pluginId) as 'worker' | 'inline') || 'inline';
+    const oldMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
     const executionMode =
       options.executionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : oldMode || 'inline');
 
@@ -2902,7 +2921,8 @@ export class PluginHost {
       }
 
       try {
-        const mode = (p.execution_mode ?? 'inline') as 'inline' | 'worker';
+        // 归一化：DB 里的 execution_mode 是任意字符串（TEXT 列，无 CHECK 约束）
+        const mode = normalizeExecutionMode(p.execution_mode);
         await this.activatePlugin(p.id, { mode });
       } catch (err) {
         // D-10: 单个插件激活失败不影响其他插件
