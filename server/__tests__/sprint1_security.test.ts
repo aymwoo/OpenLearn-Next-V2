@@ -128,7 +128,10 @@ describe('Sprint 1 安全与生命周期加固验证套件 (C-1, C-3, C-4, H-2, 
   it('C-3: packages/core/plugin-host 静态沙箱中间件 CSP 中不包含 unsafe-eval', async () => {
     const fs = await import('fs');
     const path = await import('path');
-    const fileContent = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'), 'utf-8');
+    // L-2 阶段 2：PluginHost 已拆成抽象类继承链，createPluginStaticMiddleware 移到了 base.ts。
+    // ⚠️ 断言的是**生产源码里的 CSP 字面量**，所以文件路径必须跟着迁移走 ——
+    // 读错文件会让正则匹配到别处或直接 null，得到「看似通过/失败」的错误结论。
+    const fileContent = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/base.ts'), 'utf-8');
     // 验证 createPluginStaticMiddleware 中的 Content-Security-Policy 没有 'unsafe-eval'
     const sandboxMatch = fileContent.match(
       /createPluginStaticMiddleware[\s\S]*?res\.setHeader\(\s*'Content-Security-Policy'[\s\S]*?\);/,

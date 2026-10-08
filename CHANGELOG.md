@@ -115,6 +115,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - ✅ **另一项前置风险已排除**：跨进程 IPC 的序列化差异。实测 `spawn(..., {serialization:'json'})` 有 **10/13 探针静默降级**（Date→string、Map/Set/RegExp/Error→`{}`、undefined 字段被丢弃、NaN/Infinity→null、BigInt 与循环引用直接抛错）；而 `serialization:'advanced'`（v8.serialize）**0/13 不一致，与 worker_threads 的 structuredClone 完全一致**。已固化为 `ipc-serialization-parity.test.ts` —— 该选项若被去掉会立刻红，而失效后果是运行期静默数据损坏。
   - **不改任何运行行为**：全量测试 381 files / 3217 tests 通过。
 
+- **重构：PluginHost 拆成抽象类继承链（L-2 阶段 2，L-2 全部完成）**：
+  - `PluginHost`（3401 行 / 60 个方法）拆成 `Base → Core → Http → Lifecycle → Reload → Install` 六层，各层一个文件。
+  - **为什么是继承链而不是「独立函数 + `Object.assign` 到原型」**：实测 TypeScript 报 TS2341 —— 在类的外部通过 `this: PluginHost` 访问 `private` 字段会被拒绝。那条路的唯一出路是把 8 个内部字段全改成 `public`，那是真实的封装损失。继承链用 `protected` 解决：子类天然可访问父类 protected，而 protected 在类外与 private 一样不可访问，**对外 API 完全不变**。
+  - **链序由调用图决定，不是拍脑袋**：先算出 60 个方法间的调用图（实测**无环**），再按主题分组，然后校验偏序约束 `module(调用方) >= module(被调方)`，违例从 19 降到 0。关键调整有两条：`setPluginState` / `declareProcessOwnership` / `revokePluginContributions` / `revokePluginStageGuards` 被 10+ 个方法跨模块调用，必须前置到链首的 Core；Install 依赖 Lifecycle 与 Reload，却**无任何模块依赖它**，故置于链尾。
+  - **正确性保证**：逐行比对 —— 1762 行实质内容**零丢失、零重复**，仅两类文本改写：`private` → `protected`（只限字段与被跨模块调用的方法），以及唯一的非机械改写（见下）。
+  - ⚠️ **唯一的非机械改写**：原代码以类名调用 `PluginHost.normalizeStaticRoute(...)`（它是 `private static`）。同类内访问 private 成员合法，拆到另一个类后就不行。改为指向定义类 `PluginHostCore.normalizeStaticRoute(...)`（`protected static`，子类可访问），共 4 处调用点。
+  - **顺带消灭一处字符串手术**：`normalizeStaticRoute` 原是 `private static`，类外既不能 import 也不能继承，测试只能从源码文本里按标记切出函数体再用 `new Function` 求值（25 行）。它是纯函数，现抽为 `static-route.ts` 的导出函数，类上的静态方法改为委托 —— 测试直接 import 真货。源码一改结构就报「源码结构变了？」的脆弱性随之消失。
+  - 新增 `plugin-host-inheritance.test.ts`（6 例）钉住继承链的结构不变量：每层声明与 import 正确的父类、没有方法在两层里重复定义（防「复制一份塞进模块」的腐化）、单文件不超过 1200 行。已做反向对照：删掉父类 import、注入同名方法，两者均立即变红。
+  - 另有 4 个既有测试读 `plugin-host/index.ts` 源码做文本断言，路径已随迁移更新（`execution-mode` / `static-route-normalization` / `dependency-install` / `dependency-blocked-vs-cycle` / `sprint1_security`）。
+
 - **重构：Worker bootstrap 拆分（L-2 阶段 1）**：
   - `generateBootstrapCode()` 原本是**一个 881 行的模板字面量**，占 `worker-manager.ts` 的 44%。现拆成 5 个具名 section 模块（运行时 shim / `process` 遮蔽 / RPC 代理 / RESTful 路由 / 消息处理器），`worker-manager.ts` **2022 → 1122 行**。
   - 拆分方式是**程序化提取**（880 行手抄必然出错，且这类错误只在真跑 worker 时才暴露），并在提取前核实两个前提：模板体**零反引号**（放进新模板字面量不会被提前截断）、**仅 1 处 `${}` 且在 header**（故各 section 可做成无插值的纯常量）。拆分后逐字节比对：**31939 字节完全一致** —— 「零行为变更」是可验证的事实而非口头声明。

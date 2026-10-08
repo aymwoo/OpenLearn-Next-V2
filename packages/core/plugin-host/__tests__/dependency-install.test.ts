@@ -44,7 +44,8 @@ import {
   installPluginDependencies,
 } from '../dependency-install.js';
 
-const SRC = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'), 'utf-8');
+// L-2 阶段 2：PluginHost 已拆成抽象类继承链，安装/更新的依赖安装调用点在 install.ts。
+const SRC = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/install.ts'), 'utf-8');
 const REGISTRY_ENV = 'OPENLEARN_PLUGINS_NPM_REGISTRY';
 
 afterEach(() => {

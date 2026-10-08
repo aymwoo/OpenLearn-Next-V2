@@ -31,7 +31,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { topologicalSort } from '../dependency-resolver.js';
 
-const SRC = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'), 'utf-8');
+// L-2 阶段 2：PluginHost 已拆成抽象类继承链，restoreActivePlugins 的激活队列在 reload.ts。
+const SRC = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/reload.ts'), 'utf-8');
 
 /**
  * 切出 `restoreActivePlugins` 里激活队列构造那一段源码。

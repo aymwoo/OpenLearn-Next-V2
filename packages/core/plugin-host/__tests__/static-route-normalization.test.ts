@@ -25,43 +25,25 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { normalizeStaticRoute as normalize } from '../static-route.js';
 
-const SRC = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'), 'utf-8');
+const ROOT = path.resolve(process.cwd(), 'packages/core/plugin-host');
+// L-2 阶段 2：PluginHost 已拆成抽象类继承链，SEC-ROUTE-02/03 的安装路径守卫在 install.ts，
+// setExpressApp 的恢复挂载段在 core.ts。下面几段「源码文本断言」分别读对应文件。
+const INSTALL_SRC = fs.readFileSync(path.join(ROOT, 'install.ts'), 'utf-8');
+const CORE_SRC = fs.readFileSync(path.join(ROOT, 'core.ts'), 'utf-8');
 
 /**
- * 从真实源码里切出 `normalizeStaticRoute` 的函数体并求值。
+ * 直接 import 生产代码。
  *
- * 刻意**执行生产代码**而非写一份等价实现 ——
- * 本轮已在遮蔽块上验证过这个做法：测真货，副本会与源码漂移。
+ * 原先这里是 25 行字符串手术 —— 从 `plugin-host/index.ts` 的源码文本里按标记
+ * `private static normalizeStaticRoute(...)` 切出函数体，再用 `new Function` 求值。
+ * 之所以要这么绕：`private static` 既不能被类外 import，也无法被继承。
+ *
+ * L-2 阶段 2 把该纯函数抽成了独立模块（`static-route.ts`），类上的静态方法改为委托。
+ * 于是测试可以直接测真货 —— 这比"执行从源码切出来的文本"更可靠：
+ * 后者一遇到源码结构调整就报「源码结构变了？」，而那不是被测行为出错。
  */
-function loadNormalizer(): (route: string) => string {
-  const marker = 'private static normalizeStaticRoute(route: string): string {';
-  const at = SRC.indexOf(marker);
-  expect(at, '未找到 normalizeStaticRoute（源码结构变了？）').toBeGreaterThan(-1);
-
-  // 从 '{' 起做花括号配平，截出完整函数体
-  const open = SRC.indexOf('{', at + marker.length - 1);
-  let depth = 0;
-  let end = -1;
-  for (let i = open; i < SRC.length; i++) {
-    if (SRC[i] === '{') depth++;
-    else if (SRC[i] === '}') {
-      depth--;
-      if (depth === 0) {
-        end = i + 1;
-        break;
-      }
-    }
-  }
-  expect(end, 'normalizeStaticRoute 的花括号不配平').toBeGreaterThan(-1);
-
-  const body = SRC.slice(open + 1, end - 1);
-  // 该函数体内出现的 `/\/{2,}/g` 等字面量含反斜杠，用 Function 构造时需原样保留
-  const factory = new Function(`return function normalizeStaticRoute(route) {${body}}`) as () => (r: string) => string;
-  return factory();
-}
-
-const normalize = loadNormalizer();
 
 describe('G-4b · 静态路由归一化', () => {
   it('末尾斜杠等价：/foo 与 /foo/ 归一到同一形式', () => {
@@ -115,18 +97,18 @@ describe('G-4b · 安装路径与恢复路径都做归一化冲突检测', () =>
    * 这与本轮第三次踩到的坑同源：**同名字面量先出现在注释里，切片就切错地方。**
    */
   function installPathGuard(): string {
-    const m = /^\s*\/\/ SEC-ROUTE-03:/m.exec(SRC);
+    const m = /^\s*\/\/ SEC-ROUTE-03:/m.exec(INSTALL_SRC);
     expect(m, '未找到 SEC-ROUTE-03 标记行').not.toBeNull();
-    return SRC.slice(m!.index, m!.index + 1400);
+    return INSTALL_SRC.slice(m!.index, m!.index + 1400);
   }
 
   /** 定位 setExpressApp 里的恢复挂载段 */
   function restorePathGuard(): string {
-    const at = SRC.indexOf('Restored static route');
+    const at = CORE_SRC.indexOf('Restored static route');
     expect(at, '未找到恢复挂载日志').toBeGreaterThan(-1);
     // 从「解 manifest」那行往前取，才能覆盖到冲突检测代码
-    const start = SRC.lastIndexOf('if (m.deploy?.staticRoute', at);
-    return SRC.slice(start, at + 200);
+    const start = CORE_SRC.lastIndexOf('if (m.deploy?.staticRoute', at);
+    return CORE_SRC.slice(start, at + 200);
   }
 
   it('安装路径：冲突比较两侧都经归一化，且不再只是裸 toLowerCase', () => {
@@ -145,11 +127,11 @@ describe('G-4b · 安装路径与恢复路径都做归一化冲突检测', () =>
   });
 
   it('安装路径：SEC-ROUTE-02 保留前缀比对也用归一化形式', () => {
-    const m = /^\s*\/\/ SEC-ROUTE-02:/m.exec(SRC);
+    const m = /^\s*\/\/ SEC-ROUTE-02:/m.exec(INSTALL_SRC);
     expect(m, '未找到 SEC-ROUTE-02 标记行').not.toBeNull();
-    const seg = SRC.slice(m!.index, m!.index + 400);
+    const seg = INSTALL_SRC.slice(m!.index, m!.index + 400);
     expect(seg, '保留前缀比对应基于归一化形式 —— 否则 /API/ 可绕过 /api 的保留检查').toMatch(
-      /const normalized = PluginHost\.normalizeStaticRoute\(route\)/,
+      /const normalized = PluginHostCore\.normalizeStaticRoute\(route\)/,
     );
   });
 

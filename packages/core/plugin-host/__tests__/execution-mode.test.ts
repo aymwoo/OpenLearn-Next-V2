@@ -81,7 +81,7 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
   });
 
   it('plugin-host 的 mode 分支同时覆盖 worker 与 process', () => {
-    const code = stripComments(read('packages/core/plugin-host/index.ts'));
+    const code = stripComments(read('packages/core/plugin-host/lifecycle.ts'));
     // activatePlugin 的分流：两者必须走同一条隔离路径
     expect(
       code,
@@ -91,7 +91,7 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
   });
 
   it('activateWorker 把 mode 落到具体隔离原语', () => {
-    const code = stripComments(read('packages/core/plugin-host/index.ts'));
+    const code = stripComments(read('packages/core/plugin-host/lifecycle.ts'));
     expect(code, 'createWorker 调用处应传 isolateKind，由 mode 决定 thread/process').toMatch(
       /isolateKind:\s*requiresProcessIsolation\(mode\)\s*\?\s*'process'\s*:\s*'thread'/,
     );
@@ -104,7 +104,10 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
 
   it('全仓生产代码不再有「缺 process 的两值联合」（单一真源）', () => {
     const files = [
-      'packages/core/plugin-host/index.ts',
+      // L-2 阶段 2 后类已拆成继承链，mode 相关的代码分布在 lifecycle/install/core 三层
+      'packages/core/plugin-host/lifecycle.ts',
+      'packages/core/plugin-host/install.ts',
+      'packages/core/plugin-host/core.ts',
       'packages/core/plugin-host/plugin-distribution-manager.ts',
       'packages/core/plugin-host/types.ts',
       'server/routes/plugins.ts',
