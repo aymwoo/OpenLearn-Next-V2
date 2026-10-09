@@ -1,395 +1,167 @@
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { decryptApiKey } from '../utils/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
-import type { ServerContext, StoredAIProvider } from '../context.js';
+import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
-import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
+import { ScheduleService } from '../services/schedule-service.js';
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
+  const scheduleService = new ScheduleService(kernelContainer.db);
 
+  /**
+   * 今日/指定日期的排课查询 (支持周循环课表匹配)
+   */
   app.get('/api/schedules/today', requireAuth(), (req, res) => {
     try {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
-
-      // Weekly repeating: match the day of week (strftime('%w', s.scheduled_date) = strftime('%w', ?))
-      // Partition by class_id and time_slot to get the latest schedule defined for this slot on this weekday
-      const schedules = kernelContainer.db
-        .prepare(
-          `
-        WITH RankedSchedules AS (
-          SELECT s.*,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY s.class_id, s.time_slot, strftime('%w', s.scheduled_date)
-                   ORDER BY s.scheduled_date DESC, s.created_at DESC
-                 ) as rn
-          FROM schedules s
-          WHERE strftime('%w', s.scheduled_date) = strftime('%w', ?)
-        )
-        SELECT r.id, r.class_id, r.lesson_id, ? as scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
-               COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name
-        FROM RankedSchedules r
-        LEFT JOIN lessons l ON r.lesson_id = l.id
-        JOIN classes c ON r.class_id = c.id
-        WHERE r.rn = 1
-        ORDER BY r.time_slot ASC, r.created_at ASC
-      `,
-        )
-        .all(clientDate, clientDate) as any[];
-
+      const schedules = scheduleService.getTodaySchedules(clientDate);
       res.json({ success: true, schedules });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 全量排课列表 (A7 标准分页信封)
+   */
   app.get('/api/schedules', requireAuth(), (req, res) => {
     try {
-      // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）；
-      // 子资源端点 /api/classes/:classId/schedules 暂维持裸数组（前端消费路径可区分）
       const pg = parsePagination(req.query as any);
-      const total = (kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM schedules').get() as any).n;
-      const schedules = kernelContainer.db
-        .prepare(
-          `
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
-        FROM schedules s
-        LEFT JOIN lessons l ON s.lesson_id = l.id
-        LEFT JOIN classes c ON s.class_id = c.id
-        ORDER BY s.scheduled_date DESC, s.time_slot ASC
-        LIMIT ? OFFSET ?
-      `,
-        )
-        .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
-      res.json({ data: schedules, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
+      const result = scheduleService.listSchedules(pg);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 排课冲突预检端点
+   */
+  app.post('/api/schedules/check-conflict', requireAuth(), (req, res) => {
+    try {
+      const { classId, scheduledDate, timeSlot, lessonId, excludeScheduleId } = req.body;
+      if (!classId || !scheduledDate) {
+        return res.status(400).json({ error: 'classId and scheduledDate are required' });
+      }
+      const report = scheduleService.detectConflicts({
+        classId,
+        scheduledDate,
+        timeSlot,
+        lessonId,
+        excludeScheduleId,
+      });
+      res.json({ success: true, ...report });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * 指定班级的排课列表 (保持裸数组兼容)
+   */
   app.get('/api/classes/:classId/schedules', requireAuth(), (req, res) => {
     try {
-      const schedules = kernelContainer.db
-        .prepare(
-          `
-        SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
-        FROM schedules s
-        LEFT JOIN lessons l ON s.lesson_id = l.id
-        WHERE s.class_id = ?
-        ORDER BY s.scheduled_date DESC, s.time_slot ASC
-      `,
-        )
-        .all(req.params.classId);
+      const schedules = scheduleService.getClassSchedules(req.params.classId);
       res.json(schedules);
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 为班级创建单条排课 (支持冲突防御与 force 覆盖)
+   */
   app.post('/api/classes/:classId/schedules', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
-      const id = 'sch-' + Date.now().toString(36);
-      kernelContainer.db
-        .prepare(
-          `
-        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-        )
-        .run(
-          id,
-          req.params.classId,
-          lessonId || '',
+      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
+      const schedule = scheduleService.createSchedule(
+        {
+          classId: req.params.classId,
+          lessonId,
           scheduledDate,
-          timeSlot || null,
-          status || 'scheduled',
-          notes || null,
-          Date.now(),
-        );
+          timeSlot,
+          status,
+          notes,
+        },
+        { allowConflict: Boolean(force || allowConflict) },
+      );
       res.json({
         success: true,
-        schedule: {
-          id,
-          class_id: req.params.classId,
-          lesson_id: lessonId || '',
-          scheduled_date: scheduledDate,
-          time_slot: timeSlot || null,
-          status: status || 'scheduled',
-          notes: notes || null,
-        },
+        schedule,
       });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 更新已有排课信息 (支持冲突防御与 force 覆盖)
+   */
   app.put('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
-      kernelContainer.db
-        .prepare(
-          `
-        UPDATE schedules 
-        SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
-        WHERE id = ? AND class_id = ?
-      `,
-        )
-        .run(
-          lessonId || '',
+      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
+      scheduleService.updateSchedule(
+        req.params.scheduleId,
+        req.params.classId,
+        {
+          lessonId,
           scheduledDate,
-          timeSlot || null,
-          status || 'scheduled',
-          notes || null,
-          req.params.scheduleId,
-          req.params.classId,
-        );
+          timeSlot,
+          status,
+          notes,
+        },
+        { allowConflict: Boolean(force || allowConflict) },
+      );
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 级联删除排课记录及关联考勤表 (DATA-INT-01 原子事务)
+   */
   app.delete('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      // DATA-INT-01: 级联删除包事务
-      const tx = kernelContainer.db.transaction(() => {
-        kernelContainer.db
-          .prepare('DELETE FROM schedules WHERE id = ? AND class_id = ?')
-          .run(req.params.scheduleId, req.params.classId);
-        kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
-      });
-      tx();
+      scheduleService.deleteScheduleCascade(req.params.scheduleId, req.params.classId);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
+  /**
+   * 批量创建排课 (原子事务封装)
+   */
   app.post('/api/classes/:classId/schedules/batch', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { schedules } = req.body; // array of { lessonId, scheduledDate, timeSlot, status, notes }
-      const db = kernelContainer.db;
-
-      const insertStmt = db.prepare(`
-        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const transaction = db.transaction((items) => {
-        for (const item of items) {
-          const id = randomId('sch-');
-          insertStmt.run(
-            id,
-            req.params.classId,
-            item.lessonId || item.lesson_id || '',
-            item.scheduledDate || item.scheduled_date || '',
-            item.timeSlot || item.time_slot || null,
-            item.status || 'scheduled',
-            item.notes || null,
-            Date.now(),
-          );
-        }
+      const { schedules, force, allowConflict } = req.body;
+      const result = scheduleService.batchCreateSchedules(req.params.classId, schedules || [], {
+        allowConflict: Boolean(force || allowConflict),
       });
-
-      transaction(schedules);
-      res.json({ success: true, count: schedules.length });
+      res.json({ success: true, count: result.count, ids: result.ids });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  // ==================== Timetable OCR ====================
+  /**
+   * 课程表多模态 OCR 视觉识别与清洗
+   */
   app.post('/api/timetable/ocr', requireAuth('teacher', 'administrator'), async (req, res) => {
     const startTime = Date.now();
-    console.log(
-      `[OCR Start] Starting timetable OCR. Payload size: ${req.body.imageBase64?.length || 0} bytes. Lang: ${req.body.lang || 'zh'}`,
-    );
-
     try {
       const { imageBase64, lang = 'zh', providerId } = req.body;
-
-      if (!imageBase64) {
-        console.warn(`[OCR Error] Missing imageBase64`);
-        return res.status(400).json({ error: 'imageBase64 is required' });
-      }
-
-      const base64Content = imageBase64.replace(/^data:[^;]+;base64,/, '');
-      const mimeMatch = imageBase64.match(/^data:(image\/[^;]+);base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-
-      const prompt = `你是一个专业的课程表识别助手。请仔细分析这张学校教师的周课程表图片，直接提取出所有的课程条目�?
-
-重要指令（非常关键，必须遵守）：
-1. 严禁输出任何长篇的推理过程、草稿或思考步骤（如不要输�? <think> 标签及其中的英文/中文思考过程）�?
-2. 直接�? JSON 格式输出课程表数据数组，不要有任何前导说明文字或后随文字�?
-3. 请立即输出结果，保持极简，避免输出长度超限而被API截断�?
-
-对于每一个课程条目，请提取以下信息：
-- dayOfWeek: 星期几（1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六, 7=周日�?
-- periodNumber: 第几节课�?1-9�?
-- className: 班级名称（例�? "高一(13)"�?"高二(5)"�?
-- subject: 科目名称（例�? "信息"�?"劳动"�?"数学"�?
-- timeSlot: 上课时间段（例如 "10:50-11:30"）。如果图片中可见，请填入具体时间。通常课表的最左侧或某列（“时间”列）会标注该节次对应的上下课时间（例如�?4节对应�?10:50-11:30”），请将对应的时段填入该节次的所有课程条目中。如果确实不可见则为空字符串
-- location: 教室/机房信息（如果图片中可见，例�? "312"），如果不可见则为空字符�?
-- teacherName: 教师姓名（如果图片中可见），如果不可见则为空字符�?
-
-请注意：
-1. 必须提取课程表中的所有课程条目，不要遗漏
-2. 仔细区分不同的星期和节次
-3. 只返回一个有效的 JSON 数组，包含在方括�? [] 中，严禁使用 markdown 格式包裹
-4. 如果某个字段在图片中不可见，请使用空字符�?
-
-返回格式示例�?
-[{"dayOfWeek":1,"periodNumber":1,"className":"高一(13)","subject":"信息","timeSlot":"08:00-08:40","location":"312","teacherName":""}]`;
-
-      let text = '';
-
-      const provider = providerId
-        ? (kernelContainer.db
-            .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-            .get(providerId) as StoredAIProvider | undefined)
-        : undefined;
-
-      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
-
-      if (provider && provider.api_key && provider.api_key.trim()) {
-        let chatUrl = provider.api_url.trim();
-        if (!chatUrl.endsWith('/chat/completions')) {
-          chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
-        }
-
-        console.log(`[OCR Routing] Using AI Provider: ${provider.name} (${provider.model_name}) at URL: ${chatUrl}`);
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${provider.api_key.trim()}`,
-        };
-
-        const messages = [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${base64Content}`,
-                },
-              },
-              {
-                type: 'text',
-                text: prompt,
-              },
-            ],
-          },
-        ];
-
-        try {
-          console.log(`[OCR Request] Sending fetch request to AI Provider...`);
-          const response = await fetchWithRetry(chatUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              model: provider.model_name,
-              messages,
-              temperature: 0.1,
-              max_tokens: 8192,
-            }),
-            timeoutMs: 60_000,
-            maxAttempts: 2,
-          });
-
-          console.log(`[OCR Response] Received response. Status: ${response.status} ${response.statusText}`);
-
-          const responseText = await response.text();
-          console.log(
-            `[OCR Response Body] Length: ${responseText?.length || 0} bytes. Preview: ${responseText?.substring(0, 500)}`,
-          );
-
-          if (!responseText || !responseText.trim()) {
-            throw new Error(
-              lang === 'zh'
-                ? `AI Provider (${provider.name}) 返回了空响应，请检查模型是否支持图片识别。`
-                : `AI Provider (${provider.name}) returned an empty response.`,
-            );
-          }
-
-          let data: any;
-          try {
-            data = JSON.parse(responseText);
-          } catch (jsonErr) {
-            throw new Error(
-              lang === 'zh'
-                ? `AI Provider (${provider.name}) 返回了非 JSON 响应: ${responseText.substring(0, 200)}`
-                : `AI Provider (${provider.name}) returned non-JSON: ${responseText.substring(0, 200)}`,
-            );
-          }
-
-          text = data.choices?.[0]?.message?.content?.trim() || '';
-          if (!text) {
-            throw new Error(
-              lang === 'zh'
-                ? `AI Provider (${provider.name}) 未返回有效文本内容。可能该模型不支持图片输入。`
-                : `AI Provider (${provider.name}) returned no text content. The model may not support image input.`,
-            );
-          }
-        } catch (fetchErr: any) {
-          console.error(`[OCR Fetch Error] Detailed Error:`, {
-            name: fetchErr.name,
-            message: fetchErr.message,
-            stack: fetchErr.stack,
-            cause: fetchErr.cause,
-          });
-          throw fetchErr;
-        }
-      } else {
-        return res.status(400).json({
-          error:
-            lang === 'zh'
-              ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
-              : 'No AI provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
-        });
-      }
-
-      // Strip <think> tags if present
-      let cleanText = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-
-      // Find the first '[' and the last ']' to extract the JSON array
-      const startIdx = cleanText.indexOf('[');
-      const endIdx = cleanText.lastIndexOf(']');
-
-      let jsonStr = '';
-      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        jsonStr = cleanText.substring(startIdx, endIdx + 1).trim();
-      } else {
-        // Fallback to markdown strip
-        jsonStr = cleanText
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-      }
-
-      const entries = JSON.parse(jsonStr);
-      console.log(
-        `[OCR Success] Successfully parsed ${entries.length} timetable entries. Time elapsed: ${Date.now() - startTime}ms`,
-      );
-
+      const result = await scheduleService.processTimetableOcr(imageBase64, { lang, providerId });
       res.json({
         success: true,
-        entries,
-        providerUsed: { id: provider.id, name: provider.name, model_name: provider.model_name },
+        entries: result.entries,
+        providerUsed: result.providerUsed,
       });
     } catch (e: any) {
       const elapsed = Date.now() - startTime;
-      console.error(`[OCR Global Catch] Timetable OCR error after ${elapsed}ms:`, {
-        name: e.name,
-        message: e.message,
-        stack: e.stack,
-        cause: e.cause,
-      });
+      console.error(`[OCR Error after ${elapsed}ms]:`, (e as Error).message);
       sendSafeError(res, e);
     }
   });

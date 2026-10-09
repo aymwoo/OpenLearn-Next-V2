@@ -33,6 +33,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **`ScheduleService` 领域服务下沉与三维排课冲突检测引擎（架构路线图 E3 深化）**：
+  - **巨石解耦与职责收敛**：将 `server/routes/schedules.ts`（原 396 行）中的纯领域业务彻底抽离至 [`server/services/schedule-service.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/schedule-service.ts)，路由精简至 142 行（削减 64%），转为轻量级 HTTP 校验与路由适配层；
+  - **三维排课冲突检测引擎 (`detectConflicts`)**：
+    - `parseTimeSlot` & `isTimeOverlapping`：支持规范时段（如 `08:00 - 08:45`、`14:30 ~ 16:00`）、单点时段、全天时段及离散节次的区间数学相交判定（$S_A < E_B \land S_B < E_A$）；
+    - 班级时间冲突（`class_overlap`）：同一班级同一天重叠时段排课防撞；
+    - 教师时间冲突（`teacher_overlap`）：同一授课教师同一天跨班级重叠时段排课防撞；
+    - 机房空间冲突（`lab_overlap`）：共享同一机房的多个班级在重叠时段排课防撞；
+    - 自更新排除：更新已有排课时排除自身 ID，防止误判；
+    - 冲突强门禁与覆盖参数：默认抛出 `ScheduleConflictError`（HTTP 409），支持 `force` / `allowConflict` 显式覆盖，保持 100% 向后兼容；
+    - 新增冲突预检端点：`POST /api/schedules/check-conflict`；
+  - **周期性排课与事务保障**：
+    - `expandRecurringSchedules`：跨周周期性按星期展开排课日期序列；
+    - `batchCreateSchedules`：批量排课原子事务与全量前置冲突拦截；
+    - `deleteScheduleCascade`：级联清理排课与关联考勤记录（`DATA-INT-01` 原子事务）；
+  - **多模态 AI 课表 OCR 识别封装**：
+    - `processTimetableOcr`：内聚视觉模型调度、API Key 解密、提示词工程与 JSON 响应清洗；
+  - **测试覆盖与质量验证**：
+    - 新增专属单元测试套件 [`server/services/__tests__/schedule-service.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/__tests__/schedule-service.test.ts)（14/14 用例 100% 通过）；
+    - 关联集成与前端测试套件（`schedules-routes.test.ts`、`TimetableManager.test.tsx`、`TimetableSubviews.test.tsx`）共 32 个测试全量绿灯；
+    - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
+
 - **`LessonService` 领域服务下沉与课时路由解耦（架构路线图 E3 收口）**：
   - **巨石解耦与职责内聚**：将 `server/routes/lessons.ts`（原 871 行巨石路由）中的纯领域与数据访问逻辑彻底抽离至 [`server/services/lesson-service.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/lesson-service.ts)，路由精简至 455 行（代码收敛 48%），转为轻量级 HTTP 门禁与协议适配层；
   - **领域服务核心能力**：
