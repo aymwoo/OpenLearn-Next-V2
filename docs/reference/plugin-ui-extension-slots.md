@@ -9,7 +9,7 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **74** 个成员）
+### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **75** 个成员）
 
 > 旧文档写 55 个、且把 `palette.item` 列为合法槽位名——**`palette.item` 不是合法槽位名**。备课画板组件扩展的真实槽位名是 **`editor.palette_item`**，已于 `SegmentEditorCard` 与 `LessonPalette` 中完整挂载并与 `paletteItemRegistry` 协同。
 
@@ -111,14 +111,16 @@ export type ExtensionSlot =
   | 'assignment.submission.preview'
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action'
-  | 'statusbar.item';
+  | 'statusbar.item'
+  // ── 白板画布核心图元扩展槽位（一等公民图元渲染）──
+  | 'whiteboard.renderer';
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
 export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 ```
 
-> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 74 个成员内。
+> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 75 个成员内。
 
 ### 后端 manifest `contributes` 键（`packages/core/plugin-host/contribution-registry.ts`，镜像 `packages/plugin-sdk/openlearn.d.ts`）
 
@@ -135,90 +137,91 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值共 74 个**（全部 74 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
+- 生产调用点上的**固定名槽位值共 75 个**（全部 75 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
-| 槽位                                 | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `student.view`                       | `src/features/student-workspace/widgets/student-default-widgets.tsx`、`src/features/student/StudentDashboardPanel.tsx`                  | 前者无；后者 `{ studentId }`                                                                                         |
-| `teacher.tab`（button 形态）         | `src/features/shared/NavigationSidebar.tsx`                                                                                             | `{ renderType: 'button' }`（组件被绕过，见 §2）                                                                      |
-| `teacher.tab`（panel 形态）          | `src/components/PluginTabPanel.tsx`（由 `src/features/teacher/TeacherView.tsx` 挂载）                                                   | `{ renderType: 'panel', lessonId, classId }`                                                                         |
-| `teacher.dashboard.widget`           | `src/features/teacher/Dashboard.tsx`                                                                                                    | 无（仅 `route?`）                                                                                                    |
-| `teacher.panel`                      | `src/features/teacher/Dashboard.tsx`                                                                                                    | `{ lang, lessons, classes, students }`                                                                               |
-| `global.setting`                     | `src/features/teacher/SettingsView.tsx`                                                                                                 | `{ lang }`                                                                                                           |
-| `nav.user_menu`                      | `src/components/UserMenu.tsx`                                                                                                           | `{ session, lang, closeMenu }`                                                                                       |
-| `classroom.tool`                     | `src/features/whiteboard/components/WhiteboardToolbar.tsx`                                                                              | 无（仅 `route?`）                                                                                                    |
-| `help.plugin_docs`                   | `src/features/teacher/help/PluginDocsViewer.tsx`                                                                                        | 无（仅 `route?`）                                                                                                    |
-| `stage.display.card`                 | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ stage }`                                                                                                          |
-| `stage.display.overlay`              | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, isFullscreen, lang }`                                                         |
-| `stage.display.action`               | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, isFullscreen, lang, onToggleFullscreen, onOpenPeerReview }`                   |
-| `classroom.quick_activity`           | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage, lessonId, classId }`                                                                                       |
-| `classroom.topbar.action`            | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage }`                                                                                                          |
-| `classroom.topbar.pill`              | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage }`                                                                                                          |
-| `classroom.header.action`            | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage }`                                                                                       |
-| `classroom.countdown.widget`         | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                                                   | 无（仅 `route?`）                                                                                                    |
-| `classroom.countdown.action`         | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                                                   | `{ onStart, onPause, onReset, onAddTime }`                                                                           |
-| `classroom.portal.telemetry`         | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无（另传 `lang`）                                                                                                    |
-| `classroom.portal.course_badge`      | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | `{ lessonId }`                                                                                                       |
-| `classroom.portal.teaching_mode`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | `{ selectedModeId, registerHint }`                                                                                   |
-| `classroom.portal.insight`           | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无                                                                                                                   |
-| `classroom.portal.preflight`         | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无（另传 `lang`）                                                                                                    |
-| `classroom.portal.launch_action`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无                                                                                                                   |
-| `classroom.notification.tabs`        | `src/features/classroom/notifications/ParentNotificationModal.tsx`                                                                      | 无（仅 `route?`）                                                                                                    |
-| `classroom.pacing.dashboard`         | `src/features/classroom/pacing/MasteryPredictionModal.tsx`                                                                              | 无（仅 `route?`）                                                                                                    |
-| `classroom.barometer.metric`         | `src/features/classroom/PacingDashboardModal.tsx`                                                                                       | `{ lessonId, signals, total, health, lang }`                                                                         |
-| `classroom.diagnostic.feed`          | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                                          | 无（仅 `route?`）                                                                                                    |
-| `classroom.audit.event`              | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                                          | `{ activeTab, totalCount, lang }`                                                                                    |
-| `classroom.collab.canvas`            | `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`                                                               | `{ lessonId, classId, activeGroupId, activeTool, activeColor, activeWidth, lang }`                                   |
-| `classroom.agenda.action`            | `src/components/LiveClassroomView.tsx`                                                                                                  | `{ segment, isActive, idx, lessonId, lang }`                                                                         |
-| `classroom.attribution.award`        | `src/features/classroom/ClassroomAttributionModal.tsx`                                                                                  | `{ student, onAwardPoints }`                                                                                         |
-| `classroom.attribution.action`       | `src/features/classroom/ClassroomAttributionModal.tsx`                                                                                  | `{ student }`                                                                                                        |
-| `classroom.leaderboard.action`       | `src/features/classroom/ClassroomLeaderboardModal.tsx`                                                                                  | 无（仅 `route?`）                                                                                                    |
-| `classroom.preclass.passcode_action` | `src/features/classroom/PreClassReadyView.tsx`                                                                                          | `{ classId, classPasscode, expiresAt, isExpired, onRefresh }`                                                        |
-| `classroom.preclass.passcode_addon`  | `src/features/classroom/PreClassReadyView.tsx`                                                                                          | `{ classId, classPasscode, expiresAt, isExpired, onRefresh }`                                                        |
-| `classroom.post_class.widget`        | `src/features/classroom/PostClassWrapupView.tsx`                                                                                        | `{ lessonId }`                                                                                                       |
-| `classroom.seating.toolbar`          | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, lab, stats }`                                                                                            |
-| `classroom.seating.legend`           | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats }`                                                                                                 |
-| `classroom.seating.summary`          | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats, onlineStudentIds }`                                                                               |
-| `classroom.seating.seat_badge`       | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                                                    | `{ seat, student, isOnline, classId }`                                                                               |
-| `classroom.seating.seat_actions`     | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ seat, student, isOnline, classId, lang }`                                                                         |
-| `student.classroom.countdown`        | `src/features/student/StudentCountdownBanner.tsx`                                                                                       | 无（仅 `route?`）                                                                                                    |
-| `student.classroom.overlay`          | `src/features/student/StudentInteractiveOverlay.tsx`                                                                                    | `{ studentId, lessonId }`                                                                                            |
-| `student.fullscreen`                 | `src/features/student/StudentInteractiveOverlay.tsx`                                                                                    | `{ studentId, lessonId }`                                                                                            |
-| `student.lesson.tool`                | `src/features/student/StudentLessonInteractionPanel.tsx`                                                                                | `{ lessonId, studentId, activeSegmentId, lang }`                                                                     |
-| `student.quick_actions.item`         | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ studentId, lessonId, closeMenu }`                                                                                 |
-| `student.quick_actions.action`       | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ studentId }`                                                                                                      |
-| `student.quick_actions.fab`          | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ urgentCount }`                                                                                                    |
-| `student.profile.tab`（button 形态） | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ renderType: 'button', studentActiveTab, setStudentActiveTab, student, lessonId, classId, lang, progressHistory }` |
-| `student.profile.tab`（panel 形态）  | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ renderType: 'panel', studentActiveTab, student, lessonId, classId, lang, progressHistory }`                       |
-| `student.profile.dimension`          | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ student, dimensions }`                                                                                            |
-| `student.profile.card`               | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | 无（仅 `route?`）                                                                                                    |
-| `student.profile.action`             | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ student, lessonId, classId }`                                                                                     |
-| `student.profile.timeline_item`      | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | 无（仅 `route?`）                                                                                                    |
-| `class.tab`（button 形态）           | `src/features/teacher/classes/ClassTabs.tsx`                                                                                            | `{ renderType, classId, classActiveTab, setClassActiveTab }`                                                         |
-| `class.tab`（panel 形态）            | `src/features/teacher/classes/ClassesView.tsx`                                                                                          | `{ renderType, classId, students, lang, classActiveTab }`                                                            |
-| `class.batch.action`                 | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ classId, cls, lang, selectedStudentIds, selectedStudents, allStudents, disabled, onRefresh }`                     |
-| `student.row.panel`                  | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ studentId }`                                                                                                      |
-| `editor.header.action`               | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, currentLesson, lang, isReadOnly, onSave }`                                                              |
-| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`                                                                               |
-| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`                                                                                     |
-| `whiteboard.dock.plugin`             | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                          |
-| `whiteboard.canvas.widget`           | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                          |
-| `whiteboard.autosave.status`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, status, lastSavedTime }`                                                                                |
-| `whiteboard.autosave.action`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, flush }`                                                                                                |
-| `courseware.viewer.toolbar`          | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                   |
-| `courseware.viewer.overlay`          | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                   |
-| `peer_review.rubric.dimension`       | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                    |
-| `peer_review.badge`                  | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                    |
-| `peer_review.action`                 | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                    |
-| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | 无（仅 `route?`）                                                                                                    |
-| `timetable.tab`（button 形态）       | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'button', timetableActiveTab, setTimetableActiveTab }`                                                |
-| `timetable.tab`（panel 形态）        | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'panel', timetableActiveTab, classes, lessons, lang, onSchedulesUpdated }`                            |
-| `admin.tab`（button 形态）           | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                        |
-| `admin.tab`（panel 形态）            | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'panel', adminActiveTab, currentUserId, currentUserRole, lang, siteInfo }`                            |
-| `assignment.submission.preview`      | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ submission, studentId, lessonId, isSelf, lang }`                                                                  |
-| `header.action`                      | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                     |
-| `statusbar.item`                     | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                           |
+| 槽位                                 | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `student.view`                       | `src/features/student-workspace/widgets/student-default-widgets.tsx`、`src/features/student/StudentDashboardPanel.tsx`                  | 前者无；后者 `{ studentId }`                                                                                          |
+| `teacher.tab`（button 形态）         | `src/features/shared/NavigationSidebar.tsx`                                                                                             | `{ renderType: 'button' }`（组件被绕过，见 §2）                                                                       |
+| `teacher.tab`（panel 形态）          | `src/components/PluginTabPanel.tsx`（由 `src/features/teacher/TeacherView.tsx` 挂载）                                                   | `{ renderType: 'panel', lessonId, classId }`                                                                          |
+| `teacher.dashboard.widget`           | `src/features/teacher/Dashboard.tsx`                                                                                                    | 无（仅 `route?`）                                                                                                     |
+| `teacher.panel`                      | `src/features/teacher/Dashboard.tsx`                                                                                                    | `{ lang, lessons, classes, students }`                                                                                |
+| `global.setting`                     | `src/features/teacher/SettingsView.tsx`                                                                                                 | `{ lang }`                                                                                                            |
+| `nav.user_menu`                      | `src/components/UserMenu.tsx`                                                                                                           | `{ session, lang, closeMenu }`                                                                                        |
+| `classroom.tool`                     | `src/features/whiteboard/components/WhiteboardToolbar.tsx`                                                                              | 无（仅 `route?`）                                                                                                     |
+| `help.plugin_docs`                   | `src/features/teacher/help/PluginDocsViewer.tsx`                                                                                        | 无（仅 `route?`）                                                                                                     |
+| `stage.display.card`                 | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ stage }`                                                                                                           |
+| `stage.display.overlay`              | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, isFullscreen, lang }`                                                          |
+| `stage.display.action`               | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, isFullscreen, lang, onToggleFullscreen, onOpenPeerReview }`                    |
+| `classroom.quick_activity`           | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage, lessonId, classId }`                                                                                        |
+| `classroom.topbar.action`            | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage }`                                                                                                           |
+| `classroom.topbar.pill`              | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ stage }`                                                                                                           |
+| `classroom.header.action`            | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage }`                                                                                        |
+| `classroom.countdown.widget`         | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                                                   | 无（仅 `route?`）                                                                                                     |
+| `classroom.countdown.action`         | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                                                   | `{ onStart, onPause, onReset, onAddTime }`                                                                            |
+| `classroom.portal.telemetry`         | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无（另传 `lang`）                                                                                                     |
+| `classroom.portal.course_badge`      | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | `{ lessonId }`                                                                                                        |
+| `classroom.portal.teaching_mode`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | `{ selectedModeId, registerHint }`                                                                                    |
+| `classroom.portal.insight`           | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无                                                                                                                    |
+| `classroom.portal.preflight`         | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无（另传 `lang`）                                                                                                     |
+| `classroom.portal.launch_action`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                                                       | 无                                                                                                                    |
+| `classroom.notification.tabs`        | `src/features/classroom/notifications/ParentNotificationModal.tsx`                                                                      | 无（仅 `route?`）                                                                                                     |
+| `classroom.pacing.dashboard`         | `src/features/classroom/pacing/MasteryPredictionModal.tsx`                                                                              | 无（仅 `route?`）                                                                                                     |
+| `classroom.barometer.metric`         | `src/features/classroom/PacingDashboardModal.tsx`                                                                                       | `{ lessonId, signals, total, health, lang }`                                                                          |
+| `classroom.diagnostic.feed`          | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                                          | 无（仅 `route?`）                                                                                                     |
+| `classroom.audit.event`              | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                                          | `{ activeTab, totalCount, lang }`                                                                                     |
+| `classroom.collab.canvas`            | `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`                                                               | `{ lessonId, classId, activeGroupId, activeTool, activeColor, activeWidth, lang }`                                    |
+| `classroom.agenda.action`            | `src/components/LiveClassroomView.tsx`                                                                                                  | `{ segment, isActive, idx, lessonId, lang }`                                                                          |
+| `classroom.attribution.award`        | `src/features/classroom/ClassroomAttributionModal.tsx`                                                                                  | `{ student, onAwardPoints }`                                                                                          |
+| `classroom.attribution.action`       | `src/features/classroom/ClassroomAttributionModal.tsx`                                                                                  | `{ student }`                                                                                                         |
+| `classroom.leaderboard.action`       | `src/features/classroom/ClassroomLeaderboardModal.tsx`                                                                                  | 无（仅 `route?`）                                                                                                     |
+| `classroom.preclass.passcode_action` | `src/features/classroom/PreClassReadyView.tsx`                                                                                          | `{ classId, classPasscode, expiresAt, isExpired, onRefresh }`                                                         |
+| `classroom.preclass.passcode_addon`  | `src/features/classroom/PreClassReadyView.tsx`                                                                                          | `{ classId, classPasscode, expiresAt, isExpired, onRefresh }`                                                         |
+| `classroom.post_class.widget`        | `src/features/classroom/PostClassWrapupView.tsx`                                                                                        | `{ lessonId }`                                                                                                        |
+| `classroom.seating.toolbar`          | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, lab, stats }`                                                                                             |
+| `classroom.seating.legend`           | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats }`                                                                                                  |
+| `classroom.seating.summary`          | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats, onlineStudentIds }`                                                                                |
+| `classroom.seating.seat_badge`       | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                                                    | `{ seat, student, isOnline, classId }`                                                                                |
+| `classroom.seating.seat_actions`     | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ seat, student, isOnline, classId, lang }`                                                                          |
+| `student.classroom.countdown`        | `src/features/student/StudentCountdownBanner.tsx`                                                                                       | 无（仅 `route?`）                                                                                                     |
+| `student.classroom.overlay`          | `src/features/student/StudentInteractiveOverlay.tsx`                                                                                    | `{ studentId, lessonId }`                                                                                             |
+| `student.fullscreen`                 | `src/features/student/StudentInteractiveOverlay.tsx`                                                                                    | `{ studentId, lessonId }`                                                                                             |
+| `student.lesson.tool`                | `src/features/student/StudentLessonInteractionPanel.tsx`                                                                                | `{ lessonId, studentId, activeSegmentId, lang }`                                                                      |
+| `student.quick_actions.item`         | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ studentId, lessonId, closeMenu }`                                                                                  |
+| `student.quick_actions.action`       | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ studentId }`                                                                                                       |
+| `student.quick_actions.fab`          | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                                                   | `{ urgentCount }`                                                                                                     |
+| `student.profile.tab`（button 形态） | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ renderType: 'button', studentActiveTab, setStudentActiveTab, student, lessonId, classId, lang, progressHistory }`  |
+| `student.profile.tab`（panel 形态）  | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ renderType: 'panel', studentActiveTab, student, lessonId, classId, lang, progressHistory }`                        |
+| `student.profile.dimension`          | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ student, dimensions }`                                                                                             |
+| `student.profile.card`               | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | 无（仅 `route?`）                                                                                                     |
+| `student.profile.action`             | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | `{ student, lessonId, classId }`                                                                                      |
+| `student.profile.timeline_item`      | `src/features/student/StudentGrowthProfileModal.tsx`                                                                                    | 无（仅 `route?`）                                                                                                     |
+| `class.tab`（button 形态）           | `src/features/teacher/classes/ClassTabs.tsx`                                                                                            | `{ renderType, classId, classActiveTab, setClassActiveTab }`                                                          |
+| `class.tab`（panel 形态）            | `src/features/teacher/classes/ClassesView.tsx`                                                                                          | `{ renderType, classId, students, lang, classActiveTab }`                                                             |
+| `class.batch.action`                 | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ classId, cls, lang, selectedStudentIds, selectedStudents, allStudents, disabled, onRefresh }`                      |
+| `student.row.panel`                  | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ studentId }`                                                                                                       |
+| `editor.header.action`               | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, currentLesson, lang, isReadOnly, onSave }`                                                               |
+| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`                                                                                |
+| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`                                                                                      |
+| `whiteboard.dock.plugin`             | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
+| `whiteboard.canvas.widget`           | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
+| `whiteboard.autosave.status`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, status, lastSavedTime }`                                                                                 |
+| `whiteboard.autosave.action`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, flush }`                                                                                                 |
+| `courseware.viewer.toolbar`          | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                    |
+| `courseware.viewer.overlay`          | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                    |
+| `peer_review.rubric.dimension`       | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                     |
+| `peer_review.badge`                  | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                     |
+| `peer_review.action`                 | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                     |
+| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | 无（仅 `route?`）                                                                                                     |
+| `timetable.tab`（button 形态）       | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'button', timetableActiveTab, setTimetableActiveTab }`                                                 |
+| `timetable.tab`（panel 形态）        | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'panel', timetableActiveTab, classes, lessons, lang, onSchedulesUpdated }`                             |
+| `admin.tab`（button 形态）           | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                         |
+| `admin.tab`（panel 形态）            | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'panel', adminActiveTab, currentUserId, currentUserRole, lang, siteInfo }`                             |
+| `assignment.submission.preview`      | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ submission, studentId, lessonId, isSelf, lang }`                                                                   |
+| `header.action`                      | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                      |
+| `statusbar.item`                     | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                            |
+| `whiteboard.renderer`                | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ element, elementId, elementType, data, width, height, isSelected, readOnly, userRole, lessonId, onElementUpdate }` |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -235,7 +238,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `anchor:whiteboard-toolbar:grid`         | 同上                                                                                               |
 | `anchor:classroom-attribution:awards`    | `src/features/classroom/ClassroomAttributionModal.tsx`（`slotProps={{ student, onAwardPoints }}`） |
 
-#### 1.2 历史幽灵槽位激活与归零记录（全量 74 个槽位均已消费）
+#### 1.2 历史幽灵槽位激活与归零记录（全量 75 个槽位均已消费）
 
 平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位。目前已在 `9ac5673c` 与 `efb3366f` 提交中完成系统性重构与全量挂载：
 
@@ -244,7 +247,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 - `whiteboard.dock.plugin`（白板左下悬浮坞）、`whiteboard.canvas.widget`（白板画布任务卡片）、`classroom.audit.event`（审计事件流）
 - `classroom.seating.seat_actions`（机房座位右键菜单）、`editor.timeline_segment`（步骤形态扩展）、`editor.palette_item`（白板扩展图元卡片）
 
-同时，`help.plugin_docs`（帮助文档）与 `student.classroom.overlay`（学生端课堂浮层）已正式纳入 `ExtensionSlot` 联合类型；并扩展增设了 `stage.display.overlay`（大屏全屏 HUD 覆盖）、`stage.display.action`（大屏快捷工具栏操作）、`assignment.submission.preview`（作业多模态预览），以及全局壳层的 `header.action`（全局顶栏快捷操作）与 `statusbar.item`（全局底部状态栏）。**当前声明但无渲染器的 `ExtensionSlot` 成员数量为 0**。所有 74 个联合类型槽位均具备明确的前端宿主消费方与上下文隔离机制。
+同时，`help.plugin_docs`（帮助文档）与 `student.classroom.overlay`（学生端课堂浮层）已正式纳入 `ExtensionSlot` 联合类型；并扩展增设了 `stage.display.overlay`（大屏全屏 HUD 覆盖）、`stage.display.action`（大屏快捷工具栏操作）、`assignment.submission.preview`（作业多模态预览）、全局壳层的 `header.action`（全局顶栏快捷操作）与 `statusbar.item`（全局底部状态栏），以及核心画板的 `whiteboard.renderer`（自定义图元一等公民渲染器）。**当前声明但无渲染器的 `ExtensionSlot` 成员数量为 0**。所有 75 个联合类型槽位均具备明确的前端宿主消费方与上下文隔离机制。
 
 ---
 
@@ -655,16 +658,67 @@ interface PaletteItemComponentProps {
 
 ---
 
-## 10. 统计口径
+## 10. 白板自定义图元渲染器扩展 (`whiteboard.renderer`)
+
+**槽位名称**：`whiteboard.renderer`  
+**挂载位置**：`src/features/whiteboard/InteractiveWhiteboard.tsx`（白板画布核心渲染流水线）
+
+与传统备课小组件或局部浮层不同，`whiteboard.renderer` 为白板引入**自定义一等公民图元渲染**能力。第三方插件可为特定的图元类型（如 Desmos 函数图像、GeoGebra 几何、分子 3D 结构等）注册专属图元渲染器，深度接入白板的缩放、平铺拖拽、选框高亮、右键上下文菜单以及实时事件同步流水线。
+
+### 注册方式
+
+在插件激活阶段调用 `ctx.ui.registerExtensionPoint('whiteboard.renderer', ...)`：
+
+```tsx
+import type { WhiteboardRendererSlotProps } from '@/plugin-host/types';
+
+async function activate(ctx) {
+  ctx.ui.registerExtensionPoint('whiteboard.renderer', {
+    id: 'desmos-graph-renderer',
+    label: 'Desmos 图形计算器',
+    targetType: 'desmos', // 匹配图元类型 el.type === 'desmos'
+    component: () => import('./DesmosGraphComponent'),
+  });
+}
+```
+
+### Props 规范 (`WhiteboardRendererSlotProps`)
+
+```typescript
+export interface WhiteboardRendererSlotProps {
+  element: any; // 原始白板图元对象
+  elementId: string; // 图元 ID
+  elementType: string; // 图元类型
+  data: Record<string, any>; // 元素已解析的数据 payload
+  width: number; // 当前视口计算宽度
+  height: number; // 当前视口计算高度
+  isSelected?: boolean; // 是否当前选中
+  readOnly?: boolean; // 是否处于只读锁定态
+  userRole?: 'teacher' | 'student'; // 当前用户角色
+  lessonId?: string; // 课程/课节 ID
+  onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>; // 更新回调
+  dispatcher?: IHostActionDispatcher; // 宿主动作派发器
+}
+```
+
+### 特性支持
+
+1. **一等公民画布生命周期**：参与自动平铺布局、缩放定位、层级变换与双击全屏；
+2. **边框与外观定制**：支持 `data.frameless = true` 实现无外壳/无标题栏透明呈现；
+3. **实时数据协同**：调用 `onElementUpdate` 自动向 `frontendEventBus` 广播 `whiteboard.element_updated`，触发全班同步。
+
+---
+
+## 11. 统计口径
 
 | 指标                                                           | 数值           |
 | -------------------------------------------------------------- | -------------- |
-| `ExtensionSlot` 联合类型成员                                   | **74**         |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **74**         |
-| 其中属于 `ExtensionSlot` 联合类型                              | **74**（100%） |
+| `ExtensionSlot` 联合类型成员                                   | **75**         |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **75**         |
+| 其中属于 `ExtensionSlot` 联合类型                              | **75**（100%） |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**          |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**          |
 | 声明但无渲染器的 `ExtensionSlot` 成员                          | **0**          |
-| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **82**         |
+| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **83**         |
 
 > 统计更新于规范化收口批次（2026-10-09）。

@@ -173,7 +173,9 @@ export type ExtensionSlot =
   | 'assignment.submission.preview' // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
-  | 'statusbar.item'; // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
+  | 'statusbar.item' // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
+  // ── 白板画布核心图元扩展槽位（一等公民图元渲染）──
+  | 'whiteboard.renderer'; // 白板自定义图元渲染器扩展（如 Desmos 函数图像、分子 3D 结构等自定义一等公民图元）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -206,6 +208,8 @@ export interface ExtensionPointConfig {
   rolesAllowed?: ('admin' | 'teacher' | 'student')[];
   /** v5.1: 可选子路由 */
   route?: string;
+  /** 自定义扩展类型匹配键（如 whiteboard.renderer 中的图元类型 'desmos' | '3d-molecule'） */
+  targetType?: string;
   /** v5.1: 额外 props */
   slotProps?: Record<string, any>;
   /** v0.2.6: 锚点槽位专用 —— 相对宿主锚点按钮的位置（默认 'after'） */
@@ -522,5 +526,21 @@ export interface StatusbarItemSlotProps {
   lang: 'zh' | 'en';
   /** 浏览器网络在线状态（navigator.onLine + online/offline 事件） */
   isOnline: boolean;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.renderer extensions (custom whiteboard graphical objects) */
+export interface WhiteboardRendererSlotProps {
+  element: any;
+  elementId: string;
+  elementType: string;
+  data: Record<string, any>;
+  width: number;
+  height: number;
+  isSelected?: boolean;
+  readOnly?: boolean;
+  userRole?: 'teacher' | 'student';
+  lessonId?: string;
+  onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }

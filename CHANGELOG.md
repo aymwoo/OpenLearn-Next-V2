@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **白板自定义图元一等公民扩展槽位 (`whiteboard.renderer`)**：
+  - **核心渲染流水线挂载**：在 [`src/features/whiteboard/InteractiveWhiteboard.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/whiteboard/InteractiveWhiteboard.tsx) 的 `renderElement` 核心渲染入口挂载 `whiteboard.renderer` 扩展点，允许第三方插件为特定图元类型（如 Desmos 函数图像、GeoGebra 几何、分子 3D 模型等）注册专属渲染器，成为白板一等公民图元；
+  - **画板生命周期全面打通**：自定义图元深度接入 Konva 视口缩放、平铺拖拽布局、选框高亮、右键上下文菜单与多选生命周期；`buildElementData` 扩展支持读取插件图元默认数据配置；
+  - **无边框/透明卡片支持**：支持 `data.frameless = true` 或 `data.hideTitleBar = true`，自定义图元可自由选择展示标准 Widget 外壳或完全自绘无边框视觉；
+  - **实时数据协同流水线**：注入 `onElementUpdate` 回调，插件更新图元数据时自动向 `frontendEventBus` 广播 `whiteboard.element_updated`，触发全班协同同步；
+  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 75 个，新增 `targetType?: string` 匹配键与 `WhiteboardRendererSlotProps` 接口；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)（75 联合槽位 / 75 消费调用点 / 0 幽灵槽位 / 8 锚点 / 83 唯一槽位值，100% 对齐）；
+  - **双层专项测试覆盖**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 `targetType` 匹配、Props 透传、未命中返回 null 及兜底匹配测试（3/3 通过）；新增 [`src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx) 验证白板画布中的自定义图元渲染、事件广播与 frameless 无边框模式（2/2 通过）。
+
 - **全局壳层扩展槽（底座解耦）(`header.action` / `statusbar.item`)**：
   - **全局顶栏快捷操作槽 (`header.action`)**：在 [`src/components/AppHeader.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppHeader.tsx) 右侧工具区（「系统资源库」按钮之前）挂载，注入 `{ session, currentRole, lang }`，供全局 AI 助手入口、屏幕录制、校园门户直通等插件使用（此前仅有课堂内的 `classroom.header.action`）；
   - **全局底部状态栏槽 (`statusbar.item`)**：新增 [`src/components/AppStatusBar.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppStatusBar.tsx) 并由 [`src/App.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/App.tsx) 挂载在主工作区底部，注入 `{ session, currentRole, lang, isOnline }`（`isOnline` 订阅浏览器 `online` / `offline` 事件）；

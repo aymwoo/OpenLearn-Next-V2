@@ -325,7 +325,6 @@ export const DEFAULT_WHITEBOARD_PAGES: WhiteboardPageItem[] = [
  * plugin 类型允许 data 覆盖，其余类型以本表为准。
  */
 
-
 /**
  * 判定「这是一次真正的拖拽」所需的最小指针位移（px）。
  *
@@ -396,6 +395,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     }, [currentGlobalTheme]);
     const themeTokens = themeManager.getTokens();
     const isDarkCanvas = currentGlobalTheme === 'dark' || currentGlobalTheme === 'chalkboard';
+
+    // 订阅插件系统注册的白板自定义图元渲染器扩展 (whiteboard.renderer)
+    const whiteboardRenderers = usePluginHostStore((s) => s.extensionPoints.get('whiteboard.renderer'));
 
     const [tool, setTool] = useState<'cursor' | 'rect' | 'circle' | 'pen' | 'text' | 'presentation' | 'highlighter'>(
       'cursor',
@@ -474,10 +476,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         filterCurrentPageElements(safeElements, currentPage, pages, activeSegmentId) as WhiteboardElement[],
       [safeElements, currentPage, pages, activeSegmentId],
     );
-    const getCurrentPageElements = useCallback(
-      (): WhiteboardElement[] => currentPageElements,
-      [currentPageElements],
-    );
+    const getCurrentPageElements = useCallback((): WhiteboardElement[] => currentPageElements, [currentPageElements]);
 
     // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
     const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1614,8 +1613,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       };
     }, [activeDragElement, onElementUpdate, lessonId, setLocalGeometry, autoTileEnabled, getCurrentPageElements]);
 
-
-
     // Window-level resizing event listeners
     useEffect(() => {
       if (!activeResizeElement || !resizingState) return;
@@ -2197,7 +2194,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const renderActiveDrawing = () =>
       renderDrawingRaw(currentDrawing ? { ...currentDrawing, page: currentPage, segmentId: activeSegmentId } : null);
 
-
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
         <React.Fragment key={i}>{renderDrawingRaw(drawing)}</React.Fragment>
@@ -2582,8 +2578,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           const quizOptions = Array.isArray(data.options) ? data.options : [];
           // DATA-INT-02: 计数以 lesson_quiz_submissions 关系表为权威（quiz-counts 拉取
           // + quiz.answered 事件实时递增）；data.submissions 为存量历史数据兜底
-          const submissionCount =
-            quizCounts[el.id] ?? Object.keys(data.submissions || {}).length;
+          const submissionCount = quizCounts[el.id] ?? Object.keys(data.submissions || {}).length;
           return (
             <Group key={el.id}>
               <Html
@@ -3444,6 +3439,122 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           );
         }
 
+        // ── 插件注册的自定义白板图元 (whiteboard.renderer) 一等公民渲染 ───────────
+        const extTargetType =
+          el.type === 'whiteboard.renderer' ? data.rendererType || data.type || 'whiteboard.renderer' : el.type;
+        const matchingRenderer = whiteboardRenderers?.find((ext) => {
+          const et = ext as any;
+          return (
+            et.targetType === extTargetType ||
+            ext.id === extTargetType ||
+            ext.route === extTargetType ||
+            `${ext.pluginId}/${ext.id}` === extTargetType ||
+            et.slotProps?.elementType === extTargetType ||
+            et.slotProps?.targetType === extTargetType
+          );
+        });
+
+        if (matchingRenderer) {
+          const isFrameless = Boolean(data.frameless);
+          const hideTitle = Boolean(data.hideTitleBar || isFrameless);
+          return (
+            <Group key={el.id}>
+              <Html
+                divProps={{
+                  style: {
+                    position: 'absolute',
+                    top: `${displayY}px`,
+                    left: `${displayX}px`,
+                    pointerEvents: 'none',
+                    zIndex: isThisSelected ? 20 : 10,
+                  },
+                }}
+              >
+                <div
+                  onPointerDown={(e) => {
+                    if (readOnly) return;
+                    setSelectedShapeId(el.id);
+                    e.stopPropagation();
+                  }}
+                  onContextMenu={(e) => {
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    const containerRect = containerRef.current?.getBoundingClientRect();
+                    if (containerRect) {
+                      setContextMenu({
+                        x: e.clientX - containerRect.left,
+                        y: e.clientY - containerRect.top,
+                        elementId: el.id,
+                      });
+                    }
+                  }}
+                  className={
+                    isFrameless
+                      ? `overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`
+                      : `bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`
+                  }
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
+                >
+                  {!hideTitle && (
+                    <WidgetTitleBar
+                      {...getWidgetTitleBarProps(
+                        data.title || matchingRenderer.label || el.type,
+                        <Blocks size={13} className="text-indigo-600" />,
+                        'indigo',
+                      )}
+                    />
+                  )}
+                  {!data.isMinimized && (
+                    <div
+                      className={`flex-1 overflow-hidden relative min-h-0 ${isFrameless ? '' : 'bg-white'}`}
+                      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
+                    >
+                      <ExtensionPointRenderer
+                        slot="whiteboard.renderer"
+                        slotProps={{
+                          element: el,
+                          elementId: el.id,
+                          elementType: extTargetType,
+                          data,
+                          width: displayWidth,
+                          height: displayHeight,
+                          isSelected: isThisSelected,
+                          readOnly,
+                          userRole,
+                          lessonId,
+                          onElementUpdate: onElementUpdate
+                            ? async (id: string, updatedData: any) => {
+                                await onElementUpdate(id, updatedData);
+                                frontendEventBus.publish({
+                                  id: uuidv7(),
+                                  type: 'whiteboard.element_updated',
+                                  source: 'whiteboard',
+                                  payload: { lessonId },
+                                  timestamp: Date.now(),
+                                  correlationId: lessonId,
+                                });
+                              }
+                            : undefined,
+                        }}
+                      />
+                    </div>
+                  )}
+                  {readOnly && <ReadOnlyLockCover />}
+                  {!data.isMinimized && renderResizeHandles()}
+                </div>
+              </Html>
+            </Group>
+          );
+        }
+
         // ── 插件注册的备课画板组件 (Palette Item) 渲染 ────────────────────
         const pluginPaletteItem = paletteItemRegistry.get(el.type);
         if (pluginPaletteItem) {
@@ -3576,6 +3687,18 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       const base = { x, y, page: currentPage, segmentId: activeSegmentId };
       const pluginConfig = paletteItemRegistry.get(type);
       const pluginDefaults = pluginConfig?.defaultData || {};
+      const extRenderer = whiteboardRenderers?.find((ext) => {
+        const et = ext as any;
+        return (
+          et.targetType === type ||
+          ext.id === type ||
+          ext.route === type ||
+          `${ext.pluginId}/${ext.id}` === type ||
+          et.slotProps?.elementType === type ||
+          et.slotProps?.targetType === type
+        );
+      });
+      const rendererDefaults = (extRenderer?.slotProps as any)?.defaultData || {};
       switch (type) {
         case 'code-sandbox':
           return { ...base, code: content.code ?? "console.log('Hello Sandbox!');" };
@@ -3611,7 +3734,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         case 'rollcall':
           return { ...base, allStudents: [] };
         default:
-          return { ...base, ...pluginDefaults, ...content };
+          return { ...base, ...pluginDefaults, ...rendererDefaults, ...content };
       }
     };
 
@@ -3906,12 +4029,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             <WhiteboardEmptyState
               isVisible={
                 safeElements.filter((el) => {
-                  if (el.type === "page_meta") return false;
+                  if (el.type === 'page_meta') return false;
                   try {
                     const d = JSON.parse(el.data);
                     const elPage = d.page ?? 0;
                     const currentObj = pages[currentPage];
-                    const pageMatches = d.pageId && currentObj?.id ? d.pageId === currentObj.id : elPage === currentPage;
+                    const pageMatches =
+                      d.pageId && currentObj?.id ? d.pageId === currentObj.id : elPage === currentPage;
                     if (!pageMatches) return false;
                     if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
                     return true;

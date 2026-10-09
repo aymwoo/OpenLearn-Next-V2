@@ -388,9 +388,7 @@ export function ExtensionPointRenderer({
                 slotProps?.setTimetableActiveTab?.(tabValue);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
-                isActive
-                  ? 'bg-white text-indigo-700 shadow-sm font-bold'
-                  : 'text-gray-500 hover:text-gray-800'
+                isActive ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'
               }`}
               title={label}
             >
@@ -413,7 +411,9 @@ export function ExtensionPointRenderer({
         key={`${activeExt.pluginId}/${activeExt.id}`}
         pluginId={activeExt.pluginId}
         fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">课表扩展 Tab 加载失败</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            课表扩展 Tab 加载失败
+          </div>
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
@@ -449,9 +449,7 @@ export function ExtensionPointRenderer({
                 slotProps?.setAdminActiveTab?.(tabValue);
               }}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-800'
+                isActive ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
               }`}
               title={label}
             >
@@ -474,7 +472,9 @@ export function ExtensionPointRenderer({
         key={`${activeExt.pluginId}/${activeExt.id}`}
         pluginId={activeExt.pluginId}
         fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">管理后台扩展 Tab 加载失败</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            管理后台扩展 Tab 加载失败
+          </div>
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
@@ -586,6 +586,78 @@ export function ExtensionPointRenderer({
           );
         })}
       </>
+    );
+  }
+
+  // whiteboard.renderer — renders custom graphical object component matching elementType
+  if (slot === 'whiteboard.renderer') {
+    const targetType = slotProps?.elementType;
+    if (!targetType) return null;
+    const activeExt = extensions.find((ext) => {
+      const et = ext as any;
+      return (
+        et.targetType === targetType ||
+        ext.id === targetType ||
+        ext.route === targetType ||
+        `${ext.pluginId}/${ext.id}` === targetType ||
+        et.slotProps?.elementType === targetType ||
+        et.slotProps?.targetType === targetType
+      );
+    });
+    if (!activeExt) return null;
+
+    if (isPluginBlown(activeExt.pluginId)) {
+      if (!warnedPluginsRef.current.has(activeExt.pluginId)) {
+        warnedPluginsRef.current.add(activeExt.pluginId);
+        console.warn(
+          `[ExtensionBreaker] Plugin "${activeExt.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
+        );
+      }
+      return null;
+    }
+
+    const isReact = typeof activeExt.component === 'function';
+    const isDOM = typeof (activeExt as any).render === 'function';
+    if (!isReact && !isDOM) return null;
+
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        onBreakerTrip={(pid) => {
+          void host
+            .deactivatePlugin(pid)
+            .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
+        }}
+        fallback={
+          fallback ?? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-600 flex items-center justify-center">
+              <span>{lang === 'zh' ? '自定义图元加载失败' : 'Custom object failed to load'}</span>
+            </div>
+          )
+        }
+      >
+        <Suspense fallback={fallback ?? <LoadingSkeleton />}>
+          {isReact ? (
+            React.createElement(resolveExtensionComponent(activeExt), {
+              ...activeExt.slotProps,
+              ...slotProps,
+              dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+            })
+          ) : (
+            <DOMExtensionWrapper
+              ext={activeExt}
+              route={activeExt.route || route}
+              slotProps={{
+                ...activeExt.slotProps,
+                ...slotProps,
+                dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+              }}
+              slot={slot}
+            />
+          )}
+        </Suspense>
+      </ExtensionErrorBoundary>
     );
   }
 

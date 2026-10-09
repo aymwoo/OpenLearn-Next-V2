@@ -404,4 +404,136 @@ describe('ExtensionPointRenderer — anchor slot placement filtering (v0.2.6)', 
     expect(comp).toBeTruthy();
     expect(comp.getAttribute('data-online')).toBe('true');
   });
+
+  describe('whiteboard.renderer — 白板自定义图元一等公民扩展槽位', () => {
+    it('按 elementType 匹配 targetType 注册的图元扩展，并正确透传 slotProps', async () => {
+      const DesmosGraphComp = (props: any) => (
+        <div
+          data-testid="desmos-element"
+          data-element-id={props.elementId}
+          data-element-type={props.elementType}
+          data-width={props.width}
+          data-height={props.height}
+          data-formula={props.data?.formula}
+          data-selected={String(props.isSelected)}
+        >
+          <button
+            data-testid="update-btn"
+            onClick={() => props.onElementUpdate?.(props.elementId, { formula: 'y = cos(x)' })}
+          >
+            Update Formula
+          </button>
+        </div>
+      );
+      const factory = () => Promise.resolve({ default: DesmosGraphComp });
+      (factory as any).__isLazyFactory = true;
+
+      usePluginHostStore.getState().registerExtensionPoint('whiteboard.renderer', {
+        id: 'desmos-graph-renderer',
+        label: 'Desmos 图形计算器',
+        pluginId: 'prov-desmos',
+        targetType: 'desmos',
+        component: factory,
+      });
+
+      const onUpdate = vi.fn();
+      renderWithHost(
+        <ExtensionPointRenderer
+          slot="whiteboard.renderer"
+          slotProps={{
+            element: { id: 'el-desmos-1', type: 'desmos' },
+            elementId: 'el-desmos-1',
+            elementType: 'desmos',
+            data: { formula: 'y = sin(x)' },
+            width: 480,
+            height: 360,
+            isSelected: true,
+            userRole: 'teacher',
+            lessonId: 'lesson-101',
+            onElementUpdate: onUpdate,
+          }}
+        />,
+      );
+
+      const el = await screen.findByTestId('desmos-element');
+      expect(el).toBeTruthy();
+      expect(el.getAttribute('data-element-id')).toBe('el-desmos-1');
+      expect(el.getAttribute('data-element-type')).toBe('desmos');
+      expect(el.getAttribute('data-width')).toBe('480');
+      expect(el.getAttribute('data-height')).toBe('360');
+      expect(el.getAttribute('data-formula')).toBe('y = sin(x)');
+      expect(el.getAttribute('data-selected')).toBe('true');
+
+      // 验证回调透传与触发
+      const updateBtn = screen.getByTestId('update-btn');
+      updateBtn.click();
+      expect(onUpdate).toHaveBeenCalledWith('el-desmos-1', { formula: 'y = cos(x)' });
+    });
+
+    it('当 elementType 未匹配任何已注册图元时返回 null', () => {
+      const OtherComp = () => <div data-testid="other">Other</div>;
+      const factory = () => Promise.resolve({ default: OtherComp });
+      (factory as any).__isLazyFactory = true;
+
+      usePluginHostStore.getState().registerExtensionPoint('whiteboard.renderer', {
+        id: 'molecule-3d',
+        label: '分子 3D 渲染器',
+        pluginId: 'p-chem',
+        targetType: 'molecule-3d',
+        component: factory,
+      });
+
+      const { container } = renderWithHost(
+        <ExtensionPointRenderer
+          slot="whiteboard.renderer"
+          slotProps={{
+            element: { id: 'el-unknown', type: 'unregistered-type' },
+            elementId: 'el-unknown',
+            elementType: 'unregistered-type',
+            data: {},
+            width: 300,
+            height: 300,
+          }}
+        />,
+      );
+
+      expect(container.firstChild).toBeNull();
+      expect(screen.queryByTestId('other')).toBeNull();
+    });
+
+    it('支持按 ext.id 或 slotProps.elementType 兜底匹配', async () => {
+      const GeoGebraComp = (props: any) => (
+        <div data-testid="geogebra-element" data-type={props.elementType}>
+          GeoGebra Canvas
+        </div>
+      );
+      const factory = () => Promise.resolve({ default: GeoGebraComp });
+      (factory as any).__isLazyFactory = true;
+
+      usePluginHostStore.getState().registerExtensionPoint('whiteboard.renderer', {
+        id: 'geogebra',
+        label: 'GeoGebra 几何画板',
+        pluginId: 'p-math',
+        component: factory,
+      });
+
+      renderWithHost(
+        <ExtensionPointRenderer
+          slot="whiteboard.renderer"
+          slotProps={{
+            element: { id: 'el-geo-1', type: 'geogebra' },
+            elementId: 'el-geo-1',
+            elementType: 'geogebra',
+            data: {},
+            width: 500,
+            height: 400,
+          }}
+        />,
+      );
+
+      const el = await screen.findByTestId('geogebra-element');
+      expect(el).toBeTruthy();
+      expect(el.getAttribute('data-type')).toBe('geogebra');
+    });
+  });
 });
