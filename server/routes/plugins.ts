@@ -1,5 +1,6 @@
 import express from 'express';
 import { isValidExecutionMode, type PluginExecutionMode } from '../../packages/core/plugin-host/types.js';
+import { getMaxUploadBodyBytes } from '../../packages/core/esm-loader/install-utils.js';
 import path from 'path';
 import fs from 'fs';
 import semver from 'semver';
@@ -589,10 +590,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // Raw binary upload — avoids base64 overhead for large plugin zips
+  // 审计 R-4：body 上限与解压炸弹上限同源（getMaxUploadBodyBytes）。
+  // 此前硬编码 '400mb'，与 install-utils 的 300MB 解压上限各写各的 ——
+  // 调小 OPENLEARN_MAX_ZIP_SIZE 不收窄 body，超限包仍会被整包收进内存后才拒。
+  const zipUploadLimit = `${Math.max(1, Math.round(getMaxUploadBodyBytes() / (1024 * 1024)))}mb`;
   app.post(
     '/api/plugins/upload-zip-raw',
     requireAuth('administrator'),
-    express.raw({ type: 'application/octet-stream', limit: '400mb' }),
+    express.raw({ type: 'application/octet-stream', limit: zipUploadLimit }),
     async (req, res) => {
       try {
         const zipBuffer = req.body;
@@ -650,7 +655,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.post(
     '/api/plugins/:id(*)/update-zip-raw',
     requireAuth('administrator'),
-    express.raw({ type: 'application/octet-stream', limit: '400mb' }),
+    express.raw({ type: 'application/octet-stream', limit: zipUploadLimit }),
     async (req, res) => {
       try {
         const targetPluginId = decodeURIComponent(req.params.id);

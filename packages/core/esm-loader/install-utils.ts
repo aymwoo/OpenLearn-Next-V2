@@ -32,6 +32,20 @@ export function getMaxUncompressedSize(): number {
 }
 
 /**
+ * 插件 ZIP 上传的 HTTP body 上限（审计 R-4）。
+ *
+ * 此前路由层硬编码 `'400mb'`，与上面的解压上限（默认 300MB）是**两个各写各的
+ * 口径**：400MB 的 body 若解压出 >300MB 仍会在后面被拒，上限形同虚设；
+ * 反过来调小 OPENLEARN_MAX_ZIP_SIZE 也不会影响 body 接收。
+ *
+ * 压缩态大小 ≤ 未压缩总量是 ZIP 的物理性质，故 body 上限取解压上限同值即为
+ * 单一口径：一个 env 同时管住「收多少」与「放多少」。
+ */
+export function getMaxUploadBodyBytes(): number {
+  return getMaxUncompressedSize();
+}
+
+/**
  * 静态门拒绝的原因码。用于让调用方与测试能区分「哪种违规」，
  * 避免所有失败都退化成一句无法定位的 "plugin code rejected"。
  */
@@ -485,10 +499,44 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
 }
 
 /**
+ * 把 ZIP 条目写入目标目录，并按**实际解压出的字节**计量总量（审计 R-4）。
+ *
+ * ## 为什么不能只信 ZIP 头
+ *
+ * 原先的 bomb 检查读 `file._data.uncompressedSize` —— 那是中央目录里的
+ * **自声明值**，攻击者可以声明 1KB 而实际解压出 500MB。头检查只能当
+ * fast-fail 的预筛，唯一可信的计量点是「真的解压出了多少字节」。
+ *
+ * 在写盘循环里累计：一旦超过上限立即中断（此时已写出的文件由调用方的
+ * finally 清理临时目录）。
+ *
+ * @param maxTotalBytes 实际解压字节总和上限。传 `Infinity` 可关闭计量（仅测试）。
+ */
+export async function extractZipEntries(zip: JSZip, destDir: string, maxTotalBytes: number): Promise<void> {
+  let totalBytes = 0;
+
+  for (const [name, file] of Object.entries(zip.files)) {
+    if (file.dir) continue;
+    const filePath = path.join(destDir, name);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const content = await file.async('nodebuffer');
+
+    totalBytes += content.length;
+    if (totalBytes > maxTotalBytes) {
+      throw new Error(
+        `ZIP bomb prevention: actual uncompressed size ${totalBytes} bytes exceeds limit of ${maxTotalBytes} bytes`,
+      );
+    }
+
+    fs.writeFileSync(filePath, content);
+  }
+}
+
+/**
  * 从 ZIP Buffer 中解压、校验 manifest、esbuild 打包，返回 manifest 和 bundledCode。
  *
  * D-12: 接收 ZIP 原始字节（来自 SQLite zip_package BLOB 或 HTTP upload），完成：
- * 1. ZIP bomb 防护：检查所有文件未压缩大小总和 ≤ 10MB
+ * 1. ZIP bomb 防护：头大小预筛 + 解压循环内按实际字节强制（见 extractZipEntries）
  * 2. 路径穿越防护：拒绝包含 ".." 或以 "/" 开头的条目名
  * 3. jszip.loadAsync() 解压
  * 4. 读取并解析 manifest.json
@@ -498,14 +546,20 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
  * 8. 调用 bundlePlugin() 打包
  * 9. 清理临时目录
  *
+ * @returns `package` 是**复用凭据**（R-4）：installPluginFromZip /
+ *   updatePluginFromZip 还需要提取 frontend.js / deploy script / storage 资产，
+ *   此前它们各自再 `JSZip.loadAsync(zipBuffer)` 一次 —— 400MB 的包就是
+ *   又一份 ~400MB 的解析结构。返回同一份对象让调用方免除第二次解析。
+ *
  * @param zipBuffer - ZIP 文件的原始字节
- * @returns {{ manifest, bundledCode, entryFileName }}
+ * @returns {{ manifest, bundledCode, entryFileName, package }}
  * @throws {Error} ZIP bomb 检测、路径穿越、manifest 缺失/校验失败、入口文件缺失、esbuild 打包失败
  */
 export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
   manifest: Manifest;
   bundledCode: string;
   entryFileName: string;
+  package: JSZip;
 }> {
   // Step 1: 加载 ZIP
   const zip = await JSZip.loadAsync(zipBuffer);
@@ -576,20 +630,13 @@ export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    // 写入所有 ZIP 文件到临时目录
-    for (const [name, file] of Object.entries(zip.files)) {
-      if (file.dir) continue;
-      const filePath = path.join(tmpDir, name);
-      const fileDir = path.dirname(filePath);
-      fs.mkdirSync(fileDir, { recursive: true });
-      const content = await file.async('nodebuffer');
-      fs.writeFileSync(filePath, content);
-    }
+    // 写入所有 ZIP 文件到临时目录（按实际解压字节计量，防伪造头绕过 bomb 检查）
+    await extractZipEntries(zip, tmpDir, getMaxUncompressedSize());
 
     // Step 8: esbuild 打包
     const bundledCode = await bundlePlugin(entryCode, tmpDir);
 
-    return { manifest, bundledCode, entryFileName: resolvedMain };
+    return { manifest, bundledCode, entryFileName: resolvedMain, package: zip };
   } finally {
     // Step 9: 清理临时目录
     try {

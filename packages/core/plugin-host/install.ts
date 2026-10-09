@@ -8,7 +8,6 @@ import { PluginHostReload } from './reload.js';
 import { PluginHostCore } from './core.js';
 import { v7 as uuidv7 } from 'uuid';
 import fs from 'fs';
-import JSZip from 'jszip';
 import path from 'path';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import { manifestSchema } from '../esm-loader/manifest-schema.js';
@@ -45,6 +44,11 @@ export abstract class PluginHostInstall extends PluginHostReload {
    * @returns 解析后的 manifest
    */
   async installPlugin(sourceCode: string): Promise<Manifest> {
+    // 审计 R-4：安装入队串行（内存重操作，见 base.enqueueInstall）
+    return this.enqueueInstall(() => this.installPluginExclusive(sourceCode));
+  }
+
+  private async installPluginExclusive(sourceCode: string): Promise<Manifest> {
     // 1. 微加载提取 manifest（用于唯一性检查和 name 字段）
     const rawManifest = await this.extractManifest(sourceCode);
 
@@ -340,12 +344,22 @@ export abstract class PluginHostInstall extends PluginHostReload {
    * @returns manifest
    */
   async installPluginFromZip(zipBuffer: Buffer, overrideExecutionMode?: PluginExecutionMode): Promise<Manifest> {
+    // 审计 R-4：安装入队串行（见 base.enqueueInstall）
+    return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipBuffer, overrideExecutionMode));
+  }
+
+  private async installPluginFromZipExclusive(
+    zipBuffer: Buffer,
+    overrideExecutionMode?: PluginExecutionMode,
+  ): Promise<Manifest> {
     if (!this.esmLoader) {
       throw new Error('Cannot install ZIP plugin: no esmLoader injected');
     }
 
-    // 1. 验证并打包 ZIP
-    const { manifest, bundledCode } = await validateAndBundleZip(zipBuffer);
+    // 1. 验证并打包 ZIP —— package 是复用凭据：下方的 frontend.js / deploy
+    //    script / storage 提取直接用它，不再第二次 JSZip.loadAsync（R-4：
+    //    那对大包是又一份 ≈压缩态大小的解析结构）。
+    const { manifest, bundledCode, package: zip } = await validateAndBundleZip(zipBuffer);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, writing files...');
 
     // 2. 唯一性检查
@@ -395,7 +409,6 @@ export abstract class PluginHostInstall extends PluginHostReload {
       fs.writeFileSync(zipFilePath, zipBuffer);
 
       // Extract frontend.js and deploy script if present in ZIP
-      const zip = await JSZip.loadAsync(zipBuffer);
       const frontendFile = zip.file('frontend.js');
       if (frontendFile) {
         const frontendCode = await frontendFile.async('string');
@@ -633,11 +646,33 @@ export abstract class PluginHostInstall extends PluginHostReload {
     previousStatus: string;
     wasActive: boolean;
   }> {
+    // 审计 R-4：更新与安装共用同一条队列（install-from-url 对已存在插件走
+    // update 分支，与 install 并发时同样叠加内存峰值）。
+    return this.enqueueInstall(() => this.updatePluginFromZipExclusive(zipBuffer, options));
+  }
+
+  private async updatePluginFromZipExclusive(
+    zipBuffer: Buffer,
+    options: {
+      targetPluginId?: string;
+      executionMode?: PluginExecutionMode;
+      allowDowngrade?: boolean;
+    } = {},
+  ): Promise<{
+    pluginId: string;
+    manifest: Manifest;
+    oldVersion: string;
+    newVersion: string;
+    previousStatus: string;
+    wasActive: boolean;
+  }> {
     if (!this.esmLoader) {
       throw new Error('Cannot update ZIP plugin: no esmLoader injected');
     }
 
-    const { manifest, bundledCode } = await validateAndBundleZip(zipBuffer);
+    // package 是复用凭据（R-4）：下方的 frontend.js / storage 提取不再第二次
+    // JSZip.loadAsync —— 对大包那是又一份 ≈压缩态大小的解析结构。
+    const { manifest, bundledCode, package: zip } = await validateAndBundleZip(zipBuffer);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, preparing update...');
 
     // Resolve existing install
@@ -736,7 +771,6 @@ export abstract class PluginHostInstall extends PluginHostReload {
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
       fs.writeFileSync(zipFilePath, zipBuffer);
 
-      const zip = await JSZip.loadAsync(zipBuffer);
       const frontendFile = zip.file('frontend.js');
       const frontendPath = path.join(pluginDir, 'frontend.js');
       if (frontendFile) {

@@ -146,6 +146,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **R-4 安装链路内存治理：全局串行化 + 实际字节计量 + body 限额同源（2026-10-10）**：
+  - **问题实测定级上调（Low → Medium）**：安装是内存重操作 —— HTTP body Buffer（≤400MB）+ JSZip 解析结构 + 逐文件解压 + esbuild 内存打包，单请求 RSS 峰值可达数百 MB~1GB 量级；而三个安装入口（`installPlugin` / `installPluginFromZip` / `updatePluginFromZip`）**无任何互斥** —— 两个管理员同时安装（或连点两次）峰值即 N 倍，而共享主线程的还有课堂实时链路，一次 OOM 的代价远大于排队。安装是低频管理操作，串行代价可忽略；
+  - **串行化**：`PluginHostBase` 新增全局安装队列 `enqueueInstall`（FIFO；前一个无论成败都继续下一个 —— `then(op, op)` 防失败毒化；与 `inflightActivate` 的区别是「同 pluginId 合并」vs「全局互斥」，注释已标明勿混淆）；三个安装入口改为 public 包装 + `*Exclusive` 私有实现（沿用 `activatePlugin` 的命名模式）；
+  - **ZIP bomb 从 advisory 变为硬防护**：原检查读 ZIP 头自声明的 `_data.uncompressedSize`（**可伪造** —— 声明 1KB、解压 500MB）。新增 `extractZipEntries()`，在写盘循环里按**实际解压字节**累计，超限即中断（临时目录由调用方 finally 清理）；头检查保留为 fast-fail 预筛；
+  - **body 限额同源**：上传路由从此前硬编码 `'400mb'`（与解压上限 300MB 两个各写各的口径）改为 `getMaxUploadBodyBytes()` 派生 —— 压缩态 ≤ 未压缩总量是 ZIP 物理性质，一个 env（`OPENLEARN_MAX_ZIP_SIZE`）同时管住「收多少」与「放多少」；
+  - **消除双份解析**：`validateAndBundleZip` 新增返回 `package`（JSZip 复用凭据），`installPluginFromZip` / `updatePluginFromZip` 提取 frontend.js / deploy script / storage 时直接复用 —— 对大包省去又一份 ≈压缩态大小的解析结构；
+  - **测试**：`zip-memory-budget.test.ts`（实际字节计量含伪造头用例 / 跨文件累计 / 正常写入含嵌套目录 / body 限额同源与 env 联动）；`install-serialization.test.ts`（FIFO 顺序 / 失败不毒化 / 两个真实 `installPlugin` 并发串行 —— 无队列时必红 / 唯一性冲突后队列仍活 / install 与 ZIP 路径互斥）。全量 3403 测试通过，`tsc --noEmit` 0 error，ESLint 0 error。
+
 - **B-5 进程归属加固：spawn/registerInterval ownerHint + ESM 激活路径归属声明（2026-10-10）**：
   - **根因**：`ProcessManager.setPluginOwner` 写入的 `currentOwner` 是**全局单值**，只在「插件激活期内」准确。插件运行期（HTTP handler / 定时器回调）`spawn` 的任务会错记到「最后激活的插件」名下 —— 轻则自己 `kill` 自己的后台任务被归属校验拒绝（功能故障），重则他人可 kill 本插件的任务（越权）；
   - **修复一（根治）**：`IProcessService.spawn` / `registerInterval` 增加可选第四参 `ownerHint`（`interfaces.ts` + `openlearn.d.ts` 手写契约同步，dist 已重新生成）；`ProcessManager` 实现 ownerHint 优先、缺省回落 `currentOwner`（内核自身调用与旧调用方行为不变）；`wrapProcessManager` 的 per-plugin 包装层显式传入调用方插件 id —— 归属精度从「激活期」扩展到整个插件生命周期；

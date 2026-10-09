@@ -281,4 +281,42 @@ export abstract class PluginHostBase {
   // ── Phase 7: Middleware Registration ─────────────────────────────────────
 
   protected _hotReloadController: import('./hot-reload.js').HotReloadController | null = null;
+
+  // ── 安装/更新串行化（审计 R-4）──────────────────────────────────────────
+
+  /**
+   * ZIP 安装/更新的串行队列。
+   *
+   * ## 为什么必须串行
+   *
+   * 安装链路是**内存重操作**：HTTP body Buffer（≤300MB）+ JSZip 解析结构
+   * （≈压缩态大小）+ 逐文件解压 + esbuild 内存打包，单请求 RSS 峰值实测可达
+   * 数百 MB~1GB 量级。而安装入口（`installPlugin` / `installPluginFromZip` /
+   * `updatePluginFromZip`）此前**没有任何互斥** —— 两个管理员同时点安装，
+   * 或一个管理员连点两次，峰值就是 N 倍。共享主线程的还有课堂实时链路，
+   * 一次 OOM 的代价远大于排队。
+   *
+   * 安装是低频管理操作（插件市场装一次管很久），串行的代价可以忽略；
+   * 收益是把最坏情况从「N × 峰值」压到「1 × 峰值」。
+   *
+   * 与 `inflightActivate` 的区别：那个是**同 pluginId 合并并发调用**；
+   * 本队列是**全局互斥**（不同插件的安装也要互斥 —— 保护的是进程内存，
+   * 不是单个插件的状态）。
+   */
+  private installQueue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * 把操作排进安装队列（FIFO，前一个无论成败都继续下一个）。
+   *
+   * 失败不毒化队列：`then(op, op)` 让上一次的 rejection 不阻止后续 op；
+   * 同时把队列自身的 promise 吞掉 rejection，避免 unhandled rejection。
+   */
+  protected enqueueInstall<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.installQueue.then(op, op);
+    this.installQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
 }
