@@ -86,11 +86,18 @@ export function StudentGrowthProfileModal({
 }: StudentGrowthProfileModalProps) {
   const [awardingPoints, setAwardingPoints] = useState(false);
   const [internalProgress, setInternalProgress] = useState<StudentProgressType[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('overview');
   /**
    * 积分台账版本号。服务端每次 `classroom:points_awarded` 广播都会让它自增，
    * 把它纳入下方取数 effect 的依赖即可在加分后自动重拉。
    */
   const pointsVersion = usePointsLedgerStore((s) => s.version);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('overview');
+    }
+  }, [isOpen, student?.id]);
 
   // Automatically fetch student progress history when not provided via prop
   useEffect(() => {
@@ -483,7 +490,40 @@ ${
           </div>
         </header>
 
-        {/* ── 2. Top Summary Metric Cards Strip (4 Metrics) ── */}
+        {/* ── 1.5. Profile Segmented Tabs Navigation ── */}
+        <div className="px-5 py-2 bg-surface border-b border-border/80 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'overview'
+                  ? 'bg-primary-theme text-white shadow-xs'
+                  : 'text-muted hover:text-foreground hover:bg-surface-secondary'
+              }`}
+            >
+              <TrendingUp size={14} className="shrink-0" />
+              <span>{lang === 'zh' ? '全景概览' : 'Overview'}</span>
+            </button>
+
+            {/* Plugin Extension: student.profile.tab (button renderMode) */}
+            <ExtensionPointRenderer
+              slot="student.profile.tab"
+              slotProps={{
+                renderType: 'button',
+                studentActiveTab: activeTab,
+                setStudentActiveTab: setActiveTab,
+                student,
+                lessonId,
+                classId,
+                lang,
+              }}
+            />
+          </div>
+        </div>
+
+        {activeTab === 'overview' ? (
+          <>
+            {/* ── 2. Top Summary Metric Cards Strip (4 Metrics) ── */}
         <section className="px-5 py-3 bg-surface-secondary/40 border-b border-border/70 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
           {/* Card 1: Points */}
           <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
@@ -817,6 +857,23 @@ ${
             </div>
           </div>
         </div>
+          </>
+        ) : (
+          <div className="p-4 flex-1 overflow-y-auto bg-surface-secondary/20">
+            <ExtensionPointRenderer
+              slot="student.profile.tab"
+              slotProps={{
+                renderType: 'panel',
+                studentActiveTab: activeTab,
+                student,
+                lessonId,
+                classId,
+                lang,
+                progressHistory: activeProgressHistory,
+              }}
+            />
+          </div>
+        )}
 
         {/* ── 4. Modal Footer: Attribution Award & Export Actions ── */}
         <footer className="px-5 py-3 bg-surface border-t border-border/80 flex flex-wrap items-center justify-between gap-3 shrink-0">

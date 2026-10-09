@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **开辟下一批核心业务域扩展槽位 (`student.profile.tab` / `class.batch.action` / `editor.header.action`)**：
+  - **学生成长中心扩展 Tab (`student.profile.tab`)**：在 `src/features/student/StudentGrowthProfileModal.tsx` 开辟分段 Tab 导航栏，支持原生“全景概览”与第三方插件扩展 Tab，在 `ExtensionPointRenderer` 落地 `renderType: 'button'` 与 `panel` 双渲染态，完整透传学生画像、课堂/班级 ID 与双向受控 `dispatcher`；
+  - **班级花名册批量操作流水线 (`class.batch.action`) 增强**：在 `src/features/teacher/classes/ClassStudentsPanel.tsx` 丰富 `slotProps`，透传选中的学生数组实体 `selectedStudents`、全量学生 `allStudents`、班级详情 `cls`、禁用态 `disabled` 与刷新回调 `onRefresh`，并接入 `host:refresh` 权威处理器，支持第三方插件一键同步学籍、批量颁发微勋章或导出名册；
+  - **备课编辑器头部动作扩展 (`editor.header.action`) 增强**：优化在 `src/features/teacher/LessonEditorView.tsx` 顶栏快捷操作区的布局与响应式展示，透传当前课节实体 `currentLesson`、只读状态 `isReadOnly`、当前角色 `activeRole` 与保存回调 `onSave`，并支持插件发起课程数据受控刷新；
+  - **自动化测试 100% 达标**：新增 3 个专项单元与集成测试套件，全量 Vitest 测试套件 396 个测试文件、3306 个用例 100% 通过，`pnpm lint` 保持 0 错误。
+
 - **双向受控 `IHostActionDispatcher` 架构与宿主动作协议落地**：
   - **标准化动作协议联合类型**：定义 `HostAction`，涵盖全局刷新协议 `host:refresh`（支持 `timetable` | `classes` | `lessons` | `students` | `all`）、受控确认模态 `host:modal:confirm`（异步 Promise 决议布尔值）、受控自定义模态 `host:modal:open` / `host:modal:close`、全局 Toast `host:toast` 与路由导航 `host:navigate`；
   - **受控分发器实现与中间件机制**：实现 `HostActionDispatcher`，支持洋葱模型中间件流水线（`dispatcher.use`）、权威处理器注册与生命周期注销（`registerHandler`）、通配广播订阅（`subscribe`）与插件身份打标（`createScopedDispatcher`）；

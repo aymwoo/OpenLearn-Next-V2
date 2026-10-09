@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   LayoutGrid,
@@ -19,6 +19,7 @@ import {
   Check,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 import { StudentPrivateNotesEditor } from '../../../components/StudentPrivateNotesEditor';
 import { parseCSV } from '../../../utils/pluginParsers.js';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
@@ -95,7 +96,27 @@ export function ClassStudentsPanel({
   fetchStudents,
   parseCSV,
 }: ClassStudentsPanelProps) {
+  const host = useOptionalPluginHost();
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+
+  // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
+  useEffect(() => {
+    if (!host) return;
+    const dispatcher = host.getDispatcher?.();
+    if (!dispatcher) return;
+
+    const disposable = dispatcher.registerHandler('host:refresh', async (envelope) => {
+      const target = envelope.action.payload.target;
+      if (target === 'students' || target === 'classes' || target === 'all') {
+        await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
+        return { success: true, refreshed: ['students', 'classes'] };
+      }
+    });
+
+    return () => {
+      disposable.dispose();
+    };
+  }, [host, cls.id, fetchClassStudents, fetchStudents]);
 
   const handleCopyStudentNumber = (e: React.MouseEvent, text: string, stId: string) => {
     e.stopPropagation();
@@ -465,9 +486,15 @@ export function ClassStudentsPanel({
                         slot="class.batch.action"
                         slotProps={{
                           classId: cls.id,
+                          cls,
                           lang,
                           selectedStudentIds: Array.from(selectedStudentIds),
+                          selectedStudents: cStudents.filter((s) => selectedStudentIds.has(s.id)),
+                          allStudents: cStudents,
                           disabled: selectedStudentIds.size === 0,
+                          onRefresh: async () => {
+                            await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
+                          },
                         }}
                       />
                     </div>

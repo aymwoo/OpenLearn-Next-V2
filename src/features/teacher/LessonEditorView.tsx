@@ -14,9 +14,11 @@ import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './lesson-editor/paletteC
 import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoSave';
 import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 
 export function LessonEditorView() {
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
+  const host = useOptionalPluginHost();
   const {
     lang,
     session,
@@ -76,6 +78,27 @@ export function LessonEditorView() {
       hoveredSegmentDropTargetRef.current = null;
     }
   }, [whiteboardDragState]);
+
+  // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
+  useEffect(() => {
+    if (!host) return;
+    const dispatcher = host.getDispatcher?.();
+    if (!dispatcher) return;
+
+    const disposable = dispatcher.registerHandler('host:refresh', async (envelope) => {
+      const target = envelope.action.payload.target;
+      if (target === 'lessons' || target === 'all') {
+        if (selectedLesson && fetchElements) {
+          await fetchElements(selectedLesson);
+        }
+        return { success: true, refreshed: ['lessons'] };
+      }
+    });
+
+    return () => {
+      disposable.dispose();
+    };
+  }, [host, selectedLesson, fetchElements]);
 
   const handleSaveElementToServer = async (lId: string, elId: string, data: any): Promise<boolean> => {
     try {
@@ -272,11 +295,6 @@ export function LessonEditorView() {
                   lastSavedTime: editorLastSavedTime,
                 }}
               />
-              {/* 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF 等） */}
-              <ExtensionPointRenderer
-                slot="editor.header.action"
-                slotProps={{ lessonId: selectedLesson, lang, onSave: handleSaveElementToServer }}
-              />
               <ExtensionPointRenderer
                 slot="whiteboard.autosave.action"
                 slotProps={{
@@ -336,6 +354,19 @@ export function LessonEditorView() {
               <span>{lang === 'zh' ? '学生视角' : 'Student'}</span>
             </button>
           </div>
+
+          {/* 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF 等） */}
+          <ExtensionPointRenderer
+            slot="editor.header.action"
+            slotProps={{
+              lessonId: selectedLesson,
+              currentLesson,
+              lang,
+              isReadOnly,
+              activeRole,
+              onSave: handleSaveElementToServer,
+            }}
+          />
 
           <button
             type="button"

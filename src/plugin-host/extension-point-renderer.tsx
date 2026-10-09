@@ -492,6 +492,69 @@ export function ExtensionPointRenderer({
     );
   }
 
+  // student.profile.tab with renderType 'button' — render segmented buttons
+  if (slot === 'student.profile.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.studentActiveTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setStudentActiveTab?.(tabValue);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-surface text-primary-theme shadow-xs border border-theme/60'
+                  : 'text-muted hover:text-main'
+              }`}
+              title={label}
+            >
+              <PluginIconRenderer icon={icon} size={14} className="shrink-0" alt={label} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // student.profile.tab with renderType 'panel' — render active plugin tab panel
+  if (slot === 'student.profile.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.studentActiveTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            学生画像扩展 Tab 加载失败
+          </div>
+        }
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          {React.createElement(resolveExtensionComponent(activeExt), {
+            student: slotProps?.student,
+            lessonId: slotProps?.lessonId,
+            classId: slotProps?.classId,
+            lang: slotProps?.lang,
+            progressHistory: slotProps?.progressHistory,
+            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+            ...activeExt.slotProps,
+          })}
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  }
+
   // teacher.tab with renderType 'button' — render NavButton-style buttons
   // directly from extension metadata, bypassing plugin components entirely.
   // This guarantees pixel-perfect styling consistency with system NavButton.

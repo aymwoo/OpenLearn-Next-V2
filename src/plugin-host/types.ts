@@ -121,6 +121,7 @@ export type ExtensionSlot =
   | 'classroom.attribution.award' // 课堂归因加分维度扩展
   | 'classroom.attribution.action' // 课堂表现归因动作扩展
   | 'classroom.leaderboard.action' // 班级积分榜操作扩展
+  | 'student.profile.tab' // 学生成长档案扩展 Tab（如 AI 错题分析 / 综合素质评价 / 阶段性发展对比）
   | 'student.profile.dimension' // 学生多维素养雷达维度扩展
   | 'student.profile.card' // 学生成长档案扩展卡片
   | 'student.profile.action' // 学生成长档案操作动作扩展
