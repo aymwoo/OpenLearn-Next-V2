@@ -171,7 +171,14 @@ interface ICapabilityService {
 }
 
 interface IProcessService {
-  spawn(name: string, taskType: string, payload: unknown): string | Promise<string>;
+  /**
+   * @param ownerHint 显式归属（B-5）。宿主注入的 per-plugin 代理层会传入调用方
+   *   插件 id —— `setPluginOwner` 的 `currentOwner` 是全局单值，只保证「激活期内
+   *   spawn」归属正确；插件运行期（HTTP handler / 定时器回调）spawn 的任务若不带
+   *   hint，会错记到「最后激活的插件」名下（自己 kill 被拒，或他人可 kill 自己的
+   *   后台任务）。宿主已代为传参，插件作者无需关心。
+   */
+  spawn(name: string, taskType: string, payload: unknown, ownerHint?: string): string | Promise<string>;
   kill(processId: string): void | Promise<void>;
   registerHandler(taskType: string, handler: ProcessHandler): void | Promise<void>;
   unregisterHandler(taskType: string): void | Promise<void>;
@@ -179,6 +186,7 @@ interface IProcessService {
     name: string,
     intervalMs: number,
     tickFn: (log: (msg: string) => void) => void,
+    ownerHint?: string,
   ): string | Promise<string>;
   restore(): void | Promise<void>;
 }

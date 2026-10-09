@@ -171,9 +171,9 @@ describe('B-5 · 跨插件边界：taskType 命名空间与 kill 归属', () => 
       unregisterHandler: vi.fn(async (taskType: string) => {
         registered.delete(taskType);
       }),
-      spawn: vi.fn(async (_name: string, _taskType: string, _payload: unknown) => 'pid-new'),
+      spawn: vi.fn(async (_name: string, _taskType: string, _payload: unknown, _ownerHint?: string) => 'pid-new'),
       kill: vi.fn(async () => {}),
-      registerInterval: vi.fn(async () => 'pid-new'),
+      registerInterval: vi.fn(async (_name: string, _intervalMs: number, _tick: unknown, _ownerHint?: string) => 'pid-new'),
       restore: vi.fn(async () => {}),
       getProcessOwner: (pid: string) => owners[pid],
     };
@@ -233,6 +233,17 @@ describe('B-5 · 跨插件边界：taskType 命名空间与 kill 归属', () => 
     delete svc.getProcessOwner;
     const wrap = wrapProcessManagerForTest(svc, new ResourceTracker(), 'plugin-a');
     await expect(wrap.kill('p_other')).resolves.toBeUndefined();
+  });
+
+  it('spawn / registerInterval 显式携带调用方插件 id（ownerHint，B-5）', async () => {
+    const svc = mkProcessService();
+    const wrap = wrapProcessManagerForTest(svc, new ResourceTracker(), 'plugin-a');
+    await wrap.spawn('job', 'my-task', {});
+    // spawn 第四参必须是调用方插件 id
+    expect(svc.spawn.mock.calls[0][3]).toBe('plugin-a');
+    await wrap.registerInterval('tick', 1000, () => {});
+    // registerInterval 第四参同上
+    expect(svc.registerInterval.mock.calls[0][3]).toBe('plugin-a');
   });
 
   it('disposeAll 清理时用的是带前缀的 key', async () => {

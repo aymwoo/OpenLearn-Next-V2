@@ -185,11 +185,6 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
    * @param currentState 进入 ACTIVATING **之前**的状态 —— 仅用于加载失败时
    *   恢复原位（不落在 transient 态）。必须由编排层传入：此刻内存状态已是
    *   ACTIVATING，本方法无法自行还原「之前是什么」。
-   *
-   * TODO（已知不对称，非本轮修复）：此路径不调用 `declareProcessOwnership`，
-   * 意味着 DB 安装的插件 spawn 的任务没有归属记录 —— `wrapProcessManager.kill`
-   * 的归属校验对它们退化为「不拦截」（与 B-5 修复前一致）。修复前需确认
-   * `setPluginOwner` 与「进程表已存在行」两种写入路径的语义，避免误杀。
    */
   private async activateFromDatabase(pluginId: string, currentState: PluginState): Promise<void> {
     // 3. 从 DB 加载插件
@@ -222,6 +217,18 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       manifestSchema.parse(mergedManifest);
 
       const { skipTokens } = this.resolveActivationGuards(mergedManifest, pluginId);
+
+      // B-5：声明进程归属 —— 与 preloaded 路径对齐（P1 收尾）。
+      //
+      // 此前仅 preloaded 路径调用，ESM 安装的插件激活期 spawn 的任务无归属
+      // （currentOwner 是上一个声明者的值或 undefined）⇒ kill 归属校验对它们
+      // 退化为不拦截。必须早于 buildContext / activate：归属是同步写入的单值，
+      // activate 里 spawn 时它必须已经指向本插件。
+      //
+      // 注意：这一声明只覆盖「激活期内 spawn」。插件运行期（HTTP handler /
+      // 定时器回调）的 spawn 由 wrapProcessManager 显式传 ownerHint=pluginId
+      // 保证归属（B-5 加固），不依赖 currentOwner。
+      await this.declareProcessOwnership(pluginId);
 
       // 7. 构建安全的 PluginContext — skipTokens 中指定的可选服务 key 将被设为 null（D-12）
       const ctx = await buildContext(

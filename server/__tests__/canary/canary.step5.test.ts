@@ -284,8 +284,15 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
   });
 
   it('9.3 定时心跳任务停摆：deactivate 销毁 registerInterval 注册的后台定时器', () => {
-    // canary 在 inline 模式下注册了 canary-heartbeat
-    expect(mockProcessManager.registerInterval).toHaveBeenCalledWith('canary-heartbeat', 1000, expect.any(Function));
+    // canary 在 inline 模式下注册了 canary-heartbeat。
+    // 第四参 ownerHint（B-5）：per-plugin 包装层显式携带调用方插件 id（DB UUID），
+    // 使运行期注册的定时器归属真实调用方 —— 不再错记到「最后激活的插件」名下。
+    expect(mockProcessManager.registerInterval).toHaveBeenCalledWith(
+      'canary-heartbeat',
+      1000,
+      expect.any(Function),
+      expect.any(String),
+    );
   });
 
   it('9.4 命令处理器注销：deactivate 自动清理命令注册', () => {

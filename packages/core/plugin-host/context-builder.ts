@@ -351,13 +351,20 @@ export function wrapProcessManager(
     }),
     registerInterval: createSafeFunction((name: string, intervalMs: number, tickFn: any) => {
       return Promise.resolve(
-        processService.registerInterval(name, intervalMs, (log) => {
-          try {
-            tickFn(log);
-          } catch (e) {
-            console.error(`[Plugin:${pluginId}] Error in interval task ${name}:`, e);
-          }
-        }),
+        // ownerHint 传本插件 id（B-5 加固）：currentOwner 是全局单值，
+        // 插件运行期注册的 interval 若不显式携带归属，会错记到最后激活者名下。
+        processService.registerInterval(
+          name,
+          intervalMs,
+          (log) => {
+            try {
+              tickFn(log);
+            } catch (e) {
+              console.error(`[Plugin:${pluginId}] Error in interval task ${name}:`, e);
+            }
+          },
+          pluginId,
+        ),
       ).then((processId) => {
         tracker.track(pluginId, {
           dispose: () => {
@@ -385,10 +392,15 @@ export function wrapProcessManager(
      * 否则自己 spawn 的任务会派发不到自己的 handler（前缀只在 register 时加了）。
      *
      * 传入的 taskType 若已带本插件前缀则不重复加。
+     *
+     * ownerHint 传**本插件 id**（B-5 加固）：`setPluginOwner` 的 currentOwner
+     * 是全局单值，只在激活期内准确；插件运行期（HTTP handler、定时器回调）
+     * spawn 的任务若不加 hint，会错记到「最后激活的插件」名下 —— 轻则自己
+     * kill 被归属校验拒绝，重则他人可 kill 本插件的后台任务。
      */
     spawn: createSafeFunction((name: string, taskType: string, payload: unknown) => {
       const scoped = taskType.startsWith(`${pluginId}::`) ? taskType : scopedTaskType(taskType);
-      return processService.spawn(name, scoped, payload);
+      return processService.spawn(name, scoped, payload, pluginId);
     }),
     unregisterHandler: createSafeFunction((taskType: string) => {
       return processService.unregisterHandler(scopedTaskType(taskType));

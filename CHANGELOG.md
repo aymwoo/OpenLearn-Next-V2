@@ -146,6 +146,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **B-5 进程归属加固：spawn/registerInterval ownerHint + ESM 激活路径归属声明（2026-10-10）**：
+  - **根因**：`ProcessManager.setPluginOwner` 写入的 `currentOwner` 是**全局单值**，只在「插件激活期内」准确。插件运行期（HTTP handler / 定时器回调）`spawn` 的任务会错记到「最后激活的插件」名下 —— 轻则自己 `kill` 自己的后台任务被归属校验拒绝（功能故障），重则他人可 kill 本插件的任务（越权）；
+  - **修复一（根治）**：`IProcessService.spawn` / `registerInterval` 增加可选第四参 `ownerHint`（`interfaces.ts` + `openlearn.d.ts` 手写契约同步，dist 已重新生成）；`ProcessManager` 实现 ownerHint 优先、缺省回落 `currentOwner`（内核自身调用与旧调用方行为不变）；`wrapProcessManager` 的 per-plugin 包装层显式传入调用方插件 id —— 归属精度从「激活期」扩展到整个插件生命周期；
+  - **修复二**：ESM 安装路径的激活流程补 `declareProcessOwnership`（此前仅 preloaded 路径有，P1 标记的 TODO 就此关闭）—— 激活期 spawn 的任务归属正确，`kill` 归属校验对 ESM 插件真正生效；
+  - **契约同步**：canary step5 9.3 与 ai-planner 两处 `toHaveBeenCalledWith` 断言随签名扩展（补第四参 ownerHint），并注释说明新参语义；
+  - **测试**：新增 `process-manager-ownership.test.ts` 六例（ownerHint 写入 / currentOwner 被覆盖后仍归属真实调用方 / 不传回落 / 双缺失为 NULL / registerInterval / kill 后 DB 行保留供审计）；`method-policy-backend.test.ts` B-5 组追加包装层传参断言。全量 3393 测试通过，`tsc --noEmit` 0 error，ESLint 0 error。
+
 - **插件系统审计 P1：激活流程拆分、能力助手收敛与两项契约修复（2026-10-09 晚场）**：
   - **`activatePluginExclusive` 拆分（310 行 → 编排 64 行）**：原方法把三分支（preloaded / ESM / worker）+ 依赖检查 + 能力授予 + 中间件 + 超时 + 回滚合于一体 —— F-1（process 模式分流遗漏）与 F-4（inline 停用不注销贡献点）都发生在这个体量里。现拆为「编排 + `activatePreloaded` + `activateFromDatabase` + `loadPluginModule` + `resolveActivationGuards` + `runActivatePipeline` + `grantCapabilities`/`revokeCapabilities`」，最长方法 89 行，各职责单一可测。两条 inline 路径的**既有差异**（错误类型、成功副作用在中间件管道内/外、`declareProcessOwnership` 仅 preloaded 有）逐条保留并在注释中标注 —— 统一它们属行为变更，需单独评估；ESM 路径缺失进程归属声明记为 TODO（其 spawn 任务的 kill 归属校验退化为不拦截）；
   - **能力授予/撤销从 7 处内联收敛为单一来源**：`grantCapabilities` / `revokeCapabilities`（protected，activate / activateWorker / deactivate / deactivateWorker / uninstall 兜底共用），消除「只改一处」的漂移风险；撤销失败从 3 处静默 swallow 统一为记录日志后继续；

@@ -168,7 +168,9 @@ describe('AiPlannerPlugin', () => {
       processId: 'mock-process-id',
       message: 'Process started in the background.',
     });
-    // spawn 必须用与 registerHandler 相同的前缀，否则任务派发不到自己的 handler
+    // spawn 必须用与 registerHandler 相同的前缀，否则任务派发不到自己的 handler。
+    // 第四参 ownerHint（B-5）：包装层显式携带调用方插件 id，进程归属不再依赖
+    // 「激活期设置的单值 currentOwner」—— 插件运行期 spawn 也归属正确。
     expect(mockProcessManager.spawn).toHaveBeenCalledWith(
       'AI Generator: AI Ethics',
       '@openlearn/plugin-ai-planner::ai_planner_task',
@@ -178,6 +180,7 @@ describe('AiPlannerPlugin', () => {
         classId: undefined,
         duration: 3,
       },
+      '@openlearn/plugin-ai-planner',
     );
   });
 });

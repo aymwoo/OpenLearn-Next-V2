@@ -67,27 +67,20 @@ export class ProcessManager {
     }
   }
 
-  public spawn(name: string, taskType: string, payload: any): string {
+  public spawn(name: string, taskType: string, payload: any, ownerHint?: string): string {
     const processId = uuidv7();
+
+    // ownerHint 优先于 currentOwner（B-5）：currentOwner 是全局单值，只对
+    // 「激活期内 spawn」正确；per-plugin 包装层传的 ownerHint 才代表真实调用方。
+    const owner = ownerHint ?? this.currentOwner ?? null;
 
     this.kernel.db
       .prepare(
         'INSERT INTO processes (id, name, status, task_type, payload, state, logs, created_at, updated_at, plugin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(
-        processId,
-        name,
-        'running',
-        taskType,
-        JSON.stringify(payload),
-        null,
-        '',
-        Date.now(),
-        Date.now(),
-        this.currentOwner ?? null,
-      );
+      .run(processId, name, 'running', taskType, JSON.stringify(payload), null, '', Date.now(), Date.now(), owner);
 
-    if (this.currentOwner) this.processOwners.set(processId, this.currentOwner);
+    if (owner) this.processOwners.set(processId, owner);
 
     this.kernel.eventBus.publish({
       id: uuidv7(),
@@ -162,16 +155,24 @@ export class ProcessManager {
     });
   }
 
-  public registerInterval(name: string, intervalMs: number, tickFn: (log: (msg: string) => void) => void): string {
+  public registerInterval(
+    name: string,
+    intervalMs: number,
+    tickFn: (log: (msg: string) => void) => void,
+    ownerHint?: string,
+  ): string {
     const processId = uuidv7();
+
+    // 同 spawn：ownerHint 优先（B-5）
+    const owner = ownerHint ?? this.currentOwner ?? null;
 
     this.kernel.db
       .prepare(
         'INSERT INTO processes (id, name, status, task_type, logs, created_at, updated_at, plugin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(processId, name, 'running', 'interval', '', Date.now(), Date.now(), this.currentOwner ?? null);
+      .run(processId, name, 'running', 'interval', '', Date.now(), Date.now(), owner);
 
-    if (this.currentOwner) this.processOwners.set(processId, this.currentOwner);
+    if (owner) this.processOwners.set(processId, owner);
 
     this.kernel.eventBus.publish({
       id: uuidv7(),

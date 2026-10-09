@@ -188,8 +188,15 @@ export interface IProcessService {
    * Spawn a new background process.
    * Corresponds to ProcessManager.spawn() — made async for cross-runtime compatibility.
    * Payload tightened from `any` to `unknown` per D-11.
+   *
+   * @param ownerHint 显式归属（B-5）。`wrapProcessManager` 的 per-plugin 包装层
+   *   传入调用方插件 id —— `setPluginOwner` 的 `currentOwner` 是**全局单值**，
+   *   只保证「激活期内 spawn」归属正确；插件运行期（HTTP handler / 定时器回调）
+   *   spawn 的任务会错记到「最后激活的插件」名下。ownerHint 让 per-plugin 包装层
+   *   显式携带归属，把归属精度从「激活期」扩展到整个插件生命周期。
+   *   缺省回落 currentOwner（旧调用方行为不变）。
    */
-  spawn(name: string, taskType: string, payload: unknown): string | Promise<string>;
+  spawn(name: string, taskType: string, payload: unknown, ownerHint?: string): string | Promise<string>;
 
   /**
    * Kill a running process by its id.
@@ -212,11 +219,14 @@ export interface IProcessService {
   /**
    * Register a recurring interval process.
    * Corresponds to ProcessManager.registerInterval() — made async for cross-runtime compatibility.
+   *
+   * @param ownerHint 同 spawn —— per-plugin 包装层显式携带归属（B-5）。
    */
   registerInterval(
     name: string,
     intervalMs: number,
     tickFn: (log: (msg: string) => void) => void,
+    ownerHint?: string,
   ): string | Promise<string>;
 
   /**
