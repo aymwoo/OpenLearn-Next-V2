@@ -146,6 +146,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件系统 2026-10-09 审计轮修复（F-1 / F-2 / F-3 / F-4 / F-5 / R-1 / R-2 / R-3 / R-5 / R-6 / E-1 / E-2 / E-4 / E-5）**：
+  - **F-1（Critical）`process` 执行模式在生命周期后半段被系统性遗漏**：activate 一侧早已支持 `worker/process` 双隔离，但停用 / 卸载 / 模式热切换 / 热重载四处仍写 `=== 'worker'`。后果是静默失效——停用走 inline 路径子进程永不 terminate；再激活撞 "Worker already exists"；**热重载把进程隔离降级为宿主管内 inline**。新增单一判据 `requiresIsolatedExecution(mode)`（类型谓词，带收窄）替换四处字面量，`reloadWorker` 重建时同步 `isolateKind`（此前缺省 thread，进程模式热重载后原语也会降级）；
+  - **F-2**：`@scope/name` 形式 manifest.id 的 REST 端点不可达——网关路由 `:pluginId` 是单段参数，而市场 id 校验正则明确允许 `/`。网关新增 `resolveScopedPluginId()` 前缀重组（取最长匹配），编码（`%2F`）与未编码两种形态均可用；
+  - **F-3**：`classroomTools` 的 zustand 注册补齐 `commandType` 语义（此前注册空组件且不带命令，按 store 渲染的消费端拿到的是无动作按钮），并注明真实消费端是 `LiveClassroomView` 的 manifest 直解析；
+  - **F-4**：inline 插件**正常停用**此前不注销声明式贡献点（只有 worker / uninstall / pipeline 崩溃三条路径注销），`listContributions()` 长期滞留已停用插件条目。deactivate finally 补 `revokePluginContributions()`；
+  - **F-5**：manifest.executionMode 此前只映射 `'worker'` 一个值（写 `'process'` 被静默装成 inline），安装与更新路径统一走 `normalizeExecutionMode`；
+  - **R-1（High）inline 派发无超时熔断**：网关传入的 `timeoutMs`（5s）/ SSE `maxLifetimeMs`（5min）在 inline 路径被完全丢弃——插件一个不 resolve 的 handler 永久占住 Express 连接。两条派发路径各加 `Promise.race` 超时，超时抛 `PluginDispatchTimeoutError`（命中网关既有 504 契约）；顺带 `reloadWorker` 的 DB 更新补 `version` 列（R-3 一半）；
+  - **R-2**：dev 热重载 watchDir 从 `cwd/plugins` 推导改为跟随宿主 `getPluginsDir()`（H-8 整改的残留——migrate 路径修了、hot-reload 漏了）；
+  - **R-3**：`/api/plugins/execute-command` 存在性预检不再读 CommandBus 私有 Map，改用新增的公开方法 `CommandBus.hasHandler()`；
+  - **R-5**：`GET /api/plugins/:id` 详情错误响应接入 `sendSafeError` 脱敏（此前直接回 `err.message`）；`GET /api/plugins/:id/config` 从「任意登录用户」收紧为教师/管理员（配置值可能含第三方服务密钥）；
+  - **R-6**：卸载时静态路由摘除不再 `break`——`createPluginStaticMiddleware` 挂载的是两个中间件，只摘一个会留下持续设 header 的空转层；
+  - **E-1**：manifest `contributes` schema 从 6 个 slot 补全为 21 个服务端 slot（镜像 `contribution-registry.ts` 的 `ContributionConfig` 联合）+ 11 个前端 slot 宽松兜底（`id` 必填）。此前 14+ slot 经 passthrough 原样入库，「安装期 schema 校验」的承诺对多数 slot 不成立；修正 canary fixture 把声明式贡献写成单对象的格式错误；
+  - **E-2**：`ctx.resolve(<string>)` 收敛到 SDK 已承诺 Token 白名单（`PLUGIN_RESOLVABLE_TOKEN_NAMES`，29 个）——此前字符串路径直达 `ServiceRegistry.resolveByName`（纯 Map.get、零门禁），插件凭内部 token 名即可在 inline 模式拿到 20+ 个内核服务实例；
+  - **E-4**：`PluginContext.services` 9 个 key 的类型补 `| null`，把 D-12 运行时降级机制从注释升级为类型契约（开启 strictNullChecks 的插件作者编译期即可见）；
+  - **E-5**：前端宿主补 disposer 登记表——`ctx.navigation.subscribeTeacherTab` / `ctx.context.subscribe` 此前把 appStore 的 unsubscribe 原样交给插件，不退订即永久泄漏；现随 `unregisterPluginResources` 统一回收；
+  - **测试**：`execution-mode.test.ts` 新增 F-1 源码级护栏（五处分流必须用 `requiresIsolatedExecution`、禁止裸 `=== 'worker'`）；新增 `audit-fixes.test.ts`（F-4 / R-1 / E-2 行为契约）与 `plugin-gateway-scoped-id.test.ts`（F-2 七例）。全量 3374 测试通过，`tsc --noEmit` 与 ESLint 0 error。
+
 - **教学环节守卫：命名空间隔离 / 并行执行 / 全局延迟上限（I-3）**：三项均先探针实测复现再修复：
   - **命名空间冲突（判定正确性问题，非性能问题）**：旧实现用 `guard.id` 作唯一键，实测两个插件都注册 `id:'gate'` 时 `listGuards().length === 1`，**插件 A 的拒绝被插件 B 静默覆盖成放行**。现改为 `owner + id` 复合键，`registerGuard(guard, owner?)` 接受 owner；未声明 owner 时退化为旧语义但打告警（没有 owner 就无从区分，至少让它可见）；
   - **无 owner 导致无法按插件回收**：守卫注册在内核 DI 的 `defaultStageGuardPipeline` 单例里、进程级存活，插件停用时不清理会导致门禁继续按已停用插件的规则判定。现新增 `unregisterByOwner()` / `listGuardsByOwner()`，并挂到 `PluginHost.revokePluginContributions()`（插件停用与更新的公共路径），`pluginId` 与 `manifestId` 两侧都试；

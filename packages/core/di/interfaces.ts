@@ -854,3 +854,55 @@ export interface IStageGuardService {
 }
 
 export const IStageGuardServiceToken = new Token<IStageGuardService>('@openlearn/core:IStageGuardService');
+
+// ── 插件可解析的 Token 白名单（审计 E-2）─────────────────────────────────
+//
+// 背景：`ctx.resolve` 接受 `string | Token`。Token 对象路径天然安全 —— 插件必须
+// import SDK 导出的常量才拿得到它。但**字符串路径**此前直接落到
+// `serviceRegistry.resolveByName(name)`，那里是纯粹的 `registry.get(name)`，
+// 没有任何门禁：插件只要知道一个内部 token 名（LessonEngine / ClassroomRuntime /
+// Presence / Collaboration / Analytics 等 20+ 个内核服务），就能在 inline 模式下
+// 拿到宿主内部服务实例（worker 模式有 computeAllowedWorkerTokens 兜底）。
+//
+// 本集合 = `packages/plugin-sdk/index.ts` value 导出的全部 Token（对插件作者的
+// 公开承诺面）。字符串 resolve 只允许命中本集合；Token 对象路径不受限。
+// **新增对外 Token 时同步加到这里**，否则插件用名字解析会被拒（报错信息
+// 会指明，属显式失败而非静默降级）。
+export const PLUGIN_RESOLVABLE_TOKENS = [
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  IProcessServiceToken,
+  IStorageServiceToken,
+  IAIServiceToken,
+  IDatabaseToken,
+  IPluginHostToken,
+  ISemesterGradeServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
+  ILessonEngineServiceToken,
+  IClassroomRuntimeServiceToken,
+  IPresenceEngineServiceToken,
+  ITeachingCollaborationServiceToken,
+  ILearningAnalyticsServiceToken,
+  IAICapabilityServiceToken,
+  ICapabilityRuntimeServiceToken,
+  IPlatformServiceRegistryToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
+  ICapabilityRegistryToken,
+  IAuthSessionBridgeToken,
+  ICoursewareRuntimeScriptRegistryToken,
+  IStageGuardServiceToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
+  IClassroomCountdownServiceToken,
+] as const;
+
+// IActivityRegistryToken 定义在 activity-ecosystem（interfaces.ts import 它会形成
+// 反向依赖），故按名字收录 —— 名字必须与 SDK value 导出的常量一致。
+export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
+  ...PLUGIN_RESOLVABLE_TOKENS.map((t) => t.name),
+  '@openlearn/activity-ecosystem:IActivityRegistry',
+]);

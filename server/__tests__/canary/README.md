@@ -67,12 +67,12 @@ server/__tests__/canary/
     ],
   },
   "contributes": {
-    "teacher.tab": { "id": "canary-tab", "label": "金丝雀", "icon": "Bird", "position": 50 },
-    "student.view": { "id": "canary-student", "label": "探针面板" },
-    "classroom.tool": { "id": "canary-tool", "name": "探针互动", "icon": "Activity", "commandType": "canary.ping" },
+    "teacher.tab": [{ "id": "canary-tab", "label": "金丝雀", "icon": "Bird", "position": 50 }],
+    "student.view": [{ "id": "canary-student", "label": "探针面板" }],
+    "classroom.tool": [{ "id": "canary-tool", "name": "探针互动", "icon": "Activity", "commandType": "canary.ping" }],
     "anchor:*": { "id": "anchor:toolbar-export", "placement": "before", "label": "探针锚点" },
-    "help.plugin_docs": { "id": "canary-docs", "title": "金丝雀说明", "markdownUrl": "/plugins/canary.md" },
-    "student.lesson.tool": { "id": "canary-lesson-tool", "label": "课中探针" },
+    "help.plugin_docs": [{ "id": "canary-docs", "title": "金丝雀说明", "markdownUrl": "/plugins/canary.md" }],
+    "student.lesson.tool": [{ "id": "canary-lesson-tool", "label": "课中探针" }],
   },
   "classroomTools": [
     {

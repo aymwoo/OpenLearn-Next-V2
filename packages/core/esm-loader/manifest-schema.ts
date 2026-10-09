@@ -24,6 +24,191 @@ const classroomToolSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional(),
 });
 
+// ── V5.x：与 contribution-registry.ts 的 ContributionConfig 联合类型一一对应 ──
+//
+// 审计 E-1：此前本 schema 只枚举 6 个 slot，其余全部落到顶层 `.passthrough()`
+// 原样入库 —— 「安装期 schema 校验、而非运行时」的设计承诺对多数 slot 不成立：
+// 插件 manifest 里写坏形状的 timeline.segments / palette.items / peer_review.*
+// 不会在安装时被拒，而要等到前端渲染对应组件时才炸，排查时现象与病因离得很远。
+//
+// 下面补全 contribution-registry.ts 已定义的全部 slot。**新增 slot 时请同步
+// 两处**（此处校验 + registry 的 Config 接口），并优先在本文件加 zod schema。
+// anchor:* 为开放命名空间（宿主公布锚点 id），继续由 passthrough 透传。
+
+const helpDocSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  markdownUrl: z.string().optional(),
+});
+
+const quickActivitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  commandType: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
+
+const timelineSegmentSchema = z.object({
+  id: z.string().min(1),
+  labelZh: z.string().min(1),
+  labelEn: z.string().min(1),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  defaultDurationMin: z.number().optional(),
+});
+
+const paletteItemSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  labelZh: z.string().min(1),
+  labelEn: z.string().min(1),
+  icon: z.string().optional(),
+  category: z.enum(['media', 'interactive', 'container', 'custom']).optional(),
+  defaultData: z.record(z.string(), z.unknown()).optional(),
+});
+
+const cockpitWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+  position: z.number().int().optional(),
+  width: z.enum(['full', 'half', 'third']).optional(),
+});
+
+const stageCardSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+  theme: z.enum(['dark', 'light', 'accent']).optional(),
+});
+
+const classroomTopbarActionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  badge: z.union([z.string(), z.number()]).optional(),
+  commandType: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
+
+const classroomAttributionAwardSchema = z.object({
+  id: z.string().min(1),
+  dimensionId: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  icon: z.string().optional(),
+  defaultDeltaPoints: z.number(),
+});
+
+const studentCompetencyDimensionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  key: z.string().min(1),
+  maxScore: z.number().optional(),
+  defaultWeight: z.number().optional(),
+  icon: z.string().optional(),
+  category: z.enum(['cognitive', 'practice', 'collaboration', 'focus', 'custom']).optional(),
+});
+
+const studentProfileWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  placement: z.enum(['sidebar', 'content', 'footer']).optional(),
+  order: z.number().int().optional(),
+});
+
+const canvasWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  component: z.string().min(1),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+  defaultWidth: z.number().optional(),
+  defaultHeight: z.number().optional(),
+  resizable: z.boolean().optional(),
+});
+
+const barometerMetricSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  valueSource: z.string().optional(),
+  color: z.string().optional(),
+  tooltip: z.string().optional(),
+});
+
+const peerReviewRubricSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  maxScore: z.number().optional(),
+  weight: z.number().optional(),
+  icon: z.string().optional(),
+  targetMetric: z.string().optional(),
+});
+
+const peerReviewBadgeSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  emoji: z.string().optional(),
+  description: z.string().optional(),
+  color: z.string().optional(),
+  points: z.number().optional(),
+});
+
+const preclassPasscodeActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  order: z.number().int().optional(),
+  command: z.string().optional(),
+});
+
+const preclassPasscodeAddonSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  order: z.number().int().optional(),
+});
+
+/**
+ * 前端专属 / 演进中的 slot。
+ *
+ * 这些 slot 的条目不进服务端 ContributionRegistry（由前端
+ * `registerExtensionPoint` 消费），但同样声明在 manifest.contributes 里。
+ * 校验保持宽松：`id` 必填、其余透传 —— 前端的 ExtensionPointConfig
+ * 校验发生在注册时，此处只拦「缺 id」这类结构性错误。
+ * 与上方固定 slot 的分工：服务端消费的严格校验，前端消费的宽松兜底。
+ *
+ * 显式列出而不 spread Object.fromEntries —— spread 进来的值是
+ * `ZodArray | undefined`，不满足 zod shape（ZodRawShape）的类型约束。
+ */
+const frontendSlotEntrySchema = z
+  .object({
+    id: z.string().min(1),
+  })
+  .passthrough();
+
+const frontendSlotsShape = {
+  'header.action': z.array(frontendSlotEntrySchema).optional(),
+  'statusbar.item': z.array(frontendSlotEntrySchema).optional(),
+  'stage.display.overlay': z.array(frontendSlotEntrySchema).optional(),
+  'stage.display.action': z.array(frontendSlotEntrySchema).optional(),
+  'assignment.submission.preview': z.array(frontendSlotEntrySchema).optional(),
+  'student.classroom.overlay': z.array(frontendSlotEntrySchema).optional(),
+  'student.profile.tab': z.array(frontendSlotEntrySchema).optional(),
+  'whiteboard.renderer': z.array(frontendSlotEntrySchema).optional(),
+  'timetable.tab': z.array(frontendSlotEntrySchema).optional(),
+  'admin.tab': z.array(frontendSlotEntrySchema).optional(),
+  'workspace.view': z.array(frontendSlotEntrySchema).optional(),
+} as const;
+
 const contributesSchema = z
   .object({
     'classroom.tool': z.array(classroomToolSchema).optional(),
@@ -66,6 +251,25 @@ const contributesSchema = z
         }),
       )
       .optional(),
+    // E-1：补全 contribution-registry.ts 已定义的全部服务端 slot
+    'classroom.quick_activity': z.array(quickActivitySchema).optional(),
+    'timeline.segments': z.array(timelineSegmentSchema).optional(),
+    'palette.items': z.array(paletteItemSchema).optional(),
+    'teacher.cockpit.widget': z.array(cockpitWidgetSchema).optional(),
+    'stage.display.card': z.array(stageCardSchema).optional(),
+    'classroom.topbar.action': z.array(classroomTopbarActionSchema).optional(),
+    'classroom.attribution.award': z.array(classroomAttributionAwardSchema).optional(),
+    'student.profile.dimension': z.array(studentCompetencyDimensionSchema).optional(),
+    'student.profile.card': z.array(studentProfileWidgetSchema).optional(),
+    'whiteboard.canvas.widget': z.array(canvasWidgetSchema).optional(),
+    'classroom.barometer.metric': z.array(barometerMetricSchema).optional(),
+    'peer_review.rubric.dimension': z.array(peerReviewRubricSchema).optional(),
+    'peer_review.badge': z.array(peerReviewBadgeSchema).optional(),
+    'classroom.preclass.passcode_action': z.array(preclassPasscodeActionSchema).optional(),
+    'classroom.preclass.passcode_addon': z.array(preclassPasscodeAddonSchema).optional(),
+    'help.plugin_docs': z.array(helpDocSchema).optional(),
+    // 前端专属/演进 slot：宽松兜底（结构性错误仍会被拒）
+    ...frontendSlotsShape,
     // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。
     // .passthrough() 保留任意 anchor:* 键（运行时透传），避免被 zod 默认 strip。
     // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。

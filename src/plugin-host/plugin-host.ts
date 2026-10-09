@@ -94,6 +94,34 @@ export class FrontendPluginHost {
   private workerManager: BrowserWorkerManager | null = null;
   private dispatcher: IHostActionDispatcher = defaultHostActionDispatcher;
 
+  /**
+   * 每插件的 disposer 登记表（审计 E-5）。
+   *
+   * 后端有 ResourceTracker 统一回收「注册/dispose」型资源；前端此前只有
+   * extensionPoints 一条链 —— 订阅型 API（navigation.subscribeTeacherTab /
+   * context.subscribe）把 appStore.subscribe 返回的 unsubscribe **原样**交给
+   * 插件：插件不退订就永久泄漏（每次激活再叠一层，zustand subscribe 没有
+   * 上限告警，页面会话内只增不减）。
+   */
+  private disposers = new Map<string, Array<() => void>>();
+
+  /**
+   * 登记一个随插件停用/卸载自动执行的清理函数。
+   * @returns 供插件**主动**退订的包装 —— 调用即从登记表摘除并执行原 release。
+   */
+  private trackDisposer(pluginId: string, release: () => void): () => void {
+    const list = this.disposers.get(pluginId) ?? [];
+    list.push(release);
+    this.disposers.set(pluginId, list);
+    return () => {
+      const current = this.disposers.get(pluginId);
+      if (!current) return;
+      const idx = current.indexOf(release);
+      if (idx >= 0) current.splice(idx, 1);
+      release();
+    };
+  }
+
   constructor(options?: { moduleLoader?: ModuleLoader }) {
     this.moduleLoader = options?.moduleLoader ?? this.defaultModuleLoader;
   }
@@ -302,12 +330,29 @@ export class FrontendPluginHost {
       }
 
       // Automatically register classroomTools as extension points
+      //
+      // F-3：本注册是**语义桥**，不是工具栏的真实来源。
+      //
+      // 真实消费端是 LiveClassroomView.tsx（直读 manifest.classroomTools /
+      // contributes['classroom.tool']，按 commandType 触发 invokeCommand）。
+      // zustand store 里的这份条目服务的是「可枚举」诉求（插件经
+      // host.getExtensions('classroom.tool') 自省、管理台预览），因此
+      // **必须带上 commandType** —— 此前注册的是 `() => null` 空组件且
+      // 不带 commandType：任何按 store 渲染的消费端拿到的都是无动作
+      // 按钮，而维护者无从得知要改 manifest。两处形状保持一致后，
+      // 「改 manifest 即改工具栏」的因果关系才在两条链上都成立。
       if (manifest.classroomTools) {
-        for (const tool of manifest.classroomTools) {
+        for (const tool of manifest.classroomTools as Array<{
+          id: string;
+          name: string;
+          icon?: string;
+          commandType?: string;
+        }>) {
           store.registerExtensionPoint('classroom.tool', {
             id: tool.id,
             label: tool.name,
             icon: tool.icon,
+            slotProps: tool.commandType ? { commandType: tool.commandType } : undefined,
             component: () => Promise.resolve({ default: (() => null) as any }),
             pluginId,
           });
@@ -365,9 +410,7 @@ export class FrontendPluginHost {
       id: pluginId,
       name: pluginInfo.name,
       version: pluginInfo.version,
-      capabilitiesProposed: Array.isArray(pluginInfo.capabilitiesProposed)
-        ? [...pluginInfo.capabilitiesProposed]
-        : [],
+      capabilitiesProposed: Array.isArray(pluginInfo.capabilitiesProposed) ? [...pluginInfo.capabilitiesProposed] : [],
     };
 
     store.updatePluginState(pluginId, PluginState.ACTIVATING);
@@ -483,6 +526,20 @@ export class FrontendPluginHost {
    * through ctx.ui, so the host must evict their registrations here.
    */
   public unregisterPluginResources(pluginId: string): void {
+    // 审计 E-5：先退订该插件登记的全部订阅型资源（appStore subscribe 等）。
+    // 放在最前 —— 后续清理可能触发 store 变更，若订阅还在会回调进已半拆的插件。
+    const pending = this.disposers.get(pluginId);
+    if (pending) {
+      const snapshot = pending.splice(0);
+      for (const release of snapshot) {
+        try {
+          release();
+        } catch (e) {
+          console.error(`[FrontendPluginHost] Error releasing subscription for "${pluginId}":`, e);
+        }
+      }
+      this.disposers.delete(pluginId);
+    }
     usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
     fullscreenRendererRegistry.unregisterPlugin(pluginId);
     propertyEditorRegistry.unregisterPlugin(pluginId);
@@ -592,13 +649,18 @@ export class FrontendPluginHost {
         setSelectedLesson: (lessonId: string | null) => appStore.getState().setSelectedLesson(lessonId),
         subscribeTeacherTab: (callback: (tab: string) => void) => {
           let prevTab = appStore.getState().teacherTab;
-          return appStore.subscribe((state) => {
-            const nextTab = state.teacherTab;
-            if (nextTab !== prevTab) {
-              prevTab = nextTab;
-              callback(nextTab);
-            }
-          });
+          // E-5：release 登记到宿主，插件停用/卸载时自动退订；
+          // 返回给插件的是包装函数（主动退订也会从登记表摘除，不会双重执行）。
+          return this.trackDisposer(
+            pluginId,
+            appStore.subscribe((state) => {
+              const nextTab = state.teacherTab;
+              if (nextTab !== prevTab) {
+                prevTab = nextTab;
+                callback(nextTab);
+              }
+            }),
+          );
         },
       },
       context: {
@@ -609,13 +671,17 @@ export class FrontendPluginHost {
         subscribe: (callback: (ctx: { lessonId: string | null; classId: string | null }) => void) => {
           const init = appStore.getState();
           let snapshot = { lessonId: init.selectedLesson, classId: init.liveClassSelectedClassId };
-          return appStore.subscribe((s) => {
-            const next = { lessonId: s.selectedLesson, classId: s.liveClassSelectedClassId };
-            if (next.lessonId !== snapshot.lessonId || next.classId !== snapshot.classId) {
-              snapshot = next;
-              callback(next);
-            }
-          });
+          // E-5：同上 —— appStore 订阅随插件生命周期自动回收。
+          return this.trackDisposer(
+            pluginId,
+            appStore.subscribe((s) => {
+              const next = { lessonId: s.selectedLesson, classId: s.liveClassSelectedClassId };
+              if (next.lessonId !== snapshot.lessonId || next.classId !== snapshot.classId) {
+                snapshot = next;
+                callback(next);
+              }
+            }),
+          );
         },
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
@@ -677,6 +743,14 @@ class SemesterGradeServiceProxy implements ISemesterGradeService {
 
 /**
  * Map of bare module specifiers to their global host shared dependencies expression.
+ *
+ * **与后端 `PLUGIN_SHARED_MODULES` 的有意差异（E-3）**：本 map 严格等于
+ * `src/main.tsx` 里 `window.HostSharedDeps` 实际注入的模块（react / react-dom /
+ * react-dom-client / jsx-runtime / recharts / lucide-react）。后端白名单里的
+ * jspdf / exceljs / uuid / react-markdown 是**服务端**能力，宿主不会把它们
+ * 注入浏览器 —— 插件作者在前端代码里 import 这些模块会拿到「未注册共享模块」
+ * 错误。请不要为了「两边对齐」把后端模块加进来：那只会把错误从加载期推迟
+ * 到调用期。新增前端共享依赖时必须同时注入 HostSharedDeps 并在此登记。
  */
 export const SHARED_MODULE_MAP: Record<string, string> = {
   react: 'window.HostSharedDeps.React',

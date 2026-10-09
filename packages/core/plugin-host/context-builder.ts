@@ -33,6 +33,7 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  PLUGIN_RESOLVABLE_TOKEN_NAMES,
 } from '../di/interfaces.js';
 import type {
   ICommandBusService,
@@ -836,6 +837,22 @@ export async function buildContext(
     http: httpRouter,
     resolve: <T>(token: string | Token<T>): Promise<T> => {
       if (typeof token === 'string') {
+        // 审计 E-2：字符串入参只在 SDK 已承诺的 Token 白名单内放行。
+        //
+        // 修复前这里直接 `resolveByName(token)` —— ServiceRegistry 的
+        // resolveByName 是纯粹的 `registry.get(name)`、无门禁。插件知道任意
+        // 内部 token 名（LessonEngine / ClassroomRuntime / Presence 等 20+ 个
+        // 内核服务）即可拿到实例，inline 模式下没有任何 allowlist
+        // （worker 模式有 computeAllowedWorkerTokens 兜底）。
+        //
+        // Token 对象路径不受影响：插件必须 import SDK 导出的常量才拿得到对象。
+        if (!PLUGIN_RESOLVABLE_TOKEN_NAMES.has(token)) {
+          throw new Error(
+            `[PluginHost] Plugin "${manifest.id}" cannot resolve "${token}" by name. ` +
+              `Use the Token object imported from @openlearn/plugin-sdk, or one of the ` +
+              `SDK-exported Token names.`,
+          );
+        }
         return serviceRegistry.resolveByName(token) as Promise<T>;
       }
       return serviceRegistry.resolve(token);
