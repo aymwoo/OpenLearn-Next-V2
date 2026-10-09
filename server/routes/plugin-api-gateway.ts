@@ -90,6 +90,40 @@ const rateLimiter = new PluginRateLimiter();
 setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000).unref();
 
 /**
+ * F-2：把被单段路由参数切碎的**多段 manifest.id** 请求重组为 (manifest.id, subPath)。
+ *
+ * manifest.id 没有格式约束（`manifest-schema.ts` 的 `id` 只要求非空字符串），
+ * 社区市场的 id 校验正则也明确允许 `/` 与 `@`
+ * （`community-registry.ts` 的 `PLUGIN_ID_PATTERN`）—— 因此 `@scope/name`
+ * 形式的 id 是合法且市场可安装的。
+ *
+ * 而本文件末尾挂载的网关路由是 `app.all('/api/plugins/:pluginId/*')`：
+ * `:pluginId` 是**单段** 参数。对 `/api/plugins/@scope/name/health`，
+ * Express 切出 `pluginId='@scope'`、`subPath='name/health'` —— 解析不到任何
+ * 插件 ⇒ 404 或错派发。这类插件的 REST 端点形同全部不可达。
+ *
+ * 重组策略：用「完整路径」匹配**最长的**已安装 manifest.id 前缀
+ * （取最长是因为一个 id 可能是另一个的前缀，短匹配会把归属判错）。
+ * `%2F` 编码的调用本就工作（解码后单段命中），本函数覆盖未编码形态。
+ */
+export function resolveScopedPluginId(
+  pluginHost: { listInstalledPluginIds(): string[] },
+  fullPath: string,
+): { manifestId: string; subPath: string } | null {
+  const normalized = fullPath.replace(/^\/+/g, '').replace(/\/+$/g, '');
+  if (!normalized) return null;
+  let best: string | null = null;
+  for (const id of pluginHost.listInstalledPluginIds()) {
+    if (!id) continue;
+    if (normalized === id || normalized.startsWith(`${id}/`)) {
+      if (best === null || id.length > best.length) best = id;
+    }
+  }
+  if (!best) return null;
+  return { manifestId: best, subPath: normalized === best ? '' : normalized.slice(best.length + 1) };
+}
+
+/**
  * 活跃 SSE 流连接计数器（按 IP 与按插件限额，防慢速长连接 DoS 耗尽文件描述符）
  */
 class StreamConnectionTracker {
@@ -197,15 +231,36 @@ function resolveAuthContext(req: Request): {
  * 插件 RESTful API 统一网关处理器
  */
 export async function pluginApiGatewayMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const pluginId = req.params.pluginId;
-  const rawSubPath = (req.params as any)[0] || '';
+  const rawPluginId = req.params.pluginId;
+  const capturedSubPath = (req.params as any)[0] || '';
 
   // 1. 系统保留动作避让检查：如果子路径是单个保留词且为特定方法，交由后续核心路由处理
-  if (RESERVED_ACTIONS.has(rawSubPath)) {
+  if (RESERVED_ACTIONS.has(capturedSubPath)) {
     return next();
   }
 
-  // 2. 路径归一化与遍历攻击拦截 (Path Traversal Protection)
+  const pluginHost = kernelContainer.pluginHost;
+  if (!pluginHost) {
+    res.status(503).json({ success: false, error: 'Plugin system is not initialized' });
+    return;
+  }
+
+  // 2. F-2：多段 manifest.id（`@scope/name`）重组。
+  //
+  // 只有当单段 pluginId 解析不到任何插件时才尝试（fast path 不受影响）。
+  // 命中后修正 pluginId 与子路径，后续的鉴权规则匹配、限流键、派发
+  // 全部基于修正后的值。
+  let pluginId = rawPluginId;
+  let rawSubPath = capturedSubPath;
+  if (!pluginHost.getPluginManifest(pluginId)) {
+    const resolved = resolveScopedPluginId(pluginHost, `${rawPluginId}/${capturedSubPath}`);
+    if (resolved) {
+      pluginId = resolved.manifestId;
+      rawSubPath = resolved.subPath;
+    }
+  }
+
+  // 3. 路径归一化与遍历攻击拦截 (Path Traversal Protection)
   if (rawSubPath.includes('..') || rawSubPath.toLowerCase().includes('%2e%2e')) {
     res.status(400).json({ success: false, error: 'Path traversal attempt detected' });
     return;
@@ -216,13 +271,7 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
     return;
   }
 
-  const pluginHost = kernelContainer.pluginHost;
-  if (!pluginHost) {
-    res.status(503).json({ success: false, error: 'Plugin system is not initialized' });
-    return;
-  }
-
-  // 3. 插件状态与合法性检查
+  // 4. 插件状态与合法性检查
   const resolvedUuid = pluginHost.resolvePluginUuid(pluginId);
   const manifest = pluginHost.getPluginManifest(pluginId);
 
