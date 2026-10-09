@@ -1,15 +1,15 @@
-import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { classRoom } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
-import { lessonActiveSegments } from '../shared-state.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
+import { LessonService } from '../services/lesson-service.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
+
+export { LessonService };
 
 /**
  * 校验当前用户对课程的管理权 (水平越权 IDOR 防护)
@@ -23,39 +23,7 @@ export function checkLessonOwnership(
 ): { allowed: boolean; status: number; error?: string; lesson?: any } {
   const token = getCookieToken(req);
   const session = req.session || (token ? getValidSession(token) : null);
-  if (!session) {
-    return { allowed: false, status: 401, error: 'Authentication required' };
-  }
-
-  const isAdmin =
-    session.username === 'admin' ||
-    session.userId === 'usr_admin' ||
-    session.role === 'admin' ||
-    session.role === 'administrator';
-
-  const isTeacherOrAdmin = isAdmin || session.role === 'teacher';
-  if (!isTeacherOrAdmin) {
-    return { allowed: false, status: 403, error: 'Forbidden: Only teachers or administrators can modify lessons' };
-  }
-
-  const lesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
-  if (!lesson) {
-    return { allowed: false, status: 404, error: 'Lesson not found' };
-  }
-
-  if (isAdmin) {
-    return { allowed: true, status: 200, lesson };
-  }
-
-  if (!lesson.creator_id || lesson.creator_id === session.userId || lesson.creator_id === session.username) {
-    return { allowed: true, status: 200, lesson };
-  }
-
-  return {
-    allowed: false,
-    status: 403,
-    error: 'Forbidden: You do not have permission to modify this lesson because it was created by another teacher',
-  };
+  return new LessonService().checkOwnership(lessonId, session);
 }
 
 /**
@@ -114,7 +82,7 @@ export function requireWhiteboardWriteAccess() {
       });
     }
 
-    const lesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as any;
+    const lesson = new LessonService().getLesson(id);
     if (!lesson) {
       return res.status(404).json({ success: false, error: 'Lesson not found' });
     }
@@ -136,74 +104,20 @@ export function requireWhiteboardWriteAccess() {
   };
 }
 
-/**
- * 旧版作业面板（/eval-submissions、/eval-status）只读 `plugin_submissions`，
- * 而后来的作业中心（P0/P1）支持「纯文字 / 链接 / 多附件」提交：这些内容落在
- * `plugin_submission_versions`（每次提交留档），`plugin_submissions.file_path`
- * 对他们恒为 NULL。
- *
- * 若沿用旧写法，前端拿到 `file_path = null` 后 `file_path.split('/')` 会直接崩
- * （学生端白屏 + 遥测上报 `Cannot read properties of null (reading 'split')`），
- * 且即使不崩也无内容可展示。这里把最新版本的文件/文字/链接一并带出来。
- */
-const LATEST_VERSION_COLUMNS = `
-  (SELECT v.files_json FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_files_json,
-  (SELECT v.text_content FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_text_content,
-  (SELECT v.link_url FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_link_url
-`;
-
-/** 把最新版本信息展开为 `files` / `textContent` / `linkUrl` 三个前端友好字段 */
-function withLatestVersion(row: any): any {
-  if (!row) return row;
-  let files: any[] = [];
-  try {
-    const parsed = JSON.parse(row.latest_files_json || '[]');
-    if (Array.isArray(parsed)) files = parsed;
-  } catch {
-    files = [];
-  }
-  const { latest_files_json, latest_text_content, latest_link_url, ...rest } = row;
-  return { ...rest, files, textContent: latest_text_content ?? null, linkUrl: latest_link_url ?? null };
-}
-
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app } = ctx;
+  const lessonService = new LessonService();
 
   app.get('/api/lessons', requireAuth(), (req, res) => {
     // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
     const pg = parsePagination(req.query as any);
-    const total = kernelContainer.queryReadOne<{ n: number }>('SELECT COUNT(*) AS n FROM lessons')?.n || 0;
-    const lessons = kernelContainer.queryRead(
-      `
-      SELECT l.*, u.name as creator_name,
-        (SELECT COUNT(*) FROM student_lesson_progress WHERE lesson_id = l.id) as enrollment_count
-      FROM lessons l
-      LEFT JOIN users u ON l.creator_id = u.id
-      ORDER BY l.created_at DESC
-      LIMIT ? OFFSET ?
-    `,
-      pg.isAll ? -1 : pg.pageSize,
-      pg.offset,
-    );
-    res.json({ data: lessons, total, page: pg.page, pageSize: pg.isAll ? total : pg.pageSize });
+    res.json(lessonService.listLessons(pg));
   });
 
-  // ── 作业上传与互评插�? API ──────────────────────────────────────────────
+  // ── 作业上传与互评插件 API ──────────────────────────────────────────────
   app.get('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
     try {
-      const { lessonId } = req.params;
-      const rows = kernelContainer.db
-        .prepare(
-          `
-        SELECT ps.*, s.name as student_name,
-               ${LATEST_VERSION_COLUMNS}
-        FROM plugin_submissions ps
-        LEFT JOIN students s ON ps.student_id = s.id
-        WHERE ps.lesson_id = ?
-      `,
-        )
-        .all(lessonId) as any[];
-      res.json(rows.map(withLatestVersion));
+      res.json(lessonService.getEvalSubmissions(req.params.lessonId));
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -211,83 +125,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/lessons/:lessonId/eval-grades', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { lessonId } = req.params;
-      const submissions = kernelContainer.db
-        .prepare(
-          `
-        SELECT ps.*, s.name as student_name
-        FROM plugin_submissions ps
-        LEFT JOIN students s ON ps.student_id = s.id
-        WHERE ps.lesson_id = ?
-      `,
-        )
-        .all(lessonId) as any[];
-
-      // PERF-N1: 批量取本课节全部互评与评分（原来在循环内逐条查询，1+2N → 1+2），
-      // 按 submission_id 建 Map 归并。SQLite 参数上限保护：每批 500 个 id。
-      const submissionIds = submissions.map((s) => s.id);
-      const reviewsBySubmission = new Map<string, any[]>();
-      const gradesBySubmission = new Map<string, any>();
-      for (let i = 0; i < submissionIds.length; i += 500) {
-        const batch = submissionIds.slice(i, i + 500);
-        if (batch.length === 0) break;
-        const placeholders = batch.map(() => '?').join(', ');
-
-        const reviewRows = kernelContainer.db
-          .prepare(
-            `
-          SELECT pr.*, s.name as reviewer_name
-          FROM plugin_peer_reviews pr
-          LEFT JOIN students s ON pr.reviewer_id = s.id
-          WHERE pr.submission_id IN (${placeholders})
-        `,
-          )
-          .all(...batch) as any[];
-        for (const review of reviewRows) {
-          let list = reviewsBySubmission.get(review.submission_id);
-          if (!list) {
-            list = [];
-            reviewsBySubmission.set(review.submission_id, list);
-          }
-          list.push(review);
-        }
-
-        const gradeRows = kernelContainer.db
-          .prepare(`SELECT * FROM plugin_grades WHERE submission_id IN (${placeholders})`)
-          .all(...batch) as any[];
-        for (const grade of gradeRows) {
-          gradesBySubmission.set(grade.submission_id, grade);
-        }
-      }
-
-      const result = [];
-      for (const sub of submissions) {
-        const reviews = reviewsBySubmission.get(sub.id) || [];
-
-        let peerAverageScore = 0;
-        if (reviews.length > 0) {
-          const sum = reviews.reduce((acc, r) => acc + r.score, 0);
-          peerAverageScore = Math.round(sum / reviews.length);
-        }
-
-        const grade = gradesBySubmission.get(sub.id) || null;
-
-        result.push({
-          id: sub.id,
-          lessonId: sub.lesson_id,
-          studentId: sub.student_id,
-          studentName: sub.student_name,
-          filePath: sub.file_path,
-          version: sub.version,
-          createdAt: sub.created_at,
-          updatedAt: sub.updated_at,
-          peerReviews: reviews,
-          peerAverageScore,
-          grade,
-        });
-      }
-
-      res.json(result);
+      res.json(lessonService.getEvalGrades(req.params.lessonId));
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -295,18 +133,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
     try {
-      const { submissionId } = req.params;
-      const rows = kernelContainer.db
-        .prepare(
-          `
-        SELECT pr.*, s.name as reviewer_name
-        FROM plugin_peer_reviews pr
-        LEFT JOIN students s ON pr.reviewer_id = s.id
-        WHERE pr.submission_id = ?
-      `,
-        )
-        .all(submissionId);
-      res.json(rows);
+      res.json(lessonService.getSubmissionReviews(req.params.submissionId));
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -315,57 +142,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/students/:studentId/eval-status', requireAuth(), (req, res) => {
     try {
       const { lessonId, studentId } = req.params;
-      const submission = kernelContainer.db
-        .prepare(
-          `
-        SELECT ps.*, ${LATEST_VERSION_COLUMNS}
-        FROM plugin_submissions ps WHERE ps.lesson_id = ? AND ps.student_id = ?
-      `,
-        )
-        .get(lessonId, studentId) as any;
-
-      let reviewsWritten = [];
-      let grade = null;
-
-      if (submission) {
-        reviewsWritten = kernelContainer.db
-          .prepare(
-            `
-          SELECT pr.*, s.name as student_name 
-          FROM plugin_peer_reviews pr
-          LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
-          LEFT JOIN students s ON ps.student_id = s.id
-          WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
-        `,
-          )
-          .all(studentId, lessonId);
-
-        grade = kernelContainer.db
-          .prepare(
-            `
-          SELECT * FROM plugin_grades WHERE submission_id = ?
-        `,
-          )
-          .get(submission.id) as any;
-      } else {
-        reviewsWritten = kernelContainer.db
-          .prepare(
-            `
-          SELECT pr.*, s.name as student_name 
-          FROM plugin_peer_reviews pr
-          LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
-          LEFT JOIN students s ON ps.student_id = s.id
-          WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
-        `,
-          )
-          .all(studentId, lessonId);
-      }
-
-      res.json({
-        submission: submission ? withLatestVersion(submission) : null,
-        reviewsWritten,
-        grade,
-      });
+      res.json(lessonService.getStudentEvalStatus(lessonId, studentId));
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -377,10 +154,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || 'usr_teacher';
       const actorId = getActorId(req) || 'teacher';
-      const cmd = kernelContainer.commandBus.createCommand('lesson.create', { title, content, creatorId }, actorId, {
-        approved: true,
-      });
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const result = await lessonService.createLesson({ title, content, creatorId }, actorId);
       res.json({ success: true, result });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -396,15 +170,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const { timeline } = req.body;
-      const timelineStr = typeof timeline === 'string' ? timeline : JSON.stringify(timeline ?? []);
       const actorId = getActorId(req) || 'teacher';
-      const cmd = kernelContainer.commandBus.createCommand(
-        'lesson.update_timeline',
-        { lessonId: id, timeline: timelineStr },
-        actorId,
-        { approved: true },
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const result = await lessonService.updateTimeline({ lessonId: id, timeline }, actorId);
       res.json({ success: true, result });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -420,32 +187,14 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const { progressMode, progressConditions } = req.body;
-      const conditionsStr =
-        typeof progressConditions === 'string' ? progressConditions : JSON.stringify(progressConditions || null);
-
-      kernelContainer.db
-        .prepare('UPDATE lessons SET progress_mode = ?, progress_conditions = ?, updated_at = ? WHERE id = ?')
-        .run(progressMode || 'manual', conditionsStr, Date.now(), id);
-
-      await publishClassroomEvent(
-        CLASSROOM_EVENTS.LESSON_PROGRESS_MODE_CHANGED,
-        {
-          lessonId: id,
-          progressMode: progressMode || 'manual',
-          progressConditions: progressConditions || null,
-        },
-        { correlationId: id },
-      );
-
+      await lessonService.updateProgressMode(id, progressMode, progressConditions);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  // Auth helper functions imported from server/middleware/auth.js
-  // (getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId are now module-level imports)
-
+  // ── 交互白板 API ──────────────────────────────────────────────────────────
   app.get('/api/lessons/:id/whiteboard', requireAuth(), (req, res) => {
     try {
       const elements = whiteboardService.getWhiteboardElements(req.params.id);
@@ -520,30 +269,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  /**
-   * 教学环节门禁 —— **服务端权威判定**（I-1）
-   *
-   * ## 为什么必须有这个端点
-   *
-   * 原先 `StageGuardPipeline` 的唯一调用点是客户端 `lessonEngineStore.checkStageAccess`
-   * → `coreRuntime.stageGuard.checkAccess()`，而 `coreRuntime` 是
-   * `new LessonRuntime({ eventBus: frontendEventBus })`，**跑在浏览器里**。
-   * 学生只要在 DevTools 里改本地 state（或直接调 store 方法）就能解锁任意环节 ——
-   * I-2 把 fail-open 改成 fail-close 的语义，一行都没能落到服务端。
-   *
-   * 本端点让判定改由服务端执行：
-   *   · 守卫注册在内核 DI（`IStageGuardServiceToken` → `defaultStageGuardPipeline`）
-   *   · 守卫实现读服务端状态（如 `diagnosticService` 的提交记录），
-   *     客户端**无法伪造**「测验已通过」这类前置条件
-   *
-   * ## 仍然拦不住什么（诚实标注）
-   *
-   * 「进入环节」本身是纯客户端状态（`setActiveSegmentId`），没有任何服务端提交动作。
-   * 所以本端点提供的是**服务端权威的 UI 门禁**，不是资源级强制。
-   * 真正的强制点必须是「记录学习成果」的动作（如 quiz-submit 的成绩录入）——
-   * 那要求 timeline segment 能引用具体 element（当前 segment 结构是
-   * `{id,title,type,duration,color}`，**不含 element 引用**），属另一项改造。
-   */
+  // ── 教学环节门禁服务端权威判定 ───────────────────────────────────────────
   app.post('/api/lessons/:id/stage-access', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { id: lessonId } = req.params;
@@ -616,46 +342,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── AI 助教协同 ────────────────────────────────────────────────────────────
   app.post('/api/lessons/:id/ai-tutor', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { elements } = req.body;
-      const ai = kernelContainer.aiService;
-      const elementsSummary = elements
-        .map((e: any, i: number) => `Element ${i + 1}: type=${e.type}, content=${JSON.stringify(e.data)}`)
-        .join('\n');
-
-      const prompt = `You are a real-time AI Tutor monitoring a student's interactive whiteboard.
-The student has pressed the "Ask AI" button for help.
-Current Whiteboard Elements:
-${elementsSummary || 'The whiteboard is empty.'}
-
-Provide a short, friendly, and helpful hint (1-2 sentences) directly related to the student's current progress or to encourage them to start. Do not use markdown. Return ONLY the hint text.`;
-
-      const text = await ai.generateText(prompt);
-      const hint = text.trim() || "I'm here to help! Let me know what you're working on.";
-
-      const cmd = kernelContainer.commandBus.createCommand(
-        'whiteboard.draw',
-        {
-          lessonId: req.params.id,
-          type: 'text',
-          data: JSON.stringify({
-            text: `🤖 AI Tutor: ${hint}`,
-            x: 50,
-            y: 50,
-            fontSize: 20,
-            color: '#8b5cf6',
-            page: 0,
-          }),
-        },
-        'system-ai',
-        { approved: true },
-      );
-
-      await kernelContainer.commandBus.execute(cmd);
-
-      // In a real system, the socket.io broadcast would happen here or within the command handler.
-      // The frontend currently emits a 'refresh' event on its own socket upon success of this API.
+      const hint = await lessonService.generateAiTutorHint(req.params.id, elements);
       res.json({ success: true, hint });
     } catch (e: any) {
       console.error('AI Tutor error:', e);
@@ -663,7 +354,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
-  // ── 课程删除 API ─────────────────────────────────────────────────────
+  // ── 课程删除 API (级联删除事务) ──────────────────────────────────────────
   app.delete('/api/lessons/:id', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
@@ -672,39 +363,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         return res.status(ownership.status).json({ success: false, error: ownership.error });
       }
 
-      const delTx = kernelContainer.db.transaction(() => {
-        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
-        kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
-        kernelContainer.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(id);
-        kernelContainer.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(id);
-
-        // Cascade delete interactive classroom session data
-        const sessionRows = kernelContainer.db
-          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?')
-          .all(id) as { id: string }[];
-
-        for (const s of sessionRows) {
-          kernelContainer.db
-            .prepare(
-              'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id = ?)',
-            )
-            .run(s.id);
-          kernelContainer.db.prepare('DELETE FROM classroom_quick_polls WHERE session_id = ?').run(s.id);
-          kernelContainer.db.prepare('DELETE FROM classroom_buzzers WHERE session_id = ?').run(s.id);
-          kernelContainer.db.prepare('DELETE FROM classroom_exit_tickets WHERE session_id = ?').run(s.id);
-          kernelContainer.db.prepare('DELETE FROM classroom_pacing_signals WHERE session_id = ?').run(s.id);
-        }
-
-        kernelContainer.db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(id);
-        kernelContainer.db.prepare('DELETE FROM lesson_quiz_submissions WHERE lesson_id = ?').run(id);
-        return kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
-      });
-      const result = delTx() as any;
-
-      // Phase B4: 课时删除后清理活跃 segment 缓存，防 Map 无限增长
-      lessonActiveSegments.delete(id);
-
-      if (result.changes === 0) {
+      const result = lessonService.deleteLessonCascade(id);
+      if (!result.deleted) {
         return res.status(404).json({ error: 'Lesson not found' });
       }
 
@@ -714,103 +374,29 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
-  // ── 课程统计 API（删除确认弹窗用）───────────────────────────────────
+  // ── 课程统计 API (删除确认弹窗用) ─────────────────────────────────────────
   app.get('/api/lessons/:id/stats', requireAuth(), (req, res) => {
     try {
-      const { id } = req.params;
-
-      const whiteboardCount = (
-        kernelContainer.db
-          .prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
-          .get(id) as any
-      ).count;
-
-      const scheduleCount = (
-        kernelContainer.db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(id) as any
-      ).count;
-
-      const enrollmentCount = (
-        kernelContainer.db
-          .prepare('SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?')
-          .get(id) as any
-      ).count;
-
-      const assignmentCount = (
-        kernelContainer.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(id) as any
-      ).count;
-
-      res.json({ whiteboardCount, scheduleCount, enrollmentCount, assignmentCount });
+      res.json(lessonService.getLessonStats(req.params.id));
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  // ── 课程复制 API ─────────────────────────────────────────────────────
+  // ── 课程复制 API ──────────────────────────────────────────────────────────
   app.post('/api/lessons/:id/clone', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
-
-      const original = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as any;
-      if (!original) {
-        return res.status(404).json({ error: 'Lesson not found' });
-      }
-
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || 'usr_teacher';
-      const newId = uuidv7();
-      const now = Date.now();
-      const newTitle = `副本-${original.title}`;
-
-      const cloneTx = kernelContainer.db.transaction(() => {
-        kernelContainer.db
-          .prepare(
-            'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          )
-          .run(
-            newId,
-            newTitle,
-            original.content,
-            original.timeline,
-            original.progress_mode,
-            original.progress_conditions,
-            creatorId,
-            now,
-            now,
-          );
-
-        const whiteboardElements = kernelContainer.db
-          .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
-          .all(id) as any[];
-
-        const insertElement = kernelContainer.db.prepare(
-          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-        );
-
-        for (const el of whiteboardElements) {
-          insertElement.run(uuidv7(), newId, el.type, el.data, now);
-        }
-      });
-      cloneTx();
-
-      const cloned = kernelContainer.db
-        .prepare(
-          `
-        SELECT l.*, u.name as creator_name, 0 as enrollment_count 
-        FROM lessons l 
-        LEFT JOIN users u ON l.creator_id = u.id
-        WHERE l.id = ?
-      `,
-        )
-        .get(newId);
-
+      const cloned = lessonService.cloneLesson(id, creatorId);
       res.json({ success: true, lesson: cloned });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  // --- Pre-Class Diagnostic Hub & Pre-flight Healthcheck APIs ---
-
+  // ── Pre-Class Diagnostic Hub & Pre-flight Healthcheck APIs ────────────────
   app.get('/api/lessons/:lessonId/pre-class-diagnostic', requireAuth(), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
@@ -825,11 +411,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   app.post('/api/classes/:classId/checkin/icebreaker', requireAuth(), (req, res) => {
     try {
       const classId = req.params.classId;
-      const { mood } = req.body; // 'fullPower' | 'needCoffee' | 'needHelp'
+      const { mood } = req.body;
       const current = diagnosticService.recordIcebreakerCheckin(classId, mood);
 
       if (ctx.io) {
-        // 班级维度事件 → 投班级房间。
         ctx.io.to(classRoom(classId)).emit('classroom:icebreaker_updated', {
           classId,
           stats: current,
@@ -847,8 +432,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const classId = req.params.classId;
       const startTime = Date.now();
 
-      // 自检数据库连通性
-      const testDb = kernelContainer.db.prepare('SELECT 1 as alive').get();
+      kernelContainer.db.prepare('SELECT 1 as alive').get();
       const rttMs = Math.max(2, Date.now() - startTime);
 
       res.json({

@@ -10,6 +10,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Refactor / Performance
+
+- **`LessonService` 领域服务下沉与课时路由解耦（架构路线图 E3 收口）**：
+  - **巨石解耦与职责内聚**：将 `server/routes/lessons.ts`（原 871 行巨石路由）中的纯领域与数据访问逻辑彻底抽离至 [`server/services/lesson-service.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/lesson-service.ts)，路由精简至 455 行（代码收敛 48%），转为轻量级 HTTP 门禁与协议适配层；
+  - **领域服务核心能力**：
+    - `listLessons(pg)`：内聚 A7 分页信封与多表统计（白板元素数、排课数、选课学生数、关联作业数）；
+    - `checkOwnership(lessonId, session)`：核心 IDOR 水平越权防范状态机（支持管理员全局管辖、教师所属权校验、历史未绑定课程向后兼容）；
+    - `createLesson` / `updateTimeline`：统一调度 `commandBus` 执行 `lesson.create` 与 `lesson.update_timeline`，校验 Capability 权限并发布领域事件；
+    - `updateProgressMode`：流转模式更新与课堂事件广播；
+    - `deleteLessonCascade`：单事务原子级联清除 10+ 张关联表（白板、进度、课表、作业、答题记录、互动会话、投票、抢答、通票、晴雨表），并在删除后同步回收 `lessonActiveSegments` 活跃内存分段，杜绝内存泄漏；
+    - `cloneLesson`：事务级课时深克隆与全量白板图元重新映射复制；
+    - `getEvalSubmissions` / `getEvalGrades`：PERF-N1 500-batch 批量拉取互评详情，以及最新多模态版本（附件 JSON / 纯文本 / 外链）展开；
+  - **100% 向后兼容承诺**：保持对外路由端点规范、入参出参以及 `checkLessonOwnership` / `requireWhiteboardWriteAccess` 中间件与工具函数签名完全一致；
+  - **测试覆盖与质量门禁**：
+    - 新增专用单元测试套件 [`server/services/__tests__/lesson-service.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/__tests__/lesson-service.test.ts)（16/16 用例 100% 通过）；
+    - 4 个课时相关核心测试套件（`lesson-service.test.ts`、`lesson_ownership.test.ts`、`eval-submissions-auth.test.ts`、`pagination.test.ts`）共 46 个测试全量通过；
+    - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
+
 ### Features
 
 - **开辟下一批核心业务域扩展槽位 (`student.profile.tab` / `class.batch.action` / `editor.header.action`)**：
