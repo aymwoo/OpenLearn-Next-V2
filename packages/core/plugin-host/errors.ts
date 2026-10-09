@@ -100,6 +100,23 @@ export class SemverMismatchError extends PluginHostError {
 // ── Phase 7: Hot Reload Errors ───────────────────────────────────────────
 
 /**
+ * PluginDispatchTimeoutError — inline 插件 HTTP/SSE 派发超时（审计 R-1）。
+ *
+ * 修复前 inline 路径直接调用 `httpRouter.handle(req)`，网关传入的 timeoutMs
+ * 被静默丢弃 —— inline 插件一个不 resolve 的 handler 会永久占住 Express
+ * 连接。消息含 "timed out" 以命中网关既有的 504 判定，与 worker 路径同一契约。
+ */
+export class PluginDispatchTimeoutError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    public readonly timeoutMs: number,
+  ) {
+    super(`Plugin "${pluginId}" request timed out after ${timeoutMs}ms`);
+    this.name = 'PluginDispatchTimeoutError';
+  }
+}
+
+/**
  * HotReloadError — 热重载失败时抛出。
  */
 export class HotReloadError extends PluginHostError {

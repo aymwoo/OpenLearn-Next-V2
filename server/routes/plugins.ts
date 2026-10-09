@@ -463,7 +463,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // V3.1: 读取插件配置（schema + 当前值）
-  app.get('/api/plugins/:id(*)/config', requireAuth(), (req, res) => {
+  // SEC：配置值可能含第三方服务密钥等秘密，仅教师/管理员可读（审计 R-5）。
+  // 此前只要求登录 —— 学生账号可读任意插件的全部配置值。
+  app.get('/api/plugins/:id(*)/config', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
@@ -551,7 +553,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
-      res.status(404).json({ success: false, error: err.message });
+      // 走 sendSafeError 统一脱敏（审计 R-5）：此前此处直接回 err.message，
+      // 内部异常文本（含路径/SQL 片段）会泄露给客户端；本文件其余路由
+      // 均已走 sendSafeError，只差这一处。
+      sendSafeError(res, err, 404);
     }
   });
 
@@ -704,14 +709,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       // （见 packages/core/plugin-host/plugin-namespace.ts，
       //   ctx.invokeCommand 即走该路径）。本端点不做猜测。
       const resolvedType = type;
-      const bus = kernelContainer.commandBus as any;
-      // service-host stores handlers in private 'handlers' / 'legacyHandlers' Maps
-      const handlersMap = bus.handlers;
-      const legacyMap = bus.legacyHandlers;
+      const bus = kernelContainer.commandBus;
 
       // 精确命中失败即拒绝：不 fallback、不猜测命名空间。
       // commandBus 的 interceptor 会再兜一层（未注册 action descriptor 的命令 default-deny）。
-      if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
+      //
+      // 存在性预检走 CommandBus.hasHandler() 公开方法（审计 R-3）——
+      // 修复前此处 `(bus as any).handlers / legacyHandlers` 直接读两个私有 Map，
+      // CommandBus 一重构预检就静默失效（`?.has?.()` 落空 ⇒ 永远 404）。
+      if (!bus.hasHandler?.(resolvedType)) {
         console.warn('[execute-command] no handler for command type:', resolvedType);
         return res.status(404).json({
           success: false,

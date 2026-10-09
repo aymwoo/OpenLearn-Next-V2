@@ -71,6 +71,19 @@ export class CommandBus {
     this.legacyHandlers.delete(commandType);
   }
 
+  /**
+   * 该命令类型是否已有 handler（modern 或 legacy）。
+   *
+   * 审计 R-3：`/api/plugins/execute-command` 此前为做存在性预检，直接以
+   * `(bus as any).handlers` / `bus.legacyHandlers` 读两个私有 Map ——
+   * CommandBus 任何内部重命名都会让预检静默失效（`?.has?.()` 落空即
+   * 永远返回 404，且没有任何测试会红）。提供公开查询方法，
+   * 让「预检」与「派发」依据同一份事实。
+   */
+  public hasHandler(commandType: string): boolean {
+    return this.handlers.has(commandType) || this.legacyHandlers.has(commandType);
+  }
+
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
     const normalizedCommand: PlatformCommand = {
       ...command,
