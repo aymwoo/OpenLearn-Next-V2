@@ -80,14 +80,16 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
     expect(guard.length, 'API 层应至少 3 处用 isValidExecutionMode 收窄').toBeGreaterThanOrEqual(3);
   });
 
-  it('plugin-host 的 mode 分支同时覆盖 worker 与 process', () => {
+  it('plugin-host 的 activate 分流覆盖 worker 与 process 两种隔离模式', () => {
     const code = stripComments(read('packages/core/plugin-host/lifecycle.ts'));
-    // activatePlugin 的分流：两者必须走同一条隔离路径
+    // 判据收敛为 requiresIsolatedExecution（审计 F-1）—— 它同时覆盖
+    // worker 与 process；旧的 `mode === 'worker' || mode === 'process'` 字面量
+    // 写法散落在四个入口，漏改一处就是一次静默降级。
     expect(
       code,
-      "activatePlugin 的分流应写成 `mode === 'worker' || mode === 'process'` —— " +
+      'activatePlugin 的分流应使用 requiresIsolatedExecution —— ' +
         '只判 worker 会让 process 模式落进 inline 路径（静默降级）',
-    ).toMatch(/mode\s*===\s*'worker'\s*\|\|\s*mode\s*===\s*'process'/);
+    ).toMatch(/requiresIsolatedExecution\(mode\)/);
   });
 
   it('activateWorker 把 mode 落到具体隔离原语', () => {
@@ -147,5 +149,58 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
     for (const f of files) {
       expect(stripComments(read(f)), `${f} 未同步 'process'`).toMatch(/'process'/);
     }
+  });
+});
+
+/**
+ * 审计 F-1 的回归护栏。
+ *
+ * 背景：'process' 加入时 activate 一侧改成了双分支，但**停用 / 卸载 /
+ * 模式热切换 / 热重载**四处仍写 `=== 'worker'`。四处各自合法、编译器一声不吭，
+ * 而后果是静默失效：停用后子进程泄漏、再激活撞 "Worker already exists"、
+ * 热重载把进程隔离降级为宿主管内 inline。
+ *
+ * 本组断言把判据**焊死**在 `requiresIsolatedExecution` 上：新增第四种模式时
+ * 只有这一处谓词需要扩展，任何入口退回字面量比较都会立刻红灯。
+ */
+describe('审计 F-1 · 隔离执行判据收敛到 requiresIsolatedExecution', () => {
+  it('activate / deactivate / uninstall / mode-switch / reload 五处分流都用该谓词', () => {
+    const cases: Array<{ file: string; expected: number; what: string }> = [
+      { file: 'packages/core/plugin-host/lifecycle.ts', expected: 2, what: 'activate + deactivate' },
+      { file: 'packages/core/plugin-host/install.ts', expected: 2, what: 'uninstall + mode-switch' },
+      { file: 'packages/core/plugin-host/reload.ts', expected: 1, what: 'reload' },
+    ];
+    for (const { file, expected, what } of cases) {
+      const code = stripComments(read(file));
+      const hits = code.match(/requiresIsolatedExecution\(/g) ?? [];
+      expect(hits.length, `${file}（${what}）应使用 ${expected} 次 requiresIsolatedExecution`).toBe(expected);
+    }
+  });
+
+  it('五处分流不再有裸字面量 `=== "worker"` 判定', () => {
+    const files = [
+      'packages/core/plugin-host/lifecycle.ts',
+      'packages/core/plugin-host/install.ts',
+      'packages/core/plugin-host/reload.ts',
+    ];
+    for (const file of files) {
+      const code = stripComments(read(file));
+      // 形如 mode === 'worker' / execMode === 'worker' / oldMode === 'worker'
+      const legacy = code.match(/\w*[Mm]ode\s*===\s*'worker'/g);
+      expect(
+        legacy,
+        `${file} 仍有只认 worker 的字面量判定 —— process 模式会在该处落进 inline 路径：\n${legacy?.join('\n')}`,
+      ).toBeNull();
+    }
+  });
+
+  it("manifest.executionMode 的三个取值都被安装路径识别（不再只映射 'worker'）", () => {
+    const code = stripComments(read('packages/core/plugin-host/install.ts'));
+    expect(
+      code,
+      "安装路径应 normalizeExecutionMode(manifest.executionMode) —— 写 'process' 不能被静默装成 inline",
+    ).toMatch(
+      /normalizeExecutionMode\(\s*\(?\s*manifest\s+as\s*\{[^}]*executionMode[^}]*\}\s*\)?\s*\.\s*executionMode\s*\)?/,
+    );
   });
 });

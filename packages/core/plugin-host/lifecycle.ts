@@ -14,7 +14,12 @@ import { manifestSchema } from '../esm-loader/manifest-schema.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
-import { normalizeExecutionMode, requiresProcessIsolation, type PluginExecutionMode } from './types.js';
+import {
+  normalizeExecutionMode,
+  requiresIsolatedExecution,
+  requiresProcessIsolation,
+  type PluginExecutionMode,
+} from './types.js';
 import { compose } from './middleware.js';
 import { PluginState } from './types.js';
 import type { PluginContext, MiddlewareContext } from './types.js';
@@ -91,7 +96,11 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     // 'worker' 与 'process' 都走隔离路径，区别在 WorkerManager 选哪种原语。
     // 刻意合成一个分支而不是各写一条：两条路径的激活前检查、能力授予、
     // serviceHost 装配完全相同，拆开必然产生漂移。
-    if (mode === 'worker' || mode === 'process') {
+    //
+    // 判据用 requiresIsolatedExecution 而不是字面量 `=== 'worker'`（审计 F-1）：
+    // 停用/卸载/热切换/热重载四处曾只认 'worker'，导致 process 模式的插件
+    // 停用后子进程泄漏、热重载后降级为 inline —— 全是不报错的静默失效。
+    if (requiresIsolatedExecution(mode)) {
       return this.activateWorker(pluginId, mode);
     }
 
@@ -555,8 +564,11 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     this.setPluginState(pluginId, PluginState.DEACTIVATING);
 
     // Phase 5: Check if this is a worker-mode plugin
-    const mode = this.getExecutionMode(pluginId);
-    if (mode === 'worker') {
+    // 归一化后再判：DB 的 execution_mode 是任意字符串（审计 C-4）。
+    // 判据用 requiresIsolatedExecution：process 模式的停用也必须走
+    // deactivateWorker，否则子进程永不 terminate（审计 F-1）。
+    const mode = normalizeExecutionMode(this.getExecutionMode(pluginId));
+    if (requiresIsolatedExecution(mode)) {
       return this.deactivateWorker(pluginId);
     }
 
@@ -616,6 +628,13 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
           // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
           this.resourceTracker.disposeAll(pluginId);
           this.pluginInstances.delete(pluginId);
+          // D-1/D-2：注销该插件的声明式贡献（审计 F-4）。
+          //
+          // 此前只有 worker 停用路径、uninstall 与 pipeline 崩溃兜底会调
+          // revokePluginContributions —— inline 正常停用这条路漏了，导致
+          // contributionRegistry 长期滞留已停用插件的条目，
+          // listContributions() 的 allSummaries / stats() 继续把它们算进去。
+          this.revokePluginContributions(pluginId);
           this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
           // 热重载注销

@@ -225,15 +225,25 @@ export interface IPluginHttpRouter {
 }
 
 export interface PluginContext {
-  /** 9 个内核服务，通过 Token DI 获取的接口代理 */
+  /**
+   * 9 个内核服务，通过 Token DI 获取的接口代理。
+   *
+   * 审计 E-4：每个 key 的运行时契约是 **`T | null`** —— `buildContext` 的
+   * D-12 降级机制（manifest.optional 里的 Token 版本不兼容时）会把对应 key
+   * 置为 `null`（`services[serviceKey] = null`）并以 `ctx.services.x === null`
+   * 作为「该能力不可用」的信号。此前类型层不含 `null`，插件按类型直接调用
+   * `ctx.services.pointsLedger.addPoints(...)` 会在运行时踩空。
+   *
+   * 使用约定：消费可选服务前判空，见 docs/plugin 指南的「降級」示例。
+   */
   services: {
-    commandBus: ICommandBusService;
-    eventBus: IEventBusService;
-    actionRegistry: IActionRegistryService;
-    capability: ICapabilityService;
-    processManager: IProcessService;
-    storage: IStorageService;
-    ai: IAIService;
+    commandBus: ICommandBusService | null;
+    eventBus: IEventBusService | null;
+    actionRegistry: IActionRegistryService | null;
+    capability: ICapabilityService | null;
+    processManager: IProcessService | null;
+    storage: IStorageService | null;
+    ai: IAIService | null;
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
@@ -362,6 +372,26 @@ export type PluginExecutionMode = 'inline' | 'worker' | 'process';
 /** 需要进程级隔离（而非线程级）的模式 */
 export function requiresProcessIsolation(mode: PluginExecutionMode): boolean {
   return mode === 'process';
+}
+
+/**
+ * 运行期判据：该模式是否需要**隔离执行**（worker 线程或子进程）。
+ *
+ * ## 为什么必须有它（审计 F-1）
+ *
+ * `'process'` 加入时，activate 一侧改成了 `mode === 'worker' || mode === 'process'`，
+ * 但停用 / 卸载 / 模式热切换 / 热重载四处仍写 `=== 'worker'`。后果不是报错，而是：
+ *
+ *   · 停用走 inline 路径 ⇒ 子进程永不 terminate，泄漏；
+ *   · 再激活撞 "Worker already exists" ⇒ 激活失败；
+ *   · 热重载在主进程 `esmLoader.load()` ⇒ **进程隔离静默降级为内联运行**。
+ *
+ * 这正是 `PluginExecutionMode` 注释预警的「新增取值时漏改一处，那个入口会悄悄
+ * 退回只认两种模式」。四个字面量分散在四个文件里，各自都合法、编译器一声不吭。
+ * 收敛为单一谓词后，「需要隔离」只有一种写法，将来加第四种模式也只需改这里。
+ */
+export function requiresIsolatedExecution(mode: PluginExecutionMode): mode is 'worker' | 'process' {
+  return mode === 'worker' || mode === 'process';
 }
 
 /** 归一化任意来源（DB 字符串 / manifest 字段 / API 入参）到合法模式 */

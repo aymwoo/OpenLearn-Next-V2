@@ -13,7 +13,12 @@ import type { PluginModule } from '../esm-loader/esm-loader.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
-import { normalizeExecutionMode } from './types.js';
+import {
+  normalizeExecutionMode,
+  requiresIsolatedExecution,
+  requiresProcessIsolation,
+  type PluginExecutionMode,
+} from './types.js';
 import { topologicalSort, buildDepGraph } from './dependency-resolver.js';
 import { compose } from './middleware.js';
 import { PluginState } from './types.js';
@@ -319,9 +324,23 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
     );
 
     // 5. Phase 5: Worker-mode check — if worker-mode, delegate to workerManager
-    const mode = this.getExecutionMode(pluginId);
-    if (mode === 'worker') {
-      return this.reloadWorker(pluginId, newSourceCode, newManifest, oldInstance, oldDisposables, filePath, oldVersion);
+    //
+    // 判据用 requiresIsolatedExecution（审计 F-1）：process 模式此前落到 inline
+    // 路径 —— 新代码被 `esmLoader.load()` 在宿主管内加载并 activate。
+    // 管理员给插件选了「进程隔离」，一次热重载就静默降级为与宿主同进程，
+    // 而 UI 显示一切正常。这是本项修复里后果最重的一条。
+    const mode = normalizeExecutionMode(this.getExecutionMode(pluginId));
+    if (requiresIsolatedExecution(mode)) {
+      return this.reloadWorker(
+        pluginId,
+        newSourceCode,
+        newManifest,
+        oldInstance,
+        oldDisposables,
+        filePath,
+        oldVersion,
+        mode,
+      );
     }
 
     // 6. ESM 加载 + 激活新版本（inline mode）
@@ -438,6 +457,7 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
     _oldDisposables: import('./types.js').Disposable[],
     filePath: string,
     _oldVersion: string,
+    mode: PluginExecutionMode = 'worker',
   ): Promise<void> {
     // 1. Save old source code for rollback
     const oldRow = this.db.prepare('SELECT source_code FROM plugins WHERE id = ?').get(pluginId) as
@@ -467,10 +487,13 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
         undefined,
         this.getPluginDir(pluginId),
         prevState,
+        // F-1：重建必须用**与激活时一致**的原语。process 模式若用缺省 thread
+        // 重建，该插件的隔离强度会随一次热重载静默降级。
+        { isolateKind: requiresProcessIsolation(mode) ? 'process' : 'thread' },
       );
       this.db
-        .prepare('UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?')
-        .run(newSourceCode, Date.now(), pluginId);
+        .prepare('UPDATE plugins SET source_code = ?, updated_at = ?, version = ? WHERE id = ?')
+        .run(newSourceCode, Date.now(), _newManifest.version, pluginId);
       console.log(`[PluginHost] Worker-mode reload succeeded for "${pluginId}"`);
     } catch (err) {
       // Failed — try to restore old worker
@@ -483,6 +506,9 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
             (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
             undefined,
             this.getPluginDir(pluginId),
+            undefined,
+            // 回滚同样按当前模式的原语重建
+            { isolateKind: requiresProcessIsolation(mode) ? 'process' : 'thread' },
           );
         } catch {
           console.error(`[PluginHost] Worker-mode reload: failed to restore old worker for "${pluginId}"`);

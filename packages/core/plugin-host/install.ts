@@ -16,7 +16,7 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { buildContext } from './context-builder.js';
 import type { ClassroomToolConfig } from './contribution-registry.js';
-import { normalizeExecutionMode, type PluginExecutionMode } from './types.js';
+import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import { checkMissingDeps } from './dependency-resolver.js';
 import semver from 'semver';
@@ -207,8 +207,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）
     if (currentState === PluginState.ACTIVE) {
       // Phase 5: If worker-mode, ensure Worker is terminated before DB deletion
-      const execMode = this.getExecutionMode(pluginId);
-      if (execMode === 'worker') {
+      // 判据用 requiresIsolatedExecution（审计 F-1）：process 模式的卸载
+      // 也必须走 deactivateWorker，否则子进程在 DB 行删除后仍在运行。
+      const execMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
+      if (requiresIsolatedExecution(execMode)) {
         await this.deactivateWorker(pluginId);
       } else {
         await this.deactivatePlugin(pluginId);
@@ -288,7 +290,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
           const layer = stack[i];
           if (layer.route === undefined && layer.regexp && new RegExp(layer.regexp).test(route + '/')) {
             stack.splice(i, 1);
-            break;
+            // 审计 R-6：原先此处 `break` —— createPluginStaticMiddleware 挂载的是
+            // **两个**中间件（CSP 头 + express.static），只摘一个会留下一个
+            // 空转层（继续给已卸载插件的路由设 header）。从后往前遍历时
+            // splice 不影响更小的索引，故可安全删除全部匹配层。
           }
         }
         this._registeredRoutes.delete(manifestId);
@@ -553,8 +558,14 @@ export abstract class PluginHostInstall extends PluginHostReload {
       this.emitProgress(manifest.id, 'registering', 'Registering routes and saving...');
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       // Read executionMode from manifest (default: 'inline'), override if administrator specifies
-      const executionMode =
-        overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
+      //
+      // F-5：manifest.executionMode 曾是 `=== 'worker' ? 'worker' : 'inline'` 两值
+      // 映射 —— 作者在 manifest 里写 'process' 会被静默装成 inline，而
+      // types.ts 的注释声称「mode 有三个来源（参数/DB/manifest）」。
+      // 统一走 normalizeExecutionMode：非法值退化为 inline（可预测），
+      // 'process' 被正确识别。override 优先。
+      const executionMode: PluginExecutionMode =
+        overrideExecutionMode ?? normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
       // version 列说明同 installPlugin（H-3）：加速索引，真源是 manifest JSON
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -698,8 +709,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
     const oldMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
-    const executionMode =
-      options.executionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : oldMode || 'inline');
+    // F-5：manifest.executionMode 三个取值都识别（原来是只认 'worker' 的两值映射）。
+    const manifestMode = normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
+    const executionMode = options.executionMode ?? (manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
 
     const pluginDir = this.getPluginDir(pluginId);
     const filePath = this.getPluginFilePath(pluginId);
@@ -813,7 +825,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
         if (oldMode !== executionMode) {
           // Mode switch: full deactivate + activate under new mode
           try {
-            if (oldMode === 'worker') await this.deactivateWorker(pluginId);
+            // 判据用 requiresIsolatedExecution（审计 F-1）：oldMode 为 'process' 时
+            // 也必须走 deactivateWorker 停掉子进程，否则 createWorker 会撞
+            // "Worker already exists"，新模式永远激活不了。
+            if (requiresIsolatedExecution(oldMode)) await this.deactivateWorker(pluginId);
             else await this.deactivatePlugin(pluginId);
           } catch (e) {
             console.warn(`[PluginHost] deactivate before mode-switch update failed for "${pluginId}":`, e);

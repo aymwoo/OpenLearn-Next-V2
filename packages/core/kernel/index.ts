@@ -374,7 +374,11 @@ export class Kernel {
 
     // Phase 7: 开发模式热重载
     if (process.env.NODE_ENV === 'development') {
-      const watchDir = path.resolve(process.cwd(), 'plugins');
+      // 审计 R-2：watchDir 必须取自宿主实际使用的目录（`getPluginsDir()`），
+      // 而不是再从 cwd 推导一遍 —— Kernel 支持注入 pluginsDir（测试与
+      // 自托管安装场景），自己再算一次就与宿主分叉：监听的目录不是
+      // 真正安装插件的目录，热重载形同虚设，甚至可能 watch 到无关目录。
+      const watchDir = this.pluginHost.getPluginsDir();
       try {
         const hotReload = new HotReloadController(this.pluginHost, watchDir);
         this.pluginHost.setHotReloadController(hotReload);
