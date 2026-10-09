@@ -170,7 +170,10 @@ export type ExtensionSlot =
   // ── 学生端课堂交互浮层扩展槽位 ──
   | 'student.classroom.overlay' // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
   // ── 作业评估与多模态预览扩展槽位 ──
-  | 'assignment.submission.preview'; // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
+  | 'assignment.submission.preview' // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
+  // ── 全局壳层扩展槽位（底座解耦）──
+  | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
+  | 'statusbar.item'; // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -500,5 +503,24 @@ export interface AssignmentSubmissionPreviewSlotProps {
   lessonId?: string;
   isSelf?: boolean;
   lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to header.action extensions (global AppHeader, right side) */
+export interface HeaderActionSlotProps {
+  session?: any;
+  /** 当前工作台视角（教师账号模拟学生时为 'student'） */
+  currentRole: 'teacher' | 'student';
+  lang: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to statusbar.item extensions (global bottom status bar) */
+export interface StatusbarItemSlotProps {
+  session?: any;
+  currentRole: 'teacher' | 'student';
+  lang: 'zh' | 'en';
+  /** 浏览器网络在线状态（navigator.onLine + online/offline 事件） */
+  isOnline: boolean;
   dispatcher?: IHostActionDispatcher;
 }

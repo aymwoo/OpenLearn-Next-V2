@@ -17,6 +17,7 @@ import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
 import { FontSizeSelector } from './FontSizeSelector';
 import { StudentLiveHeader } from './StudentLiveHeader';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 export interface AppHeaderProps {
   activeRole?: 'teacher' | 'student';
@@ -42,7 +43,8 @@ export interface AppHeaderProps {
   dbStatus?: 'normal' | 'warning' | 'error';
   siteInfo?: any;
   setActiveStudentId?: Dispatch<SetStateAction<string | null>>;
-  setReadNotifications?: Dispatch<SetStateAction<Set<string>>> | ((updater: (prev: Set<string>) => Set<string>) => void);
+  setReadNotifications?:
+    Dispatch<SetStateAction<Set<string>>> | ((updater: (prev: Set<string>) => Set<string>) => void);
   setIsSystemResourceLibraryOpen?: Dispatch<SetStateAction<boolean>>;
   setProfileOpen?: Dispatch<SetStateAction<boolean>>;
   setTeacherTab?: (tab: string) => void;
@@ -66,25 +68,31 @@ export function AppHeader(props: AppHeaderProps) {
   const teacherTab = props.teacherTab ?? appData?.teacherTab ?? 'live_class';
   const studentViewStatus = props.studentViewStatus ?? appData?.studentViewStatus ?? 'dashboard';
   const session = props.session !== undefined ? props.session : appData?.session;
-  const activeStudentId = props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
+  const activeStudentId =
+    props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
   const students = props.students ?? appData?.students ?? [];
   const studentDashboardData = props.studentDashboardData ?? appData?.studentDashboardData ?? null;
   const isNotificationsOpen = props.isNotificationsOpen ?? appData?.isNotificationsOpen ?? false;
   const studentNotifications = props.studentNotifications ?? appData?.studentNotifications ?? [];
   const unreadNotifications = props.unreadNotifications ?? appData?.unreadNotifications ?? [];
   const readNotifications = props.readNotifications ?? appData?.readNotifications ?? new Set<string>();
-  const selectedNotificationForModal = props.selectedNotificationForModal !== undefined ? props.selectedNotificationForModal : (appData?.selectedNotificationForModal ?? null);
+  const selectedNotificationForModal =
+    props.selectedNotificationForModal !== undefined
+      ? props.selectedNotificationForModal
+      : (appData?.selectedNotificationForModal ?? null);
   const dbConnected = props.dbConnected ?? appData?.dbConnected ?? false;
   const dbStatus = props.dbStatus ?? appData?.dbStatus ?? 'normal';
   const siteInfo = props.siteInfo ?? appData?.siteInfo;
   const setActiveStudentId = props.setActiveStudentId ?? appData?.setActiveStudentId ?? (() => {});
   const setReadNotifications = props.setReadNotifications ?? appData?.setReadNotifications ?? (() => {});
-  const setIsSystemResourceLibraryOpen = props.setIsSystemResourceLibraryOpen ?? appData?.setIsSystemResourceLibraryOpen ?? (() => {});
+  const setIsSystemResourceLibraryOpen =
+    props.setIsSystemResourceLibraryOpen ?? appData?.setIsSystemResourceLibraryOpen ?? (() => {});
   const setProfileOpen = props.setProfileOpen ?? appData?.setProfileOpen ?? (() => {});
   const setTeacherTab = props.setTeacherTab ?? appData?.setTeacherTab ?? (() => {});
   const setStudentViewStatus = props.setStudentViewStatus ?? appData?.setStudentViewStatus ?? (() => {});
   const setIsNotificationsOpen = props.setIsNotificationsOpen ?? appData?.setIsNotificationsOpen ?? (() => {});
-  const setSelectedNotificationForModal = props.setSelectedNotificationForModal ?? appData?.setSelectedNotificationForModal ?? (() => {});
+  const setSelectedNotificationForModal =
+    props.setSelectedNotificationForModal ?? appData?.setSelectedNotificationForModal ?? (() => {});
   const handleLogout = props.handleLogout ?? appData?.handleLogout ?? appData?.onLogout ?? (() => {});
   const toggleLanguage = props.toggleLanguage ?? appData?.toggleLanguage ?? (() => {});
   const setActiveRole = props.setActiveRole ?? appData?.setActiveRole ?? (() => {});
@@ -350,6 +358,15 @@ export function AppHeader(props: AppHeaderProps) {
             )}
           </div>
         )}
+        {/* 第三方全局顶栏快捷操作扩展槽（全局 AI 助手 / 屏幕录制 / 校园门户直通等） */}
+        <div id="app-header-plugin-actions" className="flex items-center gap-2 empty:hidden">
+          <ExtensionPointRenderer
+            slot="header.action"
+            lang={lang}
+            fallback={<></>}
+            slotProps={{ session, currentRole: activeRole, lang }}
+          />
+        </div>
         <button
           onClick={() => setIsSystemResourceLibraryOpen(true)}
           className="flex items-center gap-1.5 hover:text-primary-theme transition-colors bg-surface text-main px-3 py-1.5 rounded-md border border-theme shadow-sm font-medium cursor-pointer"

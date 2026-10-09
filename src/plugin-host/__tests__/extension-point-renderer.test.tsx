@@ -339,4 +339,69 @@ describe('ExtensionPointRenderer — anchor slot placement filtering (v0.2.6)', 
     expect(peerPreview.getAttribute('data-student')).toBe('stu-peer');
     expect(peerPreview.getAttribute('data-content')).toBe('console.log("peer")');
   });
+
+  it('正确渲染 header.action 槽位并注入 session 与角色', async () => {
+    const HeaderComp = (props: any) => (
+      <div data-testid="header-action-comp" data-role={props.currentRole} data-user={props.session?.name}>
+        Header Action
+      </div>
+    );
+    const factory = () => Promise.resolve({ default: HeaderComp });
+    (factory as any).__isLazyFactory = true;
+
+    usePluginHostStore.getState().registerExtensionPoint('header.action', {
+      id: 'ai-assistant-btn',
+      label: '全局 AI 助手',
+      pluginId: 'p-ai-assistant',
+      component: factory,
+    });
+
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="header.action"
+        slotProps={{
+          session: { name: 'Teacher Li', role: 'teacher' },
+          currentRole: 'teacher',
+          lang: 'zh',
+        }}
+      />,
+    );
+
+    const comp = await screen.findByTestId('header-action-comp');
+    expect(comp).toBeTruthy();
+    expect(comp.getAttribute('data-role')).toBe('teacher');
+    expect(comp.getAttribute('data-user')).toBe('Teacher Li');
+  });
+
+  it('正确渲染 statusbar.item 槽位并注入在线状态', async () => {
+    const StatusbarComp = (props: any) => (
+      <div data-testid="statusbar-item-comp" data-online={String(props.isOnline)}>
+        Statusbar Item
+      </div>
+    );
+    const factory = () => Promise.resolve({ default: StatusbarComp });
+    (factory as any).__isLazyFactory = true;
+
+    usePluginHostStore.getState().registerExtensionPoint('statusbar.item', {
+      id: 'net-rtt-indicator',
+      label: '网络延迟指示器',
+      pluginId: 'p-net-rtt',
+      component: factory,
+    });
+
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="statusbar.item"
+        slotProps={{
+          currentRole: 'student',
+          lang: 'en',
+          isOnline: true,
+        }}
+      />,
+    );
+
+    const comp = await screen.findByTestId('statusbar-item-comp');
+    expect(comp).toBeTruthy();
+    expect(comp.getAttribute('data-online')).toBe('true');
+  });
 });

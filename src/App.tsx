@@ -6,6 +6,7 @@ import ForcedPasswordChangeGate from './components/ForcedPasswordChangeGate';
 import { StageDisplayView } from './features/classroom/stage-display/StageDisplayView';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
 import { AppHeader } from './components/AppHeader';
+import { AppStatusBar } from './components/AppStatusBar';
 import { ProfileModal } from './components/ProfileModal';
 import { AppShell } from './components/AppShell';
 import { RightSidebar } from './features/shared/RightSidebar';
@@ -108,6 +109,9 @@ export default function App() {
               />
 
               <AppShell activeRole={activeRole} />
+
+              {/* 全局底部状态栏（statusbar.item 扩展槽；无插件贡献时不渲染） */}
+              <AppStatusBar />
             </div>
 
             <RightSidebar />

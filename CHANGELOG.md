@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **全局壳层扩展槽（底座解耦）(`header.action` / `statusbar.item`)**：
+  - **全局顶栏快捷操作槽 (`header.action`)**：在 [`src/components/AppHeader.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppHeader.tsx) 右侧工具区（「系统资源库」按钮之前）挂载，注入 `{ session, currentRole, lang }`，供全局 AI 助手入口、屏幕录制、校园门户直通等插件使用（此前仅有课堂内的 `classroom.header.action`）；
+  - **全局底部状态栏槽 (`statusbar.item`)**：新增 [`src/components/AppStatusBar.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppStatusBar.tsx) 并由 [`src/App.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/App.tsx) 挂载在主工作区底部，注入 `{ session, currentRole, lang, isOnline }`（`isOnline` 订阅浏览器 `online` / `offline` 事件）；
+  - **零视觉变化**：两处容器均使用 `empty:hidden`，且以空 fallback 替代默认加载骨架；无插件贡献时不占布局空间，现有部署界面不变；
+  - **类型与文档**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 扩充至 74 个，新增 `HeaderActionSlotProps` / `StatusbarItemSlotProps`；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)（74 联合槽位 / 74 消费调用点 / 0 幽灵槽位 / 8 锚点 / 82 唯一槽位值，经脚本核对）；
+  - **测试覆盖**：在 [`src/components/__tests__/app-shell-slots.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/__tests__/app-shell-slots.test.tsx) 与 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐空态、Props 注入、在线状态切换及宿主渲染测试。
+
 - **大屏互动与作业生态扩展槽开辟 (`stage.display.overlay` / `stage.display.action` / `assignment.submission.preview`)**：
   - **大屏展台 HUD 全屏覆盖槽 (`stage.display.overlay`)**：在 [`src/features/classroom/stage-display/StageDisplayPanel.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/classroom/stage-display/StageDisplayPanel.tsx) 挂载 `absolute inset-0 pointer-events-none z-30` 级覆盖层，透传 `lessonId`、`lessonTitle`、`stage`、`data`、`isFullscreen` 与 `lang`，支持全班弹幕、抢答倒计时、全屏仪式动效等第三方插件安全叠加；
   - **大屏展台快捷操作工具栏槽 (`stage.display.action`)**：在展台 Header 右侧操作区开辟快捷操作槽位，支持插件挂载外接设备控制、一键录屏、切流投屏等操作按钮，并透传 `onToggleFullscreen` 与 `onOpenPeerReview` 宿主交互回调；
