@@ -147,4 +147,46 @@ describe('ExtensionPointRenderer — anchor slot placement filtering (v0.2.6)', 
     const sorted = usePluginHostStore.getState().getExtensions('anchor:test:btn');
     expect(sorted.map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
+
+  it('正确渲染 help.plugin_docs 槽位插件', async () => {
+    usePluginHostStore.getState().registerExtensionPoint('help.plugin_docs', {
+      id: 'doc-ext',
+      label: '插件使用文档',
+      pluginId: 'p-docs',
+      component: lazyComponent(<div data-testid="plugin-doc-content">Docs Content</div>),
+    });
+
+    renderWithHost(<ExtensionPointRenderer slot="help.plugin_docs" />);
+    expect(await screen.findByTestId('plugin-doc-content')).toBeTruthy();
+  });
+
+  it('正确渲染 student.classroom.overlay 槽位并注入 props', async () => {
+    const OverlayComp = (props: any) => (
+      <div data-testid="student-overlay" data-student-id={props.studentId} data-lesson-id={props.lessonId}>
+        Student Overlay
+      </div>
+    );
+    const factory = () => Promise.resolve({ default: OverlayComp });
+    (factory as any).__isLazyFactory = true;
+
+    usePluginHostStore.getState().registerExtensionPoint('student.classroom.overlay', {
+      id: 'hud-ext',
+      label: '学生互动 HUD',
+      pluginId: 'p-hud',
+      component: factory,
+    });
+
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="student.classroom.overlay"
+        slotProps={{ studentId: 'stu_123', lessonId: 'les_456' }}
+      />,
+    );
+
+    const overlay = await screen.findByTestId('student-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay.getAttribute('data-student-id')).toBe('stu_123');
+    expect(overlay.getAttribute('data-lesson-id')).toBe('les_456');
+  });
 });
+

@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **UI 扩展槽位规范化收敛与全量消费对齐 (`help.plugin_docs` / `student.classroom.overlay`)**：
+  - **联合类型规范化**：将此前作为裸字符串使用的 `help.plugin_docs`（帮助中心插件使用文档）与 `student.classroom.overlay`（学生端课堂交互全屏浮层）正式纳入 [`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 的 `ExtensionSlot` 联合类型，总成员数由 67 增至 69；
+  - **声明与消费 100% 对齐**：全仓 69 个 `ExtensionSlot` 槽位全部在前端宿主组件中具备明确的 `<ExtensionPointRenderer>` 渲染调用点，实现声明但未消费的幽灵槽位数为 0；
+  - **权威文档与统计更新**：同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)，校准 69 个联合类型槽位与 8 个 `anchor:*` 锚点槽位全量挂载清单及统计口径；
+  - **专项回归测试**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐针对新增槽位的类型安全注册与属性透传渲染测试（6/6 100% 通过）。
+
 ### Security
 
 - **StageGuard 资源级物理强门禁与防跳关落地（终结路线图 I-1 遗留局限）**：
