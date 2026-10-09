@@ -10,6 +10,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **StageGuard 资源级物理强门禁与防跳关落地（终结路线图 I-1 遗留局限）**：
+  - **已知局限终结**：彻底解决原系统“仅防 UI 点击切换、不防直接调用 API 提交测验/作业”的旁路跳关漏洞，实现测验与作业物理提交的真·防跳关闭环；
+  - **多层级双向环节解析器 (`StageResolver`)**：
+    - `resolveElementStageId`：多级解析白板图元/测验的所属环节（优先级：入参 `dataObj.segmentId` -> `whiteboard_elements.data.segmentId` -> 课时 `lessons.timeline` 中 `segment.elementIds` / `segment.elementId` 反查）；
+    - `resolveAssignmentStageId`：多级解析作业的所属环节（优先级：`element_id` 关联图元解析 -> 课时 `timeline` 中 `segment.assignmentIds` / `segment.elementIds` 反查）；
+    - `enforceStageAccess`：统一调度 `StageGuardPipeline`，校验当前学生对目标环节的准入权限，未解锁直接抛出携带 HTTP 403 状态与明确原因的 `STAGE_ACCESS_DENIED` 错误，实现零数据落库；
+  - **随堂测验提交链路物理门禁**：
+    - `server/services/diagnostic-service.ts`（`submitQuiz`）：在校验题面后、写入 DB 前前置调用环节门禁检查，未解锁时拒绝写入 `lesson_quiz_submissions`；
+    - `server/routes/lessons.ts`（`POST /api/lessons/:id/quiz-submit`）：从会话提取角色并透传，保证教师与管理员预览豁免；
+  - **作业中心提交链路物理门禁**：
+    - `packages/plugins/assignment-eval.ts`（`assignment.submit`）：在执行学生提交前前置解析作业归属环节并执行门禁校验，未解锁环节阻止入库；
+  - **100% 向后兼容与特权豁免**：
+    - 未绑定任何环节的全局独立图元/测验自动放行；
+    - 教师及管理员（`role !== 'student'` / `isPrivilegedActor`）在预览或教研调试时免除门禁限制；
+  - **专项测试套件与全链路验证**：
+    - 新增专项集成测试 [`server/__tests__/stage-guard-resource-enforcement.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/__tests__/stage-guard-resource-enforcement.test.ts)（6/6 用例 100% 通过），覆盖全局独立测验、`data.segmentId` 绑定、`timeline.elementIds` 绑定、教师预览豁免、Fail-close 语义一致性及作业提交拦截；
+    - 关联测试（`stage-guard-server-enforcement.test.ts`、`quiz-answered-e2e.test.ts`、`assignment-hub.test.ts`）全量绿灯；
+    - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
+
 ### Refactor / Performance
 
 - **`LessonService` 领域服务下沉与课时路由解耦（架构路线图 E3 收口）**：

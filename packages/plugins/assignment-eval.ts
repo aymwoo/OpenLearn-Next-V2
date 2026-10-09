@@ -6,6 +6,9 @@ import {
   ISemesterGradeServiceToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { resolveAssignmentStageId, enforceStageAccess } from '../core/lesson-engine/stage-resolver.js';
+import { defaultStageGuardPipeline } from '../core/lesson-engine/stage-guard-pipeline.js';
+import { IStageGuardServiceToken } from '../core/di/interfaces.js';
 
 /**
  * 作业中心（Assignment Hub）
@@ -698,6 +701,32 @@ export const AssignmentEvalPlugin = {
         assertStudentOwnership(command.actorId, studentId, 'submit');
 
         const assignment = resolveAssignment(payload.assignmentId, payload.lessonId);
+
+        // StageGuard 资源级物理门禁校验（仅对普通学生生效）
+        if (assignment.lesson_id && !isPrivilegedActor(command.actorId)) {
+          const stageId = resolveAssignmentStageId(
+            db,
+            assignment.lesson_id,
+            assignment.id,
+            assignment.element_id,
+          );
+          if (stageId) {
+            let pipeline: any;
+            try {
+              pipeline = await ctx.resolve(IStageGuardServiceToken as any);
+            } catch {
+              // ignore
+            }
+            pipeline = pipeline || defaultStageGuardPipeline;
+            await enforceStageAccess(pipeline, {
+              studentId,
+              lessonId: assignment.lesson_id,
+              stageId,
+              elementId: assignment.element_id || assignment.id,
+              action: 'assignment_submit',
+            });
+          }
+        }
         const now = Date.now();
         const isLate = assignment.due_at !== null && now > Number(assignment.due_at) ? 1 : 0;
         if (isLate && !assignment.allow_late) {

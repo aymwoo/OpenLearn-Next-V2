@@ -312,6 +312,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         studentName,
         answer,
         timeSpentMs,
+        role: session?.role || 'student',
       });
 
       res.json(result);

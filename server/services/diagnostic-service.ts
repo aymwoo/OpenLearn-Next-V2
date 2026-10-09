@@ -9,6 +9,9 @@
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
+import { resolveElementStageId, enforceStageAccess } from '../../packages/core/lesson-engine/stage-resolver.js';
+import { defaultStageGuardPipeline } from '../../packages/core/lesson-engine/stage-guard-pipeline.js';
+import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 
 export interface TopMistakeItem {
   rank: number;
@@ -51,6 +54,8 @@ export interface QuizSubmitParams {
   studentName?: string | null;
   answer: any;
   timeSpentMs?: number;
+  role?: string;
+  skipStageGuard?: boolean;
 }
 
 export interface QuizSubmitResult {
@@ -328,6 +333,27 @@ export class DiagnosticService {
       dataObj = JSON.parse(row.data);
     } catch {
       dataObj = {};
+    }
+
+    // 1.5 环节门禁校验 (StageGuard 资源级物理强门禁)
+    if (!params.skipStageGuard && params.role !== 'teacher' && params.role !== 'administrator') {
+      const stageId = resolveElementStageId(this.db, lessonId, elementId, dataObj);
+      if (stageId) {
+        let pipeline: any;
+        try {
+          pipeline = await kernelContainer.serviceRegistry.resolve(IStageGuardServiceToken);
+        } catch {
+          // ignore
+        }
+        pipeline = pipeline || defaultStageGuardPipeline;
+        await enforceStageAccess(pipeline, {
+          studentId,
+          lessonId,
+          stageId,
+          elementId,
+          action: 'quiz_submit',
+        });
+      }
     }
 
     const correctAnswer = dataObj.correctAnswer;

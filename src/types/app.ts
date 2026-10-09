@@ -18,6 +18,17 @@ export type Lesson = {
   creator_name?: string | null;
 };
 
+export type TimelineSegment = {
+  id: string;
+  title: string;
+  type?: string;
+  duration?: string | number | null;
+  color?: string;
+  elementIds?: string[];
+  assignmentIds?: string[];
+  [key: string]: unknown;
+};
+
 export type WhiteboardElement = {
   id: string;
   type: string;
