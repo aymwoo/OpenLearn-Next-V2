@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **大屏互动与作业生态扩展槽开辟 (`stage.display.overlay` / `stage.display.action` / `assignment.submission.preview`)**：
+  - **大屏展台 HUD 全屏覆盖槽 (`stage.display.overlay`)**：在 [`src/features/classroom/stage-display/StageDisplayPanel.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/classroom/stage-display/StageDisplayPanel.tsx) 挂载 `absolute inset-0 pointer-events-none z-30` 级覆盖层，透传 `lessonId`、`lessonTitle`、`stage`、`data`、`isFullscreen` 与 `lang`，支持全班弹幕、抢答倒计时、全屏仪式动效等第三方插件安全叠加；
+  - **大屏展台快捷操作工具栏槽 (`stage.display.action`)**：在展台 Header 右侧操作区开辟快捷操作槽位，支持插件挂载外接设备控制、一键录屏、切流投屏等操作按钮，并透传 `onToggleFullscreen` 与 `onOpenPeerReview` 宿主交互回调；
+  - **作业提交多模态预览槽 (`assignment.submission.preview`)**：在 [`src/components/StudentAssignmentEvalPanel.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/StudentAssignmentEvalPanel.tsx) 我的作业已提交卡片与同伴互评列表中双向挂载，打破原系统仅支持纯文本与文件的局限，透传 `submission`、`studentId`、`lessonId`、`isSelf` 与 `lang`，供代码沙盒回放、3D 模型渲染、音视频富媒体预览等插件无缝接入；
+  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 72 个，新增专有 Props 接口类型定义；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md) 清单与统计口径（72 联合槽位，72 消费调用点，0 幽灵槽位，8 锚点，80 唯一槽位值）；
+  - **双层专项测试验证**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 3 个新槽位渲染与 Props 回调测试（9/9 通过），并在 [`src/components/__tests__/student-assignment-eval-panel.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/__tests__/student-assignment-eval-panel.test.tsx) 增加自提交与同伴互评场景集成测试（5/5 通过）。
+
 - **UI 扩展槽位规范化收敛与全量消费对齐 (`help.plugin_docs` / `student.classroom.overlay`)**：
   - **联合类型规范化**：将此前作为裸字符串使用的 `help.plugin_docs`（帮助中心插件使用文档）与 `student.classroom.overlay`（学生端课堂交互全屏浮层）正式纳入 [`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 的 `ExtensionSlot` 联合类型，总成员数由 67 增至 69；
   - **声明与消费 100% 对齐**：全仓 69 个 `ExtensionSlot` 槽位全部在前端宿主组件中具备明确的 `<ExtensionPointRenderer>` 渲染调用点，实现声明但未消费的幽灵槽位数为 0；

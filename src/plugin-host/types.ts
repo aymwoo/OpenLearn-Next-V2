@@ -91,6 +91,8 @@ export type ExtensionSlot =
   | 'nav.user_menu' // v5.2: 顶部 Header 用户菜单扩展
   | 'classroom.quick_activity' // 极速课堂互动扩展
   | 'stage.display.card' // 大屏展台卡片扩展
+  | 'stage.display.overlay' // 大屏展台全屏 HUD 覆盖扩展（全班弹幕/倒计时/仪式动效等）
+  | 'stage.display.action' // 大屏展台操作工具栏快捷操作扩展
   | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
   | 'editor.palette_item' // 课程编辑器白板图元扩展
   // ── 本地新增槽位 ──
@@ -166,7 +168,9 @@ export type ExtensionSlot =
   // ── 帮助中心与通用扩展槽位 ──
   | 'help.plugin_docs' // 帮助中心插件使用文档扩展
   // ── 学生端课堂交互浮层扩展槽位 ──
-  | 'student.classroom.overlay'; // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
+  | 'student.classroom.overlay' // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
+  // ── 作业评估与多模态预览扩展槽位 ──
+  | 'assignment.submission.preview'; // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -376,10 +380,7 @@ export type ActionHandler<TAction extends HostAction = HostAction, TResult = any
   envelope: ActionEnvelope<TAction>,
 ) => Promise<TResult> | TResult;
 
-export type ActionMiddleware = (
-  envelope: ActionEnvelope,
-  next: () => Promise<any>,
-) => Promise<any>;
+export type ActionMiddleware = (envelope: ActionEnvelope, next: () => Promise<any>) => Promise<any>;
 
 export interface DispatchOptions {
   timeoutMs?: number;
@@ -467,4 +468,37 @@ export interface FrontendPluginContext {
   registerPanel?(config: any): void;
   registerMenu?(config: any): void;
   registerToolbarButton?(config: any): void;
+}
+
+/** Props passed to stage.display.overlay extensions */
+export interface StageDisplayOverlaySlotProps {
+  lessonId: string;
+  lessonTitle?: string;
+  stage?: string;
+  data?: any;
+  isFullscreen?: boolean;
+  lang?: 'zh' | 'en';
+}
+
+/** Props passed to stage.display.action extensions */
+export interface StageDisplayActionSlotProps {
+  lessonId: string;
+  lessonTitle?: string;
+  stage?: string;
+  data?: any;
+  isFullscreen?: boolean;
+  lang?: 'zh' | 'en';
+  onToggleFullscreen?: () => void;
+  onOpenPeerReview?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assignment.submission.preview extensions */
+export interface AssignmentSubmissionPreviewSlotProps {
+  submission: any;
+  studentId?: string;
+  lessonId?: string;
+  isSelf?: boolean;
+  lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
 }

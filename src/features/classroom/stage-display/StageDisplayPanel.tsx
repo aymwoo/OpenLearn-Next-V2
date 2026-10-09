@@ -128,6 +128,20 @@ export function StageDisplayPanel({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* 第三方大屏展台快捷操作扩展槽 */}
+            <ExtensionPointRenderer
+              slot="stage.display.action"
+              slotProps={{
+                lessonId,
+                lessonTitle,
+                stage: data.stage,
+                data,
+                isFullscreen,
+                lang,
+                onToggleFullscreen: toggleFullscreen,
+                onOpenPeerReview: () => setPeerReviewOpen(true),
+              }}
+            />
             <button
               id="stage-peer-review-toggle"
               type="button"
@@ -437,6 +451,21 @@ export function StageDisplayPanel({
           {...(peerReview ?? {})}
         />
       )}
+
+      {/* 第三方大屏全屏 HUD 覆盖层（全班弹幕、抢答倒计时、仪式动效等） */}
+      <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+        <ExtensionPointRenderer
+          slot="stage.display.overlay"
+          slotProps={{
+            lessonId,
+            lessonTitle,
+            stage: data.stage,
+            data,
+            isFullscreen,
+            lang,
+          }}
+        />
+      </div>
     </div>
   );
 }

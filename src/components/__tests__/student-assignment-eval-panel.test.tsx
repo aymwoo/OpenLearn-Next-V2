@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { StudentAssignmentEvalPanel } from '../StudentAssignmentEvalPanel';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import { PluginHostProvider } from '../../plugin-host/plugin-host-context';
+import { FrontendPluginHost } from '../../plugin-host/plugin-host';
 
 /**
  * 回归测试 —— 学生端「作业提交与互评」面板的空 `file_path` 崩溃。
@@ -39,6 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  usePluginHostStore.setState({ extensionPoints: new Map() });
 });
 
 describe('StudentAssignmentEvalPanel 空 file_path', () => {
@@ -149,5 +153,70 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
     });
     expect(screen.getByText('未提交作业')).toBeDefined();
     expect(screen.getByText('当前暂无同学提交作业作品。')).toBeDefined();
+  });
+
+  it('挂载并渲染 assignment.submission.preview 扩展槽位（自提交与同伴提交）', async () => {
+    const PreviewComp = (props: any) => (
+      <div data-testid={`preview-${props.isSelf ? 'self' : 'peer'}`}>
+        Preview: {props.submission?.textContent || props.submission?.files?.[0]?.name}
+      </div>
+    );
+    const factory = () => Promise.resolve({ default: PreviewComp });
+    (factory as any).__isLazyFactory = true;
+
+    usePluginHostStore.getState().registerExtensionPoint('assignment.submission.preview', {
+      id: 'mock-eval-preview',
+      label: '多模态作业预览',
+      pluginId: 'p-eval-preview',
+      component: factory,
+    });
+
+    mockFetchWith(
+      {
+        submission: {
+          id: 'sub-self-1',
+          assignment_id: 'asg-1',
+          lesson_id: lessonId,
+          student_id: studentId,
+          file_path: null,
+          version: 1,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          files: [],
+          textContent: '自提交的算法解释',
+          linkUrl: null,
+        },
+        reviewsWritten: [],
+        grade: null,
+      },
+      [
+        {
+          id: 'sub-peer-1',
+          assignment_id: 'asg-1',
+          lesson_id: lessonId,
+          student_id: 'stu-peer-9',
+          file_path: null,
+          version: 1,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          files: [],
+          textContent: '同伴提交的物理实验数据',
+          linkUrl: null,
+        },
+      ],
+    );
+
+    const host = new FrontendPluginHost();
+    render(
+      <PluginHostProvider host={host}>
+        <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />
+      </PluginHostProvider>,
+    );
+
+    expect(await screen.findByTestId('preview-self')).toBeDefined();
+    expect(screen.getByText('Preview: 自提交的算法解释')).toBeDefined();
+
+    expect(await screen.findByTestId('preview-peer')).toBeDefined();
+    expect(screen.getByText('Preview: 同伴提交的物理实验数据')).toBeDefined();
   });
 });

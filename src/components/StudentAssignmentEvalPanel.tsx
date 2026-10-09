@@ -12,6 +12,7 @@ import {
   Award,
   Clock,
 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 interface StudentAssignmentEvalPanelProps {
   lessonId: string;
@@ -295,6 +296,18 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                     })}
                 </div>
               )}
+
+              {/* 第三方作业多模态预览扩展槽（自作答） */}
+              <ExtensionPointRenderer
+                slot="assignment.submission.preview"
+                slotProps={{
+                  submission: mySubmission,
+                  studentId,
+                  lessonId,
+                  isSelf: true,
+                  lang,
+                }}
+              />
             </div>
           ) : (
             <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 mb-4 text-left">
@@ -482,6 +495,18 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                       {peerSub.textContent}
                     </p>
                   )}
+
+                  {/* 第三方作业多模态预览扩展槽（同伴作答） */}
+                  <ExtensionPointRenderer
+                    slot="assignment.submission.preview"
+                    slotProps={{
+                      submission: peerSub,
+                      studentId: peerSub.student_id,
+                      lessonId,
+                      isSelf: false,
+                      lang,
+                    }}
+                  />
 
                   {/* Submission review status */}
                   {existingReview && (
