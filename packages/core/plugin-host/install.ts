@@ -72,6 +72,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     }
 
     // 2c. V3.0: 注册声明式贡献点（classroomTools → contributes 自动桥接）
+    this.warnIfBaseRouteDeclared(manifest);
     if (manifest.contributes) {
       this.contributionRegistry.register(manifest.id, manifest.contributes);
     } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
@@ -274,12 +275,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // 4b. 撤销插件能力（与 T-04-20 等价的兜底）
     // 非 ACTIVE 态卸载不会走 deactivate 路径，也就不会执行 revokeAll，
     // 会造成已授予能力在内存中残留（权限泄漏）。此处无条件撤销一次。
-    try {
-      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-      await capService.revokeAll(`plugin:${manifestId}`);
-    } catch (capErr) {
-      console.warn(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
-    }
+    // 与 activate/deactivate 共用 revokeCapabilities（P1：能力授予/撤销
+    // 从 7 处内联收敛为单一来源，避免只改一处造成漂移）。
+    await this.revokeCapabilities(`plugin:${manifestId}`);
 
     // 4c. Deregister static routes registered by deploy (best-effort cleanup)
     if (this.expressApp && this._registeredRoutes.has(manifestId)) {
@@ -364,6 +362,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     }
 
     // 2b. V3.0: 注册声明式贡献点（classroomTools → contributes 自动桥接）
+    this.warnIfBaseRouteDeclared(manifest);
     if (manifest.contributes) {
       this.contributionRegistry.register(manifest.id, manifest.contributes);
     } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {

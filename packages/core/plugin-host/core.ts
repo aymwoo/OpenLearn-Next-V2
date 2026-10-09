@@ -159,6 +159,27 @@ export abstract class PluginHostCore extends PluginHostBase {
     }
   }
 
+  /**
+   * `api.baseRoute` 声明时的一次性告警（审计 P1）。
+   *
+   * baseRoute 在全仓没有任何路由消费方 —— 插件 REST 端点的真实路径固定是
+   * `/api/plugins/{manifest.id}/*`。该字段却暗示「可自选挂载前缀」，
+   * 已实际误导过（exam-bank 声明 `/api/plugins/exam-bank`，而它的
+   * manifest.id 是 `@teacher/plugin-exam-bank`）。
+   *
+   * 选择「告警」而非「拒绝安装」：字段无害，只是无效；拒绝会无谓地挡住
+   * 存量可用的插件。silent 是正确的做法，但它把作者的误解保留到联调阶段。
+   */
+  protected warnIfBaseRouteDeclared(manifest: { api?: { baseRoute?: string } }): void {
+    const baseRoute = manifest.api?.baseRoute;
+    if (!baseRoute) return;
+    console.warn(
+      `[PluginHost] manifest declares api.baseRoute "${baseRoute}" — 该字段无路由作用。` +
+        `插件 REST 端点的真实路径固定为 /api/plugins/<manifest.id>/*` +
+        `（见 docs/plugin/plugin-manifest-spec.md §2.7）。`,
+    );
+  }
+
   // ── 文件系统路径辅助方法 ──────────────────────────────────────────
 
   /** 获取插件的文件系统目录路径 */

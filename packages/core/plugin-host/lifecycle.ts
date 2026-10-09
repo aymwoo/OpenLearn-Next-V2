@@ -111,101 +111,87 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     // 2. 设置状态为 ACTIVATING
     this.setPluginState(pluginId, PluginState.ACTIVATING);
 
-    // Phase 8: Check if this is a preloaded inline plugin
+    // Phase 8: preloaded（内置插件）与 DB（安装插件）两条 inline 路径分派。
+    //
+    // 审计 P1：本方法原约 310 行，把三分支（preloaded / ESM / worker）+ 依赖
+    // 检查 + 能力授予 + 中间件 + 超时 + 回滚合于一体 —— F-1（process 模式
+    // 分流遗漏）与 F-4（inline 停用不注销贡献点）都发生在这个体量里。
+    // 现拆为「编排（本节）+ activatePreloaded + activateFromDatabase +
+    // loadPluginModule + resolveActivationGuards + runActivatePipeline +
+    // grant/revokeCapabilities」，各方法单一职责、独立可测。
     const preloaded = this.preloadedPlugins.get(pluginId);
     if (preloaded) {
-      const manifest = preloaded.manifest;
-      const activate = preloaded.activate;
-      const deactivate = preloaded.deactivate;
-      const actorId = `plugin:${manifest.id}`;
-
-      try {
-        manifestSchema.parse(manifest);
-
-        // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
-        const depCheck = this.checkPluginDependencies(manifest);
-        if (depCheck) {
-          throw new PluginActivateError(pluginId, depCheck);
-        }
-
-        // V3.2: 检查跨插件服务依赖（阻塞激活）
-        const serviceCheck = this.checkCrossPluginServices(manifest);
-        if (serviceCheck) {
-          const items = serviceCheck.unsatisfied.map((u) => `"${u.required}" from ${u.providerId}`).join(', ');
-          throw new PluginActivateError(
-            pluginId,
-            `Plugin "${manifest.id}" requires cross-plugin services: ${items} (not provided)`,
-          );
-        }
-        const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
-        // B-5：在构建上下文**之前**声明进程归属，否则本插件 spawn 的任务会被
-        // 记到上一个声明者名下（归属列/内存 Map 都是同步写入，见 setPluginOwner 注释）。
-        await this.declareProcessOwnership(pluginId);
-        const ctx = await buildContext(
-          this.serviceRegistry,
-          this.resourceTracker,
-          pluginId,
-          manifest,
-          this.db,
-          skipTokens,
-          this.contributionRegistry,
-        );
-
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-        const caps = manifest.capabilitiesProposed ?? [];
-        for (const cap of caps) {
-          await capService.grant(actorId, cap);
-        }
-
-        const middlewareCtx: MiddlewareContext = {
-          pluginId,
-          manifest,
-          phase: 'beforeActivate',
-          timestamp: Date.now(),
-        };
-
-        const before = this.getMiddleware('beforeActivate');
-        const after = this.getMiddleware('afterActivate');
-
-        const activatePipeline = compose([
-          ...before,
-          async (_ctx, next) => {
-            await next(); // 执行实际激活
-            const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
-            const afterPipeline = compose(after);
-            await afterPipeline(afterCtx, async () => {});
-          },
-        ]);
-
-        await activatePipeline(middlewareCtx, async () => {
-          // 激活带 5 秒超时
-          await Promise.race([
-            activate(ctx),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => {
-                reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
-              }, ACTIVATION_TIMEOUT_MS),
-            ),
-          ]);
-        });
-
-        this.pluginInstances.set(pluginId, { manifest, activate, deactivate, context: ctx });
-        this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
-      } catch (err: any) {
-        console.error('[PluginHost] Preloaded plugin activation error stack:', err.stack);
-        this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
-        this.resourceTracker.disposeAll(pluginId);
-        try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-          await capService.revokeAll(actorId);
-        } catch {
-          // ignore
-        }
-        throw new EsmActivationError(pluginId, err.message);
-      }
+      await this.activatePreloaded(pluginId, preloaded);
       return;
     }
 
+    await this.activateFromDatabase(pluginId, currentState);
+  }
+
+  /**
+   * preloaded 插件的激活（Phase 8，内置插件路径）。
+   *
+   * 与 ESM 路径的**有意差异**（拆分时逐条保留，勿「顺手统一」）：
+   * - 失败时抛 `EsmActivationError`（包装原错误），ESM 路径原样 rethrow；
+   * - 成功副作用（实例入库 + ACTIVE）在中间件管道**之后**执行，
+   *   ESM 路径在管道内（afterActivate 中间件之前）；
+   * - 声明进程归属（B-5）只在此路径 —— ESM 路径缺失是一项**已知不对称**，
+   *   见下方 TODO。
+   */
+  private async activatePreloaded(
+    pluginId: string,
+    preloaded: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> },
+  ): Promise<void> {
+    const manifest = preloaded.manifest;
+    const activate = preloaded.activate;
+    const deactivate = preloaded.deactivate;
+    const actorId = `plugin:${manifest.id}`;
+
+    try {
+      manifestSchema.parse(manifest);
+
+      const { skipTokens } = this.resolveActivationGuards(manifest, pluginId);
+      // B-5：在构建上下文**之前**声明进程归属，否则本插件 spawn 的任务会被
+      // 记到上一个声明者名下（归属列/内存 Map 都是同步写入，见 setPluginOwner 注释）。
+      await this.declareProcessOwnership(pluginId);
+      const ctx = await buildContext(
+        this.serviceRegistry,
+        this.resourceTracker,
+        pluginId,
+        manifest,
+        this.db,
+        skipTokens,
+        this.contributionRegistry,
+      );
+
+      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? []);
+
+      await this.runActivatePipeline(pluginId, manifest, activate, ctx);
+
+      this.pluginInstances.set(pluginId, { manifest, activate, deactivate, context: ctx });
+      this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
+    } catch (err: any) {
+      console.error('[PluginHost] Preloaded plugin activation error stack:', err.stack);
+      this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
+      this.resourceTracker.disposeAll(pluginId);
+      await this.revokeCapabilities(actorId);
+      throw new EsmActivationError(pluginId, err.message);
+    }
+  }
+
+  /**
+   * 已安装插件（DB 行 + 文件系统产物）的激活。
+   *
+   * @param currentState 进入 ACTIVATING **之前**的状态 —— 仅用于加载失败时
+   *   恢复原位（不落在 transient 态）。必须由编排层传入：此刻内存状态已是
+   *   ACTIVATING，本方法无法自行还原「之前是什么」。
+   *
+   * TODO（已知不对称，非本轮修复）：此路径不调用 `declareProcessOwnership`，
+   * 意味着 DB 安装的插件 spawn 的任务没有归属记录 —— `wrapProcessManager.kill`
+   * 的归属校验对它们退化为「不拦截」（与 B-5 修复前一致）。修复前需确认
+   * `setPluginOwner` 与「进程表已存在行」两种写入路径的语义，避免误杀。
+   */
+  private async activateFromDatabase(pluginId: string, currentState: PluginState): Promise<void> {
     // 3. 从 DB 加载插件
     const row = this.db.prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?').get(pluginId) as
       { file_path?: string; source_code: string; manifest: string } | undefined;
@@ -226,70 +212,16 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     const actorId = `plugin:${storedManifest.id}`;
 
     try {
-      // 4. 加载源码 — 优先从文件系统 file:// URL 导入（使 Node.js 能解析 @openlearn/* 等裸模块），
-      //    fallback 到 DB source_code 的 data: URL 加载（向后兼容旧格式插件）
-      let mod: PluginModule;
-      if (process.env.NODE_ENV !== 'test' && row.file_path && fs.existsSync(row.file_path)) {
-        // 使用 file:// URL 直接导入，Node.js 会基于文件所在目录解析裸模块 specifier
-        // 附加 ?t= 查询参数绕过 ESM 缓存，确保重新激活时加载最新代码
-        // 宿主以 external 方式提供 SDK，先确保插件目录能解析到它
-        this.ensureHostSdkResolution();
-        const fileUrl = pathToFileURL(row.file_path);
-        mod = await import(`${fileUrl.href}?t=${Date.now()}`);
-      } else {
-        let sourceCode: string = '';
-        if (row.file_path && fs.existsSync(row.file_path)) {
-          sourceCode = fs.readFileSync(row.file_path, 'utf-8');
-        } else if (row.source_code) {
-          sourceCode = row.source_code;
-        } else {
-          throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
-        }
-        mod = await this.esmLoader.load(sourceCode);
-      }
+      // 4-6. 加载模块、提取导出、合并 manifest、schema 校验
+      const { manifest: codeManifest, activate, deactivate } = await this.loadPluginModule(pluginId, row);
 
-      // 5. 提取 manifest 和 activate（支持两种导出格式）
-      const plugin = mod.default ?? mod;
-      const manifest = plugin.manifest ?? (mod as any).manifest;
-      const activate = plugin.activate ?? (mod as any).activate;
-      const deactivate = plugin.deactivate ?? (mod as any).deactivate;
+      // Merge stored package manifest (from DB) with code-level manifest to ensure
+      // all required fields (e.g. main, requires) are present
+      const mergedManifest = { ...storedManifest, ...codeManifest } as Manifest;
 
-      if (!manifest || !activate) {
-        throw new EsmActivationError(pluginId, 'missing manifest or activate function');
-      }
-
-      if (typeof activate !== 'function') {
-        throw new EsmActivationError(pluginId, 'activate must be a function');
-      }
-
-      // Merge stored package manifest (from DB) with code-level manifest to ensure all required fields (e.g. main, requires) are present
-      const mergedManifest = {
-        ...storedManifest,
-        ...manifest,
-      };
-
-      // 6. 校验 manifest schema
       manifestSchema.parse(mergedManifest);
 
-      // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
-      const depCheck = this.checkPluginDependencies(mergedManifest);
-      if (depCheck) {
-        this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
-        throw new PluginActivateError(pluginId, depCheck);
-      }
-
-      // 6a. Phase 6: Token version compatibility check (D-05, D-12)
-
-      // V3.2: 检查跨插件服务依赖（阻塞激活）
-      const serviceCheck = this.checkCrossPluginServices(mergedManifest);
-      if (serviceCheck) {
-        const items = serviceCheck.unsatisfied.map((u) => `"${u.required}" from ${u.providerId}`).join(', ');
-        throw new PluginActivateError(
-          pluginId,
-          `Plugin "${mergedManifest.id}" requires cross-plugin services: ${items} (not provided)`,
-        );
-      }
-      const skipTokens = this.checkSemVerCompatibility(mergedManifest, pluginId, 'activate');
+      const { skipTokens } = this.resolveActivationGuards(mergedManifest, pluginId);
 
       // 7. 构建安全的 PluginContext — skipTokens 中指定的可选服务 key 将被设为 null（D-12）
       const ctx = await buildContext(
@@ -298,55 +230,17 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         pluginId,
         mergedManifest,
         this.db,
-        skipTokens, // NEW: Phase 6 — incompatible optional token names
+        skipTokens, // Phase 6 — incompatible optional token names
         this.contributionRegistry,
       );
 
       // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）
-      try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-        const caps = mergedManifest.capabilitiesProposed ?? [];
-        for (const cap of caps) {
-          await capService.grant(actorId, cap);
-        }
-      } catch (capErr) {
-        console.error(`[PluginHost] Failed to grant capabilities for "${pluginId}":`, capErr);
-        throw capErr;
-      }
+      await this.grantCapabilities(actorId, mergedManifest.capabilitiesProposed ?? []);
 
-      // 9. Phase 7: 中间件管道包裹激活（洋葱模型: beforeActivate → activate → afterActivate）
-      const middlewareCtx: MiddlewareContext = {
-        pluginId,
-        manifest: mergedManifest,
-        phase: 'beforeActivate',
-        timestamp: Date.now(),
-      };
-      const before = this.getMiddleware('beforeActivate');
-      const after = this.getMiddleware('afterActivate');
-
-      const activatePipeline = compose([
-        ...before,
-        async (_ctx, next) => {
-          await next(); // 执行实际激活
-          // 激活成功后执行 afterActivate 中间件
-          const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
-          const afterPipeline = compose(after);
-          await afterPipeline(afterCtx, async () => {});
-        },
-      ]);
-
-      await activatePipeline(middlewareCtx, async () => {
-        // 10. 激活带 5 秒超时（D-11, T-04-17）
-        await Promise.race([
-          activate(ctx),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => {
-              reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
-            }, ACTIVATION_TIMEOUT_MS),
-          ),
-        ]);
-
-        // 11. 成功
+      // 9-11. 中间件管道 + 5s 超时 + 成功副作用（实例入库、ACTIVE、热重载接线）
+      // 副作用放在管道内（afterActivate 中间件之前）—— 与 preloaded 路径
+      // 「管道之后」的差异是既有行为，拆分时保留。
+      await this.runActivatePipeline(pluginId, mergedManifest, activate, ctx, () => {
         this.pluginInstances.set(pluginId, {
           manifest: mergedManifest,
           activate,
@@ -367,21 +261,180 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         console.log(`[PluginHost] Plugin "${mergedManifest.id}" activated (${pluginId})`);
       });
     } catch (err) {
-      // 11. D-12: 失败回滚
+      // D-12: 失败回滚 —— ERROR + disposeAll + 撤销能力 + 原样 rethrow
       this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
-
-      // 撤销能力（T-04-19: 即使激活失败也撤销）
-      try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-        await capService.revokeAll(actorId);
-      } catch {
-        // revokeAll 静默失败
-      }
+      await this.revokeCapabilities(actorId);
 
       console.error(`[PluginHost] Plugin "${pluginId}" activate failed:`, err);
       throw err;
+    }
+  }
+
+  /**
+   * 从 DB 行加载插件模块（拆自分支 4-6）。
+   *
+   * 优先从文件系统 `file://` URL 导入（使 Node.js 能解析 @openlearn/* 等裸
+   * 模块），fallback 到 DB source_code 的 data: URL 加载（向后兼容旧格式）。
+   *
+   * 注意 `process.env.NODE_ENV !== 'test'` 条件：测试环境下**所有**路径都走
+   * esmLoader，否则测试会真实 import 磁盘文件（不可控、慢、且测不到 loader 层）。
+   */
+  private async loadPluginModule(
+    pluginId: string,
+    row: { file_path?: string; source_code: string },
+  ): Promise<{
+    manifest: Manifest;
+    activate: (ctx: PluginContext) => Promise<void>;
+    deactivate?: () => Promise<void>;
+  }> {
+    let mod: PluginModule;
+    if (process.env.NODE_ENV !== 'test' && row.file_path && fs.existsSync(row.file_path)) {
+      // 使用 file:// URL 直接导入，Node.js 会基于文件所在目录解析裸模块 specifier
+      // 附加 ?t= 查询参数绕过 ESM 缓存，确保重新激活时加载最新代码
+      // 宿主以 external 方式提供 SDK，先确保插件目录能解析到它
+      this.ensureHostSdkResolution();
+      const fileUrl = pathToFileURL(row.file_path);
+      mod = await import(`${fileUrl.href}?t=${Date.now()}`);
+    } else {
+      let sourceCode: string = '';
+      if (row.file_path && fs.existsSync(row.file_path)) {
+        sourceCode = fs.readFileSync(row.file_path, 'utf-8');
+      } else if (row.source_code) {
+        sourceCode = row.source_code;
+      } else {
+        throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
+      }
+      mod = await this.esmLoader.load(sourceCode);
+    }
+
+    // 提取 manifest 和 activate（支持 default export 和具名导出两种格式）
+    const plugin = mod.default ?? mod;
+    const manifest = plugin.manifest ?? (mod as any).manifest;
+    const activate = plugin.activate ?? (mod as any).activate;
+    const deactivate = plugin.deactivate ?? (mod as any).deactivate;
+
+    if (!manifest || !activate) {
+      throw new EsmActivationError(pluginId, 'missing manifest or activate function');
+    }
+
+    if (typeof activate !== 'function') {
+      throw new EsmActivationError(pluginId, 'activate must be a function');
+    }
+
+    return { manifest, activate, deactivate };
+  }
+
+  /**
+   * 激活前的依赖与兼容性守卫（preloaded / ESM 两条路径共用，审计前各写一遍）。
+   *
+   * - `pluginDependencies` 缺失或未激活 → PluginActivateError（阻塞激活）
+   * - `requires` 里的跨插件服务未在提供方 manifest.provides 声明 → 阻塞
+   * - Token 版本不兼容 → required 抛错 / optional 收集进返回的 skipTokens（D-12）
+   *
+   * 统一后抛错的 message 用 `manifest.id`（拆分前 ESM 路径用 mergedManifest.id，
+   * 与 stored/code 合并后的 id 相同，语义一致）。
+   */
+  private resolveActivationGuards(manifest: Manifest, pluginId: string): { skipTokens: Set<string> } {
+    // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
+    const depCheck = this.checkPluginDependencies(manifest);
+    if (depCheck) {
+      throw new PluginActivateError(pluginId, depCheck);
+    }
+
+    // V3.2: 检查跨插件服务依赖（阻塞激活）
+    const serviceCheck = this.checkCrossPluginServices(manifest);
+    if (serviceCheck) {
+      const items = serviceCheck.unsatisfied.map((u) => `"${u.required}" from ${u.providerId}`).join(', ');
+      throw new PluginActivateError(
+        pluginId,
+        `Plugin "${manifest.id}" requires cross-plugin services: ${items} (not provided)`,
+      );
+    }
+
+    // Phase 6: Token version compatibility check (D-05, D-12)
+    return { skipTokens: this.checkSemVerCompatibility(manifest, pluginId, 'activate') };
+  }
+
+  /**
+   * 洋葱模型激活管道：beforeActivate → activate（5s 超时）→ afterActivate。
+   *
+   * 拆前 preloaded / ESM 各写一份完全相同的 compose + race 代码
+   * （约 25 行 ×2），任一侧改超时值或中间件顺序都会造成漂移。
+   *
+   * @param onActivated 激活成功后的副作用钩子。ESM 路径传入（在 afterActivate
+   *   中间件之前执行，保持既有行为）；preloaded 路径不传（在管道返回后执行）。
+   */
+  private async runActivatePipeline(
+    pluginId: string,
+    manifest: Manifest,
+    activate: (ctx: PluginContext) => Promise<void>,
+    ctx: PluginContext,
+    onActivated?: () => void,
+  ): Promise<void> {
+    const middlewareCtx: MiddlewareContext = {
+      pluginId,
+      manifest,
+      phase: 'beforeActivate',
+      timestamp: Date.now(),
+    };
+    const before = this.getMiddleware('beforeActivate');
+    const after = this.getMiddleware('afterActivate');
+
+    const activatePipeline = compose([
+      ...before,
+      async (_ctx, next) => {
+        await next(); // 执行实际激活
+        // 激活成功后执行 afterActivate 中间件
+        const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
+        const afterPipeline = compose(after);
+        await afterPipeline(afterCtx, async () => {});
+      },
+    ]);
+
+    await activatePipeline(middlewareCtx, async () => {
+      // 激活带 5 秒超时（D-11, T-04-17）
+      await Promise.race([
+        activate(ctx),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => {
+            reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
+          }, ACTIVATION_TIMEOUT_MS),
+        ),
+      ]);
+      onActivated?.();
+    });
+  }
+
+  /**
+   * 按 manifest.capabilitiesProposed 授予能力（拆前散布在 5 处）。
+   * grant 失败必须向上抛 —— 能力缺失时激活出来的插件是半残状态。
+   */
+  protected async grantCapabilities(actorId: string, caps: string[]): Promise<void> {
+    if (caps.length === 0) return;
+    try {
+      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
+      for (const cap of caps) {
+        await capService.grant(actorId, cap);
+      }
+    } catch (capErr) {
+      console.error(`[PluginHost] Failed to grant capabilities for "${actorId}":`, capErr);
+      throw capErr;
+    }
+  }
+
+  /**
+   * 撤销某 actor 的全部能力（拆前散布在 5 处，其中 3 处静默 swallow）。
+   * 统一为「记录日志后继续」—— 撤销失败不该掩盖原始激活/停用错误，
+   * 但完全静默会让「能力残留」类问题无从排查。
+   */
+  protected async revokeCapabilities(actorId: string): Promise<void> {
+    try {
+      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
+      await capService.revokeAll(actorId);
+    } catch (capErr) {
+      console.error(`[PluginHost] Failed to revoke capabilities for "${actorId}":`, capErr);
     }
   }
 
@@ -414,11 +467,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
     try {
       // Grant capabilities (same as inline mode activation)
-      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-      const caps = manifest.capabilitiesProposed ?? [];
-      for (const cap of caps) {
-        await capService.grant(actorId, cap);
-      }
+      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? []);
 
       // Resolve EventBus for event forwarding to Worker
       const eventBus = (await this.serviceRegistry.resolve<IEventBusService>(
@@ -450,12 +499,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
-      try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-        await capService.revokeAll(actorId);
-      } catch {
-        // revokeAll 静默失败
-      }
+      await this.revokeCapabilities(actorId);
       throw err;
     }
   }
@@ -644,12 +688,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
           // 撤销能力（T-04-20: finally 中强制撤销）
           if (actorId) {
-            try {
-              const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-              await capService.revokeAll(actorId);
-            } catch (capErr) {
-              console.error(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
-            }
+            await this.revokeCapabilities(actorId);
           }
         }
 
@@ -665,10 +704,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       this.revokePluginContributions(pluginId); // D-1/D-2：注销声明式贡献
       this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
       if (actorId) {
-        try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-          await capService.revokeAll(actorId);
-        } catch {}
+        await this.revokeCapabilities(actorId);
       }
       throw pipelineErr;
     }
@@ -712,12 +748,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
       if (actorId) {
-        try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
-          await capService.revokeAll(actorId);
-        } catch (capErr) {
-          console.error(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
-        }
+        await this.revokeCapabilities(actorId);
       }
 
       console.log(`[PluginHost] Plugin "${pluginId}" deactivated (worker mode)`);

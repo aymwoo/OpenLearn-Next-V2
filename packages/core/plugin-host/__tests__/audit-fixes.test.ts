@@ -6,7 +6,7 @@
  * contributionRegistry 长期滞留已停用插件的条目，
  * `listContributions()` 的 allSummaries / stats() 继续把它们算进去。
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PluginState } from '../types.js';
 import { createDb, makeHost, makeTmpDir, removeTmpDir, insertPluginRow } from './helpers/audit-host.js';
 
@@ -55,5 +55,41 @@ describe('F-4 · inline 停用注销声明式贡献点', () => {
     // 修复前：listContributions 返回 1 条、summary 非空（已停用插件的幽灵贡献）
     expect(host.listContributions(manifest.id)).toEqual([]);
     expect(host.contributions.summary(manifest.id)).toEqual([]);
+  });
+});
+
+describe('P1 · api.baseRoute 安装告警（无路由作用字段）', () => {
+  let db: ReturnType<typeof createDb>;
+  let pluginsDir: string;
+  let host: Awaited<ReturnType<typeof makeHost>>;
+
+  beforeEach(async () => {
+    db = createDb();
+    pluginsDir = makeTmpDir('audit-baseroute-');
+    host = await makeHost(db, pluginsDir);
+  });
+
+  afterEach(() => {
+    removeTmpDir(pluginsDir);
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  it('声明了 baseRoute 的 manifest 触发一次告警', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (host as unknown as { warnIfBaseRouteDeclared: (m: unknown) => void }).warnIfBaseRouteDeclared({
+      api: { baseRoute: '/api/plugins/exam-bank' },
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/baseRoute[\s\S]*无路由作用/);
+  });
+
+  it('未声明（或空串）时不告警', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = host as unknown as { warnIfBaseRouteDeclared: (m: unknown) => void };
+    h.warnIfBaseRouteDeclared({});
+    h.warnIfBaseRouteDeclared({ api: {} });
+    h.warnIfBaseRouteDeclared({ api: { baseRoute: '' } });
+    expect(warn).not.toHaveBeenCalled();
   });
 });

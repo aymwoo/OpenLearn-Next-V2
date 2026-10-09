@@ -146,6 +146,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件系统审计 P1：激活流程拆分、能力助手收敛与两项契约修复（2026-10-09 晚场）**：
+  - **`activatePluginExclusive` 拆分（310 行 → 编排 64 行）**：原方法把三分支（preloaded / ESM / worker）+ 依赖检查 + 能力授予 + 中间件 + 超时 + 回滚合于一体 —— F-1（process 模式分流遗漏）与 F-4（inline 停用不注销贡献点）都发生在这个体量里。现拆为「编排 + `activatePreloaded` + `activateFromDatabase` + `loadPluginModule` + `resolveActivationGuards` + `runActivatePipeline` + `grantCapabilities`/`revokeCapabilities`」，最长方法 89 行，各职责单一可测。两条 inline 路径的**既有差异**（错误类型、成功副作用在中间件管道内/外、`declareProcessOwnership` 仅 preloaded 有）逐条保留并在注释中标注 —— 统一它们属行为变更，需单独评估；ESM 路径缺失进程归属声明记为 TODO（其 spawn 任务的 kill 归属校验退化为不拦截）；
+  - **能力授予/撤销从 7 处内联收敛为单一来源**：`grantCapabilities` / `revokeCapabilities`（protected，activate / activateWorker / deactivate / deactivateWorker / uninstall 兜底共用），消除「只改一处」的漂移风险；撤销失败从 3 处静默 swallow 统一为记录日志后继续；
+  - **`api.baseRoute` 契约修复**：该字段全仓无任何路由消费方（真实路径固定 `/api/plugins/{manifest.id}/*`），却暗示「可自选挂载前缀」，已实际误导（exam-bank 声明 `/api/plugins/exam-bank` 而其 manifest.id 是 `@teacher/plugin-exam-bank`）。schema 注释说明 + 安装期一次性告警（不拒绝安装：字段无害，只是无效）+ `plugin-manifest-spec.md §2.7` 重写该节（含多段 manifest.id 的正确拼路规则：未编码与 `%2F` 编码两种形态宿主均可解析）；
+  - **R-1 局限文档化**：`plugin-lifecycle.md` 新增 §3.2.1「激活超时不等于执行取消」—— 5s 激活 / 5s HTTP / 5min SSE 均为 `Promise.race` 语义，到点后宿主放弃等待但**插件已启动的执行不会被取消**（JS 协作式调度无 preemption）；给出实践指引（长任务进 processManager、需可取消语义选 worker/process 模式）；顺带修正文档中 `ACTIVATION_TIMEOUT_MS` / `DEACTIVATION_TIMEOUT_MS` 的路径漂移（L-2 拆分后实际在 `base.ts`，文档仍写 `index.ts`）；
+  - **测试**：`audit-fixes.test.ts` 新增 baseRoute 告警两例（触发/静默）；全量 3386 测试通过，`tsc --noEmit` 0 error，ESLint 0 error。
+
 - **插件系统 2026-10-09 审计轮修复（F-1 / F-2 / F-3 / F-4 / F-5 / R-1 / R-2 / R-3 / R-5 / R-6 / E-1 / E-2 / E-4 / E-5）**：
   - **F-1（Critical）`process` 执行模式在生命周期后半段被系统性遗漏**：activate 一侧早已支持 `worker/process` 双隔离，但停用 / 卸载 / 模式热切换 / 热重载四处仍写 `=== 'worker'`。后果是静默失效——停用走 inline 路径子进程永不 terminate；再激活撞 "Worker already exists"；**热重载把进程隔离降级为宿主管内 inline**。新增单一判据 `requiresIsolatedExecution(mode)`（类型谓词，带收窄）替换四处字面量，`reloadWorker` 重建时同步 `isolateKind`（此前缺省 thread，进程模式热重载后原语也会降级）；
   - **F-2**：`@scope/name` 形式 manifest.id 的 REST 端点不可达——网关路由 `:pluginId` 是单段参数，而市场 id 校验正则明确允许 `/`。网关新增 `resolveScopedPluginId()` 前缀重组（取最长匹配），编码（`%2F`）与未编码两种形态均可用；

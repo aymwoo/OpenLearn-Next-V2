@@ -81,14 +81,40 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 
 激活超时与执行行为依插件运行模式而定：
 
-- **进程内模式 (Inline Mode)**：超时限制为 **5000 毫秒**（`packages/core/plugin-host/index.ts` 的 `ACTIVATION_TIMEOUT_MS`）；
+- **进程内模式 (Inline Mode)**：超时限制为 **5000 毫秒**（`packages/core/plugin-host/base.ts` 的 `ACTIVATION_TIMEOUT_MS`）；
 - **Worker 隔离模式 (Worker Mode)**：初始等待窗口为 **60000 毫秒**（`packages/core/worker-runtime/worker-manager.ts` 的 `ACTIVATE_TIMEOUT_MS`，可用环境变量 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 覆盖，非法值回落默认 60s）。Worker 侧 `error` / `exit` 事件会在等待期内**立即 reject** 激活（`WorkerActivateError`），不等到超时才失败。
 
 > ⚠️ **`ctx.reportProgress` 不是 `PluginContext` 的成员**。`packages/core/plugin-host/types.ts` 的 `PluginContext` 接口**没有** `reportProgress`；它只由 `worker-manager.ts` 在 Worker 引导脚本里**动态注入**到 worker 侧的 `ctx` 对象上（全仓唯一出现处是该引导脚本）。后果：
+>
 > - **Inline 模式**：`ctx.reportProgress` 为 `undefined`，直接调用会抛 `TypeError`；
 > - **类型层面**：若 `activate(ctx: PluginContext)`，TypeScript 会因属性不存在而报错，需 `(ctx as any).reportProgress?.(...)` 之类的写法。
 >
 > 滑动续期窗口另由 `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` 控制（默认 `Math.min(30_000, ACTIVATE_TIMEOUT_MS)`，小于 3000 的值被忽略）。主线程在收到 `activate-progress` 消息时以该窗口重新武装计时器（`armActivationTimer`）。**调优 Worker 激活超时只改 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 而不同步调整续期窗口，实际行为可能与预期不符。**
+
+#### 激活流程的代码组织（P1 拆分）
+
+`activatePluginExclusive` orchestrator 只做「reopen → heal → mode 分流 → 状态转换 → 分派」，两条 inline 路径各自独立成方法，共享守卫/管道/能力助手：
+
+| 方法                                       | 职责                                                                                                                                                                                                      |
+| :----------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activatePreloaded`                        | 内置（preloaded）插件：失败抛 `EsmActivationError`、成功副作用在中间件管道**之后**、声明进程归属（B-5）                                                                                                   |
+| `activateFromDatabase`                     | 已安装插件：失败原样 rethrow、成功副作用在管道**之内**（`afterActivate` 之前）。**已知不对称**：不走 `declareProcessOwnership`，其 spawn 的任务无归属记录，`kill` 归属校验退化为不拦截（TODO 见方法注释） |
+| `loadPluginModule`                         | file:// 优先 / data: URL 回放的模块加载与导出提取                                                                                                                                                         |
+| `resolveActivationGuards`                  | 依赖 + 跨插件服务 + Token 版本守卫（两条路径共用）                                                                                                                                                        |
+| `runActivatePipeline`                      | 洋葱管道 + 5s 超时；`onActivated` 钩子表达两条路径的副作用位置差异                                                                                                                                        |
+| `grantCapabilities` / `revokeCapabilities` | 能力授予/撤销单一来源（此前散布 7 处，其中 3 处静默 swallow 造成漂移风险）                                                                                                                                |
+
+两条 inline 路径的差异是**既有行为**，拆分时刻意保留（错误类型、副作用时序、归属声明）。统一它们属于行为变更，需单独评估。
+
+### 3.2.1 运行期限额：激活超时不等于执行取消（R-1 局限）
+
+5 秒激活超时、5 秒 HTTP 派发超时、5 分钟 SSE 生命周期都是 `Promise.race` 语义——**到点后宿主放弃等待并回收响应面，但插件已启动的同步/异步执行不会被取消**（JS 协作式调度，没有 preemption）。
+
+实践含义：
+
+- **激活超时后**：插件状态被置为 `ERROR` 且资源已 `disposeAll`，但 `activate()` 里的后续代码**仍在后台运行**。若它在超时后继续调用 `ctx.services.commandBus.registerHandler(...)`，这些注册会落在**已被标记关闭**的 tracker 上（`reopen` 在下次激活时才解除）——实际效果是被丢弃，但执行本身不停。**离线长任务请放进 `ctx.services.processManager` 的后台进程体系**，不要在 `activate` 内同步等待。
+- **HTTP/SSE 派发超时后**：客户端收到 504（普通请求）或 `error` 事件后流被关闭（SSE），但 inline 插件的 handler 仍在跑完它剩下的逻辑。需要「可取消」语义的插件应选用 worker / process 模式（`terminate()` 可真正终结隔离原语内的执行），或在 handler 内自行实现取消检查。
+- inline 模式的同步死循环（如 `while(true){}`）会卡住宿主编事件循环，任何超时机制都无法干预 —— 这正是 `executionMode: 'worker' | 'process'` 存在的理由。
 
 流程如下：
 
@@ -107,7 +133,7 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 
 ### 3.3 停用阶段 (`deactivatePlugin`)
 
-停用超时限制同样为 **5000 毫秒**（`packages/core/plugin-host/index.ts` 的 `DEACTIVATION_TIMEOUT_MS`）。流程如下：
+停用超时限制同样为 **5000 毫秒**（`packages/core/plugin-host/base.ts` 的 `DEACTIVATION_TIMEOUT_MS`）。流程如下：
 
 1. **状态校验**：必须处于 `ACTIVE` 状态。状态转换为 `DEACTIVATING`。
 2. **洋葱中间件前置管线 (`beforeDeactivate`)**。

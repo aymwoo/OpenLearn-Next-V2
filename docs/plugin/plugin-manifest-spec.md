@@ -257,6 +257,21 @@
 
 > **提示**：所有插件 RESTful API 统一挂载至宿主 `/api/plugins/:pluginId/*` 路径。在插件代码中通过 `ctx.http.get(...)` 注册具体的路由处理逻辑。
 
+#### `api.baseRoute` —— 无路由作用（历史遗留字段）
+
+`apiSchema` 接受 `baseRoute`，但**全仓没有任何代码按它挂载或匹配路由**。插件 REST 端点的真实路径固定为：
+
+```
+/api/plugins/<manifest.id>/<route.path>
+```
+
+两点常见误解：
+
+1. **它不能改挂载前缀**。`baseRoute: "/api/plugins/exam-bank"` 不会让端点落在该路径下；真实路径由 `manifest.id` 决定。
+2. **`manifest.id` 可以是多段形式**（如 `@teacher/plugin-exam-bank`）—— 市场 id 校验正则（`PLUGIN_ID_PATTERN`）允许 `/` 与 `@`。宿主网关会把 `/api/plugins/@teacher/plugin-exam-bank/questions` 正确重组为 `pluginId='@teacher/plugin-exam-bank'` + 子路径 `questions`（未编码形态同样支持；`%2F` 编码形态本就工作）。调用方自然拼 `/api/plugins/{manifest.id}/...` 即可，无需手工编码。
+
+安装时宿主对声明了 `baseRoute` 的 manifest 输出一次告警。该字段保留仅为兼容存量 manifest，**新插件请忽略它**，不要在代码里依赖任何由它推导出的路径。
+
 ---
 
 ### 2.8 远端版本更新源声明 (`updateSource`)（SDK 3.4.3 / 平台 v0.3.10 新增）

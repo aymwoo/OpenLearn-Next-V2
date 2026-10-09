@@ -302,6 +302,18 @@ export const apiRouteSchema = z.object({
 
 export const apiSchema = z
   .object({
+    /**
+     * 声明式 baseRoute —— **无路由作用**（审计 P1）。
+     *
+     * 全仓无任何代码按此字段挂载或匹配路由：插件 REST 端点的真实路径固定为
+     * `/api/plugins/{manifest.id}/*`（见 `server/routes/plugin-api-gateway.ts`）。
+     * 该字段历史上暗示「可自选挂载前缀」，实际不生效 —— 误导插件作者把
+     * `baseRoute` 当能力用（如声明 `/api/plugins/exam-bank` 而真实路径是
+     * `/api/plugins/@teacher/plugin-exam-bank`）。
+     *
+     * 安装时宿主会对声明了它的 manifest 输出一次告警。将来若实现「按
+     * baseRoute 挂载」，告警与本节注释同步移除；若不再需要，下个 major 移除。
+     */
     baseRoute: z.string().optional(),
     routes: z.array(apiRouteSchema).optional(),
   })
