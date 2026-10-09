@@ -27,6 +27,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 interface TeacherUser {
   id: string;
@@ -121,9 +122,9 @@ export function AdminPanel({
   const [refreshStatsCount, setRefreshStatsCount] = useState(0);
 
   // Top-level Admin Panel Tab State
-  const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'sqlite' | 'ai_providers' | 'site_settings'>(
-    'directory',
-  );
+  const [activeAdminTab, setActiveAdminTab] = useState<
+    'directory' | 'sqlite' | 'ai_providers' | 'site_settings' | (string & {})
+  >('directory');
   const [sqliteStats, setSqliteStats] = useState<{
     status: string;
     type: string;
@@ -556,6 +557,16 @@ export function AdminPanel({
             <Settings size={14} />
             <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
           </button>
+
+          {/* admin.tab 扩展 Tab 按钮 */}
+          <ExtensionPointRenderer
+            slot="admin.tab"
+            slotProps={{
+              renderType: 'button',
+              adminActiveTab: activeAdminTab,
+              setAdminActiveTab: setActiveAdminTab,
+            }}
+          />
         </div>
 
 
@@ -1321,6 +1332,21 @@ export function AdminPanel({
 
           {/* 演示数据一键初始化 / 一键清理 */}
           <DemoDataPanel lang={lang} />
+        </div>
+      ) : activeAdminTab.startsWith('plugin:') ? (
+        <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
+          <ExtensionPointRenderer
+            slot="admin.tab"
+            slotProps={{
+              renderType: 'panel',
+              adminActiveTab: activeAdminTab,
+              currentUserId,
+              currentUserRole,
+              lang,
+              siteInfo,
+              aiProviders,
+            }}
+          />
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">

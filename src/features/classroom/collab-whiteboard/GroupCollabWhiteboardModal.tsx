@@ -30,6 +30,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { executeGrouping, type GroupingStrategy, type BreakoutGroup, type StudentCandidate } from './breakout-engine';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 // ── 类型 ────────────────────────────────────────────────────────────
 
@@ -766,6 +767,20 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                       <Download size={12} />
                       <span>SVG</span>
                     </button>
+
+                    {/* 小组协作白板工具扩展 */}
+                    <ExtensionPointRenderer
+                      slot="classroom.collab.canvas"
+                      slotProps={{
+                        lessonId,
+                        classId,
+                        activeGroupId,
+                        activeTool,
+                        activeColor,
+                        activeWidth,
+                        lang,
+                      }}
+                    />
                   </div>
                 </div>
 

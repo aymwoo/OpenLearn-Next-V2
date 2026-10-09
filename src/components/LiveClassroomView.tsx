@@ -1772,6 +1772,18 @@ export function LiveClassroomView({
                                 </>
                               )}
                             </button>
+
+                            {/* 环节步骤卡片动作扩展 */}
+                            <ExtensionPointRenderer
+                              slot="classroom.agenda.action"
+                              slotProps={{
+                                segment: seg,
+                                isActive,
+                                idx,
+                                lessonId: selectedLesson,
+                                lang,
+                              }}
+                            />
                           </div>
                         );
                       })}

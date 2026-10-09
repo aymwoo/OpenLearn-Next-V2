@@ -27,6 +27,7 @@ import {
   UI_SERVICE_TOKEN,
   STORAGE_SERVICE_TOKEN,
   SEMESTER_GRADE_SERVICE_TOKEN,
+  HOST_ACTION_DISPATCHER_TOKEN,
 } from './types';
 import type {
   FrontendPluginManifest,
@@ -38,8 +39,10 @@ import type {
   IUIService,
   IStorageService,
   ISemesterGradeService,
+  IHostActionDispatcher,
   FrontendPluginInfo,
 } from './types';
+import { defaultHostActionDispatcher } from './host-action-dispatcher';
 import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
@@ -89,9 +92,20 @@ export class FrontendPluginHost {
   private moduleLoader: ModuleLoader;
   /** BrowserWorkerManager for worker-mode plugin execution. */
   private workerManager: BrowserWorkerManager | null = null;
+  private dispatcher: IHostActionDispatcher = defaultHostActionDispatcher;
 
   constructor(options?: { moduleLoader?: ModuleLoader }) {
     this.moduleLoader = options?.moduleLoader ?? this.defaultModuleLoader;
+  }
+
+  /** Returns the active IHostActionDispatcher. */
+  getDispatcher(): IHostActionDispatcher {
+    return this.dispatcher;
+  }
+
+  /** Sets a custom IHostActionDispatcher instance. */
+  setDispatcher(dispatcher: IHostActionDispatcher): void {
+    this.dispatcher = dispatcher;
   }
 
   /**
@@ -106,9 +120,9 @@ export class FrontendPluginHost {
   // ── Initialization ───────────────────────────────────────────────────
 
   /**
-   * Initialize the FrontendPluginHost with the four frontend services.
+   * Initialize the FrontendPluginHost with the four frontend services and dispatcher.
    *
-   * Creates the FrontendServiceRegistry, registers all four services
+   * Creates the FrontendServiceRegistry, registers all services
    * with their token constants, and updates the zustand store.
    */
   async initialize(
@@ -116,13 +130,18 @@ export class FrontendPluginHost {
     socketServiceImpl: ISocketService,
     uiServiceImpl: IUIService,
     storageServiceImpl: IStorageService,
+    dispatcherImpl?: IHostActionDispatcher,
   ): Promise<void> {
+    if (dispatcherImpl) {
+      this.dispatcher = dispatcherImpl;
+    }
     const registry = new FrontendServiceRegistry();
     await registry.register(FRONTEND_API_TOKEN, frontendApiImpl);
     await registry.register(SOCKET_SERVICE_TOKEN, socketServiceImpl);
     await registry.register(UI_SERVICE_TOKEN, uiServiceImpl);
     await registry.register(STORAGE_SERVICE_TOKEN, storageServiceImpl);
     await registry.register(SEMESTER_GRADE_SERVICE_TOKEN, new SemesterGradeServiceProxy(frontendApiImpl));
+    await registry.register(HOST_ACTION_DISPATCHER_TOKEN, this.dispatcher);
     this.registry = registry;
     this.initialized = true;
     usePluginHostStore.getState().initialize(registry);
@@ -506,6 +525,16 @@ export class FrontendPluginHost {
     const uiService = await this.registry.resolve<IUIService>(UI_SERVICE_TOKEN);
     const storageService = await this.registry.resolve<IStorageService>(STORAGE_SERVICE_TOKEN);
 
+    const scopedDispatcher: IHostActionDispatcher = (this.dispatcher as any).createScopedDispatcher
+      ? (this.dispatcher as any).createScopedDispatcher(pluginId)
+      : {
+          dispatch: (action: any, options: any) =>
+            this.dispatcher.dispatch(action, { sourcePluginId: pluginId, ...options }),
+          registerHandler: (t: any, h: any) => this.dispatcher.registerHandler(t, h),
+          subscribe: (t: any, l: any) => this.dispatcher.subscribe(t, l),
+          use: (m: any) => this.dispatcher.use(m),
+        };
+
     return {
       services: {
         frontendApi,
@@ -515,6 +544,7 @@ export class FrontendPluginHost {
       },
       pluginId,
       manifest,
+      dispatcher: scopedDispatcher,
       ui: {
         registerExtensionPoint: (slot: AnyExtensionSlot, config: ExtensionPointConfig) => {
           usePluginHostStore.getState().registerExtensionPoint(slot, {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trash2, FileText, Sliders, Palette, Sparkles, Clock, Layers } from 'lucide-react';
 import { SEGMENT_TYPES, SEGMENT_COLORS } from './timelineConfig';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 interface SegmentEditorCardProps {
   lang: 'zh' | 'en';
@@ -158,6 +159,17 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
             className="w-full border border-theme/70 px-3 py-1.5 rounded-xl bg-surface/90 focus:bg-surface text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/20 transition-all resize-y shadow-2xs leading-relaxed"
           />
         </div>
+
+        {/* 课程编辑器步骤类型扩展 */}
+        <ExtensionPointRenderer
+          slot="editor.timeline_segment"
+          slotProps={{
+            segment,
+            lang,
+            readOnly,
+            onPatch,
+          }}
+        />
       </div>
     </div>
   );

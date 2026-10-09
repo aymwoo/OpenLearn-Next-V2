@@ -200,6 +200,17 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
               ),
             )
           )}
+
+          {/* 课堂互动分级审计流扩展 */}
+          <ExtensionPointRenderer
+            slot="classroom.audit.event"
+            slotProps={{
+              activeTab,
+              totalCount,
+              currentList,
+              lang,
+            }}
+          />
         </div>
 
         {/* ── Footer ───────────────────────────────────────── */}

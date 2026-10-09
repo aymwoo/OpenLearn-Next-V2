@@ -558,6 +558,17 @@ export function Dashboard() {
             </div>
           </>
         )}
+
+        {/* v5.1: 教师独立全宽管理面板扩展槽位 */}
+        <ExtensionPointRenderer
+          slot="teacher.panel"
+          slotProps={{
+            lang,
+            lessons,
+            classes,
+            students,
+          }}
+        />
       </div>
       <QuickActionsMenu
         classes={classes}

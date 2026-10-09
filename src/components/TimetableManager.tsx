@@ -36,6 +36,8 @@ import { TimetableCalendarView } from './timetable/sub-views/TimetableCalendarVi
 import { TimetableAdjustView } from './timetable/sub-views/TimetableAdjustView';
 import { TimetableImportExportView } from './timetable/sub-views/TimetableImportExportView';
 import { TimetableOcrView } from './timetable/sub-views/TimetableOcrView';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
@@ -47,7 +49,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   onClassesUpdated,
 }) => {
   // Navigation states
-  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import'>('view');
+  const host = useOptionalPluginHost();
+  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import' | (string & {})>('view');
   const [viewMode, setViewMode] = useState<'list' | 'week' | 'cycle'>('week');
 
   // Weekly calendar states
@@ -321,6 +324,26 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       fetchAllSchedules();
     }
   }, [selectedClassId, classes]);
+
+  // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
+  useEffect(() => {
+    if (!host) return;
+    const dispatcher = host.getDispatcher?.();
+    if (!dispatcher) return;
+
+    const disposable = dispatcher.registerHandler('host:refresh', async (envelope) => {
+      const target = envelope.action.payload.target;
+      if (target === 'timetable' || target === 'all') {
+        await fetchAllSchedules();
+        onSchedulesUpdated?.();
+        return { success: true, refreshed: ['timetable'] };
+      }
+    });
+
+    return () => {
+      disposable.dispose();
+    };
+  }, [host, onSchedulesUpdated]);
 
   // Fetch AI providers for OCR feature
   useEffect(() => {
@@ -1304,6 +1327,16 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           >
             {lang === 'zh' ? '📷 AI 图片识课' : 'AI Image OCR'}
           </button>
+
+          {/* timetable.tab 扩展 Tab 按钮 */}
+          <ExtensionPointRenderer
+            slot="timetable.tab"
+            slotProps={{
+              renderType: 'button',
+              timetableActiveTab: activeTab,
+              setTimetableActiveTab: setActiveTab,
+            }}
+          />
         </div>
       </div>
 
@@ -1411,6 +1444,20 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             ocrImporting={ocrImporting}
           />
         )}
+
+        {/* timetable.tab 扩展面板内容 */}
+        <ExtensionPointRenderer
+          slot="timetable.tab"
+          slotProps={{
+            renderType: 'panel',
+            timetableActiveTab: activeTab,
+            classes,
+            lessons,
+            lang,
+            onSchedulesUpdated,
+            onClassesUpdated,
+          }}
+        />
       </div>
 
       {/* Add Schedule Dialog */}

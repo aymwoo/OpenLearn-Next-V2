@@ -4114,6 +4114,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   )}
                 </div>
               )}
+
+              {/* 白板画布动态可拖拽任务卡片扩展 */}
+              <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+                <ExtensionPointRenderer
+                  slot="whiteboard.canvas.widget"
+                  slotProps={{ lessonId, classId, userRole, readOnly }}
+                />
+              </div>
+
+              {/* 白板主画板左下角活跃插件悬浮坞扩展 */}
+              <div className="absolute bottom-4 left-4 z-30 pointer-events-auto flex items-center gap-2">
+                <ExtensionPointRenderer
+                  slot="whiteboard.dock.plugin"
+                  slotProps={{ lessonId, classId, userRole, readOnly }}
+                />
+              </div>
             </div>
             {!readOnly && !hidePageBar && (
               <WhiteboardPageBar

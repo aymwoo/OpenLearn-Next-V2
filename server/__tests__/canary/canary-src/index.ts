@@ -261,16 +261,22 @@ export default {
     }
 
     // ── 阶段 3：命令与事件 ──
+    // exposeToAgent: false —— 探针 action 只为验证 register/unregister RPC 链路，
+    // 不进入 AI Agent 工具箱。若不声明，worker 模式 ServiceHost 的 Barrier 3
+    // （method-policy.ts：未声明 agent:tool 能力的插件注册对外暴露的 action 即拒绝）
+    // 会在激活阶段直接拒绝整个 activate，双模式契约分叉。
     if (ctx.services.actionRegistry) {
       await (ctx.services.actionRegistry as any).register({
         id: 'canary.ping',
         commandType: 'canary.ping',
         description: 'Ping canary probe',
+        exposeToAgent: false,
       });
       await (ctx.services.actionRegistry as any).register({
         id: 'canary.ping.prefixed',
         commandType: 'ext-canary.canary.ping',
         description: 'Ping canary probe (prefixed)',
+        exposeToAgent: false,
       });
     }
     await (ctx.services.commandBus as any).registerHandler('canary.ping', {

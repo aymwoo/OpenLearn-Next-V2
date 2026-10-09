@@ -22,6 +22,7 @@ export const SOCKET_SERVICE_TOKEN = '@openlearn/frontend:ISocketService';
 export const UI_SERVICE_TOKEN = '@openlearn/frontend:IUIService';
 export const STORAGE_SERVICE_TOKEN = '@openlearn/frontend:IStorageService';
 export const SEMESTER_GRADE_SERVICE_TOKEN = '@openlearn/frontend:ISemesterGradeService';
+export const HOST_ACTION_DISPATCHER_TOKEN = '@openlearn/frontend:IHostActionDispatcher';
 
 // ── Core types ───────────────────────────────────────────────────────────
 
@@ -156,7 +157,11 @@ export type ExtensionSlot =
   | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
   // ── 课件播放器扩展槽位（P1） ──
   | 'courseware.viewer.toolbar' // 课件播放器工具栏扩展（草稿本/批注/字幕/随堂笔记等）
-  | 'courseware.viewer.overlay'; // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
+  | 'courseware.viewer.overlay' // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
+  // ── 课表中心扩展槽位 ──
+  | 'timetable.tab' // 课表中心扩展 Tab（如：智能排课排班 / 考勤日历同步 / 考务监考编排）
+  // ── 管理后台扩展槽位 ──
+  | 'admin.tab'; // 管理后台扩展 Tab（如：数据备份与容灾 / 审计日志导出 / 教师绩效与学分报表）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -237,6 +242,173 @@ export interface FrontendPluginContextSnapshot {
   classId: string | null;
 }
 
+// ── Host Action Dispatcher Protocol (v5.3) ──────────────────────────────────
+
+export interface HostRefreshPayload {
+  target: 'timetable' | 'classes' | 'lessons' | 'students' | 'all';
+  scope?: string;
+  reason?: string;
+}
+
+export interface HostRefreshResult {
+  success: boolean;
+  refreshed: string[];
+}
+
+export type HostRefreshAction = {
+  type: 'host:refresh';
+  payload: HostRefreshPayload;
+};
+
+export interface HostModalConfirmPayload {
+  id?: string;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'primary' | 'danger' | 'warning';
+}
+
+export interface HostModalConfirmResult {
+  confirmed: boolean;
+}
+
+export type HostModalConfirmAction = {
+  type: 'host:modal:confirm';
+  payload: HostModalConfirmPayload;
+};
+
+export interface HostModalActionItem {
+  actionId: string;
+  label: string;
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  isClose?: boolean;
+}
+
+export interface HostModalOpenPayload {
+  id?: string;
+  title: string;
+  content?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  showCloseButton?: boolean;
+  closableByBackdrop?: boolean;
+  actions?: HostModalActionItem[];
+}
+
+export interface HostModalOpenResult {
+  actionId?: string;
+  closed: boolean;
+}
+
+export type HostModalOpenAction = {
+  type: 'host:modal:open';
+  payload: HostModalOpenPayload;
+};
+
+export interface HostModalClosePayload {
+  id?: string;
+  result?: any;
+}
+
+export type HostModalCloseAction = {
+  type: 'host:modal:close';
+  payload: HostModalClosePayload;
+};
+
+export interface HostToastPayload {
+  title: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  duration?: number;
+}
+
+export interface HostToastResult {
+  delivered: boolean;
+}
+
+export type HostToastAction = {
+  type: 'host:toast';
+  payload: HostToastPayload;
+};
+
+export interface HostNavigatePayload {
+  tab: string;
+  subTab?: string;
+  params?: Record<string, any>;
+}
+
+export interface HostNavigateResult {
+  navigated: boolean;
+}
+
+export type HostNavigateAction = {
+  type: 'host:navigate';
+  payload: HostNavigatePayload;
+};
+
+export type CustomHostAction<TType extends string = string, TPayload = any> = {
+  type: TType;
+  payload: TPayload;
+};
+
+export type HostAction =
+  | HostRefreshAction
+  | HostModalConfirmAction
+  | HostModalOpenAction
+  | HostModalCloseAction
+  | HostToastAction
+  | HostNavigateAction
+  | CustomHostAction;
+
+export interface ActionEnvelope<TAction extends HostAction = HostAction> {
+  action: TAction;
+  sourcePluginId?: string;
+  timestamp: number;
+  correlationId: string;
+}
+
+export type ActionHandler<TAction extends HostAction = HostAction, TResult = any> = (
+  envelope: ActionEnvelope<TAction>,
+) => Promise<TResult> | TResult;
+
+export type ActionMiddleware = (
+  envelope: ActionEnvelope,
+  next: () => Promise<any>,
+) => Promise<any>;
+
+export interface DispatchOptions {
+  timeoutMs?: number;
+  sourcePluginId?: string;
+}
+
+export interface IHostActionDispatcher {
+  /**
+   * 派发受控动作至宿主并等待异步反馈
+   */
+  dispatch<TResult = any>(action: HostAction, options?: DispatchOptions): Promise<TResult>;
+
+  /**
+   * 注册指定 Action 类型的权威处理器（宿主业务模块接管执行）
+   */
+  registerHandler<TAction extends HostAction = HostAction, TResult = any>(
+    type: TAction['type'],
+    handler: ActionHandler<TAction, TResult>,
+  ): Disposable;
+
+  /**
+   * 订阅动作广播（被动观察者模式，用于审计、联动或日志）
+   */
+  subscribe<TAction extends HostAction = HostAction>(
+    type: TAction['type'] | '*',
+    listener: (envelope: ActionEnvelope<TAction>, result?: any, error?: Error) => void,
+  ): Disposable;
+
+  /**
+   * 挂载中间件（前置校验、权限拦截、耗时监控等）
+   */
+  use(middleware: ActionMiddleware): Disposable;
+}
+
 // ── Frontend Plugin Context ──────────────────────────────────────────────
 
 export interface FrontendPluginContext {
@@ -248,6 +420,8 @@ export interface FrontendPluginContext {
   };
   pluginId: string;
   manifest: FrontendPluginManifest;
+  /** v5.3: 双向受控宿主动作分发器（全局刷新、受控弹窗、Toast 等） */
+  dispatcher: IHostActionDispatcher;
   ui: {
     registerExtensionPoint(slot: AnyExtensionSlot, config: ExtensionPointConfig): void;
     unregisterExtensionPoint(slot: AnyExtensionSlot, id: string): void;

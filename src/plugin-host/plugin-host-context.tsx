@@ -16,6 +16,8 @@
 
 import React, { createContext, useContext } from 'react';
 import { FrontendPluginHost } from './plugin-host';
+import { HostModalContainer } from './host-modal-container';
+import type { IHostActionDispatcher } from './types';
 
 const PluginHostContext = createContext<FrontendPluginHost | null>(null);
 
@@ -25,7 +27,12 @@ export interface PluginHostProviderProps {
 }
 
 export function PluginHostProvider({ children, host }: PluginHostProviderProps) {
-  return <PluginHostContext.Provider value={host}>{children}</PluginHostContext.Provider>;
+  return (
+    <PluginHostContext.Provider value={host}>
+      {children}
+      <HostModalContainer dispatcher={host?.getDispatcher?.()} />
+    </PluginHostContext.Provider>
+  );
 }
 
 /**
@@ -48,3 +55,12 @@ export function usePluginHost(): FrontendPluginHost {
 export function useOptionalPluginHost(): FrontendPluginHost | null {
   return useContext(PluginHostContext);
 }
+
+/**
+ * Hook to access the active IHostActionDispatcher.
+ */
+export function useHostActionDispatcher(): IHostActionDispatcher {
+  const host = usePluginHost();
+  return host.getDispatcher();
+}
+

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Settings, Shield, ArrowRight } from 'lucide-react';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 interface SettingsViewProps {
   lang: string;
@@ -73,6 +74,9 @@ export function SettingsView({ lang, onNavigateToAdmin }: SettingsViewProps) {
           <span className="text-xs font-mono font-bold text-gray-600">STATE: OPERATIONAL</span>
         </div>
       </div>
+
+      {/* 插件全局设置扩展槽 */}
+      <ExtensionPointRenderer slot="global.setting" slotProps={{ lang }} />
     </div>
   );
 }

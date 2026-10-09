@@ -18,6 +18,7 @@ import {
 import { PaletteCard } from './PaletteCard';
 import { PALETTE_GROUPS, PALETTE_ITEMS, COLOR_THEME } from './paletteConfig';
 import { usePluginPaletteItems } from './palette-item-registry';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import type { WhiteboardPageItem, WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
 
 export interface LessonPaletteProps {
@@ -620,6 +621,16 @@ export function LessonPalette({
             });
           })()
         )}
+
+        {/* 声明式图元卡片扩展 */}
+        <ExtensionPointRenderer
+          slot="editor.palette_item"
+          slotProps={{
+            lang,
+            onActivate: handleActivate,
+            readOnly,
+          }}
+        />
       </div>
     </div>
   );

@@ -269,11 +269,15 @@ function resolveExtensionComponent(ext: any): React.ComponentType<any> {
 /**
  * Renders all registered extension point components for a given slot.
  *
- * Each extension point is rendered via Suspense with a LoadingSkeleton fallback,
- * wrapped in an individual ErrorBoundary.
- *
  * Returns null if no extensions are registered for the slot.
  */
+function getExtensionDispatcher(host: any, pluginId: string, customDispatcher?: any) {
+  if (customDispatcher) return customDispatcher;
+  if (!host || typeof host.getDispatcher !== 'function') return undefined;
+  const disp = host.getDispatcher();
+  return typeof disp?.createScopedDispatcher === 'function' ? disp.createScopedDispatcher(pluginId) : disp;
+}
+
 export function ExtensionPointRenderer({
   slot,
   fallback,
@@ -358,6 +362,129 @@ export function ExtensionPointRenderer({
             classId: slotProps?.classId,
             students: slotProps?.students,
             lang: slotProps?.lang,
+            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+            ...activeExt.slotProps,
+          })}
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  }
+
+  // timetable.tab with renderType 'button' — render segmented buttons
+  if (slot === 'timetable.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.timetableActiveTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setTimetableActiveTab?.(tabValue);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
+                isActive
+                  ? 'bg-white text-indigo-700 shadow-sm font-bold'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+              title={label}
+            >
+              <PluginIconRenderer icon={icon} size={14} className="shrink-0" alt={label} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // timetable.tab with renderType 'panel' — render active plugin tab panel
+  if (slot === 'timetable.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.timetableActiveTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">课表扩展 Tab 加载失败</div>
+        }
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          {React.createElement(resolveExtensionComponent(activeExt), {
+            classes: slotProps?.classes,
+            lessons: slotProps?.lessons,
+            lang: slotProps?.lang,
+            onSchedulesUpdated: slotProps?.onSchedulesUpdated,
+            onClassesUpdated: slotProps?.onClassesUpdated,
+            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+            ...activeExt.slotProps,
+          })}
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  }
+
+  // admin.tab with renderType 'button' — render segmented buttons
+  if (slot === 'admin.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.adminActiveTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setAdminActiveTab?.(tabValue);
+              }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+              title={label}
+            >
+              <PluginIconRenderer icon={icon} size={14} className="shrink-0" alt={label} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // admin.tab with renderType 'panel' — render active plugin tab panel
+  if (slot === 'admin.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.adminActiveTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">管理后台扩展 Tab 加载失败</div>
+        }
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          {React.createElement(resolveExtensionComponent(activeExt), {
+            currentUserId: slotProps?.currentUserId,
+            currentUserRole: slotProps?.currentUserRole,
+            lang: slotProps?.lang,
+            siteInfo: slotProps?.siteInfo,
+            aiProviders: slotProps?.aiProviders,
+            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
         </Suspense>
@@ -437,6 +564,7 @@ export function ExtensionPointRenderer({
                   route: ext.route || route,
                   lessonId: selectedLesson,
                   classId: liveClassSelectedClassId,
+                  dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
                   ...ext.slotProps,
                   ...slotProps,
                 })
@@ -447,6 +575,7 @@ export function ExtensionPointRenderer({
                   slotProps={{
                     lessonId: selectedLesson,
                     classId: liveClassSelectedClassId,
+                    dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
                     ...ext.slotProps,
                     ...slotProps,
                   }}

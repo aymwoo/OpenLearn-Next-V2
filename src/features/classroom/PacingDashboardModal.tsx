@@ -13,6 +13,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, TrendingUp, Gauge, Users } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { getOptionalSocket } from '../../services/socket-service';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface PacingSignals {
   TOO_FAST?: number;
@@ -206,6 +207,18 @@ export function PacingDashboardModal({
             })}
             {/* 教学建议 */}
             <div className={`mt-1 text-xs font-bold ${buildAdvice().tone}`}>{buildAdvice().text}</div>
+
+            {/* 课堂节奏晴雨表指标扩展 */}
+            <ExtensionPointRenderer
+              slot="classroom.barometer.metric"
+              slotProps={{
+                lessonId,
+                signals: windowSignals,
+                total,
+                health,
+                lang,
+              }}
+            />
           </div>
         </div>
       </div>

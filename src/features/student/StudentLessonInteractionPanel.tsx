@@ -4,6 +4,7 @@ import { BookOpen, Minimize2, Maximize2, ChevronRight, Folder, Globe } from 'luc
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface StudentLessonInteractionPanelProps {
   /** 全班专注锁定中：标签页与白板均变为只读 */
@@ -119,23 +120,36 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           </button>
         </div>
 
-        <button
-          onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
-          className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
-          title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
-        >
-          {studentFullscreenPanel === 'right' ? (
-            <>
-              <Minimize2 size={13} />
-              <span className="text-xs font-medium">退出全屏</span>
-            </>
-          ) : (
-            <>
-              <Maximize2 size={13} />
-              <span className="text-xs font-medium">全屏</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 学生端随堂工具扩展 */}
+          <ExtensionPointRenderer
+            slot="student.lesson.tool"
+            slotProps={{
+              lessonId: selectedLesson,
+              studentId: activeStudentId,
+              activeSegmentId,
+              lang,
+            }}
+          />
+
+          <button
+            onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
+            className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
+            title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
+          >
+            {studentFullscreenPanel === 'right' ? (
+              <>
+                <Minimize2 size={13} />
+                <span className="text-xs font-medium">退出全屏</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 size={13} />
+                <span className="text-xs font-medium">全屏</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
       {studentLessonTab === 'whiteboard' && (
         <LazyWhiteboard

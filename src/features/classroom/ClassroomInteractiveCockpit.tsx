@@ -569,6 +569,16 @@ export function ClassroomInteractiveCockpit({
 
       {/* 右侧：节奏晴雨表指示器（点击打开实时情绪仪表盘） */}
       <div className="flex items-center gap-2 pl-2 border-l border-border/60">
+        {/* 全局顶栏右侧快捷动作扩展 */}
+        <ExtensionPointRenderer
+          slot="classroom.header.action"
+          slotProps={{
+            lessonId,
+            classId,
+            stage: currentStage,
+          }}
+        />
+
         <button
           onClick={() => setShowPacingDashboard(true)}
           className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-surface-secondary transition-colors cursor-pointer group"

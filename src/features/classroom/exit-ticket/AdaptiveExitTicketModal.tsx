@@ -97,9 +97,11 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
         });
       }
       setSubmitted(true);
+      onSubmitSuccess?.();
     } catch (e) {
       // fallback graceful
       setSubmitted(true);
+      onSubmitSuccess?.();
     } finally {
       setIsSubmitting(false);
     }

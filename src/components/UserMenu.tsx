@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { User, LogOut, ChevronDown } from 'lucide-react';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import type { SessionType } from '../types/app';
 import type { Language } from '../i18n';
 
@@ -79,6 +80,14 @@ export function UserMenu({ session, lang, onLogout, onProfile }: UserMenuProps) 
             <User size={16} className="text-gray-400" />
             {t('个人资料', 'Profile')}
           </button>
+          <ExtensionPointRenderer
+            slot="nav.user_menu"
+            slotProps={{
+              session,
+              lang,
+              closeMenu: () => setOpen(false),
+            }}
+          />
           <button
             type="button"
             role="menuitem"

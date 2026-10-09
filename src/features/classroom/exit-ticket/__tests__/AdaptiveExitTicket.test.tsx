@@ -63,19 +63,29 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
 
     it('提交自适应结课通票并调用 API', async () => {
       const onSuccess = vi.fn();
-      render(<AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" onSubmitSuccess={onSuccess} />);
+      const onClose = vi.fn();
+      render(
+        <AdaptiveExitTicketModal isOpen={true} onClose={onClose} lessonId="les-1" onSubmitSuccess={onSuccess} />,
+      );
 
       // 答题
       fireEvent.click(screen.getByText(/可将位移划分为无限小微元/));
       fireEvent.click(screen.getByText('确认本题答案'));
 
-      // 点击提交
+      // 点击提交 —— 产品语义：POST /exit-ticket 成功后立即回调 onSubmitSuccess，
+      // 同时渲染成功页。此处精确断言「恰好一次」，防止回调被意外重复触发。
       const submitBtn = screen.getByText('提交自适应结课通票');
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
         expect(screen.getByText('结课通票提交成功！')).toBeTruthy();
-        expect(onSuccess).toHaveBeenCalled();
+        expect(onSuccess).toHaveBeenCalledTimes(1);
+      });
+
+      // 成功页「完成」关闭弹窗
+      fireEvent.click(screen.getByText('完成'));
+      await waitFor(() => {
+        expect(onClose).toHaveBeenCalled();
       });
     });
   });

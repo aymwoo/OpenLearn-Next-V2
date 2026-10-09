@@ -351,6 +351,12 @@ function SeatCell({
             lang={lang}
             slotProps={{ seat, student, isOnline, classId }}
           />
+          {/* Plugin seat actions extension */}
+          <ExtensionPointRenderer
+            slot="classroom.seating.seat_actions"
+            lang={lang}
+            slotProps={{ seat, student, isOnline, classId }}
+          />
         </>
       ) : hasSeat ? (
         <span className="text-2xs text-subtle italic">{zh ? '未分配' : 'Unassigned'}</span>

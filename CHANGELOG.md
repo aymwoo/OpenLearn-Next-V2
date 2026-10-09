@@ -12,6 +12,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **双向受控 `IHostActionDispatcher` 架构与宿主动作协议落地**：
+  - **标准化动作协议联合类型**：定义 `HostAction`，涵盖全局刷新协议 `host:refresh`（支持 `timetable` | `classes` | `lessons` | `students` | `all`）、受控确认模态 `host:modal:confirm`（异步 Promise 决议布尔值）、受控自定义模态 `host:modal:open` / `host:modal:close`、全局 Toast `host:toast` 与路由导航 `host:navigate`；
+  - **受控分发器实现与中间件机制**：实现 `HostActionDispatcher`，支持洋葱模型中间件流水线（`dispatcher.use`）、权威处理器注册与生命周期注销（`registerHandler`）、通配广播订阅（`subscribe`）与插件身份打标（`createScopedDispatcher`）；
+  - **全局响应式模态渲染器**：封装 `<HostModalContainer />` 并挂载于 `<PluginHostProvider>` 根层，支持 Esc 键、蒙层防误触与按键决议反馈，导出 `useHostActionDispatcher()` Hook；
+  - **全链路双向透传注入**：在插件上下文 `ctx.dispatcher` 与扩展槽 `<ExtensionPointRenderer>`（`props.dispatcher`）中全覆盖注入；
+  - **课表中心数据联动**：`TimetableManager` 注册 `host:refresh` (target: timetable | all) 处理器，第三方排课插件可直接触发宿主课表重新加载；
+  - **自动化测试 100% 达标**：新增 17 个专项测试用例，全站 188 个前端测试套件与 1203 个用例全部通过，`pnpm lint` 保持 0 错误。
+
+- **14 个幽灵扩展槽位全量挂载激活（全站零消费槽位彻底清零）**：
+  - 针对此前 SDK 已声明但未在界面渲染的 14 个扩展槽，全部在宿主业务组件中挂载 `<ExtensionPointRenderer>`（包含课堂倒计时、学生快捷指令浮球、遥测岛指标、学情预测仪表、诊断告警流、小组协作白板等）。
+
+- **开辟课表中心 (`timetable.tab`) 与管理后台 (`admin.tab`) 专属扩展 Tab**：
+  - 在 `TimetableManager` 与 `AdminPanel` 中支持 `button`（选项卡胶囊）与 `panel`（面板内容）双渲染态，允许第三方插件无侵入拓展排课算法与管理工具。
+
 - **E2E 自动化测试全链路覆盖专项强化（Phase 1 - Phase 4 最终圆满落地）**：
   - 新增 11 个高质量 Playwright 端到端测试套件，全套件扩充至 15 个 Spec / 20 个 Tests，全量联跑 1.6m (96s) 100% 绿灯全过，综合页面功能覆盖率自 13.2% 飞跃至 **86.8%**（在线教学核心覆盖率达 95 分，综合审计评级由 C+ 跃升至 **AAA 卓越**）：
     - **在线教学高危盲区（Phase 1）**：
