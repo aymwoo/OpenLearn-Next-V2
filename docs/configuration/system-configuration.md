@@ -26,6 +26,7 @@
 | `OPENLEARN_PLUGIN_PERMISSION`               | `rw`                                         | 子进程 Node 权限档位：`rw`/`ro`/`off`（仅子进程生效；暂无法约束网络）                                                     |
 | `OPENLEARN_PLUGIN_MAX_HEAP_MB`              | `128`                                        | 子进程 V8 老生代上限（MB），`0`/`off` 关闭                                                                               |
 | `OPENLEARN_WORKER_LIVENESS`                 | `on`                                         | 插件存活探活（默认 30s 间隔 + 15s 宽限）；`off` 关闭                                                                      |
+| `BRIDGE_HOOK_TELEMETRY`                     | `on`                                         | 课件网络遥测总闸：`off` 关闭 fetch/XHR/axios/beacon/form 向父窗口的上报（成绩提交不受影响）                              |
 | `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | —                                            | `ctx.reportProgress` 心跳滑动续期窗口                                                                                    |
 | `DEBUG_COMMAND_BUS`                           | 关闭                                         | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效                                   |
 

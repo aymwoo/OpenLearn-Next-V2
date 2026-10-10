@@ -159,6 +159,10 @@
   var __lmsHandlers = {};
   var __lmsPendingRequests = {};
 
+  // HOOK 遥测总闸：服务端注入 window.__LMS_HOOK_TELEMETRY__（默认 true；
+  // BRIDGE_HOOK_TELEMETRY=off 可关闭 fetch/XHR/axios/beacon/form 上报）。
+  function __hookAllowed() { return window.__LMS_HOOK_TELEMETRY__ !== false; }
+
   function __applyThemeTokens(themeData) {
     if (!themeData || typeof themeData !== 'object') return;
     try {
@@ -323,7 +327,7 @@
           }
 
           if (url && !url.includes('/api/courseware/attempts/')) {
-            window.parent.postMessage({
+            if (__hookAllowed()) window.parent.postMessage({
               type: "HOOK_FETCH",
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
@@ -352,7 +356,7 @@
             try { bodyStr = JSON.stringify(body); } catch(e){}
           }
           if (this._url && !this._url.includes('/api/courseware/attempts/')) {
-            window.parent.postMessage({
+            if (__hookAllowed()) window.parent.postMessage({
               type: "HOOK_XHR",
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
@@ -371,7 +375,7 @@
         axiosInstance.interceptors.request.use(function(config) {
           try {
             if (config.url && !config.url.includes('/api/courseware/attempts/')) {
-              window.parent.postMessage({
+              if (__hookAllowed()) window.parent.postMessage({
                 type: "HOOK_AXIOS",
                 uuid: window.__LMS_COURSEWARE__?.uuid,
                 attempt_id: window.__LMS_STUDENT__?.attempt_id,
@@ -403,7 +407,7 @@
       navigator.sendBeacon = function(url, data) {
         try {
           if (url && !url.includes('/api/courseware/attempts/')) {
-            window.parent.postMessage({
+            if (__hookAllowed()) window.parent.postMessage({
               type: "HOOK_BEACON",
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
@@ -426,7 +430,7 @@
           data[key] = value;
         });
         if (form.action && !form.action.includes('/api/courseware/attempts/')) {
-          window.parent.postMessage({
+          if (__hookAllowed()) window.parent.postMessage({
             type: "HOOK_FORM",
             uuid: window.__LMS_COURSEWARE__?.uuid,
             attempt_id: window.__LMS_STUDENT__?.attempt_id,

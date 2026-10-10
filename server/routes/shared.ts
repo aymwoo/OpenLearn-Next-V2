@@ -163,6 +163,7 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
 <script>
 window.__LMS_STUDENT__ = ${JSON.stringify(studentInfo)};
 window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
+window.__LMS_HOOK_TELEMETRY__ = ${process.env.BRIDGE_HOOK_TELEMETRY === 'off' ? 'false' : 'true'};
 window.__LMS_COURSEWARE__ = {
   uuid: ${JSON.stringify(cwInfo.uuid)},
   name: ${JSON.stringify(cwInfo.name)}
