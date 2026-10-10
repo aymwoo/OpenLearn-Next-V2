@@ -251,9 +251,16 @@ async function startServer() {
   );
 
   // SEC-AUTH-04: 登录频率限制器（测试环境下放宽，生产环境 5次/IP/分钟）
+  // V6 修复：key 用 IP+用户名双键，伪造 X-Forwarded-For 轮换 IP 也无法稀释同一用户名的计数
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
     max: process.env.PLAYWRIGHT_TEST ? 1000 : 5,
+    keyGenerator: (req: any) => {
+      const ip = typeof req.ip === 'string' ? req.ip : 'unknown';
+      const rawUser = req.body?.username ?? req.body?.studentName ?? '';
+      const user = String(rawUser).slice(0, 64).toLowerCase();
+      return `${ip}:${user}`;
+    },
     message: { error: '登录尝试过于频繁，请稍后再试。Too many login attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

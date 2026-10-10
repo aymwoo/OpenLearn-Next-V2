@@ -19,7 +19,7 @@ export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
  * 外部站点可任意 iframe 嵌入——见 2026-09-30 安全审计）。
  */
 export const COURSEWARE_DOCUMENT_CSP =
-  "sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';";
+  "sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline'; connect-src 'self' blob: data:;";
 
 /** 为课件/资源 HTML 响应设置自有宽松 CSP（覆盖 helmet 全局头）。 */
 export function setCoursewareDocumentCsp(res: { setHeader: (name: string, value: string) => void }): void {

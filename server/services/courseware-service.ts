@@ -313,12 +313,23 @@ export class CoursewareService {
     let parsedScore: number | null = null;
     if (score !== undefined && score !== null) {
       const num = parseFloat(score);
-      if (!isNaN(num)) parsedScore = num;
+      // V4 纵深：伪造成绩直达落库。此前 NaN 静默忽略、超大值照收；现拒绝非有限/越界分数
+      if (typeof score === 'boolean' || !Number.isFinite(num) || num < 0 || num > 1000) {
+        const err: any = new Error('Invalid score: must be a finite number in [0, 1000]');
+        err.status = 400;
+        throw err;
+      }
+      parsedScore = num;
     }
     let parsedCompletion: number | null = null;
     if (completion !== undefined && completion !== null) {
       const num = parseFloat(completion);
-      if (!isNaN(num)) parsedCompletion = num;
+      if (!Number.isFinite(num) || num < 0 || num > 100) {
+        const err: any = new Error('Invalid completion: must be a finite number in [0, 100]');
+        err.status = 400;
+        throw err;
+      }
+      parsedCompletion = num;
     }
 
     const actorId =

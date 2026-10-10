@@ -752,11 +752,16 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const providers = kernelContainer.db
         .prepare('SELECT * FROM ai_providers ORDER BY created_at DESC')
         .all() as any[];
-      // SEC-DATA-01: 掩码 API Key 后返?
-      const masked = providers.map((p) => ({
-        ...p,
-        api_key: maskApiKey(decryptApiKey(p.api_key || '')),
-      }));
+      // SEC-DATA-01: 掩码 API Key 后返?（解密失败fail-closed：展示不可用标识，不抛 500）
+      const masked = providers.map((p) => {
+        let apiKey: string;
+        try {
+          apiKey = maskApiKey(decryptApiKey(p.api_key || ''));
+        } catch {
+          apiKey = '[UNDECRYPTABLE]';
+        }
+        return { ...p, api_key: apiKey };
+      });
       res.json(masked);
     } catch (e: any) {
       sendSafeError(res, e);

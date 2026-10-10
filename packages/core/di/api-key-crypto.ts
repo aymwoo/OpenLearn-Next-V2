@@ -30,6 +30,17 @@ import path from 'node:path';
 
 let _encryptionKey: Buffer | null = null;
 
+/** .env 权限加固：含密钥文件收敛到 0600（最佳努力，失败只告警） */
+function hardenEnvFilePerms(envPath: string): void {
+  try {
+    if (fs.existsSync(envPath)) {
+      fs.chmodSync(envPath, 0o600);
+    }
+  } catch {
+    console.warn('[Crypto] Could not chmod 0600 on .env (check file ownership)');
+  }
+}
+
 export function getEncryptionKey(): Buffer {
   if (_encryptionKey) return _encryptionKey;
 
@@ -52,6 +63,7 @@ export function getEncryptionKey(): Buffer {
         const fileKeyHex = match[1].trim();
         _encryptionKey = Buffer.from(fileKeyHex, 'hex');
         process.env.ENCRYPTION_KEY = fileKeyHex;
+        hardenEnvFilePerms(envPath);
         console.log('[Crypto] ENCRYPTION_KEY loaded from .env file');
         return _encryptionKey;
       }
@@ -80,10 +92,12 @@ export function getEncryptionKey(): Buffer {
         return _encryptionKey;
       }
       fs.appendFileSync(envPath, `\nENCRYPTION_KEY=${newKey}\n`);
-      console.log('[Crypto] ENCRYPTION_KEY auto-generated and persisted to .env');
+      hardenEnvFilePerms(envPath);
+      console.log('[Crypto] ENCRYPTION_KEY auto-generated and persisted to .env (0600)');
     } else {
       fs.writeFileSync(envPath, `ENCRYPTION_KEY=${newKey}\n`);
-      console.log('[Crypto] .env created with auto-generated ENCRYPTION_KEY');
+      hardenEnvFilePerms(envPath);
+      console.log('[Crypto] .env created with auto-generated ENCRYPTION_KEY (0600)');
     }
   } catch {
     console.warn('[Crypto] Could not persist ENCRYPTION_KEY, using in-memory fallback');
@@ -126,8 +140,10 @@ export function decryptApiKey(encrypted: string): string {
     decipher.setAuthTag(authTag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
   } catch {
-    // 解密失败（ENCRYPTION_KEY 变更或数据损坏），按明文处理
-    console.warn('[Crypto] Failed to decrypt API key, treating as plaintext');
-    return encrypted;
+    // V7 修复：解密失败 fail-closed（此前把密文当明文 Bearer 继续用，
+    // 密文会被打到上游 Authorization 头且误导排障）。调用方应捕获并报 500。
+    const err: any = new Error('Failed to decrypt API key (ENCRYPTION_KEY mismatch or corrupted data)');
+    err.status = 500;
+    throw err;
   }
 }
