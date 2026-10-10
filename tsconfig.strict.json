@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "docs/_build",
+    "storage",
+    "coverage",
+    "v2_plugins",
+    "plugins",
+    "packages/core/esm-loader/__tests__/fixtures",
+    "packages/plugin-sdk/scaffold/templates",
+    "packages/core/__tests__/lti-provider-plugin.test.ts",
+    "scratch"
+  ]
+}

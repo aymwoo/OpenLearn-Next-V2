@@ -361,9 +361,12 @@ export class CoursewareService {
   public listAttempts(
     queryParams: { coursewareUuid?: string; page?: any; pageSize?: any },
     isStaff: boolean,
+    requesterStudentId?: string,
   ): ListAttemptsResult {
     const coursewareUuid =
       typeof queryParams.coursewareUuid === 'string' ? queryParams.coursewareUuid.trim() : '';
+    // V3 修复：非教师此前返回全量榜单（含他生 score/studentId）。现非 staff 仅返本人。
+    const ownerFilter = !isStaff && requesterStudentId ? 'a.student_id = ?' : null;
 
     const baseSql = `
       SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
@@ -383,22 +386,25 @@ export class CoursewareService {
       LEFT JOIN submission_result r ON a.id = r.attempt_id
     `;
 
-    const sql = coursewareUuid
-      ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC LIMIT ? OFFSET ?`
-      : `${baseSql} ORDER BY a.started_at DESC LIMIT ? OFFSET ?`;
+    const where: string[] = [];
+    const args: any[] = [];
+    if (coursewareUuid) {
+      where.push('cw.uuid = ?');
+      args.push(coursewareUuid);
+    }
+    if (ownerFilter && requesterStudentId) {
+      where.push(ownerFilter);
+      args.push(requesterStudentId);
+    }
+    const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+    const sql = `${baseSql}${whereSql} ORDER BY a.started_at DESC LIMIT ? OFFSET ?`;
 
     const pg: Pagination = parsePagination(queryParams as any);
-    const countSql = coursewareUuid
-      ? `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id WHERE cw.uuid = ?`
-      : `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id`;
+    const countSql = `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id${whereSql}`;
 
-    const total = (this.db.prepare(countSql).get(...(coursewareUuid ? [coursewareUuid] : [])) as any).n;
+    const total = (this.db.prepare(countSql).get(...args) as any).n;
     const stmt = this.db.prepare(sql);
-    const rows = (
-      coursewareUuid
-        ? stmt.all(coursewareUuid, pg.isAll ? -1 : pg.pageSize, pg.offset)
-        : stmt.all(pg.isAll ? -1 : pg.pageSize, pg.offset)
-    ) as AttemptListItem[];
+    const rows = stmt.all(...args, pg.isAll ? -1 : pg.pageSize, pg.offset) as AttemptListItem[];
 
     const sanitizedData = isStaff
       ? rows

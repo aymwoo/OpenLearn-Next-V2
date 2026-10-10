@@ -232,35 +232,10 @@ export class RosterService {
 
   public deleteClassCascade(classId: string): void {
     const tx = this.db.transaction(() => {
-      // 1. 获取班级中所有学生
-      const students = this.db.prepare('SELECT student_id FROM class_students WHERE class_id = ?').all(classId) as {
-        student_id: string;
-      }[];
-
-      // 2. 删除每个学生的数据
-      const deleteStudentStmt = this.db.prepare('DELETE FROM students WHERE id = ?');
-      const deleteClassStudentByStudentStmt = this.db.prepare('DELETE FROM class_students WHERE student_id = ?');
-      const deleteProgressStmt = this.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?');
-      const deleteSubmissionsByStudentStmt = this.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?');
-      const deleteAttendanceByStudentStmt = this.db.prepare('DELETE FROM attendance WHERE student_id = ?');
-      const deleteSeatsByStudentStmt = this.db.prepare('DELETE FROM student_seats WHERE student_id = ?');
-      const deleteReadNotificationsStmt = this.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?');
-      const deleteRollcallsByStudentStmt = this.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?');
-
-      for (const s of students) {
-        deleteStudentStmt.run(s.student_id);
-        deleteClassStudentByStudentStmt.run(s.student_id);
-        deleteProgressStmt.run(s.student_id);
-        deleteSubmissionsByStudentStmt.run(s.student_id);
-        deleteAttendanceByStudentStmt.run(s.student_id);
-        deleteSeatsByStudentStmt.run(s.student_id);
-        deleteReadNotificationsStmt.run(s.student_id);
-        try {
-          deleteRollcallsByStudentStmt.run(s.student_id);
-        } catch {}
-      }
-
-      // 3. 删除班级关联数据
+      // P0-1 修复：删班只删本班域，绝不删除 students 本体（跨班学生需保留）。
+      // students 本体仅当其不再属于任何班级（孤儿）时才可 GC，且不在此默认执行。
+      // 1. 先清本班的选课关系（后续孤儿判定依赖此结果）
+      this.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
       this.db.prepare(
         'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)',
       ).run(classId);
@@ -274,7 +249,6 @@ export class RosterService {
         this.db.prepare('DELETE FROM student_rollcalls WHERE class_id = ?').run(classId);
       } catch {}
       this.db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
-      this.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
       this.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
     });
 

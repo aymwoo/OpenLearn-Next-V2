@@ -172,7 +172,7 @@ function persistRollcallPick(el: any, elementId: string, deps: SocketRouteDeps):
 
     deps.db.prepare(ROLLCALL_INSERT_SQL).run(rollcallId, studentId, classId, lessonId, pickedTime);
     console.log(`[Rollcall] Saved rollcall for student ${studentId} (${studentName})`);
-
+    // 单次全局：与 presence.ts 点名语义一致，保证未进房间的教师端也能收到
     deps.io.emit('student-picked', {
       rollcallId,
       studentId,

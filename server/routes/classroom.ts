@@ -197,24 +197,13 @@ export function registerClassroomRoutes(
     state.updatedAt = Date.now();
     activeCountdowns.set(lessonId, state);
 
-    // 持久化到数据库
+    // P1-4 修复：此前读-改-写整列 settings_json，与 view-state 并发时互相覆盖。
+    // 现用 json_set 原子打补丁，仅改 $.countdown，不触碰 viewState 等其他键。
     try {
-      const session = db
-        .prepare(
-          'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
-        )
-        .get(lessonId) as any;
-      if (session) {
-        let settings: Record<string, any> = {};
-        try {
-          settings = JSON.parse(session.settings_json || '{}');
-        } catch (_) {}
-        settings.countdown = state;
-        db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
-          JSON.stringify(settings),
-          session.id,
-        );
-      }
+      db.prepare(
+        `UPDATE classroom_sessions SET settings_json = json_set(coalesce(settings_json, '{}'), '$.countdown', json(?))
+         WHERE id = (SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1)`,
+      ).run(JSON.stringify(state), lessonId);
     } catch (_) {}
 
     // 广播到所有连接的客户端与房间
@@ -594,19 +583,16 @@ export function registerClassroomRoutes(
           return res.status(404).json({ error: 'No active session for this lesson' });
         }
 
-        let settings: Record<string, any> = {};
-        try {
-          settings = JSON.parse(session.settings_json || '{}');
-        } catch (_) {
-          settings = {};
-        }
-
         if (currentPage !== undefined) {
           const page = Number(currentPage);
           if (!Number.isFinite(page) || page < 0 || page > 10000) {
             return res.status(400).json({ error: 'Invalid currentPage' });
           }
-          settings.viewState = { ...(settings.viewState ?? {}), currentPage: Math.floor(page) };
+          // P1-4 修复：原子更新 $.viewState.currentPage，不读取整列，避免覆盖 countdown
+          db.prepare(
+            `UPDATE classroom_sessions SET settings_json = json_set(coalesce(settings_json, '{}'), '$.viewState.currentPage', ?)
+             WHERE id = ?`,
+          ).run(Math.floor(page), session.id);
         }
 
         if (activeSegmentId !== undefined) {
@@ -614,12 +600,13 @@ export function registerClassroomRoutes(
           db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segId, session.id);
         }
 
-        db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
-          JSON.stringify(settings),
-          session.id,
-        );
+        const fresh = db.prepare('SELECT settings_json FROM classroom_sessions WHERE id = ?').get(session.id) as any;
+        let viewState: Record<string, any> = {};
+        try {
+          viewState = JSON.parse(fresh?.settings_json || '{}').viewState ?? {};
+        } catch (_) {}
 
-        res.json({ success: true, viewState: settings.viewState ?? {} });
+        res.json({ success: true, viewState });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -642,16 +629,81 @@ export function registerClassroomRoutes(
 
         const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
         if (!result.success) {
-          return res.status(403).json({ error: result.reason || 'Stage transition blocked' });
+          const status = (result.reason || '').startsWith('Illegal transition') ? 400 : 403;
+          return res.status(status).json({ error: result.reason || 'Stage transition blocked' });
         }
 
         // Phase B4: 课时进入 ARCHIVED_REPORT（结课）后清理活跃 segment 缓存，
-        // 防止长期运行时 Map 无限增长
+        // 防止长期运行时 Map 无限增长；P2 修复：同步清理倒计时内存态，避免下次同 lessonId 复用读到旧 endsAt
         if (stage === ARCHIVED_REPORT_STAGE) {
           lessonActiveSegments.delete(lessonId);
+          activeCountdowns.delete(lessonId);
         }
 
         res.json({ success: true, stage: result.stage });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // 签到核销闭环（二选一落定：实现核销并直写 attendance，消除双轨）：
+  // 学生输入大屏 4 位码 → 校验 classroom_sessions.checkin_code → 查排课写 attendance(present)。
+  // 无排课时仅标记会话级签到成功（attendanceScheduled:false），不断言失败。
+  app.post(
+    '/api/classroom/sessions/:lessonId/checkin',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const code = String(req.body?.code ?? '').trim();
+        if (!code) return res.status(400).json({ error: 'Missing checkin code' });
+        const session = (req as any).session;
+        const studentId = session?.studentId || session?.userId;
+        if (!studentId) return res.status(403).json({ error: 'Student identity required' });
+
+        const cs = db
+          .prepare(
+            'SELECT id, class_id, stage, checkin_code FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+        if (!cs) return res.status(404).json({ error: 'No active session for this lesson' });
+        if (cs.stage !== 'IN_CLASS_TEACHING' && cs.stage !== 'PRE_CLASS_READY' && cs.stage !== 'WRAP_UP_EXIT_TICKET') {
+          return res.status(400).json({ error: 'Checkin not open at this stage' });
+        }
+        if (!cs.checkin_code || cs.checkin_code !== code) {
+          return res.status(400).json({ error: 'Invalid checkin code' });
+        }
+        if (cs.class_id) {
+          const member = db
+            .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
+            .get(cs.class_id, studentId) as any;
+          if (!member && session?.role === 'student') {
+            return res.status(403).json({ error: 'Not a class member' });
+          }
+        }
+
+        let attendanceScheduled = false;
+        try {
+          const sch = cs.class_id
+            ? (db
+                .prepare(
+                  'SELECT id FROM schedules WHERE class_id = ? AND (lesson_id = ? OR lesson_id = ?) ORDER BY scheduled_date DESC LIMIT 1',
+                )
+                .get(cs.class_id, lessonId, '') as any)
+            : null;
+          if (sch?.id) {
+            db.prepare(
+              `INSERT INTO attendance (schedule_id, student_id, status, recorded_at)
+               VALUES (?, ?, 'present', ?) ON CONFLICT(schedule_id, student_id)
+               DO UPDATE SET status='present', recorded_at=excluded.recorded_at`,
+            ).run(sch.id, studentId, Date.now());
+            attendanceScheduled = true;
+          }
+        } catch (_) {}
+
+        if (io) emitClassroomEvent(io, lessonId, 'classroom:checkin_submitted', { lessonId, studentId });
+        res.json({ success: true, attendanceScheduled });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -742,6 +794,10 @@ export function registerClassroomRoutes(
         const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
         if (!poll || poll.status !== 'ACTIVE') {
           return res.status(400).json({ error: 'Poll is closed or not found' });
+        }
+        // P1-1 修复：校验课节归属，禁止跨课节重放 pollId 注票
+        if (poll.lesson_id && poll.lesson_id !== lessonId) {
+          return res.status(400).json({ error: 'Poll does not belong to this lesson' });
         }
 
         if (!votedOption) {
@@ -941,7 +997,15 @@ export function registerClassroomRoutes(
           won,
           winner: won
             ? { studentId, studentName, responseTimeMs }
-            : { studentId: buzzer.winner_student_id, studentName: buzzer.winner_student_name },
+            : (() => {
+                // P0-1 修复：失败路径重读，避免并发下返回更新前的空赢家
+                const fresh = db.prepare('SELECT * FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+                return {
+                  studentId: fresh?.winner_student_id ?? null,
+                  studentName: fresh?.winner_student_name ?? null,
+                  responseTimeMs: fresh?.winner_response_time_ms ?? null,
+                };
+              })(),
         });
       } catch (e: any) {
         sendSafeError(res, e, 500);

@@ -140,10 +140,29 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
 
   const runtimeScripts = collectCoursewareRuntimeScripts(cwInfo);
 
+  // P4 修复：向课件注入宿主 origin，供桥接 SDK 入站校验（防同页恶意 iframe 伪造命令/进度）
+  let hostOrigin = '';
+  try {
+    const host = (req?.headers?.host || req?.get?.('host') || '').toString().trim();
+    if (host) {
+      const protoHeader = (req?.headers?.['x-forwarded-proto'] || '').toString().split(',')[0].trim();
+      const proto =
+        protoHeader === 'https' || protoHeader === 'http'
+          ? protoHeader
+          : req?.protocol === 'https' || req?.secure
+            ? 'https'
+            : 'http';
+      hostOrigin = `${proto}://${host}`;
+    }
+  } catch {
+    hostOrigin = '';
+  }
+
   const injection = `
 <!-- LMS Courseware SDK Inject -->
 <script>
 window.__LMS_STUDENT__ = ${JSON.stringify(studentInfo)};
+window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
 window.__LMS_COURSEWARE__ = {
   uuid: ${JSON.stringify(cwInfo.uuid)},
   name: ${JSON.stringify(cwInfo.name)}

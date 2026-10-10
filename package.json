@@ -51,6 +51,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "lint:strict": "tsc --noEmit -p tsconfig.strict.json",
     "lint:eslint": "eslint . --ext .ts,.tsx --ignore-pattern dist --ignore-pattern node_modules",
     "format": "prettier --write .",
     "test": "vitest run",

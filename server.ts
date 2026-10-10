@@ -62,6 +62,7 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/c
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import {
   getCookieToken,
+  getValidSession,
   checkIsTeacherOrAdmin,
   getActorId,
   requireAuth,
@@ -276,7 +277,8 @@ async function startServer() {
   // Phase B1 CSRF: 全局写请求跨站来源门控（Sec-Fetch-Site/Dest 判定 + 豁免清单，
   // 见 server/middleware/csrf.ts 判定表；SameSite=Lax cookie 兜底）
   app.use(csrfGuard);
-  // SEC-FIX: uploads 静态资源需鉴权（防匿名枚举已上传课件/头像），plugins 保持只读但阻断敏感文件
+  // SEC-FIX: uploads 静态资源需鉴权（防匿名枚举已上传课件/附件），plugins 保持只读但阻断敏感文件
+  // V1 修复：此前仅判 Cookie 字符串存在，任意值放行；现校验 session 有效性
   app.use(
     '/uploads',
     (req: any, res: any, next: any) => {
@@ -284,9 +286,13 @@ async function startServer() {
       if (reqPath.startsWith('/avatars/')) {
         return next();
       }
-      const token = req.headers.cookie?.match?.(/edu_os_token=([^;]+)/)?.[1];
+      const token = getCookieToken(req);
       if (!token) {
         return res.status(401).json({ error: 'Authentication required' });
+      }
+      const session = getValidSession(token);
+      if (!session) {
+        return res.status(401).json({ error: 'Session expired or invalid' });
       }
       next();
     },
@@ -294,8 +300,9 @@ async function startServer() {
       // 禁用目录索引与隐藏文件
       index: false,
       dotfiles: 'ignore',
-      // 缓存控制：静态资源可缓存 1h，接口不受影响
-      maxAge: '1h',
+      fallthrough: false,
+      // 敏感文件不做长缓存，避免注销后仍可从缓存读取
+      maxAge: 0,
     }),
   );
   app.use('/plugins', express.static(path.join(process.cwd(), 'plugins'), { index: false, dotfiles: 'ignore' }));
@@ -354,10 +361,18 @@ async function startServer() {
   };
 
   // SEC-NET-01: Express CORS 中间件 — 允许沙箱 iframe（origin: null）、同源请求与合法来源
+  // V2 修复：ALLOWED_ORIGINS=* 时不得同时 Allow-Credentials:true（规范禁止，浏览器会忽略），
+  // 此时降级为无凭证的 *，避免运维误以为“放行且带凭证”生效
   app.use((req, res, next) => {
     const origin = req.headers.origin;
+    const wildcard = configuredOrigins.includes('*');
     if (origin && origin !== 'null' && origin !== undefined) {
-      if (isOriginAllowed(origin, req.headers.host)) {
+      if (wildcard) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Max-Age', '86400');
+      } else if (isOriginAllowed(origin, req.headers.host)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -661,8 +676,20 @@ export { startServer };
 
 // Auto-start only when run directly (not imported by CLI)
 if (process.argv[1]?.endsWith('server.cjs') || process.argv[1]?.endsWith('server.ts')) {
-  startServer().catch(console.error);
+  startServer().catch((e) => {
+    console.error('[Server] Fatal startup error:', e);
+    process.exit(1);
+  });
 }
+
+// R1 修复：宿主进程最后防线 —— 运行期未捕获异常只记日志 + 优雅退出，避免单次抛错即静默崩溃
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Server] uncaughtException:', err);
+  gracefulShutdown('UNCAUGHT').catch(() => process.exit(1));
+});
 
 // ── 优雅关闭 (OBS-SHUTDOWN-01) ────────────────────────────────────
 let shuttingDown = false;

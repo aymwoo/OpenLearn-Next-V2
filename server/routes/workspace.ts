@@ -167,7 +167,8 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       let nodes: any[] = [];
 
       if (parentId === 'virtual-lessons') {
-        const lessons = kernelContainer.queryRead('SELECT id, title, content FROM lessons');
+        // P2 分页收敛：上限 200 防全表阻塞 event loop（content 仍随行，后续迭代再拆延迟加载）
+        const lessons = kernelContainer.queryRead('SELECT id, title, content FROM lessons ORDER BY created_at DESC LIMIT 200');
         nodes = lessons.map((l) => ({
           id: `lesson-${l.id}`,
           parent_id: 'virtual-lessons',
@@ -178,7 +179,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       } else if (parentId === 'virtual-assignments') {
         const assignments = kernelContainer.db
           .prepare(
-            'SELECT a.id, a.title, c.name as cname, a.content FROM assignments a JOIN classes c ON a.class_id = c.id',
+            'SELECT a.id, a.title, c.name as cname, a.content FROM assignments a JOIN classes c ON a.class_id = c.id ORDER BY a.created_at DESC LIMIT 200',
           )
           .all() as any[];
         nodes = assignments.map((a) => ({
@@ -186,7 +187,6 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
           parent_id: 'virtual-assignments',
           type: 'file',
           name: `[${a.cname}] ${a.title}.md`,
-          content: a.content,
         }));
       } else if (parentId === 'virtual-submissions') {
         // SEC-FIX: 严格数据脱敏，普通学生仅可查看本人提交与成绩，严禁全量拉取全校作业与分数

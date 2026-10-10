@@ -115,11 +115,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   // ── 3. 榜单查询与进度 ──────────────────────────────────────────────────────
   app.get('/api/courseware/attempts', requireAuth(), (req, res) => {
     try {
-      const session = (req as any).session as { role?: string; subRole?: string } | undefined;
+      const session = (req as any).session as any;
       const isStaff =
         session?.role === 'teacher' || session?.role === 'administrator' || session?.subRole === 'administrator';
-
-      const envelope = coursewareService.listAttempts(req.query, isStaff);
+      const requesterStudentId = isStaff ? undefined : session?.studentId || session?.userId;
+      const envelope = coursewareService.listAttempts(req.query, isStaff, requesterStudentId);
       res.json(envelope);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -202,7 +202,8 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   });
 
   // ── 5. 手写课件落库、Token 铸造与沙箱直出 ──────────────────────────────────
-  app.post('/api/courseware/inline', requireAuth(), (req, res) => {
+  // V4 修复：学生可写任意 HTML/JS 并经 /runtime 执行 + 伪造满分，此前 requireAuth() 未限角色
+  app.post('/api/courseware/inline', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const code = typeof req.body?.code === 'string' ? req.body.code : '';
       const uuid = coursewareService.saveInlineCourseware(code);

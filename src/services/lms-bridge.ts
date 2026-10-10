@@ -520,18 +520,53 @@ export function useLmsBridge(session: SessionType | null): void {
 }
 
 /**
- * 获取当前所有受管辖或页面中挂载的课件 / 微前端 iframe
+ * 获取受管辖课件 iframe（仅 data-lms-bridge 标记 + 已注册集合）。
+ * V5 修复：此前 getAllTargetIframes() 用 querySelectorAll('iframe') 全选，
+ * 主题/成绩/字号广播到同页 LTI 外链与恶意插件 blob:iframe，造成嗅探面。
+ * 现仅向受管辖集合投递。
  */
-function getAllTargetIframes(): Set<HTMLIFrameElement> {
-  const targetIframes = new Set<HTMLIFrameElement>(managedIframes);
+function getManagedTargetIframes(): HTMLIFrameElement[] {
+  const out: HTMLIFrameElement[] = [];
+  const seen = new Set<HTMLIFrameElement>();
+  for (const iframe of managedIframes) {
+    if (iframe && !seen.has(iframe)) {
+      seen.add(iframe);
+      out.push(iframe);
+    }
+  }
   if (typeof document !== 'undefined') {
     try {
-      document.querySelectorAll('iframe').forEach((iframe) => targetIframes.add(iframe));
+      document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]').forEach((iframe) => {
+        if (!seen.has(iframe)) {
+          seen.add(iframe);
+          out.push(iframe);
+        }
+      });
     } catch {
       // 忽略 DOM 查询异常
     }
   }
-  return targetIframes;
+  return out;
+}
+
+/** 向单个受管辖 iframe 定向投递，origin 能算则算，算不出（srcdoc/blob）才降级 '*' */
+function postToManagedIframe(iframe: HTMLIFrameElement, message: unknown): void {
+  try {
+    let origin: string | undefined;
+    if (iframe.src && typeof window !== 'undefined') {
+      try {
+        const url = new URL(iframe.src, window.location.href);
+        if (url.origin && url.origin !== 'null' && !iframe.src.startsWith('blob:') && !iframe.src.startsWith('data:')) {
+          origin = url.origin;
+        }
+      } catch {
+        // ignore invalid URL
+      }
+    }
+    iframe.contentWindow?.postMessage(message, origin || '*');
+  } catch {
+    // 跨域/沙箱安全限制时静默失败
+  }
 }
 
 /**
@@ -540,28 +575,18 @@ function getAllTargetIframes(): Set<HTMLIFrameElement> {
 export function broadcastThemeToIframes(theme: string, tokens: Record<string, string> = {}): void {
   if (typeof document === 'undefined') return;
   try {
-    const iframes = getAllTargetIframes();
+    const iframes = getManagedTargetIframes();
     iframes.forEach((iframe) => {
-      try {
-        iframe.contentWindow?.postMessage(
-          {
-            type: 'LMS_HOST_COMMAND',
-            event: 'theme:changed',
-            payload: { theme, tokens },
-          },
-          '*',
-        );
-        iframe.contentWindow?.postMessage(
-          {
-            type: 'LMS_THEME_CHANGED',
-            theme,
-            tokens,
-          },
-          '*',
-        );
-      } catch {
-        // 忽略可能存在的跨域限制报错
-      }
+      postToManagedIframe(iframe, {
+        type: 'LMS_HOST_COMMAND',
+        event: 'theme:changed',
+        payload: { theme, tokens },
+      });
+      postToManagedIframe(iframe, {
+        type: 'LMS_THEME_CHANGED',
+        theme,
+        tokens,
+      });
     });
   } catch {
     // 忽略异常
@@ -575,28 +600,18 @@ export function broadcastFontScaleToIframes(scale: number): void {
   if (typeof document === 'undefined') return;
   try {
     const clampedScale = Math.min(140, Math.max(85, Math.round(scale)));
-    const iframes = getAllTargetIframes();
+    const iframes = getManagedTargetIframes();
     iframes.forEach((iframe) => {
-      try {
-        iframe.contentWindow?.postMessage(
-          {
-            type: 'LMS_HOST_COMMAND',
-            event: 'font-scale:changed',
-            payload: { scale: clampedScale, fontScale: (clampedScale / 100).toFixed(2) },
-          },
-          '*',
-        );
-        iframe.contentWindow?.postMessage(
-          {
-            type: 'LMS_FONT_SCALE_CHANGED',
-            scale: clampedScale,
-            fontScale: (clampedScale / 100).toFixed(2),
-          },
-          '*',
-        );
-      } catch {
-        // 忽略跨域错误
-      }
+      postToManagedIframe(iframe, {
+        type: 'LMS_HOST_COMMAND',
+        event: 'font-scale:changed',
+        payload: { scale: clampedScale, fontScale: (clampedScale / 100).toFixed(2) },
+      });
+      postToManagedIframe(iframe, {
+        type: 'LMS_FONT_SCALE_CHANGED',
+        scale: clampedScale,
+        fontScale: (clampedScale / 100).toFixed(2),
+      });
     });
   } catch {
     // 忽略异常

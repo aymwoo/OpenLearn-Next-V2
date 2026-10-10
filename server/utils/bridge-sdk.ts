@@ -197,6 +197,22 @@ export const BRIDGE_SDK_CODE = `(function() {
   window.addEventListener('message', function(event) {
     var d = event.data;
     if (!d || typeof d !== 'object') return;
+    // P4 修复：入站无 origin 校验，任意页面可伪造宿主命令/假进度。
+    // 沙箱课件为不透明 origin，合法父窗口必为真实 origin 且 source===window.parent；
+    // 同页恶意 iframe 的 origin 为 'null'，直接拒收。__LMS_HOST_ORIGIN__ 由服务端注入，
+    // 有则必须精确匹配，无则至少拒绝 'null'/非 parent 来源。
+    var expectedHost = window.__LMS_HOST_ORIGIN__ || null;
+    var isHostCmd = (d.type === 'LMS_HOST_COMMAND' || d.type === 'LMS_THEME_CHANGED' || d.type === 'LMS_PROGRESS_RESPONSE');
+    if (isHostCmd) {
+      try {
+        if (event.source !== window.parent) return;
+      } catch (e) { return; }
+      if (expectedHost) {
+        if (event.origin !== expectedHost) return;
+      } else if (!event.origin || event.origin === 'null') {
+        return;
+      }
+    }
     if (d.type === 'LMS_HOST_COMMAND' && d.event) {
       if (d.event === 'theme:changed' && d.payload) {
         __applyThemeTokens(d.payload);
@@ -228,7 +244,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, "*");
+      }, window.__LMS_HOST_ORIGIN__ || "*");
     },
     saveProgress(data) {
       window.parent.postMessage({
@@ -236,7 +252,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, "*");
+      }, window.__LMS_HOST_ORIGIN__ || "*");
     },
     finish(data) {
       window.parent.postMessage({
@@ -244,7 +260,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, "*");
+      }, window.__LMS_HOST_ORIGIN__ || "*");
     },
     getStudent() {
       return window.__LMS_STUDENT__;
@@ -262,7 +278,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         event: event,
         payload: data
-      }, "*");
+      }, window.__LMS_HOST_ORIGIN__ || "*");
     },
     on(event, callback) {
       (__lmsHandlers[event] = __lmsHandlers[event] || []).push(callback);
@@ -283,7 +299,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         config: config
-      }, "*");
+      }, window.__LMS_HOST_ORIGIN__ || "*");
     },
     getProgress() {
       return new Promise(function(resolve) {
@@ -298,7 +314,7 @@ export const BRIDGE_SDK_CODE = `(function() {
           uuid: window.__LMS_COURSEWARE__?.uuid,
           attempt_id: window.__LMS_STUDENT__?.attempt_id,
           requestId: requestId
-        }, "*");
+        }, window.__LMS_HOST_ORIGIN__ || "*");
       });
     }
   };
@@ -323,7 +339,7 @@ export const BRIDGE_SDK_CODE = `(function() {
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url, method, headers: JSON.parse(JSON.stringify(headers)), body: body ? body.toString() : null }
-            }, "*");
+            }, window.__LMS_HOST_ORIGIN__ || "*");
           }
         } catch (e) {
           console.error("Bridge Hook fetch error", e);
@@ -352,7 +368,7 @@ export const BRIDGE_SDK_CODE = `(function() {
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url: this._url, method: this._method, body: bodyStr ? bodyStr.toString() : null }
-            }, "*");
+            }, window.__LMS_HOST_ORIGIN__ || "*");
           }
         } catch (e) {
           console.error("Bridge Hook XHR error", e);
@@ -371,7 +387,7 @@ export const BRIDGE_SDK_CODE = `(function() {
                 uuid: window.__LMS_COURSEWARE__?.uuid,
                 attempt_id: window.__LMS_STUDENT__?.attempt_id,
                 payload: { url: config.url, method: config.method, data: config.data }
-              }, "*");
+              }, window.__LMS_HOST_ORIGIN__ || "*");
             }
           } catch (e) {
             console.error("Bridge Hook Axios error", e);
@@ -403,7 +419,7 @@ export const BRIDGE_SDK_CODE = `(function() {
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url: url, data: data ? data.toString() : null }
-            }, "*");
+            }, window.__LMS_HOST_ORIGIN__ || "*");
           }
         } catch (e) {
           console.error("Bridge Hook Beacon error", e);
@@ -426,7 +442,7 @@ export const BRIDGE_SDK_CODE = `(function() {
             uuid: window.__LMS_COURSEWARE__?.uuid,
             attempt_id: window.__LMS_STUDENT__?.attempt_id,
             payload: { action: form.action, method: form.method, data: data }
-          }, "*");
+          }, window.__LMS_HOST_ORIGIN__ || "*");
         }
       } catch (err) {
         console.error("Bridge Hook Form error", err);

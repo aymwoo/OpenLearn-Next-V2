@@ -150,8 +150,11 @@ export const ManagementPlugin = {
     });
 
     await commandBus.registerHandler(studentListCmd, {
-      async execute() {
-        const students = db.prepare('SELECT * FROM students ORDER BY created_at DESC').all();
+      async execute(command) {
+        // P2 分页收敛：默认上限 200（payload.limit 可覆盖，最大 500），防千级学生全表扫描
+        const raw = (command?.payload as any)?.limit;
+        const limit = Math.min(500, Math.max(1, Number(raw) || 200));
+        const students = db.prepare('SELECT * FROM students ORDER BY created_at DESC LIMIT ?').all(limit);
         return { students };
       },
     });
@@ -680,6 +683,38 @@ export const ManagementPlugin = {
     await commandBus.registerHandler(scheduleCreateCmd, {
       async execute(command) {
         const payload = command.payload as any;
+        if (!payload?.classId || !payload?.scheduledDate) {
+          throw new Error('schedule.create: classId and scheduledDate are required');
+        }
+        // P0 修复：插件直写旁路此前绕过三维冲突检测。此处做同班级同日期重叠拦截，
+        // 显式 allowConflict:true 才放行（与 ScheduleService.createSchedule 同语义）。
+        // 完整三维检测仍以 HTTP/ScheduleService 为准，此为插件面最小 fail-close 门。
+        if (!payload?.allowConflict && !payload?.force) {
+          const toMin = (t: string | null | undefined): [number, number] | null => {
+            if (!t) return null;
+            const m = String(t).match(/(\d{1,2}):(\d{2})\s*[-~～—至到]?\s*(\d{1,2})?:?(\d{2})?/);
+            if (!m) return null;
+            const s = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+            if (m[3] == null) return [s, Math.min(1440, s + 45)];
+            const e = parseInt(m[3], 10) * 60 + parseInt(m[4] || '0', 10);
+            if (!(s >= 0 && s < 1440 && e > 0 && e <= 1440 && e > s)) return null;
+            return [s, e];
+          };
+          const overlap = (a: string | null | undefined, b: string | null | undefined): boolean => {
+            if (!a || !b) return true; // 空时段视为全天，占坑
+            const pa = toMin(a);
+            const pb = toMin(b);
+            if (!pa || !pb) return true;
+            return Math.max(pa[0], pb[0]) < Math.min(pa[1], pb[1]);
+          };
+          const existing = db
+            .prepare('SELECT id, time_slot FROM schedules WHERE class_id = ? AND scheduled_date = ?')
+            .all(payload.classId, payload.scheduledDate) as any[];
+          const hit = existing.find((r) => overlap(payload.timeSlot, r.time_slot));
+          if (hit) {
+            throw new Error(`schedule.create: class time conflict with ${hit.id} (pass allowConflict:true to force)`);
+          }
+        }
         const id = 'sch-' + uuidv7();
         db.prepare(
           `

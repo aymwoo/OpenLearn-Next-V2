@@ -4,11 +4,11 @@
 
 ```
 ├── server.ts              # Express + Socket.IO backend (API routes, AI agent, auth)
-├── server/                # Server-side modules (from v5.0)
+├── server/                # Server-side modules (server modular split)
 │   ├── middleware/        # Auth and security middleware
 │   ├── routes/            # Express route handlers
 │   └── utils/             # Server utilities
-│       └── bridge-sdk.ts  # Bridge SDK Proxy for interactive courseware iframe sandboxes
+│       └── bridge-sdk.ts  # AUTO-GENERATED from packages/bridge-sdk/src/bridge.js via scripts/build-bridge-sdk.mjs — do not edit directly
 ├── src/                   # React 19 frontend
 │   ├── App.tsx            # Main application shell
 │   ├── components/        # Shared UI components (PascalCase)
@@ -21,8 +21,8 @@
 │   ├── core/              # OS kernel subsystems (command-bus, event-bus, plugin-runtime, db, DI)
 │   ├── plugin-sdk/        # Plugin development types and tokens
 │   ├── plugin-test-kit/   # Mock context factory for plugin testing
-│   ├── plugins/           # Built-in plugins (builtin, vfs, management, ai-planner, etc.)
-│   └── mfe-*/             # Micro-frontend packages (whiteboard, courseware)
+│   ├── plugins/           # Built-in plugins (builtin, vfs, process, management, ai-planner, assignment-eval, courseware-score, ai-submit-injector, score-monitor-script)
+│   └── bridge-sdk/        # LMS Bridge iframe SDK source (packages/bridge-sdk/src/bridge.js)
 ├── docs/                  # Architecture reports and plugin development tutorials
 ├── assets/                # Static resources (plugin ZIPs)
 ├── migrations/            # SQLite schema migrations
@@ -75,7 +75,7 @@
 - **Multi-tier Scope Boundaries**:
   - `CHANGELOG.md`: Platform host (`openlearn-next`).
   - `packages/plugin-sdk/CHANGELOG.md`: Plugin SDK types & DI tokens (`@openlearn/plugin-sdk`).
-  - `v2_plugins/<plugin-id>/CHANGELOG.md`: Individual plugins (e.g. `@aymwoo/plugin-research-workflow`).
+  - `packages/plugins/<plugin-id>/CHANGELOG.md`: Individual built-in plugins (no `v2_plugins/` directory in this repo).
 
 ## Environment
 

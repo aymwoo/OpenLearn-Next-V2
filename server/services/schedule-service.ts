@@ -132,10 +132,12 @@ export function parseTimeSlot(timeSlot: string | null | undefined): { startMin: 
     const sM = parseInt(rangeMatch[2], 10);
     const eH = parseInt(rangeMatch[3], 10);
     const eM = parseInt(rangeMatch[4], 10);
-    return {
-      startMin: sH * 60 + sM,
-      endMin: eH * 60 + eM,
-    };
+    // P1 修复：此前接受 25:99 且跨天/空区间返回负区间导致漏检。此处做白名单校验。
+    if (sH < 0 || sH > 23 || eH < 0 || eH > 24 || sM < 0 || sM > 59 || eM < 0 || eM > 59) return null;
+    const startMin = sH * 60 + sM;
+    const endMin = eH * 60 + eM;
+    if (!(endMin > startMin && endMin <= 1440)) return null; // 明确禁止跨天/空区间
+    return { startMin, endMin };
   }
 
   // 匹配单点时段：08:00
@@ -143,6 +145,7 @@ export function parseTimeSlot(timeSlot: string | null | undefined): { startMin: 
   if (singleMatch) {
     const sH = parseInt(singleMatch[1], 10);
     const sM = parseInt(singleMatch[2], 10);
+    if (sH < 0 || sH > 23 || sM < 0 || sM > 59) return null;
     const startMin = sH * 60 + sM;
     return {
       startMin,
@@ -184,6 +187,39 @@ export function isTimeOverlapping(slotA: string | null | undefined, slotB: strin
   return normA.toLowerCase() === normB.toLowerCase();
 }
 
+const SCHEDULE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// scheduled 占资源；cancelled/holiday 不占；swap/completed 为历史兼容状态（单测与存量数据在用）
+const SCHEDULE_STATUS = new Set(['scheduled', 'cancelled', 'holiday', 'swap', 'completed']);
+
+/** P1 输入校验：日期/时段/状态/外键存在性，失败抛 status=400 */
+function assertValidScheduleInput(
+  db: Database.Database,
+  params: { classId: string; lessonId?: string | null; scheduledDate: string; timeSlot?: string | null; status?: string | null },
+): void {
+  const { classId, lessonId, scheduledDate, timeSlot, status } = params;
+  const bad = (msg: string): Error => {
+    const e = new Error(msg) as Error & { status: number };
+    e.status = 400;
+    return e;
+  };
+  if (!classId || typeof classId !== 'string') throw bad('classId is required');
+  if (!scheduledDate || !SCHEDULE_DATE_RE.test(scheduledDate)) throw bad('scheduledDate must be YYYY-MM-DD');
+  const [y, mo, d] = scheduledDate.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) throw bad('scheduledDate is not a real date');
+  if (timeSlot != null && timeSlot !== '') {
+    const parsed = parseTimeSlot(timeSlot);
+    if (!parsed) throw bad('timeSlot must be HH:MM-HH:MM with 00:00<=start<end<=24:00');
+  }
+  if (status != null && status !== '' && !SCHEDULE_STATUS.has(status)) throw bad(`status must be one of ${[...SCHEDULE_STATUS].join('/')}`);
+  const cls = db.prepare('SELECT id FROM classes WHERE id = ?').get(classId) as any;
+  if (!cls) throw bad('classId does not exist');
+  if (lessonId) {
+    const les = db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId) as any;
+    if (!les) throw bad('lessonId does not exist');
+  }
+}
+
 /**
  * 展开周期性排课模板为指定周次的单日排课列表
  */
@@ -199,18 +235,24 @@ export function expandRecurringSchedules(
     notes: string | null;
   }> = [];
 
-  const start = new Date(startDate + 'T00:00:00Z');
-  const end = new Date(endDate + 'T00:00:00Z');
-
+  // P1 修复：此前用 UTC（T00:00:00Z + getUTCDay/toISOString），UTC+8 晚间差一天。
+  // 日期为无时区 YYYY-MM-DD，一律按本地历法展开。
+  const m = (s: string) => /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  const ms = m(startDate);
+  const me = m(endDate);
+  if (!ms || !me) return results;
+  const start = new Date(Number(ms[1]), Number(ms[2]) - 1, Number(ms[3]));
+  const end = new Date(Number(me[1]), Number(me[2]) - 1, Number(me[3]));
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
     return results;
   }
+  const pad = (n: number) => String(n).padStart(2, '0');
 
   const current = new Date(start);
   while (current <= end) {
-    const day = current.getUTCDay();
+    const day = current.getDay();
     if (daysOfWeek.includes(day)) {
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = `${current.getFullYear()}-${pad(current.getMonth() + 1)}-${pad(current.getDate())}`;
       results.push({
         scheduledDate: dateStr,
         timeSlot: timeSlot || null,
@@ -219,7 +261,7 @@ export function expandRecurringSchedules(
         notes: notes || null,
       });
     }
-    current.setUTCDate(current.getUTCDate() + 1);
+    current.setDate(current.getDate() + 1);
   }
 
   return results;
@@ -232,6 +274,9 @@ export class ScheduleService {
    * 今日/指定日期的课表查询 (支持每周循环匹配与窗口排名)
    */
   public getTodaySchedules(clientDate: string): ScheduleRecord[] {
+    // P1 修复：校验 YYYY-MM-DD（此前任意字符串进 strftime，行为未定义）；
+    // 循环投影仅取 scheduled 状态，cancelled 不再幽灵复现；返回加 isRecurringProjection 语义注释
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clientDate || '')) return [];
     const query = `
       WITH RankedSchedules AS (
         SELECT s.*,
@@ -241,6 +286,7 @@ export class ScheduleService {
                ) as rn
         FROM schedules s
         WHERE strftime('%w', s.scheduled_date) = strftime('%w', ?)
+          AND s.status = 'scheduled'
       )
       SELECT r.id, r.class_id, r.lesson_id, ? as scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
              COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
@@ -321,6 +367,7 @@ export class ScheduleService {
     const conflicts: ScheduleConflictItem[] = [];
 
     // 1. 班级时间冲突：同一班级在同一日期、重叠时段是否已有其他排课
+    // P1 修复：已取消/假期不占资源，过滤幽灵占用
     const classSchedules = this.db
       .prepare(
         `
@@ -328,7 +375,7 @@ export class ScheduleService {
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         JOIN classes c ON s.class_id = c.id
-        WHERE s.class_id = ? AND s.scheduled_date = ? ${excludeScheduleId ? 'AND s.id != ?' : ''}
+        WHERE s.class_id = ? AND s.scheduled_date = ? AND s.status NOT IN ('cancelled', 'holiday') ${excludeScheduleId ? 'AND s.id != ?' : ''}
       `,
       )
       .all(...(excludeScheduleId ? [classId, scheduledDate, excludeScheduleId] : [classId, scheduledDate])) as any[];
@@ -363,7 +410,7 @@ export class ScheduleService {
             JOIN lessons l ON s.lesson_id = l.id
             JOIN classes c ON s.class_id = c.id
             LEFT JOIN users u ON l.creator_id = u.id
-            WHERE l.creator_id = ? AND s.scheduled_date = ? ${excludeScheduleId ? 'AND s.id != ?' : ''}
+            WHERE l.creator_id = ? AND s.scheduled_date = ? AND s.status NOT IN ('cancelled', 'holiday') ${excludeScheduleId ? 'AND s.id != ?' : ''}
           `,
           )
           .all(
@@ -404,7 +451,7 @@ export class ScheduleService {
           FROM schedules s
           JOIN classes c ON s.class_id = c.id
           LEFT JOIN lessons l ON s.lesson_id = l.id
-          WHERE c.lab_id = ? AND s.class_id != ? AND s.scheduled_date = ? ${excludeScheduleId ? 'AND s.id != ?' : ''}
+          WHERE c.lab_id = ? AND s.class_id != ? AND s.scheduled_date = ? AND s.status NOT IN ('cancelled', 'holiday') ${excludeScheduleId ? 'AND s.id != ?' : ''}
         `,
         )
         .all(
@@ -443,53 +490,58 @@ export class ScheduleService {
     options?: { allowConflict?: boolean },
   ): ScheduleRecord {
     const { classId, lessonId, scheduledDate, timeSlot, status, notes } = params;
+    assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
 
-    if (!options?.allowConflict) {
-      const report = this.detectConflicts({
-        classId,
-        scheduledDate,
-        timeSlot,
-        lessonId,
-      });
-      if (report.hasConflict) {
-        throw new ScheduleConflictError(
-          `排课冲突：${report.conflicts[0].message}`,
-          report.conflicts,
-        );
+    // P0 竞态修复：detect+insert 同事务（better-sqlite3 同进程串行），事務内重查
+    const tx = this.db.transaction(() => {
+      if (!options?.allowConflict) {
+        const report = this.detectConflicts({
+          classId,
+          scheduledDate,
+          timeSlot,
+          lessonId,
+        });
+        if (report.hasConflict) {
+          throw new ScheduleConflictError(
+            `排课冲突：${report.conflicts[0].message}`,
+            report.conflicts,
+          );
+        }
       }
-    }
 
-    const id = randomId('sch-');
-    const now = Date.now();
+      const id = randomId('sch-');
+      const now = Date.now();
 
-    this.db
-      .prepare(
-        `
-        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      )
-      .run(
+      this.db
+        .prepare(
+          `
+          INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        )
+        .run(
+          id,
+          classId,
+          lessonId || '',
+          scheduledDate,
+          timeSlot || null,
+          status || 'scheduled',
+          notes || null,
+          now,
+        );
+      return {
         id,
-        classId,
-        lessonId || '',
-        scheduledDate,
-        timeSlot || null,
-        status || 'scheduled',
-        notes || null,
-        now,
-      );
+        class_id: classId,
+        lesson_id: lessonId || '',
+        scheduled_date: scheduledDate,
+        time_slot: timeSlot || null,
+        status: status || 'scheduled',
+        notes: notes || null,
+        created_at: now,
+      };
+    });
 
-    return {
-      id,
-      class_id: classId,
-      lesson_id: lessonId || '',
-      scheduled_date: scheduledDate,
-      time_slot: timeSlot || null,
-      status: status || 'scheduled',
-      notes: notes || null,
-      created_at: now,
-    };
+    return tx() as ScheduleRecord;
   }
 
   /**
@@ -502,40 +554,44 @@ export class ScheduleService {
     options?: { allowConflict?: boolean },
   ): void {
     const { lessonId, scheduledDate, timeSlot, status, notes } = params;
+    assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
 
-    if (!options?.allowConflict) {
-      const report = this.detectConflicts({
-        classId,
-        scheduledDate,
-        timeSlot,
-        lessonId,
-        excludeScheduleId: scheduleId,
-      });
-      if (report.hasConflict) {
-        throw new ScheduleConflictError(
-          `排课冲突：${report.conflicts[0].message}`,
-          report.conflicts,
-        );
+    const tx = this.db.transaction(() => {
+      if (!options?.allowConflict) {
+        const report = this.detectConflicts({
+          classId,
+          scheduledDate,
+          timeSlot,
+          lessonId,
+          excludeScheduleId: scheduleId,
+        });
+        if (report.hasConflict) {
+          throw new ScheduleConflictError(
+            `排课冲突：${report.conflicts[0].message}`,
+            report.conflicts,
+          );
+        }
       }
-    }
 
-    this.db
-      .prepare(
-        `
-        UPDATE schedules 
-        SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
-        WHERE id = ? AND class_id = ?
-      `,
-      )
-      .run(
-        lessonId || '',
-        scheduledDate,
-        timeSlot || null,
-        status || 'scheduled',
-        notes || null,
-        scheduleId,
-        classId,
-      );
+      this.db
+        .prepare(
+          `
+          UPDATE schedules 
+          SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
+          WHERE id = ? AND class_id = ?
+        `,
+        )
+        .run(
+          lessonId || '',
+          scheduledDate,
+          timeSlot || null,
+          status || 'scheduled',
+          notes || null,
+          scheduleId,
+          classId,
+        );
+    });
+    tx();
   }
 
   /**
@@ -560,31 +616,22 @@ export class ScheduleService {
     if (!Array.isArray(schedules) || schedules.length === 0) {
       return { count: 0, ids: [] };
     }
+    if (schedules.length > 500) {
+      const e = new Error('batch too large (max 500)') as Error & { status: number };
+      e.status = 413;
+      throw e;
+    }
 
-    if (!options?.allowConflict) {
-      const allConflicts: ScheduleConflictItem[] = [];
-      for (const item of schedules) {
-        const scheduledDate = item.scheduledDate || item.scheduled_date || '';
-        const timeSlot = item.timeSlot || item.time_slot || null;
-        const lessonId = item.lessonId || item.lesson_id || '';
-        if (scheduledDate) {
-          const report = this.detectConflicts({
-            classId,
-            scheduledDate,
-            timeSlot,
-            lessonId,
-          });
-          if (report.hasConflict) {
-            allConflicts.push(...report.conflicts);
-          }
-        }
-      }
-      if (allConflicts.length > 0) {
-        throw new ScheduleConflictError(
-          `批量排课检测到 ${allConflicts.length} 处冲突：${allConflicts[0].message}`,
-          allConflicts,
-        );
-      }
+    // 归一化 + P1 逐条校验（空日期此前直接入库脏数据）
+    const norm = schedules.map((item) => ({
+      lessonId: item.lessonId || item.lesson_id || '',
+      scheduledDate: item.scheduledDate || item.scheduled_date || '',
+      timeSlot: item.timeSlot || item.time_slot || null,
+      status: item.status || 'scheduled',
+      notes: item.notes || null,
+    }));
+    for (const n of norm) {
+      assertValidScheduleInput(this.db, { classId, lessonId: n.lessonId, scheduledDate: n.scheduledDate, timeSlot: n.timeSlot, status: n.status });
     }
 
     const insertStmt = this.db.prepare(`
@@ -595,25 +642,48 @@ export class ScheduleService {
     const createdIds: string[] = [];
     const now = Date.now();
 
-    const tx = this.db.transaction((items: BatchScheduleItem[]) => {
-      for (const item of items) {
+    // 检测与插入同事务：单实例串行化，全成功或全失败
+    const tx = this.db.transaction(() => {
+      if (!options?.allowConflict) {
+        const allConflicts: ScheduleConflictItem[] = [];
+        for (const n of norm) {
+          const report = this.detectConflicts({ classId, scheduledDate: n.scheduledDate, timeSlot: n.timeSlot, lessonId: n.lessonId });
+          if (report.hasConflict) allConflicts.push(...report.conflicts);
+        }
+        const byDate = new Map<string, typeof norm>();
+        for (const n of norm) {
+          const arr = byDate.get(n.scheduledDate) || [];
+          arr.push(n);
+          byDate.set(n.scheduledDate, arr);
+        }
+        for (const [, arr] of byDate) {
+          for (let i = 0; i < arr.length; i++) {
+            for (let j = i + 1; j < arr.length; j++) {
+              if (isTimeOverlapping(arr[i].timeSlot, arr[j].timeSlot)) {
+                allConflicts.push({
+                  type: 'class_overlap',
+                  message: `批量内自冲突：${arr[i].scheduledDate} ${arr[i].timeSlot || '全天'} 与 ${arr[j].timeSlot || '全天'} 重叠`,
+                } as ScheduleConflictItem);
+              }
+            }
+          }
+        }
+        if (allConflicts.length > 0) {
+          throw new ScheduleConflictError(
+            `批量排课检测到 ${allConflicts.length} 处冲突：${allConflicts[0].message}`,
+            allConflicts,
+          );
+        }
+      }
+      for (const n of norm) {
         const id = randomId('sch-');
         createdIds.push(id);
-        insertStmt.run(
-          id,
-          classId,
-          item.lessonId || item.lesson_id || '',
-          item.scheduledDate || item.scheduled_date || '',
-          item.timeSlot || item.time_slot || null,
-          item.status || 'scheduled',
-          item.notes || null,
-          now,
-        );
+        insertStmt.run(id, classId, n.lessonId, n.scheduledDate, n.timeSlot, n.status, n.notes, now);
       }
     });
 
-    tx(schedules);
-    return { count: schedules.length, ids: createdIds };
+    tx();
+    return { count: norm.length, ids: createdIds };
   }
 
   /**

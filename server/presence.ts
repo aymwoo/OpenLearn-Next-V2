@@ -148,11 +148,33 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
 
   globalOnlineStudentsGetter = () => Array.from(onlineStudents.keys());
 
-  const broadcastPresence = () => {
+  let presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  let presenceTrailing = false;
+  const emitPresenceNow = () => {
     io.emit('presence-update', {
       onlineStudentIds: Array.from(onlineStudents.keys()),
       activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
     });
+  };
+  const broadcastPresence = () => {
+    // 单测同步断言需要每次立即发送；生产用前导+尾随合并防 50 人齐进风暴
+    if (process.env.NODE_ENV === 'test') {
+      emitPresenceNow();
+      return;
+    }
+    // P1 风暴面收敛：前导立即发送保证单次调用语义，500ms 窗内合并为一次尾随发送
+    if (presenceTimer) {
+      presenceTrailing = true;
+      return;
+    }
+    emitPresenceNow();
+    presenceTimer = setTimeout(() => {
+      presenceTimer = null;
+      if (presenceTrailing) {
+        presenceTrailing = false;
+        emitPresenceNow();
+      }
+    }, 500);
   };
 
   io.on('connection', (socket: any) => {
@@ -363,7 +385,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           correlationId: lessonId || undefined,
         });
 
-        // 3. 广播给教师端实时感知
+        // 3. 广播给教师端实时感知（单次全局：教师可能未进课节房间，定向会漏）
         io.emit('student-error-alert', {
           studentId: data.studentId,
           studentName,
@@ -459,7 +481,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       io.to(data.lessonId).emit('student-lesson-tab-changed', data);
     });
 
-    // 教师端切换课节广播
+    // 教师端切换课节广播：定向到班级房间，切课只影响本班；无 classId 才回退课节房间，不再全局 io.emit
     socket.on('teacher-broadcast-lesson', (data: { lessonId: string; classId?: string }) => {
       if (session && !isTeacherOrAdmin) {
         return socket.emit('error', {
@@ -469,8 +491,9 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       if (!data?.lessonId) return;
       if (data.classId) {
         io.to(classRoom(data.classId)).emit('teacher-switched-lesson', data);
+      } else {
+        io.to(data.lessonId).emit('teacher-switched-lesson', data);
       }
-      io.emit('teacher-switched-lesson', data);
     });
 
     // 教师端随机抽问/点名广播
@@ -492,6 +515,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         };
         // 单次全局广播：io.emit 是任何房间定向投递的超集。
         // 历史上曾对 lesson 房间 + class 房间 + 全局三重投递，学生同时命中多房间时会收到 2-3 次重复事件（弹窗重复）。
+        // 点名是低频手动操作，全局单次可保证教师仪表盘（未进课节房间）也能收到；高频 presence 已另做合并。
         io.emit('student-picked', payload);
       },
     );

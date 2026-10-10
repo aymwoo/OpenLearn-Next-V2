@@ -13,9 +13,29 @@ export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const gradingService = new GradingService();
 
+  // V3 修复：横向越权 IDOR —— 学生此前可拉任意班成绩/考勤。此处统一班级成员门控。
+  const isStaffSession = (s: any) => s?.role === 'teacher' || s?.role === 'administrator' || s?.role === 'admin';
+  const isClassMember = (classId: string, s: any): boolean => {
+    if (!s) return false;
+    if (isStaffSession(s)) return true;
+    const sid = s.studentId || s.userId;
+    if (!sid || !classId) return false;
+    try {
+      const row = kernelContainer.db
+        .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
+        .get(classId, sid) as any;
+      return !!row;
+    } catch {
+      return false;
+    }
+  };
+
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/attendance-summary', requireAuth(), (req, res) => {
     try {
+      if (!isClassMember(req.params.classId, (req as any).session)) {
+        return res.status(403).json({ error: 'Not a class member' });
+      }
       const summary = gradingService.getAttendanceSummary(req.params.classId);
       res.json(summary);
     } catch (e: any) {
@@ -25,6 +45,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.get('/api/schedules/:scheduleId/attendance', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      if (!isStaffSession(session)) {
+        // 由 schedule 反查 class 再做成员校验
+        const sch = kernelContainer.db
+          .prepare('SELECT class_id FROM schedules WHERE id = ?')
+          .get(req.params.scheduleId) as any;
+        if (!sch || !isClassMember(sch.class_id, session)) {
+          return res.status(403).json({ error: 'Not a class member' });
+        }
+      }
       const attendance = gradingService.getScheduleAttendance(req.params.scheduleId);
       res.json(attendance);
     } catch (e: any) {
@@ -45,6 +75,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ── 2. 成绩权重配置 ────────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/grade-weights', requireAuth(), (req, res) => {
     try {
+      if (!isClassMember(req.params.classId, (req as any).session)) {
+        return res.status(403).json({ error: 'Not a class member' });
+      }
       const weights = gradingService.getGradeWeights(req.params.classId);
       res.json(weights);
     } catch (e: any) {
@@ -73,6 +106,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ── 3. 考试管理与分数录入 ──────────────────────────────────────────────────────
   app.get('/api/classes/:classId/exams', requireAuth(), (req, res) => {
     try {
+      if (!isClassMember(req.params.classId, (req as any).session)) {
+        return res.status(403).json({ error: 'Not a class member' });
+      }
       const exams = gradingService.listExams(req.params.classId);
       res.json(exams);
     } catch (e: any) {
@@ -93,7 +129,19 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.get('/api/exams/:examId/scores', requireAuth(), (req, res) => {
     try {
-      const scores = gradingService.getExamScores(req.params.examId);
+      const session = (req as any).session;
+      const scores: any = gradingService.getExamScores(req.params.examId);
+      if (isStaffSession(session)) {
+        res.json(scores);
+        return;
+      }
+      // 学生仅返本人行
+      const sid = session?.studentId || session?.userId;
+      const list = Array.isArray(scores) ? scores : (scores?.scores ?? scores?.data ?? []);
+      if (Array.isArray(list)) {
+        res.json(list.filter((r: any) => (r.student_id || r.studentId) === sid));
+        return;
+      }
       res.json(scores);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -115,8 +163,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/semester-grades', requireAuth(), (req, res) => {
     try {
       const classId = req.params.classId;
+      if (!isClassMember(classId, (req as any).session)) {
+        return res.status(403).json({ error: 'Not a class member' });
+      }
       const semesterName = (req.query.semesterName as string) || '2026年春季学期';
-      const result = gradingService.computeSemesterGrades(classId, semesterName);
+      const result: any = gradingService.computeSemesterGrades(classId, semesterName);
+      const session = (req as any).session;
+      if (!isStaffSession(session) && result && Array.isArray(result.students)) {
+        const sid = session?.studentId || session?.userId;
+        result.students = result.students.filter((s: any) => (s.student_id || s.studentId || s.id) === sid);
+      }
       res.json({ success: true, weights: result.weights, students: result.students });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -191,6 +247,12 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/students/:studentId/points-logs', requireAuth(), async (req, res) => {
     try {
       const { studentId } = req.params;
+      const session = (req as any).session;
+      // 学生仅允许查本人，教师/管理员放行
+      if (!isStaffSession(session)) {
+        const sid = session?.studentId || session?.userId;
+        if (sid !== studentId) return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
       const { classId } = req.query;
 
       const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);

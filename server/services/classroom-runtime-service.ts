@@ -172,6 +172,18 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
   ): Promise<{ success: boolean; stage: ClassroomLifecycleStage; reason?: string }> {
     const currentStage = await this.getStage(lessonId);
 
+    // P0-2 修复：环节合法性白名单，禁止任意跳阶段（如 PRE 直跳 ARCHIVED、已归档复活）
+    const ALLOWED: Record<string, string[]> = {
+      PRE_CLASS_READY: ['IN_CLASS_TEACHING'],
+      IN_CLASS_TEACHING: ['WRAP_UP_EXIT_TICKET'],
+      WRAP_UP_EXIT_TICKET: ['ARCHIVED_REPORT'],
+      ARCHIVED_REPORT: [],
+    };
+    const allowedNext = ALLOWED[currentStage] || [];
+    if (!allowedNext.includes(toStage)) {
+      return { success: false, stage: currentStage, reason: `Illegal transition ${currentStage} -> ${toStage}` };
+    }
+
     // Run all registered plugin guards.
     // D-3：默认 fail-close —— 守卫超时/抛错都拒绝流转（此前无超时且抛错仅记日志）。
     for (const [owner, guard] of this.stageGuards) {

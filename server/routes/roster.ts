@@ -34,7 +34,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/students', requireAuth(), (req, res) => {
+  app.get('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
       res.json(rosterService.listStudents(pg));
@@ -45,6 +45,29 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/students', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      const role = session?.role;
+      const isStaff = role === 'teacher' || role === 'administrator' || role === 'admin';
+      if (!isStaff) {
+        // 学生仅允许查看自己所在班级，且过滤敏感字段
+        const studentId = session?.studentId || session?.userId;
+        if (!studentId) return res.status(403).json({ error: 'Forbidden' });
+        const member = kernelContainer.db
+          .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
+          .get(req.params.id, studentId) as any;
+        if (!member) return res.status(403).json({ error: 'Not a class member' });
+        const rows = rosterService.getClassStudents(req.params.id) as any[];
+        return res.json(
+          rows.map((r) => ({
+            id: r.id,
+            student_number: r.student_number,
+            name: r.name,
+            avatar: r.avatar,
+            joined_at: r.joined_at,
+            created_at: r.created_at,
+          })),
+        );
+      }
       res.json(rosterService.getClassStudents(req.params.id));
     } catch (e: any) {
       sendSafeError(res, e);
@@ -87,9 +110,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   /**
-   * 预留给第三方插件/外部系统获取班级临时密码信息的扩展接口
+   * 班级临时口令：教师专属。P0-3 修复：此前任意登录可 GET 且带 UPDATE 副作用，
+   * 学生枚举 classId 即可盗取口令冒充上课。现收紧为教师/管理员。
    */
-  app.get('/api/classes/:id/passcode', requireAuth(), (req, res) => {
+  app.get('/api/classes/:id/passcode', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       res.json(rosterService.getClassPasscode(req.params.id));
     } catch (e: any) {
