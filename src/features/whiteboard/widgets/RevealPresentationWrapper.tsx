@@ -55,8 +55,8 @@ export function RevealPresentationWrapper({
   // Parse slides
   const slides = markdown
     .split(/(?:\r?\n|^)---(?:\r?\n|$)/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+    .map((s: string) => s.trim())
+    .filter((s: string) => s.length > 0);
 
   const totalSlides = fileType === 'md' ? Math.max(1, slides.length) : data.slideCount || 1;
 
@@ -148,7 +148,7 @@ export function RevealPresentationWrapper({
   useEffect(() => {
     if (!autoplay || mode !== 'ppt' || fileType !== 'md') return;
     const interval = setInterval(() => {
-      setSlideIndex((prev) => {
+      setSlideIndex((prev: number) => {
         const next = (prev + 1) % Math.max(1, slides.length);
         if (onElementUpdate) {
           onElementUpdate(elementId, { ...data, slideX: next });
@@ -309,7 +309,7 @@ export function RevealPresentationWrapper({
   const extractOutline = () => {
     const lines = markdown.split('\n');
     const headers: { text: string; level: number; lineIndex: number }[] = [];
-    lines.forEach((line, index) => {
+    lines.forEach((line: string, index: number) => {
       const match = line.match(/^(#{1,3})\s+(.*)$/);
       if (match) {
         headers.push({
@@ -830,7 +830,7 @@ export function RevealPresentationWrapper({
             {/* Scrollable document container */}
             <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8" ref={scrollContainerRef}>
               <div className="markdown-body prose prose-neutral max-w-none text-xs leading-relaxed text-slate-700">
-                {markdown.split('\n').map((line, idx) => {
+                {markdown.split('\n').map((line: string, idx: number) => {
                   const headerMatch = line.match(/^(#{1,3})\s+(.*)$/);
                   if (headerMatch) {
                     const level = headerMatch[1].length;

@@ -885,8 +885,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     return className;
   };
 
-  const findMatchedClass = (ocrClassName: string) => {
-    if (!ocrClassName) return null;
+  const findMatchedClass = (ocrClassName: string): ClassType | undefined => {
+    if (!ocrClassName) return undefined;
     const cleanOcr = ocrClassName.replace(/\s+/g, '').toLowerCase();
 
     // 1. Try exact/substring match
@@ -908,7 +908,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         return dbNum === ocrNum || dbNum.includes(ocrNum) || ocrNum.includes(dbNum);
       });
     }
-    return found || null;
+    return found;
   };
 
   const handleOcrImport = async () => {

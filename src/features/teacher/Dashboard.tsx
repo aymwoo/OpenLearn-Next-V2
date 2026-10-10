@@ -27,6 +27,7 @@ import { TopPerformersWidget } from './TopPerformersWidget';
 import { ClassroomCountdownWidget } from '../classroom/ClassroomCountdownWidget';
 import { ClassSummaryStats } from './ClassSummaryStats';
 import { useAppData } from '../../context/AppDataContext';
+import type { ToastType } from '../../hooks/useToast';
 
 export function Dashboard() {
   // C1-R3: 全部数据来自 AppDataContext（不再经 TeacherView props 透传）
@@ -171,7 +172,9 @@ export function Dashboard() {
               classes={classes}
               schedules={todaySchedules}
               students={students}
-              addToast={addToast}
+              addToast={(title: string, msg: string, type?: string) =>
+                addToast(title, msg, (type ?? 'info') as ToastType)
+              }
             />
           </div>
         ) : (
@@ -347,7 +350,9 @@ export function Dashboard() {
               classes={classes}
               schedules={todaySchedules}
               students={students}
-              addToast={addToast}
+              addToast={(title: string, msg: string, type?: string) =>
+                addToast(title, msg, (type ?? 'info') as ToastType)
+              }
             />
 
             {/* Stats Grid */}

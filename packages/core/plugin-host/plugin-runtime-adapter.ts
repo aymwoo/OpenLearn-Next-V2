@@ -110,6 +110,10 @@ export class PluginRuntimeAdapter implements IPluginRuntime {
   }
 
   public async reloadPlugin(pluginId: string, newCode?: string): Promise<void> {
+    // strict: PluginHost.reloadPlugin 要求 newSourceCode 必填；缺省时显式拒绝而非传入 undefined
+    if (newCode === undefined) {
+      throw new Error(`[PluginRuntimeAdapter] reloadPlugin "${pluginId}" requires newCode`);
+    }
     await this.pluginHost.reloadPlugin(pluginId, newCode);
   }
 }

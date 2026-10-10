@@ -157,9 +157,9 @@ describe('NodeEsmLoader + bundle E2E', () => {
     // Step 3: 验证 PluginModule 结构
     expect(mod).toBeDefined();
     expect(mod.default).toBeDefined();
-    expect(mod.default.manifest).toBeDefined();
-    expect(mod.default.manifest.id).toBe('ext-sample');
-    expect(typeof mod.default.activate).toBe('function');
+    expect(mod.default!.manifest).toBeDefined();
+    expect(mod.default!.manifest!.id).toBe('ext-sample');
+    expect(typeof mod.default!.activate).toBe('function');
   });
 
   // 端到端 schema 验证

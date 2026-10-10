@@ -123,13 +123,13 @@ describe('setupPresence', () => {
     m.globalEmitted.length = 0;
     socket.trigger('enter-lesson', { studentId: 's1', lessonId: 'L1' });
 
-    const updates = m.globalEmitted.filter((e) => e.event === 'presence-update');
+    const updates = m.globalEmitted.filter((e: Emitted) => e.event === 'presence-update');
     expect(updates[updates.length - 1]).toMatchObject({
       payload: { onlineStudentIds: ['s1'], activeStudentLessons: { s1: 'L1' } },
     });
     // segment map empty → no student-active-segment-changed (neither socket nor global)
-    expect(socket._emitted.find((e) => e.event === 'student-active-segment-changed')).toBeUndefined();
-    expect(m.globalEmitted.some((e) => e.event === 'student-active-segment-changed')).toBe(false);
+    expect(socket._emitted.find((e: Emitted) => e.event === 'student-active-segment-changed')).toBeUndefined();
+    expect(m.globalEmitted.some((e: Emitted) => e.event === 'student-active-segment-changed')).toBe(false);
   });
 
   it('whiteboard-event publishes to the event bus and refreshes both the lesson room and the broadcast room', () => {
@@ -225,7 +225,7 @@ describe('setupPresence', () => {
 
     // 历史版本三重投递（lesson 房间 + class 房间 + 全局），学生同时命中多房间会收到 2-3 次重复弹窗。
     // 现收敛为单次全局广播：io.emit 是任何房间定向投递的超集，语义等价。
-    const pickedEvents = m.globalEmitted.filter((e) => e.event === 'student-picked');
+    const pickedEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'student-picked');
     expect(pickedEvents.length).toBe(1);
     expect(pickedEvents[0].scope).toBe('global');
     expect(pickedEvents[0].payload).toMatchObject({
@@ -241,7 +241,7 @@ describe('setupPresence', () => {
     const socket = m.connect();
     socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
 
-    const ackEvents = m.globalEmitted.filter((e) => e.event === 'student-acknowledged');
+    const ackEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged');
     expect(ackEvents.length).toBe(1);
     expect(ackEvents[0].payload).toEqual({ studentId: 's1', lessonId: 'L1' });
   });
@@ -380,7 +380,7 @@ describe('setupPresence', () => {
       socket.trigger('join-room', 'class-c1');
       socket.trigger('join-room', 'class-c2');
       expect(socket._joinedRooms).toEqual(['class-c1']);
-      expect(socket._emitted.some((e) => e.event === 'error')).toBe(true);
+      expect(socket._emitted.some((e: Emitted) => e.event === 'error')).toBe(true);
     });
 
     it('教师可加入任意班级与课节房间', () => {
@@ -427,22 +427,22 @@ describe('setupPresence', () => {
       socket._joinedRooms.length = 0;
       socket.trigger('enter-lesson', { studentId: 's1', lessonId: 'L_live' });
       expect(socket._joinedRooms).toEqual([]); // 未 join 课节房间（register-student join 的班级房间已清空重计）
-      expect(socket._emitted.some((e) => e.event === 'error')).toBe(true);
+      expect(socket._emitted.some((e: Emitted) => e.event === 'error')).toBe(true);
     });
 
     it('whiteboard-update：教师放行，学生仅可写自己的伪课节房间', () => {
       const m = buildMocks();
       const teacher = m.connect('sock-t', teacherSession);
       teacher.trigger('whiteboard-update', { roomId: 'L1', type: 'temp-draw', payload: {} });
-      expect(teacher._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1);
+      expect(teacher._emitted.filter((e: Emitted) => e.scope === 'socket-room')).toHaveLength(1);
 
       const student = m.connect('sock-s', studentSession);
       student.trigger('whiteboard-update', { roomId: 'assignment-a1-student-s1', type: 'temp-draw', payload: {} });
-      expect(student._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1);
+      expect(student._emitted.filter((e: Emitted) => e.scope === 'socket-room')).toHaveLength(1);
 
       student.trigger('whiteboard-update', { roomId: 'L1', type: 'temp-draw', payload: {} });
       student.trigger('whiteboard-update', { roomId: 'assignment-a1-student-s2', type: 'temp-draw', payload: {} });
-      expect(student._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1); // 仍只有自己房间那条
+      expect(student._emitted.filter((e: Emitted) => e.scope === 'socket-room')).toHaveLength(1); // 仍只有自己房间那条
     });
 
     it('whiteboard-event：学生向课节房间注入 refresh 被拒（EventBus 也不写）', () => {
@@ -463,10 +463,10 @@ describe('setupPresence', () => {
       const m = buildMocks();
       const socket = m.connect('sock-1', studentSession);
       socket.trigger('student-acknowledge-pick', { studentId: 's2', lessonId: 'L1' });
-      expect(m.globalEmitted.filter((e) => e.event === 'student-acknowledged')).toHaveLength(0);
+      expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged')).toHaveLength(0);
 
       socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
-      expect(m.globalEmitted.filter((e) => e.event === 'student-acknowledged')).toHaveLength(1);
+      expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged')).toHaveLength(1);
     });
   });
 

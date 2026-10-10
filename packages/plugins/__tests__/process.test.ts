@@ -100,7 +100,7 @@ describe('ProcessPlugin', () => {
 
   it('should successfully register, activate and run process commands', async () => {
     const pluginId = '@openlearn/plugin-process';
-    pluginHost.registerPreloadedPlugin(pluginId, ProcessPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, ProcessPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     db.prepare(
       'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',

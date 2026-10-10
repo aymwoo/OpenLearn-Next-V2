@@ -50,7 +50,7 @@ export function parseElementData<T = Record<string, any>>(
     return parsed;
   } catch (error) {
     console.warn('[parseElementData] Failed to parse element data:', error, rawJson);
-    return fallback;
+    return defaultFallback;
   }
 }
 

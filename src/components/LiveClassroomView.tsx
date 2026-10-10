@@ -1620,7 +1620,7 @@ export function LiveClassroomView({
                     </button>
                     <button
                       type="button"
-                      onClick={() => whiteboardRef.current?.addPage()}
+                      onClick={() => whiteboardRef.current?.addPage?.()}
                       className="p-1 rounded-md text-muted hover:text-primary-theme hover:bg-primary-theme/10 transition-colors cursor-pointer"
                       title={lang === 'zh' ? '新建白板页面' : 'Add Whiteboard Page'}
                     >
@@ -1657,7 +1657,7 @@ export function LiveClassroomView({
                           return (
                             <div
                               key={p.id || idx}
-                              onClick={() => whiteboardRef.current?.switchPage(idx)}
+                              onClick={() => whiteboardRef.current?.switchPage?.(idx)}
                               className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
                                 isActive
                                   ? 'bg-primary-theme text-white font-semibold shadow-xs ring-1 ring-primary-theme/30'

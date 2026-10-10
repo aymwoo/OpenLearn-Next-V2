@@ -118,7 +118,8 @@ export class PlatformContainer {
             scope: mapScopeKind(desc.scopeKind) as ServiceScopeType,
             dependencies: desc.dependencies,
             metadata: desc.metadata,
-            factory: (scope: ServiceScope) => this.buildInstance(desc, scope),
+            // strict: ServiceDescriptor.factory 接受 unknown/scope 缺省，运行时恒由 ServiceResolver 传入 ServiceScope
+            factory: (scope?: unknown) => this.buildInstance(desc, scope as ServiceScope),
           };
 
     this.registry.register(serviceDescriptor);

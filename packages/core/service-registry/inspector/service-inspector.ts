@@ -13,12 +13,13 @@ export class ServiceInspector {
   ): ReadonlyArray<ServiceInspectionInfo> {
     const list: ServiceInspectionInfo[] = descriptors.map((desc) => ({
       id: desc.id,
-      namespace: desc.namespace,
-      serviceType: desc.serviceType,
-      version: desc.version,
-      scope: desc.scope,
+      // strict: ServiceDescriptor 可选元数据缺省时用合法 fallback（仅诊断展示，不影响注册表行为）
+      namespace: desc.namespace ?? '',
+      serviceType: desc.serviceType ?? desc.id,
+      version: desc.version ?? '0.0.0',
+      scope: desc.scope ?? 'Singleton',
       lifecycleState: lifecycleManager.getLifecycleState(desc.id),
-      dependencies: desc.dependencies,
+      dependencies: desc.dependencies ?? [],
     }));
 
     return Object.freeze(list);

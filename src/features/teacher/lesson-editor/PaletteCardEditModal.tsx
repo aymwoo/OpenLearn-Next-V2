@@ -55,7 +55,7 @@ export function PaletteCardEditModal({ config, lang, initialData, onConfirm, onC
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-xl ${theme.iconBg} ${theme.iconText}`}>
-              <Icon size={18} />
+              {Icon ? <Icon size={18} /> : null}
             </div>
             <h2 className="font-bold text-gray-800 text-base">
               {lang === 'zh' ? `编辑：${config.labelZh}` : `Edit: ${config.labelEn}`}

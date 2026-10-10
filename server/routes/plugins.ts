@@ -233,11 +233,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         const src: UpdateSource | undefined = manifest.updateSource;
         if (!src?.type || !src?.repo) continue;
         const result = await checkVersion(src, manifest.version || '0.0.0');
+        // strict: checkVersion 回包自带 installedVersion，与本地字面量同值；后置显式值避免重复指定被覆盖
         results.push({
           pluginId: p.id,
           manifestId: manifest.id || p.id,
-          installedVersion: manifest.version || '0.0.0',
           ...result,
+          installedVersion: manifest.version || '0.0.0',
         });
       }
 

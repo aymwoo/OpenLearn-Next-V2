@@ -576,6 +576,12 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
   // ══════════════════════════════════════════════════════════════════════════════
   describe('阶段 5: 课堂会话终态锁定与归档 (Session Archival & Immutability)', () => {
     it('教师结束下课并将会话状态流转至 ARCHIVED_REPORT 结课阶段', async () => {
+      // P0-2：阶段白名单要求经 WRAP_UP_EXIT_TICKET 才能归档
+      const wrapRes = await post(`/api/classroom/sessions/${lessonId}/stage`, teacherToken, {
+        stage: 'WRAP_UP_EXIT_TICKET',
+        classId,
+      });
+      expect(wrapRes.status).toBe(200);
       const endRes = await post(`/api/classroom/sessions/${lessonId}/stage`, teacherToken, {
         stage: ARCHIVED_REPORT_STAGE,
         classId,

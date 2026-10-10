@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react';
 import {
   Activity,
   Loader2,
@@ -38,13 +39,13 @@ export interface ClassAssignmentsPanelProps {
   setSuggestedObjectives: (...args: any[]) => void;
   setSuggestedQuestions: (...args: any[]) => void;
   setIsQuizGeneratorOpen: (...args: any[]) => void;
-  setClassSubmissionFilters: (...args: any[]) => void;
+  setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
   setActiveStudentId: (...args: any[]) => void;
   setSelectedAssignment: (...args: any[]) => void;
   setStudentViewStatus: (...args: any[]) => void;
   setActiveRole: (...args: any[]) => void;
   isGrading: Record<string, boolean>;
-  setIsGrading: (...args: any[]) => void;
+  setIsGrading: Dispatch<SetStateAction<Record<string, boolean>>>;
   fetchClassDashboard: (...args: any[]) => void;
   get30DayAverageWarning: (studentId: string, classId: string) => number | null;
 }

@@ -21,7 +21,8 @@ afterEach(() => {
   delete process.env.MIGRATION_CHECKSUM_STRICT;
 });
 
-const mig = (name: string, up: string, down?: string): Migration => ({ name, up, down });
+const mig = (name: string, up: string, down?: string): Migration =>
+  ({ name, up, ...(down === undefined ? {} : { down }) }) as Migration;
 
 describe('迁移 · checksum 校验', () => {
   it('未篡改时无漂移', () => {

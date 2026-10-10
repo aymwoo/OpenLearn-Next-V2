@@ -672,7 +672,7 @@ export function ClassroomInteractiveCockpit({
       <ClassroomAttributionModal
         isOpen={isAttributionModalOpen}
         onClose={() => setIsAttributionModalOpen(false)}
-        classId={classId}
+        classId={classId ?? null}
         lessonId={lessonId}
         students={students}
         lang={lang}
@@ -684,7 +684,7 @@ export function ClassroomInteractiveCockpit({
       <ClassroomLeaderboardModal
         isOpen={isLeaderboardModalOpen}
         onClose={() => setIsLeaderboardModalOpen(false)}
-        classId={classId}
+        classId={classId ?? null}
         lessonId={lessonId}
         students={students}
         lang={lang}

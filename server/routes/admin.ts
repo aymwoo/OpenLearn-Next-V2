@@ -54,7 +54,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
       );
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
-      const imported = [];
+      const imported: any[] = [];
 
       // DATA-INT-01: 整批导入包事务 —— 任一学生落库失败整体回滚，不残留半截班级
       const importTx = db.transaction(() => {
@@ -121,7 +121,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
       );
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
-      const imported = [];
+      const imported: any[] = [];
       for (const st of students) {
         const stName = st.name;
         const stEmail = st.email || '';

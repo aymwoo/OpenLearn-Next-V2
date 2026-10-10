@@ -540,7 +540,7 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
       autoRecordRaw === undefined ? (existing?.auto_record_enabled ?? false) : isTruthyFlag(autoRecordRaw),
     auto_record_min_completion:
       autoRecordMinCompletion !== undefined
-        ? clamp(autoRecordMinCompletion, 0, 1)
+        ? clamp(autoRecordMinCompletion ?? 0, 0, 1)
         : (existing?.auto_record_min_completion ?? 0),
     auto_record_strategy:
       strategyRaw === undefined || strategyRaw === null || String(strategyRaw).trim() === ''

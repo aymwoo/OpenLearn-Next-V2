@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, type SetStateAction } from 'react';
 import { parseCSV } from '../utils/pluginParsers.js';
 import {
   fetchDbStatus,
@@ -732,8 +732,8 @@ export function useAppComposer() {
     }
   }, [activeStudentId]);
 
-  const setExpandedStudentId = (id: string | null) => {
-    _setExpandedStudentId(id);
+  const setExpandedStudentId = (value: SetStateAction<string | null>) => {
+    _setExpandedStudentId(value);
   };
   const [isGeneratingAssignment, setIsGeneratingAssignment] = useState<string | null>(null);
   const [assignmentSortOrder, setAssignmentSortOrder] = useState<'dueDate' | 'status' | 'avgScore'>('dueDate');
@@ -871,7 +871,7 @@ export function useAppComposer() {
           store.addPlugin({
             id: plugin.id,
             name: plugin.name,
-            version: plugin.version,
+            version: plugin.version ?? '',
             state: PluginState.INSTALLED,
             executionMode: 'inline',
             // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
@@ -885,7 +885,7 @@ export function useAppComposer() {
             usePluginHostStore.setState((s) => ({
               activePlugins: s.activePlugins.map((p) =>
                 p.id === plugin.id
-                  ? { ...p, version: plugin.version, name: plugin.name, capabilitiesProposed: declaredCapabilities }
+                  ? { ...p, version: plugin.version ?? '', name: plugin.name, capabilitiesProposed: declaredCapabilities }
                   : p,
               ),
             }));

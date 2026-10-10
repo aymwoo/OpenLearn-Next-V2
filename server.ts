@@ -128,7 +128,8 @@ async function startServer() {
     console.error('[Migration] Failed to run database migrations:', err);
   }
 
-  await runStartupMigrations(kernelContainer.db);
+  // strict: Database 与 MigrationDb 端口类型结构漂移（better-sqlite3 Statement 泛型），运行时相容
+  await runStartupMigrations(kernelContainer.db as unknown as import('./server/bootstrap-db.js').MigrationDb);
 
   await kernelContainer.ready;
 
@@ -469,7 +470,8 @@ async function startServer() {
   // Realtime bridge: forward kernel domain events to Socket.IO clients.
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed
   // without changing broadcast behavior. See server/__tests__/realtime-bridge.test.ts.
-  setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db });
+  // strict: Database 与 BridgeDb 端口类型结构漂移（better-sqlite3 Statement 泛型），运行时相容
+  setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db as unknown as import('./server/realtime-bridge.js').BridgeDb });
 
   // P2: ai.context.provider —— 把插件上下文注册表委托给 kernel AIService
   // （Inline 插件经 ctx.services.ai.registerAIContextProvider 注册的切片，

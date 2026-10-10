@@ -480,7 +480,9 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         setSelectedLesson={setSelectedLesson}
         setStudentViewStatus={setStudentViewStatus}
         setSelectedAssignment={setSelectedAssignment}
-        addToast={addToast}
+        addToast={(title: string, description: string, type?: string) =>
+          addToast(title, description, type ?? 'info')
+        }
         lang={lang}
         onExpandWidget={handleExpandWidget}
       />

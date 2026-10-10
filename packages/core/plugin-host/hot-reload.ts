@@ -63,8 +63,8 @@ export class FileWatcher {
       }
     });
 
-    this.watcher.on('error', (err: Error) => {
-      console.error('[FileWatcher] chokidar error:', err.message);
+    this.watcher.on('error', (err: unknown) => {
+      console.error('[FileWatcher] chokidar error:', err instanceof Error ? err.message : String(err));
     });
 
     this.watching = true;

@@ -212,38 +212,36 @@ export function AppHeader(props: AppHeaderProps) {
                 </option>
               ))}
             </select>
-            {(setActiveRole || studentPreviewTab) && (
-              <button
-                type="button"
-                onClick={() => {
-                  // 备课预览标签页内没有教师端可回，改为关闭该标签页
-                  if (studentPreviewTab) {
-                    window.close();
-                    return;
-                  }
-                  setActiveRole?.('teacher');
-                }}
-                className="ml-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                title={
-                  lang === 'zh'
-                    ? studentPreviewTab
-                      ? '关闭此学生视角预览标签页'
-                      : '退出模拟学生并返回教师端工作台'
-                    : studentPreviewTab
-                      ? 'Close this student preview tab'
-                      : 'Exit student view and return to teacher workspace'
+            <button
+              type="button"
+              onClick={() => {
+                // 备课预览标签页内没有教师端可回，改为关闭该标签页
+                if (studentPreviewTab) {
+                  window.close();
+                  return;
                 }
-              >
-                {studentPreviewTab ? <X size={12} /> : <LogOut size={12} />}
-                {lang === 'zh'
+                setActiveRole?.('teacher');
+              }}
+              className="ml-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+              title={
+                lang === 'zh'
                   ? studentPreviewTab
-                    ? '关闭预览'
-                    : '返回教师端'
+                    ? '关闭此学生视角预览标签页'
+                    : '退出模拟学生并返回教师端工作台'
                   : studentPreviewTab
-                    ? 'Close Tab'
-                    : 'Exit Student View'}
-              </button>
-            )}
+                    ? 'Close this student preview tab'
+                    : 'Exit student view and return to teacher workspace'
+              }
+            >
+              {studentPreviewTab ? <X size={12} /> : <LogOut size={12} />}
+              {lang === 'zh'
+                ? studentPreviewTab
+                  ? '关闭预览'
+                  : '返回教师端'
+                : studentPreviewTab
+                  ? 'Close Tab'
+                  : 'Exit Student View'}
+            </button>
           </div>
         )}
       </div>
@@ -284,9 +282,11 @@ export function AppHeader(props: AppHeaderProps) {
                         } catch (e) {
                           console.error(e);
                         }
-                        const newRead = new Set(readNotifications);
-                        studentNotifications.forEach((n) => newRead.add(n.id));
-                        setReadNotifications(newRead);
+                        setReadNotifications((prev: Set<string>) => {
+                          const nextRead = new Set(prev);
+                          studentNotifications.forEach((n) => nextRead.add(n.id));
+                          return nextRead;
+                        });
                       }}
                       className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
                     >
@@ -314,9 +314,7 @@ export function AppHeader(props: AppHeaderProps) {
                                     body: JSON.stringify({ notificationId: notif.id }),
                                   }).catch(console.error);
                                 }
-                                const newRead = new Set(readNotifications);
-                                newRead.add(notif.id);
-                                setReadNotifications(newRead);
+                                setReadNotifications((prev: Set<string>) => new Set(prev).add(notif.id));
                               }
                               const assocAssignment = studentDashboardData?.assignments?.find(
                                 (a: any) => a.id === notif.relatedId,

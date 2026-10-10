@@ -438,7 +438,8 @@ export class Kernel {
         }
 
         // Register in PluginHost's preloadedPlugins map
-        this.pluginHost.registerPreloadedPlugin(plugin.id, plugin.mod);
+        // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+        this.pluginHost.registerPreloadedPlugin(plugin.id, plugin.mod as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]);
 
         // Activate plugin
         await this.pluginHost.activatePlugin(plugin.id);
@@ -532,7 +533,10 @@ export class Kernel {
       if (hasLessonIdColumn === null) {
         const columns = this.db.prepare('PRAGMA table_info(events)').all() as { name: string }[];
         hasLessonIdColumn = columns.some((c) => c.name === 'lesson_id');
-        stmt = this.db.prepare(hasLessonIdColumn ? INSERT_EVENT_WITH_LESSON : INSERT_EVENT_LEGACY);
+        // strict: better-sqlite3 Statement 泛型与端口类型结构漂移，运行时相容
+        stmt = this.db.prepare(hasLessonIdColumn ? INSERT_EVENT_WITH_LESSON : INSERT_EVENT_LEGACY) as unknown as {
+          run: (...params: unknown[]) => unknown;
+        };
       }
 
       if (hasLessonIdColumn) {

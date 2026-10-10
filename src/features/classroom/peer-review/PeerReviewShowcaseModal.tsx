@@ -396,7 +396,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
               reactions={reactions}
               onReactionClick={handleReactionClick}
               // 已同步台数来自调用方的真实投放数据；无数据时传 null 显示「—」
-              syncedStudentsCount={syncedStudentsCount ?? null}
+              syncedStudentsCount={syncedStudentsCount}
             />
           </div>
 

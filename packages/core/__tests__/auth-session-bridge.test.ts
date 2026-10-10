@@ -40,9 +40,9 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       // 验证 client_sessions 会话有效
       const session = getValidSession(res.token);
       expect(session).toBeDefined();
-      expect(session.userId).toBe(testStudentId);
-      expect(session.role).toBe('student');
-      expect(session.name).toBe('LTI 测试学生');
+      expect(session!.userId).toBe(testStudentId);
+      expect(session!.role).toBe('student');
+      expect(session!.name).toBe('LTI 测试学生');
     });
 
     it('为教师创建会话并自动同步用户记录', async () => {
@@ -67,8 +67,8 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       // 验证 client_sessions 会话有效
       const session = getValidSession(res.token);
       expect(session).toBeDefined();
-      expect(session.userId).toBe(testTeacherId);
-      expect(session.role).toBe('teacher');
+      expect(session!.userId).toBe(testTeacherId);
+      expect(session!.role).toBe('teacher');
     });
 
     it('参数不合法时抛出清晰异常', async () => {

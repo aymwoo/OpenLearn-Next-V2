@@ -334,7 +334,7 @@ export class WorkerRegistry {
       sourceCode: string;
       serviceTokens: string[];
       eventBus: unknown;
-      pluginDir: string;
+      pluginDir?: string;
     },
   ): void {
     let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
@@ -916,7 +916,7 @@ export class WorkerManager {
       }, ms);
     };
 
-    const onWorkerExit = (code: number) => {
+    const onWorkerExit = (code: number | null) => {
       clearActivationTimer();
       if (activationReject) {
         activationReject(
@@ -1040,7 +1040,12 @@ export class WorkerManager {
         await serviceHost.dispose();
       } catch {}
       try {
-        await worker.terminate();
+        // strict: process 隔离模式下 worker 未创建（childProcess 路径），走 isolate 终止；thread 模式保持原路径
+        if (worker) {
+          await worker.terminate();
+        } else {
+          await isolate.terminate();
+        }
       } catch {
         // 静默
       }

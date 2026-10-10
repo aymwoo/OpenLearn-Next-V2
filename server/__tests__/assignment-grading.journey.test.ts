@@ -64,7 +64,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
   beforeAll(async () => {
     const now = Date.now();
     const expiresAt = now + 24 * 3600 * 1000;
-    await runStartupMigrations(db);
+    await runStartupMigrations(db as unknown as import('../bootstrap-db.js').MigrationDb); // strict: Database/MigrationDb 端口漂移，运行时相容
 
     // 清理可能遗留的历史测试数据
     try {

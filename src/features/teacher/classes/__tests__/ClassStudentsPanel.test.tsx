@@ -55,7 +55,7 @@ function buildProps() {
     handleBatchResetPassword: vi.fn(),
     handleBatchTransferStudents: vi.fn(),
     handleBatchSetLockedLesson: vi.fn(),
-    expandedStudentId: null,
+    expandedStudentId: null as string | null,
     setExpandedStudentId: vi.fn(),
     fetchStudentProgress: vi.fn().mockResolvedValue(undefined),
     studentProgressMap: {} as Record<string, StudentProgressType[]>,

@@ -332,12 +332,13 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         }
       }
 
+      const currentStudentId = activeStudentIdRef.current;
       const isCurrentStudent =
         activeRoleRef.current === 'student' &&
-        activeStudentIdRef.current &&
-        data.studentId === activeStudentIdRef.current;
+        currentStudentId &&
+        data.studentId === currentStudentId;
 
-      if (isCurrentStudent && !isDuplicate) {
+      if (isCurrentStudent && currentStudentId && !isDuplicate) {
         // 1. 被抽中的学生：屏幕级强提示（全屏抽中弹窗 + 提示音效 + 强提醒Toast）。
         //    刻意不写入通知消息列表——点名是即时互动，需要的是屏幕级提醒而非铃铛里的一条静默记录。
         setPickedAlertDataRef.current?.({
@@ -353,7 +354,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
 
         addToast(langRef.current === 'zh' ? '⚡️ 闪电抽问：老师抽中了你！' : '⚡️ Classroom Pick Alert', msg, 'warning');
 
-        fetchStudentDashboard(activeStudentIdRef.current);
+        fetchStudentDashboard(currentStudentId);
       } else if (activeRoleRef.current === 'student' && !isCurrentStudent && !isDuplicate) {
         // 2. 全班其他学生：向全班提示被抽中的学生
         const studentName = data.studentName || '同学';

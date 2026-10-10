@@ -81,7 +81,9 @@ export interface ClassesViewProps {
   studentProgressMap: Record<string, StudentProgressType[]>;
   studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
   setStudentActiveTabs: Dispatch<SetStateAction<Record<string, 'progress' | 'settings' | 'notes'>>>;
-  setStudents: (students: StudentType[]) => void;
+  setStudents:
+    | Dispatch<SetStateAction<StudentType[]>>
+    | ((students: StudentType[] | ((prev: StudentType[]) => StudentType[])) => void);
   fetchClassStudents: (id: string) => Promise<void>;
   fetchStudents: () => Promise<void>;
   setImportError: Dispatch<SetStateAction<string | null>>;

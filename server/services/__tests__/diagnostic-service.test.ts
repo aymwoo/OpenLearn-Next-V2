@@ -21,7 +21,7 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
 
   beforeAll(async () => {
     service = new DiagnosticService(db, mockPublisher as any);
-    await runStartupMigrations(db);
+    await runStartupMigrations(db as unknown as import('../../bootstrap-db.js').MigrationDb); // strict: Database/MigrationDb 端口漂移，运行时相容
     const now = Date.now();
 
     // 清理可能存在的历史脏数据

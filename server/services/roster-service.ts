@@ -232,8 +232,14 @@ export class RosterService {
 
   public deleteClassCascade(classId: string): void {
     const tx = this.db.transaction(() => {
-      // P0-1 修复：删班只删本班域，绝不删除 students 本体（跨班学生需保留）。
-      // students 本体仅当其不再属于任何班级（孤儿）时才可 GC，且不在此默认执行。
+      // P0-1 修复：删班只删本班域。先记录本班学生，绝不删除跨班学生的全局行；
+      // 删选课后成为孤儿（不属于任何班级）的学生，才 GC 其无归属的全局残留，
+      // students 本体默认保留（需二次确认的 GDPR 流程才删）。
+      const memberIds = (
+        this.db.prepare('SELECT student_id FROM class_students WHERE class_id = ?').all(classId) as {
+          student_id: string;
+        }[]
+      ).map((r) => r.student_id);
       // 1. 先清本班的选课关系（后续孤儿判定依赖此结果）
       this.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
       this.db.prepare(
@@ -250,6 +256,24 @@ export class RosterService {
       } catch {}
       this.db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
       this.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+
+      // 2. 孤儿 GC：本班学生中删选课后已不属于任何班级的，仅清其无归属全局残留
+      const stillEnrolled = this.db.prepare('SELECT 1 AS ok FROM class_students WHERE student_id = ? LIMIT 1');
+      const delProgress = this.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?');
+      const delReadNotif = this.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?');
+      const delSubByStudent = this.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?');
+      for (const sid of memberIds) {
+        if (!stillEnrolled.get(sid)) {
+          delProgress.run(sid);
+          try {
+            delReadNotif.run(sid);
+          } catch {}
+          try {
+            this.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(sid);
+          } catch {}
+          delSubByStudent.run(sid);
+        }
+      }
     });
 
     tx();

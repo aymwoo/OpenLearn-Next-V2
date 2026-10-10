@@ -121,7 +121,7 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
     const now = Date.now();
     const expiresAt = now + 24 * 60 * 60 * 1000;
     const db = kernelContainer.db;
-    await runStartupMigrations(db);
+    await runStartupMigrations(db as unknown as import('../bootstrap-db.js').MigrationDb); // strict: Database/MigrationDb 端口漂移，运行时相容
 
     // 清理可能遗留的历史旅程数据
     try {
@@ -617,8 +617,10 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
       checkZero('SELECT COUNT(*) as count FROM schedules WHERE class_id = ?', primaryClassId);
       // 8. attendance
       checkZero('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?', schedId);
-      // 9. 该班专属学生已被级联清除
-      checkZero('SELECT COUNT(*) as count FROM students WHERE id = ?', studentAliceId);
+      // 9. P0-1 修复：删班不再删除 students 本体（此前跨班学生会被误删全局行）。
+      // 学生身份默认保留（彻底擦除走 GDPR 流程），仅其无归属的全局残留被 GC。
+      const aliceRow = db.prepare('SELECT COUNT(*) as count FROM students WHERE id = ?').get(studentAliceId) as any;
+      expect(aliceRow.count).toBe(1);
       // 10. 学生做题进度归零
       checkZero('SELECT COUNT(*) as count FROM student_lesson_progress WHERE student_id = ?', studentAliceId);
       // 11. 学生考勤记录归零

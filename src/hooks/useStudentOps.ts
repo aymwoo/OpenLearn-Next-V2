@@ -49,6 +49,7 @@ export function useStudentOps(deps: {
 
   const submitQuizAssignment = async (isTimeLimitExpired = false) => {
     if (!selectedAssignment) return;
+    if (!activeStudentId) return;
     const isMcq =
       selectedAssignment?.content && selectedAssignment.content.startsWith('{"quizType":"mcq_learning_objectives"');
     const contentToSubmit = isMcq ? JSON.stringify(quizStudentAnswersRef.current) : 'Submitted via Whiteboard';
@@ -62,7 +63,7 @@ export function useStudentOps(deps: {
         if (isTimeLimitExpired) {
           alert('Time is up! Your assessment was successfully submitted automatically.');
         }
-        await fetchStudentDashboard(activeStudentId!);
+        await fetchStudentDashboard(activeStudentId);
         setStudentViewStatus('dashboard');
         setSelectedAssignment(null);
       }

@@ -17,8 +17,9 @@ describe('LMS Theme Bridge & Sandboxed Synchronization', () => {
     vi.restoreAllMocks();
   });
 
-  it('broadcastThemeToIframes posts LMS_HOST_COMMAND and LMS_THEME_CHANGED to all iframes', () => {
+  it('broadcastThemeToIframes posts LMS_HOST_COMMAND and LMS_THEME_CHANGED to managed iframes only', () => {
     const iframe1 = document.createElement('iframe');
+    iframe1.setAttribute('data-lms-bridge', '1');
     const iframe2 = document.createElement('iframe');
     container.appendChild(iframe1);
     container.appendChild(iframe2);
@@ -63,12 +64,33 @@ describe('LMS Theme Bridge & Sandboxed Synchronization', () => {
       '*',
     );
 
-    expect(postMessageSpy2).toHaveBeenCalledTimes(2);
+    // 未标记 data-lms-bridge 的 iframe 不投递
+    expect(postMessageSpy2).not.toHaveBeenCalled();
+  });
+
+  it('broadcastThemeToIframes skips unmarked iframes (LTI embeds / third-party content)', () => {
+    const managed = document.createElement('iframe');
+    managed.setAttribute('data-lms-bridge', '1');
+    const foreign = document.createElement('iframe');
+    container.appendChild(managed);
+    container.appendChild(foreign);
+
+    const managedSpy = vi.fn();
+    const foreignSpy = vi.fn();
+    Object.defineProperty(managed, 'contentWindow', { value: { postMessage: managedSpy }, writable: true });
+    Object.defineProperty(foreign, 'contentWindow', { value: { postMessage: foreignSpy }, writable: true });
+
+    broadcastThemeToIframes('sapphire-classic', {});
+    // V5 修复：未标记的同页 iframe 不再收到主题广播（防嗅探）
+    expect(foreignSpy).not.toHaveBeenCalled();
+    expect(managedSpy).toHaveBeenCalledTimes(2);
   });
 
   it('tolerates postMessage errors silently without interrupting', () => {
     const errorIframe = document.createElement('iframe');
+    errorIframe.setAttribute('data-lms-bridge', '1');
     const goodIframe = document.createElement('iframe');
+    goodIframe.setAttribute('data-lms-bridge', '1');
     container.appendChild(errorIframe);
     container.appendChild(goodIframe);
 

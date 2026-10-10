@@ -45,6 +45,10 @@ export class PluginLifecycleManager implements IPluginLifecycleManager {
   }
 
   public async reloadPlugin(pluginId: string, newCode?: string): Promise<void> {
+    // strict: PluginHost.reloadPlugin 要求 newSourceCode 必填；缺省时沿用“无新源码即原地重载”语义此处显式守卫
+    if (newCode === undefined) {
+      throw new Error(`[PluginLifecycleManager] reloadPlugin "${pluginId}" requires newCode`);
+    }
     await this.pluginHost.reloadPlugin(pluginId, newCode);
   }
 

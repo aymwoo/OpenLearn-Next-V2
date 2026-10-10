@@ -37,7 +37,9 @@ export function registerBridgeRoutes(ctx: ServerContext) {
   app.get('/runtime/:uuid/*', (req, res) => {
     try {
       const { uuid } = req.params;
-      let subpath = req.params[0] || '';
+      // strict: express params 类型仅声明 uuid，通配段经 Record 收窄读取（运行时相容）
+      const params = req.params as unknown as Record<string, string | undefined>;
+      let subpath = params[0] || '';
 
       // SEC-AUTH: /runtime 原先完全无鉴权 —— 未认证者可读取任意课件文件，且触发
       // courseware 行自动登记（INSERT）与磁盘自愈写。沙箱 iframe 的请求不带会话

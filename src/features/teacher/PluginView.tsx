@@ -16,7 +16,7 @@ export interface PluginViewProps {
   onInstall?: (code?: string) => Promise<void> | void;
   onZipUpload?: (
     file: File,
-    executionMode: 'worker' | 'inline',
+    executionMode: 'worker' | 'inline' | 'process',
     opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
   ) => Promise<void>;
   onToggle?: (id: string) => Promise<void>;

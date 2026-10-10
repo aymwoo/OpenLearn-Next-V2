@@ -5,6 +5,7 @@
 
 import { PlatformBuilder } from '../builder/platform-builder.js';
 import { PlatformBuilderResult } from '../builder/builder-types.js';
+import { PlatformStage } from '../types/index.js';
 import { StartupAdapterContext, AdapterState } from './adapter-types.js';
 import { BootstrapRegistration } from './bootstrap-registration.js';
 import { PipelineResult } from '../pipeline/pipeline-types.js';
@@ -57,13 +58,13 @@ export class ServerBootstrapAdapter {
     const pipelineResult = await builderResult.pipeline.execute({
       startupTimestamp: Date.now(),
       startupOptions: {},
-      startupStage: builderResult.platformContext.currentStage,
+      startupStage: builderResult.platformContext.currentStage ?? PlatformStage.Created,
       startupToken: { token: 'srv_adapter_token', isCancelled: false, cancel: () => {} },
       isCancelled: false,
       platformContext: builderResult.platformContext,
       config: builderResult.platformContext.config,
       state: 'Active',
-      currentStage: builderResult.platformContext.currentStage,
+      currentStage: builderResult.platformContext.currentStage ?? PlatformStage.Created,
       startTime: Date.now(),
       getMetadata: () => undefined,
       setStage: () => {},

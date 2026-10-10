@@ -459,11 +459,19 @@ export function AppModals(props: AppModalsProps = {}) {
         batchPicker={batchPicker}
         setBatchPicker={setBatchPicker}
         batchPickerLesson={batchPickerLesson}
-        setBatchPickerLesson={setBatchPickerLesson}
+        setBatchPickerLesson={(v: SetStateAction<string>) =>
+          setBatchPickerLesson(typeof v === 'function' ? (v as (prev: string) => string)(batchPickerLesson) : v)
+        }
         batchPickerDate={batchPickerDate}
-        setBatchPickerDate={setBatchPickerDate}
+        setBatchPickerDate={(v: SetStateAction<string>) =>
+          setBatchPickerDate(typeof v === 'function' ? (v as (prev: string) => string)(batchPickerDate) : v)
+        }
         batchPickerTargetClass={batchPickerTargetClass}
-        setBatchPickerTargetClass={setBatchPickerTargetClass}
+        setBatchPickerTargetClass={(v: SetStateAction<string>) =>
+          setBatchPickerTargetClass(
+            typeof v === 'function' ? (v as (prev: string) => string)(batchPickerTargetClass) : v,
+          )
+        }
         lessons={lessons}
         classes={classes}
         expandedClassId={expandedClassId}

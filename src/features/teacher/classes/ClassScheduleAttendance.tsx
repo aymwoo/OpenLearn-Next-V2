@@ -158,7 +158,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
         {(classSchedulesMap[cls.id] || []).length === 0 ? (
           <div className="text-xs text-gray-400 italic">No schedules yet.</div>
         ) : (
-          classSchedulesMap[cls.id].map((sch) => {
+          classSchedulesMap[cls.id].map((sch: any) => {
             const isExp = expandedScheduleId === sch.id;
             const att = scheduleAttendanceMap[sch.id] || [];
             return (
@@ -231,7 +231,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                     </div>
                     <div className="grid gap-1">
                       {cStudents.map((st) => {
-                        const aRec = att.find((a) => a.student_id === st.id);
+                        const aRec = att.find((a: any) => a.student_id === st.id);
                         return (
                           <div
                             key={st.id}

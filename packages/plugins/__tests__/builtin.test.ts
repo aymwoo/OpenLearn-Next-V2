@@ -152,7 +152,7 @@ describe('BuiltinPlugin', () => {
 
   it('should successfully register, activate and run Builtin commands', async () => {
     const pluginId = '@openlearn/plugin-builtin';
-    pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(
@@ -218,7 +218,7 @@ describe('BuiltinPlugin', () => {
 
   it('activate 时向课件运行时脚本注册点注册平台原生分数监视器', async () => {
     const pluginId = '@openlearn/plugin-builtin';
-    pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
     db.prepare(
       'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
     ).run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');

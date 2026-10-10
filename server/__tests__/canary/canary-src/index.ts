@@ -289,7 +289,8 @@ export default {
     });
 
     // ── 9.3 后台心跳任务 ──
-    if (mode === 'inline' && ctx.services.processManager?.registerInterval) {
+    // strict: registerInterval 恒为函数，意图是判 processManager 可用；用 typeof 避免恒真条件
+    if (mode === 'inline' && typeof ctx.services.processManager?.registerInterval === 'function') {
       await (ctx.services.processManager as any).registerInterval('canary-heartbeat', 1000, () => {
         ticks += 1;
       });

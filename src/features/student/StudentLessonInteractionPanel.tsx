@@ -166,19 +166,24 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           onElementDelete={async (elementId: string) => {
             // 锁定期间白板只读：拒绝任何删除写入
             if (isStudentLocked) return;
+            if (!selectedLesson) return;
             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
             fetchElements(selectedLesson);
           }}
           onClearBoard={async () => {
             // 锁定期间白板只读：拒绝清空写入
             if (isStudentLocked) return;
+            if (!selectedLesson) return;
             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
             fetchElements(selectedLesson);
           }}
           onElementAdd={async () => {
             /* readonly or sync */
           }}
-          onRefresh={() => fetchElements(selectedLesson)}
+          onRefresh={() => {
+            if (!selectedLesson) return;
+            fetchElements(selectedLesson);
+          }}
         />
       )}
       {studentLessonTab === 'courseware' && (
@@ -248,7 +253,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           </div>
         </div>
       )}
-      {studentLessonTab === 'assignment' && (
+      {studentLessonTab === 'assignment' && selectedLesson && activeStudentId && (
         <StudentAssignmentEvalPanel
           lessonId={selectedLesson}
           studentId={activeStudentId}

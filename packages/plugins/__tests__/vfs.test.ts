@@ -93,7 +93,7 @@ describe('VfsPlugin', () => {
 
   it('should successfully register, activate and run VFS commands', async () => {
     const pluginId = '@openlearn/plugin-vfs';
-    pluginHost.registerPreloadedPlugin(pluginId, VfsPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, VfsPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(

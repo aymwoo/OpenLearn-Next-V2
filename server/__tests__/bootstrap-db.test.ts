@@ -101,7 +101,7 @@ describe('runStartupMigrations', () => {
       m.runCallsFor('DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?'),
     ).toHaveLength(1);
     const logged = logSpy.mock.calls.some(
-      (c) => typeof c[0] === 'string' && (c[0] as string).includes('Cleaned up 3 expired sessions'),
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('Cleaned up 3 expired sessions'),
     );
     expect(logged).toBe(true);
   });

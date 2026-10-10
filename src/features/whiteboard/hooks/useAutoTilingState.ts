@@ -118,7 +118,7 @@ export function useAutoTilingState({
       let detectedStackDir: StackDirection | undefined = forcedStackDirection ?? tileSplitPreferenceRef.current;
 
       for (const el of tileableElements) {
-        const data = parseElementData(el, null);
+        const data = parseElementData<Record<string, any> | null>(el, null);
         if (!data) continue;
         if (!detectedStackDir && data.tileStackDir) {
           detectedStackDir = data.tileStackDir;
@@ -210,8 +210,8 @@ export function useAutoTilingState({
       const elB = safeElements.find((el) => el.id === idB);
       if (!elA || !elB) return;
 
-      const dataA = parseElementData(elA, null);
-      const dataB = parseElementData(elB, null);
+      const dataA = parseElementData<Record<string, any> | null>(elA, null);
+      const dataB = parseElementData<Record<string, any> | null>(elB, null);
       if (!dataA || !dataB) return;
 
       const geoA = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
@@ -274,7 +274,7 @@ export function useAutoTilingState({
     const restores: { id: string; patch: Record<string, any> }[] = [];
 
     for (const el of safeElements) {
-      const data = parseElementData(el, null);
+      const data = parseElementData<Record<string, any> | null>(el, null);
       if (!data || !data.__preTile) continue;
       const { __preTile, __tiled, tileOrder, ...rest } = data;
       const keys = geometryKeys(el.type === 'circle' ? 'circle' : 'rect');
@@ -338,13 +338,18 @@ export function useAutoTilingState({
         for (const [id, patch] of Object.entries(patches)) {
           const currentBox = currentBoxes.find((b) => b.id === id);
           if (currentBox) {
-            setLocalGeometry(id, {
-              x: currentBox.x,
-              y: currentBox.y,
-              width: currentBox.width,
-              height: currentBox.height,
-              ...patch,
-            });
+            setLocalGeometry(
+              id,
+              Object.assign(
+                {
+                  x: currentBox.x,
+                  y: currentBox.y,
+                  width: currentBox.width,
+                  height: currentBox.height,
+                },
+                patch,
+              ),
+            );
           }
         }
 

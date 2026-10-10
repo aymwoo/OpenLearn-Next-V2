@@ -90,6 +90,10 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
   it('allows plugins to intercept and guard stage transitions', async () => {
     await service.getOrCreateSession('les_101', 't1', 'cls_1');
 
+    // P0-2：阶段白名单要求 PRE→IN→WRAP→ARCHIVED 逐步推进，先走到 WRAP
+    expect((await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1')).success).toBe(true);
+    expect((await service.transitionStage('les_101', 'WRAP_UP_EXIT_TICKET', 't1')).success).toBe(true);
+
     // Plugin registers a guard preventing ARCHIVED_REPORT if quiz is incomplete
     service.registerStageGuard('plugin-assessment-guard', (from, to) => {
       if (to === 'ARCHIVED_REPORT') {

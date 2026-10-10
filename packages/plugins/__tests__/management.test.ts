@@ -178,7 +178,7 @@ describe('ManagementPlugin', () => {
 
   it('should successfully register, activate and run Management commands', async () => {
     const pluginId = '@openlearn/plugin-management';
-    pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(

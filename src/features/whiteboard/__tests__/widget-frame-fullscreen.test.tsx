@@ -185,7 +185,7 @@ describe('浏览器全屏 · 进入与退出', () => {
 
   it('原生全屏不可用时静默降级为「仅占满视口」，不抛错', async () => {
     // 删除原生 API 模拟不支持
-    const el = document.documentElement as HTMLElement & { requestFullscreen?: unknown };
+    const el = document.documentElement as unknown as { requestFullscreen?: unknown };
     const saved = el.requestFullscreen;
     delete el.requestFullscreen;
 

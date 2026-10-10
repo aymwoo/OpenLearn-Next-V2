@@ -208,7 +208,7 @@ describe('buildContext', () => {
 
     // 调用 registerHandler — 应自动 registerHandler + tracker.track()
     const handler = { execute: vi.fn().mockResolvedValue(undefined) };
-    await ctx.services.commandBus.registerHandler('plugin-id-123.testcommand', handler);
+    await ctx.services.commandBus!.registerHandler('plugin-id-123.testcommand', handler);
 
     // 验证原始 registerHandler 被调用
     expect(rawCommandBus.registerHandler).toHaveBeenCalled();
@@ -227,7 +227,7 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     // 订阅事件 — 应自动 tracker.track()
-    await ctx.services.eventBus.subscribe('test.event', vi.fn());
+    await ctx.services.eventBus!.subscribe('test.event', vi.fn());
 
     // 验证原始 subscribe 被调用
     expect(rawEventBus.subscribe).toHaveBeenCalled();
@@ -244,7 +244,7 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     const originalListener = vi.fn();
-    await ctx.services.eventBus.subscribe('test.event', originalListener);
+    await ctx.services.eventBus!.subscribe('test.event', originalListener);
 
     // 取得注册给 rawEventBus 的 safeSubscriber 引用
     const registeredWrapper = (rawEventBus.subscribe as any).mock.calls[0][1];
@@ -252,7 +252,7 @@ describe('buildContext', () => {
     expect(registeredWrapper).not.toBe(originalListener);
 
     // 调用 ctx.services.eventBus.unsubscribe 并传入 originalListener
-    await ctx.services.eventBus.unsubscribe('test.event', originalListener);
+    await ctx.services.eventBus!.unsubscribe('test.event', originalListener);
 
     // rawEventBus.unsubscribe 必须接收到 registeredWrapper，确保底层成功卸载
     expect(rawEventBus.unsubscribe).toHaveBeenCalledWith('test.event', registeredWrapper);
@@ -267,7 +267,7 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     // 注册 process handler — 应自动 tracker.track()
-    await ctx.services.processManager.registerHandler('test.task', vi.fn());
+    await ctx.services.processManager!.registerHandler('test.task', vi.fn());
 
     // 验证原始 registerHandler 被调用，且 taskType 已被加上插件命名空间前缀（B-5）。
     // 不加前缀时 ProcessManager.handlers 是全局 Map、后者顶掉前者 ——
@@ -352,7 +352,7 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     // 注册 interval — 应自动 tracker.track()
-    const processId = await ctx.services.processManager.registerInterval('test-interval', 1000, vi.fn());
+    const processId = await ctx.services.processManager!.registerInterval('test-interval', 1000, vi.fn());
 
     expect(processId).toBe('interval-456');
     expect(mockProcessService.registerInterval).toHaveBeenCalled();
@@ -371,9 +371,9 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     // 调用 capability 方法 — 不应触发任何 tracker 操作
-    await ctx.services.capability.grant('actor-1', 'test:read');
-    await ctx.services.capability.check('actor-1', 'test:read');
-    await ctx.services.capability.revokeAll('actor-1');
+    await ctx.services.capability!.grant('actor-1', 'test:read');
+    await ctx.services.capability!.check('actor-1', 'test:read');
+    await ctx.services.capability!.revokeAll('actor-1');
 
     // 验证原始 capability service 方法被调用
     expect(rawCapability.grant).toHaveBeenCalledWith('actor-1', 'test:read');

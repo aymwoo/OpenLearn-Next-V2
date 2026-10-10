@@ -18,7 +18,7 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
 
   beforeAll(async () => {
     service = new ResourceService(db, mockAiInjector);
-    await runStartupMigrations(db);
+    await runStartupMigrations(db as unknown as import('../../bootstrap-db.js').MigrationDb); // strict: Database/MigrationDb 端口漂移，运行时相容
     const now = Date.now();
 
     // 清理脏数据

@@ -31,7 +31,7 @@ describe('PlatformContainer — registration & constructor injection', () => {
     class Consumer {
       constructor(public dep: { value: number }) {}
     }
-    c.register('consumer', Consumer, { dependencies: ['dep'] });
+    c.register('consumer', Consumer as unknown as new (...args: unknown[]) => unknown, { dependencies: ['dep'] });
     const resolved = c.resolve<Consumer>('consumer');
     expect(resolved.dep.value).toBe(42);
   });

@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Users, Loader2 } from 'lucide-react';
 import type { StudentType, Lesson } from '../../types/app';
 import { useAppData } from '../../context/AppDataContext';
+import type { ToastType } from '../../hooks/useToast';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
 
 const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
@@ -106,7 +107,9 @@ export function StudentView() {
               vfsNodes={vfsNodes}
               studentSelectedCourseware={studentSelectedCourseware}
               setStudentSelectedCourseware={setStudentSelectedCourseware}
-              addToast={addToast}
+              addToast={(title: string, description: string, type: string) =>
+                addToast(title, description, type as ToastType)
+              }
             />
           ) : studentViewStatus === 'assignment' && selectedAssignment ? (
             <StudentAssignmentView
@@ -130,7 +133,9 @@ export function StudentView() {
               studentDashboardData={studentDashboardData}
               readNotifications={readNotifications}
               setReadNotifications={setReadNotifications}
-              addToast={addToast}
+              addToast={(title: string, description: string, type: string) =>
+                addToast(title, description, type as ToastType)
+              }
               lang={lang}
               setSelectedLesson={setSelectedLesson}
               setStudentViewStatus={setStudentViewStatus}

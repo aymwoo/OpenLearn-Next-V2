@@ -51,6 +51,8 @@ describe('courseware access token (SEC-AUTH)', () => {
     const cwNodeId = 'vfs-cw-token-test';
     const studentId = 'usr-cw-token-student';
     const studentToken = 'tok-cw-token-student';
+    const teacherId = 'usr-cw-token-teacher';
+    const teacherToken = 'tok-cw-token-teacher';
     const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}`, 'Content-Type': 'application/json' });
 
     beforeAll(async () => {
@@ -67,6 +69,21 @@ describe('courseware access token (SEC-AUTH)', () => {
         .run(
           studentToken,
           JSON.stringify({ userId: studentId, role: 'student', username: 'cw_token_student' }),
+          now,
+          now + 60 * 60 * 1000,
+        );
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(teacherId, 'cw_token_teacher', 'placeholder', 'teacher', 'Token 教师', now);
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+        )
+        .run(
+          teacherToken,
+          JSON.stringify({ userId: teacherId, role: 'teacher', username: 'cw_token_teacher' }),
           now,
           now + 60 * 60 * 1000,
         );
@@ -89,7 +106,9 @@ describe('courseware access token (SEC-AUTH)', () => {
       kernelContainer.db.prepare('DELETE FROM vfs_nodes WHERE id = ?').run(cwNodeId);
       kernelContainer.db.prepare('DELETE FROM courseware WHERE id = ?').run(cwNodeId);
       kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(studentToken);
+      kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
       kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
       if (server) {
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
@@ -144,11 +163,19 @@ describe('courseware access token (SEC-AUTH)', () => {
     });
 
     it('SEC-NET-02: POST /api/courseware/inline 幂等落库并返回稳定 uuid', async () => {
+      // V4 修复：inline 落库限教师/管理员（学生写任意 HTML 可经 /runtime 执行 + 伪造满分）
+      const forbidden = await fetch(`${baseUrl}/api/courseware/inline`, {
+        method: 'POST',
+        headers: cookie(studentToken),
+        body: JSON.stringify({ code: '<p>x</p>' }),
+      });
+      expect(forbidden.status).toBe(403);
+
       const code = '<html><body><h1>inline test</h1><script>1+1</script></body></html>';
       const post = async () =>
         fetch(`${baseUrl}/api/courseware/inline`, {
           method: 'POST',
-          headers: cookie(studentToken),
+          headers: cookie(teacherToken),
           body: JSON.stringify({ code }),
         });
 
@@ -188,14 +215,14 @@ describe('courseware access token (SEC-AUTH)', () => {
 
       const empty = await fetch(`${baseUrl}/api/courseware/inline`, {
         method: 'POST',
-        headers: cookie(studentToken),
+        headers: cookie(teacherToken),
         body: JSON.stringify({ code: '   ' }),
       });
       expect(empty.status).toBe(400);
 
       const tooBig = await fetch(`${baseUrl}/api/courseware/inline`, {
         method: 'POST',
-        headers: cookie(studentToken),
+        headers: cookie(teacherToken),
         body: JSON.stringify({ code: 'x'.repeat(512 * 1024 + 1) }),
       });
       expect(tooBig.status).toBe(413);

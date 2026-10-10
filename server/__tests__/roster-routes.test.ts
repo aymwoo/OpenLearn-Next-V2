@@ -26,7 +26,7 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
     const now = Date.now();
     const expiresAt = now + 60 * 60 * 1000;
     const db = kernelContainer.db;
-    await runStartupMigrations(db);
+    await runStartupMigrations(db as unknown as import('../bootstrap-db.js').MigrationDb); // strict: Database/MigrationDb 端口漂移，运行时相容
 
     // 1. 预置基础用户与学生
     const insertUser = db.prepare(

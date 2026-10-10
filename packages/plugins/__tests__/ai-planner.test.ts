@@ -127,7 +127,7 @@ describe('AiPlannerPlugin', () => {
 
   it('should successfully register, activate and run AI Planner commands', async () => {
     const pluginId = '@openlearn/plugin-ai-planner';
-    pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(

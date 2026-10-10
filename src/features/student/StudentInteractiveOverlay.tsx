@@ -118,9 +118,10 @@ export function StudentInteractiveOverlay({
                 buzzerArmedTimeRef.current = Date.now();
               } else if (json.activeBuzzer.status === 'LOCKED') {
                 // 本轮已出结果：结果一经判定即锁定，不被后续轮询翻转
+                const outcome = buzzOutcomeRef.current;
                 const decided =
-                  buzzOutcomeRef.current?.buzzerId === json.activeBuzzer.id
-                    ? buzzOutcomeRef.current.status
+                  outcome && outcome.buzzerId === json.activeBuzzer.id
+                    ? outcome.status
                     : json.activeBuzzer.winner_student_id === studentId
                       ? 'WINNER'
                       : 'MISSED';

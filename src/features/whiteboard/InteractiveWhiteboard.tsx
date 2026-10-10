@@ -865,7 +865,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       for (const el of elements) {
         const overlay = localGeometryRef.current.get(el.id);
         if (!overlay) continue;
-        const data = parseElementData(el, null);
+        const data = parseElementData<Record<string, any> | null>(el, null);
         if (!data) {
           localGeometryRef.current.delete(el.id);
           continue;
@@ -2490,16 +2490,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   }}
                 >
                   <HelloWorldWrapper
-                    elementId={el.id}
-                    data={data}
-                    readOnly={readOnly}
-                    {...getWidgetTitleBarProps(
-                      'Hello World 插件',
-                      <Sparkles size={11} className="text-amber-500 animate-pulse" />,
-                      'slate',
+                    {...Object.assign(
+                      { elementId: el.id, data, readOnly },
+                      getWidgetTitleBarProps(
+                        'Hello World 插件',
+                        <Sparkles size={11} className="text-amber-500 animate-pulse" />,
+                        'slate',
+                      ),
+                      { onElementUpdate, lessonId },
                     )}
-                    onElementUpdate={onElementUpdate}
-                    lessonId={lessonId}
                   />
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
@@ -2553,18 +2552,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   }}
                 >
                   <RollCallWrapper
-                    elementId={el.id}
-                    data={data}
-                    lessonId={lessonId}
-                    classId={fullscreenBroadcastClassId || (data && data.classId)}
-                    readOnly={readOnly}
-                    userRole={userRole}
-                    {...getWidgetTitleBarProps(
-                      '随机点名助手 (分层抽问 Fair Picker)',
-                      <Sparkles size={13} className="animate-pulse text-amber-400" />,
-                      'indigo',
+                    {...Object.assign(
+                      {
+                        elementId: el.id,
+                        data,
+                        lessonId,
+                        classId: fullscreenBroadcastClassId || (data && data.classId),
+                        readOnly,
+                        userRole,
+                      },
+                      getWidgetTitleBarProps(
+                        '随机点名助手 (分层抽问 Fair Picker)',
+                        <Sparkles size={13} className="animate-pulse text-amber-400" />,
+                        'indigo',
+                      ),
+                      { onElementUpdate },
                     )}
-                    onElementUpdate={onElementUpdate}
                   />
                   {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}

@@ -46,6 +46,7 @@ import type {
   AIPersonaDefinition,
   IPointsDimensionRegistry,
   IPointsLedgerService,
+  PointsDimensionSpec,
 } from '../di/interfaces.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
 
@@ -487,7 +488,7 @@ function wrapPointsDimensionRegistry(
   pluginId: string,
 ): IPointsDimensionRegistry {
   return {
-    registerDimension: createSafeFunction((spec) => {
+    registerDimension: createSafeFunction((spec: PointsDimensionSpec) => {
       const dimensionId = spec?.id;
       registry.registerDimension(spec);
       if (dimensionId) {
@@ -498,7 +499,7 @@ function wrapPointsDimensionRegistry(
         });
       }
     }),
-    getDimension: createSafeFunction((id) => {
+    getDimension: createSafeFunction((id: string) => {
       return registry.getDimension(id);
     }),
     listDimensions: createSafeFunction(() => {

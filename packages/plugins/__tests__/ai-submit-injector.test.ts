@@ -112,7 +112,7 @@ describe('AiSubmitInjectorPlugin', () => {
 
   it('should trigger AI injection when courseware is uploaded without submission logic', async () => {
     const pluginId = '@openlearn/plugin-ai-submit-injector';
-    pluginHost.registerPreloadedPlugin(pluginId, AiSubmitInjectorPlugin);
+    pluginHost.registerPreloadedPlugin(pluginId, AiSubmitInjectorPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(
