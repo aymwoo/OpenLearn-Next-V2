@@ -240,8 +240,8 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 >
 > | 版本          | 说明          | 用途                                                                 |
 > | ------------- | ------------- | -------------------------------------------------------------------- |
-> | 平台发行版本  | 当前 `0.3.22` | 主应用平台发布版本（根目录 `package.json`）                          |
-> | 宿主 API 版本 | 当前 `0.3.22` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
+> | 平台发行版本  | 当前 `0.5.0` | 主应用平台发布版本（根目录 `package.json`）                          |
+> | 宿主 API 版本 | 当前 `0.5.0` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
 > | SDK 版本      | 当前 `3.7.0`  | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理               |
 >
 > **`engines.openlearn` 应填写宿主版本兼容范围（推荐声明为 `>=0.2.5`）**，而非 SDK 版本。
@@ -300,7 +300,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.3.22`、SDK `@openlearn/plugin-sdk@3.7.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.5.0`、SDK `@openlearn/plugin-sdk@3.7.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -1268,7 +1268,7 @@ export default {
 
 ### 6.1 FrontendPluginHost
 
-前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块，支持 inline 和 worker 两种执行模式：
+前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块，支持 inline 和 worker 两种执行模式（后端另有 `process` 子进程隔离模式，见 `src/plugin-host/types.ts` 的 `executionMode` 与 `.env.example` L-1 节；`legacy` 为 vm 时代残留，勿用）：
 
 ```typescript
 // 前端插件结构

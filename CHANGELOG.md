@@ -13,32 +13,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Features
 
 - **白板自定义图元一等公民扩展槽位 (`whiteboard.renderer`)**：
-  - **核心渲染流水线挂载**：在 [`src/features/whiteboard/InteractiveWhiteboard.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/whiteboard/InteractiveWhiteboard.tsx) 的 `renderElement` 核心渲染入口挂载 `whiteboard.renderer` 扩展点，允许第三方插件为特定图元类型（如 Desmos 函数图像、GeoGebra 几何、分子 3D 模型等）注册专属渲染器，成为白板一等公民图元；
+  - **核心渲染流水线挂载**：在 [`src/features/whiteboard/InteractiveWhiteboard.tsx`](./src/features/whiteboard/InteractiveWhiteboard.tsx) 的 `renderElement` 核心渲染入口挂载 `whiteboard.renderer` 扩展点，允许第三方插件为特定图元类型（如 Desmos 函数图像、GeoGebra 几何、分子 3D 模型等）注册专属渲染器，成为白板一等公民图元；
   - **画板生命周期全面打通**：自定义图元深度接入 Konva 视口缩放、平铺拖拽布局、选框高亮、右键上下文菜单与多选生命周期；`buildElementData` 扩展支持读取插件图元默认数据配置；
   - **无边框/透明卡片支持**：支持 `data.frameless = true` 或 `data.hideTitleBar = true`，自定义图元可自由选择展示标准 Widget 外壳或完全自绘无边框视觉；
   - **实时数据协同流水线**：注入 `onElementUpdate` 回调，插件更新图元数据时自动向 `frontendEventBus` 广播 `whiteboard.element_updated`，触发全班协同同步；
-  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 75 个，新增 `targetType?: string` 匹配键与 `WhiteboardRendererSlotProps` 接口；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)（75 联合槽位 / 75 消费调用点 / 0 幽灵槽位 / 8 锚点 / 83 唯一槽位值，100% 对齐）；
-  - **双层专项测试覆盖**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 `targetType` 匹配、Props 透传、未命中返回 null 及兜底匹配测试（3/3 通过）；新增 [`src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx) 验证白板画布中的自定义图元渲染、事件广播与 frameless 无边框模式（2/2 通过）。
+  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 75 个，新增 `targetType?: string` 匹配键与 `WhiteboardRendererSlotProps` 接口；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md)（75 联合槽位 / 75 消费调用点 / 0 幽灵槽位 / 8 锚点 / 83 唯一槽位值，100% 对齐）；
+  - **双层专项测试覆盖**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](./src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 `targetType` 匹配、Props 透传、未命中返回 null 及兜底匹配测试（3/3 通过）；新增 [`src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx`](./src/features/whiteboard/__tests__/whiteboard-renderer-slot.test.tsx) 验证白板画布中的自定义图元渲染、事件广播与 frameless 无边框模式（2/2 通过）。
 
 - **全局壳层扩展槽（底座解耦）(`header.action` / `statusbar.item`)**：
-  - **全局顶栏快捷操作槽 (`header.action`)**：在 [`src/components/AppHeader.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppHeader.tsx) 右侧工具区（「系统资源库」按钮之前）挂载，注入 `{ session, currentRole, lang }`，供全局 AI 助手入口、屏幕录制、校园门户直通等插件使用（此前仅有课堂内的 `classroom.header.action`）；
-  - **全局底部状态栏槽 (`statusbar.item`)**：新增 [`src/components/AppStatusBar.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/AppStatusBar.tsx) 并由 [`src/App.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/App.tsx) 挂载在主工作区底部，注入 `{ session, currentRole, lang, isOnline }`（`isOnline` 订阅浏览器 `online` / `offline` 事件）；
+  - **全局顶栏快捷操作槽 (`header.action`)**：在 [`src/components/AppHeader.tsx`](./src/components/AppHeader.tsx) 右侧工具区（「系统资源库」按钮之前）挂载，注入 `{ session, currentRole, lang }`，供全局 AI 助手入口、屏幕录制、校园门户直通等插件使用（此前仅有课堂内的 `classroom.header.action`）；
+  - **全局底部状态栏槽 (`statusbar.item`)**：新增 [`src/components/AppStatusBar.tsx`](./src/components/AppStatusBar.tsx) 并由 [`src/App.tsx`](./src/App.tsx) 挂载在主工作区底部，注入 `{ session, currentRole, lang, isOnline }`（`isOnline` 订阅浏览器 `online` / `offline` 事件）；
   - **零视觉变化**：两处容器均使用 `empty:hidden`，且以空 fallback 替代默认加载骨架；无插件贡献时不占布局空间，现有部署界面不变；
-  - **类型与文档**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 扩充至 74 个，新增 `HeaderActionSlotProps` / `StatusbarItemSlotProps`；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)（74 联合槽位 / 74 消费调用点 / 0 幽灵槽位 / 8 锚点 / 82 唯一槽位值，经脚本核对）；
-  - **测试覆盖**：在 [`src/components/__tests__/app-shell-slots.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/__tests__/app-shell-slots.test.tsx) 与 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐空态、Props 注入、在线状态切换及宿主渲染测试。
+  - **类型与文档**：[`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中 `ExtensionSlot` 扩充至 74 个，新增 `HeaderActionSlotProps` / `StatusbarItemSlotProps`；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md)（74 联合槽位 / 74 消费调用点 / 0 幽灵槽位 / 8 锚点 / 82 唯一槽位值，经脚本核对）；
+  - **测试覆盖**：在 [`src/components/__tests__/app-shell-slots.test.tsx`](./src/components/__tests__/app-shell-slots.test.tsx) 与 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](./src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐空态、Props 注入、在线状态切换及宿主渲染测试。
 
 - **大屏互动与作业生态扩展槽开辟 (`stage.display.overlay` / `stage.display.action` / `assignment.submission.preview`)**：
-  - **大屏展台 HUD 全屏覆盖槽 (`stage.display.overlay`)**：在 [`src/features/classroom/stage-display/StageDisplayPanel.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/features/classroom/stage-display/StageDisplayPanel.tsx) 挂载 `absolute inset-0 pointer-events-none z-30` 级覆盖层，透传 `lessonId`、`lessonTitle`、`stage`、`data`、`isFullscreen` 与 `lang`，支持全班弹幕、抢答倒计时、全屏仪式动效等第三方插件安全叠加；
+  - **大屏展台 HUD 全屏覆盖槽 (`stage.display.overlay`)**：在 [`src/features/classroom/stage-display/StageDisplayPanel.tsx`](./src/features/classroom/stage-display/StageDisplayPanel.tsx) 挂载 `absolute inset-0 pointer-events-none z-30` 级覆盖层，透传 `lessonId`、`lessonTitle`、`stage`、`data`、`isFullscreen` 与 `lang`，支持全班弹幕、抢答倒计时、全屏仪式动效等第三方插件安全叠加；
   - **大屏展台快捷操作工具栏槽 (`stage.display.action`)**：在展台 Header 右侧操作区开辟快捷操作槽位，支持插件挂载外接设备控制、一键录屏、切流投屏等操作按钮，并透传 `onToggleFullscreen` 与 `onOpenPeerReview` 宿主交互回调；
-  - **作业提交多模态预览槽 (`assignment.submission.preview`)**：在 [`src/components/StudentAssignmentEvalPanel.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/StudentAssignmentEvalPanel.tsx) 我的作业已提交卡片与同伴互评列表中双向挂载，打破原系统仅支持纯文本与文件的局限，透传 `submission`、`studentId`、`lessonId`、`isSelf` 与 `lang`，供代码沙盒回放、3D 模型渲染、音视频富媒体预览等插件无缝接入；
-  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 72 个，新增专有 Props 接口类型定义；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md) 清单与统计口径（72 联合槽位，72 消费调用点，0 幽灵槽位，8 锚点，80 唯一槽位值）；
-  - **双层专项测试验证**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 3 个新槽位渲染与 Props 回调测试（9/9 通过），并在 [`src/components/__tests__/student-assignment-eval-panel.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/components/__tests__/student-assignment-eval-panel.test.tsx) 增加自提交与同伴互评场景集成测试（5/5 通过）。
+  - **作业提交多模态预览槽 (`assignment.submission.preview`)**：在 [`src/components/StudentAssignmentEvalPanel.tsx`](./src/components/StudentAssignmentEvalPanel.tsx) 我的作业已提交卡片与同伴互评列表中双向挂载，打破原系统仅支持纯文本与文件的局限，透传 `submission`、`studentId`、`lessonId`、`isSelf` 与 `lang`，供代码沙盒回放、3D 模型渲染、音视频富媒体预览等插件无缝接入；
+  - **类型系统与权威文档同步**：[`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中 `ExtensionSlot` 联合类型扩充至 72 个，新增专有 Props 接口类型定义；同步更新 [`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md) 清单与统计口径（72 联合槽位，72 消费调用点，0 幽灵槽位，8 锚点，80 唯一槽位值）；
+  - **双层专项测试验证**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](./src/plugin-host/__tests__/extension-point-renderer.test.tsx) 增加 3 个新槽位渲染与 Props 回调测试（9/9 通过），并在 [`src/components/__tests__/student-assignment-eval-panel.test.tsx`](./src/components/__tests__/student-assignment-eval-panel.test.tsx) 增加自提交与同伴互评场景集成测试（5/5 通过）。
 
 - **UI 扩展槽位规范化收敛与全量消费对齐 (`help.plugin_docs` / `student.classroom.overlay`)**：
-  - **联合类型规范化**：将此前作为裸字符串使用的 `help.plugin_docs`（帮助中心插件使用文档）与 `student.classroom.overlay`（学生端课堂交互全屏浮层）正式纳入 [`src/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/types.ts) 的 `ExtensionSlot` 联合类型，总成员数由 67 增至 69；
+  - **联合类型规范化**：将此前作为裸字符串使用的 `help.plugin_docs`（帮助中心插件使用文档）与 `student.classroom.overlay`（学生端课堂交互全屏浮层）正式纳入 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 的 `ExtensionSlot` 联合类型，总成员数由 67 增至 69；
   - **声明与消费 100% 对齐**：全仓 69 个 `ExtensionSlot` 槽位全部在前端宿主组件中具备明确的 `<ExtensionPointRenderer>` 渲染调用点，实现声明但未消费的幽灵槽位数为 0；
-  - **权威文档与统计更新**：同步更新 [`docs/reference/plugin-ui-extension-slots.md`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/docs/reference/plugin-ui-extension-slots.md)，校准 69 个联合类型槽位与 8 个 `anchor:*` 锚点槽位全量挂载清单及统计口径；
-  - **专项回归测试**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐针对新增槽位的类型安全注册与属性透传渲染测试（6/6 100% 通过）。
+  - **权威文档与统计更新**：同步更新 [`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md)，校准 69 个联合类型槽位与 8 个 `anchor:*` 锚点槽位全量挂载清单及统计口径；
+  - **专项回归测试**：在 [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](./src/plugin-host/__tests__/extension-point-renderer.test.tsx) 补齐针对新增槽位的类型安全注册与属性透传渲染测试（6/6 100% 通过）。
 
 ### Security
 
@@ -57,14 +57,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - 未绑定任何环节的全局独立图元/测验自动放行；
     - 教师及管理员（`role !== 'student'` / `isPrivilegedActor`）在预览或教研调试时免除门禁限制；
   - **专项测试套件与全链路验证**：
-    - 新增专项集成测试 [`server/__tests__/stage-guard-resource-enforcement.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/__tests__/stage-guard-resource-enforcement.test.ts)（6/6 用例 100% 通过），覆盖全局独立测验、`data.segmentId` 绑定、`timeline.elementIds` 绑定、教师预览豁免、Fail-close 语义一致性及作业提交拦截；
+    - 新增专项集成测试 [`server/__tests__/stage-guard-resource-enforcement.test.ts`](./server/__tests__/stage-guard-resource-enforcement.test.ts)（6/6 用例 100% 通过），覆盖全局独立测验、`data.segmentId` 绑定、`timeline.elementIds` 绑定、教师预览豁免、Fail-close 语义一致性及作业提交拦截；
     - 关联测试（`stage-guard-server-enforcement.test.ts`、`quiz-answered-e2e.test.ts`、`assignment-hub.test.ts`）全量绿灯；
     - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
 
 ### Refactor / Performance
 
 - **`ScheduleService` 领域服务下沉与三维排课冲突检测引擎（架构路线图 E3 深化）**：
-  - **巨石解耦与职责收敛**：将 `server/routes/schedules.ts`（原 396 行）中的纯领域业务彻底抽离至 [`server/services/schedule-service.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/schedule-service.ts)，路由精简至 142 行（削减 64%），转为轻量级 HTTP 校验与路由适配层；
+  - **巨石解耦与职责收敛**：将 `server/routes/schedules.ts`（原 396 行）中的纯领域业务彻底抽离至 [`server/services/schedule-service.ts`](./server/services/schedule-service.ts)，路由精简至 142 行（削减 64%），转为轻量级 HTTP 校验与路由适配层；
   - **三维排课冲突检测引擎 (`detectConflicts`)**：
     - `parseTimeSlot` & `isTimeOverlapping`：支持规范时段（如 `08:00 - 08:45`、`14:30 ~ 16:00`）、单点时段、全天时段及离散节次的区间数学相交判定（$S_A < E_B \land S_B < E_A$）；
     - 班级时间冲突（`class_overlap`）：同一班级同一天重叠时段排课防撞；
@@ -80,12 +80,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **多模态 AI 课表 OCR 识别封装**：
     - `processTimetableOcr`：内聚视觉模型调度、API Key 解密、提示词工程与 JSON 响应清洗；
   - **测试覆盖与质量验证**：
-    - 新增专属单元测试套件 [`server/services/__tests__/schedule-service.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/__tests__/schedule-service.test.ts)（14/14 用例 100% 通过）；
+    - 新增专属单元测试套件 [`server/services/__tests__/schedule-service.test.ts`](./server/services/__tests__/schedule-service.test.ts)（14/14 用例 100% 通过）；
     - 关联集成与前端测试套件（`schedules-routes.test.ts`、`TimetableManager.test.tsx`、`TimetableSubviews.test.tsx`）共 32 个测试全量绿灯；
     - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
 
 - **`LessonService` 领域服务下沉与课时路由解耦（架构路线图 E3 收口）**：
-  - **巨石解耦与职责内聚**：将 `server/routes/lessons.ts`（原 871 行巨石路由）中的纯领域与数据访问逻辑彻底抽离至 [`server/services/lesson-service.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/lesson-service.ts)，路由精简至 455 行（代码收敛 48%），转为轻量级 HTTP 门禁与协议适配层；
+  - **巨石解耦与职责内聚**：将 `server/routes/lessons.ts`（原 871 行巨石路由）中的纯领域与数据访问逻辑彻底抽离至 [`server/services/lesson-service.ts`](./server/services/lesson-service.ts)，路由精简至 455 行（代码收敛 48%），转为轻量级 HTTP 门禁与协议适配层；
   - **领域服务核心能力**：
     - `listLessons(pg)`：内聚 A7 分页信封与多表统计（白板元素数、排课数、选课学生数、关联作业数）；
     - `checkOwnership(lessonId, session)`：核心 IDOR 水平越权防范状态机（支持管理员全局管辖、教师所属权校验、历史未绑定课程向后兼容）；
@@ -96,7 +96,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - `getEvalSubmissions` / `getEvalGrades`：PERF-N1 500-batch 批量拉取互评详情，以及最新多模态版本（附件 JSON / 纯文本 / 外链）展开；
   - **100% 向后兼容承诺**：保持对外路由端点规范、入参出参以及 `checkLessonOwnership` / `requireWhiteboardWriteAccess` 中间件与工具函数签名完全一致；
   - **测试覆盖与质量门禁**：
-    - 新增专用单元测试套件 [`server/services/__tests__/lesson-service.test.ts`](file:///home/wuxf/Develop/openlearn-next/openlearnv2/server/services/__tests__/lesson-service.test.ts)（16/16 用例 100% 通过）；
+    - 新增专用单元测试套件 [`server/services/__tests__/lesson-service.test.ts`](./server/services/__tests__/lesson-service.test.ts)（16/16 用例 100% 通过）；
     - 4 个课时相关核心测试套件（`lesson-service.test.ts`、`lesson_ownership.test.ts`、`eval-submissions-auth.test.ts`、`pagination.test.ts`）共 46 个测试全量通过；
     - `pnpm lint`（`tsc --noEmit`）保持 0 错误。
 
@@ -1871,14 +1871,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **服务就绪后自动唤起浏览器 (`-o, --open`)**：
   - 跨平台零外部依赖实现（macOS `open` / Windows `cmd start` / Linux `xdg-open`），在 HTTP 服务器真正绑定就绪时精准静默自动弹出默认浏览器。
 - **环境健康自检与就绪诊断工具 (`npx openlearn-next doctor`)**：
-  - 新增独立子模块 [`cli-doctor.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-doctor.mjs)，支持五维综合体检：
+  - 新增独立子模块 [`cli-doctor.mjs`](./cli-doctor.mjs)，支持五维综合体检：
     1. Node.js 运行时版本校验（>= 20.0.0 严格检查）；
     2. 硬件架构、CPU 核心数与剩余空闲物理内存容量评估；
     3. 目标数据存储目录递归创建与原子写入/删除权限检测；
     4. 目标端口（默认 9000 或 `-p` 指定）占用状态与自动避让检测；
     5. 本机局域网网络接口连通性与 IPv4 地址检测。
 - **一键在线冷备快照与安全回滚恢复 (`backup` / `restore`)**：
-  - 新增独立数据运维子模块 [`cli-data.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-data.mjs)；
+  - 新增独立数据运维子模块 [`cli-data.mjs`](./cli-data.mjs)；
   - `backup [file]`：基于 SQLite WAL 在线一致性快照技术，毫秒级导出当前平台完整快照；
   - `restore <file>`：还原前强制校验 SQLite Magic Header (`SQLite format 3\0`) 防坏文件注入，并自动为被覆盖主库生成 `.bak_<timestamp>` 安全回滚镜像副本。
 - **终端免界面重置管理员密码 (`reset-admin`)**：
@@ -1890,28 +1890,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **CORS 跨域白名单命令行透传 (`--cors <origins>`)**：
   - 命令行直接透传配置到 Express 与 Socket.IO 运行时跨域拦截器。
 - **自动化测试保障**：
-  - 新增专用自动化测试套件 [`packages/core/__tests__/cli-enhanced.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/cli-enhanced.test.ts)，全量 7 项测试保障。
+  - 新增专用自动化测试套件 [`packages/core/__tests__/cli-enhanced.test.ts`](./packages/core/__tests__/cli-enhanced.test.ts)，全量 7 项测试保障。
 
 ## [0.3.7] - 2026-09-06
 
 ### Features & CLI Utilities
 
 - **NPX 缓存与运行数据安全清理命令 (CLI Cache Cleaner Command)**：
-  - 在 [`cli.mjs`](file:///home/wuxf/Develop/openlearnv2/cli.mjs) 及 [`cli-cleaner.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-cleaner.mjs) 中新增 `clean` / `clean-cache`（以及 `--clean` / `--clean-cache`）命令行工具；
+  - 在 [`cli.mjs`](./cli.mjs) 及 [`cli-cleaner.mjs`](./cli-cleaner.mjs) 中新增 `clean` / `clean-cache`（以及 `--clean` / `--clean-cache`）命令行工具；
   - **精准清理 NPX 历史旧包**：自动扫描 `~/.npm/_npx/` 下的所有散列子目录，精准清理历史残留的旧版本 `openlearn-next` 临时目录，彻底杜绝 NPX 因缓存命中旧版本的问题；
   - **优化运行数据与日志**：默认清理 SQLite WAL 预写日志 (`data.db-wal`)、共享内存文件 (`data.db-shm`) 与临时目录，并在默认模式下严格保护用户核心业务数据 `data.db` 不被误删；
   - **丰富选项支持**：支持 `--npx`（仅清包缓存）、`--db`（重置本地数据库）与 `--all`（全量彻底清理重置）；
   - 新增 `-v` / `--version` 快速版本查询与完善的 `-h` / `--help` 命令帮助指引；
-  - 新增自动化单元测试套件 [`packages/core/__tests__/cli-cleaner.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/cli-cleaner.test.ts)。
+  - 新增自动化单元测试套件 [`packages/core/__tests__/cli-cleaner.test.ts`](./packages/core/__tests__/cli-cleaner.test.ts)。
 
 ## [0.3.6] - 2026-09-06
 
 ### Quality & Governance (防版本漂移质量加固)
 
 - **内核导出版本定义强收敛 (Kernel Definition Convergence)**：
-  - 将 [`packages/core/bootstrap/types/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/bootstrap/types/index.ts) 中的 `PLATFORM_VERSION` 改为直接从单一真理源 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts) 导入，彻底消除内核内部出现双重硬编码字面量的隐患。
+  - 将 [`packages/core/bootstrap/types/index.ts`](./packages/core/bootstrap/types/index.ts) 中的 `PLATFORM_VERSION` 改为直接从单一真理源 [`packages/core/version.ts`](./packages/core/version.ts) 导入，彻底消除内核内部出现双重硬编码字面量的隐患。
 - **全自动防版本漂移质量门禁测试 (Anti-Drift Test Gate)**：
-  - 新增专用自动化质量门禁测试套件 [`packages/core/__tests__/version-consistency.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/version-consistency.test.ts)，设立 6 重自动化强断言：
+  - 新增专用自动化质量门禁测试套件 [`packages/core/__tests__/version-consistency.test.ts`](./packages/core/__tests__/version-consistency.test.ts)，设立 6 重自动化强断言：
     1. 根目录 `package.json.version` 强等于 `PLATFORM_VERSION`；
     2. `OPENLEARN_VERSION` 强等于 `PLATFORM_VERSION`；
     3. `bootstrap/types` 导出的平台版本强等于核心版本；
@@ -1920,36 +1920,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     6. `docs/conf.py` 动态或静态严格与 `package.json` 对齐。
   - 后续任何发版若漏改任一处或引发插件互锁，`pnpm test` 会在 1 秒内阻断发布并给出清晰指引。
 - **文档系统版本动态绑定 (Dynamic Docs Versioning)**：
-  - 改造 [`docs/conf.py`](file:///home/wuxf/Develop/openlearnv2/docs/conf.py)，改用 Python 原生动态读取根目录 `package.json` 的版本号，保证 Sphinx 文档系统与主应用平台版本永不脱节。
+  - 改造 [`docs/conf.py`](./docs/conf.py)，改用 Python 原生动态读取根目录 `package.json` 的版本号，保证 Sphinx 文档系统与主应用平台版本永不脱节。
 - **SDK 依赖版本对齐与发版脚本加固 (Dependency & Publish Hardening)**：
   - 升级根目录 `package.json` 对 `@openlearn/plugin-sdk` 的依赖为 `^3.5.2`；
-  - 加固 [`scripts/publish.sh`](file:///home/wuxf/Develop/openlearnv2/scripts/publish.sh)，前置注入 `pnpm lint` 与防漂移测试强制门禁；
-  - 完善发版指南 [`.agents/skills/openlearn-release-workflow/SKILL.md`](file:///home/wuxf/Develop/openlearnv2/.agents/skills/openlearn-release-workflow/SKILL.md) 标准操作规程。
+  - 加固 [`scripts/publish.sh`](./scripts/publish.sh)，前置注入 `pnpm lint` 与防漂移测试强制门禁；
+  - 完善发版指南 [`.agents/skills/openlearn-release-workflow/SKILL.md`](./.agents/skills/openlearn-release-workflow/SKILL.md) 标准操作规程。
 - **生态与插件开发规范文档纠偏 (Ecosystem Doc Fixes)**：
-  - 修正 [`docs/plugin/plugin-manifest-spec.md`](file:///home/wuxf/Develop/openlearnv2/docs/plugin/plugin-manifest-spec.md) 与插件开发教程中的 SemVer 示范，全面替换为 `">=0.2.5"` 并详细阐述 SemVer 0.x 规则。
+  - 修正 [`docs/plugin/plugin-manifest-spec.md`](./docs/plugin/plugin-manifest-spec.md) 与插件开发教程中的 SemVer 示范，全面替换为 `">=0.2.5"` 并详细阐述 SemVer 0.x 规则。
 
 ## [0.3.5] - 2026-09-06
 
 ### Fixes & Architecture Alignment
 
 - **平台版本单一真理源 (Single Source of Truth) 与漂移消除**：
-  - 新建 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts)，统一导出 `PLATFORM_VERSION` 与 `OPENLEARN_VERSION`；
-  - 消除 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中历史滞留的 `OPENLEARN_VERSION = '0.2.5'` 硬编码；
-  - 消除 [`packages/core/bootstrap/types/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/bootstrap/types/index.ts) 与各适配器（`UnifiedExtensionRegistry`、`PluginRuntimeAdapter`、`PluginCapabilityGateway`、`PluginRuntimeComposition`、`PluginLifecycleManager`、`PluginDistributionManager` 等）中写死的 `'0.2.5'`；
-  - 修正 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 的 `/health` 接口版本获取逻辑，直接使用 `PLATFORM_VERSION`，彻底避免跨目录/CLI 运行环境下 `process.cwd()` 缺失 `package.json` 导致的读取回退。
+  - 新建 [`packages/core/version.ts`](./packages/core/version.ts)，统一导出 `PLATFORM_VERSION` 与 `OPENLEARN_VERSION`；
+  - 消除 [`packages/core/plugin-host/index.ts`](./packages/core/plugin-host/index.ts) 中历史滞留的 `OPENLEARN_VERSION = '0.2.5'` 硬编码；
+  - 消除 [`packages/core/bootstrap/types/index.ts`](./packages/core/bootstrap/types/index.ts) 与各适配器（`UnifiedExtensionRegistry`、`PluginRuntimeAdapter`、`PluginCapabilityGateway`、`PluginRuntimeComposition`、`PluginLifecycleManager`、`PluginDistributionManager` 等）中写死的 `'0.2.5'`；
+  - 修正 [`server.ts`](./server.ts) 的 `/health` 接口版本获取逻辑，直接使用 `PLATFORM_VERSION`，彻底避免跨目录/CLI 运行环境下 `process.cwd()` 缺失 `package.json` 导致的读取回退。
 - **内置核心插件与模版兼容性放宽 (Relaxed Engine Constraints)**：
   - 将 7 大内置插件（`builtin`、`vfs`、`process`、`management`、`ai-planner`、`ai-submit-injector`、`assignment-eval`）及插件 SDK 脚手架模板中的 `engines.openlearn` 由过紧的 `^0.2.5`（SemVer 规范下仅匹配 `<0.3.0`）调整为向上兼容的 `>=0.2.5`，杜绝 0.x 阶段版本升级引发的插件互锁拒载异常。
 - **SPA 路由与健康检查端点层级调整 (Route Order Correction)**：
   - 将 `/health`、`/health/ready`、`/metrics` 端点移至静态 SPA 回退路由（`app.get('*', ...)`）之前，修复生产环境下对系统探针请求错误返回 `index.html` 的问题。
 - **历史数据库插件恢复安全容错 (Worker Directory Existence Guard)**：
-  - 在 [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts) 创建 Worker 时，检查 `pluginDir/index.js` 是否在物理磁盘真实存在。若物理文件因迁移或版本迭代已清理，自动安全回退至内嵌数据 URL 启动，消除启动恢复时的 `ERR_MODULE_NOT_FOUND` 堆栈报警。
+  - 在 [`packages/core/worker-runtime/worker-manager.ts`](./packages/core/worker-runtime/worker-manager.ts) 创建 Worker 时，检查 `pluginDir/index.js` 是否在物理磁盘真实存在。若物理文件因迁移或版本迭代已清理，自动安全回退至内嵌数据 URL 启动，消除启动恢复时的 `ERR_MODULE_NOT_FOUND` 堆栈报警。
 
 ## [0.3.3] - 2026-09-06
 
 ### Fixes & Network Hardening
 
 - **Socket.IO & Express Same-Origin CORS 智能放行 (Same-Origin Auto-Allowance & CORS Fix)**：
-  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 引入统一的 `isOriginAllowed(origin, hostHeader)` 判定算法；
+  - 在 [`server.ts`](./server.ts) 引入统一的 `isOriginAllowed(origin, hostHeader)` 判定算法；
   - 修复生产环境（未显式配 `ALLOWED_ORIGINS` 时）CORS 回调对同源浏览器请求（如 `http://localhost:9000`）抛出 `new Error('CORS not allowed')` 导致底层 Engine.IO 响应 `HTTP 400 Bad Request {"code": 3, "message": "Bad request"}` 的问题；
   - 自动放行同源请求（`new URL(origin).host === hostHeader`）与本地回环来源（`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0`），对于未受信任跨域请求安全剔除 `Access-Control-Allow-Origin` 头而不再向底层抛出未捕获异常；
   - 解决客户端重连由于 CORS 阻断陷入反复 400 的异常状态。
@@ -1959,14 +1959,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes & Runtime Hardening
 
 - **Vite 依赖动态按需解耦 (Vite Decoupling & Module Loader Fix)**：
-  - 移除 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 顶层静态 `import { createServer as createViteServer } from 'vite'`，消除 esbuild 打包 CJS 时在 `dist/server.cjs` 顶层生成的 `require("vite")` 提升语句；
+  - 移除 [`server.ts`](./server.ts) 顶层静态 `import { createServer as createViteServer } from 'vite'`，消除 esbuild 打包 CJS 时在 `dist/server.cjs` 顶层生成的 `require("vite")` 提升语句；
   - 将开发期 Vite 中间件初始化改为在 `if (process.env.NODE_ENV !== 'production')` 分支内执行异步 `await import('vite')`，彻底解决在纯生产环境（零 `devDependencies` 安装）及 `npx openlearn-next@latest` 启动时由于缺失 vite 引发的 `Cannot find module 'vite'` 崩溃异常。
 - **esbuild 核心解耦与生产依赖补齐 (esbuild Dynamic Import & Dependency Governance)**：
-  - 移除 [`packages/core/esm-loader/install-utils.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/esm-loader/install-utils.ts) 顶层静态 `import * as esbuild from 'esbuild'`，在 `bundlePlugin` 函数内部改为按需动态 `await import('esbuild')`，避免服务启动模块加载期对 esbuild 的同步求值；
-  - 将 `esbuild` 正式移入 [`package.json`](file:///home/wuxf/Develop/openlearnv2/package.json) 的生产 `dependencies`，保障在独立部署与分发场景下管理后台上传安装插件 ZIP 时的内存打包与编译功能完好可用；
+  - 移除 [`packages/core/esm-loader/install-utils.ts`](./packages/core/esm-loader/install-utils.ts) 顶层静态 `import * as esbuild from 'esbuild'`，在 `bundlePlugin` 函数内部改为按需动态 `await import('esbuild')`，避免服务启动模块加载期对 esbuild 的同步求值；
+  - 将 `esbuild` 正式移入 [`package.json`](./package.json) 的生产 `dependencies`，保障在独立部署与分发场景下管理后台上传安装插件 ZIP 时的内存打包与编译功能完好可用；
   - 经扫描校验，`dist/server.cjs` 外部依赖缺失项完全归零（`Missing from dependencies: []`）。
 - **CLI 生产环境模式显式守卫 (CLI Production Safeguard)**：
-  - 在 [`cli.mjs`](file:///home/wuxf/Develop/openlearnv2/cli.mjs) 启动子进程前显式注入 `process.env.NODE_ENV = process.env.NODE_ENV || 'production'`，保障从 CLI/npx 唤起时稳定运行于生产静态托管模式。
+  - 在 [`cli.mjs`](./cli.mjs) 启动子进程前显式注入 `process.env.NODE_ENV = process.env.NODE_ENV || 'production'`，保障从 CLI/npx 唤起时稳定运行于生产静态托管模式。
 
 ## [0.3.1] - 2026-09-06
 
@@ -1977,77 +1977,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Security & Multi-Teacher Authorization (Round 4)
 
 - **IDOR 课程水平越权防护与教师专属所有权 (Lesson Ownership & IDOR Protection)**：
-  - **数据层升级**：在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 与 [`migrations/000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql) 中的 `lessons` 表增加 `creator_id TEXT` 字段，并在系统启动时平滑执行 `ALTER TABLE lessons ADD COLUMN creator_id TEXT`，全面兼容历史老版本未标记创建人的课程；
-  - **内核指令绑定**：在 [`packages/plugins/builtin.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/builtin.ts) 的 `lesson.create` 命令执行时，优先解析 `payload.creatorId` 或提取 `command.actorId`（自动解析 `user:usr_id:teacher` 前缀），并在发出的 `lesson.created` 领域事件中携带创建人 ID；
-  - **路由所有权守卫与白板写访问权限中间件**：在 [`server/routes/lessons.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/lessons.ts) 抽象出通用鉴权函数 `checkLessonOwnership(req, lessonId)` 与声明式白板写权限中间件 `requireWhiteboardWriteAccess()`：
+  - **数据层升级**：在 [`packages/core/db/index.ts`](./packages/core/db/index.ts) 与 [`migrations/000_initial_schema.sql`](./migrations/000_initial_schema.sql) 中的 `lessons` 表增加 `creator_id TEXT` 字段，并在系统启动时平滑执行 `ALTER TABLE lessons ADD COLUMN creator_id TEXT`，全面兼容历史老版本未标记创建人的课程；
+  - **内核指令绑定**：在 [`packages/plugins/builtin.ts`](./packages/plugins/builtin.ts) 的 `lesson.create` 命令执行时，优先解析 `payload.creatorId` 或提取 `command.actorId`（自动解析 `user:usr_id:teacher` 前缀），并在发出的 `lesson.created` 领域事件中携带创建人 ID；
+  - **路由所有权守卫与白板写访问权限中间件**：在 [`server/routes/lessons.ts`](./server/routes/lessons.ts) 抽象出通用鉴权函数 `checkLessonOwnership(req, lessonId)` 与声明式白板写权限中间件 `requireWhiteboardWriteAccess()`：
     - 针对课堂主白板（`!assignment-`），强制教师/管理员登录并验证课程所有权，严禁学生和未授权教师修改/清空白板；
     - 针对随堂作业学生白板（`assignment-${id}-student-${studentId}`），强制身份认证并校验当前学生是否为该作业的拥有者（防止跨学生篡改与匿名恶意刷白板），教师与管理员放行以支持在线批注与作业点评；
     - 统一挂载至 `POST /api/lessons/:id/whiteboard/reset`、`POST /api/lessons/:id/whiteboard`、`PUT /api/lessons/:id/whiteboard/:elementId`、`DELETE /api/lessons/:id/whiteboard`、`DELETE /api/lessons/:id/whiteboard/:elementId`；
     - 为 `POST /api/lessons/:id/quiz-submit`、`GET /api/lessons/:id/quiz-submissions` 以及 `POST /api/lessons/:id/ai-tutor` 补齐明确的 `requireAuth` 角色中间件，拦截匿名恶意调用与大模型 Token 额度消耗。
   - **教研协同流转与一键克隆**：重构 `POST /api/lessons/:id/clone` 接口，强制挂载 `requireAuth('teacher', 'administrator')` 中间件，在复制课程模板与白板结构时自动将新课程属主更新为当前操作教师，实现“跨教师只读浏览 + 一键克隆转为本人教案”的顺畅备课流转；
   - **前端交互与安全视觉**：
-    - 在 [`CourseManagement.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/CourseManagement.tsx) 课程卡片中显著标注创建教师身份（本人课程展示皇冠徽章，他人课程展示只读图标），对于非本人创建课程禁用删除按钮并提示权限不足；新增「我的备课」快速筛选开关，支持教师在海量共享课程中一键聚焦个人教案；
-    - 在 [`LessonEditorView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/LessonEditorView.tsx) 中增加只读横幅提示，并在他人课程模式下引导一键克隆，拦截非所有者修改操作；
-  - **自动化测试套件**：编写 [`server/__tests__/lesson_ownership.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/lesson_ownership.test.ts)，全方位覆盖未登录拦截 (401)、学生越权阻断 (403)、跨学生作业白板篡改拦截 (403)、跨教师越权拦截 (403)、管理员放行、老旧课程兼容以及克隆后属主流转等核心用例，全平台 177 个测试套件（1011 个测试用例）持续 100% 绿灯。
+    - 在 [`CourseManagement.tsx`](./src/features/teacher/CourseManagement.tsx) 课程卡片中显著标注创建教师身份（本人课程展示皇冠徽章，他人课程展示只读图标），对于非本人创建课程禁用删除按钮并提示权限不足；新增「我的备课」快速筛选开关，支持教师在海量共享课程中一键聚焦个人教案；
+    - 在 [`LessonEditorView.tsx`](./src/features/teacher/LessonEditorView.tsx) 中增加只读横幅提示，并在他人课程模式下引导一键克隆，拦截非所有者修改操作；
+  - **自动化测试套件**：编写 [`server/__tests__/lesson_ownership.test.ts`](./server/__tests__/lesson_ownership.test.ts)，全方位覆盖未登录拦截 (401)、学生越权阻断 (403)、跨学生作业白板篡改拦截 (403)、跨教师越权拦截 (403)、管理员放行、老旧课程兼容以及克隆后属主流转等核心用例，全平台 177 个测试套件（1011 个测试用例）持续 100% 绿灯。
 
 ### Security & Engineering Governance (Round 3)
 
 - **SEC-01 传输安全与 Cookie 策略加固 (Cookie Secure & Nginx TLS Best Practice)**：
-  - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts) 中对身份凭据 Cookie `edu_os_token` 进行安全改造，根据请求来源及环境协议动态注入 `; Secure` 标识，并将超长有效期缩短并精准对齐服务端会话有效期（7 天 / 604,800 秒）。
-  - 在 [`nginx.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.conf) 与 [`nginx.generated.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.generated.conf) 增补全链路 HTTPS 443 SSL 规范配置（TLS 1.2/1.3、强加密套件、HSTS），并提供 80 端口强跳 443 的最佳实践指导。
+  - 在 [`server/routes/roster.ts`](./server/routes/roster.ts) 中对身份凭据 Cookie `edu_os_token` 进行安全改造，根据请求来源及环境协议动态注入 `; Secure` 标识，并将超长有效期缩短并精准对齐服务端会话有效期（7 天 / 604,800 秒）。
+  - 在 [`nginx.conf`](./nginx.conf) 与 [`nginx.generated.conf`](./nginx.generated.conf) 增补全链路 HTTPS 443 SSL 规范配置（TLS 1.2/1.3、强加密套件、HSTS），并提供 80 端口强跳 443 的最佳实践指导。
 - **SEC-02 敏感端点鉴权防护与统一脱敏错误处理中间件 (Endpoint Protection & Info Leakage Defense)**：
-  - 对监控与关键配置端点挂载严格权限门禁：[`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 中的 `/metrics` 挂载 `requireAuth('administrator')`；[`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts) 中的 `GET /api/ai-providers` 挂载 `requireAuth('teacher', 'administrator')`，`/api/admin/logs` 挂载 `requireAuth('administrator')`。
-  - 创建 [`server/utils/error-handler.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/error-handler.ts) 实现统一的 `sendSafeError` 错误响应中间件，在生产环境下统一屏蔽底层 SQL 语句、文件系统绝对路径与系统异常堆栈，全面替换各路由模块中的裸 `e.message` 返回，杜绝敏感系统信息探测与泄漏。
+  - 对监控与关键配置端点挂载严格权限门禁：[`server.ts`](./server.ts) 中的 `/metrics` 挂载 `requireAuth('administrator')`；[`server/routes/plugins.ts`](./server/routes/plugins.ts) 中的 `GET /api/ai-providers` 挂载 `requireAuth('teacher', 'administrator')`，`/api/admin/logs` 挂载 `requireAuth('administrator')`。
+  - 创建 [`server/utils/error-handler.ts`](./server/utils/error-handler.ts) 实现统一的 `sendSafeError` 错误响应中间件，在生产环境下统一屏蔽底层 SQL 语句、文件系统绝对路径与系统异常堆栈，全面替换各路由模块中的裸 `e.message` 返回，杜绝敏感系统信息探测与泄漏。
 - **SEC-03 依赖治理、锁定文件与工程规范校准 (Dependency Governance & Clean Repository)**：
-  - 彻底清理仓库跟踪的冗余锁定文件 `package-lock.json` 与历史遗留临时文件 `temp_check.mjs`、`test-results/`，同步在 [`.gitignore`](file:///home/wuxf/Develop/openlearnv2/.gitignore) 增补忽略规则。
-  - 在 [`package.json`](file:///home/wuxf/Develop/openlearnv2/package.json) 补齐 `"engines": { "node": ">=20.0.0", "pnpm": ">=9.0.0" }`；清理失效废弃脚本 `migrate-passwords`；
-  - 编写 [`scripts/backup-db.ts`](file:///home/wuxf/Develop/openlearnv2/scripts/backup-db.ts) 重构 `db:backup` 脚本，修复此前因 ESM/CJS 混用导致的模块加载失败。
+  - 彻底清理仓库跟踪的冗余锁定文件 `package-lock.json` 与历史遗留临时文件 `temp_check.mjs`、`test-results/`，同步在 [`.gitignore`](./.gitignore) 增补忽略规则。
+  - 在 [`package.json`](./package.json) 补齐 `"engines": { "node": ">=20.0.0", "pnpm": ">=9.0.0" }`；清理失效废弃脚本 `migrate-passwords`；
+  - 编写 [`scripts/backup-db.ts`](./scripts/backup-db.ts) 重构 `db:backup` 脚本，修复此前因 ESM/CJS 混用导致的模块加载失败。
 - **SEC-04 代码清洁度与路由层解耦治理 (Lint Warnings & Architecture Hygiene)**：
   - 全面清理由旧版 `server.ts` 拆分至 14 个路由文件时机械复制的无用头文件导入与上下文全量解构代码（如 `GoogleGenAI`、`xss`、`crypto`、`bcrypt`、`ai-submit-injector` 等），ESLint warnings 大幅缩减近 600 个，TypeScript 类型检查零错误通过。
 - **SEC-05 自动化测试与内核文档同步 (Docs & Test Parallelism Alignment)**：
-  - 校准 [`AGENTS.md`](file:///home/wuxf/Develop/openlearnv2/AGENTS.md) 描述，阐明 Vitest 启用 `fileParallelism: true` 的真实原理（通过环境变量 `VITEST_POOL_ID` 隔离于独立 SQLite 库文件），修复文档失真；全量 176 个测试套件、993 个用例持续 100% 绿灯通过。
+  - 校准 [`AGENTS.md`](./AGENTS.md) 描述，阐明 Vitest 启用 `fileParallelism: true` 的真实原理（通过环境变量 `VITEST_POOL_ID` 隔离于独立 SQLite 库文件），修复文档失真；全量 176 个测试套件、993 个用例持续 100% 绿灯通过。
 
 ### Security
 
 - **VULN-06 白板协同投毒阻断 (RCE & XSS Defense)**：
-  - 彻底移除 [`MathGraphWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/MathGraphWrapper.tsx) 中的原生 `eval`，自研实现算术 AST 递归下降求值器 `safeEvaluateMath`，严格限定白名单数学运算与常用函数，彻底阻断 JS 语法、属性与原型链穿透。
-  - 重构 [`CodeSandboxWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/CodeSandboxWrapper.tsx)，将代码执行迁移至独立 Web Worker Blob 沙箱环境，隔离 DOM、Cookie、`localStorage` 访问，并配置 3 秒看门狗超时中断。
+  - 彻底移除 [`MathGraphWrapper.tsx`](./src/features/whiteboard/widgets/MathGraphWrapper.tsx) 中的原生 `eval`，自研实现算术 AST 递归下降求值器 `safeEvaluateMath`，严格限定白名单数学运算与常用函数，彻底阻断 JS 语法、属性与原型链穿透。
+  - 重构 [`CodeSandboxWrapper.tsx`](./src/features/whiteboard/widgets/CodeSandboxWrapper.tsx)，将代码执行迁移至独立 Web Worker Blob 沙箱环境，隔离 DOM、Cookie、`localStorage` 访问，并配置 3 秒看门狗超时中断。
 - **VULN-03 审批端点鉴权与篡改拦截**：
-  - 在 [`server/routes/processes.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/processes.ts) 中对 `/api/approvals/*` 与 `/api/processes/*` 强制挂载 `requireAuth('administrator')`，并彻底移除 `payloadOverride` 字段，杜绝参数篡改风险。
+  - 在 [`server/routes/processes.ts`](./server/routes/processes.ts) 中对 `/api/approvals/*` 与 `/api/processes/*` 强制挂载 `requireAuth('administrator')`，并彻底移除 `payloadOverride` 字段，杜绝参数篡改风险。
 - **VULN-07 课件上传路径穿越与同源 XSS 隔离**：
-  - 在 [`packages/plugins/builtin.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/builtin.ts) 中对课件单 HTML 上传增加路径净化 `path.basename(filename.replace(/\\/g, '/'))` 与 `!destPath.startsWith(storageDir)` 沙箱边界强校验，彻底拦截 `../` 路径穿越写文件。
-  - 在 [`server/routes/resources.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/resources.ts) 直出 HTML 资源响应头注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads`，将其降级为 opaque origin，消除同源 XSS 攻击向量。
+  - 在 [`packages/plugins/builtin.ts`](./packages/plugins/builtin.ts) 中对课件单 HTML 上传增加路径净化 `path.basename(filename.replace(/\\/g, '/'))` 与 `!destPath.startsWith(storageDir)` 沙箱边界强校验，彻底拦截 `../` 路径穿越写文件。
+  - 在 [`server/routes/resources.ts`](./server/routes/resources.ts) 直出 HTML 资源响应头注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads`，将其降级为 opaque origin，消除同源 XSS 攻击向量。
 - **VULN-01 核心业务路由鉴权全覆盖**：
-  - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts)、[`server/routes/grading.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/grading.ts)、[`server/routes/assignments.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/assignments.ts)、[`server/routes/schedules.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/schedules.ts)、[`server/routes/lessons.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/lessons.ts)、[`server/routes/workspace.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/workspace.ts) 中为所有增删改接口全面补齐 `requireAuth('teacher', 'administrator')`。
+  - 在 [`server/routes/roster.ts`](./server/routes/roster.ts)、[`server/routes/grading.ts`](./server/routes/grading.ts)、[`server/routes/assignments.ts`](./server/routes/assignments.ts)、[`server/routes/schedules.ts`](./server/routes/schedules.ts)、[`server/routes/lessons.ts`](./server/routes/lessons.ts)、[`server/routes/workspace.ts`](./server/routes/workspace.ts) 中为所有增删改接口全面补齐 `requireAuth('teacher', 'administrator')`。
   - 在 `/api/vfs` 针对 `virtual-submissions` 增加数据脱敏，普通学生仅可拉取本人提交物，杜绝全校学生姓名、提交内容与成绩泄露。
 - **VULN-02 课件成绩伪造与冒名提交拦截**：
-  - 在 [`server/routes/courseware.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/courseware.ts) 课件管理接口挂载教师/管理员鉴权，在 `/attempts/:attemptId/log` 与 `/submit` 增加学生所属权强校验，拦截跨账号冒名刷分改分。
+  - 在 [`server/routes/courseware.ts`](./server/routes/courseware.ts) 课件管理接口挂载教师/管理员鉴权，在 `/attempts/:attemptId/log` 与 `/submit` 增加学生所属权强校验，拦截跨账号冒名刷分改分。
 - **VULN-04 插件安装命令注入防护与默认凭证预警**：
-  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中为依赖安装统一添加 `--ignore-scripts` 阻断 postinstall 钩子执行，对 `manifest.deploy.script` 增加 `ALLOW_UNSAFE_PLUGIN_SCRIPTS=true` 环境变量门禁。
-  - 在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 针对默认内置管理员与教师账号增加显著安全日志预警。
+  - 在 [`packages/core/plugin-host/index.ts`](./packages/core/plugin-host/index.ts) 中为依赖安装统一添加 `--ignore-scripts` 阻断 postinstall 钩子执行，对 `manifest.deploy.script` 增加 `ALLOW_UNSAFE_PLUGIN_SCRIPTS=true` 环境变量门禁。
+  - 在 [`packages/core/db/index.ts`](./packages/core/db/index.ts) 针对默认内置管理员与教师账号增加显著安全日志预警。
 - **VULN-05 插件 Worker 资源配额限制**：
-  - 在 [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts) 实例化 Worker 时配置 `resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 }`，有效抵御插件内存耗尽型拒绝服务（DoS）。
+  - 在 [`packages/core/worker-runtime/worker-manager.ts`](./packages/core/worker-runtime/worker-manager.ts) 实例化 Worker 时配置 `resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 }`，有效抵御插件内存耗尽型拒绝服务（DoS）。
 - **VULN-08 Socket.IO 握手鉴权与 CORS 严格白名单化**：
-  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 为 Socket.IO 引入 `io.use()` 握手鉴权中间件，校验 `edu_os_token` Cookie/Auth 并注入 Session；严格限制 CORS Origin 回调，生产环境下禁止未配置时退化为 `origin: '*'`。
-  - 在 [`server/presence.ts`](file:///home/wuxf/Develop/openlearnv2/server/presence.ts) 增加角色与身份强校验，阻断学生客户端伪造他人 `studentId` 发起进入/离开课堂事件，并对 `teacher-broadcast-segment` 与 `teacher-ping-student` 严格限定仅教师或管理员可用。
+  - 在 [`server.ts`](./server.ts) 为 Socket.IO 引入 `io.use()` 握手鉴权中间件，校验 `edu_os_token` Cookie/Auth 并注入 Session；严格限制 CORS Origin 回调，生产环境下禁止未配置时退化为 `origin: '*'`。
+  - 在 [`server/presence.ts`](./server/presence.ts) 增加角色与身份强校验，阻断学生客户端伪造他人 `studentId` 发起进入/离开课堂事件，并对 `teacher-broadcast-segment` 与 `teacher-ping-student` 严格限定仅教师或管理员可用。
 - **VULN-09 插件 ZIP 条目与脚本 Zip Slip 绝对防御**：
-  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中对 `storage/` 静态条目解压与 `manifest.deploy.script` 路径进行全面规范化，严格拒绝任何包含 `..` 的路径，并强校验 `path.resolve` 结果必须以插件安装目录为绝对前缀，阻断路径穿越写盘。
+  - 在 [`packages/core/plugin-host/index.ts`](./packages/core/plugin-host/index.ts) 中对 `storage/` 静态条目解压与 `manifest.deploy.script` 路径进行全面规范化，严格拒绝任何包含 `..` 的路径，并强校验 `path.resolve` 结果必须以插件安装目录为绝对前缀，阻断路径穿越写盘。
 - **VULN-10 Helmet Content-Security-Policy (CSP) 策略深度收紧**：
-  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 的 Helmet CSP 中移除 `scriptSrc` 通配 `https:` 与 `data:`，仅允许 `'self'`, `'unsafe-inline'`, `'unsafe-eval'`, `blob:`；移除 `frameSrc` 全局通配 `http:` 与 `https:`，仅允许 `'self'`, `blob:`, `data:` 及环境变量可配置的合法课件域；精确化 `styleSrc` 与 `fontSrc` 仅允许受信 Google Fonts 域名。
+  - 在 [`server.ts`](./server.ts) 的 Helmet CSP 中移除 `scriptSrc` 通配 `https:` 与 `data:`，仅允许 `'self'`, `'unsafe-inline'`, `'unsafe-eval'`, `blob:`；移除 `frameSrc` 全局通配 `http:` 与 `https:`，仅允许 `'self'`, `blob:`, `data:` 及环境变量可配置的合法课件域；精确化 `styleSrc` 与 `fontSrc` 仅允许受信 Google Fonts 域名。
 - **VULN-11 数据库 RPC 核心安全表与底层高危 SQL 指令拦截**：
-  - 在 [`packages/core/worker-runtime/service-host.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/service-host.ts) 中增加 `FORBIDDEN_OPERATIONS` 正则，全面封杀 `ATTACH DATABASE`、`DETACH DATABASE`、`PRAGMA`、`VACUUM`、`CREATE/DROP TRIGGER` 与 `CREATE/DROP VIEW`；
+  - 在 [`packages/core/worker-runtime/service-host.ts`](./packages/core/worker-runtime/service-host.ts) 中增加 `FORBIDDEN_OPERATIONS` 正则，全面封杀 `ATTACH DATABASE`、`DETACH DATABASE`、`PRAGMA`、`VACUUM`、`CREATE/DROP TRIGGER` 与 `CREATE/DROP VIEW`；
   - 扩展核心安全保护表白名单与 DDL 作用域校验，杜绝插件通过裸 SQL 绕过业务层或破坏数据库内部结构。
 - **VULN-12 生产环境依赖漏洞治理与子依赖版本覆盖**：
   - 将仅用于开发和打包的 `xlsx` 迁移至 `devDependencies`，将 `vite` 迁移至 `devDependencies`；
   - 在 `pnpm-workspace.yaml` 中配置安全版本覆盖（`overrides`），将 `ws` (>=8.21.0), `socket.io-parser` (>=4.2.7), `nanoid` (>=3.3.18), `postcss` (>=8.5.23), `ip-address` (>=10.3.1), `dompurify` (>=3.4.13), `qs` (>=6.16.0), `body-parser` (>=1.20.6), `protobufjs` (>=7.6.5) 全面升级到安全版本。
   - `pnpm audit --prod` 达成 **0 vulnerabilities (无已知漏洞)**。
 - **VULN-13 课件 LMS Bridge 消息响应定向化与通配广播收紧**：
-  - 在 [`src/services/lms-bridge.ts`](file:///home/wuxf/Develop/openlearnv2/src/services/lms-bridge.ts) 回复 `LMS_PROGRESS_RESPONSE` 时严格校验接收方窗口属于 DOM 中受管辖的有效 iframe；针对具有非 null 真实域名的 iframe 定向回传 `event.origin`，并在 `sendCommandToCourseware` 中根据 iframe URL 解析真实 Origin，消除向非受信窗口通配泄露数据的隐患。
+  - 在 [`src/services/lms-bridge.ts`](./src/services/lms-bridge.ts) 回复 `LMS_PROGRESS_RESPONSE` 时严格校验接收方窗口属于 DOM 中受管辖的有效 iframe；针对具有非 null 真实域名的 iframe 定向回传 `event.origin`，并在 `sendCommandToCourseware` 中根据 iframe URL 解析真实 Origin，消除向非受信窗口通配泄露数据的隐患。
 - **VULN-14 前端插件静态解析与静态路由沙箱隔离**：
-  - 彻底重构 [`src/utils/pluginParsers.ts`](file:///home/wuxf/Develop/openlearnv2/src/utils/pluginParsers.ts)，完全删除主线程中的 `new Function` 动态求值，改用纯静态正则与作用域提取，杜绝浏览器主线程解析恶意插件时遭受同源脚本执行攻击；
-  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 的插件静态资源路由挂载中间件，强制注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads` 与 `X-Content-Type-Options: nosniff` 响应头，确保插件静态前端页面降级至沙箱隔离环境，无法越权窃取宿主 Cookie 及本地存储。
+  - 彻底重构 [`src/utils/pluginParsers.ts`](./src/utils/pluginParsers.ts)，完全删除主线程中的 `new Function` 动态求值，改用纯静态正则与作用域提取，杜绝浏览器主线程解析恶意插件时遭受同源脚本执行攻击；
+  - 在 [`packages/core/plugin-host/index.ts`](./packages/core/plugin-host/index.ts) 的插件静态资源路由挂载中间件，强制注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads` 与 `X-Content-Type-Options: nosniff` 响应头，确保插件静态前端页面降级至沙箱隔离环境，无法越权窃取宿主 Cookie 及本地存储。
 - **自动化安全回归验证**：
-  - 扩充 [`server/__tests__/security_hardening.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/security_hardening.test.ts) 与 [`src/utils/__tests__/pluginParsers.test.ts`](file:///home/wuxf/Develop/openlearnv2/src/utils/__tests__/pluginParsers.test.ts)，全量 176 个测试套件、993 个用例持续保持 100% 绿灯通过。
+  - 扩充 [`server/__tests__/security_hardening.test.ts`](./server/__tests__/security_hardening.test.ts) 与 [`src/utils/__tests__/pluginParsers.test.ts`](./src/utils/__tests__/pluginParsers.test.ts)，全量 176 个测试套件、993 个用例持续保持 100% 绿灯通过。
 
 ## [0.3.0] - 2026-09-06
 
@@ -2055,39 +2055,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 3)**：
   - **主题可视化设计器 (`ThemeDesignerModal.tsx`)**：开发沉浸式调色板设计器，内置 4 套创意预设（高雅墨蓝、暮樱柔粉、复古秋叶、深海极客），提供核心主色/背景/卡片/边框/文字等色值微调、实时拟真沙箱视口微缩预览、配置 JSON 导入/导出与复制，支持本地自定义主题管理与一键激活。
-  - **微前端沙箱与互动课件主题同步 (MFE & Courseware Theme Bridge)**：升级 [`src/services/lms-bridge.ts`](file:///home/wuxf/Develop/openlearnv2/src/services/lms-bridge.ts) 与 [`server/utils/bridge-sdk.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/bridge-sdk.ts)，宿主向所有课件沙箱 `iframe` 跨域广播 `theme:changed` 与 `LMS_THEME_CHANGED` 消息；沙箱内部自动响应式写入 `data-theme` 属性与 CSS 变量，并为第三方课件提供 `window.LMS.getTheme()` 查询 API。
-  - **课件加载主动握手**：在 [`InteractiveCoursewareViewer.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/courseware/InteractiveCoursewareViewer.tsx) 与 [`HtmlAppletFrame.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/HtmlAppletFrame.tsx) 的 iframe `onLoad` 时主动下发当前主题，保障各类多文件互动课件与动态 HTML 小应用首屏样式无缝匹配。
+  - **微前端沙箱与互动课件主题同步 (MFE & Courseware Theme Bridge)**：升级 [`src/services/lms-bridge.ts`](./src/services/lms-bridge.ts) 与 [`server/utils/bridge-sdk.ts`](./server/utils/bridge-sdk.ts)，宿主向所有课件沙箱 `iframe` 跨域广播 `theme:changed` 与 `LMS_THEME_CHANGED` 消息；沙箱内部自动响应式写入 `data-theme` 属性与 CSS 变量，并为第三方课件提供 `window.LMS.getTheme()` 查询 API。
+  - **课件加载主动握手**：在 [`InteractiveCoursewareViewer.tsx`](./src/features/courseware/InteractiveCoursewareViewer.tsx) 与 [`HtmlAppletFrame.tsx`](./src/features/whiteboard/components/HtmlAppletFrame.tsx) 的 iframe `onLoad` 时主动下发当前主题，保障各类多文件互动课件与动态 HTML 小应用首屏样式无缝匹配。
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 2)**：
-  - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/rendering-engine/theme/theme-manager.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
-  - **白板悬浮控件 Token 化**：白板悬浮工具栏 [`WhiteboardToolbar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardToolbar.tsx) 与底部分页导航胶囊 [`WhiteboardPageBar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardPageBar.tsx) 全面语义化，支持选取、画笔、几何图形、荧光笔色盘与大纲抽屉无缝随全局换肤。
-  - **核心教学主视图容器适配**：课堂控制中心 [`LiveClassroomView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/LiveClassroomView.tsx)、备课工作台 [`LessonEditorView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/LessonEditorView.tsx)（及画板组件库 [`LessonPalette.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/lesson-editor/LessonPalette.tsx)）与学生端工作台 [`StudentView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/student/StudentView.tsx) 全面接入设计 Token。
-  - **单测护航**：新增 [`theme-manager.test.ts`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/__tests__/theme-manager.test.ts)，全量 174 个测试套件、976 个用例持续保持 100% 绿灯。
+  - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](./src/features/whiteboard/rendering-engine/theme/theme-manager.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
+  - **白板悬浮控件 Token 化**：白板悬浮工具栏 [`WhiteboardToolbar.tsx`](./src/features/whiteboard/components/WhiteboardToolbar.tsx) 与底部分页导航胶囊 [`WhiteboardPageBar.tsx`](./src/features/whiteboard/components/WhiteboardPageBar.tsx) 全面语义化，支持选取、画笔、几何图形、荧光笔色盘与大纲抽屉无缝随全局换肤。
+  - **核心教学主视图容器适配**：课堂控制中心 [`LiveClassroomView.tsx`](./src/components/LiveClassroomView.tsx)、备课工作台 [`LessonEditorView.tsx`](./src/features/teacher/LessonEditorView.tsx)（及画板组件库 [`LessonPalette.tsx`](./src/features/teacher/lesson-editor/LessonPalette.tsx)）与学生端工作台 [`StudentView.tsx`](./src/features/student/StudentView.tsx) 全面接入设计 Token。
+  - **单测护航**：新增 [`theme-manager.test.ts`](./src/features/whiteboard/__tests__/theme-manager.test.ts)，全量 174 个测试套件、976 个用例持续保持 100% 绿灯。
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 1)**：
-  - 基于 Tailwind CSS v4 原生变量机制构建设计 Token 层，在 [`src/index.css`](file:///home/wuxf/Develop/openlearnv2/src/index.css) 中规范 `--bg-app`、`--bg-surface`、`--border-theme`、`--text-main`、`--color-primary` 等语义化设计变量与实用类。
+  - 基于 Tailwind CSS v4 原生变量机制构建设计 Token 层，在 [`src/index.css`](./src/index.css) 中规范 `--bg-app`、`--bg-surface`、`--border-theme`、`--text-main`、`--color-primary` 等语义化设计变量与实用类。
   - 内置 4 套教育场景专属预设：**浅色日间 (Light)**、**暗夜极客 (Dark)**、**教学护眼防眩光 (EyeCare)**、**经典墨绿黑板 (Chalkboard)**。
-  - 新增中心化主题状态管理器 [`src/store/themeStore.ts`](file:///home/wuxf/Develop/openlearnv2/src/store/themeStore.ts)，支持 DOM 响应式同步、本地偏好记忆（`localStorage`）以及动态注册自定义主题样式；
-  - 研发顶栏主题切换器组件 [`ThemeSelector.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/ThemeSelector.tsx)，完成应用主外壳与导航侧边栏的语义化换肤适配。
+  - 新增中心化主题状态管理器 [`src/store/themeStore.ts`](./src/store/themeStore.ts)，支持 DOM 响应式同步、本地偏好记忆（`localStorage`）以及动态注册自定义主题样式；
+  - 研发顶栏主题切换器组件 [`ThemeSelector.tsx`](./src/components/ThemeSelector.tsx)，完成应用主外壳与导航侧边栏的语义化换肤适配。
 - **数据库版本化迁移体系 (Phase 20 - DB-MIG-01)**：
-  - 新增 [`server/utils/migrate.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/migrate.ts) 迁移加载与执行引擎，支持从 `migrations/` 自动读取 `.sql` 文件，按文件名自然排序并解析 `-- UP` 与 `-- DOWN` 分隔符。
+  - 新增 [`server/utils/migrate.ts`](./server/utils/migrate.ts) 迁移加载与执行引擎，支持从 `migrations/` 自动读取 `.sql` 文件，按文件名自然排序并解析 `-- UP` 与 `-- DOWN` 分隔符。
   - 服务启动时自动执行迁移并记录状态至 `_migrations` 表（包含 `applied_at` 与 `checksum`），具备天然幂等性与 duplicate column 容错保护，并支持单项迁移回滚。
-  - 落地首批标准迁移：[`000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql)（30+ 核心数据表与索引）、[`001_add_execution_mode.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/001_add_execution_mode.sql)、[`002_add_client_session_expiry.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/002_add_client_session_expiry.sql)、[`003_classroom_runtime.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/003_classroom_runtime.sql)。
+  - 落地首批标准迁移：[`000_initial_schema.sql`](./migrations/000_initial_schema.sql)（30+ 核心数据表与索引）、[`001_add_execution_mode.sql`](./migrations/001_add_execution_mode.sql)、[`002_add_client_session_expiry.sql`](./migrations/002_add_client_session_expiry.sql)、[`003_classroom_runtime.sql`](./migrations/003_classroom_runtime.sql)。
 
 ### Fixes
 
 - **Worker 插件自建表 DDL 安全白名单修复**：
-  - [`ServiceHost`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/service-host.ts) 构造函数与方法支持同时校验 `dbPluginId`（DB UUID）与 `pluginId`（manifest.id）双重合法命名空间前缀，转义特殊字符为下划线，彻底修复 `@ext/class-manager` 等插件在 worker 内部建表时触发 `not permitted to perform DDL` 导致的 Watchdog 重启崩溃循环。
+  - [`ServiceHost`](./packages/core/worker-runtime/service-host.ts) 构造函数与方法支持同时校验 `dbPluginId`（DB UUID）与 `pluginId`（manifest.id）双重合法命名空间前缀，转义特殊字符为下划线，彻底修复 `@ext/class-manager` 等插件在 worker 内部建表时触发 `not permitted to perform DDL` 导致的 Watchdog 重启崩溃循环。
 - **自定义 AI 提供商首屏列表加载修复**：
-  - 修复 [`usePluginManagement`](file:///home/wuxf/Develop/openlearnv2/src/hooks/usePluginManagement.ts) 与 [`AdminPanel`](file:///home/wuxf/Develop/openlearnv2/src/components/AdminPanel.tsx) 初始化挂载时未主动调用 `fetchAIProviders()` 的问题，确保系统初次运行时默认自带的 DeepSeek 与 MiniMax 模型即时呈现，无需在添加新 provider 之后才被动刷新。
+  - 修复 [`usePluginManagement`](./src/hooks/usePluginManagement.ts) 与 [`AdminPanel`](./src/components/AdminPanel.tsx) 初始化挂载时未主动调用 `fetchAIProviders()` 的问题，确保系统初次运行时默认自带的 DeepSeek 与 MiniMax 模型即时呈现，无需在添加新 provider 之后才被动刷新。
 - **React 19 Rules of Hooks 违规清零**：
-  - 修复 [`PluginCardRenderer.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/PluginCardRenderer.tsx)（`useRef`/`useEffect` 条件调用）与 [`ActivityWorkspaceWidget.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/activity-ecosystem/ActivityWorkspaceWidget.tsx)（`useMemo` 条件调用）中的 3 处致命 Hook 违规，消除了组件卸载/挂载时 Fiber 链条错乱的运行时风险。
+  - 修复 [`PluginCardRenderer.tsx`](./src/features/whiteboard/widgets/PluginCardRenderer.tsx)（`useRef`/`useEffect` 条件调用）与 [`ActivityWorkspaceWidget.tsx`](./src/features/activity-ecosystem/ActivityWorkspaceWidget.tsx)（`useMemo` 条件调用）中的 3 处致命 Hook 违规，消除了组件卸载/挂载时 Fiber 链条错乱的运行时风险。
 
 ### Refactor / Performance
 
 - **测试套件多 Worker 数据库隔离与 Vitest 并发提速**：
-  - [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 在 `process.env.VITEST` 下按 Worker Pool ID / PID 分配隔离的临时 SQLite 实例，彻底消除跨测试文件数据库死锁竞争。
-  - [`vitest.config.ts`](file:///home/wuxf/Develop/openlearnv2/vitest.config.ts) 开启 `fileParallelism: true`，全量 172 个测试文件、965 个测试用例运行时间从 **204 秒极限压缩至 37.45 秒**（提速 **5.4 倍**）。
+  - [`packages/core/db/index.ts`](./packages/core/db/index.ts) 在 `process.env.VITEST` 下按 Worker Pool ID / PID 分配隔离的临时 SQLite 实例，彻底消除跨测试文件数据库死锁竞争。
+  - [`vitest.config.ts`](./vitest.config.ts) 开启 `fileParallelism: true`，全量 172 个测试文件、965 个测试用例运行时间从 **204 秒极限压缩至 37.45 秒**（提速 **5.4 倍**）。
 - **ESLint 工具链基线修复与清理**：
-  - 修正 [`eslint.config.js`](file:///home/wuxf/Develop/openlearnv2/eslint.config.js) 全局 ignores，排除 `.venv`、构建产物与 Sphinx 文档静态脚本，调整非关键警告级别，`pnpm lint:eslint` 达成 0 Error 绿灯基线。
+  - 修正 [`eslint.config.js`](./eslint.config.js) 全局 ignores，排除 `.venv`、构建产物与 Sphinx 文档静态脚本，调整非关键警告级别，`pnpm lint:eslint` 达成 0 Error 绿灯基线。
 
 ### Features (v0.2.9)
 

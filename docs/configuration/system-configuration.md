@@ -1,6 +1,6 @@
 # System Configuration 系统配置规范
 
-本页汇总平台全部服务端配置入口：环境变量、SQLite 数据库路径、会话密钥与插件 `manifest.configuration`。**当前唯一权威来源是代码**（`server.ts`、`cli.mjs`、`packages/core/worker-runtime/worker-manager.ts`），本页与其同步于 v0.3.22。
+本页汇总平台全部服务端配置入口：环境变量、SQLite 数据库路径、会话密钥与插件 `manifest.configuration`。**当前唯一权威来源是代码**（`server.ts`、`cli.mjs`、`packages/core/worker-runtime/worker-manager.ts`），本页与其同步于 v0.5.0。
 
 ---
 
@@ -22,6 +22,10 @@
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
 | `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）            |
 | `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                                      | Worker 插件激活超时（inline 模式固定 5000ms）                                                                            |
+| `OPENLEARN_WORKER_ISOLATE`                  | `thread`                                     | 插件隔离原语：`thread`（worker_threads，同进程）/`process`（child_process 子进程，仅 `process` 执行模式），见 `.env.example` L-1 节 |
+| `OPENLEARN_PLUGIN_PERMISSION`               | `rw`                                         | 子进程 Node 权限档位：`rw`/`ro`/`off`（仅子进程生效；暂无法约束网络）                                                     |
+| `OPENLEARN_PLUGIN_MAX_HEAP_MB`              | `128`                                        | 子进程 V8 老生代上限（MB），`0`/`off` 关闭                                                                               |
+| `OPENLEARN_WORKER_LIVENESS`                 | `on`                                         | 插件存活探活（默认 30s 间隔 + 15s 宽限）；`off` 关闭                                                                      |
 | `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | —                                            | `ctx.reportProgress` 心跳滑动续期窗口                                                                                    |
 | `DEBUG_COMMAND_BUS`                           | 关闭                                         | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效                                   |
 
