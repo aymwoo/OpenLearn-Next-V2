@@ -41,6 +41,9 @@ jobs:
       - name: Type check
         run: pnpm lint
 
+      - name: Strict type check
+        run: pnpm lint:strict
+
       - name: Run tests
         run: pnpm test
 
@@ -62,6 +65,7 @@ jobs:
                 '## CI Results',
                 '',
                 '✅ `pnpm lint` (tsc --noEmit) passed',
+                '✅ `pnpm lint:strict` (tsc strict) passed',
                 '✅ `pnpm test` (vitest) passed',
               ].join('\n'),
             });
