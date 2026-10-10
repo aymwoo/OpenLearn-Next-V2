@@ -23,6 +23,8 @@ import {
   saveScoreConfig,
   type ScoreAggregation,
 } from './courseware-score.js';
+// R-4：命令 handler 的 base64 Buffer → 临时 ZIP 文件（安装链路只持路径）
+import { removeTempZip, writeBufferToTempZip } from '../core/esm-loader/install-utils.js';
 
 /** 平台原生课件运行时脚本注册表的引用（供 deactivate 声明式回收） */
 let nativeRuntimeScriptRegistry: any = null;
@@ -892,8 +894,16 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const base64Content = payload.base64Data.replace(/^data:[^;]+;base64,/, '');
         const fileBuffer = Buffer.from(base64Content, 'base64');
-        const manifest = await distributionManager.installFromZip(fileBuffer, payload.executionMode);
-        return { success: true, manifest };
+        // R-4：命令天生持 Buffer（base64 已解码）—— 落临时文件后丢引用，
+        // 安装链路只持路径；finally 保证临时文件不残留。
+        let zipPath: string | undefined;
+        try {
+          zipPath = writeBufferToTempZip(fileBuffer);
+          const manifest = await distributionManager.installFromZip(zipPath, payload.executionMode);
+          return { success: true, manifest };
+        } finally {
+          removeTempZip(zipPath);
+        }
       },
     });
 
@@ -925,12 +935,19 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const base64Content = String(payload.base64Data || '').replace(/^data:[^;]+;base64,/, '');
         const fileBuffer = Buffer.from(base64Content, 'base64');
-        const result = await distributionManager.updateFromZip(fileBuffer, {
-          targetPluginId: payload.targetPluginId,
-          executionMode: payload.executionMode,
-          allowDowngrade: !!payload.allowDowngrade,
-        });
-        return { success: true, ...result };
+        // R-4：同 install_zip —— Buffer 落临时文件，安装链路只持路径
+        let zipPath: string | undefined;
+        try {
+          zipPath = writeBufferToTempZip(fileBuffer);
+          const result = await distributionManager.updateFromZip(zipPath, {
+            targetPluginId: payload.targetPluginId,
+            executionMode: payload.executionMode,
+            allowDowngrade: !!payload.allowDowngrade,
+          });
+          return { success: true, ...result };
+        } finally {
+          removeTempZip(zipPath);
+        }
       },
     });
 

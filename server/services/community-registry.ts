@@ -1,4 +1,8 @@
 import semver from 'semver';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { isSafeExternalUrl, fetchWithSafeRedirects, UrlSafetyError } from '../utils/url-safety.js';
 
 /**
@@ -363,7 +367,8 @@ function failureResult(url: string, installed: ReadonlyMap<string, string>, erro
 // ── 插件包下载 ───────────────────────────────────────────────────────────────
 
 export interface DownloadedPackage {
-  buffer: Buffer;
+  /** R-4：下载改为流式落盘，安装链路只持路径（不再持内存 Buffer） */
+  zipPath: string;
   filename: string;
   bytes: number;
 }
@@ -371,6 +376,13 @@ export interface DownloadedPackage {
 /**
  * 服务端下载插件包。地址必须已通过 `isSafeExternalUrl`；响应体超过
  * `MAX_PACKAGE_BYTES` 直接拒绝，避免把非法大文件写进内存与磁盘。
+ *
+ * R-4：**流式落盘**而非 `response.arrayBuffer()` —— 后者把整个包收成内存
+ * Buffer 后再交给安装链路（安装链路内部还要再读一份给 JSZip），下载 + 安装
+ * 双副本。改为边下边写临时文件，返回路径；上限按**实际写入字节**判定
+ * （content-length 可谎报或缺失）。
+ *
+ * 调用方负责 `removeTempZip` 清理返回的 zipPath（try/finally）。
  */
 export async function downloadPluginPackage(
   downloadUrl: string,
@@ -402,15 +414,49 @@ export async function downloadPluginPackage(
     throw new Error(`插件包超过 ${Math.floor(MAX_PACKAGE_BYTES / 1024 / 1024)}MB 上限`);
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length === 0) {
-    throw new Error('插件包为空');
-  }
-  if (buffer.length > MAX_PACKAGE_BYTES) {
-    throw new Error(`插件包超过 ${Math.floor(MAX_PACKAGE_BYTES / 1024 / 1024)}MB 上限`);
+  if (!response.body) {
+    throw new Error('下载插件包失败: 响应体为空');
   }
 
-  return { buffer, filename: resolveFilename(response, downloadUrl), bytes: buffer.length };
+  // R-4：流式落盘 + 实际字节计量（async iterator + 背压，任意时刻仅一个 chunk 在内存）
+  const zipPath = path.join(os.tmpdir(), `plugin-download-${randomUUID()}.zip`);
+  const out = fs.createWriteStream(zipPath);
+  let received = 0;
+
+  try {
+    for await (const chunk of response.body as unknown as AsyncIterable<Buffer>) {
+      received += chunk.length;
+      if (received > MAX_PACKAGE_BYTES) {
+        throw new Error(`插件包超过 ${Math.floor(MAX_PACKAGE_BYTES / 1024 / 1024)}MB 上限`);
+      }
+      if (!out.write(chunk)) {
+        // 背压：等 drain 再继续，避免未写出的 chunk 在内存里堆积
+        await new Promise<void>((resolve, reject) => {
+          out.once('drain', resolve);
+          out.once('error', reject);
+        });
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      out.once('error', reject);
+      out.end(() => resolve());
+    });
+  } catch (err) {
+    out.destroy();
+    try {
+      fs.rmSync(zipPath, { force: true });
+    } catch {
+      /* best effort */
+    }
+    throw err;
+  }
+
+  if (received === 0) {
+    fs.rmSync(zipPath, { force: true });
+    throw new Error('插件包为空');
+  }
+
+  return { zipPath, filename: resolveFilename(response, downloadUrl), bytes: received };
 }
 
 function resolveFilename(response: Response, downloadUrl: string): string {

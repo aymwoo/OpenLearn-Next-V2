@@ -3,6 +3,7 @@ import { Kernel } from '../kernel/index.js';
 import JSZip from 'jszip';
 import { IEventBusServiceToken } from '../di/index.js';
 import { createPluginsDir, cleanupPluginsDir } from '../plugin-host/__tests__/helpers/plugins-dir.js';
+import { tmpZipPath } from '../esm-loader/__tests__/helpers/tmp-zip.js';
 
 describe('Worker RPC and Event Forwarding', () => {
   let kernel: Kernel;
@@ -121,7 +122,7 @@ export default {
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     // Install zip
-    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+    await kernel.pluginHost.installPluginFromZip(tmpZipPath(zipBuffer));
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
@@ -205,7 +206,7 @@ export default {
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     // Install zip (this will trigger npm install in the pluginDir)
-    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+    await kernel.pluginHost.installPluginFromZip(tmpZipPath(zipBuffer));
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
@@ -273,7 +274,7 @@ export default {
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     // Install zip
-    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+    await kernel.pluginHost.installPluginFromZip(tmpZipPath(zipBuffer));
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
@@ -452,7 +453,7 @@ export default {
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     // Install zip
-    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+    await kernel.pluginHost.installPluginFromZip(tmpZipPath(zipBuffer));
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();

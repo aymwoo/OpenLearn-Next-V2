@@ -22,7 +22,7 @@
 
 ```typescript
 async updatePluginFromZip(
-  zipBuffer: Buffer,
+  zipPath: string,
   options?: PluginUpdateOptions,
 ): Promise<PluginUpdateResult>;
 
@@ -51,10 +51,10 @@ interface PluginUpdateResult {
 }
 
 // 新方法
-updateFromZip(zipBuffer: Buffer, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
+updateFromZip(zipPath: string, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
 
 // 既有方法扩展：现支持指定执行模式
-installFromZip(zipBuffer: Buffer, executionMode?: 'worker' | 'inline'): Promise<{ pluginId: string; manifest: Manifest }>;
+installFromZip(zipPath: string, executionMode?: 'worker' | 'inline'): Promise<{ pluginId: string; manifest: Manifest }>;
 ```
 
 ### 命令总线入口（builtin 插件）
@@ -71,7 +71,8 @@ installFromZip(zipBuffer: Buffer, executionMode?: 'worker' | 'inline'): Promise<
 import { IPluginDistributionManagerToken } from '@openlearn/plugin-sdk';
 
 const dm = await ctx.resolve(IPluginDistributionManagerToken);
-const res = await dm.updateFromZip(zipBuffer, { allowDowngrade: false });
+// R-4：入参是 ZIP 文件路径——宿主已把上传/下载内容流式落盘，插件侧只需路径
+const res = await dm.updateFromZip(zipPath, { allowDowngrade: false });
 // res.newVersion, res.wasActive ...
 ```
 

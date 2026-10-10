@@ -50,9 +50,9 @@ export interface IPluginRepositoryAdapter {
 ### 核心 API
 
 1. **`listAvailablePackages()`**: 汇总所有已注册仓库（官方在线市场、私有仓库、本地离线包）中的可用插件包。
-2. **`installFromZip(zipBuffer, executionMode)`**: 直接解析并安装 ZIP 格式的插件安装包。
+2. **`installFromZip(zipPath, executionMode)`**: 直接解析并安装 ZIP 格式的插件安装包。
 3. **`installFromRepository(repoId, pluginId)`**: 从指定仓库下载 ZIP 并完成安装。
-4. **`updateFromZip(zipBuffer, options)`**: 升级插件。若插件处于 `ACTIVE` 状态，会自动完成 `停用 → 覆盖物理文件与 DB 记录 → 重新激活` 的无缝升级序列。
+4. **`updateFromZip(zipPath, options)`**: 升级插件。若插件处于 `ACTIVE` 状态，会自动完成 `停用 → 覆盖物理文件与 DB 记录 → 重新激活` 的无缝升级序列。
 
 ---
 

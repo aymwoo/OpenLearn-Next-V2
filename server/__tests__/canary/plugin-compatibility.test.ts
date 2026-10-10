@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
+import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/tmp-zip.js';
 import { PluginState } from '../../../packages/core/plugin-host/types.js';
 import { bootstrapSharedModules } from '../../../packages/core/plugin-host/context-builder.js';
 import {
@@ -183,7 +184,10 @@ describe.skipIf(!FIXTURE_DIRECTORY)('第三方插件平台兼容性', () => {
 
     // class_manager declares these official plugin dependencies in its manifest.
     for (const dependencyId of ['@openlearn/plugin-management', '@openlearn/plugin-builtin']) {
-      const dependencyManifest = await host.installPluginFromZip(await buildDependencyZip(dependencyId), 'inline');
+      const dependencyManifest = await host.installPluginFromZip(
+        tmpZipPath(await buildDependencyZip(dependencyId)),
+        'inline',
+      );
       const dependencyRuntimeId = host.resolvePluginUuid(dependencyManifest.id);
       installedPluginIds.push(dependencyRuntimeId);
       await host.activatePlugin(dependencyRuntimeId, { mode: 'inline' });
@@ -218,7 +222,7 @@ describe.skipIf(!FIXTURE_DIRECTORY)('第三方插件平台兼容性', () => {
       expect(manifest.id).toBe(manifestId);
       expect(manifest.version).toMatch(/^\d+\.\d+\.\d+/);
 
-      const installedManifest = await host.installPluginFromZip(zipBuffer, 'inline');
+      const installedManifest = await host.installPluginFromZip(tmpZipPath(zipBuffer), 'inline');
       expect(installedManifest.id).toBe(manifestId);
       const pluginId = host.resolvePluginUuid(manifestId);
       installedPluginIds.push(pluginId);

@@ -1,8 +1,14 @@
 import express from 'express';
+import { randomUUID } from 'node:crypto';
 import { isValidExecutionMode, type PluginExecutionMode } from '../../packages/core/plugin-host/types.js';
-import { getMaxUploadBodyBytes } from '../../packages/core/esm-loader/install-utils.js';
+import {
+  getMaxUploadBodyBytes,
+  removeTempZip,
+  writeBufferToTempZip,
+} from '../../packages/core/esm-loader/install-utils.js';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import semver from 'semver';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
@@ -24,8 +30,139 @@ import { createLogger } from '../../packages/core/observability/logger.js';
 
 const pluginLog = createLogger('plugins');
 /**
+ * R-4：把 raw ZIP 上传 body **流式落盘**，返回临时文件路径。
+ *
+ * 替换 `express.raw({ limit })` 的关键动机：后者把整个 body 收成 Buffer 才交
+ * 给 handler —— 一个 300MB 的包就是 300MB Buffer 全程驻留（req.body 引用到
+ * handler 结束）。流式写盘任意时刻只有一个 chunk 在内存。
+ *
+ * 上限在写盘循环里**按实际字节**执行（不信任 content-length：可谎报或缺失）。
+ * 超限立即销毁请求流、清理半成品文件，并直接以 413 结束响应。
+ *
+ * @returns 临时 ZIP 路径；调用方负责 `removeTempZip` 清理（try/finally）
+ */
+function streamBodyToTempZip(req: express.Request, res: express.Response, maxBytes: number): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const zipPath = path.join(os.tmpdir(), `plugin-upload-${randomUUID()}.zip`);
+    const out = fs.createWriteStream(zipPath);
+    let received = 0;
+    let settled = false;
+
+    const cleanup = () => {
+      try {
+        fs.rmSync(zipPath, { force: true });
+      } catch {
+        /* best effort */
+      }
+    };
+
+    out.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    });
+
+    req.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (received > maxBytes) {
+        if (settled) return;
+        settled = true;
+        out.destroy();
+        cleanup();
+        res.status(413).json({
+          success: false,
+          error: `Payload too large. Maximum allowed size is ${Math.floor(maxBytes / 1024 / 1024)}MB`,
+        });
+        reject(new Error('payload-too-large'));
+        return;
+      }
+      if (!out.write(chunk)) {
+        // 背压：暂停读取直到 drain（否则未写出的 chunk 在内存里堆积）
+        req.pause();
+        out.once('drain', () => req.resume());
+      }
+    });
+
+    req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      out.end(() => {
+        if (received === 0) {
+          cleanup();
+          reject(new Error('empty-body'));
+          return;
+        }
+        resolve(zipPath);
+      });
+    });
+
+    req.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      out.destroy();
+      cleanup();
+      reject(err);
+    });
+  });
+}
+
+/**
+ * R-4/L2a：把 fetch 响应体**流式落盘**（one-click-update / 市场下载路径）。
+ *
+ * 取代 `resp.arrayBuffer()`—— 那会把整个包收成内存 Buffer，而安装链路内部
+ * 还要再读一份给 JSZip，下载与安装双副本。流式写盘任意时刻仅一个 chunk。
+ *
+ * 上限按**实际写入字节**判定（content-length 可谎报或缺失）；超限抛
+ * `response-too-large`，由调用方转化为用户可读的 400 响应。
+ */
+async function streamHttpBodyToFile(resp: Response, maxBytes: number): Promise<string> {
+  if (!resp.body) {
+    throw new Error('响应体为空');
+  }
+
+  const zipPath = path.join(os.tmpdir(), `plugin-download-${randomUUID()}.zip`);
+  const out = fs.createWriteStream(zipPath);
+  let received = 0;
+
+  try {
+    for await (const chunk of resp.body as unknown as AsyncIterable<Buffer>) {
+      received += chunk.length;
+      if (received > maxBytes) {
+        throw new Error('response-too-large');
+      }
+      if (!out.write(chunk)) {
+        // 背压：等 drain 再继续
+        await new Promise<void>((resolve, reject) => {
+          out.once('drain', resolve);
+          out.once('error', reject);
+        });
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      out.once('error', reject);
+      out.end(() => resolve());
+    });
+  } catch (err) {
+    out.destroy();
+    try {
+      fs.rmSync(zipPath, { force: true });
+    } catch {
+      /* best effort */
+    }
+    throw err;
+  }
+
+  if (received === 0) {
+    fs.rmSync(zipPath, { force: true });
+    throw new Error('插件包为空');
+  }
+
+  return zipPath;
+}
+
+/**
  * 在本地 v2_plugins 源目录中按 manifest id 查找最新的插件版本。
- * 用于已安装插件未声明市场更新源（updateSource）时的更新检测回退，
  * 避免已安装插件长期停留在安装时刻的旧版本快照上。
  */
 function findLocalPluginSource(manifestId: string): { dir: string; version: string } | null {
@@ -302,34 +439,39 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       const existing = expectedId ? kernelContainer.pluginHost.findByManifestId(expectedId) : null;
 
-      if (existing) {
-        const result = await kernelContainer.pluginDistributionManager.updateFromZip(pkg.buffer, {
-          targetPluginId: existing.pluginId,
-          executionMode,
-          allowDowngrade: Boolean(allowDowngrade),
-        });
-        return res.json({
+      try {
+        if (existing) {
+          const result = await kernelContainer.pluginDistributionManager.updateFromZip(pkg.zipPath, {
+            targetPluginId: existing.pluginId,
+            executionMode,
+            allowDowngrade: Boolean(allowDowngrade),
+          });
+          return res.json({
+            success: true,
+            updated: true,
+            pluginId: result.pluginId,
+            manifest: result.manifest,
+            oldVersion: result.oldVersion,
+            newVersion: result.newVersion,
+            wasActive: result.wasActive,
+            filename: pkg.filename,
+            bytes: pkg.bytes,
+          });
+        }
+
+        const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode);
+        res.json({
           success: true,
-          updated: true,
+          updated: false,
           pluginId: result.pluginId,
           manifest: result.manifest,
-          oldVersion: result.oldVersion,
-          newVersion: result.newVersion,
-          wasActive: result.wasActive,
           filename: pkg.filename,
           bytes: pkg.bytes,
         });
+      } finally {
+        // R-4：下载的临时 ZIP 在安装/更新完成后归还（内容已 copyFileSync 进插件目录）
+        removeTempZip(pkg.zipPath);
       }
-
-      const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.buffer, executionMode);
-      res.json({
-        success: true,
-        updated: false,
-        pluginId: result.pluginId,
-        manifest: result.manifest,
-        filename: pkg.filename,
-        bytes: pkg.bytes,
-      });
     } catch (err: any) {
       pluginLog.error(err);
       sendSafeError(res, err);
@@ -385,11 +527,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   // 一键热更新插件 API
   app.post('/api/plugins/:id(*)/one-click-update', requireAuth('administrator'), async (req, res) => {
+    let zipPath: string | undefined;
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
       const { downloadUrl } = req.body || {};
-
-      let zipBuffer: Buffer;
 
       if (downloadUrl) {
         const urlCheck = isSafeExternalUrl(downloadUrl);
@@ -415,10 +556,17 @@ export function registerPluginsRoutes(ctx: ServerContext) {
               fallbackToClient: true,
             });
           }
-          const arrayBuf = await resp.arrayBuffer();
-          zipBuffer = Buffer.from(arrayBuf);
+          // R-4/L2a：流式落盘（原 `resp.arrayBuffer()` 整包进内存后再交给安装链路）
+          zipPath = await streamHttpBodyToFile(resp, getMaxUploadBodyBytes());
         } catch (e: any) {
           const isTimeout = e.name === 'TimeoutError' || e.message?.includes('timeout');
+          if (e.message === 'response-too-large') {
+            return res.status(400).json({
+              success: false,
+              error: `更新包超过 ${Math.floor(getMaxUploadBodyBytes() / 1024 / 1024)}MB 上限`,
+              fallbackToClient: true,
+            });
+          }
           return res.status(400).json({
             success: false,
             error: isTimeout ? '服务端下载超时，请尝试从客户端直传' : `下载失败: ${e.message}`,
@@ -435,7 +583,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
 
-      const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+      const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
         targetPluginId,
         allowDowngrade: false,
       });
@@ -452,6 +600,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     } catch (err: any) {
       pluginLog.error(err);
       sendSafeError(res, err);
+    } finally {
+      // R-4：下载的临时 ZIP 在更新完成后归还
+      removeTempZip(zipPath);
     }
   });
 
@@ -596,87 +747,34 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 审计 R-4：body 上限与解压炸弹上限同源（getMaxUploadBodyBytes）。
   // 此前硬编码 '400mb'，与 install-utils 的 300MB 解压上限各写各的 ——
   // 调小 OPENLEARN_MAX_ZIP_SIZE 不收窄 body，超限包仍会被整包收进内存后才拒。
-  const zipUploadLimit = `${Math.max(1, Math.round(getMaxUploadBodyBytes() / (1024 * 1024)))}mb`;
-  app.post(
-    '/api/plugins/upload-zip-raw',
-    requireAuth('administrator'),
-    express.raw({ type: 'application/octet-stream', limit: zipUploadLimit }),
-    async (req, res) => {
-      try {
-        const zipBuffer = req.body;
-        const filename = req.headers['x-filename']
-          ? decodeURIComponent(req.headers['x-filename'] as string)
-          : 'plugin.zip';
-        const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
-        const executionMode = isValidExecutionMode(executionModeHeader)
-          ? (executionModeHeader as PluginExecutionMode)
-          : undefined;
-        const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
-        const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
-        const targetPluginId = req.headers['x-target-plugin-id']
-          ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
-          : undefined;
-        if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
-          return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
-        }
+  //
+  // R-4/L2a：body **流式落盘**（streamBodyToTempZip 替换 express.raw）——
+  // 任意时刻内存里只有一个 chunk；超限按实际写入字节判定（不信任 content-length）。
+  const zipUploadLimitBytes = getMaxUploadBodyBytes();
+  app.post('/api/plugins/upload-zip-raw', requireAuth('administrator'), async (req, res) => {
+    let zipPath: string | undefined;
+    try {
+      zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
+      const filename = req.headers['x-filename']
+        ? decodeURIComponent(req.headers['x-filename'] as string)
+        : 'plugin.zip';
+      const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
+      const executionMode = isValidExecutionMode(executionModeHeader)
+        ? (executionModeHeader as PluginExecutionMode)
+        : undefined;
+      const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
+      const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
+      const targetPluginId = req.headers['x-target-plugin-id']
+        ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
+        : undefined;
 
-        if (modeHeader === 'update') {
-          const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
-            targetPluginId,
-            executionMode,
-            allowDowngrade,
-          });
-          return res.json({
-            success: true,
-            updated: true,
-            pluginId: result.pluginId,
-            manifest: result.manifest,
-            oldVersion: result.oldVersion,
-            newVersion: result.newVersion,
-            wasActive: result.wasActive,
-            filename,
-          });
-        }
-
-        const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer, executionMode);
-        // result.pluginId is DB UUID; result.manifest keeps package metadata
-        res.json({
-          success: true,
-          updated: false,
-          pluginId: result.pluginId,
-          manifest: result.manifest,
-          filename,
-        });
-      } catch (err: any) {
-        pluginLog.error(err);
-        sendSafeError(res, err);
-      }
-    },
-  );
-
-  // Explicit update endpoint (card "Update" button)
-  app.post(
-    '/api/plugins/:id(*)/update-zip-raw',
-    requireAuth('administrator'),
-    express.raw({ type: 'application/octet-stream', limit: zipUploadLimit }),
-    async (req, res) => {
-      try {
-        const targetPluginId = decodeURIComponent(req.params.id);
-        const zipBuffer = req.body;
-        const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
-        const executionMode = isValidExecutionMode(executionModeHeader)
-          ? (executionModeHeader as PluginExecutionMode)
-          : undefined;
-        const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
-        if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
-          return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
-        }
-        const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+      if (modeHeader === 'update') {
+        const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
           targetPluginId,
           executionMode,
           allowDowngrade,
         });
-        res.json({
+        return res.json({
           success: true,
           updated: true,
           pluginId: result.pluginId,
@@ -684,13 +782,70 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           oldVersion: result.oldVersion,
           newVersion: result.newVersion,
           wasActive: result.wasActive,
+          filename,
         });
-      } catch (err: any) {
-        pluginLog.error(err);
-        sendSafeError(res, err);
       }
-    },
-  );
+
+      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipPath, executionMode);
+      // result.pluginId is DB UUID; result.manifest keeps package metadata
+      res.json({
+        success: true,
+        updated: false,
+        pluginId: result.pluginId,
+        manifest: result.manifest,
+        filename,
+      });
+    } catch (err: any) {
+      // 413 已在流式中间件里直接响应过
+      if (err?.message === 'payload-too-large') return;
+      if (err?.message === 'empty-body') {
+        return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
+      }
+      pluginLog.error(err);
+      sendSafeError(res, err);
+    } finally {
+      // 安装链路只消费 zipPath 的内容（已 copyFileSync 进插件目录），临时文件在此归还
+      removeTempZip(zipPath);
+    }
+  });
+
+  // Explicit update endpoint (card "Update" button)
+  // R-4/L2a：与 upload-zip-raw 同一套流式落盘 + 临时文件归还
+  app.post('/api/plugins/:id(*)/update-zip-raw', requireAuth('administrator'), async (req, res) => {
+    let zipPath: string | undefined;
+    try {
+      const targetPluginId = decodeURIComponent(req.params.id);
+      zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
+      const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
+      const executionMode = isValidExecutionMode(executionModeHeader)
+        ? (executionModeHeader as PluginExecutionMode)
+        : undefined;
+      const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
+      const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
+        targetPluginId,
+        executionMode,
+        allowDowngrade,
+      });
+      res.json({
+        success: true,
+        updated: true,
+        pluginId: result.pluginId,
+        manifest: result.manifest,
+        oldVersion: result.oldVersion,
+        newVersion: result.newVersion,
+        wasActive: result.wasActive,
+      });
+    } catch (err: any) {
+      if (err?.message === 'payload-too-large') return;
+      if (err?.message === 'empty-body') {
+        return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
+      }
+      pluginLog.error(err);
+      sendSafeError(res, err);
+    } finally {
+      removeTempZip(zipPath);
+    }
+  });
 
   // Plugin command execution endpoint (V3.0: frontend invokeCommand bridge)
   // SEC-AUTH: 该端点被前端插件宿主全局调用，教师端与学生端共用同一宿主

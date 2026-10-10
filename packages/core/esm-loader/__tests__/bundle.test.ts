@@ -20,6 +20,7 @@ import { NodeEsmLoader } from '../node-loader.js';
 import { manifestSchema } from '../manifest-schema.js';
 import JSZip from 'jszip';
 import { fileURLToPath } from 'url';
+import { tmpZipPath } from './helpers/tmp-zip.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(__dirname, 'fixtures');
@@ -92,7 +93,7 @@ describe('validateAndBundleZip', () => {
   // Test 4: 解压合法 sample.zip
   it('should extract and bundle a valid ZIP package', async () => {
     const zipBuffer = sampleZipBuffer();
-    const result = await validateAndBundleZip(zipBuffer);
+    const result = await validateAndBundleZip(tmpZipPath(zipBuffer));
 
     // 校验 manifest
     expect(result.manifest).toBeDefined();
@@ -100,9 +101,10 @@ describe('validateAndBundleZip', () => {
     expect(result.manifest.name).toBe('Sample Plugin');
     expect(result.manifest.version).toBe('1.0.0');
 
-    // 校验 bundledCode
-    expect(typeof result.bundledCode).toBe('string');
-    expect(result.bundledCode.length).toBeGreaterThan(0);
+    // 校验 bundledPath（R-4：bundle 落盘，读回内容校验）
+    expect(typeof result.bundledPath).toBe('string');
+    const bundledCode = fs.readFileSync(result.bundledPath, 'utf-8');
+    expect(bundledCode.length).toBeGreaterThan(0);
 
     // 校验 entryFileName
     expect(result.entryFileName).toBe('index.js');
@@ -114,7 +116,7 @@ describe('validateAndBundleZip', () => {
     zip.file('index.js', 'export default {}');
     const badZipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
-    await expect(validateAndBundleZip(badZipBuffer)).rejects.toThrow(/manifest\.json/i);
+    await expect(validateAndBundleZip(tmpZipPath(badZipBuffer))).rejects.toThrow(/manifest\.json/i);
   });
 
   // Test 7: 路径穿越防护
@@ -137,22 +139,22 @@ describe('validateAndBundleZip', () => {
 
     const badZipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
-    await expect(validateAndBundleZip(badZipBuffer)).rejects.toThrow(/path traversal/i);
+    await expect(validateAndBundleZip(tmpZipPath(badZipBuffer))).rejects.toThrow(/path traversal/i);
   });
 });
 
 describe('NodeEsmLoader + bundle E2E', () => {
   // Test 6: 端到端 — esbuild bundle → NodeEsmLoader.load() → PluginModule
   it('should load esbuild-bundled code via NodeEsmLoader', async () => {
-    // Step 1: ZIP → bundle
+    // Step 1: ZIP → bundle（R-4：bundle 落盘，此处读回内容喂 loader）
     const zipBuffer = sampleZipBuffer();
-    const { bundledCode, manifest } = await validateAndBundleZip(zipBuffer);
+    const { bundledPath, manifest } = await validateAndBundleZip(tmpZipPath(zipBuffer));
 
     expect(manifest.id).toBe('ext-sample');
 
     // Step 2: NodeEsmLoader.load()
     const loader = new NodeEsmLoader();
-    const mod = await loader.load(bundledCode);
+    const mod = await loader.load(fs.readFileSync(bundledPath, 'utf-8'));
 
     // Step 3: 验证 PluginModule 结构
     expect(mod).toBeDefined();

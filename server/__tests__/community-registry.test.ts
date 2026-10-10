@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import http from 'node:http';
+import fs from 'node:fs';
+import { Readable } from 'node:stream';
 import {
   COMMUNITY_REGISTRY_ENV,
   __resetCommunityRegistryCache,
@@ -40,6 +42,16 @@ function binaryResponse(bytes: number, headers: Record<string, string> = {}): Re
     status: 200,
     headers: new Headers(headers),
     arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
+    // R-4：downloadPluginPackage 改为流式落盘 —— 桩需提供可读 body。
+    // 用 Readable.from 切成 64KB chunk，顺带验证大数据量下的背压路径。
+    body: Readable.from(
+      (function* () {
+        const CHUNK = 64 * 1024;
+        for (let offset = 0; offset < buf.length; offset += CHUNK) {
+          yield buf.subarray(offset, Math.min(offset + CHUNK, buf.length));
+        }
+      })(),
+    ) as unknown as ReadableStream<Uint8Array>,
   } as unknown as Response;
 }
 
@@ -440,7 +452,7 @@ describe('downloadPluginPackage', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('returns the buffer and derives the filename from content-disposition', async () => {
+  it('returns the on-disk zip path and derives the filename from content-disposition', async () => {
     const fetchImpl = vi
       .fn<FetchLike>()
       .mockResolvedValue(binaryResponse(2048, { 'content-disposition': 'attachment; filename="homework-hub.zip"' }));
@@ -448,8 +460,10 @@ describe('downloadPluginPackage', () => {
     const pkg = await downloadPluginPackage('https://plugins.example.com/download?id=7', { fetchImpl });
 
     expect(pkg.bytes).toBe(2048);
-    expect(pkg.buffer).toHaveLength(2048);
+    // R-4：下载改为流式落盘 —— 断言磁盘文件大小而非内存 Buffer
+    expect(fs.statSync(pkg.zipPath).size).toBe(2048);
     expect(pkg.filename).toBe('homework-hub.zip');
+    fs.rmSync(pkg.zipPath, { force: true });
   });
 
   it('falls back to the URL basename when no disposition header is present', async () => {

@@ -13,6 +13,7 @@ import path from 'node:path';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
+import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/tmp-zip.js';
 import { PluginState } from '../../../packages/core/plugin-host/types.js';
 import type { PluginApiRequest } from '../../../packages/core/plugin-host/types.js';
 import { bootstrapSharedModules } from '../../../packages/core/plugin-host/context-builder.js';
@@ -319,7 +320,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
 
     // 安装插件
     const zip = await buildCanaryZip();
-    const manifest = await host.installPluginFromZip(zip, 'inline');
+    const manifest = await host.installPluginFromZip(tmpZipPath(zip), 'inline');
     pluginId = (manifest as unknown as { pluginId?: string }).pluginId ?? manifest.id;
   }, 120_000);
 

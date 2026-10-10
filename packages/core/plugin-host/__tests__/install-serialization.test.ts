@@ -32,6 +32,7 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
 } from '../../di/interfaces.js';
+import { tmpZipPath } from '../../esm-loader/__tests__/helpers/tmp-zip.js';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -199,7 +200,7 @@ describe('R-4 · 安装/更新串行化（enqueueInstall）', () => {
       await sleep(60);
       return 'held';
     });
-    const zipPath = host.installPluginFromZip(Buffer.from('not-a-real-zip'));
+    const zipPath = host.installPluginFromZip(tmpZipPath(Buffer.from('not-a-real-zip')));
     await expect(zipPath).rejects.toThrow(); // 假 ZIP 会失败，但必须在让出队列之后
     await expect(gate).resolves.toBe('held');
     // 队列仍活着

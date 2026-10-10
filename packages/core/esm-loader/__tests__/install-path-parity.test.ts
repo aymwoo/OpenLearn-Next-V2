@@ -17,6 +17,7 @@ import JSZip from 'jszip';
 import { PluginHost } from '../../plugin-host/index.js';
 import { NodeEsmLoader } from '../node-loader.js';
 import { ServiceRegistry } from '../../di/service-registry.js';
+import { tmpZipPath } from './helpers/tmp-zip.js';
 
 /** 内存库，schema 与 plugin-host 测试夹具保持一致 */
 function createTestDb(): Database.Database {
@@ -93,7 +94,7 @@ describe('安装路径静态防线一致性（C-6 / A-2）', () => {
 
   it('路径二（plugin.install_zip / ZIP）同样拒绝计算式 import', async () => {
     const zipBuffer = await buildZip('ext-malicious-zip-computed', 'Malicious Zip Computed', MALICIOUS_SOURCE);
-    await expect(host.installPluginFromZip(zipBuffer)).rejects.toThrow();
+    await expect(host.installPluginFromZip(tmpZipPath(zipBuffer))).rejects.toThrow();
   });
 
   it('两条路径的拒绝理由一致（不是「一边通过、一边拒绝」）', async () => {
@@ -103,7 +104,7 @@ describe('安装路径静态防线一致性（C-6 / A-2）', () => {
       () => null,
       (e: Error) => e,
     );
-    const zipErr = await host.installPluginFromZip(zipBuffer).then(
+    const zipErr = await host.installPluginFromZip(tmpZipPath(zipBuffer)).then(
       () => null,
       (e: Error) => e,
     );

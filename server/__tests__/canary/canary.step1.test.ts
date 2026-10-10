@@ -18,6 +18,7 @@ import path from 'node:path';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
+import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/tmp-zip.js';
 import { PluginState } from '../../../packages/core/plugin-host/types.js';
 import type { PluginApiRequest } from '../../../packages/core/plugin-host/types.js';
 import {
@@ -159,7 +160,7 @@ describe('金丝雀第 1 步：最小 ZIP 安装闭环（inline）', () => {
 
   it('1a. installFromZip —— manifest 解析、token-enforcer 扫描、esbuild 打包、落库', async () => {
     const zip = await buildCanaryZip();
-    const manifest = await host.installPluginFromZip(zip, 'inline');
+    const manifest = await host.installPluginFromZip(tmpZipPath(zip), 'inline');
 
     expect(manifest.id).toBe('ext-canary');
     pluginId = (manifest as unknown as { pluginId?: string }).pluginId ?? manifest.id;

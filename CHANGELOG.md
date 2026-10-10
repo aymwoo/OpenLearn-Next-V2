@@ -154,6 +154,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **消除双份解析**：`validateAndBundleZip` 新增返回 `package`（JSZip 复用凭据），`installPluginFromZip` / `updatePluginFromZip` 提取 frontend.js / deploy script / storage 时直接复用 —— 对大包省去又一份 ≈压缩态大小的解析结构；
   - **测试**：`zip-memory-budget.test.ts`（实际字节计量含伪造头用例 / 跨文件累计 / 正常写入含嵌套目录 / body 限额同源与 env 联动）；`install-serialization.test.ts`（FIFO 顺序 / 失败不毒化 / 两个真实 `installPlugin` 并发串行 —— 无队列时必红 / 唯一性冲突后队列仍活 / install 与 ZIP 路径互斥）。全量 3403 测试通过，`tsc --noEmit` 0 error，ESLint 0 error。
 
+- **R-4 收官（L2a + L2b + L3）：安装链路路径化 + 流式落盘 + esbuild 落盘（2026-10-10）**：
+  - **L2a body 流式落盘**：`upload-zip-raw` / `update-zip-raw` 从 `express.raw`（整包 Buffer 全程驻留）改为自研流式写盘中间件 `streamBodyToTempZip` —— 任意时刻内存只有一个 chunk，上限按**实际写入字节**判定（不信任 content-length），背压用 `pause/drain`；`one-click-update` 的 `resp.arrayBuffer()` 改为 `streamHttpBodyToFile` 同款流式；市场下载 `downloadPluginPackage` 同样流式落盘（返回 `zipPath` 取代 `buffer`，上限 `MAX_PACKAGE_BYTES` 按实际字节执行）；
+  - **契约路径化**：`installPluginFromZip` / `updatePluginFromZip` / `installFromZip` / `updateFromZip` / `updatePlugin` / `validateAndBundleZip` 入参从 `Buffer` 改为 `zipPath: string`（Kernel/内置插件的 base64 命令 handler 经 `writeBufferToTempZip` 落临时文件，finally 归还）；bundle 与 ZIP 进插件目录均改 `copyFileSync`，安装全程只保留路径这一份事实，ZIP 内容仅在 `validateAndBundleZip` 内出现**一份** Buffer；
+  - **L2b storage 串行提取**：安装与更新两条路径的 `Promise.all(10)` 改串行 + 按 `getMaxUncompressedSize()` 双保险计量 —— 插件常把图片/视频打进 `storage/`，10 份解压 Buffer 并存等于把单文件峰值放大十倍；
+  - **L3 esbuild 落盘**：`bundlePlugin` 增加可选 `outfile`（`write: true`），产物不再以多 MB 字符串驻留；词法门 `assertPluginCodeSafe` 位置与严格度不变（从盘上读回同一份产物再过门）；
+  - **测试基建**：新增 `__tests__/helpers/tmp-zip.ts`（Buffer→临时文件 + vitest afterEach 自动清理，避免测试在 /tmp 逐次沉积）；新增 `plugin-upload-stream.test.ts`（流式原语 5 例 + 路由护栏 2 例）；
+  - **过程中实测捕获并修复一个真实 bug**：流式中间件首版同时 `out.write(chunk)` 与 `req.pipe(out)` —— **每个 chunk 被写两遍**（文件内容重复、体积翻倍）—— 被「完整写入内容一致」用例当场抓住（3000 vs 1500）。教训与 R-1 相同：数据流正确性必须用字节级断言，不能只看流程跑通；
+  - **实测定案**：JSZip `loadAsync` **不接受 Node 流**（"can't accept a stream"），故「流式解压」在该库上不可达 —— 本轮杠杆是消除多余副本（body Buffer + 第二次 loadAsync）而非流式解析；若要进一步压缩峰值需更换 unzip 依赖并重写全部安全护栏，列为后续评估项而非本轮范围；
+  - **契约同步**：`openlearn.d.ts` 手写契约 + `generated.d.ts` + dist 全部重新生成；三处文档（plugin-registry / plugin-update-distribution / di-tokens）的 `zipBuffer` 签名同步为 `zipPath`。全量 3411 测试通过，`tsc --noEmit` 0 error，ESLint 0 error。
+
 - **B-5 进程归属加固：spawn/registerInterval ownerHint + ESM 激活路径归属声明（2026-10-10）**：
   - **根因**：`ProcessManager.setPluginOwner` 写入的 `currentOwner` 是**全局单值**，只在「插件激活期内」准确。插件运行期（HTTP handler / 定时器回调）`spawn` 的任务会错记到「最后激活的插件」名下 —— 轻则自己 `kill` 自己的后台任务被归属校验拒绝（功能故障），重则他人可 kill 本插件的任务（越权）；
   - **修复一（根治）**：`IProcessService.spawn` / `registerInterval` 增加可选第四参 `ownerHint`（`interfaces.ts` + `openlearn.d.ts` 手写契约同步，dist 已重新生成）；`ProcessManager` 实现 ownerHint 优先、缺省回落 `currentOwner`（内核自身调用与旧调用方行为不变）；`wrapProcessManager` 的 per-plugin 包装层显式传入调用方插件 id —— 归属精度从「激活期」扩展到整个插件生命周期；

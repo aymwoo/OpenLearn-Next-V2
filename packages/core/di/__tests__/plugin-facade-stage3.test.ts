@@ -12,6 +12,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PluginLifecycleManager } from '../../plugin-host/plugin-lifecycle-manager.js';
 import { PluginDistributionManager } from '../../plugin-host/plugin-distribution-manager.js';
+import { tmpZipPath } from '../../esm-loader/__tests__/helpers/tmp-zip.js';
 
 describe('P7-A2 Stage 3 — facade 委托行为保持兼容', () => {
   it('PluginLifecycleManager 把 listPlugins / uninstallPlugin 委托给 PluginHost', () => {
@@ -31,12 +32,17 @@ describe('P7-A2 Stage 3 — facade 委托行为保持兼容', () => {
 
   it('PluginDistributionManager.installFromZip 转发 executionMode', async () => {
     const fakeHost: any = {
-      installPluginFromZip: vi.fn(async (buf: Buffer, mode?: string) => ({ id: 'p1', mode })),
+      installPluginFromZip: vi.fn(async (zipPath: string, mode?: string) => ({ id: 'p1', mode })),
     };
     const mgr = new PluginDistributionManager(fakeHost);
 
-    const res = await mgr.installFromZip(Buffer.from('x'), 'worker');
-    expect(fakeHost.installPluginFromZip).toHaveBeenCalledWith(Buffer.from('x'), 'worker');
+    // R-4：入参为 ZIP 路径（不再是 Buffer）—— 测试用临时文件断言透传
+    const res = await mgr.installFromZip(tmpZipPath(Buffer.from('x')), 'worker');
+    expect(fakeHost.installPluginFromZip).toHaveBeenCalledTimes(1);
+    const [forwardedPath, forwardedMode] = fakeHost.installPluginFromZip.mock.calls[0];
+    expect(typeof forwardedPath).toBe('string');
+    expect(forwardedPath.endsWith('.zip')).toBe(true);
+    expect(forwardedMode).toBe('worker');
     expect(res).toEqual({ pluginId: 'p1', manifest: { id: 'p1', mode: 'worker' } });
   });
 });

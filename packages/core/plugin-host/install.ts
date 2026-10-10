@@ -12,7 +12,7 @@ import path from 'path';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import { manifestSchema } from '../esm-loader/manifest-schema.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
-import { validateAndBundleZip } from '../esm-loader/install-utils.js';
+import { getMaxUncompressedSize, removeTempFile, validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { buildContext } from './context-builder.js';
 import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
@@ -325,9 +325,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
   }
 
   /**
-   * 从 ZIP Buffer 安装插件。
+   * 从磁盘 ZIP 安装插件（R-4：入参从 Buffer 改为路径）。
    *
-   * 方法 5: installPluginFromZip(zipBuffer: Buffer): Promise<Manifest>
+   * 方法 5: installPluginFromZip(zipPath: string): Promise<Manifest>
    *
    * 从 PluginRuntime lines 69-107 迁移，适配 PluginHost 架构：
    * - 调用 validateAndBundleZip() 进行 ZIP 验证和 esbuild 打包
@@ -340,16 +340,19 @@ export abstract class PluginHostInstall extends PluginHostReload {
    * 注意：与 PluginRuntime 不同，PluginHost 不在安装时自动激活 —
    * 调用方需显式调用 activatePlugin()。
    *
-   * @param zipBuffer - ZIP 文件的原始字节
+   * @param zipPath ZIP 文件路径。路由层已把上传 body 流式落盘；命令 handler /
+   *   base64 等天生持有 Buffer 的调用方用 `writeBufferToTempZip` 转换后自行清理。
+   *   安装链路全程只保留路径这一份事实，ZIP 内容仅在 validateAndBundleZip 内
+   *   出现**一份** Buffer 副本（读盘即交 JSZip，用完可回收）。
    * @returns manifest
    */
-  async installPluginFromZip(zipBuffer: Buffer, overrideExecutionMode?: PluginExecutionMode): Promise<Manifest> {
+  async installPluginFromZip(zipPath: string, overrideExecutionMode?: PluginExecutionMode): Promise<Manifest> {
     // 审计 R-4：安装入队串行（见 base.enqueueInstall）
-    return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipBuffer, overrideExecutionMode));
+    return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipPath, overrideExecutionMode));
   }
 
   private async installPluginFromZipExclusive(
-    zipBuffer: Buffer,
+    zipPath: string,
     overrideExecutionMode?: PluginExecutionMode,
   ): Promise<Manifest> {
     if (!this.esmLoader) {
@@ -359,7 +362,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // 1. 验证并打包 ZIP —— package 是复用凭据：下方的 frontend.js / deploy
     //    script / storage 提取直接用它，不再第二次 JSZip.loadAsync（R-4：
     //    那对大包是又一份 ≈压缩态大小的解析结构）。
-    const { manifest, bundledCode, package: zip } = await validateAndBundleZip(zipBuffer);
+    const { manifest, package: zip, bundledPath } = await validateAndBundleZip(zipPath);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, writing files...');
 
     // 2. 唯一性检查
@@ -402,11 +405,11 @@ export abstract class PluginHostInstall extends PluginHostReload {
     const zipFilePath = path.join(pluginDir, 'package.zip');
 
     try {
-      // 4. 写入文件系统
+      // 4. 写入文件系统（R-4：bundle 与 ZIP 均以 copyFileSync 落盘，不再持内存副本）
       fs.mkdirSync(pluginDir, { recursive: true });
-      fs.writeFileSync(filePath, bundledCode, 'utf-8');
+      fs.copyFileSync(bundledPath, filePath);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
-      fs.writeFileSync(zipFilePath, zipBuffer);
+      fs.copyFileSync(zipPath, zipFilePath);
 
       // Extract frontend.js and deploy script if present in ZIP
       const frontendFile = zip.file('frontend.js');
@@ -450,24 +453,31 @@ export abstract class PluginHostInstall extends PluginHostReload {
         for (const dir of dirs) {
           fs.mkdirSync(dir, { recursive: true });
         }
-        // Write files in parallel batches (10 at a time) to balance speed and memory
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
-          const batch = storageEntries.slice(i, i + BATCH_SIZE);
-          await Promise.all(
-            batch.map(async (name) => {
-              const normalized = name.replace(/\\/g, '/');
-              const destPath = path.resolve(pluginDir, normalized);
-              if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
-                throw new Error(`Security Violation: Zip Slip detected in asset path "${name}"`);
-              }
-              const file = zip.file(name);
-              if (file) {
-                const content = await file.async('nodebuffer');
-                fs.writeFileSync(destPath, content);
-              }
-            }),
-          );
+        // R-4/L2b：串行写入。
+        //
+        // 原实现 Promise.all 每批 10 个 `file.async('nodebuffer')` —— 插件常把
+        // 图片/视频打进 storage/，10 份解压 Buffer 同时驻留等于把单文件峰值
+        // 放大十倍。串行后任意时刻只有**一个** Buffer 在内存；代价只是写入
+        // 顺序化（安装期一次性操作，且本就受串行队列保护）。
+        let storageBytes = 0;
+        for (const rawName of storageEntries) {
+          const normalized = rawName.replace(/\\/g, '/');
+          const destPath = path.resolve(pluginDir, normalized);
+          if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
+            throw new Error(`Security Violation: Zip Slip detected in asset path "${rawName}"`);
+          }
+          const file = zip.file(rawName);
+          if (!file) continue;
+          const content = await file.async('nodebuffer');
+          // 双保险：这些条目的解压总量在 validateAndBundleZip 的 tmpDir 写入时
+          // 已被计量，此处按同一上限再核一次（防将来两条路径的条目集漂移）。
+          storageBytes += content.length;
+          if (storageBytes > getMaxUncompressedSize()) {
+            throw new Error(
+              `ZIP bomb prevention: storage assets total ${storageBytes} bytes exceeds limit of ${getMaxUncompressedSize()} bytes`,
+            );
+          }
+          fs.writeFileSync(destPath, content);
         }
         console.log(`[PluginHost] Static assets extracted for plugin "${manifest.id}"`);
       }
@@ -618,6 +628,11 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
       this.pluginStates.delete(pluginId);
       throw err;
+    } finally {
+      // R-4：bundle 已 copyFileSync 进插件目录（或安装失败被弃用），
+      // 独立的临时 bundle 文件在此归还。放在 finally —— 安装的任何一步
+      // 抛错（bomb/zip-slip/deploy 失败/DB 冲突）都不能让它残留在 /tmp。
+      removeTempFile(bundledPath);
     }
   }
 
@@ -632,7 +647,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
    * - inactive → replace files only, keep disabled
    */
   async updatePluginFromZip(
-    zipBuffer: Buffer,
+    zipPath: string,
     options: {
       targetPluginId?: string;
       executionMode?: PluginExecutionMode;
@@ -648,11 +663,11 @@ export abstract class PluginHostInstall extends PluginHostReload {
   }> {
     // 审计 R-4：更新与安装共用同一条队列（install-from-url 对已存在插件走
     // update 分支，与 install 并发时同样叠加内存峰值）。
-    return this.enqueueInstall(() => this.updatePluginFromZipExclusive(zipBuffer, options));
+    return this.enqueueInstall(() => this.updatePluginFromZipExclusive(zipPath, options));
   }
 
   private async updatePluginFromZipExclusive(
-    zipBuffer: Buffer,
+    zipPath: string,
     options: {
       targetPluginId?: string;
       executionMode?: PluginExecutionMode;
@@ -672,7 +687,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
 
     // package 是复用凭据（R-4）：下方的 frontend.js / storage 提取不再第二次
     // JSZip.loadAsync —— 对大包那是又一份 ≈压缩态大小的解析结构。
-    const { manifest, bundledCode, package: zip } = await validateAndBundleZip(zipBuffer);
+    const { manifest, package: zip, bundledPath } = await validateAndBundleZip(zipPath);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, preparing update...');
 
     // Resolve existing install
@@ -767,9 +782,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
 
     try {
       fs.mkdirSync(pluginDir, { recursive: true });
-      fs.writeFileSync(filePath, bundledCode, 'utf-8');
+      // R-4：bundle 与 ZIP 均 copyFileSync 落盘（不持内存副本）
+      fs.copyFileSync(bundledPath, filePath);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
-      fs.writeFileSync(zipFilePath, zipBuffer);
+      fs.copyFileSync(zipPath, zipFilePath);
 
       const frontendFile = zip.file('frontend.js');
       const frontendPath = path.join(pluginDir, 'frontend.js');
@@ -796,15 +812,21 @@ export abstract class PluginHostInstall extends PluginHostReload {
         const dirs = new Set<string>();
         for (const name of storageEntries) dirs.add(path.dirname(name));
         for (const dir of dirs) fs.mkdirSync(path.join(pluginDir, dir), { recursive: true });
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
-          const batch = storageEntries.slice(i, i + BATCH_SIZE);
-          await Promise.all(
-            batch.map(async (name) => {
-              const file = zip.file(name);
-              if (file) fs.writeFileSync(path.join(pluginDir, name), await file.async('nodebuffer'));
-            }),
-          );
+        // R-4/L2b：串行 + 计量（与安装路径一致；原为 Promise.all 每批 10 份
+        // 解压 Buffer 并存）。条目名已在 validateAndBundleZip Step 3 全量
+        // 拦截 `..`/绝对路径，此处直接按路径拼接。
+        let storageBytes = 0;
+        for (const name of storageEntries) {
+          const file = zip.file(name);
+          if (!file) continue;
+          const content = await file.async('nodebuffer');
+          storageBytes += content.length;
+          if (storageBytes > getMaxUncompressedSize()) {
+            throw new Error(
+              `ZIP bomb prevention: storage assets total ${storageBytes} bytes exceeds limit of ${getMaxUncompressedSize()} bytes`,
+            );
+          }
+          fs.writeFileSync(path.join(pluginDir, name), content);
         }
       }
 
@@ -869,7 +891,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
           await this.activatePlugin(pluginId);
         } else {
           // Same mode: atomic hot reload
-          await this.reloadPlugin(pluginId, bundledCode);
+          // R-4：bundle 已落盘（bundledPath），把落盘内容作为新源码交给 reload。
+          // 用 esmLoader 会 file:// 加载该路径，与安装路径的一致。
+          await this.reloadPlugin(pluginId, fs.readFileSync(bundledPath, 'utf-8'));
         }
       } else {
         // Keep disabled — ensure state is not ACTIVE
@@ -945,6 +969,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
         /* ignore */
       }
       throw err;
+    } finally {
+      // R-4：更新路径同样归还独立临时 bundle（成功已 copyFileSync 进插件目录）
+      removeTempFile(bundledPath);
     }
   }
 }

@@ -21,7 +21,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import JSZip from 'jszip';
+import fs from 'node:fs';
 import { validateAndBundleZip } from '../install-utils.js';
+import { tmpZipPath } from './helpers/tmp-zip.js';
 
 /**
  * 构建测试 ZIP，结构由 `layout` 决定：
@@ -72,7 +74,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
 
   it('正常 build（main="index.js", ZIP 根有 index.js）— 直接命中，不走 fallback', async () => {
     const buf = await buildTestZip({ main: 'index.js', layout: 'flat' });
-    const { entryFileName } = await validateAndBundleZip(buf);
+    const { entryFileName } = await validateAndBundleZip(tmpZipPath(buf));
 
     expect(entryFileName).toBe('index.js');
     expect(warnSpy).not.toHaveBeenCalled();
@@ -85,7 +87,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
       id: 'ext-old-build',
       name: 'Old Build',
     });
-    const { entryFileName, manifest } = await validateAndBundleZip(buf);
+    const { entryFileName, manifest } = await validateAndBundleZip(tmpZipPath(buf));
 
     expect(entryFileName).toBe('index.js');
     expect(manifest.main).toBe('dist/index.js'); // manifest 原文不动（schema 不接受修改）
@@ -98,7 +100,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
 
   it('真实嵌套存在（main="dist/index.js", ZIP 真的 dist/index.js）— 不走 fallback', async () => {
     const buf = await buildTestZip({ main: 'dist/index.js', layout: 'nested' });
-    const { entryFileName } = await validateAndBundleZip(buf);
+    const { entryFileName } = await validateAndBundleZip(tmpZipPath(buf));
 
     expect(entryFileName).toBe('dist/index.js');
     expect(warnSpy).not.toHaveBeenCalled();
@@ -106,7 +108,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
 
   it('真正缺失（main="missing.js", ZIP 里都没有）— 仍抛出原错误（不被 fallback 误救）', async () => {
     const buf = await buildTestZip({ main: 'missing.js', layout: 'flat' });
-    await expect(validateAndBundleZip(buf)).rejects.toThrow(
+    await expect(validateAndBundleZip(tmpZipPath(buf))).rejects.toThrow(
       /Entry file "missing\.js" specified in manifest not found in ZIP package/,
     );
     expect(warnSpy).not.toHaveBeenCalled();
@@ -114,7 +116,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
 
   it('真实不存在 + dist 前缀也不存在（main="dist/missing.js", ZIP 里什么都没有）— 仍抛错', async () => {
     const buf = await buildTestZip({ main: 'dist/missing.js', layout: 'flat' });
-    await expect(validateAndBundleZip(buf)).rejects.toThrow(
+    await expect(validateAndBundleZip(tmpZipPath(buf))).rejects.toThrow(
       /Entry file "dist\/missing\.js" specified in manifest not found in ZIP package/,
     );
     expect(warnSpy).not.toHaveBeenCalled();
@@ -135,7 +137,7 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
     zip.file('dist/a/b.js', 'export default {};');
     const buf = await zip.generateAsync({ type: 'nodebuffer' });
 
-    const { entryFileName } = await validateAndBundleZip(buf);
+    const { entryFileName } = await validateAndBundleZip(tmpZipPath(buf));
     expect(entryFileName).toBe('dist/a/b.js');
     expect(warnSpy).not.toHaveBeenCalled();
   });
@@ -159,10 +161,12 @@ describe('validateAndBundleZip — manifest.main fallback (兼容旧 build)', ()
     zip.file('index.js', 'export default { activate: async () => {} };');
     const buf = await zip.generateAsync({ type: 'nodebuffer' });
 
-    const { manifest, entryFileName, bundledCode } = await validateAndBundleZip(buf);
+    const { manifest, entryFileName, bundledPath } = await validateAndBundleZip(tmpZipPath(buf));
 
     expect(manifest.id).toBe('openlearn-plugin-learnstar');
     expect(entryFileName).toBe('index.js'); // fallback 后的真实路径
+    // R-4：bundle 落盘，读回内容校验
+    const bundledCode = fs.readFileSync(bundledPath, 'utf-8');
     expect(typeof bundledCode).toBe('string');
     expect(bundledCode.length).toBeGreaterThan(0);
   });

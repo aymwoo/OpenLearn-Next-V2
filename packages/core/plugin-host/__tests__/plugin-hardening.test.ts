@@ -10,6 +10,7 @@ import { PluginHost } from '../index.js';
 import { PluginState } from '../types.js';
 import { ServiceHost } from '../../worker-runtime/service-host.js';
 import { CapabilityGuard } from '../../capability/index.js';
+import { tmpZipPath } from '../../esm-loader/__tests__/helpers/tmp-zip.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -173,7 +174,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   it('should return manifest containing generated pluginId (UUID) upon ZIP installation', async () => {
     const zipBuffer = await createMockZip('ext-test-zip', 'Zip Test Plugin');
 
-    const manifest = await host.installPluginFromZip(zipBuffer);
+    const manifest = await host.installPluginFromZip(tmpZipPath(zipBuffer));
 
     expect(manifest.id).toBe('ext-test-zip');
     expect((manifest as any).pluginId).toBeDefined();
@@ -185,7 +186,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   // 2. Alias operation lifecycle
   it('should support toggle, activate, deactivate, and uninstall lifecycle using Manifest ID alias', async () => {
     const zipBuffer = await createMockZip('ext-alias-test', 'Alias Test Plugin');
-    const installedManifest = await host.installPluginFromZip(zipBuffer);
+    const installedManifest = await host.installPluginFromZip(tmpZipPath(zipBuffer));
     const uuid = (installedManifest as any).pluginId;
 
     // Verify initially INSTALLED
@@ -290,7 +291,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
       staticRoute: 'custom/app',
       staticDir: 'public',
     });
-    await expect(host.installPluginFromZip(zip1)).rejects.toThrow(
+    await expect(host.installPluginFromZip(tmpZipPath(zip1))).rejects.toThrow(
       'must start with "/" and cannot contain ".."',
     );
 
@@ -299,7 +300,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
       staticRoute: '/custom/../etc',
       staticDir: 'public',
     });
-    await expect(host.installPluginFromZip(zip2)).rejects.toThrow(
+    await expect(host.installPluginFromZip(tmpZipPath(zip2))).rejects.toThrow(
       'must start with "/" and cannot contain ".."',
     );
   });
@@ -315,7 +316,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
         staticRoute: reserved,
         staticDir: 'public',
       });
-      await expect(host.installPluginFromZip(zip)).rejects.toThrow(
+      await expect(host.installPluginFromZip(tmpZipPath(zip))).rejects.toThrow(
         /Security Violation: Plugin ".*" cannot register reserved system route/,
       );
     }
@@ -336,7 +337,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     });
 
     // 1. Install Plugin A successfully
-    const manifestA = await host.installPluginFromZip(zipA);
+    const manifestA = await host.installPluginFromZip(tmpZipPath(zipA));
     expect(manifestA.id).toBe('ext-plugin-a');
     expect(mockApp.use).toHaveBeenCalledWith('/ext/my-dashboard', expect.any(Function), expect.any(Function));
 
@@ -344,7 +345,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     //
     // 报错文案在 G-4b 后多带了「归一化形式」与「已注册形式」，因为原先只报原始路由 ——
     // 而 `/foo` 与 `/foo/` 这类冲突正是靠归一化才检出的，只报原始值会让人看不出差在哪。
-    await expect(host.installPluginFromZip(zipB)).rejects.toThrow(
+    await expect(host.installPluginFromZip(tmpZipPath(zipB))).rejects.toThrow(
       'Static route conflict: "/ext/my-dashboard" (normalized: "/ext/my-dashboard") ' +
         'is already registered by plugin "ext-plugin-a" as "/ext/my-dashboard"',
     );
@@ -353,7 +354,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     await host.uninstallPlugin('ext-plugin-a');
 
     // 4. Install Plugin B now succeeds
-    const manifestB = await host.installPluginFromZip(zipB);
+    const manifestB = await host.installPluginFromZip(tmpZipPath(zipB));
     expect(manifestB.id).toBe('ext-plugin-b');
   });
 
@@ -372,20 +373,20 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
       staticRoute: '/ext/g4b',
       staticDir: 'storage/dist',
     });
-    await host.installPluginFromZip(zipBase);
+    await host.installPluginFromZip(tmpZipPath(zipBase));
 
     // 仅末尾多一个斜杠
     const zipSlash = await createMockZip('ext-g4b-slash', 'Slash', {
       staticRoute: '/ext/g4b/',
       staticDir: 'storage/dist',
     });
-    await expect(host.installPluginFromZip(zipSlash)).rejects.toThrow(/Static route conflict/);
+    await expect(host.installPluginFromZip(tmpZipPath(zipSlash))).rejects.toThrow(/Static route conflict/);
 
     // 仅大小写不同
     const zipCase = await createMockZip('ext-g4b-case', 'Case', {
       staticRoute: '/EXT/G4B',
       staticDir: 'storage/dist',
     });
-    await expect(host.installPluginFromZip(zipCase)).rejects.toThrow(/Static route conflict/);
+    await expect(host.installPluginFromZip(tmpZipPath(zipCase))).rejects.toThrow(/Static route conflict/);
   });
 });

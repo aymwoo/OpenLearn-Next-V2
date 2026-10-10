@@ -46,6 +46,61 @@ export function getMaxUploadBodyBytes(): number {
 }
 
 /**
+ * 从磁盘读入 ZIP（R-4 路径化契约的单一读入口）。
+ *
+ * 安装链路全程只保留**一份** ZIP Buffer：路由层已把 body 流式落盘（原始字节
+ * 不进内存），此处读盘后交给 JSZip。读盘是外部内存（Buffer 不在 V8 heap），
+ * 且 `validateAndBundleZip` 返回后调用方不再持有它，可被 GC。
+ *
+ * JSZip 的 `loadAsync` **不接受 Node 流**（实测 "can't accept a stream"），
+ * 所以「流式解压」在该库上不可达 —— 真正的杠杆是消除多余的副本（body Buffer
+ * 与第二次 loadAsync），见 `validateAndBundleZip` 的 `package` 复用凭据。
+ */
+export function readZipBufferFromPath(zipPath: string): Buffer {
+  if (!fs.existsSync(zipPath)) {
+    throw new Error(`[install-utils] ZIP 文件不存在: ${zipPath}`);
+  }
+  return fs.readFileSync(zipPath);
+}
+
+/**
+ * 把内存中的 ZIP Buffer 落成临时文件，返回路径（R-4）。
+ *
+ * 用于**天生就持有 Buffer** 的调用方：base64 上传（HTTP 已解析）、命令
+ * handler（base64Data）、市场下载（改为流式落盘，见 community-registry）。
+ * 落盘后调用方应立即丢弃 Buffer 引用，让安装链路只剩路径一份事实。
+ */
+export function writeBufferToTempZip(buffer: Buffer, prefix = 'plugin-upload-'): string {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('[install-utils] 空的 ZIP Buffer');
+  }
+  const zipPath = path.join(os.tmpdir(), `${prefix}${uuidv7()}.zip`);
+  fs.writeFileSync(zipPath, buffer);
+  return zipPath;
+}
+
+/** 清理临时 ZIP 文件（幂等；不存在视为已清理） */
+export function removeTempZip(zipPath: string | undefined): void {
+  if (!zipPath) return;
+  try {
+    fs.rmSync(zipPath, { force: true });
+  } catch {
+    /* 清理失败不阻断主流程 */
+  }
+}
+
+/**
+ * 清理临时文件（bundle 产物等，语义同 removeTempZip；分开命名让调用点自描述） */
+export function removeTempFile(filePath: string | undefined): void {
+  if (!filePath) return;
+  try {
+    fs.rmSync(filePath, { force: true });
+  } catch {
+    /* best effort */
+  }
+}
+
+/**
  * 静态门拒绝的原因码。用于让调用方与测试能区分「哪种违规」，
  * 避免所有失败都退化成一句无法定位的 "plugin code rejected"。
  */
@@ -416,14 +471,22 @@ export function assertPluginCodeSafe(code: string): void {
  *
  * D-07: esbuild 安装时打包 —— stdin API 接收代码字符串，bundle 选项
  * 解析所有相对导入并内联，write: false 在内存中完成打包。
- * D-08: external: ['@openlearn/*'] 保留 Token 服务导入为 external，
- * 禁止第三方 npm 包导入（esbuild 无法解析的裸 specifier 会报错）。
+ * D-08: external: ['@openlearn/*'] 保留 Token 服务导入，禁止第三方 npm 包导入。
+ *
+ * 用**重载**而非 `string | undefined` 表达两种模式（strict 门禁驱动）：
+ * 无 outfile 时调用方拿到的必然是代码字符串；有 outfile 时产物已落盘、
+ * 调用方无需（也不该）再持有内存副本。放宽成联合类型会让每个调用点
+ * （含测试）都背上 undefined 收窄，是把 API 的模糊性转嫁给消费方。
  *
  * @param entryCode - 插件入口文件的源代码
  * @param resolveDir - 解析相对导入的基准目录（临时解压目录）
- * @returns 打包后的单 ESM bundle 代码字符串
+ * @param outfile - 可选：打包产物落盘路径（审计 R-4/L3）。给了就 `write: true`，
+ *   bundle 不经过内存字符串；调用方自行 `fs.copyFileSync` 到最终位置。
+ *   不给则维持 `write: false` 返回内存字符串（源码安装路径只做校验、产物丢弃）。
  */
-export async function bundlePlugin(entryCode: string, resolveDir: string): Promise<string> {
+export async function bundlePlugin(entryCode: string, resolveDir: string): Promise<string>;
+export async function bundlePlugin(entryCode: string, resolveDir: string, outfile: string): Promise<void>;
+export async function bundlePlugin(entryCode: string, resolveDir: string, outfile?: string): Promise<string | void> {
   const esbuild = await import('esbuild');
   const result = await esbuild.build({
     stdin: {
@@ -432,7 +495,10 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
       loader: 'ts',
     },
     bundle: true,
-    write: false,
+    // R-4/L3：outfile 模式下 write: true，产物直接落盘 —— 大插件的 bundle
+    // 不再以多 MB 字符串驻留内存。无 outfile 时维持内存返回（校验用途）。
+    write: outfile !== undefined,
+    ...(outfile !== undefined ? { outfile } : {}),
     format: 'esm',
     platform: 'neutral',
     target: 'es2022',
@@ -489,7 +555,19 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
     ],
   });
 
-  const bundled = result.outputFiles[0].text;
+  if (outfile !== undefined) {
+    // write:true 模式：outputFiles 为空，从盘上读回同一道词法门。
+    // 位置与严格度和内存模式完全一致 —— 都在打包产物落盘后、调用方使用前。
+    assertPluginCodeSafe(fs.readFileSync(outfile, 'utf-8'));
+    return undefined;
+  }
+
+  // 无 outfile 时 esbuild 保证 outputFiles 非空（write:false 模式）；strict 下仍需显式收窄，
+  // 否则 "possibly undefined" 会挡住整条安装链路（CI 的 lint:strict 门禁）。
+  const bundled = result.outputFiles?.[0]?.text;
+  if (bundled === undefined) {
+    throw new Error('[install-utils] esbuild produced no output (write:false mode)');
+  }
 
   // A-1：esbuild 的 onResolve 只拦得住可静态解析的字面量 specifier，
   // 计算式 import() 会被原样保留为运行时 import()，故必须在打包后再过一道静态门。
@@ -533,36 +611,38 @@ export async function extractZipEntries(zip: JSZip, destDir: string, maxTotalByt
 }
 
 /**
- * 从 ZIP Buffer 中解压、校验 manifest、esbuild 打包，返回 manifest 和 bundledCode。
+ * 从磁盘 ZIP 解压、校验 manifest、esbuild 打包（审计 R-4：入参从 Buffer 改路径）。
  *
- * D-12: 接收 ZIP 原始字节（来自 SQLite zip_package BLOB 或 HTTP upload），完成：
+ * D-12: 完成：
  * 1. ZIP bomb 防护：头大小预筛 + 解压循环内按实际字节强制（见 extractZipEntries）
  * 2. 路径穿越防护：拒绝包含 ".." 或以 "/" 开头的条目名
- * 3. jszip.loadAsync() 解压
+ * 3. jszip.loadAsync() 解压（Buffer 来自 readZipBufferFromPath，全链路仅此一份）
  * 4. 读取并解析 manifest.json
  * 5. D-10: manifestSchema.parse() 运行时校验
  * 6. 根据 manifest.main 读取入口文件
  * 7. 将所有文件写入临时目录
- * 8. 调用 bundlePlugin() 打包
+ * 8. 调用 bundlePlugin() 打包（产物落盘，不占内存字符串）
  * 9. 清理临时目录
  *
  * @returns `package` 是**复用凭据**（R-4）：installPluginFromZip /
  *   updatePluginFromZip 还需要提取 frontend.js / deploy script / storage 资产，
  *   此前它们各自再 `JSZip.loadAsync(zipBuffer)` 一次 —— 400MB 的包就是
  *   又一份 ~400MB 的解析结构。返回同一份对象让调用方免除第二次解析。
+ * @returns `bundledPath` 是 bundle 的**独立临时文件**路径（刻意不放 tmpDir：
+ *   本函数的 finally 会递归删除 tmpDir，放里面等于返回一个悬空路径）。
+ *   调用方 copyFileSync 到最终位置后必须 `removeTempFile` 归还。
  *
- * @param zipBuffer - ZIP 文件的原始字节
- * @returns {{ manifest, bundledCode, entryFileName, package }}
+ * @param zipPath - ZIP 文件路径（路由层已流式落盘）
  * @throws {Error} ZIP bomb 检测、路径穿越、manifest 缺失/校验失败、入口文件缺失、esbuild 打包失败
  */
-export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
+export async function validateAndBundleZip(zipPath: string): Promise<{
   manifest: Manifest;
-  bundledCode: string;
+  bundledPath: string;
   entryFileName: string;
   package: JSZip;
 }> {
-  // Step 1: 加载 ZIP
-  const zip = await JSZip.loadAsync(zipBuffer);
+  // Step 1: 加载 ZIP（单一 Buffer 副本，读盘后即交给 JSZip）
+  const zip = await JSZip.loadAsync(readZipBufferFromPath(zipPath));
 
   // Step 2: ZIP bomb 防护 — 检查所有文件的未压缩大小总和
   let totalUncompressed = 0;
@@ -633,10 +713,12 @@ export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
     // 写入所有 ZIP 文件到临时目录（按实际解压字节计量，防伪造头绕过 bomb 检查）
     await extractZipEntries(zip, tmpDir, getMaxUncompressedSize());
 
-    // Step 8: esbuild 打包
-    const bundledCode = await bundlePlugin(entryCode, tmpDir);
+    // Step 8: esbuild 打包（产物落**独立的临时文件**——不放 tmpDir，
+    // 因为下方 finally 会递归删除 tmpDir，放里面等于返回悬空路径）
+    const bundledPath = path.join(os.tmpdir(), `plugin-bundle-${uuidv7()}.mjs`);
+    await bundlePlugin(entryCode, tmpDir, bundledPath);
 
-    return { manifest, bundledCode, entryFileName: resolvedMain, package: zip };
+    return { manifest, bundledPath, entryFileName: resolvedMain, package: zip };
   } finally {
     // Step 9: 清理临时目录
     try {

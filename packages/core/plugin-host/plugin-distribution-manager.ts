@@ -9,6 +9,7 @@ import type { PluginExecutionMode } from './types.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
+import { removeTempZip, writeBufferToTempZip } from '../esm-loader/install-utils.js';
 
 export interface PluginPackageMetadata {
   readonly id: string;
@@ -29,7 +30,6 @@ export interface IPluginRepositoryAdapter {
   getPackage(pluginId: string): Promise<PluginPackageMetadata | undefined>;
   fetchZipBuffer(pluginId: string): Promise<Buffer>;
 }
-
 export class LocalRepositoryAdapter implements IPluginRepositoryAdapter {
   public readonly type = 'local';
   private readonly _packages = new Map<string, { meta: PluginPackageMetadata; zipBuffer: Buffer }>();
@@ -80,13 +80,16 @@ export interface IPluginDistributionManager {
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
+  /**
+   * @param zipPath ZIP 文件路径（R-4：安装链路只持路径）
+   */
   installFromZip(
-    zipBuffer: Buffer,
+    zipPath: string,
     executionMode?: PluginExecutionMode,
   ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
-  updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
-  updateFromZip(zipBuffer: Buffer, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
+  updatePlugin(pluginId: string, zipPath?: string): Promise<void>;
+  updateFromZip(zipPath: string, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
   uninstallPlugin(pluginId: string): Promise<void>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
@@ -121,11 +124,15 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     return result;
   }
 
+  /**
+   * @param zipPath ZIP 文件路径（R-4：安装链路只持路径；Buffer 调用方先经
+   *   `writeBufferToTempZip` 落盘并负责清理）
+   */
   public async installFromZip(
-    zipBuffer: Buffer,
+    zipPath: string,
     executionMode?: PluginExecutionMode,
   ): Promise<{ pluginId: string; manifest: Manifest }> {
-    const manifest = await this.pluginHost.installPluginFromZip(zipBuffer, executionMode);
+    const manifest = await this.pluginHost.installPluginFromZip(zipPath, executionMode);
     // installPluginFromZip returns Manifest & { pluginId: <DB UUID> }.
     // Prefer the UUID so callers can toggle/activate without alias resolution.
     const pluginId = (manifest as Manifest & { pluginId?: string }).pluginId ?? manifest.id;
@@ -145,32 +152,40 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     const zipBuffer = await repo.fetchZipBuffer(pluginId);
 
     // SEC-INTEGRITY: 如果元数据中声明了 integrity，强校验 SHA-256 哈希
-    if (pkgMeta?.integrity) {
-      const crypto = await import('node:crypto');
-      const hash = crypto.createHash('sha256').update(zipBuffer);
-      const expected = pkgMeta.integrity.trim();
-      let matches = false;
-      if (expected.startsWith('sha256-')) {
-        const base64Digest = hash.digest('base64');
-        matches = expected.slice(7) === base64Digest;
-      } else {
-        const hexDigest = hash.digest('hex');
-        matches = expected.toLowerCase() === hexDigest.toLowerCase();
+    let zipPath: string | undefined;
+    try {
+      if (pkgMeta?.integrity) {
+        const crypto = await import('node:crypto');
+        const hash = crypto.createHash('sha256').update(zipBuffer);
+        const expected = pkgMeta.integrity.trim();
+        let matches = false;
+        if (expected.startsWith('sha256-')) {
+          const base64Digest = hash.digest('base64');
+          matches = expected.slice(7) === base64Digest;
+        } else {
+          const hexDigest = hash.digest('hex');
+          matches = expected.toLowerCase() === hexDigest.toLowerCase();
+        }
+        if (!matches) {
+          throw new Error(
+            `[PluginDistributionManager] Integrity verification failed for plugin "${pluginId}". ` +
+              `Downloaded ZIP checksum does not match repository metadata.`,
+          );
+        }
       }
-      if (!matches) {
-        throw new Error(
-          `[PluginDistributionManager] Integrity verification failed for plugin "${pluginId}". ` +
-            `Downloaded ZIP checksum does not match repository metadata.`,
-        );
-      }
-    }
 
-    return this.installFromZip(zipBuffer);
+      // R-4：仓库适配器暴露的仍是 Buffer（内存态仓库，无下载环节），
+      // 在此转换成路径contract 并负责清理。
+      zipPath = writeBufferToTempZip(zipBuffer, 'plugin-repo-');
+      return await this.installFromZip(zipPath);
+    } finally {
+      removeTempZip(zipPath);
+    }
   }
 
-  public async updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void> {
-    if (zipBuffer) {
-      await this.updateFromZip(zipBuffer, { targetPluginId: pluginId });
+  public async updatePlugin(pluginId: string, zipPath?: string): Promise<void> {
+    if (zipPath) {
+      await this.updateFromZip(zipPath, { targetPluginId: pluginId });
       return;
     }
     // No zip: reload from on-disk index.js
@@ -183,8 +198,8 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     await this.pluginHost.reloadPlugin(pluginId, code);
   }
 
-  public async updateFromZip(zipBuffer: Buffer, options: PluginUpdateOptions = {}): Promise<PluginUpdateResult> {
-    return this.pluginHost.updatePluginFromZip(zipBuffer, options);
+  public async updateFromZip(zipPath: string, options: PluginUpdateOptions = {}): Promise<PluginUpdateResult> {
+    return this.pluginHost.updatePluginFromZip(zipPath, options);
   }
 
   public async uninstallPlugin(pluginId: string): Promise<void> {

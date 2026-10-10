@@ -18,6 +18,7 @@ import path from 'node:path';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
+import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/tmp-zip.js';
 import { PluginState } from '../../../packages/core/plugin-host/types.js';
 import { bootstrapSharedModules } from '../../../packages/core/plugin-host/context-builder.js';
 import {
@@ -248,7 +249,7 @@ describe('金丝雀第 4 步：毒丸变体拒绝矩阵（POISON_MATRIX）', () 
 
       if (variant === 'noprovides') {
         // noprovides 变体在安装时 manifest 合法，但在激活时尝试 provide 未声明的 token
-        const installed = await host.installPluginFromZip(poisonZip, 'inline');
+        const installed = await host.installPluginFromZip(tmpZipPath(poisonZip), 'inline');
         expect(installed).toBeDefined();
         const pId = (installed as any).pluginId ?? installed.id;
         expect(host.getPluginState(pId)).toBe(PluginState.INSTALLED);
@@ -261,7 +262,7 @@ describe('金丝雀第 4 步：毒丸变体拒绝矩阵（POISON_MATRIX）', () 
         // 安装期毒丸：必须在 validateAndBundleZip 或 installPluginFromZip 阶段被直接拒绝
         let caughtError: Error | null = null;
         try {
-          await host.installPluginFromZip(poisonZip, 'inline');
+          await host.installPluginFromZip(tmpZipPath(poisonZip), 'inline');
         } catch (err: any) {
           caughtError = err;
         }
