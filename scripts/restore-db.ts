@@ -2,10 +2,13 @@
  * restore-db.ts — 从备份恢复 SQLite 数据库。
  *
  * 用法：
- *   pnpm run db:restore                        # 使用 backups/ 下最新的备份
- *   pnpm run db:restore -- path/to/backup.db   # 指定备份文件
- *   pnpm run db:restore -- --list              # 列出可用备份
- *   pnpm run db:restore -- --force             # 覆盖现有数据库前不留安全副本
+ *   pnpm run db:restore -- --list              # 列出可用备份（无需停服）
+ *   pnpm run db:restore -- --i-understand-downtime [path/to/backup.db]  # 停服后恢复
+ *   pnpm run db:restore -- --i-understand-downtime --force  # 覆盖前不留安全副本
+ *
+ * R2：恢复是停机操作（直接覆盖库文件 + 删除 -wal/-shm，带电恢复必损坏）。
+ * 除 --list 外必须显式 --i-understand-downtime，并先停服（pm2 stop / Ctrl-C）。
+ * 若检测到疑似运行中的服务持有库文件（fuser 有回显），直接拒绝。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,9 +26,8 @@ const positional = args.filter((a) => !a.startsWith('--'));
 const dbPath = getDefaultDbPath();
 const backupDir = getDefaultBackupDir();
 
-function main(): void {
-  if (has('--list')) {
-    const files = listBackups(backupDir);
+async function main(): Promise<void> {
+  if (has('--list')) {    const files = listBackups(backupDir);
     if (!files.length) {
       console.log(`（${backupDir} 下没有备份文件）`);
       return;
@@ -44,6 +46,24 @@ function main(): void {
   if (!target) {
     console.error('✗ 找不到任何有效备份。请先运行 `pnpm run db:backup`，或用 --list 查看。');
     process.exit(1);
+  }
+
+  if (!has('--i-understand-downtime')) {
+    console.error('✗ 拒绝执行：恢复是停机操作，必须先停服（pm2 stop openlearnv2 或 Ctrl-C），');
+    console.error('  再显式传入 --i-understand-downtime 确认。仅查看备份请用 --list。');
+    process.exit(1);
+  }
+
+  // 最佳努力检测带电恢复：fuser 能看到持有者则拒绝（无 fuser 时跳过检测）
+  try {
+    const { execSync } = await import('node:child_process');
+    const holders = execSync(`fuser "${dbPath}" 2>/dev/null || true`, { encoding: 'utf8' }).trim();
+    if (holders) {
+      console.error(`✗ 检测到仍有进程持有数据库（fuser: ${holders}），请先停服再恢复。`);
+      process.exit(1);
+    }
+  } catch {
+    // 无 fuser 或检测失败时跳过，不阻断已确认的恢复
   }
 
   const resolved = path.resolve(target);
@@ -79,4 +99,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(`✗ 恢复失败：${err?.message ?? err}`);
+  process.exit(1);
+});

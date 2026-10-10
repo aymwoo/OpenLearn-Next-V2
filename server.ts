@@ -59,6 +59,14 @@ import {
   runOpenAIAgentChat,
 } from './server/ai-agent.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
+import {
+  performBackup,
+  checkpoint,
+  listBackups,
+  getDefaultBackupDir,
+  getDefaultDbPath,
+} from './packages/core/db/index.js';
+import { startBackupScheduler } from './server/backup-scheduler.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import {
   getCookieToken,
@@ -512,7 +520,24 @@ async function startServer() {
     try {
       kernelContainer.db.prepare('SELECT 1').get();
       const workerCount = kernelContainer.workerManager?.registry?.activeCount ?? 0;
-      res.json({ status: 'ready', db: 'connected', workers: workerCount });
+      // R4 加深：WAL 体积 + 最新备份年龄纳入就绪信号（仅上报，不因此 503，避免新实例无备份时自杀）
+      let walBytes: number | null = null;
+      try {
+        walBytes = fs.statSync(getDefaultDbPath() + '-wal').size;
+      } catch {
+        walBytes = 0;
+      }
+      let lastBackupAgeH: number | null = null;
+      try {
+        const files = listBackups(getDefaultBackupDir()).filter((b) => b.isValid);
+        if (files.length > 0) {
+          lastBackupAgeH = Math.max(0, (Date.now() - new Date(files[0].mtime).getTime()) / 3600000);
+          lastBackupAgeH = Math.round(lastBackupAgeH * 10) / 10;
+        }
+      } catch {
+        lastBackupAgeH = null;
+      }
+      res.json({ status: 'ready', db: 'connected', workers: workerCount, walBytes, lastBackupAgeH });
     } catch (e: any) {
       res.status(503).json({ status: 'not_ready', error: e.message });
     }
@@ -610,6 +635,14 @@ async function startServer() {
     }
   };
 
+  // R2 定时化：应用内备份调度（每日 03:00 热备 + 每小时 WAL checkpoint），
+  // 测试/临时实例可用 BACKUP_SCHEDULE=off 关闭
+  const backupScheduler = startBackupScheduler({
+    db: kernelContainer.db,
+    performBackupFn: (options) => performBackup(options),
+    checkpointFn: (mode) => checkpoint(mode as any),
+  });
+
   httpServer.listen(PORT, HOST, () => {
     const isAnyHost = HOST === '0.0.0.0';
     const localUrl = `http://localhost:${PORT}`;
@@ -647,7 +680,11 @@ async function startServer() {
 
   const cleanup = async () => {
     console.log('[Server] Cleaning up server resources...');
-    await new Promise<void>((resolve) => {
+    try {
+      backupScheduler.stop();
+    } catch (err) {
+      console.warn('[Server] Error while stopping backup scheduler:', err);
+    }    await new Promise<void>((resolve) => {
       httpServer.close((err) => {
         if (err) console.warn('[Server] Error while closing HTTP server:', err);
         resolve();
