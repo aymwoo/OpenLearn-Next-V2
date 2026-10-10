@@ -209,7 +209,14 @@ function assertValidScheduleInput(
   if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) throw bad('scheduledDate is not a real date');
   if (timeSlot != null && timeSlot !== '') {
     const parsed = parseTimeSlot(timeSlot);
-    if (!parsed) throw bad('timeSlot must be HH:MM-HH:MM with 00:00<=start<end<=24:00');
+    if (!parsed) {
+      // 离散文本时段（如 "第1节"）允许：冲突引擎按文本相等判定（见 isTimeOverlapping）。
+      // 但含时间形态（\d{1,2}:\d{2}）却解析失败的视为 malformed（如 25:99、跨天、空区间）。
+      const looksLikeTime = /\d{1,2}:\d{2}/.test(timeSlot);
+      if (looksLikeTime || timeSlot.length > 32) {
+        throw bad('timeSlot must be HH:MM-HH:MM with 00:00<=start<end<=24:00, or a short discrete label');
+      }
+    }
   }
   if (status != null && status !== '' && !SCHEDULE_STATUS.has(status)) throw bad(`status must be one of ${[...SCHEDULE_STATUS].join('/')}`);
   const cls = db.prepare('SELECT id FROM classes WHERE id = ?').get(classId) as any;

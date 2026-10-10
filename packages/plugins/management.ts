@@ -704,8 +704,14 @@ export const ManagementPlugin = {
             if (!a || !b) return true; // 空时段视为全天，占坑
             const pa = toMin(a);
             const pb = toMin(b);
-            if (!pa || !pb) return true;
-            return Math.max(pa[0], pb[0]) < Math.min(pa[1], pb[1]);
+            if (pa && pb) return Math.max(pa[0], pb[0]) < Math.min(pa[1], pb[1]);
+            // 离散文本时段（如 "第1节"）按文本相等判定（与 isTimeOverlapping 同语义）；
+            // 含时间形态却解析失败的视为 malformed，fail-close 占坑
+            const ta = String(a).trim().toLowerCase();
+            const tb = String(b).trim().toLowerCase();
+            const timeLike = (s: string) => /\d{1,2}:\d{2}/.test(s);
+            if (!timeLike(ta) && !timeLike(tb)) return ta === tb;
+            return true;
           };
           const existing = db
             .prepare('SELECT id, time_slot FROM schedules WHERE class_id = ? AND scheduled_date = ?')

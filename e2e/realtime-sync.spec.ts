@@ -190,4 +190,33 @@ test.describe('课堂实时同步（跨端）', () => {
 
     await expect(page.getByText(/\+10 金币/).first()).toBeVisible({ timeout: 30_000 });
   });
+
+  test('断网重连后学生端恢复实时同步（offline → online）', async () => {
+    // 慢用例：离线窗口需超过 Engine.IO 心跳超时（pingTimeout 20s）才能确保
+    // 客户端真正走完 disconnect → reconnect 周期，而非“抖动一下没断开”。
+    test.slow();
+    await dismissPickAlert();
+
+    // 基线：确认当前链路是通的
+    const baseRes = await api.post(`/api/classroom/sessions/${fx.lessonId}/countdown`, {
+      data: { action: 'start', duration: 600, label: 'E2E 断网前基线' },
+    });
+    expect(baseRes.ok(), '基线倒计时应成功').toBeTruthy();
+    const banner = page.locator('#student-classroom-countdown-banner');
+    await expect(banner).toContainText('E2E 断网前基线', { timeout: 20_000 });
+
+    // 断网 30s：学生 socket 必定超时断开；期间教师动作学生收不到是预期的
+    //（当前客户端无离线队列，不断言断网期间事件的补发，只断言重连后链路恢复）。
+    await ctx.setOffline(true);
+    await page.waitForTimeout(30_000);
+    await ctx.setOffline(false);
+
+    // 重连后教师发起新倒计时，学生应实时看到（走 socket.io 自动重连 +
+    // useClassroomSocket 的 connect/reconnect → syncPresenceAndRooms 恢复房间）。
+    const recoverRes = await api.post(`/api/classroom/sessions/${fx.lessonId}/countdown`, {
+      data: { action: 'start', duration: 600, label: 'E2E 重连后恢复' },
+    });
+    expect(recoverRes.ok(), '重连后倒计时应成功').toBeTruthy();
+    await expect(banner).toContainText('E2E 重连后恢复', { timeout: 60_000 });
+  });
 });

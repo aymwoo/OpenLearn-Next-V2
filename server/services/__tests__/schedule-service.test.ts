@@ -127,6 +127,13 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
       expect(isTimeOverlapping('第1节', '第2节')).toBe(false);
     });
 
+    it('parseTimeSlot: 非法时间（25:99/跨天/空区间）返回 null', () => {
+      expect(parseTimeSlot('25:99')).toBeNull();
+      expect(parseTimeSlot('23:00-01:00')).toBeNull();
+      expect(parseTimeSlot('10:00-10:00')).toBeNull();
+      expect(parseTimeSlot('08:00-08:45')).not.toBeNull();
+    });
+
     it('expandRecurringSchedules: 准确按周期展开未来日期', () => {
       const items = expandRecurringSchedules({
         startDate: '2026-10-12', // 2026-10-12 是周一
@@ -313,6 +320,43 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
       const updated = scheduleService.getScheduleById(schB.id);
       expect(updated?.time_slot).toBe('15:00 - 15:45');
       expect(updated?.notes).toBe('调课');
+    });
+
+    it('createSchedule: 离散文本时段放行、malformed 时间 400 拒绝', () => {
+      // e2e 夹具与“第N节”形态：无时间形态的短文本标签允许入库
+      const discrete = scheduleService.createSchedule({
+        classId: CLASS_3,
+        lessonId: LESSON_3,
+        scheduledDate: '2026-10-26',
+        timeSlot: 'e2e',
+      });
+      expect(discrete.time_slot).toBe('e2e');
+      // 同文本再次排布应冲突（文本相等口径）
+      expect(() =>
+        scheduleService.createSchedule({
+          classId: CLASS_3,
+          lessonId: LESSON_3,
+          scheduledDate: '2026-10-26',
+          timeSlot: 'e2e',
+        }),
+      ).toThrowError(ScheduleConflictError);
+      // 含时间形态但非法：25:99 / 跨天一律 400
+      expect(() =>
+        scheduleService.createSchedule({
+          classId: CLASS_3,
+          lessonId: LESSON_3,
+          scheduledDate: '2026-10-26',
+          timeSlot: '25:99',
+        }),
+      ).toThrowError(/timeSlot/);
+      expect(() =>
+        scheduleService.createSchedule({
+          classId: CLASS_3,
+          lessonId: LESSON_3,
+          scheduledDate: '2026-10-26',
+          timeSlot: '23:00-01:00',
+        }),
+      ).toThrowError(/timeSlot/);
     });
 
     it('batchCreateSchedules: 批量排课原子事务与冲突拦截', () => {
