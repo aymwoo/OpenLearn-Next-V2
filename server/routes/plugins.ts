@@ -903,6 +903,51 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 命名空间强制挂载在 /api/plugins/:pluginId/*，支持任意 HTTP 动词
   app.all('/api/plugins/:pluginId/*', pluginApiGatewayMiddleware);
 
+  // ── 国家智慧教育公共服务平台 REST 代理网关 (Smart Education Gateway) ──
+  app.get('/api/external/smart-edu/resources', requireAuth(), async (req, res) => {
+    try {
+      const bus = kernelContainer.commandBus;
+      const cmd = await bus.createCommand('smart_edu.search_resources', req.query, getActorId(req));
+      const result = await bus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/external/smart-edu/import', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const bus = kernelContainer.commandBus;
+      const cmd = await bus.createCommand('smart_edu.import_course', { ...req.body, creatorId: getActorId(req) }, getActorId(req));
+      const result = await bus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/external/smart-edu/report', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const bus = kernelContainer.commandBus;
+      const cmd = await bus.createCommand('smart_edu.report_metrics', req.body, getActorId(req));
+      const result = await bus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.get('/api/external/smart-edu/status', requireAuth(), async (req, res) => {
+    try {
+      const bus = kernelContainer.commandBus;
+      const cmd = await bus.createCommand('smart_edu.get_status', {}, getActorId(req));
+      const result = await bus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   // AI Provider Endpoints (仅教师和管理员有权查看配置的模型提供方)
   app.get('/api/ai-providers', requireAuth('teacher', 'administrator'), (req, res) => {
     try {

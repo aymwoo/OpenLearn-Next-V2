@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **官方《国家智慧教育公共服务平台连接器》（@openlearn/plugin-smart-edu）标杆插件落地**：
+  - **核心命令总线与内核事务落库**：在 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts) 实现内核级连接器插件，支持精品课分类检索 (`smart_edu.search_resources`)、课程与白板图元原子化事务落库 (`smart_edu.import_course`)、学情数据国家平台 CELTS-3 规范回执签发与广播 (`smart_edu.report_metrics`) 以及多活健康心跳检测 (`smart_edu.get_status`)；并在 [`packages/core/kernel/index.ts`](./packages/core/kernel/index.ts) 系统内核插件链注册；
+  - **开放外部网关 REST API**：在 [`server/routes/plugins.ts`](./server/routes/plugins.ts) 暴露 `/api/external/smart-edu/resources`、`/import`、`/report`、`/status` 四组直连网关路由；
+  - **全域扩展槽位 10 个端点全覆盖装配**：在 [`src/features/smart-edu/`](./src/features/smart-edu/) 实现完整业务连接组件，包括 `SmartEduImportModal`（精品课检索与导入弹窗）、`SmartEduCourseToolbarAction` (`course.list.toolbar.action`)、`SmartEduCourseBadge` (`course.card.badge`)、`SmartEduCourseCardAction` (`course.card.action`)、`SmartEduSegmentAction` (`editor.segment.action`)、`SmartEduAlertBanner` (`classroom.alert.banner`)、`SmartEduStageTicker` (`classroom.stage.display.ticker`)、`SmartEduPostClassExporter` (`classroom.post_class.exporter`)、`SmartEduHeaderStatusPill` (`header.status_pill`) 以及 `SmartEduAdminCard` (`admin.dashboard.card`)；
+  - **开箱即用自动注册与类型安全**：在 [`src/main.tsx`](./src/main.tsx) 开箱调用 `registerSmartEduExtensions()`；在 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 严格导出全部对应 SlotProps 类型；
+  - **端到端专项测试矩阵**：新增 [`packages/plugins/__tests__/national-smart-edu.test.ts`](./packages/plugins/__tests__/national-smart-edu.test.ts) (4/4) 与 [`src/features/smart-edu/__tests__/smart-edu-connector.test.tsx`](./src/features/smart-edu/__tests__/smart-edu-connector.test.tsx) (8/8) 自动化测试，配合全域扩展槽测试（合计 30/30 项全绿）。
+
 - **全域 20 个业务扩展槽位全量落地与国家智慧教育公共服务平台直连支持**：
   - **架构契约双源一致性（SSOT）与防漂移**：在 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中将 `ExtensionSlot` 联合类型扩充至 95 个；在 [`packages/core/esm-loader/manifest-schema.ts`](./packages/core/esm-loader/manifest-schema.ts) 为 20 个槽位声明完整 Zod 校验 Schema；在 [`packages/core/plugin-host/contribution-registry.ts`](./packages/core/plugin-host/contribution-registry.ts) 与 [`packages/plugin-sdk/index.ts`](./packages/plugin-sdk/index.ts) 同步配置接口，并通过 `generate-dts.mjs` 更新 [`packages/plugin-sdk/generated.d.ts`](./packages/plugin-sdk/generated.d.ts)；
   - **14 个核心业务视图全量消费（0 幽灵槽位）**：

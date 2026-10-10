@@ -576,3 +576,91 @@ export interface WhiteboardRendererSlotProps {
   onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
+
+/** Props passed to course.list.toolbar.action extensions */
+export interface CourseListToolbarActionSlotProps {
+  selectedCourseIds?: string[];
+  courses?: any[];
+  lang?: string;
+  onRefresh?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to course.card.badge extensions */
+export interface CourseCardBadgeSlotProps {
+  course?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to course.card.action extensions */
+export interface CourseCardActionSlotProps {
+  course?: any;
+  lang?: string;
+  onRefresh?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to editor.segment.action extensions */
+export interface EditorSegmentActionSlotProps {
+  segment?: any;
+  segmentId?: string;
+  lang?: string;
+  readOnly?: boolean;
+  onPatch?: (patch: any) => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.alert.banner extensions */
+export interface ClassroomAlertBannerSlotProps {
+  lessonId?: string | null;
+  classId?: string | null;
+  stage?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.cockpit.drawer.item extensions */
+export interface ClassroomCockpitDrawerItemSlotProps {
+  lessonId?: string | null;
+  classId?: string | null;
+  stage?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.stage.display.ticker extensions */
+export interface ClassroomStageDisplayTickerSlotProps {
+  lessonId?: string | null;
+  lessonTitle?: string;
+  stage?: any;
+  data?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.post_class.exporter extensions */
+export interface ClassroomPostClassExporterSlotProps {
+  lessonId?: string | null;
+  summaryData?: any;
+  lang?: string;
+  onExport?: (format: string) => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to header.status_pill extensions */
+export interface HeaderStatusPillSlotProps {
+  session?: any;
+  currentRole?: 'teacher' | 'student';
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to admin.dashboard.card extensions */
+export interface AdminDashboardCardSlotProps {
+  siteInfo?: any;
+  lang?: string;
+  onRefresh?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
