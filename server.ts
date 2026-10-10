@@ -47,7 +47,7 @@ import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
 import { loadMigrationsFromDirectory, runMigrations } from './server/utils/migrate.js';
-import { MF_REMOTE_CACHE, lessonActiveSegments } from './server/shared-state.js';
+import { lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
   buildAgentFinalMessage,
@@ -411,7 +411,6 @@ async function startServer() {
     app,
     loginLimiter,
     aiLimiter,
-    MF_REMOTE_CACHE,
     lessonActiveSegments,
     buildAgentSystemInstruction,
     buildAgentFinalMessage,

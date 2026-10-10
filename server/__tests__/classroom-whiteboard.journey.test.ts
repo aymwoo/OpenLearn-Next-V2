@@ -200,7 +200,6 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
       loginLimiter: null,
       aiLimiter: null,
       activityRegistry: null,
-      MF_REMOTE_CACHE: new Map(),
       lessonActiveSegments: new Map(),
       buildAgentSystemInstruction: () => '',
       buildAgentFinalMessage: () => '',

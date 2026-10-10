@@ -106,7 +106,6 @@ describe('StageGuard 资源级物理强门禁 (Resource-level Enforcement)', () 
       loginLimiter: () => (_req: any, _res: any, next: any) => next(),
       aiLimiter: () => (_req: any, _res: any, next: any) => next(),
       activityRegistry: {} as any,
-      MF_REMOTE_CACHE: new Map(),
     } as any);
 
     registerAssignmentHubRoutes({

@@ -80,7 +80,6 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
       loginLimiter: null,
       aiLimiter: null,
       activityRegistry: null,
-      MF_REMOTE_CACHE: new Map(),
       lessonActiveSegments: new Map(),
       buildAgentSystemInstruction: () => '',
       buildAgentFinalMessage: () => '',

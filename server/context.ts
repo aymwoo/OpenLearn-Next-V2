@@ -53,7 +53,6 @@ export interface ServerContext {
   loginLimiter: any;
   aiLimiter: any;
   activityRegistry: ActivityRegistry;
-  MF_REMOTE_CACHE: Map<string, { entry: string; meta: Record<string, any> }>;
   lessonActiveSegments: Map<string, string>;
   buildAgentSystemInstruction: (lang: 'zh' | 'en', currentLessonId?: string | null) => string;
   buildAgentFinalMessage: (message: string, attachments?: AgentChatAttachment[]) => string;

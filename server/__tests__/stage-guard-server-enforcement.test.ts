@@ -83,7 +83,6 @@ describe('I-1 · 环节门禁的服务端强制', () => {
       loginLimiter: () => (_req: any, _res: any, next: any) => next(),
       aiLimiter: () => (_req: any, _res: any, next: any) => next(),
       activityRegistry: {} as any,
-      MF_REMOTE_CACHE: new Map(),
     } as any);
 
     server = app.listen(0);

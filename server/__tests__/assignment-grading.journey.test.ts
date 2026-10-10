@@ -182,7 +182,6 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
       loginLimiter: ((_req: any, _res: any, next: any) => next()) as any,
       aiLimiter: null,
       activityRegistry: null,
-      MF_REMOTE_CACHE: new Map(),
       lessonActiveSegments: new Map(),
     } as any;
 

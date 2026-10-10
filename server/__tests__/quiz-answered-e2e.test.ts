@@ -71,7 +71,6 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       io,
       loginLimiter: null,
       activityRegistry: null,
-      MF_REMOTE_CACHE: new Map(),
       lessonActiveSegments: new Map(),
       buildAgentSystemInstruction: () => '',
       buildAgentFinalMessage: () => '',

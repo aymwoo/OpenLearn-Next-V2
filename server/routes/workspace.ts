@@ -4,7 +4,6 @@ import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, requireAuth } f
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
-import { cacheGetMfRemote, cacheSetMfRemote } from '../shared-state.js';
 
 // ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
 // 该端点每次调用都会写一行 events 审计记录并向全体在线用户广播，
@@ -13,7 +12,7 @@ const DIAGNOSTIC_MIN_INTERVAL_MS = 1000;
 const diagnosticLastReportAt = new Map<string, number>();
 
 export function registerWorkspaceRoutes(ctx: ServerContext) {
-  const { app, MF_REMOTE_CACHE } = ctx;
+  const { app } = ctx;
 
   app.get('/api/events', requireAuth('administrator', 'teacher'), (req, res) => {
     try {
@@ -105,52 +104,6 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       }
 
       res.json({ success: true });
-    } catch (e: any) {
-      sendSafeError(res, e);
-    }
-  });
-
-  // ── MFE Remote Entries ─────────────────────────────────────────────────
-  app.get('/api/mfe/remotes', requireAuth(), (req, res) => {
-    try {
-      const name = req.query.name as string | undefined;
-
-      if (!name) {
-        // Return all registered remotes
-        const rows = kernelContainer.db.prepare('SELECT name, entry, meta FROM mfe_remotes').all() as Array<{
-          name: string;
-          entry: string;
-          meta: string;
-        }>;
-        return res.json({ success: true, result: rows });
-      }
-
-      // Cache-first strategy (D-24)；Phase B4: TTL 惰性过期 + 容量上限
-      const cached = cacheGetMfRemote(name);
-      if (cached) {
-        return res.json({ success: true, result: cached });
-      }
-
-      // Cache miss: query database
-      const row = kernelContainer.db.prepare('SELECT name, entry, meta FROM mfe_remotes WHERE name = ?').get(name) as
-        { name: string; entry: string; meta: string } | undefined;
-
-      if (!row) {
-        return res.status(404).json({
-          success: false,
-          error: `Remote "${name}" not registered`,
-        });
-      }
-
-      const result = {
-        entry: row.entry,
-        meta: JSON.parse(row.meta || '{}'),
-      };
-
-      // Populate cache (D-24)
-      cacheSetMfRemote(name, result.entry, result.meta);
-
-      res.json({ success: true, result });
     } catch (e: any) {
       sendSafeError(res, e);
     }
