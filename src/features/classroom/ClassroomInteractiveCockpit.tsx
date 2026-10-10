@@ -422,10 +422,15 @@ export function ClassroomInteractiveCockpit({
   ];
 
   return (
-    <div
-      id="classroom-interactive-cockpit"
-      className="bg-surface border-b border-border/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 select-none text-xs transition-colors"
-    >
+    <>
+      <ExtensionPointRenderer
+        slot="classroom.alert.banner"
+        slotProps={{ classId, lessonId, currentStage }}
+      />
+      <div
+        id="classroom-interactive-cockpit"
+        className="bg-surface border-b border-border/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 select-none text-xs transition-colors"
+      >
       {/* 阶段控制导航 (Stepper) */}
       <div className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs">
         {stages.map((st, idx) => {
@@ -541,6 +546,14 @@ export function ClassroomInteractiveCockpit({
         {/* 扩展卡槽：第三方插件注册自定义快捷互动 */}
         <ExtensionPointRenderer
           slot="classroom.quick_activity"
+          slotProps={{
+            lessonId,
+            classId,
+            stage: currentStage,
+          }}
+        />
+        <ExtensionPointRenderer
+          slot="classroom.cockpit.drawer.item"
           slotProps={{
             lessonId,
             classId,
@@ -1013,5 +1026,6 @@ export function ClassroomInteractiveCockpit({
         </div>
       )}
     </div>
+    </>
   );
 }

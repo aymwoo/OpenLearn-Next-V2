@@ -229,6 +229,24 @@ export function PostClassWrapupView({
             <span>{lang === 'zh' ? '生成学情全景简报' : 'Generate Briefing Report'}</span>
             <ArrowRight size={14} />
           </button>
+
+          {/* 第三方课后复盘导出通道扩展（直报国家/教委智慧教育大数据平台接口/家校推送等） */}
+          <ExtensionPointRenderer
+            slot="classroom.post_class.exporter"
+            slotProps={{
+              summaryData: {
+                selectedLesson,
+                lessonTitle,
+                selectedClassId,
+                className,
+                attemptsCount: displayAttempts.length,
+                exitTicketStats,
+              },
+              classId: selectedClassId,
+              lessonId: selectedLesson,
+              lang,
+            }}
+          />
         </div>
       </div>
 

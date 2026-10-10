@@ -11,12 +11,13 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useOptionalAppData } from '../../context/AppDataContext';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface RightSidebarProps {
   showRightSidebar?: boolean;
   setShowRightSidebar?: (v: boolean) => void;
-  rightSidebarTab?: 'agent' | 'shell';
-  setRightSidebarTab?: (t: 'agent' | 'shell') => void;
+  rightSidebarTab?: 'agent' | 'shell' | (string & {});
+  setRightSidebarTab?: (t: 'agent' | 'shell' | (string & {})) => void;
   effectiveAgentProviderId?: string;
   agentProviderId?: string;
   setAgentProviderId?: (id: string) => void;
@@ -106,6 +107,15 @@ export function RightSidebar(props: RightSidebarProps = {}) {
             >
               <Terminal size={14} /> Shell
             </button>
+            <ExtensionPointRenderer
+              slot="ai_sidebar.tab"
+              slotProps={{
+                renderType: 'button',
+                activeTab: rightSidebarTab,
+                setActiveTab: setRightSidebarTab,
+                lang,
+              }}
+            />
             <button
               onClick={() => setShowRightSidebar(false)}
               className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 rounded-md"
@@ -310,7 +320,7 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                 </div>
               </form>
             </div>
-          ) : (
+          ) : rightSidebarTab === 'shell' ? (
             <div className="flex-1 flex flex-col bg-black text-green-400 font-mono text-xs min-h-0 mx-4 mb-4 rounded-xl shadow-inner border border-gray-800 overflow-hidden">
               <div className="p-3 border-b border-gray-800 flex items-center justify-between shrink-0 bg-gray-900">
                 <div className="flex items-center gap-2 text-gray-300 font-sans tracking-wide">
@@ -338,6 +348,17 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                   ))
                 )}
               </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4">
+              <ExtensionPointRenderer
+                slot="ai_sidebar.tab"
+                slotProps={{
+                  renderType: 'panel',
+                  activeTab: rightSidebarTab,
+                  lang,
+                }}
+              />
             </div>
           )}
         </>

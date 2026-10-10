@@ -31,6 +31,7 @@ export interface QuickInsertRegistryFacade {
   registerItem: (item: QuickInsertItemDescriptor) => void;
   registerProvider: (provider: QuickInsertProvider) => void;
   unregisterItem: (itemId: string) => boolean;
+  getItem?: (itemId: string) => QuickInsertItemDescriptor | undefined;
   search: (query: string, category?: QuickInsertCategory) => ReadonlyArray<QuickInsertItemDescriptor>;
   executeItem: (itemId: string, context?: Record<string, unknown>) => Promise<void>;
   getRecents: () => ReadonlyArray<QuickInsertItemDescriptor>;

@@ -20,6 +20,7 @@ import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -53,6 +54,7 @@ export function CourseManagement() {
     filterThisMonth,
     setFilterThisMonth,
     copyingLessonId,
+    fetchLessons,
   } = useAppData();
 
   // 原回调 prop 的闭包封装（onClick 直接传 setter 会把 MouseEvent 误写入状态）
@@ -133,6 +135,10 @@ export function CourseManagement() {
               <Plus size={14} />
               {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
             </button>
+            <ExtensionPointRenderer
+              slot="course.list.toolbar.action"
+              slotProps={{ lang, refreshLessons: fetchLessons }}
+            />
           </div>
         </div>
         {lessons.length > 0 && (
@@ -297,6 +303,7 @@ export function CourseManagement() {
                           {lesson.title}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
+                          <ExtensionPointRenderer slot="course.card.badge" slotProps={{ lesson }} />
                           {lesson.creator_name ? (
                             <span
                               className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
@@ -389,6 +396,7 @@ export function CourseManagement() {
                               <Trash2 size={14} />
                             </span>
                           )}
+                          <ExtensionPointRenderer slot="course.card.action" slotProps={{ lesson, lang }} />
                         </div>
                       </div>
                     </div>

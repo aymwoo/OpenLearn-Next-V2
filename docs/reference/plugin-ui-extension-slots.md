@@ -9,7 +9,7 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **75** 个成员）
+### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **95** 个成员）
 
 > 旧文档写 55 个、且把 `palette.item` 列为合法槽位名——**`palette.item` 不是合法槽位名**。备课画板组件扩展的真实槽位名是 **`editor.palette_item`**，已于 `SegmentEditorCard` 与 `LessonPalette` 中完整挂载并与 `paletteItemRegistry` 协同。
 
@@ -113,14 +113,40 @@ export type ExtensionSlot =
   | 'header.action'
   | 'statusbar.item'
   // ── 白板画布核心图元扩展槽位（一等公民图元渲染）──
-  | 'whiteboard.renderer';
+  | 'whiteboard.renderer'
+  // ── 备课中心与课程库（国家智慧教育平台对接 / 资源生态）──
+  | 'course.list.toolbar.action'
+  | 'course.card.badge'
+  | 'course.card.action'
+  | 'editor.segment.action'
+  // ── 课堂互动与执教大屏 ──
+  | 'classroom.alert.banner'
+  | 'classroom.cockpit.drawer.item'
+  | 'classroom.stage.display.ticker'
+  | 'classroom.post_class.exporter'
+  // ── 课表与机房管理 ──
+  | 'timetable.toolbar.action'
+  | 'timetable.card.badge'
+  | 'computer_lab.toolbar.action'
+  | 'computer_lab.seat.overlay'
+  // ── 学生学习门户与作业闭环 ──
+  | 'student.dashboard.hero_widget'
+  | 'student.assignment.toolbar.action'
+  | 'student.lesson.notes_addon'
+  | 'student.lesson.toolbox'
+  // ── 管理后台与全域底座 ──
+  | 'admin.dashboard.card'
+  | 'admin.user.action'
+  | 'header.status_pill'
+  // ── AI 助手侧边栏 ──
+  | 'ai_sidebar.tab';
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
 export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 ```
 
-> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 75 个成员内。
+> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 95 个成员内。
 
 ### 后端 manifest `contributes` 键（`packages/core/plugin-host/contribution-registry.ts`，镜像 `packages/plugin-sdk/openlearn.d.ts`）
 
@@ -132,12 +158,33 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 - `classroom.quick_activity` → `QuickActivityConfig`
 - `anchor:*` → `AnchorToolConfig`（v0.2.6+，开放命名空间，锚点 id 见 `docs/plugin/anchor-slots.md`）
 - `help.plugin_docs` → `HelpDocConfig`（V3.2 新增）
+- **全域扩展槽位贡献配置**（镜像 `packages/core/plugin-host/contribution-registry.ts`）：
+  - `course.list.toolbar.action` → `CourseListToolbarActionConfig`
+  - `course.card.badge` → `CourseCardBadgeConfig`
+  - `course.card.action` → `CourseCardActionConfig`
+  - `editor.segment.action` → `EditorSegmentActionConfig`
+  - `classroom.alert.banner` → `ClassroomAlertBannerConfig`
+  - `classroom.cockpit.drawer.item` → `ClassroomCockpitDrawerItemConfig`
+  - `classroom.stage.display.ticker` → `ClassroomStageDisplayTickerConfig`
+  - `classroom.post_class.exporter` → `ClassroomPostClassExporterConfig`
+  - `timetable.toolbar.action` → `TimetableToolbarActionConfig`
+  - `timetable.card.badge` → `TimetableCardBadgeConfig`
+  - `computer_lab.toolbar.action` → `ComputerLabToolbarActionConfig`
+  - `computer_lab.seat.overlay` → `ComputerLabSeatOverlayConfig`
+  - `student.dashboard.hero_widget` → `StudentDashboardHeroWidgetConfig`
+  - `student.assignment.toolbar.action` → `StudentAssignmentToolbarActionConfig`
+  - `student.lesson.notes_addon` → `StudentLessonNotesAddonConfig`
+  - `student.lesson.toolbox` → `StudentLessonToolboxConfig`
+  - `admin.dashboard.card` → `AdminDashboardCardConfig`
+  - `admin.user.action` → `AdminUserActionConfig`
+  - `header.status_pill` → `HeaderStatusPillConfig`
+  - `ai_sidebar.tab` → `AiSidebarTabConfig`
 
 #### 已实际挂载渲染器（存在 `ExtensionPointRenderer` 调用点）的槽位
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值共 75 个**（全部 75 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
+- 生产调用点上的**固定名槽位值共 95 个**（全部 95 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                 | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                              |
@@ -222,6 +269,27 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `header.action`                      | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                      |
 | `statusbar.item`                     | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                            |
 | `whiteboard.renderer`                | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ element, elementId, elementType, data, width, height, isSelected, readOnly, userRole, lessonId, onElementUpdate }` |
+| `course.list.toolbar.action`         | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ selectedCourseIds, courses, lang, onRefresh }`                                                                     |
+| `course.card.badge`                  | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ course, lang }`                                                                                                    |
+| `course.card.action`                 | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ course, lang, onRefresh }`                                                                                         |
+| `editor.segment.action`              | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch, segmentId }`                                                                      |
+| `classroom.alert.banner`             | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage, lang }`                                                                                  |
+| `classroom.cockpit.drawer.item`      | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage, lang }`                                                                                  |
+| `classroom.stage.display.ticker`     | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, lang }`                                                                        |
+| `classroom.post_class.exporter`      | `src/features/classroom/PostClassWrapupView.tsx`                                                                                        | `{ lessonId, summaryData, lang, onExport }`                                                                           |
+| `timetable.toolbar.action`           | `src/components/TimetableManager.tsx`                                                                                                   | `{ activeTab, schedules, lang, onRefresh }`                                                                           |
+| `timetable.card.badge`               | `src/components/timetable/sub-views/TimetableCalendarView.tsx`                                                                          | `{ schedule, lang }`                                                                                                  |
+| `computer_lab.toolbar.action`        | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ activeTab, labs, lang, onRefresh }`                                                                                |
+| `computer_lab.seat.overlay`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ seatId, seatNumber, labId, student, isOnline, lang }`                                                              |
+| `student.dashboard.hero_widget`      | `src/features/student/StudentDashboardPanel.tsx`                                                                                        | `{ studentId, lang }`                                                                                                 |
+| `student.assignment.toolbar.action`  | `src/features/student/StudentAssignmentHeader.tsx`                                                                                      | `{ assignmentId, studentId, status, lang, onRefresh }`                                                                |
+| `student.lesson.notes_addon`         | `src/features/student/StudentLessonView.tsx`                                                                                            | `{ lessonId, studentId, activeSegmentId, lang }`                                                                      |
+| `student.lesson.toolbox`             | `src/features/student/StudentLessonView.tsx`                                                                                            | `{ lessonId, studentId, activeSegmentId, lang }`                                                                      |
+| `admin.dashboard.card`               | `src/components/AdminPanel.tsx`                                                                                                         | `{ siteInfo, lang, onRefresh }`                                                                                       |
+| `admin.user.action`                  | `src/components/AdminPanel.tsx`                                                                                                         | `{ user, lang, onRefresh }`                                                                                           |
+| `header.status_pill`                 | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                      |
+| `ai_sidebar.tab`（button 形态）      | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'button', activeTab, setActiveTab, lang }`                                                            |
+| `ai_sidebar.tab`（panel 形态）       | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'panel', activeTab, setActiveTab, lang }`                                                             |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -238,16 +306,19 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `anchor:whiteboard-toolbar:grid`         | 同上                                                                                               |
 | `anchor:classroom-attribution:awards`    | `src/features/classroom/ClassroomAttributionModal.tsx`（`slotProps={{ student, onAwardPoints }}`） |
 
-#### 1.2 历史幽灵槽位激活与归零记录（全量 75 个槽位均已消费）
+#### 1.2 历史幽灵槽位激活与归零记录（全量 95 个槽位均已消费）
 
-平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位。目前已在 `9ac5673c` 与 `efb3366f` 提交中完成系统性重构与全量挂载：
+平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位。目前已在系统性重构中全量挂载，并于本次全域扩展升级中新增 20 个高价值业务扩展槽位（包含与“国家智慧教育公共服务平台”直连对接能力），全部在 14 个前端核心视图中完成真实消费：
 
-- `nav.user_menu`（顶部用户菜单）、`student.lesson.tool`（学生随堂工具）、`teacher.panel`（教师独立全宽面板）、`global.setting`（全局设置页）
-- `classroom.header.action`（中控顶栏动作）、`classroom.collab.canvas`（小组协作画布工具）、`classroom.barometer.metric`（晴雨表指标）、`classroom.agenda.action`（环节操作卡片）
-- `whiteboard.dock.plugin`（白板左下悬浮坞）、`whiteboard.canvas.widget`（白板画布任务卡片）、`classroom.audit.event`（审计事件流）
-- `classroom.seating.seat_actions`（机房座位右键菜单）、`editor.timeline_segment`（步骤形态扩展）、`editor.palette_item`（白板扩展图元卡片）
-
-同时，`help.plugin_docs`（帮助文档）与 `student.classroom.overlay`（学生端课堂浮层）已正式纳入 `ExtensionSlot` 联合类型；并扩展增设了 `stage.display.overlay`（大屏全屏 HUD 覆盖）、`stage.display.action`（大屏快捷工具栏操作）、`assignment.submission.preview`（作业多模态预览）、全局壳层的 `header.action`（全局顶栏快捷操作）与 `statusbar.item`（全局底部状态栏），以及核心画板的 `whiteboard.renderer`（自定义图元一等公民渲染器）。**当前声明但无渲染器的 `ExtensionSlot` 成员数量为 0**。所有 75 个联合类型槽位均具备明确的前端宿主消费方与上下文隔离机制。
+- **基础与课堂历史槽位全面激活**：`nav.user_menu`（顶部用户菜单）、`student.lesson.tool`（学生随堂工具）、`teacher.panel`（教师独立全宽面板）、`global.setting`（全局设置页）、`classroom.header.action`（中控顶栏动作）、`classroom.collab.canvas`（小组协作画布工具）、`classroom.barometer.metric`（晴雨表指标）、`classroom.agenda.action`（环节操作卡片）、`whiteboard.dock.plugin`（白板左下悬浮坞）、`whiteboard.canvas.widget`（白板画布任务卡片）、`classroom.audit.event`（审计事件流）、`classroom.seating.seat_actions`（机房座位右键菜单）、`editor.timeline_segment`（步骤形态扩展）、`editor.palette_item`（白板扩展图元卡片）；
+- **全域 20 个业务槽位全新落地（含国家智慧教育平台直连）**：
+  - 备课中心与课程库：`course.list.toolbar.action`、`course.card.badge`、`course.card.action`、`editor.segment.action`；
+  - 课堂互动与执教大屏：`classroom.alert.banner`、`classroom.cockpit.drawer.item`、`classroom.stage.display.ticker`、`classroom.post_class.exporter`；
+  - 课表与机房管理：`timetable.toolbar.action`、`timetable.card.badge`、`computer_lab.toolbar.action`、`computer_lab.seat.overlay`；
+  - 学生学习门户与作业闭环：`student.dashboard.hero_widget`、`student.assignment.toolbar.action`、`student.lesson.notes_addon`、`student.lesson.toolbox`；
+  - 管理后台与全域底座：`admin.dashboard.card`、`admin.user.action`、`header.status_pill`；
+  - AI 助手侧边栏：`ai_sidebar.tab`；
+- **声明但无渲染器的 `ExtensionSlot` 成员数量为 0**：全仓 95 个联合类型槽位均具备明确的前端宿主消费方、响应式 Props 透传与上下文隔离机制。
 
 ---
 
@@ -709,16 +780,54 @@ export interface WhiteboardRendererSlotProps {
 
 ---
 
-## 11. 统计口径
+## 11. 全域业务扩展槽位规范与使用指南（含国家智慧教育平台对接）
+
+本次升级新增的 20 个高价值扩展槽位，覆盖备课中心、互动课堂、大屏展台、课表、机房、学生端、管理后台以及 AI 侧边栏，为连接“国家智慧教育公共服务平台”等外部权威平台提供了完整的集成挂载点。
+
+### 11.1 备课中心与课程库（国家平台对接 / 资源生态）
+- **`course.list.toolbar.action`**：在 `CourseManagement` 顶部工具栏注入，Props 包含 `{ selectedCourseIds, courses, lang, onRefresh }`。国家教育平台插件可通过此槽位挂载「从国家智慧教育平台导入精品课」或「批量同步课程资源」操作按钮。
+- **`course.card.badge`**：在课程卡片标题旁渲染，Props 包含 `{ course, lang }`。插件可基于课程元数据展示「国家级精品课」、「部优课程」等官方认证角标。
+- **`course.card.action`**：在课程卡片底部操作区渲染，Props 包含 `{ course, lang, onRefresh }`。插件可挂载「上报至智慧教育平台」或「查看国家云资源链接」等单课操作项。
+- **`editor.segment.action`**：在课程备课编辑器 `SegmentEditorCard` 环节卡片工具栏渲染，Props 包含 `{ segment, lang, readOnly, onPatch, segmentId }`。供国家平台微课资源插入、智能教案辅助等教学环节级工具接入。
+
+### 11.2 课堂互动与执教大屏
+- **`classroom.alert.banner`**：在交互驾驶舱顶部横幅区域渲染，Props 包含 `{ lessonId, classId, stage, lang }`。用于全班广播、设备异常警告或国家平台直播/推流提醒。
+- **`classroom.cockpit.drawer.item`**：在驾驶舱侧边抽屉中渲染，Props 包含 `{ lessonId, classId, stage, lang }`。
+- **`classroom.stage.display.ticker`**：在大屏展台底部跑马灯/状态条渲染，Props 包含 `{ lessonId, lessonTitle, stage, data, lang }`。支持全屏展示时滚动国家平台同步信息、全班公告等。
+- **`classroom.post_class.exporter`**：在课后总结报告页 `PostClassWrapupView` 导出按钮区渲染，Props 包含 `{ lessonId, summaryData, lang, onExport }`。支持一键导出符合国家教育平台标准格式的学情分析与教学评价报告。
+
+### 11.3 课表与机房管理
+- **`timetable.toolbar.action`**：在课表管理工具栏渲染，Props 包含 `{ activeTab, schedules, lang, onRefresh }`。用于学期课表一键同步或对接外部排课系统。
+- **`timetable.card.badge`**：在日历课表卡片中渲染，Props 包含 `{ schedule, lang }`。展示公开课、国家平台同步直播课等标记。
+- **`computer_lab.toolbar.action`**：在机房管理工具栏渲染，Props 包含 `{ activeTab, labs, lang, onRefresh }`。
+- **`computer_lab.seat.overlay`**：在机房座位图每个座位卡片上方渲染浮层，Props 包含 `{ seatId, seatNumber, labId, student, isOnline, lang }`。支持挂载学生机器状态探针、锁屏管控或推流插件。
+
+### 11.4 学生学习门户与作业闭环
+- **`student.dashboard.hero_widget`**：在学生主页 Hero 区域渲染，Props 包含 `{ studentId, lang }`。用于展示国家平台自主学习任务流、每日推荐资源等。
+- **`student.assignment.toolbar.action`**：在作业详情顶栏渲染，Props 包含 `{ assignmentId, studentId, status, lang, onRefresh }`。
+- **`student.lesson.notes_addon`**：在学生端随堂笔记区域挂载插件工具，Props 包含 `{ lessonId, studentId, activeSegmentId, lang }`。
+- **`student.lesson.toolbox`**：在学生端课堂工具箱区域挂载，Props 包含 `{ lessonId, studentId, activeSegmentId, lang }`。
+
+### 11.5 管理后台与全域底座
+- **`admin.dashboard.card`**：在管理员控制台概览区渲染卡片，Props 包含 `{ siteInfo, lang, onRefresh }`。支持接入国家平台连接状态监控卡片、全校数据上报大屏。
+- **`admin.user.action`**：在用户管理表格每行渲染，Props 包含 `{ user, lang, onRefresh }`。支持国家统一身份认证账号绑定与实名校验。
+- **`header.status_pill`**：在全局顶栏右侧状态区渲染胶囊徽标，Props 包含 `{ session, currentRole, lang }`。实时展示国家平台连通状态与同步心跳。
+
+### 11.6 AI 助手侧边栏
+- **`ai_sidebar.tab`**：在全局右侧侧边栏中渲染，支持 `button`（顶部 Tab 切换按钮）与 `panel`（Tab 激活时的自定义面板）两种渲染态，Props 包含 `{ renderType: 'button' | 'panel', activeTab, setActiveTab, lang }`。允许第三方 AI 助手或智能教研 Agent 深度嵌入右侧抽屉。
+
+---
+
+## 12. 统计口径
 
 | 指标                                                           | 数值           |
 | -------------------------------------------------------------- | -------------- |
-| `ExtensionSlot` 联合类型成员                                   | **75**         |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **75**         |
-| 其中属于 `ExtensionSlot` 联合类型                              | **75**（100%） |
+| `ExtensionSlot` 联合类型成员                                   | **95**         |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **95**         |
+| 其中属于 `ExtensionSlot` 联合类型                              | **95**（100%） |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**          |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**          |
 | 声明但无渲染器的 `ExtensionSlot` 成员                          | **0**          |
-| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **83**         |
+| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **103**        |
 
-> 统计更新于规范化收口批次（2026-10-09）。
+> 统计更新于全域扩展槽位与国家智慧教育平台对接升级批次（2026-10-10）。

@@ -400,6 +400,17 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
       {/* 1. Fixed Top Student Profile Header */}
       <StudentDashboardHeader students={students} activeStudentId={activeStudentId} />
 
+      {/* 第三方学生仪表盘顶部激励挂件扩展（每日学习打卡连胜榜 / 积分虚拟商城展位） */}
+      <ExtensionPointRenderer
+        slot="student.dashboard.hero_widget"
+        slotProps={{
+          studentId: activeStudentId,
+          students,
+          studentDashboardData,
+          lang,
+        }}
+      />
+
       {/* 2. Roll Call Alert / Alarm Notifications */}
       <StudentRollCallAlarms
         studentDashboardData={studentDashboardData}

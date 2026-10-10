@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：154 个（入口导出但手写 d.ts 未声明的 154 项及其类型引用闭包）
+ * 覆盖符号：225 个（入口导出但手写 d.ts 未声明的 225 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -14,6 +14,39 @@ interface AIAnalyticsModel {
     readonly teacherAdoptionRate: number;
     readonly studentUsageRate: number;
     readonly averageResponseTimeMs: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the ai.prompt.template slot (AI prompt engineering templates). */
+interface AIPromptTemplateConfig {
+    id: string;
+    title: string;
+    description?: string;
+    category?: string;
+    prompt: string;
+    parameters?: Array<{
+        name: string;
+        label: string;
+        default?: string;
+    }>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the ai_sidebar.tab slot. */
+interface AISidebarTabConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the ai.skill.provider slot (AI tool & function calling capabilities). */
+interface AISkillProviderConfig {
+    id: string;
+    name: string;
+    description: string;
+    parametersSchema?: Record<string, unknown>;
+    commandType?: string;
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -54,6 +87,23 @@ interface ActivityDefinition {
 /** @see packages/core/lesson-engine/types.ts */
 type ActivityStatus = 'idle' | 'active' | 'paused' | 'completed' | 'skipped';
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the admin.dashboard.card slot. */
+interface AdminDashboardCardConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the admin.user.action slot. */
+interface AdminUserActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
 /** @see packages/core/analytics-engine/types.ts */
 interface AnalyticsInsight {
     readonly id: string;
@@ -71,6 +121,15 @@ interface AnalyticsPrivacyConfig {
     readonly anonymousAnalysis: boolean;
     readonly dataMasking: boolean;
     readonly retentionPeriodDays: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.attribution.action slot. */
+interface AttributionActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -145,6 +204,41 @@ interface CapabilityResult<T = unknown> {
 type CapabilityRole = 'Teacher' | 'Student' | 'Plugin' | 'AI' | 'Observer' | 'System';
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.batch.action slot. */
+interface ClassBatchActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.tab slot. */
+interface ClassTabConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    position?: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.agenda.action slot. */
+interface ClassroomAgendaActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.alert.banner slot. */
+interface ClassroomAlertBannerConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the classroom.attribution.award slot (custom award criteria in point awarding modal). */
 interface ClassroomAttributionAwardConfig {
     id: string;
@@ -153,6 +247,49 @@ interface ClassroomAttributionAwardConfig {
     description: string;
     icon?: string;
     defaultDeltaPoints: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.audit.event slot. */
+interface ClassroomAuditEventConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.cockpit.drawer.item slot. */
+interface ClassroomCockpitDrawerItemConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.header.action slot. */
+interface ClassroomHeaderActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.post_class.exporter slot. */
+interface ClassroomPostClassExporterConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.stage.display.ticker slot. */
+interface ClassroomStageDisplayTickerConfig {
+    id: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -183,6 +320,14 @@ interface CodeAnalyticsModel {
     readonly errorRate: number;
     readonly debugCount: number;
     readonly completionRate: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.collab.canvas slot. */
+interface CollabCanvasConfig {
+    id: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/collaboration-engine/types.ts */
@@ -256,8 +401,98 @@ type CollaborationMode = 'Teacher Presentation' | 'Teacher + Student' | 'Student
 /** @see packages/core/collaboration-engine/types.ts */
 type CollaborationPermission = 'Whiteboard Edit' | 'Whiteboard View' | 'Comment' | 'Annotation' | 'Run Code' | 'Submit Quiz' | 'Create Object' | 'Delete Object' | 'Broadcast' | 'Group Switch' | 'Teacher Review' | 'AI Operation';
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the command_palette.item slot (global command palette Ctrl+K). */
+interface CommandPaletteItemConfig {
+    id: string;
+    title: string;
+    category?: string;
+    description?: string;
+    keywords?: string[];
+    commandType?: string;
+    shortcut?: string;
+    payload?: Record<string, unknown>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the computer_lab.seat.overlay slot. */
+interface ComputerLabSeatOverlayConfig {
+    id: string;
+    label?: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the computer_lab.toolbar.action slot. */
+interface ComputerLabToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
 /** @see packages/core/presence-engine/types.ts */
 type ConnectionState = 'connected' | 'reconnecting' | 'disconnected' | 'offline';
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.countdown.action slot. */
+interface CountdownActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.countdown.widget slot. */
+interface CountdownWidgetConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the course.card.action slot. */
+interface CourseCardActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the course.card.badge slot. */
+interface CourseCardBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the course.list.toolbar.action slot. */
+interface CourseListToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the courseware.viewer.overlay slot. */
+interface CoursewareViewerOverlayConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the courseware.viewer.toolbar slot. */
+interface CoursewareViewerToolbarConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
 
 /** @see packages/core/analytics-engine/types.ts */
 interface CustomIndicatorDefinition {
@@ -287,6 +522,32 @@ interface CustomPresenceDefinition {
     readonly defaultStatus: string;
     readonly rolesAllowed: ReadonlyArray<EntityRole>;
     readonly providerFn?: (entityId: string) => Promise<Partial<PresenceEntity>>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.diagnostic.feed slot. */
+interface DiagnosticFeedConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the editor.header.action slot. */
+interface EditorHeaderActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the editor.segment.action slot. */
+interface EditorSegmentActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -337,6 +598,15 @@ interface Flow {
 /** @see packages/core/presence-engine/types.ts */
 type FocusState = 'Focused' | 'Distracted' | 'Inactive' | 'Minimized' | 'Background';
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the global.setting slot. */
+interface GlobalSettingConfig {
+    id: string;
+    title: string;
+    description?: string;
+    icon?: string;
+}
+
 /** @see packages/core/analytics-engine/types.ts */
 interface GroupAnalyticsModel {
     readonly groupId: string;
@@ -380,6 +650,14 @@ interface GroupWorkspaceData {
     readonly timelinePosition: number;
     readonly pluginState: Record<string, unknown>;
     readonly aiContext: Record<string, unknown>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the header.status_pill slot. */
+interface HeaderStatusPillConfig {
+    id: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -611,6 +889,15 @@ interface InvocationRequest {
     readonly timeoutMs?: number;
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.leaderboard.action slot. */
+interface LeaderboardActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
 /** @see packages/core/lesson-engine/types.ts */
 interface Lesson {
     id: string;
@@ -664,6 +951,15 @@ type LessonStatus = 'idle' | 'draft' | 'ready' | 'active' | 'paused' | 'complete
  */
 type ManifestV3 = z.infer<typeof manifestSchemaV3>;
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the nav.user_menu slot. */
+interface NavUserMenuConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
 /** @see packages/core/analytics-engine/types.ts */
 interface NormalizedAnalyticsEvent<T = Record<string, unknown>> {
     readonly eventId: string;
@@ -677,6 +973,14 @@ interface NormalizedAnalyticsEvent<T = Record<string, unknown>> {
     readonly metadata: T;
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.notification.tabs slot. */
+interface NotificationTabsConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
 /** @see packages/core/collaboration-engine/types.ts */
 interface ObjectLock {
     readonly objectId: string;
@@ -687,6 +991,14 @@ interface ObjectLock {
 
 /** @see packages/core/version.ts */
 declare const PLATFORM_VERSION: string;
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.pacing.dashboard slot. */
+interface PacingDashboardConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the palette.items slot (custom whiteboard tools & widgets). */
@@ -720,6 +1032,15 @@ interface Participant {
 type ParticipantRole = 'Teacher' | 'Teaching Assistant' | 'Student' | 'Observer' | 'AI Tutor' | 'AI Assistant' | 'Plugin';
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the peer_review.action slot. */
+interface PeerReviewActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the peer_review.badge slot (custom peer nomination micro-badges). */
 interface PeerReviewBadgeConfig {
     id: string;
@@ -740,6 +1061,14 @@ interface PeerReviewRubricConfig {
     weight?: number;
     icon?: string;
     targetMetric?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the peer_review.showcase.widget slot. */
+interface PeerReviewShowcaseWidgetConfig {
+    id: string;
+    title: string;
+    icon?: string;
 }
 
 /** @see packages/core/bootstrap/types/index.ts */
@@ -883,6 +1212,85 @@ declare class PluginRuntimeAdapter implements IPluginRuntime {
 /** @see packages/core/presence-engine/types.ts */
 type PluginStatus = 'Loading' | 'Running' | 'Paused' | 'Error' | 'Finished';
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.course_badge slot. */
+interface PortalCourseBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.insight slot. */
+interface PortalInsightConfig {
+    id: string;
+    title: string;
+    description?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.launch_action slot. */
+interface PortalLaunchActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.preflight slot. */
+interface PortalPreflightConfig {
+    id: string;
+    label: string;
+    description?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.teaching_mode slot. */
+interface PortalTeachingModeConfig {
+    id: string;
+    title: string;
+    description?: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.portal.telemetry slot. */
+interface PortalTelemetryConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    valueSource?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.post_class.widget slot. */
+interface PostClassWidgetConfig {
+    id: string;
+    title: string;
+    icon?: string;
+    position?: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.preclass.passcode_action slot. */
+interface PreclassPasscodeActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    order?: number;
+    command?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.preclass.passcode_addon slot. */
+interface PreclassPasscodeAddonConfig {
+    id: string;
+    title: string;
+    description?: string;
+    order?: number;
+}
+
 /** @see packages/core/analytics-engine/types.ts */
 // ── Prediction Interface ───────────────────────────────────────────────────
 interface PredictionResult {
@@ -1009,6 +1417,19 @@ interface QuickActivityConfig {
     icon?: string;
     description?: string;
     category?: string;
+    commandType?: string;
+    payload?: Record<string, unknown>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the quick_insert.item slot (slash insert menu /). */
+interface QuickInsertItemConfig {
+    id: string;
+    title: string;
+    category?: string;
+    description?: string;
+    icon?: string;
+    keywords?: string[];
     commandType?: string;
     payload?: Record<string, unknown>;
 }
@@ -1222,6 +1643,49 @@ interface RuntimeStateTree {
     };
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.seating.legend slot. */
+interface SeatingLegendConfig {
+    id: string;
+    label: string;
+    color?: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.seating.seat_actions slot. */
+interface SeatingSeatActionsConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.seating.seat_badge slot. */
+interface SeatingSeatBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.seating.summary slot. */
+interface SeatingSummaryConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.seating.toolbar slot. */
+interface SeatingToolbarConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
 /** @see packages/core/service-registry/types/index.ts */
 interface ServiceDescriptor<T = unknown> {
     readonly id: string;
@@ -1349,6 +1813,15 @@ interface StudentAnalyticsModel {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.assignment.toolbar.action slot. */
+interface StudentAssignmentToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.profile.dimension slot (custom competency radar dimensions). */
 interface StudentCompetencyDimensionConfig {
     id: string;
@@ -1361,6 +1834,63 @@ interface StudentCompetencyDimensionConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.classroom.countdown slot. */
+interface StudentCountdownConfig {
+    id: string;
+    title: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.dashboard.hero_widget slot. */
+interface StudentDashboardHeroWidgetConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.fullscreen slot. */
+interface StudentFullscreenConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.lesson.notes_addon slot. */
+interface StudentLessonNotesAddonConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.lesson.toolbox slot. */
+interface StudentLessonToolboxConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.profile.action slot. */
+interface StudentProfileActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.profile.timeline_item slot. */
+interface StudentProfileTimelineItemConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.profile.card slot (custom widgets inside student growth profile). */
 interface StudentProfileWidgetConfig {
     id: string;
@@ -1369,6 +1899,40 @@ interface StudentProfileWidgetConfig {
     icon?: string;
     placement?: 'sidebar' | 'content' | 'footer';
     order?: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.quick_actions.action slot. */
+interface StudentQuickActionsActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.quick_actions.fab slot. */
+interface StudentQuickActionsFabConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.quick_actions.item slot. */
+interface StudentQuickActionsItemConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.row.panel slot. */
+interface StudentRowPanelConfig {
+    id: string;
+    title: string;
+    icon?: string;
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -1394,6 +1958,14 @@ interface SyncMessage<T = unknown> {
 
 /** @see packages/core/collaboration-engine/types.ts */
 type SyncType = 'object_sync' | 'selection_sync' | 'viewport_sync' | 'pointer_sync' | 'stage_sync' | 'lesson_sync';
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the teacher.panel slot. */
+interface TeacherPanelConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
 
 /** @see packages/core/presence-engine/types.ts */
 type TeacherStatus = 'Preparing' | 'Teaching' | 'Explaining' | 'Writing' | 'Observing' | 'Reviewing' | 'Answering' | 'Discussing' | 'Waiting' | 'Offline';
@@ -1429,6 +2001,31 @@ interface TimelineSegmentConfig {
     icon?: string;
     color?: string;
     defaultDurationMin?: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the timetable.card.badge slot. */
+interface TimetableCardBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the timetable.toolbar.action slot. */
+interface TimetableToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.topbar.pill slot. */
+interface TopbarPillConfig {
+    id: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/plugin-host/unified-extension-registry.ts */
@@ -1506,6 +2103,31 @@ interface WhiteboardAnalyticsModel {
     readonly annotationFrequency: number;
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the whiteboard.autosave.action slot. */
+interface WhiteboardAutosaveActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the whiteboard.autosave.status slot. */
+interface WhiteboardAutosaveStatusConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the whiteboard.dock.plugin slot. */
+interface WhiteboardDockPluginConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
 /** @see packages/core/presence-engine/types.ts */
 type WhiteboardStatus = 'Editing' | 'Presenting' | 'Locked' | 'ReadOnly' | 'Collaborating';
 
@@ -1533,13 +2155,19 @@ declare function writeBufferToTempZip(buffer: Buffer, prefix: any): string;
 
 export type {
   AIAnalyticsModel,
+  AIPromptTemplateConfig,
+  AISidebarTabConfig,
+  AISkillProviderConfig,
   AIStatus,
   Activity,
   ActivityConfig,
   ActivityDefinition,
+  AdminDashboardCardConfig,
+  AdminUserActionConfig,
   AnalyticsInsight,
   AnalyticsPrivacyConfig,
   AnchorToolConfig,
+  AttributionActionConfig,
   BarometerMetricConfig,
   CanvasWidgetConfig,
   CapabilityCategory,
@@ -1547,38 +2175,63 @@ export type {
   CapabilityDescriptor,
   CapabilityResult,
   CapabilityRole,
+  ClassBatchActionConfig,
+  ClassTabConfig,
+  ClassroomAgendaActionConfig,
+  ClassroomAlertBannerConfig,
   ClassroomAttributionAwardConfig,
+  ClassroomAuditEventConfig,
+  ClassroomCockpitDrawerItemConfig,
+  ClassroomHeaderActionConfig,
+  ClassroomPostClassExporterConfig,
+  ClassroomStageDisplayTickerConfig,
   ClassroomToolConfig,
   ClassroomTopbarActionConfig,
   CockpitWidgetConfig,
   CodeAnalyticsModel,
+  CollabCanvasConfig,
   CollaborationAnalyticsData,
   CollaborationEventMap,
   CollaborationEventType,
   CollaborationMode,
   CollaborationPermission,
   CommandMetadata,
+  CommandPaletteItemConfig,
+  ComputerLabSeatOverlayConfig,
+  ComputerLabToolbarActionConfig,
   ConfigDeclaration,
   ConfigProperty,
   ConnectionState,
   ContributionAccessor,
   ContributionConfig,
   ContributionSummary,
+  CountdownActionConfig,
+  CountdownWidgetConfig,
+  CourseCardActionConfig,
+  CourseCardBadgeConfig,
+  CourseListToolbarActionConfig,
+  CoursewareViewerOverlayConfig,
+  CoursewareViewerToolbarConfig,
   CustomIndicatorDefinition,
   CustomInsightRule,
   CustomMetricDefinition,
   CustomPresenceDefinition,
   DashboardWidgetConfig,
+  DiagnosticFeedConfig,
+  EditorHeaderActionConfig,
+  EditorSegmentActionConfig,
   EntityRole,
   EntityType,
   EventSubscriber,
   Flow,
   FocusState,
+  GlobalSettingConfig,
   GroupAnalyticsModel,
   GroupData,
   GroupPresenceData,
   GroupStatus,
   GroupWorkspaceData,
+  HeaderStatusPillConfig,
   HelpDocConfig,
   HighLevelIndicators,
   IAIServiceContract,
@@ -1603,20 +2256,35 @@ export type {
   IWhiteboardServiceContract,
   InteractionSignal,
   InvocationRequest,
+  LeaderboardActionConfig,
   Lesson,
   LessonAnalyticsModel,
   LessonEventType,
   LessonSnapshot,
   ManifestV3,
+  NavUserMenuConfig,
   NormalizedAnalyticsEvent,
+  NotificationTabsConfig,
   ObjectLock,
+  PacingDashboardConfig,
   PaletteItemContributionConfig,
   Participant,
   ParticipantRole,
+  PeerReviewActionConfig,
   PeerReviewBadgeConfig,
   PeerReviewRubricConfig,
+  PeerReviewShowcaseWidgetConfig,
   PlatformEvent,
   PluginStatus,
+  PortalCourseBadgeConfig,
+  PortalInsightConfig,
+  PortalLaunchActionConfig,
+  PortalPreflightConfig,
+  PortalTeachingModeConfig,
+  PortalTelemetryConfig,
+  PostClassWidgetConfig,
+  PreclassPasscodeActionConfig,
+  PreclassPasscodeAddonConfig,
   PredictionResult,
   PresenceDashboardMetrics,
   PresenceDiff,
@@ -1625,6 +2293,7 @@ export type {
   PresenceEventType,
   PresencePrivacyConfig,
   QuickActivityConfig,
+  QuickInsertItemConfig,
   QuizAnalyticsModel,
   RawAnalyticsMetrics,
   ResultType,
@@ -1638,6 +2307,11 @@ export type {
   RuntimeRole,
   RuntimeSnapshot,
   RuntimeStateTree,
+  SeatingLegendConfig,
+  SeatingSeatActionsConfig,
+  SeatingSeatBadgeConfig,
+  SeatingSummaryConfig,
+  SeatingToolbarConfig,
   ServiceDescriptor,
   ServiceInspectionInfo,
   ServiceLifecycleState,
@@ -1648,20 +2322,39 @@ export type {
   StageStatus,
   StudentAction,
   StudentAnalyticsModel,
+  StudentAssignmentToolbarActionConfig,
   StudentCompetencyDimensionConfig,
+  StudentCountdownConfig,
+  StudentDashboardHeroWidgetConfig,
+  StudentFullscreenConfig,
+  StudentLessonNotesAddonConfig,
   StudentLessonToolConfig,
+  StudentLessonToolboxConfig,
+  StudentProfileActionConfig,
+  StudentProfileTimelineItemConfig,
   StudentProfileWidgetConfig,
+  StudentQuickActionsActionConfig,
+  StudentQuickActionsFabConfig,
+  StudentQuickActionsItemConfig,
+  StudentRowPanelConfig,
   StudentStatus,
   StudentViewConfig,
   SyncMessage,
   SyncType,
+  TeacherPanelConfig,
   TeacherStatus,
   TeacherTabConfig,
   TeachingContextData,
   TeachingObject,
   TimelineSegmentConfig,
+  TimetableCardBadgeConfig,
+  TimetableToolbarActionConfig,
+  TopbarPillConfig,
   UserParticipant,
   WhiteboardAnalyticsModel,
+  WhiteboardAutosaveActionConfig,
+  WhiteboardAutosaveStatusConfig,
+  WhiteboardDockPluginConfig,
   WhiteboardStatus,
 };
 export {

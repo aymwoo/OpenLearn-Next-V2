@@ -1302,39 +1302,52 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           </p>
         </div>
 
-        <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 self-start sm:self-auto shadow-inner border border-slate-200/50">
-          <button
-            onClick={() => setActiveTab('view')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'view' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-          >
-            {lang === 'zh' ? '🗓️ 课表看板' : 'Schedule Grid'}
-          </button>
-          <button
-            onClick={() => setActiveTab('adjust')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'adjust' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-          >
-            {lang === 'zh' ? '🛠️ 临时调休调课' : 'Holiday Adjusts'}
-          </button>
-          <button
-            onClick={() => setActiveTab('import_export')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'import_export' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-          >
-            {lang === 'zh' ? '📥 快速导入导出' : 'Import / Export'}
-          </button>
-          <button
-            onClick={() => setActiveTab('ocr_import')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-          >
-            {lang === 'zh' ? '📷 AI 图片识课' : 'AI Image OCR'}
-          </button>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 self-start sm:self-auto shadow-inner border border-slate-200/50">
+            <button
+              onClick={() => setActiveTab('view')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'view' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {lang === 'zh' ? '🗓️ 课表看板' : 'Schedule Grid'}
+            </button>
+            <button
+              onClick={() => setActiveTab('adjust')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'adjust' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {lang === 'zh' ? '🛠️ 临时调休调课' : 'Holiday Adjusts'}
+            </button>
+            <button
+              onClick={() => setActiveTab('import_export')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'import_export' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {lang === 'zh' ? '📥 快速导入导出' : 'Import / Export'}
+            </button>
+            <button
+              onClick={() => setActiveTab('ocr_import')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {lang === 'zh' ? '📷 AI 图片识课' : 'AI Image OCR'}
+            </button>
 
-          {/* timetable.tab 扩展 Tab 按钮 */}
+            {/* timetable.tab 扩展 Tab 按钮 */}
+            <ExtensionPointRenderer
+              slot="timetable.tab"
+              slotProps={{
+                renderType: 'button',
+                timetableActiveTab: activeTab,
+                setTimetableActiveTab: setActiveTab,
+              }}
+            />
+          </div>
+
+          {/* timetable.toolbar.action 扩展操作 */}
           <ExtensionPointRenderer
-            slot="timetable.tab"
+            slot="timetable.toolbar.action"
             slotProps={{
-              renderType: 'button',
-              timetableActiveTab: activeTab,
-              setTimetableActiveTab: setActiveTab,
+              schedules,
+              currentWeekMonday,
+              lang,
+              onRefresh: fetchAllSchedules,
             }}
           />
         </div>

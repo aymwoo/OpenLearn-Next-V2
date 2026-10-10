@@ -174,6 +174,18 @@ export function StageDisplayPanel({
         </div>
       </header>
 
+      {/* 顶部通栏通知跑马灯扩展（全班弹幕加油墙 / 优秀作业光荣榜滚屏 / 紧急通知） */}
+      <ExtensionPointRenderer
+        slot="classroom.stage.display.ticker"
+        slotProps={{
+          lessonId,
+          lessonTitle,
+          stage: data.stage,
+          data,
+          lang,
+        }}
+      />
+
       {/* 主展示区 */}
       <main className="flex-1 p-8 grid grid-cols-12 gap-8 overflow-y-auto">
         {/* 左侧重点展示区 (8 列) */}

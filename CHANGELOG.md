@@ -12,6 +12,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **全域 20 个业务扩展槽位全量落地与国家智慧教育公共服务平台直连支持**：
+  - **架构契约双源一致性（SSOT）与防漂移**：在 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中将 `ExtensionSlot` 联合类型扩充至 95 个；在 [`packages/core/esm-loader/manifest-schema.ts`](./packages/core/esm-loader/manifest-schema.ts) 为 20 个槽位声明完整 Zod 校验 Schema；在 [`packages/core/plugin-host/contribution-registry.ts`](./packages/core/plugin-host/contribution-registry.ts) 与 [`packages/plugin-sdk/index.ts`](./packages/plugin-sdk/index.ts) 同步配置接口，并通过 `generate-dts.mjs` 更新 [`packages/plugin-sdk/generated.d.ts`](./packages/plugin-sdk/generated.d.ts)；
+  - **14 个核心业务视图全量消费（0 幽灵槽位）**：
+    - **备课中心与课程库（国家平台对接 / 资源生态）**：在 [`src/features/teacher/CourseManagement.tsx`](./src/features/teacher/CourseManagement.tsx) 挂载 `course.list.toolbar.action`（支持一键从国家平台导入精品课）、`course.card.badge`（部优/精品课官方认证角标）、`course.card.action`（上报与查看云资源），并在 [`src/features/teacher/lesson-editor/SegmentEditorCard.tsx`](./src/features/teacher/lesson-editor/SegmentEditorCard.tsx) 挂载 `editor.segment.action`（环节微课资源插入）；
+    - **课堂互动与执教大屏**：在 [`src/features/classroom/ClassroomInteractiveCockpit.tsx`](./src/features/classroom/ClassroomInteractiveCockpit.tsx) 挂载 `classroom.alert.banner`（全班直播广播/异常警告）与 `classroom.cockpit.drawer.item`（抽屉工具）；在 [`src/features/classroom/stage-display/StageDisplayPanel.tsx`](./src/features/classroom/stage-display/StageDisplayPanel.tsx) 挂载 `classroom.stage.display.ticker`（大屏跑马灯公告）；在 [`src/features/classroom/PostClassWrapupView.tsx`](./src/features/classroom/PostClassWrapupView.tsx) 挂载 `classroom.post_class.exporter`（国家平台格式学情报告导出）；
+    - **课表与机房管理**：在 [`src/components/TimetableManager.tsx`](./src/components/TimetableManager.tsx) 与 [`src/components/timetable/sub-views/TimetableCalendarView.tsx`](./src/components/timetable/sub-views/TimetableCalendarView.tsx) 挂载 `timetable.toolbar.action` 与 `timetable.card.badge`；在 [`src/components/ComputerLabManager.tsx`](./src/components/ComputerLabManager.tsx) 挂载 `computer_lab.toolbar.action` 与 `computer_lab.seat.overlay`（机房学生机状态探针/锁屏控制）；
+    - **学生门户与作业闭环**：在 [`src/features/student/StudentDashboardPanel.tsx`](./src/features/student/StudentDashboardPanel.tsx) 挂载 `student.dashboard.hero_widget`；在 [`src/features/student/StudentAssignmentHeader.tsx`](./src/features/student/StudentAssignmentHeader.tsx) 挂载 `student.assignment.toolbar.action`；在 [`src/features/student/StudentLessonView.tsx`](./src/features/student/StudentLessonView.tsx) 挂载 `student.lesson.notes_addon` 与 `student.lesson.toolbox`；
+    - **管理后台与全域底座**：在 [`src/components/AdminPanel.tsx`](./src/components/AdminPanel.tsx) 挂载 `admin.dashboard.card` 与 `admin.user.action`（统一身份认证绑定）；在 [`src/components/AppHeader.tsx`](./src/components/AppHeader.tsx) 挂载 `header.status_pill`（国家平台连接状态心跳胶囊）；
+    - **AI 助手侧边栏**：在 [`src/features/shared/RightSidebar.tsx`](./src/features/shared/RightSidebar.tsx) 挂载 `ai_sidebar.tab`（支持 button 与 panel 双渲染态，供智能教研助教嵌入）；
+  - **静态 Contributes 命令桥接**：在 [`src/plugin-host/plugin-host.ts`](./src/plugin-host/plugin-host.ts) 打通 `command_palette.item`、`quick_insert.item`、`ai.prompt.template`、`ai.skill.provider` 以及声明式 `classroom.tool` 桥接，统一对接 [`frontendApi`](./src/services/frontend-api.ts) `/api/plugins/execute-command` 执行流水线；
+  - **测试覆盖与权威文档**：
+    - 新增专项测试套件 [`src/features/teacher/__tests__/course-management-extension-slots.test.tsx`](./src/features/teacher/__tests__/course-management-extension-slots.test.tsx) 验证国家教育平台对接场景的真实挂载与属性透传（4/4 通过）；
+    - 双源一致性门禁 [`packages/core/plugin-host/__tests__/contributes-schema-parity.test.ts`](./packages/core/plugin-host/__tests__/contributes-schema-parity.test.ts) 与 SDK 漂移门禁 [`packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts`](./packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts) 全量通过；
+    - 权威文档 [`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md) 同步更新（95 联合槽位 / 95 生产消费调用点 / 0 幽灵槽位 / 8 锚点 / 103 唯一槽位值）。
+
 - **白板自定义图元一等公民扩展槽位 (`whiteboard.renderer`)**：
   - **核心渲染流水线挂载**：在 [`src/features/whiteboard/InteractiveWhiteboard.tsx`](./src/features/whiteboard/InteractiveWhiteboard.tsx) 的 `renderElement` 核心渲染入口挂载 `whiteboard.renderer` 扩展点，允许第三方插件为特定图元类型（如 Desmos 函数图像、GeoGebra 几何、分子 3D 模型等）注册专属渲染器，成为白板一等公民图元；
   - **画板生命周期全面打通**：自定义图元深度接入 Konva 视口缩放、平铺拖拽布局、选框高亮、右键上下文菜单与多选生命周期；`buildElementData` 扩展支持读取插件图元默认数据配置；

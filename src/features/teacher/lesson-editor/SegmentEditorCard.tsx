@@ -50,21 +50,27 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
             </div>
           </div>
 
-          {readOnly ? (
-            <span className="text-2xs font-semibold text-muted px-2 py-1 rounded-lg border border-theme">
-              {lang === 'zh' ? '只读' : 'Read-only'}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="px-2.5 py-1 text-xs text-rose-600 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/25 rounded-xl flex items-center gap-1.5 transition-all hover:scale-102 cursor-pointer shadow-2xs shrink-0"
-              title={lang === 'zh' ? '删除当前环节' : 'Delete Segment'}
-            >
-              <Trash2 size={12} />
-              <span>{lang === 'zh' ? '删除环节' : 'Delete'}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <ExtensionPointRenderer
+              slot="editor.segment.action"
+              slotProps={{ segmentId: segment.id, segment, lang }}
+            />
+            {readOnly ? (
+              <span className="text-2xs font-semibold text-muted px-2 py-1 rounded-lg border border-theme">
+                {lang === 'zh' ? '只读' : 'Read-only'}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="px-2.5 py-1 text-xs text-rose-600 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/25 rounded-xl flex items-center gap-1.5 transition-all hover:scale-102 cursor-pointer shadow-2xs shrink-0"
+                title={lang === 'zh' ? '删除当前环节' : 'Delete Segment'}
+              >
+                <Trash2 size={12} />
+                <span>{lang === 'zh' ? '删除环节' : 'Delete'}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 参数表单网格 */}

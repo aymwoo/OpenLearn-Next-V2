@@ -359,6 +359,72 @@ export class FrontendPluginHost {
         }
       }
 
+      if ((manifest as any).contributes) {
+        const contributes = (manifest as any).contributes;
+        // command_palette.item
+        if (Array.isArray(contributes['command_palette.item'])) {
+          for (const item of contributes['command_palette.item']) {
+            store.registerExtensionPoint('command_palette.item', {
+              id: item.id,
+              label: item.title,
+              slotProps: item,
+              component: () => Promise.resolve({ default: (() => null) as any }),
+              pluginId,
+            });
+          }
+        }
+        // quick_insert.item
+        if (Array.isArray(contributes['quick_insert.item'])) {
+          for (const item of contributes['quick_insert.item']) {
+            store.registerExtensionPoint('quick_insert.item', {
+              id: item.id,
+              label: item.title,
+              icon: item.icon,
+              slotProps: item,
+              component: () => Promise.resolve({ default: (() => null) as any }),
+              pluginId,
+            });
+          }
+        }
+        // ai.prompt.template
+        if (Array.isArray(contributes['ai.prompt.template'])) {
+          for (const item of contributes['ai.prompt.template']) {
+            store.registerExtensionPoint('ai.prompt.template', {
+              id: item.id,
+              label: item.title,
+              slotProps: item,
+              component: () => Promise.resolve({ default: (() => null) as any }),
+              pluginId,
+            });
+          }
+        }
+        // ai.skill.provider
+        if (Array.isArray(contributes['ai.skill.provider'])) {
+          for (const item of contributes['ai.skill.provider']) {
+            store.registerExtensionPoint('ai.skill.provider', {
+              id: item.id,
+              label: item.name,
+              slotProps: item,
+              component: () => Promise.resolve({ default: (() => null) as any }),
+              pluginId,
+            });
+          }
+        }
+        // classroom.tool (when not defined via legacy classroomTools)
+        if (Array.isArray(contributes['classroom.tool']) && !manifest.classroomTools) {
+          for (const tool of contributes['classroom.tool']) {
+            store.registerExtensionPoint('classroom.tool', {
+              id: tool.id,
+              label: tool.name,
+              icon: tool.icon,
+              slotProps: tool.commandType ? { commandType: tool.commandType, payload: tool.payload } : undefined,
+              component: () => Promise.resolve({ default: (() => null) as any }),
+              pluginId,
+            });
+          }
+        }
+      }
+
       const ctx = await this.buildContext(pluginId, manifest);
 
       // 5s activation timeout

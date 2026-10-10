@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { ClassType, ScheduleType } from '../types';
 import { getWeekDates, getIsAfternoon } from '../utils/timetableUtils';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 export interface TimetableCalendarViewProps {
   lang: 'zh' | 'en';
@@ -152,33 +153,39 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
         </div>
 
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100/50">
-          <span
-            className={`inline-block text-xs px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
-              sch.status === 'cancelled'
-                ? 'bg-red-50 border-red-100 text-red-600'
-                : sch.status === 'holiday'
-                  ? 'bg-amber-50 border-amber-100 text-amber-600'
-                  : sch.status === 'swap'
-                    ? 'bg-blue-50 border-blue-100 text-blue-600'
-                    : 'bg-green-50 border-green-100 text-green-600'
-            }`}
-          >
-            {sch.status === 'cancelled'
-              ? lang === 'zh'
-                ? '停课'
-                : 'Cancelled'
-              : sch.status === 'holiday'
+          <div className="flex items-center gap-1 flex-wrap">
+            <span
+              className={`inline-block text-xs px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+                sch.status === 'cancelled'
+                  ? 'bg-red-50 border-red-100 text-red-600'
+                  : sch.status === 'holiday'
+                    ? 'bg-amber-50 border-amber-100 text-amber-600'
+                    : sch.status === 'swap'
+                      ? 'bg-blue-50 border-blue-100 text-blue-600'
+                      : 'bg-green-50 border-green-100 text-green-600'
+              }`}
+            >
+              {sch.status === 'cancelled'
                 ? lang === 'zh'
-                  ? '假期'
-                  : 'Holiday'
-                : sch.status === 'swap'
+                  ? '停课'
+                  : 'Cancelled'
+                : sch.status === 'holiday'
                   ? lang === 'zh'
-                    ? '代课'
-                    : 'Swapped'
-                  : lang === 'zh'
-                    ? '正常'
-                    : 'Active'}
-          </span>
+                    ? '假期'
+                    : 'Holiday'
+                  : sch.status === 'swap'
+                    ? lang === 'zh'
+                      ? '代课'
+                      : 'Swapped'
+                    : lang === 'zh'
+                      ? '正常'
+                      : 'Active'}
+            </span>
+            <ExtensionPointRenderer
+              slot="timetable.card.badge"
+              slotProps={{ schedule: sch, lang }}
+            />
+          </div>
 
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button

@@ -21,6 +21,7 @@ import {
   Layers,
   ArrowRightLeft,
 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 export interface ComputerLab {
   id: string;
@@ -446,13 +447,24 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-        >
-          <Plus size={14} />
-          {lang === 'zh' ? '新增机房规则' : 'New Lab Config'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleOpenCreate}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <Plus size={14} />
+            {lang === 'zh' ? '新增机房规则' : 'New Lab Config'}
+          </button>
+          <ExtensionPointRenderer
+            slot="computer_lab.toolbar.action"
+            slotProps={{
+              activeLab: activePreviewLab,
+              computerLabs,
+              onRefresh,
+              lang,
+            }}
+          />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 overflow-hidden">
@@ -876,6 +888,16 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                         <div className="text-[9px] font-mono text-slate-400 truncate max-w-[70px]">
                                           {seat.student_number || `ID:${seat.student_id.slice(-4)}`}
                                         </div>
+                                        <ExtensionPointRenderer
+                                          slot="computer_lab.seat.overlay"
+                                          slotProps={{
+                                            labId: activePreviewLab.id,
+                                            row: rIdx,
+                                            col: cIdx,
+                                            seat,
+                                            isOccupied: true,
+                                          }}
+                                        />
                                       </div>
 
                                       {/* Tooltip */}

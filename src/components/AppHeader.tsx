@@ -170,6 +170,12 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
         </button>
 
+        {/* header.status_pill 状态指示胶囊扩展（WebSocket 通道延迟、离线 PWA 状态） */}
+        <ExtensionPointRenderer
+          slot="header.status_pill"
+          slotProps={{ dbConnected, dbStatus, lang }}
+        />
+
         {/* Dashboard nav entry */}
         <button
           onClick={goToDashboard}

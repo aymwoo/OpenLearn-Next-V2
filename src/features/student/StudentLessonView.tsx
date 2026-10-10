@@ -4,6 +4,7 @@ import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
 import { StudentLessonContentPanel } from './StudentLessonContentPanel';
 import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -125,6 +126,27 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           addToast={addToast}
         />
       </div>
+
+      {/* 随堂个人笔记增强挂件扩展 */}
+      <ExtensionPointRenderer
+        slot="student.lesson.notes_addon"
+        slotProps={{
+          lessonId: selectedLesson,
+          studentId: activeStudentId,
+          activeSegmentId,
+          lang,
+        }}
+      />
+
+      {/* 随堂学生工具箱扩展（科学计算器 / 发音词典 / 元素周期表等） */}
+      <ExtensionPointRenderer
+        slot="student.lesson.toolbox"
+        slotProps={{
+          lessonId: selectedLesson,
+          studentId: activeStudentId,
+          lang,
+        }}
+      />
     </div>
   );
 }

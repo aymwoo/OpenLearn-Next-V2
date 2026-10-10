@@ -43,6 +43,55 @@ const VALID_ENTRY: Record<string, unknown> = {
   'classroom.preclass.passcode_action': { id: 't19', label: 'PasscodeAction' },
   'classroom.preclass.passcode_addon': { id: 't20', title: 'Addon' },
   'help.plugin_docs': { id: 't21', title: 'Docs' },
+  'command_palette.item': { id: 't22', title: 'Open Palette' },
+  'quick_insert.item': { id: 't23', title: 'Insert Diagram' },
+  'ai.prompt.template': { id: 't24', title: 'Toulmin Model', prompt: 'Analyze claims' },
+  'ai.skill.provider': { id: 't25', name: 'calc_tool', description: 'Calculator' },
+  'class.tab': { id: 't26', label: 'Class Stats' },
+  'class.batch.action': { id: 't27', label: 'Batch Export' },
+  'student.row.panel': { id: 't28', title: 'Student Detail' },
+  'editor.header.action': { id: 't29', label: 'AI Check' },
+  'classroom.post_class.widget': { id: 't30', title: 'Exit Ticket' },
+  'courseware.viewer.toolbar': { id: 't31', label: 'Draw Tool' },
+  'courseware.viewer.overlay': { id: 't32', title: 'Watermark' },
+  'classroom.portal.telemetry': { id: 't33', label: 'Ping' },
+  'classroom.portal.course_badge': { id: 't34', label: 'VIP' },
+  'classroom.portal.teaching_mode': { id: 't35', title: 'Flipped' },
+  'classroom.portal.insight': { id: 't36', title: 'Weak Points' },
+  'classroom.portal.preflight': { id: 't37', label: 'Mic Check' },
+  'classroom.portal.launch_action': { id: 't38', label: 'Fast Start' },
+  'classroom.countdown.widget': { id: 't39', title: 'Countdown' },
+  'classroom.countdown.action': { id: 't40', label: 'Add 1m' },
+  'student.classroom.countdown': { id: 't41', title: 'Exam End' },
+  'student.quick_actions.item': { id: 't42', label: 'Raise Hand' },
+  'student.quick_actions.action': { id: 't43', label: 'Ask Doubt' },
+  'student.quick_actions.fab': { id: 't44', label: 'Help' },
+  'classroom.notification.tabs': { id: 't45', label: 'SMS' },
+  'classroom.pacing.dashboard': { id: 't46', title: 'Pacing' },
+  'classroom.diagnostic.feed': { id: 't47', title: 'Logs' },
+  'classroom.collab.canvas': { id: 't48', label: 'Group 1' },
+  'classroom.topbar.pill': { id: 't49', label: 'Syncing' },
+  'classroom.attribution.action': { id: 't50', label: 'Add 5 pts' },
+  'classroom.leaderboard.action': { id: 't51', label: 'Export Ranks' },
+  'student.profile.action': { id: 't52', label: 'Send Medal' },
+  'student.profile.timeline_item': { id: 't53', title: 'Quiz Answer' },
+  'classroom.header.action': { id: 't54', label: 'Record Screen' },
+  'classroom.agenda.action': { id: 't55', label: 'Skip Step' },
+  'whiteboard.dock.plugin': { id: 't56', title: 'Desmos' },
+  'classroom.audit.event': { id: 't57', title: 'Audit' },
+  'peer_review.action': { id: 't58', label: 'Submit Review' },
+  'peer_review.showcase.widget': { id: 't59', title: 'Compare' },
+  'classroom.seating.toolbar': { id: 't60', label: 'Lock Seats' },
+  'classroom.seating.legend': { id: 't61', label: 'Present' },
+  'classroom.seating.seat_badge': { id: 't62', label: 'Leader' },
+  'classroom.seating.seat_actions': { id: 't63', label: 'Reboot PC' },
+  'classroom.seating.summary': { id: 't64', title: 'Lab Stats' },
+  'whiteboard.autosave.status': { id: 't65', label: 'Saved' },
+  'whiteboard.autosave.action': { id: 't66', label: 'Backup Now' },
+  'teacher.panel': { id: 't67', title: 'Full Panel' },
+  'student.fullscreen': { id: 't68', title: 'Exam Lock' },
+  'global.setting': { id: 't69', title: 'OSS Storage' },
+  'nav.user_menu': { id: 't70', label: 'My Badges' },
 };
 
 /** 每个 slot 的**破坏形状**与期望命中的错误特征（缺必填字段 / 枚举越界 / 类型错误） */
@@ -58,6 +107,10 @@ const INVALID_ENTRY: Record<string, { entry: unknown; pattern: RegExp }> = {
     pattern: /defaultDeltaPoints/i,
   },
   'whiteboard.canvas.widget': { entry: { id: 'b15', title: 'x' /* 缺 component */ }, pattern: /component/i },
+  'command_palette.item': { entry: { id: 'b22' /* 缺 title */ }, pattern: /title/i },
+  'quick_insert.item': { entry: { id: 'b23' /* 缺 title */ }, pattern: /title/i },
+  'ai.prompt.template': { entry: { id: 'b24', title: 'T' /* 缺 prompt */ }, pattern: /prompt/i },
+  'ai.skill.provider': { entry: { id: 'b25', name: 'N' /* 缺 description */ }, pattern: /description/i },
 };
 
 const SERVER_SLOTS = Object.keys(VALID_ENTRY);
@@ -137,6 +190,29 @@ describe('E-1 · contributes schema ↔ contribution-registry 双源一致', () 
     expect((parsed.contributes as Record<string, unknown[]>)['header.action'][0]).toMatchObject({
       id: 'h1',
       anything: { nested: true },
+    });
+
+    // 验证新加入的备课与智慧教育对接业务槽位
+    expect(() =>
+      manifestSchema.parse({
+        id: 'p',
+        name: 'P',
+        version: '1.0.0',
+        main: 'index.js',
+        contributes: { 'course.list.toolbar.action': [{ label: 'no-id' }] },
+      }),
+    ).toThrow(/course\.list\.toolbar\.action|id/i);
+
+    const parsedCourse = manifestSchema.parse({
+      id: 'p',
+      name: 'P',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: { 'course.list.toolbar.action': [{ id: 'national-edu-sync', title: '国家智慧教育平台同步' }] },
+    });
+    expect((parsedCourse.contributes as Record<string, unknown[]>)['course.list.toolbar.action'][0]).toMatchObject({
+      id: 'national-edu-sync',
+      title: '国家智慧教育平台同步',
     });
   });
 });

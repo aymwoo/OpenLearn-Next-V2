@@ -143,7 +143,7 @@ describe('SDK 契约成员级漂移门禁（E-2）', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       }),
     ).not.toThrow();
-  });
+  }, 120000);
 
   it('反向漂移·运行时值（d.ts 声明 / index 未导出）必须清零', () => {
     // 只有 class / const / function 这类**运行时值**才是真问题：

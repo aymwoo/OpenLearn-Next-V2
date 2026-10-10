@@ -177,6 +177,345 @@ const preclassPasscodeAddonSchema = z.object({
   order: z.number().int().optional(),
 });
 
+const commandPaletteItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  category: z.string().optional(),
+  description: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+  commandType: z.string().optional(),
+  shortcut: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
+
+const quickInsertItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  category: z.string().optional(),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+  commandType: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
+
+const aiPromptTemplateSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  prompt: z.string().min(1),
+  parameters: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        label: z.string().min(1),
+        default: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+const aiSkillProviderSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  parametersSchema: z.record(z.string(), z.unknown()).optional(),
+  commandType: z.string().optional(),
+});
+
+const classTabSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  position: z.number().int().optional(),
+});
+
+const classBatchActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentRowPanelSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const editorHeaderActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const postClassWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+  position: z.number().int().optional(),
+});
+
+const coursewareViewerToolbarSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const coursewareViewerOverlaySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const portalTelemetrySchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  valueSource: z.string().optional(),
+});
+
+const portalCourseBadgeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const portalTeachingModeSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const portalInsightSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const portalPreflightSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const portalLaunchActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const countdownWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const countdownActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentCountdownSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+});
+
+const studentQuickActionsItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentQuickActionsActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentQuickActionsFabSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const notificationTabsSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const pacingDashboardSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const diagnosticFeedSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const collabCanvasSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const topbarPillSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const attributionActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const leaderboardActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentProfileActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentProfileTimelineItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const classroomHeaderActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const classroomAgendaActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const whiteboardDockPluginSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const classroomAuditEventSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const peerReviewActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const peerReviewShowcaseWidgetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const seatingToolbarSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const seatingLegendSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const seatingSeatBadgeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const seatingSeatActionsSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const seatingSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const whiteboardAutosaveStatusSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const whiteboardAutosaveActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const teacherPanelSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const studentFullscreenSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const globalSettingSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const navUserMenuSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
 /**
  * 前端专属 / 演进中的 slot。
  *
@@ -207,6 +546,27 @@ const frontendSlotsShape = {
   'timetable.tab': z.array(frontendSlotEntrySchema).optional(),
   'admin.tab': z.array(frontendSlotEntrySchema).optional(),
   'workspace.view': z.array(frontendSlotEntrySchema).optional(),
+  // ── 新增 20 个全域业务扩展槽 ──
+  'course.list.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'course.card.action': z.array(frontendSlotEntrySchema).optional(),
+  'course.card.badge': z.array(frontendSlotEntrySchema).optional(),
+  'editor.segment.action': z.array(frontendSlotEntrySchema).optional(),
+  'classroom.cockpit.drawer.item': z.array(frontendSlotEntrySchema).optional(),
+  'classroom.alert.banner': z.array(frontendSlotEntrySchema).optional(),
+  'classroom.stage.display.ticker': z.array(frontendSlotEntrySchema).optional(),
+  'classroom.post_class.exporter': z.array(frontendSlotEntrySchema).optional(),
+  'timetable.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'timetable.card.badge': z.array(frontendSlotEntrySchema).optional(),
+  'computer_lab.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'computer_lab.seat.overlay': z.array(frontendSlotEntrySchema).optional(),
+  'student.dashboard.hero_widget': z.array(frontendSlotEntrySchema).optional(),
+  'student.assignment.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'student.lesson.notes_addon': z.array(frontendSlotEntrySchema).optional(),
+  'student.lesson.toolbox': z.array(frontendSlotEntrySchema).optional(),
+  'admin.dashboard.card': z.array(frontendSlotEntrySchema).optional(),
+  'admin.user.action': z.array(frontendSlotEntrySchema).optional(),
+  'header.status_pill': z.array(frontendSlotEntrySchema).optional(),
+  'ai_sidebar.tab': z.array(frontendSlotEntrySchema).optional(),
 } as const;
 
 const contributesSchema = z
@@ -268,6 +628,57 @@ const contributesSchema = z
     'classroom.preclass.passcode_action': z.array(preclassPasscodeActionSchema).optional(),
     'classroom.preclass.passcode_addon': z.array(preclassPasscodeAddonSchema).optional(),
     'help.plugin_docs': z.array(helpDocSchema).optional(),
+    // 新增核心能力槽位
+    'command_palette.item': z.array(commandPaletteItemSchema).optional(),
+    'quick_insert.item': z.array(quickInsertItemSchema).optional(),
+    'ai.prompt.template': z.array(aiPromptTemplateSchema).optional(),
+    'ai.skill.provider': z.array(aiSkillProviderSchema).optional(),
+    // 补齐宿主 UI 槽位
+    'class.tab': z.array(classTabSchema).optional(),
+    'class.batch.action': z.array(classBatchActionSchema).optional(),
+    'student.row.panel': z.array(studentRowPanelSchema).optional(),
+    'editor.header.action': z.array(editorHeaderActionSchema).optional(),
+    'classroom.post_class.widget': z.array(postClassWidgetSchema).optional(),
+    'courseware.viewer.toolbar': z.array(coursewareViewerToolbarSchema).optional(),
+    'courseware.viewer.overlay': z.array(coursewareViewerOverlaySchema).optional(),
+    'classroom.portal.telemetry': z.array(portalTelemetrySchema).optional(),
+    'classroom.portal.course_badge': z.array(portalCourseBadgeSchema).optional(),
+    'classroom.portal.teaching_mode': z.array(portalTeachingModeSchema).optional(),
+    'classroom.portal.insight': z.array(portalInsightSchema).optional(),
+    'classroom.portal.preflight': z.array(portalPreflightSchema).optional(),
+    'classroom.portal.launch_action': z.array(portalLaunchActionSchema).optional(),
+    'classroom.countdown.widget': z.array(countdownWidgetSchema).optional(),
+    'classroom.countdown.action': z.array(countdownActionSchema).optional(),
+    'student.classroom.countdown': z.array(studentCountdownSchema).optional(),
+    'student.quick_actions.item': z.array(studentQuickActionsItemSchema).optional(),
+    'student.quick_actions.action': z.array(studentQuickActionsActionSchema).optional(),
+    'student.quick_actions.fab': z.array(studentQuickActionsFabSchema).optional(),
+    'classroom.notification.tabs': z.array(notificationTabsSchema).optional(),
+    'classroom.pacing.dashboard': z.array(pacingDashboardSchema).optional(),
+    'classroom.diagnostic.feed': z.array(diagnosticFeedSchema).optional(),
+    'classroom.collab.canvas': z.array(collabCanvasSchema).optional(),
+    'classroom.topbar.pill': z.array(topbarPillSchema).optional(),
+    'classroom.attribution.action': z.array(attributionActionSchema).optional(),
+    'classroom.leaderboard.action': z.array(leaderboardActionSchema).optional(),
+    'student.profile.action': z.array(studentProfileActionSchema).optional(),
+    'student.profile.timeline_item': z.array(studentProfileTimelineItemSchema).optional(),
+    'classroom.header.action': z.array(classroomHeaderActionSchema).optional(),
+    'classroom.agenda.action': z.array(classroomAgendaActionSchema).optional(),
+    'whiteboard.dock.plugin': z.array(whiteboardDockPluginSchema).optional(),
+    'classroom.audit.event': z.array(classroomAuditEventSchema).optional(),
+    'peer_review.action': z.array(peerReviewActionSchema).optional(),
+    'peer_review.showcase.widget': z.array(peerReviewShowcaseWidgetSchema).optional(),
+    'classroom.seating.toolbar': z.array(seatingToolbarSchema).optional(),
+    'classroom.seating.legend': z.array(seatingLegendSchema).optional(),
+    'classroom.seating.seat_badge': z.array(seatingSeatBadgeSchema).optional(),
+    'classroom.seating.seat_actions': z.array(seatingSeatActionsSchema).optional(),
+    'classroom.seating.summary': z.array(seatingSummarySchema).optional(),
+    'whiteboard.autosave.status': z.array(whiteboardAutosaveStatusSchema).optional(),
+    'whiteboard.autosave.action': z.array(whiteboardAutosaveActionSchema).optional(),
+    'teacher.panel': z.array(teacherPanelSchema).optional(),
+    'student.fullscreen': z.array(studentFullscreenSchema).optional(),
+    'global.setting': z.array(globalSettingSchema).optional(),
+    'nav.user_menu': z.array(navUserMenuSchema).optional(),
     // 前端专属/演进 slot：宽松兜底（结构性错误仍会被拒）
     ...frontendSlotsShape,
     // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。

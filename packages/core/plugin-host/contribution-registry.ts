@@ -228,6 +228,536 @@ export interface PreclassPasscodeAddonConfig {
   order?: number;
 }
 
+/** A contribution to the command_palette.item slot (global command palette Ctrl+K). */
+export interface CommandPaletteItemConfig {
+  id: string;
+  title: string;
+  category?: string;
+  description?: string;
+  keywords?: string[];
+  commandType?: string;
+  shortcut?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** A contribution to the quick_insert.item slot (slash insert menu /). */
+export interface QuickInsertItemConfig {
+  id: string;
+  title: string;
+  category?: string;
+  description?: string;
+  icon?: string;
+  keywords?: string[];
+  commandType?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** A contribution to the ai.prompt.template slot (AI prompt engineering templates). */
+export interface AIPromptTemplateConfig {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  prompt: string;
+  parameters?: Array<{ name: string; label: string; default?: string }>;
+}
+
+/** A contribution to the ai.skill.provider slot (AI tool & function calling capabilities). */
+export interface AISkillProviderConfig {
+  id: string;
+  name: string;
+  description: string;
+  parametersSchema?: Record<string, unknown>;
+  commandType?: string;
+}
+
+/** A contribution to the class.tab slot. */
+export interface ClassTabConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  position?: number;
+}
+
+/** A contribution to the class.batch.action slot. */
+export interface ClassBatchActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.row.panel slot. */
+export interface StudentRowPanelConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the editor.header.action slot. */
+export interface EditorHeaderActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.post_class.widget slot. */
+export interface PostClassWidgetConfig {
+  id: string;
+  title: string;
+  icon?: string;
+  position?: number;
+}
+
+/** A contribution to the courseware.viewer.toolbar slot. */
+export interface CoursewareViewerToolbarConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the courseware.viewer.overlay slot. */
+export interface CoursewareViewerOverlayConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.portal.telemetry slot. */
+export interface PortalTelemetryConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  valueSource?: string;
+}
+
+/** A contribution to the classroom.portal.course_badge slot. */
+export interface PortalCourseBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.portal.teaching_mode slot. */
+export interface PortalTeachingModeConfig {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.portal.insight slot. */
+export interface PortalInsightConfig {
+  id: string;
+  title: string;
+  description?: string;
+}
+
+/** A contribution to the classroom.portal.preflight slot. */
+export interface PortalPreflightConfig {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+/** A contribution to the classroom.portal.launch_action slot. */
+export interface PortalLaunchActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.countdown.widget slot. */
+export interface CountdownWidgetConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.countdown.action slot. */
+export interface CountdownActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.classroom.countdown slot. */
+export interface StudentCountdownConfig {
+  id: string;
+  title: string;
+}
+
+/** A contribution to the student.quick_actions.item slot. */
+export interface StudentQuickActionsItemConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.quick_actions.action slot. */
+export interface StudentQuickActionsActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.quick_actions.fab slot. */
+export interface StudentQuickActionsFabConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.notification.tabs slot. */
+export interface NotificationTabsConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.pacing.dashboard slot. */
+export interface PacingDashboardConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.diagnostic.feed slot. */
+export interface DiagnosticFeedConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.collab.canvas slot. */
+export interface CollabCanvasConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.topbar.pill slot. */
+export interface TopbarPillConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.attribution.action slot. */
+export interface AttributionActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.leaderboard.action slot. */
+export interface LeaderboardActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.profile.action slot. */
+export interface StudentProfileActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.profile.timeline_item slot. */
+export interface StudentProfileTimelineItemConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.header.action slot. */
+export interface ClassroomHeaderActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.agenda.action slot. */
+export interface ClassroomAgendaActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the whiteboard.dock.plugin slot. */
+export interface WhiteboardDockPluginConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.audit.event slot. */
+export interface ClassroomAuditEventConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the peer_review.action slot. */
+export interface PeerReviewActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the peer_review.showcase.widget slot. */
+export interface PeerReviewShowcaseWidgetConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.seating.toolbar slot. */
+export interface SeatingToolbarConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.seating.legend slot. */
+export interface SeatingLegendConfig {
+  id: string;
+  label: string;
+  color?: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.seating.seat_badge slot. */
+export interface SeatingSeatBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.seating.seat_actions slot. */
+export interface SeatingSeatActionsConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.seating.summary slot. */
+export interface SeatingSummaryConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the whiteboard.autosave.status slot. */
+export interface WhiteboardAutosaveStatusConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the whiteboard.autosave.action slot. */
+export interface WhiteboardAutosaveActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the teacher.panel slot. */
+export interface TeacherPanelConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the student.fullscreen slot. */
+export interface StudentFullscreenConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the global.setting slot. */
+export interface GlobalSettingConfig {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;
+}
+
+/** A contribution to the nav.user_menu slot. */
+export interface NavUserMenuConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the course.list.toolbar.action slot. */
+export interface CourseListToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the course.card.action slot. */
+export interface CourseCardActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the course.card.badge slot. */
+export interface CourseCardBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the editor.segment.action slot. */
+export interface EditorSegmentActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.cockpit.drawer.item slot. */
+export interface ClassroomCockpitDrawerItemConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the classroom.alert.banner slot. */
+export interface ClassroomAlertBannerConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.stage.display.ticker slot. */
+export interface ClassroomStageDisplayTickerConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.post_class.exporter slot. */
+export interface ClassroomPostClassExporterConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the timetable.toolbar.action slot. */
+export interface TimetableToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the timetable.card.badge slot. */
+export interface TimetableCardBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the computer_lab.toolbar.action slot. */
+export interface ComputerLabToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the computer_lab.seat.overlay slot. */
+export interface ComputerLabSeatOverlayConfig {
+  id: string;
+  label?: string;
+  icon?: string;
+}
+
+/** A contribution to the student.dashboard.hero_widget slot. */
+export interface StudentDashboardHeroWidgetConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the student.assignment.toolbar.action slot. */
+export interface StudentAssignmentToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.lesson.notes_addon slot. */
+export interface StudentLessonNotesAddonConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the student.lesson.toolbox slot. */
+export interface StudentLessonToolboxConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the admin.dashboard.card slot. */
+export interface AdminDashboardCardConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the admin.user.action slot. */
+export interface AdminUserActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the header.status_pill slot. */
+export interface HeaderStatusPillConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the ai_sidebar.tab slot. */
+export interface AISidebarTabConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -251,7 +781,76 @@ export type ContributionConfig =
   | PeerReviewRubricConfig
   | PeerReviewBadgeConfig
   | PreclassPasscodeActionConfig
-  | PreclassPasscodeAddonConfig;
+  | PreclassPasscodeAddonConfig
+  | CommandPaletteItemConfig
+  | QuickInsertItemConfig
+  | AIPromptTemplateConfig
+  | AISkillProviderConfig
+  | ClassTabConfig
+  | ClassBatchActionConfig
+  | StudentRowPanelConfig
+  | EditorHeaderActionConfig
+  | PostClassWidgetConfig
+  | CoursewareViewerToolbarConfig
+  | CoursewareViewerOverlayConfig
+  | PortalTelemetryConfig
+  | PortalCourseBadgeConfig
+  | PortalTeachingModeConfig
+  | PortalInsightConfig
+  | PortalPreflightConfig
+  | PortalLaunchActionConfig
+  | CountdownWidgetConfig
+  | CountdownActionConfig
+  | StudentCountdownConfig
+  | StudentQuickActionsItemConfig
+  | StudentQuickActionsActionConfig
+  | StudentQuickActionsFabConfig
+  | NotificationTabsConfig
+  | PacingDashboardConfig
+  | DiagnosticFeedConfig
+  | CollabCanvasConfig
+  | TopbarPillConfig
+  | AttributionActionConfig
+  | LeaderboardActionConfig
+  | StudentProfileActionConfig
+  | StudentProfileTimelineItemConfig
+  | ClassroomHeaderActionConfig
+  | ClassroomAgendaActionConfig
+  | WhiteboardDockPluginConfig
+  | ClassroomAuditEventConfig
+  | PeerReviewActionConfig
+  | PeerReviewShowcaseWidgetConfig
+  | SeatingToolbarConfig
+  | SeatingLegendConfig
+  | SeatingSeatBadgeConfig
+  | SeatingSeatActionsConfig
+  | SeatingSummaryConfig
+  | WhiteboardAutosaveStatusConfig
+  | WhiteboardAutosaveActionConfig
+  | TeacherPanelConfig
+  | StudentFullscreenConfig
+  | GlobalSettingConfig
+  | NavUserMenuConfig
+  | CourseListToolbarActionConfig
+  | CourseCardActionConfig
+  | CourseCardBadgeConfig
+  | EditorSegmentActionConfig
+  | ClassroomCockpitDrawerItemConfig
+  | ClassroomAlertBannerConfig
+  | ClassroomStageDisplayTickerConfig
+  | ClassroomPostClassExporterConfig
+  | TimetableToolbarActionConfig
+  | TimetableCardBadgeConfig
+  | ComputerLabToolbarActionConfig
+  | ComputerLabSeatOverlayConfig
+  | StudentDashboardHeroWidgetConfig
+  | StudentAssignmentToolbarActionConfig
+  | StudentLessonNotesAddonConfig
+  | StudentLessonToolboxConfig
+  | AdminDashboardCardConfig
+  | AdminUserActionConfig
+  | HeaderStatusPillConfig
+  | AISidebarTabConfig;
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {

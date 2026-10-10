@@ -6,6 +6,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { QuickInsertMenuProps, QuickInsertCategory, QuickInsertItemDescriptor } from './quick-insert-types.js';
 import { QuickInsertRegistry } from './quick-insert-registry.js';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store.js';
+import { frontendApi } from '../../services/frontend-api.js';
 
 export const globalQuickInsertRegistry = new QuickInsertRegistry();
 
@@ -19,10 +21,47 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<QuickInsertCategory | 'All'>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
+
   const filteredItems = useMemo(() => {
     const categoryFilter = selectedCategory === 'All' ? undefined : selectedCategory;
-    return registry.search(query, categoryFilter);
-  }, [registry, query, selectedCategory]);
+    const baseItems = registry.search(query, categoryFilter);
+
+    const pluginExts = extensionPoints.get('quick_insert.item') ?? [];
+    const pluginItems: QuickInsertItemDescriptor[] = pluginExts
+      .map((ext) => {
+        const cfg = (ext.slotProps ?? {}) as any;
+        const category = (cfg.category || 'Plugin') as QuickInsertCategory;
+        return {
+          id: ext.id,
+          title: ext.label || cfg.title || ext.id,
+          description: cfg.description,
+          icon: typeof ext.icon === 'string' ? ext.icon : undefined,
+          category,
+          keywords: cfg.keywords,
+          execute: async (context?: Record<string, unknown>) => {
+            if (cfg.commandType) {
+              await frontendApi.post('/api/plugins/execute-command', {
+                type: cfg.commandType,
+                payload: cfg.payload ?? context,
+              });
+            }
+          },
+        };
+      })
+      .filter((item) => {
+        if (categoryFilter && item.category !== categoryFilter) return false;
+        const rawQuery = query.startsWith('/') ? query.slice(1) : query;
+        const q = rawQuery.trim().toLowerCase();
+        if (!q) return true;
+        const matchTitle = item.title.toLowerCase().includes(q);
+        const matchDesc = item.description?.toLowerCase().includes(q) ?? false;
+        const matchKeywords = item.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false;
+        return matchTitle || matchDesc || matchKeywords;
+      });
+
+    return [...baseItems, ...pluginItems];
+  }, [registry, query, selectedCategory, extensionPoints]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -36,7 +75,11 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
         e.preventDefault();
         const active = filteredItems[selectedIndex];
         if (active) {
-          registry.executeItem(active.id);
+          if (registry.getItem(active.id)) {
+            registry.executeItem(active.id);
+          } else {
+            active.execute();
+          }
           onClose();
         }
       } else if (e.key === 'Escape') {
@@ -111,7 +154,11 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
                   idx === selectedIndex ? 'bg-indigo-600/20 text-white' : 'text-slate-300 hover:bg-slate-800/60'
                 }`}
                 onClick={() => {
-                  registry.executeItem(item.id);
+                  if (registry.getItem(item.id)) {
+                    registry.executeItem(item.id);
+                  } else {
+                    item.execute();
+                  }
                   onClose();
                 }}
                 data-testid={`quick-insert-item-${item.id}`}

@@ -6,6 +6,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CommandPaletteProps, CommandCategory, CommandDescriptor } from './command-types.js';
 import { CommandRegistry } from './command-registry.js';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store.js';
+import { frontendApi } from '../../services/frontend-api.js';
 
 export const globalCommandRegistry = new CommandRegistry();
 
@@ -18,10 +20,47 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<CommandCategory | 'All'>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
+
   const filteredCommands = useMemo(() => {
     const categoryFilter = selectedCategory === 'All' ? undefined : selectedCategory;
-    return registry.search(query, categoryFilter);
-  }, [registry, query, selectedCategory]);
+    const baseCommands = registry.search(query, categoryFilter);
+
+    const pluginExts = extensionPoints.get('command_palette.item') ?? [];
+    const pluginCommands: CommandDescriptor[] = pluginExts
+      .map((ext) => {
+        const cfg = (ext.slotProps ?? {}) as any;
+        const category = (cfg.category || 'Plugin') as CommandCategory;
+        return {
+          id: ext.id,
+          title: ext.label || cfg.title || ext.id,
+          description: cfg.description,
+          icon: typeof ext.icon === 'string' ? ext.icon : undefined,
+          category,
+          keywords: cfg.keywords,
+          shortcut: cfg.shortcut,
+          execute: async (context?: Record<string, unknown>) => {
+            if (cfg.commandType) {
+              await frontendApi.post('/api/plugins/execute-command', {
+                type: cfg.commandType,
+                payload: cfg.payload ?? context,
+              });
+            }
+          },
+        };
+      })
+      .filter((cmd) => {
+        if (categoryFilter && cmd.category !== categoryFilter) return false;
+        if (!query.trim()) return true;
+        const q = query.trim().toLowerCase();
+        const matchTitle = cmd.title.toLowerCase().includes(q);
+        const matchDesc = cmd.description?.toLowerCase().includes(q) ?? false;
+        const matchKeywords = cmd.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false;
+        return matchTitle || matchDesc || matchKeywords;
+      });
+
+    return [...baseCommands, ...pluginCommands];
+  }, [registry, query, selectedCategory, extensionPoints]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -35,7 +74,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         e.preventDefault();
         const active = filteredCommands[selectedIndex];
         if (active) {
-          registry.executeCommand(active.id);
+          if (registry.getCommand(active.id)) {
+            registry.executeCommand(active.id);
+          } else {
+            active.execute();
+          }
           onClose();
         }
       } else if (e.key === 'Escape') {
@@ -111,7 +154,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   idx === selectedIndex ? 'bg-indigo-600/20 text-white' : 'text-slate-300 hover:bg-slate-800/60'
                 }`}
                 onClick={() => {
-                  registry.executeCommand(cmd.id);
+                  if (registry.getCommand(cmd.id)) {
+                    registry.executeCommand(cmd.id);
+                  } else {
+                    cmd.execute();
+                  }
                   onClose();
                 }}
                 data-testid={`command-item-${cmd.id}`}

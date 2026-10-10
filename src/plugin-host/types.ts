@@ -175,7 +175,39 @@ export type ExtensionSlot =
   | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
   | 'statusbar.item' // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
   // ── 白板画布核心图元扩展槽位（一等公民图元渲染）──
-  | 'whiteboard.renderer'; // 白板自定义图元渲染器扩展（如 Desmos 函数图像、分子 3D 结构等自定义一等公民图元）
+  | 'whiteboard.renderer' // 白板自定义图元渲染器扩展（如 Desmos 函数图像、分子 3D 结构等自定义一等公民图元）
+  // ── 全局命令面板与快捷插入扩展槽位 ──
+  | 'command_palette.item' // 全局命令面板（Ctrl+K）扩展命令
+  | 'quick_insert.item' // 斜杠菜单（/）快速插入项
+  // ── AI 智能体生态扩展槽位 ──
+  | 'ai.prompt.template' // AI 提示词工程模板扩展
+  | 'ai.skill.provider' // AI 工具与能力提供者扩展
+  // ── 备课与课程工程域扩展槽位 ──
+  | 'course.list.toolbar.action' // 课程库顶部操作栏扩展（国家智慧教育平台课件同步等）
+  | 'course.card.action' // 课程卡片操作扩展（推送到国家平台/微课生成等）
+  | 'course.card.badge' // 课程卡片徽章扩展（国家精品课认证角标等）
+  | 'editor.segment.action' // 环节时间线卡片操作扩展（国家课标对齐/配时预测等）
+  // ── 在线课堂与大屏中控域扩展槽位 ──
+  | 'classroom.cockpit.drawer.item' // 课堂中控台活动抽屉项目扩展
+  | 'classroom.alert.banner' // 课堂中控台顶部横幅通知扩展
+  | 'classroom.stage.display.ticker' // 大屏展台跑马灯通知扩展
+  | 'classroom.post_class.exporter' // 课后复盘导出通道扩展（智慧教育大数据直报等）
+  // ── 现代教务与排课调度域扩展槽位 ──
+  | 'timetable.toolbar.action' // 课表中心工具栏操作扩展（外部日历同步等）
+  | 'timetable.card.badge' // 周历卡片状态角标扩展
+  | 'computer_lab.toolbar.action' // 机房管理顶部操作扩展（批量网络唤醒等）
+  | 'computer_lab.seat.overlay' // 机房机位硬件图层扩展
+  // ── 学生端自主学习与作业域扩展槽位 ──
+  | 'student.dashboard.hero_widget' // 学生仪表盘激励挂件扩展
+  | 'student.assignment.toolbar.action' // 学生作业详情顶部工具扩展
+  | 'student.lesson.notes_addon' // 学生随堂笔记增强挂件扩展
+  | 'student.lesson.toolbox' // 学生随堂浮动工具箱扩展
+  // ── 系统运维与管理后台域扩展槽位 ──
+  | 'admin.dashboard.card' // 管理后台系统监控指标卡片追加
+  | 'admin.user.action' // 管理后台教工列表操作扩展
+  // ── 全局框架与智能中枢域扩展槽位 ──
+  | 'header.status_pill' // 全局顶栏状态指示胶囊扩展
+  | 'ai_sidebar.tab'; // AI 助手右侧边栏专属 Tab 扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

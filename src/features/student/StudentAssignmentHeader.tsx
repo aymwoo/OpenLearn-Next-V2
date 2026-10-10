@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import type { StudentType, Lesson } from '../../types/app';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export function StudentAssignmentHeader(props: {
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
@@ -8,7 +9,7 @@ export function StudentAssignmentHeader(props: {
 }) {
   const { setStudentViewStatus, setSelectedAssignment, selectedAssignment } = props;
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between flex-wrap gap-2">
       <button
         onClick={() => {
           setStudentViewStatus('dashboard');
@@ -18,7 +19,13 @@ export function StudentAssignmentHeader(props: {
       >
         <ChevronRight className="rotate-180" size={16} /> Back to Dashboard
       </button>
-      <h2 className="text-xl font-bold text-gray-800">Assignment: {selectedAssignment.title}</h2>
+      <div className="flex items-center gap-3 flex-wrap">
+        <h2 className="text-xl font-bold text-gray-800">Assignment: {selectedAssignment.title}</h2>
+        <ExtensionPointRenderer
+          slot="student.assignment.toolbar.action"
+          slotProps={{ assignment: selectedAssignment }}
+        />
+      </div>
     </div>
   );
 }

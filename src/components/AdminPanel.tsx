@@ -779,6 +779,12 @@ export function AdminPanel({
                 <Cpu size={20} />
               </div>
             </div>
+
+            {/* admin.dashboard.card 扩展指标卡（容器集群监控 / API 吞吐率 / 带宽卡片） */}
+            <ExtensionPointRenderer
+              slot="admin.dashboard.card"
+              slotProps={{ sqliteStats, lang }}
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1394,13 +1400,24 @@ export function AdminPanel({
               </span>
             </div>
 
-            <button
-              onClick={handleOpenCreate}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer shrink-0 self-end sm:self-auto"
-            >
-              <Plus size={14} />
-              <span>{lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap shrink-0 self-end sm:self-auto">
+              <button
+                onClick={handleOpenCreate}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>{lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}</span>
+              </button>
+              <ExtensionPointRenderer
+                slot="admin.user.action"
+                slotProps={{
+                  users,
+                  filteredUsers,
+                  lang,
+                  onRefresh: fetchUsers,
+                }}
+              />
+            </div>
           </div>
 
           {/* Accounts list */}
