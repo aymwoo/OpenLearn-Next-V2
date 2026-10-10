@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
+import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
 import { StudentLessonContentPanel } from './StudentLessonContentPanel';
 import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
@@ -80,6 +81,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         lessons={lessons}
         selectedLesson={selectedLesson}
       />
+      <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
         <StudentLessonContentPanel
           students={students}
