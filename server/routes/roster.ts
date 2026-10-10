@@ -13,7 +13,9 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { emitClassroomEvent } from '../presence.js';
 import type { ServerContext } from '../context.js';
 import { RosterService } from '../services/roster-service.js';
+import { createLogger } from '../../packages/core/observability/logger.js';
 
+const rlog = createLogger('roster');
 /**
  * 学生级联删除（DATA-INT-01）：12 张子表 + students 本体，委托至 RosterService。
  */
@@ -312,7 +314,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
             .run(JSON.stringify(updatedSession), token);
         } catch (clearErr) {
-          console.warn('[Auth] Failed to clear mustChangePassword flag:', clearErr);
+          rlog.warn({ err: clearErr }, '[Auth] Failed to clear mustChangePassword flag');
         }
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
       }
@@ -350,7 +352,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
             .run(JSON.stringify(updatedSession), token);
         } catch (clearErr) {
-          console.warn('[Auth] Failed to clear mustChangePassword flag:', clearErr);
+          rlog.warn({ err: clearErr }, '[Auth] Failed to clear mustChangePassword flag');
         }
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
       }
@@ -556,7 +558,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         if (needsUpgrade) {
           const newHash = bcryptHashPassword(password);
           kernelContainer.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userObj.id);
-          console.log(`[Auth] Auto-upgraded password hash for user ${userObj.username}`);
+          rlog.info(`[Auth] Auto-upgraded password hash for user ${userObj.username}`);
         }
         // SEC-AUTH-06: 种子默认密码（admin/admin、teacher/teacher，特征为密码=用户名）
         // 登录成功即打标：前端强制改密 + 服务端 enforcePasswordChanged 拦截写操作（测试环境下豁免）
@@ -567,7 +569,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         const isE2e = !!process.env.PLAYWRIGHT_TEST;
         const mustChangePassword = !isE2e && password === userObj.username;
         if (mustChangePassword) {
-          console.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
+          rlog.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
         }
         sessionData = {
           role: 'teacher',
@@ -611,7 +613,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             kernelContainer.db
               .prepare('UPDATE students SET password = ? WHERE id = ?')
               .run(bcryptHashPassword(providedPassword), studentObj.id);
-            console.log(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
+            rlog.info(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
           }
         }
         // 旧明文密码
@@ -621,11 +623,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
             kernelContainer.db
               .prepare('UPDATE students SET password = ? WHERE id = ?')
               .run(bcryptHashPassword(providedPassword), studentObj.id);
-            console.log(
+            rlog.info(
               `[Auth] Auto-upgraded plain password hash for student ${studentObj.student_number || studentObj.id}`,
             );
           } catch (upgradeErr) {
-            console.error('[Auth] Failed to auto-upgrade plain password', upgradeErr);
+            rlog.error({ err: upgradeErr }, '[Auth] Failed to auto-upgrade plain password');
           }
         }
 
@@ -658,7 +660,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
               }
             }
           } catch (dbErr) {
-            console.error('Failed to query active class passcodes', dbErr);
+            rlog.error({ err: dbErr }, 'Failed to query active class passcodes');
           }
         }
 
@@ -979,7 +981,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       rosterService.deleteStudentCascade(studentId);
 
-      console.log(`[GDPR] Complete data deletion for student ${studentId}`);
+      rlog.info(`[GDPR] Complete data deletion for student ${studentId}`);
       res.json({ success: true, message: 'All student data has been permanently deleted.' });
     } catch (e: any) {
       sendSafeError(res, e);

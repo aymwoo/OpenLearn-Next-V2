@@ -20,7 +20,9 @@ import {
   type DownloadedPackage,
 } from '../services/community-registry.js';
 import type { ServerContext } from '../context.js';
+import { createLogger } from '../../packages/core/observability/logger.js';
 
+const pluginLog = createLogger('plugins');
 /**
  * 在本地 v2_plugins 源目录中按 manifest id 查找最新的插件版本。
  * 用于已安装插件未声明市场更新源（updateSource）时的更新检测回退，
@@ -329,7 +331,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         bytes: pkg.bytes,
       });
     } catch (err: any) {
-      console.error(err);
+      pluginLog.error(err);
       sendSafeError(res, err);
     }
   });
@@ -448,7 +450,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         wasActive: result.wasActive,
       });
     } catch (err: any) {
-      console.error(err);
+      pluginLog.error(err);
       sendSafeError(res, err);
     }
   });
@@ -569,7 +571,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
-      console.error(err);
+      pluginLog.error(err);
       sendSafeError(res, err);
     }
   });
@@ -585,7 +587,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
-      console.error(err);
+      pluginLog.error(err);
       sendSafeError(res, err);
     }
   });
@@ -646,7 +648,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           filename,
         });
       } catch (err: any) {
-        console.error(err);
+        pluginLog.error(err);
         sendSafeError(res, err);
       }
     },
@@ -684,7 +686,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           wasActive: result.wasActive,
         });
       } catch (err: any) {
-        console.error(err);
+        pluginLog.error(err);
         sendSafeError(res, err);
       }
     },
@@ -724,7 +726,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       // 修复前此处 `(bus as any).handlers / legacyHandlers` 直接读两个私有 Map，
       // CommandBus 一重构预检就静默失效（`?.has?.()` 落空 ⇒ 永远 404）。
       if (!bus.hasHandler?.(resolvedType)) {
-        console.warn('[execute-command] no handler for command type:', resolvedType);
+        pluginLog.warn({ commandType: resolvedType }, '[execute-command] no handler for command type');
         return res.status(404).json({
           success: false,
           error:
@@ -737,7 +739,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (err: any) {
-      console.error('[execute-command]', err.message);
+      pluginLog.error({ error: err.message }, '[execute-command]');
       sendSafeError(res, err);
     }
   });

@@ -553,6 +553,29 @@ async function startServer() {
   // SEC-AUTH-METRICS: 保护系统级指标，仅管理员可探测服务器运行性能指标
   app.get('/metrics', requireAuth('administrator'), (_req: any, res: any) => {
     const mem = process.memoryUsage();
+    let socketConnectedCount: number | null = null;
+    try {
+      const sockets: any = (io as any)?.sockets?.sockets;
+      socketConnectedCount =
+        typeof sockets?.size === 'number' ? sockets.size : typeof (io as any)?.engine?.clientsCount === 'number' ? (io as any).engine.clientsCount : null;
+    } catch {
+      socketConnectedCount = null;
+    }
+    let walBytes: number | null = null;
+    try {
+      walBytes = fs.statSync(getDefaultDbPath() + '-wal').size;
+    } catch {
+      walBytes = 0;
+    }
+    let lastBackupAgeH: number | null = null;
+    try {
+      const files = listBackups(getDefaultBackupDir()).filter((b) => b.isValid);
+      if (files.length > 0) {
+        lastBackupAgeH = Math.round((Math.max(0, Date.now() - new Date(files[0].mtime).getTime()) / 3600000) * 10) / 10;
+      }
+    } catch {
+      lastBackupAgeH = null;
+    }
     res.json({
       uptime: Math.floor((Date.now() - startTime) / 1000),
       memory: {
@@ -560,6 +583,9 @@ async function startServer() {
         heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB',
       },
       nodeVersion: process.version,
+      socketConnectedCount,
+      walBytes,
+      lastBackupAgeH,
     });
   });
 

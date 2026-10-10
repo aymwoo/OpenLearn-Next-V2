@@ -299,9 +299,11 @@ jobs:
           version: latest
 
       # `npm audit` cannot work here (no package-lock.json → ENOLOCK).
-      # Non-blocking on purpose: the repo currently carries pre-existing high
-      # advisories in transitive dev dependencies (browserslist via
-      # @vitejs/plugin-react). Flip continue-on-error to false once triaged.
+      # Non-blocking on purpose: the configured registry (npmmirror) has no
+      # audit endpoint (ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS), so the step fails
+      # for infrastructure reasons even with zero advisories. Flip
+      # continue-on-error to false once the registry supports audit or the
+      # pipeline pins the official registry for this step.
       - name: Audit dependencies
         continue-on-error: true
         run: pnpm audit --audit-level high

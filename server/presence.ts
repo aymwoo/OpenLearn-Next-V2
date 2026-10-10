@@ -2,7 +2,9 @@ import type { Server } from 'socket.io';
 import type { EventBusPort } from '../packages/core/event-bus/index.js';
 import { lessonActiveSegments, setActiveSegment } from './shared-state.js';
 import { randomId } from './utils/id.js';
+import { createLogger } from '../packages/core/observability/logger.js';
 
+const plog = createLogger('presence');
 export interface PresenceDeps {
   io: Server;
   eventBus: EventBusPort;
@@ -220,12 +222,12 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     socket.on('register-student', (data: { studentId: string; name: string }) => {
       // SEC-AUTH: 阻止学生客户端伪造他人 studentId
       if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
-        console.warn(`[Presence Security] Student ${session.userId} attempted to impersonate ${data.studentId}`);
+        plog.warn(`[Presence Security] Student ${session.userId} attempted to impersonate ${data.studentId}`);
         return socket.emit('error', { message: 'Forbidden: Cannot register presence for another student' });
       }
       registeredStudentId = data.studentId;
       onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
-      console.log(`[Presence] Student online: ${data.name} (${data.studentId})`);
+      plog.info(`[Presence] Student online: ${data.name} (${data.studentId})`);
 
       // 加入所属班级房间：课堂广播（白板最大化视图等）需要在学生处于
       // 任意视图（含作业工作区）时都能送达
@@ -234,7 +236,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           socket.join(classRoom(classId));
         }
       } catch (err) {
-        console.warn(`[Presence] Failed to resolve classes for student ${data.studentId}`, err);
+        plog.warn({ err }, `[Presence] Failed to resolve classes for student ${data.studentId}`);
       }
 
       broadcastPresence();
@@ -246,12 +248,12 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       }
       // SEC-AUTH: 课节房间归属 —— 开课中的课节仅班级成员可进入（防止跨班收听锁屏/点名广播）
       if (session && !isTeacherOrAdmin && !canJoinLessonRoom(data.lessonId)) {
-        console.warn(`[Presence Security] Student ${session.userId} denied enter-lesson ${data.lessonId}`);
+        plog.warn(`[Presence Security] Student ${session.userId} denied enter-lesson ${data.lessonId}`);
         return socket.emit('error', { message: 'Forbidden: Not allowed to enter this lesson' });
       }
       activeStudentLessons.set(data.studentId, data.lessonId);
       socket.join(data.lessonId);
-      console.log(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
+      plog.info(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
       broadcastPresence();
 
       // Send current active segment if it exists
@@ -273,14 +275,14 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         socket.leave(oldRoom);
       }
       activeStudentLessons.delete(data.studentId);
-      console.log(`[Presence] Student ${data.studentId} left lesson`);
+      plog.info(`[Presence] Student ${data.studentId} left lesson`);
       broadcastPresence();
     });
 
     socket.on('join-room', (roomId: string) => {
       // SEC-AUTH: 房间归属校验 —— 任意登录者不得加入任意房间收听跨班广播
       if (!canJoinRoom(roomId)) {
-        console.warn(`[Presence Security] ${session?.userId} denied join-room ${roomId}`);
+        plog.warn(`[Presence Security] ${session?.userId} denied join-room ${roomId}`);
         return socket.emit('error', { message: 'Forbidden: Not allowed to join this room' });
       }
       socket.join(roomId);
@@ -290,7 +292,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       // SEC-AUTH: 教师可写任意房间；学生仅可写自己作业工作区的伪课节房间
       // （课堂白板对学生只读；HTTP 侧 whiteboard.update 命令已有同口径校验）
       if (!canWriteWhiteboardRoom(data?.roomId)) {
-        console.warn(`[Presence Security] ${session?.userId} denied whiteboard-update for room ${data?.roomId}`);
+        plog.warn(`[Presence Security] ${session?.userId} denied whiteboard-update for room ${data?.roomId}`);
         return;
       }
       // 实时绘制事件（temp-draw, temp-end, segment-change）：直接广播，不经过 EventBus
@@ -308,7 +310,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       }) => {
         // SEC-AUTH: 与 whiteboard-update 同口径 —— 教师可写任意课节；学生仅自己的伪课节
         if (!canWriteWhiteboardRoom(data?.payload?.lessonId)) {
-          console.warn(`[Presence Security] ${session?.userId} denied whiteboard-event for ${data?.payload?.lessonId}`);
+          plog.warn(`[Presence Security] ${session?.userId} denied whiteboard-event for ${data?.payload?.lessonId}`);
           return;
         }
         // 1. 发布到服务端 EventBus（自动写入 events 表，审计日志）
@@ -356,7 +358,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
 
         // SEC-AUTH: 阻止学生客户端伪造他人 studentId 上报错误
         if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
-          console.warn(`[Presence Security] Student ${session.userId} attempted to report error as ${data.studentId}`);
+          plog.warn(`[Presence Security] Student ${session.userId} attempted to report error as ${data.studentId}`);
           return;
         }
 
@@ -365,7 +367,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         const classId = data.classId || null;
 
         // 1. 输出到服务端控制台/系统日志
-        console.warn(
+        plog.warn(
           `[Client Diagnostics] Student ${data.studentId} (${studentName}) reported error [${data.error.type || 'runtime'}]: ${data.error.message || data.error.title} (Lesson: ${lessonId || 'N/A'})`,
         );
 
@@ -401,7 +403,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       (data: { classId?: string | null; lessonId: string; elementId: string | null; mode?: 'board' | 'browser' }) => {
         // SEC-AUTH: 仅教师或管理员可广播授课白板的最大化视图
         if (session && !isTeacherOrAdmin) {
-          console.warn(`[Presence Security] Unauthorized teacher-broadcast-fullscreen by ${session?.userId}`);
+          plog.warn(`[Presence Security] Unauthorized teacher-broadcast-fullscreen by ${session?.userId}`);
           return socket.emit('error', {
             message: 'Forbidden: Only teachers or administrators can broadcast fullscreen',
           });
@@ -428,7 +430,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     socket.on('teacher-broadcast-segment', (data: { lessonId: string; activeSegmentId: string }) => {
       // SEC-AUTH: 仅教师或管理员可广播环节切换指令
       if (session && !isTeacherOrAdmin) {
-        console.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
+        plog.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
       }
       // Store the active segment in memory with capacity guard
@@ -440,10 +442,10 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     socket.on('teacher-ping-student', (data: { studentId: string; lessonId: string; message?: string }) => {
       // SEC-AUTH: 仅教师或管理员可向学生发起单向提醒
       if (session && !isTeacherOrAdmin) {
-        console.warn(`[Presence Security] Unauthorized teacher-ping-student by ${session?.userId}`);
+        plog.warn(`[Presence Security] Unauthorized teacher-ping-student by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can ping students' });
       }
-      console.log(`[Ping] Teacher pinged student ${data.studentId} for lesson ${data.lessonId}`);
+      plog.info(`[Ping] Teacher pinged student ${data.studentId} for lesson ${data.lessonId}`);
       const studentOnlineInfo = onlineStudents.get(data.studentId);
       if (studentOnlineInfo) {
         io.to(studentOnlineInfo.socketId).emit('student-pinged', {
@@ -456,7 +458,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     // 教师端全班锁屏指令全网广播
     socket.on('teacher-broadcast-lock', (data: { lessonId: string; locked: boolean; classId?: string }) => {
       if (session && !isTeacherOrAdmin) {
-        console.warn(`[Presence Security] Unauthorized teacher-broadcast-lock by ${session?.userId}`);
+        plog.warn(`[Presence Security] Unauthorized teacher-broadcast-lock by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast lock' });
       }
       if (!data?.lessonId) return;
@@ -501,11 +503,11 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       'teacher-pick-student',
       (data: { studentId: string; studentName: string; lessonId?: string; classId?: string }) => {
         if (session && !isTeacherOrAdmin) {
-          console.warn(`[Presence Security] Unauthorized teacher-pick-student by ${session?.userId}`);
+          plog.warn(`[Presence Security] Unauthorized teacher-pick-student by ${session?.userId}`);
           return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can pick students' });
         }
         if (!data?.studentId) return;
-        console.log(`[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`);
+        plog.info(`[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`);
         const payload = {
           studentId: data.studentId,
           studentName: data.studentName,
@@ -525,10 +527,10 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       if (!data?.studentId) return;
       // SEC-AUTH: 阻止学生伪造他人 studentId 确认答到
       if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
-        console.warn(`[Presence Security] Student ${session.userId} attempted to acknowledge as ${data.studentId}`);
+        plog.warn(`[Presence Security] Student ${session.userId} attempted to acknowledge as ${data.studentId}`);
         return;
       }
-      console.log(`[Presence] Student acknowledged pick: ${data.studentId}`);
+      plog.info(`[Presence] Student acknowledged pick: ${data.studentId}`);
       io.emit('student-acknowledged', { studentId: data.studentId, lessonId: data.lessonId });
     });
 
@@ -547,10 +549,10 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         if (!currentRecord || currentRecord.socketId === socket.id) {
           onlineStudents.delete(registeredStudentId);
           activeStudentLessons.delete(registeredStudentId);
-          console.log(`[Presence] Student offline: ${registeredStudentId}`);
+          plog.info(`[Presence] Student offline: ${registeredStudentId}`);
           broadcastPresence();
         } else {
-          console.log(
+          plog.info(
             `[Presence] Stale socket disconnected for student ${registeredStudentId}, preserved active connection (${currentRecord.socketId})`,
           );
         }
