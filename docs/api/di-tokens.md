@@ -102,11 +102,11 @@ interface PluginContext {
 > resolve** —— 全仓唯一提及是一段注释示例，`v2_plugins/` 与 `assets/` 均无引用。
 > 对外承诺一个零消费者的 API 比不承诺更糟，故收回导出。
 >
-> | Token                                | 解析类型                 | 标识字符串                                | 内核现状                |
-> | ------------------------------------ | ------------------------ | ----------------------------------------- | ----------------------- |
-> | `IPluginRuntimeCompositionToken`     | `PluginRuntimeComposition` | `@openlearn/core:IPluginRuntimeComposition` | 已注册，零 resolve      |
-> | `IUnifiedExtensionRegistryToken`     | `UnifiedExtensionRegistry` | `@openlearn/core:IUnifiedExtensionRegistry` | 已注册，零 resolve      |
-> | `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService` | `@openlearn/core:ICapabilityGovernanceService` | 子系统 529 行整体零 resolve |
+> | Token                               | 解析类型                       | 标识字符串                                     | 内核现状                    |
+> | ----------------------------------- | ------------------------------ | ---------------------------------------------- | --------------------------- |
+> | `IPluginRuntimeCompositionToken`    | `PluginRuntimeComposition`     | `@openlearn/core:IPluginRuntimeComposition`    | 已注册，零 resolve          |
+> | `IUnifiedExtensionRegistryToken`    | `UnifiedExtensionRegistry`     | `@openlearn/core:IUnifiedExtensionRegistry`    | 已注册，零 resolve          |
+> | `ICapabilityGovernanceServiceToken` | `ICapabilityGovernanceService` | `@openlearn/core:ICapabilityGovernanceService` | 子系统 529 行整体零 resolve |
 >
 > 内核侧引用不受影响（走 `packages/core` 相对路径）。若将来接入真实消费者，把它们
 > 加回 `packages/plugin-sdk/index.ts` 的 value 导出块即可。
@@ -134,8 +134,8 @@ interface PluginContext {
 
 ### F. 活动生态 Token
 
-| 导出 Token               | 解析类型           | 标识字符串                                           |
-| ------------------------ | ------------------ | ---------------------------------------------------- |
+| 导出 Token               | 解析类型           | 标识字符串                                        |
+| ------------------------ | ------------------ | ------------------------------------------------- |
 | `IActivityRegistryToken` | `ActivityRegistry` | （定义于 `packages/activity-ecosystem/index.ts`） |
 
 ### G. 认证与会话桥接 Token (v0.3.15+)
@@ -161,6 +161,7 @@ interface PluginContext {
 > 定义文件统一为 `packages/core/di/interfaces.ts`（下文各小节另有标注的实现文件除外）。
 
 > ⚠️ **关于返回类型 `T | Promise<T>`**：接口层为跨运行时兼容（inline 同步实现 / worker RPC 异步代理）把大多数方法声明为**联合返回类型** `T | Promise<T>`，而非统一的 `Promise<T>`。这意味着：
+>
 > - **不能**对返回值直接写 `.then()` / `await … .catch()`，那在同步实现上会在类型与运行期双重失败；
 > - 正确写法是 `await`（`await` 对同步值与 Promise 都成立），或 `Promise.resolve(x).then(...)`；
 > - 只有明确标注 `Promise<…>` 的方法（如 `IStorageService` 全套、`IAIService.generateText`、`IPointsLedgerService` 全套）才是纯 Promise。

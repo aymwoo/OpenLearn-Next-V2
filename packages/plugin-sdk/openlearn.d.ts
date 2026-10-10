@@ -865,13 +865,14 @@ interface IPluginDistributionManager {
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
+  /** @param zipPath ZIP 文件路径（R-4：安装链路只持路径，不再接收 Buffer） */
   installFromZip(
-    zipBuffer: Buffer,
+    zipPath: string,
     executionMode?: 'worker' | 'inline' | 'process',
   ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
-  updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
-  updateFromZip(zipBuffer: Buffer, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
+  updatePlugin(pluginId: string, zipPath?: string): Promise<void>;
+  updateFromZip(zipPath: string, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
   uninstallPlugin(pluginId: string): Promise<void>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;

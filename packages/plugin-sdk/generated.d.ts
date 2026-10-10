@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：152 个（入口导出但手写 d.ts 未声明的 152 项及其类型引用闭包）
+ * 覆盖符号：154 个（入口导出但手写 d.ts 未声明的 154 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -801,7 +801,7 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
-  installFromZip(zipBuffer: Buffer, executionMode?: PluginExecutionMode): Promise<{
+  installFromZip(zipPath: string, executionMode?: PluginExecutionMode): Promise<{
     pluginId: string;
     manifest: Manifest;
 }>;
@@ -809,8 +809,8 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
     pluginId: string;
     manifest: Manifest;
 }>;
-  updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
-  updateFromZip(zipBuffer: Buffer, options: PluginUpdateOptions): Promise<PluginUpdateResult>;
+  updatePlugin(pluginId: string, zipPath?: string): Promise<void>;
+  updateFromZip(zipPath: string, options: PluginUpdateOptions): Promise<PluginUpdateResult>;
   uninstallPlugin(pluginId: string): Promise<void>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
@@ -1526,6 +1526,10 @@ declare const logger: any; // 初始化器非字面量，未收敛
 
 /** @see packages/core/esm-loader/manifest-schema.ts */
 declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$loose>;
+
+declare function removeTempZip(zipPath: string | undefined): void;
+
+declare function writeBufferToTempZip(buffer: Buffer, prefix: any): string;
 
 export type {
   AIAnalyticsModel,
