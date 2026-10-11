@@ -211,6 +211,39 @@ export const NationalSmartEduPlugin = {
     ],
     capabilitiesProposed: ['smart_edu:read', 'smart_edu:write', 'smart_edu:export'],
     engines: { openlearn: '>=0.2.5' },
+    // ai.skill.provider：把这四个命令声明为 AI Agent 可调用的技能。
+    // 消费链路见 server/ai-agent.ts —— Agent 工具注入后以本插件 actor
+    // （plugin:@openlearn/plugin-smart-edu，持有 capabilitiesProposed 授权）
+    // 经 commandBus 派发，内核拦截器照常做 descriptor/inputSchema/能力检查。
+    contributes: {
+      'ai.skill.provider': [
+        {
+          id: 'skill-search-resources',
+          name: '国家平台精品课检索',
+          description:
+            '检索国家智慧教育平台精品课资源目录，支持关键词与 subject/grade/awardLevel 过滤，返回资源 id/code/title 等元数据',
+          commandType: 'smart_edu.search_resources',
+        },
+        {
+          id: 'skill-import-course',
+          name: '国家平台精品课导入',
+          description: '将国家平台精品课导入本地课程库（需要 resourceId，可先调用检索获取）',
+          commandType: 'smart_edu.import_course',
+        },
+        {
+          id: 'skill-report-metrics',
+          name: 'CELTS-3 学情上报',
+          description: '将课堂学情数据按 CELTS-3 规范提交至国家平台网关（需要 lessonId）',
+          commandType: 'smart_edu.report_metrics',
+        },
+        {
+          id: 'skill-get-status',
+          name: '国家平台网关健康探测',
+          description: '探测国家平台数据网关连通性、往返延迟与已同步课程数',
+          commandType: 'smart_edu.get_status',
+        },
+      ],
+    },
   },
 
   activate: async (ctx: PluginContext) => {

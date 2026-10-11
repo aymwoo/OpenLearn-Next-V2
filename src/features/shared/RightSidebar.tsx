@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { AiPromptTemplatePicker } from './AiPromptTemplatePicker';
 
 export interface RightSidebarProps {
   showRightSidebar?: boolean;
@@ -294,6 +295,8 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                       accept=".csv,.txt,.json,.md"
                     />
                   </label>
+                  {/* ai.prompt.template —— 插件提示词模板选择器（无模板注册时零渲染） */}
+                  <AiPromptTemplatePicker setInput={setInput} currentInput={input} lang={lang} />
                   <div className="relative flex-1">
                     <input
                       type="text"

@@ -30,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **10 个槽位补 SlotProps 类型契约**：`timetable.toolbar.action`/`timetable.card.badge`/`computer_lab.toolbar.action`/`computer_lab.seat.overlay`/`student.dashboard.hero_widget`/`student.assignment.toolbar.action`/`student.lesson.notes_addon`/`student.lesson.toolbox`/`admin.user.action`/`ai_sidebar.tab`（与各宿主实际传参逐一核对），第三方插件不再需要猜宿主形状；
   - **回归测试**：新增 [`contributes-generic-bridge.test.ts`](./src/plugin-host/__tests__/contributes-generic-bridge.test.ts)（非白名单槽位落地/前缀化/label 解析/legacy 防双注册/内置包门控）与 [`ai-sidebar-tab-slot.test.tsx`](./src/plugin-host/__tests__/ai-sidebar-tab-slot.test.tsx)（button/panel 双形态语义）。
 
+- **AI 生态槽位消费落地（`ai.prompt.template` / `ai.skill.provider` 从"已注册待消费"转正）**：
+  - **`ai.skill.provider` → Agent 真实工具**：[`server/ai-agent.ts`](./server/ai-agent.ts) 从 active 插件 manifest 收集 `contributes['ai.skill.provider']`，以 `pskill_*` 工具名注入 OpenAI function-calling 工具列表（与 actionRegistry 暴露的同命令工具去重），并在系统提示中列出技能清单；模型调用后以**贡献插件自身 actor**（`plugin:{manifest.id}`，持有 capabilitiesProposed 授权）经 commandBus 派发，内核拦截器照常做 descriptor/inputSchema/能力检查，descriptor 缺失 fail-closed。命令名解析兼容内核直注册（原名）与 worker 命名空间两种形态；smart-edu manifest 重声明四个技能（检索/导入/上报/网关探测）；回归测试 [`ai-agent-plugin-skills.test.ts`](./server/__tests__/ai-agent-plugin-skills.test.ts)；
+  - **`ai.prompt.template` → Agent 输入区模板选择器**：新增 [`AiPromptTemplatePicker`](./src/features/shared/AiPromptTemplatePicker.tsx) 挂载在聊天输入框旁——插件贡献的提示词模板经选择、`{{参数}}` 填参（预填 default）渲染后插入输入框（追加不覆盖），无模板注册时零渲染；回归测试 [`AiPromptTemplatePicker.test.tsx`](./src/features/shared/__tests__/AiPromptTemplatePicker.test.tsx)；
+  - **权威槽位文档同步**：[`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md) 修正 12 个槽位的 Props 列（此前为与宿主实际传参不符的虚构形状），新增 `ai.prompt.template`/`ai.skill.provider` 消费行与 11.6 消费语义说明，统计更新（96 固定名消费值 / 104 唯一槽位值）。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features
