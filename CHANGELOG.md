@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-11
+
 ### Features
 
 - **官方《国家智慧教育公共服务平台连接器》（@openlearn/plugin-smart-edu）标杆插件落地**：

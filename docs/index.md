@@ -40,6 +40,7 @@ architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
 architecture/navigation-audit-report
 architecture/security-remediation-report
+architecture/plugin-worker-isolation-l1-proposal
 ```
 
 ```{toctree}
@@ -178,6 +179,7 @@ roadmap/documentation-roadmap
 :maxdepth: 2
 :caption: 📋 发布日志 (Release Notes)
 
+release-notes/v0.6.0
 release-notes/v0.5.0
 release-notes/v0.4.2
 release-notes/v0.4.1
