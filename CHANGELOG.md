@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **熔断记录随插件注销清理**：`unregisterPluginResources` 调用 `resetPluginBreaker`——模块级 `pluginCrashRegistry` 此前不随生命周期回收，卸载后残留条目（重新安装曾 blown 的插件会被静默跳过）；
   - **未打标 lazy 工厂的自愈探针 + 开发期告警**：`resolveExtensionComponent` 缓存阶段对未打标函数以无参调用探测一次，返回 thenable 即判定为漏打标的 lazy 工厂——**自动包 React.lazy 自愈**（不再永久悬挂）并打 `console.error` 提示打标；直接组件（hooks/类组件/必选 props 在无参调用时抛错）被捕获后按直组件处理，不误报。此前的"当前代码库只注册直接组件所以安全"假设已被两次事故证伪，现改为机制级防护。
 
+- **内置扩展包默认停用（用户决策）**：`@openlearn/plugin-smart-edu`（国家智慧教育平台连接器）的启停语义从「默认启用 + 黑名单停用」翻转为「**默认停用 + 用户覆盖**」——`builtin-bundles.ts` 新增 `defaultEnabled` 包元数据（smart-edu = false），store 改为 `builtinBundleOverrides` 用户覆盖表（localStorage 持久），未做选择时以 `defaultEnabled` 为准。国家平台不提供公开的第三方网关，未配置 `SMARTEDU_API_BASE` 时该包只会在备课界面呈现「未配置」提示——默认停用后教师不再看到无效入口，管理员可在 Plugin Center「内置扩展包」卡片显式启用（启用后仍需配置网关才有真实数据）。回归测试更新为默认停用语义（4 项）。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

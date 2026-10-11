@@ -49,7 +49,9 @@ describe('SmartEduConnector (国家智慧教育平台连接器前端组件测试
     });
   });
 
-  it('registerSmartEduExtensions 以直接组件注册全部 9 个关键扩展槽位', () => {
+  it('显式启用后 registerSmartEduExtensions 以直接组件注册全部 9 个关键扩展槽位', () => {
+    // v0.6.1 用户决策：内置包默认停用 —— 测试先在 Plugin Center 语义下启用
+    usePluginHostStore.getState().setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
     registerSmartEduExtensions();
     const store = usePluginHostStore.getState();
 

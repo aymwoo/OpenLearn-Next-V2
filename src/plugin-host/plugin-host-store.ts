@@ -17,6 +17,7 @@
  */
 
 import { create } from 'zustand';
+import { isBuiltinBundleDefaultEnabled } from './builtin-bundles';
 import type { FrontendPluginInfo, AnyExtensionSlot, ExtensionPointConfig, PluginState } from './types';
 import type { FrontendServiceRegistry } from './service-registry';
 
@@ -30,7 +31,8 @@ export interface PluginHostStoreState {
   /** Per-plugin dashboard widget visibility. true (default, show) | false (hidden). */
   dashboardVisibility: Map<string, boolean>;
   /** 已被管理台停用的内置扩展包 id 列表（localStorage 持久）。 */
-  builtinBundlesDisabled: string[];
+  /** 用户对内置包的显式启停覆盖（localStorage 持久）；未覆盖时取 builtin-bundles 的 defaultEnabled。 */
+  builtinBundleOverrides: Record<string, boolean>;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -82,7 +84,7 @@ export interface PluginHostStoreActions {
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('storage', (e) => {
     if (e.key === BUILTIN_BUNDLES_KEY) {
-      usePluginHostStore.setState({ builtinBundlesDisabled: loadBuiltinBundlesDisabled() });
+      usePluginHostStore.setState({ builtinBundleOverrides: loadBuiltinBundleOverrides() });
     } else if (e.key === DASH_VIS_KEY) {
       usePluginHostStore.setState({ dashboardVisibility: loadDashboardVisibility() });
     }
@@ -107,22 +109,24 @@ function saveDashboardVisibility(map: Map<string, boolean>): void {
 }
 
 // ── localStorage helpers for builtin extension bundles ───────────────
-const BUILTIN_BUNDLES_KEY = 'openlearn:builtinBundlesDisabled';
+const BUILTIN_BUNDLES_KEY = 'openlearn:builtinBundleEnabled';
 
-function loadBuiltinBundlesDisabled(): string[] {
+function loadBuiltinBundleOverrides(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(BUILTIN_BUNDLES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map(String);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, Boolean(v)]));
+      }
     }
   } catch {}
-  return [];
+  return {};
 }
 
-function saveBuiltinBundlesDisabled(ids: string[]): void {
+function saveBuiltinBundleOverrides(overrides: Record<string, boolean>): void {
   try {
-    localStorage.setItem(BUILTIN_BUNDLES_KEY, JSON.stringify(ids));
+    localStorage.setItem(BUILTIN_BUNDLES_KEY, JSON.stringify(overrides));
   } catch {}
 }
 
@@ -132,7 +136,7 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
   extensionPoints: new Map(),
   services: null,
   dashboardVisibility: loadDashboardVisibility(),
-  builtinBundlesDisabled: loadBuiltinBundlesDisabled(),
+  builtinBundleOverrides: loadBuiltinBundleOverrides(),
   initialized: false,
 
   // ── Actions ────────────────────────────────────────────────────────
@@ -255,14 +259,19 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
   // 「管理台可停用」能力（v0.6.0 审计：此前 main.tsx 开机直注册，
   // 无人能停用、无人能清理其扩展点）。
 
-  isBuiltinBundleEnabled: (bundleId) => !get().builtinBundlesDisabled.includes(bundleId),
+  // v0.6.1 用户决策：内置包默认停用 —— 启停语义从「黑名单」翻转为
+  // 「用户覆盖 + defaultEnabled」（builtin-bundles.ts）。用户从未选择时
+  // 以包元数据的 defaultEnabled 为准（国家平台连接器 = false）。
+  isBuiltinBundleEnabled: (bundleId) => {
+    const override = get().builtinBundleOverrides[bundleId];
+    if (typeof override === 'boolean') return override;
+    return isBuiltinBundleDefaultEnabled(bundleId);
+  },
 
   setBuiltinBundleEnabled: (bundleId, enabled) =>
     set((state) => {
-      const next = enabled
-        ? state.builtinBundlesDisabled.filter((id) => id !== bundleId)
-        : [...new Set([...state.builtinBundlesDisabled, bundleId])];
-      saveBuiltinBundlesDisabled(next);
-      return { builtinBundlesDisabled: next };
+      const next = { ...state.builtinBundleOverrides, [bundleId]: enabled };
+      saveBuiltinBundleOverrides(next);
+      return { builtinBundleOverrides: next };
     }),
 }));

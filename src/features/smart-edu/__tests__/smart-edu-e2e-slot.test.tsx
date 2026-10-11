@@ -5,7 +5,7 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
-import { registerSmartEduExtensions } from '../smart-edu-plugin';
+import { registerSmartEduExtensions, SMART_EDU_PLUGIN_ID } from '../smart-edu-plugin';
 
 /**
  * 端到端集成测试 —— 注册路径与渲染路径必须在这条测试里会合。
@@ -48,6 +48,8 @@ describe('SmartEdu 槽位端到端（真实注册 → 真实 ExtensionPointRende
   beforeEach(() => {
     host = new FrontendPluginHost();
     usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map() });
+    // v0.6.1 用户决策：默认停用 —— 端到端测试显式启用后再注册
+    usePluginHostStore.getState().setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
     registerSmartEduExtensions();
   });
 

@@ -166,23 +166,34 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
   });
 });
 
-describe('内置扩展包门控（遗留债务 ② 回归）', () => {
+describe('内置扩展包门控（默认停用语义，v0.6.1 用户决策）', () => {
   beforeEach(() => {
     usePluginHostStore.setState({
       activePlugins: [],
       extensionPoints: new Map(),
-      builtinBundlesDisabled: [],
+      builtinBundleOverrides: {},
     });
   });
 
-  it('默认启用：registerSmartEduExtensions 注册全部 9 个槽位', () => {
+  it('默认停用：用户未做选择时 registerSmartEduExtensions 不注册任何槽位', () => {
     registerSmartEduExtensions();
     const store = usePluginHostStore.getState();
+    expect(store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)).toBe(false);
+    expect(store.getExtensions('course.card.badge')).toHaveLength(0);
+    expect(store.getExtensions('header.status_pill')).toHaveLength(0);
+  });
+
+  it('显式启用后：registerSmartEduExtensions 注册全部 9 个槽位', () => {
+    usePluginHostStore.getState().setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
+    registerSmartEduExtensions();
+    const store = usePluginHostStore.getState();
+    expect(store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)).toBe(true);
     expect(store.getExtensions('course.card.badge').length).toBeGreaterThanOrEqual(1);
     expect(store.getExtensions('header.status_pill').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('停用后：registerSmartEduExtensions 跳过注册，且可一键清理已有扩展点', () => {
+  it('显式停用后：重复注册不产生残留，一键清理已有扩展点', () => {
+    usePluginHostStore.getState().setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
     registerSmartEduExtensions();
     const store = usePluginHostStore.getState();
 
@@ -197,10 +208,13 @@ describe('内置扩展包门控（遗留债务 ② 回归）', () => {
     // 停用状态下重复调用注册不产生残留
     registerSmartEduExtensions();
     expect(usePluginHostStore.getState().getExtensions('course.card.badge')).toHaveLength(0);
+  });
 
-    // 重新启用后可再次注册
-    usePluginHostStore.getState().setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
-    registerSmartEduExtensions();
-    expect(usePluginHostStore.getState().getExtensions('course.card.badge').length).toBeGreaterThanOrEqual(1);
+  it('用户覆盖优先于默认值：先停用再启用恢复注册（localStorage 覆盖语义）', () => {
+    const store = usePluginHostStore.getState();
+    store.setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, true);
+    expect(store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)).toBe(true);
+    store.setBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID, false);
+    expect(store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)).toBe(false);
   });
 });

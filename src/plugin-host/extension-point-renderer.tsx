@@ -28,7 +28,7 @@ import {
   resetPluginBreaker,
   CRASH_BREAKER_THRESHOLD,
 } from './extension-breaker';
-import { BUILTIN_BUNDLE_IDS } from './builtin-bundles';
+import { isBuiltinBundleId } from './builtin-bundles';
 import type { ExtensionSlot } from './types';
 
 // 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
@@ -47,7 +47,7 @@ function handleBreakerTrip(
 ): void {
   const store = usePluginHostStore.getState();
   store.unregisterPluginExtensionPoints(pid);
-  if (BUILTIN_BUNDLE_IDS.includes(pid)) {
+  if (isBuiltinBundleId(pid)) {
     store.setBuiltinBundleEnabled(pid, false);
   }
   void host

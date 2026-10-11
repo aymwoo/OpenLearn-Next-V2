@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Package, ToggleLeft, ToggleRight } from 'lucide-react';
 import { usePluginHostStore } from '../plugin-host/plugin-host-store';
-import { BUILTIN_BUNDLE_IDS } from '../plugin-host/builtin-bundles';
+import { BUILTIN_BUNDLES } from '../plugin-host/builtin-bundles';
 import { registerSmartEduExtensions } from '../features/smart-edu/smart-edu-plugin';
 
 /**
@@ -24,15 +24,14 @@ const BUILTIN_BUNDLE_INFO: Record<string, { name: string; description: string }>
 };
 
 export function BuiltinExtensionBundlesCard({ lang = 'zh' }: { lang?: string }) {
-  const disabledBundles = usePluginHostStore((s) => s.builtinBundlesDisabled);
   const isBuiltinBundleEnabled = usePluginHostStore((s) => s.isBuiltinBundleEnabled);
   const setBuiltinBundleEnabled = usePluginHostStore((s) => s.setBuiltinBundleEnabled);
   const unregisterPluginExtensionPoints = usePluginHostStore((s) => s.unregisterPluginExtensionPoints);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const zh = lang === 'zh';
 
-  const bundles = BUILTIN_BUNDLE_IDS.filter((id) => BUILTIN_BUNDLE_INFO[id]);
-  if (bundles.length === 0) return null;
+  const bundleIds = BUILTIN_BUNDLES.map((b) => b.id).filter((id) => BUILTIN_BUNDLE_INFO[id]);
+  if (bundleIds.length === 0) return null;
 
   const handleToggle = async (bundleId: string) => {
     setTogglingId(bundleId);
@@ -61,7 +60,7 @@ export function BuiltinExtensionBundlesCard({ lang = 'zh' }: { lang?: string }) 
       </div>
 
       <div className="space-y-2">
-        {bundles.map((bundleId) => {
+        {bundleIds.map((bundleId) => {
           const info = BUILTIN_BUNDLE_INFO[bundleId];
           const enabled = isBuiltinBundleEnabled(bundleId);
           return (
