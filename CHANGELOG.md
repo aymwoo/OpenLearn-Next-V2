@@ -45,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **课堂 R-1/R-2/R-3/R-4**：`ClassroomSyncChannel` 只随房间身份（课节+班级）重建，倒计时/学生列表等快照依赖 ref 化（此前课中每秒销毁重建信道）；阶段推进改为等服务端裁决、失败 toast 告知，cockpit 轮询加代次守卫（此前乐观更新+双轮询回灌造成阶段抖动）；学生端远程最大化元素缺失超 3s 自动退出全屏（此前教师删除投屏元素后全班锁死在空白全屏）；socket 重连即重拉学生状态（断线间隙发起的锁定对恢复连接的学生立即生效）；
   - **P2 快赢**：课堂动态流写入即截断至 200 条（此前无上限，40 人班级一小时可积 7 万+条且全量重渲染）；`/api/commands` 加 10s 执行超时（此前挂死 handler 令教师工具下发永久 pending）；课堂节奏仪表盘在线人数改读 stage/data 的真实 presence 统计（此前读不存在的字段恒为 0）；投票 close 与抢答 reset 补课节归属校验（此前凭 id 即可误关他班互动）。
 
+- **第三轮审计遗留的结构性项目（R-5 / R-8）**：
+  - **R-5｜SDK 门禁契约与阶段推进两套系统合并**：[`ClassroomRuntimeService`](./server/services/classroom-runtime-service.ts) 注入内核 `StageGuardPipeline`（server.ts 装配时从 serviceRegistry 解析），`transitionStage` 在自有守卫表之后调用管线的 `checkAccess` —— 插件经 SDK `registerStageGuard` 写入的门禁自此对阶段推进**真实生效**（此前 SDK 指向的注册表与本服务自有的空表互不相通，管线并入后沿用其单守卫 1500ms + 全局上限 + fail-close 策略；`StageGuardContext.studentId` 传发起流转的 actorId，完整身份在 metadata）。插件停用/热重载的守卫回收（I-3 unregisterByOwner）无需改动即自动生效；回归测试 5 项（否决阻断/放行流转/抛错 fail-close/未注入向后兼容/上下文形状）；
+  - **R-8｜课堂计时状态迁出 AppDataContext**：`liveClassTimeRemaining` 的唯一宿主改为既有的独立 [`liveClassStore`](./src/store/liveClassStore.ts)——唯一写点为 ClassroomCountdownWidget 的 endsAt 校准 tick（经 `onTimeRemainingChange` 回调写 store），「时间到」toast 与学生端 `broadcastSyncTimer` 一并移入该回调，LiveClassroomView 的旧每秒自减定时器删除（同时消灭 N-1 双写定时器）；`useClassroomLive`/`useClassroomSlice`/`appStore` 三处的字段与透传全部移除。每秒一次的计时变化不再流经 AppDataContext，2754 行的课堂视图及其消费树不再整体重渲染。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

@@ -131,8 +131,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
     setPickedAlertData,
     pickedAnnouncement,
     setPickedAnnouncement,
-    liveClassTimeRemaining,
-    setLiveClassTimeRemaining,
+    // liveClassTimeRemaining 已迁至 liveClassStore（R-8）
     liveClassFeed,
     setLiveClassFeed,
     liveClassAcknowledgedMap,
@@ -428,8 +427,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
     setPickedAlertData,
     pickedAnnouncement,
     setPickedAnnouncement,
-    liveClassTimeRemaining,
-    setLiveClassTimeRemaining,
+    // liveClassTimeRemaining 已迁至 liveClassStore（R-8）
     liveClassFeed,
     setLiveClassFeed,
     liveClassAcknowledgedMap,

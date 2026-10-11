@@ -67,7 +67,6 @@ export interface AppState {
 
   // Live class
   liveClassFeed: any[];
-  liveClassTimeRemaining: number;
   liveClassAcknowledgedMap: Map<string, boolean>;
   liveClassStudentProgress: any[];
 
@@ -130,7 +129,6 @@ export interface AppState {
   // Live class setters
   setLiveClassFeed: (feed: any[]) => void;
   appendLiveClassFeed: (entry: any) => void;
-  setLiveClassTimeRemaining: (time: number) => void;
   setLiveClassAcknowledgedMap: (map: Map<string, boolean>) => void;
   setLiveClassStudentProgress: (progress: any[]) => void;
 
@@ -193,7 +191,6 @@ export const appStore = createStore<AppState>((set) => ({
 
   // Live class defaults
   liveClassFeed: [],
-  liveClassTimeRemaining: 0,
   liveClassAcknowledgedMap: new Map(),
   liveClassStudentProgress: [],
 
@@ -308,7 +305,6 @@ export const appStore = createStore<AppState>((set) => ({
 
   setLiveClassFeed: (liveClassFeed) => set({ liveClassFeed }),
   appendLiveClassFeed: (entry) => set((s) => ({ liveClassFeed: [...s.liveClassFeed.slice(-49), entry] })),
-  setLiveClassTimeRemaining: (liveClassTimeRemaining) => set({ liveClassTimeRemaining }),
   setLiveClassAcknowledgedMap: (liveClassAcknowledgedMap) => set({ liveClassAcknowledgedMap }),
   setLiveClassStudentProgress: (liveClassStudentProgress) => set({ liveClassStudentProgress }),
 

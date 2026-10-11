@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore, appStore } from '../store/appStore';
+import { liveClassStore } from '../store/liveClassStore';
 import { useAppData } from '../context/AppDataContext';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
 import { listFromEnvelope } from '../utils/listEnvelope.js';
@@ -101,8 +102,6 @@ export function LiveClassroomView({
     setLiveClassSelectedClassId,
     liveClassIsActive,
     setLiveClassIsActive,
-    liveClassTimeRemaining,
-    setLiveClassTimeRemaining,
     liveClassFeed,
     setLiveClassFeed,
     liveClassAcknowledgedMap,
@@ -153,7 +152,9 @@ export function LiveClassroomView({
   const [activeDrawStudentId, setActiveDrawStudentId] = useState<string | null>(null);
   const [selectedDrawStudentIds, setSelectedDrawStudentIds] = useState<string[]>([]);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // R-8：旧每秒定时器已删，timerRef 一并移除；prevTimerRunningRef 供
+  // onTimeRemainingChange 回调识别 running→false 转换（触发「时间到」toast）
+  const prevTimerRunningRef = useRef(false);
   const lastAutoLockedRef = useRef<{ lesson: string | null; classId: string | null }>({
     lesson: null,
     classId: null,
@@ -797,7 +798,8 @@ export function LiveClassroomView({
     activeSegmentId,
     middleTab,
     isClassLocked,
-    liveClassTimeRemaining,
+    // R-8：计时已迁至 liveClassStore，快照按需在处理时实时读取（下方 handler
+    // 用 getter），不再经 context 传入
     liveClassSelectedClassId,
     liveClassIsActive,
     students,
@@ -808,7 +810,6 @@ export function LiveClassroomView({
     activeSegmentId,
     middleTab,
     isClassLocked,
-    liveClassTimeRemaining,
     liveClassSelectedClassId,
     liveClassIsActive,
     students,
@@ -828,7 +829,7 @@ export function LiveClassroomView({
           activeSegmentId: snap.activeSegmentId,
           activeTab: snap.middleTab === 'submissions' || snap.middleTab === 'top_performers' ? 'courseware' : snap.middleTab,
           isClassLocked: snap.isClassLocked,
-          liveClassTimeRemaining: snap.liveClassTimeRemaining,
+          liveClassTimeRemaining: liveClassStore.getState().liveClassTimeRemaining,
           liveClassSelectedClassId: snap.liveClassSelectedClassId,
           liveClassIsActive: snap.liveClassIsActive,
           fullscreenElementId: liveClassFullscreenElementId,
@@ -934,9 +935,8 @@ export function LiveClassroomView({
     syncChannelRef.current?.broadcastLockClass(isClassLocked);
   }, [isClassLocked]);
 
-  useEffect(() => {
-    syncChannelRef.current?.broadcastSyncTimer(liveClassTimeRemaining, liveClassIsActive);
-  }, [liveClassTimeRemaining, liveClassIsActive]);
+  // broadcastSyncTimer 已并入 onTimeRemainingChange 回调（见工具栏接线）——
+  // 计时值现住在 liveClassStore，本组件不再订阅，秒级变化不再触发全树重渲染。
 
   // Extract classroomTools from active plugins (supporting legacy and modern contributes['classroom.tool'])
   const activePlugins = plugins.filter((p) => p.status === 'active');
@@ -962,25 +962,12 @@ export function LiveClassroomView({
   );
 
   // Countdown timer effect
-  useEffect(() => {
-    if (liveClassIsActive && liveClassTimeRemaining > 0) {
-      timerRef.current = setInterval(() => {
-        setLiveClassTimeRemaining(liveClassTimeRemaining - 1);
-      }, 1000);
-    } else if (liveClassTimeRemaining === 0 && liveClassIsActive) {
-      addToast(
-        lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
-        lang === 'zh'
-          ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
-          : 'The current segment duration has elapsed. Transition recommended.',
-        'warning',
-      );
-      setLiveClassIsActive(false);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [liveClassIsActive, liveClassTimeRemaining]);
+  // v0.6.1 审计 R-8/N-1：此旧的每秒自减定时器已删除 —— 计时的唯一写点是
+  // ClassroomCountdownWidget 的 endsAt 校准 tick（经 onTimeRemainingChange
+  // 写 liveClassStore，见下方工具栏接线），「时间到」toast 与学生端广播
+  // 也在该回调内完成。liveClassTimeRemaining 移出 AppDataContext 后，
+  // 每秒一次的状态变化不再引发本组件（2754 行）及其消费树整体重渲染。
+
 
   // Auto-lock class when selection changes
   useEffect(() => {
@@ -1009,7 +996,8 @@ export function LiveClassroomView({
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
     const secs = parseDuration(seg.duration);
-    setLiveClassTimeRemaining(secs);
+    // R-8：计时写入 liveClassStore（不经过 AppDataContext）
+    liveClassStore.getState().setLiveClassTimeRemaining(secs);
     setLiveClassIsActive(true);
 
     setLiveClassFeed((prev) => [
@@ -1523,8 +1511,26 @@ export function LiveClassroomView({
           syncChannel={syncChannelRef.current}
           onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
           onTimeRemainingChange={(timeRemaining, isRunning) => {
-            setLiveClassTimeRemaining(timeRemaining);
-            setLiveClassIsActive(isRunning);
+            // v0.6.1 审计 R-8/N-1：计时唯一写点 —— widget 的 endsAt 校准 tick
+            // 写 liveClassStore（独立 store），不再经过 AppDataContext；「时间到」
+            // toast 与学生端 broadcastSyncTimer 也在此完成（取代已删除的旧
+            // 每秒定时器与广播 effect）。
+            const wasRunning = prevTimerRunningRef.current;
+            prevTimerRunningRef.current = isRunning;
+            liveClassStore.getState().setLiveClassTimeRemaining(timeRemaining);
+            if (wasRunning !== isRunning) {
+              setLiveClassIsActive(isRunning);
+              if (wasRunning && !isRunning) {
+                addToast(
+                  lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
+                  lang === 'zh'
+                    ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
+                    : 'The current segment duration has elapsed. Transition recommended.',
+                  'warning',
+                );
+              }
+            }
+            syncChannelRef.current?.broadcastSyncTimer(timeRemaining, isRunning);
           }}
         />
       </div>

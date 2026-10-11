@@ -372,3 +372,93 @@ describe('门禁失效策略（D-3）', () => {
     expect(res.success).toBe(false);
   });
 });
+
+// ── R-5（第三轮审计）：SDK registerStageGuard（内核 StageGuardPipeline）对
+// 阶段推进真实生效 —— 此前 transitionStage 只读自己的空表，两套系统互不相通。
+
+describe('ClassroomRuntimeService × StageGuardPipeline（R-5 回归钉）', () => {
+  let db: Database.Database;
+  let emittedEvents: Array<{ event: string; payload: any; room?: string }> = [];
+  const mockIo = {
+    emit: (event: string, payload: any) => {
+      emittedEvents.push({ event, payload });
+    },
+    to: (room: string) => ({
+      emit: (event: string, payload: any) => {
+        emittedEvents.push({ event: `${room}:${event}`, payload, room });
+      },
+    }),
+  } as any;
+
+  beforeEach(() => {
+    emittedEvents = [];
+    db = new Database(':memory:');
+    const migrations = loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations'));
+    runMigrations(db, migrations);
+    db.prepare(
+      "INSERT INTO users (id, username, name, password_hash, role, created_at) VALUES ('t1', 'teacher1', 'Teacher One', 'hash', 'teacher', 1000)",
+    ).run();
+    db.prepare(
+      "INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES ('les_101', 'Interactive Physics', 't1', 1000, 1000)",
+    ).run();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('管线守卫 allowed:false 时拒绝阶段推进', async () => {
+    const service = new ClassroomRuntimeService(db, mockIo, {
+      stageGuardPipeline: { checkAccess: async () => ({ allowed: false, reason: '必修环节未完成' }) },
+    });
+    const result = await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('必修环节未完成');
+    expect(await service.getStage('les_101')).toBe('PRE_CLASS_READY');
+  });
+
+  it('管线守卫放行时正常流转（拒绝理由为空时使用默认文案）', async () => {
+    const service = new ClassroomRuntimeService(db, mockIo, {
+      stageGuardPipeline: { checkAccess: async () => ({ allowed: true }) },
+    });
+    const result = await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(result.success).toBe(true);
+    expect(result.stage).toBe('IN_CLASS_TEACHING');
+  });
+
+  it('管线抛错时按 fail-close 拒绝（guardPolicy 默认值）', async () => {
+    const service = new ClassroomRuntimeService(db, mockIo, {
+      stageGuardPipeline: { checkAccess: async () => { throw new Error('pipeline exploded'); } },
+    });
+    const result = await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('门禁管线');
+  });
+
+  it('未注入管线时行为不变（向后兼容）', async () => {
+    const service = new ClassroomRuntimeService(db, mockIo);
+    const result = await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(result.success).toBe(true);
+  });
+
+  it('管线收到的上下文携带课节与发起者（studentId 字段语义沿用）', async () => {
+    const seen: any[] = [];
+    const service = new ClassroomRuntimeService(db, mockIo, {
+      stageGuardPipeline: {
+        checkAccess: async (ctx: any) => {
+          seen.push(ctx);
+          return { allowed: true };
+        },
+      },
+    });
+    await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      studentId: 't1',
+      lessonId: 'les_101',
+      currentStageId: 'PRE_CLASS_READY',
+      targetStageId: 'IN_CLASS_TEACHING',
+      metadata: { classId: 'cls_1', actorId: 't1' },
+    });
+  });
+});

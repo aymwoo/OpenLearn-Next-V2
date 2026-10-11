@@ -48,7 +48,9 @@ export function useClassroomLive() {
     }
   }, [pickedAlertData]);
 
-  const [liveClassTimeRemaining, setLiveClassTimeRemaining] = useState(0);
+  // v0.6.1 审计 R-8：liveClassTimeRemaining 已迁至 liveClassStore（独立
+  // zustand store，写点为 ClassroomCountdownWidget 的校准 tick）—— 每秒
+  // 一次的计时变化不再流经 AppDataContext 引发全消费树重渲染。
   const [liveClassFeedRaw, setLiveClassFeedRaw] = useState<any[]>([]);
   // v0.6.1 审计 R-7：feed 写入即截断至最近 200 条 —— 此前无上限（40 人班级
   // 按 2s 一条进度事件计一小时约 7.2 万条）且渲染层整表 map，每条新事件
@@ -71,8 +73,8 @@ export function useClassroomLive() {
     setPickedAlertData,
     pickedAnnouncement,
     setPickedAnnouncement,
-    liveClassTimeRemaining,
-    setLiveClassTimeRemaining,
+    // liveClassTimeRemaining 已迁至 liveClassStore（R-8）—— 唯一消费方
+    // LiveClassroomView 直接读写该 store，不再有 context 链路
     liveClassFeed: liveClassFeedRaw,
     setLiveClassFeed,
     liveClassAcknowledgedMap,

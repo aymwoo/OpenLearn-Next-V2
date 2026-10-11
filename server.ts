@@ -28,6 +28,7 @@ import {
   ISemesterGradeServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
+  IStageGuardServiceToken,
 } from './packages/core/di/interfaces.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
@@ -469,7 +470,13 @@ async function startServer() {
   registerPluginsRoutes(ctx);
 
   // Classroom Lifecycle and Realtime Interaction Engine
-  const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
+  // R-5（第三轮审计）：把内核 StageGuardPipeline 注入课堂运行时 —— 插件经
+  // SDK registerStageGuard 写入的门禁自此对阶段推进真实生效（此前两套系统
+  // 互不相通，SDK 契约暴露的门禁注册表为空转）。
+  const stageGuardPipeline = await kernelContainer.serviceRegistry.resolve(IStageGuardServiceToken);
+  const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io, {
+    stageGuardPipeline: stageGuardPipeline ?? undefined,
+  });
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
 
