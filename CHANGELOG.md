@@ -22,6 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **导入弹窗请求竞态修复**：搜索请求加 300ms 防抖 + AbortController + 过期响应守卫 + `res.ok` 检查，未配置/失败状态如实呈现；
   - **端到端回归测试**：新增 [`smart-edu-e2e-slot.test.tsx`](./src/features/smart-edu/__tests__/smart-edu-e2e-slot.test.tsx)（真实注册路径 → 真实 ExtensionPointRenderer 渲染，拦截"组件直测 + store 直塞"模式漏过的全链路回归）；内核插件测试重写为网关契约测试（stub fetch，覆盖未配置/检索/导入/上报哈希/健康探测/签名头）。
 
+- **v0.6.0 审计遗留债务清理**（插件可扩展性与管理能力收尾）：
+  - **manifest contributes 通用声明式桥接**：`plugin-host.ts` 的 5 个硬编码槽位 if 块替换为通用循环——任何数组型 `contributes` 键一律注册进 store（slotProps 携带完整条目、commandType 按插件命名空间前缀化、label 按 title→label→name 解析、legacy `classroomTools` 存在时跳过 `classroom.tool` 防双注册）。此前 schema 放行的 40+ 槽位声明被静默丢弃，第三方插件照 manifest schema 声明必然白写；
+  - **内置扩展包接入管理生命周期**：`plugin-host-store` 新增 `builtinBundlesDisabled`（localStorage 持久）与 `isBuiltinBundleEnabled`/`setBuiltinBundleEnabled`；`registerSmartEduExtensions` 受门控；Plugin Center「商店」页新增 [`BuiltinExtensionBundlesCard`](./src/components/BuiltinExtensionBundlesCard.tsx)——内置扩展包（smart-edu）此前开机直注册、管理台不可见不可停用，现与已安装插件同等可启停（停用即注销其全部扩展点）；
+  - **`ai_sidebar.tab` 双形态渲染分支**：渲染器补 button（紧凑 tab 按钮，点击写回 `setActiveTab('plugin:{pluginId}/{extId}')`）与 panel（仅渲染 activeTab 命中的单面板）分支——此前 button 态把插件完整组件内联进 tab 条、panel 态多插件时全部堆叠；
+  - **`computer_lab.seat.overlay` 点击冒泡隔离**：座位单元内的扩展 overlay 包裹 `stopPropagation` 容器——座位根节点 onClick 是座位安排/移除入口，插件 overlay 内点击不得误触；
+  - **10 个槽位补 SlotProps 类型契约**：`timetable.toolbar.action`/`timetable.card.badge`/`computer_lab.toolbar.action`/`computer_lab.seat.overlay`/`student.dashboard.hero_widget`/`student.assignment.toolbar.action`/`student.lesson.notes_addon`/`student.lesson.toolbox`/`admin.user.action`/`ai_sidebar.tab`（与各宿主实际传参逐一核对），第三方插件不再需要猜宿主形状；
+  - **回归测试**：新增 [`contributes-generic-bridge.test.ts`](./src/plugin-host/__tests__/contributes-generic-bridge.test.ts)（非白名单槽位落地/前缀化/label 解析/legacy 防双注册/内置包门控）与 [`ai-sidebar-tab-slot.test.tsx`](./src/plugin-host/__tests__/ai-sidebar-tab-slot.test.tsx)（button/panel 双形态语义）。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

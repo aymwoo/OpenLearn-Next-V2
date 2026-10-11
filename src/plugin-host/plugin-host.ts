@@ -367,79 +367,43 @@ export class FrontendPluginHost {
         }
       }
 
-      if ((manifest as any).contributes) {
-        const contributes = (manifest as any).contributes;
-        // command_palette.item
-        if (Array.isArray(contributes['command_palette.item'])) {
-          for (const item of contributes['command_palette.item']) {
-            store.registerExtensionPoint('command_palette.item', {
-              id: item.id,
-              label: item.title,
-              // 命令名按插件命名空间前缀化（与 ctx.invokeCommand 同一规则），
-              // 使 manifest 作者可以写裸命令名并只能命中本插件注册的 handler；
-              // 声明他插件/宿主命令名的会解析为无效 key 被服务端 404 拒绝。
-              slotProps: {
-                ...item,
-                ...(item.commandType
-                  ? { commandType: resolvePluginCommandType(item.commandType, pluginId) }
-                  : {}),
-              },
-              component: NullExtensionComponent,
-              pluginId,
-            });
-          }
-        }
-        // quick_insert.item
-        if (Array.isArray(contributes['quick_insert.item'])) {
-          for (const item of contributes['quick_insert.item']) {
-            store.registerExtensionPoint('quick_insert.item', {
-              id: item.id,
-              label: item.title,
-              icon: item.icon,
-              // 同上：命名空间前缀化，见 command_palette.item 注释。
-              slotProps: {
-                ...item,
-                ...(item.commandType
-                  ? { commandType: resolvePluginCommandType(item.commandType, pluginId) }
-                  : {}),
-              },
-              component: NullExtensionComponent,
-              pluginId,
-            });
-          }
-        }
-        // ai.prompt.template
-        if (Array.isArray(contributes['ai.prompt.template'])) {
-          for (const item of contributes['ai.prompt.template']) {
-            store.registerExtensionPoint('ai.prompt.template', {
-              id: item.id,
-              label: item.title,
-              slotProps: item,
-              component: NullExtensionComponent,
-              pluginId,
-            });
-          }
-        }
-        // ai.skill.provider
-        if (Array.isArray(contributes['ai.skill.provider'])) {
-          for (const item of contributes['ai.skill.provider']) {
-            store.registerExtensionPoint('ai.skill.provider', {
-              id: item.id,
-              label: item.name,
-              slotProps: item,
-              component: NullExtensionComponent,
-              pluginId,
-            });
-          }
-        }
-        // classroom.tool (when not defined via legacy classroomTools)
-        if (Array.isArray(contributes['classroom.tool']) && !manifest.classroomTools) {
-          for (const tool of contributes['classroom.tool']) {
-            store.registerExtensionPoint('classroom.tool', {
-              id: tool.id,
-              label: tool.name,
-              icon: tool.icon,
-              slotProps: tool.commandType ? { commandType: tool.commandType, payload: tool.payload } : undefined,
+      const contributes = (manifest as unknown as Record<string, unknown>).contributes as
+        | Record<string, unknown>
+        | undefined;
+
+      // ── manifest contributes 通用声明式桥接 ──────────────────────────────
+      //
+      // 数组型 contributes 键一律注册：slotProps 携带完整条目（消费端按各自
+      // SlotProps 读取），commandType 按插件命名空间前缀化，组件为占位空组件
+      // （贡献本体是数据而非 UI 的槽位，如 command_palette.item / class.tab）。
+      //
+      // v0.6.0 审计：此前仅 5 个硬编码槽位被桥接，schema 放行的其余槽位全部
+      // 静默丢弃——第三方插件照 manifest schema 声明 contributes 必然白写。
+      // 通用循环后，任何 schema 校验通过的槽位声明都会抵达 store；数据型消费
+      // 端（直读 extensionPoints 的视图）即刻生效，视觉型槽位由插件代码在
+      // activate 时经 ctx.ui.registerExtensionPoint 补真实组件。
+      if (contributes) {
+        for (const [slotName, entries] of Object.entries(contributes)) {
+          if (!Array.isArray(entries)) continue;
+          // classroom.tool 与 legacy manifest.classroomTools 二选一，避免双注册
+          if (slotName === 'classroom.tool' && manifest.classroomTools) continue;
+          for (const rawEntry of entries) {
+            if (!rawEntry || typeof rawEntry !== 'object') continue;
+            const entry = rawEntry as Record<string, unknown>;
+            const entryId = String(entry.id ?? '');
+            if (!entryId) continue; // id 是 store 主键，schema 虽强制 min(1) 这里再兜一层
+            store.registerExtensionPoint(slotName as AnyExtensionSlot, {
+              id: entryId,
+              label: String(entry.title ?? entry.label ?? entry.name ?? entryId),
+              icon: typeof entry.icon === 'string' ? entry.icon : undefined,
+              slotProps: entry.commandType
+                ? {
+                    ...entry,
+                    // 与 ctx.invokeCommand 同一命名空间规则：manifest 可写裸命令名，
+                    // 只会命中本插件注册的 handler；跨命名空间引用解析为无效 key。
+                    commandType: resolvePluginCommandType(String(entry.commandType), pluginId),
+                  }
+                : entry,
               component: NullExtensionComponent,
               pluginId,
             });

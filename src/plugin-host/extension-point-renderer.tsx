@@ -441,6 +441,67 @@ export function ExtensionPointRenderer({
     );
   }
 
+  // ai_sidebar.tab with renderType 'button' — render compact tab buttons in the
+  // right-sidebar tab strip (Agent / Shell 同排)。此前无分支：button 态把插件完整
+  // 组件内联进 tab 条、panel 态不做 activeTab 过滤（v0.6.0 审计 E-1）。
+  if (slot === 'ai_sidebar.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.activeTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setActiveTab?.(tabValue);
+              }}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 min-w-0 cursor-pointer ${
+                isActive ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title={label}
+            >
+              <PluginIconRenderer icon={icon} size={14} className="shrink-0" alt={label} />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // ai_sidebar.tab with renderType 'panel' — render ONLY the active plugin tab's
+  // panel（与 class.tab / timetable.tab 的 panel 语义一致）。
+  if (slot === 'ai_sidebar.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.activeTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            扩展面板加载失败
+          </div>
+        }
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          {React.createElement(resolveExtensionComponent(activeExt), {
+            activeTab: slotProps?.activeTab,
+            lang: slotProps?.lang,
+            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+            ...activeExt.slotProps,
+          })}
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  }
+
   // admin.tab with renderType 'button' — render segmented buttons
   if (slot === 'admin.tab' && slotProps?.renderType === 'button') {
     return (

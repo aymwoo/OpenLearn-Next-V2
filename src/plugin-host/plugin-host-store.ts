@@ -29,6 +29,8 @@ export interface PluginHostStoreState {
   initialized: boolean;
   /** Per-plugin dashboard widget visibility. true (default, show) | false (hidden). */
   dashboardVisibility: Map<string, boolean>;
+  /** 已被管理台停用的内置扩展包 id 列表（localStorage 持久）。 */
+  builtinBundlesDisabled: string[];
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -48,7 +50,7 @@ export interface PluginHostStoreActions {
 
   /**
    * Register an extension point for a given slot.
-   * Pitfall 3: Throws if duplicate id for the same slot.
+   * 同 slot 同 id 幂等覆盖（服务重启后 DB UUID 变化 / HMR 重新注册时防崩溃）。
    */
   registerExtensionPoint: (slot: AnyExtensionSlot, config: ExtensionPointConfig) => void;
 
@@ -66,6 +68,12 @@ export interface PluginHostStoreActions {
 
   /** Bulk-initialize dashboard visibility (called on app startup). */
   setDashboardVisibilityBatch: (entries: Array<[string, boolean]>) => void;
+
+  /** 内置扩展包是否启用（默认启用）。 */
+  isBuiltinBundleEnabled: (bundleId: string) => boolean;
+
+  /** 启用/停用内置扩展包（持久到 localStorage）。停用后由调用方负责注销其扩展点。 */
+  setBuiltinBundleEnabled: (bundleId: string, enabled: boolean) => void;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────
@@ -87,12 +95,33 @@ function saveDashboardVisibility(map: Map<string, boolean>): void {
   } catch {}
 }
 
+// ── localStorage helpers for builtin extension bundles ───────────────
+const BUILTIN_BUNDLES_KEY = 'openlearn:builtinBundlesDisabled';
+
+function loadBuiltinBundlesDisabled(): string[] {
+  try {
+    const raw = localStorage.getItem(BUILTIN_BUNDLES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    }
+  } catch {}
+  return [];
+}
+
+function saveBuiltinBundlesDisabled(ids: string[]): void {
+  try {
+    localStorage.setItem(BUILTIN_BUNDLES_KEY, JSON.stringify(ids));
+  } catch {}
+}
+
 export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreActions>()((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────
   activePlugins: [],
   extensionPoints: new Map(),
   services: null,
   dashboardVisibility: loadDashboardVisibility(),
+  builtinBundlesDisabled: loadBuiltinBundlesDisabled(),
   initialized: false,
 
   // ── Actions ────────────────────────────────────────────────────────
@@ -185,5 +214,23 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       }
       saveDashboardVisibility(next);
       return { dashboardVisibility: next };
+    }),
+
+  // ── 内置扩展包（builtin bundles）──
+  //
+  // 内置扩展包（如 smart-edu）不经过安装链路、没有 DB 行，无法走
+  // activePlugins 的启停流。这里以 localStorage 持久的开关给它同等的
+  // 「管理台可停用」能力（v0.6.0 审计：此前 main.tsx 开机直注册，
+  // 无人能停用、无人能清理其扩展点）。
+
+  isBuiltinBundleEnabled: (bundleId) => !get().builtinBundlesDisabled.includes(bundleId),
+
+  setBuiltinBundleEnabled: (bundleId, enabled) =>
+    set((state) => {
+      const next = enabled
+        ? state.builtinBundlesDisabled.filter((id) => id !== bundleId)
+        : [...new Set([...state.builtinBundlesDisabled, bundleId])];
+      saveBuiltinBundlesDisabled(next);
+      return { builtinBundlesDisabled: next };
     }),
 }));

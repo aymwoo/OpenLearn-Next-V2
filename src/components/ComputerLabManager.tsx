@@ -888,16 +888,24 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                         <div className="text-[9px] font-mono text-slate-400 truncate max-w-[70px]">
                                           {seat.student_number || `ID:${seat.student_id.slice(-4)}`}
                                         </div>
-                                        <ExtensionPointRenderer
-                                          slot="computer_lab.seat.overlay"
-                                          slotProps={{
-                                            labId: activePreviewLab.id,
-                                            row: rIdx,
-                                            col: cIdx,
-                                            seat,
-                                            isOccupied: true,
-                                          }}
-                                        />
+                                        {/* 座位扩展 overlay：点击冒泡必须被隔离——
+                                            座位根节点 onClick 是座位安排/移除入口，
+                                            插件 overlay 内的任何点击都不得触发（v0.6.0 审计 R-8） */}
+                                        <div
+                                          className="w-full min-w-0"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <ExtensionPointRenderer
+                                            slot="computer_lab.seat.overlay"
+                                            slotProps={{
+                                              labId: activePreviewLab.id,
+                                              row: rIdx,
+                                              col: cIdx,
+                                              seat,
+                                              isOccupied: true,
+                                            }}
+                                          />
+                                        </div>
                                       </div>
 
                                       {/* Tooltip */}

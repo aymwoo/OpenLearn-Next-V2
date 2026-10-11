@@ -34,6 +34,10 @@ export const SMART_EDU_PLUGIN_ID = 'ext-national-smart-edu';
 export function registerSmartEduExtensions() {
   const store = usePluginHostStore.getState();
 
+  // 内置扩展包门控：管理台（Plugin Center）可停用；停用后开机跳过注册，
+  // 运行中停用由 Plugin Center 调 unregisterPluginExtensionPoints 清理。
+  if (!store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)) return;
+
   // 1. 备课中心：课程管理工具栏导入按钮
   store.registerExtensionPoint('course.list.toolbar.action', {
     id: 'smart-edu-toolbar-import',

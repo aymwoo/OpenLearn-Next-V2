@@ -684,3 +684,89 @@ export interface AdminDashboardCardSlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
+/** Props passed to timetable.toolbar.action extensions（与 TimetableManager.tsx 实际传参一致） */
+export interface TimetableToolbarActionSlotProps {
+  schedules?: any[];
+  currentWeekMonday?: string | null;
+  lang?: string;
+  onRefresh?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to timetable.card.badge extensions（与 TimetableCalendarView.tsx 实际传参一致） */
+export interface TimetableCardBadgeSlotProps {
+  schedule?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to computer_lab.toolbar.action extensions（与 ComputerLabManager.tsx 实际传参一致） */
+export interface ComputerLabToolbarActionSlotProps {
+  activeLab?: any;
+  computerLabs?: any[];
+  onRefresh?: () => void;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to computer_lab.seat.overlay extensions。渲染于座位单元内，宿主已做点击冒泡隔离。 */
+export interface ComputerLabSeatOverlaySlotProps {
+  labId?: string;
+  row?: number;
+  col?: number;
+  seat?: any;
+  isOccupied?: boolean;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.dashboard.hero_widget extensions（与 StudentDashboardPanel.tsx 实际传参一致） */
+export interface StudentDashboardHeroWidgetSlotProps {
+  studentId?: string | null;
+  students?: any[];
+  studentDashboardData?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.assignment.toolbar.action extensions（与 StudentAssignmentHeader.tsx 实际传参一致） */
+export interface StudentAssignmentToolbarActionSlotProps {
+  assignment?: any;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.lesson.notes_addon extensions（与 StudentLessonView.tsx 实际传参一致） */
+export interface StudentLessonNotesAddonSlotProps {
+  lessonId?: string | null;
+  studentId?: string | null;
+  activeSegmentId?: string | null;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.lesson.toolbox extensions（与 StudentLessonView.tsx 实际传参一致） */
+export interface StudentLessonToolboxSlotProps {
+  lessonId?: string | null;
+  studentId?: string | null;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to admin.user.action extensions（与 AdminPanel.tsx 实际传参一致） */
+export interface AdminUserActionSlotProps {
+  users?: any[];
+  filteredUsers?: any[];
+  lang?: string;
+  onRefresh?: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to ai_sidebar.tab extensions（button/panel 双形态，渲染分支见 extension-point-renderer） */
+export interface AiSidebarTabSlotProps {
+  renderType?: 'button' | 'panel';
+  /** 当前激活的 tab 值（插件 tab 形态为 `plugin:{pluginId}/{extId}`） */
+  activeTab?: string;
+  setActiveTab?: (tab: string) => void;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
