@@ -8,6 +8,7 @@ import { CommandPaletteProps, CommandCategory, CommandDescriptor } from './comma
 import { CommandRegistry } from './command-registry.js';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store.js';
 import { frontendApi } from '../../services/frontend-api.js';
+import { uiStore } from '../../store/uiStore.js';
 
 export const globalCommandRegistry = new CommandRegistry();
 
@@ -41,10 +42,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           shortcut: cfg.shortcut,
           execute: async (context?: Record<string, unknown>) => {
             if (cfg.commandType) {
-              await frontendApi.post('/api/plugins/execute-command', {
+              // 检查执行结果并反馈——插件命令失败绝不静默（v0.6.0 审计）。
+              const res = await frontendApi.post('/api/plugins/execute-command', {
                 type: cfg.commandType,
                 payload: cfg.payload ?? context,
               });
+              if (!res.success) {
+                uiStore.getState().addToast({
+                  id: `plugin-cmd-error-${Date.now()}`,
+                  type: 'error',
+                  title: '插件命令执行失败',
+                  message: res.error || `命令 ${cfg.commandType} 未能执行`,
+                });
+              }
             }
           },
         };

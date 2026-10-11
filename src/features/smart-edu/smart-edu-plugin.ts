@@ -11,6 +11,11 @@
  * - classroom.post_class.exporter: CELTS-3 规范学情包导出
  * - header.status_pill: 全局顶栏国家平台连通呼吸灯
  * - admin.dashboard.card: 管理后台平台直连看板
+ *
+ * 组件全部为同 bundle 直接组件（component 字段传组件本身而非 lazy 工厂）：
+ * renderer 只对带 `__isLazyFactory` 标记的工厂走 React.lazy，未打标的工厂会被
+ * 当作直接组件渲染 —— 返回 Promise 会让 Suspense 永久悬挂且不抛错，
+ * ErrorBoundary 与熔断器全部失效（v0.6.0 全量渲染失败事故）。
  */
 
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
@@ -35,7 +40,7 @@ export function registerSmartEduExtensions() {
     label: '国家平台导入',
     icon: 'Sparkles',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduCourseToolbarAction as any }),
+    component: SmartEduCourseToolbarAction,
   });
 
   // 2. 备课中心：课程卡片国家精品课角标
@@ -43,7 +48,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-card-badge',
     label: '国家精品课徽标',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduCourseBadge as any }),
+    component: SmartEduCourseBadge,
   });
 
   // 3. 备课中心：课程卡片上报国家云动作
@@ -51,7 +56,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-card-action',
     label: '上报国家云',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduCourseCardAction as any }),
+    component: SmartEduCourseCardAction,
   });
 
   // 4. 备课中心：环节工具栏插入国家微课
@@ -59,7 +64,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-segment-action',
     label: '插入国家微课',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduSegmentAction as any }),
+    component: SmartEduSegmentAction,
   });
 
   // 5. 课堂互动：驾驶舱顶部双师通道横幅
@@ -67,7 +72,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-alert-banner',
     label: '国家平台双师通道广播',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduAlertBanner as any }),
+    component: SmartEduAlertBanner,
   });
 
   // 6. 课堂互动：展台大屏跑马灯
@@ -75,7 +80,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-stage-ticker',
     label: '国家平台大屏跑马灯',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduStageTicker as any }),
+    component: SmartEduStageTicker,
   });
 
   // 7. 课后总结：CELTS-3 学情报告导出
@@ -83,7 +88,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-post-class-exporter',
     label: 'CELTS-3 学情报告导出',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduPostClassExporter as any }),
+    component: SmartEduPostClassExporter,
   });
 
   // 8. 全局顶栏：连通状态心跳胶囊
@@ -91,7 +96,7 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-header-status-pill',
     label: '国家教育云状态',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduHeaderStatusPill as any }),
+    component: SmartEduHeaderStatusPill,
   });
 
   // 9. 管理后台：国家平台直连看板
@@ -99,6 +104,6 @@ export function registerSmartEduExtensions() {
     id: 'smart-edu-admin-card',
     label: '国家平台直连看板',
     pluginId: SMART_EDU_PLUGIN_ID,
-    component: () => Promise.resolve({ default: SmartEduAdminCard as any }),
+    component: SmartEduAdminCard,
   });
 }

@@ -146,17 +146,27 @@ class ExtensionErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBo
     return { hasError: true };
   }
 
-  componentDidMount(): void {
-    // 渲染成功清零连续崩溃计数（窗口语义：仅在连续失败时累积）
-    if (this.props.pluginId) resetPluginCrash(this.props.pluginId);
-  }
-
   render() {
     if (this.state.hasError) {
       return this.props.fallback ?? null;
     }
-    return this.props.children;
+    return <CrashResetProbe pluginId={this.props.pluginId}>{this.props.children}</CrashResetProbe>;
   }
+}
+
+/**
+ * 子树成功提交后清零该插件连续崩溃计数。
+ *
+ * 不能放在边界自身的 componentDidMount 里：子组件在**首次挂载**期间抛错时，
+ * 边界以 fallback 形态完成挂载，componentDidMount 照样执行，会在 componentDidCatch
+ * 累计之后立刻清零 —— 阈值永远达不到，熔断器失效（v0.6.0 审计 R-5）。
+ * 探针只在子树真正渲染成功时挂载/提交，错误路径探针不存在，计数得以累积。
+ */
+function CrashResetProbe({ pluginId, children }: { pluginId?: string; children: React.ReactNode }) {
+  React.useEffect(() => {
+    if (pluginId) resetPluginCrash(pluginId);
+  });
+  return <>{children}</>;
 }
 
 // ── ExtensionPointRenderer ───────────────────────────────────────────────────
@@ -683,6 +693,10 @@ export function ExtensionPointRenderer({
             key={`${ext.pluginId}/${ext.id}`}
             pluginId={ext.pluginId}
             onBreakerTrip={(pid) => {
+              // 双通道降级：生命周期内插件走宿主停用；脱离生命周期直注册的内置扩展
+              // （如 smart-edu，pluginId 不在 activePlugins）至少摘除其全部扩展点，
+              // 避免坏组件反复崩溃且无法恢复（v0.6.0 审计：此前对未知 id 是 no-op）。
+              usePluginHostStore.getState().unregisterPluginExtensionPoints(pid);
               void host
                 .deactivatePlugin(pid)
                 .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));

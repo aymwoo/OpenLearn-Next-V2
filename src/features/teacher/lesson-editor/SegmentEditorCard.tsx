@@ -53,7 +53,7 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
           <div className="flex items-center gap-1.5 shrink-0">
             <ExtensionPointRenderer
               slot="editor.segment.action"
-              slotProps={{ segmentId: segment.id, segment, lang }}
+              slotProps={{ segmentId: segment.id, segment, lang, readOnly, onPatch }}
             />
             {readOnly ? (
               <span className="text-2xs font-semibold text-muted px-2 py-1 rounded-lg border border-theme">

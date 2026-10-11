@@ -89,6 +89,10 @@ export class CapabilityGuard {
         'assignment:submit',
         'assignment:review',
         'assignment:manage',
+        // 国家智慧教育平台连接器：教师是检索/导入/学情上报的业务主体。
+        // 此前缺失导致 /api/external/smart-edu/* 四端点对全体教师 Access Denied
+        // （v0.6.0 审计 C-2）。
+        'smart_edu:*',
       ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (
@@ -112,6 +116,9 @@ export class CapabilityGuard {
         'assignment:read',
         'assignment:submit',
         'assignment:review',
+        // 只读：国家平台公共资源目录检索与连接状态胶囊（header.status_pill 全角色渲染）。
+        // 导入/上报仍属教师（smart_edu:write/export 不在学生面内）。
+        'smart_edu:read',
       ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (

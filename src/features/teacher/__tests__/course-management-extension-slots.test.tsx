@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
@@ -21,6 +21,13 @@ const mockLesson: Lesson = {
   created_at: 1712000000000,
 };
 
+/**
+ * 契约断言（v0.6.0 审计 R-1/R-2 整改基线）：
+ * 宿主传参必须与 SlotProps 声明一致 —— course.card.* 传 `course`、
+ * course.list.toolbar.action 传 `onRefresh`、editor.segment.action 补传
+ * `readOnly`/`onPatch`。此前 lesson/refreshLessons 错位导致插件组件
+ * 出生即死或假成功。
+ */
 describe('Course & Lesson Extension Slots Integration', () => {
   let host: FrontendPluginHost;
 
@@ -33,9 +40,12 @@ describe('Course & Lesson Extension Slots Integration', () => {
     cleanup();
   });
 
-  it('course.list.toolbar.action 槽位正确挂载并向国家教育平台插件注入上下文', async () => {
-    const NationalEduToolbarPlugin: React.FC<{ lang: string; refreshLessons?: () => void }> = ({ lang, refreshLessons }) => (
-      <button data-testid="national-edu-sync-btn" onClick={refreshLessons}>
+  it('course.list.toolbar.action 槽位向插件注入 lang 与 onRefresh', async () => {
+    const NationalEduToolbarPlugin: React.FC<{ lang?: string; onRefresh?: () => void }> = ({
+      lang,
+      onRefresh,
+    }) => (
+      <button data-testid="national-edu-sync-btn" onClick={() => onRefresh?.()}>
         {lang === 'zh' ? '国家智慧教育平台同步' : 'Sync National Platform'}
       </button>
     );
@@ -52,7 +62,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
       <PluginHostProvider host={host}>
         <ExtensionPointRenderer
           slot="course.list.toolbar.action"
-          slotProps={{ lang: 'zh', refreshLessons: refreshMock }}
+          slotProps={{ lang: 'zh', onRefresh: refreshMock }}
         />
       </PluginHostProvider>,
     );
@@ -60,12 +70,16 @@ describe('Course & Lesson Extension Slots Integration', () => {
     const btn = await screen.findByTestId('national-edu-sync-btn');
     expect(btn).toBeTruthy();
     expect(btn.textContent).toContain('国家智慧教育平台同步');
+
+    // onRefresh 契约：点击按钮必须触达宿主刷新回调
+    fireEvent.click(btn);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 
-  it('course.card.badge 槽位正确挂载并展示精品课认证角标', async () => {
-    const QualityCourseBadge: React.FC<{ lesson: Lesson }> = ({ lesson }) => (
+  it('course.card.badge 槽位以 course 字段注入课程对象', async () => {
+    const QualityCourseBadge: React.FC<{ course?: Lesson }> = ({ course }) => (
       <span data-testid="quality-course-badge" className="badge">
-        精品课认证 [{lesson.title}]
+        精品课认证 [{course?.title}]
       </span>
     );
 
@@ -78,10 +92,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <ExtensionPointRenderer
-          slot="course.card.badge"
-          slotProps={{ lesson: mockLesson }}
-        />
+        <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: mockLesson }} />
       </PluginHostProvider>,
     );
 
@@ -90,9 +101,9 @@ describe('Course & Lesson Extension Slots Integration', () => {
     expect(badge.textContent).toContain('高中信息科技与算法编程');
   });
 
-  it('course.card.action 槽位正确挂载并提供推送到国家平台功能', async () => {
-    const PushToPlatformAction: React.FC<{ lesson: Lesson; lang: string }> = ({ lesson }) => (
-      <button data-testid="push-to-national-btn">推送到国家智慧教育云平台 ({lesson.id})</button>
+  it('course.card.action 槽位以 course 字段注入课程对象', async () => {
+    const PushToPlatformAction: React.FC<{ course?: Lesson; lang?: string }> = ({ course }) => (
+      <button data-testid="push-to-national-btn">推送到国家智慧教育云平台 ({course?.id})</button>
     );
 
     usePluginHostStore.getState().registerExtensionPoint('course.card.action', {
@@ -104,10 +115,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <ExtensionPointRenderer
-          slot="course.card.action"
-          slotProps={{ lesson: mockLesson, lang: 'zh' }}
-        />
+        <ExtensionPointRenderer slot="course.card.action" slotProps={{ course: mockLesson, lang: 'zh' }} />
       </PluginHostProvider>,
     );
 
@@ -116,13 +124,19 @@ describe('Course & Lesson Extension Slots Integration', () => {
     expect(actionBtn.textContent).toContain('les_test_01');
   });
 
-  it('editor.segment.action 槽位在 SegmentEditorCard 中正确渲染并注入 segmentId', async () => {
-    const CurriculumStandardAligner: React.FC<{ segmentId: string; segment: any; lang: string }> = ({
-      segmentId,
-      segment,
-    }) => (
+  it('editor.segment.action 槽位注入 segmentId / readOnly / onPatch', async () => {
+    const CurriculumStandardAligner: React.FC<{
+      segmentId?: string;
+      segment?: any;
+      lang?: string;
+      readOnly?: boolean;
+      onPatch?: (patch: any) => void;
+    }> = ({ segmentId, segment, readOnly, onPatch }) => (
       <div data-testid="curriculum-standard-tag">
-        对齐新课标: {segment?.title} (环节ID: {segmentId})
+        对齐新课标: {segment?.title} (环节ID: {segmentId}) [readOnly: {String(!!readOnly)}]
+        <button data-testid="apply-align-btn" onClick={() => onPatch?.({ notes: 'aligned' })}>
+          apply
+        </button>
       </div>
     );
 
@@ -133,6 +147,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
       component: createLazyComponent(CurriculumStandardAligner),
     });
 
+    const patchMock = vi.fn();
     const mockSegment = {
       id: 'seg_intro',
       title: '导入：经典背包问题情境',
@@ -145,7 +160,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
         <SegmentEditorCard
           lang="zh"
           segment={mockSegment}
-          onPatch={vi.fn()}
+          onPatch={patchMock}
           onDelete={vi.fn()}
         />
       </PluginHostProvider>,
@@ -155,5 +170,9 @@ describe('Course & Lesson Extension Slots Integration', () => {
     expect(standardTag).toBeTruthy();
     expect(standardTag.textContent).toContain('导入：经典背包问题情境');
     expect(standardTag.textContent).toContain('seg_intro');
+
+    // onPatch 契约：插件补丁必须抵达宿主回调（SegmentEditorCard 未传 readOnly，默认可编辑）
+    fireEvent.click(screen.getByTestId('apply-align-btn'));
+    expect(patchMock).toHaveBeenCalledWith({ notes: 'aligned' });
   });
 });

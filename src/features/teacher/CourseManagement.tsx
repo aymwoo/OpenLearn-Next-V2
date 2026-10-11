@@ -137,7 +137,7 @@ export function CourseManagement() {
             </button>
             <ExtensionPointRenderer
               slot="course.list.toolbar.action"
-              slotProps={{ lang, refreshLessons: fetchLessons }}
+              slotProps={{ lang, onRefresh: fetchLessons }}
             />
           </div>
         </div>
@@ -303,7 +303,7 @@ export function CourseManagement() {
                           {lesson.title}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <ExtensionPointRenderer slot="course.card.badge" slotProps={{ lesson }} />
+                          <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
                           {lesson.creator_name ? (
                             <span
                               className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
@@ -396,7 +396,7 @@ export function CourseManagement() {
                               <Trash2 size={14} />
                             </span>
                           )}
-                          <ExtensionPointRenderer slot="course.card.action" slotProps={{ lesson, lang }} />
+                          <ExtensionPointRenderer slot="course.card.action" slotProps={{ course: lesson, lang }} />
                         </div>
                       </div>
                     </div>

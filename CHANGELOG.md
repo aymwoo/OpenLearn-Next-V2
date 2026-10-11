@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：
+  - **C-1 扩展组件永久悬挂**：`ExtensionPointConfig.component` 类型契约修正为「直接组件 | 已打标 lazy 工厂」联合（[`src/plugin-host/types.ts`](./src/plugin-host/types.ts)）；`registerSmartEduExtensions` 的 9 处注册与 plugin-host 静态桥接占位改为直接组件——此前未打标的 `() => Promise.resolve({default})` 工厂被渲染器当作直组件渲染，React 19 下 Suspense 永久悬挂且不抛错，ErrorBoundary/熔断器全程失效，9 个 smart-edu 扩展上线即骨架屏。同步修复熔断器复位时序（`componentDidMount` 在错误挂载路径清零计数 → 改为 `CrashResetProbe` 仅在子树真实提交后复位）与熔断触发的恢复路径（`onBreakerTrip` 现同步摘除该插件全部扩展点，脱离生命周期的内置注册不再是 no-op）；
+  - **C-2 网关端点对教师全体 Access Denied**：[`CapabilityGuard`](./packages/core/capability/guard/capability-guard.ts) 角色回退表补授 `smart_edu:*`（教师全量）与 `smart_edu:read`（学生只读）——此前四条 `/api/external/smart-edu/*` 端点对除硬编码管理员外的所有用户拒绝；新增 [`packages/core/capability/__tests__/smart-edu-capability.test.ts`](./packages/core/capability/__tests__/smart-edu-capability.test.ts) 回归钉；
+  - **C-3 声明式 commandType 绕过插件命名空间**：`command_palette.item` / `quick_insert.item` 静态桥接注册时按 `resolvePluginCommandType` 前缀化（与 `ctx.invokeCommand` 同一规则），manifest 作者可写裸命令名且只能命中本插件 handler；命令面板/斜杠菜单的 `execute` 现检查返回值并以 toast 反馈失败（此前 404/500 完全静默）；
+  - **C-4 连接器真实对接（替换纯模拟实现）**：[`national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts) 重写为真实网关 HTTP 客户端——`SMARTEDU_API_BASE/APP_KEY/APP_SECRET/TIMEOUT_MS` 配置（[`.env.example`](./.env.example)）、HMAC-SHA256 请求签名、真实 SHA-256 提交体哈希（`X-SE-Payload-Hash` 头）、真实健康探测（计时 `/health`，失败如实报告 UNREACHABLE）；**删除全部虚构数据**（3 门假精品课、假回执 `SHA256:`+UUID、恒真 `connected:true/rtt 16ms`/伪造证书）；网关契约文档见 [`docs/plugin/smart-edu-gateway.md`](./docs/plugin/smart-edu-gateway.md)；
+  - **prop 错位四连修复**：`course.card.badge`/`action` 宿主传 `course`（原 `lesson`，徽标/按钮永不渲染）、`course.list.toolbar.action` 传 `onRefresh`（原 `refreshLessons`，导入后列表不刷新）、`SegmentEditorCard` 补传 `onPatch`/`readOnly`（原只读模式出按钮、点击假成功）；`AdminDashboardCardSlotProps`/`HeaderStatusPillSlotProps`/`ClassroomPostClassExporterSlotProps` 类型对齐宿主实际传参；
+  - **课后导出与看板去假数据**：`SmartEduPostClassExporter` 只导出真实统计（`attemptsCount`/`exitTicketStats`），缺失维度显式置 `null` 并标注 dataCompleteness（此前恒回退硬编码 '100%'/36/88.5/18）；`SmartEduAdminCard` 改为真实网关探测 + 宿主 `sqliteStats`（此前"3 门/100%/16ms"纯假数据）；顶栏胶囊/课堂横幅/大屏跑马灯改为诚实三态（未配置/在线/离线），故障绝不渲染为健康；
+  - **导入弹窗请求竞态修复**：搜索请求加 300ms 防抖 + AbortController + 过期响应守卫 + `res.ok` 检查，未配置/失败状态如实呈现；
+  - **端到端回归测试**：新增 [`smart-edu-e2e-slot.test.tsx`](./src/features/smart-edu/__tests__/smart-edu-e2e-slot.test.tsx)（真实注册路径 → 真实 ExtensionPointRenderer 渲染，拦截"组件直测 + store 直塞"模式漏过的全链路回归）；内核插件测试重写为网关契约测试（stub fetch，覆盖未配置/检索/导入/上报哈希/健康探测/签名头）。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

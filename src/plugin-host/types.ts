@@ -229,7 +229,15 @@ export interface ExtensionPointConfig {
   id: string;
   label: string;
   icon?: string | React.ComponentType<{ size?: number; className?: string }>;
-  component: () => Promise<{ default: React.ComponentType<any> }>;
+  /**
+   * 扩展组件。两种合法形态（extension-point-renderer 的 resolveExtensionComponent 按此解析）：
+   * 1. 直接组件 —— 同 bundle 内置扩展用这种（零异步，永不悬挂）；
+   * 2. lazy 工厂 `() => Promise<{ default: Comp }>` —— 仅远程/代码分割扩展使用，
+   *    且**必须**在工厂函数上设置 `__isLazyFactory = true` 标记，否则会被
+   *    当作直接组件渲染：React 拿到返回的 Promise 会永久悬挂最近的 Suspense
+   *    边界且不抛错，ErrorBoundary 与熔断器全部失效（v0.6.0 smart-edu 事故）。
+   */
+  component: React.ComponentType<any> | (() => Promise<{ default: React.ComponentType<any> }>);
   position?: number;
   pluginId: string;
   /** v5.2: 导航分组 (teaching | management | analytics | extension) */
@@ -639,28 +647,40 @@ export interface ClassroomStageDisplayTickerSlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
-/** Props passed to classroom.post_class.exporter extensions */
+/** Props passed to classroom.post_class.exporter extensions（summaryData 为课后总结页真实统计） */
 export interface ClassroomPostClassExporterSlotProps {
   lessonId?: string | null;
-  summaryData?: any;
+  classId?: string | null;
   lang?: string;
+  summaryData?: {
+    lessonTitle?: string;
+    className?: string;
+    attemptsCount?: number;
+    exitTicketStats?: { avgRating: number; count: number; topConcepts: string[] };
+  } | null;
   onExport?: (format: string) => void;
   dispatcher?: IHostActionDispatcher;
 }
 
-/** Props passed to header.status_pill extensions */
+/** Props passed to header.status_pill extensions（与 AppHeader.tsx 实际传参一致） */
 export interface HeaderStatusPillSlotProps {
-  session?: any;
-  currentRole?: 'teacher' | 'student';
+  dbConnected?: boolean;
+  dbStatus?: string;
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
 
-/** Props passed to admin.dashboard.card extensions */
+/** Props passed to admin.dashboard.card extensions（与 AdminPanel.tsx 实际传参一致） */
 export interface AdminDashboardCardSlotProps {
-  siteInfo?: any;
+  sqliteStats?: {
+    status: string;
+    type: string;
+    pageSize: number;
+    pageCount: number;
+    diskUsageBytes: number;
+    diskUsageFriendly: string;
+  } | null;
   lang?: string;
-  onRefresh?: () => void;
   dispatcher?: IHostActionDispatcher;
 }
 

@@ -52,6 +52,14 @@ import { assignmentQuestionRendererRegistry } from '../features/teacher/assignme
 // ── Module Loader type ───────────────────────────────────────────────────
 
 /**
+ * 非视觉贡献（command_palette.item / quick_insert.item / ai.* / classroom.tool
+ * 静态桥接等）的占位组件。必须是**直接组件**而非 lazy 工厂：renderer 只对带
+ * `__isLazyFactory` 标记的工厂走 React.lazy，未打标的 Promise 工厂会被当作
+ * 直接组件渲染并永久悬挂 Suspense（v0.6.0 smart-edu 事故）。
+ */
+const NullExtensionComponent = () => null;
+
+/**
  * Function type for loading a plugin module from source code.
  *
  * Default implementation uses Blob URL + import() for browser ESM loading.
@@ -353,7 +361,7 @@ export class FrontendPluginHost {
             label: tool.name,
             icon: tool.icon,
             slotProps: tool.commandType ? { commandType: tool.commandType } : undefined,
-            component: () => Promise.resolve({ default: (() => null) as any }),
+            component: NullExtensionComponent,
             pluginId,
           });
         }
@@ -367,8 +375,16 @@ export class FrontendPluginHost {
             store.registerExtensionPoint('command_palette.item', {
               id: item.id,
               label: item.title,
-              slotProps: item,
-              component: () => Promise.resolve({ default: (() => null) as any }),
+              // 命令名按插件命名空间前缀化（与 ctx.invokeCommand 同一规则），
+              // 使 manifest 作者可以写裸命令名并只能命中本插件注册的 handler；
+              // 声明他插件/宿主命令名的会解析为无效 key 被服务端 404 拒绝。
+              slotProps: {
+                ...item,
+                ...(item.commandType
+                  ? { commandType: resolvePluginCommandType(item.commandType, pluginId) }
+                  : {}),
+              },
+              component: NullExtensionComponent,
               pluginId,
             });
           }
@@ -380,8 +396,14 @@ export class FrontendPluginHost {
               id: item.id,
               label: item.title,
               icon: item.icon,
-              slotProps: item,
-              component: () => Promise.resolve({ default: (() => null) as any }),
+              // 同上：命名空间前缀化，见 command_palette.item 注释。
+              slotProps: {
+                ...item,
+                ...(item.commandType
+                  ? { commandType: resolvePluginCommandType(item.commandType, pluginId) }
+                  : {}),
+              },
+              component: NullExtensionComponent,
               pluginId,
             });
           }
@@ -393,7 +415,7 @@ export class FrontendPluginHost {
               id: item.id,
               label: item.title,
               slotProps: item,
-              component: () => Promise.resolve({ default: (() => null) as any }),
+              component: NullExtensionComponent,
               pluginId,
             });
           }
@@ -405,7 +427,7 @@ export class FrontendPluginHost {
               id: item.id,
               label: item.name,
               slotProps: item,
-              component: () => Promise.resolve({ default: (() => null) as any }),
+              component: NullExtensionComponent,
               pluginId,
             });
           }
@@ -418,7 +440,7 @@ export class FrontendPluginHost {
               label: tool.name,
               icon: tool.icon,
               slotProps: tool.commandType ? { commandType: tool.commandType, payload: tool.payload } : undefined,
-              component: () => Promise.resolve({ default: (() => null) as any }),
+              component: NullExtensionComponent,
               pluginId,
             });
           }

@@ -126,6 +126,21 @@ export interface UnifiedNavItem {
 }
 
 /**
+ * 把 ExtensionPointConfig.component（直组件 | lazy 工厂联合）归一化为导航侧的
+ * lazy 工厂。与 resolveExtensionComponent 的约定一致：带 `__isLazyFactory` 标记
+ * 的才是工厂，未打标的一律视为直接组件——包装成已决 Promise 交给 React.lazy。
+ */
+function toNavLazyFactory(
+  component: ExtensionPointConfig['component'],
+): () => Promise<{ default: React.ComponentType<any> }> {
+  if ((component as { __isLazyFactory?: boolean }).__isLazyFactory === true) {
+    return component as () => Promise<{ default: React.ComponentType<any> }>;
+  }
+  const direct = component as React.ComponentType<any>;
+  return () => Promise.resolve({ default: direct });
+}
+
+/**
  * Filter and resolve navigation items by current user role and active plugins.
  */
 export function resolveUnifiedNavigationItems(
@@ -177,7 +192,7 @@ export function resolveUnifiedNavigationItems(
       badge: pluginItem.badge,
       isPlugin: true,
       rawPluginConfig: pluginItem,
-      lazyComponent: pluginItem.component,
+      lazyComponent: toNavLazyFactory(pluginItem.component),
     });
   }
 

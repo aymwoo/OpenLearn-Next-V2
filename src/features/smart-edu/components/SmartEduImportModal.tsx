@@ -8,11 +8,12 @@ import {
   Download,
   X,
   Loader2,
-  ExternalLink,
   ShieldCheck,
   Layers,
+  Unplug,
 } from 'lucide-react';
 import type { SmartEduCourseResource } from '../types';
+import { useSmartEduStatus } from '../useSmartEduStatus';
 
 interface SmartEduImportModalProps {
   isOpen: boolean;
@@ -21,29 +22,61 @@ interface SmartEduImportModalProps {
   lang?: string;
 }
 
+const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * 国家平台精品课检索与导入弹窗。
+ *
+ * v0.6.0 审计 R-9 修复：搜索请求带 300ms 防抖 + AbortController + 过期响应守卫，
+ * 检查 res.ok 并把「未配置网关 / 网关错误」如实呈现，失败不再静默保留旧数据。
+ */
 export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }: SmartEduImportModalProps) {
   const [resources, setResources] = useState<SmartEduCourseResource[]>([]);
   const [loading, setLoading] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { status } = useSmartEduStatus();
+  const gatewayConfigured = status?.configured ?? false;
 
   useEffect(() => {
-    if (!isOpen) return;
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isOpen || !gatewayConfigured) return;
+    const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/external/smart-edu/resources?subject=${selectedSubject}&query=${encodeURIComponent(searchQuery)}`)
-      .then((res) => res.json())
+    setErrorMessage(null);
+
+    const params = new URLSearchParams({ subject: selectedSubject, query: debouncedQuery });
+    fetch(`/api/external/smart-edu/resources?${params.toString()}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.success && Array.isArray(data.resources)) {
           setResources(data.resources);
+          setErrorMessage(null);
+        } else {
+          setResources([]);
+          setErrorMessage(data.error || '资源检索失败');
         }
       })
-      .catch((err) => console.error('Failed to load smart edu resources', err))
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        setResources([]);
+        setErrorMessage(err?.message || '网络异常，无法连接国家平台网关');
+      })
       .finally(() => setLoading(false));
-  }, [isOpen, selectedSubject, searchQuery]);
 
-  if (!isOpen) return null;
+    return () => controller.abort();
+  }, [isOpen, gatewayConfigured, selectedSubject, debouncedQuery]);
 
   const handleImport = async (res: SmartEduCourseResource) => {
     try {
@@ -56,7 +89,7 @@ export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }:
       const data = await resp.json();
       if (data.success) {
         setSuccessMessage(`已成功导入《${res.title}》！`);
-        setTimeout(() => {
+        window.setTimeout(() => {
           setSuccessMessage(null);
           onSuccess?.();
           onClose();
@@ -98,9 +131,11 @@ export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }:
                 <h3 className="text-base font-bold text-white tracking-wide">
                   国家智慧教育公共服务平台 · 精品课资源库
                 </h3>
-                <span className="px-2 py-0.5 text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> smartedu.cn 官方直连
-                </span>
+                {gatewayConfigured && (
+                  <span className="px-2 py-0.5 text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> 网关直连
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
                 同步教育部审定高中新课标示范课程、微课视频切片及配套白板探究实验
@@ -160,13 +195,29 @@ export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }:
 
         {/* 资源列表内容区 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {loading ? (
+          {!gatewayConfigured ? (
+            <div className="text-center py-16 text-slate-400">
+              <Unplug className="w-8 h-8 mx-auto mb-2 text-slate-500" />
+              <p className="text-xs font-semibold text-slate-300 mb-1">国家平台网关未配置</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                请联系管理员在服务端 .env 中设置
+                <code className="mx-1 text-amber-300">SMARTEDU_API_BASE</code>
+                后重启服务
+              </p>
+            </div>
+          ) : loading ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-amber-400 mb-2" />
               <p className="text-xs">正在连接国家智慧教育平台检索资源...</p>
             </div>
+          ) : errorMessage ? (
+            <div className="text-center py-16 text-rose-400 text-xs">
+              {errorMessage}
+              <p className="text-slate-500 mt-1">请检查网关配置与服务可用性后重试</p>
+            </div>
           ) : resources.length === 0 ? (
             <div className="text-center py-16 text-slate-500 text-xs">
+              <BookOpen className="w-6 h-6 mx-auto mb-2 text-slate-600" />
               未找到匹配的国家平台示范课程资源
             </div>
           ) : (
@@ -197,7 +248,7 @@ export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }:
                     <span>学校: {res.schoolName}</span>
                     <span className="flex items-center gap-1 text-amber-400/90">
                       <Layers className="w-3 h-3" />
-                      包含 {res.timeline.length} 教学环节
+                      包含 {res.timeline?.length ?? 0} 教学环节
                     </span>
                   </div>
                 </div>
@@ -229,8 +280,16 @@ export function SmartEduImportModal({ isOpen, onClose, onSuccess, lang = 'zh' }:
         {/* 底部信息提示 */}
         <div className="px-6 py-3 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
           <div className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>国家平台数据通道已加密对齐 · 课程导入自动适配本地白板交互环境</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                gatewayConfigured && status?.connected !== false ? 'bg-emerald-400' : 'bg-slate-500'
+              }`}
+            />
+            <span>
+              {gatewayConfigured
+                ? '资源来自国家平台网关实时检索 · 课程导入自动适配本地白板交互环境'
+                : '网关未配置：显示的是本地配置提示，并非平台数据'}
+            </span>
           </div>
           <span className="text-slate-500">CELTS-3 / 教育部教育信息化技术标准</span>
         </div>
