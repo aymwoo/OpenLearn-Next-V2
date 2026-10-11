@@ -996,8 +996,11 @@ export function ClassroomInteractiveCockpit({
                 <span className="text-xs font-bold text-muted mb-1">
                   {lang === 'zh' ? '结课通票综合评分' : 'Exit Ticket Rating'}
                 </span>
+                {/* v0.6.1 数据真实性：无提交显示「—」，不再回退假 5.0 */}
                 <span className="text-3xl font-black text-indigo-500 font-mono">
-                  {panoramicSummary.metrics?.exitTicketsAvgRating || 5.0} ★
+                  {panoramicSummary.metrics?.exitTicketsAvgRating != null
+                    ? `${panoramicSummary.metrics.exitTicketsAvgRating} ★`
+                    : '—'}
                 </span>
                 <span className="text-[10px] text-muted mt-1">
                   {panoramicSummary.metrics?.exitTicketsCount || 0} 人提交

@@ -230,7 +230,7 @@ export class DiagnosticService {
           SUM(CASE WHEN s.is_correct = 0 THEN 1 ELSE 0 END) as wrong_count
         FROM lesson_quiz_submissions s
         LEFT JOIN whiteboard_elements we ON s.element_id = we.id AND s.lesson_id = we.lesson_id
-        WHERE s.lesson_id = ?
+        WHERE s.lesson_id = ? AND s.id NOT LIKE 'sim-quiz-%'
         GROUP BY s.element_id
         HAVING wrong_count > 0
         ORDER BY (wrong_count * 1.0 / total_attempts) DESC
@@ -638,7 +638,8 @@ export class DiagnosticService {
               total_quizzes_answered: s.totalQuizzesAnswered,
               correct_count: s.correctCount,
               accuracy: s.totalQuizzesAnswered > 0 ? Math.round((s.correctCount / s.totalQuizzesAnswered) * 100) : 0,
-              avg_time_spent_ms: 12000,
+              // v0.6.1 数据真实性：白板事件流无真实耗时，置 null（客户端显示 —）
+              avg_time_spent_ms: null as number | null,
               last_submitted_at: s.lastSubmittedAt,
             }))
             .sort((a, b) => b.cumulative_score - a.cumulative_score || b.accuracy - a.accuracy)

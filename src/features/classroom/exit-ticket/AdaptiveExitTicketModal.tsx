@@ -47,13 +47,18 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
   lessonId,
   studentName = '我',
   lang = 'zh',
-  coreQuestion = DEFAULT_CORE_QUESTION,
-  challengeQuestion = DEFAULT_CHALLENGE_QUESTION,
+  coreQuestion,
+  challengeQuestion,
   onSubmitSuccess,
 }) => {
   const [selectedCoreOption, setSelectedCoreOption] = useState<string | null>(null);
   const [coreAnswered, setCoreAnswered] = useState(false);
   const [isCoreCorrect, setIsCoreCorrect] = useState<boolean | null>(null);
+  // v0.6.1 数据真实性：仅当宿主传入**本课真实题目**时才启用诊断题与分层判定；
+  // 此前默认回退写死的物理题，任何课程的学生都做同一套假题并把假分层
+  // 写进教师统计。
+  const hasCoreQuestion = Boolean(coreQuestion);
+  const hasChallengeQuestion = hasCoreQuestion && Boolean(challengeQuestion);
 
   const [selectedChallengeOption, setSelectedChallengeOption] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
@@ -74,11 +79,13 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    const tierLevel: ExitTicketTier = isCoreCorrect
-      ? selectedChallengeOption
-        ? 'challenge_done'
-        : 'passed'
-      : 'remediation';
+    const tierLevel: ExitTicketTier | null = hasCoreQuestion
+      ? isCoreCorrect
+        ? selectedChallengeOption
+          ? 'challenge_done'
+          : 'passed'
+        : 'remediation'
+      : null;
 
     try {
       if (lessonId) {
@@ -89,10 +96,15 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
             rating,
             puzzledConcept: puzzledConcept.trim(),
             feedback: feedbackNotes.trim(),
-            coreAnswer: selectedCoreOption,
-            isCorrect: isCoreCorrect,
-            tierLevel,
-            challengeAnswer: selectedChallengeOption,
+            // 无真题时不上报任何诊断分层（服务端字段可空）
+            ...(hasCoreQuestion
+              ? {
+                  coreAnswer: selectedCoreOption,
+                  isCorrect: isCoreCorrect,
+                  tierLevel,
+                  challengeAnswer: selectedChallengeOption,
+                }
+              : {}),
           }),
         });
       }
@@ -157,7 +169,8 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
           </div>
         ) : (
           <div className="flex flex-col gap-4 text-xs">
-            {/* ── Step 1: 核心概念必做题 ── */}
+            {/* ── Step 1: 核心概念必做题（仅宿主传入真实题目时渲染） ── */}
+            {coreQuestion && (
             <div className="bg-surface-secondary/70 p-4 rounded-2xl border border-border/60 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-main flex items-center gap-1.5 text-xs">
@@ -262,6 +275,8 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
               )}
             </div>
 
+            )}
+
             {/* ── Step 2: 掌握度自评 ── */}
             <div className="flex flex-col gap-1.5">
               <label className="text-2xs font-bold text-main">
@@ -291,7 +306,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
                 type="text"
                 value={puzzledConcept}
                 onChange={(e) => setPuzzledConcept(e.target.value)}
-                placeholder={lang === 'zh' ? '例如：变力做功 F-s 面积法、临界滑动摩擦...' : 'e.g. friction boundary...'}
+                placeholder={lang === 'zh' ? '用几个关键词概括本节课的卡点...' : 'e.g. friction boundary...'}
                 className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-xs text-main focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               />
             </div>

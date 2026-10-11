@@ -10,7 +10,6 @@ import {
   ChevronUp,
   Star,
   Flame,
-  Send,
   Plus,
   Minus,
   TrendingUp,
@@ -193,23 +192,52 @@ export function ClassroomLeaderboardModal({
   );
 
   // Handle whole-group batch awards (Stitch 00e4f919)
-  const handleAwardWholeGroup = (groupId: string, groupName: string, deltaPoints: number, reason: string) => {
+  // v0.6.1 数据真实性：整组加分逐生调用真实积分端点（points ledger 落库 +
+  // EventBus 广播），此前只弹 toast 无任何写库。失败的学生逐个反馈。
+  const [groupAwarding, setGroupAwarding] = useState<string | null>(null);
+  const handleAwardWholeGroup = async (groupId: string, groupName: string, deltaPoints: number, reason: string) => {
+    if (!classId || groupAwarding) return;
+    const group = groups.find((g) => g.id === groupId);
+    const members = (group?.members ?? []).filter((m) => m.id);
+    if (members.length === 0) {
+      addToast?.(lang === 'zh' ? '该小组没有成员' : 'Group has no members', groupName, 'warning');
+      return;
+    }
+
+    setGroupAwarding(groupId);
     setBonusAnimation(`${groupName} 全员 +${deltaPoints} (${reason})`);
     setTimeout(() => setBonusAnimation(null), 3000);
 
+    let ok = 0;
+    let failed = 0;
+    for (const member of members) {
+      try {
+        const res = await fetch(`/api/students/${member.id}/points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            classId,
+            dimensionId: 'creative_bonus',
+            deltaPoints,
+            reason: `${reason}（${groupName} 整组）`,
+            pluginId: 'classroom-leaderboard',
+          }),
+        });
+        if (res.ok) ok += 1;
+        else failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
     addToast?.(
       lang === 'zh' ? '小组集体加分' : 'Team Points Awarded',
-      `${groupName} 全员 +${deltaPoints} (${reason})`,
-      'success',
+      lang === 'zh'
+        ? `${groupName}：成功 ${ok} 人${failed > 0 ? `，失败 ${failed} 人` : ''}`
+        : `${groupName}: ${ok} ok${failed > 0 ? `, ${failed} failed` : ''}`,
+      failed === 0 ? 'success' : 'warning',
     );
-  };
-
-  const handleSyncToStageDisplay = () => {
-    addToast?.(
-      lang === 'zh' ? '大屏榜单已同步' : 'Stage Display Synced',
-      lang === 'zh' ? '当前积分榜动效已实时推送到教室主大屏幕' : 'Leaderboard broadcasted to stage display',
-      'info',
-    );
+    setGroupAwarding(null);
   };
 
   if (!isOpen) return null;
@@ -462,7 +490,11 @@ export function ClassroomLeaderboardModal({
           ) : (
             /* Individual Leaderboard Tab */
             <div className="space-y-1.5">
-              {students.map((student, idx) => (
+              {/* v0.6.1 数据真实性：按真实积分降序排名 —— 此前按花名册顺序发奖牌，
+                  第一名可能是 0 分 */}
+              {[...students]
+                .sort((a, b) => (b.currentPoints ?? 0) - (a.currentPoints ?? 0))
+                .map((student, idx) => (
                 <div
                   key={student.id}
                   className="p-3 rounded-xl border border-border/80 bg-surface flex items-center justify-between text-xs hover:bg-surface-secondary/30 transition shadow-3xs"
@@ -534,14 +566,9 @@ export function ClassroomLeaderboardModal({
 
         {/* Footer */}
         <div className="p-4 border-t border-border/60 bg-surface-secondary/30 flex flex-wrap items-center justify-between gap-3">
-          <button
-            onClick={handleSyncToStageDisplay}
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <Send size={13} />
-            <span>{lang === 'zh' ? '同步至班级大屏勋章榜' : 'Sync to Stage Display'}</span>
-          </button>
-
+          {/* v0.6.1 数据真实性：「同步至班级大屏」按钮已移除 —— 此前只弹 toast
+              无任何广播实现（假成功）。真实的大屏推送需要走 socket 房间，
+              待实现后再恢复。 */}
           <div className="flex items-center gap-2">
             {/* Third-Party Plugin Extension Slot */}
             <ExtensionPointRenderer slot="classroom.leaderboard.action" slotProps={{ classId, lessonId, groups }} />

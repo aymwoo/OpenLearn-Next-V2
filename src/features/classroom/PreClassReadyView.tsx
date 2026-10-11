@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Users,
@@ -224,7 +224,16 @@ export function PreClassReadyView({
       : 'Please open your course materials and ensure your screen is active.',
   );
   const [isBroadcastingNotice, setIsBroadcastingNotice] = useState(false);
+  const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [markedPresentIds, setMarkedPresentIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    return () => {
+      if (broadcastTimerRef.current) {
+        clearTimeout(broadcastTimerRef.current);
+      }
+    };
+  }, []);
 
   const toggleCheck = (key: string) => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -236,12 +245,19 @@ export function PreClassReadyView({
     if (onBroadcastNotice) {
       onBroadcastNotice(warmupText);
     }
-    setTimeout(() => {
+    if (broadcastTimerRef.current) {
+      clearTimeout(broadcastTimerRef.current);
+    }
+    broadcastTimerRef.current = setTimeout(() => {
       setIsBroadcastingNotice(false);
+      // v0.6.1 数据真实性：学生端实时通道尚未接通（此前谎称「全班学生屏幕已
+      // 接收」），当前仅记录到教师端课堂动态流
       addToast(
-        lang === 'zh' ? '📢 课前提示已广播' : '📢 Warm-up Notice Sent',
-        lang === 'zh' ? '全班学生屏幕已接收到课前热身提示。' : 'Notice sent to all student screens.',
-        'success',
+        lang === 'zh' ? '📢 课前提示已记录' : '📢 Warm-up Notice Recorded',
+        lang === 'zh'
+          ? '已记录到课堂动态流。学生端实时推送通道尚未接通，请口头同步。'
+          : 'Recorded to the classroom feed. Student push is not wired yet.',
+        'info',
       );
     }, 400);
   };
@@ -249,10 +265,13 @@ export function PreClassReadyView({
   const handleMarkAllPresent = () => {
     const allIds = new Set(students.map((s) => s.id));
     setMarkedPresentIds(allIds);
+    // v0.6.1 数据真实性：标记为本地预标记（未落库 attendance），文案如实
     addToast(
-      lang === 'zh' ? '✓ 全员签到就绪' : '✓ All Marked Ready',
-      lang === 'zh' ? `已将全班 ${students.length} 名学生标记为课前签到。` : 'Marked all students ready.',
-      'success',
+      lang === 'zh' ? '✓ 已本地预标记（未落库）' : '✓ Locally Pre-marked (not persisted)',
+      lang === 'zh'
+        ? `已在本地将全班 ${students.length} 名学生预标记为就绪。正式出勤以扫码签到为准。`
+        : `Pre-marked ${students.length} students locally. Official attendance comes from check-in.`,
+      'info',
     );
   };
 

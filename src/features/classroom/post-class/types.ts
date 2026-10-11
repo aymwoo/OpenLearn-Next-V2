@@ -1,7 +1,8 @@
 export type ReflectionType = 'highlight' | 'bottleneck' | 'action_item';
 
 export interface PacingAlert {
-  minute: number;
+  /** 真实时序未采集，不提供拍脑袋分钟数 */
+  minute?: number;
   type: 'CONFUSED' | 'TOO_FAST';
   count: number;
   percentage: number;

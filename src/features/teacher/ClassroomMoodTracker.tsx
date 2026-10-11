@@ -91,21 +91,23 @@ export function ClassroomMoodTracker({
   >([]);
 
   // Real-time metrics and timeline data
+  // v0.6.1 数据真实性：初始为全零空态（此前写死 78% 投入/24 次互动/75% 清晰
+  // 的假指标，接口未返回前即展示）
   const [metrics, setMetrics] = useState<MoodMetrics>({
-    currentEngagement: 78,
-    moodStatus: 'OPTIMAL',
-    moodLabel: lang === 'zh' ? '课堂节奏良好 · 专注度高' : 'Optimal Flow · High Focus',
-    moodEmoji: '🌟',
-    totalInteractions: 24,
-    interactionFrequencyPerMin: '3.2',
+    currentEngagement: 0,
+    moodStatus: 'CALM',
+    moodLabel: lang === 'zh' ? '等待课堂数据…' : 'Waiting for classroom data…',
+    moodEmoji: '⏳',
+    totalInteractions: 0,
+    interactionFrequencyPerMin: '0',
     pulseDistribution: {
-      clearCount: 18,
-      confusedCount: 4,
-      tooFastCount: 2,
-      total: 24,
-      clearPercent: 75,
-      confusedPercent: 17,
-      tooFastPercent: 8,
+      clearCount: 0,
+      confusedCount: 0,
+      tooFastCount: 0,
+      total: 0,
+      clearPercent: 0,
+      confusedPercent: 0,
+      tooFastPercent: 0,
     },
   });
 
@@ -138,13 +140,17 @@ export function ClassroomMoodTracker({
         if (data.success && data.timeline) {
           setMetrics(data.metrics);
           setTimeline(data.timeline);
+        } else {
+          // 会话尚无数据：保持空态（空 timeline + 零指标），不合成假曲线
+          setTimeline([]);
         }
       } else {
-        // Generate sensible local fallback timeline if offline or session fresh
-        generateLocalFallback(windowMinutes);
+        // v0.6.1 数据真实性：接口失败如实置空 —— 此前用正弦波合成 15 分钟
+        // 假遥测曲线伪装真实数据
+        setTimeline([]);
       }
     } catch {
-      generateLocalFallback(windowMinutes);
+      setTimeline([]);
     } finally {
       setLoading(false);
     }

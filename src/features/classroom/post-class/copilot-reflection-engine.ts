@@ -21,8 +21,13 @@ export interface TelemetryInput {
 export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflectionReport {
   const duration = Math.max(1, input.durationMin || 45);
   const totalStudents = Math.max(1, input.totalStudents || 30);
-  const lectureMinutes = input.lectureMin ?? Math.round(duration * 0.68); // 默认约 68% 讲授
-  const lectureRatio = Math.min(100, Math.round((lectureMinutes / duration) * 100));
+  // v0.6.1 数据真实性：讲授时长只有插件真实上报（lectureMin）才参与归因，
+  // 不再按 duration*0.68 编造「讲授占比」
+  const hasLectureTiming = typeof input.lectureMin === 'number' && input.lectureMin > 0;
+  const lectureMinutes = input.lectureMin;
+  const lectureRatio = hasLectureTiming
+    ? Math.min(100, Math.round(((lectureMinutes as number) / duration) * 100))
+    : null;
   const recommendedLectureMaxRatio = 55;
 
   // 互动覆盖率估算 (人次 / 总人数，封顶 100%)
@@ -35,25 +40,23 @@ export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflect
   const fastPercent = Math.round((input.pacingData.TOO_FAST / totalPacing) * 100);
 
   const pacingAlerts: PacingAlert[] = [];
-  const primaryConcept = input.primaryPuzzledConcept || '核心公式与模型应用';
+  // v0.6.1 数据真实性：概念来自真实通票数据（无则不署名），波峰分钟数
+  // 不再按 duration 比例编造（真实时序未采集）
+  const primaryConcept = input.primaryPuzzledConcept;
 
-  // 模拟/推算困惑波峰时序
   if (confusedPercent >= 10) {
     pacingAlerts.push({
-      minute: Math.round(duration * 0.5), // 约课程中间
       type: 'CONFUSED',
       count: input.pacingData.CONFUSED,
       percentage: confusedPercent,
-      contextConcept: primaryConcept,
+      ...(primaryConcept ? { contextConcept: primaryConcept } : {}),
     });
   }
   if (fastPercent >= 8) {
     pacingAlerts.push({
-      minute: Math.round(duration * 0.7),
       type: 'TOO_FAST',
       count: input.pacingData.TOO_FAST,
       percentage: fastPercent,
-      contextConcept: '难点推导与变式迁移',
     });
   }
 
@@ -91,15 +94,15 @@ export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflect
 
   if (strengths.length === 0) {
     strengths.push({
-      title: '全流程教学数据完整沉淀',
-      description: '师生完整经历了课前预习、课中探究到结课通票的全闭环，为学情复盘提供了完整数据支撑。',
+      title: '本节无达到亮点阈值的数据信号',
+      description: '各数据面均在正常区间，未触发亮点判定；可结合课堂观察补充定性记录。',
     });
   }
 
   // 2. 薄弱点与量化归因 (Bottlenecks)
   const bottlenecks: CoPilotReflectionReport['bottlenecks'] = [];
 
-  if (lectureRatio > recommendedLectureMaxRatio) {
+  if (hasLectureTiming && lectureRatio !== null && lectureRatio > recommendedLectureMaxRatio) {
     bottlenecks.push({
       title: '教师单向讲授用时偏高',
       description: `讲授时间占比达 ${lectureRatio}%（超出推荐阈值 ${recommendedLectureMaxRatio}%），学生的自主探究与互评表达时间受到挤压。`,
@@ -128,9 +131,9 @@ export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflect
 
   if (bottlenecks.length === 0) {
     bottlenecks.push({
-      title: '高阶探究挑战度可进一步释放',
-      description: '大部分学生已轻松掌握基础内容，基础题训练比重稍显冗余，需提供拔高挑战。',
-      attribution: '整体练习梯级跨度偏平缓，学优生潜力尚未完全激发。',
+      title: '本节无显著薄弱点信号',
+      description: '随堂测正答率、晴雨表与互动覆盖率均未触发薄弱判定。',
+      attribution: '本次归因基于课内真实数据面，未触发阈值。',
     });
   }
 

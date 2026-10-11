@@ -119,9 +119,15 @@ export function ClassroomBriefingView({
 
   // ── 真实指标（全部来自 panoramic-report，缺失时为 0/null，不再回退到假值） ──
   const totalStudents = students.length || reportData?.students?.length || 0;
+  // v0.6.1 数据真实性：出勤率来自 panoramic-report 逐生真实互动记录
+  // （attendance = 出现在投票/测验/通票任一真实记录中），不再写死 100%
+  const attendanceCount =
+    (reportData?.students as Array<{ attendance?: boolean }> | undefined)?.filter((s) => s.attendance).length ?? 0;
+  const attendanceRate = totalStudents > 0 ? Math.round((attendanceCount / totalStudents) * 100) : null;
   const quizAccuracy = reportData?.metrics?.quizAccuracy ?? 0;
   const pollVotes = reportData?.metrics?.pollVotesTotal ?? 0;
-  const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? 0;
+  // v0.6.1 数据真实性：无通票为 null（显示「—」），不再回退 0/5.0
+  const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? null;
   const durationMin = reportData?.session?.durationMin ?? 0;
 
   const rawPacingSum =
@@ -197,7 +203,7 @@ export function ClassroomBriefingView({
       quizAccuracy,
       interactiveCount: pollVotes,
       pacingData,
-      primaryPuzzledConcept: reportData?.metrics?.topPuzzledConcept || '核心公式与变式应用',
+      primaryPuzzledConcept: reportData?.metrics?.topPuzzledConcepts?.[0],
     });
   }, [lessonTitle, durationMin, totalStudents, quizAccuracy, pollVotes, pacingData, reportData]);
 
@@ -320,9 +326,11 @@ export function ClassroomBriefingView({
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '全班出勤率' : 'Attendance'}
           </span>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">100%</div>
+          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+            {attendanceRate != null ? `${attendanceRate}%` : '—'}
+          </div>
           <span className="text-[10px] text-muted mt-1">
-            {totalStudents} / {totalStudents} 人到课
+            {attendanceCount} / {totalStudents} 人到课
           </span>
         </div>
 
@@ -348,7 +356,9 @@ export function ClassroomBriefingView({
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '结课通票评分' : 'Exit Rating'}
           </span>
-          <div className="text-2xl font-black text-indigo-500 font-mono mt-1">{exitRating} ★</div>
+          <div className="text-2xl font-black text-indigo-500 font-mono mt-1">
+            {exitRating != null ? `${exitRating} ★` : '—'}
+          </div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '掌握度 5.0 满分制' : 'Out of 5.0'}</span>
         </div>
 

@@ -31,48 +31,33 @@ interface CheckResult {
 export function PreflightHealthModal({ isOpen, onClose, classId, className, lang = 'zh' }: PreflightHealthModalProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
+  // v0.6.1 数据真实性：检测失败如实呈现错误并允许重试 —— 此前失败/缺字段时
+  // 本地编造 healthScore 99 与全部 passed，把故障伪装成健康。
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   const runHealthcheck = () => {
     setIsChecking(true);
-    const start = Date.now();
+    setCheckError(null);
 
     fetch(`/api/classes/${classId || 'default'}/preflight-health`)
       .then((res) => {
-        if (!res.ok) throw new Error('Health check error');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
-        setTimeout(() => {
-          setResult({
-            localApiLatencyMs: data.checks?.localApiLatencyMs || Math.max(3, Date.now() - start),
-            staticResources: data.checks?.staticResources || {
-              status: 'passed',
-              message: '课件与静态媒体资源校验完整',
-            },
-            pluginSandbox: data.checks?.pluginSandbox || {
-              status: 'passed',
-              message: '微前端与安全沙箱策略就绪',
-            },
-            socketMesh: data.checks?.socketMesh || {
-              status: 'passed',
-              message: '实时广播总线与局域网节点健康',
-            },
-            healthScore: data.healthScore || 98,
-          });
-          setIsChecking(false);
-        }, 600);
+        setResult({
+          localApiLatencyMs: data.checks?.localApiLatencyMs,
+          staticResources: data.checks?.staticResources,
+          pluginSandbox: data.checks?.pluginSandbox,
+          socketMesh: data.checks?.socketMesh,
+          healthScore: data.healthScore,
+        });
+        setIsChecking(false);
       })
-      .catch(() => {
-        setTimeout(() => {
-          setResult({
-            localApiLatencyMs: 6,
-            staticResources: { status: 'passed', message: '课件离线沙箱加载通过' },
-            pluginSandbox: { status: 'passed', message: 'CSP iframe 隔离策略有效' },
-            socketMesh: { status: 'passed', message: 'Socket.IO 局域网广播正常' },
-            healthScore: 99,
-          });
-          setIsChecking(false);
-        }, 600);
+      .catch((err) => {
+        setResult(null);
+        setCheckError(err?.message || '无法连接服务器');
+        setIsChecking(false);
       });
   };
 
@@ -120,7 +105,7 @@ export function PreflightHealthModal({ isOpen, onClose, classId, className, lang
                 {lang === 'zh' ? '系统就绪综合健康指数' : 'Overall Health Score'}
               </span>
               <div className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono">
-                {isChecking ? '--' : `${result?.healthScore ?? 98} / 100`}
+                {isChecking ? '--' : checkError ? '—' : `${result?.healthScore ?? '--'} / 100`}
               </div>
               <div className="text-2xs text-muted flex items-center gap-1">
                 <Activity size={10} className="text-emerald-500" />

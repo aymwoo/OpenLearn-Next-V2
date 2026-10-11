@@ -101,7 +101,8 @@ export interface DanmakuItem {
   text: string;
   type?: 'text' | 'voice' | 'badge';
   voiceDuration?: number;
-  topPercent: number; // 10% - 80%
+  /** 弹幕纵向排版位（10%–80%）；未提供时由 overlay 随机排版 —— 纯视觉布局，非数据 */
+  topPercent?: number;
   color?: string;
 }
 

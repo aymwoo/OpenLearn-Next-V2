@@ -59,7 +59,8 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
   const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
 
   // Submit state
-  const [filePath, setFilePath] = useState('/files/my-homework.pdf');
+  // v0.6.1 数据真实性：不再默认虚构 '/files/my-homework.pdf'（同伴侧渲染为 404 链接）
+  const [filePath, setFilePath] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
 
   // Peer review states (mapped by submissionId)
@@ -104,20 +105,20 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!filePath.trim()) return;
+    if (!filePath.trim()) {
+      // 允许无文件路径的提交（文字说明/口头提交由教师线下确认）
+    }
 
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/commands', {
+      // v0.6.1 数据真实性：改走 lesson 作用域学生提交端点 —— 此前走教师专用
+      // /api/commands，学生必 403
+      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commandType: 'assignment.submit',
-          payload: {
-            lessonId,
-            studentId,
-            filePath: filePath.trim(),
-          },
+          studentId,
+          filePath: filePath.trim() || undefined,
         }),
       });
 
@@ -125,7 +126,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
       if (data.success) {
         addToast(
           zh ? '作业提交成功' : 'Assignment Submitted',
-          zh ? `成功提交版本 ${data.result.version}！` : `Successfully submitted version ${data.result.version}!`,
+          zh ? `成功提交版本 ${data.version}！` : `Successfully submitted version ${data.version}!`,
           'success',
         );
         fetchData(true);
@@ -154,17 +155,13 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
 
     setReviewLoading((prev) => ({ ...prev, [submissionId]: true }));
     try {
-      const res = await fetch('/api/commands', {
+      // v0.6.1 数据真实性：互评走 lesson 作用域学生互评端点
+      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions/${submissionId}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commandType: 'assignment.peer_review',
-          payload: {
-            submissionId,
-            reviewerId: studentId,
-            score: Number(score),
-            comment,
-          },
+          score: Number(score),
+          comment,
         }),
       });
 

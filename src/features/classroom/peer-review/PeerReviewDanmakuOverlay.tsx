@@ -39,7 +39,7 @@ export const PeerReviewDanmakuOverlay: React.FC<PeerReviewDanmakuOverlayProps> =
           key={item.id}
           className="absolute whitespace-nowrap animate-danmaku-slide pointer-events-auto"
           style={{
-            top: `${item.topPercent}%`,
+            top: `${item.topPercent ?? Math.floor(Math.random() * 60) + 15}%`,
             right: '-100%',
           }}
         >

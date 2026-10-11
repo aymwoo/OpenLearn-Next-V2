@@ -52,6 +52,7 @@ describe('post-class copilot reflection & followup tiering', () => {
     const report = generateCoPilotReflection({
       lessonTitle: '牛顿第二定律',
       durationMin: 45,
+      lectureMin: 32,
       totalStudents: 30,
       quizAccuracy: 72,
       interactiveCount: 10,
@@ -63,6 +64,20 @@ describe('post-class copilot reflection & followup tiering', () => {
     expect(report.bottlenecks.some((b) => b.title.includes('单向讲授用时偏高'))).toBe(true);
     expect(report.pacingAlerts.length).toBeGreaterThan(0);
     expect(report.actionableSuggestions.some((s) => s.timing === 'next_pre_class')).toBe(true);
+  });
+
+  it('generateCoPilotReflection: 未提供真实讲授时长时 lectureRatio 为 null 且不伪造讲授瓶颈', () => {
+    const report = generateCoPilotReflection({
+      lessonTitle: '牛顿第二定律',
+      durationMin: 45,
+      totalStudents: 30,
+      quizAccuracy: 72,
+      interactiveCount: 10,
+      pacingData: { CLEAR: 15, CONFUSED: 5, TOO_FAST: 2 },
+    });
+
+    expect(report.lectureRatio).toBeNull();
+    expect(report.bottlenecks.some((b) => b.title.includes('单向讲授用时偏高'))).toBe(false);
   });
 
   it('classifyStudentTier: 能够区分 A/B/C 三级能力梯队', () => {

@@ -203,7 +203,8 @@ export function TopPerformersWidget({
             totalQuizzesAnswered: 1,
             correctCount: isCorrect,
             accuracy: isCorrect ? 100 : 0,
-            avgTimeSpentMs: payload.time_spent_ms || 8000,
+            // v0.6.1 数据真实性：无真实耗时不编造（此前 || 8000 伪造均速）
+            avgTimeSpentMs: payload.time_spent_ms ?? null,
             lastSubmittedAt: Date.now(),
           };
           updated = [...prev, newStudent];
@@ -530,7 +531,8 @@ export function TopPerformersWidget({
 
                   <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-theme/40">
                     <span className="flex items-center gap-1 font-mono">
-                      <Clock size={11} /> {(st.avgTimeSpentMs / 1000).toFixed(1)}s {lang === 'zh' ? '均速' : 'avg'}
+                      <Clock size={11} /> {st.avgTimeSpentMs ? `${(st.avgTimeSpentMs / 1000).toFixed(1)}s` : '—'}{' '}
+                      {lang === 'zh' ? '均速' : 'avg'}
                     </span>
                     {isGold && (
                       <button

@@ -252,34 +252,30 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
       // 不伪造语音时长：真实时长需要 MediaRecorder 录制，平台尚未接入。
       // 没有真实音频时留空（UI 退化为纯文字弹幕），而不是编一个 4 秒。
       voiceDuration: undefined,
-      topPercent: Math.floor(Math.random() * 60) + 15,
+      // v0.6.1 数据真实性：移除 Math.random 伪造的 TOP 百分位
       color: 'text-[#4edea3]',
     };
     setDanmakuList((prev) => [...prev, newDanmaku]);
   };
 
   const handleAwardPeerReviewPoints = () => {
-    addToast?.('微勋章已分发', '已向全员认真参与互评的学生批量发放 +2 过程性积分！', 'success');
+    // v0.6.1 数据真实性：批量积分发放尚未接真实端点（points ledger 需要
+    // classId + 逐生调用），如实提示而非假成功
+    addToast?.('功能尚未接入', '批量积分发放通道建设中，本次未写入任何积分。', 'warning');
   };
 
   const handleArchiveTopWorks = () => {
-    // 入库对象来自真实焦点作品（无则说明无人可入库），不再硬编码学生姓名
-    const names = [workA?.studentName, workB?.studentName].filter(Boolean) as string[];
-    addToast?.(
-      '作品已入库',
-      names.length > 0
-        ? `${names.join(' 与 ')}的优秀作品已收录进班级数字展览馆。`
-        : '暂无焦点作品可入库（学生尚未提交）。',
-      'success',
-    );
+    // v0.6.1 数据真实性：作品归档尚未接真实存储端点，如实提示
+    addToast?.('功能尚未接入', '作品归档通道建设中，本次未做任何存储。', 'warning');
   };
 
   const handleCallStudentMic = (studentName: string) => {
-    addToast?.('连麦请求已发起', `正在向 ${studentName} 的学生端发起实时语音连麦...`, 'info');
+    // v0.6.1 数据真实性：连麦信令通道未实现，如实提示
+    addToast?.('功能尚未接入', `向 ${studentName} 发起连麦的信令通道建设中。`, 'warning');
   };
 
   const handleInviteScreenShare = (studentName: string) => {
-    addToast?.('投屏邀请已下发', `已向 ${studentName} 发送大屏投屏演示邀请。`, 'info');
+    addToast?.('功能尚未接入', `向 ${studentName} 的投屏邀请通道建设中。`, 'warning');
   };
 
   const handleAdvanceToStage3 = () => {

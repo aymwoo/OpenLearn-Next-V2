@@ -1,6 +1,9 @@
+import fs from 'node:fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { getUploadsDir } from '../utils/paths.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 import { classRoom } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
@@ -143,6 +146,84 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { lessonId, studentId } = req.params;
       res.json(lessonService.getStudentEvalStatus(lessonId, studentId));
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // ── v0.6.1 数据真实性：学生端「作业提交 / 互评」专用写入端点 ────────────
+  // 此前学生端走 /api/commands（教师专用端点）→ 必 403，每次点击报错。
+  // 学生只能以**本人身份**提交/互评（session.studentId 强制对齐）。
+  app.post('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
+    try {
+      const session = (req as any).session;
+      const { studentId, filePath, textContent } = req.body || {};
+      const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
+      const targetStudentId = isPrivileged ? String(studentId || '') : String(session?.studentId || '');
+      if (!targetStudentId) {
+        return res.status(400).json({ success: false, error: 'Missing studentId' });
+      }
+      if (filePath && typeof filePath !== 'string') {
+        return res.status(400).json({ success: false, error: 'filePath must be a string' });
+      }
+      const now = Date.now();
+      const existing = kernelContainer.db
+        .prepare('SELECT id, version FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?')
+        .get(req.params.lessonId, targetStudentId) as { id: string; version: number } | undefined;
+
+      if (existing) {
+        // 重复提交 = 新版本（面板 toast 展示版本号）
+        const newVersion = (existing.version ?? 1) + 1;
+        kernelContainer.db
+          .prepare('UPDATE plugin_submissions SET file_path = ?, version = ?, updated_at = ? WHERE id = ?')
+          .run(filePath || '', newVersion, now, existing.id);
+        return res.json({ success: true, submissionId: existing.id, version: newVersion });
+      }
+
+      const id = randomId('evalsub_');
+      kernelContainer.db
+        .prepare(
+          `INSERT INTO plugin_submissions (id, assignment_id, lesson_id, student_id, file_path, version, created_at, updated_at)
+           VALUES (?, NULL, ?, ?, ?, 1, ?, ?)`,
+        )
+        .run(id, req.params.lessonId, targetStudentId, filePath || '', now, now);
+      if (textContent) {
+        console.log(`[Eval] Student ${targetStudentId} submitted text content for lesson ${req.params.lessonId}`);
+      }
+      res.json({ success: true, submissionId: id, version: 1 });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  app.post('/api/lessons/:lessonId/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
+    try {
+      const session = (req as any).session;
+      const { score, comment } = req.body || {};
+      const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
+      const reviewerId = isPrivileged ? String((req.body || {}).reviewerId || session?.studentId || '') : String(session?.studentId || '');
+      if (!reviewerId) {
+        return res.status(400).json({ success: false, error: 'Missing reviewerId' });
+      }
+      const numericScore = Number(score);
+      if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100) {
+        return res.status(400).json({ success: false, error: 'Score must be 0-100' });
+      }
+      const submission = kernelContainer.db
+        .prepare('SELECT id FROM plugin_submissions WHERE id = ? AND lesson_id = ?')
+        .get(req.params.submissionId, req.params.lessonId);
+      if (!submission) {
+        return res.status(404).json({ success: false, error: 'Submission not found for this lesson' });
+      }
+      const id = randomId('evalrev_');
+      const now = Date.now();
+      kernelContainer.db
+        .prepare(
+          `INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, comment, assignment_id, anonymous, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, NULL, 0, 'submitted', ?, ?)`,
+        )
+        .run(id, req.params.submissionId, reviewerId, numericScore, comment || '', now, now);
+      res.json({ success: true, reviewId: id });
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -429,24 +510,59 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   app.get('/api/classes/:classId/preflight-health', requireAuth(), (req, res) => {
+    // v0.6.1 数据真实性：逐项真实探测（数据层延迟 / 课件存储可写 / 内核插件链 /
+    // 实时广播总线），健康分 = 通过项占比。此前 SELECT 1 之外全部硬编码
+    // 「98 分 + 全部 passed」。
     try {
       const classId = req.params.classId;
-      const startTime = Date.now();
+      // 混合形状：延迟为数值字段，其余为探测结论对象（与客户端 CheckResult 契约一致）
+      const checks: Record<string, any> = {};
+      let passed = 0;
 
+      // 1. 数据层连通（真实往返延迟）
+      const startTime = Date.now();
       kernelContainer.db.prepare('SELECT 1 as alive').get();
       const rttMs = Math.max(2, Date.now() - startTime);
+      checks.localApiLatencyMs = rttMs;
+      checks.database = { status: 'passed', message: `数据层连通（往返 ${rttMs}ms）` };
+      passed += 1;
+
+      // 2. 课件存储目录可写
+      try {
+        const dir = getUploadsDir();
+        fs.mkdirSync(dir, { recursive: true });
+        fs.accessSync(dir, fs.constants.W_OK);
+        checks.staticResources = { status: 'passed', message: '课件存储目录可写' };
+        passed += 1;
+      } catch (err: any) {
+        checks.staticResources = { status: 'failed', message: `课件存储目录不可写：${err?.message ?? '未知原因'}` };
+      }
+
+      // 3. 内核插件链就绪
+      const activeRow = kernelContainer.db
+        .prepare("SELECT COUNT(*) as n FROM plugins WHERE status = 'active'")
+        .get() as { n: number };
+      if ((activeRow?.n ?? 0) > 0) {
+        checks.pluginSandbox = { status: 'passed', message: `内核插件链就绪（${activeRow.n} 个 active 插件）` };
+        passed += 1;
+      } else {
+        checks.pluginSandbox = { status: 'failed', message: '无 active 插件，内核插件链未就绪' };
+      }
+
+      // 4. 实时广播总线
+      if (ctx.io) {
+        checks.socketMesh = { status: 'passed', message: '实时广播总线在线（Socket.IO 已挂载）' };
+        passed += 1;
+      } else {
+        checks.socketMesh = { status: 'failed', message: 'Socket.IO 未挂载，实时广播不可用' };
+      }
 
       res.json({
         classId,
         timestamp: Date.now(),
-        healthScore: 98,
-        status: 'healthy',
-        checks: {
-          localApiLatencyMs: rttMs,
-          staticResources: { status: 'passed', message: '课件与静态媒体资源校验完整' },
-          pluginSandbox: { status: 'passed', message: '微前端与安全沙箱策略就绪' },
-          socketMesh: { status: 'passed', message: '实时广播总线与局域网节点健康' },
-        },
+        healthScore: Math.round((passed / 4) * 100),
+        status: passed === 4 ? 'healthy' : 'degraded',
+        checks,
       });
     } catch (e: any) {
       sendSafeError(res, e);

@@ -255,16 +255,15 @@ export function ClassroomAttributionModal({
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-primary-theme p-0.5 shadow-sm">
                     <div className="w-full h-full rounded-2xl bg-surface flex flex-col items-center justify-center text-primary-theme font-black">
                       <span className="text-[10px] leading-none text-muted font-mono">
-                        {selectedStudent.seatNumber || '3组'}
+                        {selectedStudent.seatNumber || '—'}
                       </span>
                       <span className="text-base leading-none font-extrabold mt-0.5">
-                        {selectedStudent.studentNo?.slice(-2) || '08'}
+                        {selectedStudent.studentNo?.slice(-2) || '—'}
                       </span>
                     </div>
                   </div>
-                  <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 rounded-full bg-emerald-500 text-white text-[9px] font-bold shadow-xs">
-                    {lang === 'zh' ? '专注' : 'Active'}
-                  </span>
+                  {/* v0.6.1 数据真实性：专注徽标已移除 —— 此前无条件常显「专注」，
+                      与真实在线/专注状态无关。接真实 presence 判定后再恢复。 */}
                 </div>
 
                 <div>
@@ -295,8 +294,8 @@ export function ClassroomAttributionModal({
                     </span>
                     <span className="text-muted text-[11px]">
                       {lang === 'zh'
-                        ? `今日抽中 ${selectedStudent.pickedCountToday ?? 1} 次`
-                        : `Picked ${selectedStudent.pickedCountToday ?? 1}x`}
+                        ? `今日抽中 ${selectedStudent.pickedCountToday ?? 0} 次`
+                        : `Picked ${selectedStudent.pickedCountToday ?? 0}x`}
                     </span>
                   </div>
                 </div>
@@ -453,26 +452,9 @@ export function ClassroomAttributionModal({
             />
           </div>
 
-          <div className="bg-surface-secondary/40 rounded-xl border border-border/70 p-3 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                <Trophy size={14} />
-              </span>
-              <div>
-                <div className="font-bold text-foreground">
-                  {lang === 'zh'
-                    ? `榜首小队：${students.length > 0 ? students[0]?.groupName || '未分组' : '数据不足'}`
-                    : `Top Group: ${students.length > 0 ? students[0]?.groupName || 'Ungrouped' : 'No data'}`}
-                </div>
-                <div className="text-[10px] text-muted">
-                  {lang === 'zh' ? '累计 104 积分 · 领跑全班' : '104 cumulative points · Leading'}
-                </div>
-              </div>
-            </div>
-            <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-300/40">
-              TOP 1
-            </span>
-          </div>
+          {/* v0.6.1 数据真实性：「榜首小队 · 累计 104 积分 · TOP 1」区块已移除 ——
+              104 为写死数值，「榜首」取花名册第一个学生而非积分最高组。
+              真实小组积分聚合见积分榜弹窗（class_groups 数据源）。 */}
         </div>
 
         <div className="p-4 border-t border-border/60 bg-surface-secondary/30 flex flex-wrap items-center justify-between gap-3">

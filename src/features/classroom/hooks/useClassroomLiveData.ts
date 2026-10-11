@@ -138,7 +138,20 @@ const HIGH_PROGRESS = 80;
 const MID_PROGRESS = 50;
 
 /** 计入「课堂亮点」的事件类型（来自 liveClassFeed.type） */
-const HIGHLIGHT_TYPES = new Set(['success', 'answer', 'checkin', 'achievement']);
+// v0.6.1 数据真实性：白名单对齐 classroom-feed-service 的真实类型集合
+// （此前交集仅 2 类，大部分真实动态进不了「课堂亮点」）
+const HIGHLIGHT_TYPES = new Set([
+  'quiz_answered',
+  'assignment_submitted',
+  'assignment_graded',
+  'achievement',
+  'checkin',
+  'progress',
+  'courseware_submitted',
+  // 本地 UI 事件类型（锁屏/抽问/工具下发等真实课堂动作）保留
+  'success',
+  'answer',
+]);
 
 /** 亮点最多保留条数 */
 const MAX_HIGHLIGHTS = 6;

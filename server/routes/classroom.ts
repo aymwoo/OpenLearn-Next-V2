@@ -455,6 +455,14 @@ export function registerClassroomRoutes(
           } catch (_) {
             activePoll.options = [];
           }
+          // v0.6.1 数据真实性：中控「结束投票 (N人)」此前读不存在的字段恒为 0
+          try {
+            activePoll.totalVotes = (
+              db.prepare('SELECT COUNT(*) AS n FROM classroom_poll_votes WHERE poll_id = ?').get(activePoll.id) as any
+            )?.n ?? 0;
+          } catch (_) {
+            activePoll.totalVotes = 0;
+          }
         }
 
         const activeBuzzer = db
@@ -1336,7 +1344,12 @@ export function registerClassroomRoutes(
         const activeSession = db
           .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
           .get(lessonId) as any;
-        const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+        // v0.6.1 数据真实性：无活动会话拒绝提交 —— 此前写入合成 `s_${lessonId}`
+        // 会话的「无主票据」，伪造会话归属且绕过阶段校验
+        if (!activeSession) {
+          return res.status(404).json({ error: '当前课节没有进行中的课堂会话，无法提交结课通票' });
+        }
+        const sessionId = activeSession.id;
 
         const ticketId = randomId('ticket_');
         const now = Date.now();
@@ -1429,7 +1442,12 @@ export function registerClassroomRoutes(
         const activeSession = db
           .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
           .get(lessonId) as any;
-        const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+        // v0.6.1 数据真实性：无活动会话拒绝提交 —— 此前写入合成 `s_${lessonId}`
+        // 会话的「无主票据」，伪造会话归属且绕过阶段校验
+        if (!activeSession) {
+          return res.status(404).json({ error: '当前课节没有进行中的课堂会话，无法提交结课通票' });
+        }
+        const sessionId = activeSession.id;
 
         let rows: any[] = [];
         try {
@@ -1562,7 +1580,8 @@ export function registerClassroomRoutes(
             .all(session.id, tenMinsAgo) as { signal_type: string; count: number }[])
         : [];
 
-      const pacingSummary: Record<string, number> = { TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 };
+      // v0.6.1：补 SLOW 键 —— 学生提交含 SLOW，此前聚合漏键致「快一点」在大屏不可见
+      const pacingSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
       pacingRows.forEach((r) => {
         pacingSummary[r.signal_type] = r.count;
       });
@@ -1602,7 +1621,7 @@ export function registerClassroomRoutes(
                 UNION
                 SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
                 UNION
-                SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ?
+                SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
               )
             `,
               )
@@ -1654,6 +1673,9 @@ export function registerClassroomRoutes(
       }
 
       // ── 9. 互动课件参与（提交 / 参与人数 / 完成度） ────────────────────
+      // v0.6.1 数据真实性：courseware_attempt 无 lesson 关联列，本指标为
+      // **平台累计口径**（此前 SQL 无过滤却在前端标为「本课节」）——客户端
+      // 文案已同步改为「累计」。待 courseware_attempt 增加 lesson_id 后可升级。
       let courseware: { attempts: number; participants: number; completed: number; avgCompletion: number } | null =
         null;
       try {
@@ -1729,8 +1751,12 @@ export function registerClassroomRoutes(
         }
 
         // 测验表现汇总
+        // v0.6.1 数据真实性：排除「模拟答题」产生的假记录（id 前缀 sim-quiz-），
+        // 模拟数据不得混入真实学情统计
         const quizSubmissions = db
-          .prepare('SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ?')
+          .prepare(
+            "SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'",
+          )
           .all(lessonId) as { score: number; is_correct: number; time_spent_ms: number }[];
 
         const totalQuizSubmissions = quizSubmissions.length;
@@ -1760,10 +1786,14 @@ export function registerClassroomRoutes(
           )
           .all(session.id) as { student_id: string; rating: number; puzzled_concept: string; feedback: string }[];
 
+        // v0.6.1 数据真实性：无评分票据时返回 null（此前写死 '5.0' 满分，
+        // 三个消费端在 0 人提交时也展示「5.0★」）；|| 5 的缺省补值一并移除，
+        // 只聚合携带真实 rating 的票据。
+        const ratedTickets = exitTickets.filter((t) => typeof t.rating === 'number');
         const avgRating =
-          exitTickets.length > 0
-            ? (exitTickets.reduce((sum, t) => sum + (t.rating || 5), 0) / exitTickets.length).toFixed(1)
-            : '5.0';
+          ratedTickets.length > 0
+            ? Number((ratedTickets.reduce((sum, t) => sum + (t.rating ?? 0), 0) / ratedTickets.length).toFixed(1))
+            : null;
 
         const puzzledConcepts = exitTickets.map((t) => t.puzzled_concept?.trim()).filter((c) => Boolean(c));
 
@@ -1783,7 +1813,7 @@ export function registerClassroomRoutes(
                   ROUND(AVG(is_correct) * 100, 1) as accuracy,
                   COUNT(*) as quiz_count
            FROM lesson_quiz_submissions
-           WHERE lesson_id = ?
+           WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
            GROUP BY student_id`,
           )
           .all(lessonId) as Array<{
@@ -1905,7 +1935,7 @@ export function registerClassroomRoutes(
             quizAccuracy: avgQuizAccuracy,
             pollVotesTotal: pollVotesCount,
             exitTicketsCount: exitTickets.length,
-            exitTicketsAvgRating: parseFloat(avgRating),
+            exitTicketsAvgRating: avgRating,
             topPuzzledConcepts: puzzledConcepts.slice(0, 10),
             pacingOverall,
             pacingBySegment: pacingBreakdown,

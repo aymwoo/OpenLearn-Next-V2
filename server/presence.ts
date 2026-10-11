@@ -3,6 +3,7 @@ import type { EventBusPort } from '../packages/core/event-bus/index.js';
 import { lessonActiveSegments, setActiveSegment } from './shared-state.js';
 import { randomId } from './utils/id.js';
 import { createLogger } from '../packages/core/observability/logger.js';
+import { kernelContainer } from '../packages/core/kernel/index.js';
 
 const plog = createLogger('presence');
 export interface PresenceDeps {
@@ -515,6 +516,19 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           classId: data.classId,
           pickedTime: Date.now(),
         };
+        // v0.6.1 数据真实性（R-3）：手动抽问与白板 rollcall 同等落库 —— 此前
+        // 只有白板路径写 student_rollcalls，学生档案点名记录与公平抽人统计
+        // 漏计手动抽问。幂等键 = 手动前缀 + 学生 + 毫秒时间戳。
+        try {
+          const rollcallId = `rollcall-manual-${data.studentId}-${payload.pickedTime}`;
+          kernelContainer.db
+            .prepare(
+              'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)',
+            )
+            .run(rollcallId, data.studentId, data.classId || '', data.lessonId || '', payload.pickedTime);
+        } catch (e: any) {
+          plog.warn(`[Presence] Failed to persist manual rollcall: ${e?.message}`);
+        }
         // 单次全局广播：io.emit 是任何房间定向投递的超集。
         // 历史上曾对 lesson 房间 + class 房间 + 全局三重投递，学生同时命中多房间时会收到 2-3 次重复事件（弹窗重复）。
         // 点名是低频手动操作，全局单次可保证教师仪表盘（未进课节房间）也能收到；高频 presence 已另做合并。

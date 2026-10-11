@@ -99,7 +99,9 @@ export function PostClassWrapupView({
         .then((data) => {
           if (data?.metrics) {
             setExitTicketStats({
-              avgRating: data.metrics.exitTicketsAvgRating || 0,
+              // v0.6.1 数据真实性：服务端无通票返回 null → 与 summary 的 0 一致，
+              // 不再出现 5.0/0 来回翻转
+              avgRating: data.metrics.exitTicketsAvgRating ?? 0,
               count: data.metrics.exitTicketsCount || 0,
               topConcepts: data.metrics.topPuzzledConcepts || [],
             });
@@ -150,10 +152,13 @@ export function PostClassWrapupView({
     if (onBroadcastNotice) {
       onBroadcastNotice(msg);
     }
+    // v0.6.1 数据真实性：学生端实时推送通道尚未接通，文案如实
     addToast(
-      lang === 'zh' ? '✓ 作业通知已下发' : '✓ Homework Broadcasted',
-      lang === 'zh' ? `已向 ${className || '全班'} 下发课后巩固任务。` : 'Homework sent to students.',
-      'success',
+      lang === 'zh' ? '✓ 作业通知已记录' : '✓ Homework Recorded',
+      lang === 'zh'
+        ? `已记录 ${className || '全班'} 的课后巩固任务到课堂动态流。学生端实时推送尚未接通，请口头同步。`
+        : 'Recorded to the classroom feed. Student push is not wired yet.',
+      'info',
     );
   };
 
@@ -614,6 +619,7 @@ export function PostClassWrapupView({
         lessonTitle={lessonTitle}
         className={className}
         masteryPercent={Math.round((exitTicketStats.avgRating / 5) * 100)}
+        puzzledConcepts={exitTicketStats.topConcepts}
         lang={lang}
       />
     </div>

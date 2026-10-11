@@ -164,7 +164,10 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
   const [timeHorizon, setTimeHorizon] = useState<'4weeks' | '8weeks' | 'all'>('all');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(true);
-  const [useSampleDataIfEmpty, setUseSampleDataIfEmpty] = useState<boolean>(true);
+  // v0.6.1 数据真实性：演示样本默认关闭 —— 此前默认开启，已评分作业不足
+  // 2 条时整表替换为 8 周硬编码假数据，KPI 卡以假乱真。空态显式提示 +
+  // 用户手动开启才展示演示样本。
+  const [useSampleDataIfEmpty, setUseSampleDataIfEmpty] = useState<boolean>(false);
 
   // 1. Collect unique classes for filter dropdown
   const uniqueClasses = useMemo(() => {
@@ -464,6 +467,11 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
 
       {/* Summary KPI Cards */}
       <div className="px-5 py-3 border-b border-gray-100 bg-slate-50/40 grid grid-cols-2 sm:grid-cols-4 gap-3.5 select-none">
+        {useSampleDataIfEmpty && (
+          <div className="col-span-2 sm:col-span-4 flex items-center gap-1.5 text-2xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+            ⚠️ {texts.demoBadge || '演示样本数据 —— 以下 KPI 为示例，非真实统计'}
+          </div>
+        )}
         <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
           <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
             <span>{texts.statCurrent}</span>

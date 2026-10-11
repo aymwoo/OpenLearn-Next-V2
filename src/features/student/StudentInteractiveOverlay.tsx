@@ -14,7 +14,7 @@ export interface StudentInteractiveOverlayProps {
 
 export function StudentInteractiveOverlay({
   lessonId,
-  studentId = 'student_demo',
+  studentId, // v0.6.1 数据真实性：无真实学号时不兜底假 id（假 id 会让真赢家在轮询中被翻成 MISSED）
   studentName = '我',
   lang = 'zh',
 }: StudentInteractiveOverlayProps) {
@@ -122,9 +122,13 @@ export function StudentInteractiveOverlay({
                 const decided =
                   outcome && outcome.buzzerId === json.activeBuzzer.id
                     ? outcome.status
-                    : json.activeBuzzer.winner_student_id === studentId
-                      ? 'WINNER'
-                      : 'MISSED';
+                    : !studentId
+                      ? // v0.6.1 数据真实性：无真实学号时跳过客户端赢家判定 ——
+                        // student_demo 兜底已移除，假 id 恒不等会让真赢家被翻成 MISSED
+                        'MISSED'
+                      : json.activeBuzzer.winner_student_id === studentId
+                        ? 'WINNER'
+                        : 'MISSED';
                 buzzOutcomeRef.current = { buzzerId: json.activeBuzzer.id, status: decided };
                 activeBuzzerRef.current = json.activeBuzzer;
                 setBuzzStatus(decided);

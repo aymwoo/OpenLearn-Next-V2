@@ -43,7 +43,11 @@ export function StudentCheckinPanel({ lessonId, lang, addToast }: StudentCheckin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: trimmed }),
       });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        attendanceScheduled?: boolean;
+      };
       if (!res.ok || !data.success) {
         setStatus('error');
         const msg =
@@ -56,8 +60,23 @@ export function StudentCheckinPanel({ lessonId, lang, addToast }: StudentCheckin
         return;
       }
       setStatus('done');
-      setMessage(lang === 'zh' ? '签到成功，出勤已记录' : 'Checked in, attendance recorded');
-      addToast(lang === 'zh' ? '签到成功' : 'Checked in', lang === 'zh' ? '出勤已记录' : 'Attendance recorded', 'success');
+      // v0.6.1 数据真实性：班级无排课时服务端只记会话级签到（不出勤表），
+      // 提示如实区分，不再一律声称「出勤已记录」
+      const recorded = data.attendanceScheduled !== false;
+      setMessage(
+        recorded
+          ? lang === 'zh'
+            ? '签到成功，出勤已记录'
+            : 'Checked in, attendance recorded'
+          : lang === 'zh'
+            ? '签到成功（本课节未关联排课，未计入正式出勤）'
+            : 'Checked in (no schedule linked; not counted in official attendance)',
+      );
+      addToast(
+        lang === 'zh' ? '签到成功' : 'Checked in',
+        recorded ? (lang === 'zh' ? '出勤已记录' : 'Attendance recorded') : (lang === 'zh' ? '会话级签到，未计入正式出勤' : 'Session-level check-in only'),
+        'success',
+      );
     } catch {
       setStatus('error');
       setMessage(lang === 'zh' ? '网络异常，请稍后重试' : 'Network error, retry later');

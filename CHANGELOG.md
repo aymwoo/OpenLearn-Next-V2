@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课堂互动与学情数据真实性端到端闭环（v0.6.1）**：
+  - **点名落库**：手动抽问与白板 rollcall 同步持久化至 `student_rollcalls` 表，解决学生档案漏计手动点名；
+  - **课堂互动与投票**：中控投票人数通过 `classroom_poll_votes` 真实统计；晴雨表补齐 `SLOW`（慢一点）节奏信号；结课通票强制关联活动会话（拒绝无主票据）；
+  - **真实数据脱虚**：测验统计与学情分析显式排除 `sim-quiz-` 模拟测试数据；结课通票评分无记录时诚实返回 `null`，移除默认硬编码 `5.0`；
+  - **教学副驾反思与知识树**：讲授时长仅在插件真实上报时计算比例，去除假数据比例推断；困惑点与知识树由真实结课通票数据驱动点亮；
+  - **课前准备稳定性**：课前广播通知状态计时器组件卸载自动清理，杜绝异步残留与测试环境 unhandled error。
+
 - **课件上传大小限制后台可配置**（用户报障「课件文件超过 7MB 上限」的后续）：
   - **管理后台 → 站点设置**新增「上传文件大小上限 (MB)」数字字段（1–90，默认 10），与站点名称/口号/Logo 同表单保存；
   - **存储**：新增迁移 [`020_upload_max_file_mb.sql`](./migrations/020_upload_max_file_mb.sql)（`site_settings` 增加 `upload_max_file_mb` 列，NULL = 默认 10）；`GET/PUT /api/site-settings` 带上该字段（PUT 侧 1–90 整数校验）；

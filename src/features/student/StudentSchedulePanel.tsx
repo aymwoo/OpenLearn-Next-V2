@@ -15,7 +15,10 @@ export function StudentSchedulePanel(props: StudentSchedulePanelProps) {
         <h3 className="font-semibold text-gray-800">My Schedule</h3>
       </div>
       <div className="p-4 flex-1">
-        {schedules.length === 0 ? (
+                <p className="text-2xs text-muted px-1 pb-1.5">
+  以下为每周重复的排课投影，日期为本周对应日。
+</p>
+{schedules.length === 0 ? (
           <div className="text-center p-8 text-gray-400 italic text-sm">No upcoming classes.</div>
         ) : (
           <div className="space-y-3">
