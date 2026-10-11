@@ -148,7 +148,7 @@ export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflect
     });
   }
 
-  if (lectureRatio > recommendedLectureMaxRatio) {
+  if (lectureRatio !== null && lectureRatio > recommendedLectureMaxRatio) {
     actionableSuggestions.push({
       title: '重构课堂结构，增加拼板探究与画廊互评',
       suggestion:
