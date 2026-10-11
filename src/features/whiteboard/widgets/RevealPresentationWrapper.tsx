@@ -206,44 +206,64 @@ export function RevealPresentationWrapper({
 
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64String = event.target?.result as string;
-        const base64Data = base64String.split(',')[1];
+      // 与服务端 express.json({limit:'10mb'}) 对齐：base64 膨胀 ~33%，
+      // 文件本体上限取 7MB（超限服务端会 413，此处提前给出可读提示）
+      if (file.size > 7 * 1024 * 1024) {
+        alert('课件文件超过 7MB 上限，请压缩后再上传。');
+        return;
+      }
 
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            base64Data: base64Data,
-          }),
+      // v0.6.1 修复：此前 reader.onload 是 async 函数且其 Promise 无人接住
+      // —— 上传失败抛出的「服务器上传文件失败」成为未捕获异步异常（全局
+      // 错误上报来源），且外层 try/catch 拦不到、finally 在 readAsDataURL
+      // 同步返回后立即执行导致 uploading spinner 失效。现把读取阶段转成
+      // Promise，全部错误汇入统一的 catch。
+      const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve((event.target?.result as string) ?? '');
+        reader.onerror = () => reject(new Error('本地文件读取失败'));
+        reader.readAsDataURL(file);
+      });
+      const base64Data = base64String.split(',')[1];
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          base64Data: base64Data,
+        }),
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        // 服务端原因透出（400 类型/内容校验、413 体积、403 权限），
+        // 不再笼统报「服务器上传文件失败」
+        if (response.status === 413) {
+          throw new Error('课件文件过大，超过服务器上传上限（10MB）。');
+        }
+        throw new Error(resData.error || `上传失败（HTTP ${response.status}）`);
+      }
+
+      if (onElementUpdate) {
+        // v0.6.1 修复：服务端返回的是 fileUrl/fileType/slideCount，此前客户端
+        // 读 url/type/pageCount —— 全部错位，上传成功后 fileUrl 也是 undefined，
+        // 课件永远无法加载。
+        await onElementUpdate(elementId, {
+          ...data,
+          fileUrl: resData.fileUrl,
+          fileName: file.name,
+          fileType: resData.fileType,
+          slideX: 0,
+          slideCount: resData.slideCount || 1,
+          isFullscreenSynced: data.isFullscreenSynced !== undefined ? data.isFullscreenSynced : true,
+          isFullscreenForced: false,
         });
-
-        if (!response.ok) {
-          throw new Error('服务器上传文件失败');
-        }
-
-        const resData = await response.json();
-
-        if (onElementUpdate) {
-          await onElementUpdate(elementId, {
-            ...data,
-            fileUrl: resData.url,
-            fileName: file.name,
-            fileType: resData.type,
-            slideX: 0,
-            slideCount: resData.pageCount || 1,
-            isFullscreenSynced: data.isFullscreenSynced !== undefined ? data.isFullscreenSynced : true,
-            isFullscreenForced: false,
-          });
-          setSlideIndex(0);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error(err);
-      alert('课件文件上传失败，请重试');
+        setSlideIndex(0);
+      }
+    } catch (err: any) {
+      console.error('[RevealPresentation] upload failed:', err);
+      alert(err?.message || '课件文件上传失败，请重试');
     } finally {
       setUploading(false);
     }
