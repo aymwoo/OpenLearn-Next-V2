@@ -25,6 +25,8 @@ import {
   Layers,
   HelpCircle,
   Compass,
+  ArrowUpCircle,
+  Copy,
 } from 'lucide-react';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
@@ -52,6 +54,8 @@ export interface SiteInfo {
   siteName: string;
   slogan: string;
   logoUrl: string | null;
+  /** 上传文件大小上限（MB）；null/undefined = 未配置，运行时取默认 10 */
+  uploadMaxFileMb?: number | null;
 }
 
 interface AdminPanelProps {
@@ -98,6 +102,7 @@ export function AdminPanel({
   const [siteSlogan, setSiteSlogan] = useState(siteInfo?.slogan || '');
   const [siteLogoUrl, setSiteLogoUrl] = useState<string | null>(siteInfo?.logoUrl || null);
   const [siteLogoInput, setSiteLogoInput] = useState(siteInfo?.logoUrl || '');
+  const [uploadMaxFileMb, setUploadMaxFileMb] = useState<number>(siteInfo?.uploadMaxFileMb ?? 10);
   const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
   const [siteSettingsLoaded, setSiteSettingsLoaded] = useState(false);
 
@@ -144,6 +149,46 @@ export function AdminPanel({
     latencyMs?: number;
   } | null>(null);
   const [loadingSqlite, setLoadingSqlite] = useState(false);
+
+  // System Upgrade Check state
+  const [upgradeInfo, setUpgradeInfo] = useState<{
+    success: boolean;
+    currentVersion: string;
+    latestVersion: string;
+    hasUpdate: boolean;
+    publishTime?: string | null;
+    upgradeCommands: {
+      npx: string;
+      npm: string;
+      git: string;
+    };
+  } | null>(null);
+  const [checkingUpgrade, setCheckingUpgrade] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [selectedDeployEnv, setSelectedDeployEnv] = useState<'npx' | 'npm' | 'git'>('npm');
+
+  const fetchUpgradeInfo = async () => {
+    try {
+      setCheckingUpgrade(true);
+      const res = await fetch('/api/system/check-upgrade');
+      if (res.ok) {
+        const data = await res.json();
+        setUpgradeInfo(data);
+      }
+    } catch (err) {
+      console.error('Failed to check system upgrade', err);
+    } finally {
+      setCheckingUpgrade(false);
+    }
+  };
+
+  const handleCopyCommand = (text: string, key: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+    }
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   const fetchSqliteStats = async () => {
     try {
@@ -271,6 +316,9 @@ export function AdminPanel({
         setSiteSlogan(data.slogan || '');
         setSiteLogoUrl(data.logoUrl || null);
         setSiteLogoInput(data.logoUrl || '');
+        if (typeof data.uploadMaxFileMb === 'number' && data.uploadMaxFileMb > 0) {
+          setUploadMaxFileMb(data.uploadMaxFileMb);
+        }
         setSiteSettingsLoaded(true);
       }
     } catch (err) {
@@ -301,6 +349,7 @@ export function AdminPanel({
           siteName: siteName.trim(),
           slogan: siteSlogan.trim(),
           logoUrl: logoToSave,
+          uploadMaxFileMb: Math.round(Number(uploadMaxFileMb)),
         }),
       });
       if (res.ok) {
@@ -341,6 +390,7 @@ export function AdminPanel({
   useEffect(() => {
     fetchUsers();
     fetchSqliteStats();
+    fetchUpgradeInfo();
     onAIProvidersChanged();
     // Simulate cpu fluctuations and poll database stats periodically for real-time telemetry
     const interval = setInterval(() => {
@@ -697,6 +747,148 @@ export function AdminPanel({
         </div>
       ) : activeAdminTab === 'sqlite' ? (
         <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
+          {/* System Version & Upgrade Maintenance Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-800/60 rounded-2xl p-5 text-white shadow-xs overflow-hidden relative">
+            <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-56 h-56 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-800/50 pb-4">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2.5 bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-indigo-300 shrink-0">
+                  <ArrowUpCircle size={22} className={checkingUpgrade ? 'animate-spin' : ''} />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-extrabold text-sm sm:text-base text-white tracking-wide">
+                      {lang === 'zh' ? '系统版本与升级生命周期' : 'System Version & Upgrade Lifecycle'}
+                    </h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-indigo-900/90 text-indigo-200 border border-indigo-700/60 font-semibold">
+                      v{upgradeInfo?.currentVersion || '2.0.0'}
+                    </span>
+                    {upgradeInfo?.hasUpdate ? (
+                      <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1.5 animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        {lang === 'zh' ? `可升级至 v${upgradeInfo.latestVersion}` : `Update Available: v${upgradeInfo.latestVersion}`}
+                      </span>
+                    ) : upgradeInfo ? (
+                      <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
+                        <Check size={12} />
+                        {lang === 'zh' ? '已是最新版本' : 'Up to date'}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-indigo-200/80 mt-1">
+                    {lang === 'zh'
+                      ? '纯 Node.js 生产环境平滑升级管理，支持 NPM 官方源与国内镜像双源智能探测与一键迁移保障。'
+                      : 'Zero-downtime upgrades for Node.js environments with automated pre-migration safety snapshots.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={fetchUpgradeInfo}
+                  disabled={checkingUpgrade}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl border border-indigo-400/40 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                >
+                  <RefreshCw size={12} className={checkingUpgrade ? 'animate-spin' : ''} />
+                  <span>{checkingUpgrade ? (lang === 'zh' ? '正在检测...' : 'Checking...') : (lang === 'zh' ? '检查更新' : 'Check Updates')}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Upgrade Command Switcher */}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-semibold text-indigo-200/90">
+                  {lang === 'zh' ? '无缝升级执行命令（根据您的部署方式选择）：' : 'Upgrade command by deployment form factor:'}
+                </span>
+                <div className="flex items-center bg-indigo-950/90 p-0.5 rounded-lg border border-indigo-700/50 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeployEnv('npm')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      selectedDeployEnv === 'npm'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-indigo-300 hover:text-white'
+                    }`}
+                  >
+                    {lang === 'zh' ? '全局 NPM' : 'Global NPM'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeployEnv('npx')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      selectedDeployEnv === 'npx'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-indigo-300 hover:text-white'
+                    }`}
+                  >
+                    {lang === 'zh' ? 'NPX 免安装' : 'NPX Runner'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeployEnv('git')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      selectedDeployEnv === 'git'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-indigo-300 hover:text-white'
+                    }`}
+                  >
+                    {lang === 'zh' ? '源码部署 (Git)' : 'Source Clone'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Code snippet with copy button */}
+              <div className="bg-slate-950/90 border border-indigo-800/80 rounded-xl p-3 flex items-center justify-between gap-3 font-mono text-xs">
+                <div className="text-emerald-400 select-all overflow-x-auto whitespace-nowrap scrollbar-none font-medium">
+                  {selectedDeployEnv === 'npm' && (upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest')}
+                  {selectedDeployEnv === 'npx' && (upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest')}
+                  {selectedDeployEnv === 'git' && (upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start')}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cmd =
+                      selectedDeployEnv === 'npm'
+                        ? (upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest')
+                        : selectedDeployEnv === 'npx'
+                          ? (upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest')
+                          : (upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start');
+                    handleCopyCommand(cmd, selectedDeployEnv);
+                  }}
+                  className="px-2.5 py-1 bg-indigo-600/40 hover:bg-indigo-600 text-indigo-100 hover:text-white rounded-lg border border-indigo-500/40 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 font-sans text-xs font-semibold"
+                >
+                  {copiedKey === selectedDeployEnv ? (
+                    <>
+                      <Check size={12} className="text-emerald-400" />
+                      <span className="text-emerald-300">{lang === 'zh' ? '已复制' : 'Copied'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} />
+                      <span>{lang === 'zh' ? '复制' : 'Copy'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-indigo-300/80 pt-0.5">
+                <span>
+                  {lang === 'zh'
+                    ? '🛡️ 数据安全保障：系统启动及执行数据库迁移时会自动创建物理快照 (backups/pre_migration_*.db)。亦可随时执行 openlearn backup --full 整包归档。'
+                    : '🛡️ Automated pre-migration snapshots are recorded. Run "openlearn backup --full" anytime for complete state packaging.'}
+                </span>
+                {upgradeInfo?.publishTime && (
+                  <span className="shrink-0 ml-2">
+                    {lang === 'zh' ? '更新时间: ' : 'Published: '}
+                    {new Date(upgradeInfo.publishTime).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Quick Header Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Health status check card */}
@@ -1263,6 +1455,25 @@ export function AdminPanel({
                   }
                   className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '上传文件大小上限 (MB)' : 'Upload Size Limit (MB)'}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={uploadMaxFileMb}
+                  onChange={(e) => setUploadMaxFileMb(Number(e.target.value))}
+                  className="w-40 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  {lang === 'zh'
+                    ? '课件（PDF/PPTX）等文件上传的体积上限，范围 1–90 MB，保存后立即生效。'
+                    : 'Size cap for file uploads (PDF/PPTX), 1–90 MB. Takes effect immediately after saving.'}
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -80,6 +80,7 @@ import {
 } from './server/middleware/auth.js';
 import { csrfGuard } from './server/middleware/csrf.js';
 import { sendSafeError } from './server/utils/error-handler.js';
+import { getUploadsDir, getPluginsDir } from './server/utils/paths.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -283,8 +284,13 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  // v0.6.1：JSON 体积硬上限抬至 110MB —— 课件上传（/api/upload）的大小限制
+  // 改为管理后台可配置（site_settings.upload_max_file_mb，1–90MB 文件本体，
+  // base64 膨胀 ~33% 后仍在上限内）。硬上限只约束单请求内存暴露峰值，
+  // 实际放行由 /api/upload 按配置逐请求裁决（413 + 明确文案）。
+  // 写操作另有 writeLimiter 限速 + 教师及以上鉴权，内存暴露可控。
+  app.use(express.json({ limit: '110mb' }));
+  app.use(express.urlencoded({ limit: '110mb', extended: true }));
   app.use((req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
       return writeLimiter(req, res, next);
@@ -313,7 +319,7 @@ async function startServer() {
       }
       next();
     },
-    express.static(path.join(process.cwd(), 'uploads'), {
+    express.static(getUploadsDir(), {
       // 禁用目录索引与隐藏文件
       index: false,
       dotfiles: 'ignore',
@@ -322,7 +328,7 @@ async function startServer() {
       maxAge: 0,
     }),
   );
-  app.use('/plugins', express.static(path.join(process.cwd(), 'plugins'), { index: false, dotfiles: 'ignore' }));
+  app.use('/plugins', express.static(getPluginsDir(), { index: false, dotfiles: 'ignore' }));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块?
 
   // SEC-NET-01: CORS 白名单化与 Same-Origin 智能放行
@@ -610,8 +616,20 @@ async function startServer() {
   } else {
     // Production static file serving
     const distPath = __dirname || path.join(process.cwd(), 'dist');
+    // SEC-CACHE: 针对 Vite 打包生成的 hash 静态分包开启不可变长效缓存
+    app.use(
+      '/assets',
+      express.static(path.join(distPath, 'assets'), {
+        maxAge: '1y',
+        immutable: true,
+      }),
+    );
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      // SEC-CACHE: index.html 必须严格禁用强缓存和协商缓存，杜绝客户端缓存旧入口导致新构建 ChunkLoadError 白屏
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

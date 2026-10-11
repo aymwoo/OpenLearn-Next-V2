@@ -19,6 +19,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **内置扩展包机制随包清退**：`builtin-bundles.ts`、Plugin Center「内置扩展包」卡片、store 的启停覆盖表与 storage 同步一并移除（该机制为承载此连接器而建，现无任何注册包；未来需要时按 R-5/R-8 整改后的成熟形态重建）；熔断降级路径改回「摘除扩展点 + 宿主停用」双通道；
   - **配套**：`.env.example` 移除 `SMARTEDU_*` 段；`docs/plugin/smart-edu-gateway.md` 删除；槽位权威文档失效引用更新。
 
+### Features
+
+- **课件上传大小限制后台可配置**（用户报障「课件文件超过 7MB 上限」的后续）：
+  - **管理后台 → 站点设置**新增「上传文件大小上限 (MB)」数字字段（1–90，默认 10），与站点名称/口号/Logo 同表单保存；
+  - **存储**：新增迁移 [`020_upload_max_file_mb.sql`](./migrations/020_upload_max_file_mb.sql)（`site_settings` 增加 `upload_max_file_mb` 列，NULL = 默认 10）；`GET/PUT /api/site-settings` 带上该字段（PUT 侧 1–90 整数校验）；
+  - **服务端强制**：`/api/upload` 解码文件字节数后按配置逐请求裁决，超限 413 并给出「可在管理后台调整」的明确文案；`express.json` 全局硬上限 10MB → 110MB（硬上限只约束单请求内存峰值，实际放行由上传路由按配置裁决；写操作有 writeLimiter + 教师及以上鉴权）；
+  - **客户端预检联动**：课件上传预检从硬编码 7MB 改为动态拉取 `/api/site-settings` 的配置值（模块级缓存，每会话一次），提示文案携带当前上限与调整入口；
+  - **回归**：迁移已在真实库副本上验证（列新增、NULL 语义正确）。
+
 ### Fixes
 
 - **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：

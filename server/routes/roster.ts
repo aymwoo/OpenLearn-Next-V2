@@ -7,6 +7,7 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packag
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { getUploadsDir } from '../utils/paths.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
@@ -435,7 +436,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'File content does not match the declared image type' });
       }
 
-      const avatarDir = path.join(process.cwd(), 'uploads', 'avatars');
+      const avatarDir = path.join(getUploadsDir(), 'avatars');
       fs.mkdirSync(avatarDir, { recursive: true });
       const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
       const filePath = path.join(avatarDir, uniqueName);
@@ -457,7 +458,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
         try {
-          fs.unlinkSync(path.join(process.cwd(), oldAvatar));
+          fs.unlinkSync(path.join(getUploadsDir(), oldAvatar.replace(/^\/uploads\//, '')));
         } catch {
           /* ignore */
         }

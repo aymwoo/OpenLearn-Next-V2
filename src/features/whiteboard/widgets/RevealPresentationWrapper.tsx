@@ -1,6 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown from 'react-markdown';
+
+// 上传大小上限（MB）——管理后台站点设置可配置（site_settings.upload_max_file_mb）。
+// 模块级缓存：每个浏览器会话只拉取一次公开端点 /api/site-settings。
+let cachedUploadLimitMb: number | null = null;
+const DEFAULT_UPLOAD_LIMIT_MB = 10;
+async function getUploadLimitMb(): Promise<number> {
+  if (cachedUploadLimitMb != null) return cachedUploadLimitMb;
+  try {
+    const res = await fetch('/api/site-settings');
+    if (res.ok) {
+      const data = await res.json();
+      if (typeof data.uploadMaxFileMb === 'number' && data.uploadMaxFileMb > 0) {
+        cachedUploadLimitMb = data.uploadMaxFileMb;
+      }
+    }
+  } catch {
+    // 拉取失败用默认值；服务端 413 兜底仍会给出明确文案
+  }
+  return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
+}
 import {
   Presentation,
   ChevronLeft,
@@ -206,10 +226,12 @@ export function RevealPresentationWrapper({
 
     setUploading(true);
     try {
-      // 与服务端 express.json({limit:'10mb'}) 对齐：base64 膨胀 ~33%，
-      // 文件本体上限取 7MB（超限服务端会 413，此处提前给出可读提示）
-      if (file.size > 7 * 1024 * 1024) {
-        alert('课件文件超过 7MB 上限，请压缩后再上传。');
+      // v0.6.1：上传上限由管理后台配置（site_settings.upload_max_file_mb，
+      // 默认 10MB），预检从 /api/site-settings 动态拉取（模块级缓存，
+      // 登录页/会话服务也在用该公开端点）。超限服务端仍会 413 兜底。
+      const limitMb = await getUploadLimitMb();
+      if (file.size > limitMb * 1024 * 1024) {
+        alert(`课件文件超过 ${limitMb}MB 上限，请压缩后再上传（上限可在管理后台 → 站点设置调整）。`);
         return;
       }
 

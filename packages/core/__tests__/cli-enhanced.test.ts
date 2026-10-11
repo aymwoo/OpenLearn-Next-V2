@@ -170,7 +170,7 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       writeFileSync(fakeBackup, 'not-a-sqlite-database-file');
       const fakeRes = await runRestore(fakeBackup, { dbPath, silent: true });
       expect(fakeRes.ok).toBe(false);
-      expect(fakeRes.error).toMatch(/并非有效的 SQLite 数据库备份/);
+      expect(fakeRes.error).toMatch(/既非 SQLite 数据库镜像亦非合法的 OpenLearn 备份 ZIP/);
 
       // 测试合法备份还原
       const restoreRes = await runRestore(backupPath, { dbPath, silent: true });

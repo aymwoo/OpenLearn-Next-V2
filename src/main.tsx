@@ -32,6 +32,18 @@ import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary';
 
 const pluginHost = new FrontendPluginHost();
 
+// 自动拦截因系统版本升级导致的动态分包加载失败 (ChunkLoadError)，执行防抖平滑重载
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  const lastReload = sessionStorage.getItem('openlearn_chunk_reload');
+  const now = Date.now();
+  // 10秒防抖窗口，防止极端网络故障时陷入无限循环刷新
+  if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+    sessionStorage.setItem('openlearn_chunk_reload', String(now));
+    window.location.reload();
+  }
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalErrorBoundary>

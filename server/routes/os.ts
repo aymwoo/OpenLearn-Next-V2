@@ -10,6 +10,7 @@ import { createActivityContext } from '../../packages/activity-ecosystem/index.j
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { listAIPersonas } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { getUploadsDir } from '../utils/paths.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
@@ -40,12 +41,25 @@ export function registerOsRoutes(ctx: ServerContext) {
       const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
       const fileBuffer = Buffer.from(base64Content, 'base64');
 
+      // v0.6.1：上传大小按管理后台配置强制执行（site_settings.upload_max_file_mb，
+      // NULL = 默认 10MB）。JSON 体积上限已抬到 110MB（server.ts），此处按
+      // **解码后**的文件字节数逐请求裁决，管理员可在 1–90MB 间调整。
+      const settingsRow = kernelContainer.db
+        .prepare('SELECT upload_max_file_mb FROM site_settings WHERE id = ?')
+        .get('global') as { upload_max_file_mb?: number | null } | undefined;
+      const maxFileMb = settingsRow?.upload_max_file_mb ?? 10;
+      if (fileBuffer.length > maxFileMb * 1024 * 1024) {
+        return res.status(413).json({
+          error: `课件文件超过 ${maxFileMb}MB 上限（上限可在管理后台 → 站点设置调整）。`,
+        });
+      }
+
       // SEC-DATA-03: Magic bytes 校验
       if (!validateMagicBytes(fileBuffer, filename)) {
         return res.status(400).json({ error: 'File content does not match the declared file type.' });
       }
 
-      const uploadsDir = path.join(process.cwd(), 'uploads');
+      const uploadsDir = getUploadsDir();
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }

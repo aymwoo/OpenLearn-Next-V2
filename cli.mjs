@@ -7,8 +7,15 @@ import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import os from 'node:os';
 
 import { runClean } from './cli-cleaner.mjs';
-import { runDoctor } from './cli-doctor.mjs';
-import { runBackup, runRestore, runResetAdmin, runPluginsList } from './cli-data.mjs';
+import { runDoctor, runCheckUpdate } from './cli-doctor.mjs';
+import {
+  runBackup,
+  runRestore,
+  runResetAdmin,
+  runPluginsList,
+  runMigrateStatus,
+  runMigrateRollback,
+} from './cli-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -27,7 +34,17 @@ export function parseCliArgs(rawArgs) {
     }
   }
 
-  const KNOWN_COMMANDS = new Set(['doctor', 'backup', 'restore', 'reset-admin', 'plugins', 'clean', 'clean-cache']);
+  const KNOWN_COMMANDS = new Set([
+    'doctor',
+    'backup',
+    'restore',
+    'reset-admin',
+    'plugins',
+    'clean',
+    'clean-cache',
+    'migrate',
+    'check-update',
+  ]);
 
   const ALIAS_COMMAND_MAP = {
     '--doctor': 'doctor',
@@ -37,6 +54,8 @@ export function parseCliArgs(rawArgs) {
     '--plugins': 'plugins',
     '--clean': 'clean',
     '--clean-cache': 'clean',
+    '--migrate': 'migrate',
+    '--check-update': 'check-update',
   };
 
   let command = null;
@@ -48,6 +67,7 @@ export function parseCliArgs(rawArgs) {
     demo: false,
     fix: false,
     all: false,
+    full: false,
     npx: false,
     db: false,
     port: null,
@@ -72,6 +92,8 @@ export function parseCliArgs(rawArgs) {
       flags.fix = true;
     } else if (token === '--all') {
       flags.all = true;
+    } else if (token === '--full') {
+      flags.full = true;
     } else if (token === '--npx') {
       flags.npx = true;
     } else if (token === '--db') {
@@ -164,8 +186,12 @@ export async function runCli(argv = process.argv.slice(2)) {
 Commands:
   doctor [options]         运行环境自检、防版本漂移体检与自动修复
                            选项: --fix (一键自动修复版本漂移与目录权限)
-  backup [file]            一键数据库快照在线备份 (默认输出至当前目录 openlearn_backup_*.db)
-  restore <file>           从备份快照文件安全还原数据 (自动生成现有数据库回滚副本)
+  check-update             检查 npm 官方源是否存在平台更新与版本升级指引
+  migrate [status|rollback] 查看数据库迁移状态或安全回滚最近一次迁移
+                           子命令: status (默认速查), rollback (执行回滚)
+  backup [file] [options]  一键数据冷备 (支持 --full 打包数据库与富媒体课件文件)
+                           选项: --full (打包 database + uploads + storage 为 zip 归档)
+  restore <file>           从备份快照文件安全还原数据 (支持 .db 镜像与 .zip 全量还原)
   reset-admin [options]    重置系统管理员 (admin) 密码 (默认重置为 admin)
                            选项: --password, -P <pwd>
   plugins [list]           查看当前已安装的平台插件清单与加载状态
@@ -204,13 +230,22 @@ Environment Variables:
   if (flags.demo) {
     demoDir = join(os.tmpdir(), `openlearn-demo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
     mkdirSync(demoDir, { recursive: true });
+    process.env.OPENLEARN_DATA_DIR = demoDir;
     process.env.OPENLEARN_DB_PATH = join(demoDir, 'data.db');
   } else if (flags.dbPath) {
     process.env.OPENLEARN_DB_PATH = resolve(flags.dbPath);
+    if (!process.env.OPENLEARN_DATA_DIR) {
+      process.env.OPENLEARN_DATA_DIR = dirname(process.env.OPENLEARN_DB_PATH);
+    }
   } else if (!process.env.OPENLEARN_DB_PATH) {
-    const dataDir = join(os.homedir(), 'openlearn-next');
+    const dataDir = process.env.OPENLEARN_DATA_DIR
+      ? resolve(process.env.OPENLEARN_DATA_DIR)
+      : join(os.homedir(), 'openlearn-next');
     mkdirSync(dataDir, { recursive: true });
+    process.env.OPENLEARN_DATA_DIR = dataDir;
     process.env.OPENLEARN_DB_PATH = join(dataDir, 'data.db');
+  } else if (!process.env.OPENLEARN_DATA_DIR) {
+    process.env.OPENLEARN_DATA_DIR = dirname(resolve(process.env.OPENLEARN_DB_PATH));
   }
 
   // ── Command Dispatcher ────────────────────────────────────────────────────
@@ -224,15 +259,37 @@ Environment Variables:
     process.exit(res.ok ? 0 : 1);
   }
 
+  if (command === 'check-update') {
+    const res = await runCheckUpdate();
+    process.exit(res.ok ? 0 : 1);
+  }
+
+  if (command === 'migrate') {
+    const sub = subcommandArgs[0] || 'status';
+    if (sub === 'rollback') {
+      const res = await runMigrateRollback({ dbPath: process.env.OPENLEARN_DB_PATH });
+      process.exit(res.ok ? 0 : 1);
+    } else {
+      const res = await runMigrateStatus({ dbPath: process.env.OPENLEARN_DB_PATH });
+      process.exit(res.ok ? 0 : 1);
+    }
+  }
+
   if (command === 'backup') {
     const targetFile = subcommandArgs[0];
-    const res = await runBackup(targetFile, { dbPath: process.env.OPENLEARN_DB_PATH });
+    const res = await runBackup(targetFile, {
+      dbPath: process.env.OPENLEARN_DB_PATH,
+      full: flags.full || flags.all,
+    });
     process.exit(res.ok ? 0 : 1);
   }
 
   if (command === 'restore') {
     const sourceFile = subcommandArgs[0];
-    const res = await runRestore(sourceFile, { dbPath: process.env.OPENLEARN_DB_PATH });
+    const res = await runRestore(sourceFile, {
+      dbPath: process.env.OPENLEARN_DB_PATH,
+      full: flags.full || flags.all,
+    });
     process.exit(res.ok ? 0 : 1);
   }
 

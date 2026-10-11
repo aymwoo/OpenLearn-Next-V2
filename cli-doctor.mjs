@@ -688,3 +688,66 @@ export async function runDoctor(options = {}) {
 
   return { ok: allOk, checks, fixes };
 }
+
+/**
+ * 检查官方 npm 远程源是否存在 openlearn-next 平台更新
+ * @param {Object} [options]
+ * @returns {Promise<{ ok: boolean, hasUpdate: boolean, currentVer: string, latestVer?: string }>}
+ */
+export async function runCheckUpdate(options = {}) {
+  const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
+  const pkgPath = path.join(__dirname, 'package.json');
+  const currentVer = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version : '0.6.0';
+
+  if (!options.silent) {
+    console.log(`[openlearn-next] 正在检查 npm 官方源... (当前本地版本: v${currentVer})`);
+  }
+
+  let latestVer = null;
+  const registries = [
+    'https://registry.npmjs.org/openlearn-next/latest',
+    'https://registry.npmmirror.com/openlearn-next/latest',
+  ];
+
+  for (const url of registries) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) {
+          latestVer = data.version;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  if (!latestVer) {
+    log(`⚠ 网络连接超时或离线，未能获取远程版本信息。`);
+    return { ok: true, hasUpdate: false, currentVer };
+  }
+
+  const hasUpdate = compareVersions(latestVer, currentVer) > 0;
+  if (!options.silent) {
+    const bold = '\x1b[1m';
+    const green = '\x1b[32m';
+    const yellow = '\x1b[33m';
+    const cyan = '\x1b[36m';
+    const reset = '\x1b[0m';
+
+    if (hasUpdate) {
+      console.log(`\n${bold}${yellow}🚀 发现平台新版本: v${latestVer} (当前: v${currentVer})${reset}`);
+      console.log(`  建议通过以下方式升级：`);
+      console.log(`  • NPX 免安装运行:  ${cyan}npx openlearn-next@latest${reset}`);
+      console.log(`  • NPM 全局升级:    ${cyan}npm i -g openlearn-next@latest${reset}`);
+      console.log(`  • 源码部署更新:    ${cyan}git pull && pnpm build && pnpm start${reset}\n`);
+    } else {
+      console.log(`\n  ${green}✓ 当前已是最新版本 (v${currentVer})，无须升级。${reset}\n`);
+    }
+  }
+
+  return { ok: true, hasUpdate, currentVer, latestVer };
+}

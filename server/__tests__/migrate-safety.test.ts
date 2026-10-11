@@ -133,3 +133,36 @@ describe('迁移 · 全部迁移文件都有 DOWN 段', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('迁移 · 执行前物理快照', () => {
+  it('对磁盘 SQLite 库执行未应用的迁移时自动生成 pre_migration_*.db 备份', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const os = await import('node:os');
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openlearn-mig-snap-'));
+    const diskDbPath = path.join(tempDir, 'active.db');
+    const diskDb = new Database(diskDbPath);
+    diskDb.exec('CREATE TABLE dummy (id TEXT);');
+
+    process.env.FORCE_MIGRATION_SNAPSHOT = 'true';
+    try {
+      const m = mig('099_test_snap', 'CREATE TABLE snap_table (id TEXT);');
+      runMigrations(diskDb, [m]);
+
+      const backupDir = path.join(tempDir, 'backups');
+      expect(fs.existsSync(backupDir)).toBe(true);
+      const backupFiles = fs.readdirSync(backupDir).filter((f) => f.startsWith('pre_migration_') && f.endsWith('.db'));
+      expect(backupFiles.length).toBeGreaterThanOrEqual(1);
+
+      // 验证快照也是有效的 SQLite 库
+      const snapDb = new Database(path.join(backupDir, backupFiles[0]!));
+      expect(snapDb.prepare("SELECT name FROM sqlite_master WHERE name='dummy'").get()).toBeTruthy();
+      snapDb.close();
+    } finally {
+      delete process.env.FORCE_MIGRATION_SNAPSHOT;
+      diskDb.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+

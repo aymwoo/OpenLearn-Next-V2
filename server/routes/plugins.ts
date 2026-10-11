@@ -983,16 +983,18 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // 站点信息设置端点（站点名称、口号、Logo 图片）
+  // 站点信息设置端点（站点名称、口号、Logo 图片、上传大小上限）
   app.get('/api/site-settings', (req, res) => {
     try {
       const row = kernelContainer.db
-        .prepare('SELECT site_name, slogan, logo_url FROM site_settings WHERE id = ?')
+        .prepare('SELECT site_name, slogan, logo_url, upload_max_file_mb FROM site_settings WHERE id = ?')
         .get('global') as any;
       res.json({
         siteName: row?.site_name || '',
         slogan: row?.slogan || '',
         logoUrl: row?.logo_url || null,
+        // null = 管理员未配置，客户端用默认 10MB
+        uploadMaxFileMb: row?.upload_max_file_mb ?? null,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1001,16 +1003,30 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   app.put('/api/site-settings', requireAuth('administrator'), (req, res) => {
     try {
-      const { siteName, slogan, logoUrl } = req.body || {};
+      const { siteName, slogan, logoUrl, uploadMaxFileMb } = req.body || {};
+      // v0.6.1：上传大小上限校验（整数 1–90；90 受 express.json 110MB 全局
+      // 上限约束，base64 膨胀 ~33% 后约 90MB 文件）。undefined = 不修改。
+      let maxFileMb: number | null | undefined = undefined;
+      if (uploadMaxFileMb !== undefined && uploadMaxFileMb !== null) {
+        maxFileMb = Number(uploadMaxFileMb);
+        if (!Number.isInteger(maxFileMb) || maxFileMb < 1 || maxFileMb > 90) {
+          return res.status(400).json({ error: '上传大小上限必须是 1–90 之间的整数（MB）' });
+        }
+      }
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url) VALUES ('global', ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url`,
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb) VALUES ('global', ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
+             upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb)`,
         )
-        .run(siteName || '', slogan || '', logoUrl || null);
+        .run(siteName || '', slogan || '', logoUrl || null, maxFileMb ?? null);
+      const row = kernelContainer.db
+        .prepare('SELECT upload_max_file_mb FROM site_settings WHERE id = ?')
+        .get('global') as any;
       res.json({
         success: true,
         siteInfo: { siteName: siteName || '', slogan: slogan || '', logoUrl: logoUrl || null },
+        uploadMaxFileMb: row?.upload_max_file_mb ?? null,
       });
     } catch (e: any) {
       sendSafeError(res, e);

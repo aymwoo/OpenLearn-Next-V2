@@ -1,4 +1,6 @@
+import semver from 'semver';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { PLATFORM_VERSION } from '../../packages/core/version.js';
 import { randomId } from '../utils/id.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
@@ -8,6 +10,56 @@ import { seedDemoData, DEMO_IDS, DEMO_TEACHER } from '../services/demo-data.js';
 
 export function registerAdminRoutes(ctx: ServerContext) {
   const { app } = ctx;
+
+  /**
+   * 平台官方源版本更新检查 (npm registry)
+   */
+  app.get('/api/system/check-upgrade', requireAuth('teacher', 'administrator'), async (_req, res) => {
+    try {
+      const currentVersion = PLATFORM_VERSION;
+      let latestVersion = currentVersion;
+      let publishTime: string | null = null;
+
+      const registries = [
+        'https://registry.npmjs.org/openlearn-next/latest',
+        'https://registry.npmmirror.com/openlearn-next/latest',
+      ];
+
+      for (const url of registries) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timer);
+          if (response.ok) {
+            const data: any = await response.json();
+            if (data.version) {
+              latestVersion = data.version;
+              publishTime = data.publish_time || null;
+              break;
+            }
+          }
+        } catch {}
+      }
+
+      const hasUpdate = semver.gt(latestVersion, currentVersion);
+
+      res.json({
+        success: true,
+        currentVersion,
+        latestVersion,
+        hasUpdate,
+        publishTime,
+        upgradeCommands: {
+          npx: 'npx openlearn-next@latest',
+          npm: 'npm i -g openlearn-next@latest',
+          git: 'git pull && pnpm build && pnpm start',
+        },
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
 
   /**
    * 兼容端点：新手引导（HelpTour）仍在调用。

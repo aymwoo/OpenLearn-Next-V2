@@ -144,6 +144,22 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
     console.error(msg);
   }
 
+  const pending = migrations.filter((m) => !applied.has(m.name));
+  if (pending.length > 0 && db.name && db.name !== ':memory:' && (process.env.FORCE_MIGRATION_SNAPSHOT === 'true' || !process.env.VITEST)) {
+    try {
+      const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(db.name), 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const backupFile = path.join(backupDir, `pre_migration_${timestamp}.db`);
+      fs.copyFileSync(db.name, backupFile);
+      console.log(`[Migration] Safety snapshot created before applying ${pending.length} migration(s): ${backupFile}`);
+    } catch (bErr: any) {
+      console.warn('[Migration] Warning: Could not create pre-migration snapshot:', bErr.message);
+    }
+  }
+
   for (const migration of migrations) {
     if (applied.has(migration.name)) continue;
 

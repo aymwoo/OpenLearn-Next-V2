@@ -32,11 +32,80 @@ export async function runBackup(outputFile, options = {}) {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const isFull = Boolean(options.full);
+  const defaultExt = isFull ? '.zip' : '.db';
   const target = outputFile
     ? path.resolve(outputFile)
-    : path.resolve(process.cwd(), `openlearn_backup_${timestamp}.db`);
+    : path.resolve(process.cwd(), `openlearn_${isFull ? 'full_backup' : 'backup'}_${timestamp}${defaultExt}`);
 
   fs.mkdirSync(path.dirname(target), { recursive: true });
+
+  if (isFull) {
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // 1. 内存/临时备份 SQLite 数据库
+      const Database = (await import('better-sqlite3')).default;
+      const tempDbPath = path.join(os.tmpdir(), `openlearn_temp_backup_${Date.now()}.db`);
+      const db = new Database(dbPath, { readonly: true });
+      await db.backup(tempDbPath);
+      db.close();
+      const dbBuffer = fs.readFileSync(tempDbPath);
+      try {
+        fs.unlinkSync(tempDbPath);
+      } catch {}
+      zip.file('data.db', dbBuffer);
+
+      // 2. 递归打包 uploads 与 storage 目录
+      const dataDir = process.env.OPENLEARN_DATA_DIR || path.dirname(dbPath);
+      const uploadsDir = path.join(dataDir, 'uploads');
+      const storageDir = path.join(dataDir, 'storage');
+
+      const addDirToZip = (dir, prefix) => {
+        if (!fs.existsSync(dir)) return;
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+        for (const item of items) {
+          const itemPath = path.join(dir, item.name);
+          const zipRel = prefix ? `${prefix}/${item.name}` : item.name;
+          if (item.isDirectory()) {
+            addDirToZip(itemPath, zipRel);
+          } else if (item.isFile()) {
+            zip.file(zipRel, fs.readFileSync(itemPath));
+          }
+        }
+      };
+
+      addDirToZip(uploadsDir, 'uploads');
+      addDirToZip(storageDir, 'storage');
+
+      // 3. 元数据信息
+      zip.file(
+        'metadata.json',
+        JSON.stringify(
+          {
+            version: '0.6.0',
+            type: 'openlearn-full-backup',
+            timestamp: Date.now(),
+            createdAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      fs.writeFileSync(target, zipBuffer);
+      const stat = fs.statSync(target);
+      const sizeKb = Math.round(stat.size / 1024);
+      log(`✓ 系统全量整包备份完成（数据库 + 课件 uploads + 作业 storage）！`);
+      log(`  全量归档文件: ${target} (${sizeKb} KB)`);
+      return { ok: true, targetFile: target };
+    } catch (fullErr) {
+      log(`✗ 全量备份生成失败: ${fullErr.message}`);
+      return { ok: false, error: fullErr.message };
+    }
+  }
 
   try {
     const Database = (await import('better-sqlite3')).default;
@@ -65,7 +134,7 @@ export async function runBackup(outputFile, options = {}) {
 }
 
 /**
- * 数据安全回滚与还原
+ * 数据安全回滚与还原（支持 .db 镜像与 .zip 全量整包）
  * @param {string} sourceFile
  * @param {Object} [options]
  * @returns {Promise<{ ok: boolean, error?: string }>}
@@ -73,7 +142,7 @@ export async function runBackup(outputFile, options = {}) {
 export async function runRestore(sourceFile, options = {}) {
   const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
   if (!sourceFile) {
-    const msg = '未指定待还原的备份文件。用法: npx openlearn-next restore <backup.db>';
+    const msg = '未指定待还原的备份文件。用法: npx openlearn-next restore <backup.db|backup.zip>';
     log(`✗ ${msg}`);
     return { ok: false, error: msg };
   }
@@ -85,32 +154,79 @@ export async function runRestore(sourceFile, options = {}) {
     return { ok: false, error: msg };
   }
 
-  // 校验 SQLite 文件头 (Magic Header: "SQLite format 3\0")
+  const dbPath = resolveDbPath(options.dbPath);
+  const dbDir = path.dirname(dbPath);
+  fs.mkdirSync(dbDir, { recursive: true });
+
+  // 识别文件类型：校验头字节（PK 为 Zip 压缩包，SQLite 为数据库镜像）
+  let isZip = false;
   try {
     const fd = fs.openSync(src, 'r');
     const buffer = Buffer.alloc(16);
     fs.readSync(fd, buffer, 0, 16, 0);
     fs.closeSync(fd);
-    const headerStr = buffer.toString('utf-8');
-    if (!headerStr.startsWith('SQLite format 3')) {
-      const msg = `文件并非有效的 SQLite 数据库备份: ${src}`;
-      log(`✗ ${msg}`);
-      return { ok: false, error: msg };
+    if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
+      isZip = true;
+    } else {
+      const headerStr = buffer.toString('utf-8');
+      if (!headerStr.startsWith('SQLite format 3')) {
+        const msg = `文件既非 SQLite 数据库镜像亦非合法的 OpenLearn 备份 ZIP: ${src}`;
+        log(`✗ ${msg}`);
+        return { ok: false, error: msg };
+      }
     }
   } catch (err) {
     log(`✗ 读取备份文件头失败: ${err.message}`);
     return { ok: false, error: err.message };
   }
 
-  const dbPath = resolveDbPath(options.dbPath);
-  const dbDir = path.dirname(dbPath);
-  fs.mkdirSync(dbDir, { recursive: true });
-
   // 创建自动回滚副本
   if (fs.existsSync(dbPath)) {
     const bakFile = `${dbPath}.bak_${Date.now()}`;
     fs.copyFileSync(dbPath, bakFile);
     log(`ℹ 已为现有数据库创建安全回滚镜像: ${bakFile}`);
+  }
+
+  if (isZip) {
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zipData = fs.readFileSync(src);
+      const zip = await JSZip.loadAsync(zipData);
+
+      const dbEntry = zip.file('data.db');
+      if (!dbEntry) {
+        throw new Error('ZIP 归档中未找到 data.db 数据库主体');
+      }
+
+      const dbBuffer = await dbEntry.async('nodebuffer');
+      fs.writeFileSync(dbPath, dbBuffer);
+
+      // 解压 uploads 与 storage 目录
+      const dataDir = process.env.OPENLEARN_DATA_DIR || path.dirname(dbPath);
+      let extractedCount = 0;
+
+      for (const [relPath, file] of Object.entries(zip.files)) {
+        if (file.dir) continue;
+        if (relPath.startsWith('uploads/') || relPath.startsWith('storage/')) {
+          const dest = path.join(dataDir, relPath);
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest, await file.async('nodebuffer'));
+          extractedCount++;
+        }
+      }
+
+      // 清理旧的 WAL 与 SHM
+      const wal = `${dbPath}-wal`;
+      const shm = `${dbPath}-shm`;
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+
+      log(`✓ 全量整包还原成功！数据库与 ${extractedCount} 个资源文件已成功写入 ${dataDir}`);
+      return { ok: true };
+    } catch (zipErr) {
+      log(`✗ 解压还原归档失败: ${zipErr.message}`);
+      return { ok: false, error: zipErr.message };
+    }
   }
 
   try {
@@ -260,6 +376,123 @@ export async function runPluginsList(options = {}) {
     return { ok: true, plugins };
   } catch (err) {
     log(`✗ 查询插件失败: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * 查看数据库迁移状态清单 (已应用 / 待应用)
+ * @param {Object} [options]
+ * @returns {Promise<{ ok: boolean, applied?: Array<any>, pending?: Array<any>, error?: string }>}
+ */
+export async function runMigrateStatus(options = {}) {
+  const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
+  const dbPath = resolveDbPath(options.dbPath);
+
+  if (!fs.existsSync(dbPath)) {
+    log(`✗ 数据库文件未找到: ${dbPath}`);
+    return { ok: false, error: 'Database file not found' };
+  }
+
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath, { readonly: true });
+
+    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'").get();
+    if (!tableCheck) {
+      log(`ℹ 数据库尚未执行过版本化迁移 (_migrations 表未建立)。`);
+      db.close();
+      return { ok: true, applied: [], pending: [] };
+    }
+
+    const appliedRows = db.prepare('SELECT name, applied_at, checksum FROM _migrations ORDER BY applied_at ASC').all();
+    db.close();
+
+    const { loadMigrationsFromDirectory, getDefaultMigrationsDir } = await import('./packages/core/db/migrator.js');
+    const allMigrations = loadMigrationsFromDirectory(getDefaultMigrationsDir());
+    const appliedSet = new Set(appliedRows.map((r) => r.name));
+    const pending = allMigrations.filter((m) => !appliedSet.has(m.name));
+
+    if (!options.silent) {
+      const bold = '\x1b[1m';
+      const green = '\x1b[32m';
+      const yellow = '\x1b[33m';
+      const cyan = '\x1b[36m';
+      const reset = '\x1b[0m';
+
+      console.log(`\n${bold}${cyan}数据库迁移版本化状态 (总计 ${allMigrations.length} 个迁移脚本):${reset}`);
+      console.log(`  ${green}✓ 已应用 (${appliedRows.length} 个):${reset}`);
+      for (const row of appliedRows) {
+        const time = new Date(row.applied_at).toLocaleString();
+        console.log(`    ${green}●${reset} ${row.name.padEnd(35)} (应用时间: ${time})`);
+      }
+      if (pending.length > 0) {
+        console.log(`\n  ${yellow}○ 待应用 (${pending.length} 个):${reset}`);
+        for (const m of pending) {
+          console.log(`    ${yellow}○${reset} ${m.name}`);
+        }
+      } else {
+        console.log(`\n  ${green}✓ 架构版本全部对齐，无待执行的增量迁移。${reset}\n`);
+      }
+    }
+
+    return { ok: true, applied: appliedRows, pending };
+  } catch (err) {
+    log(`✗ 查询迁移状态失败: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * 安全回滚最近一次应用的单项迁移 (按 -- DOWN 逆操作)
+ * @param {Object} [options]
+ * @returns {Promise<{ ok: boolean, rolledBack?: string, error?: string }>}
+ */
+export async function runMigrateRollback(options = {}) {
+  const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
+  const dbPath = resolveDbPath(options.dbPath);
+
+  if (!fs.existsSync(dbPath)) {
+    log(`✗ 数据库文件未找到: ${dbPath}`);
+    return { ok: false, error: 'Database file not found' };
+  }
+
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath);
+
+    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'").get();
+    if (!tableCheck) {
+      log(`✗ 数据库中未找到 _migrations 元表，无法执行回滚。`);
+      db.close();
+      return { ok: false, error: 'No _migrations table' };
+    }
+
+    const lastRow = db.prepare('SELECT name FROM _migrations ORDER BY applied_at DESC LIMIT 1').get();
+    if (!lastRow) {
+      log(`ℹ 数据库中当前暂无已应用的迁移记录可供回滚。`);
+      db.close();
+      return { ok: true };
+    }
+
+    const { loadMigrationsFromDirectory, getDefaultMigrationsDir, rollbackMigration } = await import(
+      './packages/core/db/migrator.js'
+    );
+    const allMigrations = loadMigrationsFromDirectory(getDefaultMigrationsDir());
+    const targetMigration = allMigrations.find((m) => m.name === lastRow.name);
+
+    if (!targetMigration) {
+      log(`✗ 未在本地 migrations 目录中找到 "${lastRow.name}.sql"，无法获取 DOWN 段执行回滚。`);
+      db.close();
+      return { ok: false, error: `Migration file ${lastRow.name} not found` };
+    }
+
+    rollbackMigration(db, targetMigration);
+    db.close();
+    log(`✓ 成功回滚迁移: ${targetMigration.name} (已执行 DOWN 逆操作并清理 _migrations 记录)`);
+    return { ok: true, rolledBack: targetMigration.name };
+  } catch (err) {
+    log(`✗ 回滚迁移失败: ${err.message}`);
     return { ok: false, error: err.message };
   }
 }
