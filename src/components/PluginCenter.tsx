@@ -20,7 +20,6 @@ import { PluginStorePanel } from './plugin-center/sub-views/PluginStorePanel';
 import { PluginCommunityPanel } from './plugin-center/sub-views/PluginCommunityPanel';
 import { PluginDevPanel } from './plugin-center/sub-views/PluginDevPanel';
 import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
-import { BuiltinExtensionBundlesCard } from './BuiltinExtensionBundlesCard';
 
 export type { PluginType, PluginCenterProps } from './plugin-center/types';
 
@@ -324,10 +323,7 @@ export function PluginCenter({
           />
 
           {storeTab === 'store' ? (
-            <>
-              {/* 内置扩展包（随宿主发布，无 DB 插件行）——提供与已安装插件同等的启停能力 */}
-              <BuiltinExtensionBundlesCard lang={lang} />
-              <PluginStorePanel
+            <PluginStorePanel
                 plugins={plugins}
                 lang={lang}
                 showSystemPlugins={showSystemPlugins}
@@ -342,8 +338,7 @@ export function PluginCenter({
               updateFileInputRef={updateFileInputRef}
               onToggle={onToggle}
               onDelete={onDelete}
-              />
-            </>
+            />
           ) : storeTab === 'community' ? (
             <PluginCommunityPanel installedPlugins={plugins} lang={lang} onInstalled={handleCommunityInstalled} />
           ) : storeTab === 'logs' ? (

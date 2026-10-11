@@ -817,7 +817,7 @@ export interface WhiteboardRendererSlotProps {
 ### 11.5 管理后台与全域底座
 - **`admin.dashboard.card`**：在管理员控制台概览区渲染卡片，Props 包含 `{ sqliteStats, lang }`。支持接入国家平台连接状态监控卡片、全校数据上报大屏。
 - **`admin.user.action`**：在用户管理操作区渲染，Props 包含 `{ users, filteredUsers, lang, onRefresh }`。支持国家统一身份认证账号绑定与实名校验。
-- **`header.status_pill`**：在全局顶栏右侧状态区渲染胶囊徽标，Props 包含 `{ dbConnected, dbStatus, lang }`（连通状态由组件自行向 `/api/external/smart-edu/status` 真实探测）。
+- **`header.status_pill`**：在全局顶栏右侧状态区渲染胶囊徽标，Props 包含 `{ dbConnected, dbStatus, lang }`（连通状态由插件组件自行探测其目标服务并如实呈现）。
 
 ### 11.6 AI 助手侧边栏
 - **`ai_sidebar.tab`**：在全局右侧侧边栏中渲染，支持 `button`（顶部 Tab 切换按钮，Props `{ renderType: 'button', activeTab, setActiveTab, lang }`）与 `panel`（Tab 激活时的自定义面板，Props `{ renderType: 'panel', activeTab, lang }`）两种渲染态，渲染器按 `activeTab === 'plugin:{pluginId}/{extId}'` 过滤单面板。允许第三方 AI 助手或智能教研 Agent 深度嵌入右侧抽屉。

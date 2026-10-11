@@ -28,7 +28,6 @@ import {
   resetPluginBreaker,
   CRASH_BREAKER_THRESHOLD,
 } from './extension-breaker';
-import { isBuiltinBundleId } from './builtin-bundles';
 import type { ExtensionSlot } from './types';
 
 // 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
@@ -38,7 +37,7 @@ export { isPluginBlown, resetPluginBreaker };
  * 熔断触发的统一降级（v0.6.1 审计 C-2）：
  * 1. 摘除该插件全部扩展点 —— 脱离生命周期的直注册插件（如内置包）也能被降级；
  * 2. 内置包同步写入停用表 —— 管理卡片如实显示「已停用」，重新启用时经
- *    registerSmartEduExtensions → resetPluginBreaker 恢复；
+ *    装配模块的重注册 → resetPluginBreaker 恢复；
  * 3. 生命周期内插件再走宿主 deactivatePlugin（失败仅记日志）。
  */
 function handleBreakerTrip(
@@ -47,9 +46,6 @@ function handleBreakerTrip(
 ): void {
   const store = usePluginHostStore.getState();
   store.unregisterPluginExtensionPoints(pid);
-  if (isBuiltinBundleId(pid)) {
-    store.setBuiltinBundleEnabled(pid, false);
-  }
   void host
     ?.deactivatePlugin(pid)
     .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));

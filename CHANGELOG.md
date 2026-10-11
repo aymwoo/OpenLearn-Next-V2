@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **移除「国家智慧教育公共服务平台连接器」（@openlearn/plugin-smart-edu）及其全部基础设施**（用户决策：国家平台不提供公开的第三方网关，该连接器在可预见的时期内无法产生真实价值，整体移除而非默认停用）：
+  - **内核**：删除 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts)（含 4 个 `smart_edu.*` 命令、ActionRegistry descriptor 与 manifest 技能声明）及其测试；从系统内核插件链（`packages/core/kernel/index.ts`）摘除注册；CapabilityGuard 角色回退表移除 `smart_edu:*` 授权（capability 表随之回归诚实——不存在的能力不再预授）；
+  - **服务端**：删除 `/api/external/smart-edu/*` 四条网关路由（resources/import/report/status）；`ai.skill.provider` 的**通用消费机制**（工具注入 / 插件 actor 派发 / fail-closed）保留——它是面向任意第三方插件的槽位契约，非连接器专属；
+  - **前端**：删除 `src/features/smart-edu/`（9 个业务组件 + 状态 Hook + 2 个测试套件）；`main.tsx` 开机注册摘除；9 个宿主槽位挂载点（`course.list.toolbar.action`、`course.card.badge`、`header.status_pill` 等）**保留**——它们是通用宿主面，第三方插件仍可贡献；
+  - **内置扩展包机制随包清退**：`builtin-bundles.ts`、Plugin Center「内置扩展包」卡片、store 的启停覆盖表与 storage 同步一并移除（该机制为承载此连接器而建，现无任何注册包；未来需要时按 R-5/R-8 整改后的成熟形态重建）；熔断降级路径改回「摘除扩展点 + 宿主停用」双通道；
+  - **配套**：`.env.example` 移除 `SMARTEDU_*` 段；`docs/plugin/smart-edu-gateway.md` 删除；槽位权威文档失效引用更新。
+
 ### Fixes
 
 - **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：

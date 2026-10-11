@@ -17,7 +17,6 @@
  */
 
 import { create } from 'zustand';
-import { isBuiltinBundleDefaultEnabled } from './builtin-bundles';
 import type { FrontendPluginInfo, AnyExtensionSlot, ExtensionPointConfig, PluginState } from './types';
 import type { FrontendServiceRegistry } from './service-registry';
 
@@ -30,9 +29,6 @@ export interface PluginHostStoreState {
   initialized: boolean;
   /** Per-plugin dashboard widget visibility. true (default, show) | false (hidden). */
   dashboardVisibility: Map<string, boolean>;
-  /** 已被管理台停用的内置扩展包 id 列表（localStorage 持久）。 */
-  /** 用户对内置包的显式启停覆盖（localStorage 持久）；未覆盖时取 builtin-bundles 的 defaultEnabled。 */
-  builtinBundleOverrides: Record<string, boolean>;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -71,21 +67,13 @@ export interface PluginHostStoreActions {
   /** Bulk-initialize dashboard visibility (called on app startup). */
   setDashboardVisibilityBatch: (entries: Array<[string, boolean]>) => void;
 
-  /** 内置扩展包是否启用（默认启用）。 */
-  isBuiltinBundleEnabled: (bundleId: string) => boolean;
-
-  /** 启用/停用内置扩展包（持久到 localStorage）。停用后由调用方负责注销其扩展点。 */
-  setBuiltinBundleEnabled: (bundleId: string, enabled: boolean) => void;
 }
 
-// 跨标签页同步（v0.6.1 审计 R-5）：内置包停用 / 仪表盘可见性写入
-// localStorage 后，其他标签页经 storage 事件拉平，避免 A 页停用、B 页
-// 扩展继续渲染直到手动刷新。
+// 跨标签页同步：仪表盘可见性写入 localStorage 后，其他标签页经
+// storage 事件拉平，避免 A 页隐藏、B 页仍显示。
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('storage', (e) => {
-    if (e.key === BUILTIN_BUNDLES_KEY) {
-      usePluginHostStore.setState({ builtinBundleOverrides: loadBuiltinBundleOverrides() });
-    } else if (e.key === DASH_VIS_KEY) {
+    if (e.key === DASH_VIS_KEY) {
       usePluginHostStore.setState({ dashboardVisibility: loadDashboardVisibility() });
     }
   });
@@ -108,35 +96,12 @@ function saveDashboardVisibility(map: Map<string, boolean>): void {
   } catch {}
 }
 
-// ── localStorage helpers for builtin extension bundles ───────────────
-const BUILTIN_BUNDLES_KEY = 'openlearn:builtinBundleEnabled';
-
-function loadBuiltinBundleOverrides(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(BUILTIN_BUNDLES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, Boolean(v)]));
-      }
-    }
-  } catch {}
-  return {};
-}
-
-function saveBuiltinBundleOverrides(overrides: Record<string, boolean>): void {
-  try {
-    localStorage.setItem(BUILTIN_BUNDLES_KEY, JSON.stringify(overrides));
-  } catch {}
-}
-
 export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreActions>()((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────
   activePlugins: [],
   extensionPoints: new Map(),
   services: null,
   dashboardVisibility: loadDashboardVisibility(),
-  builtinBundleOverrides: loadBuiltinBundleOverrides(),
   initialized: false,
 
   // ── Actions ────────────────────────────────────────────────────────
@@ -250,28 +215,5 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       }
       saveDashboardVisibility(next);
       return { dashboardVisibility: next };
-    }),
-
-  // ── 内置扩展包（builtin bundles）──
-  //
-  // 内置扩展包（如 smart-edu）不经过安装链路、没有 DB 行，无法走
-  // activePlugins 的启停流。这里以 localStorage 持久的开关给它同等的
-  // 「管理台可停用」能力（v0.6.0 审计：此前 main.tsx 开机直注册，
-  // 无人能停用、无人能清理其扩展点）。
-
-  // v0.6.1 用户决策：内置包默认停用 —— 启停语义从「黑名单」翻转为
-  // 「用户覆盖 + defaultEnabled」（builtin-bundles.ts）。用户从未选择时
-  // 以包元数据的 defaultEnabled 为准（国家平台连接器 = false）。
-  isBuiltinBundleEnabled: (bundleId) => {
-    const override = get().builtinBundleOverrides[bundleId];
-    if (typeof override === 'boolean') return override;
-    return isBuiltinBundleDefaultEnabled(bundleId);
-  },
-
-  setBuiltinBundleEnabled: (bundleId, enabled) =>
-    set((state) => {
-      const next = { ...state.builtinBundleOverrides, [bundleId]: enabled };
-      saveBuiltinBundleOverrides(next);
-      return { builtinBundleOverrides: next };
     }),
 }));

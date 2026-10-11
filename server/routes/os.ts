@@ -102,8 +102,8 @@ export function registerOsRoutes(ctx: ServerContext) {
 
       // v0.6.1 审计 R-6：命令执行加 10s 上限 —— 此前直接 await，挂死的
       // kernel/插件 handler 会令教师端工具下发按钮永久 pending（前端亦无
-      // AbortSignal）。10s 为宽上限：覆盖慢网关命令（如 smart_edu 网关
-      // 默认 8s 超时），又不至于无限挂死。
+      // AbortSignal）。10s 为宽上限：覆盖合法的慢命令（如对接外部网关的
+      // 插件命令），又不至于无限挂死。
       const result = await Promise.race([
         kernelContainer.commandBus.execute(cmd),
         new Promise<never>((_, reject) =>

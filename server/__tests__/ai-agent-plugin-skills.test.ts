@@ -85,7 +85,7 @@ describe('collectPluginSkills', () => {
   });
 
   it('toolName 加 pskill_ 前缀并清洗非法字符', () => {
-    expect(skillToolName('smart_edu.search_resources')).toBe(`${SKILL_TOOL_PREFIX}smart_edu_search_resources`);
+    expect(skillToolName('demo.search_resources')).toBe(`${SKILL_TOOL_PREFIX}demo_search_resources`);
     expect(skillToolName('@scope/p.foo.bar')).toBe(`${SKILL_TOOL_PREFIX}_scope_p_foo_bar`);
   });
 

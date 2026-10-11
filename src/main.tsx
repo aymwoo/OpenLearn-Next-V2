@@ -29,10 +29,8 @@ import './index.css';
 };
 
 import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary';
-import { registerSmartEduExtensions } from './features/smart-edu/smart-edu-plugin';
 
 const pluginHost = new FrontendPluginHost();
-registerSmartEduExtensions();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

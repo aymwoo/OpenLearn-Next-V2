@@ -14,7 +14,6 @@ import { BuiltinPlugin } from '../../plugins/builtin.js';
 import { AiPlannerPlugin } from '../../plugins/ai-planner.js';
 import { AiSubmitInjectorPlugin } from '../../plugins/ai-submit-injector.js';
 import { AssignmentEvalPlugin } from '../../plugins/assignment-eval.js';
-import { NationalSmartEduPlugin } from '../../plugins/national-smart-edu.js';
 import fs from 'fs';
 import crypto from 'node:crypto';
 
@@ -419,12 +418,6 @@ export class Kernel {
         id: '@openlearn/plugin-assignment-eval',
         mod: AssignmentEvalPlugin,
         name: 'Assignment Evaluation and Peer Review Plugin',
-        critical: false,
-      },
-      {
-        id: '@openlearn/plugin-smart-edu',
-        mod: NationalSmartEduPlugin,
-        name: 'National Smart Education Connector Plugin',
         critical: false,
       },
     ];

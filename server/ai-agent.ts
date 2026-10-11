@@ -141,7 +141,7 @@ export const skillToolName = (commandType: string): string =>
  * 从 manifest 来源集合收集插件技能。
  *
  * 命令名解析：优先按 manifest 声明的原名（内核直注册的内置插件命令，
- * 如 smart_edu.* —— 注册时即用完整命令名）；原名无 descriptor 时回退
+ * 如内核插件的领域命令 —— 注册时即用完整命令名）；原名无 descriptor 时回退
  * 插件命名空间规则（worker 插件的 handler 注册在 `pluginId.` 前缀下）。
  *
  * @param manifestSources  manifest JSON 字符串或已解析对象
@@ -171,7 +171,7 @@ export const collectPluginSkills = (
       if (!commandType || typeof commandType !== 'string') continue;
       // 绑定面收严（v0.6.1 审计 C-3/R-3）：
       // - 第一方（@openlearn/*，随宿主发布、代码在仓库内）：允许按原名绑定
-      //   内核直注册命令（如 smart_edu.*）；
+      //   内核直注册命令（@openlearn/* 内置插件）；
       // - 第三方：**只允许绑定自己命名空间内的命令**（强制前缀化）——此前
       //   「原名优先」可把 user.delete 等宿主高危命令绑成技能并顶替宿主
       //   工具。未注册的命名空间命令在派发时因缺 descriptor 被 fail-closed。
