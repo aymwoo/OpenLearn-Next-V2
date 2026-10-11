@@ -820,21 +820,11 @@ export function LiveClassroomView({
     const channel = new ClassroomSyncChannel(CLASSROOM_SYNC_CHANNEL_NAME, selectedLesson, liveClassSelectedClassId);
     syncChannelRef.current = channel;
 
+    // v0.6.1 审计 N-2：STUDENT_HANDSHAKE_REQUEST/TEACHER_INIT_STATE 死协议已
+    // 移除（发送方 requestHandshake 与消费方均不存在，恢复机制由服务端
+    // 持久化视图状态承担）；本监听只保留仍然存活的点名应答。
     const unsub = channel.onMessage((msg) => {
-      if (msg.type === 'STUDENT_HANDSHAKE_REQUEST') {
-        // Send full current snapshot to newly opened student window
-        const snap = syncSnapshotRef.current;
-        channel.broadcastInitState({
-          selectedLesson: snap.selectedLesson,
-          activeSegmentId: snap.activeSegmentId,
-          activeTab: snap.middleTab === 'submissions' || snap.middleTab === 'top_performers' ? 'courseware' : snap.middleTab,
-          isClassLocked: snap.isClassLocked,
-          liveClassTimeRemaining: liveClassStore.getState().liveClassTimeRemaining,
-          liveClassSelectedClassId: snap.liveClassSelectedClassId,
-          liveClassIsActive: snap.liveClassIsActive,
-          fullscreenElementId: liveClassFullscreenElementId,
-        });
-      } else if (msg.type === 'STUDENT_ACKNOWLEDGE_PICK') {
+      if (msg.type === 'STUDENT_ACKNOWLEDGE_PICK') {
         const studentId = msg.payload.studentId;
         const studentName =
           syncSnapshotRef.current.students.find((s) => s.id === studentId)?.name || studentId;

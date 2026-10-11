@@ -169,21 +169,9 @@ export function LessonEditorView() {
     if (activeSegmentId) {
       channel.broadcastChangeSegment(activeSegmentId);
     }
-    const unsub = channel.onMessage((msg) => {
-      if (msg.type === 'STUDENT_HANDSHAKE_REQUEST') {
-        channel.broadcastInitState({
-          selectedLesson,
-          activeSegmentId,
-          activeTab: 'whiteboard',
-          isClassLocked: false,
-          liveClassTimeRemaining: 0,
-          liveClassSelectedClassId: '',
-          liveClassIsActive: false,
-        });
-      }
-    });
+    // v0.6.1 审计 N-2：死协议 STUDENT_HANDSHAKE_REQUEST 监听已移除，
+    // 此处仅保留课节/环节变化的实时广播。
     return () => {
-      unsub();
       channel.destroy();
     };
   }, [selectedLesson, activeSegmentId]);

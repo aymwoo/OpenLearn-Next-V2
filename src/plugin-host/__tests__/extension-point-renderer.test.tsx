@@ -537,3 +537,55 @@ describe('ExtensionPointRenderer — anchor slot placement filtering (v0.2.6)', 
     });
   });
 });
+
+// ── v0.6.1 审计 R-1 收口：未打标 lazy 工厂的探针自愈 + 开发期告警 ──────────
+describe('ExtensionPointRenderer — unmarked lazy factory self-healing (R-1)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('未打标工厂被探针判定后自动包 React.lazy 渲染成功，并打 console.error 告警', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 不打 __isLazyFactory 标记 —— v0.6.0 smart-edu 事故形态
+    const unmarked = () => Promise.resolve({ default: () => <span data-testid="healed">自愈渲染</span> });
+
+    usePluginHostStore.getState().registerExtensionPoint('probe.slot', {
+      id: 'probe-ext',
+      label: 'Probe',
+      pluginId: 'p-probe',
+      component: unmarked as any,
+    });
+
+    renderWithHost(<ExtensionPointRenderer slot="probe.slot" />);
+
+    // 此前该形态会永久悬挂 Suspense 且不抛错；探针自愈后正常渲染
+    const el = await screen.findByTestId('healed', undefined, { timeout: 3000 });
+    expect(el).toBeTruthy();
+    expect(
+      errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory')),
+    ).toBe(true);
+  });
+
+  it('直接组件（含 hooks）不误报 —— 探针捕获无参调用抛错后按直组件处理', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const React = await import('react');
+    function DirectComponent() {
+      React.useState(0); // hooks 在无参探测调用时会抛错 —— 必须被捕获
+      return <span data-testid="direct">直组件</span>;
+    }
+
+    usePluginHostStore.getState().registerExtensionPoint('probe.direct', {
+      id: 'direct-ext',
+      label: 'Direct',
+      pluginId: 'p-direct',
+      component: DirectComponent as any,
+    });
+
+    renderWithHost(<ExtensionPointRenderer slot="probe.direct" />);
+    const el = await screen.findByTestId('direct', undefined, { timeout: 3000 });
+    expect(el).toBeTruthy();
+    expect(
+      errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory')),
+    ).toBe(false);
+  });
+});

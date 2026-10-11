@@ -49,6 +49,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **R-5｜SDK 门禁契约与阶段推进两套系统合并**：[`ClassroomRuntimeService`](./server/services/classroom-runtime-service.ts) 注入内核 `StageGuardPipeline`（server.ts 装配时从 serviceRegistry 解析），`transitionStage` 在自有守卫表之后调用管线的 `checkAccess` —— 插件经 SDK `registerStageGuard` 写入的门禁自此对阶段推进**真实生效**（此前 SDK 指向的注册表与本服务自有的空表互不相通，管线并入后沿用其单守卫 1500ms + 全局上限 + fail-close 策略；`StageGuardContext.studentId` 传发起流转的 actorId，完整身份在 metadata）。插件停用/热重载的守卫回收（I-3 unregisterByOwner）无需改动即自动生效；回归测试 5 项（否决阻断/放行流转/抛错 fail-close/未注入向后兼容/上下文形状）；
   - **R-8｜课堂计时状态迁出 AppDataContext**：`liveClassTimeRemaining` 的唯一宿主改为既有的独立 [`liveClassStore`](./src/store/liveClassStore.ts)——唯一写点为 ClassroomCountdownWidget 的 endsAt 校准 tick（经 `onTimeRemainingChange` 回调写 store），「时间到」toast 与学生端 `broadcastSyncTimer` 一并移入该回调，LiveClassroomView 的旧每秒自减定时器删除（同时消灭 N-1 双写定时器）；`useClassroomLive`/`useClassroomSlice`/`appStore` 三处的字段与透传全部移除。每秒一次的计时变化不再流经 AppDataContext，2754 行的课堂视图及其消费树不再整体重渲染。
 
+- **审计遗留 Nit 清理（五项，无行为面变更）**：
+  - **大屏 ticker 高度约束**：`classroom.stage.display.ticker` 挂载点限高 48px 并裁剪溢出——插件返回超高元素会挤压/挤出主展示区（ErrorBoundary 只挡崩溃，不挡布局）；
+  - **props 展开顺序统一**：5 个 tab panel 渲染分支（class/timetable/ai_sidebar/admin/student.profile）改为宿主 props 优先（`...slotProps` 展开在插件 slotProps 之后）——此前插件可用自身 slotProps 覆盖宿主注入的 dispatcher/lang，与通用分支语义相反；
+  - **死协议清理**：`STUDENT_HANDSHAKE_REQUEST` / `TEACHER_INIT_STATE` / `broadcastInitState` / `requestHandshake` 从 ClassroomSyncChannel 移除——发送方与消费方均不存在（学生端恢复由服务端持久化视图状态承担），LiveClassroomView 与 LessonEditorView 的空转监听一并删除，信道测试同步更新；
+  - **熔断记录随插件注销清理**：`unregisterPluginResources` 调用 `resetPluginBreaker`——模块级 `pluginCrashRegistry` 此前不随生命周期回收，卸载后残留条目（重新安装曾 blown 的插件会被静默跳过）；
+  - **未打标 lazy 工厂的自愈探针 + 开发期告警**：`resolveExtensionComponent` 缓存阶段对未打标函数以无参调用探测一次，返回 thenable 即判定为漏打标的 lazy 工厂——**自动包 React.lazy 自愈**（不再永久悬挂）并打 `console.error` 提示打标；直接组件（hooks/类组件/必选 props 在无参调用时抛错）被捕获后按直组件处理，不误报。此前的"当前代码库只注册直接组件所以安全"假设已被两次事故证伪，现改为机制级防护。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

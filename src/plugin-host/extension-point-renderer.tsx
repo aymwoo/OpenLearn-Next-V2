@@ -243,26 +243,50 @@ function resolveExtensionComponent(ext: any): React.ComponentType<any> {
   const cached = resolvedComponentCache.get(fn);
   if (cached) return cached;
 
-  // Heuristic: lazy factories are typically arrow functions with 0-length
-  // that return a Promise. Real React components accept (props) and return JSX.
-  // We check if the function is marked as a React component or has hooks-like
-  // characteristics by checking its .length (props arg) and name patterns.
-  //
-  // Safest approach: if the function's source contains "createElement" or
-  // "use" calls, treat it as a direct component. But we can't inspect source
-  // reliably. Instead, we check: if calling it with no args returns a thenable,
-  // it's a lazy factory. BUT we can't call it during render.
-  //
-  // Final approach: treat it as a direct component by default. If the plugin
-  // registered it as a lazy factory (returns Promise), it should have been
-  // wrapped at registration time. The current codebase registers direct
-  // components, so this is safe.
-  //
-  // We use a marker property `__isLazyFactory` that can be set at registration.
+  // 打标工厂（显式约定）：包 React.lazy 并缓存。
   if ((fn as any).__isLazyFactory === true) {
     const lazy = React.lazy(fn as () => Promise<{ default: React.ComponentType<any> }>);
     resolvedComponentCache.set(fn, lazy);
     return lazy;
+  }
+
+  // v0.6.1 审计 R-1 收口 —— 未打标 lazy 工厂的**自愈探针 + 开发期告警**。
+  //
+  // 此前的假设「当前代码库只注册直接组件，所以默认当直组件是安全的」已被
+  // 两次事故证伪（v0.6.0 smart-edu 全量渲染失败 / 第三方经
+  // ctx.ui.registerExtensionPoint 注入未打标工厂）：未打标的
+  // `() => Promise.resolve({default: Comp})` 被当作直组件渲染时，返回的
+  // Promise 会让最近的 Suspense **永久悬挂且不抛错**，ErrorBoundary 与
+  // 熔断器全程失效。
+  //
+  // 探针：在缓存阶段（每函数仅一次、不在渲染路径上）以无参调用一次，
+  // 返回 thenable 即判定为漏打标的 lazy 工厂 —— 自愈为 React.lazy（不再
+  // 悬挂），并打 console.error 提示作者打标或改直组件。误判面分析：
+  // - 直接组件被调用会走函数体 —— 使用 hooks/Context 的会同步抛错（捕获，
+  //   按直组件处理）；返回 JSX 元素（非 thenable）→ 按直组件处理；
+  // - 类组件无 new 调用直接抛错（捕获）→ 按直组件处理；
+  // - memo/forwardRef/lazy 产物是对象而非函数 → 不进探针。
+  if (typeof fn === 'function' && !(fn as any).prototype?.isReactComponent) {
+    let looksLikeFactory = false;
+    try {
+      const probe = (fn as any)();
+      if (probe && typeof probe.then === 'function') {
+        looksLikeFactory = true;
+      }
+    } catch {
+      // 直接组件的无参调用（hooks/类组件/必选 props 解构）会抛错 —— 按直组件处理
+    }
+    if (looksLikeFactory) {
+      console.error(
+        '[ExtensionPoint] Detected an UNMARKED lazy factory (function returned a Promise). ' +
+          'React would suspend forever without throwing. Auto-wrapping with React.lazy; ' +
+          'please set `__isLazyFactory = true` on the factory or register the component directly. ' +
+          `Offending function: ${fn.name || '(anonymous)'}`,
+      );
+      const lazy = React.lazy(fn as () => Promise<{ default: React.ComponentType<any> }>);
+      resolvedComponentCache.set(fn, lazy);
+      return lazy;
+    }
   }
 
   // Default: treat as direct React component
@@ -364,11 +388,11 @@ export function ExtensionPointRenderer({
         <Suspense fallback={<LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
+            ...activeExt.slotProps,
             classId: slotProps?.classId,
             students: slotProps?.students,
             lang: slotProps?.lang,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            ...activeExt.slotProps,
           })}
           </CrashResetProbe>
         </Suspense>
@@ -425,13 +449,13 @@ export function ExtensionPointRenderer({
         <Suspense fallback={<LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
+            ...activeExt.slotProps,
             classes: slotProps?.classes,
             lessons: slotProps?.lessons,
             lang: slotProps?.lang,
             onSchedulesUpdated: slotProps?.onSchedulesUpdated,
             onClassesUpdated: slotProps?.onClassesUpdated,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            ...activeExt.slotProps,
           })}
           </CrashResetProbe>
         </Suspense>
@@ -491,10 +515,10 @@ export function ExtensionPointRenderer({
         <Suspense fallback={<LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
+            ...activeExt.slotProps,
             activeTab: slotProps?.activeTab,
             lang: slotProps?.lang,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            ...activeExt.slotProps,
           })}
           </CrashResetProbe>
         </Suspense>
@@ -551,13 +575,13 @@ export function ExtensionPointRenderer({
         <Suspense fallback={<LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
+            ...activeExt.slotProps,
             currentUserId: slotProps?.currentUserId,
             currentUserRole: slotProps?.currentUserRole,
             lang: slotProps?.lang,
             siteInfo: slotProps?.siteInfo,
             aiProviders: slotProps?.aiProviders,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            ...activeExt.slotProps,
           })}
           </CrashResetProbe>
         </Suspense>
@@ -616,13 +640,13 @@ export function ExtensionPointRenderer({
         <Suspense fallback={<LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
+            ...activeExt.slotProps,
             student: slotProps?.student,
             lessonId: slotProps?.lessonId,
             classId: slotProps?.classId,
             lang: slotProps?.lang,
             progressHistory: slotProps?.progressHistory,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            ...activeExt.slotProps,
           })}
           </CrashResetProbe>
         </Suspense>

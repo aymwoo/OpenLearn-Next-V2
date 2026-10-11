@@ -3,8 +3,8 @@
  *
  * 基于现代浏览器原生 BroadcastChannel API 构建，具备以下核心优势：
  * 1. 同源 0 往返网络延迟（1~5ms 瞬时同步）；
- * 2. 状态机握手协议（Handshake）：新弹出的学生窗口加载后立即索取全量授课快照；
- * 3. 双向互动闭环：支持教师端教学指令广播与学生端动作（举手/签到/作答）即时回传。
+ * 2. 双向互动闭环：教师指令广播与学生端动作即时回传。
+ * 2. 双向互动闭环：支持教师端教学指令广播与学生端动作（举手/签到/作答）即时回传。
  */
 
 import type { Socket } from 'socket.io-client';
@@ -21,20 +21,7 @@ export interface ClassroomCountdownState {
   updatedAt: number;
 }
 
-export interface LiveClassSyncState {
-  selectedLesson: string | null;
-  activeSegmentId: string | null;
-  activeTab: 'whiteboard' | 'courseware' | 'assignment';
-  isClassLocked: boolean;
-  liveClassTimeRemaining: number;
-  liveClassSelectedClassId: string | null;
-  liveClassIsActive: boolean;
-  fullscreenElementId?: string | null;
-  countdown?: ClassroomCountdownState | null;
-}
-
 export type ClassroomSyncMessage =
-  | { type: 'TEACHER_INIT_STATE'; payload: LiveClassSyncState }
   | { type: 'TEACHER_CHANGE_LESSON'; payload: { lessonId: string | null; classId?: string | null } }
   | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null; lessonId?: string | null } }
   | {
@@ -47,7 +34,6 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_BROADCAST_COUNTDOWN'; payload: ClassroomCountdownState }
   | { type: 'TEACHER_PING_STUDENT'; payload: { studentId: string; message?: string } }
   | { type: 'TEACHER_BROADCAST_FULLSCREEN'; payload: { elementId: string | null; lessonId?: string } }
-  | { type: 'STUDENT_HANDSHAKE_REQUEST' }
   | { type: 'STUDENT_ACKNOWLEDGE_PICK'; payload: { studentId: string } }
   | { type: 'STUDENT_HEARTBEAT'; payload: { studentId: string; timestamp: number } };
 
@@ -174,10 +160,6 @@ export class ClassroomSyncChannel {
 
   // ── 教师端快捷广播方法 ───────────────────────────────────────────────
 
-  public broadcastInitState(state: LiveClassSyncState): void {
-    this.postMessage({ type: 'TEACHER_INIT_STATE', payload: state });
-  }
-
   public broadcastChangeLesson(lessonId: string | null): void {
     this.lessonId = lessonId;
     this.postMessage({ type: 'TEACHER_CHANGE_LESSON', payload: { lessonId, classId: this.classId } });
@@ -255,10 +237,6 @@ export class ClassroomSyncChannel {
   }
 
   // ── 学生端快捷回传方法 ───────────────────────────────────────────────
-
-  public requestHandshake(): void {
-    this.postMessage({ type: 'STUDENT_HANDSHAKE_REQUEST' });
-  }
 
   public acknowledgePick(studentId: string): void {
     this.postMessage({ type: 'STUDENT_ACKNOWLEDGE_PICK', payload: { studentId } });

@@ -174,17 +174,21 @@ export function StageDisplayPanel({
         </div>
       </header>
 
-      {/* 顶部通栏通知跑马灯扩展（全班弹幕加油墙 / 优秀作业光荣榜滚屏 / 紧急通知） */}
-      <ExtensionPointRenderer
-        slot="classroom.stage.display.ticker"
-        slotProps={{
-          lessonId,
-          lessonTitle,
-          stage: data.stage,
-          data,
-          lang,
-        }}
-      />
+      {/* 顶部通栏通知跑马灯扩展（全班弹幕加油墙 / 优秀作业光荣榜滚屏 / 紧急通知）。
+          v0.6.1 审计 N-7：高度约束 —— 插件返回超高元素会挤压/挤出主展示区
+          （ErrorBoundary 只挡崩溃，不挡布局），通栏条限高 48px 并裁剪溢出。 */}
+      <div className="max-h-12 overflow-hidden shrink-0">
+        <ExtensionPointRenderer
+          slot="classroom.stage.display.ticker"
+          slotProps={{
+            lessonId,
+            lessonTitle,
+            stage: data.stage,
+            data,
+            lang,
+          }}
+        />
+      </div>
 
       {/* 主展示区 */}
       <main className="flex-1 p-8 grid grid-cols-12 gap-8 overflow-y-auto">

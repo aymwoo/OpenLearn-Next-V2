@@ -35,30 +35,19 @@ describe('ClassroomSyncChannel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('initializes and posts teacher init state', () => {
+  it('initializes and posts teacher lesson change', () => {
     const channel = new ClassroomSyncChannel();
     const received: any[] = [];
     channel.onMessage((msg) => received.push(msg));
 
-    channel.broadcastInitState({
-      selectedLesson: 'L1',
-      activeSegmentId: 'seg-1',
-      activeTab: 'whiteboard',
-      isClassLocked: false,
-      liveClassTimeRemaining: 300,
-      liveClassSelectedClassId: 'C1',
-      liveClassIsActive: true,
-    });
+    channel.broadcastChangeLesson('L1');
 
     expect(postMessageMock).toHaveBeenCalledWith({
-      type: 'TEACHER_INIT_STATE',
-      payload: expect.objectContaining({
-        selectedLesson: 'L1',
-        activeSegmentId: 'seg-1',
-      }),
+      type: 'TEACHER_CHANGE_LESSON',
+      payload: expect.objectContaining({ lessonId: 'L1' }),
     });
     expect(received).toHaveLength(1);
-    expect(received[0].type).toBe('TEACHER_INIT_STATE');
+    expect(received[0].type).toBe('TEACHER_CHANGE_LESSON');
 
     channel.destroy();
     expect(closeMock).toHaveBeenCalled();
@@ -88,20 +77,15 @@ describe('ClassroomSyncChannel', () => {
     channel.destroy();
   });
 
-  it('supports student handshake and acknowledge response', () => {
+  it('supports student acknowledge and heartbeat (dead handshake protocol removed, v0.6.1 审计 N-2)', () => {
     const channel = new ClassroomSyncChannel();
     const received: any[] = [];
     channel.onMessage((msg) => received.push(msg));
 
-    channel.requestHandshake();
     channel.acknowledgePick('s101');
     channel.sendHeartbeat('s101');
 
-    expect(received.map((r) => r.type)).toEqual([
-      'STUDENT_HANDSHAKE_REQUEST',
-      'STUDENT_ACKNOWLEDGE_PICK',
-      'STUDENT_HEARTBEAT',
-    ]);
+    expect(received.map((r) => r.type)).toEqual(['STUDENT_ACKNOWLEDGE_PICK', 'STUDENT_HEARTBEAT']);
 
     channel.destroy();
   });
@@ -142,19 +126,11 @@ describe('ClassroomSyncChannel', () => {
       payload: { elementId: null, lessonId: 'L1' },
     });
 
-    // 3. Handshake init state containing fullscreenElementId
-    channel.broadcastInitState({
-      selectedLesson: 'L1',
-      activeSegmentId: 'seg-1',
-      activeTab: 'whiteboard',
-      isClassLocked: true,
-      liveClassTimeRemaining: 240,
-      liveClassSelectedClassId: 'C1',
-      liveClassIsActive: true,
-      fullscreenElementId: 'el-quiz-1',
-    });
+    // 3. Fullscreen broadcast carrying elementId
+    channel.broadcastFullscreen('el-quiz-1', 'L1');
     expect(received).toHaveLength(3);
-    expect(received[2].payload.fullscreenElementId).toBe('el-quiz-1');
+    expect(received[2].type).toBe('TEACHER_BROADCAST_FULLSCREEN');
+    expect(received[2].payload.elementId).toBe('el-quiz-1');
 
     channel.destroy();
   });

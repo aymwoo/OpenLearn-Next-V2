@@ -632,6 +632,9 @@ export class FrontendPluginHost {
     paletteItemRegistry.unregisterPlugin(pluginId);
     // 注销该插件注册的全部题型渲染器
     assignmentQuestionRendererRegistry.clearOwned(pluginId);
+    // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
+    // 此前不随生命周期回收，卸载后残留条目（重新安装后若曾 blown 会被跳过）
+    resetPluginBreaker(pluginId);
   }
 
   /**
