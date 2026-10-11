@@ -55,7 +55,7 @@ export interface PluginHostStoreActions {
   registerExtensionPoint: (slot: AnyExtensionSlot, config: ExtensionPointConfig) => void;
 
   /** Unregister a single extension point by slot + id. */
-  unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string) => void;
+  unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string, ownerPluginId?: string) => void;
 
   /** Unregister all extension points belonging to a plugin. */
   unregisterPluginExtensionPoints: (pluginId: string) => void;
@@ -76,7 +76,18 @@ export interface PluginHostStoreActions {
   setBuiltinBundleEnabled: (bundleId: string, enabled: boolean) => void;
 }
 
-// ── Store ────────────────────────────────────────────────────────────────
+// 跨标签页同步（v0.6.1 审计 R-5）：内置包停用 / 仪表盘可见性写入
+// localStorage 后，其他标签页经 storage 事件拉平，避免 A 页停用、B 页
+// 扩展继续渲染直到手动刷新。
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === BUILTIN_BUNDLES_KEY) {
+      usePluginHostStore.setState({ builtinBundlesDisabled: loadBuiltinBundlesDisabled() });
+    } else if (e.key === DASH_VIS_KEY) {
+      usePluginHostStore.setState({ dashboardVisibility: loadDashboardVisibility() });
+    }
+  });
+}
 
 // ── localStorage helpers for dashboard visibility ─────────────────────
 const DASH_VIS_KEY = 'openlearn:dashboardVisibility';
@@ -148,6 +159,16 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       const existing = state.extensionPoints.get(slot) ?? [];
       const dup = existing.find((e) => e.id === config.id);
       if (dup) {
+        // 归属守卫（v0.6.1 审计 R-2）：同 (slot,id) 仅允许**同一插件**覆盖
+        // （HMR / 服务重启重注册场景）；跨插件覆盖 = 扩展点劫持（可伪装
+        // 别家 label/slotProps 或顶掉内置包），拒绝并告警。
+        if (dup.pluginId !== config.pluginId) {
+          console.warn(
+            `[PluginHost] Extension point "${slot}/${config.id}" is owned by plugin "${dup.pluginId}"; ` +
+              `registration from "${config.pluginId}" was rejected (cross-plugin overwrite).`,
+          );
+          return state;
+        }
         // Widget IDs are globally unique per slot by convention.
         // Always overwrite on duplicate to handle re-registration after
         // server restart (new DB UUID) or HMR without crashing.
@@ -163,10 +184,21 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       return { extensionPoints: updated };
     }),
 
-  unregisterExtensionPoint: (slot, id) =>
+  unregisterExtensionPoint: (slot, id, ownerPluginId?) =>
     set((state) => {
       const existing = state.extensionPoints.get(slot);
       if (!existing) return state;
+      // 归属守卫（v0.6.1 审计 R-2）：提供 ownerPluginId 时只允许摘除自己的
+      // 扩展点（ctx.ui.unregisterExtensionPoint 由插件调用，宿主注入其 id）
+      const target = existing.find((e) => e.id === id);
+      if (!target) return state;
+      if (ownerPluginId && target.pluginId !== ownerPluginId) {
+        console.warn(
+          `[PluginHost] Plugin "${ownerPluginId}" cannot unregister extension point "${slot}/${id}" ` +
+            `owned by "${target.pluginId}".`,
+        );
+        return state;
+      }
       const filtered = existing.filter((e) => e.id !== id);
       const updated = new Map(state.extensionPoints);
       if (filtered.length === 0) {

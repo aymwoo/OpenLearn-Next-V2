@@ -89,7 +89,7 @@ import {
   duplicatePageItem,
   movePageItem,
 } from './utils/pagination-utils';
-import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
+import { whiteboardViewStore, useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import {
@@ -798,6 +798,26 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 学生端的远程元素可能只是尚未加载完毕，因此这里不处理远程状态。
     const fullscreenElementMissing =
       !!effectiveFullscreenElementId && !safeElements.some((el) => el.id === effectiveFullscreenElementId);
+
+    // v0.6.1 审计 R-3：远程最大化元素缺失超过一个对账周期（2s 轮询 ×1.5）
+    // 仍不出现 —— 说明教师在别处删除了该元素且不会再有「退出最大化」广播。
+    // 本地自动退出远程全屏，避免全班被锁死在空白全屏（教师侧状态随其
+    // 后续广播自然收敛；学生端自行恢复可操作视图是更小的恶）。
+    const missingRemoteSinceRef = useRef<number | null>(null);
+    useEffect(() => {
+      if (!fullscreenElementMissing || !isRemoteFullscreen) {
+        missingRemoteSinceRef.current = null;
+        return;
+      }
+      if (missingRemoteSinceRef.current == null) {
+        missingRemoteSinceRef.current = Date.now();
+        return;
+      }
+      if (Date.now() - missingRemoteSinceRef.current >= 3000) {
+        missingRemoteSinceRef.current = null;
+        whiteboardViewStore.getState().clearRemoteFullscreen();
+      }
+    }, [fullscreenElementMissing, isRemoteFullscreen]);
 
     useEffect(() => {
       if (!fullscreenElementMissing || isRemoteFullscreen) return;

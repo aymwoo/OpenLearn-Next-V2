@@ -35,6 +35,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`ai.prompt.template` → Agent 输入区模板选择器**：新增 [`AiPromptTemplatePicker`](./src/features/shared/AiPromptTemplatePicker.tsx) 挂载在聊天输入框旁——插件贡献的提示词模板经选择、`{{参数}}` 填参（预填 default）渲染后插入输入框（追加不覆盖），无模板注册时零渲染；回归测试 [`AiPromptTemplatePicker.test.tsx`](./src/features/shared/__tests__/AiPromptTemplatePicker.test.tsx)；
   - **权威槽位文档同步**：[`docs/reference/plugin-ui-extension-slots.md`](./docs/reference/plugin-ui-extension-slots.md) 修正 12 个槽位的 Props 列（此前为与宿主实际传参不符的虚构形状），新增 `ai.prompt.template`/`ai.skill.provider` 消费行与 11.6 消费语义说明，统计更新（96 固定名消费值 / 104 唯一槽位值）。
 
+- **第三轮审计整改（插件系统 3 Critical + 上课流程 2 Critical 与配套 Required/P2）**：
+  - **插件 C-1｜通用桥接接入生产激活路径**：classroomTools 注册与 contributes 通用桥接抽为 `registerManifestContributions`，`activateRemotePlugin`（生产唯一远程激活路径）与 `activatePlugin` 共用，commandType 命名空间以 `manifest.id` 为准、store 归属以流程 id 为准；`activateRemotePlugin` 补 manifest.id 存在性校验 —— 此前桥接整体挂在无生产调用方的路径上，第三方声明式贡献依旧被静默丢弃；
+  - **插件 C-3｜actor 伪造提权链封堵**：内核拦截器与 CapabilityGuard 的 admin 判定废除裸后缀启发式（`endsWith(':admin')` 曾使 `plugin:@evil:admin` 跳过能力检查且高危免审批），角色回退仅对 `user:` 形态 actor 生效；manifest.id 禁止包含 `:`（actor 命名空间保护）；`ai.skill.provider` 绑定面收严 —— 第一方（@openlearn/*）保留原名解析，第三方强制解析到自身命名空间（宿主高危命令不可被绑成技能），smart-edu 技能收敛为只读（检索/状态）；
+  - **插件 C-2｜熔断状态机修透**：熔断状态抽至独立模块 `extension-breaker.ts`（renderer 与 plugin-host 共同下游，避免循环导入）；两条激活路径成功后与 `registerSmartEduExtensions` 重注册前调用 `resetPluginBreaker`（此前为死代码，blown 永驻、「重新激活可恢复」不成立）；熔断 trip 统一经 `handleBreakerTrip`——摘除扩展点 + 内置包写入停用表（管理卡片如实显示已停用）+ 生命周期插件走宿主停用，whiteboard.renderer 分支同样获得兜底；
+  - **插件 R-2/R-4/R-5**：扩展点注册加跨插件归属守卫（同 (slot,id) 仅同插件可覆盖，`ctx.ui.unregisterExtensionPoint` 宿主注入调用方 id 后跨插件注销被拒）；`CrashResetProbe` 移入各调用点 `<Suspense>` 之内（此前 lazy 加载期 fallback 提交即清零计数，熔断阈值被稀释）；内置包停用/仪表盘可见性增加 `storage` 事件跨标签页同步；
+  - **课堂 C-1｜教师课堂动态流复活**：`LiveClassroomView` 的 `classroom:feed_appended` 监听从裸 `io()`（从不 join-room，实时通道 100% 收不到）改为经 `onSocketInstance` 挂主 socket（已加入 classroom-broadcast 房间）；同文件另一处 `courseware-attempt-updated` 裸连接（全局广播碰巧可达但冗余）一并收敛；
+  - **课堂 C-2｜白板元素双写翻转修复**：`useAppPolling` 改为「作业优先/课节次之」互斥选择房间（作业激活即接管学生画布，与教师最大化打断的既有语义一致），`useLessonCrud` 的去重 ref 按房间分键作纵深防御 —— 此前每 2s 学生画布在课节/作业两个房间之间翻转；
+  - **课堂 R-1/R-2/R-3/R-4**：`ClassroomSyncChannel` 只随房间身份（课节+班级）重建，倒计时/学生列表等快照依赖 ref 化（此前课中每秒销毁重建信道）；阶段推进改为等服务端裁决、失败 toast 告知，cockpit 轮询加代次守卫（此前乐观更新+双轮询回灌造成阶段抖动）；学生端远程最大化元素缺失超 3s 自动退出全屏（此前教师删除投屏元素后全班锁死在空白全屏）；socket 重连即重拉学生状态（断线间隙发起的锁定对恢复连接的学生立即生效）；
+  - **P2 快赢**：课堂动态流写入即截断至 200 条（此前无上限，40 人班级一小时可积 7 万+条且全量重渲染）；`/api/commands` 加 10s 执行超时（此前挂死 handler 令教师工具下发永久 pending）；课堂节奏仪表盘在线人数改读 stage/data 的真实 presence 统计（此前读不存在的字段恒为 0）；投票 close 与抢答 reset 补课节归属校验（此前凭 id 即可误关他班互动）。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features

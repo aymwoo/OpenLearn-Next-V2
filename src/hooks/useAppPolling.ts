@@ -133,12 +133,16 @@ export function useAppPolling(options: UseAppPollingOptions): void {
           }
         }
 
-        if (selectedLessonRef.current) {
-          await fetchElements(selectedLessonRef.current);
-        }
+        // v0.6.1 审计 C-2 修复：此前课节白板与作业白板在同一 tick 内先后写入
+        // **同一个** elements store（useLessonCrud 单 ref 去重在两房间 payload
+        // 间永远失效）→ 学生端画布每 2s 在两个房间之间翻转。语义上作业激活
+        // 即接管学生画布（教师最大化打断才清空作业，见 useClassroomSocket），
+        // 故二者互斥：有进行中作业只拉作业房间，否则拉课节房间。
         if (selectedAssignmentRef.current) {
           const studentId = activeStudentId || selectedAssignmentRef.current.student_id;
           await fetchElements(`assignment-${selectedAssignmentRef.current.id}-student-${studentId}`);
+        } else if (selectedLessonRef.current) {
+          await fetchElements(selectedLessonRef.current);
         }
       } finally {
         isFetching = false;

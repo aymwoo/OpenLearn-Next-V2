@@ -48,11 +48,10 @@ import { listFromEnvelope } from '../utils/listEnvelope.js';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
-import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
-import { getOptionalSocket } from '../services/socket-service';
+import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
@@ -330,17 +329,36 @@ export function LiveClassroomView({
   }, [liveData.studentMetrics, topPerformers, students]);
 
   const handleStageChange = async (newStage: string) => {
-    setClassroomStage(newStage);
-    if (selectedLesson) {
-      try {
-        await fetch(`/api/classroom/sessions/${selectedLesson}/stage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage: newStage, classId: liveClassSelectedClassId }),
-        });
-      } catch (err) {
-        console.error('Failed to update stage:', err);
+    // v0.6.1 审计 R-2：阶段推进先等服务端裁决（守卫可能 403），成功才更新
+    // 本地阶段 —— 此前乐观更新 + 双轮询回灌会让视图在新旧阶段间抖动、且
+    // 被拒时教师得不到任何反馈。
+    if (!selectedLesson) {
+      setClassroomStage(newStage);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/classroom/sessions/${selectedLesson}/stage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: newStage, classId: liveClassSelectedClassId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        addToast(
+          lang === 'zh' ? '⚠️ 阶段切换被拒绝' : '⚠️ Stage change rejected',
+          body?.error || body?.message || `HTTP ${res.status}`,
+          'warning',
+        );
+        return;
       }
+      setClassroomStage(newStage);
+    } catch (err) {
+      console.error('Failed to update stage:', err);
+      addToast(
+        lang === 'zh' ? '⚠️ 阶段切换失败' : '⚠️ Stage change failed',
+        lang === 'zh' ? '网络异常，请重试' : 'Network error, please retry',
+        'warning',
+      );
     }
   };
 
@@ -443,14 +461,25 @@ export function LiveClassroomView({
   }, [middleTab]);
 
   useEffect(() => {
-    const socket = io();
-    socket.on('courseware-attempt-updated', () => {
-      fetchAttempts();
+    // v0.6.1 审计：同一裸 `io()` 模式顺带修复 —— 该事件是全局广播
+    // （event-routing rooms: null），裸连接碰巧能收到，但每挂载多维持
+    // 一条冗余连接；统一挂主 socket。
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      detach?.();
+      const handler = () => {
+        fetchAttempts();
+      };
+      socket.on('courseware-attempt-updated', handler);
+      detach = () => {
+        if (typeof socket.off === 'function') socket.off('courseware-attempt-updated', handler);
+      };
     });
     return () => {
-      socket.disconnect();
+      off();
+      detach?.();
     };
-  }, []);
+  }, [fetchAttempts]);
 
   const handlePromoteAttempt = async (attemptId: string) => {
     if (!selectedLesson || !liveClassSelectedClassId) {
@@ -758,6 +787,34 @@ export function LiveClassroomView({
     );
   };
 
+  // v0.6.1 审计 R-1：同步信道只随「房间身份」（课节+班级）销毁重建。
+  // 此前 effect 依赖含 liveClassTimeRemaining（倒计时每秒变化）与 students
+  // （2s 轮询换引用）——课中每秒 destroy + 重建 BroadcastChannel 并重绑
+  // socket，摧毁窗口内的广播静默丢失。快照类状态改经 ref 在处理时读取；
+  // 它们的变更广播由下方独立的 Reactive state broadcasts effects 承担。
+  const syncSnapshotRef = useRef({
+    selectedLesson,
+    activeSegmentId,
+    middleTab,
+    isClassLocked,
+    liveClassTimeRemaining,
+    liveClassSelectedClassId,
+    liveClassIsActive,
+    students,
+    lang,
+  });
+  syncSnapshotRef.current = {
+    selectedLesson,
+    activeSegmentId,
+    middleTab,
+    isClassLocked,
+    liveClassTimeRemaining,
+    liveClassSelectedClassId,
+    liveClassIsActive,
+    students,
+    lang,
+  };
+
   useEffect(() => {
     const channel = new ClassroomSyncChannel(CLASSROOM_SYNC_CHANNEL_NAME, selectedLesson, liveClassSelectedClassId);
     syncChannelRef.current = channel;
@@ -765,19 +822,21 @@ export function LiveClassroomView({
     const unsub = channel.onMessage((msg) => {
       if (msg.type === 'STUDENT_HANDSHAKE_REQUEST') {
         // Send full current snapshot to newly opened student window
+        const snap = syncSnapshotRef.current;
         channel.broadcastInitState({
-          selectedLesson,
-          activeSegmentId,
-          activeTab: middleTab === 'submissions' || middleTab === 'top_performers' ? 'courseware' : middleTab,
-          isClassLocked,
-          liveClassTimeRemaining,
-          liveClassSelectedClassId,
-          liveClassIsActive,
+          selectedLesson: snap.selectedLesson,
+          activeSegmentId: snap.activeSegmentId,
+          activeTab: snap.middleTab === 'submissions' || snap.middleTab === 'top_performers' ? 'courseware' : snap.middleTab,
+          isClassLocked: snap.isClassLocked,
+          liveClassTimeRemaining: snap.liveClassTimeRemaining,
+          liveClassSelectedClassId: snap.liveClassSelectedClassId,
+          liveClassIsActive: snap.liveClassIsActive,
           fullscreenElementId: liveClassFullscreenElementId,
         });
       } else if (msg.type === 'STUDENT_ACKNOWLEDGE_PICK') {
         const studentId = msg.payload.studentId;
-        const studentName = students.find((s) => s.id === studentId)?.name || studentId;
+        const studentName =
+          syncSnapshotRef.current.students.find((s) => s.id === studentId)?.name || studentId;
         setLiveClassAcknowledgedMap((prev) => {
           const next = new Map(prev);
           next.set(studentId, true);
@@ -789,15 +848,15 @@ export function LiveClassroomView({
             time: new Date().toLocaleTimeString(),
             type: 'checkin',
             message:
-              lang === 'zh'
+              syncSnapshotRef.current.lang === 'zh'
                 ? `学生【${studentName}】已在独立视窗中确认点名并举手答到！`
                 : `Student "${studentName}" acknowledged classroom pick from student window!`,
           },
           ...prev,
         ]);
         addToast(
-          lang === 'zh' ? '🙋‍♂️ 学生已举手应答' : '🙋‍♂️ Student Acknowledged',
-          lang === 'zh'
+          syncSnapshotRef.current.lang === 'zh' ? '🙋‍♂️ 学生已举手应答' : '🙋‍♂️ Student Acknowledged',
+          syncSnapshotRef.current.lang === 'zh'
             ? `学生【${studentName}】已在独立视窗中确认收到点名！`
             : `Student "${studentName}" acknowledged!`,
           'success',
@@ -810,17 +869,7 @@ export function LiveClassroomView({
       channel.destroy();
       syncChannelRef.current = null;
     };
-  }, [
-    selectedLesson,
-    activeSegmentId,
-    middleTab,
-    isClassLocked,
-    liveClassTimeRemaining,
-    liveClassSelectedClassId,
-    liveClassIsActive,
-    students,
-    lang,
-  ]);
+  }, [selectedLesson, liveClassSelectedClassId]);
 
   // Reactive state broadcasts
   useEffect(() => {
@@ -843,10 +892,14 @@ export function LiveClassroomView({
     }
   }, [activeSegmentId, selectedLesson]);
 
-  // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染
+  // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染。
+  // v0.6.1 审计 C-1 修复：此前用裸 `io()` 新建独立连接且从不 join-room ——
+  // 服务端只把该事件投递到 [lessonId, classroom-broadcast] 房间，这条
+  // 监听 100% 收不到（实时通道死链，仅剩 15s 轮询兜底）。现挂到主 socket
+  // （useClassroomSocket 已加入 classroom-broadcast / lesson 房间），
+  // 经 onSocketInstance 处理「socket 晚于本组件诞生」的时序。
   useEffect(() => {
     if (!selectedLesson) return;
-    const socket = io();
     const handler = (entry: any) => {
       if (!entry || typeof entry !== 'object') return;
       setLiveClassFeed((prev: any[]) => {
@@ -854,12 +907,20 @@ export function LiveClassroomView({
         return [entry, ...prev];
       });
     };
-    socket.on('classroom:feed_appended', handler);
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      detach?.();
+      socket.on('classroom:feed_appended', handler);
+      detach = () => {
+        // 防御性清理：测试环境的 mock socket 可能没有 off
+        if (typeof socket.off === 'function') socket.off('classroom:feed_appended', handler);
+        else if (typeof (socket as any).removeListener === 'function')
+          (socket as any).removeListener('classroom:feed_appended', handler);
+      };
+    });
     return () => {
-      // 防御性清理：测试环境的 mock socket 可能没有 off
-      if (typeof socket.off === 'function') socket.off('classroom:feed_appended', handler);
-      else if (typeof (socket as any).removeListener === 'function')
-        (socket as any).removeListener('classroom:feed_appended', handler);
+      off();
+      detach?.();
     };
   }, [selectedLesson]);
 

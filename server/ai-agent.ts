@@ -169,8 +169,18 @@ export const collectPluginSkills = (
       if (!raw || typeof raw !== 'object') continue;
       const { id, name, description, commandType, parametersSchema } = raw as Record<string, any>;
       if (!commandType || typeof commandType !== 'string') continue;
-      const registered = isRegistered(commandType);
-      const effectiveType = registered ? commandType : resolvePluginCommandType(commandType, pluginId);
+      // 绑定面收严（v0.6.1 审计 C-3/R-3）：
+      // - 第一方（@openlearn/*，随宿主发布、代码在仓库内）：允许按原名绑定
+      //   内核直注册命令（如 smart_edu.*）；
+      // - 第三方：**只允许绑定自己命名空间内的命令**（强制前缀化）——此前
+      //   「原名优先」可把 user.delete 等宿主高危命令绑成技能并顶替宿主
+      //   工具。未注册的命名空间命令在派发时因缺 descriptor 被 fail-closed。
+      const isFirstParty = pluginId.startsWith('@openlearn/');
+      const effectiveType = isFirstParty
+        ? isRegistered(commandType)
+          ? commandType
+          : resolvePluginCommandType(commandType, pluginId)
+        : resolvePluginCommandType(commandType, pluginId);
       skills.push({
         toolName: skillToolName(effectiveType),
         skillName: String(name ?? id ?? effectiveType),

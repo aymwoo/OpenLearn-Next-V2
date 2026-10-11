@@ -645,6 +645,10 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     socket.on('connect', () => {
       syncPresenceAndRooms();
       restoreInterruptedView();
+      // v0.6.1 审计 R-4：锁定状态来源是 students[].locked_lesson_id，断线
+      // 期间错过的「全班锁定」广播不会因重连自动恢复 —— 重连即重拉学生
+      // 状态，使断网/刷新间隙发起的锁定对恢复连接的学生立即生效。
+      void Promise.resolve(fetchStudents()).catch(() => {});
     });
 
     socket.io?.on('reconnect', () => {

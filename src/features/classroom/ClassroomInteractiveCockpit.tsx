@@ -108,16 +108,23 @@ export function ClassroomInteractiveCockpit({
   const [showPacingDashboard, setShowPacingDashboard] = useState(false);
   const [panoramicSummary, setPanoramicSummary] = useState<any>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  // v0.6.1 审计 N-8：在线人数来自 stage/data 的 attendance.online（presence
+  // 真实在线集合）—— 此前读 students[].online（字段不存在）恒为 0。
+  const [onlineCount, setOnlineCount] = useState(0);
 
   // 轮询课堂阶段与实时数据
   useEffect(() => {
     if (!lessonId) return;
 
     let mounted = true;
+    // v0.6.1 审计 R-2：代次守卫 —— 慢的旧响应不得覆盖新响应已写入的状态
+    // （与教师端阶段推进乐观更新叠加时曾造成阶段视图抖动）
+    let pollSeq = 0;
     const fetchSession = async () => {
+      const seq = ++pollSeq;
       try {
         const res = await fetch(`/api/classroom/sessions/${lessonId}`);
-        if (res.ok && mounted) {
+        if (res.ok && mounted && seq === pollSeq) {
           const json = await res.json();
           if (json.hasActiveSession) {
             if (json.stage) setStage(json.stage);
@@ -130,9 +137,12 @@ export function ClassroomInteractiveCockpit({
         }
 
         const stageRes = await fetch(`/api/classroom/stage/${lessonId}/data`);
-        if (stageRes.ok && mounted) {
+        if (stageRes.ok && mounted && seq === pollSeq) {
           const stageJson = await stageRes.json();
           setPacingSignals(stageJson.pacing || { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 });
+          if (typeof stageJson.attendance?.online === 'number') {
+            setOnlineCount(stageJson.attendance.online);
+          }
         }
       } catch (err) {
         // silent
@@ -641,7 +651,7 @@ export function ClassroomInteractiveCockpit({
           lessonId={lessonId}
           lang={lang === 'zh' ? 'zh' : 'en'}
           signals={pacingSignals}
-          onlineCount={students?.filter((s) => s.online).length || 0}
+          onlineCount={onlineCount}
           onClose={() => setShowPacingDashboard(false)}
           activeSegmentTitle={activeSegmentId ? segmentTitles[activeSegmentId] : null}
         />

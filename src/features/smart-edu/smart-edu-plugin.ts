@@ -19,6 +19,8 @@
  */
 
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import { resetPluginBreaker } from '../../plugin-host/extension-breaker';
+import { BUILTIN_BUNDLE_IDS } from '../../plugin-host/builtin-bundles';
 import { SmartEduCourseToolbarAction } from './components/SmartEduCourseToolbarAction';
 import { SmartEduCourseBadge } from './components/SmartEduCourseBadge';
 import { SmartEduCourseCardAction } from './components/SmartEduCourseCardAction';
@@ -37,6 +39,12 @@ export function registerSmartEduExtensions() {
   // 内置扩展包门控：管理台（Plugin Center）可停用；停用后开机跳过注册，
   // 运行中停用由 Plugin Center 调 unregisterPluginExtensionPoints 清理。
   if (!store.isBuiltinBundleEnabled(SMART_EDU_PLUGIN_ID)) return;
+
+  // 重新启用/重注册前复位熔断 —— 此前熔断 blown 残留使「重新启用」后
+  // 扩展点重注册却被 isPluginBlown 全部跳过（v0.6.1 审计 C-2）。
+  if (BUILTIN_BUNDLE_IDS.includes(SMART_EDU_PLUGIN_ID)) {
+    resetPluginBreaker(SMART_EDU_PLUGIN_ID);
+  }
 
   // 1. 备课中心：课程管理工具栏导入按钮
   store.registerExtensionPoint('course.list.toolbar.action', {

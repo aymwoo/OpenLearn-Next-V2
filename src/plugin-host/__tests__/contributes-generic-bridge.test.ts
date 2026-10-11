@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { FrontendPluginHost } from '../plugin-host';
+import { FrontendPluginHost, registerManifestContributions } from '../plugin-host';
 import { usePluginHostStore } from '../plugin-host-store';
 import { PluginState } from '../types';
 import { SMART_EDU_PLUGIN_ID, registerSmartEduExtensions } from '../../features/smart-edu/smart-edu-plugin';
@@ -129,6 +129,30 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
     expect(entries).toHaveLength(1);
     expect(entries[0].label).toBe('Contrib Tool');
     expect(entries[0].slotProps).toMatchObject({ commandType: 'test-plugin.tool.ping' });
+  });
+
+  it('远程激活路径语义：store 归属用流程 id，commandType 命名空间用 manifest.id（C-1 回归钉）', () => {
+    // v0.6.1 审计 C-1：生产唯一远程激活路径 activateRemotePlugin 曾不含桥接。
+    // 该测试直接钉共享注册函数的双 id 语义 —— 归属 id（unregisterPluginResources
+    // 的清理键）与命名空间 id（plugin-namespace 契约要求 manifest.id）分离。
+    const dbId = '019f6029-884d-71dd-a4f1-31f815fa9698';
+    registerManifestContributions(
+      usePluginHostStore.getState(),
+      dbId,
+      '@scope/remote-plugin',
+      {
+        id: '@scope/remote-plugin',
+        name: 'Remote',
+        version: '1.0.0',
+        contributes: {
+          'command_palette.item': [{ id: 'cmd1', title: '远程命令', commandType: 'remote.act' }],
+        },
+      } as any,
+    );
+    const entries = usePluginHostStore.getState().getExtensions('command_palette.item');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].pluginId).toBe(dbId);
+    expect(entries[0].slotProps).toMatchObject({ commandType: '@scope/remote-plugin.remote.act' });
   });
 
   it('激活后插件状态为 ACTIVE（桥接不阻断生命周期）', async () => {

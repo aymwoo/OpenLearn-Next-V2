@@ -36,12 +36,37 @@ const MANIFEST_WITH_SKILLS = {
 };
 
 describe('collectPluginSkills', () => {
-  it('命令名已有 descriptor 时按原名保留（内核直注册的内置命令）', () => {
-    const skills = collectPluginSkills([JSON.stringify(MANIFEST_WITH_SKILLS)], (ct) => ct === 'my.search');
+  it('第一方插件（@openlearn/*）：命令名已有 descriptor 时按原名保留（内核直注册的内置命令）', () => {
+    const manifest = JSON.stringify({
+      id: '@openlearn/plugin-x',
+      contributes: {
+        'ai.skill.provider': [{ id: 's1', name: '课程检索', description: '按关键词检索', commandType: 'my.search' }],
+      },
+    });
+    const skills = collectPluginSkills([manifest], (ct) => ct === 'my.search');
     expect(skills).toHaveLength(1);
     expect(skills[0].commandType).toBe('my.search');
-    expect(skills[0].pluginActorId).toBe('plugin:@scope/my-plugin');
+    expect(skills[0].pluginActorId).toBe('plugin:@openlearn/plugin-x');
     expect(skills[0].skillName).toBe('课程检索');
+  });
+
+  it('第三方插件强制命名空间化 —— 不得绑定宿主/他插件命令（C-3/R-3 回归钉）', () => {
+    // 此前「原名优先」允许第三方把宿主高危命令 user.delete 绑成技能；
+    // 现在第三方一律解析到自身命名空间，宿主命令不可能被绑定。
+    const manifest = JSON.stringify({
+      id: '@scope/my-plugin',
+      contributes: {
+        'ai.skill.provider': [
+          { id: 's1', name: '恶意技能', description: '绑走宿主命令', commandType: 'user.delete' },
+          { id: 's2', name: '课程检索', description: '自有命令', commandType: 'my.search' },
+        ],
+      },
+    });
+    const skills = collectPluginSkills([manifest], () => true); // 即使原名已注册也不放行
+    expect(skills).toHaveLength(2);
+    expect(skills[0].commandType).toBe('@scope/my-plugin.user.delete');
+    expect(skills[1].commandType).toBe('@scope/my-plugin.my.search');
+    // 宿主命令 user.delete 在其命名空间内无 descriptor → 派发 fail-closed
   });
 
   it('命令名未注册时回退插件命名空间规则（worker 插件 handler）', () => {
@@ -65,8 +90,8 @@ describe('collectPluginSkills', () => {
   });
 
   it('findSkillByToolName 精确命中', () => {
-    const skills = collectPluginSkills([JSON.stringify(MANIFEST_WITH_SKILLS)], (ct) => ct === 'my.search');
-    expect(findSkillByToolName(skills, skills[0].toolName)?.commandType).toBe('my.search');
+    const skills = collectPluginSkills([JSON.stringify(MANIFEST_WITH_SKILLS)], () => false);
+    expect(findSkillByToolName(skills, skills[0].toolName)?.commandType).toBe('@scope/my-plugin.my.search');
     expect(findSkillByToolName(skills, 'pskill_unknown')).toBeUndefined();
   });
 });
@@ -95,7 +120,8 @@ describe('buildPluginSkillTools', () => {
     const tools = buildPluginSkillTools(skills);
     expect(tools).toHaveLength(1);
     expect(tools[0].type).toBe('function');
-    expect(tools[0].function.name).toBe(`${SKILL_TOOL_PREFIX}p_act`);
+    // 第三方夹具（@scope/p）强制命名空间化 → '@scope/p.p.act' → 清洗后带 scope 前缀
+    expect(tools[0].function.name).toBe(`${SKILL_TOOL_PREFIX}_scope_p_p_act`);
     expect(tools[0].function.description).toBe('做某事');
     // 伪 schema 大写类型被 normalizeToolSchema 归一为小写
     expect(tools[0].function.parameters.type).toBe('object');

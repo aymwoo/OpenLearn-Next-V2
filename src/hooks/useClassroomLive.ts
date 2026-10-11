@@ -49,7 +49,19 @@ export function useClassroomLive() {
   }, [pickedAlertData]);
 
   const [liveClassTimeRemaining, setLiveClassTimeRemaining] = useState(0);
-  const [liveClassFeed, setLiveClassFeed] = useState<any[]>([]);
+  const [liveClassFeedRaw, setLiveClassFeedRaw] = useState<any[]>([]);
+  // v0.6.1 审计 R-7：feed 写入即截断至最近 200 条 —— 此前无上限（40 人班级
+  // 按 2s 一条进度事件计一小时约 7.2 万条）且渲染层整表 map，每条新事件
+  // 全量重渲染。服务端 feed_replay 本就是有界窗口（最近 12 条），200 条
+  // 对课堂时间轴足够。
+  const setLiveClassFeed = (
+    updater: any[] | ((prev: any[]) => any[]),
+  ): void => {
+    setLiveClassFeedRaw((prev: any[]) => {
+      const next = typeof updater === 'function' ? (updater as (p: any[]) => any[])(prev) : updater;
+      return Array.isArray(next) && next.length > 200 ? next.slice(0, 200) : next;
+    });
+  };
   const [liveClassAcknowledgedMap, setLiveClassAcknowledgedMap] = useState<Map<string, boolean>>(new Map());
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [activeStudentLessons, setActiveStudentLessons] = useState<Record<string, string>>({});
@@ -61,7 +73,7 @@ export function useClassroomLive() {
     setPickedAnnouncement,
     liveClassTimeRemaining,
     setLiveClassTimeRemaining,
-    liveClassFeed,
+    liveClassFeed: liveClassFeedRaw,
     setLiveClassFeed,
     liveClassAcknowledgedMap,
     setLiveClassAcknowledgedMap,

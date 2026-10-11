@@ -867,6 +867,15 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId, pollId } = req.params;
+        // v0.6.1 审计 N-4：close 与 vote 同样的课节归属校验 —— 此前仅凭
+        // pollId 即可关闭任意课节进行中的投票（多教师部署可误关他班）。
+        const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
+        if (!poll) {
+          return res.status(404).json({ error: 'Poll not found' });
+        }
+        if (poll.lesson_id && poll.lesson_id !== lessonId) {
+          return res.status(403).json({ error: 'Poll does not belong to this lesson' });
+        }
         db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
 
         const rows = db
@@ -1020,6 +1029,15 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId, buzzerId } = req.params;
+        // v0.6.1 审计 N-4：reset 与 vote 同样的课节归属校验 —— 此前仅凭
+        // buzzerId 即可重置任意课节的抢答器。
+        const buzzer = db.prepare('SELECT lesson_id FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+        if (!buzzer) {
+          return res.status(404).json({ error: 'Buzzer not found' });
+        }
+        if (buzzer.lesson_id && buzzer.lesson_id !== lessonId) {
+          return res.status(403).json({ error: 'Buzzer does not belong to this lesson' });
+        }
         const now = Date.now();
         db.prepare(
           `

@@ -294,13 +294,20 @@ export class Kernel {
             );
           }
         }
+        // 管理员判定（v0.6.1 审计 C-3 加固）：废除裸后缀启发式。
+        // 此前 `actorId.endsWith(':admin')` 使 `plugin:@evil:admin` 这类
+        // **可自声明的插件 actor** 被判为管理员 —— 跳过能力检查且高危命令
+        // 免审批。现要求用户形态 actor（`user:<id>:<role>`，唯一生产者是
+        // server/middleware/auth.ts getActorId，userId 已消毒）才允许按
+        // 角色尾段判定；`plugin:` / 其他前缀一律走能力表。
         const isAdmin =
           command.actorId === 'role:administrator' ||
           command.actorId === 'admin' ||
           command.actorId === 'usr_admin' ||
           command.actorId === 'admin-demo' ||
-          command.actorId?.endsWith(':administrator') ||
-          command.actorId?.endsWith(':admin');
+          (typeof command.actorId === 'string' &&
+            command.actorId.startsWith('user:') &&
+            (command.actorId.endsWith(':administrator') || command.actorId.endsWith(':admin')));
 
         if (action.capabilityRequired && !isAdmin) {
           const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);

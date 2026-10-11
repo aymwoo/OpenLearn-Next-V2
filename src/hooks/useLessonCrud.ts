@@ -15,7 +15,11 @@ export function useLessonCrud(deps: { lang: 'zh' | 'en'; addToast: AddToast; set
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
   const setElements = useAppStore((s) => s.setElements);
 
-  const lastElementsJsonRef = useRef<string>('');
+  // v0.6.1 审计 C-2 配套：去重 ref 按房间（lessonId）分键 —— 单 ref 在
+  // 「课节白板 / 作业白板」两个房间交替拉取时永远判异，必然重复写入 store。
+  // 正常路径下 useAppPolling 已按「作业优先/课节次之」互斥选择房间，此处
+  // 分键是纵深防御（白板实时事件等其它调用方可能混拉两房间）。
+  const lastElementsJsonByRoomRef = useRef<Map<string, string>>(new Map());
 
   const fetchLessons = async () => {
     await appStore.getState().loadLessons();
@@ -79,8 +83,8 @@ export function useLessonCrud(deps: { lang: 'zh' | 'en'; addToast: AddToast; set
       const { ok, data } = await getLessonWhiteboard(lessonId);
       if (!ok) return;
       const jsonStr = JSON.stringify(data);
-      if (jsonStr !== lastElementsJsonRef.current) {
-        lastElementsJsonRef.current = jsonStr;
+      if (jsonStr !== lastElementsJsonByRoomRef.current.get(lessonId)) {
+        lastElementsJsonByRoomRef.current.set(lessonId, jsonStr);
         setElements(data);
       }
     } catch {
@@ -94,6 +98,6 @@ export function useLessonCrud(deps: { lang: 'zh' | 'en'; addToast: AddToast; set
     handleDeleteCourse,
     handleCopyCourse,
     fetchElements,
-    lastElementsJsonRef,
+    lastElementsJsonByRoomRef,
   };
 }

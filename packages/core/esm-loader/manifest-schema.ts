@@ -755,7 +755,13 @@ const requiresItemSchema = z.string().regex(/^@[\w-]+\/[\w-]+:I\w+(?:@[\^~]?\d+\
  */
 export const manifestSchema = z
   .object({
-    id: z.string().min(1, { error: 'manifest.id 不能为空' }),
+    // v0.6.1 审计 C-3：禁止 ':' —— 插件内核 actor 为 `plugin:${manifest.id}`，
+    // id 含 ':' 可伪造出 `plugin:@evil:admin` 这类命中 admin 启发式的 actor
+    // （角色回退已同时收紧为仅 user: 形态，此处从源头再堵一层）。
+    id: z
+      .string()
+      .min(1, { error: 'manifest.id 不能为空' })
+      .refine((v) => !v.includes(':'), { error: 'manifest.id 不能包含 ":"（actor 命名空间保护）' }),
     name: z.string().min(1, { error: 'manifest.name 不能为空' }),
     version: z.string().min(1, { error: 'manifest.version 不能为空' }),
     main: z.string().min(1, { error: 'manifest.main 必须指定入口文件路径' }),

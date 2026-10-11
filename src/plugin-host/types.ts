@@ -477,6 +477,7 @@ export interface FrontendPluginContext {
   dispatcher: IHostActionDispatcher;
   ui: {
     registerExtensionPoint(slot: AnyExtensionSlot, config: ExtensionPointConfig): void;
+    /** 注销扩展点 —— 宿主自动注入调用方 pluginId，跨插件注销被拒绝（v0.6.1 审计 R-2） */
     unregisterExtensionPoint(slot: AnyExtensionSlot, id: string): void;
     /** v3.5: 为第三方白板元素类型注册自定义全屏渲染器（在 activate() 内调用） */
     registerFullscreenRenderer(type: string, renderer: FullscreenRenderer): void;

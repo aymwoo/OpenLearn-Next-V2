@@ -21,7 +21,39 @@ import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { PluginIconRenderer } from '../components/PluginIconRenderer';
+import {
+  recordPluginCrash,
+  resetPluginCrash,
+  isPluginBlown,
+  resetPluginBreaker,
+  CRASH_BREAKER_THRESHOLD,
+} from './extension-breaker';
+import { BUILTIN_BUNDLE_IDS } from './builtin-bundles';
 import type { ExtensionSlot } from './types';
+
+// 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
+export { isPluginBlown, resetPluginBreaker };
+
+/**
+ * 熔断触发的统一降级（v0.6.1 审计 C-2）：
+ * 1. 摘除该插件全部扩展点 —— 脱离生命周期的直注册插件（如内置包）也能被降级；
+ * 2. 内置包同步写入停用表 —— 管理卡片如实显示「已停用」，重新启用时经
+ *    registerSmartEduExtensions → resetPluginBreaker 恢复；
+ * 3. 生命周期内插件再走宿主 deactivatePlugin（失败仅记日志）。
+ */
+function handleBreakerTrip(
+  pid: string,
+  host: { deactivatePlugin: (id: string) => Promise<void> } | null | undefined,
+): void {
+  const store = usePluginHostStore.getState();
+  store.unregisterPluginExtensionPoints(pid);
+  if (BUILTIN_BUNDLE_IDS.includes(pid)) {
+    store.setBuiltinBundleEnabled(pid, false);
+  }
+  void host
+    ?.deactivatePlugin(pid)
+    .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
+}
 
 // ── LoadingSkeleton ──────────────────────────────────────────────────────────
 
@@ -60,50 +92,9 @@ interface ErrorBoundaryProps {
 }
 
 // ── P2 插件前端熔断器 ────────────────────────────────────────────────
-// 同一插件连续崩溃达到阈值后自动停用（降级），防止坏插件反复崩溃拖垮宿主。
-// 窗口内成功渲染（hasError 复位）会清零计数。
-
-const CRASH_BREAKER_THRESHOLD = 3;
-const CRASH_BREAKER_WINDOW_MS = 5 * 60 * 1000;
-
-interface CrashRecord {
-  count: number;
-  lastAt: number;
-  blown: boolean;
-}
-
-/** pluginId → 熔断记录（模块级，跨渲染周期持久） */
-const pluginCrashRegistry = new Map<string, CrashRecord>();
-
-/** 记录一次插件前端崩溃；达到阈值返回 true（调用方应停用该插件） */
-function recordPluginCrash(pluginId: string): { shouldBreak: boolean; count: number } {
-  const now = Date.now();
-  const rec = pluginCrashRegistry.get(pluginId);
-  if (!rec || now - rec.lastAt > CRASH_BREAKER_WINDOW_MS) {
-    pluginCrashRegistry.set(pluginId, { count: 1, lastAt: now, blown: false });
-    return { shouldBreak: false, count: 1 };
-  }
-  rec.count += 1;
-  rec.lastAt = now;
-  const shouldBreak = rec.count >= CRASH_BREAKER_THRESHOLD;
-  if (shouldBreak) rec.blown = true;
-  return { shouldBreak, count: rec.count };
-}
-
-/** 渲染成功（子组件正常挂载）时清零该插件的连续崩溃计数 */
-function resetPluginCrash(pluginId: string): void {
-  pluginCrashRegistry.delete(pluginId);
-}
-
-/** 查询某插件是否已被熔断（停用降级中） */
-export function isPluginBlown(pluginId: string): boolean {
-  return pluginCrashRegistry.get(pluginId)?.blown ?? false;
-}
-
-/** 清除熔断状态（插件重激活/手动恢复时调用） */
-export function resetPluginBreaker(pluginId: string): void {
-  pluginCrashRegistry.delete(pluginId);
-}
+// 状态与阈值常量在 ./extension-breaker（独立模块）—— 激活路径
+// （plugin-host.ts）要在插件成功激活时复位熔断，而 renderer 与 plugin-host
+// 不能互相导入，熔断状态必须落在共同下游（v0.6.1 审计 C-2）。
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -150,7 +141,10 @@ class ExtensionErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBo
     if (this.state.hasError) {
       return this.props.fallback ?? null;
     }
-    return <CrashResetProbe pluginId={this.props.pluginId}>{this.props.children}</CrashResetProbe>;
+    // 注意：CrashResetProbe 不在这里包裹 —— 它必须位于调用点 <Suspense>
+    // **之内**（见各调用点）：否则 lazy 加载期间的 fallback 提交即触发探针
+    // useEffect 清零计数，熔断阈值被稀释（v0.6.1 审计 R-4）。
+    return this.props.children;
   }
 }
 
@@ -368,6 +362,7 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
             classId: slotProps?.classId,
             students: slotProps?.students,
@@ -375,6 +370,7 @@ export function ExtensionPointRenderer({
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -427,6 +423,7 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
             classes: slotProps?.classes,
             lessons: slotProps?.lessons,
@@ -436,6 +433,7 @@ export function ExtensionPointRenderer({
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -491,12 +489,14 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
             activeTab: slotProps?.activeTab,
             lang: slotProps?.lang,
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -549,6 +549,7 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
             currentUserId: slotProps?.currentUserId,
             currentUserRole: slotProps?.currentUserRole,
@@ -558,6 +559,7 @@ export function ExtensionPointRenderer({
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -612,6 +614,7 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {React.createElement(resolveExtensionComponent(activeExt), {
             student: slotProps?.student,
             lessonId: slotProps?.lessonId,
@@ -621,6 +624,7 @@ export function ExtensionPointRenderer({
             dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
             ...activeExt.slotProps,
           })}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -695,11 +699,7 @@ export function ExtensionPointRenderer({
       <ExtensionErrorBoundary
         key={`${activeExt.pluginId}/${activeExt.id}`}
         pluginId={activeExt.pluginId}
-        onBreakerTrip={(pid) => {
-          void host
-            .deactivatePlugin(pid)
-            .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
-        }}
+        onBreakerTrip={(pid) => handleBreakerTrip(pid, host)}
         fallback={
           fallback ?? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-600 flex items-center justify-center">
@@ -709,6 +709,7 @@ export function ExtensionPointRenderer({
         }
       >
         <Suspense fallback={fallback ?? <LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
           {isReact ? (
             React.createElement(resolveExtensionComponent(activeExt), {
               ...activeExt.slotProps,
@@ -727,6 +728,7 @@ export function ExtensionPointRenderer({
               slot={slot}
             />
           )}
+          </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
     );
@@ -753,15 +755,7 @@ export function ExtensionPointRenderer({
           <ExtensionErrorBoundary
             key={`${ext.pluginId}/${ext.id}`}
             pluginId={ext.pluginId}
-            onBreakerTrip={(pid) => {
-              // 双通道降级：生命周期内插件走宿主停用；脱离生命周期直注册的内置扩展
-              // （如 smart-edu，pluginId 不在 activePlugins）至少摘除其全部扩展点，
-              // 避免坏组件反复崩溃且无法恢复（v0.6.0 审计：此前对未知 id 是 no-op）。
-              usePluginHostStore.getState().unregisterPluginExtensionPoints(pid);
-              void host
-                .deactivatePlugin(pid)
-                .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
-            }}
+            onBreakerTrip={(pid) => handleBreakerTrip(pid, host)}
             fallback={
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
                 <p>{lang === 'zh' ? '扩展组件加载失败' : 'Extension failed to load'}</p>
@@ -769,6 +763,7 @@ export function ExtensionPointRenderer({
             }
           >
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
+              <CrashResetProbe pluginId={ext.pluginId}>
               {isReact ? (
                 React.createElement(resolveExtensionComponent(ext), {
                   route: ext.route || route,
@@ -792,6 +787,7 @@ export function ExtensionPointRenderer({
                   slot={slot}
                 />
               )}
+              </CrashResetProbe>
             </Suspense>
           </ExtensionErrorBoundary>
         );

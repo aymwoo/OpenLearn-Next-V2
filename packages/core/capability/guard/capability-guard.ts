@@ -61,14 +61,19 @@ export class CapabilityGuard {
   }
 
   public check(actorId: string, requiredCap: string): boolean {
-    const role = CapabilityGuard.extractRole(actorId);
+    // 角色回退仅对 **用户形态 actor**（`user:<id>:<role>`，唯一生产者是
+    // getActorId）生效 —— v0.6.1 审计 C-3：此前 `plugin:@evil:admin` 经
+    // lastIndexOf 提取出 role='admin' 即获得管理员全量能力，插件可借
+    // manifest.id 自声明完成 actor 伪造。plugin:/agent: 等 actor 一律只看
+    // 自身被授予的能力表。
+    const isUserActor = typeof actorId === 'string' && actorId.startsWith('user:');
+    const role = isUserActor ? CapabilityGuard.extractRole(actorId) : null;
     const isAdmin =
       actorId === 'role:administrator' ||
       actorId === 'admin' ||
       actorId === 'usr_admin' ||
       actorId === 'admin-demo' ||
-      role === 'administrator' ||
-      role === 'admin';
+      (isUserActor && (role === 'administrator' || role === 'admin'));
     if (isAdmin) return true;
 
     // Role-based capability fallback — 使用严格解析的 role，避免 actorId 字符串后缀被注入

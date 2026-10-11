@@ -43,6 +43,7 @@ import type {
   FrontendPluginInfo,
 } from './types';
 import { defaultHostActionDispatcher } from './host-action-dispatcher';
+import { resetPluginBreaker } from './extension-breaker';
 import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
@@ -58,6 +59,88 @@ import { assignmentQuestionRendererRegistry } from '../features/teacher/assignme
  * 直接组件渲染并永久悬挂 Suspense（v0.6.0 smart-edu 事故）。
  */
 const NullExtensionComponent = () => null;
+
+/**
+ * manifest 静态贡献注册 —— classroomTools（legacy）+ contributes 通用桥接。
+ *
+ * **两条激活路径（activatePlugin / activateRemotePlugin）必须共用本函数**：
+ * 此前桥接只存在于 activatePlugin，而生产的远程插件激活走
+ * activateRemotePlugin —— 第三方 manifest 的声明式贡献被静默丢弃
+ * （v0.6.1 审计 C-1，通用桥接曾整体挂在无生产调用方的路径上）。
+ *
+ * 两个 id 语义分离：
+ * - `pluginId`：store 归属 id（unregisterPluginResources 用同一 id 清理，
+ *   远程路径是 DB UUID）；
+ * - `manifestId`：commandType 命名空间依据（见
+ *   packages/core/plugin-host/plugin-namespace.ts —— 必须用 manifest.id，
+ *   而非 DB 生成的 UUID）。
+ *
+ * F-3：classroom.tool 的 store 注册是**语义桥**，真实消费端
+ * LiveClassroomView.tsx 直读 manifest；store 条目服务「可枚举」诉求，
+ * 必须带 commandType（否则按 store 渲染的消费端拿到无动作按钮）。
+ */
+export function registerManifestContributions(
+  store: Pick<ReturnType<typeof usePluginHostStore.getState>, 'registerExtensionPoint'>,
+  pluginId: string,
+  manifestId: string,
+  manifest: FrontendPluginManifest,
+): void {
+  if (manifest.classroomTools) {
+    for (const tool of manifest.classroomTools as Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      commandType?: string;
+    }>) {
+      store.registerExtensionPoint('classroom.tool', {
+        id: tool.id,
+        label: tool.name,
+        icon: tool.icon,
+        slotProps: tool.commandType ? { commandType: tool.commandType } : undefined,
+        component: NullExtensionComponent,
+        pluginId,
+      });
+    }
+  }
+
+  const contributes = (manifest as unknown as Record<string, unknown>).contributes as
+    | Record<string, unknown>
+    | undefined;
+
+  // ── manifest contributes 通用声明式桥接 ──────────────────────────────
+  //
+  // 数组型 contributes 键一律注册：slotProps 携带完整条目（消费端按各自
+  // SlotProps 读取），commandType 按 manifest.id 命名空间前缀化，组件为
+  // 占位空组件（贡献本体是数据而非 UI 的槽位，如 command_palette.item）。
+  if (contributes) {
+    for (const [slotName, entries] of Object.entries(contributes)) {
+      if (!Array.isArray(entries)) continue;
+      // classroom.tool 与 legacy manifest.classroomTools 二选一，避免双注册
+      if (slotName === 'classroom.tool' && manifest.classroomTools) continue;
+      for (const rawEntry of entries) {
+        if (!rawEntry || typeof rawEntry !== 'object') continue;
+        const entry = rawEntry as Record<string, unknown>;
+        const entryId = String(entry.id ?? '');
+        if (!entryId) continue; // id 是 store 主键，schema 虽强制 min(1) 这里再兜一层
+        store.registerExtensionPoint(slotName as AnyExtensionSlot, {
+          id: entryId,
+          label: String(entry.title ?? entry.label ?? entry.name ?? entryId),
+          icon: typeof entry.icon === 'string' ? entry.icon : undefined,
+          slotProps: entry.commandType
+            ? {
+                ...entry,
+                // 与 ctx.invokeCommand 同一命名空间规则：manifest 可写裸命令名，
+                // 只会命中本插件注册的 handler；跨命名空间引用解析为无效 key。
+                commandType: resolvePluginCommandType(String(entry.commandType), manifestId),
+              }
+            : entry,
+          component: NullExtensionComponent,
+          pluginId,
+        });
+      }
+    }
+  }
+}
 
 /**
  * Function type for loading a plugin module from source code.
@@ -234,8 +317,21 @@ export class FrontendPluginHost {
   /**
    * Activate a remote plugin by fetching and executing its frontend.js script.
    */
+  /**
+   * manifest 静态贡献注册 —— classroomTools（legacy）+ contributes 通用桥接。
+   * 实现已抽为模块级 `registerManifestContributions`（可独立单测），两条
+   * 激活路径共用。
+   */
+  private registerManifestContributions(pluginId: string, manifest: FrontendPluginManifest): void {
+    registerManifestContributions(usePluginHostStore.getState(), pluginId, manifest.id, manifest);
+  }
+
   async activateRemotePlugin(pluginId: string, manifest: FrontendPluginManifest): Promise<void> {
     const store = usePluginHostStore.getState();
+
+    if (!manifest || typeof manifest.id !== 'string' || !manifest.id) {
+      throw new Error(`Invalid remote plugin manifest for "${pluginId}": missing manifest.id`);
+    }
 
     // Idempotency guard: if plugin is already activating or active, skip
     const existingPlugin = store.activePlugins.find((p) => p.id === pluginId);
@@ -276,6 +372,10 @@ export class FrontendPluginHost {
         throw new Error('Invalid remote frontend plugin: missing activate function');
       }
 
+      // manifest 声明式贡献必须在插件代码激活**之前**注册（与 activatePlugin
+      // 同一顺序），使插件 activate 内可自省到自身声明
+      this.registerManifestContributions(pluginId, manifest);
+
       const ctx = await this.buildContext(pluginId, manifest);
 
       // 5s activation timeout
@@ -290,7 +390,10 @@ export class FrontendPluginHost {
         deactivate: typeof plugin.deactivate === 'function' ? plugin.deactivate : undefined,
       });
 
+      // 激活成功即复位熔断 —— v0.6.1 审计 C-2：此前 resetPluginBreaker 是
+      // 死代码，blown 标志永驻，重新激活后扩展点被 isPluginBlown 全部跳过
       store.updatePluginState(pluginId, PluginState.ACTIVE);
+      resetPluginBreaker(pluginId);
     } catch (err) {
       console.error(`[FrontendPluginHost] Failed to activate remote plugin "${pluginId}":`, err);
       store.updatePluginState(pluginId, PluginState.ERROR);
@@ -337,79 +440,7 @@ export class FrontendPluginHost {
         throw new Error(`Manifest id mismatch: expected "${pluginId}", got "${manifest.id}"`);
       }
 
-      // Automatically register classroomTools as extension points
-      //
-      // F-3：本注册是**语义桥**，不是工具栏的真实来源。
-      //
-      // 真实消费端是 LiveClassroomView.tsx（直读 manifest.classroomTools /
-      // contributes['classroom.tool']，按 commandType 触发 invokeCommand）。
-      // zustand store 里的这份条目服务的是「可枚举」诉求（插件经
-      // host.getExtensions('classroom.tool') 自省、管理台预览），因此
-      // **必须带上 commandType** —— 此前注册的是 `() => null` 空组件且
-      // 不带 commandType：任何按 store 渲染的消费端拿到的都是无动作
-      // 按钮，而维护者无从得知要改 manifest。两处形状保持一致后，
-      // 「改 manifest 即改工具栏」的因果关系才在两条链上都成立。
-      if (manifest.classroomTools) {
-        for (const tool of manifest.classroomTools as Array<{
-          id: string;
-          name: string;
-          icon?: string;
-          commandType?: string;
-        }>) {
-          store.registerExtensionPoint('classroom.tool', {
-            id: tool.id,
-            label: tool.name,
-            icon: tool.icon,
-            slotProps: tool.commandType ? { commandType: tool.commandType } : undefined,
-            component: NullExtensionComponent,
-            pluginId,
-          });
-        }
-      }
-
-      const contributes = (manifest as unknown as Record<string, unknown>).contributes as
-        | Record<string, unknown>
-        | undefined;
-
-      // ── manifest contributes 通用声明式桥接 ──────────────────────────────
-      //
-      // 数组型 contributes 键一律注册：slotProps 携带完整条目（消费端按各自
-      // SlotProps 读取），commandType 按插件命名空间前缀化，组件为占位空组件
-      // （贡献本体是数据而非 UI 的槽位，如 command_palette.item / class.tab）。
-      //
-      // v0.6.0 审计：此前仅 5 个硬编码槽位被桥接，schema 放行的其余槽位全部
-      // 静默丢弃——第三方插件照 manifest schema 声明 contributes 必然白写。
-      // 通用循环后，任何 schema 校验通过的槽位声明都会抵达 store；数据型消费
-      // 端（直读 extensionPoints 的视图）即刻生效，视觉型槽位由插件代码在
-      // activate 时经 ctx.ui.registerExtensionPoint 补真实组件。
-      if (contributes) {
-        for (const [slotName, entries] of Object.entries(contributes)) {
-          if (!Array.isArray(entries)) continue;
-          // classroom.tool 与 legacy manifest.classroomTools 二选一，避免双注册
-          if (slotName === 'classroom.tool' && manifest.classroomTools) continue;
-          for (const rawEntry of entries) {
-            if (!rawEntry || typeof rawEntry !== 'object') continue;
-            const entry = rawEntry as Record<string, unknown>;
-            const entryId = String(entry.id ?? '');
-            if (!entryId) continue; // id 是 store 主键，schema 虽强制 min(1) 这里再兜一层
-            store.registerExtensionPoint(slotName as AnyExtensionSlot, {
-              id: entryId,
-              label: String(entry.title ?? entry.label ?? entry.name ?? entryId),
-              icon: typeof entry.icon === 'string' ? entry.icon : undefined,
-              slotProps: entry.commandType
-                ? {
-                    ...entry,
-                    // 与 ctx.invokeCommand 同一命名空间规则：manifest 可写裸命令名，
-                    // 只会命中本插件注册的 handler；跨命名空间引用解析为无效 key。
-                    commandType: resolvePluginCommandType(String(entry.commandType), pluginId),
-                  }
-                : entry,
-              component: NullExtensionComponent,
-              pluginId,
-            });
-          }
-        }
-      }
+      this.registerManifestContributions(pluginId, manifest);
 
       const ctx = await this.buildContext(pluginId, manifest);
 
@@ -425,7 +456,9 @@ export class FrontendPluginHost {
         deactivate: typeof deactivate === 'function' ? deactivate : undefined,
       });
 
+      // 激活成功即复位熔断（同 activateRemotePlugin，v0.6.1 审计 C-2）
       store.updatePluginState(pluginId, PluginState.ACTIVE);
+      resetPluginBreaker(pluginId);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
       this.unregisterPluginResources(pluginId);
@@ -661,8 +694,9 @@ export class FrontendPluginHost {
             pluginId,
           });
         },
+        // 归属守卫：注入调用方 pluginId，插件只能注销自己的扩展点（v0.6.1 审计 R-2）
         unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string) => {
-          usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
+          usePluginHostStore.getState().unregisterExtensionPoint(slot, id, pluginId);
         },
         registerFullscreenRenderer: (type, renderer) => {
           fullscreenRendererRegistry.register(type, renderer, pluginId);

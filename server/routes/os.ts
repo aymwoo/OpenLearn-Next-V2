@@ -100,7 +100,16 @@ export function registerOsRoutes(ctx: ServerContext) {
 
       const cmd = kernelContainer.commandBus.createCommand(commandType, payload, getActorId(req));
 
-      const result = await kernelContainer.commandBus.execute(cmd);
+      // v0.6.1 审计 R-6：命令执行加 10s 上限 —— 此前直接 await，挂死的
+      // kernel/插件 handler 会令教师端工具下发按钮永久 pending（前端亦无
+      // AbortSignal）。10s 为宽上限：覆盖慢网关命令（如 smart_edu 网关
+      // 默认 8s 超时），又不至于无限挂死。
+      const result = await Promise.race([
+        kernelContainer.commandBus.execute(cmd),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Command execution timed out after 10s: ${commandType}`)), 10_000),
+        ),
+      ]);
       res.json({ success: true, result });
     } catch (err: any) {
       sendSafeError(res, err);
