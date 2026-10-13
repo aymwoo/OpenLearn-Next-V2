@@ -10,6 +10,13 @@ import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
+import {
+  authorizeLessonStaff,
+  isAdministrator,
+  isTeacher,
+  rejectUnless,
+  studentActorId,
+} from '../services/class-access.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 
 export { LessonService };
@@ -120,6 +127,13 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   // ── 作业上传与互评插件 API ──────────────────────────────────────────────
   app.get('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      if (!isAdministrator(session) && !isTeacher(session)) {
+        const self = studentActorId(session);
+        const rows = lessonService.getEvalSubmissions(req.params.lessonId);
+        return res.json(rows.filter((row: any) => row.student_id === self || row.studentId === self));
+      }
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, req.params.lessonId))) return;
       res.json(lessonService.getEvalSubmissions(req.params.lessonId));
     } catch (err: any) {
       sendSafeError(res, err);
@@ -128,6 +142,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/lessons/:lessonId/eval-grades', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, req.params.lessonId)))
+        return;
       res.json(lessonService.getEvalGrades(req.params.lessonId));
     } catch (err: any) {
       sendSafeError(res, err);
@@ -136,6 +152,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      const submission = kernelContainer.db
+        .prepare('SELECT lesson_id, student_id FROM plugin_submissions WHERE id = ?')
+        .get(req.params.submissionId) as { lesson_id: string; student_id: string } | undefined;
+      if (!submission) return res.status(404).json({ error: 'Submission not found' });
+      if (isAdministrator(session) || isTeacher(session)) {
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, submission.lesson_id))) return;
+      } else if (studentActorId(session) !== submission.student_id) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       res.json(lessonService.getSubmissionReviews(req.params.submissionId));
     } catch (err: any) {
       sendSafeError(res, err);
@@ -145,6 +171,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/students/:studentId/eval-status', requireAuth(), (req, res) => {
     try {
       const { lessonId, studentId } = req.params;
+      const session = (req as any).session;
+      if (isAdministrator(session) || isTeacher(session)) {
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, lessonId))) return;
+      } else if (studentActorId(session) !== studentId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       res.json(lessonService.getStudentEvalStatus(lessonId, studentId));
     } catch (err: any) {
       sendSafeError(res, err);
@@ -201,7 +233,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const session = (req as any).session;
       const { score, comment } = req.body || {};
       const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
-      const reviewerId = isPrivileged ? String((req.body || {}).reviewerId || session?.studentId || '') : String(session?.studentId || '');
+      const reviewerId = isPrivileged
+        ? String((req.body || {}).reviewerId || session?.studentId || '')
+        : String(session?.studentId || '');
       if (!reviewerId) {
         return res.status(400).json({ success: false, error: 'Missing reviewerId' });
       }
@@ -417,6 +451,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:id/quiz-submissions', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { id: lessonId } = req.params;
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, lessonId))) return;
       const quizzes = diagnosticService.getQuizSubmissions(lessonId);
       res.json({ success: true, quizzes });
     } catch (e: any) {

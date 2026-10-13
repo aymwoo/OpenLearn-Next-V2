@@ -4,18 +4,72 @@ import os from 'os';
 import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { writeFileSync } from 'fs';
 import bcrypt from 'bcryptjs';
-import {
-  loadMigrationsFromDirectory,
-  runMigrations,
-  getDefaultMigrationsDir,
-} from './migrator.js';
+import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './migrator.js';
 
 const BCRYPT_ROUNDS = 10;
 
 /** 使用 bcrypt 哈希密码 */
 export function hashPassword(pwd: string): string {
   return bcrypt.hashSync(pwd, BCRYPT_ROUNDS);
+}
+
+const SEED_PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/** 生成不含易混字符、且同时含字母与数字的初始口令。 */
+export function generateUnambiguousPassword(length = 20): string {
+  const size = Math.max(12, length);
+  const bytes = crypto.randomBytes(size);
+  let out = '';
+  for (let i = 0; i < size; i++) out += SEED_PASSWORD_ALPHABET[bytes[i] % SEED_PASSWORD_ALPHABET.length];
+  if (!/[A-Za-z]/.test(out) || !/[0-9]/.test(out)) {
+    return `${out.slice(0, size - 2)}a7`;
+  }
+  return out;
+}
+
+export interface SeedCredential {
+  password: string;
+  mustChange: boolean;
+  generated: boolean;
+}
+
+/**
+ * 种子口令。
+ * - allowWellKnown：仅测试运行器（PLAYWRIGHT_TEST）保留与用户名相同的口令。
+ * - 显式环境变量：使用调用方提供的值；若仍等于用户名，则必须改密。
+ * - 否则随机生成，并要求首次登录后修改。
+ */
+export function resolveSeedCredential(
+  username: string,
+  options?: { envValue?: string | null; allowWellKnown?: boolean; vitestFallback?: boolean },
+): SeedCredential {
+  if (options?.allowWellKnown) {
+    return { password: username, mustChange: false, generated: false };
+  }
+  const envValue = options?.envValue?.trim();
+  if (envValue) {
+    return { password: envValue, mustChange: envValue === username, generated: false };
+  }
+  if (options?.vitestFallback) {
+    return { password: `Vitest-${username}-NotDefault9`, mustChange: false, generated: false };
+  }
+  return { password: generateUnambiguousPassword(20), mustChange: true, generated: true };
+}
+
+function persistGeneratedSeedCredentials(lines: string[]): void {
+  const banner =
+    '[SECURITY] 已生成种子账号初始口令（首次登录后必须修改，明文只写这一次）：\n' +
+    lines.map((line) => `  ${line}`).join('\n');
+  console.warn(banner);
+  try {
+    const dir = path.join(process.cwd(), 'storage');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'bootstrap-credentials.txt'), `${lines.join('\n')}\n`, { mode: 0o600 });
+  } catch (err) {
+    console.warn('[SECURITY] 无法写入 storage/bootstrap-credentials.txt，请从上方日志抄录初始口令。', err);
+  }
 }
 
 /** 验证密码（支持 bcrypt 和旧 SHA-256 双模式） */
@@ -108,18 +162,57 @@ export function initializeDatabase(instance: Database.Database): void {
     throw err;
   }
 
-  // 种子数据：默认用户 (admin & teacher)
+  // 种子数据：管理员与教师。不再写入人人皆知的 admin/admin、teacher/teacher
+  // （PLAYWRIGHT_TEST 除外，供既有端到端套件登录）。
   try {
     const countObj = instance.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
+    const allowWellKnown = process.env.PLAYWRIGHT_TEST === '1' || process.env.PLAYWRIGHT_TEST === 'true';
+    const vitestFallback = Boolean(process.env.VITEST) && !allowWellKnown;
     if (countObj && countObj.cnt === 0) {
+      const adminCred = resolveSeedCredential('admin', {
+        envValue: process.env.OPENLEARN_ADMIN_PASSWORD,
+        allowWellKnown,
+        vitestFallback,
+      });
+      const teacherCred = resolveSeedCredential('teacher', {
+        envValue: process.env.OPENLEARN_TEACHER_PASSWORD,
+        allowWellKnown,
+        vitestFallback,
+      });
       const insertStmt = instance.prepare(
-        'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO users (id, username, password_hash, role, name, created_at, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?)',
       );
-      insertStmt.run('usr_admin', 'admin', hashPassword('admin'), 'administrator', 'System Admin', Date.now());
-      insertStmt.run('usr_teacher', 'teacher', hashPassword('teacher'), 'teacher', 'Regular Teacher', Date.now());
-      console.warn(
-        '[SECURITY WARNING] Default users initialized (admin/admin, teacher/teacher). In production environments, immediately change these passwords via POST /api/auth/change-password!',
+      insertStmt.run(
+        'usr_admin',
+        'admin',
+        hashPassword(adminCred.password),
+        'administrator',
+        'System Admin',
+        Date.now(),
+        adminCred.mustChange ? 1 : 0,
       );
+      insertStmt.run(
+        'usr_teacher',
+        'teacher',
+        hashPassword(teacherCred.password),
+        'teacher',
+        'Regular Teacher',
+        Date.now(),
+        teacherCred.mustChange ? 1 : 0,
+      );
+      const generated: string[] = [];
+      if (adminCred.generated) generated.push(`admin ${adminCred.password}`);
+      if (teacherCred.generated) generated.push(`teacher ${teacherCred.password}`);
+      if (generated.length > 0) persistGeneratedSeedCredentials(generated);
+    } else if (!allowWellKnown) {
+      const seeded = instance
+        .prepare('SELECT id, username, password_hash FROM users WHERE username IN (?, ?)')
+        .all('admin', 'teacher') as { id: string; username: string; password_hash: string }[];
+      for (const user of seeded) {
+        if (!verifyPassword(user.username, user.password_hash).valid) continue;
+        instance.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(user.id);
+        console.warn(`[SECURITY] 账号 ${user.username} 仍是众所周知的默认口令。登录后只能改密或登出，直到密码被修改。`);
+      }
     }
   } catch (e) {
     console.error('Failed to seed default users:', e);

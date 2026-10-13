@@ -33,9 +33,13 @@ describe('Schedules routes integration & cascade mesh (D1d)', () => {
       'INSERT OR REPLACE INTO students (id, name, student_number, password, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(studentId, '学生乙', 'STU_SCH_001', 'hash', now);
 
-    db.prepare(
-      'INSERT OR REPLACE INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)',
-    ).run(testClassId, '排课测试班', '排课专用', now);
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+      testClassId,
+      '排课测试班',
+      '排课专用',
+      now,
+    );
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(teacherId, testClassId);
 
     // 2. 预置 session
     const insertSession = db.prepare(

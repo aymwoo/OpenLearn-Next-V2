@@ -97,7 +97,10 @@ export function registerAdminRoutes(ctx: ServerContext) {
 
       const db = kernelContainer.db;
 
-      const insertClass = db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)');
+      const ownerId = (req as any).session?.userId || null;
+      const insertClass = db.prepare(
+        'INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)',
+      );
       const insertStudent = db.prepare(
         'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
       );
@@ -117,7 +120,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
 
           // Generate a random ID for the class
           const classId = randomId();
-          insertClass.run(classId, clsName, clsDesc, Date.now());
+          insertClass.run(classId, clsName, clsDesc, ownerId, Date.now());
 
           const studentsList = cls.students || [];
           const importedStudents = [];

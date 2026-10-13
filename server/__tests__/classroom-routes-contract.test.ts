@@ -99,9 +99,10 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     ).run(student2Token, sessionData(student2Id, 'student', '课堂契约学生2'), now, now + 86400000);
 
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classId,
       '契约测试班级',
+      teacherId,
       now,
     );
     for (const s of [
@@ -275,10 +276,9 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
       expect(json3.overallSummary.SLOW).toBe(1);
 
       // 通过 GET pacing-summary 查询 seg_part1 下的学生1状态和该环节汇总
-      const sumRes = await fetch(
-        `${baseUrl}/api/classroom/sessions/${lessonId}/pacing-summary?segmentId=seg_part1`,
-        { headers: cookie(studentToken) },
-      );
+      const sumRes = await fetch(`${baseUrl}/api/classroom/sessions/${lessonId}/pacing-summary?segmentId=seg_part1`, {
+        headers: cookie(studentToken),
+      });
       expect(sumRes.status).toBe(200);
       const sumJson: any = await sumRes.json();
       expect(sumJson.mySignal).toBe('CLEAR');

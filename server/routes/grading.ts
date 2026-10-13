@@ -8,34 +8,25 @@ import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { GradingService } from '../services/grading-service.js';
+import {
+  authorizeClass,
+  isAdministrator,
+  rejectUnless,
+  studentActorId,
+  teacherCanSeeStudent,
+} from '../services/class-access.js';
 
 export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const gradingService = new GradingService();
 
-  // V3 修复：横向越权 IDOR —— 学生此前可拉任意班成绩/考勤。此处统一班级成员门控。
-  const isStaffSession = (s: any) => s?.role === 'teacher' || s?.role === 'administrator' || s?.role === 'admin';
-  const isClassMember = (classId: string, s: any): boolean => {
-    if (!s) return false;
-    if (isStaffSession(s)) return true;
-    const sid = s.studentId || s.userId;
-    if (!sid || !classId) return false;
-    try {
-      const row = kernelContainer.db
-        .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
-        .get(classId, sid) as any;
-      return !!row;
-    } catch {
-      return false;
-    }
-  };
+  const gate = (req: any, res: any, classId: string, level: 'staff' | 'member') =>
+    rejectUnless(res, authorizeClass(kernelContainer.db, req.session, classId, level));
 
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/attendance-summary', requireAuth(), (req, res) => {
     try {
-      if (!isClassMember(req.params.classId, (req as any).session)) {
-        return res.status(403).json({ error: 'Not a class member' });
-      }
+      if (gate(req, res, req.params.classId, 'staff')) return;
       const summary = gradingService.getAttendanceSummary(req.params.classId);
       res.json(summary);
     } catch (e: any) {
@@ -46,16 +37,17 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/schedules/:scheduleId/attendance', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session;
-      if (!isStaffSession(session)) {
-        // 由 schedule 反查 class 再做成员校验
-        const sch = kernelContainer.db
-          .prepare('SELECT class_id FROM schedules WHERE id = ?')
-          .get(req.params.scheduleId) as any;
-        if (!sch || !isClassMember(sch.class_id, session)) {
-          return res.status(403).json({ error: 'Not a class member' });
-        }
+      const sch = kernelContainer.db
+        .prepare('SELECT class_id FROM schedules WHERE id = ?')
+        .get(req.params.scheduleId) as { class_id: string } | undefined;
+      if (!sch) return res.status(404).json({ error: 'Schedule not found' });
+      const decision = authorizeClass(kernelContainer.db, session, sch.class_id, 'member');
+      if (rejectUnless(res, decision) || !decision.ok) return;
+      let attendance: any = gradingService.getScheduleAttendance(req.params.scheduleId);
+      if (decision.level === 'student' && Array.isArray(attendance)) {
+        const sid = studentActorId(session);
+        attendance = attendance.filter((row: any) => (row.student_id || row.studentId) === sid);
       }
-      const attendance = gradingService.getScheduleAttendance(req.params.scheduleId);
       res.json(attendance);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -64,6 +56,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.post('/api/schedules/:scheduleId/attendance', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      const sch = kernelContainer.db
+        .prepare('SELECT class_id FROM schedules WHERE id = ?')
+        .get(req.params.scheduleId) as { class_id: string } | undefined;
+      if (!sch) return res.status(404).json({ error: 'Schedule not found' });
+      if (gate(req, res, sch.class_id, 'staff')) return;
       const { studentId, status } = req.body;
       gradingService.recordAttendance(req.params.scheduleId, studentId, status);
       res.json({ success: true });
@@ -75,9 +72,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ── 2. 成绩权重配置 ────────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/grade-weights', requireAuth(), (req, res) => {
     try {
-      if (!isClassMember(req.params.classId, (req as any).session)) {
-        return res.status(403).json({ error: 'Not a class member' });
-      }
+      if (gate(req, res, req.params.classId, 'member')) return;
       const weights = gradingService.getGradeWeights(req.params.classId);
       res.json(weights);
     } catch (e: any) {
@@ -87,6 +82,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/grade-weights', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (gate(req, res, req.params.classId, 'staff')) return;
       const { attendance_weight, progress_weight, assignment_weight, exam_weight } = req.body;
       gradingService.saveGradeWeights(req.params.classId, {
         attendance_weight,
@@ -106,9 +102,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ── 3. 考试管理与分数录入 ──────────────────────────────────────────────────────
   app.get('/api/classes/:classId/exams', requireAuth(), (req, res) => {
     try {
-      if (!isClassMember(req.params.classId, (req as any).session)) {
-        return res.status(403).json({ error: 'Not a class member' });
-      }
+      if (gate(req, res, req.params.classId, 'member')) return;
       const exams = gradingService.listExams(req.params.classId);
       res.json(exams);
     } catch (e: any) {
@@ -118,6 +112,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/exams', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (gate(req, res, req.params.classId, 'staff')) return;
       const { title, description, max_score } = req.body;
       if (!title) return res.status(400).json({ error: 'Title is required' });
       const examId = gradingService.createExam(req.params.classId, title, description, max_score);
@@ -130,13 +125,17 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/exams/:examId/scores', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session;
+      const exam = kernelContainer.db.prepare('SELECT class_id FROM exams WHERE id = ?').get(req.params.examId) as
+        { class_id: string } | undefined;
+      if (!exam) return res.status(404).json({ error: 'Exam not found' });
+      const decision = authorizeClass(kernelContainer.db, session, exam.class_id, 'member');
+      if (rejectUnless(res, decision) || !decision.ok) return;
       const scores: any = gradingService.getExamScores(req.params.examId);
-      if (isStaffSession(session)) {
+      if (decision.level !== 'student') {
         res.json(scores);
         return;
       }
-      // 学生仅返本人行
-      const sid = session?.studentId || session?.userId;
+      const sid = studentActorId(session);
       const list = Array.isArray(scores) ? scores : (scores?.scores ?? scores?.data ?? []);
       if (Array.isArray(list)) {
         res.json(list.filter((r: any) => (r.student_id || r.studentId) === sid));
@@ -150,6 +149,10 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.post('/api/exams/:examId/scores', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      const exam = kernelContainer.db.prepare('SELECT class_id FROM exams WHERE id = ?').get(req.params.examId) as
+        { class_id: string } | undefined;
+      if (!exam) return res.status(404).json({ error: 'Exam not found' });
+      if (gate(req, res, exam.class_id, 'staff')) return;
       const { scores } = req.body;
       if (!Array.isArray(scores)) return res.status(400).json({ error: 'Scores array is required' });
       gradingService.batchSaveExamScores(req.params.examId, scores);
@@ -163,14 +166,13 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/semester-grades', requireAuth(), (req, res) => {
     try {
       const classId = req.params.classId;
-      if (!isClassMember(classId, (req as any).session)) {
-        return res.status(403).json({ error: 'Not a class member' });
-      }
+      const session = (req as any).session;
+      const decision = authorizeClass(kernelContainer.db, session, classId, 'member');
+      if (rejectUnless(res, decision) || !decision.ok) return;
       const semesterName = (req.query.semesterName as string) || '2026年春季学期';
       const result: any = gradingService.computeSemesterGrades(classId, semesterName);
-      const session = (req as any).session;
-      if (!isStaffSession(session) && result && Array.isArray(result.students)) {
-        const sid = session?.studentId || session?.userId;
+      if (decision.level === 'student' && result && Array.isArray(result.students)) {
+        const sid = studentActorId(session);
         result.students = result.students.filter((s: any) => (s.student_id || s.studentId || s.id) === sid);
       }
       res.json({ success: true, weights: result.weights, students: result.students });
@@ -184,6 +186,10 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const { lessonId, studentId, grade } = req.body;
       if (!lessonId || !studentId || grade === undefined) {
         return res.status(400).json({ success: false, error: 'lessonId, studentId, and grade are required' });
+      }
+      const session = (req as any).session;
+      if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
       }
 
       const gradeService = await kernelContainer.serviceRegistry.resolve(ISemesterGradeServiceToken);
@@ -200,6 +206,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ─────────────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/points-dimensions', requireAuth(), async (req, res) => {
     try {
+      if (gate(req, res, req.params.classId, 'member')) return;
       const dimensionRegistry = await kernelContainer.serviceRegistry.resolve(IPointsDimensionRegistryToken);
       const dimensions = dimensionRegistry.listDimensions();
       res.json({ success: true, dimensions });
@@ -218,6 +225,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
           .status(400)
           .json({ success: false, error: 'classId, dimensionId, deltaPoints, and reason are required' });
       }
+      if (gate(req, res, classId, 'staff')) return;
 
       const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
       const logItem = await ledgerService.addPoints(
@@ -248,11 +256,12 @@ export function registerGradingRoutes(ctx: ServerContext) {
     try {
       const { studentId } = req.params;
       const session = (req as any).session;
-      // 学生仅允许查本人，教师/管理员放行
-      if (!isStaffSession(session)) {
-        const sid = session?.studentId || session?.userId;
-        if (sid !== studentId) return res.status(403).json({ success: false, error: 'Forbidden' });
-      }
+      const selfId = studentActorId(session);
+      const allowed =
+        isAdministrator(session) ||
+        selfId === studentId ||
+        teacherCanSeeStudent(kernelContainer.db, session, studentId);
+      if (!allowed) return res.status(403).json({ success: false, error: 'Forbidden' });
       const { classId } = req.query;
 
       const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
@@ -267,6 +276,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/semester-reports/archive', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (gate(req, res, req.params.classId, 'staff')) return;
       const { semesterName, reports } = req.body;
       if (!semesterName) return res.status(400).json({ error: 'semesterName is required' });
       if (!Array.isArray(reports)) return res.status(400).json({ error: 'reports array is required' });
@@ -284,6 +294,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     async (req, res) => {
       try {
         const { classId, studentId } = req.params;
+        if (gate(req, res, classId, 'staff')) return;
         const { semesterName = '2026年春季学期', providerId } = req.body;
 
         const aiEvaluation = await gradingService.generateSemesterAiEvaluation({

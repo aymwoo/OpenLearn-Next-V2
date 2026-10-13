@@ -79,7 +79,7 @@
 
 ## Environment
 
-Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") with any OpenAI-compatible model provider (such as DeepSeek, Qwen, Ollama, OpenAI, etc.). Default login: `admin/admin` (administrator) or `teacher/teacher` (teacher). The SQLite database is at `packages/core/db/educational_os.db`.
+Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") with any OpenAI-compatible model provider (such as DeepSeek, Qwen, Ollama, OpenAI, etc.). Seed usernames are `admin` (administrator) and `teacher` (teacher); passwords come from `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` or a one-time random value in `storage/bootstrap-credentials.txt`. Do not set `PLAYWRIGHT_TEST` in production. `TRUST_PROXY` defaults to off; set it explicitly behind a reverse proxy. The SQLite database is at `packages/core/db/educational_os.db`.
 
 ## Plugin Development
 

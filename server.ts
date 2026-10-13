@@ -37,7 +37,8 @@ import { bindAIPersonaRegistry } from './server/ai-persona-registry.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import { createAiLimiter, createLoginLimiter, createWriteLimiter } from './server/security/rate-limit.js';
+import { resolveTrustProxy } from './server/security/trust-proxy.js';
 import { filterXSS } from 'xss';
 import {
   hasDataSubmission,
@@ -157,20 +158,8 @@ async function startServer() {
   kernelContainer.pluginHost.setExpressApp(app);
   const PORT = parseInt(process.env.PORT || '9000', 10);
 
-  // SEC-AUTH-03: 信任反向代理（H-2: 环境变量可配置，直连环境防 X-Forwarded-Proto 伪造）
-  const rawTrustProxy = process.env.TRUST_PROXY;
-  if (rawTrustProxy !== undefined) {
-    const isBool = rawTrustProxy === 'true' || rawTrustProxy === 'false';
-    const parsed = isBool
-      ? rawTrustProxy === 'true'
-      : !isNaN(Number(rawTrustProxy))
-        ? Number(rawTrustProxy)
-        : rawTrustProxy;
-    app.set('trust proxy', parsed);
-  } else {
-    // 默认开启 1 层代理信任（如果未显式配置），但允许通过 TRUST_PROXY=false 显式关闭
-    app.set('trust proxy', 1);
-  }
+  // 默认不信任 X-Forwarded-*。反代部署必须显式设置 TRUST_PROXY（例如 1 或 loopback）。
+  app.set('trust proxy', resolveTrustProxy(process.env.TRUST_PROXY));
 
   // ── 安全中间件 ────────────────────────────────────────────────────
   // SEC-NET-02: HTTP 安全头（helmet）— CSP 与自适应 HSTS（C-1）
@@ -252,37 +241,10 @@ async function startServer() {
     }),
   );
 
-  // SEC-AUTH-04: 登录频率限制器（测试环境下放宽，生产环境 5次/IP/分钟）
-  // V6 修复：key 用 IP+用户名双键，伪造 X-Forwarded-For 轮换 IP 也无法稀释同一用户名的计数
-  const loginLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 分钟
-    max: process.env.PLAYWRIGHT_TEST ? 1000 : 5,
-    keyGenerator: (req: any) => {
-      const ip = typeof req.ip === 'string' ? req.ip : 'unknown';
-      const rawUser = req.body?.username ?? req.body?.studentName ?? '';
-      const user = String(rawUser).slice(0, 64).toLowerCase();
-      return `${ip}:${user}`;
-    },
-    message: { error: '登录尝试过于频繁，请稍后再试。Too many login attempts, please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-
-  const writeLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: process.env.PLAYWRIGHT_TEST ? 10000 : 60,
-    message: { error: '请求过于频繁，请稍后再试。Too many requests, please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-
-  const aiLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: process.env.PLAYWRIGHT_TEST ? 1000 : 10,
-    message: { error: 'AI 请求过于频繁，请稍后再试。Too many AI requests, please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
+  // 登录按账号分桶（含学号），写请求按 trust proxy 解析后的客户端地址分桶。
+  const loginLimiter = createLoginLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 5);
+  const writeLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : 60);
+  const aiLimiter = createAiLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 10);
 
   // v0.6.1：JSON 体积硬上限抬至 110MB —— 课件上传（/api/upload）的大小限制
   // 改为管理后台可配置（site_settings.upload_max_file_mb，1–90MB 文件本体，
@@ -498,7 +460,11 @@ async function startServer() {
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed
   // without changing broadcast behavior. See server/__tests__/realtime-bridge.test.ts.
   // strict: Database 与 BridgeDb 端口类型结构漂移（better-sqlite3 Statement 泛型），运行时相容
-  setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db as unknown as import('./server/realtime-bridge.js').BridgeDb });
+  setupRealtimeBridge({
+    eventBus: kernelContainer.eventBus,
+    io,
+    db: kernelContainer.db as unknown as import('./server/realtime-bridge.js').BridgeDb,
+  });
 
   // P2: ai.context.provider —— 把插件上下文注册表委托给 kernel AIService
   // （Inline 插件经 ctx.services.ai.registerAIContextProvider 注册的切片，
@@ -569,7 +535,11 @@ async function startServer() {
     try {
       const sockets: any = (io as any)?.sockets?.sockets;
       socketConnectedCount =
-        typeof sockets?.size === 'number' ? sockets.size : typeof (io as any)?.engine?.clientsCount === 'number' ? (io as any).engine.clientsCount : null;
+        typeof sockets?.size === 'number'
+          ? sockets.size
+          : typeof (io as any)?.engine?.clientsCount === 'number'
+            ? (io as any).engine.clientsCount
+            : null;
     } catch {
       socketConnectedCount = null;
     }
@@ -741,7 +711,8 @@ async function startServer() {
       backupScheduler.stop();
     } catch (err) {
       console.warn('[Server] Error while stopping backup scheduler:', err);
-    }    await new Promise<void>((resolve) => {
+    }
+    await new Promise<void>((resolve) => {
       httpServer.close((err) => {
         if (err) console.warn('[Server] Error while closing HTTP server:', err);
         resolve();

@@ -41,7 +41,11 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     app.use(express.json());
     // 模拟 server.ts 的接线：改密门在所有业务路由之前
     app.use(enforcePasswordChanged);
-    registerRosterRoutes({ app, io: undefined, loginLimiter: (_req: any, _res: any, next: () => void) => next() } as any);
+    registerRosterRoutes({
+      app,
+      io: undefined,
+      loginLimiter: (_req: any, _res: any, next: () => void) => next(),
+    } as any);
     // 受保护写操作的样本路由
     app.post('/api/lessons', (_req, res) => res.json({ ok: true }));
     app.get('/api/lessons', (_req, res) => res.json({ ok: true }));
@@ -51,15 +55,24 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
     const now = Date.now();
-    kernelContainer.db
-      .prepare('DELETE FROM users WHERE id IN (?, ?)')
-      .run(defaultUserId, normalUserId);
+    kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(defaultUserId, normalUserId);
     // 默认密码特征：password_hash = bcrypt(username)
     kernelContainer.db
-      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(defaultUserId, defaultUsername, bcrypt.hashSync(defaultUsername, 10), 'administrator', '默认密码管理员', now);
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        defaultUserId,
+        defaultUsername,
+        bcrypt.hashSync(defaultUsername, 10),
+        'administrator',
+        '默认密码管理员',
+        now,
+      );
     kernelContainer.db
-      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
       .run(normalUserId, normalUsername, bcrypt.hashSync(normalPwd, 10), 'teacher', '正常教师', now);
   });
 
@@ -72,14 +85,22 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
   });
 
   it('密码 = 用户名登录 → 会话与响应带 mustChangePassword 标记', async () => {
-    const res = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const res = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(body.session?.mustChangePassword).toBe(true);
   });
 
-  it('带标记会话的写操作被 403 拦截，GET 放行', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+  it('带标记会话的读写业务接口都被 403 拦截', async () => {
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     const rawCookie = login.headers.get('set-cookie') || '';
     const token = rawCookie.split(';')[0].split('=')[1];
 
@@ -89,16 +110,29 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     expect(body.code).toBe('FORBIDDEN_DEFAULT_PASSWORD');
 
     const getRes = await fetch(`${baseUrl}/api/lessons`, { headers: { Cookie: `edu_os_token=${token}` } });
-    expect(getRes.status).toBe(200);
+    expect(getRes.status).toBe(403);
+    const getBody: any = await getRes.json();
+    expect(getBody.code).toBe('FORBIDDEN_DEFAULT_PASSWORD');
+
+    const sessionOk = await fetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: `edu_os_token=${token}` } });
+    expect(sessionOk.status).toBe(200);
 
     // 非默认密码账号不受影响
-    const normalLogin = await post('/api/auth/login', undefined, { entrance: 'teacher', username: normalUsername, password: normalPwd });
+    const normalLogin = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: normalUsername,
+      password: normalPwd,
+    });
     const normalBody: any = await normalLogin.json();
     expect(normalBody.session?.mustChangePassword).toBeUndefined();
   });
 
   it('/api/auth/session 暴露标记，供页面刷新后继续强制改密', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
 
     const res = await fetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: `edu_os_token=${token}` } });
@@ -107,7 +141,11 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
   });
 
   it('改密成功 → 当前会话标记清除，写操作恢复', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
 
     const changeRes = await post('/api/auth/change-password', token, {
@@ -127,7 +165,11 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
   });
 
   it('SEC-AUTH-06b: 建学生未提供密码 → 随机初始密码一次性返回，123456 失效', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: normalUsername, password: normalPwd });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: normalUsername,
+      password: normalPwd,
+    });
     const teacherToken = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
 
     const createRes = await post('/api/students', teacherToken, { name: '随机口令学生', email: '' });
@@ -168,12 +210,20 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
       .prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(sid, 'STU-FORCE-1', '存量学生', '', bcrypt.hashSync('123456', 10), now);
     kernelContainer.db
-      .prepare('INSERT INTO classes (id, name, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO classes (id, name, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?)',
+      )
       .run(classId, '口令班', 'passcode-xyz', now + 3600000, now);
-    kernelContainer.db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(classId, sid, now);
+    kernelContainer.db
+      .prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
+      .run(classId, sid, now);
 
     // 个人密码 123456 登录 → 打标
-    const login = await post('/api/auth/login', undefined, { entrance: 'student', studentId: 'STU-FORCE-1', password: '123456' });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'student',
+      studentId: 'STU-FORCE-1',
+      password: '123456',
+    });
     expect(login.status).toBe(200);
     const body: any = await login.json();
     expect(body.session?.mustChangePassword).toBe(true);
@@ -184,13 +234,20 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     expect(blocked.status).toBe(403);
 
     // 班级口令登录不打标（与个人密码无关）
-    const passcodeLogin = await post('/api/auth/login', undefined, { entrance: 'student', studentId: 'STU-FORCE-1', password: 'passcode-xyz' });
+    const passcodeLogin = await post('/api/auth/login', undefined, {
+      entrance: 'student',
+      studentId: 'STU-FORCE-1',
+      password: 'passcode-xyz',
+    });
     expect(passcodeLogin.status).toBe(200);
     const passcodeBody: any = await passcodeLogin.json();
     expect(passcodeBody.session?.mustChangePassword).toBeUndefined();
 
     // 改密 → 清标，写操作恢复
-    const change = await post('/api/auth/change-password', token, { oldPassword: '123456', newPassword: 'MyNew-Pw123' });
+    const change = await post('/api/auth/change-password', token, {
+      oldPassword: '123456',
+      newPassword: 'MyNew-Pw123',
+    });
     expect(change.status).toBe(200);
     const afterPost = await post('/api/lessons', token);
     expect(afterPost.status).toBe(200);
@@ -241,7 +298,11 @@ describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
   beforeAll(async () => {
     app = express();
     app.use(express.json());
-    registerRosterRoutes({ app, io: undefined, loginLimiter: (_req: any, _res: any, next: () => void) => next() } as any);
+    registerRosterRoutes({
+      app,
+      io: undefined,
+      loginLimiter: (_req: any, _res: any, next: () => void) => next(),
+    } as any);
     server = createServer(app);
     io = new SocketServer(server, { cors: { origin: '*' } });
     io.use(socketAuthMiddleware);
@@ -251,10 +312,21 @@ describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
     const now = Date.now();
     kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(defaultUserId, normalUserId);
     kernelContainer.db
-      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(defaultUserId, defaultUsername, bcrypt.hashSync(defaultUsername, 10), 'administrator', '默认密码管理员', now);
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        defaultUserId,
+        defaultUsername,
+        bcrypt.hashSync(defaultUsername, 10),
+        'administrator',
+        '默认密码管理员',
+        now,
+      );
     kernelContainer.db
-      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
       .run(normalUserId, normalUsername, bcrypt.hashSync(normalPwd, 10), 'teacher', '正常教师', now);
   });
 
@@ -268,7 +340,11 @@ describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
   });
 
   it('带 mustChangePassword 标记的会话握手被拒（FORBIDDEN_DEFAULT_PASSWORD）', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     expect(login.status).toBe(200);
     const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
 
@@ -277,7 +353,11 @@ describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
   });
 
   it('正常密码会话连接成功；无 token + test 环境放行不受影响', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: normalUsername, password: normalPwd });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: normalUsername,
+      password: normalPwd,
+    });
     const normalToken = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
     expect((await tryConnect(normalToken)).error).toBeUndefined();
 
@@ -286,11 +366,18 @@ describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
   });
 
   it('改密后同一会话可正常建立 socket 连接', async () => {
-    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const login = await post('/api/auth/login', undefined, {
+      entrance: 'teacher',
+      username: defaultUsername,
+      password: defaultUsername,
+    });
     const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
     expect((await tryConnect(token)).error).toBe('FORBIDDEN_DEFAULT_PASSWORD');
 
-    const change = await post('/api/auth/change-password', token, { oldPassword: defaultUsername, newPassword: 'BrandNew-Pw9' });
+    const change = await post('/api/auth/change-password', token, {
+      oldPassword: defaultUsername,
+      newPassword: 'BrandNew-Pw9',
+    });
     expect(change.status).toBe(200);
     expect((await tryConnect(token)).error).toBeUndefined();
   });

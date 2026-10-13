@@ -11,6 +11,7 @@ import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
+import { actorUserId, authorizeClass, authorizeLessonStaff, isAdministrator } from '../services/class-access.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -457,9 +458,9 @@ export function registerClassroomRoutes(
           }
           // v0.6.1 数据真实性：中控「结束投票 (N人)」此前读不存在的字段恒为 0
           try {
-            activePoll.totalVotes = (
-              db.prepare('SELECT COUNT(*) AS n FROM classroom_poll_votes WHERE poll_id = ?').get(activePoll.id) as any
-            )?.n ?? 0;
+            activePoll.totalVotes =
+              (db.prepare('SELECT COUNT(*) AS n FROM classroom_poll_votes WHERE poll_id = ?').get(activePoll.id) as any)
+                ?.n ?? 0;
           } catch (_) {
             activePoll.totalVotes = 0;
           }
@@ -1750,6 +1751,15 @@ export function registerClassroomRoutes(
           return res.status(404).json({ error: 'No classroom session found for this lesson' });
         }
 
+        const httpSession = (req as any).session;
+        const actor = actorUserId(httpSession);
+        const ownsSession = !!(actor && session.teacher_id && String(session.teacher_id).includes(actor));
+        const ownsClass = !!(session.class_id && authorizeClass(db, httpSession, session.class_id, 'staff').ok);
+        const ownsLesson = authorizeLessonStaff(db, httpSession, lessonId).ok;
+        if (!isAdministrator(httpSession) && !ownsSession && !ownsClass && !ownsLesson) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
         // 测验表现汇总
         // v0.6.1 数据真实性：排除「模拟答题」产生的假记录（id 前缀 sim-quiz-），
         // 模拟数据不得混入真实学情统计
@@ -2354,8 +2364,15 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const limit = parseInt(req.query.limit as string) || 5;
+        const httpSession = (req as any).session;
         const classId = req.query.classId as string | undefined;
+        if (classId && !authorizeClass(db, httpSession, classId, 'staff').ok) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        const limit = parseInt(req.query.limit as string) || 5;
         const result = diagnosticService.getTopPerformers(lessonId, limit, classId);
         res.json(result);
       } catch (e: any) {
@@ -2369,6 +2386,16 @@ export function registerClassroomRoutes(
     try {
       const lessonId = req.query.lessonId as string;
       const classId = req.query.classId as string | undefined;
+      const httpSession = (req as any).session;
+      if (classId && !authorizeClass(db, httpSession, classId, 'staff').ok) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (lessonId && !authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (!lessonId && !classId && !isAdministrator(httpSession)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       if (lessonId) {
         // 重定向/复用具体课节查询逻辑
         const url = `/api/classroom/sessions/${lessonId}/top-performers${classId ? `?classId=${encodeURIComponent(classId)}` : ''}`;

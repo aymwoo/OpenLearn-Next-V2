@@ -55,8 +55,9 @@ describe('ClassPasscodeController', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const putCall = fetchMock.mock.calls.find((call) => call[1]?.method === 'PUT');
+    expect(putCall).toBeTruthy();
+    const [url, init] = putCall!;
     expect(url).toBe('/api/classes/class-1');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body)).toHaveProperty('class_passcode');

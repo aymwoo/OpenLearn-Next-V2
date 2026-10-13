@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **种子账号不再长期使用 `admin` / `admin`、`teacher` / `teacher`**。空库首次启动：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或从启动日志与 `storage/bootstrap-credentials.txt` 读取随机口令。存量库若口令仍等于用户名，仍可登录，但 `must_change_password` 会置位，除改密、登出、`/api/auth/session`、`/api/auth/me` 外的 `/api` 请求（含 GET）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。生产环境不要设置 `PLAYWRIGHT_TEST`。
+- **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
+- **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
+
 - **移除「国家智慧教育公共服务平台连接器」（@openlearn/plugin-smart-edu）及其全部基础设施**（用户决策：国家平台不提供公开的第三方网关，该连接器在可预见的时期内无法产生真实价值，整体移除而非默认停用）：
   - **内核**：删除 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts)（含 4 个 `smart_edu.*` 命令、ActionRegistry descriptor 与 manifest 技能声明）及其测试；从系统内核插件链（`packages/core/kernel/index.ts`）摘除注册；CapabilityGuard 角色回退表移除 `smart_edu:*` 授权（capability 表随之回归诚实——不存在的能力不再预授）；
   - **服务端**：删除 `/api/external/smart-edu/*` 四条网关路由（resources/import/report/status）；`ai.skill.provider` 的**通用消费机制**（工具注入 / 插件 actor 派发 / fail-closed）保留——它是面向任意第三方插件的槽位契约，非连接器专属；
@@ -36,6 +40,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **回归**：迁移已在真实库副本上验证（列新增、NULL 语义正确）。
 
 ### Fixes
+
+- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
+- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 
 - **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：
   - **C-1 扩展组件永久悬挂**：`ExtensionPointConfig.component` 类型契约修正为「直接组件 | 已打标 lazy 工厂」联合（[`src/plugin-host/types.ts`](./src/plugin-host/types.ts)）；`registerSmartEduExtensions` 的 9 处注册与 plugin-host 静态桥接占位改为直接组件——此前未打标的 `() => Promise.resolve({default})` 工厂被渲染器当作直组件渲染，React 19 下 Suspense 永久悬挂且不抛错，ErrorBoundary/熔断器全程失效，9 个 smart-edu 扩展上线即骨架屏。同步修复熔断器复位时序（`componentDidMount` 在错误挂载路径清零计数 → 改为 `CrashResetProbe` 仅在子树真实提交后复位）与熔断触发的恢复路径（`onBreakerTrip` 现同步摘除该插件全部扩展点，脱离生命周期的内置注册不再是 no-op）；

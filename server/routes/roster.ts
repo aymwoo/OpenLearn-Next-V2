@@ -14,6 +14,16 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { emitClassroomEvent } from '../presence.js';
 import type { ServerContext } from '../context.js';
 import { RosterService } from '../services/roster-service.js';
+import {
+  actorUserId,
+  authorizeClass,
+  isAdministrator,
+  isTeacher,
+  redactAssignmentForStudent,
+  rejectUnless,
+  stripClassSecrets,
+  teacherCanSeeStudent,
+} from '../services/class-access.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 
 const rlog = createLogger('roster');
@@ -31,7 +41,21 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/classes', requireAuth(), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
-      res.json(rosterService.listClasses(pg));
+      const session = (req as any).session;
+      let scope: { mode: 'all' | 'owner' | 'enrolled'; userId?: string } = { mode: 'all' };
+      if (!isAdministrator(session)) {
+        if (isTeacher(session)) scope = { mode: 'owner', userId: actorUserId(session) || '' };
+        else scope = { mode: 'enrolled', userId: session?.studentId || session?.userId || '' };
+      }
+      const result = rosterService.listClasses(pg, scope);
+      if (!isAdministrator(session) && !isTeacher(session)) {
+        result.data = result.data.map((c: any) => {
+          const stripped = stripClassSecrets(c) as any;
+          const { owner_user_id: _owner, ...rest } = stripped;
+          return rest;
+        });
+      }
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -48,18 +72,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/students', requireAuth(), (req, res) => {
     try {
-      const session = (req as any).session;
-      const role = session?.role;
-      const isStaff = role === 'teacher' || role === 'administrator' || role === 'admin';
-      if (!isStaff) {
-        // 学生仅允许查看自己所在班级，且过滤敏感字段
-        const studentId = session?.studentId || session?.userId;
-        if (!studentId) return res.status(403).json({ error: 'Forbidden' });
-        const member = kernelContainer.db
-          .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
-          .get(req.params.id, studentId) as any;
-        if (!member) return res.status(403).json({ error: 'Not a class member' });
-        const rows = rosterService.getClassStudents(req.params.id) as any[];
+      const decision = authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'member');
+      if (rejectUnless(res, decision) || !decision.ok) return;
+      const rows = rosterService.getClassStudents(req.params.id) as any[];
+      if (decision.level === 'student') {
         return res.json(
           rows.map((r) => ({
             id: r.id,
@@ -71,7 +87,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           })),
         );
       }
-      res.json(rosterService.getClassStudents(req.params.id));
+      res.json(rows);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -80,7 +96,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.post('/api/classes', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, description, lab_id } = req.body;
-      const classId = rosterService.createClass(name, description, lab_id);
+      const classId = rosterService.createClass(name, description, lab_id, actorUserId((req as any).session));
       res.json({ success: true, id: classId });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -89,7 +105,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.put('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { name, description, class_passcode, class_passcode_expires_at, lab_id } = req.body;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
+      const { name, description, class_passcode, class_passcode_expires_at, lab_id, owner_user_id } = req.body;
+      if (owner_user_id !== undefined) {
+        if (!isAdministrator((req as any).session)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        kernelContainer.db
+          .prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?')
+          .run(owner_user_id, req.params.id);
+      }
       // 门控必须是"任一可更新字段出现"，而不是 `if (name)`：
       // 只改 description / lab_id 的请求此前被整条丢弃（重构前的逐字段 if 已丢失）。
       // updateClass 内部只为显式传入的字段生成 SET，未传的字段保持原值。
@@ -116,8 +141,25 @@ export function registerRosterRoutes(ctx: ServerContext) {
    * 班级临时口令：教师专属。P0-3 修复：此前任意登录可 GET 且带 UPDATE 副作用，
    * 学生枚举 classId 即可盗取口令冒充上课。现收紧为教师/管理员。
    */
+  app.get('/api/classes/:id/passcode-setting', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
+      const row = kernelContainer.db
+        .prepare('SELECT class_passcode, class_passcode_expires_at FROM classes WHERE id = ?')
+        .get(req.params.id) as
+        { class_passcode?: string | null; class_passcode_expires_at?: number | null } | undefined;
+      res.json({
+        class_passcode: row?.class_passcode ?? null,
+        class_passcode_expires_at: row?.class_passcode_expires_at ?? null,
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.get('/api/classes/:id/passcode', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       res.json(rosterService.getClassPasscode(req.params.id));
     } catch (e: any) {
       if (e.message === 'Class not found') {
@@ -129,6 +171,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.delete('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       rosterService.deleteClassCascade(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -301,8 +344,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
         if (!valid) {
           return res.status(401).json({ error: 'Incorrect old password' });
         }
+        if (newPassword === userObj.username) {
+          return res.status(400).json({ error: 'New password must be different from the username' });
+        }
         kernelContainer.db
-          .prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+          .prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.userId);
         // 使该用户所有其�? session 失效
         kernelContainer.db
@@ -568,7 +614,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         // 为 E2E 准备的让步会泄漏进单元测试，打掉 force-password-change.test.ts
         // 对 SEC-AUTH-06 的守护（实测 6 条断言由该耦合失效）。
         const isE2e = !!process.env.PLAYWRIGHT_TEST;
-        const mustChangePassword = !isE2e && password === userObj.username;
+        const mustChangePassword =
+          !isE2e && (Number(userObj.must_change_password) === 1 || password === userObj.username);
         if (mustChangePassword) {
           rlog.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
         }
@@ -762,6 +809,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/lock_lesson', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const { lessonId } = req.body;
       if (!lessonId) {
         return res.status(400).json({ error: 'lessonId is required' });
@@ -789,6 +838,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/unlock_lesson', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       kernelContainer.db
         .prepare(
           'UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)',
@@ -916,6 +967,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/seats', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member')))
+        return;
       res.json(rosterService.getClassSeats(req.params.classId));
     } catch (e: any) {
       sendSafeError(res, e);
@@ -924,6 +977,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:classId/seats', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       rosterService.saveClassSeats(req.params.classId, req.body.lab_id, req.body.seats);
       res.json({ success: true });
     } catch (e: any) {
@@ -964,6 +1019,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // SEC-DATA-02: GDPR 学生数据导出
   app.get('/api/students/:id/export', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      const session = (req as any).session;
+      if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, req.params.id)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       res.json(rosterService.exportStudentData(req.params.id));
     } catch (e: any) {
       if (e.message?.includes('not found')) return res.status(404).json({ error: e.message });
@@ -975,6 +1034,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.delete('/api/students/:id/gdpr-delete', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const studentId = req.params.id;
+      const session = (req as any).session;
+      if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       const { confirm } = req.body;
       if (confirm !== true) {
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
@@ -992,14 +1055,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/students/:id/progress', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session as any;
-      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
       const currentUserId = session?.userId || session?.studentId;
       const studentRow = kernelContainer.db
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
-      // Students may only read their own progress
-      if (!isPrivileged && currentUserId !== studentId && currentUserId !== (studentRow?.student_number ?? null)) {
+      const sessionAllows =
+        isAdministrator(session) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId)) ||
+        currentUserId === studentId ||
+        currentUserId === (studentRow?.student_number ?? null);
+      if (!sessionAllows) {
         return res.status(403).json({ error: 'Forbidden: Cannot read another student progress' });
       }
       const progress = kernelContainer.db
@@ -1021,7 +1087,6 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.post('/api/students/:id/progress', requireAuth(), async (req, res) => {
     try {
       const session = (req as any).session;
-      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
       const currentUserId = session?.userId || session?.studentId;
 
       const studentRow = kernelContainer.db
@@ -1031,8 +1096,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const isSelf = studentRow
         ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
         : currentUserId === req.params.id;
+      const targetId = studentRow ? studentRow.id : req.params.id;
+      const sessionAllows =
+        isAdministrator(session) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, targetId)) ||
+        isSelf;
 
-      if (!isPrivileged && !isSelf) {
+      if (!sessionAllows) {
         return res.status(403).json({ error: 'Cannot update progress for another student' });
       }
 
@@ -1074,6 +1144,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:id/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const studentId = req.body.studentId || req.body.student_id;
       if (!studentId) {
         return res.status(400).json({ error: 'Missing studentId' });
@@ -1087,6 +1158,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:id/students/bulk-enroll', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const { students } = req.body;
       const classId = req.params.id;
       if (!students || !Array.isArray(students)) {
@@ -1102,6 +1174,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/progress', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const progress = kernelContainer.db
         .prepare(
           `
@@ -1122,6 +1195,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/lessons/:lessonId/progress', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const progress = kernelContainer.db
         .prepare(
           `
@@ -1147,6 +1222,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.delete('/api/classes/:classId/students/:studentId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       rosterService.unenrollStudent(req.params.classId, req.params.studentId);
       res.json({ success: true });
     } catch (e: any) {
@@ -1156,6 +1233,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/dashboard', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const assignments = kernelContainer.db
         .prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC')
         .all(req.params.classId);
@@ -1220,7 +1299,6 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/students/:id/dashboard', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session;
-      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
       const currentUserId = session?.userId || session?.studentId;
 
       const studentRow = kernelContainer.db
@@ -1231,17 +1309,23 @@ export function registerRosterRoutes(ctx: ServerContext) {
         ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
         : currentUserId === req.params.id;
 
-      if (!isPrivileged && !isSelf) {
+      const studentId = studentRow ? studentRow.id : req.params.id;
+      const viewerIsStaff = isAdministrator(session) || isTeacher(session);
+      if (isAdministrator(session)) {
+        // 管理员可查看任意学生仪表盘
+      } else if (isTeacher(session)) {
+        if (!teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+          return res.status(403).json({ error: 'Cannot access another student dashboard' });
+        }
+      } else if (!isSelf) {
         return res.status(403).json({ error: 'Cannot access another student dashboard' });
       }
 
-      const studentId = studentRow ? studentRow.id : req.params.id;
-
-      // Get classes
+      // Get classes（不返回班级口令）
       const studentClasses = kernelContainer.db
         .prepare(
           `
-        SELECT c.*
+        SELECT c.id, c.name, c.description, c.lab_id, c.created_at
         FROM classes c
         JOIN class_students cs ON c.id = cs.class_id
         WHERE cs.student_id = ?
@@ -1349,7 +1433,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
         )
         .get(studentId) as any;
 
-      res.json({ classes: studentClasses, schedules, assignments, progress, rollcalls, profile });
+      const safeAssignments = viewerIsStaff
+        ? assignments
+        : (assignments as any[]).map((row) => redactAssignmentForStudent(row));
+      res.json({
+        classes: (studentClasses as any[]).map((row) => stripClassSecrets(row)),
+        schedules,
+        assignments: safeAssignments,
+        progress,
+        rollcalls,
+        profile,
+      });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -1359,6 +1453,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/picker-candidates', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       res.json(rosterService.getPickerCandidates(req.params.classId, req.query.lessonId as string));
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1425,6 +1521,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 列出某班级的分组（可选 scope=default 只看默认方案）
   app.get('/api/classes/:id/groups', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'member'))) return;
       res.json(rosterService.listClassGroups(req.params.id, req.query.scope as string));
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1434,6 +1531,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 新建分组
   app.post('/api/classes/:id/groups', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const classId = req.params.id;
       const group = rosterService.createGroup(classId, req.body || {});
       publishGroupsChanged({ classId, scope: 'default' });
@@ -1450,6 +1548,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 更新分组：支持改名、调整成员与组长、以及显式设为默认方案
   app.put('/api/classes/:id/groups/:groupId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const classId = req.params.id;
       const group = rosterService.updateGroup(classId, req.params.groupId, req.body || {});
       publishGroupsChanged({ classId, scope: 'default' });
@@ -1471,6 +1570,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 删除分组
   app.delete('/api/classes/:id/groups/:groupId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const classId = req.params.id;
       rosterService.deleteGroup(classId, req.params.groupId);
       publishGroupsChanged({ classId, scope: 'default' });
@@ -1484,6 +1584,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 自动分组：将班级学生按组数随机均分，写入数据库并标记为默认方案
   app.post('/api/classes/:id/groups/auto', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
       const classId = req.params.id;
       const { groupCount } = req.body || {};
       const groups = rosterService.autoGroup(classId, parseInt(groupCount, 10) || 4);

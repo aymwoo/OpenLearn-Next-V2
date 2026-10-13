@@ -166,16 +166,23 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 ## 4. 首次登录与账户管理
 
-### 默认账户
+### 种子账户
 
-系统预置两个角色账户，初次使用时可直接登录：
+空库首次启动会创建两个账号，用户名固定，**口令不再默认等于用户名**：
 
-| 用户名    | 密码      | 角色       | 权限范围                               |
-| --------- | --------- | ---------- | -------------------------------------- |
-| `admin`   | `admin`   | 系统管理员 | 全部功能：用户管理、插件管理、系统配置 |
-| `teacher` | `teacher` | 教师       | 课程管理、班级管理、课堂直播、课件分发 |
+| 用户名    | 初始口令 | 角色       | 权限范围                               |
+| --------- | -------- | ---------- | -------------------------------------- |
+| `admin`   | 见下方   | 系统管理员 | 全部功能：用户管理、插件管理、系统配置 |
+| `teacher` | 见下方   | 教师       | 课程管理、班级管理、课堂直播、课件分发 |
 
-> **安全提醒**：首次登录后请立即修改默认密码。
+口令来源（二选一）：
+
+1. 启动前设置 `OPENLEARN_ADMIN_PASSWORD`、`OPENLEARN_TEACHER_PASSWORD`。
+2. 留空则随机生成，启动日志打印一次，并写入 `storage/bootstrap-credentials.txt`（权限 600）。登录后请修改密码并删除该文件。
+
+若口令仍与用户名相同（含升级前就在用 `admin` / `admin` 的库），登录会被标记为必须改密：除 `POST /api/auth/change-password`、`POST /api/auth/logout`、`GET /api/auth/session`、`GET /api/auth/me` 外，其余 `/api` 请求（含读请求）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。页面本身仍可打开。
+
+> 端到端测试才会设置 `PLAYWRIGHT_TEST=1` 以保留 `admin` / `admin`。生产环境不要设置这个变量。
 
 ### 注册新账户
 
@@ -506,11 +513,11 @@ docker compose start app
 # 停止服务后删除数据库文件（本地开发 / PM2 裸机）
 rm packages/core/db/educational_os.db
 
-# 重新启动，系统会自动创建新数据库并预置默认账户（admin/admin、teacher/teacher）
+# 重新启动。空库会创建 admin / teacher，口令来自环境变量或 storage/bootstrap-credentials.txt
 pnpm run dev
 ```
 
-> ⚠️ **重置后必须改种子账号密码**：`admin/admin` 与 `teacher/teacher` 会被重新种入且带 `mustChangePassword` 强制改密标记。详见[系统管理员手册](../administrator-guide/admin-manual) §0.2。
+> 重置后到启动日志或 `storage/bootstrap-credentials.txt` 取初始口令。若仍配置成与用户名相同，登录后必须改密，期间业务 API 读请求也会被拦截。详见[系统管理员手册](../administrator-guide/admin-manual) §0.2。
 >
 > Docker 部署要重置得删卷：`docker compose down -v`（⚠️ 这会**同时清掉** db / storage / backups / logs 四个卷，务必先备份）。
 

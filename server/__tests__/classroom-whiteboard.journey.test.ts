@@ -176,6 +176,7 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
       '计算机科学互动课堂',
       now,
     );
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(teacherId, classId);
     db.prepare(
       'INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?), (?, ?, ?)',
     ).run(classId, studentAliceId, now, classId, studentBobId, now);
@@ -280,9 +281,7 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
       expect(json.success).toBe(true);
 
       // 验证阶段已更新
-      const sessionRow = db
-        .prepare('SELECT stage FROM classroom_sessions WHERE lesson_id = ?')
-        .get(lessonId) as any;
+      const sessionRow = db.prepare('SELECT stage FROM classroom_sessions WHERE lesson_id = ?').get(lessonId) as any;
       expect(sessionRow.stage).toBe('IN_CLASS_TEACHING');
     });
 
