@@ -40,6 +40,8 @@ export interface BulkEnrollInput {
   name: string;
   email?: string;
   student_number?: string;
+  password?: string;
+  private_notes?: string;
 }
 
 export interface BulkEnrollResultItem {
@@ -48,6 +50,41 @@ export interface BulkEnrollResultItem {
   student_number?: string;
   email?: string;
   status: 'created_and_enrolled' | 'enrolled_existing';
+  /** 系统自动生成初始密码时回传（仅新建学生有），教师需据此分发 */
+  initial_password?: string;
+}
+
+/** 批量导入单行输入（CSV / JSON 归一化后的形态）。 */
+export interface RosterImportInput {
+  name?: string;
+  email?: string;
+  student_number?: string;
+  password?: string;
+  private_notes?: string;
+}
+
+/**
+ * 批量导入结果项。
+ *
+ * `initial_password` 仅在「CSV 未提供密码 → 系统自动生成」时返回明文，供教师
+ * 分发给学生；CSV 已显式指定密码时**不回传**（教师自己填的，无需再告知）。
+ */
+export interface RosterImportResult {
+  id: string;
+  name: string;
+  email: string;
+  student_number: string;
+  /** true = 本次新建；false = 命中已有学生，未改动其任何字段 */
+  created: boolean;
+  initial_password?: string;
+}
+
+/** 去重命中时读出的已有学生行（仅取回传给教师所需的字段）。 */
+interface ExistingStudentRow {
+  id: string;
+  student_number: string | null;
+  name: string;
+  email: string | null;
 }
 
 export interface ClassGroupItem {
@@ -218,9 +255,7 @@ export class RosterService {
       .get(id) as { id: string; name: string; class_passcode?: string; class_passcode_expires_at?: number } | undefined;
     if (!cls) throw new Error('Class not found');
 
-    const countRow = this.db
-      .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
-      .get(id) as any;
+    const countRow = this.db.prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?').get(id) as any;
 
     const now = Date.now();
     let passcode = cls.class_passcode;
@@ -260,13 +295,15 @@ export class RosterService {
       ).map((r) => r.student_id);
       // 1. 先清本班的选课关系（后续孤儿判定依赖此结果）
       this.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
-      this.db.prepare(
-        'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)',
-      ).run(classId);
+      this.db
+        .prepare(
+          'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)',
+        )
+        .run(classId);
       this.db.prepare('DELETE FROM assignments WHERE class_id = ?').run(classId);
-      this.db.prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)').run(
-        classId,
-      );
+      this.db
+        .prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)')
+        .run(classId);
       this.db.prepare('DELETE FROM schedules WHERE class_id = ?').run(classId);
       this.db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(classId);
       try {
@@ -305,21 +342,17 @@ export class RosterService {
       .prepare(
         'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
       )
-      .all(
-        pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20),
-        pg.offset ?? 0,
-      ) as StudentItem[];
+      .all(pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20), pg.offset ?? 0) as StudentItem[];
 
     const pageSize = pg.isAll ? total : ((pg as any).pageSize ?? (pg as any).limit ?? 20);
     return { data: students, total, page: pg.page ?? 1, pageSize };
   }
 
-  public createStudent(params: {
-    name: string;
-    email?: string;
-    student_number?: string;
-    password?: string;
-  }): { id: string; student_number: string; initial_password?: string } {
+  public createStudent(params: { name: string; email?: string; student_number?: string; password?: string }): {
+    id: string;
+    student_number: string;
+    initial_password?: string;
+  } {
     const { name, email, student_number, password } = params;
     if (!name?.trim()) throw new Error('Student name is required');
 
@@ -341,9 +374,7 @@ export class RosterService {
     const hashedPassword = bcryptHashPassword(finalPlain);
 
     this.db
-      .prepare(
-        'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(studentId, finalNum, name.trim(), email || '', hashedPassword, Date.now());
 
     return {
@@ -420,12 +451,8 @@ export class RosterService {
       .prepare('SELECT * FROM student_semester_reports WHERE student_id = ?')
       .all(studentId);
     const rollcalls = this.db.prepare('SELECT * FROM student_rollcalls WHERE student_id = ?').all(studentId);
-    const pluginSubmissions = this.db
-      .prepare('SELECT * FROM plugin_submissions WHERE student_id = ?')
-      .all(studentId);
-    const peerReviews = this.db
-      .prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?')
-      .all(studentId);
+    const pluginSubmissions = this.db.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
+    const peerReviews = this.db.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
 
     return {
       student: { ...student, password: '[REDACTED]' },
@@ -470,58 +497,159 @@ export class RosterService {
       .run(classId, studentId, Date.now());
   }
 
-  public bulkEnrollStudents(classId: string, students: BulkEnrollInput[]): { count: number; results: BulkEnrollResultItem[] } {
+  /**
+   * 批量导入学生的**唯一实现**。
+   *
+   * 此前「新建班级并导入学生」(`/api/classes/import`)、「独立学生导入」
+   * (`/api/students/import`)、「向已有班级批量加入学生」
+   * (`/api/classes/:id/students/bulk-enroll`) 三条路径各自实现了入库逻辑，
+   * 行为互相矛盾，且都存在同一批缺陷：
+   *
+   * 1. **只按 email 去重** —— 没填邮箱的学生每导入一次就多一条重复记录；
+   * 2. **不写 password** —— 落库为 NULL，学生用「学号 + 密码」登录时
+   *    `roster.ts` 的密码校验恒不通过，只能退到班级 passcode 分支；
+   * 3. **`/api/classes/import` 完全忽略传入的学号**，无条件重新生成，
+   *    导致同一个人走班级模板与走学生模板会得到不同学号。
+   *
+   * 现在三者统一走这里：去重键为 email → student_number，
+   * 密码缺失时自动生成并把明文回传给教师（供分发）。
+   *
+   * 密码语义与 `createStudent` 有一处**刻意差异**：CSV 中显式填写的密码
+   * （哪怕是 `123456`）一律照用，不触发自动生成 —— CSV 没有表单默认值，
+   * 显式填写就是教师的明确选择。
+   *
+   * @param classId 同时加入该班级（省略则只建学生、不入班）
+   */
+  public importStudents(
+    students: RosterImportInput[],
+    options: { classId?: string } = {},
+  ): { results: RosterImportResult[]; created: number; existing: number } {
     if (!Array.isArray(students)) throw new Error('Invalid payload: students must be an array');
-    if (!this.db.prepare('SELECT id FROM classes WHERE id = ?').get(classId)) {
+    const { classId } = options;
+
+    if (classId && !this.db.prepare('SELECT id FROM classes WHERE id = ?').get(classId)) {
       throw new Error('Class not found');
     }
 
+    // ── 事务外预计算：清洗 + bcrypt 哈希 ──────────────────────────────────
+    // bcrypt(cost=10) 单次约 60~100ms。一个 50 人的班放进写事务里会把
+    // SQLite 写锁按住 3~5 秒，因此哈希全部在事务开始前算好。
+    const prepared: {
+      name: string;
+      email: string;
+      studentNumber: string;
+      notes: string;
+      /** 明文初始密码，仅当 autoPassword 为 true 时才回传给教师 */
+      plainPassword: string;
+      autoPassword: boolean;
+      hashedPassword: string;
+    }[] = [];
+
+    for (const st of students) {
+      const name = st?.name ? st.name.trim() : '';
+      if (!name) continue;
+
+      const email = st?.email ? st.email.trim() : '';
+      const studentNumber = st?.student_number ? st.student_number.trim() : '';
+      const notes = st?.private_notes ? st.private_notes.trim() : '';
+      const provided = typeof st?.password === 'string' ? st.password.trim() : '';
+      const autoPassword = provided === '';
+      // 只能生成一次：明文与哈希必须来自同一个密码，否则回传给教师的明文无法登录。
+      const plainPassword = provided || this.generateInitialPassword();
+
+      prepared.push({
+        name,
+        email,
+        studentNumber,
+        notes,
+        plainPassword,
+        autoPassword,
+        hashedPassword: bcryptHashPassword(plainPassword),
+      });
+    }
+
     const insertStudent = this.db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO students (id, student_number, name, email, password, private_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     );
-    const findStudentByEmail = this.db.prepare('SELECT id FROM students WHERE email = ?');
+    const findByEmail = this.db.prepare('SELECT id, student_number, name, email FROM students WHERE email = ?');
+    const findByNumber = this.db.prepare(
+      'SELECT id, student_number, name, email FROM students WHERE student_number = ?',
+    );
     const insertClassStudent = this.db.prepare(
       'INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
     );
 
-    const results: BulkEnrollResultItem[] = [];
+    const results: RosterImportResult[] = [];
 
     const tx = this.db.transaction(() => {
       const now = Date.now();
-      for (const st of students) {
-        const stName = st.name ? st.name.trim() : '';
-        const stEmail = st.email ? st.email.trim() : '';
-        const stNum = st.student_number ? st.student_number.trim() : '';
-        if (!stName) continue;
+      for (const row of prepared) {
+        // 去重：先 email 后学号。两者都没有的新生才会被创建。
+        const existing =
+          (row.email ? (findByEmail.get(row.email) as ExistingStudentRow | undefined) : undefined) ??
+          (row.studentNumber ? (findByNumber.get(row.studentNumber) as ExistingStudentRow | undefined) : undefined);
 
-        let studentId = '';
-        if (stEmail) {
-          const existing = findStudentByEmail.get(stEmail) as { id: string } | undefined;
-          if (existing) studentId = existing.id;
-        }
-
-        let finalNum = stNum;
-        if (!studentId) {
-          studentId = randomId('stu_');
-          if (!finalNum) finalNum = generateStudentNumber(this.db) || `ST_${studentId}`;
-          insertStudent.run(studentId, finalNum, stName, stEmail || null, now);
+        if (existing) {
+          // 命中已有学生：不覆盖任何字段（含密码），只补班级关系。
+          // 回传**库里的真实值**而非 CSV 原值，否则教师拿到的学号可能与实际登录用的不一致。
           results.push({
-            id: studentId,
-            student_number: finalNum,
-            name: stName,
-            email: stEmail,
-            status: 'created_and_enrolled',
+            id: existing.id,
+            name: existing.name,
+            email: existing.email || '',
+            student_number: existing.student_number || '',
+            created: false,
           });
-        } else {
-          results.push({ id: studentId, name: stName, email: stEmail, status: 'enrolled_existing' });
+          if (classId) insertClassStudent.run(classId, existing.id, now);
+          continue;
         }
 
-        insertClassStudent.run(classId, studentId, now);
+        const studentId = randomId('stu_');
+        const finalNum = row.studentNumber || generateStudentNumber(this.db) || `ST_${studentId}`;
+
+        insertStudent.run(studentId, finalNum, row.name, row.email || null, row.hashedPassword, row.notes || null, now);
+
+        results.push({
+          id: studentId,
+          name: row.name,
+          email: row.email,
+          student_number: finalNum,
+          created: true,
+          ...(row.autoPassword ? { initial_password: row.plainPassword } : {}),
+        });
+
+        if (classId) insertClassStudent.run(classId, studentId, now);
       }
     });
 
     tx();
-    return { count: results.length, results };
+
+    return {
+      results,
+      created: results.filter((r) => r.created).length,
+      existing: results.filter((r) => !r.created).length,
+    };
+  }
+
+  /**
+   * 向已有班级批量加入学生 —— 复用 `importStudents` 的去重 / 学号 / 密码逻辑，
+   * 只把结果映射成前端期望的 `BulkEnrollResultItem` 形状。
+   */
+  public bulkEnrollStudents(
+    classId: string,
+    students: BulkEnrollInput[],
+  ): { count: number; results: BulkEnrollResultItem[] } {
+    const { results } = this.importStudents(students, { classId });
+
+    const mapped: BulkEnrollResultItem[] = results.map((r) => ({
+      id: r.id,
+      name: r.name,
+      student_number: r.student_number,
+      email: r.email,
+      status: r.created ? 'created_and_enrolled' : 'enrolled_existing',
+      ...(r.initial_password ? { initial_password: r.initial_password } : {}),
+    }));
+
+    return { count: mapped.length, results: mapped };
   }
 
   public unenrollStudent(classId: string, studentId: string): void {
@@ -700,7 +828,9 @@ export class RosterService {
       sortOrder?: number;
     },
   ): ClassGroupItem {
-    const row = this.db.prepare('SELECT * FROM class_groups WHERE id = ? AND class_id = ?').get(groupId, classId) as any;
+    const row = this.db
+      .prepare('SELECT * FROM class_groups WHERE id = ? AND class_id = ?')
+      .get(groupId, classId) as any;
     if (!row) throw new Error('Group not found');
 
     const { name, name_en: nameEn, color, memberIds, leaderId, isDefault, sortOrder } = data || {};
@@ -789,9 +919,7 @@ export class RosterService {
     const updated = this.db.prepare('SELECT * FROM class_groups WHERE id = ?').get(groupId) as any;
     const group = this.parseGroupRow(updated)!;
     if (group.leader_id && !group.memberIds.includes(group.leader_id)) {
-      this.db
-        .prepare('UPDATE class_groups SET leader_id = NULL, updated_at = ? WHERE id = ?')
-        .run(Date.now(), groupId);
+      this.db.prepare('UPDATE class_groups SET leader_id = NULL, updated_at = ? WHERE id = ?').run(Date.now(), groupId);
       group.leader_id = null;
     }
 
@@ -832,14 +960,7 @@ export class RosterService {
     const tx = this.db.transaction(() => {
       this.db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
       const created: ClassGroupItem[] = [];
-      const colors = [
-        'bg-indigo-500',
-        'bg-emerald-500',
-        'bg-amber-500',
-        'bg-rose-500',
-        'bg-cyan-500',
-        'bg-violet-500',
-      ];
+      const colors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-violet-500'];
 
       for (let i = 0; i < count; i++) {
         const chunk = shuffled.slice(i * perGroup, (i + 1) * perGroup);
@@ -995,7 +1116,17 @@ export class RosterService {
         difficulty = excluded.difficulty
     `,
       )
-      .run(rollcallId, studentId, classId || null, lessonId || null, now, rating ?? null, score, rewardCoins, difficulty);
+      .run(
+        rollcallId,
+        studentId,
+        classId || null,
+        lessonId || null,
+        now,
+        rating ?? null,
+        score,
+        rewardCoins,
+        difficulty,
+      );
 
     return {
       rollcallId,

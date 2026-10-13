@@ -13,7 +13,7 @@ export interface AdaptiveExitTicketModalProps {
   onSubmitSuccess?: () => void;
 }
 
-const DEFAULT_CORE_QUESTION: AdaptiveCoreQuestion = {
+export const DEFAULT_CORE_QUESTION: AdaptiveCoreQuestion = {
   id: 'core-q-1',
   question: '关于变力沿曲线轨道做功过程，下列说法严格正确的是：',
   options: [
@@ -27,7 +27,7 @@ const DEFAULT_CORE_QUESTION: AdaptiveCoreQuestion = {
   scaffoldHint: '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
 };
 
-const DEFAULT_CHALLENGE_QUESTION: AdaptiveChallengeQuestion = {
+export const DEFAULT_CHALLENGE_QUESTION: AdaptiveChallengeQuestion = {
   id: 'challenge-q-1',
   title: '高阶思维跃迁：变力与非弹性碰撞复合临界',
   prompt: '若物块在变阻力 f = -kv 作用下滑动并与弹性挡板碰撞，下列守恒与极限关系成立的是：',

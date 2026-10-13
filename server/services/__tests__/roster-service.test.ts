@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { runStartupMigrations } from '../../bootstrap-db.js';
@@ -56,13 +56,9 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       const clsId = service.createClass('待级联删除班级', undefined, testLabId);
       // 写入分组、选课和排座
       const grp = service.createGroup(clsId, { name: '临时组' });
-      db.prepare('INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)').run(
-        clsId,
-        'dummy-student',
-        testLabId,
-        1,
-        1,
-      );
+      db.prepare(
+        'INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
+      ).run(clsId, 'dummy-student', testLabId, 1, 1);
 
       service.deleteClassCascade(clsId);
 
@@ -121,9 +117,12 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       db.prepare(
         'INSERT OR IGNORE INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
       ).run('dummy-s', sid, 'present', now);
-      db.prepare(
-        'INSERT OR IGNORE INTO exam_scores (exam_id, student_id, score, recorded_at) VALUES (?, ?, ?, ?)',
-      ).run('dummy-e', sid, 88, now);
+      db.prepare('INSERT OR IGNORE INTO exam_scores (exam_id, student_id, score, recorded_at) VALUES (?, ?, ?, ?)').run(
+        'dummy-e',
+        sid,
+        88,
+        now,
+      );
       db.prepare(
         'INSERT OR IGNORE INTO student_semester_reports (id, student_id, class_id, semester_name, attendance_score, progress_score, assignment_score, exam_score, total_score, grade_level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ).run(`ssr-${sid}`, sid, 'dummy-c', '2026-春', 90, 90, 90, 90, 90, 'A', now, now);
@@ -139,9 +138,10 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       db.prepare(
         'INSERT OR IGNORE INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
       ).run('dummy-c', sid, testLabId, 2, 3);
-      db.prepare(
-        'INSERT OR IGNORE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)',
-      ).run(sid, 'notif-1');
+      db.prepare('INSERT OR IGNORE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)').run(
+        sid,
+        'notif-1',
+      );
 
       // 执行级联删除
       service.deleteStudentCascade(sid);
@@ -162,7 +162,169 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
     });
   });
 
-  describe('3. 批量导入选课与机房排座', () => {
+  describe('3. 批量导入学生统一实现 (importStudents)', () => {
+    const cleanup: string[] = [];
+    const rand = () => Math.random().toString(36).slice(2, 8);
+
+    afterAll(() => {
+      for (const id of cleanup) {
+        try {
+          service.deleteStudentCascade(id);
+        } catch {
+          /* 已删除 */
+        }
+      }
+    });
+
+    it('CSV 未提供密码时应自动生成 12 位初始密码并回传，库内存 bcrypt 哈希', () => {
+      const { results, created } = service.importStudents([
+        { name: '导入密码测试', student_number: `STU_PWD_${rand()}` },
+      ]);
+
+      expect(created).toBe(1);
+      const r = results[0];
+      expect(r.initial_password).toMatch(/^[a-zA-Z0-9]{12}$/);
+      cleanup.push(r.id);
+
+      const row = db.prepare('SELECT password FROM students WHERE id = ?').get(r.id) as any;
+      expect(row.password).toMatch(/^\$2[aby]\$/);
+      expect(bcrypt.compareSync(r.initial_password!, row.password)).toBe(true);
+    });
+
+    it('CSV 显式提供密码时应按填写的值设置，且不回传明文', () => {
+      const { results } = service.importStudents([
+        { name: '指定密码测试', student_number: `STU_PWD2_${rand()}`, password: 'Teacher@2026' },
+      ]);
+
+      const r = results[0];
+      cleanup.push(r.id);
+      expect(r.initial_password).toBeUndefined();
+
+      const row = db.prepare('SELECT password FROM students WHERE id = ?').get(r.id) as any;
+      expect(bcrypt.compareSync('Teacher@2026', row.password)).toBe(true);
+    });
+
+    it('CSV 显式填写 123456 时应照用（CSV 无表单默认值，显式即明确选择）', () => {
+      const { results } = service.importStudents([
+        { name: '弱密码测试', student_number: `STU_PWD3_${rand()}`, password: '123456' },
+      ]);
+
+      const r = results[0];
+      cleanup.push(r.id);
+      expect(r.initial_password).toBeUndefined();
+      const row = db.prepare('SELECT password FROM students WHERE id = ?').get(r.id) as any;
+      expect(bcrypt.compareSync('123456', row.password)).toBe(true);
+    });
+
+    it('应尊重 CSV 传入的学号，而不是像旧 /api/classes/import 那样无条件重新生成', () => {
+      const num = `STU_KEEP_${rand()}`;
+      const { results } = service.importStudents([{ name: '学号保留测试', student_number: num }]);
+
+      cleanup.push(results[0].id);
+      expect(results[0].student_number).toBe(num);
+      const row = db.prepare('SELECT student_number FROM students WHERE id = ?').get(results[0].id) as any;
+      expect(row.student_number).toBe(num);
+    });
+
+    it('未填邮箱时也应按学号去重，重复导入不产生第二条记录', () => {
+      const num = `STU_DEDUP_${rand()}`;
+      const first = service.importStudents([{ name: '无邮箱同学', student_number: num }]);
+      cleanup.push(first.results[0].id);
+
+      const second = service.importStudents([{ name: '无邮箱同学', student_number: num }]);
+
+      expect(second.created).toBe(0);
+      expect(second.existing).toBe(1);
+      expect(second.results[0].id).toBe(first.results[0].id);
+      // 重复导入不得覆盖已有学生的密码
+      expect(second.results[0].initial_password).toBeUndefined();
+
+      const count = (db.prepare('SELECT COUNT(*) n FROM students WHERE student_number = ?').get(num) as any).n;
+      expect(count).toBe(1);
+    });
+
+    it('按邮箱命中的已有学生应回传库内真实学号，而非 CSV 原值', () => {
+      const email = `dedup_email_${rand()}@openlearn.local`;
+      const realNum = `STU_REAL_${rand()}`;
+      const first = service.importStudents([{ name: '真实学号同学', student_number: realNum, email }]);
+      cleanup.push(first.results[0].id);
+
+      // 第二次只给邮箱，学号列留空
+      const second = service.importStudents([{ name: '真实学号同学', email }]);
+
+      expect(second.results[0].created).toBe(false);
+      expect(second.results[0].student_number).toBe(realNum);
+    });
+
+    it('导入应写入教师私有备注 private_notes', () => {
+      const { results } = service.importStudents([
+        { name: '备注测试', student_number: `STU_NOTE_${rand()}`, private_notes: '数学较弱, 需重点关注' },
+      ]);
+
+      cleanup.push(results[0].id);
+      const row = db.prepare('SELECT private_notes FROM students WHERE id = ?').get(results[0].id) as any;
+      expect(row.private_notes).toBe('数学较弱, 需重点关注');
+    });
+
+    it('无姓名行应被跳过，不产生空壳记录', () => {
+      const { results } = service.importStudents([
+        { name: '', email: `skip_${rand()}@openlearn.local` },
+        { name: '   ', email: `skip2_${rand()}@openlearn.local` },
+        { name: '正常同学', student_number: `STU_OK_${rand()}` },
+      ]);
+
+      expect(results.length).toBe(1);
+      expect(results[0].name).toBe('正常同学');
+      cleanup.push(results[0].id);
+    });
+
+    it('传入 classId 时应同时建立班级关系', () => {
+      const clsId = service.createClass(`导入入班测试_${rand()}`);
+      const { results } = service.importStudents([{ name: '入班同学', student_number: `STU_JOIN_${rand()}` }], {
+        classId: clsId,
+      });
+
+      cleanup.push(results[0].id);
+      const link = db
+        .prepare('SELECT 1 FROM class_students WHERE class_id = ? AND student_id = ?')
+        .get(clsId, results[0].id);
+      expect(link).toBeTruthy();
+      service.deleteClassCascade(clsId);
+    });
+
+    it('班级不存在时应抛错且不落任何学生', () => {
+      expect(() =>
+        service.importStudents([{ name: '幽灵同学', student_number: `STU_GHOST_${rand()}` }], {
+          classId: 'cls-does-not-exist-xyz',
+        }),
+      ).toThrow('Class not found');
+
+      const count = (
+        db.prepare('SELECT COUNT(*) n FROM students WHERE student_number LIKE ?').get(`STU_GHOST_%`) as any
+      ).n;
+      expect(count).toBe(0);
+    });
+
+    it('bulkEnrollStudents 应复用同一套去重/学号/密码逻辑并回传初始密码', () => {
+      const clsId = service.createClass(`选课导入_${rand()}`);
+      const num = `STU_ENROLL_${rand()}`;
+
+      const res = service.bulkEnrollStudents(clsId, [{ name: '选课同学', student_number: num }]);
+
+      expect(res.results[0].status).toBe('created_and_enrolled');
+      expect(res.results[0].student_number).toBe(num);
+      expect(res.results[0].initial_password).toMatch(/^[a-zA-Z0-9]{12}$/);
+      cleanup.push(res.results[0].id);
+
+      // 旧调用方不传密码时不应崩（字段为可选）
+      const res2 = service.bulkEnrollStudents(clsId, [{ name: '选课同学', student_number: num }]);
+      expect(res2.results[0].status).toBe('enrolled_existing');
+
+      service.deleteClassCascade(clsId);
+    });
+  });
+
+  describe('4. 批量导入选课与机房排座', () => {
     it('bulkEnrollStudents 应支持新学生创建并选课，以及已有邮箱学生复用选课', () => {
       const clsId = service.createClass('批量选课班级');
       const rand = Math.random().toString(36).slice(2, 7);

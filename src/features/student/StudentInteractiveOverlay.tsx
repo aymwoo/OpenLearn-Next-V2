@@ -38,6 +38,8 @@ export function StudentInteractiveOverlay({
   const [pacingFeedback, setPacingFeedback] = useState<string | null>(null);
   const [isExitTicketOpen, setIsExitTicketOpen] = useState(false);
   const [exitTicketSubmitted, setExitTicketSubmitted] = useState(false);
+  const [exitTicketCoreQuestion, setExitTicketCoreQuestion] = useState<any>(null);
+  const [exitTicketChallengeQuestion, setExitTicketChallengeQuestion] = useState<any>(null);
   const [rating, setRating] = useState(5);
   const [puzzledConcept, setPuzzledConcept] = useState('');
   const [feedbackNotes, setFeedbackNotes] = useState('');
@@ -91,6 +93,22 @@ export function StudentInteractiveOverlay({
             // 如果处于结课通票阶段且尚未提交，打开通票模态框
             if (json.stage === 'WRAP_UP_EXIT_TICKET' && !exitTicketSubmittedRef.current) {
               setIsExitTicketOpen(true);
+            }
+
+            if (json.exitTicketCoreQuestion !== undefined) {
+              setExitTicketCoreQuestion(json.exitTicketCoreQuestion);
+            }
+            if (json.exitTicketChallengeQuestion !== undefined) {
+              setExitTicketChallengeQuestion(json.exitTicketChallengeQuestion);
+            }
+
+            // 同步限时任务倒计时
+            if (json.activeCountdown) {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('openlearn:countdown:updated', { detail: json.activeCountdown }),
+                );
+              } catch (_) {}
             }
 
             // 同步投票
@@ -460,7 +478,10 @@ export function StudentInteractiveOverlay({
 
       {/* 极速单选作答弹窗 */}
       {activePoll && activePoll.status === 'ACTIVE' && (
-        <div className="fixed bottom-20 right-6 z-50 bg-surface rounded-2xl border border-amber-500/40 p-5 shadow-2xl w-80 flex flex-col gap-3 animate-slide-up">
+        <div
+          data-testid="student-quick-poll-card"
+          className="fixed bottom-20 right-6 z-50 bg-surface rounded-2xl border border-amber-500/40 p-5 shadow-2xl w-80 flex flex-col gap-3 animate-slide-up"
+        >
           <div className="flex items-center justify-between border-b border-border/60 pb-2">
             <span className="text-xs font-extrabold text-amber-500 flex items-center gap-1.5">
               <Sparkles size={14} />
@@ -581,11 +602,13 @@ export function StudentInteractiveOverlay({
 
       {/* 60s 自适应结课通票模态框 */}
       <AdaptiveExitTicketModal
-        isOpen={isExitTicketOpen && !exitTicketSubmitted}
+        isOpen={isExitTicketOpen}
         onClose={() => setIsExitTicketOpen(false)}
         lessonId={lessonId}
         studentName={studentName}
         lang={lang}
+        coreQuestion={exitTicketCoreQuestion}
+        challengeQuestion={exitTicketChallengeQuestion}
         onSubmitSuccess={() => {
           exitTicketSubmittedRef.current = true;
           setExitTicketSubmitted(true);

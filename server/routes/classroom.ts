@@ -431,9 +431,9 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const session = db
           .prepare(
-            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
           )
-          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+          .get(lessonId) as any;
 
         if (!session) {
           return res.json({
@@ -475,16 +475,20 @@ export function registerClassroomRoutes(
         // 会话恢复协议：视图状态（当前白板页）与动态流回放（最近 20 条）。
         // 教师离开课堂再回来时，前端据此一次性恢复现场。
         let viewState: Record<string, unknown> = {};
+        let exitTicketCoreQuestion: any = null;
+        let exitTicketChallengeQuestion: any = null;
         try {
           const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
           viewState = settings.viewState ?? {};
+          exitTicketCoreQuestion = settings.exitTicketCoreQuestion ?? null;
+          exitTicketChallengeQuestion = settings.exitTicketChallengeQuestion ?? null;
         } catch (_) {
           viewState = {};
         }
         const feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
 
         res.json({
-          hasActiveSession: true,
+          hasActiveSession: session.stage !== ARCHIVED_REPORT_STAGE,
           stage: session.stage,
           session,
           activePoll,
@@ -492,6 +496,8 @@ export function registerClassroomRoutes(
           activeCountdown,
           viewState,
           feedReplay,
+          exitTicketCoreQuestion,
+          exitTicketChallengeQuestion,
         });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -537,7 +543,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const { classId, teachingModeId } = req.body || {};
+        const { classId, teachingModeId, exitTicketCoreQuestion, exitTicketChallengeQuestion } =
+          req.body || {};
         const teacherId = getActorId(req) || 'teacher';
 
         if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
@@ -559,9 +566,21 @@ export function registerClassroomRoutes(
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId, normalizedClassId ?? undefined);
 
-        // 课堂启动门户会在启动课堂时一并提交所选教学模式
-        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(
+        let settings: Record<string, any> = {};
+        try {
+          settings = session.settings_json ? JSON.parse(session.settings_json) : {};
+        } catch (_) {}
+        if (exitTicketCoreQuestion !== undefined) {
+          settings.exitTicketCoreQuestion = exitTicketCoreQuestion;
+        }
+        if (exitTicketChallengeQuestion !== undefined) {
+          settings.exitTicketChallengeQuestion = exitTicketChallengeQuestion;
+        }
+
+        // 课堂启动门户会在启动课堂时一并提交所选教学模式与通票配置
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ?, settings_json = ? WHERE id = ?').run(
           modeValidation.id,
+          JSON.stringify(settings),
           session.id,
         );
 

@@ -31,9 +31,9 @@ export default defineConfig({
         rewrite: (path: string) => path.replace(/^\/_tools/, ''),
       },
     },
-    hmr: process.env.DISABLE_HMR !== 'true',
+    hmr: process.env.DISABLE_HMR !== 'true' && process.env.PLAYWRIGHT_TEST !== '1',
     watch:
-      process.env.DISABLE_HMR === 'true'
+      process.env.DISABLE_HMR === 'true' || process.env.PLAYWRIGHT_TEST === '1'
         ? null
         : {
             ignored: [
@@ -45,6 +45,8 @@ export default defineConfig({
               '**/*.d.ts',
               '**/storage/**',
               '**/uploads/**',
+              '**/artifacts/**',
+              '**/test-results/**',
             ],
           },
   },

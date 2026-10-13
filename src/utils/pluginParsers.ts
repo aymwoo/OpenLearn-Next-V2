@@ -1,3 +1,5 @@
+import { splitCsvLine, findHeaderIdx } from '../services/bulkImportService';
+
 interface ParsedManifest {
   id?: string;
   name?: string;
@@ -84,7 +86,16 @@ const parsePluginSource = (sourceCode: string) => {
   }
 };
 
-const parseCSV = (text: string): { name: string; email: string; student_number?: string }[] => {
+/**
+ * 班级面板「批量加入学生」用的 CSV 解析。
+ *
+ * 与 `services/bulkImportService.ts` 共用同一套拆行逻辑与列名候选表 ——
+ * 此前这里是一份独立实现，只认学号/姓名/邮箱，且列名用 `includes()` 模糊匹配，
+ * 导致「学生备注」这类新列可能被误判成「学生姓名」而整体错位。
+ */
+const parseCSV = (
+  text: string,
+): { name: string; email: string; student_number?: string; password?: string; private_notes?: string }[] => {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
 
@@ -100,66 +111,77 @@ const parseCSV = (text: string): { name: string; email: string; student_number?:
     }
   });
 
-  const parseRow = (rowText: string): string[] => {
-    const result: string[] = [];
-    let insideQuote = false;
-    let entry = '';
-    for (let i = 0; i < rowText.length; i++) {
-      const char = rowText[i];
-      if (char === '"') {
-        insideQuote = !insideQuote;
-      } else if (char === sep && !insideQuote) {
-        result.push(entry.trim());
-        entry = '';
-      } else {
-        entry += char;
-      }
-    }
-    result.push(entry.trim());
-    return result;
-  };
-
-  const headers = parseRow(headerLine).map((h) =>
+  const headers = splitCsvLine(headerLine, sep).map((h) =>
     h
       .toLowerCase()
       .replace(/["'\r]/g, '')
       .trim(),
   );
 
-  const studentNumIdx = headers.findIndex(
-    (h) =>
-      h.includes('student_number') ||
-      h.includes('studentnumber') ||
-      h.includes('student_id') ||
-      h.includes('studentid') ||
-      h.includes('学号') ||
-      h.includes('编号') ||
-      (h.includes('id') && !h.includes('class') && !h.includes('lesson')),
-  );
+  const studentNumIdx = findHeaderIdx(headers, [
+    '学生学号',
+    'student_number',
+    'studentnumber',
+    'student number',
+    'student_id',
+    'studentid',
+    '学号',
+    '编号',
+  ]);
+  const nameIdx = findHeaderIdx(headers, [
+    '学生姓名',
+    'student_name',
+    'studentname',
+    'student name',
+    '姓名',
+    '学生',
+    'name',
+  ]);
+  const emailIdx = findHeaderIdx(headers, [
+    '学生邮箱',
+    'student_email',
+    'studentemail',
+    'student email',
+    '邮箱',
+    'email',
+    'mail',
+  ]);
+  const passwordIdx = findHeaderIdx(headers, ['初始密码', 'initial password', 'password', 'passwd', 'pwd', '密码']);
+  const notesIdx = findHeaderIdx(headers, [
+    '学生备注',
+    'student notes',
+    'private_notes',
+    '备注',
+    'note',
+    'notes',
+    'remark',
+  ]);
 
-  const nameIdx = headers.findIndex(
-    (h) =>
-      h.includes('name') ||
-      h.includes('姓名') ||
-      (h.includes('student') && !h.includes('num') && !h.includes('id')) ||
-      (h.includes('学生') && !h.includes('号')),
-  );
-  const emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('mail') || h.includes('邮箱'));
-
+  // 无表头时沿用「第一列姓名、第二列邮箱」的位置兜底（教师随手粘贴的常见形态）
   const finalNameIdx = nameIdx >= 0 ? nameIdx : 0;
   const finalEmailIdx = emailIdx >= 0 ? emailIdx : 1;
 
-  const list: { name: string; email: string; student_number?: string }[] = [];
+  const list: { name: string; email: string; student_number?: string; password?: string; private_notes?: string }[] =
+    [];
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
-    const cols = parseRow(lines[i]);
-    const name = cols[finalNameIdx] ? cols[finalNameIdx].replace(/["'\r]/g, '').trim() : '';
-    const email = cols[finalEmailIdx] ? cols[finalEmailIdx].replace(/["'\r]/g, '').trim() : '';
-    const student_number =
-      studentNumIdx >= 0 && cols[studentNumIdx] ? cols[studentNumIdx].replace(/["'\r]/g, '').trim() : undefined;
-    if (name) {
-      list.push({ name, email, ...(student_number ? { student_number } : {}) });
-    }
+    const cols = splitCsvLine(lines[i], sep);
+    const clean = (idx: number) => (idx >= 0 && cols[idx] ? cols[idx].replace(/["'\r]/g, '').trim() : '');
+
+    const name = clean(finalNameIdx);
+    if (!name) continue;
+
+    const student_number = clean(studentNumIdx);
+    const password = clean(passwordIdx);
+    const private_notes = clean(notesIdx);
+
+    list.push({
+      name,
+      email: clean(finalEmailIdx),
+      ...(student_number ? { student_number } : {}),
+      ...(password ? { password } : {}),
+      ...(private_notes ? { private_notes } : {}),
+    });
   }
   return list;
 };

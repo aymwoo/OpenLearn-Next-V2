@@ -82,7 +82,11 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
   const totalCount = activeTab === 'student' ? studentErrors.length : errors.length;
 
   return (
-    <div className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+    >
       <div className="bg-surface border border-theme rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* ── Header ─────────────────────────────────────────── */}
         <div className="bg-surface-secondary px-6 py-4 border-b border-theme flex items-center justify-between shrink-0">

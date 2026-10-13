@@ -292,6 +292,7 @@ export function ClassroomLeaderboardModal({
 
             <button
               onClick={onClose}
+              aria-label="Close"
               className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary transition-colors cursor-pointer"
             >
               <X size={18} />

@@ -70,7 +70,10 @@ export function PreflightHealthModal({ isOpen, onClose, classId, className, lang
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+    <div
+      data-testid="preflight-health-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+    >
       <div className="bg-surface border border-theme rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b border-theme flex items-center justify-between bg-surface-secondary/50">

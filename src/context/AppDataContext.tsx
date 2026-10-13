@@ -138,7 +138,11 @@ export type AppExtras = {
   isTourOpen: boolean;
   setIsTourOpen: Dispatch<SetStateAction<boolean>>;
   handleSeedSuccess: (data: { classId: string; scheduleId: string; lessonId: string }) => Promise<void>;
-  generateTemplateContent?: (title: string, category: string) => string;
+
+  /** 课程发布向导：AI 大纲生成进行中 */
+  wizardIsGeneratingOutline?: boolean;
+  /** 课程发布向导：调用后端 AI Provider 生成 Markdown 教学大纲 */
+  handleGenerateOutline?: () => Promise<void>;
 
   // ── AppHeader 局部状态 ─────────────────────────────────────────────
   activeRole?: 'teacher' | 'student';

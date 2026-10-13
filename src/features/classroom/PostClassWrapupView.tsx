@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FileText,
   Award,
@@ -24,6 +24,7 @@ import type { StudentType } from '../../types/app';
 import { ConceptWordcloudPanel } from './exit-ticket/ConceptWordcloudPanel';
 import { KnowledgeTreeLightingModal } from './exit-ticket/KnowledgeTreeLightingModal';
 import { clusterPuzzledConcepts } from './exit-ticket/concept-clustering-engine';
+import { onSocketInstance } from '../../services/socket-service';
 
 export interface PostClassWrapupViewProps {
   selectedLesson: string | null;
@@ -92,44 +93,73 @@ export function PostClassWrapupView({
     return localStorage.getItem(`reflection_${selectedLesson}`) || '';
   });
 
-  useEffect(() => {
-    if (selectedLesson) {
-      fetch(`/api/classroom/sessions/${selectedLesson}/panoramic-report`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.metrics) {
-            setExitTicketStats({
-              // v0.6.1 数据真实性：服务端无通票返回 null → 与 summary 的 0 一致，
-              // 不再出现 5.0/0 来回翻转
-              avgRating: data.metrics.exitTicketsAvgRating ?? 0,
-              count: data.metrics.exitTicketsCount || 0,
-              topConcepts: data.metrics.topPuzzledConcepts || [],
-            });
-          }
-        })
-        .catch(() => {});
+  const refreshExitTicketData = useCallback(() => {
+    if (!selectedLesson) return;
 
-      fetch(`/api/classroom/sessions/${selectedLesson}/exit-ticket-summary`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.success) {
-            if (data.tierDistribution) setTierDistribution(data.tierDistribution);
-            if (data.submissions) setExitTickets(data.submissions);
-            if (data.puzzledConcepts && data.puzzledConcepts.length > 0) {
-              setRawPuzzledConcepts(data.puzzledConcepts);
-            }
-            if (data.totalCount !== undefined) {
-              setExitTicketStats((prev) => ({
-                ...prev,
-                count: data.totalCount,
-                avgRating: data.avgRating ?? prev.avgRating,
-              }));
-            }
+    fetch(`/api/classroom/sessions/${selectedLesson}/panoramic-report`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.metrics) {
+          setExitTicketStats((prev) => ({
+            avgRating: data.metrics.exitTicketsAvgRating ?? prev.avgRating,
+            count: data.metrics.exitTicketsCount || prev.count,
+            topConcepts:
+              data.metrics.topPuzzledConcepts && data.metrics.topPuzzledConcepts.length > 0
+                ? data.metrics.topPuzzledConcepts
+                : prev.topConcepts,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    fetch(`/api/classroom/sessions/${selectedLesson}/exit-ticket-summary`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success) {
+          if (data.tierDistribution) setTierDistribution(data.tierDistribution);
+          if (data.submissions) setExitTickets(data.submissions);
+          if (data.puzzledConcepts && data.puzzledConcepts.length > 0) {
+            setRawPuzzledConcepts(data.puzzledConcepts);
           }
-        })
-        .catch(() => {});
-    }
+          if (data.totalCount !== undefined) {
+            setExitTicketStats((prev) => ({
+              ...prev,
+              count: data.totalCount,
+              avgRating: data.avgRating ?? prev.avgRating,
+              topConcepts:
+                data.puzzledConcepts && data.puzzledConcepts.length > 0
+                  ? data.puzzledConcepts
+                  : prev.topConcepts,
+            }));
+          }
+        }
+      })
+      .catch(() => {});
   }, [selectedLesson]);
+
+  useEffect(() => {
+    refreshExitTicketData();
+  }, [refreshExitTicketData, activeTab, isKnowledgeTreeOpen]);
+
+  useEffect(() => {
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      detach?.();
+      const handler = (payload: any) => {
+        if (!payload?.lessonId || payload.lessonId === selectedLesson) {
+          refreshExitTicketData();
+        }
+      };
+      socket.on('classroom:exit_ticket_submitted', handler);
+      detach = () => {
+        socket.off('classroom:exit_ticket_submitted', handler);
+      };
+    });
+    return () => {
+      off();
+      detach?.();
+    };
+  }, [refreshExitTicketData, selectedLesson]);
 
   const clusteredConcepts = React.useMemo(() => {
     return clusterPuzzledConcepts(rawPuzzledConcepts);
@@ -619,7 +649,13 @@ export function PostClassWrapupView({
         lessonTitle={lessonTitle}
         className={className}
         masteryPercent={Math.round((exitTicketStats.avgRating / 5) * 100)}
-        puzzledConcepts={exitTicketStats.topConcepts}
+        puzzledConcepts={
+          exitTicketStats.topConcepts.length > 0
+            ? exitTicketStats.topConcepts
+            : rawPuzzledConcepts.length > 0
+            ? rawPuzzledConcepts
+            : clusteredConcepts.map((c) => c.concept)
+        }
         lang={lang}
       />
     </div>

@@ -242,6 +242,7 @@ async function startServer() {
   );
 
   // 登录按账号分桶（含学号），写请求按 trust proxy 解析后的客户端地址分桶。
+  // 不把可伪造的 X-Forwarded-For 放进 key；开发环境同样收紧，仅 PLAYWRIGHT_TEST 放宽。
   const loginLimiter = createLoginLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 5);
   const writeLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : 60);
   const aiLimiter = createAiLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 10);

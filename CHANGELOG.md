@@ -16,6 +16,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
 - **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
 
+### Fixes
+
+- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
+- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
+
+## [0.6.1] - 2026-10-13
+
+### Features
+
+- **E2E 课堂教学全生命周期自动化测试与双端架构加固 (100% 闭环覆盖)**
+  - **三大核心端到端套件交付**：
+    - `e2e/classroom-golden-journey.spec.ts`：师生双端全生命周期黄金旅程（开课就绪 → 推进上课与限时倒计时 → 教师极速投票与学生作答计票 → 学生发送节奏晴雨表 → 教师推进至课后小结 → 学生自适应 60s 通票作答与卡点提交 → 教师端动态刷新词云与点亮知识树 → 教师填写反思备忘录 → 推进至全景简报看板 → 双向回退回课中白板）；
+    - `e2e/classroom-teacher-cockpit.spec.ts`：教师端中控与白板多环节操控（教学步骤时间轴切换、白板多页大纲控制与增页切换、大纲折叠收起、左侧边栏视野伸缩、中控工具箱唤出抢答器、随机抽问弹窗与积分榜）；
+    - `e2e/classroom-resilience-and-modals.spec.ts`：意外刷新容灾与 4 大高级教学模态框（课中意外刷新浏览器恢复授课现场、AI 实时学情预测弹窗、课堂异常告警中心、家校通知生成器、学生五维雷达成长档案）；
+  - **全量套件运行控制**：3 大场景套件联合回归运行仅需 28 秒，测试前后全自动清理 DB 脏数据，残留记录为 0；
+  - **关键视觉工件存档**：全程生成 8 张关键流程高清截图保存至 `artifacts/screenshots/`。
+
+### Fixes
+
+- **课堂全生命周期流转与白板元数据关键缺陷系统性修复**
+  - **白板分页元数据白名单放行**（`packages/plugins/builtin.ts`）：在 `KNOWN_ELEMENT_TYPES` 列表中补齐 `'page_meta'`，解决教师在白板新增页面时 `whiteboard.draw` 抛出 `不支持的元素类型 "page_meta"` 的 500 错误；
+  - **结课通票跨端实时响应**（`PostClassWrapupView.tsx`）：封装 `refreshExitTicketData`，实时监听 Socket `classroom:exit_ticket_submitted` 事件，并在 Tab 切换及知识树唤起时自动重拉最新通票数据，打通学生作答到教师词云与知识树点亮的实时闭环；
+  - **结课报告阶段会话保持与双向回退**（`server/routes/classroom.ts` & `classroom-runtime-service.ts`）：修复服务端查询当前 session 时排除 `ARCHIVED_REPORT` 导致前端误判定会话丢失退回 Stage 1 的缺陷；移除 `transitionStage` 的排除过滤，支持结课后合法双向流转回课中白板；
+  - **Vite 监听隔离**（`vite.config.ts`）：在 Playwright 测试模式下关闭 HMR，并忽略 `artifacts/` 与 `test-results/`，防止测试中保存截图引起页面意外热重载；
+  - **模态框可访问性规范**：为 `MasteryPredictionModal`、`DiagnosticCenterModal`、`ParentNotificationModal`、`ClassroomAttributionModal`、`ClassroomLeaderboardModal`、`StudentGrowthProfileModal` 补充统一的 `role="dialog"` 与 `aria-label="Close"`。
+
+- **班级 / 学生批量导入链路：字段缺失与三端行为不一致的系统性修复**
+  - **背景**：`downloadCSVTemplate` 只产出「班级名称/班级描述/学生姓名/学生邮箱」与「学生姓名/学生邮箱」两套表头，而 `students` 表实际支持 `student_number`（学号，UNIQUE，学生登录账号）、`password`、`private_notes`。更严重的是 CSV/JSON 解析层根本没有学号分支 —— **教师即使自行在 CSV 中补上「学号」列也会被静默丢弃**。
+  - **CSV/JSON 解析层丢字段**（`bulkImportService.ts`）：新增学号、初始密码、学生备注三列的识别与透传，此前只提取 `name/email`。
+  - **三端入库行为不一致**：仓库里存在**三份**各自独立的导入实现 —— `POST /api/classes/import`、`POST /api/students/import`、`POST /api/classes/:id/students/bulk-enroll`，对学号的处理互相矛盾（`/api/classes/import` 完全忽略传入学号、无条件重新生成），导致同一个人走班级模板与走学生模板会得到**不同学号**。三者现统一收敛到 `RosterService.importStudents()` 这一唯一实现。
+  - **只按 email 去重**：未填邮箱的学生每导入一次就新增一条重复记录（去重键扩为 email → student_number；命中已有学生时**不覆盖**任何字段，尤其不重置其密码，并回传库内真实学号）。
+  - **导入的学生没有密码 → 学号登录失效**：三个端点的 INSERT 均不含 `password`，落库为 NULL，`roster.ts` 的密码校验恒不通过，学生只能退到班级 passcode 分支。现与单个添加学生对齐：密码缺失时自动生成 12 位初始密码并把明文回传给教师分发。
+  - **密码策略**：CSV 显式填写的密码（含 `123456`）一律照用且**不回传**；仅自动生成时回传，示例行的密码列留空以免教师沿用。
+  - **CSV 拆行修正**：原 `line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)` 对含逗号的引号字段会拆错（备注写「数学, 较弱」即触发），改为逐字符状态机并支持 `""` 转义。
+  - **表头匹配改为两级策略**：先规范化（去空格/下划线/连字符/括号）后精确匹配，失败才回退到按长度降序的包含匹配。朴素的 `includes('学生')` 会让「学生备注」列抢先命中并导致整行错位。
+  - **第三份解析实现对齐**：`utils/pluginParsers.ts`（班级面板「CSV 批量加入」）改为复用同一套拆行与表头匹配逻辑，并补齐密码/备注列。
+  - **性能**：bcrypt(cost=10) 单次约 60~100ms，50 人班的哈希计算全部移到写事务**之外**，避免把 SQLite 写锁按住 3~5 秒。
+  - **文案修正**：导入成功提示的「新学者」错别字；「匹配并更新」改为与实际行为相符的「已存在，已跳过重复创建」；初始密码以「学号 / 姓名 / 密码」清单形式在成功提示中展示一次。
+  - `ImportModal` 补充列说明与「仅学生姓名必填」提示。
+
+### Features
+
+- **课程发布与时间轴向导：课堂框架模板统一为 40 分钟课时**
+  - 三个「课堂框架模板 (Quick Apply)」预设由 45 分钟改为 40 分钟：经典讲授模式 `5-15-15-5`、主题讨论工作坊 `5-13-12-10`、翻转课堂高强度训练 `8-14-13-5`；
+  - 向导初始默认时间轴同步由 `5-20-15-5`（45 分钟）调整为 `5-15-15-5`（40 分钟）；
+  - 「科目时间轴专家建议」文案对齐 40 分钟节奏，各学科建议时长之和均为 40 分钟；
+  - 模板标题中的时长标注（如「经典 5-20-15-5 讲授模式」）与描述文案同步更新，避免标题与实际环节时长不符。
+
+- **课程发布与时间轴向导：「一键生成专家级教学大纲」改为真实 AI Provider 调用**
+  - 该按钮此前仅调用前端硬编码的 `generateTemplateContent`，按学科枚举返回一段与课题无关的固定 Markdown（正文含「公式 A」「模块 1」等占位符），并非真正生成；
+  - **服务端**：新增 `POST /api/lessons/generate-outline`（`requireAuth('teacher','administrator')` + `aiLimiter`，昂贵 LLM 调用与 `/api/agent/chat` 同级限流；`aiLimiter` 缺失时按 `plugins.ts` 先例降级为透传）；`LessonService.generateOutlineWithAi()` 经 kernel `AIService.generateText()` 调用已配置的 AI Provider，依据**课题 + 学科分类 + 课程简介 + 课堂时间轴环节**生成大纲，提示词要求输出固定章节结构（教学目标 / 重难点 / 课堂流程 / 问题链 / 练习检测 / 课后作业）并显式禁止占位符与无关套话；
+  - **健壮性**：课题为空返回 400 且不调用 AI；AI 返回空内容返回 502；`stripOuterCodeFence()` 剥离 LLM 偶发返回的整段 ` ```markdown ` 围栏（正文内部代码块不受影响）；AI 未配置/密钥解密失败等错误向上冒泡，由 `sendSafeError` 转译为可读提示；
+  - **前端**：`useCourseWizard` 新增 `handleGenerateOutline()` 与 `wizardIsGeneratingOutline` loading 态，成功写入 `wizardCourseContent` 并弹 success toast，失败保留教师已手写正文并弹 error toast（不覆盖草稿）；按钮在生成期间禁用并切换为加载态；
+  - **死代码清理**：`src/features/teacher/help/helpUtils2.ts` 及其在 `HelpView.tsx` 的再导出删除，`generateTemplateContent` 不再有任何消费方。
+
+### Breaking Changes
+
 - **移除「国家智慧教育公共服务平台连接器」（@openlearn/plugin-smart-edu）及其全部基础设施**（用户决策：国家平台不提供公开的第三方网关，该连接器在可预见的时期内无法产生真实价值，整体移除而非默认停用）：
   - **内核**：删除 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts)（含 4 个 `smart_edu.*` 命令、ActionRegistry descriptor 与 manifest 技能声明）及其测试；从系统内核插件链（`packages/core/kernel/index.ts`）摘除注册；CapabilityGuard 角色回退表移除 `smart_edu:*` 授权（capability 表随之回归诚实——不存在的能力不再预授）；
   - **服务端**：删除 `/api/external/smart-edu/*` 四条网关路由（resources/import/report/status）；`ai.skill.provider` 的**通用消费机制**（工具注入 / 插件 actor 派发 / fail-closed）保留——它是面向任意第三方插件的槽位契约，非连接器专属；
@@ -40,9 +97,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **回归**：迁移已在真实库副本上验证（列新增、NULL 语义正确）。
 
 ### Fixes
-
-- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
-- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 
 - **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：
   - **C-1 扩展组件永久悬挂**：`ExtensionPointConfig.component` 类型契约修正为「直接组件 | 已打标 lazy 工厂」联合（[`src/plugin-host/types.ts`](./src/plugin-host/types.ts)）；`registerSmartEduExtensions` 的 9 处注册与 plugin-host 静态桥接占位改为直接组件——此前未打标的 `() => Promise.resolve({default})` 工厂被渲染器当作直组件渲染，React 19 下 Suspense 永久悬挂且不抛错，ErrorBoundary/熔断器全程失效，9 个 smart-edu 扩展上线即骨架屏。同步修复熔断器复位时序（`componentDidMount` 在错误挂载路径清零计数 → 改为 `CrashResetProbe` 仅在子树真实提交后复位）与熔断触发的恢复路径（`onBreakerTrip` 现同步摘除该插件全部扩展点，脱离生命周期的内置注册不再是 no-op）；
@@ -89,6 +143,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **未打标 lazy 工厂的自愈探针 + 开发期告警**：`resolveExtensionComponent` 缓存阶段对未打标函数以无参调用探测一次，返回 thenable 即判定为漏打标的 lazy 工厂——**自动包 React.lazy 自愈**（不再永久悬挂）并打 `console.error` 提示打标；直接组件（hooks/类组件/必选 props 在无参调用时抛错）被捕获后按直组件处理，不误报。此前的"当前代码库只注册直接组件所以安全"假设已被两次事故证伪，现改为机制级防护。
 
 - **内置扩展包默认停用（用户决策）**：`@openlearn/plugin-smart-edu`（国家智慧教育平台连接器）的启停语义从「默认启用 + 黑名单停用」翻转为「**默认停用 + 用户覆盖**」——`builtin-bundles.ts` 新增 `defaultEnabled` 包元数据（smart-edu = false），store 改为 `builtinBundleOverrides` 用户覆盖表（localStorage 持久），未做选择时以 `defaultEnabled` 为准。国家平台不提供公开的第三方网关，未配置 `SMARTEDU_API_BASE` 时该包只会在备课界面呈现「未配置」提示——默认停用后教师不再看到无效入口，管理员可在 Plugin Center「内置扩展包」卡片显式启用（启用后仍需配置网关才有真实数据）。回归测试更新为默认停用语义（4 项）。
+
+### Docs
+
+- 新增 [`docs/AUDIT_REPORT.md`](./docs/AUDIT_REPORT.md)：对 `openlearn-next@0.6.0` 的结构梳理与代码审计（只读，未改业务代码）。记录安全、依赖、类型、测试与构建的实测结果。
 
 ## [0.6.0] - 2026-10-11
 
