@@ -133,6 +133,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **内置扩展包默认停用（用户决策）**：`@openlearn/plugin-smart-edu`（国家智慧教育平台连接器）的启停语义从「默认启用 + 黑名单停用」翻转为「**默认停用 + 用户覆盖**」——`builtin-bundles.ts` 新增 `defaultEnabled` 包元数据（smart-edu = false），store 改为 `builtinBundleOverrides` 用户覆盖表（localStorage 持久），未做选择时以 `defaultEnabled` 为准。国家平台不提供公开的第三方网关，未配置 `SMARTEDU_API_BASE` 时该包只会在备课界面呈现「未配置」提示——默认停用后教师不再看到无效入口，管理员可在 Plugin Center「内置扩展包」卡片显式启用（启用后仍需配置网关才有真实数据）。回归测试更新为默认停用语义（4 项）。
 
+### Docs
+
+- 新增 [`docs/AUDIT_REPORT.md`](./docs/AUDIT_REPORT.md)：对 `openlearn-next@0.6.0` 的结构梳理与代码审计（只读，未改业务代码）。记录安全、依赖、类型、测试与构建的实测结果。
+
 ## [0.6.0] - 2026-10-11
 
 ### Features
