@@ -179,6 +179,7 @@ roadmap/documentation-roadmap
 :maxdepth: 2
 :caption: 📋 发布日志 (Release Notes)
 
+release-notes/v0.6.1
 release-notes/v0.6.0
 release-notes/v0.5.0
 release-notes/v0.4.2
@@ -284,4 +285,4 @@ whiteboard-realtime-sync-audit
 - **[AI Runtime & Tools](ai/ai-runtime)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-10-03 (v0.5.0)
+> 最后更新：2026-10-13 (v0.6.1)
