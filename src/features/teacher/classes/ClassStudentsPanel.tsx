@@ -206,11 +206,12 @@ export function ClassStudentsPanel({
               const student_number = studentNumberPrompt ? studentNumberPrompt.trim() : undefined;
               const email =
                 window.prompt(lang === 'zh' ? '请输入学生邮箱 (可选):' : 'Enter student email (optional):') || '';
-              const password = window.prompt(
-                lang === 'zh'
-                  ? '请输入登录密码 (可选，留空将自动生成随机初始密码):'
-                  : 'Enter login password (optional, leave blank to auto-generate a random initial password):',
-              ) || '';
+              const password =
+                window.prompt(
+                  lang === 'zh'
+                    ? '请输入登录密码 (可选，留空将自动生成随机初始密码):'
+                    : 'Enter login password (optional, leave blank to auto-generate a random initial password):',
+                ) || '';
 
               // 1. Create a new student record（SEC-AUTH-06：不再默认 123456，
               //    留空时由服务端生成随机初始密码并在响应中一次性返回）
@@ -300,10 +301,22 @@ export function ClassStudentsPanel({
                   });
                   if (res.ok) {
                     const data = await res.json();
+                    const created = (data.results || []).filter(
+                      (r: any) => r.status === 'created_and_enrolled' && r.initial_password,
+                    );
+                    const credLines = created
+                      .map((r: any) => `${r.student_number || '-'} / ${r.name} / ${r.initial_password}`)
+                      .join('\n');
                     alert(
                       lang === 'zh'
-                        ? `成功在该班级注册/加入了 ${data.count} 名学生！`
-                        : `Successfully enrolled ${data.count} students!`,
+                        ? `成功在该班级注册/加入了 ${data.count} 名学生！` +
+                            (credLines
+                              ? `\n\n🔑 以下 ${created.length} 名学生使用系统生成的初始密码（仅本次显示，请及时分发）：\n${credLines}`
+                              : '')
+                        : `Successfully enrolled ${data.count} students!` +
+                            (credLines
+                              ? `\n\n🔑 Initial passwords (shown once — distribute them now):\n${credLines}`
+                              : ''),
                     );
                     await fetchStudents();
                     await fetchClassStudents(cls.id);

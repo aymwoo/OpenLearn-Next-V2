@@ -40,17 +40,48 @@ export function ImportModal({
         </h3>
         <p className="text-xs text-gray-500 mb-4 font-sans text-left">
           {lang === 'zh'
-            ? '支持导入 CSV 或 JSON 文件。CSV 文件需包含标题行，建议格式如下（支持中英文标题）：'
-            : 'Supports CSV or JSON files. CSV requires a header line with names like:'}
+            ? '支持导入 CSV 或 JSON 文件。CSV 文件需包含标题行（支持中英文标题），仅「学生姓名」为必填，其余列可选：'
+            : 'Supports CSV or JSON files. Only "Student Name" is required; all other columns are optional:'}
         </p>
 
-        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-nowrap overflow-x-auto select-all text-left">
-          班级名称, 班级描述, 学生姓名, 学生邮箱
-          <br />
-          高一A班, 基础英语课程, 李明, liming@example.com
-          <br />
-          高一A班, 基础英语课程, 王华, wanghua@example.com
+        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-pre overflow-x-auto select-all text-left leading-relaxed">
+          班级名称, 班级描述, 学生学号, 学生姓名, 学生邮箱, 初始密码, 学生备注
+          {'\n'}
+          高一A班, 基础英语课程, 20260101, 李明, liming@example.com, , 数学较弱
         </div>
+
+        <ul className="mb-4 text-xs text-gray-500 space-y-1 list-disc pl-5 font-sans text-left">
+          {lang === 'zh' ? (
+            <>
+              <li>
+                <strong className="text-gray-700">学号</strong>：学生登录账号。留空则自动生成； 已存在同
+                <strong className="text-gray-700">邮箱</strong>或同学号的学生会被识别为同一人，不会重复建档。
+              </li>
+              <li>
+                <strong className="text-gray-700">初始密码</strong>：留空则系统生成 12 位随机密码，
+                并在导入成功提示中列出「学号 / 姓名 / 密码」供你分发（仅显示一次，请及时保存）。
+              </li>
+              <li>
+                <strong className="text-gray-700">学生备注</strong>：仅本平台教师可见的私有备注。
+              </li>
+            </>
+          ) : (
+            <>
+              <li>
+                <strong className="text-gray-700">Student Number</strong> is the login account. Auto-generated if blank;
+                students already matching by <strong className="text-gray-700">email</strong> or student number are
+                reused instead of duplicated.
+              </li>
+              <li>
+                <strong className="text-gray-700">Initial Password</strong>: leave blank and a 12-character random
+                password is generated and listed once in the success message for you to distribute.
+              </li>
+              <li>
+                <strong className="text-gray-700">Student Notes</strong> is a teacher-only private note.
+              </li>
+            </>
+          )}
+        </ul>
 
         <div className="mb-4 flex flex-col gap-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left select-none">
           <span className="text-xs font-semibold text-indigo-900 flex items-center gap-1">

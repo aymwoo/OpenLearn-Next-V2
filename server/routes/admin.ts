@@ -4,9 +4,9 @@ import { PLATFORM_VERSION } from '../../packages/core/version.js';
 import { randomId } from '../utils/id.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
-import { generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { seedDemoData, DEMO_IDS, DEMO_TEACHER } from '../services/demo-data.js';
+import { RosterService } from '../services/roster-service.js';
 
 export function registerAdminRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -96,65 +96,49 @@ export function registerAdminRoutes(ctx: ServerContext) {
       }
 
       const db = kernelContainer.db;
+      const rosterService = new RosterService();
 
       const insertClass = db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)');
-      const insertStudent = db.prepare(
-        'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-      );
-      const insertClassStudent = db.prepare(
-        'INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
-      );
-      const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
       const imported: any[] = [];
+      /** 汇总本次导入新产生的初始密码，供教师分发给学生登录 */
+      const credentials: { student_number: string; name: string; initial_password: string }[] = [];
 
-      // DATA-INT-01: 整批导入包事务 —— 任一学生落库失败整体回滚，不残留半截班级
+      // DATA-INT-01: 整批导入包事务 —— 任一学生落库失败整体回滚，不残留半截班级。
+      // 学生入库复用 RosterService.importStudents（去重 / 学号 / 密码的唯一实现），
+      // better-sqlite3 的嵌套事务在此以 SAVEPOINT 语义嵌套，回滚依然整体生效。
       const importTx = db.transaction(() => {
         for (const cls of classes) {
           const clsName = cls.name || cls.className;
           const clsDesc = cls.description || cls.classDescription || '';
           if (!clsName) continue;
 
-          // Generate a random ID for the class
           const classId = randomId();
           insertClass.run(classId, clsName, clsDesc, Date.now());
 
-          const studentsList = cls.students || [];
-          const importedStudents = [];
+          const { results, created } = rosterService.importStudents(cls.students || [], { classId });
 
-          for (const st of studentsList) {
-            const stName = st.name || st.studentName;
-            const stEmail = st.email || st.studentEmail || '';
-            if (!stName) continue;
-
-            let studentId = '';
-            if (stEmail) {
-              const existing = findStudentByEmail.get(stEmail) as { id: string } | undefined;
-              if (existing) {
-                studentId = existing.id;
-              }
+          for (const r of results) {
+            if (r.created && r.initial_password) {
+              credentials.push({
+                student_number: r.student_number,
+                name: r.name,
+                initial_password: r.initial_password,
+              });
             }
-
-            if (!studentId) {
-              studentId = randomId();
-              const studentNumber = generateStudentNumber(db) || `ST_${studentId}`;
-              insertStudent.run(studentId, studentNumber, stName, stEmail, Date.now());
-            }
-
-            insertClassStudent.run(classId, studentId, Date.now());
-            importedStudents.push({ id: studentId, name: stName, email: stEmail });
           }
 
           imported.push({
             id: classId,
             name: clsName,
-            studentsCount: importedStudents.length,
+            studentsCount: results.length,
+            createdCount: created,
           });
         }
       });
       importTx();
 
-      res.json({ success: true, imported });
+      res.json({ success: true, imported, credentials });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -167,38 +151,15 @@ export function registerAdminRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Invalid payload: students must be an array' });
       }
 
-      const db = kernelContainer.db;
-      const insertStudent = db.prepare(
-        'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-      );
-      const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
+      const { results, created, existing } = new RosterService().importStudents(students);
 
-      const imported: any[] = [];
-      for (const st of students) {
-        const stName = st.name;
-        const stEmail = st.email || '';
-        const stNum = st.student_number || '';
-        if (!stName) continue;
-
-        let studentId = '';
-        if (stEmail) {
-          const existing = findStudentByEmail.get(stEmail) as { id: string } | undefined;
-          if (existing) {
-            studentId = existing.id;
-          }
-        }
-
-        if (!studentId) {
-          studentId = randomId();
-          const finalNum = stNum && stNum.trim() !== '' ? stNum.trim() : `ST_${studentId}`;
-          insertStudent.run(studentId, finalNum, stName, stEmail, Date.now());
-          imported.push({ id: studentId, student_number: finalNum, name: stName, email: stEmail, new: true });
-        } else {
-          imported.push({ id: studentId, name: stName, email: stEmail, new: false });
-        }
-      }
-
-      res.json({ success: true, imported });
+      res.json({
+        success: true,
+        created,
+        existing,
+        // 兼容旧前端字段名 `new`
+        imported: results.map((r) => ({ ...r, new: r.created })),
+      });
     } catch (e: any) {
       sendSafeError(res, e);
     }
