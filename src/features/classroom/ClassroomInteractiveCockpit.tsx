@@ -56,6 +56,44 @@ interface PresetPoll {
   updatedAt: number;
 }
 
+// 与服务端 server/services/classroom-runtime-service.ts 保持一致的有限状态机流转白名单
+export const ALLOWED_STAGE_TRANSITIONS: Record<string, string[]> = {
+  PRE_CLASS_READY: ['IN_CLASS_TEACHING'],
+  IN_CLASS_TEACHING: ['WRAP_UP_EXIT_TICKET'],
+  WRAP_UP_EXIT_TICKET: ['IN_CLASS_TEACHING', 'ARCHIVED_REPORT'],
+  ARCHIVED_REPORT: ['IN_CLASS_TEACHING', 'PRE_CLASS_READY'],
+};
+
+export function isStageTransitionAllowed(fromStage: string, toStage: string): boolean {
+  if (fromStage === toStage) return true;
+  const allowed = ALLOWED_STAGE_TRANSITIONS[fromStage] || [];
+  return allowed.includes(toStage);
+}
+
+export function getStageTransitionBlockReason(fromStage: string, toStage: string, lang: 'zh' | 'en' = 'zh'): string | null {
+  if (fromStage === toStage) return null;
+  if (fromStage === 'IN_CLASS_TEACHING' && toStage === 'PRE_CLASS_READY') {
+    return lang === 'zh'
+      ? '课堂正在授课中，无法直接退回课前；如需下课请推进至「结课通票」'
+      : 'Cannot return to pre-class during active teaching. Proceed to Exit Ticket to conclude.';
+  }
+  if (fromStage === 'PRE_CLASS_READY' && (toStage === 'WRAP_UP_EXIT_TICKET' || toStage === 'ARCHIVED_REPORT')) {
+    return lang === 'zh'
+      ? '课堂尚未开始，请先点击「课中授课」开课'
+      : 'Class has not started. Please start teaching first.';
+  }
+  if (fromStage === 'IN_CLASS_TEACHING' && toStage === 'ARCHIVED_REPORT') {
+    return lang === 'zh'
+      ? '请先推进至「结课通票」完成学生作答小结，再生成学情简报'
+      : 'Please conclude via Exit Ticket before generating the final report.';
+  }
+  const allowed = ALLOWED_STAGE_TRANSITIONS[fromStage] || [];
+  if (!allowed.includes(toStage)) {
+    return lang === 'zh' ? '当前教学环节不允许直接切换至该阶段' : 'Direct transition to this stage is not allowed.';
+  }
+  return null;
+}
+
 export function ClassroomInteractiveCockpit({
   lessonId,
   lessonTitle,
@@ -237,6 +275,20 @@ export function ClassroomInteractiveCockpit({
 
   // 阶段推进处理
   const handleStageTransition = async (stage: string) => {
+    if (stage === currentStage) {
+      return;
+    }
+
+    const blockReason = getStageTransitionBlockReason(currentStage, stage, lang as 'zh' | 'en');
+    if (blockReason) {
+      addToast(
+        lang === 'zh' ? '阶段切换被拦截' : 'Stage Transition Blocked',
+        blockReason,
+        'warning',
+      );
+      return;
+    }
+
     try {
       const res = await fetch(`/api/classroom/sessions/${lessonId}/stage`, {
         method: 'POST',
@@ -262,8 +314,21 @@ export function ClassroomInteractiveCockpit({
           }
         }
       } else {
-        const err = await res.json();
-        addToast(lang === 'zh' ? '阶段切换被拦截' : 'Stage Transition Blocked', err.error || 'Check guards', 'warning');
+        const err = await res.json().catch(() => ({}));
+        const rawError = err.error || '';
+        let friendlyReason = rawError;
+        if (rawError.includes('IN_CLASS_TEACHING -> PRE_CLASS_READY')) {
+          friendlyReason =
+            lang === 'zh'
+              ? '课堂正在授课中，无法直接退回课前；如需下课请推进至「结课通票」'
+              : 'Cannot return to pre-class during active teaching.';
+        } else if (rawError.startsWith('Illegal transition')) {
+          friendlyReason =
+            lang === 'zh'
+              ? '当前环节不允许此阶段流转，请按教学步骤推进'
+              : rawError;
+        }
+        addToast(lang === 'zh' ? '阶段切换被拦截' : 'Stage Transition Blocked', friendlyReason || 'Check guards', 'warning');
       }
     } catch (e: any) {
       addToast('Error', e.message, 'error');
@@ -445,17 +510,34 @@ export function ClassroomInteractiveCockpit({
       <div className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs">
         {stages.map((st, idx) => {
           const isActive = currentStage === st.id;
+          const canTransition = isActive || isStageTransitionAllowed(currentStage, st.id);
+          const blockReason = getStageTransitionBlockReason(currentStage, st.id, lang as 'zh' | 'en');
+          const tooltip = isActive
+            ? (lang === 'zh' ? '当前处于此阶段' : 'Current stage')
+            : canTransition
+              ? (lang === 'zh' ? `点击切换至 ${st.labelZh}` : `Switch to ${st.labelEn}`)
+              : blockReason || (lang === 'zh' ? '当前环节不可直接切换' : 'Not available directly');
+
           return (
             <button
               key={st.id}
+              disabled={!canTransition}
+              aria-disabled={!canTransition}
+              title={tooltip}
               onClick={() => handleStageTransition(st.id)}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
                 isActive
-                  ? 'bg-primary-theme text-white shadow-sm ring-2 ring-primary-theme/20'
-                  : 'text-muted hover:text-foreground hover:bg-surface'
+                  ? 'bg-primary-theme text-white shadow-sm ring-2 ring-primary-theme/20 cursor-default'
+                  : canTransition
+                    ? 'text-muted hover:text-foreground hover:bg-surface cursor-pointer'
+                    : 'opacity-40 text-muted/60 cursor-not-allowed hover:bg-transparent'
               }`}
             >
-              <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+              <span
+                className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                  isActive ? 'bg-white/20' : canTransition ? 'bg-foreground/10' : 'bg-muted/20'
+                }`}
+              >
                 {idx + 1}
               </span>
               <span>{lang === 'zh' ? st.labelZh : st.labelEn}</span>

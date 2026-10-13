@@ -1,7 +1,11 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { ClassroomInteractiveCockpit } from '../ClassroomInteractiveCockpit';
+import {
+  ClassroomInteractiveCockpit,
+  isStageTransitionAllowed,
+  getStageTransitionBlockReason,
+} from '../ClassroomInteractiveCockpit';
 import { StageDisplayModal } from '../StageDisplayModal';
 
 describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
@@ -114,5 +118,84 @@ describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
     expect(closeBtn).toBeDefined();
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('disables 课前就绪 button when in IN_CLASS_TEACHING stage and blocks transition with warning', () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+
+    render(
+      <ClassroomInteractiveCockpit
+        lessonId="les_1"
+        lessonTitle="物理课"
+        classId="cls_1"
+        lang="zh"
+        addToast={addToast}
+        currentStage="IN_CLASS_TEACHING"
+      />,
+    );
+
+    const preClassBtn = screen.getByText('课前就绪').closest('button')!;
+    const exitTicketBtn = screen.getByText('结课通票').closest('button')!;
+
+    // 课前就绪按钮应处于 disabled / 置灰状态
+    expect(preClassBtn.getAttribute('disabled')).not.toBeNull();
+    expect(preClassBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(preClassBtn.getAttribute('title')).toContain('无法直接退回课前');
+
+    // 结课通票按钮应可点击
+    expect(exitTicketBtn.getAttribute('disabled')).toBeNull();
+
+    fetchSpy.mockClear();
+
+    // 点击被禁用的课前就绪按钮，由于原生 disabled，不应触发网络请求
+    fireEvent.click(preClassBtn);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('ignores click on the currently active stage button (no-op)', () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+
+    render(
+      <ClassroomInteractiveCockpit
+        lessonId="les_1"
+        lessonTitle="物理课"
+        classId="cls_1"
+        lang="zh"
+        addToast={addToast}
+        currentStage="IN_CLASS_TEACHING"
+      />,
+    );
+
+    const activeBtn = screen.getByText('课中授课').closest('button')!;
+    expect(activeBtn.getAttribute('title')).toBe('当前处于此阶段');
+
+    fetchSpy.mockClear();
+    addToast.mockClear();
+
+    fireEvent.click(activeBtn);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it('correctly validates stage transitions and reasons via helper functions', () => {
+    // 课前就绪 -> 课中授课 (合法)
+    expect(isStageTransitionAllowed('PRE_CLASS_READY', 'IN_CLASS_TEACHING')).toBe(true);
+    // 课前就绪 -> 结课通票 (非法)
+    expect(isStageTransitionAllowed('PRE_CLASS_READY', 'WRAP_UP_EXIT_TICKET')).toBe(false);
+    expect(getStageTransitionBlockReason('PRE_CLASS_READY', 'WRAP_UP_EXIT_TICKET', 'zh')).toContain('课堂尚未开始');
+
+    // 课中授课 -> 结课通票 (合法)
+    expect(isStageTransitionAllowed('IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET')).toBe(true);
+    // 课中授课 -> 课前就绪 (非法)
+    expect(isStageTransitionAllowed('IN_CLASS_TEACHING', 'PRE_CLASS_READY')).toBe(false);
+    expect(getStageTransitionBlockReason('IN_CLASS_TEACHING', 'PRE_CLASS_READY', 'zh')).toContain('无法直接退回课前');
+
+    // 结课通票 -> 课中授课 / 学情简报 (合法)
+    expect(isStageTransitionAllowed('WRAP_UP_EXIT_TICKET', 'IN_CLASS_TEACHING')).toBe(true);
+    expect(isStageTransitionAllowed('WRAP_UP_EXIT_TICKET', 'ARCHIVED_REPORT')).toBe(true);
+
+    // 处于同一阶段 (合法 no-op)
+    expect(isStageTransitionAllowed('IN_CLASS_TEACHING', 'IN_CLASS_TEACHING')).toBe(true);
+    expect(getStageTransitionBlockReason('IN_CLASS_TEACHING', 'IN_CLASS_TEACHING', 'zh')).toBeNull();
   });
 });
