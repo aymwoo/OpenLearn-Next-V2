@@ -117,6 +117,18 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     res.json(lessonService.listLessons(pg));
   });
 
+  app.get('/api/lessons/:id', requireAuth(), (req, res) => {
+    try {
+      const lesson = lessonService.getLesson(req.params.id);
+      if (!lesson) {
+        return res.status(404).json({ success: false, error: 'Lesson not found' });
+      }
+      res.json(lesson);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
   // ── 作业上传与互评插件 API ──────────────────────────────────────────────
   app.get('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
     try {

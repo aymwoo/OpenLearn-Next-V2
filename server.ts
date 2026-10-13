@@ -602,6 +602,15 @@ async function startServer() {
     });
   });
 
+  // SEC-ROUTING: API 404 兜底隔离门禁 —— 任何未被上述路由消费的 /api/* 请求
+  // 必须直接返回 JSON 格式 404，严禁穿透至下游 Vite 开发服务器引发 HTML 假死与 500 超时
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: `API route not found: ${req.method} ${req.path}`,
+    });
+  });
+
   // Vite Middleware for Development
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
