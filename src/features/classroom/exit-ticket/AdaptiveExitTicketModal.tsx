@@ -69,7 +69,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
 
   // 校验必做题
   const handleCheckCoreAnswer = () => {
-    if (!selectedCoreOption) return;
+    if (!selectedCoreOption || !coreQuestion) return;
     const correct = selectedCoreOption === coreQuestion.correctOption;
     setIsCoreCorrect(correct);
     setCoreAnswered(true);
@@ -230,7 +230,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
               )}
 
               {/* 自适应分支展示 */}
-              {coreAnswered && isCoreCorrect && (
+              {coreAnswered && isCoreCorrect && challengeQuestion && (
                 <div
                   data-testid="challenge-branch"
                   className="mt-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 space-y-2 animate-fade-in"

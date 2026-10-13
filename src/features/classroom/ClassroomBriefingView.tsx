@@ -574,15 +574,17 @@ export function ClassroomBriefingView({
               </span>
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span
-                className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                  reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
-                    ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                    : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                }`}
-              >
-                讲授用时 {reflectionReport.lectureRatio}%
-              </span>
+              {reflectionReport.lectureRatio != null && (
+                <span
+                  className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                    reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
+                      ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                      : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                  }`}
+                >
+                  讲授用时 {reflectionReport.lectureRatio}%
+                </span>
+              )}
               <span className="text-[11px] px-2 py-0.5 bg-primary-theme/10 text-primary-theme rounded-full font-bold border border-primary-theme/20">
                 互动覆盖率 {reflectionReport.interactionCoverage}%
               </span>

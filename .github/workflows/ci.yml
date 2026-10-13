@@ -306,15 +306,20 @@ jobs:
         with:
           version: latest
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
       # `npm audit` cannot work here (no package-lock.json → ENOLOCK).
-      # Non-blocking on purpose: the configured registry (npmmirror) has no
-      # audit endpoint (ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS), so the step fails
-      # for infrastructure reasons even with zero advisories. Flip
-      # continue-on-error to false once the registry supports audit or the
-      # pipeline pins the official registry for this step.
-      - name: Audit dependencies
-        continue-on-error: true
-        run: pnpm audit --audit-level high
+      # Pin the official registry: some mirrors (e.g. npmmirror) have no
+      # audit endpoint (ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS). High+ findings
+      # fail the job; production critical/high must stay at zero.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies (high+)
+        run: pnpm audit --audit-level high --registry https://registry.npmjs.org/
 
   # 覆盖率独立成 job（typecheck-and-test 失败不影响收集）。
   # ⚠️ 已知行为：vitest 4 在测试运行存在失败用例时会静默跳过覆盖报告

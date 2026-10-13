@@ -12,13 +12,28 @@ packages:
   - 'packages/bridge-sdk'
 
 overrides:
+  # Production / runtime advisories
   proxy-addr: '>=2.0.8'
+  engine.io: '>=6.6.10'
   ws: '>=8.21.0'
   socket.io-parser: '>=4.2.7'
-  nanoid: '>=3.3.18'
-  postcss: '>=8.5.23'
-  ip-address: '>=10.3.1'
-  dompurify: '>=3.4.13'
+  ip-address: '>=10.7.1'
+  uuid: '>=11.1.1'
+  dompurify: '>=3.4.16'
   qs: '>=6.16.0'
   body-parser: '>=1.20.6'
   protobufjs: '>=7.6.5'
+  # Shared transitive (prod + tooling)
+  nanoid: '>=3.3.18'
+  postcss: '>=8.5.23'
+  # Dev / toolchain advisories (keep CI audit green for high+)
+  'brace-expansion@>=4': '>=5.0.12'
+  # jsdom@29 imports undici 7.x internals; do not float to undici 8
+  undici: '7.29.1'
+  browserslist: '>=4.28.7'
+  source-map-js: '>=1.2.2'
+  baseline-browser-mapping: '>=2.11.0'
+  postcss-selector-parser: '>=7.1.6'
+  fast-copy: '>=4.1.0'
+  # esbuild Windows dev-server advisory (tsx path); do not force vite's 0.25 line
+  'tsx>esbuild': '>=0.28.1'
