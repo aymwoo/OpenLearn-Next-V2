@@ -25,9 +25,17 @@ import type {
   PluginStreamResponse,
 } from '../../packages/core/plugin-host/types.js';
 import { compileRoutePattern } from '../../packages/core/plugin-host/http-router.js';
+import { isPublicRouteApproved } from '../../packages/core/plugin-host/public-routes.js';
 
 /** 平台已有的保留管理动作路径（当只有单段子路径且完全匹配时放行给后续 Express 路由） */
-const RESERVED_ACTIONS = new Set(['config', 'toggle', 'contributions', 'check-update', 'one-click-update']);
+const RESERVED_ACTIONS = new Set([
+  'config',
+  'toggle',
+  'contributions',
+  'check-update',
+  'one-click-update',
+  'public-routes',
+]);
 
 /** 响应头危险黑名单：绝对禁止插件向外部注入或篡改 */
 const FORBIDDEN_RESPONSE_HEADERS = new Set([
@@ -304,8 +312,19 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
     }
   }
 
-  // 6.1 鉴权守卫（默认需要认证，除非 Manifest 明确声明 auth: false）
-  const requiresAuth = matchedRule?.auth !== false;
+  // 6.1 鉴权守卫。
+  // manifest 的 auth:false 只是「申请公开」，不能单独放行。
+  // 匿名访问还要求管理员已把同一 method + path 写入 plugin_public_routes。
+  let publicApproved = false;
+  if (matchedRule?.auth === false) {
+    publicApproved = isPublicRouteApproved(
+      kernelContainer.db,
+      [pluginId, resolvedUuid].filter((key): key is string => typeof key === 'string' && key.length > 0),
+      matchedRule.method,
+      matchedRule.path,
+    );
+  }
+  const requiresAuth = !publicApproved;
   if (requiresAuth && !auth.isAuthenticated) {
     res.status(401).json({ success: false, error: 'Authentication required' });
     return;

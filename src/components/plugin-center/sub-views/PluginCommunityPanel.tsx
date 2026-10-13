@@ -172,6 +172,8 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
   const [sort, setSort] = useState<SortKey>('recommended');
   const [hideInstalled, setHideInstalled] = useState(false);
   const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
+  const [pendingInstall, setPendingInstall] = useState<CommunityPlugin | null>(null);
+  const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
 
@@ -267,7 +269,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
 
   /** 服务端下载失败时的兜底：浏览器取包 + application/octet-stream 直传。 */
   const uploadViaBrowser = useCallback(
-    async (plugin: CommunityPlugin) => {
+    async (plugin: CommunityPlugin, approvePublic: boolean) => {
       setInstallState(plugin.id, {
         phase: 'installing',
         message: zh ? '服务端下载不可用，改为浏览器直传…' : 'Server download unavailable, transferring from browser…',
@@ -286,6 +288,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         headers: {
           'Content-Type': 'application/octet-stream',
           'x-filename': encodeURIComponent(filename),
+          ...(approvePublic ? { 'x-approve-public-routes': 'true' } : {}),
         },
         body: blob,
       });
@@ -301,7 +304,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
   );
 
   const handleInstall = useCallback(
-    async (plugin: CommunityPlugin) => {
+    async (plugin: CommunityPlugin, approvePublic: boolean) => {
       setInstallState(plugin.id, {
         phase: 'installing',
         message: zh ? '正在由服务端下载插件包…' : 'Server is downloading the package…',
@@ -311,7 +314,12 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         const response = await doFetch(INSTALL_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ downloadUrl: plugin.downloadUrl, expectedId: plugin.id }),
+          body: JSON.stringify({
+            downloadUrl: plugin.downloadUrl,
+            expectedId: plugin.id,
+            acknowledgeRisk: true,
+            approvePublicRoutes: approvePublic,
+          }),
         });
         const body = (await response.json().catch(() => null)) as {
           success?: boolean;
@@ -323,7 +331,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
 
         if (!response.ok || !body?.success) {
           if (body?.fallbackToClient) {
-            await uploadViaBrowser(plugin);
+            await uploadViaBrowser(plugin, approvePublic);
           } else if (response.status === 403) {
             throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
           } else {
@@ -700,7 +708,10 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => void handleInstall(plugin)}
+                      onClick={() => {
+                        setApprovePublicRoutes(false);
+                        setPendingInstall(plugin);
+                      }}
                       disabled={state?.phase === 'installing' || (installed && !plugin.hasUpdate)}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 disabled:cursor-default ${
                         installed && !plugin.hasUpdate
@@ -737,6 +748,72 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
               </article>
             );
           })}
+        </div>
+      )}
+      {pendingInstall && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="community-risk-title"
+            data-testid="community-install-risk-dialog"
+            className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-amber-200 p-6"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+              <div>
+                <h3 id="community-risk-title" className="text-base font-bold text-slate-900">
+                  {zh
+                    ? `安装「${pendingInstall.name}」前请确认风险`
+                    : `Confirm the risk before installing “${pendingInstall.name}”`}
+                </h3>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  {zh
+                    ? '社区插件是第三方代码，安装后会在本机执行。未受信任的插件默认进入独立子进程，不继承宿主的密钥类环境变量，但仍具备该系统用户被权限模型允许的能力（含出站网络）。只有清单 id 以 @openlearn/ 开头，或写在 OPENLEARN_TRUSTED_INLINE_PLUGINS 里的插件，才会在宿主进程内运行。'
+                    : 'A community plugin is third-party code that runs on this machine. Untrusted plugins start in a child process and do not inherit host secret environment variables, but they still have the OS user permissions the process model allows, including outbound network. Only plugins whose manifest id starts with @openlearn/, or ids listed in OPENLEARN_TRUSTED_INLINE_PLUGINS, run inside the host process.'}
+                </p>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  {zh
+                    ? '插件自己写 auth: false 不会让接口变成公开。下面的选项默认关闭；勾选后才会批准清单里声明为公开的路由。'
+                    : 'auth: false in the manifest does not publish a route. The option below stays off unless you approve those routes.'}
+                </p>
+              </div>
+            </div>
+            <label className="mt-4 flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={approvePublicRoutes}
+                onChange={(e) => setApprovePublicRoutes(e.target.checked)}
+              />
+              <span>
+                {zh
+                  ? '同时批准清单中声明为公开的路由（auth: false）'
+                  : 'Also approve routes the manifest marks public (auth: false)'}
+              </span>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingInstall(null)}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              >
+                {zh ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const plugin = pendingInstall;
+                  const approve = approvePublicRoutes;
+                  setPendingInstall(null);
+                  void handleInstall(plugin, approve);
+                }}
+                className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+              >
+                {zh ? '确认风险并安装' : 'I understand the risk — install'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -51,6 +51,8 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
    * 在服务器重启时调用，恢复之前运行中的插件。
    */
   async restoreActivePlugins(): Promise<void> {
+    // 升级后的旧安装记录可能仍是 inline。先改写再恢复，避免第三方插件重新进宿主进程。
+    this.coerceStoredExecutionModes();
     const plugins = this.db
       .prepare("SELECT * FROM plugins WHERE status = 'active' AND loader_version = 'esm'")
       .all() as Array<{ id: string; name?: string; execution_mode?: string; [key: string]: unknown }>;

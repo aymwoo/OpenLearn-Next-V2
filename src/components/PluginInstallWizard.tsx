@@ -6,7 +6,11 @@ export type ZipInstallOptions = {
   mode: 'install' | 'update';
   targetPluginId?: string;
   allowDowngrade?: boolean;
+  /** 管理员显式批准 manifest 里 auth:false 的路由。默认不批准。 */
+  approvePublicRoutes?: boolean;
 };
+
+type SandboxChoice = 'worker' | 'inline' | 'process';
 
 interface InstalledPluginSummary {
   id: string;
@@ -24,7 +28,7 @@ interface PluginInstallWizardProps {
   /** When set, wizard is locked to updating this DB plugin id (card "Update"). */
   lockedTargetPluginId?: string | null;
   installedPlugins?: InstalledPluginSummary[];
-  onConfirmInstall: (file: File, executionMode: 'worker' | 'inline', opts?: ZipInstallOptions) => Promise<void>;
+  onConfirmInstall: (file: File, executionMode: SandboxChoice, opts?: ZipInstallOptions) => Promise<void>;
 }
 
 interface DetectedExtensionPoint {
@@ -196,7 +200,8 @@ export function PluginInstallWizard({
   const [contributes, setContributes] = useState<any>(null);
   const [hasFrontend, setHasFrontend] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [executionMode, setExecutionMode] = useState<'worker' | 'inline'>('worker');
+  const [executionMode, setExecutionMode] = useState<SandboxChoice>('process');
+  const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   const [zipObj, setZipObj] = useState<JSZip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -229,7 +234,8 @@ export function PluginInstallWizard({
       setContributes(null);
       setHasFrontend(false);
       setAgreedToTerms(false);
-      setExecutionMode('worker');
+      setExecutionMode('process');
+      setApprovePublicRoutes(false);
       setZipObj(null);
       setError(null);
       setRegisteredPanels([]);
@@ -272,9 +278,18 @@ export function PluginInstallWizard({
       // Seed extension points from manifest immediately (UTF-8 labels)
       setRegisteredPanels(extractFromManifest(parsed));
 
-      // If this is a worker-based executionMode by default
-      if (parsed.executionMode === 'inline') {
-        setExecutionMode('inline');
+      // 非 @openlearn/ 包在界面上锁死为子进程；服务端仍会再强制一次。
+      const trusted = typeof parsed.id === 'string' && parsed.id.startsWith('@openlearn/');
+      if (!trusted) {
+        setExecutionMode('process');
+      } else if (
+        parsed.executionMode === 'inline' ||
+        parsed.executionMode === 'process' ||
+        parsed.executionMode === 'worker'
+      ) {
+        setExecutionMode(parsed.executionMode);
+      } else {
+        setExecutionMode('worker');
       }
 
       // Detect same-id install for upgrade path
@@ -422,6 +437,9 @@ export function PluginInstallWizard({
     return matched.length > 0 ? matched : registeredPanels;
   }, [registeredPanels, previewRole]);
 
+  const trustedInProcess = typeof manifest?.id === 'string' && String(manifest.id).startsWith('@openlearn/');
+  const effectiveMode: SandboxChoice = trustedInProcess ? executionMode : 'process';
+
   const isUpgrade = !!existingInstall;
   const isDowngrade = isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
   const isInUse =
@@ -456,10 +474,11 @@ export function PluginInstallWizard({
           : 'Uploading and installing...',
     );
     try {
-      await onConfirmInstall(file, executionMode, {
+      await onConfirmInstall(file, effectiveMode, {
         mode: isUpgrade ? 'update' : 'install',
         targetPluginId: existingInstall?.pluginId,
         allowDowngrade: isDowngrade ? allowDowngrade : false,
+        approvePublicRoutes,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -496,10 +515,11 @@ export function PluginInstallWizard({
           : 'Express approving terms & installing...',
     );
     try {
-      await onConfirmInstall(file, executionMode, {
+      await onConfirmInstall(file, effectiveMode, {
         mode: isUpgrade ? 'update' : 'install',
         targetPluginId: existingInstall?.pluginId,
         allowDowngrade: true,
+        approvePublicRoutes,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -1010,64 +1030,116 @@ export function PluginInstallWizard({
                     </div>
                   )}
                   <p className="text-xs text-slate-500 font-medium">
-                    {lang === 'zh'
-                      ? '设置该插件启动时的微前端沙箱执行模式：'
-                      : 'Configure micro-frontend sandbox execution model:'}
+                    {lang === 'zh' ? '设置该插件启动时的执行隔离：' : 'Choose how this plugin is isolated at startup:'}
                   </p>
 
-                  <div className="space-y-3">
-                    <label
-                      className={`border rounded-xl p-4 flex gap-3 cursor-pointer transition-all ${
-                        executionMode === 'worker'
-                          ? 'bg-indigo-50/40 border-indigo-300 shadow-xs'
-                          : 'border-slate-150 hover:border-indigo-200 bg-white'
-                      }`}
+                  {!trustedInProcess ? (
+                    <div
+                      data-testid="wizard-isolation-lock"
+                      className="border border-sky-200 bg-sky-50/70 rounded-xl p-4 text-xs text-sky-950 leading-relaxed"
                     >
-                      <input
-                        type="radio"
-                        name="sandbox_mode"
-                        checked={executionMode === 'worker'}
-                        onChange={() => setExecutionMode('worker')}
-                        className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer shrink-0"
-                      />
-                      <div>
-                        <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
-                          {lang === 'zh' ? 'Worker 强沙箱隔离模式 (推荐)' : 'Worker Sandbox Isolation (Recommended)'}
-                        </h4>
-                        <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
-                          {lang === 'zh'
-                            ? '插件代码在独立的后台 Worker 线程中加载运行。即便发生死循环、崩溃抛错也不会株连系统主服务崩溃，安全性最高。'
-                            : "Loads in isolated background worker threads. Uncaught plugin errors won't crash main system."}
-                        </p>
-                      </div>
-                    </label>
+                      <h4 className="font-extrabold text-sm">
+                        {lang === 'zh' ? '子进程隔离（已锁定）' : 'Child-process isolation (locked)'}
+                      </h4>
+                      <p className="mt-1">
+                        {lang === 'zh'
+                          ? '这个包的 id 不是 @openlearn/ 内置插件。Worker 线程与宿主共享环境变量，不能当作隔离。安装后会以独立子进程运行，不继承密钥类环境变量。清单或安装参数里的 inline / worker 会被忽略。'
+                          : 'This package id is not an @openlearn/ built-in. Worker threads share the host environment, so they are not isolation. It will run in a child process and will not inherit secret environment variables. inline / worker in the manifest or install request is ignored.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <label
+                        className={`border rounded-xl p-4 flex gap-3 cursor-pointer transition-all ${
+                          executionMode === 'process'
+                            ? 'bg-indigo-50/40 border-indigo-300 shadow-xs'
+                            : 'border-slate-150 hover:border-indigo-200 bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="sandbox_mode"
+                          checked={executionMode === 'process'}
+                          onChange={() => setExecutionMode('process')}
+                          className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer shrink-0"
+                        />
+                        <div>
+                          <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
+                            {lang === 'zh' ? '子进程隔离' : 'Child-process isolation'}
+                          </h4>
+                          <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
+                            {lang === 'zh'
+                              ? '独立进程，最小环境变量。崩溃与堆上限止于该进程。'
+                              : 'Separate process with a minimal environment. Crashes and the heap cap stay in that process.'}
+                          </p>
+                        </div>
+                      </label>
+                      <label
+                        className={`border rounded-xl p-4 flex gap-3 cursor-pointer transition-all ${
+                          executionMode === 'worker'
+                            ? 'bg-indigo-50/40 border-indigo-300 shadow-xs'
+                            : 'border-slate-150 hover:border-indigo-200 bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="sandbox_mode"
+                          checked={executionMode === 'worker'}
+                          onChange={() => setExecutionMode('worker')}
+                          className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer shrink-0"
+                        />
+                        <div>
+                          <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
+                            {lang === 'zh' ? 'Worker 线程（仅受信内置）' : 'Worker thread (trusted built-ins only)'}
+                          </h4>
+                          <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
+                            {lang === 'zh'
+                              ? '同进程的 worker_threads，会看到宿主环境变量。只适合明确受信任的内置插件。'
+                              : 'Same-process worker_threads. It can see host environment variables. Trusted built-ins only.'}
+                          </p>
+                        </div>
+                      </label>
+                      <label
+                        className={`border rounded-xl p-4 flex gap-3 cursor-pointer transition-all ${
+                          executionMode === 'inline'
+                            ? 'bg-indigo-50/40 border-indigo-300 shadow-xs'
+                            : 'border-slate-150 hover:border-indigo-200 bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="sandbox_mode"
+                          checked={executionMode === 'inline'}
+                          onChange={() => setExecutionMode('inline')}
+                          className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer shrink-0"
+                        />
+                        <div>
+                          <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
+                            {lang === 'zh' ? '主进程（仅受信内置）' : 'In-process (trusted built-ins only)'}
+                          </h4>
+                          <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
+                            {lang === 'zh'
+                              ? '直接跑在宿主进程里。未捕获错误可能拖垮服务。'
+                              : 'Runs inside the host process. An uncaught error can take the server down.'}
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
 
-                    <label
-                      className={`border rounded-xl p-4 flex gap-3 cursor-pointer transition-all ${
-                        executionMode === 'inline'
-                          ? 'bg-indigo-50/40 border-indigo-300 shadow-xs'
-                          : 'border-slate-150 hover:border-indigo-200 bg-white'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="sandbox_mode"
-                        checked={executionMode === 'inline'}
-                        onChange={() => setExecutionMode('inline')}
-                        className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer shrink-0"
-                      />
-                      <div>
-                        <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
-                          {lang === 'zh' ? 'VM Inline 主进程运行模式' : 'VM Inline Execution'}
-                        </h4>
-                        <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
-                          {lang === 'zh'
-                            ? '插件在主进程上下文中运行，执行性能极高。但如果代码发生不可捕获错误，可能会造成服务崩溃，适合受信任的代码。'
-                            : 'Runs in host process, higher execution speed. Uncaught plugin failures might cause host server to stop.'}
-                        </p>
-                      </div>
-                    </label>
-                  </div>
+                  <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={approvePublicRoutes}
+                      onChange={(e) => setApprovePublicRoutes(e.target.checked)}
+                    />
+                    <span>
+                      {lang === 'zh'
+                        ? '批准清单中声明为公开的路由（auth: false）。不勾选则这些路由仍要求登录。'
+                        : 'Approve routes the manifest marks public (auth: false). Leave unchecked and those routes still require a session.'}
+                    </span>
+                  </label>
                 </div>
               )}
             </>

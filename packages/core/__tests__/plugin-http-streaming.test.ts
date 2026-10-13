@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PluginHttpRouter } from '../plugin-host/http-router.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { pluginApiGatewayMiddleware } from '../../../server/routes/plugin-api-gateway.js';
+import { approveDeclaredPublicRoutes } from '../plugin-host/public-routes.js';
 import { kernelContainer } from '../kernel/index.js';
 import type { Request, Response } from 'express';
 import { Kernel } from '../kernel/index.js';
@@ -496,6 +497,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       };
 
       pluginHost.registerPreloadedPlugin('ext-gateway-sse-test', inlinePlugin);
+      approveDeclaredPublicRoutes(kernel.db, ['ext-gateway-sse-test'], inlinePlugin.manifest);
       await pluginHost.activatePlugin('ext-gateway-sse-test');
 
       const req: any = {
@@ -551,6 +553,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       };
 
       pluginHost.registerPreloadedPlugin('ext-flood-test', inlinePlugin);
+      approveDeclaredPublicRoutes(kernel.db, ['ext-flood-test'], inlinePlugin.manifest);
       await pluginHost.activatePlugin('ext-flood-test');
 
       const testIp = '10.0.0.99';
@@ -630,6 +633,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       };
 
       pluginHost.registerPreloadedPlugin('ext-stream-err-test', inlinePlugin);
+      approveDeclaredPublicRoutes(kernel.db, ['ext-stream-err-test'], inlinePlugin.manifest);
       await pluginHost.activatePlugin('ext-stream-err-test');
 
       const req: any = {

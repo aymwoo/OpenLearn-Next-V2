@@ -25,7 +25,8 @@
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
 | `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）            |
 | `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                                      | Worker 插件激活超时（inline 模式固定 5000ms）                                                                            |
-| `OPENLEARN_WORKER_ISOLATE`                  | `thread`                                     | 插件隔离原语：`thread`（worker_threads，同进程）/`process`（child_process 子进程，仅 `process` 执行模式），见 `.env.example` L-1 节 |
+| `OPENLEARN_WORKER_ISOLATE`                  | `thread`                                     | 未显式指定 isolateKind 时的隔离原语。第三方插件激活会显式使用 `process`，不受此默认值拉回同进程 |
+| `OPENLEARN_TRUSTED_INLINE_PLUGINS`          | 空                                           | 逗号分隔的 manifest id。名单内插件可按清单使用 inline/worker。其余非 `@openlearn/` 插件强制子进程 |
 | `OPENLEARN_PLUGIN_PERMISSION`               | `rw`                                         | 子进程 Node 权限档位：`rw`/`ro`/`off`（仅子进程生效；暂无法约束网络）                                                     |
 | `OPENLEARN_PLUGIN_MAX_HEAP_MB`              | `128`                                        | 子进程 V8 老生代上限（MB），`0`/`off` 关闭                                                                               |
 | `OPENLEARN_WORKER_LIVENESS`                 | `on`                                         | 插件存活探活（默认 30s 间隔 + 15s 宽限）；`off` 关闭                                                                      |

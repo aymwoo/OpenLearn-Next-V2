@@ -17,7 +17,12 @@ export interface PluginViewProps {
   onZipUpload?: (
     file: File,
     executionMode: 'worker' | 'inline' | 'process',
-    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+    opts?: {
+      mode?: 'install' | 'update';
+      targetPluginId?: string;
+      allowDowngrade?: boolean;
+      approvePublicRoutes?: boolean;
+    },
   ) => Promise<void>;
   onToggle?: (id: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;

@@ -19,8 +19,9 @@ import { ConfigService } from './config-service.js';
 import { parseServiceRequirement, CrossPluginServiceCheck } from './dependency-resolver.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
-import { PluginState } from './types.js';
+import { PluginState, normalizeExecutionMode, type PluginExecutionMode } from './types.js';
 import type { PluginContext, PluginInfo, LifecyclePhase, Middleware } from './types.js';
+import { resolvePluginExecutionMode, type ExecutionModeDecision } from './execution-policy.js';
 import { IllegalStateTransitionError, SemverMismatchError } from './errors.js';
 import { IStageGuardServiceToken, IProcessServiceToken } from '../di/interfaces.js';
 import type { IProcessService } from '../di/interfaces.js';
@@ -318,6 +319,58 @@ export abstract class PluginHostCore extends PluginHostBase {
     }
   }
 
+  /**
+   * 激活期的执行模式。预加载进宿主的内置代码保持调用方请求的模式；
+   * 从磁盘/DB 装进来的插件再过一遍信任策略。
+   */
+  protected resolveRuntimeExecutionMode(pluginId: string, requested: unknown): ExecutionModeDecision {
+    if (this.preloadedPlugins.has(pluginId)) {
+      return { mode: normalizeExecutionMode(requested), coerced: false };
+    }
+    const manifestId = this.getPluginManifest(pluginId)?.id;
+    return resolvePluginExecutionMode(manifestId, requested);
+  }
+
+  protected persistExecutionMode(pluginId: string, mode: PluginExecutionMode): void {
+    try {
+      this.db.prepare('UPDATE plugins SET execution_mode = ? WHERE id = ?').run(mode, pluginId);
+    } catch {
+      // 部分测试库没有 execution_mode 列。激活路径仍使用内存中的决策。
+    }
+  }
+
+  /**
+   * 把库里未受信任插件的 inline/worker 改写成 process。
+   * 在恢复活跃插件之前调用，避免升级后旧行继续在宿主进程里启动。
+   */
+  protected coerceStoredExecutionModes(): void {
+    let rows: Array<{ id: string; manifest: string; execution_mode: string | null }> = [];
+    try {
+      rows = this.db.prepare('SELECT id, manifest, execution_mode FROM plugins').all() as Array<{
+        id: string;
+        manifest: string;
+        execution_mode: string | null;
+      }>;
+    } catch {
+      return;
+    }
+    for (const row of rows) {
+      if (this.preloadedPlugins.has(row.id)) continue;
+      let manifestId: string | undefined;
+      try {
+        const parsed = JSON.parse(row.manifest) as { id?: unknown };
+        if (typeof parsed.id === 'string') manifestId = parsed.id;
+      } catch {
+        manifestId = undefined;
+      }
+      const decision = resolvePluginExecutionMode(manifestId, row.execution_mode);
+      if (decision.coerced) {
+        console.warn(`[PluginHost] ${decision.reason}`);
+        this.persistExecutionMode(row.id, decision.mode);
+      }
+    }
+  }
+
   // ── Phase 6: SemVer compatibility check ─────────────────────────────────
 
   /**
@@ -516,7 +569,7 @@ export abstract class PluginHostCore extends PluginHostBase {
     }>;
 
     return rows.map((row) => {
-      let parsed: { name?: string; version?: string } = {};
+      let parsed: { id?: string; name?: string; version?: string } = {};
       try {
         parsed = JSON.parse(row.manifest);
       } catch {
@@ -549,7 +602,10 @@ export abstract class PluginHostCore extends PluginHostBase {
         version: parsed.version ?? 'unknown',
         state,
         status,
+        // execution_mode 历史字段表示加载器代际（esm / legacy），前端旧徽章仍读它。
+        // isolation_mode 才是落库的沙箱模式，并按信任策略显示实际会用的值。
         execution_mode: row.loader_version === 'vm' ? 'legacy' : 'esm',
+        isolation_mode: resolvePluginExecutionMode(parsed.id, row.execution_mode).mode,
         manifest: row.manifest,
         created_at: row.created_at,
         has_frontend,

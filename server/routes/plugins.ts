@@ -25,10 +25,35 @@ import {
   isValidPluginId,
   type DownloadedPackage,
 } from '../services/community-registry.js';
+import {
+  approveDeclaredPublicRoutes,
+  clearPublicRouteApprovals,
+} from '../../packages/core/plugin-host/public-routes.js';
 import type { ServerContext } from '../context.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 
 const pluginLog = createLogger('plugins');
+
+const COMMUNITY_RISK_ACK_MESSAGE =
+  '安装社区插件会在本机执行第三方代码。默认以独立子进程运行，不继承宿主的密钥类环境变量，但仍具备该系统用户被权限模型允许的能力。请在确认风险后重试（请求体 acknowledgeRisk: true）。插件清单里的 auth: false 不会自动公开，需要同时传入 approvePublicRoutes: true，或安装后调用 POST /api/plugins/:id/public-routes。';
+
+function headerFlag(req: express.Request, name: string): boolean {
+  return String(req.headers[name] || '').toLowerCase() === 'true';
+}
+
+function installationSecurityFields(
+  manifest: { id?: string; executionMode?: unknown; executionModeCoerced?: unknown },
+  pluginId: string,
+  approvePublic: boolean,
+) {
+  const keys = [pluginId, manifest.id].filter((key): key is string => typeof key === 'string' && key.length > 0);
+  const publicRoutesApproved = approvePublic ? approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest) : [];
+  return {
+    executionMode: typeof manifest.executionMode === 'string' ? manifest.executionMode : undefined,
+    executionModeCoerced: manifest.executionModeCoerced === true,
+    publicRoutesApproved,
+  };
+}
 /**
  * R-4：把 raw ZIP 上传 body **流式落盘**，返回临时文件路径。
  *
@@ -406,7 +431,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // SEC-AUTH: 管理员专属 —— 服务端会下载并执行第三方代码，风险等级等同于 ZIP 安装。
   app.post('/api/plugins/install-from-url', requireAuth('administrator'), async (req, res) => {
     try {
-      const { downloadUrl, expectedId, allowDowngrade, executionMode: rawExecutionMode } = req.body || {};
+      const {
+        downloadUrl,
+        expectedId,
+        allowDowngrade,
+        executionMode: rawExecutionMode,
+        acknowledgeRisk,
+        approvePublicRoutes,
+      } = req.body || {};
 
       if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
         return res.status(400).json({ success: false, error: '缺少 downloadUrl' });
@@ -418,6 +450,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const urlCheck = isSafeExternalUrl(downloadUrl.trim());
       if (!urlCheck.safe) {
         return res.status(400).json({ success: false, error: `安全拦截: 非法下载地址 (${urlCheck.reason})` });
+      }
+
+      // 管理员必须显式确认，避免社区一键安装在没有风险提示的情况下下载并执行第三方代码。
+      if (acknowledgeRisk !== true) {
+        return res.status(400).json({
+          success: false,
+          code: 'COMMUNITY_RISK_ACK_REQUIRED',
+          error: COMMUNITY_RISK_ACK_MESSAGE,
+        });
       }
 
       // 收窄到三种合法模式。用具名谓词而非内联比较 —— 加第四种模式时
@@ -456,6 +497,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             wasActive: result.wasActive,
             filename: pkg.filename,
             bytes: pkg.bytes,
+            ...installationSecurityFields(
+              {
+                ...result.manifest,
+                executionMode: result.executionMode,
+                executionModeCoerced: result.executionModeCoerced,
+              },
+              result.pluginId,
+              approvePublicRoutes === true,
+            ),
           });
         }
 
@@ -467,6 +517,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           manifest: result.manifest,
           filename: pkg.filename,
           bytes: pkg.bytes,
+          ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes === true),
         });
       } finally {
         // R-4：下载的临时 ZIP 在安装/更新完成后归还（内容已 copyFileSync 进插件目录）
@@ -768,6 +819,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
         : undefined;
 
+      const approvePublicRoutes = headerFlag(req, 'x-approve-public-routes');
+
       if (modeHeader === 'update') {
         const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
           targetPluginId,
@@ -783,6 +836,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           newVersion: result.newVersion,
           wasActive: result.wasActive,
           filename,
+          ...installationSecurityFields(
+            {
+              ...result.manifest,
+              executionMode: result.executionMode,
+              executionModeCoerced: result.executionModeCoerced,
+            },
+            result.pluginId,
+            approvePublicRoutes,
+          ),
         });
       }
 
@@ -794,6 +856,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         pluginId: result.pluginId,
         manifest: result.manifest,
         filename,
+        ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes),
       });
     } catch (err: any) {
       // 413 已在流式中间件里直接响应过
@@ -834,6 +897,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         oldVersion: result.oldVersion,
         newVersion: result.newVersion,
         wasActive: result.wasActive,
+        ...installationSecurityFields(
+          {
+            ...result.manifest,
+            executionMode: result.executionMode,
+            executionModeCoerced: result.executionModeCoerced,
+          },
+          result.pluginId,
+          headerFlag(req, 'x-approve-public-routes'),
+        ),
       });
     } catch (err: any) {
       if (err?.message === 'payload-too-large') return;
@@ -895,6 +967,28 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json({ success: true, result });
     } catch (err: any) {
       pluginLog.error({ error: err.message }, '[execute-command]');
+      sendSafeError(res, err);
+    }
+  });
+
+  // 管理员事后批准或撤回插件清单里声明的公开路由。
+  // auth: false 本身不放行；本端点把 method+path 写入 plugin_public_routes。
+  app.post('/api/plugins/:id(*)/public-routes', requireAuth('administrator'), (req, res) => {
+    try {
+      const rawId = decodeURIComponent(req.params.id);
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
+      const manifest = kernelContainer.pluginHost.getPluginManifest(pluginId);
+      if (!manifest) return res.status(404).json({ success: false, error: 'Plugin not found' });
+
+      const keys = [pluginId, manifest.id];
+      if (req.body?.approvePublicRoutes !== true) {
+        clearPublicRouteApprovals(kernelContainer.db, keys);
+        return res.json({ success: true, publicRoutesApproved: [] });
+      }
+      const publicRoutesApproved = approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest);
+      res.json({ success: true, publicRoutesApproved });
+    } catch (err: any) {
+      pluginLog.error(err);
       sendSafeError(res, err);
     }
   });

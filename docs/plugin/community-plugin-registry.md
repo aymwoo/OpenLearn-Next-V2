@@ -138,16 +138,21 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
   "downloadUrl": "https://plugins.example.com/ext-homework-hub/1.2.0.zip",
   "expectedId": "ext-homework-hub",
   "allowDowngrade": false,
-  "executionMode": "worker"
+  "executionMode": "process",
+  "acknowledgeRisk": true,
+  "approvePublicRoutes": false
 }
 ```
+
+`acknowledgeRisk` 必须为 JSON 布尔值 `true`。缺省或其它值在 URL 安全校验通过后返回 HTTP 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`，此时不会下载包。`approvePublicRoutes: true` 才会把清单里 `auth: false` 的路由记入 `plugin_public_routes`；默认不传则不公开。非 `@openlearn/` 插件即使传入 `executionMode: "worker"` 或 `"inline"`，实际仍为 `process`，响应带 `executionModeCoerced: true`。
 
 处理流程：
 
 1. 校验 `downloadUrl` 通过出站安全校验、`expectedId` 符合插件 id 规范；
-2. 服务端下载 ZIP（60 秒超时，`content-length` 或实际体积超过 200MB 直接拒绝，空包拒绝）；
-3. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；
-4. 否则 ⇒ 走 `installFromZip` 全新安装。
+2. 要求 `acknowledgeRisk === true`，否则 400 且不下载；
+3. 服务端下载 ZIP（60 秒超时，`content-length` 或实际体积超过 200MB 直接拒绝，空包拒绝）；
+4. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；
+5. 否则 ⇒ 走 `installFromZip` 全新安装，并按受信策略落执行模式。
 
 **浏览器直传回退**：步骤 2 失败时返回 HTTP 400 + `fallbackToClient: true`，前端随即在浏览器中下载同一个 ZIP，并以 `Content-Type: application/octet-stream` 直传既有的 `POST /api/plugins/upload-zip-raw`（这是大包或服务端网络受限场景的兜底路径，与「一键热更新」保持同一策略）。
 
@@ -159,7 +164,7 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 
 - **预览卡片**：图标、名称、作者、版本、认证/精选角标、描述、标签、权限数量、下载量与收藏数、源码与主页外链；
 - **筛选与排序**：关键词搜索（名称/作者/标签/id）、高频标签芯片、推荐 / 下载最多 / 按名称排序、一键隐藏已安装；
-- **安装反馈**：按钮在「安装 → 下载中 → 安装完成」之间切换，安装成功后卡片立即进入已安装态，并触发插件列表刷新（插件的前端贡献点在启动时注册，故安装完成后需要重新加载页面才会生效）；
+- **安装反馈**：点击安装先打开风险说明（`data-testid="community-install-risk-dialog"`）。确认后请求体带 `acknowledgeRisk: true`；「同时批准公开路由」默认不勾。成功后卡片进入已安装态，并触发插件列表刷新（插件的前端贡献点在启动时注册，故安装完成后需要重新加载页面才会生效）；
 - **状态覆盖**：骨架屏加载、可重试错误态、空注册表、筛选无结果、未配置注册表指引。
 
 ---

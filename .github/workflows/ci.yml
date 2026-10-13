@@ -38,6 +38,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # prepare 已在 install 时构建 SDK。这里再显式跑一次，避免 --ignore-scripts
+      # 或缓存层跳过 lifecycle 时，tsc 仍然找不到 dist。
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
+
       - name: Type check
         run: pnpm lint
 
@@ -121,6 +126,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
 
       - name: Probe platform capabilities
         run: node scripts/probe-platform-capabilities.mjs
@@ -330,6 +338,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
 
       - name: Run tests with coverage
         run: pnpm test:coverage -- --coverage.reporter=json-summary

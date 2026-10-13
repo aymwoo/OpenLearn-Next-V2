@@ -1152,7 +1152,7 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
  *
  * | 值 | 隔离强度 | 说明 |
  * |---|---|---|
- * | `'inline'` | 无 | 与宿主同进程同线程运行。默认。 |
+ * | `'inline'` | 无 | 与宿主同进程同线程运行。仅受信任插件可用，见 `execution-policy.ts`。 |
  * | `'worker'` | 崩溃隔离 | `worker_threads.Worker` —— 独立 V8 isolate，但**同进程**，共享内存与 `process.env`。 |
  * | `'process'` | **进程隔离** | `child_process` 子进程 + 最小 env 白名单 —— 爆炸半径为一个进程。见 `child-spawn.ts`。 |
  *

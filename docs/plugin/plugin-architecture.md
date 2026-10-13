@@ -250,7 +250,7 @@ graph TD
         G1 --> G2["2. 路径遍历检测 (双重 .. 校验 -> 400)"]
         G2 --> G3["3. Payload 硬限制 (≤ 1MB -> 413)"]
         G3 --> G4["4. 滑动窗口限流 (单端点 120 req/min -> 429)"]
-        G4 --> G5["5. 认证与 RBAC 守卫 (auth: false 免验, 否则 401/403)"]
+        G4 --> G5["5. 认证与 RBAC 守卫 (auth: false 且管理员已批准才免验, 否则 401/403)"]
     end
 
     G5 --> Dispatch{"执行模式"}
@@ -276,6 +276,6 @@ graph TD
 2. **路径遍历防护 (Path Traversal)**：对原始子路径及规范化路径执行双重检测，识别包含 `..` 或 `%2e%2e` 的路径遍历尝试，直接拒绝并返回 `400 Bad Request`。
 3. **Payload 体积硬限制**：请求体上限严格限制为 **1MB**（超限返回 `413 Payload Too Large`），大文件上传强制引导至平台统一 `IStorageService` 存储通道，防止 Node.js 主线程或 Worker 线程 OOM。
 4. **IP + 插件级内存滑动窗口限流器**：单端点默认 120 req/min，超限返回 `429 Too Many Requests` 及 `Retry-After` 标头，防御 DoS 与频繁刷接口。
-5. **前置认证与细粒度 RBAC 守卫**：解析 Cookie 会话（`edu_os_token`）与 Bearer Token。未登录拦截（401），角色不符拦截（403），仅显式声明 `auth: false` 的公开路由直接放行。
+5. **前置认证与细粒度 RBAC 守卫**：解析 Cookie 会话（`edu_os_token`）与 Bearer Token。未登录拦截（401），角色不符拦截（403）。`auth: false` 只是插件的公开申请，还须管理员把 `METHOD + path` 记入 `plugin_public_routes` 后才匿名放行。
 6. **响应头安全脱敏清洗**：出站前强制剥离 `Set-Cookie`、`Content-Security-Policy`、`Access-Control-Allow-Origin` 等高危标头，从根本上防止插件窃取客户端会话或削弱全站安全策略。
 7. **Worker 跨线程纯 DTO 隔离**：Worker 沙箱插件通过只读 `PluginApiRequest` DTO 接收参数，绝不持有或访问原生 Express `req`/`res` 实例，并享有 5000ms 超时熔断保护（超时返回 `504 Gateway Timeout`）。

@@ -9,17 +9,19 @@ RUN apk add --no-cache python3 make g++ gcc
 # 启用并准备 pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# 复制依赖声明文件利用 Docker 层缓存
+# 复制依赖声明文件利用 Docker 层缓存。
+# prepare 会调用 scripts/build-plugin-sdk.mjs；源码尚未复制时该脚本会跳过。
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY scripts/build-plugin-sdk.mjs ./scripts/build-plugin-sdk.mjs
 COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/
 COPY packages/plugin-test-kit/package.json ./packages/plugin-test-kit/
 
 # 安装全量依赖执行构建
 RUN pnpm install --frozen-lockfile
 
-# 复制源码并构建（前端、插件、服务端 bundle）
+# 复制源码并构建（SDK dist、前端、插件、服务端 bundle）
 COPY . .
-RUN pnpm run build
+RUN pnpm run build && node scripts/verify-plugin-sdk-entry.mjs
 
 # 修剪仅保留生产依赖以优化运行时体积
 RUN pnpm prune --prod
@@ -33,11 +35,18 @@ WORKDIR /app
 RUN apk add --no-cache wget && \
     mkdir -p /app/packages/core/db /app/storage /app/backups
 
-# 从构建阶段复制必要产物、生产依赖与数据库迁移文件
+# 从构建阶段复制必要产物、生产依赖与数据库迁移文件。
+# server.cjs 运行时 require("@openlearn/plugin-sdk")，入口在 workspace 包的 dist/。
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/migrations ./migrations
+COPY --from=build /app/packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
+COPY --from=build /app/packages/plugin-sdk/dist ./packages/plugin-sdk/dist
+COPY --from=build /app/scripts/verify-plugin-sdk-entry.mjs ./scripts/verify-plugin-sdk-entry.mjs
+
+# 镜像里必须能按发布入口加载 SDK；符号链接断了就在这里失败，而不是等到运行时。
+RUN node scripts/verify-plugin-sdk-entry.mjs
 
 # 目录权限配置并使用非 root 运行
 RUN chown -R node:node /app
