@@ -98,7 +98,11 @@ openlearn-next                  # 启动
 npm update -g openlearn-next    # 更新
 ```
 
-默认账号：`admin` / `admin`（管理员）、`teacher` / `teacher`（教师）。
+种子账号用户名仍是 `admin`（管理员）和 `teacher`（教师），但**不再使用与用户名相同的默认密码**。首次空库启动时：
+
+- 若设置了 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，使用该口令。口令若仍等于用户名，登录后必须立刻修改，期间除改密、登出和会话查询外，其余 `/api` 请求（含 GET）返回 403。
+- 未设置时随机生成 20 位口令，明文只打印一次，并写入 `storage/bootstrap-credentials.txt`（权限 600）。请在首次登录后修改并删除该文件。
+- 已有数据库若口令仍是 `admin` / `teacher`，可以登录，但同样被强制改密拦住，直到 `POST /api/auth/change-password` 成功。不要在生产环境设置 `PLAYWRIGHT_TEST`（该变量会保留测试用默认口令并跳过改密门禁）。
 
 ### 本地开发
 

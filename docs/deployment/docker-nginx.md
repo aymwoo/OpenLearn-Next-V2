@@ -140,6 +140,10 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
+        # 应用默认不信任 X-Forwarded-For。本段只有一层 Nginx 时，
+        # 进程环境变量必须设置 TRUST_PROXY=1（或 loopback），限流才会按真实客户端分桶。
+        # 应用若直接对公网监听，不要设置 TRUST_PROXY。
+
         # ⚠️ 白板实时同步必需：默认 60s 会静默掐断长连接
         proxy_read_timeout  86400s;
         proxy_send_timeout  86400s;

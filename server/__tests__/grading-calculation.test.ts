@@ -47,14 +47,16 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     );
 
     // 2. 班级与学生
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classWithWorkId,
       '有作业班级',
+      teacherId,
       now,
     );
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classEmptyId,
       '无作业班级',
+      teacherId,
       now,
     );
 
@@ -105,9 +107,10 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     // 注意：Bob 不插入 exam_scores（缺考）
 
     // 5. 考勤测试班级与排课
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classAttendanceId,
       '考勤测试班级',
+      teacherId,
       now,
     );
 
@@ -159,8 +162,17 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
 
     db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(scheduleId);
     db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
-    db.prepare('DELETE FROM class_students WHERE class_id IN (?, ?, ?)').run(classWithWorkId, classEmptyId, classAttendanceId);
-    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?) OR id LIKE ?').run(studentAliceId, studentBobId, studentCharlieId, 'stu-att-%');
+    db.prepare('DELETE FROM class_students WHERE class_id IN (?, ?, ?)').run(
+      classWithWorkId,
+      classEmptyId,
+      classAttendanceId,
+    );
+    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?) OR id LIKE ?').run(
+      studentAliceId,
+      studentBobId,
+      studentCharlieId,
+      'stu-att-%',
+    );
     db.prepare('DELETE FROM classes WHERE id IN (?, ?, ?)').run(classWithWorkId, classEmptyId, classAttendanceId);
     db.prepare('DELETE FROM class_grade_weights WHERE class_id IN (?, ?)').run(classWithWorkId, classEmptyId);
   });
@@ -259,13 +271,9 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     const db = kernelContainer.db;
     // classWithWorkId 所在班级无 schedules（结算测试用的是 semester-grades 路径），
     // 历史上首次 GET 会随机生成 sch-auto- 课表 + 假考勤写入 DB。
-    const before = (
-      db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any
-    ).n;
+    const before = (db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any).n;
     const attendanceBefore = (
-      db.prepare(
-        'SELECT COUNT(*) AS n FROM attendance WHERE schedule_id LIKE ?',
-      ).get('sch-auto-%') as any
+      db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE schedule_id LIKE ?').get('sch-auto-%') as any
     ).n;
 
     const res = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/attendance-summary`, {
@@ -276,9 +284,7 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     expect(Array.isArray(data)).toBe(true);
 
     // GET 后无新增 schedule、无 sch-auto- 假考勤写入
-    const after = (
-      db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any
-    ).n;
+    const after = (db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any).n;
     expect(after).toBe(before);
     const attendanceAfter = (
       db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE schedule_id LIKE ?').get('sch-auto-%') as any

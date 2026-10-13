@@ -7,6 +7,28 @@ import {
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 
+function parseUserActor(actorId: unknown): { userId: string; role: string } | null {
+  const match = /^user:([^:]+):(administrator|admin|teacher|student)$/.exec(String(actorId || ''));
+  if (!match) return null;
+  return { userId: match[1], role: match[2] };
+}
+
+function stripClassRow(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row;
+  const copy = { ...(row as Record<string, unknown>) };
+  delete copy.class_passcode;
+  delete copy.class_passcode_expires_at;
+  return copy;
+}
+
+function stripStudentRow(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row;
+  const copy = { ...(row as Record<string, unknown>) };
+  delete copy.password;
+  delete copy.password_hash;
+  return copy;
+}
+
 export const ManagementPlugin = {
   manifest: {
     id: '@openlearn/plugin-management',
@@ -75,6 +97,14 @@ export const ManagementPlugin = {
           payload.description || '',
           Date.now(),
         );
+        try {
+          const actor = parseUserActor(command.actorId);
+          if (actor && (actor.role === 'teacher' || actor.role === 'administrator' || actor.role === 'admin')) {
+            db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(actor.userId, classId);
+          }
+        } catch {
+          /* 测试库或旧库可能还没有 owner_user_id */
+        }
         return { classId };
       },
     });
@@ -93,9 +123,26 @@ export const ManagementPlugin = {
     });
 
     await commandBus.registerHandler(classListCmd, {
-      async execute() {
-        const classes = db.prepare('SELECT * FROM classes ORDER BY created_at DESC').all();
-        return { classes };
+      async execute(command) {
+        const actor = parseUserActor(command.actorId);
+        let classes: unknown[];
+        if (actor?.role === 'teacher') {
+          classes = db
+            .prepare('SELECT * FROM classes WHERE owner_user_id = ? ORDER BY created_at DESC')
+            .all(actor.userId);
+        } else if (actor?.role === 'student') {
+          classes = db
+            .prepare(
+              `SELECT c.* FROM classes c
+               JOIN class_students cs ON cs.class_id = c.id
+               WHERE cs.student_id = ?
+               ORDER BY c.created_at DESC`,
+            )
+            .all(actor.userId);
+        } else {
+          classes = db.prepare('SELECT * FROM classes ORDER BY created_at DESC').all();
+        }
+        return { classes: classes.map(stripClassRow) };
       },
     });
 
@@ -154,8 +201,24 @@ export const ManagementPlugin = {
         // P2 分页收敛：默认上限 200（payload.limit 可覆盖，最大 500），防千级学生全表扫描
         const raw = (command?.payload as any)?.limit;
         const limit = Math.min(500, Math.max(1, Number(raw) || 200));
-        const students = db.prepare('SELECT * FROM students ORDER BY created_at DESC LIMIT ?').all(limit);
-        return { students };
+        const actor = parseUserActor(command.actorId);
+        let students: unknown[];
+        if (actor?.role === 'teacher') {
+          students = db
+            .prepare(
+              `SELECT DISTINCT s.* FROM students s
+               JOIN class_students cs ON cs.student_id = s.id
+               JOIN classes c ON c.id = cs.class_id
+               WHERE c.owner_user_id = ?
+               ORDER BY s.created_at DESC LIMIT ?`,
+            )
+            .all(actor.userId, limit);
+        } else if (actor?.role === 'student') {
+          students = db.prepare('SELECT * FROM students WHERE id = ? LIMIT ?').all(actor.userId, limit);
+        } else {
+          students = db.prepare('SELECT * FROM students ORDER BY created_at DESC LIMIT ?').all(limit);
+        }
+        return { students: students.map(stripStudentRow) };
       },
     });
 
@@ -316,6 +379,26 @@ export const ManagementPlugin = {
     await commandBus.registerHandler(classGetStudentsCmd, {
       async execute(command) {
         const payload = command.payload as any;
+        const actor = parseUserActor(command.actorId);
+        if (actor?.role === 'teacher') {
+          const owned = db
+            .prepare('SELECT 1 AS ok FROM classes WHERE id = ? AND owner_user_id = ?')
+            .get(payload.classId, actor.userId);
+          if (!owned) {
+            const err: any = new Error('Forbidden');
+            err.status = 403;
+            throw err;
+          }
+        } else if (actor?.role === 'student') {
+          const enrolled = db
+            .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
+            .get(payload.classId, actor.userId);
+          if (!enrolled) {
+            const err: any = new Error('Forbidden');
+            err.status = 403;
+            throw err;
+          }
+        }
         const students = db
           .prepare(
             `
@@ -327,7 +410,7 @@ export const ManagementPlugin = {
         `,
           )
           .all(payload.classId);
-        return { success: true, students };
+        return { success: true, students: (students as unknown[]).map(stripStudentRow) };
       },
     });
 

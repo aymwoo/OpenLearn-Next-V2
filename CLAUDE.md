@@ -152,7 +152,7 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 
 - 引擎：SQLite (`better-sqlite3`)，主数据库位于 `packages/core/db/educational_os.db`。包含 30+ 张表。
 - 灾备机制：内置 `BackupManager`（`packages/core/db/backup-manager.ts`），支持 SQLite 在线热备（VACUUM INTO）、完整性预检（PRAGMA integrity_check）与安全恢复（Restore 回滚保证）。CLI 提供 `pnpm exec tsx scripts/backup-db.ts` 与 `scripts/restore-db.ts`。
-- 默认用户：admin/admin（administrator）, teacher/teacher（teacher）。
+- 种子用户名：admin（administrator）、teacher（teacher）。口令由 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 或首次启动随机生成，不再默认等于用户名。
 
 ### 登录与权限
 

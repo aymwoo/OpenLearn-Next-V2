@@ -662,6 +662,7 @@ describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () =
     db.prepare(
       'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(guardClassId, '归属校验班', 'H1 测试班级', 'pass-guard', now);
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(guardTeacherId, guardClassId);
     db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
       guardClassId,
       memberStudentId,

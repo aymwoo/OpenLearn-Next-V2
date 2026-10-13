@@ -518,6 +518,12 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
       db.prepare(
         'INSERT OR REPLACE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)',
       ).run(studentXssId, 'notif_01');
+      // 上一阶段已退课。擦除仍要求学生当前属于该教师管理的班级。
+      db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+        primaryClassId,
+        studentXssId,
+        now,
+      );
 
       // 1. SEC-DATA-02 安全校验：缺少 { confirm: true } 时必须被 400 阻断
       const unconfirmedRes = await fetch(`${baseUrl}/api/students/${studentXssId}/gdpr-delete`, {

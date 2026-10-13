@@ -57,12 +57,17 @@ beforeAll(async () => {
   db.prepare('DELETE FROM classes WHERE id LIKE ?').run('cls-pg-%');
   db.prepare('DELETE FROM lessons WHERE id LIKE ?').run('lesson-pg-%');
   for (let i = 1; i <= 3; i++) {
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(`stu-pg-${i}`, `STU-PG-${i}`, `分页学生${i}`, '', now + i * 1000);
-    db.prepare('INSERT INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      `stu-pg-${i}`,
+      `STU-PG-${i}`,
+      `分页学生${i}`,
+      '',
+      now + i * 1000,
+    );
+    db.prepare('INSERT INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       `cls-pg-${i}`,
       `分页班级${i}`,
+      teacherId,
       now + i * 1000,
     );
     db.prepare('INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
@@ -134,9 +139,8 @@ describe('A7: 列表端点分页信封', () => {
     expect(Array.isArray(allBody.data)).toBe(true);
     expect(typeof allBody.total).toBe('number');
 
-    // 子资源端点不在 A7 范围：无班级时返回空数组（裸数组形状）
+    // 不存在的班级不再返回空数组，避免借此枚举
     const sub = await get('/api/classes/cls-pg-nonexistent/schedules');
-    const subBody: any = await sub.json();
-    expect(Array.isArray(subBody)).toBe(true);
+    expect(sub.status).toBe(404);
   });
 });

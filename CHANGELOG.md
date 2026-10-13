@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **种子账号不再长期使用 `admin` / `admin`、`teacher` / `teacher`**。空库首次启动：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或从启动日志与 `storage/bootstrap-credentials.txt` 读取随机口令。存量库若口令仍等于用户名，仍可登录，但 `must_change_password` 会置位，除改密、登出、`/api/auth/session`、`/api/auth/me` 外的 `/api` 请求（含 GET）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。生产环境不要设置 `PLAYWRIGHT_TEST`。
+- **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
+- **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
+
+### Fixes
+
+- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
+- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
+
 ## [0.6.1] - 2026-10-13
 
 ### Features
