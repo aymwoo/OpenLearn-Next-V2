@@ -115,9 +115,10 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
     ).run(teacherId, 'e2e_teacher', '互动测试教师', 'hash', 'teacher', now);
 
     // 班级与学生花名册
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classId,
       '高二物理示范班',
+      teacherId,
       now,
     );
 

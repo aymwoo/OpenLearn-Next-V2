@@ -239,6 +239,23 @@ Output pure JSON only without markdown code blocks, matching this structure:
   }
 
   public submitTraditionalAssignment(assignmentId: string, studentId: string, content: string): void {
+    const assignment = this.db.prepare('SELECT class_id FROM assignments WHERE id = ?').get(assignmentId) as
+      { class_id: string | null } | undefined;
+    if (!assignment) {
+      const err: any = new Error('Assignment not found');
+      err.status = 404;
+      throw err;
+    }
+    if (assignment.class_id) {
+      const enrolled = this.db
+        .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1')
+        .get(assignment.class_id, studentId) as { ok: number } | undefined;
+      if (!enrolled) {
+        const err: any = new Error('Student is not enrolled in this class');
+        err.status = 403;
+        throw err;
+      }
+    }
     this.db
       .prepare(
         `
@@ -295,9 +312,7 @@ Output pure JSON only without markdown code blocks, matching this structure:
           const isCorrect = studentAns === q.correctAnswer;
           if (isCorrect) {
             correctCount++;
-            feedbackParts.push(
-              `Q${idx + 1}: Correct! Option: "${q.correctAnswer}" (Tests Objective: ${q.objective})`,
-            );
+            feedbackParts.push(`Q${idx + 1}: Correct! Option: "${q.correctAnswer}" (Tests Objective: ${q.objective})`);
           } else {
             feedbackParts.push(
               `Q${idx + 1}: Incorrect. Your Answer: "${studentAns || 'None'}". Correct Option: "${q.correctAnswer}" (Tests Objective: ${q.objective})`,
@@ -555,9 +570,8 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   }
 
   public listAssignmentFiles(assignmentId: string, studentId: string | null, isPrivileged: boolean): any[] {
-    const assignmentRow = this.db
-      .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
-      .get(assignmentId) as { class_id: string | null } | undefined;
+    const assignmentRow = this.db.prepare('SELECT class_id FROM plugin_assignments WHERE id = ?').get(assignmentId) as
+      { class_id: string | null } | undefined;
     this.assertClassMembership(assignmentRow, isPrivileged, studentId);
 
     const rows = this.db

@@ -98,7 +98,10 @@ export function registerAdminRoutes(ctx: ServerContext) {
       const db = kernelContainer.db;
       const rosterService = new RosterService();
 
-      const insertClass = db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)');
+      const ownerId = (req as any).session?.userId || null;
+      const insertClass = db.prepare(
+        'INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)',
+      );
 
       const imported: any[] = [];
       /** 汇总本次导入新产生的初始密码，供教师分发给学生登录 */
@@ -114,7 +117,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
           if (!clsName) continue;
 
           const classId = randomId();
-          insertClass.run(classId, clsName, clsDesc, Date.now());
+          insertClass.run(classId, clsName, clsDesc, ownerId, Date.now());
 
           const { results, created } = rosterService.importStudents(cls.students || [], { classId });
 

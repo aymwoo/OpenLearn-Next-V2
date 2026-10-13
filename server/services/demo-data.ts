@@ -45,18 +45,22 @@ export const DEMO_TEACHER = {
 } as const;
 
 const STUDENT_NAMES = [
-  '林小雨', '陈子涵', '王思远', '李梦琪', '张一鸣', '刘欣怡',
-  '赵梓轩', '孙嘉怡', '周浩然', '吴语彤', '郑博文', '黄芷若',
+  '林小雨',
+  '陈子涵',
+  '王思远',
+  '李梦琪',
+  '张一鸣',
+  '刘欣怡',
+  '赵梓轩',
+  '孙嘉怡',
+  '周浩然',
+  '吴语彤',
+  '郑博文',
+  '黄芷若',
 ] as const;
 
 /** 登记表中 entity_type 的取值（同时也是清理顺序的分组依据）。 */
-type EntityType =
-  | 'schedule'
-  | 'class_student'
-  | 'student'
-  | 'class'
-  | 'lesson'
-  | 'user';
+type EntityType = 'schedule' | 'class_student' | 'student' | 'class' | 'lesson' | 'user';
 
 export interface DemoDataStatus {
   seeded: boolean;
@@ -74,14 +78,7 @@ export interface DemoDataStatus {
   };
 }
 
-const ALL_ENTITY_TYPES: EntityType[] = [
-  'schedule',
-  'class_student',
-  'student',
-  'class',
-  'lesson',
-  'user',
-];
+const ALL_ENTITY_TYPES: EntityType[] = ['schedule', 'class_student', 'student', 'class', 'lesson', 'user'];
 
 export const DEMO_TEACHER_USERNAME = DEMO_TEACHER.username;
 
@@ -119,9 +116,8 @@ export function getDemoDataStatus(db: Database.Database): DemoDataStatus {
     if (seededAt === null || r.created_at < seededAt) seededAt = r.created_at;
   }
 
-  const teacher = db
-    .prepare('SELECT id FROM users WHERE username = ?')
-    .get(DEMO_TEACHER.username) as { id: string } | undefined;
+  const teacher = db.prepare('SELECT id FROM users WHERE username = ?').get(DEMO_TEACHER.username) as
+    { id: string } | undefined;
 
   return {
     seeded: rows.length > 0,
@@ -151,9 +147,9 @@ export function getDemoDataStatus(db: Database.Database): DemoDataStatus {
  * 真实的用户数据使用 UUID 或 `usr_*` 形式的 ID，不会落在这个空间内。
  */
 function purgeDemoNamespace(db: Database.Database): void {
-  const studentIds = db
-    .prepare(`SELECT id FROM students WHERE id LIKE 'demo-stu-%' OR id LIKE 'demo-s%'`)
-    .all() as { id: string }[];
+  const studentIds = db.prepare(`SELECT id FROM students WHERE id LIKE 'demo-stu-%' OR id LIKE 'demo-s%'`).all() as {
+    id: string;
+  }[];
   const classIds = db
     .prepare(`SELECT id FROM classes WHERE id = ? OR id LIKE 'demo-class%'`)
     .all(DEMO_IDS.primaryClass) as { id: string }[];
@@ -243,11 +239,7 @@ export function seedDemoData(db: Database.Database): DemoDataStatus {
       `${DEMO_TAG} 初中信息技术 · 第一单元`,
       JSON.stringify({
         description: '演示用课程：一节课即可跑通课堂互动、白板与反馈闭环。',
-        objectives: [
-          '认识信息与数字化',
-          '会用在线白板做思维导图',
-          '完成一次课堂测验与讲评',
-        ],
+        objectives: ['认识信息与数字化', '会用在线白板做思维导图', '完成一次课堂测验与讲评'],
         elements: [],
       }),
       now,
@@ -261,17 +253,34 @@ export function seedDemoData(db: Database.Database): DemoDataStatus {
       { id: DEMO_IDS.primaryClass, name: `${DEMO_TAG} 一年级(1)班`, passcode: '1001' },
       { id: DEMO_IDS.secondaryClass, name: `${DEMO_TAG} 一年级(2)班`, passcode: '1002' },
     ];
+    const classCols = db.prepare('PRAGMA table_info(classes)').all() as { name: string }[];
+    const hasOwner = classCols.some((col) => col.name === 'owner_user_id');
+    const demoOwner = `usr_${DEMO_TEACHER.username}`;
     for (const c of classes) {
-      db.prepare(
-        'INSERT INTO classes (id, name, description, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(
-        c.id,
-        c.name,
-        '系统一键生成的演示班级，用于 Demo 演示与功能验收。',
-        c.passcode,
-        now + 365 * 24 * 3600 * 1000,
-        now,
-      );
+      if (hasOwner) {
+        db.prepare(
+          'INSERT INTO classes (id, name, description, class_passcode, class_passcode_expires_at, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).run(
+          c.id,
+          c.name,
+          '系统一键生成的演示班级，用于 Demo 演示与功能验收。',
+          c.passcode,
+          now + 365 * 24 * 3600 * 1000,
+          demoOwner,
+          now,
+        );
+      } else {
+        db.prepare(
+          'INSERT INTO classes (id, name, description, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(
+          c.id,
+          c.name,
+          '系统一键生成的演示班级，用于 Demo 演示与功能验收。',
+          c.passcode,
+          now + 365 * 24 * 3600 * 1000,
+          now,
+        );
+      }
       mark('class', c.id);
     }
 
@@ -282,9 +291,13 @@ export function seedDemoData(db: Database.Database): DemoDataStatus {
     );
     STUDENT_NAMES.forEach((name, i) => {
       const id = `demo-stu-${String(i + 1).padStart(2, '0')}`;
-      db.prepare(
-        'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run(id, `DEMO-S${String(i + 1).padStart(2, '0')}`, name, `${id}@demo.local`, now);
+      db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        id,
+        `DEMO-S${String(i + 1).padStart(2, '0')}`,
+        name,
+        `${id}@demo.local`,
+        now,
+      );
       mark('student', id);
 
       // 轮流分配到两个班，保证两个班都有学生
@@ -333,9 +346,10 @@ export interface CleanupReport {
 export function cleanupDemoData(db: Database.Database): CleanupReport {
   ensureRegistryTable(db);
 
-  const removed: Record<EntityType, number> = Object.fromEntries(
-    ALL_ENTITY_TYPES.map((t) => [t, 0]),
-  ) as Record<EntityType, number>;
+  const removed: Record<EntityType, number> = Object.fromEntries(ALL_ENTITY_TYPES.map((t) => [t, 0])) as Record<
+    EntityType,
+    number
+  >;
   let skippedAdministrators = 0;
 
   const idsFor = db.prepare('SELECT entity_id FROM demo_data_registry WHERE entity_type = ?');
@@ -418,8 +432,7 @@ export function cleanupDemoData(db: Database.Database): CleanupReport {
     // ── 演示教师（管理员账号硬保护）──────────────────────────────
     for (const { entity_id } of idsFor.all('user') as { entity_id: string }[]) {
       const row = db.prepare('SELECT id, role FROM users WHERE id = ?').get(entity_id) as
-        | { id: string; role: string }
-        | undefined;
+        { id: string; role: string } | undefined;
       if (!row) {
         unregister.run('user', entity_id);
         continue;

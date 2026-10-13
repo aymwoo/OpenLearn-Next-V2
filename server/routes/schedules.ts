@@ -4,6 +4,7 @@ import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { parsePagination } from '../utils/pagination.js';
 import { ScheduleService } from '../services/schedule-service.js';
+import { accessibleClassIds, authorizeClass, rejectUnless } from '../services/class-access.js';
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -15,7 +16,10 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   app.get('/api/schedules/today', requireAuth(), (req, res) => {
     try {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
-      const schedules = scheduleService.getTodaySchedules(clientDate);
+      const schedules = scheduleService.getTodaySchedules(
+        clientDate,
+        accessibleClassIds(kernelContainer.db, (req as any).session),
+      );
       res.json({ success: true, schedules });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -28,7 +32,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   app.get('/api/schedules', requireAuth(), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
-      const result = scheduleService.listSchedules(pg);
+      const result = scheduleService.listSchedules(pg, accessibleClassIds(kernelContainer.db, (req as any).session));
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -44,6 +48,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       if (!classId || !scheduledDate) {
         return res.status(400).json({ error: 'classId and scheduledDate are required' });
       }
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, classId, 'member'))) return;
       const report = scheduleService.detectConflicts({
         classId,
         scheduledDate,
@@ -62,6 +67,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.get('/api/classes/:classId/schedules', requireAuth(), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member')))
+        return;
       const schedules = scheduleService.getClassSchedules(req.params.classId);
       res.json(schedules);
     } catch (e: any) {
@@ -74,6 +81,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.post('/api/classes/:classId/schedules', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
       const schedule = scheduleService.createSchedule(
         {
@@ -100,6 +109,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.put('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
       scheduleService.updateSchedule(
         req.params.scheduleId,
@@ -124,6 +135,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.delete('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       scheduleService.deleteScheduleCascade(req.params.scheduleId, req.params.classId);
       res.json({ success: true });
     } catch (e: any) {
@@ -136,6 +149,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.post('/api/classes/:classId/schedules/batch', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+        return;
       const { schedules, force, allowConflict } = req.body;
       const result = scheduleService.batchCreateSchedules(req.params.classId, schedules || [], {
         allowConflict: Boolean(force || allowConflict),

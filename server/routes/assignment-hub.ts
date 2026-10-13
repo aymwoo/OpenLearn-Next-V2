@@ -12,6 +12,13 @@ import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { ASSIGNMENT_MAX_FILE_SIZE } from '../utils/assignment-upload-policy.js';
 import { AssignmentService } from '../services/assignment-service.js';
+import {
+  accessibleClassIds,
+  authorizeClass,
+  isAdministrator,
+  isTeacher,
+  rejectUnless,
+} from '../services/class-access.js';
 
 function decodeFileName(raw: unknown): string {
   const text = String(raw ?? '').trim();
@@ -71,14 +78,38 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   const describeRequester = (req: express.Request) => {
     const session = (req as any).session;
     const role = session?.role;
-    const isPrivileged = role === 'teacher' || role === 'administrator' || role === 'admin';
+    const isPrivileged =
+      role === 'teacher' ||
+      role === 'administrator' ||
+      role === 'admin' ||
+      isAdministrator(session) ||
+      isTeacher(session);
     const studentId = session?.userId || session?.studentId || null;
-    return { isPrivileged, studentId: studentId ? String(studentId) : null };
+    return { isPrivileged, studentId: studentId ? String(studentId) : null, session };
+  };
+
+  /** class_id 为空的历史作业保持原行为；挂了班级则按归属校验。返回 true 表示已拒绝。 */
+  const rejectUnlessHubClass = (
+    req: express.Request,
+    res: express.Response,
+    classId: string | null | undefined,
+    level: 'staff' | 'member',
+  ) => {
+    if (!classId) return false;
+    return rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, classId, level));
+  };
+
+  const hubAssignmentClassId = (assignmentId: string): string | null | undefined => {
+    const row = kernelContainer.db.prepare('SELECT class_id FROM plugin_assignments WHERE id = ?').get(assignmentId) as
+      { class_id: string | null } | undefined;
+    return row?.class_id;
   };
 
   // ── 作业实体 ─────────────────────────────────────────────────────────────
   app.post('/api/assignments', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      const classId = (req.body || {}).classId || (req.body || {}).class_id;
+      if (classId && rejectUnlessHubClass(req, res, String(classId), 'staff')) return;
       const cmd = kernelContainer.commandBus.createCommand('assignment.create', req.body || {}, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -95,17 +126,25 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         elementId: req.query.elementId,
         includeArchived: req.query.includeArchived === '1' || req.query.includeArchived === 'true',
       };
-      const { isPrivileged, studentId } = describeRequester(req);
+      const { isPrivileged, studentId, session } = describeRequester(req);
       const requestedStudent = typeof req.query.studentId === 'string' ? req.query.studentId : undefined;
       if (isPrivileged && requestedStudent) {
         payload.studentId = requestedStudent;
       } else if (!isPrivileged && studentId) {
         payload.studentId = studentId;
       }
+      const requestedClass = typeof req.query.classId === 'string' ? req.query.classId : '';
+      if (requestedClass && rejectUnlessHubClass(req, res, requestedClass, 'member')) return;
       const cmd = kernelContainer.commandBus.createCommand('assignment.list', payload, getActorId(req), {
         silent: true,
       });
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const result = (await kernelContainer.commandBus.execute(cmd)) as {
+        assignments?: Array<{ class_id?: string | null }>;
+      };
+      const allowed = accessibleClassIds(kernelContainer.db, session);
+      if (allowed && Array.isArray(result?.assignments)) {
+        result.assignments = result.assignments.filter((row) => !row.class_id || allowed.includes(row.class_id));
+      }
       res.json(result);
     } catch (e: any) {
       sendHubError(res, e);
@@ -122,12 +161,11 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       } else if (!isPrivileged && studentId) {
         payload.studentId = studentId;
       }
-      // H1: 挂班级的作业，学生必须属于该班才能读详情
-      const assignmentRow = kernelContainer.db
-        .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
-        .get(req.params.assignmentId) as { class_id: string | null } | undefined;
-      if (assignmentRow) {
-        assignmentService.assertClassMembership(assignmentRow, isPrivileged, studentId);
+      // 挂班级的作业：学生须在班内，教师须是该班负责人
+      const classId = hubAssignmentClassId(req.params.assignmentId);
+      if (rejectUnlessHubClass(req, res, classId, isPrivileged ? 'staff' : 'member')) return;
+      if (!isPrivileged && classId) {
+        assignmentService.assertClassMembership({ class_id: classId }, false, studentId);
       }
       if (isPrivileged) {
         payload.includePeerProgress = true;
@@ -151,6 +189,8 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       try {
         const assignmentId = req.params.assignmentId;
         const { isPrivileged, studentId: sessionStudentId } = describeRequester(req);
+        if (rejectUnlessHubClass(req, res, hubAssignmentClassId(assignmentId), isPrivileged ? 'staff' : 'member'))
+          return;
 
         const headerStudent = decodeFileName(req.header('x-student-id') || '');
         const ownerStudentId = isPrivileged ? headerStudent || sessionStudentId : sessionStudentId;
@@ -188,6 +228,10 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   app.get('/api/assignments/:assignmentId/files', requireAuth(), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
+      if (
+        rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), isPrivileged ? 'staff' : 'member')
+      )
+        return;
       const files = assignmentService.listAssignmentFiles(req.params.assignmentId, studentId, isPrivileged);
       res.json({ success: true, files });
     } catch (e: any) {
@@ -198,6 +242,10 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   app.get('/api/assignments/:assignmentId/files/:fileId', requireAuth(), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
+      if (
+        rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), isPrivileged ? 'staff' : 'member')
+      )
+        return;
       const { absPath, originalName } = assignmentService.getAssignmentFileDownloadPath(
         req.params.assignmentId,
         req.params.fileId,
@@ -216,12 +264,11 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   app.delete('/api/assignments/:assignmentId/files/:fileId', requireAuth(), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
-      assignmentService.softDeleteAssignmentFile(
-        req.params.assignmentId,
-        req.params.fileId,
-        studentId,
-        isPrivileged,
-      );
+      if (
+        rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), isPrivileged ? 'staff' : 'member')
+      )
+        return;
+      assignmentService.softDeleteAssignmentFile(req.params.assignmentId, req.params.fileId, studentId, isPrivileged);
       res.json({ success: true });
     } catch (e: any) {
       sendHubError(res, e);
@@ -240,7 +287,8 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       const assignmentRow = kernelContainer.db
         .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
         .get(req.params.assignmentId) as { class_id: string | null } | undefined;
-      assignmentService.assertClassMembership(assignmentRow, isPrivileged, targetStudentId);
+      if (rejectUnlessHubClass(req, res, assignmentRow?.class_id, isPrivileged ? 'staff' : 'member')) return;
+      if (!isPrivileged) assignmentService.assertClassMembership(assignmentRow, false, targetStudentId);
       const cmd = kernelContainer.commandBus.createCommand(
         'assignment.submit',
         {
@@ -270,7 +318,8 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       const reviewAssignmentRow = kernelContainer.db
         .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
         .get(req.params.assignmentId) as { class_id: string | null } | undefined;
-      assignmentService.assertClassMembership(reviewAssignmentRow, isPrivileged, reviewerId);
+      if (rejectUnlessHubClass(req, res, reviewAssignmentRow?.class_id, isPrivileged ? 'staff' : 'member')) return;
+      if (!isPrivileged) assignmentService.assertClassMembership(reviewAssignmentRow, false, reviewerId);
       const submissionId = String(body.submissionId || '');
       if (!submissionId) {
         return res.status(400).json({ success: false, error: 'Missing submissionId' });
@@ -298,6 +347,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     requireAuth('teacher', 'administrator'),
     async (req, res) => {
       try {
+        if (rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), 'staff')) return;
         const body = req.body || {};
         const cmd = kernelContainer.commandBus.createCommand(
           'assignment.assign_peer_reviews',

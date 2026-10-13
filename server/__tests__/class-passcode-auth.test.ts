@@ -58,6 +58,7 @@ describe('班级上课临时密码与双轨登录鉴权', () => {
     db.prepare(
       'INSERT INTO classes (id, name, description, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(classId2, '高一(2)班', '平行班', null, null, now);
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id IN (?, ?)').run(teacherId, classId1, classId2);
 
     // 3. Students
     db.prepare('DELETE FROM students WHERE id IN (?, ?)').run(studentId1, studentId2);

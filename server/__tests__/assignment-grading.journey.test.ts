@@ -168,6 +168,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
       '作业全流程测试班级',
       now,
     );
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(teacherId, classId);
     db.prepare(
       'INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?), (?, ?, ?)',
     ).run(classId, studentAliceId, now, classId, studentBobId, now);
@@ -363,14 +364,18 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
 
       // 验证成绩落库
       const aliceDb = db
-        .prepare('SELECT score, feedback, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .prepare(
+          'SELECT score, feedback, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
+        )
         .get(assignmentId, studentAliceId) as any;
       expect(aliceDb.score).toBe(95);
       expect(aliceDb.status).toBe('graded');
       expect(aliceDb.feedback).toContain('实现优雅');
 
       const bobDb = db
-        .prepare('SELECT score, feedback, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .prepare(
+          'SELECT score, feedback, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
+        )
         .get(assignmentId, studentBobId) as any;
       expect(bobDb.score).toBe(85);
       expect(bobDb.status).toBe('graded');

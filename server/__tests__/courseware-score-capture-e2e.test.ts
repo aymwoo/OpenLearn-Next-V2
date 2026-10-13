@@ -76,6 +76,7 @@ beforeAll(async () => {
   db.prepare(
     'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run(classId, '采集E2E班', '得分采集链路测试班', 'pass-capture', now);
+  db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run('usr-capture-teacher', classId);
   db.prepare(
     'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run('stu-capture-001', 'cap-001', '采集学生甲', 'cap@test', now);

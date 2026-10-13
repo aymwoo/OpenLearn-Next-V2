@@ -145,32 +145,53 @@ export class RosterService {
 
   // ── 1. 班级生命周期管理 ──────────────────────────────────────────────────────
 
-  public listClasses(pg: Pagination): { data: ClassItem[]; total: number; page: number; pageSize: number } {
-    const total = (this.db.prepare('SELECT COUNT(*) AS n FROM classes').get() as any).n;
+  public listClasses(
+    pg: Pagination,
+    scope?: { mode?: 'all' | 'owner' | 'enrolled'; userId?: string },
+  ): { data: ClassItem[]; total: number; page: number; pageSize: number } {
+    const mode = scope?.mode ?? 'all';
+    const userId = scope?.userId ?? '';
+    let where = '';
+    const whereParams: unknown[] = [];
+    if (mode === 'owner') {
+      where = 'WHERE c.owner_user_id = ?';
+      whereParams.push(userId);
+    } else if (mode === 'enrolled') {
+      where = 'WHERE c.id IN (SELECT class_id FROM class_students WHERE student_id = ?)';
+      whereParams.push(userId);
+    }
+    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM classes c ${where}`).get(...whereParams) as any).n;
     const classes = this.db
       .prepare(
         `
-        SELECT c.*,
+        SELECT c.id, c.name, c.description, c.lab_id, c.owner_user_id, c.created_at,
           (SELECT COUNT(*) FROM class_students WHERE class_id = c.id) AS student_count,
           (SELECT COUNT(*) FROM schedules WHERE class_id = c.id) AS course_count,
           (SELECT COUNT(*) FROM assignments WHERE class_id = c.id) AS assignment_count
         FROM classes c
-        ORDER BY created_at DESC
+        ${where}
+        ORDER BY c.created_at DESC
         LIMIT ? OFFSET ?
       `,
       )
-      .all(pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20), pg.offset ?? 0) as ClassItem[];
+      .all(
+        ...whereParams,
+        pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20),
+        pg.offset ?? 0,
+      ) as ClassItem[];
 
     const pageSize = pg.isAll ? total : ((pg as any).pageSize ?? (pg as any).limit ?? 20);
     return { data: classes, total, page: pg.page ?? 1, pageSize };
   }
 
-  public createClass(name: string, description?: string, labId?: string): string {
+  public createClass(name: string, description?: string, labId?: string, ownerUserId?: string | null): string {
     if (!name?.trim()) throw new Error('Class name is required');
     const classId = randomId('cls_');
     this.db
-      .prepare('INSERT INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(classId, name.trim(), description || '', labId || null, Date.now());
+      .prepare(
+        'INSERT INTO classes (id, name, description, lab_id, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(classId, name.trim(), description || '', labId || null, ownerUserId || null, Date.now());
     return classId;
   }
 

@@ -226,6 +226,7 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
       kernelContainer.db
         .prepare('INSERT OR REPLACE INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)')
         .run(testClassId, '点名测试班级', '测试专用', Date.now());
+      kernelContainer.db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(teacherId, testClassId);
       kernelContainer.db
         .prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
         .run(testClassId, studentId, Date.now());

@@ -56,7 +56,8 @@
 | `ALLOWED_ORIGINS`       | CORS 白名单，逗号分隔；`cli.mjs --cors` 可覆盖。`ecosystem.config.cjs` 从 `.env` 透传          |
 | `ALLOWED_FRAME_ORIGINS` | Helmet `frame-src` / `frame-ancestors` 白名单（课件 iframe 场景）                              |
 | `LTI_ALLOWED_LMS_ORIGINS` | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                    |
-| `TRUST_PROXY`           | `server.ts` 的 `startServer()` 解析后交给 Express `trust proxy`                                |
+| `TRUST_PROXY`           | Express `trust proxy`。默认不信任（未设置 / 空 / `false` / `0`）。反代后设为 `1` 或 `loopback`。直连公网不要打开，否则写限流可被伪造的 `X-Forwarded-For` 绕过 |
+| `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` | 空库种子口令。留空则随机生成并写入 `storage/bootstrap-credentials.txt`。等于用户名时登录后强制改密 |
 | `ENABLE_HTTPS`          | `true` 且 `NODE_ENV=production` 时按 HTTPS 语义生成自引用 URL（`server/routes/` 下 3 处）      |
 | `ENABLE_HSTS`           | `true` 时启用 HSTS                                                                            |
 | `FORCE_HTTPS`           | 生产环境下为 `true` 时**隐含** `ENABLE_HSTS`（二者在 `startServer()` 的 `enableHsts` 同一行）  |

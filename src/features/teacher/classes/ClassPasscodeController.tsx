@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ClassType } from '../../../types/app';
 
 export interface ClassPasscodeControllerProps {
@@ -7,6 +8,28 @@ export interface ClassPasscodeControllerProps {
 }
 
 export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPasscodeControllerProps) {
+  const [override, setOverride] = useState<string | null>(null);
+  const passcode = override ?? cls.class_passcode ?? '';
+
+  useEffect(() => {
+    let cancelled = false;
+    setOverride(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/classes/${cls.id}/passcode-setting`);
+        if (!res.ok || typeof res.json !== 'function') return;
+        const data = await res.json();
+        if (!cancelled && data && Object.prototype.hasOwnProperty.call(data, 'class_passcode')) {
+          setOverride(data.class_passcode || '');
+        }
+      } catch {
+        /* 列表接口不再带口令；读取失败时保留本地值 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cls.id]);
   return (
     <div
       className="mb-4 bg-gradient-to-r from-indigo-50/70 to-violet-50/70 p-3.5 rounded-2xl border border-indigo-150/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans text-left"
@@ -29,9 +52,10 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
         <input
           id={`class-passcode-${cls.id}`}
           type="text"
-          value={cls.class_passcode || ''}
+          value={passcode}
           onChange={async (e) => {
             const val = e.target.value;
+            setOverride(val);
             await fetch(`/api/classes/${cls.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -48,6 +72,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
             e.stopPropagation();
             // Generate random 4 digit PIN
             const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+            setOverride(randomPin);
             await fetch(`/api/classes/${cls.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -60,10 +85,11 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
         >
           {lang === 'zh' ? '随机生成' : 'Random Gen'}
         </button>
-        {cls.class_passcode && (
+        {passcode && (
           <button
             onClick={async (e) => {
               e.stopPropagation();
+              setOverride('');
               await fetch(`/api/classes/${cls.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },

@@ -14,18 +14,20 @@
 
 `requireAuth` 同时接受 `'admin'` 与 `'administrator'`（前者会归一化为后者）。数据库 `users.role` 中规范值是 **`administrator` / `teacher` / `student`**。
 
-### 0.2 内置种子账号（⚠️ 生产环境必须改密）
+### 0.2 内置种子账号（⚠️ 不再使用默认口令）
 
-`packages/core/db/index.ts` 在首次启动时插入两个账号：
+`packages/core/db/index.ts` 在用户表为空时插入两个账号：
 
-| 用户名     | 初始密码 | 角色            | user id       |
+| 用户名     | 初始口令 | 角色            | user id       |
 | ---------- | -------- | --------------- | ------------- |
-| `admin`    | `admin`  | `administrator` | `usr_admin`   |
-| `teacher`  | `teacher`| `teacher`       | `usr_teacher` |
+| `admin`    | 环境变量或随机生成 | `administrator` | `usr_admin`   |
+| `teacher`  | 环境变量或随机生成 | `teacher`       | `usr_teacher` |
 
-源码在插入后直接打印 `[SECURITY WARNING] Default users initialized...`。
+- `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 有值时使用该值。
+- 未设置时生成 20 位随机口令，打印一次，并写入 `storage/bootstrap-credentials.txt`。
+- 已经用 `admin` / `teacher` 当密码的存量库不会被改写哈希，但会把 `must_change_password` 置 1，登录后必须修改。
 
-**改密**：`POST /api/auth/change-password`（见 §2.3）。种子账号首次登录会被打上 `mustChangePassword` 标记——前端全屏强制改密，服务端另有 `enforcePasswordChanged` 中间件兜底：带该标记的会话发起**非 GET** 请求（除 `/api/auth/change-password`、`/api/auth/logout`、`/api/auth/session`、`/api/auth/me` 四个豁免路径）一律 403 `FORBIDDEN_DEFAULT_PASSWORD`。**绕不过去，别试。**
+**改密**：`POST /api/auth/change-password`（见 §2.3）。新密码不能与用户名相同。带 `mustChangePassword` 的会话除改密、登出、`/api/auth/session`、`/api/auth/me` 外，**包括 GET 在内的** `/api` 请求一律 403 `FORBIDDEN_DEFAULT_PASSWORD`。静态页面仍可加载。生产环境不要设置 `PLAYWRIGHT_TEST`。
 
 ### 0.3 密码存储
 

@@ -70,9 +70,10 @@ describe('课中互评 API（classroom-peer-review）', () => {
     insSession.run(tokenB, JSON.stringify({ userId: studentB, role: 'student', username: 'pr_b' }), now, exp);
     insSession.run(tokenC, JSON.stringify({ userId: studentC, role: 'student', username: 'pr_c' }), now, exp);
 
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
       classId,
       '互评测试班',
+      teacherId,
       now,
     );
     db.prepare('INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
@@ -210,9 +211,10 @@ describe('课中互评 API（classroom-peer-review）', () => {
       const emptyLesson = 'les-pr-empty';
       const emptyClass = 'cls-pr-empty';
       const now = Date.now();
-      db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+      db.prepare('INSERT OR REPLACE INTO classes (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)').run(
         emptyClass,
         '空班级',
+        teacherId,
         now,
       );
       db.prepare('INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run(

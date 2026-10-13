@@ -142,31 +142,33 @@ const PASSWORD_CHANGE_EXEMPT_PATHS = new Set([
 ]);
 
 /**
- * 默认密码写操作拦截。
+ * 默认密码未改时拦截业务 API（含 GET）。
  *
- * 背景：种子账号 admin/admin、teacher/teacher 仅在登录时打 `mustChangePassword`
- * 标记（存入 session_data，见 roster.ts login），前端全屏强制改密；
- * 本中间件在服务端兜底 —— 带标记的会话发起**非 GET** 请求（除豁免路径）一律 403，
- * 防止绕过前端直接调 API。GET 保持可用（登录后 /api/auth/session 恢复会话需要）。
- *
- * 适用面：teacher/administrator 入口（种子默认密码所在）；学生口令策略属另一议题。
+ * 带 `mustChangePassword` 的会话只能访问改密、登出和会话查询。
+ * 静态资源与 SPA 壳不在 /api 下，改密页仍可加载。
+ * PLAYWRIGHT_TEST 仅供端到端套件，生产环境不得设置。
  */
 export function enforcePasswordChanged(req: Request, res: Response, next: NextFunction): void {
   if (process.env.PLAYWRIGHT_TEST) {
     return next();
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
-    if (!PASSWORD_CHANGE_EXEMPT_PATHS.has(req.path)) {
-      const token = getCookieToken(req);
-      if (token) {
-        const session = getValidSession(token);
-        if (session && (session as any).mustChangePassword) {
-          res
-            .status(403)
-            .json({ success: false, code: 'FORBIDDEN_DEFAULT_PASSWORD', error: 'Default password must be changed first' });
-          return;
-        }
-      }
+  const path = req.path || '';
+  if (!path.startsWith('/api/')) {
+    return next();
+  }
+  if (PASSWORD_CHANGE_EXEMPT_PATHS.has(path)) {
+    return next();
+  }
+  const token = getCookieToken(req);
+  if (token) {
+    const session = getValidSession(token);
+    if (session && (session as any).mustChangePassword) {
+      res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN_DEFAULT_PASSWORD',
+        error: 'Default password must be changed first',
+      });
+      return;
     }
   }
   next();
