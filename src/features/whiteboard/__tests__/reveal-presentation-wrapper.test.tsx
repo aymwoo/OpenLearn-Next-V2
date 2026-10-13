@@ -8,19 +8,13 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
     vi.restoreAllMocks();
   });
 
-  it('renders markdown presentation slides without loading pptx-preview', () => {
+  it('renders markdown presentation slides without loading PPTX viewer', () => {
     const data = {
       markdown: '# Slide 1\n---\n## Slide 2 Content',
       fileType: 'md',
     };
 
-    render(
-      <RevealPresentationWrapper
-        elementId="pres-1"
-        data={data}
-        userRole="teacher"
-      />
-    );
+    render(<RevealPresentationWrapper elementId="pres-1" data={data} userRole="teacher" />);
 
     expect(screen.getByText('Slide 1')).toBeDefined();
     expect(screen.getByText('1')).toBeDefined();
@@ -41,13 +35,7 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
       fileType: 'md',
     };
 
-    render(
-      <RevealPresentationWrapper
-        elementId="pres-2"
-        data={data}
-        userRole="teacher"
-      />
-    );
+    render(<RevealPresentationWrapper elementId="pres-2" data={data} userRole="teacher" />);
 
     // 点击进入编辑模式
     const editBtn = screen.getAllByTitle('在线编辑 Markdown 内容')[0];
@@ -62,21 +50,12 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
     expect(screen.getByText('Overview')).toBeDefined();
   });
 
-  it('safely unmounts and cleans up PPTX previewer when destroy is not a function', async () => {
-    // 模拟真实的 pptx-preview 行为：返回的对象只有 preview 方法，没有 destroy
-    const mockPreviewInstance = {
-      preview: vi.fn().mockResolvedValue(undefined),
-      slideCount: 3,
-      // 故意不定义 destroy 方法
-    };
-
-    vi.doMock('pptx-preview', () => ({
-      init: vi.fn().mockReturnValue(mockPreviewInstance),
-    }));
-
+  it('safely loads and renders PowerPointViewer and cleans up on unmount', async () => {
     const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(32)),
     } as any);
 
     try {
@@ -89,15 +68,15 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
             slideCount: 3,
           }}
           userRole="teacher"
-        />
+        />,
       );
 
-      // 等待宏/微任务中的 fetch 与 import 完成
+      // 等待异步 fetch 触发与完成
       await vi.waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(global.fetch).toHaveBeenCalledWith('http://localhost:9000/sample.pptx');
       });
 
-      // 切换课件类型为 md：触发 useEffect 的清理分支
+      // 切换课件类型为 md：触发卸载与清理分支
       rerender(
         <RevealPresentationWrapper
           elementId="pres-pptx"
@@ -106,10 +85,9 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
             fileType: 'md',
           }}
           userRole="teacher"
-        />
+        />,
       );
 
-      // 卸载组件：触发 return () => safelyDestroyPreviewer() 分支
       expect(() => unmount()).not.toThrow();
     } finally {
       global.fetch = originalFetch;

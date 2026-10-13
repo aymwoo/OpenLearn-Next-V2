@@ -21,6 +21,8 @@ async function getUploadLimitMb(): Promise<number> {
   }
   return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
 }
+import { PowerPointViewer, type PowerPointViewerHandle } from 'pptx-react-viewer';
+import 'pptx-react-viewer/styles';
 import {
   Presentation,
   ChevronLeft,
@@ -34,6 +36,7 @@ import {
   Maximize2,
   Wand2,
   FileText,
+  AlertCircle,
 } from 'lucide-react';
 
 export function RevealPresentationWrapper({
@@ -65,8 +68,11 @@ export function RevealPresentationWrapper({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const pptxContainerRef = useRef<HTMLDivElement>(null);
-  const previewerInstanceRef = useRef<any>(null);
+  const [pptxBytes, setPptxBytes] = useState<Uint8Array | null>(null);
+  const [pptxLoading, setPptxLoading] = useState(false);
+  const [pptxError, setPptxError] = useState<string | null>(null);
+  const pptxViewerCardRef = useRef<PowerPointViewerHandle>(null);
+  const pptxViewerFsRef = useRef<PowerPointViewerHandle>(null);
 
   const isFullscreenSynced = !!data.isFullscreenSynced;
   const isFullscreenForced = !!data.isFullscreenForced;
@@ -101,87 +107,155 @@ export function RevealPresentationWrapper({
     }
   }, [data.markdown]);
 
-  // Safely cleanup PPTX previewer instance
-  const safelyDestroyPreviewer = () => {
-    if (previewerInstanceRef.current) {
-      try {
-        if (typeof previewerInstanceRef.current.destroy === 'function') {
-          previewerInstanceRef.current.destroy();
+  // Load PPTX bytes when fileType is 'pptx' and fileUrl is provided
+  const loadPptxFile = (url: string) => {
+    setPptxLoading(true);
+    setPptxError(null);
+    return fetch(url)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`无法获取课件文件 (HTTP ${res.status})`);
         }
-      } catch (err) {
-        console.warn('[RevealPresentationWrapper] Failed to destroy PPTX previewer instance:', err);
-      }
-      previewerInstanceRef.current = null;
-    }
+        return res.arrayBuffer();
+      })
+      .then((ab) => {
+        setPptxBytes(new Uint8Array(ab));
+        setPptxLoading(false);
+      })
+      .catch((err) => {
+        console.error('[RevealPresentationWrapper] Fetch PPTX failed:', err);
+        setPptxError(err.message || '课件文件加载失败');
+        setPptxLoading(false);
+      });
   };
 
-  // PPTX rendering effect (Only loads if fileType is 'pptx' and container ref is available)
   useEffect(() => {
     if (fileType !== 'pptx' || !fileUrl) {
-      safelyDestroyPreviewer();
-      if (pptxContainerRef.current) {
-        pptxContainerRef.current.innerHTML = '';
-      }
+      setPptxBytes(null);
+      setPptxLoading(false);
+      setPptxError(null);
       return;
     }
 
     let active = true;
-    fetch(fileUrl)
-      .then((res) => res.arrayBuffer())
-      .then(async (ab) => {
-        if (!active) return;
-        safelyDestroyPreviewer();
-        if (pptxContainerRef.current) {
-          pptxContainerRef.current.innerHTML = '';
-          try {
-            const { init: initPptxPreview } = await import('pptx-preview');
-            const previewer: any = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
-            previewerInstanceRef.current = previewer;
-            if (typeof previewer.load === 'function') {
-              await previewer.load(ab);
-            } else if (typeof previewer.preview === 'function') {
-              await previewer.preview(ab);
-            }
+    setPptxLoading(true);
+    setPptxError(null);
 
-            if (active) {
-              if (isTeacher && onElementUpdate && data.slideCount !== previewer.slideCount && previewer.slideCount) {
-                onElementUpdate(elementId, {
-                  ...data,
-                  slideCount: previewer.slideCount,
-                });
-              }
-              if (typeof previewer.renderSingleSlide === 'function') {
-                previewer.renderSingleSlide(slideIndex);
-              }
-            }
-          } catch (e) {
-            console.error('PPTX preview init failed', e);
-          }
+    fetch(fileUrl)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`无法获取课件文件 (HTTP ${res.status})`);
         }
+        return res.arrayBuffer();
       })
-      .catch((err) => console.error('Fetch PPTX failed', err));
+      .then((ab) => {
+        if (!active) return;
+        setPptxBytes(new Uint8Array(ab));
+        setPptxLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('[RevealPresentationWrapper] Fetch PPTX failed:', err);
+        setPptxError(err.message || '课件文件加载失败');
+        setPptxLoading(false);
+      });
 
     return () => {
       active = false;
-      safelyDestroyPreviewer();
-      if (pptxContainerRef.current) {
-        pptxContainerRef.current.innerHTML = '';
-      }
     };
-  }, [fileUrl, fileType, isContainerFullscreen]);
+  }, [fileUrl, fileType]);
 
-  // Render PPTX slide when slideIndex changes
+  // Sync active slide index to PowerPointViewer instances
   useEffect(() => {
-    if (fileType === 'pptx' && previewerInstanceRef.current) {
-      try {
-        if (typeof previewerInstanceRef.current.renderSingleSlide === 'function') {
-          previewerInstanceRef.current.renderSingleSlide(slideIndex);
+    if (fileType === 'pptx') {
+      const activeRef = isContainerFullscreen ? pptxViewerFsRef.current : pptxViewerCardRef.current;
+      if (activeRef) {
+        try {
+          const currentIdx = activeRef.getActiveSlideIndex?.();
+          if (currentIdx !== undefined && currentIdx !== slideIndex) {
+            activeRef.setActiveSlideIndex?.(slideIndex);
+          }
+        } catch (e) {
+          console.warn('[RevealPresentationWrapper] Failed to sync PPTX slide index:', e);
         }
-      } catch (e) {
-        console.error('PPTX renderSingleSlide failed', e);
       }
     }
-  }, [slideIndex, fileType]);
+  }, [slideIndex, fileType, isContainerFullscreen]);
+
+  // Handlers for PowerPointViewer callbacks
+  const handlePptxActiveSlideChange = (newIndex: number) => {
+    if (newIndex !== slideIndex) {
+      setSlideIndex(newIndex);
+      if (isTeacher && onElementUpdate) {
+        onElementUpdate(elementId, {
+          ...data,
+          slideX: newIndex,
+        });
+      }
+    }
+  };
+
+  const handlePptxSlideCountChange = (count: number) => {
+    if (count > 0 && isTeacher && onElementUpdate && data.slideCount !== count) {
+      onElementUpdate(elementId, {
+        ...data,
+        slideCount: count,
+      });
+    }
+  };
+
+  const renderPptxViewer = (fullscreen: boolean) => {
+    if (pptxLoading) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-3 bg-slate-50 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          <span className="text-sm font-medium">正在解析 PPTX 课件...</span>
+        </div>
+      );
+    }
+    if (pptxError) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center text-rose-500 gap-2 p-6 text-center bg-slate-50 rounded-xl">
+          <AlertCircle className="w-8 h-8" />
+          <p className="text-sm font-medium">{pptxError}</p>
+          <button
+            onClick={() => {
+              if (fileUrl) loadPptxFile(fileUrl);
+            }}
+            className="mt-2 px-3 py-1 text-xs bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-md shadow-sm transition-colors"
+          >
+            重试加载
+          </button>
+        </div>
+      );
+    }
+    if (!pptxBytes) {
+      return (
+        <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm bg-slate-50 rounded-xl">
+          课件内容未就绪
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full h-full overflow-hidden rounded-xl bg-white border border-slate-100 shadow-md">
+        <PowerPointViewer
+          key={`${fileUrl}-${fullscreen ? 'fs' : 'card'}`}
+          ref={fullscreen ? pptxViewerFsRef : pptxViewerCardRef}
+          content={pptxBytes}
+          fileName={fileName || '课件演示.pptx'}
+          canEdit={false}
+          showToolbar={false}
+          showThumbnails={fullscreen}
+          showCompatibilityToasts={false}
+          initialSlide={slideIndex}
+          onActiveSlideChange={handlePptxActiveSlideChange}
+          onSlideCountChange={handlePptxSlideCountChange}
+          className="w-full h-full"
+        />
+      </div>
+    );
+  };
 
   // Autoplay function (For markdown slides only)
   useEffect(() => {
@@ -457,10 +531,7 @@ export function RevealPresentationWrapper({
                 </div>
               ) : fileType === 'pptx' ? (
                 <div className="w-full h-full flex items-center justify-center p-2 bg-slate-900/5 max-w-[90vw] max-h-[82vh] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850">
-                  <div
-                    ref={pptxContainerRef}
-                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center"
-                  />
+                  {renderPptxViewer(true)}
                 </div>
               ) : (
                 // Markdown mode
@@ -759,10 +830,7 @@ export function RevealPresentationWrapper({
                 <div
                   className={`w-full h-full flex items-center justify-center p-2 bg-slate-900/5 ${isContainerFullscreen ? 'max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850' : ''}`}
                 >
-                  <div
-                    ref={pptxContainerRef}
-                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center"
-                  />
+                  {renderPptxViewer(false)}
                 </div>
               ) : (
                 // Markdown mode

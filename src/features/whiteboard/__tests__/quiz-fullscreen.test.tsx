@@ -257,7 +257,10 @@ describe('QuizFullscreenView', () => {
         };
       }
       if (url.startsWith('/api/students')) {
-        return { ok: true, json: async () => ({ data: [{ id: 'stu-a', name: '张三' }], total: 1, page: 1, pageSize: 50 }) };
+        return {
+          ok: true,
+          json: async () => ({ data: [{ id: 'stu-a', name: '张三' }], total: 1, page: 1, pageSize: 50 }),
+        };
       }
       if (url.includes('/quiz-submissions')) {
         return {
