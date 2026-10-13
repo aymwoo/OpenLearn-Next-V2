@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2, FileText, Sliders, Palette, Sparkles, Clock, Layers } from 'lucide-react';
-import { SEGMENT_TYPES, SEGMENT_COLORS } from './timelineConfig';
+import { useAllSegmentTypes, SEGMENT_COLORS } from './timelineConfig';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 interface SegmentEditorCardProps {
@@ -12,6 +12,8 @@ interface SegmentEditorCardProps {
 }
 
 export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, onDelete }: SegmentEditorCardProps) {
+  const segmentTypes = useAllSegmentTypes();
+
   return (
     <div className="relative mx-3 sm:mx-4 my-3 rounded-2xl bg-surface/98 backdrop-blur-xl border-2 border-primary-theme/50 dark:border-primary-theme/60 shadow-2xl shadow-primary-theme/20 ring-4 ring-primary-theme/15 overflow-hidden shrink-0 text-main animate-in fade-in-0 zoom-in-[0.98] slide-in-from-top-3 duration-300 ease-out transition-all">
       {/* 聚光灯柔光背景与装饰光斑 */}
@@ -115,7 +117,7 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
               disabled={readOnly}
               className="border border-theme/80 px-2.5 py-1.5 rounded-xl bg-surface-secondary/80 focus:bg-surface text-xs text-main font-medium outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/25 transition-all shadow-2xs cursor-pointer"
             >
-              {SEGMENT_TYPES.map((t) => (
+              {segmentTypes.map((t) => (
                 <option key={t.id} value={t.id} className="bg-surface text-main">
                   {lang === 'zh' ? t.labelZh : t.labelEn}
                 </option>
@@ -166,7 +168,7 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
           />
         </div>
 
-        {/* 课程编辑器步骤类型扩展 */}
+        {/* 环节编辑附加面板（自定义表单 / 资源插入等；类型注册走 registerSegmentType） */}
         <ExtensionPointRenderer
           slot="editor.timeline_segment"
           slotProps={{

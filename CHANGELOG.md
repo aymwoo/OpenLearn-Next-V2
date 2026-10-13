@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **备课编辑器扩展槽收敛**：`SegmentEditorCard` 教学形态下拉改为消费 `getAllSegmentTypes()` / `useAllSegmentTypes()`，插件注册的自定义环节类型真正进入 UI；宿主暴露 `ctx.ui.registerSegmentType` / `unregisterSegmentType`（停用时按 `pluginId` 自动回收）；`manifest.contributes['editor.palette_item']` 与含 `labelZh`+`labelEn` 的 `editor.timeline_segment` 声明式贡献分别桥接到 `paletteItemRegistry` 与环节类型注册表，与命令式 API 对齐。
+
 ### Breaking Changes
 
 - **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。

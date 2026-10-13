@@ -48,7 +48,84 @@ import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/Fu
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
 import { paletteItemRegistry } from '../features/teacher/lesson-editor/palette-item-registry';
+import type { PaletteColorKey, EditField } from '../features/teacher/lesson-editor/paletteConfig';
+import {
+  registerCustomSegmentType,
+  unregisterCustomSegmentType,
+  unregisterPluginSegmentTypes,
+  resolveSegmentIcon,
+} from '../features/teacher/lesson-editor/timelineConfig';
+import type { SegmentTypeMeta } from '../features/teacher/lesson-editor/timelineConfig';
 import { assignmentQuestionRendererRegistry } from '../features/teacher/assignment-question-registry';
+
+const PALETTE_COLOR_KEYS = new Set<PaletteColorKey>([
+  'slate',
+  'blue',
+  'violet',
+  'amber',
+  'rose',
+  'emerald',
+  'cyan',
+  'pink',
+  'indigo',
+]);
+
+/**
+ * Bridge data-shaped `editor.palette_item` contributes into paletteItemRegistry
+ * so declarative entries join the LessonPalette grid (search / favorites / groups).
+ */
+function bridgePaletteItemContribution(entry: Record<string, unknown>, pluginId: string): void {
+  const type = String(entry.type ?? entry.id ?? '');
+  if (!type) return;
+  const labelZh = String(entry.labelZh ?? entry.label ?? entry.title ?? entry.name ?? type);
+  const labelEn = String(entry.labelEn ?? labelZh);
+  const colorRaw = String(entry.color ?? 'violet');
+  const color = (PALETTE_COLOR_KEYS.has(colorRaw as PaletteColorKey) ? colorRaw : 'violet') as PaletteColorKey;
+  const group = String(entry.group ?? entry.category ?? 'custom');
+  const defaultData =
+    entry.defaultData && typeof entry.defaultData === 'object' && !Array.isArray(entry.defaultData)
+      ? (entry.defaultData as Record<string, unknown>)
+      : {};
+  const editFields = Array.isArray(entry.editFields) ? (entry.editFields as EditField[]) : [];
+  paletteItemRegistry.register(
+    {
+      type,
+      labelZh,
+      labelEn,
+      descriptionZh: String(entry.descriptionZh ?? entry.description ?? ''),
+      descriptionEn: String(entry.descriptionEn ?? entry.description ?? ''),
+      color,
+      group,
+      defaultData,
+      editFields,
+      pluginId,
+    },
+    pluginId,
+  );
+}
+
+/**
+ * Bridge TimelineSegmentConfig-shaped `editor.timeline_segment` contributes
+ * (labelZh + labelEn) into the segment-type registry for the type dropdown.
+ * Pure UI panel contributions (no bilingual labels) stay ExtensionPoint-only.
+ */
+function bridgeTimelineSegmentContribution(entry: Record<string, unknown>, pluginId: string): void {
+  const labelZh = typeof entry.labelZh === 'string' ? entry.labelZh : '';
+  const labelEn = typeof entry.labelEn === 'string' ? entry.labelEn : '';
+  if (!labelZh || !labelEn) return;
+  const id = String(entry.id ?? '');
+  if (!id) return;
+  registerCustomSegmentType(
+    {
+      id,
+      labelZh,
+      labelEn,
+      icon: resolveSegmentIcon(typeof entry.icon === 'string' ? entry.icon : null),
+      pluginId,
+    },
+    pluginId,
+  );
+}
 
 // ── Module Loader type ───────────────────────────────────────────────────
 
@@ -137,6 +214,12 @@ export function registerManifestContributions(
           component: NullExtensionComponent,
           pluginId,
         });
+        // 数据型备课扩展：声明式 contributes → 运行时 Registry（与命令式 API 对齐）
+        if (slotName === 'editor.palette_item') {
+          bridgePaletteItemContribution(entry, pluginId);
+        } else if (slotName === 'editor.timeline_segment') {
+          bridgeTimelineSegmentContribution(entry, pluginId);
+        }
       }
     }
   }
@@ -630,6 +713,7 @@ export class FrontendPluginHost {
     propertyEditorRegistry.unregisterPlugin(pluginId);
     coursewareSourceRegistry.unregisterPlugin(pluginId);
     paletteItemRegistry.unregisterPlugin(pluginId);
+    unregisterPluginSegmentTypes(pluginId);
     // 注销该插件注册的全部题型渲染器
     assignmentQuestionRendererRegistry.clearOwned(pluginId);
     // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
@@ -724,6 +808,12 @@ export class FrontendPluginHost {
         },
         unregisterPaletteItem: (type) => {
           paletteItemRegistry.unregister(type, pluginId);
+        },
+        registerSegmentType: (type: SegmentTypeMeta) => {
+          registerCustomSegmentType(type, pluginId);
+        },
+        unregisterSegmentType: (id: string) => {
+          unregisterCustomSegmentType(id, pluginId);
         },
         registerAssignmentQuestionRenderer: (config) => {
           assignmentQuestionRendererRegistry.register(config, pluginId);

@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features & Types
 
+- **备课环节类型扩展契约 (`SegmentTypeMeta`)**:
+  - 导出 `SegmentTypeMeta`，供第三方插件通过宿主 `ctx.ui.registerSegmentType` / `unregisterSegmentType` 向备课时间线贡献自定义教学形态；
+  - 与声明式 `contributes['editor.timeline_segment']`（需含 `labelZh` + `labelEn`）桥接语义对齐。
+
 - **全班大屏作业互评与协同赏析模式静态清单声明契约 (`PeerReviewRubricConfig`, `PeerReviewBadgeConfig`)**:
   - 在 `@openlearn/plugin-sdk` 导出 `PeerReviewRubricConfig` 与 `PeerReviewBadgeConfig` 类型定义，供第三方互动教学与学科评价插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
   - `PeerReviewRubricConfig`: 支持声明自定义互评量规维度（如算法复杂度、代码注释覆盖率、视觉构图美感），属性包含 `id`, `name`, `description`, `maxScore`, `weight`, `icon`, `targetMetric`；

@@ -88,7 +88,12 @@ export interface QuickActivityConfig {
   payload?: Record<string, unknown>;
 }
 
-/** A contribution to the timeline.segments slot (custom lesson segment types). */
+/**
+ * A contribution to `editor.timeline_segment` that declares a custom lesson segment type.
+ * When `labelZh` + `labelEn` are present, the host bridges the entry into the segment-type
+ * registry (SegmentEditorCard type dropdown). Pure UI panel plugins should register a
+ * React component via `ctx.ui.registerExtensionPoint` instead.
+ */
 export interface TimelineSegmentConfig {
   id: string;
   labelZh: string;
@@ -98,15 +103,25 @@ export interface TimelineSegmentConfig {
   defaultDurationMin?: number;
 }
 
-/** A contribution to the palette.items slot (custom whiteboard tools & widgets). */
+/**
+ * A contribution to `editor.palette_item` (custom lesson-palette / whiteboard widgets).
+ * The host bridges data-shaped entries into `paletteItemRegistry` so they appear in the
+ * LessonPalette grid (search, favorites, groups). Prefer `ctx.ui.registerPaletteItem` when
+ * providing a custom canvas `component`.
+ */
 export interface PaletteItemContributionConfig {
   id: string;
   type: string;
   labelZh: string;
   labelEn: string;
+  descriptionZh?: string;
+  descriptionEn?: string;
   icon?: string;
+  color?: string;
+  group?: string;
   category?: 'media' | 'interactive' | 'container' | 'custom';
   defaultData?: Record<string, unknown>;
+  editFields?: unknown[];
 }
 
 /** A contribution to the teacher.cockpit.widget slot (learning radar cards). */

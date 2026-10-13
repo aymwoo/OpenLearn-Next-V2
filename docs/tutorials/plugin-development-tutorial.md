@@ -1325,6 +1325,8 @@ interface FrontendPluginContext {
     unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
     registerPaletteItem(config: PaletteItemConfig): void; // v0.3.17: 注册备课画板组件
     unregisterPaletteItem(type: string): void;
+    registerSegmentType(type: SegmentTypeMeta): void; // 注册自定义教学环节类型
+    unregisterSegmentType(id: string): void;
   };
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V2.5: 调用后端 Command Handler
   // 页面导航与 Tab 订阅控制
@@ -1713,6 +1715,47 @@ async function deactivate() {
 
 export default { activate, deactivate };
 ```
+
+也可在 `manifest.contributes['editor.palette_item']` 中声明数据型图元（`type` / `labelZh` / `labelEn` 等），宿主会桥接到同一 `paletteItemRegistry`，进入备课组件网格（搜索、收藏、分组）。需要自定义画布 `component` 时仍优先用 `ctx.ui.registerPaletteItem`。
+
+### 6.10 备课环节类型扩展（Segment Type）
+
+向备课时间线贡献自定义教学形态（如「科学探究实验」「随堂辩论」）：
+
+```tsx
+import { FlaskConical } from 'lucide-react';
+import type { FrontendPluginContext } from '@openlearn/plugin-sdk';
+
+async function activate(ctx: FrontendPluginContext) {
+  ctx.ui.registerSegmentType({
+    id: 'scientific_experiment',
+    labelZh: '科学探究实验',
+    labelEn: 'Scientific Experiment',
+    icon: FlaskConical,
+  });
+}
+```
+
+注册后会出现在 `SegmentEditorCard` 的「教学形态」下拉中；插件停用时宿主按 `pluginId` 自动回收。
+
+声明式等价写法（需同时提供 `labelZh` 与 `labelEn`）：
+
+```json
+{
+  "contributes": {
+    "editor.timeline_segment": [
+      {
+        "id": "scientific_experiment",
+        "labelZh": "科学探究实验",
+        "labelEn": "Scientific Experiment",
+        "icon": "FlaskConical"
+      }
+    ]
+  }
+}
+```
+
+> `editor.timeline_segment` 作为 **UI 附加面板** 槽位时，在 `activate` 里 `registerExtensionPoint` 挂载 React 组件即可；仅当 contributes 条目含双语 label 时才会桥接为环节类型。
 
 ---
 

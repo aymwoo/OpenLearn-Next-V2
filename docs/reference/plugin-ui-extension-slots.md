@@ -30,8 +30,8 @@ export type ExtensionSlot =
   | 'stage.display.card' // 大屏展台卡片扩展
   | 'stage.display.overlay' // 大屏展台全屏 HUD 覆盖扩展（全班弹幕/倒计时/仪式动效等）
   | 'stage.display.action' // 大屏展台操作工具栏快捷操作扩展
-  | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
-  | 'editor.palette_item' // 课程编辑器白板图元扩展
+  | 'editor.timeline_segment' // 环节编辑附加面板；含 labelZh+labelEn 的 contributes 同时桥接为环节类型
+  | 'editor.palette_item' // 声明式画板图元（桥接 paletteItemRegistry）；命令式用 registerPaletteItem
   // ── 倒计时扩展 ──
   | 'classroom.countdown.widget'
   | 'classroom.countdown.action'
@@ -253,8 +253,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `class.batch.action`                 | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ classId, cls, lang, selectedStudentIds, selectedStudents, allStudents, disabled, onRefresh }`                      |
 | `student.row.panel`                  | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ studentId }`                                                                                                       |
 | `editor.header.action`               | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, currentLesson, lang, isReadOnly, onSave }`                                                               |
-| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`                                                                                |
-| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`                                                                                      |
+| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`（UI 附加面板）；`labelZh`+`labelEn` 的数据贡献另桥接环节类型注册表 |
+| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`（自定义 UI）；数据贡献桥接 `paletteItemRegistry` 进入组件网格           |
 | `whiteboard.dock.plugin`             | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
 | `whiteboard.canvas.widget`           | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
 | `whiteboard.autosave.status`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, status, lastSavedTime }`                                                                                 |
@@ -460,7 +460,7 @@ interface HelpDocConfig {
      };
      pluginId: string;
      manifest: FrontendPluginManifest;
-     ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; registerCoursewareSource; unregisterCoursewareSource; registerPaletteItem; unregisterPaletteItem; /* ... */ };
+     ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; registerCoursewareSource; unregisterCoursewareSource; registerPaletteItem; unregisterPaletteItem; registerSegmentType; unregisterSegmentType; /* ... */ };
      invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
      navigation: { getTeacherTab; setTeacherTab; subscribeTeacherTab };
      context: { get; subscribe };        // v0.2.8 课堂上下文

@@ -1169,6 +1169,16 @@ declare interface PaletteItemConfig {
   component?: (props: PaletteItemComponentProps) => unknown;
 }
 
+/** Teaching segment type contributed via `ctx.ui.registerSegmentType` (lesson editor timeline). */
+declare interface SegmentTypeMeta {
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  /** Lucide icon component (or host-resolved icon) */
+  icon: any;
+  pluginId?: string;
+}
+
 export type {
   PluginContext,
   PluginDatabaseAPI,
@@ -1252,6 +1262,7 @@ export type {
   PaletteEditField,
   PaletteItemComponentProps,
   PaletteItemConfig,
+  SegmentTypeMeta,
   PluginApiRequest,
   PluginApiResponse,
   PluginApiHandler,

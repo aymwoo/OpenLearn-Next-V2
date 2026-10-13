@@ -11,6 +11,11 @@ import type {
   FullscreenRendererProps,
 } from '../../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import type { PropertyEditorComponent } from '../../features/whiteboard/properties/PropertyEditorRegistry';
+import {
+  getSegmentType,
+  unregisterPluginSegmentTypes,
+} from '../../features/teacher/lesson-editor/timelineConfig';
+import { FlaskConical } from 'lucide-react';
 import type {
   IFrontendAPI,
   ISocketService,
@@ -135,6 +140,54 @@ describe('ctx.ui whiteboard registries', () => {
 
     expect(fullscreenRendererRegistry.has('ext-test/widget')).toBe(false);
     expect(propertyEditorRegistry.has('ext-test/widget')).toBe(false);
+  });
+});
+
+describe('ctx.ui.registerSegmentType', () => {
+  let host: FrontendPluginHost;
+
+  beforeEach(() => {
+    usePluginHostStore.setState({
+      activePlugins: [],
+      extensionPoints: new Map(),
+      services: null,
+      initialized: false,
+    });
+    unregisterPluginSegmentTypes('segment-type-plugin');
+  });
+
+  it('wires registerSegmentType and cleans up on deactivate', async () => {
+    const manifest: FrontendPluginManifest = {
+      id: 'segment-type-plugin',
+      name: 'Segment Types',
+      version: '1.0.0',
+    };
+    const plugin = {
+      manifest,
+      activate: async (ctx: FrontendPluginContext) => {
+        ctx.ui.registerSegmentType({
+          id: 'group_debate',
+          labelZh: '随堂辩论',
+          labelEn: 'Group Debate',
+          icon: FlaskConical,
+        });
+      },
+      deactivate: async () => {},
+    };
+    const moduleLoader = async () => ({
+      default: { manifest: plugin.manifest, activate: plugin.activate, deactivate: plugin.deactivate },
+    });
+
+    host = new FrontendPluginHost({ moduleLoader });
+    const mocks = createMockServices();
+    await host.initialize(mocks.frontendApi, mocks.socketService, mocks.uiService, mocks.storageService);
+    await host.installPlugin(manifest, 'export default {}');
+    await host.activatePlugin(manifest.id);
+
+    expect(getSegmentType('group_debate').labelZh).toBe('随堂辩论');
+
+    await host.deactivatePlugin(manifest.id);
+    expect(getSegmentType('group_debate').id).not.toBe('group_debate');
   });
 });
 
