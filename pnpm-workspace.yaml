@@ -37,3 +37,6 @@ overrides:
   fast-copy: '>=4.1.0'
   # esbuild Windows dev-server advisory (tsx path); do not force vite's 0.25 line
   'tsx>esbuild': '>=0.28.1'
+  # pnpm 12 default minimumReleaseAge=1440 rejects same-day browserslist DB bumps
+  caniuse-lite: '1.0.30001815'
+  electron-to-chromium: '1.5.452'

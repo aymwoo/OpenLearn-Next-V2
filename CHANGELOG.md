@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
-- **依赖审计清零并收紧 CI 门禁**：`pnpm-workspace.yaml` overrides 钉死 `engine.io`、`ip-address`、`uuid`、`dompurify`、`undici@7.29.1`、`brace-expansion@>=4` 等已修补版本；升级 `socket.io` / `socket.io-client` 与 `vitest`。`pnpm audit`（官方 registry）现为 0 漏洞。CI `security-audit` 安装依赖后对 `high+` 失败即红（不再 `continue-on-error`）。
+- **依赖审计清零并收紧 CI 门禁**：`pnpm-workspace.yaml` overrides 钉死 `engine.io`、`ip-address`、`uuid`、`dompurify`、`undici@7.29.1`、`brace-expansion@>=4` 等已修补版本；升级 `socket.io` / `socket.io-client` 与 `vitest`；并钉死成熟的 `caniuse-lite` / `electron-to-chromium`，避免 pnpm 12 默认 `minimumReleaseAge` 拒绝同日 browserslist DB 更新。`pnpm audit`（官方 registry）现为 0 漏洞。CI `security-audit` 安装依赖后对 `high+` 失败即红（不再 `continue-on-error`）。
 - **严格类型检查通过并并入主 tsconfig**：修复退出票空值、`lectureRatio: number | null`、命令面板 / 快捷插入隐式 any 与可选 registry 方法共 14 条 `lint:strict` 诊断；主 `tsconfig.json` 开启 `strict` / `noImplicitAny` / `strictNullChecks`。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
