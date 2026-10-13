@@ -101,12 +101,26 @@ export function RevealPresentationWrapper({
     }
   }, [data.markdown]);
 
+  // Safely cleanup PPTX previewer instance
+  const safelyDestroyPreviewer = () => {
+    if (previewerInstanceRef.current) {
+      try {
+        if (typeof previewerInstanceRef.current.destroy === 'function') {
+          previewerInstanceRef.current.destroy();
+        }
+      } catch (err) {
+        console.warn('[RevealPresentationWrapper] Failed to destroy PPTX previewer instance:', err);
+      }
+      previewerInstanceRef.current = null;
+    }
+  };
+
   // PPTX rendering effect (Only loads if fileType is 'pptx' and container ref is available)
   useEffect(() => {
     if (fileType !== 'pptx' || !fileUrl) {
-      if (previewerInstanceRef.current) {
-        previewerInstanceRef.current.destroy();
-        previewerInstanceRef.current = null;
+      safelyDestroyPreviewer();
+      if (pptxContainerRef.current) {
+        pptxContainerRef.current.innerHTML = '';
       }
       return;
     }
@@ -116,26 +130,29 @@ export function RevealPresentationWrapper({
       .then((res) => res.arrayBuffer())
       .then(async (ab) => {
         if (!active) return;
-        if (previewerInstanceRef.current) {
-          previewerInstanceRef.current.destroy();
-          previewerInstanceRef.current = null;
-        }
+        safelyDestroyPreviewer();
         if (pptxContainerRef.current) {
           pptxContainerRef.current.innerHTML = '';
           try {
             const { init: initPptxPreview } = await import('pptx-preview');
             const previewer: any = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
             previewerInstanceRef.current = previewer;
-            await previewer.load(ab);
+            if (typeof previewer.load === 'function') {
+              await previewer.load(ab);
+            } else if (typeof previewer.preview === 'function') {
+              await previewer.preview(ab);
+            }
 
             if (active) {
-              if (isTeacher && onElementUpdate && data.slideCount !== previewer.slideCount) {
+              if (isTeacher && onElementUpdate && data.slideCount !== previewer.slideCount && previewer.slideCount) {
                 onElementUpdate(elementId, {
                   ...data,
                   slideCount: previewer.slideCount,
                 });
               }
-              previewer.renderSingleSlide(slideIndex);
+              if (typeof previewer.renderSingleSlide === 'function') {
+                previewer.renderSingleSlide(slideIndex);
+              }
             }
           } catch (e) {
             console.error('PPTX preview init failed', e);
@@ -146,9 +163,9 @@ export function RevealPresentationWrapper({
 
     return () => {
       active = false;
-      if (previewerInstanceRef.current) {
-        previewerInstanceRef.current.destroy();
-        previewerInstanceRef.current = null;
+      safelyDestroyPreviewer();
+      if (pptxContainerRef.current) {
+        pptxContainerRef.current.innerHTML = '';
       }
     };
   }, [fileUrl, fileType, isContainerFullscreen]);
@@ -157,7 +174,9 @@ export function RevealPresentationWrapper({
   useEffect(() => {
     if (fileType === 'pptx' && previewerInstanceRef.current) {
       try {
-        previewerInstanceRef.current.renderSingleSlide(slideIndex);
+        if (typeof previewerInstanceRef.current.renderSingleSlide === 'function') {
+          previewerInstanceRef.current.renderSingleSlide(slideIndex);
+        }
       } catch (e) {
         console.error('PPTX renderSingleSlide failed', e);
       }
