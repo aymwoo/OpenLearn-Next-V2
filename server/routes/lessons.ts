@@ -201,7 +201,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const session = (req as any).session;
       const { score, comment } = req.body || {};
       const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
-      const reviewerId = isPrivileged ? String((req.body || {}).reviewerId || session?.studentId || '') : String(session?.studentId || '');
+      const reviewerId = isPrivileged
+        ? String((req.body || {}).reviewerId || session?.studentId || '')
+        : String(session?.studentId || '');
       if (!reviewerId) {
         return res.status(400).json({ success: false, error: 'Missing reviewerId' });
       }
@@ -228,6 +230,34 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       sendSafeError(res, err);
     }
   });
+
+  // ── 课程发布向导：AI 教学大纲生成 ────────────────────────────────────────
+  // 昂贵的 LLM 调用，挂 aiLimiter（与 /api/agent/chat 同级限流）；测试环境下
+  // aiLimiter 可能为 null，按 plugins.ts 的先例降级为透传中间件。
+  const safeAiLimiter =
+    typeof ctx.aiLimiter === 'function' ? ctx.aiLimiter : (_req: any, _res: any, next: any) => next();
+
+  app.post(
+    '/api/lessons/generate-outline',
+    requireAuth('teacher', 'administrator'),
+    safeAiLimiter,
+    async (req, res) => {
+      try {
+        const { title, category, description, timeline, lang } = req.body || {};
+        const content = await lessonService.generateOutlineWithAi({
+          title,
+          category,
+          description,
+          timeline,
+          lang,
+        });
+        res.json({ success: true, content });
+      } catch (e: any) {
+        console.error('[Generate Outline Error]:', (e as Error).message);
+        sendSafeError(res, e);
+      }
+    },
+  );
 
   app.post('/api/lessons', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {

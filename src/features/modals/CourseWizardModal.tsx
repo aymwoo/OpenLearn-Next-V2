@@ -2,7 +2,6 @@ import { Fragment, Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import Markdown from 'react-markdown';
 import { BookOpen, Sparkles, Activity, Plus, CheckCircle2, ChevronRight, Database, Loader2 } from 'lucide-react';
-import { generateTemplateContent } from '../teacher/HelpView';
 
 export interface WizardSegment {
   id: string;
@@ -31,7 +30,8 @@ export interface CourseWizardModalProps {
   wizardCourseContent: string;
   setWizardCourseContent: (v: string) => void;
   addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
-  generateTemplateContent: (title: string, category: string) => string;
+  wizardIsGeneratingOutline: boolean;
+  handleGenerateOutline: () => Promise<void>;
   handleDeployWizardCourse: () => void;
 }
 
@@ -54,7 +54,8 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
     wizardCourseContent,
     setWizardCourseContent,
     addToast,
-    generateTemplateContent,
+    wizardIsGeneratingOutline,
+    handleGenerateOutline,
     handleDeployWizardCourse,
   } = props;
 
@@ -236,28 +237,28 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                         <div className="text-xs text-gray-600 leading-relaxed font-sans mt-1">
                           {wizardCourseCategory === 'Mathematics' &&
                             (lang === 'zh'
-                              ? '💡 数学：偏向理论推演。推荐 20分公式精讲 + 15分黑板实践互动，强化基础。'
-                              : '💡 Math recommends: 20m Core Lecture + 15m Practice for theorem grounding.')}
+                              ? '💡 数学：偏向理论推演。推荐 15分公式精讲 + 20分黑板实践互动 + 5分随堂检测。'
+                              : '💡 Math recommends: 15m Core Lecture + 20m Practice + 5m Check.')}
                           {wizardCourseCategory === 'ComputerScience' &&
                             (lang === 'zh'
-                              ? '💡 计算机：偏重编码体验。推荐 15分白板代码推演 + 20分终端实验与分享。'
-                              : '💡 CS recommends: 15m Algorithms + 20m Interactive workshops on virtual boards.')}
+                              ? '💡 计算机：偏重编码体验。推荐 15分白板代码推演 + 20分终端实验与分享 + 5分演示。'
+                              : '💡 CS recommends: 15m Algorithms + 20m Interactive workshops + 5m Demo.')}
                           {wizardCourseCategory === 'Literature' &&
                             (lang === 'zh'
-                              ? '💡 语文文学：注重文本深度。推荐 10分范文研习 + 20分分组思辨，提升理解。'
-                              : '💡 Lit recommends: 10m Reading Analysis + 20m Collaborative Discussions.')}
+                              ? '💡 语文文学：注重文本深度。推荐 10分范文研习 + 20分分组思辨 + 10分迁移练笔。'
+                              : '💡 Lit recommends: 10m Reading Analysis + 20m Collaborative Discussions + 10m Writing.')}
                           {wizardCourseCategory === 'Physics' &&
                             (lang === 'zh'
                               ? '💡 科学类：逻辑导向。推荐 10分虚拟视频实验 + 20分机理讲解 + 10分钟随堂答卷。'
                               : '💡 Science recommends: 10m virtual showcase + 20m principles + 10m evaluation.')}
                           {wizardCourseCategory === 'History' &&
                             (lang === 'zh'
-                              ? '💡 历史人文：情景引入。推荐 15分人文画卷重塑 + 15分史实论驳辩论。'
-                              : '💡 History recommends: 15m Context Mapping + 15m Interactive Debate panels.')}
+                              ? '💡 历史人文：情景引入。推荐 10分人文画卷重塑 + 20分史实论驳辩论 + 10分钟史料评析。'
+                              : '💡 History recommends: 10m Context Mapping + 20m Interactive Debate + 10m Source Analysis.')}
                           {wizardCourseCategory === 'Art' &&
                             (lang === 'zh'
-                              ? '💡 视觉创意：自由度高。推荐 10分美术鉴赏 + 25分白板手绘画布互动体验。'
-                              : '💡 Art recommends: 10m Aesthetics inspiration + 25m real-time board drawing.')}
+                              ? '💡 视觉创意：自由度高。推荐 10分美术鉴赏 + 25分白板手绘画布互动体验 + 5分互评。'
+                              : '💡 Art recommends: 10m Aesthetics + 25m real-time board drawing + 5m Peer Review.')}
                           {wizardCourseCategory === 'Other' &&
                             (lang === 'zh'
                               ? '💡 其他科目：均分各小节时间，循序渐进，打造完整的教学循环闭环。'
@@ -295,7 +296,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       {[
                         {
                           id: 'preset_standard',
-                          title: lang === 'zh' ? '经典 5-20-15-5 讲授模式' : 'Traditional Dual-Lecture Paradigm',
+                          title: lang === 'zh' ? '经典 5-15-15-5 讲授模式' : 'Traditional 5-15-15-5 Lecture Paradigm',
                           desc:
                             lang === 'zh'
                               ? '由浅入深：先通过场景导入，后精讲，接着在白板配合大屏进行演练。'
@@ -313,7 +314,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                               id: 'seg-preset-2',
                               title: 'Subject Core Lecture / 核心理论精讲',
                               type: 'lecture',
-                              duration: '20m',
+                              duration: '15m',
                               color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
                               notes: 'Main content slide',
                             },
@@ -340,7 +341,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           title: lang === 'zh' ? '主题讨论工作坊模式' : 'Active Discussion Workshop',
                           desc:
                             lang === 'zh'
-                              ? '协同探究：教师5分钟破冰，学生15分钟小组演练，15分钟对决汇报，10分钟定级。'
+                              ? '协同探究：教师5分钟破冰，学生13分钟小组演练，12分钟对决汇报，10分钟定级。'
                               : 'Discussion and presentation heavy layout.',
                           segments: [
                             {
@@ -355,7 +356,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                               id: 'seg-preset-6',
                               title: 'Cooperative Ideation / 精英白板协作设计',
                               type: 'practice',
-                              duration: '15m',
+                              duration: '13m',
                               color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
                               notes: 'Joint workspace analysis',
                             },
@@ -363,7 +364,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                               id: 'seg-preset-7',
                               title: 'Student Team Presentation / 各小组交互汇报',
                               type: 'lecture',
-                              duration: '15m',
+                              duration: '12m',
                               color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
                               notes: 'Group screen sharing',
                             },
@@ -382,14 +383,14 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           title: lang === 'zh' ? '翻转课堂高强度训练' : 'Targeted Problem-Solving Sprint',
                           desc:
                             lang === 'zh'
-                              ? '应试/解惑突破：10分钟温习，15分钟重难盲点攻坚，15分钟专项题演习。'
+                              ? '应试/解惑突破：8分钟温习，14分钟重难盲点攻坚，13分钟专项题演习，5分钟固化。'
                               : 'Perfect for exams and targeted training courses.',
                           segments: [
                             {
                               id: 'seg-preset-9',
                               title: 'Blind Spot Evaluation / 温史自学效果自测',
                               type: 'intro',
-                              duration: '10m',
+                              duration: '8m',
                               color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
                               notes: 'Scan quiz',
                             },
@@ -397,7 +398,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                               id: 'seg-preset-10',
                               title: 'Advanced Principle Explores / 重难考点极限拆解',
                               type: 'lecture',
-                              duration: '15m',
+                              duration: '14m',
                               color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
                               notes: 'Analyse weak metrics',
                             },
@@ -405,7 +406,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                               id: 'seg-preset-11',
                               title: 'Mock Solving Battle / 核心精选题实操对抗',
                               type: 'practice',
-                              duration: '15m',
+                              duration: '13m',
                               color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
                               notes: 'Sprint workout',
                             },
@@ -581,21 +582,22 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          const autofilled = generateTemplateContent(wizardCourseTitle, wizardCourseCategory);
-                          setWizardCourseContent(autofilled);
-                          addToast(
-                            lang === 'zh' ? '大纲模板生成成功' : 'Curriculum Loaded',
-                            lang === 'zh'
-                              ? '针对所选择的模型和属性已一键刷装教案模板框架。'
-                              : 'Prepopulated Markdown structure.',
-                            'success',
-                          );
-                        }}
-                        className="flex items-center gap-1 text-xs bg-indigo-50 border border-indigo-100 text-indigo-755 hover:bg-indigo-100 px-3 py-1 rounded-lg transition-colors font-bold cursor-pointer"
+                        onClick={() => void handleGenerateOutline()}
+                        disabled={wizardIsGeneratingOutline}
+                        className="flex items-center gap-1 text-xs bg-indigo-50 border border-indigo-100 text-indigo-755 hover:bg-indigo-100 px-3 py-1 rounded-lg transition-colors font-bold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <Sparkles size={13} className="text-indigo-500 animate-spin" />
-                        {lang === 'zh' ? '✨ 一键生成专家级教学大纲模版' : '✨ Autofill Outline Template'}
+                        {wizardIsGeneratingOutline ? (
+                          <Loader2 size={13} className="text-indigo-500 animate-spin" />
+                        ) : (
+                          <Sparkles size={13} className="text-indigo-500" />
+                        )}
+                        {wizardIsGeneratingOutline
+                          ? lang === 'zh'
+                            ? 'AI 正在生成大纲...'
+                            : 'AI is writing your outline...'
+                          : lang === 'zh'
+                            ? '✨ AI 生成专家级教学大纲'
+                            : '✨ AI-Generate Syllabus'}
                       </button>
                     </div>
 

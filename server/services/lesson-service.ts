@@ -46,6 +46,37 @@ const LATEST_VERSION_COLUMNS = `
   (SELECT v.link_url FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_link_url
 `;
 
+/**
+ * 学科分类 → AI 大纲提示词中的中文学科名。
+ * 前端向导的 `<select>` 下发的是英文枚举值（wizardCourseCategory）。
+ */
+const OUTLINE_CATEGORY_LABELS: Record<string, string> = {
+  Mathematics: '数学',
+  ComputerScience: '计算机科学',
+  Literature: '语文学',
+  Physics: '物理',
+  History: '历史学',
+  Art: '艺术设计',
+  Other: '综合素养',
+};
+
+/** 时间轴环节 type → 中文教学环节名 */
+const OUTLINE_SEGMENT_TYPE_LABELS: Record<string, string> = {
+  intro: '导入',
+  lecture: '新授',
+  practice: '练习',
+  summary: '总结',
+};
+
+/**
+ * 剥掉 LLM 偶发返回的整段 ```markdown / ```md 包裹，避免污染教案正文。
+ * 只处理"围栏包住整篇"的情况，正文内部的代码块保持原样。
+ */
+export function stripOuterCodeFence(text: string): string {
+  const match = text.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
+  return match ? match[1].trim() : text;
+}
+
 export function withLatestVersion(row: any): any {
   if (!row) return row;
   let files: any[] = [];
@@ -201,9 +232,9 @@ export class LessonService {
       this.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(lessonId);
 
       // Cascade delete interactive classroom session data
-      const sessionRows = this.db
-        .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?')
-        .all(lessonId) as { id: string }[];
+      const sessionRows = this.db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?').all(lessonId) as {
+        id: string;
+      }[];
 
       for (const s of sessionRows) {
         this.db
@@ -235,21 +266,23 @@ export class LessonService {
    * 获取课时关联数据宏观统计 (供删除确认弹窗使用)
    */
   public getLessonStats(lessonId: string): LessonStats {
-    const whiteboardCount = (
-      this.db.prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(lessonId) as any
-    )?.count || 0;
+    const whiteboardCount =
+      (this.db.prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(lessonId) as any)
+        ?.count || 0;
 
-    const scheduleCount = (
-      this.db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any
-    )?.count || 0;
+    const scheduleCount =
+      (this.db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any)?.count || 0;
 
-    const enrollmentCount = (
-      this.db.prepare('SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?').get(lessonId) as any
-    )?.count || 0;
+    const enrollmentCount =
+      (
+        this.db
+          .prepare('SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?')
+          .get(lessonId) as any
+      )?.count || 0;
 
-    const assignmentCount = (
-      this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any
-    )?.count || 0;
+    const assignmentCount =
+      (this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)?.count ||
+      0;
 
     return { whiteboardCount, scheduleCount, enrollmentCount, assignmentCount };
   }
@@ -459,9 +492,7 @@ export class LessonService {
 
     let grade = null;
     if (submission) {
-      grade = this.db
-        .prepare('SELECT * FROM plugin_grades WHERE submission_id = ?')
-        .get(submission.id) as any;
+      grade = this.db.prepare('SELECT * FROM plugin_grades WHERE submission_id = ?').get(submission.id) as any;
     }
 
     return {
@@ -509,5 +540,81 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
     await this.commandBus.execute(cmd);
     return hint;
+  }
+
+  /**
+   * 课程发布向导 —— AI 教学大纲生成
+   *
+   * 依据「课程课题 + 学科分类 + 课程简介 + 课堂时间轴环节」调用已配置的 AI Provider，
+   * 生成可直接落库的 Markdown 教学大纲正文。
+   *
+   * 历史背景：向导里的「一键生成专家级教学大纲」原先只是前端 `helpUtils2.generateTemplateContent`
+   * 的按学科硬编码字符串拼接，与课题内容无关。此方法用真实的 LLM 调用取代它。
+   */
+  public async generateOutlineWithAi(params: {
+    title: string;
+    category?: string;
+    description?: string;
+    timeline?: { title?: string; type?: string; duration?: string; notes?: string }[];
+    lang?: string;
+  }): Promise<string> {
+    const { title, category, description, timeline, lang = 'zh' } = params;
+
+    const trimmedTitle = (title || '').trim();
+    if (!trimmedTitle) {
+      const err: any = new Error(lang === 'zh' ? '课程课题不能为空' : 'Course title is required');
+      err.status = 400;
+      throw err;
+    }
+
+    const categoryLabel = OUTLINE_CATEGORY_LABELS[category || ''] || category || 'General';
+
+    const timelineText = (Array.isArray(timeline) ? timeline : [])
+      .map((seg, idx) => {
+        const segTitle = (seg?.title || '').trim() || `Stage ${idx + 1}`;
+        const segType = OUTLINE_SEGMENT_TYPE_LABELS[seg?.type || ''] || seg?.type || '';
+        const segNotes = (seg?.notes || '').trim();
+        return [
+          `${idx + 1}. ${segTitle}`,
+          seg?.duration ? `(${seg.duration})` : '',
+          segType ? `— ${segType}` : '',
+          segNotes ? `: ${segNotes}` : '',
+        ].join(' ');
+      })
+      .join('\n');
+
+    const prompt = `你是一位拥有 15 年经验的${categoryLabel}学科教学设计师。请围绕下面的课程课题，撰写一份可直接用于备课的 Markdown 教学大纲。
+
+## 输入信息
+- 课程课题：${trimmedTitle}
+- 学科分类：${categoryLabel}
+${description ? `- 课程简介与总目标：${String(description).trim()}` : '- 课程简介与总目标：（教师尚未填写，请依据课题自行拟定 2-3 条核心教学目标）'}
+${timelineText ? `- 课堂时间轴环节：\n${timelineText}` : '- 课堂时间轴环节：（教师尚未编排，请按导入—精讲—练习—总结的通用节奏自行规划）'}
+
+## 输出要求
+1. 只输出 Markdown 正文，**不要**使用 \`\`\` 代码块包裹整个答案，不要输出任何解释性前后缀。
+2. 第一行必须是以课程课题为主标题的一级标题 \`# ${trimmedTitle}\`。
+3. 正文严格按以下章节顺序组织：
+   - \`## 🎯 教学目标\`：3-4 条可观测、可评价的学习目标（使用行为动词）。
+   - \`## 🧭 教学重难点\`：重点与难点各列 1-2 条。
+   - \`## 🕒 课堂流程设计\`：与上述时间轴环节一一对应，每节写明时长、教学活动与师生活动。
+   - \`## ❓ 关键问题链\`：3-5 个由浅入深、用于启发思考的提问。
+   - \`## 📝 课堂练习与随堂检测\`：2-3 个具体的练习/检测任务。
+   - \`## 📥 课后作业\`：一份明确的课后任务与提交要求。
+4. 内容必须紧扣课题本身，禁止使用"公式 A""模块 1"之类的占位符或与课题无关的通用套话。
+5. 篇幅控制在 600-1000 字，语言${lang === 'zh' ? '使用简体中文' : 'use English'}。`;
+
+    const raw = await this.aiService.generateText(prompt, { temperature: 0.6, maxTokens: 2048 });
+    const outline = stripOuterCodeFence(String(raw || '').trim());
+
+    if (!outline) {
+      const err: any = new Error(
+        lang === 'zh' ? 'AI Provider 返回了空内容，请稍后重试或更换模型。' : 'AI Provider returned empty content.',
+      );
+      err.status = 502;
+      throw err;
+    }
+
+    return outline;
   }
 }

@@ -3,7 +3,6 @@ import { registerTeacherActivityCenter } from '../features/activity-ecosystem/re
 
 registerTeacherActivityCenter();
 import { usePluginHost } from '../plugin-host/plugin-host-context';
-import { generateTemplateContent } from '../features/teacher/HelpView';
 import { useAppStore, appStore } from '../store/appStore';
 import { translations } from '../i18n';
 import { useToast } from './useToast';
@@ -202,7 +201,8 @@ export function useAppComposer() {
     isTourOpen: session.isTourOpen,
     setIsTourOpen: session.setIsTourOpen,
     handleSeedSuccess: lessons.handleSeedSuccess,
-    generateTemplateContent,
+    wizardIsGeneratingOutline: lessons.wizardIsGeneratingOutline,
+    handleGenerateOutline: lessons.handleGenerateOutline,
     activeRole: session.activeRole,
     setActiveRole: session.setActiveRole,
     isStudentPreviewMode: session.isStudentPreviewMode,

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
-import { LessonService } from '../lesson-service.js';
+import { LessonService, stripOuterCodeFence } from '../lesson-service.js';
 
 describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
   let service: LessonService;
@@ -182,7 +182,110 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
     });
   });
 
-  describe('4. 课时深度克隆 (cloneLesson)', () => {
+  describe('4. AI 教学大纲生成 (generateOutlineWithAi)', () => {
+    /** 捕获 prompt 的 mock AI，用于断言提示词确实携带了教师输入的上下文 */
+    function makeAiService(response: string) {
+      const generateText = vi.fn(async (_prompt: string, _options?: unknown) => response);
+      return { generateText };
+    }
+
+    const timeline = [
+      { title: 'Course Orientation / 课堂导入', type: 'intro', duration: '5m', notes: 'Warm up topic' },
+      { title: 'Subject Core Lecture / 核心理论精讲', type: 'lecture', duration: '15m', notes: 'Main content' },
+      { title: 'Interactive Lab Work / 随堂协同演练', type: 'practice', duration: '15m', notes: 'Exercises' },
+      { title: 'Wrap up / 课堂成果总结与答疑', type: 'summary', duration: '5m', notes: 'Check answers' },
+    ];
+
+    it('应把课题、学科、简介与时间轴环节注入提示词，返回 AI 生成的大纲', async () => {
+      const outline = '# 西方哲学：康德的三大批判\n\n## 🎯 教学目标\n- 理解批判哲学';
+      const ai = makeAiService(outline);
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      const result = await svc.generateOutlineWithAi({
+        title: '西方哲学：康德的三大批判',
+        category: 'History',
+        description: '面向高中生的哲学入门',
+        timeline,
+        lang: 'zh',
+      });
+
+      const prompt = ai.generateText.mock.calls[0][0];
+      expect(prompt).toContain('西方哲学：康德的三大批判');
+      expect(prompt).toContain('历史学'); // category 枚举值应翻译为中文学科名
+      expect(prompt).toContain('面向高中生的哲学入门');
+      // 时间轴每个环节的标题与时长都应进入提示词
+      expect(prompt).toContain('Subject Core Lecture / 核心理论精讲');
+      expect(prompt).toContain('(15m)');
+      expect(prompt).toContain('导入'); // segment type 应翻译为中文环节名
+
+      expect(result).toBe(outline);
+    });
+
+    it('应剥离 LLM 偶发返回的整段 markdown 代码围栏', async () => {
+      const ai = makeAiService('```markdown\n# 课题\n\n## 🎯 教学目标\n- 目标一\n```');
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      const result = await svc.generateOutlineWithAi({ title: '课题', category: 'Mathematics', lang: 'zh' });
+
+      expect(result).toBe('# 课题\n\n## 🎯 教学目标\n- 目标一');
+      expect(result.startsWith('```')).toBe(false);
+    });
+
+    it('未提供 description / timeline 时应给出兜底提示语而非报错', async () => {
+      const ai = makeAiService('# 兜底大纲');
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      await svc.generateOutlineWithAi({ title: '仅有课题', category: 'Other', lang: 'zh' });
+
+      const prompt = ai.generateText.mock.calls[0][0];
+      expect(prompt).toContain('教师尚未填写');
+      expect(prompt).toContain('教师尚未编排');
+      expect(prompt).toContain('综合素养'); // Other → 综合素养
+    });
+
+    it('课题为空时应抛出 400，且不调用 AI', async () => {
+      const ai = makeAiService('should not be called');
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      await expect(svc.generateOutlineWithAi({ title: '   ', lang: 'zh' })).rejects.toThrow('课程课题不能为空');
+      expect(ai.generateText).not.toHaveBeenCalled();
+    });
+
+    it('AI 返回空内容时应抛出 502', async () => {
+      const ai = makeAiService('   ');
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      await expect(svc.generateOutlineWithAi({ title: '课题', lang: 'zh' })).rejects.toThrow(
+        'AI Provider 返回了空内容',
+      );
+    });
+
+    it('AI 不可用时错误应向上冒泡（由 sendSafeError 转译为可读提示）', async () => {
+      const ai = {
+        generateText: async () => {
+          throw new Error('未检测到可用的 AI 提供商。');
+        },
+      };
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      await expect(svc.generateOutlineWithAi({ title: '课题', lang: 'zh' })).rejects.toThrow(
+        '未检测到可用的 AI 提供商',
+      );
+    });
+
+    it('英文界面应要求模型使用英文作答', async () => {
+      const ai = makeAiService('# Lesson Plan');
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      await svc.generateOutlineWithAi({ title: 'Intro to Regressions', category: 'Mathematics', lang: 'en' });
+
+      const prompt = ai.generateText.mock.calls[0][0];
+      expect(prompt).toContain('use English');
+      expect(prompt).toContain('Intro to Regressions');
+    });
+  });
+
+  describe('5. 课时深度克隆 (cloneLesson)', () => {
     it('应深克隆课时本体及所包含的全部白板图元', () => {
       // 在原课时写入 2 个白板图元
       const el1Id = uuidv7();
@@ -230,7 +333,7 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
     });
   });
 
-  describe('5. 课时多表级联删除事务 (deleteLessonCascade)', () => {
+  describe('6. 课时多表级联删除事务 (deleteLessonCascade)', () => {
     it('级联删除应在单事务内彻底清除 10+ 张关联表，零孤儿数据残留', () => {
       const cascadeLessonId = `lesson-cascade-${uuidv7()}`;
       const sessionId = `session-cascade-${uuidv7()}`;
@@ -273,13 +376,9 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
       db.prepare(
         'INSERT INTO classroom_poll_votes (id, poll_id, student_id, selected_option, voted_at) VALUES (?, ?, ?, ?, ?)',
       ).run(uuidv7(), pollId, 'stu-test-cascade', 'A', now);
-      db.prepare('INSERT INTO classroom_buzzers (id, session_id, lesson_id, status, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        uuidv7(),
-        sessionId,
-        cascadeLessonId,
-        'READY',
-        now,
-      );
+      db.prepare(
+        'INSERT INTO classroom_buzzers (id, session_id, lesson_id, status, created_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(uuidv7(), sessionId, cascadeLessonId, 'READY', now);
       db.prepare(
         'INSERT INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, rating, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(uuidv7(), sessionId, cascadeLessonId, 'stu-test-cascade', 5, 'Great class', now);
@@ -293,14 +392,16 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
       expect(delResult.deleted).toBe(true);
 
       // 校验所有子表零残留
-      expect(
-        (db.prepare('SELECT COUNT(*) as n FROM lessons WHERE id = ?').get(cascadeLessonId) as any).n,
-      ).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as n FROM lessons WHERE id = ?').get(cascadeLessonId) as any).n).toBe(0);
       expect(
         (db.prepare('SELECT COUNT(*) as n FROM whiteboard_elements WHERE lesson_id = ?').get(cascadeLessonId) as any).n,
       ).toBe(0);
       expect(
-        (db.prepare('SELECT COUNT(*) as n FROM student_lesson_progress WHERE lesson_id = ?').get(cascadeLessonId) as any).n,
+        (
+          db
+            .prepare('SELECT COUNT(*) as n FROM student_lesson_progress WHERE lesson_id = ?')
+            .get(cascadeLessonId) as any
+        ).n,
       ).toBe(0);
       expect(
         (db.prepare('SELECT COUNT(*) as n FROM schedules WHERE lesson_id = ?').get(cascadeLessonId) as any).n,
@@ -327,12 +428,16 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
         (db.prepare('SELECT COUNT(*) as n FROM classroom_pacing_signals WHERE session_id = ?').get(sessionId) as any).n,
       ).toBe(0);
       expect(
-        (db.prepare('SELECT COUNT(*) as n FROM lesson_quiz_submissions WHERE lesson_id = ?').get(cascadeLessonId) as any).n,
+        (
+          db
+            .prepare('SELECT COUNT(*) as n FROM lesson_quiz_submissions WHERE lesson_id = ?')
+            .get(cascadeLessonId) as any
+        ).n,
       ).toBe(0);
     });
   });
 
-  describe('6. 作业互评与版本多模态展开 (getEvalSubmissions / getEvalGrades / getStudentEvalStatus)', () => {
+  describe('7. 作业互评与版本多模态展开 (getEvalSubmissions / getEvalGrades / getStudentEvalStatus)', () => {
     it('getEvalSubmissions 应正确解析展开最新版本的附件/纯文本/链接字段', () => {
       const subId = `sub-test-${uuidv7()}`;
       const now = Date.now();
@@ -343,7 +448,16 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
 
       db.prepare(
         'INSERT INTO plugin_submission_versions (id, submission_id, student_id, version, files_json, text_content, link_url, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(uuidv7(), subId, studentId, 1, JSON.stringify(['https://example.com/file.pdf']), '这是我的解题思路', 'https://github.com/solution', now);
+      ).run(
+        uuidv7(),
+        subId,
+        studentId,
+        1,
+        JSON.stringify(['https://example.com/file.pdf']),
+        '这是我的解题思路',
+        'https://github.com/solution',
+        now,
+      );
 
       const submissions = service.getEvalSubmissions(testLessonId);
       expect(submissions.length).toBeGreaterThanOrEqual(1);

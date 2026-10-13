@@ -30,7 +30,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
       id: 'seg-w2',
       title: 'Subject Core Lecture / 核心精讲',
       type: 'lecture',
-      duration: '20m',
+      duration: '15m',
       color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
       notes: 'Present major content frameworks',
     },
@@ -52,6 +52,69 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     },
   ]);
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
+  const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
+
+  /**
+   * 依据课题调用后端 AI Provider 真实生成 Markdown 教学大纲。
+   * （原先此处调用的是前端硬编码的 `generateTemplateContent` 静态模板，与课题无关。）
+   */
+  const handleGenerateOutline = async () => {
+    if (wizardIsGeneratingOutline) return;
+
+    if (!wizardCourseTitle.trim()) {
+      addToast(
+        lang === 'zh' ? '请先填写课程课题' : 'Course Title Required',
+        lang === 'zh' ? 'AI 需要课题名称才能生成大纲。' : 'AI needs a course title to generate the outline.',
+        'warning',
+      );
+      return;
+    }
+
+    setWizardIsGeneratingOutline(true);
+    try {
+      const res = await fetch('/api/lessons/generate-outline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: wizardCourseTitle,
+          category: wizardCourseCategory,
+          description: wizardCourseDescription,
+          timeline: wizardCourseTimeline,
+          lang,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+      }
+
+      const content = (data.content || '').trim();
+      if (!content) throw new Error(lang === 'zh' ? 'AI 返回了空内容' : 'AI returned empty content');
+
+      setWizardCourseContent(content);
+      addToast(
+        lang === 'zh' ? '✨ AI 大纲生成成功' : '✨ AI Outline Generated',
+        lang === 'zh'
+          ? `已根据《${wizardCourseTitle}》生成 ${content.length} 字的专家级教学大纲。`
+          : `Generated a ${content.length}-character outline for "${wizardCourseTitle}".`,
+        'success',
+      );
+    } catch (err: any) {
+      console.error(err);
+      addToast(
+        lang === 'zh' ? 'AI 大纲生成失败' : 'AI Outline Generation Failed',
+        err?.message ||
+          (lang === 'zh'
+            ? '请确认「系统管理 -> AI 提供商管理」中已配置可用的模型服务。'
+            : 'Please configure a working AI Provider in System Management.'),
+        'error',
+      );
+    } finally {
+      setWizardIsGeneratingOutline(false);
+    }
+  };
 
   const handleDeployWizardCourse = async () => {
     if (!wizardCourseTitle.trim()) {
@@ -127,6 +190,8 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     setWizardCourseTimeline,
     wizardIsSubmitting,
     setWizardIsSubmitting,
+    wizardIsGeneratingOutline,
+    handleGenerateOutline,
     handleDeployWizardCourse,
   };
 }

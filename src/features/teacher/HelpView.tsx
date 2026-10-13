@@ -315,5 +315,3 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
     </div>
   );
 }
-
-export { generateTemplateContent } from './help/helpUtils2';
