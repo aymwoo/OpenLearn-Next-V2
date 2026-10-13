@@ -84,7 +84,7 @@
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "pino": "^10.3.1",
-    "pptx-preview": "^0.0.5",
+    "pptx-react-viewer": "^4.33.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-konva": "^19.2.4",
@@ -113,6 +113,7 @@
     "@types/node": "^22.14.0",
     "@types/pino": "^7.0.4",
     "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.0.0",
     "@types/reveal.js": "^5.2.2",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.62.0",
@@ -132,7 +133,6 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "vitest": "^4.1.9",
-    "@types/react-dom": "^19.0.0"
+    "vitest": "^4.1.9"
   }
 }

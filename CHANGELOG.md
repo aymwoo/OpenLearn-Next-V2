@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
 - **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
 
+### Features
+
+- **白板课件演示套件重构（替换为现代化 OOXML PPTX Viewer）**：
+  - 彻底移除已废弃且存在渲染空白与挂死缺陷的 `pptx-preview@0.0.5`；
+  - 接入企业级高保真演示套件 [ChristopherVR/ooxml](https://github.com/ChristopherVR/ooxml) 官方 React 绑定 `pptx-react-viewer`，天然兼容 React 19；
+  - 修复 PPTX 课件视口尺寸计算、异步加载及单页放映逻辑，实现与白板教师/学生翻页状态双向同步及总页数自动更新；
+  - 解决全屏放映与普通卡片视图下的 DOM Ref 冲突，提供优雅的加载态与错误重试机制；
+  - 优化 Vite 分包策略，将 `pptx-react-viewer` 及 `ooxml` 依赖精准打包至独立的 `vendor-pptx` chunk，保障首屏体积不膨胀。
+
 ### Fixes
 
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。

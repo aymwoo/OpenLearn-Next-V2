@@ -10,7 +10,7 @@ import { render, screen, cleanup } from '@testing-library/react';
  *   2. 画布不接受绘制操作（容器 pointer-events: none）；
  *   3. 插件组件本体仍然可交互（其内部显式 pointer-events: auto）。
  *
- * Konva / reveal.js / pptx-preview 在 jsdom 下无法真实渲染，故以最薄的方式替身。
+ * Konva / reveal.js / pptx-react-viewer 在 jsdom 下无法真实渲染，故以最薄的方式替身。
  * vi.mock 工厂会被提升到文件顶部，因此所有桩件都在工厂内部或 vi.hoisted 中定义。
  */
 
@@ -42,7 +42,8 @@ vi.mock('reveal.js', () => ({ default: class RevealStub {} }));
 vi.mock('reveal.js/reveal.css', () => ({}));
 vi.mock('reveal.js/theme/white.css', () => ({}));
 vi.mock('reveal.js/plugin/markdown', () => ({ default: {} }));
-vi.mock('pptx-preview', () => ({ init: vi.fn() }));
+vi.mock('pptx-react-viewer', () => ({ PowerPointViewer: () => <div data-testid="mock-pptx-viewer" /> }));
+vi.mock('pptx-react-viewer/styles', () => ({}));
 
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
   ExtensionPointRenderer: () => <div data-testid="mock-extension-point" />,

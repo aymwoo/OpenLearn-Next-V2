@@ -90,7 +90,7 @@ export default defineConfig({
             if (id.includes('/reveal.js/')) {
               return 'vendor-reveal';
             }
-            if (id.includes('/pptx-preview/')) {
+            if (id.includes('/pptx-react-viewer/') || id.includes('/ooxml-core/') || id.includes('/ooxml-ui/')) {
               return 'vendor-pptx';
             }
             // Utilities
