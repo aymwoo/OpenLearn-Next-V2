@@ -126,7 +126,7 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** 插入一行 installed 状态的插件记录（执行模式可指定） */
 export function insertPluginRow(
   db: Database.Database,
-  opts: { id: string; manifest: Record<string, unknown>; executionMode?: string },
+  opts: { id: string; manifest: Record<string, unknown>; executionMode?: string; status?: string },
 ): void {
   db.prepare(
     'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version, version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -135,7 +135,7 @@ export function insertPluginRow(
     String(opts.manifest.name ?? opts.id),
     JSON.stringify(opts.manifest),
     '',
-    'installed',
+    opts.status ?? 'installed',
     Date.now(),
     'esm',
     String(opts.manifest.version ?? '1.0.0'),

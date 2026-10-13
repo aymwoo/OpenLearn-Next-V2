@@ -37,7 +37,7 @@ findByManifestId(manifestId: string): {
 ```typescript
 interface PluginUpdateOptions {
   targetPluginId?: string;          // 锁定目标插件（DB UUID 或 manifest.id）
-  executionMode?: 'worker' | 'inline';
+  executionMode?: 'worker' | 'inline' | 'process';
   allowDowngrade?: boolean;         // 是否允许版本降级
 }
 
@@ -54,14 +54,14 @@ interface PluginUpdateResult {
 updateFromZip(zipPath: string, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
 
 // 既有方法扩展：现支持指定执行模式
-installFromZip(zipPath: string, executionMode?: 'worker' | 'inline'): Promise<{ pluginId: string; manifest: Manifest }>;
+installFromZip(zipPath: string, executionMode?: 'worker' | 'inline' | 'process'): Promise<{ pluginId: string; manifest: Manifest }>;
 ```
 
 ### 命令总线入口（builtin 插件）
 
 | 命令类型            | 权限           | 高危  | 入参                                                                                                            |
 | ------------------- | -------------- | ----- | --------------------------------------------------------------------------------------------------------------- |
-| `plugin.update_zip` | `plugin:write` | ✅ 是 | `{ base64Data: string, targetPluginId?: string, executionMode?: 'worker'\|'inline', allowDowngrade?: boolean }` |
+| `plugin.update_zip` | `plugin:write` | ✅ 是 | `{ base64Data: string, targetPluginId?: string, executionMode?: 'worker'\|'inline'\|'process', allowDowngrade?: boolean }`。非受信插件的 `executionMode` 会被改写为 `process`，且不会因为清单 `auth: false` 自动公开路由 |
 
 该命令将 Base64 ZIP 交给 `distributionManager.updateFromZip`。
 
@@ -95,9 +95,10 @@ GET /api/plugins/by-manifest/:manifestId(*)
 ```
 POST /api/plugins/install            # body: application/octet-stream (zip)
 Header: x-install-mode: update        # 缺省为 install
-Header: x-execution-mode: worker|inline
+Header: x-execution-mode: worker|inline|process
 Header: x-target-plugin-id: <pluginId>
 Header: x-allow-downgrade: true|false
+Header: x-approve-public-routes: true|false
 → 更新模式返回 { success:true, updated:true, pluginId, manifest,
     oldVersion, newVersion, wasActive, filename }
 ```
@@ -106,8 +107,9 @@ Header: x-allow-downgrade: true|false
 
 ```
 POST /api/plugins/:id(*)/update-zip-raw   # body: application/octet-stream (zip)
-Header: x-execution-mode: worker|inline
+Header: x-execution-mode: worker|inline|process
 Header: x-allow-downgrade: true|false
+Header: x-approve-public-routes: true|false
 → { success:true, updated:true, pluginId, manifest, oldVersion, newVersion, wasActive }
 ```
 
@@ -118,7 +120,9 @@ POST /api/plugins/install-from-url        # 管理员专属（requireAuth('admin
 Body: { downloadUrl: string,
         expectedId?: string,      # 合法插件 id 格式；已在本机安装时自动改走 updateFromZip
         allowDowngrade?: boolean, # 默认关闭
-        executionMode?: 'worker'|'inline' }
+        executionMode?: 'worker'|'inline'|'process',
+        acknowledgeRisk: true,          # 必须为布尔 true，否则 400 COMMUNITY_RISK_ACK_REQUIRED
+        approvePublicRoutes?: boolean } # 默认不批准 auth:false 路由
 → 安装: { success:true, updated:false, pluginId, manifest, filename, bytes }
 → 更新: { success:true, updated:true, pluginId, manifest, oldVersion, newVersion, wasActive, filename, bytes }
 → 下载失败: 400 { success:false, error, fallbackToClient:true }

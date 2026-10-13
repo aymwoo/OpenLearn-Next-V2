@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。
+  - **迁移**：需要某个自研插件继续进程内运行时，在环境变量写 `OPENLEARN_TRUSTED_INLINE_PLUGINS=ext-your-plugin,ext-other` 后重启。预加载进宿主的内置代码不受此限制。已安装的库内记录会在下次启动恢复时改写。子进程仍受 `OPENLEARN_PLUGIN_PERMISSION`（默认 `rw`）与 `OPENLEARN_PLUGIN_MAX_HEAP_MB` 约束；Node 权限模型目前约束不了出站网络。
+- **插件清单 `auth: false` 不再让路由匿名可访问**。它只表示插件申请公开。匿名放行还要求管理员把 `METHOD + path` 写入 `plugin_public_routes`（迁移 `022`）。批准方式：安装/更新请求体 `approvePublicRoutes: true`，或头 `x-approve-public-routes: true`，或 `POST /api/plugins/:id/public-routes` 且 body `{ "approvePublicRoutes": true }`。对该端点省略或传 `false` 会清掉该插件已批准的公开路由。卸载插件时一并删除。
+  - **迁移**：升级后，原先靠 `auth: false` 对匿名用户开放的接口会返回 401。由管理员按上面三种方式之一重新批准。不要在社区一键安装时默认勾选。
+- **`POST /api/plugins/install-from-url` 在 URL 安全校验通过后、下载之前要求 `acknowledgeRisk: true`**。缺失时返回 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`。管理界面会先弹出风险说明，确认后才发请求。
+  - **迁移**：调用该接口的脚本补上 `"acknowledgeRisk": true`。公开路由仍须另传 `"approvePublicRoutes": true`。
+- **`pnpm install` 会通过 `prepare` 构建 `@openlearn/plugin-sdk` 的 `dist/`**。`pnpm build`、CI 与 Docker 镜像同样包含这一步，生产镜像内可以 `require('@openlearn/plugin-sdk')`。
+  - **迁移**：使用 `pnpm install --ignore-scripts` 时，在 `pnpm lint` / 启动前执行 `node scripts/build-plugin-sdk.mjs`。不要把未构建的 SDK 目录拷进只含 `node_modules` 的运行镜像。
+
 - **种子账号不再长期使用 `admin` / `admin`、`teacher` / `teacher`**。空库首次启动：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或从启动日志与 `storage/bootstrap-credentials.txt` 读取随机口令。存量库若口令仍等于用户名，仍可登录，但 `must_change_password` 会置位，除改密、登出、`/api/auth/session`、`/api/auth/me` 外的 `/api` 请求（含 GET）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。生产环境不要设置 `PLAYWRIGHT_TEST`。
 - **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
 - **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。

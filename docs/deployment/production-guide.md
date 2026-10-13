@@ -38,9 +38,11 @@ pm2 start openlearn-next --name "openlearn-core" -- -p 9000 -H 0.0.0.0
 # 1. 克隆源码与拉取依赖
 git clone https://github.com/aymwoo/OpenLearn-Next-V2.git /opt/openlearn
 cd /opt/openlearn
+# prepare 会构建 @openlearn/plugin-sdk 的 dist/。若使用 --ignore-scripts，
+# 请在 lint / 启动前另执行：node scripts/build-plugin-sdk.mjs
 pnpm install --frozen-lockfile
 
-# 2. 全量生产制品构建 (Vite + 插件 + esbuild 后端 Bundle)
+# 2. 全量生产制品构建 (plugin-sdk + bridge-sdk + Vite + 插件 + esbuild 后端 Bundle)
 pnpm build
 
 # 3. 验证构建产物

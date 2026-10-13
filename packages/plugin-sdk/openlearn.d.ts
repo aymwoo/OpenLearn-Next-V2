@@ -74,6 +74,11 @@ interface Manifest {
     routes?: Array<{
       method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       path: string;
+      /**
+       * `false` 表示插件希望该路由匿名可访问。宿主不会因此跳过鉴权：
+       * 管理员必须在安装时传入 approvePublicRoutes，或调用
+       * POST /api/plugins/:id/public-routes 显式批准同一 method + path。
+       */
       auth?: boolean;
       roles?: string[];
       rateLimit?: {
@@ -692,7 +697,7 @@ interface PluginHost {
   listPlugins(): PluginInfo[];
   resolvePluginUuid(idOrManifestId: string): string;
   installPlugin(sourceCode: string): Promise<Manifest>;
-  activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void>;
+  activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' | 'process' }): Promise<void>;
   deactivatePlugin(pluginId: string): Promise<void>;
   togglePlugin(pluginId: string): Promise<string>;
 }

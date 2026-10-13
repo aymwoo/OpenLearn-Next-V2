@@ -269,7 +269,7 @@ export default {
     },
   },
   activate: async (ctx: PluginContext) => {
-    // 1. 公开端点：无需登录直接提交
+    // 1. 申请公开的端点：auth: false 之后仍须管理员批准 plugin_public_routes，否则网关返回 401
     ctx.http.post('/submit', async (req: PluginApiRequest) => {
       const { score, comment } = req.body || {};
       ctx.log.info('收到匿名反馈', { score, ip: req.ip });

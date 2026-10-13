@@ -9,6 +9,7 @@ import { EsmLoader } from '../esm-loader/esm-loader.js';
 import { CapabilityGuard } from '../capability/index.js';
 import Database from 'better-sqlite3';
 import { pluginApiGatewayMiddleware } from '../../../server/routes/plugin-api-gateway.js';
+import { approveDeclaredPublicRoutes } from '../plugin-host/public-routes.js';
 import { kernelContainer } from '../kernel/index.js';
 import type { Request, Response } from 'express';
 
@@ -370,7 +371,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
       expect(res.body?.error).toContain('Forbidden');
     });
 
-    it('显式声明 auth: false 的公共接口无需登录直接放行', async () => {
+    it('仅声明 auth: false 时网关仍要求登录', async () => {
       const manifest = {
         id: 'ext-public-hub',
         name: 'Public Hub',
@@ -390,6 +391,39 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
 
       const req: Partial<Request> = {
         params: { pluginId: 'ext-public-hub', 0: 'public-status' } as any,
+        method: 'GET',
+        headers: {},
+        query: {},
+      };
+      const res = createMockRes();
+
+      await pluginApiGatewayMiddleware(req as Request, res as Response, () => {});
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body?.error).toContain('Authentication required');
+    });
+
+    it('管理员批准后，auth: false 的公共接口才无需登录放行', async () => {
+      const manifest = {
+        id: 'ext-public-hub-approved',
+        name: 'Public Hub Approved',
+        version: '1.0.0',
+        main: 'index.js',
+        api: {
+          routes: [{ method: 'GET', path: '/public-status', auth: false }],
+        },
+      };
+      pluginHost.registerPreloadedPlugin('ext-public-hub-approved', {
+        manifest,
+        activate: async (ctx: any) => {
+          ctx.http.get('/public-status', async () => ({ online: true }));
+        },
+      });
+      await pluginHost.activatePlugin('ext-public-hub-approved');
+      approveDeclaredPublicRoutes(db, ['ext-public-hub-approved'], manifest);
+
+      const req: Partial<Request> = {
+        params: { pluginId: 'ext-public-hub-approved', 0: 'public-status' } as any,
         method: 'GET',
         headers: {},
         query: {},
@@ -428,6 +462,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         },
       };
 
+      approveDeclaredPublicRoutes(db, ['ext-sneaky-plugin'], manifest);
       pluginHost.registerPreloadedPlugin('ext-sneaky-plugin', {
         manifest,
         activate: async (ctx: any) => {

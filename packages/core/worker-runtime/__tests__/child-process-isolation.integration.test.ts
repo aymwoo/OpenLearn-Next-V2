@@ -125,16 +125,25 @@ describe('L-1 P1 阶段 2 · 子进程隔离原语', () => {
   }, 30_000);
 
   it('子进程拿不到宿主密钥（相对 worker_threads 的净收益）', async () => {
-    // 前置：确认宿主环境里确实有疑似密钥，否则本用例无意义
-    const hostSecretish = Object.keys(process.env).filter((k) => /KEY|SECRET|TOKEN|AUTH/i.test(k));
-    expect(hostSecretish.length, '当前环境没有疑似密钥变量，本用例无法证明隔离效果').toBeGreaterThan(0);
+    // 用例自己注入疑似密钥，不依赖 CI / 开发机恰好有 KEY|SECRET|TOKEN。
+    const sentinel = 'OPENLEARN_TEST_SECRET_SENTINEL';
+    const previous = process.env[sentinel];
+    process.env[sentinel] = 'super-secret-value';
+    try {
+      const hostSecretish = Object.keys(process.env).filter((k) => /KEY|SECRET|TOKEN|AUTH/i.test(k));
+      expect(hostSecretish, '注入的测试密钥必须能被宿主看到').toContain(sentinel);
 
-    const env = buildMinimalEnv({ pluginId: 'p', manifestId: 'm', serviceTokens: [] });
-    const leaked = Object.keys(env).filter((k) => /KEY|SECRET|TOKEN|AUTH/i.test(k));
-    expect(leaked, `子进程 env 泄漏了：${leaked.join(', ')}`).toEqual([]);
-    // 白名单里的无害变量应保留
-    if (process.env.PATH) expect(env.PATH).toBe(process.env.PATH);
-    expect(env[WORKER_DATA_ENV], '数据变量必须注入').toContain('manifestId');
+      const env = buildMinimalEnv({ pluginId: 'p', manifestId: 'm', serviceTokens: [] });
+      const leaked = Object.keys(env).filter((k) => /KEY|SECRET|TOKEN|AUTH/i.test(k));
+      expect(leaked, `子进程 env 泄漏了：${leaked.join(', ')}`).toEqual([]);
+      expect(env[sentinel]).toBeUndefined();
+      // 白名单里的无害变量应保留
+      if (process.env.PATH) expect(env.PATH).toBe(process.env.PATH);
+      expect(env[WORKER_DATA_ENV], '数据变量必须注入').toContain('manifestId');
+    } finally {
+      if (previous === undefined) delete process.env[sentinel];
+      else process.env[sentinel] = previous;
+    }
   });
 
   it('NODE_OPTIONS 被排除（继承它会让子进程起不来或执行注入代码）', () => {

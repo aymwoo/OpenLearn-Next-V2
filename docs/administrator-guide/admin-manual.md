@@ -159,7 +159,8 @@
 | POST   | `/api/plugins`                              | `requireAuth('administrator')` | 以源码安装（`plugin.install`）   |
 | POST   | `/api/plugins/upload-zip`                   | `requireAuth('administrator')` | ZIP 安装（`plugin.install_zip`） |
 | POST   | `/api/plugins/upload-zip-raw`               | `requireAuth('administrator')` | 原始 ZIP 流式安装（上限 400mb）  |
-| POST   | `/api/plugins/install-from-url`             | `requireAuth('administrator')` | 从 URL 安装                      |
+| POST   | `/api/plugins/install-from-url`             | `requireAuth('administrator')` | 从 URL 安装（须 `acknowledgeRisk: true`） |
+| POST   | `/api/plugins/:id/public-routes`            | `requireAuth('administrator')` | 批准或撤销 manifest 中 `auth: false` 的公开路由 |
 | POST   | `/api/plugins/:id/update-zip-raw`           | `requireAuth('administrator')` | in-place 更新（原始 ZIP）        |
 | POST   | `/api/plugins/:id/check-update`             | `requireAuth()`               | 检查更新                         |
 | POST   | `/api/plugins/:id/one-click-update`         | `requireAuth('administrator')` | 一键更新                         |
@@ -177,16 +178,19 @@
 | 头                    | 取值                        | 作用                                     |
 | --------------------- | --------------------------- | ---------------------------------------- |
 | `x-filename`          | URL-encoded 文件名          | 缺省 `plugin.zip`                        |
-| `x-execution-mode`    | `worker` / `inline`         | 强制执行模式；其它值忽略（用 manifest 声明） |
+| `x-execution-mode`    | `worker` / `inline` / `process` | 请求的执行模式。非 `@openlearn/` 且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件一律改写为 `process` |
 | `x-install-mode`      | `install`（默认）/ 其他     | 安装语义                                 |
 | `x-allow-downgrade`   | `true` / 其它               | 允许降级安装                             |
 | `x-target-plugin-id`  | URL-encoded 插件 id         | 指定更新目标                             |
+| `x-approve-public-routes` | `true` / 其它           | 为 `true` 时批准清单里 `auth: false` 的路由；其它值不批准 |
 
 ### 4.3 能力审核
 
 插件在 manifest 中通过 `capabilitiesProposed` 声明所需能力字符串（如 `lesson:read` / `lesson:write` / `whiteboard:write`）。运行时由 `CapabilityGuard` 按 `actorId` 逐条校验。管理员在安装时应核对声明的能力是否与插件功能相符——完整能力字典见 [插件能力矩阵](../reference/plugin-capability-matrix)，槽位清单见 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots)。
 
-> ⚠️ **执行模式选择有实际后果**：inline 模式与 worker 模式的沙箱强度不同（worker 有独立线程与 Token 白名单），第三方不可信插件**应使用 worker 模式**。
+> ⚠️ **第三方插件固定为子进程**。Worker 线程与宿主共享环境变量，不能隔离密钥。manifest id 不以 `@openlearn/` 开头、且未列入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的包，安装、更新、激活和启动恢复时都会改成 `process`。响应里的 `executionMode` / `isolation_mode` 是实际模式；`executionModeCoerced: true` 表示请求被改写。
+>
+> ⚠️ **`auth: false` 只是申请**。网关在管理员把该方法与路径写入 `plugin_public_routes` 之前仍然要求登录。批准：安装体 `approvePublicRoutes: true`、头 `x-approve-public-routes: true`，或 `POST /api/plugins/:id/public-routes`（body `{ "approvePublicRoutes": true }` 写入，省略或 `false` 清空）。社区安装另须 `acknowledgeRisk: true`，否则 400 `COMMUNITY_RISK_ACK_REQUIRED`。
 
 ### 4.4 插件日志
 

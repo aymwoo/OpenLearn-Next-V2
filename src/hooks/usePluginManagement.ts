@@ -255,7 +255,12 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
   const handleZipPluginUpload = async (
     file: File,
     executionMode: 'worker' | 'inline' | 'process',
-    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+    opts?: {
+      mode?: 'install' | 'update';
+      targetPluginId?: string;
+      allowDowngrade?: boolean;
+      approvePublicRoutes?: boolean;
+    },
   ) => {
     setInstallingPlugin(true);
     const isUpdate = opts?.mode === 'update';
@@ -267,6 +272,9 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
         'X-Install-Mode': isUpdate ? 'update' : 'install',
         'X-Allow-Downgrade': opts?.allowDowngrade ? 'true' : 'false',
       };
+      if (opts?.approvePublicRoutes) {
+        headers['X-Approve-Public-Routes'] = 'true';
+      }
       if (opts?.targetPluginId) {
         headers['X-Target-Plugin-Id'] = encodeURIComponent(opts.targetPluginId);
       }
@@ -313,6 +321,27 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       }, 1000);
 
       const pluginName = data.manifest?.name || installedId || file.name;
+      const effectiveMode = typeof data.executionMode === 'string' ? data.executionMode : executionMode;
+      const modeLabel =
+        effectiveMode === 'process'
+          ? lang === 'zh'
+            ? '子进程隔离'
+            : 'process isolation'
+          : effectiveMode === 'worker'
+            ? lang === 'zh'
+              ? 'Worker 线程'
+              : 'worker thread'
+            : effectiveMode === 'inline'
+              ? lang === 'zh'
+                ? '主进程'
+                : 'in-process'
+              : effectiveMode;
+      const coercedNote =
+        data.executionModeCoerced === true
+          ? lang === 'zh'
+            ? '（未受信任插件已强制改为子进程，清单里的 inline/worker 不会生效）'
+            : ' (untrusted plugin was forced into a child process)'
+          : '';
       if (updated) {
         const fromV = data.oldVersion || '?';
         const toV = data.newVersion || data.manifest?.version || '?';
@@ -331,8 +360,8 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
         addToast(
           lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
           lang === 'zh'
-            ? `三方插件 "${pluginName}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
-            : `Plugin "${pluginName}" installed and activated in [${executionMode}] mode!`,
+            ? `三方插件 "${pluginName}" 已上传，实际运行模式为 [${modeLabel}]${coercedNote}`
+            : `Plugin "${pluginName}" installed in [${modeLabel}] mode${coercedNote}`,
           'success',
         );
         setChatLog((prev) => [

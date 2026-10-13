@@ -29,3 +29,4 @@
 | 013  | 013_score_source_strategy.sql     | `assignment_submissions` 补 source 列（manual/auto 来源分流，自动路径遇 manual/缺考行受保护）+ `courseware_score_config` 补 auto_record_strategy（latest/highest 更新策略）                |
 | 014  | 014_performance_indexes.sql       | 五个高频查询索引（vfs_nodes.parent_id、plugin_submissions.lesson_id、student_point_logs.student_id、student_rollcalls.class_id/student_id）                                                |
 | 021  | 021_class_owner_and_password_gate.sql | `classes.owner_user_id`（教师仅能管理自己的班；空值仅管理员可见）与 `users.must_change_password`。存量班级需 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL` |
+| 022  | 022_plugin_public_routes.sql      | `plugin_public_routes`：管理员显式批准的插件公开路由。`auth: false` 本身不再匿名放行 |

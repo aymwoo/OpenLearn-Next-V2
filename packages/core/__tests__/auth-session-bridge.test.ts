@@ -3,6 +3,7 @@ import { kernelContainer } from '../kernel/index.js';
 import { IAuthSessionBridgeToken } from '../di/interfaces.js';
 import { getValidSession } from '../../../server/middleware/auth.js';
 import { pluginApiGatewayMiddleware } from '../../../server/routes/plugin-api-gateway.js';
+import { approveDeclaredPublicRoutes } from '../plugin-host/public-routes.js';
 import type { Request, Response } from 'express';
 
 describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
@@ -129,6 +130,7 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       `,
         )
         .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
+      approveDeclaredPublicRoutes(kernelContainer.db, [testPluginId], manifest);
 
       // 模拟插件端点返回 sessionToken 与 302 重定向
       const dummyToken = 'token_' + 'a'.repeat(32);
@@ -193,6 +195,7 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       `,
         )
         .run(unauthPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
+      approveDeclaredPublicRoutes(kernelContainer.db, [unauthPluginId], manifest);
 
       const dummyToken = 'token_' + 'b'.repeat(32);
       const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
@@ -247,6 +250,7 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       `,
         )
         .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
+      approveDeclaredPublicRoutes(kernelContainer.db, [testPluginId], manifest);
 
       const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
       pluginHost.dispatchHttpRequest = async () => ({

@@ -16,6 +16,8 @@ import { getMaxUncompressedSize, removeTempFile, validateAndBundleZip } from '..
 import { buildContext } from './context-builder.js';
 import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
+import { resolvePluginExecutionMode } from './execution-policy.js';
+import { clearPublicRouteApprovals } from './public-routes.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import { checkMissingDeps } from './dependency-resolver.js';
 import semver from 'semver';
@@ -159,6 +161,13 @@ export abstract class PluginHostInstall extends PluginHostReload {
         manifest.version,
       );
 
+      // 源码安装同样不能因为清单没写 executionMode 就留在列默认值 inline。
+      const sourceDecision = resolvePluginExecutionMode(
+        manifest.id,
+        (manifest as { executionMode?: unknown }).executionMode,
+      );
+      this.persistExecutionMode(pluginId, sourceDecision.mode);
+
       // 7. 设置状态为 INSTALLED（上方 INSERT 已写入 status='installed'，此处只同步内存）
       this.setPluginState(pluginId, PluginState.INSTALLED);
 
@@ -259,6 +268,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // 4. 从 DB 删除
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
+    clearPublicRouteApprovals(this.db, [pluginId, manifestId]);
 
     // v5.1: 清理插件自建表
     const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
@@ -586,8 +596,14 @@ export abstract class PluginHostInstall extends PluginHostReload {
       // types.ts 的注释声称「mode 有三个来源（参数/DB/manifest）」。
       // 统一走 normalizeExecutionMode：非法值退化为 inline（可预测），
       // 'process' 被正确识别。override 优先。
-      const executionMode: PluginExecutionMode =
+      const requestedMode: PluginExecutionMode =
         overrideExecutionMode ?? normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
+      // 未受信任的第三方包不能靠清单或安装参数留在宿主进程里。
+      const decision = resolvePluginExecutionMode(manifest.id, requestedMode);
+      if (decision.coerced) {
+        console.warn(`[PluginHost] ${decision.reason}`);
+      }
+      const executionMode = decision.mode;
       // version 列说明同 installPlugin（H-3）：加速索引，真源是 manifest JSON
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -613,6 +629,8 @@ export abstract class PluginHostInstall extends PluginHostReload {
       return {
         ...manifest,
         pluginId,
+        executionMode,
+        executionModeCoerced: decision.coerced,
       };
     } catch (err) {
       // 失败时清理 DB 条目 + 文件系统
@@ -660,6 +678,8 @@ export abstract class PluginHostInstall extends PluginHostReload {
     newVersion: string;
     previousStatus: string;
     wasActive: boolean;
+    executionMode: PluginExecutionMode;
+    executionModeCoerced: boolean;
   }> {
     // 审计 R-4：更新与安装共用同一条队列（install-from-url 对已存在插件走
     // update 分支，与 install 并发时同样叠加内存峰值）。
@@ -680,6 +700,8 @@ export abstract class PluginHostInstall extends PluginHostReload {
     newVersion: string;
     previousStatus: string;
     wasActive: boolean;
+    executionMode: PluginExecutionMode;
+    executionModeCoerced: boolean;
   }> {
     if (!this.esmLoader) {
       throw new Error('Cannot update ZIP plugin: no esmLoader injected');
@@ -760,7 +782,13 @@ export abstract class PluginHostInstall extends PluginHostReload {
     const oldMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
     // F-5：manifest.executionMode 三个取值都识别（原来是只认 'worker' 的两值映射）。
     const manifestMode = normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
-    const executionMode = options.executionMode ?? (manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
+    const requestedUpdateMode =
+      options.executionMode ?? (manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
+    const updateDecision = resolvePluginExecutionMode(manifest.id, requestedUpdateMode);
+    if (updateDecision.coerced) {
+      console.warn(`[PluginHost] ${updateDecision.reason}`);
+    }
+    const executionMode = updateDecision.mode;
 
     const pluginDir = this.getPluginDir(pluginId);
     const filePath = this.getPluginFilePath(pluginId);
@@ -944,6 +972,8 @@ export abstract class PluginHostInstall extends PluginHostReload {
         newVersion,
         previousStatus,
         wasActive,
+        executionMode,
+        executionModeCoerced: updateDecision.coerced,
       };
     } catch (err) {
       // Best-effort restore of key files for inactive updates; active reload has its own rollback

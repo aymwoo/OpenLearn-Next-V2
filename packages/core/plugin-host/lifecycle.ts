@@ -92,7 +92,13 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     // 归一化是必要的：mode 有三个来源（调用参数、DB 的 execution_mode 列、
     // manifest.executionMode），后两者都是任意字符串。归一化把未知值收敛到
     // 'inline'，避免一个脏字符串让插件悄悄走错隔离路径。
-    const mode = normalizeExecutionMode(options?.mode ?? this.getExecutionMode(pluginId));
+    const requestedMode = normalizeExecutionMode(options?.mode ?? this.getExecutionMode(pluginId));
+    const decision = this.resolveRuntimeExecutionMode(pluginId, requestedMode);
+    if (decision.coerced) {
+      console.warn(`[PluginHost] ${decision.reason}`);
+      this.persistExecutionMode(pluginId, decision.mode);
+    }
+    const mode = decision.mode;
     // 'worker' 与 'process' 都走隔离路径，区别在 WorkerManager 选哪种原语。
     // 刻意合成一个分支而不是各写一条：两条路径的激活前检查、能力授予、
     // serviceHost 装配完全相同，拆开必然产生漂移。

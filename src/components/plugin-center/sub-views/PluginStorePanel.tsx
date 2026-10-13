@@ -188,6 +188,21 @@ export function PluginStorePanel({
                     </span>
                   )}
                   {(plugin as any).execution_mode === 'legacy' && <LegacyPluginBadge lang={lang} />}
+                  {plugin.isolation_mode === 'process' && (
+                    <span className="text-xs font-bold bg-sky-50 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded">
+                      {lang === 'zh' ? '子进程' : 'PROCESS'}
+                    </span>
+                  )}
+                  {plugin.isolation_mode === 'worker' && (
+                    <span className="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded">
+                      Worker
+                    </span>
+                  )}
+                  {plugin.isolation_mode === 'inline' && (
+                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
+                      {lang === 'zh' ? '进程内' : 'IN-PROCESS'}
+                    </span>
+                  )}
                   {isSystem && (
                     <span className="text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded uppercase tracking-wider">
                       {lang === 'zh' ? '系统' : 'SYSTEM'}

@@ -133,6 +133,17 @@ describe('community plugin registry routes', () => {
       expect(((await res.json()) as { error: string }).error).toMatch(/expectedId/);
     });
 
+    it('要求管理员显式确认风险后才下载公网插件包', async () => {
+      const res = await post(adminToken, {
+        downloadUrl: 'https://plugins.example.com/plugin.zip',
+        expectedId: 'ext-homework-hub',
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { code?: string; error: string };
+      expect(body.code).toBe('COMMUNITY_RISK_ACK_REQUIRED');
+      expect(body.error).toMatch(/acknowledgeRisk: true/);
+    });
+
     it.each([
       ['a loopback address', 'http://127.0.0.1/plugin.zip'],
       ['a cloud metadata endpoint', 'http://169.254.169.254/latest/meta-data/'],

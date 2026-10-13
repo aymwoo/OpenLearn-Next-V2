@@ -261,6 +261,10 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      expect(await screen.findByTestId('community-install-risk-dialog')).toBeTruthy();
+      expect(calls.find((c) => c.url === '/api/plugins/install-from-url')).toBeUndefined();
+
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
 
@@ -269,6 +273,8 @@ describe('PluginCommunityPanel', () => {
       expect(JSON.parse(String(installCall?.init?.body))).toEqual({
         downloadUrl: 'https://plugins.example.com/ext-homework-hub-1.2.0.zip',
         expectedId: 'ext-homework-hub',
+        acknowledgeRisk: true,
+        approvePublicRoutes: false,
       });
       expect(onInstalled).toHaveBeenCalledTimes(1);
 
@@ -292,14 +298,20 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(await screen.findByLabelText('同时批准清单中声明为公开的路由（auth: false）'));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
+
+      const installCall = calls.find((c) => c.url === '/api/plugins/install-from-url');
+      expect(JSON.parse(String(installCall?.init?.body)).approvePublicRoutes).toBe(true);
 
       const uploadCall = calls.find((c) => c.url === '/api/plugins/upload-zip-raw');
       expect(uploadCall).toBeTruthy();
       const headers = uploadCall?.init?.headers as Record<string, string>;
       expect(headers['Content-Type']).toBe('application/octet-stream');
       expect(headers['x-filename']).toBe('ext-homework-hub-1.2.0.zip');
+      expect(headers['x-approve-public-routes']).toBe('true');
       expect(uploadCall?.init?.body).toBeInstanceOf(Blob);
     });
 
@@ -313,12 +325,13 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('仅管理员可安装社区插件，请联系管理员。')).toBeTruthy();
     });
 
     it('reports the server error message when installation fails', async () => {
-      const { fetcher } = makeFetcher([
+      const { fetcher, calls } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
           url === '/api/plugins/install-from-url'
@@ -330,6 +343,11 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '取消' }));
+      expect(calls.find((c) => c.url === '/api/plugins/install-from-url')).toBeUndefined();
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('插件包超过 200MB 上限')).toBeTruthy();
     });

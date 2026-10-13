@@ -8,6 +8,8 @@ export interface PluginType {
   created_at: number;
   manifest: string;
   execution_mode?: string;
+  /** 实际沙箱：process / worker / inline。与 execution_mode（esm/legacy 加载器）不是同一字段。 */
+  isolation_mode?: string;
   version?: string;
   has_frontend?: boolean;
 }
@@ -39,7 +41,12 @@ export interface PluginCenterProps {
   onZipUpload: (
     file: File,
     executionMode: 'worker' | 'inline' | 'process',
-    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+    opts?: {
+      mode?: 'install' | 'update';
+      targetPluginId?: string;
+      allowDowngrade?: boolean;
+      approvePublicRoutes?: boolean;
+    },
   ) => Promise<void>;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;

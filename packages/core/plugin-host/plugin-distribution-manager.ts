@@ -73,6 +73,8 @@ export interface PluginUpdateResult {
   newVersion: string;
   previousStatus: string;
   wasActive: boolean;
+  executionMode?: PluginExecutionMode;
+  executionModeCoerced?: boolean;
 }
 
 export interface IPluginDistributionManager {
