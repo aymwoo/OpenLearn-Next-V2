@@ -165,7 +165,36 @@ test.describe('在线教学 60s 自适应结课通票（Adaptive Exit Ticket）�
 
       // 初始化课堂
       const initRes = await request.post(`/api/classroom/sessions/${lessonId}/init`, {
-        data: { classId, teachingModeId: 'lecture' },
+        data: {
+          classId,
+          teachingModeId: 'lecture',
+          exitTicketCoreQuestion: {
+            id: 'core-q-1',
+            question: '关于变力沿曲线轨道做功过程，下列说法严格正确的是：',
+            options: [
+              { key: 'A', text: '可以直接利用恒力做功公式 W = F·s·cosθ 统一计算' },
+              { key: 'B', text: '可将位移划分为无限小微元 Δs，在每个微元内以恒代变累加求和' },
+              { key: 'C', text: '只要动能有变化，机械能一定严格守恒' },
+              { key: 'D', text: '变力做功的数值与运动路径完全无关' },
+            ],
+            correctOption: 'B',
+            explanation: '变力方向或大小随位置改变，不能直接套用恒力公式；微元法（微分与积分思想）是求解变力功的根本物理方法。',
+            scaffoldHint: '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
+          },
+          exitTicketChallengeQuestion: {
+            id: 'challenge-q-1',
+            title: '高阶思维跃迁：变力与非弹性碰撞复合临界',
+            prompt: '若物块在变阻力 f = -kv 作用下滑动并与弹性挡板碰撞，下列守恒与极限关系成立的是：',
+            options: [
+              { key: 'A', text: '全程动量守恒且机械能保持守恒' },
+              { key: 'B', text: '当速度衰减为 0 前，系统动量损耗率与瞬时阻力成正比' },
+              { key: 'C', text: '滑动阻力做功仅取决于物块最终停止位置与重力势能无关' },
+              { key: 'D', text: '以上均不正确' },
+            ],
+            correctOption: 'B',
+            rewardBadge: '🏅 物理探究思维跃迁徽章',
+          },
+        },
       });
       expect(initRes.ok()).toBeTruthy();
 
@@ -188,7 +217,12 @@ test.describe('在线教学 60s 自适应结课通票（Adaptive Exit Ticket）�
       await page.addInitScript(() => localStorage.setItem('edu_os_tour_completed', 'true'));
       await page.goto(`/?mode=student_live&lessonId=${lessonId}`);
 
-      // 3. 教师端将课堂推进到结课通票阶段 (WRAP_UP_EXIT_TICKET)
+      // 3. 教师端将课堂推进到课中，再推进到结课通票阶段 (PRE_CLASS_READY -> IN_CLASS_TEACHING -> WRAP_UP_EXIT_TICKET)
+      const teachingRes = await request.post(`/api/classroom/sessions/${lessonId}/stage`, {
+        data: { stage: 'IN_CLASS_TEACHING', classId },
+      });
+      expect(teachingRes.ok()).toBeTruthy();
+
       const stageRes = await request.post(`/api/classroom/sessions/${lessonId}/stage`, {
         data: { stage: 'WRAP_UP_EXIT_TICKET', classId },
       });
@@ -221,7 +255,7 @@ test.describe('在线教学 60s 自适应结课通票（Adaptive Exit Ticket）�
       await challengeOptB.click();
 
       // 7. 填写困惑知识点与星级评价
-      const puzzledInput = ticketModal.locator('input[placeholder*="变力做功"]');
+      const puzzledInput = ticketModal.locator('input[placeholder*="卡点"]');
       await expect(puzzledInput).toBeVisible();
       await puzzledInput.fill(confusedText);
 
