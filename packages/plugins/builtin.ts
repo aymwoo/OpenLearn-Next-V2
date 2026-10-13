@@ -423,6 +423,7 @@ export const BuiltinPlugin = {
       'math-graph',
       'presentation',
       'plugin', // 小组件
+      'page_meta', // 分页与大纲元数据
     ];
     await actionRegistry.register({
       id: 'core-whiteboard-draw',

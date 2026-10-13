@@ -225,8 +225,16 @@ export function LiveClassroomView({
           if (!mounted || !data) return;
           if (data.hasActiveSession && data.stage) {
             setClassroomStage(data.stage);
+          } else if (data.stage === 'ARCHIVED_REPORT') {
+            setClassroomStage('ARCHIVED_REPORT');
           } else {
-            setClassroomStage('PRE_CLASS_READY');
+            setClassroomStage((prev) => (prev === 'ARCHIVED_REPORT' ? 'ARCHIVED_REPORT' : 'PRE_CLASS_READY'));
+          }
+          if (data.stage && data.stage !== 'PRE_CLASS_READY') {
+            setShowEntryPortal(false);
+          }
+          if (data.session?.class_id && !liveClassSelectedClassId) {
+            setLiveClassSelectedClassId(data.session.class_id);
           }
           // started_at 来自真实会话行；无会话时为 null（elapsedMin 随之归 0，不编造）
           const startedAt = data.session?.started_at ?? data.startedAt ?? null;

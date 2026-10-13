@@ -165,6 +165,9 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
               fetchStudents();
             } else {
               setActiveRole(data.session.role);
+              if (liveLessonParam) {
+                setSelectedLesson(liveLessonParam);
+              }
               if (data.session.role === 'student' && data.session.studentId) {
                 setActiveStudentId(data.session.studentId);
                 fetchStudents();

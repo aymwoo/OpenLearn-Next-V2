@@ -256,7 +256,7 @@ async function startServer() {
   // V6 修复：key 用 IP+用户名双键，伪造 X-Forwarded-For 轮换 IP 也无法稀释同一用户名的计数
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
-    max: process.env.PLAYWRIGHT_TEST ? 1000 : 5,
+    max: process.env.PLAYWRIGHT_TEST || process.env.NODE_ENV !== 'production' ? 1000 : 5,
     keyGenerator: (req: any) => {
       const ip = typeof req.ip === 'string' ? req.ip : 'unknown';
       const rawUser = req.body?.username ?? req.body?.studentName ?? '';
@@ -266,6 +266,7 @@ async function startServer() {
     message: { error: '登录尝试过于频繁，请稍后再试。Too many login attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
   });
 
   const writeLimiter = rateLimit({

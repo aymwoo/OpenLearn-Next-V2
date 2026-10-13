@@ -482,6 +482,7 @@ ${
 
             <button
               onClick={onClose}
+              aria-label="Close"
               className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted hover:text-foreground transition cursor-pointer"
               title={lang === 'zh' ? '关闭弹窗' : 'Close'}
             >

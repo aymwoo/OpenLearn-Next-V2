@@ -79,7 +79,8 @@ export interface AppModalsProps {
   wizardCourseContent?: string;
   setWizardCourseContent?: (v: string) => void;
   addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
-  generateTemplateContent?: (title: string, category: string) => string;
+  wizardIsGeneratingOutline?: boolean;
+  handleGenerateOutline?: () => Promise<void>;
   handleDeployWizardCourse?: () => void;
 
   // Import Lessons Modal
@@ -216,7 +217,6 @@ export function AppModals(props: AppModalsProps = {}) {
     isImporting = a?.isImporting ?? false,
     downloadCSVTemplate = a?.downloadCSVTemplate ?? (() => {}),
     addToast = a?.addToast ?? (() => {}),
-    generateTemplateContent = a?.generateTemplateContent ?? (() => ''),
     isImportLessonsOpen = a?.isImportLessonsOpen ?? false,
     setIsImportLessonsOpen = a?.setIsImportLessonsOpen ?? (() => {}),
     importStatus = a?.importStatus ?? 'idle',
@@ -300,6 +300,8 @@ export function AppModals(props: AppModalsProps = {}) {
   const setWizardCourseTimeline = cw?.setWizardCourseTimeline ?? props.setWizardCourseTimeline ?? (() => {});
   const wizardCourseContent = cw?.wizardCourseContent ?? props.wizardCourseContent ?? '';
   const setWizardCourseContent = cw?.setWizardCourseContent ?? props.setWizardCourseContent ?? (() => {});
+  const wizardIsGeneratingOutline = cw?.wizardIsGeneratingOutline ?? props.wizardIsGeneratingOutline ?? false;
+  const handleGenerateOutline = cw?.handleGenerateOutline ?? props.handleGenerateOutline ?? (async () => {});
   const handleDeployWizardCourse = cw?.handleDeployWizardCourse ?? props.handleDeployWizardCourse ?? (() => {});
 
   // Quiz Generator Resolution
@@ -373,7 +375,8 @@ export function AppModals(props: AppModalsProps = {}) {
         wizardCourseContent={wizardCourseContent}
         setWizardCourseContent={setWizardCourseContent}
         addToast={addToast}
-        generateTemplateContent={generateTemplateContent}
+        wizardIsGeneratingOutline={wizardIsGeneratingOutline}
+        handleGenerateOutline={handleGenerateOutline}
         handleDeployWizardCourse={handleDeployWizardCourse}
       />
 

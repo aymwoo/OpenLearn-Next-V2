@@ -189,12 +189,12 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
   ): Promise<{ success: boolean; stage: ClassroomLifecycleStage; reason?: string }> {
     const currentStage = await this.getStage(lessonId);
 
-    // P0-2 修复：环节合法性白名单，禁止任意跳阶段（如 PRE 直跳 ARCHIVED、已归档复活）
+    // P0-2 修复：环节合法性白名单，允许正向推进与由课后/简报回退白板或准备
     const ALLOWED: Record<string, string[]> = {
       PRE_CLASS_READY: ['IN_CLASS_TEACHING'],
       IN_CLASS_TEACHING: ['WRAP_UP_EXIT_TICKET'],
-      WRAP_UP_EXIT_TICKET: ['ARCHIVED_REPORT'],
-      ARCHIVED_REPORT: [],
+      WRAP_UP_EXIT_TICKET: ['IN_CLASS_TEACHING', 'ARCHIVED_REPORT'],
+      ARCHIVED_REPORT: ['IN_CLASS_TEACHING', 'PRE_CLASS_READY'],
     };
     const allowedNext = ALLOWED[currentStage] || [];
     if (!allowedNext.includes(toStage)) {
@@ -248,8 +248,8 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
 
     const now = Date.now();
     let session = this.db
-      .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
-      .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+      .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(lessonId) as any;
 
     if (!session) {
       session = await this.getOrCreateSession(lessonId, actorId, classId);
