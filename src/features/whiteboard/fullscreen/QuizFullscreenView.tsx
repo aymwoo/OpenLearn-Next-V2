@@ -159,6 +159,9 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
             time: Date.now(),
           },
         }));
+        window.dispatchEvent(
+          new CustomEvent('openlearn:segment-gate-changed', { detail: { lessonId: targetLessonId } }),
+        );
       }
     } catch (_e) {
       // silent
@@ -273,71 +276,74 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
           <div className="mt-4 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-400">暂无学生提交</div>
         ) : (
           <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-4 gap-3" data-testid="quiz-summary">
-            <div className="bg-gray-50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400">提交</div>
-              <div className="text-xl font-bold text-gray-700" data-testid="quiz-stat-submitted">
-                {submittedCount}
+            <div className="grid grid-cols-4 gap-3" data-testid="quiz-summary">
+              <div className="bg-gray-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-gray-400">提交</div>
+                <div className="text-xl font-bold text-gray-700" data-testid="quiz-stat-submitted">
+                  {submittedCount}
+                </div>
+              </div>
+              <div className="bg-green-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-gray-400">通过</div>
+                <div className="text-xl font-bold text-green-600" data-testid="quiz-stat-passed">
+                  {passedCount}
+                </div>
+              </div>
+              <div className="bg-indigo-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-gray-400">通过率</div>
+                <div className="text-xl font-bold text-indigo-600">{passRate}%</div>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-gray-400">均分</div>
+                <div className="text-xl font-bold text-amber-600">{avgScore !== null ? avgScore.toFixed(1) : '-'}</div>
               </div>
             </div>
-            <div className="bg-green-50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400">通过</div>
-              <div className="text-xl font-bold text-green-600" data-testid="quiz-stat-passed">
-                {passedCount}
-              </div>
-            </div>
-            <div className="bg-indigo-50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400">通过率</div>
-              <div className="text-xl font-bold text-indigo-600">{passRate}%</div>
-            </div>
-            <div className="bg-amber-50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400">均分</div>
-              <div className="text-xl font-bold text-amber-600">{avgScore !== null ? avgScore.toFixed(1) : '-'}</div>
-            </div>
-          </div>
 
-          <div className="overflow-x-auto border border-gray-200 rounded-xl">
-            <table className="w-full text-sm" data-testid="quiz-submissions-table">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                <tr>
-                  <th className="px-4 py-2 text-left">学生</th>
-                  <th className="px-4 py-2 text-left">答案</th>
-                  <th className="px-4 py-2 text-right">得分</th>
-                  <th className="px-4 py-2 text-right">提交时间</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {scored.map(({ sid, v, answerIdx, scoreNum, isCorrect }) => {
-                  const answerLetter =
-                    answerIdx !== undefined && answerIdx >= 0 && answerIdx < LETTERS.length ? LETTERS[answerIdx] : '-';
-                  const displayScore = scoreNum !== null ? scoreNum : isCorrect ? 100 : 0;
-                  const studentName = studentMap[sid] || sid;
-                  return (
-                    <tr key={sid} className="hover:bg-gray-50" data-testid={`quiz-row-${sid}`}>
-                      <td className="px-4 py-2 font-medium text-gray-700">{studentName}</td>
-                      <td className={`px-4 py-2 font-mono ${isCorrect ? 'text-green-600 font-bold' : 'text-red-500'}`}>
-                        {answerLetter}
-                        {isCorrect ? ' ✓' : ''}
-                      </td>
-                      <td
-                        className={`px-4 py-2 text-right font-mono font-bold ${
-                          displayScore >= passScore ? 'text-green-600' : 'text-gray-600'
-                        }`}
-                      >
-                        {displayScore}
-                      </td>
-                      <td className="px-4 py-2 text-right text-gray-500 text-xs">
-                        {formatTime(v.time ?? v.timestamp)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="w-full text-sm" data-testid="quiz-submissions-table">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                  <tr>
+                    <th className="px-4 py-2 text-left">学生</th>
+                    <th className="px-4 py-2 text-left">答案</th>
+                    <th className="px-4 py-2 text-right">得分</th>
+                    <th className="px-4 py-2 text-right">提交时间</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {scored.map(({ sid, v, answerIdx, scoreNum, isCorrect }) => {
+                    const answerLetter =
+                      answerIdx !== undefined && answerIdx >= 0 && answerIdx < LETTERS.length
+                        ? LETTERS[answerIdx]
+                        : '-';
+                    const displayScore = scoreNum !== null ? scoreNum : isCorrect ? 100 : 0;
+                    const studentName = studentMap[sid] || sid;
+                    return (
+                      <tr key={sid} className="hover:bg-gray-50" data-testid={`quiz-row-${sid}`}>
+                        <td className="px-4 py-2 font-medium text-gray-700">{studentName}</td>
+                        <td
+                          className={`px-4 py-2 font-mono ${isCorrect ? 'text-green-600 font-bold' : 'text-red-500'}`}
+                        >
+                          {answerLetter}
+                          {isCorrect ? ' ✓' : ''}
+                        </td>
+                        <td
+                          className={`px-4 py-2 text-right font-mono font-bold ${
+                            displayScore >= passScore ? 'text-green-600' : 'text-gray-600'
+                          }`}
+                        >
+                          {displayScore}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-500 text-xs">
+                          {formatTime(v.time ?? v.timestamp)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-          )
-        )}
+        ))}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2, FileText, Sliders, Palette, Sparkles, Clock, Layers } from 'lucide-react';
 import { useAllSegmentTypes, SEGMENT_COLORS } from './timelineConfig';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { SegmentGateFields } from './SegmentGateFields';
 
 interface SegmentEditorCardProps {
   lang: 'zh' | 'en';
@@ -167,6 +168,8 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
             className="w-full border border-theme/70 px-3 py-1.5 rounded-xl bg-surface/90 focus:bg-surface text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/20 transition-all resize-y shadow-2xs leading-relaxed"
           />
         </div>
+
+        <SegmentGateFields lang={lang} segment={segment} readOnly={readOnly} onPatch={onPatch} />
 
         {/* 环节编辑附加面板（自定义表单 / 资源插入等；类型注册走 registerSegmentType） */}
         <ExtensionPointRenderer

@@ -39,6 +39,7 @@ import {
   MessageSquare,
   Trash2,
   Zap,
+  Unlock,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore, appStore } from '../store/appStore';
@@ -1106,6 +1107,40 @@ export function LiveClassroomView({
       }
     } catch (e) {
       console.error('Failed to toggle student lock', e);
+    }
+  };
+
+  const handleOverrideSegmentGate = async (studentId: string) => {
+    if (!selectedLesson || !activeSegmentId) {
+      addToast(
+        lang === 'zh' ? '请先进入教学环节' : 'Choose a segment',
+        lang === 'zh' ? '放行需要当前课堂环节。' : 'An active segment is required.',
+        'warning',
+      );
+      return;
+    }
+    try {
+      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/segment-overrides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, segmentId: activeSegmentId, reason: '教师放行' }),
+      });
+      const stName = students.find((s) => s.id === studentId)?.name || studentId;
+      if (res.ok) {
+        addToast(
+          lang === 'zh' ? '已放行' : 'Override saved',
+          lang === 'zh' ? `已允许 ${stName} 进入当前环节。` : `${stName} may enter the current segment.`,
+          'success',
+        );
+      } else {
+        addToast(
+          lang === 'zh' ? '放行失败' : 'Override failed',
+          lang === 'zh' ? '请稍后重试。' : 'Try again.',
+          'warning',
+        );
+      }
+    } catch (e) {
+      console.error('Failed to override segment gate', e);
     }
   };
 
@@ -2348,6 +2383,15 @@ export function LiveClassroomView({
                                 </button>
                               )}
 
+                              <button
+                                type="button"
+                                onClick={() => handleOverrideSegmentGate(st.id)}
+                                disabled={!selectedLesson || !activeSegmentId}
+                                className="p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
+                                title={lang === 'zh' ? '放行当前环节' : 'Allow this segment'}
+                              >
+                                <Unlock size={9} />
+                              </button>
                               {/* Focus Lock controller */}
                               <button
                                 onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}

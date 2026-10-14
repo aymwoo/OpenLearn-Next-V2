@@ -247,7 +247,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run browser workflow tests
-        run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts
+        run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts e2e/segment-gate-lock.spec.ts
 
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
   # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。

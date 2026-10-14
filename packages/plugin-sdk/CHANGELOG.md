@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features & Types
 
+- **教学环节条件类型 (`SegmentGateTypeContribution`)**:
+  - 导出 `SegmentGateTypeContribution`，供插件在 `contributes['segment.gate_type']` 声明 `id`、`labelZh`、`labelEn`、`commandType` 与可选 `paramsSchema`；
+  - 宿主用该命令做只读判定（`capabilityRequired: 'segment:gate_eval'`）。不要把判定函数注册进宿主。
+
 - **备课环节类型扩展契约 (`SegmentTypeMeta`)**:
   - 导出 `SegmentTypeMeta`，供第三方插件通过宿主 `ctx.ui.registerSegmentType` / `unregisterSegmentType` 向备课时间线贡献自定义教学形态；
   - 与声明式 `contributes['editor.timeline_segment']`（需含 `labelZh` + `labelEn`）桥接语义对齐。

@@ -147,6 +147,18 @@ stateDiagram-v2
 
 ---
 
+## 直播课堂的环节进入条件
+
+教师广播或 `POST /api/classroom/sessions/:lessonId/segment` 推进的是**全班同一个** `current_segment_id`。学生端不能各自换环节。
+
+每个环节可以在 `lessons.timeline` 上写 `gates: [{ type, params? }]`。服务端 `SegmentGateService` 对当前学生做 AND 判定。未达标时全班指针不变，该学生看到锁定和进度，并继续显示上一环节以便补齐条件。教师可对「学生 × 环节」写入 `segment_gate_overrides`，事件 `segment.gate_overridden` 进入审计。
+
+内置类型：`quiz_completed`、`quiz_accuracy`、`assignment_submitted`、`dwell_seconds`（`segment_visits`）、`checked_in`（`lesson_checkins` 或排课考勤）。插件用 `contributes['segment.gate_type']` 声明类型，宿主调用其只读命令。
+
+四阶段生命周期（`PRE_CLASS_READY` → `IN_CLASS_TEACHING` → `WRAP_UP_EXIT_TICKET` → `ARCHIVED_REPORT`）**不再**调用 `StageGuardPipeline`。课级 `progress_mode` / `progress_conditions` 已废弃：只有环节自己没有 `gates`、且不是第一环、并且模式仍为 `gated` 时，才把已知字段映射成内置条件。
+
+`LessonRuntime` 里的教师跳转不会写 `segment_gate_overrides`。直播放行只走覆盖表。
+
 ## 教学环节流转门禁管道 (Stage Guard Pipeline)
 
 为了支持**自主闯关学习（Mastery Learning）**与个性化学习节奏，`LessonRuntime` 内置了 `stageGuard`（`StageGuardPipeline`）责任链门禁管道，支持第三方插件向环节流转注册前置进入条件（如测验达标、文件提交等）：
@@ -170,5 +182,6 @@ export interface StageGuard {
 2. **全部满足组合规则 (AND Conjunction)**：
    - 环节切换时依次执行所有适用的守卫；所有守卫均返回 `allowed: true` 时才允许进入。
    - 若有守卫拒绝，系统会自动将所有未满足的原因通过 `；` 聚合（例如 `“随堂测验需达到80分；尚未提交实验报告”`），并在学生端友好展示。
-3. **教师特权穿透 (Teacher Override)**：
-   - 教师端发起全班统一跳转（`TeacherJump` / `StudentSynced`）拥有最高优先权，可穿透学生个人门禁限制，确保课堂集中秩序可控。
+3. **教师跳转（仅本管道）**：
+   - `LessonRuntime` 上的 `TeacherJump` / `StudentSynced` 只影响这条内存管道。
+   - 直播课堂的放行记录在 `segment_gate_overrides`，由 `SegmentGateService` 读取，不经过这里。

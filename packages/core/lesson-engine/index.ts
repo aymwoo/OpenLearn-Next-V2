@@ -14,3 +14,4 @@ export * from './lesson-runtime.js';
 export * from './state-machine.js';
 export * from './stage-guard-pipeline.js';
 export * from './stage-resolver.js';
+export * from './segment-gate.js';

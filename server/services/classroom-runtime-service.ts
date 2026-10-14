@@ -107,33 +107,28 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
   private activityProviders = new Map<string, QuickActivityDescriptor>();
   /** D-3：门禁失效策略，默认 fail-close。构造时可用 options 覆盖。 */
   private readonly guardPolicy: ClassroomGuardPolicy;
-  /**
-   * R-5（第三轮审计）：内核 DI 的 StageGuardPipeline（插件经 SDK
-   * registerStageGuard 写入的那份注册表）。此前本服务只读自己的空表，
-   * SDK 契约暴露的门禁对阶段推进完全不生效 —— 两套系统的合并点。
-   */
-  private readonly stageGuardPipeline?: { checkAccess(ctx: unknown): Promise<StageGuardResult> };
 
   /**
    * @param options.guardPolicy 门禁失效策略。默认 `'fail-close'`（D-3 决策）。
    *   传 `'fail-open'` 可恢复旧行为（守卫超时/抛错仍放行）—— 但注意旧行为
    *   **没有超时上限**，插件守卫挂起会让本服务的 HTTP 接口永久不可用。
-   * @param options.stageGuardPipeline 内核 StageGuardPipeline（IStageGuardService）。
-   *   由 server.ts 装配时从 serviceRegistry 解析注入；管线自带单守卫 1500ms +
-   *   全局上限与 fail-close（D-3），与本服务策略同源。
+   *
+   * 这里的守卫只约束四阶段课堂生命周期
+   * （PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPORT）。
+   * 教学环节（timeline segment）的进入条件由 `SegmentGateService` 单独判定，
+   * 不再并入 `transitionStage`。内核 `StageGuardPipeline` 仍服务资源级
+   * `enforceStageAccess` 与 `POST /api/lessons/:id/stage-access`。
    */
   constructor(
     db: Database.Database,
     io?: Server,
     options?: {
       guardPolicy?: ClassroomGuardPolicy;
-      stageGuardPipeline?: { checkAccess(ctx: unknown): Promise<StageGuardResult> };
     },
   ) {
     this.db = db;
     this.io = io;
     this.guardPolicy = options?.guardPolicy ?? 'fail-close';
-    this.stageGuardPipeline = options?.stageGuardPipeline;
   }
 
   public setSocketIO(io: Server): void {
@@ -219,8 +214,10 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       return { success: false, stage: currentStage, reason: `Illegal transition ${currentStage} -> ${toStage}` };
     }
 
-    // Run all registered plugin guards.
+    // 仅执行注册在本服务上的生命周期守卫。
     // D-3：默认 fail-close —— 守卫超时/抛错都拒绝流转（此前无超时且抛错仅记日志）。
+    // 不调用内核 StageGuardPipeline：那条管线若被挂上练习/作业条件，
+    // 会把 PRE_CLASS → TEACHING 也拦住。环节条件走 SegmentGateService。
     for (const [owner, guard] of this.stageGuards) {
       const outcome = await runClassroomGuard(
         owner,
@@ -232,35 +229,6 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       );
       if (outcome.blocked) {
         return { success: false, stage: currentStage, reason: outcome.reason };
-      }
-    }
-
-    // R-5（第三轮审计）：合并读取内核 StageGuardPipeline —— 插件经 SDK
-    // registerStageGuard 写入的门禁在此生效。管线内部自带单守卫 1500ms +
-    // 全局上限与 fail-close（D-3），无需重复包超时。
-    // StageGuardContext.studentId 语义沿用管线的学生字段，此处传发起流转的
-    // actorId（教师/系统），完整身份在 metadata 里。
-    if (this.stageGuardPipeline) {
-      try {
-        const result = await this.stageGuardPipeline.checkAccess({
-          studentId: actorId,
-          lessonId,
-          currentStageId: currentStage,
-          targetStageId: toStage,
-          metadata: { classId, actorId },
-        });
-        if (result && result.allowed === false) {
-          return {
-            success: false,
-            stage: currentStage,
-            reason: result.reason || 'Blocked by stage guard pipeline.',
-          };
-        }
-      } catch (err) {
-        console.error('[ClassroomLifecycle] Stage guard pipeline failed:', err);
-        if (this.guardPolicy === 'fail-close') {
-          return { success: false, stage: currentStage, reason: '门禁管线执行出错，环节流转被拒绝。' };
-        }
       }
     }
 

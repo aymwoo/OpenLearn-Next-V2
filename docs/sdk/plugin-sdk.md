@@ -291,21 +291,16 @@ export default {
 
 ---
 
-## 5. 教学环节条件门禁守卫使用范例
+## 5. 教学环节进入条件
 
-第三方插件可通过 `IStageGuardServiceToken` 注册环节准入守卫。当学生在课堂中尝试切换教学环节时，系统责任链将自动执行所有已注册守卫（遵循 AND 组合判定，单守卫 1500ms 超时）。
+直播课堂的「当前环节」由教师推进，全班共用一个指针。学生能不能**看到**该环节的内容，由服务端 `SegmentGateService` 按 `lessons.timeline` 上的 `gates` 判定。
 
-> **守卫失效时的行为（契约变更）**：守卫**超时或抛异常时，环节流转会被拒绝**（Fail-Close）。
-> 早期版本是 Fail-Open（放行），那意味着「插件慢或崩 → 学生直接跳过必修环节」。
-> 若你的插件有可能偶发变慢，请确保 `canEnterStage` 内部足够快 —— 超时会被判定为拒绝。
-> 部署方可在构造 `StageGuardPipeline` 时传 `{ onGuardFailure: 'fail-open' }` 恢复旧行为。
+插件不要把判定函数注册进宿主。进程内插件与子进程插件（PR #21 的隔离模型）都走命令总线：`registerHandler` 可以被桥接，函数不行。`registerGuard` / `IStageGuardService` 只对进程内的旧管线有效，**不控制**直播环节，也**不参与**四阶段课堂生命周期（课前 → 授课 → 结课通票 → 归档）。
 
-守卫应保持轻量：它跑在学生点击切换环节的**同步路径**上，不适合做网络请求或重计算。
-
+在 `contributes['segment.gate_type']` 声明条件类型，再注册一个只读命令。命令必须带 `capabilityRequired: 'segment:gate_eval'`，并且 `exposeToAgent: false`，避免学生或 AI 直接调用。宿主用系统身份执行，超时 1500ms，失败即拒绝。
 
 ```typescript
-import type { PluginContext, StageGuard } from '@openlearn/plugin-sdk';
-import { IStageGuardServiceToken } from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {
@@ -313,33 +308,47 @@ export default {
     name: '随堂测验门禁',
     version: '1.0.0',
     main: 'index.js',
+    contributes: {
+      'segment.gate_type': [
+        {
+          id: 'quiz_score_80',
+          labelZh: '测验达到 80 分',
+          labelEn: 'Quiz score 80',
+          commandType: 'judge',
+        },
+      ],
+    },
   },
   activate: async (ctx: PluginContext) => {
-    const stageGuardService = await ctx.resolve(IStageGuardServiceToken);
-
-    const quizGuard: StageGuard = {
-      id: 'ext-quiz-gate-80',
-      name: '测验得分门禁 (≥80分)',
-      priority: 50,
-      async canEnterStage({ studentId, lessonId, targetStageId }) {
-        // 自定义业务判定逻辑
+    ctx.actionRegistry.register({
+      id: 'ext-quiz-gate.judge',
+      commandType: 'ext-quiz-gate.judge',
+      description: '只读：学生是否达到测验分数',
+      capabilityRequired: 'segment:gate_eval',
+      exposeToAgent: false,
+      inputSchema: { type: 'object', additionalProperties: true },
+    });
+    ctx.commandBus.registerHandler('ext-quiz-gate.judge', {
+      execute: async (cmd) => {
+        const { studentId, lessonId, params } = cmd.payload as {
+          studentId: string;
+          lessonId: string;
+          params?: { minScore?: number };
+        };
         const score = await getStudentQuizScore(studentId, lessonId);
-        if (score < 80) {
+        const target = params?.minScore ?? 80;
+        if (score < target) {
           return {
             allowed: false,
-            reason: `进入下一环节需测验得分≥80分（当前得分：${score}分）`,
-            progress: { current: score, target: 80, unit: '分' },
+            reason: `进入本环节需测验得分≥${target}分（当前 ${score} 分）`,
+            progress: { current: score, target, unit: '分' },
           };
         }
         return { allowed: true };
       },
-    };
-
-    const unregister = stageGuardService.registerGuard(quizGuard);
-
-    return {
-      dispose: () => unregister(),
-    };
+    });
   },
 };
 ```
+
+命令返回 `{ allowed: boolean, reason?: string, progress?: { current, target, unit? } }`。备课卡片会列出该贡献，教师把它写进环节的 `gates`。内置类型 `quiz_completed`、`quiz_accuracy`、`assignment_submitted`、`dwell_seconds`、`checked_in` 不需要插件。

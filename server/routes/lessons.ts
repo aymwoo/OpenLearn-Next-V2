@@ -10,6 +10,7 @@ import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
+import { segmentGateService } from '../services/segment-gate-service.js';
 import {
   authorizeLessonStaff,
   isAdministrator,
@@ -169,7 +170,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/lessons/:lessonId/eval-grades', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), (req as any).session, req.params.lessonId)))
+      if (
+        rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), (req as any).session, req.params.lessonId))
+      )
         return;
       res.json(lessonService.getEvalGrades(req.params.lessonId));
     } catch (err: any) {
@@ -180,7 +183,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session;
-      const submission = kernelContainer.getReadDb()
+      const submission = kernelContainer
+        .getReadDb()
         .prepare('SELECT lesson_id, student_id FROM plugin_submissions WHERE id = ?')
         .get(req.params.submissionId) as { lesson_id: string; student_id: string } | undefined;
       if (!submission) return res.status(404).json({ error: 'Submission not found' });
@@ -357,8 +361,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const { progressMode, progressConditions } = req.body;
-      await lessonService.updateProgressMode(id, progressMode, progressConditions);
-      res.json({ success: true });
+      const result = await lessonService.updateProgressMode(id, progressMode, progressConditions);
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -461,6 +465,38 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       });
 
       res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 教学环节进入条件。全班指针由教师推进；这里只回答「这名学生能不能看到该环节」。
+  // 未达标返回 403，正文仍是完整判定（原因与进度），供学生端展示锁定。
+  app.post('/api/lessons/:id/segment-access', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
+    try {
+      const { id: lessonId } = req.params;
+      const session = (req as any).session;
+      const role = session?.role;
+      const selfId = session?.studentId || session?.userId;
+      const targetSegmentId = req.body?.targetSegmentId;
+      if (typeof targetSegmentId !== 'string' || targetSegmentId.trim().length === 0) {
+        return res.status(400).json({ error: 'targetSegmentId is required' });
+      }
+
+      const previewId = typeof req.body?.studentId === 'string' ? req.body.studentId.trim() : '';
+      const isStaff = role === 'teacher' || role === 'administrator';
+      const evaluatingOther = isStaff && !!previewId && previewId !== selfId;
+      const studentId = evaluatingOther ? previewId : selfId;
+      if (!studentId) return res.status(403).json({ error: 'Student identity required' });
+
+      const result = await segmentGateService.evaluate({
+        studentId,
+        lessonId,
+        targetSegmentId: targetSegmentId.trim().slice(0, 128),
+        bypass: isStaff && !evaluatingOther,
+        enforceClassSegment: role === 'student',
+      });
+      res.status(result.allowed ? 200 : 403).json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }

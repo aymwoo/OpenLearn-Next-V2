@@ -410,6 +410,18 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     description: '课节进度模式切换 → 全局广播',
   },
   {
+    eventType: 'segment.gate_overridden',
+    socketEvent: 'segment-gate-changed',
+    rooms: lessonRoom,
+    description: '教师放行学生环节 → 课节房间，学生端重新核对进入条件',
+  },
+  {
+    eventType: 'segment.gate_override_revoked',
+    socketEvent: 'segment-gate-changed',
+    rooms: lessonRoom,
+    description: '教师撤销环节放行 → 课节房间，学生端重新核对进入条件',
+  },
+  {
     eventType: 'points.awarded',
     socketEvent: 'classroom:points_awarded',
     // 积分是全平台账户级事实（可来自作业评分、课堂归因、插件），不隶属某一课节，

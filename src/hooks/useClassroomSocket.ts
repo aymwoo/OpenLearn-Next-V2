@@ -236,6 +236,10 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       setActiveSegmentId(activeSegmentId);
     });
 
+    socket.on('segment-gate-changed', (data: any) => {
+      window.dispatchEvent(new CustomEvent('openlearn:segment-gate-changed', { detail: data }));
+    });
+
     socket.on('student-pinged', (data: any) => {
       const msg =
         data.message ||
@@ -334,9 +338,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
 
       const currentStudentId = activeStudentIdRef.current;
       const isCurrentStudent =
-        activeRoleRef.current === 'student' &&
-        currentStudentId &&
-        data.studentId === currentStudentId;
+        activeRoleRef.current === 'student' && currentStudentId && data.studentId === currentStudentId;
 
       if (isCurrentStudent && currentStudentId && !isDuplicate) {
         // 1. 被抽中的学生：屏幕级强提示（全屏抽中弹窗 + 提示音效 + 强提醒Toast）。

@@ -226,7 +226,12 @@ export class LessonService {
       { correlationId: lessonId },
     );
 
-    return { success: true };
+    return {
+      success: true,
+      deprecated: true,
+      message:
+        'progress_mode / progress_conditions 已废弃。进入条件请写在 lessons.timeline 每个环节的 gates 上。gated 模式仅在环节没有 gates 时作为兼容回退。',
+    };
   }
 
   /**
@@ -303,6 +308,17 @@ export class LessonService {
 
       this.db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
       this.db.prepare('DELETE FROM lesson_quiz_submissions WHERE lesson_id = ?').run(lessonId);
+      const tableExists = (name: string) =>
+        !!this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+      if (tableExists('segment_visits')) {
+        this.db.prepare('DELETE FROM segment_visits WHERE lesson_id = ?').run(lessonId);
+      }
+      if (tableExists('segment_gate_overrides')) {
+        this.db.prepare('DELETE FROM segment_gate_overrides WHERE lesson_id = ?').run(lessonId);
+      }
+      if (tableExists('lesson_checkins')) {
+        this.db.prepare('DELETE FROM lesson_checkins WHERE lesson_id = ?').run(lessonId);
+      }
 
       // 8. 课节主体删除
       return this.db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
@@ -322,11 +338,15 @@ export class LessonService {
    */
   public getLessonStats(lessonId: string): LessonStats {
     const whiteboardCount =
-      (this.reader.prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(lessonId) as any)
-        ?.count || 0;
+      (
+        this.reader
+          .prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
+          .get(lessonId) as any
+      )?.count || 0;
 
     const scheduleCount =
-      (this.reader.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any)?.count || 0;
+      (this.reader.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any)
+        ?.count || 0;
 
     const enrollmentCount =
       (
@@ -336,8 +356,8 @@ export class LessonService {
       )?.count || 0;
 
     const assignmentCount =
-      (this.reader.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)?.count ||
-      0;
+      (this.reader.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)
+        ?.count || 0;
 
     let attendanceCount = 0;
     try {
