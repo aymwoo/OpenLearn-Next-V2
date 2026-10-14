@@ -65,9 +65,33 @@ export function calculateStudentWeight(student: PickerStudent): number {
   return 1 / (1 + 3 * lessonCount + termCount);
 }
 
+export interface ClassroomPresenceSnapshot {
+  onlineStudentIds?: readonly string[] | null;
+  activeStudentLessons?: Readonly<Record<string, string>> | null;
+  lessonId?: string | null;
+}
+
+/**
+ * 只保留已经进入本节课的在场学生。
+ *
+ * 与服务端 `getPresentStudentIds` 同一口径：当前在线，且 `activeStudentLessons`
+ * 指向这一节。没有 lessonId 时无法判断本节会话，原样返回。
+ * 学生离开（leave-lesson）或断线后不再命中。
+ */
+export function filterCandidatesByPresence<T extends { id: string }>(
+  candidates: T[],
+  presence: ClassroomPresenceSnapshot,
+): T[] {
+  if (!candidates || candidates.length === 0) return [];
+  if (!presence.lessonId) return candidates;
+  const online = new Set(presence.onlineStudentIds ?? []);
+  const lessons = presence.activeStudentLessons ?? {};
+  return candidates.filter((student) => online.has(student.id) && lessons[student.id] === presence.lessonId);
+}
+
 /**
  * 分层过滤候选人池
- * 若指定梯度有对应学生，返回该梯度的学生集合；若为空，则优雅回退至全员
+ * 若指定梯度有对应学生，返回该梯度的学生集合；若为空，则优雅回退至传入的集合
  */
 export function filterCandidatesByTier(
   students: PickerStudent[],

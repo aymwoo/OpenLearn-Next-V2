@@ -11,7 +11,7 @@ import { getUploadsDir } from '../utils/paths.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
-import { emitClassroomEvent } from '../presence.js';
+import { emitClassroomEvent, getPresentStudentIds } from '../presence.js';
 import type { ServerContext } from '../context.js';
 import { RosterService } from '../services/roster-service.js';
 import {
@@ -804,7 +804,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
         : currentUserId === req.params.id;
       const isStaff =
-        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.getReadDb(), session, studentId));
+        isAdministrator(session) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.getReadDb(), session, studentId));
 
       if (!isSelf && !isStaff) {
         return res.status(403).json({ error: 'Forbidden: Cannot access another student notifications' });
@@ -832,7 +833,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
         : currentUserId === req.params.id;
       const isStaff =
-        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
+        isAdministrator(session) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
 
       if (!isSelf && !isStaff) {
         return res.status(403).json({ error: 'Forbidden: Cannot update another student notifications' });
@@ -1508,7 +1510,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
-      res.json(rosterService.getPickerCandidates(req.params.classId, req.query.lessonId as string));
+      const rawLessonId = req.query.lessonId;
+      const lessonId = typeof rawLessonId === 'string' && rawLessonId.trim() ? rawLessonId.trim() : undefined;
+      // 带 lessonId：只返回本节在场学生（在线且已 enter-lesson）。
+      // 不带 lessonId：无法判断「本节会话」，保持全班名单，兼容课堂外的旧调用。
+      res.json(
+        rosterService.getPickerCandidates(
+          req.params.classId,
+          lessonId,
+          lessonId ? { restrictToPresentIds: getPresentStudentIds(lessonId) } : undefined,
+        ),
+      );
     } catch (e: any) {
       sendSafeError(res, e);
     }
