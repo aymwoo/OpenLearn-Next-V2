@@ -165,7 +165,7 @@ npx openlearn-next clean
 
 ## 4. 公测上线检查清单
 
-按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。
+按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。2026-10-14 的完成情况见下文 [4.1](#41-清单状态2026-10-14)。公测说明、已知问题、反馈、隐私草稿和运营手册在 [docs/beta](../beta/README.md)。
 
 1. **构建**：`pnpm lint`、`pnpm lint:strict`、`pnpm lint:eslint`（0 error）、`pnpm test`、`pnpm build`、`pnpm audit`（无 high / critical）都通过。CI 里的 `Public beta journey` 必须绿（`pnpm exec playwright test --config=playwright.beta.config.ts`）。镜像用仓库 `Dockerfile` 构建，不要在构建机上临时改锁文件。
 2. **密钥**：`.env` 里的 `ENCRYPTION_KEY` 是 64 位 hex，已离线备份。换机器时带上同一把密钥，否则已保存的 AI Provider Key 无法解密。
@@ -178,6 +178,26 @@ npx openlearn-next clean
 9. **备份**：`node scripts/site-backup.mjs`（容器里 `docker compose exec app node scripts/site-backup.mjs`）生成数据库快照和文件包。做一次停服恢复演练，核对班级、课件文件和账号还在。
 10. **失败可见**：把数据目录改成只读再启动，日志里应有 `[Startup] FATAL` 或 `[Migration] FATAL`，进程退出码非 0，而不是一直报 healthy。
 11. **账号**：管理员登录、强制改密（若口令等于用户名）、教师建班、学生提交、安装一个插件并 `POST /api/plugins/:id/toggle` 启用。源码安装成功后状态是 `installed`，不启用时访问插件路由会返回 503。这几步都走通再开放。
+
+### 4.1 清单状态（2026-10-14）
+
+「演练已通过」指 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md) 那次镜像演练，不是公测服务器已经对外开放。「CI 有此门禁」指 `.github/workflows/ci.yml` 里失败会红的 job。起草公测材料时没有重跑 `pnpm lint:eslint`、`pnpm build` 和 `pnpm audit`。
+
+| 项 | 状态 | 已经对上的事实 | 还缺 |
+| --- | --- | --- | --- |
+| 1 构建 | 部分具备 | CI 阻断 `pnpm lint`、`pnpm lint:strict`、`pnpm test`、`pnpm audit --audit-level high`、`Public beta journey`。演练用仓库 `Dockerfile` 构建过镜像 | 清单里的 `pnpm lint:eslint`（0 error）和当次 `pnpm build` 不在 CI。ESLint 最近一次记录是审计日的 0 error、5060 warning。目标环境要用即将发布的提交再构建一次 |
+| 2 密钥 | 待目标环境执行 | AES-256-GCM，钥匙来自 `ENCRYPTION_KEY` | 生成 64 位 hex 并离线备份。空值不会拒绝启动，会落到临时内存钥匙 |
+| 3 种子口令 | 机制已演练，目标环境未做 | 演练场景 1：改密前 GET 为 403；不设口令时凭 `storage/bootstrap-credentials.txt` 登录 | 在公测机器上设置两枚口令、确认没有 `PLAYWRIGHT_TEST`、抄走并删除口令文件 |
+| 4 数据卷 | 演练已通过 | compose 挂 `/data` 与 `/backups` | 目标机的卷和磁盘空间 |
+| 5 健康检查 | 合同有测试，容器行为演练过 | 公测旅程断言 `/health`、`/health/ready` 只有 `status`、匿名 `/metrics` 为 401。演练看过 healthy 和 `unless-stopped`；当时就绪响应还带 `db` 字段 | 目标环境 `docker inspect`。收紧合同之后没有在演练记录里重跑容器 |
+| 6 日志与错误 | 代码已落地，现场未抽查 | 第 5 节；公测旅程确认指标鉴权，且该次作答不在 `audit.log`。DSN 留空可以启动 | 在目标环境抽一条 `http.request`。是否部署 GlitchTip、是否设置 `METRICS_TOKEN` 由作者定 |
+| 7 反向代理 | 演练已通过 | 演练第 3 节：不设 `TRUST_PROXY` 时伪造转发头不能拆桶；一层 Nginx 时只打满来源地址 | 目标 Nginx、证书、跳数。`docker-compose.yml` 的 `app` 发布了 `9000:9000`，开 `proxy` profile 时公网不要同时暴露 9000 |
+| 8 升级 | 演练已通过 | 从与 v0.6.1 相同的 `000`–`020` 库启动，应用 021 与 022，并用 `scripts/backfill-class-owners.mjs` 回填 | 作者选定空库还是升级。空库不用回填。升级后公开路由要重新批准 |
+| 9 备份 | 演练做过一次 | `scripts/site-backup.mjs` 与 `scripts/site-restore.mjs` 停服恢复过课件和班级 | 没有定时任务，也没有异地副本。周期由作者定 |
+| 10 失败可见 | 演练已通过 | 只读卷退出码 1，日志有 `[Startup] FATAL` | 目标机卷权限不确定时再做一次。不要在已有公测数据的卷上改只读 |
+| 11 账号旅程 | 演练与 E2E 已通过 | 演练场景 1；`e2e/public-beta-journey.spec.ts` | 目标环境用正式账号再走一遍，然后再对教师开放 |
+
+材料索引和仍须作者决定的事项见 [docs/beta/README.md](../beta/README.md)。
 
 ---
 

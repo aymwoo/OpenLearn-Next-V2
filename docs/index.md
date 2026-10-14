@@ -114,6 +114,12 @@ analytics/learning-analytics-engine
 deployment/production-guide
 deployment/docker-nginx
 DEPLOY_REHEARSAL
+beta/README
+beta/announcement
+beta/known-issues
+beta/feedback
+beta/privacy
+beta/operations
 ```
 
 ```{toctree}
