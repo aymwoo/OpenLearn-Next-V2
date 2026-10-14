@@ -1089,6 +1089,25 @@ declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
 declare const IStageGuardServiceToken: Token<IStageGuardService>;
 
+interface OutboundFetchRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+interface OutboundFetchResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  url: string;
+}
+interface INetworkProxyService {
+  fetch(input: OutboundFetchRequest): Promise<OutboundFetchResponse>;
+}
+declare const INetworkProxyServiceToken: Token<INetworkProxyService>;
+
 // ── Frontend Whiteboard Registries (V3.5) ────────────────────────────────
 // Type-only mirrors of the host runtime registries for third-party plugins.
 // Plugins receive registration functions via `ctx.ui.registerFullscreenRenderer`
@@ -1271,6 +1290,7 @@ export type {
   IPluginHttpRouter,
   AuthBridgeUser,
   IAuthSessionBridgeService,
+  INetworkProxyService,
 };
 
 export {
@@ -1307,7 +1327,6 @@ export {
   IActivityRegistryToken,
   IAuthSessionBridgeToken,
   INetworkProxyServiceToken,
-  INetworkProxyService,
   // Activity Ecosystem —— 运行时值。index.ts 以具名 value 再导出，,
   // 必须在 d.ts 里同步声明，否则插件 import 即 TS2305 / TS2724。,
   ACTIVITY_EVENTS,
@@ -1334,25 +1353,3 @@ interface AuthBridgeUser {
 interface IAuthSessionBridgeService {
   createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
 }
-
-interface OutboundFetchRequest {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  body?: string | null;
-}
-
-interface OutboundFetchResponse {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  headers: Record<string, string>;
-  body: string;
-  url: string;
-}
-
-interface INetworkProxyService {
-  fetch(input: OutboundFetchRequest): Promise<OutboundFetchResponse>;
-}
-
-declare const INetworkProxyServiceToken: Token<INetworkProxyService>;

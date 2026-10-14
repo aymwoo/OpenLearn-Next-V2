@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **补上 `INetworkProxyServiceToken` 的手写声明**。`index.ts` 已导出该 Token，`openlearn.d.ts` 同步 `declare` 与导出块，插件 `import { INetworkProxyServiceToken }` 不再 TS2305。出站请求仍由宿主代理。
+
 ### Features & Types
 
 - **备课环节类型扩展契约 (`SegmentTypeMeta`)**:
