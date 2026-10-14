@@ -457,3 +457,5 @@ export {
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
 } from '../core/di/interfaces.js';
+export type { INetworkProxyService } from '../core/di/interfaces.js';
+export { INetworkProxyServiceToken } from '../core/di/interfaces.js';

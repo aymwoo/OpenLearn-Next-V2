@@ -167,6 +167,8 @@ export class ServiceHost {
 
   private readonly allowedServiceTokens?: ReadonlySet<string>;
 
+  private readonly networkAllowlist?: readonly string[];
+
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
     private readonly capabilityGuard: CapabilityGuard,
@@ -177,9 +179,13 @@ export class ServiceHost {
     private readonly pluginId?: string,
     private readonly dbPluginId?: string,
     allowedTokens?: Iterable<string>,
+    networkAllowlist?: Iterable<string>,
   ) {
     if (allowedTokens) {
       this.allowedServiceTokens = new Set(allowedTokens);
+    }
+    if (networkAllowlist) {
+      this.networkAllowlist = Array.from(networkAllowlist);
     }
   }
 
@@ -694,6 +700,41 @@ export class ServiceHost {
         );
       }
 
+      // ── Intercept INetworkProxyService RPC (trust boundary: host-only proxy fetch) ──
+      if (msg.token === "@openlearn/core:INetworkProxyService") {
+        const [request] = msg.args as [{ url?: string; method?: string; headers?: Record<string, string>; body?: string | null }];
+        const url = String(request?.url ?? "");
+        const verdict = this.isOutboundUrlAllowed(url, this.networkAllowlist ?? []);
+        if (!verdict.allowed) {
+          throw new WorkerCapabilityError(
+            this.pluginActorId,
+            msg.token,
+            `Outbound request denied for actor ${this.pluginActorId}: ${verdict.reason}`,
+          );
+        }
+        const response = await fetch(url, {
+          method: request?.method ?? "GET",
+          headers: request?.headers,
+          body: request?.body ?? undefined,
+          redirect: "manual",
+        });
+        const body = await response.text();
+        const headers: Record<string, string> = {};
+        response.headers.forEach((value, key) => { headers[key] = value; });
+        transport.postMessage({
+          type: "result",
+          invokeId: msg.invokeId,
+          value: {
+            ok: response.ok,
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+            body,
+            url: response.url || url,
+          },
+        });
+        return;
+      }
       // ── Resolve service by token name ──────────────────────────────
       const service = await this.resolveService(msg.token);
 
@@ -915,6 +956,41 @@ export class ServiceHost {
    * @param tokenName - The token name string (e.g. `'@openlearn/core:ICommandBusService'`)
    * @returns The resolved service instance
    */
+  private isOutboundUrlAllowed(url: string, allowedHosts: readonly string[]): { allowed: boolean; reason: string } {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { allowed: false, reason: "invalid URL" };
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { allowed: false, reason: `disallowed protocol ${parsed.protocol}` };
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host.startsWith("127.") ||
+      host === "::1" ||
+      host === "0.0.0.0" ||
+      host === "169.254.169.254" ||
+      host.endsWith(".localhost")
+    ) {
+      return { allowed: false, reason: "loopback/private/metadata address blocked" };
+    }
+    if (allowedHosts.length === 0) {
+      return { allowed: false, reason: "no outbound hosts declared in manifest (default deny)" };
+    }
+    const ok = allowedHosts.some((entry) => {
+      const pattern = entry.trim().toLowerCase();
+      if (pattern === "*") return true;
+      if (pattern.startsWith("*.")) return host.endsWith(pattern.slice(1));
+      return host === pattern;
+    });
+    return ok
+      ? { allowed: true, reason: "" }
+      : { allowed: false, reason: `host ${host} not in allowlist` };
+  }
+
   private async resolveService(tokenName: string): Promise<unknown> {
     // Prefer resolveByName if available (Plan 03+)
     if (typeof (this.serviceRegistry as unknown as Record<string, unknown>).resolveByName === 'function') {
