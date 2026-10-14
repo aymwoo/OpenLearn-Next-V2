@@ -85,6 +85,13 @@ Copy `.env.example` to `.env`. AI features are configured via **AI Providers** i
 
 See [docs/plugin-development-tutorial.md](docs/plugin-development-tutorial.md) for the full guide. Plugins are ESM modules registered via the `@openlearn/plugin-sdk` types. Use the mock context from `@openlearn/plugin-test-kit` for isolated testing.
 
+## Cursor Cloud specific instructions
+
+- Install with Corepack pnpm `10.33.4` and `pnpm install --frozen-lockfile`. This is a pnpm workspace; `npm install` builds a second tree and skips the `better-sqlite3` build allow-list. Node 22 and `build-essential` are enough to compile that native module.
+- `pnpm dev` listens on port 9000 (`GET /health`, `GET /health/ready`). The Cloud Agent start script points `OPENLEARN_DATA_DIR`, `OPENLEARN_DB_PATH`, `LOG_DIR`, and `BACKUP_DIR` at `$HOME/openlearn-data` so the dev database and `storage/encryption-key` stay outside the checkout. Vitest sets its own `ENCRYPTION_KEY`; a key file left in the repo `storage/` directory fails the suite with `EncryptionKeyMismatchError`.
+- Seed usernames are `admin` and `teacher`. When those passwords are generated, they are written once to `$HOME/openlearn-data/storage/bootstrap-credentials.txt` and `must_change_password` is set. Staff login uses `entrance: "teacher"`. The first session must `POST /api/auth/change-password` (at least 8 characters, letters and numbers, different from the username) before other writes are accepted. Do not set `PLAYWRIGHT_TEST` outside Playwright.
+- AI provider API keys are configured in the admin UI and are not required to boot, log in, manage classes, or run `pnpm lint`, `pnpm lint:strict`, and `pnpm test`.
+
 ## Security & Architecture Constraints
 
 - **CSP & iframe sandboxing**: Interactive courseware runs in `<iframe>` instances with strict sandboxing (`sandbox="allow-scripts allow-forms allow-downloads"`) and no `allow-same-origin`.
