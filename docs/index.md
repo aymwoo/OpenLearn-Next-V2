@@ -113,6 +113,7 @@ analytics/learning-analytics-engine
 
 deployment/production-guide
 deployment/docker-nginx
+DEPLOY_REHEARSAL
 ```
 
 ```{toctree}

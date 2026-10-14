@@ -41,7 +41,8 @@ vi.mock('reveal.js', () => ({ default: class RevealStub {} }));
 vi.mock('reveal.js/reveal.css', () => ({}));
 vi.mock('reveal.js/theme/white.css', () => ({}));
 vi.mock('reveal.js/plugin/markdown', () => ({ default: {} }));
-vi.mock('pptx-preview', () => ({ init: vi.fn() }));
+vi.mock('pptx-react-viewer', () => ({ PowerPointViewer: () => <div data-testid="mock-pptx-viewer" /> }));
+vi.mock('pptx-react-viewer/styles', () => ({}));
 
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
   ExtensionPointRenderer: () => <div data-testid="mock-extension-point" />,

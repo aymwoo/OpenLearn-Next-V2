@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { errorStore, registerErrorListener } from '../store/errorStore';
 import { getOptionalSocket } from '../services/socket-service';
 import { appStore } from '../store/appStore';
+import { reportClientRuntimeError } from '../services/client-error-report';
 
 /**
  * Global telemetry hook to capture unhandled promise rejections, window runtime errors,
@@ -30,6 +31,7 @@ export function useGlobalErrorCapture() {
         message,
         stack,
       });
+      reportClientRuntimeError({ source: 'promise', message, stack });
 
       console.warn('[GlobalErrorCapture] Caught unhandled rejection:', reason);
     };
@@ -48,6 +50,7 @@ export function useGlobalErrorCapture() {
         message,
         stack,
       });
+      reportClientRuntimeError({ source: 'runtime', message, stack });
 
       console.warn('[GlobalErrorCapture] Caught window error:', event.error || event.message);
     };

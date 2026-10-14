@@ -207,6 +207,9 @@ export function ClassroomBriefingView({
     });
   }, [lessonTitle, durationMin, totalStudents, quizAccuracy, pollVotes, pacingData, reportData]);
 
+  const lectureRatio = reflectionReport.lectureRatio;
+  const lectureOverLimit = lectureRatio !== null && lectureRatio > reflectionReport.recommendedLectureMaxRatio;
+
   // 差异化课后分流计算
   const initialTiers = useMemo(() => {
     return buildFollowupTiers(studentRecords, lessonTitle || '本节课');
@@ -433,7 +436,9 @@ export function ClassroomBriefingView({
 
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">🐇 讲太快了 / 跟不上</span>
+                    <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      🐇 讲太快了 / 跟不上
+                    </span>
                     <span className="font-mono">
                       {pacingData.TOO_FAST || 0} 人 ({fastPercent}%)
                     </span>
@@ -574,17 +579,17 @@ export function ClassroomBriefingView({
               </span>
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {reflectionReport.lectureRatio != null && (
-                <span
-                  className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                    reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                  lectureRatio === null
+                    ? 'bg-surface-secondary text-muted border border-theme/60'
+                    : lectureOverLimit
                       ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
                       : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                  }`}
-                >
-                  讲授用时 {reflectionReport.lectureRatio}%
-                </span>
-              )}
+                }`}
+              >
+                {lectureRatio === null ? '讲授用时未采集' : `讲授用时 ${lectureRatio}%`}
+              </span>
               <span className="text-[11px] px-2 py-0.5 bg-primary-theme/10 text-primary-theme rounded-full font-bold border border-primary-theme/20">
                 互动覆盖率 {reflectionReport.interactionCoverage}%
               </span>

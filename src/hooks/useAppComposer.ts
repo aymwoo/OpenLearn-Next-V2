@@ -154,6 +154,7 @@ export function useAppComposer() {
     studentActiveTabs: classroom.studentActiveTabs,
     setStudentActiveTabs: classroom.setStudentActiveTabs,
     fetchStudents,
+    fetchClasses,
     onLogout: session.handleLogout,
     onAIProvidersChanged: lessons.fetchAIProviders,
     onDeleteCourse: lessons.handleDeleteCourse,

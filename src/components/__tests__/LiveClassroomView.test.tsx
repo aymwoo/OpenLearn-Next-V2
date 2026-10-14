@@ -149,9 +149,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(openedUrl).toContain('classId=class-g1');
     expect(openedUrl).toContain('#/student_live');
 
-    // Button should now show "已联动 (激活Tab)"
+    // Button should now show "已联动 (激活Tab)" in accessible name/title
     await waitFor(() => {
-      expect(screen.getByText(/学生端已联动 \(激活Tab\)/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /学生端已联动/ })).toBeTruthy();
     });
 
     // Clicking it again should call .focus() instead of window.open

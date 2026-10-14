@@ -95,8 +95,9 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
   it('activateWorker 把 mode 落到具体隔离原语', () => {
     const code = stripComments(read('packages/core/plugin-host/lifecycle.ts'));
     expect(code, 'createWorker 调用处应传 isolateKind，由 mode 决定 thread/process').toMatch(
-      /isolateKind:\s*requiresProcessIsolation\(mode\)\s*\?\s*'process'\s*:\s*'thread'/,
+      /const isolateKind = requiresProcessIsolation\(mode\) \? 'process' : 'thread'/,
     );
+    expect(code).toMatch(/\{\s*isolateKind\s*\}/);
   });
 
   it('createWorker 支持按实例覆盖隔离原语，缺省回落到 Manager 级设置', () => {

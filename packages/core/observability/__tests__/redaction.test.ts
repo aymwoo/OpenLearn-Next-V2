@@ -88,6 +88,16 @@ describe('日志脱敏兜底', () => {
     expect(out).toContain(REDACTION_PLACEHOLDER);
   });
 
+  it('学生作答和改密字段不落盘', () => {
+    const { log, read } = makeTestLogger();
+    const ANSWER = 'this-is-the-student-answer';
+    log.info({ textContent: ANSWER, newPassword: 'NewPassw0rd', answer: ANSWER }, 'submit');
+    const out = read();
+    expect(out).not.toContain(ANSWER);
+    expect(out).not.toContain('NewPassw0rd');
+    expect(out).toContain(REDACTION_PLACEHOLDER);
+  });
+
   it('脱敏数组元素中的敏感字段', () => {
     const { log, read } = makeTestLogger();
     const SECRET = 'array-bearer-key-8888';

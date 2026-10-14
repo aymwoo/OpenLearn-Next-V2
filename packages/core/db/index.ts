@@ -58,17 +58,32 @@ export function resolveSeedCredential(
   return { password: generateUnambiguousPassword(20), mustChange: true, generated: true };
 }
 
+/**
+ * 种子口令文件目录。与 server/utils/paths.ts 的 getStorageDir() 使用同一套优先级，
+ * 避免容器把库挂在一处、口令文件却写到进程工作目录的另一个卷。
+ */
+export function resolveBootstrapCredentialDir(): string {
+  if (process.env.OPENLEARN_DATA_DIR?.trim()) {
+    return path.join(path.resolve(process.env.OPENLEARN_DATA_DIR.trim()), 'storage');
+  }
+  if (process.env.OPENLEARN_DB_PATH?.trim()) {
+    return path.join(path.dirname(path.resolve(process.env.OPENLEARN_DB_PATH.trim())), 'storage');
+  }
+  return path.join(process.cwd(), 'storage');
+}
+
 function persistGeneratedSeedCredentials(lines: string[]): void {
   const banner =
     '[SECURITY] 已生成种子账号初始口令（首次登录后必须修改，明文只写这一次）：\n' +
     lines.map((line) => `  ${line}`).join('\n');
   console.warn(banner);
+  const filePath = path.join(resolveBootstrapCredentialDir(), 'bootstrap-credentials.txt');
   try {
-    const dir = path.join(process.cwd(), 'storage');
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(path.join(dir, 'bootstrap-credentials.txt'), `${lines.join('\n')}\n`, { mode: 0o600 });
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, `${lines.join('\n')}\n`, { mode: 0o600 });
+    console.warn(`[SECURITY] 初始口令已写入 ${filePath}（权限 600）。登录后请修改并删除该文件。`);
   } catch (err) {
-    console.warn('[SECURITY] 无法写入 storage/bootstrap-credentials.txt，请从上方日志抄录初始口令。', err);
+    console.warn(`[SECURITY] 无法写入 ${filePath}，请从上方日志抄录初始口令。`, err);
   }
 }
 
@@ -154,11 +169,16 @@ export function initializeDatabase(instance: Database.Database): void {
   try {
     const migrationsDir = getDefaultMigrationsDir();
     const migrations = loadMigrationsFromDirectory(migrationsDir);
-    if (migrations.length > 0) {
-      runMigrations(instance, migrations);
+    if (migrations.length === 0) {
+      throw new Error(
+        `[DB SSOT] FATAL: 迁移目录 ${migrationsDir} 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`,
+      );
     }
+    runMigrations(instance, migrations);
+    console.log(`[DB SSOT] 迁移已就绪（${migrations.length} 个文件，目录 ${migrationsDir}）`);
   } catch (err) {
-    console.error('[DB SSOT] Failed to apply migrations during database initialization:', err);
+    console.error('[DB SSOT] FATAL: 数据库迁移失败，进程将退出，不会在半迁移的库上提供服务。');
+    console.error(err);
     throw err;
   }
 
@@ -215,7 +235,8 @@ export function initializeDatabase(instance: Database.Database): void {
       }
     }
   } catch (e) {
-    console.error('Failed to seed default users:', e);
+    console.error('[DB SSOT] FATAL: 种子账号写入失败，拒绝启动。', e);
+    throw e;
   }
 
   // 种子数据：默认 AI Providers

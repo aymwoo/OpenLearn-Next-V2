@@ -185,7 +185,15 @@ export class Kernel {
 
     // PluginHost — 依赖 ServiceRegistry + EsmLoader + db
     const pluginsDir = opts?.pluginsDir ?? path.resolve(process.cwd(), 'plugins');
-    fs.mkdirSync(pluginsDir, { recursive: true });
+    try {
+      fs.mkdirSync(pluginsDir, { recursive: true });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[Kernel] FATAL: 无法创建插件目录 ${pluginsDir}（${detail}）。` +
+          '容器请把 OPENLEARN_DATA_DIR 或 OPENLEARN_PLUGINS_DIR 指到可写卷，例如 /data/plugins。',
+      );
+    }
     this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db, pluginsDir);
 
     // Layer 3 — WorkerManager (depends on ServiceRegistry + CapabilityGuard)
@@ -609,6 +617,11 @@ function extractEventLessonId(payload: unknown): string | null {
 function resolvePluginsDirOverride(): string | undefined {
   const raw = process.env.OPENLEARN_PLUGINS_DIR;
   if (typeof raw === 'string' && raw.length > 0) return raw;
+
+  // 与 server/utils/paths.ts 的 getPluginsDir() 对齐：设了数据根就把插件放进该卷，
+  // 而不是进程工作目录。否则容器里 node 用户写不了 /app/plugins，且重建后插件丢失。
+  const dataDir = process.env.OPENLEARN_DATA_DIR?.trim();
+  if (dataDir) return path.join(path.resolve(dataDir), 'plugins');
 
   if (process.env.VITEST) {
     throw new Error(

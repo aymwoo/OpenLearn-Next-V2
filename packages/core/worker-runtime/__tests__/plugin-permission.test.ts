@@ -69,13 +69,14 @@ function makeDb(): Database.Database {
  * 3. **不能靠环境变量传 pluginDir** —— 子进程 env 走 `buildMinimalEnv` 白名单，
  *    额外变量进不去（这正是它的设计目的）。路径直接编进源码。
  */
-const probePlugin = (dir: string) => `
+const probePlugin = (dir: string, outsideFile: string) => `
 import fs from 'node:fs';
 import path from 'node:path';
 import cp from 'node:child_process';
 import wt from 'node:worker_threads';
 
 const DIR = ${JSON.stringify(dir)};
+const OUTSIDE = ${JSON.stringify(outsideFile)};
 const results = {};
 const probe = (name, fn) => {
   try {
@@ -90,7 +91,9 @@ export default {
   manifest: { id: 'ext-perm-probe', name: 'Perm Probe', version: '1.0.0', main: 'index.js' },
   async activate(ctx) {
     // ── 应当被**拒绝**的 ──
-    probe('readEtc', () => fs.readFileSync('/etc/hostname', 'utf8'));
+    // 读插件目录之外的真实文件。不用 /etc/hostname：Windows 上该路径不存在，
+    // off 策略会得到 ENOENT，反向对照就分不清「探针路径写错」和「权限没拦住」。
+    probe('readOutside', () => fs.readFileSync(OUTSIDE, 'utf8'));
     probe('readHostPackageJson', () => fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     probe('eval', () => eval('1+1'));
     probe('newFunction', () => new Function('return 2')());
@@ -173,14 +176,29 @@ function makePluginDir(): string {
   return dir;
 }
 
+/**
+ * 插件目录的同级文件：off 下必须能读到，rw 下必须被权限模型拒绝。
+ * 放在 tmp 根下而不是 pluginDir 里面，才落在 --allow-fs-read=<pluginDir>/* 之外。
+ */
+function makeOutsideFile(): string {
+  const file = path.join(
+    os.tmpdir(),
+    `openlearn-perm-outside-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`,
+  );
+  fs.writeFileSync(file, 'outside-sandbox');
+  return file;
+}
+
 /** 跑一遍探针插件，返回沙箱内部记录的能力尝试结果 */
 async function runProbes(policy: string | undefined): Promise<Record<string, ProbeResult>> {
   const dir = makePluginDir();
+  const outsideFile = makeOutsideFile();
   try {
-    await runPlugin(probePlugin(dir), policy ?? DEFAULT_PERMISSION_POLICY, dir);
+    await runPlugin(probePlugin(dir, outsideFile), policy ?? DEFAULT_PERMISSION_POLICY, dir);
     return JSON.parse(fs.readFileSync(path.join(dir, 'probes.json'), 'utf8')) as Record<string, ProbeResult>;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outsideFile, { force: true });
   }
 }
 
@@ -209,7 +227,7 @@ export default {
 
 /** 探针插件加载后必须留下的文件 —— 否则说明插件压根没跑起来，断言全无意义 */
 const ALL_PROBE_KEYS = [
-  'readEtc',
+  'readOutside',
   'readHostPackageJson',
   'eval',
   'newFunction',
@@ -287,7 +305,7 @@ describe('L-1 P2 · 真实子进程中的能力收敛', () => {
     expect(Object.keys(r).sort()).toEqual([...ALL_PROBE_KEYS].sort());
 
     // 被拒：越界读文件
-    expect(r.readEtc, '读 /etc 应被拒').toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
+    expect(r.readOutside, '读插件目录之外的文件应被拒').toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
     expect(r.readHostPackageJson, '读宿主 package.json 应被拒').toMatchObject({
       ok: false,
       err: 'ERR_ACCESS_DENIED',
@@ -347,7 +365,7 @@ describe('L-1 P2 · 真实子进程中的能力收敛', () => {
     ).toEqual([]);
 
     // 越界读与代码生成在 off 下确实可用 —— 这正是 rw 拦掉的东西
-    expect(r.readEtc).toMatchObject({ ok: true });
+    expect(r.readOutside).toMatchObject({ ok: true });
     expect(r.eval).toMatchObject({ ok: true });
     expect(r.spawnChild).toMatchObject({ ok: true });
   }, 60_000);

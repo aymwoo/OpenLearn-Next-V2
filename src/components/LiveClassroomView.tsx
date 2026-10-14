@@ -61,6 +61,7 @@ import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
+import { resolveSegmentDuration } from '../utils/timeline-duration';
 import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
 import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
@@ -983,17 +984,9 @@ export function LiveClassroomView({
     }
   }, [selectedLesson, liveClassSelectedClassId]);
 
-  // Helper to parse "5m" or "20m" to seconds
-  const parseDuration = (dur: string): number => {
-    const num = parseInt(dur.replace(/[^0-9]/g, ''));
-    if (isNaN(num)) return 300;
-    if (dur.includes('s')) return num;
-    return num * 60; // default to minutes
-  };
-
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
-    const secs = parseDuration(seg.duration);
+    const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
     setLiveClassIsActive(true);
@@ -1331,6 +1324,15 @@ export function LiveClassroomView({
     }
   };
 
+  // 起始门户中的「前往课表设置」按钮回调。
+  const handleGoToTimetable = useCallback(() => {
+    if (setTeacherTab) {
+      setTeacherTab('timetable');
+    } else {
+      appSetTeacherTab('timetable');
+    }
+  }, [setTeacherTab, appSetTeacherTab]);
+
   // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
   // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
   if (showEntryPortal) {
@@ -1349,6 +1351,7 @@ export function LiveClassroomView({
         addToast={addToast}
         onEnterClassroom={handlePortalEnter}
         onEditLesson={handleEditLesson}
+        onGoToTimetable={handleGoToTimetable}
       />
     );
   }
@@ -1356,9 +1359,9 @@ export function LiveClassroomView({
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       {/* 1. Header Control Bar */}
-      <div className="bg-surface-secondary p-4 border-b border-theme flex flex-wrap items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3 select-none flex-wrap">
-          <div className="flex items-center gap-2.5">
+      <div className="bg-surface-secondary px-4 py-2.5 border-b border-theme flex items-center justify-between gap-3 shrink-0 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2.5 select-none shrink-0 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="relative flex items-center justify-center">
               <span
                 className={`w-3 h-3 rounded-full ${liveClassIsActive ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'} absolute`}
@@ -1367,7 +1370,7 @@ export function LiveClassroomView({
                 className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`}
               />
             </div>
-            <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2">
+            <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2 shrink-0">
               {lang === 'zh' ? '🔴 在线课堂' : '🔴 Live Classroom'}
             </h2>
           </div>
@@ -1386,7 +1389,7 @@ export function LiveClassroomView({
           </div>
 
           {/* 课程选择与切换操作 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 shrink-0">
             <select
               id="live-classroom-lesson-select"
               value={pendingLessonId || ''}
@@ -1394,7 +1397,7 @@ export function LiveClassroomView({
                 const val = e.target.value === '' ? null : e.target.value;
                 setPendingLessonId(val);
               }}
-              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
+              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors max-w-[180px] sm:max-w-[240px] truncate"
             >
               <option value="">{lang === 'zh' ? '-- 选择授课课节 --' : '-- Select Lesson --'}</option>
               {lessons.map((l) => (
@@ -1442,45 +1445,59 @@ export function LiveClassroomView({
           </div>
         </div>
 
-        {/* Lock & Student Tab Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right Actions Bar: Student Preview (Eye Icon), Lock & Classroom Quick Actions */}
+        <div className="flex items-center gap-2 ml-auto shrink-0">
           <button
             onClick={handleOpenStudentWindow}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+            className={`w-8 h-8 rounded-lg transition-all cursor-pointer flex items-center justify-center relative shadow-sm active:scale-95 shrink-0 ${
               isStudentWindowOpen
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50 shadow-emerald-500/20'
                 : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white'
             }`}
             title={
               lang === 'zh'
-                ? '在独立浏览器新Tab中打开学生端预览，可与当前教师端分屏实时操作联动'
-                : 'Open student preview in a new browser tab to sync with teacher operations side-by-side'
+                ? isStudentWindowOpen
+                  ? '学生端已联动 (独立Tab) - 点击激活'
+                  : '学生视角预览 (独立Tab) - 在新窗口中联动打开'
+                : isStudentWindowOpen
+                  ? 'Student Linked (Focus Tab)'
+                  : 'Student Preview (New Tab)'
+            }
+            aria-label={
+              lang === 'zh'
+                ? isStudentWindowOpen
+                  ? '学生端已联动 (独立Tab)'
+                  : '学生视角预览 (独立Tab)'
+                : isStudentWindowOpen
+                  ? 'Student Linked (Focus Tab)'
+                  : 'Student Preview (New Tab)'
             }
           >
-            {isStudentWindowOpen ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-200"></span>
-                </span>
-                <span>🎓 {lang === 'zh' ? '学生端已联动 (激活Tab)' : 'Student Linked (Focus Tab)'}</span>
-                <ExternalLink size={12} className="opacity-90" />
-              </>
-            ) : (
-              <>
-                <span>🎓 {lang === 'zh' ? '学生视角预览 (独立Tab)' : 'Student Preview (New Tab)'}</span>
-                <ExternalLink size={12} className="opacity-90" />
-              </>
+            <Eye size={16} />
+            {isStudentWindowOpen && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
             )}
           </button>
           <button
             onClick={() => handleToggleClassLock(!isClassLocked)}
             disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 ${
               isClassLocked
                 ? 'bg-rose-500 hover:bg-rose-600 text-white'
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white'
             }`}
+            title={
+              isClassLocked
+                ? lang === 'zh'
+                  ? '一键解锁全班'
+                  : 'Unlock Entire Class'
+                : lang === 'zh'
+                  ? '全班专注锁定'
+                  : 'Lock Class Screen'
+            }
           >
             {isClassLocked ? <ShieldAlert size={12} /> : <Shield size={12} />}
             <span>
@@ -1493,44 +1510,44 @@ export function LiveClassroomView({
                   : 'Lock Class Screen'}
             </span>
           </button>
-        </div>
 
-        {/* 上课流程扩展与倒计时工具栏 */}
-        <ClassroomToolbarQuickActions
-          lang={lang as any}
-          onOpenDiagnosticCenter={() => setIsDiagnosticCenterOpen(true)}
-          onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
-          onOpenGroupCollab={() => setIsGroupCollabOpen(true)}
-          onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
-          onOpenParentNotification={() => setIsParentNotificationOpen(true)}
-          onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
-          onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
-          selectedLesson={selectedLesson}
-          syncChannel={syncChannelRef.current}
-          onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
-          onTimeRemainingChange={(timeRemaining, isRunning) => {
-            // v0.6.1 审计 R-8/N-1：计时唯一写点 —— widget 的 endsAt 校准 tick
-            // 写 liveClassStore（独立 store），不再经过 AppDataContext；「时间到」
-            // toast 与学生端 broadcastSyncTimer 也在此完成（取代已删除的旧
-            // 每秒定时器与广播 effect）。
-            const wasRunning = prevTimerRunningRef.current;
-            prevTimerRunningRef.current = isRunning;
-            liveClassStore.getState().setLiveClassTimeRemaining(timeRemaining);
-            if (wasRunning !== isRunning) {
-              setLiveClassIsActive(isRunning);
-              if (wasRunning && !isRunning) {
-                addToast(
-                  lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
-                  lang === 'zh'
-                    ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
-                    : 'The current segment duration has elapsed. Transition recommended.',
-                  'warning',
-                );
+          {/* 上课流程扩展与倒计时工具栏 */}
+          <ClassroomToolbarQuickActions
+            lang={lang as any}
+            onOpenDiagnosticCenter={() => setIsDiagnosticCenterOpen(true)}
+            onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
+            onOpenGroupCollab={() => setIsGroupCollabOpen(true)}
+            onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
+            onOpenParentNotification={() => setIsParentNotificationOpen(true)}
+            onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
+            onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
+            selectedLesson={selectedLesson}
+            syncChannel={syncChannelRef.current}
+            onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+            onTimeRemainingChange={(timeRemaining, isRunning) => {
+              // v0.6.1 审计 R-8/N-1：计时唯一写点 —— widget 的 endsAt 校准 tick
+              // 写 liveClassStore（独立 store），不再经过 AppDataContext；「时间到」
+              // toast 与学生端 broadcastSyncTimer 也在此完成（取代已删除的旧
+              // 每秒定时器与广播 effect）。
+              const wasRunning = prevTimerRunningRef.current;
+              prevTimerRunningRef.current = isRunning;
+              liveClassStore.getState().setLiveClassTimeRemaining(timeRemaining);
+              if (wasRunning !== isRunning) {
+                setLiveClassIsActive(isRunning);
+                if (wasRunning && !isRunning) {
+                  addToast(
+                    lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
+                    lang === 'zh'
+                      ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
+                      : 'The current segment duration has elapsed. Transition recommended.',
+                    'warning',
+                  );
+                }
               }
-            }
-            syncChannelRef.current?.broadcastSyncTimer(timeRemaining, isRunning);
-          }}
-        />
+              syncChannelRef.current?.broadcastSyncTimer(timeRemaining, isRunning);
+            }}
+          />
+        </div>
       </div>
 
       {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
