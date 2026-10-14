@@ -68,3 +68,12 @@
 - 属性类型：`string | number | boolean | integer`，支持 `default` / `enum` / `minimum` / `maximum` / `description`；
 - 特殊保留键 `showInDashboard`（`boolean`）：控制插件卡片「总览」开关（见 [plugin-sdk §5.11](../sdk/plugin-sdk)）；
 - `ctx.config.onChange(callback)` 全键订阅，回调内按 `key` 过滤。
+
+## 5. 启动期环境变量强校验（P1）
+
+`server/security/env-validation.ts` 的 `assertStartupEnv()` 在 `startServer()` 最早期执行，在接触数据库与插件运行时之前拦截配置笔误。规则分两档：
+
+- **error（拒绝启动）**：`PORT` 越界/非整数、`TRUST_PROXY` 无法识别的取值、`ENCRYPTION_KEY` 非法、`OPENLEARN_WORKER_ISOLATE` / `OPENLEARN_PLUGIN_PERMISSION` / `OPENLEARN_WORKER_LIVENESS` / `BRIDGE_HOOK_TELEMETRY` 拼写错误、`OPENLEARN_PLUGIN_MAX_HEAP_MB` 带单位或低于下限、`ALLOWED_ORIGINS` 非法 origin，以及生产环境把 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 设为用户名。
+- **warning（仅告警）**：生产环境未显式设置 `ENCRYPTION_KEY`、`TRUST_PROXY=1/true` 且可能被公网直连、`ALLOWED_ORIGINS` 含 `*`、`METRICS_TOKEN` 过短、iframe/LTI 白名单无法解析。
+
+校验是纯函数，便于单测覆盖；副作用（打印与抛错）集中在 `assertStartupEnv()`，由 `server.ts` 统一处理退出。
