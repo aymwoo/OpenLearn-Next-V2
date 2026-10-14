@@ -104,6 +104,11 @@ export type AppExtras = {
   setIsGrading: Dispatch<SetStateAction<Record<string, boolean>>>;
   setStudents: (students: StudentType[]) => void;
   fetchStudents: () => Promise<void>;
+  /** 刷新班级列表；与 `useAppComposer.fetchClasses`（→ `appStore.loadClasses`）同源。
+   *  历史曾因 `useAppComposer` 拼装时漏传此字段，导致 `ClassesView` 经 `useAppData()`
+   *  透传到 `ClassPasscodeController` / `CreateClassButton` 的 prop 为 undefined。
+   *  生产环境（无单测 mock）一旦点击即抛 `fetchClasses is not a function`。 */
+  fetchClasses: () => Promise<void>;
   setImportError: (v: string | null) => void;
   setImportSuccess: (v: string | null) => void;
   setShowImportModal: (v: boolean) => void;

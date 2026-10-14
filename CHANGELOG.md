@@ -95,6 +95,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
+- **`AppDataContext` 漏传 `fetchClasses` 致 `/#/classes` 页面「随机生成 / 清除 / 创建班级」报 `TypeError: fetchClasses is not a function`**：根因为 `useAppComposer.appData` 拼装时漏了 `fetchClasses,`，且 `AppExtras` 类型未声明该字段；`ClassesView` 通过 `useAppData() as unknown as ClassesViewProps` 撒谎式透传到 `ClassPasscodeController` / `CreateClassButton`，单测因直接 mock prop 未发现。修复：`AppExtras` 补 `fetchClasses: () => Promise<void>`，`useAppComposer.appData` 补 `fetchClasses,`；同步加 `AppDataContext.test.tsx` 类型层守卫（`pnpm lint` 拦截）以防回归。
 
 ## [0.6.1] - 2026-10-13
 
