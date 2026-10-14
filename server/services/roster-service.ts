@@ -995,7 +995,11 @@ export class RosterService {
 
   // ── 6. 选人与点名候选池 ────────────────────────────────────────────────────
 
-  public getPickerCandidates(classId: string, lessonId?: string): any[] {
+  public getPickerCandidates(
+    classId: string,
+    lessonId?: string,
+    options?: { restrictToPresentIds?: readonly string[] },
+  ): any[] {
     const students = this.db
       .prepare(
         `
@@ -1043,7 +1047,7 @@ export class RosterService {
       )
       .all(classId, classId, lessonId || '', classId) as any[];
 
-    return students.map((s) => {
+    const mapped = students.map((s) => {
       let tier: 'basic' | 'intermediate' | 'advanced' = 'intermediate';
       if (s.avg_assignment_score < 70 || s.term_picked_count === 0) {
         tier = 'basic';
@@ -1062,6 +1066,12 @@ export class RosterService {
         tier,
       };
     });
+
+    // 未传 restrictToPresentIds 时保持全班名单（没有课节就无法判断本节会话）。
+    // 传入数组（含空数组）时只保留当前在场的学生，频次权重仍来自上面的点名统计。
+    if (!options || !Array.isArray(options.restrictToPresentIds)) return mapped;
+    const present = new Set(options.restrictToPresentIds);
+    return mapped.filter((s) => present.has(s.id));
   }
 
   public evaluateRollcall(params: {

@@ -138,10 +138,36 @@ export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
  * Characterization test: `server/__tests__/presence.test.ts`.
  */
 let globalOnlineStudentsGetter: (() => string[]) | null = null;
+let globalActiveLessonsGetter: (() => Record<string, string>) | null = null;
 
 /** 读取当前实时在线的学生 ID 列表 */
 export function getOnlineStudentIds(): string[] {
   return globalOnlineStudentsGetter ? globalOnlineStudentsGetter() : [];
+}
+
+/** 学生当前所在课节。`enter-lesson` 写入，`leave-lesson` 与断线删除。 */
+export function getActiveStudentLessons(): Record<string, string> {
+  return globalActiveLessonsGetter ? { ...globalActiveLessonsGetter() } : {};
+}
+
+/**
+ * 已经进入某一节 live class 的在场学生。
+ *
+ * 同时满足两件事才算在场：
+ * - Socket.IO `register-student` 之后仍然在线
+ * - `enter-lesson` 记录的课节就是这一节
+ *
+ * `leave-lesson` 或断线会立刻从结果里消失。历史签到行不会把已经离开的学生留在名单里。
+ */
+export function getPresentStudentIds(lessonId: string | null | undefined): string[] {
+  if (!lessonId) return [];
+  const online = new Set(getOnlineStudentIds());
+  const lessons = getActiveStudentLessons();
+  const present: string[] = [];
+  for (const [studentId, activeLessonId] of Object.entries(lessons)) {
+    if (activeLessonId === lessonId && online.has(studentId)) present.push(studentId);
+  }
+  return present;
 }
 
 export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLessonClassId }: PresenceDeps): void {
@@ -150,6 +176,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
 
   globalOnlineStudentsGetter = () => Array.from(onlineStudents.keys());
+  globalActiveLessonsGetter = () => Object.fromEntries(activeStudentLessons.entries());
 
   let presenceTimer: ReturnType<typeof setTimeout> | null = null;
   let presenceTrailing = false;
@@ -508,7 +535,9 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can pick students' });
         }
         if (!data?.studentId) return;
-        plog.info(`[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`);
+        plog.info(
+          `[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`,
+        );
         const payload = {
           studentId: data.studentId,
           studentName: data.studentName,

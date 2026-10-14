@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { setupPresence } from '../presence.js';
+import { getPresentStudentIds, setupPresence } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
 
 type Emitted = {
@@ -244,6 +244,32 @@ describe('setupPresence', () => {
     const ackEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged');
     expect(ackEvents.length).toBe(1);
     expect(ackEvents[0].payload).toEqual({ studentId: 's1', lessonId: 'L1' });
+  });
+
+  it('present students are only those online and inside the requested lesson', () => {
+    const m = buildMocks();
+    const inClass = m.connect('sock-in');
+    inClass.trigger('register-student', { studentId: 's-in', name: '在场' });
+    inClass.trigger('enter-lesson', { studentId: 's-in', lessonId: 'L1' });
+
+    const onlineOnly = m.connect('sock-online');
+    onlineOnly.trigger('register-student', { studentId: 's-online', name: '仅在线' });
+
+    const otherLesson = m.connect('sock-other');
+    otherLesson.trigger('register-student', { studentId: 's-other', name: '别的课' });
+    otherLesson.trigger('enter-lesson', { studentId: 's-other', lessonId: 'L-other' });
+
+    expect(getPresentStudentIds('L1')).toEqual(['s-in']);
+
+    inClass.trigger('leave-lesson', { studentId: 's-in' });
+    expect(getPresentStudentIds('L1')).toEqual([]);
+
+    inClass.trigger('enter-lesson', { studentId: 's-in', lessonId: 'L1' });
+    expect(getPresentStudentIds('L1')).toEqual(['s-in']);
+
+    inClass.trigger('disconnect', undefined);
+    expect(getPresentStudentIds('L1')).toEqual([]);
+    expect(getPresentStudentIds('')).toEqual([]);
   });
 
   it('disconnect removes the student and broadcasts an empty presence-update', () => {
