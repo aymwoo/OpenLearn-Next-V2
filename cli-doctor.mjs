@@ -406,28 +406,62 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
     }
 
     const coreContent = fs.readFileSync(coreVersionFile, 'utf-8');
-    const match = coreContent.match(/PLATFORM_VERSION\s*=\s*['"]([^'"]+)['"]/);
-    if (!match) {
-      return check('warn', `未在 packages/core/version.ts 中解析到 PLATFORM_VERSION`);
+    const staticMatch = coreContent.match(/PLATFORM_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    if (staticMatch) {
+      const coreVer = staticMatch[1];
+      if (coreVer === pkgVer) {
+        return check('ok', `v${pkgVer} (package.json 与 packages/core/version.ts 严格一致)`);
+      }
+
+      if (fix) {
+        const updated = coreContent.replace(
+          /PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/,
+          `PLATFORM_VERSION = '${pkgVer}'`,
+        );
+        fs.writeFileSync(coreVersionFile, updated, 'utf-8');
+        fixes.push(`已自动将 packages/core/version.ts 同步为 v${pkgVer}`);
+        return check('ok', `v${pkgVer} (已自动修复版本漂移: 从 v${coreVer} 同步为 v${pkgVer})`);
+      }
+
+      return check(
+        'err',
+        `检测到内核版本漂移: package.json (v${pkgVer}) 与 packages/core/version.ts (v${coreVer}) 不一致！`,
+        true,
+      );
     }
 
-    const coreVer = match[1];
-    if (coreVer === pkgVer) {
-      return check('ok', `v${pkgVer} (package.json 与 packages/core/version.ts 严格一致)`);
+    // 动态模式：检查是否为 readPlatformVersion() 架构并对齐 FALLBACK_VERSION
+    const isDynamic = coreContent.includes('readPlatformVersion');
+    const fallbackMatch = coreContent.match(/FALLBACK_VERSION\s*=\s*['"]([^'"]+)['"]/);
+
+    if (isDynamic && fallbackMatch) {
+      const fallbackVer = fallbackMatch[1];
+      if (fallbackVer === pkgVer) {
+        return check('ok', `v${pkgVer} (package.json 与 packages/core/version.ts 动态自解析完全对齐)`);
+      }
+
+      if (fix) {
+        const updated = coreContent.replace(
+          /FALLBACK_VERSION\s*=\s*['"][^'"]+['"]/,
+          `FALLBACK_VERSION = '${pkgVer}'`,
+        );
+        fs.writeFileSync(coreVersionFile, updated, 'utf-8');
+        fixes.push(`已自动将 packages/core/version.ts FALLBACK_VERSION 同步为 v${pkgVer}`);
+        return check('ok', `v${pkgVer} (已自动修复版本漂移: FALLBACK_VERSION 从 v${fallbackVer} 同步为 v${pkgVer})`);
+      }
+
+      return check(
+        'err',
+        `检测到内核兜底版本漂移: package.json (v${pkgVer}) 与 packages/core/version.ts FALLBACK_VERSION (v${fallbackVer}) 不一致！`,
+        true,
+      );
     }
 
-    if (fix) {
-      const updated = coreContent.replace(/PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/, `PLATFORM_VERSION = '${pkgVer}'`);
-      fs.writeFileSync(coreVersionFile, updated, 'utf-8');
-      fixes.push(`已自动将 packages/core/version.ts 同步为 v${pkgVer}`);
-      return check('ok', `v${pkgVer} (已自动修复版本漂移: 从 v${coreVer} 同步为 v${pkgVer})`);
+    if (isDynamic) {
+      return check('ok', `v${pkgVer} (动态自解析模式)`);
     }
 
-    return check(
-      'err',
-      `检测到内核版本漂移: package.json (v${pkgVer}) 与 packages/core/version.ts (v${coreVer}) 不一致！`,
-      true,
-    );
+    return check('warn', `未在 packages/core/version.ts 中解析到 PLATFORM_VERSION 或 FALLBACK_VERSION`);
   } catch (e) {
     return check('err', `版本一致性检查失败: ${e.message}`);
   }
