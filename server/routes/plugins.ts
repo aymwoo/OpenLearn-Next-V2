@@ -755,28 +755,34 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 后果：匿名可枚举全部插件的 id / manifestId / version / executionMode /
   // capabilitiesProposed —— 即平台装了哪些插件、每个插件声明了什么能力，可被完整测绘。
   // executionMode 与 capabilitiesProposed 尤其敏感：它们直接描述攻击面的形状。
-  app.get('/api/plugins/:id(*)', requireAuth(), async (req, res, next) => {
+  app.get('/api/plugins/:id(*)', async (req, res, next) => {
     // 插件 RESTful 网关（注册于本文件末尾）依赖 `/api/plugins/:pluginId/*` 匹配
     // 「多段 manifest id + 子路径」的 GET 请求（如
     // `/api/plugins/@openlearn/plugin-x/health`）。但本路由的 `:id(*)` 通配会先于
-    // 网关捕获整条路径（id = "@openlearn/plugin-x/health"），令插件 REST GET 子路径
-    // 全部 404。此处检测到 id 含 `/`（即 id 后还有子路径）时放行给网关处理；
-    // 纯 id（可能带 URL 编码的 %2F，Express 已解码为单段语义）仍走详情查询。
+    // 网关捕获整条路径（id = "@openlearn/plugin-x/health"）。
+    //
+    // 放行必须发生在 requireAuth() 之前。否则管理员批准的公开 GET
+    // （plugin_public_routes）会先被这里打成 401，网关的匿名放行永远走不到。
+    // 纯 id（可能带 URL 编码的 %2F，Express 已解码为单段语义）仍要求登录后再查详情。
     const rawIdPath = req.params.id ?? '';
     if (rawIdPath.includes('/') && !rawIdPath.includes('%2F')) {
       return next();
     }
-    try {
-      const rawId = decodeURIComponent(rawIdPath);
-      const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (err: any) {
-      // 走 sendSafeError 统一脱敏（审计 R-5）：此前此处直接回 err.message，
-      // 内部异常文本（含路径/SQL 片段）会泄露给客户端；本文件其余路由
-      // 均已走 sendSafeError，只差这一处。
-      sendSafeError(res, err, 404);
-    }
+    requireAuth()(req, res, () => {
+      void (async () => {
+        try {
+          const rawId = decodeURIComponent(rawIdPath);
+          const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
+          const result = await kernelContainer.commandBus.execute(cmd);
+          res.json(result);
+        } catch (err: any) {
+          // 走 sendSafeError 统一脱敏（审计 R-5）：此前此处直接回 err.message，
+          // 内部异常文本（含路径/SQL 片段）会泄露给客户端；本文件其余路由
+          // 均已走 sendSafeError，只差这一处。
+          sendSafeError(res, err, 404);
+        }
+      })();
+    });
   });
 
   app.post('/api/plugins', requireAuth('administrator'), async (req, res) => {

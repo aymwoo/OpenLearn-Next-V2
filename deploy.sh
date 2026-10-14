@@ -194,5 +194,7 @@ fi
 
 echo ""
 echo "🚀 部署完成！"
+echo "   若 Nginx 在应用前面，请在 .env 设置 TRUST_PROXY=1（一层代理）或 TRUST_PROXY=loopback 后重启。"
+echo "   应用直接对公网监听时不要设置 TRUST_PROXY。"
 echo "   访问: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo '服务器IP')"
 echo "   健康: http://127.0.0.1:9000/health"

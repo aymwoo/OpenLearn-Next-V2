@@ -434,28 +434,12 @@ docker build -t openlearnv2 .
 docker-compose up -d
 ```
 
-> **注意（重要）**：数据目录在容器内的固定位置，挂载 volume 时**必须挂到正确路径**。
->
-> | 容器内路径 | 内容 | 丢失后果 |
-> | --- | --- | --- |
-> | `/app/packages/core/db` | SQLite 主库（`OPENLEARN_DB_PATH` 指向此处） | **全部业务数据丢失** |
-> | `/app/storage` | 课件等文件存储 | 课件文件丢失 |
-> | `/app/backups` | 数据库备份 | 灾备链路失效 |
-> | `/app/logs` | 运行日志 | 排障日志丢失（容器重建即消失） |
+> **注意（重要）**：数据在容器内的 `/data`（库、课件、插件、上传）和 `/backups`。不要挂到 `/app/packages/core/db` 或 `/app/storage`，那是旧布局，和当前 `OPENLEARN_DATA_DIR` 对不上。完整步骤、反代和健康检查见 [Docker & Nginx](../deployment/docker-nginx)。
 >
 > ```bash
-> # ❌ 错误：/app/data 不是任何数据目录，照此挂载会在容器重建后丢失全部数据
-> # docker run -v ./data:/app/data openlearnv2
->
-> # ✅ 正确
-> docker run -v ./data:/app/packages/core/db \
->            -v ./storage:/app/storage \
->            -v ./backups:/app/backups \
->            -v ./logs:/app/logs \
->            openlearnv2
+> docker compose up -d --build
+> # 反代：TRUST_PROXY=1 docker compose --profile proxy up -d --build
 > ```
->
-> 推荐直接用 `docker compose up -d`（见 `docker-compose.yml`，上述四个卷均已声明）。
 
 ---
 
@@ -487,25 +471,22 @@ OpenLearnV2 使用 SQLite 数据库存储所有数据。数据库路径由 `OPEN
 | ---------------- | --------------------------------------------------------- | ------------------------------ |
 | 本地开发         | `<项目根>/packages/core/db/educational_os.db`              | 停服后 `cp` 该文件             |
 | PM2 裸机         | 同上（`cwd` = 项目根）                                     | 停服后 `cp` 该文件             |
-| Docker 容器      | 容器内 `/app/packages/core/db/educational_os.db`            | 从命名卷导出，见下             |
+| Docker 容器      | 容器内 `/data/educational_os.db`，课件在同卷 `storage/`     | `docker compose exec app node scripts/site-backup.mjs` |
 | `npx` 全局安装   | `~/openlearn-next/data.db`                                 | 停服后 `cp` 该文件             |
 
 ```bash
-# 本地开发 / PM2 裸机
-cp packages/core/db/educational_os.db educational_os.db.backup.$(date +%Y%m%d)
+# 本地开发 / PM2 裸机：数据库 + storage/plugins/uploads
+node scripts/site-backup.mjs
 
-# Docker（数据库在命名卷里，宿主机上找不到该文件）
-docker compose stop app
-docker run --rm -v openlearn_db:/data -v "$PWD":/backup alpine \
-  tar czf /backup/educational_os-$(date +%F).db.tar.gz -C /data .
-docker compose start app
+# Docker（数据在命名卷里）
+docker compose exec app node scripts/site-backup.mjs
 ```
 
-> ⚠️ **别忘了课件目录**。`storage/courseware/` 存着所有上传的课件 HTML/ZIP，漏备份会导致课件 404 但数据库记录仍在。容器部署的对应卷是 `/app/storage`。
+> ⚠️ **别忘了课件目录**。`storage/courseware/` 存着上传的课件。`site-backup.mjs` 会把 `storage/`、`plugins/`、`uploads/` 打进同一个文件包。容器里它们都在 `/data` 卷。
 >
-> SQLite 在线复制可能拿到不一致快照。**要么停服再 `cp`，要么用 `VACUUM INTO` 生成一致性副本**，不要直接复制正在写入的 db 文件。
+> SQLite 在线复制可能拿到不一致快照。脚本用 `VACUUM INTO`。不要直接 `cp` 正在写入的 db 文件。
 >
-> 恢复用 `scripts/restore-db.ts`（按 `BACKUP_DIR` 枚举备份），详见[系统管理员手册](../administrator-guide/admin-manual) §6.4。
+> 恢复须先停服：`node scripts/site-restore.mjs --i-understand-downtime`。详见[系统管理员手册](../administrator-guide/admin-manual) §6.4。
 
 ### Q: 如何重置系统？
 
@@ -519,7 +500,7 @@ pnpm run dev
 
 > 重置后到启动日志或 `storage/bootstrap-credentials.txt` 取初始口令。若仍配置成与用户名相同，登录后必须改密，期间业务 API 读请求也会被拦截。详见[系统管理员手册](../administrator-guide/admin-manual) §0.2。
 >
-> Docker 部署要重置得删卷：`docker compose down -v`（⚠️ 这会**同时清掉** db / storage / backups / logs 四个卷，务必先备份）。
+> Docker 部署要重置得删卷：`docker compose down -v`（⚠️ 这会清掉 `openlearn_data` 与 `openlearn_backups`，务必先备份）。
 
 ---
 

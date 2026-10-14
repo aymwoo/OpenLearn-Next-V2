@@ -153,7 +153,9 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
       const pad = (n: number) => String(n).padStart(2, '0');
       const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const backupFile = path.join(backupDir, `pre_migration_${timestamp}.db`);
-      fs.copyFileSync(db.name, backupFile);
+      // 复制主库文件会漏掉尚未 checkpoint 的 WAL。VACUUM INTO 生成一致性快照。
+      const escaped = backupFile.replace(/'/g, "''");
+      db.exec(`VACUUM INTO '${escaped}'`);
       console.log(`[Migration] Safety snapshot created before applying ${pending.length} migration(s): ${backupFile}`);
     } catch (bErr: any) {
       console.warn('[Migration] Warning: Could not create pre-migration snapshot:', bErr.message);

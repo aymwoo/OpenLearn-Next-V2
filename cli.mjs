@@ -192,7 +192,7 @@ Commands:
   backup [file] [options]  一键数据冷备 (支持 --full 打包数据库与富媒体课件文件)
                            选项: --full (打包 database + uploads + storage 为 zip 归档)
   restore <file>           从备份快照文件安全还原数据 (支持 .db 镜像与 .zip 全量还原)
-  reset-admin [options]    重置系统管理员 (admin) 密码 (默认重置为 admin)
+  reset-admin [options]    重置管理员 admin 的口令（未指定时随机生成，不再默认 admin）
                            选项: --password, -P <pwd>
   plugins [list]           查看当前已安装的平台插件清单与加载状态
   clean, clean-cache       清理 NPX 包缓存与本地临时运行数据
@@ -294,7 +294,7 @@ Environment Variables:
   }
 
   if (command === 'reset-admin') {
-    const newPassword = flags.password || subcommandArgs[0] || 'admin';
+    const newPassword = flags.password || subcommandArgs[0];
     const res = await runResetAdmin(newPassword, { dbPath: process.env.OPENLEARN_DB_PATH });
     process.exit(res.ok ? 0 : 1);
   }
