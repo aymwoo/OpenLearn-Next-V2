@@ -1324,6 +1324,15 @@ export function LiveClassroomView({
     }
   };
 
+  // 起始门户中的「前往课表设置」按钮回调。
+  const handleGoToTimetable = useCallback(() => {
+    if (setTeacherTab) {
+      setTeacherTab('timetable');
+    } else {
+      appSetTeacherTab('timetable');
+    }
+  }, [setTeacherTab, appSetTeacherTab]);
+
   // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
   // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
   if (showEntryPortal) {
@@ -1342,6 +1351,7 @@ export function LiveClassroomView({
         addToast={addToast}
         onEnterClassroom={handlePortalEnter}
         onEditLesson={handleEditLesson}
+        onGoToTimetable={handleGoToTimetable}
       />
     );
   }
