@@ -12,8 +12,8 @@
 | --------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `PORT`                                        | `9000`                                       | HTTP 服务端口（`cli.mjs -p` 可覆盖）                                                                                     |
 | `TRUST_PROXY`                                 | 不信任                                       | 未设置、空、`false`、`0` 均不信任 `X-Forwarded-*`。Nginx 后设 `1` 或 `loopback`。直连公网不要设为 `1`                    |
-| `OPENLEARN_ADMIN_PASSWORD`                    | 随机生成                                     | 空库管理员初始口令。等于 `admin` 时必须改密                                                                               |
-| `OPENLEARN_TEACHER_PASSWORD`                  | 随机生成                                     | 空库教师初始口令。等于 `teacher` 时必须改密                                                                               |
+| `OPENLEARN_ADMIN_PASSWORD`                    | 随机生成                                     | 空库管理员初始口令。等于 `admin` 时必须改密                                                                              |
+| `OPENLEARN_TEACHER_PASSWORD`                  | 随机生成                                     | 空库教师初始口令。等于 `teacher` 时必须改密                                                                              |
 | `HOST`                                        | `0.0.0.0`                                    | 监听地址（`cli.mjs -H` 可覆盖）                                                                                          |
 | `NODE_ENV`                                    | dev 自动设 `development` / prod `production` | 影响 HMR、静态资源策略、部分测试分支                                                                                     |
 | `OPEN_BROWSER`                                | 关闭                                         | 设为 `true` 启动后自动打开浏览器（`cli.mjs -o`）                                                                         |
@@ -23,25 +23,38 @@
 | `LTI_ALLOWED_LMS_ORIGINS`                     | 无                                           | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                               |
 | `ENCRYPTION_KEY`                              | 自动生成                                     | 64 位 hex，加密 AI Provider API Key。**非必需**：首次使用时自动生成并写回 `.env`（`packages/core/di/api-key-crypto.ts`） |
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
+| `OPENLEARN_DATA_DIR`                          | 库文件所在目录                               | 课件 `storage/`、`plugins/`、`uploads/` 的根。容器默认 `/data`                                                           |
+| `BACKUP_DIR`                                  | `<数据目录>/backups`                         | `scripts/site-backup.mjs` 与迁移前快照的输出目录。容器默认 `/backups`                                                    |
 | `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）            |
 | `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                                      | Worker 插件激活超时（inline 模式固定 5000ms）                                                                            |
-| `OPENLEARN_WORKER_ISOLATE`                  | `thread`                                     | 未显式指定 isolateKind 时的隔离原语。第三方插件激活会显式使用 `process`，不受此默认值拉回同进程 |
-| `OPENLEARN_TRUSTED_INLINE_PLUGINS`          | 空                                           | 逗号分隔的 manifest id。名单内插件可按清单使用 inline/worker。其余非 `@openlearn/` 插件强制子进程 |
-| `OPENLEARN_PLUGIN_PERMISSION`               | `rw`                                         | 子进程 Node 权限档位：`rw`/`ro`/`off`（仅子进程生效；暂无法约束网络）                                                     |
-| `OPENLEARN_PLUGIN_MAX_HEAP_MB`              | `128`                                        | 子进程 V8 老生代上限（MB），`0`/`off` 关闭                                                                               |
-| `OPENLEARN_WORKER_LIVENESS`                 | `on`                                         | 插件存活探活（默认 30s 间隔 + 15s 宽限）；`off` 关闭                                                                      |
-| `BRIDGE_HOOK_TELEMETRY`                     | `on`                                         | 课件网络遥测总闸：`off` 关闭 fetch/XHR/axios/beacon/form 向父窗口的上报（成绩提交不受影响）                              |
+| `OPENLEARN_WORKER_ISOLATE`                    | `thread`                                     | 未显式指定 isolateKind 时的隔离原语。第三方插件激活会显式使用 `process`，不受此默认值拉回同进程                          |
+| `OPENLEARN_TRUSTED_INLINE_PLUGINS`            | 空                                           | 逗号分隔的 manifest id。名单内插件可按清单使用 inline/worker。其余非 `@openlearn/` 插件强制子进程                        |
+| `OPENLEARN_PLUGIN_PERMISSION`                 | `rw`                                         | 子进程 Node 权限档位：`rw`/`ro`/`off`（仅子进程生效；暂无法约束网络）                                                    |
+| `OPENLEARN_PLUGIN_MAX_HEAP_MB`                | `128`                                        | 子进程 V8 老生代上限（MB），`0`/`off` 关闭                                                                               |
+| `OPENLEARN_WORKER_LIVENESS`                   | `on`                                         | 插件存活探活（默认 30s 间隔 + 15s 宽限）；`off` 关闭                                                                     |
+| `BRIDGE_HOOK_TELEMETRY`                       | `on`                                         | 课件网络遥测总闸：`off` 关闭 fetch/XHR/axios/beacon/form 向父窗口的上报（成绩提交不受影响）                              |
 | `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | —                                            | `ctx.reportProgress` 心跳滑动续期窗口                                                                                    |
 | `DEBUG_COMMAND_BUS`                           | 关闭                                         | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效                                   |
+| `LOG_LEVEL`                                   | 生产 `info` / 其他 `debug`                   | 结构化日志级别（pino）                                                                                                   |
+| `LOG_DIR`                                     | `<cwd>/logs`                                 | 访问日志 `openlearn.log` 与审计日志 `audit.log` 的目录。容器为 `/data/logs`                                              |
+| `LOG_REDACT`                                  | 开启                                         | `false` / `0` / `off` / `no` 关闭字段脱敏。生产不要关闭                                                                  |
+| `LOG_MAX_SIZE_MB`                             | `10`                                         | 访问日志单文件上限（MB），超出后轮转                                                                                     |
+| `LOG_MAX_FILES`                               | `5`                                          | 访问日志保留的历史份数（`openlearn.log.1` …）。更旧的直接删除                                                            |
+| `AUDIT_LOG_MAX_SIZE_MB`                       | `20`                                         | 安全审计日志单文件上限（MB）                                                                                             |
+| `AUDIT_LOG_MAX_FILES`                         | `20`                                         | 审计日志保留的历史份数                                                                                                   |
+| `SENTRY_DSN`                                  | 空                                           | 可选。Sentry 兼容 DSN。与 `OPENLEARN_ERROR_DSN` 二选一，都空则只写本地日志                                               |
+| `OPENLEARN_ERROR_DSN`                         | 空                                           | 同上，便于不把变量名叫成 Sentry                                                                                          |
+| `METRICS_TOKEN`                               | 空                                           | 可选。`Authorization: Bearer <token>` 可读取 `GET /metrics`。空则仅管理员会话可访问                                      |
 
 ## 2. SQLite 数据库路径
 
-| 场景                              | 路径                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                       |
-| npx 安装                          | `~/openlearn-next/data.db`                                               |
-| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                             |
-| Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离） |
+| 场景                              | 路径                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                           |
+| npx 安装                          | `~/openlearn-next/data.db`                                                   |
+| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                                 |
+| Docker Compose                    | `/data/educational_os.db`，文件在同一卷的 `storage/`、`plugins/`、`uploads/` |
+| Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离）     |
 
 ## 3. 会话与密钥
 

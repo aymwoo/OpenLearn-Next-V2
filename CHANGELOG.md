@@ -10,7 +10,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
+- **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
+- **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
+- **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
+
 ### Breaking Changes
+
+- **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
+
+- **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
+
+### Fixes
+
+- **Socket.IO 握手会拒绝协议版本不匹配的连接**。`engine.io` 下限升到 `>=6.6.10`（当前解析 6.6.11，修复 GHSA-2gc4-cqfq-p2gv / CVE-2026-102599）。正常的 `socket.io` 4.8 客户端不受影响。自制或过旧的 Engine.IO 客户端如果故意发送不匹配的协议修订号，连接会被断开，而不是把进程挂住。直接依赖同步为 `socket.io` / `socket.io-client` `^4.8.4`。
+- **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
+- **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
+
+### Security
+
+- 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
+- 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
+  - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）
+  - `undici@>=7 <8` → `7.30.0`（jsdom 29 的测试环境；不升到 undici 8）
+  - `browserslist` → `>=4.28.7`（同时带上 `baseline-browser-mapping` `>=2.11`）
+  - `source-map-js` → `>=1.2.2`（`@tailwindcss/node`）
+  - `fast-copy@>=4 <4.1` → `4.1.0`（`pino-pretty`）
+  - `esbuild@>=0.27.3 <0.28.1` → `0.28.1`（仅 tsx 的开发服务器；生产打包仍用 esbuild 0.25）
+  - `dompurify` → `>=3.4.16`（jspdf 内嵌，修复 IN_PLACE DOM XSS）
+  - `@tailwindcss/typography>postcss-selector-parser` → `7.1.6`（typography 0.5.20 把 6.0.10 钉死，6.x 没有补丁；构建期 API `astSync` / `selector()` 保持可用）
+  - `vitest` 升到 `^4.1.11`（GHSA-82fw-gwwq-j7x9，测试期路径穿越）
+  - `express-rate-limit` 升到 `^8.7.1`（仍依赖 `ip-address@^10`，实际修复靠上面的 override）
+
+### Fixes
+
+- **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
+- **CI 的 pnpm 固定为 `package.json` 的 `packageManager`（`pnpm@10.33.4`）**。`pnpm/action-setup` 不再使用 `version: latest`。pnpm 12 默认的 `minimumReleaseAge` 会拒绝锁文件里当天发布的 `caniuse-lite` 与 `electron-to-chromium`，`pnpm install --frozen-lockfile` 在安装阶段失败。仓库的 `.npmrc` 仍是 `minimum-release-age=0`，没有为了过 CI 关掉这条策略。GitHub Actions 的 JavaScript action 升到各自的 Node 24 主版本。
+- **架构文档漂移审计的三处误报**：发布说明里已下线的 `national-smart-edu` 不再被当成当前插件；`audit-tools/reports/` 是 gitignore 的生成物；「已于某日删除」算墓碑。`packages/core/types` 只有 `semver` 的 ambient 声明，不算子系统。
+- **Windows 权限探针不再读 `/etc/hostname`**。该路径在 Windows 上不存在，`off` 策略得到 `ENOENT`，平台探测 job 里的 worker-runtime 用例失败，随后的 verbose dump 也失败。探针改为读取测试自己创建的、位于插件目录之外的文件。
+- **Windows 上 `019_plugins_version.sql` 的分段测试认 CRLF**。`core.autocrlf=true` 时文件是 `-- UP\r\n`，用例用 `-- UP\n` 查找，整组报「缺少 -- UP 段」。读入后先把换行归一成 LF。
+- **备课「添加到画板」会等白板挂载**。调色板在主包，白板是 lazy chunk。chunk 还没好时 `whiteboardRef` 为空，点击被静默丢掉，元素不落库。现在最多等 15 秒再插入。浏览器 E2E 会先等到画布出现，并按班级名称点选；检索框只在班级超过 2 个时才出现，不能当必经步骤。
+- **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
+- **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
+- **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
+- **PM2 配置会把 `TRUST_PROXY`、种子口令和数据目录从 `.env` 传进进程**。此前 `ecosystem.config.cjs` 的 `env` 块没有这些键，反代后面的限流仍按连接地址分桶。
+- **`reset-admin` 不再把口令重置成 `admin`**。未指定 `--password` 时随机生成并打印一次；口令等于用户名时把 `must_change_password` 置 1。
+- **生产环境加载 plugin-sdk 不再依赖 `pino-pretty`**。日志目录不可写时只打到 stdout，并说明原因，而不是在 import 阶段退出。容器默认 `LOG_DIR=/data/logs`。
+- **容器里的插件目录跟数据卷走**。设置 `OPENLEARN_DATA_DIR` 时，内核插件目录是 `<数据目录>/plugins`，不再是进程工作目录下的 `/app/plugins`（node 用户写不了，容器一重建插件也没了）。创建失败时日志以 `[Kernel] FATAL` 开头。
+- **生产镜像保留 `esbuild`**。插件安装会在运行时 `import('esbuild')` 做安全扫描和打包。它原先只在 `devDependencies`，`pnpm prune --prod` 把它删掉后，容器里安装插件返回 500 `Cannot find package 'esbuild'`。现在它是生产依赖。
+- **已批准的插件公开 GET 不再被详情路由提前 401**。`GET /api/plugins/:id(*)` 会先匹配 `/api/plugins/<id>/<子路径>`。鉴权写在路由中间件上时，`next()` 放行网关的代码根本执行不到，管理员写入 `plugin_public_routes` 之后匿名 GET 仍是 401。现在含 `/` 的路径先交给网关，纯插件 id 的详情查询仍然要登录。
+- **第三方插件激活日志写出真实隔离方式**。子进程隔离此前仍打印 `activated in WORKER mode`。现在打印 `process` 或 `thread`。只读数据卷启动失败时，入口先打一行 `[Startup] FATAL`，不再先刷满 `chown` 错误。
+
+- **严格类型检查 14 处诊断**：退出票在没有题目时不再读取 `coreQuestion` / `challengeQuestion`；课后反思的 `lectureRatio` 改为 `number | null`，简报在未采集讲授时长时显示「讲授用时未采集」，不再把空值当成 0% 或渲染成 `null%`。命令面板和快速插入把扩展点 `slotProps` 按字段校验，`getCommand` / `getItem` 改为登记表上的必选方法。
+- **插件 ZIP 上传中断后不再留下临时文件**。`createWriteStream` 的 `open` 发生在下一拍；若在此之前 `rmSync`，随后的 `open` 会把同一路径重新创建出来。现在等写入流 `close` 之后再删除。
 
 - **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。
   - **迁移**：需要某个自研插件继续进程内运行时，在环境变量写 `OPENLEARN_TRUSTED_INLINE_PLUGINS=ext-your-plugin,ext-other` 后重启。预加载进宿主的内置代码不受此限制。已安装的库内记录会在下次启动恢复时改写。子进程仍受 `OPENLEARN_PLUGIN_PERMISSION`（默认 `rw`）与 `OPENLEARN_PLUGIN_MAX_HEAP_MB` 约束；Node 权限模型目前约束不了出站网络。
@@ -36,6 +90,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **PPTX 演示组件国际化运行时异常修复**：
+  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
+  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 - **`AppDataContext` 漏传 `fetchClasses` 致 `/#/classes` 页面「随机生成 / 清除 / 创建班级」报 `TypeError: fetchClasses is not a function`**：根因为 `useAppComposer.appData` 拼装时漏了 `fetchClasses,`，且 `AppExtras` 类型未声明该字段；`ClassesView` 通过 `useAppData() as unknown as ClassesViewProps` 撒谎式透传到 `ClassPasscodeController` / `CreateClassButton`，单测因直接 mock prop 未发现。修复：`AppExtras` 补 `fetchClasses: () => Promise<void>`，`useAppComposer.appData` 补 `fetchClasses,`；同步加 `AppDataContext.test.tsx` 类型层守卫（`pnpm lint` 拦截）以防回归。
@@ -71,7 +128,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **CSV 拆行修正**：原 `line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)` 对含逗号的引号字段会拆错（备注写「数学, 较弱」即触发），改为逐字符状态机并支持 `""` 转义。
   - **表头匹配改为两级策略**：先规范化（去空格/下划线/连字符/括号）后精确匹配，失败才回退到按长度降序的包含匹配。朴素的 `includes('学生')` 会让「学生备注」列抢先命中并导致整行错位。
   - **第三份解析实现对齐**：`utils/pluginParsers.ts`（班级面板「CSV 批量加入」）改为复用同一套拆行与表头匹配逻辑，并补齐密码/备注列。
-  - **性能**：bcrypt(cost=10) 单次约 60~100ms，50 人班的哈希计算全部移到写事务**之外**，避免把 SQLite 写锁按住 3~5 秒。
+  - **性能**：bcrypt(cost=10) 单次约 60~~100ms，50 人班的哈希计算全部移到写事务**之外**，避免把 SQLite 写锁按住 3~~5 秒。
   - **文案修正**：导入成功提示的「新学者」错别字；「匹配并更新」改为与实际行为相符的「已存在，已跳过重复创建」；初始密码以「学号 / 姓名 / 密码」清单形式在成功提示中展示一次。
   - `ImportModal` 补充列说明与「仅学生姓名必填」提示。
 

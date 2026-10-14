@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -251,12 +252,23 @@ export async function runRestore(sourceFile, options = {}) {
  * @param {Object} [options]
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
-export async function runResetAdmin(newPassword = 'admin', options = {}) {
+function generateResetPassword() {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(20);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+  if (!/[A-Za-z]/.test(out) || !/[0-9]/.test(out)) out = `${out.slice(0, 18)}a7`;
+  return out;
+}
+
+export async function runResetAdmin(newPassword, options = {}) {
   const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
   const dbPath = resolveDbPath(options.dbPath);
+  const generated = newPassword === undefined || newPassword === null || String(newPassword).length === 0;
+  const password = generated ? generateResetPassword() : String(newPassword);
 
   if (!fs.existsSync(dbPath)) {
-    const msg = `数据库尚未初始化 (${dbPath})。请直接启动一次平台即可生成默认 admin/admin 账号。`;
+    const msg = `数据库尚未初始化 (${dbPath})。请先启动一次平台，口令来自环境变量或 storage/bootstrap-credentials.txt。`;
     log(`ℹ ${msg}`);
     return { ok: false, error: msg };
   }
@@ -265,10 +277,10 @@ export async function runResetAdmin(newPassword = 'admin', options = {}) {
     let hash;
     try {
       const bcrypt = (await import('bcryptjs')).default;
-      hash = bcrypt.hashSync(newPassword, 10);
+      hash = bcrypt.hashSync(password, 10);
     } catch {
-      const crypto = await import('node:crypto');
-      hash = crypto.createHash('sha256').update(newPassword).digest('hex');
+      const nodeCrypto = await import('node:crypto');
+      hash = nodeCrypto.createHash('sha256').update(password).digest('hex');
     }
 
     const Database = (await import('better-sqlite3')).default;
@@ -282,16 +294,33 @@ export async function runResetAdmin(newPassword = 'admin', options = {}) {
       return { ok: false, error: msg };
     }
 
-    const updateRes = db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'admin');
+    const hasMustChange = db
+      .prepare('PRAGMA table_info(users)')
+      .all()
+      .some((col) => col.name === 'must_change_password');
+    const mustChange = password === 'admin' || generated ? 1 : 0;
+    const updateSql = hasMustChange
+      ? 'UPDATE users SET password_hash = ?, must_change_password = ? WHERE username = ?'
+      : 'UPDATE users SET password_hash = ? WHERE username = ?';
+    const updateArgs = hasMustChange ? [hash, mustChange, 'admin'] : [hash, 'admin'];
+    const updateRes = db.prepare(updateSql).run(...updateArgs);
 
     if (updateRes.changes === 0) {
-      // 若数据库中无 admin 用户，则插入
-      db.prepare(
-        'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(`usr_admin_${Date.now()}`, 'admin', hash, 'administrator', 'System Admin', Date.now());
-      log(`✓ 管理员账号不存在，已新建管理员账号: admin (密码: ${newPassword})`);
+      if (hasMustChange) {
+        db.prepare(
+          'INSERT INTO users (id, username, password_hash, role, name, created_at, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).run(`usr_admin_${Date.now()}`, 'admin', hash, 'administrator', 'System Admin', Date.now(), mustChange);
+      } else {
+        db.prepare(
+          'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(`usr_admin_${Date.now()}`, 'admin', hash, 'administrator', 'System Admin', Date.now());
+      }
+      log(`✓ 管理员账号不存在，已新建管理员账号 admin。口令：${password}`);
     } else {
-      log(`✓ 管理员 (admin) 密码已成功重置为: ${newPassword}`);
+      log(`✓ 管理员 (admin) 口令已重置。口令：${password}`);
+    }
+    if (mustChange) {
+      log('  该口令登录后必须立即修改。不要把口令设成用户名 admin。');
     }
 
     db.close();

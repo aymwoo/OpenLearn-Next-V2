@@ -48,6 +48,14 @@ describe('G-3：插件详情端点必须鉴权', () => {
     expect(decl).toContain('requireAuth(');
   });
 
+  it('含子路径的 GET 在 requireAuth 之前交给网关（已批准的公开路由不能先被 401）', () => {
+    const decl = declaration('get', '/api/plugins/:id(*)');
+    const slash = decl.indexOf("includes('/')");
+    const auth = decl.indexOf('requireAuth()(req');
+    expect(slash).toBeGreaterThan(-1);
+    expect(auth).toBeGreaterThan(slash);
+  });
+
   it('/api/plugins/by-manifest/:manifestId(*) 带 requireAuth()', () => {
     const decl = declaration('get', '/api/plugins/by-manifest/:manifestId(*)');
     expect(decl).toContain('requireAuth(');

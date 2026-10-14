@@ -22,45 +22,52 @@ import { RotatingFileStream, resolveRotationConfig } from './rotating-file-strea
  */
 const level = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 
-// Ensure logs directory exists（LOG_DIR 允许部署与测试把日志写到别处）
+// LOG_DIR 允许部署与测试把日志写到别处。目录在下面按可写性创建，失败则只留 stdout。
 const logDir = path.resolve(process.env.LOG_DIR || path.join(process.cwd(), 'logs'));
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-}
 const logFile = path.join(logDir, 'openlearn.log');
 
-const streams = [];
-
-if (process.env.NODE_ENV !== 'production') {
-  streams.push({
-    level,
-    stream: pino.transport({
+function consoleStream(): NodeJS.WritableStream {
+  if (process.env.NODE_ENV === 'production') return process.stdout;
+  try {
+    return pino.transport({
       target: 'pino-pretty',
       options: {
         colorize: true,
         translateTime: 'SYS:HH:mm:ss.l',
         ignore: 'pid,hostname',
       },
-    }) as any,
-  });
-} else {
-  streams.push({
-    level,
-    stream: process.stdout,
-  });
+    }) as unknown as NodeJS.WritableStream;
+  } catch (err) {
+    // 生产镜像会 prune 掉 pino-pretty。开发机没装它时也不应让进程起不来。
+    console.warn('[logger] pino-pretty 不可用，改用 stdout。', err instanceof Error ? err.message : err);
+    return process.stdout;
+  }
 }
+
+const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [{ level, stream: consoleStream() }];
 
 // 轮转替代原先的 fs.createWriteStream(logFile, { flags: 'a' })：
 // 此前是无限增长的单文件（实测已达 11.3 MB 且无上限、无切分）。
-const rotation = resolveRotationConfig();
-streams.push({
-  level,
-  stream: new RotatingFileStream({
-    filePath: logFile,
-    maxBytes: rotation.maxBytes,
-    maxFiles: rotation.maxFiles,
-  }),
-});
+// 目录不可写（只读根文件系统、容器里 node 用户碰不到 /app/logs）时只留 stdout。
+let fileLogging = false;
+try {
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  fs.accessSync(logDir, fs.constants.W_OK);
+  fileLogging = true;
+} catch (err) {
+  console.warn(`[logger] 无法写入日志目录 ${logDir}，仅输出到 stdout。`, err instanceof Error ? err.message : err);
+}
+if (fileLogging) {
+  const rotation = resolveRotationConfig();
+  streams.push({
+    level,
+    stream: new RotatingFileStream({
+      filePath: logFile,
+      maxBytes: rotation.maxBytes,
+      maxFiles: rotation.maxFiles,
+    }),
+  });
+}
 
 // 脱敏在 logger 层生效：redact 发生在序列化阶段、早于 multistream 分发，
 // 因此 stdout / pino-pretty / 文件三路拿到的都是已脱敏内容，不会出现

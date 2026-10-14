@@ -10,7 +10,8 @@ export interface PacingAlert {
 }
 
 export interface CoPilotReflectionReport {
-  lectureRatio: number; // 0 - 100
+  /** 0–100。宿主没有上报真实讲授时长时为 null，不按课时比例编造。 */
+  lectureRatio: number | null;
   recommendedLectureMaxRatio: number; // usually 55%
   interactionCoverage: number; // 0 - 100
   pacingAlerts: PacingAlert[];
