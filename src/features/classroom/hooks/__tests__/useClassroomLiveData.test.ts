@@ -140,6 +140,37 @@ describe('useClassroomLiveData 派生逻辑', () => {
       ]);
     });
 
+    it('字符串时长 5m 按分钟解析，不会变成 0 或 NaN', () => {
+      const stages = deriveStages(
+        [
+          { title: '开场准备', duration: '5m' },
+          { title: '讲授新课', duration: '20m' },
+          { title: '互动练习', duration: '15m' },
+          { title: '课堂总结', duration: '5m' },
+        ],
+        0,
+      );
+      expect(stages.map((stage) => stage.plannedMin)).toEqual([5, 20, 15, 5]);
+      expect(stages.some((stage) => Number.isNaN(stage.plannedMin))).toBe(false);
+    });
+
+    it('旧字段 durationMinutes / estimatedDurationSeconds 参与计划分钟', () => {
+      const stages = deriveStages(
+        [
+          { title: '导入', durationMinutes: 8 },
+          { title: '新授', estimatedDurationSeconds: 600 },
+        ],
+        0,
+      );
+      expect(stages[0].plannedMin).toBe(8);
+      expect(stages[1].plannedMin).toBe(10);
+    });
+
+    it('无法解析的时长记为 0，已用时间也不会被 NaN 吃掉', () => {
+      const stages = deriveStages([{ title: '乱码', duration: 'not-a-time' }], 12);
+      expect(stages[0]).toEqual({ stageName: '乱码', plannedMin: 0, actualMin: 0 });
+    });
+
     it('已用时间按顺序填充，未开始环节 actualMin 为 0', () => {
       const stages = deriveStages(
         [
