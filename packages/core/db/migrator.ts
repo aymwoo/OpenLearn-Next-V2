@@ -145,7 +145,12 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
   }
 
   const pending = migrations.filter((m) => !applied.has(m.name));
-  if (pending.length > 0 && db.name && db.name !== ':memory:' && (process.env.FORCE_MIGRATION_SNAPSHOT === 'true' || !process.env.VITEST)) {
+  if (
+    pending.length > 0 &&
+    db.name &&
+    db.name !== ':memory:' &&
+    (process.env.FORCE_MIGRATION_SNAPSHOT === 'true' || !process.env.VITEST)
+  ) {
     try {
       const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(db.name), 'backups');
       fs.mkdirSync(backupDir, { recursive: true });
@@ -157,8 +162,13 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
       const escaped = backupFile.replace(/'/g, "''");
       db.exec(`VACUUM INTO '${escaped}'`);
       console.log(`[Migration] Safety snapshot created before applying ${pending.length} migration(s): ${backupFile}`);
-    } catch (bErr: any) {
-      console.warn('[Migration] Warning: Could not create pre-migration snapshot:', bErr.message);
+    } catch (bErr: unknown) {
+      const message = bErr instanceof Error ? bErr.message : String(bErr);
+      // Vitest 里快照目录经常不可写。只在测试进程吞掉失败，正式进程必须先有快照再改库。
+      if (!process.env.VITEST) {
+        throw new Error(`[Migration] 迁移前快照失败，已中止且未应用任何待执行 SQL: ${message}`, { cause: bErr });
+      }
+      console.warn('[Migration] Warning: Could not create pre-migration snapshot:', message);
     }
   }
 

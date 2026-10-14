@@ -3,13 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import Database from 'better-sqlite3';
-import {
-  validateBackup,
-  listBackups,
-  pruneBackups,
-  performBackup,
-  performRestore,
-} from '../backup-manager';
+import { validateBackup, listBackups, pruneBackups, performBackup, performRestore } from '../backup-manager';
 
 describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
   let tempDir: string;
@@ -32,10 +26,16 @@ describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
         subject TEXT,
         created_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS _migrations (
+        name TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        checksum TEXT NOT NULL
+      );
       INSERT INTO lessons (id, title, subject, created_at) VALUES
         ('les_1', '物理探索：牛顿第一定律', 'physics', 1700000001),
         ('les_2', '化学探究：酸碱中和反应', 'chemistry', 1700000002),
         ('les_3', '技术工程：传感器数据拟合', 'engineering', 1700000003);
+      INSERT INTO _migrations (name, applied_at, checksum) VALUES ('000_initial_schema', 1, 'test');
     `);
     db.close();
   });
@@ -83,6 +83,17 @@ describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
       const res = validateBackup(otherDbFile);
       expect(res.ok).toBe(false);
       expect(res.reason).toContain('缺少核心 lessons 表');
+    });
+
+    it('拒绝缺少 _migrations 表的 SQLite 文件', () => {
+      const noMigrations = path.join(tempDir, 'no-migrations.db');
+      const otherDb = new Database(noMigrations);
+      otherDb.exec('CREATE TABLE lessons (id TEXT PRIMARY KEY, title TEXT NOT NULL);');
+      otherDb.close();
+
+      const res = validateBackup(noMigrations);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toContain('_migrations');
     });
   });
 

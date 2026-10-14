@@ -114,6 +114,9 @@ export function validateBackup(filePath: string): BackupValidationResult {
     if (!tableNames.has('lessons')) {
       return { ok: false, reason: '缺少核心 lessons 表，非合法 OpenLearn 业务数据库' };
     }
+    if (!tableNames.has('_migrations')) {
+      return { ok: false, reason: '缺少 _migrations 表，无法确认迁移版本，拒绝作为 OpenLearn 备份' };
+    }
 
     const { n } = probe.prepare('SELECT COUNT(*) AS n FROM lessons').get() as { n: number };
     return {

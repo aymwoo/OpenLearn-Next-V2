@@ -43,11 +43,23 @@ export function listMigrationNames(migrationsDir: string): string[] | null {
   }
 }
 
+/** 与 listMigrationNames 相同：只比较去掉 `.sql` 后的文件名，并丢掉行尾 CR。 */
+function migrationRecordName(name: string): string {
+  return path.basename(name.replace(/\r/g, '').trim(), '.sql');
+}
+
 export function migrationsComplete(expected: string[] | null, applied: string[]): ReadinessCheck {
   if (!expected) return { ok: false, reason: 'migrations' };
-  const have = new Set(applied);
-  const pending = expected.filter((name) => !have.has(name));
+  const expectedKeys = new Set(expected.map(migrationRecordName));
+  const appliedKeys = new Set(applied.map(migrationRecordName));
+  const pending = expected.filter((name) => !appliedKeys.has(migrationRecordName(name)));
+  const unknown = applied.filter((name) => !expectedKeys.has(migrationRecordName(name)));
+  if (unknown.length > 0) {
+    // 名字只进日志。readinessBody 仍然只有 status，避免把库内迁移清单写进 HTTP。
+    console.warn(`[health] not ready: unknown migrations ${unknown.join(',')}`);
+  }
   if (pending.length > 0) return { ok: false, reason: 'migrations', pendingMigrations: pending };
+  if (unknown.length > 0) return { ok: false, reason: 'migrations' };
   return { ok: true };
 }
 

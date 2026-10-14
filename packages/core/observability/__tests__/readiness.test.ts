@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   checkReadiness,
   livenessBody,
@@ -65,6 +65,24 @@ describe('就绪检查', () => {
     expect(pending.pendingMigrations).toEqual(['002_more']);
     expect(JSON.stringify(readinessBody(false))).toBe('{"status":"not_ready"}');
     expect(migrationsComplete(null, [])).toEqual({ ok: false, reason: 'migrations' });
+  });
+
+  it('库里有当前构建不认识的迁移名时不就绪，名字只进日志', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = migrationsComplete(['001_init'], ['001_init', '099_from_the_future']);
+      expect(result).toEqual({ ok: false, reason: 'migrations' });
+      expect(JSON.stringify(result)).not.toContain('099_from_the_future');
+      expect(JSON.stringify(readinessBody(result.ok))).toBe('{"status":"not_ready"}');
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('099_from_the_future'));
+
+      warn.mockClear();
+      expect(migrationsComplete(['001_init'], ['001_init.sql'])).toEqual({ ok: true });
+      expect(migrationsComplete(['001_init'], ['001_init\r'])).toEqual({ ok: true });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
