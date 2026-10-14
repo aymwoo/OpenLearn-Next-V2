@@ -487,6 +487,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         IEventBusServiceToken,
       )) as unknown as import('../event-bus/index.js').EventBus;
 
+      // 'process' → 子进程（最小 env）；'worker' → thread（缺省，保持原行为）。
+      const isolateKind = requiresProcessIsolation(mode) ? 'process' : 'thread';
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
         manifest,
@@ -495,9 +497,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         eventBus,
         this.getPluginDir(pluginId),
         undefined,
-        // L-1 P1 阶段 3：把 executionMode 落到具体隔离原语。
-        // 'process' → 子进程（最小 env）；'worker' → thread（缺省，保持原行为）。
-        { isolateKind: requiresProcessIsolation(mode) ? 'process' : 'thread' },
+        { isolateKind },
       );
 
       this.pluginInstances.set(pluginId, {
@@ -507,7 +507,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         workerRef: { transport, serviceHost },
       });
       this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
-      console.log(`[PluginHost] Plugin "${manifest.id}" activated in WORKER mode (${pluginId})`);
+      console.log(`[PluginHost] Plugin "${manifest.id}" activated in ${isolateKind} mode (${pluginId})`);
     } catch (err) {
       this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
       this.resourceTracker.disposeAll(pluginId);

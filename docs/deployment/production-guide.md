@@ -142,7 +142,7 @@ npx openlearn-next restore /backup/openlearn_daily.db
 若管理人员遗忘密码或系统受锁，无需启动 Web 界面，直接在宿主机重置：
 
 ```bash
-# 默认重置密码为 admin
+# 未指定口令时随机生成，并打印一次。不要再使用 admin 作为口令。
 npx openlearn-next reset-admin
 
 # 指定高强度自定义密码
@@ -160,3 +160,20 @@ npx openlearn-next clean --npx
 # 清理日志与临时缓存（严格保护主业务数据库 data.db 不被误删）
 npx openlearn-next clean
 ```
+
+---
+
+## 4. 公测上线检查清单
+
+按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。
+
+1. **构建**：`pnpm lint`、`pnpm lint:strict`、`pnpm lint:eslint`（0 error）、`pnpm test`、`pnpm build`、`pnpm audit`（无 high / critical）都通过。镜像用仓库 `Dockerfile` 构建，不要在构建机上临时改锁文件。
+2. **密钥**：`.env` 里的 `ENCRYPTION_KEY` 是 64 位 hex，已离线备份。换机器时带上同一把密钥，否则已保存的 AI Provider Key 无法解密。
+3. **种子口令**：设置 `OPENLEARN_ADMIN_PASSWORD` 与 `OPENLEARN_TEACHER_PASSWORD`，且都不等于用户名。若留空，从数据目录 `storage/bootstrap-credentials.txt` 抄走口令后删除该文件。生产环境不要设置 `PLAYWRIGHT_TEST`。
+4. **数据卷**：容器只挂 `/data` 与 `/backups`。确认课件出现在 `/data/storage`，插件出现在 `/data/plugins`。
+5. **健康检查**：`GET /health` 返回 `status: ok`，`GET /health/ready` 返回 `db: connected`。`docker inspect` 里 Health 为 healthy。主进程异常退出后 `restart: unless-stopped` 会把容器拉起来（`RestartCount` 增加）。`docker stop` / `docker kill` 是人为停止，策略不会再拉起。
+6. **反向代理**：Nginx 使用 `deploy/nginx/openlearn.host.conf`（或 compose 的 `deploy/nginx/openlearn.conf`）。进程设置 `TRUST_PROXY=1`（一层）或 `loopback`。应用不要同时对公网暴露 9000。用两个不同来源地址打写请求，确认 429 只打中打满的那一个地址。`/socket.io/` 能完成 WebSocket 握手。
+7. **升级**：从 v0.6.1 库启动后，`_migrations` 含 `021_class_owner_and_password_gate` 与 `022_plugin_public_routes`。用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>` 回填空归属。对需要匿名访问的插件调用 `POST /api/plugins/:id/public-routes`，body 为 `{ "approvePublicRoutes": true }`。仍使用默认口令的账号先改密。
+8. **备份**：`node scripts/site-backup.mjs`（容器里 `docker compose exec app node scripts/site-backup.mjs`）生成数据库快照和文件包。做一次停服恢复演练，核对班级、课件文件和账号还在。
+9. **失败可见**：把数据目录改成只读再启动，日志里应有 `[Startup] FATAL` 或 `[Migration] FATAL`，进程退出码非 0，而不是一直报 healthy。
+10. **账号**：管理员登录、强制改密（若口令等于用户名）、教师建班、学生提交、安装一个插件并 `POST /api/plugins/:id/toggle` 启用。源码安装成功后状态是 `installed`，不启用时访问插件路由会返回 503。这几步都走通再开放。

@@ -132,11 +132,15 @@ async function startServer() {
   try {
     const migrationsDir = path.join(process.cwd(), 'migrations');
     const migrations = loadMigrationsFromDirectory(migrationsDir);
-    if (migrations.length > 0) {
-      runMigrations(kernelContainer.db, migrations);
+    if (migrations.length === 0) {
+      throw new Error(`[Migration] FATAL: ${migrationsDir} 中没有迁移文件，拒绝启动。`);
     }
+    runMigrations(kernelContainer.db, migrations);
+    console.log(`[Migration] 启动复查完成：${migrationsDir}（${migrations.length} 个文件）`);
   } catch (err) {
-    console.error('[Migration] Failed to run database migrations:', err);
+    console.error('[Migration] FATAL: 数据库迁移失败，拒绝在未完成迁移的库上提供服务。');
+    console.error(err);
+    throw err;
   }
 
   // strict: Database 与 MigrationDb 端口类型结构漂移（better-sqlite3 Statement 泛型），运行时相容

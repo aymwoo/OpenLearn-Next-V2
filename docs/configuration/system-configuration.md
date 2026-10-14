@@ -23,6 +23,8 @@
 | `LTI_ALLOWED_LMS_ORIGINS`                     | 无                                           | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                               |
 | `ENCRYPTION_KEY`                              | 自动生成                                     | 64 位 hex，加密 AI Provider API Key。**非必需**：首次使用时自动生成并写回 `.env`（`packages/core/di/api-key-crypto.ts`） |
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
+| `OPENLEARN_DATA_DIR`                          | 库文件所在目录                               | 课件 `storage/`、`plugins/`、`uploads/` 的根。容器默认 `/data`                                                            |
+| `BACKUP_DIR`                                  | `<数据目录>/backups`                         | `scripts/site-backup.mjs` 与迁移前快照的输出目录。容器默认 `/backups`                                                     |
 | `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）            |
 | `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                                      | Worker 插件激活超时（inline 模式固定 5000ms）                                                                            |
 | `OPENLEARN_WORKER_ISOLATE`                  | `thread`                                     | 未显式指定 isolateKind 时的隔离原语。第三方插件激活会显式使用 `process`，不受此默认值拉回同进程 |
@@ -41,6 +43,7 @@
 | 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                       |
 | npx 安装                          | `~/openlearn-next/data.db`                                               |
 | `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                             |
+| Docker Compose                | `/data/educational_os.db`，文件在同一卷的 `storage/`、`plugins/`、`uploads/` |
 | Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离） |
 
 ## 3. 会话与密钥

@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
+
+### Fixes
+
 - **Socket.IO 握手会拒绝协议版本不匹配的连接**。`engine.io` 下限升到 `>=6.6.10`（当前解析 6.6.11，修复 GHSA-2gc4-cqfq-p2gv / CVE-2026-102599）。正常的 `socket.io` 4.8 客户端不受影响。自制或过旧的 Engine.IO 客户端如果故意发送不匹配的协议修订号，连接会被断开，而不是把进程挂住。直接依赖同步为 `socket.io` / `socket.io-client` `^4.8.4`。
 - **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
 - **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
@@ -32,6 +36,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `express-rate-limit` 升到 `^8.7.1`（仍依赖 `ip-address@^10`，实际修复靠上面的 override）
 
 ### Fixes
+
+- **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
+- **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
+- **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
+- **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
+- **PM2 配置会把 `TRUST_PROXY`、种子口令和数据目录从 `.env` 传进进程**。此前 `ecosystem.config.cjs` 的 `env` 块没有这些键，反代后面的限流仍按连接地址分桶。
+- **`reset-admin` 不再把口令重置成 `admin`**。未指定 `--password` 时随机生成并打印一次；口令等于用户名时把 `must_change_password` 置 1。
+- **生产环境加载 plugin-sdk 不再依赖 `pino-pretty`**。日志目录不可写时只打到 stdout，并说明原因，而不是在 import 阶段退出。容器默认 `LOG_DIR=/data/logs`。
+- **容器里的插件目录跟数据卷走**。设置 `OPENLEARN_DATA_DIR` 时，内核插件目录是 `<数据目录>/plugins`，不再是进程工作目录下的 `/app/plugins`（node 用户写不了，容器一重建插件也没了）。创建失败时日志以 `[Kernel] FATAL` 开头。
+- **生产镜像保留 `esbuild`**。插件安装会在运行时 `import('esbuild')` 做安全扫描和打包。它原先只在 `devDependencies`，`pnpm prune --prod` 把它删掉后，容器里安装插件返回 500 `Cannot find package 'esbuild'`。现在它是生产依赖。
+- **已批准的插件公开 GET 不再被详情路由提前 401**。`GET /api/plugins/:id(*)` 会先匹配 `/api/plugins/<id>/<子路径>`。鉴权写在路由中间件上时，`next()` 放行网关的代码根本执行不到，管理员写入 `plugin_public_routes` 之后匿名 GET 仍是 401。现在含 `/` 的路径先交给网关，纯插件 id 的详情查询仍然要登录。
+- **第三方插件激活日志写出真实隔离方式**。子进程隔离此前仍打印 `activated in WORKER mode`。现在打印 `process` 或 `thread`。只读数据卷启动失败时，入口先打一行 `[Startup] FATAL`，不再先刷满 `chown` 错误。
 
 - **严格类型检查 14 处诊断**：退出票在没有题目时不再读取 `coreQuestion` / `challengeQuestion`；课后反思的 `lectureRatio` 改为 `number | null`，简报在未采集讲授时长时显示「讲授用时未采集」，不再把空值当成 0% 或渲染成 `null%`。命令面板和快速插入把扩展点 `slotProps` 按字段校验，`getCommand` / `getItem` 改为登记表上的必选方法。
 - **插件 ZIP 上传中断后不再留下临时文件**。`createWriteStream` 的 `open` 发生在下一拍；若在此之前 `rmSync`，随后的 `open` 会把同一路径重新创建出来。现在等写入流 `close` 之后再删除。
@@ -94,7 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **CSV 拆行修正**：原 `line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)` 对含逗号的引号字段会拆错（备注写「数学, 较弱」即触发），改为逐字符状态机并支持 `""` 转义。
   - **表头匹配改为两级策略**：先规范化（去空格/下划线/连字符/括号）后精确匹配，失败才回退到按长度降序的包含匹配。朴素的 `includes('学生')` 会让「学生备注」列抢先命中并导致整行错位。
   - **第三份解析实现对齐**：`utils/pluginParsers.ts`（班级面板「CSV 批量加入」）改为复用同一套拆行与表头匹配逻辑，并补齐密码/备注列。
-  - **性能**：bcrypt(cost=10) 单次约 60~100ms，50 人班的哈希计算全部移到写事务**之外**，避免把 SQLite 写锁按住 3~5 秒。
+  - **性能**：bcrypt(cost=10) 单次约 60~~100ms，50 人班的哈希计算全部移到写事务**之外**，避免把 SQLite 写锁按住 3~~5 秒。
   - **文案修正**：导入成功提示的「新学者」错别字；「匹配并更新」改为与实际行为相符的「已存在，已跳过重复创建」；初始密码以「学号 / 姓名 / 密码」清单形式在成功提示中展示一次。
   - `ImportModal` 补充列说明与「仅学生姓名必填」提示。
 
