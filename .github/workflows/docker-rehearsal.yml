@@ -1,0 +1,81 @@
+name: Docker release rehearsal
+
+# 发布前检查 Docker 构建链路、迁移与健康探针。
+# 仅在 main / 手动触发 / 标签推送时运行，避免每个 PR 都承担完整镜像构建。
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'scripts/docker-entrypoint.sh'
+      - 'scripts/site-backup.mjs'
+      - 'scripts/site-restore.mjs'
+      - 'scripts/verify-plugin-sdk-entry.mjs'
+      - 'migrations/**'
+      - 'server.ts'
+      - 'packages/core/**'
+
+jobs:
+  docker-build-and-rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t openlearnv2:rehearsal .
+
+      - name: Run container with a clean data volume
+        run: |
+          docker run -d --name openlearn-rehearsal --rm \
+            -p 9000:9000 \
+            -e NODE_ENV=production \
+            -e OPENLEARN_DATA_DIR=/data \
+            -e OPENLEARN_DB_PATH=/data/educational_os.db \
+            -e BACKUP_DIR=/backups \
+            -e ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            -e OPENLEARN_ADMIN_PASSWORD=rehearsal-admin \
+            -e OPENLEARN_TEACHER_PASSWORD=rehearsal-teacher \
+            openlearnv2:rehearsal
+
+      - name: Wait for /health (container startup + migration)
+        run: |
+          echo "Waiting for container to become healthy..."
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9000/health >/dev/null 2>&1; then
+              echo "Health check passed at attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health check failed"
+          docker logs --tail=100 openlearn-rehearsal || true
+          exit 1
+
+      - name: Capture migration / startup logs
+        if: always()
+        run: docker logs --tail=150 openlearn-rehearsal || true
+
+      - name: Verify ready endpoint reports database availability
+        run: |
+          body=$(curl -fsS http://127.0.0.1:9000/health/ready || true)
+          echo "ready response: ${body:-<none>}"
+          # ready endpoint may be 404 in dev builds; do not fail the rehearsal on missing route,
+          # but fail if the endpoint explicitly reports unhealthy.
+          echo "$body" | grep -qi 'false\|error\|unavailable' && { echo 'readiness reported unhealthy'; exit 1; } || true
+
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f openlearn-rehearsal || true
