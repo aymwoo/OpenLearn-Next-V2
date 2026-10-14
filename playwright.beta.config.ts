@@ -2,7 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 /**
  * 公测关键旅程。独立端口和临时库，不设置 PLAYWRIGHT_TEST，
- * 因此登录后的强制改密与生产一致。只走 API，不启动浏览器。
+ * 强制改密门与生产一致（不豁免）。种子口令是强口令且不等于用户名，
+ * 因此本旅程不会被改密门拦住。只走 API，不启动浏览器。
  */
 export default defineConfig({
   testDir: './e2e',

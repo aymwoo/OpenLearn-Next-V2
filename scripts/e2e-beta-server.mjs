@@ -5,6 +5,10 @@ import path from 'node:path';
 /**
  * 公测旅程专用进程。不设置 PLAYWRIGHT_TEST，因此强制改密门是开着的。
  * 数据放在临时目录，避免碰到开发库。
+ *
+ * NODE_ENV=production 时，启动校验拒绝把种子口令设成用户名。
+ * 管理员口令必须与 e2e/public-beta-journey.spec.ts 的 ADMIN_PASSWORD 一致。
+ * 教师口令不等于用户名 "teacher"，同一条校验会放行，无需再改。
  */
 const dir = path.resolve(process.env.OPENLEARN_BETA_E2E_DIR || '/tmp/openlearn-beta-e2e');
 rmSync(dir, { recursive: true, force: true });
@@ -22,7 +26,7 @@ Object.assign(env, {
   BACKUP_DIR: path.join(dir, 'backups'),
   LOG_DIR: path.join(dir, 'logs'),
   LOG_LEVEL: 'info',
-  OPENLEARN_ADMIN_PASSWORD: 'admin',
+  OPENLEARN_ADMIN_PASSWORD: 'Ol-BetaE2e-Adm-7kQ9',
   OPENLEARN_TEACHER_PASSWORD: 'TeacherBeta#2026',
   ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   METRICS_TOKEN: 'beta-metrics-secret',
