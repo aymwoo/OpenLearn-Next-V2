@@ -518,25 +518,34 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
       db.prepare(
         'INSERT OR REPLACE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)',
       ).run(studentXssId, 'notif_01');
-      // 上一阶段已退课。擦除仍要求学生当前属于该教师管理的班级。
+      // 上一阶段已退课。重新入班，便于删除前仍能查到该生的班级关联数据。
       db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
         primaryClassId,
         studentXssId,
         now,
       );
 
-      // 1. SEC-DATA-02 安全校验：缺少 { confirm: true } 时必须被 400 阻断
-      const unconfirmedRes = await fetch(`${baseUrl}/api/students/${studentXssId}/gdpr-delete`, {
+      // 1. 教师会话不能执行 GDPR 删除（即使该生在其班级内）
+      const teacherRes = await fetch(`${baseUrl}/api/students/${studentXssId}/gdpr-delete`, {
         method: 'DELETE',
         headers: teacherHeaders,
+        body: JSON.stringify({ confirm: true }),
+      });
+      expect(teacherRes.status).toBe(403);
+      expect(db.prepare('SELECT 1 FROM students WHERE id = ?').get(studentXssId)).toBeDefined();
+
+      // 2. 管理员缺少 { confirm: true } 时必须被 400 阻断
+      const unconfirmedRes = await fetch(`${baseUrl}/api/students/${studentXssId}/gdpr-delete`, {
+        method: 'DELETE',
+        headers: adminHeaders,
         body: JSON.stringify({}),
       });
       expect(unconfirmedRes.status).toBe(400);
 
-      // 2. 携带二次确认请求发起 GDPR 彻底擦除
+      // 3. 管理员携带二次确认请求发起 GDPR 彻底擦除
       const res = await fetch(`${baseUrl}/api/students/${studentXssId}/gdpr-delete`, {
         method: 'DELETE',
-        headers: teacherHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({ confirm: true }),
       });
 

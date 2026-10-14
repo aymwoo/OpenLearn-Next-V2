@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Breaking Changes
 
 - **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
+- **明文学生口令不能再登录，GDPR 删除只保留给管理员**。`students.password` 不以 `$2` 开头、也不是 64 位十六进制的学生，在花名册重设密码之前无法用个人口令登录。旧 SHA-256 学生仍可登录一次并升级为 bcrypt。教师会话调用 `DELETE /api/students/:id/gdpr-delete` 得到 403；管理员仍须 `{ "confirm": true }`。
 
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
@@ -59,6 +60,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 彻底解耦高频与慢速读查询与写事务的物理句柄竞争，消除耗时列表与聚合查询造成的主写连接霸占，杜绝 `SQLITE_BUSY` 假死。
 
 ### Security
+
+- **学生登录拒绝明文口令，失败文案不再暴露账号是否存在**。库存口令不以 `$2` 开头时不再与提交值做相等比较。64 位十六进制（旧 SHA-256）仍在登录成功时升级为 bcrypt。其它非 bcrypt 值登录失败，审计原因为 `plaintext_password_rejected`，响应和审计都不回显口令，也不把该行改写成新哈希。教师的「用户不存在 / 密码错误」与学生的「学号不存在 / 口令错误」对客户端都返回 `Incorrect username or password`；审计日志仍区分原因。禁用账号仍是 403。
+- **GDPR 删除改为仅管理员**。`DELETE /api/students/:id/gdpr-delete` 不再把 `teacher` 列入 `requireAuth`。能看到该生的教师也不能擦除。
 
 - **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
 - **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。

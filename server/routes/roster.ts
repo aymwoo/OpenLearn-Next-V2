@@ -608,6 +608,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
           account: typeof account === 'string' ? account.slice(0, 64) : '',
         });
       };
+      // 教师与学生的凭证失败对客户端使用同一句文案，避免用不同错误区分账号是否存在。
+      // 具体原因只进审计（user_not_found / bad_password / student_not_found / bad_credentials）。
+      const genericLoginFailure = 'Incorrect username or password';
 
       if (entrance === 'teacher') {
         if (!username || !password) {
@@ -616,17 +619,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
         const userObj = kernelContainer.db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
         if (!userObj) {
           auditLoginFailure('user_not_found', username);
-          return res.status(401).json({ error: 'User not found' });
+          return res.status(401).json({ error: genericLoginFailure });
         }
         if (userObj.status === 'disabled') {
           auditLoginFailure('account_disabled', username);
           return res.status(403).json({ error: 'Your account has been disabled. Please contact the administrator.' });
         }
-        // SEC-AUTH-02: bcrypt 验证 + �? SHA-256 自动升级
+        // SEC-AUTH-02: bcrypt 验证 + 旧 SHA-256 自动升级
         const { valid, needsUpgrade } = verifyPassword(password, userObj.password_hash);
         if (!valid) {
           auditLoginFailure('bad_password', username);
-          return res.status(401).json({ error: 'Incorrect password' });
+          return res.status(401).json({ error: genericLoginFailure });
         }
         if (needsUpgrade) {
           const newHash = bcryptHashPassword(password);
@@ -663,7 +666,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           .get(studentId, studentId) as any;
         if (!studentObj) {
           auditLoginFailure('student_not_found', studentId);
-          return res.status(401).json({ error: 'Student not found in active roster' });
+          return res.status(401).json({ error: genericLoginFailure });
         }
 
         const providedPassword = (password || '').trim();
@@ -671,39 +674,25 @@ export function registerRosterRoutes(ctx: ServerContext) {
           return res.status(400).json({ error: 'Password or Class Passcode is required' });
         }
 
-        // SEC-AUTH-01: bcrypt 验证 + 旧明�?/旧哈希自动升�?
+        // SEC-AUTH-01: bcrypt 验证。旧 SHA-256（64 位 hex）仍可登录一次并升级。
+        // 其余非 bcrypt 库存值视为明文：不做相等比较，也不改写成新哈希（否则唯一副本被覆盖且无法重置）。
         let matchesOwnPassword = false;
+        let rejectedPlaintextPassword = false;
         const storedPwd = studentObj.password || '';
 
-        // bcrypt 哈希�? $2a$ / $2b$ / $2y$ 开�?
         if (storedPwd.startsWith('$2')) {
           matchesOwnPassword = bcrypt.compareSync(providedPassword, storedPwd);
-        }
-        // �? SHA-256 哈希�?64 �? hex�?
-        else if (/^[a-f0-9]{64}$/.test(storedPwd)) {
+        } else if (/^[a-f0-9]{64}$/.test(storedPwd)) {
           const sha256Hash = crypto.createHash('sha256').update(providedPassword).digest('hex');
           if (sha256Hash === storedPwd) {
             matchesOwnPassword = true;
-            // 自动升级�? bcrypt
             kernelContainer.db
               .prepare('UPDATE students SET password = ? WHERE id = ?')
               .run(bcryptHashPassword(providedPassword), studentObj.id);
             rlog.info(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
           }
-        }
-        // 旧明文密码
-        else if (storedPwd && storedPwd === providedPassword) {
-          matchesOwnPassword = true;
-          try {
-            kernelContainer.db
-              .prepare('UPDATE students SET password = ? WHERE id = ?')
-              .run(bcryptHashPassword(providedPassword), studentObj.id);
-            rlog.info(
-              `[Auth] Auto-upgraded plain password hash for student ${studentObj.student_number || studentObj.id}`,
-            );
-          } catch (upgradeErr) {
-            rlog.error({ err: upgradeErr }, '[Auth] Failed to auto-upgrade plain password');
-          }
+        } else if (storedPwd) {
+          rejectedPlaintextPassword = true;
         }
 
         // 2. Check temporary class passcodes for classes the student is enrolled in
@@ -747,11 +736,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
               code: 'CLASS_PASSCODE_EXPIRED',
             });
           }
-          auditLoginFailure('bad_credentials', studentId);
-          return res.status(401).json({
-            error: 'Incorrect student password or temporary class passcode',
-            code: 'AUTH_FAILED',
-          });
+          auditLoginFailure(rejectedPlaintextPassword ? 'plaintext_password_rejected' : 'bad_credentials', studentId);
+          return res.status(401).json({ error: genericLoginFailure });
         }
 
         // SEC-AUTH-06: 学生仍以初始默认口令 123456 完成个人密码登录 → 强制改密标记
@@ -1095,14 +1081,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认）
-  app.delete('/api/students/:id/gdpr-delete', requireAuth('teacher', 'administrator'), (req, res) => {
+  // SEC-DATA-02: GDPR 完整数据删除（仅管理员，需二次确认）
+  app.delete('/api/students/:id/gdpr-delete', requireAuth('administrator'), (req, res) => {
     try {
       const studentId = req.params.id;
-      const session = (req as any).session;
-      if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
       const { confirm } = req.body;
       if (confirm !== true) {
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
