@@ -18,6 +18,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type Database from 'better-sqlite3';
 
 export const ENCRYPTION_KEY_FILE_NAME = 'encryption-key';
 
@@ -274,14 +275,22 @@ export function looksLikeCiphertext(value: string): boolean {
 
 export function decryptApiKey(encrypted: string): string {
   if (!encrypted) return '';
-  // 明文（未加密或旧数据）：直接返回
+  // 历史明文不再原样返回。启动迁移会先把非空明文写成密文；
+  // 漏网的明文如果继续当 Bearer 送出，等于把密钥打到上游。
+  if (!looksLikeCiphertext(encrypted)) {
+    const err: any = new Error('Failed to decrypt API key (value is not ciphertext)');
+    err.status = 500;
+    throw err;
+  }
   const parts = encrypted.split(':');
-  if (parts.length !== 3) return encrypted;
+  const ivHex = parts[0] ?? '';
+  const tagHex = parts[1] ?? '';
+  const bodyHex = parts[2] ?? '';
   try {
     const key = getEncryptionKey();
-    const iv = Buffer.from(parts[0], 'hex');
-    const authTag = Buffer.from(parts[1], 'hex');
-    const ciphertext = Buffer.from(parts[2], 'hex');
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(tagHex, 'hex');
+    const ciphertext = Buffer.from(bodyHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(authTag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
@@ -292,4 +301,42 @@ export function decryptApiKey(encrypted: string): string {
     err.status = 500;
     throw err;
   }
+}
+
+export interface PlaintextApiKeyMigrationResult {
+  updated: number;
+  skipped: number;
+}
+
+/**
+ * 把 `ai_providers.api_key` 里仍是明文的非空值密封成 AES-256-GCM。
+ * 空字符串保持为空。已经形如 `iv:tag:cipher` 的行跳过。
+ * 每一行单独提交：中途崩溃留下明文与密文混杂，下次启动补完。
+ * 必须在任何请求解密之前调用。
+ */
+export function encryptStoredPlaintextApiKeys(db: Database.Database): PlaintextApiKeyMigrationResult {
+  const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ai_providers'").get() as
+    { name: string } | undefined;
+  if (!table) return { updated: 0, skipped: 0 };
+
+  const rows = db
+    .prepare(
+      `SELECT id, api_key FROM ai_providers
+       WHERE api_key IS NOT NULL AND api_key != ''`,
+    )
+    .all() as { id: string; api_key: string }[];
+
+  const update = db.prepare('UPDATE ai_providers SET api_key = ? WHERE id = ? AND api_key = ?');
+  let updated = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    if (looksLikeCiphertext(row.api_key)) {
+      skipped += 1;
+      continue;
+    }
+    const sealed = encryptApiKey(row.api_key);
+    const changes = db.transaction(() => update.run(sealed, row.id, row.api_key).changes)();
+    if (changes > 0) updated += 1;
+  }
+  return { updated, skipped };
 }

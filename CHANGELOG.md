@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **启动时加密仍为明文的 AI Provider API Key**。数据库就绪后，`ai_providers.api_key` 里非空且不是 `iv:tag:cipher` 三段十六进制的值会用现有 `ENCRYPTION_KEY` 做 AES-256-GCM 写回。空字符串保持为空；已经是密文的行跳过，可以重复执行，逐行提交。此后 `decryptApiKey` 遇到非密文直接抛错（`status` 500），不再把历史明文原样返回。更换 `ENCRYPTION_KEY` 后旧密文仍然无法解密，与现在相同。
 - **生产 CORS 只接受显式来源**。`NODE_ENV=production` 时，带 `Origin` 的请求只有列在 `ALLOWED_ORIGINS` 中才会回写 `Access-Control-Allow-Origin` 与 `Access-Control-Allow-Credentials: true`。`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0` 不再自动放行，Origin 的 host 与 `Host` 头相同也不再当成同源。没有 `Origin` 的请求仍然放行。非生产环境继续放行回环地址和任意来源。`ALLOWED_ORIGINS=*` 仍是不带凭证的通配。
 - **学生登录拒绝明文口令，失败文案不再暴露账号是否存在**。库存口令不以 `$2` 开头时不再与提交值做相等比较。64 位十六进制（旧 SHA-256）仍在登录成功时升级为 bcrypt。其它非 bcrypt 值登录失败，审计原因为 `plaintext_password_rejected`，响应和审计都不回显口令，也不把该行改写成新哈希。教师的「用户不存在 / 密码错误」与学生的「学号不存在 / 口令错误」对客户端都返回 `Incorrect username or password`；审计日志仍区分原因。禁用账号仍是 403。
 - **GDPR 删除改为仅管理员**。`DELETE /api/students/:id/gdpr-delete` 不再把 `teacher` 列入 `requireAuth`。能看到该生的教师也不能擦除。
