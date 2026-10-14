@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
 - **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
+- **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 
 ### Docs
 

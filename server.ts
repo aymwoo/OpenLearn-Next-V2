@@ -36,6 +36,7 @@ import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import { createAiLimiter, createLoginLimiter, createWriteLimiter } from './server/security/rate-limit.js';
 import { resolveTrustProxy } from './server/security/trust-proxy.js';
+import { assertStartupEnv } from './server/security/env-validation.js';
 import { filterXSS } from 'xss';
 import {
   hasDataSubmission,
@@ -119,6 +120,9 @@ import { registerClassroomPeerReviewRoutes } from './server/routes/classroom-pee
 let currentCleanup: (() => Promise<void>) | null = null;
 
 async function startServer() {
+  // P1 trust boundary：在碰数据库/插件运行时之前先强校验环境变量，配置笔误不允许带着跑。
+  assertStartupEnv();
+
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
   await ServerBootstrapAdapter.bootstrap({
     kernelContainer,
