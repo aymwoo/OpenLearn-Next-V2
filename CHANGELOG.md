@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
 - **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
 - **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
 
