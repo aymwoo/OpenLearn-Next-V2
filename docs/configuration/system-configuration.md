@@ -42,6 +42,7 @@
 | `LOG_MAX_FILES`                               | `5`                                          | 访问日志保留的历史份数（`openlearn.log.1` …）。更旧的直接删除                                                            |
 | `AUDIT_LOG_MAX_SIZE_MB`                       | `20`                                         | 安全审计日志单文件上限（MB）                                                                                             |
 | `AUDIT_LOG_MAX_FILES`                         | `20`                                         | 审计日志保留的历史份数                                                                                                   |
+| `OPENLEARN_EVENT_RETENTION_DAYS`              | `90`                                         | 启动时删除 events 中早于 N 天的总线事件。`0` 不删除。文件审计日志 audit.log 不受影响                                                       |
 | `SENTRY_DSN`                                  | 空                                           | 可选。Sentry 兼容 DSN。与 `OPENLEARN_ERROR_DSN` 二选一，都空则只写本地日志                                               |
 | `OPENLEARN_ERROR_DSN`                         | 空                                           | 同上，便于不把变量名叫成 Sentry                                                                                          |
 | `METRICS_TOKEN`                               | 空                                           | 可选。`Authorization: Bearer <token>` 可读取 `GET /metrics`。空则仅管理员会话可访问                                      |

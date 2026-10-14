@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **总线事件表默认只保留 90 天**。进程启动、数据库初始化结束时执行一次 `DELETE FROM events WHERE timestamp < ?`，删掉早于窗口的行，日志只记删除条数。`OPENLEARN_EVENT_RETENTION_DAYS=0` 关闭清理，恢复此前不删除的行为；设成其他非负整数则改保留天数。安全审计文件 `audit.log` 是另一份日志，不受影响。需要超过 90 天的总线历史时，必须在第一次用本版本重启之前设好该变量；若这张表是合规记录，先备份数据库。
 - **生产环境的跨域只认 `ALLOWED_ORIGINS`**。`NODE_ENV=production` 时，本机另一个端口，以及只靠把 `Host` 改成与 Origin 相同的反代，都不再带着 `edu_os_token` 通过 CORS。部署前把浏览器实际访问的公网来源写进 `ALLOWED_ORIGINS`。请求不带 `Origin` 的同源导航、curl 和非生产环境保持原样。
 - **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
 - **明文学生口令不能再登录，GDPR 删除只保留给管理员**。`students.password` 不以 `$2` 开头、也不是 64 位十六进制的学生，在花名册重设密码之前无法用个人口令登录。旧 SHA-256 学生仍可登录一次并升级为 bcrypt。教师会话调用 `DELETE /api/students/:id/gdpr-delete` 得到 403；管理员仍须 `{ "confirm": true }`。
@@ -56,6 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **启动时清理过期总线事件**。`events` 不再无限增长；默认保留 90 天（破坏性行为，见上方 Breaking Changes）。谓词只比较 `timestamp`，使用已有的 `idx_events_timestamp`。
 - **课节进度一次聚合，班级仪表盘不再返回作业×学生的空单元格**。`GET /api/classes/:classId/lessons/:lessonId/progress` 用连接和 `GROUP BY` 计算每个学生在该课作业上的最高分，字段与原来相同。班级仪表盘的 `performance` 只包含已有提交的行（`assignment_id`、`assignment_title`、`student_id`、`student_name`、`score`、`submission_status`、`submitted_at`、`graded_at`、`feedback`）。成绩热力图对缺失格子仍显示「-」。迁移 `025` 为 `assignment_submissions(student_id)` 和 `assignments(lesson_id)` 建索引，可重复执行。
 
 - **激活 SQLite WAL 只读连接池实现读写物理隔离 (PERF-01)**：
