@@ -8,7 +8,7 @@ import { accessibleClassIds, authorizeClass, rejectUnless } from '../services/cl
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
-  const scheduleService = new ScheduleService(kernelContainer.db);
+  const scheduleService = new ScheduleService(kernelContainer.db, kernelContainer.getReadDb());
 
   /**
    * 今日/指定日期的排课查询 (支持周循环课表匹配)
@@ -18,7 +18,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const schedules = scheduleService.getTodaySchedules(
         clientDate,
-        accessibleClassIds(kernelContainer.db, (req as any).session),
+        accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
       );
       res.json({ success: true, schedules });
     } catch (e: any) {
@@ -32,7 +32,10 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   app.get('/api/schedules', requireAuth(), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
-      const result = scheduleService.listSchedules(pg, accessibleClassIds(kernelContainer.db, (req as any).session));
+      const result = scheduleService.listSchedules(
+        pg,
+        accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
+      );
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -48,7 +51,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       if (!classId || !scheduledDate) {
         return res.status(400).json({ error: 'classId and scheduledDate are required' });
       }
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, classId, 'member'))) return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, classId, 'member'))) return;
       const report = scheduleService.detectConflicts({
         classId,
         scheduledDate,
@@ -67,7 +70,12 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.get('/api/classes/:classId/schedules', requireAuth(), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member')))
+      if (
+        rejectUnless(
+          res,
+          authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'member'),
+        )
+      )
         return;
       const schedules = scheduleService.getClassSchedules(req.params.classId);
       res.json(schedules);

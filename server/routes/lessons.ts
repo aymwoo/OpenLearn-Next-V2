@@ -33,7 +33,12 @@ export function checkLessonOwnership(
 ): { allowed: boolean; status: number; error?: string; lesson?: any } {
   const token = getCookieToken(req);
   const session = req.session || (token ? getValidSession(token) : null);
-  return new LessonService().checkOwnership(lessonId, session);
+  return new LessonService(
+    kernelContainer.db,
+    kernelContainer.commandBus,
+    kernelContainer.aiService,
+    kernelContainer.getReadDb(),
+  ).checkOwnership(lessonId, session);
 }
 
 /**
@@ -92,7 +97,12 @@ export function requireWhiteboardWriteAccess() {
       });
     }
 
-    const lesson = new LessonService().getLesson(id);
+    const lesson = new LessonService(
+      kernelContainer.db,
+      kernelContainer.commandBus,
+      kernelContainer.aiService,
+      kernelContainer.getReadDb(),
+    ).getLesson(id);
     if (!lesson) {
       return res.status(404).json({ success: false, error: 'Lesson not found' });
     }
@@ -116,7 +126,12 @@ export function requireWhiteboardWriteAccess() {
 
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app } = ctx;
-  const lessonService = new LessonService();
+  const lessonService = new LessonService(
+    kernelContainer.db,
+    kernelContainer.commandBus,
+    kernelContainer.aiService,
+    kernelContainer.getReadDb(),
+  );
 
   app.get('/api/lessons', requireAuth(), (req, res) => {
     // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
@@ -145,7 +160,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         const rows = lessonService.getEvalSubmissions(req.params.lessonId);
         return res.json(rows.filter((row: any) => row.student_id === self || row.studentId === self));
       }
-      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, req.params.lessonId))) return;
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), session, req.params.lessonId))) return;
       res.json(lessonService.getEvalSubmissions(req.params.lessonId));
     } catch (err: any) {
       sendSafeError(res, err);
@@ -154,7 +169,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.get('/api/lessons/:lessonId/eval-grades', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, req.params.lessonId)))
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), (req as any).session, req.params.lessonId)))
         return;
       res.json(lessonService.getEvalGrades(req.params.lessonId));
     } catch (err: any) {
@@ -165,12 +180,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session;
-      const submission = kernelContainer.db
+      const submission = kernelContainer.getReadDb()
         .prepare('SELECT lesson_id, student_id FROM plugin_submissions WHERE id = ?')
         .get(req.params.submissionId) as { lesson_id: string; student_id: string } | undefined;
       if (!submission) return res.status(404).json({ error: 'Submission not found' });
       if (isAdministrator(session) || isTeacher(session)) {
-        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, submission.lesson_id))) return;
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), session, submission.lesson_id))) return;
       } else if (studentActorId(session) !== submission.student_id) {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -185,7 +200,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { lessonId, studentId } = req.params;
       const session = (req as any).session;
       if (isAdministrator(session) || isTeacher(session)) {
-        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, lessonId))) return;
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), session, lessonId))) return;
       } else if (studentActorId(session) !== studentId) {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -491,7 +506,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:id/quiz-submissions', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { id: lessonId } = req.params;
-      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, lessonId))) return;
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.getReadDb(), (req as any).session, lessonId))) return;
       const quizzes = diagnosticService.getQuizSubmissions(lessonId);
       res.json({ success: true, quizzes });
     } catch (e: any) {

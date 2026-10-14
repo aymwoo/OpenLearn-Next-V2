@@ -42,7 +42,7 @@ function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string):
 
 export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
-  const rosterService = new RosterService();
+  const rosterService = new RosterService(kernelContainer.db, kernelContainer.getReadDb());
 
   app.get('/api/classes', requireAuth(), (req, res) => {
     try {
@@ -78,7 +78,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/students', requireAuth(), (req, res) => {
     try {
-      const decision = authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'member');
+      const decision = authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
       const rows = rosterService.getClassStudents(req.params.id) as any[];
       if (decision.level === 'student') {
@@ -148,8 +148,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
    */
   app.get('/api/classes/:id/passcode-setting', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
-      const row = kernelContainer.db
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff'))) return;
+      const row = kernelContainer.getReadDb()
         .prepare('SELECT class_passcode, class_passcode_expires_at FROM classes WHERE id = ?')
         .get(req.params.id) as
         { class_passcode?: string | null; class_passcode_expires_at?: number | null } | undefined;
@@ -795,7 +795,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
-      const studentRow = kernelContainer.db
+      const studentRow = kernelContainer.getReadDb()
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
@@ -804,13 +804,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
         ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
         : currentUserId === req.params.id;
       const isStaff =
-        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
+        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.getReadDb(), session, studentId));
 
       if (!isSelf && !isStaff) {
         return res.status(403).json({ error: 'Forbidden: Cannot access another student notifications' });
       }
 
-      const rows = kernelContainer.db
+      const rows = kernelContainer.getReadDb()
         .prepare('SELECT notification_id FROM student_read_notifications WHERE student_id = ?')
         .all(studentId) as any[];
       res.json(rows.map((r) => r.notification_id));
@@ -1109,19 +1109,19 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session as any;
       const currentUserId = session?.userId || session?.studentId;
-      const studentRow = kernelContainer.db
+      const studentRow = kernelContainer.getReadDb()
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
       const sessionAllows =
         isAdministrator(session) ||
-        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId)) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.getReadDb(), session, studentId)) ||
         currentUserId === studentId ||
         currentUserId === (studentRow?.student_number ?? null);
       if (!sessionAllows) {
         return res.status(403).json({ error: 'Forbidden: Cannot read another student progress' });
       }
-      const progress = kernelContainer.db
+      const progress = kernelContainer.getReadDb()
         .prepare(
           `
         SELECT slp.*, l.title as lesson_title
@@ -1227,8 +1227,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/progress', requireAuth(), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'staff'))) return;
-      const progress = kernelContainer.db
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff'))) return;
+      const progress = kernelContainer.getReadDb()
         .prepare(
           `
         SELECT l.id as lesson_id, l.title as lesson_title, AVG(slp.progress_percent) as average_progress
@@ -1248,9 +1248,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/lessons/:lessonId/progress', requireAuth(), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'staff')))
         return;
-      const progress = kernelContainer.db
+      const progress = kernelContainer.getReadDb()
         .prepare(
           `
         SELECT cs.student_id, COALESCE(slp.progress_percent, 0) as progress_percent, 

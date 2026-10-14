@@ -95,14 +95,19 @@ export class LessonService {
     private db: Database.Database = kernelContainer.db,
     private commandBus: any = kernelContainer.commandBus,
     private aiService: any = kernelContainer.aiService,
+    private readDb?: Database.Database,
   ) {}
+
+  private get reader(): Database.Database {
+    return this.readDb || kernelContainer.getReadDb() || this.db;
+  }
 
   /**
    * 分页查询课时列表 (A7 标准分页信封)
    */
   public listLessons(pg: Pagination) {
-    const total = (this.db.prepare('SELECT COUNT(*) AS n FROM lessons').get() as any)?.n || 0;
-    const lessons = this.db
+    const total = (this.reader.prepare('SELECT COUNT(*) AS n FROM lessons').get() as any)?.n || 0;
+    const lessons = this.reader
       .prepare(
         `
       SELECT l.*, u.name as creator_name,
@@ -127,7 +132,7 @@ export class LessonService {
    * 基础详情查询
    */
   public getLesson(lessonId: string): any {
-    return this.db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId);
+    return this.reader.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId);
   }
 
   /**
@@ -152,7 +157,7 @@ export class LessonService {
       return { allowed: false, status: 403, error: 'Forbidden: Only teachers or administrators can modify lessons' };
     }
 
-    const lesson = this.db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
+    const lesson = this.reader.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
     if (!lesson) {
       return { allowed: false, status: 404, error: 'Lesson not found' };
     }
@@ -267,21 +272,21 @@ export class LessonService {
    */
   public getLessonStats(lessonId: string): LessonStats {
     const whiteboardCount =
-      (this.db.prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(lessonId) as any)
+      (this.reader.prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(lessonId) as any)
         ?.count || 0;
 
     const scheduleCount =
-      (this.db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any)?.count || 0;
+      (this.reader.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(lessonId) as any)?.count || 0;
 
     const enrollmentCount =
       (
-        this.db
+        this.reader
           .prepare('SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?')
           .get(lessonId) as any
       )?.count || 0;
 
     const assignmentCount =
-      (this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)?.count ||
+      (this.reader.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)?.count ||
       0;
 
     return { whiteboardCount, scheduleCount, enrollmentCount, assignmentCount };
@@ -351,7 +356,7 @@ export class LessonService {
    * 获取课时作业提交列表 (含最新版本多模态内容)
    */
   public getEvalSubmissions(lessonId: string): any[] {
-    const rows = this.db
+    const rows = this.reader
       .prepare(
         `
       SELECT ps.*, s.name as student_name,
@@ -370,7 +375,7 @@ export class LessonService {
    * 获取课时作业评定与互评详情 (PERF-N1 500-batch 批量拉取)
    */
   public getEvalGrades(lessonId: string): any[] {
-    const submissions = this.db
+    const submissions = this.reader
       .prepare(
         `
       SELECT ps.*, s.name as student_name
@@ -390,7 +395,7 @@ export class LessonService {
       if (batch.length === 0) break;
       const placeholders = batch.map(() => '?').join(', ');
 
-      const reviewRows = this.db
+      const reviewRows = this.reader
         .prepare(
           `
         SELECT pr.*, s.name as reviewer_name
@@ -410,7 +415,7 @@ export class LessonService {
         list.push(review);
       }
 
-      const gradeRows = this.db
+      const gradeRows = this.reader
         .prepare(`SELECT * FROM plugin_grades WHERE submission_id IN (${placeholders})`)
         .all(...batch) as any[];
 
@@ -453,7 +458,7 @@ export class LessonService {
    * 获取指定提交的所有互评
    */
   public getSubmissionReviews(submissionId: string): any[] {
-    return this.db
+    return this.reader
       .prepare(
         `
       SELECT pr.*, s.name as reviewer_name
@@ -469,7 +474,7 @@ export class LessonService {
    * 获取学生在该课时的作业、撰写互评与最终评定状态
    */
   public getStudentEvalStatus(lessonId: string, studentId: string): any {
-    const submission = this.db
+    const submission = this.reader
       .prepare(
         `
       SELECT ps.*, ${LATEST_VERSION_COLUMNS}
@@ -478,7 +483,7 @@ export class LessonService {
       )
       .get(lessonId, studentId) as any;
 
-    const reviewsWritten = this.db
+    const reviewsWritten = this.reader
       .prepare(
         `
       SELECT pr.*, s.name as student_name 
@@ -492,7 +497,7 @@ export class LessonService {
 
     let grade = null;
     if (submission) {
-      grade = this.db.prepare('SELECT * FROM plugin_grades WHERE submission_id = ?').get(submission.id) as any;
+      grade = this.reader.prepare('SELECT * FROM plugin_grades WHERE submission_id = ?').get(submission.id) as any;
     }
 
     return {

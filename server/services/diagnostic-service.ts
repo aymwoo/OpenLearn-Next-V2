@@ -117,7 +117,12 @@ export class DiagnosticService {
   constructor(
     private readonly db: Database.Database = kernelContainer.db,
     private readonly eventPublisher: typeof publishClassroomEvent = publishClassroomEvent,
+    private readonly readDb?: Database.Database,
   ) {}
+
+  private get reader(): Database.Database {
+    return this.readDb || kernelContainer.getReadDb() || this.db;
+  }
 
   // ── 1. 课前学情诊断与错题卡点归集 (Pre-Class Diagnostic & Top Mistakes) ────────
 
@@ -125,7 +130,7 @@ export class DiagnosticService {
    * 获取课前学情诊断综合报表（课前完成度、错题排行、分层掌握、破冰心态）
    */
   public getPreClassDiagnostic(lessonId: string, classId?: string): PreClassDiagnosticResult {
-    const lesson = this.db
+    const lesson = this.reader
       .prepare('SELECT id, title, content FROM lessons WHERE id = ?')
       .get(lessonId) as { id: string; title: string; content?: string } | undefined;
 
@@ -138,7 +143,7 @@ export class DiagnosticService {
     // 获取班级总学生数
     let totalStudents = 32;
     if (classId) {
-      const countRow = this.db
+      const countRow = this.reader
         .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
         .get(classId) as { count: number } | undefined;
       if (countRow && countRow.count > 0) {
@@ -149,7 +154,7 @@ export class DiagnosticService {
     // 查询学生真实预习进度记录
     let completedCount = 0;
     try {
-      const progRows = this.db
+      const progRows = this.reader
         .prepare(
           `
         SELECT COUNT(*) as completed
@@ -176,7 +181,7 @@ export class DiagnosticService {
     let tierB_consolidating = 0;
     let tierC_needSupport = 0;
     try {
-      const tiers = this.db
+      const tiers = this.reader
         .prepare(
           `
         SELECT 
@@ -220,7 +225,7 @@ export class DiagnosticService {
    */
   public getLessonMistakes(lessonId: string): TopMistakeItem[] {
     try {
-      const mistakeRows = this.db
+      const mistakeRows = this.reader
         .prepare(
           `
         SELECT 
@@ -427,7 +432,7 @@ export class DiagnosticService {
    * 获取课节所有测验题目的作答人数统计（轻量安全查询）
    */
   public getQuizCounts(lessonId: string): QuizCountItem[] {
-    const rows = this.db
+    const rows = this.reader
       .prepare('SELECT element_id, COUNT(*) AS n FROM lesson_quiz_submissions WHERE lesson_id = ? GROUP BY element_id')
       .all(lessonId) as Array<{ element_id: string; n: number }>;
 
@@ -441,7 +446,7 @@ export class DiagnosticService {
    * 获取课节测验题目的详细作答记录（教师/管理员视角，包含答案与逐生详情）
    */
   public getQuizSubmissions(lessonId: string): QuizDetailItem[] {
-    const elements = this.db
+    const elements = this.reader
       .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
       .all(lessonId, 'quiz') as Array<{ id: string; type: string; data: string }>;
 
@@ -457,7 +462,7 @@ export class DiagnosticService {
     }> = [];
 
     try {
-      relationalRows = this.db
+      relationalRows = this.reader
         .prepare(
           `SELECT element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at
            FROM lesson_quiz_submissions
@@ -542,7 +547,7 @@ export class DiagnosticService {
       : [lessonId, limit];
 
     try {
-      rows = this.db
+      rows = this.reader
         .prepare(
           `
         SELECT 
@@ -571,14 +576,14 @@ export class DiagnosticService {
     // 2. 如果关系表暂时无作答数据，补充从 whiteboard_elements (type='quiz') 摄取聚合降级
     if (!rows || rows.length === 0) {
       try {
-        const quizElements = this.db
+        const quizElements = this.reader
           .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'quiz'")
           .all(lessonId) as Array<{ data: string }>;
 
         if (quizElements.length > 0) {
           let classStudentSet: Set<string> | null = null;
           if (classId) {
-            const classStus = this.db
+            const classStus = this.reader
               .prepare('SELECT student_id FROM class_students WHERE class_id = ?')
               .all(classId) as Array<{ student_id: string }>;
             classStudentSet = new Set(classStus.map((c) => c.student_id));
@@ -606,7 +611,7 @@ export class DiagnosticService {
                   continue;
                 }
                 if (!studentMap[stId]) {
-                  const stRow = this.db.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
+                  const stRow = this.reader.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
                   studentMap[stId] = {
                     studentId: stId,
                     studentName: stRow?.name || stId,
@@ -655,7 +660,7 @@ export class DiagnosticService {
     let averageScore = 0;
     try {
       const stats = classId
-        ? (this.db
+        ? (this.reader
             .prepare(
               `SELECT COUNT(*) as count, AVG(score) as avg_score 
                FROM lesson_quiz_submissions s 
@@ -663,7 +668,7 @@ export class DiagnosticService {
                  AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)`,
             )
             .get(lessonId, classId) as any)
-        : (this.db
+        : (this.reader
             .prepare(
               "SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'",
             )
@@ -702,7 +707,7 @@ export class DiagnosticService {
       : 'WHERE s.id NOT LIKE \'sim-quiz-%\'';
     const queryParams = classId ? [classId, limit] : [limit];
 
-    const rows = this.db
+    const rows = this.reader
       .prepare(
         `
       SELECT 
@@ -835,5 +840,9 @@ export class DiagnosticService {
   }
 }
 
-export const diagnosticService = new DiagnosticService();
+export const diagnosticService = new DiagnosticService(
+  kernelContainer.db,
+  publishClassroomEvent,
+  kernelContainer.getReadDb(),
+);
 export { DiagnosticService as MistakeService };
