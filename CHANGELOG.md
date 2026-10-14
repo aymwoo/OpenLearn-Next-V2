@@ -39,6 +39,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
 - **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
 
+### Refactor / Performance
+
+- **激活 SQLite WAL 只读连接池实现读写物理隔离 (PERF-01)**：
+  - 激活内建的 `ReadConnectionPool`（按 CPU 核心数自动池化伸缩并开启 `PRAGMA query_only = ON`）；
+  - `ScheduleService`、`LessonService`、`DiagnosticService`、`RosterService` 及其对应的只读 REST 端点（课表、课节列表/详情/统计/互评、学情诊断/错题排行/卓越答题榜、班级花名册/机房座位/学情进度矩阵/通知已读）平滑迁移至只读连接执行；
+  - 彻底解耦高频与慢速读查询与写事务的物理句柄竞争，消除耗时列表与聚合查询造成的主写连接霸占，杜绝 `SQLITE_BUSY` 假死。
+
 ### Security
 
 - **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。

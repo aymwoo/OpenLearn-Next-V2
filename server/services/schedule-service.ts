@@ -283,7 +283,14 @@ export function expandRecurringSchedules(
 }
 
 export class ScheduleService {
-  constructor(private db: Database.Database = kernelContainer.db) {}
+  constructor(
+    private db: Database.Database = kernelContainer.db,
+    private readDb?: Database.Database,
+  ) {}
+
+  private get reader(): Database.Database {
+    return this.readDb || kernelContainer.getReadDb() || this.db;
+  }
 
   /**
    * 今日/指定日期的课表查询 (支持每周循环匹配与窗口排名)
@@ -313,7 +320,7 @@ export class ScheduleService {
       WHERE r.rn = 1
       ORDER BY r.time_slot ASC, r.created_at ASC
     `;
-    return this.db.prepare(query).all(clientDate, ...(classIds ?? []), clientDate) as ScheduleRecord[];
+    return this.reader.prepare(query).all(clientDate, ...(classIds ?? []), clientDate) as ScheduleRecord[];
   }
 
   /**
@@ -328,8 +335,8 @@ export class ScheduleService {
       classIds === null
         ? 'SELECT COUNT(*) AS n FROM schedules'
         : `SELECT COUNT(*) AS n FROM schedules s ${classClause}`;
-    const total = (this.db.prepare(countSql).get(...(classIds ?? [])) as any)?.n || 0;
-    const schedules = this.db
+    const total = (this.reader.prepare(countSql).get(...(classIds ?? [])) as any)?.n || 0;
+    const schedules = this.reader
       .prepare(
         `
         SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
@@ -355,7 +362,7 @@ export class ScheduleService {
    * 查询指定班级的所有排课列表 (维持裸数组兼容)
    */
   public getClassSchedules(classId: string): ScheduleRecord[] {
-    return this.db
+    return this.reader
       .prepare(
         `
         SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
@@ -372,7 +379,7 @@ export class ScheduleService {
    * 查询单个排课详情
    */
   public getScheduleById(scheduleId: string): ScheduleRecord | undefined {
-    return this.db
+    return this.reader
       .prepare(
         `
         SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
@@ -394,7 +401,7 @@ export class ScheduleService {
 
     // 1. 班级时间冲突：同一班级在同一日期、重叠时段是否已有其他排课
     // P1 修复：已取消/假期不占资源，过滤幽灵占用
-    const classSchedules = this.db
+    const classSchedules = this.reader
       .prepare(
         `
         SELECT s.*, COALESCE(l.title, '未设定内容') as lesson_title, c.name as class_name
@@ -423,11 +430,11 @@ export class ScheduleService {
 
     // 2. 教师时间冲突：授课教师在同一日期、重叠时段是否已在其他班级排课
     if (lessonId) {
-      const currentLesson = this.db.prepare('SELECT creator_id, title FROM lessons WHERE id = ?').get(lessonId) as
+      const currentLesson = this.reader.prepare('SELECT creator_id, title FROM lessons WHERE id = ?').get(lessonId) as
         { creator_id: string | null; title: string } | undefined;
 
       if (currentLesson?.creator_id) {
-        const teacherSchedules = this.db
+        const teacherSchedules = this.reader
           .prepare(
             `
             SELECT s.*, COALESCE(l.title, '未设定内容') as lesson_title, c.name as class_name, u.name as teacher_name

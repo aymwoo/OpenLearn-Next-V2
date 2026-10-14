@@ -104,7 +104,14 @@ export interface ClassGroupItem {
 }
 
 export class RosterService {
-  constructor(private readonly db: Database.Database = kernelContainer.db) {}
+  constructor(
+    private readonly db: Database.Database = kernelContainer.db,
+    private readonly readDb?: Database.Database,
+  ) {}
+
+  private get reader(): Database.Database {
+    return this.readDb || kernelContainer.getReadDb() || this.db;
+  }
 
   // ── 辅助工具 ────────────────────────────────────────────────────────────────
 
@@ -161,8 +168,8 @@ export class RosterService {
       where = 'WHERE c.id IN (SELECT class_id FROM class_students WHERE student_id = ?)';
       whereParams.push(userId);
     }
-    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM classes c ${where}`).get(...whereParams) as any).n;
-    const classes = this.db
+    const total = (this.reader.prepare(`SELECT COUNT(*) AS n FROM classes c ${where}`).get(...whereParams) as any).n;
+    const classes = this.reader
       .prepare(
         `
         SELECT c.id, c.name, c.description, c.lab_id, c.owner_user_id, c.created_at,
@@ -338,8 +345,8 @@ export class RosterService {
   // ── 2. 学生管理与 12 表安全级联删除 ──────────────────────────────────────────
 
   public listStudents(pg: Pagination): { data: StudentItem[]; total: number; page: number; pageSize: number } {
-    const total = (this.db.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n;
-    const students = this.db
+    const total = (this.reader.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n;
+    const students = this.reader
       .prepare(
         'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
       )
@@ -434,26 +441,26 @@ export class RosterService {
   }
 
   public exportStudentData(studentId: string): any {
-    const student = this.db
+    const student = this.reader
       .prepare('SELECT id, student_number, name, email, avatar, created_at FROM students WHERE id = ?')
       .get(studentId) as any;
     if (!student) throw new Error('Student not found');
 
-    const classEnrollments = this.db
+    const classEnrollments = this.reader
       .prepare(
         `SELECT c.name as class_name FROM classes c JOIN class_students cs ON c.id = cs.class_id WHERE cs.student_id = ?`,
       )
       .all(studentId);
-    const progress = this.db.prepare('SELECT * FROM student_lesson_progress WHERE student_id = ?').all(studentId);
-    const submissions = this.db.prepare('SELECT * FROM assignment_submissions WHERE student_id = ?').all(studentId);
-    const attendance = this.db.prepare('SELECT * FROM attendance WHERE student_id = ?').all(studentId);
-    const examScores = this.db.prepare('SELECT * FROM exam_scores WHERE student_id = ?').all(studentId);
-    const semesterReports = this.db
+    const progress = this.reader.prepare('SELECT * FROM student_lesson_progress WHERE student_id = ?').all(studentId);
+    const submissions = this.reader.prepare('SELECT * FROM assignment_submissions WHERE student_id = ?').all(studentId);
+    const attendance = this.reader.prepare('SELECT * FROM attendance WHERE student_id = ?').all(studentId);
+    const examScores = this.reader.prepare('SELECT * FROM exam_scores WHERE student_id = ?').all(studentId);
+    const semesterReports = this.reader
       .prepare('SELECT * FROM student_semester_reports WHERE student_id = ?')
       .all(studentId);
-    const rollcalls = this.db.prepare('SELECT * FROM student_rollcalls WHERE student_id = ?').all(studentId);
-    const pluginSubmissions = this.db.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
-    const peerReviews = this.db.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
+    const rollcalls = this.reader.prepare('SELECT * FROM student_rollcalls WHERE student_id = ?').all(studentId);
+    const pluginSubmissions = this.reader.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
+    const peerReviews = this.reader.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
 
     return {
       student: { ...student, password: '[REDACTED]' },
@@ -473,7 +480,7 @@ export class RosterService {
   // ── 3. 选课与花名册管理 ──────────────────────────────────────────────────────
 
   public getClassStudents(classId: string): StudentItem[] {
-    return this.db
+    return this.reader
       .prepare(
         `
       SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.private_notes, s.created_at, cs.joined_at
@@ -660,7 +667,7 @@ export class RosterService {
   // ── 4. 机房与座位排布 ────────────────────────────────────────────────────────
 
   public listLabs(): any[] {
-    return this.db.prepare('SELECT * FROM computer_labs ORDER BY created_at DESC').all();
+    return this.reader.prepare('SELECT * FROM computer_labs ORDER BY created_at DESC').all();
   }
 
   public createLab(data: { room_number: string; rows: number; cols: number }): {
@@ -703,10 +710,10 @@ export class RosterService {
   }
 
   public getClassSeats(classId: string): { lab_id: string | null; seats: any[] } {
-    const classInfo = this.db.prepare('SELECT lab_id FROM classes WHERE id = ?').get(classId) as any;
+    const classInfo = this.reader.prepare('SELECT lab_id FROM classes WHERE id = ?').get(classId) as any;
     const labId = classInfo ? classInfo.lab_id : null;
 
-    const seats = this.db
+    const seats = this.reader
       .prepare(
         `SELECT ss.class_id, ss.student_id, ss.lab_id, ss.row_idx, ss.col_idx,
                 s.name AS student_name, s.student_number
@@ -743,7 +750,7 @@ export class RosterService {
   // ── 5. 分组管理与智能自动分组 ────────────────────────────────────────────────
 
   public listClassGroups(classId: string, scope?: string): ClassGroupItem[] {
-    let rows = this.db
+    let rows = this.reader
       .prepare('SELECT g.* FROM class_groups g WHERE g.class_id = ? ORDER BY g.sort_order ASC, g.created_at ASC')
       .all(classId) as any[];
 
@@ -1000,7 +1007,7 @@ export class RosterService {
     lessonId?: string,
     options?: { restrictToPresentIds?: readonly string[] },
   ): any[] {
-    const students = this.db
+    const students = this.reader
       .prepare(
         `
       SELECT 
