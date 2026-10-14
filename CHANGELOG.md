@@ -34,6 +34,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **公测旅程 CI 在生产模式下改用强测试口令启动**。`scripts/e2e-beta-server.mjs` 不再把 `OPENLEARN_ADMIN_PASSWORD` 设为 `admin`，否则启动校验拒绝启动，Playwright 等不到服务。该口令只用于这条旅程；应用的生产口令策略不变。教师口令本来就不等于用户名 `teacher`，未改。
+
 - **插件类型补上 `INetworkProxyServiceToken`**。运行时已经从 `@openlearn/plugin-sdk` 导出该 Token，`packages/plugin-sdk/openlearn.d.ts` 此前没有声明，插件 `import` 会报 TS2305。声明与导出与运行时对齐。Worker 出站仍由宿主代理，默认拒绝未列入允许名单的地址，行为不变。
 
 - **进行中的 live_class 不能再换班**。进入授课后顶栏班级改为只读，并提示「需结束本节课才能换班」。`IN_CLASS_TEACHING` / `WRAP_UP_EXIT_TICKET` 期间，初始化会话、阶段推进和 `teacher-broadcast-lesson` 若携带另一个 `classId` 会得到 409，数据库里的班级保持不变。刷新、地址栏 `classId` 和起始门户「下一节课」都会被拉回本节课已绑定的班级。课前准备阶段仍可在起始门户重选；结束或归档后新会话可以换班。

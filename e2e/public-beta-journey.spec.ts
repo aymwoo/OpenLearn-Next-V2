@@ -4,7 +4,8 @@ import path from 'node:path';
 
 const DATA_DIR = process.env.OPENLEARN_BETA_E2E_DIR || '/tmp/openlearn-beta-e2e';
 const TEACHER_PASSWORD = 'TeacherBeta#2026';
-const ADMIN_NEXT_PASSWORD = 'AdminBeta#2026';
+/** 与 scripts/e2e-beta-server.mjs 的 OPENLEARN_ADMIN_PASSWORD 保持一致。生产启动拒绝口令等于用户名。 */
+const ADMIN_PASSWORD = 'Ol-BetaE2e-Adm-7kQ9';
 const STUDENT_PASSWORD = 'StuBeta#2026';
 const OTHER_PASSWORD = 'OtherBeta#2026';
 const STUDENT_NUMBER = 'SBETA001';
@@ -40,7 +41,7 @@ async function login(ctx: APIRequestContext, data: Record<string, unknown>) {
   return { res, body };
 }
 
-test('公测关键旅程：改密、作业、越权、插件与观测', async () => {
+test('公测关键旅程：作业、越权、插件与观测', async () => {
   const admin = await playwrightRequest.newContext({ baseURL: 'http://127.0.0.1:9107' });
   const teacher = await playwrightRequest.newContext({ baseURL: 'http://127.0.0.1:9107' });
   const student = await playwrightRequest.newContext({ baseURL: 'http://127.0.0.1:9107' });
@@ -65,20 +66,13 @@ test('公测关键旅程：改密、作业、越权、插件与观测', async ()
     expect(metrics.status()).toBe(200);
     expect(await metrics.text()).toContain('openlearn_up 1');
 
-    const firstLogin = await login(admin, { entrance: 'teacher', username: 'admin', password: 'admin' });
+    const firstLogin = await login(admin, { entrance: 'teacher', username: 'admin', password: ADMIN_PASSWORD });
     expect(firstLogin.res.status()).toBe(200);
-    expect((firstLogin.body.session as { mustChangePassword?: boolean }).mustChangePassword).toBe(true);
+    // 强口令不等于用户名，种子行的 must_change_password 为 0，登录后不进强制改密。
+    expect((firstLogin.body.session as { mustChangePassword?: boolean }).mustChangePassword).toBeFalsy();
 
-    const blocked = await admin.get('/api/classes');
-    expect(blocked.status()).toBe(403);
-    expect((await bodyOf(blocked)).code).toBe('FORBIDDEN_DEFAULT_PASSWORD');
-
-    const changed = await admin.post('/api/auth/change-password', {
-      data: { oldPassword: 'admin', newPassword: ADMIN_NEXT_PASSWORD },
-    });
-    expect(changed.status(), await changed.text()).toBe(200);
     const classesAfter = await admin.get('/api/classes');
-    expect(classesAfter.status(), '改密后应能访问业务接口').toBe(200);
+    expect(classesAfter.status(), '强口令管理员应能访问业务接口').toBe(200);
 
     const createdUser = await admin.post('/api/users', {
       data: { username: 'beta_other', password: OTHER_PASSWORD, role: 'teacher', name: '另一位教师' },

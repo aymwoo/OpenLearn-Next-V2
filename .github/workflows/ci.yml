@@ -250,7 +250,8 @@ jobs:
         run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts
 
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
-  # 覆盖强制改密、教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
+  # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
+  # 生产启动拒绝种子口令等于用户名，本 job 使用强测试口令。口令等于用户名时的强制改密由单元测试覆盖。
   public-beta-journey:
     name: Public beta journey
     runs-on: ubuntu-latest
