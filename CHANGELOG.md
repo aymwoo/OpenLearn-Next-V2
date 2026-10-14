@@ -62,6 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **管理后台 AI 提供商页从 `AdminPanel` 拆出**：列表、表单状态和编辑弹层移到 `src/features/admin/AiProvidersPanel.tsx`。`ai_providers` 标签、扩展点参数、请求路径和页面文案保持不变。
 - **启动时清理过期总线事件**。`events` 不再无限增长；默认保留 90 天（破坏性行为，见上方 Breaking Changes）。谓词只比较 `timestamp`，使用已有的 `idx_events_timestamp`。
 - **课节进度一次聚合，班级仪表盘不再返回作业×学生的空单元格**。`GET /api/classes/:classId/lessons/:lessonId/progress` 用连接和 `GROUP BY` 计算每个学生在该课作业上的最高分，字段与原来相同。班级仪表盘的 `performance` 只包含已有提交的行（`assignment_id`、`assignment_title`、`student_id`、`student_name`、`score`、`submission_status`、`submitted_at`、`graded_at`、`feedback`）。成绩热力图对缺失格子仍显示「-」。迁移 `025` 为 `assignment_submissions(student_id)` 和 `assignments(lesson_id)` 建索引，可重复执行。
 
