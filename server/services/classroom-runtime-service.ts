@@ -1,5 +1,10 @@
 import type Database from 'better-sqlite3';
 import { randomId } from '../utils/id.js';
+import {
+  assertSessionClassChangeAllowed,
+  CLASS_LOCK_MESSAGE,
+  isInProgressClassLocked,
+} from './classroom-class-lock.js';
 import type { Server } from 'socket.io';
 import { emitClassroomEvent } from '../presence.js';
 import type {
@@ -165,8 +170,8 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
 
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(id);
     } else if (classId && session.class_id !== classId) {
-      // The launch portal lets teachers choose a class each time they enter.
-      // Keep the reused lesson session aligned with that explicit selection.
+      // 授课中 / 结课通票阶段班级已锁定。课前准备仍允许起始门户重选。
+      assertSessionClassChangeAllowed(session, classId);
       this.db.prepare('UPDATE classroom_sessions SET class_id = ? WHERE id = ?').run(classId, session.id);
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(session.id);
     }
@@ -188,6 +193,19 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
     classId?: string,
   ): Promise<{ success: boolean; stage: ClassroomLifecycleStage; reason?: string }> {
     const currentStage = await this.getStage(lessonId);
+
+    const existing = this.db
+      .prepare('SELECT class_id, stage FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(lessonId) as { class_id?: string | null; stage?: string | null } | undefined;
+    if (
+      existing &&
+      classId &&
+      existing.class_id &&
+      existing.class_id !== classId &&
+      isInProgressClassLocked(existing.stage)
+    ) {
+      return { success: false, stage: currentStage, reason: `CLASS_LOCKED: ${CLASS_LOCK_MESSAGE}` };
+    }
 
     // P0-2 修复：环节合法性白名单，允许正向推进与由课后/简报回退白板或准备
     const ALLOWED: Record<string, string[]> = {

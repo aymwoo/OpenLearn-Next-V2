@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import { ClassroomEntryPortal } from '../ClassroomEntryPortal';
+import { classLockHint } from '../class-session-lock';
 
 afterEach(cleanup);
 
@@ -462,11 +463,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       scheduled_date: string;
     };
     type CourseRef = { lessonId: string; lessonTitle: string; classId: string; className: string };
-    const makeSchedule = (
-      course: CourseRef,
-      timeSlot: string,
-      scheduledDate: string,
-    ): ScheduleRow => ({
+    const makeSchedule = (course: CourseRef, timeSlot: string, scheduledDate: string): ScheduleRow => ({
       id: `sch-${course.lessonId}-${course.classId}-${timeSlot.replace(':', '')}`,
       lesson_id: course.lessonId,
       lesson_title: course.lessonTitle,
@@ -526,122 +523,226 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       };
     }
 
-    it('今日有未来课时，在顶部 h1 显示「下一节」与时间、班级', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
-      const today = ymd(new Date('2026-03-15T10:00:00'));
-      const timeSlot = '11:00-11:45';
-      const course: CourseRef = {
-        lessonId: 'fixture-lesson-A',
-        lessonTitle: 'fixture-lesson-A.title',
-        classId: 'fixture-class-X',
-        className: 'fixture-class-X.name',
-      };
-      const fetcher = buildScheduleFetcher({
-        [today]: [makeSchedule(course, timeSlot, today)],
-      });
+    it(
+      '今日有未来课时，在顶部 h1 显示「下一节」与时间、班级',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const today = ymd(new Date('2026-03-15T10:00:00'));
+        const timeSlot = '11:00-11:45';
+        const course: CourseRef = {
+          lessonId: 'fixture-lesson-A',
+          lessonTitle: 'fixture-lesson-A.title',
+          classId: 'fixture-class-X',
+          className: 'fixture-class-X.name',
+        };
+        const fetcher = buildScheduleFetcher({
+          [today]: [makeSchedule(course, timeSlot, today)],
+        });
 
-      renderPortal({ fetcher });
+        renderPortal({ fetcher });
 
-      // h1 同时打了 role="button"（键盘 / 点击预选），所以走文本匹配最稳。
-      const heading = await screen.findByText(/下一节/);
-      expect(heading.tagName).toBe('H1');
-      // 「今天」是组件内部使用与本项目一致的相对日描述，不以 fixture 表达。
-      expect(screen.getByText('今天')).toBeTruthy();
-      expect(screen.getByText(timeSlot)).toBeTruthy();
-      expect(screen.getByText(course.className)).toBeTruthy();
-    }));
+        // h1 同时打了 role="button"（键盘 / 点击预选），所以走文本匹配最稳。
+        const heading = await screen.findByText(/下一节/);
+        expect(heading.tagName).toBe('H1');
+        // 「今天」是组件内部使用与本项目一致的相对日描述，不以 fixture 表达。
+        expect(screen.getByText('今天')).toBeTruthy();
+        expect(screen.getByText(timeSlot)).toBeTruthy();
+        expect(screen.getByText(course.className)).toBeTruthy();
+      }),
+    );
 
-    it('今日已全部过时，则顺延到明日的第一个课节', withFrozenNow(new Date('2026-03-15T22:00:00'), async () => {
-      const today = ymd(new Date('2026-03-15T22:00:00'));
-      const tomorrowDate = new Date(today);
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrow = ymd(tomorrowDate);
-      const oldCourse: CourseRef = {
-        lessonId: 'fixture-lesson-A',
-        lessonTitle: 'fixture-lesson-A.title',
-        classId: 'fixture-class-X',
-        className: 'fixture-class-X.name',
-      };
-      const nextCourse: CourseRef = {
-        lessonId: 'fixture-lesson-B',
-        lessonTitle: 'fixture-lesson-B.title',
-        classId: 'fixture-class-Y',
-        className: 'fixture-class-Y.name',
-      };
-      const oldTimeSlot = '08:00-08:45';
-      const nextTimeSlot = '09:30-10:15';
-      const fetcher = buildScheduleFetcher({
-        [today]: [makeSchedule(oldCourse, oldTimeSlot, today)],
-        [tomorrow]: [makeSchedule(nextCourse, nextTimeSlot, tomorrow)],
-      });
+    it(
+      '今日已全部过时，则顺延到明日的第一个课节',
+      withFrozenNow(new Date('2026-03-15T22:00:00'), async () => {
+        const today = ymd(new Date('2026-03-15T22:00:00'));
+        const tomorrowDate = new Date(today);
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrow = ymd(tomorrowDate);
+        const oldCourse: CourseRef = {
+          lessonId: 'fixture-lesson-A',
+          lessonTitle: 'fixture-lesson-A.title',
+          classId: 'fixture-class-X',
+          className: 'fixture-class-X.name',
+        };
+        const nextCourse: CourseRef = {
+          lessonId: 'fixture-lesson-B',
+          lessonTitle: 'fixture-lesson-B.title',
+          classId: 'fixture-class-Y',
+          className: 'fixture-class-Y.name',
+        };
+        const oldTimeSlot = '08:00-08:45';
+        const nextTimeSlot = '09:30-10:15';
+        const fetcher = buildScheduleFetcher({
+          [today]: [makeSchedule(oldCourse, oldTimeSlot, today)],
+          [tomorrow]: [makeSchedule(nextCourse, nextTimeSlot, tomorrow)],
+        });
 
-      renderPortal({ fetcher });
+        renderPortal({ fetcher });
 
-      const heading = await screen.findByText(/下一节/);
-      expect(heading.tagName).toBe('H1');
-      expect(screen.getByText('明天')).toBeTruthy();
-      expect(screen.getByText(nextTimeSlot)).toBeTruthy();
-    }));
+        const heading = await screen.findByText(/下一节/);
+        expect(heading.tagName).toBe('H1');
+        expect(screen.getByText('明天')).toBeTruthy();
+        expect(screen.getByText(nextTimeSlot)).toBeTruthy();
+      }),
+    );
 
-    it('课表为空时显示「今日课表尚未设置」与「前往课表设置」入口', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
-      const onGoToTimetable = vi.fn();
-      const fetcher = buildScheduleFetcher({}); // 7 天都空
+    it(
+      '课表为空时显示「今日课表尚未设置」与「前往课表设置」入口',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const onGoToTimetable = vi.fn();
+        const fetcher = buildScheduleFetcher({}); // 7 天都空
 
-      renderPortal({ fetcher, onGoToTimetable });
+        renderPortal({ fetcher, onGoToTimetable });
 
-      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
-      const link = screen.getByRole('button', { name: /前往课表设置/ });
-      fireEvent.click(link);
-      expect(onGoToTimetable).toHaveBeenCalledTimes(1);
-    }));
+        expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+        const link = screen.getByRole('button', { name: /前往课表设置/ });
+        fireEvent.click(link);
+        expect(onGoToTimetable).toHaveBeenCalledTimes(1);
+      }),
+    );
 
-    it('未提供 onGoToTimetable 时不显示「前往课表设置」按钮', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
-      const fetcher = buildScheduleFetcher({});
+    it(
+      '未提供 onGoToTimetable 时不显示「前往课表设置」按钮',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const fetcher = buildScheduleFetcher({});
 
-      renderPortal({ fetcher }); // 未传 onGoToTimetable
+        renderPortal({ fetcher }); // 未传 onGoToTimetable
 
-      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
-      expect(screen.queryByRole('button', { name: /前往课表设置/ })).toBeNull();
-    }));
+        expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: /前往课表设置/ })).toBeNull();
+      }),
+    );
 
-    it('点击「下一节」可预选该课的 lessonId 与 classId', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
-      const today = ymd(new Date('2026-03-15T10:00:00'));
-      const timeSlot = '14:00-14:45';
-      const course: CourseRef = {
-        lessonId: 'fixture-lesson-B',
-        lessonTitle: 'fixture-lesson-B.title',
-        classId: 'fixture-class-Y',
-        className: 'fixture-class-Y.name',
-      };
-      const fetcher = buildScheduleFetcher({
-        [today]: [makeSchedule(course, timeSlot, today)],
-      });
+    it(
+      '进行中的同一课节上，点击「下一节」不能改掉已绑定班级',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const today = ymd(new Date('2026-03-15T10:00:00'));
+        const course: CourseRef = {
+          lessonId: 'les-1',
+          lessonTitle: LESSONS[0].title,
+          classId: 'cls-2',
+          className: '初二 (1) 班',
+        };
+        const fallback = okFetcher();
+        const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          if (url.includes('/api/schedules/today')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ success: true, schedules: [makeSchedule(course, '14:00-14:45', today)] }),
+            };
+          }
+          if (url.includes('/api/classroom/sessions/')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                hasActiveSession: true,
+                stage: 'IN_CLASS_TEACHING',
+                session: { class_id: 'cls-1' },
+              }),
+            };
+          }
+          return fallback(input);
+        }) as unknown as typeof fetch;
 
-      const { setSelectedLesson, setLiveClassSelectedClassId } = renderPortal({ fetcher });
+        const addToast = vi.fn();
+        const { setLiveClassSelectedClassId } = renderPortal({
+          fetcher,
+          addToast,
+          selectedLesson: 'les-1',
+          liveClassSelectedClassId: 'cls-1',
+        });
 
-      const heading = await screen.findByText(/下一节/);
-      fireEvent.click(heading);
+        expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
+        expect(screen.getByTestId('portal-class-lock-hint').textContent).toContain(classLockHint('zh'));
+        expect(screen.getByRole('button', { name: /初二 \(1\) 班/ })).toHaveProperty('disabled', true);
 
-      expect(setSelectedLesson).toHaveBeenCalledWith(course.lessonId);
-      expect(setLiveClassSelectedClassId).toHaveBeenCalledWith(course.classId);
-    }));
+        fireEvent.click(await screen.findByText(/下一节/));
 
-    it('课表接口报错时静默降级，不影响开课门户其他功能', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
-      const brokenFetcher = vi.fn(async (input: RequestInfo | URL) => {
+        expect(setLiveClassSelectedClassId).not.toHaveBeenCalledWith('cls-2');
+        expect(setLiveClassSelectedClassId).toHaveBeenCalledWith('cls-1');
+        expect(addToast).toHaveBeenCalledWith('不能更换班级', classLockHint('zh'), 'warning');
+      }),
+    );
+
+    it('课前准备阶段回到门户后仍可重选班级', async () => {
+      const fallback = okFetcher();
+      const fetcher = vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.includes('/api/schedules/today')) {
-          return { ok: false, status: 500, json: async () => ({ error: 'down' }) };
+        if (url.includes('/api/classroom/sessions/')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'PRE_CLASS_READY',
+              session: { class_id: 'cls-1' },
+            }),
+          };
         }
-        return okFetcher();
+        return fallback(input);
       }) as unknown as typeof fetch;
 
-      renderPortal({ fetcher: brokenFetcher });
+      const { setLiveClassSelectedClassId } = renderPortal({
+        fetcher,
+        selectedLesson: 'les-1',
+        liveClassSelectedClassId: 'cls-1',
+      });
 
-      // 接口错误 → 与「课表为空」等价的提示状态。
-      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
-      // 课程选择与启动按钮依然可用；这些是组件内部可选列表的内容（来自 props
-      // 传入的 LESSONS / CLASSES fixture），不是课表接口的返回值。
-      expect(screen.getByText(LESSONS[0].title)).toBeTruthy();
-      expect(screen.getByRole('button', { name: /开始上课/ })).toBeTruthy();
-    }));
+      await screen.findByText('挑选授课班级');
+      expect(screen.queryByTestId('portal-class-lock-hint')).toBeNull();
+      const other = screen.getByRole('button', { name: /初二 \(1\) 班/ });
+      expect(other).toHaveProperty('disabled', false);
+      fireEvent.click(other);
+      expect(setLiveClassSelectedClassId).toHaveBeenCalledWith('cls-2');
+    });
+
+    it(
+      '点击「下一节」可预选该课的 lessonId 与 classId',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const today = ymd(new Date('2026-03-15T10:00:00'));
+        const timeSlot = '14:00-14:45';
+        const course: CourseRef = {
+          lessonId: 'fixture-lesson-B',
+          lessonTitle: 'fixture-lesson-B.title',
+          classId: 'fixture-class-Y',
+          className: 'fixture-class-Y.name',
+        };
+        const fetcher = buildScheduleFetcher({
+          [today]: [makeSchedule(course, timeSlot, today)],
+        });
+
+        const { setSelectedLesson, setLiveClassSelectedClassId } = renderPortal({ fetcher });
+
+        const heading = await screen.findByText(/下一节/);
+        fireEvent.click(heading);
+
+        expect(setSelectedLesson).toHaveBeenCalledWith(course.lessonId);
+        expect(setLiveClassSelectedClassId).toHaveBeenCalledWith(course.classId);
+      }),
+    );
+
+    it(
+      '课表接口报错时静默降级，不影响开课门户其他功能',
+      withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+        const brokenFetcher = vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          if (url.includes('/api/schedules/today')) {
+            return { ok: false, status: 500, json: async () => ({ error: 'down' }) };
+          }
+          return okFetcher();
+        }) as unknown as typeof fetch;
+
+        renderPortal({ fetcher: brokenFetcher });
+
+        // 接口错误 → 与「课表为空」等价的提示状态。
+        expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+        // 课程选择与启动按钮依然可用；这些是组件内部可选列表的内容（来自 props
+        // 传入的 LESSONS / CLASSES fixture），不是课表接口的返回值。
+        expect(screen.getByText(LESSONS[0].title)).toBeTruthy();
+        expect(screen.getByRole('button', { name: /开始上课/ })).toBeTruthy();
+      }),
+    );
   });
 });

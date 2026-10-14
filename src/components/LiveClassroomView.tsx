@@ -67,6 +67,7 @@ import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
 
 import { ClassroomToolbarQuickActions } from '../features/classroom/ClassroomToolbarQuickActions';
+import { classLockHint, isInProgressClassLocked } from '../features/classroom/class-session-lock';
 import {
   LiveSubmissionsPanel,
   FINISHED_STATUSES,
@@ -193,6 +194,10 @@ export function LiveClassroomView({
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
   const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
+  // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
+  const [entryDecisionReady, setEntryDecisionReady] = useState(!initialPortalOpen);
+  /** 教师主动回到起始门户后，轮询不要再把门户关掉。 */
+  const userReturnedToPortalRef = useRef(false);
   const [isGrowthProfileOpen, setIsGrowthProfileOpen] = useState(false);
   const [growthProfileStudentId, setGrowthProfileStudentId] = useState<string | null>(null);
   const [isPeerReviewShowcaseOpen, setIsPeerReviewShowcaseOpen] = useState(false);
@@ -214,16 +219,21 @@ export function LiveClassroomView({
     if (!selectedLesson) {
       setClassroomStage('PRE_CLASS_READY');
       setSessionStartedAt(null);
+      setEntryDecisionReady(true);
       return;
     }
     let mounted = true;
+    if (!userReturnedToPortalRef.current) {
+      setEntryDecisionReady(false);
+    }
     // Do not keep the previous lesson's stage visible while the next session is loading.
     setClassroomStage('PRE_CLASS_READY');
     const fetchSession = () => {
       fetch(`/api/classroom/sessions/${selectedLesson}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (!mounted || !data) return;
+          if (!mounted) return;
+          if (!data) return;
           if (data.hasActiveSession && data.stage) {
             setClassroomStage(data.stage);
           } else if (data.stage === 'ARCHIVED_REPORT') {
@@ -231,11 +241,17 @@ export function LiveClassroomView({
           } else {
             setClassroomStage((prev) => (prev === 'ARCHIVED_REPORT' ? 'ARCHIVED_REPORT' : 'PRE_CLASS_READY'));
           }
-          if (data.stage && data.stage !== 'PRE_CLASS_READY') {
+          const sessionClassId = data.session?.class_id ? String(data.session.class_id) : null;
+          const classLocked = Boolean(data.hasActiveSession) && isInProgressClassLocked(data.stage);
+          // 刷新 / ?classId= 不能改掉进行中会话的班级。URL 上的 classId 故意不读取。
+          if (classLocked && !userReturnedToPortalRef.current) {
             setShowEntryPortal(false);
           }
-          if (data.session?.class_id && !liveClassSelectedClassId) {
-            setLiveClassSelectedClassId(data.session.class_id);
+          const currentClassId = appStore.getState().liveClassSelectedClassId;
+          if (classLocked && sessionClassId && currentClassId !== sessionClassId) {
+            setLiveClassSelectedClassId(sessionClassId);
+          } else if (!classLocked && sessionClassId && !currentClassId) {
+            setLiveClassSelectedClassId(sessionClassId);
           }
           // started_at 来自真实会话行；无会话时为 null（elapsedMin 随之归 0，不编造）
           const startedAt = data.session?.started_at ?? data.startedAt ?? null;
@@ -262,7 +278,10 @@ export function LiveClassroomView({
             setRestoredCurrentPage(restoredPage);
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          if (mounted) setEntryDecisionReady(true);
+        });
     };
     fetchSession();
     const timer = setInterval(fetchSession, 15000);
@@ -402,6 +421,7 @@ export function LiveClassroomView({
     setSelectedLesson(lessonId);
     setLiveClassSelectedClassId(classId);
     void fetchElements(lessonId);
+    userReturnedToPortalRef.current = false;
     setShowEntryPortal(false);
   };
 
@@ -605,7 +625,8 @@ export function LiveClassroomView({
       setAutoRecordRule({
         enabled: Boolean(config?.auto_record_enabled ?? config?.autoRecordEnabled),
         minCompletion: Number(config?.auto_record_min_completion ?? config?.autoRecordMinCompletion ?? 0) || 0,
-        strategy: config?.auto_record_strategy === 'highest' || config?.autoRecordStrategy === 'highest' ? 'highest' : 'latest',
+        strategy:
+          config?.auto_record_strategy === 'highest' || config?.autoRecordStrategy === 'highest' ? 'highest' : 'latest',
       });
     } catch {
       // 静默：规则读取失败不应阻断页面
@@ -614,7 +635,11 @@ export function LiveClassroomView({
     }
   }, []);
 
-  const saveAutoRecordRule = async (next: { enabled: boolean; minCompletion: number; strategy: 'latest' | 'highest' }) => {
+  const saveAutoRecordRule = async (next: {
+    enabled: boolean;
+    minCompletion: number;
+    strategy: 'latest' | 'highest';
+  }) => {
     const previous = autoRecordRule;
     setAutoRecordRule(next); // 乐观更新，失败时回滚
     setSavingAutoRecordRule(true);
@@ -835,8 +860,7 @@ export function LiveClassroomView({
     const unsub = channel.onMessage((msg) => {
       if (msg.type === 'STUDENT_ACKNOWLEDGE_PICK') {
         const studentId = msg.payload.studentId;
-        const studentName =
-          syncSnapshotRef.current.students.find((s) => s.id === studentId)?.name || studentId;
+        const studentName = syncSnapshotRef.current.students.find((s) => s.id === studentId)?.name || studentId;
         setLiveClassAcknowledgedMap((prev) => {
           const next = new Map(prev);
           next.set(studentId, true);
@@ -966,7 +990,6 @@ export function LiveClassroomView({
   // 写 liveClassStore，见下方工具栏接线），「时间到」toast 与学生端广播
   // 也在该回调内完成。liveClassTimeRemaining 移出 AppDataContext 后，
   // 每秒一次的状态变化不再引发本组件（2754 行）及其消费树整体重渲染。
-
 
   // Auto-lock class when selection changes
   useEffect(() => {
@@ -1335,6 +1358,17 @@ export function LiveClassroomView({
 
   // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
   // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
+  // 有课节时先等会话结果，避免刷新后「下一节课」在班级锁定判定前被点到。
+  if (showEntryPortal && !entryDecisionReady) {
+    return (
+      <div
+        data-testid="live-class-entry-pending"
+        className="flex-1 flex items-center justify-center text-sm text-muted"
+      >
+        {lang === 'zh' ? '正在确认本节课班级…' : 'Checking this lesson’s class…'}
+      </div>
+    );
+  }
   if (showEntryPortal) {
     return (
       <ClassroomEntryPortal
@@ -1375,18 +1409,42 @@ export function LiveClassroomView({
             </h2>
           </div>
 
-          {/* 班级优雅展示（只读不可改） */}
+          {/* 班级只读。进行中不能改；结束/归档或回到起始门户后才能重选。 */}
           <div
             id="live-classroom-current-class-badge"
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-theme/10 border border-primary-theme/25 text-primary-theme text-xs font-bold select-none shrink-0"
-            title={lang === 'zh' ? '当前授课班级（上课期间固定）' : 'Active Class (Fixed during session)'}
+            title={classLockHint(lang)}
+            aria-readonly="true"
           >
             <School size={12} className="shrink-0" />
             <span className="truncate max-w-[120px] sm:max-w-[160px]">
               {classes.find((c) => c.id === liveClassSelectedClassId)?.name ||
                 (lang === 'zh' ? '未分配班级' : 'No Class')}
             </span>
+            <span
+              data-testid="live-class-lock-hint"
+              className="text-2xs font-semibold text-amber-700 truncate max-w-[140px]"
+            >
+              {classLockHint(lang)}
+            </span>
           </div>
+          <button
+            type="button"
+            id="live-classroom-back-to-portal"
+            onClick={() => {
+              userReturnedToPortalRef.current = true;
+              setEntryDecisionReady(true);
+              setShowEntryPortal(true);
+            }}
+            className="inline-flex items-center text-2xs font-semibold px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+            title={
+              lang === 'zh'
+                ? '回到起始门户。进行中的课不能换班'
+                : 'Back to the start portal. In-progress lessons stay on this class.'
+            }
+          >
+            {lang === 'zh' ? '返回门户' : 'Back to portal'}
+          </button>
 
           {/* 课程选择与切换操作 */}
           <div className="flex items-center gap-1.5 shrink-0">
