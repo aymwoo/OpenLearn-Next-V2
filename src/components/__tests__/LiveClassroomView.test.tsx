@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { LiveClassroomView } from '../LiveClassroomView';
 import { AppDataProvider } from '../../context/AppDataContext';
+import { appStore } from '../../store/appStore';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -114,7 +115,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   });
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
-    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     // Old role toggle buttons should not exist
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
@@ -132,7 +137,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     };
     openMock.mockReturnValue(fakeTab);
 
-    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -164,7 +173,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     openMock.mockReturnValue(null); // Simulated browser popup blocker
     const addToastMock = vi.fn();
 
-    render(<AppDataProvider value={{ ...defaultProps, addToast: addToastMock } as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={{ ...defaultProps, addToast: addToastMock } as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -185,7 +198,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     expect(await screen.findByTestId('pre-class-ready-view')).toBeTruthy();
   });
@@ -211,7 +228,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     // Should display the sidebar outline section title
     await waitFor(() => {
@@ -231,7 +252,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   });
 
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
-    render(<AppDataProvider value={defaultProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     // Topbar title is "🔴 在线课堂"
     expect(screen.getByText('🔴 在线课堂')).toBeTruthy();
@@ -239,8 +264,141 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     // Read-only class badge
     expect(screen.getByText('高一1班')).toBeTruthy();
+    expect(screen.getByTestId('live-class-lock-hint').textContent).toContain('需结束本节课才能换班');
     // No class dropdown selector
     expect(screen.queryByText('-- 选择授课班级 --')).toBeNull();
+  });
+
+  it('pins an in-progress session class over a mismatched selection and URL classId', async () => {
+    window.history.replaceState({}, '', '/?classId=class-other&lessonId=lesson-101#/live_class');
+    appStore.setState({ liveClassSelectedClassId: 'class-other' });
+    const setClass = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1', started_at: Date.now() },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider
+        value={
+          { ...defaultProps, liveClassSelectedClassId: 'class-other', setLiveClassSelectedClassId: setClass } as any
+        }
+      >
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(setClass).toHaveBeenCalledWith('class-g1');
+    });
+    expect(setClass).not.toHaveBeenCalledWith('class-other');
+    appStore.setState({ liveClassSelectedClassId: null });
+  });
+
+  it('does not render the next-lesson portal until an in-progress session is resolved, then stays on that class', async () => {
+    window.history.replaceState({}, '', '/?classId=class-other#/live_class');
+    appStore.setState({ liveClassSelectedClassId: 'class-other' });
+    const pending: Array<(value: unknown) => void> = [];
+    const setClass = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return new Promise((resolve) => {
+            pending.push(resolve);
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider
+        value={
+          { ...defaultProps, liveClassSelectedClassId: 'class-other', setLiveClassSelectedClassId: setClass } as any
+        }
+      >
+        <LiveClassroomView initialPortalOpen />
+      </AppDataProvider>,
+    );
+
+    expect(screen.getByTestId('live-class-entry-pending')).toBeTruthy();
+    expect(screen.queryByText(/下一节/)).toBeNull();
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+
+    for (const resolve of pending) {
+      resolve({
+        ok: true,
+        json: async () => ({
+          hasActiveSession: true,
+          stage: 'IN_CLASS_TEACHING',
+          session: { class_id: 'class-g1' },
+        }),
+      });
+    }
+
+    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(screen.queryByText(/下一节/)).toBeNull();
+    await waitFor(() => expect(setClass).toHaveBeenCalledWith('class-g1'));
+    expect(setClass).not.toHaveBeenCalledWith('class-other');
+    appStore.setState({ liveClassSelectedClassId: null });
+  });
+
+  it('returns to the entry portal where an in-progress class cannot be changed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1' },
+            }),
+          });
+        }
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    const props: Record<string, any> = {
+      ...defaultProps,
+      classes: [
+        { id: 'class-g1', name: '高一1班' },
+        { id: 'class-other', name: '高二2班' },
+      ],
+    };
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '返回门户' }));
+    expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
+    const other = screen.getByRole('button', { name: /高二2班/ });
+    expect(other).toHaveProperty('disabled', true);
+    fireEvent.click(other);
+    expect(props.setLiveClassSelectedClassId).not.toHaveBeenCalledWith('class-other');
   });
 
   it('handles lesson switching with secondary confirmation modal', async () => {
@@ -248,8 +406,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const fetchElementsMock = vi.fn().mockResolvedValue(undefined);
 
     const propsWithTwoLessons: Record<string, any> = {
-    classStudentsMap: {},
-    fetchClassStudents: vi.fn().mockResolvedValue(undefined),
+      classStudentsMap: {},
+      fetchClassStudents: vi.fn().mockResolvedValue(undefined),
       ...defaultProps,
       setSelectedLesson: setSelectedLessonMock,
       fetchElements: fetchElementsMock,
@@ -259,7 +417,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       ],
     };
 
-    render(<AppDataProvider value={propsWithTwoLessons as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={propsWithTwoLessons as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
@@ -310,8 +472,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     const setLiveClassFeedMock = vi.fn();
     const props: Record<string, any> = {
-    classStudentsMap: {},
-    fetchClassStudents: vi.fn().mockResolvedValue(undefined),
+      classStudentsMap: {},
+      fetchClassStudents: vi.fn().mockResolvedValue(undefined),
       ...defaultProps,
       liveClassFeed: [
         { id: '1', time: '10:00:01', type: 'info', message: '张小明 进入了课堂' },
@@ -320,7 +482,11 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       setLiveClassFeed: setLiveClassFeedMock,
     };
 
-    render(<AppDataProvider value={props as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
 
     // 1. Student focus console header & pick button
     await waitFor(() => {

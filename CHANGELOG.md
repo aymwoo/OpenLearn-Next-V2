@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **进行中的 live_class 不能再换班**。进入授课后顶栏班级改为只读，并提示「需结束本节课才能换班」。`IN_CLASS_TEACHING` / `WRAP_UP_EXIT_TICKET` 期间，初始化会话、阶段推进和 `teacher-broadcast-lesson` 若携带另一个 `classId` 会得到 409，数据库里的班级保持不变。刷新、地址栏 `classId` 和起始门户「下一节课」都会被拉回本节课已绑定的班级。课前准备阶段仍可在起始门户重选；结束或归档后新会话可以换班。
+
 - **随机点名助手只抽取已经进入本节课的学生**。候选不再是全班花名册：服务端 `GET /api/classes/:classId/picker-candidates?lessonId=` 与白板组件都按 Socket.IO 在场状态过滤（当前在线，且 `enter-lesson` 指向这一节）。学生 `leave-lesson` 或断线后立即离开候选池；没人在场时提示「当前课堂没有在场学生」，不再退回演示名单。公平加权（本堂 / 学期抽中次数）仍作用在在场池上。不带 `lessonId` 的旧调用仍返回全班名单。
 
 - **互动课堂「本节课教学蓝图」不再把环节时长显示成 NaN**。教案时间线存的是 `5m` 这类字符串，蓝图、课前就绪页和课堂节奏派生却把 `duration` 当数字秒相加，`"5m" / 60` 得到 NaN，进度条宽度也变成 0。现在统一解析 `5m` / `90s` / `1h`、数字秒，以及旧字段 `durationMinutes`、`durationMin`、`estimatedDurationSeconds`。字段缺失时蓝图按 5 分钟，写了但无法识别时显示「未设置」，不再出现 NaN。

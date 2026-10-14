@@ -4,6 +4,7 @@ import { lessonActiveSegments, setActiveSegment } from './shared-state.js';
 import { randomId } from './utils/id.js';
 import { createLogger } from '../packages/core/observability/logger.js';
 import { kernelContainer } from '../packages/core/kernel/index.js';
+import { CLASS_LOCK_MESSAGE, loadInProgressSessionClass } from './services/classroom-class-lock.js';
 
 const plog = createLogger('presence');
 export interface PresenceDeps {
@@ -520,6 +521,10 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       }
       if (!data?.lessonId) return;
       if (data.classId) {
+        const boundClassId = loadInProgressSessionClass(kernelContainer.db, data.lessonId);
+        if (boundClassId && boundClassId !== data.classId) {
+          return socket.emit('error', { message: CLASS_LOCK_MESSAGE, code: 'CLASS_LOCKED' });
+        }
         io.to(classRoom(data.classId)).emit('teacher-switched-lesson', data);
       } else {
         io.to(data.lessonId).emit('teacher-switched-lesson', data);

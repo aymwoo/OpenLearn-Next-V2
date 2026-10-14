@@ -430,9 +430,7 @@ export function registerClassroomRoutes(
       try {
         const { lessonId } = req.params;
         const session = db
-          .prepare(
-            'SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
-          )
+          .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
           .get(lessonId) as any;
 
         if (!session) {
@@ -543,8 +541,7 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const { classId, teachingModeId, exitTicketCoreQuestion, exitTicketChallengeQuestion } =
-          req.body || {};
+        const { classId, teachingModeId, exitTicketCoreQuestion, exitTicketChallengeQuestion } = req.body || {};
         const teacherId = getActorId(req) || 'teacher';
 
         if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
@@ -657,8 +654,10 @@ export function registerClassroomRoutes(
 
         const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
         if (!result.success) {
-          const status = (result.reason || '').startsWith('Illegal transition') ? 400 : 403;
-          return res.status(status).json({ error: result.reason || 'Stage transition blocked' });
+          const reason = result.reason || '';
+          const status = reason.startsWith('CLASS_LOCKED') ? 409 : reason.startsWith('Illegal transition') ? 400 : 403;
+          const error = reason.replace(/^CLASS_LOCKED:\s*/, '') || 'Stage transition blocked';
+          return res.status(status).json({ error });
         }
 
         // Phase B4: 课时进入 ARCHIVED_REPORT（结课）后清理活跃 segment 缓存，

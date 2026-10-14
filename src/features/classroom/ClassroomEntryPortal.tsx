@@ -35,6 +35,7 @@ import { useNetworkLatency } from '../../hooks/useNetworkLatency';
 import { fetchTeachingModes, teachingModeColor, type TeachingMode } from './teaching-modes-client';
 import { ComputerLabSeatingMap } from './ComputerLabSeatingMap';
 import { DEFAULT_SEGMENT_SECONDS, formatSegmentDuration, resolveSegmentDuration } from '../../utils/timeline-duration';
+import { classLockHint, isInProgressClassLocked } from './class-session-lock';
 
 /**
  * ClassroomEntryPortal —— 互动课堂的起始门户（对应 Stitch「课程入口与班级选择门户」设计）。
@@ -617,6 +618,7 @@ function ClassroomDeck({
   students,
   selectedClassId,
   onSelectClass,
+  classLocked = false,
   onlineStudentIds,
   modes,
   selectedModeId,
@@ -629,6 +631,8 @@ function ClassroomDeck({
   students: any[];
   selectedClassId: string | null;
   onSelectClass: (id: string) => void;
+  /** 进行中会话：班级卡片不可改，需先结束本节课。 */
+  classLocked?: boolean;
   onlineStudentIds: string[];
   modes: TeachingMode[];
   selectedModeId: string | null;
@@ -652,7 +656,7 @@ function ClassroomDeck({
     <Deck
       step="02"
       title={zh ? '挑选授课班级' : 'Pick Class'}
-      subtitle={zh ? '选择本节课面向的班级' : 'Choose the class for this session'}
+      subtitle={classLocked ? classLockHint(lang) : zh ? '选择本节课面向的班级' : 'Choose the class for this session'}
       aside={
         <span className="text-2xs font-semibold text-muted inline-flex items-center gap-1.5">
           <Activity size={11} className="text-emerald-500" />
@@ -661,6 +665,15 @@ function ClassroomDeck({
       }
     >
       <div className="flex flex-col gap-2.5">
+        {classLocked && (
+          <p
+            data-testid="portal-class-lock-hint"
+            role="status"
+            className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+          >
+            {classLockHint(lang)}
+          </p>
+        )}
         {classes.length === 0 ? (
           <p className="text-xs text-muted italic py-3 text-center">
             {zh ? '暂无班级，请先在「班级管理」中创建' : 'No classes yet'}
@@ -704,9 +717,16 @@ function ClassroomDeck({
                     <button
                       key={klass.id}
                       type="button"
-                      onClick={() => onSelectClass(klass.id)}
+                      onClick={() => {
+                        if (classLocked) return;
+                        onSelectClass(klass.id);
+                      }}
+                      disabled={classLocked}
                       aria-pressed={active}
-                      className={`group text-left rounded-xl border px-3 py-2 transition-all cursor-pointer flex items-center justify-between gap-2 min-w-0 ${
+                      title={classLocked ? classLockHint(lang) : undefined}
+                      className={`group text-left rounded-xl border px-3 py-2 transition-all flex items-center justify-between gap-2 min-w-0 ${
+                        classLocked ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                      } ${
                         active
                           ? 'border-primary-theme bg-primary-theme-light shadow-3xs ring-1 ring-primary-theme/30'
                           : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
@@ -1178,9 +1198,7 @@ export function ClassroomEntryPortal({
       return {
         id: String(s.id ?? ''),
         lesson_id: s.lesson_id ?? null,
-        lesson_title:
-          s.lesson_title ||
-          (zh ? '未设定内容' : 'Unspecified lesson'),
+        lesson_title: s.lesson_title || (zh ? '未设定内容' : 'Unspecified lesson'),
         class_id: String(s.class_id ?? ''),
         class_name: s.class_name || (zh ? '未指定班级' : 'Unspecified class'),
         scheduled_date: String(s.scheduled_date ?? date),
@@ -1212,27 +1230,39 @@ export function ClassroomEntryPortal({
   }, [fetcher]);
 
   // ── 课堂会话恢复：探测所选课程是否有进行中的会话 ──
-  const [activeSession, setActiveSession] = useState<{ stage: string; classId: string | null } | null>(null);
+  const [activeSession, setActiveSession] = useState<{
+    lessonId: string;
+    stage: string;
+    classId: string | null;
+    classLocked: boolean;
+  } | null>(null);
+  const classLockRef = useRef<{ lessonId: string; classId: string } | null>(null);
   const [resuming, setResuming] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setActiveSession(null);
+    classLockRef.current = null;
     if (!selectedLesson) return;
     const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
     doFetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}`)
       .then((res) => (res && res.ok ? res.json() : null))
       .then((data: any) => {
         if (cancelled || !data?.hasActiveSession) return;
-        if (data.stage === 'IN_CLASS_TEACHING' || data.stage === 'WRAP_UP_EXIT_TICKET') {
-          // classId 取自会话行（开课时已确定），回到课堂不依赖本地是否已选班级
-          setActiveSession({ stage: data.stage, classId: data.session?.class_id ?? null });
+        const classLocked = isInProgressClassLocked(data.stage);
+        const classId = data.session?.class_id ? String(data.session.class_id) : null;
+        if (!classLocked) return;
+        // classId 取自会话行（开课时已确定）。进行中时本地选择不能覆盖它。
+        setActiveSession({ lessonId: selectedLesson, stage: data.stage, classId, classLocked: true });
+        if (classId) {
+          classLockRef.current = { lessonId: selectedLesson, classId };
+          setLiveClassSelectedClassId(classId);
         }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [selectedLesson, fetcher]);
+  }, [selectedLesson, fetcher, setLiveClassSelectedClassId]);
 
   const currentLesson = useMemo(() => lessons.find((l) => l.id === selectedLesson) ?? null, [lessons, selectedLesson]);
   const currentClass = useMemo(
@@ -1251,7 +1281,13 @@ export function ClassroomEntryPortal({
   /** P4: 回到进行中的课堂 —— 走同一 onEnterClassroom，LiveClassroomView 端会按恢复协议还原现场 */
   const handleResume = useCallback(async () => {
     if (!currentLesson) return;
-    const resumeClassId = currentClass?.id ?? activeSession?.classId ?? null;
+    // 进行中会话以服务端绑定的班级为准，本地下拉 / 下一节课改过的班级不能带进去。
+    const sessionForLesson = activeSession?.lessonId === currentLesson.id ? activeSession : null;
+    const resumeClassId =
+      (sessionForLesson?.classLocked ? sessionForLesson.classId : null) ??
+      currentClass?.id ??
+      sessionForLesson?.classId ??
+      null;
     if (!resumeClassId) return;
     setResuming(true);
     try {
@@ -1271,6 +1307,21 @@ export function ClassroomEntryPortal({
     }
   }, [activeSession, addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
 
+  const applyNextSchedule = useCallback(() => {
+    if (!nextSchedule) return;
+    const targetLessonId = nextSchedule.lesson_id || null;
+    const lock = classLockRef.current;
+    // 「下一节课」不能把进行中会话的班级改成课表上的另一个班。
+    if (lock && targetLessonId === lock.lessonId && nextSchedule.class_id !== lock.classId) {
+      if (targetLessonId) setSelectedLesson(targetLessonId);
+      setLiveClassSelectedClassId(lock.classId);
+      addToast?.(zh ? '不能更换班级' : 'Class is locked', classLockHint(lang), 'warning');
+      return;
+    }
+    if (targetLessonId) setSelectedLesson(targetLessonId);
+    setLiveClassSelectedClassId(nextSchedule.class_id);
+  }, [addToast, lang, nextSchedule, setLiveClassSelectedClassId, setSelectedLesson, zh]);
+
   const handleLaunch = useCallback(async () => {
     if (!currentLesson || !currentClass) {
       addToast?.(
@@ -1280,11 +1331,18 @@ export function ClassroomEntryPortal({
       );
       return;
     }
+    const sessionForLesson = activeSession?.lessonId === currentLesson.id ? activeSession : null;
+    const lockedClassId = sessionForLesson?.classLocked ? sessionForLesson.classId : null;
+    if (lockedClassId && currentClass.id !== lockedClassId) {
+      setLiveClassSelectedClassId(lockedClassId);
+      addToast?.(zh ? '不能更换班级' : 'Class is locked', classLockHint(lang), 'warning');
+    }
+    const launchClassId = lockedClassId || currentClass.id;
     setLaunching(true);
     try {
       await onEnterClassroom({
         lessonId: currentLesson.id,
-        classId: currentClass.id,
+        classId: launchClassId,
         teachingModeId: selectedModeId,
       });
     } catch (e) {
@@ -1296,7 +1354,17 @@ export function ClassroomEntryPortal({
     } finally {
       if (mountedRef.current) setLaunching(false);
     }
-  }, [addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
+  }, [
+    activeSession,
+    addToast,
+    currentClass,
+    currentLesson,
+    lang,
+    onEnterClassroom,
+    selectedModeId,
+    setLiveClassSelectedClassId,
+    zh,
+  ]);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-app text-main">
@@ -1324,18 +1392,14 @@ export function ClassroomEntryPortal({
                   tabIndex={0}
                   title={
                     zh
-                      ? '点击预选该课并聚焦到该班级'
-                      : 'Click to pre-select this lesson and class'
+                      ? '点击预选该课并聚焦到该班级。进行中的本节课不能因此换班。'
+                      : 'Pre-select this lesson and class. An in-progress lesson keeps its class.'
                   }
-                  onClick={() => {
-                    if (nextSchedule.lesson_id) setSelectedLesson(nextSchedule.lesson_id);
-                    setLiveClassSelectedClassId(nextSchedule.class_id);
-                  }}
+                  onClick={() => applyNextSchedule()}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter' && e.key !== ' ') return;
                     e.preventDefault();
-                    if (nextSchedule.lesson_id) setSelectedLesson(nextSchedule.lesson_id);
-                    setLiveClassSelectedClassId(nextSchedule.class_id);
+                    applyNextSchedule();
                   }}
                 >
                   {zh ? `${zhGreeting}！下一节` : `${enGreeting}! Next up`}
@@ -1447,7 +1511,11 @@ export function ClassroomEntryPortal({
               classes={classes}
               students={students}
               selectedClassId={liveClassSelectedClassId}
-              onSelectClass={(id) => setLiveClassSelectedClassId(id)}
+              onSelectClass={(id) => {
+                if (activeSession?.classLocked) return;
+                setLiveClassSelectedClassId(id);
+              }}
+              classLocked={Boolean(activeSession?.classLocked && activeSession.lessonId === selectedLesson)}
               onlineStudentIds={onlineStudentIds}
               modes={modes}
               selectedModeId={selectedModeId}

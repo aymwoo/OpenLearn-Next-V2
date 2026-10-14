@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPresentStudentIds, setupPresence } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 type Emitted = {
   scope: 'global' | 'room' | 'socket' | 'socket-room';
@@ -546,6 +547,39 @@ describe('setupPresence', () => {
           error: errorPayload,
         },
       });
+    });
+
+    it('rejects teacher-broadcast-lesson that retargets an in-progress session class', () => {
+      const db = kernelContainer.db;
+      const lessonId = 'les-presence-class-lock';
+      db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
+      db.prepare(
+        `INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run('cs-presence-class-lock', lessonId, 'class-a', 'teacher-1', 'IN_CLASS_TEACHING', Date.now());
+
+      try {
+        const m = buildMocks();
+        const socket = m.connect('sock-class-lock', { role: 'teacher', userId: 'teacher-1' });
+        socket.trigger('teacher-broadcast-lesson', { lessonId, classId: 'class-b' });
+
+        expect(socket._emitted).toContainEqual(
+          expect.objectContaining({
+            event: 'error',
+            payload: expect.objectContaining({ code: 'CLASS_LOCKED' }),
+          }),
+        );
+        expect(m.globalEmitted.some((e) => e.event === 'teacher-switched-lesson')).toBe(false);
+
+        m.globalEmitted.length = 0;
+        socket._emitted.length = 0;
+        socket.trigger('teacher-broadcast-lesson', { lessonId, classId: 'class-a' });
+        expect(m.globalEmitted).toContainEqual(
+          expect.objectContaining({ event: 'teacher-switched-lesson', room: 'class-class-a' }),
+        );
+      } finally {
+        db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
+      }
     });
   });
 });

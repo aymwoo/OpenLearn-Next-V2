@@ -53,12 +53,38 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     expect(stage).toBe('PRE_CLASS_READY');
   });
 
-  it('updates a reused lesson session when the teacher explicitly chooses another class', async () => {
+  it('updates a reused lesson session when the teacher explicitly chooses another class before teaching starts', async () => {
     const first = await service.getOrCreateSession('les_101', 't1', 'cls_1');
     const reused = await service.getOrCreateSession('les_101', 't1', 'cls_2');
 
     expect(reused.id).toBe(first.id);
+    expect(reused.stage).toBe('PRE_CLASS_READY');
     expect(reused.class_id).toBe('cls_2');
+  });
+
+  it('rejects class changes while the session is in progress and allows a new class after archive', async () => {
+    const first = await service.getOrCreateSession('les_101', 't1', 'cls_1');
+    expect((await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1')).success).toBe(true);
+
+    await expect(service.getOrCreateSession('les_101', 't1', 'cls_2')).rejects.toMatchObject({ status: 409 });
+    const blocked = await service.transitionStage('les_101', 'WRAP_UP_EXIT_TICKET', 't1', 'cls_2');
+    expect(blocked.success).toBe(false);
+    expect(blocked.reason).toContain('CLASS_LOCKED');
+
+    const during = db.prepare('SELECT class_id, stage FROM classroom_sessions WHERE id = ?').get(first.id) as {
+      class_id: string;
+      stage: string;
+    };
+    expect(during).toEqual({ class_id: 'cls_1', stage: 'IN_CLASS_TEACHING' });
+
+    expect((await service.transitionStage('les_101', 'WRAP_UP_EXIT_TICKET', 't1', 'cls_1')).success).toBe(true);
+    await expect(service.getOrCreateSession('les_101', 't1', 'cls_2')).rejects.toMatchObject({ status: 409 });
+
+    expect((await service.transitionStage('les_101', 'ARCHIVED_REPORT', 't1', 'cls_1')).success).toBe(true);
+    const next = await service.getOrCreateSession('les_101', 't1', 'cls_2');
+    expect(next.id).not.toBe(first.id);
+    expect(next.class_id).toBe('cls_2');
+    expect(next.stage).toBe('PRE_CLASS_READY');
   });
 
   it('transitions through stages and broadcasts socket events', async () => {
@@ -428,7 +454,11 @@ describe('ClassroomRuntimeService × StageGuardPipeline（R-5 回归钉）', () 
 
   it('管线抛错时按 fail-close 拒绝（guardPolicy 默认值）', async () => {
     const service = new ClassroomRuntimeService(db, mockIo, {
-      stageGuardPipeline: { checkAccess: async () => { throw new Error('pipeline exploded'); } },
+      stageGuardPipeline: {
+        checkAccess: async () => {
+          throw new Error('pipeline exploded');
+        },
+      },
     });
     const result = await service.transitionStage('les_101', 'IN_CLASS_TEACHING', 't1', 'cls_1');
     expect(result.success).toBe(false);
