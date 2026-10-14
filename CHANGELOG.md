@@ -28,11 +28,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
+
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
 - **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
 
 ### Fixes
+
+- **从 v0.6.1 升级时，迁移前快照失败会中止，更新的库也不会在旧二进制上被当成就绪**。非测试进程里 `VACUUM INTO` 失败会在应用 SQL 前抛错。`/health/ready` 发现 `_migrations` 含有磁盘迁移清单里没有的名字时返回 503，名字只写日志。备份校验同时要求 `lessons` 与 `_migrations`。`duplicate column name` 仍会被忽略，校验和算法不变。
 
 - **公测旅程 CI 在生产模式下改用强测试口令启动**。`scripts/e2e-beta-server.mjs` 不再把 `OPENLEARN_ADMIN_PASSWORD` 设为 `admin`，否则启动校验拒绝启动，Playwright 等不到服务。该口令只用于这条旅程；应用的生产口令策略不变。教师口令本来就不等于用户名 `teacher`，未改。
 
