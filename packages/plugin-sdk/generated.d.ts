@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：229 个（入口导出但手写 d.ts 未声明的 229 项及其类型引用闭包）
+ * 覆盖符号：225 个（入口导出但手写 d.ts 未声明的 225 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -748,15 +748,6 @@ interface ILessonServiceContract {
     createLesson(title: string, subject: string): Promise<Record<string, unknown>>;
 }
 
-/** @see packages/core/di/interfaces.ts */
-// -- Plugin Outbound Network Proxy (trust boundary) -----------------------
-interface INetworkProxyService {
-    fetch(input: OutboundFetchRequest): Promise<OutboundFetchResponse>;
-}
-
-/** @see packages/core/di/interfaces.ts */
-declare const INetworkProxyServiceToken: Token<INetworkProxyService>;
-
 /** @see packages/core/bootstrap/types/index.ts */
 /** Abstract Logger interface contract. */
 interface IPlatformLogger {
@@ -996,24 +987,6 @@ interface ObjectLock {
     readonly lockedBy: string;
     readonly lockedAt: number;
     readonly expiresAt: number;
-}
-
-/** @see packages/core/di/interfaces.ts */
-interface OutboundFetchRequest {
-    url: string;
-    method?: string;
-    headers?: Record<string, string>;
-    body?: string | null;
-}
-
-/** @see packages/core/di/interfaces.ts */
-interface OutboundFetchResponse {
-    ok: boolean;
-    status: number;
-    statusText: string;
-    headers: Record<string, string>;
-    body: string;
-    url: string;
 }
 
 /** @see packages/core/version.ts */
@@ -2285,7 +2258,6 @@ export type {
   IConfigService,
   ILessonCapability,
   ILessonServiceContract,
-  INetworkProxyService,
   IPluginCapability,
   IPluginRuntime,
   IPluginServiceContract,
@@ -2401,7 +2373,6 @@ export type {
   WhiteboardStatus,
 };
 export {
-  INetworkProxyServiceToken,
   PluginCapabilityGateway,
   PluginContextAdapter,
   PluginDistributionManager,
