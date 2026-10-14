@@ -26,6 +26,7 @@ import {
 } from '../services/class-access.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
+import { captureError } from '../../packages/core/observability/error-reporter.js';
 import {
   classPasscodeMatches,
   openClassPasscode,
@@ -265,6 +266,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       return res.status(500).json({ status: 'disconnected', error: 'Unexpected response from SQLite' });
     } catch (e: any) {
+      captureError({
+        source: 'http',
+        message: e?.message || 'Database connection error',
+        name: e?.name || 'DatabaseError',
+        stack: e?.stack,
+        status: 500,
+        path: req.path,
+        method: req.method,
+      });
       const exposed = process.env.NODE_ENV === 'production' ? 'Database connection error' : e.message;
       return res.status(500).json({ status: 'disconnected', error: exposed });
     }

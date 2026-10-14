@@ -17,8 +17,6 @@ if (!process.env.NODE_ENV) {
     process.env.NODE_ENV = 'production';
   }
 }
-import os from 'os';
-import { exec, spawn } from 'child_process';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
@@ -77,8 +75,9 @@ import { sendSafeError } from './server/utils/error-handler.js';
 import { requestObservability } from './server/middleware/request-observability.js';
 import { registerClientErrorRoute } from './server/routes/client-errors.js';
 import { captureUnknownError } from './packages/core/observability/error-reporter.js';
-import { checkReadiness, livenessBody, readinessBody } from './packages/core/observability/health.js';
-import { renderPrometheusMetrics } from './packages/core/observability/metrics.js';
+import { createCorsMiddleware, createSocketIoCors } from './server/middleware/cors.js';
+import { registerHealthRoutes } from './server/routes/health.js';
+import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -306,87 +305,8 @@ async function startServer() {
   app.use('/plugins', express.static(getPluginsDir(), { index: false, dotfiles: 'ignore' }));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块?
 
-  // SEC-NET-01: CORS 白名单化与 Same-Origin 智能放行
-  const configuredOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-
-  const isOriginAllowed = (origin: string | undefined, hostHeader?: string): boolean => {
-    // 允许无 origin（如移动端、curl 或同源请求）
-    if (!origin) return true;
-
-    // 1. 显式配置的白名单
-    if (configuredOrigins.length > 0) {
-      if (configuredOrigins.includes(origin)) {
-        return true;
-      }
-      if (configuredOrigins.includes('*')) {
-        return true;
-      }
-    }
-
-    // 2. 同源（Same-Origin）自动放行：Origin 的 host 与请求的 Host 头部一致
-    if (hostHeader) {
-      try {
-        const originUrl = new URL(origin);
-        if (originUrl.host === hostHeader) {
-          return true;
-        }
-      } catch (err) {
-        // 无效 URL 格式，不判定为同源
-      }
-    }
-
-    // 3. 本地回环（localhost / 127.0.0.1 / [::1] / 0.0.0.0）放行
-    try {
-      const originUrl = new URL(origin);
-      const hostname = originUrl.hostname;
-      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '0.0.0.0') {
-        return true;
-      }
-    } catch (err) {
-      // 无效 URL 格式，不判定为本地回环
-    }
-
-    // 4. 开发环境宽松放行（Vite 默认端口 5173 / 4173 等）
-    if (process.env.NODE_ENV !== 'production') {
-      return true;
-    }
-
-    return false;
-  };
-
-  // SEC-NET-01: Express CORS 中间件 — 允许沙箱 iframe（origin: null）、同源请求与合法来源
-  // V2 修复：ALLOWED_ORIGINS=* 时不得同时 Allow-Credentials:true（规范禁止，浏览器会忽略），
-  // 此时降级为无凭证的 *，避免运维误以为“放行且带凭证”生效
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    const wildcard = configuredOrigins.includes('*');
-    if (origin && origin !== 'null' && origin !== undefined) {
-      if (wildcard) {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Max-Age', '86400');
-      } else if (isOriginAllowed(origin, req.headers.host)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Max-Age', '86400');
-      }
-    } else {
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-      res.setHeader('Access-Control-Max-Age', '86400');
-    }
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-    next();
-  });
+  // SEC-NET-01: Express CORS 中间件与白名单隔离
+  app.use(createCorsMiddleware());
 
   // ── Build route context for extracted route modules ──
   const ctx: ServerContext = {
@@ -405,19 +325,10 @@ async function startServer() {
     activityRegistry,
   } as unknown as ServerContext;
 
-  // SEC-NET-01: CORS 白名单化 — HTTP server + Socket.IO setup (moved up so ctx.io is ready)
+  // SEC-NET-01: HTTP server + Socket.IO setup (CORS 对齐统一配置)
   const httpServer = createHttpServer(app);
   const io = new Server(httpServer, {
-    cors: (req, callback) => {
-      const origin = req.headers.origin;
-      const host = req.headers.host;
-      const allowed = isOriginAllowed(origin, host);
-      callback(null, {
-        origin: allowed ? origin || true : false,
-        methods: ['GET', 'POST'],
-        credentials: true,
-      });
-    },
+    cors: createSocketIoCors(),
   });
 
   // SEC-AUTH-06: 默认密码强制改密 —— 种子账号（admin/admin、teacher/teacher）登录后
@@ -506,56 +417,9 @@ async function startServer() {
     },
   });
 
-  // ── 健康检查 (存活 / 就绪) ────────────────────────────────────────
+  // ── 健康检查与指标端点 (存活 / 就绪 / Prometheus) ───────────────────
   const startTime = Date.now();
-  const platformVersion = PLATFORM_VERSION;
-  const migrationsDir = path.join(process.cwd(), 'migrations');
-  app.get('/health', (_req, res) => {
-    res.json(livenessBody(Math.floor((Date.now() - startTime) / 1000), platformVersion));
-  });
-
-  app.get('/health/ready', (_req, res) => {
-    const result = checkReadiness({
-      pingDatabase: () => {
-        kernelContainer.db.prepare('SELECT 1').get();
-      },
-      storageDir: getStorageDir(),
-      migrationsDir,
-      appliedMigrations: () => {
-        const rows = kernelContainer.db.prepare('SELECT name FROM _migrations').all() as { name: string }[];
-        return rows.map((row) => row.name);
-      },
-    });
-    if (!result.ok) {
-      console.warn(
-        `[health] not ready: ${result.reason || 'unknown'}${
-          result.pendingMigrations?.length ? ` pending=${result.pendingMigrations.join(',')}` : ''
-        }`,
-      );
-      res.status(503).json(readinessBody(false));
-      return;
-    }
-    res.json(readinessBody(true));
-  });
-
-  // 指标默认受保护：METRICS_TOKEN 的 Bearer，或管理员会话。匿名请求 401。
-  app.get(
-    '/metrics',
-    (req, res, next) => {
-      const token = (process.env.METRICS_TOKEN || '').trim();
-      const header = req.headers.authorization;
-      if (token && header === `Bearer ${token}`) {
-        next();
-        return;
-      }
-      requireAuth('administrator')(req, res, next);
-    },
-    (_req, res) => {
-      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-store');
-      res.send(renderPrometheusMetrics());
-    },
-  );
+  registerHealthRoutes(app, { startTime });
 
   // SEC-ROUTING: API 404 兜底隔离门禁 —— 任何未被上述路由消费的 /api/* 请求
   // 必须直接返回 JSON 格式 404，严禁穿透至下游 Vite 开发服务器引发 HTML 假死与 500 超时
@@ -624,39 +488,6 @@ async function startServer() {
     }
   });
 
-  const getNetworkIps = (): string[] => {
-    const ips: string[] = [];
-    try {
-      const interfaces = os.networkInterfaces();
-      for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name] || []) {
-          if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('127.')) {
-            ips.push(iface.address);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[Server] Failed to inspect network interfaces:', err);
-    }
-    return ips;
-  };
-
-  const openBrowser = (targetUrl: string) => {
-    try {
-      const { platform } = process;
-      if (platform === 'darwin') {
-        spawn('open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
-      } else if (platform === 'win32') {
-        spawn('cmd.exe', ['/c', 'start', '""', targetUrl], { stdio: 'ignore', detached: true }).unref();
-      } else {
-        spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
-      }
-    } catch (err) {
-      // 忽略无桌面或无默认浏览器的静默异常
-      console.info('[Server] Auto-open browser skipped or unsupported in current environment.');
-    }
-  };
-
   // R2 定时化：应用内备份调度（每日 03:00 热备 + 每小时 WAL checkpoint），
   // 测试/临时实例可用 BACKUP_SCHEDULE=off 关闭
   const backupScheduler = startBackupScheduler({
@@ -670,17 +501,12 @@ async function startServer() {
     const localUrl = `http://localhost:${PORT}`;
     const primaryUrl = isAnyHost ? localUrl : `http://${HOST}:${PORT}`;
 
-    const OSC = '\x1b]8;;';
-    const ST = '\x1b\\';
     const reset = '\x1b[0m';
     const bold = '\x1b[1m';
     const green = '\x1b[32m';
     const cyan = '\x1b[36m';
     const dim = '\x1b[2m';
-
-    // OSC 8 超链接：仅在真实终端下启用，输出到日志/管道时退化为纯文本，避免留下转义序列
-    const hyperlink = Boolean(process.stdout.isTTY) && process.env.TERM !== 'dumb';
-    const link = (url: string) => (hyperlink ? `${OSC}${url}${ST}${url}${OSC}${ST}` : url);
+    const link = formatTerminalHyperlink;
 
     console.log(`\n  ${bold}${green}OpenLearn Next${reset} v${PLATFORM_VERSION} ready:\n`);
     console.log(`  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${link(localUrl)}${reset}`);
