@@ -21,7 +21,12 @@ import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { PluginState, normalizeExecutionMode, type PluginExecutionMode } from './types.js';
 import type { PluginContext, PluginInfo, LifecyclePhase, Middleware } from './types.js';
-import { resolvePluginExecutionMode, type ExecutionModeDecision } from './execution-policy.js';
+import {
+  isInsideBuiltinPluginsDir,
+  resolvePluginExecutionMode,
+  trustedInlineAllowlist,
+  type ExecutionModeDecision,
+} from './execution-policy.js';
 import { IllegalStateTransitionError, SemverMismatchError } from './errors.js';
 import { IStageGuardServiceToken, IProcessServiceToken } from '../di/interfaces.js';
 import type { IProcessService } from '../di/interfaces.js';
@@ -327,8 +332,21 @@ export abstract class PluginHostCore extends PluginHostBase {
     if (this.preloadedPlugins.has(pluginId)) {
       return { mode: normalizeExecutionMode(requested), coerced: false };
     }
-    const manifestId = this.getPluginManifest(pluginId)?.id;
-    return resolvePluginExecutionMode(manifestId, requested);
+    let manifestId = this.getPluginManifest(pluginId)?.id;
+    let sourcePath: string | undefined;
+    try {
+      const row = this.db.prepare('SELECT file_path, manifest FROM plugins WHERE id = ?').get(pluginId) as
+        | { file_path?: string; manifest?: string }
+        | undefined;
+      sourcePath = row?.file_path;
+      if (!manifestId && row?.manifest) {
+        const parsed = JSON.parse(row.manifest) as { id?: unknown };
+        if (typeof parsed.id === 'string') manifestId = parsed.id;
+      }
+    } catch {
+      sourcePath = undefined;
+    }
+    return resolvePluginExecutionMode(manifestId, requested, process.env, sourcePath);
   }
 
   protected persistExecutionMode(pluginId: string, mode: PluginExecutionMode): void {
@@ -344,12 +362,13 @@ export abstract class PluginHostCore extends PluginHostBase {
    * 在恢复活跃插件之前调用，避免升级后旧行继续在宿主进程里启动。
    */
   protected coerceStoredExecutionModes(): void {
-    let rows: Array<{ id: string; manifest: string; execution_mode: string | null }> = [];
+    let rows: Array<{ id: string; manifest: string; execution_mode: string | null; file_path?: string | null }> = [];
     try {
-      rows = this.db.prepare('SELECT id, manifest, execution_mode FROM plugins').all() as Array<{
+      rows = this.db.prepare('SELECT id, manifest, execution_mode, file_path FROM plugins').all() as Array<{
         id: string;
         manifest: string;
         execution_mode: string | null;
+        file_path?: string | null;
       }>;
     } catch {
       return;
@@ -363,7 +382,7 @@ export abstract class PluginHostCore extends PluginHostBase {
       } catch {
         manifestId = undefined;
       }
-      const decision = resolvePluginExecutionMode(manifestId, row.execution_mode);
+      const decision = resolvePluginExecutionMode(manifestId, row.execution_mode, process.env, row.file_path);
       if (decision.coerced) {
         console.warn(`[PluginHost] ${decision.reason}`);
         this.persistExecutionMode(row.id, decision.mode);
@@ -887,9 +906,26 @@ export abstract class PluginHostCore extends PluginHostBase {
     };
   }
 
+  /**
+   * 官方/系统插件：预加载进宿主、写进 OPENLEARN_TRUSTED_INLINE_PLUGINS，
+   * 或入口文件真实位于内置目录。manifest id 前缀不算。
+   */
+  isOfficialPlugin(pluginId: string, manifestId?: string): boolean {
+    return this.isSystemPluginRecord(pluginId, manifestId);
+  }
+
   protected isSystemPluginRecord(pluginId: string, manifestId?: string): boolean {
-    if (pluginId.startsWith('@openlearn/') || this.preloadedPlugins.has(pluginId)) return true;
-    if (manifestId?.startsWith('@openlearn/')) return true;
+    if (this.preloadedPlugins.has(pluginId)) return true;
+    const allowlist = trustedInlineAllowlist();
+    if (allowlist.has(pluginId) || (manifestId ? allowlist.has(manifestId) : false)) return true;
+    try {
+      const row = this.db.prepare('SELECT file_path FROM plugins WHERE id = ?').get(pluginId) as
+        | { file_path?: string }
+        | undefined;
+      if (isInsideBuiltinPluginsDir(row?.file_path)) return true;
+    } catch {
+      /* 测试库可能还没有 file_path 列 */
+    }
     return false;
   }
 

@@ -66,9 +66,9 @@
 
 对外域名请把 `ALLOWED_ORIGINS` 设成实际来源。本机来源的放行目前仍然生效。
 
-### 插件静态文件无需登录（审计 M-5 的一部分）
+### 插件静态文件需要登录
 
-`server.ts` 对 `/plugins` 使用 `express.static`，没有会话校验。插件源码可以被匿名拉取。管理接口本身要求登录。
+`/plugins` 与课件上传目录一样，要有有效会话才能读取包体。远程插件前端在不透明源 iframe 里执行，不再在主页面里 `import()` 插件源码。
 
 ### 已读通知不校验是不是本人（审计 M-5 的一部分）
 
@@ -82,9 +82,9 @@
 
 `GET /api/ai-providers` 对教师和管理员开放。`server/utils/crypto.ts` 的 `maskApiKey` 保留首尾各 4 个字符。写入和删除提供商仍只要管理员。`decryptApiKey` 在字符串不是 `iv:tag:cipher` 三段时把原值当明文返回。空的 `ENCRYPTION_KEY=` 不会被改写。未设置时不再使用只活在内存里的临时钥匙：首次启动把随机 64 位 hex 写到 `storage/encryption-key`（权限 600），之后每次读取；启动日志和管理后台会警告应改设环境变量并离线备份该文件。环境变量与该文件不一致时拒绝启动。长度不是 64 位 hex 时启动报错，不再拖到加解密才失败。
 
-### 第三方插件的网络
+### 第三方插件的网络与身份
 
-非 `@openlearn/` 且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 里的插件，会被改成子进程（`executionMode=process`）。Node 权限模型约束不了出站网络。这是演练记录里仍未关闭的风险。插件若拿到平台数据库句柄，可以读到学生数据。公测是否允许安装插件，由作者决定。
+未写入 `OPENLEARN_TRUSTED_INLINE_PLUGINS`、且文件不在内置目录的插件以子进程运行。id 前缀不能代替这份白名单。子进程默认不能建立原始出站连接；HTTP 只经宿主代理访问管理员批准的域名。SQL 只碰插件自己的表。社区注册表安装默认关闭，打开后还要完整性哈希和签名。`OPENLEARN_PLUGIN_PERMISSION=off` 会同时放开文件权限和出站网络。
 
 `manifest` 里的 `auth: false` 只表示申请公开。匿名访问还要管理员写入批准记录。源码安装成功后状态是 `installed`，不调用启用接口时路由返回 503。
 

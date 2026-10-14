@@ -541,11 +541,8 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
     });
 
     it('自建表记录持久化可查', () => {
-      // 记录现状：inline 模式使用 DB UUID 表前缀，worker 模式使用 manifest.id 表前缀
-      const tbl =
-        mode === 'worker'
-          ? 'plugin_ext_canary_probe_results'
-          : `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_probe_results`;
+      // 建表和查询都用安装主键。worker 不再另用 manifest id 做表前缀。
+      const tbl = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_probe_results`;
       const row = (db as any).prepare(`SELECT COUNT(*) AS c FROM ${tbl} WHERE mode = ?`).get(mode) as { c: number };
       expect(row.c).toBeGreaterThan(0);
     });

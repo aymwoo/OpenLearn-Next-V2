@@ -17,6 +17,8 @@ import { buildContext } from './context-builder.js';
 import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
 import { resolvePluginExecutionMode } from './execution-policy.js';
+import { clearPluginGrants } from './plugin-grants.js';
+import { isSafePluginTablePrefix, pluginTablePrefix } from './plugin-tables.js';
 import { clearPublicRouteApprovals } from './public-routes.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import { checkMissingDeps } from './dependency-resolver.js';
@@ -165,6 +167,8 @@ export abstract class PluginHostInstall extends PluginHostReload {
       const sourceDecision = resolvePluginExecutionMode(
         manifest.id,
         (manifest as { executionMode?: unknown }).executionMode,
+        process.env,
+        filePath,
       );
       this.persistExecutionMode(pluginId, sourceDecision.mode);
 
@@ -203,9 +207,28 @@ export abstract class PluginHostInstall extends PluginHostReload {
    *
    * @param pluginId - 插件标识符
    */
+  private dropPluginTables(prefix: string): number {
+    if (!isSafePluginTablePrefix(prefix)) return 0;
+    try {
+      const tables = this.db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
+        .all(`${prefix}%`) as { name: string }[];
+      let dropped = 0;
+      for (const table of tables) {
+        if (!table.name.startsWith(prefix) || !/^plugin_[A-Za-z0-9_]+$/.test(table.name)) continue;
+        this.db.exec(`DROP TABLE IF EXISTS ${table.name}`);
+        dropped += 1;
+      }
+      return dropped;
+    } catch (error) {
+      console.warn(`[PluginHost] Failed to drop plugin tables for prefix "${prefix}":`, error);
+      return 0;
+    }
+  }
+
   async uninstallPlugin(pluginId: string): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
-    if (pluginId.startsWith('@openlearn/') || this.preloadedPlugins.has(pluginId)) {
+    if (this.isSystemPluginRecord(pluginId)) {
       throw new Error(`Cannot uninstall system plugin: ${pluginId}`);
     }
 
@@ -268,22 +291,15 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // 4. 从 DB 删除
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
+    this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(pluginId);
     clearPublicRouteApprovals(this.db, [pluginId, manifestId]);
+    clearPluginGrants(this.db, [pluginId, manifestId]);
 
-    // v5.1: 清理插件自建表
-    const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
-    try {
-      const tables = this.db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
-        .all(tablePrefix + '%') as { name: string }[];
-      for (const t of tables) {
-        this.db.exec(`DROP TABLE IF EXISTS ${t.name}`);
-      }
-      if (tables.length > 0) {
-        console.log(`[PluginHost] Dropped ${tables.length} plugin tables for "${pluginId}"`);
-      }
-    } catch (e) {
-      console.warn(`[PluginHost] Failed to drop plugin tables for "${pluginId}":`, e);
+    // 建表与删表用同一个安装主键；同时清掉旧版按 manifest id 留下的表。
+    const dropped = this.dropPluginTables(pluginTablePrefix(pluginId));
+    const legacyDropped = manifestId !== pluginId ? this.dropPluginTables(pluginTablePrefix(manifestId)) : 0;
+    if (dropped + legacyDropped > 0) {
+      console.log(`[PluginHost] Dropped ${dropped + legacyDropped} plugin tables for "${pluginId}"`);
     }
 
     // 4b. 撤销插件能力（与 T-04-20 等价的兜底）
@@ -599,7 +615,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       const requestedMode: PluginExecutionMode =
         overrideExecutionMode ?? normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
       // 未受信任的第三方包不能靠清单或安装参数留在宿主进程里。
-      const decision = resolvePluginExecutionMode(manifest.id, requestedMode);
+      const decision = resolvePluginExecutionMode(manifest.id, requestedMode, process.env, filePath);
       if (decision.coerced) {
         console.warn(`[PluginHost] ${decision.reason}`);
       }
@@ -784,7 +800,12 @@ export abstract class PluginHostInstall extends PluginHostReload {
     const manifestMode = normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
     const requestedUpdateMode =
       options.executionMode ?? (manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
-    const updateDecision = resolvePluginExecutionMode(manifest.id, requestedUpdateMode);
+    const updateDecision = resolvePluginExecutionMode(
+      manifest.id,
+      requestedUpdateMode,
+      process.env,
+      this.getPluginFilePath(pluginId),
+    );
     if (updateDecision.coerced) {
       console.warn(`[PluginHost] ${updateDecision.reason}`);
     }

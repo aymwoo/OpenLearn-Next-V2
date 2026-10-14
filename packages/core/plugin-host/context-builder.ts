@@ -48,7 +48,9 @@ import type {
   IPointsLedgerService,
   PointsDimensionSpec,
 } from '../di/interfaces.js';
+import { bindPluginCommand, pluginActorIdFor } from '../command-bus/plugin-command.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
+import { pluginTablePrefix } from './plugin-tables.js';
 
 // ── SEC: 插件自建表 SQL 注入防护 ─────────────────────────────────────────
 
@@ -156,6 +158,7 @@ function wrapCommandBus(
   // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
   // (@openlearn/*) keep global namespace for backward compatibility.
   const isKernelPlugin = pluginId.startsWith('@openlearn/');
+  const hostActor = pluginActorIdFor(manifestId, pluginId);
 
   /** Resolve the registered command type — delegates to resolvePluginCommandType
    *  for the unified namespace rule (manifest.id prefix, '.' separator). */
@@ -206,15 +209,17 @@ function wrapCommandBus(
         });
       });
     }),
-    createCommand: createSafeFunction((type: string, payload: any, actorId: string, metadata?: any) => {
-      return commandBus.createCommand(resolveType(type), payload, actorId, metadata);
+    createCommand: createSafeFunction((type: string, payload: any, _actorId: string, metadata?: any) => {
+      const clean = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+      delete clean.approved;
+      return commandBus.createCommand(resolveType(type), payload, hostActor, clean);
     }),
     execute: createSafeFunction(async (command: any) => {
       // Normalize command type: plugins may use either 'type' or 'commandType'
       const rawType = command.type || command.commandType;
-      const prefixedCmd = { ...command, type: resolveType(rawType) };
+      const prefixedCmd = bindPluginCommand({ ...command, type: resolveType(rawType) }, hostActor);
       try {
-        return await commandBus.execute(prefixedCmd);
+        return await commandBus.execute(prefixedCmd as never);
       } catch (e: any) {
         // If the prefixed type doesn't exist in CommandBus, try fallback to the unprefixed type
         // (e.g. kernel system commands like whiteboard.draw, vfs.write_file that plugins call)
@@ -223,7 +228,7 @@ function wrapCommandBus(
         if (isNoHandler) {
           const unprefixedType = stripPluginCommandPrefix(rawType, manifestId || pluginId);
           if (unprefixedType !== prefixedCmd.type) {
-            return await commandBus.execute({ ...command, type: unprefixedType });
+            return await commandBus.execute(bindPluginCommand({ ...command, type: unprefixedType }, hostActor) as never);
           }
         }
         throw e;
@@ -458,11 +463,11 @@ function wrapActionRegistry(
  */
 function wrapCapability(capabilityService: ICapabilityService): ICapabilityService {
   return {
-    grant: createSafeFunction((actorId: string, cap: string) => {
-      return capabilityService.grant(actorId, cap);
+    grant: createSafeFunction((_actorId: string, _cap: string) => {
+      throw new Error('[Security] Plugins cannot grant capabilities');
     }),
-    revokeAll: createSafeFunction((actorId: string) => {
-      return capabilityService.revokeAll(actorId);
+    revokeAll: createSafeFunction((_actorId: string) => {
+      throw new Error('[Security] Plugins cannot revoke capabilities');
     }),
     check: createSafeFunction((actorId: string, requiredCap: string) => {
       return capabilityService.check(actorId, requiredCap);
@@ -756,7 +761,7 @@ export async function buildContext(
   Object.freeze(services);
 
   // 5. 构建插件自建表 API（v5.1）
-  const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
+  const tablePrefix = pluginTablePrefix(pluginId);
 
   const dbApi: PluginDatabaseAPI = {
     async ensureTable(tableName: string, schema: string) {

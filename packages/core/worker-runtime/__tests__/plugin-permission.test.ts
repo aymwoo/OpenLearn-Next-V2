@@ -285,8 +285,8 @@ describe('L-1 P2 · 权限旗标构造', () => {
     expect(normalizePermissionPolicy('off')).toBe('off');
   });
 
-  it('诊断文本如实写出网络缺口（不粉饰）', () => {
-    expect(describePermissionPolicy({ policy: 'rw' })).toContain('网络不受限');
+  it('诊断文本写明出站网络默认拒绝', () => {
+    expect(describePermissionPolicy({ policy: 'rw' })).toContain('出站 socket/DNS 默认拒绝');
   });
 });
 
@@ -370,14 +370,8 @@ describe('L-1 P2 · 真实子进程中的能力收敛', () => {
     expect(r.spawnChild).toMatchObject({ ok: true });
   }, 60_000);
 
-  it('⚠️ 已知缺口被钉住：网络不受权限模型约束（本版本无 --allow-net）', async () => {
+  it('rw 策略下原始 socket 被入口脚本拒绝', async () => {
     const r = await runProbes('rw');
-    // 这条断言的用意不是「期待它通过」，而是**把缺口写死在测试里**：
-    // 一旦 Node 补上 --allow-net 而我们收紧了网络，这里会红，提醒更新文档与
-    // buildPermissionArgs。若哪天它自己变红了而代码没改，就说明 Node 变了行为。
-    expect(
-      r.netConnect,
-      '若此处变 DENIED，说明 Node 已能约束网络 —— 应在 buildPermissionArgs 补 --allow-net 并更新文档',
-    ).toMatchObject({ ok: true, value: 'attempted' });
+    expect(r.netConnect).toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
   }, 60_000);
 });

@@ -260,6 +260,7 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       targetPluginId?: string;
       allowDowngrade?: boolean;
       approvePublicRoutes?: boolean;
+      approveCapabilities?: boolean;
     },
   ) => {
     setInstallingPlugin(true);
@@ -274,6 +275,12 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       };
       if (opts?.approvePublicRoutes) {
         headers['X-Approve-Public-Routes'] = 'true';
+      }
+      if (opts?.approveCapabilities) {
+        headers['X-Approve-Capabilities'] = 'true';
+      }
+      if (isUpdate) {
+        headers['X-Acknowledge-Risk'] = 'true';
       }
       if (opts?.targetPluginId) {
         headers['X-Target-Plugin-Id'] = encodeURIComponent(opts.targetPluginId);

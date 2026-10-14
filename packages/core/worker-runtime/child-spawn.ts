@@ -28,6 +28,9 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ChildProcessTransport } from './child-transport.js';
 import { ChildProcessIsolate } from './child-isolate.js';
 import {
@@ -61,6 +64,10 @@ export interface PluginWorkerData {
   manifestId: string;
   serviceTokens: readonly string[];
   pluginDir?: string;
+  /** 与宿主建表/删表共用的前缀。缺省时 bootstrap 只用 pluginId，不用 manifest id。 */
+  tablePrefix?: string;
+  /** 管理员已批准的出站主机名。preload 在启动时拍下这份名单。 */
+  approvedNetHosts?: string[];
 }
 
 /** bootstrap 数据的环境变量名 */
@@ -158,13 +165,21 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
   // console.log、不做分配，根本区分不了生效与否。位置按惯例统一放前段，
   // 但**不要**把它当作正确性依赖 —— 真正的依赖见下方注释里指出的测试。
   const heapArgs = buildHeapLimitArgs(opts.maxHeapMb);
+  const netGuardArgs: string[] = [];
+  const envOverrides: Record<string, string | undefined> = {};
+  if (policy !== 'off') {
+    const preloadPath = resolveNetPreloadPath();
+    netGuardArgs.push(`--require=${preloadPath}`);
+    permissionArgs.push(`--allow-fs-read=${preloadPath}`);
+    envOverrides.OPENLEARN_PLUGIN_NET_ALLOW = (opts.data.approvedNetHosts ?? []).join(',');
+  }
 
   const child = spawn(
     process.execPath,
-    [...permissionArgs, ...heapArgs, '--input-type=module', '--eval', opts.bootstrapCode],
+    [...permissionArgs, ...netGuardArgs, ...heapArgs, '--input-type=module', '--eval', opts.bootstrapCode],
     {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: buildMinimalEnv(opts.data),
+      env: buildMinimalEnv(opts.data, envOverrides),
       cwd: opts.cwd,
       // ★ 必须显式指定：默认 json 会静默降级 10/13 个探针（见模块注释与
       //   ipc-serialization-parity.test.ts）。它是 spawn 选项，对双向生效。
@@ -173,9 +188,34 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     },
   );
 
-  const transport = new ChildProcessTransport(child);
+  const approvedHosts = new Set((opts.data.approvedNetHosts ?? []).map((host) => host.trim().toLowerCase()));
+  const transport = new ChildProcessTransport(child, approvedHosts);
   const isolate = new ChildProcessIsolate(child, opts.termGraceMs ?? 0);
   return { child, transport, isolate };
+}
+
+/** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
+export function resolveNetPreloadPath(): string {
+  const candidates: string[] = [
+    path.resolve(process.cwd(), 'packages/core/worker-runtime/plugin-net-preload.cjs'),
+    path.resolve(process.cwd(), 'dist/plugin-net-preload.cjs'),
+  ];
+  try {
+    const url = import.meta.url;
+    if (typeof url === 'string' && url.startsWith('file:')) {
+      candidates.unshift(path.join(path.dirname(fileURLToPath(url)), 'plugin-net-preload.cjs'));
+    }
+  } catch {
+    // CJS 产物里 import.meta.url 不可用。
+  }
+  if (typeof __dirname !== 'undefined') {
+    candidates.unshift(path.join(__dirname, 'plugin-net-preload.cjs'));
+  }
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!found) {
+    throw new Error(`[PluginNet] preload script not found. Looked in: ${candidates.join(', ')}`);
+  }
+  return found;
 }
 
 /** 诊断用：把当前生效的权限策略与堆上限渲染成一行人类可读文本 */

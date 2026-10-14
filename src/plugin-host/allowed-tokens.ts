@@ -130,7 +130,7 @@ export function computeAllowedWorkerTokens(
     const hasSensitiveCap = caps.some(
       (c) =>
         typeof c === 'string' &&
-        SENSITIVE_CAPABILITY_NAMES.some((name) => c === name || c.startsWith(`${name}:`) || c === '*'),
+        SENSITIVE_CAPABILITY_NAMES.some((name) => c === name || c.startsWith(`${name}:`)),
     );
 
     if (hasSensitiveDep || hasSensitiveCap) {

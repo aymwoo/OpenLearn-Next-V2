@@ -135,12 +135,12 @@ describe('computeAllowedWorkerTokens (前端等价实现)', () => {
     expect(allowed).toContain(SEMESTER_GRADE_SERVICE_TOKEN);
   });
 
-  it('manifest 声明 grades capability（含 grades:* 与 *）时授予写成绩服务', () => {
+  it('manifest 声明 grades capability 时授予写成绩服务；* 不能代替', () => {
     expect(computeAllowedWorkerTokens({ capabilitiesProposed: ['grades'] })).toContain(SEMESTER_GRADE_SERVICE_TOKEN);
     expect(computeAllowedWorkerTokens({ capabilitiesProposed: ['grades:write'] })).toContain(
       SEMESTER_GRADE_SERVICE_TOKEN,
     );
-    expect(computeAllowedWorkerTokens({ capabilitiesProposed: ['*'] })).toContain(SEMESTER_GRADE_SERVICE_TOKEN);
+    expect(computeAllowedWorkerTokens({ capabilitiesProposed: ['*'] })).not.toContain(SEMESTER_GRADE_SERVICE_TOKEN);
   });
 
   it('requestedTokens 与授权集取交集（请求方无法越权放大）', () => {

@@ -370,15 +370,14 @@ describe('buildContext', () => {
     const rawCapability = await registry.resolve(ICapabilityServiceToken);
     const ctx = await setupContext({ registry, tracker });
 
-    // 调用 capability 方法 — 不应触发任何 tracker 操作
-    await ctx.services.capability!.grant('actor-1', 'test:read');
-    await ctx.services.capability!.check('actor-1', 'test:read');
-    await ctx.services.capability!.revokeAll('actor-1');
+    // 插件不能自己授予或撤销能力。check 仍然是只读代理，且不登记清理。
+    expect(() => ctx.services.capability!.grant('actor-1', 'test:read')).toThrow(/cannot grant/);
+    ctx.services.capability!.check('actor-1', 'test:read');
+    expect(() => ctx.services.capability!.revokeAll('actor-1')).toThrow(/cannot revoke/);
 
-    // 验证原始 capability service 方法被调用
-    expect(rawCapability.grant).toHaveBeenCalledWith('actor-1', 'test:read');
+    expect(rawCapability.grant).not.toHaveBeenCalled();
     expect(rawCapability.check).toHaveBeenCalledWith('actor-1', 'test:read');
-    expect(rawCapability.revokeAll).toHaveBeenCalledWith('actor-1');
+    expect(rawCapability.revokeAll).not.toHaveBeenCalled();
 
     // 验证 capability 方法不注册 dispose（disposeAll 不应有副作用）
     // 不应抛出错误 — capability 不注册资源

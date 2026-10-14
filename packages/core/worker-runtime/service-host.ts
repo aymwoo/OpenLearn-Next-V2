@@ -62,6 +62,9 @@ import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
 import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
+import { bindPluginCommand } from '../command-bus/plugin-command.js';
+import { isBlockedPluginCapability } from '../plugin-host/plugin-grants.js';
+import { isSafePluginTablePrefix, pluginTablePrefix } from '../plugin-host/plugin-tables.js';
 
 /**
  * 后端 Worker 侧的 Token 名集合。
@@ -870,7 +873,36 @@ export class ServiceHost {
             value: undefined,
           });
           return;
+        } else if (msg.method === 'execute') {
+          const [command] = msg.args as [unknown];
+          const bound = bindPluginCommand(command, this.pluginActorId);
+          const result = await commandBus.execute(bound as never);
+          transport.postMessage({ type: 'result', invokeId: msg.invokeId, value: result });
+          return;
+        } else if (msg.method === 'createCommand') {
+          const [type, payload, , metadata] = msg.args as [string, unknown, unknown, Record<string, unknown> | undefined];
+          const cleanMeta = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+          delete cleanMeta.approved;
+          const result = commandBus.createCommand(type, payload, this.pluginActorId, cleanMeta);
+          transport.postMessage({ type: 'result', invokeId: msg.invokeId, value: result });
+          return;
         }
+      }
+
+      if (msg.token === '@openlearn/core:ICapabilityService' && (msg.method === 'grant' || msg.method === 'revokeAll')) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          msg.token,
+          `Plugin "${this.pluginId || this.pluginActorId}" cannot ${msg.method} capabilities`,
+        );
+      }
+      if (
+        msg.token === '@openlearn/core:ICapabilityService' &&
+        msg.method === 'grant' &&
+        typeof msg.args?.[1] === 'string' &&
+        isBlockedPluginCapability(msg.args[1])
+      ) {
+        throw new WorkerCapabilityError(this.pluginActorId, msg.token, 'Wildcard capabilities cannot be granted');
       }
 
       // ── Intercept IActionRegistryService helper methods ──────────────
@@ -1008,18 +1040,19 @@ export class ServiceHost {
   }
 
   /**
-   * Security barrier for Worker plugin IDatabase RPC access.
+   * 插件 SQL 只允许自己的表前缀。
    *
-   * 1. Blocks dangerous SQLite low-level operations (ATTACH, DETACH, PRAGMA, TRIGGERS, VIEWS, VACUUM).
-   * 2. Blocks access to all platform core tables (auth, sessions, roster, grading, lessons, etc.).
-   * 3. Restricts DDL (CREATE/DROP/ALTER TABLE) strictly to the plugin's own namespace (`plugin_<id>_` prefix).
+   * 安装主键（dbPluginId，ZIP 为 UUID）是唯一命名空间。manifest id 不再另开一套。
+   * `plugin_migrations` 是迁移簿记。`sqlite_master` 只允许 SELECT，且语句里必须带上自己的前缀。
+   * `plugin_research_` 只给 OPENLEARN_RESEARCH_SQL_PLUGINS 里的精确 id（默认 lianyun-course）。
    */
   private assertDatabaseAccessAllowed(sql: string): void {
     if (typeof sql !== 'string' || sql.trim() === '') return;
 
     const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+    const scopeId = this.dbPluginId || pluginId;
+    const ownPrefix = scopeId ? pluginTablePrefix(scopeId) : '';
 
-    // SEC-DB-01: 绝对封禁底层高危与跨库操作指令
     const FORBIDDEN_OPERATIONS = [
       /\bATTACH(?:\s+DATABASE)?\b/i,
       /\bDETACH(?:\s+DATABASE)?\b/i,
@@ -1038,76 +1071,15 @@ export class ServiceHost {
       }
     }
 
-    // SEC-DB-02: 完整保护核心安全表与业务主表，禁止插件通过裸 SQL 绕过业务层直接篡改
-    const FORBIDDEN_CORE_TABLES = [
-      'users',
-      'client_sessions',
-      'plugins',
-      'plugin_storage',
-      'ai_providers',
-      'processes',
-      'pending_commands',
-      'classes',
-      'students',
-      'class_students',
-      'lessons',
-      'assignments',
-      'assignment_submissions',
-      'attendance',
-      'schedules',
-      'class_grade_weights',
-      'exams',
-      'exam_scores',
-      'student_semester_reports',
-      'student_rollcalls',
-      'student_seats',
-      'student_read_notifications',
-      'student_lesson_progress',
-      'courseware',
-      'courseware_attempt',
-      'system_resources',
-      'events',
-      '_migrations',
-      // 2026-10-04 补充：实测 97 张表中原名单只覆盖 28 张，以下为审计发现的漏网核心表。
-      'site_settings', // 站点级配置
-      'agent_conversations', // AI Agent 会话记录
-      'classroom_sessions', // 课堂会话
-      'lesson_quiz_submissions', // 课堂测验提交
-      'courseware_score_config', // 成绩计分策略
-      'demo_data_registry', // 演示数据登记表
-      'whiteboard_elements', // 白板内容
-      'student_point_logs', // 积分台账
-      'lianyun_research_activities',
-      'lianyun_research_groups',
-      'lianyun_research_submissions',
-      'lianyun_research_reviews',
-    ];
-    // 本插件被允许的 `plugin_*` 命名空间（DDL 与 DML 共用）。
-    const validNamespaces: string[] = [];
-    if (this.dbPluginId) {
-      validNamespaces.push(`plugin_${this.dbPluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
-    }
-    if (pluginId) {
-      validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
-    }
-    // Allow dedicated research ecosystem namespace for lianyun-course plugin
-    if (
-      pluginId === 'lianyun-course' ||
-      this.dbPluginId === '01a0b99f-efb7-7178-be2e-be3b1ad0cb53' ||
-      pluginId?.includes('lianyun') ||
-      pluginId?.includes('research')
-    ) {
-      validNamespaces.push('plugin_research_');
-    }
+    const researchIds = researchSqlPluginIds();
+    const researchAllowed = researchIds.has(pluginId) || (!!this.dbPluginId && researchIds.has(this.dbPluginId));
+    const referencedTables = referencedSqlTables(sql);
 
-    // 先检查 DDL，优先抛出 DDL 具体的报错以与单元测试契约精确吻合
     const ddlMatch =
       /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
     if (ddlMatch) {
       const table = ddlMatch[2]!;
-      const isAllowed =
-        validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
-      if (!isAllowed) {
+      if (!tableAllowed(table, ownPrefix, researchAllowed, sql)) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '@openlearn/core:IDatabase',
@@ -1116,49 +1088,51 @@ export class ServiceHost {
       }
     }
 
-    // SEC-DB-03（2026-10-04）：**DML 命名空间隔离**。
-    // 此前命名空间校验只作用于 DDL（CREATE/DROP/ALTER TABLE），DML 完全没管 ——
-    // 任何 worker 插件都可以任意 SELECT/INSERT/UPDATE/DELETE **其他插件的私有表**
-    // （`plugin_<别的id>_*`）。实测 97 张表里有 19 张插件私有表，跨插件读写完全畅通。
-    //
-    // 规则：`plugin_` 前缀的**表**只允许操作自己命名空间下的。
-    // 注意：必须只从"表出现的位置"提取表名，不能全文搜 `plugin_` ——
-    // `plugin_id` 是常见**列名**（如 `INSERT INTO plugin_migrations (plugin_id, ...)`），
-    // 全文搜会把列名误判成表名。
-    const sharedPluginTables = new Set(['plugin_migrations', 'plugin_storage']);
-    const referencedTables = new Set<string>();
-    for (const re of [
-      /\bFROM\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-      /\bINTO\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-      /\bUPDATE\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-      /\bJOIN\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-      /\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-    ]) {
-      for (const m of sql.matchAll(re)) referencedTables.add(m[1]!);
-    }
-
-    for (const t of referencedTables) {
-      if (!/^plugin_/i.test(t)) continue;
-      if (sharedPluginTables.has(t.toLowerCase())) continue;
-      const isOwnNamespace = validNamespaces.some((ns) => t.startsWith(ns));
-      if (!isOwnNamespace) {
+    for (const table of referencedTables) {
+      if (!tableAllowed(table, ownPrefix, researchAllowed, sql)) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is not permitted to access another plugin's table "${t}" ` +
-            `(仅允许 ${validNamespaces.join(' / ') || '<无>'} 命名空间)`,
-        );
-      }
-    }
-
-    for (const table of FORBIDDEN_CORE_TABLES) {
-      if (new RegExp(`\\b${table}\\b`, 'i').test(sql)) {
-        throw new WorkerCapabilityError(
-          this.pluginActorId,
-          '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is forbidden from accessing core security table "${table}"`,
+          `Worker plugin "${pluginId}" is not permitted to access table "${table}" ` +
+            `(仅允许 ${ownPrefix || '<无>'} 命名空间)`,
         );
       }
     }
   }
+}
+
+function researchSqlPluginIds(env: NodeJS.ProcessEnv = process.env): Set<string> {
+  if (env.OPENLEARN_RESEARCH_SQL_PLUGINS !== undefined) {
+    return new Set(
+      env.OPENLEARN_RESEARCH_SQL_PLUGINS.split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0),
+    );
+  }
+  return new Set(['lianyun-course']);
+}
+
+function referencedSqlTables(sql: string): Set<string> {
+  const referencedTables = new Set<string>();
+  for (const re of [
+    /\bFROM\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+    /\bINTO\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+    /\bUPDATE\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+    /\bJOIN\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+    /\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
+  ]) {
+    for (const match of sql.matchAll(re)) referencedTables.add(match[1]!);
+  }
+  return referencedTables;
+}
+
+function tableAllowed(table: string, ownPrefix: string, researchAllowed: boolean, sql: string): boolean {
+  const name = table.toLowerCase();
+  if (ownPrefix && isSafePluginTablePrefix(ownPrefix) && name.startsWith(ownPrefix.toLowerCase())) return true;
+  if (name === 'plugin_migrations') return true;
+  if (researchAllowed && name.startsWith('plugin_research_')) return true;
+  if (name === 'sqlite_master') {
+    return /^\s*select\b/i.test(sql) && !!ownPrefix && sql.includes(ownPrefix);
+  }
+  return false;
 }

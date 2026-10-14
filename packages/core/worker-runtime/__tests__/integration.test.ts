@@ -252,8 +252,13 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     // The invoke arrives at ServiceHost... but we need a different approach
     // since the mock transport already fires the message synchronously via EventEmitter
     const result = await promise;
-    expect(result).toEqual({ success: true, result: cmd });
-    expect(service.execute).toHaveBeenCalledWith(cmd);
+    const forwarded = {
+      ...cmd,
+      actorId: 'plugin:test',
+      metadata: {},
+    };
+    expect(result).toEqual({ success: true, result: forwarded });
+    expect(service.execute).toHaveBeenCalledWith(forwarded);
   });
 
   it('should deny calls when capabilities are empty (CapGuard enforcement)', async () => {

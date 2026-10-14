@@ -46,6 +46,8 @@ export interface CommunityPlugin {
   downloads: number | null;
   stars: number | null;
   verified: boolean;
+  integrity?: string | null;
+  signature?: string | null;
   featured: boolean;
   installedVersion: string | null;
   hasUpdate: boolean;
@@ -288,6 +290,10 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         headers: {
           'Content-Type': 'application/octet-stream',
           'x-filename': encodeURIComponent(filename),
+          'x-community-install': 'true',
+          'x-acknowledge-risk': 'true',
+          ...(plugin.integrity ? { 'x-integrity': plugin.integrity } : {}),
+          ...(plugin.signature ? { 'x-signature': plugin.signature } : {}),
           ...(approvePublic ? { 'x-approve-public-routes': 'true' } : {}),
         },
         body: blob,
@@ -319,6 +325,8 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
             expectedId: plugin.id,
             acknowledgeRisk: true,
             approvePublicRoutes: approvePublic,
+            ...(plugin.integrity ? { integrity: plugin.integrity } : {}),
+            ...(plugin.signature ? { signature: plugin.signature } : {}),
           }),
         });
         const body = (await response.json().catch(() => null)) as {
@@ -596,7 +604,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                   )}
                   {plugin.verified && (
                     <span
-                      title={zh ? '官方校验来源' : 'Verified source'}
+                      title={zh ? '平台公钥验签通过' : 'Signed with the platform public key'}
                       className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
                     >
                       <BadgeCheck size={11} />

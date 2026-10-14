@@ -8,6 +8,8 @@ export type ZipInstallOptions = {
   allowDowngrade?: boolean;
   /** 管理员显式批准 manifest 里 auth:false 的路由。默认不批准。 */
   approvePublicRoutes?: boolean;
+  /** 管理员确认清单申请的能力。通配符仍然不会被授予。 */
+  approveCapabilities?: boolean;
 };
 
 type SandboxChoice = 'worker' | 'inline' | 'process';
@@ -202,6 +204,7 @@ export function PluginInstallWizard({
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [executionMode, setExecutionMode] = useState<SandboxChoice>('process');
   const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
+  const [approveCapabilities, setApproveCapabilities] = useState(false);
   const [zipObj, setZipObj] = useState<JSZip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -278,19 +281,8 @@ export function PluginInstallWizard({
       // Seed extension points from manifest immediately (UTF-8 labels)
       setRegisteredPanels(extractFromManifest(parsed));
 
-      // 非 @openlearn/ 包在界面上锁死为子进程；服务端仍会再强制一次。
-      const trusted = typeof parsed.id === 'string' && parsed.id.startsWith('@openlearn/');
-      if (!trusted) {
-        setExecutionMode('process');
-      } else if (
-        parsed.executionMode === 'inline' ||
-        parsed.executionMode === 'process' ||
-        parsed.executionMode === 'worker'
-      ) {
-        setExecutionMode(parsed.executionMode);
-      } else {
-        setExecutionMode('worker');
-      }
+      // 上传的 ZIP 一律请求子进程。内置目录和白名单只由服务端识别。
+      setExecutionMode('process');
 
       // Detect same-id install for upgrade path
       await detectExistingInstall(parsed);
@@ -324,10 +316,6 @@ export function PluginInstallWizard({
         );
         return;
       }
-      if (String(parsed.id).startsWith('@openlearn/')) {
-        setError(lang === 'zh' ? '系统核心插件禁止通过插件中心更新。' : 'System plugins cannot be updated here.');
-        return;
-      }
       setExistingInstall({
         pluginId: lockedTargetPluginId,
         name: local?.name || localManifest?.name || parsed.name,
@@ -353,10 +341,6 @@ export function PluginInstallWizard({
         m = JSON.parse(fromList.manifest);
       } catch {
         m = {};
-      }
-      if (String(parsed.id).startsWith('@openlearn/') || fromList.id.startsWith('@openlearn/')) {
-        setError(lang === 'zh' ? '系统核心插件禁止通过插件中心更新。' : 'System plugins cannot be updated here.');
-        return;
       }
       setExistingInstall({
         pluginId: fromList.id,
@@ -437,8 +421,8 @@ export function PluginInstallWizard({
     return matched.length > 0 ? matched : registeredPanels;
   }, [registeredPanels, previewRole]);
 
-  const trustedInProcess = typeof manifest?.id === 'string' && String(manifest.id).startsWith('@openlearn/');
-  const effectiveMode: SandboxChoice = trustedInProcess ? executionMode : 'process';
+  const trustedInProcess = false;
+  const effectiveMode: SandboxChoice = 'process';
 
   const isUpgrade = !!existingInstall;
   const isDowngrade = isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
@@ -479,6 +463,7 @@ export function PluginInstallWizard({
         targetPluginId: existingInstall?.pluginId,
         allowDowngrade: isDowngrade ? allowDowngrade : false,
         approvePublicRoutes,
+        approveCapabilities,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -520,6 +505,7 @@ export function PluginInstallWizard({
         targetPluginId: existingInstall?.pluginId,
         allowDowngrade: true,
         approvePublicRoutes,
+        approveCapabilities,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -1043,8 +1029,8 @@ export function PluginInstallWizard({
                       </h4>
                       <p className="mt-1">
                         {lang === 'zh'
-                          ? '这个包的 id 不是 @openlearn/ 内置插件。Worker 线程与宿主共享环境变量，不能当作隔离。安装后会以独立子进程运行，不继承密钥类环境变量。清单或安装参数里的 inline / worker 会被忽略。'
-                          : 'This package id is not an @openlearn/ built-in. Worker threads share the host environment, so they are not isolation. It will run in a child process and will not inherit secret environment variables. inline / worker in the manifest or install request is ignored.'}
+                          ? '上传的包固定以独立子进程运行，不继承密钥类环境变量。id 前缀不能证明它是内置插件。只有内置目录或 OPENLEARN_TRUSTED_INLINE_PLUGINS 白名单里的包才可以进程内运行，而且那一步由服务端决定。'
+                          : 'Uploaded packages stay in a child process and do not inherit secret environment variables. An id prefix does not make a package built-in. Only the built-in directory or OPENLEARN_TRUSTED_INLINE_PLUGINS can run in-process, and the server makes that decision.'}
                       </p>
                     </div>
                   ) : (
@@ -1138,6 +1124,19 @@ export function PluginInstallWizard({
                       {lang === 'zh'
                         ? '批准清单中声明为公开的路由（auth: false）。不勾选则这些路由仍要求登录。'
                         : 'Approve routes the manifest marks public (auth: false). Leave unchecked and those routes still require a session.'}
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={approveCapabilities}
+                      onChange={(e) => setApproveCapabilities(e.target.checked)}
+                    />
+                    <span>
+                      {lang === 'zh'
+                        ? '确认授予清单申请的能力。不勾选则这些能力不会生效。通配符 * 不会被授予。'
+                        : 'Approve the capabilities this manifest requests. Leave unchecked and they stay inactive. Wildcard capabilities are never granted.'}
                     </span>
                   </label>
                 </div>

@@ -32,6 +32,9 @@ import { Worker } from 'node:worker_threads';
 import { WorkerLivenessMonitor } from './liveness-monitor.js';
 import type { IWorkerIsolate } from './worker-isolate.js';
 import { spawnPluginChild } from './child-spawn.js';
+import { startProcessQuota } from './plugin-quota.js';
+import { listApprovedNetHosts } from '../plugin-host/plugin-grants.js';
+import { pluginTablePrefix } from '../plugin-host/plugin-tables.js';
 import { composeBootstrapCode } from './bootstrap/index.js';
 import { DEFAULT_MAX_OLD_GENERATION_MB } from './plugin-limits.js';
 import { ThreadIsolate } from './thread-isolate.js';
@@ -131,7 +134,7 @@ export function computeAllowedWorkerTokens(manifest?: Manifest, requestedTokens?
     );
     const hasPointsDep = POINTS_SERVICE_TOKENS.some((t) => normalizedDeclared.has(normalizeDepEntry(t)));
     const hasPointsCap = caps.some(
-      (c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:') || c === '*'),
+      (c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:')),
     );
 
     if (hasPointsDep || hasPointsCap) {
@@ -589,6 +592,8 @@ export class WorkerManager {
   /** SIGKILL 之前的 SIGTERM 宽限期（ms）。0 = 立即强杀（保守默认，见 ChildProcessIsolate 注释） */
   private readonly childTermGraceMs: number = Number(process.env.OPENLEARN_WORKER_TERM_GRACE_MS ?? 0) || 0;
 
+  private readonly processQuotas = new Map<string, { stop: () => void }>();
+
   private liveness = new WorkerLivenessMonitor({
     listRunningPluginIds: () => this.registry.list(),
     sendPing: (pluginId, seq) => {
@@ -736,11 +741,19 @@ export class WorkerManager {
     //
     // 选择哪种原语由 `isolateKind` 决定，可经 `OPENLEARN_WORKER_ISOLATE=process` 全局切换。
     const resolvedPluginDir = pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')) ? pluginDir : undefined;
+    let approvedNetHosts: string[] = [];
+    try {
+      approvedNetHosts = listApprovedNetHosts(this.db as never, [pluginId, manifest.id]);
+    } catch {
+      approvedNetHosts = [];
+    }
     const workerData = {
       pluginId,
       manifestId: manifest.id,
       serviceTokens: allowedTokens,
       pluginDir: resolvedPluginDir,
+      tablePrefix: pluginTablePrefix(pluginId),
+      approvedNetHosts,
     };
 
     let worker: Worker | undefined;
@@ -774,6 +787,13 @@ export class WorkerManager {
         };
         childProcess.stdout?.on('data', (chunk: Buffer) => childLogger!.info(chunk.toString().trim()));
         childProcess.stderr?.on('data', (chunk: Buffer) => childLogger!.error(chunk.toString().trim()));
+        if (childProcess.pid) {
+          const quota = startProcessQuota(childProcess.pid, (reason) => {
+            console.error(`[PluginQuota] ${manifest.id || pluginId}: ${reason}`);
+            childProcess?.kill('SIGKILL');
+          });
+          this.processQuotas.set(pluginId, quota);
+        }
       } else {
         worker = new Worker(new URL(bootstrapDataUrl), {
           // Pass both the DB id (`pluginId` — used as the actor/registry key)
@@ -836,6 +856,8 @@ export class WorkerManager {
       // 子进程若已起来但后续失败，必须把它杀掉 —— 否则留下一个孤儿进程，
       // 它会一直占着一个 CPU 槽位直到进程结束（正是 L-1 要防的形态）。
       try {
+        this.processQuotas.get(pluginId)?.stop();
+        this.processQuotas.delete(pluginId);
         childProcess?.kill('SIGKILL');
       } catch {
         /* 已经退出 */
@@ -1070,6 +1092,8 @@ export class WorkerManager {
    * @param pluginId - 插件标识符
    */
   async terminateWorker(pluginId: string): Promise<any> {
+    this.processQuotas.get(pluginId)?.stop();
+    this.processQuotas.delete(pluginId);
     // 停止探活（L-1 P0）：必须与取消看门狗定时器同批做，
     // 否则会给已终止的插件继续发 ping，而它已不在 registry.list() 里，下轮自然被跳过 ——
     // 但 pendingPing / lastSeen 会一直留在 Map 里（内存泄漏），且重启后的新实例

@@ -96,9 +96,10 @@ export default {
     const db = await ctx.resolve('@openlearn/core:IDatabase');
 
     await eventBus.subscribe('test.trigger', async (event) => {
-      // 1. Perform database insert via RPC
-      db.prepare("INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run('node-rpc-test-id', null, 'file', 'rpc-test.txt', 'Hello from Worker RPC', Date.now(), Date.now());
+      // 1. 只能写入插件自己的表命名空间
+      await ctx.db.ensureTable('rpc_notes', 'id TEXT PRIMARY KEY, name TEXT, content TEXT');
+      await db.prepare('INSERT INTO ' + ctx.db.table('rpc_notes') + ' (id, name, content) VALUES (?, ?, ?)')
+        .run('node-rpc-test-id', 'rpc-test.txt', 'Hello from Worker RPC');
 
       // 2. Perform command execution via RPC
       await commandBus.execute({
@@ -149,7 +150,8 @@ export default {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Verify database write succeeded (RPC database access checked!)
-    const node = kernel.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get('node-rpc-test-id') as any;
+    const noteTable = `plugin_${String(testPlugin!.id).replace(/[^a-zA-Z0-9_]/g, '_')}_rpc_notes`;
+    const node = kernel.db.prepare(`SELECT * FROM ${noteTable} WHERE id = ?`).get('node-rpc-test-id') as any;
     expect(node).toBeDefined();
     expect(node.name).toBe('rpc-test.txt');
 

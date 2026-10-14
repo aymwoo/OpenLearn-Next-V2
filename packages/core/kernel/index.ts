@@ -326,8 +326,12 @@ export class Kernel {
           }
         }
 
-        if (action.isHighRisk && command.metadata?.approved !== true) {
-          if (isAdmin) {
+        // 插件 actor 不能靠自己带上 metadata.approved 跳过人工审批。
+        // 宿主审批路由和 AI 管理员路径使用的是 user: / agent-system-0 等非 plugin: actor。
+        const pluginSuppliedApproval =
+          typeof command.actorId === 'string' && command.actorId.startsWith('plugin:');
+        if (action.isHighRisk && (command.metadata?.approved !== true || pluginSuppliedApproval)) {
+          if (isAdmin && !pluginSuppliedApproval) {
             console.log(
               `[Security] Command ${command.type} initiated by Administrator (${command.actorId}). Bypassing human approval.`,
             );

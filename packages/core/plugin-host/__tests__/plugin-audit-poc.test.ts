@@ -1,8 +1,8 @@
 /**
- * 插件系统专项审计 PoC（2026-10-14）。
+ * 插件系统专项审计回归（2026-10-14）。
  *
- * 这些用例锁定**当前有漏洞的行为**，用来证明报告里的发现，不是期望的安全契约。
- * 修复后应改成断言安全结果，而不是删掉用例。
+ * PL-01 到 PL-08 断言漏洞已被阻断。PL-09、PL-10、PL-12、PL-15 仍是未修复项，
+ * 对应用例继续锁定当前行为，避免修别的洞时把它们悄悄改掉。
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import { manifestSchema } from '../../esm-loader/manifest-schema.js';
-import { resolvePluginExecutionMode } from '../execution-policy.js';
+import { builtinPluginsDir, resolvePluginExecutionMode } from '../execution-policy.js';
 import { buildMinimalEnv } from '../../worker-runtime/child-spawn.js';
 import { computeAllowedWorkerTokens } from '../../worker-runtime/worker-manager.js';
 import { ServiceHost } from '../../worker-runtime/service-host.js';
@@ -87,16 +87,21 @@ async function invokeSql(sql: string, pluginId: string) {
   return transport.messages[0];
 }
 
-describe('PoC: @openlearn/ 前缀即进程内信任，清单不校验签名', () => {
-  it('生产环境策略把任意 @openlearn/ id 当成内置插件', () => {
+describe('PL-01: 内联身份不看 id 前缀', () => {
+  it('生产环境拒绝伪造的 @openlearn id，白名单和内置目录仍然放行', () => {
     const env = productionEnv();
     expect(resolvePluginExecutionMode('@openlearn/not-a-builtin', 'inline', env)).toEqual(
-      expect.objectContaining({ mode: 'inline', coerced: false }),
+      expect.objectContaining({ mode: 'process', coerced: true }),
     );
-    expect(resolvePluginExecutionMode('@openlearn/not-a-builtin', undefined, env).mode).toBe('inline');
     expect(resolvePluginExecutionMode('ext-community', 'inline', env)).toEqual(
       expect.objectContaining({ mode: 'process', coerced: true }),
     );
+    expect(
+      resolvePluginExecutionMode('ext-local', 'inline', { ...env, OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-local' }),
+    ).toEqual(expect.objectContaining({ mode: 'inline', coerced: false }));
+    expect(
+      resolvePluginExecutionMode('@openlearn/not-a-builtin', 'inline', env, `${builtinPluginsDir()}/vfs/index.js`),
+    ).toEqual(expect.objectContaining({ mode: 'inline', coerced: false }));
   });
 
   it('manifest schema 接受伪造的 @openlearn id，只拒绝冒号', () => {
@@ -141,7 +146,7 @@ describe('PoC: @openlearn/ 前缀即进程内信任，清单不校验签名', ()
       id: string;
     };
     expect(installed.id).toBe('@openlearn/not-a-builtin');
-    expect(installed.executionMode).toBe('inline');
+    expect(installed.executionMode).toBe('process');
 
     const plain = new JSZip();
     plain.file(
@@ -176,7 +181,7 @@ describe('PoC: 子进程权限模型', () => {
     expect(JSON.stringify(env)).not.toContain('sk-audit-poc');
   });
 
-  it('Node 权限模型放行出站连接，并跟随 pluginDir 内已有符号链接读写外部文件', () => {
+  it('PL-10 仍在：权限模型跟随 pluginDir 内已有符号链接；PL-08 入口脚本拒绝原始出站 socket', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-perm-'));
     const pluginDir = path.join(root, 'plugin');
     fs.mkdirSync(pluginDir);
@@ -248,22 +253,31 @@ describe('PoC: 子进程权限模型', () => {
         c.on('error', (e) => { console.log('NET_ERR ' + e.code); srv.close(); });
       });
     `;
+    const preload = path.join(REPO_ROOT, 'packages/core/worker-runtime/plugin-net-preload.cjs');
     const netResult = spawnSync(
       process.execPath,
-      ['--permission', `--allow-fs-read=${pluginDir}/*`, '--input-type=module', '--eval', serverCode],
-      { encoding: 'utf8', env },
+      [
+        '--permission',
+        `--allow-fs-read=${pluginDir}/*`,
+        `--allow-fs-read=${preload}`,
+        `--require=${preload}`,
+        '--input-type=module',
+        '--eval',
+        serverCode,
+      ],
+      { encoding: 'utf8', env: { ...env, OPENLEARN_PLUGIN_NET_ALLOW: '' } },
     );
-    expect(`${netResult.stdout}\n${netResult.stderr}`).toContain('NET_OK');
-    expect(netResult.stdout).not.toContain('ERR_ACCESS_DENIED');
+    expect(`${netResult.stdout}\n${netResult.stderr}`).not.toContain('NET_OK');
+    expect(`${netResult.stdout}\n${netResult.stderr}`).toMatch(/ERR_ACCESS_DENIED|NET_ERR/);
 
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
 
 describe('PoC: worker 插件的数据库与能力面', () => {
-  it('语句黑名单挡得住 users，挡不住 submission_raw / vfs / 投票 / sqlite_master', async () => {
-    expect((await invokeSql('SELECT password_hash FROM users', 'ext-community'))?.type).toBe('error');
+  it('SQL 白名单拒绝插件命名空间之外的表', async () => {
     for (const sql of [
+      'SELECT password_hash FROM users',
       'SELECT * FROM submission_raw',
       'SELECT * FROM submission_result',
       'SELECT * FROM vfs_nodes',
@@ -273,15 +287,22 @@ describe('PoC: worker 插件的数据库与能力面', () => {
       'SELECT * FROM class_groups',
     ]) {
       const msg = await invokeSql(sql, 'ext-community');
-      expect(msg?.type, sql).toBe('result');
+      expect(msg?.type, sql).toBe('error');
     }
+    const own = await invokeSql(
+      'SELECT * FROM plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_scores',
+      'ext-community',
+    );
+    expect(own?.type).toBe('result');
   });
 
-  it('manifest id 含 research 即可读写 plugin_research_ 表', async () => {
-    const allowed = await invokeSql('SELECT * FROM plugin_research_grades', 'ext-research-helper');
-    expect(allowed?.type).toBe('result');
+  it('research 子串不再放行，只有显式 id 可以访问研究表', async () => {
+    const spoofed = await invokeSql('SELECT * FROM plugin_research_grades', 'ext-research-helper');
+    expect(spoofed?.type).toBe('error');
     const denied = await invokeSql('SELECT * FROM plugin_research_grades', 'ext-homework-hub');
     expect(denied?.type).toBe('error');
+    const allowed = await invokeSql('SELECT * FROM plugin_research_grades', 'lianyun-course');
+    expect(allowed?.type).toBe('result');
   });
 
   it('只要声明任意 capability，就能通过 ICapabilityService.grant 给自己授予 *', async () => {
@@ -308,8 +329,8 @@ describe('PoC: worker 插件的数据库与能力面', () => {
       } as unknown as InvokeMessage,
       transport,
     );
-    expect(transport.messages[0]?.type).toBe('result');
-    expect(guard.check('plugin:ext-community', 'site:destroy')).toBe(true);
+    expect(transport.messages[0]?.type).toBe('error');
+    expect(guard.check('plugin:ext-community', 'site:destroy')).toBe(false);
 
     const empty = new ServiceHost(
       registry as never,
@@ -353,12 +374,15 @@ describe('PoC: worker 插件的数据库与能力面', () => {
     expect(tokens.some((token) => token.includes('IAuthSessionBridge'))).toBe(false);
   });
 
-  it('命令 execute 原样转发插件提供的 actorId 与 metadata.approved', async () => {
+  it('命令 execute 丢掉插件传入的 actorId 与 metadata.approved', async () => {
     const bus = new CommandBus(new EventBus());
     let seen: { actorId?: string; metadata?: { approved?: boolean } } | undefined;
     bus.registerHandler('audit.poc.forward', {
       execute: async (command) => {
-        seen = command;
+        seen = {
+          actorId: command.actorId,
+          metadata: command.metadata as { approved?: boolean } | undefined,
+        };
         return 'ran';
       },
     });
@@ -393,8 +417,8 @@ describe('PoC: worker 插件的数据库与能力面', () => {
       transport,
     );
     expect(transport.messages[0]?.type).toBe('result');
-    expect(seen?.actorId).toBe('admin');
-    expect(seen?.metadata?.approved).toBe(true);
+    expect(seen?.actorId).toBe('plugin:ext-community');
+    expect(seen?.metadata?.approved).toBeUndefined();
   });
 });
 
@@ -424,7 +448,7 @@ describe('PoC: 内核命令拦截器信任调用方自报的 actor', () => {
 
     kernel.capabilityGuard.grant('plugin:ext-community', 'site:destroy');
     const selfApproved = kernel.commandBus.createCommand(type, {}, 'plugin:ext-community', { approved: true });
-    await expect(kernel.commandBus.execute(selfApproved)).resolves.toBe('pwned');
+    await expect(kernel.commandBus.execute(selfApproved)).rejects.toThrow(/requires human approval/);
 
     const benign = `audit.poc.benign.${Date.now()}`;
     kernel.actionRegistry.register({
@@ -436,7 +460,7 @@ describe('PoC: 内核命令拦截器信任调用方自报的 actor', () => {
     });
     kernel.commandBus.registerHandler(benign, { execute: async (command) => command.actorId });
     const omitted = kernel.commandBus.createCommand(benign, {}, '');
-    await expect(kernel.commandBus.execute(omitted)).resolves.toBe('agent-system-0');
+    await expect(kernel.commandBus.execute(omitted)).rejects.toThrow(/actorId is required/);
 
     removeTmpDir(pluginsDir);
   });
@@ -451,13 +475,14 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
       downloadUrl: 'https://plugins.example.com/spoof.zip',
       verified: 'true',
     });
-    expect(entry?.verified).toBe(true);
+    expect(entry?.verified).toBe(false);
     expect(entry?.id).toBe('@openlearn/not-a-builtin');
     const panel = fs.readFileSync(
       path.join(REPO_ROOT, 'src/components/plugin-center/sub-views/PluginCommunityPanel.tsx'),
       'utf8',
     );
-    expect(panel).toContain('官方校验来源');
+    expect(panel).not.toContain('官方校验来源');
+    expect(panel).toContain('平台公钥验签通过');
   });
 
   it('公开路由批准不绑定代码哈希，更新函数不清批准表', () => {
@@ -485,8 +510,12 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
       'utf8',
     );
     const installSrc = fs.readFileSync(path.join(REPO_ROOT, 'packages/core/plugin-host/install.ts'), 'utf8');
-    expect(boot).toContain('workerData.manifestId || workerData.pluginId');
-    expect(installSrc).toContain("const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;");
+    expect(boot).toContain('workerData.tablePrefix ||');
+    expect(boot).not.toContain(
+      "var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId)",
+    );
+    expect(installSrc).toContain('pluginTablePrefix(pluginId)');
+    expect(installSrc).toContain('pluginTablePrefix(manifestId)');
   });
 
   it('一键更新不要求风险确认；会话桥放行用子串匹配', () => {
@@ -494,8 +523,8 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     const start = routes.indexOf("app.post('/api/plugins/:id(*)/one-click-update'");
     const end = routes.indexOf('app.get', start + 10);
     const body = routes.slice(start, end);
-    expect(body).not.toContain('acknowledgeRisk');
-    expect(body).not.toContain('integrity');
+    expect(body).toContain('acknowledgeRisk');
+    expect(body).toContain('integrity');
 
     const gateway = fs.readFileSync(path.join(REPO_ROOT, 'server/routes/plugin-api-gateway.ts'), 'utf8');
     expect(gateway).toContain("r.includes('IAuthSessionBridgeService')");
@@ -503,19 +532,24 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     expect(fakeRequires.some((item) => item.includes('IAuthSessionBridgeService'))).toBe(true);
   });
 
-  it('前端插件以 Blob URL 在页面内 import，开发面板用 new Function', () => {
+  it('远程前端进沙箱 iframe，/plugins 需要会话；开发面板的 new Function 仍是 PL-15', () => {
     const host = fs.readFileSync(path.join(REPO_ROOT, 'src/plugin-host/plugin-host.ts'), 'utf8');
-    expect(host).toContain('URL.createObjectURL');
-    expect(host).toContain('import(/* @vite-ignore */ blobUrl)');
+    const remoteStart = host.indexOf('async activateRemotePlugin');
+    const remoteEnd = host.indexOf('async activatePlugin', remoteStart);
+    const remote = host.slice(remoteStart, remoteEnd);
+    expect(remote).toContain('mountSandboxFrame');
+    expect(remote).not.toContain('import(/* @vite-ignore */ blobUrl)');
+    expect(host).toContain("sandbox', PLUGIN_SANDBOX_ATTR");
     const slice = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/useClassroomSlice.ts'), 'utf8');
-    expect(slice).toContain("executionMode: 'inline'");
+    expect(slice).not.toContain("executionMode: 'inline'");
     const dev = fs.readFileSync(
       path.join(REPO_ROOT, 'src/components/plugin-center/utils/pluginCenterUtils.ts'),
       'utf8',
     );
     expect(dev).toContain('new Function');
     const server = fs.readFileSync(path.join(REPO_ROOT, 'server.ts'), 'utf8');
-    expect(server).toContain("app.use('/plugins', express.static");
-    expect(server).toContain("'blob:'");
+    expect(server).toContain("app.use(\n    '/plugins'");
+    expect(server).toContain('getValidSession(token)');
+    expect(server).toContain('/plugin-sandbox/frame');
   });
 });

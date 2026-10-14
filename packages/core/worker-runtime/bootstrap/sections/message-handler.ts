@@ -282,9 +282,8 @@ parentPort.on('message', async function(msg) {
       }
 
       // 构建插件自建表 API (dbApi)
-      // 表前缀必须用 manifestId（与命令命名空间 L525 及 ServiceHost 的 DDL 守卫一致），
-      // 否则 Worker 插件在自己命名空间建表会被误判为越权 DDL。
-      var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId).replace(/[^a-zA-Z0-9_]/g, '_') + '_';
+      // 表前缀是安装主键（workerData.tablePrefix）。命令命名空间仍用 manifest id，两者分开。
+      var tablePrefix = workerData.tablePrefix || ('plugin_' + String(workerData.pluginId || '').replace(/[^a-zA-Z0-9_]/g, '_') + '_');
       var dbService = rawServices['@openlearn/core:IDatabase'];
       var dbApi = dbService ? {
         ensureTable: function(tableName, schema) {
@@ -307,7 +306,7 @@ parentPort.on('message', async function(msg) {
           return tablePrefix + tableName;
         },
         dropAllTables: async function() {
-          var tables = await dbService.prepareAndAll("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?", [tablePrefix + '%']);
+          var tables = await dbService.prepareAndAll("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '" + tablePrefix + "%'", []);
           for (var i = 0; i < tables.length; i++) {
             // SEC: 表名来自 sqlite_master，仍二次校验后再拼进 DDL
             if (!/^plugin_[A-Za-z0-9_]+$/.test(String(tables[i].name))) continue;

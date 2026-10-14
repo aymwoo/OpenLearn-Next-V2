@@ -26,6 +26,8 @@ import {
   isValidPluginId,
   type DownloadedPackage,
 } from '../services/community-registry.js';
+import { communityInstallEnabled, verifyCommunityPackage } from '../services/community-attest.js';
+import { approvePluginCapabilities } from '../../packages/core/plugin-host/plugin-grants.js';
 import {
   approveDeclaredPublicRoutes,
   clearPublicRouteApprovals,
@@ -46,13 +48,22 @@ function installationSecurityFields(
   manifest: { id?: string; executionMode?: unknown; executionModeCoerced?: unknown },
   pluginId: string,
   approvePublic: boolean,
+  approveCapabilities = false,
 ) {
   const keys = [pluginId, manifest.id].filter((key): key is string => typeof key === 'string' && key.length > 0);
   const publicRoutesApproved = approvePublic ? approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest) : [];
+  const proposed = Array.isArray((manifest as { capabilitiesProposed?: unknown }).capabilitiesProposed)
+    ? ((manifest as { capabilitiesProposed?: unknown[] }).capabilitiesProposed ?? []).filter(
+        (cap): cap is string => typeof cap === 'string',
+      )
+    : [];
+  const capabilitiesApproved =
+    approveCapabilities === true ? approvePluginCapabilities(kernelContainer.db as never, keys, proposed) : [];
   return {
     executionMode: typeof manifest.executionMode === 'string' ? manifest.executionMode : undefined,
     executionModeCoerced: manifest.executionModeCoerced === true,
     publicRoutesApproved,
+    capabilitiesApproved,
   };
 }
 /**
@@ -372,7 +383,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         status: found.status,
         state: found.state,
         manifest: found.manifest,
-        isSystem: manifestId.startsWith('@openlearn/') || found.pluginId.startsWith('@openlearn/'),
+        isSystem: kernelContainer.pluginHost.isOfficialPlugin(found.pluginId, manifestId),
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -452,6 +463,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         executionMode: rawExecutionMode,
         acknowledgeRisk,
         approvePublicRoutes,
+        approveCapabilities,
+        integrity,
+        signature,
       } = req.body || {};
 
       if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
@@ -474,6 +488,20 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: COMMUNITY_RISK_ACK_MESSAGE,
         });
       }
+      if (!communityInstallEnabled()) {
+        return res.status(403).json({
+          success: false,
+          code: 'COMMUNITY_INSTALL_DISABLED',
+          error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。',
+        });
+      }
+      if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
+        return res.status(400).json({
+          success: false,
+          code: 'COMMUNITY_ATTESTATION_REQUIRED',
+          error: '社区包必须同时提供 integrity 与 signature',
+        });
+      }
 
       // 收窄到三种合法模式。用具名谓词而非内联比较 —— 加第四种模式时
       // 漏改这一处的后果是「该模式静默降级为默认」，且不产生任何报错。
@@ -490,6 +518,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: e?.message || '服务端下载插件包失败',
           fallbackToClient: true,
         });
+      }
+
+      const attested = verifyCommunityPackage(fs.readFileSync(pkg.zipPath), integrity, signature);
+      if (!attested.ok) {
+        removeTempZip(pkg.zipPath);
+        return res.status(400).json({ success: false, code: attested.code, error: attested.error });
       }
 
       const existing = expectedId ? kernelContainer.pluginHost.findByManifestId(expectedId) : null;
@@ -519,6 +553,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
               },
               result.pluginId,
               approvePublicRoutes === true,
+              approveCapabilities === true,
             ),
           });
         }
@@ -537,7 +572,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           manifest: result.manifest,
           filename: pkg.filename,
           bytes: pkg.bytes,
-          ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes === true),
+          ...installationSecurityFields(
+            result.manifest,
+            result.pluginId,
+            approvePublicRoutes === true,
+            approveCapabilities === true,
+          ),
         });
       } finally {
         // R-4：下载的临时 ZIP 在安装/更新完成后归还（内容已 copyFileSync 进插件目录）
@@ -601,7 +641,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     let zipPath: string | undefined;
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
-      const { downloadUrl } = req.body || {};
+      const { downloadUrl, acknowledgeRisk, integrity, signature } = req.body || {};
+      if (acknowledgeRisk !== true) {
+        return res.status(400).json({
+          success: false,
+          code: 'COMMUNITY_RISK_ACK_REQUIRED',
+          error: COMMUNITY_RISK_ACK_MESSAGE,
+        });
+      }
 
       if (downloadUrl) {
         const urlCheck = isSafeExternalUrl(downloadUrl);
@@ -609,6 +656,20 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           return res.status(400).json({
             success: false,
             error: `安全拦截: 非法下载地址 (${urlCheck.reason})`,
+          });
+        }
+        if (!communityInstallEnabled()) {
+          return res.status(403).json({
+            success: false,
+            code: 'COMMUNITY_INSTALL_DISABLED',
+            error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表更新。',
+          });
+        }
+        if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
+          return res.status(400).json({
+            success: false,
+            code: 'COMMUNITY_ATTESTATION_REQUIRED',
+            error: '社区包必须同时提供 integrity 与 signature',
           });
         }
         // Server-side download with timeout fallback signal
@@ -652,6 +713,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: '缺少 downloadUrl：请先执行检查更新获取下载地址，或通过 ZIP 上传更新',
           fallbackToClient: true,
         });
+      }
+
+      if (downloadUrl && zipPath) {
+        const attested = verifyCommunityPackage(fs.readFileSync(zipPath), integrity, signature);
+        if (!attested.ok) {
+          return res.status(400).json({ success: false, code: attested.code, error: attested.error });
+        }
       }
 
       const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
@@ -846,6 +914,33 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         : undefined;
 
       const approvePublicRoutes = headerFlag(req, 'x-approve-public-routes');
+      const approveCapabilities = headerFlag(req, 'x-approve-capabilities');
+      const communityInstall = headerFlag(req, 'x-community-install');
+
+      if (modeHeader === 'update' && !headerFlag(req, 'x-acknowledge-risk')) {
+        return res.status(400).json({
+          success: false,
+          code: 'COMMUNITY_RISK_ACK_REQUIRED',
+          error: COMMUNITY_RISK_ACK_MESSAGE,
+        });
+      }
+      if (communityInstall) {
+        if (!communityInstallEnabled()) {
+          return res.status(403).json({
+            success: false,
+            code: 'COMMUNITY_INSTALL_DISABLED',
+            error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。',
+          });
+        }
+        const attested = verifyCommunityPackage(
+          fs.readFileSync(zipPath),
+          req.headers['x-integrity'],
+          req.headers['x-signature'],
+        );
+        if (!attested.ok) {
+          return res.status(400).json({ success: false, code: attested.code, error: attested.error });
+        }
+      }
 
       if (modeHeader === 'update') {
         const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
@@ -870,6 +965,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             },
             result.pluginId,
             approvePublicRoutes,
+            approveCapabilities,
           ),
         });
       }
@@ -888,7 +984,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         pluginId: result.pluginId,
         manifest: result.manifest,
         filename,
-        ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes),
+        ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes, approveCapabilities),
       });
     } catch (err: any) {
       // 413 已在流式中间件里直接响应过
@@ -910,6 +1006,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     let zipPath: string | undefined;
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
+      if (!headerFlag(req, 'x-acknowledge-risk')) {
+        return res.status(400).json({
+          success: false,
+          code: 'COMMUNITY_RISK_ACK_REQUIRED',
+          error: COMMUNITY_RISK_ACK_MESSAGE,
+        });
+      }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
       const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
       const executionMode = isValidExecutionMode(executionModeHeader)
@@ -937,6 +1040,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           },
           result.pluginId,
           headerFlag(req, 'x-approve-public-routes'),
+          headerFlag(req, 'x-approve-capabilities'),
         ),
       });
     } catch (err: any) {

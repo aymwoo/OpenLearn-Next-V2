@@ -101,23 +101,17 @@ describe('CommandBus', () => {
     expect(legacyHandler.execute).toHaveBeenCalledTimes(1); // Not called again
   });
 
-  it('defaults actorId to agent-system-0 when omitted', async () => {
+  it('rejects an empty actorId', async () => {
     const bus = new CommandBus(createMockEventBus());
-    let capturedActorId = '';
+    bus.registerHandler('system.ping', { execute: async () => 'ok' });
 
-    bus.registerHandler('system.ping', {
-      execute: async (cmd) => {
-        capturedActorId = cmd.actorId;
-      },
-    });
-
-    await bus.execute({
-      id: 'cmd-1',
-      type: 'system.ping',
-      actorId: '',
-      payload: {},
-    });
-
-    expect(capturedActorId).toBe('agent-system-0');
+    await expect(
+      bus.execute({
+        id: 'cmd-1',
+        type: 'system.ping',
+        actorId: '',
+        payload: {},
+      }),
+    ).rejects.toThrow(/actorId is required/);
   });
 });

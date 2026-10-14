@@ -73,20 +73,25 @@ graph TD
 - **适用场景**：内核级系统插件（如 `@openlearn/plugin-vfs`、`management`、`ai-planner`）。
 - **特点**：高吞吐量、低延迟通信，可通过内存闭包直接调用内核 API。
 
-### B. Worker 线程隔离沙箱模式 (Worker Sandbox Mode)
+### B. Worker 线程模式 (Worker Thread Mode)
 
-- **运行位置**：独立的 `worker_threads.Worker` 线程。
-- **适用场景**：第三方未信任插件、高 CPU 密集或不稳定插件。
+- **运行位置**：独立的 `worker_threads.Worker` 线程，仍与宿主共享操作系统进程。
+- **适用场景**：已列入 `OPENLEARN_TRUSTED_INLINE_PLUGINS`，或入口位于 `packages/plugins` 的插件，在清单里显式选择 `worker`。
 - **特点**：
-  - **内存隔离**：无法访问主进程全局变量或未授权文件句柄。
+  - **线程隔离**：不能直接读主进程的全局变量。
   - **RPC 消息转发**：通过 `IWorkerTransport` 与 `MessageChannel` 传输 JSON/Structured-Clone 消息。
-  - **崩溃容错**：Worker 崩溃不影响主进程或其他插件。
+  - **崩溃容错**：该线程崩溃不带走其他插件；它不是操作系统级沙箱。
+
+### C. 子进程模式 (Process Mode)
+
+- **运行位置**：独立子进程。未列入白名单、且文件不在内置目录的插件，即使清单写 `inline` 或 `worker`，也会落到这里。manifest id 的 `@openlearn/` 前缀不能单独获得进程内身份。
+- **特点**：最小环境变量、Node 权限模型，以及默认拒绝的出站网络（已批准域名经宿主代理）。内存与 CPU 另有上限。详见 `docs/plugin/plugin-security-migration.md`。
 
 ---
 
 ## 3. 沙箱 IPC 与 Bridge SDK 代理机制
 
-交互式课件和插件前端部分运行在严格限制的 `<iframe>` 沙箱中（安全属性 `sandbox="allow-scripts allow-forms allow-downloads"`），无法共享同源 `window` 对象。平台使用 **Bridge SDK Proxy** 穿透沙箱：
+交互式课件运行在 `<iframe sandbox="allow-scripts allow-forms allow-downloads">` 中，不带 `allow-same-origin`。远程插件前端使用另一条通道：`sandbox="allow-scripts"` 的不透明源 iframe，经 `postMessage` 调用宿主。两者都不共享父页面的 `window`。课件侧使用 **Bridge SDK Proxy** 穿透沙箱：
 
 ```mermaid
 sequenceDiagram

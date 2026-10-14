@@ -21,13 +21,21 @@
 
 import type { ChildProcess } from 'node:child_process';
 import type { IWorkerTransport } from './types.js';
+import { handleNetProxy, isNetProxyRequest } from './plugin-net-proxy.js';
 
 export class ChildProcessTransport implements IWorkerTransport {
   private handler: ((msg: any) => void) | null = null;
   private disposed = false;
 
-  constructor(private readonly child: ChildProcess) {
+  constructor(
+    private readonly child: ChildProcess,
+    private readonly approvedHosts: ReadonlySet<string> = new Set(),
+  ) {
     this.child.on('message', (msg) => {
+      if (isNetProxyRequest(msg)) {
+        void handleNetProxy(this.child, msg, this.approvedHosts);
+        return;
+      }
       // 单监听者模式：未注册 handler 时直接丢弃（与 postMessage 通道的
       // 「消息在 handler 注册前到达会丢失」语义一致，不排队）。
       this.handler?.(msg);

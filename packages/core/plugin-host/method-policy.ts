@@ -93,9 +93,9 @@ function extractPathArg(args: unknown): string {
   return normalizePath(args[0]);
 }
 
-/** 判断 manifest 声明里是否出现了某个 capability（含 `name:*` 与通配 `*`）。 */
+/** 判断 manifest 声明里是否出现了某个 capability。`*` 不是超级能力。 */
 export function hasCapability(caps: readonly string[], name: string): boolean {
-  return caps.some((c) => typeof c === 'string' && (c === name || c === '*' || c.startsWith(`${name}:`)));
+  return caps.some((c) => typeof c === 'string' && (c === name || c.startsWith(`${name}:`)));
 }
 
 /** 只读方法判定：`get` 或 `get*` 前缀。Barrier 2 与 Barrier 3 共用同一口径。 */
