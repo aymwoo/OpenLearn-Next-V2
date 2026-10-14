@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 
+### Docs
+
+- **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
+
 ### Breaking Changes
 
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。

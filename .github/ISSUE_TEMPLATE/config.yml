@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 公测反馈怎么报
+    url: https://github.com/aymwoo/OpenLearn-Next-V2/blob/main/docs/beta/feedback.md
+    about: 教师先联系学校值班人。该链接在本文档合并进 main 之后才能打开。
