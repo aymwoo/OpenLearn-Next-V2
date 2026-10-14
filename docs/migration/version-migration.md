@@ -3,16 +3,16 @@
 > **当前版本**：`package.json` 为 **`0.6.1`**（`main` 在 v0.6.1 tag 之后还有安全修复），`@openlearn/plugin-sdk` 为 **`3.7.0`**。
 >
 > 本文覆盖两类迁移：
-> 1. **平台数据库 schema 迁移**（`migrations/000`–`022`）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
+> 1. **平台数据库 schema 迁移**（`migrations/000`–`023`）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
 > 2. **插件侧迁移**（`ctx.db.migrate`）—— 插件作者在自己插件的 `activate` 中调用
 >
-> 从 **v0.6.1 tag（PR #4 合并之前）** 升到当前 `main` 时，自动迁移之外还有三件必须人工做的事，见下一节。清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。
+> 从 **v0.6.1 tag（PR #4 合并之前）** 升到当前 `main` 时，平台 `package.json` 的版本号仍是 **`0.6.1`**。自动迁移之外还有三件必须人工做的事（0.1–0.3）。班级口令在 0.4 由启动过程加密，钥匙要和库一起带走。清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。
 
 ---
 
-## 0. 从 v0.6.1 升级（迁移 021 / 022）
+## 0. 从 v0.6.1 升级（迁移 021 / 022 / 023）
 
-先备份再启动。启动日志里应出现 `[Migration] Applied` 或启动复查完成，并且 `_migrations` 含 `021_class_owner_and_password_gate` 与 `022_plugin_public_routes`。迁移失败时进程以非 0 退出，日志以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 开头。
+先备份再启动。启动日志里应出现 `[Migration] Applied` 或启动复查完成，并且 `_migrations` 含 `021_class_owner_and_password_gate`、`022_plugin_public_routes` 与 `023_encrypt_class_passcodes`。迁移失败时进程以非 0 退出，日志以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 开头。
 
 ### 0.1 改密
 
@@ -66,6 +66,42 @@ curl -sS -b /tmp/ol.cj -H 'Content-Type: application/json' \
 ```
 
 省略该字段或传 `false` 会清掉这个插件已批准的公开路由。安装新插件时在请求体加 `approvePublicRoutes: true`，或带头 `x-approve-public-routes: true`。
+
+### 0.4 班级临时口令改为密文（迁移 023）
+
+这一步对应的仍是 **v0.6.1 tag 之后的当前 `main`**。`package.json` 里的平台版本还是 **`0.6.1`**，没有单独再发一版。
+
+`migrations/023_encrypt_class_passcodes.sql` 是标记，不改写 `classes.class_passcode`。SQL 读不到 `ENCRYPTION_KEY`，只创建单行表 `_class_passcode_encryption`，表示这一列按密文约定存储，并在 `_migrations` 记下 `023_encrypt_class_passcodes`。
+
+真正加密发生在数据库初始化：`packages/core/db/index.ts` 的 `initializeDatabase` 在跑完 SQL 之后调用 `applyStartupDataMigrations`，它再调用 `packages/core/db/class-passcode-crypto.ts` 里的 `encryptStoredClassPasscodes()`。
+
+- 非空、且还不是合法 `olenc1:` 密文的行，用与 AI Provider API Key 相同的 AES-256-GCM 密封，前缀为 `olenc1:`。
+- 已经是合法 `olenc1:` 密文的行跳过。重复启动不会再包一层。
+- 空口令保持为空。
+- 有行被加密时，日志是 `[Migration] 已加密 N 条班级临时口令（跳过已加密 M 条）`。没有明文行时不打这条日志。
+
+钥匙：设置了 `ENCRYPTION_KEY` 就用环境变量；否则用数据目录里的 `storage/encryption-key`（与 `storage/bootstrap-credentials.txt` 同目录）。换钥匙或丢掉这个文件，已加密的班级口令和 API Key 都解不开。`scripts/site-backup.mjs` 打出来的数据库快照里是密文，文件包排除 `storage/encryption-key`，钥匙要单独离线备份。
+
+谁看得到原文：
+
+- 教师或管理员调用 `GET /api/classes/:id/passcode-setting`，响应里的 `class_passcode` 是解密后的原文。
+- 教师或管理员调用 `GET /api/classes/:id/passcode`，响应里的 `classPasscode` 也是原文。口令为空或已过期时，这个接口会签发新口令再密封写回，不要拿它当只读抽查。
+- 班级列表会去掉 `class_passcode`，不返回明文，也不返回密文。
+- 访问日志和审计日志不保留口令字段；正文里的 `olenc1:` 密文片段会被抹掉。
+- 学生登录先解密，再做常量时间比较。登录响应里没有口令，也没有密文。
+
+`-- DOWN` 只删除标记表 `_class_passcode_encryption`，不能把密文还原成明文。回滚应用代码之前，恢复迁移前的数据库快照，并带上同一把钥匙。
+
+升级后确认：
+
+```bash
+sqlite3 packages/core/db/educational_os.db \
+  "SELECT name FROM _migrations WHERE name LIKE '023%';"
+sqlite3 packages/core/db/educational_os.db \
+  "SELECT id FROM classes WHERE class_passcode IS NOT NULL AND class_passcode != '' AND class_passcode NOT LIKE 'olenc1:%';"
+```
+
+第一句应返回 `023_encrypt_class_passcodes`。第二句应为空：非空口令都已经带 `olenc1:` 前缀。
 
 ---
 
@@ -279,7 +315,8 @@ grep ENCRYPTION_KEY .env
 # 4. 启动，观察迁移日志
 pnpm start 2>&1 | tee /tmp/openlearn-migrate.log
 grep '\[Migration\]' /tmp/openlearn-migrate.log
-# 期望：Applying/Applied 成对出现，覆盖 000..014 中尚未应用的那些
+# 期望：Applying/Applied 成对出现，覆盖尚未应用的迁移
+# 从 v0.6.1 tag 升到当前 main（版本号仍是 0.6.1）时，还要有 021、022、023，见第 0 节
 
 # 5. 校验
 curl -fsS http://127.0.0.1:9000/health
@@ -298,11 +335,12 @@ sqlite3 packages/core/db/educational_os.db "PRAGMA integrity_check;"
 
 | 路径                                | 内容                                                   |
 | ----------------------------------- | ------------------------------------------------------ |
-| `migrations/*.sql`                  | 15 条迁移（`000`–`014`）                             |
+| `migrations/*.sql`                  | 版本化 SQL。完整清单见 `migrations/README.md`；第 2 节表只列到 `014` |
 | `migrations/README.md`              | 迁移约定（⚠️ 009 的表名与脚本实际内容不符）           |
 | `server/utils/migrate.ts`           | `loadMigrationsFromDirectory` / `runMigrations` / `rollbackMigration` / `simpleChecksum` |
 | `server.ts`                         | 启动时触发迁移（`startServer` 内）                     |
-| `packages/core/db/index.ts`         | `runStartupMigrations` / `ensureColumn` / `hashPassword` / `verifyPassword` |
+| `packages/core/db/index.ts`         | `initializeDatabase`（SQL 之后调用 `applyStartupDataMigrations`）/ `hashPassword` / `verifyPassword` |
+| `packages/core/db/class-passcode-crypto.ts` | 启动时把仍是明文的 `classes.class_passcode` 密封为 `olenc1:` |
 | `packages/core/plugin-host/types.ts` | `PluginDatabaseAPI.migrate` 签名                    |
 | `packages/core/plugin-host/context-builder.ts` | `migrate` 实现、插件 DB 前缀注入         |
 | `packages/core/di/interfaces.ts`    | `IPointsDimensionRegistryToken` / `IPointsLedgerServiceToken` |
