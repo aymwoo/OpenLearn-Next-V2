@@ -14,6 +14,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
@@ -66,6 +67,30 @@ function installationSecurityFields(
  *
  * @returns 临时 ZIP 路径；调用方负责 `removeTempZip` 清理（try/finally）
  */
+/**
+ * createWriteStream 的 open 在下一拍才发生。若在 open 之前 rmSync，
+ * 随后的 open 会把同一路径重新创建出来，半成品文件就留在临时目录里。
+ * 先 destroy，等 close（open 完成或被取消之后）再删除。
+ */
+function discardWriteStream(out: fs.WriteStream, zipPath: string): Promise<void> {
+  return new Promise((resolve) => {
+    const remove = () => {
+      try {
+        fs.rmSync(zipPath, { force: true });
+      } catch {
+        /* best effort */
+      }
+      resolve();
+    };
+    if (out.closed) {
+      remove();
+      return;
+    }
+    out.once('close', remove);
+    out.destroy();
+  });
+}
+
 function streamBodyToTempZip(req: express.Request, res: express.Response, maxBytes: number): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const zipPath = path.join(os.tmpdir(), `plugin-upload-${randomUUID()}.zip`);
@@ -73,33 +98,29 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
     let received = 0;
     let settled = false;
 
-    const cleanup = () => {
-      try {
-        fs.rmSync(zipPath, { force: true });
-      } catch {
-        /* best effort */
-      }
+    const fail = (err: Error, after?: () => void) => {
+      if (settled) return;
+      settled = true;
+      after?.();
+      void discardWriteStream(out, zipPath).then(
+        () => reject(err),
+        () => reject(err),
+      );
     };
 
     out.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(err);
+      fail(err);
     });
 
     req.on('data', (chunk: Buffer) => {
       received += chunk.length;
       if (received > maxBytes) {
-        if (settled) return;
-        settled = true;
-        out.destroy();
-        cleanup();
-        res.status(413).json({
-          success: false,
-          error: `Payload too large. Maximum allowed size is ${Math.floor(maxBytes / 1024 / 1024)}MB`,
+        fail(new Error('payload-too-large'), () => {
+          res.status(413).json({
+            success: false,
+            error: `Payload too large. Maximum allowed size is ${Math.floor(maxBytes / 1024 / 1024)}MB`,
+          });
         });
-        reject(new Error('payload-too-large'));
         return;
       }
       if (!out.write(chunk)) {
@@ -114,8 +135,10 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
       settled = true;
       out.end(() => {
         if (received === 0) {
-          cleanup();
-          reject(new Error('empty-body'));
+          void discardWriteStream(out, zipPath).then(
+            () => reject(new Error('empty-body')),
+            () => reject(new Error('empty-body')),
+          );
           return;
         }
         resolve(zipPath);
@@ -123,11 +146,7 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
     });
 
     req.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      out.destroy();
-      cleanup();
-      reject(err);
+      fail(err);
     });
   });
 }
@@ -169,12 +188,7 @@ async function streamHttpBodyToFile(resp: Response, maxBytes: number): Promise<s
       out.end(() => resolve());
     });
   } catch (err) {
-    out.destroy();
-    try {
-      fs.rmSync(zipPath, { force: true });
-    } catch {
-      /* best effort */
-    }
+    await discardWriteStream(out, zipPath);
     throw err;
   }
 
@@ -510,6 +524,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         }
 
         const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode);
+        recordSecurityAudit('plugin.installed', {
+          actorId: getActorId(req),
+          pluginId: result.pluginId,
+          manifestId: result.manifest?.id,
+          via: 'url',
+        });
         res.json({
           success: true,
           updated: false,
@@ -742,28 +762,34 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 后果：匿名可枚举全部插件的 id / manifestId / version / executionMode /
   // capabilitiesProposed —— 即平台装了哪些插件、每个插件声明了什么能力，可被完整测绘。
   // executionMode 与 capabilitiesProposed 尤其敏感：它们直接描述攻击面的形状。
-  app.get('/api/plugins/:id(*)', requireAuth(), async (req, res, next) => {
+  app.get('/api/plugins/:id(*)', async (req, res, next) => {
     // 插件 RESTful 网关（注册于本文件末尾）依赖 `/api/plugins/:pluginId/*` 匹配
     // 「多段 manifest id + 子路径」的 GET 请求（如
     // `/api/plugins/@openlearn/plugin-x/health`）。但本路由的 `:id(*)` 通配会先于
-    // 网关捕获整条路径（id = "@openlearn/plugin-x/health"），令插件 REST GET 子路径
-    // 全部 404。此处检测到 id 含 `/`（即 id 后还有子路径）时放行给网关处理；
-    // 纯 id（可能带 URL 编码的 %2F，Express 已解码为单段语义）仍走详情查询。
+    // 网关捕获整条路径（id = "@openlearn/plugin-x/health"）。
+    //
+    // 放行必须发生在 requireAuth() 之前。否则管理员批准的公开 GET
+    // （plugin_public_routes）会先被这里打成 401，网关的匿名放行永远走不到。
+    // 纯 id（可能带 URL 编码的 %2F，Express 已解码为单段语义）仍要求登录后再查详情。
     const rawIdPath = req.params.id ?? '';
     if (rawIdPath.includes('/') && !rawIdPath.includes('%2F')) {
       return next();
     }
-    try {
-      const rawId = decodeURIComponent(rawIdPath);
-      const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (err: any) {
-      // 走 sendSafeError 统一脱敏（审计 R-5）：此前此处直接回 err.message，
-      // 内部异常文本（含路径/SQL 片段）会泄露给客户端；本文件其余路由
-      // 均已走 sendSafeError，只差这一处。
-      sendSafeError(res, err, 404);
-    }
+    requireAuth()(req, res, () => {
+      void (async () => {
+        try {
+          const rawId = decodeURIComponent(rawIdPath);
+          const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
+          const result = await kernelContainer.commandBus.execute(cmd);
+          res.json(result);
+        } catch (err: any) {
+          // 走 sendSafeError 统一脱敏（审计 R-5）：此前此处直接回 err.message，
+          // 内部异常文本（含路径/SQL 片段）会泄露给客户端；本文件其余路由
+          // 均已走 sendSafeError，只差这一处。
+          sendSafeError(res, err, 404);
+        }
+      })();
+    });
   });
 
   app.post('/api/plugins', requireAuth('administrator'), async (req, res) => {
@@ -849,6 +875,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       const result = await kernelContainer.pluginDistributionManager.installFromZip(zipPath, executionMode);
+      recordSecurityAudit('plugin.installed', {
+        actorId: getActorId(req),
+        pluginId: result.pluginId,
+        manifestId: result.manifest?.id,
+        via: 'zip-raw',
+      });
       // result.pluginId is DB UUID; result.manifest keeps package metadata
       res.json({
         success: true,
@@ -986,6 +1018,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.json({ success: true, publicRoutesApproved: [] });
       }
       const publicRoutesApproved = approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest);
+      recordSecurityAudit('plugin.public_route_approved', {
+        actorId: getActorId(req),
+        pluginId,
+        manifestId: manifest.id,
+        routes: publicRoutesApproved,
+      });
       res.json({ success: true, publicRoutesApproved });
     } catch (err: any) {
       pluginLog.error(err);

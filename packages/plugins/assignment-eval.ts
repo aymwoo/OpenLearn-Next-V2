@@ -60,6 +60,32 @@ function assertStudentOwnership(actorId: string | undefined, studentId: string, 
   }
 }
 
+/**
+ * 班级作业的终评只允许该班负责人或管理员。
+ * 没有 classes 表（插件单测）或 owner 为空的历史班保持原行为。
+ */
+function assertAssignmentClassOwner(
+  db: { prepare: (sql: string) => { get: (...args: unknown[]) => unknown } },
+  classId: string | null | undefined,
+  actorId: string | undefined,
+): void {
+  if (!classId) return;
+  const actor = parseActorId(actorId);
+  if (!actor) return;
+  if (actor.role === 'administrator' || actor.role === 'admin') return;
+  let row: { owner_user_id: string | null } | undefined;
+  try {
+    row = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(classId) as
+      { owner_user_id: string | null } | undefined;
+  } catch {
+    return;
+  }
+  if (!row?.owner_user_id || row.owner_user_id === actor.userId) return;
+  const err = new Error('Forbidden') as Error & { status: number };
+  err.status = 403;
+  throw err;
+}
+
 export const AssignmentEvalPlugin = {
   manifest: {
     id: '@openlearn/plugin-assignment-eval',
@@ -586,7 +612,7 @@ export const AssignmentEvalPlugin = {
 
         const assignments = rows.map((row) => {
           const submission = submissionsByAssignment.get(row.id) || null;
-          const grade = submission ? (gradesBySubmission.get(submission.id) || null) : null;
+          const grade = submission ? gradesBySubmission.get(submission.id) || null : null;
           return { ...row, submission, grade };
         });
         return { success: true, assignments };
@@ -704,12 +730,7 @@ export const AssignmentEvalPlugin = {
 
         // StageGuard 资源级物理门禁校验（仅对普通学生生效）
         if (assignment.lesson_id && !isPrivilegedActor(command.actorId)) {
-          const stageId = resolveAssignmentStageId(
-            db,
-            assignment.lesson_id,
-            assignment.id,
-            assignment.element_id,
-          );
+          const stageId = resolveAssignmentStageId(db, assignment.lesson_id, assignment.id, assignment.element_id);
           if (stageId) {
             let pipeline: any;
             try {
@@ -1059,6 +1080,7 @@ export const AssignmentEvalPlugin = {
         }
 
         const assignment = submission.assignment_id ? loadAssignment(submission.assignment_id) : undefined;
+        assertAssignmentClassOwner(db, assignment?.class_id, command.actorId);
         const teacherWeight =
           payload.teacherWeight === undefined
             ? Number(assignment?.teacher_weight ?? 0.6)

@@ -41,6 +41,26 @@ describe('R-4 · 流式落盘原语（背压 / 计量 / 清理）', () => {
     return p;
   };
 
+  /** 与 routes/plugins.ts 的 discardWriteStream 同构：等 close 后再删，避免 open 把路径重建出来。 */
+  function discardWriteStream(out: fs.WriteStream, zipPath: string): Promise<void> {
+    return new Promise((resolve) => {
+      const remove = () => {
+        try {
+          fs.rmSync(zipPath, { force: true });
+        } catch {
+          /* best effort */
+        }
+        resolve();
+      };
+      if (out.closed) {
+        remove();
+        return;
+      }
+      out.once('close', remove);
+      out.destroy();
+    });
+  }
+
   /** 复刻 routes/plugins.ts 的流式逻辑（保持同构），用于验证不变量 */
   async function streamToFile(source: Readable, maxBytes: number): Promise<string> {
     const zipPath = track(path.join(os.tmpdir(), `r4-stream-${randomUUID()}.zip`));
@@ -48,31 +68,24 @@ describe('R-4 · 流式落盘原语（背压 / 计量 / 清理）', () => {
     let received = 0;
     let settled = false;
 
-    const cleanup = () => {
-      try {
-        fs.rmSync(zipPath, { force: true });
-      } catch {
-        /* best effort */
-      }
-    };
-
     return new Promise<string>((resolve, reject) => {
-      out.on('error', (err) => {
+      const fail = (err: Error) => {
         if (settled) return;
         settled = true;
         source.unpipe(out);
-        cleanup();
-        reject(err);
+        void discardWriteStream(out, zipPath).then(
+          () => reject(err),
+          () => reject(err),
+        );
+      };
+
+      out.on('error', (err) => {
+        fail(err);
       });
       source.on('data', (chunk: Buffer) => {
         received += chunk.length;
         if (received > maxBytes) {
-          if (settled) return;
-          settled = true;
-          source.unpipe(out);
-          out.destroy();
-          cleanup();
-          reject(new Error('payload-too-large'));
+          fail(new Error('payload-too-large'));
           return;
         }
         if (!out.write(chunk)) {
@@ -83,14 +96,19 @@ describe('R-4 · 流式落盘原语（背压 / 计量 / 清理）', () => {
       source.on('end', () => {
         if (settled) return;
         settled = true;
-        out.end(() => (received === 0 ? (cleanup(), reject(new Error('empty-body'))) : resolve(zipPath)));
+        out.end(() => {
+          if (received === 0) {
+            void discardWriteStream(out, zipPath).then(
+              () => reject(new Error('empty-body')),
+              () => reject(new Error('empty-body')),
+            );
+            return;
+          }
+          resolve(zipPath);
+        });
       });
       source.on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        out.destroy();
-        cleanup();
-        reject(err);
+        fail(err);
       });
     });
   }

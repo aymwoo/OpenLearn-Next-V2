@@ -22,6 +22,7 @@ export type TimelineSegment = {
   id: string;
   title: string;
   type?: string;
+  /** 教案编辑器存 "5m"；部分课堂数据用秒数（300）。缺失时界面按 5 分钟或「未设置」降级。 */
   duration?: string | number | null;
   color?: string;
   elementIds?: string[];

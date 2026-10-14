@@ -61,6 +61,7 @@ import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
+import { resolveSegmentDuration } from '../utils/timeline-duration';
 import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
 import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
@@ -983,17 +984,9 @@ export function LiveClassroomView({
     }
   }, [selectedLesson, liveClassSelectedClassId]);
 
-  // Helper to parse "5m" or "20m" to seconds
-  const parseDuration = (dur: string): number => {
-    const num = parseInt(dur.replace(/[^0-9]/g, ''));
-    if (isNaN(num)) return 300;
-    if (dur.includes('s')) return num;
-    return num * 60; // default to minutes
-  };
-
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
-    const secs = parseDuration(seg.duration);
+    const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
     setLiveClassIsActive(true);
@@ -1331,6 +1324,15 @@ export function LiveClassroomView({
     }
   };
 
+  // 起始门户中的「前往课表设置」按钮回调。
+  const handleGoToTimetable = useCallback(() => {
+    if (setTeacherTab) {
+      setTeacherTab('timetable');
+    } else {
+      appSetTeacherTab('timetable');
+    }
+  }, [setTeacherTab, appSetTeacherTab]);
+
   // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
   // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
   if (showEntryPortal) {
@@ -1349,6 +1351,7 @@ export function LiveClassroomView({
         addToast={addToast}
         onEnterClassroom={handlePortalEnter}
         onEditLesson={handleEditLesson}
+        onGoToTimetable={handleGoToTimetable}
       />
     );
   }

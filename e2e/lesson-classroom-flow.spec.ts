@@ -175,6 +175,10 @@ test.describe('课程管理与课堂工作流 E2E 测试', () => {
       await segmentName.fill(segmentTitle);
       await expect.poll(() => courseHasSegment(request, courseTitle, segmentTitle)).toBe(true);
 
+      // 调色板在主包里，白板是 lazy chunk。不等画布出现就点「添加到画板」，
+      // whiteboardRef 还是空的，这次插入会被丢掉，接口里永远看不到元素。
+      await expect(page.locator('canvas').first()).toBeVisible({ timeout: 30_000 });
+
       const helloPaletteCard = page
         .locator('[title="点击编辑并添加到画板，或拖拽到画板"]')
         .filter({ hasText: '问候插件' });
@@ -194,8 +198,12 @@ test.describe('课程管理与课堂工作流 E2E 测试', () => {
       await expect(page.getByText('选择授课课程')).toBeVisible();
       await page.getByRole('button', { name: new RegExp(courseTitle) }).click();
 
-      const classSearch = page.getByRole('searchbox', { name: '搜索班级' });
-      await classSearch.fill(className);
+      // 班级检索框只在班级数 > 2 时渲染，而且是 input[type=search]。
+      // 班级按钮始终在列表里，按名称点选即可，不依赖检索框。
+      const classSearch = page.locator('input[aria-label="搜索班级"]');
+      if (await classSearch.isVisible()) {
+        await classSearch.fill(className);
+      }
       await page.getByRole('button', { name: new RegExp(className) }).click();
       await page.getByRole('radio', { name: /讲授式/ }).click();
       await page.getByRole('button', { name: /开始上课/ }).click();

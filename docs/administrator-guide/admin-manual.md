@@ -24,7 +24,7 @@
 | `teacher`  | 环境变量或随机生成 | `teacher`       | `usr_teacher` |
 
 - `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 有值时使用该值。
-- 未设置时生成 20 位随机口令，打印一次，并写入 `storage/bootstrap-credentials.txt`。
+- 未设置时生成 20 位随机口令，打印一次，并写入数据目录下的 `storage/bootstrap-credentials.txt`（容器里是 `/data/storage/bootstrap-credentials.txt`）。
 - 已经用 `admin` / `teacher` 当密码的存量库不会被改写哈希，但会把 `must_change_password` 置 1，登录后必须修改。
 
 **改密**：`POST /api/auth/change-password`（见 §2.3）。新密码不能与用户名相同。带 `mustChangePassword` 的会话除改密、登出、`/api/auth/session`、`/api/auth/me` 外，**包括 GET 在内的** `/api` 请求一律 403 `FORBIDDEN_DEFAULT_PASSWORD`。静态页面仍可加载。生产环境不要设置 `PLAYWRIGHT_TEST`。
@@ -290,34 +290,39 @@
 
 ### 6.4 备份与恢复
 
-平台**没有**备份相关的 HTTP 端点。权威实现是仓库脚本 `scripts/restore-db.ts`（枚举 `BACKUP_DIR` 下的备份并回写）。
+平台**没有**备份相关的 HTTP 端点。数据库和课件一起备份用 `node scripts/site-backup.mjs`（容器：`docker compose exec app node scripts/site-backup.mjs`）。它用 `VACUUM INTO` 做一致性快照，并把 `storage/`、`plugins/`、`uploads/` 打进 tar。只备份 SQLite 时仍可用 `pnpm run db:backup` / `scripts/restore-db.ts`。
 
-**推荐流程（容器部署）**：
+**必须一起备份的目录**（容器里都在 `/data`，备份在 `/backups`）：
+
+| 路径 | 内容 | 漏备份的后果 |
+| --- | --- | --- |
+| 数据库文件 | `educational_os.db` | 全部业务数据丢失 |
+| `storage/` | 课件、种子口令文件 | 课件 404 |
+| `plugins/` | 已安装插件源码 | 插件启动失败 |
+| `uploads/` | 头像等上传 | 附件 404 |
+
+**恢复**（先停服）：
 
 ```bash
-docker compose stop app
-docker run --rm -v <db 卷>:/data -v "$PWD":/backup alpine \
-  tar czf /backup/educational_os-$(date +%F).db.tar.gz -C /data .
-docker compose start app
+node scripts/site-restore.mjs --list
+node scripts/site-restore.mjs --i-understand-downtime
 ```
-
-**必须一起备份的目录**：
-
-| 路径                     | 内容                     | 漏备份的后果                 |
-| ------------------------ | ------------------------ | ---------------------------- |
-| `packages/core/db/`      | `educational_os.db`      | 全部业务数据丢失             |
-| `storage/courseware/`    | 课件文件                 | 课件 404                     |
-| `backups/`               | 历史备份                 | 无法回滚                     |
-
-> SQLite 在线复制可能拿到不一致快照。**要么停机复制，要么用 `VACUUM INTO`** 生成一致性副本，不要直接 `cp` 正在写入的 db 文件。
 
 **恢复校验清单**：
 
-1. 停容器 → 覆盖 db 文件 → 启动
-2. `curl -fsS http://127.0.0.1:9000/health`
-3. `curl -H "Cookie: edu_os_token=…" http://127.0.0.1:9000/api/db-status`，确认 `integrity_check` 为 `ok`
-4. 抽查一个班级、一个课件、一个学生成绩
-5. **确认 `ENCRYPTION_KEY` 未随备份变更**——换了密钥则所有 AI Provider API Key 需重新保存
+1. 停服务 → 运行恢复脚本 → 再启动
+2. `curl -fsS http://127.0.0.1:9000/health` 应含 `"status":"ok"`。`/health/ready` 成功时正文是 `{"status":"ready"}`，不要再期待 `db` 或错误详情。
+3. 抽查一个班级、一个课件文件、一个学生成绩
+4. **确认 `ENCRYPTION_KEY` 未随备份变更**——换了密钥则所有 AI Provider API Key 需重新保存
+
+**升级后回填无归属班级**（迁移 021 不猜老师）：
+
+```bash
+node scripts/backfill-class-owners.mjs --list
+node scripts/backfill-class-owners.mjs --assign teacher
+```
+
+详见[版本迁移指南](../migration/version-migration.md) §0。
 
 ---
 

@@ -353,6 +353,76 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       expect(await screen.findByText('课堂节拍节奏设计（25 分钟）')).toBeTruthy();
       expect(screen.getByText('就绪')).toBeTruthy();
       expect(screen.getByText('讲授')).toBeTruthy();
+      expect(screen.getByText('5m')).toBeTruthy();
+      expect(screen.getByText('20m')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('教案字符串时长（5m）显示分钟和总时长，进度条按占比铺开', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'seg-1', title: '开场准备', duration: '5m' },
+          { id: 'seg-2', title: '讲授新课', duration: '20m' },
+          { id: 'seg-3', title: '互动练习', duration: '15m' },
+          { id: 'seg-4', title: '课堂总结', duration: '5m' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（45 分钟）')).toBeTruthy();
+      const lecture = screen.getByText('讲授新课').closest('li') as HTMLElement;
+      expect(within(lecture).getByText('20m')).toBeTruthy();
+      expect((lecture.querySelector('div[style]') as HTMLElement).style.width).toBe('44%');
+      const practice = screen.getByText('互动练习').closest('li') as HTMLElement;
+      expect(within(practice).getByText('15m')).toBeTruthy();
+      expect((practice.querySelector('div[style]') as HTMLElement).style.width).toBe('33%');
+      expect(screen.getAllByText('5m').length).toBe(2);
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('旧字段名和混合单位仍汇总成分钟', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'l1', title: '导入', durationMinutes: 8 },
+          { id: 'l2', title: '新授', estimatedDurationSeconds: 600 },
+          { id: 'l3', title: '小时环节', duration: '1h' },
+          { id: 'l4', title: '秒环节', duration: '90s' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（80 分钟）')).toBeTruthy();
+      expect(screen.getByText('8m')).toBeTruthy();
+      expect(screen.getByText('10m')).toBeTruthy();
+      expect(screen.getByText('60m')).toBeTruthy();
+      expect(screen.getByText('2m')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('时长缺失按默认 5 分钟，无法解析时显示未设置', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'b1', title: '缺时长', duration: null },
+          { id: 'b2', title: '乱码时长', duration: 'not-a-time' },
+          { id: 'b3', title: '空字符串', duration: '' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（10 分钟）')).toBeTruthy();
+      expect(screen.getAllByText('5m').length).toBe(2);
+      const broken = screen.getByText('乱码时长').closest('li') as HTMLElement;
+      expect(within(broken).getByText('未设置')).toBeTruthy();
+      expect((broken.querySelector('div[style]') as HTMLElement).style.width).toBe('0%');
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('全部时长都无法解析时总时长显示未设置', async () => {
+      renderPortal({
+        lang: 'en',
+        timelineSegments: [{ id: 'x', title: 'Broken', duration: 'nope' }],
+      });
+
+      expect(await screen.findByText('Pacing (unset)')).toBeTruthy();
+      expect(screen.getByText('Unset')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
     });
 
     it('无环节大纲时给出默认授课提示', async () => {
@@ -371,5 +441,207 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       renderPortal({ onlineStudentIds: STUDENTS.map((s) => s.id) });
       expect(await screen.findByText(/全员席位已连接/)).toBeTruthy();
     });
+  });
+
+  describe('下一节课探针与课表入口', () => {
+    /**
+     * 本组测试不依赖文件顶部共享的 LESSONS / CLASSES fixture，而是为每个用例在内部
+     * 拼接一份合成（synthetic）的 schedule 数据。这样：
+     *   1. 断言都以本地定义为唯一事实源，避免与其他描述块中的fixture联。
+     *   2. 课表接口的返回结构（id / lesson_id / lesson_title / class_id / class_name /
+     *      time_slot / scheduled_date）是唯一与后端不变的合约点；其值不需要“看起来像
+     *      真实课程名”。
+     */
+    type ScheduleRow = {
+      id: string;
+      lesson_id: string;
+      lesson_title: string;
+      class_id: string;
+      class_name: string;
+      time_slot: string;
+      scheduled_date: string;
+    };
+    type CourseRef = { lessonId: string; lessonTitle: string; classId: string; className: string };
+    const makeSchedule = (
+      course: CourseRef,
+      timeSlot: string,
+      scheduledDate: string,
+    ): ScheduleRow => ({
+      id: `sch-${course.lessonId}-${course.classId}-${timeSlot.replace(':', '')}`,
+      lesson_id: course.lessonId,
+      lesson_title: course.lessonTitle,
+      class_id: course.classId,
+      class_name: course.className,
+      time_slot: timeSlot,
+      scheduled_date: scheduledDate,
+    });
+
+    /** 仅拦截 /api/schedules/today；其他调用走默认 okFetcher。 */
+    const buildScheduleFetcher = (scheduleMap: Record<string, ScheduleRow[]>) =>
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/schedules/today')) {
+          const date = new URL(url, 'http://localhost').searchParams.get('date') || '';
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, schedules: scheduleMap[date] || [] }),
+          };
+        }
+        return okFetcher();
+      }) as unknown as typeof fetch;
+
+    const ymd = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    /**
+     * 锁定当前“今日”为指定时间点。仅 fake Date，不动 setInterval，
+     * 以免 TelemetryIsland 的 1s 计时被冻结、造成测试无法退出。
+     * 用 function 声明以免 .tsx 解析 `<T>` 为 JSX。
+     */
+    function withFrozenNow<T>(d: Date, fn: () => Promise<T>): () => Promise<T> {
+      return async () => {
+        const RealDate = Date;
+        const fixed = d.getTime();
+        class FakeDate extends RealDate {
+          constructor(...args: any[]) {
+            if (args.length === 0) {
+              super(fixed);
+            } else {
+              // @ts-expect-error spread to base ctor
+              super(...args);
+            }
+          }
+          static now() {
+            return fixed;
+          }
+        }
+        // @ts-expect-error override global Date
+        globalThis.Date = FakeDate;
+        try {
+          return await fn();
+        } finally {
+          globalThis.Date = RealDate;
+        }
+      };
+    }
+
+    it('今日有未来课时，在顶部 h1 显示「下一节」与时间、班级', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+      const today = ymd(new Date('2026-03-15T10:00:00'));
+      const timeSlot = '11:00-11:45';
+      const course: CourseRef = {
+        lessonId: 'fixture-lesson-A',
+        lessonTitle: 'fixture-lesson-A.title',
+        classId: 'fixture-class-X',
+        className: 'fixture-class-X.name',
+      };
+      const fetcher = buildScheduleFetcher({
+        [today]: [makeSchedule(course, timeSlot, today)],
+      });
+
+      renderPortal({ fetcher });
+
+      // h1 同时打了 role="button"（键盘 / 点击预选），所以走文本匹配最稳。
+      const heading = await screen.findByText(/下一节/);
+      expect(heading.tagName).toBe('H1');
+      // 「今天」是组件内部使用与本项目一致的相对日描述，不以 fixture 表达。
+      expect(screen.getByText('今天')).toBeTruthy();
+      expect(screen.getByText(timeSlot)).toBeTruthy();
+      expect(screen.getByText(course.className)).toBeTruthy();
+    }));
+
+    it('今日已全部过时，则顺延到明日的第一个课节', withFrozenNow(new Date('2026-03-15T22:00:00'), async () => {
+      const today = ymd(new Date('2026-03-15T22:00:00'));
+      const tomorrowDate = new Date(today);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrow = ymd(tomorrowDate);
+      const oldCourse: CourseRef = {
+        lessonId: 'fixture-lesson-A',
+        lessonTitle: 'fixture-lesson-A.title',
+        classId: 'fixture-class-X',
+        className: 'fixture-class-X.name',
+      };
+      const nextCourse: CourseRef = {
+        lessonId: 'fixture-lesson-B',
+        lessonTitle: 'fixture-lesson-B.title',
+        classId: 'fixture-class-Y',
+        className: 'fixture-class-Y.name',
+      };
+      const oldTimeSlot = '08:00-08:45';
+      const nextTimeSlot = '09:30-10:15';
+      const fetcher = buildScheduleFetcher({
+        [today]: [makeSchedule(oldCourse, oldTimeSlot, today)],
+        [tomorrow]: [makeSchedule(nextCourse, nextTimeSlot, tomorrow)],
+      });
+
+      renderPortal({ fetcher });
+
+      const heading = await screen.findByText(/下一节/);
+      expect(heading.tagName).toBe('H1');
+      expect(screen.getByText('明天')).toBeTruthy();
+      expect(screen.getByText(nextTimeSlot)).toBeTruthy();
+    }));
+
+    it('课表为空时显示「今日课表尚未设置」与「前往课表设置」入口', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+      const onGoToTimetable = vi.fn();
+      const fetcher = buildScheduleFetcher({}); // 7 天都空
+
+      renderPortal({ fetcher, onGoToTimetable });
+
+      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+      const link = screen.getByRole('button', { name: /前往课表设置/ });
+      fireEvent.click(link);
+      expect(onGoToTimetable).toHaveBeenCalledTimes(1);
+    }));
+
+    it('未提供 onGoToTimetable 时不显示「前往课表设置」按钮', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+      const fetcher = buildScheduleFetcher({});
+
+      renderPortal({ fetcher }); // 未传 onGoToTimetable
+
+      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /前往课表设置/ })).toBeNull();
+    }));
+
+    it('点击「下一节」可预选该课的 lessonId 与 classId', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+      const today = ymd(new Date('2026-03-15T10:00:00'));
+      const timeSlot = '14:00-14:45';
+      const course: CourseRef = {
+        lessonId: 'fixture-lesson-B',
+        lessonTitle: 'fixture-lesson-B.title',
+        classId: 'fixture-class-Y',
+        className: 'fixture-class-Y.name',
+      };
+      const fetcher = buildScheduleFetcher({
+        [today]: [makeSchedule(course, timeSlot, today)],
+      });
+
+      const { setSelectedLesson, setLiveClassSelectedClassId } = renderPortal({ fetcher });
+
+      const heading = await screen.findByText(/下一节/);
+      fireEvent.click(heading);
+
+      expect(setSelectedLesson).toHaveBeenCalledWith(course.lessonId);
+      expect(setLiveClassSelectedClassId).toHaveBeenCalledWith(course.classId);
+    }));
+
+    it('课表接口报错时静默降级，不影响开课门户其他功能', withFrozenNow(new Date('2026-03-15T10:00:00'), async () => {
+      const brokenFetcher = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/schedules/today')) {
+          return { ok: false, status: 500, json: async () => ({ error: 'down' }) };
+        }
+        return okFetcher();
+      }) as unknown as typeof fetch;
+
+      renderPortal({ fetcher: brokenFetcher });
+
+      // 接口错误 → 与「课表为空」等价的提示状态。
+      expect(await screen.findByText(/今日课表尚未设置/)).toBeTruthy();
+      // 课程选择与启动按钮依然可用；这些是组件内部可选列表的内容（来自 props
+      // 传入的 LESSONS / CLASSES fixture），不是课表接口的返回值。
+      expect(screen.getByText(LESSONS[0].title)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /开始上课/ })).toBeTruthy();
+    }));
   });
 });

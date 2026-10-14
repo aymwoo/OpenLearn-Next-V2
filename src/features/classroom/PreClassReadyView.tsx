@@ -25,6 +25,7 @@ import type { StudentType } from '../../types/app';
 import { PreClassDiagnosticHub } from './PreClassDiagnosticHub';
 import { PreflightHealthModal } from './PreflightHealthModal';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { DEFAULT_SEGMENT_SECONDS, formatSegmentDuration, resolveSegmentDuration } from '../../utils/timeline-duration';
 
 export interface PreClassReadyViewProps {
   selectedLesson: string | null;
@@ -293,12 +294,25 @@ export function PreClassReadyView({
   const onlineCount = students.filter(isStudentOnline).length;
   const readyCount = students.filter((s) => isStudentOnline(s) || markedPresentIds.has(s.id)).length;
   const readyPercent = totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
-  const totalDuration = timelineSegments.reduce((acc, cur) => {
-    const raw = cur?.duration;
-    const num = typeof raw === 'number' ? raw : parseInt(raw, 10);
-    return acc + (!isNaN(num) && num > 0 ? num : 300);
-  }, 0);
-  const durationMins = isNaN(totalDuration) || totalDuration <= 0 ? 45 : Math.round(totalDuration / 60);
+  const segmentDurations = timelineSegments.map((seg) =>
+    resolveSegmentDuration(seg, { fallbackSeconds: DEFAULT_SEGMENT_SECONDS }),
+  );
+  const countableSeconds = segmentDurations
+    .map((item) => item.seconds)
+    .filter((seconds): seconds is number => seconds != null && Number.isFinite(seconds));
+  const totalSeconds = countableSeconds.reduce((sum, seconds) => sum + seconds, 0);
+  const durationText =
+    timelineSegments.length === 0
+      ? lang === 'zh'
+        ? '45 分钟'
+        : '45 mins'
+      : countableSeconds.length === 0
+        ? lang === 'zh'
+          ? '未设置'
+          : 'Unset'
+        : lang === 'zh'
+          ? `${Math.round(totalSeconds / 60)} 分钟`
+          : `${Math.round(totalSeconds / 60)} mins`;
 
   return (
     <div
@@ -331,8 +345,8 @@ export function PreClassReadyView({
             </h1>
             <p className="text-xs text-muted mt-0.5">
               {lang === 'zh'
-                ? `预计授课时长: ${durationMins} 分钟 · 共 ${timelineSegments.length} 个教学环节 · 白板仅在进入课中授课时展示`
-                : `Est. Duration: ${durationMins} mins · ${timelineSegments.length} segments · Whiteboard activates in-class`}
+                ? `预计授课时长: ${durationText} · 共 ${timelineSegments.length} 个教学环节 · 白板仅在进入课中授课时展示`
+                : `Est. Duration: ${durationText} · ${timelineSegments.length} segments · Whiteboard activates in-class`}
             </p>
           </div>
         </div>
@@ -501,7 +515,7 @@ export function PreClassReadyView({
                     </div>
                     <span className="font-mono text-[11px] text-muted shrink-0 flex items-center gap-1">
                       <Clock size={10} />
-                      {Math.round((seg.duration || 300) / 60)} 分钟
+                      {formatSegmentDuration(segmentDurations[idx]?.seconds ?? null, lang).prose}
                     </span>
                   </div>
                 ))

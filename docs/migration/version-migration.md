@@ -1,10 +1,71 @@
 # Version Migration Guide 版本迁移指南
 
-> **当前版本**：`package.json` 为 **`0.5.0`**，`@openlearn/plugin-sdk` 为 **`3.7.0`**。
+> **当前版本**：`package.json` 为 **`0.6.1`**（`main` 在 v0.6.1 tag 之后还有安全修复），`@openlearn/plugin-sdk` 为 **`3.7.0`**。
 >
 > 本文覆盖两类迁移：
-> 1. **平台数据库 schema 迁移**（`migrations/000`–`014`）—— 服务启动时自动执行，管理员通常无需手动干预
+> 1. **平台数据库 schema 迁移**（`migrations/000`–`022`）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
 > 2. **插件侧迁移**（`ctx.db.migrate`）—— 插件作者在自己插件的 `activate` 中调用
+>
+> 从 **v0.6.1 tag（PR #4 合并之前）** 升到当前 `main` 时，自动迁移之外还有三件必须人工做的事，见下一节。清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。
+
+---
+
+## 0. 从 v0.6.1 升级（迁移 021 / 022）
+
+先备份再启动。启动日志里应出现 `[Migration] Applied` 或启动复查完成，并且 `_migrations` 含 `021_class_owner_and_password_gate` 与 `022_plugin_public_routes`。迁移失败时进程以非 0 退出，日志以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 开头。
+
+### 0.1 改密
+
+存量库若 `admin` / `teacher` 的口令仍等于用户名，启动时会把 `users.must_change_password` 置 1，**不会改写哈希**。用原口令仍能登录，但除下列路径外的 `/api` 请求（**含 GET**）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`：
+
+- `POST /api/auth/change-password`
+- `POST /api/auth/logout`
+- `GET /api/auth/session`
+- `GET /api/auth/me`
+
+```bash
+# 登录后用返回的 Cookie
+curl -sS -c /tmp/ol.cj -H 'Content-Type: application/json' \
+  -d '{"entrance":"teacher","username":"admin","password":"admin"}' \
+  http://127.0.0.1:9000/api/auth/login
+
+curl -sS -b /tmp/ol.cj -H 'Content-Type: application/json' \
+  -d '{"oldPassword":"admin","newPassword":"换成足够长的新口令"}' \
+  http://127.0.0.1:9000/api/auth/change-password
+```
+
+新口令不能与用户名相同。容器首次空库不要依赖 `admin` / `admin`：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或到数据目录的 `storage/bootstrap-credentials.txt` 读取随机口令。
+
+### 0.2 回填班级归属
+
+迁移 021 只加列，不猜老师。`owner_user_id` 为空的班只有管理员能看见，原任课教师会以为班丢了。
+
+```bash
+# 先看哪些班没有归属（停服或不停服都可以，脚本只做短查询）
+node scripts/backfill-class-owners.mjs --list
+
+# 把所有空归属班交给用户名为 teacher 的账号（写入的是 users.id，不是用户名）
+node scripts/backfill-class-owners.mjs --assign teacher
+
+# 只改一个班
+node scripts/backfill-class-owners.mjs --class <班级 id> --assign teacher
+```
+
+容器里把命令换成 `docker compose exec app node scripts/backfill-class-owners.mjs --list`。
+
+等价 SQL：`UPDATE classes SET owner_user_id = '<教师 users.id>' WHERE owner_user_id IS NULL;`。管理员也可以 `PUT /api/classes/:id`，body 带 `owner_user_id`（教师调这个字段会 403）。
+
+### 0.3 重新批准插件公开路由
+
+迁移 022 建空表 `plugin_public_routes`。升级前靠 manifest `auth: false` 匿名放行的路由，升级后一律 401，直到管理员批准：
+
+```bash
+curl -sS -b /tmp/ol.cj -H 'Content-Type: application/json' \
+  -d '{"approvePublicRoutes":true}' \
+  http://127.0.0.1:9000/api/plugins/<插件 id 或 manifest id>/public-routes
+```
+
+省略该字段或传 `false` 会清掉这个插件已批准的公开路由。安装新插件时在请求体加 `approvePublicRoutes: true`，或带头 `x-approve-public-routes: true`。
 
 ---
 
@@ -144,7 +205,7 @@ DROP TABLE IF EXISTS foo;
 | ---------------------------------------- | -------------------------------------------------------------------- | ------------------------------------- |
 | 密码哈希升级为 bcrypt                    | `verifyPassword` 兼容旧 SHA-256，`needsUpgrade: true` 时自动重算    | `packages/core/db/index.ts`           |
 | 会话改为不透明 Cookie + 查表              | 令牌是 `client_sessions` 表主键，**不是 JWT**                        | `server/middleware/auth.ts`           |
-| 强制改密门控                             | 种子账号带 `mustChangePassword`，非 GET 且非豁免路径一律 403         | `enforcePasswordChanged`              |
+| 强制改密门控                             | 种子账号带 `mustChangePassword`，除改密、登出、会话查询外的 `/api`（含 GET）一律 403 | `enforcePasswordChanged`              |
 | CSRF 门控                                | 写请求按 `Sec-Fetch-Site` 判定，`cross-site` 走豁免清单             | `server/middleware/csrf.ts`           |
 | 前端 `setSocketBridge` 死代码被删除       | 白板事件**不再跨端转发**（从来就没生效过）                          | `src/services/event-bus.ts`           |
 | 课件 HTML 改用 `?ct=` 短时令牌鉴权        | 沙箱 iframe 不带 cookie 的替代方案                                  | `server/utils/courseware-access.ts`   |
