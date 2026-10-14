@@ -54,6 +54,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **课节进度一次聚合，班级仪表盘不再返回作业×学生的空单元格**。`GET /api/classes/:classId/lessons/:lessonId/progress` 用连接和 `GROUP BY` 计算每个学生在该课作业上的最高分，字段与原来相同。班级仪表盘的 `performance` 只包含已有提交的行（`assignment_id`、`assignment_title`、`student_id`、`student_name`、`score`、`submission_status`、`submitted_at`、`graded_at`、`feedback`）。成绩热力图对缺失格子仍显示「-」。迁移 `025` 为 `assignment_submissions(student_id)` 和 `assignments(lesson_id)` 建索引，可重复执行。
+
 - **激活 SQLite WAL 只读连接池实现读写物理隔离 (PERF-01)**：
   - 激活内建的 `ReadConnectionPool`（按 CPU 核心数自动池化伸缩并开启 `PRAGMA query_only = ON`）；
   - `ScheduleService`、`LessonService`、`DiagnosticService`、`RosterService` 及其对应的只读 REST 端点（课表、课节列表/详情/统计/互评、学情诊断/错题排行/卓越答题榜、班级花名册/机房座位/学情进度矩阵/通知已读）平滑迁移至只读连接执行；

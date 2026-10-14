@@ -1247,16 +1247,21 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const progress = kernelContainer.getReadDb()
         .prepare(
           `
-        SELECT cs.student_id, COALESCE(slp.progress_percent, 0) as progress_percent, 
-               COALESCE(slp.completed, 0) as completed, slp.completed_segments,
-               (
-                 SELECT MAX(sub.score)
-                 FROM assignment_submissions sub
-                 JOIN assignments a ON sub.assignment_id = a.id
-                 WHERE sub.student_id = cs.student_id AND a.lesson_id = ?
-               ) as quiz_score
+        SELECT cs.student_id,
+               COALESCE(slp.progress_percent, 0) as progress_percent,
+               COALESCE(slp.completed, 0) as completed,
+               slp.completed_segments,
+               quiz.quiz_score as quiz_score
         FROM class_students cs
-        LEFT JOIN student_lesson_progress slp ON cs.student_id = slp.student_id AND slp.lesson_id = ?
+        LEFT JOIN student_lesson_progress slp
+          ON cs.student_id = slp.student_id AND slp.lesson_id = ?
+        LEFT JOIN (
+          SELECT sub.student_id as student_id, MAX(sub.score) as quiz_score
+          FROM assignment_submissions sub
+          JOIN assignments a ON sub.assignment_id = a.id
+          WHERE a.lesson_id = ?
+          GROUP BY sub.student_id
+        ) quiz ON quiz.student_id = cs.student_id
         WHERE cs.class_id = ?
       `,
         )
@@ -1300,14 +1305,18 @@ export function registerRosterRoutes(ctx: ServerContext) {
         )
         .all(req.params.classId);
 
+      // 只返回已有提交的单元格。成绩表按学生花名册补「-」，不再下发作业×学生的空笛卡尔积。
       const performance = kernelContainer.db
         .prepare(
           `
-        SELECT a.id as assignment_id, a.title as assignment_title, s.id as student_id, s.name as student_name, sub.score, sub.status as submission_status, sub.submitted_at, sub.graded_at, sub.feedback
+        SELECT a.id as assignment_id, a.title as assignment_title,
+               s.id as student_id, s.name as student_name,
+               sub.score, sub.status as submission_status,
+               sub.submitted_at, sub.graded_at, sub.feedback
         FROM assignments a
-        CROSS JOIN class_students cs ON a.class_id = cs.class_id
+        JOIN class_students cs ON a.class_id = cs.class_id
         JOIN students s ON cs.student_id = s.id
-        LEFT JOIN assignment_submissions sub ON a.id = sub.assignment_id AND sub.student_id = s.id
+        JOIN assignment_submissions sub ON a.id = sub.assignment_id AND sub.student_id = s.id
         WHERE a.class_id = ?
         ORDER BY a.created_at, s.name
       `,
