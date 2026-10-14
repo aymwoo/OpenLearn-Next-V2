@@ -246,7 +246,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
             name: plugin.name,
             version: plugin.version ?? '',
             state: PluginState.INSTALLED,
-            executionMode: 'inline',
+            executionMode: 'process',
             // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
             // 决定是否放行非 get* 方法；缺失则回退为空数组（只读）。
             capabilitiesProposed: resolveDeclaredCapabilities(plugin),

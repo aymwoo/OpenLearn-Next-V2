@@ -22,13 +22,13 @@ describe('第三方插件执行模式策略', () => {
     for (const key of ENV_KEYS) saved[key] = process.env[key];
   }
 
-  it('生产语义：只有 @openlearn 或管理员白名单可以进程内运行', () => {
+  it('生产语义：只有白名单或内置目录可以进程内运行', () => {
     rememberEnv();
     delete process.env.VITEST;
     delete process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
     delete process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS;
 
-    expect(isTrustedInProcessPlugin('@openlearn/plugin-vfs')).toBe(true);
+    expect(isTrustedInProcessPlugin('@openlearn/plugin-vfs')).toBe(false);
     expect(isTrustedInProcessPlugin('ext-homework-hub')).toBe(false);
     expect(resolvePluginExecutionMode('ext-homework-hub', undefined).mode).toBe('process');
     expect(resolvePluginExecutionMode('ext-homework-hub', 'inline')).toEqual(
@@ -40,8 +40,8 @@ describe('第三方插件执行模式策略', () => {
     expect(resolvePluginExecutionMode('ext-homework-hub', 'process')).toEqual(
       expect.objectContaining({ mode: 'process', coerced: false }),
     );
-    expect(resolvePluginExecutionMode('@openlearn/plugin-vfs', 'inline').mode).toBe('inline');
-    expect(resolvePluginExecutionMode('@openlearn/plugin-vfs', 'worker').mode).toBe('worker');
+    expect(resolvePluginExecutionMode('@openlearn/plugin-vfs', 'inline').mode).toBe('process');
+    expect(resolvePluginExecutionMode('@openlearn/plugin-vfs', 'worker').mode).toBe('process');
 
     process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = ' ext-local , ext-other ';
     expect(resolvePluginExecutionMode('ext-local', 'inline')).toEqual(
@@ -59,7 +59,7 @@ describe('第三方插件执行模式策略', () => {
 
     process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = '1';
     expect(resolvePluginExecutionMode('ext-fixture', 'inline').mode).toBe('process');
-    expect(resolvePluginExecutionMode('@openlearn/plugin-builtin', 'inline').mode).toBe('inline');
+    expect(resolvePluginExecutionMode('@openlearn/plugin-builtin', 'inline').mode).toBe('process');
   });
 
   it('激活未受信任插件时改写 DB 并走子进程原语', async () => {

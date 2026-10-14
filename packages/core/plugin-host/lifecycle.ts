@@ -26,6 +26,8 @@ import type { PluginContext, MiddlewareContext } from './types.js';
 import { IllegalStateTransitionError, PluginActivateError, PluginDeactivateTimeoutError } from './errors.js';
 import { ICapabilityServiceToken, IEventBusServiceToken } from '../di/interfaces.js';
 import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
+import { isTrustedInProcessPlugin } from './execution-policy.js';
+import { isBlockedPluginCapability, isCapabilityApproved } from './plugin-grants.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { ACTIVATION_TIMEOUT_MS, DEACTIVATION_TIMEOUT_MS } from './base.js';
 import type { PluginHost } from './index.js';
@@ -170,7 +172,10 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         this.contributionRegistry,
       );
 
-      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? []);
+      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? [], {
+        official: true,
+        keys: [pluginId, manifest.id],
+      });
 
       await this.runActivatePipeline(pluginId, manifest, activate, ctx);
 
@@ -247,8 +252,11 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         this.contributionRegistry,
       );
 
-      // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）
-      await this.grantCapabilities(actorId, mergedManifest.capabilitiesProposed ?? []);
+      // 8. 授予能力。官方插件自动授予非通配能力；第三方只授予管理员已确认的项。
+      await this.grantCapabilities(actorId, mergedManifest.capabilitiesProposed ?? [], {
+        official: isTrustedInProcessPlugin(mergedManifest.id, process.env, row.file_path),
+        keys: [pluginId, mergedManifest.id],
+      });
 
       // 9-11. 中间件管道 + 5s 超时 + 成功副作用（实例入库、ACTIVE、热重载接线）
       // 副作用放在管道内（afterActivate 中间件之前）—— 与 preloaded 路径
@@ -424,11 +432,23 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
    * 按 manifest.capabilitiesProposed 授予能力（拆前散布在 5 处）。
    * grant 失败必须向上抛 —— 能力缺失时激活出来的插件是半残状态。
    */
-  protected async grantCapabilities(actorId: string, caps: string[]): Promise<void> {
+  protected async grantCapabilities(
+    actorId: string,
+    caps: string[],
+    opts?: { official?: boolean; keys?: string[] },
+  ): Promise<void> {
     if (caps.length === 0) return;
     try {
       const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
       for (const cap of caps) {
+        if (typeof cap !== 'string' || isBlockedPluginCapability(cap)) {
+          console.warn(`[PluginHost] Refusing wildcard capability "${cap}" for "${actorId}"`);
+          continue;
+        }
+        if (!opts?.official && !isCapabilityApproved(this.db, opts?.keys ?? [], cap)) {
+          console.warn(`[PluginHost] Capability "${cap}" for "${actorId}" awaits administrator approval`);
+          continue;
+        }
         await capService.grant(actorId, cap);
       }
     } catch (capErr) {
@@ -479,8 +499,10 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     const actorId = `plugin:${manifest.id}`;
 
     try {
-      // Grant capabilities (same as inline mode activation)
-      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? []);
+      await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? [], {
+        official: isTrustedInProcessPlugin(manifest.id, process.env, row.file_path),
+        keys: [pluginId, manifest.id],
+      });
 
       // Resolve EventBus for event forwarding to Worker
       const eventBus = (await this.serviceRegistry.resolve<IEventBusService>(

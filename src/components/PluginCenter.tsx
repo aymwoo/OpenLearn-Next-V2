@@ -111,7 +111,14 @@ export function PluginCenter({
     );
 
     try {
-      const body = marketItem?.downloadUrl ? JSON.stringify({ downloadUrl: marketItem.downloadUrl }) : undefined;
+      const body = marketItem?.downloadUrl
+        ? JSON.stringify({
+            downloadUrl: marketItem.downloadUrl,
+            acknowledgeRisk: true,
+            ...(marketItem.integrity ? { integrity: marketItem.integrity } : {}),
+            ...(marketItem.signature ? { signature: marketItem.signature } : {}),
+          })
+        : JSON.stringify({ acknowledgeRisk: true });
       const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/one-click-update`, {
         method: 'POST',
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -138,7 +145,12 @@ export function PluginCenter({
           formData.append('file', blob, 'update.zip');
           const uploadRes = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/update-zip-raw`, {
             method: 'POST',
-            headers: { 'x-install-mode': 'update' },
+            headers: {
+              'x-install-mode': 'update',
+              'x-acknowledge-risk': 'true',
+              ...(marketItem.integrity ? { 'x-integrity': marketItem.integrity } : {}),
+              ...(marketItem.signature ? { 'x-signature': marketItem.signature } : {}),
+            },
             body: formData,
           }).then((r) => r.json());
           if (uploadRes?.success) {

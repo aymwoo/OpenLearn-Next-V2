@@ -3,9 +3,24 @@
 > **审计日期**：2026-10-14
 > **审计对象**：`openlearn-next@0.6.1`（仓库 `OpenLearn-Next-V2`，对照 `main` @ `6ebfc84`）
 > **依据**：`docs/AUDIT_REPORT.md`（2026-10-13 全系统审计）里与插件相关的结论，本次只复核插件子系统，并补上那份报告没有展开的信任边界。
-> **方法**：读当前树的安装、策略、worker、网关和前端宿主；能用 Vitest 或 Node 权限模型探针复现的都复现了。没有改业务代码。
+> **方法**：读当前树的安装、策略、worker、网关和前端宿主；能用 Vitest 或 Node 权限模型探针复现的都复现了。PL-01 到 PL-08 已在本分支修复，对应 PoC 改为回归断言。
 > **环境**：Node.js v22.14.0，pnpm 10.33.4，Linux。权限模型探针用的就是这个 Node，不是文档里写的 v24。
-> **PoC**：`packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts`，16 项全部通过。这些用例锁定的是**当前有漏洞的行为**，修复后应改成断言安全结果。
+> **PoC**：`packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts`。PL-01 到 PL-08 断言漏洞已被阻断。PL-09、PL-10、PL-12、PL-15 的用例仍锁定未修复行为。
+> **迁移**：`docs/plugin/plugin-security-migration.md`。
+
+## 修复状态（2026-10-14）
+
+| 编号 | 状态 |
+| --- | --- |
+| PL-01 | 已修复。进程内身份只看 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 或内置目录；预加载内置插件单独放行。 |
+| PL-02 | 已修复。远程前端进入 `sandbox="allow-scripts"` 的不透明源 iframe，经 postMessage 桥调用宿主；`/plugins` 需要有效会话。 |
+| PL-03 | 已修复。插件命令的 actor 由宿主写成 `plugin:<id>`，`metadata.approved` 被丢掉；空 actor 在命令总线被拒绝。 |
+| PL-04 | 已修复。第三方能力要管理员写入批准表；`*`、`*:*`、`*:*:*` 不能授予；插件不能调用 `grant` / `revokeAll`。 |
+| PL-05 | 已修复。SQL 只允许插件自己的表前缀、`plugin_migrations`，以及显式授权的研究表。 |
+| PL-06 | 已修复。建表和删表都用安装主键；卸载同时清掉旧的 manifest id 前缀。 |
+| PL-07 | 已修复。社区安装默认关闭；安装和更新要求完整性哈希与 Ed25519 签名；注册表的 `verified` 字段不再点亮「已认证」。 |
+| PL-08 | 已修复。子进程默认拒绝原始 socket 和 DNS；HTTP 只经宿主代理访问已批准域名；另有 RSS 与 CPU 窗口上限。 |
+| PL-09 至 PL-15 | 未在本次修复。公开路由批准、符号链接跟随、开发面板 `new Function`、会话桥子串、审计覆盖、不安全部署脚本、兼容测试范围仍按下文描述。 |
 
 威胁模型：管理员会安装社区注册表或 ZIP 里的第三方包。产品界面把这类包装成「未受信任、进子进程、不继承密钥」。学生和教师打开应用后，活跃插件的前端会在他们的页面里执行。审计问题是：这个边界是否真的挡住了第三方代码，而不是管理员是否「自愿」执行任意程序。
 
@@ -42,7 +57,7 @@
 
 ### PL-01 严重 — 伪造 `@openlearn/` 前缀即可在宿主进程内执行
 
-**公测前必须修。**
+**状态：已修复。** 下文保留发现时的证据。当前策略见 `execution-policy.ts` 与迁移说明。
 
 | | |
 | --- | --- |
@@ -71,7 +86,7 @@ inline 之后插件与宿主同进程，权限模型和 `buildMinimalEnv` 都不
 
 ### PL-02 严重 — 插件前端在主页面执行，方法策略挡不住
 
-**公测前必须修。**
+**状态：已修复。** 远程激活改走 `/plugin-sandbox/frame`。父页面里的 Blob `import()` 只留在内联单测加载器。
 
 | | |
 | --- | --- |
@@ -100,7 +115,7 @@ inline 之后插件与宿主同进程，权限模型和 `buildMinimalEnv` 都不
 
 ### PL-03 严重 — 子进程插件可以冒充管理员并自己批准高危命令
 
-**公测前必须修。** 这发生在 PL-01 之外：普通 `ext-*` 插件、已经进了子进程，依然能走通。
+**状态：已修复。** 插件边界改写 actor 并删除 `metadata.approved`。宿主自己的 `admin` / `user:*:administrator` 调用不受影响。 这发生在 PL-01 之外：普通 `ext-*` 插件、已经进了子进程，依然能走通。
 
 | | |
 | --- | --- |
@@ -129,6 +144,8 @@ Worker 基础白名单包含 `ICommandBusService`（`worker-manager.ts:72`）。
 
 ### PL-04 高 — 能力声明即授权，`*` 是超级用户，插件还能继续 `grant`
 
+**状态：已修复。**
+
 **公测前必须修。** 它让 PL-03 不必冒充 `admin`：先拿到 `*`，再自批高危命令。
 
 | | |
@@ -149,6 +166,8 @@ Worker 基础白名单始终下发 `ICapabilityService`。`wrapCapability` 把 `
 - `ICapabilityService` 移出 `BASE_WORKER_SERVICE_TOKENS`。
 
 ### PL-05 高 — 数据库守卫是黑名单，学生提交、VFS、投票和 `sqlite_master` 不在其中
+
+**状态：已修复。** 研究表默认只给精确 id `lianyun-course`，可用 `OPENLEARN_RESEARCH_SQL_PLUGINS` 替换。
 
 **公测前必须修。**
 
@@ -178,6 +197,8 @@ PoC `invokeSql`。修复前，worker 插件执行 `SELECT * FROM submission_raw`
 
 ### PL-06 高 — 卸载按 UUID 删表，子进程按 manifest id 建表，学生数据会留下
 
+**状态：已修复。** 新表只用安装主键。卸载会同时删除旧 manifest id 前缀，避免留下历史表。
+
 **公测前必须修。**
 
 | | |
@@ -199,6 +220,8 @@ inline 与 process 的前缀规则也不一样，同一插件换执行模式后�
 
 ### PL-07 高 — 没有包签名；「已认证」是注册表 JSON 里的布尔值
 
+**状态：已修复。** 默认 `OPENLEARN_COMMUNITY_INSTALL` 未设置时拒绝社区安装。签名公钥是 `OPENLEARN_COMMUNITY_PUBKEY`。
+
 **社区市场对外开放前必须修。** 只做管理员手工 ZIP、且 PL-01–PL-06 已修时，可以降为安装确认文案问题。
 
 | | |
@@ -216,6 +239,8 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 - `one-click-update` 与首次安装一样要求管理员确认，并复用同一哈希。代码变了就作废 `plugin_public_routes` 里的批准（见 PL-09）。
 
 ### PL-08 高 — 子进程可以任意出网；堆和 CPU 只挡住一部分耗尽
+
+**状态：已修复。** `OPENLEARN_PLUGIN_PERMISSION=off` 仍会同时关掉权限模型和网络入口脚本。RSS / CPU 可用 `OPENLEARN_PLUGIN_QUOTA=off` 关闭。
 
 **出网：在 PL-05 修掉之前必须修，否则读到的学生数据可以直接送出。** 只修 PL-05、出网仍开放，则降为「插件能把自己收到的请求外传」，界面已经有这句话，可以记为已知限制。
 
@@ -337,11 +362,11 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 | 控制 | 结果 |
 | --- | --- |
-| 非 `@openlearn/` 且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的包 | 清单写 `inline` 也会安装成 `process`。PoC 两份 ZIP 对照通过 |
+| 不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS`、且不在内置目录的包 | 清单写 `inline` 也会安装成 `process`。`@openlearn/` 前缀同样不能单独放行。PoC 两份 ZIP 对照通过 |
 | `buildMinimalEnv` | 不继承 `OPENAI_API_KEY`、`NODE_OPTIONS`。PoC 通过 |
 | 权限模型禁止插件再起子进程、禁止 `eval`、禁止读 `/proc/self/environ` | Node v22.14.0 手工探针成立 |
-| 插件在权限模型下不能新建指向外部的符号链接或硬链接 | PoC 与手工探针 |
-| `users` 等黑名单中的表 | worker SQL 被拒。PoC 通过 |
+| 插件在权限模型下不能新建指向外部的符号链接或硬链接 | PoC 与手工探针。既有符号链接读穿仍见 PL-10 |
+| 插件自己的表前缀之外的表 | worker SQL 被拒。`users`、提交、VFS、投票不再靠黑名单。PoC 通过 |
 | 空 `capabilitiesProposed` | worker 不能调用非 `get*` 方法，`grant` 被拒。PoC 通过 |
 | worker 白名单不含 `IAuthSessionBridgeService`、不含 `IPluginHost` | `computeAllowedWorkerTokens` PoC；`IPluginHost` 不在 `BASE_WORKER_SERVICE_TOKENS` |
 | `auth: false` | 仍要管理员写入 `plugin_public_routes` 才匿名放行。本次没有推翻既有 `plugin-rest-api` 测试。批准不会在更新时失效，见 PL-09 |
@@ -351,35 +376,28 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ---
 
-## 5. 文档和实现不一致
+## 5. 文档对齐
 
-| 文档 | 写的 | 实现 |
-| --- | --- | --- |
-| `docs/plugin/plugin-architecture.md:76`–`:83` | 未受信任的第三方插件用 Worker 线程沙箱，内存与主进程隔离 | 未受信任且非伪造前缀的包走子进程；Worker 线程与宿主同进程。伪造前缀则 inline |
-| 同文 `:89` | 课件和插件前端都在无同源的 iframe 里 | 课件 iframe 属实。插件前端是主页面 Blob `import()`（PL-02） |
-| `docs/plugin/community-plugin-registry.md:147` | 非 `@openlearn/` 即使要求 inline 也会变成 process | 这句话对「id 不以该前缀开头」成立。它没有说明前缀本身没有签名（PL-01） |
-| `.env.example:18`–`:28` 与社区安装面板文案 | 只有 `@openlearn/` 或白名单进宿主进程 | 与代码一致，但任何 ZIP 都能自称 `@openlearn/` |
-| `PluginCommunityPanel.tsx:597`–`:599` | 徽章标题「官方校验来源」 | 注册表字段 `verified` 自报（PL-07） |
-| `plugin-permission.ts:35`–`:37` | 本版本约束不了网络 | Node v22.14.0 探针同意 |
-| `context-builder.ts:870` 一带注释 | Token 对象路径天然安全 | SDK 导出了数据库、插件宿主和会话桥（PL-01） |
-| `docs/plugin/plugin-lifecycle.md` 对 inline 死循环的说明 | inline 的同步死循环会卡住宿主 | 仍然正确，而且 PL-01 让第三方包能够进入这条路径 |
+PL-01 到 PL-08 修复时改过的说明：
+
+| 文档 | 现在怎么写 |
+| --- | --- |
+| `docs/plugin/plugin-architecture.md` | 未受信任插件走子进程。Worker 线程只给白名单或内置目录。插件前端是 `sandbox="allow-scripts"` 的不透明源 iframe |
+| `docs/plugin/community-plugin-registry.md` | 社区安装默认关闭，要哈希和签名。`verified` 被服务端忽略。`@openlearn/` 前缀不能单独获得进程内身份 |
+| `docs/plugin/plugin-security-migration.md` | 兼容性变化和迁移步骤 |
+| `.env.example` | 白名单、社区开关、研究表名单、网络与配额 |
+| `PluginCommunityPanel.tsx` | 徽章标题是「平台公钥验签通过」 |
+| `plugin-permission.ts` | 权限模型仍没有 `--allow-net`；出站由入口脚本和宿主代理补上 |
+
+仍成立、且没有被这次修复关掉的说明：`docs/plugin/plugin-lifecycle.md` 里 inline 同步死循环会卡住宿主。第三方包默认进不了这条路径。
 
 ---
 
-## 6. 公测前必须修
+## 6. 仍开放
 
-按这个顺序。前四条不依赖社区市场是否打开，ZIP 上传就够了。
+PL-01 到 PL-08 已修复，迁移说明见 `docs/plugin/plugin-security-migration.md`。
 
-1. **PL-01** 进程内信任改为预加载 id，拒绝第三方占用 `@openlearn/`。
-2. **PL-02** 未受信任插件的前端不要在主页面执行；`/plugins` 不要匿名提供包体。
-3. **PL-03** 插件命令的 `actorId` 和 `metadata.approved` 由宿主填写。
-4. **PL-04** 能力必须来自平台枚举和管理员勾选；插件不能 `grant`。
-5. **PL-05** 数据库默认拒绝，去掉 `research` / `lianyun` 子串特例。
-6. **PL-06** 卸载删掉实际创建的那套表前缀。
-
-社区页对公测用户可见时再加上 **PL-07**（包哈希，徽章不看自报 `verified`）。**PL-08** 的出网在 PL-05 修掉之前同样必须处理；只修了 SQL 之后，出网可以作为已披露的限制留下来，但要和安装确认文案一致，不能写成「子进程是沙箱」。
-
-PL-09 到 PL-15 不阻塞把开关关掉的内测，但 PL-09（更新后公开路由仍有效）应在任何允许 `auth: false` 的部署里一起修。
+PL-09 到 PL-15 仍开放。PL-09（更新后公开路由仍有效）应在任何允许 `auth: false` 的部署里一起修。PL-10 的既有符号链接读穿、PL-12 的更新回滚、PL-15 的 `new Function` 课件脚本都还在。
 
 ---
 
@@ -389,10 +407,6 @@ PL-09 到 PL-15 不阻塞把开关关掉的内测，但 PL-09（更新后公开�
 pnpm exec vitest run packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts
 ```
 
-本次结果：16 passed。用例覆盖 PL-01（含真实 ZIP 安装）、PL-03、PL-04、PL-05、PL-06 的前缀公式、PL-07、PL-08 的出网与符号链接、PL-09、PL-11、PL-12，以及 `buildMinimalEnv`。
-
-未写进 Vitest、在 Node v22.14.0 上单独跑过的探针：`spawn` / `eval` / `/proc/self/environ` 被拒；`npm pack` 丢弃符号链接；`--allow-fs-read=dir/*` 允许子目录、拒绝 `..`。
+PL-01 到 PL-08 的用例断言漏洞已被阻断。PL-09、PL-10、PL-12、PL-15 仍锁定未修复行为，不要把它们改成“已修复”。
 
 PoC 里的 Kernel 用例会初始化仓库内的 SQLite（与其它内核测试相同），并在内存里注册测试命令。它不修改插件业务代码。
-
-修复这些洞时，不要删掉该文件。把「当前会成功」改成「必须失败」，否则回归会丢。

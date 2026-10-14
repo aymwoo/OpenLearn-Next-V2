@@ -465,7 +465,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
 
       const logRow = kernel.db
-        .prepare('SELECT status FROM plugin_ext_worker_stream_abort_abort_log LIMIT 1')
+        .prepare('SELECT status FROM plugin_uuid_worker_stream_abort_abort_log LIMIT 1')
         .get() as any;
       expect(logRow?.status).toBe('aborted_successfully');
     });

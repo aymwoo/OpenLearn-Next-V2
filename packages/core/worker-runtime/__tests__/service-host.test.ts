@@ -535,7 +535,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
       expect(transport.messages[0].type).toBe('error');
       expect(transport.messages[0].code).toBe('WorkerCapabilityError');
       expect(transport.messages[0].message).toContain(
-        'Worker plugin "ext-test-db" is forbidden from accessing core security table "users"',
+        'Worker plugin "ext-test-db" is not permitted to access table "users"',
       );
       expect(mockDb.prepare).not.toHaveBeenCalled();
     });

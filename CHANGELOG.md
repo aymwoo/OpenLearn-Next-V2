@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
 - **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
+- **第三方插件不再因 id 前缀获得宿主进程身份。** 进程内执行只接受预加载内置插件、`OPENLEARN_TRUSTED_INLINE_PLUGINS` 的精确名单，或 `packages/plugins` 里的入口。ZIP 里的 `@openlearn/` id 会以子进程运行。能力申请需要管理员确认，`*` 不会授予。SQL 只允许插件自己的表前缀；研究表要写进 `OPENLEARN_RESEARCH_SQL_PLUGINS`（未设置时仅 `lianyun-course`）。社区注册表安装默认关闭，打开后还要完整性哈希、Ed25519 签名和 `OPENLEARN_COMMUNITY_PUBKEY`。远程前端改在不透明源 iframe 里执行，函数渲染器不能穿过 postMessage。子进程默认没有出站 socket。迁移步骤见 `docs/plugin/plugin-security-migration.md`。
 
 ### Fixes
 
@@ -98,6 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **课件上传同级逃逸与 Zip Bomb 防护 (SEC-04)**：
   - `builtin.ts` 课件解压对齐带路径分隔符的严格沙箱前缀校验（`storageDir + path.sep`），防御同级目录逃逸；
   - 解压前增加预检门禁：解压后未压缩尺寸上限 300MB、条目数上限 2,000，阻断 Zip 炸弹攻击。
+- **插件信任边界 PL-01 至 PL-08。** 伪造的 `@openlearn/` 前缀不能 inline；插件前端离开主页面；命令 actor 由宿主注入并拒绝空 actor；能力与出站域名要管理员批准；SQL 改为表前缀白名单；建表和卸载使用同一个安装主键；社区包校验哈希与签名；子进程经入口脚本拒绝未批准的出站连接，并加上 RSS 与 CPU 窗口。对应回归在 `packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts`。
 - 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
 - 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
   - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）

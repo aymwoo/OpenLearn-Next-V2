@@ -85,9 +85,13 @@ export class CommandBus {
   }
 
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
+    const actorId = typeof command.actorId === 'string' ? command.actorId.trim() : '';
+    if (!actorId) {
+      throw new Error('[Security] Command actorId is required. Empty actors are rejected.');
+    }
     const normalizedCommand: PlatformCommand = {
       ...command,
-      actorId: command.actorId || 'agent-system-0',
+      actorId,
     };
 
     if (this.interceptor) {

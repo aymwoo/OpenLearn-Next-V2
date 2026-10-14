@@ -79,6 +79,7 @@ import { createCorsMiddleware, createSocketIoCors } from './server/middleware/co
 import { registerHealthRoutes } from './server/routes/health.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
+import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -196,9 +197,9 @@ async function startServer() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          // blob: — 插件前端加载通道：FrontendPluginHost 将插件源码包装为 Blob URL
-          // 再 dynamic import（见 src/plugin-host/plugin-host.ts activateRemotePlugin）。
-          // 缺失会导致所有插件前端激活失败（CSP 违规），扩展点永不渲染。
+          // blob: — 浏览器 Worker 与内联单测加载器仍可能使用 Blob URL。
+          // 远程插件前端不再在父页面 import()，而是进 /plugin-sandbox/frame
+          // （sandbox=allow-scripts、不透明源、postMessage 桥）。
           //
           // SEC-NET-02: 生产 scriptSrc 不再含 'unsafe-inline' —— SPA 构建产物无内联
           // 脚本；第三方课件 HTML 由独立路由直出并用自有宽松 CSP 覆盖
@@ -316,7 +317,36 @@ async function startServer() {
       maxAge: 0,
     }),
   );
-  app.use('/plugins', express.static(getPluginsDir(), { index: false, dotfiles: 'ignore' }));
+  app.use(
+    '/plugins',
+    (req: any, res: any, next: any) => {
+      const token = getCookieToken(req);
+      if (!token) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      const session = getValidSession(token);
+      if (!session) {
+        return res.status(401).json({ error: 'Session expired or invalid' });
+      }
+      next();
+    },
+    express.static(getPluginsDir(), { index: false, dotfiles: 'ignore', fallthrough: false, maxAge: 0 }),
+  );
+  app.get('/plugin-sandbox/frame', (req: any, res: any) => {
+    const token = getCookieToken(req);
+    const session = token ? getValidSession(token) : null;
+    if (!session) {
+      return res.status(401).type('text/plain').send('Authentication required');
+    }
+    res
+      .status(200)
+      .setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; style-src 'none'; img-src 'none'; frame-ancestors 'self'",
+      )
+      .type('html')
+      .send(PLUGIN_SANDBOX_FRAME_HTML);
+  });
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块?
 
   // SEC-NET-01: Express CORS 中间件与白名单隔离

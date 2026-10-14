@@ -89,11 +89,10 @@ describe('B-5 · 共享 method-policy（后端视角）', () => {
     expect(policy('@openlearn/core:IEventBusService', 'publish')).toBeNull();
   });
 
-  it('能力匹配语义：* 通配；声明更具体的能力蕴含其基类', () => {
-    // hasCapability 的语义是「声明 `name:*` 或 `*` 即拥有 name」——
-    // 即**更具体蕴含更宽松**。反过来 `task:admin` 并不蕴含 `task:register`
-    // （它们是兄弟关系，不是父子），这一点容易误判，故在此锁定。
-    expect(policy(CORE.aiService, 'generateText', ['*'])).toBeNull();
+  it('能力匹配语义：* 不是超级能力；更具体的声明蕴含其前缀', () => {
+    // `*`、`*:*` 不能代替具体能力。`task:register:long` 蕴含 `task:register`。
+    // `task:admin` 与 `task:register` 是兄弟，互不蕴含。
+    expect(policy(CORE.aiService, 'generateText', ['*'])).toContain('ai:invoke');
     expect(policy(CORE.processService, 'restore', ['task:register'])).toBeNull();
     // 声明 `task:register:long` 蕴含 `task:register`
     expect(policy(CORE.processService, 'restore', ['task:register:long'])).toBeNull();

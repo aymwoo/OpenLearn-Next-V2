@@ -88,7 +88,8 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 | `tags`                    | —    | 数组或逗号分隔字符串，最多保留 8 个标签，用于前端筛选。                                                          |
 | `capabilities`            | —    | 插件申请的权限，用于在卡片上提示权限数量（悬停查看完整列表）。                                                   |
 | `downloads` / `stars`     | —    | 非负数字或数字字符串，用于展示与默认排序。                                                                       |
-| `verified` / `featured`   | —    | 布尔值（也接受 `"true"` / `1`）。`featured` 排序时优先置顶。                                                     |
+| `integrity` / `signature` | 安装时 | `integrity` 是 ZIP 的 sha256 十六进制或 `sha256-` base64。`signature` 是对该字符串的 Ed25519 签名（base64）。社区安装默认关闭。 |
+| `verified` / `featured`   | —    | `featured` 仍由注册表布尔值决定。`verified` 会被服务端忽略，不再把条目标成已认证。 |
 
 ### 归一化与容错策略
 
@@ -144,17 +145,18 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 }
 ```
 
-`acknowledgeRisk` 必须为 JSON 布尔值 `true`。缺省或其它值在 URL 安全校验通过后返回 HTTP 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`，此时不会下载包。`approvePublicRoutes: true` 才会把清单里 `auth: false` 的路由记入 `plugin_public_routes`；默认不传则不公开。非 `@openlearn/` 插件即使传入 `executionMode: "worker"` 或 `"inline"`，实际仍为 `process`，响应带 `executionModeCoerced: true`。
+`acknowledgeRisk` 必须为 JSON 布尔值 `true`。缺省或其它值在 URL 安全校验通过后返回 HTTP 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`，此时不会下载包。`approvePublicRoutes: true` 才会把清单里 `auth: false` 的路由记入 `plugin_public_routes`；默认不传则不公开。`approveCapabilities: true` 才会把 `capabilitiesProposed` 写入批准表。未列入 `OPENLEARN_TRUSTED_INLINE_PLUGINS`、且文件不在内置目录的插件，即使 id 以 `@openlearn/` 开头、即使传入 `executionMode: "worker"` 或 `"inline"`，实际仍为 `process`，响应带 `executionModeCoerced: true`。
 
 处理流程：
 
 1. 校验 `downloadUrl` 通过出站安全校验、`expectedId` 符合插件 id 规范；
 2. 要求 `acknowledgeRisk === true`，否则 400 且不下载；
-3. 服务端下载 ZIP（60 秒超时，`content-length` 或实际体积超过 200MB 直接拒绝，空包拒绝）；
-4. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；
-5. 否则 ⇒ 走 `installFromZip` 全新安装，并按受信策略落执行模式。
+3. 要求 `OPENLEARN_COMMUNITY_INSTALL=1`，否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
+4. 要求请求体同时带 `integrity` 与 `signature`，否则 400，`code` 为 `COMMUNITY_ATTESTATION_REQUIRED`，此时不下载；
+5. 服务端下载 ZIP。下载失败返回 HTTP 400 + `fallbackToClient: true`。下载成功后按 `OPENLEARN_COMMUNITY_PUBKEY` 验签，失败则删除临时包；
+6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，并按受信策略落执行模式。
 
-**浏览器直传回退**：步骤 2 失败时返回 HTTP 400 + `fallbackToClient: true`，前端随即在浏览器中下载同一个 ZIP，并以 `Content-Type: application/octet-stream` 直传既有的 `POST /api/plugins/upload-zip-raw`（这是大包或服务端网络受限场景的兜底路径，与「一键热更新」保持同一策略）。
+**浏览器直传回退**：下载失败时前端在浏览器中下载同一个 ZIP，并以 `Content-Type: application/octet-stream` 直传 `POST /api/plugins/upload-zip-raw`。社区回退必须带 `x-community-install`、`x-acknowledge-risk`、`x-integrity` 与 `x-signature`，服务端同样检查安装开关和验签。
 
 ---
 

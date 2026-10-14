@@ -22,7 +22,7 @@
  * | `child_process` 拉子进程 | ⛔ 默认即禁 | 需显式 `--allow-child-process` 才放行 |
  * | 创建 worker | ⛔ 默认即禁 | 同上，需 `--allow-worker` |
  * | IPC `process.send` / `on('message')` | ✅ 放行 | transport 不受影响 |
- * | **网络（`net` / `dns` / `http`）** | ⚠️ **完全不受限** | 本版本**没有** `--allow-net` 旗标，无法收紧 |
+ * | **网络（`net` / `dns`）** | ⛔ 入口脚本拒绝 | Node 仍没有 `--allow-net`。`plugin-net-preload.cjs` 拦住原始 socket 与 DNS；`fetch` / `http(s)` 只把已批准域名交给宿主代理 |
  *
  * ### 旗标名在版本间变过
  *
@@ -32,11 +32,11 @@
  *
  * ## 两个必须说清的缺口
  *
- * 1. **不覆盖网络。** 没有 `--allow-net`，插件在权限模式下仍可任意发起出站连接，
- *    也可读任意 DNS。要收敛只能靠别的东西（见 `docs/architecture/`
- *    `plugin-worker-isolation-l1-proposal.md` 的后续规划）。
- * 2. **不覆盖 CPU。** 权限模型管的是「能做什么」，不是「能算多久」。吃 CPU 但让出
- *    事件循环的插件仍能通过存活探活 —— 那一类要靠进程级资源配额，不是这里。
+ * 1. **权限模型本身不覆盖网络。** 没有 `--allow-net`。出站由
+ *    `plugin-net-preload.cjs` 补上：原始 socket 与 DNS 默认拒绝，HTTP 只经宿主代理。
+ *    `OPENLEARN_PLUGIN_PERMISSION=off` 会连这个入口脚本一起关掉。
+ * 2. **不覆盖 CPU。** 权限模型管的是「能做什么」，不是「能算多久」。RSS 与 CPU
+ *    窗口由 `plugin-quota.ts` 采样；`OPENLEARN_PLUGIN_QUOTA=off` 关闭采样。
  *
  * ## 与 `ctx.require` 共享模块的协调
  *
@@ -134,6 +134,6 @@ export function describePermissionPolicy(spec: PermissionSpec): string {
   const bits = ['可读 pluginDir', '可读共享依赖 node_modules'];
   if (spec.pluginDir) bits.push(spec.policy === 'rw' ? '可写 pluginDir' : '只读');
   bits.push('禁 eval/new Function', '禁 spawn 子进程', '禁创建 worker');
-  bits.push('⚠ 网络不受限（本版本无 --allow-net）');
+  bits.push('出站 socket/DNS 默认拒绝，仅宿主代理已批准域名');
   return `权限模型[${spec.policy}]：${bits.join('；')}`;
 }

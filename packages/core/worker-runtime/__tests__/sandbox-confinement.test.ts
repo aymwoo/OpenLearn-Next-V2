@@ -114,15 +114,16 @@ describe('DML 命名空间隔离（SEC-DB-03）', () => {
     }
   });
 
-  it('允许读写自己 manifestId 命名空间下的表', async () => {
+  it('拒绝 manifest id 命名空间：建表和删表只用安装主键', async () => {
     const r = await invokeSql(`SELECT * FROM ${OWN_NS_MID}attendance_records`, ['@openlearn/core:IDatabase']);
-    expect(r.type).toBe('result');
+    expect(r.type).toBe('error');
+    expect(r.message).toContain('not permitted to access table');
   });
 
   it('拒绝 SELECT 其他插件的表', async () => {
     const r = await invokeSql(`SELECT * FROM ${OTHER_TABLE}`, ['@openlearn/core:IDatabase']);
     expect(r.type).toBe('error');
-    expect(r.message).toContain("another plugin's table");
+    expect(r.message).toContain('not permitted to access table');
   });
 
   it('拒绝 UPDATE / DELETE / INSERT 其他插件的表', async () => {
@@ -141,7 +142,7 @@ describe('DML 命名空间隔离（SEC-DB-03）', () => {
       '@openlearn/core:IDatabase',
     ]);
     expect(r.type).toBe('error');
-    expect(r.message).toContain('another plugin');
+    expect(r.message).toContain('not permitted to access table');
   });
 
   it('不把 plugin_id 这类列名误判为表名', async () => {
@@ -179,7 +180,7 @@ describe('核心表黑名单扩充', () => {
   ])('拒绝访问 %s（此前黑名单漏网）', async (table) => {
     const r = await invokeSql(`SELECT * FROM ${table}`, ['@openlearn/core:IDatabase']);
     expect(r.type, `应拒绝 ${table}`).toBe('error');
-    expect(r.message).toContain('forbidden from accessing core security table');
+    expect(r.message).toContain('not permitted to access table');
   });
 
   it('既有的高危操作封禁未被破坏', async () => {

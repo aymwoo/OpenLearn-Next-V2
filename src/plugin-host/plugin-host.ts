@@ -20,6 +20,8 @@ import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore, appStore } from '../store/appStore';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
+import { checkMethodPolicy } from './method-policy';
+import { isPluginFrameMessage, PLUGIN_FRAME_CHANNEL, PLUGIN_FRAME_PATH, PLUGIN_SANDBOX_ATTR } from './sandbox-frame';
 import {
   PluginState,
   FRONTEND_API_TOKEN,
@@ -278,6 +280,8 @@ export class FrontendPluginHost {
    * 上限告警，页面会话内只增不减）。
    */
   private disposers = new Map<string, Array<() => void>>();
+  /** 远程前端插件的不透明源 iframe。停用时摘掉。 */
+  private sandboxFrames = new Map<string, HTMLIFrameElement>();
 
   /**
    * 登记一个随插件停用/卸载自动执行的清理函数。
@@ -409,6 +413,161 @@ export class FrontendPluginHost {
     registerManifestContributions(usePluginHostStore.getState(), pluginId, manifest.id, manifest);
   }
 
+  private destroySandboxFrame(pluginId: string): void {
+    const frame = this.sandboxFrames.get(pluginId);
+    if (!frame) return;
+    this.sandboxFrames.delete(pluginId);
+    try {
+      frame.contentWindow?.postMessage({ channel: PLUGIN_FRAME_CHANNEL, type: 'deactivate', id: pluginId }, '*');
+    } catch {
+      /* 框架可能已经卸掉 */
+    }
+    frame.remove();
+  }
+
+  private async mountSandboxFrame(
+    pluginId: string,
+    manifest: FrontendPluginManifest,
+    sourceCode: string,
+  ): Promise<void> {
+    if (typeof document === 'undefined') {
+      throw new Error(`Cannot sandbox plugin "${pluginId}" outside a browser document`);
+    }
+    this.destroySandboxFrame(pluginId);
+    const frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', PLUGIN_SANDBOX_ATTR);
+    frame.setAttribute('src', PLUGIN_FRAME_PATH);
+    frame.setAttribute('title', `plugin-sandbox-${pluginId}`);
+    frame.style.display = 'none';
+    document.body.appendChild(frame);
+    this.sandboxFrames.set(pluginId, frame);
+
+    const frontendApi = this.registry ? await this.registry.resolve<IFrontendAPI>(FRONTEND_API_TOKEN) : null;
+    const storageService = this.registry ? await this.registry.resolve<IStorageService>(STORAGE_SERVICE_TOKEN) : null;
+    const uiService = this.registry ? await this.registry.resolve<IUIService>(UI_SERVICE_TOKEN) : null;
+    const caps = Array.isArray(manifest.capabilitiesProposed) ? manifest.capabilitiesProposed : [];
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        reject(new Error('Activation timeout (5000ms)'));
+      }, 5000);
+
+      const finish = (error?: Error) => {
+        window.clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        if (error) reject(error);
+        else resolve();
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
+        const data = event.data;
+        if (data.type === 'ready') {
+          frame.contentWindow?.postMessage(
+            { channel: PLUGIN_FRAME_CHANNEL, type: 'load', id: pluginId, pluginId, manifest, source: sourceCode },
+            '*',
+          );
+          return;
+        }
+        if (data.type === 'activated' && data.id === pluginId) {
+          finish();
+          return;
+        }
+        if (data.type === 'activate-error' && data.id === pluginId) {
+          finish(new Error(data.error || 'sandbox activation failed'));
+          return;
+        }
+        if (data.type !== 'call' || !data.callId || !data.op) return;
+        void this.answerSandboxCall(frame, data.callId, data.op, data.args ?? [], {
+          pluginId,
+          manifest,
+          caps,
+          frontendApi,
+          storageService,
+          uiService,
+        }).catch((error: unknown) => {
+          frame.contentWindow?.postMessage(
+            {
+              channel: PLUGIN_FRAME_CHANNEL,
+              type: 'reply',
+              callId: data.callId,
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            '*',
+          );
+        });
+      };
+
+      window.addEventListener('message', onMessage);
+    });
+  }
+
+  private async answerSandboxCall(
+    frame: HTMLIFrameElement,
+    callId: string,
+    op: string,
+    args: unknown[],
+    ctx: {
+      pluginId: string;
+      manifest: FrontendPluginManifest;
+      caps: string[];
+      frontendApi: IFrontendAPI | null;
+      storageService: IStorageService | null;
+      uiService: IUIService | null;
+    },
+  ): Promise<void> {
+    const reply = (ok: boolean, value?: unknown, error?: string) => {
+      frame.contentWindow?.postMessage({ channel: PLUGIN_FRAME_CHANNEL, type: 'reply', callId, ok, value, error }, '*');
+    };
+    try {
+      let value: unknown;
+      if (op === 'api.get' || op === 'api.post' || op === 'api.del') {
+        const method = op.slice(4);
+        const denied = checkMethodPolicy(FRONTEND_API_TOKEN, method, args, ctx.caps);
+        if (denied) throw new Error(denied);
+        if (!ctx.frontendApi) throw new Error('frontendApi is not available');
+        if (method === 'get') value = await ctx.frontendApi.get(String(args[0] ?? ''));
+        else if (method === 'post') value = await ctx.frontendApi.post(String(args[0] ?? ''), args[1]);
+        else value = await ctx.frontendApi.del(String(args[0] ?? ''));
+      } else if (op === 'storage.get' || op === 'storage.set' || op === 'storage.delete') {
+        if (!ctx.storageService) throw new Error('storageService is not available');
+        const key = `${ctx.manifest.id}:${String(args[0] ?? '')}`;
+        if (op === 'storage.get') value = ctx.storageService.get(key);
+        else if (op === 'storage.set') {
+          const raw = args[1];
+          ctx.storageService.set(key, typeof raw === 'string' ? raw : JSON.stringify(raw ?? null));
+          value = true;
+        } else {
+          ctx.storageService.delete(key);
+          value = true;
+        }
+      } else if (op === 'command.invoke') {
+        if (!ctx.frontendApi) throw new Error('frontendApi is not available');
+        const prefixedType = resolvePluginCommandType(String(args[0] ?? ''), ctx.manifest.id);
+        value = await ctx.frontendApi.post('/api/plugins/execute-command', { type: prefixedType, payload: args[1] });
+      } else if (op === 'ui.register') {
+        const slot = String(args[0] ?? '') as AnyExtensionSlot;
+        const config = args[1] && typeof args[1] === 'object' ? (args[1] as ExtensionPointConfig) : ({} as ExtensionPointConfig);
+        usePluginHostStore.getState().registerExtensionPoint(slot, { ...config, pluginId: ctx.pluginId });
+        value = true;
+      } else if (op === 'ui.toast') {
+        const message = String(args[0] ?? '');
+        ctx.uiService?.showToast(message, message, 'info');
+        value = true;
+      } else if (op === 'context.get') {
+        const state = appStore.getState();
+        value = { lessonId: state.selectedLesson, classId: state.liveClassSelectedClassId };
+      } else {
+        throw new Error(`Unsupported sandbox bridge op "${op}"`);
+      }
+      reply(true, value);
+    } catch (error) {
+      reply(false, undefined, error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async activateRemotePlugin(pluginId: string, manifest: FrontendPluginManifest): Promise<void> {
     const store = usePluginHostStore.getState();
 
@@ -429,7 +588,7 @@ export class FrontendPluginHost {
 
     try {
       const url = `/plugins/${pluginId}/frontend.js`;
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: 'same-origin' });
       if (!res.ok) {
         throw new Error(`Failed to fetch frontend.js for plugin "${pluginId}": HTTP ${res.status}`);
       }
@@ -440,37 +599,16 @@ export class FrontendPluginHost {
         sourceCode = transformBareModuleImports(sourceCode);
       }
 
-      const blob = new Blob([sourceCode], { type: 'text/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-      let mod: any;
-      try {
-        mod = await import(/* @vite-ignore */ blobUrl);
-      } finally {
-        URL.revokeObjectURL(blobUrl);
-      }
-
-      const plugin = mod.default ?? mod;
-
-      if (typeof plugin.activate !== 'function') {
-        throw new Error('Invalid remote frontend plugin: missing activate function');
-      }
-
-      // manifest 声明式贡献必须在插件代码激活**之前**注册（与 activatePlugin
-      // 同一顺序），使插件 activate 内可自省到自身声明
+      // manifest 声明式贡献留在父页面。插件代码只在不透明源 iframe 里执行。
       this.registerManifestContributions(pluginId, manifest);
-
-      const ctx = await this.buildContext(pluginId, manifest);
-
-      // 5s activation timeout
-      await Promise.race([
-        plugin.activate(ctx),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000)),
-      ]);
+      await this.mountSandboxFrame(pluginId, manifest, sourceCode);
 
       this.pluginModules.set(pluginId, {
         manifest,
-        activate: plugin.activate,
-        deactivate: typeof plugin.deactivate === 'function' ? plugin.deactivate : undefined,
+        activate: async () => undefined,
+        deactivate: async () => {
+          this.destroySandboxFrame(pluginId);
+        },
       });
 
       // 激活成功即复位熔断 —— v0.6.1 审计 C-2：此前 resetPluginBreaker 是
@@ -480,6 +618,7 @@ export class FrontendPluginHost {
     } catch (err) {
       console.error(`[FrontendPluginHost] Failed to activate remote plugin "${pluginId}":`, err);
       store.updatePluginState(pluginId, PluginState.ERROR);
+      this.destroySandboxFrame(pluginId);
       this.unregisterPluginResources(pluginId);
       throw err;
     }
@@ -708,6 +847,7 @@ export class FrontendPluginHost {
       }
       this.disposers.delete(pluginId);
     }
+    this.destroySandboxFrame(pluginId);
     usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
     fullscreenRendererRegistry.unregisterPlugin(pluginId);
     propertyEditorRegistry.unregisterPlugin(pluginId);

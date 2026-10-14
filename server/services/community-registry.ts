@@ -54,6 +54,9 @@ export interface CommunityPluginEntry {
   downloads: number | null;
   stars: number | null;
   verified: boolean;
+  /** 登记的完整性字符串。verified 不由此字段或注册表的 verified 列决定。 */
+  integrity: string | null;
+  signature: string | null;
   featured: boolean;
   /** 由服务端根据本地已安装插件填充，注册表自身不提供。 */
   installedVersion: string | null;
@@ -162,7 +165,9 @@ export function normalizeCommunityEntry(raw: unknown): CommunityPluginEntry | nu
     publishedAt: asTrimmedString(record.publishedAt ?? record.published_at, 64),
     downloads: asFiniteNumber(record.downloads),
     stars: asFiniteNumber(record.stars),
-    verified: asBoolean(record.verified),
+    verified: false,
+    integrity: asTrimmedString(record.integrity, 256),
+    signature: asTrimmedString(record.signature, 512),
     featured: asBoolean(record.featured),
     installedVersion: null,
     hasUpdate: false,
