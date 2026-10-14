@@ -3,11 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { RollCallWrapper } from '../widgets/RollCallWrapper';
 import { frontendEventBus } from '../../../services/event-bus';
+import { appStore } from '../../../store/appStore';
 
 describe('RollCallWrapper Tiered Picker & Evaluation', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    appStore.setState({ onlineStudentIds: [], activeStudentLessons: {} });
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/api/classes/')) {
         return Promise.resolve({
@@ -56,8 +58,16 @@ describe('RollCallWrapper Tiered Picker & Evaluation', () => {
 
   afterEach(() => {
     cleanup();
+    appStore.setState({ onlineStudentIds: [], activeStudentLessons: {} });
     vi.restoreAllMocks();
   });
+
+  const markPresent = (ids: string[], lessonId = 'lesson-1') => {
+    appStore.setState({
+      onlineStudentIds: ids,
+      activeStudentLessons: Object.fromEntries(ids.map((id) => [id, lessonId])),
+    });
+  };
 
   it('renders with candidate list and supports mode switching to tiered', async () => {
     render(
@@ -232,6 +242,7 @@ describe('RollCallWrapper Tiered Picker & Evaluation', () => {
 
     it('keeps the local optimistic pick when the teacher has not persisted it yet', async () => {
       // 教师端点击后先播滚轮动画，此时 data 尚未回写；不能被「旧 data」打回未抽中状态
+      markPresent(['s1', 's2', 's3']);
       render(
         <RollCallWrapper
           elementId="el-rc-1"
@@ -244,6 +255,10 @@ describe('RollCallWrapper Tiered Picker & Evaluation', () => {
         />,
       );
 
+      await waitFor(() => {
+        expect(screen.getByText(/候选池：3 人/)).toBeTruthy();
+      });
+
       fireEvent.click(screen.getByText('开始随机点名'));
       expect(screen.getByText('加权滚轮运转中...')).toBeDefined();
 
@@ -255,5 +270,76 @@ describe('RollCallWrapper Tiered Picker & Evaluation', () => {
         { timeout: 3000 },
       );
     });
+  });
+
+  it('只抽取已进入本节课的学生，离开后给出无人在场提示', async () => {
+    markPresent(['s1']);
+    render(
+      <RollCallWrapper
+        elementId="el-rc-1"
+        data={{}}
+        classId="class-1"
+        lessonId="lesson-1"
+        onElementUpdate={vi.fn()}
+        onPointerDown={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/候选池：1 人/)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('开始随机点名'));
+    await waitFor(
+      () => {
+        expect(screen.getByText('张明')).toBeTruthy();
+        expect(screen.getByText('抽取下一位学生')).toBeTruthy();
+      },
+      { timeout: 3000 },
+    );
+
+    appStore.setState({
+      onlineStudentIds: ['s2'],
+      activeStudentLessons: { s2: 'lesson-other' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rollcall-no-present-students')).toBeTruthy();
+      expect(screen.getByText(/候选池：0 人/)).toBeTruthy();
+    });
+
+    const nextBtn = screen.getByText('抽取下一位学生').closest('button') as HTMLButtonElement;
+    expect(nextBtn.disabled).toBe(true);
+    fireEvent.click(nextBtn);
+    expect(screen.queryByText('加权滚轮运转中...')).toBeNull();
+  });
+
+  it('全班都未进入本节课时显示友好提示，而不是抽全班名单', async () => {
+    appStore.setState({
+      onlineStudentIds: ['s1', 's2', 's3'],
+      activeStudentLessons: { s1: 'elsewhere', s2: 'elsewhere', s3: 'elsewhere' },
+    });
+
+    render(
+      <RollCallWrapper
+        elementId="el-rc-1"
+        data={{}}
+        classId="class-1"
+        lessonId="lesson-1"
+        onPointerDown={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rollcall-no-present-students')).toBeTruthy();
+    });
+    expect(screen.getByText(/当前课堂没有在场学生/)).toBeTruthy();
+    expect(screen.getByText(/候选池：0 人/)).toBeTruthy();
+    expect(screen.queryByText('张明')).toBeNull();
+
+    const pickBtn = screen.getByText('开始随机点名').closest('button') as HTMLButtonElement;
+    expect(pickBtn.disabled).toBe(true);
   });
 });

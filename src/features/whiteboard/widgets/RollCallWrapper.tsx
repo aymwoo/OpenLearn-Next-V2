@@ -18,6 +18,7 @@ import {
   type PickerMode,
   type EvaluationRating,
   EVALUATION_CONFIGS,
+  filterCandidatesByPresence,
   filterCandidatesByTier,
   pickStudentFairly,
 } from '../services/fair-picker-engine';
@@ -85,65 +86,68 @@ export function RollCallWrapper({
   onMaximize,
 }: RollCallWrapperProps) {
   const classes = useAppStore((s) => s.classes) || [];
+  const onlineStudentIds = useAppStore((s) => s.onlineStudentIds);
+  const activeStudentLessons = useAppStore((s) => s.activeStudentLessons);
   const [selectedClassId, setSelectedClassId] = useState<string>(propClassId || data.classId || (classes[0]?.id ?? ''));
 
   const [students, setStudents] = useState<PickerStudent[]>(() => {
-    return (
-      data.candidates ||
-      data.allStudents || [
-        {
-          id: 'mock-s-1',
-          name: '张明',
-          student_number: '101',
-          tier: 'basic',
-          term_picked_count: 0,
-          lesson_picked_count: 0,
-        },
-        {
-          id: 'mock-s-2',
-          name: '李华',
-          student_number: '102',
-          tier: 'intermediate',
-          term_picked_count: 1,
-          lesson_picked_count: 0,
-        },
-        {
-          id: 'mock-s-3',
-          name: '王超',
-          student_number: '103',
-          tier: 'advanced',
-          term_picked_count: 2,
-          lesson_picked_count: 0,
-        },
-        {
-          id: 'mock-s-4',
-          name: '赵丽',
-          student_number: '104',
-          tier: 'basic',
-          term_picked_count: 0,
-          lesson_picked_count: 0,
-        },
-        {
-          id: 'mock-s-5',
-          name: '钱科',
-          student_number: '105',
-          tier: 'intermediate',
-          term_picked_count: 1,
-          lesson_picked_count: 0,
-        },
-        {
-          id: 'mock-s-6',
-          name: '孙雪',
-          student_number: '106',
-          tier: 'advanced',
-          term_picked_count: 3,
-          lesson_picked_count: 0,
-        },
-      ]
-    );
+    if (Array.isArray(data.candidates) && data.candidates.length > 0) return data.candidates;
+    if (Array.isArray(data.allStudents) && data.allStudents.length > 0) return data.allStudents;
+    // 课堂里打开时不预填演示名单，避免在真实在场名单回来之前抽到假学生。
+    if (propClassId || data.classId || lessonId) return [];
+    return [
+      {
+        id: 'mock-s-1',
+        name: '张明',
+        student_number: '101',
+        tier: 'basic',
+        term_picked_count: 0,
+        lesson_picked_count: 0,
+      },
+      {
+        id: 'mock-s-2',
+        name: '李华',
+        student_number: '102',
+        tier: 'intermediate',
+        term_picked_count: 1,
+        lesson_picked_count: 0,
+      },
+      {
+        id: 'mock-s-3',
+        name: '王超',
+        student_number: '103',
+        tier: 'advanced',
+        term_picked_count: 2,
+        lesson_picked_count: 0,
+      },
+      {
+        id: 'mock-s-4',
+        name: '赵丽',
+        student_number: '104',
+        tier: 'basic',
+        term_picked_count: 0,
+        lesson_picked_count: 0,
+      },
+      {
+        id: 'mock-s-5',
+        name: '钱科',
+        student_number: '105',
+        tier: 'intermediate',
+        term_picked_count: 1,
+        lesson_picked_count: 0,
+      },
+      {
+        id: 'mock-s-6',
+        name: '孙雪',
+        student_number: '106',
+        tier: 'advanced',
+        term_picked_count: 3,
+        lesson_picked_count: 0,
+      },
+    ];
   });
 
-  const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
+  const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(Boolean(propClassId || data.classId));
   const [pickerMode, setPickerMode] = useState<PickerMode>(data.pickerMode || 'fair_all');
   const [difficulty, setDifficulty] = useState<PickerTier>(data.difficulty || 'intermediate');
 
@@ -181,6 +185,18 @@ export function RollCallWrapper({
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  /** 滚轮动画进行中学生可能离开，落定时必须读最新在场池，而不是开抽时的闭包。 */
+  const candidatePoolRef = useRef<PickerStudent[]>([]);
+
+  const presenceKey = useMemo(() => {
+    if (!lessonId) return '';
+    return (onlineStudentIds || [])
+      .filter((id) => activeStudentLessons?.[id] === lessonId)
+      .slice()
+      .sort()
+      .join('\0');
+  }, [lessonId, onlineStudentIds, activeStudentLessons]);
+
   useEffect(() => {
     // 远端还没有抽中结果时，保留本地状态（教师端乐观更新 / 学生端等待中）
     if (data.pickedTime == null) return;
@@ -192,7 +208,8 @@ export function RollCallWrapper({
     setTempDisplayStudent(null);
   }, [remoteSignature, data.pickedTime, data.selectedStudent, data.evaluation]);
 
-  // 从真实后端按班级拉取学生及提问频次画像
+  // 从真实后端拉取提问频次画像。带 lessonId 时服务端只返回本节在场学生；
+  // presenceKey 变化（有人进入或离开）时重拉，离开的人不会留在本地名单里。
   useEffect(() => {
     if (!selectedClassId) return;
 
@@ -206,12 +223,12 @@ export function RollCallWrapper({
         return res.json();
       })
       .then((list: PickerStudent[]) => {
-        if (isMounted && Array.isArray(list) && list.length > 0) {
-          setStudents(list);
-        }
+        if (!isMounted || !Array.isArray(list)) return;
+        // 空数组是「现在没人在这节课」，必须覆盖演示名单，不能当成拉取失败。
+        if (list.length > 0 || lessonId) setStudents(list);
       })
       .catch((err) => {
-        // 优雅降级保持当前列表
+        // 网络失败时保留当前列表；课堂内初始列表为空，不会退回假学生。
         console.warn('[RollCallWrapper] candidates fallback:', err);
       })
       .finally(() => {
@@ -221,20 +238,31 @@ export function RollCallWrapper({
     return () => {
       isMounted = false;
     };
-  }, [selectedClassId, lessonId]);
+  }, [selectedClassId, lessonId, presenceKey]);
 
-  // 根据当前提问模式过滤出的候选池
+  // 先按在场状态收窄，再按分层模式过滤。公平加权仍作用在这个池子上。
+  const presentStudents = useMemo(
+    () =>
+      filterCandidatesByPresence(students, {
+        onlineStudentIds,
+        activeStudentLessons,
+        lessonId,
+      }),
+    [students, onlineStudentIds, activeStudentLessons, lessonId],
+  );
+
   const candidatePool = useMemo(() => {
     if (pickerMode === 'fair_all') {
-      return students;
+      return presentStudents;
     }
-    const { filtered } = filterCandidatesByTier(students, difficulty);
+    const { filtered } = filterCandidatesByTier(presentStudents, difficulty);
     return filtered;
-  }, [students, pickerMode, difficulty]);
+  }, [presentStudents, pickerMode, difficulty]);
+  candidatePoolRef.current = candidatePool;
 
   // 执行公平/分层抽问
   const handleStartPick = () => {
-    if (candidatePool.length === 0 || isRolling) return;
+    if (candidatePoolRef.current.length === 0 || isRolling) return;
 
     setIsRolling(true);
     setEvaluation(null);
@@ -244,16 +272,30 @@ export function RollCallWrapper({
     const intervalTime = 70;
 
     const interval = setInterval(() => {
-      const randomIdx = Math.floor(Math.random() * candidatePool.length);
-      setTempDisplayStudent(candidatePool[randomIdx]);
+      const pool = candidatePoolRef.current;
+      if (pool.length === 0) {
+        clearInterval(interval);
+        setIsRolling(false);
+        setTempDisplayStudent(null);
+        return;
+      }
+      const randomIdx = Math.floor(Math.random() * pool.length);
+      setTempDisplayStudent(pool[randomIdx]);
       counter++;
 
       if (counter >= totalFlips) {
         clearInterval(interval);
 
-        // 使用公平加权算法挑选最终学生
-        const result = pickStudentFairly(candidatePool);
-        const picked = result ? result.student : candidatePool[0];
+        const latest = candidatePoolRef.current;
+        if (latest.length === 0) {
+          setIsRolling(false);
+          setTempDisplayStudent(null);
+          return;
+        }
+
+        // 使用公平加权算法挑选最终学生（只在仍然在场的人里抽）
+        const result = pickStudentFairly(latest);
+        const picked = result ? result.student : latest[0];
 
         setSelectedStudent(picked);
         setIsRolling(false);
@@ -549,6 +591,14 @@ export function RollCallWrapper({
                     ) : null}
                   </div>
                 </div>
+              ) : candidatePool.length === 0 && !isLoadingStudents ? (
+                <div className="text-center space-y-1.5 px-3" data-testid="rollcall-no-present-students">
+                  <HelpCircle size={26} className="text-amber-300/90 mx-auto" />
+                  <div className="text-xs text-amber-200 font-semibold">当前课堂没有在场学生</div>
+                  <p className="text-2xs text-indigo-200/80 leading-relaxed">
+                    只会抽取已经进入本节课的学生。有人离开后不会再被点到，请等学生加入后再开始。
+                  </p>
+                </div>
               ) : (
                 <div className="text-center space-y-1">
                   <HelpCircle size={26} className="text-indigo-400/80 mx-auto animate-pulse" />
@@ -580,6 +630,14 @@ export function RollCallWrapper({
                 <span>{pickerMode === 'fair_all' ? '全员公平' : `分层: ${difficulty}`}</span>
                 {isLoadingStudents && <RefreshCw size={9} className="animate-spin text-indigo-400" />}
               </div>
+              {!isLoadingStudents && candidatePool.length === 0 && selectedStudent && (
+                <p
+                  className="text-2xs text-amber-200/90 text-center leading-relaxed"
+                  data-testid="rollcall-no-present-students"
+                >
+                  当前课堂没有在场学生。只会抽取已经进入本节课的学生，离开后不会再被点到。
+                </p>
+              )}
             </div>
           </div>
         </>

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateStudentWeight,
+  filterCandidatesByPresence,
   filterCandidatesByTier,
   pickStudentFairly,
   type PickerStudent,
@@ -83,6 +84,38 @@ describe('FairPickerEngine', () => {
       const { filtered, fallback } = filterCandidatesByTier([], 'intermediate');
       expect(fallback).toBe(false);
       expect(filtered).toEqual([]);
+    });
+  });
+
+  describe('filterCandidatesByPresence', () => {
+    const presenceOf = (online: string[], lessons: Record<string, string>, lessonId: string | null = 'L1') => ({
+      lessonId,
+      onlineStudentIds: online,
+      activeStudentLessons: lessons,
+    });
+
+    it('keeps only students who are online and inside this lesson', () => {
+      const filtered = filterCandidatesByPresence(
+        mockStudents,
+        presenceOf(['s1', 's2', 's4'], { s1: 'L1', s2: 'L2', s4: 'L1' }),
+      );
+      expect(filtered.map((s) => s.id)).toEqual(['s1', 's4']);
+    });
+
+    it('returns the original list when no lesson is in scope', () => {
+      expect(filterCandidatesByPresence(mockStudents, presenceOf([], {}, null))).toHaveLength(mockStudents.length);
+    });
+
+    it('returns empty when nobody has entered this lesson', () => {
+      expect(filterCandidatesByPresence(mockStudents, presenceOf(['s1'], {}))).toEqual([]);
+      expect(filterCandidatesByPresence(mockStudents, presenceOf([], { s1: 'L1' }))).toEqual([]);
+    });
+
+    it('keeps the fair-weight preference inside the present pool', () => {
+      const present = filterCandidatesByPresence(mockStudents, presenceOf(['s1', 's2'], { s1: 'L1', s2: 'L1' }));
+      // s1 权重 1，s2 权重 0.2；不在场的 s3/s4 不能被抽中
+      expect(pickStudentFairly(present, () => 0.01)?.student.id).toBe('s1');
+      expect(pickStudentFairly(present, () => 0.99)?.student.id).toBe('s2');
     });
   });
 

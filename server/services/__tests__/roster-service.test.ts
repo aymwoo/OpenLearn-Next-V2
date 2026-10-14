@@ -446,6 +446,18 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       expect(found?.term_picked_count).toBe(1);
       expect(found?.total_reward_coins).toBe(5);
 
+      const absent = service.createStudent({ name: '未进课堂' });
+      service.enrollStudent(clsId, absent.id);
+      const presentOnly = service.getPickerCandidates(clsId, 'lesson-present', {
+        restrictToPresentIds: [stu.id],
+      });
+      expect(presentOnly.map((c) => c.id)).toEqual([stu.id]);
+      expect(presentOnly[0].term_picked_count).toBe(1);
+
+      expect(service.getPickerCandidates(clsId, 'lesson-empty', { restrictToPresentIds: [] })).toEqual([]);
+
+      service.deleteStudentCascade(absent.id);
+
       // 清理
       service.deleteClassCascade(clsId);
       service.deleteStudentCascade(stu.id);
