@@ -225,3 +225,13 @@ export function resolveRotationConfig(env: NodeJS.ProcessEnv = process.env): {
   const maxFiles = Math.floor(readPositiveInt(env.LOG_MAX_FILES, 5, 'LOG_MAX_FILES'));
   return { maxBytes: Math.floor(maxSizeMb * 1024 * 1024), maxFiles };
 }
+
+/** 审计日志单独轮转：默认单文件 20MB、保留 20 份（约 400MB 上限）。 */
+export function resolveAuditRotationConfig(env: NodeJS.ProcessEnv = process.env): {
+  maxBytes: number;
+  maxFiles: number;
+} {
+  const maxSizeMb = readPositiveInt(env.AUDIT_LOG_MAX_SIZE_MB, 20, 'AUDIT_LOG_MAX_SIZE_MB');
+  const maxFiles = Math.floor(readPositiveInt(env.AUDIT_LOG_MAX_FILES, 20, 'AUDIT_LOG_MAX_FILES'));
+  return { maxBytes: Math.floor(maxSizeMb * 1024 * 1024), maxFiles };
+}

@@ -10,7 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
+- **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
+- **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
+- **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
+
 ### Breaking Changes
+
+- **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
 - **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
 

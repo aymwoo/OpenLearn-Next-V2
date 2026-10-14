@@ -139,6 +139,7 @@ const PASSWORD_CHANGE_EXEMPT_PATHS = new Set([
   '/api/auth/logout',
   '/api/auth/session',
   '/api/auth/me',
+  '/api/client-errors',
 ]);
 
 /**

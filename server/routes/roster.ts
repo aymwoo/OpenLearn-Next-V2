@@ -25,6 +25,7 @@ import {
   teacherCanSeeStudent,
 } from '../services/class-access.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
+import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 
 const rlog = createLogger('roster');
 /**
@@ -585,6 +586,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const { entrance, username, password, studentId } = req.body;
       let sessionData: any = null;
+      const auditLoginFailure = (reason: string, account: unknown) => {
+        recordSecurityAudit('auth.login_failed', {
+          requestId: (req as { requestId?: string }).requestId,
+          reason,
+          entrance: typeof entrance === 'string' ? entrance : 'unknown',
+          account: typeof account === 'string' ? account.slice(0, 64) : '',
+        });
+      };
 
       if (entrance === 'teacher') {
         if (!username || !password) {
@@ -592,14 +601,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
         }
         const userObj = kernelContainer.db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
         if (!userObj) {
+          auditLoginFailure('user_not_found', username);
           return res.status(401).json({ error: 'User not found' });
         }
         if (userObj.status === 'disabled') {
+          auditLoginFailure('account_disabled', username);
           return res.status(403).json({ error: 'Your account has been disabled. Please contact the administrator.' });
         }
         // SEC-AUTH-02: bcrypt 验证 + �? SHA-256 自动升级
         const { valid, needsUpgrade } = verifyPassword(password, userObj.password_hash);
         if (!valid) {
+          auditLoginFailure('bad_password', username);
           return res.status(401).json({ error: 'Incorrect password' });
         }
         if (needsUpgrade) {
@@ -636,6 +648,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           .prepare('SELECT * FROM students WHERE student_number = ? OR id = ?')
           .get(studentId, studentId) as any;
         if (!studentObj) {
+          auditLoginFailure('student_not_found', studentId);
           return res.status(401).json({ error: 'Student not found in active roster' });
         }
 
@@ -714,11 +727,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
         if (!matchesOwnPassword && !matchesClassPasscode) {
           if (isPasscodeExpired) {
+            auditLoginFailure('passcode_expired', studentId);
             return res.status(401).json({
               error: '班级上课临时密码已过期，请向教师索取最新口令或使用学生个人密码登录。',
               code: 'CLASS_PASSCODE_EXPIRED',
             });
           }
+          auditLoginFailure('bad_credentials', studentId);
           return res.status(401).json({
             error: 'Incorrect student password or temporary class passcode',
             code: 'AUTH_FAILED',

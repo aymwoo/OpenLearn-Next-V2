@@ -247,6 +247,35 @@ jobs:
       - name: Run browser workflow tests
         run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts
 
+  # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
+  # 覆盖强制改密、教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
+  public-beta-journey:
+    name: Public beta journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
+
+      - name: Run public beta journey
+        run: pnpm exec playwright test --config=playwright.beta.config.ts
+
   docs-drift-audit:
     runs-on: ubuntu-latest
     permissions:

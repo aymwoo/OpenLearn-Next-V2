@@ -14,6 +14,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
@@ -523,6 +524,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         }
 
         const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode);
+        recordSecurityAudit('plugin.installed', {
+          actorId: getActorId(req),
+          pluginId: result.pluginId,
+          manifestId: result.manifest?.id,
+          via: 'url',
+        });
         res.json({
           success: true,
           updated: false,
@@ -868,6 +875,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       const result = await kernelContainer.pluginDistributionManager.installFromZip(zipPath, executionMode);
+      recordSecurityAudit('plugin.installed', {
+        actorId: getActorId(req),
+        pluginId: result.pluginId,
+        manifestId: result.manifest?.id,
+        via: 'zip-raw',
+      });
       // result.pluginId is DB UUID; result.manifest keeps package metadata
       res.json({
         success: true,
@@ -1005,6 +1018,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.json({ success: true, publicRoutesApproved: [] });
       }
       const publicRoutesApproved = approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest);
+      recordSecurityAudit('plugin.public_route_approved', {
+        actorId: getActorId(req),
+        pluginId,
+        manifestId: manifest.id,
+        routes: publicRoutesApproved,
+      });
       res.json({ success: true, publicRoutesApproved });
     } catch (err: any) {
       pluginLog.error(err);
