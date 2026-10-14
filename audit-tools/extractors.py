@@ -291,6 +291,13 @@ def extract_doc_facts(docs_root: Path, packages_root: Path) -> list[DocFact]:
         # the same name. Without this rule the only doc facts a plugin could ever
         # obtain were the file-name/sub-system mappings above, which silently
         # turned every newly documented built-in plugin into a drift item.
+        #
+        # docs/release-notes/ 是某一版的档案（与 refchecks.R9 同一取舍）。
+        # 已下线的插件仍会留在当时的发布说明里，例如 v0.6.0 的
+        # packages/plugins/national-smart-edu.ts。把它当成「当前代码必须存在」
+        # 会让每次清退都变成永久 MISSING_IN_CODE。
+        if "release-notes" in rel.parts:
+            continue
         for line_no, line in enumerate(text.splitlines(), 1):
             for m in PLUGIN_PATH_PATTERN.finditer(line):
                 stem = m.group(1).rsplit("/", 1)[-1]

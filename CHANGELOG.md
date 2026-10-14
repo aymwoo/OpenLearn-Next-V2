@@ -48,6 +48,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 
 - **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
+- **CI 的 pnpm 固定为 `package.json` 的 `packageManager`（`pnpm@10.33.4`）**。`pnpm/action-setup` 不再使用 `version: latest`。pnpm 12 默认的 `minimumReleaseAge` 会拒绝锁文件里当天发布的 `caniuse-lite` 与 `electron-to-chromium`，`pnpm install --frozen-lockfile` 在安装阶段失败。仓库的 `.npmrc` 仍是 `minimum-release-age=0`，没有为了过 CI 关掉这条策略。GitHub Actions 的 JavaScript action 升到各自的 Node 24 主版本。
+- **架构文档漂移审计的三处误报**：发布说明里已下线的 `national-smart-edu` 不再被当成当前插件；`audit-tools/reports/` 是 gitignore 的生成物；「已于某日删除」算墓碑。`packages/core/types` 只有 `semver` 的 ambient 声明，不算子系统。
+- **Windows 权限探针不再读 `/etc/hostname`**。该路径在 Windows 上不存在，`off` 策略得到 `ENOENT`，平台探测 job 里的 worker-runtime 用例失败，随后的 verbose dump 也失败。探针改为读取测试自己创建的、位于插件目录之外的文件。
+- **Windows 上 `019_plugins_version.sql` 的分段测试认 CRLF**。`core.autocrlf=true` 时文件是 `-- UP\r\n`，用例用 `-- UP\n` 查找，整组报「缺少 -- UP 段」。读入后先把换行归一成 LF。
+- **备课「添加到画板」会等白板挂载**。调色板在主包，白板是 lazy chunk。chunk 还没好时 `whiteboardRef` 为空，点击被静默丢掉，元素不落库。现在最多等 15 秒再插入。浏览器 E2E 会先等到画布出现，并按班级名称点选；检索框只在班级超过 2 个时才出现，不能当必经步骤。
 - **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
 - **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
 - **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
@@ -86,6 +91,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **PPTX 演示组件国际化运行时异常修复**：
+  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
+  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 
