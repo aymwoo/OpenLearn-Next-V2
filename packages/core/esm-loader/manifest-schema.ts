@@ -771,6 +771,11 @@ export const manifestSchema = z
     requires: z.array(requiresItemSchema).optional(),
     optional: z.array(requiresItemSchema).optional(),
     capabilitiesProposed: z.array(z.string()).optional(),
+    network: z
+      .object({
+        outbound: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
     engines: z
       .object({
         openlearn: z.string().min(1),
@@ -840,6 +845,11 @@ export const manifestSchemaV3 = z
     requires: z.array(requiresItemV3Schema).optional(),
     optional: z.array(requiresItemV3Schema).optional(),
     capabilitiesProposed: z.array(z.string()).optional(),
+    network: z
+      .object({
+        outbound: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

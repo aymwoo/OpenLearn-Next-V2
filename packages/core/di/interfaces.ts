@@ -916,3 +916,25 @@ export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
   ...PLUGIN_RESOLVABLE_TOKENS.map((t) => t.name),
   '@openlearn/activity-ecosystem:IActivityRegistry',
 ]);
+
+// -- Plugin Outbound Network Proxy (trust boundary) -----------------------
+export interface INetworkProxyService {
+  fetch(input: OutboundFetchRequest): Promise<OutboundFetchResponse>;
+}
+export interface OutboundFetchRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+export interface OutboundFetchResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  url: string;
+}
+export const INetworkProxyServiceToken = new Token<INetworkProxyService>(
+  "@openlearn/core:INetworkProxyService",
+);

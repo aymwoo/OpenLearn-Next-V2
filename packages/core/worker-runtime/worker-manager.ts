@@ -77,6 +77,7 @@ export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:IStorageService',
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
+  '@openlearn/core:INetworkProxyService',
 ]);
 
 /**
@@ -862,6 +863,7 @@ export class WorkerManager {
       manifest.id,
       pluginId,
       allowedTokens,
+      manifest.network?.outbound,
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）

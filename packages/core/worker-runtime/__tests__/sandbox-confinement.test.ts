@@ -97,7 +97,7 @@ describe('白名单收敛', () => {
 
   it('IPluginHost 在全量白名单常量中仍保留（供需要它的插件走条件授予）', () => {
     // ALL_SERVICE_TOKENS 是兼容性超集，不改它以免破坏外部引用
-    expect(BASE_WORKER_SERVICE_TOKENS.length).toBe(8);
+    expect(BASE_WORKER_SERVICE_TOKENS.length).toBe(9);
   });
 });
 
