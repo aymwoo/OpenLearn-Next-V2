@@ -134,7 +134,7 @@ open http://localhost:9000
 
 > ⚠️ **不要用 `npm install`**。本仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），含 4 个子包：`packages/core`、`packages/plugin-sdk`、`packages/plugin-test-kit`、`packages/mfe-whiteboard`。`npm install` 会生成第二份依赖树（`package-lock.json`），与 pnpm 的 `allowBuilds` 白名单（`better-sqlite3` 等原生模块需编译）行为不一致，容易在启动时抛原生模块加载错误。
 >
-> `pnpm-workspace.yaml` 里的 `overrides` 段还固定了若干传递依赖的安全下界（`ws` `>=8.21.0`、`qs` `>=6.16.0` 等），这些约束只在 pnpm 下生效。
+> `pnpm-workspace.yaml` 里的 `overrides` 段还固定了若干传递依赖的安全下界（`ws` `>=8.21.0`、`qs` `>=6.16.0`、`engine.io` `>=6.6.10`、`ip-address` `>=10.7.1` 等）。替换按版本范围写，避免把 minimatch 3/5 的 `brace-expansion` 1.x/2.x 或生产打包用的 esbuild 0.25 一并抬走。这些约束只在 pnpm 下生效。CI 的 `security-audit` 对 `https://registry.npmjs.org/` 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败；`pnpm lint:strict` 同样是阻断步骤。
 >
 > `dev.sh` 需有可执行位（`chmod +x dev.sh`）。
 

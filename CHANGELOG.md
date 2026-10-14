@@ -12,6 +12,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **Socket.IO 握手会拒绝协议版本不匹配的连接**。`engine.io` 下限升到 `>=6.6.10`（当前解析 6.6.11，修复 GHSA-2gc4-cqfq-p2gv / CVE-2026-102599）。正常的 `socket.io` 4.8 客户端不受影响。自制或过旧的 Engine.IO 客户端如果故意发送不匹配的协议修订号，连接会被断开，而不是把进程挂住。直接依赖同步为 `socket.io` / `socket.io-client` `^4.8.4`。
+- **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
+- **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
+
+### Security
+
+- 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
+- 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
+  - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）
+  - `undici@>=7 <8` → `7.30.0`（jsdom 29 的测试环境；不升到 undici 8）
+  - `browserslist` → `>=4.28.7`（同时带上 `baseline-browser-mapping` `>=2.11`）
+  - `source-map-js` → `>=1.2.2`（`@tailwindcss/node`）
+  - `fast-copy@>=4 <4.1` → `4.1.0`（`pino-pretty`）
+  - `esbuild@>=0.27.3 <0.28.1` → `0.28.1`（仅 tsx 的开发服务器；生产打包仍用 esbuild 0.25）
+  - `dompurify` → `>=3.4.16`（jspdf 内嵌，修复 IN_PLACE DOM XSS）
+  - `@tailwindcss/typography>postcss-selector-parser` → `7.1.6`（typography 0.5.20 把 6.0.10 钉死，6.x 没有补丁；构建期 API `astSync` / `selector()` 保持可用）
+  - `vitest` 升到 `^4.1.11`（GHSA-82fw-gwwq-j7x9，测试期路径穿越）
+  - `express-rate-limit` 升到 `^8.7.1`（仍依赖 `ip-address@^10`，实际修复靠上面的 override）
+
+### Fixes
+
+- **严格类型检查 14 处诊断**：退出票在没有题目时不再读取 `coreQuestion` / `challengeQuestion`；课后反思的 `lectureRatio` 改为 `number | null`，简报在未采集讲授时长时显示「讲授用时未采集」，不再把空值当成 0% 或渲染成 `null%`。命令面板和快速插入把扩展点 `slotProps` 按字段校验，`getCommand` / `getItem` 改为登记表上的必选方法。
+- **插件 ZIP 上传中断后不再留下临时文件**。`createWriteStream` 的 `open` 发生在下一拍；若在此之前 `rmSync`，随后的 `open` 会把同一路径重新创建出来。现在等写入流 `close` 之后再删除。
+
 - **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。
   - **迁移**：需要某个自研插件继续进程内运行时，在环境变量写 `OPENLEARN_TRUSTED_INLINE_PLUGINS=ext-your-plugin,ext-other` 后重启。预加载进宿主的内置代码不受此限制。已安装的库内记录会在下次启动恢复时改写。子进程仍受 `OPENLEARN_PLUGIN_PERMISSION`（默认 `rw`）与 `OPENLEARN_PLUGIN_MAX_HEAP_MB` 约束；Node 权限模型目前约束不了出站网络。
 - **插件清单 `auth: false` 不再让路由匿名可访问**。它只表示插件申请公开。匿名放行还要求管理员把 `METHOD + path` 写入 `plugin_public_routes`（迁移 `022`）。批准方式：安装/更新请求体 `approvePublicRoutes: true`，或头 `x-approve-public-routes: true`，或 `POST /api/plugins/:id/public-routes` 且 body `{ "approvePublicRoutes": true }`。对该端点省略或传 `false` 会清掉该插件已批准的公开路由。卸载插件时一并删除。

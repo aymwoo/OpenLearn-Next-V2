@@ -25,7 +25,7 @@ export interface CommandPaletteProps {
 export interface CommandRegistryFacade {
   register: (command: CommandDescriptor) => void;
   unregister: (commandId: string) => boolean;
-  getCommand?: (commandId: string) => CommandDescriptor | undefined;
+  getCommand: (commandId: string) => CommandDescriptor | undefined;
   search: (query: string, category?: CommandCategory) => ReadonlyArray<CommandDescriptor>;
   executeCommand: (commandId: string, context?: Record<string, unknown>) => Promise<void>;
   getRecents: () => ReadonlyArray<CommandDescriptor>;
