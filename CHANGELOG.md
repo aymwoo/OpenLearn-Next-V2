@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **AI 对话、批改和课表不再跟随未复检的重定向**。出站请求改为逐跳手动跟随：公网 http(s) 可以继续，跨主机指向回环、私网或链路本地（含云元数据地址）的跳转会中止，并且不会把已解密的 Bearer 发到那个地址。管理员写明的首跳仍可以是本机或内网推理服务；链路本地和云元数据主机名在首跳也会被拒绝。失败信息只保留 HTTP 状态码，不再附带响应体。若提供商必须经过跳转才能到达接口，把 `api_url` 改成最终的 https 地址后重新保存密钥。
 - **生产环境拒绝 `PLAYWRIGHT_TEST`**。`NODE_ENV` 精确为 `production` 且 `PLAYWRIGHT_TEST` 为 `1` 或 `true` 时，启动打印致命日志并中止，进程不会开始监听。变量若在进程环境里，数据库初始化直接抛错；若只写在 `.env`（入口在依赖初始化之后才加载），则在监听前退出。该变量会跳过默认口令门禁，并放宽登录、写入和 AI 限流。`NODE_ENV=test` 的 Vitest，以及未处于 production 的 Playwright 开发服务器，仍可使用该变量。公测旅程配置本来就不会设置它。升级前从生产 `.env` 和 PM2 ecosystem 中删除 `PLAYWRIGHT_TEST`。
 - **启动时加密仍为明文的 AI Provider API Key**。数据库就绪后，`ai_providers.api_key` 里非空且不是 `iv:tag:cipher` 三段十六进制的值会用现有 `ENCRYPTION_KEY` 做 AES-256-GCM 写回。空字符串保持为空；已经是密文的行跳过，可以重复执行，逐行提交。此后 `decryptApiKey` 遇到非密文直接抛错（`status` 500），不再把历史明文原样返回。更换 `ENCRYPTION_KEY` 后旧密文仍然无法解密，与现在相同。
 - **生产 CORS 只接受显式来源**。`NODE_ENV=production` 时，带 `Origin` 的请求只有列在 `ALLOWED_ORIGINS` 中才会回写 `Access-Control-Allow-Origin` 与 `Access-Control-Allow-Credentials: true`。`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0` 不再自动放行，Origin 的 host 与 `Host` 头相同也不再当成同源。没有 `Origin` 的请求仍然放行。非生产环境继续放行回环地址和任意来源。`ALLOWED_ORIGINS=*` 仍是不带凭证的通配。
