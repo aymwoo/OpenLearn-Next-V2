@@ -85,7 +85,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         const q = query.trim().toLowerCase();
         const matchTitle = cmd.title.toLowerCase().includes(q);
         const matchDesc = cmd.description?.toLowerCase().includes(q) ?? false;
-        const matchKeywords = cmd.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false;
+        const matchKeywords = cmd.keywords?.some((k: string) => k.toLowerCase().includes(q)) ?? false;
         return matchTitle || matchDesc || matchKeywords;
       });
 
@@ -104,7 +104,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         e.preventDefault();
         const active = filteredCommands[selectedIndex];
         if (active) {
-          if (registry.getCommand(active.id)) {
+          if (registry.getCommand?.(active.id)) {
             registry.executeCommand(active.id);
           } else {
             active.execute();
@@ -184,7 +184,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   idx === selectedIndex ? 'bg-indigo-600/20 text-white' : 'text-slate-300 hover:bg-slate-800/60'
                 }`}
                 onClick={() => {
-                  if (registry.getCommand(cmd.id)) {
+                  if (registry.getCommand?.(cmd.id)) {
                     registry.executeCommand(cmd.id);
                   } else {
                     cmd.execute();

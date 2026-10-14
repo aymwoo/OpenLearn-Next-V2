@@ -93,6 +93,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **依赖审计清零并收紧 CI 门禁**：`pnpm-workspace.yaml` overrides 钉死 `engine.io`、`ip-address`、`uuid`、`dompurify`、`undici@>=7 <8`（7.30.0）、`brace-expansion@>=4` 等已修补版本；升级 `socket.io` / `socket.io-client` 与 `vitest`。锁文件用 `pnpm@10.33.4` 重新生成，不关闭 `minimum-release-age`，也不把同日 browserslist 数据库钉死在更旧版本上。`pnpm audit`（官方 registry）对 high+ 失败即红（`security-audit` 不再 `continue-on-error`）。
+- **严格类型检查通过并并入主 tsconfig**：修复退出票空值、`lectureRatio: number | null`、命令面板 / 快捷插入隐式 any 与可选 registry 方法共 14 条 `lint:strict` 诊断；主 `tsconfig.json` 开启 `strict` / `noImplicitAny` / `strictNullChecks`。
 - **PPTX 演示组件国际化运行时异常修复**：
   - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
   - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。

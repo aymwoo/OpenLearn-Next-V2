@@ -78,7 +78,7 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
         if (!q) return true;
         const matchTitle = item.title.toLowerCase().includes(q);
         const matchDesc = item.description?.toLowerCase().includes(q) ?? false;
-        const matchKeywords = item.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false;
+        const matchKeywords = item.keywords?.some((k: string) => k.toLowerCase().includes(q)) ?? false;
         return matchTitle || matchDesc || matchKeywords;
       });
 
@@ -97,7 +97,7 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
         e.preventDefault();
         const active = filteredItems[selectedIndex];
         if (active) {
-          if (registry.getItem(active.id)) {
+          if (registry.getItem?.(active.id)) {
             registry.executeItem(active.id);
           } else {
             active.execute();
@@ -176,7 +176,7 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
                   idx === selectedIndex ? 'bg-indigo-600/20 text-white' : 'text-slate-300 hover:bg-slate-800/60'
                 }`}
                 onClick={() => {
-                  if (registry.getItem(item.id)) {
+                  if (registry.getItem?.(item.id)) {
                     registry.executeItem(item.id);
                   } else {
                     item.execute();
