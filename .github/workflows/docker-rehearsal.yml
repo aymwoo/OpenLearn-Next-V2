@@ -1,7 +1,8 @@
 name: Docker release rehearsal
 
 # 发布前检查 Docker 构建链路、迁移与健康探针。
-# 仅在 main / 手动触发 / 标签推送时运行，避免每个 PR 都承担完整镜像构建。
+# main、手动触发和标签推送总会运行。拉取请求只在改动构建、迁移、内核，
+# 或花名册登录 / GDPR 删除相关文件时运行，避免每个 PR 都做完整镜像构建。
 
 on:
   push:
@@ -20,6 +21,11 @@ on:
       - 'migrations/**'
       - 'server.ts'
       - 'packages/core/**'
+      - 'server/routes/roster.ts'
+      - 'server/__tests__/auth-login-negative.test.ts'
+      - 'server/__tests__/gdpr-delete-auth.test.ts'
+      - 'server/__tests__/roster-lifecycle.journey.test.ts'
+      - 'CHANGELOG.md'
 
 jobs:
   docker-build-and-rehearse:
