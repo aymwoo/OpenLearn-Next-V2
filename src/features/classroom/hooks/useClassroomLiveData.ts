@@ -12,7 +12,7 @@
  *     - liveClassStudentProgress  真实进度（student_id / progress_percent）
  *     - onlineStudentIds          真实在线学生
  *     - liveClassFeed             真实课堂事件流
- *     - timelineSegments          真实教案环节（duration 秒）
+ *     - timelineSegments          真实教案环节（duration 为秒数，或 "5m" 等时长字符串）
  *     - attempts                  真实课件作答（score / completion / studentId）
  *     - sessionStartedAt          真实开课时间（classroom_sessions.started_at）
  *     - classroomStage            真实当前阶段
@@ -23,6 +23,7 @@
  */
 
 import { useMemo } from 'react';
+import { segmentPlannedMinutes } from '../../../utils/timeline-duration';
 
 // ── 输入类型（宽松以兼容宿主现有 any 传参） ─────────────────────────
 
@@ -50,7 +51,8 @@ export interface ClassroomFeedItem {
 export interface TimelineSegmentLike {
   id?: string;
   title?: string;
-  duration?: number | null;
+  /** 数字为秒；字符串为 "5m" / "90s" / "1h"，无单位时按分钟。 */
+  duration?: number | string | null;
   [key: string]: unknown;
 }
 
@@ -89,7 +91,7 @@ export interface StudentLiveMetrics {
 export interface ClassroomStageTiming {
   /** 环节标题（来自 timelineSegments.title） */
   stageName: string;
-  /** 计划分钟（timelineSegments.duration / 60） */
+  /** 计划分钟（由环节时长解析，兼容秒数与 "5m"） */
   plannedMin: number;
   /** 已投入分钟：已过去环节按计划计，当前环节按已用时计，未开始为 0 */
   actualMin: number;
@@ -240,7 +242,7 @@ export function deriveStages(
 
   const planned = segments.map((s) => ({
     name: s.title?.trim() || '未命名环节',
-    minutes: Math.max(0, Math.round((Number(s.duration) || 0) / 60)),
+    minutes: segmentPlannedMinutes(s),
   }));
 
   // 已投入时间按「顺序填充」分配：先满足前面的环节，剩余给后续。
@@ -307,7 +309,7 @@ export function useClassroomLiveData(input: UseClassroomLiveDataInput): Classroo
       highlights: deriveHighlights(feed),
       stages: deriveStages(segments, elapsedMin, classroomStage),
       elapsedMin,
-      plannedTotalMin: segments.reduce((acc, s) => acc + Math.max(0, Math.round((Number(s.duration) || 0) / 60)), 0),
+      plannedTotalMin: segments.reduce((acc, s) => acc + segmentPlannedMinutes(s), 0),
       onlineCount: studentMetrics.filter((m) => m.online).length,
       submittedCount,
       hasRealData:

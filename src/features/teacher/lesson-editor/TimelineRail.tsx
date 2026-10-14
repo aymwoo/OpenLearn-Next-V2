@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Settings2, CalendarClock, Clock, CheckCircle2, GripVertical } from 'lucide-react';
 import { DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
 import type { WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
+import { resolveSegmentDuration } from '../../../utils/timeline-duration';
 
 export interface TimelineRailProps {
   lang: 'zh' | 'en';
@@ -74,11 +75,11 @@ export function TimelineRail({
     }
   }, [dragState, segments, onHoverDropTarget]);
 
-  // 计算总时长
+  // 计算总时长。缺时长按编辑器默认 10 分钟；无法识别的值不计入，避免 NaN。
   const totalMinutes = segments.reduce((sum, seg) => {
-    const raw = String(seg.duration || '10m');
-    const num = parseInt(raw.replace(/[^\d]/g, ''), 10) || 10;
-    return sum + num;
+    const { seconds } = resolveSegmentDuration(seg, { fallbackSeconds: 600 });
+    if (seconds == null || !Number.isFinite(seconds)) return sum;
+    return sum + Math.round(seconds / 60);
   }, 0);
 
   const handleReorder = (toIdx: number) => {
