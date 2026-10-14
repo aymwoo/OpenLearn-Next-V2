@@ -351,12 +351,14 @@ export function registerOsRoutes(ctx: ServerContext) {
         });
       }
 
+      const actorId = getActorId(req);
       const result = await runOpenAIAgentChat(provider, {
         message,
         lang,
         currentLessonId,
         attachments,
         callerRole,
+        actorId,
         history,
         personaId: (req.body as AgentChatRequest)?.personaId ?? null,
       });

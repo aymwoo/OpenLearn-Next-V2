@@ -41,6 +41,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
 - **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。
+- **AI Agent 工具权限隔离与真实 Actor 透传 (SEC-01)**：
+  - 学生端调用 `/api/agent/chat` 时动态过滤掉系统管理、写操作、进程派生、VFS 写入等高危动作，并注入学生专属只读启发式引导词；
+  - 工具派发严格使用调用方会话的真实 `actorId`（如 `user:${studentId}:student`），彻底废除将非管理员无条件提升为全局写权限特权身份 `agent-system-0` 的漏洞，杜绝学生通过自然语言诱导 AI 越权篡改课程与班级。
+- **学生已读通知接口 IDOR 水平越权修补 (SEC-02)**：
+  - `GET` 与 `POST /api/students/:id/read_notifications` 增加所有权与教职工归属判定，阻断学生枚举或伪造标记全校其他学生的通知状态。
+- **全局 BodyParser 收紧与限流前置防护 (SEC-03)**：
+  - 全局 `express.json` 体积上限从 110MB 严格收紧至安全默认值 2MB；仅在 `/api/courseware/upload` 等大文件上传端点局部放开；
+  - 将写操作限流中间件前置于请求体解析之前，杜绝攻击者通过并发畸形大 Payload 耗尽 V8 堆内存造成 DoS。
+- **课件上传同级逃逸与 Zip Bomb 防护 (SEC-04)**：
+  - `builtin.ts` 课件解压对齐带路径分隔符的严格沙箱前缀校验（`storageDir + path.sep`），防御同级目录逃逸；
+  - 解压前增加预检门禁：解压后未压缩尺寸上限 300MB、条目数上限 2,000，阻断 Zip 炸弹攻击。
 - 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
 - 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
   - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）

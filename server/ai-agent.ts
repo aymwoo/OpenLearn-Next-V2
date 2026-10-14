@@ -19,11 +19,20 @@ export const buildAgentSystemInstruction = (
   currentLessonId?: string | null,
   pluginSlices?: string[],
   persona?: { nameZh: string; instructionZh: string; nameEn: string; instructionEn: string },
+  callerRole?: string,
 ) => {
-  let systemInstruction =
-    lang === 'zh'
-      ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续�? functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程�?'
-      : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
+  let systemInstruction = '';
+  if (callerRole === 'student') {
+    systemInstruction =
+      lang === 'zh'
+        ? '你是一个面向学生的智能学习助教。你需要耐心解答学生的学科问题，提供启发式的思考建议与学习支持。请注意：你没有管理班级、修改成绩或操作系统底层的权限。请始终以积极、鼓励的态度引导学生自主探究。'
+        : 'You are an intelligent learning assistant for students. Answer students questions, provide thought-provoking guidance and learning support. You do not have permissions to manage classes, edit scores, or alter system configurations. Always guide students encouragingly.';
+  } else {
+    systemInstruction =
+      lang === 'zh'
+        ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。'
+        : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
+  }
 
   if (currentLessonId) {
     systemInstruction += `\n[Context] The current selected lesson ID is "${currentLessonId}". Use this ID if the teacher's instruction is about modifying or adding to the current lesson.\n\nAvailable tools (functions) can be used multiple times in sequence if needed.`;
@@ -98,8 +107,29 @@ export const normalizeToolSchema = (schema: any): any => {
   return normalized;
 };
 
-export const buildOpenAITools = () => {
-  const actions = kernelContainer.actionRegistry.getAllActions();
+export const buildOpenAITools = (callerRole?: string) => {
+  let actions = kernelContainer.actionRegistry.getAllActions();
+  if (callerRole === 'student') {
+    // SEC-01: 学生角色下，严格剔除一切具有管理、修改、删除或系统副作用的工具
+    actions = actions.filter((action) => {
+      const cap = action.capabilityRequired || '';
+      if (
+        cap.includes(':write') ||
+        cap.includes(':delete') ||
+        cap.startsWith('management:') ||
+        cap.startsWith('process:') ||
+        cap.startsWith('plugin:') ||
+        action.commandType.startsWith('class_') ||
+        action.commandType.startsWith('student_') ||
+        action.commandType.startsWith('courseware.') ||
+        action.commandType.startsWith('vfs.') ||
+        action.commandType.startsWith('process.')
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
   return actions.map((action) => ({
     type: 'function',
     function: {
@@ -254,14 +284,19 @@ export const executeAgentToolCall = async (
   allExecutedTools: AgentToolExecution[],
   callerRole?: string,
   currentLessonId?: string | null,
+  realActorId?: string,
 ) => {
   const actionDesc = kernelContainer.actionRegistry.getActionByToolName(toolName);
   let actionResult: any;
 
   // When the caller is an administrator, elevate the agent to superadmin
   // and auto-approve high-risk operations (no manual approval queue).
-  const isAdmin = callerRole === 'administrator';
-  const actorId = isAdmin ? 'user-frontend' : 'agent-system-0';
+  const isAdmin = callerRole === 'administrator' || callerRole === 'admin';
+  // SEC-01: 不再无条件将普通调用者提升为具有全局写权限的特权 agent-system-0
+  // 严格使用调用方的真实 actorId（如 user:studentId:student），由 CapabilityGuard 进行能力校验
+  const actorId = isAdmin
+    ? 'user-frontend'
+    : realActorId || (callerRole ? `user:agent:${callerRole}` : 'agent-system-0');
   const metadata = isAdmin ? { approved: true } : undefined;
 
   if (actionDesc) {
@@ -340,20 +375,22 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
 };
 
 export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
-  const { message, lang = 'zh', currentLessonId, attachments, callerRole, history } = request;
+  const { message, lang = 'zh', currentLessonId, attachments, callerRole, actorId, history } = request;
   const systemInstruction = buildAgentSystemInstruction(
     lang,
     currentLessonId,
     collectAIContextSlices(currentLessonId ?? null),
     getAIPersona(request.personaId),
+    callerRole,
   );
   const finalMessage = buildAgentFinalMessage(message, attachments);
 
   // ai.skill.provider —— 插件贡献技能注入工具列表；与 actionRegistry 暴露的
   // 同命令工具去重（技能路径以插件 actor 派发，capability 走插件自身授权）。
-  const pluginSkills = loadActivePluginSkills();
+  // SEC-01: 若为学生身份，插件贡献的高危技能不注入工具列表
+  const pluginSkills = callerRole === 'student' ? [] : loadActivePluginSkills();
   const skillCommandTypes = new Set(pluginSkills.map((s) => s.commandType));
-  const baseTools = buildOpenAITools().filter((t) => {
+  const baseTools = buildOpenAITools(callerRole).filter((t) => {
     const action = kernelContainer.actionRegistry.getActionByToolName(t.function.name);
     return !(action && skillCommandTypes.has(action.commandType));
   });
@@ -445,7 +482,7 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
       const skill = findSkillByToolName(pluginSkills, toolName);
       const actionResult = skill
         ? await executePluginSkillToolCall(skill, parsedArgs, allExecutedTools)
-        : await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole, currentLessonId);
+        : await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole, currentLessonId, actorId);
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
