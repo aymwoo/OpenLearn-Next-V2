@@ -1,0 +1,94 @@
+name: 缺陷报告
+description: 公测期间报告一个可复现的问题。请先在学校内部登记，由运维开单。
+title: "[缺陷] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        开单前请阅读仓库里的 `docs/beta/feedback.md` 和 `docs/beta/known-issues.md`。
+
+        不要粘贴学生姓名全名册、作业或试卷原文、成绩导出、口令、班级临时口令、Cookie、`edu_os_token`、`.env`、`ENCRYPTION_KEY` 或 AI 密钥（包括只剩首尾几位的掩码）。
+
+        需要定位某次请求时，写 `x-request-id` 即可。
+  - type: dropdown
+    id: role
+    attributes:
+      label: 报告人角色
+      description: 学生的问题由教师或运维代报。
+      options:
+        - 教师
+        - 管理员或运维
+        - 开发者
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 对上课的影响
+      options:
+        - 停课：登录、建班或全班提交不可用，或怀疑不该看的人看到了学生数据
+        - 出错但能上课：有绕过办法
+        - 不确定
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 来自 GET /health 的 version。当前公测包版本是 0.6.1。
+      placeholder: "0.6.1"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 写屏幕上的提示原文、大约时间和班级名称。不要附名册和作业正文。
+      placeholder: 北京时间 10:15，教师布置文本作业后学生提交，页面停留在「请求过于频繁」。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望发生什么
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 使用教师账号登录
+        2. 打开某个班
+        3. 做了什么
+    validations:
+      required: true
+  - type: input
+    id: request-id
+    attributes:
+      label: 请求编号 x-request-id
+      description: 没有可以留空。不要粘贴整段日志。
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器
+      placeholder: Chrome 130 / Edge / Safari
+  - type: dropdown
+    id: known
+    attributes:
+      label: 是否已经写在已知问题里
+      options:
+        - 没有查过
+        - 查过，不在已知问题里
+        - 在已知问题里，但仍然影响上课
+    validations:
+      required: true
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: 确认
+      options:
+        - label: 本文没有学生作业原文、成绩单、口令、Cookie 和 API 密钥
+          required: true
+        - label: 停课或数据暴露类问题已经在学校内部通知值班人，没有只开这一张单就离开
+          required: false

@@ -61,7 +61,7 @@
 | `ENABLE_HTTPS`          | `true` 且 `NODE_ENV=production` 时按 HTTPS 语义生成自引用 URL（`server/routes/` 下 3 处）      |
 | `ENABLE_HSTS`           | `true` 时启用 HSTS                                                                            |
 | `FORCE_HTTPS`           | 生产环境下为 `true` 时**隐含** `ENABLE_HSTS`（二者在 `startServer()` 的 `enableHsts` 同一行）  |
-| `ENCRYPTION_KEY`        | 加密 AI Provider API Key 落库。**非必需**：首次使用自动生成并写回 `.env`                      |
+| `ENCRYPTION_KEY`        | 64 位 hex。加密 AI Provider API Key 与班级临时口令。未设置时写入 `storage/encryption-key`（0600），不再使用临时内存密钥 |
 
 认证**不使用**任何 JWT 签名密钥环境变量——登录态是基于 Cookie 的不透明会话令牌，由 `client_sessions` 表校验。旧文档中的 `JWT_SECRET` 在当前代码中零命中。
 

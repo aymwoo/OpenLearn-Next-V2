@@ -155,7 +155,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 | 变量                | 必需 | 说明                                                                                                                                                                                   |
 | ------------------- | :--: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PORT`              |  —   | 服务端口，默认 `9000`                                                                                                                                                                  |
-| `ENCRYPTION_KEY`    |  —   | 64 位 hex，用于加密 AI Provider API Key。**非必需**：首次用到时若未配置，系统会自动生成并写回 `.env` 持久化（`packages/core/di/api-key-crypto.ts`）；生产环境也可用 `deploy.sh` 预生成 |
+| `ENCRYPTION_KEY`    |  —   | 64 位 hex，加密 AI Provider API Key 和班级临时口令。未配置时首次启动生成 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），重启后仍能解密。建议改为环境变量并离线备份。不要留空字符串占位 |
 | `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录                                                                                                           |
 | `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                                                                                                                             |
 | `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                                                                                                                  |
@@ -401,7 +401,7 @@ pm2 startup
 
 > ⚠️ **应用名是 `openlearnv2`，不是 `openlearn`**。`pm2 logs <name>` 的名字来自 `ecosystem.config.cjs` 的 `apps[0].name`，照抄旧文档的 `openlearn` 会得到 `process not found`。
 >
-> `ecosystem.config.cjs` 顶部用 `dotenv.config()` 从同目录 `.env` 读取 `ENCRYPTION_KEY` 与 `ALLOWED_ORIGINS`——**密钥不入版本库**。但注意：把 `ENCRYPTION_KEY` 留空字符串会让 `api-key-crypto.ts` 的密钥解析走空值路径，导致 AI Provider 密钥无法解密（源码有明确警告），务必在 `.env` 中填上真实值。
+> `ecosystem.config.cjs` 顶部用 `dotenv.config()` 从同目录 `.env` 读取 `ENCRYPTION_KEY` 与 `ALLOWED_ORIGINS`——**密钥不入版本库**。把 `ENCRYPTION_KEY` 留成空字符串时，进程不会再生成一把只活在内存里的临时钥匙：它会改用数据目录里的 `storage/encryption-key`（没有就现场生成并写成 0600）。启动日志会警告这是自动生成的密钥。生产环境请在 `.env` 里填上真实的 64 位 hex，并离线备份。若环境变量和该文件不是同一把钥匙，进程会报错退出。
 
 ### Nginx 反向代理
 

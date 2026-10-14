@@ -1,0 +1,61 @@
+name: 功能建议
+description: 建议公测之后或公测期间增加的教学能力。当前版本做不到的缺陷请用缺陷报告。
+title: "[建议] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请阅读 `docs/beta/feedback.md`。描述教学场景即可。
+
+        不要粘贴学生个人信息、作业原文、口令或密钥。功能若会新收集一类学生数据，请在下面标明，方便和隐私草稿对照。
+  - type: dropdown
+    id: role
+    attributes:
+      label: 建议人角色
+      options:
+        - 教师
+        - 管理员或运维
+        - 开发者
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 要完成的教学场景
+      description: 现在上课时卡在哪一步。
+      placeholder: 想在课前把下一节课的课件发给已经加入班级的学生，而不必等进入课堂。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议怎么做
+      description: 有具体界面或流程更好。没有也可以只写目标。
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 你现在用什么办法应付
+      description: 没有就写「没有」。
+    validations:
+      required: true
+  - type: dropdown
+    id: data
+    attributes:
+      label: 是否会新收集或新展示学生数据
+      options:
+        - 不会
+        - 会，只在任课教师和管理员之间
+        - 会，学生之间也能看到
+        - 会，要发送到学校服务器以外
+        - 不确定
+    validations:
+      required: true
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: 确认
+      options:
+        - label: 本文没有学生作业原文、成绩单、口令、Cookie 和 API 密钥
+          required: true

@@ -1,9 +1,16 @@
 import { TextEncoder, TextDecoder } from 'util';
+import crypto from 'node:crypto';
 import { expect } from 'vitest';
 import path from 'path';
 import os from 'os';
 import nodeFs from 'fs';
 import { fileURLToPath } from 'url';
+
+// 测试进程自己准备一把随机钥匙，避免解析器把密钥写进仓库的 storage/。
+// 这不是产品默认密钥：每个 worker 现场生成，生产代码里没有写死的 hex。
+if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
+  process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+}
 
 const nodeUint8Array = new TextEncoder().encode('').constructor;
 global.Uint8Array = nodeUint8Array as unknown as typeof Uint8Array;

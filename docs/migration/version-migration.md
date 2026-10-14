@@ -212,7 +212,7 @@ DROP TABLE IF EXISTS foo;
 | 成绩榜对学生脱敏 `extra_json` / `comment` | 学生只拿榜单信息                                                     | `server/routes/courseware.ts`         |
 | 插件 Token 白名单（前后端）               | worker / inline 两条链路都按 manifest 计算允许访问的 Token           | `packages/core/worker-runtime/`、`src/plugin-host/allowed-tokens.ts` |
 
-> ⚠️ **升级前务必核对 `ENCRYPTION_KEY`**：它不在任何迁移里，但从 v0.3.x 起 AI Provider API Key 一律 AES-256-GCM 加密。密钥变更会导致全部 Key 无法解密。
+> ⚠️ **升级前务必核对 `ENCRYPTION_KEY`**：从 v0.3.x 起 AI Provider API Key 一律 AES-256-GCM 加密。迁移 `023` 起，班级临时口令也用同一把钥匙加密（前缀 `olenc1:`）。未设置环境变量时，钥匙在 `storage/encryption-key`。密钥变更会导致 API Key 和班级口令都无法解密。`site-backup` 不包含该文件，要单独备份。
 
 ---
 

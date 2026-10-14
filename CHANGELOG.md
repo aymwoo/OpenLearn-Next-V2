@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 
+### Docs
+
+- **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
+- **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
+
 ### Breaking Changes
 
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
@@ -34,6 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
+- **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。
 - **AI Agent 工具权限隔离与真实 Actor 透传 (SEC-01)**：
   - 学生端调用 `/api/agent/chat` 时动态过滤掉系统管理、写操作、进程派生、VFS 写入等高危动作，并注入学生专属只读启发式引导词；
   - 工具派发严格使用调用方会话的真实 `actorId`（如 `user:${studentId}:student`），彻底废除将非管理员无条件提升为全局写权限特权身份 `agent-system-0` 的漏洞，杜绝学生通过自然语言诱导 AI 越权篡改课程与班级。

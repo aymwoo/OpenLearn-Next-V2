@@ -7,6 +7,8 @@ import crypto from 'crypto';
 import { writeFileSync } from 'fs';
 import bcrypt from 'bcryptjs';
 import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './migrator.js';
+import { applyStartupDataMigrations } from './class-passcode-crypto.js';
+import { logEncryptionKeyStartupWarning } from '../di/api-key-crypto.js';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -175,6 +177,8 @@ export function initializeDatabase(instance: Database.Database): void {
       );
     }
     runMigrations(instance, migrations);
+    applyStartupDataMigrations(instance);
+    if (!process.env.VITEST) logEncryptionKeyStartupWarning();
     console.log(`[DB SSOT] 迁移已就绪（${migrations.length} 个文件，目录 ${migrationsDir}）`);
   } catch (err) {
     console.error('[DB SSOT] FATAL: 数据库迁移失败，进程将退出，不会在半迁移的库上提供服务。');

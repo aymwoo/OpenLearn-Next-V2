@@ -165,19 +165,39 @@ npx openlearn-next clean
 
 ## 4. 公测上线检查清单
 
-按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。
+按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。2026-10-14 的完成情况见下文 [4.1](#41-清单状态2026-10-14)。公测说明、已知问题、反馈、隐私草稿和运营手册在 [docs/beta](../beta/README.md)。
 
 1. **构建**：`pnpm lint`、`pnpm lint:strict`、`pnpm lint:eslint`（0 error）、`pnpm test`、`pnpm build`、`pnpm audit`（无 high / critical）都通过。CI 里的 `Public beta journey` 必须绿（`pnpm exec playwright test --config=playwright.beta.config.ts`）。镜像用仓库 `Dockerfile` 构建，不要在构建机上临时改锁文件。
-2. **密钥**：`.env` 里的 `ENCRYPTION_KEY` 是 64 位 hex，已离线备份。换机器时带上同一把密钥，否则已保存的 AI Provider Key 无法解密。
+2. **密钥**：`ENCRYPTION_KEY` 是 64 位 hex，已离线备份。它同时加密 AI Provider API Key 和班级临时口令 `classes.class_passcode`（AES-256-GCM，口令密文带 `olenc1:` 前缀）。设置了环境变量就用环境变量。没设置时，首次启动会用 `crypto.randomBytes` 生成钥匙，写到数据目录的 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动都读这个文件。启动日志和管理后台会出现醒目警告，提示正在使用自动生成的密钥，应改设 `ENCRYPTION_KEY` 并离线备份该文件。环境变量若与这个文件不一致，进程会报错并给出处理步骤，不会静默换钥匙。换机器时带上同一把密钥，否则已保存的 API Key 和班级口令都解不开。
 3. **种子口令**：设置 `OPENLEARN_ADMIN_PASSWORD` 与 `OPENLEARN_TEACHER_PASSWORD`，且都不等于用户名。若留空，从数据目录 `storage/bootstrap-credentials.txt` 抄走口令后删除该文件。生产环境不要设置 `PLAYWRIGHT_TEST`。
 4. **数据卷**：容器只挂 `/data` 与 `/backups`。确认课件出现在 `/data/storage`，插件出现在 `/data/plugins`。
 5. **健康检查**：`GET /health` 返回 `{"status":"ok"}`（可带 `uptime` 与 `version`）。`GET /health/ready` 只返回 `{"status":"ready"}`，不包含数据库路径、错误文本、WAL 或备份年龄。未就绪时 HTTP 503，正文只有 `{"status":"not_ready"}`。`docker inspect` 里 Health 为 healthy。主进程异常退出后 `restart: unless-stopped` 会把容器拉起来（`RestartCount` 增加）。`docker stop` / `docker kill` 是人为停止，策略不会再拉起。
 6. **日志与错误**：确认 `logs/openlearn.log`（或容器 stdout 与 `/data/logs`）里有 `http.request`，字段含 `requestId`、`userId`、`status`、`durationMs`，没有口令、Cookie、班级口令和学生作答。登录失败、429、403、插件安装/启用、公开路由批准出现在 `audit.log`。若使用自建 Sentry / GlitchTip，设置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN`；留空必须仍能启动。`GET /metrics` 匿名访问为 401；管理员会话或 `METRICS_TOKEN` 返回 Prometheus 文本。
 7. **反向代理**：Nginx 使用 `deploy/nginx/openlearn.host.conf`（或 compose 的 `deploy/nginx/openlearn.conf`）。进程设置 `TRUST_PROXY=1`（一层）或 `loopback`。应用不要同时对公网暴露 9000。用两个不同来源地址打写请求，确认 429 只打中打满的那一个地址。`/socket.io/` 能完成 WebSocket 握手。
-8. **升级**：从 v0.6.1 库启动后，`_migrations` 含 `021_class_owner_and_password_gate` 与 `022_plugin_public_routes`。用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>` 回填空归属。对需要匿名访问的插件调用 `POST /api/plugins/:id/public-routes`，body 为 `{ "approvePublicRoutes": true }`。仍使用默认口令的账号先改密。
-9. **备份**：`node scripts/site-backup.mjs`（容器里 `docker compose exec app node scripts/site-backup.mjs`）生成数据库快照和文件包。做一次停服恢复演练，核对班级、课件文件和账号还在。
+8. **升级**：从 v0.6.1 库启动后，`_migrations` 含 `021_class_owner_and_password_gate`、`022_plugin_public_routes` 与 `023_encrypt_class_passcodes`。启动时会把仍是明文的 `classes.class_passcode` 加密；已经是 `olenc1:` 密文的行会跳过，可以重复启动。用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>` 回填空归属。对需要匿名访问的插件调用 `POST /api/plugins/:id/public-routes`，body 为 `{ "approvePublicRoutes": true }`。仍使用默认口令的账号先改密。
+9. **备份**：`node scripts/site-backup.mjs`（容器里 `docker compose exec app node scripts/site-backup.mjs`）生成数据库快照和文件包。库里的班级口令是密文。文件包排除 `storage/encryption-key`，脚本会提示该文件（或 `ENCRYPTION_KEY`）必须单独离线备份。做一次停服恢复演练，核对班级、课件文件和账号还在，并用备份时的同一把密钥确认教师端仍能看到班级口令原文。
 10. **失败可见**：把数据目录改成只读再启动，日志里应有 `[Startup] FATAL` 或 `[Migration] FATAL`，进程退出码非 0，而不是一直报 healthy。
 11. **账号**：管理员登录、强制改密（若口令等于用户名）、教师建班、学生提交、安装一个插件并 `POST /api/plugins/:id/toggle` 启用。源码安装成功后状态是 `installed`，不启用时访问插件路由会返回 503。这几步都走通再开放。
+
+### 4.1 清单状态（2026-10-14）
+
+「演练已通过」指 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md) 那次镜像演练，不是公测服务器已经对外开放。「CI 有此门禁」指 `.github/workflows/ci.yml` 里失败会红的 job。起草公测材料时没有重跑 `pnpm lint:eslint`、`pnpm build` 和 `pnpm audit`。
+
+| 项 | 状态 | 已经对上的事实 | 还缺 |
+| --- | --- | --- | --- |
+| 1 构建 | 部分具备 | CI 阻断 `pnpm lint`、`pnpm lint:strict`、`pnpm test`、`pnpm audit --audit-level high`、`Public beta journey`。演练用仓库 `Dockerfile` 构建过镜像 | 清单里的 `pnpm lint:eslint`（0 error）和当次 `pnpm build` 不在 CI。ESLint 最近一次记录是审计日的 0 error、5060 warning。目标环境要用即将发布的提交再构建一次 |
+| 2 密钥 | 待目标环境执行 | AES-256-GCM。设置了 `ENCRYPTION_KEY` 就用环境变量。未设置时首次启动把随机 64 位 hex 写入 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次读取。与已有文件不一致则拒绝启动，不再使用临时内存钥匙。班级口令密文前缀 `olenc1:` | 在目标环境确认 64 位 hex，设成环境变量并离线备份。日志或管理后台若警告正在使用自动生成的密钥，先备份 `storage/encryption-key`，再把同一内容写入 `ENCRYPTION_KEY` |
+| 3 种子口令 | 机制已演练，目标环境未做 | 演练场景 1：改密前 GET 为 403；不设口令时凭 `storage/bootstrap-credentials.txt` 登录 | 在公测机器上设置两枚口令、确认没有 `PLAYWRIGHT_TEST`、抄走并删除口令文件 |
+| 4 数据卷 | 演练已通过 | compose 挂 `/data` 与 `/backups` | 目标机的卷和磁盘空间 |
+| 5 健康检查 | 合同有测试，容器行为演练过 | 公测旅程断言 `/health`、`/health/ready` 只有 `status`、匿名 `/metrics` 为 401。演练看过 healthy 和 `unless-stopped`；当时就绪响应还带 `db` 字段 | 目标环境 `docker inspect`。收紧合同之后没有在演练记录里重跑容器 |
+| 6 日志与错误 | 代码已落地，现场未抽查 | 第 5 节；公测旅程确认指标鉴权，且该次作答不在 `audit.log`。DSN 留空可以启动 | 在目标环境抽一条 `http.request`。是否部署 GlitchTip、是否设置 `METRICS_TOKEN` 由作者定 |
+| 7 反向代理 | 演练已通过 | 演练第 3 节：不设 `TRUST_PROXY` 时伪造转发头不能拆桶；一层 Nginx 时只打满来源地址 | 目标 Nginx、证书、跳数。`docker-compose.yml` 的 `app` 发布了 `9000:9000`，开 `proxy` profile 时公网不要同时暴露 9000 |
+| 8 升级 | 演练已通过 021/022；023 随当前代码在启动时执行 | 演练从与 v0.6.1 相同的 `000`–`020` 库启动，应用 021 与 022，并用 `scripts/backfill-class-owners.mjs` 回填。当前代码另有 `023_encrypt_class_passcodes`：启动时把仍是明文的 `classes.class_passcode` 加密，已经是 `olenc1:` 的行跳过 | 作者选定空库还是升级。空库不用回填。升级后公开路由要重新批准。目标库启动后确认 `_migrations` 含 023 |
+| 9 备份 | 演练做过一次 | `scripts/site-backup.mjs` 与 `scripts/site-restore.mjs` 停服恢复过课件和班级。当前备份的数据库快照里班级口令是密文，文件包排除 `storage/encryption-key`，清单会提醒该文件单独备份 | 没有定时任务，也没有异地副本。密钥文件要单独离线备份。周期由作者定 |
+| 10 失败可见 | 演练已通过 | 只读卷退出码 1，日志有 `[Startup] FATAL` | 目标机卷权限不确定时再做一次。不要在已有公测数据的卷上改只读 |
+| 11 账号旅程 | 演练与 E2E 已通过 | 演练场景 1；`e2e/public-beta-journey.spec.ts` | 目标环境用正式账号再走一遍，然后再对教师开放 |
+
+材料索引和仍须作者决定的事项见 [docs/beta/README.md](../beta/README.md)。
 
 ---
 

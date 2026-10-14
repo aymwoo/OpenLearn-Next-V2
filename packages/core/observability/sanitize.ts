@@ -50,6 +50,7 @@ const SENSITIVE_KEYS = new Set(
 );
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [
+  [/olenc1:[0-9a-fA-F:]+/g, '***REDACTED***'],
   [/token_[a-f0-9]{8,}/gi, 'token_***REDACTED***'],
   [/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer ***REDACTED***'],
   [/\$2[aby]\$\d{2}\$[./A-Za-z0-9]{20,}/g, '***REDACTED***'],

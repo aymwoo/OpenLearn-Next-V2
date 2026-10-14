@@ -178,6 +178,7 @@ if (isCli()) {
     if (result.safetyBackupPath) console.log(`  安全副本 : ${result.safetyBackupPath}`);
     console.log(`  文件目录 : ${result.extracted ? '已从备份包解压到 ' + result.dataDir : '未提供文件包，未改动'}`);
     console.log('  请确认 ENCRYPTION_KEY 与备份时一致，然后重新启动服务。');
+    console.log('  密钥文件 storage/encryption-key 不在备份包内，请另行放回数据目录，或设置与备份时相同的 ENCRYPTION_KEY。');
   } catch (err) {
     console.error(`✗ 站点恢复失败：${err?.message ?? err}`);
     process.exit(1);
