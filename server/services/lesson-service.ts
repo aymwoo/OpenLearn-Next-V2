@@ -24,6 +24,9 @@ export interface LessonStats {
   scheduleCount: number;
   enrollmentCount: number;
   assignmentCount: number;
+  attendanceCount?: number;
+  submissionCount?: number;
+  peerReviewCount?: number;
 }
 
 export interface CreateLessonParams {
@@ -227,16 +230,61 @@ export class LessonService {
   }
 
   /**
-   * 级联删除课时 (事务化，涉及 10+ 张关联表，防孤儿残留与内存防爆)
+   * 级联删除课时 (事务化，涉及 15+ 张关联表，防孤儿残留与内存防爆)
    */
   public deleteLessonCascade(lessonId: string): { success: boolean; deleted: boolean } {
     const delTx = this.db.transaction(() => {
+      // 1. 解除学生屏幕锁定引用，防止学生端长期处于锁屏卡死状态
+      try {
+        this.db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE locked_lesson_id = ?').run(lessonId);
+      } catch {}
+
+      // 2. 白板与学情进度
       this.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(lessonId);
       this.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(lessonId);
-      this.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(lessonId);
-      this.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(lessonId);
 
-      // Cascade delete interactive classroom session data
+      // 3. 考勤与排课 (先子后父：先删关联当前课节排课的考勤记录，再删排课)
+      this.db
+        .prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE lesson_id = ?)')
+        .run(lessonId);
+      this.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(lessonId);
+
+      // 4. 作业与提交 (先子后父：先删关联当前课节作业的提交，再删作业；同时清理插件作业生态)
+      this.db
+        .prepare(
+          'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE lesson_id = ?)',
+        )
+        .run(lessonId);
+      this.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(lessonId);
+      try {
+        this.db
+          .prepare(
+            'DELETE FROM plugin_assignment_files WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE lesson_id = ?)',
+          )
+          .run(lessonId);
+        this.db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM plugin_assignments WHERE lesson_id = ?').run(lessonId);
+      } catch {}
+
+      // 5. 课堂互动与互评体系 (量规维度、弹幕、提名、徽章、评语、任务按外键依赖安全清理)
+      try {
+        this.db.prepare('DELETE FROM classroom_peer_rubric_dimensions WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM classroom_danmaku WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM classroom_peer_nominations WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM classroom_peer_badges WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM classroom_peer_reviews WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM classroom_peer_review_tasks WHERE lesson_id = ?').run(lessonId);
+      } catch {}
+
+      // 6. 随堂信息流、预设投票、随机点名与课件打分配置
+      try {
+        this.db.prepare('DELETE FROM classroom_feed WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM lesson_preset_polls WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM student_rollcalls WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM courseware_score_config WHERE lesson_id = ?').run(lessonId);
+      } catch {}
+
+      // 7. 互动课堂会话与子项 (投票票数、投票题目、抢答器、退出测验、步调反馈)
       const sessionRows = this.db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?').all(lessonId) as {
         id: string;
       }[];
@@ -255,6 +303,8 @@ export class LessonService {
 
       this.db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
       this.db.prepare('DELETE FROM lesson_quiz_submissions WHERE lesson_id = ?').run(lessonId);
+
+      // 8. 课节主体删除
       return this.db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     });
 
@@ -268,7 +318,7 @@ export class LessonService {
   }
 
   /**
-   * 获取课时关联数据宏观统计 (供删除确认弹窗使用)
+   * 获取课时关联数据宏观统计 (供删除确认弹窗使用，由只读连接池执行)
    */
   public getLessonStats(lessonId: string): LessonStats {
     const whiteboardCount =
@@ -289,7 +339,49 @@ export class LessonService {
       (this.reader.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(lessonId) as any)?.count ||
       0;
 
-    return { whiteboardCount, scheduleCount, enrollmentCount, assignmentCount };
+    let attendanceCount = 0;
+    try {
+      attendanceCount =
+        (
+          this.reader
+            .prepare(
+              'SELECT COUNT(*) as count FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE lesson_id = ?)',
+            )
+            .get(lessonId) as any
+        )?.count || 0;
+    } catch {}
+
+    let submissionCount = 0;
+    try {
+      submissionCount =
+        (
+          this.reader
+            .prepare(
+              'SELECT COUNT(*) as count FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE lesson_id = ?)',
+            )
+            .get(lessonId) as any
+        )?.count || 0;
+    } catch {}
+
+    let peerReviewCount = 0;
+    try {
+      peerReviewCount =
+        (
+          this.reader
+            .prepare('SELECT COUNT(*) as count FROM classroom_peer_reviews WHERE lesson_id = ?')
+            .get(lessonId) as any
+        )?.count || 0;
+    } catch {}
+
+    return {
+      whiteboardCount,
+      scheduleCount,
+      enrollmentCount,
+      assignmentCount,
+      attendanceCount,
+      submissionCount,
+      peerReviewCount,
+    };
   }
 
   /**

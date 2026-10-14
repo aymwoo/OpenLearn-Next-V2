@@ -352,6 +352,9 @@ export const ManagementPlugin = {
             db.prepare('DELETE FROM student_rollcalls WHERE class_id = ?').run(classId);
           } catch (e) {}
           db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+          try {
+            db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
+          } catch (e) {}
           db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
         });
 

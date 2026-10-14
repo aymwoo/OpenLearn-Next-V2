@@ -386,10 +386,82 @@ export const BuiltinPlugin = {
     await commandBus.registerHandler(deleteLessonCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const stmt = db.prepare('DELETE FROM lessons WHERE id = ?');
-        stmt.run(payload.lessonId);
+        const lessonId = payload.lessonId;
 
-        db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(payload.lessonId);
+        const delTx = db.transaction(() => {
+          // 1. 解除学生屏幕锁定引用
+          try {
+            db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE locked_lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 2. 白板与学情进度
+          db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(lessonId);
+          try {
+            db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 3. 考勤与排课 (先子后父)
+          try {
+            db.prepare(
+              'DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE lesson_id = ?)',
+            ).run(lessonId);
+            db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 4. 作业与提交 (先子后父)
+          try {
+            db.prepare(
+              'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE lesson_id = ?)',
+            ).run(lessonId);
+            db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(lessonId);
+            db.prepare(
+              'DELETE FROM plugin_assignment_files WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE lesson_id = ?)',
+            ).run(lessonId);
+            db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM plugin_assignments WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 5. 课堂互动与互评体系
+          try {
+            db.prepare('DELETE FROM classroom_peer_rubric_dimensions WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM classroom_danmaku WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM classroom_peer_nominations WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM classroom_peer_badges WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM classroom_peer_reviews WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM classroom_peer_review_tasks WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 6. 随堂信息流、预设投票、随机点名与课件打分配置
+          try {
+            db.prepare('DELETE FROM classroom_feed WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM lesson_preset_polls WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM student_rollcalls WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM courseware_score_config WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 7. 互动课堂会话与子项
+          try {
+            const sessionRows = db
+              .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?')
+              .all(lessonId) as { id: string }[];
+            for (const s of sessionRows) {
+              db.prepare(
+                'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id = ?)',
+              ).run(s.id);
+              db.prepare('DELETE FROM classroom_quick_polls WHERE session_id = ?').run(s.id);
+              db.prepare('DELETE FROM classroom_buzzers WHERE session_id = ?').run(s.id);
+              db.prepare('DELETE FROM classroom_exit_tickets WHERE session_id = ?').run(s.id);
+              db.prepare('DELETE FROM classroom_pacing_signals WHERE session_id = ?').run(s.id);
+            }
+            db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
+            db.prepare('DELETE FROM lesson_quiz_submissions WHERE lesson_id = ?').run(lessonId);
+          } catch {}
+
+          // 8. 课节主体删除
+          db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
+        });
+
+        delTx();
 
         await eventBus.publish({
           id: uuidv7(),
