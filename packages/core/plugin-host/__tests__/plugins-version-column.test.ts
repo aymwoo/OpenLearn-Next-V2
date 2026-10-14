@@ -45,7 +45,12 @@ import { EventBus } from '../../event-bus/index.js';
 import { ActionRegistry } from '../../registry/index.js';
 import { CapabilityGuard } from '../../capability/index.js';
 
-const MIGRATION_SQL = fs.readFileSync(path.resolve(process.cwd(), 'migrations/019_plugins_version.sql'), 'utf-8');
+// Windows 的 Git（core.autocrlf=true）会把仓库里的 LF 检出成 CRLF。
+// 下面用 `-- UP\n` 定位分段；不先归一化的话，`-- UP\r\n` 会匹配失败，
+// 整组用例都报「缺少 -- UP 段」。运行时 migrator 用的是正则，不受此影响。
+const MIGRATION_SQL = fs
+  .readFileSync(path.resolve(process.cwd(), 'migrations/019_plugins_version.sql'), 'utf-8')
+  .replace(/\r\n/g, '\n');
 
 class TestEsmLoader extends EsmLoader {
   constructor(private modules: Map<string, PluginModule>) {
