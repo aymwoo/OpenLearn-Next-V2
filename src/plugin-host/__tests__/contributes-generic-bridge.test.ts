@@ -11,6 +11,12 @@ import type {
   FrontendPluginManifest,
   FrontendPluginContext,
 } from '../types';
+import { paletteItemRegistry } from '../../features/teacher/lesson-editor/palette-item-registry';
+import {
+  getAllSegmentTypes,
+  getSegmentType,
+  unregisterPluginSegmentTypes,
+} from '../../features/teacher/lesson-editor/timelineConfig';
 
 /**
  * manifest contributes 通用声明式桥接回归测试（v0.6.0 遗留债务 ①）。
@@ -53,6 +59,8 @@ async function activateWithManifest(manifest: Record<string, unknown>): Promise<
 describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () => {
   beforeEach(() => {
     usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map() });
+    paletteItemRegistry.unregisterPlugin('test-plugin');
+    unregisterPluginSegmentTypes('test-plugin');
   });
 
   it('非白名单槽位（class.tab）的 contributes 不再被静默丢弃', async () => {
@@ -159,5 +167,56 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
     });
     const active = usePluginHostStore.getState().activePlugins.find((p) => p.id === 'test-plugin');
     expect(active?.state).toBe(PluginState.ACTIVE);
+  });
+
+  it('editor.palette_item 数据贡献桥接到 paletteItemRegistry', async () => {
+    await activateWithManifest({
+      contributes: {
+        'editor.palette_item': [
+          {
+            id: 'mol-viewer',
+            type: 'ext-chem/molecule-viewer',
+            labelZh: '3D 分子探究器',
+            labelEn: '3D Molecule Viewer',
+            descriptionZh: '分子可视化',
+            color: 'emerald',
+            group: 'media',
+          },
+        ],
+      },
+    });
+
+    expect(paletteItemRegistry.has('ext-chem/molecule-viewer')).toBe(true);
+    expect(paletteItemRegistry.get('ext-chem/molecule-viewer')?.labelZh).toBe('3D 分子探究器');
+    expect(usePluginHostStore.getState().getExtensions('editor.palette_item')).toHaveLength(1);
+  });
+
+  it('editor.timeline_segment 含 labelZh+labelEn 时桥接为环节类型', async () => {
+    await activateWithManifest({
+      contributes: {
+        'editor.timeline_segment': [
+          {
+            id: 'scientific_experiment',
+            labelZh: '科学探究实验',
+            labelEn: 'Scientific Experiment',
+            icon: 'FlaskConical',
+          },
+        ],
+      },
+    });
+
+    expect(getSegmentType('scientific_experiment').labelZh).toBe('科学探究实验');
+    expect(getAllSegmentTypes().some((t) => t.id === 'scientific_experiment')).toBe(true);
+  });
+
+  it('editor.timeline_segment 无双语 label 时不写入环节类型注册表', async () => {
+    await activateWithManifest({
+      contributes: {
+        'editor.timeline_segment': [{ id: 'panel-only', label: '附加面板', commandType: 'panel.open' }],
+      },
+    });
+
+    expect(getAllSegmentTypes().map((t) => t.id)).not.toContain('panel-only');
+    expect(usePluginHostStore.getState().getExtensions('editor.timeline_segment')).toHaveLength(1);
   });
 });

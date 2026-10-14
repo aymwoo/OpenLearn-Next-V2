@@ -14,6 +14,7 @@ import type { FullscreenRenderer } from '../features/whiteboard/fullscreen/Fulls
 import type { PropertyEditorComponent } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import type { CoursewareSourceLoader } from '../features/whiteboard/courseware/courseware-source-registry';
 import type { PaletteItemConfig } from '../features/teacher/lesson-editor/paletteConfig';
+import type { SegmentTypeMeta } from '../features/teacher/lesson-editor/timelineConfig';
 
 // ── Token name constants (frontend namespace) ────────────────────────────
 
@@ -93,8 +94,8 @@ export type ExtensionSlot =
   | 'stage.display.card' // 大屏展台卡片扩展
   | 'stage.display.overlay' // 大屏展台全屏 HUD 覆盖扩展（全班弹幕/倒计时/仪式动效等）
   | 'stage.display.action' // 大屏展台操作工具栏快捷操作扩展
-  | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
-  | 'editor.palette_item' // 课程编辑器白板图元扩展
+  | 'editor.timeline_segment' // 环节编辑附加面板；含 labelZh+labelEn 的 contributes 同时桥接为环节类型
+  | 'editor.palette_item' // 声明式画板图元（桥接 paletteItemRegistry）；命令式用 registerPaletteItem
   // ── 本地新增槽位 ──
   | 'classroom.countdown.widget' // 课堂倒计时挂件扩展
   | 'classroom.countdown.action' // 课堂倒计时快捷操作扩展
@@ -491,6 +492,9 @@ export interface FrontendPluginContext {
     /** 为课程设计备课画板注册自定义组件（在 activate() 内调用） */
     registerPaletteItem(item: PaletteItemConfig): void;
     unregisterPaletteItem(type: string): void;
+    /** 为备课时间线注册自定义教学环节类型（在 activate() 内调用；会进入 SegmentEditorCard 下拉） */
+    registerSegmentType(type: SegmentTypeMeta): void;
+    unregisterSegmentType(id: string): void;
     /** 作业题型渲染器注册（P1 题型扩展：代码运行题/口语评测题等，在 activate() 内调用） */
     registerAssignmentQuestionRenderer(
       config: import('../features/teacher/assignment-question-registry').AssignmentQuestionRendererConfig,
