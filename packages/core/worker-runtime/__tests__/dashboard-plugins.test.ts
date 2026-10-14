@@ -40,6 +40,7 @@ describe('Dashboard Plugins DDL and Command Verification', () => {
       undefined,
       'lianyun-course',
       '01a0b99f-efb7-7178-be2e-be3b1ad0cb53',
+      ['@openlearn/core:IDatabase'],
     );
 
     const tablesToCreate = [

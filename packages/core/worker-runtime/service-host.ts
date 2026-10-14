@@ -642,10 +642,11 @@ export class ServiceHost {
    */
   async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
-      // ── Security Barrier 1: Token Allowlist Guard ───────────────────
+// ── Security Barrier 1: Token Allowlist Guard ───────────────────
       // Strict token-level capability sandbox: block any service token
-      // not explicitly granted to this worker plugin.
-      if (this.allowedServiceTokens && !this.allowedServiceTokens.has(msg.token)) {
+      // not explicitly granted to this worker plugin. 空允许列表（undefined 或空 Set）
+      // 视为 fail-closed，避免“未注入 allowlist 就放行全部 token”。
+      if (!this.allowedServiceTokens || !this.allowedServiceTokens.has(msg.token)) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           msg.token,
