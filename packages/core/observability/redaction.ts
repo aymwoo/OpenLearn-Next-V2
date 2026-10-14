@@ -87,6 +87,22 @@ const SENSITIVE_FIELD_NAMES: string[] = [
   'requestPayload',
   'responsePayload',
   'secret',
+  // 改密与学生作答。生产日志默认脱敏，避免口令和作答原文落盘。
+  'newPassword',
+  'oldPassword',
+  'currentPassword',
+  'confirmPassword',
+  'textContent',
+  'text_content',
+  'studentAnswer',
+  'student_answer',
+  'answer',
+  'answers',
+  'classPasscode',
+  'session_data',
+  'edu_os_token',
+  'set-cookie',
+  'Set-Cookie',
 ];
 
 /**
@@ -142,9 +158,7 @@ export function isRedactionEnabled(env: NodeJS.ProcessEnv = process.env): boolea
  * 单独抽成纯函数是为了让测试能在**不创建真实 logger、不写 `logs/`** 的前提下
  * 直接验证这份配置本身的行为。
  */
-export function buildRedactOptions(
-  env: NodeJS.ProcessEnv = process.env,
-): { paths: string[]; censor: string } | false {
+export function buildRedactOptions(env: NodeJS.ProcessEnv = process.env): { paths: string[]; censor: string } | false {
   if (!isRedactionEnabled(env)) return false;
   return { paths: SENSITIVE_PATHS, censor: REDACTION_PLACEHOLDER };
 }

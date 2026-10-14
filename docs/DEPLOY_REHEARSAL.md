@@ -153,6 +153,7 @@ node scripts/site-restore.mjs --i-understand-downtime
 **结果：通过**
 
 - 三个业务容器的 Health 都到过 `healthy`。`/health` 为 200。
+- 演练当时的 `/health/ready` 还带 `db: connected`。随后的公测运维改动把就绪响应收成 `{"status":"ready"}`，不再返回数据库、WAL 或错误文本。上线检查以 [生产指南](deployment/production-guide.md#4-公测上线检查清单) 的现行合同为准。
 - `docker restart` 之后 `/health` 恢复，`keep.txt` 还在。
 - 主进程被宿主机杀掉后：`RestartCount` 从 0 变为 1，`StartedAt` 更新，几秒内 `/health` 再次 200，课件文件还在。
 - `docker kill` 会把容器停住且 **不会** 自动拉起。这是 Docker 对「人为停止」的策略，`unless-stopped` 只处理进程自己退出。

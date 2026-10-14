@@ -1,4 +1,5 @@
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { captureError } from '../../packages/core/observability/error-reporter.js';
 
 /**
  * 安全响应错误工具函数：
@@ -36,9 +37,26 @@ export function sendSafeError(
     err && typeof err === 'object' && typeof (err as { status?: unknown }).status === 'number'
       ? (err as { status: number }).status
       : undefined;
-  const effectiveStatus =
-    declared !== undefined && declared >= 400 && declared <= 599 ? declared : status;
+  const effectiveStatus = declared !== undefined && declared >= 400 && declared <= 599 ? declared : status;
 
+  if (effectiveStatus >= 500) {
+    const req = res.req as
+      (Request & { requestId?: string; session?: { userId?: string; studentId?: string } }) | undefined;
+    if (res.locals && typeof res.locals === 'object') {
+      (res.locals as { errorCaptured?: boolean }).errorCaptured = true;
+    }
+    captureError({
+      source: 'http',
+      message: message || 'Internal server error',
+      name: err instanceof Error ? err.name : 'Error',
+      stack: err instanceof Error ? err.stack : undefined,
+      status: effectiveStatus,
+      method: req?.method,
+      path: req?.path,
+      requestId: req?.requestId,
+      userId: req?.session?.userId || req?.session?.studentId,
+    });
+  }
   if (process.env.NODE_ENV !== 'test') {
     console.error(`[API Error ${effectiveStatus}]:`, err);
   }

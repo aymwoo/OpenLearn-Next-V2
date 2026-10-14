@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -61,13 +60,7 @@ import {
   runOpenAIAgentChat,
 } from './server/ai-agent.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
-import {
-  performBackup,
-  checkpoint,
-  listBackups,
-  getDefaultBackupDir,
-  getDefaultDbPath,
-} from './packages/core/db/index.js';
+import { performBackup, checkpoint } from './packages/core/db/index.js';
 import { startBackupScheduler } from './server/backup-scheduler.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import {
@@ -81,7 +74,12 @@ import {
 } from './server/middleware/auth.js';
 import { csrfGuard } from './server/middleware/csrf.js';
 import { sendSafeError } from './server/utils/error-handler.js';
-import { getUploadsDir, getPluginsDir } from './server/utils/paths.js';
+import { requestObservability } from './server/middleware/request-observability.js';
+import { registerClientErrorRoute } from './server/routes/client-errors.js';
+import { captureUnknownError } from './packages/core/observability/error-reporter.js';
+import { checkReadiness, livenessBody, readinessBody } from './packages/core/observability/health.js';
+import { renderPrometheusMetrics } from './packages/core/observability/metrics.js';
+import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -267,6 +265,8 @@ async function startServer() {
   // Phase B1 CSRF: 全局写请求跨站来源门控（Sec-Fetch-Site/Dest 判定 + 豁免清单，
   // 见 server/middleware/csrf.ts 判定表；SameSite=Lax cookie 兜底）
   app.use(csrfGuard);
+  app.use(requestObservability());
+  registerClientErrorRoute(app);
   // SEC-FIX: uploads 静态资源需鉴权（防匿名枚举已上传课件/附件），plugins 保持只读但阻断敏感文件
   // V1 修复：此前仅判 Cookie 字符串存在，任意值放行；现校验 session 有效性
   app.use(
@@ -498,83 +498,56 @@ async function startServer() {
     },
   });
 
-  // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────
+  // ── 健康检查 (存活 / 就绪) ────────────────────────────────────────
   const startTime = Date.now();
-  // 单一版本来源：统一引用 PLATFORM_VERSION，避免运行期读取 package.json 路径漂移
   const platformVersion = PLATFORM_VERSION;
-  app.get('/health', (_req: any, res: any) => {
-    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: platformVersion });
+  const migrationsDir = path.join(process.cwd(), 'migrations');
+  app.get('/health', (_req, res) => {
+    res.json(livenessBody(Math.floor((Date.now() - startTime) / 1000), platformVersion));
   });
 
-  app.get('/health/ready', (_req: any, res: any) => {
-    try {
-      kernelContainer.db.prepare('SELECT 1').get();
-      const workerCount = kernelContainer.workerManager?.registry?.activeCount ?? 0;
-      // R4 加深：WAL 体积 + 最新备份年龄纳入就绪信号（仅上报，不因此 503，避免新实例无备份时自杀）
-      let walBytes: number | null = null;
-      try {
-        walBytes = fs.statSync(getDefaultDbPath() + '-wal').size;
-      } catch {
-        walBytes = 0;
-      }
-      let lastBackupAgeH: number | null = null;
-      try {
-        const files = listBackups(getDefaultBackupDir()).filter((b) => b.isValid);
-        if (files.length > 0) {
-          lastBackupAgeH = Math.max(0, (Date.now() - new Date(files[0].mtime).getTime()) / 3600000);
-          lastBackupAgeH = Math.round(lastBackupAgeH * 10) / 10;
-        }
-      } catch {
-        lastBackupAgeH = null;
-      }
-      res.json({ status: 'ready', db: 'connected', workers: workerCount, walBytes, lastBackupAgeH });
-    } catch (e: any) {
-      res.status(503).json({ status: 'not_ready', error: e.message });
-    }
-  });
-
-  // SEC-AUTH-METRICS: 保护系统级指标，仅管理员可探测服务器运行性能指标
-  app.get('/metrics', requireAuth('administrator'), (_req: any, res: any) => {
-    const mem = process.memoryUsage();
-    let socketConnectedCount: number | null = null;
-    try {
-      const sockets: any = (io as any)?.sockets?.sockets;
-      socketConnectedCount =
-        typeof sockets?.size === 'number'
-          ? sockets.size
-          : typeof (io as any)?.engine?.clientsCount === 'number'
-            ? (io as any).engine.clientsCount
-            : null;
-    } catch {
-      socketConnectedCount = null;
-    }
-    let walBytes: number | null = null;
-    try {
-      walBytes = fs.statSync(getDefaultDbPath() + '-wal').size;
-    } catch {
-      walBytes = 0;
-    }
-    let lastBackupAgeH: number | null = null;
-    try {
-      const files = listBackups(getDefaultBackupDir()).filter((b) => b.isValid);
-      if (files.length > 0) {
-        lastBackupAgeH = Math.round((Math.max(0, Date.now() - new Date(files[0].mtime).getTime()) / 3600000) * 10) / 10;
-      }
-    } catch {
-      lastBackupAgeH = null;
-    }
-    res.json({
-      uptime: Math.floor((Date.now() - startTime) / 1000),
-      memory: {
-        rss: Math.round(mem.rss / 1024 / 1024) + 'MB',
-        heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB',
+  app.get('/health/ready', (_req, res) => {
+    const result = checkReadiness({
+      pingDatabase: () => {
+        kernelContainer.db.prepare('SELECT 1').get();
       },
-      nodeVersion: process.version,
-      socketConnectedCount,
-      walBytes,
-      lastBackupAgeH,
+      storageDir: getStorageDir(),
+      migrationsDir,
+      appliedMigrations: () => {
+        const rows = kernelContainer.db.prepare('SELECT name FROM _migrations').all() as { name: string }[];
+        return rows.map((row) => row.name);
+      },
     });
+    if (!result.ok) {
+      console.warn(
+        `[health] not ready: ${result.reason || 'unknown'}${
+          result.pendingMigrations?.length ? ` pending=${result.pendingMigrations.join(',')}` : ''
+        }`,
+      );
+      res.status(503).json(readinessBody(false));
+      return;
+    }
+    res.json(readinessBody(true));
   });
+
+  // 指标默认受保护：METRICS_TOKEN 的 Bearer，或管理员会话。匿名请求 401。
+  app.get(
+    '/metrics',
+    (req, res, next) => {
+      const token = (process.env.METRICS_TOKEN || '').trim();
+      const header = req.headers.authorization;
+      if (token && header === `Bearer ${token}`) {
+        next();
+        return;
+      }
+      requireAuth('administrator')(req, res, next);
+    },
+    (_req, res) => {
+      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(renderPrometheusMetrics());
+    },
+  );
 
   // SEC-ROUTING: API 404 兜底隔离门禁 —— 任何未被上述路由消费的 /api/* 请求
   // 必须直接返回 JSON 格式 404，严禁穿透至下游 Vite 开发服务器引发 HTML 假死与 500 超时
@@ -599,7 +572,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production static file serving
-    const distPath = __dirname || path.join(process.cwd(), 'dist');
+    const distPath = typeof __dirname !== 'undefined' ? __dirname : path.join(process.cwd(), 'dist');
     // SEC-CACHE: 针对 Vite 打包生成的 hash 静态分包开启不可变长效缓存
     app.use(
       '/assets',
@@ -766,9 +739,11 @@ if (process.argv[1]?.endsWith('server.cjs') || process.argv[1]?.endsWith('server
 // R1 修复：宿主进程最后防线 —— 运行期未捕获异常只记日志 + 优雅退出，避免单次抛错即静默崩溃
 process.on('unhandledRejection', (reason) => {
   console.error('[Server] unhandledRejection:', reason);
+  captureUnknownError('unhandledRejection', reason);
 });
 process.on('uncaughtException', (err) => {
   console.error('[Server] uncaughtException:', err);
+  captureUnknownError('uncaught', err);
   gracefulShutdown('UNCAUGHT').catch(() => process.exit(1));
 });
 

@@ -10,7 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
+- **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
+- **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
+- **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
+
 ### Breaking Changes
+
+- **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
 - **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
 
@@ -39,6 +48,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 
 - **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
+- **CI 的 pnpm 固定为 `package.json` 的 `packageManager`（`pnpm@10.33.4`）**。`pnpm/action-setup` 不再使用 `version: latest`。pnpm 12 默认的 `minimumReleaseAge` 会拒绝锁文件里当天发布的 `caniuse-lite` 与 `electron-to-chromium`，`pnpm install --frozen-lockfile` 在安装阶段失败。仓库的 `.npmrc` 仍是 `minimum-release-age=0`，没有为了过 CI 关掉这条策略。GitHub Actions 的 JavaScript action 升到各自的 Node 24 主版本。
+- **架构文档漂移审计的三处误报**：发布说明里已下线的 `national-smart-edu` 不再被当成当前插件；`audit-tools/reports/` 是 gitignore 的生成物；「已于某日删除」算墓碑。`packages/core/types` 只有 `semver` 的 ambient 声明，不算子系统。
+- **Windows 权限探针不再读 `/etc/hostname`**。该路径在 Windows 上不存在，`off` 策略得到 `ENOENT`，平台探测 job 里的 worker-runtime 用例失败，随后的 verbose dump 也失败。探针改为读取测试自己创建的、位于插件目录之外的文件。
+- **Windows 上 `019_plugins_version.sql` 的分段测试认 CRLF**。`core.autocrlf=true` 时文件是 `-- UP\r\n`，用例用 `-- UP\n` 查找，整组报「缺少 -- UP 段」。读入后先把换行归一成 LF。
+- **备课「添加到画板」会等白板挂载**。调色板在主包，白板是 lazy chunk。chunk 还没好时 `whiteboardRef` 为空，点击被静默丢掉，元素不落库。现在最多等 15 秒再插入。浏览器 E2E 会先等到画布出现，并按班级名称点选；检索框只在班级超过 2 个时才出现，不能当必经步骤。
 - **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
 - **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
 - **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
@@ -77,6 +91,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **PPTX 演示组件国际化运行时异常修复**：
+  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
+  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 

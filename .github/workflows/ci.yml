@@ -1,5 +1,12 @@
 name: CI
 
+# pnpm 不写 version: latest。pnpm/action-setup 在省略 version 时读取
+# package.json 的 packageManager（pnpm@10.33.4），与 Dockerfile / 本地开发一致。
+# pnpm 12 默认开启 minimumReleaseAge，会拒绝锁文件里当天发布的传递依赖。
+# JavaScript action 使用 Node 24 运行时（checkout/setup-node/setup-python/
+# upload-artifact/github-script/pnpm action-setup 的当前主版本），
+# 避免 actions 仍声明 Node 20 时的弃用警告。
+
 on:
   pull_request:
     branches: [main]
@@ -19,15 +26,13 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # pnpm must be set up *before* setup-node, otherwise `cache: 'pnpm'` cannot
       # locate the pnpm store.
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
@@ -62,7 +67,7 @@ jobs:
         # 评论只是「锦上添花」的反馈：fork PR（token 只读）或仓库权限收紧时
         # 必然 403。不应因此把 typecheck/test 通过的 job 判为失败。
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.issues.createComment({
@@ -115,13 +120,11 @@ jobs:
     runs-on: windows-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
@@ -137,7 +140,7 @@ jobs:
 
       - name: Upload capability report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-capability-report-windows
           path: dist/platform-capability-report.txt
@@ -147,10 +150,13 @@ jobs:
         run: pnpm lint
 
       - name: Platform-sensitive unit tests
+        id: platform-tests
         run: pnpm vitest run packages/core/worker-runtime packages/core/plugin-host
 
+      # 只在测试步骤自己失败时再跑一遍 verbose。安装或类型检查失败时
+      # 依赖还没就绪，这里再调 vitest 只会再报一次「命令找不到」，盖住真正的错误。
       - name: Dump worker-runtime test output on failure
-        if: failure()
+        if: failure() && steps.platform-tests.outcome == 'failure'
         run: pnpm vitest run packages/core/worker-runtime --reporter=verbose
 
   plugin-compatibility:
@@ -160,13 +166,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
@@ -175,21 +179,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Checkout attendance-record compatibility fixture
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: openlearn-next/attendance-record
           ref: ce8541e7a48b286574ffd620fa167cf5b139e451
           path: .plugin-compatibility-sources/attendance-record
 
       - name: Checkout class_manager compatibility fixture
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: openlearn-next/class_manager
           ref: 941b556f0017ec20e8a8d7a1f75d1dd9f80dd26f
           path: .plugin-compatibility-sources/class_manager
 
       - name: Checkout interactive-courseware compatibility fixture
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: openlearn-next/interactive-courseware
           ref: d622e0a54463813631f41589fa8d24082160b39d
@@ -227,13 +231,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
@@ -247,15 +249,42 @@ jobs:
       - name: Run browser workflow tests
         run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts
 
+  # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
+  # 覆盖强制改密、教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
+  public-beta-journey:
+    name: Public beta journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
+
+      - name: Run public beta journey
+        run: pnpm exec playwright test --config=playwright.beta.config.ts
+
   docs-drift-audit:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -265,14 +294,14 @@ jobs:
 
       - name: Upload drift report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: drift-report
           path: audit-tools/reports/drift_report.md
 
       - name: Comment drift report on PR
         if: github.event_name == 'pull_request' && always() && steps.audit.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -302,17 +331,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
       # 仓库没有 package-lock.json，必须用 pnpm audit。
       # 钉死官方 registry：镜像源（例如 npmmirror）没有 audit 端点时会
       # ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS，那是基础设施失败，不能当成「无漏洞」。
       # --audit-level high：moderate / low 不阻断；存在 high 或 critical 时本 job 失败。
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -330,13 +357,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
@@ -363,7 +388,7 @@ jobs:
 
       - name: Upload coverage summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-summary
           path: coverage/coverage-summary.json

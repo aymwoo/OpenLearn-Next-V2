@@ -25,6 +25,7 @@ import {
 } from './courseware-score.js';
 // R-4：命令 handler 的 base64 Buffer → 临时 ZIP 文件（安装链路只持路径）
 import { removeTempZip, writeBufferToTempZip } from '../core/esm-loader/install-utils.js';
+import { recordSecurityAudit } from '../core/observability/audit-log.js';
 
 /** 平台原生课件运行时脚本注册表的引用（供 deactivate 声明式回收） */
 let nativeRuntimeScriptRegistry: any = null;
@@ -868,6 +869,11 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
         const manifest = await pluginHost.installPlugin(payload.sourceCode);
+        recordSecurityAudit('plugin.installed', {
+          actorId: command.actorId,
+          manifestId: manifest.id,
+          via: 'source',
+        });
         return { success: true, manifest };
       },
     });
@@ -900,8 +906,14 @@ export const BuiltinPlugin = {
         let zipPath: string | undefined;
         try {
           zipPath = writeBufferToTempZip(fileBuffer);
-          const manifest = await distributionManager.installFromZip(zipPath, payload.executionMode);
-          return { success: true, manifest };
+          const installed = await distributionManager.installFromZip(zipPath, payload.executionMode);
+          recordSecurityAudit('plugin.installed', {
+            actorId: command.actorId,
+            manifestId: installed.manifest?.id,
+            pluginId: installed.pluginId,
+            via: 'zip',
+          });
+          return { success: true, manifest: installed };
         } finally {
           removeTempZip(zipPath);
         }
@@ -976,6 +988,12 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
         const newStatus = await pluginHost.togglePlugin(payload.pluginId);
+        if (newStatus === 'active') {
+          recordSecurityAudit('plugin.enabled', {
+            actorId: command.actorId,
+            pluginId: String(payload.pluginId || ''),
+          });
+        }
         return { success: true, status: newStatus };
       },
     });
