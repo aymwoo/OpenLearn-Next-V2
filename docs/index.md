@@ -239,6 +239,7 @@ migration/version-migration
 :caption: 🎯 插件精准开发参考 (Plugin Dev Reference)
 
 reference/plugin-capability-matrix
+reference/plugin-trust-boundary
 reference/plugin-ui-extension-slots
 reference/plugin-database-api
 reference/platform-data-tables
