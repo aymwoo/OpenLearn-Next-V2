@@ -27,8 +27,7 @@
 - 会话 Cookie 名 `edu_os_token`，HttpOnly、`SameSite=Lax`。绝对过期 7 天，空闲 24 小时（`server/middleware/auth.ts` 的 `getValidSession`）。
 - 教师登录对未知用户名返回 `User not found`，对错误密码返回 `Incorrect password`（`server/routes/roster.ts`）。可以据此判断用户名是否存在。
 - 学生个人口令在 bcrypt 之后，仍接受无盐 SHA-256 和与库存字符串相同的明文，匹配后升级为 bcrypt。新建学生走 bcrypt。存量明文行用该明文仍能登录。
-- 学生个人口令仍是字面量 `123456` 时，会话带上必须改密。用班级临时口令登录不会因为这个字面量被要求改密。
-- 班级临时口令以明文存在 `classes.class_passcode`，登录时做字符串相等比较。可以设置过期时间。授权教师读取班级口令的接口会返回这一列。数据库备份里也是明文。
+- 学生个人口令仍是字面量 `123456` 时，会话带上必须改密。用班级临时口令登录不会因为这个字面量被要求改密。班级临时口令可以设置过期时间。它在库里是密文，细节见文末「不要再当成未修复缺陷」。
 - Cookie 的 `Secure` 只在请求被判定为 HTTPS，或 `ENABLE_HTTPS=true` 时附加。HSTS 要 `ENABLE_HSTS=true`，或生产环境且 `FORCE_HTTPS=true`（`server.ts`）。明文 HTTP 的校内部署上，同一局域网可以窃听会话 Cookie。`.env.example` 没有列出这两个变量。
 
 ### 备注并不是只给教师看
@@ -81,7 +80,7 @@
 
 ### AI 密钥对教师显示首尾各 4 位（审计 M-6 的一部分）
 
-`GET /api/ai-providers` 对教师和管理员开放。`server/utils/crypto.ts` 的 `maskApiKey` 保留首尾各 4 个字符。写入和删除提供商仍只要管理员。`decryptApiKey` 在字符串不是 `iv:tag:cipher` 三段时把原值当明文返回。空的 `ENCRYPTION_KEY=` 不会被覆盖，进程会改用一把临时钥匙，重启后已加密的密钥解不开（`packages/core/di/api-key-crypto.ts` 的 `getEncryptionKey`）。启动不校验密钥是否为 32 字节，长度不对会在加解密时失败。
+`GET /api/ai-providers` 对教师和管理员开放。`server/utils/crypto.ts` 的 `maskApiKey` 保留首尾各 4 个字符。写入和删除提供商仍只要管理员。`decryptApiKey` 在字符串不是 `iv:tag:cipher` 三段时把原值当明文返回。空的 `ENCRYPTION_KEY=` 不会被改写。未设置时不再使用只活在内存里的临时钥匙：首次启动把随机 64 位 hex 写到 `storage/encryption-key`（权限 600），之后每次读取；启动日志和管理后台会警告应改设环境变量并离线备份该文件。环境变量与该文件不一致时拒绝启动。长度不是 64 位 hex 时启动报错，不再拖到加解密才失败。
 
 ### 第三方插件的网络
 
@@ -95,7 +94,7 @@
 
 ## 3. 部署与工程上的限制
 
-- **恢复依赖同一把 `ENCRYPTION_KEY`。** 库能起来，已存的 AI 密钥解不开。演练记录已写明。
+- **恢复依赖同一把 `ENCRYPTION_KEY`，或同一份 `storage/encryption-key`。** 库能起来，已存的 AI 密钥和班级口令密文解不开。`site-backup` 不含该密钥文件。演练记录已写明密钥必须与备份时一致。
 - **AI 提供商种子失败只打日志。** `packages/core/db/index.ts` 里种子账号失败会拒绝启动；默认 AI 提供商插入失败被吃掉，进程继续。种子行的 `api_key` 是空字符串，不会自带可用模型。
 - **生产镜像里没有 `fuser`。** `scripts/site-restore.mjs` 用 `fuser` 看库是否被占用。镜像只安装了 `wget` 和 `su-exec`（`Dockerfile`）。容器里这条检查可能看不到占用者。停服是操作者的责任。
 - **没有定时备份。** 只有手工执行 `scripts/site-backup.mjs`。迁移前还会在备份目录写 `pre_migration_*.db`，那是数据库快照，不含课件文件包。
@@ -121,5 +120,7 @@
 | H-5 | SDK 的 `dist/` 不进构建与 CI | `pnpm install` 的 `prepare`、`pnpm build`、CI 和镜像都会构建 SDK |
 | M-7 | 主 tsconfig 未开 strict，严格检查失败 | `tsconfig.json` 已设 `strict`、`noImplicitAny`、`strictNullChecks`。CI 的 `pnpm lint:strict` 失败即红 |
 | M-9 | 依赖审计有 critical/high，且 CI 不阻断 | `CHANGELOG.md` 记录审计项已收到 0。CI 执行 `pnpm audit --audit-level high`，无 `continue-on-error`。起草时未重跑审计 |
+| MED-04 | 班级临时口令明文落库，登录做字符串相等比较 | `classes.class_passcode` 为 AES-256-GCM（前缀 `olenc1:`）。登录解密后做常量时间比较。授权教师的口令接口返回原文，列表不返回该列。迁移 `023` 在启动时加密剩余明文行，已是密文的跳过。`site-backup` 的数据库快照是密文 |
+| M-6 密钥回退 | 空的 `ENCRYPTION_KEY` 使用临时内存钥匙，重启后旧密文无法解密 | 未设置时持久化 `storage/encryption-key`（0600）。启动日志和管理后台警告应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与文件不一致则拒绝启动。代码里没有默认密钥 |
 
 审计报告第 3.4 节列出的「当时不成立」的项（前端包不含 AI Key、Cookie 为 HttpOnly、CSRF 门控、课件 iframe 沙箱等）没有在本次被推翻。那些句子描述的是审计当天的树；公测以本节和上文的开放项为准。
