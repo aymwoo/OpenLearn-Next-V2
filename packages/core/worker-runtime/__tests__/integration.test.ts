@@ -213,7 +213,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     const capGuard = createMockCapGuard(true);
 
     // Main thread: create ServiceHost
-    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['lesson:write']);
+    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['lesson:write'], undefined, undefined, undefined, undefined, ['@openlearn/core:ICommandBusService']);
 
     // Wire main transport messages to ServiceHost
     mainTransport.onMessage((msg: any) => {
@@ -272,6 +272,11 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
       capGuard,
       'plugin:no-cap',
       [], // empty capabilities
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
     );
 
     mainTransport.onMessage((msg: any) => {
@@ -314,7 +319,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     });
     const capGuard = createMockCapGuard(true);
 
-    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['read']);
+    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['read'], undefined, undefined, undefined, undefined, ['test:Service']);
 
     // Route messages through the mock transport pair
     transportPair.main.onMessage((msg: any) => {
