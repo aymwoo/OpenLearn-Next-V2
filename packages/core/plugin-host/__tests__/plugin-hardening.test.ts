@@ -218,7 +218,17 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     const guard = new CapabilityGuard();
 
     // Create ServiceHost bound to plugin:ext-test-isolated
-    const serviceHost = new ServiceHost(registry, guard, 'plugin:ext-test-isolated', ['whiteboard:write']);
+    const serviceHost = new ServiceHost(
+      registry,
+      guard,
+      'plugin:ext-test-isolated',
+      ['whiteboard:write'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['@openlearn/core:IStorageService'],
+    );
 
     const transport = {
       postMessage: vi.fn(),
