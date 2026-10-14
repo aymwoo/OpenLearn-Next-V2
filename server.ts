@@ -249,19 +249,27 @@ async function startServer() {
   const writeLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : 60);
   const aiLimiter = createAiLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 10);
 
-  // v0.6.1：JSON 体积硬上限抬至 110MB —— 课件上传（/api/upload）的大小限制
-  // 改为管理后台可配置（site_settings.upload_max_file_mb，1–90MB 文件本体，
-  // base64 膨胀 ~33% 后仍在上限内）。硬上限只约束单请求内存暴露峰值，
-  // 实际放行由 /api/upload 按配置逐请求裁决（413 + 明确文案）。
-  // 写操作另有 writeLimiter 限速 + 教师及以上鉴权，内存暴露可控。
-  app.use(express.json({ limit: '110mb' }));
-  app.use(express.urlencoded({ limit: '110mb', extended: true }));
+  // SEC-03 防御加固：
+  // 1. 写请求限流前置：在解析任何请求体前执行，阻止超频与恶意请求消耗 CPU/内存解析 JSON
   app.use((req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
       return writeLimiter(req, res, next);
     }
     next();
   });
+
+  // 2. 局部大文件上传解析器（110MB）：仅向特定大文件上传端点放开，必须在全局 parser 之前挂载
+  const largeUploadEndpoints = [
+    '/api/upload',
+    '/api/courseware/upload',
+    '/api/courseware/inline',
+    '/api/plugins/upload-zip',
+  ];
+  app.use(largeUploadEndpoints, express.json({ limit: '110mb' }), express.urlencoded({ limit: '110mb', extended: true }));
+
+  // 3. 全局 JSON 体积收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ limit: '2mb', extended: true }));
   // Phase B1 CSRF: 全局写请求跨站来源门控（Sec-Fetch-Site/Dest 判定 + 豁免清单，
   // 见 server/middleware/csrf.ts 判定表；SameSite=Lax cookie 兜底）
   app.use(csrfGuard);

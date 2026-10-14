@@ -1326,12 +1326,13 @@ export const BuiltinPlugin = {
 
         if (ext === '.html' || ext === '.htm') {
           // SEC-FIX: 严格剥离路径穿越前缀（支持 posix 与 win32 斜杠），并强制校验目标路径位于 storageDir 沙箱目录内
+          const storageDirWithSep = path.resolve(storageDir) + path.sep;
           const entryName = path.basename(filename.replace(/\\/g, '/'));
           if (!entryName || entryName === '.' || entryName === '..') {
             throw new Error('Invalid courseware filename');
           }
           const destPath = path.resolve(storageDir, entryName);
-          if (!destPath.startsWith(storageDir)) {
+          if (!destPath.startsWith(storageDirWithSep)) {
             throw new Error(`Path traversal attempt in HTML courseware upload: ${filename}`);
           }
           fs.writeFileSync(destPath, fileBuffer);
@@ -1418,13 +1419,37 @@ export const BuiltinPlugin = {
             throw new Error('Failed to parse ZIP archive: ' + zipErr.message);
           }
 
+          const storageDirWithSep = path.resolve(storageDir) + path.sep;
+          const MAX_ZIP_UNCOMPRESSED_SIZE = Number(process.env.OPENLEARN_MAX_ZIP_SIZE) || 300 * 1024 * 1024; // 300MB
+          const MAX_ZIP_FILE_COUNT = 2000;
+
+          // SEC-04: 第一阶段预检 Zip Bomb（未压缩总尺寸与文件总数）
+          let totalUncompressedBytes = 0;
+          let fileCount = 0;
+          for (const [_pathKey, file] of Object.entries(loadedZip.files)) {
+            const fileObj = file as any;
+            if (!fileObj.dir) {
+              fileCount++;
+              if (fileCount > MAX_ZIP_FILE_COUNT) {
+                throw new Error(`ZIP archive contains too many files (max: ${MAX_ZIP_FILE_COUNT})`);
+              }
+              const uncompressedSize = fileObj._data?.uncompressedSize ?? 0;
+              totalUncompressedBytes += uncompressedSize;
+              if (totalUncompressedBytes > MAX_ZIP_UNCOMPRESSED_SIZE) {
+                throw new Error(
+                  `ZIP uncompressed size exceeds limit of ${Math.round(MAX_ZIP_UNCOMPRESSED_SIZE / (1024 * 1024))}MB`,
+                );
+              }
+            }
+          }
+
           // Write files to storage
           const files: string[] = [];
           for (const [relativePath, file] of Object.entries(loadedZip.files)) {
             const fileObj = file as any;
             if (!fileObj.dir) {
               const destPath = path.resolve(storageDir, relativePath);
-              if (!destPath.startsWith(storageDir)) {
+              if (!destPath.startsWith(storageDirWithSep)) {
                 throw new Error('Directory traversal attempt detected in ZIP archive');
               }
               const parentDir = path.dirname(destPath);

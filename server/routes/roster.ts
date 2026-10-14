@@ -789,9 +789,26 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // --- STUDENT READ NOTIFICATIONS APIS ---
   app.get('/api/students/:id/read_notifications', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.studentId;
+      const studentRow = kernelContainer.db
+        .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
+        .get(req.params.id, req.params.id) as any;
+      const studentId = studentRow ? studentRow.id : req.params.id;
+
+      const isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === req.params.id;
+      const isStaff =
+        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
+
+      if (!isSelf && !isStaff) {
+        return res.status(403).json({ error: 'Forbidden: Cannot access another student notifications' });
+      }
+
       const rows = kernelContainer.db
         .prepare('SELECT notification_id FROM student_read_notifications WHERE student_id = ?')
-        .all(req.params.id) as any[];
+        .all(studentId) as any[];
       res.json(rows.map((r) => r.notification_id));
     } catch (e: any) {
       sendSafeError(res, e);
@@ -800,21 +817,38 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/students/:id/read_notifications', requireAuth(), async (req, res) => {
     try {
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.studentId;
+      const studentRow = kernelContainer.db
+        .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
+        .get(req.params.id, req.params.id) as any;
+      const studentId = studentRow ? studentRow.id : req.params.id;
+
+      const isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === req.params.id;
+      const isStaff =
+        isAdministrator(session) || (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
+
+      if (!isSelf && !isStaff) {
+        return res.status(403).json({ error: 'Forbidden: Cannot update another student notifications' });
+      }
+
       const { notificationId } = req.body;
       if (!notificationId) {
         return res.status(400).json({ error: 'notificationId is required' });
       }
       kernelContainer.db
         .prepare('INSERT OR IGNORE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)')
-        .run(req.params.id, notificationId);
+        .run(studentId, notificationId);
 
       await publishClassroomEvent(
         CLASSROOM_EVENTS.STUDENT_NOTIFICATION_ACKNOWLEDGED,
         {
-          studentId: req.params.id,
+          studentId,
           notificationId,
         },
-        { correlationId: req.params.id },
+        { correlationId: studentId },
       );
       res.json({ success: true });
     } catch (e: any) {
