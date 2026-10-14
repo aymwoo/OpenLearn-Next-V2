@@ -311,7 +311,7 @@ node scripts/site-restore.mjs --i-understand-downtime
 **恢复校验清单**：
 
 1. 停服务 → 运行恢复脚本 → 再启动
-2. `curl -fsS http://127.0.0.1:9000/health` 与 `/health/ready`
+2. `curl -fsS http://127.0.0.1:9000/health` 应含 `"status":"ok"`。`/health/ready` 成功时正文是 `{"status":"ready"}`，不要再期待 `db` 或错误详情。
 3. 抽查一个班级、一个课件文件、一个学生成绩
 4. **确认 `ENCRYPTION_KEY` 未随备份变更**——换了密钥则所有 AI Provider API Key 需重新保存
 
