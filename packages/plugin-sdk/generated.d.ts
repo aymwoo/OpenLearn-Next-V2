@@ -2162,7 +2162,7 @@ declare function isRedactionEnabled(env: NodeJS.ProcessEnv): boolean;
 declare const logger: any; // 初始化器非字面量，未收敛
 
 /** @see packages/core/esm-loader/manifest-schema.ts */
-declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$loose>;
+declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; network: z.ZodOptional<z.ZodObject<{ outbound: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$strip>>; }, z.core.$loose>;
 
 declare function removeTempZip(zipPath: string | undefined): void;
 

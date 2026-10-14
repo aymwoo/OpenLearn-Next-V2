@@ -52,6 +52,7 @@ import {
   IAuthSessionBridgeToken,
   IStageGuardServiceToken,
   IPluginHostToken,
+  INetworkProxyServiceToken,
 } from '../../../packages/core/di/interfaces.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
 import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
@@ -190,6 +191,7 @@ function createExtraServices(hostRef: { current: PluginHost | null }): Record<st
       clear: vi.fn(),
     },
     authSessionBridge: { createSession: vi.fn().mockResolvedValue({ token: 'tok', maxAge: 3600 }) },
+    networkProxy: { fetch: vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', headers: {}, body: '', url: '' }) },
   };
 }
 
@@ -299,6 +301,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
       [IActivityRegistryToken, extra.activityRegistry],
       [IAuthSessionBridgeToken, extra.authSessionBridge],
       [IStageGuardServiceToken, extra.stageGuard],
+      [INetworkProxyServiceToken, extra.networkProxy],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));
