@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **`live_class` 起始门户顶部挂「下一节课」**：教师进入 portal 时拉取今日 / 明日 / 最多 7 天的 \`/api/schedules/today?date=YYYY-MM-DD\`，按 \`time_slot\` 起始时间挑出最近一节未开始的课，显示相对日（今天 / 明天 / +N 天）、时间段与班级。点击顶部标题预选该课的 \`lessonId\` 与 \`classId\`。接口 5xx 或 7 天都空时降级为「今日课表尚未设置」并提供「前往课表设置」入口（需要 \`onGoToTimetable\` 回调，由 \`LiveClassroomView\` 写入 \`setTeacherTab('timetable')\`）。
 - **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
 - **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
 - **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  CalendarDays,
   Check,
   CheckCircle2,
   Clock,
@@ -21,6 +22,7 @@ import {
   Rocket,
   Search,
   Server,
+  Settings,
   ShieldCheck,
   Sparkles,
   Target,
@@ -70,6 +72,11 @@ export interface ClassroomEntryPortalProps {
     classId: string;
     teachingModeId: string | null;
   }) => void | Promise<void>;
+  /**
+   * 课表设置跳转回调（由父组件注入 setTeacherTab('timetable')）。
+   * 不传则隐藏「前往课表设置」入口。
+   */
+  onGoToTimetable?: () => void;
   /** 测试注入点；默认使用全局 fetch */
   fetcher?: typeof fetch;
 }
@@ -97,6 +104,58 @@ function greetingOf(hour: number, zh: boolean): string {
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
+}
+
+/** 本地 YYYY-MM-DD（避免 toISOString 受时区影响而错位） */
+function localYMD(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** 在 N 天前的本地 YYYY-MM-DD（offset 0 = 今天，1 = 明天，-1 = 昨天） */
+function localYMDOffset(daysFromToday: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  return localYMD(d);
+}
+
+/**
+ * 从 time_slot 文本（如 "10:30-11:15" / "10:30" / "第1节"）提取起始分钟数。
+ * 与服务端 parseTimeSlot 行为一致；无法解析（如离散文本）时返回 null。
+ */
+function parseStartMinutes(timeSlot: string | null | undefined): number | null {
+  if (!timeSlot || typeof timeSlot !== 'string') return null;
+  const m = timeSlot.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/** 当前时间距离给定 YYYY-MM-DD + HH:MM 还有多少分钟；负值表示已过。 */
+function minutesUntil(scheduledDate: string, startMin: number | null, now: Date = new Date()): number | null {
+  if (startMin === null) return null;
+  const [y, mo, da] = scheduledDate.split('-').map((s) => parseInt(s, 10));
+  if (!y || !mo || !da) return null;
+  const targetMidnight = new Date(y, mo - 1, da, 0, 0, 0, 0).getTime();
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const daysAhead = Math.round((targetMidnight - nowMidnight) / 86400000);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return daysAhead * 1440 + startMin - nowMinutes;
+}
+
+/** 描述相对日期：今天 / 明天 / 后天 / MM-DD（中文）／ Today / Tomorrow / +N days（英文） */
+function relativeDateLabel(scheduledDate: string, zh: boolean, today: string = localYMD()): string {
+  if (scheduledDate === today) return zh ? '今天' : 'Today';
+  const [y, mo, da] = today.split('-').map((s) => parseInt(s, 10));
+  const [y2, mo2, da2] = scheduledDate.split('-').map((s) => parseInt(s, 10));
+  const t1 = new Date(y, mo - 1, da).getTime();
+  const t2 = new Date(y2, mo2 - 1, da2).getTime();
+  const diff = Math.round((t2 - t1) / 86400000);
+  if (diff === 1) return zh ? '明天' : 'Tomorrow';
+  if (diff === 2) return zh ? '后天' : 'In 2 days';
+  if (diff > 2 && diff < 7) return zh ? `${diff} 天后` : `In ${diff} days`;
+  return `${pad(mo2)}-${pad(da2)}`;
 }
 
 // ── 顶部遥测岛 ─────────────────────────────────────────────────────────────
@@ -1009,6 +1068,7 @@ export function ClassroomEntryPortal({
   addToast,
   onEditLesson,
   onEnterClassroom,
+  onGoToTimetable,
   fetcher,
 }: ClassroomEntryPortalProps) {
   const zh = lang === 'zh';
@@ -1043,6 +1103,96 @@ export function ClassroomEntryPortal({
     return () => {
       cancelled = true;
     };
+  }, [fetcher]);
+
+  // ── 下一节课探针：拉取今日课表；空则顺延到明日，最多看 7 天 ──
+  // 失败 / 未配置时静默降级，不阻塞开课门户主流程。
+  interface NextSchedule {
+    id: string;
+    lesson_id: string | null;
+    lesson_title: string;
+    class_id: string;
+    class_name: string;
+    scheduled_date: string;
+    time_slot: string | null;
+    startMinutes: number | null;
+  }
+  const [nextSchedule, setNextSchedule] = useState<NextSchedule | null>(null);
+  const [nextScheduleLoaded, setNextScheduleLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+    const today = localYMD();
+    const probeOneDay = async (date: string): Promise<NextSchedule | null> => {
+      try {
+        const res = await doFetch(`/api/schedules/today?date=${encodeURIComponent(date)}`);
+        if (!res || !res.ok) return null;
+        const data = (await res.json()) as { success?: boolean; schedules?: any[] };
+        const list = (data?.success && Array.isArray(data.schedules) ? data.schedules : []) as any[];
+        // 同一天内按 time_slot 起始时间升序
+        const sorted = [...list].sort((a, b) => {
+          const sa = parseStartMinutes(a?.time_slot);
+          const sb = parseStartMinutes(b?.time_slot);
+          if (sa === null && sb === null) return 0;
+          if (sa === null) return 1;
+          if (sb === null) return -1;
+          return sa - sb;
+        });
+        for (const s of sorted) {
+          const startMin = parseStartMinutes(s?.time_slot);
+          if (date === today) {
+            // 今日只保留还未开始的课；若整点不可解析则视为未来
+            if (startMin === null) {
+              return toNext(s, date, null);
+            }
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            if (startMin > nowMin) return toNext(s, date, startMin);
+          } else {
+            // 未来天：直接取第一项
+            return toNext(s, date, startMin);
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+    const toNext = (s: any, date: string, startMin: number | null): NextSchedule | null => {
+      if (!s) return null;
+      return {
+        id: String(s.id ?? ''),
+        lesson_id: s.lesson_id ?? null,
+        lesson_title:
+          s.lesson_title ||
+          (zh ? '未设定内容' : 'Unspecified lesson'),
+        class_id: String(s.class_id ?? ''),
+        class_name: s.class_name || (zh ? '未指定班级' : 'Unspecified class'),
+        scheduled_date: String(s.scheduled_date ?? date),
+        time_slot: s.time_slot ?? null,
+        startMinutes: startMin,
+      };
+    };
+    (async () => {
+      let found: NextSchedule | null = null;
+      for (let offset = 0; offset < 7 && !found; offset++) {
+        const date = localYMDOffset(offset);
+        // 跳过今天零点之前（已不可能进入未来）
+        if (offset === 0) {
+          found = await probeOneDay(date);
+        } else {
+          found = await probeOneDay(date);
+        }
+        if (cancelled) return;
+      }
+      if (!cancelled) {
+        setNextSchedule(found);
+        setNextScheduleLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher]);
 
   // ── 课堂会话恢复：探测所选课程是否有进行中的会话 ──
@@ -1150,14 +1300,79 @@ export function ClassroomEntryPortal({
                 </span>
               )}
             </div>
-            <h1 className="text-lg font-black tracking-tight text-main">
-              {zh ? `${zhGreeting}！今日课堂待开启` : `${enGreeting}! Ready to start`}
-            </h1>
-            <p className="text-xs text-muted mt-1 leading-relaxed max-w-2xl">
-              {zh
-                ? '请确认本节课程、授课班级与教学模式，确认无误后启动进入数字赋能课堂。'
-                : 'Confirm the course, class and teaching mode, then launch the classroom.'}
-            </p>
+            {nextSchedule ? (
+              <>
+                <h1
+                  className="text-lg font-black tracking-tight text-main cursor-pointer hover:text-primary-theme transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  title={
+                    zh
+                      ? '点击预选该课并聚焦到该班级'
+                      : 'Click to pre-select this lesson and class'
+                  }
+                  onClick={() => {
+                    if (nextSchedule.lesson_id) setSelectedLesson(nextSchedule.lesson_id);
+                    setLiveClassSelectedClassId(nextSchedule.class_id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    if (nextSchedule.lesson_id) setSelectedLesson(nextSchedule.lesson_id);
+                    setLiveClassSelectedClassId(nextSchedule.class_id);
+                  }}
+                >
+                  {zh ? `${zhGreeting}！下一节` : `${enGreeting}! Next up`}
+                </h1>
+                <p className="text-xs text-muted mt-1 leading-relaxed max-w-2xl inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="inline-flex items-center gap-1 font-mono">
+                    <CalendarDays size={12} className="text-primary-theme" />
+                    {relativeDateLabel(nextSchedule.scheduled_date, zh)}
+                  </span>
+                  {nextSchedule.time_slot && (
+                    <span className="inline-flex items-center gap-1 font-mono">
+                      <Clock size={12} className="text-muted" />
+                      {nextSchedule.time_slot}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1">
+                    <GraduationCap size={12} className="text-muted" />
+                    {nextSchedule.class_name}
+                  </span>
+                </p>
+              </>
+            ) : nextScheduleLoaded ? (
+              <>
+                <h1 className="text-lg font-black tracking-tight text-main">
+                  {zh ? `${zhGreeting}！今日课堂待开启` : `${enGreeting}! Ready to start`}
+                </h1>
+                <p className="text-xs text-muted mt-1 leading-relaxed max-w-2xl inline-flex flex-wrap items-center gap-2">
+                  <span>{zh ? '今日课表尚未设置，先去安排本节内容吧。' : 'No schedule set for today yet.'}</span>
+                  {onGoToTimetable && (
+                    <button
+                      type="button"
+                      onClick={onGoToTimetable}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary-theme hover:text-primary-theme/80 transition-colors underline underline-offset-2"
+                    >
+                      <Settings size={12} />
+                      {zh ? '前往课表设置' : 'Open timetable settings'}
+                      <ArrowRight size={12} />
+                    </button>
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-black tracking-tight text-main">
+                  {zh ? `${zhGreeting}！今日课堂待开启` : `${enGreeting}! Ready to start`}
+                </h1>
+                <p className="text-xs text-muted mt-1 leading-relaxed max-w-2xl">
+                  {zh
+                    ? '请确认本节课程、授课班级与教学模式，确认无误后启动进入数字赋能课堂。'
+                    : 'Confirm the course, class and teaching mode, then launch the classroom.'}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="xl:w-[620px] shrink-0">
