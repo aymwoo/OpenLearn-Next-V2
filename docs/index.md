@@ -277,6 +277,7 @@ governance/architecture-governance
 
 classroom-time-flow-audit
 whiteboard-realtime-sync-audit
+trust-boundary-hardening-audit-2026-10-14
 ```
 
 ---
