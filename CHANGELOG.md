@@ -36,6 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **PPTX 演示组件国际化运行时异常修复**：
+  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
+  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
 - **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
 - **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
 
