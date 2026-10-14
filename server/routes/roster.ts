@@ -26,6 +26,11 @@ import {
 } from '../services/class-access.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
+import {
+  classPasscodeMatches,
+  openClassPasscode,
+  sealClassPasscode,
+} from '../../packages/core/db/class-passcode-crypto.js';
 
 const rlog = createLogger('roster');
 /**
@@ -123,9 +128,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         rosterService.updateClass(req.params.id, name, description, lab_id);
       }
       if (class_passcode !== undefined) {
-        kernelContainer.db
-          .prepare('UPDATE classes SET class_passcode = ? WHERE id = ?')
-          .run(class_passcode, req.params.id);
+        const sealed = class_passcode === null ? null : sealClassPasscode(String(class_passcode));
+        kernelContainer.db.prepare('UPDATE classes SET class_passcode = ? WHERE id = ?').run(sealed, req.params.id);
       }
       if (class_passcode_expires_at !== undefined) {
         kernelContainer.db
@@ -150,7 +154,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .get(req.params.id) as
         { class_passcode?: string | null; class_passcode_expires_at?: number | null } | undefined;
       res.json({
-        class_passcode: row?.class_passcode ?? null,
+        class_passcode: openClassPasscode(row?.class_passcode ?? null),
         class_passcode_expires_at: row?.class_passcode_expires_at ?? null,
       });
     } catch (e: any) {
@@ -710,7 +714,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
               .all(studentObj.id) as any[];
 
             for (const cls of enrolledClasses) {
-              if (cls.class_passcode && cls.class_passcode.trim() === providedPassword) {
+              if (classPasscodeMatches(cls.class_passcode, providedPassword)) {
                 // 检查有效期
                 if (cls.class_passcode_expires_at && now > cls.class_passcode_expires_at) {
                   isPasscodeExpired = true;

@@ -114,7 +114,7 @@ graph TD
 
 ### 2.2 关键数据流
 
-**登录。** `POST /api/auth/login`（`server/routes/roster.ts`）按入口区分教师与学生。教师走 `users.password_hash` 的 bcrypt（遗留 SHA-256 会升级）。学生走 `students.password`，并在个人口令失败后用明文比较班级临时口令 `classes.class_passcode`。成功后写入 `client_sessions`，下发 HttpOnly Cookie `edu_os_token`（7 天绝对过期，空闲 24 小时）。
+**登录。** `POST /api/auth/login`（`server/routes/roster.ts`）按入口区分教师与学生。教师走 `users.password_hash` 的 bcrypt（遗留 SHA-256 会升级）。学生走 `students.password`，并在个人口令失败后解密 `classes.class_passcode`（AES-256-GCM 密文，前缀 `olenc1:`）再做常量时间比较。教师接口返回原文，列表接口不返回该列。成功后写入 `client_sessions`，下发 HttpOnly Cookie `edu_os_token`（7 天绝对过期，空闲 24 小时）。
 
 **一次教学写操作。** 浏览器带 Cookie 调用 REST。`requireAuth` 解析会话并可选检查角色。路由或 CommandBus handler 写 SQLite，必要时经 Socket.IO 房间广播。高危命令在内核拦截器里做能力检查；管理员 actor 可绕过审批。
 
@@ -202,9 +202,9 @@ graph TD
 | 项 | 内容 |
 | --- | --- |
 | 位置 | `server/routes/roster.ts` 第 600–633 行 |
-| 问题 | bcrypt（`$2` 前缀）之后，仍接受 64 位十六进制 SHA-256，以及「库存字符串与提交口令全等」的明文分支，匹配后升级为 bcrypt。`docs/architecture/security-remediation-report.md` 将 SEC-09 记为「已移除明文比较」。当前源码与该结论不一致。新建学生在 `server/services/roster-service.ts` 里会哈希，这条分支主要吃旧行和任何把明文写入 `students.password` 的路径。班级口令始终明文比较、明文存储（同文件约 635–659 行）。 |
-| 影响 | 仍是明文的学生行可以用该明文登录。数据库备份会直接暴露全部班级口令。SHA-256 无盐，相同口令哈希相同。 |
-| 建议 | 学生登录只接受 bcrypt。迁移脚本把剩余明文与 SHA-256 行标成必须重置，而不是在登录时继续比较明文。班级口令改为哈希或单次令牌，并设置短 TTL；API 响应不要回传口令列。 |
+| 问题 | bcrypt（`$2` 前缀）之后，仍接受 64 位十六进制 SHA-256，以及「库存字符串与提交口令全等」的明文分支，匹配后升级为 bcrypt。`docs/architecture/security-remediation-report.md` 将 SEC-09 记为「已移除明文比较」。当前源码与该结论不一致。新建学生在 `server/services/roster-service.ts` 里会哈希，这条分支主要吃旧行和任何把明文写入 `students.password` 的路径。班级口令不再明文落库：写入时 AES-256-GCM 加密，登录解密后常量时间比较；站点备份里这一列是密文。 |
+| 影响 | 仍是明文的学生行可以用该明文登录。SHA-256 无盐，相同口令哈希相同。班级临时口令已改为密文落库，数据库备份不再直接暴露口令原文；解密仍依赖单独保管的 `ENCRYPTION_KEY` 或 `storage/encryption-key`。 |
+| 建议 | 学生登录只接受 bcrypt。迁移脚本把剩余明文与 SHA-256 行标成必须重置，而不是在登录时继续比较明文。班级口令已加密存储；教师接口仍返回原文，对外列表不返回该列。 |
 
 #### M-4 生产 CORS 对本机来源带着凭证放行
 

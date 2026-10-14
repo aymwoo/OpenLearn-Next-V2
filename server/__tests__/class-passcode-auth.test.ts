@@ -5,6 +5,8 @@ import type { AddressInfo } from 'net';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import bcrypt from 'bcryptjs';
+import { isEncryptedClassPasscode, openClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
+import { setAuditSinkForTests } from '../../packages/core/observability/audit-log.js';
 
 describe('班级上课临时密码与双轨登录鉴权', () => {
   let server: Server;
@@ -198,6 +200,22 @@ describe('班级上课临时密码与双轨登录鉴权', () => {
       }),
     });
     expect(putRes.status).toBe(200);
+    expect(JSON.stringify(await putRes.clone().json())).not.toContain(newPasscode);
+
+    const stored = db.prepare('SELECT class_passcode FROM classes WHERE id = ?').get(classId1) as {
+      class_passcode: string;
+    };
+    expect(stored.class_passcode).not.toBe(newPasscode);
+    expect(isEncryptedClassPasscode(stored.class_passcode)).toBe(true);
+    expect(openClassPasscode(stored.class_passcode)).toBe(newPasscode);
+
+    const settingRes = await fetch(`${baseUrl}/api/classes/${classId1}/passcode-setting`, {
+      headers: authCookie(teacherToken),
+    });
+    expect(settingRes.status).toBe(200);
+    const setting = await settingRes.json();
+    expect(setting.class_passcode).toBe(newPasscode);
+    expect(JSON.stringify(setting)).not.toContain('olenc1:');
 
     // 学生使用新密码登录成功
     const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
@@ -210,6 +228,9 @@ describe('班级上课临时密码与双轨登录鉴权', () => {
       }),
     });
     expect(loginRes.status).toBe(200);
+    const loginBody = await loginRes.json();
+    expect(JSON.stringify(loginBody)).not.toContain(newPasscode);
+    expect(JSON.stringify(loginBody)).not.toContain('olenc1:');
 
     // 旧密码不再有效
     const oldLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
@@ -222,5 +243,35 @@ describe('班级上课临时密码与双轨登录鉴权', () => {
       }),
     });
     expect(oldLoginRes.status).toBe(401);
+    const oldBody = await oldLoginRes.text();
+    expect(oldBody).not.toContain(newPasscode);
+    expect(oldBody).not.toContain('olenc1:');
+    expect(oldBody).not.toContain(stored.class_passcode);
+  });
+
+  it('登录失败的审计记录不含口令或密文', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    setAuditSinkForTests((record) => seen.push(record as Record<string, unknown>));
+    const wrong = 'not-a-class-pin';
+    try {
+      const res = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entrance: 'student', studentId: 'STU101', password: wrong }),
+      });
+      expect(res.status).toBe(401);
+      const body = await res.text();
+      const stored = db.prepare('SELECT class_passcode FROM classes WHERE id = ?').get(classId1) as {
+        class_passcode: string | null;
+      };
+      const dumped = JSON.stringify(seen);
+      expect(body).not.toContain(wrong);
+      expect(body).not.toContain('olenc1:');
+      expect(dumped).not.toContain(wrong);
+      expect(dumped).not.toContain('olenc1:');
+      if (stored.class_passcode) expect(dumped).not.toContain(stored.class_passcode);
+    } finally {
+      setAuditSinkForTests(null);
+    }
   });
 });
