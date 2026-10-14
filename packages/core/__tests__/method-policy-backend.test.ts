@@ -124,7 +124,17 @@ describe('B-5 · ServiceHost Barrier 3 已接线', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('未声明 ai:invoke 时 generateText 被 Barrier 3 拒绝，且未执行到服务', async () => {
-    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:x', ['some:cap'], undefined, undefined, undefined, undefined, ['@openlearn/core:IAIService']);
+    const host = new ServiceHost(
+      serviceRegistry,
+      capGuard,
+      'plugin:x',
+      ['some:cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [CORE.aiService],
+    );
     await host.handleInvoke(
       { type: 'invoke', invokeId: 'i1', token: '@openlearn/core:IAIService', method: 'generateText', args: ['hi'] },
       transport,
@@ -135,7 +145,17 @@ describe('B-5 · ServiceHost Barrier 3 已接线', () => {
   });
 
   it('声明 ai:invoke 后放行', async () => {
-    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:x', ['ai:invoke'], undefined, undefined, undefined, undefined, ['@openlearn/core:IAIService']);
+    const host = new ServiceHost(
+      serviceRegistry,
+      capGuard,
+      'plugin:x',
+      ['ai:invoke'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [CORE.aiService],
+    );
     await host.handleInvoke(
       { type: 'invoke', invokeId: 'i2', token: '@openlearn/core:IAIService', method: 'generateText', args: ['hi'] },
       transport,
@@ -149,7 +169,17 @@ describe('B-5 · ServiceHost Barrier 3 已接线', () => {
   });
 
   it('Barrier 3 早于 Barrier 2 判定（manifest 非空但方法被策略拒绝）', async () => {
-    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:x', ['some:cap']);
+    const host = new ServiceHost(
+      serviceRegistry,
+      capGuard,
+      'plugin:x',
+      ['some:cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [CORE.aiService],
+    );
     await host.handleInvoke(
       { type: 'invoke', invokeId: 'i3', token: '@openlearn/core:IAIService', method: 'generateText', args: [] },
       transport,
