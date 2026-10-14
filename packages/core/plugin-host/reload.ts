@@ -9,6 +9,8 @@ import { v7 as uuidv7 } from 'uuid';
 import fs from 'fs';
 import JSZip from 'jszip';
 import path from 'path';
+import semver from 'semver';
+import { OPENLEARN_VERSION } from '../version.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { ResourceTracker } from './resource-tracker.js';
@@ -35,6 +37,27 @@ import { IEventBusServiceToken } from '../di/interfaces.js';
 import type { IEventBusService } from '../di/interfaces.js';
 import { DEACTIVATION_TIMEOUT_MS, PluginInstance } from './base.js';
 import type { PluginHost } from './index.js';
+
+/**
+ * 与安装路径同一判定。非法 range 让 `semver.satisfies` 返回 false 或抛错，
+ * 两种都当成不兼容，避免一条坏记录中断整次恢复。
+ */
+function hostSatisfiesOpenlearnEngine(range: string): boolean {
+  try {
+    return semver.satisfies(OPENLEARN_VERSION, range);
+  } catch {
+    return false;
+  }
+}
+
+/** 存储的 manifest 里若没有 engines.openlearn，返回 undefined（恢复时仍允许激活）。 */
+function storedOpenlearnRange(manifest: Manifest | undefined): string | undefined {
+  const engines = manifest?.engines as { openlearn?: unknown } | undefined;
+  if (!engines || !Object.prototype.hasOwnProperty.call(engines, 'openlearn')) return undefined;
+  const range = engines.openlearn;
+  if (range == null) return undefined;
+  return typeof range === 'string' ? range : String(range);
+}
 
 export abstract class PluginHostReload extends PluginHostLifecycle {
   /**
@@ -158,6 +181,18 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
 
       const runtimeState = this.getPluginState(p.id);
       if (runtimeState === PluginState.ACTIVE) {
+        continue;
+      }
+
+      const range = storedOpenlearnRange(manifests.get(p.id));
+      if (range !== undefined && !hostSatisfiesOpenlearnEngine(range)) {
+        const label = manifests.get(p.id)?.id ?? p.name ?? p.id;
+        console.error(
+          `[PluginHost] Skipping restore of "${label}" (${p.id}): ` +
+            `requires OpenLearn ${range}, but host is running ${OPENLEARN_VERSION}. ` +
+            `Status set to error; plugin files left on disk.`,
+        );
+        this.setPluginState(p.id, PluginState.ERROR, { persistDb: true });
         continue;
       }
 

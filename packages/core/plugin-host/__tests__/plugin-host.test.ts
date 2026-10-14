@@ -8,12 +8,14 @@
  *
  * 使用内存 SQLite（:memory:）和 mock EsmLoader，无外部依赖。
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ServiceRegistry } from '../../di/service-registry.js';
 import { EsmLoader } from '../../esm-loader/esm-loader.js';
 import type { PluginModule } from '../../esm-loader/esm-loader.js';
-import { PluginHost, SemverMismatchError } from '../index.js';
+import { PluginHost, SemverMismatchError, OPENLEARN_VERSION } from '../index.js';
 import { PluginState } from '../types.js';
 import {
   ICommandBusServiceToken,
@@ -667,6 +669,131 @@ describe('PluginHost — 完整生命周期', () => {
     await host.restoreActivePlugins();
 
     expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE);
+  });
+
+  describe('restoreActivePlugins engines.openlearn', () => {
+    function insertActive(id: string, manifest: Record<string, unknown>, source: string) {
+      db.prepare(
+        'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(id, String(manifest.name ?? id), JSON.stringify(manifest), source, 'active', Date.now(), 'esm');
+    }
+
+    it('engines.openlearn >=0.0.1 时恢复并激活', async () => {
+      const activate = vi.fn(async () => {});
+      insertActive(
+        'eng-ok-id',
+        {
+          id: 'eng-ok',
+          name: 'Engine Ok',
+          version: '1.0.0',
+          main: 'index.ts',
+          engines: { openlearn: '>=0.0.1' },
+        },
+        'src-eng-ok',
+      );
+      loadMap.set('src-eng-ok', makePluginModule('eng-ok', 'Engine Ok', activate));
+
+      await host.restoreActivePlugins();
+
+      expect(activate).toHaveBeenCalled();
+      expect(host.getPluginState('eng-ok-id')).toBe(PluginState.ACTIVE);
+      const row = db.prepare('SELECT status FROM plugins WHERE id = ?').get('eng-ok-id') as { status: string };
+      expect(row.status).toBe('active');
+    });
+
+    it('engines.openlearn <0.0.1 时不激活并标为 error，文件留在磁盘', async () => {
+      const activate = vi.fn(async () => {});
+      insertActive(
+        'eng-old-id',
+        {
+          id: 'eng-old',
+          name: 'Engine Old',
+          version: '1.0.0',
+          main: 'index.ts',
+          engines: { openlearn: '<0.0.1' },
+        },
+        'src-eng-old',
+      );
+      loadMap.set('src-eng-old', makePluginModule('eng-old', 'Engine Old', activate));
+      const pluginDir = host.getPluginDir('eng-old-id');
+      fs.mkdirSync(pluginDir, { recursive: true });
+      const marker = path.join(pluginDir, 'index.js');
+      fs.writeFileSync(marker, 'exports.kept = true;\n');
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await host.restoreActivePlugins();
+        const logged = errorSpy.mock.calls.map((call) => call.map(String).join(' ')).join('\n');
+        expect(logged).toContain('<0.0.1');
+        expect(logged).toContain(OPENLEARN_VERSION);
+      } finally {
+        errorSpy.mockRestore();
+      }
+
+      expect(activate).not.toHaveBeenCalled();
+      expect(host.getPluginState('eng-old-id')).toBe(PluginState.ERROR);
+      const row = db.prepare('SELECT status FROM plugins WHERE id = ?').get('eng-old-id') as { status: string };
+      expect(row.status).toBe('error');
+      expect(fs.readFileSync(marker, 'utf-8')).toContain('exports.kept');
+    });
+
+    it('没有 engines 时仍激活', async () => {
+      const activate = vi.fn(async () => {});
+      insertActive(
+        'eng-absent-id',
+        { id: 'eng-absent', name: 'No Engines', version: '1.0.0', main: 'index.ts' },
+        'src-eng-absent',
+      );
+      loadMap.set('src-eng-absent', makePluginModule('eng-absent', 'No Engines', activate));
+
+      await host.restoreActivePlugins();
+
+      expect(activate).toHaveBeenCalled();
+      expect(host.getPluginState('eng-absent-id')).toBe(PluginState.ACTIVE);
+    });
+
+    it('非法 semver 跳过该插件，其余插件继续恢复', async () => {
+      const badActivate = vi.fn(async () => {});
+      const goodActivate = vi.fn(async () => {});
+      insertActive(
+        'eng-bad-id',
+        {
+          id: 'eng-bad',
+          name: 'Bad Range',
+          version: '1.0.0',
+          main: 'index.ts',
+          engines: { openlearn: 'not a range' },
+        },
+        'src-eng-bad',
+      );
+      insertActive(
+        'eng-good-id',
+        {
+          id: 'eng-good',
+          name: 'Good Range',
+          version: '1.0.0',
+          main: 'index.ts',
+          engines: { openlearn: '>=0.0.1' },
+        },
+        'src-eng-good',
+      );
+      loadMap.set('src-eng-bad', makePluginModule('eng-bad', 'Bad Range', badActivate));
+      loadMap.set('src-eng-good', makePluginModule('eng-good', 'Good Range', goodActivate));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await expect(host.restoreActivePlugins()).resolves.toBeUndefined();
+      } finally {
+        errorSpy.mockRestore();
+      }
+
+      expect(badActivate).not.toHaveBeenCalled();
+      expect(host.getPluginState('eng-bad-id')).toBe(PluginState.ERROR);
+      const badRow = db.prepare('SELECT status FROM plugins WHERE id = ?').get('eng-bad-id') as { status: string };
+      expect(badRow.status).toBe('error');
+      expect(goodActivate).toHaveBeenCalled();
+      expect(host.getPluginState('eng-good-id')).toBe(PluginState.ACTIVE);
+    });
   });
 
   // ── Test 15: 完整生命周期流程 ────────────────────────────────────────

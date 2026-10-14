@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **插件类型补上 `INetworkProxyServiceToken`**。运行时已经从 `@openlearn/plugin-sdk` 导出该 Token，`packages/plugin-sdk/openlearn.d.ts` 此前没有声明，插件 `import` 会报 TS2305。声明与导出与运行时对齐。Worker 出站仍由宿主代理，默认拒绝未列入允许名单的地址，行为不变。
 
+- **恢复已装插件时复检 `engines.openlearn`**。重启时 `restoreActivePlugins` 不再无条件激活 `status=active` 的插件。声明了 `engines.openlearn` 且宿主版本不满足该范围（含非法 semver）时，跳过激活、把状态写成 `error`、在日志里记下范围和宿主版本，插件文件留在磁盘上。没有 `engines` 的插件仍按原来的方式恢复。装上之后需要更新那些被跳过的包。
 - **进行中的 live_class 不能再换班**。进入授课后顶栏班级改为只读，并提示「需结束本节课才能换班」。`IN_CLASS_TEACHING` / `WRAP_UP_EXIT_TICKET` 期间，初始化会话、阶段推进和 `teacher-broadcast-lesson` 若携带另一个 `classId` 会得到 409，数据库里的班级保持不变。刷新、地址栏 `classId` 和起始门户「下一节课」都会被拉回本节课已绑定的班级。课前准备阶段仍可在起始门户重选；结束或归档后新会话可以换班。
 
 - **随机点名助手只抽取已经进入本节课的学生**。候选不再是全班花名册：服务端 `GET /api/classes/:classId/picker-candidates?lessonId=` 与白板组件都按 Socket.IO 在场状态过滤（当前在线，且 `enter-lesson` 指向这一节）。学生 `leave-lesson` 或断线后立即离开候选池；没人在场时提示「当前课堂没有在场学生」，不再退回演示名单。公平加权（本堂 / 学期抽中次数）仍作用在在场池上。不带 `lessonId` 的旧调用仍返回全班名单。
