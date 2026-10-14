@@ -1,6 +1,127 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from 'lucide-react';
 import { WidgetTitleBar } from './WidgetTitleBar';
+
+/**
+ * Visible limitation for the whiteboard code runner.
+ * Replaces the old "isolated Web Worker" status line, which hid that a
+ * same-origin worker's fetch sent the page session cookie.
+ */
+export const CODE_SANDBOX_DESCRIPTION = 'Pure computation only. No page session, cookies, document, or LMS API.';
+
+const SANDBOX_MESSAGE_SOURCE = 'openlearn-code-sandbox';
+
+const SANDBOX_WORKER_PREAMBLE = [
+  "'use strict';",
+  'const denied = function sandboxDenied() {',
+  "  throw new Error('Credentialed network is disabled in this sandbox');",
+  '};',
+  "const blocked = ['fetch','XMLHttpRequest','WebSocket','EventSource','importScripts','Worker','SharedWorker','Request','WebTransport'];",
+  'for (const name of blocked) {',
+  '  try {',
+  '    Object.defineProperty(self, name, { configurable: false, enumerable: true, writable: false, value: denied });',
+  '  } catch (e) {}',
+  '  let obj = Object.getPrototypeOf(self);',
+  '  while (obj) {',
+  '    if (Object.getOwnPropertyDescriptor(obj, name)) {',
+  '      try {',
+  '        Object.defineProperty(obj, name, { configurable: false, enumerable: true, writable: false, value: denied });',
+  '      } catch (e2) {}',
+  '    }',
+  '    obj = Object.getPrototypeOf(obj);',
+  '  }',
+  '}',
+  "try { Object.defineProperty(self, 'Function', { configurable: false, writable: false, value: denied }); } catch (e) {}",
+  "try { Object.defineProperty(self, 'eval', { configurable: false, writable: false, value: denied }); } catch (e) {}",
+  'try {',
+  "  Object.defineProperty(Function.prototype, 'constructor', { configurable: false, writable: false, value: denied });",
+  '} catch (e) {}',
+  'try {',
+  '  let nav = self.navigator;',
+  '  while (nav) {',
+  "    if (Object.getOwnPropertyDescriptor(nav, 'sendBeacon')) {",
+  '      try {',
+  "        Object.defineProperty(nav, 'sendBeacon', { configurable: false, writable: false, value: denied });",
+  '      } catch (e2) {}',
+  '    }',
+  '    nav = Object.getPrototypeOf(nav);',
+  '  }',
+  '} catch (e) {}',
+  "if (typeof document !== 'undefined' && document) {",
+  '  try {',
+  "    Object.defineProperty(document, 'cookie', {",
+  '      configurable: false,',
+  '      get() { return ""; },',
+  '      set() {},',
+  '    });',
+  '  } catch (e) {}',
+  '}',
+  'const logs = [];',
+  'console.log = (...args) => {',
+  '  logs.push(args.map((a) => {',
+  "    if (typeof a === 'object' && a !== null) {",
+  '      try { return JSON.stringify(a); } catch (e) { return String(a); }',
+  '    }',
+  '    return String(a);',
+  "  }).join(' '));",
+  '};',
+  '(async () => {',
+  '  try {',
+  '    const value = await (async function () {',
+].join('\n');
+
+const SANDBOX_WORKER_EPILOGUE = [
+  '    })();',
+  '    if (value !== undefined) logs.push("Return: " + String(value));',
+  '    self.postMessage({ source: "openlearn-code-sandbox", success: true, logs: logs.join("\\n") });',
+  '  } catch (err) {',
+  '    self.postMessage({',
+  '      source: "openlearn-code-sandbox",',
+  '      success: false,',
+  '      error: err && err.message ? err.message : String(err),',
+  '      logs: logs.join("\\n"),',
+  '    });',
+  '  }',
+  '})();',
+  '',
+].join('\n');
+
+/**
+ * Worker source for one snippet. The parent page never evaluates the snippet:
+ * it is text inside a blob worker. Network globals are replaced before the
+ * snippet runs, so fetch cannot send the page's session cookie.
+ *
+ * An opaque iframe (`sandbox="allow-scripts"`) cannot run this under the
+ * production CSP (`script-src 'self' blob:'`): inline scripts are blocked, and
+ * the opaque document cannot load a blob script created by the parent.
+ */
+export function buildSandboxWorkerSource(userCode: string): string {
+  return `${SANDBOX_WORKER_PREAMBLE}\n${userCode}\n${SANDBOX_WORKER_EPILOGUE}`;
+}
+
+/** Reject syntax that can still perform a credentialed module fetch. */
+export function getSandboxRunBlock(userCode: string): string | null {
+  const importCall = /(^|[^.\w$])import\s*\(/m.test(userCode);
+  const importDecl = /(^|\n)\s*import\s+[\w*{]/m.test(userCode);
+  if (importCall || importDecl) {
+    return `Error: ${CODE_SANDBOX_DESCRIPTION}`;
+  }
+  return null;
+}
+
+interface SandboxWorkerMessage {
+  source?: string;
+  success?: boolean;
+  logs?: string;
+  error?: string;
+}
+
+interface ActiveRun {
+  worker: Worker;
+  url: string;
+  timer?: ReturnType<typeof setTimeout>;
+  settled: boolean;
+}
 
 export function CodeSandboxWrapper({
   elementId,
@@ -43,6 +164,19 @@ export function CodeSandboxWrapper({
 }) {
   const [code, setCode] = useState(data.code || "console.log('Hello from sandbox!');");
   const [output, setOutput] = useState('');
+  const activeRef = useRef<ActiveRun | null>(null);
+
+  useEffect(() => {
+    return () => {
+      const active = activeRef.current;
+      if (!active) return;
+      active.settled = true;
+      if (active.timer !== undefined) clearTimeout(active.timer);
+      active.worker.terminate();
+      URL.revokeObjectURL(active.url);
+      activeRef.current = null;
+    };
+  }, []);
 
   /**
    * 服务端图元数据 → 本地 state 的反向同步。
@@ -57,59 +191,70 @@ export function CodeSandboxWrapper({
     }
   }, [data.code]);
 
+  const stopActive = () => {
+    const active = activeRef.current;
+    if (!active || active.settled) return;
+    active.settled = true;
+    if (active.timer !== undefined) clearTimeout(active.timer);
+    active.worker.terminate();
+    URL.revokeObjectURL(active.url);
+    activeRef.current = null;
+  };
+
   const runCode = () => {
-    setOutput('Running in isolated Web Worker...');
-    try {
-      // 在独立的 Web Worker 沙箱中执行不可信代码，隔离 window / document / localStorage
-      const workerScript = `
-        const logs = [];
-        const originalLog = console.log;
-        console.log = (...args) => {
-          logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-        };
-        self.onmessage = function(e) {
-          try {
-            const fn = new Function(e.data);
-            const res = fn();
-            if (res !== undefined) logs.push('Return: ' + String(res));
-            self.postMessage({ success: true, logs: logs.join('\\n') });
-          } catch (err) {
-            self.postMessage({ success: false, error: err.message, logs: logs.join('\\n') });
-          }
-        };
-      `;
-      const blob = new Blob([workerScript], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(blob);
-      const worker = new Worker(workerUrl);
-
-      const timer = setTimeout(() => {
-        worker.terminate();
-        URL.revokeObjectURL(workerUrl);
-        setOutput('Execution timed out (3000ms limit). Worker terminated.');
-      }, 3000);
-
-      worker.onmessage = (e) => {
-        clearTimeout(timer);
-        worker.terminate();
-        URL.revokeObjectURL(workerUrl);
-        if (e.data.success) {
-          setOutput(e.data.logs || 'Code executed successfully (no output)');
-        } else {
-          setOutput((e.data.logs ? e.data.logs + '\n' : '') + 'Error: ' + e.data.error);
-        }
-      };
-
-      worker.onerror = (err) => {
-        clearTimeout(timer);
-        worker.terminate();
-        URL.revokeObjectURL(workerUrl);
-        setOutput(`Worker Error: ${err.message}`);
-      };
-
-      worker.postMessage(code);
-    } catch (e: any) {
-      setOutput(`Failed to spawn isolated worker: ${e.message}`);
+    const blocked = getSandboxRunBlock(code);
+    if (blocked) {
+      stopActive();
+      setOutput(blocked);
+      return;
     }
+
+    stopActive();
+    setOutput(`Running. ${CODE_SANDBOX_DESCRIPTION}`);
+
+    const workerUrl = URL.createObjectURL(
+      new Blob([buildSandboxWorkerSource(code)], { type: 'application/javascript' }),
+    );
+    let worker: Worker;
+    try {
+      worker = new Worker(workerUrl);
+    } catch (e: unknown) {
+      URL.revokeObjectURL(workerUrl);
+      const message = e instanceof Error ? e.message : String(e);
+      setOutput(`Failed to start the sandbox: ${message}`);
+      return;
+    }
+
+    const active: ActiveRun = { worker, url: workerUrl, settled: false };
+
+    const finish = (text: string) => {
+      if (active.settled) return;
+      active.settled = true;
+      if (active.timer !== undefined) clearTimeout(active.timer);
+      worker.terminate();
+      URL.revokeObjectURL(workerUrl);
+      if (activeRef.current === active) activeRef.current = null;
+      setOutput(text);
+    };
+
+    active.timer = setTimeout(() => {
+      finish('Execution timed out (3000ms limit). Worker terminated.');
+    }, 3000);
+    activeRef.current = active;
+
+    worker.onmessage = (event: MessageEvent<SandboxWorkerMessage>) => {
+      const payload = event.data;
+      if (!payload || payload.source !== SANDBOX_MESSAGE_SOURCE) return;
+      if (payload.success) {
+        finish(payload.logs || 'Code executed successfully (no output)');
+      } else {
+        finish((payload.logs ? payload.logs + '\n' : '') + 'Error: ' + (payload.error || 'unknown error'));
+      }
+    };
+
+    worker.onerror = (event) => {
+      finish(`Worker Error: ${event.message || 'unknown error'}`);
+    };
   };
 
   const handleBlur = () => {
@@ -144,6 +289,7 @@ export function CodeSandboxWrapper({
         extraActions={
           !readOnly ? (
             <button
+              type="button"
               onClick={runCode}
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded shadow text-xs cursor-pointer font-sans mr-1"
@@ -155,6 +301,12 @@ export function CodeSandboxWrapper({
       />
       {!isMinimized && (
         <>
+          <p
+            data-testid="code-sandbox-description"
+            className="px-3 py-1 text-[10px] leading-snug text-amber-200/90 bg-gray-950 border-b border-gray-800 shrink-0"
+          >
+            {CODE_SANDBOX_DESCRIPTION}
+          </p>
           <textarea
             value={code}
             onChange={(e) => setCode(e.target.value)}
