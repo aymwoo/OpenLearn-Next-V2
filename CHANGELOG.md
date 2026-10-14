@@ -40,6 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **会话桥 `requires` 精确匹配**。插件网关下发 `edu_os_token` 前，用与宿主相同的 `parseRequiresEntry` 去掉版本后缀，再要求 Token 全名等于 `@openlearn/core:IAuthSessionBridgeService`。只包含该名字子串的声明（例如 `NotReallyIAuthSessionBridgeServiceX`）不再获得 `Set-Cookie`。声明 `@openlearn/core:IAuthSessionBridgeService@^1.0.0` 的插件行为不变。
+
 - **从 v0.6.1 升级时，迁移前快照失败会中止，更新的库也不会在旧二进制上被当成就绪**。非测试进程里 `VACUUM INTO` 失败会在应用 SQL 前抛错。`/health/ready` 发现 `_migrations` 含有磁盘迁移清单里没有的名字时返回 503，名字只写日志。备份校验同时要求 `lessons` 与 `_migrations`。`duplicate column name` 仍会被忽略，校验和算法不变。
 
 - **公测旅程 CI 在生产模式下改用强测试口令启动**。`scripts/e2e-beta-server.mjs` 不再把 `OPENLEARN_ADMIN_PASSWORD` 设为 `admin`，否则启动校验拒绝启动，Playwright 等不到服务。该口令只用于这条旅程；应用的生产口令策略不变。教师口令本来就不等于用户名 `teacher`，未改。
