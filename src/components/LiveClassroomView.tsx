@@ -61,6 +61,7 @@ import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
+import { resolveSegmentDuration } from '../utils/timeline-duration';
 import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
 import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
@@ -983,17 +984,9 @@ export function LiveClassroomView({
     }
   }, [selectedLesson, liveClassSelectedClassId]);
 
-  // Helper to parse "5m" or "20m" to seconds
-  const parseDuration = (dur: string): number => {
-    const num = parseInt(dur.replace(/[^0-9]/g, ''));
-    if (isNaN(num)) return 300;
-    if (dur.includes('s')) return num;
-    return num * 60; // default to minutes
-  };
-
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
-    const secs = parseDuration(seg.duration);
+    const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
     setLiveClassIsActive(true);

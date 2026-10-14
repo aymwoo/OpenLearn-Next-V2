@@ -353,6 +353,76 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       expect(await screen.findByText('课堂节拍节奏设计（25 分钟）')).toBeTruthy();
       expect(screen.getByText('就绪')).toBeTruthy();
       expect(screen.getByText('讲授')).toBeTruthy();
+      expect(screen.getByText('5m')).toBeTruthy();
+      expect(screen.getByText('20m')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('教案字符串时长（5m）显示分钟和总时长，进度条按占比铺开', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'seg-1', title: '开场准备', duration: '5m' },
+          { id: 'seg-2', title: '讲授新课', duration: '20m' },
+          { id: 'seg-3', title: '互动练习', duration: '15m' },
+          { id: 'seg-4', title: '课堂总结', duration: '5m' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（45 分钟）')).toBeTruthy();
+      const lecture = screen.getByText('讲授新课').closest('li') as HTMLElement;
+      expect(within(lecture).getByText('20m')).toBeTruthy();
+      expect((lecture.querySelector('div[style]') as HTMLElement).style.width).toBe('44%');
+      const practice = screen.getByText('互动练习').closest('li') as HTMLElement;
+      expect(within(practice).getByText('15m')).toBeTruthy();
+      expect((practice.querySelector('div[style]') as HTMLElement).style.width).toBe('33%');
+      expect(screen.getAllByText('5m').length).toBe(2);
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('旧字段名和混合单位仍汇总成分钟', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'l1', title: '导入', durationMinutes: 8 },
+          { id: 'l2', title: '新授', estimatedDurationSeconds: 600 },
+          { id: 'l3', title: '小时环节', duration: '1h' },
+          { id: 'l4', title: '秒环节', duration: '90s' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（80 分钟）')).toBeTruthy();
+      expect(screen.getByText('8m')).toBeTruthy();
+      expect(screen.getByText('10m')).toBeTruthy();
+      expect(screen.getByText('60m')).toBeTruthy();
+      expect(screen.getByText('2m')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('时长缺失按默认 5 分钟，无法解析时显示未设置', async () => {
+      renderPortal({
+        timelineSegments: [
+          { id: 'b1', title: '缺时长', duration: null },
+          { id: 'b2', title: '乱码时长', duration: 'not-a-time' },
+          { id: 'b3', title: '空字符串', duration: '' },
+        ],
+      });
+
+      expect(await screen.findByText('课堂节拍节奏设计（10 分钟）')).toBeTruthy();
+      expect(screen.getAllByText('5m').length).toBe(2);
+      const broken = screen.getByText('乱码时长').closest('li') as HTMLElement;
+      expect(within(broken).getByText('未设置')).toBeTruthy();
+      expect((broken.querySelector('div[style]') as HTMLElement).style.width).toBe('0%');
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('全部时长都无法解析时总时长显示未设置', async () => {
+      renderPortal({
+        lang: 'en',
+        timelineSegments: [{ id: 'x', title: 'Broken', duration: 'nope' }],
+      });
+
+      expect(await screen.findByText('Pacing (unset)')).toBeTruthy();
+      expect(screen.getByText('Unset')).toBeTruthy();
+      expect(document.body.textContent).not.toContain('NaN');
     });
 
     it('无环节大纲时给出默认授课提示', async () => {

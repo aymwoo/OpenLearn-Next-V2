@@ -34,6 +34,7 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { useNetworkLatency } from '../../hooks/useNetworkLatency';
 import { fetchTeachingModes, teachingModeColor, type TeachingMode } from './teaching-modes-client';
 import { ComputerLabSeatingMap } from './ComputerLabSeatingMap';
+import { DEFAULT_SEGMENT_SECONDS, formatSegmentDuration, resolveSegmentDuration } from '../../utils/timeline-duration';
 
 /**
  * ClassroomEntryPortal —— 互动课堂的起始门户（对应 Stitch「课程入口与班级选择门户」设计）。
@@ -842,9 +843,23 @@ function LessonBlueprint({
   lang: string;
 }) {
   const zh = lang === 'zh';
+  const locale = zh ? 'zh' : 'en';
   const segments = timelineSegments ?? [];
-  const totalSeconds = segments.reduce((acc, seg) => acc + (seg.duration || 300), 0);
-  const totalMinutes = Math.round(totalSeconds / 60);
+  const resolved = segments.map((seg) => resolveSegmentDuration(seg, { fallbackSeconds: DEFAULT_SEGMENT_SECONDS }));
+  const totalSeconds = resolved.reduce((acc, item) => {
+    const seconds = item.seconds;
+    return seconds != null && Number.isFinite(seconds) ? acc + seconds : acc;
+  }, 0);
+  const hasDuration = resolved.some((item) => item.seconds != null && Number.isFinite(item.seconds));
+  const totalMinutes = hasDuration ? Math.round(totalSeconds / 60) : null;
+  const pacingLabel =
+    totalMinutes == null
+      ? zh
+        ? '课堂节拍节奏设计（未设置）'
+        : 'Pacing (unset)'
+      : zh
+        ? `课堂节拍节奏设计（${totalMinutes} 分钟）`
+        : `Pacing (${totalMinutes} min)`;
 
   return (
     <Deck
@@ -855,7 +870,7 @@ function LessonBlueprint({
         <div>
           <div className="text-2xs font-bold text-subtle mb-1.5 flex items-center gap-1.5">
             <BookOpen size={11} />
-            {zh ? `课堂节拍节奏设计（${totalMinutes} 分钟）` : `Pacing (${totalMinutes} min)`}
+            {pacingLabel}
           </div>
           {segments.length === 0 ? (
             <p className="text-2xs text-muted italic">
@@ -864,9 +879,10 @@ function LessonBlueprint({
           ) : (
             <ol className="flex flex-col gap-1.5">
               {segments.slice(0, 6).map((seg, idx) => {
-                const mins = Math.round((seg.duration || 300) / 60);
+                const seconds = resolved[idx]?.seconds ?? null;
+                const label = formatSegmentDuration(seconds, locale);
                 const width =
-                  totalSeconds > 0 ? Math.max(8, Math.round(((seg.duration || 300) / totalSeconds) * 100)) : 0;
+                  seconds != null && totalSeconds > 0 ? Math.max(8, Math.round((seconds / totalSeconds) * 100)) : 0;
                 return (
                   <li key={seg.id || idx} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2 text-2xs">
@@ -876,7 +892,7 @@ function LessonBlueprint({
                         </span>
                         <span className="font-semibold text-main truncate">{seg.title}</span>
                       </span>
-                      <span className="font-mono text-muted shrink-0">{mins}m</span>
+                      <span className="font-mono text-muted shrink-0">{label.compact}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-surface-secondary overflow-hidden">
                       <div className="h-full rounded-full bg-primary-theme" style={{ width: `${width}%` }} />

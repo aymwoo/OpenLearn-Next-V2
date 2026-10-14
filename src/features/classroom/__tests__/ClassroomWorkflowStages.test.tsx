@@ -58,6 +58,10 @@ describe('Classroom Workflow Stage Specific Views', () => {
       // Verify students list
       expect(screen.getByText('Alice Smith')).toBeDefined();
       expect(screen.getByText('Bob Jones')).toBeDefined();
+      expect(screen.getByText(/预计授课时长: 30 分钟/)).toBeDefined();
+      expect(screen.getByText('5 分钟')).toBeDefined();
+      expect(screen.getByText('25 分钟')).toBeDefined();
+      expect(document.body.textContent).not.toContain('NaN');
 
       // Click start teaching button
       const startBtn = screen.getByText('一键开启课中授课 (进入白板)');
@@ -74,6 +78,40 @@ describe('Classroom Workflow Stage Specific Views', () => {
       fireEvent.click(broadcastBtn);
 
       expect(onBroadcastNotice).toHaveBeenCalledWith(expect.stringContaining('请大家翻到课本对应章节'));
+    });
+
+    it('字符串时长与缺失时长不渲染 NaN', () => {
+      render(
+        <PreClassReadyView
+          selectedLesson="lesson-101"
+          lessonTitle="test"
+          selectedClassId="class-1"
+          className="Grade 8 Class A"
+          students={mockStudents}
+          onlineStudentIds={['st-1']}
+          timelineSegments={[
+            { id: 'seg-1', title: '开场准备', duration: '5m' },
+            { id: 'seg-2', title: '讲授新课', duration: '20m' },
+            { id: 'seg-3', title: '乱码时长', duration: 'not-a-time' },
+            { id: 'seg-4', title: '缺时长', duration: null },
+          ]}
+          lang="zh"
+          isClassLocked={false}
+          onToggleClassLock={vi.fn()}
+          onStartClass={vi.fn()}
+          onPingStudent={vi.fn()}
+          onOpenStudentWindow={vi.fn()}
+          isStudentWindowOpen={false}
+          addToast={vi.fn()}
+          onBroadcastNotice={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText(/预计授课时长: 30 分钟/)).toBeDefined();
+      expect(screen.getAllByText('5 分钟').length).toBe(2);
+      expect(screen.getByText('20 分钟')).toBeDefined();
+      expect(screen.getByText('未设置')).toBeDefined();
+      expect(document.body.textContent).not.toContain('NaN');
     });
   });
 
