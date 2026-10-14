@@ -46,6 +46,8 @@ jobs:
       - name: Type check
         run: pnpm lint
 
+      # 严格类型检查是合并门禁（strict / noImplicitAny / strictNullChecks）。
+      # 失败即红，不要加 continue-on-error。
       - name: Strict type check
         run: pnpm lint:strict
 
@@ -306,15 +308,18 @@ jobs:
         with:
           version: latest
 
-      # `npm audit` cannot work here (no package-lock.json → ENOLOCK).
-      # Non-blocking on purpose: the configured registry (npmmirror) has no
-      # audit endpoint (ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS), so the step fails
-      # for infrastructure reasons even with zero advisories. Flip
-      # continue-on-error to false once the registry supports audit or the
-      # pipeline pins the official registry for this step.
-      - name: Audit dependencies
-        continue-on-error: true
-        run: pnpm audit --audit-level high
+      # 仓库没有 package-lock.json，必须用 pnpm audit。
+      # 钉死官方 registry：镜像源（例如 npmmirror）没有 audit 端点时会
+      # ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS，那是基础设施失败，不能当成「无漏洞」。
+      # --audit-level high：moderate / low 不阻断；存在 high 或 critical 时本 job 失败。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Audit dependencies (block on high and critical)
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+        run: pnpm audit --audit-level high --registry https://registry.npmjs.org/
 
   # 覆盖率独立成 job（typecheck-and-test 失败不影响收集）。
   # ⚠️ 已知行为：vitest 4 在测试运行存在失败用例时会静默跳过覆盖报告

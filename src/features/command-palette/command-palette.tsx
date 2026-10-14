@@ -7,8 +7,25 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CommandPaletteProps, CommandCategory, CommandDescriptor } from './command-types.js';
 import { CommandRegistry } from './command-registry.js';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store.js';
+import {
+  readEnum,
+  readOptionalString,
+  readPayload,
+  readSlotRecord,
+  readStringList,
+} from '../../plugin-host/read-slot-props.js';
 import { frontendApi } from '../../services/frontend-api.js';
 import { uiStore } from '../../store/uiStore.js';
+
+const COMMAND_CATEGORIES: readonly CommandCategory[] = [
+  'Lesson',
+  'Whiteboard',
+  'Plugin',
+  'AI',
+  'Workspace',
+  'Analytics',
+  'Resource',
+];
 
 export const globalCommandRegistry = new CommandRegistry();
 
@@ -29,30 +46,33 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     const pluginExts = extensionPoints.get('command_palette.item') ?? [];
     const pluginCommands: CommandDescriptor[] = pluginExts
-      .map((ext) => {
-        const cfg = (ext.slotProps ?? {}) as any;
-        const category = (cfg.category || 'Plugin') as CommandCategory;
+      .map((ext): CommandDescriptor => {
+        const cfg = readSlotRecord(ext.slotProps);
+        const category = readEnum(cfg.category, COMMAND_CATEGORIES, 'Plugin');
+        const title = readOptionalString(cfg, 'title');
+        const commandType = readOptionalString(cfg, 'commandType');
+        const payload = readPayload(cfg.payload);
         return {
           id: ext.id,
-          title: ext.label || cfg.title || ext.id,
-          description: cfg.description,
+          title: ext.label || title || ext.id,
+          description: readOptionalString(cfg, 'description'),
           icon: typeof ext.icon === 'string' ? ext.icon : undefined,
           category,
-          keywords: cfg.keywords,
-          shortcut: cfg.shortcut,
+          keywords: readStringList(cfg.keywords),
+          shortcut: readOptionalString(cfg, 'shortcut'),
           execute: async (context?: Record<string, unknown>) => {
-            if (cfg.commandType) {
+            if (commandType) {
               // 检查执行结果并反馈——插件命令失败绝不静默（v0.6.0 审计）。
               const res = await frontendApi.post('/api/plugins/execute-command', {
-                type: cfg.commandType,
-                payload: cfg.payload ?? context,
+                type: commandType,
+                payload: payload ?? context,
               });
               if (!res.success) {
                 uiStore.getState().addToast({
                   id: `plugin-cmd-error-${Date.now()}`,
                   type: 'error',
                   title: '插件命令执行失败',
-                  message: res.error || `命令 ${cfg.commandType} 未能执行`,
+                  message: res.error || `命令 ${commandType} 未能执行`,
                 });
               }
             }

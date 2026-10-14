@@ -17,10 +17,32 @@ overrides:
   socket.io-parser: '>=4.2.7'
   nanoid: '>=3.3.18'
   postcss: '>=8.5.23'
-  ip-address: '>=10.3.1'
-  dompurify: '>=3.4.13'
+  # GHSA-j6r3-76f7-8jcv / GHSA-h3mg-xc3c-68pw。express-rate-limit 仍声明 ^10.2.0。
+  ip-address: '>=10.7.1'
+  # GHSA-p98j-92pf-mc4p / GHSA-6688-9rhm-gjv2。jspdf 4.2.1 仍带入 <=3.4.15。
+  dompurify: '>=3.4.16'
   qs: '>=6.16.0'
   body-parser: '>=1.20.6'
   protobufjs: '>=7.6.5'
   ooxml-core: '1.8.2'
   ooxml-ui: '1.8.3'
+  # GHSA-2gc4-cqfq-p2gv。socket.io 4.8.x 依赖 engine.io ~6.6.0，锁文件会停在未修复的 6.6.8。
+  engine.io: '>=6.6.10'
+  # brace-expansion 5.x DoS（CVE-2026-14257 及后续）。v1/v2 属于 minimatch 3/5，不在公告范围内，不能整包抬到 5。
+  'brace-expansion@>=4': '5.0.12'
+  # jsdom 29 使用 undici 7。不要抬到 8（那是 jsdom 30 的主版本）。
+  'undici@>=7 <8': '7.30.0'
+  # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g。4.29 同时带上已修复的 baseline-browser-mapping >=2.11。
+  browserslist: '>=4.28.7'
+  # GHSA-68fv-2mgg-jv7q。@tailwindcss/node 仍声明 ^1.2.1。
+  source-map-js: '>=1.2.2'
+  # GHSA-jggr-w7fw-pc2j。只替换 4.0.x，避免动到其他主版本。
+  'fast-copy@>=4 <4.1': '4.1.0'
+  # GHSA-g7r4-m6w7-qqqr 只影响 esbuild >=0.27.3 <0.28.1（tsx 的开发服务器）。
+  # 生产打包用的 esbuild 0.25 不在公告范围内，不要一并抬升。
+  'esbuild@>=0.27.3 <0.28.1': '0.28.1'
+  # exceljs 4.4.0 仍依赖 uuid ^8.3.0，上游没有带修复的发布。只替换这一条边，平台直接依赖的 uuid 14 不动。
+  # 11.1.1 保留 CJS 具名导出 v4()，与 exceljs 的 require 方式一致。
+  'exceljs>uuid': '11.1.1'
+  # @tailwindcss/typography 0.5.20 把 postcss-selector-parser 钉在 6.0.10，6.x 没有补丁（修复在 >=7.1.6）。
+  '@tailwindcss/typography>postcss-selector-parser': '7.1.6'

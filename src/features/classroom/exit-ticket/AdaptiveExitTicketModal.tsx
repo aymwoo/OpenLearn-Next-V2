@@ -69,7 +69,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
 
   // 校验必做题
   const handleCheckCoreAnswer = () => {
-    if (!selectedCoreOption) return;
+    if (!selectedCoreOption || !coreQuestion) return;
     const correct = selectedCoreOption === coreQuestion.correctOption;
     setIsCoreCorrect(correct);
     setCoreAnswered(true);
@@ -171,110 +171,109 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
           <div className="flex flex-col gap-4 text-xs">
             {/* ── Step 1: 核心概念必做题（仅宿主传入真实题目时渲染） ── */}
             {coreQuestion && (
-            <div className="bg-surface-secondary/70 p-4 rounded-2xl border border-border/60 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-main flex items-center gap-1.5 text-xs">
-                  <span className="px-2 py-0.5 rounded bg-indigo-500 text-white font-mono text-[10px]">必做诊断</span>
-                  <span>1. 核心概念过关题</span>
-                </span>
-                {coreAnswered && (
-                  <span
-                    className={`text-2xs font-bold px-2 py-0.5 rounded-full ${
-                      isCoreCorrect
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                        : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+              <div className="bg-surface-secondary/70 p-4 rounded-2xl border border-border/60 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-main flex items-center gap-1.5 text-xs">
+                    <span className="px-2 py-0.5 rounded bg-indigo-500 text-white font-mono text-[10px]">必做诊断</span>
+                    <span>1. 核心概念过关题</span>
+                  </span>
+                  {coreAnswered && (
+                    <span
+                      className={`text-2xs font-bold px-2 py-0.5 rounded-full ${
+                        isCoreCorrect
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                          : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                      }`}
+                    >
+                      {isCoreCorrect ? '✓ 概念通关' : '需巩固'}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-main font-semibold leading-relaxed">{coreQuestion.question}</p>
+
+                <div className="space-y-1.5">
+                  {coreQuestion.options.map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={coreAnswered}
+                      onClick={() => setSelectedCoreOption(opt.key)}
+                      className={`w-full p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                        selectedCoreOption === opt.key
+                          ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 font-bold text-indigo-700 dark:text-indigo-300'
+                          : 'border-border/60 hover:bg-surface text-main'
+                      } ${coreAnswered ? 'cursor-default opacity-90' : ''}`}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-surface-secondary border border-border flex items-center justify-center text-[10px] font-mono shrink-0">
+                        {opt.key}
+                      </span>
+                      <span className="text-2xs leading-relaxed">{opt.text}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {!coreAnswered && (
+                  <button
+                    type="button"
+                    disabled={!selectedCoreOption}
+                    onClick={handleCheckCoreAnswer}
+                    className={`mt-1 py-1.5 px-3 rounded-xl font-bold text-2xs transition-colors flex items-center justify-center gap-1 ${
+                      selectedCoreOption
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs'
+                        : 'bg-surface-secondary text-muted cursor-not-allowed'
                     }`}
                   >
-                    {isCoreCorrect ? '✓ 概念通关' : '需巩固'}
-                  </span>
+                    <span>确认本题答案</span>
+                    <ChevronRight size={12} />
+                  </button>
+                )}
+
+                {/* 自适应分支展示 */}
+                {coreAnswered && isCoreCorrect && hasChallengeQuestion && challengeQuestion && (
+                  <div
+                    data-testid="challenge-branch"
+                    className="mt-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 space-y-2 animate-fade-in"
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-2xs">
+                      <Sparkles size={14} className="text-emerald-600 dark:text-emerald-400" />
+                      <span>太棒了！已解锁【Lv.2 进阶探究挑战题】（冲刺思维勋章）</span>
+                    </div>
+                    <p className="text-2xs font-semibold text-main">{challengeQuestion.prompt}</p>
+                    <div className="grid grid-cols-1 gap-1">
+                      {challengeQuestion.options.map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setSelectedChallengeOption(opt.key)}
+                          className={`p-2 rounded-lg border text-left text-2xs transition-colors ${
+                            selectedChallengeOption === opt.key
+                              ? 'border-emerald-500 bg-emerald-100/60 dark:bg-emerald-950 font-bold text-emerald-800 dark:text-emerald-200'
+                              : 'border-emerald-500/20 bg-surface text-main hover:bg-surface-secondary'
+                          }`}
+                        >
+                          <span className="font-mono font-bold mr-1.5">{opt.key}.</span>
+                          <span>{opt.text}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {coreAnswered && !isCoreCorrect && (
+                  <div
+                    data-testid="scaffold-branch"
+                    className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 space-y-1.5 animate-fade-in"
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-2xs text-amber-600 dark:text-amber-400">
+                      <BookOpen size={14} />
+                      <span>核心概念支架提示卡</span>
+                    </div>
+                    <p className="text-2xs leading-relaxed">{coreQuestion.scaffoldHint}</p>
+                    <p className="text-3xs text-muted">解析：{coreQuestion.explanation}</p>
+                  </div>
                 )}
               </div>
-
-              <p className="text-main font-semibold leading-relaxed">{coreQuestion.question}</p>
-
-              <div className="space-y-1.5">
-                {coreQuestion.options.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    disabled={coreAnswered}
-                    onClick={() => setSelectedCoreOption(opt.key)}
-                    className={`w-full p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
-                      selectedCoreOption === opt.key
-                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 font-bold text-indigo-700 dark:text-indigo-300'
-                        : 'border-border/60 hover:bg-surface text-main'
-                    } ${coreAnswered ? 'cursor-default opacity-90' : ''}`}
-                  >
-                    <span className="w-5 h-5 rounded-full bg-surface-secondary border border-border flex items-center justify-center text-[10px] font-mono shrink-0">
-                      {opt.key}
-                    </span>
-                    <span className="text-2xs leading-relaxed">{opt.text}</span>
-                  </button>
-                ))}
-              </div>
-
-              {!coreAnswered && (
-                <button
-                  type="button"
-                  disabled={!selectedCoreOption}
-                  onClick={handleCheckCoreAnswer}
-                  className={`mt-1 py-1.5 px-3 rounded-xl font-bold text-2xs transition-colors flex items-center justify-center gap-1 ${
-                    selectedCoreOption
-                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs'
-                      : 'bg-surface-secondary text-muted cursor-not-allowed'
-                  }`}
-                >
-                  <span>确认本题答案</span>
-                  <ChevronRight size={12} />
-                </button>
-              )}
-
-              {/* 自适应分支展示 */}
-              {coreAnswered && isCoreCorrect && (
-                <div
-                  data-testid="challenge-branch"
-                  className="mt-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 space-y-2 animate-fade-in"
-                >
-                  <div className="flex items-center gap-1.5 font-bold text-2xs">
-                    <Sparkles size={14} className="text-emerald-600 dark:text-emerald-400" />
-                    <span>太棒了！已解锁【Lv.2 进阶探究挑战题】（冲刺思维勋章）</span>
-                  </div>
-                  <p className="text-2xs font-semibold text-main">{challengeQuestion.prompt}</p>
-                  <div className="grid grid-cols-1 gap-1">
-                    {challengeQuestion.options.map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => setSelectedChallengeOption(opt.key)}
-                        className={`p-2 rounded-lg border text-left text-2xs transition-colors ${
-                          selectedChallengeOption === opt.key
-                            ? 'border-emerald-500 bg-emerald-100/60 dark:bg-emerald-950 font-bold text-emerald-800 dark:text-emerald-200'
-                            : 'border-emerald-500/20 bg-surface text-main hover:bg-surface-secondary'
-                        }`}
-                      >
-                        <span className="font-mono font-bold mr-1.5">{opt.key}.</span>
-                        <span>{opt.text}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {coreAnswered && !isCoreCorrect && (
-                <div
-                  data-testid="scaffold-branch"
-                  className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 space-y-1.5 animate-fade-in"
-                >
-                  <div className="flex items-center gap-1.5 font-bold text-2xs text-amber-600 dark:text-amber-400">
-                    <BookOpen size={14} />
-                    <span>核心概念支架提示卡</span>
-                  </div>
-                  <p className="text-2xs leading-relaxed">{coreQuestion.scaffoldHint}</p>
-                  <p className="text-3xs text-muted">解析：{coreQuestion.explanation}</p>
-                </div>
-              )}
-            </div>
-
             )}
 
             {/* ── Step 2: 掌握度自评 ── */}

@@ -66,6 +66,30 @@ function installationSecurityFields(
  *
  * @returns 临时 ZIP 路径；调用方负责 `removeTempZip` 清理（try/finally）
  */
+/**
+ * createWriteStream 的 open 在下一拍才发生。若在 open 之前 rmSync，
+ * 随后的 open 会把同一路径重新创建出来，半成品文件就留在临时目录里。
+ * 先 destroy，等 close（open 完成或被取消之后）再删除。
+ */
+function discardWriteStream(out: fs.WriteStream, zipPath: string): Promise<void> {
+  return new Promise((resolve) => {
+    const remove = () => {
+      try {
+        fs.rmSync(zipPath, { force: true });
+      } catch {
+        /* best effort */
+      }
+      resolve();
+    };
+    if (out.closed) {
+      remove();
+      return;
+    }
+    out.once('close', remove);
+    out.destroy();
+  });
+}
+
 function streamBodyToTempZip(req: express.Request, res: express.Response, maxBytes: number): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const zipPath = path.join(os.tmpdir(), `plugin-upload-${randomUUID()}.zip`);
@@ -73,33 +97,29 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
     let received = 0;
     let settled = false;
 
-    const cleanup = () => {
-      try {
-        fs.rmSync(zipPath, { force: true });
-      } catch {
-        /* best effort */
-      }
+    const fail = (err: Error, after?: () => void) => {
+      if (settled) return;
+      settled = true;
+      after?.();
+      void discardWriteStream(out, zipPath).then(
+        () => reject(err),
+        () => reject(err),
+      );
     };
 
     out.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(err);
+      fail(err);
     });
 
     req.on('data', (chunk: Buffer) => {
       received += chunk.length;
       if (received > maxBytes) {
-        if (settled) return;
-        settled = true;
-        out.destroy();
-        cleanup();
-        res.status(413).json({
-          success: false,
-          error: `Payload too large. Maximum allowed size is ${Math.floor(maxBytes / 1024 / 1024)}MB`,
+        fail(new Error('payload-too-large'), () => {
+          res.status(413).json({
+            success: false,
+            error: `Payload too large. Maximum allowed size is ${Math.floor(maxBytes / 1024 / 1024)}MB`,
+          });
         });
-        reject(new Error('payload-too-large'));
         return;
       }
       if (!out.write(chunk)) {
@@ -114,8 +134,10 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
       settled = true;
       out.end(() => {
         if (received === 0) {
-          cleanup();
-          reject(new Error('empty-body'));
+          void discardWriteStream(out, zipPath).then(
+            () => reject(new Error('empty-body')),
+            () => reject(new Error('empty-body')),
+          );
           return;
         }
         resolve(zipPath);
@@ -123,11 +145,7 @@ function streamBodyToTempZip(req: express.Request, res: express.Response, maxByt
     });
 
     req.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      out.destroy();
-      cleanup();
-      reject(err);
+      fail(err);
     });
   });
 }
@@ -169,12 +187,7 @@ async function streamHttpBodyToFile(resp: Response, maxBytes: number): Promise<s
       out.end(() => resolve());
     });
   } catch (err) {
-    out.destroy();
-    try {
-      fs.rmSync(zipPath, { force: true });
-    } catch {
-      /* best effort */
-    }
+    await discardWriteStream(out, zipPath);
     throw err;
   }
 
