@@ -5,6 +5,7 @@ import { CapabilityGuard } from '../capability/index.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db, readPool, getReadDb, queryRead, queryReadOne, checkpoint } from '../db/index.js';
+import { redactPasscodeMaterial } from '../db/class-passcode-crypto.js';
 import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { VfsPlugin } from '../../plugins/vfs.js';
@@ -540,7 +541,7 @@ export class Kernel {
         event.id,
         event.type,
         event.source,
-        JSON.stringify(event.payload),
+        JSON.stringify(redactPasscodeMaterial(event.payload)),
         event.timestamp,
         event.correlationId || null,
       ];

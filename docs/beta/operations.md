@@ -10,15 +10,15 @@
 
 开放给教师之前，在目标环境再确认这几件：
 
-1. `ENCRYPTION_KEY` 是 64 位十六进制，已抄到学校的离线位置。换机器、做恢复，都用这一把。进程日志里出现 `Generating ephemeral in-memory key` 时，不要接入真实的 AI 密钥，先停下来把钥匙写进环境变量。
+1. `ENCRYPTION_KEY` 是 64 位十六进制，已抄到学校的离线位置。换机器、做恢复，都用这一把。若未设置，进程使用数据目录 `storage/encryption-key`（没有就现场生成，权限 600）。日志或管理后台出现「正在使用自动生成的加密密钥」时，先把该文件离线备份，再把同一内容写入 `ENCRYPTION_KEY`。出现这行警告时，不要接入真实 AI 密钥后就放着不管。
 2. `OPENLEARN_ADMIN_PASSWORD` 与 `OPENLEARN_TEACHER_PASSWORD` 已设置，且都不等于用户名。数据目录里的 `storage/bootstrap-credentials.txt` 若存在，抄走后删除。环境里没有 `PLAYWRIGHT_TEST`。
 3. 卷只有 `/data` 和 `/backups`。课件在 `/data/storage`，插件在 `/data/plugins`，日志在 `/data/logs`。
 4. 前面有 Nginx 时 `TRUST_PROXY` 等于真实层数（演练是 `1`）。应用端口 9000 不对公网。compose 的 `app` 默认发布 `9000:9000`，启用 `proxy` profile 时改掉这行，只留 Nginx 的端口。
 5. `GET /health` 为 `{"status":"ok"}`，可带 `uptime` 与 `version`。`GET /health/ready` 为 `{"status":"ready"}`。未就绪是 503，正文只有 `{"status":"not_ready"}`。
 6. 匿名 `GET /metrics` 为 401。用管理员会话或 `Authorization: Bearer <METRICS_TOKEN>` 能看到 Prometheus 文本，其中有 `openlearn_up 1`。
 7. `LOG_REDACT` 不要设成 `false`。`SENTRY_DSN` 与 `OPENLEARN_ERROR_DSN` 可以空着。
-8. 若是从 v0.6.1 的旧库升级：`_migrations` 含 `021_class_owner_and_password_gate` 与 `022_plugin_public_routes`，并用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>` 回填空归属。需要匿名访问的插件再执行批准。空库开新则跳过回填。
-9. 执行一次 `node scripts/site-backup.mjs`，确认 `/backups` 里有数据库、文件包和 `openlearn_*.manifest.json`。把这三份再拷到另一块磁盘。**【待作者确认：备份周期，例如每个教学日结束后一次。】**
+8. 若是从 v0.6.1 的旧库升级：`_migrations` 含 `021_class_owner_and_password_gate`、`022_plugin_public_routes` 与 `023_encrypt_class_passcodes`。启动时会把仍是明文的班级口令加密。并用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>` 回填空归属。需要匿名访问的插件再执行批准。空库开新则跳过回填。
+9. 执行一次 `node scripts/site-backup.mjs`，确认 `/backups` 里有数据库、文件包和 `openlearn_*.manifest.json`。把这三份再拷到另一块磁盘。清单会提示 `storage/encryption-key` 不在包内，该文件或 `ENCRYPTION_KEY` 要另外离线备份。库里的班级口令是密文。**【待作者确认：备份周期，例如每个教学日结束后一次。】**
 10. 用管理员走完改密、教师建班、学生提交、插件安装后启用。安装成功不等于已启用。
 
 只读卷的失败演练在 2026-10-14 已经做过：日志第一行业务结论是 `[Startup] FATAL`，退出码非 0。目标机的卷权限若不确定，再做一次，不要在已经装有公测数据的卷上把目录改成只读。
@@ -137,7 +137,7 @@ docker compose start app
 ### 不要做的恢复
 
 - 不要在服务运行时用文件拷贝替换 `educational_os.db`。在线备份用 `scripts/site-backup.mjs`。
-- 不要为了「修好 AI」重新生成 `ENCRYPTION_KEY`。新钥匙解不开旧密文，`getEncryptionKey` 也不会覆盖 `.env` 里已经存在的那一行。
+- 不要为了「修好 AI」重新生成 `ENCRYPTION_KEY`，或删掉 `storage/encryption-key` 再启动。新钥匙解不开旧密文。环境变量与已有密钥文件不一致时，进程会拒绝启动并说明如何二选一，不会覆盖文件，也不会退回临时内存密钥。空的 `ENCRYPTION_KEY=` 行也不会被自动填上。
 - 不要用 `PLAYWRIGHT_TEST` 绕过改密门禁。
 - 不要把 `TRUST_PROXY` 开在直接对公网监听的进程上。
 

@@ -71,8 +71,10 @@ export function backupSite(options = {}) {
   }
 
   const parts = ['storage', 'plugins', 'uploads'].filter((name) => fs.existsSync(path.join(dataDir, name)));
+  // 密钥文件与数据库密文分开保管。打进同一个包等于把钥匙和锁放在一起。
+  const tarArgs = ['czf', filesArchive, '-C', dataDir, '--exclude', 'storage/encryption-key'];
   if (parts.length > 0) {
-    const tar = spawnSync('tar', ['czf', filesArchive, '-C', dataDir, ...parts], { encoding: 'utf8' });
+    const tar = spawnSync('tar', [...tarArgs, ...parts], { encoding: 'utf8' });
     if (tar.status !== 0) {
       throw new Error(`打包数据目录失败：${tar.stderr || tar.stdout || tar.error?.message || tar.status}`);
     }
@@ -83,6 +85,8 @@ export function backupSite(options = {}) {
     }
   }
 
+  const encryptionKeyReminder =
+    '密钥不在此备份中。请单独离线备份环境变量 ENCRYPTION_KEY，或数据目录里的 storage/encryption-key（与 bootstrap-credentials.txt 同目录，权限 600）。没有这把密钥就无法解密备份库中的 AI Provider API Key 和班级临时口令。';
   const manifest = {
     id,
     createdAt: (options.now ?? new Date()).toISOString(),
@@ -91,6 +95,8 @@ export function backupSite(options = {}) {
     dbFile,
     filesArchive,
     included: parts,
+    encryptionKeyExcluded: 'storage/encryption-key',
+    encryptionKeyReminder,
   };
   fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
@@ -118,6 +124,8 @@ if (isCli()) {
     console.log(`  数据库 : ${result.dbFile} (${sizeMb} MB)`);
     console.log(`  文件包 : ${result.filesArchive}`);
     console.log(`  清单   : ${path.join(path.dirname(result.dbFile), `openlearn_${result.id}.manifest.json`)}`);
+    console.log('─'.repeat(64));
+    console.log(`! ${result.encryptionKeyReminder}`);
   } catch (err) {
     console.error(`✗ 站点备份失败：${err?.message ?? err}`);
     process.exit(1);

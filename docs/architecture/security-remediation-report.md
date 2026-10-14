@@ -54,7 +54,7 @@
 | MED-01 | `server.ts:160`                | CSP 全局禁用                    | 保留（AI Studio iframe 嵌入需求）         |
 | MED-02 | `server.ts:159`                | xFrameOptions 禁用（点击劫持）  | **已修复** → `sameorigin`                 |
 | MED-03 | `server.ts:181-192`            | 上传目录 auth 中间件未实际执行  | **已修复**                                |
-| MED-04 | `server/routes/roster.ts:624`  | 课堂口令明文存储和比较          | 保留（短生命周期临时口令，产品需求）      |
+| MED-04 | `server/routes/roster.ts`       | 课堂口令明文存储和比较          | **已修复** → AES-256-GCM 落库（`olenc1:`），登录解密后常量时间比较；教师接口仍返回原文 |
 | MED-05 | `server/routes/lessons.ts:605` | 测验提交 read-modify-write 竞态 | 保留（已有 secondary atomic upsert 兜底） |
 
 ### 2.2 架构与工程化问题

@@ -132,13 +132,14 @@
 
 ### 3.2 密钥加密
 
-实现于 `packages/core/di/api-key-crypto.ts`（**AES-256-GCM**）：
+实现于 `packages/core/di/api-key-crypto.ts`（**AES-256-GCM**）。同一把钥匙也加密班级临时口令。
 
-- 密钥来源优先级：`process.env.ENCRYPTION_KEY`（非空）→ 回退解析 `ecosystem.config.cjs` 里的 `ENCRYPTION_KEY=(.+)` 行
-- 注释明确警告：**PM2 env 块把 `ENCRYPTION_KEY` 置为空字符串 `''` 是常见故障源**（第 1 步判空会跳过，第 3 步的正则又匹配到空值）
-- 解密失败的报错文案直指此因：「AI Provider API Key 解密失败：ENCRYPTION_KEY 与加密时不一致（常见于 PM2 将 ENCRYPTION_KEY 置空或密钥被轮换）」
+- 密钥来源：非空的 `process.env.ENCRYPTION_KEY` → `.env` 里非空的 `ENCRYPTION_KEY=`（避免 PM2 用空字符串挡住 dotenv）→ 数据目录 `storage/encryption-key`
+- 都没有时，首次启动用随机 32 字节生成该文件（权限 600，与 `bootstrap-credentials.txt` 同目录）。启动日志和管理后台会显示醒目警告：正在使用自动生成的密钥，请设置 `ENCRYPTION_KEY` 并离线备份文件
+- 环境变量若与已持久化的文件不一致，进程报错并说明如何二选一，不会覆盖文件，也不会退回临时内存密钥
+- 解密失败的报错文案：「AI Provider API Key 解密失败：ENCRYPTION_KEY 与加密时不一致（常见于 PM2 将 ENCRYPTION_KEY 置空或密钥被轮换）」
 
-> ⚠️ **`ENCRYPTION_KEY` 不可轮换**。改动后全部既有 API Key 无法解密，唯一出路是在本页 §3.1 逐个重新保存。轮换前务必先备份数据库。
+> ⚠️ **`ENCRYPTION_KEY` 不可轮换**。改动后全部既有 API Key 和班级临时口令无法解密。API Key 要在本页 §3.1 逐个重新保存，班级口令要由教师重新设置。轮换前务必先备份数据库，并单独备份密钥文件。`site-backup` 不包含 `storage/encryption-key`。
 
 ### 3.3 AI 功能可用性
 
@@ -264,7 +265,7 @@
 
 | 配置项            | 作用                                                                                     | 生效位置                          |
 | ----------------- | ---------------------------------------------------------------------------------------- | --------------------------------- |
-| `ENCRYPTION_KEY`  | AES-256-GCM 加密 AI Provider API Key 的主密钥                                           | `packages/core/di/api-key-crypto.ts` |
+| `ENCRYPTION_KEY`  | AES-256-GCM 主密钥（AI Provider API Key 与班级临时口令）。未设置时用 `storage/encryption-key` | `packages/core/di/api-key-crypto.ts` |
 | `ALLOWED_ORIGINS` | 逗号分隔的 CORS 白名单；**未配置时**对无 `Origin` 头与同源请求智能放行                     | `server.ts` 的 `isOriginAllowed`  |
 | `PORT`            | 监听端口，默认 `9000`                                                                      | `server.ts` 的 `startServer`      |
 | `OPENLEARN_DB_PATH` | SQLite 主库路径（容器内固定为 `/app/packages/core/db/educational_os.db`）                 | `packages/core/db/index.ts`       |

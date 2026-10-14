@@ -31,7 +31,7 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 1. **命名格式**: `NNN_description.sql`（`NNN` 为三位序号升序执行）；
 2. **段落切分**: 使用 `-- UP` 声明正向迁移操作，使用 `-- DOWN` 声明回滚逆操作。`parseMigrationSql` 对二者均为可选：未匹配到 `-- UP` 时**整份文件内容**即视为 UP，未匹配到 `-- DOWN` 时 `down` 为空串。
    - 因此「缺少 DOWN 段」不会阻塞**正向**应用，但 `rollbackMigration` 会在该迁移上直接 `throw new Error('Migration ... does not provide a DOWN rollback script.')`。**若希望某个迁移可回滚，`-- DOWN` 段是硬性要求。**
-   - `migrations/` 下 **16 个迁移全部**带 `-- UP` / `-- DOWN` 段（2026-10-04 补齐了 `009_classroom_peer_review.sql` 与 `011_classroom_feed.sql` 的 DOWN，二者此前整篇被当作 UP 执行且不可回滚）。有 DOWN 段后 `rollbackMigration()` 对全部迁移均可用。
+   - `migrations/` 下的迁移文件都带 `-- UP` / `-- DOWN` 段（2026-10-04 补齐了 `009_classroom_peer_review.sql` 与 `011_classroom_feed.sql` 的 DOWN，二者此前整篇被当作 UP 执行且不可回滚）。有 DOWN 段后 `rollbackMigration()` 对全部迁移均可用。`023` 的 DOWN 只去掉标记表，不会把班级口令密文还原成明文。
 3. **元表追踪**: 引擎自动维护 `_migrations` 状态表：
    ```sql
    CREATE TABLE IF NOT EXISTS _migrations (

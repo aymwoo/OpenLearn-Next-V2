@@ -21,7 +21,7 @@
 | `ALLOWED_ORIGINS`                             | 生产仅同源                                   | CORS 白名单，逗号分隔（`cli.mjs --cors`）；开发环境默认放行 localhost                                                    |
 | `ALLOWED_FRAME_ORIGINS`                       | 同源                                         | Helmet `frame-src` / `frame-ancestors` 白名单，逗号分隔（课件 iframe 场景）                                              |
 | `LTI_ALLOWED_LMS_ORIGINS`                     | 无                                           | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                               |
-| `ENCRYPTION_KEY`                              | 自动生成                                     | 64 位 hex，加密 AI Provider API Key。**非必需**：首次使用时自动生成并写回 `.env`（`packages/core/di/api-key-crypto.ts`） |
+| `ENCRYPTION_KEY`                              | 见下文                                       | 64 位 hex。加密 AI Provider API Key 与班级临时口令。设置了就用环境变量；未设置时首次启动生成并写入 `storage/encryption-key`（0600）。与已有文件不一致则拒绝启动 |
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
 | `OPENLEARN_DATA_DIR`                          | 库文件所在目录                               | 课件 `storage/`、`plugins/`、`uploads/` 的根。容器默认 `/data`                                                           |
 | `BACKUP_DIR`                                  | `<数据目录>/backups`                         | `scripts/site-backup.mjs` 与迁移前快照的输出目录。容器默认 `/backups`                                                    |
@@ -59,7 +59,7 @@
 ## 3. 会话与密钥
 
 - 会话采用 **HttpOnly Cookie**（`server/middleware/auth.ts` 的 `getCookieToken`），无独立 JWT 签名密钥环境变量；登录态由服务端 sessions 存储校验。
-- 唯一的加密密钥是 `ENCRYPTION_KEY`（仅用于 AI Provider API Key 落库加密，见上表）。
+- 唯一的加密密钥是 `ENCRYPTION_KEY`（AES-256-GCM）。它加密 AI Provider API Key，也加密 `classes.class_passcode`。未设置环境变量时，钥匙在数据目录的 `storage/encryption-key`（与 `bootstrap-credentials.txt` 同目录，权限 600）。启动日志和管理后台会警告这是自动生成的钥匙，应改设 `ENCRYPTION_KEY` 并离线备份该文件。`site-backup` 不打包这个文件。环境变量若与文件不一致，进程报错并说明如何二选一，不会悄悄换钥匙，也不会再使用只活在内存里的临时密钥。
 
 ## 4. 插件 `manifest.configuration`
 

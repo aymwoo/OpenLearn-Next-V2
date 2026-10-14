@@ -166,6 +166,7 @@ export function AdminPanel({
   const [checkingUpgrade, setCheckingUpgrade] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedDeployEnv, setSelectedDeployEnv] = useState<'npx' | 'npm' | 'git'>('npm');
+  const [encryptionWarning, setEncryptionWarning] = useState<string | null>(null);
 
   const fetchUpgradeInfo = async () => {
     try {
@@ -388,6 +389,24 @@ export function AdminPanel({
   };
 
   useEffect(() => {
+    if (currentUserRole !== 'administrator') return;
+    let cancelled = false;
+    fetch('/api/system/encryption-status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { warning?: unknown } | null) => {
+        if (cancelled) return;
+        const warning = typeof data?.warning === 'string' ? data.warning.trim() : '';
+        setEncryptionWarning(warning || null);
+      })
+      .catch(() => {
+        if (!cancelled) setEncryptionWarning(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserRole]);
+
+  useEffect(() => {
     fetchUsers();
     fetchSqliteStats();
     fetchUpgradeInfo();
@@ -561,6 +580,19 @@ export function AdminPanel({
           </button>
         </div>
       </div>
+
+      {encryptionWarning ? (
+        <div
+          role="alert"
+          className="mx-6 mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+        >
+          <div className="font-bold flex items-center gap-2">
+            <AlertTriangle size={16} className="shrink-0" />
+            正在使用自动生成的加密密钥
+          </div>
+          <p className="mt-1 leading-relaxed">{encryptionWarning}</p>
+        </div>
+      ) : null}
 
       {/* Sub tabs list segment: Modern Segmented Tab Bar */}
       <div className="px-6 py-2.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto">

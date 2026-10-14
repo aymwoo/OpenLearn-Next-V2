@@ -12,6 +12,7 @@ import { hashPassword as bcryptHashPassword } from '../../packages/core/db/index
 import { randomId } from '../utils/id.js';
 import { generateStudentNumber } from '../routes/shared.js';
 import type { Pagination } from '../utils/pagination.js';
+import { openClassPasscode, sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
 
 export interface ClassItem {
   id: string;
@@ -258,7 +259,7 @@ export class RosterService {
     const countRow = this.db.prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?').get(id) as any;
 
     const now = Date.now();
-    let passcode = cls.class_passcode;
+    let passcode = openClassPasscode(cls.class_passcode);
     let expiresAt = cls.class_passcode_expires_at ?? null;
 
     if (!passcode || !expiresAt || now > expiresAt) {
@@ -266,7 +267,7 @@ export class RosterService {
       expiresAt = now + 4 * 60 * 60 * 1000; // 4 hours
       this.db
         .prepare('UPDATE classes SET class_passcode = ?, class_passcode_expires_at = ? WHERE id = ?')
-        .run(passcode, expiresAt, id);
+        .run(sealClassPasscode(passcode), expiresAt, id);
     }
 
     const isExpired = expiresAt ? now > expiresAt : false;

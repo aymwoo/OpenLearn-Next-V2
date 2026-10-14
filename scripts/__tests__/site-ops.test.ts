@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { assignClassOwners, listClasses } from '../backfill-class-owners.mjs';
 import { backupSite } from '../site-backup.mjs';
@@ -101,6 +102,48 @@ describe('站点备份与恢复', () => {
       expect(lesson.title).toBe('保留课');
     } finally {
       db.close();
+    }
+  });
+
+  it('备份库保留班级口令密文，且不把 encryption-key 打进文件包', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openlearn-site-'));
+    dirs.push(root);
+    const dataDir = path.join(root, 'data');
+    const backupDir = path.join(root, 'backups');
+    fs.mkdirSync(path.join(dataDir, 'storage', 'courseware'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'storage', 'courseware', 'note.txt'), '课件正文');
+    const keyMaterial = 'offline-key-material-should-stay-out';
+    fs.writeFileSync(path.join(dataDir, 'storage', 'encryption-key'), `${keyMaterial}\n`, { mode: 0o600 });
+    const dbFile = path.join(dataDir, 'educational_os.db');
+    makeDb(dbFile);
+    const cipher = `olenc1:${'ab'.repeat(16)}:${'cd'.repeat(16)}:ef`;
+    const db = new Database(dbFile);
+    db.exec('ALTER TABLE classes ADD COLUMN class_passcode TEXT');
+    db.prepare('UPDATE classes SET class_passcode = ? WHERE id = ?').run(cipher, 'cls_owned');
+    db.close();
+
+    const manifest = backupSite({
+      env: { OPENLEARN_DATA_DIR: dataDir, OPENLEARN_DB_PATH: dbFile, BACKUP_DIR: backupDir },
+      backupDir,
+    });
+    expect(manifest.encryptionKeyReminder).toContain('单独离线备份');
+    expect(manifest.encryptionKeyExcluded).toBe('storage/encryption-key');
+    expect(JSON.stringify(manifest)).not.toContain(keyMaterial);
+
+    const listing = spawnSync('tar', ['tzf', manifest.filesArchive], { encoding: 'utf8' });
+    expect(listing.status).toBe(0);
+    expect(listing.stdout).toContain('storage/courseware/note.txt');
+    expect(listing.stdout).not.toContain('encryption-key');
+
+    const backed = new Database(manifest.dbFile, { readonly: true });
+    try {
+      const row = backed.prepare('SELECT class_passcode FROM classes WHERE id = ?').get('cls_owned') as {
+        class_passcode: string;
+      };
+      expect(row.class_passcode).toBe(cipher);
+      expect(row.class_passcode).not.toContain('8899');
+    } finally {
+      backed.close();
     }
   });
 });

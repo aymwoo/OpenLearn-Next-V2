@@ -122,7 +122,7 @@
 
 ### `classes`
 
-`id` / `name` / `description` / `class_passcode` / `created_at`。
+`id` / `name` / `description` / `class_passcode` / `created_at`。`class_passcode` 落库为 AES-256-GCM 密文（前缀 `olenc1:`），教师接口解密后返回原文。
 
 ### `students`
 

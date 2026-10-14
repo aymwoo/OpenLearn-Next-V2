@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Docs
 
 - **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
+- **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
 
 ### Breaking Changes
 
@@ -38,6 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
+- **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。
 - 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
 - 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
   - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）

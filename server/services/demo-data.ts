@@ -24,6 +24,7 @@
 
 import type Database from 'better-sqlite3';
 import { hashPassword } from '../../packages/core/db/index.js';
+import { sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
 
 /** 演示数据标记前缀 —— 仅用于 UI 展示与肉眼识别，**清理不依赖它**。 */
 export const DEMO_TAG = '[演示]';
@@ -264,7 +265,7 @@ export function seedDemoData(db: Database.Database): DemoDataStatus {
           c.id,
           c.name,
           '系统一键生成的演示班级，用于 Demo 演示与功能验收。',
-          c.passcode,
+          sealClassPasscode(c.passcode),
           now + 365 * 24 * 3600 * 1000,
           demoOwner,
           now,
@@ -276,7 +277,7 @@ export function seedDemoData(db: Database.Database): DemoDataStatus {
           c.id,
           c.name,
           '系统一键生成的演示班级，用于 Demo 演示与功能验收。',
-          c.passcode,
+          sealClassPasscode(c.passcode),
           now + 365 * 24 * 3600 * 1000,
           now,
         );
