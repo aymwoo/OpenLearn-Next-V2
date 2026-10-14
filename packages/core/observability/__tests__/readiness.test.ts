@@ -13,7 +13,13 @@ import {
   probeStorageWritable,
   readinessBody,
 } from '../health.js';
-import { renderPrometheusMetrics, resetPrometheusMetricsForTests, recordHttpResponse } from '../metrics.js';
+import {
+  OPERATIONAL_GAUGE_CACHE_MS,
+  recordHttpResponse,
+  renderPrometheusMetrics,
+  resetPrometheusMetricsForTests,
+  takeOperationalGaugeSample,
+} from '../metrics.js';
 
 let tmp: string;
 
@@ -95,6 +101,57 @@ describe('Prometheus 指标', () => {
     expect(text).toContain('openlearn_up 1');
     expect(text).toContain('openlearn_http_responses_total{status_class="2xx"} 1');
     expect(text).toContain('openlearn_http_responses_total{status_class="5xx"} 1');
+    expect(text).toContain('openlearn_migrations_pending -1');
+    expect(text).toContain('openlearn_backup_age_seconds -1');
+    expect(text).toContain('openlearn_events_rows -1');
     expect(text).not.toContain('/api/');
+    expect(text).not.toMatch(/[/\\]/);
+  });
+
+  it('渲染迁移积压、备份年龄和 events 行数，非有限数记为 -1', () => {
+    const text = renderPrometheusMetrics(1_700_000_000_000, {
+      migrationsPending: 2,
+      backupAgeSeconds: 125,
+      eventsRows: 3.9,
+    });
+    expect(text).toContain('# TYPE openlearn_migrations_pending gauge');
+    expect(text).toContain('openlearn_migrations_pending 2');
+    expect(text).toContain('# TYPE openlearn_backup_age_seconds gauge');
+    expect(text).toContain('openlearn_backup_age_seconds 125');
+    expect(text).toContain('# TYPE openlearn_events_rows gauge');
+    expect(text).toContain('openlearn_events_rows 3');
+    expect(text).not.toMatch(/[/\\]/);
+
+    const unknown = renderPrometheusMetrics(1_700_000_000_000, {
+      migrationsPending: Number.NaN,
+      backupAgeSeconds: Number.POSITIVE_INFINITY,
+      eventsRows: Number.NEGATIVE_INFINITY,
+    });
+    expect(unknown).toContain('openlearn_migrations_pending -1');
+    expect(unknown).toContain('openlearn_backup_age_seconds -1');
+    expect(unknown).toContain('openlearn_events_rows -1');
+  });
+
+  it('运维 gauge 在缓存窗口内复用同一样本', () => {
+    let loads = 0;
+    const load = () => {
+      loads += 1;
+      return { migrationsPending: loads, backupAgeSeconds: 10, eventsRows: 4 };
+    };
+    const first = takeOperationalGaugeSample(null, 1_000, load, OPERATIONAL_GAUGE_CACHE_MS);
+    const second = takeOperationalGaugeSample(first, 1_000 + OPERATIONAL_GAUGE_CACHE_MS - 1, load);
+    expect(second).toBe(first);
+    expect(loads).toBe(1);
+    expect(first.sample.migrationsPending).toBe(1);
+
+    const refreshed = takeOperationalGaugeSample(first, 1_000 + OPERATIONAL_GAUGE_CACHE_MS, load);
+    expect(refreshed.sample.migrationsPending).toBe(2);
+    expect(loads).toBe(2);
+
+    const rewound = takeOperationalGaugeSample(refreshed, 500, load);
+    expect(rewound.sample.migrationsPending).toBe(3);
+
+    takeOperationalGaugeSample(rewound, 500, load, 0);
+    expect(loads).toBe(4);
   });
 });
