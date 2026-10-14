@@ -21,8 +21,25 @@ async function getUploadLimitMb(): Promise<number> {
   }
   return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
 }
-import { PowerPointViewer, type PowerPointViewerHandle } from 'pptx-react-viewer';
+import { PowerPointViewer, type PowerPointViewerHandle, LOCALE_CATALOG } from 'pptx-react-viewer';
 import 'pptx-react-viewer/styles';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+// 确保 i18next 实例安全初始化，防止 pptx-react-viewer 内部访问 i18n.options.resources 时报错
+if (!i18n.isInitialized) {
+  i18n.use(initReactI18next).init({
+    resources: {
+      en: { translation: {} },
+      'zh-CN': { translation: {} },
+    },
+    lng: 'zh-CN',
+    fallbackLng: 'en',
+    interpolation: {
+      escapeValue: false,
+    },
+  });
+}
 import {
   Presentation,
   ChevronLeft,
@@ -249,6 +266,8 @@ export function RevealPresentationWrapper({
           showThumbnails={fullscreen}
           showCompatibilityToasts={false}
           initialSlide={slideIndex}
+          defaultLocale="zh-CN"
+          availableLocales={[...LOCALE_CATALOG]}
           onActiveSlideChange={handlePptxActiveSlideChange}
           onSlideCountChange={handlePptxSlideCountChange}
           className="w-full h-full"
