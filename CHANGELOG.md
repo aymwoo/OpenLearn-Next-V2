@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **生产 CORS 只接受显式来源**。`NODE_ENV=production` 时，带 `Origin` 的请求只有列在 `ALLOWED_ORIGINS` 中才会回写 `Access-Control-Allow-Origin` 与 `Access-Control-Allow-Credentials: true`。`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0` 不再自动放行，Origin 的 host 与 `Host` 头相同也不再当成同源。没有 `Origin` 的请求仍然放行。非生产环境继续放行回环地址和任意来源。`ALLOWED_ORIGINS=*` 仍是不带凭证的通配。
 - **学生登录拒绝明文口令，失败文案不再暴露账号是否存在**。库存口令不以 `$2` 开头时不再与提交值做相等比较。64 位十六进制（旧 SHA-256）仍在登录成功时升级为 bcrypt。其它非 bcrypt 值登录失败，审计原因为 `plaintext_password_rejected`，响应和审计都不回显口令，也不把该行改写成新哈希。教师的「用户不存在 / 密码错误」与学生的「学号不存在 / 口令错误」对客户端都返回 `Incorrect username or password`；审计日志仍区分原因。禁用账号仍是 403。
 - **GDPR 删除改为仅管理员**。`DELETE /api/students/:id/gdpr-delete` 不再把 `teacher` 列入 `requireAuth`。能看到该生的教师也不能擦除。
-
+- **插件开发面板改为静态解析 Manifest**。编辑器里的源码不再用 `new Function` 执行。预览复用静态提取，仍显示 `id`、`name`、`version`、`author`。只有执行脚本才能算出的清单不再进入预览。
 - **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
 - **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。
 - **AI Agent 工具权限隔离与真实 Actor 透传 (SEC-01)**：
