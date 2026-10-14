@@ -1,20 +1,14 @@
-import { createStore } from 'zustand/vanilla';
+import type { StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
+import { appStore } from './appStore.js';
+import type { StudentViewSlice } from './slices/studentViewSlice.js';
 
-export interface StudentState {
-  studentDashboardData: any;
-  notifications: any[];
+export type StudentState = StudentViewSlice;
 
-  setStudentDashboardData: (data: any) => void;
-  setNotifications: (notifications: any[]) => void;
-}
-
-export const studentStore = createStore<StudentState>((set) => ({
-  studentDashboardData: null,
-  notifications: [],
-
-  setStudentDashboardData: (studentDashboardData) => set({ studentDashboardData }),
-  setNotifications: (notifications) => set({ notifications }),
-}));
+/**
+ * studentStore facade:
+ * Proxied directly to the unified appStore to eliminate split-brain state inconsistencies.
+ */
+export const studentStore: StoreApi<StudentState> = appStore as unknown as StoreApi<StudentState>;
 
 export const useStudentStore = <T>(selector: (state: StudentState) => T) => useStore(studentStore, selector);
