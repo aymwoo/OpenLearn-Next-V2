@@ -148,10 +148,22 @@ export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, 
     if (cfg) setPaletteEdit({ type, data: { ...cfg.defaultData } });
   };
   const handlePaletteConfirm = async (data: Record<string, any>) => {
-    if (paletteEdit) {
-      await whiteboardRef.current?.addElementAtCenter(paletteEdit.type, data);
-    }
+    const pending = paletteEdit;
     setPaletteEdit(null);
+    if (!pending) return;
+    // LazyWhiteboard 的 konva chunk 可能还在加载。ref 为空时可选链直接返回，
+    // 用户已经点了「添加到画板」，元素却不会落库。等到画板挂上再插入。
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const add = whiteboardRef.current?.addElementAtCenter as
+        | ((type: string, content: Record<string, any>) => Promise<void>)
+        | undefined;
+      if (typeof add === 'function') {
+        await add(pending.type, data);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   };
 
   const siteInfo = useAppStore((s) => s.siteInfo);

@@ -105,7 +105,11 @@ R6_PLANNED_CONTEXT = re.compile(
 
 # R7: 墓碑标记 —— 文档自己声明该文件已被删除/废弃，不是坏引用
 #     注意: 故意不含"已迁移到/已更名"，那类语义是"新路径应该存在",属真 drift
-R7_TOMBSTONE_CONTEXT = re.compile(r"(已废弃|已删除|已移除|已下线|不再存在)")
+#     「已于 2026-10-07 删除」中间插了日期，不能只匹配紧挨着的「已删除」。
+R7_TOMBSTONE_CONTEXT = re.compile(
+    r"(已废弃|已删除|已移除|已下线|不再存在|"
+    r"已于[^。\n]{0,80}?(?:删除|废弃|移除|下线))"
+)
 
 # R7 的 section 级放宽条件: 文件名或所在小节标题带 roadmap 语义才放宽
 R6_SECTION_GUARD = re.compile(r"(?i)(roadmap|plan|proposal|design|rfc|road-map)")
@@ -131,7 +135,7 @@ def _posix(p) -> str:
 @dataclass
 class RefItem:
     check: str        # path-existence | doc-link | duplicate-docs
-    status: str       # MISSING | PLANNED | PLACEHOLDER | HISTORICAL | BROKEN_LINK | DUPLICATE
+    status: str       # MISSING | PLANNED | PLACEHOLDER | HISTORICAL | GENERATED | BROKEN_LINK | DUPLICATE
     target: str       # 被引用的路径 / 链接 / 标题或 stem
     source_path: str  # 引用所在文件
     line: int
@@ -375,6 +379,14 @@ def _classify_missing(
     if R7_TOMBSTONE_CONTEXT.search(section):
         return ("PLANNED", "R7_TOMBSTONE_CONTEXT",
                 "所在小节声明该文件已废弃/已删除，属于历史记录而非坏引用")
+
+    # --- R10: 审计脚本自己的生成物 ---
+    # audit-tools/reports/ 在 .gitignore 里。refchecks 先于 drift_report.md 落盘，
+    # 干净检出时这条路径必然不存在。文档引用它是在说明失败报告写到哪里。
+    if target.replace("\\", "/").startswith("audit-tools/reports/"):
+        return ("GENERATED", "R10_GENERATED_REPORT",
+                "audit-tools/reports/ 是 run.sh 的生成目录（已 gitignore），"
+                "文档指向运行后的报告，不是必须入库的源文件")
 
     # --- R9: docs/release-notes/ 属历史档案 ---
     # 发布说明记录的是"当时做了什么",事后路径重构或目录被 gitignore 都不构成文档错误。
@@ -634,7 +646,8 @@ def render_markdown(rep: RefReport) -> str:
     section(
         "路径存在性 (path-existence)", path_items,
         "> 分类含义: `MISSING`=坏引用(算 drift) / `PLANNED`=计划中或已废弃(不算) / "
-        "`PLACEHOLDER`=占位符或示意代码(不算) / `HISTORICAL`=历史档案引用(不算)。"
+        "`PLACEHOLDER`=占位符或示意代码(不算) / `HISTORICAL`=历史档案引用(不算) / "
+        "`GENERATED`=审计脚本生成物(不算)。"
         "规则按级联优先级判定，R5 迁移编号冲突优先于所有降噪规则。\n"
         "> **R9_RELEASE_NOTES_HISTORICAL**: `docs/release-notes/` 是历史档案，其中引用的"
         "历史路径（如事后被重构、或被 `.gitignore` 的 `v2_plugins/`）不构成文档错误，"
@@ -731,7 +744,7 @@ def main() -> None:
     print(f"  docs scanned:        {ps['docs_scanned']}")
     print(f"  path refs:           {ps['refs_total']} "
           f"(unique {ps['refs_unique']}, exist {ps['refs_exist']})")
-    for st in ("MISSING", "PLANNED", "PLACEHOLDER", "HISTORICAL"):
+    for st in ("MISSING", "PLANNED", "PLACEHOLDER", "HISTORICAL", "GENERATED"):
         print(f"    {st:<12}: {sum(1 for i in rep.items if i.check == 'path-existence' and i.status == st)}")
     print(f"  doc links:           {rep.stats['doc_link']['links_total']} "
           f"(broken {rep.stats['doc_link']['links_broken']})")

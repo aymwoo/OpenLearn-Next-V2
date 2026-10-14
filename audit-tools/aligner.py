@@ -117,6 +117,9 @@ SKIP_CODE_ONLY_NAMES = {
     # UI Shell 通用资源,不需要架构文档单独覆盖
     "shared", "student", "teacher", "modals", "navigation",
     "command-palette", "quick-insert",
+    # packages/core/types/ 只有 semver 的 ambient 声明（semver.d.ts），
+    # 不是内核子系统，不需要 docs/architecture/types.md。
+    "types",
     # 通用 plugin 文件,docs 已经在 plugin-guide 提了
     "ai-planner", "ai-submit-injector", "assignment-eval",
     "builtin", "management", "vfs", "process",

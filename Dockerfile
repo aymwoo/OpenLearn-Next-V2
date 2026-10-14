@@ -6,8 +6,9 @@ WORKDIR /app
 # 安装构建原生模块（如 better-sqlite3）所需的编译工具
 RUN apk add --no-cache python3 make g++ gcc
 
-# 钉住与锁文件配套的 pnpm。@latest 会带上默认的 minimumReleaseAge，
-# 在没有 .npmrc 时拒绝锁文件里当天发布的传递依赖，镜像构建直接失败。
+# 钉住与 package.json#packageManager、锁文件配套的 pnpm。@latest 会带上默认的
+# minimumReleaseAge，在没有 .npmrc 时拒绝锁文件里当天发布的传递依赖。
+# 这一步在复制 package.json 之前，不能改成读取 packageManager 字段。
 RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 
 # 复制依赖声明文件利用 Docker 层缓存。
