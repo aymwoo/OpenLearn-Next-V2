@@ -42,7 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
 
 - **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
-- **第三方插件不再因 id 前缀获得宿主进程身份。** 进程内执行只接受预加载内置插件、`OPENLEARN_TRUSTED_INLINE_PLUGINS` 的精确名单，或 `packages/plugins` 里的入口。ZIP 里的 `@openlearn/` id 会以子进程运行。能力申请需要管理员确认，`*` 不会授予。SQL 只允许插件自己的表前缀；研究表要写进 `OPENLEARN_RESEARCH_SQL_PLUGINS`（未设置时仅 `lianyun-course`）。社区注册表安装默认关闭，打开后还要完整性哈希、Ed25519 签名和 `OPENLEARN_COMMUNITY_PUBKEY`。远程前端改在不透明源 iframe 里执行，函数渲染器不能穿过 postMessage。子进程默认没有出站 socket。迁移步骤见 `docs/plugin/plugin-security-migration.md`。
+- **第三方插件安全边界重构（PL-01 至 PL-08 & 审计加固）**：进程内执行只接受预加载内置插件、`OPENLEARN_TRUSTED_INLINE_PLUGINS` 精确名单或 `packages/plugins` 入口，第三方插件强制子进程隔离；新建表使用方案 A 语义复合前缀 `plugin_<manifestSlug>_<shortUuid>_<table>` 并由 AST 词法守卫 `assertPluginSqlAllowed` 严格拦截 SQL 注入与模式探测；前端沙箱接入专用 `sandbox-command` 路由与二次导航熔断，根除 Confused Deputy 越权；出站网络全面封锁 UDP、DNS 全方法与底层连接，宿主代发代理放行第三方 API `Authorization` 头并限制 10MB 请求/响应与 30 秒超时；社区包强制 Ed25519 签名与流式哈希。迁移步骤见 `docs/plugin/plugin-security-migration.md`。
 
 ### Fixes
 

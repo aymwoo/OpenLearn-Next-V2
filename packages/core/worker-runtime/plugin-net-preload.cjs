@@ -2,12 +2,13 @@
  * 子进程出站网络默认拒绝。
  *
  * Node 22/24 的权限模型没有 --allow-net，所以在进程入口包一层：
- * 原始 socket / DNS 一律拒绝；fetch 与 http(s).request 只把「已批准域名」
+ * 原始 socket / UDP / DNS 一律拒绝；fetch 与 http(s).request 只把「已批准域名」
  * 交给宿主代发。允许名单在本文件加载时从环境变量拍下来，随后删掉，
  * 插件代码改环境变量不能把自己加进名单。
  */
 'use strict';
 
+const EventEmitter = require('node:events');
 const net = require('node:net');
 const http = require('node:http');
 const https = require('node:https');
@@ -29,7 +30,11 @@ function denied(message) {
 }
 
 function hostAllowed(hostname) {
-  return allowed.has(String(hostname || '').trim().toLowerCase());
+  return allowed.has(
+    String(hostname || '')
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function proxy(method, url, headers, body) {
@@ -46,13 +51,17 @@ function proxy(method, url, headers, body) {
     };
     process.on('message', onMessage);
     try {
+      let bodyBase64 = '';
+      if (body) {
+        bodyBase64 = Buffer.isBuffer(body) ? body.toString('base64') : Buffer.from(body).toString('base64');
+      }
       process.send({
         type: 'ol-net-proxy',
         id,
         method,
         url,
         headers: headers || {},
-        bodyBase64: body ? Buffer.from(body).toString('base64') : '',
+        bodyBase64,
       });
     } catch (error) {
       process.off('message', onMessage);
@@ -73,15 +82,66 @@ if (net.default) {
   net.default.createConnection = blockConnect;
 }
 
+// 拦截 UDP (dgram)
+try {
+  const dgram = require('node:dgram');
+  function blockDgram() {
+    throw denied('plugin UDP sockets are denied');
+  }
+  dgram.createSocket = blockDgram;
+  if (dgram.Socket && dgram.Socket.prototype) {
+    dgram.Socket.prototype.bind = blockDgram;
+    dgram.Socket.prototype.connect = blockDgram;
+    dgram.Socket.prototype.send = blockDgram;
+  }
+} catch {
+  /* node:dgram unavailable */
+}
+
+// 拦截 TLS 与 HTTP2 底层连接
+try {
+  const tls = require('node:tls');
+  tls.connect = blockConnect;
+} catch {}
+
+try {
+  const http2 = require('node:http2');
+  http2.connect = blockConnect;
+} catch {}
+
+// 拦截 DNS 全方法与 Resolver 原型
 function blockDns() {
   throw denied('plugin DNS lookups are denied');
 }
-for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6']) {
-  if (typeof dns[name] === 'function') dns[name] = blockDns;
+
+for (const name of Object.getOwnPropertyNames(dns)) {
+  if (
+    typeof dns[name] === 'function' &&
+    (name.startsWith('resolve') || name.startsWith('lookup') || name === 'reverse')
+  ) {
+    dns[name] = blockDns;
+  }
 }
+
 if (dns.promises) {
-  for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6']) {
-    if (typeof dns.promises[name] === 'function') dns.promises[name] = async () => blockDns();
+  for (const name of Object.getOwnPropertyNames(dns.promises)) {
+    if (
+      typeof dns.promises[name] === 'function' &&
+      (name.startsWith('resolve') || name.startsWith('lookup') || name === 'reverse')
+    ) {
+      dns.promises[name] = async () => blockDns();
+    }
+  }
+}
+
+if (dns.Resolver && dns.Resolver.prototype) {
+  for (const name of Object.getOwnPropertyNames(dns.Resolver.prototype)) {
+    if (
+      typeof dns.Resolver.prototype[name] === 'function' &&
+      (name.startsWith('resolve') || name.startsWith('reverse') || name.startsWith('set'))
+    ) {
+      dns.Resolver.prototype[name] = blockDns;
+    }
   }
 }
 
@@ -93,8 +153,36 @@ globalThis.fetch = async function pluginFetch(input, init) {
   }
   const method = (init && init.method) || (typeof input !== 'string' && input.method) || 'GET';
   let body = init && init.body;
-  if (body && typeof body !== 'string' && !Buffer.isBuffer(body)) body = String(body);
-  const result = await proxy(method, parsed.toString(), init && init.headers, body);
+  let bodyBuffer = null;
+  if (body) {
+    if (Buffer.isBuffer(body)) {
+      bodyBuffer = body;
+    } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+      bodyBuffer = Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+    } else if (typeof body === 'string') {
+      bodyBuffer = Buffer.from(body, 'utf8');
+    } else {
+      bodyBuffer = Buffer.from(String(body), 'utf8');
+    }
+  }
+
+  const headers = {};
+  const rawHeaders = (init && init.headers) || (typeof input !== 'string' && input.headers);
+  if (rawHeaders) {
+    if (typeof rawHeaders.forEach === 'function') {
+      rawHeaders.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(rawHeaders)) {
+      for (const [key, value] of rawHeaders) {
+        headers[key] = value;
+      }
+    } else if (typeof rawHeaders === 'object') {
+      Object.assign(headers, rawHeaders);
+    }
+  }
+
+  const result = await proxy(method, parsed.toString(), headers, bodyBuffer);
   const text = Buffer.from(result.bodyBase64 || '', 'base64').toString('utf8');
   return {
     ok: result.status >= 200 && result.status < 300,
@@ -126,49 +214,37 @@ function proxiedRequest(protocol) {
     if (!hostAllowed(url.hostname)) {
       throw denied(`outbound host "${url.hostname}" is not approved`);
     }
+
     const chunks = [];
-    const request = {
-      setHeader() {
-        return request;
-      },
-      write(chunk) {
-        chunks.push(Buffer.from(chunk));
-        return true;
-      },
-      end(chunk) {
-        if (chunk) chunks.push(Buffer.from(chunk));
-        const body = Buffer.concat(chunks);
-        proxy(opts.method || 'GET', url.toString(), opts.headers, body)
-          .then((result) => {
-            const response = {
-              statusCode: result.status,
-              headers: result.headers || {},
-              on(event, listener) {
-                if (event === 'data') listener(Buffer.from(result.bodyBase64 || '', 'base64'));
-                if (event === 'end') listener();
-                return response;
-              },
-            };
-            if (typeof cb === 'function') cb(response);
-            request.emit?.('response', response);
-          })
-          .catch((error) => {
-            request.emit?.('error', error);
-          });
-        return request;
-      },
-      on() {
-        return request;
-      },
-      once() {
-        return request;
-      },
-      emit() {
-        return false;
-      },
-      abort() {},
-      destroy() {},
+    const request = new EventEmitter();
+    request.setHeader = () => request;
+    request.write = (chunk) => {
+      chunks.push(Buffer.from(chunk));
+      return true;
     };
+    request.end = (chunk) => {
+      if (chunk) chunks.push(Buffer.from(chunk));
+      const body = Buffer.concat(chunks);
+      proxy(opts.method || 'GET', url.toString(), opts.headers, body)
+        .then((result) => {
+          const response = new EventEmitter();
+          response.statusCode = result.status;
+          response.headers = result.headers || {};
+          if (typeof cb === 'function') cb(response);
+          request.emit('response', response);
+          process.nextTick(() => {
+            response.emit('data', Buffer.from(result.bodyBase64 || '', 'base64'));
+            response.emit('end');
+          });
+        })
+        .catch((error) => {
+          request.emit('error', error);
+        });
+      return request;
+    };
+    request.abort = () => {};
+    request.destroy = () => {};
+
     return request;
   };
 }

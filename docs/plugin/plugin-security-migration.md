@@ -15,35 +15,36 @@
 - `*`、`*:*`、`*:*:*` 不能写入批准表，也不会授予。插件上下文里的 `grant` 和 `revokeAll` 直接拒绝。
 - 清单里写 `*` 不再因此打开积分账本或学期成绩服务的 Token 白名单。要这些服务，就声明对应的能力或 `requires`。
 
-## 数据表
+## 数据表与 SQL 隔离
 
-- 新建表的前缀是安装主键（ZIP 为 UUID）：`plugin_<id>_`。子进程和 worker 都用这一套，不再用 manifest id 另起前缀。插件代码应走 `ctx.db.ensureTable` / `ctx.db.table`。
-- 直接对 `users`、`vfs_nodes`、提交、投票等平台表执行 SQL 会被拒绝。这些数据走对应的服务接口。
-- 卸载会删除主键前缀和旧的 manifest id 前缀，并清掉能力批准、出站域名批准和 `plugin_storage`。
-- `plugin_research_` 只给 `OPENLEARN_RESEARCH_SQL_PLUGINS` 里的精确 id。变量未设置时默认只有 `lianyun-course`。设成空字符串则关闭。id 里出现 `research` 或 `lianyun` 不再算授权。
+- **方案 A 复合表前缀**：新建表使用语义复合前缀 `plugin_<manifestSlug>_<shortUuid>_<table>`（例如 `@courseware/hub` 的 `scores` 表名为 `plugin_courseware_hub_01a1404b_scores`）。既保证了数据库中表名的业务可读性，又通过实例 UUID 前缀防止命名冲突与数据越权。同时平滑兼容历史单前缀 `plugin_<uuid>_` 与 `plugin_<manifestId>_`。
+- **AST 级 SQL 守卫**：引入 `assertPluginSqlAllowed` 词法解析器，彻底剥离注释（`--`、`/* */`）、字符串字面量、括号与别名，严格阻断逗号隐式 JOIN（`FROM own_table, users`）、注释注入与 `sqlite_master` 任意模式窃取。
+- 直接对 `users`、`vfs_nodes`、提交、投票等平台内核核心表执行 SQL 会被绝对拒绝。
+- 卸载会精确删除该安装实例对应的复合前缀与 UUID 前缀表；仅在无其他兄弟插件共享同一 `manifest.id` 时才清理历史旧前缀表，杜绝误删风险。
+- `plugin_research_` 只给 `OPENLEARN_RESEARCH_SQL_PLUGINS` 里的精确 id。变量未设置时默认只有 `lianyun-course`。设成空字符串则关闭。
 
-## 命令身份
+## 命令身份与沙箱桥
 
-- 插件发出的命令由宿主改写成 `plugin:<manifest id>`。插件自己填的 `actorId` 和 `metadata.approved` 被忽略。
+- 前端沙箱通过专用通道 `POST /api/plugins/:id/sandbox-command` 派发命令，由服务端权威数据库绑定 `plugin:<manifestId>` actor，剥离 `metadata.approved`。
+- 即使管理员在线，沙箱发起的内核命令也必须进入待审批队列，杜绝 Confused Deputy 越权。
 - 命令总线拒绝空 actor，不再回落到 `agent-system-0`。
-- 宿主路由和审批流继续使用 `user:<id>:<role>`、`admin` 或 `agent-system-0`。这些调用方不是 `plugin:` 前缀，审批语义不变。
 
-## 前端
+## 前端沙箱
 
-- 活跃插件的 `frontend.js` 在 iframe 中执行。iframe 只有 `sandbox="allow-scripts"`，源是 `/plugin-sandbox/frame`，和父页面不同源。
-- 插件通过 `postMessage` 调用 `frontendApi`、按插件隔离的 storage、`invokeCommand` 和 JSON 扩展点。函数、React 渲染器不能穿过这道桥。需要渲染器的插件改为清单里的声明式贡献，或留在宿主提供的扩展槽。
+- 活跃插件的 `frontend.js` 在 iframe 中执行。iframe 拥有 `sandbox="allow-scripts"`，源是 `/plugin-sandbox/frame`。
+- 长生命周期 RPC 监听器与激活 Promise 彻底解耦，防止插件初始化后 API 调用失效挂起。
+- 接入 iframe 二次异常导航监控，一旦检测到内部重定向外逃行为立即安全熔断并销毁 frame。
 - `GET /plugins/...` 需要有效会话，和 `/uploads` 一样。
 
-## 社区包
+## 社区包认证
 
-- `OPENLEARN_COMMUNITY_INSTALL` 不是 `1` 时，`install-from-url`、带下载地址的一键更新，以及带 `x-community-install` 的浏览器直传都会被拒绝。
-- 社区包必须带 `integrity`（sha256 十六进制或 `sha256-` base64）和 `signature`（对 integrity 字符串做 Ed25519，base64）。公钥 PEM 放在 `OPENLEARN_COMMUNITY_PUBKEY`，换行写成 `\n`。
-- 注册表 JSON 的 `verified` 会被服务端忽略，列表接口固定返回 `verified: false`。面板不再把该字段画成「官方校验来源」。
-- 管理员手里的 ZIP 文件仍可手工安装。更新 ZIP 需要 `X-Acknowledge-Risk: true`。
+- `OPENLEARN_COMMUNITY_INSTALL` 不是 `1` 时，`install-from-url`、带下载地址的一键更新，以及带 `x-community-install` 的浏览器直传（包含超时回退路径）均被统一门禁拦截并拒绝。
+- 社区包必须带 `integrity`（sha256 十六进制或 `sha256-` base64）和 `signature`（Ed25519 签名，支持绑定 manifest ID 与版本元数据）。公钥 PEM 放在 `OPENLEARN_COMMUNITY_PUBKEY`。
+- 验签过程支持流式文件分块读取，防止大包占用过多主进程 V8 堆内存。
 
-## 子进程资源
+## 子进程出站网络与资源 Quota
 
-- 权限策略不是 `off` 时，子进程加载 `plugin-net-preload.cjs`。原始 socket 和 DNS 拒绝。`fetch` 与 `http(s).request` 把请求发给宿主，宿主只代理 `plugin_network_grants` 里的主机名，不跟随重定向，并去掉 `Cookie` 和 `Authorization`。
-- 清单里的域名不会自动获批。空批准集就是全部拒绝。
-- 默认还有 512MB RSS 和每个 10 秒窗口 8000 毫秒 CPU。`OPENLEARN_PLUGIN_QUOTA=off` 关闭采样。非 Linux 没有 `/proc` 采样。
-- `OPENLEARN_PLUGIN_PERMISSION=off` 同时关闭 Node 权限模型和这层网络入口。
+- 权限策略不是 `off` 时，子进程入口加载 `plugin-net-preload.cjs`。原始 Socket、UDP (`dgram`)、DNS 全系列方法（包含 `Resolver.prototype`）、TLS 及 HTTP2 底层连接均被彻底封锁。
+- `fetch` 与 `http(s).request` 将请求转发给宿主代发，宿主只代发已获批的主机名，并严格阻断 IPv4/IPv6 私有网段、环回地址与云厂商元数据（`169.254.169.254`）。
+- 宿主代发放行第三方 API `Authorization` 头（Bearer Token），同时限制请求体 10MB、响应流 10MB，并注入全局 30 秒超时，防止宿主 OOM 崩溃。
+- 默认采样 512MB RSS 和每个 10 秒窗口 8000 毫秒 CPU。**注意：进程资源 Quota 目前基于 Linux `/proc` 接口生效，非 Linux 系统自动跳过采样。**

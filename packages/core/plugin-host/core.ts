@@ -336,8 +336,7 @@ export abstract class PluginHostCore extends PluginHostBase {
     let sourcePath: string | undefined;
     try {
       const row = this.db.prepare('SELECT file_path, manifest FROM plugins WHERE id = ?').get(pluginId) as
-        | { file_path?: string; manifest?: string }
-        | undefined;
+        { file_path?: string; manifest?: string } | undefined;
       sourcePath = row?.file_path;
       if (!manifestId && row?.manifest) {
         const parsed = JSON.parse(row.manifest) as { id?: unknown };
@@ -828,6 +827,25 @@ export abstract class PluginHostCore extends PluginHostBase {
    * @throws Error 如果 manifest id 已存在
    */
   protected ensureUniqueManifestId(manifestId: string): void {
+    const RESERVED_CORE_NAMESPACES = new Set([
+      'vfs',
+      'lesson',
+      'whiteboard',
+      'ai',
+      'system',
+      'auth',
+      'admin',
+      'core',
+      'user',
+      'classroom',
+      'assignment',
+    ]);
+    const lower = String(manifestId ?? '')
+      .trim()
+      .toLowerCase();
+    if (RESERVED_CORE_NAMESPACES.has(lower) || lower.startsWith('core.') || lower.startsWith('system.')) {
+      throw new Error(`Cannot install plugin: manifest id "${manifestId}" conflicts with reserved core namespace.`);
+    }
     const existing = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{
       id: string;
       manifest: string;
@@ -920,8 +938,7 @@ export abstract class PluginHostCore extends PluginHostBase {
     if (allowlist.has(pluginId) || (manifestId ? allowlist.has(manifestId) : false)) return true;
     try {
       const row = this.db.prepare('SELECT file_path FROM plugins WHERE id = ?').get(pluginId) as
-        | { file_path?: string }
-        | undefined;
+        { file_path?: string } | undefined;
       if (isInsideBuiltinPluginsDir(row?.file_path)) return true;
     } catch {
       /* 测试库可能还没有 file_path 列 */

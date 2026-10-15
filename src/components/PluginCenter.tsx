@@ -148,6 +148,7 @@ export function PluginCenter({
             headers: {
               'x-install-mode': 'update',
               'x-acknowledge-risk': 'true',
+              'x-community-install': 'true',
               ...(marketItem.integrity ? { 'x-integrity': marketItem.integrity } : {}),
               ...(marketItem.signature ? { 'x-signature': marketItem.signature } : {}),
             },
@@ -336,9 +337,9 @@ export function PluginCenter({
 
           {storeTab === 'store' ? (
             <PluginStorePanel
-                plugins={plugins}
-                lang={lang}
-                showSystemPlugins={showSystemPlugins}
+              plugins={plugins}
+              lang={lang}
+              showSystemPlugins={showSystemPlugins}
               marketMap={marketMap}
               checkingUpdateId={checkingUpdateId}
               oneClickUpdatingId={oneClickUpdatingId}

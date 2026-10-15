@@ -189,19 +189,15 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     permissionArgs.push(`--allow-fs-read=${bootstrapFile}`);
   }
 
-  const child = spawn(
-    process.execPath,
-    [...permissionArgs, ...netGuardArgs, ...heapArgs, bootstrapFile],
-    {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: buildMinimalEnv(opts.data, envOverrides),
-      cwd: opts.cwd,
-      // ★ 必须显式指定：默认 json 会静默降级 10/13 个探针（见模块注释与
-      //   ipc-serialization-parity.test.ts）。它是 spawn 选项，对双向生效。
-      serialization: 'advanced',
-      windowsHide: true,
-    },
-  );
+  const child = spawn(process.execPath, [...permissionArgs, ...netGuardArgs, ...heapArgs, bootstrapFile], {
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    env: buildMinimalEnv(opts.data, envOverrides),
+    cwd: opts.cwd,
+    // ★ 必须显式指定：默认 json 会静默降级 10/13 个探针（见模块注释与
+    //   ipc-serialization-parity.test.ts）。它是 spawn 选项，对双向生效。
+    serialization: 'advanced',
+    windowsHide: true,
+  });
 
   const removeBootstrapFile = () => {
     try {
@@ -232,8 +228,36 @@ export function writeBootstrapTempFile(code: string): string {
   return file;
 }
 
+/**
+ * 启动或退出时扫描并清理临时目录下残留的 ol-bootstrap-*.mjs 文件。
+ */
+export function cleanupStaleBootstrapFiles(): number {
+  try {
+    const tmpDir = os.tmpdir();
+    const files = fs.readdirSync(tmpDir);
+    let cleaned = 0;
+    for (const file of files) {
+      if (file.startsWith('ol-bootstrap-') && file.endsWith('.mjs')) {
+        try {
+          fs.unlinkSync(path.join(tmpDir, file));
+          cleaned++;
+        } catch {
+          /* 忽略被占用或无权限的文件 */
+        }
+      }
+    }
+    return cleaned;
+  } catch {
+    return 0;
+  }
+}
+
+// 模块加载时执行一次孤儿清理
+cleanupStaleBootstrapFiles();
+
 /** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
-export function resolveNetPreloadPath(): string {  const candidates: string[] = [
+export function resolveNetPreloadPath(): string {
+  const candidates: string[] = [
     path.resolve(process.cwd(), 'packages/core/worker-runtime/plugin-net-preload.cjs'),
     path.resolve(process.cwd(), 'dist/plugin-net-preload.cjs'),
   ];

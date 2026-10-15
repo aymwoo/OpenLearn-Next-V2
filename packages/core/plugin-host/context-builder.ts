@@ -228,7 +228,9 @@ function wrapCommandBus(
         if (isNoHandler) {
           const unprefixedType = stripPluginCommandPrefix(rawType, manifestId || pluginId);
           if (unprefixedType !== prefixedCmd.type) {
-            return await commandBus.execute(bindPluginCommand({ ...command, type: unprefixedType }, hostActor) as never);
+            return await commandBus.execute(
+              bindPluginCommand({ ...command, type: unprefixedType }, hostActor) as never,
+            );
           }
         }
         throw e;
@@ -761,7 +763,7 @@ export async function buildContext(
   Object.freeze(services);
 
   // 5. 构建插件自建表 API（v5.1）
-  const tablePrefix = pluginTablePrefix(pluginId);
+  const tablePrefix = pluginTablePrefix(pluginId, manifest?.id);
 
   const dbApi: PluginDatabaseAPI = {
     async ensureTable(tableName: string, schema: string) {

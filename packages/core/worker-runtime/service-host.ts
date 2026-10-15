@@ -64,7 +64,12 @@ import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '
 import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
 import { isBlockedPluginCapability } from '../plugin-host/plugin-grants.js';
-import { isSafePluginTablePrefix, pluginTablePrefix } from '../plugin-host/plugin-tables.js';
+import {
+  isSafePluginTablePrefix,
+  pluginTablePrefix,
+  listAllowedPluginTablePrefixes,
+} from '../plugin-host/plugin-tables.js';
+import { assertPluginSqlAllowed } from '../plugin-host/sql-guard.js';
 
 /**
  * 后端 Worker 侧的 Token 名集合。
@@ -651,7 +656,7 @@ export class ServiceHost {
    */
   async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
-// ── Security Barrier 1: Token Allowlist Guard ───────────────────
+      // ── Security Barrier 1: Token Allowlist Guard ───────────────────
       // Strict token-level capability sandbox: block any service token
       // not explicitly granted to this worker plugin. 空允许列表（undefined 或空 Set）
       // 视为 fail-closed，避免“未注入 allowlist 就放行全部 token”。
@@ -704,9 +709,11 @@ export class ServiceHost {
       }
 
       // ── Intercept INetworkProxyService RPC (trust boundary: host-only proxy fetch) ──
-      if (msg.token === "@openlearn/core:INetworkProxyService") {
-        const [request] = msg.args as [{ url?: string; method?: string; headers?: Record<string, string>; body?: string | null }];
-        const url = String(request?.url ?? "");
+      if (msg.token === '@openlearn/core:INetworkProxyService') {
+        const [request] = msg.args as [
+          { url?: string; method?: string; headers?: Record<string, string>; body?: string | null },
+        ];
+        const url = String(request?.url ?? '');
         const verdict = this.isOutboundUrlAllowed(url, this.networkAllowlist ?? []);
         if (!verdict.allowed) {
           throw new WorkerCapabilityError(
@@ -716,16 +723,18 @@ export class ServiceHost {
           );
         }
         const response = await fetch(url, {
-          method: request?.method ?? "GET",
+          method: request?.method ?? 'GET',
           headers: request?.headers,
           body: request?.body ?? undefined,
-          redirect: "manual",
+          redirect: 'manual',
         });
         const body = await response.text();
         const headers: Record<string, string> = {};
-        response.headers.forEach((value, key) => { headers[key] = value; });
+        response.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
         transport.postMessage({
-          type: "result",
+          type: 'result',
           invokeId: msg.invokeId,
           value: {
             ok: response.ok,
@@ -880,7 +889,12 @@ export class ServiceHost {
           transport.postMessage({ type: 'result', invokeId: msg.invokeId, value: result });
           return;
         } else if (msg.method === 'createCommand') {
-          const [type, payload, , metadata] = msg.args as [string, unknown, unknown, Record<string, unknown> | undefined];
+          const [type, payload, , metadata] = msg.args as [
+            string,
+            unknown,
+            unknown,
+            Record<string, unknown> | undefined,
+          ];
           const cleanMeta = metadata && typeof metadata === 'object' ? { ...metadata } : {};
           delete cleanMeta.approved;
           const result = commandBus.createCommand(type, payload, this.pluginActorId, cleanMeta);
@@ -889,20 +903,15 @@ export class ServiceHost {
         }
       }
 
-      if (msg.token === '@openlearn/core:ICapabilityService' && (msg.method === 'grant' || msg.method === 'revokeAll')) {
+      if (
+        msg.token === '@openlearn/core:ICapabilityService' &&
+        (msg.method === 'grant' || msg.method === 'revokeAll')
+      ) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           msg.token,
           `Plugin "${this.pluginId || this.pluginActorId}" cannot ${msg.method} capabilities`,
         );
-      }
-      if (
-        msg.token === '@openlearn/core:ICapabilityService' &&
-        msg.method === 'grant' &&
-        typeof msg.args?.[1] === 'string' &&
-        isBlockedPluginCapability(msg.args[1])
-      ) {
-        throw new WorkerCapabilityError(this.pluginActorId, msg.token, 'Wildcard capabilities cannot be granted');
       }
 
       // ── Intercept IActionRegistryService helper methods ──────────────
@@ -993,34 +1002,32 @@ export class ServiceHost {
     try {
       parsed = new URL(url);
     } catch {
-      return { allowed: false, reason: "invalid URL" };
+      return { allowed: false, reason: 'invalid URL' };
     }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return { allowed: false, reason: `disallowed protocol ${parsed.protocol}` };
     }
     const host = parsed.hostname.toLowerCase();
     if (
-      host === "localhost" ||
-      host.startsWith("127.") ||
-      host === "::1" ||
-      host === "0.0.0.0" ||
-      host === "169.254.169.254" ||
-      host.endsWith(".localhost")
+      host === 'localhost' ||
+      host.startsWith('127.') ||
+      host === '::1' ||
+      host === '0.0.0.0' ||
+      host === '169.254.169.254' ||
+      host.endsWith('.localhost')
     ) {
-      return { allowed: false, reason: "loopback/private/metadata address blocked" };
+      return { allowed: false, reason: 'loopback/private/metadata address blocked' };
     }
     if (allowedHosts.length === 0) {
-      return { allowed: false, reason: "no outbound hosts declared in manifest (default deny)" };
+      return { allowed: false, reason: 'no outbound hosts declared in manifest (default deny)' };
     }
     const ok = allowedHosts.some((entry) => {
       const pattern = entry.trim().toLowerCase();
-      if (pattern === "*") return true;
-      if (pattern.startsWith("*.")) return host.endsWith(pattern.slice(1));
+      if (pattern === '*') return true;
+      if (pattern.startsWith('*.')) return host.endsWith(pattern.slice(1));
       return host === pattern;
     });
-    return ok
-      ? { allowed: true, reason: "" }
-      : { allowed: false, reason: `host ${host} not in allowlist` };
+    return ok ? { allowed: true, reason: '' } : { allowed: false, reason: `host ${host} not in allowlist` };
   }
 
   private async resolveService(tokenName: string): Promise<unknown> {
@@ -1041,62 +1048,38 @@ export class ServiceHost {
 
   /**
    * 插件 SQL 只允许自己的表前缀。
-   *
-   * 安装主键（dbPluginId，ZIP 为 UUID）是唯一命名空间。manifest id 不再另开一套。
-   * `plugin_migrations` 是迁移簿记。`sqlite_master` 只允许 SELECT，且语句里必须带上自己的前缀。
-   * `plugin_research_` 只给 OPENLEARN_RESEARCH_SQL_PLUGINS 里的精确 id（默认 lianyun-course）。
    */
   private assertDatabaseAccessAllowed(sql: string): void {
     if (typeof sql !== 'string' || sql.trim() === '') return;
 
     const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
     const scopeId = this.dbPluginId || pluginId;
-    const ownPrefix = scopeId ? pluginTablePrefix(scopeId) : '';
-
-    const FORBIDDEN_OPERATIONS = [
-      /\bATTACH(?:\s+DATABASE)?\b/i,
-      /\bDETACH(?:\s+DATABASE)?\b/i,
-      /\bPRAGMA\b/i,
-      /\bVACUUM\b/i,
-      /\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:TRIGGER|VIEW)\b/i,
-      /\bDROP\s+(?:TEMP(?:ORARY)?\s+)?(?:TRIGGER|VIEW)\b/i,
-    ];
-    for (const opRegex of FORBIDDEN_OPERATIONS) {
-      if (opRegex.test(sql)) {
-        throw new WorkerCapabilityError(
-          this.pluginActorId,
-          '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is forbidden from executing dangerous statement "${sql.trim()}"`,
-        );
-      }
-    }
+    const manifestId =
+      this.pluginId ||
+      (this.pluginActorId.startsWith('plugin:') ? this.pluginActorId.replace(/^plugin:/, '') : undefined);
+    const ownPrefix = scopeId ? pluginTablePrefix(scopeId, manifestId) : '';
+    const allowedPrefixes = listAllowedPluginTablePrefixes(scopeId, manifestId);
 
     const researchIds = researchSqlPluginIds();
     const researchAllowed = researchIds.has(pluginId) || (!!this.dbPluginId && researchIds.has(this.dbPluginId));
-    const referencedTables = referencedSqlTables(sql);
 
-    const ddlMatch =
-      /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
-    if (ddlMatch) {
-      const table = ddlMatch[2]!;
-      if (!tableAllowed(table, ownPrefix, researchAllowed, sql)) {
-        throw new WorkerCapabilityError(
-          this.pluginActorId,
-          '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is not permitted to perform DDL on table "${table}"`,
-        );
-      }
-    }
-
-    for (const table of referencedTables) {
-      if (!tableAllowed(table, ownPrefix, researchAllowed, sql)) {
-        throw new WorkerCapabilityError(
-          this.pluginActorId,
-          '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is not permitted to access table "${table}" ` +
-            `(仅允许 ${ownPrefix || '<无>'} 命名空间)`,
-        );
-      }
+    try {
+      assertPluginSqlAllowed({
+        sql,
+        ownPrefix,
+        allowedPrefixes,
+        researchAllowed,
+      });
+    } catch (err: any) {
+      const msg = err.message || String(err);
+      const formatted = msg.startsWith('Worker plugin is not permitted')
+        ? msg.replace('Worker plugin', `Worker plugin "${pluginId}"`)
+        : `Worker plugin "${pluginId}": ${msg}`;
+      throw new WorkerCapabilityError(
+        this.pluginActorId,
+        '@openlearn/core:IDatabase',
+        formatted,
+      );
     }
   }
 }
@@ -1110,29 +1093,4 @@ function researchSqlPluginIds(env: NodeJS.ProcessEnv = process.env): Set<string>
     );
   }
   return new Set(['lianyun-course']);
-}
-
-function referencedSqlTables(sql: string): Set<string> {
-  const referencedTables = new Set<string>();
-  for (const re of [
-    /\bFROM\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-    /\bINTO\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-    /\bUPDATE\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-    /\bJOIN\s+["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-    /\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/gi,
-  ]) {
-    for (const match of sql.matchAll(re)) referencedTables.add(match[1]!);
-  }
-  return referencedTables;
-}
-
-function tableAllowed(table: string, ownPrefix: string, researchAllowed: boolean, sql: string): boolean {
-  const name = table.toLowerCase();
-  if (ownPrefix && isSafePluginTablePrefix(ownPrefix) && name.startsWith(ownPrefix.toLowerCase())) return true;
-  if (name === 'plugin_migrations') return true;
-  if (researchAllowed && name.startsWith('plugin_research_')) return true;
-  if (name === 'sqlite_master') {
-    return /^\s*select\b/i.test(sql) && !!ownPrefix && sql.includes(ownPrefix);
-  }
-  return false;
 }

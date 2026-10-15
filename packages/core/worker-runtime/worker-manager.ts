@@ -133,9 +133,7 @@ export function computeAllowedWorkerTokens(manifest?: Manifest, requestedTokens?
       allDeclared.filter((d): d is string => typeof d === 'string').map(normalizeDepEntry),
     );
     const hasPointsDep = POINTS_SERVICE_TOKENS.some((t) => normalizedDeclared.has(normalizeDepEntry(t)));
-    const hasPointsCap = caps.some(
-      (c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:')),
-    );
+    const hasPointsCap = caps.some((c) => typeof c === 'string' && (c === 'points' || c.startsWith('points:')));
 
     if (hasPointsDep || hasPointsCap) {
       for (const t of POINTS_SERVICE_TOKENS) allowed.add(t);
@@ -752,7 +750,7 @@ export class WorkerManager {
       manifestId: manifest.id,
       serviceTokens: allowedTokens,
       pluginDir: resolvedPluginDir,
-      tablePrefix: pluginTablePrefix(pluginId),
+      tablePrefix: pluginTablePrefix(pluginId, manifest.id),
       approvedNetHosts,
     };
 

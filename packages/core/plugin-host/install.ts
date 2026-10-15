@@ -18,7 +18,7 @@ import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
 import { resolvePluginExecutionMode } from './execution-policy.js';
 import { clearPluginGrants } from './plugin-grants.js';
-import { isSafePluginTablePrefix, pluginTablePrefix } from './plugin-tables.js';
+import { isSafePluginTablePrefix, pluginTablePrefix, listAllowedPluginTablePrefixes } from './plugin-tables.js';
 import { clearPublicRouteApprovals } from './public-routes.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import { checkMissingDeps } from './dependency-resolver.js';
@@ -293,13 +293,23 @@ export abstract class PluginHostInstall extends PluginHostReload {
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(pluginId);
     clearPublicRouteApprovals(this.db, [pluginId, manifestId]);
-    clearPluginGrants(this.db, [pluginId, manifestId]);
+    // 建表与删表统一使用复合前缀；同时清掉该插件相关的历史合法前缀表：
+    // pluginTablePrefix(pluginId) 与 pluginTablePrefix(manifestId)
+    const otherPluginSharingManifest = this.db
+      .prepare('SELECT id FROM plugins WHERE id != ? AND manifest LIKE ?')
+      .get(pluginId, `%"id":"${manifestId}"%`);
 
-    // 建表与删表用同一个安装主键；同时清掉旧版按 manifest id 留下的表。
-    const dropped = this.dropPluginTables(pluginTablePrefix(pluginId));
-    const legacyDropped = manifestId !== pluginId ? this.dropPluginTables(pluginTablePrefix(manifestId)) : 0;
-    if (dropped + legacyDropped > 0) {
-      console.log(`[PluginHost] Dropped ${dropped + legacyDropped} plugin tables for "${pluginId}"`);
+    const prefixes = listAllowedPluginTablePrefixes(pluginId, manifestId, true);
+    let totalDropped = 0;
+    for (const prefix of prefixes) {
+      // 若仍有同 manifestId 的兄弟插件已安装，保留旧前缀避免误删
+      if (otherPluginSharingManifest && prefix === pluginTablePrefix(manifestId)) {
+        continue;
+      }
+      totalDropped += this.dropPluginTables(prefix);
+    }
+    if (totalDropped > 0) {
+      console.log(`[PluginHost] Dropped ${totalDropped} plugin tables for "${pluginId}"`);
     }
 
     // 4b. 撤销插件能力（与 T-04-20 等价的兜底）
