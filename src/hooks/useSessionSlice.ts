@@ -117,6 +117,9 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
   } = sessionBootstrapData;
 
   const students = useAppStore((s) => s.students);
+  // 订阅 dataVersion：loadClasses / loadStudents 自增，保证下游重渲染。
+  const dataVersion = useAppStore((s) => s.dataVersion);
+  void dataVersion;
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
 
   // ── C1-R2d: 学生视图收口（liveClassFocusLocked 锁定期间强制跟随教师步调）──
