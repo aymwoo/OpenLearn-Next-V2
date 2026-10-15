@@ -518,7 +518,7 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     expect(installSrc).toContain('pluginTablePrefix(manifestId)');
   });
 
-  it('一键更新不要求风险确认；会话桥放行用子串匹配', () => {
+  it('一键更新要求风险确认与产物哈希；会话桥已改为精确匹配（PL-12 已在 main 关闭）', () => {
     const routes = fs.readFileSync(path.join(REPO_ROOT, 'server/routes/plugins.ts'), 'utf8');
     const start = routes.indexOf("app.post('/api/plugins/:id(*)/one-click-update'");
     const end = routes.indexOf('app.get', start + 10);
@@ -527,12 +527,13 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     expect(body).toContain('integrity');
 
     const gateway = fs.readFileSync(path.join(REPO_ROOT, 'server/routes/plugin-api-gateway.ts'), 'utf8');
-    expect(gateway).toContain("r.includes('IAuthSessionBridgeService')");
-    const fakeRequires = ['@evil/pkg:NotReallyIAuthSessionBridgeServiceX'];
-    expect(fakeRequires.some((item) => item.includes('IAuthSessionBridgeService'))).toBe(true);
+    // PL-12 已由 #48 关闭：子串匹配换成 parseRequiresEntry().tokenName 全等，仿冒声明不再放行。
+    expect(gateway).not.toContain("r.includes('IAuthSessionBridgeService')");
+    expect(gateway).toContain('parseRequiresEntry');
+    expect(gateway).toContain('tokenName');
   });
 
-  it('远程前端进沙箱 iframe，/plugins 需要会话；开发面板的 new Function 仍是 PL-15', () => {
+  it('远程前端进沙箱 iframe，/plugins 需要会话；开发面板已改为静态解析（PL-15 已在 main 关闭）', () => {
     const host = fs.readFileSync(path.join(REPO_ROOT, 'src/plugin-host/plugin-host.ts'), 'utf8');
     const remoteStart = host.indexOf('async activateRemotePlugin');
     const remoteEnd = host.indexOf('async activatePlugin', remoteStart);
@@ -546,7 +547,8 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
       path.join(REPO_ROOT, 'src/components/plugin-center/utils/pluginCenterUtils.ts'),
       'utf8',
     );
-    expect(dev).toContain('new Function');
+    // PL-15 已由 #42 关闭：开发面板改为静态解析 Manifest，不再用 new Function 执行源码。
+    expect(dev).not.toContain('new Function');
     const server = fs.readFileSync(path.join(REPO_ROOT, 'server.ts'), 'utf8');
     expect(server).toContain("app.use(\n    '/plugins'");
     expect(server).toContain('getValidSession(token)');
