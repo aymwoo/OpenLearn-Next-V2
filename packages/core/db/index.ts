@@ -9,7 +9,7 @@ import bcrypt from 'bcryptjs';
 import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './migrator.js';
 import { applyStartupDataMigrations } from './class-passcode-crypto.js';
 import { purgeExpiredEvents } from './event-retention.js';
-import { logEncryptionKeyStartupWarning } from '../di/api-key-crypto.js';
+import { encryptStoredPlaintextApiKeys, logEncryptionKeyStartupWarning } from '../di/api-key-crypto.js';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -173,12 +173,18 @@ export function initializeDatabase(instance: Database.Database): void {
     const migrationsDir = getDefaultMigrationsDir();
     const migrations = loadMigrationsFromDirectory(migrationsDir);
     if (migrations.length === 0) {
-      throw new Error(
-        `[DB SSOT] FATAL: 迁移目录 ${migrationsDir} 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`,
-      );
+      throw new Error(`[DB SSOT] FATAL: 迁移目录 ${migrationsDir} 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`);
     }
     runMigrations(instance, migrations);
     applyStartupDataMigrations(instance);
+    // 结构迁移完成、对外提供解密之前：把历史明文 API Key 密封。
+    // 逐行提交，崩溃后下次启动会补上剩余明文。
+    const apiKeyMigration = encryptStoredPlaintextApiKeys(instance);
+    if (apiKeyMigration.updated > 0) {
+      console.log(
+        `[Migration] 已加密 ${apiKeyMigration.updated} 条仍为明文的 AI Provider API Key（跳过已是密文 ${apiKeyMigration.skipped} 条）`,
+      );
+    }
     if (!process.env.VITEST) logEncryptionKeyStartupWarning();
     console.log(`[DB SSOT] 迁移已就绪（${migrations.length} 个文件，目录 ${migrationsDir}）`);
   } catch (err) {

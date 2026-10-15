@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { AIService } from '../ai-service.js';
+import { encryptApiKey } from '../api-key-crypto.js';
 
 describe('AIService', () => {
   let db: Database.Database;
@@ -43,7 +44,7 @@ describe('AIService', () => {
     // Insert a test provider into the in-memory DB
     db.prepare(
       'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run('p1', 'test-provider', 'https://api.test.com', 'key123', 'gpt-4', Date.now(), Date.now());
+    ).run('p1', 'test-provider', 'https://api.test.com', encryptApiKey('key123'), 'gpt-4', Date.now(), Date.now());
 
     // Mock global fetch to return a fake provider response
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
