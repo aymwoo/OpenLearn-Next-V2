@@ -149,6 +149,9 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
   const setLessons = useAppStore((s) => s.setLessons);
   const students = useAppStore((s) => s.students);
+  // 订阅 dataVersion：loadClasses / loadStudents 自增，保证下游重渲染。
+  const dataVersion = useAppStore((s) => s.dataVersion);
+  void dataVersion;
 
   // ── C1-R2d: 学生域 hooks ─────────────────────────────────────────────────
   const studentOpsData = useStudentOps({

@@ -15,6 +15,20 @@ export interface ClassSlice {
   classAssignmentsMap: Record<string, any[]>;
   classProgressMap: Record<string, any>;
   classSeats: { lab_id: string | null; seats: any[] };
+  /**
+   * 班级/学生数据刷新计数器。
+   *
+   * 每次 `loadClasses` / `loadStudents` 完成后自增 1。设计上供
+   * `useLessonsSlice` 这类聚合 hook 订阅 —— 即便 `classes` / `students`
+   * 数组在某些边界情况下被 Zustand 浅比较判定为未变化（例如接口
+   * 短暂返回与上一次完全相同的引用），自增也能强制消费方重渲染。
+   *
+   * 历史上「导入学生名册后必须手动刷新页面才能看到新班级」就是这个
+   * 信号丢失：bulkImportService 调用了 load，但 appData 没变。
+   * 引入 dataVersion 后，appData 必变 → AppDataProvider 必重渲 →
+   * ClassesView 必重渲。
+   */
+  dataVersion: number;
 
   setClasses: (classes: ClassType[]) => void;
   setStudents: (students: StudentType[]) => void;
@@ -43,6 +57,7 @@ export const createClassSlice: StateCreator<ClassSlice, [], [], ClassSlice> = (s
   classAssignmentsMap: {},
   classProgressMap: {},
   classSeats: { lab_id: null, seats: [] },
+  dataVersion: 0,
 
   setClasses: (classes) => set({ classes }),
   setStudents: (students) => set({ students }),
@@ -68,7 +83,10 @@ export const createClassSlice: StateCreator<ClassSlice, [], [], ClassSlice> = (s
     try {
       const { ok, data } = await getClasses();
       if (ok) {
-        set({ classes: listFromEnvelope<ClassType>(data) });
+        set((s) => ({
+          classes: listFromEnvelope<ClassType>(data),
+          dataVersion: s.dataVersion + 1,
+        }));
       }
     } catch (e) {
       console.warn('Failed to fetch classes', e);
@@ -79,7 +97,10 @@ export const createClassSlice: StateCreator<ClassSlice, [], [], ClassSlice> = (s
     try {
       const { ok, data } = await getStudents();
       if (ok) {
-        set({ students: listFromEnvelope<StudentType>(data) });
+        set((s) => ({
+          students: listFromEnvelope<StudentType>(data),
+          dataVersion: s.dataVersion + 1,
+        }));
       }
     } catch (e) {
       console.warn('Failed to fetch students', e);

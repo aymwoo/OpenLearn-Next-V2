@@ -69,6 +69,12 @@ export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, 
   const setClasses = useAppStore((s) => s.setClasses);
   const students = useAppStore((s) => s.students);
   const setStudents = useAppStore((s) => s.setStudents);
+  // 订阅 dataVersion：loadClasses / loadStudents 完成后自增，
+  // 保证 classes / students 数组在边界场景下被浅比较「判定为未变」时，
+  // useAppComposer 仍会重新生成 appData 引用，AppDataProvider → ClassesView
+  // 仍会重渲染。详见 src/store/slices/classSlice.ts 中 dataVersion 注释。
+  const dataVersion = useAppStore((s) => s.dataVersion);
+  void dataVersion;
 
   // ── Hook: 机房座位与排课管理 ──
   const labAndScheduleData = useLabAndSchedule();

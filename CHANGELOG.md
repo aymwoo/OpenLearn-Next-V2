@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **班级/学生名册导入后页面自动刷新**。以前教师通过 ImportModal 上传 CSV 完成后，必须手动刷新页面才能在 ClassesView 看到新增的班级与学生。`bulkImportService` 已经调用了 `fetchClasses()` / `fetchStudents()`，但 `classSlice` 的 `set({ classes })` 之后 `useAppStore` 订阅在某些边界场景下被浅比较判定为未变化，整条 `useAppComposer → appData → AppDataProvider → ClassesView` 重渲染链路不触发。`classSlice` 引入 `dataVersion` 自增计数器：`loadClasses` / `loadStudents` 完成后 `dataVersion+1`；`useLessonsSlice` / `useClassroomSlice` / `useSessionSlice` 均订阅 `dataVersion`，从而在数组引用未变化时仍强制 `appData` 引用更新。导入完成后 ClassesView 立即看到新班级与新学生。
 - **会话桥 `requires` 精确匹配**。插件网关下发 `edu_os_token` 前，用与宿主相同的 `parseRequiresEntry` 去掉版本后缀，再要求 Token 全名等于 `@openlearn/core:IAuthSessionBridgeService`。只包含该名字子串的声明（例如 `NotReallyIAuthSessionBridgeServiceX`）不再获得 `Set-Cookie`。声明 `@openlearn/core:IAuthSessionBridgeService@^1.0.0` 的插件行为不变。
 
 - **从 v0.6.1 升级时，迁移前快照失败会中止，更新的库也不会在旧二进制上被当成就绪**。非测试进程里 `VACUUM INTO` 失败会在应用 SQL 前抛错。`/health/ready` 发现 `_migrations` 含有磁盘迁移清单里没有的名字时返回 503，名字只写日志。备份校验同时要求 `lessons` 与 `_migrations`。`duplicate column name` 仍会被忽略，校验和算法不变。
