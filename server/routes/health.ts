@@ -1,9 +1,22 @@
 import type { Express, Request, Response, NextFunction } from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
-import { checkReadiness, livenessBody, readinessBody } from '../../packages/core/observability/health.js';
-import { renderPrometheusMetrics } from '../../packages/core/observability/metrics.js';
+import {
+  checkReadiness,
+  listMigrationNames,
+  livenessBody,
+  readinessBody,
+} from '../../packages/core/observability/health.js';
+import {
+  OPERATIONAL_GAUGE_CACHE_MS,
+  OPERATIONAL_GAUGE_UNKNOWN,
+  renderPrometheusMetrics,
+  takeOperationalGaugeSample,
+  type OperationalGaugeCacheEntry,
+  type OperationalGaugeSample,
+} from '../../packages/core/observability/metrics.js';
 import { PLATFORM_VERSION } from '../../packages/core/version.js';
-import { getStorageDir } from '../utils/paths.js';
+import { getBackupsDir, getStorageDir } from '../utils/paths.js';
 import { requireAuth } from '../middleware/auth.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
@@ -15,6 +28,87 @@ export interface HealthRoutesOptions {
   pingDatabase?: () => void;
   getAppliedMigrations?: () => string[];
   metricsToken?: string;
+  /** 备份目录。缺省为 `getBackupsDir()`（`BACKUP_DIR` 或数据目录下的 `backups`）。 */
+  backupDir?: string;
+  /** `events` 行数。缺省执行 `SELECT COUNT(*) FROM events`。 */
+  countEvents?: () => number;
+  /** 运维 gauge 缓存毫秒数。缺省 15000。`0` 表示每次抓取都重新查询。 */
+  operationalGaugeTtlMs?: number;
+}
+
+export interface OperationalGaugeQuery {
+  migrationsDir: string;
+  backupDir: string;
+  appliedMigrations: () => string[];
+  countEvents: () => number;
+  now?: number;
+}
+
+function asUnknownGauge(value: number): number {
+  if (!Number.isFinite(value)) return OPERATIONAL_GAUGE_UNKNOWN;
+  return Math.trunc(value);
+}
+
+function countPendingMigrations(migrationsDir: string, appliedMigrations: () => string[]): number {
+  const expected = listMigrationNames(migrationsDir);
+  if (!expected) return OPERATIONAL_GAUGE_UNKNOWN;
+  let applied: string[];
+  try {
+    applied = appliedMigrations();
+  } catch {
+    return OPERATIONAL_GAUGE_UNKNOWN;
+  }
+  const have = new Set(applied);
+  return expected.filter((name) => !have.has(name)).length;
+}
+
+/** 备份目录里最新普通文件的年龄（秒）。目录不存在、没有文件、或读不出来时为 -1。不返回路径。 */
+function newestBackupAgeSeconds(backupDir: string, now: number): number {
+  let names: string[];
+  try {
+    if (!fs.existsSync(backupDir)) return OPERATIONAL_GAUGE_UNKNOWN;
+    names = fs.readdirSync(backupDir);
+  } catch {
+    return OPERATIONAL_GAUGE_UNKNOWN;
+  }
+
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const name of names) {
+    try {
+      const stat = fs.statSync(path.join(backupDir, name));
+      if (!stat.isFile()) continue;
+      if (stat.mtimeMs > newestMs) newestMs = stat.mtimeMs;
+    } catch {
+      // 单个条目读失败时跳过，不把路径或错误文本写进指标。
+    }
+  }
+  if (!Number.isFinite(newestMs)) return OPERATIONAL_GAUGE_UNKNOWN;
+  return Math.max(0, Math.floor((now - newestMs) / 1000));
+}
+
+function countEventRows(countEvents: () => number): number {
+  try {
+    return asUnknownGauge(countEvents());
+  } catch {
+    return OPERATIONAL_GAUGE_UNKNOWN;
+  }
+}
+
+/** 采集三项运维 gauge。单项失败互不影响，失败值是 -1，不携带路径或错误文本。 */
+export function collectOperationalGaugeSample(query: OperationalGaugeQuery): OperationalGaugeSample {
+  const now = query.now ?? Date.now();
+  return {
+    migrationsPending: countPendingMigrations(query.migrationsDir, query.appliedMigrations),
+    backupAgeSeconds: newestBackupAgeSeconds(query.backupDir, now),
+    eventsRows: countEventRows(query.countEvents),
+  };
+}
+
+function defaultCountEvents(): number {
+  const row = kernelContainer.db.prepare('SELECT COUNT(*) AS n FROM events').get() as
+    { n: number | bigint } | undefined;
+  if (!row) return OPERATIONAL_GAUGE_UNKNOWN;
+  return Number(row.n);
 }
 
 /**
@@ -25,6 +119,10 @@ export function registerHealthRoutes(app: Express, options?: HealthRoutesOptions
   const platformVersion = options?.platformVersion ?? PLATFORM_VERSION;
   const migrationsDir = options?.migrationsDir ?? path.join(process.cwd(), 'migrations');
   const storageDir = options?.storageDir ?? getStorageDir();
+  const backupDir = options?.backupDir ?? getBackupsDir();
+  const countEvents = options?.countEvents ?? defaultCountEvents;
+  const operationalGaugeTtlMs = options?.operationalGaugeTtlMs ?? OPERATIONAL_GAUGE_CACHE_MS;
+  let gaugeCache: OperationalGaugeCacheEntry | null = null;
 
   const pingDb =
     options?.pingDatabase ??
@@ -81,9 +179,24 @@ export function registerHealthRoutes(app: Express, options?: HealthRoutesOptions
       requireAuth('administrator')(req, res, next);
     },
     (_req: Request, res: Response) => {
+      const now = Date.now();
+      const cached = takeOperationalGaugeSample(
+        gaugeCache,
+        now,
+        () =>
+          collectOperationalGaugeSample({
+            migrationsDir,
+            backupDir,
+            appliedMigrations: getMigrations,
+            countEvents,
+            now,
+          }),
+        operationalGaugeTtlMs,
+      );
+      gaugeCache = cached;
       res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      res.send(renderPrometheusMetrics());
+      res.send(renderPrometheusMetrics(now, cached.sample));
     },
   );
 }

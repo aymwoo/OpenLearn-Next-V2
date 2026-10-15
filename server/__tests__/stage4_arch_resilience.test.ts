@@ -225,6 +225,9 @@ describe('Stage 4 Server Architecture & Resilience Suite', () => {
       const text = await validRes.text();
       expect(typeof text).toBe('string');
       expect(text.length).toBeGreaterThan(0);
+      expect(text).toContain('openlearn_migrations_pending');
+      expect(text).toContain('openlearn_backup_age_seconds');
+      expect(text).toContain('openlearn_events_rows');
     });
   });
 
