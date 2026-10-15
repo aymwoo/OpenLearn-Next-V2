@@ -16,11 +16,13 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2, Puzzle } from 'lucide-react';
+import { Loader2, Puzzle, ExternalLink } from 'lucide-react';
 import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { PluginIconRenderer } from '../components/PluginIconRenderer';
+import { openTeacherTabInNewTab } from '../utils/teacherTabHash';
+import { translations } from '../i18n';
 import {
   recordPluginCrash,
   resetPluginCrash,
@@ -655,6 +657,8 @@ export function ExtensionPointRenderer({
   // This guarantees pixel-perfect styling consistency with system NavButton.
   if (slot === 'teacher.tab' && slotProps?.renderType === 'button') {
     const sortedExtensions = [...extensions].sort((a, b) => (a.position ?? 100) - (b.position ?? 100));
+    const lang: 'zh' | 'en' = (slotProps?.lang as 'zh' | 'en') ?? 'zh';
+    const t = translations[lang];
     return (
       <>
         {sortedExtensions.map((ext) => {
@@ -663,21 +667,47 @@ export function ExtensionPointRenderer({
           const label = (ext as any).title || ext.label || ext.id;
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
+          const ariaNewTab =
+            lang === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
+          const sanitizedId = tabValue.replace(/[^a-zA-Z0-9_-]/g, '_');
           return (
-            <button
+            <div
               key={`${ext.pluginId}/${ext.id}`}
-              onClick={() => slotProps?.setTeacherTab?.(tabValue)}
-              id={`nav_btn_${tabValue.replace(/[^a-zA-Z0-9_-]/g, '_')}`}
-              className={`flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium rounded-xl cursor-pointer ${
+              className={`group relative flex items-center rounded-xl ${
                 isActive
                   ? 'bg-primary-theme-light text-primary-theme font-bold'
                   : 'text-muted hover:bg-surface-secondary hover:text-main'
-              } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : ''}`}
+              } ${slotProps?.mainNavCollapsed ? 'justify-center' : ''}`}
               title={label}
             >
-              <PluginIconRenderer icon={icon} size={18} className="shrink-0" alt={label} />
-              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => slotProps?.setTeacherTab?.(tabValue)}
+                id={`nav_btn_${sanitizedId}`}
+                className={`flex items-center gap-2.5 pl-2.5 pr-8 py-2 flex-1 min-w-0 text-sm font-medium ${
+                  isActive ? 'font-bold' : ''
+                } ${slotProps?.mainNavCollapsed ? 'justify-center px-2 pr-8' : ''}`}
+              >
+                <PluginIconRenderer icon={icon} size={18} className="shrink-0" alt={label} />
+                <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
+              </button>
+              {!slotProps?.mainNavCollapsed && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openTeacherTabInNewTab(tabValue);
+                  }}
+                  id={`nav_btn_${sanitizedId}_newtab`}
+                  aria-label={ariaNewTab}
+                  title={t.openInNewTab}
+                  data-testid={`nav_newtab_${sanitizedId}`}
+                  className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-theme/50 transition-opacity text-current"
+                >
+                  <ExternalLink size={12} className="shrink-0" />
+                </button>
+              )}
+            </div>
           );
         })}
       </>

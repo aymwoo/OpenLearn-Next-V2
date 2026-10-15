@@ -61,6 +61,7 @@ export const translations = {
     students: '学生管理',
     noClasses: '暂无班级',
     noStudents: '暂无学生',
+    openInNewTab: '在新标签页打开',
   },
   en: {
     // Phase 9: Extension Points & Plugin Migration
@@ -124,5 +125,6 @@ export const translations = {
     students: 'Students',
     noClasses: 'No classes found',
     noStudents: 'No students found',
+    openInNewTab: 'Open in new tab',
   },
 };

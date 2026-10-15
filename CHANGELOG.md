@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **左侧导航「在新标签页打开」**：教学工具 / 系统管理 / 帮助支持 / 扩展应用四组共 8 个内置导航项（课程管理 / 互动课堂 / 班级管理 / 课表管理 / 机房管理 / 插件中心 / 管理后台 / 帮助文档）以及插件通过 `teacher.tab` 扩展点注册的动态导航项，悬停时显示 ↗ 按钮，点击在浏览器新标签页打开该 tab，源 tab 不切换焦点。新 tab 启动时通过 hash 路由自动定位到目标 tab（`useSessionSlice` 在挂载时读 `window.location.hash`）。`tabToHash` / `hashToTab` 从 `useSessionSlice` 抽出到 `src/utils/teacherTabHash.ts`，新增 `buildTeacherTabUrl` 与 `openTeacherTabInNewTab`（用 `noopener,noreferrer`）。Admin Center（管理员专用）在原文件内联渲染也获得同样的 ↗ 按钮。测试覆盖 tab ↔ hash 双向编解码、URL 拼接（保留 `pathname` / `search`）与 `window.open` 调用。
 - **备课编辑器扩展槽收敛**：`SegmentEditorCard` 教学形态下拉改为消费 `getAllSegmentTypes()` / `useAllSegmentTypes()`，插件注册的自定义环节类型真正进入 UI；宿主暴露 `ctx.ui.registerSegmentType` / `unregisterSegmentType`（停用时按 `pluginId` 自动回收）；`manifest.contributes['editor.palette_item']` 与含 `labelZh`+`labelEn` 的 `editor.timeline_segment` 声明式贡献分别桥接到 `paletteItemRegistry` 与环节类型注册表，与命令式 API 对齐。
 - **`live_class` 起始门户顶部挂「下一节课」**：教师进入 portal 时拉取今日 / 明日 / 最多 7 天的 \`/api/schedules/today?date=YYYY-MM-DD\`，按 \`time_slot\` 起始时间挑出最近一节未开始的课，显示相对日（今天 / 明天 / +N 天）、时间段与班级。点击顶部标题预选该课的 \`lessonId\` 与 \`classId\`。接口 5xx 或 7 天都空时降级为「今日课表尚未设置」并提供「前往课表设置」入口（需要 \`onGoToTimetable\` 回调，由 \`LiveClassroomView\` 写入 \`setTeacherTab('timetable')\`）。
 - **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
