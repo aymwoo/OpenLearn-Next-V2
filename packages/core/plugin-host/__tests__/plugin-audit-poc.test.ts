@@ -549,7 +549,8 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     );
     // PL-15 已由 #42 关闭：开发面板改为静态解析 Manifest，不再用 new Function 执行源码。
     expect(dev).not.toContain('new Function');
-    const server = fs.readFileSync(path.join(REPO_ROOT, 'server.ts'), 'utf8');
+    // 归一化行尾：Windows 检出为 CRLF，直接匹配 `\n` 会误判。
+    const server = fs.readFileSync(path.join(REPO_ROOT, 'server.ts'), 'utf8').replace(/\r\n/g, '\n');
     expect(server).toContain("app.use(\n    '/plugins'");
     expect(server).toContain('getValidSession(token)');
     expect(server).toContain('/plugin-sandbox/frame');
