@@ -6,16 +6,7 @@ import { useStudentViewState } from './useStudentViewState';
 import { useAppStore, appStore } from '../store/appStore';
 import { useThemeStore } from '../store/themeStore';
 import { useFontSizeStore } from '../store/fontSizeStore';
-
-// ── Hash-based routing helpers ────────────────────────────────────────────
-function tabToHash(tab: string): string {
-  return '#/' + tab;
-}
-function hashToTab(hash: string): string | null {
-  const raw = hash.replace(/^#/, '');
-  if (!raw || raw === '/') return null;
-  return raw.replace(/^\//, '');
-}
+import { tabToHash, hashToTab } from '../utils/teacherTabHash';
 
 export interface SessionSliceParams {
   lang: 'zh' | 'en';

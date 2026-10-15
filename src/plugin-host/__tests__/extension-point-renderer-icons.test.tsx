@@ -54,14 +54,14 @@ describe('ExtensionPointRenderer — Custom Plugin Icons for NavigationSidebar',
       />,
     );
 
-    const btn = screen.getByRole('button', { name: /题库与测验/ });
+    const btn = container.querySelector<HTMLButtonElement>('#nav_btn_ext-exam-bank_exam-bank');
     expect(btn).toBeTruthy();
-    expect(btn.getAttribute('id')).toBe('nav_btn_ext-exam-bank_exam-bank');
+    expect(btn!.textContent).toContain('题库与测验');
 
     const svg = container.querySelector('svg.lucide-book-open');
     expect(svg).toBeTruthy();
 
-    fireEvent.click(btn);
+    fireEvent.click(btn!);
     expect(setTeacherTab).toHaveBeenCalledWith('ext-exam-bank/exam-bank');
   });
 
@@ -139,7 +139,7 @@ describe('ExtensionPointRenderer — Custom Plugin Icons for NavigationSidebar',
       component: dummyComponent(),
     });
 
-    renderWithHost(
+    const { container } = renderWithHost(
       <ExtensionPointRenderer
         slot="teacher.tab"
         slotProps={{
@@ -150,9 +150,86 @@ describe('ExtensionPointRenderer — Custom Plugin Icons for NavigationSidebar',
       />,
     );
 
-    const buttons = screen.getAllByRole('button');
-    expect(buttons[0].textContent).toContain('第一标签');
-    expect(buttons[1].textContent).toContain('第二标签');
+    const tabFirst = container.querySelector<HTMLElement>('#nav_btn_ext-one_tab-first');
+    const tabSecond = container.querySelector<HTMLElement>('#nav_btn_ext-two_tab-second');
+    expect(tabFirst?.textContent).toContain('第一标签');
+    expect(tabSecond?.textContent).toContain('第二标签');
+
+    // Each tab now also has a hover-only "open in new tab" affordance.
+    const newTabFirst = container.querySelector<HTMLElement>('#nav_btn_ext-one_tab-first_newtab');
+    const newTabSecond = container.querySelector<HTMLElement>('#nav_btn_ext-two_tab-second_newtab');
+    expect(newTabFirst).toBeTruthy();
+    expect(newTabSecond).toBeTruthy();
+    expect(newTabFirst!.getAttribute('aria-label')).toContain('第一标签');
+    expect(newTabSecond!.getAttribute('aria-label')).toContain('第二标签');
+  });
+
+  it('renders "open in new tab" affordance on each plugin teacher.tab button', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab', {
+      id: 'open-in-newtab',
+      label: '新标签页打开测试',
+      icon: 'ExternalLink',
+      pluginId: 'ext-newtab',
+      component: dummyComponent(),
+    });
+
+    const openSpy = vi.fn();
+    vi.stubGlobal('open', openSpy);
+    // jsdom's window.location.hash is read-only; provide a minimal stub.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/teacher', search: '', hash: '' },
+    });
+
+    const { container } = renderWithHost(
+      <ExtensionPointRenderer
+        slot="teacher.tab"
+        slotProps={{
+          renderType: 'button',
+          mainNavCollapsed: false,
+          teacherTab: 'dashboard',
+        }}
+      />,
+    );
+
+    const newTabBtn = container.querySelector<HTMLButtonElement>('#nav_btn_ext-newtab_open-in-newtab_newtab');
+    expect(newTabBtn).toBeTruthy();
+    expect(newTabBtn!.getAttribute('aria-label')).toBe('在新标签页打开"新标签页打开测试"');
+    expect(newTabBtn!.getAttribute('title')).toBe('在新标签页打开');
+
+    fireEvent.click(newTabBtn!);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(
+      '/teacher#/ext-newtab/open-in-newtab',
+      '_blank',
+      'noopener,noreferrer',
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it('hides "open in new tab" affordance when the sidebar is collapsed', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab', {
+      id: 'collapse-me',
+      label: '收起时不显示',
+      icon: 'Puzzle',
+      pluginId: 'ext-collapse',
+      component: dummyComponent(),
+    });
+
+    const { container } = renderWithHost(
+      <ExtensionPointRenderer
+        slot="teacher.tab"
+        slotProps={{
+          renderType: 'button',
+          mainNavCollapsed: true,
+          teacherTab: 'dashboard',
+        }}
+      />,
+    );
+
+    const newTabBtn = container.querySelector<HTMLElement>('#nav_btn_ext-collapse_collapse-me_newtab');
+    expect(newTabBtn).toBeNull();
   });
 
   it('renders custom icon in class.tab button slot', () => {

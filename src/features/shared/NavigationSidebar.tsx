@@ -13,9 +13,18 @@ import {
   ChevronLeft,
   ChevronDown,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import { openTeacherTabInNewTab } from '../../utils/teacherTabHash';
+import { translations } from '../../i18n';
+import type { Language } from '../../i18n';
+
+/** Narrow an untyped lang string to the i18n literal union, defaulting to 'zh'. */
+function narrowLang(lang: string | undefined): Language {
+  return lang === 'en' ? 'en' : 'zh';
+}
 import type { SessionType, ScheduleType } from '../../store/appStore';
 import { useAppStore } from '../../store/appStore';
 import { useOptionalAppData } from '../../context/AppDataContext';
@@ -133,20 +142,20 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
               icon={BookOpen}
               label={lang === 'zh' ? '课程管理' : 'Courses'}
               tab="courses"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
             <NavButton
               icon={Presentation}
               label={lang === 'zh' ? '互动课堂' : 'Live Class'}
               tab="live_class"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
               highlight
             />
             <NavButton
               icon={Users}
               label={lang === 'zh' ? '班级管理' : 'Classes & Students'}
               tab="classes"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
           </div>
         )}
@@ -166,37 +175,58 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
               icon={CalendarIcon}
               label={lang === 'zh' ? '课表管理' : 'Timetable Routine'}
               tab="timetable"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
             <NavButton
               icon={LayoutTemplate}
               label={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}
               tab="computer_labs"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
             <NavButton
               icon={Puzzle}
               label={lang === 'zh' ? '插件中心' : 'App Store / Plugins'}
               tab="plugins"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
 
             {session?.subRole === 'administrator' && (
-              <button
-                onClick={() => setTeacherTab('admin_directory')}
-                id="nav_btn_admin_directory"
-                className={`flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-indigo-100/80 dark:border-indigo-950/40 rounded-xl ${
+              <div
+                className={`group relative flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium text-indigo-700 border border-indigo-100/80 dark:border-indigo-950/40 rounded-xl ${
                   teacherTab === 'admin_directory'
                     ? 'bg-indigo-50/70 border-indigo-200'
-                    : 'bg-slate-50/50 dark:bg-slate-900/30'
+                    : 'bg-slate-50/50 dark:bg-slate-900/30 hover:bg-indigo-50'
                 } ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
                 title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
               >
-                <Shield size={18} className="shrink-0 text-indigo-600 animate-pulse" />
-                <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850 truncate'}>
-                  {lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setTeacherTab('admin_directory')}
+                  id="nav_btn_admin_directory"
+                  className={`flex items-center gap-2.5 flex-1 min-w-0 ${mainNavCollapsed ? 'justify-center px-0' : ''}`}
+                >
+                  <Shield size={18} className="shrink-0 text-indigo-600 animate-pulse" />
+                  <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850 truncate'}>
+                    {lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
+                  </span>
+                </button>
+                {!mainNavCollapsed && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTeacherTabInNewTab('admin_directory');
+                    }}
+                    id="nav_btn_admin_directory_newtab"
+                    aria-label={narrowLang(lang) === 'zh' ? '在新标签页打开"管理后台"' : 'Open "Admin Center" in a new tab'}
+                    title={translations[narrowLang(lang)].openInNewTab}
+                    data-testid="nav_newtab_admin_directory"
+                    className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/50 transition-opacity"
+                  >
+                    <ExternalLink size={12} className="shrink-0" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -216,7 +246,7 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
               <div className="flex flex-col gap-1">
                 <ExtensionPointRenderer
                   slot="teacher.tab"
-                  slotProps={{ renderType: 'button', mainNavCollapsed, teacherTab, setTeacherTab }}
+                  slotProps={{ renderType: 'button', mainNavCollapsed, teacherTab, setTeacherTab, lang }}
                 />
               </div>
             )}
@@ -238,7 +268,7 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
               icon={HelpCircle}
               label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'}
               tab="help"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed }}
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
           </div>
         )}
@@ -333,6 +363,7 @@ function NavButton({
   setTeacherTab,
   mainNavCollapsed,
   highlight,
+  lang,
 }: {
   icon: React.ElementType;
   label: string;
@@ -341,21 +372,49 @@ function NavButton({
   setTeacherTab: (t: string) => void;
   mainNavCollapsed: boolean;
   highlight?: boolean;
+  lang?: string;
 }) {
   const isActive = teacherTab === tab;
+  const langNarrow = narrowLang(lang);
+  const t = translations[langNarrow];
+  const newTabLabel =
+    langNarrow === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
   return (
-    <button
-      onClick={() => setTeacherTab(tab)}
-      id={`nav_btn_${tab}`}
-      className={`flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium rounded-xl cursor-pointer ${
+    <div
+      className={`group relative flex items-center rounded-xl ${
         isActive
           ? 'bg-primary-theme-light text-primary-theme font-bold' + (highlight ? ' shadow-xs border border-theme' : '')
           : 'text-muted hover:bg-surface-secondary hover:text-main'
-      } ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
+      } ${mainNavCollapsed ? 'justify-center' : ''}`}
       title={label}
     >
-      <Icon size={18} className={`shrink-0 ${highlight && !isActive ? 'text-primary-theme' : ''}`} />
-      <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
-    </button>
+      <button
+        type="button"
+        onClick={() => setTeacherTab(tab)}
+        id={`nav_btn_${tab}`}
+        className={`flex items-center gap-2.5 pl-2.5 pr-8 py-2 flex-1 min-w-0 text-sm font-medium ${
+          isActive ? 'font-bold' : ''
+        } ${mainNavCollapsed ? 'justify-center px-2 pr-8' : ''}`}
+      >
+        <Icon size={18} className={`shrink-0 ${highlight && !isActive ? 'text-primary-theme' : ''}`} />
+        <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
+      </button>
+      {!mainNavCollapsed && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openTeacherTabInNewTab(tab);
+          }}
+          id={`nav_btn_${tab}_newtab`}
+          aria-label={newTabLabel}
+          title={t.openInNewTab}
+          data-testid={`nav_newtab_${tab}`}
+          className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-theme/50 transition-opacity text-current"
+        >
+          <ExternalLink size={12} className="shrink-0" />
+        </button>
+      )}
+    </div>
   );
 }
