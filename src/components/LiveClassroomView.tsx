@@ -58,6 +58,7 @@ import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
 import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
+import { ClassroomSessionManager, type ClassroomSessionItem } from '../features/classroom/ClassroomSessionManager';
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
@@ -195,6 +196,8 @@ export function LiveClassroomView({
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
   const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
+  /** 是否展示「课堂会话与档案管理」看板 */
+  const [showSessionManager, setShowSessionManager] = useState(false);
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
   const [entryDecisionReady, setEntryDecisionReady] = useState(!initialPortalOpen);
   /** 教师主动回到起始门户后，轮询不要再把门户关掉。 */
@@ -1394,6 +1397,31 @@ export function LiveClassroomView({
   // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
   // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
   // 有课节时先等会话结果，避免刷新后「下一节课」在班级锁定判定前被点到。
+  if (showSessionManager) {
+    return (
+      <ClassroomSessionManager
+        lessons={lessons}
+        classes={classes}
+        lang={lang}
+        addToast={addToast}
+        onBackToPortal={() => setShowSessionManager(false)}
+        onResumeSession={(session: ClassroomSessionItem) => {
+          setSelectedLesson(session.lessonId);
+          if (session.classId) setLiveClassSelectedClassId(session.classId);
+          setShowSessionManager(false);
+          setShowEntryPortal(false);
+        }}
+        onViewReport={(session: ClassroomSessionItem) => {
+          setSelectedLesson(session.lessonId);
+          if (session.classId) setLiveClassSelectedClassId(session.classId);
+          setClassroomStage('ARCHIVED_REPORT');
+          setShowSessionManager(false);
+          setShowEntryPortal(false);
+        }}
+      />
+    );
+  }
+
   if (showEntryPortal && !entryDecisionReady) {
     return (
       <div
@@ -1421,6 +1449,7 @@ export function LiveClassroomView({
         onEnterClassroom={handlePortalEnter}
         onEditLesson={handleEditLesson}
         onGoToTimetable={handleGoToTimetable}
+        onOpenSessionManager={() => setShowSessionManager(true)}
       />
     );
   }
@@ -1479,6 +1508,15 @@ export function LiveClassroomView({
             }
           >
             {lang === 'zh' ? '返回门户' : 'Back to portal'}
+          </button>
+          <button
+            type="button"
+            id="live-classroom-open-sessions"
+            onClick={() => setShowSessionManager(true)}
+            className="inline-flex items-center text-2xs font-semibold px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+            title={lang === 'zh' ? '管理课堂历史与进行中会话' : 'Manage classroom sessions'}
+          >
+            {lang === 'zh' ? '会话档案' : 'Sessions'}
           </button>
 
           {/* 课程选择与切换操作 */}
