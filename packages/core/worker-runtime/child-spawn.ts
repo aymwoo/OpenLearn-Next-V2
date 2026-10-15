@@ -28,7 +28,9 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ChildProcessTransport } from './child-transport.js';
@@ -128,22 +130,23 @@ export interface SpawnChildOptions {
 /**
  * 以子进程方式启动插件 bootstrap。
  *
- * ## 为什么用 `--input-type=module --eval` 而不是写临时文件
+ * ## 为什么把 bootstrap 写成临时 `.mjs` 文件而不是 `--eval`
  *
- * 实测三种方式（`--eval` / `--import <dataUrl>` + 空主模块 / 临时文件）都能跑通，
- * 复杂类型在 `serialization:'advanced'` 下也都存活。选择 `--eval` 的理由：
- * **不写磁盘**（临时文件会散落在系统 tmp 里，且要处理清理与并发命名）。
+ * 实测 `--eval` / `--import <dataUrl>` + 空主模块 / 临时文件三种方式都能跑通，
+ * 复杂类型在 `serialization:'advanced'` 下也都存活。**曾选用 `--eval`**（不写磁盘），
+ * 但合成后的 bootstrap 约 32KB，作为 argv 载荷时，与权限旗标拼接后总命令行长度会逼近
+ * Windows 的 32767 上限（实测 32899 → `spawn ENAMETOOLONG`，子进程激活全部失败）。
+ * 故改为写临时 `.mjs`（0600，退出即删）：argv 与 bootstrap 体积解耦，任何平台都不再触顶。
  *
- * 代价：bootstrap 全文出现在子进程的 argv 里，因而出现在 `ps` 输出中。
- * bootstrap 本身**不含密钥**（密钥只在 `__PLUGIN_WORKER_DATA` 里，且那里面
- * 只有 pluginId / token 名列表），故这个暴露面可接受。若将来 bootstrap 里
- * 出现了凭据，必须改回临时文件方案。
+ * 安全取舍：bootstrap 本身**不含密钥**（密钥只在 `__PLUGIN_WORKER_DATA` 里，且那里面
+ * 只有 pluginId / token 名列表），临时文件权限 0600 且随子进程退出删除；相比 `--eval`
+ * 反而**减少**了 bootstrap 在 `ps` / argv 中的暴露。若将来把凭据放进 bootstrap，必须复审。
  *
- * ## 权限旗标放在 `--eval` 之前
+ * ## 权限旗标放在脚本路径之前
  *
- * Node 要求权限相关旗标出现在**脚本之前**。实测把它们放在 `--eval` 之后会
+ * Node 要求权限相关旗标出现在**脚本之前**。实测把它们放在脚本参数之后会
  * 报 `bad option` 或被静默忽略，因此顺序固定为
- * `[...permissionArgs, '--input-type=module', '--eval', code]`。
+ * `[...permissionArgs, ...netGuardArgs, ...heapArgs, bootstrapFile]`。
  */
 export function spawnPluginChild(opts: SpawnChildOptions): {
   child: ChildProcess;
@@ -174,9 +177,21 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     envOverrides.OPENLEARN_PLUGIN_NET_ALLOW = (opts.data.approvedNetHosts ?? []).join(',');
   }
 
+  // ★ bootstrap 经临时文件传给子进程，**不放进 argv**。
+  //
+  // 合成后的 bootstrap 约 32KB；当它作为 `--eval` 载荷与权限旗标拼接时，总命令行长度
+  // 会逼近 Windows 的 32767 上限（实测 32899），`spawn` 直接报 `ENAMETOOLONG`，子进程
+  // 激活全失败。改用临时 `.mjs`（0600，子进程退出即删）后，argv 与 bootstrap 体积解耦，
+  // 任何平台都不会再触顶。代价：磁盘上短暂出现一份 bootstrap（不含密钥，见模块注释）。
+  const bootstrapFile = writeBootstrapTempFile(opts.bootstrapCode);
+  if (policy !== 'off') {
+    // 权限模型下，入口脚本本身也要显式放行读取。
+    permissionArgs.push(`--allow-fs-read=${bootstrapFile}`);
+  }
+
   const child = spawn(
     process.execPath,
-    [...permissionArgs, ...netGuardArgs, ...heapArgs, '--input-type=module', '--eval', opts.bootstrapCode],
+    [...permissionArgs, ...netGuardArgs, ...heapArgs, bootstrapFile],
     {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: buildMinimalEnv(opts.data, envOverrides),
@@ -188,15 +203,37 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     },
   );
 
+  const removeBootstrapFile = () => {
+    try {
+      fs.unlinkSync(bootstrapFile);
+    } catch {
+      /* 已被清理或从未落盘 */
+    }
+  };
+  child.once('exit', removeBootstrapFile);
+  child.once('error', removeBootstrapFile);
+
   const approvedHosts = new Set((opts.data.approvedNetHosts ?? []).map((host) => host.trim().toLowerCase()));
   const transport = new ChildProcessTransport(child, approvedHosts);
   const isolate = new ChildProcessIsolate(child, opts.termGraceMs ?? 0);
   return { child, transport, isolate };
 }
 
+/**
+ * 把 bootstrap 源码写到临时 `.mjs` 文件（权限 0600），供子进程以**脚本路径**方式加载。
+ *
+ * 不用 `--eval` 的原因：合成后的 bootstrap 约 32KB，作为命令行参数会与权限旗标一起
+ * 逼近 Windows 的 32767 上限（实测总长 32899 → `spawn ENAMETOOLONG`，子进程激活全失败）。
+ * 落成文件后 argv 恒定很短，与 bootstrap 体积无关。调用方负责在子进程退出后删除。
+ */
+export function writeBootstrapTempFile(code: string): string {
+  const file = path.join(os.tmpdir(), `ol-bootstrap-${crypto.randomBytes(8).toString('hex')}.mjs`);
+  fs.writeFileSync(file, code, { encoding: 'utf8', mode: 0o600 });
+  return file;
+}
+
 /** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
-export function resolveNetPreloadPath(): string {
-  const candidates: string[] = [
+export function resolveNetPreloadPath(): string {  const candidates: string[] = [
     path.resolve(process.cwd(), 'packages/core/worker-runtime/plugin-net-preload.cjs'),
     path.resolve(process.cwd(), 'dist/plugin-net-preload.cjs'),
   ];
