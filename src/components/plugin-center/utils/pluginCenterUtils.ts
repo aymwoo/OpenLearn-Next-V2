@@ -1,32 +1,15 @@
-export function parsePluginSource(codeStr: string): any {
+import { parsePluginSource as extractStaticPluginSource } from '../../../utils/pluginParsers';
+
+/**
+ * 开发面板的实时预览。界面标注为静态解析，这里只调用 pluginParsers 的提取器，
+ * 不在主线程执行编辑器文本。返回给 PluginDevPanel 的仍是 `{ manifest }`，
+ * 字段与原先求值结果里的清单一致（id、name、version、author 等）。
+ */
+export function parsePluginSource(codeStr: string) {
   if (!codeStr || typeof codeStr !== 'string') return null;
-  try {
-    const fn = new Function('exports', 'require', 'module', codeStr);
-    const exportsObj: any = {};
-    const moduleObj = { exports: exportsObj };
-
-    const mockRequire = (modName: string) => {
-      if (modName === '@openlearn/plugin-sdk') {
-        return {
-          ICommandBusServiceToken: '@openlearn/core:ICommandBusService',
-          IEventBusServiceToken: '@openlearn/core:IEventBusService',
-          IActionRegistryServiceToken: '@openlearn/core:IActionRegistryService',
-          ICapabilityServiceToken: '@openlearn/core:ICapabilityService',
-          IProcessServiceToken: '@openlearn/core:IProcessService',
-          IStorageServiceToken: '@openlearn/core:IStorageService',
-          IAIServiceToken: '@openlearn/core:IAIService',
-          IDatabaseToken: '@openlearn/core:IDatabase',
-          IPluginHostToken: '@openlearn/core:IPluginHost',
-        };
-      }
-      return {};
-    };
-
-    fn(exportsObj, mockRequire, moduleObj);
-    return moduleObj.exports.default || exportsObj.default || moduleObj.exports;
-  } catch (e) {
-    return null;
-  }
+  const extracted = extractStaticPluginSource(codeStr);
+  if (!extracted.manifest) return null;
+  return { manifest: extracted.manifest };
 }
 
 export const DEFAULT_PLUGIN = `exports.default = {
