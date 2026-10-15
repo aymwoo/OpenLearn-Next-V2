@@ -165,10 +165,54 @@ export function getDbPath(): string {
 }
 
 /**
+ * 端到端开关的两个字面量。与种子口令处的判断一致：
+ * Playwright 配置写 `1`，历史调用也可能写 `true`。
+ */
+function isPlaywrightTestFlag(value: string | undefined): boolean {
+  return value === '1' || value === 'true';
+}
+
+/**
+ * 生产进程不得带着 PLAYWRIGHT_TEST 启动。
+ *
+ * 该变量会跳过默认口令门禁，并放宽登录、写入和 AI 限流。注释要求生产环境不要设置，
+ * 但此前启动路径只读取它、不拒绝它。这里在迁移和监听之前抛出，进程不会进入服务。
+ *
+ * 只在 NODE_ENV 精确等于 `production` 时拒绝。未设置 NODE_ENV 的容器保持原行为，
+ * 避免把开发或测试进程误判为生产。Vitest（NODE_ENV=test）和 Playwright 开发服务器不受影响。
+ */
+export function assertPlaywrightTestNotInProduction(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (!isPlaywrightTestFlag(process.env.PLAYWRIGHT_TEST)) return;
+  const message =
+    '[SECURITY] FATAL: NODE_ENV=production 时禁止设置 PLAYWRIGHT_TEST=1 或 true。' +
+    '该变量会关闭默认口令门禁并放宽限流。请从生产环境的 .env 与 PM2 ecosystem 中删除 PLAYWRIGHT_TEST 后重启。';
+  console.error(message);
+  throw new Error(message);
+}
+
+/**
+ * 打包后的入口会先执行依赖初始化，再执行 server 里的 dotenv.config()。
+ * 因此模块求值时进程环境里可能还没有 .env。nextTick 排在入口同步体之后、
+ * startServer 第一次 await 恢复之前，监听尚未开始。
+ * 测试运行器会自己改环境变量，不在这里登记延迟复查，避免误伤 Vitest。
+ */
+export function armPlaywrightProductionRecheck(): void {
+  process.nextTick(() => {
+    try {
+      assertPlaywrightTestNotInProduction();
+    } catch {
+      process.exit(1);
+    }
+  });
+}
+
+/**
  * 基于 migrations/ 目录执行全量版本化迁移，并播种必要的初始超级管理员和默认提供商数据。
  * 这是数据库结构创建与升级的单一真实来源 (SSOT)。
  */
 export function initializeDatabase(instance: Database.Database): void {
+  assertPlaywrightTestNotInProduction();
   try {
     const migrationsDir = getDefaultMigrationsDir();
     const migrations = loadMigrationsFromDirectory(migrationsDir);
@@ -197,7 +241,7 @@ export function initializeDatabase(instance: Database.Database): void {
   // （PLAYWRIGHT_TEST 除外，供既有端到端套件登录）。
   try {
     const countObj = instance.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
-    const allowWellKnown = process.env.PLAYWRIGHT_TEST === '1' || process.env.PLAYWRIGHT_TEST === 'true';
+    const allowWellKnown = isPlaywrightTestFlag(process.env.PLAYWRIGHT_TEST);
     const vitestFallback = Boolean(process.env.VITEST) && !allowWellKnown;
     if (countObj && countObj.cnt === 0) {
       const adminCred = resolveSeedCredential('admin', {
@@ -308,6 +352,11 @@ applyPragmas(db);
 
 // 基于 migrations/ 执行单一来源数据库初始化
 initializeDatabase(db);
+
+// 入口的 dotenv / NODE_ENV 回落发生在本模块求值之后，这里再查一次，仍在 listen 之前。
+if (!process.env.VITEST) {
+  armPlaywrightProductionRecheck();
+}
 
 console.log('Database initialized at', dbPath);
 
