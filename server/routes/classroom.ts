@@ -423,6 +423,291 @@ export function registerClassroomRoutes(
 
   // ── 1. 课堂会话与生命周期阶段 ──────────────────────────────────────────
 
+  // 获取课堂会话列表（支持分页、按班级/课节/状态筛选、关键词搜索与互动指标聚合）
+  app.get('/api/classroom/sessions', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
+    try {
+      const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+      const pageSizeParam = String(req.query.pageSize || '20').toLowerCase();
+      const isAll = pageSizeParam === 'all';
+      const pageSize = isAll ? 1000 : Math.max(1, Math.min(100, parseInt(pageSizeParam, 10) || 20));
+      const offset = (page - 1) * pageSize;
+
+      const { classId, lessonId, stage, status, search } = req.query;
+
+      const conditions: string[] = [];
+      const params: any[] = [];
+
+      if (classId && typeof classId === 'string' && classId.trim()) {
+        conditions.push('cs.class_id = ?');
+        params.push(classId.trim());
+      }
+
+      if (lessonId && typeof lessonId === 'string' && lessonId.trim()) {
+        conditions.push('cs.lesson_id = ?');
+        params.push(lessonId.trim());
+      }
+
+      if (stage && typeof stage === 'string' && stage.trim() && stage !== 'all') {
+        conditions.push('cs.stage = ?');
+        params.push(stage.trim());
+      } else if (status === 'active') {
+        conditions.push('cs.stage != ?');
+        params.push(ARCHIVED_REPORT_STAGE);
+      } else if (status === 'archived') {
+        conditions.push('cs.stage = ?');
+        params.push(ARCHIVED_REPORT_STAGE);
+      }
+
+      if (search && typeof search === 'string' && search.trim()) {
+        const kw = `%${search.trim()}%`;
+        conditions.push('(l.title LIKE ? OR c.name LIKE ? OR cs.id LIKE ?)');
+        params.push(kw, kw, kw);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const countSql = `
+          SELECT COUNT(*) AS total
+          FROM classroom_sessions cs
+          LEFT JOIN lessons l ON cs.lesson_id = l.id
+          LEFT JOIN classes c ON cs.class_id = c.id
+          ${whereClause}
+        `;
+      const totalRow = db.prepare(countSql).get(...params) as { total: number } | undefined;
+      const total = totalRow?.total ?? 0;
+
+      const listSql = `
+          SELECT 
+            cs.id,
+            cs.lesson_id,
+            cs.class_id,
+            cs.teacher_id,
+            cs.stage,
+            cs.current_segment_id,
+            cs.checkin_code,
+            cs.focus_mode,
+            cs.started_at,
+            cs.ended_at,
+            cs.created_at,
+            cs.teaching_mode_id,
+            l.title AS lesson_title,
+            c.name AS class_name
+          FROM classroom_sessions cs
+          LEFT JOIN lessons l ON cs.lesson_id = l.id
+          LEFT JOIN classes c ON cs.class_id = c.id
+          ${whereClause}
+          ORDER BY cs.created_at DESC
+          LIMIT ? OFFSET ?
+        `;
+
+      const rows = db.prepare(listSql).all(...params, pageSize, offset) as any[];
+
+      const sessionIds = rows.map((r) => r.id);
+      const statsMap = new Map<string, { pollCount: number; exitTicketCount: number; feedCount: number }>();
+
+      if (sessionIds.length > 0) {
+        const placeholders = sessionIds.map(() => '?').join(',');
+
+        try {
+          const pollCounts = db
+            .prepare(
+              `SELECT session_id, COUNT(*) AS count FROM classroom_quick_polls WHERE session_id IN (${placeholders}) GROUP BY session_id`,
+            )
+            .all(...sessionIds) as { session_id: string; count: number }[];
+          for (const r of pollCounts) {
+            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
+            cur.pollCount = r.count;
+            statsMap.set(r.session_id, cur);
+          }
+        } catch (_) {}
+
+        try {
+          const ticketCounts = db
+            .prepare(
+              `SELECT session_id, COUNT(*) AS count FROM classroom_exit_tickets WHERE session_id IN (${placeholders}) GROUP BY session_id`,
+            )
+            .all(...sessionIds) as { session_id: string; count: number }[];
+          for (const r of ticketCounts) {
+            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
+            cur.exitTicketCount = r.count;
+            statsMap.set(r.session_id, cur);
+          }
+        } catch (_) {}
+
+        try {
+          const feedCounts = db
+            .prepare(
+              `SELECT session_id, COUNT(*) AS count FROM classroom_feed WHERE session_id IN (${placeholders}) GROUP BY session_id`,
+            )
+            .all(...sessionIds) as { session_id: string; count: number }[];
+          for (const r of feedCounts) {
+            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
+            cur.feedCount = r.count;
+            statsMap.set(r.session_id, cur);
+          }
+        } catch (_) {}
+      }
+
+      const modeMap = new Map<string, { name: string; icon: string }>();
+      for (const m of BUILTIN_TEACHING_MODES) {
+        modeMap.set(m.id, { name: m.name, icon: m.icon });
+      }
+
+      const items = rows.map((r) => {
+        const stats = statsMap.get(r.id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
+        const modeInfo = r.teaching_mode_id ? modeMap.get(r.teaching_mode_id) : undefined;
+        return {
+          id: r.id,
+          lessonId: r.lesson_id,
+          lessonTitle: r.lesson_title || '未命名课程',
+          classId: r.class_id,
+          className: r.class_name || '未绑定班级',
+          teacherId: r.teacher_id,
+          stage: r.stage,
+          teachingModeId: r.teaching_mode_id,
+          teachingModeName: modeInfo?.name || r.teaching_mode_id || null,
+          checkinCode: r.checkin_code,
+          focusMode: Boolean(r.focus_mode),
+          startedAt: r.started_at,
+          endedAt: r.ended_at,
+          createdAt: r.created_at,
+          stats,
+        };
+      });
+
+      res.json({
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      });
+    } catch (e: any) {
+      sendSafeError(res, e, 500);
+    }
+  });
+
+  // 手动归档指定课堂会话
+  app.post(
+    '/api/classroom/sessions/:sessionId/archive',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { sessionId } = req.params;
+        const session = db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(sessionId) as any;
+        if (!session) {
+          return res.status(404).json({ error: `Session "${sessionId}" not found` });
+        }
+
+        const now = Date.now();
+        const endedAt = session.ended_at || now;
+
+        db.prepare('UPDATE classroom_sessions SET stage = ?, ended_at = ? WHERE id = ?').run(
+          ARCHIVED_REPORT_STAGE,
+          endedAt,
+          sessionId,
+        );
+
+        try {
+          io?.to(`lesson:${session.lesson_id}`).emit('classroom:stage_changed', {
+            lessonId: session.lesson_id,
+            stage: ARCHIVED_REPORT_STAGE,
+            classId: session.class_id,
+            sessionId,
+          });
+        } catch (_) {}
+
+        try {
+          void kernelContainer.eventBus.publish({
+            id: randomId('evt-cs-arch-'),
+            type: 'classroom.session.archived',
+            source: 'classroom.session',
+            payload: { sessionId, lessonId: session.lesson_id, classId: session.class_id },
+            timestamp: now,
+          });
+        } catch (_) {}
+
+        res.json({
+          success: true,
+          sessionId,
+          stage: ARCHIVED_REPORT_STAGE,
+          endedAt,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // 级联物理删除指定课堂会话
+  app.delete(
+    '/api/classroom/sessions/:sessionId',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { sessionId } = req.params;
+        const session = db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(sessionId) as any;
+        if (!session) {
+          return res.status(404).json({ error: `Session "${sessionId}" not found` });
+        }
+
+        const deleteTransaction = db.transaction(() => {
+          // 1. 删除 poll_votes 与 quick_polls
+          const polls = db.prepare('SELECT id FROM classroom_quick_polls WHERE session_id = ?').all(sessionId) as {
+            id: string;
+          }[];
+          if (polls.length > 0) {
+            const pollIds = polls.map((p) => p.id);
+            const placeholders = pollIds.map(() => '?').join(',');
+            db.prepare(`DELETE FROM classroom_poll_votes WHERE poll_id IN (${placeholders})`).run(...pollIds);
+          }
+          db.prepare('DELETE FROM classroom_quick_polls WHERE session_id = ?').run(sessionId);
+
+          // 2. 抢答器
+          db.prepare('DELETE FROM classroom_buzzers WHERE session_id = ?').run(sessionId);
+
+          // 3. 结课通票
+          db.prepare('DELETE FROM classroom_exit_tickets WHERE session_id = ?').run(sessionId);
+
+          // 4. 节奏信号
+          db.prepare('DELETE FROM classroom_pacing_signals WHERE session_id = ?').run(sessionId);
+
+          // 5. 课堂弹幕
+          db.prepare('DELETE FROM classroom_danmaku WHERE session_id = ?').run(sessionId);
+
+          // 6. 互评任务与相关表
+          db.prepare('DELETE FROM classroom_peer_review_tasks WHERE session_id = ?').run(sessionId);
+          db.prepare('DELETE FROM classroom_peer_reviews WHERE session_id = ?').run(sessionId);
+          db.prepare('DELETE FROM classroom_peer_badges WHERE session_id = ?').run(sessionId);
+          db.prepare('DELETE FROM classroom_peer_nominations WHERE session_id = ?').run(sessionId);
+          db.prepare('DELETE FROM classroom_peer_rubric_dimensions WHERE session_id = ?').run(sessionId);
+
+          // 7. 课堂动态流
+          db.prepare('DELETE FROM classroom_feed WHERE session_id = ?').run(sessionId);
+
+          // 8. 最后删除 classroom_sessions 本身
+          db.prepare('DELETE FROM classroom_sessions WHERE id = ?').run(sessionId);
+        });
+
+        deleteTransaction();
+
+        try {
+          io?.to(`lesson:${session.lesson_id}`).emit('classroom:session_deleted', {
+            sessionId,
+            lessonId: session.lesson_id,
+          });
+        } catch (_) {}
+
+        res.json({
+          success: true,
+          deletedId: sessionId,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
   // 获取指定课程当前活动会话
   app.get(
     '/api/classroom/sessions/:lessonId',

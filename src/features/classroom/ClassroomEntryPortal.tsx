@@ -79,6 +79,8 @@ export interface ClassroomEntryPortalProps {
    * 不传则隐藏「前往课表设置」入口。
    */
   onGoToTimetable?: () => void;
+  /** 打开课堂会话与档案管理看板 */
+  onOpenSessionManager?: () => void;
   /** 测试注入点；默认使用全局 fetch */
   fetcher?: typeof fetch;
 }
@@ -1105,6 +1107,7 @@ export function ClassroomEntryPortal({
   onEditLesson,
   onEnterClassroom,
   onGoToTimetable,
+  onOpenSessionManager,
   fetcher,
 }: ClassroomEntryPortalProps) {
   const zh = lang === 'zh';
@@ -1452,6 +1455,19 @@ export function ClassroomEntryPortal({
                     : 'Confirm the course, class and teaching mode, then launch the classroom.'}
                 </p>
               </>
+            )}
+            {onOpenSessionManager && (
+              <div className="flex items-center gap-2 mt-2.5">
+                <button
+                  type="button"
+                  id="classroom-portal-open-session-manager"
+                  onClick={onOpenSessionManager}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface border border-theme text-xs font-semibold text-main hover:bg-surface-secondary shadow-3xs hover:border-primary-theme/40 transition-all cursor-pointer"
+                >
+                  <FolderKanban size={13} className="text-primary-theme" />
+                  <span>{zh ? '课堂会话与档案管理' : 'Session Management'}</span>
+                </button>
+              </div>
             )}
           </div>
 
