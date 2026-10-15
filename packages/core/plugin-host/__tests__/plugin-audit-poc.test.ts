@@ -278,6 +278,11 @@ describe('PoC: worker 插件的数据库与能力面', () => {
   it('SQL 白名单拒绝插件命名空间之外的表', async () => {
     for (const sql of [
       'SELECT password_hash FROM users',
+      'SELECT * FROM plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_scores, users',
+      'SELECT * FROM/**/users',
+      'SELECT * FROM [users]',
+      'UPDATE/**/users SET password_hash=1',
+      '/* plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_ */ SELECT sql FROM sqlite_master',
       'SELECT * FROM submission_raw',
       'SELECT * FROM submission_result',
       'SELECT * FROM vfs_nodes',
@@ -289,10 +294,7 @@ describe('PoC: worker 插件的数据库与能力面', () => {
       const msg = await invokeSql(sql, 'ext-community');
       expect(msg?.type, sql).toBe('error');
     }
-    const own = await invokeSql(
-      'SELECT * FROM plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_scores',
-      'ext-community',
-    );
+    const own = await invokeSql('SELECT * FROM plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_scores', 'ext-community');
     expect(own?.type).toBe('result');
   });
 
@@ -511,9 +513,7 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     );
     const installSrc = fs.readFileSync(path.join(REPO_ROOT, 'packages/core/plugin-host/install.ts'), 'utf8');
     expect(boot).toContain('workerData.tablePrefix ||');
-    expect(boot).not.toContain(
-      "var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId)",
-    );
+    expect(boot).not.toContain("var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId)");
     expect(installSrc).toContain('pluginTablePrefix(pluginId)');
     expect(installSrc).toContain('pluginTablePrefix(manifestId)');
   });

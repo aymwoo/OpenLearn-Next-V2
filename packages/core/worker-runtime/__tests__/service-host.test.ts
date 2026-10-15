@@ -93,7 +93,17 @@ describe('ServiceHost basic invoke handling', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap'], undefined, undefined, undefined, undefined, ['test:Service']);
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['test:cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
+    );
 
     await host.handleInvoke(
       {
@@ -124,7 +134,17 @@ describe('ServiceHost basic invoke handling', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap'], undefined, undefined, undefined, undefined, ['test:Service']);
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['test:cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
+    );
 
     await host.handleInvoke(
       {
@@ -298,7 +318,17 @@ describe('ServiceHost error serialization', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap'], undefined, undefined, undefined, undefined, ['test:Service']);
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
+    );
 
     await host.handleInvoke(
       {
@@ -332,7 +362,17 @@ describe('ServiceHost error serialization', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap'], undefined, undefined, undefined, undefined, ['test:Service']);
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
+    );
 
     // Should not crash — should serialize the thrown string as an error
     await host.handleInvoke(
@@ -371,7 +411,17 @@ describe('ServiceHost message dispatch routing', () => {
         get: vi.fn(async () => 'ok'),
       },
     });
-    host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap'], undefined, undefined, undefined, undefined, ['test:Service']);
+    host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['test:Service'],
+    );
   });
 
   afterEach(() => {
@@ -482,7 +532,17 @@ describe('ServiceHost ActionRegistry tracking', () => {
     // Barrier 3（B-5）：action 未设 exposeToAgent 时按默认 true 处理，即它会进入
     // `getAgentTools()` 成为 AI 可调用工具，故需 manifest 声明 `agent:tool`。
     // 本用例测的是**资源追踪**而非策略，故显式声明该能力而不是绕过策略。
-    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap', 'agent:tool'], undefined, undefined, undefined, undefined, ['@openlearn/core:IActionRegistryService']);
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['test:cap', 'agent:tool'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['@openlearn/core:IActionRegistryService'],
+    );
 
     // Call register
     await host.handleInvoke(
@@ -519,7 +579,17 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write'], undefined, undefined, undefined, undefined, ['@openlearn/core:IDatabase']);
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['@openlearn/core:IDatabase'],
+      );
 
       await host.handleInvoke(
         {
@@ -550,7 +620,17 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write'], undefined, undefined, undefined, undefined, ['@openlearn/core:IDatabase']);
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['@openlearn/core:IDatabase'],
+      );
 
       await host.handleInvoke(
         {
@@ -579,7 +659,17 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write'], undefined, undefined, undefined, undefined, ['@openlearn/core:IDatabase']);
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['@openlearn/core:IDatabase'],
+      );
 
       await host.handleInvoke(
         {
@@ -768,7 +858,17 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IPointsLedgerService': svc,
       });
       const capGuard = { assertAllowed: vi.fn() };
-      const host = new ServiceHost(registry as any, capGuard as any, 'plugin:test', ['points:read'], undefined, undefined, undefined, undefined, ['@openlearn/core:IPointsLedgerService']);
+      const host = new ServiceHost(
+        registry as any,
+        capGuard as any,
+        'plugin:test',
+        ['points:read'],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['@openlearn/core:IPointsLedgerService'],
+      );
 
       // 模拟一个对原始含函数对象抛出 DataCloneError 的 transport
       const messages: any[] = [];

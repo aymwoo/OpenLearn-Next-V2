@@ -183,8 +183,7 @@ export function registerManifestContributions(
   }
 
   const contributes = (manifest as unknown as Record<string, unknown>).contributes as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 
   // ── manifest contributes 通用声明式桥接 ──────────────────────────────
   //
@@ -282,6 +281,8 @@ export class FrontendPluginHost {
   private disposers = new Map<string, Array<() => void>>();
   /** 远程前端插件的不透明源 iframe。停用时摘掉。 */
   private sandboxFrames = new Map<string, HTMLIFrameElement>();
+  /** 远程前端沙箱常驻消息监听器与生命周期清理回调。 */
+  private sandboxCleanups = new Map<string, () => void>();
 
   /**
    * 登记一个随插件停用/卸载自动执行的清理函数。
@@ -414,6 +415,11 @@ export class FrontendPluginHost {
   }
 
   private destroySandboxFrame(pluginId: string): void {
+    const cleanup = this.sandboxCleanups.get(pluginId);
+    if (cleanup) {
+      this.sandboxCleanups.delete(pluginId);
+      cleanup();
+    }
     const frame = this.sandboxFrames.get(pluginId);
     if (!frame) return;
     this.sandboxFrames.delete(pluginId);
@@ -439,6 +445,19 @@ export class FrontendPluginHost {
     frame.setAttribute('src', PLUGIN_FRAME_PATH);
     frame.setAttribute('title', `plugin-sandbox-${pluginId}`);
     frame.style.display = 'none';
+
+    // I3: 异常导航/重定向监控。首次 load 为正规载入，二次 load 视为试图重定向外逃，即刻销毁
+    let loadCount = 0;
+    const onLoad = () => {
+      loadCount++;
+      if (loadCount > 1) {
+        console.error(`[PluginSandbox] Plugin "${pluginId}" attempted unauthorized navigation. Destroying sandbox.`);
+        this.destroySandboxFrame(pluginId);
+        usePluginHostStore.getState().updatePluginState(pluginId, PluginState.ERROR);
+      }
+    };
+    frame.addEventListener('load', onLoad);
+
     document.body.appendChild(frame);
     this.sandboxFrames.set(pluginId, frame);
 
@@ -447,20 +466,57 @@ export class FrontendPluginHost {
     const uiService = this.registry ? await this.registry.resolve<IUIService>(UI_SERVICE_TOKEN) : null;
     const caps = Array.isArray(manifest.capabilitiesProposed) ? manifest.capabilitiesProposed : [];
 
+    // I1: 注册长驻消息处理器（与激活 Promise 解耦）
+    const onPersistentMessage = (event: MessageEvent) => {
+      if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
+      const data = event.data;
+      if (data.type !== 'call' || !data.callId || !data.op) return;
+      void this.answerSandboxCall(frame, data.callId, data.op, data.args ?? [], {
+        pluginId,
+        manifest,
+        caps,
+        frontendApi,
+        storageService,
+        uiService,
+      }).catch((error: unknown) => {
+        frame.contentWindow?.postMessage(
+          {
+            channel: PLUGIN_FRAME_CHANNEL,
+            type: 'reply',
+            callId: data.callId,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          '*',
+        );
+      });
+    };
+    window.addEventListener('message', onPersistentMessage);
+
+    this.sandboxCleanups.set(pluginId, () => {
+      frame.removeEventListener('load', onLoad);
+      window.removeEventListener('message', onPersistentMessage);
+    });
+
+    // 激活期单次等待：仅负责 ready/load 与 activated/activate-error
     await new Promise<void>((resolve, reject) => {
+      let resolved = false;
       const timer = window.setTimeout(() => {
-        window.removeEventListener('message', onMessage);
+        if (resolved) return;
+        window.removeEventListener('message', onActivationMessage);
         reject(new Error('Activation timeout (5000ms)'));
       }, 5000);
 
       const finish = (error?: Error) => {
+        if (resolved) return;
+        resolved = true;
         window.clearTimeout(timer);
-        window.removeEventListener('message', onMessage);
+        window.removeEventListener('message', onActivationMessage);
         if (error) reject(error);
         else resolve();
       };
 
-      const onMessage = (event: MessageEvent) => {
+      const onActivationMessage = (event: MessageEvent) => {
         if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
         const data = event.data;
         if (data.type === 'ready') {
@@ -478,29 +534,9 @@ export class FrontendPluginHost {
           finish(new Error(data.error || 'sandbox activation failed'));
           return;
         }
-        if (data.type !== 'call' || !data.callId || !data.op) return;
-        void this.answerSandboxCall(frame, data.callId, data.op, data.args ?? [], {
-          pluginId,
-          manifest,
-          caps,
-          frontendApi,
-          storageService,
-          uiService,
-        }).catch((error: unknown) => {
-          frame.contentWindow?.postMessage(
-            {
-              channel: PLUGIN_FRAME_CHANNEL,
-              type: 'reply',
-              callId: data.callId,
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            },
-            '*',
-          );
-        });
       };
 
-      window.addEventListener('message', onMessage);
+      window.addEventListener('message', onActivationMessage);
     });
   }
 
@@ -545,11 +581,15 @@ export class FrontendPluginHost {
         }
       } else if (op === 'command.invoke') {
         if (!ctx.frontendApi) throw new Error('frontendApi is not available');
-        const prefixedType = resolvePluginCommandType(String(args[0] ?? ''), ctx.manifest.id);
-        value = await ctx.frontendApi.post('/api/plugins/execute-command', { type: prefixedType, payload: args[1] });
+        const commandType = String(args[0] ?? '');
+        value = await ctx.frontendApi.post(`/api/plugins/${encodeURIComponent(ctx.pluginId)}/sandbox-command`, {
+          type: commandType,
+          payload: args[1],
+        });
       } else if (op === 'ui.register') {
         const slot = String(args[0] ?? '') as AnyExtensionSlot;
-        const config = args[1] && typeof args[1] === 'object' ? (args[1] as ExtensionPointConfig) : ({} as ExtensionPointConfig);
+        const config =
+          args[1] && typeof args[1] === 'object' ? (args[1] as ExtensionPointConfig) : ({} as ExtensionPointConfig);
         usePluginHostStore.getState().registerExtensionPoint(slot, { ...config, pluginId: ctx.pluginId });
         value = true;
       } else if (op === 'ui.toast') {

@@ -32,6 +32,8 @@ import {
   approveDeclaredPublicRoutes,
   clearPublicRouteApprovals,
 } from '../../packages/core/plugin-host/public-routes.js';
+import { bindPluginCommand, pluginActorIdFor } from '../../packages/core/command-bus/plugin-command.js';
+import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace.js';
 import type { ServerContext } from '../context.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 
@@ -65,6 +67,60 @@ function installationSecurityFields(
     publicRoutesApproved,
     capabilitiesApproved,
   };
+}
+
+function assertCommunityZipAttestation(
+  req: express.Request,
+  zipPath: string,
+  metadata?: { id?: string; version?: string },
+): { ok: true } | { ok: false; status: number; body: { success: false; code: string; error: string } } {
+  const isCommunity =
+    headerFlag(req, 'x-community-install') || !!req.headers['x-integrity'] || !!req.headers['x-signature'];
+
+  if (!isCommunity) {
+    return { ok: true };
+  }
+
+  if (!communityInstallEnabled()) {
+    return {
+      ok: false,
+      status: 403,
+      body: {
+        success: false,
+        code: 'COMMUNITY_INSTALL_DISABLED',
+        error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装或更新。',
+      },
+    };
+  }
+
+  const integrity = req.headers['x-integrity'];
+  const signature = req.headers['x-signature'];
+  if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        success: false,
+        code: 'COMMUNITY_ATTESTATION_REQUIRED',
+        error: '社区包必须同时提供 integrity 与 signature',
+      },
+    };
+  }
+
+  const attested = verifyCommunityPackage(zipPath, integrity, signature, process.env, metadata);
+  if (!attested.ok) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        success: false,
+        code: attested.code,
+        error: attested.error,
+      },
+    };
+  }
+
+  return { ok: true };
 }
 /**
  * R-4：把 raw ZIP 上传 body **流式落盘**，返回临时文件路径。
@@ -520,7 +576,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
 
-      const attested = verifyCommunityPackage(fs.readFileSync(pkg.zipPath), integrity, signature);
+      const attested = verifyCommunityPackage(
+        pkg.zipPath,
+        integrity,
+        signature,
+        process.env,
+        expectedId ? { id: expectedId } : undefined,
+      );
       if (!attested.ok) {
         removeTempZip(pkg.zipPath);
         return res.status(400).json({ success: false, code: attested.code, error: attested.error });
@@ -716,7 +778,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       if (downloadUrl && zipPath) {
-        const attested = verifyCommunityPackage(fs.readFileSync(zipPath), integrity, signature);
+        const existing = kernelContainer.pluginHost.getPluginManifest(targetPluginId);
+        const expectedId = existing?.id ?? targetPluginId;
+        const attested = verifyCommunityPackage(
+          zipPath,
+          integrity,
+          signature,
+          process.env,
+          expectedId ? { id: expectedId } : undefined,
+        );
         if (!attested.ok) {
           return res.status(400).json({ success: false, code: attested.code, error: attested.error });
         }
@@ -924,22 +994,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: COMMUNITY_RISK_ACK_MESSAGE,
         });
       }
-      if (communityInstall) {
-        if (!communityInstallEnabled()) {
-          return res.status(403).json({
-            success: false,
-            code: 'COMMUNITY_INSTALL_DISABLED',
-            error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。',
-          });
-        }
-        const attested = verifyCommunityPackage(
-          fs.readFileSync(zipPath),
-          req.headers['x-integrity'],
-          req.headers['x-signature'],
-        );
-        if (!attested.ok) {
-          return res.status(400).json({ success: false, code: attested.code, error: attested.error });
-        }
+      const attestation = assertCommunityZipAttestation(req, zipPath);
+      if (!attestation.ok) {
+        return res.status(attestation.status).json(attestation.body);
       }
 
       if (modeHeader === 'update') {
@@ -1014,6 +1071,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
+      const attestation = assertCommunityZipAttestation(req, zipPath);
+      if (!attestation.ok) {
+        return res.status(attestation.status).json(attestation.body);
+      }
       const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
       const executionMode = isValidExecutionMode(executionModeHeader)
         ? (executionModeHeader as PluginExecutionMode)
@@ -1103,6 +1164,45 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json({ success: true, result });
     } catch (err: any) {
       pluginLog.error({ error: err.message }, '[execute-command]');
+      sendSafeError(res, err);
+    }
+  });
+
+  // 沙箱前端专用命令通道：强制使用插件自身 actor (plugin:<manifestId>)，杜绝 Confused Deputy
+  app.post('/api/plugins/:id(*)/sandbox-command', requireAuth(), async (req, res) => {
+    try {
+      const { type, payload } = req.body;
+      if (!type) {
+        return res.status(400).json({ success: false, error: 'Missing command type' });
+      }
+
+      const targetId = decodeURIComponent(req.params.id);
+      const host = kernelContainer.pluginHost;
+      const pluginId = host.resolvePluginUuid(targetId);
+      const manifest = host.getPluginManifest(pluginId);
+      if (!manifest) {
+        return res.status(404).json({ success: false, error: `Plugin "${targetId}" not found` });
+      }
+
+      const manifestId = manifest.id;
+      const pluginActor = pluginActorIdFor(manifestId, pluginId);
+      const resolvedType = resolvePluginCommandType(type, manifestId);
+      const bus = kernelContainer.commandBus;
+
+      if (!bus.hasHandler?.(resolvedType)) {
+        pluginLog.warn({ commandType: resolvedType }, '[sandbox-command] no handler for command type');
+        return res.status(404).json({
+          success: false,
+          error: `No handler registered for command type "${resolvedType}".`,
+        });
+      }
+
+      const rawCmd = bus.createCommand(resolvedType, payload ?? {}, pluginActor);
+      const boundCmd = bindPluginCommand(rawCmd, pluginActor);
+      const result = await bus.execute(boundCmd as never);
+      res.json({ success: true, result });
+    } catch (err: any) {
+      pluginLog.error({ error: err.message }, '[sandbox-command]');
       sendSafeError(res, err);
     }
   });
