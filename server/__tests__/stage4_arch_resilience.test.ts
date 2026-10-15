@@ -42,29 +42,54 @@ describe('Stage 4 Server Architecture & Resilience Suite', () => {
     });
 
     it('isOriginAllowed handles origins with multi-dimensional criteria', () => {
-      // 1. 无 origin（如 curl 或同源直连）一律允许
+      // 1. 无 origin（如 curl 或同源导航）一律允许，包括生产
       expect(isOriginAllowed(undefined)).toBe(true);
       expect(isOriginAllowed('')).toBe(true);
+      expect(isOriginAllowed(undefined, 'classroom.local:9000', { allowedOrigins: [], isProduction: true })).toBe(true);
+      expect(isOriginAllowed('', 'classroom.local:9000', { allowedOrigins: [], isProduction: true })).toBe(true);
 
       // 2. 显式白名单匹配
       const opts = { allowedOrigins: ['https://trusted.org', 'https://school.edu'], isProduction: true };
       expect(isOriginAllowed('https://trusted.org', undefined, opts)).toBe(true);
+      expect(isOriginAllowed('https://school.edu', 'other.internal:9000', opts)).toBe(true);
       expect(isOriginAllowed('https://evil.attacker.com', undefined, opts)).toBe(false);
 
       // 3. 通配符 * 放行
-      expect(isOriginAllowed('https://any.site.io', undefined, { allowedOrigins: ['*'], isProduction: true })).toBe(true);
+      expect(isOriginAllowed('https://any.site.io', undefined, { allowedOrigins: ['*'], isProduction: true })).toBe(
+        true,
+      );
 
-      // 4. 同源 (Host 匹配) 放行
-      expect(isOriginAllowed('https://classroom.local:9000', 'classroom.local:9000', opts)).toBe(true);
+      // 4. 生产环境不因 Host 与 Origin 主机相同而放行
+      expect(isOriginAllowed('https://classroom.local:9000', 'classroom.local:9000', opts)).toBe(false);
       expect(isOriginAllowed('https://attacker.org:9000', 'classroom.local:9000', opts)).toBe(false);
+      expect(
+        isOriginAllowed('https://classroom.local:9000', 'classroom.local:9000', {
+          allowedOrigins: [],
+          isProduction: true,
+        }),
+      ).toBe(false);
 
-      // 5. 本地回环放行 (跨端口机房调试)
-      expect(isOriginAllowed('http://localhost:5173', undefined, { allowedOrigins: [], isProduction: true })).toBe(true);
-      expect(isOriginAllowed('http://127.0.0.1:4173', undefined, { allowedOrigins: [], isProduction: true })).toBe(true);
-      expect(isOriginAllowed('http://[::1]:8080', undefined, { allowedOrigins: [], isProduction: true })).toBe(true);
+      // 5. 生产环境拒绝本机回环，除非该来源写进 ALLOWED_ORIGINS
+      const prodEmpty = { allowedOrigins: [], isProduction: true };
+      expect(isOriginAllowed('http://localhost:5173', undefined, prodEmpty)).toBe(false);
+      expect(isOriginAllowed('http://127.0.0.1:4173', undefined, prodEmpty)).toBe(false);
+      expect(isOriginAllowed('http://[::1]:8080', undefined, prodEmpty)).toBe(false);
+      expect(isOriginAllowed('http://0.0.0.0:9000', undefined, prodEmpty)).toBe(false);
+      expect(isOriginAllowed('http://localhost:5173', 'localhost:9000', prodEmpty)).toBe(false);
+      expect(
+        isOriginAllowed('http://localhost:5173', undefined, {
+          allowedOrigins: ['http://localhost:5173'],
+          isProduction: true,
+        }),
+      ).toBe(true);
 
-      // 6. 开发环境宽松放行
-      expect(isOriginAllowed('https://vite-dev.preview', undefined, { allowedOrigins: [], isProduction: false })).toBe(true);
+      // 6. 开发环境仍宽松：任意来源、回环、Host 反射
+      const devEmpty = { allowedOrigins: [], isProduction: false };
+      expect(isOriginAllowed('https://vite-dev.preview', undefined, devEmpty)).toBe(true);
+      expect(isOriginAllowed('http://localhost:5173', undefined, devEmpty)).toBe(true);
+      expect(isOriginAllowed('http://127.0.0.1:4173', undefined, devEmpty)).toBe(true);
+      expect(isOriginAllowed('http://[::1]:8080', undefined, devEmpty)).toBe(true);
+      expect(isOriginAllowed('https://classroom.local:9000', 'classroom.local:9000', devEmpty)).toBe(true);
     });
 
     it('createCorsMiddleware responds 204 to OPTIONS and configures headers properly', async () => {
@@ -92,6 +117,20 @@ describe('Stage 4 Server Architecture & Resilience Suite', () => {
       });
       expect(evilRes.status).toBe(200);
       expect(evilRes.headers.get('access-control-allow-origin')).toBeNull();
+      expect(evilRes.headers.get('access-control-allow-credentials')).toBeNull();
+
+      // 生产环境的本机来源同样不回写凭证头
+      const loopbackRes = await fetch(`${baseUrl}/test`, {
+        headers: { Origin: 'http://localhost:5173' },
+      });
+      expect(loopbackRes.status).toBe(200);
+      expect(loopbackRes.headers.get('access-control-allow-origin')).toBeNull();
+      expect(loopbackRes.headers.get('access-control-allow-credentials')).toBeNull();
+
+      // 没有 Origin 的请求仍然放行，且不反射来源
+      const noOriginRes = await fetch(`${baseUrl}/test`);
+      expect(noOriginRes.status).toBe(200);
+      expect(noOriginRes.headers.get('access-control-allow-origin')).toBeNull();
     });
 
     it('createSocketIoCors invokes callback with exact authorization decisions', () => {
@@ -109,6 +148,12 @@ describe('Stage 4 Server Architecture & Resilience Suite', () => {
         resBlocked = opts;
       });
       expect(resBlocked.origin).toBe(false);
+
+      let resLoopback: any = null;
+      socketCors({ headers: { origin: 'http://127.0.0.1:5173', host: '127.0.0.1:9000' } }, (_err, opts) => {
+        resLoopback = opts;
+      });
+      expect(resLoopback.origin).toBe(false);
     });
   });
 

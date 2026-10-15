@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **生产环境的跨域只认 `ALLOWED_ORIGINS`**。`NODE_ENV=production` 时，本机另一个端口，以及只靠把 `Host` 改成与 Origin 相同的反代，都不再带着 `edu_os_token` 通过 CORS。部署前把浏览器实际访问的公网来源写进 `ALLOWED_ORIGINS`。请求不带 `Origin` 的同源导航、curl 和非生产环境保持原样。
 - **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
 - **明文学生口令不能再登录，GDPR 删除只保留给管理员**。`students.password` 不以 `$2` 开头、也不是 64 位十六进制的学生，在花名册重设密码之前无法用个人口令登录。旧 SHA-256 学生仍可登录一次并升级为 bcrypt。教师会话调用 `DELETE /api/students/:id/gdpr-delete` 得到 403；管理员仍须 `{ "confirm": true }`。
 
@@ -63,6 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **生产 CORS 只接受显式来源**。`NODE_ENV=production` 时，带 `Origin` 的请求只有列在 `ALLOWED_ORIGINS` 中才会回写 `Access-Control-Allow-Origin` 与 `Access-Control-Allow-Credentials: true`。`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0` 不再自动放行，Origin 的 host 与 `Host` 头相同也不再当成同源。没有 `Origin` 的请求仍然放行。非生产环境继续放行回环地址和任意来源。`ALLOWED_ORIGINS=*` 仍是不带凭证的通配。
 - **学生登录拒绝明文口令，失败文案不再暴露账号是否存在**。库存口令不以 `$2` 开头时不再与提交值做相等比较。64 位十六进制（旧 SHA-256）仍在登录成功时升级为 bcrypt。其它非 bcrypt 值登录失败，审计原因为 `plaintext_password_rejected`，响应和审计都不回显口令，也不把该行改写成新哈希。教师的「用户不存在 / 密码错误」与学生的「学号不存在 / 口令错误」对客户端都返回 `Incorrect username or password`；审计日志仍区分原因。禁用账号仍是 403。
 - **GDPR 删除改为仅管理员**。`DELETE /api/students/:id/gdpr-delete` 不再把 `teacher` 列入 `requireAuth`。能看到该生的教师也不能擦除。
 

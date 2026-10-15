@@ -1,8 +1,8 @@
 name: Docker release rehearsal
 
 # 发布前检查 Docker 构建链路、迁移与健康探针。
-# main、手动触发和标签推送总会运行。拉取请求只在改动构建、迁移、内核，
-# 或花名册登录 / GDPR 删除相关文件时运行，避免每个 PR 都做完整镜像构建。
+# main、手动触发和标签推送总会运行。拉取请求只在改动构建、迁移、内核、
+# 花名册登录 / GDPR 删除，或生产 CORS 中间件及其测试时运行，避免每个 PR 都做完整镜像构建。
 
 on:
   push:
@@ -20,6 +20,8 @@ on:
       - 'scripts/verify-plugin-sdk-entry.mjs'
       - 'migrations/**'
       - 'server.ts'
+      - 'server/middleware/cors.ts'
+      - 'server/__tests__/stage4_arch_resilience.test.ts'
       - 'packages/core/**'
       - 'server/routes/roster.ts'
       - 'server/__tests__/auth-login-negative.test.ts'
