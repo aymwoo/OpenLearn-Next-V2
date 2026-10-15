@@ -1,226 +1,240 @@
 # 可观测性架构（Observability）
 
-本文以代码为唯一真源，描述 OpenLearn V2 的日志与可观测性体系。核对范围：`packages/core/observability/`、`server/utils/logger.ts`、`packages/core/ai-capability/logging/`、`packages/core/kernel/index.ts`、`Dockerfile`、`docker-compose.yml`、`package.json`。
+本文以当前代码为唯一真源，描述 OpenLearn V2 已经落地的日志、审计、错误上报、探针和指标。核对范围：`packages/core/observability/`、`server/routes/health.ts`、`server/middleware/request-observability.ts`、`server/routes/client-errors.ts`、`server/utils/logger.ts`、`server/utils/error-handler.ts`、`packages/core/kernel/index.ts`、`packages/core/ai-capability/logging/capability-logger.ts`、`docker-compose.yml`、`Dockerfile`。
 
----
-
-## 0. 首要结论：这里只有「一个 logger 模块」和「三套互不相干的可观测性机制」
-
-必须先纠正一个常见误解。仓库里**确实有两个同名 logger 文件**——`packages/core/observability/logger.ts` 与 `server/utils/logger.ts`——但**它们不是两套独立实现**。后者是对前者的**纯 re-export**（见 §2）。真正的「多套」不在这一层，而在别处：平台实际存在**三套互不共享代码、互不共享存储**的可观测性机制。
-
-| # | 机制                              | 实现位置                                        | 载体            | 落盘 | 结构化 |
-| - | --------------------------------- | ----------------------------------------------- | --------------- | ---- | ------ |
-| 1 | **平台结构化日志（pino）**        | `packages/core/observability/logger.ts`          | 文本行          | ✅   | ✅     |
-| 2 | **事件审计日志（EventBus → SQLite）** | `packages/core/kernel/index.ts` 的 `initAuditLog()` | `events` 表   | ✅   | ✅     |
-| 3 | **AI 能力调用遥测（内存）**       | `packages/core/ai-capability/logging/capability-logger.ts` | 进程内存数组 | ❌   | ❌     |
-
-三者之间**没有任何聚合**：没有 correlationId 打通日志与事件表，没有把 `CapabilityLogger` 的数据接入 pino，也没有 metrics 采集、没有 tracing、没有健康检查以外的探针（`/health` 由 Dockerfile 的 `HEALTHCHECK` 以 wget 轮询实现，不在本模块内）。
-
-本文以机制 1 为主体（`packages/core/observability/` 的全部内容），并在 §5 简要说明机制 2、3。
+没有分布式追踪。Prometheus 文本只包含下面 §4 列出的序列。进程内计数器随进程重启归零。
 
 ---
 
 ## 1. 模块清单
 
-`packages/core/observability/` 目录下**只有一个文件**：`logger.ts`（1578 字节）。**没有 `index.ts` barrel**，因此只能按文件路径深导入，不存在 `import ... from '@openlearn/plugin-sdk'` 式的包级再导出。
+`packages/core/observability/` 没有 `index.ts`。调用方按文件路径深导入。
 
-该文件的**全部**导出只有两个符号：
+| 文件 | 职责 |
+| --- | --- |
+| `packages/core/observability/logger.ts` | 平台 pino 单例 `logger` 与 `createLogger(component)` |
+| `packages/core/observability/redaction.ts` | pino 字段路径脱敏（`buildRedactOptions`） |
+| `packages/core/observability/rotating-file-stream.ts` | 访问日志与审计日志的按大小轮转 |
+| `packages/core/observability/sanitize.ts` | 即将离开进程的错误载荷和审计字段的递归脱敏 |
+| `packages/core/observability/request-context.ts` | 当前 HTTP 请求的 `requestId`（`AsyncLocalStorage`） |
+| `packages/core/observability/audit-log.ts` | 安全审计，写入 `audit.log` |
+| `packages/core/observability/error-reporter.ts` | 脱敏后的错误事件；配置 DSN 时再转发 |
+| `packages/core/observability/health.ts` | 就绪判定，以及存活 / 就绪的公开 JSON |
+| `packages/core/observability/metrics.ts` | Prometheus 文本 |
 
-| 导出            | 类型            | 说明                                                                 |
-| --------------- | --------------- | -------------------------------------------------------------------- |
-| `logger`        | `pino.Logger`   | 模块级单例，模块被 import 时即创建                                    |
-| `createLogger`  | `(component: string) => pino.Logger` | 工厂函数，实现为 `logger.child({ component })` |
+HTTP 入口不在这个目录里：
 
-**明确不存在的能力**（逐一 grep 确认无命中）：
+| 入口 | 文件 |
+| --- | --- |
+| `GET /health`、`GET /health/ready`、`GET /metrics` | `server/routes/health.ts` |
+| 访问日志、状态类计数、403/429 审计、未捕获的 5xx | `server/middleware/request-observability.ts` |
+| `POST /api/client-errors` | `server/routes/client-errors.ts` |
+| 路由 `sendSafeError` 的 5xx | `server/utils/error-handler.ts` |
+| 进程级 `uncaughtException` / `unhandledRejection` | `server.ts` |
 
-- ❌ **没有** log level 枚举或级别常量——级别只有一处环境变量兜底逻辑
-- ❌ **没有** transport 抽象/注册表——stream 数组在模块顶层硬编码构造
-- ❌ **没有** 自定义 `serializers`、采样（sampling）
+`server/utils/logger.ts` 只 re-export `logger` 与 `createLogger`。生产代码直接 import `packages/core/observability/logger.ts`。`packages/core/__tests__/layering.test.ts` 禁止 `packages/core` 再去 import `server/`。
 
-**已具备的能力**（2026-10-03 加固，标准库实现，零新增 npm 依赖）：
+`packages/core/di/token.ts` 没有日志 Token。插件日志是上下文属性，见 §6。
 
-- ✅ **字段级脱敏**：`packages/core/observability/redaction.ts`。覆盖 `apiKey` / `api_key` /
-  `password` / `passwordHash` / `authorization` / `cookie` / `sessionToken` / `passcode` /
-  `class_passcode` / `requestPayload` / `responsePayload` / `secret`，替换为 `***REDACTED***`。
-  脱敏配置挂在 logger 上、在 multistream 分流**之前**生效，故 stdout / pino-pretty / 文件三路一致。
-  可用 `LOG_REDACT=false` 关闭（生产不建议）。详见 §3.4。
-- ✅ **按大小轮转**：`packages/core/observability/rotating-file-stream.ts`。默认
-  `LOG_MAX_SIZE_MB=10` / `LOG_MAX_FILES=5`（约 50 MB 上限），可用 `LOG_DIR` 改写目录。详见 §3.3。
-
-> ⚠️ **一个容易踩的坑**：本仓库所用 pino 版本的 fast-redact **不支持 `**` 递归通配符** ——
-> `paths: ['**.api_key']` 会**静默匹配不到任何内容**，既不报错也不告警，看起来配好了实则零保护。
-> 因此实现改为按 `*` 逐层枚举 1–10 层深度（共 165 条 path），并在
-> `__tests__/redaction.test.ts` 中有一条反回归测试专门锁死这个行为。
+下面这些载体彼此不合并成一条链路：平台日志文件、安全审计文件、SQLite `events` 表、AI 能力内存日志、Prometheus 计数器。HTTP 的 `requestId` 会出现在访问日志、审计记录和错误上报里；它不是 `events.correlationId`。
 
 ---
 
-## 2. 与 `server/utils/logger.ts` 的关系
+## 2. 存活与就绪
 
-`server/utils/logger.ts` 全文只有一行有实际语义的代码：
+`server/routes/health.ts` 的 `registerHealthRoutes` 在 `server.ts` 里注册。两个探针都不要求登录。
 
-```typescript
-export { logger, createLogger } from '../../packages/core/observability/logger.js';
+### 2.1 `GET /health`
+
+存活。响应体由 `livenessBody` 生成，只有：
+
+```json
+{ "status": "ok", "uptime": 0, "version": "0.6.1" }
 ```
 
-它是 2026-09-30 分层整改留下的**兼容垫片**，不是第二套实现。整改背景写在两个文件的注释里：此前 `packages/core/worker-runtime/worker-manager.ts` 与 `packages/core/plugin-host/context-builder.ts` 反向 import 应用层的 `server/utils/logger.ts`（ESM 导入时写作 `.js` 后缀），违反「应用 → 内核，绝不反向」的分层规则，2026-09-25 审计 H-7 立项、拖了逾一版才修。
+`uptime` 是自本次注册探针以来的整秒数。`version` 默认取 `packages/core/version.ts` 的 `PLATFORM_VERSION`。
 
-**当前状态（实测）**：
+`Dockerfile` 与 `docker-compose.yml` 的 `HEALTHCHECK` 用 wget 访问 `http://127.0.0.1:9000/health`。这个探针不检查数据库。
 
-- `packages/core/observability/logger.ts` 的生产消费方**只有 2 个**：`plugin-host/context-builder.ts` 与 `worker-runtime/worker-manager.ts`
-- `server/utils/logger.ts` 的生产消费方**为 0**——全仓（排除 `node_modules`/`.git`/`docs/`）对其的引用只出现在 `CHANGELOG.md` 的整改记录与 `graphify-out/` 的图谱快照里，没有任何 `.ts`/`.tsx`/`.mjs` 文件 import 它
+### 2.2 `GET /health/ready`
 
-因此它是一个**当前无人使用的兼容垫片**。文件自身注释也写明「server 侧新代码请直接 import core 的 observability/logger」。删掉它不会破坏任何生产编译，但本文件按职责边界不在本次改动范围内，此处仅如实记录。
+就绪。`checkReadiness` 按顺序做三件事，任何一步失败就停：
 
-**分层守卫**：`packages/core/__tests__/layering.test.ts` 用正则扫描 `packages/core` 全部生产源码（排除 `__tests__/`），断言**不含任何指向 `server/**` 的 import**，防止依赖方向被再次击穿。`server/utils/logger.ts` 的存在不违反该守卫（方向是 server → core，合法）。
+1. `pingDatabase`：默认 `SELECT 1`。
+2. `probeStorageWritable`：在存储目录写一个探针文件再删掉。存储目录来自 `getStorageDir()`。
+3. `migrationsComplete`：读 `migrations/` 里每个 `.sql` 的文件名（去掉扩展名），要求这些名字都出现在 `_migrations.name` 里。目录缺失、没有 `.sql`，或查询已应用名单失败，都视为未就绪。
 
----
+成功时 HTTP 200，体为 `{ "status": "ready" }`。失败时 HTTP 503，体为 `{ "status": "not_ready" }`。`readinessBody` 不返回数据库路径、错误文本、待应用名单或备份信息。失败原因（`database`、`storage`、`migrations`）和待应用文件名只出现在进程的警告日志里。
 
-## 3. 日志落地机制
-
-### 3.1 级别
-
-唯一的级别决策点在模块顶层：
-
-```
-process.env.LOG_LEVEL  ||  (NODE_ENV === 'production' ? 'info' : 'debug')
-```
-
-`LOG_LEVEL` 是本模块唯一读取的环境变量。`docker-compose.yml` 与 `ecosystem.config.cjs` 都显式将其设为 `info`。级别不随运行时变更，**改后须重启**。
-
-### 3.2 双路输出
-
-模块用 `pino.multistream` 把同一条记录同时送往两个 stream：
-
-| 分支                       | stream                                    | 条件                      |
-| -------------------------- | ----------------------------------------- | ------------------------- |
-| 人类可读 / 机器可读（第一路） | 非生产：`pino.transport({ target: 'pino-pretty' })`，开启 `colorize`，`translateTime: 'SYS:HH:mm:ss.l'`，`ignore: 'pid,hostname'`；生产：直接 `process.stdout`（原始 JSON 行） | 恒有一条 |
-| 纯文件（第二路）            | `fs.createWriteStream('<cwd>/logs/openlearn.log', { flags: 'a' })` | 恒有一条（**包括生产**） |
-
-日志目录 `path.resolve(process.cwd(), 'logs')` 在模块被 import 时若不存在则以 `mkdirSync(..., { recursive: true })` 创建。
-
-两点值得注意：
-
-1. **两路的 level 相同**（都取自同一个 `level` 变量），不存在"文件记全、控制台记简"的分级策略。
-2. **pino-pretty 是 devDependency**（`package.json` 中 `pino: ^10.3.1` 在 `dependencies`，`pino-pretty: ^13.1.3` 在 `devDependencies`），而 Dockerfile 在构建阶段执行 `pnpm prune --prod`。镜像内 `ENV NODE_ENV=production`，因此走 `process.stdout` 分支，不会触碰缺失的 `pino-pretty`。
-   > ⚠️ 风险：若在**已 prune 的生产依赖环境**中把 `NODE_ENV` 改成非生产值，pino 会尝试解析已不存在的 `pino-pretty` transport 目标。默认配置下不会触发。
-
-### 3.3 日志轮转
-
-`rotating-file-stream.ts` 用**同步 `fs.writeSync`** 实现按大小轮转，**零新增 npm 依赖**
-（未引入 `pino-roll` / `rotatelogs`）。
-
-- **默认值**：`LOG_MAX_SIZE_MB=10`、`LOG_MAX_FILES=5`（约 50 MB 上限）；非法值回退到默认并告警。
-- **为何用同步写**：异步轮转在 `end()` 与重新打开之间存在丢写窗口，且进程退出时序不可控；
-  同步写让「写入 + 计数 + 轮转」成为不可分割的一段。
-- **跨平台**：每次 rename 前先 `unlink` 目标（Windows 不允许 rename 覆盖已存在文件），移位按从旧到新。
-- **句柄释放**：首次写入才懒打开，`dispose()` 于 `_final` 调用，另有单个模块级
-  `process.on('exit')` 钩子；钩子挂在模块级 Set 上，避免测试大量构造时触发 `MaxListenersExceededWarning`。
-
-> **部署注意**：现有 `logs/openlearn.log` 已达 11.3 MB，超过 10 MB 默认阈值，
-> 部署后首次写入即会轮转为 `openlearn.log.1`。
-
-**容器内**：`docker-compose.yml` 现已挂载 `logs_data` → `/app/logs`（此前未挂载，容器重建即丢全部日志）。
-
-### 3.4 脱敏
-
-`redaction.ts` 在 logger 构造时通过 pino 的 `redact` 选项生效，覆盖 12 个敏感字段名，
-每个字段按 `*` 逐层展开 1–10 层深度（fast-redact 不支持 `**`，见上文）。
-
-**刻意不脱敏的字段**（避免摧毁日志价值）：`token`（全仓 406 处，但绝大多数是 **DI Token** 概念
-——`IAIServiceToken`、`{token, instance}`，脱敏会抹掉 plugin-host 诊断信息；真实凭据由
-`cookie` / `sessionToken` 覆盖）、`id` / `name` / `studentId` / `lessonId` / `content`（408 处）/
-`messages`（119 处）。
-
-**残余风险（诚实说明）**：
-
-1. **字符串内的秘密无法用字段路径脱敏**。``logger.info(`failed with key ${apiKey}`)``、
-   `error: err.message` 里带 token 的 URL、整串 `console.error` 都挡不住。
-2. **203 处裸 `console.*`** 绕过 pino，完全不经过脱敏。
-3. **非 pino 载体不受影响**：`CapabilityLogger` 的内存数组与 EventBus 的 SQLite `events` 表。
-4. 嵌套深度超过 10 层、或不在字段名单内的键，均不脱敏。
+磁盘上的迁移文件都已应用时，库里多出来的迁移名不会让这次检查失败。
 
 ---
 
-## 4. 插件如何获得日志能力
+## 3. 访问日志与请求 ID
 
-### 4.1 机制：context 属性注入，**不是 DI Token**
+`requestObservability` 挂在路由之前。
 
-日志能力**不通过 DI 容器分发**。`packages/core/di/token.ts` 中没有任何日志相关 Token，插件也无法 `resolve` 出一个 logger。
+- 请求头 `x-request-id` 若匹配 8–64 位的字母、数字、`.`、`_`、`:`、`-`，就沿用；否则生成 UUID。响应头回写同一个值。
+- 该 ID 放进 `requestLogContext`，同一条异步调用链里的 `recordSecurityAudit` 可以读到它，不必改命令载荷。
+- 响应结束时 `recordHttpResponse(status)`，并在不是静默路径时写一条 `http.request`。字段只有 `requestId`、`userId`、`method`、`path`、`status`、`durationMs`。不写查询串，不写请求体。
+- `userId` 来自已挂上的会话，否则从会话 cookie 解析；没有则是 `anonymous`。截断到 64 字符。
+- `/health` 与 `/health/ready` 在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。
 
-实际机制是属性注入：`packages/core/plugin-host/context-builder.ts` 的 `buildContext()` 内部先 `createLogger(\`Plugin:${manifest.id || pluginId}\`)` 得到一个 pino 子 logger，再包装成 `IPluginLogger` 形状的对象，作为 `log` 字段挂到返回的 `PluginContext` 上（`PluginContext.log` 的类型声明在 `packages/core/plugin-host/types.ts`）。
-
-### 4.2 接口
-
-`IPluginLogger` 是 4 个方法的窄接口，**只有消息与可选 meta，没有 logger 实例外泄**：
-
-```typescript
-export interface IPluginLogger {
-  debug(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-}
-```
-
-实现是一个字面量对象，四个方法各自把 `(message, meta)` 转发为 pino 的 `logger.<level>({ meta }, message)`——即 `meta` 落在 JSON 输出的 `meta` 字段下，`message` 落在 `msg` 字段。
-
-> 注：`types.ts` 中 `IPluginLogger` 的注释称其「自动注入 pluginId 和 timestamp」。**pluginId 确实以 `component: "Plugin:<id>"` 的形式注入**（pino child 绑定字段）；timestamp 由 pino 自身的 `time` 字段提供，**不是平台额外注入的**。实现中没有额外的字段注入逻辑。
-
-### 4.3 Worker 模式下的 stdout/stderr 接管
-
-`buildContext()` 位于 `packages/core/plugin-host/context-builder.ts`，**Worker 引导脚本内并未调用它**（`packages/core/worker-runtime/worker-manager.ts` 内嵌的 worker bootstrap 代码中无 `buildContext` 引用），即两条执行路径的插件上下文并非由同一处构造。
-
-> 待确认：Worker 模式下 `ctx.log` 具体如何跨线程投递（是否经 `parentPort` RPC 代理），本次未在 `packages/core/worker-runtime/` 中定位到实现，故不对该机制下断言。
-
-Worker 路径上**已验证**的是另一条独立通道——原始输出接管。Worker 以 `stdout: true, stderr: true` 构造，宿主侧在 `worker-manager.ts` 中用 `createLogger(\`Plugin:${manifest.id || pluginId}\`)` 接收两个流：`worker.stdout` 的每个 chunk 以 `info` 级别、`worker.stderr` 的每个 chunk 以 `error` 级别转发进 pino。
-
-这条通道的实际意义：**Worker 插件里的任何 `console.log` / `console.error`（以及任何未被 `ctx.log` 捕获的原生 stdout/stderr 输出）都会自动进入结构化日志与日志文件**，且都带上 `component` 标签。inline 插件没有这条兜底，其 `console.log` 直接打到进程 stdout，不进 `logs/openlearn.log`。
-
-### 4.4 采用度（实测）
-
-结构化 logger 的覆盖面很窄。`packages/core` 非测试 TS 文件共 **250** 个，其中含 `console.*` 调用的有 **45** 个、调用点合计 **203** 处。也就是说**绝大多数内核日志仍走裸 `console.*`，完全绕过 pino，不进 `logs/openlearn.log`**。排查线上问题时不能假定日志文件是完整的内核日志来源。
+状态码 403（路径不是 `/api/auth/login`）写审计事件 `auth.forbidden`。状态码 429 写 `rate_limit.triggered`。状态码大于等于 500，且 `sendSafeError` 尚未标记 `errorCaptured` 时，再记一条 `source: http` 的错误上报。
 
 ---
 
-## 5. 另两套可观测性机制
+## 4. `GET /metrics`
 
-### 5.1 事件审计日志（EventBus → `events` 表）
+`packages/core/observability/metrics.ts` 渲染进程内计数，另有三条运维 gauge 由 `server/routes/health.ts` 的采样器注入（读不到时为 `-1`，样本进程内缓存 15 秒）。路由层决定谁能看：
 
-`Kernel#initAuditLog()` 订阅 `EventBus` 的通配符 `*`，把**每一个**事件写入 SQLite `events` 表（列：`id`、`type`、`source`、`payload`（JSON 字符串）、`timestamp`、`correlationId`、`lesson_id`）。
+- 环境变量 `METRICS_TOKEN` 非空，且 `Authorization` 精确等于 `Bearer <该值>` 时放行。
+- 否则走 `server/middleware/auth.ts` 的 `requireAuth('administrator')`。未配置 token 时，只有管理员会话可以访问。
 
-几点实现细节：
+响应 `Content-Type` 为 `text/plain; version=0.0.4; charset=utf-8`，`Cache-Control: no-store`。
 
-- 惰性 `prepare` + 缓存：首次写入时用 `PRAGMA table_info(events)` 探测 `lesson_id` 列是否存在，据此在两个 INSERT 语句（`INSERT_EVENT_WITH_LESSON` / `INSERT_EVENT_LEGACY`）间二选一，探测只做一次。老库由 `migrations/006_classroom_event_bus.sql`（`ALTER TABLE events ADD COLUMN lesson_id TEXT`）补列。
-- `kernelContainer` 是一个 `Proxy`，在首次属性访问时惰性构造 `Kernel` 并调用 `initAuditLog()`（`packages/core/kernel/index.ts` 底部的 `Proxy` get/set trap）。
+当前文本只有这些序列：
 
-这与 §3 的文件日志是**两套独立存储**：事件表可查询、可重放（`lesson_id` 专为「按课节重放整堂课」设计），但没有把事件同时写进 pino 日志。
+| 名称 | 类型 | 含义 |
+| --- | --- | --- |
+| `openlearn_up` | gauge | 常量 `1`，表示渲染函数在跑 |
+| `openlearn_process_uptime_seconds` | gauge | 自 `metrics.ts` 被加载以来的秒数，三位小数 |
+| `openlearn_process_resident_memory_bytes` | gauge | `process.memoryUsage().rss` |
+| `openlearn_http_responses_total` | counter | 标签 `status_class` 为 `2xx`、`3xx`、`4xx`、`5xx` 或 `other` |
+| `openlearn_migrations_pending` | gauge | 磁盘上尚未记入 `_migrations` 的迁移个数；读不到时为 `-1` |
+| `openlearn_backup_age_seconds` | gauge | 备份目录里最新文件的年龄（秒）；没有文件时为 `-1` |
+| `openlearn_events_rows` | gauge | `events` 表当前行数；查询失败时为 `-1` |
 
-### 5.2 AI 能力调用遥测（`CapabilityLogger`）
-
-`packages/core/ai-capability/logging/capability-logger.ts` 的 `CapabilityLogger` 是一个**纯内存**实现，与 pino 无关：
-
-- `log(entry)` 把 `CapabilityLogEntry` 推入数组，`Object.freeze` 冻结条目
-- `getLogs(capabilityId?)` 返回冻结的副本数组，可按 `capabilityId` 过滤
-- `clear()` 清空
-
-`CapabilityLogEntry` 字段：`capabilityId`、`requestPayload`、`responsePayload`、`latencyMs`、`providerId`、`tokenCount?`、`error?`、`timestamp`。
-
-需要明确的局限：数组**无上限、无 TTL、无持久化**，只能被同进程内持有该实例的代码读取。全仓非测试代码中 `new CapabilityLogger()` 只出现 **2 处**——`packages/core/ai-capability/ai-capability-kernel.ts` 构造一个实例，`packages/core/bootstrap/composition/whiteboard-composition-module.ts` 在注册 `WhiteboardCapability` 时另建一个。其余 8 个引用该符号的文件只是 import 类型/类，不持有实例。进程重启即全部丢失，也不会出现在 `logs/openlearn.log` 中。
-
-> ⚠️ 安全提示：`requestPayload` / `responsePayload` 是**未经脱敏的原始载荷**。该结构恰好覆盖 AI 请求与响应全文，若其内容包含用户隐私数据或提示词中的敏感信息，内存中的遥测数组就是一条无脱敏、无访问控制、随进程存活的副本。
+状态类由 `statusClassOf` 划分。计数在响应 `finish` 时加一，包括探针自己的响应。文本里没有路径、用户、查询串或错误字符串。行为由 `packages/core/observability/__tests__/readiness.test.ts` 锁住。三条运维 gauge 的样本 15 秒内复用同一份（`OPERATIONAL_GAUGE_CACHE_MS`，路由选项可覆盖，`0` 表示每次抓取都重新查询）。
 
 ---
 
-## 6. 速查与已知缺口
+## 5. 平台日志
 
-| 问题                                     | 答案                                                                                     |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 有几套 logger 实现？                      | **1 套**。`server/utils/logger.ts` 是纯 re-export，且当前无任何生产消费者                  |
-| 日志有级别控制吗？                        | 有。`LOG_LEVEL` 兜底 `info`（生产）/ `debug`（非生产），不可运行时变更                      |
-| 有日志脱敏吗？                            | **有**（2026-10-03 加固）。12 个敏感字段名替换为 `***REDACTED***`；`LOG_REDACT=false` 可关。字符串内秘密与裸 `console.*` 仍挡不住 |
-| 有日志轮转吗？                            | **有**（2026-10-03 加固）。默认 10 MB × 5 个文件，同步写零新增依赖；`LOG_DIR` / `LOG_MAX_SIZE_MB` / `LOG_MAX_FILES` 可调 |
-| 容器里日志会丢吗？                        | 会。`docker-compose.yml` 未为 `/app/logs` 挂卷，日志在容器可写层，重建即失                 |
-| 插件通过 DI Token 拿日志吗？               | **不是**。由 `buildContext()` 作为 `PluginContext.log` 属性注入（inline 路径），`packages/core/di/token.ts` 无日志 Token |
-| Worker 插件的 `console.log` 会进日志文件吗？ | 会。`worker-manager.ts` 接管 `stdout`/`stderr` 转发进 pino。inline 插件不会                |
-| 内核日志都进日志文件吗？                  | 不是。`packages/core` 有 203 处 `console.*`（分布在 45/250 个文件）完全绕过 pino           |
-| 有 metrics / tracing 吗？                 | 没有。仅上述三套机制，无任何指标采集或链路追踪                                            |
+### 5.1 出口
+
+`packages/core/observability/logger.ts` 在 import 时创建 pino 单例。级别是 `LOG_LEVEL`，否则生产为 `info`、非生产为 `debug`。改环境变量后要重启。
+
+| 路 | 去向 |
+| --- | --- |
+| 控制台 | 生产：`stdout` 上的 JSON 行。非生产：`pino-pretty`（`package.json` 的 devDependency）。pretty 加载失败时退回 `stdout`，进程仍能启动 |
+| 文件 | 目录可写时，`RotatingFileStream` 写 `<LOG_DIR>/openlearn.log`。默认目录是进程 cwd 下的 `logs/`。目录不可写时只留控制台 |
+
+两路使用同一个级别。脱敏发生在分发之前，所以控制台和文件看到的是同一份已脱敏记录。
+
+`docker-compose.yml` 与 `Dockerfile` 把 `LOG_DIR` 设为 `/data/logs`。该路径在数据卷 `openlearn_data`（挂载点 `/data`）里面，容器重建后日志还在这个卷上。`ecosystem.config.cjs` 把 `LOG_LEVEL` 设为 `info`。
+
+### 5.2 轮转
+
+`packages/core/observability/rotating-file-stream.ts` 用同步 `fs.writeSync`，不引入额外 npm 包。写入前若超出上限，先删最旧的一份，再把 `.1` … `.N` 依次后移；rename 前先 unlink 目标，避免 Windows 不能覆盖已存在文件。首次写入才打开文件。模块级只注册一个 `process.on('exit')` 去 `dispose()`。
+
+| 变量 | 默认 | 作用于 |
+| --- | --- | --- |
+| `LOG_DIR` | `<cwd>/logs` | 访问日志与审计日志的目录 |
+| `LOG_MAX_SIZE_MB` | 10 | `openlearn.log` |
+| `LOG_MAX_FILES` | 5 | `openlearn.log` 的历史份数 |
+| `LOG_LEVEL` | 生产 `info`，否则 `debug` | 平台 logger；审计 logger 的 pino 级别同样读取它 |
+| `LOG_REDACT` | 开启 | 设为 `false`、`0`、`off`、`no` 时关闭 pino 字段脱敏 |
+
+非法的大小或份数回退到默认值并告警一次。
+
+### 5.3 字段脱敏
+
+`packages/core/observability/redaction.ts` 按字段名替换为 `***REDACTED***`。pino 10 自带的 fast-redact 不支持双星号递归通配符：写成递归路径会静默匹配不到任何字段。实现改为每个字段名展开裸名，再加上 1 到 10 层单星前缀（`MAX_REDACT_DEPTH`）。`packages/core/observability/__tests__/redaction.test.ts` 覆盖这个行为。
+
+当前名单：`apiKey`、`api_key`、`password`、`passwordHash`、`password_hash`、`authorization`、`Authorization`、`cookie`、`Cookie`、`sessionToken`、`passcode`、`class_passcode`、`classPasscode`、`requestPayload`、`responsePayload`、`secret`、`newPassword`、`oldPassword`、`currentPassword`、`confirmPassword`、`textContent`、`text_content`、`studentAnswer`、`student_answer`、`answer`、`answers`、`session_data`、`edu_os_token`、`set-cookie`、`Set-Cookie`。
+
+pino 路径**刻意不**脱敏 `token`。仓库里大量 `token` 是依赖注入 Token，不是会话凭据。会话凭据走 `cookie`、`sessionToken`、`edu_os_token`。
+
+挡不住的情况：
+
+- 拼进字符串的秘密，例如消息文本里的密钥，或 `error.message` 里的 URL。
+- 嵌套深于 10 层，或字段名不在名单里。
+- 不经过 pino 的 `console.*`。
+- SQLite `events` 表与 `CapabilityLogger` 不走这份 pino 配置。事件表入库前另有口令字段处理，见 §8。
+
+### 5.4 离开进程之前的递归脱敏
+
+`packages/core/observability/sanitize.ts` 的 `sanitizeValue` / `scrubString` 用在审计记录和错误上报上，与 pino 路径互补。它按字段名整值替换，并在字符串里遮住 `olenc1:` 密文、`token_` 前缀、`Bearer` 和 bcrypt 哈希。深度上限 8，数组只保留前 20 项，字符串截断到 4000 字符。
+
+这一层额外遮住 pino 名单里没有的 `token`、`content`、`correct_answer`、`headers`、`body`、`req`、`request`、`socket`。它仍然不理解自由文本里的学生作文。
+
+---
+
+## 6. 安全审计
+
+`recordSecurityAudit`（`packages/core/observability/audit-log.ts`）与访问日志分开轮转，方便单独保留。
+
+- 文件：`<LOG_DIR>/audit.log`。`AUDIT_LOG_MAX_SIZE_MB` 默认 20，`AUDIT_LOG_MAX_FILES` 默认 20。超出份数的最旧文件删除，没有按天切割，也没有外发。
+- 非测试环境始终写 stdout。目录不可写时只有 stdout。测试环境（`NODE_ENV=test` 或设置了 `VITEST`）使用 silent logger，不写文件。
+- 同一条记录再写进平台 logger。记录经过 `sanitizeValue`。
+- 每条都带 `audit: true` 和 `event`。未显式传入 `requestId` 时，从 `requestLogContext` 补上。
+
+当前写入的事件：
+
+| `event` | 调用位置 | 记录什么 |
+| --- | --- | --- |
+| `auth.login_failed` | `server/routes/roster.ts` 的登录处理 | `reason`、`entrance`、截断后的 `account`。不写口令 |
+| `auth.forbidden` | `server/middleware/request-observability.ts` | 响应 403，且路径不是登录接口。带 `requestId`、`userId`、`method`、`path` |
+| `rate_limit.triggered` | 同上 | 响应 429。字段同上 |
+| `plugin.installed` | `packages/plugins/builtin.ts`、`server/routes/plugins.ts` | `actorId`、插件标识，以及 `via`（`source`、`zip`、`url`、`zip-raw`）。不写压缩包字节 |
+| `plugin.enabled` | `packages/plugins/builtin.ts` | `actorId`、`pluginId` |
+| `plugin.public_route_approved` | `server/routes/plugins.ts` | `actorId`、`pluginId`、`manifestId`、获准的路由列表 |
+
+这张表不是总线事件表。领域事件仍进 §8 的 `events`。
+
+---
+
+## 7. 错误上报
+
+`packages/core/observability/error-reporter.ts` 的 `captureError` 先 `sanitizeErrorReport`：去掉 path 上的查询串，消息、名称、堆栈按 §5.4 擦洗并截断。
+
+未配置 DSN 时，非测试环境只写一条平台日志 `error.captured`，字段在 `errorReport` 下。配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时，再向 Sentry 兼容的 Envelope 地址 POST（自建 Sentry 或 GlitchTip）。DSN 形如 `https://<key>@<host>/<projectId>`，项目 ID 必须是数字。POST 超时 3 秒，失败被吞掉，不影响请求。
+
+`source` 可以是 `uncaught`、`unhandledRejection`、`http`、`client`、`runtime`、`promise`。
+
+| 来源 | 位置 |
+| --- | --- |
+| 未处理的 rejection / 未捕获异常 | `server.ts` 调用 `captureUnknownError` |
+| HTTP 5xx | `server/utils/error-handler.ts` 与 `server/middleware/request-observability.ts` |
+| 浏览器 | `POST /api/client-errors`（`server/routes/client-errors.ts`） |
+
+浏览器入口不要求登录，响应恒为 204，不回显正文。`Content-Length` 大于 16 KiB、没有 `message`，或 body 不是对象时直接丢掉。`source` 只接受 `client`、`runtime`、`promise`，其余按 `client`。
+
+---
+
+## 8. 插件日志
+
+日志不是 DI Token。`packages/core/plugin-host/context-builder.ts` 调用 `createLogger`，组件名是 `Plugin:` 加上 manifest id，再包成 `packages/core/plugin-host/types.ts` 里的 `IPluginLogger`（`debug` / `info` / `warn` / `error`）。`meta` 落在 JSON 的 `meta` 字段，消息落在 `msg`。`component` 绑定为 `Plugin:<id>`。时间戳是 pino 自己的 `time`。
+
+Worker 里的 `ctx.log` 由 `packages/core/worker-runtime/bootstrap/sections/message-handler.ts` 转到 `console.*`。`packages/core/worker-runtime/worker-manager.ts` 把 worker 的 stdout 以 `info`、stderr 以 `error` 送进同一个 `Plugin:<id>` 子 logger。因此 Worker 里的 `console.log` / `ctx.log` 会进入平台日志文件。inline 插件的 `ctx.log` 直接打 pino；它自己的裸 `console.*` 不进文件。
+
+---
+
+## 9. 另外两套不进 pino 的记录
+
+### 9.1 事件表
+
+`packages/core/kernel/index.ts` 的 `initAuditLog` 订阅事件总线的 `*`，把每条事件插入 SQLite `events`。列是 `id`、`type`、`source`、`payload`、`timestamp`、`correlationId`，以及存在时的 `lesson_id`（`migrations/006_classroom_event_bus.sql`）。首次写入时用 `PRAGMA table_info(events)` 在带 `lesson_id` 与不带该列的 INSERT 之间选一次。
+
+`payload` 入库前经过 `packages/core/db/class-passcode-crypto.ts` 的 `redactPasscodeMaterial`：口令字段换成占位符，字符串里的 `olenc1:` 密文被擦掉。这不是 pino 脱敏，也不写入 `audit.log`。
+
+### 9.2 AI 能力内存日志
+
+`packages/core/ai-capability/logging/capability-logger.ts` 的 `CapabilityLogger` 是进程内环形缓冲，与 pino 无关。默认最多 200 条（`AI_CAPABILITY_LOG_MAX_ENTRIES`），30 分钟过期（`AI_CAPABILITY_LOG_TTL_MS`，小于等于 0 表示不过期）。默认只保留载荷的形状摘要；`AI_CAPABILITY_LOG_CAPTURE_PAYLOAD=true` 时才保存全文。进程退出即丢失。
+
+生产构造点在 `packages/core/ai-capability/ai-capability-kernel.ts` 与 `packages/core/bootstrap/composition/whiteboard-composition-module.ts`。
+
+---
+
+## 10. 速查
+
+| 问题 | 答案 |
+| --- | --- |
+| 目录里有哪些实现？ | §1 的九个文件。没有 barrel，没有追踪 |
+| 探针怎么分？ | `/health` 只表示进程活着。`/health/ready` 查数据库、存储可写、迁移文件都已应用。失败体只有 `status` |
+| `/metrics` 现在有什么？ | `openlearn_up`、运行秒数、RSS、按状态类的 `openlearn_http_responses_total`，以及运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`。要管理员会话或 `METRICS_TOKEN` |
+| 日志文件在哪？ | `<LOG_DIR>/openlearn.log`，审计在同目录 `audit.log`。Compose 的目录是 `/data/logs` |
+| 有脱敏吗？ | pino 按 §5.3 的字段名。审计和错误上报再用 §5.4。字符串里的秘密和裸 `console.*` 仍可能漏出 |
+| 插件怎么打日志？ | `PluginContext.log`，不是 DI。Worker 的 console 经 stdout/stderr 进入同一子 logger |
+| 安全审计和 `events` 表是一回事吗？ | 不是。审计是 `audit.log` 里 §6 的事件。`events` 是总线全量记录 |
