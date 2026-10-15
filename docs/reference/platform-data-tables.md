@@ -139,10 +139,22 @@
 | `id`                        | TEXT PK | 课节 ID     |
 | `title`                     | TEXT    | 标题        |
 | `content`                   | TEXT    | 内容        |
-| `timeline`                  | TEXT    | 时间轴 JSON |
-| `progress_mode`             | TEXT    | `manual` 等 |
-| `progress_conditions`       | TEXT    | 进度条件    |
+| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]` |
+| `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退 |
+| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates` |
 | `created_at` / `updated_at` | INTEGER | 时间戳      |
+
+### `segment_visits`
+
+学生在某一环节上的停留。`id` / `lesson_id` / `segment_id` / `student_id` / `entered_at` / `left_at`。教师推进全班环节时，其他环节上仍打开的访问会被写上 `left_at`。`dwell_seconds` 读取已结束区间，以及仍打开的访问直到当前时刻。
+
+### `segment_gate_overrides`
+
+教师对「学生 × 环节」的放行。主键 `(lesson_id, segment_id, student_id)`，另有 `actor_id` / `reason` / `created_at`。写入与撤销分别发布 `segment.gate_overridden` 与 `segment.gate_override_revoked`。
+
+### `lesson_checkins`
+
+课节级签到。主键 `(lesson_id, student_id)`，`checked_in_at`。没有排课行时，课堂签到仍写这里，供 `checked_in` 条件读取。有排课且考勤为 `present` 时同样视为已签到。
 
 ### `whiteboard_elements`
 

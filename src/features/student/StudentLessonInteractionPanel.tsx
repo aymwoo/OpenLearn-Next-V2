@@ -20,6 +20,10 @@ export interface StudentLessonInteractionPanelProps {
   elements: any[];
   activeRole: 'student' | 'teacher';
   activeSegmentId: string | null;
+  /** 未达标时改为上一环节，让学生能补齐条件。 */
+  contentSegmentId?: string | null;
+  /** 正在核对，或锁定且没有可回看的上一环节。 */
+  blockSegmentContent?: boolean;
   setActiveSegmentId: (id: string) => void;
   fetchElements: (lessonId: string) => void;
   currentVfsParent: string | null;
@@ -45,6 +49,8 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
     elements,
     activeRole,
     activeSegmentId,
+    contentSegmentId,
+    blockSegmentContent = false,
     setActiveSegmentId,
     fetchElements,
     currentVfsParent,
@@ -72,6 +78,9 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
     }
     setStudentLessonTab(tab);
   };
+
+  const boardSegmentId = contentSegmentId || activeSegmentId;
+  const hideSegmentBody = blockSegmentContent;
 
   const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment') =>
     `px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -151,15 +160,23 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           </button>
         </div>
       </div>
-      {studentLessonTab === 'whiteboard' && (
+      {hideSegmentBody ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-amber-800 bg-amber-50/60 rounded-xl border border-amber-200">
+          {lang === 'zh' ? '本环节内容暂不可见' : 'This segment is not visible yet'}
+        </div>
+      ) : null}
+      {!hideSegmentBody && studentLessonTab === 'whiteboard' && (
         <LazyWhiteboard
           lessonId={selectedLesson}
           elements={elements}
           userRole={activeRole}
           readOnly={isStudentLocked}
           followRemoteFullscreen
-          activeSegmentId={activeSegmentId}
-          onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+          activeSegmentId={boardSegmentId}
+          onSegmentSync={(segId: string) => {
+            if (contentSegmentId !== undefined && contentSegmentId !== activeSegmentId) return;
+            setActiveSegmentId(segId);
+          }}
           onElementUpdate={async () => {
             /* readonly or sync */
           }}
@@ -186,7 +203,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           }}
         />
       )}
-      {studentLessonTab === 'courseware' && (
+      {!hideSegmentBody && studentLessonTab === 'courseware' && (
         <div className="flex-1 flex gap-4 min-h-0">
           {/* Courseware Selector Sidebar */}
           <div className="w-48 flex-shrink-0 bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col min-h-0">
@@ -253,7 +270,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           </div>
         </div>
       )}
-      {studentLessonTab === 'assignment' && selectedLesson && activeStudentId && (
+      {!hideSegmentBody && studentLessonTab === 'assignment' && selectedLesson && activeStudentId && (
         <StudentAssignmentEvalPanel
           lessonId={selectedLesson}
           studentId={activeStudentId}

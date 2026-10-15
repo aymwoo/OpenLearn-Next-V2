@@ -25,7 +25,6 @@ import {
   ISemesterGradeServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
-  IStageGuardServiceToken,
 } from './packages/core/di/interfaces.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
@@ -275,7 +274,11 @@ async function startServer() {
     '/api/courseware/inline',
     '/api/plugins/upload-zip',
   ];
-  app.use(largeUploadEndpoints, express.json({ limit: '110mb' }), express.urlencoded({ limit: '110mb', extended: true }));
+  app.use(
+    largeUploadEndpoints,
+    express.json({ limit: '110mb' }),
+    express.urlencoded({ limit: '110mb', extended: true }),
+  );
 
   // 3. 全局 JSON 体积收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险
   app.use(express.json({ limit: '2mb' }));
@@ -372,14 +375,10 @@ async function startServer() {
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
 
-  // Classroom Lifecycle and Realtime Interaction Engine
-  // R-5（第三轮审计）：把内核 StageGuardPipeline 注入课堂运行时 —— 插件经
-  // SDK registerStageGuard 写入的门禁自此对阶段推进真实生效（此前两套系统
-  // 互不相通，SDK 契约暴露的门禁注册表为空转）。
-  const stageGuardPipeline = await kernelContainer.serviceRegistry.resolve(IStageGuardServiceToken);
-  const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io, {
-    stageGuardPipeline: stageGuardPipeline ?? undefined,
-  });
+  // 四阶段课堂生命周期与教学环节门槛分开：
+  // transitionStage 只跑本服务 registerStageGuard 的生命周期守卫。
+  // timeline.gates 由 SegmentGateService 在学生进入环节、教师广播环节时判定。
+  const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
 

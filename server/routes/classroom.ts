@@ -11,6 +11,7 @@ import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
+import { segmentGateService } from '../services/segment-gate-service.js';
 import { actorUserId, authorizeClass, authorizeLessonStaff, isAdministrator } from '../services/class-access.js';
 
 /**
@@ -674,6 +675,83 @@ export function registerClassroomRoutes(
     },
   );
 
+  // 教师推进全班当前环节。指针对全班唯一；学生能否看到内容由 segment-access 再判。
+  app.post(
+    '/api/classroom/sessions/:lessonId/segment',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const session = (req as any).session;
+        const staff = authorizeLessonStaff(db, session, lessonId);
+        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+
+        const raw = req.body?.activeSegmentId;
+        if (typeof raw !== 'string' || !raw.trim()) {
+          return res.status(400).json({ error: 'activeSegmentId is required' });
+        }
+        const activeSegmentId = raw.trim().slice(0, 128);
+        const teacherId = getActorId(req) || 'teacher';
+        await classroomService.getOrCreateSession(lessonId, teacherId);
+        segmentGateService.setClassSegment(lessonId, activeSegmentId);
+        if (io) {
+          io.to(lessonId).emit('student-active-segment-changed', { lessonId, activeSegmentId });
+        }
+        res.json({ success: true, activeSegmentId, classSegmentId: segmentGateService.readClassSegmentId(lessonId) });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // 教师对学生 × 环节放行。写入审计事件 segment.gate_overridden。
+  app.post(
+    '/api/classroom/sessions/:lessonId/segment-overrides',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const session = (req as any).session;
+        const staff = authorizeLessonStaff(db, session, lessonId);
+        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+        const studentId = typeof req.body?.studentId === 'string' ? req.body.studentId.trim() : '';
+        const segmentId = typeof req.body?.segmentId === 'string' ? req.body.segmentId.trim().slice(0, 128) : '';
+        if (!studentId || !segmentId) {
+          return res.status(400).json({ error: 'studentId and segmentId are required' });
+        }
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : undefined;
+        const actorId = getActorId(req) || 'teacher';
+        await segmentGateService.setOverride(actorId, lessonId, segmentId, studentId, reason);
+        res.json({ success: true });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  app.delete(
+    '/api/classroom/sessions/:lessonId/segment-overrides',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const session = (req as any).session;
+        const staff = authorizeLessonStaff(db, session, lessonId);
+        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+        const studentId = typeof req.body?.studentId === 'string' ? req.body.studentId.trim() : '';
+        const segmentId = typeof req.body?.segmentId === 'string' ? req.body.segmentId.trim().slice(0, 128) : '';
+        if (!studentId || !segmentId) {
+          return res.status(400).json({ error: 'studentId and segmentId are required' });
+        }
+        const actorId = getActorId(req) || 'teacher';
+        await segmentGateService.clearOverride(actorId, lessonId, segmentId, studentId);
+        res.json({ success: true });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
   // 签到核销闭环（二选一落定：实现核销并直写 attendance，消除双轨）：
   // 学生输入大屏 4 位码 → 校验 classroom_sessions.checkin_code → 查排课写 attendance(present)。
   // 无排课时仅标记会话级签到成功（attendanceScheduled:false），不断言失败。
@@ -729,6 +807,7 @@ export function registerClassroomRoutes(
           }
         } catch (_) {}
 
+        segmentGateService.recordCheckin(lessonId, studentId);
         if (io) emitClassroomEvent(io, lessonId, 'classroom:checkin_submitted', { lessonId, studentId });
         res.json({ success: true, attendanceScheduled });
       } catch (e: any) {

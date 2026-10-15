@@ -1188,6 +1188,20 @@ declare interface PaletteItemConfig {
   component?: (props: PaletteItemComponentProps) => unknown;
 }
 
+/**
+ * 插件声明的教学环节进入条件。
+ * 宿主读取 `contributes['segment.gate_type']`，再调用 `commandType` 做只读判定。
+ * 不要把判定函数注册进宿主：进程隔离后函数过不了边界。
+ */
+declare interface SegmentGateTypeContribution {
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  /** 已注册的命令。建议同时设置 capabilityRequired: 'segment:gate_eval'，且不要 exposeToAgent。 */
+  commandType: string;
+  paramsSchema?: Record<string, unknown>;
+}
+
 /** Teaching segment type contributed via `ctx.ui.registerSegmentType` (lesson editor timeline). */
 declare interface SegmentTypeMeta {
   id: string;
@@ -1282,6 +1296,7 @@ export type {
   PaletteItemComponentProps,
   PaletteItemConfig,
   SegmentTypeMeta,
+  SegmentGateTypeContribution,
   PluginApiRequest,
   PluginApiResponse,
   PluginApiHandler,

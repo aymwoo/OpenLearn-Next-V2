@@ -13,7 +13,7 @@
  * fail-open 改成 fail-close 的语义，一行也落不到服务端 —— 因为**根本没有服务端**。
  *
  * 现在改为：
- *   store.checkStageAccess → POST /api/lessons/:id/stage-access → 内核 DI 的 StageGuardPipeline
+ *   store.checkStageAccess → POST /api/lessons/:id/segment-access → SegmentGateService
  *
  * 守卫是**函数**，无法跨进程传递，所以守卫注册天然只能在服务端 in-process DI 完成。
  * store 上的 `registerStageGuard` / `unregisterStageGuard` 因此被移除（零生产调用方）。
@@ -155,10 +155,10 @@ describe('B/C 组 · 客户端走服务端权威判定（I-1）', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, any];
-    expect(url).toContain('/api/lessons/les_1/stage-access');
+    expect(url).toContain('/api/lessons/les_1/segment-access');
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
-    expect(sentBodies[0]).toMatchObject({ targetStageId: 'stage_lab' });
+    expect(sentBodies[0]).toMatchObject({ targetSegmentId: 'stage_lab' });
   });
 
   it('B2. 直接采用服务端判定结果', async () => {
@@ -210,6 +210,14 @@ describe('B/C 组 · 客户端走服务端权威判定（I-1）', () => {
     expect(res.allowed).toBe(false);
     expect(fetchSpy, 'lessonId 缺失时不应发起无意义的请求').not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  it('C5b. 显式 lessonId 在 currentLesson 为空时仍然发往该课节', async () => {
+    useLessonEngineStore.setState({ currentLesson: null });
+    await useLessonEngineStore.getState().checkStageAccess('seg-b', 'student_001', 'les_live');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url] = fetchSpy.mock.calls[0] as [string, unknown];
+    expect(url).toContain('/api/lessons/les_live/segment-access');
   });
 
   it('C6. store 不再暴露客户端守卫注册 API（守卫是函数，无法跨进程传递）', () => {

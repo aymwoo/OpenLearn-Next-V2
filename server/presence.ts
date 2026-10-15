@@ -1,6 +1,7 @@
 import type { Server } from 'socket.io';
 import type { EventBusPort } from '../packages/core/event-bus/index.js';
 import { lessonActiveSegments, setActiveSegment } from './shared-state.js';
+import { segmentGateService } from './services/segment-gate-service.js';
 import { randomId } from './utils/id.js';
 import { createLogger } from '../packages/core/observability/logger.js';
 import { kernelContainer } from '../packages/core/kernel/index.js';
@@ -462,8 +463,12 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         plog.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
       }
-      // Store the active segment in memory with capacity guard
-      setActiveSegment(data.lessonId, data.activeSegmentId);
+      // 全班指针前进，并冻结其他环节上仍打开的停留。学生能否看到内容由 segment-access 再判。
+      if (data.lessonId && data.activeSegmentId) {
+        segmentGateService.setClassSegment(data.lessonId, String(data.activeSegmentId).slice(0, 128));
+      } else {
+        setActiveSegment(data.lessonId, data.activeSegmentId);
+      }
       // Broadcast to everyone in the lesson room (including the teacher client)
       io.to(data.lessonId).emit('student-active-segment-changed', data);
     });

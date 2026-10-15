@@ -37,4 +37,5 @@
 | 021  | 021_class_owner_and_password_gate.sql | `classes.owner_user_id`（教师仅能管理自己的班；空值仅管理员可见）与 `users.must_change_password`。空归属用 `node scripts/backfill-class-owners.mjs --assign <教师用户名>`，或 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL` |
 | 022  | 022_plugin_public_routes.sql      | `plugin_public_routes`：管理员显式批准的插件公开路由。`auth: false` 本身不再匿名放行。升级后需重新批准 |
 | 023  | 023_encrypt_class_passcodes.sql   | 标记班级临时口令改为 AES-256-GCM 密文。启动时 `encryptStoredClassPasscodes()` 把仍是明文的行加密，已带 `olenc1:` 的行跳过 |
+| 024  | 024_segment_gates.sql             | 教学环节门槛：`segment_visits`（停留）、`segment_gate_overrides`（教师放行）、`lesson_checkins`（无排课时的签到） |
 | 025  | 025_assignment_lookup_indexes.sql | `assignment_submissions(student_id)` 与 `assignments(lesson_id)` 索引，供课节进度聚合作业最高分和学生提交查询。可重复执行 |

@@ -1757,6 +1757,27 @@ async function activate(ctx: FrontendPluginContext) {
 
 > `editor.timeline_segment` 作为 **UI 附加面板** 槽位时，在 `activate` 里 `registerExtensionPoint` 挂载 React 组件即可；仅当 contributes 条目含双语 label 时才会桥接为环节类型。
 
+### 6.11 教学环节进入条件
+
+自定义环节**类型**只影响备课下拉和附加面板。学生能不能看到教师推进到的环节，由环节对象上的 `gates` 决定。插件用声明式贡献加只读命令参与判定，这样在进程内和子进程隔离下都能工作：
+
+```json
+{
+  "contributes": {
+    "segment.gate_type": [
+      {
+        "id": "lab_report_ready",
+        "labelZh": "实验报告已交",
+        "labelEn": "Lab report submitted",
+        "commandType": "judge"
+      }
+    ]
+  }
+}
+```
+
+`activate` 里 `actionRegistry.register`（`capabilityRequired: 'segment:gate_eval'`，`exposeToAgent: false`）并 `commandBus.registerHandler`。处理函数只读，返回 `{ allowed, reason?, progress? }`。宿主超时 1500ms，超时或异常都拒绝进入。不要调用 `registerGuard` 来拦直播环节。
+
 ---
 
 ## 7. 安全与权限

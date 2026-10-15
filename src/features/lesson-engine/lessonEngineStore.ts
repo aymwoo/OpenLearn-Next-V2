@@ -50,7 +50,7 @@ interface LessonEngineStoreState {
   setPresentationMode: (enabled: boolean) => void;
   setUser: (user: UserRef) => void;
   takeSnapshot: () => LessonSnapshot;
-  checkStageAccess: (targetStageId: string, studentId?: string) => Promise<StageGuardResult>;
+  checkStageAccess: (targetStageId: string, studentId?: string, lessonId?: string) => Promise<StageGuardResult>;
   /** 仅供离线预览/测试；checkStageAccess 不会回退到它 */
   checkStageAccessLocally: (targetStageId: string, studentId?: string) => Promise<StageGuardResult>;
 }
@@ -213,20 +213,19 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
      * `coreRuntime` 是 `new LessonRuntime({ eventBus: frontendEventBus })`，
      * 整套管线在客户端，学生改 DevTools 本地 state 即可解锁任意环节。
      *
-     * 现在改为调服务端 `POST /api/lessons/:id/stage-access`：守卫注册在内核 DI，
-     * 守卫实现读服务端状态，客户端无法伪造前置条件。
+     * 现在改为调服务端 `POST /api/lessons/:id/segment-access`。
+     * 显式传入的 lessonId 优先于 store 里的 currentLesson（直播页不会初始化后者）。
      *
-     * **失败即拒绝**：网络错误、服务端 5xx、非 JSON 响应一律按 fail-close 处理
-     * （与 I-2 的默认语义一致）。这里**不做**「回退到本地管道」——
-     * 那等于把绕过方法又装回去。
+     * **失败即拒绝**：网络错误、服务端 5xx、非 JSON 响应一律按 fail-close 处理。
+     * 403 若正文含 `allowed` 布尔值，采用该判定（未达标是业务结果，不是服务故障）。
+     * 这里**不做**「回退到本地管道」。
      */
-    checkStageAccess: async (targetStageId: string, studentId?: string) => {
+    checkStageAccess: async (targetStageId: string, studentId?: string, lessonId?: string) => {
       const state = get();
       const currentStudentId = studentId || state.currentUser?.id || 'anonymous';
-      const lessonId = state.currentLesson?.id || '';
-      const currentStageId = state.currentStage?.id || null;
+      const resolvedLessonId = lessonId || state.currentLesson?.id || '';
 
-      if (!lessonId) {
+      if (!resolvedLessonId) {
         return {
           allowed: false,
           reason: '缺少 lessonId，无法校验环节门禁',
@@ -234,26 +233,22 @@ export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) =>
       }
 
       try {
-        const res = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/stage-access`, {
+        const res = await fetch(`/api/lessons/${encodeURIComponent(resolvedLessonId)}/segment-access`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ currentStageId, targetStageId, metadata: { studentId: currentStudentId } }),
+          body: JSON.stringify({ targetSegmentId: targetStageId, studentId: currentStudentId }),
         });
 
+        const result = await res.json().catch(() => null);
+        if (typeof result?.allowed === 'boolean') return result;
         if (!res.ok) {
           return {
             allowed: false,
             reason: `门禁服务不可用（HTTP ${res.status}）`,
           };
         }
-
-        const result = await res.json();
-        // 契约不符时也按拒绝处理 —— 解析失败绝不能当成「放行」
-        if (typeof result?.allowed !== 'boolean') {
-          return { allowed: false, reason: '门禁服务返回了无法识别的结果' };
-        }
-        return result;
+        return { allowed: false, reason: '门禁服务返回了无法识别的结果' };
       } catch (err) {
         return {
           allowed: false,

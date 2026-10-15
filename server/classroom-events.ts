@@ -30,8 +30,12 @@ export const CLASSROOM_EVENTS = {
   WHITEBOARD_QUIZ_ANSWERED: 'whiteboard.quiz_answered',
   /** 课件 attempt 日志 / 提交 / 认领 */
   COURSEWARE_ATTEMPT_UPDATED: 'courseware.attempt_updated',
-  /** 课节进度模式（manual / auto …）切换 */
+  /** 课节进度模式（manual / auto …）切换。课级模式已废弃，仅保留广播。 */
   LESSON_PROGRESS_MODE_CHANGED: 'lesson.progress_mode_changed',
+  /** 教师放行某学生进入某一教学环节 */
+  SEGMENT_GATE_OVERRIDDEN: 'segment.gate_overridden',
+  /** 教师撤销上述放行 */
+  SEGMENT_GATE_OVERRIDE_REVOKED: 'segment.gate_override_revoked',
 } as const;
 
 export type ClassroomEventType = (typeof CLASSROOM_EVENTS)[keyof typeof CLASSROOM_EVENTS];

@@ -1,10 +1,12 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
 import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
 import { StudentLessonContentPanel } from './StudentLessonContentPanel';
 import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { SegmentGateBanner } from './SegmentGateBanner';
+import { useSegmentAccess } from './useSegmentAccess';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -71,6 +73,43 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     setStudentSelectedCourseware,
     addToast,
   } = props;
+  const segmentAccess = useSegmentAccess(selectedLesson, activeSegmentId);
+  const checkingSegment = !!activeSegmentId && (segmentAccess.status === 'idle' || segmentAccess.status === 'loading');
+  const blockSegmentContent = checkingSegment || (segmentAccess.status === 'locked' && !segmentAccess.visibleSegmentId);
+  const contentSegmentId =
+    segmentAccess.status === 'locked' && segmentAccess.visibleSegmentId
+      ? segmentAccess.visibleSegmentId
+      : activeSegmentId;
+
+  // 迟到进入的学生收不到当时的广播。轮询课堂会话，把本地指针对齐到全班当前环节。
+  useEffect(() => {
+    if (!selectedLesson || typeof fetch !== 'function') return;
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}`, {
+          credentials: 'same-origin',
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const id = json?.session?.current_segment_id;
+        if (typeof id === 'string' && id && id !== activeSegmentId) {
+          setActiveSegmentId(id);
+        }
+      } catch {
+        /* 会话尚未建立时保持本地环节，下一次轮询再对齐 */
+      }
+    };
+    void pull();
+    const timer = window.setInterval(() => {
+      void pull();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedLesson, activeSegmentId, setActiveSegmentId]);
+
   return (
     <div className="flex flex-col h-full space-y-4">
       <StudentLessonHeader
@@ -83,6 +122,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         selectedLesson={selectedLesson}
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
+      <SegmentGateBanner access={segmentAccess} lang={lang} />
       <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
         <StudentLessonContentPanel
           students={students}
@@ -101,6 +141,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           lessons={lessons}
           isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
           addToast={addToast}
+          segmentAccess={segmentAccess}
         />
         <StudentLessonInteractionPanel
           isStudentLocked={isStudentLocked}
@@ -115,6 +156,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           elements={elements}
           activeRole={activeRole}
           activeSegmentId={activeSegmentId}
+          contentSegmentId={contentSegmentId}
+          blockSegmentContent={blockSegmentContent}
           setActiveSegmentId={setActiveSegmentId}
           fetchElements={fetchElements}
           currentVfsParent={currentVfsParent}
