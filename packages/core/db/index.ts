@@ -8,6 +8,7 @@ import { writeFileSync } from 'fs';
 import bcrypt from 'bcryptjs';
 import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './migrator.js';
 import { applyStartupDataMigrations } from './class-passcode-crypto.js';
+import { purgeExpiredEvents } from './event-retention.js';
 import { logEncryptionKeyStartupWarning } from '../di/api-key-crypto.js';
 
 const BCRYPT_ROUNDS = 10;
@@ -271,6 +272,14 @@ export function initializeDatabase(instance: Database.Database): void {
     }
   } catch (e) {
     console.error('Failed to seed default AI Providers:', e);
+  }
+
+  // 总线事件只在启动时按保留期删一次。0 表示不删。失败则拒绝在未清理的库上继续启动。
+  try {
+    purgeExpiredEvents(instance);
+  } catch (err) {
+    console.error('[DB SSOT] FATAL: events 保留期清理失败，拒绝启动。', err);
+    throw err;
   }
 }
 
