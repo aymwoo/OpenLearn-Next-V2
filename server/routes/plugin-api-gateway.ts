@@ -26,6 +26,8 @@ import type {
 } from '../../packages/core/plugin-host/types.js';
 import { compileRoutePattern } from '../../packages/core/plugin-host/http-router.js';
 import { isPublicRouteApproved } from '../../packages/core/plugin-host/public-routes.js';
+import { parseRequiresEntry } from '../../packages/core/esm-loader/manifest-utils.js';
+import { IAuthSessionBridgeToken } from '../../packages/core/di/interfaces.js';
 
 /** 平台已有的保留管理动作路径（当只有单段子路径且完全匹配时放行给后续 Express 路由） */
 const RESERVED_ACTIONS = new Set([
@@ -183,6 +185,25 @@ class StreamConnectionTracker {
 }
 
 const streamConnectionTracker = new StreamConnectionTracker();
+
+/**
+ * 会话桥特权判定。
+ *
+ * 与 `PluginHost.checkSemVerCompatibility` 使用同一解析器 `parseRequiresEntry`
+ * （`packages/core/plugin-host/core.ts` 对 `manifest.requires` 的版本后缀语法）：
+ * 第一个 `@` 是 scope，`/` 之后的第二个 `@` 才是版本范围起点。去掉该后缀后，
+ * Token 名必须与 `IAuthSessionBridgeToken.name`
+ * （`@openlearn/core:IAuthSessionBridgeService`）全等。
+ * 子串匹配会放行 `NotReallyIAuthSessionBridgeServiceX` 这类仿冒声明。
+ */
+export function manifestDeclaresAuthSessionBridge(requires: readonly unknown[] | null | undefined): boolean {
+  if (!Array.isArray(requires)) return false;
+  const expected = IAuthSessionBridgeToken.name;
+  return requires.some((entry) => {
+    if (typeof entry !== 'string') return false;
+    return parseRequiresEntry(entry).tokenName === expected;
+  });
+}
 
 /**
  * 提取当前登录用户的认证信息
@@ -494,10 +515,8 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
     const status =
       typeof response.status === 'number' && response.status >= 100 && response.status <= 599 ? response.status : 200;
 
-    // SEC-LTI-AUTH: 仅当插件在 Manifest 中明确声明依赖 IAuthSessionBridgeService 特权服务时，才允许网关注入会话 Cookie
-    const allowsSessionBridge =
-      Array.isArray(manifest?.requires) &&
-      manifest.requires.some((r: string) => typeof r === 'string' && r.includes('IAuthSessionBridgeService'));
+    // SEC-LTI-AUTH: 仅当 requires 去掉版本后缀后与会话桥 Token 全等时，才允许网关注入会话 Cookie
+    const allowsSessionBridge = manifestDeclaresAuthSessionBridge(manifest?.requires);
 
     if (
       allowsSessionBridge &&

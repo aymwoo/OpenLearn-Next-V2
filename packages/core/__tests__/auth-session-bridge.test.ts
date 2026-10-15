@@ -172,6 +172,120 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
       }
     });
 
+    it('requires 为精确 Token（无版本后缀）时，网关应下发会话 Cookie', async () => {
+      const pluginHost = kernelContainer.pluginHost;
+      const testPluginId = 'test-lti-sso-exact';
+
+      const manifest = {
+        id: testPluginId,
+        name: 'Test LTI SSO Exact',
+        version: '1.0.0',
+        main: 'index.js',
+        requires: ['@openlearn/core:IAuthSessionBridgeService'],
+        api: {
+          routes: [{ method: 'POST', path: '/launch', auth: false }],
+        },
+      };
+
+      kernelContainer.db
+        .prepare(
+          `
+        INSERT OR REPLACE INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        )
+        .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
+      approveDeclaredPublicRoutes(kernelContainer.db, [testPluginId], manifest);
+
+      const dummyToken = 'token_' + 'c'.repeat(32);
+      const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
+      pluginHost.dispatchHttpRequest = async () => ({
+        status: 200,
+        headers: {},
+        body: { ok: true },
+        sessionToken: dummyToken,
+      });
+
+      const req: any = {
+        method: 'POST',
+        params: { pluginId: testPluginId, 0: 'launch' },
+        headers: {},
+        body: {},
+        query: {},
+        ip: '127.0.0.1',
+      };
+      const res = createMockRes();
+
+      try {
+        await pluginApiGatewayMiddleware(req as Request, res as Response, () => {});
+
+        expect(res.statusCode).toBe(200);
+        const cookie = res.getHeader('Set-Cookie');
+        expect(cookie).toBeDefined();
+        expect(cookie).toContain(`edu_os_token=${dummyToken}`);
+        expect(cookie).toContain('HttpOnly');
+      } finally {
+        pluginHost.dispatchHttpRequest = originalDispatch;
+        kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(testPluginId);
+      }
+    });
+
+    it('仿冒声明 NotReallyIAuthSessionBridgeServiceX 不得下发会话 Cookie', async () => {
+      const pluginHost = kernelContainer.pluginHost;
+      const testPluginId = 'test-lti-sso-lookalike';
+
+      const manifest = {
+        id: testPluginId,
+        name: 'Test LTI SSO Lookalike',
+        version: '1.0.0',
+        main: 'index.js',
+        // 子串包含 IAuthSessionBridgeService，但不是宿主 Token 全名
+        requires: ['NotReallyIAuthSessionBridgeServiceX', '@openlearn/core:NotReallyIAuthSessionBridgeServiceX@^1.0.0'],
+        api: {
+          routes: [{ method: 'POST', path: '/launch', auth: false }],
+        },
+      };
+
+      kernelContainer.db
+        .prepare(
+          `
+        INSERT OR REPLACE INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        )
+        .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
+      approveDeclaredPublicRoutes(kernelContainer.db, [testPluginId], manifest);
+
+      const dummyToken = 'token_' + 'd'.repeat(32);
+      const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
+      pluginHost.dispatchHttpRequest = async () => ({
+        status: 200,
+        headers: {},
+        body: { ok: true },
+        sessionToken: dummyToken,
+      });
+
+      const req: any = {
+        method: 'POST',
+        params: { pluginId: testPluginId, 0: 'launch' },
+        headers: {},
+        body: {},
+        query: {},
+        ip: '127.0.0.1',
+      };
+      const res = createMockRes();
+
+      try {
+        await pluginApiGatewayMiddleware(req as Request, res as Response, () => {});
+
+        expect(res.statusCode).toBe(200);
+        expect(res.getHeader('Set-Cookie')).toBeUndefined();
+      } finally {
+        pluginHost.dispatchHttpRequest = originalDispatch;
+        kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(testPluginId);
+      }
+    });
+
     it('未声明 IAuthSessionBridgeService 特权的普通插件若返回 sessionToken，网关应拒绝下发 Cookie', async () => {
       const pluginHost = kernelContainer.pluginHost;
       const unauthPluginId = 'test-unauthorized-sso';
