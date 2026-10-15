@@ -25,6 +25,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/observability/audit-log.js';
+
+const GENERIC_LOGIN_FAILURE = 'Incorrect username or password';
 
 describe('登录负面路径鉴权（教师入口 + 学生入口）', () => {
   let server: Server;
@@ -125,11 +128,11 @@ describe('登录负面路径鉴权（教师入口 + 学生入口）', () => {
       expect(body.session?.username).toBe(bcryptUsername);
     });
 
-    it('错误密码 → 401 Incorrect password，且不创建任何会话', async () => {
+    it('错误密码 → 401，客户端文案不区分「密码错误」，且不创建任何会话', async () => {
       const res = await teacherLogin(bcryptUsername, 'WrongPassword-0000');
       expect(res.status).toBe(401);
       const body: any = await res.json();
-      expect(body.error).toBe('Incorrect password');
+      expect(body.error).toBe(GENERIC_LOGIN_FAILURE);
       // 响应体绝不能带出 session/token
       expect(body.session).toBeUndefined();
       expect(body.token).toBeUndefined();
@@ -154,7 +157,7 @@ describe('登录负面路径鉴权（教师入口 + 学生入口）', () => {
       const res = await teacherLogin(shaUsername, 'NotTheLegacyPassword');
       expect(res.status).toBe(401);
       const body: any = await res.json();
-      expect(body.error).toBe('Incorrect password');
+      expect(body.error).toBe(GENERIC_LOGIN_FAILURE);
     });
 
     it('旧 SHA-256 哈希账号：正确密码 → 200，且哈希自动升级为 bcrypt', async () => {
@@ -179,11 +182,36 @@ describe('登录负面路径鉴权（教师入口 + 学生入口）', () => {
       expect(body.session).toBeUndefined();
     });
 
-    it('不存在的用户名 → 401 User not found', async () => {
+    it('不存在的用户名 → 401，客户端文案与错误密码相同', async () => {
       const res = await teacherLogin('negtest_no_such_user_at_all', 'whatever');
       expect(res.status).toBe(401);
       const body: any = await res.json();
-      expect(body.error).toBe('User not found');
+      expect(body.error).toBe(GENERIC_LOGIN_FAILURE);
+    });
+
+    it('用户不存在与密码错误共用客户端文案，审计原因不同且不含口令', async () => {
+      const seen: AuditRecord[] = [];
+      setAuditSinkForTests((record) => seen.push(record));
+      const wrongPassword = 'WrongPassword-Audit-1';
+      try {
+        const missing = await teacherLogin('negtest_no_such_user_audit', wrongPassword);
+        const bad = await teacherLogin(bcryptUsername, wrongPassword);
+        expect(missing.status).toBe(401);
+        expect(bad.status).toBe(401);
+        const missingBody: any = await missing.json();
+        const badBody: any = await bad.json();
+        expect(missingBody.error).toBe(GENERIC_LOGIN_FAILURE);
+        expect(badBody.error).toBe(missingBody.error);
+        expect(JSON.stringify(missingBody)).not.toContain(wrongPassword);
+        expect(JSON.stringify(badBody)).not.toContain(wrongPassword);
+
+        const reasons = seen.filter((row) => row.event === 'auth.login_failed').map((row) => row.reason);
+        expect(reasons).toContain('user_not_found');
+        expect(reasons).toContain('bad_password');
+        expect(JSON.stringify(seen)).not.toContain(wrongPassword);
+      } finally {
+        setAuditSinkForTests(null);
+      }
     });
 
     it('缺少密码字段 → 400', async () => {
@@ -242,9 +270,72 @@ describe('登录负面路径鉴权（教师入口 + 学生入口）', () => {
       expect(res.status).toBe(400);
     });
 
-    it('不存在的学号 → 401', async () => {
-      const res = await login({ entrance: 'student', studentId: 'NEG0000', password: studentPwd });
-      expect(res.status).toBe(401);
+    it('不存在的学号与错误个人密码共用客户端文案，审计原因不同', async () => {
+      const seen: AuditRecord[] = [];
+      setAuditSinkForTests((record) => seen.push(record));
+      try {
+        const missing = await login({ entrance: 'student', studentId: 'NEG0000', password: studentPwd });
+        const bad = await login({ entrance: 'student', studentId: studentNumber, password: 'WrongStudentPwd-1' });
+        expect(missing.status).toBe(401);
+        expect(bad.status).toBe(401);
+        const missingBody: any = await missing.json();
+        const badBody: any = await bad.json();
+        expect(missingBody.error).toBe(GENERIC_LOGIN_FAILURE);
+        expect(badBody.error).toBe(missingBody.error);
+        const reasons = seen.filter((row) => row.event === 'auth.login_failed').map((row) => row.reason);
+        expect(reasons).toContain('student_not_found');
+        expect(reasons).toContain('bad_credentials');
+      } finally {
+        setAuditSinkForTests(null);
+      }
+    });
+
+    it('明文库存口令不能登录，也不被改写成哈希', async () => {
+      const plainId = 'stu-negtest-plain';
+      const plainNumber = 'NEG9002';
+      const plainPassword = 'PlainText-Secret-1';
+      db.prepare('DELETE FROM students WHERE id = ?').run(plainId);
+      db.prepare(
+        'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(plainId, plainNumber, '明文学生', 'plain@school.edu', plainPassword, Date.now());
+
+      const seen: AuditRecord[] = [];
+      setAuditSinkForTests((record) => seen.push(record));
+      try {
+        const res = await login({ entrance: 'student', studentId: plainNumber, password: plainPassword });
+        expect(res.status).toBe(401);
+        const body: any = await res.json();
+        expect(body.error).toBe(GENERIC_LOGIN_FAILURE);
+        expect(body.session).toBeUndefined();
+        expect(JSON.stringify(body)).not.toContain(plainPassword);
+
+        const stored = db.prepare('SELECT password FROM students WHERE id = ?').get(plainId) as { password: string };
+        expect(stored.password).toBe(plainPassword);
+
+        const rejected = seen.find((row) => row.reason === 'plaintext_password_rejected');
+        expect(rejected?.event).toBe('auth.login_failed');
+        expect(JSON.stringify(seen)).not.toContain(plainPassword);
+      } finally {
+        setAuditSinkForTests(null);
+        db.prepare('DELETE FROM students WHERE id = ?').run(plainId);
+      }
+    });
+
+    it('旧 SHA-256 学生口令：正确密码 → 200，且升级为 bcrypt', async () => {
+      const shaStudentId = 'stu-negtest-sha';
+      const shaStudentNumber = 'NEG9003';
+      const shaStudentPwd = 'LegacyStudent-Sha-4';
+      db.prepare('DELETE FROM students WHERE id = ?').run(shaStudentId);
+      db.prepare(
+        'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(shaStudentId, shaStudentNumber, '哈希学生', 'sha@school.edu', sha256(shaStudentPwd), Date.now());
+
+      const res = await login({ entrance: 'student', studentId: shaStudentNumber, password: shaStudentPwd });
+      expect(res.status).toBe(200);
+      const row = db.prepare('SELECT password FROM students WHERE id = ?').get(shaStudentId) as { password: string };
+      expect(row.password).toMatch(/^\$2[aby]\$/);
+      expect(bcrypt.compareSync(shaStudentPwd, row.password)).toBe(true);
+      db.prepare('DELETE FROM students WHERE id = ?').run(shaStudentId);
     });
   });
 });
