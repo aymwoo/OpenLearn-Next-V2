@@ -58,6 +58,30 @@ export function collectCoursewareRuntimeScripts(cwInfo: { id: string; name: stri
   }
 }
 
+/**
+ * 解析请求对应的宿主 origin（`<proto>://<host>`），供桥接 SDK 出站消息定向。
+ *
+ * 单一实现：`injectLmsSdk`（/runtime、/api/resources、/api/courseware 直出 HTML）
+ * 与 `/bridge.js` 路由（白板 srcDoc 路径）共用，避免两处 proto 推导逻辑漂移。
+ * Host 缺失时返回空串——上层桥接会据此 fail-closed（见 bridge.js `__lmsHostOrigin`）。
+ */
+export function resolveRequestHostOrigin(req: any): string {
+  try {
+    const host = (req?.headers?.host || req?.get?.('host') || '').toString().trim();
+    if (!host) return '';
+    const protoHeader = (req?.headers?.['x-forwarded-proto'] || '').toString().split(',')[0].trim();
+    const proto =
+      protoHeader === 'https' || protoHeader === 'http'
+        ? protoHeader
+        : req?.protocol === 'https' || req?.secure
+          ? 'https'
+          : 'http';
+    return `${proto}://${host}`;
+  } catch {
+    return '';
+  }
+}
+
 export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string; name: string; uuid: string }) {
   const token = getCookieToken(req);
   let studentInfo = {
@@ -141,28 +165,14 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
   const runtimeScripts = collectCoursewareRuntimeScripts(cwInfo);
 
   // P4 修复：向课件注入宿主 origin，供桥接 SDK 入站校验（防同页恶意 iframe 伪造命令/进度）
-  let hostOrigin = '';
-  try {
-    const host = (req?.headers?.host || req?.get?.('host') || '').toString().trim();
-    if (host) {
-      const protoHeader = (req?.headers?.['x-forwarded-proto'] || '').toString().split(',')[0].trim();
-      const proto =
-        protoHeader === 'https' || protoHeader === 'http'
-          ? protoHeader
-          : req?.protocol === 'https' || req?.secure
-            ? 'https'
-            : 'http';
-      hostOrigin = `${proto}://${host}`;
-    }
-  } catch {
-    hostOrigin = '';
-  }
+  const hostOrigin = resolveRequestHostOrigin(req);
 
   const injection = `
 <!-- LMS Courseware SDK Inject -->
 <script>
 window.__LMS_STUDENT__ = ${JSON.stringify(studentInfo)};
 window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
+window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};
 window.__LMS_HOOK_TELEMETRY__ = ${process.env.BRIDGE_HOOK_TELEMETRY === 'off' ? 'false' : 'true'};
 window.__LMS_COURSEWARE__ = {
   uuid: ${JSON.stringify(cwInfo.uuid)},

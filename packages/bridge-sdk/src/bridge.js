@@ -16,6 +16,26 @@
     } catch (err) {}
   }
 
+  // ── P0-2: 出站消息的宿主 origin 守卫 ──
+  //   平台自身的出站消息（LMS.submit / saveProgress / finish / log / getProgress 与
+  //   fetch/XHR/axios/beacon/form 遥测）必须定向到宿主 origin，绝不能广播到 "*"。
+  //   __LMS_HOST_ORIGIN__ 由服务端按请求 Host 注入（/runtime、/api/resources、/bridge.js）。
+  //   若该值缺失/为空（反代剥掉 Host 头、curl 直连等边缘情况），默认**拒绝发送**，
+  //   避免学生作答、Hook 遥测明文外泄给同网段任意监听者，或让攻击者 iframe 伪装宿主收分。
+  //   仅在显式设置 window.__LMS_ENFORCE_ORIGIN__ === false 时才回退旧的 "*" 广播
+  //   （受控环境专用，生产不应开启）。
+  function __lmsHostOrigin() {
+    var v = window.__LMS_HOST_ORIGIN__;
+    if (typeof v === 'string' && v && v !== 'null') return v;
+    if (window.__LMS_ENFORCE_ORIGIN__ !== false) {
+      throw new Error(
+        '[LMS bridge] __LMS_HOST_ORIGIN__ missing; refusing to broadcast to "*". ' +
+          'Set window.__LMS_ENFORCE_ORIGIN__ = false to override.'
+      );
+    }
+    return '*';
+  }
+
   // ── Helper: create a safe postMessage wrapper that normalises 'null' → '*' ──
   function __makeSafePostMessage(realTarget, label) {
     return function(message, targetOrigin, transfer) {
@@ -237,7 +257,7 @@
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, window.__LMS_HOST_ORIGIN__ || "*");
+      }, __lmsHostOrigin());
     },
     saveProgress(data) {
       window.parent.postMessage({
@@ -245,7 +265,7 @@
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, window.__LMS_HOST_ORIGIN__ || "*");
+      }, __lmsHostOrigin());
     },
     finish(data) {
       window.parent.postMessage({
@@ -253,7 +273,7 @@
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         payload: data
-      }, window.__LMS_HOST_ORIGIN__ || "*");
+      }, __lmsHostOrigin());
     },
     getStudent() {
       return window.__LMS_STUDENT__;
@@ -271,7 +291,7 @@
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         event: event,
         payload: data
-      }, window.__LMS_HOST_ORIGIN__ || "*");
+      }, __lmsHostOrigin());
     },
     on(event, callback) {
       (__lmsHandlers[event] = __lmsHandlers[event] || []).push(callback);
@@ -292,7 +312,7 @@
         uuid: window.__LMS_COURSEWARE__?.uuid,
         attempt_id: window.__LMS_STUDENT__?.attempt_id,
         config: config
-      }, window.__LMS_HOST_ORIGIN__ || "*");
+      }, __lmsHostOrigin());
     },
     getProgress() {
       return new Promise(function(resolve) {
@@ -307,7 +327,7 @@
           uuid: window.__LMS_COURSEWARE__?.uuid,
           attempt_id: window.__LMS_STUDENT__?.attempt_id,
           requestId: requestId
-        }, window.__LMS_HOST_ORIGIN__ || "*");
+        }, __lmsHostOrigin());
       });
     }
   };
@@ -332,7 +352,7 @@
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url, method, headers: JSON.parse(JSON.stringify(headers)), body: body ? body.toString() : null }
-            }, window.__LMS_HOST_ORIGIN__ || "*");
+            }, __lmsHostOrigin());
           }
         } catch (e) {
           console.error("Bridge Hook fetch error", e);
@@ -361,7 +381,7 @@
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url: this._url, method: this._method, body: bodyStr ? bodyStr.toString() : null }
-            }, window.__LMS_HOST_ORIGIN__ || "*");
+            }, __lmsHostOrigin());
           }
         } catch (e) {
           console.error("Bridge Hook XHR error", e);
@@ -380,7 +400,7 @@
                 uuid: window.__LMS_COURSEWARE__?.uuid,
                 attempt_id: window.__LMS_STUDENT__?.attempt_id,
                 payload: { url: config.url, method: config.method, data: config.data }
-              }, window.__LMS_HOST_ORIGIN__ || "*");
+              }, __lmsHostOrigin());
             }
           } catch (e) {
             console.error("Bridge Hook Axios error", e);
@@ -412,7 +432,7 @@
               uuid: window.__LMS_COURSEWARE__?.uuid,
               attempt_id: window.__LMS_STUDENT__?.attempt_id,
               payload: { url: url, data: data ? data.toString() : null }
-            }, window.__LMS_HOST_ORIGIN__ || "*");
+            }, __lmsHostOrigin());
           }
         } catch (e) {
           console.error("Bridge Hook Beacon error", e);
@@ -435,7 +455,7 @@
             uuid: window.__LMS_COURSEWARE__?.uuid,
             attempt_id: window.__LMS_STUDENT__?.attempt_id,
             payload: { action: form.action, method: form.method, data: data }
-          }, window.__LMS_HOST_ORIGIN__ || "*");
+          }, __lmsHostOrigin());
         }
       } catch (err) {
         console.error("Bridge Hook Form error", err);

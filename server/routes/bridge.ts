@@ -2,7 +2,12 @@ import path from 'path';
 import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { injectLmsSdk, collectCoursewareRuntimeScripts, setCoursewareDocumentCsp } from './shared.js';
+import {
+  injectLmsSdk,
+  collectCoursewareRuntimeScripts,
+  setCoursewareDocumentCsp,
+  resolveRequestHostOrigin,
+} from './shared.js';
 import { verifyCoursewareToken } from '../utils/courseware-access.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
 import type { ServerContext } from '../context.js';
@@ -26,7 +31,15 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     } catch (e) {
       runtimeScripts = '';
     }
-    res.send(runtimeScripts ? `${BRIDGE_SDK_CODE}\n${runtimeScripts}` : BRIDGE_SDK_CODE);
+    // P0-2: 白板 srcDoc 等「不服务端拼接 HTML」的路径经 <script src="/bridge.js"> 引入
+    // SDK，需由本路由按请求 Host 前置注入宿主 origin + enforce 标志，使桥接出站消息
+    // 定向到宿主而非静默广播到 "*"。origin 计算与 injectLmsSdk 共用同一实现，避免漂移。
+    const hostOrigin = resolveRequestHostOrigin(req);
+    const preamble =
+      `window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};\n` +
+      `window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};\n`;
+    const sdkBody = runtimeScripts ? `${BRIDGE_SDK_CODE}\n${runtimeScripts}` : BRIDGE_SDK_CODE;
+    res.send(preamble + sdkBody);
   });
 
   app.get('/runtime/:uuid', (req, res, next) => {

@@ -168,11 +168,19 @@ async function startServer() {
 
   // ── 安全中间件 ────────────────────────────────────────────────────
   // SEC-NET-02: HTTP 安全头（helmet）— CSP 与自适应 HSTS（C-1）
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // P0-1: 生产环境未显式配置 ALLOWED_FRAME_ORIGINS 时，仅允许同源嵌入
+  // （"'self'" 已在下方的 frameAncestors / frameSrc 数组首位）。早期实现无条件回退到
+  // localhost:*，会让任何能起本地 Web 服务的进程（被攻陷 sidecar、恶意插件起的静态
+  // 服务器、共租户邻居）把 LMS 嵌进 click-jacking 页面。开发环境保留 localhost 便于调试。
   const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
     ? process.env.ALLOWED_FRAME_ORIGINS.split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-    : ['http://localhost:*', 'http://127.0.0.1:*'];
+    : isProduction
+      ? []
+      : ['http://localhost:*', 'http://127.0.0.1:*'];
 
   const ltiAllowedOrigins = process.env.LTI_ALLOWED_LMS_ORIGINS
     ? process.env.LTI_ALLOWED_LMS_ORIGINS.split(',')
@@ -180,7 +188,6 @@ async function startServer() {
         .filter(Boolean)
     : [];
 
-  const isProduction = process.env.NODE_ENV === 'production';
   const enableHsts = process.env.ENABLE_HSTS === 'true' || (isProduction && process.env.FORCE_HTTPS === 'true');
 
   app.use(

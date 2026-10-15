@@ -19,7 +19,7 @@
 | `OPEN_BROWSER`                                | 关闭                                         | 设为 `true` 启动后自动打开浏览器（`cli.mjs -o`）                                                                         |
 | `DISABLE_HMR`                                 | 关闭                                         | `true` 时禁用 Vite HMR（watch/中间件关闭）                                                                               |
 | `ALLOWED_ORIGINS`                             | 生产仅同源                                   | CORS 白名单，逗号分隔（`cli.mjs --cors`）；开发环境默认放行 localhost                                                    |
-| `ALLOWED_FRAME_ORIGINS`                       | 同源                                         | Helmet `frame-src` / `frame-ancestors` 白名单，逗号分隔（课件 iframe 场景）                                              |
+| `ALLOWED_FRAME_ORIGINS`                       | dev `localhost:*` / prod 仅同源              | Helmet `frame-src` / `frame-ancestors` 白名单，逗号分隔（课件 iframe 场景）。生产未配置时仅允许同源嵌入（`'self'`），防止 click-jacking |
 | `LTI_ALLOWED_LMS_ORIGINS`                     | 无                                           | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                               |
 | `ENCRYPTION_KEY`                              | 见下文                                       | 64 位 hex。加密 AI Provider API Key 与班级临时口令。设置了就用环境变量；未设置时首次启动生成并写入 `storage/encryption-key`（0600）。与已有文件不一致则拒绝启动 |
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |

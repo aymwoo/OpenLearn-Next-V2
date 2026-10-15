@@ -99,6 +99,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `@tailwindcss/typography>postcss-selector-parser` → `7.1.6`（typography 0.5.20 把 6.0.10 钉死，6.x 没有补丁；构建期 API `astSync` / `selector()` 保持可用）
   - `vitest` 升到 `^4.1.11`（GHSA-82fw-gwwq-j7x9，测试期路径穿越）
   - `express-rate-limit` 升到 `^8.7.1`（仍依赖 `ip-address@^10`，实际修复靠上面的 override）
+- **课件嵌入默认收紧为同源（P0-1）**：未设置 `ALLOWED_FRAME_ORIGINS` 时，生产环境 `frame-ancestors` 与 `frame-src` 只保留 `'self'`，不再回退到 `http://localhost:*`。此前反代漏配 `ALLOWED_FRAME_ORIGINS` 时，任何能起本地 Web 服务的进程（被攻陷 sidecar、恶意插件起的静态服务器、共租户邻居）都能把平台嵌进 click-jacking 页面。开发环境仍保留 `localhost:*`（`NODE_ENV` 非 `production`）；需要额外嵌入来源时显式配置 `ALLOWED_FRAME_ORIGINS`。
+- **桥接 SDK 出站消息不再静默广播到 `"*"`（P0-2）**：`LMS.submit` / `saveProgress` / `finish` / `log` / `getProgress` 与 fetch / XHR / axios / beacon / form 遥测统一经 `__lmsHostOrigin()` 定向到宿主 origin；`__LMS_HOST_ORIGIN__` 缺失或为空（反代剥掉 Host 头、curl 直连等）时默认拒绝发送，仅在显式 `window.__LMS_ENFORCE_ORIGIN__ = false` 时才回退旧行为。`/bridge.js`（白板 srcDoc 路径）与 `injectLmsSdk`（`/runtime`、`/api/resources`、`/api/courseware` 直出 HTML）按请求 Host 注入宿主 origin 与 enforce 标志，origin 解析共用 `resolveRequestHostOrigin()`，避免两处推导漂移。
 
 ### Fixes
 
