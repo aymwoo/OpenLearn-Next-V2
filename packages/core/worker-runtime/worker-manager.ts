@@ -885,7 +885,10 @@ export class WorkerManager {
       manifest.id,
       pluginId,
       allowedTokens,
-      manifest.network?.outbound,
+      // PL-08 收敛：宿主 worker-RPC 代理（INetworkProxyService）改用与子进程 IPC 传输层
+      // 同一份「管理员已批准」出站域名（DB `plugin_network_grants`），不再各读
+      // `manifest.network.outbound`，消除两个 allowlist 真相源。清单声明仅作提案。
+      listApprovedNetHosts(this.db as never, [pluginId, manifest.id]),
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）
