@@ -148,3 +148,36 @@ describe('CourseWizardModal AI 大纲生成', () => {
     expect(screen.getByText(/AI-Generate Syllabus/)).toBeTruthy();
   });
 });
+
+describe('CourseWizardModal 底部步骤指示器', () => {
+  it('底部控制栏不再包含底层 SQLITE 预检静态文案', () => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: 1, lang: 'zh' })} />);
+    expect(screen.queryByText(/SQLITE 写入预检通过/)).toBeNull();
+    expect(screen.queryByText(/SQLITE VERIFICATION SUCCESS/)).toBeNull();
+  });
+
+  const stepCasesZh = [
+    { step: 1, text: '第 1 步 / 共 4 步 · 内容选题' },
+    { step: 2, text: '第 2 步 / 共 4 步 · 课堂脉络' },
+    { step: 3, text: '第 3 步 / 共 4 步 · 编写大纲' },
+    { step: 4, text: '第 4 步 / 共 4 步 · 总览部署' },
+  ];
+
+  it.each(stepCasesZh)('中文界面正确展示第 $step 步指示器文案: $text', ({ step, text }) => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: step, lang: 'zh' })} />);
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+
+  const stepCasesEn = [
+    { step: 1, text: 'Step 1 of 4 · Background' },
+    { step: 2, text: 'Step 2 of 4 · Timeslots' },
+    { step: 3, text: 'Step 3 of 4 · Syllabus' },
+    { step: 4, text: 'Step 4 of 4 · Deploy' },
+  ];
+
+  it.each(stepCasesEn)('英文界面正确展示第 $step 步指示器文案: $text', ({ step, text }) => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: step, lang: 'en' })} />);
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+});
+
