@@ -8,6 +8,7 @@ import {
   Plus,
   Paintbrush,
   Loader2,
+  Save,
 } from 'lucide-react';
 import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
@@ -777,12 +778,12 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           {isSyncing ? (
             <>
               <Loader2 size={13} className="animate-spin" />
-              正在广播同步...
+              正在保存...
             </>
           ) : (
             <>
-              <Paintbrush size={13} />
-              应用修改并强制同步
+              <Save size={13} />
+              保存
             </>
           )}
         </button>

@@ -182,11 +182,11 @@ describe('WhiteboardPropertiesSidebar Component Tests', () => {
     expect(screen.getByText('#facc15')).toBeDefined();
   });
 
-  it('7. 点击“应用修改并强制同步”按钮触发 handleUpdateElementData', () => {
+  it('7. 点击“保存”按钮触发 handleUpdateElementData', () => {
     const handleUpdate = vi.fn();
     render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
 
-    const applyBtn = screen.getByText('应用修改并强制同步');
+    const applyBtn = screen.getByText('保存');
     fireEvent.click(applyBtn);
     expect(handleUpdate).toHaveBeenCalledWith(defaultProps.editingProperties);
   });
