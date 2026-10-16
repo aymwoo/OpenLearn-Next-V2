@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课表识别后台异步运行与完成全局通知**：将课表图片 AI 识别升级为全局后台任务管理（`asyncTaskStore`）。教师启动识别后，任务与请求生命周期脱离单个页面的 DOM 挂载，页面可自由跳转浏览课程、批改作业等；顶栏（`AppHeader`）实时显示后台运行动画状态与完成气泡，识别成功后通过全局 Toast 弹出完成提醒并支持「查看并导入课表」一键导航回课表管理；重新进入课表管理自动恢复识别结果表格与班级匹配，并支持失败友好重试与状态清理。
 - **学生端多学年对比 UI 与服务（PR / Issue #65）**：在学生端新增跨学年综合学业对比功能；支持多学年选择器（多选 Chips，默认选当前与上一学年）、作业提交率/按时率/均分/课程数概览卡片、同比/环比变化 Badge（升降幅）、分组对比柱状趋势图与科目维度成绩分布明细；后端新增 `AcademicYearComparisonService` 与 `GET /api/students/:id/academic-year-comparison` 接口，具备严格的三道防线 IDOR 权限控制与插件自定义指标扩展点；引入 `migrations/030_backfill_academic_year.sql` 与启动阶段幂等回填函数 `backfillAcademicYearData`，平滑兼容历史老数据库。
 - **学年维度基础（ PR 1 ）**：新增 `academic_year` 字段与索引（schedules/assignments/attendance/exams/semester reports/lesson progress/classroom sessions），site_settings 增加当前学年配置；ScheduleService 支持按学年筛选/衍生学年；`/api/site-settings` 返回 `currentAcademicYear`/`academicStartMonth`，管理员可更新并校验格式 `YYYY-YYYY`。
 

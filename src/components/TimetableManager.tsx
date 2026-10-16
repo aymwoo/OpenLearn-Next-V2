@@ -40,6 +40,7 @@ import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer'
 import { AcademicYearFilter } from './AcademicYearFilter';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
+import { useAsyncTaskStore, asyncTaskStore } from '../store/asyncTaskStore';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
@@ -237,6 +238,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   // OCR Image Recognition States
   const [ocrImagePreview, setOcrImagePreview] = useState<string | null>(null);
   const [ocrImageBase64, setOcrImageBase64] = useState<string | null>(null);
+  const [ocrFileName, setOcrFileName] = useState<string>('');
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [ocrProgressStatus, setOcrProgressStatus] = useState<string>('');
@@ -249,6 +251,36 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const ocrFileInputRef = useRef<HTMLInputElement>(null);
   const [aiProviders, setAiProviders] = useState<{ id: string; name: string; model_name: string }[]>([]);
   const [ocrProviderId, setOcrProviderId] = useState<string>('');
+  const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
+
+  // 联动全局后台任务：页面切换回来时自动同步任务状态与已识别结果
+  useEffect(() => {
+    if (timetableOcrTask?.status === 'running') {
+      setOcrLoading(true);
+      setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在后台分析提取课表...' : '🧠 AI analyzing timetable in background...');
+    } else if (timetableOcrTask?.status === 'completed') {
+      setOcrLoading(false);
+      setOcrProgress(100);
+      const entries = timetableOcrTask.result?.entries || [];
+      if (entries.length > 0 && ocrEntries.length === 0) {
+        setOcrEntries(entries);
+        setOcrSelectedEntries(new Set(entries.map((_: any, i: number) => i)));
+        setOcrMessage({
+          type: 'success',
+          text:
+            lang === 'zh'
+              ? `✅ 识别成功！共检测到 ${entries.length} 节课程安排，请审核后导入。`
+              : `✅ Success! Detected ${entries.length} class entries. Review and import below.`,
+        });
+      }
+    } else if (timetableOcrTask?.status === 'failed') {
+      setOcrLoading(false);
+      setOcrMessage({
+        type: 'error',
+        text: timetableOcrTask.error || (lang === 'zh' ? '课表识别失败' : 'OCR recognition failed'),
+      });
+    }
+  }, [timetableOcrTask, lang, ocrEntries.length]);
 
   // Time slots suggestions
   const presetTimeSlots = [
@@ -593,6 +625,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       return;
     }
 
+    setOcrFileName(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -601,6 +634,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       setOcrEntries([]);
       setOcrMessage(null);
       setOcrSelectedEntries(new Set());
+      asyncTaskStore.getState().clearTimetableOcrTask();
     };
     reader.readAsDataURL(file);
   };
@@ -650,94 +684,28 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     }
 
     setOcrLoading(true);
-    setOcrProgress(0);
-    setOcrProgressStatus(lang === 'zh' ? '📤 正在上传并优化图像...' : '📤 Uploading and optimizing image...');
+    setOcrProgress(15);
+    setOcrProgressStatus(
+      lang === 'zh'
+        ? '🚀 任务已在后台运行中，可随时切换页面...'
+        : '🚀 Task running in background, you can navigate away...',
+    );
     setOcrMessage({
       type: 'info',
       text:
-        lang === 'zh' ? '🔍 AI 正在分析课表图片，请稍候...' : '🔍 AI is analyzing the timetable image, please wait...',
+        lang === 'zh'
+          ? '🔍 AI 正在后台分析提取课表，您可以随时前往其他页面，识别完成后将通过通知提醒您。'
+          : '🔍 AI is analyzing timetable in background, you can navigate freely.',
     });
     setOcrEntries([]);
 
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += Math.random() * 6 + 1; // Increment progress by 1-7%
-      if (currentProgress >= 95) {
-        currentProgress = 95;
-        clearInterval(interval);
-      }
-      setOcrProgress(Math.round(currentProgress));
-
-      // Update status text based on progress
-      if (currentProgress < 20) {
-        setOcrProgressStatus(lang === 'zh' ? '📤 正在上传并优化图像...' : '📤 Uploading and optimizing image...');
-      } else if (currentProgress < 50) {
-        setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在分析表格排版与单元格...' : '🧠 AI analyzing table layout...');
-      } else if (currentProgress < 75) {
-        setOcrProgressStatus(
-          lang === 'zh' ? '📝 提取课程、班级及教师信息...' : '📝 Extracting lesson and teacher info...',
-        );
-      } else {
-        setOcrProgressStatus(lang === 'zh' ? '🔮 正在进行最终数据格式校验...' : '🔮 Verifying data formats...');
-      }
-    }, 400);
-
-    try {
-      const response = await fetch('/api/timetable/ocr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: ocrImageBase64, lang, providerId: ocrProviderId || undefined }),
-      });
-
-      const responseText = await response.text();
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        throw new Error(
-          lang === 'zh'
-            ? `服务端返回了无效响应: ${responseText.substring(0, 150)}`
-            : `Server returned invalid response: ${responseText.substring(0, 150)}`,
-        );
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'OCR recognition failed');
-      }
-
-      clearInterval(interval);
-      setOcrProgress(100);
-      setOcrProgressStatus(
-        lang === 'zh' ? '✅ 识别成功，正在载入结果...' : '✅ Recognition complete, loading results...',
-      );
-
-      if (data.entries && data.entries.length > 0) {
-        setOcrEntries(data.entries);
-        // Select all by default
-        setOcrSelectedEntries(new Set(data.entries.map((_: any, i: number) => i)));
-        setOcrMessage({
-          type: 'success',
-          text:
-            lang === 'zh'
-              ? `✅ 识别成功！共检测到 ${data.entries.length} 节课程安排，请审核后导入。`
-              : `✅ Success! Detected ${data.entries.length} class entries. Review and import below.`,
-        });
-      } else {
-        setOcrMessage({
-          type: 'error',
-          text:
-            lang === 'zh'
-              ? '未能从图片中识别出课程信息，请尝试更清晰的图片。'
-              : 'No class entries detected. Try a clearer image.',
-        });
-      }
-    } catch (e: any) {
-      clearInterval(interval);
-      setOcrProgress(0);
-      setOcrMessage({ type: 'error', text: `${lang === 'zh' ? 'AI 识别失败：' : 'OCR Failed: '}${e.message}` });
-    } finally {
-      setOcrLoading(false);
-    }
+    // 启动全局后台异步任务（离开本页面依然继续执行并弹窗提醒）
+    asyncTaskStore.getState().startTimetableOcr({
+      imageBase64: ocrImageBase64,
+      lang: lang === 'zh' ? 'zh' : 'en',
+      providerId: ocrProviderId || undefined,
+      fileName: ocrFileName,
+    });
   };
 
   const dayOfWeekToDate = (dayOfWeek: any, weekStartDate: string): string => {
@@ -1073,6 +1041,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       setOcrSelectedEntries(new Set());
       setOcrImagePreview(null);
       setOcrImageBase64(null);
+      setOcrFileName('');
+      asyncTaskStore.getState().clearTimetableOcrTask();
 
       let successMsg =
         lang === 'zh'

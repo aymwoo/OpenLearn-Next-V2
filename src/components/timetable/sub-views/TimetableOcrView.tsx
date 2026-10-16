@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { ClassType } from '../types';
+import { asyncTaskStore } from '../../../store';
 
 export interface TimetableOcrViewProps {
   lang: 'zh' | 'en';
@@ -174,6 +175,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                   setOcrEntries([]);
                   setOcrMessage(null);
                   setOcrSelectedEntries(new Set());
+                  asyncTaskStore.getState().clearTimetableOcrTask();
                   if (ocrFileInputRef.current) ocrFileInputRef.current.value = '';
                 }}
                 className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg transition-colors cursor-pointer"

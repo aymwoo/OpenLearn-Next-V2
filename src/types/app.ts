@@ -183,4 +183,8 @@ export interface Toast {
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }

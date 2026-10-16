@@ -53,4 +53,28 @@ describe('ToastContainer', () => {
 
     expect(copySpy).toHaveBeenCalledWith('[接口错误] Worker timeout on plugin activation');
   });
+
+  it('renders a toast with an action button and executes callback on click', () => {
+    const actionSpy = vi.fn();
+    uiStore.getState().addToast({
+      id: 't-action',
+      title: '识别完成',
+      message: '请前往核对',
+      type: 'success',
+      action: {
+        label: '查看并导入',
+        onClick: actionSpy,
+      },
+    });
+
+    render(<ToastContainer />);
+
+    const actionBtn = screen.getByRole('button', { name: '查看并导入' });
+    expect(actionBtn).toBeTruthy();
+
+    fireEvent.click(actionBtn);
+    expect(actionSpy).toHaveBeenCalledTimes(1);
+    // After action click, toast should be removed
+    expect(uiStore.getState().toasts).toHaveLength(0);
+  });
 });
