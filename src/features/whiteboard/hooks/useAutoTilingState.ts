@@ -8,6 +8,7 @@ import {
   isTileableType,
   geometryKeys,
   extractGeometry,
+  candidatePreTileGeometry,
   sameGeometry,
   detectTilingSplitters,
   applySplitterDrag,
@@ -167,7 +168,9 @@ export function useAutoTilingState({
             tileStackDir: detectedStackDir,
           };
           if (!current.__preTile) {
-            patch.__preTile = extractGeometry(current, candidate.shape);
+            // 用候选元素的有效几何（含类型默认尺寸）记录平铺前状态，
+            // 否则缺少显式宽高的组件（如随堂测试）取消平铺后会塌缩成 0 宽高。
+            patch.__preTile = candidatePreTileGeometry(candidate);
           }
           patch.__tiled = geometry;
           const targetEl =
