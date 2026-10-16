@@ -68,6 +68,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **白板/互动课件属性编辑器操作按钮文案精简优化（WhiteboardPropertiesSidebar）**：将课程编辑与课堂白板中互动课件及组件属性编辑器侧边栏底部的操作按钮文案从「应用修改并强制同步」（加载态「正在广播同步...」）精简为更直观符合直觉的「保存」（加载态「正在保存...」），按钮图标同步更新为 `<Save />`，降低教师操作认知负荷。
+
 - **课程向导底部步骤指示器优化（CourseWizardModal）**：移除向导弹窗左下角写死且无业务状态的底层技术黑话（`⚙️ SQLITE 写入预检通过`），替换为对教师更直观的动态步骤进度指示器（如 `第 1 步 / 共 4 步 · 内容选题`，支持中英文双语），提升备课流程的用户体验。
 
 - **课程列表与大纲生成模型思维链 `<think>` 剥离与卡片摘要净化 (#62)**：在 `packages/core/ai/strip-reasoning.ts` 与 `AIProviderGateway` 统一拦截剥离推理模型（DeepSeek-R1、QwQ、Claude 思考模式等）输出的 `<think>...</think>`、未闭合 `<think>` 及代码围栏思维链，并在 `generateOutlineWithAi` 中深度净化大纲正文；在 `CourseManagement` 引入 `extractCourseSummary` 纯文本摘要提取器兜底展示已有数据；新增迁移 `029_clean_lesson_think_artifacts.sql` 与 `cleanStoredLessonThinkArtifacts` 启动期幂等清洗历史受污染课程。
