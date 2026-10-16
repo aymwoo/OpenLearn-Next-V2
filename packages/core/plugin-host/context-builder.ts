@@ -145,6 +145,45 @@ export function createSafeFunction(fn: Function): Function {
 // ── 包装函数（从 PluginRuntime 迁移，DI 驱动）──────────────────────────
 
 /**
+ * Issue #71：登记 command handler 时校验是否已有匹配的 ActionDescriptor。
+ *
+ * kernel 的 default-deny 只放行「在 actionRegistry 里登记过描述符」的命令。
+ * 旧插件若只 `registerHandler()` 而没 `actionRegistry.register()`，命令会在
+ * 派发时被拒绝（且历史上表现为 HTTP 500）。这里在插件加载阶段就给出清晰告警，
+ * 便于作者按迁移指引补齐，而**不改变默认拒绝策略本身**。
+ *
+ * 命名空间差异：非内核插件的 handler 会被自动加 `<manifestId>.` 前缀，而描述符
+ * 通常按作者书写的原始 commandType 登记，因此两种形态都要查一遍，避免误报。
+ *
+ * 尽力而为：任何异常都不应影响 handler 注册结果。
+ */
+async function warnOnMissingActionDescriptor(
+  actionRegistry: IActionRegistryService,
+  rawCommandType: string,
+  registeredType: string,
+  pluginId: string,
+  manifestId?: string,
+): Promise<void> {
+  try {
+    const candidates = new Set<string>([registeredType, rawCommandType]);
+    const stripped = stripPluginCommandPrefix(rawCommandType, manifestId || pluginId);
+    if (stripped) candidates.add(stripped);
+    for (const type of candidates) {
+      const found = await actionRegistry.getActionByCommandType(type);
+      if (found) return;
+    }
+    console.warn(
+      `[PluginHost] Plugin "${pluginId}" registered command "${registeredType}" without a matching ActionDescriptor ` +
+        `(commandType: "${rawCommandType}"). The kernel default-deny policy will reject this command. ` +
+        `Register one via ctx.services.actionRegistry.register({ commandType: "${rawCommandType}", capabilityRequired, inputSchema }) ` +
+        `before registering the handler.`,
+    );
+  } catch {
+    // 预检仅为提示，失败不得阻断注册
+  }
+}
+
+/**
  * 包装 ICommandBusService：对 registerHandler 自动调用 tracker.track()。
  *
  * 迁移自 PluginRuntime lines 298-324。
@@ -154,6 +193,7 @@ function wrapCommandBus(
   tracker: ResourceTracker,
   pluginId: string,
   manifestId?: string,
+  actionRegistry?: IActionRegistryService,
 ): ICommandBusService {
   // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
   // (@openlearn/*) keep global namespace for backward compatibility.
@@ -207,6 +247,10 @@ function wrapCommandBus(
             Promise.resolve(commandBus.unregisterHandler(prefixed)).catch(() => {});
           },
         });
+        if (actionRegistry) {
+          return warnOnMissingActionDescriptor(actionRegistry, commandType, prefixed, pluginId, manifestId);
+        }
+        return undefined;
       });
     }),
     createCommand: createSafeFunction((type: string, payload: any, _actorId: string, metadata?: any) => {
@@ -685,7 +729,7 @@ export async function buildContext(
   const pointsLedgerService = await serviceRegistry.tryResolve(IPointsLedgerServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
-  const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id);
+  const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id, actionRegistryService);
   const wrappedEventBus = wrapEventBus(eventBusService, tracker, pluginId);
   const wrappedProcessManager = wrapProcessManager(
     processService,

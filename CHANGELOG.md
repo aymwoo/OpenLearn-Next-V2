@@ -46,9 +46,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 
 - **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
+- **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
 
 ### Docs
 
+- **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
 - **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
 - **版本迁移指南补上 023**：`docs/migration/version-migration.md` 说明从 v0.6.1 tag 之后的当前 `main`（平台版本号仍是 `0.6.1`）如何处理班级临时口令。`migrations/023_encrypt_class_passcodes.sql` 只留下密文约定的标记；启动时把仍是明文的行加密为 `olenc1:`，已经是该前缀的行跳过。教师口令接口仍返回原文。列表、审计日志和 `scripts/site-backup.mjs` 的数据库快照不提供明文，钥匙文件要单独备份。
 - **可观测性架构与代码对齐**：`docs/architecture/observability.md` 按 `packages/core/observability/` 现有文件重写清单，覆盖平台日志、安全审计、错误上报、请求 ID、存活/就绪探针和 `GET /metrics`。指标记录进程存活、运行时间、常驻内存、按 HTTP 状态类累计的响应次数，以及运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`。

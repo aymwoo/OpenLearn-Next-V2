@@ -549,6 +549,25 @@ await commandBus.registerHandler('myplugin.open_panel', {
 });
 ```
 
+#### 3.3.4 命令必须有 ActionDescriptor（内核 default-deny）
+
+内核的 `CommandBus` 拦截器采用 **default-deny**：只有先通过
+`ctx.services.actionRegistry.register()` 登记过 `ActionDescriptor`
+（含 `capabilityRequired` + `inputSchema`）的命令才允许派发。
+**只 `registerHandler()` 而漏了描述符的命令，一律被拒绝**，安全策略不会被绕过。
+
+- **注册顺序**：先 `actionRegistry.register()`，再 `commandBus.registerHandler()`。
+  顺序反了不会报错，但插件加载时会打印一条 `[PluginHost] ... without a matching
+  ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
+- **HTTP 表现**：经 `/api/commands` 派发被拒时返回 **HTTP 403**，
+  响应体为 `{ "success": false, "code": "COMMAND_NOT_REGISTERED", "error": "…" }`。
+  前端应按 `code` 分支处理，不要把它当作 500 服务端崩溃上报。
+  能力不足被拒时 `code` 为 `COMMAND_CAPABILITY_DENIED`。
+- **旧插件迁移**：历史插件若只注册了 handler，升级后其命令会被拒绝。请为每个
+  命令补上 `ActionDescriptor`（`commandType` 用**你写在源码里的原始命令名**，
+  例如 `poll.create`，不要手写命名空间前缀 —— 宿主会自动加前缀）。
+  可用 `node scripts/plugin-command-audit.mjs` 列出仓库内所有「有 handler 无 action」的命令。
+
 ---
 
 ## 4. 手把手实例项目
@@ -2146,6 +2165,7 @@ describe('my-plugin', () => {
 
 - [ ] 构建配置中已将 `@openlearn/plugin-sdk` 标记为 `external`，严禁将 SDK 打入插件 ZIP
 - [ ] 每个 Action（`actionRegistry.register`）都有对应的 Command Handler（`commandBus.registerHandler`）
+- [ ] 每个 Command Handler 都有对应的 Action（`actionRegistry.register`，且先注册描述符再注册 handler）—— 否则内核 default-deny 会以 403 `COMMAND_NOT_REGISTERED` 拒绝该命令（见 §3.3.4）
 - [ ] `ctx.db.ensureTable` 创建的每个表都有注释说明用途
 - [ ] 跨插件调用（如 VFS）在 `capabilitiesProposed` 中声明了对应权限
 - [ ] `activate()` 中所有可能出现异常的操作包裹了 `try/catch`

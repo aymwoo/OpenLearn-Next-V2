@@ -98,7 +98,7 @@ Content-Type: application/json
 
 - `401 { error: "Authentication required" }` — 未登录
 - `403 { error: "Forbidden: Cannot modify logs for another student" }` — 学生操作他人 attempt
-- `500` — 内部错误（如 CapabilityGuard 拦截 — 提交路径要求 `student:write` capability，见 `courseware.submit_attempt`；`/log` 本身不走命令总线）
+- `403 { code: "COMMAND_CAPABILITY_DENIED" }` — 权限不足（CapabilityGuard 拦截 — 提交路径要求 `student:write` capability，见 `courseware.submit_attempt`；`/log` 本身不走命令总线）
 
 ### 副作用
 
@@ -172,7 +172,8 @@ Content-Type: application/json
 
 - `401 { error: "Authentication required to submit attempt scores" }` — 未登录
 - `403 { error: "Forbidden: Cannot submit scores for another student" }` — 学生操作他人 attempt
-- `500` — 内部错误（如 CapabilityGuard 拦截 — 需 `student:write` capability；或 `PayloadValidationError` — 路由已剔空 `score`/`completion` 的显式 `null` 再组 payload，因为 `validateJsonSchema` 把 `null` 当作已提供值）
+- `403 { code: "COMMAND_CAPABILITY_DENIED" }` — 权限不足（CapabilityGuard 拦截 — 需 `student:write` capability）
+- `500` — 内部错误（如 `PayloadValidationError` — 路由已剔空 `score`/`completion` 的显式 `null` 再组 payload，因为 `validateJsonSchema` 把 `null` 当作已提供值）
 
 ---
 

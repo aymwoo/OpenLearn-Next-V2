@@ -218,6 +218,37 @@ describe('buildContext', () => {
     expect(rawCommandBus.unregisterHandler).toHaveBeenCalledWith('plugin-id-123.testcommand');
   });
 
+  // ── Test 4b / 4c：Issue #71 — 缺描述符的 load-time 告警 ────────────────
+
+  it('Test 4b: registerHandler 时若没有匹配的 ActionDescriptor，输出清晰告警（不改变默认拒绝策略）', async () => {
+    const registry = await setupRegistry();
+    const ctx = await setupContext({ registry });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ctx.services.commandBus!.registerHandler('missing.cmd', { execute: async () => undefined });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('without a matching ActionDescriptor'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('default-deny'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('Test 4c: 已声明 ActionDescriptor 的命令不产生告警', async () => {
+    const registry = await setupRegistry();
+    const actionRegistry = await registry.resolve(IActionRegistryServiceToken);
+    (actionRegistry.getActionByCommandType as any).mockImplementation(async (type: string) =>
+      type === 'known.cmd' ? { commandType: 'known.cmd' } : undefined,
+    );
+    const ctx = await setupContext({ registry });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ctx.services.commandBus!.registerHandler('known.cmd', { execute: async () => undefined });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   // ── Test 5 ──────────────────────────────────────────────────────────
 
   it('Test 5: 包装的 eventBus.subscribe 在 tracker 中注册 dispose', async () => {
