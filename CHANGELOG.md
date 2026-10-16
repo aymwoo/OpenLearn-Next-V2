@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
 - **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
 - **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。
+- **PPT 课件演示不再显示 `pptx.*` 原始 i18n 键名**：`RevealPresentationWrapper` 初始化 i18next 时原先只挂载空资源（`{ translation: {} }`），导致 `pptx-react-viewer` 经 `useTranslation` 查不到词条、直接回显原始键（如幻灯片左下角的 `pptx.notes.title`）。现改为载入 viewer 自带的扁平英文词典 `translationsEn`（`pptx-react-viewer/i18n`），并按扁平原样关闭 `keySeparator` / `nsSeparator`，另加 `parseMissingKeyHandler: keyToLabel` 兜底——未收录的键回退为人类可读标签，绝不会露出 `pptx.*` 键名。
 
 ### Docs
 
