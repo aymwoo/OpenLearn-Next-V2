@@ -19,6 +19,7 @@ export interface ScheduleType {
   notes?: string | null;
   lesson_title?: string;
   class_name?: string;
+  academic_year?: string | null;
   isRepeating?: boolean;
 }
 
