@@ -22,22 +22,30 @@ async function getUploadLimitMb(): Promise<number> {
   return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
 }
 import { PowerPointViewer, type PowerPointViewerHandle, LOCALE_CATALOG } from 'pptx-react-viewer';
+import { translationsEn, keyToLabel } from 'pptx-react-viewer/i18n';
 import 'pptx-react-viewer/styles';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-// 确保 i18next 实例安全初始化，防止 pptx-react-viewer 内部访问 i18n.options.resources 时报错
+// 确保 i18next 实例安全初始化，防止 pptx-react-viewer 内部访问 i18n.options.resources 时报错。
+// 必须喂入 viewer 自带的英文词典（扁平 `pptx.*` 键）：否则 react-i18next 查不到词条会直接
+// 回显原始键名（如 `pptx.notes.title` / `PPTX.SLIDEINSPECTOR.*`）。
 if (!i18n.isInitialized) {
   i18n.use(initReactI18next).init({
     resources: {
-      en: { translation: {} },
-      'zh-CN': { translation: {} },
+      en: { translation: translationsEn },
+      'zh-CN': { translation: translationsEn },
     },
     lng: 'zh-CN',
     fallbackLng: 'en',
+    // 词典键为扁平 `pptx.a.b.c`，不能按层级或命名空间拆分
+    keySeparator: false,
+    nsSeparator: false,
     interpolation: {
       escapeValue: false,
     },
+    // 兜底：万一有未收录的键，回退为人类可读标签，绝不露出原始 `pptx.*` 键名
+    parseMissingKeyHandler: (key: string) => keyToLabel(key),
   });
 }
 import {
