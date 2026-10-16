@@ -34,6 +34,13 @@ function errWithStatus(status: number, message: string): Error & { status: numbe
   return e;
 }
 
+function errWithStatusAndCode(status: number, code: string, message: string): Error & { status: number; code: string } {
+  const e = new Error(message) as Error & { status: number; code: string };
+  e.status = status;
+  e.code = code;
+  return e;
+}
+
 describe('sendSafeError · 状态码透传', () => {
   const originalEnv = process.env.NODE_ENV;
 
@@ -84,6 +91,32 @@ describe('sendSafeError · 状态码透传', () => {
     sendSafeError(res, 'plain string');
     expect(captured.status).toBe(500);
     expect((captured.body as { error: string }).error).toBe('plain string');
+  });
+});
+
+describe('sendSafeError · 机器可读错误码透传（Issue #71）', () => {
+  it('4xx + err.code 时，响应体带上 code（供前端按 code 分支）', () => {
+    const { res, captured } = mockRes();
+    sendSafeError(res, errWithStatusAndCode(403, 'COMMAND_NOT_REGISTERED', 'denied by default'));
+    expect(captured.status).toBe(403);
+    expect(captured.body).toEqual({
+      success: false,
+      code: 'COMMAND_NOT_REGISTERED',
+      error: 'denied by default',
+    });
+  });
+
+  it('4xx 但没有 code 时，响应体不含 code 字段（不改变既有契约）', () => {
+    const { res, captured } = mockRes();
+    sendSafeError(res, errWithStatus(404, 'Class not found'));
+    expect(captured.body).toEqual({ success: false, error: 'Class not found' });
+  });
+
+  it('5xx 一律不透传 code（避免泄露内部错误码）', () => {
+    const { res, captured } = mockRes();
+    sendSafeError(res, errWithStatusAndCode(500, 'SQLITE_CONSTRAINT_PRIMARYKEY', 'db boom'));
+    expect(captured.status).toBe(500);
+    expect(captured.body).toEqual({ success: false, error: 'db boom' });
   });
 });
 

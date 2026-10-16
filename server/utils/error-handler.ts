@@ -64,5 +64,17 @@ export function sendSafeError(
   // 生产环境对 4xx 仍透传 message —— 4xx 是业务语义（如「班级不存在」）而非内部故障，
   // 全量替换成 "Internal server error" 会让前端无法区分「用户填错了」与「服务器坏了」。
   const exposedMessage = isProd && effectiveStatus >= 500 ? fallbackMessage : message;
-  return res.status(effectiveStatus).json({ success: false, error: exposedMessage });
+
+  // 机器可读错误码（2026-10-16，Issue #71）：仅对 4xx 透传 `err.code`。
+  // 权限/业务类拒绝（如 COMMAND_NOT_REGISTERED）需要让前端按 code 分支处理，
+  // 而不是从本地化文案里做字符串嗅探。5xx 不透传，避免泄露内部错误码。
+  const rawCode =
+    err && typeof err === 'object' && typeof (err as { code?: unknown }).code === 'string'
+      ? (err as { code: string }).code
+      : undefined;
+  const errorCode = effectiveStatus >= 400 && effectiveStatus < 500 && rawCode ? rawCode : undefined;
+
+  return res
+    .status(effectiveStatus)
+    .json({ success: false, ...(errorCode ? { code: errorCode } : {}), error: exposedMessage });
 }

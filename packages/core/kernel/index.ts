@@ -320,9 +320,14 @@ export class Kernel {
         if (action.capabilityRequired && !isAdmin) {
           const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);
           if (!allowed) {
-            throw new Error(
+            // 权限拒绝是 4xx 语义：带上 status + 机器可读 code，
+            // 避免被 /api/commands 等路由当作 500 上报（前端会误报为服务端崩溃）。
+            const err = new Error(
               `[CapabilityGuard] Access Denied: Actor ${command.actorId} missing capability ${action.capabilityRequired} for ${command.type}`,
-            );
+            ) as any;
+            err.status = 403;
+            err.code = 'COMMAND_CAPABILITY_DENIED';
+            throw err;
           }
         }
 
@@ -371,11 +376,18 @@ export class Kernel {
         //
         // 排查提示：`scripts/plugin-command-audit.mjs` 可列出所有「有 handler 无 action」
         // 的命令（历史上是 5 个 classroom.countdown.*，已在 server/routes/classroom.ts 补齐）。
-        throw new Error(
+        //
+        // 该拒绝是**授权失败**而非服务端故障：携带 status=403 + code，
+        // 让 /api/commands 返回 403 而不是 500（此前 500 会被前端当作崩溃上报，
+        // 也会掩盖「插件忘了注册描述符」这一真实的升级兼容问题）。
+        const err = new Error(
           `[Security] Command "${command.type}" has no registered action descriptor and is denied by default. ` +
             `Only commands registered via actionRegistry.register() may be dispatched. ` +
             `If you own this command, register an ActionDescriptor (capabilityRequired + inputSchema).`,
-        );
+        ) as any;
+        err.status = 403;
+        err.code = 'COMMAND_NOT_REGISTERED';
+        throw err;
       }
     });
 

@@ -476,6 +476,36 @@ export const BuiltinPlugin = {
       },
     });
 
+    // 1.5 HELLO.SAY 示范命令（Issue #71）
+    // 宿主内置的「问候插件」白板组件（src/features/whiteboard/widgets/HelloWorldWrapper.tsx）
+    // 仍会派发 hello.say。原 ext-hello-world 示范插件已随「清理废弃插件」下线，
+    // 导致该命令既无描述符也无 handler —— 落到 kernel 的 default-deny 被拒（旧行为 HTTP 500）。
+    // 这里把描述符与 handler 补回核心插件：既维持「已注册命令必有 ActionDescriptor」的不变量，
+    // 也消除 lesson_editor 页面的 500。
+    const helloSayCmdType = 'hello.say';
+    await actionRegistry.register({
+      id: 'core-hello-say',
+      commandType: helloSayCmdType,
+      description: '示范命令：向指定用户发送一条问候（供内置「问候插件」白板组件调用）。',
+      capabilityRequired: 'whiteboard:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '关联的课程 ID（可选）' },
+          username: { type: 'STRING', description: '被问候的用户名' },
+          shout: { type: 'BOOLEAN', description: '是否同时在白板上投射问候语（可选）' },
+        },
+        required: ['username'],
+      },
+    });
+    await commandBus.registerHandler(helloSayCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const username = typeof payload?.username === 'string' && payload.username ? payload.username : 'World';
+        return { success: true, greeting: `Hello, ${username}!`, timestamp: new Date().toISOString() };
+      },
+    });
+
     // 2. WHITEBOARD HANDLER
     const drawWhiteboardCmdType = 'whiteboard.draw';
     // 前端 renderElement 支持的元素类型白名单。

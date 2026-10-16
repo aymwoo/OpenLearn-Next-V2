@@ -61,7 +61,7 @@ import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { WorkerCapabilityError } from './errors.js';
-import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
+import { resolvePluginCommandType, stripPluginCommandPrefix } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
 import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
@@ -162,6 +162,11 @@ export class ServiceHost {
   >();
   private readonly registeredCommandTypes = new Set<string>();
   private readonly registeredActionIds = new Set<string>();
+  /**
+   * actionId → commandType：本插件经 RPC 登记的 ActionDescriptor 清单（Issue #71）。
+   * 仅用于在 registerHandler 时做「是否声明了描述符」的本地预检（无需额外 RPC）。
+   */
+  private readonly registeredActionCommandTypes = new Map<string, string>();
   private readonly activeStreams = new Map<
     string,
     {
@@ -460,6 +465,7 @@ export class ServiceHost {
         console.error(`[ServiceHost] Failed to resolve actionRegistry on dispose:`, err);
       }
       this.registeredActionIds.clear();
+      this.registeredActionCommandTypes.clear();
     }
 
     // Clean up pending HTTP requests (reject with termination error)
@@ -883,6 +889,7 @@ export class ServiceHost {
             },
           });
           this.registeredCommandTypes.add(commandType);
+          this.warnIfCommandHasNoDescriptor(commandType);
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,
@@ -941,6 +948,9 @@ export class ServiceHost {
           const [descriptor] = msg.args as [any];
           await actionRegistry.register(descriptor);
           this.registeredActionIds.add(descriptor.id);
+          if (typeof descriptor?.commandType === 'string') {
+            this.registeredActionCommandTypes.set(descriptor.id, descriptor.commandType);
+          }
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,
@@ -951,6 +961,7 @@ export class ServiceHost {
           const [actionId] = msg.args as [string];
           await actionRegistry.unregister(actionId);
           this.registeredActionIds.delete(actionId);
+          this.registeredActionCommandTypes.delete(actionId);
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,
@@ -1040,6 +1051,23 @@ export class ServiceHost {
       return host === pattern;
     });
     return ok ? { allowed: true, reason: '' } : { allowed: false, reason: `host ${host} not in allowlist` };
+  }
+
+  /**
+   * Issue #71：worker 插件登记命令 handler 时，检查本插件是否已登记匹配的
+   * ActionDescriptor。缺失时给出清晰告警（kernel default-deny 会拒绝该命令），
+   * 不改变默认拒绝策略本身。使用本地登记清单比对，不产生额外 RPC。
+   */
+  private warnIfCommandHasNoDescriptor(registeredType: string): void {
+    const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+    const declared = new Set(this.registeredActionCommandTypes.values());
+    const stripped = stripPluginCommandPrefix(registeredType, pluginId);
+    if (declared.has(registeredType) || (stripped && declared.has(stripped))) return;
+    console.warn(
+      `[ServiceHost] Plugin "${pluginId}" registered command "${registeredType}" without a matching ActionDescriptor; ` +
+        `the kernel default-deny policy will reject this command. ` +
+        `Register one via ctx.services.actionRegistry.register({ commandType, capabilityRequired, inputSchema }) first.`,
+    );
   }
 
   private async resolveService(tokenName: string): Promise<unknown> {

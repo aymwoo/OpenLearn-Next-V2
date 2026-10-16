@@ -158,14 +158,40 @@ describe('Sprint 1 安全与生命周期加固验证套件 (C-1, C-3, C-4, H-2, 
     expect(studentRes.status).toBe(403);
 
     // 3. 教师调用命令 -> 正常通过鉴权（执行或进入命令总线）
+    //    注意：用一个**真实注册**的命令来验证「通过路由鉴权后能真正执行」。
+    //    历史上这里用的是 `lesson.list`（从未注册过的虚构命令），在 default-deny
+    //    生效后它会返回 500（旧）/ 403（Issue #71 修复后），无法证明教师被放行。
     const teacherRes = await fetch(`${baseUrl}/api/commands`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
-      body: JSON.stringify({ commandType: 'lesson.list', payload: {} }),
+      body: JSON.stringify({ commandType: 'hello.say', payload: { username: 'SecTeacher' } }),
     });
-    // 不为 401 或 403 说明已通过权限关卡
-    expect(teacherRes.status).not.toBe(401);
-    expect(teacherRes.status).not.toBe(403);
+    expect(teacherRes.status, await teacherRes.clone().text()).toBe(200);
+  });
+
+  // ── Issue #71：未注册 ActionDescriptor 的命令应返回 403 + 结构化 code，而非 500 ──
+  it('Issue #71: 未注册描述符的命令返回 403 + COMMAND_NOT_REGISTERED（不再被当作 500 崩溃）', async () => {
+    const res = await fetch(`${baseUrl}/api/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ commandType: 'demo.orphan_command_without_descriptor', payload: {} }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { success: boolean; code?: string; error?: string };
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('COMMAND_NOT_REGISTERED');
+  });
+
+  it('Issue #71: hello.say 已补回 ActionDescriptor 与 handler，不再被 default-deny 拒绝', async () => {
+    const res = await fetch(`${baseUrl}/api/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ commandType: 'hello.say', payload: { username: 'World', shout: true } }),
+    });
+    const body = (await res.json()) as { success: boolean; result?: { greeting?: string } };
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.result?.greeting).toBe('Hello, World!');
   });
 
   it('H-3: CORS 响应不回填通配符 *，确保 Access-Control-Allow-Credentials 为 true 时规范合规', async () => {
