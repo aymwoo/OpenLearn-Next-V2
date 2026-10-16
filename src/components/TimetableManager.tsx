@@ -37,7 +37,9 @@ import { TimetableAdjustView } from './timetable/sub-views/TimetableAdjustView';
 import { TimetableImportExportView } from './timetable/sub-views/TimetableImportExportView';
 import { TimetableOcrView } from './timetable/sub-views/TimetableOcrView';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { AcademicYearFilter } from './AcademicYearFilter';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
+import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
@@ -50,6 +52,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 }) => {
   // Navigation states
   const host = useOptionalPluginHost();
+  const academicYearCtx = useOptionalAcademicYear();
+  const academicYear = academicYearCtx?.academicYear === 'all' ? null : (academicYearCtx?.academicYear ?? null);
   const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import' | (string & {})>('view');
   const [viewMode, setViewMode] = useState<'list' | 'week' | 'cycle'>('week');
 
@@ -278,9 +282,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     setLoading(true);
     try {
       let all: ScheduleType[] = [];
+      const academicYearParam = academicYear ? `&academicYear=${encodeURIComponent(academicYear)}` : '';
       if (selectedClassId === 'all') {
         // A7: 集合级端点返回 { data, ... } 信封
-        const res = await fetch('/api/schedules?pageSize=all');
+        const res = await fetch(`/api/schedules?pageSize=all${academicYearParam}`);
         if (res.ok) {
           all = listFromEnvelope<ScheduleType>(await res.json());
         }
@@ -288,7 +293,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         // 注意：子资源端点 /api/classes/:id/schedules 暂维持裸数组（A7 未覆盖）
         const cls = classes.find((c) => c.id === selectedClassId);
         if (cls) {
-          const res = await fetch(`/api/classes/${cls.id}/schedules`);
+          const res = await fetch(`/api/classes/${cls.id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`);
           if (res.ok) {
             all = (await res.json()) as ScheduleType[];
             all.forEach((sch) => {
@@ -323,7 +328,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       prevSelectedClassIdRef.current = selectedClassId;
       fetchAllSchedules();
     }
-  }, [selectedClassId, classes]);
+  }, [selectedClassId, classes, academicYear]);
 
   // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
   useEffect(() => {
@@ -1339,6 +1344,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               }}
             />
           </div>
+
+          <AcademicYearFilter
+            value={academicYear ?? 'all'}
+            options={Array.from(new Set(schedules.map((s) => s.academic_year).filter(Boolean))) as string[]}
+            lang={lang}
+            onChange={(value) => {
+              academicYearCtx?.setAcademicYear?.(value === 'all' ? null : value);
+            }}
+          />
 
           {/* timetable.toolbar.action 扩展操作 */}
           <ExtensionPointRenderer

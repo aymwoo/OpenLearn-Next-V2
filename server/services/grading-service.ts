@@ -7,6 +7,7 @@
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
+import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
 import { decryptApiKey } from '../utils/crypto.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import type { StoredAIProvider } from '../context.js';
@@ -45,6 +46,7 @@ export interface ExamItem {
   description: string;
   max_score: number;
   created_at: number;
+  academic_year: string | null;
 }
 
 export interface ExamScoreInput {
@@ -92,17 +94,19 @@ export class GradingService {
 
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
 
-  public getAttendanceSummary(classId: string, daysWindow = 30): AttendanceSummaryItem[] {
+  public getAttendanceSummary(classId: string, daysWindow = 30, academicYear?: string | null): AttendanceSummaryItem[] {
+    const yearClause = academicYear ? ' AND s.academic_year = ?' : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     const schedules = this.db
       .prepare(
         `
       SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
       FROM schedules s
       LEFT JOIN lessons l ON s.lesson_id = l.id
-      WHERE s.class_id = ?
+      WHERE s.class_id = ?${yearClause}
     `,
       )
-      .all(classId) as any[];
+      .all(...params) as any[];
 
     const summary = schedules.map((sch) => {
       const counts = this.db
@@ -167,15 +171,17 @@ export class GradingService {
   }
 
   public recordAttendance(scheduleId: string, studentId: string, status: string): void {
+    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as { academic_year?: string | null } | undefined;
+    const academicYear = sch?.academic_year ?? null;
     this.db
       .prepare(
         `
-      INSERT INTO attendance (schedule_id, student_id, status, recorded_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(schedule_id, student_id) DO UPDATE SET status = excluded.status, recorded_at = excluded.recorded_at
+      INSERT INTO attendance (schedule_id, student_id, status, recorded_at, academic_year)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(schedule_id, student_id) DO UPDATE SET status = excluded.status, recorded_at = excluded.recorded_at, academic_year = excluded.academic_year
     `,
       )
-      .run(scheduleId, studentId, status, Date.now());
+      .run(scheduleId, studentId, status, Date.now(), academicYear);
   }
 
   // ── 2. 成绩权重标准化与持久化 ──────────────────────────────────────────────────
@@ -240,10 +246,12 @@ export class GradingService {
 
   // ── 3. 考试管理与成绩录入事务 ──────────────────────────────────────────────────
 
-  public listExams(classId: string): ExamItem[] {
+  public listExams(classId: string, academicYear?: string | null): ExamItem[] {
+    const yearClause = academicYear ? ' AND academic_year = ?' : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     return this.db
-      .prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC')
-      .all(classId) as ExamItem[];
+      .prepare(`SELECT * FROM exams WHERE class_id = ?${yearClause} ORDER BY created_at DESC`)
+      .all(...params) as ExamItem[];
   }
 
   public createExam(classId: string, title: string, description = '', maxScore = 100): string {
@@ -251,14 +259,15 @@ export class GradingService {
       throw new Error('Title is required');
     }
     const examId = randomId('exam-');
+    const now = Date.now();
     this.db
       .prepare(
         `
-      INSERT INTO exams (id, class_id, title, description, max_score, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO exams (id, class_id, title, description, max_score, created_at, academic_year)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
       )
-      .run(examId, classId, title.trim(), description || '', maxScore || 100, Date.now());
+      .run(examId, classId, title.trim(), description || '', maxScore || 100, now, deriveAcademicYear(now));
 
     return examId;
   }
@@ -302,6 +311,7 @@ export class GradingService {
   public computeSemesterGrades(
     classId: string,
     semesterName = '2026年春季学期',
+    academicYear?: string | null,
   ): SemesterGradesResult {
     // 1. 获取权重
     const weights = this.getGradeWeights(classId);
@@ -323,30 +333,32 @@ export class GradingService {
       .prepare(
         `
       SELECT student_id, status FROM attendance
-      WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
+      WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
+        ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; status: string }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; status: string }>;
 
     // 4. 批量拉取学习进度
     const progressList = this.db
       .prepare(
         `
       SELECT student_id, progress_percent FROM student_lesson_progress
-      WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
+      WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
     `,
       )
-      .all(classId) as Array<{ student_id: string; progress_percent: number }>;
+      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{ student_id: string; progress_percent: number }>;
 
     // 5. 批量拉取平时作业得分
     const assignmentSubmissions = this.db
       .prepare(
         `
       SELECT student_id, score FROM assignment_submissions
-      WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?) AND status = 'graded' AND score IS NOT NULL
+      WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}) AND status = 'graded' AND score IS NOT NULL
+        ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; score: number | null }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number | null }>;
 
     // 6. 批量拉取考试得分
     const examScoresList = this.db
@@ -355,9 +367,10 @@ export class GradingService {
       SELECT es.student_id, es.score, e.max_score FROM exam_scores es
       JOIN exams e ON es.exam_id = e.id
       WHERE e.class_id = ? AND es.score IS NOT NULL
+      ${academicYear ? 'AND e.academic_year = ? AND es.academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; score: number; max_score: number }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number; max_score: number }>;
 
     // 7. 拉取已归档学期成绩报告（已归档直接复用归档快照）
     const archivedReports = this.db
@@ -365,9 +378,10 @@ export class GradingService {
         `
       SELECT * FROM student_semester_reports
       WHERE class_id = ? AND semester_name = ?
+      ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId, semesterName) as any[];
+      .all(...(academicYear ? [classId, semesterName, academicYear] : [classId, semesterName])) as any[];
 
     const archivedMap = new Map(archivedReports.map((r) => [r.student_id, r]));
 
@@ -502,13 +516,14 @@ export class GradingService {
 
     const insertStmt = this.db.prepare(`
       INSERT INTO student_semester_reports (
-        id, student_id, class_id, semester_name,
+        id, student_id, class_id, semester_name, academic_year,
         attendance_score, progress_score, assignment_score, exam_score,
         total_score, grade_level, teacher_evaluation, ai_evaluation,
         dimension_scores, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(student_id, class_id, semester_name) DO UPDATE SET
+        academic_year = excluded.academic_year,
         attendance_score = excluded.attendance_score,
         progress_score = excluded.progress_score,
         assignment_score = excluded.assignment_score,
@@ -523,6 +538,7 @@ export class GradingService {
 
     const tx = this.db.transaction((reportsList: SemesterReportArchiveItem[]) => {
       const now = Date.now();
+      const resolvedAcademicYear = deriveAcademicYearFromSemesterName(semesterName);
       for (const r of reportsList) {
         const reportId = r.id || randomId('rep-');
         insertStmt.run(
@@ -530,6 +546,7 @@ export class GradingService {
           r.studentId,
           classId,
           semesterName,
+          resolvedAcademicYear,
           r.attendanceScore,
           r.progressScore,
           r.assignmentScore,

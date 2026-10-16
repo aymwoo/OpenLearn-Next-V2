@@ -12,6 +12,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学年维度基础（ PR 1 ）**：新增 `academic_year` 字段与索引（schedules/assignments/attendance/exams/semester reports/lesson progress/classroom sessions），site_settings 增加当前学年配置；ScheduleService 支持按学年筛选/衍生学年；`/api/site-settings` 返回 `currentAcademicYear`/`academicStartMonth`，管理员可更新并校验格式 `YYYY-YYYY`。
+- **学年维度前端管理与筛选基础（PR 2）**：AdminPanel 增加当前学年与学年起始月份配置；新增 `src/utils/academicYear.ts` 与可复用 `AcademicYearFilter` 组件，支持学年归一化、默认值与筛选交互，含组件测试。
+- **学年上下文接入（PR 3）**：新增 `AcademicYearContext`（URL/localStorage/服务端默认同步）并在 App shell 全局挂载；支持 API 值规范化为 `academicYear` 查询参数，含上下文测试。
+- **学年筛选接入 TimetableManager（PR 4）**：课表管理拉取排课时自动带上当前 `academicYear`；在 Provider 缺失时安全降级为不筛选，保持既有测试通过。
+- **学年筛选接入排课管理（PR 5）**：`useLabAndSchedule.fetchClassSchedules` 按当前 `academicYear` 请求班级排课，Provider 缺失时保持原有行为。
+- **ClassesView 学年筛选 UI（PR 14）**：班级管理增加 `AcademicYearFilter`，可切换单一年份并更新全局学术年。
+- **排课创建显式写入学年（PR 13）**：ClassScheduleAttendance 创建排课时附带由日期推导的 `academicYear`，并补全前端工具函数。
+- **TimetableManager 学年选择 UI（PR 11）**：课表管理增加 `AcademicYearFilter`，可切换单一年份并触发重新拉取，空数据/无 Provider 时安全降级。
+- **学年维度扩展到课堂会话（PR 7）**：classroom_sessions 支持按 `academic_year` 过滤；新会话自动归属当前学年；list SQL 暴露 academic_year。
+- **学年维度扩展到考试（PR 8）**：exams 按 `academic_year` 存储与过滤，`/api/classes/:classId/exams` 支持 `academicYear`。
+- **学年维度扩展到考勤（PR 9）**：attendance 按关联排课学年存储，`/api/classes/:classId/attendance-summary` 支持 `academicYear`。
+- **Attendance export 学年文件名（PR 16）**：考勤导出支持可选 `academicYear`，并在文件名中体现学年。
+- **学年维度扩展到学期报告（PR 10）**：semester reports 归档时写入 `academic_year`（由学期名称推导），schema 已支持后续按学年筛选。
+- **学年维度扩展到学期综合成绩（PR 12）**：`computeSemesterGrades` 支持按 `academic_year` 过滤考勤、进度、作业、考试与报告。
+- **学年筛选扩展到作业（PR 6）**：assignments 按 `academic_year` 存储与过滤，`/api/classes/:classId/assignments` 支持 `academicYear` 查询参数。
 - **互动课堂会话与档案管理看板（Live Class Session Management）**：新增 `ClassroomSessionManager` 看板与 `ClassroomSessionDeleteModal` 安全删除弹窗，在课堂启动门户（`ClassroomEntryPortal`）与授课中控栏（`LiveClassroomView`）提供快捷切换入口。后端新增 `GET /api/classroom/sessions`（支持分页、按班级/课节/阶段筛选、模糊搜索及投票/通票/动态指标聚合）、`POST /api/classroom/sessions/:sessionId/archive`（一键归档并释放班级占用）与 `DELETE /api/classroom/sessions/:sessionId`（数据库事务级联物理删除关联的随堂投票、选票、抢答、结课通票、弹幕、互评及动态流记录）。
 - **左侧导航「在新标签页打开」**：教学工具 / 系统管理 / 帮助支持 / 扩展应用四组共 8 个内置导航项（课程管理 / 互动课堂 / 班级管理 / 课表管理 / 机房管理 / 插件中心 / 管理后台 / 帮助文档）以及插件通过 `teacher.tab` 扩展点注册的动态导航项，悬停时显示 ↗ 按钮，点击在浏览器新标签页打开该 tab，源 tab 不切换焦点。新 tab 启动时通过 hash 路由自动定位到目标 tab（`useSessionSlice` 在挂载时读 `window.location.hash`）。`tabToHash` / `hashToTab` 从 `useSessionSlice` 抽出到 `src/utils/teacherTabHash.ts`，新增 `buildTeacherTabUrl` 与 `openTeacherTabInNewTab`（用 `noopener,noreferrer`）。Admin Center（管理员专用）在原文件内联渲染也获得同样的 ↗ 按钮。测试覆盖 tab ↔ hash 双向编解码、URL 拼接（保留 `pathname` / `search`）与 `window.open` 调用。
 - **教学环节进入条件**：环节 `gates` 存在 `lessons.timeline`。内置 `quiz_completed`、`quiz_accuracy`、`assignment_submitted`、`dwell_seconds`、`checked_in`。学生核对与教师推进全班环节都经过 `SegmentGateService`；未达标学生看到锁定和进度，全班仍共用一个当前环节。四阶段课堂生命周期不再调用 `StageGuardPipeline`。教师可按学生与环节放行并写入审计。插件用 `contributes['segment.gate_type']` 声明条件，宿主调用其只读命令。课级 `progress_mode` / `progress_conditions` 标记废弃，仅在环节没有自己的 gates 时兼容回退。

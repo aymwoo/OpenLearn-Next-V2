@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { deriveAcademicYear } from '../../../utils/academicYear';
+import { useOptionalAcademicYear } from '../../../context/AcademicYearContext';
 import { CalendarIcon, ChevronDown, ChevronRight, ShieldAlert, Download, Loader2 } from 'lucide-react';
 import type { ClassType, StudentType, Lesson } from '../../../types/app';
 import {
@@ -44,6 +46,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
   } = props;
 
   const [isExporting, setIsExporting] = useState(false);
+  const academicYearCtx = useOptionalAcademicYear();
 
   const handleExportClassAttendance = async () => {
     const schedules = classSchedulesMap[cls.id] || [];
@@ -56,6 +59,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
         students: cStudents,
         scheduleAttendanceMap,
         lang,
+        academicYear: academicYearCtx?.apiAcademicYear ?? null,
         fetchScheduleAttendance,
       });
     } finally {
@@ -141,7 +145,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
             const res = await fetch(`/api/classes/${cls.id}/schedules`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lessonId: newScheduleLessonId, scheduledDate: newScheduleDate }),
+              body: JSON.stringify({ lessonId: newScheduleLessonId, scheduledDate: newScheduleDate, academicYear: deriveAcademicYear(newScheduleDate) }),
             });
             if (res.ok) {
               setNewScheduleDate('');

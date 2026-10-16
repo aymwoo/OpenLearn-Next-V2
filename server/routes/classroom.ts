@@ -7,6 +7,7 @@ import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js'
 import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
@@ -464,6 +465,16 @@ export function registerClassroomRoutes(
         params.push(kw, kw, kw);
       }
 
+      if (typeof req.query.academicYear === 'string' && req.query.academicYear.trim()) {
+        const normalized = normalizeAcademicYear(req.query.academicYear);
+        if (normalized) {
+          conditions.push('cs.academic_year = ?');
+          params.push(normalized);
+        } else if (req.query.academicYear.trim().toLowerCase() !== 'all') {
+          // 无效值：不追加条件，避免 500
+        }
+      }
+
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       const countSql = `
@@ -490,6 +501,7 @@ export function registerClassroomRoutes(
             cs.ended_at,
             cs.created_at,
             cs.teaching_mode_id,
+            cs.academic_year,
             l.title AS lesson_title,
             c.name AS class_name
           FROM classroom_sessions cs

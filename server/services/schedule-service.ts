@@ -14,6 +14,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { decryptApiKey } from '../utils/crypto.js';
 import { randomId } from '../utils/id.js';
+import { normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import type { Pagination } from '../utils/pagination.js';
 import type { StoredAIProvider } from '../context.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
@@ -27,6 +28,7 @@ export interface ScheduleRecord {
   status: string | null;
   notes: string | null;
   created_at: number;
+  academic_year: string | null;
   lesson_title?: string;
   class_name?: string;
 }
@@ -38,6 +40,7 @@ export interface CreateScheduleParams {
   timeSlot?: string | null;
   status?: string | null;
   notes?: string | null;
+  academicYear?: string | null;
 }
 
 export interface UpdateScheduleParams {
@@ -46,6 +49,7 @@ export interface UpdateScheduleParams {
   timeSlot?: string | null;
   status?: string | null;
   notes?: string | null;
+  academicYear?: string | null;
 }
 
 export interface BatchScheduleItem {
@@ -57,6 +61,8 @@ export interface BatchScheduleItem {
   time_slot?: string | null;
   status?: string | null;
   notes?: string | null;
+  academicYear?: string | null;
+  academic_year?: string | null;
 }
 
 export interface RecurringScheduleParams {
@@ -295,12 +301,13 @@ export class ScheduleService {
   /**
    * 今日/指定日期的课表查询 (支持每周循环匹配与窗口排名)
    */
-  public getTodaySchedules(clientDate: string, classIds: string[] | null = null): ScheduleRecord[] {
+  public getTodaySchedules(clientDate: string, classIds: string[] | null = null, academicYear?: string | null): ScheduleRecord[] {
     // P1 修复：校验 YYYY-MM-DD（此前任意字符串进 strftime，行为未定义）；
     // 循环投影仅取 scheduled 状态，cancelled 不再幽灵复现；返回加 isRecurringProjection 语义注释
     if (!/^\d{4}-\d{2}-\d{2}$/.test(clientDate || '')) return [];
     if (classIds && classIds.length === 0) return [];
     const classClause = classIds === null ? '' : ` AND s.class_id IN (${classIds.map(() => '?').join(', ')})`;
+    const yearClause = academicYear ? ` AND s.academic_year = ?` : '';
     const query = `
       WITH RankedSchedules AS (
         SELECT s.*,
@@ -310,7 +317,7 @@ export class ScheduleService {
                ) as rn
         FROM schedules s
         WHERE strftime('%w', s.scheduled_date) = strftime('%w', ?)
-          AND s.status = 'scheduled'${classClause}
+          AND s.status = 'scheduled'${classClause}${yearClause}
       )
       SELECT r.id, r.class_id, r.lesson_id, ? as scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
              COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
@@ -320,22 +327,23 @@ export class ScheduleService {
       WHERE r.rn = 1
       ORDER BY r.time_slot ASC, r.created_at ASC
     `;
-    return this.reader.prepare(query).all(clientDate, ...(classIds ?? []), clientDate) as ScheduleRecord[];
+    return this.reader.prepare(query).all(clientDate, ...(classIds ?? []), ...(academicYear ? [academicYear] : []), clientDate) as ScheduleRecord[];
   }
 
   /**
    * 分页查询全量排课列表 (A7 标准分页信封)
    */
-  public listSchedules(pg: Pagination, classIds: string[] | null = null) {
+  public listSchedules(pg: Pagination, classIds: string[] | null = null, academicYear?: string | null) {
     if (classIds && classIds.length === 0) {
       return { data: [] as ScheduleRecord[], total: 0, page: pg.page, pageSize: pg.isAll ? 0 : pg.pageSize };
     }
-    const classClause = classIds === null ? '' : `WHERE s.class_id IN (${classIds.map(() => '?').join(', ')})`;
-    const countSql =
-      classIds === null
-        ? 'SELECT COUNT(*) AS n FROM schedules'
-        : `SELECT COUNT(*) AS n FROM schedules s ${classClause}`;
-    const total = (this.reader.prepare(countSql).get(...(classIds ?? [])) as any)?.n || 0;
+    const whereParts: string[] = [];
+    if (classIds !== null) whereParts.push(`s.class_id IN (${classIds.map(() => '?').join(', ')})`);
+    if (academicYear) whereParts.push(`s.academic_year = ?`);
+    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const params: any[] = [...(classIds ?? []), ...(academicYear ? [academicYear] : [])];
+    const countSql = `SELECT COUNT(*) AS n FROM schedules s ${whereClause}`;
+    const total = (this.reader.prepare(countSql).get(...params) as any)?.n || 0;
     const schedules = this.reader
       .prepare(
         `
@@ -343,12 +351,12 @@ export class ScheduleService {
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         LEFT JOIN classes c ON s.class_id = c.id
-        ${classClause}
+        ${whereClause}
         ORDER BY s.scheduled_date DESC, s.time_slot ASC
         LIMIT ? OFFSET ?
       `,
       )
-      .all(...(classIds ?? []), pg.isAll ? -1 : pg.pageSize, pg.offset) as ScheduleRecord[];
+      .all(...params, pg.isAll ? -1 : pg.pageSize, pg.offset) as ScheduleRecord[];
 
     return {
       data: schedules,
@@ -361,18 +369,20 @@ export class ScheduleService {
   /**
    * 查询指定班级的所有排课列表 (维持裸数组兼容)
    */
-  public getClassSchedules(classId: string): ScheduleRecord[] {
+  public getClassSchedules(classId: string, academicYear?: string | null): ScheduleRecord[] {
+    const yearClause = academicYear ? ` AND s.academic_year = ?` : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     return this.reader
       .prepare(
         `
         SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
-        WHERE s.class_id = ?
+        WHERE s.class_id = ?${yearClause}
         ORDER BY s.scheduled_date DESC, s.time_slot ASC
       `,
       )
-      .all(classId) as ScheduleRecord[];
+      .all(...params) as ScheduleRecord[];
   }
 
   /**
@@ -517,8 +527,11 @@ export class ScheduleService {
    * 创建单条排课 (可配置冲突强校验)
    */
   public createSchedule(params: CreateScheduleParams, options?: { allowConflict?: boolean }): ScheduleRecord {
-    const { classId, lessonId, scheduledDate, timeSlot, status, notes } = params;
+    const { classId, lessonId, scheduledDate, timeSlot, status, notes, academicYear } = params;
     assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
+
+    const resolvedAcademicYear =
+      normalizeAcademicYear(academicYear) ?? deriveAcademicYear(scheduledDate);
 
     // P0 竞态修复：detect+insert 同事务（better-sqlite3 同进程串行），事務内重查
     const tx = this.db.transaction(() => {
@@ -540,11 +553,11 @@ export class ScheduleService {
       this.db
         .prepare(
           `
-          INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at, academic_year)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         )
-        .run(id, classId, lessonId || '', scheduledDate, timeSlot || null, status || 'scheduled', notes || null, now);
+        .run(id, classId, lessonId || '', scheduledDate, timeSlot || null, status || 'scheduled', notes || null, now, resolvedAcademicYear);
       return {
         id,
         class_id: classId,
@@ -554,6 +567,7 @@ export class ScheduleService {
         status: status || 'scheduled',
         notes: notes || null,
         created_at: now,
+        academic_year: resolvedAcademicYear,
       };
     });
 
@@ -569,8 +583,13 @@ export class ScheduleService {
     params: UpdateScheduleParams,
     options?: { allowConflict?: boolean },
   ): void {
-    const { lessonId, scheduledDate, timeSlot, status, notes } = params;
+    const { lessonId, scheduledDate, timeSlot, status, notes, academicYear } = params;
     assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
+
+    const resolvedAcademicYear =
+      academicYear === undefined
+        ? deriveAcademicYear(scheduledDate)
+        : normalizeAcademicYear(academicYear);
 
     const tx = this.db.transaction(() => {
       if (!options?.allowConflict) {
@@ -589,8 +608,8 @@ export class ScheduleService {
       this.db
         .prepare(
           `
-          UPDATE schedules 
-          SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
+          UPDATE schedules
+          SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?, academic_year = ?
           WHERE id = ? AND class_id = ?
         `,
         )
@@ -600,6 +619,7 @@ export class ScheduleService {
           timeSlot || null,
           status || 'scheduled',
           notes || null,
+          resolvedAcademicYear,
           scheduleId,
           classId,
         );
@@ -642,6 +662,7 @@ export class ScheduleService {
       timeSlot: item.timeSlot || item.time_slot || null,
       status: item.status || 'scheduled',
       notes: item.notes || null,
+      academicYear: item.academicYear || item.academic_year || null,
     }));
     for (const n of norm) {
       assertValidScheduleInput(this.db, {
@@ -654,8 +675,8 @@ export class ScheduleService {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at, academic_year)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const createdIds: string[] = [];
@@ -702,7 +723,9 @@ export class ScheduleService {
       for (const n of norm) {
         const id = randomId('sch-');
         createdIds.push(id);
-        insertStmt.run(id, classId, n.lessonId, n.scheduledDate, n.timeSlot, n.status, n.notes, now);
+        const resolvedAcademicYear =
+          normalizeAcademicYear(n.academicYear) ?? deriveAcademicYear(n.scheduledDate);
+        insertStmt.run(id, classId, n.lessonId, n.scheduledDate, n.timeSlot, n.status, n.notes, now, resolvedAcademicYear);
       }
     });
 

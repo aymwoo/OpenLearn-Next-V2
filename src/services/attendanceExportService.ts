@@ -227,9 +227,10 @@ export async function exportClassAllSchedulesAttendanceCSV(options: {
   students: StudentType[];
   scheduleAttendanceMap: Record<string, AttendanceType[]>;
   lang?: 'zh' | 'en';
+  academicYear?: string | null;
   fetchScheduleAttendance?: (scheduleId: string) => Promise<void> | void;
 }): Promise<void> {
-  const { classInfo, schedules, students, scheduleAttendanceMap, lang = 'en', fetchScheduleAttendance } = options;
+  const { classInfo, schedules, students, scheduleAttendanceMap, lang = 'en', academicYear, fetchScheduleAttendance } = options;
 
   if (!schedules || schedules.length === 0) {
     const msg =
@@ -291,7 +292,8 @@ export async function exportClassAllSchedulesAttendanceCSV(options: {
   const csvContent = csvRows.map((r) => r.map(escapeCSV).join(',')).join('\n');
   const cleanClass = classInfo.name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_');
   const today = new Date().toISOString().split('T')[0];
-  const filename = `${cleanClass}_attendance_report_${today}.csv`;
+  const yearSuffix = academicYear ? `_${academicYear}` : '';
+  const filename = `${cleanClass}_attendance_report_${today}${yearSuffix}.csv`;
 
   triggerDownloadCSV(filename, csvContent);
 }
@@ -306,6 +308,7 @@ export async function exportAllClassesAttendanceCSV(options: {
   classStudentsMap: Record<string, StudentType[]>;
   scheduleAttendanceMap: Record<string, AttendanceType[]>;
   lang?: 'zh' | 'en';
+  academicYear?: string | null;
   fetchScheduleAttendance?: (scheduleId: string) => Promise<void> | void;
 }): Promise<void> {
   const {
@@ -314,6 +317,7 @@ export async function exportAllClassesAttendanceCSV(options: {
     classStudentsMap,
     scheduleAttendanceMap,
     lang = 'en',
+    academicYear,
     fetchScheduleAttendance,
   } = options;
 

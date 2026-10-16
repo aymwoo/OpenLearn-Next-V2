@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomId } from '../utils/id.js';
+import { deriveAcademicYear } from '../utils/academic-year.js';
 import {
   assertSessionClassChangeAllowed,
   CLASS_LOCK_MESSAGE,
@@ -157,11 +158,11 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       this.db
         .prepare(
           `
-          INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, checkin_code, created_at)
-          VALUES (?, ?, ?, ?, 'PRE_CLASS_READY', ?, ?)
+          INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, checkin_code, created_at, academic_year)
+          VALUES (?, ?, ?, ?, 'PRE_CLASS_READY', ?, ?, ?)
         `,
         )
-        .run(id, lessonId, classId || null, teacherId, checkinCode, now);
+        .run(id, lessonId, classId || null, teacherId, checkinCode, now, deriveAcademicYear(now));
 
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(id);
     } else if (classId && session.class_id !== classId) {

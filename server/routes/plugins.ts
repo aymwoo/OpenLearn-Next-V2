@@ -16,6 +16,7 @@ import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
 import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
@@ -1323,14 +1324,18 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.get('/api/site-settings', (req, res) => {
     try {
       const row = kernelContainer.db
-        .prepare('SELECT site_name, slogan, logo_url, upload_max_file_mb FROM site_settings WHERE id = ?')
+        .prepare('SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?')
         .get('global') as any;
+      const academicStartMonth = row?.academic_start_month ?? 9;
+      const currentAcademicYear = row?.current_academic_year || getCurrentAcademicYear(academicStartMonth);
       res.json({
         siteName: row?.site_name || '',
         slogan: row?.slogan || '',
         logoUrl: row?.logo_url || null,
         // null = 管理员未配置，客户端用默认 10MB
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
+        currentAcademicYear,
+        academicStartMonth,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1339,7 +1344,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   app.put('/api/site-settings', requireAuth('administrator'), (req, res) => {
     try {
-      const { siteName, slogan, logoUrl, uploadMaxFileMb } = req.body || {};
+      const { siteName, slogan, logoUrl, uploadMaxFileMb, currentAcademicYear, academicStartMonth } = req.body || {};
       // v0.6.1：上传大小上限校验（整数 1–90；90 受 express.json 110MB 全局
       // 上限约束，base64 膨胀 ~33% 后约 90MB 文件）。undefined = 不修改。
       let maxFileMb: number | null | undefined = undefined;
@@ -1349,20 +1354,52 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           return res.status(400).json({ error: '上传大小上限必须是 1–90 之间的整数（MB）' });
         }
       }
+
+      // 学年设置校验
+      let normalizedAcademicYear: string | null | undefined = undefined;
+      if (currentAcademicYear !== undefined) {
+        if (currentAcademicYear === null || currentAcademicYear === '') {
+          normalizedAcademicYear = null;
+        } else {
+          if (!isValidAcademicYear(currentAcademicYear)) {
+            return res.status(400).json({ error: '学年必须是 YYYY-YYYY 且连续，例如 2025-2026' });
+          }
+          normalizedAcademicYear = currentAcademicYear;
+        }
+      }
+      let normalizedStartMonth: number | undefined = undefined;
+      if (academicStartMonth !== undefined) {
+        normalizedStartMonth = Number(academicStartMonth);
+        if (!Number.isInteger(normalizedStartMonth) || normalizedStartMonth < 1 || normalizedStartMonth > 12) {
+          return res.status(400).json({ error: '学年起始月份必须是 1–12 的整数' });
+        }
+      }
+
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb) VALUES ('global', ?, ?, ?, ?)
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month) VALUES ('global', ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
-             upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb)`,
+             upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb),
+             current_academic_year = COALESCE(excluded.current_academic_year, site_settings.current_academic_year),
+             academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month)`,
         )
-        .run(siteName || '', slogan || '', logoUrl || null, maxFileMb ?? null);
+        .run(
+          siteName || '',
+          slogan || '',
+          logoUrl || null,
+          maxFileMb ?? null,
+          normalizedAcademicYear ?? null,
+          normalizedStartMonth ?? null,
+        );
       const row = kernelContainer.db
-        .prepare('SELECT upload_max_file_mb FROM site_settings WHERE id = ?')
+        .prepare('SELECT upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?')
         .get('global') as any;
       res.json({
         success: true,
         siteInfo: { siteName: siteName || '', slogan: slogan || '', logoUrl: logoUrl || null },
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
+        currentAcademicYear: row?.current_academic_year ?? null,
+        academicStartMonth: row?.academic_start_month ?? 9,
       });
     } catch (e: any) {
       sendSafeError(res, e);

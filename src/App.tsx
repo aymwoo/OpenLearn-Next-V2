@@ -1,6 +1,7 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { AppDataProvider } from './context/AppDataContext';
+import { AcademicYearProvider } from './context/AcademicYearContext';
 import { LoginPage } from './components/LoginPage';
 import ForcedPasswordChangeGate from './components/ForcedPasswordChangeGate';
 import { StageDisplayView } from './features/classroom/stage-display/StageDisplayView';
@@ -38,22 +39,22 @@ export default function App() {
 
   if (sessionLoading) {
     return (
-      <AppDataProvider value={appData}>
+      <AcademicYearProvider><AppDataProvider value={appData}>
         <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
           <Loader2 size={48} className="text-indigo-500 animate-spin" />
           <span className="text-white text-sm mt-4 font-semibold tracking-wide">
             {lang === 'zh' ? '正在连接安全核心数据库...' : 'Connecting Secure OS Core Database...'}
           </span>
         </div>
-      </AppDataProvider>
+      </AppDataProvider></AcademicYearProvider>
     );
   }
 
   if (!session) {
     return (
-      <AppDataProvider value={appData}>
+      <AcademicYearProvider><AppDataProvider value={appData}>
         <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />
-      </AppDataProvider>
+      </AppDataProvider></AcademicYearProvider>
     );
   }
 
@@ -61,19 +62,19 @@ export default function App() {
   // 不渲染应用外壳；服务端 enforcePasswordChanged 对写操作兜底拦截
   if (session.mustChangePassword) {
     return (
-      <AppDataProvider value={appData}>
+      <AcademicYearProvider><AppDataProvider value={appData}>
         <ForcedPasswordChangeGate
           lang={lang}
           username={session.username}
           onDone={() => setSession({ ...session, mustChangePassword: false })}
           onLogout={handleLogout}
         />
-      </AppDataProvider>
+      </AppDataProvider></AcademicYearProvider>
     );
   }
 
   return (
-    <AppDataProvider value={appData}>
+    <AcademicYearProvider><AppDataProvider value={appData}>
       <>
         {/* 大屏展台独立窗口：占满整个视口，不渲染平台外壳（导航/侧栏/顶栏都无意义） */}
         {isStageDisplayMode && (
@@ -129,6 +130,6 @@ export default function App() {
           </div>
         )}
       </>
-    </AppDataProvider>
+    </AppDataProvider></AcademicYearProvider>
   );
 }
