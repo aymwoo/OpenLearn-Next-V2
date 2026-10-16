@@ -19,6 +19,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       const schedules = scheduleService.getTodaySchedules(
         clientDate,
         accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
+        (req.query.academicYear as string) || null,
       );
       res.json({ success: true, schedules });
     } catch (e: any) {
@@ -35,6 +36,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       const result = scheduleService.listSchedules(
         pg,
         accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
+        (req.query.academicYear as string) || null,
       );
       res.json(result);
     } catch (e: any) {
@@ -77,7 +79,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         )
       )
         return;
-      const schedules = scheduleService.getClassSchedules(req.params.classId);
+      const schedules = scheduleService.getClassSchedules(req.params.classId, (req.query.academicYear as string) || null);
       res.json(schedules);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -91,7 +93,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
-      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
+      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict, academicYear } = req.body;
       const schedule = scheduleService.createSchedule(
         {
           classId: req.params.classId,
@@ -100,6 +102,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
           timeSlot,
           status,
           notes,
+          academicYear,
         },
         { allowConflict: Boolean(force || allowConflict) },
       );
@@ -119,7 +122,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
-      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict } = req.body;
+      const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict, academicYear } = req.body;
       scheduleService.updateSchedule(
         req.params.scheduleId,
         req.params.classId,
@@ -129,6 +132,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
           timeSlot,
           status,
           notes,
+          academicYear,
         },
         { allowConflict: Boolean(force || allowConflict) },
       );

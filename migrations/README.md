@@ -39,3 +39,4 @@
 | 023  | 023_encrypt_class_passcodes.sql   | 标记班级临时口令改为 AES-256-GCM 密文。启动时 `encryptStoredClassPasscodes()` 把仍是明文的行加密，已带 `olenc1:` 的行跳过 |
 | 024  | 024_segment_gates.sql             | 教学环节门槛：`segment_visits`（停留）、`segment_gate_overrides`（教师放行）、`lesson_checkins`（无排课时的签到） |
 | 025  | 025_assignment_lookup_indexes.sql | `assignment_submissions(student_id)` 与 `assignments(lesson_id)` 索引，供课节进度聚合作业最高分和学生提交查询。可重复执行 |
+| 027  | 027_academic_year.sql             | 学年维度：为 schedules/assignments/attendance/exams/semester reports 等表增加 `academic_year` 字段与索引；site_settings 增加当前学年配置 |
