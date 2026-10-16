@@ -94,6 +94,21 @@ export function ToastContainer() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 leading-relaxed font-sans break-words">
                   {toast.message}
                 </p>
+
+                {toast.action && (
+                  <div className="mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.action?.onClick();
+                        uiStore.getState().removeToast(toast.id);
+                      }}
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{toast.action.label}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <button

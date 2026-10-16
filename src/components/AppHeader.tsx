@@ -12,7 +12,9 @@ import {
   LogOut,
   Lock,
   X,
+  Loader2,
 } from 'lucide-react';
+import { useAsyncTaskStore } from '../store/asyncTaskStore';
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
 import { FontSizeSelector } from './FontSizeSelector';
@@ -98,6 +100,7 @@ export function AppHeader(props: AppHeaderProps) {
   const setActiveRole = props.setActiveRole ?? appData?.setActiveRole ?? (() => {});
   const isStudentLocked = props.isStudentLocked ?? appData?.isStudentLocked ?? false;
   const onBlockedNavigate = props.onBlockedNavigate ?? appData?.notifyLockedNavigation;
+  const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
 
   // 独立弹窗模式下渲染轻量化互动课堂专属 Header
   if (appData?.isStudentLiveMode) {
@@ -175,6 +178,34 @@ export function AppHeader(props: AppHeaderProps) {
           slot="header.status_pill"
           slotProps={{ dbConnected, dbStatus, lang }}
         />
+
+        {/* 全局后台任务指示器：课表识别运行中 */}
+        {timetableOcrTask?.status === 'running' && (
+          <div
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold border border-violet-200 animate-pulse select-none"
+            title={lang === 'zh' ? '大模型正在后台分析提取课表内容...' : 'AI is processing timetable in background...'}
+          >
+            <Loader2 size={13} className="animate-spin text-violet-600" />
+            <span>{lang === 'zh' ? '后台识别课表中...' : 'Timetable OCR Running...'}</span>
+          </div>
+        )}
+
+        {/* 全局后台任务指示器：课表识别完成提示 */}
+        {timetableOcrTask?.status === 'completed' && teacherTab !== 'timetable' && (
+          <button
+            type="button"
+            onClick={() => setTeacherTab('timetable')}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold border border-emerald-200 transition-colors shadow-2xs cursor-pointer select-none"
+            title={lang === 'zh' ? '点击前往课表管理查看识别结果' : 'Click to view timetable result'}
+          >
+            <CheckCircle2 size={13} className="text-emerald-600" />
+            <span>
+              {lang === 'zh'
+                ? `课表识别已完成 (${timetableOcrTask.result?.entries.length || 0}节) · 查看`
+                : `Timetable Ready (${timetableOcrTask.result?.entries.length || 0})`}
+            </span>
+          </button>
+        )}
 
         {/* Dashboard nav entry */}
         <button
