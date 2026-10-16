@@ -7,7 +7,7 @@
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
-import { deriveAcademicYear } from '../utils/academic-year.js';
+import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
 import { decryptApiKey } from '../utils/crypto.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import type { StoredAIProvider } from '../context.js';
@@ -511,13 +511,14 @@ export class GradingService {
 
     const insertStmt = this.db.prepare(`
       INSERT INTO student_semester_reports (
-        id, student_id, class_id, semester_name,
+        id, student_id, class_id, semester_name, academic_year,
         attendance_score, progress_score, assignment_score, exam_score,
         total_score, grade_level, teacher_evaluation, ai_evaluation,
         dimension_scores, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(student_id, class_id, semester_name) DO UPDATE SET
+        academic_year = excluded.academic_year,
         attendance_score = excluded.attendance_score,
         progress_score = excluded.progress_score,
         assignment_score = excluded.assignment_score,
@@ -532,6 +533,7 @@ export class GradingService {
 
     const tx = this.db.transaction((reportsList: SemesterReportArchiveItem[]) => {
       const now = Date.now();
+      const resolvedAcademicYear = deriveAcademicYearFromSemesterName(semesterName);
       for (const r of reportsList) {
         const reportId = r.id || randomId('rep-');
         insertStmt.run(
@@ -539,6 +541,7 @@ export class GradingService {
           r.studentId,
           classId,
           semesterName,
+          resolvedAcademicYear,
           r.attendanceScore,
           r.progressScore,
           r.assignmentScore,

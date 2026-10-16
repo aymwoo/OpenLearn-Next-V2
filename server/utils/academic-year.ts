@@ -55,3 +55,17 @@ export function getCurrentAcademicYear(startMonth = 9, now: Date = new Date()): 
   const academicStartYear = month >= startMonth ? year : year - 1;
   return `${academicStartYear}-${academicStartYear + 1}`;
 }
+
+
+/**
+ * 从学期名称推导学年（如 "2026年春季学期" -> "2025-2026"；"2025年秋季学期" -> "2025-2026"）
+ */
+export function deriveAcademicYearFromSemesterName(semesterName: string, startMonth = 9): string | null {
+  const m = /(\d{4})/.exec(semesterName || '');
+  if (!m) return null;
+  const year = Number(m[1]);
+  const lower = (semesterName || '').toLowerCase();
+  // 春季学期通常属于上一年度学年；秋季学期属于本年度学年
+  const academicStartYear = lower.includes('春') ? year - 1 : year;
+  return `${academicStartYear}-${academicStartYear + 1}`;
+}
