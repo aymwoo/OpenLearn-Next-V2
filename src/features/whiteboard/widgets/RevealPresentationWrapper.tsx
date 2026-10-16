@@ -265,6 +265,8 @@ export function RevealPresentationWrapper({
           showToolbar={false}
           showThumbnails={fullscreen}
           showCompatibilityToasts={false}
+          // 默认收起右侧「属性/检查器」边栏：授课/演示时避免其自动占用右侧空间。
+          customization={{ hiddenPanels: ['inspector'] }}
           initialSlide={slideIndex}
           defaultLocale="zh-CN"
           availableLocales={[...LOCALE_CATALOG]}
