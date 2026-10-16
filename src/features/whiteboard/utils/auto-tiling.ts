@@ -87,13 +87,17 @@ export const DEFAULT_TILING_GAP = 8;
 export const DEFAULT_TILING_PADDING = 8;
 
 /**
- * 不参与自动平铺的元素类型。
+ * 不参与自动平铺的元素类型黑名单。
+ *
+ * 这里只列出「没有矩形几何、无法参与镶嵌布局」的图元；**其余所有组件一律参与平铺**，
+ * 包括 quiz（随堂测试）、rollcall、assignment 以及插件注册的自定义图元——
+ * 它们都在 2D 画布上渲染为可缩放的组件卡片，因此无需在平铺逻辑里逐个登记，
+ * 插件组件也无需改动即可被平铺。
  *  - page_meta ：白板分页元数据，不是可见组件
  *  - pen / highlighter ：自由手绘折线，坐标存在 points 数组里（绝对舞台坐标），
  *    没有 x/y/width/height 概念，强行平铺会把手写笔迹拉成方块
- *  - quiz ：仅在全屏广播视图中呈现的随堂测试，在 2D 画布上不渲染组件卡片，不占用平铺网格
  */
-export const NON_TILEABLE_TYPES: readonly string[] = ['page_meta', 'pen', 'highlighter', 'quiz'];
+export const NON_TILEABLE_TYPES: readonly string[] = ['page_meta', 'pen', 'highlighter'];
 
 export function isTileableType(type: string): boolean {
   return !NON_TILEABLE_TYPES.includes(type);
@@ -346,6 +350,21 @@ export function extractGeometry(data: Record<string, any>, shape: 'rect' | 'circ
     out[key] = Number.isFinite(n) ? n : 0;
   }
   return out;
+}
+
+/**
+ * 取出候选元素「平铺前」的有效几何补丁，用于平铺时写入 `__preTile`。
+ *
+ * 与 extractGeometry 的区别：extractGeometry 只忠实反映 data 里已有的数值（缺失一律记 0），
+ * 而这里的 width/height 用候选元素归一化后的实际尺寸——也就是缺失时会回退到类型默认尺寸。
+ * 组件（如随堂测试 quiz）创建时通常只写 x/y，靠默认宽高渲染；若用 extractGeometry 记录
+ * `__preTile`，取消平铺会把宽高还原成 0，组件直接塌缩不可见。
+ */
+export function candidatePreTileGeometry(candidate: TileCandidate): Record<string, number> {
+  if (candidate.shape === 'circle') {
+    return { x: candidate.x, y: candidate.y, radius: candidate.width / 2 };
+  }
+  return { x: candidate.x, y: candidate.y, width: candidate.width, height: candidate.height };
 }
 
 /** 两个几何补丁是否在 0.5px 容差内相等 */

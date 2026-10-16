@@ -15,6 +15,7 @@ import {
   isTileableType,
   geometryKeys,
   extractGeometry,
+  candidatePreTileGeometry,
   sameGeometry,
   NON_TILEABLE_TYPES,
   sortCandidatesForTiling,
@@ -333,6 +334,39 @@ describe('toTileCandidate / toTiledGeometry', () => {
     }
   });
 
+  it('quiz（随堂测试）可平铺：无显式几何时回退到默认尺寸', () => {
+    expect(isTileableType('quiz')).toBe(true);
+    // 随堂测试元素通常只带 question/options，没有 x/y/width/height
+    const c = toTileCandidate({ id: 'q', type: 'quiz' }, {}, { width: 340, height: 380 });
+    expect(c).toEqual({ id: 'q', x: 0, y: 0, width: 340, height: 380 });
+  });
+
+  it('quiz 读取已保存的顶层几何（旧白板已有宽高时不被默认值覆盖）', () => {
+    const c = toTileCandidate(
+      { id: 'q', type: 'quiz' },
+      { x: 20, y: 30, width: 500, height: 400 },
+      { width: 340, height: 380 },
+    );
+    expect(c).toEqual({ id: 'q', x: 20, y: 30, width: 500, height: 400 });
+  });
+
+  it('quiz 与其他组件一起参与平铺，并被分配到独立格子', () => {
+    const quiz = toTileCandidate({ id: 'quiz-1', type: 'quiz' }, {}, { width: 340, height: 380 })!;
+    const text = toTileCandidate(
+      { id: 'text-1', type: 'text' },
+      { x: 0, y: 0, width: 300, height: 200 },
+      { width: 300, height: 200 },
+    )!;
+    const results = computeTiling([quiz, text], CONTAINER);
+    expect(results).toHaveLength(2);
+    const quizResult = results.find((r) => r.id === 'quiz-1')!;
+    const textResult = results.find((r) => r.id === 'text-1')!;
+    // 两个组件都被重新分配了几何，且互不重叠（二分后左右各占一半）
+    expect(quizResult.width).toBeGreaterThan(0);
+    expect(quizResult.height).toBeGreaterThan(0);
+    expect(quizResult.x).not.toBe(textResult.x);
+  });
+
   it('普通元素读取顶层 x/y/width/height', () => {
     const c = toTileCandidate(
       { id: 'a', type: 'text' },
@@ -387,6 +421,39 @@ describe('toTileCandidate / toTiledGeometry', () => {
     const c = toTileCandidate({ id: 'r', type: 'rect' }, {}, { width: 10, height: 10 })!;
     const geo = toTiledGeometry(c, { id: 'r', x: 1, y: 2, width: 300, height: 200 });
     expect(geo).toEqual({ x: 1, y: 2, width: 300, height: 200 });
+  });
+
+  it('candidatePreTileGeometry 记录「有效」几何：缺失宽高时用类型默认值，取消平铺不会塌缩成 0', () => {
+    // quiz 创建时只写 x/y，没有 width/height；平铺前状态必须记下默认尺寸
+    const quiz = toTileCandidate({ id: 'q', type: 'quiz' }, { x: 100, y: 50 }, { width: 340, height: 380 })!;
+    expect(candidatePreTileGeometry(quiz)).toEqual({ x: 100, y: 50, width: 340, height: 380 });
+    // 对照：extractGeometry 会把缺失宽高记为 0，正是需要避免的
+    expect(extractGeometry({ x: 100, y: 50 })).toEqual({ x: 100, y: 50, width: 0, height: 0 });
+  });
+
+  it('candidatePreTileGeometry 保留已显式设置的宽高（不被默认值覆盖）', () => {
+    const quiz = toTileCandidate(
+      { id: 'q', type: 'quiz' },
+      { x: 0, y: 0, width: 500, height: 400 },
+      { width: 340, height: 380 },
+    )!;
+    expect(candidatePreTileGeometry(quiz)).toEqual({ x: 0, y: 0, width: 500, height: 400 });
+  });
+
+  it('candidatePreTileGeometry 圆形记录 radius 而非 width/height', () => {
+    const circle = toTileCandidate({ id: 'c', type: 'circle' }, { x: 5, y: 6 }, { width: 80, height: 80 })!;
+    expect(candidatePreTileGeometry(circle)).toEqual({ x: 5, y: 6, radius: 40 });
+  });
+
+  it('平铺 → 取消平铺（读 __preTile）对 quiz 是几何无损的往返', () => {
+    const quiz = toTileCandidate({ id: 'q', type: 'quiz' }, { x: 100, y: 50 }, { width: 340, height: 380 })!;
+    const [tiled] = computeTiling([quiz], CONTAINER);
+    const preTile = candidatePreTileGeometry(quiz);
+    // 平铺确实改变了几何
+    expect(tiled.width).not.toBe(quiz.width);
+    // 恢复后回到平铺前的有效尺寸（非 0）
+    expect(preTile.width).toBe(340);
+    expect(preTile.height).toBe(380);
   });
 });
 
