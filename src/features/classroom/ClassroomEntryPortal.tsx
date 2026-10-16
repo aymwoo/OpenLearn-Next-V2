@@ -1373,7 +1373,7 @@ export function ClassroomEntryPortal({
     <div className="flex-1 min-h-0 overflow-y-auto bg-app text-main">
       <div className="p-4 md:p-6 flex flex-col gap-4 max-w-[1800px] mx-auto">
         {/* 顶部横幅 + 遥测岛 */}
-        <section className="bg-surface border border-theme rounded-2xl shadow-3xs p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+        <section className="bg-surface border border-theme rounded-2xl shadow-3xs p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-2xs font-mono font-semibold px-2 py-0.5 rounded bg-surface-secondary border border-theme text-muted inline-flex items-center gap-1">
