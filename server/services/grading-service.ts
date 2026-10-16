@@ -7,6 +7,7 @@
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
+import { deriveAcademicYear } from '../utils/academic-year.js';
 import { decryptApiKey } from '../utils/crypto.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import type { StoredAIProvider } from '../context.js';
@@ -45,6 +46,7 @@ export interface ExamItem {
   description: string;
   max_score: number;
   created_at: number;
+  academic_year: string | null;
 }
 
 export interface ExamScoreInput {
@@ -240,10 +242,12 @@ export class GradingService {
 
   // ── 3. 考试管理与成绩录入事务 ──────────────────────────────────────────────────
 
-  public listExams(classId: string): ExamItem[] {
+  public listExams(classId: string, academicYear?: string | null): ExamItem[] {
+    const yearClause = academicYear ? ' AND academic_year = ?' : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     return this.db
-      .prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC')
-      .all(classId) as ExamItem[];
+      .prepare(`SELECT * FROM exams WHERE class_id = ?${yearClause} ORDER BY created_at DESC`)
+      .all(...params) as ExamItem[];
   }
 
   public createExam(classId: string, title: string, description = '', maxScore = 100): string {
@@ -251,14 +255,15 @@ export class GradingService {
       throw new Error('Title is required');
     }
     const examId = randomId('exam-');
+    const now = Date.now();
     this.db
       .prepare(
         `
-      INSERT INTO exams (id, class_id, title, description, max_score, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO exams (id, class_id, title, description, max_score, created_at, academic_year)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
       )
-      .run(examId, classId, title.trim(), description || '', maxScore || 100, Date.now());
+      .run(examId, classId, title.trim(), description || '', maxScore || 100, now, deriveAcademicYear(now));
 
     return examId;
   }

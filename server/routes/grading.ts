@@ -103,7 +103,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/exams', requireAuth(), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'member')) return;
-      const exams = gradingService.listExams(req.params.classId);
+      const exams = gradingService.listExams(req.params.classId, (req.query.academicYear as string) || null);
       res.json(exams);
     } catch (e: any) {
       sendSafeError(res, e);
