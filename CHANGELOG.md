@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **学年上下文接入（PR 3）**：新增 `AcademicYearContext`（URL/localStorage/服务端默认同步）并在 App shell 全局挂载；支持 API 值规范化为 `academicYear` 查询参数，含上下文测试。
 - **学年筛选接入 TimetableManager（PR 4）**：课表管理拉取排课时自动带上当前 `academicYear`；在 Provider 缺失时安全降级为不筛选，保持既有测试通过。
 - **学年筛选接入排课管理（PR 5）**：`useLabAndSchedule.fetchClassSchedules` 按当前 `academicYear` 请求班级排课，Provider 缺失时保持原有行为。
+- **ClassesView 学年筛选 UI（PR 14）**：班级管理增加 `AcademicYearFilter`，可切换单一年份并更新全局学术年。
 - **排课创建显式写入学年（PR 13）**：ClassScheduleAttendance 创建排课时附带由日期推导的 `academicYear`，并补全前端工具函数。
 - **TimetableManager 学年选择 UI（PR 11）**：课表管理增加 `AcademicYearFilter`，可切换单一年份并触发重新拉取，空数据/无 Provider 时安全降级。
 - **学年维度扩展到课堂会话（PR 7）**：classroom_sessions 支持按 `academic_year` 过滤；新会话自动归属当前学年；list SQL 暴露 academic_year。

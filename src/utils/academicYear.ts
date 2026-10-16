@@ -19,7 +19,7 @@ export function deriveAcademicYear(
   startMonth = 9,
 ): string | null {
   let year: number;
-  let month: number;
+  let month: number; // 0-based
   if (typeof date === 'string') {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date.trim());
     if (!m) return null;
@@ -33,5 +33,12 @@ export function deriveAcademicYear(
   }
 
   const academicStartYear = month + 1 >= startMonth ? year : year - 1;
+  return `${academicStartYear}-${academicStartYear + 1}`;
+}
+
+export function getCurrentAcademicYear(startMonth = 9, now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const academicStartYear = month >= startMonth ? year : year - 1;
   return `${academicStartYear}-${academicStartYear + 1}`;
 }

@@ -31,6 +31,9 @@ import { ClassRowHeader } from './ClassRowHeader.js';
 import { ClassPasscodeController } from './ClassPasscodeController.js';
 import { ClassTabs, type ClassTabKey } from './ClassTabs.js';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useOptionalAcademicYear } from '../../../context/AcademicYearContext';
+import { AcademicYearFilter } from '../../../components/AcademicYearFilter';
+import { getCurrentAcademicYear } from '../../../utils/academicYear';
 import { ClassSchedulesCharts } from './ClassSchedulesCharts';
 import { ClassAssignmentsPanel } from './ClassAssignmentsPanel.js';
 import { ClassScheduleAttendance } from './ClassScheduleAttendance';
@@ -146,6 +149,9 @@ export interface ClassesViewProps {
 export function ClassesView() {
   // C1-R3: 全部数据经 AppDataContext 取用；保留 ClassesViewProps 作为依赖契约类型
   const props = useAppData() as unknown as ClassesViewProps;
+  const academicYearCtx = useOptionalAcademicYear();
+  const currentAcademicYear = academicYearCtx?.currentAcademicYear || getCurrentAcademicYear();
+  const academicYearValue = academicYearCtx?.academicYear ?? 'all';
   const [isExportingAttendance, setIsExportingAttendance] = useState(false);
 
   const handleExportCurrentClassAttendance = async () => {
@@ -196,6 +202,12 @@ export function ClassesView() {
           </h3>
           {/* 批量管理模式开关 + 班级级操作栏 */}
           <div className="flex items-center gap-2 flex-wrap">
+            <AcademicYearFilter
+              value={academicYearValue}
+              options={Array.from(new Set([currentAcademicYear, ...(currentAcademicYear ? [`${Number(currentAcademicYear.split('-')[0]) - 1}-${currentAcademicYear.split('-')[0]}`] : [])]))}
+              lang={props.lang as 'zh' | 'en'}
+              onChange={(value) => academicYearCtx?.setAcademicYear?.(value === 'all' ? null : value)}
+            />
             <button
               onClick={() => {
                 props.setBatchMode((b) => !b);
