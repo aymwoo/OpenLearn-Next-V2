@@ -775,11 +775,19 @@ export class ScheduleService {
 返回格式示例：
 [{"dayOfWeek":1,"periodNumber":1,"className":"高一(13)","subject":"信息","timeSlot":"08:00-08:40","location":"312","teacherName":""}]`;
 
-    const provider = providerId
-      ? (this.db
-          .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-          .get(providerId) as StoredAIProvider | undefined)
-      : undefined;
+    let provider: StoredAIProvider | undefined;
+    if (providerId) {
+      provider = this.db
+        .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
+        .get(providerId) as StoredAIProvider | undefined;
+    }
+    if (!provider) {
+      provider = this.db
+        .prepare(
+          "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' ORDER BY created_at DESC LIMIT 1",
+        )
+        .get() as StoredAIProvider | undefined;
+    }
 
     if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
 
