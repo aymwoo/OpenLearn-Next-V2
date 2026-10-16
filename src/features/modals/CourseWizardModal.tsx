@@ -13,6 +13,13 @@ export interface WizardSegment {
   notes: string;
 }
 
+export const WIZARD_STEP_META: Record<number, { zh: string; en: string }> = {
+  1: { zh: '内容选题', en: 'Background' },
+  2: { zh: '课堂脉络', en: 'Timeslots' },
+  3: { zh: '编写大纲', en: 'Syllabus' },
+  4: { zh: '总览部署', en: 'Deploy' },
+};
+
 export interface CourseWizardModalProps {
   isCourseWizardOpen: boolean;
   setIsCourseWizardOpen: (v: boolean) => void;
@@ -733,9 +740,16 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
 
             {/* Footer controls */}
             <div className="p-4 border-t border-gray-105 bg-slate-50 flex justify-between items-center shrink-0">
-              <span className="text-xs font-bold font-mono text-gray-400 uppercase select-none">
-                {lang === 'zh' ? '⚙️ SQLITE 写入预检通过' : '⚙️ SQLITE VERIFICATION SUCCESS'}
-              </span>
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-500 select-none">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 font-bold text-[11px] border border-indigo-200">
+                  {wizardStep}
+                </span>
+                <span>
+                  {lang === 'zh'
+                    ? `第 ${wizardStep} 步 / 共 4 步 · ${WIZARD_STEP_META[wizardStep]?.zh || ''}`
+                    : `Step ${wizardStep} of 4 · ${WIZARD_STEP_META[wizardStep]?.en || ''}`}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 {wizardStep > 1 && (
                   <button
