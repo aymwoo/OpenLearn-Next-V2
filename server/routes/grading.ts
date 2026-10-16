@@ -27,7 +27,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/attendance-summary', requireAuth(), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'staff')) return;
-      const summary = gradingService.getAttendanceSummary(req.params.classId);
+      const summary = gradingService.getAttendanceSummary(req.params.classId, 30, (req.query.academicYear as string) || null);
       res.json(summary);
     } catch (e: any) {
       sendSafeError(res, e);

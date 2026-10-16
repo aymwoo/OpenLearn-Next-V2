@@ -94,17 +94,19 @@ export class GradingService {
 
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
 
-  public getAttendanceSummary(classId: string, daysWindow = 30): AttendanceSummaryItem[] {
+  public getAttendanceSummary(classId: string, daysWindow = 30, academicYear?: string | null): AttendanceSummaryItem[] {
+    const yearClause = academicYear ? ' AND s.academic_year = ?' : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     const schedules = this.db
       .prepare(
         `
       SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
       FROM schedules s
       LEFT JOIN lessons l ON s.lesson_id = l.id
-      WHERE s.class_id = ?
+      WHERE s.class_id = ?${yearClause}
     `,
       )
-      .all(classId) as any[];
+      .all(...params) as any[];
 
     const summary = schedules.map((sch) => {
       const counts = this.db
@@ -169,15 +171,17 @@ export class GradingService {
   }
 
   public recordAttendance(scheduleId: string, studentId: string, status: string): void {
+    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as { academic_year?: string | null } | undefined;
+    const academicYear = sch?.academic_year ?? null;
     this.db
       .prepare(
         `
-      INSERT INTO attendance (schedule_id, student_id, status, recorded_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(schedule_id, student_id) DO UPDATE SET status = excluded.status, recorded_at = excluded.recorded_at
+      INSERT INTO attendance (schedule_id, student_id, status, recorded_at, academic_year)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(schedule_id, student_id) DO UPDATE SET status = excluded.status, recorded_at = excluded.recorded_at, academic_year = excluded.academic_year
     `,
       )
-      .run(scheduleId, studentId, status, Date.now());
+      .run(scheduleId, studentId, status, Date.now(), academicYear);
   }
 
   // ── 2. 成绩权重标准化与持久化 ──────────────────────────────────────────────────
