@@ -2,6 +2,7 @@ import { Fragment, Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import Markdown from 'react-markdown';
 import { BookOpen, Sparkles, Activity, Plus, CheckCircle2, ChevronRight, Database, Loader2 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface WizardSegment {
   id: string;
@@ -441,6 +442,22 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* 插件贡献的课堂框架模板（Quick Apply 扩展槽） */}
+                  <div className="mt-1">
+                    <ExtensionPointRenderer
+                      slot="course.wizard.quick_apply"
+                      lang={lang}
+                      slotProps={{
+                        lang,
+                        wizardCourseTitle,
+                        wizardCourseCategory,
+                        wizardCourseTimeline,
+                        setWizardCourseTimeline,
+                        addToast,
+                      }}
+                    />
                   </div>
 
                   {/* Customizable Interactive Grid */}

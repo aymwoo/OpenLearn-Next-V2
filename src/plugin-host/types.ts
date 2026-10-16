@@ -187,6 +187,7 @@ export type ExtensionSlot =
   | 'course.list.toolbar.action' // 课程库顶部操作栏扩展（国家智慧教育平台课件同步等）
   | 'course.card.action' // 课程卡片操作扩展（推送到国家平台/微课生成等）
   | 'course.card.badge' // 课程卡片徽章扩展（国家精品课认证角标等）
+  | 'course.wizard.quick_apply' // 课程向导 Quick Apply 课堂框架模板扩展（插件可贡献模板按钮，接收 setWizardCourseTimeline/wizardCourseTimeline/wizardCourseCategory/addToast/lang 上下文）
   | 'editor.segment.action' // 环节时间线卡片操作扩展（国家课标对齐/配时预测等）
   // ── 在线课堂与大屏中控域扩展槽位 ──
   | 'classroom.cockpit.drawer.item' // 课堂中控台活动抽屉项目扩展

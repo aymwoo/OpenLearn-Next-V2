@@ -23,10 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **指标增加迁移积压、备份年龄和 events 行数**。`GET /metrics` 增加三条 Prometheus gauge：`openlearn_migrations_pending`（磁盘上尚未记入 `_migrations` 的迁移个数，读不到时为 `-1`）、`openlearn_backup_age_seconds`（备份目录里最新文件的年龄，单位秒，没有文件时为 `-1`）、`openlearn_events_rows`（`events` 表当前行数，查询失败时为 `-1`）。三项在进程内缓存 15 秒。指标文本不包含路径或错误字符串。`GET /health/ready` 的响应体仍然只有 `status`。
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
+- **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
 
 ### Fixes
 
 - **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
+- **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
 
 ### Docs
 
