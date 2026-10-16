@@ -22,3 +22,25 @@ export async function getStudentDashboard(studentId: string): Promise<{ ok: bool
   if (!res.ok) return { ok: false };
   return { ok: true, data: await res.json() };
 }
+
+export async function getStudentAcademicYearComparison(
+  studentId: string,
+  years?: string[] | string,
+): Promise<{ ok: boolean; data?: any; error?: string }> {
+  let url = `/api/students/${studentId}/academic-year-comparison`;
+  if (years) {
+    const yearsStr = Array.isArray(years) ? years.join(',') : years;
+    url += `?years=${encodeURIComponent(yearsStr)}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) {
+    try {
+      const err = await res.json();
+      return { ok: false, error: err.error || 'Request failed' };
+    } catch {
+      return { ok: false, error: 'Request failed' };
+    }
+  }
+  return { ok: true, data: await res.json() };
+}
+

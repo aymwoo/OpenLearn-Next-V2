@@ -43,4 +43,6 @@
 | 027  | 027_academic_year.sql             | 学年维度：为 schedules/assignments/attendance/exams/semester reports 等表增加 `academic_year` 字段与索引；site_settings 增加当前学年配置 |
 | 028  | 028_classroom_indexes.sql         | 补齐课堂互动与会话高频查询/级联删除索引（`classroom_buzzers`、`classroom_sessions`） |
 | 029  | 029_clean_lesson_think_artifacts.sql | 课程大纲模型思维链残留 (<think>...</think>) 清洗标记与启动期幂等清理 |
+| 030  | 030_backfill_academic_year.sql    | 学年历史数据回填：为老数据库中 NULL 学年的排课/作业/考勤等按日期与父级关联平滑补齐 |
+
 

@@ -5,6 +5,7 @@ export type DashboardWidgetId =
   | 'course-progress'
   | 'schedules'
   | 'academic-trajectory'
+  | 'academic-comparison'
   | 'extension-views';
 
 export type WidgetSize = 'third' | 'half' | 'two-thirds' | 'full';
@@ -37,8 +38,10 @@ export const DEFAULT_WIDGET_LAYOUT: WidgetLayoutConfig[] = [
   { id: 'course-progress', size: 'half', visible: true },
   { id: 'schedules', size: 'half', visible: true },
   { id: 'academic-trajectory', size: 'full', visible: true },
+  { id: 'academic-comparison', size: 'full', visible: true },
   { id: 'extension-views', size: 'full', visible: true },
 ];
+
 
 export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string }; layout: WidgetLayoutConfig[] }> = {
   default: {
@@ -54,6 +57,7 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
       { id: 'schedules', size: 'half', visible: true },
       { id: 'course-progress', size: 'half', visible: true },
       { id: 'academic-trajectory', size: 'half', visible: true },
+      { id: 'academic-comparison', size: 'full', visible: true },
       { id: 'extension-views', size: 'full', visible: true },
     ],
   },
@@ -63,6 +67,7 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
       { id: 'progress-trends', size: 'full', visible: true },
       { id: 'quick-stats', size: 'full', visible: true },
       { id: 'academic-trajectory', size: 'full', visible: true },
+      { id: 'academic-comparison', size: 'full', visible: true },
       { id: 'upcoming-assignments', size: 'half', visible: true },
       { id: 'schedules', size: 'half', visible: true },
       { id: 'course-progress', size: 'full', visible: true },
@@ -78,7 +83,9 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
       { id: 'course-progress', size: 'half', visible: true },
       { id: 'schedules', size: 'half', visible: true },
       { id: 'academic-trajectory', size: 'full', visible: true },
+      { id: 'academic-comparison', size: 'full', visible: true },
       { id: 'extension-views', size: 'full', visible: true },
     ],
+
   },
 };

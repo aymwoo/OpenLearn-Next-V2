@@ -69,3 +69,46 @@ export function deriveAcademicYearFromSemesterName(semesterName: string, startMo
   const academicStartYear = lower.includes('春') ? year - 1 : year;
   return `${academicStartYear}-${academicStartYear + 1}`;
 }
+
+/**
+ * 解析并标准化外部输入的学年列表字符串（逗号分隔或数组）
+ * 过滤非法学年并按升序排列
+ */
+export function parseAcademicYearList(input: unknown): string[] {
+  if (!input) return [];
+  let rawList: string[] = [];
+  if (Array.isArray(input)) {
+    rawList = input.map(String);
+  } else if (typeof input === 'string') {
+    rawList = input.split(',').map((s) => s.trim());
+  }
+  const validYears = new Set<string>();
+  for (const item of rawList) {
+    if (isValidAcademicYear(item)) {
+      validYears.add(item);
+    }
+  }
+  return Array.from(validYears).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * 获取相邻学年（如 2025-2026 前一年为 2024-2025，后一年为 2026-2027）
+ */
+export function getAdjacentAcademicYear(year: string, offset = -1): string | null {
+  if (!isValidAcademicYear(year)) return null;
+  const start = parseInt(year.split('-')[0], 10);
+  const targetStart = start + offset;
+  return `${targetStart}-${targetStart + 1}`;
+}
+
+/**
+ * 获取默认对比学年（当前学年及前一学年）
+ */
+export function getDefaultComparisonAcademicYears(startMonth = 9, now: Date = new Date()): [string, string] {
+  const current = getCurrentAcademicYear(startMonth, now);
+  const prev =
+    getAdjacentAcademicYear(current, -1) ||
+    `${parseInt(current.split('-')[0], 10) - 1}-${parseInt(current.split('-')[0], 10)}`;
+  return [prev, current];
+}
+
