@@ -24,6 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 
+### Fixes
+
+- **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
+
 ### Docs
 
 - **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。

@@ -673,10 +673,10 @@ export function ExtensionPointRenderer({
           return (
             <div
               key={`${ext.pluginId}/${ext.id}`}
-              className={`group relative flex items-center rounded-xl ${
+              className={`group relative flex items-center rounded-xl transition-all duration-150 ${
                 isActive
-                  ? 'bg-primary-theme-light text-primary-theme font-bold'
-                  : 'text-muted hover:bg-surface-secondary hover:text-main'
+                  ? 'bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs'
+                  : 'border border-transparent text-muted hover:bg-surface-secondary hover:text-main'
               } ${slotProps?.mainNavCollapsed ? 'justify-center' : ''}`}
               title={label}
             >
@@ -684,9 +684,9 @@ export function ExtensionPointRenderer({
                 type="button"
                 onClick={() => slotProps?.setTeacherTab?.(tabValue)}
                 id={`nav_btn_${sanitizedId}`}
-                className={`flex items-center gap-2.5 pl-2.5 pr-8 py-2 flex-1 min-w-0 text-sm font-medium ${
+                className={`flex items-center gap-2.5 py-2 flex-1 min-w-0 text-sm font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-theme/50 rounded-lg ${
                   isActive ? 'font-bold' : ''
-                } ${slotProps?.mainNavCollapsed ? 'justify-center px-2 pr-8' : ''}`}
+                } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : 'pl-2.5 pr-8'}`}
               >
                 <PluginIconRenderer icon={icon} size={18} className="shrink-0" alt={label} />
                 <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>

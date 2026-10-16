@@ -127,4 +127,48 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     const awardSvg = container.querySelector('svg.lucide-award');
     expect(awardSvg).toBeTruthy();
   });
+
+  it('renders clean borderless inactive states without persistent boxes on admin or plugins', () => {
+    const { container } = render(<NavigationSidebar {...defaultProps} teacherTab="courses" />);
+
+    const coursesBtn = container.querySelector('#nav_btn_courses');
+    const coursesWrapper = coursesBtn?.parentElement;
+    expect(coursesWrapper?.className).toContain('bg-primary-theme-light');
+    expect(coursesWrapper?.className).toContain('text-primary-theme');
+    expect(coursesWrapper?.className).toContain('border-primary-theme/25');
+
+    const pluginsBtn = container.querySelector('#nav_btn_plugins');
+    const pluginsWrapper = pluginsBtn?.parentElement;
+    expect(pluginsWrapper?.className).toContain('border-transparent');
+    expect(pluginsWrapper?.className).toContain('text-muted');
+    expect(pluginsWrapper?.className).not.toContain('bg-primary-theme-light');
+    expect(pluginsWrapper?.className).not.toContain('border-indigo-100');
+
+    const adminBtn = container.querySelector('#nav_btn_admin_directory');
+    const adminWrapper = adminBtn?.parentElement;
+    expect(adminWrapper?.className).toContain('border-transparent');
+    expect(adminWrapper?.className).toContain('text-muted');
+    expect(adminWrapper?.className).not.toContain('bg-primary-theme-light');
+    expect(adminWrapper?.className).not.toContain('border-indigo-100');
+    expect(adminWrapper?.className).not.toContain('bg-slate-50');
+  });
+
+  it('activates plugins tab cleanly and resets other items to borderless inactive', () => {
+    const { container } = render(<NavigationSidebar {...defaultProps} teacherTab="plugins" />);
+
+    const pluginsBtn = container.querySelector('#nav_btn_plugins');
+    const pluginsWrapper = pluginsBtn?.parentElement;
+    expect(pluginsWrapper?.className).toContain('bg-primary-theme-light');
+    expect(pluginsWrapper?.className).toContain('border-primary-theme/25');
+
+    const coursesBtn = container.querySelector('#nav_btn_courses');
+    const coursesWrapper = coursesBtn?.parentElement;
+    expect(coursesWrapper?.className).toContain('border-transparent');
+    expect(coursesWrapper?.className).not.toContain('bg-primary-theme-light');
+
+    const adminBtn = container.querySelector('#nav_btn_admin_directory');
+    const adminWrapper = adminBtn?.parentElement;
+    expect(adminWrapper?.className).toContain('border-transparent');
+    expect(adminWrapper?.className).not.toContain('border-indigo-100');
+  });
 });

@@ -191,42 +191,13 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
             />
 
             {session?.subRole === 'administrator' && (
-              <div
-                className={`group relative flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium text-indigo-700 border border-indigo-100/80 dark:border-indigo-950/40 rounded-xl ${
-                  teacherTab === 'admin_directory'
-                    ? 'bg-indigo-50/70 border-indigo-200'
-                    : 'bg-slate-50/50 dark:bg-slate-900/30 hover:bg-indigo-50'
-                } ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
-                title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
-              >
-                <button
-                  type="button"
-                  onClick={() => setTeacherTab('admin_directory')}
-                  id="nav_btn_admin_directory"
-                  className={`flex items-center gap-2.5 flex-1 min-w-0 ${mainNavCollapsed ? 'justify-center px-0' : ''}`}
-                >
-                  <Shield size={18} className="shrink-0 text-indigo-600 animate-pulse" />
-                  <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850 truncate'}>
-                    {lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
-                  </span>
-                </button>
-                {!mainNavCollapsed && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openTeacherTabInNewTab('admin_directory');
-                    }}
-                    id="nav_btn_admin_directory_newtab"
-                    aria-label={narrowLang(lang) === 'zh' ? '在新标签页打开"管理后台"' : 'Open "Admin Center" in a new tab'}
-                    title={translations[narrowLang(lang)].openInNewTab}
-                    data-testid="nav_newtab_admin_directory"
-                    className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/50 transition-opacity"
-                  >
-                    <ExternalLink size={12} className="shrink-0" />
-                  </button>
-                )}
-              </div>
+              <NavButton
+                icon={Shield}
+                label={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
+                tab="admin_directory"
+                isAdmin
+                {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
+              />
             )}
           </div>
         )}
@@ -363,6 +334,7 @@ function NavButton({
   setTeacherTab,
   mainNavCollapsed,
   highlight,
+  isAdmin,
   lang,
 }: {
   icon: React.ElementType;
@@ -372,6 +344,7 @@ function NavButton({
   setTeacherTab: (t: string) => void;
   mainNavCollapsed: boolean;
   highlight?: boolean;
+  isAdmin?: boolean;
   lang?: string;
 }) {
   const isActive = teacherTab === tab;
@@ -379,12 +352,13 @@ function NavButton({
   const t = translations[langNarrow];
   const newTabLabel =
     langNarrow === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
+
   return (
     <div
-      className={`group relative flex items-center rounded-xl ${
+      className={`group relative flex items-center rounded-xl transition-all duration-150 ${
         isActive
-          ? 'bg-primary-theme-light text-primary-theme font-bold' + (highlight ? ' shadow-xs border border-theme' : '')
-          : 'text-muted hover:bg-surface-secondary hover:text-main'
+          ? 'bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs'
+          : 'border border-transparent text-muted hover:bg-surface-secondary hover:text-main'
       } ${mainNavCollapsed ? 'justify-center' : ''}`}
       title={label}
     >
@@ -392,11 +366,22 @@ function NavButton({
         type="button"
         onClick={() => setTeacherTab(tab)}
         id={`nav_btn_${tab}`}
-        className={`flex items-center gap-2.5 pl-2.5 pr-8 py-2 flex-1 min-w-0 text-sm font-medium ${
+        className={`flex items-center gap-2.5 py-2 flex-1 min-w-0 text-sm font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-theme/50 rounded-lg ${
           isActive ? 'font-bold' : ''
-        } ${mainNavCollapsed ? 'justify-center px-2 pr-8' : ''}`}
+        } ${mainNavCollapsed ? 'justify-center px-2' : 'pl-2.5 pr-8'}`}
       >
-        <Icon size={18} className={`shrink-0 ${highlight && !isActive ? 'text-primary-theme' : ''}`} />
+        <Icon
+          size={18}
+          className={`shrink-0 transition-colors ${
+            isActive
+              ? 'text-primary-theme'
+              : highlight
+                ? 'text-primary-theme'
+                : isAdmin
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : ''
+          }`}
+        />
         <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
       </button>
       {!mainNavCollapsed && (
