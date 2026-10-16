@@ -989,7 +989,7 @@ interface PluginDatabaseAPI {
 
 **新增 `migrate()` 方法**：支持声明式数据库版本迁移，参数 `version` 表示目标版本号，若当前版本低于目标版本则执行 `upgradeFn`。
 
-示例：`ctx.db.table('polls')` 返回带前缀的完整表名。前缀来源**取决于执行模式**：Inline 模式为 `plugins` 表行 UUID（如 `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_polls`），Worker 模式为 `manifest.id`（如 `manifest.id = '@openlearn/plugin-poll'` 时返回 `plugin__openlearn_plugin_poll_polls`）——前缀中所有非 `[A-Za-z0-9_]` 字符（`@`、`/`、`-` 等）都会被替换为 `_`。完整规则见 §8.1.1「表前缀语义」。
+示例：`ctx.db.table('polls')` 返回带前缀的完整表名。平台已统一收敛表前缀为 `plugin_<scopeId>_`：上传与外部插件统一为 `plugins` 表行 UUID（如 `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_polls`），内置插件为规范 scopeId。前缀中所有非 `[A-Za-z0-9_]` 字符一律替换为 `_`。完整规则见 §8.1.1「表前缀语义」。
 
 **从 DI 获取原始 Database 实例的方法限制：**
 
@@ -1870,18 +1870,14 @@ Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext
 | `ctx.pluginId`                | `plugins` 表行 UUID          | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                      |
 | `ctx.manifest`                | 可用                         | 可用                                      | —                                                                    |
 
-**`ctx.db.table()` 表前缀语义（易踩坑）：**
+**`ctx.db.table()` 表前缀语义（已统一收敛）：**
 
-| 模式   | 表前缀                  | 代码位置（符号名而非行号）                                                                                  |
-| ------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Inline | `plugin_<plugins.id>_`  | `buildContext()` 内的 `tablePrefix`（`packages/core/plugin-host/context-builder.ts`）                         |
-| Worker | `plugin_<manifest.id>_` | Worker 引导脚本内的 `tablePrefix`（`packages/core/worker-runtime/worker-manager.ts`）                        |
+平台已统一收敛表前缀生成规则为 `plugin_<scopeId>_`（统一调用 `pluginTablePrefix(scopeId)`）：
+1. 外部上传与社区安装的插件一律使用 `plugins` 表主键 UUID 作为 `scopeId`，在 Inline 与独立进程/Worker 模式下完全一致，保障存储物理隔离与跨模式迁移一致性；
+2. 内置核心插件使用规范 scopeId（如 `@openlearn/plugin-vfs` → `plugin__openlearn_plugin_vfs_`）；
+3. 前缀中所有非 `[A-Za-z0-9_]` 字符一律替换为 `_`。卸载插件时，宿主依据统一安装主键精准识别并级联清理自建表。
 
-两种模式的表前缀**不一致**，原因是 Worker 侧 `ServiceHost.assertDatabaseAccessAllowed()`（`packages/core/worker-runtime/service-host.ts`）的 DDL 命名空间守卫按命令命名空间（`manifest.id`）校验表前缀（`packages/core/worker-runtime/worker-manager.ts` 中构造 `tablePrefix` 处有显式注释说明这一点）：若 Worker 侧改用 UUID 前缀，插件在自己的命名空间内建表也会被误判为越权 DDL 并抛 `WorkerCapabilityError`。因此 Worker 模式固定使用 `manifestId`，Inline 模式则沿用 `plugins` 表行 UUID。
-
-实证：数据库中并存两类前缀——UUID 派生的形如 `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_attendance_records`（Inline 模式），manifestId 派生的形如 `plugin_ext_raffle_vote_`（`ext-raffle-vote`）与 `plugin__openlearn_plugin_interactive_courseware_`（`@openlearn/plugin-interactive-courseware`，`@`、`/`、`-` 均被替换为 `_`）。
-
-> **实践建议**：不要手工拼接 `plugin_` 前缀表名，一律通过 `ctx.db.table('xxx')` / `ctx.db.ensureTable('xxx', schema)` 获取；同时不要把拼好的表名硬编码进需要跨模式复用的 SQL 字符串。
+> **实践建议**：不要手工拼接 `plugin_` 前缀表名，一律通过 `ctx.db.table('xxx')` / `ctx.db.ensureTable('xxx', schema)` 获取；同时不要把拼好的表名硬编码进跨模式复用的 SQL 字符串。
 
 > **关键规则**：Worker 中 `commandBus.execute()` **不会**自动给 `type` 加 `manifest.id` 前缀（`registerHandler` 会）。从 Worker 内部调用另一个自己的命令时，必须手动拼接完整 type：
 >

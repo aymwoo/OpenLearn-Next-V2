@@ -40,12 +40,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 - **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
 
-### Fixes
-
-- **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
-- **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
-- **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。
-- **PPT 课件演示不再显示 `pptx.*` 原始 i18n 键名**：`RevealPresentationWrapper` 初始化 i18next 时原先只挂载空资源（`{ translation: {} }`），导致 `pptx-react-viewer` 经 `useTranslation` 查不到词条、直接回显原始键（如幻灯片左下角的 `pptx.notes.title`）。现改为载入 viewer 自带的扁平英文词典 `translationsEn`（`pptx-react-viewer/i18n`），并按扁平原样关闭 `keySeparator` / `nsSeparator`，另加 `parseMissingKeyHandler: keyToLabel` 兜底——未收录的键回退为人类可读标签，绝不会露出 `pptx.*` 键名。
 
 ### Docs
 
@@ -55,6 +49,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Cloud Agent 开发数据目录**：`AGENTS.md` 说明开发服务把 SQLite、加密密钥和日志放到 `$HOME/openlearn-data`，避免仓库里的 `storage/encryption-key` 与 Vitest 自带的 `ENCRYPTION_KEY` 冲突。
 - **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
 - **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
+- **插件数据库 API 前缀文档统一规范 (`MEDIUM-01`)**：更新 `docs/reference/plugin-database-api.md`、`docs/sdk/plugin-sdk.md` 与 `docs/tutorials/plugin-development-tutorial.md`，将旧有的 `plugin_<id>_` 描述全部修正为最新的方案 A 复合表前缀 `plugin_<scopeId>_`。
+- **主文档导航索引收录插件安全加固迁移指南 (`LOW-01`)**：在 `docs/index.md` 核心架构与安全指南清单中补充收录 `plugin/plugin-security-migration.md`。
 
 ### Breaking Changes
 
@@ -70,6 +66,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
+- **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
+- **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。
+- **PPT 课件演示不再显示 `pptx.*` 原始 i18n 键名**：`RevealPresentationWrapper` 初始化 i18next 时原先只挂载空资源（`{ translation: {} }`），导致 `pptx-react-viewer` 经 `useTranslation` 查不到词条、直接回显原始键（如幻灯片左下角的 `pptx.notes.title`）。现改为载入 viewer 自带的扁平英文词典 `translationsEn`（`pptx-react-viewer/i18n`），并按扁平原样关闭 `keySeparator` / `nsSeparator`，另加 `parseMissingKeyHandler: keyToLabel` 兜底——未收录的键回退为人类可读标签，绝不会露出 `pptx.*` 键名。
+- **SQL 守卫嵌套子查询与括号表名解析防御 (`CRITICAL-01`)**：修复 `packages/core/plugin-host/sql-guard.ts` 中 `extractTableNames` 对 `FROM ((subquery))` 括号包裹嵌套子查询时抛出未捕获错误或漏检的问题。增加递归括号解包与兜底 Fail-Closed 机制，全面杜绝通过复杂括号嵌套绕过插件表名授权检查。
+- **授课中控会话归档/删除前端状态即时同步 (`CRITICAL-02`)**：修复 `src/components/LiveClassroomView.tsx` 中教师在看板中归档或删除历史会话后，前端活跃状态与持久化引用未重置导致的跨会话状态残留与指令发往已销毁会话的缺陷。
+- **课堂简报历史会话精准报告与真实投票聚合 (`CRITICAL-03`)**：修复 `src/features/classroom/ClassroomBriefingView.tsx` 与 `server/routes/classroom.ts` 中简报仅拉取全局活跃会话、以及随堂投票使用前端硬编码模拟数据的缺陷。支持通过 `?sessionId=` 查看历史已归档会话简报，并从数据库聚合真实投票选项分布与参与率。
+- **Browser Worker Manager 激活流程内部 RPC 路由器保活 (`CRITICAL-04`)**：修复 `src/plugin-host/browser-worker-manager.ts` 中插件 `activate()` 覆盖 `self.onmessage` 时导致宿主内部 Worker RPC 通信链路中断的缺陷。改为包装代理原消息分发器。
+- **课堂会话管理跨教师越权防护 IDOR Defense (`HIGH-01`)**：在 `server/routes/classroom.ts` 中为 `GET /api/classroom/sessions`、`POST /api/classroom/sessions/:sessionId/transition`、`POST /api/classroom/sessions/:sessionId/archive`、`DELETE /api/classroom/sessions/:sessionId` 以及会话详情接口增加 `canManageClassroomSession` 权限校验，防止普通教师越权操作或删除其他教师的课堂会话。
+- **插件网络代理私有地址/元数据/DNS 重绑定防护 (`HIGH-02`)**：加固 `packages/core/worker-runtime/plugin-net-proxy.ts` 与 `service-host.ts`，禁止插件通过 `fetch` 访问回环地址、RFC 1918 私网网段、云厂商链路本地与元数据服务（169.254.169.254、fd00::/8 等），并在宿主代发请求前增加基于 `dns.lookup` 的解析 IP 边界校验，阻断 DNS 重绑定 SSRF 攻击。
+- **课堂实时事件广播 Room 命名空间规范化与锁定状态释放 (`HIGH-03`)**：规范 `server/routes/classroom.ts` 中的 Socket 事件广播，统一使用 `emitClassroomEvent` 向真实订阅的课堂 Room 广播，移除历史遗留的无效房间前缀；在课堂会话归档或删除时自动释放受影响学生的 `locked_lesson_id` 锁定。
+- **班级删除级联清理课堂会话与插件作业生态 (`HIGH-04`)**：完善 `server/services/roster-service.ts` 中的 `deleteClassCascade` 事务，同步物理清理关联的课堂会话（含投票、选票、抢答、结课通票、节奏信号、弹幕、互评与动态流）及插件作业生态（含提交版本、附件、互评任务与评分），杜绝孤儿数据残留。
+- **前端 SocketService 重连与身份切换事件监听器保活 (`HIGH-05`)**：在 `src/services/socket-service.ts` 引入 `onSocketInstance` 监听机制，确保底层 Socket 实例因网络波动重连或身份切换重新初始化时，既有组件注册的业务监听器能够平滑重新挂载，避免事件静默丢失。
+- **插件前端沙箱二次导航熔断与崩溃感知 (`HIGH-06`)**：在 `server/utils/plugin-sandbox-frame.ts` 与 `src/plugin-host/plugin-host.ts` 中强化 iframe 沙箱，注入 `location.replace/assign` 与 `window.open` 拦截钩子，发生二次导航时自动熔断并向宿主上报安全违规；宿主渲染器增加崩溃探测心跳与 Suspense 错误边界保护。
+- **课堂会话看板搜索防抖与请求竞态取消 (`HIGH-07`)**：在 `src/features/classroom/ClassroomSessionManager.tsx` 引入 250ms 搜索输入防抖与 `AbortController` 请求取消机制，消除输入高频请求抖动与并发竞态乱序覆盖问题。
+- **社区插件 Ed25519 签名与流式哈希完整性校验 (`MEDIUM-02`)**：在 `server/services/community-attest.ts` 与 `server/routes/plugins.ts` 中收紧社区插件安装与发布校验，验证 `.openlearn-package-attestation.json` 签名并在校验失败时即时清理临时解压目录与暂存文件。
+- **随堂倒计时运行时定时器清理与状态隔离 (`MEDIUM-03`)**：在 `server/shared-state.ts` 与 `server/routes/classroom.ts` 中规范化倒计时运行时维护，新增 `clearLessonRuntimeState`，在课节结束或删除时彻底清除内存中残留的定时器句柄与状态。
+- **课节级联删除深度覆盖独立插件提交与评分 (`MEDIUM-04`)**：在 `server/services/lesson-service.ts` 中的 `deleteLessonCascade` 事务中补充对无作业外键关联的独立插件提交（`assignment_id IS NULL`）、历史版本文件、互评与成绩的级联清理，并在删除后触发 `clearLessonRuntimeState`。
+- **课堂会话删除弹窗无障碍与授课视图定时器泄漏修复 (`MEDIUM-06`)**：修复 `ClassroomSessionDeleteModal.tsx` 的 ESC 键与遮罩交互处理；在 `LiveClassroomView.tsx` 组件卸载时安全清理画板恢复定时器与学生窗口检查定时器。
 - **班级/学生名册导入后页面自动刷新**。以前教师通过 ImportModal 上传 CSV 完成后，必须手动刷新页面才能在 ClassesView 看到新增的班级与学生。`bulkImportService` 已经调用了 `fetchClasses()` / `fetchStudents()`，但 `classSlice` 的 `set({ classes })` 之后 `useAppStore` 订阅在某些边界场景下被浅比较判定为未变化，整条 `useAppComposer → appData → AppDataProvider → ClassesView` 重渲染链路不触发。`classSlice` 引入 `dataVersion` 自增计数器：`loadClasses` / `loadStudents` 完成后 `dataVersion+1`；`useLessonsSlice` / `useClassroomSlice` / `useSessionSlice` 均订阅 `dataVersion`，从而在数组引用未变化时仍强制 `appData` 引用更新。导入完成后 ClassesView 立即看到新班级与新学生。
 - **会话桥 `requires` 精确匹配**。插件网关下发 `edu_os_token` 前，用与宿主相同的 `parseRequiresEntry` 去掉版本后缀，再要求 Token 全名等于 `@openlearn/core:IAuthSessionBridgeService`。只包含该名字子串的声明（例如 `NotReallyIAuthSessionBridgeServiceX`）不再获得 `Set-Cookie`。声明 `@openlearn/core:IAuthSessionBridgeService@^1.0.0` 的插件行为不变。
 
@@ -99,6 +114,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 激活内建的 `ReadConnectionPool`（按 CPU 核心数自动池化伸缩并开启 `PRAGMA query_only = ON`）；
   - `ScheduleService`、`LessonService`、`DiagnosticService`、`RosterService` 及其对应的只读 REST 端点（课表、课节列表/详情/统计/互评、学情诊断/错题排行/卓越答题榜、班级花名册/机房座位/学情进度矩阵/通知已读）平滑迁移至只读连接执行；
   - 彻底解耦高频与慢速读查询与写事务的物理句柄竞争，消除耗时列表与聚合查询造成的主写连接霸占，杜绝 `SQLITE_BUSY` 假死。
+- **课堂互动高频查询与级联删除数据库索引优化 (`MEDIUM-05`)**：新增 `migrations/028_classroom_indexes.sql`，为 `classroom_buzzers(session_id, student_id)`、`classroom_buzzers(session_id, buzzed_at)` 以及 `classroom_sessions(academic_year, stage)` 建立复合索引，大幅提升高并发抢答查重与多维历史档案检索效率。
 
 ### Security
 

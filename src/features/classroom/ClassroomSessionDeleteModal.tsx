@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
 export interface ClassroomSessionDeleteModalProps {
@@ -22,6 +22,17 @@ export function ClassroomSessionDeleteModal({
   isDeleting = false,
   lang = 'zh',
 }: ClassroomSessionDeleteModalProps) {
+  useEffect(() => {
+    if (!isOpen || isDeleting) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isDeleting, onClose]);
+
   if (!isOpen) return null;
   const zh = lang === 'zh';
 
@@ -31,6 +42,9 @@ export function ClassroomSessionDeleteModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-session-modal-title"
+      onClick={() => {
+        if (!isDeleting) onClose();
+      }}
     >
       <div
         className="w-full max-w-md bg-surface border border-theme rounded-2xl shadow-2xl p-6 relative overflow-hidden"

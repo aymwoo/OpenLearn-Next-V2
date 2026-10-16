@@ -135,22 +135,108 @@ export function listApprovedNetHosts(db: SqlDb, keys: string[]): string[] {
   return [...hosts];
 }
 
+function isForbiddenIpv4Octets(octets: number[]): boolean {
+  const [a, b, c] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 0 && c === 2) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  );
+}
+
+function parseIpv4HostOctets(host: string): number[] | null {
+  if (/^(0[xX][0-9a-fA-F]+|\d+)$/.test(host)) {
+    let num: number;
+    if (/^0[xX]/.test(host)) {
+      num = parseInt(host.slice(2), 16);
+    } else if (/^0\d+$/.test(host) && /^[0-7]+$/.test(host.slice(1))) {
+      num = parseInt(host.slice(1), 8);
+    } else {
+      num = Number(host);
+    }
+    if (!Number.isSafeInteger(num) || num < 0 || num >= 2 ** 32) return null;
+    return [(num >>> 24) & 0xff, (num >>> 16) & 0xff, (num >>> 8) & 0xff, num & 0xff];
+  }
+  const parts = host.split('.');
+  if (parts.length !== 4) return null;
+  const octetRe = /^(0[xX][0-9a-fA-F]+|0[0-7]*|\d+)$/;
+  if (!parts.every((s) => octetRe.test(s))) return null;
+  const octets = parts.map((s) => {
+    let n: number;
+    if (/^0[xX]/.test(s)) n = parseInt(s.slice(2), 16);
+    else if (/^0\d/.test(s)) n = parseInt(s.slice(1), 8);
+    else n = parseInt(s, 10);
+    return Number.isSafeInteger(n) && n >= 0 && n <= 255 ? n : -1;
+  });
+  if (octets.some((o) => o < 0)) return null;
+  return octets;
+}
+
+export function isPrivateOrReservedHost(rawHost: string): boolean {
+  const host = rawHost.trim().toLowerCase().replace(/\.$/, '');
+  if (!host) return true;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host === '0.0.0.0' ||
+    host === '::' ||
+    host === '::1' ||
+    host === '[::]' ||
+    host === '[::1]'
+  ) {
+    return true;
+  }
+
+  const unwrapped = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (unwrapped.includes(':')) {
+    if (
+      unwrapped === '::' ||
+      unwrapped === '::1' ||
+      /^0*:0*:0*:0*:0*:0*:0*:0*1$/i.test(unwrapped) ||
+      /^0*:0*:0*:0*:0*:0*:0*:0*$/i.test(unwrapped) ||
+      /^f[cd][0-9a-f]{2}:/i.test(unwrapped) ||
+      /^fe[89ab][0-9a-f]:/i.test(unwrapped) ||
+      /^ff[0-9a-f]{2}:/i.test(unwrapped)
+    ) {
+      return true;
+    }
+    const v4MappedMatch = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(unwrapped);
+    if (v4MappedMatch) {
+      const octets = parseIpv4HostOctets(v4MappedMatch[1]);
+      return octets ? isForbiddenIpv4Octets(octets) : true;
+    }
+    return false;
+  }
+
+  const octets = parseIpv4HostOctets(unwrapped);
+  if (octets) {
+    return isForbiddenIpv4Octets(octets);
+  }
+
+  return false;
+}
+
 export function normalizeNetHost(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const host = raw.trim().toLowerCase().replace(/\.$/, '');
   if (!host || host.length > 253) return null;
   if (host.includes('/') || host.includes(':') || host.includes(' ') || host.includes('*')) return null;
-  if (host === 'localhost' || host.endsWith('.localhost')) return null;
+  if (isPrivateOrReservedHost(host)) return null;
 
-  // 严格阻断 IPv4 私有网段、环回网段与链路本地元数据地址
-  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (ipv4Match) {
-    const [, a, b, c, d] = ipv4Match.map(Number);
-    if (a > 255 || b > 255 || c > 255 || d > 255) return null;
-    if (a === 0 || a === 127 || a === 10) return null; // 0.0.0.0/8, 127.0.0.0/8, 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return null; // 172.16.0.0/12
-    if (a === 192 && b === 168) return null; // 192.168.0.0/16
-    if (a === 169 && b === 254) return null; // 169.254.0.0/16 (链路本地 & 云元数据)
+  // 若是四段数字但某段 > 255（非法 IPv4 字面量），直接拒绝
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) && !parseIpv4HostOctets(host)) {
+    return null;
   }
 
   return host;

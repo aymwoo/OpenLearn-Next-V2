@@ -146,42 +146,80 @@ export function sanitizeSql(sql: string): string {
   return result;
 }
 
-/**
- * 从经过脱敏净化的 SQL 中全面提取所有可能引用的表名。
- */
-export function extractReferencedTables(cleanSql: string): Set<string> {
-  const tables = new Set<string>();
+const SUBQUERY_PLACEHOLDER = '__ol_subquery__';
 
-  // 1. DDL: (CREATE|DROP|ALTER) TABLE [IF EXISTS] <table_name>
-  const ddlRegex = /\b(?:CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([a-zA-Z_][\w]*)/gi;
-  for (const m of cleanSql.matchAll(ddlRegex)) {
-    if (m[1]) tables.add(m[1].toLowerCase());
+function extractFlatTables(flatSql: string, tables: Set<string>): void {
+  // 1. DDL: (CREATE|DROP|ALTER) [TEMP|TEMPORARY] TABLE [IF [NOT] EXISTS] <table_name>
+  const ddlRegex =
+    /\b(?:CREATE|DROP|ALTER)\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([a-zA-Z_][\w]*)/gi;
+  for (const m of flatSql.matchAll(ddlRegex)) {
+    if (m[1] && m[1].toLowerCase() !== SUBQUERY_PLACEHOLDER) {
+      tables.add(m[1].toLowerCase());
+    }
   }
 
-  // 2. DML: INTO / UPDATE / JOIN
-  const simpleClauseRegex = /\b(?:INTO|UPDATE|JOIN)\s+([a-zA-Z_][\w]*)/gi;
-  for (const m of cleanSql.matchAll(simpleClauseRegex)) {
-    if (m[1]) tables.add(m[1].toLowerCase());
+  // 1b. ALTER TABLE ... RENAME TO <new_table_name>
+  const renameToRegex = /\bRENAME\s+TO\s+([a-zA-Z_][\w]*)/gi;
+  for (const m of flatSql.matchAll(renameToRegex)) {
+    if (m[1] && m[1].toLowerCase() !== SUBQUERY_PLACEHOLDER) {
+      tables.add(m[1].toLowerCase());
+    }
+  }
+
+  // 2. DML: INTO / UPDATE [OR ...] / JOIN
+  const simpleClauseRegex =
+    /\b(?:INTO|UPDATE(?:\s+OR\s+(?:ROLLBACK|ABORT|REPLACE|FAIL|IGNORE))?|JOIN)\s+([a-zA-Z_][\w]*)/gi;
+  for (const m of flatSql.matchAll(simpleClauseRegex)) {
+    if (m[1] && m[1].toLowerCase() !== SUBQUERY_PLACEHOLDER) {
+      tables.add(m[1].toLowerCase());
+    }
   }
 
   // 3. FROM 子句处理（支持逗号多表: FROM table1, table2 alias, table3 ...）
   const fromRegex =
-    /\bFROM\s+([^;]+?)(?=\bWHERE\b|\bGROUP\b|\bHAVING\b|\bORDER\b|\bLIMIT\b|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|\bJOIN\b|\)|$)/gi;
-  for (const match of cleanSql.matchAll(fromRegex)) {
+    /\bFROM\s+([^;]+?)(?=\bWHERE\b|\bGROUP\b|\bHAVING\b|\bORDER\b|\bLIMIT\b|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|\bWINDOW\b|\bVALUES\b|\bSET\b|\bINTO\b|\bJOIN\b|\bLEFT\b|\bRIGHT\b|\bINNER\b|\bOUTER\b|\bCROSS\b|\bNATURAL\b|\bON\b|\bUSING\b|\bSELECT\b|;|$)/gi;
+  for (const match of flatSql.matchAll(fromRegex)) {
     const clause = match[1];
     if (!clause) continue;
     // 按逗号切分多表
     const parts = clause.split(',');
     for (const part of parts) {
       const trimmed = part.trim();
-      if (!trimmed || trimmed.startsWith('(')) continue;
+      if (!trimmed) continue;
       // 提取首个标识符作为表名
       const tokenMatch = /^[a-zA-Z_][\w]*/.exec(trimmed);
       if (tokenMatch) {
-        tables.add(tokenMatch[0].toLowerCase());
+        const tableName = tokenMatch[0].toLowerCase();
+        if (tableName !== SUBQUERY_PLACEHOLDER) {
+          tables.add(tableName);
+        }
       }
     }
   }
+}
+
+/**
+ * 从经过脱敏净化的 SQL 中全面提取所有可能引用的表名（含任意层级括号与子查询）。
+ */
+export function extractReferencedTables(cleanSql: string): Set<string> {
+  const tables = new Set<string>();
+  let working = cleanSql;
+  const parenRegex = /\(([^()]*)\)/g;
+  let depth = 0;
+
+  while (parenRegex.test(working) && depth++ < 100) {
+    working = working.replace(parenRegex, (_full, inner: string) => {
+      extractFlatTables(inner, tables);
+      const trimmedInner = inner.trim();
+      if (/^(?:SELECT|VALUES|WITH)\b/i.test(trimmedInner)) {
+        return ` ${SUBQUERY_PLACEHOLDER} `;
+      }
+      return ` ${inner} `;
+    });
+  }
+
+  working = working.replace(/[()]/g, ' ');
+  extractFlatTables(working, tables);
 
   return tables;
 }
@@ -210,6 +248,11 @@ export function assertPluginSqlAllowed(options: SqlGuardOptions): void {
 
   const clean = sanitizeSql(sql);
   const tables = extractReferencedTables(clean);
+
+  // 1b. Fail-Closed 兜底：若存在表操作子句但未能解析出任何具体表名，直接拒绝
+  if (/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\b/i.test(clean) && tables.size === 0) {
+    throw new Error(`Worker plugin SQL rejected: unable to resolve target table in "${sql.trim()}"`);
+  }
 
   // 2. 核心敏感表黑名单静态比对（无论语法位置，全词兜底检测）
   const isDdl = /^\s*(DROP|CREATE|ALTER|TRUNCATE)\b/i.test(clean);

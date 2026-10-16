@@ -62,6 +62,9 @@ describe('community-attest 密码学完整性与签名校验', () => {
     // 尝试冒名使用其他 ID 验证：应被拒绝
     expect(signatureMatches(testHashHex, boundSig, pubPem, { id: 'ext-attacker-plugin', version })).toBe(false);
 
+    // 当明确提供 { id, version } 元数据时，禁止使用未绑定元数据的裸哈希签名降级绕过
+    expect(signatureMatches(testHashHex, testSig, pubPem, { id: manifestId, version })).toBe(false);
+
     // 完整性校验流程集成
     const result = verifyCommunityPackage(
       testBytes,

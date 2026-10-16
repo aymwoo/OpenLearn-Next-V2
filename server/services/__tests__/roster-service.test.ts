@@ -52,13 +52,36 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       expect(passcodeInfo.expiresAt).toBeGreaterThan(Date.now());
     });
 
-    it('deleteClassCascade 应级联清理排座、分组和选课记录', () => {
+    it('deleteClassCascade 应级联清理排座、分组、课堂会话、插件作业与考试记录 (HIGH-04)', () => {
       const clsId = service.createClass('待级联删除班级', undefined, testLabId);
       // 写入分组、选课和排座
       const grp = service.createGroup(clsId, { name: '临时组' });
       db.prepare(
         'INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
       ).run(clsId, 'dummy-student', testLabId, 1, 1);
+
+      // 写入该班级的课堂会话与子项
+      const now = Date.now();
+      const sessId = `cs_cascade_${now}`;
+      db.prepare(
+        'INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(sessId, 'lesson_cascade', clsId, 'teacher', 'IN_CLASS_TEACHING', now);
+      db.prepare(
+        'INSERT INTO classroom_quick_polls (id, session_id, lesson_id, question_type, options_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run('poll_cascade', sessId, 'lesson_cascade', 'SINGLE', '[]', now);
+
+      // 写入插件作业
+      db.prepare(
+        'INSERT INTO plugin_assignments (id, class_id, lesson_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run('passign_cascade', clsId, 'lesson_cascade', '作业标题', now, now);
+
+      // 写入考试
+      db.prepare('INSERT INTO exams (id, class_id, title, created_at) VALUES (?, ?, ?, ?)').run(
+        'exam_cascade',
+        clsId,
+        '期中考试',
+        now,
+      );
 
       service.deleteClassCascade(clsId);
 
@@ -70,6 +93,18 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
 
       const seats = db.prepare('SELECT * FROM student_seats WHERE class_id = ?').all(clsId);
       expect(seats.length).toBe(0);
+
+      const sessRow = db.prepare('SELECT id FROM classroom_sessions WHERE id = ?').get(sessId);
+      expect(sessRow).toBeUndefined();
+
+      const pollRow = db.prepare('SELECT id FROM classroom_quick_polls WHERE id = ?').get('poll_cascade');
+      expect(pollRow).toBeUndefined();
+
+      const passignRow = db.prepare('SELECT id FROM plugin_assignments WHERE id = ?').get('passign_cascade');
+      expect(passignRow).toBeUndefined();
+
+      const examRow = db.prepare('SELECT id FROM exams WHERE id = ?').get('exam_cascade');
+      expect(examRow).toBeUndefined();
     });
   });
 

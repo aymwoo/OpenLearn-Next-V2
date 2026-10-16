@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Activity,
   Archive,
@@ -53,6 +53,8 @@ export interface ClassroomSessionManagerProps {
   onBackToPortal: () => void;
   onResumeSession: (session: ClassroomSessionItem) => void;
   onViewReport?: (session: ClassroomSessionItem) => void;
+  onSessionArchived?: (session: ClassroomSessionItem) => void;
+  onSessionDeleted?: (session: ClassroomSessionItem) => void;
   addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
@@ -86,9 +88,15 @@ export function ClassroomSessionManager({
   onBackToPortal,
   onResumeSession,
   onViewReport,
+  onSessionArchived,
+  onSessionDeleted,
   addToast,
 }: ClassroomSessionManagerProps) {
   const zh = lang === 'zh';
+  const addToastRef = useRef(addToast);
+  useEffect(() => {
+    addToastRef.current = addToast;
+  }, [addToast]);
 
   const [sessions, setSessions] = useState<ClassroomSessionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -101,13 +109,26 @@ export function ClassroomSessionManager({
   const [selectedLessonId, setSelectedLessonId] = useState<string>('');
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Actions states
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<ClassroomSessionItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchSessions = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -116,31 +137,41 @@ export function ClassroomSessionManager({
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (selectedLessonId) params.set('lessonId', selectedLessonId);
       if (selectedClassId) params.set('classId', selectedClassId);
-      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      if (debouncedSearchQuery.trim()) params.set('search', debouncedSearchQuery.trim());
 
-      const res = await fetch(`/api/classroom/sessions?${params.toString()}`);
+      const res = await fetch(`/api/classroom/sessions?${params.toString()}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (controller.signal.aborted) return;
       setSessions(data.items || []);
       setTotal(data.total || 0);
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
       console.error('Failed to fetch sessions:', err);
-      addToast?.(
+      addToastRef.current?.(
         zh ? '加载会话失败' : 'Failed to load sessions',
         err.message || (zh ? '网络请求异常' : 'Network error'),
         'error',
       );
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  }, [page, statusFilter, selectedLessonId, selectedClassId, searchQuery, addToast, zh]);
+  }, [page, statusFilter, selectedLessonId, selectedClassId, debouncedSearchQuery, zh]);
 
   useEffect(() => {
     void fetchSessions();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [fetchSessions]);
 
   // Handle Archive
   const handleArchive = async (sessionId: string) => {
+    const targetSession = sessions.find((s) => s.id === sessionId);
     setArchivingId(sessionId);
     try {
       const res = await fetch(`/api/classroom/sessions/${sessionId}/archive`, {
@@ -150,14 +181,21 @@ export function ClassroomSessionManager({
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
-      addToast?.(
+      addToastRef.current?.(
         zh ? '归档成功' : 'Archived successfully',
         zh ? '会话已移入已归档档案库' : 'Session moved to archived reports',
         'success',
       );
+      if (targetSession) {
+        onSessionArchived?.(targetSession);
+      }
       void fetchSessions();
     } catch (err: any) {
-      addToast?.(zh ? '归档失败' : 'Failed to archive', err.message || (zh ? '未知错误' : 'Unknown error'), 'error');
+      addToastRef.current?.(
+        zh ? '归档失败' : 'Failed to archive',
+        err.message || (zh ? '未知错误' : 'Unknown error'),
+        'error',
+      );
     } finally {
       setArchivingId(null);
     }
@@ -166,24 +204,30 @@ export function ClassroomSessionManager({
   // Handle Delete
   const confirmDelete = async () => {
     if (!sessionToDelete) return;
+    const deletedTarget = sessionToDelete;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/classroom/sessions/${sessionToDelete.id}`, {
+      const res = await fetch(`/api/classroom/sessions/${deletedTarget.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
-      addToast?.(
+      addToastRef.current?.(
         zh ? '删除成功' : 'Deleted successfully',
         zh ? '会话及其关联数据已彻底清理' : 'Session and cascaded data removed',
         'success',
       );
       setSessionToDelete(null);
+      onSessionDeleted?.(deletedTarget);
       void fetchSessions();
     } catch (err: any) {
-      addToast?.(zh ? '删除失败' : 'Failed to delete', err.message || (zh ? '未知错误' : 'Unknown error'), 'error');
+      addToastRef.current?.(
+        zh ? '删除失败' : 'Failed to delete',
+        err.message || (zh ? '未知错误' : 'Unknown error'),
+        'error',
+      );
     } finally {
       setIsDeleting(false);
     }
