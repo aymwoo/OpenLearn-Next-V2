@@ -37,6 +37,7 @@ import { TimetableAdjustView } from './timetable/sub-views/TimetableAdjustView';
 import { TimetableImportExportView } from './timetable/sub-views/TimetableImportExportView';
 import { TimetableOcrView } from './timetable/sub-views/TimetableOcrView';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { AcademicYearFilter } from './AcademicYearFilter';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 
@@ -1343,6 +1344,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               }}
             />
           </div>
+
+          <AcademicYearFilter
+            value={academicYear ?? 'all'}
+            options={Array.from(new Set(schedules.map((s) => s.academic_year).filter(Boolean))) as string[]}
+            lang={lang}
+            onChange={(value) => {
+              academicYearCtx?.setAcademicYear?.(value === 'all' ? null : value);
+            }}
+          />
 
           {/* timetable.toolbar.action 扩展操作 */}
           <ExtensionPointRenderer
