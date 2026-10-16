@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { deriveAcademicYear } from '../../../utils/academicYear';
 import { CalendarIcon, ChevronDown, ChevronRight, ShieldAlert, Download, Loader2 } from 'lucide-react';
 import type { ClassType, StudentType, Lesson } from '../../../types/app';
 import {
@@ -141,7 +142,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
             const res = await fetch(`/api/classes/${cls.id}/schedules`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lessonId: newScheduleLessonId, scheduledDate: newScheduleDate }),
+              body: JSON.stringify({ lessonId: newScheduleLessonId, scheduledDate: newScheduleDate, academicYear: deriveAcademicYear(newScheduleDate) }),
             });
             if (res.ok) {
               setNewScheduleDate('');
