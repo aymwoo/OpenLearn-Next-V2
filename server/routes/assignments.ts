@@ -18,7 +18,10 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
     try {
       const decision = authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
-      const rows = assignmentService.listClassAssignments(req.params.classId);
+      const rows = assignmentService.listClassAssignments(
+        req.params.classId,
+        (req.query.academicYear as string) || null,
+      );
       res.json(decision.level === 'student' ? rows.map((row) => redactAssignmentForStudent(row)) : rows);
     } catch (e: any) {
       sendSafeError(res, e);

@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
+import { deriveAcademicYear } from '../utils/academic-year.js';
 import { validateMagicBytes, SIZE_LIMITS, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
 import {
@@ -39,6 +40,7 @@ export interface TraditionalAssignmentItem {
   description: string;
   content: string;
   created_at: number;
+  academic_year: string | null;
 }
 
 export interface TraditionalSubmissionItem {
@@ -70,10 +72,12 @@ export class AssignmentService {
 
   // ── 1. 传统班级作业与测试 ────────────────────────────────────────────────
 
-  public listClassAssignments(classId: string): TraditionalAssignmentItem[] {
+  public listClassAssignments(classId: string, academicYear?: string | null): TraditionalAssignmentItem[] {
+    const yearClause = academicYear ? ' AND academic_year = ?' : '';
+    const params: any[] = [classId, ...(academicYear ? [academicYear] : [])];
     return this.db
-      .prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC')
-      .all(classId) as TraditionalAssignmentItem[];
+      .prepare(`SELECT * FROM assignments WHERE class_id = ?${yearClause} ORDER BY created_at DESC`)
+      .all(...params) as TraditionalAssignmentItem[];
   }
 
   public getTraditionalAssignment(id: string): TraditionalAssignmentItem | undefined {
@@ -88,11 +92,13 @@ export class AssignmentService {
     content: string,
   ): string {
     const id = randomId('ast_');
+    const now = Date.now();
+    const resolvedAcademicYear = deriveAcademicYear(now);
     this.db
       .prepare(
-        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, classId, lessonId || null, title || 'Untitled Assignment', description || '', content || '', Date.now());
+      .run(id, classId, lessonId || null, title || 'Untitled Assignment', description || '', content || '', now, resolvedAcademicYear);
     return id;
   }
 
@@ -123,9 +129,10 @@ export class AssignmentService {
     }
 
     const id = randomId('ast_');
+    const now1 = Date.now();
     this.db
       .prepare(
-        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         id,
@@ -134,7 +141,8 @@ export class AssignmentService {
         gen.title || `Quiz: ${topic}`,
         gen.description || '',
         gen.content || '',
-        Date.now(),
+        now1,
+        deriveAcademicYear(now1),
       );
 
     return {
@@ -207,11 +215,12 @@ Output pure JSON only without markdown code blocks, matching this structure:
       timeLimit: timeLimit || 0,
     });
 
+    const now = Date.now();
     this.db
       .prepare(
-        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, classId, lessonId || null, title || 'AI Suggested Quiz', description || '', contentJson, Date.now());
+      .run(id, classId, lessonId || null, title || 'AI Suggested Quiz', description || '', contentJson, now, deriveAcademicYear(now));
 
     return id;
   }
