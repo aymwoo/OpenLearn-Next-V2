@@ -231,6 +231,27 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
       expect(result.startsWith('```')).toBe(false);
     });
 
+    it('应彻底剥离 LLM 返回的 <think>...</think> 思考链内容并仅保留正文大纲', async () => {
+      const reasoningOutput = `<think>
+The user wants me to create a teaching outline in Markdown format for a course topic "物理实验" in Physics.
+Let me analyze the requirements carefully:
+Topic: "物理实验"
+</think>
+
+# 物理实验：单摆周期探究
+
+## 🎯 教学目标
+- 掌握单摆周期公式测量方法`;
+      const ai = makeAiService(reasoningOutput);
+      const svc = new LessonService(db, kernelContainer.commandBus, ai);
+
+      const result = await svc.generateOutlineWithAi({ title: '物理实验：单摆周期探究', category: 'Physics', lang: 'zh' });
+
+      expect(result).not.toContain('<think>');
+      expect(result).not.toContain('The user wants me to create');
+      expect(result).toBe('# 物理实验：单摆周期探究\n\n## 🎯 教学目标\n- 掌握单摆周期公式测量方法');
+    });
+
     it('未提供 description / timeline 时应给出兜底提示语而非报错', async () => {
       const ai = makeAiService('# 兜底大纲');
       const svc = new LessonService(db, kernelContainer.commandBus, ai);

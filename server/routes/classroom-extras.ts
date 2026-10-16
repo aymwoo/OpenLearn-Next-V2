@@ -27,25 +27,14 @@ import { sendSafeError } from '../utils/error-handler.js';
  * 处理：移除成对思考块（含跨行、含未闭合的尾部残留）、剥离 markdown 代码围栏，
  * 并压缩多余空行；仅在清洗后为空时才返回原文，避免误伤正常输出。
  */
+import { stripReasoningArtifacts } from '../../packages/core/ai/strip-reasoning.js';
+
+/**
+ * 清洗模型输出中的「思考过程」等非正文内容。
+ * 委托至核心 packages/core/ai/strip-reasoning.js，保持 fallbackToRawIfEmpty: true 的兼容语义。
+ */
 export function stripModelArtifacts(raw: string): string {
-  if (typeof raw !== 'string') return '';
-  let out = raw;
-
-  // 成对/未闭合的 <think…> 块（大小写不敏感，跨行）
-  out = out.replace(/<(think|thinking|reasoning|analysis)>[\s\S]*?<\/\1>/gi, '');
-  out = out.replace(/<(think|thinking|reasoning|analysis)>[\s\S]*$/gi, '');
-
-  // 成对/未闭合的 markdown 代码围栏包裹的思考块
-  out = out.replace(/```(?:think|thinking|reasoning)[\s\S]*?```/gi, '');
-
-  // 剥掉整体包裹的 json 围栏（predict-mastery 的解析路径已单独处理，这里兜底）
-  out = out.replace(/^```(?:json|markdown|md)?\s*/i, '').replace(/```\s*$/i, '');
-
-  // 压缩 3+ 连续空行为 2
-  out = out.replace(/\n{3,}/g, '\n\n').trim();
-
-  // 清洗后为空 → 返回原文（避免把正常内容误删成空）
-  return out.length > 0 ? out : raw.trim();
+  return stripReasoningArtifacts(raw, { fallbackToRawIfEmpty: true });
 }
 
 /**

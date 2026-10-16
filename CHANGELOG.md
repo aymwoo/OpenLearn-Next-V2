@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课程列表与大纲生成模型思维链 `<think>` 剥离与卡片摘要净化 (#62)**：在 `packages/core/ai/strip-reasoning.ts` 与 `AIProviderGateway` 统一拦截剥离推理模型（DeepSeek-R1、QwQ、Claude 思考模式等）输出的 `<think>...</think>`、未闭合 `<think>` 及代码围栏思维链，并在 `generateOutlineWithAi` 中深度净化大纲正文；在 `CourseManagement` 引入 `extractCourseSummary` 纯文本摘要提取器兜底展示已有数据；新增迁移 `029_clean_lesson_think_artifacts.sql` 与 `cleanStoredLessonThinkArtifacts` 启动期幂等清洗历史受污染课程。
+
 - **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
 - **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
 - **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。

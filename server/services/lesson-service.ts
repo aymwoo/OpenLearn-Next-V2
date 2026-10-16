@@ -8,6 +8,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { stripReasoningArtifacts } from '../../packages/core/ai/strip-reasoning.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { lessonActiveSegments, clearLessonRuntimeState } from '../shared-state.js';
 import type { Pagination } from '../utils/pagination.js';
@@ -754,7 +755,7 @@ ${timelineText ? `- 课堂时间轴环节：\n${timelineText}` : '- 课堂时间
 5. 篇幅控制在 600-1000 字，语言${lang === 'zh' ? '使用简体中文' : 'use English'}。`;
 
     const raw = await this.aiService.generateText(prompt, { temperature: 0.6, maxTokens: 2048 });
-    const outline = stripOuterCodeFence(String(raw || '').trim());
+    const outline = stripReasoningArtifacts(stripOuterCodeFence(String(raw || '').trim()));
 
     if (!outline) {
       const err: any = new Error(

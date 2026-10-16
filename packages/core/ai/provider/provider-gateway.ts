@@ -6,6 +6,7 @@
 import { AIProviderConfig, AIGenerateOptions } from '../types/index.js';
 import { AIEventBus } from '../event/ai-event-bus.js';
 import { fetchWithRetry } from '../utils/fetch-with-retry.js';
+import { stripReasoningArtifacts } from '../strip-reasoning.js';
 
 export class AIProviderGateway {
   private eventBus: AIEventBus;
@@ -87,6 +88,8 @@ export class AIProviderGateway {
       throw new Error('AI Provider returned no content');
     }
 
-    return content.trim();
+    // 统一剥离推理模型（DeepSeek-R1、QwQ 等）的 <think>...</think> 思维链标记与代码围栏
+    const cleaned = stripReasoningArtifacts(content);
+    return cleaned.trim();
   }
 }
