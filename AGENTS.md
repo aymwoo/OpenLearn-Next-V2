@@ -66,6 +66,7 @@
 - **Types used**: `feat`, `fix`, `docs`, `refactor`, `tool`, `test`
 - **Scopes**: Component or domain — `plugin`, `kernel`, `worker`, `whiteboard`, `PluginCenter`, `db`, etc.
 - **PR descriptions**: Describe what changed and why, link related issues, include screenshots for UI changes.
+- **AI agents must submit every change via a Pull Request (never push to `main`)**: This applies to all AI coding agents (CodeBuddy, Cursor, Copilot, etc.) working in this repository. For each change: create a dedicated branch (e.g. `codebuddy/<slug>` or `cursor/<slug>`), commit with the Conventional Commits format above, push the branch, then open a PR with `gh pr create` describing what changed, why, and a test plan (with screenshots for UI changes). Do **not** commit or `git push` directly to `main`/`master`, and do not merge your own PR unless a human explicitly asks you to.
 
 ## Release & CHANGELOG Workflow
 
