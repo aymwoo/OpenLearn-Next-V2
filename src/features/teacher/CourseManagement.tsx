@@ -21,6 +21,7 @@ import type { Lesson, SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { extractCourseSummary } from '../../utils/courseSummary';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -327,8 +328,12 @@ export function CourseManagement() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">
-                        <Markdown>{lesson.content}</Markdown>
+                      <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1 leading-relaxed">
+                        {extractCourseSummary(lesson.content) || (
+                          <span className="italic text-gray-400">
+                            {lang === 'zh' ? '暂无课程大纲与简介' : 'No outline or summary available.'}
+                          </span>
+                        )}
                       </div>
                       <div className="flex justify-between items-center mt-auto">
                         <button

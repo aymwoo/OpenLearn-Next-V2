@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { decryptApiKey, encryptApiKey } from '../di/api-key-crypto.js';
+import { stripReasoningArtifacts } from '../ai/strip-reasoning.js';
 
 export const CLASS_PASSCODE_PREFIX = 'olenc1:';
 
@@ -108,10 +109,42 @@ export function encryptStoredClassPasscodes(db: Database.Database): { updated: n
   return { updated, skipped };
 }
 
+export function cleanStoredLessonThinkArtifacts(db: Database.Database): { updated: number; examined: number } {
+  const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='lessons'").get();
+  if (!tableCheck) return { updated: 0, examined: 0 };
+
+  const dirtyRows = db
+    .prepare(
+      "SELECT id, content FROM lessons WHERE content LIKE '%<think%' OR content LIKE '%<thinking%' OR content LIKE '%<reasoning%' OR content LIKE '%```think%'",
+    )
+    .all() as { id: string; content: string }[];
+
+  if (!dirtyRows || dirtyRows.length === 0) return { updated: 0, examined: 0 };
+
+  const update = db.prepare('UPDATE lessons SET content = ? WHERE id = ?');
+  let updated = 0;
+  const run = db.transaction(() => {
+    for (const row of dirtyRows) {
+      if (!row.content) continue;
+      const cleaned = stripReasoningArtifacts(row.content);
+      if (cleaned !== row.content) {
+        update.run(cleaned, row.id);
+        updated++;
+      }
+    }
+  });
+  run();
+  return { updated, examined: dirtyRows.length };
+}
+
 export function applyStartupDataMigrations(db: Database.Database): void {
   const result = encryptStoredClassPasscodes(db);
   if (result.updated > 0) {
     console.log(`[Migration] 已加密 ${result.updated} 条班级临时口令（跳过已加密 ${result.skipped} 条）`);
+  }
+  const cleanResult = cleanStoredLessonThinkArtifacts(db);
+  if (cleanResult.updated > 0) {
+    console.log(`[Migration] 已清洗 ${cleanResult.updated} 门课程中的模型思维链 (<think>) 残留`);
   }
 }
 
