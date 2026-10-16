@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **学年维度扩展到课堂会话（PR 7）**：classroom_sessions 支持按 `academic_year` 过滤；新会话自动归属当前学年；list SQL 暴露 academic_year。
 - **学年维度扩展到考试（PR 8）**：exams 按 `academic_year` 存储与过滤，`/api/classes/:classId/exams` 支持 `academicYear`。
 - **学年维度扩展到考勤（PR 9）**：attendance 按关联排课学年存储，`/api/classes/:classId/attendance-summary` 支持 `academicYear`。
+- **Attendance export 学年文件名（PR 16）**：考勤导出支持可选 `academicYear`，并在文件名中体现学年。
 - **学年维度扩展到学期报告（PR 10）**：semester reports 归档时写入 `academic_year`（由学期名称推导），schema 已支持后续按学年筛选。
 - **学年维度扩展到学期综合成绩（PR 12）**：`computeSemesterGrades` 支持按 `academic_year` 过滤考勤、进度、作业、考试与报告。
 - **学年筛选扩展到作业（PR 6）**：assignments 按 `academic_year` 存储与过滤，`/api/classes/:classId/assignments` 支持 `academicYear` 查询参数。
