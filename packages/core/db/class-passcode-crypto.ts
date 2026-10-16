@@ -146,7 +146,199 @@ export function applyStartupDataMigrations(db: Database.Database): void {
   if (cleanResult.updated > 0) {
     console.log(`[Migration] 已清洗 ${cleanResult.updated} 门课程中的模型思维链 (<think>) 残留`);
   }
+  const backfillResult = backfillAcademicYearData(db);
+  if (backfillResult.updated > 0) {
+    console.log(`[Migration] 已回填 ${backfillResult.updated} 条历史数据的学年维度信息`);
+  }
 }
+
+/**
+ * 历史数据学年平滑回填（按日期与父级实体关系幂等更新为 NULL 的记录）
+ */
+export function backfillAcademicYearData(db: Database.Database): { updated: number } {
+  const hasTable = (tableName: string) => {
+    const row = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(tableName);
+    return !!row;
+  };
+
+  const deriveYear = (dateVal: string | number | null | undefined, startMonth = 9): string | null => {
+    if (!dateVal) return null;
+    let year: number;
+    let month: number;
+    if (typeof dateVal === 'string') {
+      const m = /^(\d{4})-(\d{2})/.exec(dateVal.trim());
+      if (m) {
+        year = Number(m[1]);
+        month = Number(m[2]) - 1;
+      } else {
+        const d = new Date(dateVal);
+        if (Number.isNaN(d.getTime())) return null;
+        year = d.getFullYear();
+        month = d.getMonth();
+      }
+    } else {
+      const d = new Date(dateVal);
+      if (Number.isNaN(d.getTime())) return null;
+      year = d.getFullYear();
+      month = d.getMonth();
+    }
+    const start = month + 1 >= startMonth ? year : year - 1;
+    return `${start}-${start + 1}`;
+  };
+
+  let totalUpdated = 0;
+
+  const run = db.transaction(() => {
+    // 1. schedules
+    if (hasTable('schedules')) {
+      const unassignedSchedules = db
+        .prepare('SELECT id, scheduled_date, created_at FROM schedules WHERE academic_year IS NULL')
+        .all() as Array<{ id: string; scheduled_date?: string | null; created_at?: string | null }>;
+      const updateSchedule = db.prepare('UPDATE schedules SET academic_year = ? WHERE id = ?');
+      for (const item of unassignedSchedules) {
+        const y = deriveYear(item.scheduled_date || item.created_at);
+        if (y) {
+          updateSchedule.run(y, item.id);
+          totalUpdated++;
+        }
+      }
+    }
+
+    // 2. assignments
+    if (hasTable('assignments')) {
+      const unassignedAssignments = db
+        .prepare('SELECT id, created_at FROM assignments WHERE academic_year IS NULL')
+        .all() as Array<{ id: string; created_at?: string | null }>;
+      const updateAssignment = db.prepare('UPDATE assignments SET academic_year = ? WHERE id = ?');
+      for (const item of unassignedAssignments) {
+        const y = deriveYear(item.created_at);
+        if (y) {
+          updateAssignment.run(y, item.id);
+          totalUpdated++;
+        }
+      }
+    }
+
+    // 3. assignment_submissions
+    if (hasTable('assignment_submissions') && hasTable('assignments')) {
+      // 优先从所属 assignment 继承
+      const inherited = db
+        .prepare(
+          `UPDATE assignment_submissions
+           SET academic_year = (SELECT a.academic_year FROM assignments a WHERE a.id = assignment_submissions.assignment_id)
+           WHERE academic_year IS NULL
+             AND EXISTS (SELECT 1 FROM assignments a WHERE a.id = assignment_submissions.assignment_id AND a.academic_year IS NOT NULL)`,
+        )
+        .run();
+      totalUpdated += inherited.changes;
+
+      // 若仍有未分类的，按 submitted_at 推导
+      const unassignedSubs = db
+        .prepare('SELECT assignment_id, student_id, submitted_at FROM assignment_submissions WHERE academic_year IS NULL')
+        .all() as Array<{ assignment_id: string; student_id: string; submitted_at?: string | null }>;
+      const updateSub = db.prepare(
+        'UPDATE assignment_submissions SET academic_year = ? WHERE assignment_id = ? AND student_id = ?',
+      );
+      for (const item of unassignedSubs) {
+        const y = deriveYear(item.submitted_at);
+        if (y) {
+          updateSub.run(y, item.assignment_id, item.student_id);
+          totalUpdated++;
+        }
+      }
+    }
+
+    // 4. attendance
+    if (hasTable('attendance') && hasTable('schedules')) {
+      const inherited = db
+        .prepare(
+          `UPDATE attendance
+           SET academic_year = (SELECT s.academic_year FROM schedules s WHERE s.id = attendance.schedule_id)
+           WHERE academic_year IS NULL
+             AND EXISTS (SELECT 1 FROM schedules s WHERE s.id = attendance.schedule_id AND s.academic_year IS NOT NULL)`,
+        )
+        .run();
+      totalUpdated += inherited.changes;
+
+      const unassignedAtt = db
+        .prepare('SELECT schedule_id, student_id, recorded_at FROM attendance WHERE academic_year IS NULL')
+        .all() as Array<{ schedule_id: string; student_id: string; recorded_at?: string | null }>;
+      const updateAtt = db.prepare(
+        'UPDATE attendance SET academic_year = ? WHERE schedule_id = ? AND student_id = ?',
+      );
+      for (const item of unassignedAtt) {
+        const y = deriveYear(item.recorded_at);
+        if (y) {
+          updateAtt.run(y, item.schedule_id, item.student_id);
+          totalUpdated++;
+        }
+      }
+    }
+
+    // 5. exams & exam_scores
+    if (hasTable('exams')) {
+      const unassignedExams = db
+        .prepare('SELECT id, created_at FROM exams WHERE academic_year IS NULL')
+        .all() as Array<{ id: string; created_at?: string | null }>;
+      const updateExam = db.prepare('UPDATE exams SET academic_year = ? WHERE id = ?');
+      for (const item of unassignedExams) {
+        const y = deriveYear(item.created_at);
+        if (y) {
+          updateExam.run(y, item.id);
+          totalUpdated++;
+        }
+      }
+    }
+
+    if (hasTable('exam_scores') && hasTable('exams')) {
+      const inherited = db
+        .prepare(
+          `UPDATE exam_scores
+           SET academic_year = (SELECT e.academic_year FROM exams e WHERE e.id = exam_scores.exam_id)
+           WHERE academic_year IS NULL
+             AND EXISTS (SELECT 1 FROM exams e WHERE e.id = exam_scores.exam_id AND e.academic_year IS NOT NULL)`,
+        )
+        .run();
+      totalUpdated += inherited.changes;
+    }
+
+    // 6. student_lesson_progress
+    if (hasTable('student_lesson_progress')) {
+      const cols = (db.prepare('PRAGMA table_info(student_lesson_progress)').all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
+      if (cols.includes('academic_year')) {
+        const dateCol = cols.includes('assigned_at')
+          ? 'assigned_at'
+          : cols.includes('updated_at')
+            ? 'updated_at'
+            : cols.includes('created_at')
+              ? 'created_at'
+              : null;
+        if (dateCol) {
+          const unassignedProgress = db
+            .prepare(`SELECT lesson_id, student_id, ${dateCol} as date_val FROM student_lesson_progress WHERE academic_year IS NULL`)
+            .all() as Array<{ lesson_id: string; student_id: string; date_val?: string | null }>;
+          const updateProgress = db.prepare(
+            'UPDATE student_lesson_progress SET academic_year = ? WHERE lesson_id = ? AND student_id = ?',
+          );
+          for (const item of unassignedProgress) {
+            const y = deriveYear(item.date_val);
+            if (y) {
+              updateProgress.run(y, item.lesson_id, item.student_id);
+              totalUpdated++;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  run();
+  return { updated: totalUpdated };
+}
+
+
 
 /** 审计事件入库前去掉口令字段和 olenc1 密文，不改调用方拿到的原对象。 */
 export function redactPasscodeMaterial(value: unknown, depth = 0): unknown {

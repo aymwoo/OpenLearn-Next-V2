@@ -17,7 +17,9 @@ import { StudentRollCallAlarms } from './StudentRollCallAlarms';
 import { StudentCourseProgressList } from './StudentCourseProgressList';
 import { StudentQuickStats } from './StudentQuickStats';
 import { StudentPerformanceCharts } from './StudentPerformanceCharts';
+import { StudentAcademicYearComparison } from './StudentAcademicYearComparison';
 import { StudentSchedulePanel } from './StudentSchedulePanel';
+
 import { StudentAssignmentsPanel } from './StudentAssignmentsPanel';
 import { WeeklyProgressTrendChart } from '../../components/WeeklyProgressTrendChart';
 import { DashboardWidgetCard } from './components/DashboardWidgetCard';
@@ -365,7 +367,40 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
           </DashboardWidgetCard>
         );
 
+      case 'academic-comparison':
+        return (
+          <DashboardWidgetCard
+            id="academic-comparison"
+            key={widget.id}
+            title={lang === 'zh' ? '多学年综合学业对比' : 'Multi-Year Academic Comparison'}
+            subtitle={
+              lang === 'zh'
+                ? '跨学年作业提交率、均分与课程参与横向对比'
+                : 'Cross-year submission rates, grades and course progression'
+            }
+            icon={<TrendingUp size={18} className="text-teal-600" />}
+            size={widget.size}
+            collapsed={widget.collapsed}
+            onResize={(s) => handleResize('academic-comparison', s)}
+            onMoveLeft={() => handleMove('academic-comparison', 'left')}
+            onMoveRight={() => handleMove('academic-comparison', 'right')}
+            isFirst={index === 0}
+            isLast={index === layout.length - 1}
+            onToggleCollapse={() => handleToggleCollapse('academic-comparison')}
+            lang={lang}
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
+            isDragging={draggedWidgetId === 'academic-comparison'}
+          >
+            <StudentAcademicYearComparison
+              studentId={activeStudentId || ''}
+              lang={lang}
+            />
+          </DashboardWidgetCard>
+        );
+
       case 'extension-views':
+
         return (
           <DashboardWidgetCard
             id="extension-views"

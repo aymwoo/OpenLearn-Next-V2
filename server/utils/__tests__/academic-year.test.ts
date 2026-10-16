@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isValidAcademicYear, normalizeAcademicYear, deriveAcademicYear, getCurrentAcademicYear } from '../academic-year.js';
+import {
+  isValidAcademicYear,
+  normalizeAcademicYear,
+  deriveAcademicYear,
+  getCurrentAcademicYear,
+  parseAcademicYearList,
+  getAdjacentAcademicYear,
+  getDefaultComparisonAcademicYears,
+} from '../academic-year.js';
 
 describe('academic-year utils', () => {
   it('validates contiguous years', () => {
@@ -24,4 +32,23 @@ describe('academic-year utils', () => {
     expect(getCurrentAcademicYear(9, new Date('2025-08-15'))).toBe('2024-2025');
     expect(getCurrentAcademicYear(9, new Date('2025-09-15'))).toBe('2025-2026');
   });
+
+  it('parses academic year lists with filtering and ordering', () => {
+    expect(parseAcademicYearList('2025-2026, 2024-2025, invalid, 2025-2026')).toEqual(['2024-2025', '2025-2026']);
+    expect(parseAcademicYearList(['2026-2027', '2024-2025'])).toEqual(['2024-2025', '2026-2027']);
+    expect(parseAcademicYearList(null)).toEqual([]);
+    expect(parseAcademicYearList('')).toEqual([]);
+  });
+
+  it('calculates adjacent academic years', () => {
+    expect(getAdjacentAcademicYear('2025-2026', -1)).toBe('2024-2025');
+    expect(getAdjacentAcademicYear('2025-2026', 1)).toBe('2026-2027');
+    expect(getAdjacentAcademicYear('invalid', -1)).toBeNull();
+  });
+
+  it('generates default comparison academic years (prev & curr)', () => {
+    const fixedNow = new Date('2025-10-01');
+    expect(getDefaultComparisonAcademicYears(9, fixedNow)).toEqual(['2024-2025', '2025-2026']);
+  });
 });
+

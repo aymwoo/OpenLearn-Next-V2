@@ -133,9 +133,12 @@ describe('班级与作业对象级授权', () => {
     expect((await get(`/api/classes/${classA}/assignments`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/classes/${classA}/dashboard`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/students/${studentA}/dashboard`, tokStudentB)).status).toBe(403);
+    expect((await get(`/api/students/${studentA}/academic-year-comparison`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/classes/${classA}/assignments`, tokTeacherB)).status).toBe(403);
     expect((await get(`/api/classes/${classA}/dashboard`, tokTeacherB)).status).toBe(403);
+    expect((await get(`/api/students/${studentA}/academic-year-comparison`, tokTeacherB)).status).toBe(403);
     expect((await get(`/api/exams/${examId}/scores`, tokStudentB)).status).toBe(403);
+
     expect((await get(`/api/classes/${classA}/semester-grades`, tokTeacherB)).status).toBe(403);
     expect((await get('/api/classes/cls-objauth-missing/assignments', tokTeacherA)).status).toBe(404);
   });
@@ -177,5 +180,19 @@ describe('班级与作业对象级授权', () => {
     const adminBody: any = await admin.json();
     expect(adminBody.recentSubmissions.length).toBeGreaterThan(0);
     expect(JSON.stringify(adminBody)).not.toContain('class_passcode');
+
+    // 学生本人、本班教师与管理员可以查看多学年对比
+    const studentComp = await get(`/api/students/${studentA}/academic-year-comparison`, tokStudentA);
+    expect(studentComp.status).toBe(200);
+    const studentCompBody: any = await studentComp.json();
+    expect(studentCompBody.studentId).toBe(studentA);
+    expect(Array.isArray(studentCompBody.metricsByYear)).toBe(true);
+
+    const teacherComp = await get(`/api/students/${studentA}/academic-year-comparison`, tokTeacherA);
+    expect(teacherComp.status).toBe(200);
+
+    const adminComp = await get(`/api/students/${studentA}/academic-year-comparison`, tokAdmin);
+    expect(adminComp.status).toBe(200);
   });
 });
+

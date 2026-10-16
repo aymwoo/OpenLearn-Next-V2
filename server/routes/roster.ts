@@ -14,6 +14,7 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { emitClassroomEvent, getPresentStudentIds } from '../presence.js';
 import type { ServerContext } from '../context.js';
 import { RosterService } from '../services/roster-service.js';
+import { AcademicYearComparisonService } from '../services/academic-comparison-service.js';
 import {
   actorUserId,
   authorizeClass,
@@ -1505,7 +1506,46 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
+  // 学生多学年对比接口（严格 IDOR 权限校验：学生仅可查本人，教师仅可查本班，管理员可查全部）
+  app.get('/api/students/:id/academic-year-comparison', requireAuth(), async (req, res) => {
+    try {
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.studentId;
+
+      const studentRow = kernelContainer.db
+        .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
+        .get(req.params.id, req.params.id) as any;
+
+      if (!studentRow) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+
+      const isSelf =
+        currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number);
+
+      const studentId = studentRow.id;
+      if (isAdministrator(session)) {
+        // 管理员允许查看任意学生
+      } else if (isTeacher(session)) {
+        if (!teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+          return res.status(403).json({ error: 'Cannot access another student academic comparison' });
+        }
+      } else if (!isSelf) {
+        return res.status(403).json({ error: 'Cannot access another student academic comparison' });
+      }
+
+      const yearsParam = req.query.years as string | undefined;
+      const service = new AcademicYearComparisonService(kernelContainer.db);
+      const comparison = await service.getAcademicYearComparison(studentId, yearsParam);
+
+      res.json(comparison);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   // --- Smart Fair & Tiered Random Picker APIs ---
+
 
   app.get('/api/classes/:classId/picker-candidates', requireAuth(), (req, res) => {
     try {
