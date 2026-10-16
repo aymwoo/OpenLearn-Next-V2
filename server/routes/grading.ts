@@ -170,7 +170,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const decision = authorizeClass(kernelContainer.db, session, classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
       const semesterName = (req.query.semesterName as string) || '2026年春季学期';
-      const result: any = gradingService.computeSemesterGrades(classId, semesterName);
+      const result: any = gradingService.computeSemesterGrades(classId, semesterName, (req.query.academicYear as string) || null);
       if (decision.level === 'student' && result && Array.isArray(result.students)) {
         const sid = studentActorId(session);
         result.students = result.students.filter((s: any) => (s.student_id || s.studentId || s.id) === sid);

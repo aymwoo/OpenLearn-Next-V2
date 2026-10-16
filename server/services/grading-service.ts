@@ -311,6 +311,7 @@ export class GradingService {
   public computeSemesterGrades(
     classId: string,
     semesterName = '2026年春季学期',
+    academicYear?: string | null,
   ): SemesterGradesResult {
     // 1. 获取权重
     const weights = this.getGradeWeights(classId);
@@ -332,30 +333,32 @@ export class GradingService {
       .prepare(
         `
       SELECT student_id, status FROM attendance
-      WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
+      WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
+        ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; status: string }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; status: string }>;
 
     // 4. 批量拉取学习进度
     const progressList = this.db
       .prepare(
         `
       SELECT student_id, progress_percent FROM student_lesson_progress
-      WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
+      WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
     `,
       )
-      .all(classId) as Array<{ student_id: string; progress_percent: number }>;
+      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{ student_id: string; progress_percent: number }>;
 
     // 5. 批量拉取平时作业得分
     const assignmentSubmissions = this.db
       .prepare(
         `
       SELECT student_id, score FROM assignment_submissions
-      WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?) AND status = 'graded' AND score IS NOT NULL
+      WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}) AND status = 'graded' AND score IS NOT NULL
+        ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; score: number | null }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number | null }>;
 
     // 6. 批量拉取考试得分
     const examScoresList = this.db
@@ -364,9 +367,10 @@ export class GradingService {
       SELECT es.student_id, es.score, e.max_score FROM exam_scores es
       JOIN exams e ON es.exam_id = e.id
       WHERE e.class_id = ? AND es.score IS NOT NULL
+      ${academicYear ? 'AND e.academic_year = ? AND es.academic_year = ?' : ''}
     `,
       )
-      .all(classId) as Array<{ student_id: string; score: number; max_score: number }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number; max_score: number }>;
 
     // 7. 拉取已归档学期成绩报告（已归档直接复用归档快照）
     const archivedReports = this.db
@@ -374,9 +378,10 @@ export class GradingService {
         `
       SELECT * FROM student_semester_reports
       WHERE class_id = ? AND semester_name = ?
+      ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(classId, semesterName) as any[];
+      .all(...(academicYear ? [classId, semesterName, academicYear] : [classId, semesterName])) as any[];
 
     const archivedMap = new Map(archivedReports.map((r) => [r.student_id, r]));
 
