@@ -23,3 +23,37 @@ export function setActiveSegment(lessonId: string, segmentId: string): void {
   }
 }
 
+// ── Classroom Active Countdowns ──────────────────────────────────────────────
+export interface ActiveCountdownState {
+  totalDuration: number;
+  timeRemaining: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  label: string;
+  endsAt: number | null;
+  updatedAt: number;
+  lessonId?: string;
+}
+
+const MAX_ACTIVE_COUNTDOWNS = 500;
+export const activeCountdowns = new Map<string, ActiveCountdownState>();
+
+export function setActiveCountdownBounded(lessonId: string, state: ActiveCountdownState): void {
+  if (!activeCountdowns.has(lessonId) && activeCountdowns.size >= MAX_ACTIVE_COUNTDOWNS) {
+    const oldestKey = activeCountdowns.keys().next().value;
+    if (oldestKey !== undefined) {
+      activeCountdowns.delete(oldestKey);
+    }
+  }
+  activeCountdowns.set(lessonId, state);
+}
+
+/**
+ * 集中清理指定课节的所有内存中常驻运行时状态（分段与倒计时）。
+ */
+export function clearLessonRuntimeState(lessonId: string): void {
+  if (!lessonId) return;
+  lessonActiveSegments.delete(lessonId);
+  activeCountdowns.delete(lessonId);
+}
+

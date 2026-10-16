@@ -237,7 +237,10 @@ export function DOMExtensionWrapper({
 const resolvedComponentCache = new WeakMap<Function, React.ComponentType<any>>();
 
 function resolveExtensionComponent(ext: any): React.ComponentType<any> {
-  const fn = ext.component as Function;
+  const fn = ext?.component as Function | undefined;
+  if (typeof fn !== 'function') {
+    return () => null;
+  }
   const cached = resolvedComponentCache.get(fn);
   if (cached) return cached;
 
@@ -333,6 +336,53 @@ export function ExtensionPointRenderer({
 
   if (extensions.length === 0) return null;
 
+  const renderTabPanelContent = (activeExt: any, extraProps: Record<string, any>, fallbackText: string) => {
+    if (isPluginBlown(activeExt.pluginId)) {
+      if (!warnedPluginsRef.current.has(activeExt.pluginId)) {
+        warnedPluginsRef.current.add(activeExt.pluginId);
+        console.warn(
+          `[ExtensionBreaker] Plugin "${activeExt.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
+        );
+      }
+      return null;
+    }
+    const isReact = typeof activeExt.component === 'function';
+    const isDOM = typeof activeExt.render === 'function';
+    if (!isReact && !isDOM) return null;
+
+    const mergedProps = {
+      ...activeExt.slotProps,
+      ...extraProps,
+      dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+    };
+
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
+        onBreakerTrip={(pid) => handleBreakerTrip(pid, host)}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{fallbackText}</div>
+        }
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          <CrashResetProbe pluginId={activeExt.pluginId}>
+            {isReact ? (
+              React.createElement(resolveExtensionComponent(activeExt), mergedProps)
+            ) : (
+              <DOMExtensionWrapper
+                ext={activeExt}
+                route={activeExt.route || route}
+                slotProps={mergedProps}
+                slot={slot}
+              />
+            )}
+          </CrashResetProbe>
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  };
+
   // class.tab with renderType 'button' — render compact tab buttons from
   // extension metadata (same metadata-driven pattern as teacher.tab, but
   // styled as class-detail tabs). Content is rendered separately by
@@ -375,26 +425,14 @@ export function ExtensionPointRenderer({
     const expected = slotProps?.classActiveTab as string | undefined;
     const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
     if (!activeExt) return null;
-    return (
-      <ExtensionErrorBoundary
-        key={`${activeExt.pluginId}/${activeExt.id}`}
-        pluginId={activeExt.pluginId}
-        fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">扩展 Tab 加载失败</div>
-        }
-      >
-        <Suspense fallback={<LoadingSkeleton />}>
-          <CrashResetProbe pluginId={activeExt.pluginId}>
-          {React.createElement(resolveExtensionComponent(activeExt), {
-            ...activeExt.slotProps,
-            classId: slotProps?.classId,
-            students: slotProps?.students,
-            lang: slotProps?.lang,
-            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-          })}
-          </CrashResetProbe>
-        </Suspense>
-      </ExtensionErrorBoundary>
+    return renderTabPanelContent(
+      activeExt,
+      {
+        classId: slotProps?.classId,
+        students: slotProps?.students,
+        lang: slotProps?.lang,
+      },
+      '扩展 Tab 加载失败',
     );
   }
 
@@ -434,30 +472,16 @@ export function ExtensionPointRenderer({
     const expected = slotProps?.timetableActiveTab as string | undefined;
     const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
     if (!activeExt) return null;
-    return (
-      <ExtensionErrorBoundary
-        key={`${activeExt.pluginId}/${activeExt.id}`}
-        pluginId={activeExt.pluginId}
-        fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-            课表扩展 Tab 加载失败
-          </div>
-        }
-      >
-        <Suspense fallback={<LoadingSkeleton />}>
-          <CrashResetProbe pluginId={activeExt.pluginId}>
-          {React.createElement(resolveExtensionComponent(activeExt), {
-            ...activeExt.slotProps,
-            classes: slotProps?.classes,
-            lessons: slotProps?.lessons,
-            lang: slotProps?.lang,
-            onSchedulesUpdated: slotProps?.onSchedulesUpdated,
-            onClassesUpdated: slotProps?.onClassesUpdated,
-            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-          })}
-          </CrashResetProbe>
-        </Suspense>
-      </ExtensionErrorBoundary>
+    return renderTabPanelContent(
+      activeExt,
+      {
+        classes: slotProps?.classes,
+        lessons: slotProps?.lessons,
+        lang: slotProps?.lang,
+        onSchedulesUpdated: slotProps?.onSchedulesUpdated,
+        onClassesUpdated: slotProps?.onClassesUpdated,
+      },
+      '课表扩展 Tab 加载失败',
     );
   }
 
@@ -500,27 +524,13 @@ export function ExtensionPointRenderer({
     const expected = slotProps?.activeTab as string | undefined;
     const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
     if (!activeExt) return null;
-    return (
-      <ExtensionErrorBoundary
-        key={`${activeExt.pluginId}/${activeExt.id}`}
-        pluginId={activeExt.pluginId}
-        fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-            扩展面板加载失败
-          </div>
-        }
-      >
-        <Suspense fallback={<LoadingSkeleton />}>
-          <CrashResetProbe pluginId={activeExt.pluginId}>
-          {React.createElement(resolveExtensionComponent(activeExt), {
-            ...activeExt.slotProps,
-            activeTab: slotProps?.activeTab,
-            lang: slotProps?.lang,
-            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-          })}
-          </CrashResetProbe>
-        </Suspense>
-      </ExtensionErrorBoundary>
+    return renderTabPanelContent(
+      activeExt,
+      {
+        activeTab: slotProps?.activeTab,
+        lang: slotProps?.lang,
+      },
+      '扩展面板加载失败',
     );
   }
 
@@ -560,30 +570,16 @@ export function ExtensionPointRenderer({
     const expected = slotProps?.adminActiveTab as string | undefined;
     const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
     if (!activeExt) return null;
-    return (
-      <ExtensionErrorBoundary
-        key={`${activeExt.pluginId}/${activeExt.id}`}
-        pluginId={activeExt.pluginId}
-        fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-            管理后台扩展 Tab 加载失败
-          </div>
-        }
-      >
-        <Suspense fallback={<LoadingSkeleton />}>
-          <CrashResetProbe pluginId={activeExt.pluginId}>
-          {React.createElement(resolveExtensionComponent(activeExt), {
-            ...activeExt.slotProps,
-            currentUserId: slotProps?.currentUserId,
-            currentUserRole: slotProps?.currentUserRole,
-            lang: slotProps?.lang,
-            siteInfo: slotProps?.siteInfo,
-            aiProviders: slotProps?.aiProviders,
-            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-          })}
-          </CrashResetProbe>
-        </Suspense>
-      </ExtensionErrorBoundary>
+    return renderTabPanelContent(
+      activeExt,
+      {
+        currentUserId: slotProps?.currentUserId,
+        currentUserRole: slotProps?.currentUserRole,
+        lang: slotProps?.lang,
+        siteInfo: slotProps?.siteInfo,
+        aiProviders: slotProps?.aiProviders,
+      },
+      '管理后台扩展 Tab 加载失败',
     );
   }
 
@@ -625,30 +621,16 @@ export function ExtensionPointRenderer({
     const expected = slotProps?.studentActiveTab as string | undefined;
     const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
     if (!activeExt) return null;
-    return (
-      <ExtensionErrorBoundary
-        key={`${activeExt.pluginId}/${activeExt.id}`}
-        pluginId={activeExt.pluginId}
-        fallback={
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-            学生画像扩展 Tab 加载失败
-          </div>
-        }
-      >
-        <Suspense fallback={<LoadingSkeleton />}>
-          <CrashResetProbe pluginId={activeExt.pluginId}>
-          {React.createElement(resolveExtensionComponent(activeExt), {
-            ...activeExt.slotProps,
-            student: slotProps?.student,
-            lessonId: slotProps?.lessonId,
-            classId: slotProps?.classId,
-            lang: slotProps?.lang,
-            progressHistory: slotProps?.progressHistory,
-            dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-          })}
-          </CrashResetProbe>
-        </Suspense>
-      </ExtensionErrorBoundary>
+    return renderTabPanelContent(
+      activeExt,
+      {
+        student: slotProps?.student,
+        lessonId: slotProps?.lessonId,
+        classId: slotProps?.classId,
+        lang: slotProps?.lang,
+        progressHistory: slotProps?.progressHistory,
+      },
+      '学生画像扩展 Tab 加载失败',
     );
   }
 

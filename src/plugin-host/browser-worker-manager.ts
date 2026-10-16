@@ -56,6 +56,7 @@ interface WorkerInstance {
   worker: Worker;
   transport: IWorkerTransport;
   serviceHost: ServiceHost;
+  blobUrl: string;
 }
 
 // ── BrowserWorkerManager ────────────────────────────────────────────────────
@@ -127,6 +128,11 @@ export class BrowserWorkerManager {
     try {
       worker = new Worker(blobUrl, { type: 'module' });
     } catch (err) {
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        /* ignore */
+      }
       throw new Error(
         `Failed to create Worker for plugin "${pluginId}": ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -141,7 +147,7 @@ export class BrowserWorkerManager {
     const serviceHost = new ServiceHost(this.registry, actorId, manifestCaps, socketService, allowedTokens);
 
     // 7. Register and setup message routing
-    this.workerRegistry.set(pluginId, { pluginId, worker, transport, serviceHost });
+    this.workerRegistry.set(pluginId, { pluginId, worker, transport, serviceHost, blobUrl });
 
     // Setup activation lifecycle handlers
     let activationResolve: (() => void) | null = null;
@@ -196,6 +202,11 @@ export class BrowserWorkerManager {
       serviceHost.dispose();
       try {
         worker.terminate();
+      } catch {
+        /* ignore */
+      }
+      try {
+        URL.revokeObjectURL(blobUrl);
       } catch {
         /* ignore */
       }
@@ -256,6 +267,11 @@ export class BrowserWorkerManager {
       } catch (termErr) {
         console.error(`[BrowserWorkerManager] Worker terminate error for "${pluginId}":`, termErr);
       }
+      try {
+        URL.revokeObjectURL(instance.blobUrl);
+      } catch {
+        /* ignore */
+      }
       this.workerRegistry.delete(pluginId);
     }
   }
@@ -297,6 +313,7 @@ export class BrowserWorkerManager {
 
 const pendingCalls = new Map();
 let eventSubscriptions = new Map();
+let activePlugin = null;
 
 self.onmessage = async (event) => {
   const msg = event.data;
@@ -329,8 +346,28 @@ self.onmessage = async (event) => {
     return;
   }
 
-  // 3. Activate
-  if (msg.type === 'activate') {
+  // 3. Deactivate request (handled in unified onmessage without wiping RPC/event routing)
+  if (msg?.type === 'deactivate-request') {
+    try {
+      if (activePlugin && typeof activePlugin.deactivate === 'function') {
+        await activePlugin.deactivate();
+      }
+    } catch (err) {
+      self.postMessage({
+        type: 'error',
+        message: (err && err.message) ? err.message : String(err),
+      });
+    } finally {
+      activePlugin = null;
+      pendingCalls.clear();
+      eventSubscriptions.clear();
+      self.postMessage({ type: 'deactivated' });
+    }
+    return;
+  }
+
+  // 4. Activate
+  if (msg?.type === 'activate') {
     try {
       const services = {};
       for (const token of msg.serviceTokens) {
@@ -352,6 +389,8 @@ self.onmessage = async (event) => {
         return;
       }
 
+      activePlugin = plugin;
+
       const ctx = {
         services,
         pluginId: msg.manifest?.id || 'unknown',
@@ -370,21 +409,6 @@ self.onmessage = async (event) => {
 
       await plugin.activate(ctx);
       self.postMessage({ type: 'activated' });
-
-      // 4. Handle deactivate request (register after activation)
-      self.onmessage = async (dmsg) => {
-        if (dmsg.type === 'deactivate-request') {
-          try {
-            if (typeof plugin.deactivate === 'function') {
-              await plugin.deactivate();
-            }
-          } finally {
-            pendingCalls.clear();
-            eventSubscriptions.clear();
-            self.postMessage({ type: 'deactivated' });
-          }
-        }
-      };
     } catch (err) {
       self.postMessage({
         type: 'error',

@@ -83,6 +83,59 @@ describe('sql-guard 深度安全校验', () => {
         }),
       ).toThrowError(/Dangerous statement/i);
     });
+
+    it('阻断子查询与括号包裹表名绕过 (SELECT * FROM (SELECT * FROM users) / FROM (users))', () => {
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'SELECT * FROM (SELECT * FROM users)',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'SELECT * FROM (users)',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'SELECT * FROM (SELECT * FROM plugin_abc_items WHERE id = 1) t1, users',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'SELECT * FROM (SELECT * FROM plugin_other_secret)',
+          ownPrefix,
+        }),
+      ).toThrowError(/not permitted/i);
+    });
+
+    it('阻断 UPDATE OR IGNORE 与 ALTER TABLE RENAME TO 跨命名空间绕过', () => {
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'UPDATE OR IGNORE users SET role = "administrator"',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'ALTER TABLE plugin_abc_items RENAME TO users',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'ALTER TABLE plugin_abc_items RENAME TO plugin_other_items',
+          ownPrefix,
+        }),
+      ).toThrowError(/not permitted/i);
+    });
   });
 
   describe('合法语法与边界放行测试', () => {

@@ -70,8 +70,12 @@ export function signatureMatches(
       if (crypto.verify(null, Buffer.from(boundPayload, 'utf8'), key, sig)) {
         return true;
       }
+      // 当明确指定了预期 id 与 version 时，禁止降级回退到无元数据的裸哈希签名
+      if (metadata.version !== undefined) {
+        return false;
+      }
     }
-    // 向后兼容：直接验证 integrity 原文签名
+    // 仅在未指定完整版本元数据时，向后兼容验证 integrity 原文签名
     return crypto.verify(null, Buffer.from(integrity.trim(), 'utf8'), key, sig);
   } catch {
     return false;

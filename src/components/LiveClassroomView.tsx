@@ -166,11 +166,23 @@ export function LiveClassroomView({
 
   // Student Pop-up Window & Real-time Sync Channel
   const studentWindowRef = useRef<Window | null>(null);
+  const studentWindowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isStudentWindowOpen, setIsStudentWindowOpen] = useState(false);
   const syncChannelRef = useRef<ClassroomSyncChannel | null>(null);
   /** 环节切换回写 view-state 的防抖定时器 */
-  const segWriteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const segWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawRecoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (studentWindowCheckIntervalRef.current) clearInterval(studentWindowCheckIntervalRef.current);
+      if (segWriteTimerRef.current) clearTimeout(segWriteTimerRef.current);
+      if (drawTickTimerRef.current) clearTimeout(drawTickTimerRef.current);
+      if (drawRecoverTimerRef.current) clearTimeout(drawRecoverTimerRef.current);
+    };
+  }, []);
 
   // Whiteboard outline & page states in LiveClassroom
   const whiteboardRef = useRef<WhiteboardHandle | null>(null);
@@ -180,6 +192,9 @@ export function LiveClassroomView({
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
   const [classroomStage, setClassroomStage] = useState<string>('PRE_CLASS_READY');
+  /** 指定查看某场历史会话战报时的 sessionId（null = 默认最新会话） */
+  const [reportSessionId, setReportSessionId] = useState<string | null>(null);
+  const viewingSpecificReportRef = useRef<string | null>(null);
   /** 会话恢复：教师重进课堂时恢复到的白板页（undefined = 无恢复数据） */
   const [restoredCurrentPage, setRestoredCurrentPage] = useState<number | undefined>(undefined);
   // 课程切换待选状态与确认弹窗
@@ -230,15 +245,19 @@ export function LiveClassroomView({
     if (!userReturnedToPortalRef.current) {
       setEntryDecisionReady(false);
     }
-    // Do not keep the previous lesson's stage visible while the next session is loading.
-    setClassroomStage('PRE_CLASS_READY');
+    // 若当前正在定点查看某场历史会话战报，不重置为 PRE_CLASS_READY
+    if (!viewingSpecificReportRef.current) {
+      setClassroomStage('PRE_CLASS_READY');
+    }
     const fetchSession = () => {
       fetch(`/api/classroom/sessions/${selectedLesson}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (!mounted) return;
           if (!data) return;
-          if (data.hasActiveSession && data.stage) {
+          if (viewingSpecificReportRef.current) {
+            setClassroomStage('ARCHIVED_REPORT');
+          } else if (data.hasActiveSession && data.stage) {
             setClassroomStage(data.stage);
           } else if (data.stage === 'ARCHIVED_REPORT') {
             setClassroomStage('ARCHIVED_REPORT');
@@ -809,11 +828,17 @@ export function LiveClassroomView({
     studentWindowRef.current = studentTab;
     setIsStudentWindowOpen(true);
 
-    const checkInterval = setInterval(() => {
+    if (studentWindowCheckIntervalRef.current) {
+      clearInterval(studentWindowCheckIntervalRef.current);
+    }
+    studentWindowCheckIntervalRef.current = setInterval(() => {
       if (!studentWindowRef.current || studentWindowRef.current.closed) {
         setIsStudentWindowOpen(false);
         studentWindowRef.current = null;
-        clearInterval(checkInterval);
+        if (studentWindowCheckIntervalRef.current) {
+          clearInterval(studentWindowCheckIntervalRef.current);
+          studentWindowCheckIntervalRef.current = null;
+        }
       }
     }, 1000);
 
@@ -935,15 +960,39 @@ export function LiveClassroomView({
         return [entry, ...prev];
       });
     };
+    const stageChangedHandler = (payload: any) => {
+      if (!payload || payload.lessonId !== selectedLesson) return;
+      if (payload.stage) {
+        setClassroomStage(payload.stage);
+        if (payload.stage === 'ARCHIVED_REPORT') {
+          setLiveClassIsActive(false);
+        }
+      }
+    };
+    const sessionDeletedHandler = (payload: any) => {
+      if (!payload || payload.lessonId !== selectedLesson) return;
+      viewingSpecificReportRef.current = null;
+      setReportSessionId(null);
+      setClassroomStage('PRE_CLASS_READY');
+      setLiveClassIsActive(false);
+      setSessionStartedAt(null);
+    };
     let detach: (() => void) | null = null;
     const off = onSocketInstance((socket) => {
       detach?.();
       socket.on('classroom:feed_appended', handler);
+      socket.on('classroom:stage_changed', stageChangedHandler);
+      socket.on('classroom:session_deleted', sessionDeletedHandler);
       detach = () => {
-        // 防御性清理：测试环境的 mock socket 可能没有 off
-        if (typeof socket.off === 'function') socket.off('classroom:feed_appended', handler);
-        else if (typeof (socket as any).removeListener === 'function')
+        if (typeof socket.off === 'function') {
+          socket.off('classroom:feed_appended', handler);
+          socket.off('classroom:stage_changed', stageChangedHandler);
+          socket.off('classroom:session_deleted', sessionDeletedHandler);
+        } else if (typeof (socket as any).removeListener === 'function') {
           (socket as any).removeListener('classroom:feed_appended', handler);
+          (socket as any).removeListener('classroom:stage_changed', stageChangedHandler);
+          (socket as any).removeListener('classroom:session_deleted', sessionDeletedHandler);
+        }
       };
     });
     return () => {
@@ -1289,7 +1338,7 @@ export function LiveClassroomView({
         if (count > maxTicks - 5) {
           currentInterval += 45;
         }
-        setTimeout(tick, currentInterval);
+        drawTickTimerRef.current = setTimeout(tick, currentInterval);
       } else {
         const finalStudent = drawPool[randIndex];
         setActiveDrawStudentId(null);
@@ -1336,13 +1385,15 @@ export function LiveClassroomView({
         }
 
         // Recover highlight after 8 seconds
-        setTimeout(() => {
+        if (drawRecoverTimerRef.current) clearTimeout(drawRecoverTimerRef.current);
+        drawRecoverTimerRef.current = setTimeout(() => {
           setSelectedDrawStudentIds((prev) => prev.filter((id) => id !== finalStudent.id));
         }, 8000);
       }
     };
 
-    setTimeout(tick, currentInterval);
+    if (drawTickTimerRef.current) clearTimeout(drawTickTimerRef.current);
+    drawTickTimerRef.current = setTimeout(tick, currentInterval);
   };
 
   const formatTime = (secs: number): string => {
@@ -1404,19 +1455,50 @@ export function LiveClassroomView({
         classes={classes}
         lang={lang}
         addToast={addToast}
-        onBackToPortal={() => setShowSessionManager(false)}
+        onBackToPortal={() => {
+          userReturnedToPortalRef.current = true;
+          setEntryDecisionReady(true);
+          setShowSessionManager(false);
+          setShowEntryPortal(true);
+        }}
         onResumeSession={(session: ClassroomSessionItem) => {
+          viewingSpecificReportRef.current = null;
+          setReportSessionId(null);
+          userReturnedToPortalRef.current = false;
           setSelectedLesson(session.lessonId);
           if (session.classId) setLiveClassSelectedClassId(session.classId);
+          setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
           setShowSessionManager(false);
           setShowEntryPortal(false);
         }}
         onViewReport={(session: ClassroomSessionItem) => {
+          viewingSpecificReportRef.current = session.id;
+          setReportSessionId(session.id);
           setSelectedLesson(session.lessonId);
           if (session.classId) setLiveClassSelectedClassId(session.classId);
           setClassroomStage('ARCHIVED_REPORT');
           setShowSessionManager(false);
           setShowEntryPortal(false);
+        }}
+        onSessionArchived={(session: ClassroomSessionItem) => {
+          if (session.lessonId === selectedLesson) {
+            viewingSpecificReportRef.current = session.id;
+            setReportSessionId(session.id);
+            setClassroomStage('ARCHIVED_REPORT');
+            setLiveClassIsActive(false);
+          }
+        }}
+        onSessionDeleted={(session: ClassroomSessionItem) => {
+          if (session.lessonId === selectedLesson) {
+            viewingSpecificReportRef.current = null;
+            setReportSessionId(null);
+            setClassroomStage('PRE_CLASS_READY');
+            setLiveClassIsActive(false);
+            setSessionStartedAt(null);
+            userReturnedToPortalRef.current = true;
+            setEntryDecisionReady(true);
+            setShowEntryPortal(true);
+          }
         }}
       />
     );

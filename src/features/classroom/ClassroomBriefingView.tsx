@@ -32,6 +32,7 @@ import type { StudentPersonalDigest } from './post-class';
 
 export interface ClassroomBriefingViewProps {
   selectedLesson: string | null;
+  sessionId?: string | null;
   lessonTitle: string;
   selectedClassId: string | null;
   className: string;
@@ -44,6 +45,7 @@ export interface ClassroomBriefingViewProps {
 
 export function ClassroomBriefingView({
   selectedLesson,
+  sessionId,
   lessonTitle,
   selectedClassId,
   className,
@@ -68,9 +70,10 @@ export function ClassroomBriefingView({
   useEffect(() => {
     if (!selectedLesson) return;
     setLoading(true);
+    const reportQuery = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
 
     Promise.all([
-      fetch(`/api/classroom/sessions/${selectedLesson}/panoramic-report`)
+      fetch(`/api/classroom/sessions/${selectedLesson}/panoramic-report${reportQuery}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
       fetch(`/api/classroom/stage/${selectedLesson}/data`)
@@ -115,7 +118,7 @@ export function ClassroomBriefingView({
       }
       setLoading(false);
     });
-  }, [selectedLesson]);
+  }, [selectedLesson, sessionId]);
 
   // ── 真实指标（全部来自 panoramic-report，缺失时为 0/null，不再回退到假值） ──
   const totalStudents = students.length || reportData?.students?.length || 0;
@@ -126,6 +129,11 @@ export function ClassroomBriefingView({
   const attendanceRate = totalStudents > 0 ? Math.round((attendanceCount / totalStudents) * 100) : null;
   const quizAccuracy = reportData?.metrics?.quizAccuracy ?? 0;
   const pollVotes = reportData?.metrics?.pollVotesTotal ?? 0;
+  const pollOptionBreakdown: Array<{ option: string; count: number; percent: number }> = Array.isArray(
+    reportData?.metrics?.pollOptionBreakdown,
+  )
+    ? reportData.metrics.pollOptionBreakdown
+    : [];
   // v0.6.1 数据真实性：无通票为 null（显示「—」），不再回退 0/5.0
   const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? null;
   const durationMin = reportData?.session?.durationMin ?? 0;
@@ -285,8 +293,8 @@ export function ClassroomBriefingView({
             </h1>
             <p className="text-xs text-muted mt-0.5">
               {lang === 'zh'
-                ? `总教学时长: ${durationMin} 分钟 · 全班 ${totalStudents} 人全员出勤 · 随堂测验准确率 ${quizAccuracy}%`
-                : `Duration: ${durationMin} mins · ${totalStudents} students · Quiz Accuracy: ${quizAccuracy}%`}
+                ? `总教学时长: ${durationMin} 分钟 · 到课互动 ${attendanceCount}/${totalStudents} 人 · 随堂测验准确率 ${quizAccuracy}%`
+                : `Duration: ${durationMin} mins · Active: ${attendanceCount}/${totalStudents} · Quiz Accuracy: ${quizAccuracy}%`}
             </p>
           </div>
         </div>
@@ -541,31 +549,53 @@ export function ClassroomBriefingView({
                 <Sparkles size={14} className="text-amber-500" />
                 <span>{lang === 'zh' ? '极速投票作答选项分布' : 'Quick Poll Option Breakdown'}</span>
               </span>
-              <span className="text-[11px] text-emerald-600 font-bold">正确率 92%</span>
+              <span className="text-[11px] text-muted font-mono">
+                {pollVotes > 0
+                  ? lang === 'zh'
+                    ? `共 ${pollVotes} 票`
+                    : `${pollVotes} votes`
+                  : lang === 'zh'
+                    ? '暂无投票'
+                    : 'No votes'}
+              </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 text-center text-xs">
-              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col">
-                <span className="font-bold text-emerald-700 dark:text-emerald-300">选项 A (正确)</span>
-                <span className="text-xl font-black font-mono mt-1 text-emerald-600">76%</span>
-                <span className="text-[10px] text-muted">19 人</span>
+            {pollOptionBreakdown.length === 0 ? (
+              <div className="py-5 text-center text-xs text-muted bg-surface-secondary/40 rounded-xl border border-dashed border-theme">
+                {lang === 'zh' ? '本场课堂会话暂无极速投票作答记录' : 'No quick poll votes recorded in this session'}
               </div>
-              <div className="p-2.5 rounded-xl bg-surface-secondary border border-theme/60 flex flex-col">
-                <span className="font-bold text-muted">选项 B</span>
-                <span className="text-xl font-black font-mono mt-1 text-main">12%</span>
-                <span className="text-[10px] text-muted">3 人</span>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                {pollOptionBreakdown.map((item, idx) => (
+                  <div
+                    key={item.option}
+                    className={`p-2.5 rounded-xl flex flex-col ${
+                      idx === 0
+                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                        : 'bg-surface-secondary border border-theme/60'
+                    }`}
+                  >
+                    <span
+                      className={`font-bold ${
+                        idx === 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted'
+                      }`}
+                    >
+                      {lang === 'zh' ? `选项 ${item.option}` : `Option ${item.option}`}
+                    </span>
+                    <span
+                      className={`text-xl font-black font-mono mt-1 ${
+                        idx === 0 ? 'text-emerald-600' : 'text-main'
+                      }`}
+                    >
+                      {item.percent}%
+                    </span>
+                    <span className="text-[10px] text-muted">
+                      {item.count} {lang === 'zh' ? '人' : 'votes'}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="p-2.5 rounded-xl bg-surface-secondary border border-theme/60 flex flex-col">
-                <span className="font-bold text-muted">选项 C</span>
-                <span className="text-xl font-black font-mono mt-1 text-main">8%</span>
-                <span className="text-[10px] text-muted">2 人</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-surface-secondary border border-theme/60 flex flex-col">
-                <span className="font-bold text-muted">选项 D</span>
-                <span className="text-xl font-black font-mono mt-1 text-main">4%</span>
-                <span className="text-[10px] text-muted">1 人</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 

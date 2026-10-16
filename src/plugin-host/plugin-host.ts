@@ -453,6 +453,8 @@ export class FrontendPluginHost {
       if (loadCount > 1) {
         console.error(`[PluginSandbox] Plugin "${pluginId}" attempted unauthorized navigation. Destroying sandbox.`);
         this.destroySandboxFrame(pluginId);
+        this.unregisterPluginResources(pluginId);
+        this.pluginModules.delete(pluginId);
         usePluginHostStore.getState().updatePluginState(pluginId, PluginState.ERROR);
       }
     };

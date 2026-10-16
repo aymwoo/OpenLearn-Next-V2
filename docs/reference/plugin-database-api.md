@@ -15,16 +15,12 @@
 
 仅 4 个方法，所有表自动加前缀 `plugin_{pluginId}_`，互不干扰。
 
-> ⚠️ **`pluginId` 的取值取决于执行模式**（这是本页最容易踩的坑）：
+> ℹ️ **表前缀命名规范（已统一）**：
 >
-> | 模式   | `pluginId` 实际取值            | 表前缀形态                                 |
-> | ------ | ----------------------------- | ------------------------------------------ |
-> | Inline | **`plugins` 表的行 UUID**      | `plugin_019fa0d4_2e31_76d9_8322_ca08f60012a8_xxx` |
-> | Worker | **`manifest.id`（manifestId）** | `plugin_ext_raffle_vote_xxx`               |
->
-> 前缀中所有非 `[A-Za-z0-9_]` 字符（UUID 的 `-`、`manifest.id` 的 `@`、`/`、`-`）一律替换为 `_`。
-> 之所以 Worker 侧用 `manifestId`：`ServiceHost.assertDatabaseAccessAllowed()` 的 DDL 命名空间守卫按命令命名空间（`manifest.id`）校验表前缀，若 Worker 用 UUID 前缀，插件在自己命名空间内建表也会被误判为越权 DDL。
-> 下文表格中的 `plugin_{pluginId}_` 为简写，实际按上表取值。
+> 平台已统一收敛表前缀生成规则为 `plugin_<scopeId>_`（`pluginTablePrefix(scopeId)`）：
+> 1. 上传与社区安装的插件统一使用其安装主键（`plugins` 表的行 UUID），在 Inline 与 Worker（子进程/独立进程）两种模式下均保持一致，实现存储物理隔离与防冲突；
+> 2. 内置核心插件使用其规范 scopeId（如 `@openlearn/plugin-vfs` → `plugin__openlearn_plugin_vfs_`）；
+> 3. 前缀中所有非 `[A-Za-z0-9_]` 字符一律替换为 `_`。卸载插件时，宿主依据统一安装主键精准识别并级联清理私有表。
 
 ```typescript
 // packages/core/plugin-host/types.ts
@@ -151,11 +147,11 @@ export async function activate(ctx: PluginContext) {
 
 | 项目     | 路径 A `ctx.db`                                                    | 路径 B `ctx.resolve(IDatabaseToken)` |
 | -------- | ------------------------------------------------------------------ | ------------------------------------ |
-| 命名空间 | 自动前缀 `plugin_{pluginId}_`；Inline 的 `pluginId` = `plugins` 表行 UUID，Worker 的 `pluginId` = `manifest.id`（见 §1 顶部说明） | 无，整个平台库                       |
+| 命名空间 | 自动前缀 `plugin_<scopeId>_`（统一为安装行 UUID 或内置插件 scopeId，见 §1 说明） | 无，整个平台库                       |
 | 暴露位置 | `PluginContext.db`（`packages/core/plugin-host/types.ts`）/ `buildContext()` 构造的 `dbApi`（`packages/core/plugin-host/context-builder.ts`） | `ServiceRegistry` 注册 `IDatabaseToken`（`packages/core/kernel/index.ts` 的服务注册段） |
 | 适用     | 插件私有表                                                         | 跨表查询 / 读写平台表 / 事务         |
 
-**KV 存储（非 SQL）**：`ctx.services.storage`（`IStorageService` 的 `get` / `set` / `delete`）后端为 `plugin_storage` 表，**按 `plugin_id` 自动命名空间隔离**。注意此处 `plugin_id` 列写入的是 **`manifest.id`**（`buildContext()` 中 `wrapStorage()` 的实现，见 `packages/core/plugin-host/context-builder.ts`），**与 §1 的表前缀取值规则不同**——表前缀在 Inline 模式下是 UUID，KV 命名空间则始终是 manifestId。适合简单键值，无需建表。
+**KV 存储（非 SQL）**：`ctx.services.storage`（`IStorageService` 的 `get` / `set` / `delete`）后端为 `plugin_storage` 表，**按 `plugin_id` 自动命名空间隔离**。注意此处 `plugin_id` 列写入的是 **`manifest.id`**（`buildContext()` 中 `wrapStorage()` 的实现，见 `packages/core/plugin-host/context-builder.ts`）。适合简单键值，无需建表。
 
 ---
 
@@ -164,7 +160,7 @@ export async function activate(ctx: PluginContext) {
 - 优先用 `ctx.db.ensureTable()` + `ctx.db.table()` 管理插件私有表；精细控制（联表、事务、读写平台表）再落到 `ctx.resolve(IDatabaseToken)` 的原始实例。
 - 升级表结构一律走 `ctx.db.migrate(targetVersion, fn)`，保证幂等与版本可追溯；迁移脚本内只用 `prepare().run()`，以兼容 Worker 模式。
 - 迁移脚本中不要依赖 `upgradeFn` 自动加表前缀，需要隔离请用 `ctx.db.ensureTable()` / `ctx.db.table()`。
-- 不要依赖 Inline / Worker 两种模式产生相同的表名前缀（见 §1 顶部说明），也不要把表名硬编码进跨模式复用的 SQL。
+- 统一通过 `ctx.db.table('xxx')` 获取表名，切勿把手动拼接的表名硬编码进 SQL 字符串中。
 - Worker 隔离模式插件避免依赖事务与 `exec`。
 
 > 最后更新：2026-10-03

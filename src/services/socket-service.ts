@@ -18,8 +18,9 @@ let _socket: Socket | null = null;
 /** 等待 socket 就绪的订阅者。用于「消费者比 socket 更早诞生」的场景。 */
 const _socketReadyListeners = new Set<(socket: Socket) => void>();
 
-export function setSocketInstance(socket: Socket): void {
+export function setSocketInstance(socket: Socket | null): void {
   _socket = socket;
+  if (!socket) return;
   for (const listener of _socketReadyListeners) {
     try {
       listener(socket);
@@ -30,35 +31,20 @@ export function setSocketInstance(socket: Socket): void {
 }
 
 /**
- * 订阅「socket 就绪」；若已就绪则**立即同步调用一次**。
+ * 订阅「socket 就绪与换绑」；若当前已有可用 socket 实例，则立即同步调用一次。
+ * 当后续发生 socket 重连、切换实例时，将自动通知所有活跃订阅者进行解绑与换绑。
  *
- * 为什么需要它：socket 在 `useClassroomSocket` 的 effect 里才注入，而 React 的
- * passive effect 是**子先于父**执行的 —— 任何在子组件 effect 里想挂 socket 监听的
- * 代码，拿到的都是 null 且**不会报错**。历史上 `ClassroomSyncChannel` 就栽在这里：
- * 「发」正常、「收」永久静默失效。
- *
- * 正确用法：
- * ```ts
- * useEffect(() => {
- *   let detach: (() => void) | null = null;
- *   const off = onSocketInstance((socket) => {
- *     detach?.();
- *     const handler = (d) => console.log(d);
- *     socket.on('some-event', handler);
- *     detach = () => socket.off('some-event', handler);
- *   });
- *   return () => { off(); detach?.(); };
- * }, []);
- * ```
- *
- * @returns 取消订阅函数（已就绪时的立即回调也会被它一并回滚，见上例）。
+ * @returns 取消订阅函数。
  */
 export function onSocketInstance(listener: (socket: Socket) => void): () => void {
-  if (_socket) {
-    listener(_socket);
-    return () => {};
-  }
   _socketReadyListeners.add(listener);
+  if (_socket) {
+    try {
+      listener(_socket);
+    } catch (e) {
+      console.error('[socket-service] socket listener error:', e);
+    }
+  }
   return () => {
     _socketReadyListeners.delete(listener);
   };

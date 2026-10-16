@@ -63,6 +63,27 @@ describe('Plugin Network Hardening & Proxy Security', () => {
       expect(sentMsg.error).toContain('not approved');
     });
 
+    it('即使 approvedHosts 被塞入私有 IP、环回地址或 IPv6 本地地址也必须强制阻断', async () => {
+      for (const badUrl of [
+        'http://127.0.0.1:8080/internal',
+        'http://192.168.1.1/admin',
+        'http://169.254.169.254/latest/meta-data/',
+        'http://[::1]:9000/health',
+        'http://2130706433/secret',
+      ]) {
+        let sentMsg: any = null;
+        const fakeChild = {
+          send: vi.fn((m) => {
+            sentMsg = m;
+          }),
+        };
+        const host = new URL(badUrl).hostname.toLowerCase();
+        await handleNetProxy(fakeChild as any, { type: 'ol-net-proxy', id: 'ssrf-1', url: badUrl }, new Set([host]));
+        expect(sentMsg?.ok).toBe(false);
+        expect(sentMsg?.error).toContain('blocked');
+      }
+    });
+
     it('放行 Authorization 头以支持 Bearer Token', async () => {
       let sentMsg: any = null;
       const fakeChild = {

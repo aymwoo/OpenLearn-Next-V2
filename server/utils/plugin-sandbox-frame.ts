@@ -14,6 +14,7 @@ export const PLUGIN_SANDBOX_FRAME_HTML = `<!doctype html>
 const CHANNEL = ${JSON.stringify('ol-plugin-frame')};
 let targetOrigin = '*';
 const pending = new Map();
+let activePlugin = null;
 function post(msg) { parent.postMessage(Object.assign({ channel: CHANNEL }, msg), targetOrigin); }
 function call(op, args) {
   const callId = Math.random().toString(16).slice(2);
@@ -58,6 +59,13 @@ window.addEventListener('message', async function (event) {
     return;
   }
   if (data.type === 'deactivate') {
+    try {
+      if (activePlugin && typeof activePlugin.deactivate === 'function') {
+        await activePlugin.deactivate();
+      }
+    } catch (_) {}
+    activePlugin = null;
+    pending.clear();
     post({ type: 'deactivated', id: data.id });
     return;
   }
@@ -70,6 +78,7 @@ window.addEventListener('message', async function (event) {
     try { mod = await import(url); } finally { URL.revokeObjectURL(url); }
     const plugin = mod.default || mod;
     if (typeof plugin.activate !== 'function') throw new Error('missing activate function');
+    activePlugin = plugin;
     await Promise.race([
       plugin.activate(makeCtx(data.pluginId, data.manifest)),
       new Promise(function (_, reject) { setTimeout(function () { reject(new Error('Activation timeout (5000ms)')); }, 5000); })

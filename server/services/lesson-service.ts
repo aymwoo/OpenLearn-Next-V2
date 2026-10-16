@@ -9,7 +9,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
-import { lessonActiveSegments } from '../shared-state.js';
+import { lessonActiveSegments, clearLessonRuntimeState } from '../shared-state.js';
 import type { Pagination } from '../utils/pagination.js';
 
 export interface LessonOwnershipResult {
@@ -262,12 +262,44 @@ export class LessonService {
         .run(lessonId);
       this.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(lessonId);
       try {
+        const subSubquery =
+          'SELECT id FROM plugin_submissions WHERE lesson_id = ? OR assignment_id IN (SELECT id FROM plugin_assignments WHERE lesson_id = ?)';
+        const assignSubquery = 'SELECT id FROM plugin_assignments WHERE lesson_id = ?';
+
         this.db
           .prepare(
-            'DELETE FROM plugin_assignment_files WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE lesson_id = ?)',
+            `DELETE FROM plugin_assignment_files WHERE submission_id IN (${subSubquery}) OR assignment_id IN (${assignSubquery})`,
           )
-          .run(lessonId);
-        this.db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
+          .run(lessonId, lessonId, lessonId);
+
+        this.db
+          .prepare(
+            `DELETE FROM plugin_peer_review_tasks WHERE submission_id IN (${subSubquery}) OR assignment_id IN (${assignSubquery})`,
+          )
+          .run(lessonId, lessonId, lessonId);
+
+        this.db
+          .prepare(
+            `DELETE FROM plugin_peer_reviews WHERE submission_id IN (${subSubquery}) OR assignment_id IN (${assignSubquery})`,
+          )
+          .run(lessonId, lessonId, lessonId);
+
+        this.db
+          .prepare(
+            `DELETE FROM plugin_grades WHERE submission_id IN (${subSubquery}) OR assignment_id IN (${assignSubquery})`,
+          )
+          .run(lessonId, lessonId, lessonId);
+
+        this.db
+          .prepare(
+            `DELETE FROM plugin_submission_versions WHERE submission_id IN (${subSubquery}) OR assignment_id IN (${assignSubquery})`,
+          )
+          .run(lessonId, lessonId, lessonId);
+
+        this.db
+          .prepare(`DELETE FROM plugin_submissions WHERE lesson_id = ? OR assignment_id IN (${assignSubquery})`)
+          .run(lessonId, lessonId);
+
         this.db.prepare('DELETE FROM plugin_assignments WHERE lesson_id = ?').run(lessonId);
       } catch {}
 
@@ -325,7 +357,7 @@ export class LessonService {
     });
 
     const result = delTx() as any;
-    lessonActiveSegments.delete(lessonId);
+    clearLessonRuntimeState(lessonId);
 
     return {
       success: true,

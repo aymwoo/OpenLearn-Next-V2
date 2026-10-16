@@ -995,7 +995,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: COMMUNITY_RISK_ACK_MESSAGE,
         });
       }
-      const attestation = assertCommunityZipAttestation(req, zipPath);
+      const expectedId = targetPluginId
+        ? (kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId)
+        : undefined;
+      const attestation = assertCommunityZipAttestation(req, zipPath, expectedId ? { id: expectedId } : undefined);
       if (!attestation.ok) {
         return res.status(attestation.status).json(attestation.body);
       }
@@ -1072,7 +1075,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
-      const attestation = assertCommunityZipAttestation(req, zipPath);
+      const expectedUpdateId = kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId;
+      const attestation = assertCommunityZipAttestation(
+        req,
+        zipPath,
+        expectedUpdateId ? { id: expectedUpdateId } : undefined,
+      );
       if (!attestation.ok) {
         return res.status(attestation.status).json(attestation.body);
       }

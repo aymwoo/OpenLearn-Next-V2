@@ -3,6 +3,9 @@
  */
 
 import type { ChildProcess } from 'node:child_process';
+import dns from 'node:dns/promises';
+import net from 'node:net';
+import { isPrivateOrReservedHost } from '../plugin-host/plugin-grants.js';
 
 export interface NetProxyRequest {
   type: 'ol-net-proxy';
@@ -47,9 +50,32 @@ export async function handleNetProxy(
     reply({ ok: false, error: 'only http(s) can be proxied' });
     return;
   }
-  if (!approvedHosts.has(target.hostname.toLowerCase())) {
+  const hostname = target.hostname.toLowerCase();
+  if (isPrivateOrReservedHost(hostname)) {
+    reply({ ok: false, error: `host ${target.hostname} is blocked (loopback/private/metadata address)` });
+    return;
+  }
+  if (!approvedHosts.has(hostname)) {
     reply({ ok: false, error: `host ${target.hostname} is not approved` });
     return;
+  }
+
+  // DNS 预解析校验：若域名解析到内网/环回/链路本地地址，立即阻断（防御 DNS Rebinding / 内网 A 记录）
+  if (!net.isIP(hostname) && !hostname.startsWith('[')) {
+    try {
+      const resolved = await dns.lookup(hostname, { all: true });
+      for (const entry of resolved) {
+        if (isPrivateOrReservedHost(entry.address)) {
+          reply({
+            ok: false,
+            error: `host ${target.hostname} resolves to forbidden private/internal address (${entry.address})`,
+          });
+          return;
+        }
+      }
+    } catch {
+      // 离线单测（mock fetch）或 DNS 故障交由下游 fetch 处理
+    }
   }
 
   if (msg.bodyBase64 && msg.bodyBase64.length > MAX_REQUEST_BODY_BASE64) {

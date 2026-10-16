@@ -10,8 +10,14 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
-import { lessonActiveSegments } from '../shared-state.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
+import {
+  lessonActiveSegments,
+  activeCountdowns,
+  setActiveCountdownBounded,
+  clearLessonRuntimeState,
+  type ActiveCountdownState,
+} from '../shared-state.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
 import { actorUserId, authorizeClass, authorizeLessonStaff, isAdministrator } from '../services/class-access.js';
 
@@ -120,19 +126,66 @@ export function registerClassroomRoutes(
     return { ok: true, id };
   };
 
-  // ── 课堂倒计时管理（持久化 & 插件可扩展） ─────────────────────────
-  interface ActiveCountdownState {
-    lessonId: string;
-    totalDuration: number;
-    timeRemaining: number;
-    isRunning: boolean;
-    isPaused: boolean;
-    label: string;
-    endsAt: number | null;
-    updatedAt: number;
-  }
+  // ── 课堂倒计时管理（持久化 & 插件可扩展，来自 shared-state） ─────────────────────────
 
-  const activeCountdowns = new Map<string, ActiveCountdownState>();
+
+  /**
+   * 校验当前请求者是否有权管理（查看/归档/删除/推进）指定课堂会话。
+   * - 管理员：允许管理全部课堂会话
+   * - 普通教师：仅允许管理自己创建的会话、所属班级归属自己的会话、或所属课程由自己创建的会话
+   *   （对于未绑定明确归属人的历史遗留会话保持兼容）
+   */
+  const canManageClassroomSession = (req: Request, session: any): boolean => {
+    const httpSession = (req as any).session;
+    if (!httpSession) return false;
+    if (isAdministrator(httpSession)) return true;
+    const uid = actorUserId(httpSession) || '';
+    const username = httpSession?.username ? String(httpSession.username).trim() : '';
+    const actorFull = (getActorId(req) || '').trim();
+    const tokens = new Set([uid, username, actorFull].filter(Boolean));
+    if (tokens.size === 0) return false;
+
+    const sessionTeacher = session?.teacher_id ? String(session.teacher_id).trim() : '';
+    if (sessionTeacher && tokens.has(sessionTeacher)) return true;
+
+    let classOwner = '';
+    if (session?.class_id) {
+      const cls = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(session.class_id) as
+        | { owner_user_id: string | null }
+        | undefined;
+      classOwner = cls?.owner_user_id ? String(cls.owner_user_id).trim() : '';
+      if (classOwner && tokens.has(classOwner)) return true;
+    }
+
+    let lessonCreator = '';
+    if (session?.lesson_id) {
+      const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(session.lesson_id) as
+        | { creator_id: string | null }
+        | undefined;
+      lessonCreator = lesson?.creator_id ? String(lesson.creator_id).trim() : '';
+      if (lessonCreator && tokens.has(lessonCreator)) return true;
+    }
+
+    const hasExplicitOwner =
+      (sessionTeacher !== '' && sessionTeacher !== 'teacher') || classOwner !== '' || lessonCreator !== '';
+    return !hasExplicitOwner;
+  };
+
+  /**
+   * 当课节不再存在任何进行中会话时，清理其内存态与学生锁定状态。
+   */
+  const cleanupLessonRuntimeIfNoActiveSession = (lessonId: string) => {
+    if (!lessonId) return;
+    const activeRemaining = db
+      .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? AND stage != ? LIMIT 1')
+      .get(lessonId, ARCHIVED_REPORT_STAGE);
+    if (!activeRemaining) {
+      clearLessonRuntimeState(lessonId);
+      try {
+        db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE locked_lesson_id = ?').run(lessonId);
+      } catch (_) {}
+    }
+  };
 
   const publishCountdownEvent = (type: string, payload: any) => {
     try {
@@ -157,12 +210,14 @@ export function registerClassroomRoutes(
           const settings = JSON.parse(session.settings_json);
           if (settings.countdown) {
             state = { ...settings.countdown, lessonId };
+            setActiveCountdownBounded(lessonId, state!);
           }
         }
       } catch (_) {}
     }
 
     if (!state) {
+      // 只读查询未命中持久化倒计时时，仅返回临时默认态，不写入 activeCountdowns，防止任意 lessonId 造成内存无界增长
       state = {
         lessonId,
         totalDuration: 0,
@@ -173,7 +228,6 @@ export function registerClassroomRoutes(
         endsAt: null,
         updatedAt: Date.now(),
       };
-      activeCountdowns.set(lessonId, state);
     }
 
     // 若当前正在运行，依据目标截止时间校准精确剩余秒数（杜绝浏览器休眠漂移）
@@ -198,7 +252,7 @@ export function registerClassroomRoutes(
 
   const persistAndBroadcastCountdown = (lessonId: string, state: ActiveCountdownState) => {
     state.updatedAt = Date.now();
-    activeCountdowns.set(lessonId, state);
+    setActiveCountdownBounded(lessonId, state);
 
     // P1-4 修复：此前读-改-写整列 settings_json，与 view-state 并发时互相覆盖。
     // 现用 json_set 原子打补丁，仅改 $.countdown，不触碰 viewState 等其他键。
@@ -475,6 +529,32 @@ export function registerClassroomRoutes(
         }
       }
 
+      const httpSession = (req as any).session;
+      if (!isAdministrator(httpSession)) {
+        const uid = actorUserId(httpSession) || '';
+        const username = httpSession?.username ? String(httpSession.username).trim() : '';
+        const actorFull = (getActorId(req) || '').trim();
+        const actorTokens = Array.from(new Set([uid, username, actorFull].filter(Boolean)));
+        if (actorTokens.length === 0) {
+          conditions.push('1 = 0');
+        } else {
+          const ph = actorTokens.map(() => '?').join(',');
+          conditions.push(
+            `(
+              cs.teacher_id IN (${ph})
+              OR c.owner_user_id IN (${ph})
+              OR l.creator_id IN (${ph})
+              OR (
+                (cs.teacher_id IS NULL OR cs.teacher_id = '' OR cs.teacher_id = 'teacher')
+                AND (c.owner_user_id IS NULL OR c.owner_user_id = '')
+                AND (l.creator_id IS NULL OR l.creator_id = '')
+              )
+            )`,
+          );
+          params.push(...actorTokens, ...actorTokens, ...actorTokens);
+        }
+      }
+
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       const countSql = `
@@ -610,6 +690,9 @@ export function registerClassroomRoutes(
         if (!session) {
           return res.status(404).json({ error: `Session "${sessionId}" not found` });
         }
+        if (!canManageClassroomSession(req, session)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const now = Date.now();
         const endedAt = session.ended_at || now;
@@ -620,8 +703,10 @@ export function registerClassroomRoutes(
           sessionId,
         );
 
+        cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
+
         try {
-          io?.to(`lesson:${session.lesson_id}`).emit('classroom:stage_changed', {
+          emitClassroomEvent(io, session.lesson_id, 'classroom:stage_changed', {
             lessonId: session.lesson_id,
             stage: ARCHIVED_REPORT_STAGE,
             classId: session.class_id,
@@ -661,6 +746,9 @@ export function registerClassroomRoutes(
         const session = db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(sessionId) as any;
         if (!session) {
           return res.status(404).json({ error: `Session "${sessionId}" not found` });
+        }
+        if (!canManageClassroomSession(req, session)) {
+          return res.status(403).json({ error: 'Forbidden' });
         }
 
         const deleteTransaction = db.transaction(() => {
@@ -703,8 +791,10 @@ export function registerClassroomRoutes(
 
         deleteTransaction();
 
+        cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
+
         try {
-          io?.to(`lesson:${session.lesson_id}`).emit('classroom:session_deleted', {
+          emitClassroomEvent(io, session.lesson_id, 'classroom:session_deleted', {
             sessionId,
             lessonId: session.lesson_id,
           });
@@ -841,17 +931,43 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const { classId, teachingModeId, exitTicketCoreQuestion, exitTicketChallengeQuestion } = req.body || {};
         const teacherId = getActorId(req) || 'teacher';
+        const httpSession = (req as any).session;
 
         if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
           return res.status(404).json({ error: `Lesson "${lessonId}" not found` });
+        }
+
+        const staff = authorizeLessonStaff(db, httpSession, lessonId);
+        if (staff.ok === false) {
+          return res.status(staff.status).json({ error: staff.error });
         }
 
         const normalizedClassId = typeof classId === 'string' && classId.trim() ? classId.trim() : null;
         if (classId !== undefined && classId !== null && !normalizedClassId) {
           return res.status(400).json({ error: 'Invalid classId' });
         }
-        if (normalizedClassId && !db.prepare('SELECT id FROM classes WHERE id = ?').get(normalizedClassId)) {
-          return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
+        if (normalizedClassId) {
+          const cls = db
+            .prepare('SELECT id, owner_user_id FROM classes WHERE id = ?')
+            .get(normalizedClassId) as { id: string; owner_user_id: string | null } | undefined;
+          if (!cls) {
+            return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
+          }
+          if (cls.owner_user_id && cls.owner_user_id.trim()) {
+            const clsAuth = authorizeClass(db, httpSession, normalizedClassId, 'staff');
+            if (clsAuth.ok === false) {
+              return res.status(clsAuth.status).json({ error: clsAuth.error });
+            }
+          }
+        }
+
+        const activeSession = db
+          .prepare(
+            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+        if (activeSession && !canManageClassroomSession(req, activeSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
         }
 
         const modeValidation = validateTeachingModeId(teachingModeId);
@@ -945,9 +1061,36 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const { stage, classId } = req.body;
         const teacherId = getActorId(req) || 'teacher';
+        const httpSession = (req as any).session;
 
         if (!['PRE_CLASS_READY', 'IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET', 'ARCHIVED_REPORT'].includes(stage)) {
           return res.status(400).json({ error: `Invalid stage: ${stage}` });
+        }
+
+        const activeSession = db
+          .prepare(
+            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+        if (activeSession && !canManageClassroomSession(req, activeSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const staff = authorizeLessonStaff(db, httpSession, lessonId);
+        if (!activeSession && staff.ok === false) {
+          return res.status(staff.status).json({ error: staff.error });
+        }
+
+        if (typeof classId === 'string' && classId.trim()) {
+          const cls = db
+            .prepare('SELECT id, owner_user_id FROM classes WHERE id = ?')
+            .get(classId.trim()) as { id: string; owner_user_id: string | null } | undefined;
+          if (cls?.owner_user_id && cls.owner_user_id.trim()) {
+            const clsAuth = authorizeClass(db, httpSession, classId.trim(), 'staff');
+            if (clsAuth.ok === false) {
+              return res.status(clsAuth.status).json({ error: clsAuth.error });
+            }
+          }
         }
 
         const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
@@ -2136,21 +2279,22 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const requestedSessionId =
+          typeof req.query.sessionId === 'string' && req.query.sessionId.trim() ? req.query.sessionId.trim() : null;
 
-        const session = db
-          .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
-          .get(lessonId) as any;
+        const session = requestedSessionId
+          ? (db
+              .prepare('SELECT * FROM classroom_sessions WHERE id = ? AND lesson_id = ?')
+              .get(requestedSessionId, lessonId) as any)
+          : (db
+              .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+              .get(lessonId) as any);
 
         if (!session) {
           return res.status(404).json({ error: 'No classroom session found for this lesson' });
         }
 
-        const httpSession = (req as any).session;
-        const actor = actorUserId(httpSession);
-        const ownsSession = !!(actor && session.teacher_id && String(session.teacher_id).includes(actor));
-        const ownsClass = !!(session.class_id && authorizeClass(db, httpSession, session.class_id, 'staff').ok);
-        const ownsLesson = authorizeLessonStaff(db, httpSession, lessonId).ok;
-        if (!isAdministrator(httpSession) && !ownsSession && !ownsClass && !ownsLesson) {
+        if (!canManageClassroomSession(req, session)) {
           return res.status(403).json({ error: 'Forbidden' });
         }
 
@@ -2182,6 +2326,23 @@ export function registerClassroomRoutes(
               )
               .get(session.id) as any
           )?.count || 0;
+
+        const pollOptionRows = db
+          .prepare(
+            `SELECT v.selected_option AS option, COUNT(*) AS count
+             FROM classroom_poll_votes v
+             JOIN classroom_quick_polls p ON v.poll_id = p.id
+             WHERE p.session_id = ?
+             GROUP BY v.selected_option
+             ORDER BY count DESC, v.selected_option ASC`,
+          )
+          .all(session.id) as Array<{ option: string; count: number }>;
+
+        const pollOptionBreakdown = pollOptionRows.map((row) => ({
+          option: row.option,
+          count: row.count,
+          percent: pollVotesCount > 0 ? Math.round((row.count / pollVotesCount) * 100) : 0,
+        }));
 
         // 结课通票汇总
         const exitTickets = db
@@ -2338,6 +2499,7 @@ export function registerClassroomRoutes(
             quizCount: totalQuizSubmissions,
             quizAccuracy: avgQuizAccuracy,
             pollVotesTotal: pollVotesCount,
+            pollOptionBreakdown,
             exitTicketsCount: exitTickets.length,
             exitTicketsAvgRating: avgRating,
             topPuzzledConcepts: puzzledConcepts.slice(0, 10),

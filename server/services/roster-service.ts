@@ -301,6 +301,9 @@ export class RosterService {
           student_id: string;
         }[]
       ).map((r) => r.student_id);
+      const tableExists = (name: string) =>
+        !!this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+
       // 1. 先清本班的选课关系（后续孤儿判定依赖此结果）
       this.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
       this.db
@@ -309,6 +312,120 @@ export class RosterService {
         )
         .run(classId);
       this.db.prepare('DELETE FROM assignments WHERE class_id = ?').run(classId);
+
+      // 插件作业生态清理
+      if (tableExists('plugin_assignments')) {
+        if (tableExists('plugin_assignment_files')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_assignment_files WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        if (tableExists('plugin_peer_review_tasks')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_peer_review_tasks WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        if (tableExists('plugin_peer_reviews')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_peer_reviews WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        if (tableExists('plugin_grades')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_grades WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        if (tableExists('plugin_submission_versions')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_submission_versions WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        if (tableExists('plugin_submissions')) {
+          this.db
+            .prepare(
+              'DELETE FROM plugin_submissions WHERE assignment_id IN (SELECT id FROM plugin_assignments WHERE class_id = ?)',
+            )
+            .run(classId);
+        }
+        this.db.prepare('DELETE FROM plugin_assignments WHERE class_id = ?').run(classId);
+      }
+
+      // 考试与学期成绩关联表清理
+      if (tableExists('exams')) {
+        if (tableExists('exam_scores')) {
+          this.db
+            .prepare('DELETE FROM exam_scores WHERE exam_id IN (SELECT id FROM exams WHERE class_id = ?)')
+            .run(classId);
+        }
+        this.db.prepare('DELETE FROM exams WHERE class_id = ?').run(classId);
+      }
+      if (tableExists('class_grade_weights')) {
+        this.db.prepare('DELETE FROM class_grade_weights WHERE class_id = ?').run(classId);
+      }
+      if (tableExists('semester_grades')) {
+        this.db.prepare('DELETE FROM semester_grades WHERE class_id = ?').run(classId);
+      }
+
+      // 课堂互动会话与关联瞬态数据清理
+      if (tableExists('classroom_sessions')) {
+        const sessionSubquery = 'SELECT id FROM classroom_sessions WHERE class_id = ?';
+        if (tableExists('classroom_poll_votes') && tableExists('classroom_quick_polls')) {
+          this.db
+            .prepare(
+              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sessionSubquery}))`,
+            )
+            .run(classId);
+        }
+        if (tableExists('classroom_quick_polls')) {
+          this.db.prepare(`DELETE FROM classroom_quick_polls WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_buzzers')) {
+          this.db.prepare(`DELETE FROM classroom_buzzers WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_exit_tickets')) {
+          this.db.prepare(`DELETE FROM classroom_exit_tickets WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_pacing_signals')) {
+          this.db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_danmaku')) {
+          this.db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_peer_review_tasks')) {
+          this.db.prepare(`DELETE FROM classroom_peer_review_tasks WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_peer_reviews')) {
+          this.db.prepare(`DELETE FROM classroom_peer_reviews WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_peer_badges')) {
+          this.db.prepare(`DELETE FROM classroom_peer_badges WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_peer_nominations')) {
+          this.db.prepare(`DELETE FROM classroom_peer_nominations WHERE session_id IN (${sessionSubquery})`).run(classId);
+        }
+        if (tableExists('classroom_peer_rubric_dimensions')) {
+          this.db
+            .prepare(`DELETE FROM classroom_peer_rubric_dimensions WHERE session_id IN (${sessionSubquery})`)
+            .run(classId);
+        }
+        if (tableExists('classroom_feed')) {
+          this.db
+            .prepare(`DELETE FROM classroom_feed WHERE session_id IN (${sessionSubquery}) OR class_id = ?`)
+            .run(classId, classId);
+        }
+        this.db.prepare('DELETE FROM classroom_sessions WHERE class_id = ?').run(classId);
+      }
+
       this.db
         .prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)')
         .run(classId);

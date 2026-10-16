@@ -65,8 +65,7 @@ import {
 - **`migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>`**: 声明式版本迁移。`upgradeFn` **可以是同步或异步**（返回 `Promise<void> | void`），但 `migrate` 本身**一定返回 `Promise<void>`，必须 `await`**。版本号记录在 `plugin_migrations` 表，插件重启后不重复执行已应用的版本。
 
   > ⚠️ worker 执行模式下 `db` 是 RPC 代理（不是 better-sqlite3 实例），**没有 `transaction()`**。需要事务时先探测再调用：`typeof db.transaction === 'function' ? db.transaction(fn)() : fn(db)`。平台自身代码就这么做（见 `server/utils/auto-record-score.ts` 的 `promoteAttemptToGrade`）。
-  >
-  > ⚠️ 表名前缀在两种执行模式下**相反**：inline 用 `plugin_{pluginId}_`（DB 行 UUID），worker 用 `plugin_{manifestId}_`。详见[插件数据库 API](../reference/plugin-database-api)。
+  > ℹ️ 表名前缀规范：平台已统一收敛表前缀为 `plugin_<scopeId>_`（统一使用插件安装主键/UUID，内置插件使用规范 scopeId）。详见[插件数据库 API](../reference/plugin-database-api)。
 
 #### `ctx.log`
 

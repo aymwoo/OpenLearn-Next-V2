@@ -334,7 +334,7 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
   });
 
   describe('6. 课时多表级联删除事务 (deleteLessonCascade)', () => {
-    it('级联删除应在单事务内彻底清除 10+ 张关联表，零孤儿数据残留', () => {
+    it('级联删除应在单事务内彻底清除 10+ 张关联表，零孤儿数据残留', async () => {
       const cascadeLessonId = `lesson-cascade-${uuidv7()}`;
       const sessionId = `session-cascade-${uuidv7()}`;
       const pollId = `poll-cascade-${uuidv7()}`;
@@ -382,14 +382,35 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
       db.prepare(
         'INSERT INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, rating, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(uuidv7(), sessionId, cascadeLessonId, 'stu-test-cascade', 5, 'Great class', now);
+      // 插入遗留插件作业提交及版本与文件 (assignment_id 为 NULL)
+      const legacySubId = `sub-leg-${uuidv7()}`;
       db.prepare(
-        'INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run(uuidv7(), sessionId, 'stu-test-cascade', 'TOO_FAST', now);
+        'INSERT INTO plugin_submissions (id, lesson_id, assignment_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(legacySubId, cascadeLessonId, null, 'stu-test-cascade', 1, now, now);
+      db.prepare(
+        'INSERT INTO plugin_submission_versions (id, submission_id, student_id, version, submitted_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(uuidv7(), legacySubId, 'stu-test-cascade', 1, now);
+      db.prepare(
+        'INSERT INTO plugin_assignment_files (id, assignment_id, submission_id, student_id, original_name, stored_path, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(uuidv7(), 'dummy-assign', legacySubId, 'stu-test-cascade', 'test.txt', '/tmp/test.txt', now);
+
+      // 设置内存态倒计时
+      const { activeCountdowns } = await import('../../shared-state.js');
+      activeCountdowns.set(cascadeLessonId, {
+        totalDuration: 60,
+        timeRemaining: 60,
+        isRunning: true,
+        isPaused: false,
+        label: '测试',
+        endsAt: now + 60000,
+        updatedAt: now,
+      });
 
       // 执行级联删除
       const delResult = service.deleteLessonCascade(cascadeLessonId);
       expect(delResult.success).toBe(true);
       expect(delResult.deleted).toBe(true);
+      expect(activeCountdowns.has(cascadeLessonId)).toBe(false);
 
       // 校验所有子表零残留
       expect((db.prepare('SELECT COUNT(*) as n FROM lessons WHERE id = ?').get(cascadeLessonId) as any).n).toBe(0);
@@ -432,6 +453,23 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
           db
             .prepare('SELECT COUNT(*) as n FROM lesson_quiz_submissions WHERE lesson_id = ?')
             .get(cascadeLessonId) as any
+        ).n,
+      ).toBe(0);
+      expect(
+        (db.prepare('SELECT COUNT(*) as n FROM plugin_submissions WHERE lesson_id = ?').get(cascadeLessonId) as any).n,
+      ).toBe(0);
+      expect(
+        (
+          db
+            .prepare('SELECT COUNT(*) as n FROM plugin_submission_versions WHERE submission_id = ?')
+            .get(legacySubId) as any
+        ).n,
+      ).toBe(0);
+      expect(
+        (
+          db
+            .prepare('SELECT COUNT(*) as n FROM plugin_assignment_files WHERE submission_id = ?')
+            .get(legacySubId) as any
         ).n,
       ).toBe(0);
     });

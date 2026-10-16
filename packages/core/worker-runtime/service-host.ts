@@ -58,12 +58,14 @@ import type { CapabilityGuard } from '../capability/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
 import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
-import { isBlockedPluginCapability } from '../plugin-host/plugin-grants.js';
+import { isBlockedPluginCapability, isPrivateOrReservedHost } from '../plugin-host/plugin-grants.js';
 import {
   isSafePluginTablePrefix,
   pluginTablePrefix,
@@ -722,11 +724,29 @@ export class ServiceHost {
             `Outbound request denied for actor ${this.pluginActorId}: ${verdict.reason}`,
           );
         }
+        const parsedHost = new URL(url).hostname.toLowerCase();
+        if (!net.isIP(parsedHost) && !parsedHost.startsWith('[')) {
+          try {
+            const resolved = await dns.lookup(parsedHost, { all: true });
+            for (const entry of resolved) {
+              if (isPrivateOrReservedHost(entry.address)) {
+                throw new WorkerCapabilityError(
+                  this.pluginActorId,
+                  msg.token,
+                  `Outbound request denied for actor ${this.pluginActorId}: host ${parsedHost} resolves to forbidden address (${entry.address})`,
+                );
+              }
+            }
+          } catch (dnsErr) {
+            if (dnsErr instanceof WorkerCapabilityError) throw dnsErr;
+          }
+        }
         const response = await fetch(url, {
           method: request?.method ?? 'GET',
           headers: request?.headers,
           body: request?.body ?? undefined,
           redirect: 'manual',
+          signal: AbortSignal.timeout(30_000),
         });
         const body = await response.text();
         const headers: Record<string, string> = {};
@@ -1008,14 +1028,7 @@ export class ServiceHost {
       return { allowed: false, reason: `disallowed protocol ${parsed.protocol}` };
     }
     const host = parsed.hostname.toLowerCase();
-    if (
-      host === 'localhost' ||
-      host.startsWith('127.') ||
-      host === '::1' ||
-      host === '0.0.0.0' ||
-      host === '169.254.169.254' ||
-      host.endsWith('.localhost')
-    ) {
+    if (isPrivateOrReservedHost(host)) {
       return { allowed: false, reason: 'loopback/private/metadata address blocked' };
     }
     if (allowedHosts.length === 0) {
@@ -1023,8 +1036,7 @@ export class ServiceHost {
     }
     const ok = allowedHosts.some((entry) => {
       const pattern = entry.trim().toLowerCase();
-      if (pattern === '*') return true;
-      if (pattern.startsWith('*.')) return host.endsWith(pattern.slice(1));
+      if (!pattern || pattern.includes('*')) return false;
       return host === pattern;
     });
     return ok ? { allowed: true, reason: '' } : { allowed: false, reason: `host ${host} not in allowlist` };

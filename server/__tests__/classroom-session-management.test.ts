@@ -307,4 +307,135 @@ describe('课堂会话管理 API (Classroom Session Management)', () => {
       expect(feedRow).toBeUndefined();
     });
   });
+
+  describe('跨教师租户隔离 (IDOR 防护) 与历史战报精确查询', () => {
+    const otherTeacherId = 'usr-sm-teacher-002';
+    const otherTeacherToken = 'tok-sm-teacher-002';
+    const adminId = 'usr-sm-admin-001';
+    const adminToken = 'tok-sm-admin-001';
+    const histSessionOldId = 'cs_sm_hist_old';
+    const histSessionNewId = 'cs_sm_hist_new';
+    const histPollId = 'poll-sm-hist-old';
+
+    beforeAll(() => {
+      const now = Date.now();
+      const expiresAt = now + 60 * 60 * 1000;
+      db.prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(otherTeacherId, 'sm_teacher_2', 'placeholder', 'teacher', '另一位教师', now);
+      db.prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(adminId, 'sm_admin', 'placeholder', 'administrator', '系统管理员', now);
+
+      const insertSession = db.prepare(
+        'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+      );
+      insertSession.run(
+        otherTeacherToken,
+        JSON.stringify({ userId: otherTeacherId, role: 'teacher', username: 'sm_teacher_2' }),
+        now,
+        expiresAt,
+      );
+      insertSession.run(
+        adminToken,
+        JSON.stringify({ userId: adminId, role: 'administrator', username: 'sm_admin' }),
+        now,
+        expiresAt,
+      );
+
+      // 同一课程下的两个不同历史会话（验证 ?sessionId= 精确战报查询）
+      db.prepare(
+        `INSERT OR REPLACE INTO classroom_sessions
+          (id, lesson_id, class_id, teacher_id, stage, started_at, ended_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        histSessionOldId,
+        lessonId1,
+        classId1,
+        teacherId,
+        ARCHIVED_REPORT_STAGE,
+        now - 7200000,
+        now - 5400000,
+        now - 7200000,
+      );
+
+      db.prepare(
+        `INSERT OR REPLACE INTO classroom_sessions
+          (id, lesson_id, class_id, teacher_id, stage, started_at, ended_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        histSessionNewId,
+        lessonId1,
+        classId1,
+        teacherId,
+        ARCHIVED_REPORT_STAGE,
+        now - 50000,
+        now - 10000,
+        now - 50000,
+      );
+
+      db.prepare(
+        `INSERT OR REPLACE INTO classroom_quick_polls (id, session_id, lesson_id, question_type, options_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(histPollId, histSessionOldId, lessonId1, 'SINGLE', '["A","B"]', now - 7000000);
+      db.prepare(
+        `INSERT OR REPLACE INTO classroom_poll_votes (id, poll_id, student_id, selected_option, voted_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).run('vote-sm-hist-1', histPollId, studentId, 'B', now - 6900000);
+    });
+
+    afterAll(() => {
+      db.prepare('DELETE FROM classroom_poll_votes WHERE poll_id = ?').run(histPollId);
+      db.prepare('DELETE FROM classroom_quick_polls WHERE id = ?').run(histPollId);
+      db.prepare('DELETE FROM classroom_sessions WHERE id IN (?, ?)').run(histSessionOldId, histSessionNewId);
+      db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(otherTeacherToken, adminToken);
+      db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(otherTeacherId, adminId);
+    });
+
+    it('普通教师无法在列表中看到其他教师的专属会话，也不能归档或删除他人会话 (403)', async () => {
+      const listRes = await call('GET', '/api/classroom/sessions', otherTeacherToken);
+      expect(listRes.status).toBe(200);
+      const listData = await listRes.json();
+      const ids = listData.items.map((i: any) => i.id);
+      expect(ids).not.toContain(sessionArchivedId);
+      expect(ids).not.toContain(histSessionOldId);
+
+      const archRes = await call('POST', `/api/classroom/sessions/${histSessionOldId}/archive`, otherTeacherToken);
+      expect(archRes.status).toBe(403);
+
+      const delRes = await call('DELETE', `/api/classroom/sessions/${histSessionOldId}`, otherTeacherToken);
+      expect(delRes.status).toBe(403);
+    });
+
+    it('管理员可查看全部教师的课堂会话', async () => {
+      const listRes = await call('GET', '/api/classroom/sessions', adminToken);
+      expect(listRes.status).toBe(200);
+      const listData = await listRes.json();
+      const ids = listData.items.map((i: any) => i.id);
+      expect(ids).toContain(sessionArchivedId);
+      expect(ids).toContain(histSessionOldId);
+    });
+
+    it('panoramic-report 支持通过 ?sessionId= 精确读取指定历史会话战报及真实投票选项分布', async () => {
+      // 不传 sessionId 时默认返回最新会话 histSessionNewId
+      const latestRes = await call('GET', `/api/classroom/sessions/${lessonId1}/panoramic-report`, teacherToken);
+      expect(latestRes.status).toBe(200);
+      const latestData = await latestRes.json();
+      expect(latestData.session.id).toBe(histSessionNewId);
+      expect(latestData.metrics.pollVotesTotal).toBe(0);
+
+      // 传 sessionId=histSessionOldId 时返回历史旧会话及其真实投票分布
+      const oldRes = await call(
+        'GET',
+        `/api/classroom/sessions/${lessonId1}/panoramic-report?sessionId=${histSessionOldId}`,
+        teacherToken,
+      );
+      expect(oldRes.status).toBe(200);
+      const oldData = await oldRes.json();
+      expect(oldData.session.id).toBe(histSessionOldId);
+      expect(oldData.metrics.pollVotesTotal).toBe(1);
+      expect(oldData.metrics.pollOptionBreakdown).toEqual([{ option: 'B', count: 1, percent: 100 }]);
+    });
+  });
 });
+
