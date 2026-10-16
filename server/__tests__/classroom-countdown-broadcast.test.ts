@@ -83,7 +83,7 @@ describe('课堂倒计时广播 · 不存在「只引用不调用」的负对照
 
     const orphan = eventNames.filter((name) => {
       const at = CODE.indexOf(`'${name}'`);
-      return !/emit[A-Z]\w*\s*\(/.test(CODE.slice(Math.max(0, at - 220), at));
+      return !/(emit[A-Z]\w*\s*\(|\.emit\s*\()/.test(CODE.slice(Math.max(0, at - 220), at));
     });
 
     expect(
