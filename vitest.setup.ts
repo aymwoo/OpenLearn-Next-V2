@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
   process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
 }
+if (!process.env.OPENLEARN_DATA_DIR) {
+  process.env.OPENLEARN_DATA_DIR = path.join(os.tmpdir(), `openlearn_test_data_${process.env.VITEST_POOL_ID || '0'}`);
+}
 
 const nodeUint8Array = new TextEncoder().encode('').constructor;
 global.Uint8Array = nodeUint8Array as unknown as typeof Uint8Array;

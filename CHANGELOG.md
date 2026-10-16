@@ -72,6 +72,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课表识别自动兜底默认可用 AI 提供商与前端初始选中修复（ScheduleService & TimetableManager）**：修复在设置中已配置 AI Provider 且连接成功后、课表多模态 OCR 识别仍报“未检测到可用的 AI 提供商”的缺陷。在 `ScheduleService.processTimetableOcr` 增加未传或指定无效 `providerId` 时自动兜底查询首个有效提供商的机制（与 Agent 对话、作业批改保持一致）；并在前端 `TimetableManager` 拉取模型列表后自动将 `ocrProviderId` 默认初始化为首个可用提供商。
+
 - **白板/互动课件属性编辑器操作按钮文案精简优化（WhiteboardPropertiesSidebar）**：将课程编辑与课堂白板中互动课件及组件属性编辑器侧边栏底部的操作按钮文案从「应用修改并强制同步」（加载态「正在广播同步...」）精简为更直观符合直觉的「保存」（加载态「正在保存...」），按钮图标同步更新为 `<Save />`，降低教师操作认知负荷。
 
 - **课程向导底部步骤指示器优化（CourseWizardModal）**：移除向导弹窗左下角写死且无业务状态的底层技术黑话（`⚙️ SQLITE 写入预检通过`），替换为对教师更直观的动态步骤进度指示器（如 `第 1 步 / 共 4 步 · 内容选题`，支持中英文双语），提升备课流程的用户体验。

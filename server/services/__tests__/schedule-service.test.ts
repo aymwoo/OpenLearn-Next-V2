@@ -8,11 +8,12 @@
  * 4. 课表列表查询与周循环匹配 (getTodaySchedules, listSchedules, getClassSchedules)
  * 5. 级联删除考勤事务 (deleteScheduleCascade)
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import path from 'node:path';
 import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { loadMigrationsFromDirectory, runMigrations } from '../../utils/migrate.js';
+import { encryptApiKey } from '../../utils/crypto.js';
 import {
   ScheduleService,
   parseTimeSlot,
@@ -452,6 +453,78 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
       // 验证两者皆被清除
       expect(scheduleService.getScheduleById(sch.id)).toBeUndefined();
       expect(db.prepare('SELECT COUNT(*) as n FROM attendance WHERE schedule_id = ?').get(sch.id)).toEqual({ n: 0 });
+    });
+  });
+
+  describe('6. processTimetableOcr 课表识别提供商自动解析与兜底', () => {
+    it('当未显式指定 providerId 时，自动兜底解析已配置的默认 AI 提供商', async () => {
+      const now = Date.now();
+      const testProviderId = 'prov_ocr_fallback_test';
+      db.prepare('DELETE FROM ai_providers').run();
+      db.prepare(
+        'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        testProviderId,
+        'Test Vision Provider',
+        'https://api.openai.com/v1',
+        encryptApiKey('sk-mock-key-12345'),
+        'gpt-4o',
+        now,
+        now,
+      );
+
+      const originalFetch = global.fetch;
+      const fakeBody = JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify([
+                {
+                  dayOfWeek: 1,
+                  periodNumber: 1,
+                  className: '高一(1)班',
+                  subject: '信息科技',
+                  timeSlot: '08:00 - 08:45',
+                  location: '机房1',
+                  teacherName: '张老师',
+                },
+              ]),
+            },
+          },
+        ],
+      });
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => fakeBody,
+        json: async () => JSON.parse(fakeBody),
+      });
+      global.fetch = mockFetch as any;
+
+      try {
+        const result = await scheduleService.processTimetableOcr(
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          { providerId: undefined },
+        );
+
+        expect(result.providerUsed.id).toBe(testProviderId);
+        expect(result.providerUsed.name).toBe('Test Vision Provider');
+        expect(result.providerUsed.model_name).toBe('gpt-4o');
+        expect(result.entries.length).toBe(1);
+        expect(result.entries[0].className).toBe('高一(1)班');
+      } finally {
+        global.fetch = originalFetch;
+        db.prepare('DELETE FROM ai_providers WHERE id = ?').run(testProviderId);
+      }
+    });
+
+    it('当数据库中无任何可用 AI 提供商时，抛出包含明确引导的错误提示', async () => {
+      db.prepare('DELETE FROM ai_providers').run();
+      await expect(
+        scheduleService.processTimetableOcr(
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        ),
+      ).rejects.toThrow('未检测到可用的 AI 提供商');
     });
   });
 });

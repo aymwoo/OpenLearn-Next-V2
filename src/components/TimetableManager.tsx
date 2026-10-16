@@ -354,7 +354,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   useEffect(() => {
     fetch('/api/ai-providers')
       .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setAiProviders(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setAiProviders(list);
+        if (list.length > 0) {
+          setOcrProviderId((prev) => (prev && list.some((p) => p.id === prev) ? prev : list[0].id));
+        }
+      })
       .catch(() => setAiProviders([]));
   }, []);
 
