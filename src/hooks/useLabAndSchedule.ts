@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react';
+import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 import type { ScheduleType, AttendanceType } from '../store/appStore';
 
 export function useLabAndSchedule() {
+  const academicYearCtx = useOptionalAcademicYear();
+  const academicYear = academicYearCtx?.academicYear === 'all' ? null : (academicYearCtx?.academicYear ?? null);
   const [computerLabs, setComputerLabs] = useState<any[]>([]);
   const [loadingLabs, setLoadingLabs] = useState(false);
   const [classSeats, setClassSeats] = useState<{ lab_id: string | null; seats: any[] }>({
@@ -58,13 +61,13 @@ export function useLabAndSchedule() {
 
   const fetchClassSchedules = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/classes/${id}/schedules`);
+      const res = await fetch(`/api/classes/${id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setClassSchedulesMap((prev) => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
-  }, []);
+  }, [academicYear]);
 
   const fetchScheduleAttendance = useCallback(async (id: string) => {
     try {
