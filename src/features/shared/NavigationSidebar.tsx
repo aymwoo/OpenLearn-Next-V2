@@ -366,6 +366,10 @@ function NavButton({
         type="button"
         onClick={() => setTeacherTab(tab)}
         id={`nav_btn_${tab}`}
+        // 折叠态 / <md 窄屏时标签 span 会被 hidden，按钮就只剩一个无语义的图标 ——
+        // 补 aria-label 保证任何宽度下都有可访问名（axe: button-name）。
+        aria-label={label}
+        aria-current={isActive ? 'page' : undefined}
         className={`flex items-center gap-2.5 py-2 flex-1 min-w-0 text-sm font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-theme/50 rounded-lg ${
           isActive ? 'font-bold' : ''
         } ${mainNavCollapsed ? 'justify-center px-2' : 'pl-2.5 pr-8'}`}

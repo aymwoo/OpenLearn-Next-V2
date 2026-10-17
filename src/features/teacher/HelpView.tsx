@@ -236,7 +236,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             <HelpCircle className="text-indigo-600" size={24} />
             教育实验操作系统：内核帮助与开发中心 (Openlearn Next Reference Hub)
           </h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-subtle mt-1">
             本页提供 OpenLearn 插件开发的快速入口：脚手架工具、交互式代码范例、完整的 API 参考文档。
           </p>
         </div>
@@ -248,7 +248,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'commands'
                 ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted hover:text-gray-800'
             }`}
           >
             <Terminal size={14} />
@@ -260,7 +260,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'sdk_guide'
                 ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted hover:text-gray-800'
             }`}
           >
             <Puzzle size={14} />
@@ -272,7 +272,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'user_guide'
                 ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted hover:text-gray-800'
             }`}
           >
             <BookOpen size={14} />
@@ -284,7 +284,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'plugin_docs'
                 ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted hover:text-gray-800'
             }`}
           >
             <FileText size={14} />

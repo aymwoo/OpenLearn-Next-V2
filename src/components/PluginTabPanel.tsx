@@ -45,10 +45,10 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <Puzzle size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-sm text-gray-400 font-medium">
+              <p className="text-sm text-subtle font-medium">
                 {lang === 'zh' ? '此插件未提供页面组件' : 'This plugin has no page component'}
               </p>
-              <p className="text-xs text-gray-300 mt-1">
+              <p className="text-xs text-muted mt-1">
                 {lang === 'zh'
                   ? '插件已注册导航条目，但未提供对应的界面渲染逻辑。'
                   : 'The plugin registered a navigation entry but did not provide a render component.'}

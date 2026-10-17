@@ -356,21 +356,21 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           <div className="flex bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/30 shadow-xs mr-2 shrink-0">
             <button
               onClick={() => setViewMode('week')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-muted hover:text-gray-800'}`}
             >
               <Grid size={11} />
               {lang === 'zh' ? '周课表' : 'Week View'}
             </button>
             <button
               onClick={() => setViewMode('cycle')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'cycle' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'cycle' ? 'bg-white text-indigo-700 shadow-xs' : 'text-muted hover:text-gray-800'}`}
             >
               <RotateCcw size={11} />
               {lang === 'zh' ? '星期总览' : 'Cycle View'}
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-xs' : 'text-muted hover:text-gray-800'}`}
             >
               <List size={11} />
               {lang === 'zh' ? '列表' : 'List View'}
@@ -458,7 +458,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           <p className="text-gray-500 text-sm font-semibold">
             {lang === 'zh' ? '暂未匹配到对应的课次安排数据' : 'No schedules match your filters'}
           </p>
-          <p className="text-gray-400 text-xs mt-1">
+          <p className="text-subtle text-xs mt-1">
             {lang === 'zh'
               ? '您可以点击右上角“排定课时”为班级新增课程。'
               : 'Try adding a new entry using the schedule button above.'}

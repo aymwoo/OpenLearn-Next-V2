@@ -164,9 +164,9 @@ export function AppHeader(props: AppHeaderProps) {
             <span className="text-base font-black text-slate-900 tracking-tight">
               {siteInfo.siteName || 'OpenLearn Next'}
             </span>
-            <span className="text-xs font-medium text-slate-400 tracking-tight">v{__APP_VERSION__}</span>
+            <span className="text-xs font-medium text-subtle tracking-tight">v{__APP_VERSION__}</span>
             {siteInfo.slogan && (
-              <span className="hidden md:inline text-xs text-slate-400 font-normal truncate max-w-[200px]">
+              <span className="hidden md:inline text-xs text-subtle font-normal truncate max-w-[200px]">
                 {siteInfo.slogan}
               </span>
             )}

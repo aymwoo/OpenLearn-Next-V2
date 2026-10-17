@@ -1077,7 +1077,7 @@ function PreflightDeck({
                 <Icon size={12} className={item.ok ? 'text-emerald-500' : 'text-amber-500'} />
                 <span className="text-main truncate">{item.label}</span>
               </span>
-              <span className={`font-mono shrink-0 ${item.ok ? 'text-muted' : 'text-amber-600 dark:text-amber-400'}`}>
+              <span className={`font-mono shrink-0 ${item.ok ? 'text-muted' : 'text-amber-700 dark:text-amber-400'}`}>
                 {item.value}
               </span>
             </li>

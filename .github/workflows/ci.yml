@@ -255,6 +255,11 @@ jobs:
       - name: Run live-class contrast audit
         run: pnpm exec playwright test e2e/live-class-contrast.spec.ts
 
+      # 全站无障碍门禁（WCAG 2.0/2.1 A+AA）：登录页 + 教师端主要工作区跑完整 axe 规则集，
+      # 断言零违规。挡住 button-name / select-name / 结构性 ARIA / 对比度等回归。
+      - name: Run accessibility gate
+        run: pnpm exec playwright test e2e/a11y-gate.spec.ts
+
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
   # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
   # 生产启动拒绝种子口令等于用户名，本 job 使用强测试口令。口令等于用户名时的强制改密由单元测试覆盖。

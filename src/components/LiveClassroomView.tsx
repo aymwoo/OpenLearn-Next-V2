@@ -2637,13 +2637,13 @@ export function LiveClassroomView({
                         <span
                           className={`text-[10px] font-mono mt-1 truncate max-w-[48px] select-none font-bold ${
                             isSelectedDraw
-                              ? 'text-amber-600 dark:text-amber-400 font-extrabold animate-bounce'
+                              ? 'text-amber-700 dark:text-amber-400 font-extrabold animate-bounce'
                               : !isOnline
                                 ? 'text-slate-400'
                                 : progPercent === 100
                                   ? 'text-emerald-600 dark:text-emerald-400'
                                   : isBehind
-                                    ? 'text-amber-600 dark:text-amber-400'
+                                    ? 'text-amber-700 dark:text-amber-400'
                                     : 'text-muted'
                           }`}
                         >

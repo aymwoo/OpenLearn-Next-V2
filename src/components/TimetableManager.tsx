@@ -1276,7 +1276,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             <Calendar className="text-indigo-600 animate-pulse" size={22} />
             {lang === 'zh' ? '班级课表中心 & 动态调整' : 'Timetable Center & Adjustments'}
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-subtle mt-0.5">
             {lang === 'zh'
               ? '统一管理日常排课，支持节假日批量停课、讲师临时换课、换班及 CSV 导入导出。'
               : 'Orchestrate routines schedules, holidays exclusions, and instructors swapping items.'}
@@ -1287,25 +1287,25 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 self-start sm:self-auto shadow-inner border border-slate-200/50">
             <button
               onClick={() => setActiveTab('view')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'view' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'view' ? 'bg-white text-indigo-700 shadow-sm' : 'text-muted hover:text-gray-800'}`}
             >
               {lang === 'zh' ? '🗓️ 课表看板' : 'Schedule Grid'}
             </button>
             <button
               onClick={() => setActiveTab('adjust')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'adjust' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'adjust' ? 'bg-white text-indigo-700 shadow-sm' : 'text-muted hover:text-gray-800'}`}
             >
               {lang === 'zh' ? '🛠️ 临时调休调课' : 'Holiday Adjusts'}
             </button>
             <button
               onClick={() => setActiveTab('import_export')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'import_export' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'import_export' ? 'bg-white text-indigo-700 shadow-sm' : 'text-muted hover:text-gray-800'}`}
             >
               {lang === 'zh' ? '📥 快速导入导出' : 'Import / Export'}
             </button>
             <button
               onClick={() => setActiveTab('ocr_import')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-muted hover:text-gray-800'}`}
             >
               {lang === 'zh' ? '📷 AI 图片识课' : 'AI Image OCR'}
             </button>
@@ -1605,7 +1605,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddOpen(false)}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-500 hover:bg-gray-150 transition-colors"
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-muted hover:bg-gray-150 transition-colors"
                 >
                   {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>
@@ -1759,7 +1759,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                     setIsEditOpen(false);
                     setSelectedSchedule(null);
                   }}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-500 hover:bg-gray-150 transition-colors"
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-muted hover:bg-gray-150 transition-colors"
                 >
                   {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>

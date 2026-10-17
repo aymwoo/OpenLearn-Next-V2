@@ -54,6 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **全站无障碍（WCAG 2.0/2.1 A+AA）审计与修复**：用 axe-core 对登录页与教师端 8 个主要工作区（工作台/课程/班级/课表/互动课堂/插件中心/管理后台/帮助）跑完整规则集，从 **99 个违规节点清零到 0**，并把门禁固化进 CI。修复项：
+  1. **可访问名缺失（critical，每个页面 8 处）**：侧边栏导航按钮的标签 span 在折叠态与 `<md` 窄屏下是 `hidden`，按钮只剩无语义图标 → 补 `aria-label` 与 `aria-current="page"`；氛围仪表盘的课节 `<select>` 补 `aria-label`。
+  2. **次级文字对比度不足（serious，8 个页面各自出现）**：AppHeader 版本号 `text-slate-400`（2.63:1）、RightSidebar「OS Core Options」`text-gray-400`（2.6:1）、课表/帮助/插件空态里的 `text-gray-400` / `text-gray-300`（1.4–4.43:1）、互动课堂「待选择/暂无学生名单」`text-amber-600`（3.19:1）、插件中心「从 ZIP 安装」`text-teal-600`（3.55:1）→ 统一改用语义令牌 `text-subtle` / `text-muted` 或达标的深色阶（amber-700 / teal-700），四套主题下自动跟随。
+  3. **自动化门禁**：新增 `e2e/a11y-gate.spec.ts`（登录页 + 8 个工作区，完整 axe 规则集，断言零违规），已加入 CI 的 `Browser workflow E2E` job，与 `live-class-contrast.spec.ts`（逐主题只查对比度）互补。
 - **live_class 课中授课页面文字对比度达 WCAG AA（Issue #77）**：极速投票及课中其它互动组件的文字/背景对比度此前多处不达标（投影到大屏更明显）。修复三类根因：
   1. **写死的亮色底配白字**（`bg-amber-500 text-white` 仅 2.15:1、`bg-rose-500` 3.67:1、`bg-emerald-500` 2.54:1、`bg-blue-500` 3.68:1）→ 统一改用达标的深色阶（`-600/-700/-800`），覆盖中控（极速投票/结束投票/抢答/积分榜/PacingDashboard/诊断/宏引擎/家长通知/退出通票词云/小组白板）、学生端互动浮层、大屏展台（`text-slate-500` → `text-slate-400`、非法类 `to-slate-850` → `to-slate-800`）与 `LiveClassroomView`。
   2. **主题令牌本身不达标**（浅色 `--text-subtle` #94a3b8 在白底仅 2.56:1、`--text-muted` 在 `--bg-surface-secondary` 上 4.34:1；深色/护眼 `--text-subtle` 仅 3.08/3.01:1）→ 四套主题的 muted/subtle 重选至 surface 与 surface-secondary 上均 ≥ 4.5:1，`themeStore` 下发给课件 iframe 的令牌同步保持一致。

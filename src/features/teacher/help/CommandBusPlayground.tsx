@@ -208,7 +208,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                     </div>
 
                     <div className="flex items-center gap-3 self-end sm:self-auto">
-                      <span className="text-xs text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
+                      <span className="text-xs text-subtle font-mono hidden md:inline">ID: {cmd.id}</span>
                       <button
                         className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
                           isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
