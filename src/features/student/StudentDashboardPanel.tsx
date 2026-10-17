@@ -25,6 +25,8 @@ import { WeeklyProgressTrendChart } from '../../components/WeeklyProgressTrendCh
 import { DashboardWidgetCard } from './components/DashboardWidgetCard';
 import { StudentQuickActionsFloatingMenu } from './components/StudentQuickActionsFloatingMenu';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { useStudentActiveSession } from './useStudentActiveSession';
+import { StudentActiveClassBanner } from './StudentActiveClassBanner';
 import type { StudentType } from '../../types/app';
 import type { DashboardWidgetId, WidgetSize, WidgetLayoutConfig } from './types/dashboardLayout';
 import { DEFAULT_WIDGET_LAYOUT, LAYOUT_PRESETS } from './types/dashboardLayout';
@@ -59,6 +61,14 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     setQuizStudentAnswers,
     setSubAssignmentTab,
   } = props;
+
+  // Issue #109: 真实进行中的课堂会话（轮询由 StudentView 顶层统一驱动）
+  const activeSession = useStudentActiveSession((s) => s.activeSession);
+  const returnToActiveClass = () => {
+    if (!activeSession) return;
+    setSelectedLesson(activeSession.lessonId);
+    setStudentViewStatus('lesson');
+  };
 
   const storageKey = `student_dashboard_layout_v2_${activeStudentId || 'default'}`;
 
@@ -432,8 +442,19 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
 
   return (
     <div className="space-y-6">
+      {/* 0. Issue #109: 正在进行的课堂 → 醒目返回入口（不受组件布局影响） */}
+      {activeSession && (
+        <StudentActiveClassBanner activeSession={activeSession} lang={lang} onReturn={returnToActiveClass} />
+      )}
+
       {/* 1. Fixed Top Student Profile Header */}
-      <StudentDashboardHeader students={students} activeStudentId={activeStudentId} />
+      <StudentDashboardHeader
+        students={students}
+        activeStudentId={activeStudentId}
+        activeSession={activeSession}
+        onReturnToClass={returnToActiveClass}
+        lang={lang}
+      />
 
       {/* 第三方学生仪表盘顶部激励挂件扩展（每日学习打卡连胜榜 / 积分虚拟商城展位） */}
       <ExtensionPointRenderer

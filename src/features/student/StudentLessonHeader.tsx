@@ -1,5 +1,6 @@
 import type { StudentType, Lesson } from '../../types/app';
 import { ChevronRight, Lock } from 'lucide-react';
+import { useStudentActiveSession } from './useStudentActiveSession';
 
 export interface StudentLessonHeaderProps {
   students: StudentType[];
@@ -11,6 +12,8 @@ export interface StudentLessonHeaderProps {
   lessons: Lesson[];
   selectedLesson: string | null;
   lang?: 'zh' | 'en';
+  /** Issue #109: 离开课堂时若课堂仍在进行，用 Toast 告知可从顶部返回 */
+  addToast?: (title: string, description: string, type: string) => void;
 }
 
 export function StudentLessonHeader(props: StudentLessonHeaderProps) {
@@ -23,7 +26,11 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
     lessons,
     selectedLesson,
     lang = 'zh',
+    addToast,
   } = props;
+
+  // Issue #109: 课堂仍在进行时，离开课堂给一条「可随时返回」的提示
+  const activeSession = useStudentActiveSession((s) => s.activeSession);
 
   // 兼容旧调用方：未显式传入锁定时，回退到 students 表派生（单一数据源仍是 locked_lesson_id）
   const locked = isStudentLocked || !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id;
@@ -48,6 +55,15 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
           onClick={() => {
             setStudentViewStatus('dashboard');
             setSelectedLesson(null);
+            if (activeSession) {
+              addToast?.(
+                lang === 'zh' ? '课堂仍在进行' : 'Class still in progress',
+                lang === 'zh'
+                  ? `可随时从看板顶部的「${activeSession.lessonTitle} · 返回课堂」回到课堂。`
+                  : `You can return anytime via the banner at the top of your dashboard.`,
+                'info',
+              );
+            }
           }}
           className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 transition-colors font-medium text-sm cursor-pointer"
         >

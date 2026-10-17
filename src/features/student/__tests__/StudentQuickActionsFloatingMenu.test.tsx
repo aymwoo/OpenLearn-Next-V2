@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
 import { StudentQuickActionsFloatingMenu } from '../components/StudentQuickActionsFloatingMenu';
+import { studentActiveSessionStore } from '../useStudentActiveSession';
 
 describe('StudentQuickActionsFloatingMenu', () => {
   const mockSchedules = [
@@ -59,8 +60,20 @@ describe('StudentQuickActionsFloatingMenu', () => {
     onExpandWidget: vi.fn(),
   };
 
+  const activeSessionFixture = {
+    sessionId: 'sess-live-1',
+    lessonId: 'les-mech-101',
+    lessonTitle: 'Mechanics & Dynamics',
+    classId: 'cls-1',
+    className: 'Physics 101',
+    stage: 'IN_CLASS_TEACHING',
+    startedAt: Date.now() - 5 * 60000,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Issue #109: 悬浮菜单的「进入实时课堂」只认服务端真实会话
+    studentActiveSessionStore.setState({ activeSession: activeSessionFixture, loading: false, studentKey: 'student-bob' });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
@@ -69,6 +82,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
 
   afterEach(() => {
     cleanup();
+    studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
   });
 
   it('renders the floating action trigger button with total urgent badge', () => {
@@ -124,8 +138,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
     );
   });
 
-  it('triggers onExpandWidget and locates assignment on clicking View Latest Assignments', () => {
-    const onExpandWidget = vi.fn();
+  it('triggers onExpandWidget and locates assignment on clicking View Latest Assignments', () => {    const onExpandWidget = vi.fn();
 
     // Create a dummy widget in document
     const dummyWidget = document.createElement('div');
@@ -314,5 +327,40 @@ describe('StudentQuickActionsFloatingMenu', () => {
     await waitFor(() => {
       expect(screen.queryByText('学生快捷指令 (Quick Actions)')).toBeNull();
     });
+  });
+
+  it('Issue #109: 无进行中会话时不渲染「进入实时课堂」入口（不再猜测课节）', () => {
+    studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: 'student-bob' });
+    render(<StudentQuickActionsFloatingMenu {...defaultProps} />);
+
+    const fab = document.getElementById('student-quick-actions-fab-btn')!;
+    fireEvent.click(fab);
+
+    expect(screen.queryByText('进入实时课堂')).toBeNull();
+    expect(document.getElementById('qa-action-join-live')).toBeNull();
+    // 其它动作仍可用
+    expect(screen.getByText('查看待办作业')).toBeTruthy();
+  });
+
+  it('Issue #109: 进入的课节来自真实会话，而不是排课投影的第一条', () => {
+    const setSelectedLesson = vi.fn();
+    // 真实会话指向一节与 schedules[0] 不同的课
+    studentActiveSessionStore.setState({
+      activeSession: {
+        ...activeSessionFixture,
+        sessionId: 'sess-live-2',
+        lessonId: 'les-real-live-999',
+        lessonTitle: '真实进行中的课',
+      },
+      loading: false,
+      studentKey: 'student-bob',
+    });
+
+    render(<StudentQuickActionsFloatingMenu {...defaultProps} setSelectedLesson={setSelectedLesson} />);
+    fireEvent.click(document.getElementById('student-quick-actions-fab-btn')!);
+    expect(screen.getByText('真实进行中的课')).toBeTruthy();
+    fireEvent.click(document.getElementById('qa-action-join-live')!);
+
+    expect(setSelectedLesson).toHaveBeenCalledWith('les-real-live-999');
   });
 });

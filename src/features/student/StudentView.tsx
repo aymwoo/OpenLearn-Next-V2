@@ -5,6 +5,7 @@ import type { StudentType, Lesson } from '../../types/app';
 import { useAppData } from '../../context/AppDataContext';
 import type { ToastType } from '../../hooks/useToast';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
+import { useStudentActiveSessionPolling } from './useStudentActiveSession';
 
 const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
 const StudentAssignmentView = lazy(() =>
@@ -55,6 +56,10 @@ export function StudentView() {
     submitQuizAssignment,
     subAssignmentTab,
   } = useAppData();
+
+  // Issue #109: 学生端全局轮询「自己班级正在进行的课堂会话」，
+  // 供看板横幅 / 顶部导航 / 悬浮菜单复用（模块级 store 单例，只发一次请求）
+  useStudentActiveSessionPolling(activeStudentId || null);
 
   return (
     <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">

@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学生端「返回正在进行的课堂」入口（Issue #109）**：新增服务端 `GET /api/student/active-session`（`requireAuth('student','teacher','administrator')`）——按登录学生的班级成员关系查询未归档（`stage != ARCHIVED_REPORT`）的课堂会话并优先返回 `IN_CLASS_TEACHING`/`WRAP_UP_EXIT_TICKET` 的会话；**学生身份强制使用会话内 `studentId`，忽略客户端 `?studentId=` 越权参数**，教师/管理员可用该参数模拟学生视角。前端新增 `useStudentActiveSession`（模块级 store + `StudentView` 顶层 20s 轮询 + 标签页可见/窗口聚焦即时刷新）与 `StudentActiveClassBanner`：学生离开课堂后在看板顶部看到「正在上课：<课节名> · 返回课堂」醒目横幅，一键回到真实进行中的课节；`StudentDashboardHeader` 常驻返回按钮；`StudentQuickActionsFloatingMenu` 的「进入实时课堂」改用真实会话数据（无会话时隐藏该入口，不再回退 `schedules[0]`/`progress[0]` 猜测课节）；`StudentLessonHeader` 在课堂仍在进行时点击 Back to Dashboard 会提示「可随时从看板顶部返回」。课堂归档后入口经轮询/刷新自动消失。补充 `student-active-session.test.ts`（跨班不可见/越权参数忽略/归档不返回/教师模拟）、`StudentActiveClassBanner`、看板/头部/课节头/悬浮菜单单测与 e2e `student-return-to-class.spec.ts`（离开→返回→刷新保留→归档消失）。
 - **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
   - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
   - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
