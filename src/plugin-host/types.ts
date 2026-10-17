@@ -223,7 +223,12 @@ export type ExtensionSlot =
   // ── 课堂教学环节主工作区接管槽位 ──
   | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
   // ── 学生端学业对比扩展槽位 ──
-  | 'student.academic_year.metric_card'; // 学生端多学年综合学业对比自定义指标卡扩展
+  | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
+  // ── 环节节点与学生端徽标微扩展槽位 ──
+  | 'editor.timeline.node_badge' // 备课端时间线环节导轨节点微徽章扩展（器材标识、AI评估就绪等）
+  | 'student.segment.badge' // 学生端环节导航/卡片微徽章扩展（素养徽标、探究难度标识等）
+  // ── 全局后台长任务指示项扩展槽位 ──
+  | 'header.async_task.item'; // 全局顶栏后台异步任务状态/操作项扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

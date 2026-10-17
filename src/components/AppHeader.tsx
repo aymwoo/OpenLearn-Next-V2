@@ -207,6 +207,12 @@ export function AppHeader(props: AppHeaderProps) {
           </button>
         )}
 
+        {/* header.async_task.item 全局后台任务指示器项扩展 */}
+        <ExtensionPointRenderer
+          slot="header.async_task.item"
+          slotProps={{ lang, activeRole, teacherTab, setTeacherTab }}
+        />
+
         {/* Dashboard nav entry */}
         <button
           onClick={goToDashboard}

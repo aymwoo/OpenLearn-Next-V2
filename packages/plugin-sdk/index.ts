@@ -174,6 +174,9 @@ export type {
   TimetableEntryActionConfig,
   ClassroomActiveSegmentMainConfig,
   StudentAcademicYearMetricCardConfig,
+  EditorTimelineNodeBadgeConfig,
+  StudentSegmentBadgeConfig,
+  HeaderAsyncTaskItemConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 

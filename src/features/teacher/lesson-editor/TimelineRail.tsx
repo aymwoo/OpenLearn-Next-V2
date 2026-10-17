@@ -3,6 +3,7 @@ import { Plus, Settings2, CalendarClock, Clock, CheckCircle2, GripVertical } fro
 import { DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
 import type { WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
 import { resolveSegmentDuration } from '../../../utils/timeline-duration';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 export interface TimelineRailProps {
   lang: 'zh' | 'en';
@@ -189,6 +190,16 @@ export function TimelineRail({
               <span className="truncate max-w-[90px]">{seg.title}</span>
               <span className="text-[10px] font-mono opacity-60">({seg.duration || '10m'})</span>
               {isCompleted && <CheckCircle2 size={11} className="text-emerald-500 shrink-0 ml-0.5" />}
+              <ExtensionPointRenderer
+                slot="editor.timeline.node_badge"
+                slotProps={{
+                  segment: seg,
+                  idx,
+                  isActive,
+                  isCompleted,
+                  lang,
+                }}
+              />
               {isDropTarget && (
                 <span className="text-[10px] font-bold text-primary-theme animate-bounce flex items-center gap-0.5 ml-1">
                   <span>📥</span>
