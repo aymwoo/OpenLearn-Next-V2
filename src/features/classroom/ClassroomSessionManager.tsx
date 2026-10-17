@@ -44,6 +44,8 @@ export interface ClassroomSessionItem {
   endedAt: number | null;
   createdAt: number;
   stats: ClassroomSessionStats;
+  /** 已经进入本节 live class 且仍在线的学生数（Issue #91；服务端 getPresentStudentIds 派生） */
+  presentCount?: number;
 }
 
 export interface ClassroomSessionManagerProps {

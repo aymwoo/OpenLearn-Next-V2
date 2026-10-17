@@ -238,6 +238,17 @@ describe('课堂会话管理 API (Classroom Session Management)', () => {
       expect(ids).not.toContain(sessionActiveId);
     });
 
+    it('Issue #91：列表项带 presentCount（在场学生数，非在线总人数）', async () => {
+      const res = await call('GET', '/api/classroom/sessions?status=active', teacherToken);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.items.length).toBeGreaterThan(0);
+      for (const item of data.items) {
+        expect(typeof item.presentCount, `${item.id} 应带 presentCount`).toBe('number');
+        expect(item.presentCount).toBeGreaterThanOrEqual(0);
+      }
+    });
+
     it('支持按 search 关键词模糊查询课程名称', async () => {
       const res = await call('GET', '/api/classroom/sessions?search=机器人', teacherToken);
       expect(res.status).toBe(200);
