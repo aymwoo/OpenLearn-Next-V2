@@ -12,7 +12,43 @@ import { recordHttpResponse } from '../../packages/core/observability/metrics.js
 import { captureError } from '../../packages/core/observability/error-reporter.js';
 
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,64}$/;
-const QUIET_PATHS = new Set(['/health', '/health/ready']);
+const QUIET_PATHS = new Set([
+  '/health',
+  '/health/ready',
+  '/',
+  '/index.html',
+  '/favicon.ico',
+  '/robots.txt',
+]);
+
+const DEV_QUIET_PREFIXES = [
+  '/@vite/',
+  '/@fs/',
+  '/src/',
+  '/node_modules/',
+  '/@id/',
+];
+
+/**
+ * 判定请求是否静默（不打印 http.request 访问日志）：
+ * - 正常探活（/health, /health/ready）与公共静态入口（/, /index.html, /favicon.ico, /robots.txt）在 <400 时静默；
+ * - 开发环境下的 Vite 内部资源与源码加载（/@vite/, /src/ 等）在 <400 时静默；
+ * - 任何 >=400 的异常响应（404, 500 等）严格保留日志与错误收集，绝不静默。
+ */
+export function isQuietRequest(
+  reqPath: string,
+  status: number,
+  isProduction = process.env.NODE_ENV === 'production',
+): boolean {
+  if (status >= 400) return false;
+  if (QUIET_PATHS.has(reqPath)) return true;
+  if (!isProduction) {
+    for (const prefix of DEV_QUIET_PREFIXES) {
+      if (reqPath.startsWith(prefix)) return true;
+    }
+  }
+  return false;
+}
 
 type RequestWithId = Request & {
   requestId?: string;
@@ -48,7 +84,7 @@ export function requestObservability() {
       const status = res.statusCode;
       const userId = resolveRequestUserId(req);
       recordHttpResponse(status);
-      const quiet = QUIET_PATHS.has(req.path) && status < 400;
+      const quiet = isQuietRequest(req.path, status);
       if (!quiet) {
         logger.info(
           {
