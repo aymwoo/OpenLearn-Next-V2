@@ -3,6 +3,8 @@ import { handleNetProxy, type NetProxyRequest } from '../plugin-net-proxy.js';
 import { normalizeNetHost } from '../../plugin-host/plugin-grants.js';
 import { cleanupStaleBootstrapFiles, writeBootstrapTempFile } from '../child-spawn.js';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 describe('Plugin Network Hardening & Proxy Security', () => {
   describe('normalizeNetHost IP & domain restrictions', () => {
@@ -145,13 +147,46 @@ describe('Plugin Network Hardening & Proxy Security', () => {
   });
 
   describe('child-spawn 临时 bootstrap 文件生命周期', () => {
-    it('cleanupStaleBootstrapFiles 扫描并清除遗留的 ol-bootstrap 文件', () => {
-      const createdFile = writeBootstrapTempFile('console.log("test");');
-      expect(fs.existsSync(createdFile)).toBe(true);
+    it('文件名带上属主 pid，供并发进程互相识别', () => {
+      const file = writeBootstrapTempFile('console.log("test");');
+      expect(path.basename(file)).toMatch(new RegExp(`^ol-bootstrap-${process.pid}-[0-9a-f]+\\.mjs$`));
+      fs.rmSync(file, { force: true });
+    });
+
+    it('⚠️ 属主仍存活的 bootstrap 文件不会被当成残留删除（CI 随机挂的根因防盗门）', () => {
+      // 回归测试：临时目录是全局共享的，vitest fileParallelism 下另一个 worker
+      // 在模块加载时会跑一次孤儿清理。如果「见到就删」，对方刚写好、子进程还没 exec
+      // 的文件就会被删 → 子进程 MODULE_NOT_FOUND → 激活失败。
+      const liveFile = writeBootstrapTempFile('console.log("live");');
+      expect(fs.existsSync(liveFile), '前置条件：文件应已落盘').toBe(true);
+
+      cleanupStaleBootstrapFiles();
+
+      expect(fs.existsSync(liveFile), '属主（本进程）还没退出，这不是残留文件').toBe(true);
+      fs.rmSync(liveFile, { force: true });
+    });
+
+    it('cleanupStaleBootstrapFiles 清除属主已退出的遗留文件', () => {
+      // 900001 是一个不可能存在的 pid（Linux pid_max 默认 4194304，但该进程不存在），
+      // 用它构造「属主已死」的孤儿文件。
+      const orphan = path.join(os.tmpdir(), `ol-bootstrap-900001-${Date.now().toString(16)}.mjs`);
+      fs.writeFileSync(orphan, 'console.log("orphan");', { mode: 0o600 });
 
       const cleaned = cleanupStaleBootstrapFiles();
       expect(cleaned).toBeGreaterThanOrEqual(1);
-      expect(fs.existsSync(createdFile)).toBe(false);
+      expect(fs.existsSync(orphan), '属主已退出的文件应被清除').toBe(false);
+    });
+
+    it('旧格式（无属主 pid）只清明显过期的，不误删并发的在用文件', () => {
+      const legacyFresh = path.join(os.tmpdir(), `ol-bootstrap-${Date.now().toString(16)}.mjs`);
+      fs.writeFileSync(legacyFresh, 'console.log("legacy");', { mode: 0o600 });
+
+      cleanupStaleBootstrapFiles();
+      expect(fs.existsSync(legacyFresh), '刚写入的旧格式文件无从判断属主，不该删').toBe(true);
+
+      // 把「现在」拨快 2 小时，同一文件就该被认为过期
+      cleanupStaleBootstrapFiles(Date.now() + 2 * 60 * 60 * 1000);
+      expect(fs.existsSync(legacyFresh), '超过 1 小时才视为残留').toBe(false);
     });
   });
 });
