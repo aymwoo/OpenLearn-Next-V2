@@ -87,22 +87,32 @@ describe('WhiteboardPropertiesSidebar Component Tests', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('3. 选中矩形图形时正确展示标题、类型与坐标定位输入框', () => {
+  it('3. 选中矩形图形时正确展示标题、类型与尺寸输入框（位置仅靠拖动，不提供 X/Y）', () => {
     render(<WhiteboardPropertiesSidebar {...defaultProps} />);
 
     expect(screen.getByText('属性编辑器')).toBeDefined();
     expect(screen.getByText('rect')).toBeDefined();
     expect(screen.getByText('el-rect-1')).toBeDefined();
 
-    // 检查 X, Y, Width, Height 字段
-    const xInput = screen.getByDisplayValue('100');
-    expect(xInput).toBeDefined();
+    // Issue #97：位置只在画布上拖动调整，属性栏不再提供 X/Y 坐标输入
+    expect(screen.queryByText('X 坐标')).toBeNull();
+    expect(screen.queryByText('Y 坐标')).toBeNull();
+    expect(screen.queryByDisplayValue('100'), 'x=100 不应再渲染成输入框').toBeNull();
+    expect(screen.queryByDisplayValue('150'), 'y=150 不应再渲染成输入框').toBeNull();
+    expect(screen.queryByText('物理定位 & 尺寸')).toBeNull();
+    expect(screen.getByText('尺寸')).toBeDefined();
 
-    fireEvent.change(xInput, { target: { value: '180' } });
-    expect(defaultProps.handleLocalPropChange).toHaveBeenCalledWith('x', 180);
+    // 宽高仍然可编辑
+    const widthInput = screen.getByDisplayValue('200');
+    fireEvent.change(widthInput, { target: { value: '260' } });
+    expect(defaultProps.handleLocalPropChange).toHaveBeenCalledWith('width', 260);
 
-    fireEvent.blur(xInput);
-    expect(defaultProps.handleNumericPropBlur).toHaveBeenCalledWith('x', '100');
+    fireEvent.blur(widthInput);
+    expect(defaultProps.handleNumericPropBlur).toHaveBeenCalledWith('width', '200');
+
+    const heightInput = screen.getByDisplayValue('120');
+    fireEvent.change(heightInput, { target: { value: '90' } });
+    expect(defaultProps.handleLocalPropChange).toHaveBeenCalledWith('height', 90);
   });
 
   it('4. 属性撤销与重做按钮在栈为空时处于 disabled 状态，非空时可点击', () => {
