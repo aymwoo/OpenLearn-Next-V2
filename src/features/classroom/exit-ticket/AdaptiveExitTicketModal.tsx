@@ -287,12 +287,14 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
                     key={star}
                     type="button"
                     onClick={() => setRating(star)}
+                    aria-label={`${star} 星`}
+                    aria-pressed={star === rating}
                     className="p-0.5 text-xl transition-transform hover:scale-125 cursor-pointer"
                   >
                     <Star size={20} className={star <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
                   </button>
                 ))}
-                <span className="text-2xs font-bold text-amber-500 font-mono ml-1">{rating}.0 星</span>
+                <span className="text-2xs font-bold text-amber-700 dark:text-amber-400 font-mono ml-1">{rating}.0 星</span>
               </div>
             </div>
 

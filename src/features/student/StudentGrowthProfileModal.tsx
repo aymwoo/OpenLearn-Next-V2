@@ -821,7 +821,7 @@ ${
                           <span className="font-bold text-foreground text-xs">{evt.title}</span>
                         </div>
                         {evt.points !== undefined && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
+                          <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
                             +{evt.points}
                           </span>
                         )}

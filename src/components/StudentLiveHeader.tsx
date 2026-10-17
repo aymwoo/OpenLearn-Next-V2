@@ -39,7 +39,7 @@ export function StudentLiveHeader(props: StudentLiveHeaderProps) {
             <h1 className="text-sm font-black text-main tracking-wide">
               {lang === 'zh' ? '互动课堂 · 学生端' : 'Interactive Classroom · Student Client'}
             </h1>
-            <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               {lang === 'zh' ? '已与教师中控台实时联动' : 'Synced with Teacher'}
             </span>
@@ -116,7 +116,7 @@ export function StudentLiveHeader(props: StudentLiveHeaderProps) {
         <button
           type="button"
           onClick={() => window.close()}
-          className="px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg transition-colors cursor-pointer"
+          className="px-2.5 py-1.5 text-xs font-bold text-rose-700 dark:text-rose-400 hover:text-rose-800 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg transition-colors cursor-pointer"
           title={lang === 'zh' ? '关闭学生端Tab' : 'Close Tab'}
         >
           {lang === 'zh' ? '关闭Tab' : 'Close Tab'}

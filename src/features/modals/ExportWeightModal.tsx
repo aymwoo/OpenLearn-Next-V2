@@ -107,6 +107,7 @@ export function ExportWeightModal({
                 </div>
                 <input
                   type="range"
+                  aria-label={lang === 'zh' ? '随堂测验权重' : 'Quizzes weight'}
                   min="0"
                   max="100"
                   value={quizzesWeight}
@@ -127,6 +128,7 @@ export function ExportWeightModal({
                 </div>
                 <input
                   type="range"
+                  aria-label={lang === 'zh' ? '作业权重' : 'Assignments weight'}
                   min="0"
                   max="100"
                   value={assignmentsWeight}

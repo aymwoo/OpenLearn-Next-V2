@@ -15,7 +15,7 @@ export function AppShell(props: AppShellProps) {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] text-slate-400 gap-3">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] text-subtle gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
           <span className="text-sm font-medium tracking-wide">正在加载工作台...</span>
         </div>

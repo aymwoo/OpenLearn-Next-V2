@@ -166,10 +166,11 @@ export function CourseManagement() {
                 )}
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-subtle uppercase tracking-wider">
                   {lang === 'zh' ? '排序方式：' : 'Sort by:'}
                 </span>
                 <select
+                  aria-label={lang === 'zh' ? '课程排序方式' : 'Course sort order'}
                   value={lessonsSortOrder}
                   onChange={(e) => setLessonsSortOrder(e.target.value as any)}
                   className="bg-white border border-gray-200 text-xs text-gray-755 font-bold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
@@ -340,8 +341,8 @@ export function CourseManagement() {
                           onClick={() => handleCopyId(lesson.id)}
                           className={`flex items-center gap-1 text-xs rounded px-1.5 py-0.5 transition-all cursor-pointer ${
                             copiedLessonId === lesson.id
-                              ? 'text-emerald-600 bg-emerald-50 border border-emerald-200'
-                              : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
+                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                              : 'text-subtle hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
                           }`}
                           title={
                             copiedLessonId === lesson.id

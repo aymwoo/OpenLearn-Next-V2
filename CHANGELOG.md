@@ -62,6 +62,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   1. **可访问名缺失（critical，每个页面 8 处）**：侧边栏导航按钮的标签 span 在折叠态与 `<md` 窄屏下是 `hidden`，按钮只剩无语义图标 → 补 `aria-label` 与 `aria-current="page"`；氛围仪表盘的课节 `<select>` 补 `aria-label`。
   2. **次级文字对比度不足（serious，8 个页面各自出现）**：AppHeader 版本号 `text-slate-400`（2.63:1）、RightSidebar「OS Core Options」`text-gray-400`（2.6:1）、课表/帮助/插件空态里的 `text-gray-400` / `text-gray-300`（1.4–4.43:1）、互动课堂「待选择/暂无学生名单」`text-amber-600`（3.19:1）、插件中心「从 ZIP 安装」`text-teal-600`（3.55:1）→ 统一改用语义令牌 `text-subtle` / `text-muted` 或达标的深色阶（amber-700 / teal-700），四套主题下自动跟随。
   3. **自动化门禁**：新增 `e2e/a11y-gate.spec.ts`（登录页 + 8 个工作区，完整 axe 规则集，断言零违规），已加入 CI 的 `Browser workflow E2E` job，与 `live-class-contrast.spec.ts`（逐主题只查对比度）互补。
+- **无障碍门禁扩展到学生端课中与互动浮层**：`e2e/a11y-gate.spec.ts` 新增第三个用例，覆盖学生端课中界面与三个互动浮层（极速投票作答卡 / 毫秒抢答 / 60 秒结课通票），通过 API 造出对应状态后逐一跑完整 axe 规则集断言零违规；同时修复暴露出的 17 处违规：
+  1. **节奏信号三枚按钮**（听懂了/有疑问/讲太慢，含选中态）`text-amber-600` / `text-emerald-600` / `text-rose-600` → 统一提到 `-700`（浅色底 3.19:1 → 5.02:1），深色主题保留 `dark:text-*-400`。
+  2. **可访问名缺失**：结课通票的 5 颗星级评分按钮是纯图标 → 补 `aria-label="N 星"` + `aria-pressed`；班级行展开/收起箭头补 `aria-label` + `aria-expanded`；Toast 关闭按钮补 `aria-label`；课程排序、互动课堂课程选择、作业权重滑杆、完成度门槛滑杆等控件补 `aria-label`。
+  3. **次级文字对比度**：学生直播页眉「已与教师中控台实时联动」`text-emerald-600`、成长档案积分徽章、AppShell/StudentView 的加载占位 `text-slate-400`、作业批改面板说明文字、课程管理「排序方式」与「复制课程 ID」、互动课堂页码徽章 `bg-white/20 text-white`（白字压半透明主色底）、班级锁定提示 → 改用语义令牌或达标深色阶。
+  4. **语义修正**：互动课堂班级徽章误用 `aria-readonly`（非控件属性，`aria-allowed-attr` 报错）→ 改为 `role="status"` 表达只读状态。
+
 - **live_class 课中授课页面文字对比度达 WCAG AA（Issue #77）**：极速投票及课中其它互动组件的文字/背景对比度此前多处不达标（投影到大屏更明显）。修复三类根因：
   1. **写死的亮色底配白字**（`bg-amber-500 text-white` 仅 2.15:1、`bg-rose-500` 3.67:1、`bg-emerald-500` 2.54:1、`bg-blue-500` 3.68:1）→ 统一改用达标的深色阶（`-600/-700/-800`），覆盖中控（极速投票/结束投票/抢答/积分榜/PacingDashboard/诊断/宏引擎/家长通知/退出通票词云/小组白板）、学生端互动浮层、大屏展台（`text-slate-500` → `text-slate-400`、非法类 `to-slate-850` → `to-slate-800`）与 `LiveClassroomView`。
   2. **主题令牌本身不达标**（浅色 `--text-subtle` #94a3b8 在白底仅 2.56:1、`--text-muted` 在 `--bg-surface-secondary` 上 4.34:1；深色/护眼 `--text-subtle` 仅 3.08/3.01:1）→ 四套主题的 muted/subtle 重选至 surface 与 surface-secondary 上均 ≥ 4.5:1，`themeStore` 下发给课件 iframe 的令牌同步保持一致。
