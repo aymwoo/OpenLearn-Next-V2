@@ -89,7 +89,7 @@ export function PacingDashboardModal({
         text: zh ? '🐢 较多学生希望加快节奏' : '🐢 Many students want you to speed up',
         tone: 'text-indigo-600',
       };
-    return { text: zh ? '✓ 节奏反馈健康，可按当前节奏继续' : '✓ Pace is healthy — carry on', tone: 'text-emerald-600' };
+    return { text: zh ? '✓ 节奏反馈健康，可按当前节奏继续' : '✓ Pace is healthy — carry on', tone: 'text-emerald-700 dark:text-emerald-400' };
   }, [windowSignals, total, zh]);
 
   const pieData = counts
@@ -118,7 +118,7 @@ export function PacingDashboardModal({
             <div>
               <h2 className="text-sm font-black text-main flex items-center gap-1.5">
                 {zh ? '课堂反馈情绪仪表盘' : 'Classroom Feedback Dashboard'}
-                <span className="flex items-center gap-1 text-2xs font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-2xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
                   <TrendingUp size={10} /> {zh ? '实时' : 'LIVE'}
                 </span>
               </h2>
@@ -173,7 +173,7 @@ export function PacingDashboardModal({
                 <Users size={10} /> {onlineCount} {zh ? '在线' : 'online'}
               </span>
               <span
-                className={`text-xl font-black ${health === null ? 'text-muted' : health >= 60 ? 'text-emerald-600' : health >= 30 ? 'text-amber-600' : 'text-rose-600'}`}
+                className={`text-xl font-black ${health === null ? 'text-muted' : health >= 60 ? 'text-emerald-700 dark:text-emerald-400' : health >= 30 ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'}`}
               >
                 {health === null ? '—' : `${health}%`}
               </span>

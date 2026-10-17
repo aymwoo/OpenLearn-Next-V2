@@ -77,7 +77,7 @@ export function StageAttendanceCard({ attendance, zh = true }: { attendance?: St
           </div>
         </>
       ) : (
-        <p className="text-[11px] text-slate-500 leading-relaxed">
+        <p className="text-[11px] text-slate-400 leading-relaxed">
           {zh
             ? '本课节未绑定班级名单，暂无应到/实到口径（避免用 0% 误导为「无人到课」）。'
             : 'No class roster bound to this lesson; expected/attended is unavailable.'}
@@ -136,7 +136,7 @@ export function StageCoursewareCard({ stats, zh = true }: { stats?: StageCoursew
           </div>
         </>
       ) : (
-        <p className="text-[11px] text-slate-500 leading-relaxed flex items-center gap-2">
+        <p className="text-[11px] text-slate-400 leading-relaxed flex items-center gap-2">
           <FileCheck2 size={14} className="shrink-0" />
           {zh ? '还没有学生打开互动课件。展示口径为平台累计（含往期课节），作答数据将在学生开始操作后实时出现。' : 'No courseware activity yet.'}
         </p>
@@ -188,7 +188,7 @@ export function StageFeedCard({ feed, zh = true }: { feed?: StageFeedItem[]; zh?
                 <span className="ml-1">{f.message}</span>
               </span>
               {f.at > 0 && (
-                <span className="shrink-0 font-mono text-[10px] text-slate-500">
+                <span className="shrink-0 font-mono text-[10px] text-slate-400">
                   {new Date(f.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
@@ -196,7 +196,7 @@ export function StageFeedCard({ feed, zh = true }: { feed?: StageFeedItem[]; zh?
           ))}
         </ul>
       ) : (
-        <p className="text-[11px] text-slate-500 leading-relaxed flex items-center gap-2">
+        <p className="text-[11px] text-slate-400 leading-relaxed flex items-center gap-2">
           <Radio size={14} className="shrink-0" />
           {zh ? '课堂动态会在学生答题、签到、提交课件时实时出现在这里。' : 'Live events will appear here.'}
         </p>

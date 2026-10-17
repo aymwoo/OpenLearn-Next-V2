@@ -36,6 +36,12 @@
   --color-primary-theme: var(--color-primary);
   --color-primary-theme-light: var(--color-primary-light);
   --color-primary-theme-hover: var(--color-primary-hover);
+  /* 填充型主色（按钮底/选中底）——白字在其上达 AA */
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-hover: var(--primary-solid-hover);
+  /* 文本/图标型主色——主色压在主题底上达 AA */
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-ink-hover: var(--primary-ink-hover);
 }
 
 /* ── 把 dark: 变体绑定到应用主题，而非操作系统的 prefers-color-scheme ──
@@ -108,6 +114,22 @@
   background-color: var(--color-primary-hover);
 }
 
+@utility bg-primary-solid {
+  background-color: var(--color-primary-solid);
+}
+
+@utility bg-primary-solid-hover {
+  background-color: var(--color-primary-solid-hover);
+}
+
+@utility text-primary-ink {
+  color: var(--color-primary-ink);
+}
+
+@utility text-primary-ink-hover {
+  color: var(--color-primary-ink-hover);
+}
+
 @utility text-primary-theme {
   color: var(--color-primary);
 }
@@ -136,10 +158,20 @@
     --border-theme: #e2e8f0;
     --border-theme-subtle: #f1f5f9;
     --text-main: #0f172a;
-    --text-muted: #64748b;
-    --text-subtle: #94a3b8;
+    /* AA：muted / subtle 必须同时在 --bg-surface(#fff) 与 --bg-surface-secondary(#f1f5f9)
+       上达到 4.5:1（原值 #64748b / #94a3b8 分别为 4.34 / 2.34，不达标）。 */
+    --text-muted: #475569;
+    --text-subtle: #5a6b80;
     --color-primary: #4f46e5;
     --color-primary-hover: #4338ca;
+    /* 填充型主色面（按钮底、选中态底）：白字在其上需 ≥ 4.5:1。
+       --color-primary 在深色/黑板主题偏亮，直接当填充底会不达标，故单独一枚。 */
+    --primary-solid: #4f46e5;
+    --primary-solid-hover: #4338ca;
+    /* 文本/图标型主色：主色出现在主题底上（≥ 4.5:1）。同一枚令牌无法同时
+       满足「白字压底」与「主色压底」两种角色（深色主题里两者对亮度要求相反）。 */
+    --primary-ink: #4f46e5;
+    --primary-ink-hover: #4338ca;
     --color-primary-light: #eef2ff;
     --color-primary-text: #ffffff;
   }
@@ -153,9 +185,16 @@
     --border-theme-subtle: #1e293b;
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
-    --text-subtle: #64748b;
-    --color-primary: #6366f1;
-    --color-primary-hover: #818cf8;
+    /* AA：深色面上原 #64748b 只有 3.08–3.73:1，提亮到 #8698ad（4.97–6.0:1）。 */
+    --text-subtle: #8698ad;
+    --color-primary: #5b5ce8;
+    --color-primary-hover: #4f46e5;
+    /* 填充型主色面：深色主题的亮主色(#818cf8 一类)配白字只有 2:1，填充底用深色系。 */
+    --primary-solid: #4f46e5;
+    --primary-solid-hover: #4338ca;
+    /* 文本/图标型主色：深色底上需更亮（#5b5ce8 在 #111827 上仅 3.5:1）。 */
+    --primary-ink: #818cf8;
+    --primary-ink-hover: #a5b4fc;
     --color-primary-light: rgba(99, 102, 241, 0.18);
     --color-primary-text: #ffffff;
   }
@@ -168,10 +207,16 @@
     --border-theme: #cce0d6;
     --border-theme-subtle: #deece5;
     --text-main: #143526;
-    --text-muted: #3d6350;
-    --text-subtle: #6c917d;
+    /* AA：原 #3d6350 / #6c917d 在 --bg-surface-secondary(#e6f0ea) 上为 5.81 / 3.01，
+       subtle 不达标；下调为 #2f5a44 / #457057（6.76 / 4.86）。 */
+    --text-muted: #2f5a44;
+    --text-subtle: #457057;
     --color-primary: #2d6a4f;
     --color-primary-hover: #1b4332;
+    --primary-solid: #2d6a4f;
+    --primary-solid-hover: #1b4332;
+    --primary-ink: #2d6a4f;
+    --primary-ink-hover: #1b4332;
     --color-primary-light: #d8f3dc;
     --color-primary-text: #ffffff;
   }
@@ -184,10 +229,16 @@
     --border-theme: #2d5242;
     --border-theme-subtle: #1f382d;
     --text-main: #e8f5e9;
+    /* 已验证达标：#a5d6a7 → 9.6 / 8.19， #66bb6a → 6.67 / 5.7（surface / secondary）。 */
     --text-muted: #a5d6a7;
     --text-subtle: #66bb6a;
-    --color-primary: #4caf50;
-    --color-primary-hover: #388e3c;
+    --color-primary: #2f7d32;
+    --color-primary-hover: #276b29;
+    --primary-solid: #2f7d32;
+    --primary-solid-hover: #276b29;
+    /* 文本/图标型主色：黑板底上需要用亮绿（#2f7d32 在 #16261f 上仅 3.5:1）。 */
+    --primary-ink: #66bb6a;
+    --primary-ink-hover: #81c784;
     --color-primary-light: rgba(76, 175, 80, 0.18);
     --color-primary-text: #ffffff;
   }
@@ -198,6 +249,42 @@
    斜杠透明度写法无法生成、静默失效；@theme 会派生全部变体。
    类名与行为向下兼容：bg-surface、border-theme、text-muted… 用法完全不变。
    ↑↑↑ 上方已补充 14 个 @utility 作为 cockpit/portal 等子组件的兼容兜底。 */
+
+/* ── 语义色别名「防劫持」（Issue #77）────────────────────────────────────
+   第三方库会在**运行时**往 <head> 注入非 layer 的 `:root, :host { ... }`
+   规则，重定义通用名。实测：
+     · pptx 查看器：`--color-muted: var(--pptx-muted, #1f2937)`
+     · reveal.js  ：`.reveal .r-overlay-button { --color-muted: unset }`
+   非 layer 规则优先级高于 `@layer theme`，且后注入 ⇒ 我们的语义别名被覆盖，
+   `text-muted` 在深色主题下变成 #1f2937（深灰压深色底，1.2:1，几乎不可见），
+   `text-foreground` 也会被换成第三方的浅色 fallback。
+
+   这里用 `html[data-theme]`（specificity 0,1,1）压过第三方的 `:root`（0,1,0），
+   在任何主题下把别名重新钉回我们自己的基础令牌。 */
+:root,
+:host,
+html[data-theme] {
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-surface-secondary: var(--bg-surface-secondary);
+  --color-surface-elevated: var(--bg-surface-elevated);
+  --color-theme: var(--border-theme);
+  --color-theme-subtle: var(--border-theme-subtle);
+  --color-border: var(--border-theme);
+  --color-border-theme: var(--border-theme);
+  --color-border-theme-subtle: var(--border-theme-subtle);
+  --color-main: var(--text-main);
+  --color-foreground: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-primary-theme: var(--color-primary);
+  --color-primary-theme-light: var(--color-primary-light);
+  --color-primary-theme-hover: var(--color-primary-hover);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-hover: var(--primary-solid-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-ink-hover: var(--primary-ink-hover);
+}
 
 /* ── 中文排版规范保障：全站所有字体最小不得低于 9pt (12px) ── */
 :root {

@@ -298,7 +298,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
                   {lang === 'zh' ? '生成时间' : 'Generated'}: {new Date(response.generatedAt).toLocaleTimeString()}
                 </span>
                 {response.counts.highlights > 0 && (
-                  <span className="inline-flex items-center gap-1 text-emerald-600">
+                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
                     <Check size={10} />
                     {response.counts.highlights} highlights
                   </span>
@@ -326,7 +326,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
               disabled={!currentMarkdown}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
                 copied
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-emerald-700 text-white'
                   : 'bg-primary-theme text-white hover:bg-primary-theme-hover disabled:opacity-50'
               }`}
             >

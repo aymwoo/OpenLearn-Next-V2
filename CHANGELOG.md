@@ -54,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **live_class 课中授课页面文字对比度达 WCAG AA（Issue #77）**：极速投票及课中其它互动组件的文字/背景对比度此前多处不达标（投影到大屏更明显）。修复三类根因：
+  1. **写死的亮色底配白字**（`bg-amber-500 text-white` 仅 2.15:1、`bg-rose-500` 3.67:1、`bg-emerald-500` 2.54:1、`bg-blue-500` 3.68:1）→ 统一改用达标的深色阶（`-600/-700/-800`），覆盖中控（极速投票/结束投票/抢答/积分榜/PacingDashboard/诊断/宏引擎/家长通知/退出通票词云/小组白板）、学生端互动浮层、大屏展台（`text-slate-500` → `text-slate-400`、非法类 `to-slate-850` → `to-slate-800`）与 `LiveClassroomView`。
+  2. **主题令牌本身不达标**（浅色 `--text-subtle` #94a3b8 在白底仅 2.56:1、`--text-muted` 在 `--bg-surface-secondary` 上 4.34:1；深色/护眼 `--text-subtle` 仅 3.08/3.01:1）→ 四套主题的 muted/subtle 重选至 surface 与 surface-secondary 上均 ≥ 4.5:1，`themeStore` 下发给课件 iframe 的令牌同步保持一致。
+  3. **主色令牌角色冲突 + 第三方令牌劫持**：填充型主色与文本型主色拆成 `--primary-solid*` / `--primary-ink*`（深色/黑板主题的亮主色配白字仅 4.47/2.78:1，反之深主色压在深色底也不达标）；并用 `html[data-theme]` 高优先级重新钉住语义别名，避免 pptx 查看器与 reveal.js 运行时注入的非 layer `:root` 规则把 `--color-muted` 劫持成 `#1f2937`（曾使深色主题下 `text-muted` 只有 1.2:1）。
+- **对比度自动化回归**：新增 `src/store/__tests__/theme-contrast.test.ts`（解析 `src/index.css` 计算四套主题令牌的 WCAG 对比度：正文 ≥ 4.5:1、填充主色上的白字 ≥ 4.5:1，并断言与 `themeStore` 令牌不漂移）与 `e2e/live-class-contrast.spec.ts`（axe-core `color-contrast` 在真实浏览器里逐主题审计中控、极速投票配置弹窗与学生端作答卡），后者已接入 CI 的 `Browser workflow E2E` job。
 - **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
 - **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
 

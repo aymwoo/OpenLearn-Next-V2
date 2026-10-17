@@ -544,7 +544,7 @@ export function ClassroomCountdownWidget({
               <button
                 type="button"
                 onClick={handlePause}
-                className="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
+                className="px-8 py-3 rounded-2xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
               >
                 <Pause size={20} />
                 <span>{lang === 'zh' ? '暂停' : 'Pause'}</span>
@@ -553,7 +553,7 @@ export function ClassroomCountdownWidget({
               <button
                 type="button"
                 onClick={handleResume}
-                className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
+                className="px-8 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
               >
                 <Play size={20} />
                 <span>{lang === 'zh' ? '继续' : 'Resume'}</span>
@@ -641,7 +641,7 @@ export function ClassroomCountdownWidget({
                 type="button"
                 id="classroom-countdown-pause-btn"
                 onClick={handlePause}
-                className="w-5 h-5 rounded-md bg-amber-500 text-white hover:bg-amber-600 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                className="w-5 h-5 rounded-md bg-amber-700 text-white hover:bg-amber-800 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
                 title={lang === 'zh' ? '暂停倒计时' : 'Pause'}
               >
                 <Pause size={10} />
@@ -1000,7 +1000,7 @@ export function ClassroomCountdownWidget({
             type="button"
             id="classroom-countdown-pause-btn"
             onClick={handlePause}
-            className="flex-1 py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 py-1.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Pause size={12} />
             <span>{lang === 'zh' ? '暂停计时' : 'Pause'}</span>

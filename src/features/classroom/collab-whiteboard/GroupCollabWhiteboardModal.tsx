@@ -332,7 +332,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
               onClick={() => setIsGalleryMode(!isGalleryMode)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
                 isGalleryMode
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                  ? 'bg-amber-700 hover:bg-amber-800 text-white shadow-amber-500/20'
                   : 'bg-surface hover:bg-surface-secondary border border-theme text-main'
               }`}
             >
@@ -573,7 +573,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                               <div className={`w-2.5 h-2.5 rounded-full ${g.color}`} />
                               <span className="font-bold text-xs text-main">{g.name}</span>
                               {isSpotlight && (
-                                <span className="px-1.5 py-0.2 rounded-md bg-amber-500 text-white text-[9px] font-bold">
+                                <span className="px-1.5 py-0.2 rounded-md bg-amber-700 text-white text-[9px] font-bold">
                                   🌟 置顶高光
                                 </span>
                               )}
@@ -635,7 +635,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                                 onClick={() => setSpotlightGroupId(isSpotlight ? null : g.id)}
                                 className={`py-1 px-2 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                   isSpotlight
-                                    ? 'bg-amber-500 text-white'
+                                    ? 'bg-amber-700 text-white'
                                     : 'bg-surface-secondary text-muted hover:text-main'
                                 }`}
                                 title={lang === 'zh' ? '设为全班高光' : 'Spotlight'}

@@ -527,7 +527,7 @@ export function ClassroomInteractiveCockpit({
               onClick={() => handleStageTransition(st.id)}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
                 isActive
-                  ? 'bg-primary-theme text-white shadow-sm ring-2 ring-primary-theme/20 cursor-default'
+                  ? 'bg-primary-solid text-white shadow-sm ring-2 ring-primary-theme/20 cursor-default'
                   : canTransition
                     ? 'text-muted hover:text-foreground hover:bg-surface cursor-pointer'
                     : 'opacity-40 text-muted/60 cursor-not-allowed hover:bg-transparent'
@@ -552,7 +552,7 @@ export function ClassroomInteractiveCockpit({
         {activePoll && activePoll.status === 'ACTIVE' ? (
           <button
             onClick={handleClosePoll}
-            className="px-3 py-1.5 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
+            className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg hover:bg-amber-800 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
           >
             <CheckCircle2 size={13} />
             <span>
@@ -566,7 +566,7 @@ export function ClassroomInteractiveCockpit({
             onClick={() => setIsPollDialogOpen(true)}
             className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
           >
-            <Sparkles size={13} className="text-amber-500" />
+            <Sparkles size={13} className="text-amber-700 dark:text-amber-400" />
             <span>{lang === 'zh' ? '极速投票' : 'Quick Poll'}</span>
           </button>
         )}
@@ -575,7 +575,7 @@ export function ClassroomInteractiveCockpit({
         {activeBuzzer ? (
           <button
             onClick={handleResetBuzzer}
-            className="px-3 py-1.5 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+            className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
           >
             <RotateCcw size={13} />
             <span>{lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}</span>
@@ -585,7 +585,7 @@ export function ClassroomInteractiveCockpit({
             onClick={handleStartBuzzer}
             className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
           >
-            <Bell size={13} className="text-rose-500" />
+            <Bell size={13} className="text-rose-700 dark:text-rose-400" />
             <span>{lang === 'zh' ? '发起抢答' : 'Start Buzzer'}</span>
           </button>
         )}
@@ -631,7 +631,7 @@ export function ClassroomInteractiveCockpit({
           className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
           title={lang === 'zh' ? '全班积分榜与小组联赛' : 'Class Points & Team Leaderboard'}
         >
-          <Trophy size={13} className="text-amber-500" />
+          <Trophy size={13} className="text-amber-700 dark:text-amber-400" />
           <span>{lang === 'zh' ? '积分榜' : 'Leaderboard'}</span>
         </button>
 
@@ -690,29 +690,29 @@ export function ClassroomInteractiveCockpit({
           title={lang === 'zh' ? '打开课堂反馈情绪仪表盘' : 'Open feedback dashboard'}
         >
           <div className="flex items-center gap-1 text-[11px] font-semibold text-muted group-hover:text-main">
-            <TrendingUp size={12} className="text-primary-theme" />
+            <TrendingUp size={12} className="text-primary-ink" />
             <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
             {activeSegmentId && segmentTitles[activeSegmentId] && (
-              <span className="text-[10px] text-primary-theme font-medium truncate max-w-[90px]">
+              <span className="text-[10px] text-primary-ink font-medium truncate max-w-[90px]">
                 [{segmentTitles[activeSegmentId]}]
               </span>
             )}
           </div>
           <div className="flex items-center gap-1.5">
             <span
-              className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]"
+              className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[10px]"
               title="理解 / 节奏适宜"
             >
               💡 {pacingSignals.CLEAR || 0}
             </span>
             <span
-              className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px]"
+              className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[10px]"
               title="困惑"
             >
               ❓ {pacingSignals.CONFUSED || 0}
             </span>
             <span
-              className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]"
+              className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold text-[10px]"
               title="慢一点（讲太快）"
             >
               🐇 {pacingSignals.TOO_FAST || 0}
@@ -803,11 +803,14 @@ export function ClassroomInteractiveCockpit({
       {/* 极速出题配置对话框（含预设题库 + 灵活编辑器） */}
       {isPollDialogOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-lg shadow-xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+          <div
+            data-testid="classroom-quick-poll-dialog"
+            className="bg-surface rounded-2xl border border-border p-6 w-full max-w-lg shadow-xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto"
+          >
             {/* 标题栏 */}
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                <Sparkles size={18} className="text-amber-500" />
+                <Sparkles size={18} className="text-amber-700 dark:text-amber-400" />
                 <span>{lang === 'zh' ? '极速投票配置' : 'Quick Poll Setup'}</span>
               </h3>
               <button
@@ -842,7 +845,7 @@ export function ClassroomInteractiveCockpit({
                           </span>
                           <span className="truncate">{preset.options.join(' / ')}</span>
                           {preset.correctOption && (
-                            <span className="flex items-center gap-0.5 text-emerald-500">
+                            <span className="flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400">
                               <Star size={10} className="fill-current" />
                               {preset.correctOption}
                             </span>
@@ -853,7 +856,7 @@ export function ClassroomInteractiveCockpit({
                         <button
                           type="button"
                           onClick={() => loadPresetToEditor(preset)}
-                          className="p-1.5 rounded-md hover:bg-primary-theme/10 text-primary-theme transition-colors cursor-pointer"
+                          className="p-1.5 rounded-md hover:bg-primary-theme/10 text-primary-ink transition-colors cursor-pointer"
                           title={lang === 'zh' ? '引入到编辑器' : 'Load to editor'}
                         >
                           <ArrowDownToLine size={14} />
@@ -868,7 +871,7 @@ export function ClassroomInteractiveCockpit({
                               preset.correctOption,
                             )
                           }
-                          className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-500 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 transition-colors cursor-pointer"
                           title={lang === 'zh' ? '直接发送' : 'Send now'}
                         >
                           <Rocket size={14} />
@@ -876,7 +879,7 @@ export function ClassroomInteractiveCockpit({
                         <button
                           type="button"
                           onClick={() => handleDeletePreset(preset.id)}
-                          className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-md hover:bg-red-500/10 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
                           title={lang === 'zh' ? '删除' : 'Delete'}
                         >
                           <Trash2 size={14} />
@@ -925,7 +928,7 @@ export function ClassroomInteractiveCockpit({
                     onClick={() => handlePollTypeChange(key)}
                     className={`p-2 rounded-lg border font-bold text-center text-xs transition-colors cursor-pointer ${
                       pollType === key
-                        ? 'border-primary-theme bg-primary-theme/10 text-primary-theme'
+                        ? 'border-primary-theme bg-primary-theme/10 text-primary-ink'
                         : 'border-border bg-surface-secondary text-muted'
                     }`}
                   >
@@ -940,7 +943,7 @@ export function ClassroomInteractiveCockpit({
               <label className="font-semibold text-muted text-xs">
                 {lang === 'zh' ? '选项列表' : 'Options'}{' '}
                 {pollCorrectOption && (
-                  <span className="text-emerald-500 ml-1">
+                  <span className="text-emerald-700 dark:text-emerald-400 ml-1">
                     ✓ {lang === 'zh' ? '参考答案' : 'Answer'}: {pollCorrectOption}
                   </span>
                 )}
@@ -953,8 +956,8 @@ export function ClassroomInteractiveCockpit({
                       onClick={() => setPollCorrectOption(pollCorrectOption === opt ? '' : opt)}
                       className={`p-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                         pollCorrectOption === opt
-                          ? 'text-emerald-500 bg-emerald-500/10'
-                          : 'text-muted/40 hover:text-emerald-400'
+                          ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
+                          : 'text-subtle hover:text-emerald-700 dark:hover:text-emerald-400'
                       }`}
                       title={lang === 'zh' ? '设为参考答案' : 'Set as correct'}
                     >
@@ -980,7 +983,7 @@ export function ClassroomInteractiveCockpit({
                           if (pollCorrectOption === opt) setPollCorrectOption('');
                           if (pollType !== 'CUSTOM') setPollType('CUSTOM');
                         }}
-                        className="p-1.5 rounded-md text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                        className="p-1.5 rounded-md text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -995,7 +998,7 @@ export function ClassroomInteractiveCockpit({
                     setPollOptions([...pollOptions, `选项${pollOptions.length + 1}`]);
                     if (pollType !== 'CUSTOM') setPollType('CUSTOM');
                   }}
-                  className="flex items-center gap-1.5 text-xs text-primary-theme hover:text-primary-theme-hover font-semibold mt-1 cursor-pointer"
+                  className="flex items-center gap-1.5 text-xs text-primary-ink hover:text-primary-ink-hover font-semibold mt-1 cursor-pointer"
                 >
                   <Plus size={13} />
                   {lang === 'zh' ? '添加选项' : 'Add Option'}{' '}
@@ -1017,7 +1020,7 @@ export function ClassroomInteractiveCockpit({
               <button
                 type="button"
                 onClick={() => handleStartQuickPoll()}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary-theme text-white font-bold rounded-lg hover:bg-primary-theme-hover transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-primary-solid text-white font-bold rounded-lg hover:bg-primary-solid-hover transition-colors cursor-pointer"
               >
                 <Rocket size={14} />
                 {lang === 'zh' ? '立即发布' : 'Launch'}
@@ -1033,7 +1036,7 @@ export function ClassroomInteractiveCockpit({
           <div className="bg-surface rounded-3xl border border-border p-8 w-full max-w-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border/80 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-primary-theme/10 text-primary-theme rounded-2xl">
+                <div className="p-3 bg-primary-theme/10 text-primary-ink rounded-2xl">
                   <FileBarChart2 size={28} />
                 </div>
                 <div>
@@ -1058,7 +1061,7 @@ export function ClassroomInteractiveCockpit({
                 <span className="text-xs font-bold text-muted mb-1">
                   {lang === 'zh' ? '随堂测验正确率' : 'Quiz Accuracy'}
                 </span>
-                <span className="text-3xl font-black text-emerald-500 font-mono">
+                <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
                   {panoramicSummary.metrics?.quizAccuracy || 0}%
                 </span>
                 <span className="text-[10px] text-muted mt-1">{panoramicSummary.metrics?.quizCount || 0} 题次提交</span>
@@ -1068,7 +1071,7 @@ export function ClassroomInteractiveCockpit({
                 <span className="text-xs font-bold text-muted mb-1">
                   {lang === 'zh' ? '课堂互动参与人次' : 'Poll Interactions'}
                 </span>
-                <span className="text-3xl font-black text-amber-500 font-mono">
+                <span className="text-3xl font-black text-amber-700 dark:text-amber-400 font-mono">
                   {panoramicSummary.metrics?.pollVotesTotal || 0}
                 </span>
                 <span className="text-[10px] text-muted mt-1">口播投票互动</span>
@@ -1112,7 +1115,7 @@ export function ClassroomInteractiveCockpit({
             <div className="flex justify-end">
               <button
                 onClick={() => setShowSummaryModal(false)}
-                className="px-6 py-2.5 bg-primary-theme text-white font-bold rounded-xl hover:bg-primary-theme-hover transition-colors cursor-pointer"
+                className="px-6 py-2.5 bg-primary-solid text-white font-bold rounded-xl hover:bg-primary-solid-hover transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '完成归档' : 'Done'}
               </button>

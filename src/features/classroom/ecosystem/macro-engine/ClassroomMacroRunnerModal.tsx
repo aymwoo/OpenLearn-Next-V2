@@ -135,7 +135,7 @@ export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: Classro
                         isCurrent
                           ? 'bg-primary-theme text-white animate-spin'
                           : isDone
-                            ? 'bg-emerald-500 text-white'
+                            ? 'bg-emerald-700 text-white'
                             : 'bg-surface-secondary text-muted'
                       }`}
                     >
