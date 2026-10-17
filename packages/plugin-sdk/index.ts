@@ -170,6 +170,10 @@ export type {
   AssignmentGradeRubricAddonConfig,
   StudentSegmentGateFallbackConfig,
   EditorSegmentTypeConfigConfig,
+  TimetableImportSourceConfig,
+  TimetableEntryActionConfig,
+  ClassroomActiveSegmentMainConfig,
+  StudentAcademicYearMetricCardConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 

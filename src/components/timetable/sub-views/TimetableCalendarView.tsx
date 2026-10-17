@@ -187,7 +187,11 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             />
           </div>
 
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity items-center">
+            <ExtensionPointRenderer
+              slot="timetable.entry.action"
+              slotProps={{ schedule: sch, lang, onEdit: () => openEditModal(sch) }}
+            />
             <button
               onClick={() => openEditModal(sch)}
               className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1 rounded-md transition-colors cursor-pointer"
@@ -542,6 +546,10 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <ExtensionPointRenderer
+                          slot="timetable.entry.action"
+                          slotProps={{ schedule: sch, lang, onEdit: () => openEditModal(sch) }}
+                        />
                         <button
                           onClick={() => openEditModal(sch)}
                           className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded transition-colors cursor-pointer"

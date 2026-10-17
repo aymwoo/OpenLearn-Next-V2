@@ -52,6 +52,7 @@ import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
 import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
 import { useErrorStore, errorStore } from '../store/errorStore';
@@ -449,9 +450,13 @@ export function LiveClassroomView({
   };
 
   // Interactive courseware submission states
-  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers'>(
+  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers' | 'segment_main'>(
     'whiteboard',
   );
+  const host = useOptionalPluginHost();
+  const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
+  const hasSegmentMainExtension = segmentMainExtensions.length > 0;
+  const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
   const [rawPayload, setRawPayload] = useState<any | null>(null);
@@ -1003,7 +1008,9 @@ export function LiveClassroomView({
 
   useEffect(() => {
     syncChannelRef.current?.broadcastChangeTab(
-      middleTab === 'submissions' || middleTab === 'top_performers' ? 'courseware' : middleTab,
+      middleTab === 'submissions' || middleTab === 'top_performers' || middleTab === 'segment_main'
+        ? 'courseware'
+        : middleTab,
     );
   }, [middleTab]);
 
@@ -1066,6 +1073,9 @@ export function LiveClassroomView({
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
     setLiveClassIsActive(true);
+    if (hasSegmentMainExtension) {
+      setMiddleTab('segment_main');
+    }
 
     setLiveClassFeed((prev) => [
       {
@@ -2154,6 +2164,25 @@ export function LiveClassroomView({
                         <Trophy size={12} className="text-amber-500" />
                         <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
                       </button>
+                      {hasSegmentMainExtension && currentActiveSegment && (
+                        <button
+                          id="teacher_active_segment_main_tab_btn"
+                          data-testid="teacher-active-segment-main-tab-btn"
+                          onClick={() => setMiddleTab('segment_main')}
+                          className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            middleTab === 'segment_main'
+                              ? 'bg-surface text-primary-theme shadow-sm'
+                              : 'text-muted hover:text-main'
+                          }`}
+                        >
+                          <Sparkles size={12} className="text-primary-theme" />
+                          <span>
+                            {lang === 'zh'
+                              ? `🧩 ${currentActiveSegment.title || '环节工作区'}`
+                              : `🧩 ${currentActiveSegment.title || 'Segment Workspace'}`}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2191,6 +2220,28 @@ export function LiveClassroomView({
 
                 {middleTab === 'whiteboard' ? (
                   <>
+                    {hasSegmentMainExtension && currentActiveSegment && (
+                      <div
+                        data-testid="classroom-active-segment-main-hint"
+                        className="flex items-center justify-between px-3 py-1.5 bg-primary-theme/10 border border-primary-theme/20 rounded-lg text-xs text-primary-theme shrink-0"
+                      >
+                        <span className="flex items-center gap-1.5 font-medium truncate">
+                          <Sparkles size={13} className="shrink-0" />
+                          <span>
+                            {lang === 'zh'
+                              ? `当前环节「${currentActiveSegment.title}」已配备专属互动工作区`
+                              : `Current segment "${currentActiveSegment.title}" has a dedicated interactive workspace`}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMiddleTab('segment_main')}
+                          className="px-2.5 py-0.5 bg-primary-theme text-white rounded-md font-bold hover:bg-primary-theme-hover cursor-pointer text-xs shrink-0 transition-colors shadow-xs"
+                        >
+                          {lang === 'zh' ? '切换至环节工作区' : 'Switch to Workspace'}
+                        </button>
+                      </div>
+                    )}
                     {/* Whiteboard canvas wrapper */}
                     <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col">
                       <LazyWhiteboard
@@ -2284,6 +2335,35 @@ export function LiveClassroomView({
                       students={students}
                       addToast={addToast}
                     />
+                  </div>
+                ) : middleTab === 'segment_main' ? (
+                  <div
+                    data-testid="classroom-active-segment-main-container"
+                    className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4"
+                  >
+                    {currentActiveSegment ? (
+                      <ExtensionPointRenderer
+                        slot="classroom.active_segment.main"
+                        slotProps={{
+                          segment: currentActiveSegment,
+                          lessonId: selectedLesson,
+                          classId: liveClassSelectedClassId,
+                          lang,
+                          onRefresh: () => fetchElements(selectedLesson),
+                        }}
+                      />
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-muted text-sm space-y-2">
+                        <p>{lang === 'zh' ? '当前没有正在进行的教学环节。' : 'No active lesson segment currently.'}</p>
+                        <button
+                          type="button"
+                          onClick={() => setMiddleTab('whiteboard')}
+                          className="px-3 py-1 text-xs font-bold bg-primary-theme text-white rounded-lg cursor-pointer hover:bg-primary-theme-hover transition-colors"
+                        >
+                          {lang === 'zh' ? '返回演示白板' : 'Back to Whiteboard'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <TeacherAssignmentGradePanel

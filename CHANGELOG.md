@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **业务协同环节扩展插槽扩充（Phase 2）**：
+  - **课表外部导入源与条目动作扩展**：在 `TimetableOcrView` 中新增 `timetable.import.source` 插槽，支持扩展第三方教务排课系统、Excel/CSV 模板导入解析；在 `TimetableCalendarView` 中为日历卡片和列表视图新增 `timetable.entry.action` 插槽，支持一键调课申请、排课同步等插件动作。
+  - **课堂活跃环节主交互区扩展**：在 `LiveClassroomView` 中新增 `classroom.active_segment.main` 插槽与顶部专属工作区 Tab / 引导提示条，当处于活跃环节且插件注册该插槽时支持无缝切入专属工作区（如虚拟仿真实验大屏、团队竞赛对战等），与默认白板自由双向切换并向后兼容降级。
+  - **学生端学年成长对比指标扩展卡片**：在 `StudentAcademicYearComparison` 核心指标网格中新增 `student.academic_year.metric_card` 插槽，支持插件无侵入挂载核心素养发展值、学科竞赛积分、跨学科项目实践等自定义多学年对比指标卡。
 - **核心环节扩展插槽扩充（Phase 1）**：
   - **作业批改面板扩展**：在 `TeacherAssignmentGradePanel` 中新增 `assignment.grade.toolbar.action`（支持批量操作/AI初评/导出）、`assignment.grade.item.addon`（支持代码自动测试报告/AI评语推荐/查重）与 `assignment.grade.rubric.addon`（评分细则量规微调）。
   - **学生端环节门禁解锁引导**：在 `StudentLessonInteractionPanel` 中将原本硬编码的纯文本提示升级为 `student.segment.gate_fallback` 交互插槽，允许插件挂载解锁前置答题、补签卡片或放行申请。

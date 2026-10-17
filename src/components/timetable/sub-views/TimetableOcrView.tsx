@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { ClassType } from '../types';
 import { asyncTaskStore } from '../../../store';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 export interface TimetableOcrViewProps {
   lang: 'zh' | 'en';
@@ -210,6 +211,25 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
           )}
         </button>
       </div>
+
+      {/* 外部课表导入扩展源（Excel/CSV文件解析、智慧校园API对接等） */}
+      <ExtensionPointRenderer
+        slot="timetable.import.source"
+        slotProps={{
+          lang,
+          onImportEntries: (entries: any[]) => {
+            setOcrEntries(entries);
+            setOcrSelectedEntries(new Set(entries.map((_: any, i: number) => i)));
+            setOcrMessage({
+              type: 'success',
+              text:
+                lang === 'zh'
+                  ? `✅ 外部导入成功！共载入 ${entries.length} 节课程安排，请审核后导入。`
+                  : `✅ Successfully imported ${entries.length} timetable entries. Review below.`,
+            });
+          },
+        }}
+      />
 
       {/* Progress Display */}
       {ocrLoading && (

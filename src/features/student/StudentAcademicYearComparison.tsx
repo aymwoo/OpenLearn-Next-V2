@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStudentAcademicYearComparison } from '../../services/dashboardService';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type {
 
   AcademicYearComparisonResult,
@@ -364,6 +365,17 @@ export function StudentAcademicYearComparison({
             })}
           </div>
         </div>
+
+        {/* 扩展插槽：学年维度自定义指标卡 */}
+        <ExtensionPointRenderer
+          slot="student.academic_year.metric_card"
+          slotProps={{
+            studentId,
+            comparisonData: data,
+            selectedYears,
+            lang,
+          }}
+        />
       </div>
 
       {/* 学年对比可视化图表 */}
