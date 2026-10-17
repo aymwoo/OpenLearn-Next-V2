@@ -6,6 +6,7 @@ import { LoginPage } from './components/LoginPage';
 import ForcedPasswordChangeGate from './components/ForcedPasswordChangeGate';
 import { StageDisplayView } from './features/classroom/stage-display/StageDisplayView';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
+import { StudentDefaultPasswordBanner } from './components/StudentDefaultPasswordBanner';
 import { AppHeader } from './components/AppHeader';
 import { AppStatusBar } from './components/AppStatusBar';
 import { ProfileModal } from './components/ProfileModal';
@@ -91,6 +92,15 @@ export default function App() {
             <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
               {/* 全局模拟学生提示条 */}
               <ImpersonationBanner />
+
+              {/* Issue #94: 学生默认密码非阻塞提示（教师/管理员强制改密走 ForcedPasswordChangeGate，不经过此处） */}
+              {session.role === 'student' && session.usedDefaultPassword && (
+                <StudentDefaultPasswordBanner
+                  userId={session.studentId || session.userId}
+                  lang={lang}
+                  onOpenProfile={() => setProfileOpen(true)}
+                />
+              )}
 
               {/* Top Navbar */}
               <AppHeader />

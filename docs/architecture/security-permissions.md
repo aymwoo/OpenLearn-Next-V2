@@ -31,7 +31,7 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 
 ### 其他认证层控制
 
-- **强制改密（`SEC-AUTH-06`）**: `enforcePasswordChanged` 拦截带 `mustChangePassword` 标记的会话访问的全部 `/api` 请求（含 GET），仅放行 `/api/auth/change-password`、`/api/auth/logout`、`/api/auth/session`、`/api/auth/me`。静态资源与 SPA 壳不在 `/api` 下，改密页仍可打开。
+- **强制改密（`SEC-AUTH-06`）**: `enforcePasswordChanged` 拦截带 `mustChangePassword` 标记的会话访问的全部 `/api` 请求（含 GET），仅放行 `/api/auth/change-password`、`/api/auth/logout`、`/api/auth/session`、`/api/auth/me`。静态资源与 SPA 壳不在 `/api` 下，改密页仍可打开。**适用范围（Issue #94 起）**：仅教师/管理员种子账号（密码等于用户名或 `users.must_change_password=1`）；**学生以初始默认口令 123456 登录不再强制改密**——会话仅携带 `usedDefaultPassword` 提示标记，前端展示可关闭的非阻塞横幅引导修改，接口不受任何拦截。
 - **班级对象授权**: 班级、作业、提交、成绩按角色和成员关系校验（`server/services/class-access.ts`）。管理员可访问全部班级；教师只能访问 `classes.owner_user_id` 指向自己的班级（空归属的历史班级不向全体教师开放，需管理员指定归属）；学生只能访问 `class_students` 中的班级，且只能看到自己的提交与成绩。对外列表不返回 `class_passcode`。库内该列是 AES-256-GCM 密文（前缀 `olenc1:`），登录先解密再做常量时间比较；任课教师的口令接口返回原文。越权返回 403，对象不存在返回 404。
 - **Socket 握手鉴权**: `socketAuthMiddleware(socket, next)` 从 cookie `edu_os_token` 或 `socket.handshake.auth.token` 取令牌校验会话，并同样拒绝带 `mustChangePassword` 标记的连接（与 HTTP 层同用 `FORBIDDEN_DEFAULT_PASSWORD` 错误码）。
 - **CSRF**: `server/middleware/csrf.ts` 的 `csrfGuard`。

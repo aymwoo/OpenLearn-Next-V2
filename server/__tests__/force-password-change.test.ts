@@ -199,7 +199,7 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE session_data LIKE ?').run(`%${created.id}%`);
   });
 
-  it('SEC-AUTH-06b: 存量 123456 学生个人密码登录打标；班级口令登录不打标；改密后恢复', async () => {
+  it('Issue #94: 存量 123456 学生个人密码登录不再强制改密（仅提示标记）；班级口令登录无标记；改密后提示清除', async () => {
     const now = Date.now();
     const sid = 'stu-force-legacy';
     const classId = 'cls-force-legacy';
@@ -218,7 +218,7 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
       .prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
       .run(classId, sid, now);
 
-    // 个人密码 123456 登录 → 打标
+    // 个人密码 123456 登录 → 不打 mustChangePassword，仅携带 usedDefaultPassword 提示
     const login = await post('/api/auth/login', undefined, {
       entrance: 'student',
       studentId: 'STU-FORCE-1',
@@ -226,14 +226,15 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     });
     expect(login.status).toBe(200);
     const body: any = await login.json();
-    expect(body.session?.mustChangePassword).toBe(true);
+    expect(body.session?.mustChangePassword).toBeUndefined();
+    expect(body.session?.usedDefaultPassword).toBe(true);
     const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
 
-    // 写操作被兜底中间件拦截
-    const blocked = await post('/api/lessons', token);
-    expect(blocked.status).toBe(403);
+    // 写操作不被拦截（学生可直接进入系统使用）
+    const allowed = await post('/api/lessons', token);
+    expect(allowed.status).toBe(200);
 
-    // 班级口令登录不打标（与个人密码无关）
+    // 班级口令登录不携带任何标记（与个人密码无关）
     const passcodeLogin = await post('/api/auth/login', undefined, {
       entrance: 'student',
       studentId: 'STU-FORCE-1',
@@ -242,8 +243,9 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     expect(passcodeLogin.status).toBe(200);
     const passcodeBody: any = await passcodeLogin.json();
     expect(passcodeBody.session?.mustChangePassword).toBeUndefined();
+    expect(passcodeBody.session?.usedDefaultPassword).toBeUndefined();
 
-    // 改密 → 清标，写操作恢复
+    // 改密 → 提示标记清除
     const change = await post('/api/auth/change-password', token, {
       oldPassword: '123456',
       newPassword: 'MyNew-Pw123',
