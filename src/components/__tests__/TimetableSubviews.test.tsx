@@ -86,6 +86,8 @@ describe('Timetable Utilities & Components', () => {
           setFormStatus={vi.fn()}
           setFormNotes={vi.fn()}
           setIsAddOpen={vi.fn()}
+          onQuickStart={vi.fn()}
+          activeSessionLessonIds={new Set()}
         />,
       );
 
