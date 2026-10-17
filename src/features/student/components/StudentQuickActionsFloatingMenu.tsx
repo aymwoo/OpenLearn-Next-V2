@@ -22,6 +22,7 @@ import { useScreenResize, ScreenResizeInfo } from '../../../hooks/useScreenResiz
 import { useCustomEvent } from '../../../hooks/useEventBus';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { StudentQuickActionItem, studentQuickActionsRegistry, QuickActionBadgeVariant } from '../types/quickActions';
+import { useStudentActiveSession } from '../useStudentActiveSession';
 
 export type { StudentQuickActionItem, QuickActionBadgeVariant };
 
@@ -201,9 +202,6 @@ export function StudentQuickActionsFloatingMenu({
   const schedules = studentDashboardData?.schedules || [];
   const assignments = studentDashboardData?.assignments || [];
   const rollcalls = studentDashboardData?.rollcalls || [];
-  const progress = studentDashboardData?.progress || [];
-
-  // Urgent items counters
   const unreadRollcalls = useMemo(
     () => rollcalls.filter((r: any) => !readNotifications.has(r.id)),
     [rollcalls, readNotifications],
@@ -211,20 +209,17 @@ export function StudentQuickActionsFloatingMenu({
 
   const pendingAssignments = useMemo(() => assignments.filter((a: any) => !a.submission_status), [assignments]);
 
-  // Active / next live session
+  // Issue #109: 只使用服务端真实进行中的会话，不再从排课投影/进度里猜测课节
+  const activeSession = useStudentActiveSession((s) => s.activeSession);
   const activeSessionSchedule = useMemo(() => {
-    if (schedules.length > 0) {
-      return schedules.find((s: any) => s.attendance_status === 'present' || s.status === 'scheduled') || schedules[0];
-    }
-    if (progress.length > 0) {
-      return {
-        lesson_id: progress[0].lesson_id,
-        lesson_title: progress[0].lesson_title,
-        class_name: lang === 'zh' ? '正在进行的课程' : 'In-progress course',
-      };
-    }
-    return null;
-  }, [schedules, progress, lang]);
+    if (!activeSession) return null;
+    return {
+      lesson_id: activeSession.lessonId,
+      lesson_title: activeSession.lessonTitle,
+      class_name: activeSession.className,
+      stage: activeSession.stage,
+    };
+  }, [activeSession]);
 
   // Combine plugin actions from props and registry
   const combinedPluginActions = useMemo(() => {
@@ -273,9 +268,9 @@ export function StudentQuickActionsFloatingMenu({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // 1. Action: Join Live Session
+  // 1. Action: Join Live Session（只有真实进行中会话时才可用）
   const handleJoinLiveSession = () => {
-    const targetLessonId = activeSessionSchedule?.lesson_id || (progress[0]?.lesson_id ?? null);
+    const targetLessonId = activeSessionSchedule?.lesson_id ?? null;
     if (targetLessonId) {
       setSelectedLesson(targetLessonId);
       setStudentViewStatus('lesson');
@@ -444,12 +439,13 @@ export function StudentQuickActionsFloatingMenu({
             {/* Sub-view: Main Menu or Notifications */}
             {activeTab === 'menu' ? (
               <div className="p-3.5 flex flex-col gap-2.5 max-h-[460px] overflow-y-auto">
-                {/* 1. Action Card: Join Live Session */}
-                <div
-                  id="qa-action-join-live"
-                  onClick={handleJoinLiveSession}
-                  className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-indigo-50/60 hover:border-indigo-300 transition-all cursor-pointer shadow-3xs"
-                >
+                {/* 1. Action Card: Join Live Session（Issue #109：无进行中会话时不渲染，避免猜测错误课节） */}
+                {activeSessionSchedule && (
+                  <div
+                    id="qa-action-join-live"
+                    onClick={handleJoinLiveSession}
+                    className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-indigo-50/60 hover:border-indigo-300 transition-all cursor-pointer shadow-3xs"
+                  >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 text-white flex items-center justify-center shrink-0 shadow-xs relative">
                       <Radio size={18} className="animate-pulse" />
@@ -468,11 +464,7 @@ export function StudentQuickActionsFloatingMenu({
                         </span>
                       </div>
                       <p className="text-2xs text-slate-500 truncate mt-0.5">
-                        {activeSessionSchedule
-                          ? activeSessionSchedule.lesson_title || activeSessionSchedule.title || '当前课堂'
-                          : lang === 'zh'
-                            ? '点击接入今日课堂与互动白板'
-                            : 'Connect to live interactive lesson'}
+                        {activeSessionSchedule.lesson_title || activeSessionSchedule.class_name || '当前课堂'}
                       </p>
                     </div>
                   </div>
@@ -480,7 +472,8 @@ export function StudentQuickActionsFloatingMenu({
                     size={16}
                     className="text-slate-400 group-hover/item:text-indigo-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
                   />
-                </div>
+                  </div>
+                )}
 
                 {/* 2. Action Card: View Latest Assignments */}
                 <div

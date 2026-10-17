@@ -2519,6 +2519,63 @@ export function registerClassroomRoutes(
 
   // ── 8. 实时课堂情绪与参与度追踪 (Real-time Classroom Mood Tracker) ─────────
 
+  // 学生端：查询自己所在班级当前进行中的课堂会话（Issue #109）
+  // - 学生角色：强制使用会话自己的 studentId（忽略任何客户端传参，避免越权）
+  // - 教师/管理员：可传 ?studentId= 用于「模拟学生视角」查看
+  app.get(
+    '/api/student/active-session',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const httpSession = (req as any).session;
+        const isStudent = httpSession?.role === 'student';
+        const studentId = isStudent
+          ? String(httpSession?.studentId || '').trim()
+          : typeof req.query.studentId === 'string'
+            ? req.query.studentId.trim()
+            : '';
+        if (!studentId) {
+          return res.status(400).json({ error: 'studentId is required' });
+        }
+
+        const row = db
+          .prepare(
+            `
+            SELECT cs.id AS session_id, cs.lesson_id, cs.class_id, cs.stage, cs.started_at, cs.created_at,
+                   l.title AS lesson_title, c.name AS class_name
+            FROM classroom_sessions cs
+            INNER JOIN class_students cst ON cst.class_id = cs.class_id
+            LEFT JOIN lessons l ON l.id = cs.lesson_id
+            LEFT JOIN classes c ON c.id = cs.class_id
+            WHERE cst.student_id = ? AND cs.stage != ?
+            ORDER BY
+              CASE WHEN cs.stage IN ('IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET') THEN 0 ELSE 1 END,
+              cs.created_at DESC
+            LIMIT 1
+          `,
+          )
+          .get(studentId, ARCHIVED_REPORT_STAGE) as any;
+
+        res.json({
+          success: true,
+          activeSession: row
+            ? {
+                sessionId: row.session_id,
+                lessonId: row.lesson_id,
+                lessonTitle: row.lesson_title || '',
+                classId: row.class_id,
+                className: row.class_name || '',
+                stage: row.stage,
+                startedAt: row.started_at ?? null,
+              }
+            : null,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
   // 获取当前所有活跃中的授课会话
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {

@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, cleanup } from '@testing-library/react';
 import { useClassroomSocket } from '../useClassroomSocket';
 import { whiteboardEventSlot } from '../../features/whiteboard/events';
 
@@ -97,7 +97,9 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
     whiteboardEventSlot.clear();
   });
   afterEach(() => {
+    cleanup();
     whiteboardEventSlot.clear();
+    vi.restoreAllMocks();
   });
 
   it('listens to whiteboard-quiz-answered and ingests as quiz.answered', () => {

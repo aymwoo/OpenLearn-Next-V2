@@ -120,6 +120,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         setSelectedLesson={setSelectedLesson}
         lessons={lessons}
         selectedLesson={selectedLesson}
+        addToast={addToast}
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />

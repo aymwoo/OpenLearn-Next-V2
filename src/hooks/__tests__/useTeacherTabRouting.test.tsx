@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, cleanup } from '@testing-library/react';
 import { useSessionSlice } from '../useSessionSlice';
 import { useSessionBootstrap } from '../useSessionBootstrap';
 import { appStore } from '../../store/appStore';
@@ -28,6 +28,7 @@ describe('Teacher Tab Hash Routing & Login Persistence (Issue #88)', () => {
   });
 
   afterEach(() => {
+    cleanup();
     (window as any).location = originalLocation;
     vi.restoreAllMocks();
   });

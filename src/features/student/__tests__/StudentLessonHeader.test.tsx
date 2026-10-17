@@ -1,7 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { StudentType, Lesson } from '../../../types/app';
 import { StudentLessonHeader } from '../StudentLessonHeader';
+import { studentActiveSessionStore } from '../useStudentActiveSession';
+
+beforeEach(() => {
+  studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+});
 
 afterEach(() => {
   cleanup();
@@ -39,5 +44,48 @@ describe('StudentLessonHeader', () => {
     render(<StudentLessonHeader {...makeProps({ students, lang: 'en' })} />);
     expect(screen.queryByText('Back to Dashboard')).toBeNull();
     expect(screen.getByText('Class Focus Locked · Following Teacher')).toBeTruthy();
+  });
+
+  it('Issue #109: warns that the class is still running when leaving the classroom', () => {
+    studentActiveSessionStore.setState({
+      activeSession: {
+        sessionId: 'sess-1',
+        lessonId: 'l1',
+        lessonTitle: 'Math',
+        classId: 'c1',
+        className: 'Class 1',
+        stage: 'IN_CLASS_TEACHING',
+        startedAt: Date.now(),
+      },
+      loading: false,
+      studentKey: 's1',
+    });
+    const addToast = vi.fn();
+    const setStudentViewStatus = vi.fn();
+    const setSelectedLesson = vi.fn();
+
+    render(
+      <StudentLessonHeader
+        {...makeProps({ addToast, setStudentViewStatus, setSelectedLesson, lang: 'zh' })}
+      />,
+    );
+    fireEvent.click(screen.getByText('Back to Dashboard'));
+
+    expect(setStudentViewStatus).toHaveBeenCalledWith('dashboard');
+    expect(setSelectedLesson).toHaveBeenCalledWith(null);
+    expect(addToast).toHaveBeenCalledWith(
+      '课堂仍在进行',
+      expect.stringContaining('返回课堂'),
+      'info',
+    );
+
+    studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+  });
+
+  it('Issue #109: does not warn when no class session is running', () => {
+    const addToast = vi.fn();
+    render(<StudentLessonHeader {...makeProps({ addToast, lang: 'zh' })} />);
+    fireEvent.click(screen.getByText('Back to Dashboard'));
+    expect(addToast).not.toHaveBeenCalled();
   });
 });
