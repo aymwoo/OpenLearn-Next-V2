@@ -72,7 +72,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
-      res.json(rosterService.listStudents(pg));
+      const session = (req as any).session;
+      const scope = isAdministrator(session)
+        ? ({ mode: 'all' } as const)
+        : ({
+            mode: 'owner',
+            userId: actorUserId(session) || '',
+            username: session?.username || '',
+          } as const);
+      res.json(rosterService.listStudents(pg, scope));
     } catch (e: any) {
       sendSafeError(res, e);
     }
