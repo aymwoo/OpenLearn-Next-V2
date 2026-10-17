@@ -58,6 +58,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
+      reportOnFailure: true,
+      include: [
+        'packages/*/src/**/*.{ts,tsx,js,mjs}',
+        'packages/core/**/*.{ts,tsx,js,mjs}',
+        'packages/plugin-sdk/**/*.{ts,tsx,js,mjs}',
+        'packages/plugins/**/*.{ts,tsx,js,mjs}',
+        'server/**/*.{ts,tsx,js,mjs}',
+        'src/**/*.{ts,tsx,js,mjs}',
+      ],
       exclude: [
         '**/node_modules/**',
         '**/__tests__/**',
@@ -67,11 +76,12 @@ export default defineConfig({
         'v2_plugins/**',
         'scripts/**',
       ],
+      // 覆盖率阈值：显式配置 include 消除 137 个零覆盖源文件脱离分母的虚高失真（诚实基线）
       thresholds: {
-        lines: 54,
-        branches: 44,
-        functions: 50,
-        statements: 54,
+        lines: 45,
+        branches: 35,
+        functions: 40,
+        statements: 44,
       },
     },
   },

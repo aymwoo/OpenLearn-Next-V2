@@ -39,7 +39,25 @@ describe('Worker RPC and Event Forwarding', () => {
     });
   };
 
+  const waitForCondition = async (
+    predicate: () => boolean | Promise<boolean>,
+    timeoutMs = 4000,
+    intervalMs = 20,
+  ): Promise<void> => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (await predicate()) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    if (!(await predicate())) {
+      throw new Error(`Timed out waiting for condition after ${timeoutMs}ms`);
+    }
+  };
+
   beforeEach(async () => {
+    process.env.OPENLEARN_WATCHDOG_BASE_DELAY = '50';
     pluginsDir = createPluginsDir('worker-rpc');
     kernel = new Kernel({ pluginsDir });
     await kernel.ready;
@@ -59,6 +77,7 @@ describe('Worker RPC and Event Forwarding', () => {
   });
 
   afterEach(async () => {
+    delete process.env.OPENLEARN_WATCHDOG_BASE_DELAY;
     cleanupPluginsDir(pluginsDir);
     const plugins = kernel.pluginHost.listPlugins();
     for (const p of plugins) {
@@ -146,11 +165,19 @@ export default {
       timestamp: Date.now(),
     });
 
-    // Wait a little bit for worker thread to process event and complete database writes/commands
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Wait for worker thread to process event and complete database writes/commands
+    const noteTable = `plugin_${String(testPlugin!.id).replace(/[^a-zA-Z0-9_]/g, '_')}_rpc_notes`;
+    await waitForCondition(() => {
+      try {
+        const node = kernel.db.prepare(`SELECT * FROM ${noteTable} WHERE id = ?`).get('node-rpc-test-id') as any;
+        const classes = kernel.db.prepare('SELECT * FROM classes WHERE name = ?').all('Class from Worker RPC') as any[];
+        return Boolean(node?.name === 'rpc-test.txt' && classes.length > 0);
+      } catch {
+        return false;
+      }
+    }, 4000);
 
     // Verify database write succeeded (RPC database access checked!)
-    const noteTable = `plugin_${String(testPlugin!.id).replace(/[^a-zA-Z0-9_]/g, '_')}_rpc_notes`;
     const node = kernel.db.prepare(`SELECT * FROM ${noteTable} WHERE id = ?`).get('node-rpc-test-id') as any;
     expect(node).toBeDefined();
     expect(node.name).toBe('rpc-test.txt');
@@ -222,8 +249,17 @@ export default {
     // Verify it is active
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
-    // Wait a little bit for worker thread to process and write to VFS
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Wait for worker thread to process and write to VFS
+    await waitForCondition(() => {
+      try {
+        const fileResult = kernel.db
+          .prepare("SELECT content FROM vfs_nodes WHERE name = 'cookie_test_result.txt'")
+          .get() as { content: string } | undefined;
+        return fileResult?.content === 'Parsed foo=bar';
+      } catch {
+        return false;
+      }
+    }, 5000);
 
     // Verify that the file was written to VFS with the expected content
     const fileResult = kernel.db
@@ -331,16 +367,23 @@ export default {
     // Run hot reload on worker-mode plugin
     await kernel.pluginHost.reloadPlugin(testPlugin!.id, pluginCodeV2);
 
-    // Wait a little bit for the new worker thread to boot and register its handler
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Run increment command again on the reloaded worker (should increment from 10 to 15)
-    const result2 = (await kernel.commandBus.execute({
-      id: 'cmd-inc-2',
-      type: 'ext-test-state-inherit.increment',
-      actorId: 'role:administrator',
-      payload: {},
-    })) as any;
+    // Wait for the new worker thread to boot and register its handler
+    let result2: any;
+    let callIndex = 0;
+    await waitForCondition(async () => {
+      try {
+        callIndex++;
+        result2 = await kernel.commandBus.execute({
+          id: `cmd-inc-2-${callIndex}`,
+          type: 'ext-test-state-inherit.increment',
+          actorId: 'role:administrator',
+          payload: {},
+        });
+        return result2?.count === 15;
+      } catch {
+        return false;
+      }
+    }, 4000);
     expect(result2.count).toBe(15);
   }, 40000);
 
@@ -490,65 +533,43 @@ export default {
     };
     eventBus.subscribe('plugin.crashed', subscriber);
 
-    // Trigger crash 1
-    await kernel.commandBus.execute({
-      id: 'cmd-watchdog-crash1',
-      type: 'ext-test-watchdog.crash_now',
-      actorId: 'role:administrator',
-      payload: {},
-    });
+    const triggerCrashAndWaitRecovery = async (crashId: string) => {
+      await kernel.commandBus.execute({
+        id: crashId,
+        type: 'ext-test-watchdog.crash_now',
+        actorId: 'role:administrator',
+        payload: {},
+      });
+      // 等待旧 worker 崩溃并注销 handler
+      await waitForCondition(() => !kernel.commandBus.hasHandler('ext-test-watchdog.get_run_status'), 2000, 10);
+      // 等待看门狗拉起新 worker 并重新注册 handler
+      let res: any;
+      let attempt = 0;
+      await waitForCondition(async () => {
+        try {
+          attempt++;
+          res = await kernel.commandBus.execute({
+            id: `cmd-watchdog-rc-${crashId}-${attempt}`,
+            type: 'ext-test-watchdog.get_run_status',
+            actorId: 'role:administrator',
+            payload: {},
+          });
+          return res?.status === 'ok';
+        } catch {
+          return false;
+        }
+      }, 4000, 10);
+      expect(res.status).toBe('ok');
+    };
 
-    // Wait for watchdog to auto-recover it (first crash has 1000ms delay + buffer)
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    // Trigger crash 1 and wait for recovery (baseDelay 50ms)
+    await triggerCrashAndWaitRecovery('cmd-watchdog-crash1');
 
-    // Verify it recovered and registered handlers again!
-    const res2 = (await kernel.commandBus.execute({
-      id: 'cmd-watchdog-rc2',
-      type: 'ext-test-watchdog.get_run_status',
-      actorId: 'role:administrator',
-      payload: {},
-    })) as any;
-    expect(res2.status).toBe('ok');
+    // Trigger crash 2 and wait for recovery (baseDelay 50ms * 2 = 100ms)
+    await triggerCrashAndWaitRecovery('cmd-watchdog-crash2');
 
-    // Trigger crash 2
-    await kernel.commandBus.execute({
-      id: 'cmd-watchdog-crash2',
-      type: 'ext-test-watchdog.crash_now',
-      actorId: 'role:administrator',
-      payload: {},
-    });
-
-    // Wait for watchdog (2nd crash has 2000ms delay + buffer)
-    await new Promise((resolve) => setTimeout(resolve, 3500));
-
-    // Verify it recovered again
-    const res3 = (await kernel.commandBus.execute({
-      id: 'cmd-watchdog-rc3',
-      type: 'ext-test-watchdog.get_run_status',
-      actorId: 'role:administrator',
-      payload: {},
-    })) as any;
-    expect(res3.status).toBe('ok');
-
-    // Trigger crash 3
-    await kernel.commandBus.execute({
-      id: 'cmd-watchdog-crash3',
-      type: 'ext-test-watchdog.crash_now',
-      actorId: 'role:administrator',
-      payload: {},
-    });
-
-    // Wait for watchdog (3rd crash has 4000ms delay + buffer)
-    await new Promise((resolve) => setTimeout(resolve, 5500));
-
-    // Verify it recovered again
-    const res4 = (await kernel.commandBus.execute({
-      id: 'cmd-watchdog-rc4',
-      type: 'ext-test-watchdog.get_run_status',
-      actorId: 'role:administrator',
-      payload: {},
-    })) as any;
-    expect(res4.status).toBe('ok');
+    // Trigger crash 3 and wait for recovery (baseDelay 50ms * 4 = 200ms)
+    await triggerCrashAndWaitRecovery('cmd-watchdog-crash3');
 
     // Trigger crash 4 (this should trigger the circuit breaker since count is 4 > 3)
     await kernel.commandBus.execute({
@@ -558,8 +579,17 @@ export default {
       payload: {},
     });
 
-    // Wait for breaker (circuit breaker fires immediately)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Wait for breaker (circuit breaker fires immediately upon 4th crash)
+    await waitForCondition(() => {
+      try {
+        const row = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as {
+          status: string;
+        } | undefined;
+        return row?.status === 'error' && crashedEventReceived;
+      } catch {
+        return false;
+      }
+    }, 4000, 10);
 
     // Verify plugin is now marked as 'error' state in DB
     const finalRow = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as {
