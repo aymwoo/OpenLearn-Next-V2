@@ -339,15 +339,20 @@ export class GradingService {
       )
       .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; status: string }>;
 
-    // 4. 批量拉取学习进度
+    // 4. 批量拉取学习进度（成绩只采用已验证进度，学生自报仅作展示）
     const progressList = this.db
       .prepare(
         `
-      SELECT student_id, progress_percent FROM student_lesson_progress
+      SELECT student_id, progress_percent, verified, verified_progress_percent FROM student_lesson_progress
       WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
     `,
       )
-      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{ student_id: string; progress_percent: number }>;
+      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{
+      student_id: string;
+      progress_percent: number;
+      verified: number;
+      verified_progress_percent: number | null;
+    }>;
 
     // 5. 批量拉取平时作业得分
     const assignmentSubmissions = this.db
@@ -393,9 +398,14 @@ export class GradingService {
     }
 
     const progressMap = new Map<string, number[]>();
+    const verifiedProgressMap = new Map<string, number[]>();
     for (const p of progressList) {
       if (!progressMap.has(p.student_id)) progressMap.set(p.student_id, []);
       progressMap.get(p.student_id)!.push(p.progress_percent);
+      if (p.verified === 1) {
+        if (!verifiedProgressMap.has(p.student_id)) verifiedProgressMap.set(p.student_id, []);
+        verifiedProgressMap.get(p.student_id)!.push(p.verified_progress_percent ?? p.progress_percent);
+      }
     }
 
     const assignmentMap = new Map<string, number[]>();
@@ -448,11 +458,15 @@ export class GradingService {
         attendanceScore = Math.round(sum / statuses.length);
       }
 
-      // 计算进度分：课节进度的算术均值
-      const progressPercents = progressMap.get(student.id) || [];
+      // 计算进度分：只取已验证进度（教师确认 / 课件自动录入 / 受信插件）的算术均值。
+      // 学生自报进度不计入成绩；若存在进度记录但全部未验证，记 0 分而不是回退到「无记录 100 分」。
+      const verifiedPercents = verifiedProgressMap.get(student.id) || [];
+      const allPercents = progressMap.get(student.id) || [];
       let progressScore = 100;
-      if (progressPercents.length > 0) {
-        progressScore = Math.round(progressPercents.reduce((acc, val) => acc + val, 0) / progressPercents.length);
+      if (verifiedPercents.length > 0) {
+        progressScore = Math.round(verifiedPercents.reduce((acc, val) => acc + val, 0) / verifiedPercents.length);
+      } else if (allPercents.length > 0) {
+        progressScore = 0;
       }
 
       // 计算作业分：若班级已发布作业但学生未交则得 0 分，否则为已交作业平均分

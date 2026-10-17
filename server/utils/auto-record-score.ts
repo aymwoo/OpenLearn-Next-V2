@@ -233,11 +233,14 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
     );
 
     db.prepare(
-      `INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
-       VALUES (?, ?, 1, 100, '[]', ?)
+      `INSERT INTO student_lesson_progress
+         (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent)
+       VALUES (?, ?, 1, 100, '[]', ?, 1, 100)
        ON CONFLICT(student_id, lesson_id) DO UPDATE SET
          completed = 1,
-         progress_percent = 100`,
+         progress_percent = 100,
+         verified = 1,
+         verified_progress_percent = 100`,
     ).run(attempt.student_id, lessonId, now);
 
     return { assignmentId };

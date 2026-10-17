@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **学生自报学习进度不再直接计入成绩（P1）**：`student_lesson_progress` 新增 `verified` 与 `verified_progress_percent`（迁移 `032_progress_verification.sql`，历史数据回填为已验证以保持既有成绩口径）。学生端进度滑杆 /「已完成」按钮写入的行标记为未验证，只影响展示；教师/管理员在同一次 `POST /api/students/:id/progress` 中的写入、课件自动录入（`auto-record-score`）与受信插件 `student.set_progress` 标记为已验证并记下验证值。`GradingService` 的进度分只聚合已验证进度，且**只有未验证记录时记 0 分**（不再回退到「无记录 100 分」），学生后续修改展示进度也无法覆盖教师已验证的数值。教师端学生进度列表新增「已验证 / 自报」徽标与一键「确认」按钮，学生端进度控件文案标注「教师确认后计入成绩」。新增 `student-progress-verification.test.ts`（4 例）并更新自动录入断言。
+
 ### Fixes
 
 - **随堂测验正确答案统一到 `correctIndex`（Issue #107）**：此前同一道测验题有两个答案字段且各模块各读各的 —— 组件默认数据只写 `correctIndex: 0`，属性栏「正确答案」下拉写 `correctAnswer`（选项文本），服务端判分与环节门禁 `looksLikeQuiz` 只读 `correctAnswer`，全屏测验视图统计与正确选项高亮只读 `correctIndex`。后果是「新建测验不设答案就全员 0 分」「教师选了非 A 的答案后大屏正确率与服务端得分对不上」「选项本身是单个字母时提交格式可能误判」。现在统一以**选项索引**为权威：新增 `packages/core/whiteboard/quiz-answer.ts`（前后端共用的纯函数：`resolveCorrectIndex` / `resolveSubmittedIndex` / `gradeQuizSubmission` / `buildQuizAnswerFields` / `looksLikeQuizAnswerData`），属性栏下拉改为写索引并同时同步 `correctAnswer` 文本（`handlePropsUpdate` 一次原子写入），学生提交统一发送选项索引，服务端判分、大屏统计、环节门禁全部走同一解析。**旧数据无需迁移**：只有 `correctAnswer` 时按「选项文本 → 字母 → 数字」换算成索引，历史提交里的字母 / 索引 / 选项文本三种作答写法也统一归一化（此前 `parseInt('B')` 得 NaN，大屏会把已答对的学生计成未答）。服务端判分结果与 `GET /api/lessons/:id/quiz-submissions` 均新增 `correctIndex`（提交后才回传，学生端据此高亮正确选项），`quiz.answered` 事件契约同步补充该字段。新增 `packages/core/whiteboard/__tests__/quiz-answer.test.ts`（26 例）、`server/__tests__/quiz-answer-grading.test.ts`（7 例），并补充 `quiz-fullscreen.test.tsx`（旧字段高亮 / 提交发送索引）与 `whiteboard-properties-sidebar.test.tsx`（下拉写入两字段 / 旧数据回显）。
