@@ -41,6 +41,7 @@ import { AcademicYearFilter } from './AcademicYearFilter';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 import { useAsyncTaskStore, asyncTaskStore } from '../store/asyncTaskStore';
+import { uiStore, useUIStore } from '../store/uiStore';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
@@ -252,15 +253,71 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [aiProviders, setAiProviders] = useState<{ id: string; name: string; model_name: string }[]>([]);
   const [ocrProviderId, setOcrProviderId] = useState<string>('');
   const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
+  const pendingTimetableSubTab = useUIStore((s) => s.pendingTimetableSubTab);
+
+  // ── Issue #89: 识别草稿现场恢复与持久化 ─────────────────────────────────
+  // 挂载时（进入/切回课表中心）：恢复草稿（结果条目、勾选、图片、提供方），
+  // 并在识别任务运行中/已完成时自动落在「AI 识别导入」子页，而不是默认的「查看」子页。
+  useEffect(() => {
+    const draft = asyncTaskStore.getState().timetableOcrDraft;
+    if (draft) {
+      if (draft.entries.length > 0) {
+        setOcrEntries(draft.entries);
+        setOcrSelectedEntries(new Set(draft.selected));
+        setOcrMessage({
+          type: 'info',
+          text:
+            lang === 'zh'
+              ? '已恢复上次的识别结果，请核对后导入。'
+              : 'Previous OCR result restored. Review and import below.',
+        });
+      }
+      if (draft.imagePreview) setOcrImagePreview(draft.imagePreview);
+      if (draft.imageBase64) setOcrImageBase64(draft.imageBase64);
+      if (draft.fileName) setOcrFileName(draft.fileName);
+      if (draft.providerId) setOcrProviderId(draft.providerId);
+    }
+    const taskStatus = asyncTaskStore.getState().timetableOcrTask?.status;
+    if (taskStatus === 'running' || taskStatus === 'completed') {
+      setActiveTab('ocr_import');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 消费子页导航信号（完成 Toast「查看并导入课表」/ 顶栏「识别已完成 · 查看」徽标）：
+  // 打开课表中心时直接落到「AI 识别导入」子页
+  useEffect(() => {
+    if (pendingTimetableSubTab) {
+      setActiveTab(pendingTimetableSubTab as 'ocr_import');
+      uiStore.getState().setPendingTimetableSubTab(null);
+    }
+  }, [pendingTimetableSubTab]);
+
+  // 草稿现场同步到全局 store（切页不丢；sessionStorage 持久化由 store 负责）
+  useEffect(() => {
+    const task = asyncTaskStore.getState().timetableOcrTask;
+    // 无图片、无结果且无任务时无需记录草稿（首次进入页面的空现场）
+    if (!ocrImagePreview && !ocrImageBase64 && ocrEntries.length === 0 && !task) return;
+    asyncTaskStore.getState().setTimetableOcrDraft({
+      imagePreview: ocrImagePreview,
+      imageBase64: ocrImageBase64,
+      fileName: ocrFileName,
+      providerId: ocrProviderId,
+      entries: ocrEntries,
+      selected: Array.from(ocrSelectedEntries),
+    });
+  }, [ocrImagePreview, ocrImageBase64, ocrFileName, ocrProviderId, ocrEntries, ocrSelectedEntries]);
 
   // 联动全局后台任务：页面切换回来时自动同步任务状态与已识别结果
   useEffect(() => {
     if (timetableOcrTask?.status === 'running') {
       setOcrLoading(true);
       setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在后台分析提取课表...' : '🧠 AI analyzing timetable in background...');
+      setActiveTab('ocr_import');
     } else if (timetableOcrTask?.status === 'completed') {
       setOcrLoading(false);
       setOcrProgress(100);
+      setActiveTab('ocr_import');
       const entries = timetableOcrTask.result?.entries || [];
       if (entries.length > 0 && ocrEntries.length === 0) {
         setOcrEntries(entries);

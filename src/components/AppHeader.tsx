@@ -15,6 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAsyncTaskStore } from '../store/asyncTaskStore';
+import { uiStore } from '../store/uiStore';
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
 import { FontSizeSelector } from './FontSizeSelector';
@@ -190,11 +191,14 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
         )}
 
-        {/* 全局后台任务指示器：课表识别完成提示 */}
+        {/* 全局后台任务指示器：课表识别完成提示（点击直达「AI 识别导入」子页，Issue #89） */}
         {timetableOcrTask?.status === 'completed' && teacherTab !== 'timetable' && (
           <button
             type="button"
-            onClick={() => setTeacherTab('timetable')}
+            onClick={() => {
+              setTeacherTab('timetable');
+              uiStore.getState().setPendingTimetableSubTab('ocr_import');
+            }}
             className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold border border-emerald-200 transition-colors shadow-2xs cursor-pointer select-none"
             title={lang === 'zh' ? '点击前往课表管理查看识别结果' : 'Click to view timetable result'}
           >
