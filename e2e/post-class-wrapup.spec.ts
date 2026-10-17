@@ -255,11 +255,17 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
       await expect(liveClassNavBtn).toBeVisible({ timeout: 15_000 });
       await liveClassNavBtn.click();
 
-      // 活跃课堂检测到后，等待“回到课堂”按钮就绪并点击恢复
-      const resumeBtn = page.getByRole('button', { name: '回到课堂' });
-      await expect(resumeBtn).toBeVisible({ timeout: 15_000 });
-      await expect(resumeBtn).toBeEnabled({ timeout: 10_000 });
-      await resumeBtn.click();
+      // Issue #91: 先处理进行中会话首屏（点「继续上课」）；无首屏时退回旧门户的「回到课堂」
+      const resumeFromList = page.getByRole('button', { name: /继续上课|Resume/ }).first();
+      if (await resumeFromList.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await resumeFromList.click();
+      } else {
+        // 活跃课堂检测到后，等待“回到课堂”按钮就绪并点击恢复
+        const resumeBtn = page.getByRole('button', { name: '回到课堂' });
+        await expect(resumeBtn).toBeVisible({ timeout: 15_000 });
+        await expect(resumeBtn).toBeEnabled({ timeout: 10_000 });
+        await resumeBtn.click();
+      }
 
       // 4. 断言课后复盘主面板 #post-class-wrapup-view 成功挂载
       const wrapupView = page.locator('#post-class-wrapup-view');

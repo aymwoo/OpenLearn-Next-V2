@@ -138,6 +138,12 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       await page.goto('/');
       await page.locator('button:has-text("互动课堂")').first().click();
 
+      // Issue #91: 进入互动课堂先展示进行中会话列表（不再自动进入）→ 点「继续上课」
+      const resumeFromList = page.getByRole('button', { name: /继续上课|Resume/ }).first();
+      if (await resumeFromList.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await resumeFromList.click();
+      }
+
       // 检测活跃课堂，若展示“回到课堂”则点击
       const resumeBtn = page.getByRole('button', { name: '回到课堂' });
       if (await resumeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {

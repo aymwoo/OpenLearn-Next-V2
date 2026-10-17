@@ -94,6 +94,11 @@ async function openTeacherClassroom(page: Page) {
   const cockpit = page.locator(COCKPIT);
   if (await cockpit.isVisible().catch(() => false)) return;
   await page.locator('button:has-text("互动课堂")').first().click();
+  // Issue #91: 进入互动课堂先展示进行中会话列表（不再自动进入）——有进行中会话时点「继续上课」
+  const resumeFromList = page.getByRole('button', { name: /继续上课|Resume/ }).first();
+  if (await resumeFromList.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await resumeFromList.click();
+  }
   const resumeBtn = page.getByRole('button', { name: '回到课堂' });
   if (await resumeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await resumeBtn.click();
