@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { LiveClassroomView } from '../LiveClassroomView';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { appStore } from '../../store/appStore';
@@ -81,6 +81,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     liveClassStudentProgress: [],
     activeRole: 'teacher',
     setActiveRole: vi.fn(),
+    socketRef: { current: { emit: vi.fn() } },
   };
 
   beforeEach(() => {
@@ -704,5 +705,199 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
         message: '反馈流已清空。',
       }),
     ]);
+  });
+
+  it('supports clicking a student card to pin the overview panel and keeps displaying on mouse leave (#115)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const props: Record<string, any> = {
+      ...defaultProps,
+      liveClassStudentProgress: [
+        {
+          student_id: 's101',
+          progress_percent: 85,
+          quiz_score: 95,
+          completed_segments: '["seg-1"]',
+        },
+        {
+          student_id: 's102',
+          progress_percent: 40,
+          quiz_score: null,
+          completed_segments: '[]',
+        },
+      ],
+    };
+
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('学生专注力监控')).toBeTruthy();
+    });
+
+    // 1. Initial state: No student pinned or hovered -> shows Class Overview
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
+    expect(screen.queryByText('随堂测验')).toBeNull();
+
+    // 2. Find student cards
+    const cardS101 = screen.getByRole('button', { name: /张小明/ });
+    const cardS102 = screen.getByRole('button', { name: /李华/ });
+
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+
+    // 3. Click card to pin student s101
+    fireEvent.click(cardS101);
+    expect(cardS101.getAttribute('aria-pressed')).toBe('true');
+
+    // Overview panel now displays 张小明's details & pinned badge
+    expect(screen.getByText('随堂测验')).toBeTruthy();
+    expect(screen.getByText('95 / 100')).toBeTruthy();
+    expect(screen.getByText('固定')).toBeTruthy();
+    expect(screen.getByTitle('已固定显示该学生概况，点击空白处或 Esc 取消')).toBeTruthy();
+
+    // 4. Mouse leave s101 card -> Overview remains pinned to 张小明
+    fireEvent.mouseLeave(cardS101);
+    expect(screen.getByText('95 / 100')).toBeTruthy();
+    expect(screen.getByText('固定')).toBeTruthy();
+
+    // 5. Hover over student s102 card -> temporary preview
+    fireEvent.mouseEnter(cardS102);
+    expect(screen.getByText('预览')).toBeTruthy();
+    expect(screen.getByTitle('临时悬浮预览中，鼠标移开后恢复已固定学生')).toBeTruthy();
+    expect(screen.getByText('未提交')).toBeTruthy(); // 李华's quiz score is null
+
+    // 6. Mouse leave s102 card -> smooth recovery back to pinned student s101
+    fireEvent.mouseLeave(cardS102);
+    expect(screen.queryByText('预览')).toBeNull();
+    expect(screen.getByText('固定')).toBeTruthy();
+    expect(screen.getByText('95 / 100')).toBeTruthy();
+
+    // 7. Unpin via the "取消固定" button in the overview panel header
+    const unpinBtn = screen.getByRole('button', { name: '取消固定学生概况' });
+    fireEvent.click(unpinBtn);
+
+    // Reverts to Class Overview
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
+    expect(screen.queryByText('随堂测验')).toBeNull();
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+
+    // 8. Keyboard accessibility: Enter key pins the card
+    fireEvent.keyDown(cardS101, { key: 'Enter' });
+    expect(cardS101.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('95 / 100')).toBeTruthy();
+
+    // 9. Press Escape key -> clears pinned state
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
+
+    // 10. Space key toggles pin on cardS102
+    fireEvent.keyDown(cardS102, { key: ' ' });
+    expect(cardS102.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('未提交')).toBeTruthy();
+
+    // Space key toggles off
+    fireEvent.keyDown(cardS102, { key: ' ' });
+    expect(cardS102.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
+  });
+
+  it('stops click propagation from card action buttons to prevent toggling pin state (#115)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const socketEmitMock = vi.fn();
+    const addToastMock = vi.fn();
+    const props: Record<string, any> = {
+      ...defaultProps,
+      socketRef: { current: { emit: socketEmitMock } },
+      addToast: addToastMock,
+      liveClassStudentProgress: [
+        {
+          student_id: 's101',
+          progress_percent: 20, // behind
+          quiz_score: 50,
+          completed_segments: '[]',
+        },
+      ],
+    };
+
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('学生专注力监控')).toBeTruthy();
+    });
+
+    const cardS101 = screen.getByRole('button', { name: /张小明/ });
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+
+    // Click warning ping button inside card
+    const pingBtn = within(cardS101).getByTitle('提醒');
+    fireEvent.click(pingBtn);
+
+    expect(socketEmitMock).toHaveBeenCalledWith('teacher-ping-student', {
+      studentId: 's101',
+      lessonId: 'lesson-101',
+      message: expect.stringContaining('学习进度预警'),
+    });
+    expect(addToastMock).toHaveBeenCalledWith(
+      expect.stringContaining('已发送提醒'),
+      expect.stringContaining('张小明'),
+      'success',
+    );
+
+    // Crucial: Pin state was NOT toggled because of e.stopPropagation()
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
+
+    // Click unlock segment button inside card
+    const unlockBtn = within(cardS101).getByTitle('放行当前环节');
+    fireEvent.click(unlockBtn);
+
+    // Pin state still remains false
+    expect(cardS101.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('班级学情概况')).toBeTruthy();
   });
 });
