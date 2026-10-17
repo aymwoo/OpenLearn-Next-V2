@@ -841,6 +841,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     const [activeDragElement, setActiveDragElement] = useState<{
       id: string;
+      initialX: number;
+      initialY: number;
       currentX: number;
       currentY: number;
       startPointerX: number;
@@ -947,6 +949,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     const dragRef = useRef<{
       id: string;
+      initialX: number;
+      initialY: number;
       currentX: number;
       currentY: number;
       startPointerX: number;
@@ -1383,15 +1387,24 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const handleElementDragStart = (e: React.PointerEvent, elementId: string, elementData: any) => {
       if (userRole !== 'teacher') return;
       e.preventDefault();
-      const initialX = elementData.x ?? 0;
-      const initialY = elementData.y ?? 0;
+      // 优先从乐观覆盖层获取真实视觉位置，避免连续快速二次拖拽时从旧服务端坐标“起跳”
+      const overlay = localGeometryRef.current.get(elementId);
+      const initialX = overlay?.x ?? elementData.x ?? 0;
+      const initialY = overlay?.y ?? elementData.y ?? 0;
       const dragInfo = {
         id: elementId,
+        initialX,
+        initialY,
         currentX: initialX,
         currentY: initialY,
         startPointerX: e.clientX,
         startPointerY: e.clientY,
-        data: elementData,
+        data: {
+          ...elementData,
+          ...(overlay ?? {}),
+          x: initialX,
+          y: initialY,
+        },
       };
       dragRef.current = dragInfo;
       setActiveDragElement(dragInfo);
@@ -1400,11 +1413,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       onElementDragChangeRef.current?.({
         elementId,
         elementType: targetEl?.type || 'unknown',
-        elementData,
+        elementData: dragInfo.data,
         clientX: e.clientX,
         clientY: e.clientY,
         initialPage: currentPage,
-        initialSegmentId: elementData.segmentId || activeSegmentId,
+        initialSegmentId: dragInfo.data.segmentId || activeSegmentId,
       });
     };
 
@@ -1469,8 +1482,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         if (!dragRef.current) return;
         const dx = e.clientX - dragRef.current.startPointerX;
         const dy = e.clientY - dragRef.current.startPointerY;
-        const initialX = dragRef.current.data.x ?? 0;
-        const initialY = dragRef.current.data.y ?? 0;
+        const initialX = dragRef.current.initialX;
+        const initialY = dragRef.current.initialY;
 
         dragRef.current.currentX = initialX + dx;
         dragRef.current.currentY = initialY + dy;
@@ -1578,15 +1591,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const dropAction = activeDropZoneActionRef.current;
         setActiveDropZoneAction(null);
         setDragOverTileId(null);
-        dragRef.current = null;
-        setActiveDragElement(null);
 
-        if (isExternalHandled) {
+        if (!hasMoved || isExternalHandled) {
+          dragRef.current = null;
+          setActiveDragElement(null);
           return;
         }
 
         // 平铺模式下放开鼠标：若命中切分或对调动作则执行，否则弹回复位保持网格严密
         if (autoTileEnabled) {
+          dragRef.current = null;
+          setActiveDragElement(null);
           if (dropAction && dropAction.targetId && dropAction.targetId !== elementId) {
             if (dropAction.type === 'swap') {
               void swapTileElementsRef.current?.(elementId, dropAction.targetId);
@@ -1599,16 +1614,27 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           return;
         }
 
+        const prevOverlay = localGeometryRef.current.get(elementId);
+        const nextGeo = {
+          ...extractGeometry(elementData, elementData?.radius !== undefined ? 'circle' : 'rect'),
+          ...(prevOverlay ?? {}),
+          x: finalX,
+          y: finalY,
+        };
+
+        // 1. 同步立即写入乐观几何覆盖层，确保在清空 activeDragElement 时，
+        //    下一个渲染批次直接使用新坐标，消除因异步 await onElementUpdate
+        //    导致的旧服务端坐标闪回与组件闪烁/短暂消失空窗。
+        setLocalGeometry(elementId, nextGeo);
+
+        // 2. 同步清空拖拽瞬态状态（React 会将 setLocalGeometry 与此处的 setState 批处理在同一帧内）
+        dragRef.current = null;
+        setActiveDragElement(null);
+
         if (onElementUpdate) {
           setIsSyncing(true);
           try {
-            await onElementUpdate(elementId, { ...elementData, x: finalX, y: finalY });
-            // 乐观更新：拖拽结果立即落画布，避免服务端回传前被覆盖层弹回
-            setLocalGeometry(elementId, {
-              ...extractGeometry(elementData, elementData?.radius !== undefined ? 'circle' : 'rect'),
-              x: finalX,
-              y: finalY,
-            });
+            await onElementUpdate(elementId, { ...elementData, ...(prevOverlay ?? {}), x: finalX, y: finalY });
             frontendEventBus.publish({
               id: uuidv7(),
               type: 'whiteboard.element_updated',
@@ -1619,6 +1645,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             });
           } catch (err) {
             console.error('Drag end update error:', err);
+            // 失败时安全回滚
+            if (prevOverlay) {
+              setLocalGeometry(elementId, prevOverlay);
+            } else {
+              clearLocalGeometry(elementId);
+            }
           } finally {
             setIsSyncing(false);
           }
@@ -1700,25 +1732,36 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const { id } = resizeRef.current;
         const { x, y, width, height } = resizingStateRef.current;
 
+        const targetEl = safeElements.find((el) => el.id === id);
+        let currentData: any = {};
+        if (targetEl) {
+          try {
+            currentData = JSON.parse(targetEl.data);
+          } catch {}
+        }
+        const prevOverlay = localGeometryRef.current.get(id);
+        const nextGeo = {
+          ...extractGeometry(currentData, currentData?.radius !== undefined ? 'circle' : 'rect'),
+          ...(prevOverlay ?? {}),
+          x,
+          y,
+          width,
+          height,
+        };
+
+        // 1. 同步立即写入乐观几何覆盖层，消除缩放释放后的尺寸闪烁与空窗
+        setLocalGeometry(id, nextGeo);
+
+        // 2. 同步清空缩放瞬态状态
         resizeRef.current = null;
         resizingStateRef.current = null;
         setActiveResizeElement(null);
         setResizingState(null);
 
-        const targetEl = safeElements.find((el) => el.id === id);
         if (targetEl && onElementUpdate) {
           try {
-            const currentData = JSON.parse(targetEl.data);
             setIsSyncing(true);
-            await onElementUpdate(id, { ...currentData, x, y, width, height });
-            // 乐观更新：缩放结果立即落画布
-            setLocalGeometry(id, {
-              ...extractGeometry(currentData, currentData?.radius !== undefined ? 'circle' : 'rect'),
-              x,
-              y,
-              width,
-              height,
-            });
+            await onElementUpdate(id, { ...currentData, ...(prevOverlay ?? {}), x, y, width, height });
             frontendEventBus.publish({
               id: uuidv7(),
               type: 'whiteboard.element_updated',
@@ -1729,6 +1772,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             });
           } catch (err) {
             console.error('Resize end update error:', err);
+            // 失败时安全回滚
+            if (prevOverlay) {
+              setLocalGeometry(id, prevOverlay);
+            } else {
+              clearLocalGeometry(id);
+            }
           } finally {
             setIsSyncing(false);
           }
