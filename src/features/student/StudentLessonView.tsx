@@ -13,6 +13,12 @@ export interface StudentLessonViewProps {
   activeStudentId: string | null;
   /** 全班专注锁定中：学生端进入只读跟随模式 */
   isStudentLocked?: boolean;
+  /** 导航限制：禁止切 Tab、返回看板（答题锁定与完全锁定均开启） */
+  isNavigationLocked?: boolean;
+  /** 交互限制：白板设为只读并拦截内容写入（仅完全锁定开启，答题锁定为 false） */
+  isInteractionLocked?: boolean;
+  /** 锁定模式：'full' | 'navigation' */
+  lockMode?: 'full' | 'navigation';
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
   setSelectedLesson: (id: string | null) => void;
   lessons: Lesson[];
@@ -46,6 +52,9 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     students,
     activeStudentId,
     isStudentLocked = false,
+    isNavigationLocked,
+    isInteractionLocked,
+    lockMode,
     setStudentViewStatus,
     setSelectedLesson,
     lessons,
@@ -115,7 +124,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       <StudentLessonHeader
         students={students}
         activeStudentId={activeStudentId}
-        isStudentLocked={isStudentLocked}
+        isStudentLocked={isNavigationLocked ?? isStudentLocked}
+        lockMode={lockMode}
         setStudentViewStatus={setStudentViewStatus}
         setSelectedLesson={setSelectedLesson}
         lessons={lessons}
@@ -146,6 +156,9 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         />
         <StudentLessonInteractionPanel
           isStudentLocked={isStudentLocked}
+          isNavigationLocked={isNavigationLocked}
+          isInteractionLocked={isInteractionLocked}
+          lockMode={lockMode}
           studentLessonTab={studentLessonTab}
           setStudentLessonTab={setStudentLessonTab}
           isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}

@@ -99,7 +99,7 @@ export function AppHeader(props: AppHeaderProps) {
   const handleLogout = props.handleLogout ?? appData?.handleLogout ?? appData?.onLogout ?? (() => {});
   const toggleLanguage = props.toggleLanguage ?? appData?.toggleLanguage ?? (() => {});
   const setActiveRole = props.setActiveRole ?? appData?.setActiveRole ?? (() => {});
-  const isStudentLocked = props.isStudentLocked ?? appData?.isStudentLocked ?? false;
+  const isStudentLocked = props.isStudentLocked ?? appData?.isNavigationLocked ?? appData?.isStudentLocked ?? false;
   const onBlockedNavigate = props.onBlockedNavigate ?? appData?.notifyLockedNavigation;
   const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
 

@@ -80,6 +80,14 @@ export type ClassType = {
   assignment_count?: number;
 };
 
+export type LockMode = 'full' | 'navigation';
+
+export interface LockTarget {
+  tab?: 'whiteboard' | 'courseware' | 'assignment';
+  assignmentId?: string;
+  elementId?: string;
+}
+
 export type StudentType = {
   id: string;
   student_number?: string;
@@ -87,6 +95,8 @@ export type StudentType = {
   email: string;
   password?: string;
   locked_lesson_id?: string | null;
+  lock_mode?: LockMode | null;
+  lock_target?: string | null;
   private_notes?: string | null;
   created_at: number;
 };

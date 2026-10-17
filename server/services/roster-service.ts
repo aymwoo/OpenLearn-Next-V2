@@ -32,6 +32,8 @@ export interface StudentItem {
   email?: string | null;
   avatar?: string | null;
   locked_lesson_id?: string | null;
+  lock_mode?: 'full' | 'navigation' | null;
+  lock_target?: string | null;
   private_notes?: string | null;
   created_at: number;
   joined_at?: number;
@@ -465,7 +467,7 @@ export class RosterService {
     const total = (this.reader.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n;
     const students = this.reader
       .prepare(
-        'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
+        'SELECT id, student_number, name, email, avatar, locked_lesson_id, lock_mode, lock_target, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
       )
       .all(pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20), pg.offset ?? 0) as StudentItem[];
 
@@ -517,10 +519,12 @@ export class RosterService {
       student_number?: string;
       password?: string;
       locked_lesson_id?: string | null;
+      lock_mode?: 'full' | 'navigation' | null;
+      lock_target?: string | object | null;
       private_notes?: string | null;
     },
   ): void {
-    const { name, email, student_number, password, locked_lesson_id, private_notes } = params;
+    const { name, email, student_number, password, locked_lesson_id, lock_mode, lock_target, private_notes } = params;
     if (name) this.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name.trim(), id);
     if (email !== undefined)
       this.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email?.trim() || null, id);
@@ -528,8 +532,21 @@ export class RosterService {
       const hashed = password.trim() !== '' ? bcryptHashPassword(password) : password;
       this.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(hashed, id);
     }
-    if (locked_lesson_id !== undefined)
+    if (locked_lesson_id !== undefined) {
       this.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id = ?').run(locked_lesson_id, id);
+      if (locked_lesson_id === null) {
+        this.db.prepare("UPDATE students SET lock_mode = 'full', lock_target = NULL WHERE id = ?").run(id);
+      }
+    }
+    if (lock_mode !== undefined && locked_lesson_id !== null) {
+      const validMode = lock_mode === 'navigation' ? 'navigation' : 'full';
+      this.db.prepare('UPDATE students SET lock_mode = ? WHERE id = ?').run(validMode, id);
+    }
+    if (lock_target !== undefined && locked_lesson_id !== null) {
+      const targetStr =
+        lock_target ? (typeof lock_target === 'string' ? lock_target : JSON.stringify(lock_target)) : null;
+      this.db.prepare('UPDATE students SET lock_target = ? WHERE id = ?').run(targetStr, id);
+    }
     if (private_notes !== undefined)
       this.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(private_notes, id);
     if (student_number !== undefined)
@@ -600,7 +617,7 @@ export class RosterService {
     return this.reader
       .prepare(
         `
-      SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.private_notes, s.created_at, cs.joined_at
+      SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.lock_mode, s.lock_target, s.private_notes, s.created_at, cs.joined_at
       FROM students s
       INNER JOIN class_students cs ON s.id = cs.student_id
       WHERE cs.class_id = ?
