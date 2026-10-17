@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { LiveClassroomView } from '../LiveClassroomView';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { appStore } from '../../store/appStore';
+import { uiStore } from '../../store/uiStore';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -167,6 +168,40 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const linkedButton = screen.getByRole('button', { name: /学生端已联动/ });
     fireEvent.click(linkedButton);
     expect(fakeTab.focus).toHaveBeenCalled();
+  });
+
+  it('Issue #90: 消费课表「快速开始上课」信号，跳过门户直接进入授课视图', async () => {
+    const setSelectedLesson = vi.fn();
+    const setLiveClassSelectedClassId = vi.fn();
+    const props = {
+      ...defaultProps,
+      setSelectedLesson,
+      setLiveClassSelectedClassId,
+      initialPortalOpen: true, // 默认会先展示门户；有开课信号时应被跳过
+    };
+
+    uiStore.getState().setPendingLiveClassLaunch({
+      lessonId: 'lesson-102',
+      classId: 'class-g2',
+      teachingModeId: 'mode_explore',
+    });
+
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView />
+      </AppDataProvider>,
+    );
+
+    // 信号被消费清空，并按信号内容选中课程与班级
+    await waitFor(() => {
+      expect(uiStore.getState().pendingLiveClassLaunch).toBeNull();
+    });
+    expect(setSelectedLesson).toHaveBeenCalledWith('lesson-102');
+    expect(setLiveClassSelectedClassId).toHaveBeenCalledWith('class-g2');
+    expect(defaultProps.fetchElements).toHaveBeenCalledWith('lesson-102');
+
+    // 未渲染起始门户，直接进入授课/课前流程视图
+    expect(await screen.findByTestId('pre-class-ready-view')).toBeTruthy();
   });
 
   it('handles browser tab blocking gracefully', () => {

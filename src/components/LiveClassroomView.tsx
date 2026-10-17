@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore, appStore } from '../store/appStore';
+import { uiStore } from '../store/uiStore';
 import { liveClassStore } from '../store/liveClassStore';
 import { useAppData } from '../context/AppDataContext';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
@@ -211,13 +212,29 @@ export function LiveClassroomView({
   // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
-  const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
+  // Issue #90: 课表「快速开始上这节课」——课表页已完成会话初始化并留下
+  // pendingLiveClassLaunch 信号时，跳过门户直接进入授课视图。
+  const initialLaunchSignal = uiStore.getState().pendingLiveClassLaunch;
+  const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen && !initialLaunchSignal);
   /** 是否展示「课堂会话与档案管理」看板 */
   const [showSessionManager, setShowSessionManager] = useState(false);
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
-  const [entryDecisionReady, setEntryDecisionReady] = useState(!initialPortalOpen);
+  const [entryDecisionReady, setEntryDecisionReady] = useState(!initialPortalOpen || !!initialLaunchSignal);
   /** 教师主动回到起始门户后，轮询不要再把门户关掉。 */
   const userReturnedToPortalRef = useRef(false);
+
+  // 消费一键开课信号：与门户 handlePortalEnter 同一恢复路径（选中课程/班级 + 拉取白板要素）
+  useEffect(() => {
+    if (!initialLaunchSignal) return;
+    setSelectedLesson(initialLaunchSignal.lessonId);
+    if (initialLaunchSignal.classId) {
+      setLiveClassSelectedClassId(initialLaunchSignal.classId);
+    }
+    void fetchElements(initialLaunchSignal.lessonId);
+    userReturnedToPortalRef.current = false;
+    uiStore.getState().setPendingLiveClassLaunch(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isGrowthProfileOpen, setIsGrowthProfileOpen] = useState(false);
   const [growthProfileStudentId, setGrowthProfileStudentId] = useState<string | null>(null);
   const [isPeerReviewShowcaseOpen, setIsPeerReviewShowcaseOpen] = useState(false);

@@ -199,6 +199,8 @@ describe('Timetable extension slots', () => {
         setFormStatus: vi.fn(),
         setFormNotes: vi.fn(),
         setIsAddOpen: vi.fn(),
+        onQuickStart: vi.fn(),
+        activeSessionLessonIds: new Set(),
       };
 
       render(
