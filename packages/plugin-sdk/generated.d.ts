@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：237 个（入口导出但手写 d.ts 未声明的 237 项及其类型引用闭包）
+ * 覆盖符号：240 个（入口导出但手写 d.ts 未声明的 240 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -456,12 +456,37 @@ interface ComputerLabSeatOverlayConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the computer_lab.seating.sidebar slot. */
+interface ComputerLabSeatingSidebarConfig {
+    id: string;
+    label?: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the computer_lab.seating.toolbar slot. */
+interface ComputerLabSeatingToolbarConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the computer_lab.toolbar.action slot. */
 interface ComputerLabToolbarActionConfig {
     id: string;
     label: string;
     icon?: string;
     commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the computer_lab.unassigned.item slot. */
+interface ComputerLabUnassignedItemConfig {
+    id: string;
+    label?: string;
+    icon?: string;
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -2317,7 +2342,10 @@ export type {
   CommandMetadata,
   CommandPaletteItemConfig,
   ComputerLabSeatOverlayConfig,
+  ComputerLabSeatingSidebarConfig,
+  ComputerLabSeatingToolbarConfig,
   ComputerLabToolbarActionConfig,
+  ComputerLabUnassignedItemConfig,
   ConfigDeclaration,
   ConfigProperty,
   ConnectionState,
