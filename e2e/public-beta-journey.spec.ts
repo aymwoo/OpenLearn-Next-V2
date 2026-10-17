@@ -119,6 +119,9 @@ test('公测关键旅程：作业、越权、插件与观测', async () => {
       password: STUDENT_PASSWORD,
     });
     expect(studentLogin.res.status(), JSON.stringify(studentLogin.body)).toBe(200);
+    // Issue #94: 学生会话不应携带强制改密标记；非默认密码也不携带默认密码提示标记
+    expect((studentLogin.body.session as { mustChangePassword?: boolean }).mustChangePassword).toBeFalsy();
+    expect((studentLogin.body.session as { usedDefaultPassword?: boolean }).usedDefaultPassword).toBeFalsy();
 
     const submit = await student.post(`/api/assignments/${assignmentId}/submit`, {
       data: { textContent: '公测学生的作答' },

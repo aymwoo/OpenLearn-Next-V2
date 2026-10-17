@@ -408,9 +408,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.studentId}%`);
-        // SEC-AUTH-06: 改密成功后清除当前会话的默认密码标记（其余会话已被删除）
+        // SEC-AUTH-06 / Issue #94: 改密成功后清除当前会话的默认密码标记与提示标记（其余会话已被删除）
         try {
-          const updatedSession = { ...session, mustChangePassword: false };
+          const updatedSession = { ...session, mustChangePassword: false, usedDefaultPassword: false };
           kernelContainer.db
             .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
             .run(JSON.stringify(updatedSession), token);
@@ -741,9 +741,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
           return res.status(401).json({ error: genericLoginFailure });
         }
 
-        // SEC-AUTH-06: 学生仍以初始默认口令 123456 完成个人密码登录 → 强制改密标记
-        //（班级口令登录不打标：该路径与个人密码无关）
-        const studentMustChangePassword = matchesOwnPassword && providedPassword === '123456';
+        // Issue #94（SEC-AUTH-06b 策略调整）：学生仍以初始默认口令 123456 完成个人密码登录
+        // **不再强制改密** —— 不打 mustChangePassword 标记、不拦截任何请求，
+        // 仅在会话携带 usedDefaultPassword 提示标记，由前端展示可关闭的非阻塞横幅
+        //（班级口令登录不携带提示：该路径与个人密码无关）。
+        // 教师/管理员种子账号的强制改密（上方 teacher 分支）保持不变。
+        const studentUsedDefaultPassword = matchesOwnPassword && providedPassword === '123456';
+        if (studentUsedDefaultPassword) {
+          rlog.info(`[Auth] Student ${studentObj.student_number || studentObj.id} logged in with default password (hint only)`);
+        }
         sessionData = {
           role: 'student',
           userId: studentObj.id,
@@ -751,7 +757,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           name: studentObj.name,
           email: studentObj.email,
           avatar: studentObj.avatar ?? null,
-          ...(studentMustChangePassword ? { mustChangePassword: true } : {}),
+          ...(studentUsedDefaultPassword ? { usedDefaultPassword: true } : {}),
         };
       }
 

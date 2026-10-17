@@ -174,6 +174,8 @@ export interface SessionType {
   avatar?: string;
   /** SEC-AUTH-06: 仍在使用种子默认密码（admin/admin、teacher/teacher），须强制改密 */
   mustChangePassword?: boolean;
+  /** Issue #94: 学生仍在使用初始默认口令 123456 —— 不阻塞使用，仅提示建议修改 */
+  usedDefaultPassword?: boolean;
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
