@@ -16,6 +16,7 @@ import type { ServerContext } from '../context.js';
 import { RosterService } from '../services/roster-service.js';
 import { AcademicYearComparisonService } from '../services/academic-comparison-service.js';
 import {
+  type AccessSession,
   actorUserId,
   authorizeClass,
   isAdministrator,
@@ -40,6 +41,26 @@ const rlog = createLogger('roster');
  */
 function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string): void {
   new RosterService(db).deleteStudentCascade(studentId);
+}
+
+/**
+ * 学生对象的写操作级联授权（P0 IDOR 修复）。
+ *
+ * - 管理员：不限；
+ * - 教师：仅限 `teacherCanSeeStudent` 判定可见的学生（其本人班级的在册学生）；
+ * - 其余角色：拒绝。
+ *
+ * 入参允许使用 student_number，统一解析为规范 id；无授权时返回 null，调用方回 403。
+ */
+function resolveWritableStudentId(session: AccessSession | null | undefined, rawId: string): string | null {
+  const row = kernelContainer
+    .getReadDb()
+    .prepare('SELECT id FROM students WHERE id = ? OR student_number = ?')
+    .get(rawId, rawId) as { id: string } | undefined;
+  const studentId = row?.id || rawId;
+  if (isAdministrator(session)) return studentId;
+  if (isTeacher(session) && teacherCanSeeStudent(kernelContainer.getReadDb(), session, studentId)) return studentId;
+  return null;
 }
 
 export function registerRosterRoutes(ctx: ServerContext) {
@@ -1058,7 +1079,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.put('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      rosterService.updateStudent(req.params.id, req.body);
+      const studentId = resolveWritableStudentId((req as any).session, req.params.id);
+      if (!studentId) return res.status(403).json({ error: "Cannot modify another teacher's student" });
+      rosterService.updateStudent(studentId, req.body);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1067,7 +1090,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.delete('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      rosterService.deleteStudentCascade(req.params.id);
+      const studentId = resolveWritableStudentId((req as any).session, req.params.id);
+      if (!studentId) return res.status(403).json({ error: "Cannot delete another teacher's student" });
+      rosterService.deleteStudentCascade(studentId);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1486,13 +1511,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .all(studentId);
 
       // Get profile details (containing locked_lesson_id)
+      // 私有备忘（private_notes）只在教师/管理员视角查询，学生本人不得读取老师给其的备注。
       const profile = kernelContainer.db
         .prepare(
-          `
-        SELECT id, name, email, locked_lesson_id, private_notes, student_number
-        FROM students
-        WHERE id = ?
-      `,
+          viewerIsStaff
+            ? `SELECT id, name, email, locked_lesson_id, private_notes, student_number FROM students WHERE id = ?`
+            : `SELECT id, name, email, locked_lesson_id, student_number FROM students WHERE id = ?`,
         )
         .get(studentId) as any;
 
