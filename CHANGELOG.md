@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **学生私有备忘存储型 XSS 与花名册全库越权修复（P1）**：
+  - 新增 `packages/core/security/html-sanitize.ts`（前后端共用）：基于 `xss` 白名单净化备忘富文本，仅保留排版标签与 `color`/`background-color`/`text-align`/`font-*`/`text-decoration`，剥离 `script`/`img`/事件属性/`javascript:` 链接；保持 `{"category","html"}` 存储格式，非法分类回落 `General`。
+  - **写入侧**：`RosterService.updateStudent`（`PUT /api/students/:id`）与 `RosterService.importStudents`（`POST /api/students/import`、批量入班）落库前净化 `private_notes`，CSV 导入不再是绕过口。
+  - **读取侧**：`StudentPrivateNotesEditor` 在 `innerHTML` 赋值前净化，保存前再次净化，覆盖修复前的历史脏数据（此前恶意 `<img onerror>` 会在教师打开备忘时执行）。
+  - `GET /api/students` 改为按教师班级归属过滤（`listStudents` 新增 `scope`）：管理员全库，教师仅返回其 `owner_user_id` 名下班级的在册学生，分页 `total` 同步收敛；此前任意教师可拉取全库学生名单及其私有备忘。
+  - 新增 `html-sanitize.test.ts`（7 例）、`student-private-notes-security.test.ts`（5 例：PUT/导入净化、教师列表隔离、管理员全量）与 `StudentPrivateNotesEditor.test.tsx`（2 例：历史脏数据渲染、保存净化）。
+
 ### Fixes
 
 - **随堂测验正确答案统一到 `correctIndex`（Issue #107）**：此前同一道测验题有两个答案字段且各模块各读各的 —— 组件默认数据只写 `correctIndex: 0`，属性栏「正确答案」下拉写 `correctAnswer`（选项文本），服务端判分与环节门禁 `looksLikeQuiz` 只读 `correctAnswer`，全屏测验视图统计与正确选项高亮只读 `correctIndex`。后果是「新建测验不设答案就全员 0 分」「教师选了非 A 的答案后大屏正确率与服务端得分对不上」「选项本身是单个字母时提交格式可能误判」。现在统一以**选项索引**为权威：新增 `packages/core/whiteboard/quiz-answer.ts`（前后端共用的纯函数：`resolveCorrectIndex` / `resolveSubmittedIndex` / `gradeQuizSubmission` / `buildQuizAnswerFields` / `looksLikeQuizAnswerData`），属性栏下拉改为写索引并同时同步 `correctAnswer` 文本（`handlePropsUpdate` 一次原子写入），学生提交统一发送选项索引，服务端判分、大屏统计、环节门禁全部走同一解析。**旧数据无需迁移**：只有 `correctAnswer` 时按「选项文本 → 字母 → 数字」换算成索引，历史提交里的字母 / 索引 / 选项文本三种作答写法也统一归一化（此前 `parseInt('B')` 得 NaN，大屏会把已答对的学生计成未答）。服务端判分结果与 `GET /api/lessons/:id/quiz-submissions` 均新增 `correctIndex`（提交后才回传，学生端据此高亮正确选项），`quiz.answered` 事件契约同步补充该字段。新增 `packages/core/whiteboard/__tests__/quiz-answer.test.ts`（26 例）、`server/__tests__/quiz-answer-grading.test.ts`（7 例），并补充 `quiz-fullscreen.test.tsx`（旧字段高亮 / 提交发送索引）与 `whiteboard-properties-sidebar.test.tsx`（下拉写入两字段 / 旧数据回显）。

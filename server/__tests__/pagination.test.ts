@@ -54,6 +54,7 @@ beforeAll(async () => {
 
   // 种子：3 个学生、3 个班级、1 个 lesson，创建时间递增保证顺序确定
   db.prepare('DELETE FROM students WHERE id LIKE ?').run('stu-pg-%');
+  db.prepare('DELETE FROM class_students WHERE class_id LIKE ?').run('cls-pg-%');
   db.prepare('DELETE FROM classes WHERE id LIKE ?').run('cls-pg-%');
   db.prepare('DELETE FROM lessons WHERE id LIKE ?').run('lesson-pg-%');
   for (let i = 1; i <= 3; i++) {
@@ -70,6 +71,12 @@ beforeAll(async () => {
       teacherId,
       now + i * 1000,
     );
+    // 花名册按班级归属过滤：把学生编入教师自有班级
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      `cls-pg-${i}`,
+      `stu-pg-${i}`,
+      now + i * 1000,
+    );
     db.prepare('INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
       `lesson-pg-${i}`,
       `分页课程${i}`,
@@ -82,6 +89,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   db.prepare('DELETE FROM students WHERE id LIKE ?').run('stu-pg-%');
+  db.prepare('DELETE FROM class_students WHERE class_id LIKE ?').run('cls-pg-%');
   db.prepare('DELETE FROM classes WHERE id LIKE ?').run('cls-pg-%');
   db.prepare('DELETE FROM lessons WHERE id LIKE ?').run('lesson-pg-%');
   db.prepare('DELETE FROM users WHERE id LIKE ?').run('usr-pg-%');
