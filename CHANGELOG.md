@@ -12,7 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
-<<<<<<< HEAD
 - **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
   - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
   - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
