@@ -215,35 +215,87 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
   return { child, transport, isolate };
 }
 
+/** bootstrap 临时文件命名前缀 / 后缀（清理逻辑与前缀强绑定） */
+const BOOTSTRAP_PREFIX = 'ol-bootstrap-';
+const BOOTSTRAP_SUFFIX = '.mjs';
+/** 旧格式（无属主 pid 段）文件的过期阈值：无从判断属主，只清明显过期的 */
+const LEGACY_BOOTSTRAP_STALE_MS = 60 * 60 * 1000;
+
+/** 从文件名解析属主 pid；旧格式返回 null（无法判断）。 */
+function bootstrapOwnerPid(fileName: string): number | null {
+  const m = new RegExp(`^${BOOTSTRAP_PREFIX}(\\d+)-[0-9a-f]+\\${BOOTSTRAP_SUFFIX}$`).exec(fileName);
+  if (!m) return null;
+  const pid = Number(m[1]);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+/** 进程是否仍存活（signal 0 只做存在性检查）；EPERM 说明进程在但不属于当前用户。 */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException)?.code === 'EPERM';
+  }
+}
+
 /**
  * 把 bootstrap 源码写到临时 `.mjs` 文件（权限 0600），供子进程以**脚本路径**方式加载。
  *
  * 不用 `--eval` 的原因：合成后的 bootstrap 约 32KB，作为命令行参数会与权限旗标一起
  * 逼近 Windows 的 32767 上限（实测总长 32899 → `spawn ENAMETOOLONG`，子进程激活全失败）。
  * 落成文件后 argv 恒定很短，与 bootstrap 体积无关。调用方负责在子进程退出后删除。
+ *
+ * 文件名带上**属主进程 pid**：清理逻辑靠它区分「残留」与「另一个进程正在用的文件」
+ * （见 `cleanupStaleBootstrapFiles`）。
  */
 export function writeBootstrapTempFile(code: string): string {
-  const file = path.join(os.tmpdir(), `ol-bootstrap-${crypto.randomBytes(8).toString('hex')}.mjs`);
+  const file = path.join(
+    os.tmpdir(),
+    `${BOOTSTRAP_PREFIX}${process.pid}-${crypto.randomBytes(8).toString('hex')}${BOOTSTRAP_SUFFIX}`,
+  );
   fs.writeFileSync(file, code, { encoding: 'utf8', mode: 0o600 });
   return file;
 }
 
 /**
- * 启动或退出时扫描并清理临时目录下残留的 ol-bootstrap-*.mjs 文件。
+ * 启动或退出时扫描并清理临时目录下**属于已退出进程**的 ol-bootstrap-*.mjs 文件。
+ *
+ * 为什么不能「见到就删」：临时目录是全局共享的，vitest 的 `fileParallelism`、或同一
+ * 机器上的多个 node 进程都会并发落同名前缀的文件。早期版本（无 pid 段）在模块加载时
+ * 无差别删除，于是 A 进程刚写好、子进程还没 exec 的 bootstrap 会被 B 进程删掉，症状是
+ * 子进程 `Cannot find module '/tmp/ol-bootstrap-….mjs'` → `WorkerActivateError: exited
+ * with code 1`，表现为随机挂的 CI（plugin-heap-limit / plugin-permission 均中过）。
+ *
+ * 判定规则：
+ * - 新格式 `ol-bootstrap-<pid>-<rand>.mjs`：属主 pid 仍存活 → 不是残留，跳过；
+ * - 旧格式（无 pid 段）无从判断属主，只有明显过期（超过 1 小时）才删。
  */
-export function cleanupStaleBootstrapFiles(): number {
+export function cleanupStaleBootstrapFiles(now = Date.now()): number {
   try {
     const tmpDir = os.tmpdir();
     const files = fs.readdirSync(tmpDir);
     let cleaned = 0;
     for (const file of files) {
-      if (file.startsWith('ol-bootstrap-') && file.endsWith('.mjs')) {
+      if (!file.startsWith(BOOTSTRAP_PREFIX) || !file.endsWith(BOOTSTRAP_SUFFIX)) continue;
+      const full = path.join(tmpDir, file);
+      const ownerPid = bootstrapOwnerPid(file);
+      if (ownerPid === null) {
+        // 旧格式：拿不到属主，只清明显过期的
         try {
-          fs.unlinkSync(path.join(tmpDir, file));
-          cleaned++;
+          if (now - fs.statSync(full).mtimeMs < LEGACY_BOOTSTRAP_STALE_MS) continue;
         } catch {
-          /* 忽略被占用或无权限的文件 */
+          continue;
         }
+      } else if (isPidAlive(ownerPid)) {
+        // 属主还活着 —— 那是它正在用的文件，不是残留（包括本进程自己刚落的）
+        continue;
+      }
+      try {
+        fs.unlinkSync(full);
+        cleaned++;
+      } catch {
+        /* 被占用或无权限的文件 */
       }
     }
     return cleaned;
@@ -252,7 +304,7 @@ export function cleanupStaleBootstrapFiles(): number {
   }
 }
 
-// 模块加载时执行一次孤儿清理
+// 模块加载时执行一次孤儿清理（只清属主已退出的，不会误伤并发进程的在用文件）
 cleanupStaleBootstrapFiles();
 
 /** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
