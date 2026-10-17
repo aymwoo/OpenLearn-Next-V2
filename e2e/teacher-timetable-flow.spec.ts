@@ -191,4 +191,79 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
       purgeTimetableE2EFromDb();
     }
   });
+
+  test('课表识别草稿持久化：完成徽标直达 AI 识别子页，刷新后现场不丢 (Issue #89)', async ({ page, context }) => {
+    const ts = Date.now().toString(36).toUpperCase();
+    const subjectA = `E2E 识别数学-${ts}`;
+    const subjectB = `E2E 识别语文-${ts}`;
+
+    // 1. 教师/管理员鉴权登录
+    const loginRes = await context.request.post('/api/auth/login', {
+      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+    });
+    expect(loginRes.ok(), '登录管理员应成功').toBeTruthy();
+
+    await page.addInitScript(() => {
+      localStorage.setItem('edu_os_tour_completed', 'true');
+    });
+
+    // 2. 预置已完成的识别任务与草稿到 sessionStorage（模拟上一次会话识别完成后的现场）
+    await page.addInitScript(
+      ({ subjectA, subjectB }) => {
+        const entries = [
+          { dayOfWeek: 1, periodNumber: 1, timeSlot: '08:00 - 08:40', className: '高一(1)班', subject: subjectA, location: '机房1' },
+          { dayOfWeek: 2, periodNumber: 2, timeSlot: '08:50 - 09:30', className: '高一(2)班', subject: subjectB, location: '教室2' },
+        ];
+        sessionStorage.setItem(
+          'openlearn_timetable_ocr_task',
+          JSON.stringify({
+            id: 'task_ocr_e2e',
+            type: 'timetable_ocr',
+            title: '课表图片 AI 识别',
+            status: 'completed',
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            result: { entries, providerUsed: { id: 'prov_e2e', name: 'E2E Provider', model_name: 'e2e-model' } },
+          }),
+        );
+        sessionStorage.setItem(
+          'openlearn_timetable_ocr_draft',
+          JSON.stringify({
+            imagePreview: null,
+            imageBase64: null,
+            fileName: 'E2E 课表.png',
+            providerId: '',
+            entries,
+            selected: [0, 1],
+            updatedAt: Date.now(),
+          }),
+        );
+      },
+      { subjectA, subjectB },
+    );
+
+    // 3. 进入平台：默认落在互动课堂（非课表页），顶栏应出现「识别已完成」徽标
+    await page.goto('/');
+    const ocrBadge = page.getByText(/课表识别已完成/).first();
+    await expect(ocrBadge).toBeVisible({ timeout: 15_000 });
+
+    // 4. 点击徽标 → 直达课表中心并自动落在「AI 图片识课」子页，识别结果与勾选现场恢复
+    await ocrBadge.click();
+    await expect(page.getByText('班级课表中心 & 动态调整')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/已恢复上次的识别结果/).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(subjectA).first()).toBeVisible();
+    await expect(page.getByText(subjectB).first()).toBeVisible();
+
+    // 5. 刷新页面：草稿从 sessionStorage 恢复，仍落在识别子页且结果还在
+    await page.reload();
+    await expect(page.getByText('班级课表中心 & 动态调整')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/已恢复上次的识别结果/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(subjectA).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(subjectB).first()).toBeVisible({ timeout: 10_000 });
+
+    // 6. 截图留证 (Generates Artifact: Screenshot)
+    const SCREENSHOT_PATH = path.resolve(process.cwd(), 'artifacts/screenshots/teacher_timetable_ocr_draft_restore.png');
+    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    expect(fs.existsSync(SCREENSHOT_PATH)).toBe(true);
+  });
 });

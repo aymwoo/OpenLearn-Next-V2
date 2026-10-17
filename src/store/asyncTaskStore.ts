@@ -14,6 +14,24 @@ export interface TimetableOcrResult {
   };
 }
 
+/**
+ * 课表识别草稿（Issue #89）。
+ *
+ * 记录「AI 识别导入」子页的现场：结果条目、勾选、图片预览、提供方等。
+ * 切换页面（组件卸载）或刷新（sessionStorage 恢复）后均可回到审核界面直接导入，
+ * 直到用户导入成功或重新选图/丢弃。
+ */
+export interface TimetableOcrDraft {
+  imagePreview: string | null;
+  imageBase64: string | null;
+  fileName: string;
+  providerId: string;
+  entries: any[];
+  /** 已勾选条目的索引数组 */
+  selected: number[];
+  updatedAt: number;
+}
+
 export interface AsyncTask<T = any> {
   id: string;
   type: AsyncTaskType;
@@ -30,6 +48,9 @@ export interface AsyncTaskState {
   /** 当前正在执行或刚完成的课表识别任务 */
   timetableOcrTask: AsyncTask<TimetableOcrResult> | null;
 
+  /** 课表识别草稿（Issue #89：切页/刷新不丢失，直到导入成功或重新选图） */
+  timetableOcrDraft: TimetableOcrDraft | null;
+
   /** 是否有任意任务在后台运行中 */
   isAnyTaskRunning: boolean;
 
@@ -41,12 +62,58 @@ export interface AsyncTaskState {
     fileName?: string;
   }) => Promise<void>;
 
+  /** 同步「AI 识别导入」子页的草稿现场（结果条目、勾选、图片等） */
+  setTimetableOcrDraft: (draft: Partial<Omit<TimetableOcrDraft, 'updatedAt'>>) => void;
+
   /** 清除或消费课表识别任务结果（如已导入完毕） */
   clearTimetableOcrTask: () => void;
 }
 
+// ── sessionStorage 持久化（Issue #89）─────────────────────────────────────
+// 刷新或新开窗口后，识别任务状态与草稿仍可恢复。
+// 图片 base64 体积可能超过配额：先尝试全量保存，QuotaExceeded 时降级为去除图片再存。
+
+const OCR_TASK_KEY = 'openlearn_timetable_ocr_task';
+const OCR_DRAFT_KEY = 'openlearn_timetable_ocr_draft';
+
+function readSession<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(key: string, value: unknown, stripImageKeys: string[] = []): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 配额不足：去除大字段（图片 base64/预览）后重试一次
+    if (stripImageKeys.length > 0 && value && typeof value === 'object') {
+      try {
+        const slim = { ...(value as Record<string, any>) };
+        for (const k of stripImageKeys) slim[k] = null;
+        sessionStorage.setItem(key, JSON.stringify(slim));
+      } catch {
+        /* 彻底不可用时放弃持久化，仅保留内存态 */
+      }
+    }
+  }
+}
+
+function removeSession(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
-  timetableOcrTask: null,
+  // 刷新后恢复：优先 sessionStorage，配额降级保存时图片字段为 null 不影响结果条目
+  timetableOcrTask: readSession<AsyncTask<TimetableOcrResult>>(OCR_TASK_KEY),
+  timetableOcrDraft: readSession<TimetableOcrDraft>(OCR_DRAFT_KEY),
   isAnyTaskRunning: false,
 
   startTimetableOcr: async ({ imageBase64, lang, providerId, fileName }) => {
@@ -64,6 +131,7 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
       timetableOcrTask: newTask,
       isAnyTaskRunning: true,
     });
+    writeSession(OCR_TASK_KEY, newTask);
 
     // 立即给出全局轻量提示，告知已进入后台运行，用户可自由跳转页面
     uiStore.getState().addToast({
@@ -107,8 +175,9 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
         timetableOcrTask: completedTask,
         isAnyTaskRunning: false,
       });
+      writeSession(OCR_TASK_KEY, completedTask);
 
-      // 任务成功完成，弹出带有一键跳转动作的全局 Toast
+      // 任务成功完成，弹出带有一键跳转动作的全局 Toast（直达「AI 识别导入」子页）
       uiStore.getState().addToast({
         id: `toast_done_${taskId}`,
         title: lang === 'zh' ? '🎉 AI 课表识别完成' : '🎉 Timetable OCR Completed',
@@ -121,6 +190,7 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
           label: lang === 'zh' ? '查看并导入课表' : 'View Timetable',
           onClick: () => {
             uiStore.getState().setTeacherTab('timetable');
+            uiStore.getState().setPendingTimetableSubTab('ocr_import');
           },
         },
       });
@@ -137,6 +207,7 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
         timetableOcrTask: failedTask,
         isAnyTaskRunning: false,
       });
+      writeSession(OCR_TASK_KEY, failedTask);
 
       uiStore.getState().addToast({
         id: `toast_fail_${taskId}`,
@@ -151,8 +222,27 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
     }
   },
 
+  setTimetableOcrDraft: (draft) => {
+    const next: TimetableOcrDraft = {
+      imagePreview: null,
+      imageBase64: null,
+      fileName: '',
+      providerId: '',
+      entries: [],
+      selected: [],
+      ...(get().timetableOcrDraft || {}),
+      ...draft,
+      updatedAt: Date.now(),
+    };
+    set({ timetableOcrDraft: next });
+    // 图片字段可能超配额：降级时去除图片，其余现场（条目/勾选）必须保住
+    writeSession(OCR_DRAFT_KEY, next, ['imagePreview', 'imageBase64']);
+  },
+
   clearTimetableOcrTask: () => {
-    set({ timetableOcrTask: null, isAnyTaskRunning: false });
+    set({ timetableOcrTask: null, isAnyTaskRunning: false, timetableOcrDraft: null });
+    removeSession(OCR_TASK_KEY);
+    removeSession(OCR_DRAFT_KEY);
   },
 }));
 

@@ -17,6 +17,8 @@ export interface UIState {
   lang: Language;
   activeRole: 'teacher' | 'student';
   teacherTab: string;
+  /** Issue #89: 待消费的课表中心子页导航信号（如 'ocr_import'），由 TimetableManager 挂载/监听消费后清空 */
+  pendingTimetableSubTab: string | null;
 
   // Modal Open States
   profileOpen: boolean;
@@ -35,6 +37,7 @@ export interface UIState {
   setLang: (lang: Language) => void;
   setActiveRole: (role: 'teacher' | 'student') => void;
   setTeacherTab: (tab: string) => void;
+  setPendingTimetableSubTab: (subTab: string | null) => void;
   setProfileOpen: (open: boolean) => void;
   setIsCourseWizardOpen: (open: boolean) => void;
   setIsImportLessonsOpen: (open: boolean) => void;
@@ -52,6 +55,7 @@ export const uiStore = createStore<UIState>((set) => ({
   activeRole: 'teacher',
   // 教师/管理员的默认首页：若 URL hash 中已携带有效 tab（如在新窗口打开、刷新或深层链接）则优先采用，否则为互动课堂（live_class）
   teacherTab: getInitialTeacherTab(),
+  pendingTimetableSubTab: null,
 
   profileOpen: false,
   isCourseWizardOpen: false,
@@ -67,6 +71,7 @@ export const uiStore = createStore<UIState>((set) => ({
   setLang: (lang) => set({ lang }),
   setActiveRole: (activeRole) => set({ activeRole }),
   setTeacherTab: (teacherTab) => set({ teacherTab }),
+  setPendingTimetableSubTab: (pendingTimetableSubTab) => set({ pendingTimetableSubTab }),
   setProfileOpen: (profileOpen) => set({ profileOpen }),
   setIsCourseWizardOpen: (isCourseWizardOpen) => set({ isCourseWizardOpen }),
   setIsImportLessonsOpen: (isImportLessonsOpen) => set({ isImportLessonsOpen }),
