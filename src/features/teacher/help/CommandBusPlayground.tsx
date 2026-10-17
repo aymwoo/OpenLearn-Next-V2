@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Terminal,
   Blocks,
@@ -43,6 +43,19 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
     { id: 'plugin', name: '第三方插件', icon: Puzzle },
   ];
 
+  // Issue #117：默认 payload 在渲染期用 useMemo 一次算好，不再于 render 中
+  // 直接给 state 对象（commandPayloads）赋值 —— 那是在渲染期间修改状态。
+  const defaultPayloads = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const cmd of registeredCommands) {
+      map[cmd.id] = generateInitialPayload(cmd.inputSchema);
+    }
+    return map;
+  }, [registeredCommands]);
+
+  /** 当前生效的 payload 文本：用户改过的优先，否则回落到默认模板。 */
+  const payloadOf = (cmdId: string): string => commandPayloads[cmdId] ?? defaultPayloads[cmdId] ?? '{}';
+
   const filteredCommands = registeredCommands.filter((cmd) => {
     const matchesCategory = selectedCategory === 'all' || getCommandCategory(cmd.commandType) === selectedCategory;
     const matchesSearch =
@@ -56,7 +69,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
   const handleExecute = async (commandType: string, cmdId: string) => {
     setExecutionResults((prev) => ({ ...prev, [cmdId]: { success: false, loading: true } }));
     try {
-      const rawPayload = commandPayloads[cmdId] || '{}';
+      const rawPayload = payloadOf(cmdId);
       let parsedPayload = {};
       try {
         parsedPayload = JSON.parse(rawPayload);
@@ -140,22 +153,30 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
             <p className="text-xs text-gray-500 mt-1">请尝试清空查询条件或检查当前的插件状态</p>
           </div>
         ) : (
-          <div className="space-y-4 max-w-5xl mx-auto">
+          // Issue #117：窄屏 1 列 / md 2 列 / xl 3 列；不再限制 max-w-5xl（原来宽屏大片空白）
+          <div
+            data-testid="command-grid"
+            role="list"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-w-[1600px] mx-auto"
+          >
             {filteredCommands.map((cmd) => {
               const isExpanded = expandedCommandId === cmd.id;
               const cat = getCommandCategory(cmd.commandType);
               const isHighRisk = cmd.isHighRisk;
 
-              if (commandPayloads[cmd.id] === undefined) {
-                commandPayloads[cmd.id] = generateInitialPayload(cmd.inputSchema);
-              }
-
               const execResult = executionResults[cmd.id];
+              const panelId = `command-panel-${cmd.id}`;
 
               return (
                 <div
                   key={cmd.id}
-                  className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
+                  role="listitem"
+                  data-testid={`command-card-${cmd.id}`}
+                  data-expanded={isExpanded ? 'true' : 'false'}
+                  className={`flex flex-col bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
+                    // 展开的卡片占满整行，调试面板才有足够宽度（Issue #117 方案 1）
+                    isExpanded ? 'col-span-full' : ''
+                  } ${
                     isExpanded
                       ? 'border-indigo-400 ring-1 ring-indigo-100'
                       : isHighRisk
@@ -163,13 +184,24 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                         : 'border-gray-200 hover:border-indigo-200'
                   }`}
                 >
-                  <div
+                  {/*
+                    Issue #117：整张卡头是一个真正的 <button>（可 Tab 聚焦、Enter/Space 展开）。
+                    原来是 div + onClick，键盘完全不可达；里面又套了一个 <button>（嵌套按钮非法），
+                    这里把它降级成纯展示的 span，交互统一由外层按钮承担。
+                  */}
+                  <button
+                    type="button"
                     onClick={() => {
                       setExpandedCommandId(isExpanded ? null : cmd.id);
                     }}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/30 transition-colors select-none"
+                    aria-expanded={isExpanded}
+                    aria-controls={panelId}
+                    className={`w-full flex-1 text-left p-4 flex flex-col gap-2.5 cursor-pointer hover:bg-gray-50/30 transition-colors select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset rounded-xl ${
+                      isExpanded ? 'bg-indigo-50/40' : ''
+                    }`}
                   >
-                    <div className="flex items-start gap-3">
+                    {/* 第一行：图标 + commandType（长类型名换行也不撑破卡片） */}
+                    <div className="flex items-start gap-2.5 min-w-0">
                       <div
                         className={`p-2 rounded-lg shrink-0 ${
                           isHighRisk ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'
@@ -189,29 +221,38 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                           <Puzzle size={18} />
                         )}
                       </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono font-bold text-sm bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200">
-                            {cmd.commandType}
-                          </span>
-                          {isHighRisk && (
-                            <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
-                              ⚠️ 高风险操作
-                            </span>
-                          )}
-                          <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2 py-0.5">
-                            🔒 {cmd.capabilityRequired || '无公开权限'}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 text-xs mt-1.5 font-medium line-clamp-1">{cmd.description}</p>
-                      </div>
+                      <span className="font-mono font-bold text-sm bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200 min-w-0 break-all">
+                        {cmd.commandType}
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-3 self-end sm:self-auto">
-                      <span className="text-xs text-subtle font-mono hidden md:inline">ID: {cmd.id}</span>
-                      <button
-                        className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
-                          isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
+                    {/* 第二行：权限 / 高风险标签 */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {isHighRisk && (
+                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
+                          ⚠️ 高风险操作
+                        </span>
+                      )}
+                      <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2 py-0.5 max-w-full truncate">
+                        🔒 {cmd.capabilityRequired || '无公开权限'}
+                      </span>
+                    </div>
+
+                    {/* 第三行：描述（最多两行，避免长描述把卡片拉高） */}
+                    <p className="text-gray-600 text-xs font-medium line-clamp-2 min-h-[2rem]">
+                      {cmd.description || '（该命令没有描述）'}
+                    </p>
+
+                    {/* 第四行：ID + 调试入口（mt-auto 让卡片在网格中底部对齐、等高） */}
+                    <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                      <span className="text-xs text-subtle font-mono truncate min-w-0" title={`ID: ${cmd.id}`}>
+                        ID: {cmd.id}
+                      </span>
+                      <span
+                        className={`text-xs px-3 py-1 rounded-lg font-semibold border transition-all flex items-center gap-1 shrink-0 ${
+                          isExpanded
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                            : 'bg-gray-100 text-gray-700 border-gray-200'
                         }`}
                       >
                         {isExpanded ? '折叠面板' : '交互调试 Shell'}
@@ -219,12 +260,12 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                           size={12}
                           className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                         />
-                      </button>
+                      </span>
                     </div>
-                  </div>
+                  </button>
 
                   {isExpanded && (
-                    <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
+                    <div id={panelId} className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-white rounded-lg border border-gray-200 p-4">
                           <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2">
@@ -244,9 +285,9 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                                   >
                                     <div className="flex items-baseline gap-1.5">
                                       <span className="text-indigo-600 font-semibold">{propName}</span>
-                                      <span className="text-gray-400 text-xs">({prop.type})</span>
+                                      <span className="text-subtle text-xs">({prop.type})</span>
                                       {isRequired && (
-                                        <span className="text-red-500 text-xs font-bold bg-red-50 border border-red-100 rounded px-1">
+                                        <span className="text-red-700 text-xs font-bold bg-red-50 border border-red-200 rounded px-1">
                                           REQUIRED
                                         </span>
                                       )}
@@ -275,7 +316,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                               onClick={() => {
                                 setCommandPayloads((prev) => ({
                                   ...prev,
-                                  [cmd.id]: generateInitialPayload(cmd.inputSchema),
+                                  [cmd.id]: defaultPayloads[cmd.id] ?? '{}',
                                 }));
                               }}
                               className="text-xs text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
@@ -284,9 +325,15 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                             </button>
                           </h4>
 
-                          <label className="text-xs font-semibold text-gray-400 block mb-1">Payload JSON:</label>
+                          <label
+                            htmlFor={`command-payload-${cmd.id}`}
+                            className="text-xs font-semibold text-subtle block mb-1"
+                          >
+                            Payload JSON:
+                          </label>
                           <textarea
-                            value={commandPayloads[cmd.id] || ''}
+                            id={`command-payload-${cmd.id}`}
+                            value={payloadOf(cmd.id)}
                             onChange={(e) => {
                               const val = e.target.value;
                               setCommandPayloads((prev) => ({ ...prev, [cmd.id]: val }));
