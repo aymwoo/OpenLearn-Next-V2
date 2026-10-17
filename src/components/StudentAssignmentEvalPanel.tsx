@@ -213,7 +213,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-3xs text-left">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 select-none">
-              <Upload size={16} className="text-indigo-650" />
+              <Upload size={16} className="text-indigo-600" />
               {zh ? '我的作业提交' : 'My Assignment Submission'}
             </h3>
             <button
@@ -267,7 +267,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                       href={mySubmission.linkUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block truncate text-indigo-650 hover:underline"
+                      className="block truncate text-indigo-600 hover:underline"
                     >
                       {mySubmission.linkUrl}
                     </a>
@@ -281,7 +281,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block truncate text-indigo-650 hover:underline"
+                          className="block truncate text-indigo-600 hover:underline"
                         >
                           {f.name}
                         </a>
@@ -338,7 +338,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                 <button
                   type="submit"
                   disabled={submitLoading}
-                  className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-3xs"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-3xs"
                 >
                   {submitLoading ? <RefreshCw className="animate-spin" size={13} /> : <Upload size={13} />}
                   {mySubmission ? (zh ? '重新提交' : 'Re-submit') : zh ? '上传作品' : 'Submit'}
@@ -413,12 +413,12 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
       {/* Right Column: Classmates Peer Review */}
       <div className="flex-grow bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-3xs flex flex-col min-h-[400px] text-left">
         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-4 shrink-0 select-none">
-          <User size={16} className="text-teal-650" />
+          <User size={16} className="text-teal-700" />
           {zh ? '同学作业互评公开板' : 'Classmate Submissions for Peer Review'}
         </h3>
 
         {peerSubmissions.length === 0 ? (
-          <div className="flex-grow flex items-center justify-center text-slate-400 italic text-xs py-12 border border-dashed border-slate-200 rounded-xl bg-white">
+          <div className="flex-grow flex items-center justify-center text-subtle italic text-xs py-12 border border-dashed border-slate-200 rounded-xl bg-white">
             {zh ? '当前暂无同学提交作业作品。' : 'No classmate submissions available yet.'}
           </div>
         ) : (
@@ -476,7 +476,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                         href={peerLinkHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50 shrink-0"
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50 shrink-0"
                       >
                         {peerDownloadHref ? (zh ? '下载查阅' : 'Download File') : zh ? '打开链接' : 'Open Link'}
                       </a>
@@ -551,7 +551,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                         const val = parseInt(e.target.value);
                         setReviewScores((prev) => ({ ...prev, [peerSub.id]: val }));
                       }}
-                      className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-650"
+                      className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                     />
 
                     <div className="flex gap-2">
@@ -567,7 +567,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                       <button
                         onClick={() => handlePeerReview(peerSub.id, peerSub.student_id)}
                         disabled={submittingReview}
-                        className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs px-3 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
                       >
                         {submittingReview ? <RefreshCw className="animate-spin" size={13} /> : <Star size={13} />}
                         <span className="ml-1 shrink-0">
