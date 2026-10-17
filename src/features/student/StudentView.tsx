@@ -18,6 +18,9 @@ export function StudentView() {
     students,
     activeStudentId,
     isStudentLocked = false,
+    isNavigationLocked,
+    isInteractionLocked,
+    studentLockMode,
     studentViewStatus,
     studentDashboardData,
     readNotifications,
@@ -87,6 +90,9 @@ export function StudentView() {
               students={students}
               activeStudentId={activeStudentId}
               isStudentLocked={isStudentLocked}
+              isNavigationLocked={isNavigationLocked}
+              isInteractionLocked={isInteractionLocked}
+              lockMode={studentLockMode}
               setStudentViewStatus={setStudentViewStatus}
               setSelectedLesson={setSelectedLesson}
               lessons={lessons}

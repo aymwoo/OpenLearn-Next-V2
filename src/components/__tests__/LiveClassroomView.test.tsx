@@ -900,4 +900,99 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(cardS101.getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByText('班级学情概况')).toBeTruthy();
   });
+
+  it('Issue #110: supports split class lock button with full focus and answer lock modes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ success: true, students: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    const props = {
+      ...defaultProps,
+      students: [
+        { id: 's101', name: '张小明', locked_lesson_id: null, lock_mode: 'full' },
+        { id: 's102', name: '李华', locked_lesson_id: null, lock_mode: 'full' },
+      ],
+    };
+
+    const { rerender } = render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    // 未锁定时展示「全班专注」与「答题锁定」按钮
+    const focusBtn = screen.getByRole('button', { name: /全班专注/ });
+    const answerBtn = screen.getByRole('button', { name: /答题锁定/ });
+    expect(focusBtn).toBeTruthy();
+    expect(answerBtn).toBeTruthy();
+
+    // 等待挂载时的自动锁定完成并解开 disabled
+    await waitFor(() => {
+      expect((focusBtn as HTMLButtonElement).disabled).toBe(false);
+      expect((answerBtn as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fetchSpy.mockClear();
+
+    // 点击答题锁定
+    fireEvent.click(answerBtn);
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/classes/class-g1/lock_lesson',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ lessonId: 'lesson-101', mode: 'navigation' }),
+        }),
+      );
+    });
+
+    // 重新渲染为答题锁定状态
+    const lockedStudentsList = [
+      { id: 's101', name: '张小明', class_id: 'class-g1', locked_lesson_id: 'lesson-101', lock_mode: 'navigation' },
+      { id: 's102', name: '李华', class_id: 'class-g1', locked_lesson_id: 'lesson-101', lock_mode: 'navigation' },
+    ];
+    const lockedProps = {
+      ...props,
+      students: lockedStudentsList,
+      classStudentsMap: {
+        'class-g1': lockedStudentsList,
+      },
+    };
+
+    rerender(
+      <AppDataProvider value={lockedProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    // 锁定时展示「答题锁定 · 解锁」与「切专注」按钮
+    expect(screen.getByText('答题锁定 · 解锁')).toBeTruthy();
+    const switchFocusBtn = screen.getByRole('button', { name: /切专注/ });
+    expect(switchFocusBtn).toBeTruthy();
+
+    await waitFor(() => {
+      expect((switchFocusBtn as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fetchSpy.mockClear();
+
+    // 点击「切专注」切换为专注模式
+    fireEvent.click(switchFocusBtn);
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/classes/class-g1/lock_lesson',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ lessonId: 'lesson-101', mode: 'full' }),
+        }),
+      );
+    });
+
+    fetchSpy.mockRestore();
+  });
 });

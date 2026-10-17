@@ -42,7 +42,10 @@ import {
   Unlock,
   Pin,
   X,
+  Lock,
+  FileEdit,
 } from 'lucide-react';
+import type { LockMode } from '../types/app';
 import * as Icons from 'lucide-react';
 import { useAppStore, appStore } from '../store/appStore';
 import { uiStore } from '../store/uiStore';
@@ -853,10 +856,13 @@ export function LiveClassroomView({
     }
   };
 
-  // Find if class-wide locking is active (if all students are locked to this lesson)
-  const isClassLocked = !!(
-    liveClassSelectedClassId && students.filter((s) => s.locked_lesson_id === selectedLesson).length > 0
-  );
+  // Find if class-wide locking is active and its primary mode
+  const lockedStudents = students.filter((s) => s.locked_lesson_id === selectedLesson);
+  const isClassLocked = !!(liveClassSelectedClassId && lockedStudents.length > 0);
+  const classLockMode: LockMode =
+    lockedStudents.some((s) => s.lock_mode === 'navigation') && !lockedStudents.some((s) => s.lock_mode === 'full')
+      ? 'navigation'
+      : 'full';
 
   // 规则读取：进入「学生提交数据」页时拉一次（教师/管理员才有可配置权限）
   useEffect(() => {
@@ -1177,8 +1183,8 @@ export function LiveClassroomView({
     );
   };
 
-  // Lock entire class
-  const handleToggleClassLock = async (lock: boolean) => {
+  // Lock entire class with mode support ('full' | 'navigation')
+  const handleToggleClassLock = async (lock: boolean, mode: 'full' | 'navigation' = 'full') => {
     if (!liveClassSelectedClassId || !selectedLesson) {
       addToast(
         lang === 'zh' ? '⚠️ 无法操作' : '⚠️ Action Prevented',
@@ -1197,23 +1203,32 @@ export function LiveClassroomView({
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: lock ? JSON.stringify({ lessonId: selectedLesson }) : undefined,
+        body: lock ? JSON.stringify({ lessonId: selectedLesson, mode }) : undefined,
       });
 
       if (res.ok) {
         await fetchStudents();
+        const isAnswer = mode === 'navigation';
         setLiveClassFeed((prev) => [
           {
             id: Math.random().toString(),
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             type: lock ? 'warning' : 'info',
-            message: lock ? `已对全班学生强制锁定专注模式（限定当前课程）。` : `已解锁全班学生专注模式限制。`,
+            message: lock
+              ? isAnswer
+                ? `已对全班学生开启答题锁定（放开作答，限制离开当前页面）。`
+                : `已对全班学生强制锁定专注模式（限定当前课程，只读跟随）。`
+              : `已解锁全班学生专注模式限制。`,
           },
           ...prev,
         ]);
         addToast(
           lang === 'zh' ? '🔒 锁状态更新' : '🔒 Class Status Updated',
-          lock ? '全班专注锁定成功，学生将无法切回主页。' : '全班屏幕解锁成功，学生已恢复自由浏览。',
+          lock
+            ? isAnswer
+              ? '全班答题锁定成功，学生可在当前页面作答，无法切出。'
+              : '全班专注锁定成功，学生将无法切回主页。'
+            : '全班屏幕解锁成功，学生已恢复自由浏览。',
           'success',
         );
       }
@@ -1224,26 +1239,48 @@ export function LiveClassroomView({
     }
   };
 
-  // Lock single student
-  const handleToggleStudentLock = async (studentId: string, currentLockId: string | null | undefined) => {
-    const newLockVal = currentLockId ? null : selectedLesson;
+  // Lock single student with mode support ('full' | 'navigation')
+  const handleToggleStudentLock = async (
+    studentId: string,
+    currentLockId: string | null | undefined,
+    currentLockMode?: 'full' | 'navigation' | null,
+    targetMode?: 'full' | 'navigation',
+  ) => {
+    let newLockVal: string | null = selectedLesson;
+    let newMode: 'full' | 'navigation' = targetMode || 'full';
+
+    if (currentLockId) {
+      if (targetMode && currentLockMode !== targetMode) {
+        // 切换模式，保持锁定
+        newLockVal = selectedLesson;
+        newMode = targetMode;
+      } else {
+        // 解锁
+        newLockVal = null;
+      }
+    }
+
     try {
       const res = await fetch(`/api/students/${studentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locked_lesson_id: newLockVal }),
+        body: JSON.stringify({
+          locked_lesson_id: newLockVal,
+          lock_mode: newLockVal ? newMode : 'full',
+        }),
       });
       if (res.ok) {
         await fetchStudents();
         const stName = students.find((s) => s.id === studentId)?.name || studentId;
+        const isAnswer = newMode === 'navigation';
         setLiveClassFeed((prev) => [
           {
             id: Math.random().toString(),
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             type: newLockVal ? 'warning' : 'info',
             message: newLockVal
-              ? `已针对学生 [${stName}] 单独开启专注限制锁定。`
-              : `已解锁学生 [${stName}] 的专注限制。`,
+              ? `已针对学生 [${stName}] 开启${isAnswer ? '答题锁定' : '专注限制锁定'}。`
+              : `已解锁学生 [${stName}] 的屏幕锁定。`,
           },
           ...prev,
         ]);
@@ -1841,35 +1878,93 @@ export function LiveClassroomView({
               </span>
             )}
           </button>
-          <button
-            onClick={() => handleToggleClassLock(!isClassLocked)}
-            disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 ${
-              isClassLocked
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            }`}
-            title={
-              isClassLocked
-                ? lang === 'zh'
-                  ? '一键解锁全班'
-                  : 'Unlock Entire Class'
-                : lang === 'zh'
-                  ? '全班专注锁定'
-                  : 'Lock Class Screen'
-            }
-          >
-            {isClassLocked ? <ShieldAlert size={12} /> : <Shield size={12} />}
-            <span>
-              {isClassLocked
-                ? lang === 'zh'
-                  ? '一键解锁全班'
-                  : 'Unlock Entire Class'
-                : lang === 'zh'
-                  ? '全班专注锁定'
-                  : 'Lock Class Screen'}
-            </span>
-          </button>
+          {isClassLocked ? (
+            <div className="inline-flex rounded-lg shadow-sm shrink-0">
+              <button
+                onClick={() => handleToggleClassLock(false)}
+                disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
+                className={`px-3 py-1.5 rounded-l-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 text-white ${
+                  classLockMode === 'navigation'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+                title={
+                  lang === 'zh'
+                    ? `${classLockMode === 'navigation' ? '答题锁定中' : '专注锁定中'} · 点击一键解锁全班`
+                    : `${classLockMode === 'navigation' ? 'Answer Lock Active' : 'Focus Lock Active'} · Click to unlock`
+                }
+              >
+                {classLockMode === 'navigation' ? <FileEdit size={12} /> : <ShieldAlert size={12} />}
+                <span>
+                  {classLockMode === 'navigation'
+                    ? lang === 'zh'
+                      ? '答题锁定 · 解锁'
+                      : 'Answer Lock · Unlock'
+                    : lang === 'zh'
+                      ? '专注锁定 · 解锁'
+                      : 'Focus Lock · Unlock'}
+                </span>
+              </button>
+              <button
+                onClick={() => handleToggleClassLock(true, classLockMode === 'navigation' ? 'full' : 'navigation')}
+                disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
+                className={`px-2 py-1.5 rounded-r-lg font-bold text-[11px] flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 text-white border-l border-white/20 ${
+                  classLockMode === 'navigation'
+                    ? 'bg-amber-700 hover:bg-amber-800'
+                    : 'bg-rose-700 hover:bg-rose-800'
+                }`}
+                title={
+                  classLockMode === 'navigation'
+                    ? lang === 'zh'
+                      ? '切换为全班专注锁定（只读跟随，禁止交互）'
+                      : 'Switch to Full Focus Lock'
+                    : lang === 'zh'
+                      ? '切换为全班答题锁定（放开作答，禁止离开）'
+                      : 'Switch to Answer Lock'
+                }
+              >
+                <ArrowLeftRight size={11} />
+                <span>
+                  {classLockMode === 'navigation'
+                    ? lang === 'zh'
+                      ? '切专注'
+                      : 'To Focus'
+                    : lang === 'zh'
+                      ? '切答题'
+                      : 'To Answer'}
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div className="inline-flex rounded-lg shadow-sm shrink-0">
+              <button
+                onClick={() => handleToggleClassLock(true, 'full')}
+                disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
+                className="px-2.5 py-1.5 rounded-l-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                title={
+                  lang === 'zh'
+                    ? '全班专注锁定（只读跟随，限制离开）'
+                    : 'Class Focus Lock (Read-only, navigation restricted)'
+                }
+              >
+                <Shield size={12} />
+                <span>{lang === 'zh' ? '全班专注' : 'Focus Lock'}</span>
+              </button>
+              <button
+                onClick={() => handleToggleClassLock(true, 'navigation')}
+                disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
+                className="px-2.5 py-1.5 rounded-r-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white border-l border-amber-700 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                title={
+                  lang === 'zh'
+                    ? '全班答题锁定（允许正常作答与输入，限制离开）'
+                    : 'Class Answer Lock (Allow interaction/submissions, navigation restricted)'
+                }
+              >
+                <FileEdit size={12} />
+                <span>{lang === 'zh' ? '答题锁定' : 'Answer Lock'}</span>
+              </button>
+            </div>
+          )}
 
           {/* 上课流程扩展与倒计时工具栏 */}
           <ClassroomToolbarQuickActions
@@ -2548,10 +2643,13 @@ export function LiveClassroomView({
                   )}
                 </div>
                 <span
-                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0"
-                  title={lang === 'zh' ? '已锁定学生屏幕人数' : 'Locked count'}
+                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
+                  title={lang === 'zh' ? '已锁定学生屏幕人数 (专注 / 答题)' : 'Locked count (Focus / Answer)'}
                 >
-                  🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
+                  <span>🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}</span>
+                  {students.some((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation') && (
+                    <span className="text-amber-600 text-[9px] font-sans">✏️答题</span>
+                  )}
                 </span>
               </div>
 
@@ -2562,6 +2660,7 @@ export function LiveClassroomView({
                 >
                   {students.map((st) => {
                     const isStudentLocked = st.locked_lesson_id === selectedLesson;
+                    const studentLockMode = st.lock_mode || 'full';
                     const isCheckedIn = liveClassAcknowledgedMap.get(st.id);
                     const isOnline = onlineStudentIds.includes(st.id);
                     const activeLessonId = activeStudentLessons[st.id];
@@ -2597,7 +2696,10 @@ export function LiveClassroomView({
                     } else if (!isOnline) {
                       ringColor = 'stroke-slate-200 dark:stroke-slate-700'; // offline
                     } else if (isStudentLocked) {
-                      ringColor = 'stroke-rose-500 animate-pulse'; // focus locked
+                      ringColor =
+                        studentLockMode === 'navigation'
+                          ? 'stroke-amber-500 animate-pulse'
+                          : 'stroke-rose-500 animate-pulse'; // focus locked vs answer locked
                     } else if (isBehind) {
                       ringColor = 'stroke-amber-500 animate-pulse'; // behind progress
                     } else if (!isInLesson) {
@@ -2768,22 +2870,38 @@ export function LiveClassroomView({
                               >
                                 <Unlock size={9} />
                               </button>
-                              {/* Focus Lock controller */}
+                              {/* Focus / Answer Lock controller */}
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleToggleStudentLock(st.id, st.locked_lesson_id);
+                                  handleToggleStudentLock(st.id, st.locked_lesson_id, st.lock_mode);
                                 }}
                                 disabled={!selectedLesson}
                                 className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                   isStudentLocked
-                                    ? 'text-rose-500 hover:text-rose-600'
+                                    ? studentLockMode === 'navigation'
+                                      ? 'text-amber-500 hover:text-amber-600'
+                                      : 'text-rose-500 hover:text-rose-600'
                                     : 'text-slate-400 hover:text-rose-500'
                                 }`}
-                                title={isStudentLocked ? '解锁' : '锁定'}
+                                title={
+                                  isStudentLocked
+                                    ? studentLockMode === 'navigation'
+                                      ? '解除答题锁定'
+                                      : '解除专注锁定'
+                                    : '开启专注锁定'
+                                }
                               >
-                                {isStudentLocked ? <ShieldAlert size={9} /> : <Shield size={9} />}
+                                {isStudentLocked ? (
+                                  studentLockMode === 'navigation' ? (
+                                    <FileEdit size={9} />
+                                  ) : (
+                                    <ShieldAlert size={9} />
+                                  )
+                                ) : (
+                                  <Shield size={9} />
+                                )}
                               </button>
                             </div>
                           </div>
@@ -2861,8 +2979,14 @@ export function LiveClassroomView({
                         </div>
                         <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
                           <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
-                          <span className="font-bold font-mono text-rose-700 dark:text-rose-400 text-xs mt-0.5">
-                            {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
+                          <span className="font-bold font-mono text-xs mt-0.5">
+                            <span className="text-rose-600" title="专注锁定">
+                              {students.filter((s) => s.locked_lesson_id === selectedLesson && s.lock_mode !== 'navigation').length}
+                            </span>
+                            <span className="text-muted">/</span>
+                            <span className="text-amber-600" title="答题锁定">
+                              {students.filter((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation').length}
+                            </span>
                           </span>
                         </div>
                         <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
@@ -2914,6 +3038,17 @@ export function LiveClassroomView({
                         <span className="truncate max-w-[120px]">
                           {st.name} ({st.student_number || 'N/A'})
                         </span>
+                        {st.locked_lesson_id === selectedLesson && (
+                          <span
+                            className={`text-[9px] px-1 py-0.2 rounded font-bold border shrink-0 ${
+                              st.lock_mode === 'navigation'
+                                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-200 dark:border-amber-800'
+                                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border-rose-200 dark:border-rose-800'
+                            }`}
+                          >
+                            {st.lock_mode === 'navigation' ? '✏️答题锁' : '🔒专注锁'}
+                          </span>
+                        )}
                         {isPinned && !isHoverPreview && (
                           <span
                             className="text-[10px] font-semibold text-primary-ink bg-primary-theme/10 border border-primary-theme/20 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0"
@@ -2948,6 +3083,38 @@ export function LiveClassroomView({
                         )}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {selectedLesson && (
+                          st.locked_lesson_id === selectedLesson ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleStudentLock(
+                                  st.id,
+                                  st.locked_lesson_id,
+                                  st.lock_mode,
+                                  st.lock_mode === 'navigation' ? 'full' : 'navigation',
+                                );
+                              }}
+                              className="text-[9px] px-1 py-0.2 rounded bg-surface hover:bg-surface-secondary border border-theme text-primary-ink font-bold transition-colors cursor-pointer"
+                              title={st.lock_mode === 'navigation' ? '切换为专注锁定' : '切换为答题锁定'}
+                            >
+                              {st.lock_mode === 'navigation' ? '切专注' : '切答题'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleStudentLock(st.id, null, null, 'navigation');
+                              }}
+                              className="text-[9px] px-1 py-0.2 rounded bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:border-amber-800 font-bold transition-colors cursor-pointer"
+                              title="对该学生开启答题锁定"
+                            >
+                              答题锁
+                            </button>
+                          )
+                        )}
                         <span className="text-xs text-primary-ink font-mono font-black">{progPercent}%</span>
                         {isPinned && (
                           <button
