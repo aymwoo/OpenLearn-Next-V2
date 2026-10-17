@@ -165,6 +165,11 @@ export type {
   AdminUserActionConfig,
   HeaderStatusPillConfig,
   AISidebarTabConfig,
+  AssignmentGradeToolbarActionConfig,
+  AssignmentGradeItemAddonConfig,
+  AssignmentGradeRubricAddonConfig,
+  StudentSegmentGateFallbackConfig,
+  EditorSegmentTypeConfigConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 

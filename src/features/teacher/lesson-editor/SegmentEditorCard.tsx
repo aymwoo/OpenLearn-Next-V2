@@ -171,6 +171,18 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
 
         <SegmentGateFields lang={lang} segment={segment} readOnly={readOnly} onPatch={onPatch} />
 
+        {/* 自定义教学形态专属配置面板（如数字化探究实验配置、编程实战预设、小组辩论规则等） */}
+        <ExtensionPointRenderer
+          slot="editor.segment.type_config"
+          slotProps={{
+            segmentType: segment.type || 'lecture',
+            segment,
+            lang,
+            readOnly,
+            onPatch,
+          }}
+        />
+
         {/* 环节编辑附加面板（自定义表单 / 资源插入等；类型注册走 registerSegmentType） */}
         <ExtensionPointRenderer
           slot="editor.timeline_segment"

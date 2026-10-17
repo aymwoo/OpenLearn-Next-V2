@@ -161,8 +161,26 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
         </div>
       </div>
       {hideSegmentBody ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-amber-800 bg-amber-50/60 rounded-xl border border-amber-200">
-          {lang === 'zh' ? '本环节内容暂不可见' : 'This segment is not visible yet'}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-amber-800 bg-amber-50/60 rounded-xl border border-amber-200 gap-3">
+          <div className="text-sm font-semibold flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span>{lang === 'zh' ? '本教学环节尚未解锁' : 'This segment is not unlocked yet'}</span>
+          </div>
+          <p className="text-xs text-amber-700/80 max-w-md text-center">
+            {lang === 'zh'
+              ? '您尚未满足本教学环节的进入门禁条件，请完成前置任务或等待教师统一推进。'
+              : 'You have not met the gate conditions for this segment yet. Please complete prerequisites or wait for the teacher.'}
+          </p>
+          <ExtensionPointRenderer
+            slot="student.segment.gate_fallback"
+            slotProps={{
+              lessonId: selectedLesson,
+              activeSegmentId,
+              studentId: activeStudentId,
+              contentSegmentId,
+              lang,
+            }}
+          />
         </div>
       ) : null}
       {!hideSegmentBody && studentLessonTab === 'whiteboard' && (

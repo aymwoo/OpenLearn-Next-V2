@@ -16,6 +16,7 @@ import {
   Database,
   ExternalLink,
 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 interface TeacherAssignmentGradePanelProps {
   lessonId: string;
@@ -247,14 +248,25 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             {submissions.length} {zh ? '个提交' : 'submissions'}
           </span>
         </div>
-        <button
-          onClick={() => fetchData(true)}
-          disabled={refreshing}
-          className="p-1.5 bg-white hover:bg-slate-55 border border-slate-200 rounded-lg text-slate-600 transition-colors flex items-center justify-center cursor-pointer shadow-4xs"
-          title={zh ? '刷新数据' : 'Refresh'}
-        >
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <ExtensionPointRenderer
+            slot="assignment.grade.toolbar.action"
+            slotProps={{
+              lessonId,
+              submissions,
+              refresh: () => fetchData(true),
+              lang,
+            }}
+          />
+          <button
+            onClick={() => fetchData(true)}
+            disabled={refreshing}
+            className="p-1.5 bg-white hover:bg-slate-55 border border-slate-200 rounded-lg text-slate-600 transition-colors flex items-center justify-center cursor-pointer shadow-4xs"
+            title={zh ? '刷新数据' : 'Refresh'}
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Global default weights setup */}
@@ -295,6 +307,17 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             <span className="text-xs font-bold text-slate-700 w-8">{defaultPeerWeight}%</span>
           </div>
         </div>
+
+        <ExtensionPointRenderer
+          slot="assignment.grade.rubric.addon"
+          slotProps={{
+            lessonId,
+            defaultTeacherWeight,
+            defaultPeerWeight,
+            onTeacherWeightChange: handleDefaultTeacherWeightChange,
+            lang,
+          }}
+        />
       </div>
 
       {/* Main submissions area */}
@@ -527,6 +550,22 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                         className="w-full bg-white border border-slate-250 rounded-lg text-xs p-2 focus:ring-1 focus:ring-indigo-500 outline-none shadow-4xs disabled:opacity-50 disabled:bg-slate-50 resize-none font-medium text-slate-700"
                       />
                     </div>
+
+                    {/* 第三方作业评估与分析插件扩展（代码运行结果/AI评语推荐/查重诊断等） */}
+                    <ExtensionPointRenderer
+                      slot="assignment.grade.item.addon"
+                      slotProps={{
+                        submission: sub,
+                        studentId: sub.student_id,
+                        lessonId,
+                        score: currentScore,
+                        comment: currentComment,
+                        isConfirmed,
+                        onScoreChange: (score: number) => setScores((prev) => ({ ...prev, [sub.id]: score })),
+                        onCommentChange: (comment: string) => setComments((prev) => ({ ...prev, [sub.id]: comment })),
+                        lang,
+                      }}
+                    />
 
                     {/* Real-time Calculation Sync Strip */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-slate-100 mt-1">

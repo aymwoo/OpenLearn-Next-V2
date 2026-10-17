@@ -773,6 +773,42 @@ export interface AISidebarTabConfig {
   icon?: string;
 }
 
+/** A contribution to the assignment.grade.toolbar.action slot. */
+export interface AssignmentGradeToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the assignment.grade.item.addon slot. */
+export interface AssignmentGradeItemAddonConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the assignment.grade.rubric.addon slot. */
+export interface AssignmentGradeRubricAddonConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the student.segment.gate_fallback slot. */
+export interface StudentSegmentGateFallbackConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the editor.segment.type_config slot. */
+export interface EditorSegmentTypeConfigConfig {
+  id: string;
+  segmentType: string;
+  label?: string;
+  icon?: string;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -865,7 +901,12 @@ export type ContributionConfig =
   | AdminDashboardCardConfig
   | AdminUserActionConfig
   | HeaderStatusPillConfig
-  | AISidebarTabConfig;
+  | AISidebarTabConfig
+  | AssignmentGradeToolbarActionConfig
+  | AssignmentGradeItemAddonConfig
+  | AssignmentGradeRubricAddonConfig
+  | StudentSegmentGateFallbackConfig
+  | EditorSegmentTypeConfigConfig;
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {
