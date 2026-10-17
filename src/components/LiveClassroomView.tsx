@@ -341,6 +341,8 @@ export function LiveClassroomView({
   const {
     data: peerReviewData,
     topPerformers,
+    showcaseWorks,
+    setSpotlightWork,
     autoAssigning,
     autoAssign: handleAutoAssignPeerReview,
   } = usePeerReviewData({
@@ -1744,6 +1746,7 @@ export function LiveClassroomView({
             onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
             onOpenGroupCollab={() => setIsGroupCollabOpen(true)}
             onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
+            onOpenPeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(true)}
             onOpenParentNotification={() => setIsParentNotificationOpen(true)}
             onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
             onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
@@ -3038,6 +3041,8 @@ export function LiveClassroomView({
         onClosePeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(false)}
         onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
         peerReviewData={peerReviewData as never}
+        showcaseWorks={showcaseWorks}
+        onSelectSpotlightWork={setSpotlightWork}
         onAutoAssignPeerReview={handleAutoAssignPeerReview}
         autoAssigning={autoAssigning}
         isParentNotificationOpen={isParentNotificationOpen}

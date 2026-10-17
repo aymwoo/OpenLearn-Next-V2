@@ -29,6 +29,11 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import {
+  getUnifiedShowcaseWorks,
+  getUnifiedShowcaseWorksResult,
+  type ShowcaseWork,
+} from '../services/showcase-work-service.js';
 
 /** 统一的 id 生成（与仓库既有风格一致：时间戳 + 随机后缀） */
 function makeId(prefix: string): string {
@@ -96,6 +101,23 @@ export function registerClassroomPeerReviewRoutes(app: Express): void {
 }
 
 function ensureRoutes(app: Express): void {
+  // ── 0. 查询全量统一作品池（课堂作业 / 课件作答 / 传统作业） ───────────
+  app.get(
+    '/api/classroom/sessions/:lessonId/showcase-works',
+    requireAuth('teacher', 'administrator', 'student'),
+    async (req: Request, res: Response) => {
+      try {
+        const db = kernelContainer.db as any;
+        const { lessonId } = req.params;
+        const session = resolveSession(lessonId);
+        const works = getUnifiedShowcaseWorks(db, lessonId, session?.id, session?.classId);
+        return res.json({ success: true, works });
+      } catch (e: any) {
+        sendSafeError(res, e);
+      }
+    },
+  );
+
   // ── 1. 一键分配互评任务 ────────────────────────────────────────────────
   app.post(
     '/api/classroom/sessions/:lessonId/peer-review/auto-assign',
@@ -108,88 +130,10 @@ function ensureRoutes(app: Express): void {
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session for this lesson' });
 
-        // 真实作品池（排除 teacher/guest 占位），带真实学生与分数。
-        //
-        // 注意 schema 事实：`courseware_attempt` **没有 lesson_id 列** ——
-        // 课节与课件的关联在 `whiteboard_elements`（type='html-applet' 的 data.coursewareUuid）。
-        // 因此分两级取作品：
-        //   scope='lesson'：仅收本教案内嵌课件产生的作答（精确）
-        //   scope='class' ：本课节无内嵌课件时，回退到本班学生在此课件上的全部作答（宽松）
-        // 响应回传 scope，便于教师理解当前口径；两者都拿不到 → 400。
-        const coursewareIds: string[] = [];
-        try {
-          const els = db
-            .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'html-applet'")
-            .all(lessonId) as Array<{ data: string }>;
-          for (const el of els) {
-            try {
-              const parsed = JSON.parse(el.data || '{}');
-              const uuid = parsed?.coursewareUuid ?? parsed?.uuid;
-              if (typeof uuid === 'string' && uuid.trim()) {
-                const cw = db.prepare('SELECT id FROM courseware WHERE uuid = ?').get(uuid.trim()) as
-                  { id: string } | undefined;
-                if (cw?.id && !coursewareIds.includes(cw.id)) coursewareIds.push(cw.id);
-              }
-            } catch {
-              /* 单元素解析失败不影响整体 */
-            }
-          }
-        } catch {
-          /* 表不存在等异常 → 走 class 级回退 */
-        }
+        // 统一作品池：涵盖课堂作业提交、课件作答与传统作业
+        const { works, scope } = getUnifiedShowcaseWorksResult(db, lessonId, session.id, session.classId);
 
-        const classStudentIds = session.classId
-          ? (
-              db.prepare('SELECT student_id FROM class_students WHERE class_id = ?').all(session.classId) as Array<{
-                student_id: string;
-              }>
-            ).map((r) => r.student_id)
-          : [];
-
-        const buildQuery = (whereClause: string, params: unknown[]) =>
-          db
-            .prepare(
-              `SELECT a.id as attemptId, a.student_id as studentId,
-                      COALESCE(s.name, a.student_id) as studentName,
-                      cw.name as coursewareName, r.score, r.completion
-                 FROM courseware_attempt a
-                 JOIN courseware cw ON a.courseware_id = cw.id
-                 LEFT JOIN students s ON a.student_id = s.id
-                 LEFT JOIN submission_result r ON r.attempt_id = a.id
-                WHERE a.student_id NOT IN ('teacher', 'guest', 'teacher_preview', '')
-                  AND (a.finished_at IS NOT NULL OR r.score IS NOT NULL)
-                  ${whereClause}
-                ORDER BY COALESCE(r.score, 0) DESC`,
-            )
-            .all(...params);
-
-        let scope: 'lesson' | 'class' = 'lesson';
-        let attempts: Array<{
-          attemptId: string;
-          studentId: string;
-          studentName: string;
-          coursewareName: string | null;
-          score: number | null;
-          completion: number | null;
-        }> = [];
-
-        if (coursewareIds.length > 0) {
-          const placeholders = coursewareIds.map(() => '?').join(',');
-          attempts = buildQuery(`AND a.courseware_id IN (${placeholders})`, coursewareIds);
-        }
-        if (attempts.length < 2 && classStudentIds.length > 0) {
-          const placeholders = classStudentIds.map(() => '?').join(',');
-          const classAttempts = buildQuery(`AND a.student_id IN (${placeholders})`, classStudentIds);
-          if (classAttempts.length > attempts.length) {
-            attempts = classAttempts;
-            scope = 'class';
-          }
-        }
-
-        if (attempts.length === 0) {
-          attempts = [];
-        }
-        if (attempts.length < 2) {
+        if (works.length < 2) {
           return res.status(400).json({
             success: false,
             error: 'Not enough submitted works to assign peer reviews (need at least 2)',
@@ -199,8 +143,8 @@ function ensureRoutes(app: Express): void {
         ensureRubric(session.id, lessonId);
 
         // 分层对调：前一半为标杆（benchmark），后一半为攻坚（improve）
-        const mid = Math.ceil(attempts.length / 2);
-        const tiers = attempts.map((a, i) => ({ ...a, tier: i < mid ? 'benchmark' : 'improve' }));
+        const mid = Math.ceil(works.length / 2);
+        const tiers = works.map((w, i) => ({ ...w, tier: i < mid ? 'benchmark' : 'improve' }));
 
         const insert = db.prepare(
           `INSERT OR REPLACE INTO classroom_peer_review_tasks
@@ -222,7 +166,7 @@ function ensureRoutes(app: Express): void {
             const wantTier =
               tiers.length >= 4 ? (reviewer.tier === 'benchmark' ? 'improve' : 'benchmark') : target.tier;
             const pick = tiers.find(
-              (t) => t.tier === wantTier && t.studentId !== reviewer.studentId && t.attemptId === target.attemptId,
+              (t) => t.tier === wantTier && t.studentId !== reviewer.studentId && t.workId === target.workId,
             );
             const finalTarget = pick ?? target;
             insert.run(
@@ -234,8 +178,8 @@ function ensureRoutes(app: Express): void {
               reviewer.studentName,
               finalTarget.studentId,
               finalTarget.studentName,
-              finalTarget.attemptId,
-              `${finalTarget.studentName} · ${finalTarget.coursewareName ?? '课件作品'}`,
+              finalTarget.workId,
+              `${finalTarget.studentName} · ${finalTarget.title} (${finalTarget.sourceLabel})`,
               finalTarget.score,
               finalTarget.tier,
               now,
@@ -423,6 +367,8 @@ function ensureRoutes(app: Express): void {
         const total = tasks.length;
         const completed = tasks.filter((t) => t.status === 'submitted').length;
 
+        const showcaseWorks = getUnifiedShowcaseWorks(db, lessonId, session.id, session.classId);
+
         return res.json({
           success: true,
           sessionId: session.id,
@@ -434,6 +380,7 @@ function ensureRoutes(app: Express): void {
           dimensions,
           progress: { completed, total },
           studentsWithWork: new Set(tasks.map((t) => t.reviewer_id)).size,
+          showcaseWorks,
         });
       } catch (e: any) {
         sendSafeError(res, e);

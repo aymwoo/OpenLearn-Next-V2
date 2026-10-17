@@ -31,6 +31,30 @@ export interface LivePeerBadge {
   timestamp?: string;
 }
 
+export interface ShowcaseWorkFile {
+  name: string;
+  size?: number;
+  url?: string;
+  mimeType?: string;
+  isImage?: boolean;
+  isCode?: boolean;
+}
+
+export interface ShowcaseWork {
+  workId: string;
+  studentId: string;
+  studentName: string;
+  source: 'courseware' | 'plugin' | 'assignment';
+  sourceLabel: string;
+  title: string;
+  submittedAt?: string;
+  score?: number;
+  codeSnippet?: string;
+  textContent?: string;
+  files?: ShowcaseWorkFile[];
+  summary?: string;
+}
+
 export interface SpotlightWorkItem {
   id: string;
   slot: 'A' | 'B';
@@ -48,6 +72,14 @@ export interface SpotlightWorkItem {
   visualBadgeText?: string;
   /** 代码片段标题与内容：真实作品无代码源时为空，UI 显示占位说明 */
   codeTitle?: string;
+  /** 作品来源类型与标签 */
+  source?: 'courseware' | 'plugin' | 'assignment';
+  sourceLabel?: string;
+  /** 纯文本/多行作答内容 */
+  textContent?: string;
+  /** 提交附件清单（图片、代码、文档） */
+  files?: ShowcaseWorkFile[];
+  submittedAt?: string;
   /**
    * 学生真实作答内容摘要（从 submission_raw 提取）。
    * 大屏「作品可视化预览」用它渲染，取代原先与真实作品无关的写死 SVG。

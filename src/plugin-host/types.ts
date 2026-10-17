@@ -139,6 +139,7 @@ export type ExtensionSlot =
   | 'peer_review.badge' // 全班大屏互评微勋章扩展
   | 'peer_review.action' // 全班大屏互评操作扩展
   | 'peer_review.showcase.widget' // 大屏焦点作品对比分析组件扩展
+  | 'peer_review.work.preview' // 大屏焦点作品自定义多模态预览扩展（如 3D/仿真器/特定文件播放器）
   // ── 机房座位图扩展槽位 ──────────────────────────────────────────────
   // 座位图读取已有的 computer_labs + student_seats 表，展示班级学生在机房的物理座位分布。
   | 'classroom.seating.toolbar' // 座位图工具栏右侧按钮（如"远程开机"、"锁屏"）
@@ -824,4 +825,24 @@ export interface AiSidebarTabSlotProps {
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
+
+/** Props passed to peer_review.work.preview extensions */
+export interface PeerReviewWorkPreviewSlotProps {
+  work?: any;
+  slot?: 'A' | 'B';
+  isAnonymous?: boolean;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to peer_review.showcase.widget extensions */
+export interface PeerReviewShowcaseWidgetSlotProps {
+  workA?: any;
+  workB?: any;
+  annotations?: any[];
+  isAnonymous?: boolean;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
 
