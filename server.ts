@@ -115,6 +115,7 @@ import { registerPluginsRoutes } from './server/routes/plugins.js';
 import { registerClassroomRoutes } from './server/routes/classroom.js';
 import { registerClassroomExtrasRoutes } from './server/routes/classroom-extras.js';
 import { registerClassroomPeerReviewRoutes } from './server/routes/classroom-peer-review.js';
+import { registerAssessmentRoutes } from './server/routes/assessments.js';
 
 // Module-level cleanup reference for graceful shutdown (H-8)
 let currentCleanup: (() => Promise<void>) | null = null;
@@ -404,6 +405,9 @@ async function startServer() {
   registerSchedulesRoutes(ctx);
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
+
+  // 测评子系统（Issue #100 / #120）。题型注册表由内核 bootstrap 时注册进 DI，这里只挂路由。
+  registerAssessmentRoutes(ctx);
 
   // 四阶段课堂生命周期与教学环节门槛分开：
   // transitionStage 只跑本服务 registerStageGuard 的生命周期守卫。

@@ -958,6 +958,25 @@ interface StageGuard {
   canEnterStage(ctx: StageGuardContext): Promise<StageGuardResult>;
 }
 
+interface IAssessmentQuestionTypeSummary {
+  type: string;
+  label: { zh: string; en: string };
+  category: string;
+  supports: string[];
+  autoGradable: boolean;
+  pluginId?: string;
+}
+
+/** 测评题型注册表（Issue #100）。插件用它注册自定义题型与判分实现。 */
+interface IAssessmentGraderRegistry {
+  registerQuestionType(definition: unknown, options?: { pluginId?: string }): void;
+  unregisterQuestionType(type: string, pluginId?: string): boolean;
+  clearOwnedQuestionTypes(pluginId: string): number;
+  getQuestionType(type: string): unknown;
+  listQuestionTypes(): IAssessmentQuestionTypeSummary[];
+  gradeItem(item: unknown, answer: unknown, ctx: unknown): unknown;
+}
+
 interface IStageGuardService {
   registerGuard(guard: StageGuard): () => void;
   unregisterGuard(guardId: string): void;
@@ -1087,6 +1106,8 @@ declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScr
 declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
+declare const IAssessmentGraderRegistryToken: Token<IAssessmentGraderRegistry>;
+
 declare const IStageGuardServiceToken: Token<IStageGuardService>;
 
 interface OutboundFetchRequest {
@@ -1270,6 +1291,8 @@ export type {
   IClassroomCountdownService,
   StageGuardContext,
   StageGuard,
+  IAssessmentQuestionTypeSummary,
+  IAssessmentGraderRegistry,
   IStageGuardService,
   IntegrationHealthStatus,
   IntegrationDescriptor,
@@ -1338,6 +1361,7 @@ export {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
+  IAssessmentGraderRegistryToken,
   IStageGuardServiceToken,
   IActivityRegistryToken,
   IAuthSessionBridgeToken,

@@ -33,6 +33,7 @@ import {
   IPointsLedgerServiceToken,
   ILessonEngineServiceToken,
   IStageGuardServiceToken,
+  IAssessmentGraderRegistryToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
@@ -61,6 +62,7 @@ import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
 import { LessonRuntime, defaultStageGuardPipeline } from '../lesson-engine/index.js';
+import { assessmentGraderRegistry } from '../assessment/registry-service.js';
 import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
 import { PresenceEngineKernel } from '../presence-engine/index.js';
 import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
@@ -288,6 +290,10 @@ export class Kernel {
     // 也回退到该单例（lesson-runtime.ts），若此处 new 一个新实例，
     // 插件经 ctx.resolve() 注册的守卫与运行时实际校验的管道将不是同一个对象（split-brain）。
     this.serviceRegistry.register(IStageGuardServiceToken, defaultStageGuardPipeline as any);
+
+    // 测评题型注册表（Issue #100）：内置 5 种题型 + 插件题型共用同一实例。
+    // 必须在这里注册而不是 server.ts —— canary 会断言 PLUGIN_RESOLVABLE_TOKENS 全部可解析。
+    this.serviceRegistry.register(IAssessmentGraderRegistryToken, assessmentGraderRegistry as any);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
