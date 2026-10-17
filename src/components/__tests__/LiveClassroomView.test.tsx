@@ -113,6 +113,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     cleanup();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    // Issue #91：会话恢复记忆写在 sessionStorage，用例之间必须隔离
+    window.sessionStorage.clear();
   });
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
@@ -342,17 +344,46 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     appStore.setState({ liveClassSelectedClassId: null });
   });
 
-  it('does not render the next-lesson portal until an in-progress session is resolved, then stays on that class', async () => {
+  it('Issue #91：有进行中会话时先进「进行中会话列表」而不是授课视图，继续上课后才进课并保持班级锁定', async () => {
     window.history.replaceState({}, '', '/?classId=class-other#/live_class');
     appStore.setState({ liveClassSelectedClassId: 'class-other' });
-    const pending: Array<(value: unknown) => void> = [];
+    const pendingPerLesson: Array<(value: unknown) => void> = [];
     const setClass = vi.fn();
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
+        // 列表端点：/api/classroom/sessions?status=active（注意不是 /sessions/<lessonId>）
+        if (String(url).includes('/api/classroom/sessions?')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              items: [
+                {
+                  id: 'sess-1',
+                  lessonId: 'lesson-101',
+                  lessonTitle: '物理探究实验课',
+                  classId: 'class-g1',
+                  className: '高一1班',
+                  teacherId: 'teacher',
+                  stage: 'IN_CLASS_TEACHING',
+                  teachingModeId: null,
+                  teachingModeName: null,
+                  checkinCode: null,
+                  focusMode: false,
+                  startedAt: Date.now() - 60000,
+                  endedAt: null,
+                  createdAt: Date.now() - 60000,
+                  stats: { pollCount: 0, exitTicketCount: 0, feedCount: 0 },
+                  presentCount: 2,
+                },
+              ],
+              total: 1,
+            }),
+          });
+        }
         if (String(url).includes('/api/classroom/sessions/')) {
           return new Promise((resolve) => {
-            pending.push(resolve);
+            pendingPerLesson.push(resolve);
           });
         }
         return Promise.resolve({ ok: true, json: async () => ({}) });
@@ -369,11 +400,14 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    expect(screen.getByTestId('live-class-entry-pending')).toBeTruthy();
+    // 第一屏就是「进行中会话」这一屏（先加载态），不再先渲染门户、也不直接进授课视图
+    expect(screen.getByTestId('in-progress-sessions-loading')).toBeTruthy();
+    expect(screen.queryByTestId('live-class-entry-pending')).toBeNull();
     expect(screen.queryByText(/下一节/)).toBeNull();
-    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    expect(screen.queryByText('🔴 在线课堂')).toBeNull();
+    await waitFor(() => expect(pendingPerLesson.length).toBeGreaterThan(0));
 
-    for (const resolve of pending) {
+    for (const resolve of pendingPerLesson) {
       resolve({
         ok: true,
         json: async () => ({
@@ -384,10 +418,114 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       });
     }
 
-    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    // 关键行为变更：落到「进行中会话列表」，授课视图尚未进入
+    expect(await screen.findByTestId('in-progress-session-list')).toBeTruthy();
+    expect(screen.queryByText('🔴 在线课堂')).toBeNull();
     expect(screen.queryByText(/下一节/)).toBeNull();
     await waitFor(() => expect(setClass).toHaveBeenCalledWith('class-g1'));
     expect(setClass).not.toHaveBeenCalledWith('class-other');
+
+    // 教师显式「继续上课」后才进授课视图
+    fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
+    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
+    appStore.setState({ liveClassSelectedClassId: null });
+  });
+
+  it('Issue #91：会话列表为空时回退到起始门户，并显示班级锁定提示', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions?')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: [], total: 0 }) });
+        }
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ hasActiveSession: false }),
+          });
+        }
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId('in-progress-session-list')).toBeNull());
+    expect(await screen.findByText(/下一节课|开始上课/)).toBeTruthy();
+  });
+
+  it('Issue #91：显式「继续上课」后重新挂载（刷新/切标签页回来）直接回到授课视图，不再要求重选', async () => {
+    appStore.setState({ liveClassSelectedClassId: 'class-g1' });
+    const listItem = {
+      id: 'sess-1',
+      lessonId: 'lesson-101',
+      lessonTitle: '物理探究实验课',
+      classId: 'class-g1',
+      className: '高一1班',
+      teacherId: 'teacher',
+      stage: 'IN_CLASS_TEACHING',
+      teachingModeId: null,
+      teachingModeName: null,
+      checkinCode: null,
+      focusMode: false,
+      startedAt: Date.now() - 60000,
+      endedAt: null,
+      createdAt: Date.now() - 60000,
+      stats: { pollCount: 0, exitTicketCount: 0, feedCount: 0 },
+      presentCount: 2,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions?')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: [listItem], total: 1 }) });
+        }
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1' },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    const first = render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen />
+      </AppDataProvider>,
+    );
+
+    // 第一次进入：先看到会话列表
+    expect(await screen.findByTestId('in-progress-session-list')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
+    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+
+    // 模拟刷新 / 切标签页回来：卸载后用同样的 props 重新挂载
+    first.unmount();
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen />
+      </AppDataProvider>,
+    );
+
+    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
     appStore.setState({ liveClassSelectedClassId: null });
   });
 

@@ -22,6 +22,7 @@ import AxeBuilder from '@axe-core/playwright';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
+import { enterTeachingView } from './fixtures/classroom-entry';
 
 const DB_PATH = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
 
@@ -93,11 +94,8 @@ async function freezeAnimations(page: Page) {
 async function openTeacherClassroom(page: Page) {
   const cockpit = page.locator(COCKPIT);
   if (await cockpit.isVisible().catch(() => false)) return;
-  await page.locator('button:has-text("互动课堂")').first().click();
-  const resumeBtn = page.getByRole('button', { name: '回到课堂' });
-  if (await resumeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await resumeBtn.click();
-  }
+  // Issue #91: 首屏是进行中会话列表，需要等列表拉回来再点「继续上课」
+  await enterTeachingView(page, COCKPIT);
   await expect(cockpit).toBeVisible({ timeout: 20_000 });
 }
 

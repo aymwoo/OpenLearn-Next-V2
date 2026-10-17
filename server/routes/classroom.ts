@@ -9,7 +9,7 @@ import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
-import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
+import { emitClassroomEvent, getOnlineStudentIds, getPresentStudentIds } from '../presence.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import {
   lessonActiveSegments,
@@ -663,6 +663,9 @@ export function registerClassroomRoutes(
           startedAt: r.started_at,
           endedAt: r.ended_at,
           createdAt: r.created_at,
+          // 已经进入本节 live class 且仍在线的学生数（Issue #91 会话列表需要）。
+          // 用 getPresentStudentIds 而非在线总人数：历史签到不算，已离开的不算。
+          presentCount: getPresentStudentIds(r.lesson_id).length,
           stats,
         };
       });

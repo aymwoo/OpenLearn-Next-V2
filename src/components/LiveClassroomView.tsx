@@ -61,6 +61,8 @@ import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInte
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
 import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
 import { ClassroomSessionManager, type ClassroomSessionItem } from '../features/classroom/ClassroomSessionManager';
+import { InProgressSessionList } from '../features/classroom/InProgressSessionList';
+import { readRememberedActiveLesson, rememberActiveLesson } from '../features/classroom/live-class-resume-memory';
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
@@ -209,21 +211,50 @@ export function LiveClassroomView({
     setPendingLessonId(selectedLesson);
   }, [selectedLesson]);
 
+  /**
+   * Issue #91：本标签页是否已经显式进过这节课（刷新 / 切标签页后回来）。
+   * 为真时跳过「会话列表 → 起始门户」两步，直接回授课视图，否则教师每次刷新
+   * 都要重新点一次「继续上课」。
+   */
+  const resumeRememberedSession = Boolean(selectedLesson) && readRememberedActiveLesson() === selectedLesson;
+
   // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
   // Issue #90: 课表「快速开始上这节课」——课表页已完成会话初始化并留下
-  // pendingLiveClassLaunch 信号时，跳过门户直接进入授课视图。
+  // pendingLiveClassLaunch 信号时，跳过会话列表与门户直接进入授课视图。
   const initialLaunchSignal = uiStore.getState().pendingLiveClassLaunch;
-  const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen && !initialLaunchSignal);
+  const [showEntryPortal, setShowEntryPortal] = useState(
+    initialPortalOpen && !resumeRememberedSession && !initialLaunchSignal,
+  );
   /** 是否展示「课堂会话与档案管理」看板 */
   const [showSessionManager, setShowSessionManager] = useState(false);
+  /**
+   * Issue #91：进入互动课堂的第一屏是「进行中的课堂会话」列表。
+   * 常规路径（initialPortalOpen）先看列表，列表为空时由 `onEmpty` 回退到起始门户。
+   */
+  const [showSessionPicker, setShowSessionPicker] = useState(
+    initialPortalOpen && !resumeRememberedSession && !initialLaunchSignal,
+  );
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
-  const [entryDecisionReady, setEntryDecisionReady] = useState(!initialPortalOpen || !!initialLaunchSignal);
+  const [entryDecisionReady, setEntryDecisionReady] = useState(
+    !initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal,
+  );
   /** 教师主动回到起始门户后，轮询不要再把门户关掉。 */
   const userReturnedToPortalRef = useRef(false);
+  /**
+   * 教师已经**显式**进了某节课（门户开课 / 列表继续上课 / 会话档案恢复）。
+   * 轮询看到「有进行中会话」时不得再把教师弹回会话列表——否则每次 15s 轮询
+   * 都会把正在上课的人踢出授课视图。
+   * 宿主传 initialPortalOpen={false} 表示「已经在这节课的授课视图里」（嵌入场景与
+   * 既有单测），那种情况同样算作显式进课。
+   * Issue #90 的一键开课信号同理（课表页已完成 init，直达授课视图）。
+   */
+  const enteredClassroomRef = useRef(
+    !initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal,
+  );
 
-  // 消费一键开课信号：与门户 handlePortalEnter 同一恢复路径（选中课程/班级 + 拉取白板要素）
+  // 消费一键开课信号（Issue #90）：与门户 handlePortalEnter 同一恢复路径（选中课程/班级 + 拉取白板要素）
   useEffect(() => {
     if (!initialLaunchSignal) return;
     setSelectedLesson(initialLaunchSignal.lessonId);
@@ -285,8 +316,10 @@ export function LiveClassroomView({
           const sessionClassId = data.session?.class_id ? String(data.session.class_id) : null;
           const classLocked = Boolean(data.hasActiveSession) && isInProgressClassLocked(data.stage);
           // 刷新 / ?classId= 不能改掉进行中会话的班级。URL 上的 classId 故意不读取。
-          if (classLocked && !userReturnedToPortalRef.current) {
+          // Issue #91：不再直接跳进授课视图，改为先把「进行中的会话」交还给教师选择。
+          if (classLocked && !userReturnedToPortalRef.current && !enteredClassroomRef.current) {
             setShowEntryPortal(false);
+            setShowSessionPicker(true);
           }
           const currentClassId = appStore.getState().liveClassSelectedClassId;
           if (classLocked && sessionClassId && currentClassId !== sessionClassId) {
@@ -465,6 +498,9 @@ export function LiveClassroomView({
     setLiveClassSelectedClassId(classId);
     void fetchElements(lessonId);
     userReturnedToPortalRef.current = false;
+    enteredClassroomRef.current = true;
+    rememberActiveLesson(lessonId);
+    setShowSessionPicker(false);
     setShowEntryPortal(false);
   };
 
@@ -1486,18 +1522,24 @@ export function LiveClassroomView({
         addToast={addToast}
         onBackToPortal={() => {
           userReturnedToPortalRef.current = true;
+          enteredClassroomRef.current = false;
+          rememberActiveLesson(null);
           setEntryDecisionReady(true);
           setShowSessionManager(false);
+          setShowSessionPicker(false);
           setShowEntryPortal(true);
         }}
         onResumeSession={(session: ClassroomSessionItem) => {
           viewingSpecificReportRef.current = null;
           setReportSessionId(null);
           userReturnedToPortalRef.current = false;
+          enteredClassroomRef.current = true;
+          rememberActiveLesson(session.lessonId);
           setSelectedLesson(session.lessonId);
           if (session.classId) setLiveClassSelectedClassId(session.classId);
           setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
           setShowSessionManager(false);
+          setShowSessionPicker(false);
           setShowEntryPortal(false);
         }}
         onViewReport={(session: ClassroomSessionItem) => {
@@ -1525,9 +1567,53 @@ export function LiveClassroomView({
             setLiveClassIsActive(false);
             setSessionStartedAt(null);
             userReturnedToPortalRef.current = true;
+            enteredClassroomRef.current = false;
+            rememberActiveLesson(null);
             setEntryDecisionReady(true);
+            setShowSessionPicker(false);
             setShowEntryPortal(true);
           }
+        }}
+      />
+    );
+  }
+
+  // Issue #91：第一屏 —— 进行中的课堂会话列表（空列表时自动回退到起始门户）
+  if (showSessionPicker) {
+    return (
+      <InProgressSessionList
+        lang={lang}
+        currentLessonId={selectedLesson}
+        addToast={addToast}
+        onResume={(session: ClassroomSessionItem) => {
+          viewingSpecificReportRef.current = null;
+          setReportSessionId(null);
+          userReturnedToPortalRef.current = false;
+          enteredClassroomRef.current = true;
+          rememberActiveLesson(session.lessonId);
+          setSelectedLesson(session.lessonId);
+          if (session.classId) setLiveClassSelectedClassId(session.classId);
+          setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
+          setShowSessionPicker(false);
+          setShowEntryPortal(false);
+        }}
+        onStartNew={() => {
+          // 开始一节新课走既有起始门户；进行中的会话不受影响。
+          userReturnedToPortalRef.current = true;
+          enteredClassroomRef.current = false;
+          rememberActiveLesson(null);
+          setEntryDecisionReady(true);
+          setShowSessionPicker(false);
+          setShowEntryPortal(true);
+        }}
+        onOpenArchive={() => {
+          setShowSessionPicker(false);
+          setShowSessionManager(true);
+        }}
+        onEmpty={() => {
+          // 一场进行中的会话都没有 → 直接显示起始门户（与旧行为一致）
+          setShowSessionPicker(false);
+          if (!enteredClassroomRef.current) setShowEntryPortal(true);
         }}
       />
     );
@@ -1610,7 +1696,10 @@ export function LiveClassroomView({
             id="live-classroom-back-to-portal"
             onClick={() => {
               userReturnedToPortalRef.current = true;
+              enteredClassroomRef.current = false;
+              rememberActiveLesson(null);
               setEntryDecisionReady(true);
+              setShowSessionPicker(false);
               setShowEntryPortal(true);
             }}
             className="inline-flex items-center text-2xs font-semibold px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"

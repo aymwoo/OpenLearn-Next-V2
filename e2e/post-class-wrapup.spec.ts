@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import { clickIfVisible } from './fixtures/classroom-entry';
 
 function purgePostClassWrapupE2EFromDb() {
   const dbPath = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
@@ -255,11 +256,18 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
       await expect(liveClassNavBtn).toBeVisible({ timeout: 15_000 });
       await liveClassNavBtn.click();
 
-      // 活跃课堂检测到后，等待“回到课堂”按钮就绪并点击恢复
-      const resumeBtn = page.getByRole('button', { name: '回到课堂' });
-      await expect(resumeBtn).toBeVisible({ timeout: 15_000 });
-      await expect(resumeBtn).toBeEnabled({ timeout: 10_000 });
-      await resumeBtn.click();
+      // Issue #91: 首屏是进行中会话列表 —— 等列表拉回来后点「继续上课」；
+      // 没有首屏（无进行中会话）时退回旧门户的「回到课堂」。
+      const clickedResume = await clickIfVisible(
+        page.getByRole('button', { name: /继续上课|Resume/ }).first(),
+        10_000,
+      );
+      if (!clickedResume) {
+        const resumeBtn = page.getByRole('button', { name: '回到课堂' });
+        await expect(resumeBtn).toBeVisible({ timeout: 15_000 });
+        await expect(resumeBtn).toBeEnabled({ timeout: 10_000 });
+        await resumeBtn.click();
+      }
 
       // 4. 断言课后复盘主面板 #post-class-wrapup-view 成功挂载
       const wrapupView = page.locator('#post-class-wrapup-view');
