@@ -187,33 +187,11 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           </div>
         </div>
 
-        {/* 通用属性: X, Y 坐标及宽高 */}
+        {/* 通用属性: 尺寸（位置仅通过画布拖动调整，不再提供 X/Y 坐标输入 —— Issue #97） */}
         <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
           <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">
-            物理定位 & 尺寸
+            尺寸
           </h4>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-muted font-semibold mb-1">X 坐标</label>
-              <input
-                type="number"
-                value={Math.round(editingProperties.x ?? 0)}
-                onChange={(e) => handleLocalPropChange('x', parseFloat(e.target.value) || 0)}
-                onBlur={(e) => handleNumericPropBlur('x', e.target.value)}
-                className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted font-semibold mb-1">Y 坐标</label>
-              <input
-                type="number"
-                value={Math.round(editingProperties.y ?? 0)}
-                onChange={(e) => handleLocalPropChange('y', parseFloat(e.target.value) || 0)}
-                onBlur={(e) => handleNumericPropBlur('y', e.target.value)}
-                className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-              />
-            </div>
-          </div>
 
           {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
             <div className="grid grid-cols-2 gap-2 mt-2">

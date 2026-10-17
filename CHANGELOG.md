@@ -12,12 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+<<<<<<< HEAD
 - **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
   - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
   - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
   - **异步更新失败安全回滚**：当 `onElementUpdate` 抛出错误时安全回退至上一版几何覆盖层；
   - **回归单测建设**：新增 `src/features/whiteboard/__tests__/whiteboard-drag-flicker.test.tsx`（4 个高精度回归单测，覆盖松手首帧坐标保持、二次连续拖拽叠加、缩放首帧尺寸保持及保存失败回滚）。
-
+- **课表页「快速开始上这节课」一键开课入口（Issue #90）**：在 `TimetableCalendarView` 的周视图排课卡片、列表视图操作列以及课表页顶部新增「当前/下一节课」快捷卡片（按当前日期与 `time_slot` 自动定位正在进行或即将开始的课），均提供「▶ 开始上课」一键入口；点击弹出轻量确认框展示排课信息与教学模式选择（数据复用 `fetchTeachingModes`，不选即用默认模式），确认后走与门户同一接口 `POST /api/classroom/sessions/:lessonId/init` 初始化会话（服务端 get-or-create，已有进行中会话自动复用），成功后经 `uiStore.pendingLiveClassLaunch` 信号切到互动课堂并由 `LiveClassroomView` 跳过启动门户直接进入授课视图，初始化失败停留在课表页并提示错误；停课/假期排课与未关联课程的排课入口禁用并带可访问名提示（`aria-label`/`title`）；进入课表页时拉取 `status=active` 会话列表，已有进行中会话的排课按钮自动变为「进入课堂」直接进入不重新初始化；与 `timetable.card.badge`/`timetable.entry.action` 插槽共存。补充 `TimetableManager.test.tsx`（入口可用性/进行中文案/初始化调用与信号/失败停留）与 `LiveClassroomView.test.tsx`（信号消费跳过门户）单测及 `teacher-timetable-flow.spec.ts` e2e（一键开课直达授课视图 + 回页变「进入课堂」）。
 - **大屏作业互评赏析统一数据契约、多模态渲染与入口修复（Issue #95）**：
   - **后端统一跨表作品池聚合与分配**：新增 `server/services/showcase-work-service.ts`（`getUnifiedShowcaseWorks` 与 `getUnifiedShowcaseWorksResult`），打破原本只读 `courseware_attempt` 单一课件来源的局限，无缝聚合课堂作业提交（`plugin_submissions` + `plugin_submission_versions`，含附件清单、运行截图与作答文本）、课件作答（`courseware_attempt` + `submission_result`）与传统作业（`assignments` + `assignment_submissions`）；新增端点 `GET /api/classroom/sessions/:lessonId/showcase-works`；重构 `auto-assign` 互评自动分配逻辑，支持按全局唯一 `workId` 进行跨来源作业分层对调与匹配，并在 `GET /peer-review` 响应中回传 `showcaseWorks`。
   - **大屏焦点对比多模态预览与扩展插槽**：升级 `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`，支持图片缩略图列表与点击全屏大图预览、多格式文件附件下载卡片、文本作答流与代码语法高亮，消除文件型作品误显“无作答内容”缺陷；为卡片新增来源标识 Badge（课件作答 / 课堂作业 / 插件作业）；新增 `peer_review.work.preview` 扩展插槽并为 `peer_review.showcase.widget` 注入完整上下文 props。
@@ -77,6 +78,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 - **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
 
+
+### Refactor / Performance
+
+- **课程编辑器属性栏移除 X/Y 坐标输入（Issue #97）**：`WhiteboardPropertiesSidebar.tsx` 的「物理定位 & 尺寸」卡片不再提供 X 坐标 / Y 坐标数字输入框，标题简化为「尺寸」——组件位置统一通过在画布上拖动调整（`x`/`y` 数据结构与保存逻辑不变，拖动后照常落库），消除属性栏与拖拽两条位置修改通道并存导致的不一致。宽度 / 高度 / 半径输入保留不变；`InteractiveWhiteboard.tsx` 复用同一属性栏，互动课堂白板行为同步收敛。
 
 ### Fixes
 
