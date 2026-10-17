@@ -40,6 +40,8 @@ import {
   Trash2,
   Zap,
   Unlock,
+  Pin,
+  X,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore, appStore } from '../store/appStore';
@@ -139,7 +141,7 @@ export function LiveClassroomView({
   };
 
   const onPingStudent = (studentId: string, message?: string) => {
-    if (socketRef.current) {
+    if (socketRef?.current) {
       socketRef.current.emit('teacher-ping-student', {
         studentId,
         lessonId: selectedLesson,
@@ -152,8 +154,32 @@ export function LiveClassroomView({
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [hoveredStudentId, setHoveredStudentId] = useState<string | null>(null);
+  const [pinnedStudentId, setPinnedStudentId] = useState<string | null>(null);
   const studentErrors = useErrorStore((s) => s.studentErrors);
   const appSetTeacherTab = useAppStore((s) => s.setTeacherTab);
+
+  // 切换班级或学生移出当前班级时重置固定选中状态
+  useEffect(() => {
+    setPinnedStudentId(null);
+  }, [liveClassSelectedClassId]);
+
+  useEffect(() => {
+    if (pinnedStudentId && !students.some((s) => s.id === pinnedStudentId)) {
+      setPinnedStudentId(null);
+    }
+  }, [students, pinnedStudentId]);
+
+  // 按 Esc 键快速取消固定
+  useEffect(() => {
+    if (!pinnedStudentId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPinnedStudentId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pinnedStudentId]);
 
   // Random drawing states
   const [isDrawing, setIsDrawing] = useState(false);
@@ -2530,7 +2556,10 @@ export function LiveClassroomView({
               </div>
 
               {liveClassSelectedClassId ? (
-                <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-1.5 justify-items-center auto-rows-max scrollbar-thin py-1">
+                <div
+                  onClick={() => setPinnedStudentId(null)}
+                  className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-1.5 justify-items-center auto-rows-max scrollbar-thin py-1"
+                >
                   {students.map((st) => {
                     const isStudentLocked = st.locked_lesson_id === selectedLesson;
                     const isCheckedIn = liveClassAcknowledgedMap.get(st.id);
@@ -2551,6 +2580,7 @@ export function LiveClassroomView({
 
                     const isSelectedDraw = selectedDrawStudentIds.includes(st.id);
                     const isActiveDraw = activeDrawStudentId === st.id;
+                    const isPinned = pinnedStudentId === st.id;
 
                     // SVG ring calculation
                     const radius = 19.5;
@@ -2581,14 +2611,31 @@ export function LiveClassroomView({
                     return (
                       <div
                         key={st.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isPinned}
+                        aria-label={`学生 ${st.name}，学习进度 ${progPercent}%${isPinned ? '，已固定概况' : ''}`}
                         onMouseEnter={() => setHoveredStudentId(st.id)}
                         onMouseLeave={() => setHoveredStudentId(null)}
-                        className={`group relative flex flex-col items-center justify-center p-1.5 rounded-xl transition-all cursor-default w-full ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPinnedStudentId((prev) => (prev === st.id ? null : st.id));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setPinnedStudentId((prev) => (prev === st.id ? null : st.id));
+                          }
+                        }}
+                        className={`group relative flex flex-col items-center justify-center p-1.5 rounded-xl transition-all cursor-pointer w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-theme ${
                           isSelectedDraw
                             ? 'z-20 duration-300 bg-amber-500/10 ring-2 ring-amber-400 shadow-md scale-105'
                             : isActiveDraw
                               ? 'z-20 ring-1 ring-primary-theme bg-primary-theme/5 scale-102'
-                              : 'hover:bg-surface-secondary/70'
+                              : isPinned
+                                ? 'z-10 bg-primary-theme/10 ring-2 ring-primary-theme shadow-xs scale-102'
+                                : 'hover:bg-surface-secondary/70'
                         }`}
                       >
                         {/* Main Circular Widget */}
@@ -2598,7 +2645,9 @@ export function LiveClassroomView({
                               ? 'shadow-[0_0_15px_#f59e0b] scale-105 z-10 bg-amber-50 ring-2 ring-amber-400'
                               : isActiveDraw
                                 ? 'shadow-[0_0_10px_#6366f1] scale-105 z-10 bg-indigo-50 ring-1 ring-indigo-400'
-                                : ''
+                                : isPinned
+                                  ? 'shadow-xs bg-primary-theme/5 ring-1 ring-primary-theme/30'
+                                  : ''
                           }`}
                         >
                           {/* Student Exception Alert Badge */}
@@ -2615,6 +2664,16 @@ export function LiveClassroomView({
                             >
                               <AlertTriangle size={9} className="animate-pulse" />
                             </button>
+                          )}
+
+                          {/* Pinned indicator badge */}
+                          {isPinned && !isSelectedDraw && (
+                            <span
+                              className="absolute -top-1 -left-1 z-20 text-[9px] bg-primary-theme text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold shadow-xs"
+                              title="已固定选中"
+                            >
+                              <Pin size={7} />
+                            </span>
                           )}
 
                           {/* Golden glow aura for selected draw */}
@@ -2672,7 +2731,9 @@ export function LiveClassroomView({
                               {/* Alert / Warning button */}
                               {selectedLesson && onPingStudent && (
                                 <button
-                                  onClick={() => {
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     const msg =
                                       lang === 'zh'
                                         ? `⚠️ 学习进度预警：您当前的进度 (${progPercent}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
@@ -2697,7 +2758,10 @@ export function LiveClassroomView({
 
                               <button
                                 type="button"
-                                onClick={() => handleOverrideSegmentGate(st.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOverrideSegmentGate(st.id);
+                                }}
                                 disabled={!selectedLesson || !activeSegmentId}
                                 className="p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
                                 title={lang === 'zh' ? '放行当前环节' : 'Allow this segment'}
@@ -2706,7 +2770,11 @@ export function LiveClassroomView({
                               </button>
                               {/* Focus Lock controller */}
                               <button
-                                onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleStudentLock(st.id, st.locked_lesson_id);
+                                }}
                                 disabled={!selectedLesson}
                                 className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                   isStudentLocked
@@ -2774,133 +2842,172 @@ export function LiveClassroomView({
 
             {/* Hover Details / Class Summary Panel */}
             <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col gap-1.5 h-[128px] shrink-0 shadow-xs select-none justify-center">
-              {hoveredStudentId ? (
-                (() => {
-                  const st = students.find((s) => s.id === hoveredStudentId);
-                  if (!st) return null;
-                  const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
-                  const progPercent = studentProg?.progress_percent ?? 0;
-                  const completedSegIds = (() => {
-                    if (!studentProg || !studentProg.completed_segments) return [];
-                    try {
-                      return typeof studentProg.completed_segments === 'string'
-                        ? JSON.parse(studentProg.completed_segments)
-                        : studentProg.completed_segments;
-                    } catch (e) {
-                      return [];
-                    }
-                  })();
-
-                  const stErrors = studentErrors.filter((e) => e.studentId === st.id);
-
+              {(() => {
+                const activeInspectStudentId = hoveredStudentId ?? pinnedStudentId;
+                if (!activeInspectStudentId) {
                   return (
-                    <div className="flex flex-col gap-1.5 text-xs text-main">
-                      <div className="font-extrabold text-main border-b border-theme pb-1 flex justify-between items-center shrink-0">
-                        <span className="flex items-center gap-1.5 truncate">
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${onlineStudentIds.includes(st.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}
-                          />
-                          <span className="truncate max-w-[130px]">
-                            {st.name} ({st.student_number || 'N/A'})
-                          </span>
-                          {stErrors.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                errorStore.getState().setActiveTab('student');
-                                errorStore.getState().setIsErrorCenterOpen(true);
-                              }}
-                              className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
-                              title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
-                            >
-                              <AlertTriangle size={10} className="text-rose-700 dark:text-rose-400 animate-pulse" />
-                              <span>{stErrors.length} 异常</span>
-                            </button>
-                          )}
-                        </span>
-                        <span className="text-xs text-primary-ink font-mono font-black shrink-0">{progPercent}%</span>
+                    // Class summary state when no inspect
+                    <div className="flex flex-col gap-1 text-xs text-main h-full justify-center">
+                      <div className="font-extrabold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 shrink-0">
+                        <Activity size={12} className="text-primary-ink animate-pulse" />
+                        <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
-                        <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                          <span className="text-muted font-bold text-[10px]">随堂测验</span>
-                          <span
-                            className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-ink' : 'text-muted'}`}
-                          >
-                            {studentProg != null && studentProg.quiz_score !== null
-                              ? `${studentProg.quiz_score} / 100`
-                              : '未提交'}
+                      <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
+                        <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                          <span className="text-muted font-medium text-[10px]">在线/总数</span>
+                          <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400 text-xs mt-0.5">
+                            {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
                           </span>
                         </div>
-
-                        <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                          <span className="text-muted font-bold text-[10px]">教学环节进度</span>
-                          <span className="font-bold text-main text-xs">
-                            {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
+                        <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                          <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
+                          <span className="font-bold font-mono text-rose-700 dark:text-rose-400 text-xs mt-0.5">
+                            {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
                           </span>
                         </div>
-                      </div>
-
-                      <div className="text-xs text-muted leading-relaxed truncate mt-0.5 shrink-0">
-                        环节:{' '}
-                        {timelineSegments.length > 0 ? (
-                          timelineSegments.map((seg, sIdx) => {
-                            const isSegCompleted = Array.isArray(completedSegIds) && completedSegIds.includes(seg.id);
-                            return (
-                              <span
-                                key={seg.id}
-                                className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
-                                title={seg.title}
-                              >
-                                {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
-                              </span>
-                            );
-                          })
-                        ) : (
-                          <span className="italic text-muted">暂无步骤</span>
-                        )}
+                        <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                          <span className="text-muted font-medium text-[10px]">平均进度</span>
+                          <span className="font-bold font-mono text-primary-ink text-xs mt-0.5">
+                            {(() => {
+                              const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
+                              if (inClassStudents.length === 0) return '0%';
+                              const total = inClassStudents.reduce((sum, s) => {
+                                const p = liveClassStudentProgress.find((prog) => prog.student_id === s.id);
+                                return sum + (p?.progress_percent ?? 0);
+                              }, 0);
+                              return `${Math.round(total / inClassStudents.length)}%`;
+                            })()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
-                })()
-              ) : (
-                // Class summary state when no hover
-                <div className="flex flex-col gap-1 text-xs text-main h-full justify-center">
-                  <div className="font-extrabold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 shrink-0">
-                    <Activity size={12} className="text-primary-ink animate-pulse" />
-                    <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
+                }
+
+                const st = students.find((s) => s.id === activeInspectStudentId);
+                if (!st) return null;
+                const isPinned = pinnedStudentId === st.id;
+                const isHoverPreview =
+                  hoveredStudentId === st.id && pinnedStudentId !== null && pinnedStudentId !== st.id;
+                const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
+                const progPercent = studentProg?.progress_percent ?? 0;
+                const completedSegIds = (() => {
+                  if (!studentProg || !studentProg.completed_segments) return [];
+                  try {
+                    return typeof studentProg.completed_segments === 'string'
+                      ? JSON.parse(studentProg.completed_segments)
+                      : studentProg.completed_segments;
+                  } catch (e) {
+                    return [];
+                  }
+                })();
+
+                const stErrors = studentErrors.filter((e) => e.studentId === st.id);
+
+                return (
+                  <div className="flex flex-col gap-1.5 text-xs text-main">
+                    <div className="font-extrabold text-main border-b border-theme pb-1 flex justify-between items-center shrink-0">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${onlineStudentIds.includes(st.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}
+                        />
+                        <span className="truncate max-w-[120px]">
+                          {st.name} ({st.student_number || 'N/A'})
+                        </span>
+                        {isPinned && !isHoverPreview && (
+                          <span
+                            className="text-[10px] font-semibold text-primary-ink bg-primary-theme/10 border border-primary-theme/20 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0"
+                            title="已固定显示该学生概况，点击空白处或 Esc 取消"
+                          >
+                            <Pin size={8} className="rotate-45" />
+                            <span>固定</span>
+                          </span>
+                        )}
+                        {isHoverPreview && (
+                          <span
+                            className="text-[10px] font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded shrink-0"
+                            title="临时悬浮预览中，鼠标移开后恢复已固定学生"
+                          >
+                            预览
+                          </span>
+                        )}
+                        {stErrors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              errorStore.getState().setActiveTab('student');
+                              errorStore.getState().setIsErrorCenterOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                            title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
+                          >
+                            <AlertTriangle size={10} className="text-rose-700 dark:text-rose-400 animate-pulse" />
+                            <span>{stErrors.length} 异常</span>
+                          </button>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-primary-ink font-mono font-black">{progPercent}%</span>
+                        {isPinned && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPinnedStudentId(null);
+                            }}
+                            className="text-muted hover:text-main p-0.5 rounded hover:bg-surface transition-colors cursor-pointer"
+                            title="取消固定"
+                            aria-label="取消固定学生概况"
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
+                      <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                        <span className="text-muted font-bold text-[10px]">随堂测验</span>
+                        <span
+                          className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-ink' : 'text-muted'}`}
+                        >
+                          {studentProg != null && studentProg.quiz_score !== null
+                            ? `${studentProg.quiz_score} / 100`
+                            : '未提交'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                        <span className="text-muted font-bold text-[10px]">教学环节进度</span>
+                        <span className="font-bold text-main text-xs">
+                          {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted leading-relaxed truncate mt-0.5 shrink-0">
+                      环节:{' '}
+                      {timelineSegments.length > 0 ? (
+                        timelineSegments.map((seg, sIdx) => {
+                          const isSegCompleted = Array.isArray(completedSegIds) && completedSegIds.includes(seg.id);
+                          return (
+                            <span
+                              key={seg.id}
+                              className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
+                              title={seg.title}
+                            >
+                              {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="italic text-muted">暂无步骤</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
-                    <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                      <span className="text-muted font-medium text-[10px]">在线/总数</span>
-                      <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400 text-xs mt-0.5">
-                        {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                      <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
-                      <span className="font-bold font-mono text-rose-700 dark:text-rose-400 text-xs mt-0.5">
-                        {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                      <span className="text-muted font-medium text-[10px]">平均进度</span>
-                      <span className="font-bold font-mono text-primary-ink text-xs mt-0.5">
-                        {(() => {
-                          const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
-                          if (inClassStudents.length === 0) return '0%';
-                          const total = inClassStudents.reduce((sum, s) => {
-                            const p = liveClassStudentProgress.find((prog) => prog.student_id === s.id);
-                            return sum + (p?.progress_percent ?? 0);
-                          }, 0);
-                          return `${Math.round(total / inClassStudents.length)}%`;
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Feedback log feed (Collapsible) */}
