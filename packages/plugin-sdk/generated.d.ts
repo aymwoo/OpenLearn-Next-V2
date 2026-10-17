@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：225 个（入口导出但手写 d.ts 未声明的 225 项及其类型引用闭包）
+ * 覆盖符号：230 个（入口导出但手写 d.ts 未声明的 230 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -121,6 +121,30 @@ interface AnalyticsPrivacyConfig {
     readonly anonymousAnalysis: boolean;
     readonly dataMasking: boolean;
     readonly retentionPeriodDays: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the assignment.grade.item.addon slot. */
+interface AssignmentGradeItemAddonConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the assignment.grade.rubric.addon slot. */
+interface AssignmentGradeRubricAddonConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the assignment.grade.toolbar.action slot. */
+interface AssignmentGradeToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -548,6 +572,15 @@ interface EditorSegmentActionConfig {
     label: string;
     icon?: string;
     commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the editor.segment.type_config slot. */
+interface EditorSegmentTypeConfigConfig {
+    id: string;
+    segmentType: string;
+    label?: string;
+    icon?: string;
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -1945,6 +1978,14 @@ interface StudentRowPanelConfig {
     icon?: string;
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.segment.gate_fallback slot. */
+interface StudentSegmentGateFallbackConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
 /** @see packages/core/presence-engine/types.ts */
 type StudentStatus = 'Online' | 'Offline' | 'Reconnecting' | 'Idle' | 'Listening' | 'Writing' | 'Coding' | 'Answering' | 'Discussing' | 'Watching' | 'Presenting' | 'Finished' | 'Need Help' | 'Away';
 
@@ -2182,6 +2223,9 @@ export type {
   AnalyticsInsight,
   AnalyticsPrivacyConfig,
   AnchorToolConfig,
+  AssignmentGradeItemAddonConfig,
+  AssignmentGradeRubricAddonConfig,
+  AssignmentGradeToolbarActionConfig,
   AttributionActionConfig,
   BarometerMetricConfig,
   CanvasWidgetConfig,
@@ -2235,6 +2279,7 @@ export type {
   DiagnosticFeedConfig,
   EditorHeaderActionConfig,
   EditorSegmentActionConfig,
+  EditorSegmentTypeConfigConfig,
   EntityRole,
   EntityType,
   EventSubscriber,
@@ -2352,6 +2397,7 @@ export type {
   StudentQuickActionsFabConfig,
   StudentQuickActionsItemConfig,
   StudentRowPanelConfig,
+  StudentSegmentGateFallbackConfig,
   StudentStatus,
   StudentViewConfig,
   SyncMessage,

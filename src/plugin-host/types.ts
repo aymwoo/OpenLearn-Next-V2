@@ -209,7 +209,14 @@ export type ExtensionSlot =
   | 'admin.user.action' // 管理后台教工列表操作扩展
   // ── 全局框架与智能中枢域扩展槽位 ──
   | 'header.status_pill' // 全局顶栏状态指示胶囊扩展
-  | 'ai_sidebar.tab'; // AI 助手右侧边栏专属 Tab 扩展
+  | 'ai_sidebar.tab' // AI 助手右侧边栏专属 Tab 扩展
+  // ── 教师作业批改与评估扩展槽位 ──
+  | 'assignment.grade.toolbar.action' // 教师作业批改面板工具栏操作扩展（如 AI 批量初评、报告导出等）
+  | 'assignment.grade.item.addon' // 教师作业批改学生作答卡片内部扩展（如代码测试报告、AI 评语推荐、反剽窃分析）
+  | 'assignment.grade.rubric.addon' // 教师作业批改评分细则/量规扩展
+  // ── 教学环节与门禁交互扩展槽位 ──
+  | 'student.segment.gate_fallback' // 学生端教学环节未解锁时的交互引导扩展（补测卡片/补签到/解锁任务）
+  | 'editor.segment.type_config'; // 备课端自定义教学形态专属配置面板扩展（探究实验器材配置/代码沙盒模板等）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
