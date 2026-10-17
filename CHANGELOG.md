@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **导航侧边栏「在新窗口打开」Hash 路由保持与登录恢复（Issue #88）**：在 `src/store/uiStore.ts` 中引入 `getInitialTeacherTab()`，在客户端初始化时优先读取并解析 `window.location.hash` 中的有效 tab，消除因硬编码默认 `'live_class'` 导致的初始状态漂移；在 `src/hooks/useSessionSlice.ts` 中引入首次挂载守卫 `isFirstMountRef`，当挂载时 URL 中已有非空合法 tab 且与 store 不一致时跳过首帧强制改写，消除写 effect 抢先覆盖 URL 并反向触发 `hashchange` 的竞态缺陷；在 `src/hooks/useSessionBootstrap.ts` 的 `handleLoginSuccess` 中，优先保留 `window.location.hash` 指定的工作区，仅在无 hash 时回退到 `'live_class'`；补充 `useTeacherTabRouting.test.tsx` 与 `uiStore.test.ts` 单元测试覆盖。
 - **导航侧边栏展开宽度与文本可见性解绑断点**：在 `NavigationSidebar.tsx` 与 `extension-point-renderer.tsx` 中，将展开状态（`!mainNavCollapsed`）的类名从 `w-16 md:w-44` 修复为 `w-44 md:w-44 shrink-0`，同时将内部文本与标题样式的 `hidden md:block` / `hidden md:inline` 解绑断点限制为 `block` / `inline`。彻底解决在笔记本系统缩放（125%/150%）、小视口窗口、分屏或未最大化状态下点击展开导航栏时，宽度依然只有 64px 且不显示文字的问题；补充 `NavigationSidebar.test.tsx` 单元测试覆盖。
 - **请求观测中间件静态资源与入口探活静默**：在 `server/middleware/request-observability.ts` 中引入 `isQuietRequest` 判定，将公共静态入口（`/`, `/index.html`, `/favicon.ico`, `/robots.txt`）以及开发模式下的 Vite 编译资产路径（`/@vite/`, `/src/` 等）在正常响应（`< 400`）时保持静默，消除 IDE 探活与开发刷新时控制台频繁输出 `http.request` 的刷屏噪音；异常状态（`>= 400`）与业务 API 依然严格记录日志。
 

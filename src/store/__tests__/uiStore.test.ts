@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { uiStore } from '../uiStore';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { uiStore, getInitialTeacherTab } from '../uiStore';
 
 describe('uiStore', () => {
   beforeEach(() => {
@@ -49,5 +49,37 @@ describe('uiStore', () => {
 
     uiStore.getState().removeToast('t1');
     expect(uiStore.getState().toasts).toHaveLength(0);
+  });
+
+  describe('getInitialTeacherTab', () => {
+    const originalLocation = window.location;
+
+    afterEach(() => {
+      (window as any).location = originalLocation;
+    });
+
+    it('defaults to live_class when hash is empty or missing', () => {
+      delete (window as any).location;
+      (window as any).location = { hash: '' };
+      expect(getInitialTeacherTab()).toBe('live_class');
+
+      (window as any).location = { hash: '#/' };
+      expect(getInitialTeacherTab()).toBe('live_class');
+    });
+
+    it('parses valid built-in tab from location.hash', () => {
+      delete (window as any).location;
+      (window as any).location = { hash: '#/courses' };
+      expect(getInitialTeacherTab()).toBe('courses');
+
+      (window as any).location = { hash: '#/computer_labs' };
+      expect(getInitialTeacherTab()).toBe('computer_labs');
+    });
+
+    it('parses plugin tab from location.hash', () => {
+      delete (window as any).location;
+      (window as any).location = { hash: '#/openlearn-courseware-hub/courseware-hub-teacher-tab' };
+      expect(getInitialTeacherTab()).toBe('openlearn-courseware-hub/courseware-hub-teacher-tab');
+    });
   });
 });
