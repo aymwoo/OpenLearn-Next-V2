@@ -9,6 +9,7 @@ export interface ClassroomToolbarQuickActionsProps {
   onOpenMasteryPrediction: () => void;
   onOpenGroupCollab: () => void;
   onOpenShowcaseDiff: () => void;
+  onOpenPeerReviewShowcase?: () => void;
   onOpenParentNotification: () => void;
   onOpenMacroRunner: () => void;
   onOpenHardwareSettings: () => void;
@@ -24,6 +25,7 @@ export function ClassroomToolbarQuickActions({
   onOpenMasteryPrediction,
   onOpenGroupCollab,
   onOpenShowcaseDiff,
+  onOpenPeerReviewShowcase,
   onOpenParentNotification,
   onOpenMacroRunner,
   onOpenHardwareSettings,
@@ -74,6 +76,25 @@ export function ClassroomToolbarQuickActions({
       >
         🔍
       </button>
+      {onOpenPeerReviewShowcase && (
+        <button
+          id="btn-open-peer-review-showcase"
+          onClick={onOpenPeerReviewShowcase}
+          className="w-7 h-7 sm:w-8 sm:h-8 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+          title={
+            lang === 'zh'
+              ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)'
+              : 'Peer Review & Showcase'
+          }
+          aria-label={
+            lang === 'zh'
+              ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)'
+              : 'Peer Review & Showcase'
+          }
+        >
+          🌟
+        </button>
+      )}
       <button
         onClick={onOpenParentNotification}
         className="w-7 h-7 sm:w-8 sm:h-8 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"

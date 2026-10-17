@@ -20,6 +20,8 @@ import type {
   NominatedStudent,
   DanmakuItem,
   RubricDimensionItem,
+  ShowcaseWork,
+  ShowcaseWorkFile,
 } from '../peer-review/types';
 import type { ReactionCountItem } from '../peer-review/PeerReviewRubricStats';
 
@@ -67,6 +69,10 @@ export interface UsePeerReviewDataInput {
 export interface UsePeerReviewDataResult {
   data: PeerReviewData;
   topPerformers: TopPerformerRow[];
+  showcaseWorks: ShowcaseWork[];
+  selectedWorkAId: string | null;
+  selectedWorkBId: string | null;
+  setSpotlightWork: (slot: 'A' | 'B', workId: string | null) => void;
   autoAssigning: boolean;
   autoAssign: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -204,6 +210,51 @@ const EMPTY_DATA: PeerReviewData = {
   fromServer: false,
 };
 
+function showcaseWorkToSpotlightItem(
+  work: ShowcaseWork | undefined,
+  slot: 'A' | 'B',
+  workContents: Record<string, WorkContent>,
+): SpotlightWorkItem | null {
+  if (!work) return null;
+  const name = work.studentName || '学生';
+  const content =
+    workContents[work.workId] ||
+    (work.codeSnippet || work.textContent
+      ? {
+          kind: (work.codeSnippet ? 'code' : 'text') as WorkContent['kind'],
+          lines: (work.codeSnippet || work.textContent || '')
+            .split('\n')
+            .slice(0, 16)
+            .map((line) => ({ text: line.slice(0, 160), indent: 0 })),
+          eventCount: 1,
+        }
+      : null);
+
+  const codeLines = content?.lines?.length
+    ? content.lines
+    : work.codeSnippet
+    ? work.codeSnippet.split('\n').slice(0, 16).map((text) => ({ text, indent: 0 }))
+    : undefined;
+
+  return {
+    id: work.workId,
+    slot,
+    studentName: name,
+    studentInitial: name.slice(0, 1),
+    workTitle: work.title || `${name} · ${work.sourceLabel}`,
+    workSubtitle: `${work.sourceLabel}${typeof work.score === 'number' ? ` · 得分 ${work.score}` : ''}`,
+    source: work.source,
+    sourceLabel: work.sourceLabel,
+    textContent: work.textContent,
+    files: work.files,
+    submittedAt: work.submittedAt,
+    badges: [],
+    workContent: content ?? null,
+    codeTitle: work.title ? `${work.sourceLabel} · ${work.title}` : undefined,
+    codeLines,
+  };
+}
+
 export function usePeerReviewData({
   lessonId,
   enabled,
@@ -214,7 +265,18 @@ export function usePeerReviewData({
 }: UsePeerReviewDataInput): UsePeerReviewDataResult {
   const [topPerformers, setTopPerformers] = useState<TopPerformerRow[]>([]);
   const [serverData, setServerData] = useState<any>(null);
+  const [showcaseWorks, setShowcaseWorks] = useState<ShowcaseWork[]>([]);
+  const [selectedWorkAId, setSelectedWorkAId] = useState<string | null>(null);
+  const [selectedWorkBId, setSelectedWorkBId] = useState<string | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
+
+  const setSpotlightWork = useCallback((slot: 'A' | 'B', workId: string | null) => {
+    if (slot === 'A') {
+      setSelectedWorkAId(workId);
+    } else {
+      setSelectedWorkBId(workId);
+    }
+  }, []);
 
   // ── 真实积分榜 ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -280,15 +342,31 @@ export function usePeerReviewData({
     }
   }, [attempts, workContents, loadWorkContent]);
 
-  // ── 真实互评数据 ────────────────────────────────────────────────────
+  // ── 真实互评数据与统一作品池 ─────────────────────────────────────────
   const refresh = useCallback(async () => {
     if (!lessonId) {
       setServerData(null);
+      setShowcaseWorks([]);
       return;
     }
     try {
-      const res = await fetch(`/api/classroom/sessions/${lessonId}/peer-review`);
-      if (res.ok) setServerData(await res.json());
+      const [reviewRes, worksRes] = await Promise.all([
+        fetch(`/api/classroom/sessions/${lessonId}/peer-review`),
+        fetch(`/api/classroom/sessions/${lessonId}/showcase-works`),
+      ]);
+      if (reviewRes.ok) {
+        const body = await reviewRes.json();
+        setServerData(body);
+        if (Array.isArray(body?.showcaseWorks) && body.showcaseWorks.length > 0) {
+          setShowcaseWorks(body.showcaseWorks);
+        }
+      }
+      if (worksRes.ok) {
+        const worksBody = await worksRes.json();
+        if (Array.isArray(worksBody?.works) && worksBody.works.length > 0) {
+          setShowcaseWorks(worksBody.works);
+        }
+      }
     } catch {
       /* 静默：教师未开启互评时该接口可能 404 */
     }
@@ -320,7 +398,7 @@ export function usePeerReviewData({
         lang === 'zh' ? '✅ 互评已分配' : '✅ Peer reviews assigned',
         lang === 'zh'
           ? `${body.works} 份作品 · 生成 ${body.tasks} 条任务（口径：${
-              body.scope === 'lesson' ? '本课节课件' : '本班全部'
+              body.scope === 'lesson' ? '本课节作品池' : '本班全部'
             }）`
           : `${body.tasks} tasks created`,
         'success',
@@ -331,26 +409,12 @@ export function usePeerReviewData({
     }
   }, [lessonId, addToast, lang, refresh]);
 
-  // ── 组装：优先服务端真实互评；否则用真实作答前 2 名兜底 ─────────────
+  // ── 组装：优先服务端真实互评；作品池支持跨表与焦点对比 ─────────────
   const data = useMemo<PeerReviewData>(() => {
-    if (serverData?.matchingItems?.length || serverData?.podiumStudents?.length) {
-      return {
-        ...EMPTY_DATA,
-        matchingItems: serverData.matchingItems ?? [],
-        badges: serverData.badges ?? [],
-        podiumStudents: serverData.podiumStudents ?? [],
-        danmaku: serverData.danmaku ?? [],
-        reactions: serverData.reactions ?? [],
-        rubricDimensions: serverData.dimensions ?? [],
-        reviewProgress: serverData.progress ?? { completed: 0, total: 0 },
-        fromServer: true,
-      };
-    }
-
     const validAttempts = attempts.filter((a) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest');
     const ranked = [...validAttempts].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
 
-    const toWork = (a: CoursewareAttemptLike | undefined, slot: 'A' | 'B') => {
+    const toWork = (a: CoursewareAttemptLike | undefined, slot: 'A' | 'B'): SpotlightWorkItem | null => {
       if (!a) return null;
       const name = String(a.studentName || a.studentId);
       const score = typeof a.score === 'number' ? a.score : null;
@@ -368,37 +432,82 @@ export function usePeerReviewData({
               ? '已完成提交'
               : '作答中'
             : `得分 ${score}${typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''}`,
-        // rating 平台无来源 → 不填（UI 显示「—」）
+        source: 'courseware',
+        sourceLabel: '课件作答',
         badges: [],
-        // 真实作答内容：替代原先写死的五边形 SVG
         workContent: content ?? null,
-        // 明确的内容类型标注，供 UI 决定渲染方式
         codeTitle: content ? `真实作答内容（${KIND_LABELS[content.kind]}）` : undefined,
         codeLines: content?.lines.length ? content.lines : undefined,
       };
     };
 
-    const podium = topPerformers.slice(0, 3).map((t, idx) => ({
-      rank: idx + 1,
-      name: t.studentName,
-      votes: t.cumulativeScore,
-      workTitle: `${t.accuracy}% 正确率`,
-      honorTitle: idx === 0 ? '本节最高分' : '优秀表现',
-      rankBadgeClass: idx === 0 ? 'bg-[#ffb95f] text-[#2a1700]' : 'bg-[#171f33] text-[#908fa0]',
-      tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
-    }));
+    // 优先从全班作品池中选出焦点对比作品 A 和 B
+    let resolvedWorkA: SpotlightWorkItem | null = null;
+    let resolvedWorkB: SpotlightWorkItem | null = null;
+
+    if (showcaseWorks.length > 0) {
+      const itemA = showcaseWorks.find((w) => w.workId === selectedWorkAId) || showcaseWorks[0];
+      const itemB =
+        showcaseWorks.find((w) => w.workId === selectedWorkBId) ||
+        showcaseWorks.find((w) => w.workId !== itemA?.workId) ||
+        showcaseWorks[1];
+      resolvedWorkA = showcaseWorkToSpotlightItem(itemA, 'A', workContents);
+      resolvedWorkB = showcaseWorkToSpotlightItem(itemB, 'B', workContents);
+    } else {
+      resolvedWorkA = toWork(ranked[0], 'A');
+      resolvedWorkB = toWork(ranked[1], 'B');
+    }
+
+    const podium =
+      serverData?.podiumStudents?.length > 0
+        ? serverData.podiumStudents
+        : topPerformers.slice(0, 3).map((t, idx) => ({
+            rank: idx + 1,
+            name: t.studentName,
+            votes: t.cumulativeScore,
+            workTitle: `${t.accuracy}% 正确率`,
+            honorTitle: idx === 0 ? '本节最高分' : '优秀表现',
+            rankBadgeClass: idx === 0 ? 'bg-[#ffb95f] text-[#2a1700]' : 'bg-[#171f33] text-[#908fa0]',
+            tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
+          }));
+
+    if (serverData?.matchingItems?.length || serverData?.podiumStudents?.length) {
+      return {
+        ...EMPTY_DATA,
+        workA: resolvedWorkA,
+        workB: resolvedWorkB,
+        matchingItems: serverData.matchingItems ?? [],
+        badges: serverData.badges ?? [],
+        podiumStudents: podium,
+        danmaku: serverData.danmaku ?? [],
+        reactions: serverData.reactions ?? [],
+        rubricDimensions: serverData.dimensions ?? [],
+        reviewProgress: serverData.progress ?? { completed: 0, total: 0 },
+        fromServer: true,
+      };
+    }
 
     return {
       ...EMPTY_DATA,
-      workA: toWork(ranked[0], 'A'),
-      workB: toWork(ranked[1], 'B'),
+      workA: resolvedWorkA,
+      workB: resolvedWorkB,
       podiumStudents: podium,
       reviewProgress: {
         completed: validAttempts.filter((a) => a.status === 'completed').length,
         total: studentCount,
       },
     };
-  }, [serverData, attempts, topPerformers, studentCount, workContents]);
+  }, [serverData, attempts, topPerformers, studentCount, workContents, showcaseWorks, selectedWorkAId, selectedWorkBId]);
 
-  return { data, topPerformers, autoAssigning, autoAssign, refresh };
+  return {
+    data,
+    topPerformers,
+    showcaseWorks,
+    selectedWorkAId,
+    selectedWorkBId,
+    setSpotlightWork,
+    autoAssigning,
+    autoAssign,
+    refresh,
+  };
 }

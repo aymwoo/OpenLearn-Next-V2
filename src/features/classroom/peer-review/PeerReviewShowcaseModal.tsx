@@ -15,6 +15,7 @@ import type {
   RubricDimensionItem,
   NominatedStudent,
   DanmakuItem,
+  ShowcaseWork,
 } from './types';
 
 /**
@@ -54,7 +55,8 @@ export interface PeerReviewShowcaseModalProps {
   //   dimensions     ← 量规维度真实达标率（plugin_peer_reviews 按维度聚合）
   //   podiumStudents ← 提名票数排名（真实投票）
   //   danmaku        ← 课堂弹幕（Socket.IO 广播，见 classroom.* 事件）
-  //   workA / workB  ← 大屏焦点对比的两份真实作品（courseware_attempt）
+  //   workA / workB  ← 大屏焦点对比的两份真实作品
+  //   showcaseWorks  ← 全班跨表统一作品库（课件作答 + 课堂作业 + 插件提交）
   matchingItems?: PeerMatchingItem[];
   badges?: LivePeerBadge[];
   annotations?: TeacherPeerAnnotation[];
@@ -64,6 +66,8 @@ export interface PeerReviewShowcaseModalProps {
   danmaku?: DanmakuItem[];
   workA?: SpotlightWorkItem | null;
   workB?: SpotlightWorkItem | null;
+  showcaseWorks?: ShowcaseWork[];
+  onSelectSpotlightWork?: (slot: 'A' | 'B', workId: string | null) => void;
   /** 真实评阅进度（已评/总数），未提供时按 0 显示 */
   reviewProgress?: { completed: number; total: number };
   /** 真实倒计时秒数，未提供时为 0（不显示假倒计时） */
@@ -91,6 +95,8 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   addToast,
   workA: workAProp,
   workB: workBProp,
+  showcaseWorks = [],
+  onSelectSpotlightWork,
   reviewProgress,
   countdownSeconds,
   onAutoAssign,
@@ -127,25 +133,54 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRubricOpen, setIsRubricOpen] = useState(false);
+  const [showWorksDrawer, setShowWorksDrawer] = useState(false);
 
-  // ── Initial Mock Data based on Stitch 21e2dac1 ─────────────────────────
+  // ── Controlled / Props Sync State ─────────────────────────────────────
   const [matchingItems, setMatchingItems] = useState<PeerMatchingItem[]>(matchingItemsProp ?? []);
-
   const [badges, setBadges] = useState<LivePeerBadge[]>(badgesProp ?? []);
-
   const [workA, setWorkA] = useState<SpotlightWorkItem>(workAProp ?? (null as unknown as SpotlightWorkItem));
-
   const [workB, setWorkB] = useState<SpotlightWorkItem>(workBProp ?? (null as unknown as SpotlightWorkItem));
-
   const [annotations, setAnnotations] = useState<TeacherPeerAnnotation[]>(annotationsProp ?? []);
-
-  const [dimensions] = useState<RubricDimensionItem[]>(rubricDimensionsProp ?? []);
-
+  const [dimensions, setDimensions] = useState<RubricDimensionItem[]>(rubricDimensionsProp ?? []);
   const [reactions, setReactions] = useState<ReactionCountItem[]>(reactionsProp ?? []);
-
-  const [podiumStudents] = useState<NominatedStudent[]>(podiumStudentsProp ?? []);
-
+  const [podiumStudents, setPodiumStudents] = useState<NominatedStudent[]>(podiumStudentsProp ?? []);
   const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>(danmakuProp ?? []);
+
+  useEffect(() => {
+    if (workAProp !== undefined) setWorkA(workAProp as SpotlightWorkItem);
+  }, [workAProp]);
+
+  useEffect(() => {
+    if (workBProp !== undefined) setWorkB(workBProp as SpotlightWorkItem);
+  }, [workBProp]);
+
+  useEffect(() => {
+    if (matchingItemsProp) setMatchingItems(matchingItemsProp);
+  }, [matchingItemsProp]);
+
+  useEffect(() => {
+    if (badgesProp) setBadges(badgesProp);
+  }, [badgesProp]);
+
+  useEffect(() => {
+    if (annotationsProp) setAnnotations(annotationsProp);
+  }, [annotationsProp]);
+
+  useEffect(() => {
+    if (rubricDimensionsProp) setDimensions(rubricDimensionsProp);
+  }, [rubricDimensionsProp]);
+
+  useEffect(() => {
+    if (reactionsProp) setReactions(reactionsProp);
+  }, [reactionsProp]);
+
+  useEffect(() => {
+    if (podiumStudentsProp) setPodiumStudents(podiumStudentsProp);
+  }, [podiumStudentsProp]);
+
+  useEffect(() => {
+    if (danmakuProp) setDanmakuList(danmakuProp);
+  }, [danmakuProp]);
 
   // ── Countdown Timer effect ───────────────────────────────────────────
   useEffect(() => {
@@ -312,7 +347,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
           均由调用方通过 props 传入真实数据。无数据时明确告知教师原因，
           而不是用假学生/假分数让界面「看起来有内容」。
         */}
-        {!workA && !workB && matchingItems.length === 0 && podiumStudents.length === 0 && (
+        {!workA && !workB && showcaseWorks.length === 0 && matchingItems.length === 0 && podiumStudents.length === 0 && (
           <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-3 text-[11px] text-[#908fa0]">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
             <span className="flex-1">
@@ -327,6 +362,103 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
               >
                 {autoAssigning ? '分配中…' : '一键分配互评'}
               </button>
+            )}
+          </div>
+        )}
+
+        {/* 全班多模态作品池切换抽屉 / 面板 */}
+        {showcaseWorks && showcaseWorks.length > 0 && (
+          <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#131b2e] p-3 flex flex-col gap-2 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse" />
+                <span className="text-xs font-bold text-[#dae2fd]">
+                  本节提交作品池（跨来源已聚合 {showcaseWorks.length} 份作品）
+                </span>
+                <span className="text-[10px] text-[#908fa0]">
+                  包含课件作答、课堂作业与插件提交，点击可设为大屏焦点 A / B
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWorksDrawer(!showWorksDrawer)}
+                className="px-2.5 py-1 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] text-[11px] text-[#c0c1ff] hover:text-white font-medium transition-colors cursor-pointer"
+              >
+                {showWorksDrawer ? '收起作品池 ▲' : `展开作品池 (${showcaseWorks.length}) ▼`}
+              </button>
+            </div>
+
+            {showWorksDrawer && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 pt-2 border-t border-[#2d3449]/60 max-h-60 overflow-y-auto">
+                {showcaseWorks.map((work) => {
+                  const isA = workA?.id === work.workId;
+                  const isB = workB?.id === work.workId;
+                  const maskedName =
+                    reviewState.isAnonymous && work.studentName.length > 1
+                      ? `${work.studentName[0]}**`
+                      : work.studentName;
+
+                  return (
+                    <div
+                      key={work.workId}
+                      className={`p-2.5 rounded-lg border text-xs flex flex-col gap-1.5 transition-all ${
+                        isA
+                          ? 'bg-[#8083ff]/15 border-[#8083ff]'
+                          : isB
+                          ? 'bg-[#00a572]/15 border-[#00a572]'
+                          : 'bg-[#171f33] border-[#2d3449]/80 hover:border-[#8083ff]/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-semibold text-[#dae2fd] truncate">{maskedName}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${
+                            work.source === 'plugin'
+                              ? 'bg-[#8083ff]/20 text-[#c0c1ff] border-[#8083ff]/30'
+                              : work.source === 'assignment'
+                              ? 'bg-[#00a572]/20 text-[#4edea3] border-[#00a572]/30'
+                              : 'bg-[#ca8100]/20 text-[#ffb95f] border-[#ca8100]/30'
+                          }`}
+                        >
+                          {work.sourceLabel}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[#908fa0] truncate" title={work.title}>
+                        {work.title}
+                      </div>
+                      {work.files && work.files.length > 0 && (
+                        <div className="text-[10px] text-[#8083ff] truncate">
+                          📎 {work.files.length} 个附件 ({work.files.map((f) => f.name).join(', ')})
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-auto pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onSelectSpotlightWork?.('A', work.workId)}
+                          className={`flex-1 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                            isA
+                              ? 'bg-[#8083ff] text-white shadow-xs'
+                              : 'bg-[#222a3d] hover:bg-[#8083ff]/40 text-[#dae2fd]'
+                          }`}
+                        >
+                          {isA ? '焦点 A ★' : '设为焦点 A'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onSelectSpotlightWork?.('B', work.workId)}
+                          className={`flex-1 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                            isB
+                              ? 'bg-[#00a572] text-white shadow-xs'
+                              : 'bg-[#222a3d] hover:bg-[#00a572]/40 text-[#dae2fd]'
+                          }`}
+                        >
+                          {isB ? '焦点 B ★' : '设为焦点 B'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}

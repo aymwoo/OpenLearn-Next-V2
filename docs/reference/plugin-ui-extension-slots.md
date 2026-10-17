@@ -78,6 +78,7 @@ export type ExtensionSlot =
   | 'peer_review.badge'
   | 'peer_review.action'
   | 'peer_review.showcase.widget'
+  | 'peer_review.work.preview'
   // ── 机房座位图（v0.3.22）──
   | 'classroom.seating.toolbar'
   | 'classroom.seating.legend'
@@ -270,7 +271,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `peer_review.rubric.dimension`       | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                     |
 | `peer_review.badge`                  | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                     |
 | `peer_review.action`                 | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                     |
-| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | 无（仅 `route?`）                                                                                                     |
+| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | `{ workA, workB, annotations, isAnonymous }`                                                                         |
+| `peer_review.work.preview`           | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | `{ work, slot, isAnonymous }`                                                                                         |
 | `timetable.tab`（button 形态）       | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'button', timetableActiveTab, setTimetableActiveTab }`                                                 |
 | `timetable.tab`（panel 形态）        | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'panel', timetableActiveTab, classes, lessons, lang, onSchedulesUpdated }`                             |
 | `admin.tab`（button 形态）           | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                         |

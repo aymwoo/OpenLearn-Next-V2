@@ -318,6 +318,36 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
 
       expect(onAddAnn).toHaveBeenCalledWith('测试批注内容');
     });
+
+    it('【多模态】渲染带图片与文件的作品，并支持点击放大图片', () => {
+      const multimodalWork = {
+        ...sampleWorkA,
+        codeLines: undefined,
+        workContent: null,
+        source: 'plugin' as const,
+        sourceLabel: '插件作业',
+        files: [
+          { name: 'solution.png', url: '/storage/solution.png', isImage: true },
+          { name: 'notes.pdf', url: '/storage/notes.pdf', size: 10240 },
+        ],
+      };
+
+      render(
+        <SpotlightDualWorkArena
+          workA={multimodalWork}
+          workB={sampleWorkB}
+          annotations={[]}
+        />,
+      );
+
+      expect(screen.getByText('插件作业')).toBeDefined();
+      expect(screen.getByText('solution.png')).toBeDefined();
+      expect(screen.getByText('notes.pdf')).toBeDefined();
+
+      // 点击图片放大
+      fireEvent.click(screen.getByTitle('solution.png (点击放大)'));
+      expect(screen.getByAltText('Work preview')).toBeDefined();
+    });
   });
 
   describe('4. PeerReviewRubricStats', () => {
@@ -490,6 +520,55 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
       // Press Escape to close
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('【作品池】展开作品池并支持设为焦点 A / B', () => {
+      const onSelect = vi.fn();
+      const mockWorks = [
+        {
+          workId: 'w1',
+          studentId: 's1',
+          studentName: '王小明',
+          source: 'courseware' as const,
+          sourceLabel: '课件作答',
+          title: '课件实验作品',
+          score: 95,
+        },
+        {
+          workId: 'w2',
+          studentId: 's2',
+          studentName: '李小红',
+          source: 'plugin' as const,
+          sourceLabel: '插件作业',
+          title: 'Python算法提交',
+          files: [{ name: 'main.py' }],
+        },
+      ];
+
+      render(
+        <PeerReviewShowcaseModal
+          isOpen={true}
+          onClose={vi.fn()}
+          showcaseWorks={mockWorks}
+          onSelectSpotlightWork={onSelect}
+        />,
+      );
+
+      expect(screen.getByText(/本节提交作品池/)).toBeDefined();
+      // 点击展开
+      fireEvent.click(screen.getByText(/展开作品池/));
+      expect(screen.getByText('课件实验作品')).toBeDefined();
+      expect(screen.getByText('Python算法提交')).toBeDefined();
+
+      // 点击设为焦点 A
+      const setABtns = screen.getAllByText('设为焦点 A');
+      fireEvent.click(setABtns[0]);
+      expect(onSelect).toHaveBeenCalledWith('A', 'w1');
+
+      // 点击设为焦点 B
+      const setBBtns = screen.getAllByText('设为焦点 B');
+      fireEvent.click(setBBtns[1]);
+      expect(onSelect).toHaveBeenCalledWith('B', 'w2');
     });
   });
 });

@@ -411,4 +411,91 @@ describe('课中互评 API（classroom-peer-review）', () => {
       expect(body.danmaku[0].sender).toBe('学生乙');
     });
   });
+
+  describe('统一大屏作品池与多模态聚合 (Issue #95)', () => {
+    it('GET /api/classroom/sessions/:lessonId/showcase-works 聚合课件、插件与作业提交', async () => {
+      // 1. 先验证已有课件作答
+      const res1 = await call('GET', `/api/classroom/sessions/${lessonId}/showcase-works`, teacherToken);
+      expect(res1.status).toBe(200);
+      const body1 = (await res1.json()) as any;
+      expect(Array.isArray(body1.works)).toBe(true);
+      expect(body1.works.length).toBeGreaterThanOrEqual(3);
+      expect(body1.works.some((w: any) => w.source === 'courseware')).toBe(true);
+
+      // 2. 注入插件提交作品 (plugin_submissions + plugin_submission_versions)
+      const now = Date.now();
+      const pluginSubId = 'psub-test-01';
+      db.prepare(
+        `INSERT OR REPLACE INTO plugin_submissions (id, lesson_id, student_id, file_path, version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?)`,
+      ).run(pluginSubId, lessonId, studentA, '/storage/uploads/diagram.png', now, now);
+
+      db.prepare(
+        `INSERT OR REPLACE INTO plugin_submission_versions (id, submission_id, student_id, version, files_json, text_content, submitted_at)
+         VALUES (?, ?, ?, 1, ?, ?, ?)`,
+      ).run(
+        'psub-ver-01',
+        pluginSubId,
+        studentA,
+        JSON.stringify([
+          { name: 'diagram.png', url: '/storage/uploads/diagram.png', size: 102400 },
+          { name: 'solution.py', url: '/storage/uploads/solution.py', size: 2048 },
+        ]),
+        '这是学生甲提交的算法思路与运行截图',
+        now,
+      );
+
+      // 3. 注入传统作业提交 (assignments + assignment_submissions)
+      const assignId = 'asgn-test-01';
+      db.prepare(
+        `INSERT OR REPLACE INTO assignments (id, class_id, lesson_id, title, created_at)
+         VALUES (?, ?, ?, '课堂编程练习', ?)`,
+      ).run(assignId, classId, lessonId, now);
+
+      db.prepare(
+        `INSERT OR REPLACE INTO assignment_submissions (assignment_id, student_id, content, status, submitted_at)
+         VALUES (?, ?, 'print("Hello OpenLearn")', 'submitted', ?)`,
+      ).run(assignId, studentB, now);
+
+      // 4. 调用接口查询跨表作品
+      const res2 = await call('GET', `/api/classroom/sessions/${lessonId}/showcase-works`, teacherToken);
+      expect(res2.status).toBe(200);
+      const body2 = (await res2.json()) as any;
+      const works = body2.works;
+
+      const pluginWork = works.find((w: any) => w.source === 'plugin');
+      expect(pluginWork).toBeDefined();
+      expect(pluginWork.studentName).toBe('学生甲');
+      expect(pluginWork.sourceLabel).toBe('插件作业');
+      expect(pluginWork.files).toHaveLength(2);
+      expect(pluginWork.files[0].name).toBe('diagram.png');
+      expect(pluginWork.text).toContain('算法思路');
+
+      const assignWork = works.find((w: any) => w.source === 'assignment');
+      expect(assignWork).toBeDefined();
+      expect(assignWork.sourceLabel).toBe('课堂作业');
+      expect(assignWork.text).toContain('print("Hello OpenLearn")');
+
+      // 5. 验证 GET /peer-review 也携带 showcaseWorks
+      const reviewRes = await call('GET', `/api/classroom/sessions/${lessonId}/peer-review`, teacherToken);
+      expect(reviewRes.status).toBe(200);
+      const reviewBody = (await reviewRes.json()) as any;
+      expect(Array.isArray(reviewBody.showcaseWorks)).toBe(true);
+      expect(reviewBody.showcaseWorks.length).toBe(works.length);
+
+      // 6. 验证 auto-assign 支持全量作品
+      const assignRes = await call('POST', `/api/classroom/sessions/${lessonId}/peer-review/auto-assign`, teacherToken, {
+        perStudent: 2,
+      });
+      expect(assignRes.status).toBe(200);
+      const assignBody = (await assignRes.json()) as any;
+      expect(assignBody.works).toBe(works.length);
+
+      // 清理注入的数据
+      db.prepare('DELETE FROM plugin_submission_versions WHERE submission_id = ?').run(pluginSubId);
+      db.prepare('DELETE FROM plugin_submissions WHERE id = ?').run(pluginSubId);
+      db.prepare('DELETE FROM assignment_submissions WHERE assignment_id = ?').run(assignId);
+      db.prepare('DELETE FROM assignments WHERE id = ?').run(assignId);
+    });
+  });
 });

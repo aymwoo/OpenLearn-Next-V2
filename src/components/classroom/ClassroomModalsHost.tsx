@@ -66,6 +66,8 @@ export interface ClassroomModalsHostProps {
     rubricDimensions: unknown;
     reviewProgress: { completed: number; total: number };
   };
+  showcaseWorks?: any[];
+  onSelectSpotlightWork?: (slot: 'A' | 'B', workId: string | null) => void;
   onAutoAssignPeerReview: () => void | Promise<void>;
   autoAssigning: boolean;
 
@@ -114,6 +116,8 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
   onClosePeerReviewShowcase,
   onAdvanceToStage3,
   peerReviewData,
+  showcaseWorks,
+  onSelectSpotlightWork,
   onAutoAssignPeerReview,
   autoAssigning,
   isParentNotificationOpen,
@@ -170,6 +174,8 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
         onAdvanceToStage3={onAdvanceToStage3}
         workA={peerReviewData.workA as never}
         workB={peerReviewData.workB as never}
+        showcaseWorks={showcaseWorks}
+        onSelectSpotlightWork={onSelectSpotlightWork}
         matchingItems={peerReviewData.matchingItems as never}
         badges={peerReviewData.badges as never}
         podiumStudents={peerReviewData.podiumStudents as never}
