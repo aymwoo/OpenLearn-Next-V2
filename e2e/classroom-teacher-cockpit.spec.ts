@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
+import { enterTeachingView } from './fixtures/classroom-entry';
 
 const DB_PATH = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
 
@@ -139,19 +140,8 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
       });
 
       await page.goto('/');
-      await page.locator('button:has-text("互动课堂")').first().click();
-
-      // Issue #91: 进入互动课堂先展示进行中会话列表（不再自动进入）→ 点「继续上课」
-      const resumeFromList = page.getByRole('button', { name: /继续上课|Resume/ }).first();
-      if (await resumeFromList.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await resumeFromList.click();
-      }
-
-      // 检测到活跃课堂，如果展示“回到课堂”按钮则点击
-      const resumeBtn = page.getByRole('button', { name: '回到课堂' });
-      if (await resumeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await resumeBtn.click();
-      }
+      // Issue #91: 首屏是进行中会话列表，等列表拉回来再点「继续上课」
+      await enterTeachingView(page);
 
       // 验证课中授课界面与中控导航挂载
       await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
