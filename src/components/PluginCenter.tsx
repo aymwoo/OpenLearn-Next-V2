@@ -291,7 +291,7 @@ export function PluginCenter({
                   className={`flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none transition-colors border rounded-lg px-3 py-1.5 shadow-sm ${
                     selectedZipFile
                       ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                      : 'border-teal-200 bg-teal-50/50 text-teal-600 hover:border-teal-400 hover:bg-teal-50'
+                      : 'border-teal-200 bg-teal-50/50 text-teal-700 hover:border-teal-400 hover:bg-teal-50'
                   }`}
                   onClick={() => {
                     document.getElementById('zip-plugin-uploader')?.click();

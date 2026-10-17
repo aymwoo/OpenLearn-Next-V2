@@ -367,7 +367,7 @@ export function RightSidebar(props: RightSidebarProps = {}) {
         </>
       ) : (
         <div
-          className="flex flex-col items-center py-6 h-full text-gray-400 w-full"
+          className="flex flex-col items-center py-6 h-full text-subtle w-full"
           onClick={() => setShowRightSidebar(true)}
         >
           <Wand2 size={18} className="mb-6 hover:text-indigo-500" />

@@ -428,6 +428,7 @@ export function ClassroomMoodTracker({
           {/* Lesson Selector */}
           <select
             id="mood-tracker-lesson-select"
+            aria-label={lang === 'zh' ? '选择要查看的课节' : 'Select lesson to view'}
             value={selectedLessonId}
             onChange={(e) => setSelectedLessonId(e.target.value)}
             className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
