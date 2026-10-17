@@ -148,6 +148,9 @@ export interface QuizGrade {
  *
  * 题目没有可判定的正确答案时返回 `resolved: false, score: 0` —— 与修复前
  * 「没设置答案一律 0 分」的行为一致，避免把未配置答案的测验算成全员满分。
+ *
+ * 例外：题干没有选项数组、`correctAnswer` 是一段自由文本（历史数据里存在这种
+ * 「文本对答」测验），此时索引无从谈起，退回修复前的**字符串等值比较**语义。
  */
 export function gradeQuizSubmission(data: QuizAnswerLike | null | undefined, answer: unknown): QuizGrade {
   const options = readQuizOptions(data);
@@ -155,6 +158,12 @@ export function gradeQuizSubmission(data: QuizAnswerLike | null | undefined, ans
   const answerIndex = resolveSubmittedIndex(answer, options);
 
   if (correctIndex === null) {
+    const legacy = data?.correctAnswer;
+    if (legacy !== undefined && legacy !== null && String(legacy).trim() !== '') {
+      const normalize = (v: unknown) => String(v).trim().toLowerCase();
+      const isCorrect = normalize(answer) === normalize(legacy);
+      return { isCorrect, score: isCorrect ? 100 : 0, resolved: true, correctIndex: null, answerIndex };
+    }
     return { isCorrect: false, score: 0, resolved: false, correctIndex: null, answerIndex };
   }
 

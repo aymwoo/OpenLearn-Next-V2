@@ -123,6 +123,14 @@ describe('Issue #107 · 随堂测验答案字段归一化', () => {
       expect(gradeQuizSubmission(data, 'A').isCorrect).toBe(false);
     });
 
+    it('没有 options、correctAnswer 是自由文本时退回字符串等值比较（历史「文本对答」测验）', () => {
+      // 真实存量数据：stage-guard 测试里就有 { correctAnswer: '氧气', segmentId: 'seg-2' } 这种无选项的题
+      const data = { correctAnswer: '氧气' };
+      expect(gradeQuizSubmission(data, '氧气')).toMatchObject({ isCorrect: true, score: 100, resolved: true });
+      expect(gradeQuizSubmission(data, '  氧气 ')).toMatchObject({ isCorrect: true, score: 100 });
+      expect(gradeQuizSubmission(data, '二氧化碳')).toMatchObject({ isCorrect: false, score: 0, resolved: true });
+    });
+
     it('未设置正确答案 → resolved=false、0 分（保持修复前口径，不把未配置的题算满分）', () => {
       const grade = gradeQuizSubmission({ options: OPTIONS }, 1);
       expect(grade).toMatchObject({ isCorrect: false, score: 0, resolved: false, correctIndex: null });
