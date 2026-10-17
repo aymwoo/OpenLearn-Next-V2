@@ -72,6 +72,7 @@ import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
 
 import { ClassroomToolbarQuickActions } from '../features/classroom/ClassroomToolbarQuickActions';
 import { classLockHint, isInProgressClassLocked } from '../features/classroom/class-session-lock';
+import { ActiveSessionFirstScreen, type ActiveSessionItem } from '../features/classroom/ActiveSessionFirstScreen';
 import {
   LiveSubmissionsPanel,
   FINISHED_STATUSES,
@@ -216,6 +217,12 @@ export function LiveClassroomView({
   // pendingLiveClassLaunch 信号时，跳过门户直接进入授课视图。
   const initialLaunchSignal = uiStore.getState().pendingLiveClassLaunch;
   const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen && !initialLaunchSignal);
+  /**
+   * Issue #91: 进入互动课堂时若存在真正进行中的会话（IN_CLASS_TEACHING / WRAP_UP_EXIT_TICKET），
+   * 先显示「进行中会话」首屏让教师显式选择继续/开新课/归档，不再自动进入。
+   * 课表一键开课信号（initialLaunchSignal）与 initialPortalOpen=false 跳过该首屏。
+   */
+  const [showActiveSessionGate, setShowActiveSessionGate] = useState(initialPortalOpen && !initialLaunchSignal);
   /** 是否展示「课堂会话与档案管理」看板 */
   const [showSessionManager, setShowSessionManager] = useState(false);
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
@@ -284,10 +291,8 @@ export function LiveClassroomView({
           }
           const sessionClassId = data.session?.class_id ? String(data.session.class_id) : null;
           const classLocked = Boolean(data.hasActiveSession) && isInProgressClassLocked(data.stage);
-          // 刷新 / ?classId= 不能改掉进行中会话的班级。URL 上的 classId 故意不读取。
-          if (classLocked && !userReturnedToPortalRef.current) {
-            setShowEntryPortal(false);
-          }
+          // Issue #91: 不再「有进行中会话就自动进入授课视图」——教师可在会话首屏显式选择。
+          // 但进行中会话的班级锁定保护保留：刷新 / ?classId= 不能改掉进行中会话的班级。
           const currentClassId = appStore.getState().liveClassSelectedClassId;
           if (classLocked && sessionClassId && currentClassId !== sessionClassId) {
             setLiveClassSelectedClassId(sessionClassId);
@@ -1529,6 +1534,34 @@ export function LiveClassroomView({
             setShowEntryPortal(true);
           }
         }}
+      />
+    );
+  }
+
+  // Issue #91: 进行中会话首屏——教师显式选择继续上课 / 开始新课 / 结束归档
+  if (showActiveSessionGate) {
+    return (
+      <ActiveSessionFirstScreen
+        lang={lang}
+        onResumeSession={(session: ActiveSessionItem) => {
+          viewingSpecificReportRef.current = null;
+          setReportSessionId(null);
+          userReturnedToPortalRef.current = false;
+          setSelectedLesson(session.lessonId);
+          // 继续会话使用会话自己的班级（班级锁定保护）
+          if (session.classId) setLiveClassSelectedClassId(session.classId);
+          setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
+          setShowActiveSessionGate(false);
+          setShowEntryPortal(false);
+        }}
+        onStartNew={() => {
+          userReturnedToPortalRef.current = true;
+          setEntryDecisionReady(true);
+          setShowActiveSessionGate(false);
+          setShowEntryPortal(true);
+        }}
+        onEmpty={() => setShowActiveSessionGate(false)}
+        addToast={addToast}
       />
     );
   }

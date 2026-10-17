@@ -342,7 +342,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     appStore.setState({ liveClassSelectedClassId: null });
   });
 
-  it('does not render the next-lesson portal until an in-progress session is resolved, then stays on that class', async () => {
+  it('Issue #91: 进行中会话不再自动进入——先显示会话首屏，继续上课后留在会话班级', async () => {
     window.history.replaceState({}, '', '/?classId=class-other#/live_class');
     appStore.setState({ liveClassSelectedClassId: 'class-other' });
     const pending: Array<(value: unknown) => void> = [];
@@ -350,7 +350,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
-        if (String(url).includes('/api/classroom/sessions/')) {
+        const u = String(url);
+        if (u.includes('/api/classroom/sessions/') || u.includes('/api/classroom/sessions?')) {
           return new Promise((resolve) => {
             pending.push(resolve);
           });
@@ -369,7 +370,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    expect(screen.getByTestId('live-class-entry-pending')).toBeTruthy();
+    // 首屏显示「进行中的课堂会话」列表，而不是起始门户或授课视图
+    expect(screen.getByTestId('active-session-first-screen')).toBeTruthy();
     expect(screen.queryByText(/下一节/)).toBeNull();
     await waitFor(() => expect(pending.length).toBeGreaterThan(0));
 
@@ -377,18 +379,67 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       resolve({
         ok: true,
         json: async () => ({
-          hasActiveSession: true,
-          stage: 'IN_CLASS_TEACHING',
-          session: { class_id: 'class-g1' },
+          items: [
+            {
+              id: 'ses-1',
+              lessonId: 'lesson-101',
+              lessonTitle: '物理探究实验课',
+              classId: 'class-g1',
+              className: '高一1班',
+              stage: 'IN_CLASS_TEACHING',
+              teachingModeName: null,
+              startedAt: Date.now(),
+            },
+          ],
         }),
       });
     }
 
+    // 教师显式选择「继续上课」→ 进入授课视图，班级锁定为会话自己的 class_id
+    fireEvent.click(await screen.findByTestId('resume-session-ses-1'));
     expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
-    expect(screen.queryByText(/下一节/)).toBeNull();
     await waitFor(() => expect(setClass).toHaveBeenCalledWith('class-g1'));
     expect(setClass).not.toHaveBeenCalledWith('class-other');
     appStore.setState({ liveClassSelectedClassId: null });
+  });
+
+  it('Issue #91: 没有进行中会话时直接显示起始门户（行为不变）', async () => {
+    window.history.replaceState({}, '', '#/live_class');
+    appStore.setState({ liveClassSelectedClassId: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        const u = String(url);
+        if (u.includes('/api/classroom/sessions?')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+        }
+        if (u.includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ hasActiveSession: false }),
+          });
+        }
+        if (u.includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (u.includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen />
+      </AppDataProvider>,
+    );
+
+    // 无进行中会话 → 首屏回退，展示起始门户（含选课标题）
+    await waitFor(() => {
+      expect(screen.queryByTestId('active-session-first-screen')).toBeNull();
+    });
+    expect(await screen.findByText(/选择授课课程/)).toBeTruthy();
   });
 
   it('returns to the entry portal where an in-progress class cannot be changed', async () => {

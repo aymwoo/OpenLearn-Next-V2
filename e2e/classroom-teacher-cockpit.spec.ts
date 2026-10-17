@@ -256,4 +256,96 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
       if (studentId) await request.delete(`/api/students/${studentId}`).catch(() => {});
     }
   });
+
+  test('进入互动课堂先显示进行中会话列表：可开新课或继续上课，不再自动进入 (Issue #91)', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const lessonTitle = `E2E 会话首屏课节 ${suffix}`;
+    const className = `E2E 会话首屏班级 ${suffix}`;
+    let lessonId: string | null = null;
+    let classId: string | null = null;
+    let sessionId: string | null = null;
+
+    try {
+      // 1. 登录管理员
+      const loginRes = await request.post('/api/auth/login', {
+        data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+      });
+      expect(loginRes.ok()).toBeTruthy();
+
+      // 2. 创建课程与班级，初始化会话并推进到课中（IN_CLASS_TEACHING）
+      const lessonRes = await request.post('/api/lessons', {
+        data: { title: lessonTitle, content: '会话首屏测试' },
+      });
+      expect(lessonRes.ok()).toBeTruthy();
+      lessonId = (await lessonRes.json()).result?.lessonId || (await lessonRes.json()).id;
+
+      const classRes = await request.post('/api/classes', { data: { name: className } });
+      expect(classRes.ok()).toBeTruthy();
+      classId = (await classRes.json()).id;
+
+      const initRes = await request.post(`/api/classroom/sessions/${lessonId}/init`, {
+        data: { classId },
+      });
+      expect(initRes.ok()).toBeTruthy();
+      const stageRes = await request.post(`/api/classroom/sessions/${lessonId}/stage`, {
+        data: { stage: 'IN_CLASS_TEACHING', classId },
+      });
+      expect(stageRes.ok(), await stageRes.text()).toBeTruthy();
+
+      await page.addInitScript(() => {
+        localStorage.setItem('edu_os_tour_completed', 'true');
+      });
+
+      // 3. 进入互动课堂：第一屏是「进行中的课堂会话」列表，不再自动进入授课视图
+      await page.goto('/');
+      await page.locator('button:has-text("互动课堂")').first().click();
+      const firstScreen = page.getByTestId('active-session-first-screen');
+      await expect(firstScreen).toBeVisible({ timeout: 15_000 });
+      await expect(firstScreen.getByText(lessonTitle)).toBeVisible();
+      await expect(firstScreen.getByText(className)).toBeVisible();
+      await expect(page.locator('#pre-class-ready-view')).toHaveCount(0);
+
+      // 4. 「开始一节新课」→ 进入既有起始门户（不影响该进行中会话）
+      await firstScreen.getByTestId('start-new-class-btn').click();
+      await expect(page.getByText(/选择授课课程/)).toBeVisible({ timeout: 10_000 });
+
+      // 5. 刷新：再次出现首屏，点「继续上课」→ 直接进入授课视图（班级来自会话）
+      await page.reload();
+      await expect(page.getByTestId('active-session-first-screen')).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: /继续上课：/ }).click();
+      await expect(page.getByText('🔴 在线课堂')).toBeVisible({ timeout: 15_000 });
+      // 班级锁定保护：班级徽章显示会话自己的班级
+      await expect(page.locator('#live-classroom-current-class-badge').getByText(className)).toBeVisible();
+
+      // 6. 截图留证 (Generates Artifact: Screenshot)
+      const shotDir = path.join(process.cwd(), 'artifacts', 'screenshots');
+      if (!fs.existsSync(shotDir)) fs.mkdirSync(shotDir, { recursive: true });
+      const shot = path.join(shotDir, 'live_class_active_session_first_screen.png');
+      await page.screenshot({ path: shot, fullPage: true });
+      expect(fs.existsSync(shot)).toBe(true);
+    } finally {
+      // 归档并清理会话（需要先拿到 sessionId）
+      if (lessonId) {
+        try {
+          const listRes = await request.get(`/api/classroom/sessions?lessonId=${lessonId}&status=active`);
+          if (listRes.ok()) {
+            const data = await listRes.json();
+            sessionId = data.items?.[0]?.id || null;
+            if (sessionId) {
+              await request.post(`/api/classroom/sessions/${sessionId}/archive`).catch(() => {});
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (lessonId) await request.delete(`/api/lessons/${lessonId}`).catch(() => {});
+      if (classId) await request.delete(`/api/classes/${classId}`).catch(() => {});
+    }
+  });
 });
