@@ -419,8 +419,8 @@ export function StudentInteractiveOverlay({
             onClick={() => sendPacingSignal('CLEAR')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CLEAR'
-                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 ring-2 ring-emerald-500/60 shadow-xs'
-                : 'hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/60 shadow-xs'
+                : 'hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
             }`}
             title={lang === 'zh' ? '听懂了，节奏适宜（再次点击取消）' : 'Clear & Optimal (Click again to cancel)'}
           >
@@ -434,8 +434,8 @@ export function StudentInteractiveOverlay({
             onClick={() => sendPacingSignal('CONFUSED')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CONFUSED'
-                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 ring-2 ring-amber-500/60 shadow-xs'
-                : 'hover:bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 ring-2 ring-amber-500/60 shadow-xs'
+                : 'hover:bg-amber-500/10 text-amber-700 dark:text-amber-400'
             }`}
             title={lang === 'zh' ? '有点困惑，希望老师点拨（再次点击取消）' : 'Confused (Click again to cancel)'}
           >
@@ -449,8 +449,8 @@ export function StudentInteractiveOverlay({
             onClick={() => sendPacingSignal('TOO_FAST')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'TOO_FAST'
-                ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 ring-2 ring-rose-500/60 shadow-xs'
-                : 'hover:bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 ring-2 ring-rose-500/60 shadow-xs'
+                : 'hover:bg-rose-500/10 text-rose-700 dark:text-rose-400'
             }`}
             title={lang === 'zh' ? '讲得太快了，希望能慢一点（再次点击取消）' : 'Too fast (Click again to cancel)'}
           >

@@ -143,7 +143,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
 
           <button
             onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
-            className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
+            className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
             title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
           >
             {studentFullscreenPanel === 'right' ? (
@@ -166,7 +166,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             <span>{lang === 'zh' ? '本教学环节尚未解锁' : 'This segment is not unlocked yet'}</span>
           </div>
-          <p className="text-xs text-amber-700/80 max-w-md text-center">
+          <p className="text-xs text-amber-700 dark:text-amber-400 max-w-md text-center">
             {lang === 'zh'
               ? '您尚未满足本教学环节的进入门禁条件，请完成前置任务或等待教师统一推进。'
               : 'You have not met the gate conditions for this segment yet. Please complete prerequisites or wait for the teacher.'}

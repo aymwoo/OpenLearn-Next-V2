@@ -71,7 +71,7 @@ export function StudentView() {
       ) : (
         <Suspense
           fallback={
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-subtle gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
               <span className="text-sm font-medium">加载内容中...</span>
             </div>

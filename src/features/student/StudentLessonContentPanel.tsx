@@ -69,7 +69,7 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
         </span>
         <button
           onClick={() => setStudentFullscreenPanel((p) => (p === 'left' ? 'none' : 'left'))}
-          className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
+          className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
           title={studentFullscreenPanel === 'left' ? '退出全屏' : '全屏'}
         >
           {studentFullscreenPanel === 'left' ? (

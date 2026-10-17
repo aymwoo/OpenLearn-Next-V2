@@ -74,7 +74,9 @@ export function ClassRowHeader({
               expand();
             }
           }}
-          className="text-gray-400 hover:text-gray-600 shrink-0"
+          aria-label={isExpanded ? '收起班级' : '展开班级'}
+          aria-expanded={isExpanded}
+          className="text-subtle hover:text-main shrink-0"
         >
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>

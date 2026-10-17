@@ -76,4 +76,94 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       await expectNoViolations(page, tab.name);
     }
   });
+
+  test('学生端课中界面与互动浮层无违规', async ({ page, context, request }) => {
+    test.setTimeout(360_000);
+
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const studentNum = `STU_A11Y_${suffix}`;
+
+    // 1. 教师侧准备：课节 + 班级 + 学生 + 会话进入课中
+    await request.post('/api/auth/login', {
+      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+    });
+    const lessonRes = await request.post('/api/lessons', {
+      data: { title: `A11Y 学生端课节 ${suffix}`, content: '无障碍门禁' },
+    });
+    expect(lessonRes.ok()).toBeTruthy();
+    const lessonJson = await lessonRes.json();
+    const lessonId: string = lessonJson.result?.lessonId || lessonJson.lessonId || lessonJson.id;
+
+    const classRes = await request.post('/api/classes', { data: { name: `A11Y 班级 ${suffix}`, grade: '高一' } });
+    expect(classRes.ok()).toBeTruthy();
+    const classId: string = (await classRes.json()).id;
+
+    const stuRes = await request.post('/api/students', {
+      data: { student_number: studentNum, name: `A11Y学生${suffix.slice(0, 4)}`, password: 'password123' },
+    });
+    expect(stuRes.ok()).toBeTruthy();
+    await request.post(`/api/classes/${encodeURIComponent(classId)}/students`, {
+      data: { studentId: (await stuRes.json()).id },
+    });
+
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/init`, {
+      data: { classId, teachingModeId: 'lecture' },
+    });
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+      data: { stage: 'IN_CLASS_TEACHING', classId },
+    });
+
+    // 2. 学生登录并进入课中
+    await context.request.post('/api/auth/login', {
+      data: { entrance: 'student', studentId: studentNum, password: 'password123' },
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('edu_os_tour_completed', 'true');
+    });
+
+    const studentUrl = `/?mode=student_live&lessonId=${encodeURIComponent(lessonId)}`;
+    const loadStudent = async () => {
+      await page.goto(studentUrl);
+      // 底部「课堂互动工具栏」只在学生壳渲染出来后存在
+      await page.waitForSelector('aside[aria-label="课堂互动工具栏"]', { timeout: 30_000 });
+      await freezeAnimations(page);
+    };
+
+    // 3. 学生端课中壳（含白板/课件/作业 Tab 与互动浮层槽位）
+    await loadStudent();
+    await expectNoViolations(page, '学生端课中界面');
+
+    // 4. 极速投票作答卡
+    const pollRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll`, {
+      data: { title: `A11Y 投票 ${suffix}`, questionType: 'ABCD', options: ['A', 'B', 'C', 'D'] },
+    });
+    expect(pollRes.ok()).toBeTruthy();
+    await loadStudent();
+    await expect(page.locator('[data-testid="student-quick-poll-card"]')).toBeVisible({ timeout: 25_000 });
+    await freezeAnimations(page);
+    await expectNoViolations(page, '学生端·极速投票作答卡');
+
+    // 5. 毫秒抢答模态
+    await request.post(
+      `/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll/${encodeURIComponent(
+        (await pollRes.json()).poll?.id ?? '',
+      )}/close`,
+    );
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/buzzer`, {
+      data: { title: '全班极速抢答' },
+    });
+    await loadStudent();
+    await expect(page.getByRole('button', { name: '抢！' })).toBeVisible({ timeout: 25_000 });
+    await freezeAnimations(page);
+    await expectNoViolations(page, '学生端·毫秒抢答');
+
+    // 6. 结课通票模态（WRAP_UP_EXIT_TICKET 阶段自动弹出）
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+      data: { stage: 'WRAP_UP_EXIT_TICKET', classId },
+    });
+    await loadStudent();
+    await expect(page.locator('[data-testid="adaptive-exit-ticket-modal"]')).toBeVisible({ timeout: 25_000 });
+    await freezeAnimations(page);
+    await expectNoViolations(page, '学生端·结课通票');
+  });
 });

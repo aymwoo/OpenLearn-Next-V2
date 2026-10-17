@@ -1570,7 +1570,9 @@ export function LiveClassroomView({
             id="live-classroom-current-class-badge"
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-theme/10 border border-primary-theme/25 text-primary-ink text-xs font-bold select-none shrink-0"
             title={classLockHint(lang)}
-            aria-readonly="true"
+            // 班级徽章是只读状态展示，不是可交互控件；aria-allowed-attr 会拒绝
+            // 非控件上的 aria-readonly。改用 role="status" 表达「只读状态」。
+            role="status"
           >
             <School size={12} className="shrink-0" />
             <span className="truncate max-w-[120px] sm:max-w-[160px]">
@@ -1579,7 +1581,7 @@ export function LiveClassroomView({
             </span>
             <span
               data-testid="live-class-lock-hint"
-              className="text-2xs font-semibold text-amber-700 truncate max-w-[140px]"
+              className="text-2xs font-semibold text-muted truncate max-w-[140px]"
             >
               {classLockHint(lang)}
             </span>
@@ -1615,6 +1617,7 @@ export function LiveClassroomView({
           <div className="flex items-center gap-1.5 shrink-0">
             <select
               id="live-classroom-lesson-select"
+              aria-label={lang === 'zh' ? '选择授课课程' : 'Select lesson to teach'}
               value={pendingLessonId || ''}
               onChange={(e) => {
                 const val = e.target.value === '' ? null : e.target.value;
@@ -1972,7 +1975,7 @@ export function LiveClassroomView({
                               <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
                                 <span
                                   className={`text-[10px] px-1 py-0.2 rounded font-mono shrink-0 ${
-                                    isActive ? 'bg-white/20 text-white' : 'bg-surface-secondary text-muted'
+                                    isActive ? 'bg-primary-solid/85 text-white' : 'bg-surface-secondary text-muted'
                                   }`}
                                 >
                                   P{idx + 1}
@@ -1981,7 +1984,7 @@ export function LiveClassroomView({
                               </div>
                               <span
                                 className={`text-[9px] px-1.5 py-0.2 rounded shrink-0 ${
-                                  isActive ? 'bg-white/20 text-white' : 'text-muted'
+                                  isActive ? 'bg-primary-solid/85 text-white' : 'text-muted'
                                 }`}
                               >
                                 {pageElementsCount} {lang === 'zh' ? '组件' : 'items'}
@@ -2641,7 +2644,7 @@ export function LiveClassroomView({
                               : !isOnline
                                 ? 'text-slate-400'
                                 : progPercent === 100
-                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  ? 'text-emerald-700 dark:text-emerald-400'
                                   : isBehind
                                     ? 'text-amber-700 dark:text-amber-400'
                                     : 'text-muted'
@@ -2738,7 +2741,7 @@ export function LiveClassroomView({
                             return (
                               <span
                                 key={seg.id}
-                                className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
+                                className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
                                 title={seg.title}
                               >
                                 {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
@@ -2762,7 +2765,7 @@ export function LiveClassroomView({
                   <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
                     <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
                       <span className="text-muted font-medium text-[10px]">在线/总数</span>
-                      <span className="font-bold font-mono text-emerald-600 text-xs mt-0.5">
+                      <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400 text-xs mt-0.5">
                         {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
                       </span>
                     </div>
@@ -2870,7 +2873,7 @@ export function LiveClassroomView({
                             f.type === 'success'
                               ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
                               : f.type === 'warning'
-                                ? 'bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-950/40 dark:text-amber-400'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-950/40 dark:text-amber-400'
                                 : 'bg-surface text-muted border border-theme'
                           }`}
                         >

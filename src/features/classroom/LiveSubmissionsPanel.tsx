@@ -179,6 +179,7 @@ export function LiveSubmissionsPanel({
             </span>
             <input
               type="range"
+              aria-label={lang === 'zh' ? '完成度门槛' : 'Min completion'}
               min={0}
               max={100}
               step={5}

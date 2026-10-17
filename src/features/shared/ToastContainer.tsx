@@ -114,7 +114,8 @@ export function ToastContainer() {
               <button
                 type="button"
                 onClick={() => uiStore.getState().removeToast(toast.id)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded p-1 h-fit transition-colors shrink-0 cursor-pointer"
+                aria-label="关闭提示"
+                className="text-subtle hover:text-main hover:bg-gray-50 dark:hover:bg-slate-800 rounded p-1 h-fit transition-colors shrink-0 cursor-pointer"
               >
                 <X size={14} />
               </button>

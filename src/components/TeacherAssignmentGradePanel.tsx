@@ -277,7 +277,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             <h4 className="text-xs font-bold text-slate-700">
               {zh ? '全局默认折算权重设置' : 'Default Grading Weights Configuration'}
             </h4>
-            <p className="text-xs text-slate-400 mt-0.5 font-medium">
+            <p className="text-xs text-subtle mt-0.5 font-medium">
               {zh
                 ? '调整权重分配，所有尚未锁定成绩的学生将自动应用此默认权重比例。'
                 : 'Setting global default weights. Changes will automatically apply to non-confirmed grades.'}
@@ -290,6 +290,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             <span className="text-xs font-bold text-slate-500">{zh ? '教师评分:' : 'Teacher:'}</span>
             <input
               type="range"
+              aria-label={zh ? '教师评分权重' : 'Teacher weight'}
               min="0"
               max="100"
               step="5"
@@ -494,6 +495,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                           />
                           <input
                             type="range"
+                            aria-label={zh ? `${sub.studentName || '学生'} 的得分` : `Score for ${sub.studentName || 'student'}`}
                             min="0"
                             max="100"
                             disabled={isConfirmed}
