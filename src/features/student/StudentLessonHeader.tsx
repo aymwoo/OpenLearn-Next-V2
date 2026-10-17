@@ -7,6 +7,8 @@ export interface StudentLessonHeaderProps {
   activeStudentId: string | null;
   /** 全班专注锁定中：学生端进入只读跟随模式 */
   isStudentLocked?: boolean;
+  /** 锁定模式：'full' (完全锁定) | 'navigation' (答题锁定) */
+  lockMode?: 'full' | 'navigation';
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
   setSelectedLesson: (id: string | null) => void;
   lessons: Lesson[];
@@ -21,6 +23,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
     students,
     activeStudentId,
     isStudentLocked = false,
+    lockMode,
     setStudentViewStatus,
     setSelectedLesson,
     lessons,
@@ -33,23 +36,43 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
   const activeSession = useStudentActiveSession((s) => s.activeSession);
 
   // 兼容旧调用方：未显式传入锁定时，回退到 students 表派生（单一数据源仍是 locked_lesson_id）
-  const locked = isStudentLocked || !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id;
+  const currentStudent = students.find((s) => s.id === activeStudentId);
+  const locked = isStudentLocked || !!currentStudent?.locked_lesson_id;
+  const effectiveLockMode = lockMode || currentStudent?.lock_mode || 'full';
+  const isAnswerMode = effectiveLockMode === 'navigation';
 
   return (
     <div className="flex items-center justify-between gap-4">
       {locked ? (
-        <div
-          className="text-indigo-700 font-semibold text-sm flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 shadow-3xs select-none"
-          role="status"
-          title={
-            lang === 'zh'
-              ? '老师已开启全班专注锁定，您暂时无法切换页面'
-              : 'The teacher locked the class focus. Navigating away is disabled.'
-          }
-        >
-          <Lock size={15} className="text-indigo-600 shrink-0" />
-          {lang === 'zh' ? '全班专注锁定 · 跟随教师授课' : 'Class Focus Locked · Following Teacher'}
-        </div>
+        isAnswerMode ? (
+          <div
+            className="text-amber-800 font-semibold text-sm flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 shadow-3xs select-none"
+            role="status"
+            title={
+              lang === 'zh'
+                ? '答题锁定中 · 请完成作答后提交，暂时无法离开本页'
+                : 'Answer Locked · Complete and submit your work before leaving'
+            }
+          >
+            <Lock size={15} className="text-amber-600 shrink-0" />
+            {lang === 'zh'
+              ? '答题锁定中 · 请完成作答后提交，暂时无法离开本页'
+              : 'Answer Locked · Complete and submit work'}
+          </div>
+        ) : (
+          <div
+            className="text-indigo-700 font-semibold text-sm flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 shadow-3xs select-none"
+            role="status"
+            title={
+              lang === 'zh'
+                ? '老师已开启全班专注锁定，您暂时无法切换页面'
+                : 'The teacher locked the class focus. Navigating away is disabled.'
+            }
+          >
+            <Lock size={15} className="text-indigo-600 shrink-0" />
+            {lang === 'zh' ? '全班专注锁定 · 跟随教师授课' : 'Class Focus Locked · Following Teacher'}
+          </div>
+        )
       ) : (
         <button
           onClick={() => {

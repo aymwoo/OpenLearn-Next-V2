@@ -506,17 +506,31 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     });
 
     socket.on('class-lock-status-changed', (data: any) => {
-      const { lessonId, locked } = data;
+      const { lessonId, locked, mode, target } = data || {};
       if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
         Promise.resolve(fetchStudents()).then(() => {
           if (locked && lessonId) {
             setSelectedLesson(lessonId);
             setStudentViewStatus('lesson');
+            if (target?.tab) {
+              setStudentLessonTab(target.tab);
+            }
+            const isAnswerMode = mode === 'navigation';
             addToast(
-              langRef.current === 'zh' ? '🔒 课程已被锁定' : '🔒 Lesson Locked',
               langRef.current === 'zh'
-                ? '老师已锁定当前授课，您将无法切换到其他页面。'
-                : 'The teacher has locked the active lesson. You cannot leave this page.',
+                ? isAnswerMode
+                  ? '🔒 答题锁定已开启'
+                  : '🔒 课程已被锁定'
+                : isAnswerMode
+                  ? '🔒 Answer Lock Active'
+                  : '🔒 Lesson Locked',
+              langRef.current === 'zh'
+                ? isAnswerMode
+                  ? '老师已开启答题锁定，请完成作答后提交，暂时无法离开本页。'
+                  : '老师已锁定当前授课，您将无法切换到其他页面。'
+                : isAnswerMode
+                  ? 'The teacher activated answer lock. Please complete and submit your work on this page.'
+                  : 'The teacher has locked the active lesson. You cannot leave this page.',
               'info',
             );
           }

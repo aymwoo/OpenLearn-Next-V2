@@ -23,7 +23,7 @@ export function StudentLiveHeader(props: StudentLiveHeaderProps) {
   const students = props.students ?? appData?.students ?? [];
   const selectedLesson = props.selectedLesson !== undefined ? props.selectedLesson : (appData?.selectedLesson ?? null);
   const lessons = props.lessons ?? appData?.lessons ?? [];
-  const isStudentLocked = props.isStudentLocked ?? appData?.isStudentLocked ?? false;
+  const isStudentLocked = props.isStudentLocked ?? appData?.isNavigationLocked ?? appData?.isStudentLocked ?? false;
   const isFollowingTeacher = props.isFollowingTeacher ?? appData?.isFollowingTeacher ?? false;
   const setIsFollowingTeacher = props.setIsFollowingTeacher ?? appData?.setIsFollowingTeacher ?? (() => {});
   const notifyLockedNavigation = props.notifyLockedNavigation ?? appData?.notifyLockedNavigation ?? (() => {});

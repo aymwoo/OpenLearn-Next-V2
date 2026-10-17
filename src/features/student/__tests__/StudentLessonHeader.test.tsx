@@ -88,4 +88,16 @@ describe('StudentLessonHeader', () => {
     fireEvent.click(screen.getByText('Back to Dashboard'));
     expect(addToast).not.toHaveBeenCalled();
   });
+
+  it('Issue #110: renders answer lock banner when lockMode is navigation', () => {
+    render(<StudentLessonHeader {...makeProps({ isStudentLocked: true, lockMode: 'navigation', lang: 'zh' })} />);
+    expect(screen.queryByText('Back to Dashboard')).toBeNull();
+    expect(screen.getByText('答题锁定中 · 请完成作答后提交，暂时无法离开本页')).toBeTruthy();
+  });
+
+  it('Issue #110: renders english answer lock banner when lockMode is navigation and lang is en', () => {
+    render(<StudentLessonHeader {...makeProps({ isStudentLocked: true, lockMode: 'navigation', lang: 'en' })} />);
+    expect(screen.queryByText('Back to Dashboard')).toBeNull();
+    expect(screen.getByText('Answer Locked · Complete and submit work')).toBeTruthy();
+  });
 });

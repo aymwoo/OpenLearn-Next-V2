@@ -278,5 +278,69 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
       expect(json.rollcalls.length).toBeGreaterThan(0);
       expect(json.rollcalls[0].student_id).toBe(studentId);
     });
+
+    it('Issue #110: 教师可对全班开启答题锁定（navigation 模式与 target），且学生面板与数据库正确更新', async () => {
+      const lockRes = await fetch(`${baseUrl}/api/classes/${testClassId}/lock_lesson`, {
+        method: 'POST',
+        headers: {
+          ...cookie(teacherToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lessonId: 'lesson-110-test',
+          mode: 'navigation',
+          target: { tab: 'courseware' },
+        }),
+      });
+      expect(lockRes.status).toBe(200);
+      const lockJson = await lockRes.json();
+      expect(lockJson.success).toBe(true);
+
+      const studentInDb = kernelContainer.db
+        .prepare('SELECT locked_lesson_id, lock_mode, lock_target FROM students WHERE id = ?')
+        .get(studentId) as any;
+      expect(studentInDb.locked_lesson_id).toBe('lesson-110-test');
+      expect(studentInDb.lock_mode).toBe('navigation');
+      expect(JSON.parse(studentInDb.lock_target)).toEqual({ tab: 'courseware' });
+
+      // GET /api/students/:id/dashboard
+      const dashRes = await fetch(`${baseUrl}/api/students/${studentId}/dashboard`, {
+        headers: cookie(teacherToken),
+      });
+      expect(dashRes.status).toBe(200);
+      const dashJson = await dashRes.json();
+      expect(dashJson.profile.locked_lesson_id).toBe('lesson-110-test');
+      expect(dashJson.profile.lock_mode).toBe('navigation');
+      expect(dashJson.profile.lock_target).toEqual({ tab: 'courseware' });
+
+      // PUT /api/students/:id 单人更新模式
+      const updateRes = await fetch(`${baseUrl}/api/students/${studentId}`, {
+        method: 'PUT',
+        headers: {
+          ...cookie(teacherToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          locked_lesson_id: 'lesson-110-test',
+          lock_mode: 'full',
+        }),
+      });
+      expect(updateRes.status).toBe(200);
+      const updatedStudent = kernelContainer.db.prepare('SELECT lock_mode FROM students WHERE id = ?').get(studentId) as any;
+      expect(updatedStudent.lock_mode).toBe('full');
+
+      // POST /api/classes/:classId/unlock_lesson 解锁全班重置
+      const unlockRes = await fetch(`${baseUrl}/api/classes/${testClassId}/unlock_lesson`, {
+        method: 'POST',
+        headers: cookie(teacherToken),
+      });
+      expect(unlockRes.status).toBe(200);
+      const unlockedStudent = kernelContainer.db
+        .prepare('SELECT locked_lesson_id, lock_mode, lock_target FROM students WHERE id = ?')
+        .get(studentId) as any;
+      expect(unlockedStudent.locked_lesson_id).toBeNull();
+      expect(unlockedStudent.lock_mode).toBe('full');
+      expect(unlockedStudent.lock_target).toBeNull();
+    });
   });
 });
