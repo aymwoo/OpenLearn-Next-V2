@@ -671,7 +671,7 @@ export function ExtensionPointRenderer({
                 } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : 'pl-2.5 pr-8'}`}
               >
                 <PluginIconRenderer icon={icon} size={18} className="shrink-0" alt={label} />
-                <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
+                <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'block truncate'}>{label}</span>
               </button>
               {!slotProps?.mainNavCollapsed && (
                 <button

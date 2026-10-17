@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **导航侧边栏展开宽度与文本可见性解绑断点**：在 `NavigationSidebar.tsx` 与 `extension-point-renderer.tsx` 中，将展开状态（`!mainNavCollapsed`）的类名从 `w-16 md:w-44` 修复为 `w-44 md:w-44 shrink-0`，同时将内部文本与标题样式的 `hidden md:block` / `hidden md:inline` 解绑断点限制为 `block` / `inline`。彻底解决在笔记本系统缩放（125%/150%）、小视口窗口、分屏或未最大化状态下点击展开导航栏时，宽度依然只有 64px 且不显示文字的问题；补充 `NavigationSidebar.test.tsx` 单元测试覆盖。
 - **请求观测中间件静态资源与入口探活静默**：在 `server/middleware/request-observability.ts` 中引入 `isQuietRequest` 判定，将公共静态入口（`/`, `/index.html`, `/favicon.ico`, `/robots.txt`）以及开发模式下的 Vite 编译资产路径（`/@vite/`, `/src/` 等）在正常响应（`< 400`）时保持静默，消除 IDE 探活与开发刷新时控制台频繁输出 `http.request` 的刷屏噪音；异常状态（`>= 400`）与业务 API 依然严格记录日志。
 
 ### Features

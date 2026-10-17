@@ -171,4 +171,42 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     expect(adminWrapper?.className).toContain('border-transparent');
     expect(adminWrapper?.className).not.toContain('border-indigo-100');
   });
+
+  it('guarantees sidebar expand width and visible text without breakpoint restriction', () => {
+    // 展开状态
+    const { container: expandedContainer } = render(<NavigationSidebar {...defaultProps} mainNavCollapsed={false} />);
+    const expandedSidebar = expandedContainer.querySelector('#navigation_sidebar');
+    const expandedClass = expandedSidebar?.getAttribute('class') || '';
+
+    // 宽度必须具有 w-44 与 shrink-0，且不具有纯 w-16
+    expect(expandedClass).toContain('w-44');
+    expect(expandedClass).toContain('shrink-0');
+    expect(expandedClass.split(' ')).not.toContain('w-16');
+
+    // 按钮文字标签必须为可见的 block truncate，不再带有 hidden md:block
+    const coursesBtn = expandedContainer.querySelector('#nav_btn_courses');
+    const labelSpan = coursesBtn?.querySelector('span');
+    expect(labelSpan?.className).toContain('block truncate');
+    expect(labelSpan?.className).not.toContain('hidden');
+
+    // 标题必须可见
+    expect(screen.getByText('系统导航')).toBeTruthy();
+
+    cleanup();
+
+    // 折叠状态
+    const { container: collapsedContainer } = render(<NavigationSidebar {...defaultProps} mainNavCollapsed={true} />);
+    const collapsedSidebar = collapsedContainer.querySelector('#navigation_sidebar');
+    const collapsedClass = collapsedSidebar?.getAttribute('class') || '';
+
+    expect(collapsedClass).toContain('w-16');
+    expect(collapsedClass).toContain('shrink-0');
+    expect(collapsedClass).not.toContain('w-44');
+
+    const collapsedCoursesBtn = collapsedContainer.querySelector('#nav_btn_courses');
+    const collapsedLabelSpan = collapsedCoursesBtn?.querySelector('span');
+    expect(collapsedLabelSpan?.className).toContain('hidden');
+    expect(screen.queryByText('系统导航')).toBeNull();
+  });
 });
+
