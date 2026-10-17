@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
+  - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
+  - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
+  - **异步更新失败安全回滚**：当 `onElementUpdate` 抛出错误时安全回退至上一版几何覆盖层；
+  - **回归单测建设**：新增 `src/features/whiteboard/__tests__/whiteboard-drag-flicker.test.tsx`（4 个高精度回归单测，覆盖松手首帧坐标保持、二次连续拖拽叠加、缩放首帧尺寸保持及保存失败回滚）。
+
 - **大屏作业互评赏析统一数据契约、多模态渲染与入口修复（Issue #95）**：
   - **后端统一跨表作品池聚合与分配**：新增 `server/services/showcase-work-service.ts`（`getUnifiedShowcaseWorks` 与 `getUnifiedShowcaseWorksResult`），打破原本只读 `courseware_attempt` 单一课件来源的局限，无缝聚合课堂作业提交（`plugin_submissions` + `plugin_submission_versions`，含附件清单、运行截图与作答文本）、课件作答（`courseware_attempt` + `submission_result`）与传统作业（`assignments` + `assignment_submissions`）；新增端点 `GET /api/classroom/sessions/:lessonId/showcase-works`；重构 `auto-assign` 互评自动分配逻辑，支持按全局唯一 `workId` 进行跨来源作业分层对调与匹配，并在 `GET /peer-review` 响应中回传 `showcaseWorks`。
   - **大屏焦点对比多模态预览与扩展插槽**：升级 `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`，支持图片缩略图列表与点击全屏大图预览、多格式文件附件下载卡片、文本作答流与代码语法高亮，消除文件型作品误显“无作答内容”缺陷；为卡片新增来源标识 Badge（课件作答 / 课堂作业 / 插件作业）；新增 `peer_review.work.preview` 扩展插槽并为 `peer_review.showcase.widget` 注入完整上下文 props。
