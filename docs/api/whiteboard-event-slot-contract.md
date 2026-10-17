@@ -118,7 +118,7 @@ interface WhiteboardEvent {
 
 | `type`          | 触发时机                                                         | `payload` 字段                                                      |
 | --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `quiz.answered` | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功 | `answer`, `score`, `isCorrect`, `correctAnswer`, `question`, `time` |
+| `quiz.answered` | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功 | `answer`, `score`, `isCorrect`, `correctAnswer`, `correctIndex`, `question`, `time` |
 
 **数据流**：学生点击 quiz 答案 → POST `/api/lessons/:id/quiz-submit`（`server/routes/lessons.ts` 的 `quiz-submit` 路由）→ 判定 `isCorrect`/`score`（答对 100 / 答错 0）→ `INSERT ... ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE` 写 `lesson_quiz_submissions` → `publishClassroomEvent(CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED, {...})` → 由 `server/event-routing.ts` 投递为 socket 事件 `whiteboard-quiz-answered` → 前端 `useClassroomSocket` 监听 → `whiteboardEventSlot.ingest({ source:'widget.quiz', type:'quiz.answered', ...})`。
 

@@ -12,6 +12,7 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { resolveElementStageId, enforceStageAccess } from '../../packages/core/lesson-engine/stage-resolver.js';
 import { defaultStageGuardPipeline } from '../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
+import { gradeQuizSubmission, resolveCorrectIndex } from '../../packages/core/whiteboard/quiz-answer.js';
 
 export interface TopMistakeItem {
   rank: number;
@@ -63,6 +64,11 @@ export interface QuizSubmitResult {
   isCorrect: boolean;
   score: number;
   studentId: string;
+  /**
+   * 该题正确答案的选项索引（Issue #107）。`null` 表示题目还没设置正确答案、无法判分。
+   * 只在**提交之后**回传：学生端据此高亮正确选项，不必从元素 payload 里读答案。
+   */
+  correctIndex?: number | null;
 }
 
 export interface QuizCountItem {
@@ -361,16 +367,11 @@ export class DiagnosticService {
       }
     }
 
-    const correctAnswer = dataObj.correctAnswer;
-
-    // 2. 判定正误与计算得分
-    let isCorrect = false;
-    let score = 0;
-    if (correctAnswer !== undefined && correctAnswer !== null) {
-      const normalize = (s: any) => String(s).trim().toLowerCase();
-      isCorrect = normalize(answer) === normalize(correctAnswer);
-      score = isCorrect ? 100 : 0;
-    }
+    // 2. 判定正误与计算得分（Issue #107：以选项索引 correctIndex 为权威，
+    //    旧数据只有 correctAnswer（选项文本 / 字母 / 数字）时自动换算成索引）
+    const grade = gradeQuizSubmission(dataObj, answer);
+    const { isCorrect, score } = grade;
+    const correctAnswer = dataObj.correctAnswer ?? (grade.correctIndex !== null ? dataObj.options?.[grade.correctIndex] : null);
 
     // 3. 关系型原子 upsert，唯一权威数据源（CONCUR-01）
     this.db
@@ -411,7 +412,9 @@ export class DiagnosticService {
           score,
           isCorrect,
           time: Date.now(),
-          correctAnswer: dataObj.correctAnswer || null,
+          correctAnswer: correctAnswer ?? null,
+          // Issue #107：索引是权威字段，事件里一并下发，避免下游各读各的
+          correctIndex: grade.correctIndex,
           question: dataObj.question || null,
         },
         { correlationId: lessonId },
@@ -425,6 +428,8 @@ export class DiagnosticService {
       isCorrect,
       score,
       studentId,
+      // 已提交后才回传正确答案索引：学生端据此高亮正确选项，无需从 payload 里读
+      correctIndex: grade.correctIndex,
     };
   }
 
@@ -514,6 +519,8 @@ export class DiagnosticService {
         elementId: el.id,
         question: parsed.question || '',
         options: parsed.options || [],
+        // Issue #107：索引为权威，correctAnswer 保持向后兼容（可能由索引推导）
+        correctIndex: resolveCorrectIndex(parsed),
         correctAnswer: parsed.correctAnswer || null,
         submissions,
         submissionCount: Object.keys(submissions).length,
@@ -605,7 +612,6 @@ export class DiagnosticService {
             try {
               const parsed = JSON.parse(el.data || '{}');
               const subs = parsed.submissions || {};
-              const correctAnswer = parsed.correctAnswer;
               for (const [stId, subData] of Object.entries(subs) as [string, any][]) {
                 if (classStudentSet && !classStudentSet.has(stId)) {
                   continue;
@@ -621,8 +627,9 @@ export class DiagnosticService {
                     lastSubmittedAt: subData.time || Date.now(),
                   };
                 }
+                // Issue #107：历史提交可能没写 score，兜底判分同样走索引归一化
                 const score =
-                  typeof subData.score === 'number' ? subData.score : subData.answer === correctAnswer ? 100 : 0;
+                  typeof subData.score === 'number' ? subData.score : gradeQuizSubmission(parsed, subData.answer).score;
                 studentMap[stId].cumulativeScore += score;
                 studentMap[stId].totalQuizzesAnswered += 1;
                 if (score > 0) studentMap[stId].correctCount += 1;

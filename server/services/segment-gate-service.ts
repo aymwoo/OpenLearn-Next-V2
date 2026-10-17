@@ -14,6 +14,7 @@ import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin
 import { setActiveSegment, lessonActiveSegments } from '../shared-state.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { randomId } from '../utils/id.js';
+import { looksLikeQuizAnswerData } from '../../packages/core/whiteboard/quiz-answer.js';
 import {
   aggregateVerdicts,
   evaluateBuiltinGate,
@@ -113,7 +114,9 @@ function segmentIdOfElement(data: Record<string, unknown>): string | null {
 function looksLikeQuiz(type: string, data: Record<string, unknown>, submitted: boolean): boolean {
   if (submitted) return true;
   if (type === 'quiz') return true;
-  return data.correctAnswer !== undefined && data.correctAnswer !== null;
+  // Issue #107：正确答案的权威字段是 correctIndex，旧数据才只有 correctAnswer。
+  // 两个都认，否则只设了 correctIndex 的测验进不了环节门禁的判定。
+  return looksLikeQuizAnswerData(data);
 }
 
 export class SegmentGateService {

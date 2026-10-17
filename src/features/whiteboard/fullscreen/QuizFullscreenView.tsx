@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { FullscreenRendererProps } from './FullscreenRendererRegistry';
 import { listFromEnvelope } from '../../../utils/listEnvelope.js';
+import { gradeQuizSubmission, resolveCorrectIndex, resolveSubmittedIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 
 interface QuizSubmission {
   answer?: number | string;
@@ -28,9 +29,12 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string; studentId?: string } | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitFeedback, setSubmitFeedback] = useState<{ isCorrect: boolean; score: number; answer?: string } | null>(
-    null,
-  );
+  const [submitFeedback, setSubmitFeedback] = useState<{
+    isCorrect: boolean;
+    score: number;
+    answer?: string;
+    correctIndex?: number;
+  } | null>(null);
   const [localSubmissions, setLocalSubmissions] = useState<Record<string, QuizSubmission>>(
     (data.submissions || {}) as Record<string, QuizSubmission>,
   );
@@ -94,7 +98,12 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
   }, []);
 
   const entries = Object.entries(localSubmissions);
-  const correctIndex: number | undefined = typeof data.correctIndex === 'number' ? data.correctIndex : undefined;
+  // Issue #107：以 correctIndex 为权威，旧数据只有 correctAnswer（选项文本 / 字母）时自动换算，
+  // 保证大屏统计的「正确选项」与判定口径和服务端判分完全一致。
+  const resolvedCorrectIndex = resolveCorrectIndex(data);
+  const payloadCorrectIndex: number | undefined = resolvedCorrectIndex === null ? undefined : resolvedCorrectIndex;
+  // 学生端的元素 payload 可能不含答案字段（防作弊剥离），提交后改用服务端回传的索引
+  const correctIndex: number | undefined = submitFeedback?.correctIndex ?? payloadCorrectIndex;
   const passScore: number = typeof data.passScore === 'number' ? data.passScore : 60;
 
   const currentStudentId = currentUser?.studentId || currentUser?.id;
@@ -116,25 +125,21 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
     }
     return null;
   };
+  const quizOptions: string[] = Array.isArray(data.options) ? data.options.map((o: any) => String(o)) : [];
+  // Issue #107：历史提交里有字母（'B'）、索引（1）、选项文本三种写法，统一归一化成索引，
+  // 否则 'B' 会被 parseInt 成 NaN，大屏把已答对的学生统计成未答。
   const parseAnswerIdx = (v: QuizSubmission): number | undefined => {
-    if (typeof v.answer === 'number') return v.answer;
-    if (typeof v.answer === 'string') {
-      const n = parseInt(v.answer, 10);
-      return isNaN(n) ? undefined : n;
-    }
-    if (typeof v.optionIndex === 'number') return v.optionIndex;
-    return undefined;
+    const idx = resolveSubmittedIndex(v, quizOptions);
+    return idx === null ? undefined : idx;
   };
 
   const handleStudentSubmit = async () => {
     if (selectedIdx === null || isSubmitting) return;
     setIsSubmitting(true);
     const chosenLetter = LETTERS[selectedIdx] || String(selectedIdx);
-    const chosenText = (data.options || [])[selectedIdx];
-    let answerToSend: string | number = chosenLetter;
-    if (data.correctAnswer && !LETTERS.includes(data.correctAnswer.toUpperCase()) && chosenText) {
-      answerToSend = chosenText;
-    }
+    // Issue #107：提交统一发**选项索引**。旧实现按「correctAnswer 是否像字母」猜该发字母还是选项文本，
+    // 选项本身是单个字母或文本重复时会误判；现在服务端按索引归一化判分，不需要再猜。
+    const answerToSend: number = selectedIdx;
 
     try {
       const targetLessonId = lessonId || 'current';
@@ -149,7 +154,13 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
       });
       const resData = await res.json().catch(() => null);
       if (res.ok && resData?.success) {
-        setSubmitFeedback({ isCorrect: resData.isCorrect, score: resData.score, answer: chosenLetter });
+        setSubmitFeedback({
+          isCorrect: resData.isCorrect,
+          score: resData.score,
+          answer: chosenLetter,
+          // 服务端在判分时回传正确索引，用于提交后的正确选项高亮
+          correctIndex: typeof resData.correctIndex === 'number' ? resData.correctIndex : undefined,
+        });
         const sid = resData.studentId || currentStudentId || 'me';
         setLocalSubmissions((prev) => ({
           ...prev,
