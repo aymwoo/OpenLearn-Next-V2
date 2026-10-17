@@ -44,5 +44,6 @@
 | 028  | 028_classroom_indexes.sql         | 补齐课堂互动与会话高频查询/级联删除索引（`classroom_buzzers`、`classroom_sessions`） |
 | 029  | 029_clean_lesson_think_artifacts.sql | 课程大纲模型思维链残留 (<think>...</think>) 清洗标记与启动期幂等清理 |
 | 030  | 030_backfill_academic_year.sql    | 学年历史数据回填：为老数据库中 NULL 学年的排课/作业/考勤等按日期与父级关联平滑补齐 |
+| 032  | 032_progress_verification.sql      | 学习进度区分「学生自报」与「已验证」：新增 `verified` / `verified_progress_percent`，成绩只计入已验证进度；历史进度回填为已验证以保持既有成绩口径 |
 
 

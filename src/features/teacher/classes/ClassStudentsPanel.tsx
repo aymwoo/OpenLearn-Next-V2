@@ -926,28 +926,83 @@ export function ClassStudentsPanel({
                                     </div>
                                   ) : (
                                     <div className="flex flex-col gap-2">
-                                      {progress.map((p) => (
-                                        <div
-                                          key={p.lesson_id}
-                                          className="text-xs flex items-center justify-between pr-2"
-                                        >
-                                          <span
-                                            className="truncate max-w-[130px] font-semibold text-gray-750"
-                                            title={p.lesson_title}
+                                      {progress.map((p) => {
+                                        const verified = p.verified === 1;
+                                        return (
+                                          <div
+                                            key={p.lesson_id}
+                                            className="text-xs flex items-center justify-between pr-2 gap-1"
                                           >
-                                            {p.lesson_title}
-                                          </span>
-                                          <div className="flex-1 mx-2 h-1.5 bg-gray-200 rounded-full overflow-hidden shrink-0">
-                                            <div
-                                              className={`h-full ${p.progress_percent === 100 ? 'bg-green-500' : 'bg-indigo-500'}`}
-                                              style={{ width: `${p.progress_percent}%` }}
-                                            ></div>
+                                            <span
+                                              className="truncate max-w-[110px] font-semibold text-gray-750"
+                                              title={p.lesson_title}
+                                            >
+                                              {p.lesson_title}
+                                            </span>
+                                            <span
+                                              className={`shrink-0 text-[10px] px-1 py-0.5 rounded border font-medium ${
+                                                verified
+                                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                                              }`}
+                                              title={
+                                                verified
+                                                  ? lang === 'zh'
+                                                    ? '教师/课件已验证，计入成绩'
+                                                    : 'Verified — counts toward grade'
+                                                  : lang === 'zh'
+                                                    ? '学生自报，不计入成绩'
+                                                    : 'Self-reported — not graded'
+                                              }
+                                            >
+                                              {verified
+                                                ? lang === 'zh'
+                                                  ? '已验证'
+                                                  : 'Verified'
+                                                : lang === 'zh'
+                                                  ? '自报'
+                                                  : 'Self'}
+                                            </span>
+                                            <div className="flex-1 mx-2 h-1.5 bg-gray-200 rounded-full overflow-hidden shrink-0">
+                                              <div
+                                                className={`h-full ${p.progress_percent === 100 ? 'bg-green-500' : 'bg-indigo-500'}`}
+                                                style={{ width: `${p.progress_percent}%` }}
+                                              ></div>
+                                            </div>
+                                            <span className="text-xs text-gray-400 w-6 text-right shrink-0 font-medium font-sans">
+                                              {p.progress_percent}%
+                                            </span>
+                                            {!verified && (
+                                              <button
+                                                type="button"
+                                                aria-label={
+                                                  lang === 'zh'
+                                                    ? `确认 ${p.lesson_title} 的进度并计入成绩`
+                                                    : `Verify progress for ${p.lesson_title}`
+                                                }
+                                                title={lang === 'zh' ? '确认该进度并计入成绩' : 'Verify and count toward grade'}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const res = await fetch(`/api/students/${st.id}/progress`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                      lessonId: p.lesson_id,
+                                                      completed: p.progress_percent >= 100,
+                                                      progressPercent: p.progress_percent,
+                                                      completedSegments: p.completed_segments || '[]',
+                                                    }),
+                                                  });
+                                                  if (res.ok) fetchStudentProgress(st.id);
+                                                }}
+                                                className="shrink-0 p-0.5 rounded text-emerald-600 hover:bg-emerald-50 border border-emerald-200 cursor-pointer"
+                                              >
+                                                <Check size={11} />
+                                              </button>
+                                            )}
                                           </div>
-                                          <span className="text-xs text-gray-400 w-6 text-right shrink-0 font-medium font-sans">
-                                            {p.progress_percent}%
-                                          </span>
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>

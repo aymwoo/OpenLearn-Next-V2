@@ -145,6 +145,10 @@ export type StudentProgressType = {
   lesson_title: string;
   completed: number;
   progress_percent: number;
+  /** 1 = 教师/课件/受信插件已验证，计入成绩；0 = 学生自报，仅作展示 */
+  verified?: number;
+  verified_progress_percent?: number | null;
+  completed_segments?: string | null;
   assigned_at: number;
 };
 

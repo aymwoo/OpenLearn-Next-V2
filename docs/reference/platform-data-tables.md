@@ -162,7 +162,7 @@
 
 ### `student_lesson_progress`
 
-`student_id` + `lesson_id` 复合主键，`completed` / `progress_percent` / `completed_segments` / `assigned_at`。
+`student_id` + `lesson_id` 复合主键，`completed` / `progress_percent` / `completed_segments` / `assigned_at`。迁移 `032` 起新增 `verified`（1 = 教师/课件/受信插件已验证，成绩只采用该部分）与 `verified_progress_percent`（验证时的进度值，学生自报只改 `progress_percent`，不覆盖此列）。
 
 ### `schedules`
 
