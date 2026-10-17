@@ -747,22 +747,12 @@ export interface ComputerLabSeatOverlaySlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
-/** 座位变更明细（computer_lab.seating.* 插槽的 onSeatMove 回调参数）。`from` 为 null 表示来自未排座池。 */
-export interface ComputerLabSeatMoveDetail {
-  from: { row: number; col: number } | null;
-  to: { row: number; col: number };
-  studentId: string;
-  /** 交换发生时，原目标座位被换走的学生 ID */
-  swappedStudentId?: string;
-}
-
 /** Props passed to computer_lab.seating.toolbar extensions（与 ComputerLabManager.tsx 实际传参一致） */
 export interface ComputerLabSeatingToolbarSlotProps {
   labId?: string;
   classId?: string | null;
   assignedSeats?: any[];
   setAssignedSeats?: (updater: any[] | ((prev: any[]) => any[])) => void;
-  onSeatMove?: (move: ComputerLabSeatMoveDetail) => void;
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }

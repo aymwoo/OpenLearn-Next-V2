@@ -22,7 +22,6 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
-import type { ComputerLabSeatMoveDetail } from '../plugin-host/types';
 
 export interface ComputerLab {
   id: string;
@@ -220,12 +219,6 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
       );
   }, [classStudents, assignedStudentIds]);
 
-  // 座位变更通知：透传给 computer_lab.seating.toolbar 插槽的 onSeatMove，
-  // 供插件校验或记录排座行为；宿主本身不据此拦截。
-  const notifySeatMove = useCallback((move: ComputerLabSeatMoveDetail) => {
-    void move;
-  }, []);
-
   // 统一的座位变更入口（点击式与拖拽式共用）：
   // - 目标为空 → 学生移动到目标座位；
   // - 目标有人且来源是座位（from 非空）→ 两人交换座位；
@@ -258,12 +251,6 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     ];
     setAssignedSeats(next);
     setIsDirty(true);
-    notifySeatMove({
-      from: from ?? null,
-      to,
-      studentId: student.id,
-      swappedStudentId: isSwap ? targetOcc!.student_id : undefined,
-    });
   };
 
   // Interactive seat handlers
@@ -842,7 +829,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               : 'Saved'}
                       </span>
                     </button>
-                    {/* 排座工具栏扩展：按学号/成绩自动排座、座位表导入导出等（onSeatMove 供插件校验/记录） */}
+                    {/* 排座工具栏扩展：按学号/成绩自动排座、座位表导入导出等（插件按 assignedSeats 自行 diff 校验） */}
                     <ExtensionPointRenderer
                       slot="computer_lab.seating.toolbar"
                       slotProps={{
@@ -850,7 +837,6 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                         classId: selectedClassId,
                         assignedSeats,
                         setAssignedSeats,
-                        onSeatMove: notifySeatMove,
                         lang,
                       }}
                     />
