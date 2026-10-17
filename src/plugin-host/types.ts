@@ -199,6 +199,9 @@ export type ExtensionSlot =
   | 'timetable.card.badge' // 周历卡片状态角标扩展
   | 'computer_lab.toolbar.action' // 机房管理顶部操作扩展（批量网络唤醒等）
   | 'computer_lab.seat.overlay' // 机房机位硬件图层扩展
+  | 'computer_lab.seating.toolbar' // 机房排座工具栏扩展（按学号/成绩自动排座、座位表导入导出）
+  | 'computer_lab.unassigned.item' // 未排座学生列表项扩展（身体状况/分组标签等）
+  | 'computer_lab.seating.sidebar' // 机房排座统计区扩展（排座统计、规则校验结果）
   // ── 学生端自主学习与作业域扩展槽位 ──
   | 'student.dashboard.hero_widget' // 学生仪表盘激励挂件扩展
   | 'student.assignment.toolbar.action' // 学生作业详情顶部工具扩展
@@ -741,6 +744,43 @@ export interface ComputerLabSeatOverlaySlotProps {
   col?: number;
   seat?: any;
   isOccupied?: boolean;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** 座位变更明细（computer_lab.seating.* 插槽的 onSeatMove 回调参数）。`from` 为 null 表示来自未排座池。 */
+export interface ComputerLabSeatMoveDetail {
+  from: { row: number; col: number } | null;
+  to: { row: number; col: number };
+  studentId: string;
+  /** 交换发生时，原目标座位被换走的学生 ID */
+  swappedStudentId?: string;
+}
+
+/** Props passed to computer_lab.seating.toolbar extensions（与 ComputerLabManager.tsx 实际传参一致） */
+export interface ComputerLabSeatingToolbarSlotProps {
+  labId?: string;
+  classId?: string | null;
+  assignedSeats?: any[];
+  setAssignedSeats?: (updater: any[] | ((prev: any[]) => any[])) => void;
+  onSeatMove?: (move: ComputerLabSeatMoveDetail) => void;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to computer_lab.unassigned.item extensions（渲染于每个未排座学生条目旁，与宿主按钮同级） */
+export interface ComputerLabUnassignedItemSlotProps {
+  student?: any;
+  classId?: string | null;
+  labId?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to computer_lab.seating.sidebar extensions（渲染于座位网格下方统计区） */
+export interface ComputerLabSeatingSidebarSlotProps {
+  labId?: string;
+  classId?: string | null;
+  assignedSeats?: any[];
+  unassignedStudents?: any[];
   dispatcher?: IHostActionDispatcher;
 }
 

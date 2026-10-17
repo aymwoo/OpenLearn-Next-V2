@@ -9,7 +9,7 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **95** 个成员）
+### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **98** 个成员）
 
 > 旧文档写 55 个、且把 `palette.item` 列为合法槽位名——**`palette.item` 不是合法槽位名**。备课画板组件扩展的真实槽位名是 **`editor.palette_item`**，已于 `SegmentEditorCard` 与 `LessonPalette` 中完整挂载并与 `paletteItemRegistry` 协同。
 
@@ -129,6 +129,9 @@ export type ExtensionSlot =
   | 'timetable.card.badge'
   | 'computer_lab.toolbar.action'
   | 'computer_lab.seat.overlay'
+  | 'computer_lab.seating.toolbar'
+  | 'computer_lab.unassigned.item'
+  | 'computer_lab.seating.sidebar'
   // ── 学生学习门户与作业闭环 ──
   | 'student.dashboard.hero_widget'
   | 'student.assignment.toolbar.action'
@@ -146,7 +149,7 @@ export type AnchorSlot = `anchor:${string}`;
 export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 ```
 
-> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 95 个成员内。
+> `src/plugin-host/types.ts` 中另有一条注释说明 `student.quick_actions.compact_addon` **已移除**（无消费者），因此它不在上述 98 个成员内。
 
 ### 后端 manifest `contributes` 键（`packages/core/plugin-host/contribution-registry.ts`，镜像 `packages/plugin-sdk/openlearn.d.ts`）
 
@@ -171,6 +174,9 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - `timetable.card.badge` → `TimetableCardBadgeConfig`
   - `computer_lab.toolbar.action` → `ComputerLabToolbarActionConfig`
   - `computer_lab.seat.overlay` → `ComputerLabSeatOverlayConfig`
+  - `computer_lab.seating.toolbar` → `ComputerLabSeatingToolbarConfig`
+  - `computer_lab.unassigned.item` → `ComputerLabUnassignedItemConfig`
+  - `computer_lab.seating.sidebar` → `ComputerLabSeatingSidebarConfig`
   - `student.dashboard.hero_widget` → `StudentDashboardHeroWidgetConfig`
   - `student.assignment.toolbar.action` → `StudentAssignmentToolbarActionConfig`
   - `student.lesson.notes_addon` → `StudentLessonNotesAddonConfig`
@@ -188,7 +194,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值共 95 个**（全部 95 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
+- 生产调用点上的**固定名槽位值共 98 个**（全部 98 个均已纳入 `ExtensionSlot` 联合类型并被宿主消费，消费率 100%，不含 `anchor:*`）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                 | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                              |
@@ -285,6 +291,9 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `timetable.card.badge`               | `src/components/timetable/sub-views/TimetableCalendarView.tsx`                                                                          | `{ schedule, lang }`                                                                                                  |
 | `computer_lab.toolbar.action`        | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ activeLab, computerLabs, onRefresh, lang }`                                                                        |
 | `computer_lab.seat.overlay`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, row, col, seat, isOccupied }`                                                                               |
+| `computer_lab.seating.toolbar`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, setAssignedSeats, onSeatMove, lang }`                                               |
+| `computer_lab.unassigned.item`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ student, classId, labId }`                                                                                         |
+| `computer_lab.seating.sidebar`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, unassignedStudents }`                                                               |
 | `student.dashboard.hero_widget`      | `src/features/student/StudentDashboardPanel.tsx`                                                                                        | `{ studentId, students, studentDashboardData, lang }`                                                                 |
 | `student.assignment.toolbar.action`  | `src/features/student/StudentAssignmentHeader.tsx`                                                                                      | `{ assignment }`                                                                                                      |
 | `student.lesson.notes_addon`         | `src/features/student/StudentLessonView.tsx`                                                                                            | `{ lessonId, studentId, activeSegmentId, lang }`                                                                      |
@@ -312,7 +321,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `anchor:whiteboard-toolbar:grid`         | 同上                                                                                               |
 | `anchor:classroom-attribution:awards`    | `src/features/classroom/ClassroomAttributionModal.tsx`（`slotProps={{ student, onAwardPoints }}`） |
 
-#### 1.2 历史幽灵槽位激活与归零记录（全量 95 个槽位均已消费）
+#### 1.2 历史幽灵槽位激活与归零记录（全量 98 个槽位均已消费）
 
 平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位。目前已在系统性重构中全量挂载，并于本次全域扩展升级中新增 20 个高价值业务扩展槽位（包含与“国家智慧教育公共服务平台”直连对接能力），全部在 14 个前端核心视图中完成真实消费：
 
@@ -324,7 +333,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - 学生学习门户与作业闭环：`student.dashboard.hero_widget`、`student.assignment.toolbar.action`、`student.lesson.notes_addon`、`student.lesson.toolbox`；
   - 管理后台与全域底座：`admin.dashboard.card`、`admin.user.action`、`header.status_pill`；
   - AI 助手侧边栏：`ai_sidebar.tab`；
-- **声明但无渲染器的 `ExtensionSlot` 成员数量为 0**：全仓 95 个联合类型槽位均具备明确的前端宿主消费方、响应式 Props 透传与上下文隔离机制。
+- **声明但无渲染器的 `ExtensionSlot` 成员数量为 0**：全仓 98 个联合类型槽位均具备明确的前端宿主消费方、响应式 Props 透传与上下文隔离机制。
 
 ---
 
@@ -807,6 +816,9 @@ export interface WhiteboardRendererSlotProps {
 - **`timetable.card.badge`**：在日历课表卡片中渲染，Props 包含 `{ schedule, lang }`。展示公开课、国家平台同步直播课等标记。
 - **`computer_lab.toolbar.action`**：在机房管理工具栏渲染，Props 包含 `{ activeLab, computerLabs, onRefresh, lang }`。
 - **`computer_lab.seat.overlay`**：在机房座位图每个座位单元内渲染浮层，Props 包含 `{ labId, row, col, seat, isOccupied }`。宿主已对座位根节点的 onClick 做了点击冒泡隔离（overlay 内点击不会误触座位安排/移除）。
+- **`computer_lab.seating.toolbar`**：在「班级机位联动」工具栏（清空/保存按钮旁）渲染，Props 包含 `{ labId, classId, assignedSeats, setAssignedSeats, onSeatMove, lang }`。适用于按学号/成绩/分组自动排座、座位表导入导出等；`onSeatMove({ from, to, studentId, swappedStudentId? })` 在每次座位变更（点击或拖拽，含交换）后被宿主调用，插件可据此校验或记录排座行为（如禁止安排到故障机位时用 `setAssignedSeats` 回滚）。
+- **`computer_lab.unassigned.item`**：在未排座学生列表的每个条目旁渲染（与学生选择按钮同级，避免嵌套交互元素），Props 包含 `{ student, classId, labId }`。可显示学生身体状况、分组等标签。
+- **`computer_lab.seating.sidebar`**：在座位网格下方的统计区渲染，Props 包含 `{ labId, classId, assignedSeats, unassignedStudents }`。适用于排座统计、规则校验结果展示。
 
 ### 11.4 学生学习门户与作业闭环
 - **`student.dashboard.hero_widget`**：在学生主页 Hero 区域渲染，Props 包含 `{ studentId, students, studentDashboardData, lang }`。用于展示国家平台自主学习任务流、每日推荐资源等。
@@ -830,12 +842,13 @@ export interface WhiteboardRendererSlotProps {
 
 | 指标                                                           | 数值           |
 | -------------------------------------------------------------- | -------------- |
-| `ExtensionSlot` 联合类型成员                                   | **95**         |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **96**         |
-| 其中属于 `ExtensionSlot` 联合类型                              | **96**（100%） |
+| `ExtensionSlot` 联合类型成员                                   | **98**         |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **99**         |
+| 其中属于 `ExtensionSlot` 联合类型                              | **99**（100%） |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**          |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**          |
 | 声明但无渲染器的 `ExtensionSlot` 成员                          | **0**          |
-| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **104**        |
+| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | **107**        |
 
 > 统计更新于 v0.6.0 审计整改与 AI 生态槽位消费批次（2026-10-11）：`ai.prompt.template` 新增渲染消费端（Agent 输入区模板选择器）；`ai.skill.provider` 为**服务端消费**槽位（AI Agent 工具注入，非渲染，不计入渲染调用点）。
+> 2026-10-17 更新（Issue #86）：机房排座新增 `computer_lab.seating.toolbar` / `computer_lab.unassigned.item` / `computer_lab.seating.sidebar` 3 个槽位，并支持拖拽调座与点击/拖拽交换。

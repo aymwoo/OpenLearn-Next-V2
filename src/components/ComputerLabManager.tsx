@@ -22,6 +22,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import type { ComputerLabSeatMoveDetail } from '../plugin-host/types';
 
 export interface ComputerLab {
   id: string;
@@ -93,6 +94,16 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [selectedStudentToPlace, setSelectedStudentToPlace] = useState<StudentItem | null>(null);
+  // 点击式「拿起」的来源座位（与 selectedStudentToPlace 同步维护；null 表示来源是未排座池）
+  const [pickupFromSeat, setPickupFromSeat] = useState<{ row: number; col: number } | null>(null);
+  // HTML5 拖拽状态：type 'seat' = 从座位卡片拖起，'pool' = 从未排座池拖起
+  const [dragState, setDragState] = useState<{
+    type: 'seat' | 'pool';
+    studentId: string;
+    from?: { row: number; col: number };
+  } | null>(null);
+  // 当前拖拽悬停的落点座位（用于高亮移动/交换提示）
+  const [dropTarget, setDropTarget] = useState<{ row: number; col: number } | null>(null);
 
   // Load classes if not passed via props
   useEffect(() => {
@@ -137,6 +148,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     setLoadingSeats(true);
     setError('');
     setSelectedStudentToPlace(null);
+    setPickupFromSeat(null);
     try {
       const [seatsRes, studentsRes] = await Promise.all([
         fetch(`/api/classes/${classId}/seats`),
@@ -181,6 +193,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
       setAssignedSeats([]);
       setIsDirty(false);
       setSelectedStudentToPlace(null);
+      setPickupFromSeat(null);
     }
   }, [selectedClassId, loadClassSeatsAndStudents]);
 
@@ -207,6 +220,52 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
       );
   }, [classStudents, assignedStudentIds]);
 
+  // 座位变更通知：透传给 computer_lab.seating.toolbar 插槽的 onSeatMove，
+  // 供插件校验或记录排座行为；宿主本身不据此拦截。
+  const notifySeatMove = useCallback((move: ComputerLabSeatMoveDetail) => {
+    void move;
+  }, []);
+
+  // 统一的座位变更入口（点击式与拖拽式共用）：
+  // - 目标为空 → 学生移动到目标座位；
+  // - 目标有人且来源是座位（from 非空）→ 两人交换座位；
+  // - 目标有人且来源是未排座池（from 为空）→ 原占位者回到未排座列表。
+  const applySeatMove = (
+    student: { id: string; name: string; student_number?: string },
+    to: { row: number; col: number },
+    from?: { row: number; col: number } | null,
+  ) => {
+    const targetOcc = assignedSeats.find((s) => s.row_idx === to.row && s.col_idx === to.col);
+    const isSwap = !!from && !!targetOcc && targetOcc.student_id !== student.id;
+
+    let next = assignedSeats.filter(
+      (s) => !(s.row_idx === to.row && s.col_idx === to.col) && s.student_id !== student.id,
+    );
+    if (isSwap && from) {
+      // 被换走的学生落到来源座位，无人被挤到未排座列表
+      next = next.filter((s) => !(s.row_idx === from.row && s.col_idx === from.col));
+      next = [...next, { ...targetOcc!, row_idx: from.row, col_idx: from.col }];
+    }
+    next = [
+      ...next,
+      {
+        student_id: student.id,
+        row_idx: to.row,
+        col_idx: to.col,
+        student_name: student.name,
+        student_number: student.student_number,
+      },
+    ];
+    setAssignedSeats(next);
+    setIsDirty(true);
+    notifySeatMove({
+      from: from ?? null,
+      to,
+      studentId: student.id,
+      swappedStudentId: isSwap ? targetOcc!.student_id : undefined,
+    });
+  };
+
   // Interactive seat handlers
   const handleSeatClick = (rIdx: number, cIdx: number) => {
     if (!selectedClassId || !activePreviewLab) return;
@@ -214,25 +273,10 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     const existing = seatMap.get(`${rIdx}_${cIdx}`);
 
     if (selectedStudentToPlace) {
-      // Place student at this seat
-      const newSeat: AssignedSeat = {
-        student_id: selectedStudentToPlace.id,
-        row_idx: rIdx,
-        col_idx: cIdx,
-        student_name: selectedStudentToPlace.name,
-        student_number: selectedStudentToPlace.student_number,
-      };
-
-      setAssignedSeats((prev) => {
-        // Remove this student from wherever they were, and remove old occupant of this seat
-        const filtered = prev.filter(
-          (s) => s.student_id !== selectedStudentToPlace.id && !(s.row_idx === rIdx && s.col_idx === cIdx),
-        );
-        return [...filtered, newSeat];
-      });
-
+      // 放下已拿起的学生：目标有人且来源是座位 → 交换；否则移动/入座
+      applySeatMove(selectedStudentToPlace, { row: rIdx, col: cIdx }, pickupFromSeat);
       setSelectedStudentToPlace(null);
-      setIsDirty(true);
+      setPickupFromSeat(null);
       return;
     }
 
@@ -244,6 +288,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
         student_number: existing.student_number || '',
       };
       setSelectedStudentToPlace(st);
+      setPickupFromSeat({ row: rIdx, col: cIdx });
     }
   };
 
@@ -797,6 +842,18 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               : 'Saved'}
                       </span>
                     </button>
+                    {/* 排座工具栏扩展：按学号/成绩自动排座、座位表导入导出等（onSeatMove 供插件校验/记录） */}
+                    <ExtensionPointRenderer
+                      slot="computer_lab.seating.toolbar"
+                      slotProps={{
+                        labId: activePreviewLab.id,
+                        classId: selectedClassId,
+                        assignedSeats,
+                        setAssignedSeats,
+                        onSeatMove: notifySeatMove,
+                        lang,
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -846,12 +903,71 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               const isTargetPlacement =
                                 selectedStudentToPlace &&
                                 (!isOccupied || seat.student_id !== selectedStudentToPlace.id);
+                              // 拖拽视觉状态：自身来源 / 落点高亮（交换 vs 移动）
+                              const isSelfDragSource =
+                                !!dragState?.from && dragState.from.row === rIdx && dragState.from.col === cIdx;
+                              const isDropTarget =
+                                !!dragState && !!dropTarget && dropTarget.row === rIdx && dropTarget.col === cIdx && !isSelfDragSource;
+                              const isSwapTarget =
+                                isDropTarget && isOccupied && dragState?.type === 'seat' && seat.student_id !== dragState.studentId;
+                              const isMoveTarget = isDropTarget && (!isOccupied || dragState?.type === 'pool');
 
                               return (
                                 <div
                                   key={cIdx}
+                                  data-seat-id={`${rIdx}_${cIdx}`}
                                   onClick={() => handleSeatClick(rIdx, cIdx)}
-                                  className={`group relative rounded-xl flex flex-col items-center justify-center transition-all select-none shadow-sm cursor-pointer ${
+                                  draggable={!!selectedClassId && isOccupied}
+                                  onDragStart={(e) => {
+                                    if (!selectedClassId || !seat) return;
+                                    setDragState({
+                                      type: 'seat',
+                                      studentId: seat.student_id,
+                                      from: { row: rIdx, col: cIdx },
+                                    });
+                                    e.dataTransfer.setData(
+                                      'text/plain',
+                                      JSON.stringify({
+                                        type: 'seat',
+                                        studentId: seat.student_id,
+                                        from: { row: rIdx, col: cIdx },
+                                      }),
+                                    );
+                                    e.dataTransfer.effectAllowed = 'move';
+                                  }}
+                                  onDragEnd={() => {
+                                    setDragState(null);
+                                    setDropTarget(null);
+                                  }}
+                                  onDragOver={(e) => {
+                                    if (!dragState || isSelfDragSource) return;
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                    setDropTarget({ row: rIdx, col: cIdx });
+                                  }}
+                                  onDragLeave={() => {
+                                    setDropTarget((cur) => (cur && cur.row === rIdx && cur.col === cIdx ? null : cur));
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (dragState && !isSelfDragSource) {
+                                      const student =
+                                        dragState.type === 'pool'
+                                          ? unassignedStudents.find((s) => s.id === dragState.studentId) ||
+                                            classStudents.find((s) => s.id === dragState.studentId)
+                                          : classStudents.find((s) => s.id === dragState.studentId);
+                                      if (student) {
+                                        applySeatMove(student, { row: rIdx, col: cIdx }, dragState.from);
+                                        setSelectedStudentToPlace(null);
+                                        setPickupFromSeat(null);
+                                      }
+                                    }
+                                    setDragState(null);
+                                    setDropTarget(null);
+                                  }}
+                                  className={`group relative rounded-xl flex flex-col items-center justify-center transition-all select-none shadow-sm ${
+                                    selectedClassId && isOccupied ? 'cursor-grab' : 'cursor-pointer'
+                                  } ${
                                     selectedClassId ? 'w-20 h-14' : 'w-11 h-11'
                                   } ${
                                     isOccupied
@@ -859,7 +975,15 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                       : isTargetPlacement
                                         ? 'bg-indigo-950/40 border border-dashed border-indigo-400 hover:bg-indigo-900/50 ring-1 ring-indigo-400/50 animate-pulse'
                                         : 'bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850'
-                                  }`}
+                                  }${
+                                    isSwapTarget
+                                      ? ' ring-2 ring-amber-400 border-amber-400 bg-amber-950/40'
+                                      : ''
+                                  }${
+                                    isMoveTarget && !isSwapTarget
+                                      ? ' ring-2 ring-emerald-400 border-emerald-400 bg-emerald-950/40'
+                                      : ''
+                                  }${isSelfDragSource ? ' opacity-40' : ''}`}
                                 >
                                   {isOccupied ? (
                                     <>
@@ -958,6 +1082,21 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                     )}
                   </div>
 
+                  {/* 排座统计侧边区扩展：排座统计、规则校验结果等 */}
+                  {selectedClassId && activePreviewLab && !loadingSeats && (
+                    <div className="shrink-0 px-4 pb-2">
+                      <ExtensionPointRenderer
+                        slot="computer_lab.seating.sidebar"
+                        slotProps={{
+                          labId: activePreviewLab.id,
+                          classId: selectedClassId,
+                          assignedSeats,
+                          unassignedStudents,
+                        }}
+                      />
+                    </div>
+                  )}
+
                   {/* Bottom section: Unassigned students tray OR lab specs summary */}
                   {selectedClassId ? (
                     <div className="border-t border-slate-900 bg-slate-900/90 p-3 shrink-0 flex flex-col gap-2">
@@ -980,7 +1119,10 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               </span>
                               <button
                                 type="button"
-                                onClick={() => setSelectedStudentToPlace(null)}
+                                onClick={() => {
+                                  setSelectedStudentToPlace(null);
+                                  setPickupFromSeat(null);
+                                }}
                                 className="hover:text-white"
                               >
                                 <X size={10} />
@@ -1010,22 +1152,49 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                         <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-h-16 pr-2">
                           {unassignedStudents.map((st) => {
                             const isSelected = selectedStudentToPlace?.id === st.id;
+                            const isDraggingSelf = dragState?.type === 'pool' && dragState.studentId === st.id;
                             return (
-                              <button
-                                key={st.id}
-                                type="button"
-                                onClick={() => setSelectedStudentToPlace(isSelected ? null : st)}
-                                className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                  isSelected
-                                    ? 'bg-indigo-600 text-white border-indigo-400 ring-2 ring-indigo-400/50 shadow-md'
-                                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-indigo-500 hover:bg-slate-750'
-                                }`}
-                              >
-                                <span>{st.name}</span>
-                                {st.student_number && (
-                                  <span className="text-[10px] font-mono text-slate-400">{st.student_number}</span>
-                                )}
-                              </button>
+                              <div key={st.id} className="shrink-0 flex items-center gap-1" data-unassigned-id={st.id}>
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => {
+                                    setDragState({ type: 'pool', studentId: st.id });
+                                    e.dataTransfer.setData(
+                                      'text/plain',
+                                      JSON.stringify({ type: 'pool', studentId: st.id }),
+                                    );
+                                    e.dataTransfer.effectAllowed = 'move';
+                                  }}
+                                  onDragEnd={() => {
+                                    setDragState(null);
+                                    setDropTarget(null);
+                                  }}
+                                  onClick={() => {
+                                    setSelectedStudentToPlace(isSelected ? null : st);
+                                    setPickupFromSeat(null);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-grab active:cursor-grabbing flex items-center gap-1.5 ${
+                                    isSelected
+                                      ? 'bg-indigo-600 text-white border-indigo-400 ring-2 ring-indigo-400/50 shadow-md'
+                                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-indigo-500 hover:bg-slate-750'
+                                  }${isDraggingSelf ? ' opacity-40' : ''}`}
+                                >
+                                  <span>{st.name}</span>
+                                  {st.student_number && (
+                                    <span className="text-[10px] font-mono text-slate-400">{st.student_number}</span>
+                                  )}
+                                </button>
+                                {/* 未排座学生条目扩展：与按钮同级渲染（避免嵌套交互元素），显示学生标签/分组等 */}
+                                <ExtensionPointRenderer
+                                  slot="computer_lab.unassigned.item"
+                                  slotProps={{
+                                    student: st,
+                                    classId: selectedClassId,
+                                    labId: activePreviewLab?.id,
+                                  }}
+                                />
+                              </div>
                             );
                           })}
                         </div>

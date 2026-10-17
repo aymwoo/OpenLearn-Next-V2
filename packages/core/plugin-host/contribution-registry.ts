@@ -714,6 +714,28 @@ export interface ComputerLabSeatOverlayConfig {
   icon?: string;
 }
 
+/** A contribution to the computer_lab.seating.toolbar slot. */
+export interface ComputerLabSeatingToolbarConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the computer_lab.unassigned.item slot. */
+export interface ComputerLabUnassignedItemConfig {
+  id: string;
+  label?: string;
+  icon?: string;
+}
+
+/** A contribution to the computer_lab.seating.sidebar slot. */
+export interface ComputerLabSeatingSidebarConfig {
+  id: string;
+  label?: string;
+  icon?: string;
+}
+
 /** A contribution to the student.dashboard.hero_widget slot. */
 export interface StudentDashboardHeroWidgetConfig {
   id: string;
@@ -946,6 +968,9 @@ export type ContributionConfig =
   | TimetableCardBadgeConfig
   | ComputerLabToolbarActionConfig
   | ComputerLabSeatOverlayConfig
+  | ComputerLabSeatingToolbarConfig
+  | ComputerLabUnassignedItemConfig
+  | ComputerLabSeatingSidebarConfig
   | StudentDashboardHeroWidgetConfig
   | StudentAssignmentToolbarActionConfig
   | StudentLessonNotesAddonConfig

@@ -163,6 +163,15 @@ test.describe('教务管理端：机房物理网格与座位分配治理 E2E 测
       await expect(page.getByText(student1Name).first()).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText(student2Name).first()).toBeVisible({ timeout: 10_000 });
 
+      // 9.5 拖拽交换：把 0_0（机房生A）拖到 0_1（机房生B）→ 两人交换座位
+      const seatA = page.locator('[data-seat-id="0_0"]');
+      const seatB = page.locator('[data-seat-id="0_1"]');
+      await expect(seatA.getByText(student1Name)).toBeVisible({ timeout: 10_000 });
+      await expect(seatB.getByText(student2Name)).toBeVisible({ timeout: 10_000 });
+      await page.dragAndDrop('[data-seat-id="0_0"]', '[data-seat-id="0_1"]');
+      await expect(seatA.getByText(student2Name)).toBeVisible({ timeout: 10_000 });
+      await expect(seatB.getByText(student1Name)).toBeVisible({ timeout: 10_000 });
+
       // 10. 保存排座
       const saveSeatsBtn = page.getByRole('button', { name: /保存排座|Save/ }).first();
       await expect(saveSeatsBtn).toBeVisible();
@@ -172,6 +181,12 @@ test.describe('教务管理端：机房物理网格与座位分配治理 E2E 测
       await expect(
         page.getByText(/已成功持久化至系统|Seating assignments saved/i).first(),
       ).toBeVisible({ timeout: 10_000 });
+
+      // 10.5 刷新页面验证拖拽交换结果已持久化到 student_seats
+      await page.reload();
+      await expect(page.getByText('统一机房座位管理')).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('[data-seat-id="0_0"]').getByText(student2Name)).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('[data-seat-id="0_1"]').getByText(student1Name)).toBeVisible({ timeout: 15_000 });
 
       // 11. 截取机房排座真实全景渲染截图 (Generates Artifact: Screenshot)
       const SCREENSHOT_PATH = path.resolve(process.cwd(), 'artifacts/screenshots/teacher_computer_lab_seating.png');
@@ -202,6 +217,7 @@ test.describe('教务管理端：机房物理网格与座位分配治理 E2E 测
 - Lab Created: ${labName} (3 rows x 4 cols = 12 seats, ID: ${createdLabId})
 - Linked Class: ${className} (ID: ${createdClassId})
 - Auto Assigned Students: ${student1Name}, ${student2Name}
+- Drag Swap Verified: 0_0 <-> 0_1 exchanged and persisted after reload
 - Seating Persisted to student_seats
 - Lab Deleted with confirmation
 - Screenshot Saved: ${SCREENSHOT_PATH}
