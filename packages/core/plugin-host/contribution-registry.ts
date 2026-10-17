@@ -809,6 +809,36 @@ export interface EditorSegmentTypeConfigConfig {
   icon?: string;
 }
 
+/** A contribution to the timetable.import.source slot. */
+export interface TimetableImportSourceConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  description?: string;
+}
+
+/** A contribution to the timetable.entry.action slot. */
+export interface TimetableEntryActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the classroom.active_segment.main slot. */
+export interface ClassroomActiveSegmentMainConfig {
+  id: string;
+  segmentType?: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the student.academic_year.metric_card slot. */
+export interface StudentAcademicYearMetricCardConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -906,7 +936,11 @@ export type ContributionConfig =
   | AssignmentGradeItemAddonConfig
   | AssignmentGradeRubricAddonConfig
   | StudentSegmentGateFallbackConfig
-  | EditorSegmentTypeConfigConfig;
+  | EditorSegmentTypeConfigConfig
+  | TimetableImportSourceConfig
+  | TimetableEntryActionConfig
+  | ClassroomActiveSegmentMainConfig
+  | StudentAcademicYearMetricCardConfig;
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {

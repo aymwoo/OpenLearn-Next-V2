@@ -216,7 +216,14 @@ export type ExtensionSlot =
   | 'assignment.grade.rubric.addon' // 教师作业批改评分细则/量规扩展
   // ── 教学环节与门禁交互扩展槽位 ──
   | 'student.segment.gate_fallback' // 学生端教学环节未解锁时的交互引导扩展（补测卡片/补签到/解锁任务）
-  | 'editor.segment.type_config'; // 备课端自定义教学形态专属配置面板扩展（探究实验器材配置/代码沙盒模板等）
+  | 'editor.segment.type_config' // 备课端自定义教学形态专属配置面板扩展（探究实验器材配置/代码沙盒模板等）
+  // ── 课表多源导入与排课扩展槽位 ──
+  | 'timetable.import.source' // 课表多源导入扩展（如 Excel/CSV 导入、第三方教务同步等）
+  | 'timetable.entry.action' // 排课卡片动作扩展（如一键备课、调课申请等）
+  // ── 课堂教学环节主工作区接管槽位 ──
+  | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
+  // ── 学生端学业对比扩展槽位 ──
+  | 'student.academic_year.metric_card'; // 学生端多学年综合学业对比自定义指标卡扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

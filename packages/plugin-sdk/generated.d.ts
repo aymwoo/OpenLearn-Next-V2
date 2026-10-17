@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：230 个（入口导出但手写 d.ts 未声明的 230 项及其类型引用闭包）
+ * 覆盖符号：234 个（入口导出但手写 d.ts 未声明的 234 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -243,6 +243,15 @@ interface ClassTabConfig {
     label: string;
     icon?: string;
     position?: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.active_segment.main slot. */
+interface ClassroomActiveSegmentMainConfig {
+    id: string;
+    segmentType?: string;
+    label: string;
+    icon?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -1833,6 +1842,14 @@ type StageCompletionStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
 /** @see packages/core/presence-engine/types.ts */
 type StageStatus = 'Waiting' | 'Running' | 'Completed' | 'Paused' | 'Skipped';
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.academic_year.metric_card slot. */
+interface StudentAcademicYearMetricCardConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
 /** @see packages/core/lesson-engine/types.ts */
 interface StudentAction {
     id: string;
@@ -2068,6 +2085,23 @@ interface TimetableCardBadgeConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the timetable.entry.action slot. */
+interface TimetableEntryActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the timetable.import.source slot. */
+interface TimetableImportSourceConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    description?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the timetable.toolbar.action slot. */
 interface TimetableToolbarActionConfig {
     id: string;
@@ -2236,6 +2270,7 @@ export type {
   CapabilityRole,
   ClassBatchActionConfig,
   ClassTabConfig,
+  ClassroomActiveSegmentMainConfig,
   ClassroomAgendaActionConfig,
   ClassroomAlertBannerConfig,
   ClassroomAttributionAwardConfig,
@@ -2380,6 +2415,7 @@ export type {
   StageAnalytics,
   StageCardConfig,
   StageStatus,
+  StudentAcademicYearMetricCardConfig,
   StudentAction,
   StudentAnalyticsModel,
   StudentAssignmentToolbarActionConfig,
@@ -2409,6 +2445,8 @@ export type {
   TeachingObject,
   TimelineSegmentConfig,
   TimetableCardBadgeConfig,
+  TimetableEntryActionConfig,
+  TimetableImportSourceConfig,
   TimetableToolbarActionConfig,
   TopbarPillConfig,
   UserParticipant,
