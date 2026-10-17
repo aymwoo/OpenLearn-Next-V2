@@ -358,7 +358,8 @@ export class WorkerRegistry {
       return;
     }
 
-    const delay = Math.pow(2, stats.count - 1) * 1000;
+    const baseDelay = Number(process.env.OPENLEARN_WATCHDOG_BASE_DELAY) || 1000;
+    const delay = Math.pow(2, stats.count - 1) * baseDelay;
     console.warn(
       `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`,
     );
