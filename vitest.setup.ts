@@ -1,10 +1,23 @@
 import { TextEncoder, TextDecoder } from 'util';
 import crypto from 'node:crypto';
-import { expect } from 'vitest';
+import { expect, afterEach } from 'vitest';
 import path from 'path';
 import os from 'os';
 import nodeFs from 'fs';
 import { fileURLToPath } from 'url';
+
+/**
+ * 全局守卫：还原被测试用例修改的 global.fetch。
+ *
+ * 防止部分测试直接执行 `global.fetch = vi.fn(...)` 且未恢复，
+ * 导致同一 Worker 内后续运行的测试文件遭遇跨用例污染 (Flaky)。
+ */
+const originalGlobalFetch = globalThis.fetch;
+afterEach(() => {
+  if (globalThis.fetch !== originalGlobalFetch) {
+    globalThis.fetch = originalGlobalFetch;
+  }
+});
 
 // 测试进程自己准备一把随机钥匙，避免解析器把密钥写进仓库的 storage/。
 // 这不是产品默认密钥：每个 worker 现场生成，生产代码里没有写死的 hex。

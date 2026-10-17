@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, cleanup } from '@testing-library/react';
 
 /**
  * 教师端广播的白板最大化视图必须由 `useClassroomSocket` 处理：
@@ -92,6 +92,7 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
