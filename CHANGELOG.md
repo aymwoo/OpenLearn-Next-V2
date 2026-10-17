@@ -71,6 +71,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
 
 
+### Refactor / Performance
+
+- **课程编辑器属性栏移除 X/Y 坐标输入（Issue #97）**：`WhiteboardPropertiesSidebar.tsx` 的「物理定位 & 尺寸」卡片不再提供 X 坐标 / Y 坐标数字输入框，标题简化为「尺寸」——组件位置统一通过在画布上拖动调整（`x`/`y` 数据结构与保存逻辑不变，拖动后照常落库），消除属性栏与拖拽两条位置修改通道并存导致的不一致。宽度 / 高度 / 半径输入保留不变；`InteractiveWhiteboard.tsx` 复用同一属性栏，互动课堂白板行为同步收敛。
+
 ### Fixes
 
 - **全站无障碍（WCAG 2.0/2.1 A+AA）审计与修复**：用 axe-core 对登录页与教师端 8 个主要工作区（工作台/课程/班级/课表/互动课堂/插件中心/管理后台/帮助）跑完整规则集，从 **99 个违规节点清零到 0**，并把门禁固化进 CI。修复项：
