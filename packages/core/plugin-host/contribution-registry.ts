@@ -839,6 +839,28 @@ export interface StudentAcademicYearMetricCardConfig {
   icon?: string;
 }
 
+/** A contribution to the editor.timeline.node_badge slot. */
+export interface EditorTimelineNodeBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the student.segment.badge slot. */
+export interface StudentSegmentBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the header.async_task.item slot. */
+export interface HeaderAsyncTaskItemConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  taskType?: string;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -940,7 +962,10 @@ export type ContributionConfig =
   | TimetableImportSourceConfig
   | TimetableEntryActionConfig
   | ClassroomActiveSegmentMainConfig
-  | StudentAcademicYearMetricCardConfig;
+  | StudentAcademicYearMetricCardConfig
+  | EditorTimelineNodeBadgeConfig
+  | StudentSegmentBadgeConfig
+  | HeaderAsyncTaskItemConfig;
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {

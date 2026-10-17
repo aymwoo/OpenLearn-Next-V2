@@ -3,6 +3,7 @@ import type { StudentType, Lesson } from '../../types/app';
 import { Activity, BookOpen, Minimize2, Maximize2, Lock, CheckCircle2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { SegmentAccessState } from './useSegmentAccess';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface StudentLessonContentPanelProps {
   students: StudentType[];
@@ -120,6 +121,18 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
                       <span>
                         {seg.title} ({seg.duration})
                       </span>
+                      <ExtensionPointRenderer
+                        slot="student.segment.badge"
+                        slotProps={{
+                          segment: seg,
+                          idx,
+                          isActive,
+                          isLocked: !!isLocked,
+                          studentId: activeStudentId,
+                          lessonId: selectedLesson,
+                          lang,
+                        }}
+                      />
                     </button>
                   );
                 })}

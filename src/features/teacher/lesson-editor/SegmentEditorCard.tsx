@@ -55,6 +55,10 @@ export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, on
 
           <div className="flex items-center gap-1.5 shrink-0">
             <ExtensionPointRenderer
+              slot="editor.timeline.node_badge"
+              slotProps={{ segment, lang, isActive: true, isCompleted: false }}
+            />
+            <ExtensionPointRenderer
               slot="editor.segment.action"
               slotProps={{ segmentId: segment.id, segment, lang, readOnly, onPatch }}
             />

@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：234 个（入口导出但手写 d.ts 未声明的 234 项及其类型引用闭包）
+ * 覆盖符号：237 个（入口导出但手写 d.ts 未声明的 237 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -592,6 +592,14 @@ interface EditorSegmentTypeConfigConfig {
     icon?: string;
 }
 
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the editor.timeline.node_badge slot. */
+interface EditorTimelineNodeBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
 /** @see packages/core/presence-engine/types.ts */
 type EntityRole = 'teacher' | 'student' | 'assistant' | 'ai' | 'plugin' | 'system';
 
@@ -692,6 +700,15 @@ interface GroupWorkspaceData {
     readonly timelinePosition: number;
     readonly pluginState: Record<string, unknown>;
     readonly aiContext: Record<string, unknown>;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the header.async_task.item slot. */
+interface HeaderAsyncTaskItemConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    taskType?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -1996,6 +2013,14 @@ interface StudentRowPanelConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.segment.badge slot. */
+interface StudentSegmentBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.segment.gate_fallback slot. */
 interface StudentSegmentGateFallbackConfig {
     id: string;
@@ -2315,6 +2340,7 @@ export type {
   EditorHeaderActionConfig,
   EditorSegmentActionConfig,
   EditorSegmentTypeConfigConfig,
+  EditorTimelineNodeBadgeConfig,
   EntityRole,
   EntityType,
   EventSubscriber,
@@ -2326,6 +2352,7 @@ export type {
   GroupPresenceData,
   GroupStatus,
   GroupWorkspaceData,
+  HeaderAsyncTaskItemConfig,
   HeaderStatusPillConfig,
   HelpDocConfig,
   HighLevelIndicators,
@@ -2433,6 +2460,7 @@ export type {
   StudentQuickActionsFabConfig,
   StudentQuickActionsItemConfig,
   StudentRowPanelConfig,
+  StudentSegmentBadgeConfig,
   StudentSegmentGateFallbackConfig,
   StudentStatus,
   StudentViewConfig,

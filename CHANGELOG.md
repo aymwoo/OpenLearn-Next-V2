@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **生态与全局增强环节扩展插槽扩充（Phase 3）**：
+  - **备课时间线环节节点与卡片微徽章扩展**：在 `TimelineRail` 和 `SegmentEditorCard` 头部操作区新增 `editor.timeline.node_badge` 插槽，支持无侵入式挂载器材清单徽章、AI 评估就绪标识或前置门禁指示。
+  - **学生端环节步骤导航微徽标扩展**：在 `StudentLessonContentPanel` 顶部环节步骤导航按钮中新增 `student.segment.badge` 插槽，支持动态渲染学科素养标签、难度星级与门禁锁定状态。
+  - **全局顶栏后台任务中心项扩展**：在 `AppHeader` 状态区新增 `header.async_task.item` 插槽，为第三方插件提供全局异步长任务（如大文件后台导出、批量排课同步等）的状态胶囊与导航交互挂载能力。
 - **业务协同环节扩展插槽扩充（Phase 2）**：
   - **课表外部导入源与条目动作扩展**：在 `TimetableOcrView` 中新增 `timetable.import.source` 插槽，支持扩展第三方教务排课系统、Excel/CSV 模板导入解析；在 `TimetableCalendarView` 中为日历卡片和列表视图新增 `timetable.entry.action` 插槽，支持一键调课申请、排课同步等插件动作。
   - **课堂活跃环节主交互区扩展**：在 `LiveClassroomView` 中新增 `classroom.active_segment.main` 插槽与顶部专属工作区 Tab / 引导提示条，当处于活跃环节且插件注册该插槽时支持无缝切入专属工作区（如虚拟仿真实验大屏、团队竞赛对战等），与默认白板自由双向切换并向后兼容降级。
