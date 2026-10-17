@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { useToast } from './useToast';
 import { fetchAuthSession } from '../services/sessionService.js';
 import { useSessionBootstrap } from './useSessionBootstrap';
@@ -183,6 +183,8 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
 
   // ── Hash-based routing: reflect teacherTab in the address bar ──
   // Deep link + back/forward support: read the active tab from the URL hash.
+  const isFirstMountRef = useRef(true);
+
   useEffect(() => {
     if (isStudentTabMode || isStageDisplayMode) return;
     const applyHash = () => {
@@ -193,13 +195,24 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
     };
     window.addEventListener('hashchange', applyHash);
     const initial = hashToTab(window.location.hash);
-    if (initial) setTeacherTab(initial);
+    if (initial && initial !== appStore.getState().teacherTab) {
+      setTeacherTab(initial);
+    }
     return () => window.removeEventListener('hashchange', applyHash);
   }, [setTeacherTab, isStudentTabMode, isStageDisplayMode]);
 
   // Write the active tab back into the URL hash so the address bar shows it.
   useEffect(() => {
     if (isStudentTabMode || isStageDisplayMode) return;
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      const initialFromUrl = hashToTab(window.location.hash);
+      // 若挂载时 URL 中已有非空合法 tab 且与当前 store 中的 teacherTab 不一致，
+      // 首帧跳过改写，让读 hash 逻辑优先完成同步，避免将 URL 强制覆盖为默认 tab
+      if (initialFromUrl && initialFromUrl !== teacherTab) {
+        return;
+      }
+    }
     const desired = tabToHash(teacherTab);
     if (window.location.hash !== desired) {
       window.location.hash = desired;

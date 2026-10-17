@@ -2,6 +2,15 @@ import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { Language } from '../i18n';
 import type { Toast } from '../types/app';
+import { hashToTab } from '../utils/teacherTabHash.js';
+
+export function getInitialTeacherTab(): string {
+  if (typeof window !== 'undefined' && window.location?.hash) {
+    const tabFromHash = hashToTab(window.location.hash);
+    if (tabFromHash) return tabFromHash;
+  }
+  return 'live_class';
+}
 
 export interface UIState {
   // Navigation & Role
@@ -41,8 +50,8 @@ export interface UIState {
 export const uiStore = createStore<UIState>((set) => ({
   lang: 'zh',
   activeRole: 'teacher',
-  // 教师/管理员的默认首页：互动课堂（live_class）
-  teacherTab: 'live_class',
+  // 教师/管理员的默认首页：若 URL hash 中已携带有效 tab（如在新窗口打开、刷新或深层链接）则优先采用，否则为互动课堂（live_class）
+  teacherTab: getInitialTeacherTab(),
 
   profileOpen: false,
   isCourseWizardOpen: false,

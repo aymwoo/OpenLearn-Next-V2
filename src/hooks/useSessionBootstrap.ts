@@ -13,6 +13,7 @@ import {
   fetchSiteSettings as fetchSiteSettingsApi,
   postLogout,
 } from '../services/sessionService.js';
+import { hashToTab } from '../utils/teacherTabHash.js';
 
 export function useSessionBootstrap(deps: { fetchStudents: () => Promise<void> }) {
   const { fetchStudents } = deps;
@@ -84,8 +85,9 @@ export function useSessionBootstrap(deps: { fetchStudents: () => Promise<void> }
     setSession(newSession);
     if (newSession.role === 'teacher') {
       setActiveRole('teacher');
-      // 教师/管理员登录后的默认首页：互动课堂（管理员 role 同为 teacher，靠 subRole 区分）
-      appStore.getState().setTeacherTab('live_class');
+      // 教师/管理员登录后的默认首页：若 URL hash 指定了有效 tab 则保持（如在新窗口打开、刷新或深层链接），否则回退到互动课堂
+      const hashTab = typeof window !== 'undefined' ? hashToTab(window.location.hash) : null;
+      appStore.getState().setTeacherTab(hashTab || 'live_class');
     } else {
       setActiveRole('student');
       setActiveStudentId(newSession.studentId);
