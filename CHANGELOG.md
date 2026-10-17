@@ -68,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   1. **可访问名缺失（critical，每个页面 8 处）**：侧边栏导航按钮的标签 span 在折叠态与 `<md` 窄屏下是 `hidden`，按钮只剩无语义图标 → 补 `aria-label` 与 `aria-current="page"`；氛围仪表盘的课节 `<select>` 补 `aria-label`。
   2. **次级文字对比度不足（serious，8 个页面各自出现）**：AppHeader 版本号 `text-slate-400`（2.63:1）、RightSidebar「OS Core Options」`text-gray-400`（2.6:1）、课表/帮助/插件空态里的 `text-gray-400` / `text-gray-300`（1.4–4.43:1）、互动课堂「待选择/暂无学生名单」`text-amber-600`（3.19:1）、插件中心「从 ZIP 安装」`text-teal-600`（3.55:1）→ 统一改用语义令牌 `text-subtle` / `text-muted` 或达标的深色阶（amber-700 / teal-700），四套主题下自动跟随。
   3. **自动化门禁**：新增 `e2e/a11y-gate.spec.ts`（登录页 + 8 个工作区，完整 axe 规则集，断言零违规），已加入 CI 的 `Browser workflow E2E` job，与 `live-class-contrast.spec.ts`（逐主题只查对比度）互补。
+- **无障碍门禁扩展到学生仪表盘与作业面板**：`e2e/a11y-gate.spec.ts` 新增第四个用例，覆盖学生仪表盘与作业作答/互评面板（通过 API 造出班级、课节、作业与学生数据前置），跑完整 axe 规则集断言零违规；顺带修复互评面板一批**非法 Tailwind 色阶**（`indigo-650` / `teal-650` —— Tailwind 无此档位，样式此前静默失效）：提交按钮改 `indigo-600`（白字 5.17:1）、互评空态 `text-slate-400 italic` 改语义令牌 `text-subtle`。
 - **无障碍门禁扩展到学生端课中与互动浮层**：`e2e/a11y-gate.spec.ts` 新增第三个用例，覆盖学生端课中界面与三个互动浮层（极速投票作答卡 / 毫秒抢答 / 60 秒结课通票），通过 API 造出对应状态后逐一跑完整 axe 规则集断言零违规；同时修复暴露出的 17 处违规：
   1. **节奏信号三枚按钮**（听懂了/有疑问/讲太慢，含选中态）`text-amber-600` / `text-emerald-600` / `text-rose-600` → 统一提到 `-700`（浅色底 3.19:1 → 5.02:1），深色主题保留 `dark:text-*-400`。
   2. **可访问名缺失**：结课通票的 5 颗星级评分按钮是纯图标 → 补 `aria-label="N 星"` + `aria-pressed`；班级行展开/收起箭头补 `aria-label` + `aria-expanded`；Toast 关闭按钮补 `aria-label`；课程排序、互动课堂课程选择、作业权重滑杆、完成度门槛滑杆等控件补 `aria-label`。
