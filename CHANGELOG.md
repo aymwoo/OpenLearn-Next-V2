@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **学生写操作与学生私有备忘的对象级授权修复（P0 IDOR）**：
+  - `PUT /api/students/:id` 与 `DELETE /api/students/:id` 此前只校验角色（`teacher`/`administrator`），不校验学生归属，任意教师可修改或删除任意学校学生的姓名、学号、密码、锁定课节与私有备忘。现新增 `resolveWritableStudentId`：管理员不限，教师仅可写 `teacherCanSeeStudent` 判定可见的学生（即其 `owner_user_id` 名下班级的在册学生），其余一律 403；入参支持 `student_number` 并统一解析为规范 id。
+  - `GET /api/students/:id/dashboard` 的 `profile` 此前无条件 `SELECT private_notes`，学生本人即可读到教师给其写的「特别关注/行为」备忘。现改为仅在教师/管理员视角查询该列，学生视角的 `profile` 不再包含 `private_notes`（`locked_lesson_id` 等学生端自用字段保留）。
+  - 新增 `server/__tests__/student-write-auth.test.ts`（8 例）：跨班教师 PUT/DELETE 均 403 且数据不变、本班教师与管理员可写、学生角色仍被拒、学生本人 dashboard 无 `private_notes`、本班教师可见、跨班教师 dashboard 403；并更新 `roster-routes.test.ts` 的创建流程，按真实 UI 的「创建 → 编入班级」顺序建立归属后再验证写操作。
+
 ### Fixes
 
 - **随堂测验正确答案统一到 `correctIndex`（Issue #107）**：此前同一道测验题有两个答案字段且各模块各读各的 —— 组件默认数据只写 `correctIndex: 0`，属性栏「正确答案」下拉写 `correctAnswer`（选项文本），服务端判分与环节门禁 `looksLikeQuiz` 只读 `correctAnswer`，全屏测验视图统计与正确选项高亮只读 `correctIndex`。后果是「新建测验不设答案就全员 0 分」「教师选了非 A 的答案后大屏正确率与服务端得分对不上」「选项本身是单个字母时提交格式可能误判」。现在统一以**选项索引**为权威：新增 `packages/core/whiteboard/quiz-answer.ts`（前后端共用的纯函数：`resolveCorrectIndex` / `resolveSubmittedIndex` / `gradeQuizSubmission` / `buildQuizAnswerFields` / `looksLikeQuizAnswerData`），属性栏下拉改为写索引并同时同步 `correctAnswer` 文本（`handlePropsUpdate` 一次原子写入），学生提交统一发送选项索引，服务端判分、大屏统计、环节门禁全部走同一解析。**旧数据无需迁移**：只有 `correctAnswer` 时按「选项文本 → 字母 → 数字」换算成索引，历史提交里的字母 / 索引 / 选项文本三种作答写法也统一归一化（此前 `parseInt('B')` 得 NaN，大屏会把已答对的学生计成未答）。服务端判分结果与 `GET /api/lessons/:id/quiz-submissions` 均新增 `correctIndex`（提交后才回传，学生端据此高亮正确选项），`quiz.answered` 事件契约同步补充该字段。新增 `packages/core/whiteboard/__tests__/quiz-answer.test.ts`（26 例）、`server/__tests__/quiz-answer-grading.test.ts`（7 例），并补充 `quiz-fullscreen.test.tsx`（旧字段高亮 / 提交发送索引）与 `whiteboard-properties-sidebar.test.tsx`（下拉写入两字段 / 旧数据回显）。
