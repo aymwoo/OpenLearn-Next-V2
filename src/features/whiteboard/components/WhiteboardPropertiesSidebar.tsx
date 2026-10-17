@@ -13,6 +13,7 @@ import {
 import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
+import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
 
 export interface WhiteboardPropertiesSidebarProps {
@@ -103,6 +104,15 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
   if (isWidget && activePropertiesElementId !== selectedShapeId) {
     return null;
   }
+
+  // Issue #107：随堂测验的正确答案以选项索引 `correctIndex` 为权威字段。
+  // 旧数据只有 `correctAnswer`（历史下拉写的是选项文本）时在这里读时换算，不需要数据迁移；
+  // 保存时两个字段一起写（见下方下拉的 onChange），兼容仍在读旧字段的代码。
+  const quizOptions: string[] = Array.isArray(editingProperties.options)
+    ? editingProperties.options.map((o: any) => String(o))
+    : [];
+  const quizCorrectIndex = resolveCorrectIndex(editingProperties);
+  const optionLabelOf = (idx: number): string => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[idx] || String(idx + 1);
 
   return (
     <div
@@ -353,32 +363,34 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
               />
             </div>
 
-            {/* Correct answer selector */}
+            {/* Correct answer selector（Issue #107：以选项索引 correctIndex 为权威，同时同步旧字段 correctAnswer） */}
             {(editingProperties.options || []).length > 0 && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
                 <label className="block text-xs text-amber-500 font-bold mb-1.5">
                   ⚠️ 正确答案 (Correct Answer)
                 </label>
                 <select
-                  value={editingProperties.correctAnswer || ''}
+                  value={quizCorrectIndex === null ? '' : String(quizCorrectIndex)}
                   onChange={(e) => {
-                    handleLocalPropChange('correctAnswer', e.target.value);
-                    handlePropBlur('correctAnswer', e.target.value);
+                    const raw = e.target.value;
+                    const index = raw === '' ? null : Number(raw);
+                    // 一次写入两个字段：correctIndex 是权威，correctAnswer（选项文本）供仍在读旧字段的代码使用
+                    handlePropsUpdate(buildQuizAnswerFields(index, quizOptions));
                   }}
                   className={`w-full px-2 py-1.5 border rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
-                    editingProperties.correctAnswer
+                    quizCorrectIndex !== null
                       ? 'border-green-500/40 bg-green-500/10 text-green-600'
                       : 'border-amber-500/40 bg-surface text-main'
                   }`}
                 >
                   <option value="">-- 请选择正确答案 --</option>
-                  {(editingProperties.options || []).map((opt: string, idx: number) => (
-                    <option key={idx} value={opt}>
-                      {opt}
+                  {quizOptions.map((opt: string, idx: number) => (
+                    <option key={idx} value={String(idx)}>
+                      {optionLabelOf(idx)}. {opt}
                     </option>
                   ))}
                 </select>
-                {!editingProperties.correctAnswer && (
+                {quizCorrectIndex === null && (
                   <p className="text-xs text-amber-500 mt-1">未设置正确答案将无法自动判分</p>
                 )}
               </div>

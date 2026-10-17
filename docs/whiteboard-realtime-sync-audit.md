@@ -90,7 +90,7 @@ publish(event: PlatformEvent): Promise<void> {
 | `math-graph`             | `equation`                                  | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
 | `code-sandbox`           | `code`                                      | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
 | `presentation`           | `markdown` / `slideX`                       | ✅ 原本就有（`RevealPresentationWrapper.tsx:72-83`）    | ✅ 默认广播         | ✅ 已通（原先靠 2s 轮询）           |
-| `quiz`                   | `question` / `options` / `correctIndex`     | 未走独立 Widget 组件，内联渲染（`data` 变化直接重渲染） | ✅ 默认广播         | ✅ 已通                             |
+| `quiz`                   | `question` / `options` / `correctIndex`（权威；旧 `correctAnswer` 见 Issue #107） | 未走独立 Widget 组件，内联渲染（`data` 变化直接重渲染） | ✅ 默认广播         | ✅ 已通                             |
 | `assignment`             | `title` / `description` / `assignmentId`    | 同上，内联渲染                                          | ✅ 默认广播         | ✅ 已通                             |
 | `plugin` / `hello-world` | 插件自有数据                                | 与白板 `data` **无关**（见 §2.4）                       | ✅ 默认广播         | ➖ 主机侧已通；插件内同步由插件自负 |
 

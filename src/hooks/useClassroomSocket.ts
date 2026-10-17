@@ -673,6 +673,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
             score: typeof data.score === 'number' ? data.score : undefined,
             isCorrect: !!data.isCorrect,
             correctAnswer: data.correctAnswer,
+            // Issue #107：索引是权威字段，事件里一并带下来，下游（大屏/AI）不必再猜
+            correctIndex: typeof data.correctIndex === 'number' ? data.correctIndex : undefined,
             question: data.question,
             time: data.time,
           },

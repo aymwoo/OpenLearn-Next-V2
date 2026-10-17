@@ -201,6 +201,56 @@ describe('WhiteboardPropertiesSidebar Component Tests', () => {
     expect(handleUpdate).toHaveBeenCalledWith(defaultProps.editingProperties);
   });
 
+  it('9. Issue #107：选择正确答案时一次写入 correctIndex（权威）与 correctAnswer（兼容）', () => {
+    const handlePropsUpdate = vi.fn();
+    render(
+      <WhiteboardPropertiesSidebar
+        {...defaultProps}
+        selectedShapeId="el-quiz-1"
+        activePropertiesElementId="el-quiz-1"
+        safeElements={[
+          { id: 'el-quiz-1', type: 'quiz', data: JSON.stringify({ question: 'Q', options: ['甲', '乙', '丙'] }) },
+        ]}
+        editingProperties={{
+          question: 'Q',
+          options: ['甲', '乙', '丙'],
+          // 新建测验的默认数据只有索引
+          correctIndex: 0,
+        }}
+        handlePropsUpdate={handlePropsUpdate}
+      />,
+    );
+
+    // 默认答案 A 被回显（旧实现读 correctAnswer，默认数据下显示「未设置」）
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(select.value).toBe('0');
+
+    fireEvent.change(select, { target: { value: '2' } });
+    expect(handlePropsUpdate).toHaveBeenCalledWith({ correctIndex: 2, correctAnswer: '丙' });
+  });
+
+  it('10. Issue #107：旧数据只有 correctAnswer 文本时下拉仍回显正确选项', () => {
+    render(
+      <WhiteboardPropertiesSidebar
+        {...defaultProps}
+        selectedShapeId="el-quiz-2"
+        activePropertiesElementId="el-quiz-2"
+        safeElements={[
+          {
+            id: 'el-quiz-2',
+            type: 'quiz',
+            data: JSON.stringify({ question: 'Q', options: ['甲', '乙', '丙'], correctAnswer: '乙' }),
+          },
+        ]}
+        editingProperties={{ question: 'Q', options: ['甲', '乙', '丙'], correctAnswer: '乙' }}
+      />,
+    );
+
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(select.value).toBe('1');
+    expect(screen.queryByText('未设置正确答案将无法自动判分')).toBeNull();
+  });
+
   it('8. 点击“删除当前组件”按钮触发 handleElementDelete 并清除选中态', () => {
     const handleDelete = vi.fn();
     const setSelectedShapeId = vi.fn();

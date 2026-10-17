@@ -96,6 +96,83 @@ describe('QuizFullscreenView', () => {
     expect(row2.querySelectorAll('.text-green-600').length).toBeLessThan(2);
   });
 
+  it('Issue #107：只有旧字段 correctAnswer（选项文本）时也能高亮正确选项并统计通过率', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { id: 'stu-1', name: '小明' },
+        { id: 'stu-2', name: '小红' },
+      ],
+    });
+    render(
+      <QuizFullscreenView
+        {...baseProps}
+        data={{
+          question: '你的掌握程度？',
+          options: ['完全掌握', '基本掌握', '还有疑惑'],
+          // 旧数据：没有 correctIndex，只有选项文本
+          correctAnswer: '还有疑惑',
+          submissions: {
+            'stu-1': { answer: 'C', score: 100 }, // 历史协议：字母
+            'stu-2': { answer: 0, score: 0 }, // 新协议：索引
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('quiz-stat-submitted').textContent).toBe('2'));
+    // 正确选项落在第 3 个（索引 2），而不是默认的 A
+    expect(screen.getAllByText('✓ 正确答案')).toHaveLength(1);
+    expect(screen.getByText('C.').closest('div')?.textContent).toContain('✓ 正确答案');
+    // 字母作答 'C' 被归一化成索引 2 → 与服务端判分一致，算通过
+    expect(screen.getByTestId('quiz-stat-passed').textContent).toBe('1');
+    expect(screen.getByTestId('quiz-row-stu-1').textContent).toContain('C');
+    expect(screen.getByTestId('quiz-row-stu-1').textContent).toContain('✓');
+  });
+
+  it('Issue #107：提交时发送选项索引，并用服务端回传的 correctIndex 高亮', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/quiz-submit')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, isCorrect: true, score: 100, correctIndex: 2 }),
+        });
+      }
+      // 作答区只对学生会话渲染：让 /api/auth/session 返回学生身份
+      if (String(url).includes('/api/auth/session')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ role: 'student', userId: 'stu-1', studentId: 'stu-1' }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+
+    render(
+      <QuizFullscreenView
+        {...baseProps}
+        data={{
+          question: 'Q',
+          options: ['选项一', '选项二', '选项三'],
+          // 学生端 payload 里可能不含答案字段
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByText('选项三'));
+    fireEvent.click(screen.getByTestId('quiz-submit-btn'));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find((c) => String(c[0]).includes('/quiz-submit'));
+      expect(call).toBeTruthy();
+      const body = JSON.parse(String(call![1].body));
+      // 发的是索引（number），不再按「correctAnswer 是否像字母」猜格式
+      expect(body.answer).toBe(2);
+    });
+    // 服务端回传的索引让正确选项在提交后高亮
+    await waitFor(() => expect(screen.getByText('✓ 正确答案')).toBeDefined());
+  });
+
   it('handles legacy optionIndex/timestamp shape without crashing', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'stu-1', name: '小刚' }] });
     render(

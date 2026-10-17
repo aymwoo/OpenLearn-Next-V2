@@ -182,7 +182,16 @@ export interface CodePayload {
 export interface QuizPayload {
   question: string;
   options: string[];
-  correctIndex?: number;
+  /**
+   * 正确答案的选项索引（0-based）—— **权威字段**（Issue #107）。
+   * `null` / 缺省表示未设置答案，此时不自动判分。
+   */
+  correctIndex?: number | null;
+  /**
+   * 旧字段：历史属性栏把「正确答案」存成选项文本，也有历史数据存字母。
+   * 仍会被读时换算成索引（见 `packages/core/whiteboard/quiz-answer.ts`），新写入时与 correctIndex 同步。
+   */
+  correctAnswer?: string | null;
   submissions?: Record<string, { optionIndex: number; studentId: string; timestamp: number }>;
 }
 
