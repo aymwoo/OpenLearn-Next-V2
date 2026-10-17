@@ -98,14 +98,14 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
   return (
     <div
       id="navigation_sidebar"
-      className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-44'} bg-surface border-r border-theme text-main flex flex-col transition-all duration-300`}
+      className={`${mainNavCollapsed ? 'w-16' : 'w-44 md:w-44'} shrink-0 bg-surface border-r border-theme text-main flex flex-col transition-all duration-300`}
     >
       {/* Collapse/Expand Toggle */}
       <div
         className={`p-2 flex border-b border-theme-subtle ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-3'} min-h-[48px] shrink-0`}
       >
         {!mainNavCollapsed && (
-          <span className="hidden md:inline text-xs font-black tracking-widest text-muted uppercase select-none">
+          <span className="inline text-xs font-black tracking-widest text-muted uppercase select-none">
             {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
           </span>
         )}
@@ -252,7 +252,7 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
         if (mainNavCollapsed || todaySchedules.length === 0) return null;
         return (
           <div
-            className="mt-auto p-2.5 m-2 bg-indigo-50/55 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 hidden md:block select-none shadow-3xs"
+            className="mt-auto p-2.5 m-2 bg-indigo-50/55 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 block select-none shadow-3xs"
             id="today_schedule_sidebar_panel"
           >
             <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 mb-1">
@@ -386,7 +386,7 @@ function NavButton({
                   : ''
           }`}
         />
-        <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block truncate'}>{label}</span>
+        <span className={mainNavCollapsed ? 'hidden' : 'block truncate'}>{label}</span>
       </button>
       {!mainNavCollapsed && (
         <button
