@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **请求观测中间件静态资源与入口探活静默**：在 `server/middleware/request-observability.ts` 中引入 `isQuietRequest` 判定，将公共静态入口（`/`, `/index.html`, `/favicon.ico`, `/robots.txt`）以及开发模式下的 Vite 编译资产路径（`/@vite/`, `/src/` 等）在正常响应（`< 400`）时保持静默，消除 IDE 探活与开发刷新时控制台频繁输出 `http.request` 的刷屏噪音；异常状态（`>= 400`）与业务 API 依然严格记录日志。
+
 ### Features
 
 - **生态与全局增强环节扩展插槽扩充（Phase 3）**：
