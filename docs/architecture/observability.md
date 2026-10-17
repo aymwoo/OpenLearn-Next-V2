@@ -76,9 +76,16 @@ HTTP 入口不在这个目录里：
 
 - 请求头 `x-request-id` 若匹配 8–64 位的字母、数字、`.`、`_`、`:`、`-`，就沿用；否则生成 UUID。响应头回写同一个值。
 - 该 ID 放进 `requestLogContext`，同一条异步调用链里的 `recordSecurityAudit` 可以读到它，不必改命令载荷。
-- 响应结束时 `recordHttpResponse(status)`，并在不是静默路径时写一条 `http.request`。字段只有 `requestId`、`userId`、`method`、`path`、`status`、`durationMs`。不写查询串，不写请求体。
+- 响应结束时 `recordHttpResponse(status)`，并在判定需要记录时写一条 `http.request`。字段只有 `requestId`、`userId`、`method`、`path`、`status`、`durationMs`。不写查询串，不写请求体。
 - `userId` 来自已挂上的会话，否则从会话 cookie 解析；没有则是 `anonymous`。截断到 64 字符。
-- `/health` 与 `/health/ready` 在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。
+- **静默白名单 (`isQuietRequest`)**：公共入口（`/`、`/index.html`、`/favicon.ico`、`/robots.txt`）、探活（`/health`、`/health/ready`）以及开发环境 Vite 内部资源（`/@vite/`、`/src/` 等）在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。通过环境变量 `HTTP_ACCESS_LOG_IGNORE` 可配置额外的逗号分隔前缀名单（如 `/api/vfs,/api/classroom/sessions/`）以静默特定高频接口。
+- **访问日志分级与降噪 (`HTTP_ACCESS_LOG`)**：
+  - 默认模式 `HTTP_ACCESS_LOG=errors`（未配置且 `LOG_LEVEL` 不是 `debug`/`trace` 时）：正常的成功请求（`< 400` 且未超出慢请求阈值）默认静默，彻底消除前端轮询刷屏；
+  - `status >= 500` 时以 `error` 级别输出；
+  - `status >= 400` 或耗时 `durationMs >= HTTP_SLOW_MS`（默认 1000ms）时以 `warn` 级别输出；
+  - 排障模式 `HTTP_ACCESS_LOG=all`（或显式设置 `LOG_LEVEL=debug`）：成功请求降为 `debug` 级别输出；
+  - 关闭模式 `HTTP_ACCESS_LOG=off`：完全不写 `http.request` 日志。
+- **解耦保证**：指标计数（§4）、403/429 安全审计与 5xx 错误捕获不受 `HTTP_ACCESS_LOG` 开关影响。
 
 状态码 403（路径不是 `/api/auth/login`）写审计事件 `auth.forbidden`。状态码 429 写 `rate_limit.triggered`。状态码大于等于 500，且 `sendSafeError` 尚未标记 `errorCaptured` 时，再记一条 `source: http` 的错误上报。
 
@@ -120,7 +127,7 @@ HTTP 入口不在这个目录里：
 | 控制台 | 生产：`stdout` 上的 JSON 行。非生产：`pino-pretty`（`package.json` 的 devDependency）。pretty 加载失败时退回 `stdout`，进程仍能启动 |
 | 文件 | 目录可写时，`RotatingFileStream` 写 `<LOG_DIR>/openlearn.log`。默认目录是进程 cwd 下的 `logs/`。目录不可写时只留控制台 |
 
-两路使用同一个级别。脱敏发生在分发之前，所以控制台和文件看到的是同一份已脱敏记录。
+两路默认使用同一个级别；亦可通过 `LOG_CONSOLE_LEVEL` 针对控制台独立设置日志级别（例如控制台设为 `warn` 保持清爽，文件保留 `debug` 全量记录）。脱敏发生在分发之前，所以控制台和文件看到的是同一份已脱敏记录。
 
 `docker-compose.yml` 与 `Dockerfile` 把 `LOG_DIR` 设为 `/data/logs`。该路径在数据卷 `openlearn_data`（挂载点 `/data`）里面，容器重建后日志还在这个卷上。`ecosystem.config.cjs` 把 `LOG_LEVEL` 设为 `info`。
 
@@ -133,7 +140,8 @@ HTTP 入口不在这个目录里：
 | `LOG_DIR` | `<cwd>/logs` | 访问日志与审计日志的目录 |
 | `LOG_MAX_SIZE_MB` | 10 | `openlearn.log` |
 | `LOG_MAX_FILES` | 5 | `openlearn.log` 的历史份数 |
-| `LOG_LEVEL` | 生产 `info`，否则 `debug` | 平台 logger；审计 logger 的 pino 级别同样读取它 |
+| `LOG_LEVEL` | 生产 `info`，否则 `debug` | 平台 logger 与文件日志级别；审计 logger 的 pino 级别同样读取它 |
+| `LOG_CONSOLE_LEVEL` | 继承 `LOG_LEVEL` | 控制台单独级别（可选） |
 | `LOG_REDACT` | 开启 | 设为 `false`、`0`、`off`、`no` 时关闭 pino 字段脱敏 |
 
 非法的大小或份数回退到默认值并告警一次。
