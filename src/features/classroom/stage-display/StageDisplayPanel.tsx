@@ -196,7 +196,7 @@ export function StageDisplayPanel({
         <section className="col-span-8 flex flex-col gap-6">
           {/* 签到就绪卡片（课前） */}
           {data.stage === 'PRE_CLASS_READY' && (
-            <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-850 rounded-3xl border border-slate-800 p-10 flex flex-col justify-center items-center text-center shadow-2xl">
+            <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl border border-slate-800 p-10 flex flex-col justify-center items-center text-center shadow-2xl">
               <div className="p-4 bg-blue-500/10 rounded-3xl border border-blue-500/20 text-blue-400 mb-6">
                 <Radio size={48} className="animate-pulse" />
               </div>
@@ -260,7 +260,7 @@ export function StageDisplayPanel({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <span className="w-10 h-10 rounded-xl bg-blue-500 text-white font-bold text-lg flex items-center justify-center shadow-md">
+                          <span className="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold text-lg flex items-center justify-center shadow-md">
                             {opt}
                           </span>
                           <span className="font-semibold text-slate-200 text-lg">选项 {opt}</span>
@@ -340,7 +340,7 @@ export function StageDisplayPanel({
             !data.activeBuzzer &&
             data.stage !== 'PRE_CLASS_READY' &&
             data.stage !== 'WRAP_UP_EXIT_TICKET' && (
-              <div className="flex-1 min-h-[220px] bg-gradient-to-br from-slate-900 to-slate-850 rounded-3xl border border-slate-800 p-10 flex flex-col justify-center items-center text-center">
+              <div className="flex-1 min-h-[220px] bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl border border-slate-800 p-10 flex flex-col justify-center items-center text-center">
                 <div className="p-4 bg-slate-800/60 rounded-3xl border border-slate-700/50 text-slate-400 mb-5">
                   <Presentation size={40} />
                 </div>
@@ -449,7 +449,7 @@ export function StageDisplayPanel({
               </div>
             </div>
 
-            <p className="text-xs text-slate-500 text-center mt-2">
+            <p className="text-xs text-slate-400 text-center mt-2">
               {lang === 'zh'
                 ? '提示：此数据来自学生端匿名点击，自动脱敏保护学生自尊。'
                 : 'Aggregated anonymized signals from student devices.'}

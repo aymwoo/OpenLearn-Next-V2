@@ -390,10 +390,10 @@ const RiskBadge: React.FC<{ level: 'low' | 'medium' | 'high'; count: number; lan
 const RiskPill: React.FC<{ level: 'low' | 'medium' | 'high'; lang: 'zh' | 'en' }> = ({ level, lang }) => {
   const color =
     level === 'high'
-      ? 'bg-rose-500 text-white'
+      ? 'bg-rose-600 text-white'
       : level === 'medium'
-        ? 'bg-amber-500 text-white'
-        : 'bg-emerald-500 text-white';
+        ? 'bg-amber-700 text-white'
+        : 'bg-emerald-700 text-white';
   const Icon = level === 'low' ? CheckCircle2 : AlertTriangle;
   const label =
     level === 'high'

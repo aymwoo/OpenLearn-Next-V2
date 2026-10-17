@@ -276,7 +276,7 @@ export function ClassroomBriefingView({
       {/* 1. Header Banner */}
       <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
             <FileBarChart2 size={24} />
           </div>
           <div>
@@ -337,7 +337,7 @@ export function ClassroomBriefingView({
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '全班出勤率' : 'Attendance'}
           </span>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-1">
             {attendanceRate != null ? `${attendanceRate}%` : '—'}
           </div>
           <span className="text-[10px] text-muted mt-1">
@@ -357,7 +357,7 @@ export function ClassroomBriefingView({
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '口播投票与抢答' : 'Interactions'}
           </span>
-          <div className="text-2xl font-black text-amber-500 font-mono mt-1">
+          <div className="text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">
             {pollVotes} <span className="text-xs font-normal">人次</span>
           </div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '高参与度活跃' : 'High engagement'}</span>
@@ -416,7 +416,7 @@ export function ClassroomBriefingView({
               <div className="flex flex-col gap-2.5">
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                       💡 听懂了 / 节奏适宜
                     </span>
                     <span className="font-mono">
@@ -546,7 +546,7 @@ export function ClassroomBriefingView({
           <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col gap-3">
             <div className="flex items-center justify-between border-b border-theme pb-2">
               <span className="text-xs font-black uppercase text-main tracking-wider flex items-center gap-1.5">
-                <Sparkles size={14} className="text-amber-500" />
+                <Sparkles size={14} className="text-amber-700 dark:text-amber-400" />
                 <span>{lang === 'zh' ? '极速投票作答选项分布' : 'Quick Poll Option Breakdown'}</span>
               </span>
               <span className="text-[11px] text-muted font-mono">
@@ -584,7 +584,7 @@ export function ClassroomBriefingView({
                     </span>
                     <span
                       className={`text-xl font-black font-mono mt-1 ${
-                        idx === 0 ? 'text-emerald-600' : 'text-main'
+                        idx === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-main'
                       }`}
                     >
                       {item.percent}%
@@ -614,8 +614,8 @@ export function ClassroomBriefingView({
                   lectureRatio === null
                     ? 'bg-surface-secondary text-muted border border-theme/60'
                     : lectureOverLimit
-                      ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                      : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                      ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20'
+                      : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
                 }`}
               >
                 {lectureRatio === null ? '讲授用时未采集' : `讲授用时 ${lectureRatio}%`}
@@ -756,7 +756,7 @@ export function ClassroomBriefingView({
                   <td className="p-3 font-mono text-muted">{r.studentNumber}</td>
                   <td className="p-3 font-bold text-main">{r.name}</td>
                   <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                       {r.attendance}
                     </span>
                   </td>
@@ -764,7 +764,7 @@ export function ClassroomBriefingView({
                     {r.quizScore === null ? '—' : `${r.quizScore} 分`}
                   </td>
                   <td className="p-3 text-center font-mono">{r.pollsAnswered} 次</td>
-                  <td className="p-3 text-center font-bold text-amber-500">
+                  <td className="p-3 text-center font-bold text-amber-700 dark:text-amber-400">
                     {r.rating === null ? '—' : `${r.rating} ★`}
                   </td>
                   <td className="p-3">
@@ -773,8 +773,8 @@ export function ClassroomBriefingView({
                         r.status === '优秀'
                           ? 'bg-purple-500/10 text-purple-600 border border-purple-500/30'
                           : r.status === '良好'
-                            ? 'bg-blue-500/10 text-blue-600 border border-blue-500/30'
-                            : 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
+                            ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30'
+                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30'
                       }`}
                     >
                       {r.status}

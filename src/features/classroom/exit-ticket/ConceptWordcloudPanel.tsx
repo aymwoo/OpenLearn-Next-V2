@@ -130,7 +130,7 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
                 onClick={() => setActiveConceptIndex(isActive ? null : idx)}
                 className={`rounded-2xl font-bold flex items-center gap-1.5 transition-all cursor-pointer border shadow-2xs ${sizeClass} ${
                   isActive
-                    ? 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-400/40 scale-105'
+                    ? 'bg-amber-700 text-white border-amber-800 ring-2 ring-amber-400/40 scale-105'
                     : 'bg-amber-500/10 text-amber-800 dark:text-amber-200 border-amber-500/30 hover:bg-amber-500/20'
                 }`}
               >

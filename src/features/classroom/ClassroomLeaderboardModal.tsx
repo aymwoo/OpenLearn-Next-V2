@@ -321,7 +321,7 @@ export function ClassroomLeaderboardModal({
                 const isExpanded = expandedGroupId === group.id;
                 const rankColor =
                   group.rank === 1
-                    ? 'bg-amber-500 text-white'
+                    ? 'bg-amber-700 text-white'
                     : group.rank === 2
                       ? 'bg-slate-400 text-white'
                       : group.rank === 3
@@ -504,7 +504,7 @@ export function ClassroomLeaderboardModal({
                     <span
                       className={`w-6 h-6 rounded-lg font-mono font-bold text-xs flex items-center justify-center ${
                         idx === 0
-                          ? 'bg-amber-500 text-white'
+                          ? 'bg-amber-700 text-white'
                           : idx === 1
                             ? 'bg-slate-400 text-white'
                             : idx === 2

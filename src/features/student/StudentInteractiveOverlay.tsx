@@ -408,7 +408,7 @@ export function StudentInteractiveOverlay({
         </div>
 
         {pacingFeedback && (
-          <span className="text-2xs font-bold text-primary-theme px-1.5 py-0.5 animate-fade-in whitespace-nowrap">
+          <span className="text-2xs font-bold text-primary-ink px-1.5 py-0.5 animate-fade-in whitespace-nowrap">
             {pacingFeedback}
           </span>
         )}
@@ -483,12 +483,12 @@ export function StudentInteractiveOverlay({
           className="fixed bottom-20 right-6 z-50 bg-surface rounded-2xl border border-amber-500/40 p-5 shadow-2xl w-80 flex flex-col gap-3 animate-slide-up"
         >
           <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <span className="text-xs font-extrabold text-amber-500 flex items-center gap-1.5">
+            <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
               <Sparkles size={14} />
               {lang === 'zh' ? '极速答题进行中' : 'Quick Poll Active'}
             </span>
             {pollSubmitted && (
-              <span className="text-[11px] text-emerald-500 font-bold flex items-center gap-1">
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
                 <CheckCircle2 size={12} />
                 {lang === 'zh' ? '已提交' : 'Submitted'}
               </span>
@@ -507,7 +507,7 @@ export function StudentInteractiveOverlay({
                   onClick={() => submitPollVote(opt)}
                   className={`p-3 rounded-xl font-bold text-center text-sm transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-primary-theme text-white ring-2 ring-primary-theme shadow-md scale-95'
+                      ? 'bg-primary-solid text-white ring-2 ring-primary-theme shadow-md scale-95'
                       : pollSubmitted
                         ? 'bg-surface-secondary text-muted opacity-60 cursor-not-allowed'
                         : 'bg-surface-secondary hover:bg-primary-theme/10 hover:border-primary-theme border border-border text-foreground'
@@ -542,7 +542,7 @@ export function StudentInteractiveOverlay({
             </button>
 
             <h3 className="text-xl font-black text-foreground flex items-center gap-2">
-              <Bell size={22} className="text-rose-500 animate-bounce" />
+              <Bell size={22} className="text-rose-700 dark:text-rose-400 animate-bounce" />
               <span>{activeBuzzer.title || '全班极速抢答'}</span>
             </h3>
 
@@ -558,7 +558,7 @@ export function StudentInteractiveOverlay({
               <div className="my-4 flex flex-col items-center gap-3">
                 <button
                   onClick={handleBuzzIn}
-                  className="w-36 h-36 rounded-full bg-gradient-to-tr from-rose-600 to-rose-400 text-white font-black text-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center border-4 border-white dark:border-slate-800 cursor-pointer animate-pulse"
+                  className="w-36 h-36 rounded-full bg-gradient-to-tr from-rose-700 to-rose-600 text-white font-black text-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center border-4 border-white dark:border-slate-800 cursor-pointer animate-pulse"
                 >
                   <Zap size={32} className="mb-1" />
                   <span>抢！</span>
@@ -570,7 +570,7 @@ export function StudentInteractiveOverlay({
             {buzzStatus === 'WINNER' && (
               <div className="my-4 p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-col items-center text-center">
                 <span className="text-4xl mb-2">🎉</span>
-                <span className="text-lg font-black text-emerald-500">恭喜你率先抢答！</span>
+                <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">恭喜你率先抢答！</span>
                 <span className="text-xs text-muted mt-1">请起立或开麦回答老师的问题</span>
                 <button
                   onClick={() => setDismissedBuzzerId(activeBuzzer.id)}

@@ -249,6 +249,12 @@ jobs:
       - name: Run browser workflow tests
         run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts e2e/segment-gate-lock.spec.ts
 
+      # 课中授课页面文字对比度（Issue #77）：axe-core color-contrast + 四套主题。
+      # 组件里写死的亮色底配白字（如 bg-amber-500 text-white 仅 2.15:1）只有真实
+      # 渲染才能发现，故单独成 job 步骤（失败即红，防止对比度回归）。
+      - name: Run live-class contrast audit
+        run: pnpm exec playwright test e2e/live-class-contrast.spec.ts
+
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
   # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
   # 生产启动拒绝种子口令等于用户名，本 job 使用强测试口令。口令等于用户名时的强制改密由单元测试覆盖。

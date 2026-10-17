@@ -1558,7 +1558,7 @@ export function LiveClassroomView({
           {/* 班级只读。进行中不能改；结束/归档或回到起始门户后才能重选。 */}
           <div
             id="live-classroom-current-class-badge"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-theme/10 border border-primary-theme/25 text-primary-theme text-xs font-bold select-none shrink-0"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-theme/10 border border-primary-theme/25 text-primary-ink text-xs font-bold select-none shrink-0"
             title={classLockHint(lang)}
             aria-readonly="true"
           >
@@ -1627,7 +1627,7 @@ export function LiveClassroomView({
               onClick={() => setIsSwitchLessonConfirmOpen(true)}
               className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                 pendingLessonId && pendingLessonId !== selectedLesson
-                  ? 'bg-primary-theme hover:opacity-90 text-white shadow-2xs ring-1 ring-primary-theme/50 active:scale-95'
+                  ? 'bg-primary-solid hover:opacity-90 text-white shadow-2xs ring-1 ring-primary-theme/50 active:scale-95'
                   : 'bg-surface border border-theme/60 text-muted opacity-45 cursor-not-allowed'
               }`}
               title={
@@ -1699,7 +1699,7 @@ export function LiveClassroomView({
             disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
             className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 ${
               isClassLocked
-                ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                ? 'bg-rose-600 hover:bg-rose-700 text-white'
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white'
             }`}
             title={
@@ -1777,12 +1777,12 @@ export function LiveClassroomView({
 
       {/* 2. Main Stage Router: Switches based on classroomStage */}
       {!selectedLesson ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none bg-surface">
+        <div className="flex-1 flex flex-col items-center justify-center text-subtle gap-2.5 select-none bg-surface">
           <Presentation size={38} className="text-slate-300 animate-bounce" style={{ animationDuration: '2.5s' }} />
-          <div className="text-sm font-bold text-slate-655">
+          <div className="text-sm font-bold text-muted">
             {lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-subtle">
             {lang === 'zh'
               ? '课前准备、课中白板、课后小结与简报将在选择课节后就绪'
               : 'Classroom workflows activate once a lesson is selected.'}
@@ -1866,7 +1866,7 @@ export function LiveClassroomView({
               {/* 顶栏控制 */}
               <div className="p-3 border-b border-theme/60 flex items-center justify-between shrink-0 bg-surface-secondary/20">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-theme flex items-center justify-center shrink-0">
+                  <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-ink flex items-center justify-center shrink-0">
                     <Clock size={13} />
                   </div>
                   <div className="min-w-0">
@@ -1901,11 +1901,11 @@ export function LiveClassroomView({
                     <button
                       type="button"
                       onClick={() => setIsOutlineCollapsed((prev) => !prev)}
-                      className="flex items-center gap-1.5 text-xs font-bold text-main hover:text-primary-theme transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 text-xs font-bold text-main hover:text-primary-ink transition-colors cursor-pointer"
                     >
-                      <LayoutGrid size={13} className="text-primary-theme" />
+                      <LayoutGrid size={13} className="text-primary-ink" />
                       <span>{lang === 'zh' ? '白板页面大纲' : 'Whiteboard Outline'}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-theme/10 text-primary-theme font-mono font-bold">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-theme/10 text-primary-ink font-mono font-bold">
                         {whiteboardPages.length || 1}
                       </span>
                       <ChevronDown
@@ -1916,7 +1916,7 @@ export function LiveClassroomView({
                     <button
                       type="button"
                       onClick={() => whiteboardRef.current?.addPage?.()}
-                      className="p-1 rounded-md text-muted hover:text-primary-theme hover:bg-primary-theme/10 transition-colors cursor-pointer"
+                      className="p-1 rounded-md text-muted hover:text-primary-ink hover:bg-primary-theme/10 transition-colors cursor-pointer"
                       title={lang === 'zh' ? '新建白板页面' : 'Add Whiteboard Page'}
                     >
                       <Plus size={13} />
@@ -1932,7 +1932,7 @@ export function LiveClassroomView({
                         {lang === 'zh' ? '当前' : 'Active'}:{' '}
                         {whiteboardPages[currentWhiteboardPage]?.title || `P${currentWhiteboardPage + 1}`}
                       </span>
-                      <span className="text-[10px] text-primary-theme font-bold">
+                      <span className="text-[10px] text-primary-ink font-bold">
                         {lang === 'zh' ? '展开' : 'Expand'}
                       </span>
                     </div>
@@ -1955,7 +1955,7 @@ export function LiveClassroomView({
                               onClick={() => whiteboardRef.current?.switchPage?.(idx)}
                               className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
                                 isActive
-                                  ? 'bg-primary-theme text-white font-semibold shadow-xs ring-1 ring-primary-theme/30'
+                                  ? 'bg-primary-solid text-white font-semibold shadow-xs ring-1 ring-primary-theme/30'
                                   : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
                               }`}
                             >
@@ -1988,7 +1988,7 @@ export function LiveClassroomView({
                 <div className="flex flex-col gap-2 min-h-0">
                   <div className="flex items-center justify-between select-none">
                     <div className="flex items-center gap-1.5">
-                      <Radio size={12} className="text-primary-theme" />
+                      <Radio size={12} className="text-primary-ink" />
                       <h4 className="text-xs font-black uppercase text-main tracking-wider">
                         {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
                       </h4>
@@ -2020,13 +2020,13 @@ export function LiveClassroomView({
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <span
                                   className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                                    isActive ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-muted'
+                                    isActive ? 'bg-primary-solid text-white' : 'bg-surface-secondary text-muted'
                                   }`}
                                 >
                                   {idx + 1}
                                 </span>
                                 <span
-                                  className={`text-xs font-bold truncate ${isActive ? 'text-primary-theme' : 'text-main'}`}
+                                  className={`text-xs font-bold truncate ${isActive ? 'text-primary-ink' : 'text-main'}`}
                                 >
                                   {seg.title}
                                 </span>
@@ -2038,7 +2038,7 @@ export function LiveClassroomView({
 
                             <div
                               className={`text-2xs line-clamp-2 leading-relaxed pl-1 ${
-                                isActive ? 'text-primary-theme/90' : 'text-muted'
+                                isActive ? 'text-primary-ink/90' : 'text-muted'
                               }`}
                             >
                               {seg.notes || (lang === 'zh' ? '无步骤描述备注信息。' : 'No description notes.')}
@@ -2048,7 +2048,7 @@ export function LiveClassroomView({
                               onClick={() => handleStartSegment(seg)}
                               className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                                 isActive
-                                  ? 'bg-primary-theme text-white hover:bg-primary-theme-hover shadow-xs'
+                                  ? 'bg-primary-solid text-white hover:bg-primary-solid-hover shadow-xs'
                                   : 'bg-surface-secondary text-muted hover:text-main hover:bg-surface border border-theme'
                               }`}
                             >
@@ -2102,7 +2102,7 @@ export function LiveClassroomView({
                     {isLeftSidebarCollapsed && (
                       <button
                         onClick={() => setIsLeftSidebarCollapsed(false)}
-                        className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-theme hover:text-primary-theme-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                        className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-ink hover:text-primary-ink-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
                         title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                       >
                         <ChevronRight size={10} />
@@ -2114,7 +2114,7 @@ export function LiveClassroomView({
                         onClick={() => setMiddleTab('whiteboard')}
                         className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                           middleTab === 'whiteboard'
-                            ? 'bg-surface text-primary-theme shadow-sm'
+                            ? 'bg-surface text-primary-ink shadow-sm'
                             : 'text-muted hover:text-main'
                         }`}
                       >
@@ -2124,7 +2124,7 @@ export function LiveClassroomView({
                         onClick={() => setMiddleTab('submissions')}
                         className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                           middleTab === 'submissions'
-                            ? 'bg-surface text-primary-theme shadow-sm'
+                            ? 'bg-surface text-primary-ink shadow-sm'
                             : 'text-muted hover:text-main'
                         }`}
                       >
@@ -2135,7 +2135,7 @@ export function LiveClassroomView({
                         onClick={() => setMiddleTab('assignment')}
                         className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                           middleTab === 'assignment'
-                            ? 'bg-surface text-primary-theme shadow-sm'
+                            ? 'bg-surface text-primary-ink shadow-sm'
                             : 'text-muted hover:text-main'
                         }`}
                       >
@@ -2147,11 +2147,11 @@ export function LiveClassroomView({
                         onClick={() => setMiddleTab('top_performers')}
                         className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
                           middleTab === 'top_performers'
-                            ? 'bg-surface text-amber-500 shadow-sm'
+                            ? 'bg-surface text-amber-700 dark:text-amber-400 shadow-sm'
                             : 'text-muted hover:text-main'
                         }`}
                       >
-                        <Trophy size={12} className="text-amber-500" />
+                        <Trophy size={12} className="text-amber-700 dark:text-amber-400" />
                         <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
                       </button>
                     </div>
@@ -2167,7 +2167,7 @@ export function LiveClassroomView({
                         className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer mr-1"
                         title={lang === 'zh' ? '点击查看学生端异常诊断日志' : 'View Student Client Errors'}
                       >
-                        <AlertTriangle size={12} className="text-rose-500 animate-pulse" />
+                        <AlertTriangle size={12} className="text-rose-700 dark:text-rose-400 animate-pulse" />
                         <span>
                           {lang === 'zh'
                             ? `学生端异常 (${studentErrors.length})`
@@ -2175,7 +2175,7 @@ export function LiveClassroomView({
                         </span>
                       </button>
                     )}
-                    <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
+                    <span className="text-primary-ink font-mono tracking-widest animate-pulse flex items-center gap-1">
                       <Activity size={10} /> Live Broadcaster Connected
                     </span>
                     <button
@@ -2294,16 +2294,16 @@ export function LiveClassroomView({
                 )}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none">
+              <div className="flex-1 flex flex-col items-center justify-center text-subtle gap-2.5 select-none">
                 <Presentation
                   size={38}
                   className="text-slate-300 animate-bounce"
                   style={{ animationDuration: '2.5s' }}
                 />
-                <div className="text-sm font-bold text-slate-655">
+                <div className="text-sm font-bold text-muted">
                   {lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}
                 </div>
-                <p className="text-xs text-slate-400">白板及环节控制面板将在课节载入后自动生成</p>
+                <p className="text-xs text-subtle">白板及环节控制面板将在课节载入后自动生成</p>
               </div>
             )}
           </div>
@@ -2321,7 +2321,7 @@ export function LiveClassroomView({
                     <button
                       onClick={handleRandomPick}
                       disabled={students.length === 0 || isDrawing}
-                      className="text-[11px] font-bold bg-primary-theme/10 text-primary-theme hover:bg-primary-theme/20 border border-primary-theme/25 px-2 py-0.5 rounded-full transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs shrink-0"
+                      className="text-[11px] font-bold bg-primary-theme/10 text-primary-ink hover:bg-primary-theme/20 border border-primary-theme/25 px-2 py-0.5 rounded-full transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs shrink-0"
                       title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
                     >
                       <Shuffle size={10} className={isDrawing ? 'animate-spin' : ''} />
@@ -2418,7 +2418,7 @@ export function LiveClassroomView({
                                 errorStore.getState().setActiveTab('student');
                                 errorStore.getState().setIsErrorCenterOpen(true);
                               }}
-                              className="absolute -top-1 -right-1 z-30 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:scale-125 transition-transform"
+                              className="absolute -top-1 -right-1 z-30 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md cursor-pointer hover:scale-125 transition-transform"
                               title={`该学生端捕获到 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
                             >
                               <AlertTriangle size={9} className="animate-pulse" />
@@ -2495,7 +2495,7 @@ export function LiveClassroomView({
                                   className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                     isBehind
                                       ? 'text-amber-500 hover:text-amber-600 animate-pulse'
-                                      : 'text-slate-400 hover:text-primary-theme'
+                                      : 'text-slate-400 hover:text-primary-ink'
                                   }`}
                                   title="提醒"
                                 >
@@ -2530,7 +2530,7 @@ export function LiveClassroomView({
 
                           {/* Top-Right Online/Lesson Badge Indicator or Jackpot winner target badge */}
                           {isSelectedDraw ? (
-                            <span className="absolute -top-1.5 -right-1.5 z-20 text-[10px] bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
+                            <span className="absolute -top-1.5 -right-1.5 z-20 text-[10px] bg-amber-700 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
                               🎯
                             </span>
                           ) : (
@@ -2574,7 +2574,7 @@ export function LiveClassroomView({
                   })}
                 </div>
               ) : (
-                <div className="text-xs text-slate-400 italic py-4 text-center flex-1 flex items-center justify-center">
+                <div className="text-xs text-subtle italic py-4 text-center flex-1 flex items-center justify-center">
                   {lang === 'zh' ? '请选择班级以显示学生' : 'Select class to show student monitors.'}
                 </div>
               )}
@@ -2622,19 +2622,19 @@ export function LiveClassroomView({
                               className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
                               title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
                             >
-                              <AlertTriangle size={10} className="text-rose-500 animate-pulse" />
+                              <AlertTriangle size={10} className="text-rose-700 dark:text-rose-400 animate-pulse" />
                               <span>{stErrors.length} 异常</span>
                             </button>
                           )}
                         </span>
-                        <span className="text-xs text-primary-theme font-mono font-black shrink-0">{progPercent}%</span>
+                        <span className="text-xs text-primary-ink font-mono font-black shrink-0">{progPercent}%</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
                         <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
                           <span className="text-muted font-bold text-[10px]">随堂测验</span>
                           <span
-                            className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}
+                            className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-ink' : 'text-muted'}`}
                           >
                             {studentProg != null && studentProg.quiz_score !== null
                               ? `${studentProg.quiz_score} / 100`
@@ -2676,7 +2676,7 @@ export function LiveClassroomView({
                 // Class summary state when no hover
                 <div className="flex flex-col gap-1 text-xs text-main h-full justify-center">
                   <div className="font-extrabold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 shrink-0">
-                    <Activity size={12} className="text-primary-theme animate-pulse" />
+                    <Activity size={12} className="text-primary-ink animate-pulse" />
                     <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
@@ -2688,13 +2688,13 @@ export function LiveClassroomView({
                     </div>
                     <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
                       <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
-                      <span className="font-bold font-mono text-rose-500 text-xs mt-0.5">
+                      <span className="font-bold font-mono text-rose-700 dark:text-rose-400 text-xs mt-0.5">
                         {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
                       </span>
                     </div>
                     <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
                       <span className="text-muted font-medium text-[10px]">平均进度</span>
-                      <span className="font-bold font-mono text-primary-theme text-xs mt-0.5">
+                      <span className="font-bold font-mono text-primary-ink text-xs mt-0.5">
                         {(() => {
                           const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
                           if (inClassStudents.length === 0) return '0%';
@@ -2733,11 +2733,11 @@ export function LiveClassroomView({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <ChevronDown
                     size={13}
-                    className={`text-muted group-hover:text-primary-theme transition-transform duration-200 shrink-0 ${
+                    className={`text-muted group-hover:text-primary-ink transition-transform duration-200 shrink-0 ${
                       isFeedCollapsed ? '-rotate-90' : 'rotate-0'
                     }`}
                   />
-                  <MessageSquare size={12} className="text-primary-theme shrink-0" />
+                  <MessageSquare size={12} className="text-primary-ink shrink-0" />
                   <span className="font-extrabold text-main text-xs truncate">
                     {lang === 'zh' ? '课堂互动反馈流' : 'Live Feed'}
                   </span>
@@ -2762,7 +2762,7 @@ export function LiveClassroomView({
                           },
                         ])
                       }
-                      className="text-[10px] font-bold hover:text-rose-500 text-muted transition-colors flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-surface-secondary cursor-pointer"
+                      className="text-[10px] font-bold hover:text-rose-700 dark:hover:text-rose-400 text-muted transition-colors flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-surface-secondary cursor-pointer"
                       title={lang === 'zh' ? '清空互动反馈记录' : 'Clear feed'}
                     >
                       <Trash2 size={10} />
@@ -2772,7 +2772,7 @@ export function LiveClassroomView({
                   <button
                     type="button"
                     onClick={() => setIsFeedCollapsed((prev) => !prev)}
-                    className="text-[10px] text-muted hover:text-primary-theme font-medium cursor-pointer"
+                    className="text-[10px] text-muted hover:text-primary-ink font-medium cursor-pointer"
                   >
                     {isFeedCollapsed ? (lang === 'zh' ? '展开' : 'Expand') : lang === 'zh' ? '收起' : 'Collapse'}
                   </button>
@@ -2824,7 +2824,7 @@ export function LiveClassroomView({
             {/* Modal Header */}
             <div className="bg-surface-secondary px-6 py-4 border-b border-theme flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="text-primary-theme" size={18} />
+                <FileText className="text-primary-ink" size={18} />
                 <h3 className="text-sm font-bold text-main">
                   {lang === 'zh'
                     ? `[${selectedAttempt.studentName}] 的互动提交轨迹详情`
@@ -2855,7 +2855,7 @@ export function LiveClassroomView({
                   <div className="text-xs text-muted font-bold uppercase tracking-wider">
                     {lang === 'zh' ? '提交成绩' : 'Score'}
                   </div>
-                  <div className="text-xs font-bold text-primary-theme mt-1">
+                  <div className="text-xs font-bold text-primary-ink mt-1">
                     {selectedAttempt.score !== null ? `${selectedAttempt.score} 分` : lang === 'zh' ? '未打分' : 'N/A'}
                   </div>
                 </div>
@@ -2872,13 +2872,13 @@ export function LiveClassroomView({
               {/* Event Logs Timeline */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 flex-wrap">
-                  <Activity size={13} className="text-primary-theme" />
+                  <Activity size={13} className="text-primary-ink" />
                   <span>{lang === 'zh' ? '实时捕获轨迹事件流 (LMS Bridge)' : 'LMS Event Captures'}</span>
                 </h4>
 
                 {loadingRaw ? (
                   <div className="py-12 flex flex-col items-center justify-center text-muted gap-2">
-                    <RefreshCw size={20} className="animate-spin text-primary-theme" />
+                    <RefreshCw size={20} className="animate-spin text-primary-ink" />
                     <span className="text-xs">{lang === 'zh' ? '正在查询原始数据...' : 'Loading raw data...'}</span>
                   </div>
                 ) : Array.isArray(rawPayload) && rawPayload.length > 0 ? (
@@ -2981,7 +2981,7 @@ export function LiveClassroomView({
         >
           <div className="bg-surface border border-theme rounded-2xl shadow-2xl max-w-md w-full p-5 flex flex-col gap-4 text-main">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25 flex items-center justify-center shrink-0">
                 <AlertCircle size={22} />
               </div>
               <div>
@@ -3002,9 +3002,9 @@ export function LiveClassroomView({
                 </span>
               </div>
               <div className="flex items-center justify-center text-muted">
-                <ArrowDown size={14} className="text-primary-theme animate-bounce" />
+                <ArrowDown size={14} className="text-primary-ink animate-bounce" />
               </div>
-              <div className="flex items-center justify-between text-primary-theme font-bold">
+              <div className="flex items-center justify-between text-primary-ink font-bold">
                 <span>{lang === 'zh' ? '目标新课程' : 'New Lesson'}:</span>
                 <span className="truncate max-w-[240px]">{lessons.find((l) => l.id === pendingLessonId)?.title}</span>
               </div>
@@ -3045,7 +3045,7 @@ export function LiveClassroomView({
                   }
                   setIsSwitchLessonConfirmOpen(false);
                 }}
-                className="px-4 py-1.5 rounded-xl bg-primary-theme hover:opacity-90 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-primary-solid hover:opacity-90 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
               >
                 {lang === 'zh' ? '确认切换' : 'Confirm Switch'}
               </button>

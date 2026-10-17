@@ -270,7 +270,7 @@ const TabButton: React.FC<{
     {count > 0 && (
       <span
         className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-          active ? (accent === 'rose' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white') : 'bg-surface text-muted'
+          active ? (accent === 'rose' ? 'bg-rose-600 text-white' : 'bg-amber-700 text-white') : 'bg-surface text-muted'
         }`}
       >
         {count}
