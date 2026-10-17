@@ -15,6 +15,9 @@ import {
   RotateCcw,
   Plus,
   X,
+  Play,
+  DoorOpen,
+  Zap,
 } from 'lucide-react';
 import type { ClassType, ScheduleType } from '../types';
 import { getWeekDates, getIsAfternoon } from '../utils/timetableUtils';
@@ -60,6 +63,10 @@ export interface TimetableCalendarViewProps {
   setFormStatus: (status: string) => void;
   setFormNotes: (notes: string) => void;
   setIsAddOpen: (open: boolean) => void;
+  /** Issue #90: 打开「快速开始上这节课」确认框 */
+  onQuickStart: (sch: ScheduleType) => void;
+  /** 已有进行中（未归档）课堂会话的 lesson_id 集合 → 按钮显示「进入课堂」 */
+  activeSessionLessonIds: Set<string>;
 }
 
 export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
@@ -97,6 +104,8 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
   setFormStatus,
   setFormNotes,
   setIsAddOpen,
+  onQuickStart,
+  activeSessionLessonIds,
 }) => {
   const weekDays = [
     { key: 1, label: lang === 'zh' ? '周一 (Mon)' : 'Mon' },
@@ -109,6 +118,88 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
   ];
 
   const weekDates = getWeekDates(currentWeekMonday);
+
+  // ── Issue #90: 快速开始上这节课 ─────────────────────────────────────────
+  /** 解析 "HH:MM - HH:MM" 时间段；无法解析（如全天）返回 null */
+  const parseTimeSlot = (slot?: string | null): { start: string; end: string } | null => {
+    const m = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec((slot || '').trim());
+    if (!m) return null;
+    return {
+      start: `${m[1].padStart(2, '0')}:${m[2]}`,
+      end: `${m[3].padStart(2, '0')}:${m[4]}`,
+    };
+  };
+
+  const nowHM = (() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  })();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayActiveSchedules = filteredSchedules
+    .filter((s) => s.scheduled_date === todayStr && s.status !== 'cancelled' && s.status !== 'holiday')
+    .sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
+  const currentSchedule = todayActiveSchedules.find((s) => {
+    const t = parseTimeSlot(s.time_slot);
+    return t && t.start <= nowHM && nowHM <= t.end;
+  });
+  const nextSchedule = todayActiveSchedules.find((s) => {
+    const t = parseTimeSlot(s.time_slot);
+    return t && t.start > nowHM;
+  });
+  const focusSchedule = currentSchedule || nextSchedule;
+
+  /** 排课卡片/列表行的「开始上课」按钮：停课/假期/未关联课程禁用；已有进行中会话显示「进入课堂」 */
+  const renderQuickStartButton = (sch: ScheduleType, size: 'sm' | 'xs' = 'xs') => {
+    const isUnavailable = sch.status === 'cancelled' || sch.status === 'holiday';
+    const hasLesson = !!sch.lesson_id;
+    const disabled = isUnavailable || !hasLesson;
+    const isActiveSession = hasLesson && activeSessionLessonIds.has(sch.lesson_id);
+    const title = isUnavailable
+      ? lang === 'zh'
+        ? '停课/假期排课不能开始上课'
+        : 'Cancelled/holiday schedules cannot start a class'
+      : !hasLesson
+        ? lang === 'zh'
+          ? '未关联课程，请先编辑排课关联课程'
+          : 'No lesson linked. Edit the schedule to link one first.'
+        : isActiveSession
+          ? lang === 'zh'
+            ? '该课已有进行中的课堂会话，点击直接进入'
+            : 'An active session exists. Click to enter directly.'
+          : lang === 'zh'
+            ? '快速开始上这节课'
+            : 'Quick start this class';
+    const cls =
+      size === 'sm'
+        ? 'px-2.5 py-1 text-xs gap-1'
+        : 'px-1.5 py-0.5 text-[11px] gap-0.5';
+    return (
+      <button
+        type="button"
+        data-testid={`quick-start-${sch.id}`}
+        disabled={disabled}
+        aria-label={`${title}：${sch.lesson_title || sch.class_name || sch.id}`}
+        title={title}
+        onClick={() => onQuickStart(sch)}
+        className={`flex items-center rounded-md font-bold transition-all ${
+          disabled
+            ? 'text-slate-300 bg-slate-50 border border-slate-100 cursor-not-allowed'
+            : isActiveSession
+              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 cursor-pointer'
+              : 'text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-500 shadow-2xs cursor-pointer'
+        } ${cls}`}
+      >
+        {isActiveSession ? <DoorOpen size={11} aria-hidden="true" /> : <Play size={11} aria-hidden="true" />}
+        {isActiveSession
+          ? lang === 'zh'
+            ? '进入课堂'
+            : 'Enter'
+          : lang === 'zh'
+            ? '开始上课'
+            : 'Start'}
+      </button>
+    );
+  };
 
   const renderScheduleCard = (sch: ScheduleType) => {
     const isCancel = sch.status === 'cancelled' || sch.status === 'holiday';
@@ -185,6 +276,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
               slot="timetable.card.badge"
               slotProps={{ schedule: sch, lang }}
             />
+            {renderQuickStartButton(sch)}
           </div>
 
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity items-center">
@@ -345,6 +437,46 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 当前/下一节课快捷卡片（Issue #90）：根据当前日期与 time_slot 自动定位，提供一键开课 */}
+      {focusSchedule && (
+        <div
+          id="timetable_quick_start_card"
+          data-testid="timetable-quick-start-card"
+          className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border shadow-2xs ${
+            currentSchedule
+              ? 'bg-emerald-50/60 border-emerald-200/70'
+              : 'bg-indigo-50/60 border-indigo-200/60'
+          }`}
+        >
+          <div
+            className={`flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border select-none ${
+              currentSchedule
+                ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                : 'bg-indigo-100 border-indigo-200 text-indigo-700'
+            }`}
+          >
+            <Zap size={12} aria-hidden="true" />
+            {currentSchedule
+              ? lang === 'zh'
+                ? '正在进行'
+                : 'In Progress'
+              : lang === 'zh'
+                ? '下一节课'
+                : 'Up Next'}
+          </div>
+          <div className="flex-1 min-w-[180px] leading-snug">
+            <div className="text-sm font-bold text-slate-800">
+              {focusSchedule.lesson_title || focusSchedule.class_name}
+            </div>
+            <div className="text-xs text-slate-500 flex flex-wrap gap-x-3">
+              <span className="font-mono">{focusSchedule.time_slot}</span>
+              <span>{focusSchedule.class_name}</span>
+            </div>
+          </div>
+          {renderQuickStartButton(focusSchedule, 'sm')}
+        </div>
+      )}
+
       {/* Filters Row */}
       <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap items-center gap-2">
@@ -546,6 +678,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {renderQuickStartButton(sch, 'sm')}
                         <ExtensionPointRenderer
                           slot="timetable.entry.action"
                           slotProps={{ schedule: sch, lang, onEdit: () => openEditModal(sch) }}

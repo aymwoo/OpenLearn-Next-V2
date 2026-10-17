@@ -25,6 +25,9 @@ import {
   XCircle,
   ArrowRight,
   Eye,
+  Play,
+  DoorOpen,
+  Zap,
   Grid,
   List,
   ChevronLeft,
@@ -42,6 +45,7 @@ import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 import { useAsyncTaskStore, asyncTaskStore } from '../store/asyncTaskStore';
 import { uiStore, useUIStore } from '../store/uiStore';
+import { fetchTeachingModes, type TeachingMode } from '../features/classroom/teaching-modes-client';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
@@ -307,6 +311,89 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       selected: Array.from(ocrSelectedEntries),
     });
   }, [ocrImagePreview, ocrImageBase64, ocrFileName, ocrProviderId, ocrEntries, ocrSelectedEntries]);
+
+  // ── Issue #90: 快速开始上这节课 ─────────────────────────────────────────
+  const [launchTarget, setLaunchTarget] = useState<ScheduleType | null>(null);
+  const [launchModes, setLaunchModes] = useState<TeachingMode[]>([]);
+  const [launchModesLoaded, setLaunchModesLoaded] = useState(false);
+  const [launchSelectedMode, setLaunchSelectedMode] = useState<string | null>(null);
+  const [launchStarting, setLaunchStarting] = useState(false);
+  const [launchError, setLaunchError] = useState<string>('');
+  /** 已有进行中（未归档）课堂会话的 lesson_id 集合 → 按钮显示「进入课堂」 */
+  const [activeSessionLessonIds, setActiveSessionLessonIds] = useState<Set<string>>(new Set());
+
+  // 拉取进行中的课堂会话（status=active 即未归档），用于卡片按钮「开始上课 / 进入课堂」文案
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/classroom/sessions?pageSize=all&status=active');
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+        if (!cancelled) {
+          setActiveSessionLessonIds(new Set(items.map((s: any) => s.lessonId).filter(Boolean)));
+        }
+      } catch {
+        /* 静默失败：按钮统一显示「开始上课」，点击后走 get-or-create init 兜底 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openQuickStart = (sch: ScheduleType) => {
+    setLaunchTarget(sch);
+    setLaunchSelectedMode(null);
+    setLaunchError('');
+    if (!launchModesLoaded) {
+      fetchTeachingModes()
+        .then((modes) => {
+          setLaunchModes(modes);
+          setLaunchModesLoaded(true);
+        })
+        .catch(() => {
+          // 拉取失败不阻塞：仍可用默认模式直接开始
+          setLaunchModes([]);
+          setLaunchModesLoaded(true);
+        });
+    }
+  };
+
+  // 与门户「开始上课」同一初始化接口；失败停留在课表页并提示，成功后经
+  // pendingLiveClassLaunch 信号让互动课堂跳过门户直接进入授课视图
+  const confirmQuickStart = async (teachingModeId: string | null) => {
+    if (!launchTarget?.lesson_id || launchStarting) return;
+    setLaunchStarting(true);
+    setLaunchError('');
+    try {
+      const res = await fetch(`/api/classroom/sessions/${launchTarget.lesson_id}/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: launchTarget.class_id, teachingModeId: teachingModeId ?? undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(
+          data?.error || (lang === 'zh' ? '初始化课堂会话失败' : 'Failed to initialise the classroom session'),
+        );
+      }
+      uiStore.getState().setPendingLiveClassLaunch({
+        lessonId: launchTarget.lesson_id,
+        classId: launchTarget.class_id,
+        teachingModeId,
+      });
+      uiStore.getState().setTeacherTab('live_class');
+      setLaunchTarget(null);
+    } catch (e: any) {
+      setLaunchError(
+        e?.message || (lang === 'zh' ? '初始化课堂会话失败，请重试' : 'Failed to initialise the classroom session'),
+      );
+    } finally {
+      setLaunchStarting(false);
+    }
+  };
 
   // 联动全局后台任务：页面切换回来时自动同步任务状态与已识别结果
   useEffect(() => {
@@ -1438,6 +1525,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             setFormStatus={setFormStatus}
             setFormNotes={setFormNotes}
             setIsAddOpen={setIsAddOpen}
+            onQuickStart={openQuickStart}
+            activeSessionLessonIds={activeSessionLessonIds}
           />
         )}
 
@@ -1519,6 +1608,96 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           }}
         />
       </div>
+
+      {/* Quick Start Lesson Dialog (Issue #90) */}
+      {launchTarget && (
+        <div
+          className="fixed inset-0 z-55 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={lang === 'zh' ? '快速开始上课' : 'Quick start class'}
+        >
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 flex items-center gap-1.5 text-sm xl:text-base">
+                <Zap className="text-indigo-600" size={18} />
+                {lang === 'zh' ? '快速开始上这节课' : 'Quick Start This Class'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLaunchTarget(null)}
+                aria-label={lang === 'zh' ? '关闭' : 'Close'}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
+              {/* 排课信息 */}
+              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-xs">
+                <div className="font-bold text-indigo-900">
+                  {launchTarget.lesson_title || (lang === 'zh' ? '未命名课程' : 'Untitled Lesson')}
+                </div>
+                <div className="text-indigo-700/80 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span className="font-mono">{launchTarget.time_slot || (lang === 'zh' ? '全天' : 'All-day')}</span>
+                  <span>{launchTarget.class_name}</span>
+                  <span>{launchTarget.scheduled_date}</span>
+                </div>
+              </div>
+
+              {/* 教学模式（轻量确认框；不选即用默认模式） */}
+              {launchModes.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 mb-1.5">
+                    {lang === 'zh' ? '教学模式（可选）' : 'Teaching Mode (optional)'}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {launchModes.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setLaunchSelectedMode(launchSelectedMode === m.id ? null : m.id)}
+                        aria-pressed={launchSelectedMode === m.id}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                          launchSelectedMode === m.id
+                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+                        }`}
+                      >
+                        {lang === 'zh' ? m.name : m.nameEn || m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {launchError && (
+                <div
+                  className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2"
+                  role="alert"
+                >
+                  <AlertCircle size={13} className="shrink-0 mt-px" />
+                  <span>{launchError}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => confirmQuickStart(launchSelectedMode)}
+                disabled={launchStarting || !launchTarget.lesson_id}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {launchStarting ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Play size={15} aria-hidden="true" />
+                )}
+                {lang === 'zh' ? '开始上课' : 'Start Class'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Schedule Dialog */}
       {isAddOpen && (

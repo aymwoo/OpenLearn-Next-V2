@@ -19,6 +19,8 @@ export interface UIState {
   teacherTab: string;
   /** Issue #89: 待消费的课表中心子页导航信号（如 'ocr_import'），由 TimetableManager 挂载/监听消费后清空 */
   pendingTimetableSubTab: string | null;
+  /** Issue #90: 课表「快速开始上这节课」的一键开课信号（课表页已初始化会话），由 LiveClassroomView 挂载消费后清空 */
+  pendingLiveClassLaunch: { lessonId: string; classId: string | null; teachingModeId: string | null } | null;
 
   // Modal Open States
   profileOpen: boolean;
@@ -38,6 +40,9 @@ export interface UIState {
   setActiveRole: (role: 'teacher' | 'student') => void;
   setTeacherTab: (tab: string) => void;
   setPendingTimetableSubTab: (subTab: string | null) => void;
+  setPendingLiveClassLaunch: (
+    launch: { lessonId: string; classId: string | null; teachingModeId: string | null } | null,
+  ) => void;
   setProfileOpen: (open: boolean) => void;
   setIsCourseWizardOpen: (open: boolean) => void;
   setIsImportLessonsOpen: (open: boolean) => void;
@@ -56,6 +61,7 @@ export const uiStore = createStore<UIState>((set) => ({
   // 教师/管理员的默认首页：若 URL hash 中已携带有效 tab（如在新窗口打开、刷新或深层链接）则优先采用，否则为互动课堂（live_class）
   teacherTab: getInitialTeacherTab(),
   pendingTimetableSubTab: null,
+  pendingLiveClassLaunch: null,
 
   profileOpen: false,
   isCourseWizardOpen: false,
@@ -72,6 +78,7 @@ export const uiStore = createStore<UIState>((set) => ({
   setActiveRole: (activeRole) => set({ activeRole }),
   setTeacherTab: (teacherTab) => set({ teacherTab }),
   setPendingTimetableSubTab: (pendingTimetableSubTab) => set({ pendingTimetableSubTab }),
+  setPendingLiveClassLaunch: (pendingLiveClassLaunch) => set({ pendingLiveClassLaunch }),
   setProfileOpen: (profileOpen) => set({ profileOpen }),
   setIsCourseWizardOpen: (isCourseWizardOpen) => set({ isCourseWizardOpen }),
   setIsImportLessonsOpen: (isImportLessonsOpen) => set({ isImportLessonsOpen }),
