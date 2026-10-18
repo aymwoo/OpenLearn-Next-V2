@@ -81,6 +81,15 @@ sudo systemctl enable --now openlearn
 
 ---
 
+## 2.5 多校部署（一校一实例）
+
+平台**不是** SaaS 多租户：一个实例服务一所学校。多校部署为每校一套实例（独立库、独立数据目录、独立 `ENCRYPTION_KEY`、独立备份），通过反向代理按域名路由。
+
+- 决策依据与代价：[ADR-001 多租户 / 多校区与数据库抽象层](../architecture/adr-001-tenant-and-db-abstraction)
+- 配置清单、Compose 隔离、Nginx 示例、逐实例升级/备份/恢复：[多校部署（一校一实例）](multi-school)
+
+---
+
 ## 3. 生产运维与容灾保障 (CLI Toolchain)
 
 OpenLearn 内置了免启动服务、免 Web 界面的完整命令行数据运维能力。

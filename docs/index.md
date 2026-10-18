@@ -30,6 +30,7 @@ architecture/dependency-injection
 architecture/presence-collaboration
 architecture/security-permissions
 architecture/database-and-migrations
+architecture/adr-001-tenant-and-db-abstraction
 architecture/theming-system
 architecture/service-registry
 architecture/whiteboard-subsystems
@@ -114,6 +115,7 @@ analytics/learning-analytics-engine
 
 deployment/production-guide
 deployment/docker-nginx
+deployment/multi-school
 DEPLOY_REHEARSAL
 beta/README
 beta/announcement
