@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getPresentStudentIds, setupPresence } from '../presence.js';
+import { getPresentStudentIds, PRESENCE_STAFF_ROOM, setupPresence } from '../presence.js';
 import { lessonActiveSegments } from '../shared-state.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
@@ -106,14 +106,19 @@ describe('setupPresence', () => {
     ]);
   });
 
-  it('register-student broadcasts presence-update with the student online', () => {
+  it('register-student broadcasts presence-update to the staff room only', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket._emitted.length = 0;
     socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
 
     expect(m.globalEmitted).toEqual([
-      { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} } },
+      {
+        scope: 'room',
+        room: PRESENCE_STAFF_ROOM,
+        event: 'presence-update',
+        payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} },
+      },
     ]);
   });
 
@@ -273,7 +278,7 @@ describe('setupPresence', () => {
     expect(getPresentStudentIds('')).toEqual([]);
   });
 
-  it('disconnect removes the student and broadcasts an empty presence-update', () => {
+  it('disconnect removes the student and broadcasts an empty presence-update to the staff room', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
@@ -281,7 +286,12 @@ describe('setupPresence', () => {
     socket.trigger('disconnect', undefined);
 
     expect(m.globalEmitted).toEqual([
-      { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
+      {
+        scope: 'room',
+        room: PRESENCE_STAFF_ROOM,
+        event: 'presence-update',
+        payload: { onlineStudentIds: [], activeStudentLessons: {} },
+      },
     ]);
   });
 
@@ -304,7 +314,12 @@ describe('setupPresence', () => {
     // Now when active socket2 disconnects, presence is removed
     socket2.trigger('disconnect', undefined);
     expect(m.globalEmitted).toEqual([
-      { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
+      {
+        scope: 'room',
+        room: PRESENCE_STAFF_ROOM,
+        event: 'presence-update',
+        payload: { onlineStudentIds: [], activeStudentLessons: {} },
+      },
     ]);
   });
 
@@ -333,7 +348,8 @@ describe('setupPresence', () => {
 
       socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
 
-      expect(socket._joinedRooms).toEqual(['class-c1', 'class-c2']);
+      // 无 session 的测试连接按特权处理，会先加入 presence-staff
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-c1', 'class-c2']);
     });
 
     it('still registers presence when the class lookup fails', () => {
@@ -344,7 +360,12 @@ describe('setupPresence', () => {
       socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
 
       expect(m.globalEmitted).toEqual([
-        { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} } },
+        {
+          scope: 'room',
+          room: PRESENCE_STAFF_ROOM,
+          event: 'presence-update',
+          payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} },
+        },
       ]);
     });
 
@@ -415,7 +436,7 @@ describe('setupPresence', () => {
       const socket = m.connect('sock-1', teacherSession);
       socket.trigger('join-room', 'class-c9');
       socket.trigger('join-room', 'L1');
-      expect(socket._joinedRooms).toEqual(['class-c9', 'L1']);
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-c9', 'L1']);
     });
 
     it('学生加入开课课节房间须属于开课班级；未开课课节不设限', () => {
@@ -441,7 +462,7 @@ describe('setupPresence', () => {
       const m = buildMocks();
       const socket = m.connect();
       socket.trigger('join-room', 'class-anything');
-      expect(socket._joinedRooms).toEqual(['class-anything']);
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-anything']);
     });
 
     it('enter-lesson 对开课课节做同样的班级归属校验', () => {
@@ -494,6 +515,105 @@ describe('setupPresence', () => {
 
       socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
       expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged')).toHaveLength(1);
+    });
+  });
+
+  describe('SEC-AUTH: presence 可见范围（Issue #133）', () => {
+    const teacherSession = { userId: 'usr_t', role: 'teacher' };
+    const adminSession = { userId: 'usr_a', role: 'administrator' };
+    const studentSession = (studentId: string) => ({ userId: studentId, role: 'student' });
+
+    it('学生手动 join-room presence-staff 被拒', () => {
+      const m = buildMocks();
+      const student = m.connect('sock-s', studentSession('s1'));
+      student._joinedRooms.length = 0;
+      student.trigger('join-room', PRESENCE_STAFF_ROOM);
+
+      expect(student._joinedRooms).toEqual([]);
+      expect(student._emitted.some((e: Emitted) => e.event === 'error')).toBe(true);
+    });
+
+    it('学生连接不会加入 presence-staff 房间，教师/管理员会加入', () => {
+      const m = buildMocks();
+      const student = m.connect('sock-s', studentSession('s1'));
+      const teacher = m.connect('sock-t', teacherSession);
+      const admin = m.connect('sock-a', adminSession);
+
+      expect(student._joinedRooms).not.toContain(PRESENCE_STAFF_ROOM);
+      expect(teacher._joinedRooms).toContain(PRESENCE_STAFF_ROOM);
+      expect(admin._joinedRooms).toContain(PRESENCE_STAFF_ROOM);
+    });
+
+    it('在线状态变化只投递到 presence-staff，不再有全局广播', () => {
+      const m = buildMocks();
+      const s1 = m.connect('sock-1', studentSession('s1'));
+      s1.trigger('register-student', { studentId: 's1', name: 'Stu1' });
+
+      s1._emitted.length = 0;
+      m.globalEmitted.length = 0;
+
+      const s2 = m.connect('sock-2', studentSession('s2'));
+      s2.trigger('register-student', { studentId: 's2', name: 'Stu2' });
+
+      const presenceEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'presence-update');
+      expect(presenceEvents.length).toBe(1);
+      expect(presenceEvents[0]).toMatchObject({ scope: 'room', room: PRESENCE_STAFF_ROOM });
+      // 已在线的学生 socket 收不到这次全量广播
+      expect(s1._emitted).toEqual([]);
+    });
+
+    it('学生 request-presence 只返回本人状态', () => {
+      const m = buildMocks();
+      const s1 = m.connect('sock-1', studentSession('s1'));
+      s1.trigger('register-student', { studentId: 's1', name: 'Stu1' });
+      s1.trigger('enter-lesson', { studentId: 's1', lessonId: 'L1' });
+
+      const s2 = m.connect('sock-2', studentSession('s2'));
+      s2.trigger('register-student', { studentId: 's2', name: 'Stu2' });
+      s2.trigger('enter-lesson', { studentId: 's2', lessonId: 'L2' });
+
+      s1._emitted.length = 0;
+      s1.trigger('request-presence', undefined);
+
+      expect(s1._emitted).toEqual([
+        {
+          scope: 'socket',
+          event: 'presence-update',
+          payload: { onlineStudentIds: ['s1'], activeStudentLessons: { s1: 'L1' } },
+        },
+      ]);
+    });
+
+    it('学生连接时的初始推送为空，不泄露当前在线名单', () => {
+      const m = buildMocks();
+      const s1 = m.connect('sock-1', studentSession('s1'));
+      s1.trigger('register-student', { studentId: 's1', name: 'Stu1' });
+
+      const s2 = m.connect('sock-2', studentSession('s2'));
+      expect(s2._emitted).toEqual([
+        { scope: 'socket', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
+      ]);
+    });
+
+    it('教师/管理员 request-presence 仍返回全校全量', () => {
+      const m = buildMocks();
+      const s1 = m.connect('sock-1', studentSession('s1'));
+      s1.trigger('register-student', { studentId: 's1', name: 'Stu1' });
+      s1.trigger('enter-lesson', { studentId: 's1', lessonId: 'L1' });
+      const s2 = m.connect('sock-2', studentSession('s2'));
+      s2.trigger('register-student', { studentId: 's2', name: 'Stu2' });
+
+      const teacher = m.connect('sock-t', teacherSession);
+      teacher._emitted.length = 0;
+      teacher.trigger('request-presence', undefined);
+
+      expect(teacher._emitted).toEqual([
+        {
+          scope: 'socket',
+          event: 'presence-update',
+          payload: { onlineStudentIds: ['s1', 's2'], activeStudentLessons: { s1: 'L1' } },
+        },
+      ]);
     });
   });
 
