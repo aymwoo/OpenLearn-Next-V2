@@ -66,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **源码中文编码损坏修复与 CI 编码门禁（Issue #130）**：修复 9 个文件中 29 处被非 UTF-8 编码写入损坏的中文（7 个源码文件 27 处 + 2 个 md 文档 2 处），其中 2 处为用户可见文案：学生看板未绑定课节的课表标题恢复为 `未设定内容 (上课时自由选择)`（与 `schedule-service` / `grading-service` 一致），AI 对话注入检测提示恢复为 `检测到潜在的 prompt 注入尝试，请修改您的输入。`；其余为被 GBK 字节污染的注释（`roster.ts` 的 profile/avatar 段等），已逐处从损坏前的提交还原原文。issue 复现命令未覆盖的根 `server.ts:153`（`rg ... server src packages` 只扫目录，漏掉根文件）及 2 处 md 文档同类损坏一并修复。防回归：新增 `scripts/check-source-encoding.mjs`（`pnpm lint:encoding`）扫描全仓 TS/TSX/MJS/CJS/JS 中的 U+FFFD 字面量与非法 UTF-8 字节并接入 CI `typecheck-and-test`；新增最小 `.editorconfig`（`charset = utf-8`）；检查脚本附带 4 例单元测试。
 - **课堂情绪追踪与优秀学员组件实时通道死链修复（Issue #129）**：`src/hooks/useSocket.ts`（已删除）每次调用都新建裸 `io()` 连接且从不参加任何房间，而服务端课堂事件经 `emitClassroomEvent` 只投递到 `[lessonId, classroom-broadcast]` 房间（`server/presence.ts`），导致教师端「课堂情绪追踪」（`ClassroomMoodTracker`）的 `classroom:pacing_updated` / `classroom:quick_poll_updated` / `classroom:buzzer_winner` 与「优秀学员」（`TopPerformersWidget`）的 `whiteboard-quiz-answered` 监听 100% 收不到，只能靠手动刷新或 15s 轮询兜底。现删除该废弃 hook，两个组件统一改用 `onSocketInstance` 挂 App 主 socket（`useClassroomSocket` 连接时已加入 `classroom-broadcast`，与 `LiveClassroomView` v0.6.1 审计 C-1 修复同模式），并顺带移除 `quiz.answered` / `classroom:quiz_response_received` 两个全仓无任何 emit 的死监听。测试：`ClassroomMoodTracker.test.tsx` 与 `TopPerformersWidget.test.tsx` 各新增回归用例（主 socket 派发事件 → 组件实时更新、非本课节事件过滤、`io()` 不再被调用）。
 - **HTTP 访问日志分级与轮询刷屏静默优化（Issue #116）**：
   - **默认静默正常成功请求**：在 `server/middleware/request-observability.ts` 中引入请求级别分级（`resolveHttpAccessLogLevel`）与策略控制（`resolveHttpAccessLogMode`），默认模式（`HTTP_ACCESS_LOG=errors`）下正常的 200/304 快速响应不再输出控制台与访问日志，彻底根除前端高频轮询（`/api/classroom/sessions/:id`、`/api/vfs` 等）造成的日志刷屏噪音；
@@ -156,7 +157,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 - **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
-
 
 ### Refactor / Performance
 

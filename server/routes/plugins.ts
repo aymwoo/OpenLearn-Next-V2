@@ -831,7 +831,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // V3.0: 查询插件贡献点摘�?
+  // V3.0: 查询插件贡献点摘要
   app.get('/api/plugins/:id(*)/contributions', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
@@ -1415,7 +1415,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const providers = kernelContainer.db
         .prepare('SELECT * FROM ai_providers ORDER BY created_at DESC')
         .all() as any[];
-      // SEC-DATA-01: 掩码 API Key 后返?（解密失败fail-closed：展示不可用标识，不抛 500）
+      // SEC-DATA-01: 掩码 API Key 后返回（解密失败fail-closed：展示不可用标识，不抛 500）
       const masked = providers.map((p) => {
         let apiKey: string;
         try {

@@ -48,6 +48,11 @@ jobs:
       - name: Build plugin SDK
         run: node scripts/build-plugin-sdk.mjs
 
+      # 源码编码检查（Issue #130）：U+FFFD 与非法 UTF-8 字节不会导致编译或测试
+      # 失败，却会直接损坏用户可见的中文文案，只能在 CI 里显式拦截。
+      - name: Source encoding check
+        run: pnpm lint:encoding
+
       - name: Type check
         run: pnpm lint
 
