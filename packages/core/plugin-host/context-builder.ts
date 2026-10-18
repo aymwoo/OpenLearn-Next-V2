@@ -23,6 +23,7 @@ import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
+import { warnDeprecation } from '../extension-points/index.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -761,6 +762,18 @@ export async function buildContext(
   Object.setPrototypeOf(wrappedAI, null);
 
   // 4. 构建 services 容器并冻结（D-06）
+  if (manifest) {
+    const allTokens = [
+      ...(Array.isArray(manifest.requires) ? manifest.requires : []),
+      ...(Array.isArray(manifest.optional) ? manifest.optional : []),
+    ];
+    for (const rawToken of allTokens) {
+      const lastAt = rawToken.lastIndexOf('@');
+      const tokenName = lastAt > 0 ? rawToken.slice(0, lastAt) : rawToken;
+      warnDeprecation('service', tokenName, manifest.id || pluginId);
+    }
+  }
+
   const services = {
     commandBus: wrappedCommandBus,
     eventBus: wrappedEventBus,

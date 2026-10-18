@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import os from 'node:os';
 
 import { runClean } from './cli-cleaner.mjs';
-import { runDoctor, runCheckUpdate } from './cli-doctor.mjs';
+import { runDoctor, runCheckUpdate, runPluginCompatibilityReport } from './cli-doctor.mjs';
 import {
   runBackup,
   runRestore,
@@ -36,6 +36,7 @@ export function parseCliArgs(rawArgs) {
 
   const KNOWN_COMMANDS = new Set([
     'doctor',
+    'compat-report',
     'backup',
     'restore',
     'reset-admin',
@@ -48,6 +49,7 @@ export function parseCliArgs(rawArgs) {
 
   const ALIAS_COMMAND_MAP = {
     '--doctor': 'doctor',
+    '--compat-report': 'compat-report',
     '--backup': 'backup',
     '--restore': 'restore',
     '--reset-admin': 'reset-admin',
@@ -70,6 +72,8 @@ export function parseCliArgs(rawArgs) {
     full: false,
     npx: false,
     db: false,
+    compatReport: false,
+    targetVersion: null,
     port: null,
     host: null,
     dbPath: null,
@@ -128,6 +132,17 @@ export function parseCliArgs(rawArgs) {
         throw new Error('选项 -P/--password 必须指定密码内容');
       }
       flags.password = val;
+    } else if (token === '--compat-report') {
+      flags.compatReport = true;
+      if (!command) {
+        command = 'compat-report';
+      }
+    } else if (token === '--target-version') {
+      const val = normalized[++i];
+      if (!val || val.startsWith('-')) {
+        throw new Error('选项 --target-version 必须指定有效的目标版本号 (例如: 0.7.0 或 1.0.0)');
+      }
+      flags.targetVersion = val;
     } else if (ALIAS_COMMAND_MAP[token]) {
       if (!command) {
         command = ALIAS_COMMAND_MAP[token];
@@ -141,6 +156,10 @@ export function parseCliArgs(rawArgs) {
     } else {
       positionalArgs.push(token);
     }
+  }
+
+  if (command === 'compat-report') {
+    flags.compatReport = true;
   }
 
   // 校验未知位置参数（防手误误启服务）
@@ -185,7 +204,12 @@ export async function runCli(argv = process.argv.slice(2)) {
 
 Commands:
   doctor [options]         运行环境自检、防版本漂移体检与自动修复
-                           选项: --fix (一键自动修复版本漂移与目录权限)
+                           选项:
+                             --fix            一键自动修复版本漂移与目录权限
+                             --compat-report  运行已安装插件升级前兼容性预检报告
+                             --target-version <ver> 指定拟升级的目标版本 (默认当前版本)
+  compat-report [options]  运行已安装插件升级前兼容性预检报告 (等同于 doctor --compat-report)
+                           选项: --target-version <ver>
   check-update             检查 npm 官方源是否存在平台更新与版本升级指引
   migrate [status|rollback] 查看数据库迁移状态或安全回滚最近一次迁移
                            子命令: status (默认速查), rollback (执行回滚)
@@ -249,6 +273,14 @@ Environment Variables:
   }
 
   // ── Command Dispatcher ────────────────────────────────────────────────────
+  if (command === 'compat-report' || (command === 'doctor' && flags.compatReport) || flags.compatReport) {
+    const report = await runPluginCompatibilityReport({
+      dbPath: process.env.OPENLEARN_DB_PATH,
+      targetVersion: flags.targetVersion,
+    });
+    process.exit(report.summary.incompatibleCount > 0 ? 1 : 0);
+  }
+
   if (command === 'doctor') {
     const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 9000;
     const res = await runDoctor({

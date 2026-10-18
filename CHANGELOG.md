@@ -37,6 +37,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **扩展点生命周期与弃用策略规范及插件升级兼容性预检报告（Issue #146）**：
+  - **核心扩展点元数据契约**：在 `packages/core/extension-points/metadata.ts` 建立平台统一扩展点元数据契约（`CORE_EXTENSION_POINTS`），涵盖 Commands、Events、UI Slots (contributes)、DI Services (requires/optional) 四大扩展原语，定义 `since`、`deprecated`、`removedIn`、`replacement` 规范字段。
+  - **弃用缓冲期承诺**：约定任何扩展点一旦标记为弃用，平台承诺至少保留 1 个完整的 minor 版本周期（在 `deprecated <= platformVersion < removedIn` 期间保持向后兼容），直至目标版本 `removedIn` 才彻底物理移除；并在 `docs/plugin/plugin-manifest-spec.md` 写入第 3 节规范。
+  - **运行时结构化弃用告警**：在 `CommandBus`、`EventBus`、`ContributionRegistry`、`ContextBuilder` 四大接入层全面接入弃用检测与单进程 Set 去重告警机制，输出包含调用方插件 ID、弃用版本、计划移除版本与替代建议的 `[DeprecationWarning]`，有效避免高频调用刷屏。
+  - **升级前兼容性预检报告**：在 CLI 中提供 `npx openlearn-next doctor --compat-report` 与 `npx openlearn-next compat-report [--target-version <ver>]`，零外部依赖扫描已安装插件清单，从 Engines 约束、UI 插槽、依赖注入服务与命令等多维度评估升级兼容性；并在存在破坏性不兼容时退出码返回 1，方便接入自动化 CI。单测覆盖 CI 3 个第三方插件（attendance-record, class_manager, interactive-courseware）及各种弃用/移除边界条件。
+  - **SDK 类型标注**：在 `packages/plugin-sdk/openlearn.d.ts` 为弃用扩展点方法补充 `@deprecated` JSDoc 注解。
 - **插件卸载数据语义：默认保留数据、清除前先导出、重装自动复用（Issue #141）**：卸载此前无条件 `DROP TABLE` 插件私有表并删除 `plugin_migrations` / `plugin_storage`（更新路径却保留数据，同一份数据在两条路径上语义相反），误点卸载即丢学生作业、考勤与成绩。
   - **卸载 ≠ 删数据**：`PluginHost.uninstallPlugin(pluginId, { dataPolicy: 'keep' | 'purge' })` 默认 `keep` 并在返回值中回显保留/删除的表名、行数与归档路径；新模块 `packages/core/plugin-host/orphan-data.ts` 负责数据摘要、孤立登记、SQL 归档与清除。
   - **`keep`（默认）**：插件私有表、`plugin_migrations` 版本记录与 `plugin_storage` 键值原样保留，并写入新表 `plugin_orphan_data`（迁移 `034_plugin_orphan_data.sql`）登记；无数据的插件不登记，避免管理页噪声。
