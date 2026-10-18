@@ -162,6 +162,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **信任边界文档与各执行模式网络代理现状对齐（Issue #144）**：
+  - 更新 `docs/reference/plugin-trust-boundary.md`：
+    - §1 执行模式对照表与 §2 五大能力面矩阵：纠正旧有的「process 模式出站网络不受限」表述，如实反映 `process`（rw/ro）模式通过 `plugin-net-preload.cjs`（拦截底层 Socket/UDP/DNS/TLS/HTTP2）与宿主 IPC 代发（`plugin-net-proxy.ts`）实现的默认拒绝与白名单代理，标注 `process (off)` 逃生舱完全放行；
+    - §1 与 §4 明确 `inline` 与 `worker_threads` 模式未注入网络沙箱、同进程共享宿主网络栈的客观现状，并说明加载策略层（`execution-policy.ts:resolvePluginExecutionMode`）已强制将所有不受信的第三方插件改写（coerce）为 `process` 模式运行，形成防御闭环；
+    - §5 运营建议：修复第 91 行 Markdown 表格首行误写为 `<|channel|>` 的语法渲染错误（审计报告 `TB-08`）；
+    - §7 长期路线图：将已交付的网络代理标记为完成，调整演进目标为细粒度流控配额与 eBPF 网络度量。
+  - 更新 `docs/reference/plugin-capability-matrix.md`：补充 `network:*` 说明，明确出站网络不属于 `capabilitiesProposed` 字符串，而是由 `plugin_network_grants` 白名单与 manifest `network.outbound` 独立管控。
+  - 同步更新 `docs-drift-remediation-tracker.md`（阶段九）与 `docs/trust-boundary-hardening-audit-2026-10-14.md`（标记 TB-08、TB-09、R-04 已修复）。
+  - 新增自动化防漂移与网络覆盖测试 `packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts`（10 个测试用例守住文档一致性与策略层执行模式收敛门禁）。
 - **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
 - **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
 - **版本迁移指南补上 023**：`docs/migration/version-migration.md` 说明从 v0.6.1 tag 之后的当前 `main`（平台版本号仍是 `0.6.1`）如何处理班级临时口令。`migrations/023_encrypt_class_passcodes.sql` 只留下密文约定的标记；启动时把仍是明文的行加密为 `olenc1:`，已经是该前缀的行跳过。教师口令接口仍返回原文。列表、审计日志和 `scripts/site-backup.mjs` 的数据库快照不提供明文，钥匙文件要单独备份。
