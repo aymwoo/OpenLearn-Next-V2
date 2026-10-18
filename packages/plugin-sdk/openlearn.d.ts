@@ -696,7 +696,13 @@ interface ActivityRegistry {
 interface PluginHost {
   registerPreloadedPlugin(
     pluginId: string,
-    plugin: { manifest: unknown; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> },
+    plugin: {
+      manifest: unknown;
+      activate: (ctx: PluginContext) => Promise<void>;
+      deactivate?: () => Promise<void>;
+      onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+      onStudentDelete?: (studentId: string) => Promise<void> | void;
+    },
   ): void;
   listPlugins(): PluginInfo[];
   resolvePluginUuid(idOrManifestId: string): string;
@@ -704,6 +710,12 @@ interface PluginHost {
   activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' | 'process' }): Promise<void>;
   deactivatePlugin(pluginId: string): Promise<void>;
   togglePlugin(pluginId: string): Promise<string>;
+  exportStudentDataFromPlugins(
+    studentId: string,
+  ): Promise<Record<string, { status: 'ok' | 'not_implemented' | 'error'; data?: unknown; error?: string }>>;
+  deleteStudentDataFromPlugins(
+    studentId: string,
+  ): Promise<Record<string, { success: boolean; error?: string }>>;
 }
 
 // ── Capability & Platform Kernel Services (v0.3.17+) ─────────────────────

@@ -37,6 +37,7 @@ import {
   resolveHostSdkDir,
   validatePluginStateTransition,
 } from './base.js';
+import { dispatchStudentExport, dispatchStudentDelete } from './student-data-privacy.js';
 import type { PluginHost } from './index.js';
 
 export abstract class PluginHostCore extends PluginHostBase {
@@ -45,7 +46,13 @@ export abstract class PluginHostCore extends PluginHostBase {
    */
   registerPreloadedPlugin(
     pluginId: string,
-    plugin: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> },
+    plugin: {
+      manifest: any;
+      activate: (ctx: PluginContext) => Promise<void>;
+      deactivate?: () => Promise<void>;
+      onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+      onStudentDelete?: (studentId: string) => Promise<void> | void;
+    },
   ): void {
     this.preloadedPlugins.set(pluginId, plugin);
   }
@@ -1056,4 +1063,29 @@ export abstract class PluginHostCore extends PluginHostBase {
       console.warn(`[PluginHost] Failed to persist status "${status}" for "${pluginId}":`, e);
     }
   }
+
+  /**
+   * GDPR 数据导出：调度所有活跃插件导出指定学生的数据。
+   *
+   * @param studentId 学生 ID
+   * @returns 各活跃插件的导出结果字典，未实现的插件标注 { status: 'not_implemented' }
+   */
+  async exportStudentDataFromPlugins(
+    studentId: string,
+  ): Promise<Record<string, { status: 'ok' | 'not_implemented' | 'error'; data?: unknown; error?: string }>> {
+    return dispatchStudentExport(this.pluginInstances, studentId);
+  }
+
+  /**
+   * GDPR 级联删除：调度所有活跃插件删除指定学生的数据。
+   *
+   * @param studentId 学生 ID
+   * @returns 各活跃插件的删除结果字典
+   */
+  async deleteStudentDataFromPlugins(
+    studentId: string,
+  ): Promise<Record<string, { success: boolean; error?: string }>> {
+    return dispatchStudentDelete(this.pluginInstances, studentId);
+  }
 }
+

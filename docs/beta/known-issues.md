@@ -90,7 +90,7 @@
 
 ### 删除与导出不是全库
 
-见 [隐私草稿](privacy.md) 第 6 节。这里不重复表名以外的结论：`deleteStudentCascade` 与 `exportStudentData` 覆盖同一组业务表，不管课件尝试、积分、同伴互评、作业文件表、磁盘文件、`events` 和 `agent_conversations`。
+见 [隐私草稿](privacy.md) 第 6 节。`deleteStudentCascade` 与 `exportStudentData` 现已将学生积分（`student_point_logs`）纳入单事务与导出报告，并纳管各活跃插件的导出/删除钩子；`events` 纳入 90 天保留期清理。系统级未纳管项仍包括课件答题过程尝试快照、课堂同伴互评表、作业文件表与磁盘文件、以及 `agent_conversations`。
 
 ## 3. 部署与工程上的限制
 

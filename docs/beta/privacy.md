@@ -88,11 +88,20 @@
 
 教师和学生的浏览器会保存会话 Cookie。用学校域名且全程 HTTPS 时，应同时让 Cookie 带 `Secure`（由 HTTPS 或 `ENABLE_HTTPS` 触发）并考虑 HSTS。明文 HTTP 时 Cookie 可在同一局域网被窃听。见已知问题。
 
-## 5. 保存多久
+### 5. 保存多久与数据保留策略
 
-**代码里没有按学期自动删除学生数据的任务。** 会话过期后，过期行会在再次使用该 Cookie 时删掉；绝对期限 7 天，空闲 24 小时。访问日志按文件大小轮转后删除最旧文件，不是按「保存 180 天」这种日历。
+系统在 `packages/core/db/retention-policy.ts` 中内置了多类别数据保留与定期清理策略（Issue #145）。服务启动与数据库就绪时会自动执行超期数据清理，各类别支持通过环境变量独立配置保留天数（设置为 `0` 表示禁用清理）：
 
-数据库和 `/data` 里的文件会一直留到有人备份覆盖、恢复或手动删除。
+| 数据类别 | 对应表名 | 默认保留天数 | 环境变量配置项 |
+| --- | --- | --- | --- |
+| 总线事件 | `events` | 90 天 | `OPENLEARN_EVENT_RETENTION_DAYS` |
+| 考勤流水 | `attendance` | 365 天 | `OPENLEARN_ATTENDANCE_RETENTION_DAYS` |
+| 点名记录 | `student_rollcalls` | 180 天 | `OPENLEARN_ROLLCALLS_RETENTION_DAYS` |
+| 已读通知标记 | `student_read_notifications` | 30 天 | `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS` |
+| 客户端会话 | `client_sessions` | 30 天 | `OPENLEARN_SESSIONS_RETENTION_DAYS` |
+
+**核心名册、班级与作业数据**：
+数据库中的 `students` 核心名册、班级关系与正式作业提交等业务数据不会被保留策略自动删除，将一直保留直至管理员/教师手动删除或触发 GDPR 级联删除。
 
 **【待学校/法务确认】**
 
@@ -107,16 +116,21 @@
 - `GET /api/students/:id/export`：导出该生数据。管理员可导出任意学生；教师限于 `teacherCanSeeStudent` 能看到的学生。
 - `DELETE /api/students/:id/gdpr-delete`：请求体 `{ "confirm": true }`。注释写管理员专用，代码允许能看到该生的教师。
 
-两者都走 `server/services/roster-service.ts` 里的同一组表：
+两者都走 `server/services/roster-service.ts`：
 
-`class_students`、`student_lesson_progress`、`assignment_submissions`、`attendance`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`plugin_submissions`、`plugin_peer_reviews`（按 `reviewer_id`）、`student_seats`、`student_read_notifications`，以及 `students` 行本身。导出里的口令字段写成 `[REDACTED]`。
+1. **单事务级联清理表集**：
+   `class_students`、`student_lesson_progress`、`assignment_submissions`、`attendance`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`plugin_submissions`、`plugin_peer_reviews`（按 `reviewer_id`）、`student_seats`、`student_read_notifications`、`student_point_logs`（已纳入级联事务），以及 `students` 行本身。
+2. **调度插件扩展数据钩子**：
+   - 导出时：并发调用活跃插件的 `onStudentExport(studentId)` 钩子（支持 Worker 隔离插件异步 RPC），汇总为 `pluginData` 随报告导出。
+   - 删除时：并发调度活跃插件的 `onStudentDelete(studentId)` 钩子清理插件私有状态，并在安全审计中记录 `student.gdpr_deleted`。
+3. **数据脱敏**：导出里的口令字段统一脱敏为 `[REDACTED]`。
 
-这次删除**不会**清掉的内容包括：
+这次删除仍**未**清掉的系统级内容包括：
 
-- `courseware_attempt`、`student_point_logs`
+- `courseware_attempt`（课件答题过程快照，后续规划独立清理策略）
 - 课堂同伴互评相关表（迁移 `migrations/009_classroom_peer_review.sql` 中的 `classroom_peer_reviews` 等）
 - `plugin_assignment_files` 以及磁盘上的课件、上传文件
-- `agent_conversations`、`events`、访问日志、已有备份
+- `agent_conversations`、`events`（受数据保留策略 90 天清理覆盖）、访问日志、已有备份
 
 **【待学校/法务确认】这个范围能否回答家长的删除或导出要求。** 在确认之前，公告和界面都不要写成「已满足 GDPR」或「已彻底删除」。接口路径里的 `gdpr` 是代码里的名字，不是合规结论。
 

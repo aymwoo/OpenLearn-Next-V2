@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：243 个（入口导出但手写 d.ts 未声明的 243 项及其类型引用闭包）
+ * 覆盖符号：245 个（入口导出但手写 d.ts 未声明的 245 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -166,6 +166,12 @@ interface BarometerMetricConfig {
     color?: string;
     tooltip?: string;
 }
+
+/** @see packages/core/plugin-host/method-policy.ts */
+declare const CAP_STUDENT_DATA_READ: 'student-data:read';
+
+/** @see packages/core/plugin-host/method-policy.ts */
+declare const CAP_STUDENT_DATA_WRITE: 'student-data:write';
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the whiteboard.canvas.widget slot (draggable interactive canvas widgets). */
@@ -2542,6 +2548,8 @@ export type {
   WhiteboardStatus,
 };
 export {
+  CAP_STUDENT_DATA_READ,
+  CAP_STUDENT_DATA_WRITE,
   PluginCapabilityGateway,
   PluginContextAdapter,
   PluginDistributionManager,
