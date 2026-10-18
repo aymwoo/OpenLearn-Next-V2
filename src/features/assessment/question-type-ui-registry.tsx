@@ -23,6 +23,15 @@ export interface QuestionEditorProps {
   disabled?: boolean;
 }
 
+/** 学生作答组件拿到的 props。`value` 形状由题型决定（索引 / 索引数组 / 布尔 / 数组或对象）。 */
+export interface QuestionAnswerProps {
+  config: Record<string, unknown>;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  lang: 'zh' | 'en';
+  readOnly?: boolean;
+}
+
 export interface AssessmentQuestionTypeUi {
   /** 与后端题型注册表一致的 type */
   type: string;
@@ -31,6 +40,11 @@ export interface AssessmentQuestionTypeUi {
   supports: AssessmentKind[];
   /** 出题编辑器 */
   Editor: React.FC<QuestionEditorProps>;
+  /**
+   * 学生作答组件（Issue #122）。缺省时作答页退化成 JSON 文本框，
+   * 这样"只有服务端 grader 的插件题型"也能被作答而不是被卡住。
+   */
+  Answer?: React.FC<QuestionAnswerProps>;
   /** 新题默认配置（缺省时用 `{}`） */
   createDefaultConfig?: () => Record<string, unknown>;
   /** 新题默认标准答案（缺省时用 null） */

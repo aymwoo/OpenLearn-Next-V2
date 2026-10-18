@@ -27,6 +27,7 @@ import { StudentQuickActionsFloatingMenu } from './components/StudentQuickAction
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import { StudentActiveClassBanner } from './StudentActiveClassBanner';
+import { StudentAssessmentsWidget } from '../assessment/student/StudentAssessmentsWidget';
 import type { StudentType } from '../../types/app';
 import type { DashboardWidgetId, WidgetSize, WidgetLayoutConfig } from './types/dashboardLayout';
 import { DEFAULT_WIDGET_LAYOUT, LAYOUT_PRESETS } from './types/dashboardLayout';
@@ -44,6 +45,8 @@ export interface StudentDashboardPanelProps {
   setSelectedAssignment: (ast: any) => void;
   setQuizStudentAnswers: (answers: any) => void;
   setSubAssignmentTab: (tab: string) => void;
+  /** Issue #122：打开「我的测评」全屏视图（缺省时挂件只显示摘要） */
+  onOpenAssessments?: () => void;
 }
 
 export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
@@ -60,6 +63,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     setSelectedAssignment,
     setQuizStudentAnswers,
     setSubAssignmentTab,
+    onOpenAssessments,
   } = props;
 
   // Issue #109: 真实进行中的课堂会话（轮询由 StudentView 顶层统一驱动）
@@ -253,6 +257,31 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             isDragging={draggedWidgetId === 'progress-trends'}
           >
             <WeeklyProgressTrendChart assignments={studentDashboardData.assignments} lang={lang} />
+          </DashboardWidgetCard>
+        );
+
+      case 'assessments':
+        return (
+          <DashboardWidgetCard
+            id="assessments"
+            key={widget.id}
+            title={lang === 'zh' ? '我的测评 (My Assessments)' : 'My Assessments'}
+            subtitle={lang === 'zh' ? '测试 / 考试 / 问卷：待完成与成绩' : 'Quizzes, exams & surveys'}
+            icon={<ClipboardList size={18} className="text-indigo-600" />}
+            size={widget.size}
+            collapsed={widget.collapsed}
+            onResize={(s) => handleResize('assessments', s)}
+            onMoveLeft={() => handleMove('assessments', 'left')}
+            onMoveRight={() => handleMove('assessments', 'right')}
+            isFirst={index === 0}
+            isLast={index === layout.length - 1}
+            onToggleCollapse={() => handleToggleCollapse('assessments')}
+            lang={lang}
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
+            isDragging={draggedWidgetId === 'assessments'}
+          >
+            <StudentAssessmentsWidget lang={lang} onOpen={onOpenAssessments} />
           </DashboardWidgetCard>
         );
 

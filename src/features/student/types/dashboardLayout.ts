@@ -1,6 +1,7 @@
 export type DashboardWidgetId =
   | 'quick-stats'
   | 'progress-trends'
+  | 'assessments'
   | 'upcoming-assignments'
   | 'course-progress'
   | 'schedules'
@@ -34,6 +35,7 @@ export const SIZE_LABELS: Record<WidgetSize, { zh: string; en: string }> = {
 export const DEFAULT_WIDGET_LAYOUT: WidgetLayoutConfig[] = [
   { id: 'quick-stats', size: 'full', visible: true },
   { id: 'progress-trends', size: 'two-thirds', visible: true },
+  { id: 'assessments', size: 'third', visible: true },
   { id: 'upcoming-assignments', size: 'third', visible: true },
   { id: 'course-progress', size: 'half', visible: true },
   { id: 'schedules', size: 'half', visible: true },
@@ -41,7 +43,6 @@ export const DEFAULT_WIDGET_LAYOUT: WidgetLayoutConfig[] = [
   { id: 'academic-comparison', size: 'full', visible: true },
   { id: 'extension-views', size: 'full', visible: true },
 ];
-
 
 export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string }; layout: WidgetLayoutConfig[] }> = {
   default: {
@@ -53,6 +54,7 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
     layout: [
       { id: 'quick-stats', size: 'full', visible: true },
       { id: 'upcoming-assignments', size: 'full', visible: true },
+      { id: 'assessments', size: 'full', visible: true },
       { id: 'progress-trends', size: 'half', visible: true },
       { id: 'schedules', size: 'half', visible: true },
       { id: 'course-progress', size: 'half', visible: true },
@@ -69,6 +71,7 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
       { id: 'academic-trajectory', size: 'full', visible: true },
       { id: 'academic-comparison', size: 'full', visible: true },
       { id: 'upcoming-assignments', size: 'half', visible: true },
+      { id: 'assessments', size: 'half', visible: true },
       { id: 'schedules', size: 'half', visible: true },
       { id: 'course-progress', size: 'full', visible: true },
       { id: 'extension-views', size: 'full', visible: true },
@@ -80,12 +83,12 @@ export const LAYOUT_PRESETS: Record<string, { label: { zh: string; en: string };
       { id: 'quick-stats', size: 'full', visible: true },
       { id: 'progress-trends', size: 'half', visible: true },
       { id: 'upcoming-assignments', size: 'half', visible: true },
+      { id: 'assessments', size: 'half', visible: true },
       { id: 'course-progress', size: 'half', visible: true },
       { id: 'schedules', size: 'half', visible: true },
       { id: 'academic-trajectory', size: 'full', visible: true },
       { id: 'academic-comparison', size: 'full', visible: true },
       { id: 'extension-views', size: 'full', visible: true },
     ],
-
   },
 };
