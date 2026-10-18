@@ -176,10 +176,13 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       const restoreRes = await runRestore(backupPath, { dbPath, silent: true });
       expect(restoreRes.ok).toBe(true);
 
-      // 验证是否生成了 .bak_ 安全回滚副本
-      const files = readdirSync(tempDir);
-      const bakFiles = files.filter((f) => f.includes('data.db.bak_'));
-      expect(bakFiles.length).toBeGreaterThanOrEqual(1);
+      // Issue #150：安全副本改为 `VACUUM INTO` 生成在 BACKUP_DIR（默认 <dbDir>/backups），
+      // 命名为 pre_restore_*.db —— 直接拷贝主库会漏掉 WAL 里未 checkpoint 的页。
+      expect(restoreRes.safetyBackup).toBeTruthy();
+      expect(existsSync(restoreRes.safetyBackup as string)).toBe(true);
+      const backupsDir = join(tempDir, 'backups');
+      const safetyFiles = readdirSync(backupsDir).filter((f) => f.startsWith('pre_restore_'));
+      expect(safetyFiles.length).toBeGreaterThanOrEqual(1);
     });
 
     it('6. runResetAdmin 能够重置现有管理员密码', async () => {
