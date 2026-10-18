@@ -855,11 +855,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(404).json({ success: false, error: 'Plugin not found' });
       }
       const manifest = JSON.parse(row.manifest);
+      // Issue #151：可选按班级/学校返回该作用域下的有效值（缺省平台值）。
+      const classId = typeof req.query.classId === 'string' ? req.query.classId : undefined;
+      const schoolId = typeof req.query.schoolId === 'string' ? req.query.schoolId : undefined;
       res.json({
         success: true,
         result: {
           schema: manifest.configuration?.properties ?? {},
-          values: kernelContainer.pluginHost.getPluginConfig(pluginId, manifest),
+          values: kernelContainer.pluginHost.getPluginConfig(pluginId, manifest, { classId, schoolId }),
         },
       });
     } catch (e: any) {
@@ -882,7 +885,19 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(404).json({ success: false, error: 'Plugin not found' });
       }
       const manifest = JSON.parse(row.manifest);
-      kernelContainer.pluginHost.setPluginConfig(pluginId, manifest, updates);
+      // Issue #151：`?scopeType=class&scopeId=<classId>` 写入班级覆盖；缺省写平台层。
+      const scopeTypeRaw = typeof req.query.scopeType === 'string' ? req.query.scopeType : 'platform';
+      if (scopeTypeRaw !== 'platform' && scopeTypeRaw !== 'school' && scopeTypeRaw !== 'class') {
+        return res.status(400).json({ success: false, error: 'scopeType 必须是 platform / school / class' });
+      }
+      const scopeId = typeof req.query.scopeId === 'string' ? req.query.scopeId : '';
+      if (scopeTypeRaw !== 'platform' && !scopeId) {
+        return res.status(400).json({ success: false, error: '非平台作用域必须提供 scopeId' });
+      }
+      kernelContainer.pluginHost.setPluginConfig(pluginId, manifest, updates, {
+        scopeType: scopeTypeRaw,
+        scopeId,
+      });
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);

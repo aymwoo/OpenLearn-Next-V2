@@ -254,10 +254,24 @@ interface IPluginLogger {
 
 // ── Config Service ───────────────────────────────────────────────────────
 
+type ConfigScopeType = 'platform' | 'school' | 'class';
+
+interface ConfigReadOptions {
+  /** 按班级解析覆盖值（班级 > 学校 > 平台 > 默认值）。 */
+  classId?: string;
+  /** 预留给多租户（Issue #149）；当前没有自动来源时可显式传入。 */
+  schoolId?: string;
+}
+
+interface ConfigWriteScope {
+  scopeType?: ConfigScopeType;
+  scopeId?: string;
+}
+
 interface IConfigService {
-  get<T = unknown>(key: string): T;
-  getAll(): Record<string, unknown>;
-  set(key: string, value: unknown): Promise<void>;
+  get<T = unknown>(key: string, options?: ConfigReadOptions): T;
+  getAll(options?: ConfigReadOptions): Record<string, unknown>;
+  set(key: string, value: unknown, scope?: ConfigWriteScope): Promise<void>;
   onChange(callback: (key: string, newValue: unknown, oldValue: unknown) => void): () => void;
 }
 
@@ -268,6 +282,8 @@ interface ConfigProperty {
   enum?: unknown[];
   minimum?: number;
   maximum?: number;
+  /** 允许覆盖该配置项的作用域；缺省 `['platform']`。 */
+  scope?: ConfigScopeType[];
 }
 
 interface ConfigDeclaration {

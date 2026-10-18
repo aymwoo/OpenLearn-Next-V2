@@ -50,5 +50,6 @@
 | 034  | 034_plugin_orphan_data.sql        | 插件卸载数据语义：孤立插件数据登记表（`plugin_orphan_data`，keep 保留登记 / purge 归档后可清除） |
 | 035  | 035_icebreaker_checkins.sql       | 课前破冰心情打卡持久化与去重（`icebreaker_checkins` 表与按学生去重唯一索引） |
 | 036  | 036_student_read_notifications_created_at.sql | 保留策略：为 `student_read_notifications` 补齐 `created_at` 以便按 30 天窗口清理 |
+| 037  | 037_plugin_config_scopes.sql      | 插件配置分层：`plugin_config` 表（平台/学校/班级），旧 `plugin_storage` 的 `config:*` 值迁移到平台层 |
 
 

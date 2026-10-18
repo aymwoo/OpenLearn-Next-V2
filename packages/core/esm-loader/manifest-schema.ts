@@ -809,6 +809,8 @@ export const manifestSchema = z
               enum: z.array(z.unknown()).optional(),
               minimum: z.number().optional(),
               maximum: z.number().optional(),
+              // Issue #151：允许覆盖该配置项的作用域。缺省只有 platform（老插件行为不变）。
+              scope: z.array(z.enum(['platform', 'school', 'class'])).optional(),
             }),
           )
           .optional(),
