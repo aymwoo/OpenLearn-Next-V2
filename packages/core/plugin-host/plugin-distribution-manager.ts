@@ -10,6 +10,14 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
 import { removeTempZip, writeBufferToTempZip } from '../esm-loader/install-utils.js';
+import { verifyPluginPackage } from '../security/plugin-signature.js';
+import {
+  PluginSignatureError,
+  PluginIntegrityRequiredError,
+  PluginAttestationRequiredError,
+  PluginIntegrityMismatchError,
+  PluginSignatureInvalidError,
+} from './errors.js';
 
 export interface PluginPackageMetadata {
   readonly id: string;
@@ -20,12 +28,15 @@ export interface PluginPackageMetadata {
   readonly downloadUrl?: string;
   readonly manifest?: Manifest;
   readonly integrity?: string;
+  readonly signature?: string;
+  readonly publisher?: string;
+  readonly keyId?: string;
 }
 
 export interface IPluginRepositoryAdapter {
   readonly id: string;
   readonly name: string;
-  readonly type: 'official' | 'private' | 'local' | 'offline';
+  readonly type: 'official' | 'private' | 'local' | 'offline' | 'community' | 'remote';
   listPackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
   getPackage(pluginId: string): Promise<PluginPackageMetadata | undefined>;
   fetchZipBuffer(pluginId: string): Promise<Buffer>;
@@ -153,29 +164,44 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     const pkgMeta = await repo.getPackage(pluginId);
     const zipBuffer = await repo.fetchZipBuffer(pluginId);
 
-    // SEC-INTEGRITY: 如果元数据中声明了 integrity，强校验 SHA-256 哈希
+    // SEC-SIGNATURE: 来源分级强安全门禁校验（完整性 SHA-256 + 发布者 Ed25519 签名）
+    const isCommunity = repo.type === 'community' || repo.type === 'remote';
+    const verifyResult = await verifyPluginPackage({
+      packageSource: zipBuffer,
+      sourceType: isCommunity ? 'community' : 'local',
+      metadata: {
+        id: pluginId,
+        version: pkgMeta?.version,
+        integrity: pkgMeta?.integrity,
+        signature: pkgMeta?.signature,
+        publisher: pkgMeta?.publisher,
+      },
+    });
+
+    if (!verifyResult.ok) {
+      if (verifyResult.code === 'COMMUNITY_INTEGRITY_REQUIRED') {
+        throw new PluginIntegrityRequiredError(pluginId, verifyResult.error);
+      }
+      if (verifyResult.code === 'COMMUNITY_ATTESTATION_REQUIRED') {
+        throw new PluginAttestationRequiredError(pluginId, verifyResult.error);
+      }
+      if (
+        verifyResult.code === 'COMMUNITY_INTEGRITY_MISMATCH' ||
+        verifyResult.code === 'LOCAL_INTEGRITY_MISMATCH'
+      ) {
+        throw new PluginIntegrityMismatchError(pluginId, verifyResult.error);
+      }
+      if (
+        verifyResult.code === 'COMMUNITY_SIGNATURE_INVALID' ||
+        verifyResult.code === 'LOCAL_SIGNATURE_INVALID'
+      ) {
+        throw new PluginSignatureInvalidError(pluginId, verifyResult.error);
+      }
+      throw new PluginSignatureError(pluginId, verifyResult.code, verifyResult.error);
+    }
+
     let zipPath: string | undefined;
     try {
-      if (pkgMeta?.integrity) {
-        const crypto = await import('node:crypto');
-        const hash = crypto.createHash('sha256').update(zipBuffer);
-        const expected = pkgMeta.integrity.trim();
-        let matches = false;
-        if (expected.startsWith('sha256-')) {
-          const base64Digest = hash.digest('base64');
-          matches = expected.slice(7) === base64Digest;
-        } else {
-          const hexDigest = hash.digest('hex');
-          matches = expected.toLowerCase() === hexDigest.toLowerCase();
-        }
-        if (!matches) {
-          throw new Error(
-            `[PluginDistributionManager] Integrity verification failed for plugin "${pluginId}". ` +
-              `Downloaded ZIP checksum does not match repository metadata.`,
-          );
-        }
-      }
-
       // R-4：仓库适配器暴露的仍是 Buffer（内存态仓库，无下载环节），
       // 在此转换成路径contract 并负责清理。
       zipPath = writeBufferToTempZip(zipBuffer, 'plugin-repo-');

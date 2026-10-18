@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **插件包发布者签名与来源分级安全验签（Issue #143）**：
+  - **核心非对称验签引擎**：新增 `packages/core/security/plugin-signature.ts`，基于 Ed25519 算法对插件完整性与发布者身份进行事前密码学校验；签名载荷支持结构化元数据绑定（`openlearn-plugin-attestation-v2\n<id>\n<version>\n<integrity>`），杜绝版本降级与冒名攻击，同时向下兼容纯哈希签名。
+  - **来源分级安全策略**：`PluginDistributionManager` 实现来源分级门禁 —— 内置插件 (`builtin`) 完全信任放行；本地上传 (`local`) 允许管理员显式审计安装（若带签名则强验）；社区/远端市场 (`community`) 默认**强行要求**声明 SHA-256 `integrity` 与有效 `signature`，缺少哈希、缺少签名、公钥未配置或签名无效一律拒绝并输出标准化错误码。
+  - **分发管理器与错误类**：扩展 `PluginPackageMetadata` 支持 `signature` 与 `publisher` 字段；`packages/core/plugin-host/errors.ts` 新增 `PluginSignatureError`、`PluginIntegrityRequiredError`、`PluginAttestationRequiredError`、`PluginIntegrityMismatchError` 与 `PluginSignatureInvalidError`。
+  - **SDK CLI 签名工具**：`@openlearn/plugin-sdk` CLI 新增 `sign` 命令与 `build --key <private.pem>` 选项，支持开发者使用 Ed25519 私钥为打包产物一键签名并自动嵌入 `signature.json`。
+  - **存量兼容**：平台升级后已安装插件在宿主启动时无需重复验签，保证存量系统平滑运行。
+
 - **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
   - `GET /api/courseware/attempts` 修复教师水平越权：`listAttempts` 不再仅凭 `isStaff` 放行全校数据。教师视角仅返回其管辖班级（`classes.owner_user_id`）中的学生作答与教师自测记录；管理员保留全校可见性；学生视角仅能查看本人并脱敏内部字段（`extra_json`, `comment`）。
   - 读接口鉴权加固：`GET /api/courseware/attempts/:attemptId/progress` 与 `GET /api/courseware/attempts/:attemptId/raw` 增加基于 `teacherCanSeeStudent` 的班级范围校验，教师尝试读取非管辖班级学生作答一律拒绝（403），不存在的记录返回 404。

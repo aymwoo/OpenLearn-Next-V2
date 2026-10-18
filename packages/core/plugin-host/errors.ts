@@ -159,3 +159,53 @@ export class MiddlewareError extends PluginHostError {
     this.name = 'MiddlewareError';
   }
 }
+
+// ── Phase 8: Signature & Distribution Verification Errors (Issue #143) ───────
+
+/**
+ * PluginSignatureError — 插件包完整性或发布者签名错误基类。
+ */
+export class PluginSignatureError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(`Signature verification failed for "${pluginId}" [${code}]: ${message}`);
+    this.name = 'PluginSignatureError';
+  }
+}
+
+export class PluginIntegrityRequiredError extends PluginSignatureError {
+  constructor(pluginId: string, message = '社区插件包必须声明 integrity (SHA-256)') {
+    super(pluginId, 'COMMUNITY_INTEGRITY_REQUIRED', message);
+    this.name = 'PluginIntegrityRequiredError';
+  }
+}
+
+export class PluginAttestationRequiredError extends PluginSignatureError {
+  constructor(pluginId: string, message = '社区插件包必须包含有效发布者签名') {
+    super(pluginId, 'COMMUNITY_ATTESTATION_REQUIRED', message);
+    this.name = 'PluginAttestationRequiredError';
+  }
+}
+
+export class PluginIntegrityMismatchError extends PluginSignatureError {
+  constructor(pluginId: string, message = `Integrity verification failed for plugin "${pluginId}". Downloaded ZIP checksum does not match repository metadata.`) {
+    super(
+      pluginId,
+      'COMMUNITY_INTEGRITY_MISMATCH',
+      message.includes('Integrity verification failed')
+        ? message
+        : `Integrity verification failed for plugin "${pluginId}": ${message}`,
+    );
+    this.name = 'PluginIntegrityMismatchError';
+  }
+}
+
+export class PluginSignatureInvalidError extends PluginSignatureError {
+  constructor(pluginId: string, message = '发布者签名无效或未在信任公钥列表中') {
+    super(pluginId, 'COMMUNITY_SIGNATURE_INVALID', message);
+    this.name = 'PluginSignatureInvalidError';
+  }
+}

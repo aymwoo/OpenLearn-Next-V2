@@ -117,7 +117,22 @@ pnpm vitest run packages/core/plugin-host/__tests__/lifecycle-race.test.ts
 
 ---
 
-## 7. 长期路线图
+## 7. 分发与来源身份认证边界（Issue #143）
+
+在运行时沙箱之前，平台在安装与更新阶段实施发布者身份与代码完整性事前防御：
+
+| 插件来源 | 完整性要求 | 签名要求 | 策略处理 |
+|---|---|---|---|
+| `builtin` | 宿主系统内部内置 | 免验签 | 宿主上下文同级信任 |
+| `local` | 可选声明 | 可选提供 | 管理员直接上传操作，有签名则强验；未签名允许显式放行并记录审计 |
+| `community` / `remote` | **强制**声明 `integrity` (SHA-256) | **强制**要求 Ed25519 签名 | 强安全门禁：缺哈希拒绝、缺签名拒绝、未配置公钥拒绝、哈希篡改或签名非法拒绝（错误码 `COMMUNITY_*`） |
+
+- **防重放与防冒名**：签名载荷绑定 `openlearn-plugin-attestation-v2\n<id>\n<version>\n<integrity>`，禁止版本降级或假冒其他插件 ID。
+- **已装插件兼容**：已安装插件在宿主升级重启时不强制二次验签，确保平滑运行。
+
+---
+
+## 8. 长期路线图
 
 1. **网络隔离**：host proxy + manifest outbound allowlist + deny-by-default + audit logging。
 2. **共享依赖 range enforcement**：worker 流量目测 + SBOM。
