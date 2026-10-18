@@ -130,7 +130,8 @@ describe('CoursewareService 领域服务单元测试 (E3 深化)', () => {
     });
 
     it('学生查询榜单必须安全脱敏 (自动剥离 extra_json 与 comment)', () => {
-      const list = service.listAttempts({ coursewareUuid: cwUuid }, false);
+      // 新口径：学生视角需携带本人身份（session 或 requesterStudentId），且仅返回本人作答
+      const list = service.listAttempts({ coursewareUuid: cwUuid }, false, stuAlice);
       const aliceRow = list.data.find((item) => item.attemptId === aliceAttemptId);
       expect(aliceRow).toBeDefined();
       expect(aliceRow?.score).toBe(95);

@@ -20,10 +20,12 @@ import {
   markStudentAbsent,
   promoteAttemptToGrade,
 } from '../utils/auto-record-score.js';
+import { isAdministrator, isTeacher, teacherCanSeeStudent, type AccessSession } from './class-access.js';
 
-export interface CoursewareSessionInfo {
+export interface CoursewareSessionInfo extends AccessSession {
   userId?: string;
   studentId?: string;
+  username?: string;
   role?: string;
   subRole?: string;
 }
@@ -371,13 +373,35 @@ export class CoursewareService {
 
   public listAttempts(
     queryParams: { coursewareUuid?: string; page?: any; pageSize?: any },
-    isStaff: boolean,
+    sessionOrIsStaff?: AccessSession | boolean | null,
     requesterStudentId?: string,
   ): ListAttemptsResult {
     const coursewareUuid =
       typeof queryParams.coursewareUuid === 'string' ? queryParams.coursewareUuid.trim() : '';
-    // V3 修复：非教师此前返回全量榜单（含他生 score/studentId）。现非 staff 仅返本人。
-    const ownerFilter = !isStaff && requesterStudentId ? 'a.student_id = ?' : null;
+
+    let isStaff = false;
+    let isAdmin = false;
+    let isTeach = false;
+    let effectiveStudentId = requesterStudentId;
+    let teacherUid = '';
+    let teacherUsername = '';
+
+    if (typeof sessionOrIsStaff === 'boolean') {
+      isStaff = sessionOrIsStaff;
+      isAdmin = isStaff;
+    } else if (sessionOrIsStaff && typeof sessionOrIsStaff === 'object') {
+      isAdmin = isAdministrator(sessionOrIsStaff);
+      isTeach = isTeacher(sessionOrIsStaff);
+      isStaff = isAdmin || isTeach;
+      if (!isStaff) {
+        effectiveStudentId = sessionOrIsStaff.studentId || sessionOrIsStaff.userId || requesterStudentId;
+      } else if (isTeach) {
+        teacherUid = sessionOrIsStaff.userId || '';
+        teacherUsername = sessionOrIsStaff.username || '';
+      }
+    } else {
+      isStaff = false;
+    }
 
     const baseSql = `
       SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
@@ -403,9 +427,30 @@ export class CoursewareService {
       where.push('cw.uuid = ?');
       args.push(coursewareUuid);
     }
-    if (ownerFilter && requesterStudentId) {
-      where.push(ownerFilter);
-      args.push(requesterStudentId);
+
+    if (isAdmin) {
+      // 管理员拥有全校可见性，不过滤学生
+    } else if (isTeach) {
+      // 教师：仅可见自己管辖班级中的学生作答，以及教师本人的自测记录（如 student_id = 'teacher' 或自身 uid）
+      where.push(`(
+        a.student_id = ? OR a.student_id = ? OR a.student_id = 'teacher' OR
+        EXISTS (
+          SELECT 1 FROM class_students cs
+          JOIN classes c ON c.id = cs.class_id
+          LEFT JOIN students s2 ON s2.id = cs.student_id
+          WHERE (cs.student_id = a.student_id OR s2.student_number = a.student_id)
+            AND (c.owner_user_id = ? OR c.owner_user_id = ?)
+        )
+      )`);
+      args.push(teacherUid, teacherUsername, teacherUid, teacherUsername);
+    } else {
+      // 学生/访客：仅能查本人，若未提供有效身份则返回空
+      if (effectiveStudentId) {
+        where.push('a.student_id = ?');
+        args.push(effectiveStudentId);
+      } else {
+        where.push('1 = 0');
+      }
     }
     const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
     const sql = `${baseSql}${whereSql} ORDER BY a.started_at DESC LIMIT ? OFFSET ?`;
@@ -437,19 +482,33 @@ export class CoursewareService {
   // ── 5. 作答进度查询 ────────────────────────────────────────────────────────
 
   public getAttemptProgress(attemptId: string, session?: CoursewareSessionInfo | null): any {
-    if (
-      session &&
-      session.role !== 'teacher' &&
-      session.role !== 'administrator' &&
-      session.subRole !== 'administrator'
-    ) {
-      const owner = this.db
-        .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-        .get(attemptId) as { student_id: string } | undefined;
-      if (!owner || owner.student_id !== (session.userId || session.studentId)) {
-        const err: any = new Error('Forbidden: Cannot read another student attempt');
-        err.status = 403;
-        throw err;
+    const owner = this.db
+      .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+      .get(attemptId) as { student_id: string } | undefined;
+
+    if (!owner) {
+      return null;
+    }
+
+    if (session) {
+      if (isAdministrator(session)) {
+        // 管理员放行
+      } else if (isTeacher(session)) {
+        const uid = session.userId || '';
+        const username = session.username || '';
+        const isSelf = owner.student_id === uid || owner.student_id === username || owner.student_id === 'teacher';
+        if (!isSelf && !teacherCanSeeStudent(this.db, session, owner.student_id)) {
+          const err: any = new Error('Forbidden: Cannot read attempt of a student outside your classes');
+          err.status = 403;
+          throw err;
+        }
+      } else {
+        const selfId = session.userId || session.studentId;
+        if (owner.student_id !== selfId) {
+          const err: any = new Error('Forbidden: Cannot read another student attempt');
+          err.status = 403;
+          throw err;
+        }
       }
     }
 

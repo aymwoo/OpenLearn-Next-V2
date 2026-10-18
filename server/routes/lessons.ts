@@ -18,6 +18,7 @@ import {
   redactAnswerPayload,
   rejectUnless,
   studentActorId,
+  teacherCanSeeStudent,
 } from '../services/class-access.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 
@@ -528,6 +529,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const evaluatingOther = isStaff && !!previewId && previewId !== selfId;
       const studentId = evaluatingOther ? previewId : selfId;
       if (!studentId) return res.status(403).json({ error: 'Student identity required' });
+
+      if (evaluatingOther && isTeacher(session)) {
+        if (!teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+          return res.status(403).json({ error: 'Forbidden: Cannot evaluate student outside your classes' });
+        }
+      }
 
       const result = await segmentGateService.evaluate({
         studentId,

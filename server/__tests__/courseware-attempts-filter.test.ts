@@ -17,6 +17,7 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
   const cwBId = 'cw-row-B';
   const studentId = 'stu-filter-1';
   const teacherId = 'usr-filter-teacher-1';
+  const classId = 'cls-filter-1';
   const teacherToken = 'tok-filter-teacher-1';
   const studentToken = 'tok-filter-student-1';
   const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
@@ -52,6 +53,16 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       now,
       now + 60 * 60 * 1000,
     );
+
+    // 教师管辖班级 + 学生在班：新口径下教师仅能看到所教班级学生的作答
+    kernelContainer.db
+      .prepare(
+        'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(classId, '切片测试班', 'attempts filter fixture', 'pass-filter-1', teacherId, now);
+    kernelContainer.db
+      .prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
+      .run(classId, studentId, now);
 
     kernelContainer.db
       .prepare('INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -100,6 +111,8 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
       .run('att-A-1', 'att-A-2', 'att-B-1');
     kernelContainer.db.prepare('DELETE FROM courseware WHERE id IN (?, ?)').run(cwAId, cwBId);
     kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+    kernelContainer.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+    kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);
     kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(teacherId, studentId);
     if (server) {

@@ -7,6 +7,13 @@ import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { mintCoursewareToken, verifyCoursewareToken } from '../utils/courseware-access.js';
 import { CoursewareService } from '../services/courseware-service.js';
+import {
+  authorizeClass,
+  isAdministrator,
+  isTeacher,
+  rejectUnless,
+  teacherCanSeeStudent,
+} from '../services/class-access.js';
 
 export function registerCoursewareRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -116,10 +123,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.get('/api/courseware/attempts', requireAuth(), (req, res) => {
     try {
       const session = (req as any).session as any;
-      const isStaff =
-        session?.role === 'teacher' || session?.role === 'administrator' || session?.subRole === 'administrator';
-      const requesterStudentId = isStaff ? undefined : session?.studentId || session?.userId;
-      const envelope = coursewareService.listAttempts(req.query, isStaff, requesterStudentId);
+      const envelope = coursewareService.listAttempts(req.query, session);
       res.json(envelope);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -142,14 +146,30 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const { attemptId } = req.params;
       const session = (req as any).session;
-      if (session.role !== 'teacher' && session.role !== 'administrator') {
-        const owner = kernelContainer.db
-          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-          .get(attemptId) as { student_id: string } | undefined;
-        if (!owner || owner.student_id !== (session.userId || session.studentId)) {
+      const owner = kernelContainer.db
+        .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+        .get(attemptId) as { student_id: string } | undefined;
+
+      if (!owner) {
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+
+      if (isAdministrator(session)) {
+        // 管理员放行
+      } else if (isTeacher(session)) {
+        const uid = session.userId || '';
+        const username = session.username || '';
+        const isSelf = owner.student_id === uid || owner.student_id === username || owner.student_id === 'teacher';
+        if (!isSelf && !teacherCanSeeStudent(kernelContainer.db, session, owner.student_id)) {
+          return res.status(403).json({ error: 'Forbidden: Cannot read attempt of a student outside your classes' });
+        }
+      } else {
+        const selfId = session.userId || session.studentId;
+        if (owner.student_id !== selfId) {
           return res.status(403).json({ error: 'Forbidden: Cannot read another student attempt' });
         }
       }
+
       const cmd = kernelContainer.commandBus.createCommand(
         'courseware.get_attempt_raw_data',
         { attemptId },
@@ -165,7 +185,16 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   // ── 4. 成绩转录与自动补录 ──────────────────────────────────────────────────
   app.post('/api/courseware/attempts/mark-absent', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      const session = (req as any).session;
       const { lessonId, classId, studentId, coursewareId } = req.body ?? {};
+      if (!classId) {
+        return res.status(400).json({ success: false, error: 'classId is required' });
+      }
+      const decision = authorizeClass(kernelContainer.db, session, classId, 'staff');
+      if (rejectUnless(res, decision)) return;
+      if (studentId && isTeacher(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: student does not belong to your class' });
+      }
       const result = coursewareService.markAbsent({ lessonId, classId, studentId, coursewareId });
       res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
     } catch (e: any) {
@@ -178,8 +207,14 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
 
   app.post('/api/courseware/attempts/:attemptId/promote', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      const session = (req as any).session;
       const { attemptId } = req.params;
-      const { lessonId, classId } = req.body;
+      const { lessonId, classId } = req.body ?? {};
+      if (!classId) {
+        return res.status(400).json({ success: false, error: 'classId is required' });
+      }
+      const decision = authorizeClass(kernelContainer.db, session, classId, 'staff');
+      if (rejectUnless(res, decision)) return;
       const result = await coursewareService.promoteAttempt(attemptId, lessonId, classId);
       res.json({ success: true, assignmentId: result.assignmentId, score: result.score });
     } catch (e: any) {
@@ -192,7 +227,13 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
 
   app.post('/api/courseware/attempts/auto-record', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      const session = (req as any).session;
       const { lessonId, classId, limit } = req.body || {};
+      if (!classId) {
+        return res.status(400).json({ error: 'classId is required' });
+      }
+      const decision = authorizeClass(kernelContainer.db, session, classId, 'staff');
+      if (rejectUnless(res, decision)) return;
       const report = coursewareService.autoRecordForLesson(lessonId, classId, limit);
       res.json({ success: true, ...report });
     } catch (e: any) {

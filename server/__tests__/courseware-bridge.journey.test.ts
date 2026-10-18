@@ -102,8 +102,8 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
 
     // 3. 初始化班级与班级学生绑定
     db.prepare(
-      'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(classId, className, '牛顿力学虚拟实验课', 'pass-cw-j4', now);
+      'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(classId, className, '牛顿力学虚拟实验课', 'pass-cw-j4', teacherId, now);
 
     db.prepare(
       'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',

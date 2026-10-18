@@ -27,10 +27,13 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
   const studentId = 'stu-actor-0001';
   const teacherId = 'usr-actor-teacher-0001';
   const otherStudentId = 'stu-actor-0002';
+  const outStudentId = 'stu-actor-0003';
+  const classId = 'cls-actor-0001';
   const coursewareId = 'cw-actor-0001';
   const coursewareUuid = 'cw-actor-uuid-0001';
   const studentAttemptId = 'att-actor-student-0001';
   const otherAttemptId = 'att-actor-other-0001';
+  const outAttemptId = 'att-actor-out-0001';
   const teacherAttemptId = 'att-actor-teacher-preview-0001';
   const studentToken = 'tok-actor-student-0001';
   const teacherToken = 'tok-actor-teacher-0001';
@@ -54,6 +57,20 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
       .prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(studentId, 'stu-actor-0001-num', 'Actor 学生', 'actor@test', now);
 
+    // 教师管辖班级：studentId / otherStudentId 在班，outStudentId 不在班（跨班 403 对照）
+    kernelContainer.db
+      .prepare(
+        'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(classId, 'Actor 测试班', 'submit actor fixture', 'pass-actor-1', teacherId, now);
+    const enroll = kernelContainer.db
+      .prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
+    enroll.run(classId, studentId, now);
+    enroll.run(classId, otherStudentId, now);
+    kernelContainer.db
+      .prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(outStudentId, 'stu-actor-0003-num', 'Actor 外班学生', 'actor3@test', now);
+
     kernelContainer.db
       .prepare('INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(coursewareId, coursewareUuid, 'Actor 测试课件', 'html', 'index.html', now);
@@ -63,6 +80,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
     );
     insertAttempt.run(studentAttemptId, coursewareId, studentId, now, 'active');
     insertAttempt.run(otherAttemptId, coursewareId, otherStudentId, now, 'active');
+    insertAttempt.run(outAttemptId, coursewareId, outStudentId, now, 'active');
     insertAttempt.run(teacherAttemptId, coursewareId, 'teacher_preview', now, 'active');
 
     // 真实会话行：getValidSession(token) 读 client_sessions.session_data
@@ -95,15 +113,18 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
   afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     kernelContainer.db
-      .prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?)')
-      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
+      .prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, outAttemptId, teacherAttemptId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(studentToken, teacherToken);
     kernelContainer.db
-      .prepare('DELETE FROM submission_raw WHERE attempt_id IN (?, ?, ?)')
-      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
+      .prepare('DELETE FROM submission_raw WHERE attempt_id IN (?, ?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, outAttemptId, teacherAttemptId);
     kernelContainer.db
-      .prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)')
-      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
+      .prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, outAttemptId, teacherAttemptId);
+    kernelContainer.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+    kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+    kernelContainer.db.prepare('DELETE FROM students WHERE id IN (?, ?)').run(studentId, outStudentId);
   });
 
   it('学生用 Cookie 会话提交自己的 attempt → 200 并落库（不再 500）', async () => {
@@ -151,9 +172,10 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
     expect(res.status).toBe(401);
   });
 
-  it('原始作答数据 /raw：无会话 401、学生读自己 200、学生读他人 403、教师读任意 200', async () => {
+  it('原始作答数据 /raw：无会话 401、学生读自己 200、学生读他人 403、教师读本班学生 200、跨班 403', async () => {
     const own = `${baseUrl}/api/courseware/attempts/${studentAttemptId}/raw`;
     const other = `${baseUrl}/api/courseware/attempts/${otherAttemptId}/raw`;
+    const outside = `${baseUrl}/api/courseware/attempts/${outAttemptId}/raw`;
 
     expect((await fetch(own)).status).toBe(401);
 
@@ -163,8 +185,13 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
     const asStudentOther = await fetch(other, { headers: cookie(studentToken) });
     expect(asStudentOther.status).toBe(403);
 
+    // 教师读本班学生 → 200
     const asTeacher = await fetch(other, { headers: cookie(teacherToken) });
     expect(asTeacher.status, await asTeacher.text()).toBe(200);
+
+    // 教师读非所教班级学生 → 403（新口径：班级切片隔离）
+    const asTeacherOut = await fetch(outside, { headers: cookie(teacherToken) });
+    expect(asTeacherOut.status).toBe(403);
   });
 
   it('CapabilityGuard：角色后缀兜底授予 student:write，裸 UUID 不授予（缺陷根因）', () => {

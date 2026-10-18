@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
+  - `GET /api/courseware/attempts` 修复教师水平越权：`listAttempts` 不再仅凭 `isStaff` 放行全校数据。教师视角仅返回其管辖班级（`classes.owner_user_id`）中的学生作答与教师自测记录；管理员保留全校可见性；学生视角仅能查看本人并脱敏内部字段（`extra_json`, `comment`）。
+  - 读接口鉴权加固：`GET /api/courseware/attempts/:attemptId/progress` 与 `GET /api/courseware/attempts/:attemptId/raw` 增加基于 `teacherCanSeeStudent` 的班级范围校验，教师尝试读取非管辖班级学生作答一律拒绝（403），不存在的记录返回 404。
+  - 同类写路由跨班级越权加固：`POST /api/courseware/attempts/mark-absent`、`POST /api/courseware/attempts/:attemptId/promote` 与 `POST /api/courseware/attempts/auto-record` 增加基于 `authorizeClass` 的班级管理权判定，且 `mark-absent` 校验学生班级归属；缺少 `classId` 校验（400）或跨班操作统一拒绝（403）。
+  - 课时分段评估加固：`POST /api/lessons/:id/segment-access` 在教师跨学生评估（`evaluatingOther`）时增加 `teacherCanSeeStudent` 校验。
+  - 新增 `server/__tests__/courseware-access-scope.test.ts`（17 例完整覆盖教师隔离、跨班读写 403、管理员全量、学生脱敏），并更新 `courseware-bridge.journey.test.ts` 班级归属夹具。
 - **`presence-update` 全局广播全校在线学生及所在课节（Issue #133）**：`server/presence.ts` 不再用 `io.emit` 向所有连接广播在线名单。新增 `presence-staff` 房间，仅教师/管理员在连接时自动加入（客户端手动 `join-room` 一律拒绝），`presence-update` 只投递到该房间；学生连接时的初始推送与 `request-presence` 只返回本人状态（是否在线 + 本人所在课节）。教师端在线监控、专注力、点名与课堂大屏不受影响。`server/__tests__/presence.test.ts` 新增 6 例：学生不入房且手动入房被拒、在线变化不再有全局广播、学生初始/按需拉取只见本人、教师仍拿全量。
 - **VFS 与文件下载对任意登录用户开放（Issue #128）**：`GET /api/vfs` 与 `GET /files/*` 收紧为教师/管理员。此前学生可借 `parentId=virtual-lessons` 拉取全校课节完整正文、`parentId=virtual-assignments` 拉取全校作业列表，并通过默认分支与 `/files/*` 读取任意 VFS 文件。`virtual-submissions` 的学生自助分支随角色收紧一并移除；前端 VFS 轮询只在教师会话下发起，学生端不再产生 403 噪声。新增 `server/__tests__/vfs-auth.test.ts`（11 例：学生各分支与下载均 403、教师/管理员正常、未登录 401）。
 - **白板读接口向学生泄露测验答案与跨学生作业白板越权（Issue #127）**：
