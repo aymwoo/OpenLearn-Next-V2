@@ -9,7 +9,7 @@ module.exports = {
     {
       name: 'openlearnv2',
       cwd: __dirname,
-      script: 'dist/server.cjs',
+      script: 'scripts/pm2-entry.cjs',
       instances: 1,
       exec_mode: 'fork',
       env: {
