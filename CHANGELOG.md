@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **插件声明式版本化迁移、失败事务回滚与降级保护（Issue #142）**：
+  - **声明式 SQL 迁移约定**：插件根目录支持 `migrations/` 目录约定，以数字序 SQL 脚本命名（如 `001_initial.sql`、`002_add_field.sql`），支持可选 `-- DOWN` 分段作为回滚定义，内置 `{{table_prefix}}` 占位符展开。
+  - **激活生命周期内原子执行**：在插件激活（`activateFromDatabase`、`activateWorker` 与 `activatePreloaded`）阶段前自动执行未执行的增量迁移，单脚本在 SQLite `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` 事务内原子执行；任意步骤失败自动回滚已执行语句，并将插件标记为 `ERROR` 状态。
+  - **严格版本降级保护**：当数据库已应用的最新迁移版本大于插件声明文件中的最高版本时，抛出 `PluginMigrationDowngradeError` 并强行阻断激活，杜绝旧版本插件在升级后 Schema 上运行导致的数据损坏风险。
+  - **元数据持久化与篡改校验**：自动维护 `plugin_declared_migrations` 元表，记录 `(plugin_id, version, name, checksum, applied_at)`；执行前校验已应用脚本的 SHA-256 校验和一致性。
+  - **命令式 `ctx.db.migrate` 事务原子化**：旧版命令式 `ctx.db.migrate(targetVersion, upgradeFn)` 升级为在原生 SQLite 事务中执行并支持失败回滚，保持完全向后兼容。
+  - **测试套件支持**：`@openlearn/plugin-test-kit` 新增导出 `runTestPluginMigrations` 助手，并在 mock context 的 `db.migrate` 中增加事务与错误回滚模拟。
+
 ### Fixes
 
 - **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
