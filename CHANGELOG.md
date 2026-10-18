@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **`presence-update` 全局广播全校在线学生及所在课节（Issue #133）**：`server/presence.ts` 不再用 `io.emit` 向所有连接广播在线名单。新增 `presence-staff` 房间，仅教师/管理员在连接时自动加入（客户端手动 `join-room` 一律拒绝），`presence-update` 只投递到该房间；学生连接时的初始推送与 `request-presence` 只返回本人状态（是否在线 + 本人所在课节）。教师端在线监控、专注力、点名与课堂大屏不受影响。`server/__tests__/presence.test.ts` 新增 6 例：学生不入房且手动入房被拒、在线变化不再有全局广播、学生初始/按需拉取只见本人、教师仍拿全量。
 - **VFS 与文件下载对任意登录用户开放（Issue #128）**：`GET /api/vfs` 与 `GET /files/*` 收紧为教师/管理员。此前学生可借 `parentId=virtual-lessons` 拉取全校课节完整正文、`parentId=virtual-assignments` 拉取全校作业列表，并通过默认分支与 `/files/*` 读取任意 VFS 文件。`virtual-submissions` 的学生自助分支随角色收紧一并移除；前端 VFS 轮询只在教师会话下发起，学生端不再产生 403 噪声。新增 `server/__tests__/vfs-auth.test.ts`（11 例：学生各分支与下载均 403、教师/管理员正常、未登录 401）。
 - **白板读接口向学生泄露测验答案与跨学生作业白板越权（Issue #127）**：
   - `GET /api/lessons/:id/whiteboard` 按角色脱敏：学生视角对元素 `data` 递归剥离 `correctIndex` / `correctAnswer` / `answer` / `solution` 等答案字段（`ANSWER_KEYS` 补齐 `correctIndex` 系列键），教师/管理员仍返回完整数据；判分结果继续由 `POST /quiz-submit` 在提交后回传，学生端高亮逻辑不受影响。

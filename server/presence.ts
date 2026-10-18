@@ -36,6 +36,16 @@ export interface PresenceDeps {
 export const classRoom = (classId: string): string => `class-${classId}`;
 
 /**
+ * 教师/管理员专用的在线状态房间名。
+ *
+ * `presence-update` 携带全校在线学生 ID 及「学生 → 当前课节」映射，属于教师端的
+ * 监控数据。历史上用 `io.emit` 发给全部连接，任何学生登录后都能在 WebSocket 帧里
+ * 看到其他班级的在线情况（Issue #133）。现收敛为：连接时仅 `isTeacherOrAdmin`
+ * 自动加入本房间，学生永不加入；`presence-update` 只投递到这里。
+ */
+export const PRESENCE_STAFF_ROOM = 'presence-staff';
+
+/**
  * 全局白板广播房间名。
  *
  * 每个客户端在连接时都会 `join-room 'whiteboard-broadcast'`（见
@@ -182,11 +192,35 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
 
   let presenceTimer: ReturnType<typeof setTimeout> | null = null;
   let presenceTrailing = false;
+
+  const presenceSnapshot = () => ({
+    onlineStudentIds: Array.from(onlineStudents.keys()),
+    activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
+  });
+
+  /**
+   * 按可见范围裁剪 presence 快照（SEC-AUTH / Issue #133）。
+   *
+   * - 教师 / 管理员：全校全量 —— 在线监控、专注力、点名都依赖它。
+   * - 学生：仅本人（是否在线 + 本人所在课节），不暴露其他学生。
+   * - 无 session：`NODE_ENV=test` 下握手豁免的 mock 连接，按特权处理；
+   *   生产由 `socketAuthMiddleware` 拒绝无 token 连接，不会出现该分支。
+   */
+  const visiblePresence = (session: any) => {
+    if (!session || session.role === 'teacher' || session.role === 'administrator') {
+      return presenceSnapshot();
+    }
+    const selfId: string = session.userId;
+    const lessonId = activeStudentLessons.get(selfId);
+    return {
+      onlineStudentIds: onlineStudents.has(selfId) ? [selfId] : [],
+      activeStudentLessons: lessonId ? { [selfId]: lessonId } : {},
+    };
+  };
+
   const emitPresenceNow = () => {
-    io.emit('presence-update', {
-      onlineStudentIds: Array.from(onlineStudents.keys()),
-      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
-    });
+    // 只投教师/管理员房间：在线名单是教师端监控数据，不再向全校连接广播
+    io.to(PRESENCE_STAFF_ROOM).emit('presence-update', presenceSnapshot());
   };
   const broadcastPresence = () => {
     // 单测同步断言需要每次立即发送；生产用前导+尾随合并防 50 人齐进风暴
@@ -214,6 +248,11 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     const session = socket.data?.session;
     const isTeacherOrAdmin = session?.role === 'teacher' || session?.role === 'administrator';
 
+    // 在线状态只对教师/管理员可见（无 session 的测试连接按特权处理）
+    if (!session || isTeacherOrAdmin) {
+      socket.join(PRESENCE_STAFF_ROOM);
+    }
+
     // ── SEC-AUTH: 房间归属校验 ────────────────────────────────────
     // 握手鉴权在 NODE_ENV=test 下豁免（此时 socket 无 session），与各处理器的
     // `if (session && ...)` 口径一致：无会话一律放行，生产行为由握手层兜底。
@@ -234,6 +273,8 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       if (!session) return true;
       if (typeof roomId !== 'string' || !roomId) return false;
       if (PUBLIC_BROADCAST_ROOMS.has(roomId)) return true;
+      // 在线状态房间只能由连接时的角色判定自动加入，客户端不得主动 join（防学生自荐收听）
+      if (roomId === PRESENCE_STAFF_ROOM) return false;
       if (isTeacherOrAdmin) return true;
       // 作业工作区伪课节：学生仅可加入绑定自己的房间
       const pseudoSid = pseudoRoomStudentId(roomId);
@@ -612,18 +653,12 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       }
     });
 
-    // 支持客户端随时按需主动请求最新在线列表
+    // 支持客户端随时按需主动请求最新在线列表（学生只能拿到本人状态）
     socket.on('request-presence', () => {
-      socket.emit('presence-update', {
-        onlineStudentIds: Array.from(onlineStudents.keys()),
-        activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
-      });
+      socket.emit('presence-update', visiblePresence(session));
     });
 
-    // Send initial status immediately on connection
-    socket.emit('presence-update', {
-      onlineStudentIds: Array.from(onlineStudents.keys()),
-      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
-    });
+    // Send initial status immediately on connection（同样按角色裁剪）
+    socket.emit('presence-update', visiblePresence(session));
   });
 }
