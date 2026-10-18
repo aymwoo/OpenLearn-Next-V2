@@ -1,5 +1,6 @@
 import type { ServerContext } from '../context.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { resourceService } from '../services/resource-service.js';
@@ -8,7 +9,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 export function registerResourcesRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/resources', requireAuth(), (_req, res) => {
+  app.get('/api/resources', requireScopedAuth('authenticated'), (_req, res) => {
     try {
       const resources = resourceService.listResources();
       res.json(resources);
@@ -17,7 +18,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/resources/:id', requireAuth(), (req, res) => {
+  app.get('/api/resources/:id', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const resource = resourceService.getResource(req.params.id);
       if (!resource) return res.status(404).send('Resource not found');
@@ -45,7 +46,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/resources/:id/*', requireAuth(), (req, res) => {
+  app.get('/api/resources/:id/*', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const resource = resourceService.getResource(req.params.id);
       if (!resource) return res.status(404).send('Resource not found');

@@ -8,6 +8,7 @@
 import express from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { ASSIGNMENT_MAX_FILE_SIZE } from '../utils/assignment-upload-policy.js';
@@ -118,7 +119,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/assignments', requireAuth(), async (req, res) => {
+  app.get('/api/assignments', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const payload: Record<string, unknown> = {
         lessonId: req.query.lessonId,
@@ -151,7 +152,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/assignments/:assignmentId', requireAuth(), async (req, res) => {
+  app.get('/api/assignments/:assignmentId', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       const payload: Record<string, unknown> = { assignmentId: req.params.assignmentId };
@@ -183,7 +184,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   // ── 文件上传（原始二进制体）────────────────────────────────────────────
   app.post(
     '/api/assignments/:assignmentId/files',
-    requireAuth(),
+    requireScopedAuth('class-member'),
     express.raw({ type: () => true, limit: ASSIGNMENT_MAX_FILE_SIZE + 1024 * 1024 }),
     async (req, res) => {
       try {
@@ -225,7 +226,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   );
 
   // ── 文件列表 / 下载 / 删除 ───────────────────────────────────────────────
-  app.get('/api/assignments/:assignmentId/files', requireAuth(), async (req, res) => {
+  app.get('/api/assignments/:assignmentId/files', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       if (
@@ -239,7 +240,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/assignments/:assignmentId/files/:fileId', requireAuth(), async (req, res) => {
+  app.get('/api/assignments/:assignmentId/files/:fileId', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       if (
@@ -261,7 +262,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/assignments/:assignmentId/files/:fileId', requireAuth(), async (req, res) => {
+  app.delete('/api/assignments/:assignmentId/files/:fileId', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       if (
@@ -276,7 +277,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   });
 
   // ── 提交 / 互评 / 评分（透传命令总线，校验在插件内完成）─────────────────
-  app.post('/api/assignments/:assignmentId/submit', requireAuth(), async (req, res) => {
+  app.post('/api/assignments/:assignmentId/submit', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       const body = req.body || {};
@@ -307,7 +308,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/assignments/:assignmentId/peer-review', requireAuth(), async (req, res) => {
+  app.post('/api/assignments/:assignmentId/peer-review', requireScopedAuth('class-member'), async (req, res) => {
     try {
       const { isPrivileged, studentId } = describeRequester(req);
       const body = req.body || {};

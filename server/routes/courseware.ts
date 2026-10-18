@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -41,7 +42,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware', requireAuth(), async (req, res) => {
+  app.get('/api/courseware', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const actorId = getActorId(req) || 'system';
       const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, actorId, { silent: true });
@@ -113,7 +114,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   });
 
   // ── 3. 榜单查询与进度 ──────────────────────────────────────────────────────
-  app.get('/api/courseware/attempts', requireAuth(), (req, res) => {
+  app.get('/api/courseware/attempts', requireScopedAuth('class-member'), (req, res) => {
     try {
       const session = (req as any).session as any;
       const isStaff =
@@ -126,7 +127,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts/:attemptId/progress', requireAuth(), (req, res) => {
+  app.get('/api/courseware/attempts/:attemptId/progress', requireScopedAuth('self'), (req, res) => {
     try {
       const { attemptId } = req.params;
       const session = (req as any).session;
@@ -138,7 +139,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts/:attemptId/raw', requireAuth(), async (req, res) => {
+  app.get('/api/courseware/attempts/:attemptId/raw', requireScopedAuth('self'), async (req, res) => {
     try {
       const { attemptId } = req.params;
       const session = (req as any).session;
@@ -214,7 +215,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/:id/access-token', requireAuth(), (req, res) => {
+  app.get('/api/courseware/:id/access-token', requireScopedAuth('authenticated'), (req, res) => {
     res.json({ token: mintCoursewareToken(req.params.id) });
   });
 
@@ -242,7 +243,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/courseware/debug', requireAuth(), (req, res) => {
+  app.post('/api/courseware/debug', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const { msg, url, student, courseware } = req.body;
       const safeMsg = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000);

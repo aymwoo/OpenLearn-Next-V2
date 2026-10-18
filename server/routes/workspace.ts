@@ -1,6 +1,7 @@
 import path from 'path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
@@ -27,7 +28,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   // SEC-AUTH: 本端点是 WebSocket 路径（server/presence.ts 'student-client-error'）的
   // HTTP 回退。此前它既无鉴权、也丢掉了 WS 路径已有的防冒充校验（SEC-AUTH），
   // 使得回退路径成为绕过身份校验的后门。两者现在必须保持同等校验强度。
-  app.post('/api/diagnostics/report', requireAuth(), (req, res) => {
+  app.post('/api/diagnostics/report', requireScopedAuth('self'), (req, res) => {
     try {
       const data = req.body || {};
       const session = (req as any).session || {};

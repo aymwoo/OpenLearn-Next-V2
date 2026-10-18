@@ -4,6 +4,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { Socket } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { markAuthMiddleware } from '../security/route-scope.js';
 
 // ── Session 工具函数 ──────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ export function getActorId(req: Request): string {
 
 /** 要求认证中间件（可选指定允许的角色） */
 export function requireAuth(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  const middleware = (req: Request, res: Response, next: NextFunction) => {
     const token = getCookieToken(req);
     if (!token) return res.status(401).json({ success: false, error: 'Authentication required' });
     const session = getValidSession(token);
@@ -129,6 +130,7 @@ export function requireAuth(...roles: string[]) {
     (req as any).session = session;
     next();
   };
+  return markAuthMiddleware(middleware, roles);
 }
 
 // ── SEC-AUTH-06: 默认密码强制改密 ─────────────────────────────────

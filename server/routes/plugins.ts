@@ -14,6 +14,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
@@ -403,7 +404,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // manifest 原文，前端 plugin-host 需要这个扁平字段把能力声明送进 Worker 模式的
   // ServiceHost Security Barrier 2。缺失时前端会回退解析 manifest 原文，再退化为
   // 空数组（只读）。这里是纯展示层补字段，不改变内核的授权判定。
-  app.get('/api/plugins', requireAuth(), (req, res) => {
+  app.get('/api/plugins', requireScopedAuth('authenticated'), (req, res) => {
     const list = kernelContainer.pluginLifecycleManager.listPlugins() as ReadonlyArray<Record<string, any>>;
     res.json(
       list.map((plugin) => {
@@ -424,7 +425,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   // Lookup installed plugin by logical manifest.id (for upgrade detection in the wizard)
   // MUST be registered before /api/plugins/:id(*)
-  app.get('/api/plugins/by-manifest/:manifestId(*)', requireAuth(), (req, res) => {
+  app.get('/api/plugins/by-manifest/:manifestId(*)', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const manifestId = decodeURIComponent(req.params.manifestId);
       const found = kernelContainer.pluginHost.findByManifestId(manifestId);
@@ -450,7 +451,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 插件市场列表与版本更新检测 API
   // SEC-AUTH: 与 check-update 同源 —— 该端点会对每个声明 updateSource 的插件调用
   // checkVersion（触发服务端 git / HTTP 出站请求），必须要求有效会话。
-  app.get('/api/plugins/market', requireAuth(), async (req, res) => {
+  app.get('/api/plugins/market', requireScopedAuth('authenticated'), async (req, res) => {
     // Return update info for all installed plugins that declare updateSource
     try {
       const plugins = kernelContainer.db
@@ -497,7 +498,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 社区插件市场（Community Registry）
   // SEC-AUTH: 该端点会代表服务端向运维配置的社区注册表发起出站请求，
   // 必须要求有效会话；仅管理员可安装，因此列表对教师开放、安装动作受限于 install-from-url。
-  app.get('/api/plugins/community', requireAuth(), async (req, res) => {
+  app.get('/api/plugins/community', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const result = await fetchCommunityRegistry({
         installed: listInstalledManifestVersions(),
@@ -655,7 +656,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 手动检查单个插件更新
   // SEC-AUTH: 该端点以插件 manifest 声明的 repo 为参数触发服务端 git / HTTP 出站请求，
   // 必须要求有效会话（不限制角色：插件中心教师亦可查看），避免成为未认证的出站请求放大面。
-  app.post('/api/plugins/:id(*)/check-update', requireAuth(), async (req, res) => {
+  app.post('/api/plugins/:id(*)/check-update', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
@@ -817,7 +818,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // V3.0: 查询插件贡献点摘�?
-  app.get('/api/plugins/:id(*)/contributions', requireAuth(), (req, res) => {
+  app.get('/api/plugins/:id(*)/contributions', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const summary = kernelContainer.pluginHost.listContributions(rawId);
@@ -1130,7 +1131,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // （src/main.tsx 单例，学生端学习面板/考试全屏视图亦会派发命令）。
   // 因此此处只要求"有效会话"，不得限制角色 —— 改成 requireAuth('teacher','administrator')
   // 会直接打断学生端功能。
-  app.post('/api/plugins/execute-command', requireAuth(), async (req, res) => {
+  app.post('/api/plugins/execute-command', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const { type, payload } = req.body;
       if (!type) {
@@ -1178,7 +1179,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // 沙箱前端专用命令通道：强制使用插件自身 actor (plugin:<manifestId>)，杜绝 Confused Deputy
-  app.post('/api/plugins/:id(*)/sandbox-command', requireAuth(), async (req, res) => {
+  app.post('/api/plugins/:id(*)/sandbox-command', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const { type, payload } = req.body;
       if (!type) {

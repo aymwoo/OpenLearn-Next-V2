@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import type { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js';
 import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
@@ -2043,7 +2044,7 @@ export function registerClassroomRoutes(
 
   // ── 6. 大屏公开脱敏数据接口 (Stage Display) ────────────────────────────
 
-  app.get('/api/classroom/stage/:lessonId/data', requireAuth(), (req: Request, res: Response) => {
+  app.get('/api/classroom/stage/:lessonId/data', requireScopedAuth('class-member'), (req: Request, res: Response) => {
     try {
       const { lessonId } = req.params;
 
@@ -2601,7 +2602,7 @@ export function registerClassroomRoutes(
 
   // ── 教学模式 (Teaching Modes — 课堂启动门户的模式选择器) ──────────
   // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
-  app.get('/api/classroom/teaching-modes', requireAuth(), (req: Request, res: Response) => {
+  app.get('/api/classroom/teaching-modes', requireScopedAuth('authenticated'), (req: Request, res: Response) => {
     try {
       const rows = db.prepare('SELECT * FROM teaching_modes ORDER BY sort_order ASC, created_at ASC').all() as any[];
 

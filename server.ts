@@ -77,6 +77,8 @@ import { registerClientErrorRoute } from './server/routes/client-errors.js';
 import { captureUnknownError } from './packages/core/observability/error-reporter.js';
 import { createCorsMiddleware, createSocketIoCors } from './server/middleware/cors.js';
 import { registerHealthRoutes } from './server/routes/health.js';
+import { assertRouteDataScopes } from './server/security/route-scope.js';
+import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
@@ -464,6 +466,15 @@ async function startServer() {
   // ── 健康检查与指标端点 (存活 / 就绪 / Prometheus) ───────────────────
   const startTime = Date.now();
   registerHealthRoutes(app, { startTime });
+
+  // ── 路由数据范围审计 (Issue #140) ──────────────────────────────────
+  // 所有 API 路由注册完成后统一审计：`requireAuth()`（不限角色）必须声明
+  // 数据范围（requireScopedAuth），否则启动日志告警；CI / 严格环境可设置
+  // ROUTE_SCOPE_ENFORCE=true 让未声明路由直接阻止启动。
+  assertRouteDataScopes(app, {
+    whitelist: ROUTE_SCOPE_WHITELIST,
+    enforce: process.env.ROUTE_SCOPE_ENFORCE === 'true',
+  });
 
   // SEC-ROUTING: API 404 兜底隔离门禁 —— 任何未被上述路由消费的 /api/* 请求
   // 必须直接返回 JSON 格式 404，严禁穿透至下游 Vite 开发服务器引发 HTML 假死与 500 超时
