@@ -22,7 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **读取侧**：`StudentPrivateNotesEditor` 在 `innerHTML` 赋值前净化，保存前再次净化，覆盖修复前的历史脏数据（此前恶意 `<img onerror>` 会在教师打开备忘时执行）。
   - `GET /api/students` 改为按教师班级归属过滤（`listStudents` 新增 `scope`）：管理员全库，教师仅返回其 `owner_user_id` 名下班级的在册学生，分页 `total` 同步收敛；此前任意教师可拉取全库学生名单及其私有备忘。
   - 新增 `html-sanitize.test.ts`（7 例）、`student-private-notes-security.test.ts`（5 例：PUT/导入净化、教师列表隔离、管理员全量）与 `StudentPrivateNotesEditor.test.tsx`（2 例：历史脏数据渲染、保存净化）。
-- **学生自报学习进度不再直接计入成绩（P1）**：`student_lesson_progress` 新增 `verified` 与 `verified_progress_percent`（迁移 `032_progress_verification.sql`，历史数据回填为已验证以保持既有成绩口径）。学生端进度滑杆 /「已完成」按钮写入的行标记为未验证，只影响展示；教师/管理员在同一次 `POST /api/students/:id/progress` 中的写入、课件自动录入（`auto-record-score`）与受信插件 `student.set_progress` 标记为已验证并记下验证值。`GradingService` 的进度分只聚合已验证进度，且**只有未验证记录时记 0 分**（不再回退到「无记录 100 分」），学生后续修改展示进度也无法覆盖教师已验证的数值。教师端学生进度列表新增「已验证 / 自报」徽标与一键「确认」按钮，学生端进度控件文案标注「教师确认后计入成绩」。新增 `student-progress-verification.test.ts`（4 例）并更新自动录入断言。
+- **学生自报学习进度不再直接计入成绩（P1）**：`student_lesson_progress` 新增 `verified` 与 `verified_progress_percent`（迁移 `032_progress_verification.sql`，历史数据回填为已验证以保持既有成绩口径）。学生端进度滑杆 /「已完成」按钮写入的行标记为未验证，只影响展示；教师/管理员在同一次 `POST /api/students/:id/progress` 中的写入、课件自动录入（`auto-record-score`）与受信插件 `student.set_progress` 标记为已验证并记下验证值。`GradingService` 的进度分只聚合已验证进度，学生后续修改展示进度也无法覆盖教师已验证的数值。教师端学生进度列表新增「已验证 / 自报」徽标与一键「确认」按钮，学生端进度控件文案标注「教师确认后计入成绩」。新增 `student-progress-verification.test.ts`（4 例）并更新自动录入断言。
+- **学生档案 P2 安全加固**：
+  - **密码写入**：教师端不再把 `password` 渲染成带占位值 `123456` 的可编辑输入框，也取消逐字符 `PUT`；改为「设置新密码」内联表单，一次性提交且不回显。`PUT /api/students/:id` 拒绝空/纯空白密码（400），避免空串哈希导致账号无法登录。
+  - **敏感变更审计**：`PUT /api/students/:id` 比较更新前后的 `password` / `private_notes` / `locked_lesson_id`，变更时写入 `student.sensitive_fields_updated`（操作者、目标学生、字段名），不记录密码明文/哈希或备忘内容。
+  - **进度事件**：教师端班级花名册通过 `useClassroomSocket` 新增的 `onStudentProgressUpdated` 回调就地刷新已加载学生的进度（此前该广播只有课堂大屏消费）；`GET /api/students/:id/progress` 从 `segment_visits` 中已离开的环节派生并合并 `completed_segments`，大屏「环节完成度」不再长期为空。
+  - **成绩口径**：没有任何已验证进度时 `progressScore` 返回 `null` 并从总评中排除，总分按剩余可用权重重新归一化（不再默认 100 分，也不惩罚未使用进度追踪的班级）；归档快照中该项按 0 记录。
 
 ### Fixes
 

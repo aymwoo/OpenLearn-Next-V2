@@ -152,19 +152,21 @@ describe('GradingService 领域服务单元测试 (E3)', () => {
       expect(alice).toBeDefined();
       expect(bob).toBeDefined();
 
-      // Alice: 出勤 present=100分，考试 95分，无作业时默认100，进度默认100
-      // 权重: att:0.2, prog:0.3, assign:0.3, exam:0.2 -> 100*0.2 + 100*0.3 + 100*0.3 + 95*0.2 = 20 + 30 + 30 + 19 = 99
+      // Alice: 出勤 present=100分，考试 95分，无作业时默认100；无验证进度 → 进度分排除，
+      // 按剩余权重 0.7（0.2+0.3+0.2）归一化: (100*0.2 + 100*0.3 + 95*0.2) / 0.7 = 98.57 -> 99
       expect(alice?.attendanceScore).toBe(100);
       expect(alice?.examScore).toBe(95);
+      expect(alice?.progressScore).toBeNull();
       expect(alice?.totalScore).toBe(99);
       expect(alice?.gradeLevel).toBe('A');
 
-      // Bob: 出勤 late=80分，考试缺考 (score is null) -> 0分，无作业默认100，进度100
-      // 80*0.2 + 100*0.3 + 100*0.3 + 0*0.2 = 16 + 30 + 30 + 0 = 76
+      // Bob: 出勤 late=80分，考试缺考 (score is null) -> 0分，无作业默认100；进度分排除
+      // (80*0.2 + 100*0.3 + 0*0.2) / 0.7 = 65.71 -> 66
       expect(bob?.attendanceScore).toBe(80);
       expect(bob?.examScore).toBe(0);
-      expect(bob?.totalScore).toBe(76);
-      expect(bob?.gradeLevel).toBe('C');
+      expect(bob?.progressScore).toBeNull();
+      expect(bob?.totalScore).toBe(66);
+      expect(bob?.gradeLevel).toBe('D');
     });
   });
 

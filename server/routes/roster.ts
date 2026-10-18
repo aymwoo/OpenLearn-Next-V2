@@ -1096,7 +1096,31 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const studentId = resolveWritableStudentId((req as any).session, req.params.id);
       if (!studentId) return res.status(403).json({ error: "Cannot modify another teacher's student" });
+      // 空密码会把账号锁死（空串哈希无法登录），必须在入口拒绝
+      if (req.body?.password !== undefined) {
+        if (typeof req.body.password !== 'string' || req.body.password.trim() === '') {
+          return res.status(400).json({ error: 'Password cannot be empty' });
+        }
+      }
+      const sensitiveBefore = kernelContainer.db
+        .prepare('SELECT password, private_notes, locked_lesson_id FROM students WHERE id = ?')
+        .get(studentId) as Record<string, unknown> | undefined;
       rosterService.updateStudent(studentId, req.body);
+      // 敏感字段变更留痕：只记录字段名，不记录密码明文/哈希或备忘内容
+      const sensitiveAfter = kernelContainer.db
+        .prepare('SELECT password, private_notes, locked_lesson_id FROM students WHERE id = ?')
+        .get(studentId) as Record<string, unknown> | undefined;
+      const changedFields = ['password', 'private_notes', 'locked_lesson_id'].filter(
+        (field) => sensitiveBefore?.[field] !== sensitiveAfter?.[field],
+      );
+      if (changedFields.length > 0) {
+        recordSecurityAudit('student.sensitive_fields_updated', {
+          actorId: actorUserId((req as any).session),
+          studentId,
+          fields: changedFields,
+          method: 'PUT',
+        });
+      }
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1165,14 +1189,38 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const progress = kernelContainer.getReadDb()
         .prepare(
           `
-        SELECT slp.*, l.title as lesson_title
+        SELECT slp.*, l.title as lesson_title,
+               (
+                 SELECT GROUP_CONCAT(DISTINCT sv.segment_id)
+                 FROM segment_visits sv
+                 WHERE sv.lesson_id = slp.lesson_id
+                   AND sv.student_id = slp.student_id
+                   AND sv.left_at IS NOT NULL
+               ) AS visited_segment_ids
         FROM student_lesson_progress slp
         JOIN lessons l ON slp.lesson_id = l.id
         WHERE slp.student_id = ?
       `,
         )
-        .all(studentId);
-      res.json(progress);
+        .all(studentId) as any[];
+
+      // 环节完成度以 segment_visits（已离开该环节）为权威来源：进度表里的
+      // completed_segments 长期没有生产方，合并后既兼容历史值也能反映真实课堂行为。
+      res.json(
+        progress.map((row) => {
+          const { visited_segment_ids, ...rest } = row;
+          if (!visited_segment_ids) return rest;
+          let stored: unknown[] = [];
+          try {
+            const parsed = JSON.parse(rest.completed_segments || '[]');
+            if (Array.isArray(parsed)) stored = parsed;
+          } catch {
+            stored = [];
+          }
+          const merged = Array.from(new Set([...stored, ...String(visited_segment_ids).split(',')]));
+          return { ...rest, completed_segments: JSON.stringify(merged) };
+        }),
+      );
     } catch (e: any) {
       sendSafeError(res, e);
     }

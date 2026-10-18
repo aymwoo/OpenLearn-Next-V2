@@ -560,6 +560,7 @@ export class CoursewareService {
         progressPercent: 100,
         completed: true,
         completedSegments: [],
+        verified: true,
       },
       { correlationId: lessonId },
     );

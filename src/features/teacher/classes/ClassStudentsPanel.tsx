@@ -98,6 +98,11 @@ export function ClassStudentsPanel({
 }: ClassStudentsPanelProps) {
   const host = useOptionalPluginHost();
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+  // 密码设置为显式一次性提交：不显示、不回显、不逐字符落库
+  const [passwordEditingId, setPasswordEditingId] = useState<string | null>(null);
+  const [passwordDraft, setPasswordDraft] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
   useEffect(() => {
@@ -124,6 +129,31 @@ export function ClassStudentsPanel({
     navigator.clipboard?.writeText(text);
     setCopiedStudentId(stId);
     setTimeout(() => setCopiedStudentId(null), 1500);
+  };
+
+  const submitStudentPassword = async (studentId: string) => {
+    const password = passwordDraft.trim();
+    if (!password) {
+      setPasswordError(lang === 'zh' ? '密码不能为空' : 'Password cannot be empty');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError('');
+    try {
+      const res = await fetch(`/api/students/${studentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        setPasswordError(lang === 'zh' ? '保存失败，请重试' : 'Failed to save, please retry');
+        return;
+      }
+      setPasswordEditingId(null);
+      setPasswordDraft('');
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const cStudents = classStudentsMap[cls.id] || [];
@@ -814,25 +844,74 @@ export function ClassStudentsPanel({
                                     <span className="font-semibold text-gray-600">
                                       {lang === 'zh' ? '该生个人登录密码:' : 'Personal Login Password:'}
                                     </span>
-                                    <input
-                                      type="text"
-                                      className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
-                                      value={st.password || '123456'}
-                                      onChange={async (e) => {
-                                        const newPwd = e.target.value;
-                                        await fetch(`/api/students/${st.id}`, {
-                                          method: 'PUT',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ password: newPwd }),
-                                        });
-                                        setStudents((prev) =>
-                                          prev.map((s) => (s.id === st.id ? { ...s, password: newPwd } : s)),
-                                        );
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      title={lang === 'zh' ? '点击可修改密码' : 'Click to edit student password'}
-                                    />
+                                    {passwordEditingId === st.id ? (
+                                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                          type="password"
+                                          autoFocus
+                                          autoComplete="new-password"
+                                          className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center text-gray-750"
+                                          value={passwordDraft}
+                                          placeholder={lang === 'zh' ? '输入新密码' : 'New password'}
+                                          onChange={(e) => {
+                                            setPasswordDraft(e.target.value);
+                                            setPasswordError('');
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') void submitStudentPassword(st.id);
+                                            if (e.key === 'Escape') {
+                                              setPasswordEditingId(null);
+                                              setPasswordDraft('');
+                                              setPasswordError('');
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          disabled={passwordSaving || passwordDraft.trim() === ''}
+                                          onClick={() => void submitStudentPassword(st.id)}
+                                          className="px-1.5 py-0.5 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
+                                        >
+                                          {lang === 'zh' ? '确认' : 'Save'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setPasswordEditingId(null);
+                                            setPasswordDraft('');
+                                            setPasswordError('');
+                                          }}
+                                          className="px-1.5 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs cursor-pointer"
+                                        >
+                                          {lang === 'zh' ? '取消' : 'Cancel'}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-mono text-gray-400 tracking-widest" aria-label="hidden">
+                                          ••••••
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPasswordEditingId(st.id);
+                                            setPasswordDraft('');
+                                            setPasswordError('');
+                                          }}
+                                          className="px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-xs font-semibold cursor-pointer"
+                                          title={lang === 'zh' ? '为学生设置新密码' : 'Set a new password for this student'}
+                                        >
+                                          {lang === 'zh' ? '设置新密码' : 'Set password'}
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
+                                  {passwordEditingId === st.id && passwordError && (
+                                    <div className="text-[10px] text-rose-600 mt-0.5" role="alert">
+                                      {passwordError}
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                     <select
                                       id={`assign-lesson-class-${st.id}`}

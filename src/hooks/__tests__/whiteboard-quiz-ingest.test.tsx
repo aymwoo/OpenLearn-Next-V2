@@ -91,6 +91,43 @@ const baseOptions: any = {
   setActiveSegmentIdRemote: vi.fn(),
 };
 
+describe('useClassroomSocket — student-progress-updated → onStudentProgressUpdated', () => {
+  beforeEach(() => {
+    mockSocket = new MockSocket();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('forwards lesson, percent, completed and verified flags to the callback', () => {
+    const onStudentProgressUpdated = vi.fn();
+    const setLiveClassStudentProgress = vi.fn();
+    renderHook(() =>
+      useClassroomSocket({ ...baseOptions, setLiveClassStudentProgress, onStudentProgressUpdated }),
+    );
+
+    act(() => {
+      mockSocket.fire('student-progress-updated', {
+        studentId: 'stu-1',
+        lessonId: 'L-001',
+        progressPercent: 60,
+        completed: false,
+        verified: false,
+      });
+    });
+
+    expect(onStudentProgressUpdated).toHaveBeenCalledWith({
+      studentId: 'stu-1',
+      lessonId: 'L-001',
+      progressPercent: 60,
+      completed: false,
+      verified: false,
+    });
+    expect(setLiveClassStudentProgress).toHaveBeenCalled();
+  });
+});
+
 describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlot', () => {
   beforeEach(() => {
     mockSocket = new MockSocket();

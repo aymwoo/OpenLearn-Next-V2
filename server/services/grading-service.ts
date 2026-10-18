@@ -60,7 +60,8 @@ export interface StudentSemesterGrade {
   studentName: string;
   studentNumber: string;
   attendanceScore: number;
-  progressScore: number;
+  /** null = 没有任何已验证进度，该分项不参与总评（按其余权重归一化） */
+  progressScore: number | null;
   assignmentScore: number;
   examScore: number;
   totalScore: number;
@@ -79,7 +80,8 @@ export interface SemesterReportArchiveItem {
   id?: string;
   studentId: string;
   attendanceScore: number;
-  progressScore: number;
+  /** null = 该分项未参与总评；归档列非空，落库时按 0 记录 */
+  progressScore: number | null;
   assignmentScore: number;
   examScore: number;
   totalScore: number;
@@ -397,15 +399,11 @@ export class GradingService {
       attendanceMap.get(a.student_id)!.push(a.status);
     }
 
-    const progressMap = new Map<string, number[]>();
     const verifiedProgressMap = new Map<string, number[]>();
     for (const p of progressList) {
-      if (!progressMap.has(p.student_id)) progressMap.set(p.student_id, []);
-      progressMap.get(p.student_id)!.push(p.progress_percent);
-      if (p.verified === 1) {
-        if (!verifiedProgressMap.has(p.student_id)) verifiedProgressMap.set(p.student_id, []);
-        verifiedProgressMap.get(p.student_id)!.push(p.verified_progress_percent ?? p.progress_percent);
-      }
+      if (p.verified !== 1) continue;
+      if (!verifiedProgressMap.has(p.student_id)) verifiedProgressMap.set(p.student_id, []);
+      verifiedProgressMap.get(p.student_id)!.push(p.verified_progress_percent ?? p.progress_percent);
     }
 
     const assignmentMap = new Map<string, number[]>();
@@ -459,15 +457,12 @@ export class GradingService {
       }
 
       // 计算进度分：只取已验证进度（教师确认 / 课件自动录入 / 受信插件）的算术均值。
-      // 学生自报进度不计入成绩；若存在进度记录但全部未验证，记 0 分而不是回退到「无记录 100 分」。
+      // 没有任何已验证进度时返回 null —— 该分项不参与总评，而不是按 0 或 100 计。
       const verifiedPercents = verifiedProgressMap.get(student.id) || [];
-      const allPercents = progressMap.get(student.id) || [];
-      let progressScore = 100;
-      if (verifiedPercents.length > 0) {
-        progressScore = Math.round(verifiedPercents.reduce((acc, val) => acc + val, 0) / verifiedPercents.length);
-      } else if (allPercents.length > 0) {
-        progressScore = 0;
-      }
+      const progressScore: number | null =
+        verifiedPercents.length > 0
+          ? Math.round(verifiedPercents.reduce((acc, val) => acc + val, 0) / verifiedPercents.length)
+          : null;
 
       // 计算作业分：若班级已发布作业但学生未交则得 0 分，否则为已交作业平均分
       const scores = assignmentMap.get(student.id) || [];
@@ -484,13 +479,22 @@ export class GradingService {
         examScore = Math.round(sum / examScores.length);
       }
 
-      // 加权综合总分
-      const totalScore = Math.round(
-        attendanceScore * weights.attendance_weight +
-          progressScore * weights.progress_weight +
-          assignmentScore * weights.assignment_weight +
-          examScore * weights.exam_weight,
+      // 加权综合总分：缺失分项（如无已验证进度）不参与计算，按可用权重重新归一化，
+      // 避免「未使用进度追踪的班级」被无端扣掉 25% 或凭空拿到满分。
+      const components: Array<{ score: number | null; weight: number }> = [
+        { score: attendanceScore, weight: weights.attendance_weight },
+        { score: progressScore, weight: weights.progress_weight },
+        { score: assignmentScore, weight: weights.assignment_weight },
+        { score: examScore, weight: weights.exam_weight },
+      ];
+      const availableComponents = components.filter(
+        (c): c is { score: number; weight: number } => c.score !== null && c.weight > 0,
       );
+      const availableWeight = availableComponents.reduce((acc, c) => acc + c.weight, 0);
+      const totalScore =
+        availableWeight > 0
+          ? Math.round(availableComponents.reduce((acc, c) => acc + c.score * c.weight, 0) / availableWeight)
+          : 0;
 
       // 等级评定
       let gradeLevel: 'A' | 'B' | 'C' | 'D' | 'E' = 'E';
@@ -562,7 +566,8 @@ export class GradingService {
           semesterName,
           resolvedAcademicYear,
           r.attendanceScore,
-          r.progressScore,
+          // 归档列为 NOT NULL：被排除的分项落 0；totalScore 已按可用权重重算
+          r.progressScore ?? 0,
           r.assignmentScore,
           r.examScore,
           r.totalScore,
