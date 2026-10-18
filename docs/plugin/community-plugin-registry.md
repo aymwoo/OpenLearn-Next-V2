@@ -88,8 +88,30 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 | `tags`                    | —    | 数组或逗号分隔字符串，最多保留 8 个标签，用于前端筛选。                                                          |
 | `capabilities`            | —    | 插件申请的权限，用于在卡片上提示权限数量（悬停查看完整列表）。                                                   |
 | `downloads` / `stars`     | —    | 非负数字或数字字符串，用于展示与默认排序。                                                                       |
-| `integrity` / `signature` | 安装时 | `integrity` 是 ZIP 的 sha256 十六进制或 `sha256-` base64。`signature` 是对该字符串的 Ed25519 签名（base64）。社区安装默认关闭。 |
+| `integrity` / `signature` | 安装时 | `integrity` 是 ZIP 的 sha256 十六进制或 `sha256-` base64。`signature` 是对结构化元数据载荷（或哈希原文）的 Ed25519 签名（base64）。社区来源强制要求同时存在 `integrity` 与有效 `signature`。 |
+| `publisher`               | —    | 发布者标识或公钥 ID，与签名元数据保持一致。 |
 | `verified` / `featured`   | —    | `featured` 仍由注册表布尔值决定。`verified` 会被服务端忽略，不再把条目标成已认证。 |
+
+### 签名载荷与 SDK 签名工具
+
+社区插件包要求使用 Ed25519 私钥签署。签名载荷遵循结构化绑定格式：
+```text
+openlearn-plugin-attestation-v2
+<plugin-id>
+<version>
+<sha256-hex-or-base64>
+```
+
+插件开发者可通过 `@openlearn/plugin-sdk` CLI 一键完成打包并签名：
+```bash
+# 构建并直接签名打包
+npx @openlearn/plugin-sdk build --key publisher-private.pem --publisher "Alice Dev"
+
+# 为已有 ZIP 签署签名并注入 signature.json
+npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice Dev" my-plugin.zip
+```
+执行后将输出计算得到的 `Integrity` 与 `Signature`，可直接填入注册表清单；同时 ZIP 根目录下会自动嵌入包含发布者身份信息的 `signature.json`。
+
 
 ### 归一化与容错策略
 
@@ -156,7 +178,15 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 5. 服务端下载 ZIP。下载失败返回 HTTP 400 + `fallbackToClient: true`。下载成功后按 `OPENLEARN_COMMUNITY_PUBKEY` 验签，失败则删除临时包；
 6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，并按受信策略落执行模式。
 
-**浏览器直传回退**：下载失败时前端在浏览器中下载同一个 ZIP，并以 `Content-Type: application/octet-stream` 直传 `POST /api/plugins/upload-zip-raw`。社区回退必须带 `x-community-install`、`x-acknowledge-risk`、`x-integrity` 与 `x-signature`，服务端同样检查安装开关和验签。
+**错误码说明**：
+
+| 错误代码 | 说明 |
+| :--- | :--- |
+| `COMMUNITY_INTEGRITY_REQUIRED` | 社区插件包未声明 `integrity` (SHA-256)，被拒绝 |
+| `COMMUNITY_ATTESTATION_REQUIRED` | 社区包缺少 `signature` 或请求体/请求头缺少凭据 |
+| `COMMUNITY_PUBKEY_MISSING` | 宿主未配置信任公钥 (`OPENLEARN_COMMUNITY_PUBKEY`)，拒绝安装社区包 |
+| `COMMUNITY_INTEGRITY_MISMATCH` | 完整性哈希与下载包不匹配（防网络损坏与中间人篡改） |
+| `COMMUNITY_SIGNATURE_INVALID` | 签名无效、密钥不匹配或非受信发布者 |
 
 ---
 
@@ -175,10 +205,14 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 
 | 文件                                                              | 职责                                                                 |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `server/services/community-registry.ts`                           | 注册表拉取、归一化、缓存、安装状态标注、ZIP 下载与体积上限           |
+| `packages/core/security/plugin-signature.ts`                      | 统一非对称签名校验、Ed25519 载荷结构化绑定、多公钥 Keyring 解析与来源分级安全策略 |
+| `packages/core/plugin-host/plugin-distribution-manager.ts`        | 插件分发与仓库管理，集成完整性与签名门禁                             |
+| `packages/plugin-sdk/cli.mjs`                                     | SDK CLI 打包构建与 `sign` 签名命令                                   |
+| `server/services/community-attest.ts`                           | 社区包验签服务桥接                                                   |
 | `server/utils/url-safety.ts`                                      | 共享出站 URL 安全校验（SSRF 防护）                                   |
 | `server/routes/plugins.ts`                                        | `GET /api/plugins/community` 与 `POST /api/plugins/install-from-url` |
 | `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx` | 社区页 UI 与安装交互                                                 |
 | `server/__tests__/community-registry.test.ts`                     | 归一化 / 缓存 / 安全校验 / 下载限制单测                              |
 | `server/__tests__/community-routes.test.ts`                       | 路由鉴权与入参门禁契约测试                                           |
 | `src/components/__tests__/PluginCommunityPanel.test.tsx`          | 面板渲染 / 筛选 / 安装与回退路径测试                                 |
+

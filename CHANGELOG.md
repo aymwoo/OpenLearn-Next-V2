@@ -52,6 +52,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
 ### Security
 
+- **插件包发布者签名与来源分级安全验签（Issue #143）**：
+  - **核心非对称验签引擎**：新增 `packages/core/security/plugin-signature.ts`，基于 Ed25519 算法对插件完整性与发布者身份进行事前密码学校验；签名载荷支持结构化元数据绑定（`openlearn-plugin-attestation-v2\n<id>\n<version>\n<integrity>`），杜绝版本降级与冒名攻击，同时向下兼容纯哈希签名。
+  - **来源分级安全策略**：`PluginDistributionManager` 实现来源分级门禁 —— 内置插件 (`builtin`) 完全信任放行；本地上传 (`local`) 允许管理员显式审计安装（若带签名则强验）；社区/远端市场 (`community`) 默认**强行要求**声明 SHA-256 `integrity` 与有效 `signature`，缺少哈希、缺少签名、公钥未配置或签名无效一律拒绝并输出标准化错误码。
+  - **分发管理器与错误类**：扩展 `PluginPackageMetadata` 支持 `signature` 与 `publisher` 字段；`packages/core/plugin-host/errors.ts` 新增 `PluginSignatureError`、`PluginIntegrityRequiredError`、`PluginAttestationRequiredError`、`PluginIntegrityMismatchError` 与 `PluginSignatureInvalidError`。
+  - **SDK CLI 签名工具**：`@openlearn/plugin-sdk` CLI 新增 `sign` 命令与 `build --key <private.pem>` 选项，支持开发者使用 Ed25519 私钥为打包产物一键签名并自动嵌入 `signature.json`。
+  - **存量兼容**：平台升级后已安装插件在宿主启动时无需重复验签，保证存量系统平滑运行。
 - **插件访问学生个人数据的能力声明与审计，插件表纳入导出/删除与保留策略（P1 安全，Issue #145）**：
   - **学生个人数据能力声明与统一审计**：在 `packages/core/plugin-host/method-policy.ts` 中引入专有的 `CAP_STUDENT_DATA_READ = 'student-data:read'` 与 `CAP_STUDENT_DATA_WRITE = 'student-data:write'` 能力常量；在 Inline 代理层（`context-builder.ts`）与 Worker 隔离层（`service-host.ts`）拦截插件对 `pointsLedger`（读 `getLogs`/`getStudentTotalByDimension`/`getStudentDimensionSummary`，写 `addPoints`）的学生数据访问，统一记录 `plugin.student_data_access` 安全审计日志；提供平滑迁移兼容期，对未声明能力的存量插件输出控制台警告并标记 `migrationWarning: true`。
   - **插件扩展数据 GDPR 导出与级联删除**：在 `PluginInstance`、`PluginModule` 与 `@openlearn/plugin-sdk` 规范中引入可选的 `onStudentExport(studentId)` 与 `onStudentDelete(studentId)` 扩展生命周期钩子；`PluginHost` 新增 `exportStudentDataFromPlugins` 与 `deleteStudentDataFromPlugins`（委托至 `student-data-privacy.ts`），统一支持 Inline 异步与 Worker 隔离消息 RPC（带 10s 超时保护），未实现的插件标记 `{ status: 'not_implemented' }`；

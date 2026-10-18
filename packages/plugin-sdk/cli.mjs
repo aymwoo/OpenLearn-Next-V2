@@ -28,7 +28,7 @@ import { join, dirname, relative, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash, createPrivateKey, sign } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_DIR = join(__dirname, 'scaffold', 'templates');
@@ -384,10 +384,53 @@ async function cmdBuild(args) {
 
       const zipName = `${pluginName.replace(/\//g, '-').replace(/@/g, '')}.zip`;
       const zipPath = join(distDir, zipName);
+      const cwdZip = join(cwd, zipName);
+
+      const keyFlagIdx = args.findIndex((a) => a === '--key' || a === '--sign');
+      const keyFilePath = keyFlagIdx !== -1 && args[keyFlagIdx + 1] ? resolve(cwd, args[keyFlagIdx + 1]) : null;
+      const pubFlagIdx = args.findIndex((a) => a === '--publisher');
+      const publisherName = pubFlagIdx !== -1 && args[pubFlagIdx + 1] ? args[pubFlagIdx + 1] : null;
+
+      if (keyFilePath) {
+        if (!existsSync(keyFilePath)) {
+          console.error(`${c.red}Error:${c.reset} Private key file not found: ${keyFilePath}`);
+          process.exit(1);
+        }
+        const privKeyPem = readFileSync(keyFilePath, 'utf8');
+        const initialZipBuf = await zip.generateAsync({ type: 'nodebuffer' });
+        const hashHex = createHash('sha256').update(initialZipBuf).digest('hex');
+        const payload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${hashHex}`;
+        const privKey = createPrivateKey(privKeyPem);
+        const signature = sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+        const publisher = publisherName || manifest.author || 'community';
+
+        const sigManifest = {
+          version: 2,
+          algorithm: 'ed25519',
+          signature,
+          publisher,
+        };
+        zip.file('signature.json', JSON.stringify(sigManifest, null, 2));
+
+        const finalZipBuf = await zip.generateAsync({ type: 'nodebuffer' });
+        const finalHashHex = createHash('sha256').update(finalZipBuf).digest('hex');
+        const finalPayload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${finalHashHex}`;
+        const finalSig = sign(null, Buffer.from(finalPayload, 'utf8'), privKey).toString('base64');
+
+        writeFileSync(zipPath, finalZipBuf);
+        writeFileSync(cwdZip, finalZipBuf);
+
+        const sizeKB = (finalZipBuf.length / 1024).toFixed(1);
+        console.log(`${tick} Packaged & Signed ${zipName} (${sizeKB} KB)`);
+        console.log(`  → ${cwdZip}`);
+        console.log(`  ${info} Publisher: ${publisher}`);
+        console.log(`  ${info} Integrity (SHA-256): ${finalHashHex}`);
+        console.log(`  ${info} Signature: ${finalSig}`);
+        return;
+      }
+
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       writeFileSync(zipPath, zipBuffer);
-
-      const cwdZip = join(cwd, zipName);
       writeFileSync(cwdZip, zipBuffer);
 
       const sizeKB = (zipBuffer.length / 1024).toFixed(1);
@@ -400,6 +443,101 @@ async function cmdBuild(args) {
   }
 }
 
+async function cmdSign(args) {
+  const cwd = process.cwd();
+  const keyFlagIdx = args.findIndex((a) => a === '--key' || a === '-k');
+  if (keyFlagIdx === -1 || !args[keyFlagIdx + 1]) {
+    console.error(`${c.red}Error:${c.reset} Private key is required. Use --key <private-key.pem>`);
+    process.exit(1);
+  }
+  const keyFilePath = resolve(cwd, args[keyFlagIdx + 1]);
+  if (!existsSync(keyFilePath)) {
+    console.error(`${c.red}Error:${c.reset} Private key file not found: ${keyFilePath}`);
+    process.exit(1);
+  }
+
+  const pubFlagIdx = args.findIndex((a) => a === '--publisher');
+  const publisherName = pubFlagIdx !== -1 && args[pubFlagIdx + 1] ? args[pubFlagIdx + 1] : null;
+
+  const remainingArgs = args.filter(
+    (_, i) => i !== keyFlagIdx && i !== keyFlagIdx + 1 && i !== pubFlagIdx && i !== pubFlagIdx + 1,
+  );
+  let targetZip = remainingArgs[0] ? resolve(cwd, remainingArgs[0]) : null;
+
+  if (!targetZip) {
+    const zipFiles = readdirSync(cwd).filter((f) => f.endsWith('.zip'));
+    if (zipFiles.length === 1) {
+      targetZip = join(cwd, zipFiles[0]);
+    } else if (zipFiles.length > 1) {
+      console.error(
+        `${c.red}Error:${c.reset} Multiple ZIP files found in directory. Specify one explicitly.`,
+      );
+      process.exit(1);
+    } else {
+      console.error(`${c.red}Error:${c.reset} No ZIP file specified or found in current directory.`);
+      process.exit(1);
+    }
+  }
+
+  if (!existsSync(targetZip)) {
+    console.error(`${c.red}Error:${c.reset} Target ZIP file not found: ${targetZip}`);
+    process.exit(1);
+  }
+
+  let JSZip;
+  try {
+    JSZip = (await import('jszip')).default;
+  } catch {
+    const projectEsbuild = join(cwd, 'node_modules', 'jszip', 'lib', 'index.js');
+    JSZip = (await import(projectEsbuild)).default;
+  }
+
+  const privKeyPem = readFileSync(keyFilePath, 'utf8');
+  const zipData = readFileSync(targetZip);
+  const zip = await JSZip.loadAsync(zipData);
+
+  const manifestFile = zip.file('manifest.json');
+  let manifest = { id: basename(targetZip, '.zip'), version: '1.0.0' };
+  if (manifestFile) {
+    try {
+      manifest = JSON.parse(await manifestFile.async('string'));
+    } catch (_) {}
+  }
+
+  zip.remove('signature.json');
+  const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+  const hashHex = createHash('sha256').update(unsignedBuf).digest('hex');
+  const payload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${hashHex}`;
+  const privKey = createPrivateKey(privKeyPem);
+  const signature = sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+  const publisher = publisherName || manifest.author || 'community';
+
+  zip.file(
+    'signature.json',
+    JSON.stringify(
+      {
+        version: 2,
+        algorithm: 'ed25519',
+        signature,
+        publisher,
+      },
+      null,
+      2,
+    ),
+  );
+
+  const finalBuf = await zip.generateAsync({ type: 'nodebuffer' });
+  const finalHashHex = createHash('sha256').update(finalBuf).digest('hex');
+  const finalPayload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${finalHashHex}`;
+  const finalSig = sign(null, Buffer.from(finalPayload, 'utf8'), privKey).toString('base64');
+
+  writeFileSync(targetZip, finalBuf);
+  console.log(`${tick} Successfully signed ${basename(targetZip)}`);
+  console.log(`  ${info} Publisher: ${publisher}`);
+  console.log(`  ${info} Integrity: ${finalHashHex}`);
+  console.log(`  ${info} Signature: ${finalSig}`);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -407,7 +545,7 @@ const command = args[0];
 
 if (!command || command === '-h' || command === '--help') {
   console.log(`
-${c.bold}@openlearn/plugin-sdk${c.reset} — Plugin scaffolding & build tool
+${c.bold}@openlearn/plugin-sdk${c.reset} — Plugin scaffolding, build & signing tool
 
 ${c.bold}Usage:${c.reset}
   npx @openlearn/plugin-sdk ${c.cyan}<command>${c.reset} [options]
@@ -415,6 +553,7 @@ ${c.bold}Usage:${c.reset}
 ${c.bold}Commands:${c.reset}
   ${c.cyan}init${c.reset}     Scaffold a new OpenLearn plugin project
   ${c.cyan}build${c.reset}    Build plugin into a distributable ZIP file
+  ${c.cyan}sign${c.reset}     Sign a packaged plugin ZIP with Ed25519 private key
 
 ${c.bold}Init options:${c.reset}
   --name <name>          Plugin package name (kebab-case)
@@ -424,12 +563,17 @@ ${c.bold}Init options:${c.reset}
 
 ${c.bold}Build options:${c.reset}
   --watch, -w            Watch for changes and rebuild
+  --key <file>           Sign package with Ed25519 private key during build
+  --publisher <name>     Publisher identity (defaults to manifest author)
+
+${c.bold}Sign options:${c.reset}
+  --key <file>           Ed25519 private key PEM file (required)
+  --publisher <name>     Publisher identity (defaults to manifest author)
 
 ${c.bold}Examples:${c.reset}
   npx @openlearn/plugin-sdk init
-  npx @openlearn/plugin-sdk init --name my-poll --template full-stack
-  npx @openlearn/plugin-sdk build
-  npx @openlearn/plugin-sdk build --watch
+  npx @openlearn/plugin-sdk build --key publisher.pem
+  npx @openlearn/plugin-sdk sign --key publisher.pem my-plugin.zip
 `);
   process.exit(0);
 }
@@ -441,8 +585,12 @@ switch (command) {
   case 'build':
     cmdBuild(args.slice(1));
     break;
+  case 'sign':
+    cmdSign(args.slice(1));
+    break;
   default:
     console.error(`${c.red}Unknown command:${c.reset} ${command}`);
-    console.error(`Available: init, build`);
+    console.error(`Available: init, build, sign`);
     process.exit(1);
 }
+
