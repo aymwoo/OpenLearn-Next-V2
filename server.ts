@@ -152,7 +152,7 @@ async function startServer() {
 
   await kernelContainer.ready;
 
-  // ���� Activity Ecosystem bootstrap (Product Layer, kernel untouched) ����
+  // ── Activity Ecosystem bootstrap (Product Layer, kernel untouched) ──
   // Register the singleton registry as a DI service so plugins can resolve it
   // via the SAME `ctx.resolve(IActivityRegistryToken)` API used for core
   // services. Official activities are registered as Activity Providers and
@@ -350,7 +350,7 @@ async function startServer() {
       .type('html')
       .send(PLUGIN_SANDBOX_FRAME_HTML);
   });
-  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块?
+  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
 
   // SEC-NET-01: Express CORS 中间件与白名单隔离
   app.use(createCorsMiddleware());

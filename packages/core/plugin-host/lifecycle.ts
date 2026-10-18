@@ -511,6 +511,14 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
       // 'process' → 子进程（最小 env）；'worker' → thread（缺省，保持原行为）。
       const isolateKind = requiresProcessIsolation(mode) ? 'process' : 'thread';
+
+      // 隔离模式下插件代码由子进程/线程从 `<pluginsDir>/<id>/index.js` 直接 import，
+      // 裸模块 `@openlearn/plugin-sdk` 只能沿该目录向上解析。此前这条链接**只在
+      // inline 激活路径**（loadPluginModule）里建立，于是「全新数据目录 + 只有隔离插件」
+      // 的场景必然 ERR_MODULE_NOT_FOUND（实测于 Issue #147 升级回归：三个第三方插件
+      // 全部因解析不到 SDK 而 state=error）。激活任何隔离插件前都先补齐链接。
+      this.ensureHostSdkResolution();
+
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
         manifest,

@@ -518,8 +518,9 @@ describe('PluginHost — 完整生命周期', () => {
     await host.installPlugin(sourceCode);
     const [installed] = db.prepare('SELECT id FROM plugins').all() as any[];
 
-    // 未激活直接卸载 — 应成功
-    await expect(host.uninstallPlugin(installed.id)).resolves.toBeUndefined();
+    // 未激活直接卸载 — 应成功（Issue #141：返回值携带数据策略结果）
+    const result = await host.uninstallPlugin(installed.id);
+    expect(result).toMatchObject({ pluginId: installed.id, dataPolicy: 'keep', orphanRegistered: false });
 
     expect(host.getPluginState(installed.id)).toBe(PluginState.UNINSTALLED);
     const rows = db.prepare('SELECT * FROM plugins WHERE id = ?').all(installed.id) as any[];

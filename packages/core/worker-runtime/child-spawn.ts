@@ -122,7 +122,7 @@ export interface SpawnChildOptions {
    */
   permissionPolicy?: PluginPermissionPolicy;
   /** 权限模式里的 fs 放行范围；不给则用 `data.pluginDir` 与 `process.cwd()` */
-  permissionPaths?: { pluginDir?: string; rootPath?: string };
+  permissionPaths?: { pluginDir?: string; rootPath?: string; sharedReadPaths?: string[] };
   /** 堆上限（MB）。不给则读 `OPENLEARN_PLUGIN_MAX_HEAP_MB`；传 0 表示不设上限 */
   maxHeapMb?: number;
 }
@@ -158,6 +158,7 @@ export function spawnPluginChild(opts: SpawnChildOptions): {
     policy,
     pluginDir: opts.permissionPaths?.pluginDir ?? opts.data.pluginDir,
     rootPath: opts.permissionPaths?.rootPath ?? process.cwd(),
+    sharedReadPaths: opts.permissionPaths?.sharedReadPaths,
   });
 
   // 堆上限与权限旗标放同一段（都在脚本参数之前）。

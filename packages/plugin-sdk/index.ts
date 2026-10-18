@@ -56,15 +56,22 @@ export type {
 // 于是消费侧写 `new PluginLifecycleManager(...)` / `PluginRuntimeComposition` 作为值时
 // 报 `TS1362: cannot be used as a value because it was exported using 'export type'`。
 // 由 generate-dts.mjs 的反向体检发现。
+//
+// ⚠️ 必须从**各自的模块**导入，不能走 `../core/plugin-host/index.js`：
+// 那个入口会实例化 `PluginHost extends PluginHostInstall`，一路把 `base.js`
+// 里的 `import express from 'express'` 拖进 SDK 产物。于是**任何**第三方插件
+// 只要 import 一次 SDK，就会在隔离进程里加载 express → body-parser → depd
+// 的 `new Function`，被 `--disallow-code-generation-from-strings` 打成
+// `EvalError: Code generation from strings disallowed`（Issue #147 实测）。
+export { PluginRuntimeAdapter } from '../core/plugin-host/plugin-runtime-adapter.js';
+export { PluginRuntimeComposition } from '../core/plugin-host/plugin-runtime-composition.js';
+export { PluginContextAdapter } from '../core/plugin-host/plugin-context-adapter.js';
+export { PluginLifecycleManager } from '../core/plugin-host/plugin-lifecycle-manager.js';
+export { PluginCapabilityGateway } from '../core/plugin-host/plugin-capability-gateway.js';
+export { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
 export {
-  PluginRuntimeAdapter,
-  PluginRuntimeComposition,
-  PluginContextAdapter,
-  PluginLifecycleManager,
-  PluginCapabilityGateway,
-  UnifiedExtensionRegistry,
   PluginDistributionManager,
-} from '../core/plugin-host/index.js';
+} from '../core/plugin-host/plugin-distribution-manager.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 

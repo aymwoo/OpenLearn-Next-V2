@@ -192,7 +192,7 @@ E3 重构把原先的 `return res.status(4xx).json({error:'具体消息'})` 换�
 | M4 | **element-cache 返回共享可变引用**并直接进 React state，还传给第三方插件属性编辑器；当前无原地写入，是"任何后续 mutation 都会全局污染"的陷阱 | `element-cache.ts:31-37` → `InteractiveWhiteboard.tsx:440` |
 | M5 | **登出后 ≤45s 可无会话复用 token**（`tokenMemoryCache` 键只有 coursewareId）。真正问题是铸造端点 `courseware.ts:216` 只有 `requireAuth()`、**无归属校验**——缓存只是把既有 IDOR 冻结了 45s | `InteractiveCoursewareViewer.tsx:12` |
 | M6 | **能力目录改用桶文件**后，`kernel/index.ts` 与 `worker-manager.ts` 为一个类付出整个 capability + AI 基础设施层的加载代价（目前无 import-time 副作用，非功能缺陷） | `packages/core/kernel/index.ts:4` |
-| M7 | **死配置**：`vendor-reveal` 分包规则永��生效——`Reveal`/`RevealMarkdown` 被 tree-shake，产物 43 个 chunk 无一含 reveal 代码 | `vite.config.ts:88-90` |
+| M7 | **死配置**：`vendor-reveal` 分包规则永不生效——`Reveal`/`RevealMarkdown` 被 tree-shake，产物 43 个 chunk 无一含 reveal 代码 | `vite.config.ts:88-90` |
 | M8 | **6 处文档仍写 `packages/core/capability-system/`** 为权威位置，第三方插件若照此导入，将来删除垫片即断链 | `capability-gateway.md` 等 |
 | M9 | **既有双轨权限实现**：`pipeline/permission-checker.ts`（按 `CapabilityRole` 枚举）与 `CapabilityGuard`（按 `resource:action` 字符串）同处一个目录，易被误认为同源 | `packages/core/capability/pipeline/` |
 | M10 | **测试分层缺口**：46 个 service 测试全不经过路由 catch，H1 与全部 8 个状态码回归因此逃逸 | `server/services/__tests__/` |
