@@ -22,6 +22,8 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
   const [stem, setStem] = useState('');
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [answerKey, setAnswerKey] = useState<unknown>(null);
+  // Issue #186：默认私有；选中共享后同实例教师可见
+  const [visibility, setVisibility] = useState<'private' | 'school'>('private');
   const [saving, setSaving] = useState(false);
 
   const types = assessmentQuestionTypeUiRegistry.list();
@@ -61,7 +63,7 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
     setSaving(true);
     setError(null);
     try {
-      await assessmentApi.createBankItem({ type, stem: stem.trim(), config, answerKey });
+      await assessmentApi.createBankItem({ type, stem: stem.trim(), config, answerKey, visibility });
       setStem('');
       await load();
     } catch (err: any) {
@@ -114,6 +116,20 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
               }}
             />
           )}
+          <div>
+            <label htmlFor="bank-visibility" className="block text-2xs font-semibold text-muted mb-1">
+              {zh ? '可见范围' : 'Visibility'}
+            </label>
+            <select
+              id="bank-visibility"
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value === 'school' ? 'school' : 'private')}
+              className={INPUT}
+            >
+              <option value="private">{zh ? '仅自己' : 'Private'}</option>
+              <option value="school">{zh ? '同校教师可见' : 'Teachers on this instance'}</option>
+            </select>
+          </div>
           {error && (
             <p role="alert" className="text-xs text-rose-600">
               {error}

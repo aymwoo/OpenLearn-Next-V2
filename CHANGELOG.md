@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 稳定性：单次生成 15s 超时、每操作者 60s 内 20 次限流；Provider 未配置（503）/超时/输出非 JSON 或越界（502）均给出明确错误，**不阻塞人工批改**，也不产生脏建议。
   - 前端批改面板对需人工批改的题提供「AI 建议」：展示建议分/理由/置信度，「采纳并填入分数」只填输入框，仍需点「保存评分」才落分。
   - 测试：`assessment-ai-grading.test.ts`（5 例：建议不改分 + 审计、确认落分且 regrade 不覆盖、非法输出 502、Provider 缺失 503 且人工批改可用、客观题 400）。
+- **题库共享与按规则随机抽题（每人一卷，Issue #186）**：
+  - `question_bank_items.visibility`（`private` 默认 | `school` 同实例教师可见）：共享不复制条目，列表返回「自己的 + school 共享」；读取他校/私有条目仍 403，写/删限 owner。题库创建表单新增「可见范围」。
+  - `assessments.settings_json.draw`：按 `type` / `tags` / `difficultyMin..Max` 从试卷题目池抽 `count` 道；种子 `assignmentId:studentKey:attemptNo` 确定性洗牌，结果与种子写入 `assessment_attempts.paper_json`（迁移 `039_question_bank_sharing_and_papers.sql`）。
+  - 同一学生重入题目集合/顺序不变；不同学生卷面不同；同卷不重复；可用题不足时抛 409，**不静默少题**。
+  - 作答载荷、自动保存、判分与结果页全部按本卷题目集过滤；题库后续修改不影响已组卷内容（快照）。
+  - 测试：`assessment-bank-draw.test.ts`（4 例：每人一卷稳定性/不同卷、题库不足 409、标签与难度过滤、共享可见性）。文档：`docs/architecture/assessment-model.md` §7。
 ### Features
 
 - **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：

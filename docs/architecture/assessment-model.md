@@ -142,3 +142,31 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 - 白板 `quiz` / `lesson_preset_polls` / AI 出题的桥接与迁移（#124）
 - 题库共享、按规则抽题、AI 辅助批改、难度/区分度（#124）
 - 管理员跨教师查看试卷（本期 `listAssessments` 只返回自己名下的）
+
+## 7. 题库共享与按规则随机抽题（Issue #186）
+
+### 7.1 题库可见范围
+
+- `question_bank_items.visibility`：`private`（默认，仅 owner）| `school`（同实例教师可见）。平台按 ADR-001「一校一实例」部署，因此 school 即本校。
+- 共享**不复制**条目：`GET /api/question-bank` 返回「自己的全部 + visibility=school 的他人条目」；读取他人共享条目允许，写/删仍限 owner（`getBankItem` 的写路径不变）。
+- 学生永远不可见题库。
+
+### 7.2 抽题规则（每人一卷）
+
+在 `assessments.settings_json` 里配置：
+
+```json
+{ "draw": { "count": 5, "type": "short_answer", "tags": ["unit-1"], "difficultyMin": 1, "difficultyMax": 3 } }
+```
+
+- 生效时机：`startAttempt` 创建作答时，用种子 `assignmentId:studentKey:attemptNo` 对题目池做确定性洗牌后取前 `count` 道；结果与种子写入 `assessment_attempts.paper_json`（`{ seed, itemIds }`）。
+- **稳定性**：同一学生重入复用同一条 attempt（未交卷）或已交卷的多次作答各自独立成卷；刷新/断网重连题目集合与顺序不变。
+- **不同学生不同卷**：种子含学生身份，卷面不同；同卷内不重复（洗牌后切片）。
+- **题库不足**：可用题数 < count 时 `startAttempt` 抛 409，**不静默少题**。
+- **过滤口径**：`type` / `tags`（命中任一）/ `difficultyMin..Max` 依据题库条目（`question_bank_items`）；未关联题库的自建题在启用过滤时被排除。
+- **判分不受题库后续修改影响**：试卷题目在组卷时已快照进 `assessment_items`（含标准答案），抽题只选 id。
+
+### 7.3 数据与回滚
+
+- 迁移 `039_question_bank_sharing_and_papers.sql` 只加两列（幂等；DOWN 可回滚）。
+- 关闭抽题：把 settings.draw 去掉后，新作答恢复整卷；已有 `paper_json` 的旧作答仍按各自的卷面判分与展示。

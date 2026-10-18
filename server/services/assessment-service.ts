@@ -130,6 +130,8 @@ interface AttemptRow {
   needs_manual_review: number;
   proctor_json: string;
   academic_year: string | null;
+  /** Issue #186：每个人的卷面（{ seed, itemIds }），未配置抽题规则时为 null */
+  paper_json: string | null;
 }
 
 interface AnswerRow {
@@ -866,7 +868,8 @@ export class AssessmentService {
 
   listBankItems(ownerId: string, filter: { type?: string } = {}) {
     const params: unknown[] = [ownerId];
-    let sql = 'SELECT * FROM question_bank_items WHERE owner_id = ?';
+    // Issue #186：自己的条目 + 同实例教师共享（visibility='school'）的条目
+    let sql = "SELECT * FROM question_bank_items WHERE (owner_id = ? OR visibility = 'school')";
     if (filter.type) {
       sql += ' AND type = ?';
       params.push(filter.type);
@@ -885,6 +888,8 @@ export class AssessmentService {
     tags?: string[];
     difficulty?: number | null;
     maxScore?: number;
+    /** Issue #186：私有（默认）或同校教师共享 */
+    visibility?: 'private' | 'school';
   }) {
     const error = validateItemSnapshot(this.registry, {
       type: input.type,
@@ -899,8 +904,8 @@ export class AssessmentService {
     this.db
       .prepare(
         `INSERT INTO question_bank_items
-           (id, owner_id, type, stem, config_json, answer_key_json, tags_json, difficulty, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, owner_id, type, stem, config_json, answer_key_json, tags_json, difficulty, visibility, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -911,6 +916,7 @@ export class AssessmentService {
         input.answerKey === undefined || input.answerKey === null ? null : JSON.stringify(input.answerKey),
         JSON.stringify(Array.isArray(input.tags) ? input.tags : []),
         input.difficulty ?? null,
+        input.visibility === 'school' ? 'school' : 'private',
         now,
         now,
       );
@@ -921,7 +927,8 @@ export class AssessmentService {
     const row = this.db.prepare('SELECT * FROM question_bank_items WHERE id = ?').get(id) as
       Record<string, any> | undefined;
     if (!row) throw notFound('bank item');
-    if (row.owner_id !== ownerId) throw forbidden('not the bank item owner');
+    // Issue #186：共享条目允许同实例教师读取（写/删仍限 owner）
+    if (row.owner_id !== ownerId && row.visibility !== 'school') throw forbidden('not the bank item owner');
     return this.toBankItemView(row);
   }
 
@@ -1039,11 +1046,15 @@ export class AssessmentService {
     const attemptNo = this.countAttempts(assignmentId, isAnonymous ? null : studentId, anonKey) + 1;
     const deadlineAt = computeDeadline(this.windowOf(asg), now);
     const id = randomId();
+    // Issue #186：按学生种子成卷（同学生稳定、不同学生不同卷）；题库不足在此抛 409
+    const paperJson = settings.draw
+      ? this.buildPaper(assessment.id, settings.draw, assignmentId + ':' + (isAnonymous ? anonKey : studentId) + ':' + attemptNo)
+      : null;
     this.db
       .prepare(
         `INSERT INTO assessment_attempts
-           (id, assignment_id, student_id, anon_key, attempt_no, status, started_at, deadline_at, academic_year)
-         VALUES (?, ?, ?, ?, ?, 'in_progress', ?, ?, ?)`,
+           (id, assignment_id, student_id, anon_key, attempt_no, status, started_at, deadline_at, academic_year, paper_json)
+         VALUES (?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -1054,6 +1065,7 @@ export class AssessmentService {
         now,
         deadlineAt,
         asg.academicYear ?? assessment.academic_year,
+        paperJson,
       );
     const row = this.requireAttempt(id);
     return this.buildAttemptPayload(row, assessment, asg, settings, { newAttempt: true });
@@ -1065,7 +1077,8 @@ export class AssessmentService {
     const settled = this.settleIfExpired(attempt, this.now());
     if (settled.status !== 'in_progress') throw conflict('attempt already submitted');
 
-    const items = this.readItems(this.assignmentAssessmentId(settled.assignment_id));
+    // Issue #186：只能作答本卷题目（抽题规则下不存在的题目按 404 处理）
+    const items = this.itemsForAttempt(settled, this.readItems(this.assignmentAssessmentId(settled.assignment_id)));
     const item = items.find((i) => i.id === itemId);
     if (!item) throw notFound('item');
     const definition = this.registry.get(item.type);
@@ -1621,6 +1634,70 @@ export class AssessmentService {
     };
   }
 
+  /**
+   * Issue #186：按抽题规则为某个种子确定性地挑题，返回 { seed, itemIds } 的 JSON。
+   * 供 startAttempt 写入 assessment_attempts.paper_json：同一学生重入复用同一条 attempt，
+   * 因此卷面稳定；不同学生种子不同 → 卷不同。题库不足时抛 409（不静默少题）。
+   */
+  private buildPaper(
+    assessmentId: string,
+    rules: NonNullable<AssessmentSettings['draw']>,
+    seed: string,
+  ): string {
+    const items = this.readItems(assessmentId);
+    let pool = items;
+    if (
+      rules.type ||
+      (rules.tags && rules.tags.length > 0) ||
+      rules.difficultyMin !== undefined ||
+      rules.difficultyMax !== undefined
+    ) {
+      const bankRows = this.db
+        .prepare('SELECT id, type, tags_json, difficulty FROM question_bank_items')
+        .all() as Array<{ id: string; type: string; tags_json: string; difficulty: number | null }>;
+      const byId = new Map(bankRows.map((row) => [row.id, row]));
+      pool = items.filter((item) => {
+        const bank = item.bankItemId ? byId.get(item.bankItemId) : undefined;
+        if (!bank) return false;
+        if (rules.type && bank.type !== rules.type) return false;
+        if (rules.difficultyMin !== undefined && (bank.difficulty === null || bank.difficulty < rules.difficultyMin)) {
+          return false;
+        }
+        if (rules.difficultyMax !== undefined && (bank.difficulty === null || bank.difficulty > rules.difficultyMax)) {
+          return false;
+        }
+        if (rules.tags && rules.tags.length > 0) {
+          const tags = safeJsonParse<string[]>(bank.tags_json, []);
+          if (!rules.tags.some((tag) => tags.includes(tag))) return false;
+        }
+        return true;
+      });
+    }
+    if (pool.length < rules.count) {
+      throw conflict('题库题目不足：需要 ' + rules.count + ' 道，可用 ' + pool.length + ' 道');
+    }
+    const picked = seededShuffle(pool, seed).slice(0, rules.count);
+    return JSON.stringify({ seed, itemIds: picked.map((item) => item.id) });
+  }
+
+  /** 本次作答的卷面题目顺序；null = 整卷（未配置抽题规则）。 */
+  private paperItemIds(attempt: { paper_json?: string | null }): string[] | null {
+    const raw = attempt.paper_json;
+    if (!raw) return null;
+    const parsed = safeJsonParse<{ itemIds?: unknown }>(raw, {});
+    if (!Array.isArray(parsed.itemIds)) return null;
+    const ids = parsed.itemIds.filter((id): id is string => typeof id === 'string');
+    return ids.length > 0 ? ids : null;
+  }
+
+  /** 按卷面过滤并排序题目；未配置抽题时保持原样。 */
+  private itemsForAttempt<T extends { id: string }>(attempt: { paper_json?: string | null }, items: T[]): T[] {
+    const paperIds = this.paperItemIds(attempt);
+    if (!paperIds) return items;
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return paperIds.map((id) => byId.get(id)).filter((item): item is T => Boolean(item));
+  }
+
   private readItems(assessmentId: string): AssessmentItemRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM assessment_items WHERE assessment_id = ? ORDER BY sort_order ASC')
@@ -1751,7 +1828,8 @@ export class AssessmentService {
     const assessmentId = this.assignmentAssessmentId(attempt.assignment_id);
     const assessment = this.db.prepare('SELECT * FROM assessments WHERE id = ?').get(assessmentId) as AssessmentRow;
     const settings = parseAssessmentSettings(assessment.kind, safeJsonParse(assessment.settings_json, {}));
-    const items = this.readItems(assessmentId);
+    // Issue #186：判分只针对本卷题目（每人一卷时不把未抽到的题算成全错）
+    const items = this.itemsForAttempt(attempt, this.readItems(assessmentId));
 
     const answerRows = this.db
       .prepare('SELECT * FROM assessment_answers WHERE attempt_id = ?')
@@ -1847,7 +1925,8 @@ export class AssessmentService {
     settings: AssessmentSettings,
     meta: { newAttempt: boolean },
   ) {
-    const items = this.readItems(assessment.id);
+    // Issue #186：配置抽题规则时只给学生本次抽到的题目（按卷面顺序）
+    const items = this.itemsForAttempt(attempt, this.readItems(assessment.id));
     const answerRows = this.db
       .prepare('SELECT * FROM assessment_answers WHERE attempt_id = ?')
       .all(attempt.id) as AnswerRow[];
@@ -1903,7 +1982,10 @@ export class AssessmentService {
       .prepare('SELECT * FROM assessments WHERE id = ?')
       .get(assignment.assessmentId) as AssessmentRow;
     const settings = parseAssessmentSettings(assessment.kind, safeJsonParse(assessment.settings_json, {}));
-    const items = this.readItems(assessment.id).sort((a, b) => a.sortOrder - b.sortOrder);
+    // Issue #186：结果页同样只展示本卷题目
+    const items = this.itemsForAttempt(attempt, this.readItems(assessment.id)).sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    );
     const answerRows = this.db
       .prepare('SELECT * FROM assessment_answers WHERE attempt_id = ?')
       .all(attempt.id) as AnswerRow[];

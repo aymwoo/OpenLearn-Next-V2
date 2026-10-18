@@ -147,6 +147,8 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
         tags: body.tags,
         difficulty: body.difficulty ?? null,
         maxScore: body.maxScore,
+        // Issue #186：private（默认）| school（同实例教师可见）
+        visibility: body.visibility === 'school' ? 'school' : 'private',
       });
       res.status(201).json(created);
     } catch (e: any) {
