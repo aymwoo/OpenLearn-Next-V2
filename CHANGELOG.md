@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **插件声明式版本化迁移、失败事务回滚与降级保护（Issue #142）**：
+  - **声明式 SQL 迁移约定**：插件根目录支持 `migrations/` 目录约定，以数字序 SQL 脚本命名（如 `001_initial.sql`、`002_add_field.sql`），支持可选 `-- DOWN` 分段作为回滚定义，内置 `{{table_prefix}}` 占位符展开。
+  - **激活生命周期内原子执行**：在插件激活（`activateFromDatabase`、`activateWorker` 与 `activatePreloaded`）阶段前自动执行未执行的增量迁移，单脚本在 SQLite `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` 事务内原子执行；任意步骤失败自动回滚已执行语句，并将插件标记为 `ERROR` 状态。
+  - **严格版本降级保护**：当数据库已应用的最新迁移版本大于插件声明文件中的最高版本时，抛出 `PluginMigrationDowngradeError` 并强行阻断激活，杜绝旧版本插件在升级后 Schema 上运行导致的数据损坏风险。
+  - **元数据持久化与篡改校验**：自动维护 `plugin_declared_migrations` 元表，记录 `(plugin_id, version, name, checksum, applied_at)`；执行前校验已应用脚本的 SHA-256 校验和一致性。
+  - **命令式 `ctx.db.migrate` 事务原子化**：旧版命令式 `ctx.db.migrate(targetVersion, upgradeFn)` 升级为在原生 SQLite 事务中执行并支持失败回滚，保持完全向后兼容。
+  - **测试套件支持**：`@openlearn/plugin-test-kit` 新增导出 `runTestPluginMigrations` 助手，并在 mock context 的 `db.migrate` 中增加事务与错误回滚模拟。
+
 ### Fixes
 
 - **课前「破冰心情打卡」全链路闭环与持久化（Issue #131）**：

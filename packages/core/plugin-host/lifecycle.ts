@@ -6,6 +6,7 @@
 
 import { PluginHostHttp } from './http.js';
 import fs from 'fs';
+import path from 'path';
 import { pathToFileURL } from 'node:url';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
@@ -14,6 +15,8 @@ import { manifestSchema } from '../esm-loader/manifest-schema.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
+import { runPluginDeclarativeMigrations } from './declarative-migrator.js';
+import { pluginTablePrefix } from './plugin-tables.js';
 import {
   normalizeExecutionMode,
   requiresIsolatedExecution,
@@ -148,7 +151,12 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
    */
   private async activatePreloaded(
     pluginId: string,
-    preloaded: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> },
+    preloaded: {
+      manifest: any;
+      activate: (ctx: PluginContext) => Promise<void>;
+      deactivate?: () => Promise<void>;
+      migrationsDir?: string;
+    },
   ): Promise<void> {
     const manifest = preloaded.manifest;
     const activate = preloaded.activate;
@@ -157,6 +165,12 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
     try {
       manifestSchema.parse(manifest);
+
+      if (preloaded.migrationsDir && fs.existsSync(preloaded.migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, preloaded.migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
 
       const { skipTokens } = this.resolveActivationGuards(manifest, pluginId);
       // B-5：在构建上下文**之前**声明进程归属，否则本插件 spawn 的任务会被
@@ -226,6 +240,15 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       const mergedManifest = { ...storedManifest, ...codeManifest } as Manifest;
 
       manifestSchema.parse(mergedManifest);
+
+      // 声明式版本化迁移（Issue #142）
+      const pluginDir = this.getPluginDir(pluginId);
+      const migrationsDir = path.join(pluginDir, 'migrations');
+      if (fs.existsSync(migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
 
       const { skipTokens } = this.resolveActivationGuards(mergedManifest, pluginId);
 
@@ -499,6 +522,15 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     const actorId = `plugin:${manifest.id}`;
 
     try {
+      // 声明式版本化迁移（Issue #142）
+      const pluginDir = this.getPluginDir(pluginId);
+      const migrationsDir = path.join(pluginDir, 'migrations');
+      if (fs.existsSync(migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
+
       await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? [], {
         official: isTrustedInProcessPlugin(manifest.id, process.env, row.file_path),
         keys: [pluginId, manifest.id],

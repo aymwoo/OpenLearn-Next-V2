@@ -13,6 +13,8 @@
  */
 
 import Database from 'better-sqlite3';
+import fs from 'node:fs';
+import path from 'node:path';
 import type {
   PluginContext,
   Manifest,
@@ -399,11 +401,20 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
         { version: number } | undefined;
       const currentVersion = row ? row.version : 0;
       if (currentVersion < targetVersion) {
-        await upgradeFn(db);
-        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
-          pluginId,
-          targetVersion,
-        );
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          await upgradeFn(db);
+          db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
+            pluginId,
+            targetVersion,
+          );
+          db.exec('COMMIT');
+        } catch (err) {
+          try {
+            db.exec('ROLLBACK');
+          } catch {}
+          throw err;
+        }
       }
     },
   };
@@ -529,3 +540,94 @@ export function createMockStreamResponse(): MockStreamResult {
     },
   };
 }
+
+// ── Declarative Migration Test Helpers ─────────────────────────────────────
+
+export interface RunTestPluginMigrationsOptions {
+  tablePrefix?: string;
+}
+
+/**
+ * 辅助函数：在单元测试中为指定插件运行其 migrations 目录下的声明式 SQL 迁移。
+ *
+ * 适用于插件开发者测试「从历史数据/低版本迁移升级至新版本」的升级演进逻辑。
+ *
+ * @param db SQLite 数据库实例
+ * @param pluginId 插件 ID
+ * @param migrationsDir 迁移文件所在的目录绝对路径
+ * @param options 执行选项（如自定义表名前缀）
+ */
+export function runTestPluginMigrations(
+  db: Database.Database,
+  pluginId: string,
+  migrationsDir: string,
+  options: RunTestPluginMigrationsOptions = {},
+): { appliedCount: number; appliedNames: string[] } {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS plugin_declared_migrations (
+      plugin_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      checksum TEXT NOT NULL,
+      applied_at INTEGER NOT NULL,
+      PRIMARY KEY (plugin_id, name)
+    );
+  `);
+
+  if (!fs.existsSync(migrationsDir)) {
+    return { appliedCount: 0, appliedNames: [] };
+  }
+
+  const prefix = options.tablePrefix ?? `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
+
+  const files = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+  const appliedRows = db
+    .prepare('SELECT name, version FROM plugin_declared_migrations WHERE plugin_id = ?')
+    .all(pluginId) as Array<{ name: string; version: number }>;
+  const appliedSet = new Set(appliedRows.map((r) => r.name));
+
+  const appliedNames: string[] = [];
+
+  for (const file of files) {
+    const baseName = file.replace(/\.sql$/, '');
+    if (appliedSet.has(baseName)) continue;
+
+    const fullPath = path.join(migrationsDir, file);
+    const content = fs.readFileSync(fullPath, 'utf8');
+
+    // 解析 -- UP
+    const upMatch = content.match(/--\s*UP([\s\S]*?)(?=--\s*DOWN|$)/i);
+    const downMatch = content.match(/--\s*DOWN([\s\S]*)$/i);
+    const up = upMatch ? upMatch[1].trim() : downMatch ? content.slice(0, downMatch.index).trim() : content.trim();
+
+    const sqlToRun = up.replace(/\{\{\s*prefix\s*\}\}/g, prefix).replace(/\{\{\s*table_prefix\s*\}\}/g, prefix);
+
+    // 解析版本号
+    const vMatch = baseName.match(/^(\d+)/);
+    const version = vMatch ? parseInt(vMatch[1], 10) : 0;
+
+    const tx = db.transaction(() => {
+      const stmts = sqlToRun
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.replace(/--.*$/gm, '').trim().length > 0);
+      for (const stmt of stmts) {
+        db.exec(stmt);
+      }
+      db.prepare(`
+        INSERT INTO plugin_declared_migrations (plugin_id, version, name, checksum, applied_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(pluginId, version, baseName, 'test-checksum', Date.now());
+    });
+
+    tx();
+    appliedNames.push(baseName);
+  }
+
+  return { appliedCount: appliedNames.length, appliedNames };
+}
+

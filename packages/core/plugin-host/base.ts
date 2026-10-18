@@ -231,6 +231,7 @@ export abstract class PluginHostBase {
       manifest: any;
       activate: (ctx: PluginContext) => Promise<void>;
       deactivate?: () => Promise<void>;
+      migrationsDir?: string;
     }
   >();
 

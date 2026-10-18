@@ -837,11 +837,22 @@ export async function buildContext(
         { version: number } | undefined;
       const currentVersion = row ? row.version : 0;
       if (currentVersion < targetVersion) {
-        await upgradeFn(db);
-        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
-          pluginId,
-          targetVersion,
-        );
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          await upgradeFn(db);
+          db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
+            pluginId,
+            targetVersion,
+          );
+          db.exec('COMMIT');
+        } catch (err) {
+          try {
+            db.exec('ROLLBACK');
+          } catch {
+            // 忽略 ROLLBACK 在已回滚状态下的异常
+          }
+          throw err;
+        }
       }
     },
   };
