@@ -5,8 +5,14 @@
  * 批改写入 `manual_override = 1`，之后 `regrade` 不会覆盖（后端保证，有单测）。
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
-import { assessmentApi, ApiError, type AssessmentAssignment, type TeacherAttempt } from './api';
+import { ArrowLeft, CheckCircle2, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import {
+  assessmentApi,
+  ApiError,
+  type AiGradingSuggestion,
+  type AssessmentAssignment,
+  type TeacherAttempt,
+} from './api';
 
 interface TeacherItemView {
   itemId: string;
@@ -53,6 +59,10 @@ export function GradingPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Issue #187：AI 建议（只展示；采纳=填入分数输入框，仍需点「保存评分」才落分）
+  const [suggestions, setSuggestions] = useState<Record<string, AiGradingSuggestion>>({});
+  const [suggestBusy, setSuggestBusy] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
 
   const loadAttempts = useCallback(async () => {
     setLoading(true);
@@ -75,6 +85,9 @@ export function GradingPanel({
     setSelected(attemptId);
     setDetail(null);
     setError(null);
+    // Issue #187：切换作答时清空上一份的 AI 建议与采纳标记，避免串号
+    setSuggestions({});
+    setAccepted(new Set());
     try {
       const res = await assessmentApi.getTeacherView(attemptId);
       setDetail(res);
@@ -85,6 +98,34 @@ export function GradingPanel({
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
+  };
+
+  /** Issue #187：请求 AI 建议（不改分）。 */
+  const suggest = async (item: TeacherItemView) => {
+    if (!detail) return;
+    setSuggestBusy(item.itemId);
+    setError(null);
+    try {
+      const suggestion = await assessmentApi.aiSuggestGrade(detail.attempt.id, item.itemId);
+      setSuggestions((prev) => ({ ...prev, [item.itemId]: suggestion }));
+      setAccepted((prev) => {
+        const next = new Set(prev);
+        next.delete(item.itemId);
+        return next;
+      });
+    } catch (e: any) {
+      setError(zh ? 'AI 建议不可用：' + (e?.message ?? String(e)) : 'AI suggestion unavailable: ' + (e?.message ?? String(e)));
+    } finally {
+      setSuggestBusy(null);
+    }
+  };
+
+  /** 采纳建议：只把建议分填入输入框，教师仍需点「保存评分」确认。 */
+  const acceptSuggestion = (item: TeacherItemView) => {
+    const suggestion = suggestions[item.itemId];
+    if (!suggestion) return;
+    setScores((prev) => ({ ...prev, [item.itemId]: String(suggestion.suggestedScore) }));
+    setAccepted((prev) => new Set(prev).add(item.itemId));
   };
 
   const grade = async (item: TeacherItemView) => {
@@ -100,6 +141,9 @@ export function GradingPanel({
       await assessmentApi.gradeAnswer(detail.attempt.id, item.itemId, {
         score: Number(raw),
         feedback: feedbacks[item.itemId] || null,
+        // Issue #187：采纳过 AI 建议时显式标记，服务端记 ai_grading_accepted 审计
+        acceptedAiSuggestion: accepted.has(item.itemId),
+        suggestedScore: suggestions[item.itemId]?.suggestedScore,
       });
       const refreshed = await assessmentApi.getTeacherView(detail.attempt.id);
       setDetail(refreshed);
@@ -251,6 +295,46 @@ export function GradingPanel({
                   <p className="text-xs text-main bg-surface-secondary rounded-lg px-2 py-1.5 whitespace-pre-wrap break-words">
                     {answerText(item.answer)}
                   </p>
+                  {/* Issue #187：AI 建议只展示与填空，不自动落分 */}
+                  {item.needsManualReview && (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void suggest(item)}
+                        disabled={suggestBusy === item.itemId}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-theme text-2xs font-semibold text-main hover:bg-surface-secondary disabled:opacity-50 cursor-pointer"
+                      >
+                        {suggestBusy === item.itemId ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <Sparkles size={11} />
+                        )}
+                        {zh ? 'AI 建议' : 'AI suggestion'}
+                      </button>
+                      {suggestions[item.itemId] && (
+                        <div className="text-2xs text-muted bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded-lg px-2 py-1.5 space-y-1">
+                          <p className="text-main">
+                            {zh ? '建议分' : 'Suggested'} {suggestions[item.itemId].suggestedScore}/{item.maxScore}
+                            {suggestions[item.itemId].confidence !== null &&
+                              ' · ' +
+                                (zh ? '置信度' : 'confidence') +
+                                ' ' +
+                                Math.round((suggestions[item.itemId].confidence as number) * 100) +
+                                '%'}
+                            {accepted.has(item.itemId) && ' · ' + (zh ? '已填入，待保存' : 'applied, pending save')}
+                          </p>
+                          <p className="whitespace-pre-wrap break-words">{suggestions[item.itemId].rationale}</p>
+                          <button
+                            type="button"
+                            onClick={() => acceptSuggestion(item)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-2xs font-bold hover:bg-indigo-700 cursor-pointer"
+                          >
+                            {zh ? '采纳并填入分数' : 'Apply to score'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr_auto] gap-2 items-end">
                     <div>
                       <label htmlFor={`score-${item.itemId}`} className="block text-2xs font-semibold text-muted mb-1">

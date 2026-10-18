@@ -84,6 +84,16 @@ export interface TeacherItemDetail {
   config: Record<string, unknown>;
 }
 
+/** Issue #187：AI 批改建议（教师确认前的建议，不含落分语义）。 */
+export interface AiGradingSuggestion {
+  itemId: string;
+  maxScore: number;
+  suggestedScore: number;
+  rationale: string;
+  confidence: number | null;
+  generatedAt: number;
+}
+
 export interface AssessmentStats {
   assignmentId: string;
   attemptCount: number;
@@ -376,10 +386,20 @@ export const assessmentApi = {
     request<{ items: TeacherAttempt[] }>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/attempts`),
   stats: (assignmentId: string) =>
     request<AssessmentStats>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/stats`),
-  gradeAnswer: (attemptId: string, itemId: string, input: { score: number; feedback?: string | null }) =>
+  gradeAnswer: (
+    attemptId: string,
+    itemId: string,
+    input: { score: number; feedback?: string | null; acceptedAiSuggestion?: boolean; suggestedScore?: number },
+  ) =>
     request<{ attempt: TeacherAttempt }>(
       `/api/assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(itemId)}/grade`,
       { method: 'PUT', body: JSON.stringify(input) },
+    ),
+  /** Issue #187：AI 批改建议（只返回建议，不改分）。 */
+  aiSuggestGrade: (attemptId: string, itemId: string) =>
+    request<AiGradingSuggestion>(
+      `/api/assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(itemId)}/ai-suggest`,
+      { method: 'POST' },
     ),
   regrade: (attemptId: string) =>
     request<{ attempt: TeacherAttempt }>(`/api/assessment-attempts/${encodeURIComponent(attemptId)}/regrade`, {

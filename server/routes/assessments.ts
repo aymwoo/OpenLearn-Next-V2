@@ -308,17 +308,43 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
   app.put('/api/assessment-attempts/:id/answers/:itemId/grade', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const body = req.body ?? {};
-      res.json(
-        service.manualGrade(req.params.id, teacherActor(req), req.params.itemId, {
-          score: Number(body.score),
-          feedback: body.feedback ?? null,
-          gradedBy: teacherActor(req),
-        }),
-      );
+      const result = service.manualGrade(req.params.id, teacherActor(req), req.params.itemId, {
+        score: Number(body.score),
+        feedback: body.feedback ?? null,
+        gradedBy: teacherActor(req),
+      });
+      // Issue #187：教师采纳 AI 建议后落分 —— 仅在显式标记时记审计（建议分 vs 实际分）。
+      if (body.acceptedAiSuggestion === true) {
+        recordSecurityAudit('assessment.ai_grading_accepted', {
+          actorId: teacherActor(req),
+          attemptId: req.params.id,
+          itemId: req.params.itemId,
+          suggestedScore: typeof body.suggestedScore === 'number' ? body.suggestedScore : null,
+          finalScore: Number(body.score),
+        });
+      }
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
+
+  // Issue #187：AI 批改建议 —— 只生成建议（ai_suggestion_json），绝不改 score；
+  // 教师确认走上面的 grade 端点。Provider 不可用/超时/非法输出返回 5xx，不阻塞人工批改。
+  app.post(
+    '/api/assessment-attempts/:id/answers/:itemId/ai-suggest',
+    requireAuth('teacher', 'administrator'),
+    async (req, res) => {
+      try {
+        const suggestion = await service.suggestAiGrade(req.params.id, teacherActor(req), req.params.itemId, {
+          actorId: teacherActor(req),
+        });
+        res.json(suggestion);
+      } catch (e: any) {
+        sendSafeError(res, e);
+      }
+    },
+  );
 
   app.post('/api/assessment-attempts/:id/regrade', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
