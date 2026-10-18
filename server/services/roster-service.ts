@@ -13,6 +13,7 @@ import { randomId } from '../utils/id.js';
 import { generateStudentNumber } from '../routes/shared.js';
 import type { Pagination } from '../utils/pagination.js';
 import { openClassPasscode, sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
+import { sanitizePrivateNotes } from '../../packages/core/security/html-sanitize.js';
 
 export interface ClassItem {
   id: string;
@@ -461,13 +462,37 @@ export class RosterService {
 
   // ── 2. 学生管理与 12 表安全级联删除 ──────────────────────────────────────────
 
-  public listStudents(pg: Pagination): { data: StudentItem[]; total: number; page: number; pageSize: number } {
-    const total = (this.reader.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n;
+  /**
+   * 学生列表。`scope.mode = 'owner'` 时只返回教师本人班级的在册学生；
+   * 管理员使用 `'all'`。默认 `'all'` 仅为兼容既有内部调用。
+   */
+  public listStudents(
+    pg: Pagination,
+    scope: { mode: 'all' | 'owner'; userId?: string; username?: string } = { mode: 'all' },
+  ): { data: StudentItem[]; total: number; page: number; pageSize: number } {
+    const ownerScoped = scope.mode === 'owner';
+    const where = ownerScoped
+      ? `WHERE s.id IN (
+           SELECT cs.student_id
+           FROM class_students cs
+           JOIN classes c ON c.id = cs.class_id
+           WHERE c.owner_user_id = ? OR c.owner_user_id = ?
+         )`
+      : '';
+    const params: string[] = ownerScoped ? [scope.userId || '', scope.username || ''] : [];
+
+    const total = (this.reader.prepare(`SELECT COUNT(*) AS n FROM students s ${where}`).get(...params) as any).n;
     const students = this.reader
       .prepare(
-        'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC LIMIT ? OFFSET ?',
+        `SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.private_notes, s.created_at
+         FROM students s ${where}
+         ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
       )
-      .all(pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20), pg.offset ?? 0) as StudentItem[];
+      .all(
+        ...params,
+        pg.isAll ? -1 : ((pg as any).pageSize ?? (pg as any).limit ?? 20),
+        pg.offset ?? 0,
+      ) as StudentItem[];
 
     const pageSize = pg.isAll ? total : ((pg as any).pageSize ?? (pg as any).limit ?? 20);
     return { data: students, total, page: pg.page ?? 1, pageSize };
@@ -531,7 +556,7 @@ export class RosterService {
     if (locked_lesson_id !== undefined)
       this.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id = ?').run(locked_lesson_id, id);
     if (private_notes !== undefined)
-      this.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(private_notes, id);
+      this.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(sanitizePrivateNotes(private_notes), id);
     if (student_number !== undefined)
       this.db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(student_number, id);
   }
@@ -676,7 +701,7 @@ export class RosterService {
 
       const email = st?.email ? st.email.trim() : '';
       const studentNumber = st?.student_number ? st.student_number.trim() : '';
-      const notes = st?.private_notes ? st.private_notes.trim() : '';
+      const notes = sanitizePrivateNotes(st?.private_notes ? st.private_notes.trim() : '') || '';
       const provided = typeof st?.password === 'string' ? st.password.trim() : '';
       const autoPassword = provided === '';
       // 只能生成一次：明文与哈希必须来自同一个密码，否则回传给教师的明文无法登录。

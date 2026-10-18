@@ -25,6 +25,7 @@ import {
   Bookmark,
   AlertCircle,
 } from 'lucide-react';
+import { sanitizeRichTextHtml } from '../../packages/core/security/html-sanitize';
 
 interface StudentPrivateNotesEditorProps {
   studentId: string;
@@ -184,12 +185,13 @@ export function StudentPrivateNotesEditor({
     }
 
     if (editorRef.current) {
-      editorRef.current.innerHTML = htmlContent;
+      // 读取侧净化：覆盖修复前已落库的历史脏数据（写入侧同样会净化）
+      editorRef.current.innerHTML = sanitizeRichTextHtml(htmlContent);
     }
 
     setLoadedCategory(parsedCategory);
     setSelectedCategory(parsedCategory);
-    setLastSavedContent(htmlContent);
+    setLastSavedContent(sanitizeRichTextHtml(htmlContent));
     setHasUnsavedChanges(false);
     setSaveSuccess(false);
   }, [studentId, initialValue]);
@@ -229,14 +231,15 @@ export function StudentPrivateNotesEditor({
     if (editorRef.current) {
       const notesHTML = editorRef.current.innerHTML;
       const normalizedHTML = notesHTML === '<br>' ? '' : notesHTML;
-      const serialized = JSON.stringify({ category: selectedCategory, html: normalizedHTML });
+      const safeHTML = sanitizeRichTextHtml(normalizedHTML);
+      const serialized = JSON.stringify({ category: selectedCategory, html: safeHTML });
 
       setIsSaving(true);
       setSaveSuccess(false);
       try {
         const success = await onSave(serialized);
         if (success) {
-          setLastSavedContent(normalizedHTML);
+          setLastSavedContent(safeHTML);
           setLoadedCategory(selectedCategory);
           setHasUnsavedChanges(false);
           setSaveSuccess(true);

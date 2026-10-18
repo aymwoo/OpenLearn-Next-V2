@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
+import { assessmentGraderRegistry } from '../../../packages/core/assessment/registry-service.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
 import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/tmp-zip.js';
@@ -51,6 +52,7 @@ import {
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
   IStageGuardServiceToken,
+  IAssessmentGraderRegistryToken,
   IPluginHostToken,
   INetworkProxyServiceToken,
 } from '../../../packages/core/di/interfaces.js';
@@ -301,6 +303,8 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       [IActivityRegistryToken, extra.activityRegistry],
       [IAuthSessionBridgeToken, extra.authSessionBridge],
       [IStageGuardServiceToken, extra.stageGuard],
+      // 测评题型注册表：生产 kernel 启动时注册（Issue #100）
+      [IAssessmentGraderRegistryToken, assessmentGraderRegistry],
       [INetworkProxyServiceToken, extra.networkProxy],
     ];
 

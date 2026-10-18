@@ -148,7 +148,26 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
   });
 
   describe('2. 学生管理与 IDOR 越权防护', () => {
+    const ownedClassId = 'test-roster-owned-class';
     let createdStudentId = '';
+
+    beforeAll(() => {
+      const db = kernelContainer.db;
+      const now = Date.now();
+      db.prepare('INSERT OR REPLACE INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+        ownedClassId,
+        '教师自有班级',
+        'IDOR 测试',
+        now,
+      );
+      db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(teacherId, ownedClassId);
+    });
+
+    afterAll(() => {
+      const db = kernelContainer.db;
+      db.prepare('DELETE FROM class_students WHERE class_id = ?').run(ownedClassId);
+      db.prepare('DELETE FROM classes WHERE id = ?').run(ownedClassId);
+    });
 
     it('教师角色可创建新学生', async () => {
       const res = await fetch(`${baseUrl}/api/students`, {
@@ -168,6 +187,17 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
       expect(json.success).toBe(true);
       expect(json.id).toBeDefined();
       createdStudentId = json.id;
+
+      // 真实流程：创建后立即编入教师自己的班级（写操作授权依赖班级归属）
+      const linkRes = await fetch(`${baseUrl}/api/classes/${ownedClassId}/students`, {
+        method: 'POST',
+        headers: {
+          ...cookie(teacherToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ studentId: createdStudentId }),
+      });
+      expect(linkRes.status).toBe(200);
     });
 
     it('学生角色禁止修改其他学生的信息（IDOR 越权拦截 403）', async () => {

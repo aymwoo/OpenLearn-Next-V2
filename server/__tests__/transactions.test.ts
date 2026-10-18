@@ -179,6 +179,8 @@ describe('DATA-INT-01: 学生级联删除事务化', () => {
       '事务测试班',
       now,
     );
+    // 写操作需班级归属：把测试班挂到当前登录教师名下
+    db.prepare('UPDATE classes SET owner_user_id = ? WHERE id = ?').run(TEACHER_ID, 'cls-tx-1');
     seedStudentChildRows(studentId);
 
     const res = await del(`/api/students/${studentId}`);
