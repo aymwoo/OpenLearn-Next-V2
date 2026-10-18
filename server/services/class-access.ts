@@ -25,6 +25,11 @@ const ANSWER_KEYS = new Set([
   'correct_answer',
   'correctAnswers',
   'correct_answers',
+  // #107 起 correctIndex 是随堂测验的权威答案字段，学生视角同样必须剥离
+  'correctIndex',
+  'correct_index',
+  'correctIndexes',
+  'correct_indexes',
   'answer',
   'answers',
   'referenceAnswer',
@@ -85,7 +90,11 @@ export function redactAnswerKeys(value: unknown): unknown {
   return value;
 }
 
-export function redactAssignmentContent(content: unknown): unknown {
+/**
+ * 脱敏任意 JSON 字符串 / 对象里的答案字段（作业 content、白板元素 data 等）。
+ * 非 JSON 字符串原样返回，避免破坏自由文本。
+ */
+export function redactAnswerPayload(content: unknown): unknown {
   if (typeof content !== 'string') return content;
   const trimmed = content.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content;
@@ -94,6 +103,10 @@ export function redactAssignmentContent(content: unknown): unknown {
   } catch {
     return content;
   }
+}
+
+export function redactAssignmentContent(content: unknown): unknown {
+  return redactAnswerPayload(content);
 }
 
 export function redactAssignmentForStudent<T extends { content?: unknown }>(row: T): T {
