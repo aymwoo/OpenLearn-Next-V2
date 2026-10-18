@@ -172,6 +172,24 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
 
   /* ───────────────────────── 教师：发布 / 关闭 / 发布成绩 ───────────────────────── */
 
+  /** 某份试卷的全部发布记录（关闭 / 批改 / 统计的入口） */
+  app.get('/api/assessments/:id/assignments', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      res.json({ items: service.listAssignments(req.params.id, teacherActor(req)) });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /** 教师视角的作答详情（批改页数据源；始终含标准答案） */
+  app.get('/api/assessment-attempts/:id/teacher-view', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      res.json(service.getAttemptForTeacher(req.params.id, teacherActor(req)));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.post('/api/assessments/:id/publish', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const body = req.body ?? {};

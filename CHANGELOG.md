@@ -55,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **测评中心（教师端 UI，Issue #100 / 子 issue #121）**：新增教师工作区 `#/assessments`（`NavigationSidebar` 教学工具分组「测评中心」），包含试卷列表（类型/状态徽标、题数与满分、草稿可删）、新建对话框（测试/考试/问卷三选一并说明各自差异）、试卷编辑器（设置项即时保存、组卷、题目上下移/删除、题库取题）、发布到班级（可选限时与截止时间）、布置列表（交卷进度、待批改数、发布成绩、关闭、CSV 导出、进入批改/统计）、人工批改页（逐题作答原文 + 打分 + 评语，写入 `manual_override` 后自动判分不再覆盖）与统计页（均分/正确率逐题表格 + CSV 导出）。新增前端题型 UI 注册表 `assessmentQuestionTypeUiRegistry`（zustand + `pluginId` 所有权 + `clearOwned`）与 5 种内置题型出题编辑器，插件可经 `ctx.ui.registerAssessmentQuestionType` 注入、卸载时自动清理，**与后端 `IAssessmentGraderRegistry` 共用同一个 `type`**。后端补齐 UI 所需两个端点：`GET /api/assessments/:id/assignments`（含班级名与交卷进度）与 `GET /api/assessment-attempts/:id/teacher-view`（逐题作答 + 标准答案，教师无需等成绩发布）。`e2e/a11y-gate.spec.ts` 覆盖范围新增 `#/assessments`。测试：前端 25 例（列表/新建/只读/组卷/发布/批改/统计/5 种编辑器/注册表所有权）+ 后端新增 3 例；本地实测 axe-core WCAG 2.0/2.1 A+AA 在「列表 / 已发布详情 / 草稿编辑器 / 640px 窄屏」四种状态均 0 违规。
 - **互动课堂学生专注力监控支持点击固定选中概况面板（Issue #115）**：此前右侧学生专注力监控圆环仅支持 `hoveredStudentId` 瞬时悬浮预览，鼠标移开或移向下方控制台时立即恢复全班概况，教师无法驻留查看单个学生的详细环节进度或随堂测验得分。现在引入 `pinnedStudentId` 状态持久固定显示：
   - **点击卡片锁定/切换**：点击学生卡片可锁定选中该学生，卡片呈现主题色高光环与小图钉（`Pin`）徽标，右侧下方概况面板持久显示该学生测验得分、各环节通关打勾清单与异常徽标，移开鼠标不再丢失详情；再次点击卡片或点击面板右上角「取消固定」按钮恢复全班学情概况；
   - **临时悬浮平滑预览**：已有固定学生时，将鼠标悬浮于其他学生卡片上可临时优先预览（展示「预览」徽标），移开鼠标后平滑恢复至已固定学生；

@@ -406,6 +406,41 @@ export class AssessmentService {
     return this.getAssignment(assignmentId);
   }
 
+  /** 某份试卷的全部发布记录（含班级名），供测评中心列出可批改/可统计的布置。 */
+  listAssignments(assessmentId: string, ownerId: string) {
+    this.requireOwnedAssessment(assessmentId, ownerId);
+    const rows = this.db
+      .prepare(
+        `SELECT aa.*, c.name AS class_name
+           FROM assessment_assignments aa
+           LEFT JOIN classes c ON c.id = aa.class_id
+          WHERE aa.assessment_id = ?
+          ORDER BY aa.created_at DESC`,
+      )
+      .all(assessmentId) as Array<AssignmentRow & { class_name: string | null }>;
+    const now = this.now();
+    return rows.map((row) => {
+      const counts = this.db
+        .prepare(
+          `SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN status != 'in_progress' THEN 1 ELSE 0 END) AS submitted,
+             SUM(CASE WHEN needs_manual_review = 1 THEN 1 ELSE 0 END) AS pending
+           FROM assessment_attempts WHERE assignment_id = ?`,
+        )
+        .get(row.id) as { total: number | null; submitted: number | null; pending: number | null };
+      return {
+        ...this.getAssignment(row.id),
+        className: row.class_name,
+        attemptCount: counts?.total ?? 0,
+        submittedCount: counts?.submitted ?? 0,
+        pendingReviewCount: counts?.pending ?? 0,
+        // 惰性超时结算的提示：学生端读取时会结算，教师端只做展示
+        now,
+      };
+    });
+  }
+
   closeAssignment(assignmentId: string, ownerId: string) {
     const asg = this.requireOwnedAssignment(assignmentId, ownerId);
     this.db.prepare("UPDATE assessment_assignments SET status = 'closed' WHERE id = ?").run(asg.id);
@@ -688,6 +723,45 @@ export class AssessmentService {
     return ordered.map(({ row, label }) =>
       toTeacherAttemptView(this.toAttemptViewRow(row), { revealIdentity: false, anonymousLabel: label }),
     );
+  }
+
+  /**
+   * 教师视角的一次作答详情：逐题作答原文 + 评分状态（批改 UI 的数据源）。
+   *
+   * 与学生结果视图的区别：**始终包含标准答案**（教师本来就能改答案），
+   * 且忽略 resultVisibility（教师不需要等"发布成绩"）。
+   */
+  getAttemptForTeacher(attemptId: string, ownerId: string) {
+    const attempt = this.requireAttempt(attemptId);
+    this.requireOwnedAssignment(attempt.assignment_id, ownerId);
+    const settled = this.settleIfExpired(attempt, this.now());
+    const assessmentId = this.assignmentAssessmentId(settled.assignment_id);
+    const items = this.readItems(assessmentId).sort((a, b) => a.sortOrder - b.sortOrder);
+    const answerRows = this.db
+      .prepare('SELECT * FROM assessment_answers WHERE attempt_id = ?')
+      .all(settled.id) as AnswerRow[];
+
+    return {
+      attempt: toTeacherAttemptView(this.toAttemptViewRow(settled), { revealIdentity: false }),
+      items: items.map((item) => {
+        const row = answerRows.find((a) => a.item_id === item.id);
+        return {
+          itemId: item.id,
+          type: item.type,
+          stem: item.stem,
+          maxScore: item.maxScore,
+          answer: row ? safeJsonParse<unknown>(row.answer_json, null) : null,
+          answerKey: item.answerKey,
+          score: row?.score ?? null,
+          isCorrect: row?.is_correct === null || row?.is_correct === undefined ? null : row.is_correct === 1,
+          needsManualReview: (row?.score ?? null) === null,
+          feedback: row?.feedback ?? null,
+          grader: row?.grader ?? null,
+          manualOverride: row?.manual_override === 1,
+          config: item.config,
+        };
+      }),
+    };
   }
 
   /** 教师手动批改单题。写入 `manual_override = 1`，此后自动判分不再覆盖。 */

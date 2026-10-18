@@ -28,6 +28,9 @@ const TimetableView = lazy(() => import('./TimetableView').then((m) => ({ defaul
 const AdminDirectoryView = lazy(() => import('./AdminDirectoryView').then((m) => ({ default: m.AdminDirectoryView })));
 const ComputerLabView = lazy(() => import('./ComputerLabView').then((m) => ({ default: m.ComputerLabView })));
 const HelpView = lazy(() => import('./HelpView').then((m) => ({ default: m.HelpView })));
+const AssessmentCenter = lazy(() =>
+  import('../assessment/AssessmentCenter').then((m) => ({ default: m.AssessmentCenter })),
+);
 
 import { useOptionalAppData } from '../../context/AppDataContext';
 
@@ -61,6 +64,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
           'admin_directory',
           'help',
           'computer_labs',
+          'assessments',
         ].includes(teacherTab) ? null : (
           <PluginTabPanel activeNavPlugin={teacherTab.includes('/') ? teacherTab.split('/')[0] : null} />
         )}
@@ -93,6 +97,8 @@ export function TeacherView(_props: TeacherViewProps = {}) {
             <AdminDirectoryView />
           ) : teacherTab === 'computer_labs' ? (
             <ComputerLabView />
+          ) : teacherTab === 'assessments' ? (
+            <AssessmentCenter />
           ) : teacherTab === 'help' ? (
             <HelpView />
           ) : null}

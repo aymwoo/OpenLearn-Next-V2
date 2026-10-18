@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Clock,
   ExternalLink,
+  ClipboardList,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
@@ -155,6 +156,12 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
               icon={Users}
               label={lang === 'zh' ? '班级管理' : 'Classes & Students'}
               tab="classes"
+              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
+            />
+            <NavButton
+              icon={ClipboardList}
+              label={lang === 'zh' ? '测评中心' : 'Assessment Center'}
+              tab="assessments"
               {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
             />
           </div>
