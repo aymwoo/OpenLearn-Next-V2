@@ -40,8 +40,8 @@ const rlog = createLogger('roster');
 /**
  * 学生级联删除（DATA-INT-01）：12 张子表 + students 本体，委托至 RosterService。
  */
-function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string): void {
-  new RosterService(db).deleteStudentCascade(studentId);
+async function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string): Promise<void> {
+  await new RosterService(db).deleteStudentCascade(studentId);
 }
 
 /**
@@ -1128,11 +1128,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
+  app.delete('/api/students/:id', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const studentId = resolveWritableStudentId((req as any).session, req.params.id);
       if (!studentId) return res.status(403).json({ error: "Cannot delete another teacher's student" });
-      rosterService.deleteStudentCascade(studentId);
+      await rosterService.deleteStudentCascade(studentId);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1140,13 +1140,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // SEC-DATA-02: GDPR 学生数据导出
-  app.get('/api/students/:id/export', requireAuth('teacher', 'administrator'), (req, res) => {
+  app.get('/api/students/:id/export', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const session = (req as any).session;
       if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, req.params.id)) {
         return res.status(403).json({ error: 'Forbidden' });
       }
-      res.json(rosterService.exportStudentData(req.params.id));
+      const data = await rosterService.exportStudentData(req.params.id);
+      res.json(data);
     } catch (e: any) {
       if (e.message?.includes('not found')) return res.status(404).json({ error: e.message });
       sendSafeError(res, e);
@@ -1154,7 +1155,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // SEC-DATA-02: GDPR 完整数据删除（仅管理员，需二次确认）
-  app.delete('/api/students/:id/gdpr-delete', requireAuth('administrator'), (req, res) => {
+  app.delete('/api/students/:id/gdpr-delete', requireAuth('administrator'), async (req, res) => {
     try {
       const studentId = req.params.id;
       const { confirm } = req.body;
@@ -1162,10 +1163,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
       }
 
-      rosterService.deleteStudentCascade(studentId);
+      const result = await rosterService.deleteStudentCascade(studentId);
 
       rlog.info(`[GDPR] Complete data deletion for student ${studentId}`);
-      res.json({ success: true, message: 'All student data has been permanently deleted.' });
+      res.json({
+        success: true,
+        message: 'All student data has been permanently deleted.',
+        pluginsCleaned: result.pluginsCleaned,
+      });
     } catch (e: any) {
       sendSafeError(res, e);
     }

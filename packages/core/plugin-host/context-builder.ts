@@ -23,6 +23,8 @@ import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
+import { recordSecurityAudit } from '../observability/audit-log.js';
+import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -565,7 +567,33 @@ function wrapPointsDimensionRegistry(
  * addPoints 会持久化到 events 表，插件上下文调用的所有写入都需经过此包装。
  * 与 wrap*EventBus 不同，这里不需要 ResourceTracker——账本项不属于“订阅 / 定时器 / 资源”那一类需清理的资源。
  */
-function wrapPointsLedgerService(service: IPointsLedgerService): IPointsLedgerService {
+function wrapPointsLedgerService(
+  service: IPointsLedgerService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IPointsLedgerService {
+  const auditAccess = (
+    studentId: string,
+    method: string,
+    operation: 'read' | 'write',
+    requiredCap: string,
+  ) => {
+    const hasCap = hasCapability(capabilities ?? [], requiredCap);
+    if (!hasCap) {
+      console.warn(
+        `[PluginSecurity] Plugin "${pluginId}" ${operation === 'read' ? 'accessed' : 'modified'} student data via ${method} without declaring "${requiredCap}". In future versions this will be blocked.`,
+      );
+    }
+    recordSecurityAudit('plugin.student_data_access', {
+      pluginId,
+      studentId,
+      method,
+      operation,
+      hasCapability: hasCap,
+      ...(hasCap ? {} : { migrationWarning: true }),
+    });
+  };
+
   return {
     addPoints: createSafeFunction(
       async (
@@ -574,18 +602,22 @@ function wrapPointsLedgerService(service: IPointsLedgerService): IPointsLedgerSe
         dimensionId: string,
         deltaPoints: number,
         reason: string,
-        pluginId?: string,
+        callerPluginId?: string,
       ) => {
-        return service.addPoints(studentId, classId, dimensionId, deltaPoints, reason, pluginId);
+        auditAccess(studentId, 'addPoints', 'write', CAP_STUDENT_DATA_WRITE);
+        return service.addPoints(studentId, classId, dimensionId, deltaPoints, reason, callerPluginId || pluginId);
       },
     ),
     getLogs: createSafeFunction(async (studentId: string, classId?: string) => {
+      auditAccess(studentId, 'getLogs', 'read', CAP_STUDENT_DATA_READ);
       return service.getLogs(studentId, classId);
     }),
     getStudentTotalByDimension: createSafeFunction(async (studentId: string, classId: string, dimensionId: string) => {
+      auditAccess(studentId, 'getStudentTotalByDimension', 'read', CAP_STUDENT_DATA_READ);
       return service.getStudentTotalByDimension(studentId, classId, dimensionId);
     }),
     getStudentDimensionSummary: createSafeFunction(async (studentId: string, classId: string) => {
+      auditAccess(studentId, 'getStudentDimensionSummary', 'read', CAP_STUDENT_DATA_READ);
       return service.getStudentDimensionSummary(studentId, classId);
     }),
   } as IPointsLedgerService;
@@ -749,7 +781,9 @@ export async function buildContext(
   const wrappedPointsDimension = pointsDimensionRegistry
     ? wrapPointsDimensionRegistry(pointsDimensionRegistry, tracker, pluginId)
     : null;
-  const wrappedPointsLedger = pointsLedgerService ? wrapPointsLedgerService(pointsLedgerService) : null;
+  const wrappedPointsLedger = pointsLedgerService
+    ? wrapPointsLedgerService(pointsLedgerService, pluginId, manifest.capabilitiesProposed)
+    : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
   Object.setPrototypeOf(wrappedCommandBus, null);

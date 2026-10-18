@@ -38,6 +38,10 @@ export type {
 export { PluginState } from '../core/plugin-host/types.js';
 
 export { PluginHttpRouter } from '../core/plugin-host/http-router.js';
+export {
+  CAP_STUDENT_DATA_READ,
+  CAP_STUDENT_DATA_WRITE,
+} from '../core/plugin-host/method-policy.js';
 
 // ── Unified Foundation Layer (P7 Sprints) ──────────────────────────────
 

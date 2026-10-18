@@ -13,6 +13,7 @@ var eventBusProxy = null;
 var registeredCommandHandlers = new Map();
 var pluginHttpRouter = createPluginHttpRouter();
 var activeWorkerStreams = new Map();
+var activePluginInstance = null;
 
 parentPort.on('message', async function(msg) {
   // 0. 存活探针（L-1 P0）—— 必须放在所有分支之前。
@@ -26,6 +27,65 @@ parentPort.on('message', async function(msg) {
   // terminate() 本身是有效的（实测 3/3 轮 2-3ms 杀得掉），缺的只是「有人去杀」。
   if (msg && msg.type === 'ping') {
     parentPort.postMessage({ type: 'pong', seq: msg.seq });
+    return;
+  }
+
+  // 0b. GDPR 学生数据导出与级联删除钩子
+  if (msg && msg.type === 'student-export-request') {
+    var exportId = msg.invokeId;
+    try {
+      if (activePluginInstance && typeof activePluginInstance.onStudentExport === 'function') {
+        var exportData = await activePluginInstance.onStudentExport(msg.studentId);
+        parentPort.postMessage({
+          type: 'student-export-response',
+          invokeId: exportId,
+          status: 'ok',
+          data: exportData
+        });
+      } else {
+        parentPort.postMessage({
+          type: 'student-export-response',
+          invokeId: exportId,
+          status: 'not_implemented'
+        });
+      }
+    } catch (err) {
+      parentPort.postMessage({
+        type: 'student-export-response',
+        invokeId: exportId,
+        status: 'error',
+        error: (err && err.message) ? err.message : String(err)
+      });
+    }
+    return;
+  }
+
+  if (msg && msg.type === 'student-delete-request') {
+    var delId = msg.invokeId;
+    try {
+      if (activePluginInstance && typeof activePluginInstance.onStudentDelete === 'function') {
+        await activePluginInstance.onStudentDelete(msg.studentId);
+        parentPort.postMessage({
+          type: 'student-delete-response',
+          invokeId: delId,
+          success: true
+        });
+      } else {
+        parentPort.postMessage({
+          type: 'student-delete-response',
+          invokeId: delId,
+          success: true,
+          notImplemented: true
+        });
+      }
+    } catch (err) {
+      parentPort.postMessage({
+        type: 'student-delete-response',
+        invokeId: delId,
+        success: false,
+        error: (err && err.message) ? err.message : String(err)
+      });
+    }
     return;
   }
 
@@ -470,6 +530,7 @@ parentPort.on('message', async function(msg) {
         });
       }
 
+      activePluginInstance = plugin;
       parentPort.postMessage({ type: 'activated' });
 
       // 4. 停用请求（激活后注册，避免竞争）
@@ -482,6 +543,7 @@ parentPort.on('message', async function(msg) {
               state = await plugin.deactivate();
             }
           } finally {
+            activePluginInstance = null;
             // 清理 pending calls、活跃流、事件代理与 HTTP 路由
             pendingCalls.clear();
             if (activeWorkerStreams) {

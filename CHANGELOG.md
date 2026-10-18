@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **插件访问学生个人数据的能力声明与审计，插件表纳入导出/删除与保留策略（P1 安全，Issue #145）**：
+  - **学生个人数据能力声明与统一审计**：在 `packages/core/plugin-host/method-policy.ts` 中引入专有的 `CAP_STUDENT_DATA_READ = 'student-data:read'` 与 `CAP_STUDENT_DATA_WRITE = 'student-data:write'` 能力常量；在 Inline 代理层（`context-builder.ts`）与 Worker 隔离层（`service-host.ts`）拦截插件对 `pointsLedger`（读 `getLogs`/`getStudentTotalByDimension`/`getStudentDimensionSummary`，写 `addPoints`）的学生数据访问，统一记录 `plugin.student_data_access` 安全审计日志；提供平滑迁移兼容期，对未声明能力的存量插件输出控制台警告并标记 `migrationWarning: true`。
+  - **插件扩展数据 GDPR 导出与级联删除**：在 `PluginInstance`、`PluginModule` 与 `@openlearn/plugin-sdk` 规范中引入可选的 `onStudentExport(studentId)` 与 `onStudentDelete(studentId)` 扩展生命周期钩子；`PluginHost` 新增 `exportStudentDataFromPlugins` 与 `deleteStudentDataFromPlugins`（委托至 `student-data-privacy.ts`），统一支持 Inline 异步与 Worker 隔离消息 RPC（带 10s 超时保护），未实现的插件标记 `{ status: 'not_implemented' }`；
+  - **花名册级联事务与导出纳管**：`RosterService.deleteStudentCascade` 将学生积分流水（`student_point_logs`）纳入单事务原子清理，并在事务提交后并发调度活跃插件的 `deleteStudentDataFromPlugins` 并记入 `student.gdpr_deleted` 安全审计；`RosterService.exportStudentData` 聚合输出 `pointLogs` 以及各活跃插件返回的 `pluginData`，实现学生数据完整覆盖与脱敏导出；
+  - **多类别数据保留策略与定期清理**：新增迁移 `034_student_read_notifications_created_at.sql`；新增 `packages/core/db/retention-policy.ts`，定义 5 大类别保留窗口：`events`（90 天）、`attendance`（365 天）、`student_rollcalls`（180 天）、`student_read_notifications`（30 天）、`client_sessions`（30 天），支持独立环境变量自定义及 `0` 禁用；服务端启动及数据库就绪时自动调用 `purgeAllExpiredData` 清理超期数据；
+  - **测试与文档**：新增 `plugin-student-data-audit.test.ts`（5 例）、`plugin-student-privacy-hooks.test.ts`（5 例）与 `retention-policy.test.ts`（11 例），更新现有花名册测试与 `plugin-capability-matrix.md`、`privacy.md` 及 `known-issues.md`。
 - **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
   - `GET /api/courseware/attempts` 修复教师水平越权：`listAttempts` 不再仅凭 `isStaff` 放行全校数据。教师视角仅返回其管辖班级（`classes.owner_user_id`）中的学生作答与教师自测记录；管理员保留全校可见性；学生视角仅能查看本人并脱敏内部字段（`extra_json`, `comment`）。
   - 读接口鉴权加固：`GET /api/courseware/attempts/:attemptId/progress` 与 `GET /api/courseware/attempts/:attemptId/raw` 增加基于 `teacherCanSeeStudent` 的班级范围校验，教师尝试读取非管辖班级学生作答一律拒绝（403），不存在的记录返回 404。
