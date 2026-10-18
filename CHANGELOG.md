@@ -167,6 +167,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `scripts/upgrade-regression/verify-upgrade.ts`：恢复 fixture 后用当前 `main` 启动，断言 `/health`、插件全部 `active`、旧班级/学生/成员关系可读、插件 `plugin_storage` 标记可读回、已执行迁移 checksum 未被改写、旧表全部仍在，并二次启动验证「零新迁移」。作业以 `MIGRATION_CHECKSUM_STRICT=true` 运行，历史迁移被改写会直接启动失败。
   - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
   - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
+  - 定位修正：ZIP 安装落库的 `plugins.file_path` 是构库机器的绝对路径，而校验在另一个临时目录里恢复 fixture，插件代码文件搬了家、库里那列没搬 —— `loadPluginModule` 找不到文件、ZIP 插件的 `source_code` 又是空串，三个插件全被打成 `state=error`，看起来像升级把插件弄坏了。现在 `restoreFixture` 会按 `/plugins/` 相对结构把 `file_path` 重定位到恢复后的数据目录（真实升级同目录，不受影响），并在插件非 active 时把服务端日志尾巴打进 CI，病因不再藏在被捕获的日志里。
   - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
 
 ### Docs

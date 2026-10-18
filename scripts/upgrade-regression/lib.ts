@@ -549,7 +549,69 @@ export async function restoreFixture(fixtureFile: string, targetDir: string): Pr
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, await entry.async('nodebuffer'));
   }
+
+  // 恢复后必须把 DB 里的绝对路径重定位到新的数据目录（见 rebasePluginPaths）。
+  const rebased = rebasePluginPaths(path.join(targetDir, 'educational_os.db'), targetDir);
+  if (rebased > 0) {
+    console.log(`[restore-fixture] 已把 ${rebased} 个插件的 file_path 重定位到 ${targetDir}`);
+  }
   return metadata;
+}
+
+/**
+ * 把 `plugins.file_path` 从「构库机器的绝对路径」重定位到恢复后的数据目录。
+ *
+ * 为什么必须做：ZIP 安装时 `file_path` 落库的是绝对路径
+ * （`<dataDir>/plugins/<pluginId>/index.js`），插件代码文件本身随 fixture 一起搬家，
+ * 但 DB 里那一列仍指回构库机器的临时目录。升级校验在**另一个**临时目录里启动，
+ * 于是 `loadPluginModule` 发现 `fs.existsSync(file_path) === false`，而 ZIP 插件的
+ * `source_code` 是空串 —— 直接 `PluginActivateError: no source code available`，
+ * 三个插件全被打成 `state=error`。
+ *
+ * 这是校验工具的重定位问题，不是产品升级回归：真实升级用的是同一个数据目录。
+ * 但方向不能反 —— 若哪天产品真的只认库里的绝对路径（数据目录搬迁即失效），
+ * 这个门禁也不会再误报成「插件升级后全挂」。
+ *
+ * @returns 实际被改写的行数。
+ */
+export function rebasePluginPaths(dbPath: string, targetDataDir: string): number {
+  if (!fs.existsSync(dbPath)) return 0;
+  const db = openDb(dbPath, false);
+  try {
+    const rows = db
+      .prepare("SELECT id, file_path FROM plugins WHERE file_path IS NOT NULL AND file_path != ''")
+      .all() as Array<{ id: string; file_path: string }>;
+    const update = db.prepare('UPDATE plugins SET file_path = ? WHERE id = ?');
+    let rebased = 0;
+    for (const row of rows) {
+      const next = rebaseUnderPluginsDir(row.file_path, targetDataDir);
+      if (!next || next === row.file_path) continue;
+      update.run(next, row.id);
+      rebased += 1;
+    }
+    return rebased;
+  } catch {
+    // 老到没有 plugins 表 / file_path 列的 fixture 不该因此失败，交给后续断言报告。
+    return 0;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * 取 `…/plugins/<相对路径>` 中的相对部分，拼到目标数据目录下。
+ *
+ * 用「最后一个 /plugins/ 段」而不是前缀匹配：构库与校验的数据目录都在临时目录里，
+ * 前缀本身就不一样，能复用的只有安装时的相对结构。Windows 构库的 fixture 在
+ * Linux 上恢复也要能处理，故两种分隔符都归一化。
+ */
+function rebaseUnderPluginsDir(storedPath: string, targetDataDir: string): string | undefined {
+  const normalized = storedPath.replace(/\\/g, '/');
+  const marker = normalized.lastIndexOf('/plugins/');
+  if (marker < 0) return undefined;
+  const relative = normalized.slice(marker + '/plugins/'.length);
+  if (!relative || relative.split('/').includes('..')) return undefined;
+  return path.join(targetDataDir, 'plugins', ...relative.split('/'));
 }
 
 // ── 断言 ──────────────────────────────────────────────────────────────────

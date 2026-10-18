@@ -21,6 +21,7 @@ import {
   pluginManifestId,
   readAppliedMigrations,
   readPluginStorageMarker,
+  rebasePluginPaths,
   restoreFixture,
   snapshotFixture,
   writePluginStorageMarker,
@@ -196,6 +197,66 @@ describe('fixture 快照与恢复', () => {
     expect(readPluginStorageMarker(restoredDb, 'plugin-uuid-1', 'upgrade_regression_marker')).toBe('seeded');
     expect(readAppliedMigrations(restoredDb).map((row) => row.name)).toEqual(['001_create_legacy_records']);
     restoredDb.close();
+  });
+
+  it('恢复时把 plugins.file_path 从构库目录重定位到新数据目录', async () => {
+    // 构库：数据目录 A，DB 里写的是 A/plugins/<id>/index.js（ZIP 安装就是这样落库的）。
+    const sourceDir = makeTempDir('ol-upgrade-rebase-source-');
+    const sourceDbPath = path.join(sourceDir, 'educational_os.db');
+    const sourceDb = new Database(sourceDbPath);
+    sourceDb.exec('CREATE TABLE plugins (id TEXT PRIMARY KEY, file_path TEXT);');
+    const pluginDir = path.join(sourceDir, 'plugins', 'plugin-uuid-1');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(path.join(pluginDir, 'index.js'), 'export default {};\n');
+    sourceDb
+      .prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)')
+      .run('plugin-uuid-1', path.join(pluginDir, 'index.js'));
+    sourceDb.close();
+
+    const metadata: FixtureMetadata = {
+      label: 'unit-test',
+      platformVersion: '0.0.0-test',
+      createdAt: new Date().toISOString(),
+      migrations: [],
+      tables: ['plugins'],
+      plugins: [{ manifestId: '@ext/demo', dbId: 'plugin-uuid-1', version: '1.0.0' }],
+      sample: { classId: 'c1', className: '一班', studentIds: [], studentNumbers: [] },
+      markerKey: 'unused',
+      markerValue: 'unused',
+    };
+    const fixtureFile = path.join(makeTempDir('ol-upgrade-rebase-fixture-'), 'fixture.zip');
+    await snapshotFixture({ dataDir: sourceDir, outFile: fixtureFile, metadata });
+
+    // 校验：换到数据目录 B，file_path 必须指向 B 下真实存在的同一个文件。
+    const restoredDir = makeTempDir('ol-upgrade-rebase-restored-');
+    await restoreFixture(fixtureFile, restoredDir);
+    const restoredDb = new Database(path.join(restoredDir, 'educational_os.db'), { readonly: true });
+    const row = restoredDb.prepare('SELECT file_path FROM plugins WHERE id = ?').get('plugin-uuid-1') as {
+      file_path: string;
+    };
+    restoredDb.close();
+
+    expect(row.file_path).toBe(path.join(restoredDir, 'plugins', 'plugin-uuid-1', 'index.js'));
+    expect(fs.existsSync(row.file_path)).toBe(true);
+    expect(row.file_path.startsWith(sourceDir)).toBe(false);
+  });
+
+  it('重定位只改 plugin 目录内的路径，不动其它绝对路径', () => {
+    const dataDir = makeTempDir('ol-upgrade-rebase-guard-');
+    const dbPath = path.join(dataDir, 'educational_os.db');
+    const db = new Database(dbPath);
+    db.exec('CREATE TABLE plugins (id TEXT PRIMARY KEY, file_path TEXT);');
+    const outside = path.join(dataDir, 'elsewhere', 'index.js');
+    db.prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)').run('p1', outside);
+    db.prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)').run('p2', '');
+    db.close();
+
+    expect(rebasePluginPaths(dbPath, dataDir)).toBe(0);
+    const check = new Database(dbPath, { readonly: true });
+    expect((check.prepare('SELECT file_path FROM plugins WHERE id = ?').get('p1') as { file_path: string }).file_path).toBe(
+      outside,
+    );
+    check.close();
   });
 });
 

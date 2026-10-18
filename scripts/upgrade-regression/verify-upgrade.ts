@@ -101,6 +101,7 @@ async function main() {
     await loginAsAdmin(session);
 
     const plugins = await listPlugins(session);
+    const inactivePlugins: string[] = [];
     for (const expected of metadata.plugins) {
       const match = plugins.find((entry) => pluginManifestId(entry) === expected.manifestId);
       record(
@@ -115,6 +116,14 @@ async function main() {
         isPluginActive(match),
         match ? `state=${match.state ?? match.status ?? 'unknown'}` : '插件不存在',
       );
+      if (!isPluginActive(match)) inactivePlugins.push(expected.manifestId);
+    }
+    // 只报「state=error」等于把真实病因（激活抛了什么）留在被捕获却没打印的日志里，
+    // 排查只能靠本地重建 fixture。这里在断言失败前把服务端日志尾巴打出来。
+    if (inactivePlugins.length > 0) {
+      console.error(`[verify-upgrade] 以下插件未处于 active：${inactivePlugins.join(', ')}`);
+      console.error('--- server logs (tail) ---');
+      console.error(server.logs().split('\n').slice(-120).join('\n'));
     }
 
     const classes = await session.json<{ data: Array<{ id: string; name: string }> }>(`/api/classes${PAGE_SIZE_QUERY}`);
