@@ -134,6 +134,7 @@ beforeEach(() => {
     CREATE TABLE student_lesson_progress (
       student_id TEXT NOT NULL, lesson_id TEXT NOT NULL, completed INTEGER,
       progress_percent REAL, completed_segments TEXT, assigned_at INTEGER,
+      verified INTEGER NOT NULL DEFAULT 0, verified_progress_percent INTEGER,
       PRIMARY KEY (student_id, lesson_id)
     );
     CREATE TABLE students (id TEXT PRIMARY KEY, name TEXT);
@@ -305,10 +306,15 @@ describe('promoteAttemptToGrade', () => {
     promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
 
     const progress = db
-      .prepare('SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+      .prepare(
+        'SELECT completed, progress_percent, verified, verified_progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?',
+      )
       .get('s1', LESSON) as any;
     expect(progress.completed).toBe(1);
     expect(progress.progress_percent).toBe(100);
+    // 课件完成属于已验证进度，成绩计算才会采用
+    expect(progress.verified).toBe(1);
+    expect(progress.verified_progress_percent).toBe(100);
   });
 });
 

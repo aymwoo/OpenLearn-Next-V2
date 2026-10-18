@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { ClassStudentsPanel } from '../ClassStudentsPanel';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../../types/app';
 
@@ -132,5 +132,70 @@ describe('ClassStudentsPanel', () => {
     const props = baseProps({ classStudentsMap: { 'class-1': [] } });
     render(<ClassStudentsPanel {...props} />);
     expect(screen.getByText('No students registered in this class.')).toBeTruthy();
+  });
+
+  it('marks self-reported progress and verifies it through the progress API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const props = baseProps({
+      expandedStudentId: 's-1',
+      studentActiveTabs: { 's-1': 'progress' },
+      studentProgressMap: {
+        's-1': [
+          {
+            student_id: 's-1',
+            lesson_id: 'lesson-1',
+            lesson_title: 'Algebra',
+            completed: 0,
+            progress_percent: 40,
+            verified: 0,
+            verified_progress_percent: null,
+            completed_segments: '[]',
+            assigned_at: 0,
+          },
+        ],
+      },
+    });
+    render(<ClassStudentsPanel {...props} />);
+
+    expect(screen.getByText('Self')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Verify progress for Algebra' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/students/s-1/progress',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"progressPercent":40'),
+        }),
+      ),
+    );
+    expect(props.fetchStudentProgress).toHaveBeenCalledWith('s-1');
+  });
+
+  it('shows the verified badge without a verify button for teacher-verified progress', () => {
+    const props = baseProps({
+      expandedStudentId: 's-1',
+      studentActiveTabs: { 's-1': 'progress' },
+      studentProgressMap: {
+        's-1': [
+          {
+            student_id: 's-1',
+            lesson_id: 'lesson-1',
+            lesson_title: 'Algebra',
+            completed: 1,
+            progress_percent: 100,
+            verified: 1,
+            verified_progress_percent: 100,
+            completed_segments: '[]',
+            assigned_at: 0,
+          },
+        ],
+      },
+    });
+    render(<ClassStudentsPanel {...props} />);
+
+    expect(screen.getByText('Verified')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Verify progress for Algebra' })).toBeNull();
   });
 });

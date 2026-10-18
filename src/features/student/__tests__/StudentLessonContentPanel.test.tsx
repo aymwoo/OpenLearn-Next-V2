@@ -30,6 +30,6 @@ describe('StudentLessonContentPanel', () => {
       />,
     );
     expect(screen.getByText(/Lesson Content/)).toBeTruthy();
-    expect(screen.getByText(/自主学习进度反馈/)).toBeTruthy();
+    expect(screen.getByText(/自主学习进度（教师确认后计入成绩）/)).toBeTruthy();
   });
 });

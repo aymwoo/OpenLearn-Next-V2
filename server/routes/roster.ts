@@ -93,7 +93,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
-      res.json(rosterService.listStudents(pg));
+      const session = (req as any).session;
+      const scope = isAdministrator(session)
+        ? ({ mode: 'all' } as const)
+        : ({
+            mode: 'owner',
+            userId: actorUserId(session) || '',
+            username: session?.username || '',
+          } as const);
+      res.json(rosterService.listStudents(pg, scope));
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -1189,28 +1197,54 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const { lessonId, completed, progressPercent, completedSegments } = req.body;
       const completedSegmentsStr =
         typeof completedSegments === 'string' ? completedSegments : JSON.stringify(completedSegments || []);
+      const percent = progressPercent || 0;
+      // 成绩只计入已验证进度（P1）：教师/管理员写入视为已验证；
+      // 学生自报只更新展示值，绝不覆盖 verified_progress_percent。
+      const verifiedByStaff =
+        isAdministrator(session) ||
+        (isTeacher(session) && teacherCanSeeStudent(kernelContainer.db, session, studentId));
 
-      kernelContainer.db
-        .prepare(
-          `
-        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(student_id, lesson_id) DO UPDATE SET
-          completed = excluded.completed,
-          progress_percent = excluded.progress_percent,
-          completed_segments = excluded.completed_segments
-      `,
-        )
-        .run(studentId, lessonId, completed ? 1 : 0, progressPercent || 0, completedSegmentsStr, Date.now());
+      if (verifiedByStaff) {
+        kernelContainer.db
+          .prepare(
+            `
+          INSERT INTO student_lesson_progress
+            (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent)
+          VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+          ON CONFLICT(student_id, lesson_id) DO UPDATE SET
+            completed = excluded.completed,
+            progress_percent = excluded.progress_percent,
+            completed_segments = excluded.completed_segments,
+            verified = 1,
+            verified_progress_percent = excluded.verified_progress_percent
+        `,
+          )
+          .run(studentId, lessonId, completed ? 1 : 0, percent, completedSegmentsStr, Date.now(), percent);
+      } else {
+        kernelContainer.db
+          .prepare(
+            `
+          INSERT INTO student_lesson_progress
+            (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent)
+          VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+          ON CONFLICT(student_id, lesson_id) DO UPDATE SET
+            completed = excluded.completed,
+            progress_percent = excluded.progress_percent,
+            completed_segments = excluded.completed_segments
+        `,
+          )
+          .run(studentId, lessonId, completed ? 1 : 0, percent, completedSegmentsStr, Date.now());
+      }
 
       await publishClassroomEvent(
         CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
         {
           studentId,
           lessonId,
-          progressPercent: progressPercent || 0,
+          progressPercent: percent,
           completed: !!completed,
           completedSegments: completedSegments || [],
+          verified: verifiedByStaff,
         },
         { correlationId: lessonId || undefined },
       );
