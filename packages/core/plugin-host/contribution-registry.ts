@@ -13,6 +13,8 @@
  * Design: Two-level index — slot → pluginId → ContributionConfig[]
  */
 
+import { warnDeprecation } from '../extension-points/index.js';
+
 // ── Contribution Config Types ────────────────────────────────────────────
 
 /** A contribution to the classroom.tool slot (command-triggered toolbar button). */
@@ -1032,6 +1034,8 @@ export class ContributionRegistry {
 
     for (const [slot, configs] of Object.entries(contributes)) {
       if (!Array.isArray(configs) || configs.length === 0) continue;
+
+      warnDeprecation('slot', slot, pluginId);
 
       if (!this.contributions.has(slot)) {
         this.contributions.set(slot, new Map());
