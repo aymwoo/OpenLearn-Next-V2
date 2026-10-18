@@ -166,6 +166,11 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     await expect(page.locator('[data-testid="adaptive-exit-ticket-modal"]')).toBeVisible({ timeout: 25_000 });
     await freezeAnimations(page);
     await expectNoViolations(page, '学生端·结课通票');
+
+    // 结课归档，防止未结束的通票状态泄漏到后续测试
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+      data: { stage: 'ARCHIVED_REPORT', classId },
+    });
   });
 
   test('学生端「我的测评」列表与作答界面无违规', async ({ page, context, request }) => {
@@ -235,6 +240,14 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
 
     const openAssessments = page.getByRole('button', { name: /打开我的测评/ });
     await openAssessments.waitFor({ state: 'visible', timeout: 30_000 });
+
+    // 若有结课通票或引导遮罩层拦截，优先关闭
+    const exitTicketClose = page.locator('[data-testid="adaptive-exit-ticket-modal"] button[aria-label="Close"]');
+    if (await exitTicketClose.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await exitTicketClose.click();
+      await page.waitForTimeout(300);
+    }
+
     await openAssessments.click();
 
     // 3. 列表（待完成）
