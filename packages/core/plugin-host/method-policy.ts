@@ -104,6 +104,51 @@ export function isReadOnlyMethod(method: string): boolean {
 }
 
 /**
+ * 注册 action 时的**能力降级**（而不是拒绝）。
+ *
+ * ## 为什么不再直接抛错
+ *
+ * `agent:tool` 在能力模型里必须由管理员逐项勾选（见 `docs/PLUGIN_AUDIT_REPORT.md`），
+ * 而 `ActionDescriptor.exposeToAgent` 的默认值是 `true` —— 于是**任何不知道
+ * 这条新规则的旧插件**（第三方插件普遍如此，它们按 SDK 文档注册 action 即可）
+ * 在 worker / process 隔离模式下调用 `actionRegistry.register()` 都会拿到
+ * 拒绝，`activate()` 随之失败，整个插件被打成 `state=error`。
+ *
+ * 这会把「不许进 AI 工具列表」这一条**暴露面**约束，放大成「插件升级后不能启动」的
+ * 可用性事故：升级回归门禁（Issue #147）用三个真实第三方插件验证时，
+ * class-manager / attendance-record 全部因此激活失败。
+ *
+ * 现在改为**降级**：未获 `agent:tool` 能力时，把本次注册的 descriptor 强制改写为
+ * `exposeToAgent: false` 再放行。安全语义不变（该 action 依然不会出现在
+ * `getAgentTools()` 里），但插件功能不受影响。管理员显式授予 `agent:tool` 后，
+ * 插件声明的 `exposeToAgent` 才被尊重。
+ *
+ * @returns `args` 为实际应转发给宿主的参数（可能已改写）；`downgraded` 非空表示发生了降级。
+ */
+export function sanitizeActionRegisterArgs(
+  token: string,
+  method: string,
+  args: unknown[] | undefined,
+  tokens: Pick<MethodPolicyTokens, 'actionRegistry'>,
+  caps: readonly string[],
+): { args?: unknown[]; downgraded?: string } {
+  if (!tokens.actionRegistry || token !== tokens.actionRegistry || method !== 'register') return { args };
+  if (!Array.isArray(args) || args.length === 0) return { args };
+  const descriptor = args[0] as { type?: unknown; exposeToAgent?: unknown } | undefined;
+  if (!descriptor || typeof descriptor !== 'object') return { args };
+  if (descriptor.exposeToAgent === false) return { args };
+  if (hasCapability(caps, CAP_AGENT_TOOL)) return { args };
+
+  const label = typeof descriptor.type === 'string' ? `"${descriptor.type}"` : '(anonymous)';
+  return {
+    args: [{ ...descriptor, exposeToAgent: false }, ...args.slice(1)],
+    downgraded:
+      `action ${label} 的 exposeToAgent=true 需要 '${CAP_AGENT_TOOL}' 能力；` +
+      `插件未声明该能力，已降级为 exposeToAgent=false（不进入 AI Agent 工具列表，其余功能不受影响）。`,
+  };
+}
+
+/**
  * 策略上下文：把「这次调用涉及哪些 Token」交给判定函数。
  *
  * 两端 Token 命名空间不同，故用集合传入而非硬编码常量 ——
@@ -227,6 +272,10 @@ export function checkMethodPolicy(input: MethodPolicyInput): string | null {
   // 该 action 是否进入 `getAgentTools()`，也就是**是否成为 AI 可调用的工具**。
   // 未声明能力的插件可以通过反复 register/unregister 把自己的 action 塞进 Agent
   // 工具列表，让 AI 代为执行 —— 这是能力边界的放大器，故单独设门。
+  //
+  // 注：ServiceHost 在调用本函数之前会先走 `sanitizeActionRegisterArgs`，
+  // 把未授权的 `exposeToAgent` 降级为 false（保住插件可用性）。这里的判定
+  // 保留为纵深防御 —— 任何绕过 sanitize 的直接调用仍然会被拒绝。
   if (tokens.actionRegistry && token === tokens.actionRegistry) {
     if (method === 'register') {
       const descriptor = Array.isArray(args) ? args[0] : undefined;

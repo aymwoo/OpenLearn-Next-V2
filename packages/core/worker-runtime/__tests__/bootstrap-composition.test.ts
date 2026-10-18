@@ -70,4 +70,22 @@ describe('L-2 · bootstrap section 结构', () => {
   it('遮蔽段仍在消息处理器之前（先遮蔽再让插件代码有机会跑）', () => {
     expect(CODE.indexOf(PROCESS_MASKING_SECTION)).toBeLessThan(CODE.indexOf(MESSAGE_HANDLER_SECTION));
   });
+
+  it('宿主 RPC 的 rejection 被标记并降级为非致命（Issue #147）', () => {
+    // 旧插件按 inline 的同步语义写代码，迁移里的 idempotent try/catch 在隔离模式下
+    // 接不住异步 rejection。宿主 RPC 错误必须能被 unhandledRejection 处理器识别，
+    // 否则一个「列已存在」就能把整个插件打成 error。
+    const marker = MESSAGE_HANDLER_SECTION.indexOf('err.__openlearnRpcError = true;');
+    const reject = MESSAGE_HANDLER_SECTION.indexOf('pending.reject(err);');
+    expect(marker, '消息处理器应标记 RPC 错误').toBeGreaterThan(-1);
+    expect(marker, '标记必须发生在 reject 之前').toBeLessThan(reject);
+
+    const handlerStart = PROCESS_MASKING_SECTION.indexOf("process.on('unhandledRejection'");
+    const handlerEnd = PROCESS_MASKING_SECTION.indexOf("process.on('uncaughtException'");
+    const handlerBlock = PROCESS_MASKING_SECTION.slice(handlerStart, handlerEnd);
+    const markerCheck = handlerBlock.indexOf('reason.__openlearnRpcError');
+    const fatalPost = handlerBlock.indexOf("type: 'error'");
+    expect(markerCheck, 'unhandledRejection 应识别 RPC 标记').toBeGreaterThan(-1);
+    expect(markerCheck, 'RPC 标记检查必须早于致命上报').toBeLessThan(fatalPost);
+  });
 });

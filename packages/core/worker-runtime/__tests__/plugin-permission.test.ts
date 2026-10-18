@@ -270,6 +270,22 @@ describe('L-1 P2 · 权限旗标构造', () => {
     expect(buildPermissionArgs({ policy: 'off', pluginDir: '/plug', rootPath: '/repo' })).toEqual([]);
   });
 
+  it('额外只读路径（宿主提供的 plugin-sdk 链接目录）按目录与子树放行，且只读', () => {
+    const args = buildPermissionArgs({
+      policy: 'rw',
+      pluginDir: '/data/plugins/uuid-1',
+      rootPath: '/repo',
+      sharedReadPaths: ['/data/plugins/node_modules', '/repo/packages/plugin-sdk'],
+    });
+    expect(args).toContain('--allow-fs-read=/data/plugins/node_modules');
+    expect(args).toContain('--allow-fs-read=/data/plugins/node_modules/*');
+    expect(args).toContain('--allow-fs-read=/repo/packages/plugin-sdk/*');
+    // 只读：不能因为这些路径是「宿主的」就顺带给出写权限
+    expect(args.filter((a) => a.startsWith('--allow-fs-write='))).toEqual([
+      '--allow-fs-write=/data/plugins/uuid-1/*',
+    ]);
+  });
+
   it('反斜杠路径归一为正斜杠（Node 通配符不认反斜杠）', () => {
     const args = buildPermissionArgs({ policy: 'rw', pluginDir: 'C:\\plug\\', rootPath: 'C:\\repo' });
     expect(args).toContain('--allow-fs-read=C:/plug/*');

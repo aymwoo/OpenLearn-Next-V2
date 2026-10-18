@@ -69,6 +69,16 @@ export interface PermissionSpec {
   pluginDir?: string;
   /** 宿主工作目录（`ctx.require` 共享模块从这里解析） */
   rootPath?: string;
+  /**
+   * 额外只读路径（目录）。
+   *
+   * 目前用于宿主提供的 `@openlearn/plugin-sdk`：插件通过
+   * `<pluginsDir>/node_modules/@openlearn/plugin-sdk` 这条链接解析到宿主 SDK，
+   * 而该目录既不在 `pluginDir` 下、也不在 `<rootPath>/node_modules` 下 ——
+   * 不放行的话，隔离插件 import SDK 时会被权限模型以
+   * `ERR_ACCESS_DENIED (FileSystemRead)` 拦下（Issue #147 实测）。
+   */
+  sharedReadPaths?: string[];
 }
 
 /**
@@ -120,6 +130,13 @@ export function buildPermissionArgs(spec: PermissionSpec): string[] {
   // 共享模块解析目标。只放行 node_modules 子树，宿主源码/.env 仍不可读。
   if (spec.rootPath) {
     args.push(`--allow-fs-read=${globPath(`${spec.rootPath}/node_modules`)}`);
+  }
+
+  // 宿主提供的运行时依赖（当前是 plugin-sdk 链接目录）：只读，且只放行该子树。
+  for (const sharedPath of spec.sharedReadPaths ?? []) {
+    if (!sharedPath) continue;
+    args.push(`--allow-fs-read=${sharedPath}`);
+    args.push(`--allow-fs-read=${globPath(sharedPath)}`);
   }
 
   return args;

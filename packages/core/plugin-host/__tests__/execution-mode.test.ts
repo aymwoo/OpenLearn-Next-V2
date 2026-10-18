@@ -100,6 +100,18 @@ describe('阶段 3 · 三处 API 入口都认得 process（防静默降级）', 
     expect(code).toMatch(/\{\s*isolateKind\s*\}/);
   });
 
+  it('隔离模式激活前先建立宿主 SDK 链接', () => {
+    // 子进程/线程从 <pluginsDir>/<id>/index.js import，裸模块只能沿目录向上解析。
+    // 链接只在 inline 路径建立过 → 全新数据目录首装隔离插件必然 ERR_MODULE_NOT_FOUND。
+    const code = stripComments(read('packages/core/plugin-host/lifecycle.ts'));
+    const workerBlock = code.slice(code.indexOf('private async activateWorker'));
+    const linkIndex = workerBlock.indexOf('this.ensureHostSdkResolution()');
+    const spawnIndex = workerBlock.indexOf('this.workerManager.createWorker(');
+    expect(linkIndex, 'activateWorker 应调用 ensureHostSdkResolution()').toBeGreaterThan(-1);
+    expect(spawnIndex).toBeGreaterThan(-1);
+    expect(linkIndex, '链接必须在 createWorker 之前建立').toBeLessThan(spawnIndex);
+  });
+
   it('createWorker 支持按实例覆盖隔离原语，缺省回落到 Manager 级设置', () => {
     const code = stripComments(read('packages/core/worker-runtime/worker-manager.ts'));
     expect(code).toMatch(/opts\?\.isolateKind\s*\?\?\s*this\.isolateKind/);
