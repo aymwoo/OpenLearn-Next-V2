@@ -2,6 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
+import crypto from 'node:crypto';
+import JSZip from 'jszip';
+import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/observability/audit-log.js';
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { COMMUNITY_REGISTRY_ENV } from '../services/community-registry.js';
@@ -153,6 +156,172 @@ describe('community plugin registry routes', () => {
       const res = await post(adminToken, { downloadUrl });
       expect(res.status).toBe(400);
       expect(((await res.json()) as { error: string }).error).toMatch(/安全拦截: 非法下载地址/);
+    });
+  });
+
+  describe('POST /api/plugins/upload-zip-raw 签名门禁与审计 (Issue #176)', () => {
+    let auditEvents: AuditRecord[] = [];
+    const keyPair = crypto.generateKeyPairSync('ed25519');
+    const pubPem = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const privKey = keyPair.privateKey;
+
+    let savedPubkeyEnv: string | undefined;
+
+    beforeAll(() => {
+      savedPubkeyEnv = process.env.OPENLEARN_COMMUNITY_PUBKEY;
+      process.env.OPENLEARN_COMMUNITY_PUBKEY = pubPem;
+      process.env.OPENLEARN_COMMUNITY_INSTALL = '1';
+      setAuditSinkForTests((record) => {
+        auditEvents.push(record);
+      });
+    });
+
+    afterAll(() => {
+      if (savedPubkeyEnv === undefined) {
+        delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
+      } else {
+        process.env.OPENLEARN_COMMUNITY_PUBKEY = savedPubkeyEnv;
+      }
+      setAuditSinkForTests(null);
+    });
+
+    async function makePluginZip(manifest: Record<string, unknown>, embedSig = false) {
+      // 显式标注索引类型：展开 Record<string, unknown> 的后推断不会带上 id/version 已知键，
+      // 直接访问 fullManifest.id 会触发 TS2339（CI typecheck 实测）。
+      const fullManifest: Record<string, unknown> = {
+        name: String(manifest.id),
+        description: 'Test plugin',
+        ...manifest,
+      };
+      const zip = new JSZip();
+      zip.file('manifest.json', JSON.stringify(fullManifest));
+      zip.file('index.js', 'export default {};');
+      if (embedSig) {
+        const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+        const unsignedHash = crypto.createHash('sha256').update(unsignedBuf).digest('hex');
+        const payload = `openlearn-plugin-attestation-v2\n${String(fullManifest.id)}\n${String(fullManifest.version ?? '')}\n${unsignedHash}`;
+        const signature = crypto.sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+        zip.file(
+          'signature.json',
+          JSON.stringify({
+            version: 2,
+            algorithm: 'ed25519',
+            signature,
+            publisher: 'Alice Corp',
+          }),
+        );
+      }
+      return await zip.generateAsync({ type: 'nodebuffer' });
+    }
+
+    it('B2: 未签名本地包直接上传默认被拦截拒绝 (400 COMMUNITY_ATTESTATION_REQUIRED)', async () => {
+      const zipBuf = await makePluginZip({ id: 'ext-unsigned-test', version: '1.0.0' }, false);
+      const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+        method: 'POST',
+        headers: {
+          ...cookie(adminToken),
+          'Content-Type': 'application/zip',
+          'x-plugin-filename': 'ext-unsigned-test.zip',
+        },
+        body: zipBuf,
+      });
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { code?: string; error: string };
+      expect(body.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+      expect(body.error).toContain('allowUnsigned');
+    });
+
+    it('B5: 未签名本地包携带 x-allow-unsigned: true 时放行并记录旁路审计', async () => {
+      auditEvents = [];
+      const zipBuf = await makePluginZip({ id: 'ext-bypassed-test', version: '1.0.0' }, false);
+      const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+        method: 'POST',
+        headers: {
+          ...cookie(adminToken),
+          'Content-Type': 'application/zip',
+          'x-plugin-filename': 'ext-bypassed-test.zip',
+          'x-allow-unsigned': 'true',
+        },
+        body: zipBuf,
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; pluginId: string };
+      expect(body.success).toBe(true);
+
+      const installEvent = auditEvents.find(
+        (e) => e.event === 'plugin.installed' && e.manifestId === 'ext-bypassed-test',
+      );
+      expect(installEvent).toBeDefined();
+      expect(installEvent?.signatureStatus).toBe('unverified_local_acknowledged');
+
+      const bypassEvent = auditEvents.find(
+        (e) => e.event === 'plugin.unverified_local_bypassed' && e.manifestId === 'ext-bypassed-test',
+      );
+      expect(bypassEvent).toBeDefined();
+    });
+
+    it('B3: 签名版本与包内 manifest 不匹配时拒绝', async () => {
+      const zip = new JSZip();
+      const manifest = { id: 'ext-mismatch-test', name: 'ext-mismatch-test', version: '2.0.0' };
+      zip.file('manifest.json', JSON.stringify(manifest));
+      zip.file('index.js', 'export default {};');
+      const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+      const unsignedHash = crypto.createHash('sha256').update(unsignedBuf).digest('hex');
+
+      // 故意签署成旧版本 1.0.0
+      const payload = `openlearn-plugin-attestation-v2\next-mismatch-test\n1.0.0\n${unsignedHash}`;
+      const badSig = crypto.sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+      zip.file(
+        'signature.json',
+        JSON.stringify({
+          version: 2,
+          algorithm: 'ed25519',
+          signature: badSig,
+          publisher: 'Alice Corp',
+        }),
+      );
+      const zipBuf = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+        method: 'POST',
+        headers: {
+          ...cookie(adminToken),
+          'Content-Type': 'application/zip',
+          'x-plugin-filename': 'ext-mismatch-test.zip',
+        },
+        body: zipBuf,
+      });
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { code?: string; error: string };
+      expect(body.code).toBe('COMMUNITY_SIGNATURE_INVALID');
+    });
+
+    it('B1: 携带有效嵌入式签名的 ZIP 包成功通过校验并标记 verified', async () => {
+      auditEvents = [];
+      const zipBuf = await makePluginZip({ id: 'ext-embed-valid', version: '1.0.0' }, true);
+      const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+        method: 'POST',
+        headers: {
+          ...cookie(adminToken),
+          'Content-Type': 'application/zip',
+          'x-plugin-filename': 'ext-embed-valid.zip',
+        },
+        body: zipBuf,
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; pluginId: string };
+      expect(body.success).toBe(true);
+
+      const installEvent = auditEvents.find(
+        (e) => e.event === 'plugin.installed' && e.manifestId === 'ext-embed-valid',
+      );
+      expect(installEvent).toBeDefined();
+      expect(installEvent?.signatureStatus).toBe('verified');
+      expect(installEvent?.publisher).toBe('Alice Corp');
     });
   });
 });

@@ -110,4 +110,65 @@ describe('community-attest 密码学完整性与签名校验', () => {
     expect(badSig.ok).toBe(false);
     expect((badSig as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
   });
+
+  it('B4: 支持多受信公钥 Keyring，使用第 2 个公钥签名的包能通过验签', () => {
+    const keyPair2 = crypto.generateKeyPairSync('ed25519');
+    const pubPem2 = keyPair2.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const manifestId = 'ext-keyring-test';
+    const version = '2.0.0';
+    const boundPayload = `openlearn-plugin-attestation-v2\n${manifestId}\n${version}\n${testHashHex}`;
+    const sigWithKey2 = crypto.sign(null, Buffer.from(boundPayload, 'utf8'), keyPair2.privateKey).toString('base64');
+
+    // 环境变量中配置多个公钥（通过逗号分隔）
+    const result = verifyCommunityPackage(
+      testBytes,
+      testHashHex,
+      sigWithKey2,
+      {
+        OPENLEARN_COMMUNITY_INSTALL: '1',
+        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
+        OPENLEARN_TRUSTED_PUBKEYS: pubPem2,
+      },
+      { id: manifestId, version },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('B3: 严格校验版本绑定，版本不匹配或仅签署裸哈希时严禁降级通过', () => {
+    const manifestId = 'ext-bound-plugin';
+    const declaredVersion = '1.0.0';
+    const attackerVersion = '1.0.1'; // 攻击者尝试篡改版本
+
+    // 签名为 1.0.0
+    const boundPayload = `openlearn-plugin-attestation-v2\n${manifestId}\n${declaredVersion}\n${testHashHex}`;
+    const validSig = crypto.sign(null, Buffer.from(boundPayload, 'utf8'), privateKey).toString('base64');
+
+    // 校验时传入篡改后的版本 1.0.1：必须被拒绝
+    const resTampered = verifyCommunityPackage(
+      testBytes,
+      testHashHex,
+      validSig,
+      {
+        OPENLEARN_COMMUNITY_INSTALL: '1',
+        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
+      },
+      { id: manifestId, version: attackerVersion },
+    );
+    expect(resTampered.ok).toBe(false);
+    expect((resTampered as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+
+    // 传入裸哈希签名（testSig）：必须被拒绝
+    const resRawHash = verifyCommunityPackage(
+      testBytes,
+      testHashHex,
+      testSig,
+      {
+        OPENLEARN_COMMUNITY_INSTALL: '1',
+        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
+      },
+      { id: manifestId, version: declaredVersion },
+    );
+    expect(resRawHash.ok).toBe(false);
+    expect((resRawHash as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+  });
 });

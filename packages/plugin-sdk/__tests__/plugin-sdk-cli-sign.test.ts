@@ -74,10 +74,21 @@ describe('@openlearn/plugin-sdk CLI 签名能力 (Issue #143)', () => {
         },
         trustedPublicKeys: [pubPem],
       });
-
       expect(verifyRes.ok).toBe(true);
       if (verifyRes.ok) {
         expect(verifyRes.status).toBe('verified');
+      }
+
+      // 6. 测试纯嵌入式签名场景（无外部 metadata 传入）实现真实 round-trip 闭环 (B1)
+      const embeddedVerifyRes = await verifyPluginPackage({
+        packageSource: zipPath,
+        sourceType: 'community',
+        trustedPublicKeys: [pubPem],
+      });
+      expect(embeddedVerifyRes.ok).toBe(true);
+      if (embeddedVerifyRes.ok) {
+        expect(embeddedVerifyRes.status).toBe('verified');
+        expect(embeddedVerifyRes.publisher).toBe('Alice Dev');
       }
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
