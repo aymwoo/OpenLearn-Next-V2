@@ -248,6 +248,49 @@
 }
 ```
 
+#### 分层覆盖（Issue #151）
+
+配置支持 **平台 → 学校 → 班级** 三层，解析顺序为 `班级 > 学校 > 平台 > manifest 默认值`。哪些配置项允许在更细的层级覆盖，由每个属性上的 `scope` 声明：
+
+```json
+"configuration": {
+  "properties": {
+    "weight": {
+      "type": "number",
+      "default": 10,
+      "scope": ["platform", "class"],
+      "description": "该插件在本班的评分权重"
+    }
+  }
+}
+```
+
+- `scope` 缺省为 `["platform"]`：老插件行为不变，只有一层（写入平台层）。
+- `platform` 始终隐含允许；`class` / `school` 必须显式声明后才能写入，未声明时 `set()` 会拒绝。
+- `school` 层依赖多租户模型（Issue #149）。在其落地前，调用方可以显式传 `schoolId` 触发该层解析，但没有自动来源。
+
+运行时读取：
+
+```ts
+// 平台值（等同旧行为）
+const weight = ctx.config.get<number>('weight');
+
+// 班级有效值：班级覆盖 > 学校覆盖 > 平台值 > 默认值
+const classWeight = ctx.config.get<number>('weight', { classId });
+
+// 一次取全部（同样支持 classId / schoolId）
+const all = ctx.config.getAll({ classId });
+```
+
+写入（一般由管理端或平台 API 调用）：
+
+```ts
+await ctx.config.set('weight', 20);                                    // 平台层
+await ctx.config.set('weight', 30, { scopeType: 'class', scopeId });   // 班级覆盖
+```
+
+存储落点是 `plugin_config(plugin_id, scope_type, scope_id, key, value, updated_at)`（迁移 `037_plugin_config_scopes.sql`）。旧库升级时，`plugin_storage` 里的 `config:<key>` 值会原样搬到平台层；迁移未执行时 `ConfigService` 仍会回退读取旧位置。
+
 ---
 
 ### 2.6 静态资源与部署扩展 (`deploy`)
