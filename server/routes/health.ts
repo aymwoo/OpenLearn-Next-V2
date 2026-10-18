@@ -15,6 +15,7 @@ import {
   type OperationalGaugeCacheEntry,
   type OperationalGaugeSample,
 } from '../../packages/core/observability/metrics.js';
+import { renderPluginMetrics } from '../../packages/core/observability/plugin-metrics.js';
 import { PLATFORM_VERSION } from '../../packages/core/version.js';
 import { getBackupsDir, getStorageDir } from '../utils/paths.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -196,7 +197,12 @@ export function registerHealthRoutes(app: Express, options?: HealthRoutesOptions
       gaugeCache = cached;
       res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      res.send(renderPrometheusMetrics(now, cached.sample));
+      // Issue #150：进程级指标之后追加按插件维度指标（未安装插件时为空串）。
+      const pluginMetrics = renderPluginMetrics();
+      const body = pluginMetrics
+        ? `${renderPrometheusMetrics(now, cached.sample)}\n${pluginMetrics}`
+        : renderPrometheusMetrics(now, cached.sample);
+      res.send(body);
     },
   );
 }

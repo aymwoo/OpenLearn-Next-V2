@@ -59,6 +59,7 @@ import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
 import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
 import { PluginHost } from '../plugin-host/index.js';
+import { setPluginNamespaceResolver } from '../observability/plugin-metrics.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
 import { LessonRuntime, defaultStageGuardPipeline } from '../lesson-engine/index.js';
@@ -198,6 +199,9 @@ export class Kernel {
       );
     }
     this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db, pluginsDir);
+    // Issue #150：插件命令的命名空间就是 manifest.id。把它交给指标模块，
+    // 让「用户触发、但由插件处理」的命令也能计入该插件（只认已安装的命名空间）。
+    setPluginNamespaceResolver((namespace) => (this.pluginHost.findByManifestId(namespace) ? namespace : undefined));
 
     // Layer 3 — WorkerManager (depends on ServiceRegistry + CapabilityGuard)
     this.workerManager = new WorkerManager(this.serviceRegistry, this.capabilityGuard, this.db);

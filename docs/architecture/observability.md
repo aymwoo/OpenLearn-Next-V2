@@ -112,6 +112,33 @@ HTTP 入口不在这个目录里：
 | `openlearn_backup_age_seconds` | gauge | 备份目录里最新文件的年龄（秒）；没有文件时为 `-1` |
 | `openlearn_events_rows` | gauge | `events` 表当前行数；查询失败时为 `-1` |
 
+### 4.1 按插件维度的指标（Issue #150）
+
+同一份 `/metrics` 文本在进程级序列之后追加按插件维度的计数（`packages/core/observability/plugin-metrics.ts`）。没有任何插件指标时这一段为空，不产生空样本。
+
+| 名称 | 类型 | 含义 |
+| --- | --- | --- |
+| `openlearn_plugin_commands_total{plugin,result}` | counter | 命令派发次数；`result` 为 `ok` / `error` |
+| `openlearn_plugin_command_duration_seconds_sum{plugin}` | counter | 命令派发累计耗时（秒） |
+| `openlearn_plugin_command_duration_seconds_count{plugin}` | counter | 参与计时的命令数，与 sum 配对求平均 |
+| `openlearn_plugin_events_total{plugin}` | counter | 插件发出的事件数（`event.source = plugin:<id>`） |
+| `openlearn_plugin_http_requests_total{plugin,status}` | counter | 插件 REST 网关请求数；`status` 为状态类 `2xx`…`other` |
+| `openlearn_plugin_http_request_duration_seconds_sum{plugin}` | counter | 网关派发累计耗时（秒） |
+| `openlearn_plugin_worker_crashes_total{plugin}` | counter | Worker 非零退出次数（含激活期崩溃） |
+| `openlearn_plugin_worker_restarts_total{plugin}` | counter | 看门狗排定的重启次数（熔断后不再增加） |
+
+归因规则：`actorId` 以 `plugin:` 开头时取 manifest id；否则看命令命名空间，**只有内核能解析到已安装插件**（`PluginHost.findByManifestId`）时才归因，避免把核心命令算到插件头上。`plugin` 标签值会做 Prometheus 转义与长度截断；登记条目超过 200 个后落到 `plugin="__overflow__"`，防止安装/卸载反复产生新 id 把基数拖爆。
+
+查询示例：
+
+```promql
+# 最近 5 分钟错误率最高的插件
+topk(5, sum by (plugin) (rate(openlearn_plugin_commands_total{result="error"}[5m])))
+# 平均耗时（秒）
+sum by (plugin) (rate(openlearn_plugin_command_duration_seconds_sum[5m]))
+  / sum by (plugin) (rate(openlearn_plugin_command_duration_seconds_count[5m]))
+```
+
 状态类由 `statusClassOf` 划分。计数在响应 `finish` 时加一，包括探针自己的响应。文本里没有路径、用户、查询串或错误字符串。行为由 `packages/core/observability/__tests__/readiness.test.ts` 锁住。三条运维 gauge 的样本 15 秒内复用同一份（`OPERATIONAL_GAUGE_CACHE_MS`，路由选项可覆盖，`0` 表示每次抓取都重新查询）。
 
 ---
@@ -241,7 +268,7 @@ Worker 里的 `ctx.log` 由 `packages/core/worker-runtime/bootstrap/sections/mes
 | --- | --- |
 | 目录里有哪些实现？ | §1 的九个文件。没有 barrel，没有追踪 |
 | 探针怎么分？ | `/health` 只表示进程活着。`/health/ready` 查数据库、存储可写、迁移文件都已应用。失败体只有 `status` |
-| `/metrics` 现在有什么？ | `openlearn_up`、运行秒数、RSS、按状态类的 `openlearn_http_responses_total`，以及运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`。要管理员会话或 `METRICS_TOKEN` |
+| `/metrics` 现在有什么？ | `openlearn_up`、运行秒数、RSS、按状态类的 `openlearn_http_responses_total`，运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`，以及按插件维度的 `openlearn_plugin_*`（§4.1）。要管理员会话或 `METRICS_TOKEN` |
 | 日志文件在哪？ | `<LOG_DIR>/openlearn.log`，审计在同目录 `audit.log`。Compose 的目录是 `/data/logs` |
 | 有脱敏吗？ | pino 按 §5.3 的字段名。审计和错误上报再用 §5.4。字符串里的秘密和裸 `console.*` 仍可能漏出 |
 | 插件怎么打日志？ | `PluginContext.log`，不是 DI。Worker 的 console 经 stdout/stderr 进入同一子 logger |
