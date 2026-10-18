@@ -455,7 +455,14 @@ interface PluginContext {
   config: IConfigService;
   contributions: ContributionAccessor;
   http: IPluginHttpRouter;
+  /** 国际化多语言服务 (Issue #148) */
+  i18n: PluginI18nAPI;
   require(moduleName: string): unknown;
+}
+
+interface PluginI18nAPI {
+  t(key: string, defaultValueOrParams?: string | Record<string, any>, maybeParams?: Record<string, any>): string;
+  getLanguage(): string;
 }
 
 interface PluginInfo {

@@ -1009,11 +1009,16 @@ export interface ContributionSummary {
  */
 export type ContributesSection = Record<string, unknown>;
 
+/** 插件声明的语言包贡献（Issue #148） */
+export type PluginLocalesDeclaration = Record<string, string | Record<string, string>>;
+
 // ── Registry ─────────────────────────────────────────────────────────────
 
 export class ContributionRegistry {
   /** Two-level index: slot name → pluginId → config array */
   private contributions = new Map<string, Map<string, ContributionConfig[]>>();
+  /** Plugin locales index: pluginId → locales declaration (Issue #148) */
+  private locales = new Map<string, PluginLocalesDeclaration>();
 
   // ── Registration ──────────────────────────────────────────────────────
 
@@ -1030,7 +1035,13 @@ export class ContributionRegistry {
     // ponytail: clear previous first, handles reinstall
     this.unregister(pluginId);
 
+    // 存储语言包贡献（Issue #148）
+    if (contributes.locales && typeof contributes.locales === 'object' && !Array.isArray(contributes.locales)) {
+      this.locales.set(pluginId, contributes.locales as PluginLocalesDeclaration);
+    }
+
     for (const [slot, configs] of Object.entries(contributes)) {
+      if (slot === 'locales') continue;
       if (!Array.isArray(configs) || configs.length === 0) continue;
 
       if (!this.contributions.has(slot)) {
@@ -1133,6 +1144,22 @@ export class ContributionRegistry {
     return result;
   }
 
+  // ── Locales Query (Issue #148) ────────────────────────────────────────
+
+  /**
+   * Get locales declaration for a specific plugin.
+   */
+  getLocales(pluginId: string): PluginLocalesDeclaration | undefined {
+    return this.locales.get(pluginId);
+  }
+
+  /**
+   * Get all registered plugin locales.
+   */
+  getAllLocales(): Map<string, PluginLocalesDeclaration> {
+    return new Map(this.locales);
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
   /**
@@ -1140,6 +1167,7 @@ export class ContributionRegistry {
    * Called at uninstall time by PluginHost.
    */
   unregister(pluginId: string): void {
+    this.locales.delete(pluginId);
     for (const slotMap of this.contributions.values()) {
       slotMap.delete(pluginId);
     }
@@ -1169,6 +1197,7 @@ export class ContributionRegistry {
    * Clear all contributions. Used in test teardown.
    */
   dispose(): void {
+    this.locales.clear();
     this.contributions.clear();
   }
 }

@@ -22,6 +22,7 @@ import { useAppStore, appStore } from '../store/appStore';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { checkMethodPolicy } from './method-policy';
 import { isPluginFrameMessage, PLUGIN_FRAME_CHANNEL, PLUGIN_FRAME_PATH, PLUGIN_SANDBOX_ATTR } from './sandbox-frame';
+import { registerPluginLocales, unregisterPluginLocales, t, getGlobalLanguage } from '../i18n';
 import {
   PluginState,
   FRONTEND_API_TOKEN,
@@ -185,6 +186,11 @@ export function registerManifestContributions(
 
   const contributes = (manifest as unknown as Record<string, unknown>).contributes as
     Record<string, unknown> | undefined;
+
+  // 注册插件多语言词条包 (Issue #148)
+  if (contributes && (contributes as any).locales && typeof (contributes as any).locales === 'object') {
+    registerPluginLocales(pluginId, (contributes as any).locales);
+  }
 
   // ── manifest contributes 通用声明式桥接 ──────────────────────────────
   //
@@ -900,6 +906,7 @@ export class FrontendPluginHost {
     // 注销该插件注册的全部题型渲染器
     assignmentQuestionRendererRegistry.clearOwned(pluginId);
     assessmentQuestionTypeUiRegistry.clearOwned(pluginId);
+    unregisterPluginLocales(pluginId);
     // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
     // 此前不随生命周期回收，卸载后残留条目（重新安装后若曾 blown 会被跳过）
     resetPluginBreaker(pluginId);
@@ -1053,6 +1060,13 @@ export class FrontendPluginHost {
             }),
           );
         },
+      },
+      i18n: {
+        t: (key: string, defaultValueOrParams?: string | Record<string, any>, maybeParams?: Record<string, any>) => {
+          const namespacedKey = key.includes(':') ? key : `${pluginId}:${key}`;
+          return t(namespacedKey, defaultValueOrParams, maybeParams);
+        },
+        getLanguage: () => getGlobalLanguage(),
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
         if (!frontendApi)

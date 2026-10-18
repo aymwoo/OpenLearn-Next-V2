@@ -284,10 +284,28 @@ export interface PluginContext {
    */
   http: IPluginHttpRouter;
   /**
+   * 国际化多语言服务 (Issue #148)
+   */
+  i18n: PluginI18nAPI;
+  /**
    * 引用主应用共享模块（v5.1）
    * 仅白名单中的模块可被引用，非白名单模块抛出错误
    */
   require(moduleName: string): any;
+}
+
+/**
+ * 插件国际化 API (Issue #148)
+ */
+export interface PluginI18nAPI {
+  /**
+   * 翻译指定词条键名，支持命名空间查找与参数插值
+   */
+  t(key: string, defaultValueOrParams?: string | Record<string, any>, maybeParams?: Record<string, any>): string;
+  /**
+   * 获取当前系统语言代码（默认为 'zh'）
+   */
+  getLanguage(): string;
 }
 
 /**
