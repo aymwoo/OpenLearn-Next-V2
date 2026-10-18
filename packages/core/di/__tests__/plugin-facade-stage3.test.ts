@@ -27,7 +27,8 @@ describe('P7-A2 Stage 3 — facade 委托行为保持兼容', () => {
     expect(list).toEqual([{ id: 'p1', state: 'active' }]);
 
     void mgr.uninstallPlugin('p1');
-    expect(fakeHost.uninstallPlugin).toHaveBeenCalledWith('p1');
+    // Issue #141：卸载新增可选的 dataPolicy 参数，facade 原样透传（缺省为 undefined）
+    expect(fakeHost.uninstallPlugin).toHaveBeenCalledWith('p1', undefined);
   });
 
   it('PluginDistributionManager.installFromZip 转发 executionMode', async () => {
