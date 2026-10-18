@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **下线废弃写盘调试接口 `POST /api/courseware/debug`（Issue #132）**：
+  - 彻底移除 `server/routes/courseware.ts` 中废弃的 `POST /api/courseware/debug` 路由，消除任意登录用户通过 `fs.appendFileSync` 无上限同步追加写 `client_debug.log` 导致的磁盘写满与事件循环阻塞（DoS）安全隐患。
+  - 同步更新契约文档 `docs/api/courseware-attempts-contract.md`，对齐最新 API 契约，明确课件客户端错误上报统一经 `/api/client-errors` 走标准错误流。
+  - 根目录 `.gitignore` 补充 `client_debug.log` 规则，防止本地开发或调试日志被误提交。
+  - 新增 `server/__tests__/courseware-debug-removed.test.ts` 验证该端点返回 404 且不再生成磁盘文件。
+
 - **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
   - `GET /api/courseware/attempts` 修复教师水平越权：`listAttempts` 不再仅凭 `isStaff` 放行全校数据。教师视角仅返回其管辖班级（`classes.owner_user_id`）中的学生作答与教师自测记录；管理员保留全校可见性；学生视角仅能查看本人并脱敏内部字段（`extra_json`, `comment`）。
   - 读接口鉴权加固：`GET /api/courseware/attempts/:attemptId/progress` 与 `GET /api/courseware/attempts/:attemptId/raw` 增加基于 `teacherCanSeeStudent` 的班级范围校验，教师尝试读取非管辖班级学生作答一律拒绝（403），不存在的记录返回 404。

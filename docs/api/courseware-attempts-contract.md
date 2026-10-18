@@ -37,7 +37,6 @@
 | POST   | `/api/courseware/attempts/:attemptId/submit`      | 学生/教师         | 学生最终提交分数                        |
 | POST   | `/api/courseware/attempts/:attemptId/adopt`       | 任意登录          | 把无主 attempt 认领到当前学生名下      |
 | GET    | `/api/courseware/attempts`                        | 任意登录          | 成绩榜（分页信封 + 角色脱敏，见 §4）    |
-| POST   | `/api/courseware/debug`                           | 任意登录          | 课件 iframe 客户端调试日志落盘          |
 | GET    | `/api/courseware/attempts/:attemptId/raw`         | 本人/教师         | 拉取 attempt 的原始事件流               |
 | GET    | `/api/courseware/attempts/:attemptId/progress`    | 本人/教师         | 拉取 attempt 当前成绩快照               |
 | POST   | `/api/courseware/attempts/mark-absent`            | 教师/管理员       | 教师标记缺考                            |
@@ -510,14 +509,12 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 > 自动路径相对手动路径多出的 `reason`：`rule-disabled`（未开启 `autoRecordEnabled`）、`already-recorded`、`manual-protected`（教师手改分受保护，自动规则绝不覆盖）、`absent-protected`（教师缺考标记受保护）、`not-higher`（`strategy='highest'` 且新分不高于已录分）、`below-min-completion`（自动路径**不**放宽完成度门槛）。
 
-### 11.9 `POST /api/courseware/debug` — 客户端调试日志
+### 11.9 `POST /api/courseware/inline` — 手写 HTML 课件落库
 
-**角色**：任意登录。**Body**：`{ msg, url, student, courseware }`。写 `client_debug.log`（进程 cwd 下）并打到控制台。`msg` 截断 2000 字符、`url` 截断 1000 字符、其余字段 `JSON.stringify` 后截断 1000 字符，防止日志灌盘 / 注入。响应 `{ success: true }`。
-
-### 11.10 `POST /api/courseware/inline` — 手写 HTML 课件落库
-
-**角色**：任意登录（学生端也要渲染同一元素，不能限教师）。
+**角色**：教师/管理员。
 
 背景：`HtmlAppletFrame` 原先用 `<iframe srcdoc>` 承载手写 HTML，而 srcdoc 文档**继承父页面 CSP**；全局 CSP 收紧（`scriptSrc` 去掉 `'unsafe-inline'`）后课件内联脚本会被拦。改造后前端把 code 经本端点落库，改走 `/runtime/inline-<hash>/` 加载——该路由有自有宽松 CSP。
 
 **Body**：`{ code }`（≤ 512KB，按内容 sha256 前 16 位生成 `inline-<hash>` 幂等去重，存 `system_resources`）。**响应**：`{ uuid }`。**错误**：`400 Missing code`、`413 Inline courseware too large (512KB max)`。
+
+> **废弃端点下线说明 (Issue #132)**：原 `POST /api/courseware/debug`（直接写 `client_debug.log`）因无任何前端调用方且存在无限制写盘 DoS 隐患，已彻底移除。课件 iframe 异常上报统一走标准 `/api/client-errors` 接口。
