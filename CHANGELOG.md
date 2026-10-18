@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **AI 辅助批改建议（教师确认后生效，Issue #187）**：
+  - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
+  - 教师确认（可修改后确认）走既有 `PUT .../grade`：写分并 `manual_override = 1`，`regrade` 不再覆盖；请求带 `acceptedAiSuggestion: true` 时记 `assessment.ai_grading_accepted` 审计（建议分 vs 实际分），建议生成本身记 `assessment.ai_grading_suggested`。
+  - 稳定性：单次生成 15s 超时、每操作者 60s 内 20 次限流；Provider 未配置（503）/超时/输出非 JSON 或越界（502）均给出明确错误，**不阻塞人工批改**，也不产生脏建议。
+  - 前端批改面板对需人工批改的题提供「AI 建议」：展示建议分/理由/置信度，「采纳并填入分数」只填输入框，仍需点「保存评分」才落分。
+  - 测试：`assessment-ai-grading.test.ts`（5 例：建议不改分 + 审计、确认落分且 regrade 不覆盖、非法输出 502、Provider 缺失 503 且人工批改可用、客观题 400）。
+### Features
+
 - **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：
   - 新增 `packages/core/assessment/item-analysis.ts`（纯函数）：难度 (p) = 该题平均得分 / 满分；区分度 (r) = 题目得分与**剩余卷面分**的 Pearson 相关（避免 part-whole 虚高）。
   - 退化规则：样本量 < 5、全对/全错（题目方差为 0）、剩余分方差为 0 时返回 `null`，不输出 NaN；**待人工批改的作答不计入**（不把未批改当成 0 分）。分级 `|r| ≥ 0.4` 高、`≥ 0.2` 中、其余低。

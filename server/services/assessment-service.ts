@@ -12,6 +12,7 @@
  */
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import {
   aggregateScores,
   anonymousLabel,
@@ -155,6 +156,63 @@ function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
+/* ── Issue #187：AI 批改建议的 prompt 与解析（纯函数，便于单测） ── */
+
+export interface AiGradingSuggestion {
+  suggestedScore: number;
+  rationale: string;
+  confidence: number | null;
+}
+
+/** 构造批改建议 prompt：只包含本题题干/满分/评分参考/学生作答。 */
+export function buildAiGradingPrompt(input: {
+  stem: string;
+  maxScore: number;
+  answerKey: unknown;
+  studentAnswer: unknown;
+}): string {
+  const answerText = typeof input.studentAnswer === `string` ? input.studentAnswer : JSON.stringify(input.studentAnswer);
+  const keyText = input.answerKey == null ? `（无）` : JSON.stringify(input.answerKey);
+  return [
+    `你是一名严谨的教师，正在批改一道主观题。请只输出一个 JSON 对象，不要输出任何解释或代码块。`,
+    `题目：` + input.stem,
+    `满分：` + String(input.maxScore),
+    `评分参考（标准答案/要点）：` + keyText,
+    `学生作答：` + answerText,
+    `输出格式：{"suggestedScore":<0 到满分之间的数字>,"rationale":"<不超过 200 字的中文评分理由>","confidence":<0 到 1 的数字>}`,
+  ].join(`\n`);
+}
+
+/**
+ * 解析 AI 输出为建议。任何不合法的输出返回 null —— 调用方据此提示教师，
+ * 绝不能把随意文本当成分数。
+ */
+export function parseAiGradingSuggestion(text: string, maxScore: number): AiGradingSuggestion | null {
+  if (typeof text !== `string`) return null;
+  // 去掉可能的 ```json 围栏，取第一个 { 到最后一个 }
+  const start = text.indexOf(`{`);
+  const end = text.lastIndexOf(`}`);
+  if (start < 0 || end <= start) return null;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== `object`) return null;
+  const score = Number(parsed.suggestedScore);
+  if (!Number.isFinite(score) || score < 0 || score > maxScore) return null;
+  const rationale = typeof parsed.rationale === `string` ? parsed.rationale.trim() : ``;
+  if (!rationale) return null;
+  let confidence: number | null = null;
+  if (parsed.confidence !== undefined && parsed.confidence !== null) {
+    const c = Number(parsed.confidence);
+    if (Number.isFinite(c) && c >= 0 && c <= 1) confidence = c;
+  }
+  return { suggestedScore: Math.round(score * 100) / 100, rationale, confidence };
+}
+
+
 /** 基于字符串种子的确定性打乱算法 (Fisher-Yates) */
 function seededShuffle<T>(array: T[], seed: string): T[] {
   const result = [...array];
@@ -200,6 +258,13 @@ export interface AssessmentServiceOptions {
   anonSecret?: () => string;
   /** 题型注册表（测试可注入） */
   registry?: QuestionTypeRegistry;
+  /**
+   * AI 建议生成器（Issue #187）。
+   * 缺省在首次调用时取 `kernelContainer.aiService`；显式传 null 表示禁用（测试/无 AI 环境）。
+   */
+  ai?: { generateText: (prompt: string) => Promise<string> } | null;
+  /** 单次 AI 建议的超时（毫秒），默认 15000。 */
+  aiTimeoutMs?: number;
 }
 
 export class AssessmentService {
@@ -207,12 +272,56 @@ export class AssessmentService {
   private readonly now: () => number;
   private readonly anonSecret: () => string;
   private readonly registry: QuestionTypeRegistry;
+  /** Issue #187：AI 建议生成器（undefined = 未注入，运行时取 kernelContainer.aiService）。 */
+  private readonly aiOverride?: { generateText: (prompt: string) => Promise<string> } | null;
+  private readonly aiTimeoutMs: number;
+  /** Issue #187：建议接口的简单限流（actor → 最近调用时间戳）。 */
+  private readonly aiSuggestCalls = new Map<string, number[]>();
 
   constructor(options: AssessmentServiceOptions = {}) {
     this.db = options.db ?? (kernelContainer.db as unknown as Database.Database);
     this.now = options.now ?? (() => Date.now());
     this.anonSecret = options.anonSecret ?? (() => getEncryptionKey().toString('hex'));
     this.registry = options.registry ?? assessmentGraderRegistry.underlying;
+    this.aiOverride = options.ai;
+    this.aiTimeoutMs = options.aiTimeoutMs ?? 15_000;
+  }
+
+  /** 解析 AI 生成器：显式注入优先；null = 禁用；undefined = 运行时取内核服务。 */
+  private resolveAi(): { generateText: (prompt: string) => Promise<string> } | null {
+    if (this.aiOverride !== undefined) return this.aiOverride;
+    return (kernelContainer as unknown as { aiService?: { generateText: (p: string) => Promise<string> } })
+      .aiService ?? null;
+  }
+
+  /** Issue #187：每个操作者 60 秒内最多 20 次建议请求（内存级，多实例部署下为每进程口径）。 */
+  private enforceAiSuggestRateLimit(actorId: string): void {
+    const now = this.now();
+    const recent = (this.aiSuggestCalls.get(actorId) ?? []).filter((ts) => now - ts < 60_000);
+    if (recent.length >= 20) {
+      const err: any = new Error('AI 建议请求过于频繁，请稍后再试');
+      err.status = 429;
+      throw err;
+    }
+    recent.push(now);
+    this.aiSuggestCalls.set(actorId, recent);
+  }
+
+  /** 把 Promise 包一层超时，避免 AI Provider 卡住教师批改。 */
+  private withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(label)), ms);
+      promise.then(
+        (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      );
+    });
   }
 
   /* ───────────────────────── 试卷（教师） ───────────────────────── */
@@ -1100,6 +1209,105 @@ export class AssessmentService {
     this.recomputeAttemptTotals(attemptId, now);
     const fresh = this.requireAttempt(attemptId);
     return { attempt: toTeacherAttemptView(this.toAttemptViewRow(fresh), { revealIdentity: false }) };
+  }
+
+  /**
+   * Issue #187：为一道主观题生成 AI 批改建议。
+   *
+   * **只写建议，不改分**：结果落到 ai_suggestion_json；score/feedback/manual_override 一概不动。
+   * 教师确认（可修改后确认）走 manualGrade —— 那条路径本来就写 manual_override = 1。
+   * AI Provider 缺失/超时/输出非法时抛 503/502，前端提示但不阻塞人工批改。
+   */
+  async suggestAiGrade(
+    attemptId: string,
+    ownerId: string,
+    itemId: string,
+    options: { actorId?: string } = {},
+  ): Promise<{
+    itemId: string;
+    maxScore: number;
+    suggestedScore: number;
+    rationale: string;
+    confidence: number | null;
+    generatedAt: number;
+  }> {
+    const attempt = this.requireAttempt(attemptId);
+    this.requireOwnedAssignment(attempt.assignment_id, ownerId);
+    if (attempt.status === 'in_progress') throw conflict('attempt is still in progress');
+    const items = this.readItems(this.assignmentAssessmentId(attempt.assignment_id));
+    const item = items.find((i) => i.id === itemId);
+    if (!item) throw notFound('item');
+    // 题型定义（内置或插件）声明 category；未注册的题型不提供 AI 建议（保守拒绝）
+    const definition = this.registry.get(item.type) as { category?: string } | undefined;
+    if (definition?.category !== 'subjective') throw badRequest('AI 建议仅适用于主观题');
+
+    const answerRow = this.db
+      .prepare('SELECT answer_json FROM assessment_answers WHERE attempt_id = ? AND item_id = ?')
+      .get(attemptId, itemId) as { answer_json: string | null } | undefined;
+    const studentAnswer = answerRow?.answer_json ? safeJsonParse<unknown>(answerRow.answer_json, answerRow.answer_json) : null;
+    if (
+      studentAnswer === null ||
+      studentAnswer === undefined ||
+      (typeof studentAnswer === 'string' && studentAnswer.trim() === '')
+    ) {
+      throw badRequest('该题尚无学生作答，无法生成批改建议');
+    }
+
+    const ai = this.resolveAi();
+    if (!ai) {
+      const err: any = new Error('AI Provider 未配置，无法生成批改建议');
+      err.status = 503;
+      throw err;
+    }
+
+    this.enforceAiSuggestRateLimit(options.actorId ?? ownerId);
+
+    const prompt = buildAiGradingPrompt({
+      stem: item.stem,
+      maxScore: item.maxScore,
+      answerKey: item.answerKey,
+      studentAnswer,
+    });
+
+    let text: string;
+    try {
+      text = await this.withTimeout(ai.generateText(prompt), this.aiTimeoutMs, 'AI 建议生成超时');
+    } catch (e: any) {
+      const err: any = new Error('AI 建议生成失败：' + (e?.message ?? String(e)));
+      err.status = 503;
+      throw err;
+    }
+
+    const parsed = parseAiGradingSuggestion(text, item.maxScore);
+    if (!parsed) {
+      const err: any = new Error('AI 返回内容无法解析为有效建议（已忽略，不影响人工批改）');
+      err.status = 502;
+      throw err;
+    }
+
+    const generatedAt = this.now();
+    const suggestion = { ...parsed, generatedAt };
+    this.db
+      .prepare(
+        "INSERT INTO assessment_answers" +
+          " (attempt_id, item_id, answer_json, score, max_score, is_correct, grader, feedback, graded_by, graded_at, manual_override, ai_suggestion_json, updated_at)" +
+          " VALUES (?, ?, NULL, NULL, ?, NULL, 'ai_suggested', NULL, NULL, NULL, 0, ?, ?)" +
+          " ON CONFLICT(attempt_id, item_id) DO UPDATE SET" +
+          " ai_suggestion_json = excluded.ai_suggestion_json," +
+          " grader = CASE WHEN assessment_answers.score IS NULL THEN 'ai_suggested' ELSE assessment_answers.grader END," +
+          " updated_at = excluded.updated_at",
+      )
+      .run(attemptId, itemId, item.maxScore, JSON.stringify(suggestion), generatedAt);
+
+    recordSecurityAudit('assessment.ai_grading_suggested', {
+      actorId: options.actorId ?? ownerId,
+      attemptId,
+      itemId,
+      suggestedScore: parsed.suggestedScore,
+      confidence: parsed.confidence,
+    });
+
+    return { itemId, maxScore: item.maxScore, ...suggestion };
   }
 
   /** 重新判分（教师手动改过的题跳过）。 */
