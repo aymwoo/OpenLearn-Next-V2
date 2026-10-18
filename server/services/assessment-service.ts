@@ -151,6 +151,25 @@ function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
+/** 基于字符串种子的确定性打乱算法 (Fisher-Yates) */
+function seededShuffle<T>(array: T[], seed: string): T[] {
+  const result = [...array];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  const nextRandom = () => {
+    h = (Math.imul(48271, h) + 1) | 0;
+    return ((h >>> 0) % 10000) / 10000;
+  };
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(nextRandom() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function toItemRecord(row: ItemRow): AssessmentItemRecord {
   return {
     id: row.id,
@@ -466,7 +485,268 @@ export class AssessmentService {
         .run(asg.id);
     });
     tx();
+    // 自动回写成绩到 exams / exam_scores（防覆盖教师手工录入成绩）
+    try {
+      this.syncScoresToGradebook(asg.id, ownerId);
+    } catch (e) {
+      console.warn('[AssessmentService] Failed to auto sync scores to gradebook on release:', e);
+    }
     return this.getAssignment(asg.id);
+  }
+
+  /**
+   * 将已批改/已提交的成绩回写到 exams / exam_scores 表，联动学期成绩总评 (Issue #123)
+   * 严格防护：不覆盖教师手工录入的同名成绩。
+   */
+  syncScoresToGradebook(
+    assignmentId: string,
+    ownerId: string,
+  ): { examId: string; syncedCount: number; skippedCount: number } {
+    const asg = this.requireOwnedAssignment(assignmentId, ownerId);
+    const assessment = this.db.prepare('SELECT * FROM assessments WHERE id = ?').get(asg.assessmentId) as AssessmentRow | undefined;
+    if (!assessment) throw notFound('assessment');
+
+    return this.db.transaction(() => {
+      let examId = asg.examId;
+      const now = this.now();
+
+      // 1. 若当前 assignment 尚未关联 exam_id，在 exams 表中新建或查找对应考试
+      if (!examId) {
+        const existingExam = this.db
+          .prepare('SELECT id FROM exams WHERE class_id = ? AND title = ?')
+          .get(asg.classId, assessment.title) as { id: string } | undefined;
+
+        if (existingExam) {
+          examId = existingExam.id;
+        } else {
+          examId = randomId('exam');
+          const maxScore = this.readItems(assessment.id).reduce((sum, it) => sum + (it.maxScore || 1), 0);
+          this.db
+            .prepare(
+              `INSERT INTO exams (id, class_id, title, description, max_score, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              examId,
+              asg.classId,
+              assessment.title,
+              assessment.description || '',
+              maxScore > 0 ? Math.round(maxScore) : 100,
+              now,
+            );
+        }
+
+        this.db.prepare('UPDATE assessment_assignments SET exam_id = ? WHERE id = ?').run(examId, asg.id);
+      }
+
+      // 2. 查询该 assignment 下所有实名学生且已有成绩的 attempts
+      const attempts = this.db
+        .prepare(
+          `SELECT student_id, score, max_score FROM assessment_attempts 
+           WHERE assignment_id = ? AND student_id IS NOT NULL AND status IN ('submitted', 'graded', 'released') AND score IS NOT NULL`,
+        )
+        .all(asg.id) as Array<{ student_id: string; score: number; max_score: number | null }>;
+
+      let syncedCount = 0;
+      let skippedCount = 0;
+
+      const checkExistingScore = this.db.prepare(
+        'SELECT score, notes FROM exam_scores WHERE exam_id = ? AND student_id = ?',
+      );
+
+      const upsertScore = this.db.prepare(
+        `INSERT INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(exam_id, student_id) DO UPDATE SET
+           score = excluded.score,
+           notes = excluded.notes,
+           recorded_at = excluded.recorded_at`,
+      );
+
+      for (const att of attempts) {
+        const existing = checkExistingScore.get(examId, att.student_id) as
+          | { score: number; notes: string | null }
+          | undefined;
+
+        // 验收标准：不覆盖教师手工录入的同名成绩！
+        // 若已有成绩且 notes 不是以 'assessment:' 开头，说明是教师手工在成绩表直接录入的，跳过
+        if (existing && existing.notes && !existing.notes.startsWith('assessment:')) {
+          skippedCount++;
+          continue;
+        }
+
+        const finalScore = roundScore(att.score);
+        upsertScore.run(
+          examId,
+          att.student_id,
+          finalScore,
+          `assessment:${asg.id}`,
+          now,
+        );
+        syncedCount++;
+      }
+
+      return { examId, syncedCount, skippedCount };
+    })();
+  }
+
+  /**
+   * 记录学生考试监考事件（失焦、切屏、退出全屏）(Issue #123)
+   */
+  recordProctor(
+    attemptId: string,
+    studentId: string,
+    event: { type: 'blur' | 'visibility_hidden' | 'fullscreen_exit'; at?: number; detail?: string },
+  ): {
+    ok: boolean;
+    blurCount: number;
+    switchTabCount: number;
+    fullscreenExitCount: number;
+    summary?: { blur: number; visibility_hidden: number; fullscreen_exit: number; total: number };
+  } {
+    const attempt = this.requireAttemptForStudent(attemptId, studentId);
+    if (attempt.status !== 'in_progress') {
+      throw badRequest('作答已提交或结束，无法记录监考事件');
+    }
+
+    const currentProctor = safeJsonParse<any>(attempt.proctor_json, {
+      blurCount: 0,
+      switchTabCount: 0,
+      fullscreenExitCount: 0,
+      events: [] as Array<{ type: string; at: number; detail?: string }>,
+      summary: { blur: 0, visibility_hidden: 0, fullscreen_exit: 0, total: 0 },
+      lastEventAt: null as number | null,
+    });
+
+    const at = event.at || this.now();
+    if (event.type === 'blur') {
+      currentProctor.blurCount = (currentProctor.blurCount || 0) + 1;
+    } else if (event.type === 'visibility_hidden') {
+      currentProctor.switchTabCount = (currentProctor.switchTabCount || 0) + 1;
+    } else if (event.type === 'fullscreen_exit') {
+      currentProctor.fullscreenExitCount = (currentProctor.fullscreenExitCount || 0) + 1;
+    }
+
+    const total =
+      (currentProctor.blurCount || 0) +
+      (currentProctor.switchTabCount || 0) +
+      (currentProctor.fullscreenExitCount || 0);
+
+    const summary = {
+      blur: currentProctor.blurCount || 0,
+      visibility_hidden: currentProctor.switchTabCount || 0,
+      fullscreen_exit: currentProctor.fullscreenExitCount || 0,
+      total,
+    };
+    currentProctor.summary = summary;
+    currentProctor.lastEventAt = at;
+    if (!Array.isArray(currentProctor.events)) currentProctor.events = [];
+    if (currentProctor.events.length >= 50) {
+      currentProctor.events.shift();
+    }
+    currentProctor.events.push({ type: event.type, at, detail: event.detail });
+
+    this.db
+      .prepare('UPDATE assessment_attempts SET proctor_json = ? WHERE id = ?')
+      .run(JSON.stringify(currentProctor), attemptId);
+
+    return {
+      ok: true,
+      blurCount: currentProctor.blurCount,
+      switchTabCount: currentProctor.switchTabCount,
+      fullscreenExitCount: currentProctor.fullscreenExitCount,
+      summary,
+    };
+  }
+
+  /**
+   * 获取测评实时作答进度与大屏统计卡片数据 (Issue #123)
+   */
+  getProgressSummary(assignmentId: string, ownerId?: string) {
+    const asg = ownerId ? this.requireOwnedAssignment(assignmentId, ownerId) : this.getAssignment(assignmentId);
+    const assessment = this.db
+      .prepare('SELECT title, kind FROM assessments WHERE id = ?')
+      .get(asg.assessmentId) as { title: string; kind: string } | undefined;
+
+    const roster = this.db
+      .prepare(
+        `SELECT s.id as student_id, s.name, s.student_number 
+         FROM class_students cs
+         JOIN students s ON cs.student_id = s.id
+         WHERE cs.class_id = ?
+         ORDER BY s.student_number ASC, s.name ASC`,
+      )
+      .all(asg.classId) as Array<{ student_id: string; name: string; student_number: string }>;
+
+    const attempts = this.db
+      .prepare('SELECT * FROM assessment_attempts WHERE assignment_id = ?')
+      .all(asg.id) as AttemptRow[];
+
+    const attemptMap = new Map<string, AttemptRow>();
+    for (const att of attempts) {
+      if (att.student_id) {
+        attemptMap.set(att.student_id, att);
+      }
+    }
+
+    let submittedCount = 0;
+    let inProgressCount = 0;
+    let notStartedCount = 0;
+    let totalScore = 0;
+    let scoredStudents = 0;
+
+    const studentList = roster.map((stu) => {
+      const att = attemptMap.get(stu.student_id);
+      let status: 'not_started' | 'in_progress' | 'submitted' | 'graded' = 'not_started';
+      let score: number | null = null;
+      let proctor: any = null;
+      let submittedAt: number | null = null;
+
+      if (!att) {
+        notStartedCount++;
+      } else {
+        proctor = safeJsonParse(att.proctor_json, {});
+        submittedAt = att.submitted_at;
+        if (att.status === 'in_progress') {
+          inProgressCount++;
+          status = 'in_progress';
+        } else {
+          submittedCount++;
+          status = att.status === 'graded' || att.status === 'released' ? 'graded' : 'submitted';
+          if (att.score !== null && att.score !== undefined) {
+            score = att.score;
+            totalScore += att.score;
+            scoredStudents++;
+          }
+        }
+      }
+
+      return {
+        studentId: stu.student_id,
+        name: stu.name,
+        studentNumber: stu.student_number,
+        status,
+        score,
+        proctor,
+        submittedAt,
+      };
+    });
+
+    const avgScore = scoredStudents > 0 ? Math.round((totalScore / scoredStudents) * 10) / 10 : null;
+    return {
+      assignmentId: asg.id,
+      assignment: asg,
+      title: assessment?.title || '随堂测评',
+      kind: assessment?.kind || 'quiz',
+      totalStudents: roster.length,
+      submittedCount,
+      inProgressCount,
+      notStartedCount,
+      unstartedCount: notStartedCount,
+      avgScore,
+      averageScore: avgScore,
+      students: studentList,
+    };
   }
 
   /* ───────────────────────── 题库（教师） ───────────────────────── */
@@ -1259,6 +1539,26 @@ export class AssessmentService {
     const answers: Record<string, unknown> = {};
     for (const row of answerRows) answers[row.item_id] = safeJsonParse<unknown>(row.answer_json, null);
 
+    let sortedItems = items.sort((a, b) => a.sortOrder - b.sortOrder);
+    if (settings.shuffleItems) {
+      sortedItems = seededShuffle(sortedItems, attempt.id);
+    }
+    let studentItems = sortedItems.map(toStudentItemView);
+    if (settings.shuffleOptions) {
+      studentItems = studentItems.map((it) => {
+        if (it.config && Array.isArray((it.config as any).options)) {
+          return {
+            ...it,
+            config: {
+              ...it.config,
+              options: seededShuffle((it.config as any).options, `${attempt.id}_${it.id}`),
+            },
+          };
+        }
+        return it;
+      });
+    }
+
     const now = this.now();
     return {
       newAttempt: meta.newAttempt,
@@ -1276,8 +1576,8 @@ export class AssessmentService {
         submitted: false,
         remaining: remainingSeconds(attempt.deadline_at, now),
       }),
-      // 学生端只拿到「没有 answerKey」的题目快照
-      items: items.sort((a, b) => a.sortOrder - b.sortOrder).map(toStudentItemView),
+      // 学生端只拿到「没有 answerKey」的题目快照（支持按配置乱序）
+      items: studentItems,
       answers,
     };
   }

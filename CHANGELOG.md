@@ -32,6 +32,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`restore` 安全加固**：`npx openlearn-next restore --snapshot <pre_migration_*.db>` 现在先做 `PRAGMA integrity_check` 与迁移兼容性预检（快照含当前代码不认识的迁移默认拒绝，`--force` 才放行回滚），再用 `VACUUM INTO` 生成 `pre_restore_*.db` 安全副本，最后以临时文件 + `rename` 原子替换并清理 `-wal`/`-shm`。CLI 帮助与 `docs/beta/operations.md` 同步。
   - **CI 演练**：新增 `scripts/db/migration-restore-drill.ts` 与 `docker-rehearsal` 工作流的 `migration-restore-drill` 作业 —— 建库 → 注入一条中途失败的迁移（断言整条事务回滚）→ 从 `pre_migration` 快照恢复（断言完整性、迁移条数与业务数据）→ 用恢复后的库启动真实服务（`/health`、`/health/ready` 200，且不产生新迁移）。
   - **文档**：`docs/architecture/observability.md` 增加 §4.1 插件指标表与 PromQL 示例。
+- **测评子系统 · 严格考试模式、课内发起与成绩回写（Issue #123）**：
+  - **严格考试模式与防作弊机制**：
+    - **单次作答限制**：已交卷或已批改的作答禁止二次作答，再次尝试直接抛出 409 Conflict。
+    - **题目与选项乱序**：基于确定性伪随机算法（以布置 ID 与学生 ID 为种子），在试卷开启 `shuffleItems` / `shuffleOptions` 时为每个学生生成个性化乱序序列，且刷新页面或断网重连后顺序保持完全一致；学生端请求题目快照时绝不泄露正确答案 `answerKey`。
+    - **防作弊监考数据记录**：全屏锁定与页面失去焦点（blur）、切屏切换标签（visibility_hidden）、退出全屏（fullscreen_exit）事件实时上报并原子记录至 `assessment_attempts.proctor_json`，持久化各事件次数与最近违规时间，并在教师端批改面板展示监考异常告警与审计详情。
+    - **前端作答防作弊加固**：考试模式下强制全屏答题、弹出切屏警告横幅、动态半透明水印、禁用鼠标右键菜单与文本选择复制。
+  - **成绩发布管理与结果可见性隔离**：
+    - 考试类型默认 `score_released = 0`，学生交卷后保持 `submitted` / `graded` 状态，对学生隐藏得分与逐题解析；只有教师显式点击「发布成绩」后才对学生开放。
+  - **成绩回写与学期总评无缝联动**：
+    - 教师发布成绩或手动同步成绩时，将学生成绩原子回写至 `exams` 与 `exam_scores` 表；
+    - 自动联动 `GradingService`，以 `exam_weight` 权重计入学期总评（`computeSemesterGrades`）；
+    - **严格防覆盖**：仅回写带有 `assessment:{id}` 前缀的记录，绝不覆盖教师手工录入的同名线下考试成绩。
+  - **课内即时发起与大屏看板**：
+    - 教师端支持在课堂会话中即时发起随堂测/随堂考（`POST /api/classroom/sessions/:lessonId/assessment`），与课堂会话 `activeAssessment` 状态绑定，并通过 Socket.IO 广播 `classroom:assessment_started` 联动学生端全屏作答浮层；
+    - 课堂大屏与教师驾驶舱支持通过 `GET /api/classroom/sessions/:lessonId/assessment-progress` 实时拉取全班作答进度（未开始 / 作答中 / 已交卷）、班级均分与学生答题状态列表。
+  - **测试与门禁验证**：新增 `server/__tests__/assessment-exam-mode.test.ts` 与 `server/__tests__/classroom-assessment-session.test.ts`（全量 32 个测评测试 100% 通过），`pnpm lint` 0 类型错误，`audit-tools/run.sh` 架构漂移 0 drift。
 
 - **宿主与插件统一命名空间 i18n 体系与语言包贡献规范（Issue #148）**：
   - **清单规范扩展与校验**：在 `manifest.contributes` 引入 `locales` 声明规范（支持内联字典 `Record<string, Record<string, string>>` 与相对 JSON 文件路径 `Record<string, string>` 两种形态），并在 `manifest-schema.ts` 与 `contribution-registry.ts` 完成 Zod 校验、注册索引与生命周期回收。

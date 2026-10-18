@@ -33,6 +33,8 @@ export interface AssessmentSettings {
   countsTowardGrade: boolean;
   /** 是否允许交卷后查看逐题解析 */
   showItemAnalysis: boolean;
+  /** 严格监考模式（失焦/切屏/退出全屏记录与全屏锁定） */
+  strictProctor?: boolean;
 }
 
 const DEFAULT_SETTINGS: AssessmentSettings = {
@@ -47,6 +49,7 @@ const DEFAULT_SETTINGS: AssessmentSettings = {
   caseSensitive: false,
   countsTowardGrade: false,
   showItemAnalysis: true,
+  strictProctor: false,
 };
 
 const SCORE_POLICIES: readonly ScorePolicy[] = ['first', 'last', 'highest', 'average'];
@@ -90,6 +93,7 @@ export function parseAssessmentSettings(kind: AssessmentKind, raw: unknown): Ass
     caseSensitive: asBool(input.caseSensitive, DEFAULT_SETTINGS.caseSensitive),
     countsTowardGrade: asBool(input.countsTowardGrade, DEFAULT_SETTINGS.countsTowardGrade),
     showItemAnalysis: asBool(input.showItemAnalysis, DEFAULT_SETTINGS.showItemAnalysis),
+    strictProctor: asBool(input.strictProctor, kind === 'exam'),
   };
 
   // ── 按类型强制收敛行为差异 ──────────────────────────────────────────
@@ -99,9 +103,11 @@ export function parseAssessmentSettings(kind: AssessmentKind, raw: unknown): Ass
     parsed.countsTowardGrade = false;
     parsed.resultVisibility = 'score_only';
     parsed.showItemAnalysis = false;
+    parsed.strictProctor = false;
   } else if (kind === 'exam') {
     parsed.maxAttempts = 1;
     parsed.countsTowardGrade = true;
+    parsed.strictProctor = true;
     // 考试必须"教师发布后"才出分，避免学生提前看到答案互相传
     if (parsed.resultVisibility === 'immediate') parsed.resultVisibility = 'after_release';
   } else {

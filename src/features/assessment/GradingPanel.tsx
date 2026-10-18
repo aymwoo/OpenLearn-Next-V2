@@ -171,6 +171,7 @@ export function GradingPanel({
             <ul data-testid="grading-attempt-list" className="space-y-1.5">
               {attempts!.map((attempt) => {
                 const active = selected === attempt.id;
+                const proctorTotal = Number((attempt.proctor as any)?.summary?.total ?? 0);
                 return (
                   <li key={attempt.id}>
                     <button
@@ -183,9 +184,19 @@ export function GradingPanel({
                           : 'border-theme hover:bg-surface-secondary'
                       }`}
                     >
-                      <span className="font-semibold text-main block truncate">
-                        {attempt.anonymousLabel ?? attempt.studentId ?? attempt.id}
-                      </span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-semibold text-main block truncate">
+                          {attempt.anonymousLabel ?? attempt.studentId ?? attempt.id}
+                        </span>
+                        {proctorTotal > 0 && (
+                          <span
+                            className="px-1.5 py-0.2 rounded text-3xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 shrink-0"
+                            title={zh ? `监考异常事件 ${proctorTotal} 次` : `${proctorTotal} proctor violations`}
+                          >
+                            ⚠️ {proctorTotal}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-2xs text-muted">
                         {attempt.status} · {attempt.score ?? '—'}/{attempt.maxScore ?? '—'}
                         {attempt.needsManualReview && (
@@ -201,9 +212,19 @@ export function GradingPanel({
         </section>
 
         <section aria-labelledby="grade-heading">
-          <h2 id="grade-heading" className="text-xs font-bold text-main mb-2">
-            {zh ? '逐题批改' : 'Grade items'}
-          </h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 id="grade-heading" className="text-xs font-bold text-main">
+              {zh ? '逐题批改' : 'Grade items'}
+            </h2>
+            {detail && Number((detail.attempt.proctor as any)?.summary?.total ?? 0) > 0 && (
+              <div className="px-2 py-0.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 text-2xs font-semibold">
+                ⚠️ {zh ? '监考异常' : 'Proctor alert'}：
+                {zh ? '切屏' : 'tab switch'} {(detail.attempt.proctor as any)?.summary?.visibility_hidden ?? 0} ·{' '}
+                {zh ? '失焦' : 'blur'} {(detail.attempt.proctor as any)?.summary?.blur ?? 0} ·{' '}
+                {zh ? '退出全屏' : 'exit fullscreen'} {(detail.attempt.proctor as any)?.summary?.fullscreen_exit ?? 0}
+              </div>
+            )}
+          </div>
           {!detail ? (
             <p className="text-xs text-muted">{zh ? '从左侧选择一份作答。' : 'Pick an attempt on the left.'}</p>
           ) : (

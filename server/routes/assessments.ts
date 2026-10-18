@@ -226,6 +226,22 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     }
   });
 
+  app.post('/api/assessment-assignments/:id/sync-gradebook', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      res.json(service.syncScoresToGradebook(req.params.id, teacherActor(req)));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.get('/api/assessment-assignments/:id/progress', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      res.json(service.getProgressSummary(req.params.id, teacherActor(req)));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   /* ───────────────────────── 教师：批改 / 统计 / 导出 ───────────────────────── */
 
   app.get('/api/assessment-assignments/:id/attempts', requireAuth('teacher', 'administrator'), (req, res) => {
@@ -347,6 +363,17 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
       const sid = studentActor(req);
       if (!sid) return res.status(403).json({ error: 'Forbidden' });
       res.json(service.submitAttempt(req.params.id, sid));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.put('/api/assessment-attempts/:id/proctor', requireAuth('student'), (req, res) => {
+    try {
+      const sid = studentActor(req);
+      if (!sid) return res.status(403).json({ error: 'Forbidden' });
+      const event = req.body ?? {};
+      res.json(service.recordProctor(req.params.id, sid, event));
     } catch (e: any) {
       sendSafeError(res, e);
     }

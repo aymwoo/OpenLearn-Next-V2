@@ -345,6 +345,31 @@ export const assessmentApi = {
     request<AssessmentAssignment>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/release`, {
       method: 'POST',
     }),
+  syncGradebook: (assignmentId: string) =>
+    request<{ examId: string; syncedCount: number; skippedCount: number }>(
+      `/api/assessment-assignments/${encodeURIComponent(assignmentId)}/sync-gradebook`,
+      { method: 'POST' },
+    ),
+  getAssignmentProgress: (assignmentId: string) =>
+    request<{
+      assignmentId: string;
+      title: string;
+      kind: string;
+      totalStudents: number;
+      submittedCount: number;
+      inProgressCount: number;
+      notStartedCount: number;
+      avgScore: number | null;
+      students: Array<{
+        studentId: string;
+        name: string;
+        studentNumber: string;
+        status: string;
+        score: number | null;
+        proctor: any;
+        submittedAt: number | null;
+      }>;
+    }>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/progress`),
 
   /* 批改 / 统计 / 导出 */
   listAttempts: (assignmentId: string) =>
@@ -363,12 +388,57 @@ export const assessmentApi = {
   exportCsvUrl: (assignmentId: string) =>
     `/api/assessment-assignments/${encodeURIComponent(assignmentId)}/export?format=csv`,
 
+  /* ── 课内发起与进度 ── */
+  startClassroomAssessment: (
+    lessonId: string,
+    input: { assessmentId: string; durationSec?: number; opensAt?: number; closesAt?: number },
+  ) =>
+    request<{ success: boolean; assignment: AssessmentAssignment }>(
+      `/api/classroom/sessions/${encodeURIComponent(lessonId)}/assessment`,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+  getClassroomAssessmentProgress: (lessonId: string, assignmentId?: string) =>
+    request<{
+      success: boolean;
+      progress: {
+        assignmentId: string;
+        title: string;
+        kind: string;
+        totalStudents: number;
+        submittedCount: number;
+        inProgressCount: number;
+        notStartedCount: number;
+        avgScore: number | null;
+        students: Array<{
+          studentId: string;
+          name: string;
+          studentNumber: string;
+          status: string;
+          score: number | null;
+          proctor: any;
+          submittedAt: number | null;
+        }>;
+      };
+    }>(
+      `/api/classroom/sessions/${encodeURIComponent(lessonId)}/assessment-progress${
+        assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : ''
+      }`,
+    ),
+
   /* ── 学生端 ── */
   myAssessments: () => request<{ items: StudentAssignmentEntry[] }>('/api/me/assessments'),
   startAttempt: (assignmentId: string) =>
     request<StudentAttemptPayload>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/attempts`, {
       method: 'POST',
     }),
+  reportProctor: (
+    attemptId: string,
+    event: { type: 'blur' | 'visibility_hidden' | 'fullscreen_exit'; at?: number; detail?: string },
+  ) =>
+    request<{ ok: boolean; blurCount: number; switchTabCount: number; fullscreenExitCount: number }>(
+      `/api/assessment-attempts/${encodeURIComponent(attemptId)}/proctor`,
+      { method: 'PUT', body: JSON.stringify(event) },
+    ),
   saveAnswer: (attemptId: string, itemId: string, answer: unknown) =>
     request<{ ok: boolean }>(
       `/api/assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(itemId)}`,
