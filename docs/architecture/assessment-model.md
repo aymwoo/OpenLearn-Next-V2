@@ -59,6 +59,18 @@ question_bank_items                          （题库，独立于试卷）
 2. **判分幂等**：纯函数，同输入同输出；
 3. **`manual_override = 1` 的行不被自动判分覆盖**（regrade 时 SQL 层过滤）。
 
+### 3.5 项分析：难度与区分度（#184）
+
+| 指标 | 口径 | 退化规则 |
+| --- | --- | --- |
+| 难度 (p) | 该题已判分作答的平均得分 / 该题满分 | 无已判分作答 → `null` |
+| 区分度 (r) | 题目得分与该考生**剩余卷面分**（总分 − 本题得分）的 Pearson 相关 | 样本量 < 5、题目得分方差为 0（全对/全错）、剩余分方差为 0 → `null` |
+
+- 用剩余分而不是总分，避免题目自身贡献总分导致相关系数虚高；二分题下等价于点二列相关。
+- **待人工批改的作答不参与**（`score = null` 不计入样本），不会把未批改的题当成 0 分。
+- 分级：`|r| ≥ 0.4` 高、`≥ 0.2` 中、其余低；原始数值与等级同时返回。
+- 纯函数实现：`packages/core/assessment/item-analysis.ts`（不依赖数据库）。
+
 ## 4. 插件接口
 
 服务端题型注册走新的 DI token（不走 capability provider，理由见
@@ -102,6 +114,8 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 | POST | `/api/assessments/:id/publish` |
 | POST | `/api/assessment-assignments/:id/close` · `/release` |
 | GET | `/api/assessment-assignments/:id/attempts` · `/stats` · `/export?format=csv` |
+| GET | `/api/assessment-assignments/:id/item-analysis`（难度/区分度） |
+| GET | `/api/assessment-assignments/:id/item-analysis/export?format=csv\|json\|xlsx` |
 | PUT | `/api/assessment-attempts/:id/answers/:itemId/grade`（人工批改） |
 | POST | `/api/assessment-attempts/:id/regrade` |
 

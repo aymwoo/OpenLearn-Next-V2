@@ -260,6 +260,35 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     }
   });
 
+  // Issue #184：逐题项分析（难度 p / 区分度 r），与 stats 同权限口径。
+  app.get('/api/assessment-assignments/:id/item-analysis', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      res.json(service.itemAnalysis(req.params.id, teacherActor(req)));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // Issue #184：项分析导出（csv / json / xlsx），CSV 补 BOM 让 Excel 识别 UTF-8。
+  app.get(
+    '/api/assessment-assignments/:id/item-analysis/export',
+    requireAuth('teacher', 'administrator'),
+    async (req, res) => {
+      try {
+        const format = String(req.query.format ?? 'csv').toLowerCase();
+        if (format !== 'csv' && format !== 'json' && format !== 'xlsx') {
+          return res.status(400).json({ error: 'format must be one of csv, json, xlsx' });
+        }
+        const exported = await service.exportItemAnalysis(req.params.id, teacherActor(req), format);
+        res.setHeader('Content-Type', exported.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+        res.send(format === 'csv' ? `\uFEFF${exported.body}` : exported.body);
+      } catch (e: any) {
+        sendSafeError(res, e);
+      }
+    },
+  );
+
   app.get('/api/assessment-assignments/:id/export', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const format = String(req.query.format ?? 'csv').toLowerCase();

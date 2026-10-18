@@ -35,6 +35,10 @@ import {
   toStudentAttemptView,
   toTeacherAttemptView,
   validateItemSnapshot,
+  computeItemAnalysis,
+  DEFAULT_MIN_SAMPLE_SIZE,
+  ITEM_ANALYSIS_COLUMNS,
+  toItemAnalysisCsv,
   type AssessmentItemRecord,
   type AssessmentKind,
   type AssessmentSettings,
@@ -1226,6 +1230,109 @@ export class AssessmentService {
 
     const kindLabel = settings.anonymous ? 'survey-anonymous' : assessment.kind;
     return { filename: `assessment-${assignmentId}-${kindLabel}.csv`, csv: `${lines.join('\n')}\n` };
+  }
+
+  /**
+   * 逐题项分析：难度 (p) 与区分度 (r)（Issue #184）。
+   *
+   * 只统计**已交卷且已判分**的 attempt；未判分（含待人工批改的简答）的作答不参与，
+   * 否则「没批的题」会被当成 0 分，把难度和区分度都拉偏。
+   */
+  itemAnalysis(assignmentId: string, ownerId: string) {
+    const asg = this.requireOwnedAssignment(assignmentId, ownerId);
+    const items = this.readItems(asg.assessmentId).sort((a, b) => a.sortOrder - b.sortOrder);
+    const rows = this.db
+      .prepare('SELECT * FROM assessment_attempts WHERE assignment_id = ?')
+      .all(assignmentId) as AttemptRow[];
+    const now = this.now();
+    const settled = rows
+      .map((row) => this.settleIfExpired(row, now))
+      .filter((row) => row.status !== 'in_progress' && typeof row.score === 'number');
+
+    const attempts = settled.map((row) => {
+      const answers = this.db
+        .prepare('SELECT item_id, score FROM assessment_answers WHERE attempt_id = ?')
+        .all(row.id) as Array<{ item_id: string; score: number | null }>;
+      const scores: Record<string, number | null> = {};
+      for (const answer of answers) scores[answer.item_id] = answer.score;
+      return { totalScore: row.score as number, scores };
+    });
+
+    const analysis = computeItemAnalysis(
+      items.map((item) => ({
+        id: item.id,
+        type: item.type,
+        maxScore: item.maxScore,
+        sortOrder: item.sortOrder,
+      })),
+      attempts,
+    );
+
+    return {
+      assignmentId,
+      assessmentId: asg.assessmentId,
+      sampleSize: attempts.length,
+      minSampleSize: DEFAULT_MIN_SAMPLE_SIZE,
+      items: analysis,
+    };
+  }
+
+  /**
+   * 导出项分析（Issue #184）：CSV / JSON / XLSX，列序与 {@link ITEM_ANALYSIS_COLUMNS} 一致。
+   */
+  async exportItemAnalysis(
+    assignmentId: string,
+    ownerId: string,
+    format: 'csv' | 'json' | 'xlsx',
+  ): Promise<{ filename: string; contentType: string; body: string | Buffer }> {
+    const analysis = this.itemAnalysis(assignmentId, ownerId);
+    const base = `assessment-${assignmentId}-item-analysis`;
+
+    if (format === 'json') {
+      return {
+        filename: `${base}.json`,
+        contentType: 'application/json; charset=utf-8',
+        body: `${JSON.stringify(analysis, null, 2)}\n`,
+      };
+    }
+
+    if (format === 'csv') {
+      return {
+        filename: `${base}.csv`,
+        contentType: 'text/csv; charset=utf-8',
+        body: `${toItemAnalysisCsv(analysis.items)}\n`,
+      };
+    }
+
+    // XLSX：动态 import，避免把 exceljs 拉进每次服务启动的主路径。
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('项分析');
+    sheet.addRow(ITEM_ANALYSIS_COLUMNS.map((column) => column.label));
+    for (const row of analysis.items) {
+      sheet.addRow(
+        ITEM_ANALYSIS_COLUMNS.map((column) => {
+          if (column.key === 'order') return row.order + 1;
+          const value = row[column.key as keyof typeof row];
+          return value === null ? '' : value;
+        }),
+      );
+    }
+    // 样式是锦上添花：测试环境把 exceljs 换成最小 stub（没有 getRow/columns），
+    // 真实环境才有。缺这些方法时仍然返回一个可打开的 xlsx。
+    const headerRow = typeof (sheet as any).getRow === 'function' ? sheet.getRow(1) : null;
+    if (headerRow) headerRow.font = { bold: true };
+    if (Array.isArray(sheet.columns)) {
+      sheet.columns.forEach((column) => {
+        column.width = 16;
+      });
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    return {
+      filename: `${base}.xlsx`,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      body: Buffer.from(buffer),
+    };
   }
 
   /**
