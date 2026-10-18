@@ -215,15 +215,19 @@ export function teacherCanSeeStudent(
   if (!isTeacher(session)) return false;
   const uid = actorUserId(session);
   if (!uid) return false;
+  // studentId 兼容学生主键与学号（student_number）两种形态：历史/自报路径写入的
+  // attempt.student_id 可能是学号（与 listAttempts 的班级切片同口径，见 courseware-service）。
   const row = db
     .prepare(
       `SELECT 1 AS ok
        FROM class_students cs
        JOIN classes c ON c.id = cs.class_id
-       WHERE cs.student_id = ? AND (c.owner_user_id = ? OR c.owner_user_id = ?)
+       LEFT JOIN students s ON s.id = cs.student_id
+       WHERE (cs.student_id = ? OR s.student_number = ?)
+         AND (c.owner_user_id = ? OR c.owner_user_id = ?)
        LIMIT 1`,
     )
-    .get(studentId, uid, session.username || '') as { ok: number } | undefined;
+    .get(studentId, studentId, uid, session.username || '') as { ok: number } | undefined;
   return !!row;
 }
 

@@ -36,6 +36,8 @@ describe('Security Scope: Courseware Attempts & Cross-Class Authorization (Issue
   const attemptA1 = `att-scope-a1-${Date.now()}`;
   const attemptB1 = `att-scope-b1-${Date.now()}`;
   const attemptTest = `att-scope-test-${Date.now()}`;
+  // 历史路径兼容：attempt.student_id 以学号（student_number）存储
+  const attemptANum = `att-scope-a1-num-${Date.now()}`;
 
   const cookieTeacherA = { Cookie: `edu_os_token=${teacherAToken}` };
   const cookieTeacherB = { Cookie: `edu_os_token=${teacherBToken}` };
@@ -132,6 +134,7 @@ describe('Security Scope: Courseware Attempts & Cross-Class Authorization (Issue
     insertAttempt.run(attemptA1, cwId, studentA1Id, now - 1000, now - 500, 'finished');
     insertAttempt.run(attemptB1, cwId, studentB1Id, now - 800, now - 300, 'finished');
     insertAttempt.run(attemptTest, cwId, 'teacher', now - 600, now - 100, 'finished');
+    insertAttempt.run(attemptANum, cwId, 'NUM-A1', now - 700, now - 200, 'finished');
 
     // 8. 评分记录
     const insertResult = db.prepare(
@@ -213,6 +216,26 @@ describe('Security Scope: Courseware Attempts & Cross-Class Authorization (Issue
   });
 
   describe('2. 课件作答进度详情鉴权 (GET /api/courseware/attempts/:id/progress)', () => {
+    it('以学号存储的历史作答：教师 A 榜单可见且进度可查（student_number 口径一致）', async () => {
+      const list = await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(cwUuid)}`, {
+        headers: cookieTeacherA,
+      });
+      const body: any = await list.json();
+      expect(body.data.map((item: any) => item.attemptId)).toContain(attemptANum);
+
+      const res = await fetch(`${baseUrl}/api/courseware/attempts/${attemptANum}/progress`, {
+        headers: cookieTeacherA,
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it('以学号存储的历史作答：跨班教师 B 仍被拦截返回 403', async () => {
+      const res = await fetch(`${baseUrl}/api/courseware/attempts/${attemptANum}/progress`, {
+        headers: cookieTeacherB,
+      });
+      expect(res.status).toBe(403);
+    });
+
     it('教师 A 查看学生 A1 的作答进度返回 200', async () => {
       const res = await fetch(`${baseUrl}/api/courseware/attempts/${attemptA1}/progress`, {
         headers: cookieTeacherA,
