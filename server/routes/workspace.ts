@@ -1,6 +1,6 @@
 import path from 'path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
@@ -110,12 +110,11 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   });
 
   // VFS APIs
-  app.get('/api/vfs', requireAuth(), (req, res) => {
+  // SEC-AUTH: VFS 是教师工作台的系统资源浏览器，此前只要求登录，学生可借此列出
+  // 全校课节正文、作业列表与任意 VFS 文件。现收紧为教师/管理员。
+  app.get('/api/vfs', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const parentId = req.query.parentId === 'null' ? null : req.query.parentId || null;
-      const isStaff = checkIsTeacherOrAdmin(req);
-      const token = getCookieToken(req);
-      const session = (req as any).session || (token ? getValidSession(token) : null);
 
       let nodes: any[] = [];
 
@@ -142,33 +141,16 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
           name: `[${a.cname}] ${a.title}.md`,
         }));
       } else if (parentId === 'virtual-submissions') {
-        // SEC-FIX: 严格数据脱敏，普通学生仅可查看本人提交与成绩，严禁全量拉取全校作业与分数
-        let submissions: any[] = [];
-        if (isStaff) {
-          submissions = kernelContainer.db
-            .prepare(
-              `
-            SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
-            FROM assignment_submissions sub
-            JOIN assignments a ON sub.assignment_id = a.id
-            JOIN students s ON sub.student_id = s.id
-          `,
-            )
-            .all() as any[];
-        } else if (session?.userId || session?.studentId) {
-          const studentOwnerId = session.userId || session.studentId;
-          submissions = kernelContainer.db
-            .prepare(
-              `
-            SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
-            FROM assignment_submissions sub
-            JOIN assignments a ON sub.assignment_id = a.id
-            JOIN students s ON sub.student_id = s.id
-            WHERE sub.student_id = ?
-          `,
-            )
-            .all(studentOwnerId) as any[];
-        }
+        const submissions = kernelContainer.db
+          .prepare(
+            `
+          SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
+          FROM assignment_submissions sub
+          JOIN assignments a ON sub.assignment_id = a.id
+          JOIN students s ON sub.student_id = s.id
+        `,
+          )
+          .all() as any[];
         nodes = submissions.map((sub) => ({
           id: `sub-${sub.id}`,
           parent_id: 'virtual-submissions',
@@ -196,7 +178,8 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   });
 
   // VFS File Download Router (V5.1+)
-  app.get('/files/*', requireAuth(), (req, res) => {
+  // 与 /api/vfs 同口径：仅教师/管理员可下载 VFS 文件
+  app.get('/files/*', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       let filePath = req.params[0] || '';
       if (!filePath.startsWith('/')) {
