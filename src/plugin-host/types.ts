@@ -195,6 +195,10 @@ export type ExtensionSlot =
   | 'classroom.alert.banner' // 课堂中控台顶部横幅通知扩展
   | 'classroom.stage.display.ticker' // 大屏展台跑马灯通知扩展
   | 'classroom.post_class.exporter' // 课后复盘导出通道扩展（智慧教育大数据直报等）
+  // ── 测评子系统扩展槽位（Issue #183）──
+  | 'assessment.list.card' // 测评列表卡片扩展（教师/学生视图按 props 区分）
+  | 'assessment.attempt.toolbar' // 作答页工具条扩展（计算器、草稿、插件题型工具）
+  | 'assessment.stats.card' // 统计页卡片扩展（自定义图表、导出入口）
   // ── 现代教务与排课调度域扩展槽位 ──
   | 'timetable.toolbar.action' // 课表中心工具栏操作扩展（外部日历同步等）
   | 'timetable.card.badge' // 周历卡片状态角标扩展
@@ -639,6 +643,44 @@ export interface CourseListToolbarActionSlotProps {
 /** Props passed to course.card.badge extensions */
 export interface CourseCardBadgeSlotProps {
   course?: any;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+// ── 测评子系统扩展槽 props（Issue #183）──
+// 白名单视图：只携带摘要字段，绝不含 answerKey / answer_key_json / 学生身份等敏感数据。
+
+/** Props passed to assessment.list.card extensions（教师/学生按 viewer 区分） */
+export interface AssessmentListCardSlotProps {
+  assessment: {
+    id: string;
+    kind: string;
+    title: string;
+    description: string | null;
+    status: string;
+    itemCount: number;
+    totalScore: number;
+    settings: Record<string, unknown>;
+    createdAt: number;
+    updatedAt: number;
+  };
+  viewer: 'teacher' | 'student';
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assessment.attempt.toolbar extensions */
+export interface AssessmentAttemptToolbarSlotProps {
+  assignmentId: string;
+  attemptId: string;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assessment.stats.card extensions（逐题统计不含标准答案） */
+export interface AssessmentStatsCardSlotProps {
+  assignmentId: string;
+  stats: Record<string, unknown>;
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }

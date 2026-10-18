@@ -31,6 +31,7 @@ import {
 import { assessmentQuestionTypeUiRegistry } from '../question-type-ui-registry';
 import '../register-builtin-question-uis';
 import { FallbackAnswer } from './answer-uis';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 type View =
   | { mode: 'list' }
@@ -617,6 +618,12 @@ export function AssessmentRunner({
           {submitting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
           {zh ? '提交交卷' : 'Submit'}
         </button>
+        {/* Issue #183：作答页工具条扩展（计算器/草稿/插件题型工具）；只传会话标识，不含题目答案 */}
+        <ExtensionPointRenderer
+          slot="assessment.attempt.toolbar"
+          slotProps={{ assignmentId: payload.assignment.id, attemptId, lang }}
+          lang={lang}
+        />
       </div>
 
       {/* 监考告警提示条 */}

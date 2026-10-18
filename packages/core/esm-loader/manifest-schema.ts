@@ -570,6 +570,10 @@ const frontendSlotsShape = {
   'admin.user.action': z.array(frontendSlotEntrySchema).optional(),
   'header.status_pill': z.array(frontendSlotEntrySchema).optional(),
   'ai_sidebar.tab': z.array(frontendSlotEntrySchema).optional(),
+  // ── 测评子系统扩展槽（Issue #183）──
+  'assessment.list.card': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.attempt.toolbar': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.stats.card': z.array(frontendSlotEntrySchema).optional(),
 } as const;
 
 export const pluginLocalesSchema = z

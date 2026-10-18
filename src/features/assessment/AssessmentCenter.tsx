@@ -18,6 +18,8 @@ import {
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { assessmentApi, ApiError, type AssessmentSummary } from './api';
 import { AssessmentEditor } from './AssessmentEditor';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { toAssessmentListCardProps } from './extension-slot-props';
 import { QuestionBankPanel } from './QuestionBankPanel';
 
 type SubTab = 'papers' | 'bank';
@@ -297,6 +299,12 @@ export function AssessmentCenter() {
                           </button>
                         </span>
                       </div>
+                      {/* Issue #183：插件可在每张测评卡片注入内容（props 走白名单投影，不含答案） */}
+                      <ExtensionPointRenderer
+                        slot="assessment.list.card"
+                        slotProps={{ assessment: toAssessmentListCardProps(item), viewer: 'teacher', lang }}
+                        lang={lang}
+                      />
                     </li>
                   );
                 })}

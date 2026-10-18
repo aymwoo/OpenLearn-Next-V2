@@ -95,6 +95,24 @@ describe('manifestSchema', () => {
     ]);
   });
 
+  it('should accept assessment extension slots in contributes (Issue #183)', () => {
+    const manifest = {
+      id: 'ext-assessment-tools',
+      name: 'Assessment Tools',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        'assessment.list.card': [{ id: 'list-badge', label: '题库统计' }],
+        'assessment.attempt.toolbar': [{ id: 'calc', label: '计算器' }],
+        'assessment.stats.card': [{ id: 'chart', label: '自定义图表' }],
+      },
+    };
+    const parsed = manifestSchema.parse(manifest);
+    expect((parsed.contributes as any)['assessment.list.card']).toEqual([{ id: 'list-badge', label: '题库统计' }]);
+    expect((parsed.contributes as any)['assessment.attempt.toolbar']).toEqual([{ id: 'calc', label: '计算器' }]);
+    expect((parsed.contributes as any)['assessment.stats.card']).toEqual([{ id: 'chart', label: '自定义图表' }]);
+  });
+
   it('should accept manifest with empty optional arrays', () => {
     const manifest = {
       id: 'ext-quiz',

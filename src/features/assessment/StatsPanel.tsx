@@ -6,6 +6,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Download, Loader2, RefreshCw } from 'lucide-react';
 import { assessmentApi, ApiError, type AssessmentAssignment, type AssessmentStats } from './api';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { toAssessmentStatsCardProps } from './extension-slot-props';
 
 export function StatsPanel({
   assignment,
@@ -106,6 +108,12 @@ export function StatsPanel({
                   <p className="text-sm font-bold text-main">{card.value}</p>
                 </div>
               ))}
+              {/* Issue #183：统计页卡片扩展（props 为聚合统计白名单投影，不含标准答案） */}
+              <ExtensionPointRenderer
+                slot="assessment.stats.card"
+                slotProps={{ assignmentId: assignment.id, stats: toAssessmentStatsCardProps(stats), lang }}
+                lang={lang}
+              />
             </div>
 
             <table data-testid="stats-table" className="w-full text-xs border border-theme rounded-xl overflow-hidden">
