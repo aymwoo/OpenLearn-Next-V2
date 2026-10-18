@@ -56,9 +56,9 @@ describe('G-3：插件详情端点必须鉴权', () => {
     expect(auth).toBeGreaterThan(slash);
   });
 
-  it('/api/plugins/by-manifest/:manifestId(*) 带 requireAuth()', () => {
+  it('/api/plugins/by-manifest/:manifestId(*) 带认证中间件', () => {
     const decl = declaration('get', '/api/plugins/by-manifest/:manifestId(*)');
-    expect(decl).toContain('requireAuth(');
+    expect(decl).toMatch(/requireAuth\(\)|requireScopedAuth\('authenticated'\)/);
   });
 
   it('插件写操作（install / toggle / delete / config）仍限定 administrator', () => {
@@ -77,10 +77,12 @@ describe('G-3：插件详情端点必须鉴权', () => {
 });
 
 describe('G-2：execute-command 不做后缀模糊匹配', () => {
-  it('路由仍保留 requireAuth()（本端点由学生端宿主共用，不得限制角色）', () => {
+  it('路由仍保留认证且不限制角色（本端点由学生端宿主共用）', () => {
     const decl = declaration('post', '/api/plugins/execute-command');
-    expect(decl).toContain('requireAuth(');
+    expect(decl).toMatch(/requireAuth\(\)|requireScopedAuth\('authenticated'\)/);
     expect(decl).not.toContain("requireAuth('teacher'");
+    expect(decl).not.toContain("requireScopedAuth('class-staff'");
+    expect(decl).not.toContain("requireScopedAuth('admin'");
   });
 
   it('不再存在 endsWith 后缀匹配逻辑', () => {
