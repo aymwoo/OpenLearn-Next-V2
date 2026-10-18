@@ -933,6 +933,7 @@ interface IUnifiedPluginContext {
     readonly contributions: ContributionAccessor;
     readonly config: IConfigService;
     readonly http: PluginContext['http'];
+    readonly i18n: PluginContext['i18n'];
     // Methods
     resolve<T>(token: Token<T>): Promise<T>;
     provide<T>(token: Token<T>, instance: T): Promise<void>;
@@ -1211,6 +1212,7 @@ declare class PluginContextAdapter implements IUnifiedPluginContext {
   get services(): PluginContext['services'];
   get log(): IPluginLogger;
   get http(): PluginContext['http'];
+  get i18n(): PluginContext['i18n'];
   get db(): PluginDatabaseAPI;
   get contributions(): ContributionAccessor;
   get config(): IConfigService;
