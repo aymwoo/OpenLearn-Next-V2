@@ -17,6 +17,10 @@ on:
       - 'scripts/docker-entrypoint.sh'
       - 'scripts/site-backup.mjs'
       - 'scripts/site-restore.mjs'
+      - 'scripts/db/**'
+      - 'cli.mjs'
+      - 'cli-data.mjs'
+      - 'server/routes/health.ts'
       - 'scripts/verify-plugin-sdk-entry.mjs'
       - 'migrations/**'
       - 'server.ts'
@@ -87,3 +91,32 @@ jobs:
       - name: Cleanup container
         if: always()
         run: docker rm -f openlearn-rehearsal || true
+
+  # Issue #150：升级失败时的「恢复路径」必须被 CI 真实走一遍，而不是只写在文档里。
+  # 不依赖 Docker 镜像：在 runner 上建库 → 注入失败迁移 → 从 pre_migration 快照恢复
+  # → 用恢复后的库启动真实服务并检查 /health、/health/ready。
+  migration-restore-drill:
+    name: Migration failure → restore drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install platform dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
+
+      - name: Run migration failure → restore drill
+        run: pnpm exec tsx scripts/db/migration-restore-drill.ts
