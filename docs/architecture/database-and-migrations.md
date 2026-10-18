@@ -104,3 +104,13 @@ sequenceDiagram
     Boot->>Boot: runStartupMigrations(db)（server/bootstrap-db.ts，非版本化）
     Boot->>Boot: await kernelContainer.ready
 ```
+
+---
+
+## 5. 多租户边界与数据库抽象层 (ADR-001)
+
+关于多校区部署策略与数据库抽象层演进的权威架构决策，详见 [ADR-001: 多租户架构决策与数据库抽象层评估](adr-001-multi-tenant-and-database-abstraction.md)：
+- **单校部署基准**: 平台核心表与插件表均不含 `school_id`，严格遵循“一校一实例、多容器编排”物理隔离标准，从存储介质层面阻断跨校数据越权。
+- **多校运维拓扑**: 多校集约化部署通过 Docker Compose 多容器独立卷与反向代理实现，详见 [operations.md 第 5 节](../beta/operations.md#5-多校区部署拓扑指南-adr-001)。
+- **数据库抽象演进**: 保持现有 `PluginDatabaseAPI` 原始 SQL 参数化契约向后兼容；收敛 `sqlite_master` 等方言内省，为轻量 QueryBuilder 演进留出扩展点。
+

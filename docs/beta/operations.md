@@ -171,3 +171,132 @@ CI 覆盖：`docker-rehearsal` 工作流的 `migration-restore-drill` 作业会�
 3. 学校确认隐私草稿里要发出的部分。未确认前，不要批量创建学生。
 4. 把 [公告](announcement.md) 里的空填上再发给教师。
 5. 开放后的第一个小时，看 `/health/ready`、`RestartCount`、`audit.log` 里的登录失败和 429。
+
+---
+
+## 5. 多校区部署拓扑指南 (ADR-001)
+
+依 [ADR-001 架构决策](file:///home/wuxf/Develop/openlearnv2/docs/architecture/adr-001-multi-tenant-and-database-abstraction.md)，OpenLearn V2 **严格遵循“一校一实例 (Instance-per-School)”物理隔离架构**。平台核心表不含 `school_id`，多校区或区域集约化部署通过现代容器编排与轻量反向代理实现。
+
+### 5.1 部署拓扑结构
+
+```mermaid
+flowchart TD
+    Client["教师/学生浏览器"] --> Gateway["统一边缘网关 / 反向代理 (Nginx / Caddy)<br>监听 80 / 443"]
+    Gateway -- "Host: school-a.edu.local" --> AppA["OpenLearn 实例 A (学校 A 容器)<br>127.0.0.1:9001"]
+    Gateway -- "Host: school-b.edu.local" --> AppB["OpenLearn 实例 B (学校 B 容器)<br>127.0.0.1:9002"]
+    Gateway -- "Host: school-c.edu.local" --> AppC["OpenLearn 实例 C (学校 C 容器)<br>127.0.0.1:9003"]
+    AppA --> VolA[("独立数据卷 /data-a<br>educational_os.db")]
+    AppB --> VolB[("独立数据卷 /data-b<br>educational_os.db")]
+    AppC --> VolC[("独立数据卷 /data-c<br>educational_os.db")]
+```
+
+- **物理安全**: 各校数据库文件与附件物理隔离，绝不存在跨校 SQL 越权或数据泄露风险。
+- **容灾粒度**: 某校数据库损坏或误操作仅需对该校容器恢复，其他校区 100% 不受影响。
+- **资源开销**: Node.js + SQLite 单实例典型内存仅 ~100MB，单台 8G 内存服务器可轻松并发运行数十所学校。
+
+### 5.2 多校区 Compose 编排示例 (`docker-compose.multi-school.yml`)
+
+```yaml
+services:
+  # 学校 A 实例
+  school_a:
+    image: ghcr.io/aymwoo/openlearn-next:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9001:9000"
+    environment:
+      - NODE_ENV=production
+      - TRUST_PROXY=1
+      - PORT=9000
+      - OPENLEARN_DATA_DIR=/data
+      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - OPENLEARN_ADMIN_PASSWORD=SchoolAAdminSecret123
+      - OPENLEARN_TEACHER_PASSWORD=SchoolATeacherSecret123
+    volumes:
+      - school_a_data:/data
+      - school_a_backups:/backups
+
+  # 学校 B 实例
+  school_b:
+    image: ghcr.io/aymwoo/openlearn-next:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9002:9000"
+    environment:
+      - NODE_ENV=production
+      - TRUST_PROXY=1
+      - PORT=9000
+      - OPENLEARN_DATA_DIR=/data
+      - ENCRYPTION_KEY=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      - OPENLEARN_ADMIN_PASSWORD=SchoolBAdminSecret456
+      - OPENLEARN_TEACHER_PASSWORD=SchoolBTeacherSecret456
+    volumes:
+      - school_b_data:/data
+      - school_b_backups:/backups
+
+volumes:
+  school_a_data:
+  school_a_backups:
+  school_b_data:
+  school_b_backups:
+```
+
+### 5.3 统一反向代理 Nginx 配置模版
+
+在反向代理层根据访问域名分发至对应学校的本地端口，并配置 WebSocket 穿透：
+
+```nginx
+# 学校 A 分发
+server {
+    listen 80;
+    server_name school-a.edu.local;
+    client_max_body_size 350m;
+
+    location / {
+        proxy_pass http://127.0.0.1:9001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# 学校 B 分发
+server {
+    listen 80;
+    server_name school-b.edu.local;
+    client_max_body_size 350m;
+
+    location / {
+        proxy_pass http://127.0.0.1:9002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 5.4 单校隔离运维操作
+
+- **单校备份**:
+  ```bash
+  docker compose -f docker-compose.multi-school.yml exec school_a node scripts/site-backup.mjs
+  ```
+  备份产物直接写入 `school_a_backups` 卷，与学校 B 完全物理隔离。
+- **单校维护与恢复**:
+  ```bash
+  # 仅暂停学校 A，学校 B 正常教学完全不受干扰
+  docker compose -f docker-compose.multi-school.yml stop school_a
+  # 恢复快照
+  docker compose -f docker-compose.multi-school.yml run --rm school_a npx openlearn-next restore --snapshot /backups/pre_migration_xxx.db
+  # 启动
+  docker compose -f docker-compose.multi-school.yml start school_a
+  ```

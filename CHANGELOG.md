@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **多租户架构决策（明确一校一实例与容器化编排）与数据库抽象层评估（Issue #149）**：
+  - **ADR-001 架构决策落地**：发布并在架构基线合入 `docs/architecture/adr-001-multi-tenant-and-database-abstraction.md`，深入权衡方案 A（一校一实例）与方案 B（单库多租户 `school_id`），基于学生数据物理隔离、机房断网边缘可用性、SQLite WAL 单写锁并发特征与插件生态零破坏性等维度，权威确立方案 A 为平台核心标准。
+  - **多校区部署运维指南**：在 `docs/beta/operations.md` 补充第 5 节「多校区部署拓扑指南」，提供标准 Docker Compose 多实例编排配置示例、Nginx 反向代理与 WebSocket 穿透配置、单校独立数据卷配置及隔离备份/恢复运维规程。
+  - **数据库抽象层评估**：确立三步走演进路线——维持现有 `PluginDatabaseAPI` 原始 SQL 参数化调用兼容性；收敛分散的 `sqlite_master` 与方言内省；规划轻量 QueryBuilder 与驱动抽象接口（`IDatabaseDriver`），为未来可能的大型定制场景预留解耦扩展点。
+
 - **按插件维度运行指标 + 迁移失败快照恢复与 CI 演练（Issue #150）**：
   - **按插件指标**：新增 `packages/core/observability/plugin-metrics.ts`，在命令派发（`CommandBus`）、事件发布（`EventBus`）、插件 REST 网关（`PluginHost.dispatchHttpRequest`）与 Worker 生命周期（崩溃 / 看门狗重启）处按插件累计计数与耗时，`/metrics` 在进程级序列后追加 `openlearn_plugin_*`。归因优先看 `plugin:<id>` actor，其次看命令命名空间（只有内核能解析到已安装插件时才归因）；标签做 Prometheus 转义、长度截断，条目超过 200 个落到 `__overflow__`，避免基数失控；指标记录失败不影响业务请求。
   - **`restore` 安全加固**：`npx openlearn-next restore --snapshot <pre_migration_*.db>` 现在先做 `PRAGMA integrity_check` 与迁移兼容性预检（快照含当前代码不认识的迁移默认拒绝，`--force` 才放行回滚），再用 `VACUUM INTO` 生成 `pre_restore_*.db` 安全副本，最后以临时文件 + `rename` 原子替换并清理 `-wal`/`-shm`。CLI 帮助与 `docs/beta/operations.md` 同步。
