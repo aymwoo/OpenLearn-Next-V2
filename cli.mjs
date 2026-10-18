@@ -79,6 +79,8 @@ export function parseCliArgs(rawArgs) {
     dbPath: null,
     cors: null,
     password: null,
+    snapshot: null,
+    force: false,
   };
 
   for (let i = 0; i < normalized.length; i++) {
@@ -137,6 +139,14 @@ export function parseCliArgs(rawArgs) {
       if (!command) {
         command = 'compat-report';
       }
+    } else if (token === '--snapshot') {
+      const val = normalized[++i];
+      if (!val || val.startsWith('-')) {
+        throw new Error('选项 --snapshot 必须指定迁移前快照文件路径 (pre_migration_*.db)');
+      }
+      flags.snapshot = val;
+    } else if (token === '--force') {
+      flags.force = true;
     } else if (token === '--target-version') {
       const val = normalized[++i];
       if (!val || val.startsWith('-')) {
@@ -216,6 +226,7 @@ Commands:
   backup [file] [options]  一键数据冷备 (支持 --full 打包数据库与富媒体课件文件)
                            选项: --full (打包 database + uploads + storage 为 zip 归档)
   restore <file>           从备份快照文件安全还原数据 (支持 .db 镜像与 .zip 全量还原)
+  restore --snapshot <db>  从迁移失败前的 pre_migration_*.db 快照恢复 (可加 --force 回滚到更旧库)
   reset-admin [options]    重置管理员 admin 的口令（未指定时随机生成，不再默认 admin）
                            选项: --password, -P <pwd>
   plugins [list]           查看当前已安装的平台插件清单与加载状态
@@ -317,10 +328,12 @@ Environment Variables:
   }
 
   if (command === 'restore') {
-    const sourceFile = subcommandArgs[0];
+    // Issue #150：迁移失败后的 pre_migration_*.db 快照可直接恢复。
+    const sourceFile = flags.snapshot || subcommandArgs[0];
     const res = await runRestore(sourceFile, {
       dbPath: process.env.OPENLEARN_DB_PATH,
       full: flags.full || flags.all,
+      force: flags.force,
     });
     process.exit(res.ok ? 0 : 1);
   }

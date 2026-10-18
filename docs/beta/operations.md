@@ -128,6 +128,29 @@ docker compose start app
 
 迁移前自动生成的 `pre_migration_*.db` 只有数据库，没有文件包。整站退回用 `openlearn_*.manifest.json`。只用迁移前快照时，课件目录不会跟着退回。
 
+### 迁移失败后用 `pre_migration_*.db` 快照恢复（Issue #150）
+
+启动日志里会出现快照路径，形如 `/backups/pre_migration_20261018_042627.db`。恢复仍必须先停服：
+
+```bash
+docker compose stop app
+
+# 只看快照：restore 会先做完整性校验与迁移兼容性预检，再决定是否覆盖
+npx openlearn-next restore --snapshot /backups/pre_migration_20261018_042627.db
+
+docker compose start app
+```
+
+CLI 行为：
+
+- 先把快照复制到临时文件，`PRAGMA integrity_check` 不通过就拒绝，主库不动。
+- 迁移兼容性预检：快照里有当前代码**不认识**的迁移（来自更新版本）时默认拒绝，确认要回滚才加 `--force`；快照缺少当前迁移则允许，并提示下次启动会补齐。
+- 覆盖前用 `VACUUM INTO` 在当前库旁生成 `pre_restore_*.db`（目录取 `BACKUP_DIR`，默认 `<dbDir>/backups`），失败可按原路径退回。
+- 原子替换（先写临时文件再 `rename`），替换后删除旧的 `-wal` / `-shm`。
+- `.zip` 全量备份仍会同时还原 `uploads/` 与 `storage/`；单个 `.db` 快照不包含文件包。
+
+CI 覆盖：`docker-rehearsal` 工作流的 `migration-restore-drill` 作业会跑「注入一条中途失败的迁移 → 断言事务回滚 → 从快照恢复 → 启动后 `/health` 与 `/health/ready` 均 200」。脚本是 `scripts/db/migration-restore-drill.ts`，本地可用 `pnpm exec tsx scripts/db/migration-restore-drill.ts` 复现。
+
 ### 恢复后的插件与账号
 
 - 第三方插件若在备份里是 `process`，启动恢复时仍会按这个模式拉起。公开路由以备份里的批准记录为准。
