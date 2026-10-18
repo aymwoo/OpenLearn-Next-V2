@@ -6,6 +6,7 @@
  * 以及结课通票（Exit Ticket）困惑概念分析与破冰心态统计。
  * 独立于 Express HTTP 传输层，可直接注入内存/隔离 SQLite 进行无状态单元测试。
  */
+import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
@@ -13,6 +14,9 @@ import { resolveElementStageId, enforceStageAccess } from '../../packages/core/l
 import { defaultStageGuardPipeline } from '../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 import { gradeQuizSubmission, resolveCorrectIndex } from '../../packages/core/whiteboard/quiz-answer.js';
+
+export const VALID_ICEBREAKER_MOODS = ['fullPower', 'needCoffee', 'needHelp'] as const;
+export type IcebreakerMood = (typeof VALID_ICEBREAKER_MOODS)[number];
 
 export interface TopMistakeItem {
   rank: number;
@@ -180,7 +184,7 @@ export class DiagnosticService {
     const topMistakes = this.getLessonMistakes(lessonId);
 
     // 班级真实破冰心态统计
-    const icebreakerStats = this.getIcebreakerStats(classId);
+    const icebreakerStats = this.getIcebreakerStats(classId, lessonId);
 
     // 真实分层分布统计
     let tierA_mastered = 0;
@@ -291,27 +295,95 @@ export class DiagnosticService {
   }
 
   /**
-   * 记录学生课前破冰心态打卡
+   * 记录学生课前破冰心态打卡（数据库持久化，按学生+课次/日期幂等去重覆盖）
    */
-  public recordIcebreakerCheckin(classId: string, mood: string): IcebreakerStats {
-    const current = this.classIcebreakerMap.get(classId) || { fullPower: 0, needCoffee: 0, needHelp: 0 };
-    if (mood === 'fullPower') current.fullPower += 1;
-    else if (mood === 'needCoffee') current.needCoffee += 1;
-    else if (mood === 'needHelp') current.needHelp += 1;
+  public recordIcebreakerCheckin(
+    classId: string,
+    mood: string,
+    studentId?: string,
+    lessonId?: string,
+  ): IcebreakerStats {
+    if (!VALID_ICEBREAKER_MOODS.includes(mood as IcebreakerMood)) {
+      const err = new Error(`Invalid mood: ${mood}. Expected one of: ${VALID_ICEBREAKER_MOODS.join(', ')}`) as any;
+      err.status = 400;
+      throw err;
+    }
 
-    this.classIcebreakerMap.set(classId, current);
-    return { ...current };
+    const now = Date.now();
+    const checkinDate = new Date().toISOString().slice(0, 10);
+    const resolvedLessonId = lessonId?.trim() || null;
+    const resolvedStudentId = studentId?.trim() || randomUUID();
+    const scopeKey = resolvedLessonId ? `lesson:${resolvedLessonId}` : `date:${checkinDate}`;
+
+    try {
+      const id = randomUUID();
+      this.db
+        .prepare(
+          `INSERT INTO icebreaker_checkins (
+            id, class_id, lesson_id, scope_key, student_id, mood, checkin_date, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(class_id, scope_key, student_id) DO UPDATE SET
+            mood = excluded.mood,
+            lesson_id = COALESCE(excluded.lesson_id, icebreaker_checkins.lesson_id),
+            updated_at = excluded.updated_at`,
+        )
+        .run(id, classId, resolvedLessonId, scopeKey, resolvedStudentId, mood, checkinDate, now, now);
+    } catch {
+      // 容错降级回退到内存 Map
+      const current = this.classIcebreakerMap.get(classId) || { fullPower: 0, needCoffee: 0, needHelp: 0 };
+      if (mood === 'fullPower') current.fullPower += 1;
+      else if (mood === 'needCoffee') current.needCoffee += 1;
+      else if (mood === 'needHelp') current.needHelp += 1;
+      this.classIcebreakerMap.set(classId, current);
+      return { ...current };
+    }
+
+    return this.getIcebreakerStats(classId, resolvedLessonId || undefined);
   }
 
   /**
-   * 获取班级破冰心态统计
+   * 获取班级破冰心态统计（基于数据库真实数据聚合）
    */
-  public getIcebreakerStats(classId?: string): IcebreakerStats {
+  public getIcebreakerStats(classId?: string, lessonId?: string): IcebreakerStats {
     if (!classId) {
       return { fullPower: 0, needCoffee: 0, needHelp: 0 };
     }
-    const current = this.classIcebreakerMap.get(classId);
-    return current ? { ...current } : { fullPower: 0, needCoffee: 0, needHelp: 0 };
+
+    try {
+      const checkinDate = new Date().toISOString().slice(0, 10);
+      let rows: Array<{ mood: string; cnt: number }>;
+
+      if (lessonId) {
+        rows = this.reader
+          .prepare(
+            `SELECT mood, COUNT(*) as cnt
+             FROM icebreaker_checkins
+             WHERE class_id = ? AND (lesson_id = ? OR (lesson_id IS NULL AND checkin_date = ?))
+             GROUP BY mood`,
+          )
+          .all(classId, lessonId, checkinDate) as Array<{ mood: string; cnt: number }>;
+      } else {
+        rows = this.reader
+          .prepare(
+            `SELECT mood, COUNT(*) as cnt
+             FROM icebreaker_checkins
+             WHERE class_id = ? AND checkin_date = ?
+             GROUP BY mood`,
+          )
+          .all(classId, checkinDate) as Array<{ mood: string; cnt: number }>;
+      }
+
+      const stats: IcebreakerStats = { fullPower: 0, needCoffee: 0, needHelp: 0 };
+      for (const r of rows) {
+        if (r.mood === 'fullPower') stats.fullPower = Number(r.cnt) || 0;
+        else if (r.mood === 'needCoffee') stats.needCoffee = Number(r.cnt) || 0;
+        else if (r.mood === 'needHelp') stats.needHelp = Number(r.cnt) || 0;
+      }
+      return stats;
+    } catch {
+      const current = this.classIcebreakerMap.get(classId);
+      return current ? { ...current } : { fullPower: 0, needCoffee: 0, needHelp: 0 };
+    }
   }
 
   // ── 2. 随堂测验提交与批改 (Quiz Submissions & Grading Engine) ───────────────────

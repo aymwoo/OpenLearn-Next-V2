@@ -16,6 +16,8 @@ export interface StudentLessonHeaderProps {
   lang?: 'zh' | 'en';
   /** Issue #109: 离开课堂时若课堂仍在进行，用 Toast 告知可从顶部返回 */
   addToast?: (title: string, description: string, type: string) => void;
+  /** Issue #131: 打开课前心情打卡弹窗 */
+  onOpenIcebreaker?: () => void;
 }
 
 export function StudentLessonHeader(props: StudentLessonHeaderProps) {
@@ -30,6 +32,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
     selectedLesson,
     lang = 'zh',
     addToast,
+    onOpenIcebreaker,
   } = props;
 
   // Issue #109: 课堂仍在进行时，离开课堂给一条「可随时返回」的提示
@@ -93,7 +96,23 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
           <ChevronRight className="rotate-180" size={16} /> Back to Dashboard
         </button>
       )}
-      <h2 className="text-xl font-bold text-gray-800">{lessons.find((l) => l.id === selectedLesson)?.title}</h2>
+      <div className="flex items-center gap-3">
+        {onOpenIcebreaker && (
+          <button
+            type="button"
+            data-testid="open-icebreaker-btn"
+            onClick={onOpenIcebreaker}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-xs font-semibold shadow-3xs transition-colors cursor-pointer"
+            title={lang === 'zh' ? '课前破冰心情打卡' : 'Pre-class Icebreaker Check-in'}
+          >
+            <span>✨</span>
+            <span>{lang === 'zh' ? '心情打卡' : 'Mood Check-in'}</span>
+          </button>
+        )}
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+          {lessons.find((l) => l.id === selectedLesson)?.title}
+        </h2>
+      </div>
     </div>
   );
 }

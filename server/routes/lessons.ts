@@ -8,7 +8,7 @@ import { randomId } from '../utils/id.js';
 import { classRoom, pseudoRoomStudentId } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
-import { diagnosticService } from '../services/diagnostic-service.js';
+import { diagnosticService, VALID_ICEBREAKER_MOODS } from '../services/diagnostic-service.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
@@ -665,17 +665,29 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  // TODO(#131)：scope 已声明为 class-member（目标态），但 handler 仍未校验班级归属与去重；
-  // 本 issue 只做声明门禁，行为修复留给 #131。
+  // Issue #131: 课前破冰心情打卡（严格校验班级成员权限、mood 枚举校验、按学生幂等去重落库）
   app.post('/api/classes/:classId/checkin/icebreaker', requireScopedAuth('class-member'), (req, res) => {
     try {
       const classId = req.params.classId;
-      const { mood } = req.body;
-      const current = diagnosticService.recordIcebreakerCheckin(classId, mood);
+      const session = (req as any).session;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, session, classId, 'member'))) return;
+
+      const { mood, lessonId } = req.body || {};
+      if (!mood || typeof mood !== 'string' || !VALID_ICEBREAKER_MOODS.includes(mood as any)) {
+        res.status(400).json({
+          error: `Invalid mood: ${mood}. Expected one of: ${VALID_ICEBREAKER_MOODS.join(', ')}`,
+        });
+        return;
+      }
+
+      const studentId = studentActorId(session) || 'anonymous';
+      const resolvedLessonId = typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
+      const current = diagnosticService.recordIcebreakerCheckin(classId, mood, studentId, resolvedLessonId);
 
       if (ctx.io) {
         ctx.io.to(classRoom(classId)).emit('classroom:icebreaker_updated', {
           classId,
+          lessonId: resolvedLessonId || undefined,
           stats: current,
         });
       }
