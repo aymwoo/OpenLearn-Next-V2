@@ -339,6 +339,82 @@ describe('Issue #120 · 测评 API', () => {
       expect(csv.text).toContain(STUDENT_ID);
     });
 
+    it('项分析：返回逐题难度与区分度，样本不足时区分度为 null', async () => {
+      const res = await call('GET', `/api/assessment-assignments/${assignmentId}/item-analysis`, TEACHER_TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.json.assignmentId).toBe(assignmentId);
+      expect(res.json.sampleSize).toBe(1);
+      expect(res.json.minSampleSize).toBe(5);
+      expect(res.json.items).toHaveLength(4);
+      const single = res.json.items[0];
+      expect(single.difficulty).toBeGreaterThan(0);
+      expect(single.difficulty).toBeLessThanOrEqual(1);
+      // 单份作答远低于最小样本量：不臆造相关系数
+      expect(single.discrimination).toBeNull();
+      expect(single.discriminationLevel).toBeNull();
+    });
+
+    it('项分析导出：csv / json / xlsx 与非法格式', async () => {
+      const csv = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis/export?format=csv`,
+        TEACHER_TOKEN,
+      );
+      expect(csv.status).toBe(200);
+      expect(csv.headers.get('content-type')).toContain('text/csv');
+      expect(csv.text).toContain('难度 (p)');
+      expect(csv.text).toContain('区分度 (r)');
+
+      const json = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis/export?format=json`,
+        TEACHER_TOKEN,
+      );
+      expect(json.status).toBe(200);
+      expect(json.headers.get('content-type')).toContain('application/json');
+      const parsed = JSON.parse(json.text);
+      expect(parsed.items).toHaveLength(4);
+      expect(parsed.items[0]).toHaveProperty('difficulty');
+      expect(parsed.items[0]).toHaveProperty('discrimination');
+
+      const xlsx = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis/export?format=xlsx`,
+        TEACHER_TOKEN,
+      );
+      expect(xlsx.status).toBe(200);
+      expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
+      expect(xlsx.text.length).toBeGreaterThan(0);
+
+      const bad = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis/export?format=pdf`,
+        TEACHER_TOKEN,
+      );
+      expect(bad.status).toBe(400);
+    });
+
+    it('非 owner 教师不能读取项分析（403）', async () => {
+      // 该会话在后面的用例里才给其它测试种下；这里独立种一次，避免依赖执行顺序。
+      seedSession('tok_assess_other_teacher', {
+        userId: 'usr_other_teacher',
+        username: 'other_teacher',
+        role: 'teacher',
+      });
+      const res = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis`,
+        'tok_assess_other_teacher',
+      );
+      expect(res.status).toBe(403);
+      const exported = await call(
+        'GET',
+        `/api/assessment-assignments/${assignmentId}/item-analysis/export?format=csv`,
+        'tok_assess_other_teacher',
+      );
+      expect(exported.status).toBe(403);
+    });
+
     it('非 owner 教师不能访问别人的试卷（403）', async () => {
       seedSession('tok_assess_other_teacher', {
         userId: 'usr_other_teacher',

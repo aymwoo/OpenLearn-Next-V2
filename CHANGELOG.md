@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：
+  - 新增 `packages/core/assessment/item-analysis.ts`（纯函数）：难度 (p) = 该题平均得分 / 满分；区分度 (r) = 题目得分与**剩余卷面分**的 Pearson 相关（避免 part-whole 虚高）。
+  - 退化规则：样本量 < 5、全对/全错（题目方差为 0）、剩余分方差为 0 时返回 `null`，不输出 NaN；**待人工批改的作答不计入**（不把未批改当成 0 分）。分级 `|r| ≥ 0.4` 高、`≥ 0.2` 中、其余低。
+  - 新端点：`GET /api/assessment-assignments/:id/item-analysis` 与 `.../item-analysis/export?format=csv|json|xlsx`（教师/管理员，按 owner 校验；CSV 带 BOM）。
+  - 测试：纯函数 11 例（部分得分、小样本、全对/全错、方差为 0、负相关、CSV 列序）+ API 3 例（形状/退化、三种导出格式与非法格式、跨教师 403）；`docs/architecture/assessment-model.md` 补充口径与端点。
+
 ### Docs
 
 - **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
