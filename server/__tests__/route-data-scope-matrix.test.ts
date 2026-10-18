@@ -260,13 +260,15 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
   });
 
   describe('courseware', () => {
-    it('原始作答：学生读自己 200、读他人 403，教师读任意 200', async () => {
+    it('原始作答：学生读自己 200、读他人 403，教师读本班 200、跨班 403（Issue #139 班级切片口径）', async () => {
       expect((await get(`/api/courseware/attempts/${attemptA}/raw`, tokStudentA)).status).toBe(200);
       expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokStudentA)).status).toBe(403);
-      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokTeacherA)).status).toBe(200);
+      expect((await get(`/api/courseware/attempts/${attemptA}/raw`, tokTeacherA)).status).toBe(200);
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokTeacherA)).status).toBe(403);
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokAdmin)).status).toBe(200);
     });
 
-    it('作答列表：学生只拿到自己的记录，教师拿到全部', async () => {
+    it('作答列表：学生只拿到自己的记录，教师只拿到所教班级，管理员全量', async () => {
       const studentList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokStudentA);
       expect(studentList.status).toBe(200);
       const studentBody: any = await studentList.json();
@@ -274,11 +276,23 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
       expect(studentRows.length).toBeGreaterThan(0);
       expect(studentRows.every((row: any) => row.studentId === studentA)).toBe(true);
 
-      const teacherList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokTeacherA);
-      expect(teacherList.status).toBe(200);
-      const teacherBody: any = await teacherList.json();
-      const teacherRows: any[] = teacherBody.attempts ?? teacherBody.data ?? [];
-      expect(new Set(teacherRows.map((row: any) => row.studentId))).toEqual(new Set([studentA, studentB]));
+      const teacherListA = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokTeacherA);
+      expect(teacherListA.status).toBe(200);
+      const teacherBodyA: any = await teacherListA.json();
+      const teacherRowsA: any[] = teacherBodyA.attempts ?? teacherBodyA.data ?? [];
+      expect(new Set(teacherRowsA.map((row: any) => row.studentId))).toEqual(new Set([studentA]));
+
+      const teacherListB = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokTeacherB);
+      expect(teacherListB.status).toBe(200);
+      const teacherBodyB: any = await teacherListB.json();
+      const teacherRowsB: any[] = teacherBodyB.attempts ?? teacherBodyB.data ?? [];
+      expect(new Set(teacherRowsB.map((row: any) => row.studentId))).toEqual(new Set([studentB]));
+
+      const adminList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokAdmin);
+      expect(adminList.status).toBe(200);
+      const adminBody: any = await adminList.json();
+      const adminRows: any[] = adminBody.attempts ?? adminBody.data ?? [];
+      expect(new Set(adminRows.map((row: any) => row.studentId))).toEqual(new Set([studentA, studentB]));
     });
   });
 

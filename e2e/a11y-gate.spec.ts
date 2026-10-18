@@ -341,6 +341,15 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       data: { classId, teachingModeId: 'lecture' },
     });
     await page.goto(`/?mode=student_live&lessonId=${encodeURIComponent(lessonId)}`);
+    // Issue #131: 课前破冰打卡弹窗会在进入课中视图时自动弹出，先跳过以免遮挡后续交互
+    const icebreakerModal = page.getByTestId('student-icebreaker-modal');
+    const modalShown = await icebreakerModal
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (modalShown) {
+      await page.getByTestId('icebreaker-skip-btn').click();
+    }
     const assignmentTab = page.getByRole('button', { name: /作业提交与互评|Assignments & Peer Reviews/ }).first();
     await expect(assignmentTab).toBeVisible({ timeout: 25_000 });
     await assignmentTab.click();
