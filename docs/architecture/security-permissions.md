@@ -34,7 +34,9 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **强制改密（`SEC-AUTH-06`）**: `enforcePasswordChanged` 拦截带 `mustChangePassword` 标记的会话访问的全部 `/api` 请求（含 GET），仅放行 `/api/auth/change-password`、`/api/auth/logout`、`/api/auth/session`、`/api/auth/me`。静态资源与 SPA 壳不在 `/api` 下，改密页仍可打开。**适用范围（Issue #94 起）**：仅教师/管理员种子账号（密码等于用户名或 `users.must_change_password=1`）；**学生以初始默认口令 123456 登录不再强制改密**——会话仅携带 `usedDefaultPassword` 提示标记，前端展示可关闭的非阻塞横幅引导修改，接口不受任何拦截。
 - **班级对象授权**: 班级、作业、提交、成绩按角色和成员关系校验（`server/services/class-access.ts`）。管理员可访问全部班级；教师只能访问 `classes.owner_user_id` 指向自己的班级（空归属的历史班级不向全体教师开放，需管理员指定归属）；学生只能访问 `class_students` 中的班级，且只能看到自己的提交与成绩。对外列表不返回 `class_passcode`。库内该列是 AES-256-GCM 密文（前缀 `olenc1:`），登录先解密再做常量时间比较；任课教师的口令接口返回原文。越权返回 403，对象不存在返回 404。
 - **学生对象写授权**: `PUT /api/students/:id` 与 `DELETE /api/students/:id` 在角色校验之外再做学生级归属校验（`server/routes/roster.ts` 的 `resolveWritableStudentId`）：管理员不限；教师仅可写 `teacherCanSeeStudent` 判定可见的学生（其名下班级的在册学生）；其余 403。路径参数支持 `student_number` 或 `id`，统一解析为规范 id 后再落库。
+- **花名册范围**: `GET /api/students` 与班级对象授权同口径——管理员返回全库，教师仅返回其 `owner_user_id` 名下班级的在册学生（`RosterService.listStudents` 的 `scope.mode = 'owner'`），分页 `total` 同步收敛。
 - **私有备忘隔离**: `students.private_notes` 只对教师/管理员可见。`GET /api/students/:id/dashboard` 按视角选择列，学生本人响应中的 `profile` 不含 `private_notes`（`locked_lesson_id` 等学生端自用字段保留）；`GET /api/classes/:id/students` 的学生视角同样走字段白名单。
+- **私有备忘净化**: `students.private_notes` 以 `{"category","html"}` JSON 或裸 HTML 存储。`packages/core/security/html-sanitize.ts` 是唯一净化入口：`PUT /api/students/:id` 与 `POST /api/students/import` 落库前净化（`xss` 白名单，仅保留排版标签与有限 `style`），编辑器在 `innerHTML` 赋值前再净化一次以覆盖历史脏数据。
 - **Socket 握手鉴权**: `socketAuthMiddleware(socket, next)` 从 cookie `edu_os_token` 或 `socket.handshake.auth.token` 取令牌校验会话，并同样拒绝带 `mustChangePassword` 标记的连接（与 HTTP 层同用 `FORBIDDEN_DEFAULT_PASSWORD` 错误码）。
 - **CSRF**: `server/middleware/csrf.ts` 的 `csrfGuard`。
 

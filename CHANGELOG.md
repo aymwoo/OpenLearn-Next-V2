@@ -16,6 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `PUT /api/students/:id` 与 `DELETE /api/students/:id` 此前只校验角色（`teacher`/`administrator`），不校验学生归属，任意教师可修改或删除任意学校学生的姓名、学号、密码、锁定课节与私有备忘。现新增 `resolveWritableStudentId`：管理员不限，教师仅可写 `teacherCanSeeStudent` 判定可见的学生（即其 `owner_user_id` 名下班级的在册学生），其余一律 403；入参支持 `student_number` 并统一解析为规范 id。
   - `GET /api/students/:id/dashboard` 的 `profile` 此前无条件 `SELECT private_notes`，学生本人即可读到教师给其写的「特别关注/行为」备忘。现改为仅在教师/管理员视角查询该列，学生视角的 `profile` 不再包含 `private_notes`（`locked_lesson_id` 等学生端自用字段保留）。
   - 新增 `server/__tests__/student-write-auth.test.ts`（8 例）：跨班教师 PUT/DELETE 均 403 且数据不变、本班教师与管理员可写、学生角色仍被拒、学生本人 dashboard 无 `private_notes`、本班教师可见、跨班教师 dashboard 403；并更新 `roster-routes.test.ts` 的创建流程，按真实 UI 的「创建 → 编入班级」顺序建立归属后再验证写操作。
+- **学生私有备忘存储型 XSS 与花名册全库越权修复（P1）**：
+  - 新增 `packages/core/security/html-sanitize.ts`（前后端共用）：基于 `xss` 白名单净化备忘富文本，仅保留排版标签与 `color`/`background-color`/`text-align`/`font-*`/`text-decoration`，剥离 `script`/`img`/事件属性/`javascript:` 链接；保持 `{"category","html"}` 存储格式，非法分类回落 `General`。
+  - **写入侧**：`RosterService.updateStudent`（`PUT /api/students/:id`）与 `RosterService.importStudents`（`POST /api/students/import`、批量入班）落库前净化 `private_notes`，CSV 导入不再是绕过口。
+  - **读取侧**：`StudentPrivateNotesEditor` 在 `innerHTML` 赋值前净化，保存前再次净化，覆盖修复前的历史脏数据（此前恶意 `<img onerror>` 会在教师打开备忘时执行）。
+  - `GET /api/students` 改为按教师班级归属过滤（`listStudents` 新增 `scope`）：管理员全库，教师仅返回其 `owner_user_id` 名下班级的在册学生，分页 `total` 同步收敛；此前任意教师可拉取全库学生名单及其私有备忘。
+  - 新增 `html-sanitize.test.ts`（7 例）、`student-private-notes-security.test.ts`（5 例：PUT/导入净化、教师列表隔离、管理员全量）与 `StudentPrivateNotesEditor.test.tsx`（2 例：历史脏数据渲染、保存净化）。
 
 ### Fixes
 
