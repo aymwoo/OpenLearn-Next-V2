@@ -47,6 +47,7 @@
 | 031  | 031_assessment_core.sql           | 测评子系统核心数据结构（试卷、考试、题库、题目等） |
 | 032  | 032_progress_verification.sql      | 学习进度区分「学生自报」与「已验证」：新增 `verified` / `verified_progress_percent`，成绩只计入已验证进度；历史进度回填为已验证以保持既有成绩口径 |
 | 033  | 033_student_lock_mode.sql         | 学生端锁定模式 (lock_mode) 与锁定目标 (lock_target) |
-| 034  | 034_icebreaker_checkins.sql       | 课前破冰心情打卡持久化与去重（`icebreaker_checkins` 表与按学生去重唯一索引） |
+| 034  | 034_plugin_orphan_data.sql        | 插件卸载数据语义：孤立插件数据登记表（`plugin_orphan_data`，keep 保留登记 / purge 归档后可清除） |
+| 035  | 035_icebreaker_checkins.sql       | 课前破冰心情打卡持久化与去重（`icebreaker_checkins` 表与按学生去重唯一索引） |
 
 

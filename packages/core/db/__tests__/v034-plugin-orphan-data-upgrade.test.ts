@@ -43,7 +43,11 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
     const newer = all.filter((migration) => migrationNumber(migration.name) >= 34);
 
     expect(legacy).toHaveLength(34);
-    expect(newer.map((migration) => migration.name)).toEqual(['034_plugin_orphan_data']);
+    // 035（课前破冰打卡）在 034 之后合入，两个迁移都属于「旧库升级后新增」。
+    expect(newer.map((migration) => migration.name)).toEqual([
+      '034_plugin_orphan_data',
+      '035_icebreaker_checkins',
+    ]);
 
     const db = openMemory();
     runMigrations(db, legacy);

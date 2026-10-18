@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **课前「破冰心情打卡」全链路闭环与持久化（Issue #131）**：
   - **学生端入口**：在学生进入课堂界面（`StudentLessonView`）新增 `StudentIcebreakerModal` 轻量打卡浮层，提供充满电（`fullPower`）、需要咖啡（`needCoffee`）、需要帮助（`needHelp`）三项，支持一键打卡与免打扰跳过；在顶栏标题旁提供「心情打卡」按钮支持随时修改心情。
   - **服务端鉴权与校验**：`POST /api/classes/:classId/checkin/icebreaker` 接入 `authorizeClass(ctx.db, req.session, classId, 'member')`，防范非本班学生越权（403）及非法班级（404）；严密校验 `mood` 合法枚举（400）。
-  - **数据持久化与幂等更新**：新增数据库迁移 `034_icebreaker_checkins.sql`，按 `(class_id, scope_key, student_id)` 唯一索引进行 UPSERT，实现同一学生重复打卡按修改心情更新，并持久化到 SQLite（服务重启统计不丢失）。
+  - **数据持久化与幂等更新**：新增数据库迁移 `035_icebreaker_checkins.sql`，按 `(class_id, scope_key, student_id)` 唯一索引进行 UPSERT，实现同一学生重复打卡按修改心情更新，并持久化到 SQLite（服务重启统计不丢失）。
   - **统计聚合与教师端联动**：`DiagnosticService.getIcebreakerStats` 与 `getPreClassDiagnostic` 基于数据库真实数据按课节与班级聚合，学生打卡后即刻通过 Socket 向教师端 `PreClassDiagnosticHub` 实时推送更新。
   - **测试覆盖**：新增 `server/__tests__/icebreaker-checkin.test.ts`（8 例覆盖未认证 401、跨班 403、不存在 404、非法 mood 400、去重修改与重启持久化）和 `src/features/student/__tests__/StudentIcebreakerModal.test.tsx`（6 例覆盖选项渲染、提交回调、跳过标记与错误呈现）。
 
