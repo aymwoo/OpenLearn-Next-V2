@@ -217,6 +217,52 @@ function listDir(dir, depth, prefix = '') {
   if (entries.length > 12) console.log(`  ${prefix}... and ${entries.length - 12} more`);
 }
 
+// ── Signature Helpers ───────────────────────────────────────────────────
+
+const ATTESTATION_V2_PREFIX = 'openlearn-plugin-attestation-v2';
+
+function buildAttestationPayload(id, version, integrityHex) {
+  return `${ATTESTATION_V2_PREFIX}\n${id || ''}\n${version || ''}\n${integrityHex.trim()}`;
+}
+
+async function signZip({ zip, manifest, privKeyPem, publisherName }) {
+  const privKey = createPrivateKey(privKeyPem);
+  const publisher = publisherName || manifest.author || 'community';
+
+  // 1. Remove existing signature.json to compute clean unsigned buffer
+  zip.remove('signature.json');
+  const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+  const unsignedHashHex = createHash('sha256').update(unsignedBuf).digest('hex');
+
+  // 2. Compute signature over unsigned archive
+  const payload = buildAttestationPayload(manifest.id, manifest.version, unsignedHashHex);
+  const signature = sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+
+  // 3. Write signature.json into zip
+  const sigManifest = {
+    version: 2,
+    algorithm: 'ed25519',
+    signature,
+    publisher,
+  };
+  zip.file('signature.json', JSON.stringify(sigManifest, null, 2));
+
+  // 4. Generate final zip buffer & compute outer integrity + signature for external registry/metadata
+  const finalZipBuf = await zip.generateAsync({ type: 'nodebuffer' });
+  const finalHashHex = createHash('sha256').update(finalZipBuf).digest('hex');
+  const finalPayload = buildAttestationPayload(manifest.id, manifest.version, finalHashHex);
+  const finalSig = sign(null, Buffer.from(finalPayload, 'utf8'), privKey).toString('base64');
+
+  return {
+    finalZipBuf,
+    publisher,
+    unsignedHashHex,
+    signature,
+    finalHashHex,
+    finalSig,
+  };
+}
+
 async function cmdBuild(args) {
   const cwd = process.cwd();
   const pkgPath = join(cwd, 'package.json');
@@ -397,35 +443,17 @@ async function cmdBuild(args) {
           process.exit(1);
         }
         const privKeyPem = readFileSync(keyFilePath, 'utf8');
-        const initialZipBuf = await zip.generateAsync({ type: 'nodebuffer' });
-        const hashHex = createHash('sha256').update(initialZipBuf).digest('hex');
-        const payload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${hashHex}`;
-        const privKey = createPrivateKey(privKeyPem);
-        const signature = sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
-        const publisher = publisherName || manifest.author || 'community';
+        const signed = await signZip({ zip, manifest, privKeyPem, publisherName });
 
-        const sigManifest = {
-          version: 2,
-          algorithm: 'ed25519',
-          signature,
-          publisher,
-        };
-        zip.file('signature.json', JSON.stringify(sigManifest, null, 2));
+        writeFileSync(zipPath, signed.finalZipBuf);
+        writeFileSync(cwdZip, signed.finalZipBuf);
 
-        const finalZipBuf = await zip.generateAsync({ type: 'nodebuffer' });
-        const finalHashHex = createHash('sha256').update(finalZipBuf).digest('hex');
-        const finalPayload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${finalHashHex}`;
-        const finalSig = sign(null, Buffer.from(finalPayload, 'utf8'), privKey).toString('base64');
-
-        writeFileSync(zipPath, finalZipBuf);
-        writeFileSync(cwdZip, finalZipBuf);
-
-        const sizeKB = (finalZipBuf.length / 1024).toFixed(1);
+        const sizeKB = (signed.finalZipBuf.length / 1024).toFixed(1);
         console.log(`${tick} Packaged & Signed ${zipName} (${sizeKB} KB)`);
         console.log(`  → ${cwdZip}`);
-        console.log(`  ${info} Publisher: ${publisher}`);
-        console.log(`  ${info} Integrity (SHA-256): ${finalHashHex}`);
-        console.log(`  ${info} Signature: ${finalSig}`);
+        console.log(`  ${info} Publisher: ${signed.publisher}`);
+        console.log(`  ${info} Integrity (SHA-256): ${signed.finalHashHex}`);
+        console.log(`  ${info} Signature: ${signed.finalSig}`);
         return;
       }
 
@@ -504,38 +532,13 @@ async function cmdSign(args) {
     } catch (_) {}
   }
 
-  zip.remove('signature.json');
-  const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
-  const hashHex = createHash('sha256').update(unsignedBuf).digest('hex');
-  const payload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${hashHex}`;
-  const privKey = createPrivateKey(privKeyPem);
-  const signature = sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
-  const publisher = publisherName || manifest.author || 'community';
+  const signed = await signZip({ zip, manifest, privKeyPem, publisherName });
+  writeFileSync(targetZip, signed.finalZipBuf);
 
-  zip.file(
-    'signature.json',
-    JSON.stringify(
-      {
-        version: 2,
-        algorithm: 'ed25519',
-        signature,
-        publisher,
-      },
-      null,
-      2,
-    ),
-  );
-
-  const finalBuf = await zip.generateAsync({ type: 'nodebuffer' });
-  const finalHashHex = createHash('sha256').update(finalBuf).digest('hex');
-  const finalPayload = `openlearn-plugin-attestation-v2\n${manifest.id || ''}\n${manifest.version || ''}\n${finalHashHex}`;
-  const finalSig = sign(null, Buffer.from(finalPayload, 'utf8'), privKey).toString('base64');
-
-  writeFileSync(targetZip, finalBuf);
   console.log(`${tick} Successfully signed ${basename(targetZip)}`);
-  console.log(`  ${info} Publisher: ${publisher}`);
-  console.log(`  ${info} Integrity: ${finalHashHex}`);
-  console.log(`  ${info} Signature: ${finalSig}`);
+  console.log(`  ${info} Publisher: ${signed.publisher}`);
+  console.log(`  ${info} Integrity: ${signed.finalHashHex}`);
+  console.log(`  ${info} Signature: ${signed.finalSig}`);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────

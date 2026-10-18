@@ -28,7 +28,9 @@ import {
   isValidPluginId,
   type DownloadedPackage,
 } from '../services/community-registry.js';
-import { communityInstallEnabled, verifyCommunityPackage } from '../services/community-attest.js';
+import JSZip from 'jszip';
+import { communityInstallEnabled, verifyCommunityPackage, communityPublicKeys } from '../services/community-attest.js';
+import { verifyPluginPackage } from '../../packages/core/security/plugin-signature.js';
 import { approvePluginCapabilities } from '../../packages/core/plugin-host/plugin-grants.js';
 import {
   exportPluginDataToSql,
@@ -85,58 +87,136 @@ function installationSecurityFields(
   };
 }
 
-function assertCommunityZipAttestation(
+interface AttestationSuccess {
+  ok: true;
+  signatureStatus: 'verified' | 'unverified_local_acknowledged';
+  publisher?: string;
+  integrity?: string;
+}
+
+interface AttestationFailure {
+  ok: false;
+  status: number;
+  body: { success: false; code: string; error: string };
+}
+
+type AttestationResult = AttestationSuccess | AttestationFailure;
+
+async function assertCommunityZipAttestation(
   req: express.Request,
   zipPath: string,
-  metadata?: { id?: string; version?: string },
-): { ok: true } | { ok: false; status: number; body: { success: false; code: string; error: string } } {
-  const isCommunity =
-    headerFlag(req, 'x-community-install') || !!req.headers['x-integrity'] || !!req.headers['x-signature'];
+  targetPluginId?: string,
+): Promise<AttestationResult> {
+  let pkgManifest: { id?: string; version?: string } | null = null;
+  let hasEmbeddedSignature = false;
 
-  if (!isCommunity) {
-    return { ok: true };
-  }
-
-  if (!communityInstallEnabled()) {
+  try {
+    const buffer = fs.readFileSync(zipPath);
+    const zip = await JSZip.loadAsync(buffer);
+    const manifestFile = zip.file('manifest.json');
+    if (manifestFile) {
+      pkgManifest = JSON.parse(await manifestFile.async('string'));
+    }
+    if (zip.file('signature.json')) {
+      hasEmbeddedSignature = true;
+    }
+  } catch (err: any) {
     return {
       ok: false,
-      status: 403,
+      status: 400,
       body: {
         success: false,
-        code: 'COMMUNITY_INSTALL_DISABLED',
-        error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装或更新。',
+        code: 'INVALID_ZIP_ARCHIVE',
+        error: `无效的插件 ZIP 包：${err?.message || '无法解析'}`,
       },
     };
   }
 
-  const integrity = req.headers['x-integrity'];
-  const signature = req.headers['x-signature'];
-  if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
+  // 校验目标 ID 匹配（针对 update 或指定 ID 场景）
+  if (targetPluginId && pkgManifest?.id && pkgManifest.id !== targetPluginId) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        success: false,
+        code: 'PLUGIN_ID_MISMATCH',
+        error: `插件包 ID (${pkgManifest.id}) 与目标 ID (${targetPluginId}) 不匹配`,
+      },
+    };
+  }
+
+  const isCommunityFlag = headerFlag(req, 'x-community-install');
+  const hasExtSignature = typeof req.headers['x-signature'] === 'string' && req.headers['x-signature'].trim().length > 0;
+  const hasExtIntegrity = typeof req.headers['x-integrity'] === 'string' && req.headers['x-integrity'].trim().length > 0;
+  const isSigned = hasExtSignature || hasEmbeddedSignature;
+  const allowUnsigned = headerFlag(req, 'x-allow-unsigned');
+
+  // 如果声明了社区安装，或者包含签名/完整性声明
+  if (isCommunityFlag || isSigned || hasExtIntegrity) {
+    if (isCommunityFlag && !communityInstallEnabled()) {
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          success: false,
+          code: 'COMMUNITY_INSTALL_DISABLED',
+          error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装或更新。',
+        },
+      };
+    }
+
+    const trustedKeys = communityPublicKeys();
+    const verifyRes = await verifyPluginPackage({
+      packageSource: zipPath,
+      sourceType: 'community',
+      metadata: {
+        id: pkgManifest?.id,
+        version: pkgManifest?.version,
+        integrity: hasExtIntegrity ? (req.headers['x-integrity'] as string) : undefined,
+        signature: hasExtSignature ? (req.headers['x-signature'] as string) : undefined,
+      },
+      trustedPublicKeys: trustedKeys,
+    });
+
+    if (!verifyRes.ok) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          success: false,
+          code: verifyRes.code || 'COMMUNITY_SIGNATURE_INVALID',
+          error: verifyRes.error || '社区插件包签名或完整性校验失败',
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      signatureStatus: 'verified',
+      publisher: verifyRes.publisher,
+      integrity: verifyRes.integrity,
+    };
+  }
+
+  // 没有签名，且未声明社区安装
+  // 按照 B2 安全基线：必须由管理员显式传入 x-allow-unsigned: true
+  if (!allowUnsigned) {
     return {
       ok: false,
       status: 400,
       body: {
         success: false,
         code: 'COMMUNITY_ATTESTATION_REQUIRED',
-        error: '社区包必须同时提供 integrity 与 signature',
+        error: '插件包未签名。若确认为本地可信插件，需管理员显式开启 allowUnsigned 确认后安装。',
       },
     };
   }
 
-  const attested = verifyCommunityPackage(zipPath, integrity, signature, process.env, metadata);
-  if (!attested.ok) {
-    return {
-      ok: false,
-      status: 400,
-      body: {
-        success: false,
-        code: attested.code,
-        error: attested.error,
-      },
-    };
-  }
-
-  return { ok: true };
+  // 管理员显式免验放行
+  return {
+    ok: true,
+    signatureStatus: 'unverified_local_acknowledged',
+  };
 }
 /**
  * R-4：把 raw ZIP 上传 body **流式落盘**，返回临时文件路径。
@@ -1159,7 +1239,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const expectedId = targetPluginId
         ? (kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId)
         : undefined;
-      const attestation = assertCommunityZipAttestation(req, zipPath, expectedId ? { id: expectedId } : undefined);
+      const attestation = await assertCommunityZipAttestation(req, zipPath, expectedId);
       if (!attestation.ok) {
         return res.status(attestation.status).json(attestation.body);
       }
@@ -1170,6 +1250,23 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           executionMode,
           allowDowngrade,
         });
+        recordSecurityAudit('plugin.installed', {
+          actorId: getActorId(req),
+          pluginId: result.pluginId,
+          manifestId: result.manifest?.id,
+          via: 'zip-raw-update',
+          signatureStatus: attestation.signatureStatus,
+          publisher: attestation.publisher,
+          integrity: attestation.integrity,
+        });
+        if (attestation.signatureStatus === 'unverified_local_acknowledged') {
+          recordSecurityAudit('plugin.unverified_local_bypassed', {
+            actorId: getActorId(req),
+            pluginId: result.pluginId,
+            manifestId: result.manifest?.id,
+            filename,
+          });
+        }
         return res.json({
           success: true,
           updated: true,
@@ -1198,7 +1295,18 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         pluginId: result.pluginId,
         manifestId: result.manifest?.id,
         via: 'zip-raw',
+        signatureStatus: attestation.signatureStatus,
+        publisher: attestation.publisher,
+        integrity: attestation.integrity,
       });
+      if (attestation.signatureStatus === 'unverified_local_acknowledged') {
+        recordSecurityAudit('plugin.unverified_local_bypassed', {
+          actorId: getActorId(req),
+          pluginId: result.pluginId,
+          manifestId: result.manifest?.id,
+          filename,
+        });
+      }
       // result.pluginId is DB UUID; result.manifest keeps package metadata
       res.json({
         success: true,
@@ -1237,10 +1345,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
       const expectedUpdateId = kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId;
-      const attestation = assertCommunityZipAttestation(
+      const attestation = await assertCommunityZipAttestation(
         req,
         zipPath,
-        expectedUpdateId ? { id: expectedUpdateId } : undefined,
+        expectedUpdateId,
       );
       if (!attestation.ok) {
         return res.status(attestation.status).json(attestation.body);
@@ -1255,6 +1363,23 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         executionMode,
         allowDowngrade,
       });
+      recordSecurityAudit('plugin.installed', {
+        actorId: getActorId(req),
+        pluginId: result.pluginId,
+        manifestId: result.manifest?.id,
+        via: 'update-zip-raw',
+        signatureStatus: attestation.signatureStatus,
+        publisher: attestation.publisher,
+        integrity: attestation.integrity,
+      });
+      if (attestation.signatureStatus === 'unverified_local_acknowledged') {
+        recordSecurityAudit('plugin.unverified_local_bypassed', {
+          actorId: getActorId(req),
+          pluginId: result.pluginId,
+          manifestId: result.manifest?.id,
+          filename: targetPluginId,
+        });
+      }
       res.json({
         success: true,
         updated: true,

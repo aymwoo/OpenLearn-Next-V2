@@ -19,8 +19,12 @@ export function communityInstallEnabled(env: NodeJS.ProcessEnv = process.env): b
   return env.OPENLEARN_COMMUNITY_INSTALL === '1';
 }
 
+export function communityPublicKeys(env: NodeJS.ProcessEnv = process.env): string[] {
+  return resolveTrustedPublicKeys([], env);
+}
+
 export function communityPublicKeyPem(env: NodeJS.ProcessEnv = process.env): string | null {
-  const keys = resolveTrustedPublicKeys([], env);
+  const keys = communityPublicKeys(env);
   return keys[0] || null;
 }
 
@@ -28,10 +32,12 @@ export function communityPublicKeyPem(env: NodeJS.ProcessEnv = process.env): str
 export function signatureMatches(
   integrity: string,
   signature: string,
-  pem: string,
+  pemOrKeys: string | string[],
   metadata?: { id?: string; version?: string },
+  options?: { allowV1Fallback?: boolean },
 ): boolean {
-  const res = verifySignature(integrity, signature, pem, metadata);
+  const allowV1 = options?.allowV1Fallback ?? (!metadata || !metadata.id);
+  const res = verifySignature(integrity, signature, pemOrKeys, metadata, { allowV1Fallback: allowV1 });
   return res.ok;
 }
 
@@ -41,6 +47,7 @@ export function verifyCommunityPackage(
   signature: unknown,
   env: NodeJS.ProcessEnv = process.env,
   metadata?: { id?: string; version?: string },
+  options?: { allowV1Fallback?: boolean },
 ): { ok: true } | { ok: false; code: string; error: string } {
   if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
     return {
@@ -49,18 +56,19 @@ export function verifyCommunityPackage(
       error: '社区包必须同时提供 integrity 与 signature',
     };
   }
-  const pem = communityPublicKeyPem(env);
-  if (!pem) {
+  const keys = communityPublicKeys(env);
+  if (keys.length === 0) {
     return {
       ok: false,
       code: 'COMMUNITY_PUBKEY_MISSING',
-      error: '未配置 OPENLEARN_COMMUNITY_PUBKEY，拒绝安装社区包',
+      error: '未配置受信任社区公钥 (OPENLEARN_COMMUNITY_PUBKEY 或 OPENLEARN_TRUSTED_PUBKEYS)，拒绝安装社区包',
     };
   }
   if (!hashMatches(bytesOrPath, integrity)) {
     return { ok: false, code: 'COMMUNITY_INTEGRITY_MISMATCH', error: '完整性哈希与下载内容不一致' };
   }
-  if (!signatureMatches(integrity, signature, pem, metadata)) {
+  const allowV1 = options?.allowV1Fallback ?? (!metadata || !metadata.id);
+  if (!signatureMatches(integrity, signature, keys, metadata, { allowV1Fallback: allowV1 })) {
     return { ok: false, code: 'COMMUNITY_SIGNATURE_INVALID', error: '社区包签名校验失败' };
   }
   return { ok: true };

@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件签名校验与分发安全性阻塞项加固（Issue #176，跟踪修复 PR #172 阻塞项）**：
+  - **B1 嵌入式签名密码学闭环**：宿主 `extractEmbeddedSignature` 在解析 `signature.json` 时移除该条目并计算确定性 `unsignedIntegrity`，使嵌入式签名验证载荷与 CLI 签名计算对齐；CLI 重构抽取 `signZip` 共享 helper 与 `ATTESTATION_V2_PREFIX` 单一载荷前缀常量；新增无外置 metadata 传参下的纯嵌入式签名真实 round-trip 验签测试（杜绝抓控制台输出正则）。
+  - **B2 社区与本地来源防绕过模型**：重构路由层 `assertCommunityZipAttestation`，默认按严格安全策略校验；未签名包直接上传默认被拒（400 `COMMUNITY_ATTESTATION_REQUIRED`），严防通过去除请求头绕过检测；本地免签安装必须由管理员显式传入 `x-allow-unsigned: true`。
+  - **B3 严格元数据绑定与禁止裸哈希降级**：社区来源强制禁用 v1 裸哈希回退（`allowV1Fallback: false`）；路由层自动读取包内 `manifest.json` 传递全量 `{ id, version }`；签名版本与目标不符或签裸哈希直接被拒。
+  - **B4 路由层完整 Keyring 信任对齐**：`server/services/community-attest.ts` 提供 `communityPublicKeys(env)` 接入完整受信任公钥列表；`resolveTrustedPublicKeys` 健壮提取多 PEM 块与逗号/分号/换行路径，支持 `OPENLEARN_TRUSTED_PUBKEYS` 中第 2+ 个密钥验签。
+  - **B5 本地免签放行安全审计**：管理员携带 `x-allow-unsigned: true` 安装未签名本地包时，在 `plugin.installed` 记录 `signatureStatus: 'unverified_local_acknowledged'`，并触发独立的 `plugin.unverified_local_bypassed` 安全审计事件。
+
 - **课前「破冰心情打卡」全链路闭环与持久化（Issue #131）**：
   - **学生端入口**：在学生进入课堂界面（`StudentLessonView`）新增 `StudentIcebreakerModal` 轻量打卡浮层，提供充满电（`fullPower`）、需要咖啡（`needCoffee`）、需要帮助（`needHelp`）三项，支持一键打卡与免打扰跳过；在顶栏标题旁提供「心情打卡」按钮支持随时修改心情。
   - **服务端鉴权与校验**：`POST /api/classes/:classId/checkin/icebreaker` 接入 `authorizeClass(ctx.db, req.session, classId, 'member')`，防范非本班学生越权（403）及非法班级（404）；严密校验 `mood` 合法枚举（400）。

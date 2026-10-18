@@ -101,6 +101,12 @@ export function hashMatches(input: Buffer | string, integrity: string): boolean 
   return expected.toLowerCase() === hex.toLowerCase();
 }
 
+export const ATTESTATION_V2_PREFIX = 'openlearn-plugin-attestation-v2';
+
+export function buildAttestationPayloadString(id: string, version: string, integrityHex: string): string {
+  return `${ATTESTATION_V2_PREFIX}\n${id}\n${version || ''}\n${integrityHex.trim()}`;
+}
+
 /**
  * Build deterministic signing payload for attestation.
  */
@@ -110,8 +116,7 @@ export function buildAttestationPayload(
 ): Buffer {
   const trimmedHash = integrity.trim();
   if (metadata && metadata.id) {
-    const boundPayload = `openlearn-plugin-attestation-v2\n${metadata.id}\n${metadata.version || ''}\n${trimmedHash}`;
-    return Buffer.from(boundPayload, 'utf8');
+    return Buffer.from(buildAttestationPayloadString(metadata.id, metadata.version || '', trimmedHash), 'utf8');
   }
   return Buffer.from(trimmedHash, 'utf8');
 }
@@ -134,9 +139,11 @@ export function verifySignature(
   signature: string,
   publicKeys: string | string[],
   metadata?: { id?: string; version?: string },
+  options?: { allowV1Fallback?: boolean },
 ): { ok: boolean; matchedKey?: string } {
   const keys = Array.isArray(publicKeys) ? publicKeys : [publicKeys];
   const sig = Buffer.from(signature.trim(), 'base64');
+  const allowV1 = options?.allowV1Fallback ?? true;
 
   for (const pem of keys) {
     if (!pem || !pem.trim()) continue;
@@ -148,16 +155,18 @@ export function verifySignature(
         if (crypto.verify(null, boundBuf, pubKey, sig)) {
           return { ok: true, matchedKey: pem };
         }
-        // Strict v2: if version was explicitly provided, do not allow falling back to raw hash
-        if (metadata.version !== undefined) {
+        // Strict v2: if version was explicitly provided or v1 fallback is disabled, do not allow falling back to raw hash
+        if (!allowV1 || metadata.version !== undefined) {
           continue;
         }
       }
 
       // 2. Fallback to v1 raw hash payload
-      const rawBuf = Buffer.from(integrity.trim(), 'utf8');
-      if (crypto.verify(null, rawBuf, pubKey, sig)) {
-        return { ok: true, matchedKey: pem };
+      if (allowV1) {
+        const rawBuf = Buffer.from(integrity.trim(), 'utf8');
+        if (crypto.verify(null, rawBuf, pubKey, sig)) {
+          return { ok: true, matchedKey: pem };
+        }
       }
     } catch {
       // Ignore key parsing/crypto error for individual key, continue checking next
@@ -167,12 +176,17 @@ export function verifySignature(
   return { ok: false };
 }
 
+export interface EmbeddedSignatureResult extends PackageSignatureManifest {
+  unsignedIntegrity?: string;
+}
+
 /**
  * Extract embedded signature.json from a ZIP file if present.
+ * Also computes unsignedIntegrity (the deterministic hash of the archive excluding signature.json).
  */
 export async function extractEmbeddedSignature(
   zipPathOrBuffer: string | Buffer,
-): Promise<PackageSignatureManifest | null> {
+): Promise<EmbeddedSignatureResult | null> {
   try {
     const JSZip = (await import('jszip')).default;
     let buffer: Buffer;
@@ -190,7 +204,13 @@ export async function extractEmbeddedSignature(
     const content = await sigFile.async('string');
     const parsed = JSON.parse(content);
     if (parsed && typeof parsed.signature === 'string') {
-      return parsed as PackageSignatureManifest;
+      zip.remove('signature.json');
+      const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+      const unsignedIntegrity = computeSha256(unsignedBuf).hex;
+      return {
+        ...(parsed as PackageSignatureManifest),
+        unsignedIntegrity,
+      };
     }
     return null;
   } catch {
@@ -216,18 +236,33 @@ export function resolveTrustedPublicKeys(
     keys.push(rawCommunity.replace(/\\n/g, '\n').trim());
   }
 
-  // 2. OPENLEARN_TRUSTED_PUBKEYS (comma or semicolon separated PEMs/paths)
+  // 2. OPENLEARN_TRUSTED_PUBKEYS (PEM blocks or comma/semicolon/newline separated paths)
   const rawTrusted = env.OPENLEARN_TRUSTED_PUBKEYS;
   if (rawTrusted && rawTrusted.trim()) {
-    const parts = rawTrusted.split(/;|\n/);
-    for (const part of parts) {
+    let remaining = rawTrusted;
+    // Extract any inline PEM blocks
+    const pemMatches = rawTrusted.match(/-----BEGIN [A-Z0-9 ]+-----[\s\S]+?-----END [A-Z0-9 ]+-----/g);
+    if (pemMatches) {
+      for (const pem of pemMatches) {
+        keys.push(pem.replace(/\\n/g, '\n').trim());
+      }
+      remaining = rawTrusted.replace(/-----BEGIN [A-Z0-9 ]+-----[\s\S]+?-----END [A-Z0-9 ]+-----/g, '');
+    }
+    // Parse any remaining file paths (comma, semicolon, or newline separated)
+    for (const part of remaining.split(/[,;\n]/)) {
       const p = part.trim();
       if (!p) continue;
-      if (p.includes('BEGIN PUBLIC KEY')) {
-        keys.push(p.replace(/\\n/g, '\n'));
-      } else if (fs.existsSync(p)) {
+      if (fs.existsSync(p)) {
         try {
-          keys.push(fs.readFileSync(p, 'utf8').trim());
+          const fileContent = fs.readFileSync(p, 'utf8').trim();
+          const filePems = fileContent.match(/-----BEGIN [A-Z0-9 ]+-----[\s\S]+?-----END [A-Z0-9 ]+-----/g);
+          if (filePems) {
+            for (const fpem of filePems) {
+              keys.push(fpem.trim());
+            }
+          } else {
+            keys.push(fileContent);
+          }
         } catch {}
       }
     }
@@ -270,23 +305,51 @@ export async function verifyPluginPackage(
   // 4. Resolve signature & publisher (from metadata or embedded signature.json)
   let declaredSignature = metadata?.signature?.trim();
   let declaredPublisher = metadata?.publisher?.trim();
+  let embeddedResult: EmbeddedSignatureResult | null = null;
 
   if (!declaredSignature) {
-    const embedded = await extractEmbeddedSignature(packageSource);
-    if (embedded) {
-      declaredSignature = embedded.signature?.trim();
-      if (!declaredPublisher && embedded.publisher) {
-        declaredPublisher = embedded.publisher.trim();
+    embeddedResult = await extractEmbeddedSignature(packageSource);
+    if (embeddedResult) {
+      declaredSignature = embeddedResult.signature?.trim();
+      if (!declaredPublisher && embeddedResult.publisher) {
+        declaredPublisher = embeddedResult.publisher.trim();
       }
     }
   }
+
+  // Also read manifest id/version from package ZIP if not provided
+  let effectiveId = metadata?.id;
+  let effectiveVersion = metadata?.version;
+  if (!effectiveId || !effectiveVersion) {
+    try {
+      const JSZip = (await import('jszip')).default;
+      let buffer: Buffer;
+      if (typeof packageSource === 'string') {
+        buffer = fs.readFileSync(packageSource);
+      } else {
+        buffer = packageSource;
+      }
+      const zip = await JSZip.loadAsync(buffer);
+      const manifestFile = zip.file('manifest.json');
+      if (manifestFile) {
+        const parsedM = JSON.parse(await manifestFile.async('string'));
+        if (!effectiveId && parsedM?.id) effectiveId = parsedM.id;
+        if (!effectiveVersion && parsedM?.version) effectiveVersion = parsedM.version;
+      }
+    } catch {}
+  }
+
+  const sigTargetIntegrity =
+    embeddedResult && !metadata?.signature && embeddedResult.unsignedIntegrity
+      ? embeddedResult.unsignedIntegrity
+      : effectiveIntegrity;
 
   const isCommunity = sourceType === 'community' || sourceType === 'remote';
 
   // 5. Community policy enforcement
   if (isCommunity) {
-    // 5.1 Must declare integrity
-    if (!declaredIntegrity) {
+    // 5.1 Must declare integrity (either externally or embedded)
+    if (!declaredIntegrity && !embeddedResult) {
       return {
         ok: false,
         code: 'COMMUNITY_INTEGRITY_REQUIRED',
@@ -314,7 +377,7 @@ export async function verifyPluginPackage(
     }
 
     // 5.4 Check integrity hash
-    if (!hashMatches(packageSource, declaredIntegrity)) {
+    if (declaredIntegrity && !hashMatches(packageSource, declaredIntegrity)) {
       return {
         ok: false,
         code: 'COMMUNITY_INTEGRITY_MISMATCH',
@@ -322,11 +385,17 @@ export async function verifyPluginPackage(
       };
     }
 
-    // 5.5 Verify cryptographic signature
-    const sigCheck = verifySignature(declaredIntegrity, declaredSignature, trustedKeys, {
-      id: metadata?.id,
-      version: metadata?.version,
-    });
+    // 5.5 Verify cryptographic signature (strictly disallow v1 raw hash fallback)
+    const sigCheck = verifySignature(
+      sigTargetIntegrity,
+      declaredSignature,
+      trustedKeys,
+      {
+        id: effectiveId,
+        version: effectiveVersion,
+      },
+      { allowV1Fallback: false },
+    );
 
     if (!sigCheck.ok) {
       return {
@@ -340,7 +409,7 @@ export async function verifyPluginPackage(
       ok: true,
       status: 'verified',
       publisher: declaredPublisher,
-      integrity: declaredIntegrity,
+      integrity: effectiveIntegrity,
       matchedKey: sigCheck.matchedKey,
     };
   }
@@ -357,10 +426,16 @@ export async function verifyPluginPackage(
   if (declaredSignature) {
     const trustedKeys = resolveTrustedPublicKeys(options.trustedPublicKeys, env);
     if (trustedKeys.length > 0) {
-      const sigCheck = verifySignature(effectiveIntegrity, declaredSignature, trustedKeys, {
-        id: metadata?.id,
-        version: metadata?.version,
-      });
+      const sigCheck = verifySignature(
+        sigTargetIntegrity,
+        declaredSignature,
+        trustedKeys,
+        {
+          id: effectiveId,
+          version: effectiveVersion,
+        },
+        { allowV1Fallback: true },
+      );
       if (!sigCheck.ok) {
         return {
           ok: false,
