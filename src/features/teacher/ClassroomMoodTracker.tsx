@@ -29,7 +29,7 @@ import {
   Volume2,
   Users,
 } from 'lucide-react';
-import { useSocket } from '../../hooks/useSocket';
+import { onSocketInstance } from '../../services/socket-service';
 import type { Lesson, ClassType, ScheduleType, StudentType } from '../../store/appStore';
 
 export interface TimelineDataPoint {
@@ -113,8 +113,9 @@ export function ClassroomMoodTracker({
 
   const [timeline, setTimeline] = useState<TimelineDataPoint[]>([]);
 
-  // Socket connection for live telemetry updates
-  const { on } = useSocket();
+  // 实时遥测订阅 App 主 socket（由 useClassroomSocket 创建并加入 classroom-broadcast）。
+  // Issue #129 / v0.6.1 审计 C-1：此前用 useSocket 每次挂载新建裸 `io()` 且从不入房，
+  // 服务端只投 [lessonId, classroom-broadcast]，监听实际收不到任何事件。
 
   // Pick default lesson if none selected
   useEffect(() => {
@@ -183,9 +184,9 @@ export function ClassroomMoodTracker({
     fetchMoodData();
   }, [fetchMoodData]);
 
-  // Real-time socket event listeners
+  // Real-time socket event listeners（挂 App 主 socket，见 Issue #129）
   useEffect(() => {
-    const offPacing = on('classroom:pacing_updated', (data: any) => {
+    const handlePacing = (data: any) => {
       if (data.lessonId === selectedLessonId || !data.lessonId) {
         fetchMoodData();
         const d = new Date();
@@ -200,9 +201,9 @@ export function ClassroomMoodTracker({
           ...prev.slice(0, 5),
         ]);
       }
-    });
+    };
 
-    const offPoll = on('classroom:quick_poll_updated', (data: any) => {
+    const handlePoll = (data: any) => {
       if (data.lessonId === selectedLessonId || !data.lessonId) {
         fetchMoodData();
         const d = new Date();
@@ -217,9 +218,9 @@ export function ClassroomMoodTracker({
           ...prev.slice(0, 5),
         ]);
       }
-    });
+    };
 
-    const offBuzzer = on('classroom:buzzer_winner', (data: any) => {
+    const handleBuzzer = (data: any) => {
       if (data.lessonId === selectedLessonId || !data.lessonId) {
         fetchMoodData();
         const d = new Date();
@@ -234,14 +235,27 @@ export function ClassroomMoodTracker({
           ...prev.slice(0, 5),
         ]);
       }
-    });
-
-    return () => {
-      offPacing?.();
-      offPoll?.();
-      offBuzzer?.();
     };
-  }, [on, selectedLessonId, fetchMoodData, lang]);
+
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      detach?.();
+      socket.on('classroom:pacing_updated', handlePacing);
+      socket.on('classroom:quick_poll_updated', handlePoll);
+      socket.on('classroom:buzzer_winner', handleBuzzer);
+      detach = () => {
+        if (typeof socket.off === 'function') {
+          socket.off('classroom:pacing_updated', handlePacing);
+          socket.off('classroom:quick_poll_updated', handlePoll);
+          socket.off('classroom:buzzer_winner', handleBuzzer);
+        }
+      };
+    });
+    return () => {
+      off();
+      detach?.();
+    };
+  }, [selectedLessonId, fetchMoodData, lang]);
 
   // Live simulation tick (when toggled)
   useEffect(() => {

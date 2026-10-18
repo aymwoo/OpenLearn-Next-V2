@@ -1,7 +1,42 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+
+/**
+ * Issue #129：本组件不再自建 socket 连接，改为订阅 App 主 socket。
+ * - `ioMock` 断言不再调用裸 `io()`（回归「新建裸连接」问题）；
+ * - 通过真实 socket-service 注入假主 socket，模拟服务端派发事件。
+ */
+const { ioMock } = vi.hoisted(() => ({ ioMock: vi.fn() }));
+vi.mock('socket.io-client', () => ({ io: ioMock }));
+
+import { setSocketInstance } from '../../../services/socket-service';
 import { TopPerformersWidget } from '../TopPerformersWidget';
+
+type FakeSocketHandler = (...args: any[]) => void;
+
+/** 最小主 socket 桩：记录监听器，支持手动派发事件。 */
+function createFakeMainSocket() {
+  const listeners = new Map<string, Set<FakeSocketHandler>>();
+  const socket = {
+    id: 'main-socket',
+    connected: true,
+    on: (event: string, handler: FakeSocketHandler) => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(handler);
+      return socket;
+    },
+    off: (event: string, handler: FakeSocketHandler) => {
+      listeners.get(event)?.delete(handler);
+      return socket;
+    },
+    emit: vi.fn(),
+    fire: (event: string, payload: unknown) => {
+      listeners.get(event)?.forEach((handler) => handler(payload));
+    },
+  };
+  return socket;
+}
 
 // Mock recharts ResponsiveContainer to render children in JSDOM
 vi.mock('recharts', async () => {
@@ -36,6 +71,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
 
   afterEach(() => {
     cleanup();
+    setSocketInstance(null);
   });
 
   it('renders widget title, podium cards, and recharts container', async () => {
@@ -241,5 +277,77 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
     expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('classId=cls-live-1'));
     const calledUrls = fetchSpy.mock.calls.map((call) => call[0]);
     expect(calledUrls.some((u: string) => u === '/api/classroom/top-performers?limit=5')).toBe(false);
+  });
+
+  it('订阅 App 主 socket：派发 whiteboard-quiz-answered 后榜单实时刷新，且不再新建裸连接（Issue #129）', async () => {
+    const socket = createFakeMainSocket();
+    setSocketInstance(socket as any);
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/classroom/sessions/les-1/top-performers')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              lessonId: 'les-1',
+              topPerformers: [
+                {
+                  rank: 1,
+                  studentId: 'st-1',
+                  studentName: 'Alice Smith',
+                  cumulativeScore: 300,
+                  totalQuizzesAnswered: 3,
+                  correctCount: 3,
+                  accuracy: 100,
+                  avgTimeSpentMs: 5000,
+                  lastSubmittedAt: Date.now(),
+                },
+                {
+                  rank: 2,
+                  studentId: 'st-2',
+                  studentName: 'Bob Johnson',
+                  cumulativeScore: 280,
+                  totalQuizzesAnswered: 3,
+                  correctCount: 3,
+                  accuracy: 95,
+                  avgTimeSpentMs: 6500,
+                  lastSubmittedAt: Date.now(),
+                },
+              ],
+              summary: { totalParticipants: 2, totalResponses: 6, averageScore: 290 },
+            }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    render(<TopPerformersWidget lang="zh" lessonId="les-1" lessons={mockLessons} students={mockStudents as any} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Smith')).toBeTruthy();
+    });
+    // 初始无实时事件：不显示同步徽标
+    expect(screen.queryByText('实时作答同步中')).toBeNull();
+
+    await act(async () => {
+      socket.fire('whiteboard-quiz-answered', {
+        lessonId: 'les-1',
+        studentId: 'st-1',
+        studentName: 'Alice Smith',
+        score: 137,
+        isCorrect: true,
+        time_spent_ms: 4200,
+      });
+    });
+
+    // 实时徽标出现，且 Alice 分数 300 + 137 = 437 无需刷新即更新
+    await waitFor(() => {
+      expect(screen.getByText('实时作答同步中')).toBeTruthy();
+    });
+    expect((await screen.findAllByText('437')).length).toBeGreaterThan(0);
+
+    // 回归断言：不再自建裸 socket 连接
+    expect(ioMock).not.toHaveBeenCalled();
   });
 });

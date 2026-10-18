@@ -1,7 +1,42 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+
+/**
+ * Issue #129：本组件不再自建 socket 连接，改为订阅 App 主 socket。
+ * - `ioMock` 断言不再调用裸 `io()`（回归「新建裸连接」问题）；
+ * - 通过真实 socket-service 注入假主 socket，模拟服务端派发事件。
+ */
+const { ioMock } = vi.hoisted(() => ({ ioMock: vi.fn() }));
+vi.mock('socket.io-client', () => ({ io: ioMock }));
+
+import { setSocketInstance } from '../../../services/socket-service';
 import { ClassroomMoodTracker } from '../ClassroomMoodTracker';
+
+type FakeSocketHandler = (...args: any[]) => void;
+
+/** 最小主 socket 桩：记录监听器，支持手动派发事件。 */
+function createFakeMainSocket() {
+  const listeners = new Map<string, Set<FakeSocketHandler>>();
+  const socket = {
+    id: 'main-socket',
+    connected: true,
+    on: (event: string, handler: FakeSocketHandler) => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(handler);
+      return socket;
+    },
+    off: (event: string, handler: FakeSocketHandler) => {
+      listeners.get(event)?.delete(handler);
+      return socket;
+    },
+    emit: vi.fn(),
+    fire: (event: string, payload: unknown) => {
+      listeners.get(event)?.forEach((handler) => handler(payload));
+    },
+  };
+  return socket;
+}
 
 // Mock recharts ResponsiveContainer to render children with dimensions in JSDOM
 vi.mock('recharts', async () => {
@@ -41,6 +76,7 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
 
   afterEach(() => {
     cleanup();
+    setSocketInstance(null);
   });
 
   it('renders mood tracker header, metric cards, and chart containers', async () => {
@@ -195,5 +231,75 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
     const btn30m = screen.getByText('30m');
     fireEvent.click(btn30m);
     expect(btn30m.className).toContain('bg-white');
+  });
+
+  it('订阅 App 主 socket：派发本课节的 pacing_updated 后实时刷新，且不再新建裸连接（Issue #129）', async () => {
+    const socket = createFakeMainSocket();
+    setSocketInstance(socket as any);
+
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/mood-tracker')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              metrics: {
+                currentEngagement: 70,
+                moodStatus: 'OPTIMAL',
+                moodLabel: '课堂节奏良好',
+                moodEmoji: '🌟',
+                totalInteractions: 5,
+                interactionFrequencyPerMin: '1.0',
+                pulseDistribution: {
+                  clearCount: 5,
+                  confusedCount: 0,
+                  tooFastCount: 0,
+                  total: 5,
+                  clearPercent: 100,
+                  confusedPercent: 0,
+                  tooFastPercent: 0,
+                },
+              },
+              timeline: [],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+    global.fetch = fetchMock;
+
+    render(
+      <ClassroomMoodTracker
+        lang="zh"
+        lessons={mockLessons as any}
+        schedules={mockSchedules as any}
+        addToast={vi.fn()}
+      />,
+    );
+
+    // 初次拉取（默认选中课节 les-1）
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/mood-tracker'));
+    });
+
+    // 非本课节的事件应被忽略
+    await act(async () => {
+      socket.fire('classroom:pacing_updated', { lessonId: 'les-2' });
+    });
+    expect(screen.queryByText('收到学生节奏脉搏反馈')).toBeNull();
+
+    // 本课节事件：实时追加动态流水，并触发数据刷新
+    const callsBefore = fetchMock.mock.calls.length;
+    await act(async () => {
+      socket.fire('classroom:pacing_updated', { lessonId: 'les-1' });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('收到学生节奏脉搏反馈')).toBeTruthy();
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore);
+
+    // 回归断言：不再自建裸 socket 连接
+    expect(ioMock).not.toHaveBeenCalled();
   });
 });

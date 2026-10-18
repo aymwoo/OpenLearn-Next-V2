@@ -18,7 +18,7 @@ import {
   TrendingUp,
   Radio,
 } from 'lucide-react';
-import { useSocket } from '../../hooks/useSocket';
+import { onSocketInstance } from '../../services/socket-service';
 import type { Lesson, ClassType, ScheduleType, StudentType } from '../../store/appStore';
 
 export interface TopPerformerStudent {
@@ -105,8 +105,9 @@ export function TopPerformersWidget({
     }
   }, [selectedLessonId, lessons, schedules]);
 
-  // Socket for live quiz response telemetry
-  const { on } = useSocket();
+  // 实时作答遥测订阅 App 主 socket（由 useClassroomSocket 创建并加入 classroom-broadcast）。
+  // Issue #129 / v0.6.1 审计 C-1：此前用 useSocket 每次挂载新建裸 `io()` 且从不入房，
+  // 服务端只投 [lessonId, classroom-broadcast]，监听实际收不到任何事件。
 
   // Fetch top performers from API
   const fetchTopPerformers = useCallback(
@@ -147,10 +148,10 @@ export function TopPerformersWidget({
     }
   }, [selectedLessonId, classId, fetchTopPerformers]);
 
-  // Listen to real-time socket events for quiz responses
+  // Listen to real-time socket events for quiz responses（挂 App 主 socket，见 Issue #129）：
+  // 仅保留服务端真实投递的 `whiteboard-quiz-answered`；原先一并监听的
+  // `quiz.answered` / `classroom:quiz_response_received` 全仓无任何 emit，属死监听，已删除。
   useEffect(() => {
-    if (!on) return;
-
     const handleQuizAnswered = (payload: any) => {
       setLastLiveEventTime(Date.now());
 
@@ -228,16 +229,21 @@ export function TopPerformersWidget({
       }));
     };
 
-    const cleanup1 = on('whiteboard-quiz-answered', handleQuizAnswered);
-    const cleanup2 = on('quiz.answered', handleQuizAnswered);
-    const cleanup3 = on('classroom:quiz_response_received', handleQuizAnswered);
-
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      detach?.();
+      socket.on('whiteboard-quiz-answered', handleQuizAnswered);
+      detach = () => {
+        if (typeof socket.off === 'function') {
+          socket.off('whiteboard-quiz-answered', handleQuizAnswered);
+        }
+      };
+    });
     return () => {
-      if (typeof cleanup1 === 'function') cleanup1();
-      if (typeof cleanup2 === 'function') cleanup2();
-      if (typeof cleanup3 === 'function') cleanup3();
+      off();
+      detach?.();
     };
-  }, [on, selectedLessonId, students]);
+  }, [selectedLessonId, students]);
 
   // Simulate live quiz responses for real-time testing
   const handleSimulateQuiz = async () => {

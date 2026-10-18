@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课堂情绪追踪与优秀学员组件实时通道死链修复（Issue #129）**：`src/hooks/useSocket.ts`（已删除）每次调用都新建裸 `io()` 连接且从不参加任何房间，而服务端课堂事件经 `emitClassroomEvent` 只投递到 `[lessonId, classroom-broadcast]` 房间（`server/presence.ts`），导致教师端「课堂情绪追踪」（`ClassroomMoodTracker`）的 `classroom:pacing_updated` / `classroom:quick_poll_updated` / `classroom:buzzer_winner` 与「优秀学员」（`TopPerformersWidget`）的 `whiteboard-quiz-answered` 监听 100% 收不到，只能靠手动刷新或 15s 轮询兜底。现删除该废弃 hook，两个组件统一改用 `onSocketInstance` 挂 App 主 socket（`useClassroomSocket` 连接时已加入 `classroom-broadcast`，与 `LiveClassroomView` v0.6.1 审计 C-1 修复同模式），并顺带移除 `quiz.answered` / `classroom:quiz_response_received` 两个全仓无任何 emit 的死监听。测试：`ClassroomMoodTracker.test.tsx` 与 `TopPerformersWidget.test.tsx` 各新增回归用例（主 socket 派发事件 → 组件实时更新、非本课节事件过滤、`io()` 不再被调用）。
 - **HTTP 访问日志分级与轮询刷屏静默优化（Issue #116）**：
   - **默认静默正常成功请求**：在 `server/middleware/request-observability.ts` 中引入请求级别分级（`resolveHttpAccessLogLevel`）与策略控制（`resolveHttpAccessLogMode`），默认模式（`HTTP_ACCESS_LOG=errors`）下正常的 200/304 快速响应不再输出控制台与访问日志，彻底根除前端高频轮询（`/api/classroom/sessions/:id`、`/api/vfs` 等）造成的日志刷屏噪音；
   - **异常响应与慢请求分级告警**：`status >= 500` 使用 `error` 级别输出；`status >= 400`（401/403/404/429 等）与耗时超过阈值的慢请求（`durationMs >= HTTP_SLOW_MS`，默认 1000ms）使用 `warn` 级别输出，并始终保留携带 `requestId` 以供排障定位；
