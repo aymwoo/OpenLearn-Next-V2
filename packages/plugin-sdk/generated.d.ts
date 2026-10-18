@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：261 个（入口导出但手写 d.ts 未声明的 261 项及其类型引用闭包）
+ * 覆盖符号：245 个（入口导出但手写 d.ts 未声明的 245 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -1091,15 +1091,6 @@ interface PacingDashboardConfig {
     icon?: string;
 }
 
-/** @see packages/core/security/plugin-signature.ts */
-interface PackageSignatureManifest {
-    readonly version?: number;
-    readonly algorithm?: 'ed25519' | string;
-    readonly keyId?: string;
-    readonly signature: string;
-    readonly publisher?: string;
-}
-
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /**
  * A contribution to `editor.palette_item` (custom lesson-palette / whiteboard widgets).
@@ -1197,11 +1188,6 @@ interface PlatformBootstrapConfig {
 /** Platform execution mode. */
 type PlatformMode = 'standalone' | 'cluster' | 'embedded';
 
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginAttestationRequiredError extends PluginSignatureError {
-  constructor(pluginId: string, message: any);
-}
-
 /** @see packages/core/plugin-host/plugin-capability-gateway.ts */
 declare class PluginCapabilityGateway implements IPluginCapabilityGateway {
   readonly id: any;
@@ -1290,21 +1276,6 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
  */
 type PluginExecutionMode = 'inline' | 'worker' | 'process';
 
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginHostError extends Error {
-  constructor(message: string);
-}
-
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginIntegrityMismatchError extends PluginSignatureError {
-  constructor(pluginId: string, message: any);
-}
-
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginIntegrityRequiredError extends PluginSignatureError {
-  constructor(pluginId: string, message: any);
-}
-
 /** @see packages/core/plugin-host/plugin-lifecycle-manager.ts */
 declare class PluginLifecycleManager implements IPluginLifecycleManager {
   readonly id: any;
@@ -1342,18 +1313,6 @@ declare class PluginRuntimeAdapter implements IPluginRuntime {
   deactivatePlugin(pluginId: string): Promise<void>;
   reloadPlugin(pluginId: string, newCode?: string): Promise<void>;
   readonly pluginHost: PluginHost;
-}
-
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginSignatureError extends PluginHostError {
-  constructor(pluginId: string, code: string, message: string);
-  readonly pluginId: string;
-  readonly code: string;
-}
-
-/** @see packages/core/plugin-host/errors.ts */
-declare class PluginSignatureInvalidError extends PluginSignatureError {
-  constructor(pluginId: string, message: any);
 }
 
 /** @see packages/core/presence-engine/types.ts */
@@ -2304,41 +2263,6 @@ interface UserRef {
 /** @see packages/core/lesson-engine/types.ts */
 type UserRole = 'teacher' | 'student' | 'administrator' | 'assistant';
 
-/** @see packages/core/security/plugin-signature.ts */
-interface VerifyPluginPackageOptions {
-    /** ZIP file path or buffer */
-    readonly packageSource: string | Buffer;
-    /** Plugin origin: builtin, local (uploaded by admin), or community/remote */
-    readonly sourceType: 'builtin' | 'local' | 'community' | 'remote';
-    /** Expected plugin metadata from registry or manifest */
-    readonly metadata?: {
-        readonly id?: string;
-        readonly version?: string;
-        readonly integrity?: string;
-        readonly signature?: string;
-        readonly publisher?: string;
-    };
-    /** List of trusted Ed25519 public keys in PEM format */
-    readonly trustedPublicKeys?: string[];
-    /** Process environment to resolve fallback keys */
-    readonly env?: NodeJS.ProcessEnv;
-    /** Whether unsigned packages are allowed for local uploads (defaults to true) */
-    readonly allowUnsignedLocal?: boolean;
-}
-
-/** @see packages/core/security/plugin-signature.ts */
-type VerifyPluginPackageResult = {
-    readonly ok: true;
-    readonly status: 'trusted_builtin' | 'verified' | 'unverified_local_acknowledged';
-    readonly publisher?: string;
-    readonly integrity?: string;
-    readonly matchedKey?: string;
-} | {
-    readonly ok: false;
-    readonly code: 'COMMUNITY_INTEGRITY_REQUIRED' | 'COMMUNITY_ATTESTATION_REQUIRED' | 'COMMUNITY_PUBKEY_MISSING' | 'COMMUNITY_INTEGRITY_MISMATCH' | 'COMMUNITY_SIGNATURE_INVALID' | 'LOCAL_INTEGRITY_MISMATCH' | 'LOCAL_SIGNATURE_INVALID' | 'PACKAGE_READ_ERROR';
-    readonly error: string;
-};
-
 /** @see packages/core/bootstrap/types/index.ts */
 /** Semantic version string (e.g. '0.2.5'). */
 type Version = string;
@@ -2384,29 +2308,15 @@ interface WhiteboardDockPluginConfig {
 /** @see packages/core/presence-engine/types.ts */
 type WhiteboardStatus = 'Editing' | 'Presenting' | 'Locked' | 'ReadOnly' | 'Collaborating';
 
-declare function buildAttestationPayload(integrity: string, metadata?: {
-    id?: string;
-    version?: string;
-}): Buffer;
-
 declare function buildRedactOptions(env: NodeJS.ProcessEnv): {
     paths: string[];
     censor: string;
 } | false;
 
-declare function computeSha256(input: Buffer | string): {
-    hex: string;
-    base64: string;
-};
-
 /** @see packages/core/db/index.ts */
 declare const db: any; // 初始化器非字面量，未收敛
 
-declare function extractEmbeddedSignature(zipPathOrBuffer: string | Buffer): Promise<PackageSignatureManifest | null>;
-
 declare function hasCapability(caps: readonly string[], name: string): boolean;
-
-declare function hashMatches(input: Buffer | string, integrity: string): boolean;
 
 declare function isRedactionEnabled(env: NodeJS.ProcessEnv): boolean;
 
@@ -2417,18 +2327,6 @@ declare const logger: any; // 初始化器非字面量，未收敛
 declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; network: z.ZodOptional<z.ZodObject<{ outbound: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$strip>>; }, z.core.$loose>;
 
 declare function removeTempZip(zipPath: string | undefined): void;
-
-declare function resolveTrustedPublicKeys(explicitKeys?: string[], env: NodeJS.ProcessEnv): string[];
-
-declare function verifyPluginPackage(options: VerifyPluginPackageOptions): Promise<VerifyPluginPackageResult>;
-
-declare function verifySignature(integrity: string, signature: string, publicKeys: string | string[], metadata?: {
-    id?: string;
-    version?: string;
-}): {
-    ok: boolean;
-    matchedKey?: string;
-};
 
 declare function writeBufferToTempZip(buffer: Buffer, prefix: any): string;
 
