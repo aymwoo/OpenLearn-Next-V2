@@ -111,6 +111,7 @@ CANONICAL_OVERRIDES = {
     "plugin-host": "plugin-host",
     "plugin-runtime": "plugin-host",
     "plugin": "plugin-host",
+    "extension-points": "plugin-host",
     "process-manager": "process",
     "process": "process",
     "assignment-eval": "plugins",

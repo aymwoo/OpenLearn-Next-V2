@@ -59,8 +59,8 @@ graph TD
 | TB-05 | 中 | 公测演练依赖人工步骤，镜像构建/入口降权/迁移/健康探针没有 CI 固化 | `docs/DEPLOY_REHEARSAL.md` | ✅ 已修（PR #29）：`.github/workflows/docker-rehearsal.yml` |
 | TB-06 | 中 | CORS / 健康探针 / 主机网络逻辑内联在 `server.ts`，难以独立审查与测试 | `server.ts` | ✅ 已修（PR #28）：拆为 `server/middleware/cors.ts`、`server/routes/health.ts`、`server/utils/host-network.ts`，并补 `stage4_arch_resilience.test.ts` |
 | TB-07 | 中 | 信任边界散落在 capability matrix 与代码注释里，管理员无法快速回答「某模式能做什么」 | 文档缺口 | ✅ 已修（PR #26）：`docs/reference/plugin-trust-boundary.md` |
-| TB-08 | 低 | 信任边界矩阵第 5 节表格首行被误写成 `<|channel|>`，Markdown 表格渲染异常 | `docs/reference/plugin-trust-boundary.md:91` | ⚠️ 未修（见 R-04） |
-| TB-09 | 低 | 本报告落地后，`plugin-trust-boundary.md` §4/§7 仍写「网络 unrestricted」「长期路线图：host proxy」 | `docs/reference/plugin-trust-boundary.md:83,122` | ⚠️ 未修（见 R-04） |
+| TB-08 | 低 | 信任边界矩阵第 5 节表格首行被误写成 `<|channel|>`，Markdown 表格渲染异常 | `docs/reference/plugin-trust-boundary.md:91` | ✅ 已修（Issue #144） |
+| TB-09 | 低 | 本报告落地后，`plugin-trust-boundary.md` §4/§7 仍写「网络 unrestricted」「长期路线图：host proxy」 | `docs/reference/plugin-trust-boundary.md:83,122` | ✅ 已修（Issue #144） |
 
 ---
 
@@ -68,10 +68,10 @@ graph TD
 
 | # | 风险 | 说明 | 建议 |
 | --- | --- | --- | --- |
-| R-01 | `process` 模式原始网络仍不受限 | `INetworkProxyService` 是「插件主动走 ctx 代理」的收敛路径；只要插件直接 `fetch`/`net.connect`，宿主仍拦不住。Node 24 尚无 `--allow-net` | 社区插件审核时默认拒绝「不声明网络的插件出现直连痕迹」；中长期跟 Node 网络权限模型或 eBPF/cgroup 网络配额 |
+| R-01 | `worker_threads` / `inline` 模式原始网络不受限 | 虽已由 `plugin-net-preload.cjs` 封锁 `process` 模式原始网络，但 `worker_threads` 与 `inline` 同进程共享网络栈不受拦截 | 当前已由 `resolvePluginExecutionMode` 在加载期强门禁强制对第三方插件降级至 `process` 模式兜底；中长期探索 Worker 线程级沙箱或全面统一 process 隔离 |
 | R-02 | 出站 allowlist 的可见性 | manifest 可自行声明 `network.outbound`，但安装/启用 UI 尚未突出展示「该插件将能访问哪些域名」 | 在管理员插件详情页展示 allowlist，并要求批准高危域名；考虑对私有/敏感域名二次确认 |
 | R-03 | CPU 饥饿不等于崩溃 | 存活探活只处理「卡死且不响应」；持续吃 CPU 但让出 event loop 的插件仍存活 | P2：进程级 CPU/内存配额（cgroup 或 watchdog quota） |
-| R-04 | 信任边界文档漂移 | TB-08 的渲染缺陷与 TB-09 的「网络 unrestricted」表述仍留在文档里，容易与 #32 之后的实现矛盾 | 单开 docs PR 同步 `plugin-trust-boundary.md`，并加入 docs drift 检查 |
+| R-04 | 信任边界文档漂移 | TB-08 的渲染缺陷与 TB-09 的「网络 unrestricted」表述仍留在文档里，容易与 #32 之后的实现矛盾 | ✅ 已修（Issue #144）：同步 `plugin-trust-boundary.md`，并加入自动化防漂移测试 |
 | R-05 | 环境校验只覆盖 `server.ts` 入口 | `cli.mjs` 的子命令（doctor/migrate/backup）不经过 `assertStartupEnv()`，理论上仍可用非法环境变量运行非服务命令 | 视需要在 CLI 子命令入口复用同一校验器；服务入口已覆盖 |
 | R-06 | 部署侧其余已知项 | AI Provider 种子失败只告警不拒绝启动；`TRUST_PROXY` 跳数必须等于真实反代层数；恢复后的 AI Key 依赖备份时的 `ENCRYPTION_KEY` | 维持 `docs/DEPLOY_REHEARSAL.md` 的「仍未关闭的风险」清单，纳入每次发布检查 |
 

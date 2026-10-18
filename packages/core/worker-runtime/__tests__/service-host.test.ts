@@ -569,6 +569,45 @@ describe('ServiceHost ActionRegistry tracking', () => {
     expect(actionRegistry.unregister).toHaveBeenCalledWith('action-foo');
   });
 
+  it("未获 agent:tool 的插件注册 action 时降级为 exposeToAgent=false，而不是让 activate 失败", async () => {
+    // 旧插件（第三方普遍如此）不知道 exposeToAgent / agent:tool 的存在。
+    // 直接拒绝会让 activate() 抛错 → 整个插件 state=error（Issue #147 实测）。
+    // 期望：放行注册、强制不暴露给 Agent，插件功能不受影响。
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['test:cap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['@openlearn/core:IActionRegistryService'],
+    );
+
+    await host.handleInvoke(
+      {
+        type: 'invoke',
+        invokeId: 'inv-act-downgrade',
+        token: '@openlearn/core:IActionRegistryService',
+        method: 'register',
+        args: [{ id: 'action-bar', commandType: 'demo.run' }],
+      },
+      transport as any,
+    );
+
+    expect(actionRegistry.register).toHaveBeenCalledWith({
+      id: 'action-bar',
+      commandType: 'demo.run',
+      exposeToAgent: false,
+    });
+    expect(transport.messages[0]).toEqual({
+      type: 'result',
+      invokeId: 'inv-act-downgrade',
+      value: undefined,
+    });
+  });
+
   describe('IDatabase security barrier', () => {
     it('should reject worker access to forbidden security tables (e.g. users)', async () => {
       const mockDb = {

@@ -2,19 +2,19 @@
  * PluginHost 公共入口（L-2 阶段 2）。
  *
  * 原先 3401 行 / 60 个方法的类已拆成抽象类继承链：
- *   Base → Core → Http → Lifecycle → Reload → Install
+ *   Base → Core → Http → Lifecycle → Reload → Install → Uninstall
  * 各层在同目录下的同名文件。本文件只保留对外的类与 re-export，
  * 以维持既有导入面 `from './plugin-host/index.js'`。
  */
 
-import { PluginHostInstall } from './install.js';
+import { PluginHostUninstall } from './uninstall.js';
 
 /**
  * 插件宿主 —— 对外唯一入口。
  *
  * 本类不新增任何成员，只作为继承链末端把各层能力组合起来。
  */
-export class PluginHost extends PluginHostInstall {}
+export class PluginHost extends PluginHostUninstall {}
 
 export { OPENLEARN_VERSION } from '../version.js';
 export { validatePluginStateTransition } from './base.js';
@@ -46,3 +46,21 @@ export {
 } from './plugin-distribution-manager.js';
 export { PluginHttpRouter, compileRoutePattern } from './http-router.js';
 export type { PluginApiRequest, PluginApiResponse, PluginApiHandler, IPluginHttpRouter } from './types.js';
+export {
+  ORPHAN_DATA_TABLE,
+  ensureOrphanDataTable,
+  listOrphanData,
+  registerOrphanData,
+  exportPluginDataToSql,
+  purgePluginData,
+  summarizePluginData,
+  listPluginTables,
+  type PluginDataPolicy,
+  type OrphanDataRecord,
+  type OrphanDataSummary,
+  type PluginTableInfo,
+  type UninstallPluginOptions,
+  type UninstallPluginResult,
+  type ExportPluginDataResult,
+  type PurgePluginDataResult,
+} from './orphan-data.js';

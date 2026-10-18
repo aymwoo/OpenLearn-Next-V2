@@ -69,4 +69,18 @@ describe('@openlearn/plugin-sdk 构建产物', () => {
     expect(output).toContain('require ok');
     expect(output).toContain('packages/plugin-sdk/dist/index.js');
   });
+
+  it('发布入口不静态加载 express（否则隔离插件进程会被 -disallow-code-generation-from-strings 打死）', () => {
+    // SDK 曾经通过 `../core/plugin-host/index.js` 再导出类，顺带把 base.js 的
+    // `import express` 带进产物。插件进程 import SDK → express → body-parser →
+    // depd 的 `new Function` 被权限模型直接拦截（EvalError，Issue #147）。
+    execFileSync(process.execPath, [path.join(root, 'scripts/build-plugin-sdk.mjs')], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+    const dist = fs.readFileSync(path.join(root, 'packages/plugin-sdk/dist/index.js'), 'utf8');
+    expect(dist, 'SDK 产物不应再 import express —— 插件运行时不需要宿主 HTTP 栈').not.toMatch(
+      /from\s+["']express["']/,
+    );
+  });
 });

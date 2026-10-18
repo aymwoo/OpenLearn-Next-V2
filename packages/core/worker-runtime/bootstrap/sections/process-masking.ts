@@ -88,6 +88,13 @@ try {
 process.on('unhandledRejection', function(reason) {
   var msg = (reason && reason.message) ? reason.message : String(reason);
   var stack = (reason && reason.stack) || '';
+  // 宿主 RPC 调用的 rejection：旧插件按 inline 的同步语义写代码（不 await），
+  // 这类失败在旧宿主里根本不会出现，也不代表 worker 崩溃 —— 记告警、继续跑。
+  // 真崩溃（插件自己的 Promise 炸了）仍走下面的致命路径。
+  if (reason && reason.__openlearnRpcError) {
+    console.warn('[Worker unhandledRejection (host RPC, non-fatal) for ' + workerData.pluginId + ']:', msg);
+    return;
+  }
   console.error('[Worker unhandledRejection for ' + workerData.pluginId + ']:', msg, stack);
   try {
     parentPort.postMessage({

@@ -6,6 +6,7 @@
 
 import { PluginHostHttp } from './http.js';
 import fs from 'fs';
+import path from 'path';
 import { pathToFileURL } from 'node:url';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
@@ -14,6 +15,8 @@ import { manifestSchema } from '../esm-loader/manifest-schema.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
+import { runPluginDeclarativeMigrations } from './declarative-migrator.js';
+import { pluginTablePrefix } from './plugin-tables.js';
 import {
   normalizeExecutionMode,
   requiresIsolatedExecution,
@@ -154,6 +157,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       deactivate?: () => Promise<void>;
       onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
       onStudentDelete?: (studentId: string) => Promise<void> | void;
+      migrationsDir?: string;
     },
   ): Promise<void> {
     const manifest = preloaded.manifest;
@@ -163,6 +167,12 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
     try {
       manifestSchema.parse(manifest);
+
+      if (preloaded.migrationsDir && fs.existsSync(preloaded.migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, preloaded.migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
 
       const { skipTokens } = this.resolveActivationGuards(manifest, pluginId);
       // B-5：在构建上下文**之前**声明进程归属，否则本插件 spawn 的任务会被
@@ -240,6 +250,15 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       const mergedManifest = { ...storedManifest, ...codeManifest } as Manifest;
 
       manifestSchema.parse(mergedManifest);
+
+      // 声明式版本化迁移（Issue #142）
+      const pluginDir = this.getPluginDir(pluginId);
+      const migrationsDir = path.join(pluginDir, 'migrations');
+      if (fs.existsSync(migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
 
       const { skipTokens } = this.resolveActivationGuards(mergedManifest, pluginId);
 
@@ -519,6 +538,15 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     const actorId = `plugin:${manifest.id}`;
 
     try {
+      // 声明式版本化迁移（Issue #142）
+      const pluginDir = this.getPluginDir(pluginId);
+      const migrationsDir = path.join(pluginDir, 'migrations');
+      if (fs.existsSync(migrationsDir)) {
+        runPluginDeclarativeMigrations(this.db, pluginId, migrationsDir, {
+          tablePrefix: pluginTablePrefix(pluginId),
+        });
+      }
+
       await this.grantCapabilities(actorId, manifest.capabilitiesProposed ?? [], {
         official: isTrustedInProcessPlugin(manifest.id, process.env, row.file_path),
         keys: [pluginId, manifest.id],
@@ -531,6 +559,14 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
       // 'process' → 子进程（最小 env）；'worker' → thread（缺省，保持原行为）。
       const isolateKind = requiresProcessIsolation(mode) ? 'process' : 'thread';
+
+      // 隔离模式下插件代码由子进程/线程从 `<pluginsDir>/<id>/index.js` 直接 import，
+      // 裸模块 `@openlearn/plugin-sdk` 只能沿该目录向上解析。此前这条链接**只在
+      // inline 激活路径**（loadPluginModule）里建立，于是「全新数据目录 + 只有隔离插件」
+      // 的场景必然 ERR_MODULE_NOT_FOUND（实测于 Issue #147 升级回归：三个第三方插件
+      // 全部因解析不到 SDK 而 state=error）。激活任何隔离插件前都先补齐链接。
+      this.ensureHostSdkResolution();
+
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
         manifest,

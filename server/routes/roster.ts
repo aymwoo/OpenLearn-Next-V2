@@ -317,7 +317,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (!token) {
         return res.json({ session: null });
       }
-      // SEC-AUTH-03: 使用 getValidSession 自动检查过�?
+      // SEC-AUTH-03: 使用 getValidSession 自动检查过期
       const session = getValidSession(token);
       if (!session) {
         return res.json({ session: null });
@@ -396,7 +396,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.userId);
-        // 使该用户所有其�? session 失效
+        // 使该用户所有其他 session 失效
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.userId}%`);
@@ -434,7 +434,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('UPDATE students SET password = ? WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.studentId);
-        // 使该学生所有其�? session 失效
+        // 使该学生所有其他 session 失效
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.studentId}%`);
@@ -456,7 +456,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // P7 Step2: �Է���������ϸ��£�����ʾ���� name���޶���ǰ��¼�û���������ֹ�Ľ�ɫ/����/�˺ţ�
+  // P7 Step2: 自服务个人资料更新（仅显示名称 name，限定当前登录用户自身，禁止改角色/密码/账号）
   app.post('/api/auth/profile', (req, res) => {
     try {
       const token = getCookieToken(req);
@@ -473,12 +473,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
         if (!session.studentId) return res.status(400).json({ error: 'Invalid student session' });
         kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, session.studentId);
       } else {
-        // teacher �� administrator(subRole) ������ users ������ session.userId ��������
+        // teacher 与 administrator(subRole) 均落在 users 表，按 session.userId 更新自身
         if (!session.userId) return res.status(400).json({ error: 'Invalid user session' });
         kernelContainer.db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, session.userId);
       }
 
-      // ͬ����ǰ session_data �� name������ͬԴ�������������ֵ
+      // 同步当前 session_data 的 name，避免同源其他请求读到旧值
       try {
         const row = kernelContainer.db
           .prepare('SELECT session_data FROM client_sessions WHERE id = ?')
@@ -491,7 +491,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             .run(JSON.stringify(data), token);
         }
       } catch {
-        /* session_data ͬ���ǹؼ�·�� */
+        /* session_data 同步非关键路径 */
       }
 
       res.json({ success: true, name });
@@ -500,7 +500,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // P7/Profile: ����ͷ���ϴ���base64 ͼƬ������ uploads/avatars/��
+  // P7/Profile: 个人头像上传（base64 图片，存于 uploads/avatars/）
   app.post('/api/auth/avatar', (req, res) => {
     try {
       const token = getCookieToken(req);
@@ -535,7 +535,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       fs.writeFileSync(filePath, fileBuffer);
       const avatarUrl = `/uploads/avatars/${uniqueName}`;
 
-      // ��ȡ��ɾ����ͷ���ļ�������¶��ļ���
+      // 读取并删除旧头像文件（避免孤儿文件）
       let oldAvatar: string | null = null;
       if (session.role === 'student') {
         const row = kernelContainer.db
@@ -556,7 +556,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         }
       }
 
-      // ͬ����ǰ session_data.avatar
+      // 同步当前 session_data.avatar
       try {
         const row = kernelContainer.db
           .prepare('SELECT session_data FROM client_sessions WHERE id = ?')
@@ -569,7 +569,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             .run(JSON.stringify(data), token);
         }
       } catch {
-        /* session_data ͬ���ǹؼ�·�� */
+        /* session_data 同步非关键路径 */
       }
 
       res.json({ success: true, avatar: avatarUrl });
@@ -578,7 +578,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // P7/Profile: �Ƴ�����ͷ��
+  // P7/Profile: 移除个人头像
   app.delete('/api/auth/avatar', (req, res) => {
     try {
       const token = getCookieToken(req);
@@ -618,7 +618,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
             .run(JSON.stringify(data), token);
         }
       } catch {
-        /* session_data ͬ���ǹؼ�·�� */
+        /* session_data 同步非关键路径 */
       }
 
       res.json({ success: true });
@@ -793,10 +793,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       if (sessionData) {
         const sessionToken = 'token_' + crypto.randomBytes(16).toString('hex');
-        // SEC-AUTH-03: session 添加 expires_at�?24小时空闲 + 7天绝对）
-        // SEC-AUTH-03: session 添加 expires_at?24小时空闲 + 7天绝对）
+        // SEC-AUTH-03: session 添加 expires_at（24小时空闲 + 7天绝对）
         const now = Date.now();
-        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过?
+        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过期
         kernelContainer.db
           .prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
           .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
@@ -1531,7 +1530,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           WHERE cs.student_id = ?
         )
         SELECT r.id, r.class_id, r.lesson_id, r.scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
-               COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name,
+               COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name,
                (SELECT status FROM attendance a WHERE a.schedule_id = r.id AND a.student_id = ?) as attendance_status
         FROM RankedSchedules r
         LEFT JOIN lessons l ON r.lesson_id = l.id

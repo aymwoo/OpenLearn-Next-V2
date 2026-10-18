@@ -12,12 +12,12 @@
 
 | 模式 | 适用对象 | 崩溃隔离 | 文件系统 | 进程/Worker | eval / new Function | 网络 | 备注 |
 |---|---|---|---|---|---|---|---|
-| `inline` | • 宿主内建插件<br>• 数据库迁移/宿主启动前必要扩展 | ❌ 与宿主同上下文 | ✅宿主用户全部权限 | ✅可 spawn / worker | ✅执行字符串 | ✅不可拦截 | 仅限可信代码 |
-| `worker_threads` | • 宿主内的稳定插件 | ✅ 线程级 | ✅宿主用户全部权限 | ✅可 spawn / worker（同进程内核问题仍可通过 child_process 逃逸） | ✅执行字符串 | ❌ worker 内局部防护无法覆盖宿主 net | 是**资源崩溃**隔离，不是**安全**沙箱 |
-| `process` + `rw/ro` | • 第三方/社区插件（默认） | ✅ 进程级 | 仅 `pluginDir` + 宿主 `node_modules`（只读/读写由 policy 决定） | ❌ 禁止子进程/worker | ❌ 禁止字符串代码生成 | ⚠️ **本版本不受限**（Node 无 `--allow-net`） | 默认推荐 |
+| `inline` | • 宿主内建插件<br>• 数据库迁移/宿主启动前必要扩展 | ❌ 与宿主同上下文 | ✅宿主用户全部权限 | ✅可 spawn / worker | ✅执行字符串 | ✅不可拦截 | 仅限完全可信代码；策略层禁止第三方插件使用 |
+| `worker_threads` | • 宿主内的稳定插件 | ✅ 线程级 | ✅宿主用户全部权限 | ✅可 spawn / worker（同进程内核问题仍可通过 child_process 逃逸） | ✅执行字符串 | ⚠️ 原生不受限（无 preload 拦截） | 是**资源崩溃**隔离，不是**安全**沙箱；策略层已强制对第三方插件禁用 |
+| `process` + `rw/ro` | • 第三方/社区插件（默认） | ✅ 进程级 | 仅 `pluginDir` + 宿主 `node_modules`（只读/读写由 policy 决定） | ❌ 禁止子进程/worker | ❌ 禁止字符串代码生成 | 🛡️ 默认拒绝 + 获批域名宿主代发 | 默认推荐（`plugin-net-preload.cjs` + 宿主 IPC 代理） |
 | `process` + `off` | • 合法需要 spawn / 原始联网 / 写外部路径的插件 | ✅ 进程级 | 全部用户权限 | ✅ | ✅ | ✅ | 逃生舱；必须人工审批 + 审计 |
 
-> **默认执行模式建议**：第三方插件应默认 `process + rw`。`inline` 与 `worker_threads` 仅允许宿主内建或管理员显式提升。
+> **默认执行模式建议**：第三方插件强制默认 `process + rw`。`execution-policy.ts` 会将所有非内置且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件强制改写（coerce）为 `process` 模式，禁止使用 `inline` 与 `worker_threads`。
 
 ---
 
@@ -32,7 +32,7 @@
 | 拉起子进程 | ✅ | ✅ | ❌ | ❌ | ✅ |
 | 创建 worker | ✅ | ✅ | ❌ | ❌ | ✅ |
 | `eval` / `new Function` | ✅ | ✅ | ❌ | ❌ | ✅ |
-| 出站网络 | ✅（不可拦截） | ✅（不可拦截） | ⚠️ 不限制（本版本无 `--allow-net`） | ⚠️ 不限制 | ✅ |
+| 出站网络 | ✅（不可拦截，同宿主） | ⚠️ 不受限（同进程线程） | 🛡️ 默认拒绝 + 获批域名宿主代发 | 🛡️ 默认拒绝 + 获批域名宿主代发 | ✅ 完全放行（逃生舱） |
 | CPU hog / 死循环 | 全宿主影响 | 吃 CPU 但需 watchedog | 受限于进程级资源（P2） | 受限于进程级资源（P2） | 受限于进程级资源（P2） |
 
 ---
@@ -78,17 +78,21 @@
 
 否则插件可拉起不受权限模型约束的孙进程 / worker，沙箱形同虚设。
 
-### 3 个已知缺口
+### 3 个已知缺口与边界现状
 
-1. **网络 unrestricted**：Node 本版本没有 `--allow-net`，process 模式下仍可任意出站。
+1. **网络拦截与边界划分**：
+   - 虽然 Node 官方目前仍无 `--allow-net` 启动旗标，但平台在 `process` 模式（默认 `rw` / `ro`）下通过子进程入口注入 `plugin-net-preload.cjs` 与宿主 IPC 代理实现了网络沙箱闭环：
+     - **原始底层连接完全阻断**：原始 Socket、UDP (`dgram`)、DNS (`dns.lookup`/`resolve*`)、TLS 与 HTTP2 底层连接均被彻底封锁并抛出 `ERR_ACCESS_DENIED`。
+     - **应用层受控代发**：`fetch` 与 `http(s).request` 仅放行在 `plugin_network_grants` 表中获批的目标域名，并通过 IPC 通道（`ol-net-proxy`）转交宿主代发。宿主侧内建防 SSRF 校验（阻断本地环回、私有 IP、云元数据地址与 DNS 重绑定）。
+     - **执行模式边界覆盖**：`inline` 与 `worker_threads` 模式不受 `plugin-net-preload.cjs` 约束，同进程共享宿主网络栈；但平台在加载策略层（`execution-policy.ts`）已实施强门禁，所有非内置且未受显式信任的第三方插件一律强制改写（coerce）为 `process` 模式运行，从而杜绝不受信代码在无网络拦截模式下运行。
 2. **CPU 不受 permission model 约束**：吃 CPU 但让出 event loop 的插件仍可通过探活；需要进程级 watchdog/resource quota（P2）。
-3. **読み取り的共享依赖范围**：防的是宿主 `.env`/源码，不能阻止插件读取所有 `node_modules` 内的文件（只含 JS 依赖）。
+3. **读取的共享依赖范围**：防的是宿主 `.env`/源码，不能阻止插件读取所有 `node_modules` 内的文件（只含 JS 依赖）。
 
 ---
 
 ## 5. 运营建议（管理员操作）
 
-<|channel|> 指令 | 预期行为 | 风险 |
+| 指令 | 预期行为 | 风险 |
 |---|---|---|
 | 默认安装社区插件 | process + rw | 中 |
 | 安装需要联网/spawn 的插件 | process + off + 审批 + 审计 | 高 |
@@ -102,6 +106,15 @@
 ## 6. 配套测试建议
 
 ```bash
+# 网络加固与代理防 SSRF 验证
+pnpm vitest run packages/core/worker-runtime/__tests__/plugin-net-hardening.test.ts
+
+# 真实子进程权限收敛与 raw socket 拦截
+pnpm vitest run packages/core/worker-runtime/__tests__/plugin-permission.test.ts
+
+# 执行模式网络覆盖与信任边界防漂移测试
+pnpm vitest run packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts
+
 # Token allowlist 负向
 pnpm vitest run packages/core/worker-runtime/__tests__/service-host-allowlist.test.ts
 
@@ -110,16 +123,13 @@ pnpm vitest run packages/core/worker-runtime/__tests__/sandbox-confinement.test.
 
 # 插件代码静态门禁
 pnpm vitest run packages/core/esm-loader/__tests__/plugin-code-security.test.ts
-
-# 全链路 plugin lifecycle（应逐步补齐）
-pnpm vitest run packages/core/plugin-host/__tests__/lifecycle-race.test.ts
 ```
 
 ---
 
 ## 7. 长期路线图
 
-1. **网络隔离**：host proxy + manifest outbound allowlist + deny-by-default + audit logging。
+1. **网络隔离演进**：子进程 host proxy + 默认拒绝已在 PR #32 交付；后续将跟进更细粒度的流控配额、eBPF 网络层审计与 `worker_threads` 模式安全网探索。
 2. **共享依赖 range enforcement**：worker 流量目测 + SBOM。
 3. **进程资源配额**：watchdog timeout / memory cap / cgroup（host 侧）。
 4. **Permission policy evolution**：`rw/ro/off` 增加 `network` granular gate。

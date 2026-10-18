@@ -10,14 +10,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **插件声明式版本化迁移、失败事务回滚与降级保护（Issue #142）**：
+  - **声明式 SQL 迁移约定**：插件根目录支持 `migrations/` 目录约定，以数字序 SQL 脚本命名（如 `001_initial.sql`、`002_add_field.sql`），支持可选 `-- DOWN` 分段作为回滚定义，内置 `{{table_prefix}}` 占位符展开。
+  - **激活生命周期内原子执行**：在插件激活（`activateFromDatabase`、`activateWorker` 与 `activatePreloaded`）阶段前自动执行未执行的增量迁移，单脚本在 SQLite `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` 事务内原子执行；任意步骤失败自动回滚已执行语句，并将插件标记为 `ERROR` 状态。
+  - **严格版本降级保护**：当数据库已应用的最新迁移版本大于插件声明文件中的最高版本时，抛出 `PluginMigrationDowngradeError` 并强行阻断激活，杜绝旧版本插件在升级后 Schema 上运行导致的数据损坏风险。
+  - **元数据持久化与篡改校验**：自动维护 `plugin_declared_migrations` 元表，记录 `(plugin_id, version, name, checksum, applied_at)`；执行前校验已应用脚本的 SHA-256 校验和一致性。
+  - **命令式 `ctx.db.migrate` 事务原子化**：旧版命令式 `ctx.db.migrate(targetVersion, upgradeFn)` 升级为在原生 SQLite 事务中执行并支持失败回滚，保持完全向后兼容。
+  - **测试套件支持**：`@openlearn/plugin-test-kit` 新增导出 `runTestPluginMigrations` 助手，并在 mock context 的 `db.migrate` 中增加事务与错误回滚模拟。
+
+### Fixes
+
+- **课前「破冰心情打卡」全链路闭环与持久化（Issue #131）**：
+  - **学生端入口**：在学生进入课堂界面（`StudentLessonView`）新增 `StudentIcebreakerModal` 轻量打卡浮层，提供充满电（`fullPower`）、需要咖啡（`needCoffee`）、需要帮助（`needHelp`）三项，支持一键打卡与免打扰跳过；在顶栏标题旁提供「心情打卡」按钮支持随时修改心情。
+  - **服务端鉴权与校验**：`POST /api/classes/:classId/checkin/icebreaker` 接入 `authorizeClass(ctx.db, req.session, classId, 'member')`，防范非本班学生越权（403）及非法班级（404）；严密校验 `mood` 合法枚举（400）。
+  - **数据持久化与幂等更新**：新增数据库迁移 `035_icebreaker_checkins.sql`，按 `(class_id, scope_key, student_id)` 唯一索引进行 UPSERT，实现同一学生重复打卡按修改心情更新，并持久化到 SQLite（服务重启统计不丢失）。
+  - **统计聚合与教师端联动**：`DiagnosticService.getIcebreakerStats` 与 `getPreClassDiagnostic` 基于数据库真实数据按课节与班级聚合，学生打卡后即刻通过 Socket 向教师端 `PreClassDiagnosticHub` 实时推送更新。
+  - **测试覆盖**：新增 `server/__tests__/icebreaker-checkin.test.ts`（8 例覆盖未认证 401、跨班 403、不存在 404、非法 mood 400、去重修改与重启持久化）和 `src/features/student/__tests__/StudentIcebreakerModal.test.tsx`（6 例覆盖选项渲染、提交回调、跳过标记与错误呈现）。
+
+- **隔离模式插件激活前补齐宿主 SDK 解析链接，并放行权限模型读取（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；同时 `process` 隔离的 Node 权限模型新增 `sharedReadPaths`，把 `<pluginsDir>/node_modules` 与 SDK 链接的真实目录按只读放行（此前会被 `ERR_ACCESS_DENIED (FileSystemRead)` 二次拦下）。`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫，`plugin-permission.test.ts` / `worker-manager.test.ts` 覆盖只读旗标与路径收集。
+- **未获 `agent:tool` 的插件注册 action 改为降级而非拒绝（Issue #147 实测发现）**：`method-policy` 原先把「未声明 `agent:tool` 却注册对外暴露 action」直接抛错，而 `ActionDescriptor.exposeToAgent` 默认 `true`、旧插件（含最新版 class-manager / attendance-record）根本不知道这条新规 —— 结果是 worker/process 隔离下 `activate()` 失败、插件整体 `state=error`，把「不暴露给 AI Agent」放大成「升级后插件不能用」。现由 `sanitizeActionRegisterArgs` 把未授权的 descriptor 强制改写为 `exposeToAgent: false` 后放行：安全语义不变（仍不进 `getAgentTools()`），插件功能保留；`checkMethodPolicy` 中的拒绝分支保留为纵深防御。新增 `service-host.test.ts` 用例覆盖降级与「已授权时原样透传」。
+- **`@openlearn/plugin-sdk` 发布入口不再静态加载 express（Issue #147 实测发现）**：SDK 的 `index.ts` 曾从 `../core/plugin-host/index.js` 再导出运行时类，那个入口会实例化 `PluginHost extends PluginHostInstall`，把 `base.js` 的 `import express from 'express'` 一路带进 SDK 产物。于是**任何**第三方插件只要 `import '@openlearn/plugin-sdk'`，隔离进程就要加载 express → body-parser → depd 的 `new Function`，被 `--disallow-code-generation-from-strings` 拦成 `EvalError`，插件直接激活失败（升级回归实测：attendance-record / interactive-courseware 全挂）。现在改为从各模块直接再导出，产物无 express；`dist-entrypoint.test.ts` 增加「产物不得 import express」的守卫。
+- **隔离插件里 host RPC 的拒绝不再当场杀掉 worker（Issue #147 实测发现）**：旧插件是按 inline 的**同步**语义写的（`rawDb.prepare(...).run()` 不 `await`，幂等迁移靠 `try/catch`）。在隔离模式下同一次调用变成异步 rejection，`try/catch` 接不住，而 bootstrap 的 `unhandledRejection` 处理器一律上报错误并退出子进程 —— attendance-record 的 `duplicate column name: status`（列本来就在）因此把整个插件打成 `state=error`。现在 worker 侧的 RPC 代理会给宿主错误打 `__openlearnRpcError` 标记，`unhandledRejection` 识别后只记告警、继续运行；插件自己 Promise 爆炸仍走原来的致命路径（`worker-manager` 的 rejection 用例保持原断言）。
+- **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
+
+### Features
+
+- **扩展点生命周期与弃用策略规范及插件升级兼容性预检报告（Issue #146）**：
+  - **核心扩展点元数据契约**：在 `packages/core/extension-points/metadata.ts` 建立平台统一扩展点元数据契约（`CORE_EXTENSION_POINTS`），涵盖 Commands、Events、UI Slots (contributes)、DI Services (requires/optional) 四大扩展原语，定义 `since`、`deprecated`、`removedIn`、`replacement` 规范字段。
+  - **弃用缓冲期承诺**：约定任何扩展点一旦标记为弃用，平台承诺至少保留 1 个完整的 minor 版本周期（在 `deprecated <= platformVersion < removedIn` 期间保持向后兼容），直至目标版本 `removedIn` 才彻底物理移除；并在 `docs/plugin/plugin-manifest-spec.md` 写入第 3 节规范。
+  - **运行时结构化弃用告警**：在 `CommandBus`、`EventBus`、`ContributionRegistry`、`ContextBuilder` 四大接入层全面接入弃用检测与单进程 Set 去重告警机制，输出包含调用方插件 ID、弃用版本、计划移除版本与替代建议的 `[DeprecationWarning]`，有效避免高频调用刷屏。
+  - **升级前兼容性预检报告**：在 CLI 中提供 `npx openlearn-next doctor --compat-report` 与 `npx openlearn-next compat-report [--target-version <ver>]`，零外部依赖扫描已安装插件清单，从 Engines 约束、UI 插槽、依赖注入服务与命令等多维度评估升级兼容性；并在存在破坏性不兼容时退出码返回 1，方便接入自动化 CI。单测覆盖 CI 3 个第三方插件（attendance-record, class_manager, interactive-courseware）及各种弃用/移除边界条件。
+  - **SDK 类型标注**：在 `packages/plugin-sdk/openlearn.d.ts` 为弃用扩展点方法补充 `@deprecated` JSDoc 注解。
+- **插件卸载数据语义：默认保留数据、清除前先导出、重装自动复用（Issue #141）**：卸载此前无条件 `DROP TABLE` 插件私有表并删除 `plugin_migrations` / `plugin_storage`（更新路径却保留数据，同一份数据在两条路径上语义相反），误点卸载即丢学生作业、考勤与成绩。
+  - **卸载 ≠ 删数据**：`PluginHost.uninstallPlugin(pluginId, { dataPolicy: 'keep' | 'purge' })` 默认 `keep` 并在返回值中回显保留/删除的表名、行数与归档路径；新模块 `packages/core/plugin-host/orphan-data.ts` 负责数据摘要、孤立登记、SQL 归档与清除。
+  - **`keep`（默认）**：插件私有表、`plugin_migrations` 版本记录与 `plugin_storage` 键值原样保留，并写入新表 `plugin_orphan_data`（迁移 `034_plugin_orphan_data.sql`）登记；无数据的插件不登记，避免管理页噪声。
+  - **重装复用**：同 `manifest.id` 重装自动复用原安装 UUID（表前缀 / 迁移版本 / 存储键三处键空间天然命中，无需数据搬迁），安装成功落库后才注销登记；安装中途失败时登记仍在，不会出现「表还在但没人知道」的盲区。
+  - **`purge`（显式）**：先导出可重放的 SQL 归档（建表语句 + 数据 + 迁移版本 + 存储键），导出失败即中止卸载（数据、DB 行、文件都完好）；成功后删表 / 迁移记录 / 存储键并写 `plugin.data_purged` 审计。授权状态（公开路由审批、能力授予、静态路由与内存资源）无论策略都照常清除 —— 它们是授权而非数据。
+  - **HTTP 与前端**：`DELETE /api/plugins/:id` 接受 `dataPolicy`（purge 需 `confirm=purge`）；新增 `GET /api/plugins/orphan-data`（列表）、`POST /api/plugins/orphan-data/:key/export`（导出 + `plugin.data_exported` 审计）、`GET .../archive`（下载，路径限定在归档目录内）、`DELETE .../:key`（需 `confirm=<pluginId>`，服务端先自动导出再清除）。插件中心新增「插件数据」页签（列出 / 导出 / 下载 / 两步清除）与卸载对话框（保留/清除二选一、purge 需勾选不可恢复确认），替代原 `window.confirm`；归档固定写到数据目录的 `plugin-data-exports/`（与 `/plugins` 静态服务隔离，避免登录用户可读归档）。
+  - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
 ### Security
 
 - **插件访问学生个人数据的能力声明与审计，插件表纳入导出/删除与保留策略（P1 安全，Issue #145）**：
   - **学生个人数据能力声明与统一审计**：在 `packages/core/plugin-host/method-policy.ts` 中引入专有的 `CAP_STUDENT_DATA_READ = 'student-data:read'` 与 `CAP_STUDENT_DATA_WRITE = 'student-data:write'` 能力常量；在 Inline 代理层（`context-builder.ts`）与 Worker 隔离层（`service-host.ts`）拦截插件对 `pointsLedger`（读 `getLogs`/`getStudentTotalByDimension`/`getStudentDimensionSummary`，写 `addPoints`）的学生数据访问，统一记录 `plugin.student_data_access` 安全审计日志；提供平滑迁移兼容期，对未声明能力的存量插件输出控制台警告并标记 `migrationWarning: true`。
   - **插件扩展数据 GDPR 导出与级联删除**：在 `PluginInstance`、`PluginModule` 与 `@openlearn/plugin-sdk` 规范中引入可选的 `onStudentExport(studentId)` 与 `onStudentDelete(studentId)` 扩展生命周期钩子；`PluginHost` 新增 `exportStudentDataFromPlugins` 与 `deleteStudentDataFromPlugins`（委托至 `student-data-privacy.ts`），统一支持 Inline 异步与 Worker 隔离消息 RPC（带 10s 超时保护），未实现的插件标记 `{ status: 'not_implemented' }`；
   - **花名册级联事务与导出纳管**：`RosterService.deleteStudentCascade` 将学生积分流水（`student_point_logs`）纳入单事务原子清理，并在事务提交后并发调度活跃插件的 `deleteStudentDataFromPlugins` 并记入 `student.gdpr_deleted` 安全审计；`RosterService.exportStudentData` 聚合输出 `pointLogs` 以及各活跃插件返回的 `pluginData`，实现学生数据完整覆盖与脱敏导出；
-  - **多类别数据保留策略与定期清理**：新增迁移 `034_student_read_notifications_created_at.sql`；新增 `packages/core/db/retention-policy.ts`，定义 5 大类别保留窗口：`events`（90 天）、`attendance`（365 天）、`student_rollcalls`（180 天）、`student_read_notifications`（30 天）、`client_sessions`（30 天），支持独立环境变量自定义及 `0` 禁用；服务端启动及数据库就绪时自动调用 `purgeAllExpiredData` 清理超期数据；
+  - **多类别数据保留策略与定期清理**：新增迁移 `036_student_read_notifications_created_at.sql`；新增 `packages/core/db/retention-policy.ts`，定义 5 大类别保留窗口：`events`（90 天）、`attendance`（365 天）、`student_rollcalls`（180 天）、`student_read_notifications`（30 天）、`client_sessions`（30 天），支持独立环境变量自定义及 `0` 禁用；服务端启动及数据库就绪时自动调用 `purgeAllExpiredData` 清理超期数据；
   - **测试与文档**：新增 `plugin-student-data-audit.test.ts`（5 例）、`plugin-student-privacy-hooks.test.ts`（5 例）与 `retention-policy.test.ts`（11 例），更新现有花名册测试与 `plugin-capability-matrix.md`、`privacy.md` 及 `known-issues.md`。
+- **下线废弃写盘调试接口 `POST /api/courseware/debug`（Issue #132）**：
+  - 彻底移除 `server/routes/courseware.ts` 中废弃的 `POST /api/courseware/debug` 路由，消除任意登录用户通过 `fs.appendFileSync` 无上限同步追加写 `client_debug.log` 导致的磁盘写满与事件循环阻塞（DoS）安全隐患。
+  - 同步更新契约文档 `docs/api/courseware-attempts-contract.md`，对齐最新 API 契约，明确课件客户端错误上报统一经 `/api/client-errors` 走标准错误流。
+  - 根目录 `.gitignore` 补充 `client_debug.log` 规则，防止本地开发或调试日志被误提交。
+  - 新增 `server/__tests__/courseware-debug-removed.test.ts` 验证该端点返回 404 且不再生成磁盘文件。
+
 - **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
   - `GET /api/courseware/attempts` 修复教师水平越权：`listAttempts` 不再仅凭 `isStaff` 放行全校数据。教师视角仅返回其管辖班级（`classes.owner_user_id`）中的学生作答与教师自测记录；管理员保留全校可见性；学生视角仅能查看本人并脱敏内部字段（`extra_json`, `comment`）。
   - 读接口鉴权加固：`GET /api/courseware/attempts/:attemptId/progress` 与 `GET /api/courseware/attempts/:attemptId/raw` 增加基于 `teacherCanSeeStudent` 的班级范围校验，教师尝试读取非管辖班级学生作答一律拒绝（403），不存在的记录返回 404。
@@ -49,6 +95,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **源码中文编码损坏修复与 CI 编码门禁（Issue #130）**：修复 9 个文件中 29 处被非 UTF-8 编码写入损坏的中文（7 个源码文件 27 处 + 2 个 md 文档 2 处），其中 2 处为用户可见文案：学生看板未绑定课节的课表标题恢复为 `未设定内容 (上课时自由选择)`（与 `schedule-service` / `grading-service` 一致），AI 对话注入检测提示恢复为 `检测到潜在的 prompt 注入尝试，请修改您的输入。`；其余为被 GBK 字节污染的注释（`roster.ts` 的 profile/avatar 段等），已逐处从损坏前的提交还原原文。issue 复现命令未覆盖的根 `server.ts:153`（`rg ... server src packages` 只扫目录，漏掉根文件）及 2 处 md 文档同类损坏一并修复。防回归：新增 `scripts/check-source-encoding.mjs`（`pnpm lint:encoding`）扫描全仓 TS/TSX/MJS/CJS/JS 中的 U+FFFD 字面量与非法 UTF-8 字节并接入 CI `typecheck-and-test`；新增最小 `.editorconfig`（`charset = utf-8`）；检查脚本附带 4 例单元测试。
 - **课堂情绪追踪与优秀学员组件实时通道死链修复（Issue #129）**：`src/hooks/useSocket.ts`（已删除）每次调用都新建裸 `io()` 连接且从不参加任何房间，而服务端课堂事件经 `emitClassroomEvent` 只投递到 `[lessonId, classroom-broadcast]` 房间（`server/presence.ts`），导致教师端「课堂情绪追踪」（`ClassroomMoodTracker`）的 `classroom:pacing_updated` / `classroom:quick_poll_updated` / `classroom:buzzer_winner` 与「优秀学员」（`TopPerformersWidget`）的 `whiteboard-quiz-answered` 监听 100% 收不到，只能靠手动刷新或 15s 轮询兜底。现删除该废弃 hook，两个组件统一改用 `onSocketInstance` 挂 App 主 socket（`useClassroomSocket` 连接时已加入 `classroom-broadcast`，与 `LiveClassroomView` v0.6.1 审计 C-1 修复同模式），并顺带移除 `quiz.answered` / `classroom:quiz_response_received` 两个全仓无任何 emit 的死监听。测试：`ClassroomMoodTracker.test.tsx` 与 `TopPerformersWidget.test.tsx` 各新增回归用例（主 socket 派发事件 → 组件实时更新、非本课节事件过滤、`io()` 不再被调用）。
 - **HTTP 访问日志分级与轮询刷屏静默优化（Issue #116）**：
   - **默认静默正常成功请求**：在 `server/middleware/request-observability.ts` 中引入请求级别分级（`resolveHttpAccessLogLevel`）与策略控制（`resolveHttpAccessLogMode`），默认模式（`HTTP_ACCESS_LOG=errors`）下正常的 200/304 快速响应不再输出控制台与访问日志，彻底根除前端高频轮询（`/api/classroom/sessions/:id`、`/api/vfs` 等）造成的日志刷屏噪音；
@@ -140,7 +187,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
 - **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
 
-
 ### Refactor / Performance
 
 - **课程编辑器属性栏移除 X/Y 坐标输入（Issue #97）**：`WhiteboardPropertiesSidebar.tsx` 的「物理定位 & 尺寸」卡片不再提供 X 坐标 / Y 坐标数字输入框，标题简化为「尺寸」——组件位置统一通过在画布上拖动调整（`x`/`y` 数据结构与保存逻辑不变，拖动后照常落库），消除属性栏与拖拽两条位置修改通道并存导致的不一致。宽度 / 高度 / 半径输入保留不变；`InteractiveWhiteboard.tsx` 复用同一属性栏，互动课堂白板行为同步收敛。
@@ -166,8 +212,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
 - **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
 
+### CI
+
+- **新增「上一正式版 → main」升级回归门禁（Issue #147）**：此前 CI 只有「当前 main 新装三个第三方插件」（`plugin-compatibility`）与「空库冷启动」（`docker-rehearsal`），没有任何作业验证「旧库 + 已装插件 + 旧数据」的升级路径。
+  - 新增 `scripts/upgrade-regression/build-fixture.ts`：以 release tag 的服务端代码起真实进程，管理员登录后经 `POST /api/plugins/upload-zip-raw` 安装三个真实第三方插件并激活，创建样例班级/学生，停服后用 `VACUUM INTO` 生成一致快照，连同 `plugins/`、`storage/` 与 `metadata.json` 打包为 fixture。
+  - 新增 `scripts/upgrade-regression/verify-upgrade.ts`：恢复 fixture 后用当前 `main` 启动，断言 `/health`、插件全部 `active`、旧班级/学生/成员关系可读、插件 `plugin_storage` 标记可读回、已执行迁移 checksum 未被改写、旧表全部仍在，并二次启动验证「零新迁移」。作业以 `MIGRATION_CHECKSUM_STRICT=true` 运行，历史迁移被改写会直接启动失败。
+  - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
+  - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
+  - 定位修正：ZIP 安装落库的 `plugins.file_path` 是构库机器的绝对路径，而校验在另一个临时目录里恢复 fixture，插件代码文件搬了家、库里那列没搬 —— `loadPluginModule` 找不到文件、ZIP 插件的 `source_code` 又是空串，三个插件全被打成 `state=error`，看起来像升级把插件弄坏了。现在 `restoreFixture` 会按 `/plugins/` 相对结构把 `file_path` 重定位到恢复后的数据目录（真实升级同目录，不受影响），并在插件非 active 时把服务端日志尾巴打进 CI，病因不再藏在被捕获的日志里。
+  - 定位修正（SDK 解析链接）：fixture 的 zip 打包刻意跳过 symlink —— `plugins/node_modules/@openlearn/plugin-sdk` 这个宿主为插件建的解析链接，target 是构库机器的绝对路径，打进 fixture 恢复后也是悬空链接。而 v0.6.1 之后第三方插件默认跑 worker 模式，worker 的导入路径不像 inline 路径那样会自建链接，于是恢复后 worker 加载 `index.js` 抛 `ERR_MODULE_NOT_FOUND: Cannot find package '@openlearn/plugin-sdk'`，插件再次全部 `state=error`。真实升级不受影响（用户磁盘上的链接随数据目录保留），这是校验工具搬家后必须自补的环境件：`restoreFixture` 现在调用 `ensurePluginSdkSymlink`，按当前机器的宿主 SDK 重建链接，悬空链接/解引用空目录先清掉再建（避免 `EEXIST`），已有可用链接幂等保留。
+  - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
+
 ### Docs
 
+- **信任边界文档与各执行模式网络代理现状对齐（Issue #144）**：
+  - 更新 `docs/reference/plugin-trust-boundary.md`：
+    - §1 执行模式对照表与 §2 五大能力面矩阵：纠正旧有的「process 模式出站网络不受限」表述，如实反映 `process`（rw/ro）模式通过 `plugin-net-preload.cjs`（拦截底层 Socket/UDP/DNS/TLS/HTTP2）与宿主 IPC 代发（`plugin-net-proxy.ts`）实现的默认拒绝与白名单代理，标注 `process (off)` 逃生舱完全放行；
+    - §1 与 §4 明确 `inline` 与 `worker_threads` 模式未注入网络沙箱、同进程共享宿主网络栈的客观现状，并说明加载策略层（`execution-policy.ts:resolvePluginExecutionMode`）已强制将所有不受信的第三方插件改写（coerce）为 `process` 模式运行，形成防御闭环；
+    - §5 运营建议：修复第 91 行 Markdown 表格首行误写为 `<|channel|>` 的语法渲染错误（审计报告 `TB-08`）；
+    - §7 长期路线图：将已交付的网络代理标记为完成，调整演进目标为细粒度流控配额与 eBPF 网络度量。
+  - 更新 `docs/reference/plugin-capability-matrix.md`：补充 `network:*` 说明，明确出站网络不属于 `capabilitiesProposed` 字符串，而是由 `plugin_network_grants` 白名单与 manifest `network.outbound` 独立管控。
+  - 同步更新 `docs-drift-remediation-tracker.md`（阶段九）与 `docs/trust-boundary-hardening-audit-2026-10-14.md`（标记 TB-08、TB-09、R-04 已修复）。
+  - 新增自动化防漂移与网络覆盖测试 `packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts`（10 个测试用例守住文档一致性与策略层执行模式收敛门禁）。
 - **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
 - **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
 - **版本迁移指南补上 023**：`docs/migration/version-migration.md` 说明从 v0.6.1 tag 之后的当前 `main`（平台版本号仍是 `0.6.1`）如何处理班级临时口令。`migrations/023_encrypt_class_passcodes.sql` 只留下密文约定的标记；启动时把仍是明文的行加密为 `olenc1:`，已经是该前缀的行跳过。教师口令接口仍返回原文。列表、审计日志和 `scripts/site-backup.mjs` 的数据库快照不提供明文，钥匙文件要单独备份。

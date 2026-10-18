@@ -785,3 +785,334 @@ export async function runCheckUpdate(options = {}) {
 
   return { ok: true, hasUpdate, currentVer, latestVer };
 }
+
+/**
+ * 平台核心扩展点元数据契约（用于零依赖环境的升级兼容性分析）
+ */
+export const CORE_EXTENSION_POINTS = [
+  // ── Commands ─────────────────────────────────────────────────────────────
+  { id: 'lesson.create', kind: 'command', since: '0.1.0' },
+  { id: 'lesson.update', kind: 'command', since: '0.1.0' },
+  { id: 'lesson.delete', kind: 'command', since: '0.1.0' },
+  { id: 'assignment.grade', kind: 'command', since: '0.2.0' },
+  { id: 'assignment.peer_review', kind: 'command', since: '0.3.0' },
+  { id: 'whiteboard.draw', kind: 'command', since: '0.1.0' },
+  { id: 'whiteboard.clear', kind: 'command', since: '0.1.0' },
+  { id: 'vfs.write_file', kind: 'command', since: '0.2.0' },
+  { id: 'vfs.read_file', kind: 'command', since: '0.2.0' },
+  {
+    id: 'vfs.read_path',
+    kind: 'command',
+    since: '0.1.0',
+    deprecated: '0.6.0',
+    removedIn: '0.7.0',
+    replacement: "Use 'vfs.read_file' instead",
+  },
+  {
+    id: 'classroom.legacy_poll',
+    kind: 'command',
+    since: '0.1.0',
+    deprecated: '0.5.0',
+    removedIn: '0.7.0',
+    replacement: "Use 'classroom.quick_poll' instead",
+  },
+
+  // ── Events ───────────────────────────────────────────────────────────────
+  { id: 'lesson.created', kind: 'event', since: '0.1.0' },
+  { id: 'lesson.updated', kind: 'event', since: '0.1.0' },
+  { id: 'lesson.deleted', kind: 'event', since: '0.1.0' },
+  { id: 'assignment.graded', kind: 'event', since: '0.2.0' },
+  { id: 'classroom.pacing_updated', kind: 'event', since: '0.3.0' },
+  { id: 'classroom.quick_poll_updated', kind: 'event', since: '0.3.0' },
+  { id: 'quiz.answered', kind: 'event', since: '0.6.0' },
+  {
+    id: 'whiteboard.quiz_answered',
+    kind: 'event',
+    since: '0.1.0',
+    deprecated: '0.6.0',
+    removedIn: '0.7.0',
+    replacement: "Use 'quiz.answered' instead",
+  },
+
+  // ── UI Slots ─────────────────────────────────────────────────────────────
+  { id: 'teacher.tab', kind: 'slot', since: '0.1.0' },
+  { id: 'classroom.tool', kind: 'slot', since: '0.1.0' },
+  { id: 'teacher.dashboard.widget', kind: 'slot', since: '0.2.0' },
+  { id: 'student.view', kind: 'slot', since: '0.2.0' },
+  { id: 'student.lesson.tool', kind: 'slot', since: '0.2.0' },
+  { id: 'anchor:lesson-header', kind: 'slot', since: '0.2.6' },
+  { id: 'anchor:teacher-top-nav', kind: 'slot', since: '0.2.6' },
+  {
+    id: 'legacy.classroom.tab',
+    kind: 'slot',
+    since: '0.1.0',
+    deprecated: '0.5.0',
+    removedIn: '0.7.0',
+    replacement: "Use 'teacher.tab' instead",
+  },
+
+  // ── Services ─────────────────────────────────────────────────────────────
+  { id: '@openlearn/core:ICommandBusService', kind: 'service', since: '0.1.0' },
+  { id: '@openlearn/core:IEventBusService', kind: 'service', since: '0.1.0' },
+  { id: '@openlearn/core:IStorageService', kind: 'service', since: '0.1.0' },
+  { id: '@openlearn/core:IAIService', kind: 'service', since: '0.2.0' },
+  { id: '@openlearn/core:IDatabase', kind: 'service', since: '0.1.0' },
+  {
+    id: '@openlearn/core:ILegacyAuthService',
+    kind: 'service',
+    since: '0.1.0',
+    deprecated: '0.5.0',
+    removedIn: '0.7.0',
+    replacement: "Use '@openlearn/core:IAuthService' instead",
+  },
+];
+
+/**
+ * 分析插件列表相对于目标平台版本的升级兼容性 (Zero External Dependencies)
+ * @param {Array} plugins 插件 Manifest 列表
+ * @param {string} targetVersion 拟升级的目标版本 (例如 '0.7.0')
+ */
+export function generateUpgradeCompatibilityReport(plugins, targetVersion) {
+  const extPointMap = new Map(CORE_EXTENSION_POINTS.map((p) => [p.id, p]));
+  const pluginResults = [];
+
+  for (const plugin of plugins) {
+    const issues = [];
+    const pluginId = plugin.id;
+    const pluginName = plugin.name || pluginId;
+    const pluginVersion = plugin.version || '0.0.0';
+    const engineReq = plugin.engines?.openlearn;
+
+    // 1. 检查 engines.openlearn 语义化版本约束
+    if (engineReq && engineReq !== '*') {
+      if (!satisfiesVersionRange(targetVersion, engineReq)) {
+        issues.push({
+          level: 'error',
+          message: `Plugin engines.openlearn constraint "${engineReq}" is not satisfied by target version v${targetVersion}`,
+        });
+      }
+    }
+
+    // 2. 检查 UI 插槽扩展点贡献 (contributes)
+    if (plugin.contributes && typeof plugin.contributes === 'object') {
+      for (const slotKey of Object.keys(plugin.contributes)) {
+        const meta = extPointMap.get(slotKey);
+        if (meta) {
+          if (meta.removedIn && compareVersions(targetVersion, meta.removedIn) >= 0) {
+            issues.push({
+              level: 'error',
+              extensionPoint: slotKey,
+              replacement: meta.replacement,
+              message: `UI Slot "${slotKey}" is removed in v${meta.removedIn}. ${meta.replacement || ''}`,
+            });
+          } else if (meta.deprecated && compareVersions(targetVersion, meta.deprecated) >= 0) {
+            issues.push({
+              level: 'warn',
+              extensionPoint: slotKey,
+              replacement: meta.replacement,
+              message: `UI Slot "${slotKey}" is deprecated since v${meta.deprecated} and will be removed in v${meta.removedIn || 'a future minor release'}. ${meta.replacement || ''}`,
+            });
+          }
+        }
+      }
+    }
+
+    // 3. 检查依赖注入服务 Token (requires / optional)
+    const serviceList = [
+      ...(Array.isArray(plugin.requires) ? plugin.requires : []),
+      ...(Array.isArray(plugin.optional) ? plugin.optional : []),
+    ];
+    for (const rawToken of serviceList) {
+      const lastAt = rawToken.lastIndexOf('@');
+      const tokenName = lastAt > 0 ? rawToken.slice(0, lastAt) : rawToken;
+      const meta = extPointMap.get(tokenName);
+      if (meta) {
+        if (meta.removedIn && compareVersions(targetVersion, meta.removedIn) >= 0) {
+          issues.push({
+            level: 'error',
+            extensionPoint: tokenName,
+            replacement: meta.replacement,
+            message: `Service Token "${tokenName}" is removed in v${meta.removedIn}. ${meta.replacement || ''}`,
+          });
+        } else if (meta.deprecated && compareVersions(targetVersion, meta.deprecated) >= 0) {
+          issues.push({
+            level: 'warn',
+            extensionPoint: tokenName,
+            replacement: meta.replacement,
+            message: `Service Token "${tokenName}" is deprecated since v${meta.deprecated} and will be removed in v${meta.removedIn || 'a future minor release'}. ${meta.replacement || ''}`,
+          });
+        }
+      }
+    }
+
+    // 4. 检查显式声明的 Commands
+    const cmdList = Array.isArray(plugin.commands) ? plugin.commands : [];
+    for (const cmd of cmdList) {
+      const meta = extPointMap.get(cmd);
+      if (meta) {
+        if (meta.removedIn && compareVersions(targetVersion, meta.removedIn) >= 0) {
+          issues.push({
+            level: 'error',
+            extensionPoint: cmd,
+            replacement: meta.replacement,
+            message: `Command "${cmd}" is removed in v${meta.removedIn}. ${meta.replacement || ''}`,
+          });
+        } else if (meta.deprecated && compareVersions(targetVersion, meta.deprecated) >= 0) {
+          issues.push({
+            level: 'warn',
+            extensionPoint: cmd,
+            replacement: meta.replacement,
+            message: `Command "${cmd}" is deprecated since v${meta.deprecated}. ${meta.replacement || ''}`,
+          });
+        }
+      }
+    }
+
+    let status = 'compatible';
+    if (issues.some((i) => i.level === 'error')) {
+      status = 'incompatible';
+    } else if (issues.some((i) => i.level === 'warn')) {
+      status = 'has_warnings';
+    }
+
+    pluginResults.push({
+      id: pluginId,
+      name: pluginName,
+      version: pluginVersion,
+      openlearnEngineReq: engineReq,
+      status,
+      issues,
+    });
+  }
+
+  const incompatibleCount = pluginResults.filter((p) => p.status === 'incompatible').length;
+  const warningCount = pluginResults.filter((p) => p.status === 'has_warnings').length;
+  const compatibleCount = pluginResults.filter((p) => p.status === 'compatible').length;
+
+  let overallStatus = 'compatible';
+  if (incompatibleCount > 0) {
+    overallStatus = 'incompatible';
+  } else if (warningCount > 0) {
+    overallStatus = 'has_warnings';
+  }
+
+  return {
+    targetVersion,
+    generatedAt: new Date().toISOString(),
+    overallStatus,
+    summary: {
+      totalPlugins: pluginResults.length,
+      compatibleCount,
+      warningCount,
+      incompatibleCount,
+    },
+    plugins: pluginResults,
+  };
+}
+
+/**
+ * 生成并打印插件升级兼容性报告 (Issue #146)
+ * @param {Object} [options]
+ * @param {string} [options.targetVersion] 目标平台版本，默认取当前平台版本
+ * @param {string} [options.dbPath] 数据库路径
+ * @param {string} [options.pluginsDir] 本地插件目录路径
+ * @param {Array} [options.manifests] 直接传入的待检测 manifest 列表（单测/模拟用）
+ * @param {boolean} [options.silent] 是否静默输出
+ * @returns {Promise<any>}
+ */
+export async function runPluginCompatibilityReport(options = {}) {
+  const pkgPath = path.join(__dirname, 'package.json');
+  const curVer = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version : '0.6.1';
+  const targetVersion = options.targetVersion || process.env.OPENLEARN_UPGRADE_TARGET_VERSION || curVer;
+
+  const manifests = [];
+  if (Array.isArray(options.manifests)) {
+    manifests.push(...options.manifests);
+  } else {
+    // 1. 读取数据库
+    const dbPath = options.dbPath
+      ? path.resolve(options.dbPath)
+      : process.env.OPENLEARN_DB_PATH
+        ? path.resolve(process.env.OPENLEARN_DB_PATH)
+        : path.join(os.homedir(), 'openlearn-next', 'data.db');
+
+    if (fs.existsSync(dbPath)) {
+      try {
+        const Database = (await import('better-sqlite3')).default;
+        const db = new Database(dbPath, { readonly: true });
+        const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='plugins'").get();
+        if (tableCheck) {
+          const rows = db
+            .prepare("SELECT id, name, manifest FROM plugins WHERE id NOT LIKE '@openlearn/plugin-%'")
+            .all();
+          for (const row of rows) {
+            if (row.manifest) {
+              try {
+                manifests.push(JSON.parse(row.manifest));
+              } catch {}
+            }
+          }
+        }
+        db.close();
+      } catch {}
+    }
+
+    // 2. 扫描 plugins 目录
+    const localPluginsDir = options.pluginsDir || path.join(__dirname, 'plugins');
+    if (fs.existsSync(localPluginsDir)) {
+      try {
+        const entries = fs.readdirSync(localPluginsDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (ent.isDirectory()) {
+            const mfPath = path.join(localPluginsDir, ent.name, 'manifest.json');
+            if (fs.existsSync(mfPath)) {
+              try {
+                const mf = JSON.parse(fs.readFileSync(mfPath, 'utf-8'));
+                if (mf.id && !manifests.some((m) => m.id === mf.id)) {
+                  manifests.push(mf);
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const report = generateUpgradeCompatibilityReport(manifests, targetVersion);
+
+  if (!options.silent) {
+    const bold = '\x1b[1m';
+    const green = '\x1b[32m';
+    const yellow = '\x1b[33m';
+    const red = '\x1b[31m';
+    const cyan = '\x1b[36m';
+    const reset = '\x1b[0m';
+
+    console.log(`\n${bold}${cyan}╔═════════════════════════════════════════════════════════════╗${reset}`);
+    console.log(`${bold}${cyan}║   OpenLearn Plugin Upgrade Compatibility Report (Issue #146) ║${reset}`);
+    console.log(`${bold}${cyan}╚═════════════════════════════════════════════════════════════╝${reset}\n`);
+    console.log(`  • 目标版本:  ${bold}v${report.targetVersion}${reset}`);
+    console.log(`  • 扫描插件:  ${report.summary.totalPlugins} 个`);
+    console.log(`  • 完全兼容:  ${green}${report.summary.compatibleCount} 个${reset}`);
+    console.log(`  • 存在弃用警告: ${yellow}${report.summary.warningCount} 个${reset}`);
+    console.log(`  • 存在破坏性冲突: ${red}${report.summary.incompatibleCount} 个${reset}\n`);
+
+    for (const p of report.plugins) {
+      const statusIcon =
+        p.status === 'compatible'
+          ? `${green}✓${reset}`
+          : p.status === 'has_warnings'
+            ? `${yellow}⚠${reset}`
+            : `${red}✗${reset}`;
+      console.log(`  ${statusIcon} ${bold}${p.id}${reset} (v${p.version})`);
+      for (const issue of p.issues) {
+        const issuePrefix = issue.level === 'error' ? `${red}[ERROR]${reset}` : `${yellow}[WARN]${reset}`;
+        console.log(`     ↳ ${issuePrefix} ${issue.message}`);
+      }
+    }
+    console.log('');
+  }
+
+  return report;
+}

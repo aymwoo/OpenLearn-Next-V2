@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { warnDeprecation } from '../extension-points/index.js';
 
 export interface PlatformEvent<T = unknown> {
   readonly id: string;
@@ -126,6 +127,7 @@ export class EventBus {
    * 忽略返回值的既有调用方完全兼容。
    */
   public subscribe(eventType: string, subscriber: EventSubscriber): () => void {
+    warnDeprecation('event', eventType);
     if (!this.subscribers.has(eventType)) {
       this.subscribers.set(eventType, new Set());
     }
@@ -162,6 +164,7 @@ export class EventBus {
   }
 
   public async publish(event: PlatformEvent): Promise<void> {
+    warnDeprecation('event', event.type, event.source);
     await this.publishDetailed(event);
   }
 

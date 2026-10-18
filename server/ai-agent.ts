@@ -326,8 +326,8 @@ export const executeAgentToolCall = async (
                   `[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`,
                 );
 
-                // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据�?
-                // 确保携带 segmentId 的元素能被正确渲染�?
+                // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据，
+                // 确保携带 segmentId 的元素能被正确渲染。
                 kernelContainer.eventBus
                   .publish({
                     id: crypto.randomUUID(),

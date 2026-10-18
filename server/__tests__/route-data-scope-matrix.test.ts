@@ -260,13 +260,19 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
   });
 
   describe('courseware', () => {
-    it('原始作答：学生读自己 200、读他人 403，教师读任意 200', async () => {
+    it('原始作答：学生读自己 200、读他人 403，教师仅能读本班学生（外班/管理员口径见 #139）', async () => {
       expect((await get(`/api/courseware/attempts/${attemptA}/raw`, tokStudentA)).status).toBe(200);
       expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokStudentA)).status).toBe(403);
-      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokTeacherA)).status).toBe(200);
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokStudentB)).status).toBe(200);
+      // 教师切片（Issue #139）：仅本班学生可读，外班学生 403
+      expect((await get(`/api/courseware/attempts/${attemptA}/raw`, tokTeacherA)).status).toBe(200);
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokTeacherA)).status).toBe(403);
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokTeacherB)).status).toBe(200);
+      // 管理员保留全校可见性
+      expect((await get(`/api/courseware/attempts/${attemptB}/raw`, tokAdmin)).status).toBe(200);
     });
 
-    it('作答列表：学生只拿到自己的记录，教师拿到全部', async () => {
+    it('作答列表：学生只拿到自己的记录，教师仅拿到本班学生，管理员拿全部', async () => {
       const studentList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokStudentA);
       expect(studentList.status).toBe(200);
       const studentBody: any = await studentList.json();
@@ -274,11 +280,26 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
       expect(studentRows.length).toBeGreaterThan(0);
       expect(studentRows.every((row: any) => row.studentId === studentA)).toBe(true);
 
+      // 教师切片（Issue #139）：A 班教师只见本班学生
       const teacherList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokTeacherA);
       expect(teacherList.status).toBe(200);
       const teacherBody: any = await teacherList.json();
       const teacherRows: any[] = teacherBody.attempts ?? teacherBody.data ?? [];
-      expect(new Set(teacherRows.map((row: any) => row.studentId))).toEqual(new Set([studentA, studentB]));
+      expect(new Set(teacherRows.map((row: any) => row.studentId))).toEqual(new Set([studentA]));
+
+      // B 班教师只见本班学生
+      const teacherBList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokTeacherB);
+      expect(teacherBList.status).toBe(200);
+      const teacherBBody: any = await teacherBList.json();
+      const teacherBRows: any[] = teacherBBody.attempts ?? teacherBBody.data ?? [];
+      expect(new Set(teacherBRows.map((row: any) => row.studentId))).toEqual(new Set([studentB]));
+
+      // 管理员保留全校可见性
+      const adminList = await get(`/api/courseware/attempts?coursewareUuid=${coursewareUuid}`, tokAdmin);
+      expect(adminList.status).toBe(200);
+      const adminBody: any = await adminList.json();
+      const adminRows: any[] = adminBody.attempts ?? adminBody.data ?? [];
+      expect(new Set(adminRows.map((row: any) => row.studentId))).toEqual(new Set([studentA, studentB]));
     });
   });
 

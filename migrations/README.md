@@ -44,6 +44,11 @@
 | 028  | 028_classroom_indexes.sql         | 补齐课堂互动与会话高频查询/级联删除索引（`classroom_buzzers`、`classroom_sessions`） |
 | 029  | 029_clean_lesson_think_artifacts.sql | 课程大纲模型思维链残留 (<think>...</think>) 清洗标记与启动期幂等清理 |
 | 030  | 030_backfill_academic_year.sql    | 学年历史数据回填：为老数据库中 NULL 学年的排课/作业/考勤等按日期与父级关联平滑补齐 |
+| 031  | 031_assessment_core.sql           | 测评子系统核心数据结构（试卷、考试、题库、题目等） |
 | 032  | 032_progress_verification.sql      | 学习进度区分「学生自报」与「已验证」：新增 `verified` / `verified_progress_percent`，成绩只计入已验证进度；历史进度回填为已验证以保持既有成绩口径 |
+| 033  | 033_student_lock_mode.sql         | 学生端锁定模式 (lock_mode) 与锁定目标 (lock_target) |
+| 034  | 034_plugin_orphan_data.sql        | 插件卸载数据语义：孤立插件数据登记表（`plugin_orphan_data`，keep 保留登记 / purge 归档后可清除） |
+| 035  | 035_icebreaker_checkins.sql       | 课前破冰心情打卡持久化与去重（`icebreaker_checkins` 表与按学生去重唯一索引） |
+| 036  | 036_student_read_notifications_created_at.sql | 保留策略：为 `student_read_notifications` 补齐 `created_at` 以便按 30 天窗口清理 |
 
 

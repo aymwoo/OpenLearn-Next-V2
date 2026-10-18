@@ -10,14 +10,15 @@
  * 继承链没有这个问题：子类天然能访问父类的 **protected** 成员，而 protected 在类外与
  * private 一样不可访问 —— **对外 API 不变**。
  *
- * 链序：Base → Core → Http → Lifecycle → Reload → Install
+ * 链序：Base → Core → Http → Lifecycle → Reload → Install → Uninstall
  *
  * 硬约束：**后面的类能调用前面的，前面的不能调用后面的**（TS 解析时看不到后面类的声明）。
  * 已用脚本按调用图验证：分组后违例为 0。链序由三条事实决定 ——
  *   1. `setPluginState` / `declareProcessOwnership` / `revokePluginContributions` /
  *      `revokePluginStageGuards` 被 10+ 个方法跨模块调用，必须在链首的 Core；
  *   2. Reload 调用 Lifecycle（restore → activate），故 Lifecycle 在前；
- *   3. Install 依赖 Lifecycle 与 Reload，却**无人依赖它**，故置于链尾。
+ *   3. Install 依赖 Lifecycle 与 Reload；Uninstall 依赖 Install（孤立数据复用钩子
+ *      位于安装路径）且**无人依赖它**，故置于链尾。
  *
  * 本文件同时承载原 `index.ts` 的文件级声明（状态转移表、超时常量、静态路由中间件工厂等），
  * 主题模块从这里 import。它们此前是模块私有的，现在仅对同包模块可见 ——
@@ -234,6 +235,7 @@ export abstract class PluginHostBase {
       deactivate?: () => Promise<void>;
       onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
       onStudentDelete?: (studentId: string) => Promise<void> | void;
+      migrationsDir?: string;
     }
   >();
 

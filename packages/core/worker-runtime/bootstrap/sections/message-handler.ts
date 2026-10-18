@@ -243,6 +243,12 @@ parentPort.on('message', async function(msg) {
       var err = new Error(msg.message);
       err.name = msg.code || 'RpcError';
       err.stack = msg.stack;
+      // 标记「错误来自宿主 RPC」。旧插件按 inline 的**同步**语义写代码
+      // （例如 rawDb.prepare(...).run() 不 await），迁移里的幂等保护靠 try/catch；
+      // 在隔离模式下同一个调用变成异步 rejection，try/catch 接不住。
+      // unhandledRejection 处理器据此把它降级为告警，而不是当场杀掉 worker
+      // （Issue #147：attendance-record 的 duplicate column name: status）。
+      err.__openlearnRpcError = true;
       pending.reject(err);
     } else if (msg.type === 'result') {
       pending.resolve(msg.value);

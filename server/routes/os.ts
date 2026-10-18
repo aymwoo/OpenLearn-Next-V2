@@ -31,7 +31,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       }
 
       const ext = path.extname(filename).toLowerCase();
-      // SEC-DATA-03: 拒绝可执行文件上�?
+      // SEC-DATA-03: 拒绝可执行文件上传
       if (BLOCKED_EXTENSIONS.includes(ext)) {
         return res.status(400).json({ error: `File type ${ext} is not allowed for security reasons.` });
       }
@@ -140,7 +140,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  //  Activity Ecosystem REST (Sprint P7-01)
+  // ── Activity Ecosystem REST (Sprint P7-01) ──────────────────────────────
   // List registered activity providers, filtered by role. Reuses the same
   // registry the Workspace and plugins share. No business logic is duplicated.
   app.get('/api/activities', requireScopedAuth('authenticated'), async (req, res) => {
@@ -178,7 +178,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // List activities that are currently in progress (running or paused). Used by
-  // the dashboard "Activity Center" status monitor  it shows live status and
+  // the dashboard "Activity Center" status monitor — it shows live status and
   // hides itself when nothing is running. State is in-memory on the provider
   // instances, so this reflects the live server process only.
   app.get('/api/activities/running', requireScopedAuth('authenticated'), (_req, res) => {
@@ -201,7 +201,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  // Finish (end) a running activity
+  // Finish (end) a running activity — the management action exposed to the
   // dashboard. Reuses the same ActivityContext as start().
   app.post('/api/activities/:id/finish', requireScopedAuth('authenticated'), async (req, res) => {
     try {
@@ -288,13 +288,13 @@ export function registerOsRoutes(ctx: ServerContext) {
         }));
       }
 
-      // SEC-NET-04: Prompt 注入检�?
+      // SEC-NET-04: Prompt 注入检测
       if (detectPromptInjection(message)) {
         return res.status(400).json({
           success: false,
           error:
             lang === 'zh'
-              ? '检测到潜在�? prompt 注入尝试，请修改您的输入�?'
+              ? '检测到潜在的 prompt 注入尝试，请修改您的输入。'
               : 'Potential prompt injection detected. Please rephrase your input.',
         });
       }

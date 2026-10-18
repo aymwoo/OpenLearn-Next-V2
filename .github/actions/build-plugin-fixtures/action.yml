@@ -1,0 +1,60 @@
+name: Build plugin compatibility fixtures
+description: >
+  Checkout、构建并 stage 三个真实第三方插件 ZIP，供插件兼容作业与升级回归 fixture 共用。
+  固定 commit 保证「同一份插件产物」在两次作业里完全一致。
+
+inputs:
+  output-dir:
+    description: 存放 staged ZIP 的目录（相对仓库根）
+    required: false
+    default: .plugin-compatibility-fixtures
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout attendance-record
+      uses: actions/checkout@v7
+      with:
+        repository: openlearn-next/attendance-record
+        ref: ce8541e7a48b286574ffd620fa167cf5b139e451
+        path: .plugin-compatibility-sources/attendance-record
+
+    - name: Checkout class_manager
+      uses: actions/checkout@v7
+      with:
+        repository: openlearn-next/class_manager
+        ref: 941b556f0017ec20e8a8d7a1f75d1dd9f80dd26f
+        path: .plugin-compatibility-sources/class_manager
+
+    - name: Checkout interactive-courseware
+      uses: actions/checkout@v7
+      with:
+        repository: openlearn-next/interactive-courseware
+        ref: d622e0a54463813631f41589fa8d24082160b39d
+        path: .plugin-compatibility-sources/interactive-courseware
+
+    - name: Build attendance-record
+      shell: bash
+      working-directory: .plugin-compatibility-sources/attendance-record
+      run: npm install --no-audit --no-fund && npm run build
+
+    - name: Build class_manager
+      shell: bash
+      working-directory: .plugin-compatibility-sources/class_manager
+      # 它的 esbuild 把 @openlearn/plugin-sdk 打进产物（external: []），
+      # 而固定版本的 SDK 产物 import 了 uuid，需补一个构建期依赖。
+      run: npm install --no-audit --no-fund && npm install --no-save --no-audit --no-fund uuid@14.0.1 && npm run build
+
+    - name: Build interactive-courseware
+      shell: bash
+      working-directory: .plugin-compatibility-sources/interactive-courseware
+      run: pnpm install --no-frozen-lockfile && pnpm build
+
+    - name: Stage plugin ZIP fixtures
+      shell: bash
+      env:
+        FIXTURE_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        node scripts/stage-plugin-compat-fixture.mjs attendance-record .plugin-compatibility-sources/attendance-record "$FIXTURE_OUTPUT_DIR"
+        node scripts/stage-plugin-compat-fixture.mjs class_manager .plugin-compatibility-sources/class_manager "$FIXTURE_OUTPUT_DIR"
+        node scripts/stage-plugin-compat-fixture.mjs interactive-courseware .plugin-compatibility-sources/interactive-courseware "$FIXTURE_OUTPUT_DIR"
