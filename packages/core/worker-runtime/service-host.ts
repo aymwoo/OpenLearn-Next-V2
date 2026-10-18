@@ -63,7 +63,7 @@ import net from 'node:net';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
-import { checkMethodPolicy, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
+import { checkMethodPolicy, sanitizeActionRegisterArgs, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
 import { isBlockedPluginCapability, isPrivateOrReservedHost } from '../plugin-host/plugin-grants.js';
 import {
@@ -701,10 +701,26 @@ export class ServiceHost {
       // 没有方法级收窄 —— 与浏览器侧 `method-policy.ts` 各写一套，规则漂移无从察觉。
       // 现两端共用 `packages/core/plugin-host/method-policy.ts`（审计项 B-4），
       // 策略常量与判定逻辑只有一处真理源，本层只提供后端的 Token 名集合。
+      //
+      // 先降级再判定：未获 `agent:tool` 的插件注册 action 时，把 descriptor 的
+      // `exposeToAgent` 强制改为 false 而不是直接拒绝 —— 拒绝会连带 `activate()`
+      // 失败，使旧插件升级到隔离模式后整体不可用（Issue #147 实测）。
+      const actionSanitized = sanitizeActionRegisterArgs(
+        msg.token,
+        msg.method,
+        msg.args,
+        CORE_WORKER_TOKENS,
+        this.manifestCapabilities,
+      );
+      if (actionSanitized.downgraded) {
+        console.warn(`[ServiceHost] ${actionSanitized.downgraded} (${this.pluginActorId})`);
+      }
+      const effectiveArgs = actionSanitized.args ?? msg.args;
+
       const methodDenial = checkMethodPolicy({
         token: msg.token,
         method: msg.method,
-        args: msg.args,
+        args: effectiveArgs,
         caps: this.manifestCapabilities,
         tokens: CORE_WORKER_TOKENS,
       });
@@ -945,7 +961,7 @@ export class ServiceHost {
       if (msg.token === '@openlearn/core:IActionRegistryService') {
         const actionRegistry = service as any;
         if (msg.method === 'register') {
-          const [descriptor] = msg.args as [any];
+          const [descriptor] = effectiveArgs as [any];
           await actionRegistry.register(descriptor);
           this.registeredActionIds.add(descriptor.id);
           if (typeof descriptor?.commandType === 'string') {
@@ -983,7 +999,7 @@ export class ServiceHost {
       // structured clone algorithm throws DataCloneError if the result
       // contains unserializable values. This is a documented constraint
       // of the Worker RPC boundary.
-      const result = await method.apply(service, msg.args);
+      const result = await method.apply(service, effectiveArgs);
 
       // ── Return result to Worker ───────────────────────────────────
       try {
