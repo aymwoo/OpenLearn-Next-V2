@@ -327,6 +327,28 @@ export interface PurgeAllOptions {
 }
 
 /**
+ * 组装单类别清理选项。
+ *
+ * `retentionRaw` 必须**省略**而不是显式传 `undefined`：各 purge 函数用
+ * `'retentionRaw' in options` 判定「调用方是否显式指定过保留期」——
+ * 显式传 `undefined`（哪怕值是 undefined）属性即算「已指定」，会**绕过环境变量回退**
+ * 直接按默认天数清理。于是 `initializeDatabase` 无参调用本函数时，
+ * `OPENLEARN_EVENT_RETENTION_DAYS=0` 等禁用开关全部失效（Issue #170 CI 实测：
+ * 禁用 events 清理后过期事件仍被删）。config 里没给的类别一律不传该属性，
+ * 走各函数自己的 env 回退；显式给了（含 null）才透传。
+ */
+function categoryOptions(
+  opts: PurgeAllOptions,
+  key: 'eventsDays' | 'attendanceDays' | 'notificationsDays' | 'rollcallsDays' | 'sessionsDays',
+): PurgeCategoryOptions {
+  const options: PurgeCategoryOptions = { now: opts.now, log: opts.log };
+  if (opts.config && key in opts.config) {
+    options.retentionRaw = opts.config[key];
+  }
+  return options;
+}
+
+/**
  * 启动时一键清理所有支持保留策略的数据类别。
  */
 export function purgeAllExpiredData(
@@ -336,35 +358,11 @@ export function purgeAllExpiredData(
   const results: Record<string, PurgeCategoryResult> = {};
   const opts = options ?? {};
 
-  results.events = purgeExpiredEvents(db, {
-    now: opts.now,
-    retentionRaw: opts.config?.eventsDays,
-    log: opts.log,
-  });
-
-  results.attendance = purgeExpiredAttendance(db, {
-    now: opts.now,
-    retentionRaw: opts.config?.attendanceDays,
-    log: opts.log,
-  });
-
-  results.notifications = purgeExpiredNotifications(db, {
-    now: opts.now,
-    retentionRaw: opts.config?.notificationsDays,
-    log: opts.log,
-  });
-
-  results.rollcalls = purgeExpiredRollcalls(db, {
-    now: opts.now,
-    retentionRaw: opts.config?.rollcallsDays,
-    log: opts.log,
-  });
-
-  results.sessions = purgeExpiredSessions(db, {
-    now: opts.now,
-    retentionRaw: opts.config?.sessionsDays,
-    log: opts.log,
-  });
+  results.events = purgeExpiredEvents(db, categoryOptions(opts, 'eventsDays'));
+  results.attendance = purgeExpiredAttendance(db, categoryOptions(opts, 'attendanceDays'));
+  results.notifications = purgeExpiredNotifications(db, categoryOptions(opts, 'notificationsDays'));
+  results.rollcalls = purgeExpiredRollcalls(db, categoryOptions(opts, 'rollcallsDays'));
+  results.sessions = purgeExpiredSessions(db, categoryOptions(opts, 'sessionsDays'));
 
   return results;
 }

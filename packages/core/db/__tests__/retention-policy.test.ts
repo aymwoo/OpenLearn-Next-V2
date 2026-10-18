@@ -313,5 +313,54 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
       expect(summary.rollcalls.deleted).toBe(1);
       expect(summary.sessions.deleted).toBe(1);
     });
+
+    it('purgeAllExpiredData: 无 config 时遵守环境变量禁用开关（不得显式传 undefined 绕过 env）', () => {
+      // 回归（Issue #170 CI 实测）：purgeAllExpiredData 曾给每个类别显式传
+      // retentionRaw: undefined，触发 'retentionRaw' in options 短路，
+      // OPENLEARN_EVENT_RETENTION_DAYS=0 的禁用开关失效，过期事件仍被删。
+      const oldTime = now - 500 * DAY_MS;
+      db.prepare('INSERT INTO events (id, type, timestamp) VALUES (?, ?, ?)').run('e-env-off', 'test', oldTime);
+
+      const original = process.env.OPENLEARN_EVENT_RETENTION_DAYS;
+      process.env.OPENLEARN_EVENT_RETENTION_DAYS = '0';
+      try {
+        const summary = purgeAllExpiredData(db, { now, log: mockLog });
+        expect(summary.events.disabled).toBe(true);
+        expect(summary.events.deleted).toBe(0);
+        expect(db.prepare('SELECT id FROM events').all()).toHaveLength(1);
+      } finally {
+        if (original === undefined) delete process.env.OPENLEARN_EVENT_RETENTION_DAYS;
+        else process.env.OPENLEARN_EVENT_RETENTION_DAYS = original;
+      }
+    });
+
+    it('purgeAllExpiredData: 无 config 时按环境变量天数清理（env 回退完好）', () => {
+      const oldTime = now - 100 * DAY_MS;
+      const recentTime = now - 10 * DAY_MS;
+      db.prepare('INSERT INTO events (id, type, timestamp) VALUES (?, ?, ?)').run('e-env-old', 'test', oldTime);
+      db.prepare('INSERT INTO events (id, type, timestamp) VALUES (?, ?, ?)').run('e-env-new', 'test', recentTime);
+
+      const original = process.env.OPENLEARN_EVENT_RETENTION_DAYS;
+      process.env.OPENLEARN_EVENT_RETENTION_DAYS = '50';
+      try {
+        const summary = purgeAllExpiredData(db, { now, log: mockLog });
+        expect(summary.events.disabled).toBe(false);
+        expect(summary.events.days).toBe(50);
+        expect(summary.events.deleted).toBe(1);
+        expect(db.prepare('SELECT id FROM events').all()).toEqual([{ id: 'e-env-new' }]);
+      } finally {
+        if (original === undefined) delete process.env.OPENLEARN_EVENT_RETENTION_DAYS;
+        else process.env.OPENLEARN_EVENT_RETENTION_DAYS = original;
+      }
+    });
+
+    it('purgeAllExpiredData: config 显式给 0 时禁用对应类别（透传不被破坏）', () => {
+      const oldTime = now - 500 * DAY_MS;
+      db.prepare('INSERT INTO events (id, type, timestamp) VALUES (?, ?, ?)').run('e-cfg-off', 'test', oldTime);
+
+      const summary = purgeAllExpiredData(db, { now, config: { eventsDays: 0 }, log: mockLog });
+      expect(summary.events.disabled).toBe(true);
+      expect(db.prepare('SELECT id FROM events').all()).toHaveLength(1);
+    });
   });
 });
