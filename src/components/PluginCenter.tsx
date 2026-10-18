@@ -12,14 +12,17 @@ import {
   Github,
   RefreshCw,
   Store,
+  Database,
 } from 'lucide-react';
-import type { PluginCenterProps } from './plugin-center/types';
+import type { PluginCenterProps, OrphanDataItem } from './plugin-center/types';
 import { PluginSettingsModal } from './PluginSettingsModal';
 import { PluginInstallWizard } from './PluginInstallWizard';
 import { PluginStorePanel } from './plugin-center/sub-views/PluginStorePanel';
 import { PluginCommunityPanel } from './plugin-center/sub-views/PluginCommunityPanel';
 import { PluginDevPanel } from './plugin-center/sub-views/PluginDevPanel';
 import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
+import { PluginDataPanel } from './plugin-center/sub-views/PluginDataPanel';
+import { PluginUninstallDialog } from './PluginUninstallDialog';
 
 export type { PluginType, PluginCenterProps } from './plugin-center/types';
 
@@ -35,12 +38,39 @@ export function PluginCenter({
   onZipUpload,
   onToggle,
   onDelete,
-}: PluginCenterProps) {
+  orphanData = [],
+  orphanDataLoading = false,
+  fetchOrphanData,
+  handleExportOrphanData,
+  handlePurgeOrphanData,
+  handleDownloadOrphanArchive,
+}: PluginCenterProps & {
+  orphanData?: OrphanDataItem[];
+  orphanDataLoading?: boolean;
+  fetchOrphanData?: () => Promise<void> | void;
+  handleExportOrphanData?: (item: OrphanDataItem) => Promise<void> | void;
+  handlePurgeOrphanData?: (item: OrphanDataItem) => Promise<void> | void;
+  handleDownloadOrphanArchive?: (item: OrphanDataItem) => void;
+}) {
   const [showSystemPlugins, setShowSystemPlugins] = useState(false);
   const [dismissMigration, setDismissMigration] = useState(false);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const [updateTargetPluginId, setUpdateTargetPluginId] = useState<string | null>(null);
   const updateFileInputRef = useRef<HTMLInputElement>(null);
+
+  // 卸载确认（Issue #141）：触发卸载前先弹出数据策略选择对话框
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; manifestId: string } | null>(null);
+
+  const requestDelete = (id: string) => {
+    const plugin = plugins.find((p) => p.id === id);
+    let manifestId = id;
+    try {
+      manifestId = JSON.parse(plugin?.manifest ?? '{}')?.id ?? id;
+    } catch {
+      manifestId = id;
+    }
+    setDeleteTarget({ id, name: plugin?.name ?? manifestId, manifestId });
+  };
 
   const [zipError, setZipError] = useState<string | null>(null);
   const [zipPreview, setZipPreview] = useState<{ name: string; id: string; version: string } | null>(null);
@@ -271,6 +301,16 @@ export function PluginCenter({
                 >
                   <Terminal size={14} /> {lang === 'zh' ? '系统日志' : 'Logs'}
                 </button>
+                <button
+                  onClick={() => setStoreTab('data')}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1 cursor-pointer ${
+                    storeTab === 'data'
+                      ? 'bg-white shadow text-indigo-600 font-bold'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Database size={14} /> {lang === 'zh' ? '插件数据' : 'Data'}
+                </button>
               </div>
             </div>
 
@@ -350,12 +390,22 @@ export function PluginCenter({
               setUpdateTargetPluginId={setUpdateTargetPluginId}
               updateFileInputRef={updateFileInputRef}
               onToggle={onToggle}
-              onDelete={onDelete}
+              onDelete={requestDelete}
             />
           ) : storeTab === 'community' ? (
             <PluginCommunityPanel installedPlugins={plugins} lang={lang} onInstalled={handleCommunityInstalled} />
           ) : storeTab === 'logs' ? (
             <PluginLogsPanel lang={lang} />
+          ) : storeTab === 'data' ? (
+            <PluginDataPanel
+              lang={lang}
+              items={orphanData}
+              loading={orphanDataLoading}
+              onRefresh={() => void fetchOrphanData?.()}
+              onExport={(item) => void handleExportOrphanData?.(item)}
+              onPurge={(item) => void handlePurgeOrphanData?.(item)}
+              onDownloadArchive={handleDownloadOrphanArchive}
+            />
           ) : (
             <PluginDevPanel
               lang={lang}
@@ -365,7 +415,7 @@ export function PluginCenter({
               installingPlugin={installingPlugin}
               onInstall={onInstall}
               onToggle={onToggle}
-              onDelete={onDelete}
+              onDelete={requestDelete}
               setUpdateTargetPluginId={setUpdateTargetPluginId}
               updateFileInputRef={updateFileInputRef}
               setStoreTab={setStoreTab}
@@ -495,6 +545,20 @@ export function PluginCenter({
           <RefreshCw size={14} className="text-indigo-400 animate-spin" />
           <span>{updateToast}</span>
         </div>
+      )}
+
+      {deleteTarget && (
+        <PluginUninstallDialog
+          pluginName={deleteTarget.name}
+          manifestId={deleteTarget.manifestId}
+          lang={lang}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={(dataPolicy) => {
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            onDelete(target.id, dataPolicy);
+          }}
+        />
       )}
     </>
   );

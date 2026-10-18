@@ -48,7 +48,7 @@ describe('PluginLifecycleManager (P7-B3 EU-01)', () => {
     expect(mockHost.reloadPlugin).toHaveBeenCalledWith('plugin-quiz', 'new code');
 
     await manager.uninstallPlugin('plugin-vote');
-    expect(mockHost.uninstallPlugin).toHaveBeenCalledWith('plugin-vote');
+    expect(mockHost.uninstallPlugin).toHaveBeenCalledWith('plugin-vote', undefined);
   });
 
   it('should register srv_plugin_lifecycle_manager in PluginCompositionModule', () => {

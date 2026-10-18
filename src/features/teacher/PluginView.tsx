@@ -5,11 +5,13 @@ import type { PluginType } from '../../store/appStore';
 import type { Language } from '../../i18n';
 import { useOptionalAppData } from '../../context/AppDataContext';
 
+type PluginStoreTab = 'store' | 'widgets' | 'dev' | 'logs' | 'community' | 'data';
+
 export interface PluginViewProps {
   plugins?: PluginType[];
   lang?: Language;
-  storeTab?: 'store' | 'widgets' | 'dev' | 'logs' | 'community';
-  setStoreTab?: (tab: 'store' | 'widgets' | 'dev' | 'logs' | 'community') => void;
+  storeTab?: PluginStoreTab;
+  setStoreTab?: (tab: PluginStoreTab) => void;
   pluginCode?: string;
   setPluginCode?: (code: string) => void;
   installingPlugin?: boolean;
@@ -25,15 +27,15 @@ export interface PluginViewProps {
     },
   ) => Promise<void>;
   onToggle?: (id: string) => Promise<void>;
-  onDelete?: (id: string) => Promise<void>;
+  onDelete?: (id: string, dataPolicy?: 'keep' | 'purge') => Promise<void> | void;
 }
 
 export function PluginView(props: PluginViewProps = {}) {
   const appData = useOptionalAppData();
   const plugins = props.plugins ?? appData?.plugins ?? [];
   const lang = props.lang ?? (appData?.lang as Language) ?? 'zh';
-  const storeTab = props.storeTab ?? (appData?.storeTab as any) ?? 'store';
-  const setStoreTab = props.setStoreTab ?? appData?.setStoreTab ?? (() => {});
+  const storeTab = props.storeTab ?? (appData?.storeTab as PluginStoreTab) ?? 'store';
+  const setStoreTab = (props.setStoreTab ?? appData?.setStoreTab ?? (() => {})) as (tab: PluginStoreTab) => void;
   const pluginCode = props.pluginCode ?? appData?.pluginCode ?? '';
   const setPluginCode = props.setPluginCode ?? appData?.setPluginCode ?? (() => {});
   const installingPlugin = props.installingPlugin ?? appData?.installingPlugin ?? false;
@@ -47,7 +49,7 @@ export function PluginView(props: PluginViewProps = {}) {
       plugins={plugins}
       lang={lang}
       storeTab={storeTab}
-      setStoreTab={(tab) => setStoreTab(tab as any)}
+      setStoreTab={(tab) => setStoreTab(tab as PluginStoreTab)}
       pluginCode={pluginCode}
       setPluginCode={setPluginCode}
       installingPlugin={installingPlugin}
@@ -57,6 +59,12 @@ export function PluginView(props: PluginViewProps = {}) {
       onZipUpload={onZipUpload}
       onToggle={onToggle}
       onDelete={onDelete}
+      orphanData={appData?.orphanData}
+      orphanDataLoading={appData?.orphanDataLoading}
+      fetchOrphanData={appData?.fetchOrphanData}
+      handleExportOrphanData={appData?.handleExportOrphanData}
+      handlePurgeOrphanData={appData?.handlePurgeOrphanData}
+      handleDownloadOrphanArchive={appData?.handleDownloadOrphanArchive}
     />
   );
 }

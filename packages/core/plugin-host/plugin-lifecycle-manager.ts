@@ -6,6 +6,7 @@
 
 import type { PluginHost } from './index.js';
 import type { PluginState, PluginInfo } from './types.js';
+import type { UninstallPluginOptions, UninstallPluginResult } from './orphan-data.js';
 import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
 
@@ -16,7 +17,7 @@ export interface IPluginLifecycleManager {
   activatePlugin(pluginId: string): Promise<void>;
   deactivatePlugin(pluginId: string): Promise<void>;
   reloadPlugin(pluginId: string, newCode?: string): Promise<void>;
-  uninstallPlugin(pluginId: string): Promise<void>;
+  uninstallPlugin(pluginId: string, options?: UninstallPluginOptions): Promise<UninstallPluginResult>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
 }
@@ -52,8 +53,11 @@ export class PluginLifecycleManager implements IPluginLifecycleManager {
     await this.pluginHost.reloadPlugin(pluginId, newCode);
   }
 
-  public async uninstallPlugin(pluginId: string): Promise<void> {
-    await this.pluginHost.uninstallPlugin(pluginId);
+  public async uninstallPlugin(
+    pluginId: string,
+    options?: UninstallPluginOptions,
+  ): Promise<UninstallPluginResult> {
+    return this.pluginHost.uninstallPlugin(pluginId, options);
   }
 
   public health(): IntegrationHealthStatus {

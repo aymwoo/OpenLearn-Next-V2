@@ -180,7 +180,8 @@ describe('审计 F-1 · 隔离执行判据收敛到 requiresIsolatedExecution', 
   it('activate / deactivate / uninstall / mode-switch / reload 五处分流都用该谓词', () => {
     const cases: Array<{ file: string; expected: number; what: string }> = [
       { file: 'packages/core/plugin-host/lifecycle.ts', expected: 2, what: 'activate + deactivate' },
-      { file: 'packages/core/plugin-host/install.ts', expected: 2, what: 'uninstall + mode-switch' },
+      { file: 'packages/core/plugin-host/install.ts', expected: 1, what: 'mode-switch' },
+      { file: 'packages/core/plugin-host/uninstall.ts', expected: 1, what: 'uninstall' },
       { file: 'packages/core/plugin-host/reload.ts', expected: 1, what: 'reload' },
     ];
     for (const { file, expected, what } of cases) {
@@ -194,6 +195,7 @@ describe('审计 F-1 · 隔离执行判据收敛到 requiresIsolatedExecution', 
     const files = [
       'packages/core/plugin-host/lifecycle.ts',
       'packages/core/plugin-host/install.ts',
+      'packages/core/plugin-host/uninstall.ts',
       'packages/core/plugin-host/reload.ts',
     ];
     for (const file of files) {
