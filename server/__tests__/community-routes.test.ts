@@ -186,7 +186,9 @@ describe('community plugin registry routes', () => {
     });
 
     async function makePluginZip(manifest: Record<string, unknown>, embedSig = false) {
-      const fullManifest = {
+      // 显式标注索引类型：展开 Record<string, unknown> 的后推断不会带上 id/version 已知键，
+      // 直接访问 fullManifest.id 会触发 TS2339（CI typecheck 实测）。
+      const fullManifest: Record<string, unknown> = {
         name: String(manifest.id),
         description: 'Test plugin',
         ...manifest,
@@ -197,7 +199,7 @@ describe('community plugin registry routes', () => {
       if (embedSig) {
         const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
         const unsignedHash = crypto.createHash('sha256').update(unsignedBuf).digest('hex');
-        const payload = `openlearn-plugin-attestation-v2\n${fullManifest.id}\n${fullManifest.version || ''}\n${unsignedHash}`;
+        const payload = `openlearn-plugin-attestation-v2\n${String(fullManifest.id)}\n${String(fullManifest.version ?? '')}\n${unsignedHash}`;
         const signature = crypto.sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
         zip.file(
           'signature.json',
