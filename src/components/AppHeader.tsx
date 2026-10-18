@@ -296,10 +296,19 @@ export function AppHeader(props: AppHeaderProps) {
         {activeRole === 'student' && activeStudentId && studentDashboardData && (
           <div className="relative">
             <button
+              type="button"
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              // 图标按钮必须有可访问名（a11y 门禁 button-name/critical）：
+              // 未读数量本身是动态内容，不能当名字，故显式给 aria-label + 未读数提示。
+              aria-label={
+                lang === 'zh'
+                  ? `通知${unreadNotifications.length > 0 ? `（${unreadNotifications.length} 条未读）` : ''}`
+                  : `Notifications${unreadNotifications.length > 0 ? ` (${unreadNotifications.length} unread)` : ''}`
+              }
+              aria-expanded={isNotificationsOpen}
               className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
             >
-              <Bell size={20} />
+              <Bell size={20} aria-hidden="true" />
               {unreadNotifications.length > 0 && (
                 <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[18px]">
                   {unreadNotifications.length}
