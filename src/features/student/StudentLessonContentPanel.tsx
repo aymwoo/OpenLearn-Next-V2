@@ -145,7 +145,9 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
           <div className="flex justify-between items-center text-xs font-bold text-gray-500">
             <span className="flex items-center gap-1">
               <Activity size={12} className="text-indigo-500 animate-pulse" />
-              {lang === 'zh' ? '自主学习进度反馈' : 'Learning Progress'}
+              {lang === 'zh'
+                ? '自主学习进度（教师确认后计入成绩）'
+                : 'Learning Progress (graded after teacher verification)'}
             </span>
             <span className="font-mono text-indigo-600 font-extrabold">{localProgressPercent}%</span>
           </div>

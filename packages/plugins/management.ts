@@ -917,14 +917,25 @@ export const ManagementPlugin = {
             : JSON.stringify(payload.completedSegments || []);
         db.prepare(
           `
-          INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO student_lesson_progress
+            (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent)
+          VALUES (?, ?, ?, ?, ?, ?, 1, ?)
           ON CONFLICT(student_id, lesson_id) DO UPDATE SET
             completed = excluded.completed,
             progress_percent = excluded.progress_percent,
-            completed_segments = excluded.completed_segments
+            completed_segments = excluded.completed_segments,
+            verified = 1,
+            verified_progress_percent = excluded.verified_progress_percent
         `,
-        ).run(payload.studentId, payload.lessonId, compVal, payload.progressPercent, completedSegmentsStr, Date.now());
+        ).run(
+          payload.studentId,
+          payload.lessonId,
+          compVal,
+          payload.progressPercent,
+          completedSegmentsStr,
+          Date.now(),
+          payload.progressPercent,
+        );
         return {
           success: true,
           studentId: payload.studentId,

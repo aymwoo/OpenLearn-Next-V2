@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **读取侧**：`StudentPrivateNotesEditor` 在 `innerHTML` 赋值前净化，保存前再次净化，覆盖修复前的历史脏数据（此前恶意 `<img onerror>` 会在教师打开备忘时执行）。
   - `GET /api/students` 改为按教师班级归属过滤（`listStudents` 新增 `scope`）：管理员全库，教师仅返回其 `owner_user_id` 名下班级的在册学生，分页 `total` 同步收敛；此前任意教师可拉取全库学生名单及其私有备忘。
   - 新增 `html-sanitize.test.ts`（7 例）、`student-private-notes-security.test.ts`（5 例：PUT/导入净化、教师列表隔离、管理员全量）与 `StudentPrivateNotesEditor.test.tsx`（2 例：历史脏数据渲染、保存净化）。
+- **学生自报学习进度不再直接计入成绩（P1）**：`student_lesson_progress` 新增 `verified` 与 `verified_progress_percent`（迁移 `032_progress_verification.sql`，历史数据回填为已验证以保持既有成绩口径）。学生端进度滑杆 /「已完成」按钮写入的行标记为未验证，只影响展示；教师/管理员在同一次 `POST /api/students/:id/progress` 中的写入、课件自动录入（`auto-record-score`）与受信插件 `student.set_progress` 标记为已验证并记下验证值。`GradingService` 的进度分只聚合已验证进度，且**只有未验证记录时记 0 分**（不再回退到「无记录 100 分」），学生后续修改展示进度也无法覆盖教师已验证的数值。教师端学生进度列表新增「已验证 / 自报」徽标与一键「确认」按钮，学生端进度控件文案标注「教师确认后计入成绩」。新增 `student-progress-verification.test.ts`（4 例）并更新自动录入断言。
 
 ### Fixes
 
