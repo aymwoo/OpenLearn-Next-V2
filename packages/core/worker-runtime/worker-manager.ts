@@ -49,6 +49,7 @@ import type { IWorkerTransport } from './types.js';
 import { ServiceHost } from './service-host.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { createLogger } from '../observability/logger.js';
+import { recordWorkerCrash, recordWorkerRestart } from '../observability/plugin-metrics.js';
 import { WorkerActivateError, WorkerTimeoutError } from './errors.js';
 import { v7 as uuidv7 } from 'uuid';
 import { IEventBusServiceToken } from '../di/index.js';
@@ -305,6 +306,7 @@ export class WorkerRegistry {
           // Mark as crashed, clean up, but DO NOT trigger watchdog restarts.
           // The activation promise in createWorker will reject with WorkerActivateError.
           entry.status = 'crashed';
+          recordWorkerCrash(pluginId);
           console.error(`[WorkerRegistry] Worker for "${pluginId}" exited with code ${code} during activation`);
           if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
             entry.serviceHost.dispose().catch((err) => {
@@ -319,6 +321,7 @@ export class WorkerRegistry {
         }
         if (code !== 0) {
           entry.status = 'crashed';
+          recordWorkerCrash(pluginId);
           console.error(`[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`);
 
           const manifest = entry.manifest;
@@ -389,6 +392,7 @@ export class WorkerRegistry {
     console.warn(
       `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`,
     );
+    recordWorkerRestart(pluginId);
 
     const timer = setTimeout(async () => {
       // 触发时从 Set 摘除，避免堆积已执行的句柄

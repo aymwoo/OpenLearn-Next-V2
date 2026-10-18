@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **按插件维度运行指标 + 迁移失败快照恢复与 CI 演练（Issue #150）**：
+  - **按插件指标**：新增 `packages/core/observability/plugin-metrics.ts`，在命令派发（`CommandBus`）、事件发布（`EventBus`）、插件 REST 网关（`PluginHost.dispatchHttpRequest`）与 Worker 生命周期（崩溃 / 看门狗重启）处按插件累计计数与耗时，`/metrics` 在进程级序列后追加 `openlearn_plugin_*`。归因优先看 `plugin:<id>` actor，其次看命令命名空间（只有内核能解析到已安装插件时才归因）；标签做 Prometheus 转义、长度截断，条目超过 200 个落到 `__overflow__`，避免基数失控；指标记录失败不影响业务请求。
+  - **`restore` 安全加固**：`npx openlearn-next restore --snapshot <pre_migration_*.db>` 现在先做 `PRAGMA integrity_check` 与迁移兼容性预检（快照含当前代码不认识的迁移默认拒绝，`--force` 才放行回滚），再用 `VACUUM INTO` 生成 `pre_restore_*.db` 安全副本，最后以临时文件 + `rename` 原子替换并清理 `-wal`/`-shm`。CLI 帮助与 `docs/beta/operations.md` 同步。
+  - **CI 演练**：新增 `scripts/db/migration-restore-drill.ts` 与 `docker-rehearsal` 工作流的 `migration-restore-drill` 作业 —— 建库 → 注入一条中途失败的迁移（断言整条事务回滚）→ 从 `pre_migration` 快照恢复（断言完整性、迁移条数与业务数据）→ 用恢复后的库启动真实服务（`/health`、`/health/ready` 200，且不产生新迁移）。
+  - **文档**：`docs/architecture/observability.md` 增加 §4.1 插件指标表与 PromQL 示例。
+
 - **宿主与插件统一命名空间 i18n 体系与语言包贡献规范（Issue #148）**：
   - **清单规范扩展与校验**：在 `manifest.contributes` 引入 `locales` 声明规范（支持内联字典 `Record<string, Record<string, string>>` 与相对 JSON 文件路径 `Record<string, string>` 两种形态），并在 `manifest-schema.ts` 与 `contribution-registry.ts` 完成 Zod 校验、注册索引与生命周期回收。
   - **声明式 UI 国际化 (%key%)**：扩展点（如 `teacher.tab`、`class.tab`、`timetable.tab` 等）在清单声明中支持 VSCode 样式的 `%key%` 格式（如 `label: "%tab.title%"`），`ExtensionPointRenderer` 自动按当前语言解析插件词条；普通文本字面量保持原样输出。

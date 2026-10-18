@@ -140,10 +140,117 @@ export async function runBackup(outputFile, options = {}) {
  * @param {Object} [options]
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
+/**
+ * 读取 SQLite 快照的完整性信息。
+ *
+ * 迁移失败后的 `pre_migration_*.db` 与 `backup` 产物都是普通 SQLite 镜像：
+ * 直接覆盖主库前必须确认它真的能打开、`integrity_check` 通过，否则「恢复」
+ * 会用一个坏文件替掉还能用的库。
+ *
+ * @param {string} filePath
+ * @returns {Promise<{ ok: boolean, error?: string, migrations: string[] }>}
+ */
+async function inspectSqliteSnapshot(filePath) {
+  const Database = (await import('better-sqlite3')).default;
+  let db;
+  try {
+    db = new Database(filePath, { readonly: true, fileMustExist: true });
+    const integrity = db.pragma('integrity_check', { simple: true });
+    if (String(integrity).toLowerCase() !== 'ok') {
+      return { ok: false, error: `快照完整性校验失败: ${integrity}`, migrations: [] };
+    }
+    let migrations = [];
+    try {
+      migrations = db
+        .prepare('SELECT name FROM _migrations ORDER BY name')
+        .all()
+        .map((row) => String(row.name));
+    } catch {
+      // 极早期/非平台数据库没有 _migrations —— 交给迁移兼容性检查给出明确提示。
+      migrations = [];
+    }
+    return { ok: true, migrations };
+  } catch (err) {
+    return { ok: false, error: `无法打开快照（不是有效的 SQLite 数据库？）: ${err.message}`, migrations: [] };
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** 当前代码自带的迁移文件（用于判断快照是否来自「未来版本」）。 */
+function listCurrentMigrationNames(migrationsDir) {
+  try {
+    // DB 里 `_migrations.name` 存的是**去扩展名**的迁移名（migrator 的约定）。
+    return fs
+      .readdirSync(migrationsDir)
+      .filter((name) => name.endsWith('.sql'))
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 迁移兼容性预检。
+ *
+ * - 快照里有当前代码不认识的迁移 → 快照来自更新版本，恢复后再启动会触发
+ *   checksum/结构不匹配。默认拒绝，`--force` 显式放行（管理员可能就是要回滚）。
+ * - 当前代码有快照没有的迁移 → 正常升级路径，下次启动会补上。
+ */
+function checkMigrationCompatibility(snapshotMigrations, migrationsDir) {
+  const current = new Set(listCurrentMigrationNames(migrationsDir));
+  const unknown = snapshotMigrations.filter((name) => current.size > 0 && !current.has(name));
+  const pending = [...current].filter((name) => !snapshotMigrations.includes(name));
+  return { unknown, pending };
+}
+
+/** 用 VACUUM INTO 生成一致性安全副本（直接 copy 会漏掉 WAL 里未 checkpoint 的页）。 */
+async function createSafetySnapshot(dbPath, backupsDir) {
+  const Database = (await import('better-sqlite3')).default;
+  fs.mkdirSync(backupsDir, { recursive: true });
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const target = path.join(backupsDir, `pre_restore_${stamp}.db`);
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  } finally {
+    db.close();
+  }
+  return target;
+}
+
+/**
+ * 安全还原（Issue #150 加固）。
+ *
+ * 与旧实现的区别：
+ * 1. 先校验快照（SQLite 头 + `PRAGMA integrity_check`）再动主库；
+ * 2. 迁移兼容性预检：快照来自更新版本时默认拒绝（`force: true` 放行）；
+ * 3. 安全副本用 `VACUUM INTO` 生成，落在 `BACKUP_DIR`（默认 `<dbDir>/backups`），
+ *    失败时可原路恢复；
+ * 4. 原子替换：先写临时文件再 `rename`，避免半截库；替换后清理 `-wal`/`-shm`。
+ *
+ * 停服仍是操作者的责任：SQLite 文件被运行中的进程持有替换会得到旧句柄。
+ *
+ * @param {string} [sourceFile] `.db` 快照 / 全量 `.zip` 备份
+ * @param {Object} [options]
+ * @param {string} [options.dbPath]
+ * @param {boolean} [options.force] 允许恢复「快照迁移比当前代码更新」的库
+ * @param {string} [options.migrationsDir]
+ * @param {string} [options.backupsDir]
+ * @param {boolean} [options.silent]
+ */
 export async function runRestore(sourceFile, options = {}) {
   const log = options.silent ? () => {} : (msg) => console.log(`[openlearn-next] ${msg}`);
   if (!sourceFile) {
-    const msg = '未指定待还原的备份文件。用法: npx openlearn-next restore <backup.db|backup.zip>';
+    const msg =
+      '未指定待还原的备份文件。用法: npx openlearn-next restore <backup.db|backup.zip|--snapshot pre_migration_xxx.db>';
     log(`✗ ${msg}`);
     return { ok: false, error: msg };
   }
@@ -157,6 +264,8 @@ export async function runRestore(sourceFile, options = {}) {
 
   const dbPath = resolveDbPath(options.dbPath);
   const dbDir = path.dirname(dbPath);
+  const migrationsDir = options.migrationsDir || path.resolve(process.cwd(), 'migrations');
+  const backupsDir = options.backupsDir || process.env.BACKUP_DIR || path.join(dbDir, 'backups');
   fs.mkdirSync(dbDir, { recursive: true });
 
   // 识别文件类型：校验头字节（PK 为 Zip 压缩包，SQLite 为数据库镜像）
@@ -168,45 +277,73 @@ export async function runRestore(sourceFile, options = {}) {
     fs.closeSync(fd);
     if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
       isZip = true;
-    } else {
-      const headerStr = buffer.toString('utf-8');
-      if (!headerStr.startsWith('SQLite format 3')) {
-        const msg = `文件既非 SQLite 数据库镜像亦非合法的 OpenLearn 备份 ZIP: ${src}`;
-        log(`✗ ${msg}`);
-        return { ok: false, error: msg };
-      }
+    } else if (!buffer.toString('utf-8').startsWith('SQLite format 3')) {
+      const msg = `文件既非 SQLite 数据库镜像亦非合法的 OpenLearn 备份 ZIP: ${src}`;
+      log(`✗ ${msg}`);
+      return { ok: false, error: msg };
     }
   } catch (err) {
     log(`✗ 读取备份文件头失败: ${err.message}`);
     return { ok: false, error: err.message };
   }
 
-  // 创建自动回滚副本
-  if (fs.existsSync(dbPath)) {
-    const bakFile = `${dbPath}.bak_${Date.now()}`;
-    fs.copyFileSync(dbPath, bakFile);
-    log(`ℹ 已为现有数据库创建安全回滚镜像: ${bakFile}`);
-  }
-
-  if (isZip) {
-    try {
+  // ── 1. 把待恢复的数据库落到临时文件并校验 ───────────────────────────────
+  const stagePath = path.join(dbDir, `.restore_stage_${process.pid}_${Date.now()}.db`);
+  let extraction = null;
+  try {
+    if (isZip) {
       const JSZip = (await import('jszip')).default;
-      const zipData = fs.readFileSync(src);
-      const zip = await JSZip.loadAsync(zipData);
-
+      const zip = await JSZip.loadAsync(fs.readFileSync(src));
       const dbEntry = zip.file('data.db');
-      if (!dbEntry) {
-        throw new Error('ZIP 归档中未找到 data.db 数据库主体');
+      if (!dbEntry) throw new Error('ZIP 归档中未找到 data.db 数据库主体');
+      fs.writeFileSync(stagePath, await dbEntry.async('nodebuffer'));
+      extraction = zip;
+    } else {
+      fs.copyFileSync(src, stagePath);
+    }
+
+    const inspection = await inspectSqliteSnapshot(stagePath);
+    if (!inspection.ok) {
+      const msg = inspection.error || '快照校验失败';
+      log(`✗ ${msg}`);
+      return { ok: false, error: msg };
+    }
+
+    // ── 2. 迁移兼容性预检 ────────────────────────────────────────────────
+    const { unknown, pending } = checkMigrationCompatibility(inspection.migrations, migrationsDir);
+    if (unknown.length > 0) {
+      const msg =
+        `快照包含当前代码不认识的迁移（来自更新版本？）：${unknown.join(', ')}。` +
+        '恢复后再启动会触发结构与 checksum 不匹配；确认要回滚请加 --force。';
+      if (!options.force) {
+        log(`✗ ${msg}`);
+        return { ok: false, error: msg, unknownMigrations: unknown };
       }
+      log(`⚠ ${msg}（--force 已放行）`);
+    }
+    if (pending.length > 0) {
+      log(`ℹ 快照缺少 ${pending.length} 条当前迁移，恢复后首次启动会自动补齐`);
+    }
 
-      const dbBuffer = await dbEntry.async('nodebuffer');
-      fs.writeFileSync(dbPath, dbBuffer);
+    // ── 3. 安全副本 ─────────────────────────────────────────────────────
+    let safetyBackup;
+    if (fs.existsSync(dbPath)) {
+      safetyBackup = await createSafetySnapshot(dbPath, backupsDir);
+      log(`ℹ 已创建恢复前安全副本: ${safetyBackup}`);
+    }
 
-      // 解压 uploads 与 storage 目录
-      const dataDir = process.env.OPENLEARN_DATA_DIR || path.dirname(dbPath);
+    // ── 4. 原子替换 + 清理 WAL/SHM ──────────────────────────────────────
+    fs.renameSync(stagePath, dbPath);
+    for (const suffix of ['-wal', '-shm']) {
+      const sidecar = `${dbPath}${suffix}`;
+      if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+    }
+
+    // zip 备份里的 uploads/ 与 storage/ 一并还原（沿用旧行为）
+    if (extraction) {
+      const dataDir = process.env.OPENLEARN_DATA_DIR || dbDir;
       let extractedCount = 0;
-
-      for (const [relPath, file] of Object.entries(zip.files)) {
+      for (const [relPath, file] of Object.entries(extraction.files)) {
         if (file.dir) continue;
         if (relPath.startsWith('uploads/') || relPath.startsWith('storage/')) {
           const dest = path.join(dataDir, relPath);
@@ -215,34 +352,29 @@ export async function runRestore(sourceFile, options = {}) {
           extractedCount++;
         }
       }
-
-      // 清理旧的 WAL 与 SHM
-      const wal = `${dbPath}-wal`;
-      const shm = `${dbPath}-shm`;
-      if (fs.existsSync(wal)) fs.unlinkSync(wal);
-      if (fs.existsSync(shm)) fs.unlinkSync(shm);
-
-      log(`✓ 全量整包还原成功！数据库与 ${extractedCount} 个资源文件已成功写入 ${dataDir}`);
-      return { ok: true };
-    } catch (zipErr) {
-      log(`✗ 解压还原归档失败: ${zipErr.message}`);
-      return { ok: false, error: zipErr.message };
+      log(`✓ 全量整包还原成功！数据库与 ${extractedCount} 个资源文件已写入 ${dataDir}`);
+    } else {
+      log(`✓ 数据库还原成功！已切换为 ${src} 的数据。`);
     }
-  }
 
-  try {
-    fs.copyFileSync(src, dbPath);
-    // 清理旧的 WAL 与 SHM
-    const wal = `${dbPath}-wal`;
-    const shm = `${dbPath}-shm`;
-    if (fs.existsSync(wal)) fs.unlinkSync(wal);
-    if (fs.existsSync(shm)) fs.unlinkSync(shm);
-
-    log(`✓ 数据库还原成功！当前主库已切换为 ${src} 的数据。`);
-    return { ok: true };
+    return {
+      ok: true,
+      restoredFrom: src,
+      safetyBackup,
+      migrations: inspection.migrations.length,
+      pendingMigrations: pending.length,
+    };
   } catch (err) {
-    log(`✗ 覆盖写入数据库失败: ${err.message}`);
+    log(`✗ 还原失败: ${err.message}`);
     return { ok: false, error: err.message };
+  } finally {
+    if (fs.existsSync(stagePath)) {
+      try {
+        fs.unlinkSync(stagePath);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
@@ -504,9 +636,8 @@ export async function runMigrateRollback(options = {}) {
       return { ok: true };
     }
 
-    const { loadMigrationsFromDirectory, getDefaultMigrationsDir, rollbackMigration } = await import(
-      './packages/core/db/migrator.js'
-    );
+    const { loadMigrationsFromDirectory, getDefaultMigrationsDir, rollbackMigration } =
+      await import('./packages/core/db/migrator.js');
     const allMigrations = loadMigrationsFromDirectory(getDefaultMigrationsDir());
     const targetMigration = allMigrations.find((m) => m.name === lastRow.name);
 

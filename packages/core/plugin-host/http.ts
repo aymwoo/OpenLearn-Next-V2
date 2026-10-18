@@ -11,12 +11,32 @@ import { PluginState } from './types.js';
 import { PluginDispatchTimeoutError } from './errors.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from './types.js';
 import { PluginHttpRouter, compileRoutePattern } from './http-router.js';
+import { recordPluginHttp } from '../observability/plugin-metrics.js';
 
 export abstract class PluginHostHttp extends PluginHostCore {
   /**
-   * 向插件派发 HTTP 请求（自动路由到 Worker 隔离线程或 Inline 实例）
+   * 向插件派发 HTTP 请求（自动路由到 Worker 隔离线程或 Inline 实例）。
+   *
+   * Issue #150：这里是所有插件 REST 网关请求的**唯一**汇合点，
+   * 因此在最外层计时并按插件记录状态码分类 —— 各 mode 分支不必重复埋点。
    */
   async dispatchHttpRequest(
+    pluginIdOrManifestId: string,
+    req: PluginApiRequest,
+    timeoutMs: number = 5000,
+  ): Promise<PluginApiResponse> {
+    const startedAt = Date.now();
+    try {
+      const response = await this.dispatchHttpRequestInner(pluginIdOrManifestId, req, timeoutMs);
+      recordPluginHttp(pluginIdOrManifestId, response.status ?? 200, Date.now() - startedAt);
+      return response;
+    } catch (error) {
+      recordPluginHttp(pluginIdOrManifestId, 500, Date.now() - startedAt);
+      throw error;
+    }
+  }
+
+  private async dispatchHttpRequestInner(
     pluginIdOrManifestId: string,
     req: PluginApiRequest,
     timeoutMs: number = 5000,

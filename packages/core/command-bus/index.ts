@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { EventBus } from '../event-bus/index.js';
 import { warnDeprecation } from '../extension-points/index.js';
+import { pluginIdFromActor, pluginIdFromCommandType, recordPluginCommand } from '../observability/plugin-metrics.js';
 
 export interface CommandMetadata {
   readonly correlationId?: string;
@@ -97,8 +98,20 @@ export class CommandBus {
       actorId,
     };
 
+    // Issue #150：按插件维度统计命令派发。插件命令可能由用户发起，故 actor 之外
+    // 还要看命令命名空间（解析器由内核注入，只有已安装插件才算）。
+    const metricsPluginId =
+      pluginIdFromActor(normalizedCommand.actorId) ?? pluginIdFromCommandType(normalizedCommand.type);
+    const metricsStartedAt = Date.now();
+    const recordOutcome = (ok: boolean) => recordPluginCommand(metricsPluginId, ok, Date.now() - metricsStartedAt);
+
     if (this.interceptor) {
-      await this.interceptor(normalizedCommand);
+      try {
+        await this.interceptor(normalizedCommand);
+      } catch (error) {
+        recordOutcome(false);
+        throw error;
+      }
     }
 
     warnDeprecation('command', normalizedCommand.type, normalizedCommand.actorId);
@@ -106,6 +119,7 @@ export class CommandBus {
     // D-11: Priority routing — modern handler first, legacy fallback
     const handler = this.handlers.get(normalizedCommand.type) ?? this.legacyHandlers.get(normalizedCommand.type);
     if (!handler) {
+      recordOutcome(false);
       throw new Error(`No handler registered for command: ${normalizedCommand.type}`);
     }
 
@@ -120,8 +134,10 @@ export class CommandBus {
     // Simplified Pipeline: Validation -> Execution
     try {
       const result = await handler.execute(normalizedCommand);
+      recordOutcome(true);
       return result;
     } catch (error: any) {
+      recordOutcome(false);
       console.error(`[CommandBus] Failed to execute ${normalizedCommand.type}:`, error);
       throw error;
     }

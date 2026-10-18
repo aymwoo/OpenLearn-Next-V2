@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { warnDeprecation } from '../extension-points/index.js';
+import { recordPluginEvent } from '../observability/plugin-metrics.js';
 
 export interface PlatformEvent<T = unknown> {
   readonly id: string;
@@ -195,6 +196,9 @@ export class EventBus {
       id: event.id || randomEventId(),
       timestamp: event.timestamp || Date.now(),
     };
+
+    // Issue #150：插件发出的事件（source = plugin:<id>）计入按插件维度指标。
+    recordPluginEvent(fullEvent.source);
 
     const chain = dispatchChain.getStore() ?? new Map<string, number>();
     const depth = chain.get(fullEvent.type) ?? 0;
