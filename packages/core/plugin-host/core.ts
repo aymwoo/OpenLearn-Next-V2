@@ -724,7 +724,11 @@ export abstract class PluginHostCore extends PluginHostBase {
    * V3.1: 读取插件的配置值（供 REST API 使用）。
    * 创建临时 ConfigService 实例加载 schema + DB 值，不保持内存引用。
    */
-  getPluginConfig(pluginId: string, manifest?: Record<string, any>): Record<string, unknown> {
+  getPluginConfig(
+    pluginId: string,
+    manifest?: Record<string, any>,
+    options: { classId?: string; schoolId?: string } = {},
+  ): Record<string, unknown> {
     let m = manifest;
     if (!m) {
       const row = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
@@ -734,18 +738,24 @@ export abstract class PluginHostCore extends PluginHostBase {
     }
     const svc = new ConfigService(this.db, m as any);
     svc.loadFromDB();
-    return svc.getAll();
+    // Issue #151：给了 classId / schoolId 就返回该作用域下的有效值。
+    return svc.getAll(options);
   }
 
   /**
    * V3.1: 更新插件的配置值（供 REST API 使用）。
    * 逐个调用 set()，schema 校验由 ConfigService 内部完成。
    */
-  setPluginConfig(pluginId: string, manifest: Record<string, any>, updates: Record<string, unknown>): void {
+  setPluginConfig(
+    pluginId: string,
+    manifest: Record<string, any>,
+    updates: Record<string, unknown>,
+    scope: { scopeType?: 'platform' | 'school' | 'class'; scopeId?: string } = {},
+  ): void {
     const svc = new ConfigService(this.db, manifest as any);
     svc.loadFromDB();
     for (const [key, value] of Object.entries(updates)) {
-      svc.setSync(key, value);
+      svc.setSync(key, value, scope);
     }
   }
 

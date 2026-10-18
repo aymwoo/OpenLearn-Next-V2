@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件配置分层：平台 → 学校 → 班级（Issue #151）**：
+  - **新存储**：新增迁移 `037_plugin_config_scopes.sql` 与 `plugin_config(plugin_id, scope_type, scope_id, key, value, updated_at)` 表；旧 `plugin_storage` 里的 `config:<key>` 值在迁移时原样搬到平台层（`scope_type='platform'`），二次迁移幂等。
+  - **解析顺序**：`班级 > 学校 > 平台 > manifest 默认值`。`ctx.config.get(key, { classId, schoolId })` 与 `getAll(options)` 返回该作用域下的有效值；不传 options 时行为与旧版一致（平台值）。
+  - **manifest 声明**：`configuration.properties.<key>.scope` 声明允许覆盖的层级，缺省 `['platform']`（老插件行为不变）；未声明就写班级层会被拒绝并给出明确错误。
+  - **写入与 API**：`ctx.config.set(key, value, { scopeType, scopeId })`；`GET /api/plugins/:id/config?classId=` 返回作用域有效值，`POST ...?scopeType=class&scopeId=` 写入覆盖（缺省仍写平台层，老前端无感）。
+  - **兼容兜底**：迁移未执行或手工恢复的库，`ConfigService` 仍会回退读 `plugin_storage` 的旧位置。
+  - **文档与测试**：`docs/plugin/plugin-manifest-spec.md` §2.5 增加分层说明与示例；新增 `v037-plugin-config-scopes.test.ts`（2 例）与 ConfigService 分层用例（7 例：解析顺序、getAll、未声明 scope 拒绝、缺 scopeId、legacy 回退、新表优先、升级后值不变）。
+
 - **按插件维度运行指标 + 迁移失败快照恢复与 CI 演练（Issue #150）**：
   - **按插件指标**：新增 `packages/core/observability/plugin-metrics.ts`，在命令派发（`CommandBus`）、事件发布（`EventBus`）、插件 REST 网关（`PluginHost.dispatchHttpRequest`）与 Worker 生命周期（崩溃 / 看门狗重启）处按插件累计计数与耗时，`/metrics` 在进程级序列后追加 `openlearn_plugin_*`。归因优先看 `plugin:<id>` actor，其次看命令命名空间（只有内核能解析到已安装插件时才归因）；标签做 Prometheus 转义、长度截断，条目超过 200 个落到 `__overflow__`，避免基数失控；指标记录失败不影响业务请求。
   - **`restore` 安全加固**：`npx openlearn-next restore --snapshot <pre_migration_*.db>` 现在先做 `PRAGMA integrity_check` 与迁移兼容性预检（快照含当前代码不认识的迁移默认拒绝，`--force` 才放行回滚），再用 `VACUUM INTO` 生成 `pre_restore_*.db` 安全副本，最后以临时文件 + `rename` 原子替换并清理 `-wal`/`-shm`。CLI 帮助与 `docs/beta/operations.md` 同步。

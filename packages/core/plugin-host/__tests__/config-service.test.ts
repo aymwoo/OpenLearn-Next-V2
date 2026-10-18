@@ -178,3 +178,138 @@ describe('ConfigService', () => {
     expect(svc.hasKey('unknown')).toBe(false);
   });
 });
+
+describe('ConfigService · 分层设置（Issue #151）', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS plugin_storage (
+        plugin_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (plugin_id, key)
+      );
+    `);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  function scopedManifest(): Manifest {
+    return makeManifest({
+      weight: { type: 'number', default: 10, scope: ['platform', 'class'] },
+      theme: { type: 'string', default: 'light' },
+    });
+  }
+
+  it('解析顺序 班级 > 学校 > 平台 > 默认值', async () => {
+    const manifest = makeManifest({
+      weight: { type: 'number', default: 10, scope: ['platform', 'school', 'class'] },
+    });
+    const svc = new ConfigService(db, manifest);
+
+    expect(svc.get('weight')).toBe(10); // 默认值
+
+    await svc.set('weight', 20); // 平台
+    expect(svc.get('weight')).toBe(20);
+
+    await svc.set('weight', 30, { scopeType: 'school', scopeId: 'sch-1' });
+    expect(svc.get('weight', { schoolId: 'sch-1' })).toBe(30);
+    expect(svc.get('weight')).toBe(20);
+
+    await svc.set('weight', 40, { scopeType: 'class', scopeId: 'cls-1' });
+    expect(svc.get('weight', { classId: 'cls-1' })).toBe(40);
+    expect(svc.get('weight', { classId: 'cls-1', schoolId: 'sch-1' })).toBe(40);
+    expect(svc.get('weight', { classId: 'cls-2', schoolId: 'sch-1' })).toBe(30);
+    expect(svc.get('weight', { classId: 'cls-2' })).toBe(20);
+  });
+
+  it('getAll 按作用域返回有效值', async () => {
+    const manifest = makeManifest({
+      weight: { type: 'number', default: 10, scope: ['platform', 'class'] },
+      theme: { type: 'string', default: 'light' },
+    });
+    const svc = new ConfigService(db, manifest);
+    await svc.set('weight', 20);
+    await svc.set('weight', 55, { scopeType: 'class', scopeId: 'cls-1' });
+
+    expect(svc.getAll()).toEqual({ weight: 20, theme: 'light' });
+    expect(svc.getAll({ classId: 'cls-1' })).toEqual({ weight: 55, theme: 'light' });
+  });
+
+  it('未在 manifest 声明 scope 的配置项只允许平台层覆盖', async () => {
+    const manifest = makeManifest({ theme: { type: 'string', default: 'light' } });
+    const svc = new ConfigService(db, manifest);
+
+    expect(svc.allowedScopes('theme')).toEqual(['platform']);
+    await expect(svc.set('theme', 'dark', { scopeType: 'class', scopeId: 'cls-1' })).rejects.toThrow(
+      /不允许在 class 层覆盖/,
+    );
+  });
+
+  it('非平台作用域必须提供 scopeId', async () => {
+    const svc = new ConfigService(db, scopedManifest());
+    await expect(svc.set('weight', 1, { scopeType: 'class' })).rejects.toThrow(/必须提供 scopeId/);
+  });
+
+  it('迁移未执行时回退读 plugin_storage 的旧配置（视为平台层）', () => {
+    db.prepare('INSERT INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)').run(
+      'ext-test',
+      'config:weight',
+      '77',
+      Date.now(),
+    );
+    const svc = new ConfigService(db, scopedManifest());
+    svc.loadFromDB();
+
+    expect(svc.get('weight')).toBe(77);
+    // 班级层没有值时继续回退到旧平台值
+    expect(svc.get('weight', { classId: 'cls-1' })).toBe(77);
+  });
+
+  it('写入平台层后优先读新表，旧值不再覆盖', async () => {
+    db.prepare('INSERT INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)').run(
+      'ext-test',
+      'config:theme',
+      '"dark"',
+      Date.now(),
+    );
+    const svc = new ConfigService(db, scopedManifest());
+    svc.loadFromDB();
+    expect(svc.get('theme')).toBe('dark');
+
+    await svc.set('theme', 'light');
+    expect(svc.get('theme')).toBe('light');
+
+    const fresh = new ConfigService(db, scopedManifest());
+    fresh.loadFromDB();
+    expect(fresh.get('theme')).toBe('light');
+  });
+
+  it('旧库升级后（迁移已执行）读取值不变', () => {
+    // 模拟迁移 037 的结果：旧值已在平台层
+    const svc = new ConfigService(db, scopedManifest());
+    svc.loadFromDB();
+    db.exec(`CREATE TABLE IF NOT EXISTS plugin_config (
+      plugin_id TEXT NOT NULL, scope_type TEXT NOT NULL DEFAULT 'platform', scope_id TEXT NOT NULL DEFAULT '',
+      key TEXT NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (plugin_id, scope_type, scope_id, key)
+    )`);
+    db.prepare('INSERT INTO plugin_config VALUES (?, ?, ?, ?, ?, ?)').run(
+      'ext-test',
+      'platform',
+      '',
+      'weight',
+      '88',
+      1,
+    );
+
+    const upgraded = new ConfigService(db, scopedManifest());
+    upgraded.loadFromDB();
+    expect(upgraded.get('weight')).toBe(88);
+  });
+});

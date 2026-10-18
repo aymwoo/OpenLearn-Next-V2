@@ -48,6 +48,7 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
       '034_plugin_orphan_data',
       '035_icebreaker_checkins',
       '036_student_read_notifications_created_at',
+      '037_plugin_config_scopes',
     ]);
 
     const db = openMemory();

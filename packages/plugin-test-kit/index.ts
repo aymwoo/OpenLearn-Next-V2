@@ -470,9 +470,13 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
       tokenMap[token.name] = instance;
     },
     config: {
-      get: <T = unknown>(_key: string): T => undefined as T,
-      getAll: (): Record<string, unknown> => ({}),
-      set: async (_key: string, _value: unknown): Promise<void> => {},
+      get: <T = unknown>(_key: string, _options?: { classId?: string; schoolId?: string }): T => undefined as T,
+      getAll: (_options?: { classId?: string; schoolId?: string }): Record<string, unknown> => ({}),
+      set: async (
+        _key: string,
+        _value: unknown,
+        _scope?: { scopeType?: 'platform' | 'school' | 'class'; scopeId?: string },
+      ): Promise<void> => {},
       onChange:
         (_cb: (key: string, newValue: unknown, oldValue: unknown) => void): (() => void) =>
         () => {},
