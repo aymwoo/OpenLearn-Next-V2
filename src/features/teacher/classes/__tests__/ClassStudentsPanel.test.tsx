@@ -198,4 +198,36 @@ describe('ClassStudentsPanel', () => {
     expect(screen.getByText('Verified')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Verify progress for Algebra' })).toBeNull();
   });
+
+  it('sets a student password in one explicit submit without displaying the stored one', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const props = baseProps({
+      expandedStudentId: 's-1',
+      studentActiveTabs: { 's-1': 'settings' },
+    });
+    render(<ClassStudentsPanel {...props} />);
+
+    // 不再把 password 字段（或占位 123456）渲染成可编辑输入框
+    expect(screen.queryByDisplayValue('123456')).toBeNull();
+    expect(screen.getByText('••••••')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Set password'));
+    const input = screen.getByPlaceholderText('New password') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'NewPass-1' } });
+    // 逐字符输入期间不得落库
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/students/s-1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ password: 'NewPass-1' }),
+        }),
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

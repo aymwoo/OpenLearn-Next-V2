@@ -9,6 +9,7 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { setAuditSinkForTests } from '../../packages/core/observability/audit-log.js';
 
 describe('学生写操作与私有备忘的对象级授权', () => {
   let server: Server;
@@ -185,8 +186,7 @@ describe('学生写操作与私有备忘的对象级授权', () => {
     });
   });
 
-  describe('GET /api/students/:id/dashboard 私有备忘隔离', () => {
-    it('学生本人查看自己的仪表盘时不会收到 private_notes', async () => {
+  describe('GET /api/students/:id/dashboard 私有备忘隔离', () => {    it('学生本人查看自己的仪表盘时不会收到 private_notes', async () => {
       const res = await fetch(`${baseUrl}/api/students/${studentA}/dashboard`, { headers: cookie(tokStudentA) });
       expect(res.status).toBe(200);
       const body: any = await res.json();
@@ -205,6 +205,56 @@ describe('学生写操作与私有备忘的对象级授权', () => {
     it('其它班级教师仍被拒绝访问（403）', async () => {
       const res = await fetch(`${baseUrl}/api/students/${studentA}/dashboard`, { headers: cookie(tokTeacherB) });
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('密码写入校验与敏感字段审计', () => {
+    const auditEvents: any[] = [];
+
+    beforeAll(() => {
+      setAuditSinkForTests((record) => auditEvents.push(record));
+    });
+
+    afterAll(() => {
+      setAuditSinkForTests(null);
+    });
+
+    it('空密码或纯空白密码返回 400，且哈希保持不变', async () => {
+      const before = (db.prepare('SELECT password FROM students WHERE id = ?').get(studentA) as any).password;
+      const blank = await updateStudent(studentA, tokTeacherA, { password: '   ' });
+      expect(blank.status).toBe(400);
+      const empty = await updateStudent(studentA, tokTeacherA, { password: '' });
+      expect(empty.status).toBe(400);
+
+      const after = (db.prepare('SELECT password FROM students WHERE id = ?').get(studentA) as any).password;
+      expect(after).toBe(before);
+    });
+
+    it('设置新密码成功，审计只记录字段名不记录明文', async () => {
+      auditEvents.length = 0;
+      const newPassword = 'Audit-Pw-9281';
+      const res = await updateStudent(studentA, tokTeacherA, { password: newPassword });
+      expect(res.status).toBe(200);
+
+      const event = auditEvents.find((e) => e.event === 'student.sensitive_fields_updated');
+      expect(event).toBeTruthy();
+      expect(event.fields).toContain('password');
+      expect(event.studentId).toBe(studentA);
+      expect(event.actorId).toBe(teacherA);
+      expect(JSON.stringify(event)).not.toContain(newPassword);
+    });
+
+    it('锁定课节与私有备忘变更同样留痕', async () => {
+      auditEvents.length = 0;
+      const res = await updateStudent(studentA, tokTeacherA, {
+        locked_lesson_id: 'les-audit',
+        private_notes: JSON.stringify({ category: 'General', html: '<b>审计备注</b>' }),
+      });
+      expect(res.status).toBe(200);
+
+      const event = auditEvents.find((e) => e.event === 'student.sensitive_fields_updated');
+      expect(event).toBeTruthy();
+      expect(event.fields).toEqual(expect.arrayContaining(['locked_lesson_id', 'private_notes']));
     });
   });
 });

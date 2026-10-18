@@ -43,6 +43,17 @@ export interface UseClassroomSocketOptions {
   fetchElements: (roomId: string) => Promise<void> | void;
   setPickedAlertData?: (data: { studentId: string; studentName: string; rollcallId?: string } | null) => void;
   setPickedAnnouncement?: (data: { studentName: string; studentId: string } | null) => void;
+  /**
+   * 学生课节进度广播：用于教师端已加载的进度视图（如班级花名册）就地刷新。
+   * 课堂大屏的实时进度由 setLiveClassStudentProgress 单独维护。
+   */
+  onStudentProgressUpdated?: (data: {
+    studentId: string;
+    lessonId?: string;
+    progressPercent: number;
+    completed: boolean;
+    verified?: boolean;
+  }) => void;
 }
 
 export function useClassroomSocket(options: UseClassroomSocketOptions) {
@@ -76,6 +87,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     fetchElements,
     setPickedAlertData,
     setPickedAnnouncement,
+    onStudentProgressUpdated,
   } = options;
 
   const socketRef = useRef<any>(null);
@@ -94,6 +106,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   const studentLessonTabRef = useRef(studentLessonTab);
   const setPickedAlertDataRef = useRef(setPickedAlertData);
   const setPickedAnnouncementRef = useRef(setPickedAnnouncement);
+  const onStudentProgressUpdatedRef = useRef(onStudentProgressUpdated);
   /**
    * 被教师「最大化视图」打断前的学生视图。
    * 教师在互动课堂里最大化组件时会把学生强行拉到该课节的白板全屏，
@@ -139,6 +152,9 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   useEffect(() => {
     setPickedAnnouncementRef.current = setPickedAnnouncement;
   }, [setPickedAnnouncement]);
+  useEffect(() => {
+    onStudentProgressUpdatedRef.current = onStudentProgressUpdated;
+  }, [onStudentProgressUpdated]);
   // Main Socket Connection & Event Registration
   useEffect(() => {
     if (!session) return;
@@ -250,7 +266,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     });
 
     socket.on('student-progress-updated', (data: any) => {
-      const { studentId, progressPercent, completed } = data;
+      const { studentId, lessonId, progressPercent, completed } = data;
       setLiveClassStudentProgress((prev) => {
         const index = prev.findIndex((p) => p.student_id === studentId);
         if (index !== -1) {
@@ -271,6 +287,14 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
             },
           ];
         }
+      });
+      // 教师端班级花名册等已加载视图同步刷新（未加载过的学生由消费方自行忽略）
+      onStudentProgressUpdatedRef.current?.({
+        studentId,
+        lessonId,
+        progressPercent,
+        completed: !!completed,
+        verified: data.verified === true,
       });
     });
 

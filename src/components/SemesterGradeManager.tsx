@@ -42,7 +42,8 @@ interface StudentGradeReport {
   studentName: string;
   studentNumber: string;
   attendanceScore: number;
-  progressScore: number;
+  /** null = 无已验证进度，该分项不参与总评 */
+  progressScore: number | null;
   assignmentScore: number;
   examScore: number;
   totalScore: number;
@@ -543,7 +544,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                         <td className="p-3 font-mono text-slate-400 text-xs">{report.studentNumber || '-'}</td>
                         <td className="p-3 font-bold text-slate-800">{report.studentName}</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.attendanceScore}分</td>
-                        <td className="p-3 text-center font-medium text-slate-600">{report.progressScore}分</td>
+                        <td className="p-3 text-center font-medium text-slate-600">
+                          {report.progressScore == null ? '—' : `${report.progressScore}分`}
+                        </td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.assignmentScore}分</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.examScore}分</td>
                         <td className="p-3 text-center font-extrabold text-indigo-700 bg-indigo-50/20">

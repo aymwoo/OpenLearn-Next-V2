@@ -420,6 +420,26 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
     fetchElements,
     setPickedAlertData,
     setPickedAnnouncement,
+    onStudentProgressUpdated: ({ studentId, lessonId, progressPercent, completed, verified }) => {
+      setStudentProgressMap((prev) => {
+        const rows = prev[studentId];
+        // 未展开/未加载过该生进度时不做无谓的状态更新，展开时会走接口懒加载
+        if (!rows) return prev;
+        return {
+          ...prev,
+          [studentId]: rows.map((row) =>
+            lessonId && row.lesson_id !== lessonId
+              ? row
+              : {
+                  ...row,
+                  progress_percent: progressPercent,
+                  completed: completed ? 1 : 0,
+                  ...(verified !== undefined ? { verified: verified ? 1 : 0 } : {}),
+                },
+          ),
+        };
+      });
+    },
   });
 
   return {

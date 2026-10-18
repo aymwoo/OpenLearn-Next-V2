@@ -4,8 +4,7 @@
  * - 学生写入 → verified = 0，且不产生 verified_progress_percent；
  * - 教师确认（同一接口）→ verified = 1，记录 verified_progress_percent；
  * - 学生后续修改展示进度不得覆盖已验证值；
- * - 只有未验证记录时进度分为 0（不能回退到「无记录 100 分」）；
- * - 完全无进度记录时仍沿用既有默认 100 分。
+ * - 没有已验证进度（无论有自报记录还是完全无记录）→ 进度分 null，不参与总评。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
@@ -126,6 +125,7 @@ describe('学生进度验证与成绩口径', () => {
     try {
       db.prepare('DELETE FROM student_semester_reports WHERE class_id = ?').run(classId);
       db.prepare('DELETE FROM student_lesson_progress WHERE student_id IN (?, ?)').run(studentId, untouchedStudentId);
+      db.prepare('DELETE FROM segment_visits WHERE lesson_id = ? AND student_id = ?').run(lessonId, studentId);
       db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
       db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
       db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
@@ -137,7 +137,7 @@ describe('学生进度验证与成绩口径', () => {
     }
   });
 
-  it('学生自报进度标记为未验证，成绩进度分为 0', async () => {
+  it('学生自报进度标记为未验证，进度分不参与总评', async () => {
     const res = await postProgress(tokStudent, { lessonId, completed: false, progressPercent: 80 });
     expect(res.status).toBe(200);
 
@@ -147,9 +147,9 @@ describe('学生进度验证与成绩口径', () => {
     expect(row.verified_progress_percent).toBeNull();
 
     const grade = gradeOf(studentId);
-    expect(grade.progressScore).toBe(0);
-    // 100*0.15 + 0*0.25 + 100*0.35 + 100*0.25 = 75
-    expect(grade.totalScore).toBe(75);
+    // 无已验证进度 → 该分项排除，其余分项满分并按剩余权重归一化
+    expect(grade.progressScore).toBeNull();
+    expect(grade.totalScore).toBe(100);
   });
 
   it('教师确认后同一进度变为已验证并计入成绩', async () => {
@@ -180,8 +180,28 @@ describe('学生进度验证与成绩口径', () => {
     expect(grade.totalScore).toBe(95);
   });
 
-  it('完全没有进度记录的学生仍沿用默认 100 分', () => {
+  it('环节完成度从 segment_visits 派生，未离开的环节不计入', async () => {
+    const now = Date.now();
+    db.prepare('DELETE FROM segment_visits WHERE lesson_id = ? AND student_id = ?').run(lessonId, studentId);
+    const insertVisit = db.prepare(
+      'INSERT INTO segment_visits (id, lesson_id, segment_id, student_id, entered_at, left_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    insertVisit.run('sv-p1-a', lessonId, 'seg-a', studentId, now, now);
+    insertVisit.run('sv-p1-b', lessonId, 'seg-b', studentId, now, null);
+
+    const res = await fetch(`${baseUrl}/api/students/${studentId}/progress`, { headers: cookie(tokTeacher) });
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const row = body.find((p: any) => p.lesson_id === lessonId);
+    expect(row).toBeTruthy();
+    const segments = JSON.parse(row.completed_segments || '[]');
+    expect(segments).toContain('seg-a');
+    expect(segments).not.toContain('seg-b');
+  });
+
+  it('完全没有进度记录的学生同样排除该分项，总分不因此被扣减', () => {
     const grade = gradeOf(untouchedStudentId);
-    expect(grade.progressScore).toBe(100);
+    expect(grade.progressScore).toBeNull();
+    expect(grade.totalScore).toBe(100);
   });
 });
