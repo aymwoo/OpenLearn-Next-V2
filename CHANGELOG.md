@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **宿主与插件统一命名空间 i18n 体系与语言包贡献规范（Issue #148）**：
+  - **清单规范扩展与校验**：在 `manifest.contributes` 引入 `locales` 声明规范（支持内联字典 `Record<string, Record<string, string>>` 与相对 JSON 文件路径 `Record<string, string>` 两种形态），并在 `manifest-schema.ts` 与 `contribution-registry.ts` 完成 Zod 校验、注册索引与生命周期回收。
+  - **声明式 UI 国际化 (%key%)**：扩展点（如 `teacher.tab`、`class.tab`、`timetable.tab` 等）在清单声明中支持 VSCode 样式的 `%key%` 格式（如 `label: "%tab.title%"`），`ExtensionPointRenderer` 自动按当前语言解析插件词条；普通文本字面量保持原样输出。
+  - **多级优雅回退与防裸键泄露**：构建防裸键泄露机制（解决历史 Issue #64 PPTX 内部键暴露痛点），查找顺序遵循 `当前语言 -> 默认语言 (zh) -> defaultValue -> 友好格式化`，绝不向用户呈现代码级未翻译裸键或带有 `%` 符号的内部键名。
+  - **上下文注入与 API 对齐**：前端上下文与后端核心 `PluginContext` 均注入 `ctx.i18n`（含 `t` 与 `getLanguage`），支持命名空间查找（`pluginId:key`）与变量插值 `{var}`。
+  - **CI 门禁与编码完整性审计**：实现 `scripts/check-i18n.mjs` 并新增 `pnpm lint:i18n` 门禁，自动扫描双语词条对称性、空值、未翻译占位符及 UTF-8 编码完整性（强化 Issue #130 拦截 `\uFFFD` 乱码与非法字节）。
+  - **测试与文档对齐**：新增 `src/__tests__/i18n.test.ts` 与 `scripts/__tests__/check-i18n.test.ts`，更新 `docs/plugin/plugin-manifest-spec.md` 规范手册，`audit-tools/run.sh` 架构漂移 0 drift，`pnpm lint` 0 类型错误。
+
 - **插件声明式版本化迁移、失败事务回滚与降级保护（Issue #142）**：
   - **声明式 SQL 迁移约定**：插件根目录支持 `migrations/` 目录约定，以数字序 SQL 脚本命名（如 `001_initial.sql`、`002_add_field.sql`），支持可选 `-- DOWN` 分段作为回滚定义，内置 `{{table_prefix}}` 占位符展开。
   - **激活生命周期内原子执行**：在插件激活（`activateFromDatabase`、`activateWorker` 与 `activatePreloaded`）阶段前自动执行未执行的增量迁移，单脚本在 SQLite `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` 事务内原子执行；任意步骤失败自动回滚已执行语句，并将插件标记为 `ERROR` 状态。

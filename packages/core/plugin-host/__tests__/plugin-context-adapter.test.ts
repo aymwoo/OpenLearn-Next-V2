@@ -43,6 +43,10 @@ describe('PluginContextAdapter (EU-02)', () => {
       },
       config: {} as any,
       http: {} as any,
+      i18n: {
+        t: vi.fn().mockImplementation((k) => k),
+        getLanguage: vi.fn().mockReturnValue('zh'),
+      },
       require: vi.fn().mockReturnValue({ shared: true }),
     };
   };

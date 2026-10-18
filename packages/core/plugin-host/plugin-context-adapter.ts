@@ -21,6 +21,7 @@ export interface IUnifiedPluginContext {
   readonly contributions: ContributionAccessor;
   readonly config: IConfigService;
   readonly http: PluginContext['http'];
+  readonly i18n: PluginContext['i18n'];
 
   // Methods
   resolve<T>(token: Token<T>): Promise<T>;
@@ -57,6 +58,10 @@ export class PluginContextAdapter implements IUnifiedPluginContext {
 
   public get http(): PluginContext['http'] {
     return this._context.http;
+  }
+
+  public get i18n(): PluginContext['i18n'] {
+    return this._context.i18n;
   }
 
   public get db(): PluginDatabaseAPI {

@@ -187,6 +187,47 @@
 >
 > 完整锚点目录见 [`anchor-slots.md`](./anchor-slots.md)。
 
+#### 2.4.1 国际化语言包与声明式文案 (`contributes.locales`) (Issue #148 新增)
+
+插件可通过 `contributes.locales` 提供多语言本地化字典，支持两种声明形态：
+
+1. **内联字典形态** (`Record<string, Record<string, string>>`)：
+```json
+"contributes": {
+  "locales": {
+    "zh": {
+      "tab.title": "作业中心",
+      "welcome": "欢迎使用作业批改系统"
+    },
+    "en": {
+      "tab.title": "Homework Hub",
+      "welcome": "Welcome to Homework Hub"
+    }
+  },
+  "teacher.tab": [
+    {
+      "id": "homework-manager",
+      "label": "%tab.title%",
+      "icon": "BookOpen"
+    }
+  ]
+}
+```
+
+2. **独立文件路径形态** (`Record<string, string>`)：
+```json
+"contributes": {
+  "locales": {
+    "zh": "locales/zh.json",
+    "en": "locales/en.json"
+  }
+}
+```
+
+- **声明式 UI 国际化 (`%key%`)**：当槽位标签声明为 `%key%` 格式时（如 `label: "%tab.title%"`），宿主渲染器会自动按当前系统语言解析对应词条。
+- **级联回退与防裸键泄露**：查找遵循 `当前语言 -> 默认语言 (zh) -> defaultValue -> 友好格式化`，杜绝未翻译的代码级键名直接暴露给终端用户。
+- **运行时 API**：插件可在 `activate(ctx)` 中通过 `ctx.i18n.t(key, defaultValue?, params?)` 和 `ctx.i18n.getLanguage()` 消费多语言能力。
+
 ---
 
 ### 2.5 配置项声明 (`configuration`)

@@ -215,4 +215,66 @@ describe('E-1 · contributes schema ↔ contribution-registry 双源一致', () 
       title: '国家智慧教育平台同步',
     });
   });
+
+  it('contributes.locales 语言包声明与校验（Issue #148）', () => {
+    // 1. 合法声明：相对路径或内联字典
+    const validManifest = {
+      id: 'ext-i18n-plugin',
+      name: 'I18n Plugin',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        locales: {
+          'zh-CN': 'locales/zh-CN.json',
+          'en-US': { 'tab.title': 'Attendance' },
+        },
+      },
+    };
+    const parsed = manifestSchema.parse(validManifest);
+    expect(parsed.contributes?.locales).toEqual({
+      'zh-CN': 'locales/zh-CN.json',
+      'en-US': { 'tab.title': 'Attendance' },
+    });
+
+    // 2. 注册至 ContributionRegistry 并可检索
+    const registry = new ContributionRegistry();
+    registry.register('ext-i18n-plugin', parsed.contributes as any);
+    expect(registry.getLocales('ext-i18n-plugin')).toEqual({
+      'zh-CN': 'locales/zh-CN.json',
+      'en-US': { 'tab.title': 'Attendance' },
+    });
+
+    // 卸载后清空
+    registry.unregister('ext-i18n-plugin');
+    expect(registry.getLocales('ext-i18n-plugin')).toBeUndefined();
+
+    // 3. 非法声明被拦截：语言代码为空或类型错误
+    expect(() =>
+      manifestSchema.parse({
+        id: 'bad-plugin',
+        name: 'Bad',
+        version: '1.0.0',
+        main: 'index.js',
+        contributes: {
+          locales: {
+            '': 'locales/empty.json',
+          },
+        },
+      }),
+    ).toThrow(/语言代码/);
+
+    expect(() =>
+      manifestSchema.parse({
+        id: 'bad-plugin-2',
+        name: 'Bad 2',
+        version: '1.0.0',
+        main: 'index.js',
+        contributes: {
+          locales: {
+            'zh-CN': 12345, // 必须是字符串路径或字典对象
+          },
+        },
+      }),
+    ).toThrow();
+  });
 });

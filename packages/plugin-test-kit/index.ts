@@ -450,6 +450,13 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
     } as any,
     pluginId,
     manifest,
+    // Issue #148：i18n 是 PluginContext 的必填项。测试夹具不需要真实词条，
+    // 直接回显默认值或 key（与宿主「找不到词条时回退」的行为一致）。
+    i18n: {
+      t: (key: string, defaultValueOrParams?: string | Record<string, any>) =>
+        typeof defaultValueOrParams === 'string' ? defaultValueOrParams : key,
+      getLanguage: () => 'zh',
+    },
     resolve: async <T>(token: Token<T>): Promise<T> => {
       const inst = tokenMap[token.name];
       if (inst === undefined) {

@@ -1013,6 +1013,47 @@ export async function buildContext(
     log: pluginLog,
     config: configService,
     contributions: contributionsAccessor,
+    i18n: {
+      t: (key: string, defaultValueOrParams?: string | Record<string, any>, maybeParams?: Record<string, any>) => {
+        let defaultValue: string | undefined;
+        let params: Record<string, any> | undefined;
+        if (typeof defaultValueOrParams === 'string') {
+          defaultValue = defaultValueOrParams;
+          params = maybeParams;
+        } else if (defaultValueOrParams && typeof defaultValueOrParams === 'object') {
+          params = defaultValueOrParams;
+          if (maybeParams && typeof maybeParams === 'object' && 'defaultValue' in maybeParams) {
+            defaultValue = (maybeParams as any).defaultValue;
+          }
+        }
+
+        let targetPluginId = pluginId;
+        let subKey = key;
+        if (key.includes(':')) {
+          const colonIdx = key.indexOf(':');
+          targetPluginId = key.substring(0, colonIdx);
+          subKey = key.substring(colonIdx + 1);
+        }
+
+        const localesDecl = contributionRegistry?.getLocales(targetPluginId);
+        if (localesDecl) {
+          const lang = 'zh';
+          if (localesDecl[lang] && typeof localesDecl[lang] === 'object') {
+            const val = (localesDecl[lang] as Record<string, string>)[subKey];
+            if (val !== undefined) {
+              return interpolate(val, params);
+            }
+          }
+        }
+
+        if (defaultValue !== undefined && defaultValue !== null) {
+          return interpolate(defaultValue, params);
+        }
+
+        return friendlyFormatKey(subKey);
+      },
+      getLanguage: () => 'zh',
+    },
     require: (moduleName: string) => {
       if (!PLUGIN_SHARED_MODULES.includes(moduleName as any)) {
         throw new Error(
@@ -1026,4 +1067,29 @@ export async function buildContext(
       return sharedModules[moduleName];
     },
   };
+}
+
+function interpolate(template: string, params?: Record<string, any>): string {
+  if (!template || !params) return template;
+  return template.replace(/\{([^{}]+)\}/g, (match, key) => {
+    const val = params[key.trim()];
+    return val !== undefined && val !== null ? String(val) : match;
+  });
+}
+
+function friendlyFormatKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let key = rawKey.replace(/^%+|%+$/g, '').trim();
+  if (key.includes(':')) {
+    key = key.split(':').slice(1).join(':');
+  }
+  const segments = key.split('.').filter(Boolean);
+  const targetSegment = segments.length > 1 ? segments.slice(-2).join(' ') : (segments[0] || key);
+  return targetSegment
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ') || rawKey;
 }

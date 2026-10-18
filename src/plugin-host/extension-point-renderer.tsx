@@ -22,7 +22,7 @@ import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { PluginIconRenderer } from '../components/PluginIconRenderer';
 import { openTeacherTabInNewTab } from '../utils/teacherTabHash';
-import { translations } from '../i18n';
+import { translations, resolveLabel, type Language } from '../i18n';
 import {
   recordPluginCrash,
   resetPluginCrash,
@@ -388,12 +388,14 @@ export function ExtensionPointRenderer({
   // styled as class-detail tabs). Content is rendered separately by
   // ClassesView via the same slot with renderType 'panel'.
   if (slot === 'class.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
         {extensions.map((ext) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.classActiveTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           return (
@@ -438,12 +440,14 @@ export function ExtensionPointRenderer({
 
   // timetable.tab with renderType 'button' — render segmented buttons
   if (slot === 'timetable.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
         {extensions.map((ext) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.timetableActiveTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           return (
@@ -489,12 +493,14 @@ export function ExtensionPointRenderer({
   // right-sidebar tab strip (Agent / Shell 同排)。此前无分支：button 态把插件完整
   // 组件内联进 tab 条、panel 态不做 activeTab 过滤（v0.6.0 审计 E-1）。
   if (slot === 'ai_sidebar.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
         {extensions.map((ext) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.activeTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           return (
@@ -536,12 +542,14 @@ export function ExtensionPointRenderer({
 
   // admin.tab with renderType 'button' — render segmented buttons
   if (slot === 'admin.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
         {extensions.map((ext) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.adminActiveTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           return (
@@ -585,12 +593,14 @@ export function ExtensionPointRenderer({
 
   // student.profile.tab with renderType 'button' — render segmented buttons
   if (slot === 'student.profile.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
         {extensions.map((ext) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.studentActiveTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           return (
@@ -646,7 +656,8 @@ export function ExtensionPointRenderer({
         {sortedExtensions.map((ext) => {
           const tabValue = `${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.teacherTab === tabValue;
-          const label = (ext as any).title || ext.label || ext.id;
+          const rawLabel = (ext as any).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, lang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
           const ariaNewTab =

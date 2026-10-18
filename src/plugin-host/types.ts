@@ -535,6 +535,11 @@ export interface FrontendPluginContext {
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
+  /** 国际化多语言服务 (Issue #148) */
+  i18n?: {
+    t(key: string, defaultValueOrParams?: string | Record<string, any>, maybeParams?: Record<string, any>): string;
+    getLanguage(): string;
+  };
   /** 页面导航与 Tab 订阅控制 */
   navigation?: {
     getTeacherTab(): string;
