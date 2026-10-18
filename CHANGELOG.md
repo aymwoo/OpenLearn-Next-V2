@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **隔离模式插件激活前补齐宿主 SDK 解析链接（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫。
 - **未获 `agent:tool` 的插件注册 action 改为降级而非拒绝（Issue #147 实测发现）**：`method-policy` 原先把「未声明 `agent:tool` 却注册对外暴露 action」直接抛错，而 `ActionDescriptor.exposeToAgent` 默认 `true`、旧插件（含最新版 class-manager / attendance-record）根本不知道这条新规 —— 结果是 worker/process 隔离下 `activate()` 失败、插件整体 `state=error`，把「不暴露给 AI Agent」放大成「升级后插件不能用」。现由 `sanitizeActionRegisterArgs` 把未授权的 descriptor 强制改写为 `exposeToAgent: false` 后放行：安全语义不变（仍不进 `getAgentTools()`），插件功能保留；`checkMethodPolicy` 中的拒绝分支保留为纵深防御。新增 `service-host.test.ts` 用例覆盖降级与「已授权时原样透传」。
+- **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
 
 ### Security
 
