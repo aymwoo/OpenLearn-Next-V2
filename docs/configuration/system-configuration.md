@@ -36,6 +36,10 @@
 | `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | —                                            | `ctx.reportProgress` 心跳滑动续期窗口                                                                                    |
 | `DEBUG_COMMAND_BUS`                           | 关闭                                         | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效                                   |
 | `LOG_LEVEL`                                   | 生产 `info` / 其他 `debug`                   | 结构化日志级别（pino）                                                                                                   |
+| `LOG_CONSOLE_LEVEL`                           | 继承 `LOG_LEVEL`                             | 控制台输出级别（可选）。可独立配置以实现控制台只打印 warn/error 而日志文件记录 debug/info                                  |
+| `HTTP_ACCESS_LOG`                             | `errors`                                     | 请求访问日志策略：`errors`（默认，仅记录 4xx/5xx 与慢请求）、`all`（全量记录，排障开启）、`off`（完全关闭访问日志输出）      |
+| `HTTP_SLOW_MS`                                | `1000`                                       | 慢请求阈值（毫秒）。耗时达到或超过此阈值的请求以 `warn` 级别记录访问日志                                                  |
+| `HTTP_ACCESS_LOG_IGNORE`                      | 空                                           | 逗号分隔的路径前缀名单（如 `/api/vfs,/api/classroom/sessions/`），对特定高频轮询接口静默正常访问日志                      |
 | `LOG_DIR`                                     | `<cwd>/logs`                                 | 访问日志 `openlearn.log` 与审计日志 `audit.log` 的目录。容器为 `/data/logs`                                              |
 | `LOG_REDACT`                                  | 开启                                         | `false` / `0` / `off` / `no` 关闭字段脱敏。生产不要关闭                                                                  |
 | `LOG_MAX_SIZE_MB`                             | `10`                                         | 访问日志单文件上限（MB），超出后轮转                                                                                     |

@@ -29,16 +29,50 @@ const DEV_QUIET_PREFIXES = [
   '/@id/',
 ];
 
+export type HttpAccessLogMode = 'off' | 'errors' | 'all';
+export const DEFAULT_HTTP_SLOW_MS = 1000;
+
+export function resolveHttpAccessLogMode(
+  envAccessLog = process.env.HTTP_ACCESS_LOG,
+  envLogLevel = process.env.LOG_LEVEL,
+): HttpAccessLogMode {
+  const normalized = envAccessLog?.trim().toLowerCase();
+  if (normalized === 'off' || normalized === 'errors' || normalized === 'all') {
+    return normalized;
+  }
+  const normalizedLevel = envLogLevel?.trim().toLowerCase();
+  if (normalizedLevel === 'debug' || normalizedLevel === 'trace') {
+    return 'all';
+  }
+  return 'errors';
+}
+
+export function resolveSlowRequestThresholdMs(envSlowMs = process.env.HTTP_SLOW_MS): number {
+  if (!envSlowMs) return DEFAULT_HTTP_SLOW_MS;
+  const parsed = Number.parseInt(envSlowMs.trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HTTP_SLOW_MS;
+}
+
+export function resolveHttpAccessLogIgnorePrefixes(envIgnore = process.env.HTTP_ACCESS_LOG_IGNORE): string[] {
+  if (!envIgnore) return [];
+  return envIgnore
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
 /**
  * 判定请求是否静默（不打印 http.request 访问日志）：
  * - 正常探活（/health, /health/ready）与公共静态入口（/, /index.html, /favicon.ico, /robots.txt）在 <400 时静默；
  * - 开发环境下的 Vite 内部资源与源码加载（/@vite/, /src/ 等）在 <400 时静默；
+ * - 命中 HTTP_ACCESS_LOG_IGNORE 前缀名单的正常请求在 <400 时静默；
  * - 任何 >=400 的异常响应（404, 500 等）严格保留日志与错误收集，绝不静默。
  */
 export function isQuietRequest(
   reqPath: string,
   status: number,
   isProduction = process.env.NODE_ENV === 'production',
+  customIgnorePrefixes?: string[],
 ): boolean {
   if (status >= 400) return false;
   if (QUIET_PATHS.has(reqPath)) return true;
@@ -47,7 +81,38 @@ export function isQuietRequest(
       if (reqPath.startsWith(prefix)) return true;
     }
   }
+  const ignorePrefixes = customIgnorePrefixes ?? resolveHttpAccessLogIgnorePrefixes();
+  for (const prefix of ignorePrefixes) {
+    if (reqPath.startsWith(prefix)) return true;
+  }
   return false;
+}
+
+/**
+ * 判定 HTTP 访问日志记录级别：
+ * - mode === 'off': 彻底关闭访问日志（返回 null）；
+ * - status >= 500: error；
+ * - status >= 400 或耗时超过慢请求阈值: warn；
+ * - 正常成功请求：mode === 'all' 时输出 debug，mode === 'errors' 时静默（返回 null）。
+ */
+export function resolveHttpAccessLogLevel(
+  status: number,
+  durationMs: number,
+  mode = resolveHttpAccessLogMode(),
+  slowThresholdMs = resolveSlowRequestThresholdMs(),
+): 'error' | 'warn' | 'debug' | null {
+  if (mode === 'off') return null;
+
+  if (status >= 500) {
+    return 'error';
+  }
+  if (status >= 400 || durationMs >= slowThresholdMs) {
+    return 'warn';
+  }
+  if (mode === 'all') {
+    return 'debug';
+  }
+  return null;
 }
 
 type RequestWithId = Request & {
@@ -86,17 +151,22 @@ export function requestObservability() {
       recordHttpResponse(status);
       const quiet = isQuietRequest(req.path, status);
       if (!quiet) {
-        logger.info(
-          {
-            requestId,
-            userId,
-            method: req.method,
-            path: req.path,
-            status,
-            durationMs,
-          },
-          'http.request',
-        );
+        const logLevel = resolveHttpAccessLogLevel(status, durationMs);
+        if (logLevel) {
+          const effectiveLevel =
+            logLevel === 'debug' && !logger.isLevelEnabled('debug') ? 'info' : logLevel;
+          logger[effectiveLevel](
+            {
+              requestId,
+              userId,
+              method: req.method,
+              path: req.path,
+              status,
+              durationMs,
+            },
+            'http.request',
+          );
+        }
       }
       if (status === 403 && req.path !== '/api/auth/login') {
         recordSecurityAudit('auth.forbidden', {

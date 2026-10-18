@@ -14,13 +14,29 @@ import { RotatingFileStream, resolveRotationConfig } from './rotating-file-strea
  * `server/utils/logger.ts` 改为 re-export 保持既有导入路径兼容。
  *
  * 环境变量：
- * - `LOG_LEVEL`      日志级别，默认 生产 info / 非生产 debug
- * - `LOG_REDACT`     脱敏开关，默认开启；设 `false` 关闭（⚠️ 生产环境不建议关闭）
- * - `LOG_DIR`        日志目录，默认 `<cwd>/logs`
- * - `LOG_MAX_SIZE_MB`单文件大小上限（MB），默认 10
- * - `LOG_MAX_FILES`  轮转保留份数，默认 5
+ * - `LOG_LEVEL`         日志级别，默认 生产 info / 非生产 debug
+ * - `LOG_CONSOLE_LEVEL` 控制台日志级别，可选；未配置时继承 LOG_LEVEL
+ * - `LOG_REDACT`        脱敏开关，默认开启；设 `false` 关闭（⚠️ 生产环境不建议关闭）
+ * - `LOG_DIR`           日志目录，默认 `<cwd>/logs`
+ * - `LOG_MAX_SIZE_MB`   单文件大小上限（MB），默认 10
+ * - `LOG_MAX_FILES`     轮转保留份数，默认 5
  */
-const level = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+const defaultLevel =
+  process.env.LOG_LEVEL ||
+  (process.env.HTTP_ACCESS_LOG === 'all'
+    ? 'debug'
+    : process.env.NODE_ENV === 'production'
+      ? 'info'
+      : 'debug');
+const consoleLevel = process.env.LOG_CONSOLE_LEVEL || defaultLevel;
+const fileLevel = defaultLevel;
+
+function minPinoLevel(a: string, b: string): string {
+  const vA = pino.levels.values[a.toLowerCase()] ?? 30;
+  const vB = pino.levels.values[b.toLowerCase()] ?? 30;
+  return vA <= vB ? a : b;
+}
+const rootLevel = minPinoLevel(consoleLevel, fileLevel);
 
 // LOG_DIR 允许部署与测试把日志写到别处。目录在下面按可写性创建，失败则只留 stdout。
 const logDir = path.resolve(process.env.LOG_DIR || path.join(process.cwd(), 'logs'));
@@ -44,7 +60,7 @@ function consoleStream(): NodeJS.WritableStream {
   }
 }
 
-const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [{ level, stream: consoleStream() }];
+const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [{ level: consoleLevel, stream: consoleStream() }];
 
 // 轮转替代原先的 fs.createWriteStream(logFile, { flags: 'a' })：
 // 此前是无限增长的单文件（实测已达 11.3 MB 且无上限、无切分）。
@@ -60,7 +76,7 @@ try {
 if (fileLogging) {
   const rotation = resolveRotationConfig();
   streams.push({
-    level,
+    level: fileLevel,
     stream: new RotatingFileStream({
       filePath: logFile,
       maxBytes: rotation.maxBytes,
@@ -72,7 +88,7 @@ if (fileLogging) {
 // 脱敏在 logger 层生效：redact 发生在序列化阶段、早于 multistream 分发，
 // 因此 stdout / pino-pretty / 文件三路拿到的都是已脱敏内容，不会出现
 // 「控制台已脱敏、文件里却是明文」这种不一致。
-export const logger = pino({ level, redact: buildRedactOptions() as any }, pino.multistream(streams as any));
+export const logger = pino({ level: rootLevel, redact: buildRedactOptions() as any }, pino.multistream(streams as any));
 
 /** 创建带组件标签的子 logger */
 export function createLogger(component: string): pino.Logger {
