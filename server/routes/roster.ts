@@ -898,15 +898,18 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
-      const { lessonId } = req.body;
+      const { lessonId, mode = 'full', target } = req.body;
       if (!lessonId) {
         return res.status(400).json({ error: 'lessonId is required' });
       }
+      const validMode = mode === 'navigation' ? 'navigation' : 'full';
+      const targetStr = target ? (typeof target === 'string' ? target : JSON.stringify(target)) : null;
+
       kernelContainer.db
         .prepare(
-          'UPDATE students SET locked_lesson_id = ? WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)',
+          'UPDATE students SET locked_lesson_id = ?, lock_mode = ?, lock_target = ? WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)',
         )
-        .run(lessonId, req.params.classId);
+        .run(lessonId, validMode, targetStr, req.params.classId);
 
       await publishClassroomEvent(
         CLASSROOM_EVENTS.CLASSROOM_LOCK_CHANGED,
@@ -914,6 +917,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
           classId: req.params.classId,
           lessonId,
           locked: true,
+          mode: validMode,
+          target,
         },
         { correlationId: req.params.classId },
       );
@@ -929,7 +934,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return;
       kernelContainer.db
         .prepare(
-          'UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)',
+          "UPDATE students SET locked_lesson_id = NULL, lock_mode = 'full', lock_target = NULL WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)",
         )
         .run(req.params.classId);
 
@@ -938,6 +943,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         {
           classId: req.params.classId,
           locked: false,
+          mode: 'full',
+          target: null,
         },
         { correlationId: req.params.classId },
       );
@@ -1549,10 +1556,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const profile = kernelContainer.db
         .prepare(
           viewerIsStaff
-            ? `SELECT id, name, email, locked_lesson_id, private_notes, student_number FROM students WHERE id = ?`
-            : `SELECT id, name, email, locked_lesson_id, student_number FROM students WHERE id = ?`,
+            ? `SELECT id, name, email, locked_lesson_id, lock_mode, lock_target, private_notes, student_number FROM students WHERE id = ?`
+            : `SELECT id, name, email, locked_lesson_id, lock_mode, lock_target, student_number FROM students WHERE id = ?`,
         )
         .get(studentId) as any;
+
+      if (profile && typeof profile.lock_target === 'string') {
+        try {
+          profile.lock_target = JSON.parse(profile.lock_target);
+        } catch {}
+      }
 
       const safeAssignments = viewerIsStaff
         ? assignments

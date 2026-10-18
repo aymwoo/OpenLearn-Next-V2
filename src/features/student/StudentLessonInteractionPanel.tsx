@@ -9,6 +9,12 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 export interface StudentLessonInteractionPanelProps {
   /** 全班专注锁定中：标签页与白板均变为只读 */
   isStudentLocked?: boolean;
+  /** 导航限制：禁止切 Tab、返回看板（答题锁定与完全锁定均开启） */
+  isNavigationLocked?: boolean;
+  /** 交互限制：白板设为只读并拦截内容写入（仅完全锁定开启，答题锁定为 false） */
+  isInteractionLocked?: boolean;
+  /** 锁定模式：'full' | 'navigation' */
+  lockMode?: 'full' | 'navigation';
   studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
   setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
   isStudentLessonContentCollapsed: boolean;
@@ -38,6 +44,9 @@ export interface StudentLessonInteractionPanelProps {
 export function StudentLessonInteractionPanel(props: StudentLessonInteractionPanelProps) {
   const {
     isStudentLocked = false,
+    isNavigationLocked,
+    isInteractionLocked,
+    lockMode,
     studentLessonTab,
     setStudentLessonTab,
     isStudentLessonContentCollapsed,
@@ -62,15 +71,29 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
     addToast,
   } = props;
 
+  const navigationLocked = isNavigationLocked ?? isStudentLocked;
+  const interactionLocked = isInteractionLocked ?? (lockMode === 'navigation' ? false : isStudentLocked);
+  const isAnswerMode = (lockMode || (!interactionLocked && navigationLocked ? 'navigation' : 'full')) === 'navigation';
+
   // 锁定期间禁止自行切换标签页，仅允许跟随教师端广播的 TEACHER_CHANGE_TAB
   const handleTabChange = (tab: 'whiteboard' | 'courseware' | 'assignment') => {
-    if (isStudentLocked) {
+    if (navigationLocked) {
       if (tab !== studentLessonTab) {
         addToast(
-          lang === 'zh' ? '🔒 全班专注锁定' : '🔒 Class Focus Locked',
           lang === 'zh'
-            ? '锁定期间无法切换标签页，请跟随教师当前授课内容。'
-            : 'Switching tabs is disabled while the class is locked.',
+            ? isAnswerMode
+              ? '🔒 答题锁定'
+              : '🔒 全班专注锁定'
+            : isAnswerMode
+              ? '🔒 Answer Locked'
+              : '🔒 Class Focus Locked',
+          lang === 'zh'
+            ? isAnswerMode
+              ? '答题锁定中，请在当前页面完成作答并提交。'
+              : '锁定期间无法切换标签页，请跟随教师当前授课内容。'
+            : isAnswerMode
+              ? 'Answer lock active. Complete your work on this page.'
+              : 'Switching tabs is disabled while the class is locked.',
           'warning',
         );
       }
@@ -87,7 +110,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
       studentLessonTab === tab
         ? 'bg-primary-theme/10 text-primary-theme shadow-sm font-bold'
         : 'text-muted hover:bg-surface-secondary'
-    } ${isStudentLocked && studentLessonTab !== tab ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+    } ${navigationLocked && studentLessonTab !== tab ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
 
   return (
     <div
@@ -114,11 +137,20 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           <button
             onClick={() => handleTabChange('whiteboard')}
             className={tabButtonClass('whiteboard')}
-            title={isStudentLocked && lang === 'zh' ? '锁定中：白板为只读跟随模式' : undefined}
+            title={
+              interactionLocked && lang === 'zh'
+                ? '锁定中：白板为只读跟随模式'
+                : navigationLocked && lang === 'zh'
+                  ? '答题锁定中：请在此页面完成作答'
+                  : undefined
+            }
           >
             Interactive Whiteboard
-            {isStudentLocked && studentLessonTab === 'whiteboard' && (
+            {interactionLocked && studentLessonTab === 'whiteboard' && (
               <span className="ml-1.5 text-xs font-bold text-indigo-500">🔒 {lang === 'zh' ? '只读' : 'RO'}</span>
+            )}
+            {!interactionLocked && navigationLocked && studentLessonTab === 'whiteboard' && (
+              <span className="ml-1.5 text-xs font-bold text-amber-600">✏️ {lang === 'zh' ? '答题锁定' : 'Answering'}</span>
             )}
           </button>
           <button onClick={() => handleTabChange('courseware')} className={tabButtonClass('courseware')}>
@@ -188,7 +220,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           lessonId={selectedLesson}
           elements={elements}
           userRole={activeRole}
-          readOnly={isStudentLocked}
+          readOnly={interactionLocked}
           followRemoteFullscreen
           activeSegmentId={boardSegmentId}
           onSegmentSync={(segId: string) => {
@@ -199,15 +231,15 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
             /* readonly or sync */
           }}
           onElementDelete={async (elementId: string) => {
-            // 锁定期间白板只读：拒绝任何删除写入
-            if (isStudentLocked) return;
+            // 完全锁定期间白板只读：拒绝任何删除写入
+            if (interactionLocked) return;
             if (!selectedLesson) return;
             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
             fetchElements(selectedLesson);
           }}
           onClearBoard={async () => {
-            // 锁定期间白板只读：拒绝清空写入
-            if (isStudentLocked) return;
+            // 完全锁定期间白板只读：拒绝清空写入
+            if (interactionLocked) return;
             if (!selectedLesson) return;
             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
             fetchElements(selectedLesson);

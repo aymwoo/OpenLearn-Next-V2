@@ -114,4 +114,52 @@ describe('StudentLessonInteractionPanel', () => {
     );
     expect(whiteboardProps.at(-1)?.readOnly).toBe(false);
   });
+
+  describe('Issue #110: answer lock (navigation mode)', () => {
+    it('passes readOnly=false to the whiteboard and allows whiteboard writes under answer lock', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
+      render(
+        <Suspense fallback={null}>
+          <StudentLessonInteractionPanel
+            {...(makeProps({ isStudentLocked: true, lockMode: 'navigation' }) as any)}
+          />
+        </Suspense>,
+      );
+
+      // 白板非只读
+      expect(whiteboardProps.at(-1)?.readOnly).toBe(false);
+
+      // 白板写入允许通过
+      const onElementDelete = whiteboardProps.at(-1)?.onElementDelete as (id: string) => Promise<void>;
+      await onElementDelete('el-1');
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    it('blocks tab switching and toasts with answer lock message', () => {
+      const setStudentLessonTab = vi.fn();
+      const addToast = vi.fn();
+      render(
+        <Suspense fallback={null}>
+          <StudentLessonInteractionPanel
+            {...(makeProps({
+              isStudentLocked: true,
+              lockMode: 'navigation',
+              setStudentLessonTab,
+              addToast,
+              lang: 'zh',
+            }) as any)}
+          />
+        </Suspense>,
+      );
+
+      screen.getByText('Interactive Courseware Viewer').click();
+      expect(setStudentLessonTab).not.toHaveBeenCalled();
+      expect(addToast).toHaveBeenCalledWith(
+        '🔒 答题锁定',
+        expect.stringContaining('答题锁定中'),
+        'warning',
+      );
+      expect(screen.getByText('✏️ 答题锁定')).toBeTruthy();
+    });
+  });
 });
