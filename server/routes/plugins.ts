@@ -31,6 +31,15 @@ import {
 import { communityInstallEnabled, verifyCommunityPackage } from '../services/community-attest.js';
 import { approvePluginCapabilities } from '../../packages/core/plugin-host/plugin-grants.js';
 import {
+  exportPluginDataToSql,
+  listOrphanData,
+  purgePluginData,
+  updateOrphanDataExportPath,
+  type OrphanDataRecord,
+} from '../../packages/core/plugin-host/orphan-data.js';
+import { listAllowedPluginTablePrefixes } from '../../packages/core/plugin-host/plugin-tables.js';
+import { getPluginsDir } from '../utils/paths.js';
+import {
   approveDeclaredPublicRoutes,
   clearPublicRouteApprovals,
 } from '../../packages/core/plugin-host/public-routes.js';
@@ -46,6 +55,11 @@ const COMMUNITY_RISK_ACK_MESSAGE =
 
 function headerFlag(req: express.Request, name: string): boolean {
   return String(req.headers[name] || '').toLowerCase() === 'true';
+}
+
+/** 归档文件名安全段：manifest.id 可能含 `@` / `/` 等路径字符。 */
+function sanitizeFileNameSegment(value: string): string {
+  return value.replace(/[^A-Za-z0-9._@-]/g, '_');
 }
 
 function installationSecurityFields(
@@ -886,10 +900,156 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── 插件数据（孤立数据）管理（Issue #141）────────────────────────────────
+  //
+  // 卸载默认保留插件数据（dataPolicy=keep）：表 / plugin_migrations / plugin_storage
+  // 原样留库并登记；本组接口负责列出 / 导出归档 / 清除。
+  // 注册顺序必须早于下方 `GET /api/plugins/:id(*)` 通配，否则会被当成插件 id。
+
+  /** 解析 key：优先 plugin_id（UUID），其次 manifest_id 别名（唯一命中才接受）。 */
+  function resolveOrphanRecord(key: string): { record?: OrphanDataRecord; ambiguous?: boolean; notFound?: boolean } {
+    const records = listOrphanData(kernelContainer.db);
+    const byPluginId = records.find((r) => r.pluginId === key);
+    if (byPluginId) return { record: byPluginId };
+    const byManifest = records.filter((r) => r.manifestId === key);
+    if (byManifest.length === 1) return { record: byManifest[0] };
+    if (byManifest.length > 1) return { ambiguous: true };
+    return { notFound: true };
+  }
+
+  /** 归档目录必须与 PluginHost.getPluginDataExportDir() 同口径（数据目录下、不在 /plugins 静态服务内）。 */
+  const pluginDataExportDir = path.join(path.dirname(getPluginsDir()), 'plugin-data-exports');
+
+  function exportOrphanData(record: OrphanDataRecord): { file: string; tables: string[]; rowCount: number } {
+    const prefixes = [
+      ...new Set([
+        ...record.tablePrefixes,
+        ...listAllowedPluginTablePrefixes(record.pluginId, record.manifestId, true),
+      ]),
+    ];
+    const targetFile = path.join(
+      pluginDataExportDir,
+      `${sanitizeFileNameSegment(record.manifestId)}__${record.pluginId}__${Date.now()}.sql`,
+    );
+    const result = exportPluginDataToSql(kernelContainer.db, {
+      manifestId: record.manifestId,
+      pluginId: record.pluginId,
+      prefixes,
+      targetFile,
+    });
+    updateOrphanDataExportPath(kernelContainer.db, record.manifestId, record.pluginId, result.file);
+    return result;
+  }
+
+  app.get('/api/plugins/orphan-data', requireAuth('administrator'), (_req, res) => {
+    try {
+      const items = listOrphanData(kernelContainer.db).map((record) => ({
+        ...record,
+        tableCount: record.tableNames.length,
+        archiveDir: pluginDataExportDir,
+      }));
+      res.json({ success: true, items, exportDir: pluginDataExportDir });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/plugins/orphan-data/:key(*)/export', requireAuth('administrator'), (req, res) => {
+    try {
+      const key = decodeURIComponent(req.params.key);
+      const { record, ambiguous, notFound } = resolveOrphanRecord(key);
+      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
+      const exported = exportOrphanData(record);
+      recordSecurityAudit('plugin.data_exported', {
+        actorId: getActorId(req),
+        pluginId: record.pluginId,
+        manifestId: record.manifestId,
+        file: exported.file,
+        tables: exported.tables.length,
+        rows: exported.rowCount,
+      });
+      res.json({ success: true, ...exported, archiveDir: pluginDataExportDir });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.get('/api/plugins/orphan-data/:key(*)/archive', requireAuth('administrator'), (req, res) => {
+    try {
+      const key = decodeURIComponent(req.params.key);
+      const { record, ambiguous, notFound } = resolveOrphanRecord(key);
+      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
+      if (!record.lastExportPath) {
+        return res.status(404).json({ success: false, error: 'No archive exported yet; call the export endpoint first' });
+      }
+      const resolved = path.resolve(record.lastExportPath);
+      if (!resolved.startsWith(path.resolve(pluginDataExportDir) + path.sep)) {
+        return res.status(400).json({ success: false, error: 'Archive path is outside the export directory' });
+      }
+      if (!fs.existsSync(resolved)) {
+        return res.status(404).json({ success: false, error: 'Archive file is missing on disk' });
+      }
+      res.download(resolved, path.basename(resolved));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.delete('/api/plugins/orphan-data/:key(*)', requireAuth('administrator'), (req, res) => {
+    try {
+      const key = decodeURIComponent(req.params.key);
+      const { record, ambiguous, notFound } = resolveOrphanRecord(key);
+      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
+      // 二次确认：清除数据不可恢复，必须显式带 confirm=<pluginId>。
+      if (String(req.body?.confirm ?? req.query.confirm ?? '') !== record.pluginId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Clearing plugin data is irreversible; pass confirm=<pluginId> to proceed',
+          pluginId: record.pluginId,
+        });
+      }
+      // purge 前自动导出：没有归档就先生成一份，保证「清除过 = 有归档」。
+      if (!record.lastExportPath || !fs.existsSync(record.lastExportPath)) {
+        const exported = exportOrphanData(record);
+        record.lastExportPath = exported.file;
+      }
+      const purged = purgePluginData(kernelContainer.db, record);
+      recordSecurityAudit('plugin.data_purged', {
+        actorId: getActorId(req),
+        pluginId: record.pluginId,
+        manifestId: record.manifestId,
+        droppedTables: purged.droppedTables.length,
+        deletedStorageRows: purged.deletedStorageRows,
+        exportFile: record.lastExportPath,
+      });
+      res.json({ success: true, ...purged, exportFile: record.lastExportPath });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.delete('/api/plugins/:id(*)', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
-      const cmd = kernelContainer.commandBus.createCommand('plugin.uninstall', { pluginId: rawId }, getActorId(req));
+      const requestedPolicy = String(req.query.dataPolicy ?? req.body?.dataPolicy ?? 'keep');
+      if (requestedPolicy !== 'keep' && requestedPolicy !== 'purge') {
+        return res.status(400).json({ success: false, error: `Invalid dataPolicy "${requestedPolicy}" (expected keep | purge)` });
+      }
+      // 卸载即清除数据（purge）是不可恢复操作：必须显式带 confirm=purge 二次确认。
+      if (requestedPolicy === 'purge' && String(req.query.confirm ?? req.body?.confirm ?? '') !== 'purge') {
+        return res.status(400).json({
+          success: false,
+          error: 'dataPolicy=purge removes plugin data irreversibly after exporting an archive; pass confirm=purge to proceed',
+        });
+      }
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.uninstall',
+        { pluginId: rawId, dataPolicy: requestedPolicy },
+        getActorId(req),
+      );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {

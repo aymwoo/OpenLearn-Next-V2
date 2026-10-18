@@ -29,11 +29,33 @@ export interface ParsedAction {
   description?: string;
 }
 
+/** 卸载时的数据处理策略（Issue #141）。默认保留数据。 */
+export type PluginDataPolicy = 'keep' | 'purge';
+
+/** 卸载后保留在库中的「孤立插件数据」（GET /api/plugins/orphan-data）。 */
+export interface OrphanDataItem {
+  manifestId: string;
+  pluginId: string;
+  pluginName: string | null;
+  pluginVersion: string | null;
+  tableNames: string[];
+  tableCount: number;
+  rowCount: number;
+  storageKeys: number;
+  migrationVersion: number | null;
+  lastExportPath: string | null;
+  uninstalledAt: number;
+  archiveDir?: string;
+}
+
+/** 插件中心子标签页。 */
+export type PluginStoreTab = 'store' | 'widgets' | 'dev' | 'logs' | 'community' | 'data';
+
 export interface PluginCenterProps {
   plugins: PluginType[];
   lang: Language;
-  storeTab: 'store' | 'widgets' | 'dev' | 'logs' | 'community';
-  setStoreTab: (tab: 'store' | 'widgets' | 'dev' | 'logs' | 'community') => void;
+  storeTab: PluginStoreTab;
+  setStoreTab: (tab: PluginStoreTab) => void;
   pluginCode: string;
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;
@@ -49,7 +71,7 @@ export interface PluginCenterProps {
     },
   ) => Promise<void>;
   onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, dataPolicy?: PluginDataPolicy) => void;
 }
 
 export const CAPABILITY_INFO: Record<

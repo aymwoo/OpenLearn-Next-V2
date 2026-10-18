@@ -1105,7 +1105,9 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-plugin-uninstall',
       commandType: uninstallPluginCmdType,
-      description: '从系统中卸载并彻底删除插件。此为高风险操作。',
+      description:
+        '从系统中卸载插件。默认保留插件数据（表 / 迁移版本 / 存储键），可重装恢复；' +
+        'dataPolicy="purge" 时会先导出 SQL 归档再删除数据并写审计，属高风险操作。',
       capabilityRequired: 'plugin:write',
       isHighRisk: true,
       inputSchema: {
@@ -1115,6 +1117,10 @@ export const BuiltinPlugin = {
             type: 'STRING',
             description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别',
           },
+          dataPolicy: {
+            type: 'STRING',
+            description: 'keep（默认，保留数据）| purge（先导出归档再删除数据）',
+          },
         },
         required: ['pluginId'],
       },
@@ -1123,8 +1129,12 @@ export const BuiltinPlugin = {
     await commandBus.registerHandler(uninstallPluginCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        await lifecycleManager.uninstallPlugin(payload.pluginId);
-        return { success: true };
+        const dataPolicy = payload?.dataPolicy === 'purge' ? 'purge' : 'keep';
+        const result = await lifecycleManager.uninstallPlugin(payload.pluginId, {
+          dataPolicy,
+          actorId: command.actorId,
+        });
+        return { success: true, ...result };
       },
     });
 

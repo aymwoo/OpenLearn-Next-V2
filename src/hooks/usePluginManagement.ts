@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { AIProvider, PluginType, SessionType } from '../types/app';
+import type { OrphanDataItem, PluginDataPolicy, PluginStoreTab } from '../components/plugin-center/types';
 
 export const DEFAULT_PLUGIN_CODE = `exports.default = {
   manifest: {
@@ -37,13 +38,93 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
   const [showPluginModal, setShowPluginModal] = useState(false);
-  const [storeTab, setStoreTab] = useState<'store' | 'widgets' | 'dev' | 'logs'>('store');
+  const [storeTab, setStoreTab] = useState<PluginStoreTab>('store');
   const [pluginCode, setPluginCode] = useState(DEFAULT_PLUGIN_CODE);
   const [installingPlugin, setInstallingPlugin] = useState(false);
 
   const [events, setEvents] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, number>>({});
+
+  // ── 插件数据（孤立数据，Issue #141）────────────────────────────────────
+  const [orphanData, setOrphanData] = useState<OrphanDataItem[]>([]);
+  const [orphanDataLoading, setOrphanDataLoading] = useState(false);
+
+  const fetchOrphanData = useCallback(async () => {
+    setOrphanDataLoading(true);
+    try {
+      const res = await fetch('/api/plugins/orphan-data');
+      if (res.ok) {
+        const data = await res.json();
+        setOrphanData(Array.isArray(data.items) ? data.items : []);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch plugin orphan data', e);
+    } finally {
+      setOrphanDataLoading(false);
+    }
+  }, []);
+
+  const handleExportOrphanData = useCallback(
+    async (item: OrphanDataItem) => {
+      try {
+        const res = await fetch(`/api/plugins/orphan-data/${encodeURIComponent(item.pluginId)}/export`, {
+          method: 'POST',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success) {
+          addToast(
+            lang === 'zh' ? '导出完成' : 'Export finished',
+            lang === 'zh'
+              ? `已导出 ${data.tables?.length ?? 0} 张表 / ${data.rowCount ?? 0} 行到 ${data.file}`
+              : `Exported ${data.tables?.length ?? 0} tables / ${data.rowCount ?? 0} rows to ${data.file}`,
+            'success',
+          );
+          await fetchOrphanData();
+        } else {
+          addToast(lang === 'zh' ? '导出失败' : 'Export failed', data?.error || 'Unknown error', 'error');
+        }
+      } catch (e: any) {
+        addToast(lang === 'zh' ? '导出失败' : 'Export failed', String(e?.message ?? e), 'error');
+      }
+    },
+    [addToast, fetchOrphanData, lang],
+  );
+
+  const handlePurgeOrphanData = useCallback(
+    async (item: OrphanDataItem) => {
+      try {
+        const res = await fetch(`/api/plugins/orphan-data/${encodeURIComponent(item.pluginId)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirm: item.pluginId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success) {
+          addToast(
+            lang === 'zh' ? '已清除插件数据' : 'Plugin data purged',
+            lang === 'zh'
+              ? `删除 ${data.droppedTables?.length ?? 0} 张表；归档：${data.exportFile ?? '（无）'}`
+              : `Dropped ${data.droppedTables?.length ?? 0} tables; archive: ${data.exportFile ?? '(none)'}`,
+            'success',
+          );
+          await fetchOrphanData();
+        } else {
+          addToast(lang === 'zh' ? '清除失败' : 'Purge failed', data?.error || 'Unknown error', 'error');
+        }
+      } catch (e: any) {
+        addToast(lang === 'zh' ? '清除失败' : 'Purge failed', String(e?.message ?? e), 'error');
+      }
+    },
+    [addToast, fetchOrphanData, lang],
+  );
+
+  const handleDownloadOrphanArchive = useCallback(
+    (item: OrphanDataItem) => {
+      window.open(`/api/plugins/orphan-data/${encodeURIComponent(item.pluginId)}/archive`, '_blank');
+    },
+    [],
+  );
 
   const togglingPluginsRef = useRef<Set<string>>(new Set());
 
@@ -417,23 +498,35 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
     }
   };
 
-  const handleDeletePlugin = async (id: string) => {
-    if (
-      !window.confirm(
-        lang === 'zh'
-          ? '确定要彻底删除该插件吗？删除后此插件相关的功能将无法使用。'
-          : 'Are you sure you want to completely delete this plugin? This cannot be undone.',
-      )
-    ) {
-      return;
-    }
+  /**
+   * 卸载插件（Issue #141）。
+   *
+   * `dataPolicy` 默认 `keep`：服务端保留插件表 / 迁移版本 / 存储键，登记为孤立数据；
+   * `purge` 为不可恢复操作（服务端仍会先导出 SQL 归档），调用方（卸载对话框）
+   * 必须已完成二次确认，这里再带上 `confirm=purge` 让服务端复核。
+   */
+  const handleDeletePlugin = async (id: string, dataPolicy: PluginDataPolicy = 'keep') => {
     try {
-      const res = await fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const url =
+        dataPolicy === 'purge'
+          ? `/api/plugins/${encodeURIComponent(id)}?dataPolicy=purge&confirm=purge`
+          : `/api/plugins/${encodeURIComponent(id)}`;
+      const res = await fetch(url, { method: 'DELETE' });
       if (res.ok) {
+        const result = await res.json().catch(() => ({}));
         setTeacherTab('plugins');
         setStoreTab('store');
         await fetchPlugins();
-        setChatLog((prev) => [...prev, { role: 'agent', content: `[System] Plugin uninstalled and deleted.` }]);
+        const summary =
+          dataPolicy === 'purge'
+            ? lang === 'zh'
+              ? `插件已卸载，数据已清除（归档：${result.exportFile ?? '无数据需归档'}）。`
+              : `Plugin uninstalled and data purged (archive: ${result.exportFile ?? 'nothing to archive'}).`
+            : lang === 'zh'
+              ? `插件已卸载，数据已保留（${result.keptTables?.length ?? 0} 张表），可在「插件数据」中管理。`
+              : `Plugin uninstalled with data kept (${result.keptTables?.length ?? 0} tables). Manage it under Plugin Data.`;
+        setChatLog((prev) => [...prev, { role: 'agent', content: `[System] ${summary}` }]);
+        addToast(lang === 'zh' ? '卸载完成' : 'Uninstalled', summary, 'success');
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.error || (lang === 'zh' ? '删除插件失败' : 'Failed to delete plugin'));
@@ -518,6 +611,12 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
     handleZipPluginUpload,
     handleTogglePlugin,
     handleDeletePlugin,
+    orphanData,
+    orphanDataLoading,
+    fetchOrphanData,
+    handleExportOrphanData,
+    handlePurgeOrphanData,
+    handleDownloadOrphanArchive,
     handleApprove,
     handleReject,
   };
