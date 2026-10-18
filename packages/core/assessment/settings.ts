@@ -35,6 +35,20 @@ export interface AssessmentSettings {
   showItemAnalysis: boolean;
   /** 严格监考模式（失焦/切屏/退出全屏记录与全屏锁定） */
   strictProctor?: boolean;
+  /**
+   * 按规则随机抽题（Issue #186）：配置后每个学生从试卷题目池中抽取 count 道，
+   * 结果与种子写入 assessment_attempts.paper_json，同一学生多次进入保持一致。
+   */
+  draw?: {
+    count: number;
+    /** 题库题型过滤（如 short_answer） */
+    type?: string;
+    /** 题库标签过滤（命中任一即可） */
+    tags?: string[];
+    /** 难度区间（含端点，题库 difficulty 字段） */
+    difficultyMin?: number;
+    difficultyMax?: number;
+  };
 }
 
 const DEFAULT_SETTINGS: AssessmentSettings = {
@@ -68,8 +82,30 @@ function asPositiveInt(value: unknown, fallback: number): number {
   return n;
 }
 
+/** 解析抽题规则；结构非法时整体忽略（回退整卷），不产生「半生效」规则。 */
+function parseDrawRules(raw: unknown): AssessmentSettings['draw'] | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const input = raw as Record<string, unknown>;
+  const count = typeof input.count === 'number' ? input.count : Number(input.count);
+  if (!Number.isFinite(count) || !Number.isInteger(count) || count < 1) return undefined;
+  const draw: NonNullable<AssessmentSettings['draw']> = { count };
+  if (typeof input.type === 'string' && input.type.trim()) draw.type = input.type.trim();
+  if (Array.isArray(input.tags)) {
+    const tags = input.tags.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
+    if (tags.length > 0) draw.tags = tags;
+  }
+  const min = typeof input.difficultyMin === 'number' ? input.difficultyMin : Number(input.difficultyMin);
+  const max = typeof input.difficultyMax === 'number' ? input.difficultyMax : Number(input.difficultyMax);
+  if (input.difficultyMin !== undefined && input.difficultyMin !== null && Number.isFinite(min)) draw.difficultyMin = min;
+  if (input.difficultyMax !== undefined && input.difficultyMax !== null && Number.isFinite(max)) draw.difficultyMax = max;
+  if (draw.difficultyMin !== undefined && draw.difficultyMax !== undefined && draw.difficultyMin > draw.difficultyMax) {
+    return undefined;
+  }
+  return draw;
+}
+
 /**
- * 解析设置。`kind` 决定强制项，因此必须传入。
+ * 解析设置。kind 决定强制项，因此必须传入。
  * 非法值一律回落到该类型的默认（而不是 `undefined` 或"无限"）。
  */
 export function parseAssessmentSettings(kind: AssessmentKind, raw: unknown): AssessmentSettings {
@@ -80,6 +116,8 @@ export function parseAssessmentSettings(kind: AssessmentKind, raw: unknown): Ass
   const resultVisibility = RESULT_VISIBILITIES.includes(input.resultVisibility as ResultVisibility)
     ? (input.resultVisibility as ResultVisibility)
     : DEFAULT_SETTINGS.resultVisibility;
+
+  const draw = parseDrawRules(input.draw);
 
   const parsed: AssessmentSettings = {
     timed: asBool(input.timed, DEFAULT_SETTINGS.timed),
@@ -94,6 +132,7 @@ export function parseAssessmentSettings(kind: AssessmentKind, raw: unknown): Ass
     countsTowardGrade: asBool(input.countsTowardGrade, DEFAULT_SETTINGS.countsTowardGrade),
     showItemAnalysis: asBool(input.showItemAnalysis, DEFAULT_SETTINGS.showItemAnalysis),
     strictProctor: asBool(input.strictProctor, kind === 'exam'),
+    ...(draw ? { draw } : {}),
   };
 
   // ── 按类型强制收敛行为差异 ──────────────────────────────────────────

@@ -304,6 +304,8 @@ export const assessmentApi = {
     answerKey?: unknown;
     maxScore?: number;
     tags?: string[];
+    /** Issue #186：private（默认）| school（同实例教师可见） */
+    visibility?: 'private' | 'school';
   }) =>
     request<BankItem>('/api/question-bank', {
       method: 'POST',
