@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
+
 ### Security
 
 - **下线废弃写盘调试接口 `POST /api/courseware/debug`（Issue #132）**：
