@@ -633,6 +633,31 @@ export interface CourseListToolbarActionConfig {
   commandType?: string;
 }
 
+// ── 测评子系统扩展槽（Issue #183）────────────────────────────────────────
+/** A contribution to the assessment.list.card slot. */
+export interface AssessmentListCardConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the assessment.attempt.toolbar slot. */
+export interface AssessmentAttemptToolbarConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the assessment.stats.card slot. */
+export interface AssessmentStatsCardConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
 /** A contribution to the course.card.action slot. */
 export interface CourseCardActionConfig {
   id: string;
@@ -959,6 +984,9 @@ export type ContributionConfig =
   | GlobalSettingConfig
   | NavUserMenuConfig
   | CourseListToolbarActionConfig
+  | AssessmentListCardConfig
+  | AssessmentAttemptToolbarConfig
+  | AssessmentStatsCardConfig
   | CourseCardActionConfig
   | CourseCardBadgeConfig
   | EditorSegmentActionConfig

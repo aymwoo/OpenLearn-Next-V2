@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新端点：`GET /api/assessment-assignments/:id/item-analysis` 与 `.../item-analysis/export?format=csv|json|xlsx`（教师/管理员，按 owner 校验；CSV 带 BOM）。
   - 测试：纯函数 11 例（部分得分、小样本、全对/全错、方差为 0、负相关、CSV 列序）+ API 3 例（形状/退化、三种导出格式与非法格式、跨教师 403）；`docs/architecture/assessment-model.md` 补充口径与端点。
 
+- **测评子系统扩展点：列表卡片 / 作答工具条 / 统计卡片（Issue #183）**：
+  - 新增三个 `ExtensionSlot`：`assessment.list.card`（测评列表卡片，教师/学生按 `viewer` props 区分）、`assessment.attempt.toolbar`（作答页工具条，如计算器/草稿/插件题型工具）、`assessment.stats.card`（统计页卡片，如自定义图表与导出入口）；manifest `contributes` 同步支持三个键，插件中心可枚举。
+  - 渲染点：`AssessmentCenter` 每张卡片末尾、学生作答页头部工具条、`StatsPanel` 统计卡片网格；空槽位不占位、不报错。
+  - **props 白名单**：新增 `src/features/assessment/extension-slot-props.ts`，扩展只拿到显式列出的摘要字段（列表：id/kind/title/description/status/itemCount/totalScore/settings/时间戳；统计：聚合计数 + 逐题聚合，**不含 `answerKey` / `answer_key_json` / 学生身份**），与 `packages/core/assessment/serialize.ts` 同一条白名单原则；单测用哨兵字段做全量断言。
+  - 卸载/停用插件时由既有 `unregisterPluginResources` 路径统一清理已挂载扩展，无需新增生命周期代码。
+  - 测试：`assessment-extension-slots.test.ts`（白名单 2 例）+ `manifest-schema.test.ts`（三个槽位声明被 schema 接受）。
 ### Docs
 
 - **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
