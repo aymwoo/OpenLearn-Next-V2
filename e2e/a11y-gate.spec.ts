@@ -195,7 +195,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     });
     expect(assessmentRes.ok()).toBeTruthy();
     const assessmentId: string = (await assessmentRes.json()).id;
-    const itemsRes = await request.post(`/api/assessments/${encodeURIComponent(assessmentId)}/items`, {
+    const itemsRes = await request.put(`/api/assessments/${encodeURIComponent(assessmentId)}/items`, {
       data: {
         items: [
           {
