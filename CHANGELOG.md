@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+
+- **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
+  - 新增 `docs/architecture/adr-001-tenant-and-db-abstraction.md`（决策、理由、代价、备选方案与数据库抽象评估结论）。
+  - 新增 `docs/deployment/multi-school.md`（逐实例 `.env`、Compose 项目隔离、Nginx Host 路由、逐实例升级/备份/恢复、观测与容量边界）。
+  - `docs/deployment/production-guide.md` 增加「2.5 多校部署」入口；`docs/architecture/database-and-migrations.md` 补充选型边界；文档索引同步。
+
 ### Features
 
 - **按插件维度运行指标 + 迁移失败快照恢复与 CI 演练（Issue #150）**：

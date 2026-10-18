@@ -4,6 +4,8 @@
 
 OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提供高吞吐并发读写能力，并通过版本化迁移体系保障 Schema 演进的可靠性与幂等性。
 
+> **选型边界**：平台采用「一校一实例」，不为多租户引入 `school_id`，也**不承诺** PostgreSQL 兼容、不引入 ORM / 查询构建器。决策依据、代价与重新评估条件见 [ADR-001：多租户 / 多校区与数据库抽象层](adr-001-tenant-and-db-abstraction)；多校部署方式见 [多校部署（一校一实例）](../deployment/multi-school)。
+
 ---
 
 ## 1. 数据库持久化基础 (Storage Foundation)
