@@ -78,7 +78,6 @@ export function useAppPolling(options: UseAppPollingOptions): void {
   useEffect(() => {
     if (!session) return;
 
-    const isStudent = session.role === 'student';
     const isTeacher = session.role === 'teacher';
     const isAdmin =
       isTeacher &&
@@ -100,9 +99,8 @@ export function useAppPolling(options: UseAppPollingOptions): void {
       fetchStudents();
       fetchLabs();
       fetchVfs(currentVfsParentRef.current);
-    } else if (isStudent && currentVfsParentRef.current) {
-      fetchVfs(currentVfsParentRef.current);
     }
+    // 学生无 VFS 访问权限（SEC-AUTH），不再发起请求
 
     let isFetching = false;
     const intervalId = setInterval(async () => {
@@ -154,7 +152,8 @@ export function useAppPolling(options: UseAppPollingOptions): void {
 
   useEffect(() => {
     if (!session) return;
-    if (session.role === 'teacher' || currentVfsParent) {
+    // VFS 仅教师/管理员可读（SEC-AUTH）；学生不再发起请求
+    if (session.role === 'teacher') {
       fetchVfs(currentVfsParent);
     }
   }, [currentVfsParent, session]);

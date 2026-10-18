@@ -40,6 +40,7 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **敏感字段审计**: `PUT /api/students/:id` 比较更新前后的 `password` / `private_notes` / `locked_lesson_id`，实际变更时写入审计事件 `student.sensitive_fields_updated`（操作者 `actorId`、目标 `studentId`、变更字段名），**不记录密码明文/哈希或备忘正文**。
 - **学生密码写入**: 教师端不返回、不回显密码，改为一次性「设置新密码」提交；服务端拒绝空/纯空白密码（400），避免空串哈希导致账号无法登录。
 - **白板读授权（#127）**: `GET /api/lessons/:id/whiteboard` 与写操作同口径——教师/管理员可读任意课节与作业白板；学生视角对元素 `data` 递归剥离 `correctIndex` / `correctAnswer` / `answer` / `solution` 等答案字段，作业伪课节（`assignment-*-student-<sid>`）只允许本人，已有开课记录的真实课节仅开课班级成员可读（与 socket `canJoinLessonRoom` 一致），未开课的自学场景不额外设限。
+- **VFS 访问（#128）**: `GET /api/vfs`（含 `virtual-lessons` / `virtual-assignments` / `virtual-submissions` / 物理节点）与 `GET /files/*` 仅教师/管理员可用，学生一律 403。VFS 是教师工作台的系统资源浏览器，前端也只在教师会话下拉取。
 - **Socket 握手鉴权**: `socketAuthMiddleware(socket, next)` 从 cookie `edu_os_token` 或 `socket.handshake.auth.token` 取令牌校验会话，并同样拒绝带 `mustChangePassword` 标记的连接（与 HTTP 层同用 `FORBIDDEN_DEFAULT_PASSWORD` 错误码）。
 - **CSRF**: `server/middleware/csrf.ts` 的 `csrfGuard`。
 

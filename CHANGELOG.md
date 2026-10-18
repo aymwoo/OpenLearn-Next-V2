@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **VFS 与文件下载对任意登录用户开放（Issue #128）**：`GET /api/vfs` 与 `GET /files/*` 收紧为教师/管理员。此前学生可借 `parentId=virtual-lessons` 拉取全校课节完整正文、`parentId=virtual-assignments` 拉取全校作业列表，并通过默认分支与 `/files/*` 读取任意 VFS 文件。`virtual-submissions` 的学生自助分支随角色收紧一并移除；前端 VFS 轮询只在教师会话下发起，学生端不再产生 403 噪声。新增 `server/__tests__/vfs-auth.test.ts`（11 例：学生各分支与下载均 403、教师/管理员正常、未登录 401）。
 - **白板读接口向学生泄露测验答案与跨学生作业白板越权（Issue #127）**：
   - `GET /api/lessons/:id/whiteboard` 按角色脱敏：学生视角对元素 `data` 递归剥离 `correctIndex` / `correctAnswer` / `answer` / `solution` 等答案字段（`ANSWER_KEYS` 补齐 `correctIndex` 系列键），教师/管理员仍返回完整数据；判分结果继续由 `POST /quiz-submit` 在提交后回传，学生端高亮逻辑不受影响。
   - 读授权与写授权对齐：`assignment-<aid>-student-<sid>` 伪课节，学生只能读绑定自己的房间（读他人作业白板返回 403）；已有开课记录的真实课节，只有开课班级成员可读（与 socket `canJoinLessonRoom` 同口径）；未开课的自学/预览场景不额外设限。教师/管理员保持可读（课堂观察与作业批注）。
