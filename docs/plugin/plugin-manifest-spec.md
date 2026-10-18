@@ -330,3 +330,69 @@
 
 - `type`: 更新源类型，支持 `"github-release"` 或 `"gitee-release"`。
 - `repo`: 仓库路径（`owner/repo`）。
+
+---
+
+## 3. 扩展点生命周期与弃用策略规范 (Extension Point Lifecycle & Deprecation Policy)
+
+为保证平台在持续演进过程中插件生态的稳定性，OpenLearn 对扩展点（命令、事件、UI 插槽、DI 服务）建立了严格的生命周期与弃用策略（Issue #146）。
+
+### 3.1 扩展点元数据契约
+
+平台内核维护标准化的扩展点元数据契约（`CORE_EXTENSION_POINTS`）：
+
+| 属性 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `id` | `string` | 扩展点唯一标识符（如命令 `lesson.create`、事件 `quiz.answered`、插槽 `teacher.tab`、服务 `@openlearn/core:IStorageService`） |
+| `kind` | `'command' \| 'event' \| 'slot' \| 'service'` | 扩展原语种类 |
+| `description` | `string` | 功能简述 |
+| `since` | `string` | 首次引入该扩展点的平台语义化版本（如 `"0.1.0"`） |
+| `deprecated` | `string` (可选) | 标记弃用的平台版本（如 `"0.6.0"`） |
+| `removedIn` | `string` (可选) | 计划彻底移除该扩展点的目标版本（如 `"0.7.0"`） |
+| `replacement` | `string` (可选) | 推荐的官方替代扩展点或迁移指引（如 `"Use 'quiz.answered' instead"`） |
+
+### 3.2 弃用策略与缓冲期约定
+
+1. **至少 1 个 Minor 版本缓冲期**：任何扩展点一旦被标记为弃用（`deprecated`），平台承诺**至少保留 1 个完整的 minor 版本周期**（即在 `deprecated <= platformVersion < removedIn` 期间保持可用）。严禁在无弃用过渡期的情况下直接移除任何已发布的扩展点。
+2. **渐进式生命周期流转**：
+   - **Active (正常生效)**：`platformVersion >= since` 且未标记 `deprecated`。
+   - **Deprecated (已弃用但在期内可用)**：`deprecated <= platformVersion < removedIn`。宿主在插件注册或调用时发射结构化警告，但不阻断执行。
+   - **Removed (已移除并阻断)**：`platformVersion >= removedIn`。该扩展点不再被内核支持；声明其为必需依赖（`requires`）或调用其将触发不兼容错误。
+
+### 3.3 运行时弃用告警机制
+
+当插件在运行时注册或使用已弃用的扩展点时，宿主四大接入层将自动输出统一格式的结构化告警：
+- **命令总线 (`CommandBus`)**：注册遗留处理器或执行弃用命令时触发；
+- **事件总线 (`EventBus`)**：订阅或发布弃用事件时触发；
+- **贡献注册表 (`ContributionRegistry`)**：遍历插件 manifest 声明的弃用 UI 插槽（`contributes`）时触发；
+- **上下文构造器 (`ContextBuilder`)**：为插件依赖注入注入声明的弃用服务（`requires`/`optional`）时触发。
+
+告警输出范式：
+```
+[DeprecationWarning] Plugin "plugin-id" is using deprecated <kind> "<name>" (deprecated since v0.6.0, will be removed in v0.7.0). Replacement: Use 'new-name' instead.
+```
+宿主内置单进程 Set 去重机制（`callerPluginId:kind:name`），防止高频调用与循环触发造成控制台刷屏。
+
+### 3.4 升级前兼容性预检报告 (CLI Doctor)
+
+在平台版本升级前，系统运维人员与开发者可通过命令行工具快速扫描已安装插件的兼容性状况：
+
+```bash
+# 对照当前版本运行预检
+npx openlearn-next doctor --compat-report
+
+# 指定升级目标版本运行预检
+npx openlearn-next doctor --compat-report --target-version 0.7.0
+
+# 快捷命令别名
+npx openlearn-next compat-report --target-version 0.8.0
+```
+
+预检引擎将自动核验：
+1. **Engines 约束**：检查各插件 `engines.openlearn` 是否满足目标版本范围；
+2. **UI 插槽贡献**：扫描 `contributes` 中是否存在已弃用或将在目标版本移除的插槽；
+3. **DI 服务依赖**：扫描 `requires` 与 `optional` 中声明的服务 Token 是否在目标版本已移除或已弃用；
+4. **Commands / Events**：扫描插件显式声明的命令与事件生命周期。
+
+报告汇总插件的兼容状态（`compatible`、`has_warnings`、`incompatible`），并在存在阻断性冲突时返回非零退出码（exit code 1），方便集成至 CI/CD 自动化部署前置检查中。
+

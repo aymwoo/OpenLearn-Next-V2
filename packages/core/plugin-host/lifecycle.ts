@@ -155,6 +155,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       manifest: any;
       activate: (ctx: PluginContext) => Promise<void>;
       deactivate?: () => Promise<void>;
+      onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+      onStudentDelete?: (studentId: string) => Promise<void> | void;
       migrationsDir?: string;
     },
   ): Promise<void> {
@@ -193,7 +195,14 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
       await this.runActivatePipeline(pluginId, manifest, activate, ctx);
 
-      this.pluginInstances.set(pluginId, { manifest, activate, deactivate, context: ctx });
+      this.pluginInstances.set(pluginId, {
+        manifest,
+        activate,
+        deactivate,
+        onStudentExport: typeof preloaded.onStudentExport === 'function' ? preloaded.onStudentExport : undefined,
+        onStudentDelete: typeof preloaded.onStudentDelete === 'function' ? preloaded.onStudentDelete : undefined,
+        context: ctx,
+      });
       this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
     } catch (err: any) {
       console.error('[PluginHost] Preloaded plugin activation error stack:', err.stack);
@@ -233,7 +242,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
     try {
       // 4-6. 加载模块、提取导出、合并 manifest、schema 校验
-      const { manifest: codeManifest, activate, deactivate } = await this.loadPluginModule(pluginId, row);
+      const { manifest: codeManifest, activate, deactivate, onStudentExport, onStudentDelete } =
+        await this.loadPluginModule(pluginId, row);
 
       // Merge stored package manifest (from DB) with code-level manifest to ensure
       // all required fields (e.g. main, requires) are present
@@ -289,6 +299,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
           manifest: mergedManifest,
           activate,
           deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+          onStudentExport: typeof onStudentExport === 'function' ? onStudentExport : undefined,
+          onStudentDelete: typeof onStudentDelete === 'function' ? onStudentDelete : undefined,
           context: ctx,
         });
         this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
@@ -332,6 +344,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     manifest: Manifest;
     activate: (ctx: PluginContext) => Promise<void>;
     deactivate?: () => Promise<void>;
+    onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+    onStudentDelete?: (studentId: string) => Promise<void> | void;
   }> {
     let mod: PluginModule;
     if (process.env.NODE_ENV !== 'test' && row.file_path && fs.existsSync(row.file_path)) {
@@ -358,6 +372,8 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     const manifest = plugin.manifest ?? (mod as any).manifest;
     const activate = plugin.activate ?? (mod as any).activate;
     const deactivate = plugin.deactivate ?? (mod as any).deactivate;
+    const onStudentExport = plugin.onStudentExport ?? (mod as any).onStudentExport;
+    const onStudentDelete = plugin.onStudentDelete ?? (mod as any).onStudentDelete;
 
     if (!manifest || !activate) {
       throw new EsmActivationError(pluginId, 'missing manifest or activate function');
@@ -367,7 +383,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       throw new EsmActivationError(pluginId, 'activate must be a function');
     }
 
-    return { manifest, activate, deactivate };
+    return { manifest, activate, deactivate, onStudentExport, onStudentDelete };
   }
 
   /**

@@ -22,9 +22,13 @@ export interface PluginModule {
     manifest?: Record<string, unknown>;
     activate?: (ctx: unknown) => Promise<void>;
     deactivate?: () => Promise<void>;
+    onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+    onStudentDelete?: (studentId: string) => Promise<void> | void;
   };
   activate?: (ctx: unknown) => Promise<void>;
   deactivate?: () => Promise<void>;
+  onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+  onStudentDelete?: (studentId: string) => Promise<void> | void;
   manifest?: Record<string, unknown>;
   [key: string]: unknown;
 }

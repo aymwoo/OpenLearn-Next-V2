@@ -43,10 +43,11 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
     const newer = all.filter((migration) => migrationNumber(migration.name) >= 34);
 
     expect(legacy).toHaveLength(34);
-    // 035（课前破冰打卡）在 034 之后合入，两个迁移都属于「旧库升级后新增」。
+    // 035（课前破冰打卡）、036（保留策略所需 created_at）都是 034 之后合入的迁移。
     expect(newer.map((migration) => migration.name)).toEqual([
       '034_plugin_orphan_data',
       '035_icebreaker_checkins',
+      '036_student_read_notifications_created_at',
     ]);
 
     const db = openMemory();
