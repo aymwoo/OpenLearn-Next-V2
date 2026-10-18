@@ -33,3 +33,8 @@ SELECT
 FROM plugin_storage
 WHERE key LIKE 'config:%'
 ON CONFLICT (plugin_id, scope_type, scope_id, key) DO NOTHING;
+
+-- DOWN
+-- 回滚只删新表/索引：旧值仍在 plugin_storage，回退到旧版 ConfigService 后可继续读取。
+DROP INDEX IF EXISTS idx_plugin_config_scope;
+DROP TABLE IF EXISTS plugin_config;
