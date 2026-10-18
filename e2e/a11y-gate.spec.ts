@@ -166,6 +166,103 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     await expect(page.locator('[data-testid="adaptive-exit-ticket-modal"]')).toBeVisible({ timeout: 25_000 });
     await freezeAnimations(page);
     await expectNoViolations(page, '学生端·结课通票');
+
+    // 结课归档，防止未结束的通票状态泄漏到后续测试
+    await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+      data: { stage: 'ARCHIVED_REPORT', classId },
+    });
+  });
+
+  test('学生端「我的测评」列表与作答界面无违规', async ({ page, context, request }) => {
+    test.setTimeout(360_000);
+
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const studentNum = `STU_A11Y3_${suffix}`;
+
+    // 1. 教师侧准备：班级 + 学生 + 一份已发布的测评
+    await request.post('/api/auth/login', {
+      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+    });
+    const classRes = await request.post('/api/classes', { data: { name: `A11Y 测评班 ${suffix}` } });
+    expect(classRes.ok()).toBeTruthy();
+    const classId: string = (await classRes.json()).id;
+
+    const stuRes = await request.post('/api/students', {
+      data: { student_number: studentNum, name: `A11Y测评生${suffix.slice(0, 4)}`, password: 'password123' },
+    });
+    expect(stuRes.ok()).toBeTruthy();
+    await request.post(`/api/classes/${encodeURIComponent(classId)}/students`, {
+      data: { studentId: (await stuRes.json()).id },
+    });
+
+    const assessmentRes = await request.post('/api/assessments', {
+      data: { kind: 'quiz', title: `A11Y 测评 ${suffix}`, description: '无障碍门禁覆盖' },
+    });
+    expect(assessmentRes.ok()).toBeTruthy();
+    const assessmentId: string = (await assessmentRes.json()).id;
+    const itemsRes = await request.put(`/api/assessments/${encodeURIComponent(assessmentId)}/items`, {
+      data: {
+        items: [
+          {
+            type: 'single_choice',
+            stem: '生态系统能量最终来源？',
+            config: { options: ['太阳能', '地热', '化学能'] },
+            answerKey: { index: 0 },
+            maxScore: 5,
+            sortOrder: 0,
+          },
+          {
+            type: 'fill_blank',
+            stem: '生产者通过____作用固定太阳能。',
+            config: { blanks: [{ id: 'b1' }] },
+            answerKey: { blanks: [['光合作用']] },
+            maxScore: 5,
+            sortOrder: 1,
+          },
+        ],
+      },
+    });
+    expect(itemsRes.ok()).toBeTruthy();
+    const publishRes = await request.post(`/api/assessments/${encodeURIComponent(assessmentId)}/publish`, {
+      data: { classId },
+    });
+    expect(publishRes.ok()).toBeTruthy();
+
+    // 2. 学生登录（仪表盘 → 我的测评）
+    await context.request.post('/api/auth/login', {
+      data: { entrance: 'student', studentId: studentNum, password: 'password123' },
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('edu_os_tour_completed', 'true');
+    });
+    await page.goto('/');
+    await page.waitForSelector('#nav_btn_courses', { timeout: 30_000 }).catch(() => {});
+
+    const openAssessments = page.getByRole('button', { name: /打开我的测评/ });
+    await openAssessments.waitFor({ state: 'visible', timeout: 30_000 });
+
+    // 若有结课通票或引导遮罩层拦截，优先关闭
+    const exitTicketClose = page.locator('[data-testid="adaptive-exit-ticket-modal"] button[aria-label="Close"]');
+    if (await exitTicketClose.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await exitTicketClose.click();
+      await page.waitForTimeout(300);
+    }
+
+    await openAssessments.click();
+
+    // 3. 列表（待完成）
+    await page.locator('[data-testid="student-pending-list"]').waitFor({ state: 'visible', timeout: 30_000 });
+    await freezeAnimations(page);
+    await expectNoViolations(page, '学生端·我的测评列表');
+
+    // 4. 作答界面（含单选与填空控件、倒计时）
+    await page
+      .getByRole('button', { name: /开始作答/ })
+      .first()
+      .click();
+    await page.locator('[data-testid^="answer-item-"]').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await freezeAnimations(page);
+    await expectNoViolations(page, '学生端·测评作答界面');
   });
 
   test('学生端仪表盘与作业作答面板无违规', async ({ page, context, request }) => {

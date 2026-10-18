@@ -119,6 +119,92 @@ export interface BankItem {
   updatedAt: number;
 }
 
+/* ─────────────────── 学生端（Issue #122） ─────────────────── */
+
+export interface StudentAssignmentEntry {
+  assignmentId: string;
+  assessmentId: string;
+  kind: AssessmentKind;
+  title: string;
+  classId: string;
+  lessonId: string | null;
+  opensAt: number | null;
+  closesAt: number | null;
+  durationSec: number | null;
+  windowState: 'before_open' | 'open' | 'after_close' | 'untimed';
+  completed: boolean;
+  attempt: {
+    id: string;
+    assignmentId: string;
+    attemptNo: number;
+    status: string;
+    startedAt: number;
+    submittedAt: number | null;
+    deadlineAt: number | null;
+    remainingSeconds: number | null;
+    score: number | null;
+    maxScore: number | null;
+    needsManualReview: boolean;
+  } | null;
+}
+
+export interface StudentAttemptPayload {
+  newAttempt: boolean;
+  assignment: {
+    id: string;
+    assessmentId: string;
+    kind: AssessmentKind;
+    title: string;
+    description: string | null;
+    settings: AssessmentSettings;
+  };
+  attempt: StudentAssignmentEntry['attempt'] & { remainingSeconds: number | null };
+  items: Array<{
+    id: string;
+    section: string | null;
+    sortOrder: number;
+    type: string;
+    stem: string;
+    config: Record<string, unknown>;
+    maxScore: number;
+  }>;
+  answers: Record<string, unknown>;
+}
+
+export interface StudentResultPayload {
+  assignment: {
+    id: string;
+    assessmentId: string;
+    kind: AssessmentKind;
+    title: string;
+    classId: string;
+    scoreReleased: boolean;
+    academicYear: string | null;
+  };
+  attempt: StudentAssignmentEntry['attempt'];
+  showScore: boolean;
+  showAnalysis: boolean;
+  items: Array<{
+    itemId: string;
+    type: string;
+    stem: string;
+    maxScore: number;
+    answer: unknown;
+    score: number | null;
+    isCorrect: boolean | null;
+    needsManualReview: boolean;
+    feedback: string | null;
+    answerKey?: unknown;
+  }>;
+  aggregate: {
+    score: number | null;
+    maxScore: number | null;
+    attemptId: string | null;
+    consideredAttempts: number;
+    provisional: boolean;
+  };
+}
+
 export interface QuestionTypeSummary {
   type: string;
   label: { zh: string; en: string };
@@ -276,4 +362,22 @@ export const assessmentApi = {
     }),
   exportCsvUrl: (assignmentId: string) =>
     `/api/assessment-assignments/${encodeURIComponent(assignmentId)}/export?format=csv`,
+
+  /* ── 学生端 ── */
+  myAssessments: () => request<{ items: StudentAssignmentEntry[] }>('/api/me/assessments'),
+  startAttempt: (assignmentId: string) =>
+    request<StudentAttemptPayload>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/attempts`, {
+      method: 'POST',
+    }),
+  saveAnswer: (attemptId: string, itemId: string, answer: unknown) =>
+    request<{ ok: boolean }>(
+      `/api/assessment-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(itemId)}`,
+      { method: 'PUT', body: JSON.stringify({ answer }) },
+    ),
+  submitAttempt: (attemptId: string) =>
+    request<StudentResultPayload>(`/api/assessment-attempts/${encodeURIComponent(attemptId)}/submit`, {
+      method: 'POST',
+    }),
+  attemptResult: (attemptId: string) =>
+    request<StudentResultPayload>(`/api/assessment-attempts/${encodeURIComponent(attemptId)}/result`),
 };

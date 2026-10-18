@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Users, Loader2 } from 'lucide-react';
 import type { StudentType, Lesson } from '../../types/app';
@@ -11,8 +11,13 @@ const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => (
 const StudentAssignmentView = lazy(() =>
   import('./StudentAssignmentView').then((m) => ({ default: m.StudentAssignmentView })),
 );
+const StudentAssessmentsView = lazy(() =>
+  import('../assessment/student/StudentAssessmentsView').then((m) => ({ default: m.StudentAssessmentsView })),
+);
 
 export function StudentView() {
+  /** Issue #122：「我的测评」全屏视图（不改动 studentViewStatus 联合类型，避免波及 6 处调用方） */
+  const [assessmentsOpen, setAssessmentsOpen] = useState(false);
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 AppShell props 透传）
   const {
     students,
@@ -85,7 +90,9 @@ export function StudentView() {
             </div>
           }
         >
-          {studentViewStatus === 'lesson' ? (
+          {assessmentsOpen ? (
+            <StudentAssessmentsView lang={lang as 'zh' | 'en'} onExit={() => setAssessmentsOpen(false)} />
+          ) : studentViewStatus === 'lesson' ? (
             <StudentLessonView
               students={students}
               activeStudentId={activeStudentId}
@@ -153,6 +160,7 @@ export function StudentView() {
               setSelectedAssignment={setSelectedAssignment}
               setQuizStudentAnswers={setQuizStudentAnswers}
               setSubAssignmentTab={(tab: any) => setSubAssignmentTab(tab)}
+              onOpenAssessments={() => setAssessmentsOpen(true)}
             />
           )}
         </Suspense>

@@ -11,6 +11,13 @@ import {
   SingleChoiceEditor,
   TrueFalseEditor,
 } from './builtin-question-uis';
+import {
+  FillBlankAnswer,
+  MultipleChoiceAnswer,
+  ShortAnswerAnswer,
+  SingleChoiceAnswer,
+  TrueFalseAnswer,
+} from './student/answer-uis';
 
 const DEFAULT_OPTIONS = ['选项 A', '选项 B', '选项 C', '选项 D'];
 
@@ -27,6 +34,7 @@ export function registerBuiltinQuestionTypeUis(): void {
     category: 'objective',
     supports: ['quiz', 'exam', 'survey'],
     Editor: SingleChoiceEditor,
+    Answer: SingleChoiceAnswer,
     createDefaultConfig: () => ({ options: [...DEFAULT_OPTIONS] }),
     createDefaultAnswerKey: () => ({ index: 0 }),
   });
@@ -37,6 +45,7 @@ export function registerBuiltinQuestionTypeUis(): void {
     category: 'objective',
     supports: ['quiz', 'exam', 'survey'],
     Editor: MultipleChoiceEditor,
+    Answer: MultipleChoiceAnswer,
     createDefaultConfig: () => ({ options: [...DEFAULT_OPTIONS] }),
     createDefaultAnswerKey: () => ({ indexes: [0] }),
   });
@@ -47,6 +56,7 @@ export function registerBuiltinQuestionTypeUis(): void {
     category: 'objective',
     supports: ['quiz', 'exam', 'survey'],
     Editor: TrueFalseEditor,
+    Answer: TrueFalseAnswer,
     createDefaultConfig: () => ({ trueLabel: '正确', falseLabel: '错误' }),
     createDefaultAnswerKey: () => ({ value: true }),
   });
@@ -57,6 +67,7 @@ export function registerBuiltinQuestionTypeUis(): void {
     category: 'objective',
     supports: ['quiz', 'exam', 'survey'],
     Editor: FillBlankEditor,
+    Answer: FillBlankAnswer,
     createDefaultConfig: () => ({ blanks: [{ id: 'b1', inputType: 'text' }] }),
     createDefaultAnswerKey: () => null,
   });
@@ -67,6 +78,7 @@ export function registerBuiltinQuestionTypeUis(): void {
     category: 'subjective',
     supports: ['quiz', 'exam', 'survey'],
     Editor: ShortAnswerEditor,
+    Answer: ShortAnswerAnswer,
     createDefaultConfig: () => ({ placeholder: '请输入你的作答', maxLength: 2000 }),
     createDefaultAnswerKey: () => null,
   });
