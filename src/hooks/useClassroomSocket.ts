@@ -532,34 +532,47 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     socket.on('class-lock-status-changed', (data: any) => {
       const { lessonId, locked, mode, target } = data || {};
       if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
-        Promise.resolve(fetchStudents()).then(() => {
-          if (locked && lessonId) {
-            setSelectedLesson(lessonId);
-            setStudentViewStatus('lesson');
-            if (target?.tab) {
-              setStudentLessonTab(target.tab);
-            }
-            const isAnswerMode = mode === 'navigation';
-            addToast(
-              langRef.current === 'zh'
-                ? isAnswerMode
-                  ? '🔒 答题锁定已开启'
-                  : '🔒 课程已被锁定'
-                : isAnswerMode
-                  ? '🔒 Answer Lock Active'
-                  : '🔒 Lesson Locked',
-              langRef.current === 'zh'
-                ? isAnswerMode
-                  ? '老师已开启答题锁定，请完成作答后提交，暂时无法离开本页。'
-                  : '老师已锁定当前授课，您将无法切换到其他页面。'
-                : isAnswerMode
-                  ? 'The teacher activated answer lock. Please complete and submit your work on this page.'
-                  : 'The teacher has locked the active lesson. You cannot leave this page.',
-              'info',
-            );
+        const studentId = activeStudentIdRef.current;
+        const currentStudents = appStore.getState().students;
+        const idx = currentStudents.findIndex((s) => s.id === studentId);
+        const updated = idx >= 0 ? { ...currentStudents[idx] } : ({ id: studentId, name: '' } as any);
+        updated.locked_lesson_id = locked ? lessonId : null;
+        updated.lock_mode = locked ? mode || 'full' : 'full';
+        updated.lock_target = locked ? target : null;
+        if (idx >= 0) {
+          const next = [...currentStudents];
+          next[idx] = updated;
+          appStore.getState().setStudents(next);
+        } else {
+          appStore.getState().setStudents([updated]);
+        }
+
+        if (locked && lessonId) {
+          setSelectedLesson(lessonId);
+          setStudentViewStatus('lesson');
+          if (target?.tab) {
+            setStudentLessonTab(target.tab);
           }
-        });
-        fetchStudentDashboard(activeStudentIdRef.current);
+          const isAnswerMode = mode === 'navigation';
+          addToast(
+            langRef.current === 'zh'
+              ? isAnswerMode
+                ? '🔒 答题锁定已开启'
+                : '🔒 课程已被锁定'
+              : isAnswerMode
+                ? '🔒 Answer Lock Active'
+                : '🔒 Lesson Locked',
+            langRef.current === 'zh'
+              ? isAnswerMode
+                ? '老师已开启答题锁定，请完成作答后提交，暂时无法离开本页。'
+                : '老师已锁定当前授课，您将无法切换到其他页面。'
+              : isAnswerMode
+                ? 'The teacher activated answer lock. Please complete and submit your work on this page.'
+                : 'The teacher has locked the active lesson. You cannot leave this page.',
+            'info',
+          );
+        }
+        fetchStudentDashboard(studentId);
       } else {
         fetchStudents();
       }
@@ -689,6 +702,9 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       // 期间错过的「全班锁定」广播不会因重连自动恢复 —— 重连即重拉学生
       // 状态，使断网/刷新间隙发起的锁定对恢复连接的学生立即生效。
       void Promise.resolve(fetchStudents()).catch(() => {});
+      if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
+        void Promise.resolve(fetchStudentDashboard(activeStudentIdRef.current)).catch(() => {});
+      }
     });
 
     socket.io?.on('reconnect', () => {

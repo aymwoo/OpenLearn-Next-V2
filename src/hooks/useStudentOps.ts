@@ -10,7 +10,7 @@ import { getStudentDashboard } from '../services/dashboardService.js';
 import { getStudentProgress } from '../services/progressService.js';
 import { postStudentProgress } from '../services/progressService.js';
 import { postAssignmentSubmission } from '../services/assignmentService.js';
-import type { StudentProgressType } from '../types/app';
+import type { StudentProgressType, StudentType } from '../types/app';
 
 export function useStudentOps(deps: {
   activeStudentId: string | null;
@@ -39,6 +39,28 @@ export function useStudentOps(deps: {
       const { ok, data } = await getStudentDashboard(id);
       if (ok) {
         setStudentDashboardData(data);
+        if (data.profile) {
+          const studentProfile = data.profile as StudentType;
+          const currentStudents = appStore.getState().students;
+          const idx = currentStudents.findIndex((s) => s.id === data.profile.id);
+          const existing = idx >= 0 ? currentStudents[idx] : null;
+          const hasChanged =
+            !existing ||
+            existing.locked_lesson_id !== studentProfile.locked_lesson_id ||
+            existing.lock_mode !== studentProfile.lock_mode ||
+            JSON.stringify(existing.lock_target) !== JSON.stringify(studentProfile.lock_target) ||
+            existing.name !== studentProfile.name;
+
+          if (hasChanged) {
+            if (idx >= 0) {
+              const next = [...currentStudents];
+              next[idx] = { ...next[idx], ...studentProfile };
+              appStore.getState().setStudents(next);
+            } else {
+              appStore.getState().setStudents([studentProfile]);
+            }
+          }
+        }
         if (data.profile && data.profile.locked_lesson_id) {
           setSelectedLesson(data.profile.locked_lesson_id);
           setStudentViewStatus('lesson');
@@ -77,14 +99,9 @@ export function useStudentOps(deps: {
     if (!session) return;
     if (activeRole === 'student' && activeStudentId) {
       fetchStudentDashboard(activeStudentId);
-      const student = students.find((s) => s.id === activeStudentId);
-      if (student && student.locked_lesson_id) {
-        setSelectedLesson(student.locked_lesson_id);
-        setStudentViewStatus('lesson');
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, activeRole, activeStudentId, students]);
+  }, [session, activeRole, activeStudentId]);
 
   const updateStudentProgress = async (progressVal: number) => {
     if (activeRole === 'student' && activeStudentId && selectedLesson) {
