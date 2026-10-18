@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
+
 ### Features
 
 - **插件卸载数据语义：默认保留数据、清除前先导出、重装自动复用（Issue #141）**：卸载此前无条件 `DROP TABLE` 插件私有表并删除 `plugin_migrations` / `plugin_storage`（更新路径却保留数据，同一份数据在两条路径上语义相反），误点卸载即丢学生作业、考勤与成绩。
@@ -19,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`purge`（显式）**：先导出可重放的 SQL 归档（建表语句 + 数据 + 迁移版本 + 存储键），导出失败即中止卸载（数据、DB 行、文件都完好）；成功后删表 / 迁移记录 / 存储键并写 `plugin.data_purged` 审计。授权状态（公开路由审批、能力授予、静态路由与内存资源）无论策略都照常清除 —— 它们是授权而非数据。
   - **HTTP 与前端**：`DELETE /api/plugins/:id` 接受 `dataPolicy`（purge 需 `confirm=purge`）；新增 `GET /api/plugins/orphan-data`（列表）、`POST /api/plugins/orphan-data/:key/export`（导出 + `plugin.data_exported` 审计）、`GET .../archive`（下载，路径限定在归档目录内）、`DELETE .../:key`（需 `confirm=<pluginId>`，服务端先自动导出再清除）。插件中心新增「插件数据」页签（列出 / 导出 / 下载 / 两步清除）与卸载对话框（保留/清除二选一、purge 需勾选不可恢复确认），替代原 `window.confirm`；归档固定写到数据目录的 `plugin-data-exports/`（与 `/plugins` 静态服务隔离，避免登录用户可读归档）。
   - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
-
 ### Security
 
 - **课件作答记录按教师所教班级切片隔离与同类路由越权修复（P0 安全，Issue #139）**：
