@@ -18,6 +18,7 @@ const TABS = [
   { name: '班级管理', hash: '#/classes' },
   { name: '课表管理', hash: '#/timetable' },
   { name: '互动课堂', hash: '#/live_class' },
+  { name: '测评中心', hash: '#/assessments' },
   { name: '插件中心', hash: '#/plugins' },
   { name: '管理后台', hash: '#/admin' },
   { name: '帮助文档', hash: '#/help' },

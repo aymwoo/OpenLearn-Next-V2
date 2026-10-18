@@ -355,6 +355,78 @@ describe('Issue #120 · 测评 API', () => {
     });
   });
 
+  describe('教师端 UI 依赖的两个端点（Issue #121）', () => {
+    let assessmentId = '';
+    let assignmentId = '';
+    let attemptId = '';
+    let shortAnswerItemId = '';
+
+    it('GET /api/assessments/:id/assignments 返回班级名与交卷进度', async () => {
+      const created = await call('POST', '/api/assessments', TEACHER_TOKEN, { kind: 'quiz', title: 'UI 用布置列表' });
+      assessmentId = created.json.id;
+      const withItems = await call('PUT', `/api/assessments/${assessmentId}/items`, TEACHER_TOKEN, { items: ITEMS });
+      shortAnswerItemId = withItems.json.items.find((i: any) => i.type === 'short_answer').id;
+      const published = await call('POST', `/api/assessments/${assessmentId}/publish`, TEACHER_TOKEN, {
+        classId: CLASS_ID,
+      });
+      assignmentId = published.json.id;
+
+      const list = await call('GET', `/api/assessments/${assessmentId}/assignments`, TEACHER_TOKEN);
+      expect(list.status).toBe(200);
+      expect(list.json.items).toHaveLength(1);
+      expect(list.json.items[0]).toMatchObject({
+        id: assignmentId,
+        classId: CLASS_ID,
+        className: '测评测试班',
+        status: 'open',
+        attemptCount: 0,
+        submittedCount: 0,
+        pendingReviewCount: 0,
+      });
+    });
+
+    it('GET /api/assessment-attempts/:id/teacher-view 返回逐题作答与标准答案', async () => {
+      const started = await call('POST', `/api/assessment-assignments/${assignmentId}/attempts`, STUDENT_TOKEN);
+      attemptId = started.json.attempt.id;
+      // 用真实 itemId 提交两道题（单选取对、简答留待批改）
+      const detail = await call('GET', `/api/assessments/${assessmentId}`, TEACHER_TOKEN);
+      const singleId = detail.json.items.find((i: any) => i.type === 'single_choice').id;
+      const shortId = detail.json.items.find((i: any) => i.type === 'short_answer').id;
+      shortAnswerItemId = shortId;
+      await call('PUT', `/api/assessment-attempts/${attemptId}/answers/${singleId}`, STUDENT_TOKEN, { answer: 1 });
+      await call('PUT', `/api/assessment-attempts/${attemptId}/answers/${shortId}`, STUDENT_TOKEN, {
+        answer: '我的简答',
+      });
+      const submitted = await call('POST', `/api/assessment-attempts/${attemptId}/submit`, STUDENT_TOKEN);
+      expect(submitted.status).toBe(200);
+
+      const view = await call('GET', `/api/assessment-attempts/${attemptId}/teacher-view`, TEACHER_TOKEN);
+      expect(view.status).toBe(200);
+      expect(view.json.attempt.studentId).toBe(STUDENT_ID);
+      const single = view.json.items.find((i: any) => i.type === 'single_choice');
+      const short = view.json.items.find((i: any) => i.type === 'short_answer');
+      // 教师视角始终带标准答案
+      expect(single.answerKey).toEqual({ index: 1 });
+      expect(single.score).toBe(10);
+      // 简答：作答原文在、分数为空、待人工批改
+      expect(short.answer).toBe('我的简答');
+      expect(short.score).toBeNull();
+      expect(short.needsManualReview).toBe(true);
+    });
+
+    it('非 owner 教师访问这两个端点都是 403', async () => {
+      seedSession('tok_assess_other_teacher2', {
+        userId: 'usr_other_teacher2',
+        username: 'other_teacher2',
+        role: 'teacher',
+      });
+      const a = await call('GET', `/api/assessments/${assessmentId}/assignments`, 'tok_assess_other_teacher2');
+      expect(a.status).toBe(403);
+      const b = await call('GET', `/api/assessment-attempts/${attemptId}/teacher-view`, 'tok_assess_other_teacher2');
+      expect(b.status).toBe(403);
+    });
+  });
+
   describe('考试模式：交卷后不公布，release 后可见', () => {
     let assignmentId = '';
     let attemptId = '';

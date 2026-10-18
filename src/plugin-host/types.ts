@@ -524,6 +524,14 @@ export interface FrontendPluginContext {
       config: import('../features/teacher/assignment-question-registry').AssignmentQuestionRendererConfig,
     ): void;
     unregisterAssignmentQuestionRenderer(quizType: string): void;
+    /**
+     * 测评题型出题编辑器注册（Issue #121）。与服务端 `IAssessmentGraderRegistry` 共用同一个
+     * `type` 字符串；插件卸载时宿主自动 `clearOwned`。
+     */
+    registerAssessmentQuestionType(
+      config: import('../features/assessment/question-type-ui-registry').AssessmentQuestionTypeUi,
+    ): void;
+    unregisterAssessmentQuestionType(type: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;

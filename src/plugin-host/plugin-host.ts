@@ -59,6 +59,7 @@ import {
 } from '../features/teacher/lesson-editor/timelineConfig';
 import type { SegmentTypeMeta } from '../features/teacher/lesson-editor/timelineConfig';
 import { assignmentQuestionRendererRegistry } from '../features/teacher/assignment-question-registry';
+import { assessmentQuestionTypeUiRegistry } from '../features/assessment/question-type-ui-registry';
 
 const PALETTE_COLOR_KEYS = new Set<PaletteColorKey>([
   'slate',
@@ -898,6 +899,7 @@ export class FrontendPluginHost {
     unregisterPluginSegmentTypes(pluginId);
     // 注销该插件注册的全部题型渲染器
     assignmentQuestionRendererRegistry.clearOwned(pluginId);
+    assessmentQuestionTypeUiRegistry.clearOwned(pluginId);
     // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
     // 此前不随生命周期回收，卸载后残留条目（重新安装后若曾 blown 会被跳过）
     resetPluginBreaker(pluginId);
@@ -1002,6 +1004,13 @@ export class FrontendPluginHost {
         },
         unregisterAssignmentQuestionRenderer: (quizType) => {
           assignmentQuestionRendererRegistry.unregister(quizType, pluginId);
+        },
+        /** 测评题型出题编辑器注册（Issue #121）：与后端 IAssessmentGraderRegistry 共用 type */
+        registerAssessmentQuestionType: (config) => {
+          assessmentQuestionTypeUiRegistry.register(config, pluginId);
+        },
+        unregisterAssessmentQuestionType: (type) => {
+          assessmentQuestionTypeUiRegistry.unregister(type, pluginId);
         },
       },
       navigation: {
