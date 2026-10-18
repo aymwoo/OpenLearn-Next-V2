@@ -109,7 +109,7 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
   });
 
   describe('2. 学生管理、初始密码与 12 表原子级联删除 (DATA-INT-01)', () => {
-    it('教师未填密码时应生成 12 位高熵初始密码，库内存储 bcrypt 哈希', () => {
+    it('教师未填密码时应生成 12 位高熵初始密码，库内存储 bcrypt 哈希', async () => {
       const res = service.createStudent({
         name: '张三测试',
         email: 'zhangsan_test@openlearn.local',
@@ -125,7 +125,7 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       expect(bcrypt.compareSync(res.initial_password!, row.password)).toBe(true);
 
       // 验证导出 GDPR 数据时密码已脱敏
-      const exportData = service.exportStudentData(res.id);
+      const exportData = await service.exportStudentData(res.id);
       expect(exportData.student.password).toBe('[REDACTED]');
       expect(exportData.student.name).toBe('张三测试');
 

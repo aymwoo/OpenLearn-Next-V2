@@ -11,6 +11,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { randomId } from '../utils/id.js';
 import { generateStudentNumber } from '../routes/shared.js';
+import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import type { Pagination } from '../utils/pagination.js';
 import { openClassPasscode, sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
 import { sanitizePrivateNotes } from '../../packages/core/security/html-sanitize.js';
@@ -107,10 +108,15 @@ export interface ClassGroupItem {
 }
 
 export class RosterService {
+  private readonly pluginHost?: any;
+
   constructor(
     private readonly db: Database.Database = kernelContainer.db,
     private readonly readDb?: Database.Database,
-  ) {}
+    pluginHost?: any,
+  ) {
+    this.pluginHost = pluginHost || (kernelContainer as any)?.pluginHost;
+  }
 
   private get reader(): Database.Database {
     return this.readDb || kernelContainer.getReadDb() || this.db;
@@ -579,9 +585,38 @@ export class RosterService {
   }
 
   /**
-   * 学生安全级联删除（DATA-INT-01）：12 张关联子表 + students 本体，单事务执行。
+   * 学生安全级联删除（DATA-INT-01 / GDPR）：内置 13 张关联子表 + 调度插件删除钩子 + students 本体。
+   * 采用同步清理本地 SQLite 事务保障同进程即时一致性，随后异步调度活跃插件的 onStudentDelete。
    */
-  public deleteStudentCascade(studentId: string): void {
+  public async deleteStudentCascade(
+    studentId: string,
+  ): Promise<{ pluginsCleaned: Record<string, { success: boolean; error?: string }> }> {
+    // 1. 同步单事务彻底清理内置关联子表与 student 本体（含 student_point_logs）
+    this.deleteStudentCascadeSync(studentId);
+
+    // 2. 调度活跃插件的 onStudentDelete 钩子
+    let pluginsCleaned: Record<string, { success: boolean; error?: string }> = {};
+    if (this.pluginHost && typeof this.pluginHost.deleteStudentDataFromPlugins === 'function') {
+      try {
+        pluginsCleaned = await this.pluginHost.deleteStudentDataFromPlugins(studentId);
+      } catch (err) {
+        console.warn(`[RosterService] Error deleting student data from plugins for student ${studentId}:`, err);
+      }
+    }
+
+    // 3. 记录安全审计
+    recordSecurityAudit('student.gdpr_deleted', {
+      studentId,
+      pluginsCleaned,
+    });
+
+    return { pluginsCleaned };
+  }
+
+  /**
+   * 内置表单事务同步级联删除（供内部及测试纯同步场景使用）。
+   */
+  public deleteStudentCascadeSync(studentId: string): void {
     const tx = this.db.transaction(() => {
       this.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
       this.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
@@ -594,12 +629,17 @@ export class RosterService {
       this.db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(studentId);
       this.db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(studentId);
       this.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(studentId);
+      try {
+        this.db.prepare('DELETE FROM student_point_logs WHERE student_id = ?').run(studentId);
+      } catch {
+        // 表可能未建
+      }
       this.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
     });
     tx();
   }
 
-  public exportStudentData(studentId: string): any {
+  public async exportStudentData(studentId: string): Promise<any> {
     const student = this.reader
       .prepare('SELECT id, student_number, name, email, avatar, created_at FROM students WHERE id = ?')
       .get(studentId) as any;
@@ -621,6 +661,22 @@ export class RosterService {
     const pluginSubmissions = this.reader.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
     const peerReviews = this.reader.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
 
+    let pointLogs: any[] = [];
+    try {
+      pointLogs = this.reader.prepare('SELECT * FROM student_point_logs WHERE student_id = ?').all(studentId);
+    } catch {
+      // 表可能未建
+    }
+
+    let pluginData: Record<string, unknown> = {};
+    if (this.pluginHost && typeof this.pluginHost.exportStudentDataFromPlugins === 'function') {
+      try {
+        pluginData = await this.pluginHost.exportStudentDataFromPlugins(studentId);
+      } catch (err) {
+        console.warn(`[RosterService] Error exporting student data from plugins for student ${studentId}:`, err);
+      }
+    }
+
     return {
       student: { ...student, password: '[REDACTED]' },
       classes: classEnrollments,
@@ -630,8 +686,10 @@ export class RosterService {
       examScores,
       semesterReports,
       rollcalls,
+      pointLogs,
       pluginSubmissions,
       peerReviews,
+      pluginData,
       exportedAt: new Date().toISOString(),
     };
   }

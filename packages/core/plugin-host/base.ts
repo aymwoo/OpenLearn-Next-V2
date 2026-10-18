@@ -185,6 +185,8 @@ export interface PluginInstance {
   manifest: Manifest;
   activate: ((ctx: PluginContext) => Promise<void>) | undefined;
   deactivate?: (() => Promise<void>) | undefined;
+  onStudentExport?: ((studentId: string) => Promise<unknown> | unknown) | undefined;
+  onStudentDelete?: ((studentId: string) => Promise<void> | void) | undefined;
   workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
   context?: PluginContext;
 }
@@ -231,6 +233,8 @@ export abstract class PluginHostBase {
       manifest: any;
       activate: (ctx: PluginContext) => Promise<void>;
       deactivate?: () => Promise<void>;
+      onStudentExport?: (studentId: string) => Promise<unknown> | unknown;
+      onStudentDelete?: (studentId: string) => Promise<void> | void;
       migrationsDir?: string;
     }
   >();

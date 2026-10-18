@@ -72,6 +72,8 @@ import {
   listAllowedPluginTablePrefixes,
 } from '../plugin-host/plugin-tables.js';
 import { assertPluginSqlAllowed } from '../plugin-host/sql-guard.js';
+import { recordSecurityAudit } from '../observability/audit-log.js';
+import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from '../plugin-host/method-policy.js';
 
 /**
  * 后端 Worker 侧的 Token 名集合。
@@ -985,6 +987,28 @@ export class ServiceHost {
           });
           return;
         }
+      }
+
+      // ── Intercept IPointsLedgerService calls for student data privacy audit ──
+      if (msg.token === '@openlearn/core:IPointsLedgerService') {
+        const studentId = Array.isArray(msg.args) && typeof msg.args[0] === 'string' ? msg.args[0] : '';
+        const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+        const isRead = msg.method !== 'addPoints';
+        const requiredCap = isRead ? CAP_STUDENT_DATA_READ : CAP_STUDENT_DATA_WRITE;
+        const hasCap = hasCapability(this.manifestCapabilities ?? [], requiredCap);
+        if (!hasCap) {
+          console.warn(
+            `[PluginSecurity] Worker plugin "${pluginId}" ${isRead ? 'accessed' : 'modified'} student data via ${msg.method} without declaring "${requiredCap}". In future versions this will be blocked.`,
+          );
+        }
+        recordSecurityAudit('plugin.student_data_access', {
+          pluginId,
+          studentId,
+          method: msg.method,
+          operation: isRead ? 'read' : 'write',
+          hasCapability: hasCap,
+          ...(hasCap ? {} : { migrationWarning: true }),
+        });
       }
 
       // ── Get the method from the service instance ───────────────────

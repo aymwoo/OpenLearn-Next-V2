@@ -42,6 +42,12 @@ export const CAP_AI_INVOKE = 'ai:invoke';
 /** 授予「注册后台常驻任务」所需。 */
 export const CAP_TASK_REGISTER = 'task:register';
 
+/** 授予读取学生个人敏感数据（积分流水、维度汇总等）所需。 */
+export const CAP_STUDENT_DATA_READ = 'student-data:read';
+
+/** 授予写入/变更学生个人敏感数据（积分变动等）所需。 */
+export const CAP_STUDENT_DATA_WRITE = 'student-data:write';
+
 // ── 高危 API 路径前缀（浏览器侧 IFrontendAPI 使用）────────────────────────────
 
 /**

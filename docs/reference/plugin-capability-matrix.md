@@ -272,15 +272,27 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 
 每个 descriptor 携带 `permission: CapabilityRole[]`（而非 `resource:action` 字符串）。`PermissionChecker.validatePermission` 在 `permission` 为空数组、或 `actorRole === 'System'` 时放行，否则精确匹配，**无层级继承**。详见 [capability-gateway](../architecture/capability-gateway.md)。
 
+### 5.3 学生个人数据隐私与安全审计能力声明（Issue #145）
+
+平台在 `packages/core/plugin-host/method-policy.ts` 中引入了两项专用的学生个人数据能力常量：
+- `CAP_STUDENT_DATA_READ = 'student-data:read'`：声明插件有权读取学生个人数据（如通过 `pointsLedger` 访问积分日志、统计与维度汇总）。
+- `CAP_STUDENT_DATA_WRITE = 'student-data:write'`：声明插件有权写入或修改学生个人数据（如通过 `pointsLedger.addPoints` 记录积分）。
+
+**审计与迁移策略**：
+1. **双端统一审计**：Inline 模式下的上下文代理包装器与 Worker 隔离模式下的 `ServiceHost` RPC 拦截器均对学生数据读写调用进行统一拦截，记录 `plugin.student_data_access` 安全审计日志。
+2. **渐进迁移兼容期**：对于尚未声明该能力的存量插件，当前版本在控制台输出警告并放行，在审计记录中标记 `migrationWarning: true`；待升级周期结束后将强制阻断未声明能力的插件访问。
+
 ---
 
 ## 6. 统计口径
 
 - `capabilityRequired` 不同的权限字符串：**19** 个。
+- 专有学生数据能力声明（隐私审计）：**2** 个（`student-data:read` / `student-data:write`）。
 - `capabilityRequired` 声明点（后端非测试源码）：**82** 处。
 - `isHighRisk: true`：**9** 处；显式 `isHighRisk: false`：**1** 处（`plugin.info`）。
 - `CapabilityGuard` 构造函数预置默认 actor：**6** 个；`check()` 内角色兜底表：**2** 张（`teacher` / `student`）。
 - `RuntimePermission` 成员：**7** 个；`CapabilityRole` 成员：**6** 个。
 - 内置插件 manifest 中 `capabilitiesProposed` 声明：**7** 个插件，其中 1 个为空数组。
 
-> 统计截至 commit `a11b99b`。
+> 统计更新至 Issue #145 学生个人数据能力声明与审计策略落地。
+

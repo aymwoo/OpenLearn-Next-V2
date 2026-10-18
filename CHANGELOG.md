@@ -52,6 +52,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
 ### Security
 
+- **插件访问学生个人数据的能力声明与审计，插件表纳入导出/删除与保留策略（P1 安全，Issue #145）**：
+  - **学生个人数据能力声明与统一审计**：在 `packages/core/plugin-host/method-policy.ts` 中引入专有的 `CAP_STUDENT_DATA_READ = 'student-data:read'` 与 `CAP_STUDENT_DATA_WRITE = 'student-data:write'` 能力常量；在 Inline 代理层（`context-builder.ts`）与 Worker 隔离层（`service-host.ts`）拦截插件对 `pointsLedger`（读 `getLogs`/`getStudentTotalByDimension`/`getStudentDimensionSummary`，写 `addPoints`）的学生数据访问，统一记录 `plugin.student_data_access` 安全审计日志；提供平滑迁移兼容期，对未声明能力的存量插件输出控制台警告并标记 `migrationWarning: true`。
+  - **插件扩展数据 GDPR 导出与级联删除**：在 `PluginInstance`、`PluginModule` 与 `@openlearn/plugin-sdk` 规范中引入可选的 `onStudentExport(studentId)` 与 `onStudentDelete(studentId)` 扩展生命周期钩子；`PluginHost` 新增 `exportStudentDataFromPlugins` 与 `deleteStudentDataFromPlugins`（委托至 `student-data-privacy.ts`），统一支持 Inline 异步与 Worker 隔离消息 RPC（带 10s 超时保护），未实现的插件标记 `{ status: 'not_implemented' }`；
+  - **花名册级联事务与导出纳管**：`RosterService.deleteStudentCascade` 将学生积分流水（`student_point_logs`）纳入单事务原子清理，并在事务提交后并发调度活跃插件的 `deleteStudentDataFromPlugins` 并记入 `student.gdpr_deleted` 安全审计；`RosterService.exportStudentData` 聚合输出 `pointLogs` 以及各活跃插件返回的 `pluginData`，实现学生数据完整覆盖与脱敏导出；
+  - **多类别数据保留策略与定期清理**：新增迁移 `036_student_read_notifications_created_at.sql`；新增 `packages/core/db/retention-policy.ts`，定义 5 大类别保留窗口：`events`（90 天）、`attendance`（365 天）、`student_rollcalls`（180 天）、`student_read_notifications`（30 天）、`client_sessions`（30 天），支持独立环境变量自定义及 `0` 禁用；服务端启动及数据库就绪时自动调用 `purgeAllExpiredData` 清理超期数据；
+  - **测试与文档**：新增 `plugin-student-data-audit.test.ts`（5 例）、`plugin-student-privacy-hooks.test.ts`（5 例）与 `retention-policy.test.ts`（11 例），更新现有花名册测试与 `plugin-capability-matrix.md`、`privacy.md` 及 `known-issues.md`。
 - **下线废弃写盘调试接口 `POST /api/courseware/debug`（Issue #132）**：
   - 彻底移除 `server/routes/courseware.ts` 中废弃的 `POST /api/courseware/debug` 路由，消除任意登录用户通过 `fs.appendFileSync` 无上限同步追加写 `client_debug.log` 导致的磁盘写满与事件循环阻塞（DoS）安全隐患。
   - 同步更新契约文档 `docs/api/courseware-attempts-contract.md`，对齐最新 API 契约，明确课件客户端错误上报统一经 `/api/client-errors` 走标准错误流。
