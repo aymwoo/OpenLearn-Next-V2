@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
 import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
@@ -7,6 +7,8 @@ import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { SegmentGateBanner } from './SegmentGateBanner';
 import { useSegmentAccess } from './useSegmentAccess';
+import { StudentIcebreakerModal } from './StudentIcebreakerModal';
+import { useStudentActiveSession } from './useStudentActiveSession';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -90,6 +92,26 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       ? segmentAccess.visibleSegmentId
       : activeSegmentId;
 
+  // Issue #131: 学生端破冰心情打卡状态
+  const [icebreakerOpen, setIcebreakerOpen] = useState(false);
+  const [resolvedClassId, setResolvedClassId] = useState<string | null>(null);
+  const activeSession = useStudentActiveSession((s) => s.activeSession);
+  const effectiveClassId =
+    resolvedClassId || (activeSession?.lessonId === selectedLesson ? activeSession.classId : null);
+
+  useEffect(() => {
+    if (!effectiveClassId || !selectedLesson) return;
+    try {
+      const keyChecked = `icebreaker_checked_${activeStudentId || 'cur'}_${effectiveClassId}_${selectedLesson}`;
+      const keySkipped = `icebreaker_skipped_${activeStudentId || 'cur'}_${effectiveClassId}_${selectedLesson}`;
+      if (!sessionStorage.getItem(keyChecked) && !sessionStorage.getItem(keySkipped)) {
+        setIcebreakerOpen(true);
+      }
+    } catch {
+      /* ignore storage error */
+    }
+  }, [effectiveClassId, selectedLesson, activeStudentId]);
+
   // 迟到进入的学生收不到当时的广播。轮询课堂会话，把本地指针对齐到全班当前环节。
   useEffect(() => {
     if (!selectedLesson || typeof fetch !== 'function') return;
@@ -102,6 +124,10 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         if (!res.ok || cancelled) return;
         const json = await res.json();
         const id = json?.session?.current_segment_id;
+        const clsId = json?.session?.class_id;
+        if (clsId && typeof clsId === 'string') {
+          setResolvedClassId(clsId);
+        }
         if (typeof id === 'string' && id && id !== activeSegmentId) {
           setActiveSegmentId(id);
         }
@@ -131,6 +157,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         lessons={lessons}
         selectedLesson={selectedLesson}
         addToast={addToast}
+        lang={lang}
+        onOpenIcebreaker={() => setIcebreakerOpen(true)}
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />
@@ -203,6 +231,17 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           studentId: activeStudentId,
           lang,
         }}
+      />
+
+      {/* Issue #131: 学生端课前破冰心情打卡弹窗 */}
+      <StudentIcebreakerModal
+        isOpen={icebreakerOpen}
+        onClose={() => setIcebreakerOpen(false)}
+        classId={effectiveClassId}
+        lessonId={selectedLesson}
+        studentId={activeStudentId}
+        lang={lang}
+        addToast={addToast}
       />
     </div>
   );

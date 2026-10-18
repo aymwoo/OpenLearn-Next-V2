@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课前「破冰心情打卡」全链路闭环与持久化（Issue #131）**：
+  - **学生端入口**：在学生进入课堂界面（`StudentLessonView`）新增 `StudentIcebreakerModal` 轻量打卡浮层，提供充满电（`fullPower`）、需要咖啡（`needCoffee`）、需要帮助（`needHelp`）三项，支持一键打卡与免打扰跳过；在顶栏标题旁提供「心情打卡」按钮支持随时修改心情。
+  - **服务端鉴权与校验**：`POST /api/classes/:classId/checkin/icebreaker` 接入 `authorizeClass(ctx.db, req.session, classId, 'member')`，防范非本班学生越权（403）及非法班级（404）；严密校验 `mood` 合法枚举（400）。
+  - **数据持久化与幂等更新**：新增数据库迁移 `035_icebreaker_checkins.sql`，按 `(class_id, scope_key, student_id)` 唯一索引进行 UPSERT，实现同一学生重复打卡按修改心情更新，并持久化到 SQLite（服务重启统计不丢失）。
+  - **统计聚合与教师端联动**：`DiagnosticService.getIcebreakerStats` 与 `getPreClassDiagnostic` 基于数据库真实数据按课节与班级聚合，学生打卡后即刻通过 Socket 向教师端 `PreClassDiagnosticHub` 实时推送更新。
+  - **测试覆盖**：新增 `server/__tests__/icebreaker-checkin.test.ts`（8 例覆盖未认证 401、跨班 403、不存在 404、非法 mood 400、去重修改与重启持久化）和 `src/features/student/__tests__/StudentIcebreakerModal.test.tsx`（6 例覆盖选项渲染、提交回调、跳过标记与错误呈现）。
+
 - **隔离模式插件激活前补齐宿主 SDK 解析链接，并放行权限模型读取（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；同时 `process` 隔离的 Node 权限模型新增 `sharedReadPaths`，把 `<pluginsDir>/node_modules` 与 SDK 链接的真实目录按只读放行（此前会被 `ERR_ACCESS_DENIED (FileSystemRead)` 二次拦下）。`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫，`plugin-permission.test.ts` / `worker-manager.test.ts` 覆盖只读旗标与路径收集。
 - **未获 `agent:tool` 的插件注册 action 改为降级而非拒绝（Issue #147 实测发现）**：`method-policy` 原先把「未声明 `agent:tool` 却注册对外暴露 action」直接抛错，而 `ActionDescriptor.exposeToAgent` 默认 `true`、旧插件（含最新版 class-manager / attendance-record）根本不知道这条新规 —— 结果是 worker/process 隔离下 `activate()` 失败、插件整体 `state=error`，把「不暴露给 AI Agent」放大成「升级后插件不能用」。现由 `sanitizeActionRegisterArgs` 把未授权的 descriptor 强制改写为 `exposeToAgent: false` 后放行：安全语义不变（仍不进 `getAgentTools()`），插件功能保留；`checkMethodPolicy` 中的拒绝分支保留为纵深防御。新增 `service-host.test.ts` 用例覆盖降级与「已授权时原样透传」。
 - **`@openlearn/plugin-sdk` 发布入口不再静态加载 express（Issue #147 实测发现）**：SDK 的 `index.ts` 曾从 `../core/plugin-host/index.js` 再导出运行时类，那个入口会实例化 `PluginHost extends PluginHostInstall`，把 `base.js` 的 `import express from 'express'` 一路带进 SDK 产物。于是**任何**第三方插件只要 `import '@openlearn/plugin-sdk'`，隔离进程就要加载 express → body-parser → depd 的 `new Function`，被 `--disallow-code-generation-from-strings` 拦成 `EvalError`，插件直接激活失败（升级回归实测：attendance-record / interactive-courseware 全挂）。现在改为从各模块直接再导出，产物无 express；`dist-entrypoint.test.ts` 增加「产物不得 import express」的守卫。
