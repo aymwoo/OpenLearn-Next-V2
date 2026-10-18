@@ -335,6 +335,30 @@ export function AssessmentEditor({
           <div className="mt-3 flex flex-wrap gap-4">
             {[
               {
+                key: 'singleAttempt',
+                zh: '严格单次作答（禁止重考）',
+                en: 'Single attempt only',
+                disabled: !isDraft,
+              },
+              {
+                key: 'shuffleItems',
+                zh: '题目乱序',
+                en: 'Shuffle items',
+                disabled: !isDraft,
+              },
+              {
+                key: 'shuffleOptions',
+                zh: '选项乱序',
+                en: 'Shuffle options',
+                disabled: !isDraft,
+              },
+              {
+                key: 'strictProctor',
+                zh: '严格监考（切屏/失焦/防复制）',
+                en: 'Strict proctoring',
+                disabled: !isDraft,
+              },
+              {
                 key: 'partialCredit',
                 zh: '多选少选给部分分',
                 en: 'Partial credit for multi-choice',
@@ -720,7 +744,7 @@ function PublishSection({
                 >
                   {zh ? '批改' : 'Grade'}
                 </button>
-                {!assignment.scoreReleased && (
+                {!assignment.scoreReleased ? (
                   <button
                     type="button"
                     onClick={async () => {
@@ -731,9 +755,26 @@ function PublishSection({
                         onError(e?.message ?? String(e));
                       }
                     }}
+                    title={zh ? '发布成绩并自动同步至成绩单' : 'Release scores and sync to gradebook'}
                     className="px-2 py-1 rounded-lg border border-theme text-2xs font-semibold text-main hover:bg-surface-secondary cursor-pointer"
                   >
                     {zh ? '发布成绩' : 'Release'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await assessmentApi.syncGradebook(assignment.id);
+                        await onPublished();
+                      } catch (e: any) {
+                        onError(e?.message ?? String(e));
+                      }
+                    }}
+                    title={zh ? '将本场成绩同步至系统成绩单' : 'Sync scores to gradebook'}
+                    className="px-2 py-1 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-300 dark:bg-indigo-950/40 text-2xs font-semibold cursor-pointer"
+                  >
+                    {zh ? '同步成绩单' : 'Sync Grades'}
                   </button>
                 )}
                 {assignment.status === 'open' && (

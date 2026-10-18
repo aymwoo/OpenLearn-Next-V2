@@ -21,6 +21,7 @@ import {
 } from '../shared-state.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
 import { actorUserId, authorizeClass, authorizeLessonStaff, isAdministrator } from '../services/class-access.js';
+import { assessmentService } from '../services/assessment-service.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -867,11 +868,13 @@ export function registerClassroomRoutes(
         let viewState: Record<string, unknown> = {};
         let exitTicketCoreQuestion: any = null;
         let exitTicketChallengeQuestion: any = null;
+        let activeAssessment: any = null;
         try {
           const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
           viewState = settings.viewState ?? {};
           exitTicketCoreQuestion = settings.exitTicketCoreQuestion ?? null;
           exitTicketChallengeQuestion = settings.exitTicketChallengeQuestion ?? null;
+          activeAssessment = settings.activeAssessment ?? null;
         } catch (_) {
           viewState = {};
         }
@@ -888,6 +891,7 @@ export function registerClassroomRoutes(
           feedReplay,
           exitTicketCoreQuestion,
           exitTicketChallengeQuestion,
+          activeAssessment,
         });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -1445,6 +1449,114 @@ export function registerClassroomRoutes(
         }
 
         res.json({ success: true, distribution, totalVotes: total });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // ── 2.5. 课堂随堂测评与考试 (In-Class Assessment & Exam) ────────────────
+  // 教师课内发起测评/随堂考 (Issue #123)
+  app.post(
+    '/api/classroom/sessions/:lessonId/assessment',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { assessmentId, durationSec, opensAt, closesAt } = req.body ?? {};
+        if (!assessmentId) {
+          return res.status(400).json({ error: 'assessmentId is required' });
+        }
+        const teacherId = actorUserId((req as any).session) || getActorId(req) || 'teacher';
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId);
+
+        const classId = session?.class_id || session?.classId || req.body?.classId;
+        if (!classId) {
+          return res.status(400).json({ error: 'No class linked to this lesson session' });
+        }
+
+        const assessRow = db.prepare('SELECT owner_id, title, kind FROM assessments WHERE id = ?').get(assessmentId) as
+          | { owner_id: string; title: string; kind: string }
+          | undefined;
+        if (!assessRow) {
+          return res.status(404).json({ error: 'Assessment not found' });
+        }
+        const ownerId = assessRow.owner_id || teacherId;
+
+        const now = Date.now();
+        const asg = assessmentService.publish(assessmentId, ownerId, {
+          classId,
+          lessonId,
+          durationSec: durationSec ? Number(durationSec) : null,
+          opensAt: opensAt ? Number(opensAt) : now,
+          closesAt: closesAt ? Number(closesAt) : null,
+          createdBy: teacherId,
+        });
+
+        let settings: any = {};
+        try {
+          settings = session.settings_json ? JSON.parse(session.settings_json) : {};
+        } catch (_) {
+          settings = {};
+        }
+        const activeAssessment = {
+          assignmentId: asg.id,
+          assessmentId,
+          title: assessRow.title,
+          kind: assessRow.kind,
+          durationSec: asg.durationSec,
+          opensAt: asg.opensAt,
+          closesAt: asg.closesAt,
+          startedAt: now,
+        };
+        settings.activeAssessment = activeAssessment;
+        db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
+          JSON.stringify(settings),
+          session.id,
+        );
+
+        if (io) {
+          emitClassroomEvent(io, lessonId, 'classroom:assessment_started', activeAssessment);
+        }
+
+        res.status(201).json({
+          success: true,
+          assignmentId: asg.id,
+          assignment: asg,
+          activeAssessment,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // 教师查询当前课堂测评的实时作答进度与大屏统计卡片 (Issue #123)
+  app.get(
+    '/api/classroom/sessions/:lessonId/assessment-progress',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        let assignmentId = req.query.assignmentId as string | undefined;
+
+        if (!assignmentId) {
+          const row = db
+            .prepare('SELECT id FROM assessment_assignments WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+            .get(lessonId) as { id: string } | undefined;
+          if (row) assignmentId = row.id;
+        }
+
+        if (!assignmentId) {
+          return res.status(404).json({ error: 'No assessment assignment found for this lesson' });
+        }
+
+        const progress = assessmentService.getProgressSummary(assignmentId);
+        res.json({
+          success: true,
+          ...progress,
+          progress,
+        });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }

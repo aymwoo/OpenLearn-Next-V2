@@ -341,7 +341,7 @@ function EntryCard({
 
 /* ─────────────────────────── 作答 ─────────────────────────── */
 
-function AssessmentRunner({
+export function AssessmentRunner({
   lang,
   payload,
   initialAnswers,
@@ -356,17 +356,101 @@ function AssessmentRunner({
 }) {
   const zh = lang === 'zh';
   const attemptId = payload.attempt!.id;
+  const isExam = payload.assignment.kind === 'exam' || Boolean(payload.assignment.settings?.strictProctor);
   const [answers, setAnswers] = useState<Record<string, unknown>>(initialAnswers);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [remaining, setRemaining] = useState<number | null>(payload.attempt!.remainingSeconds ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [proctorViolations, setProctorViolations] = useState(0);
+  const [proctorWarning, setProctorWarning] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const answersRef = useRef(answers);
   const submittedRef = useRef(false);
 
   answersRef.current = answers;
+
+  // 严格考试监考事件上报（失焦、切屏、退出全屏）
+  const sendProctorEvent = useCallback(
+    async (type: 'blur' | 'visibility_hidden' | 'fullscreen_exit') => {
+      if (!isExam || submittedRef.current) return;
+      try {
+        setProctorViolations((prev) => prev + 1);
+        const warningMap = {
+          blur: zh ? '检测到窗口失去焦点，已记录监考日志！' : 'Window lost focus — logged to proctor record!',
+          visibility_hidden: zh ? '检测到切换屏幕/应用，已记录监考日志！' : 'Screen/tab switched — logged to proctor record!',
+          fullscreen_exit: zh ? '检测到退出全屏作答，已记录监考日志！' : 'Exited fullscreen — logged to proctor record!',
+        };
+        setProctorWarning(warningMap[type]);
+        await assessmentApi.reportProctor(attemptId, { type });
+      } catch {
+        // silent fail for proctor telemetry
+      }
+    },
+    [attemptId, isExam, zh],
+  );
+
+  // 监听全屏、失焦与切屏事件
+  useEffect(() => {
+    if (!isExam) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void sendProctorEvent('visibility_hidden');
+      }
+    };
+
+    const handleBlur = () => {
+      void sendProctorEvent('blur');
+    };
+
+    const handleFullscreenChange = () => {
+      const active = Boolean(document.fullscreenElement);
+      setIsFullscreen(active);
+      if (!active && !submittedRef.current) {
+        void sendProctorEvent('fullscreen_exit');
+      }
+    };
+
+    // 禁用右键与复制/粘贴
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleCopyCutPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopyCutPaste);
+    document.addEventListener('cut', handleCopyCutPaste);
+    document.addEventListener('paste', handleCopyCutPaste);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopyCutPaste);
+      document.removeEventListener('cut', handleCopyCutPaste);
+      document.removeEventListener('paste', handleCopyCutPaste);
+    };
+  }, [isExam, sendProctorEvent]);
+
+  const requestFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const flush = useCallback(
     async (itemId: string) => {
@@ -407,6 +491,10 @@ function AssessmentRunner({
         pendingIds.map((itemId) => assessmentApi.saveAnswer(attemptId, itemId, answersRef.current[itemId] ?? null)),
       );
       const result = await assessmentApi.submitAttempt(attemptId);
+      // 提交后若在全屏，退出全屏
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
       onSubmitted(result);
     } catch (e: any) {
       submittedRef.current = false;
@@ -443,24 +531,68 @@ function AssessmentRunner({
   }).length;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-theme bg-surface-secondary/70 flex flex-wrap items-center gap-3 shrink-0">
-        <button
-          type="button"
-          onClick={onExit}
-          className="p-1.5 rounded-lg border border-theme bg-surface text-muted hover:text-main cursor-pointer"
-          aria-label={zh ? '返回测评列表（作答已自动保存）' : 'Back to list (answers are saved)'}
+    <div
+      className={`flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl overflow-hidden relative ${
+        isExam ? 'select-none' : ''
+      }`}
+    >
+      {/* 考试模式防作弊半透明背景水印 */}
+      {isExam && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 opacity-[0.035] dark:opacity-[0.06] overflow-hidden flex flex-wrap items-center justify-around gap-16 select-none p-4"
         >
-          <ArrowLeft size={15} />
-        </button>
+          {Array.from({ length: 24 }).map((_, i) => (
+            <div key={i} className="transform -rotate-25 text-xs font-mono font-bold tracking-widest text-main">
+              {payload.assignment.title} · #{attemptId.slice(-6)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="relative z-10 px-5 py-3 border-b border-theme bg-surface-secondary/70 flex flex-wrap items-center gap-3 shrink-0">
+        {!isExam && (
+          <button
+            type="button"
+            onClick={onExit}
+            className="p-1.5 rounded-lg border border-theme bg-surface text-muted hover:text-main cursor-pointer"
+            aria-label={zh ? '返回测评列表（作答已自动保存）' : 'Back to list (answers are saved)'}
+          >
+            <ArrowLeft size={15} />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-bold text-main truncate">{payload.assignment.title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-bold text-main truncate">{payload.assignment.title}</h1>
+            {isExam && (
+              <span className="px-2 py-0.5 rounded-full text-2xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800">
+                {zh ? '严格考试模式' : 'Exam Mode'}
+              </span>
+            )}
+          </div>
           <p className="text-2xs text-muted">
             {zh ? '已作答' : 'Answered'} {answeredCount}/{items.length}
             {savedAt && ` · ${zh ? '已自动保存' : 'autosaved'}`}
             {dirty.size > 0 && ` · ${zh ? '保存中…' : 'saving…'}`}
+            {isExam && proctorViolations > 0 && (
+              <span className="text-rose-600 font-semibold ml-2">
+                {zh ? `异常记录 ${proctorViolations} 次` : `Violations: ${proctorViolations}`}
+              </span>
+            )}
           </p>
         </div>
+
+        {/* 考试模式全屏提示与切换按钮 */}
+        {isExam && !isFullscreen && (
+          <button
+            type="button"
+            onClick={() => void requestFullscreen()}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 cursor-pointer animate-pulse"
+          >
+            {zh ? '进入全屏锁定' : 'Enter Fullscreen'}
+          </button>
+        )}
+
         {remaining !== null && (
           <span
             data-testid="assessment-countdown"
@@ -487,16 +619,33 @@ function AssessmentRunner({
         </button>
       </div>
 
+      {/* 监考告警提示条 */}
+      {proctorWarning && (
+        <div
+          role="alert"
+          className="relative z-10 mx-5 mt-3 px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs flex items-center justify-between gap-2"
+        >
+          <span>⚠️ {proctorWarning}</span>
+          <button
+            type="button"
+            onClick={() => setProctorWarning(null)}
+            className="text-2xs font-bold underline cursor-pointer"
+          >
+            {zh ? '知道了' : 'Dismiss'}
+          </button>
+        </div>
+      )}
+
       {error && (
         <p
           role="alert"
-          className="mx-5 mt-3 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs"
+          className="relative z-10 mx-5 mt-3 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs"
         >
           {error}
         </p>
       )}
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="relative z-10 flex-1 overflow-y-auto p-5">
         <ol className="space-y-4 max-w-3xl mx-auto">
           {items.map((item, index) => {
             const ui = assessmentQuestionTypeUiRegistry.get(item.type);
@@ -529,7 +678,7 @@ function AssessmentRunner({
 
 /* ─────────────────────────── 结果 ─────────────────────────── */
 
-function ResultView({ lang, result, onBack }: { lang: 'zh' | 'en'; result: StudentResultPayload; onBack: () => void }) {
+export function ResultView({ lang, result, onBack }: { lang: 'zh' | 'en'; result: StudentResultPayload; onBack: () => void }) {
   const zh = lang === 'zh';
   const { attempt, assignment } = result;
   return (

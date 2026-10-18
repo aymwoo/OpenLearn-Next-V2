@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Sparkles, TrendingUp, CheckCircle2, HelpCircle, Zap, Star, X } from 'lucide-react';
+import { Bell, Sparkles, TrendingUp, CheckCircle2, HelpCircle, Zap, Star, X, ClipboardList, Clock, Play } from 'lucide-react';
 import { StudentCountdownBanner } from './StudentCountdownBanner';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
 import { getOptionalSocket } from '../../services/socket-service';
+import { assessmentApi, type StudentAttemptPayload, type StudentResultPayload } from '../assessment/api';
+import { AssessmentRunner, ResultView } from '../assessment/student/StudentAssessmentsView';
 
 export interface StudentInteractiveOverlayProps {
   lessonId: string | null;
@@ -43,6 +45,21 @@ export function StudentInteractiveOverlay({
   const [rating, setRating] = useState(5);
   const [puzzledConcept, setPuzzledConcept] = useState('');
   const [feedbackNotes, setFeedbackNotes] = useState('');
+
+  // 课内即时测评状态
+  const [classroomAssessment, setClassroomAssessment] = useState<{
+    assignmentId: string;
+    title: string;
+    kind: string;
+    durationSec: number | null;
+    totalItems: number;
+    maxScore: number;
+  } | null>(null);
+  const [assessmentModalState, setAssessmentModalState] = useState<'closed' | 'prompt' | 'answering' | 'result'>('closed');
+  const [assessmentPayload, setAssessmentPayload] = useState<StudentAttemptPayload | null>(null);
+  const [assessmentResult, setAssessmentResult] = useState<StudentResultPayload | null>(null);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [assessmentError, setAssessmentError] = useState<string | null>(null);
 
   const buzzerArmedTimeRef = useRef<number>(Date.now());
   /**
@@ -189,7 +206,7 @@ export function StudentInteractiveOverlay({
     // 一律通过上面的 ref 读取：把它们放进依赖会导致自激轮询（见 activeBuzzerRef 注释）。
   }, [lessonId, studentId]);
 
-  // 监听教师广播的教学环节切换
+  // 监听教师广播的教学环节切换与随堂测评发起
   useEffect(() => {
     const socket = getOptionalSocket();
     if (!socket || !lessonId) return;
@@ -199,13 +216,45 @@ export function StudentInteractiveOverlay({
         setActiveSegmentId(data.activeSegmentId);
       }
     };
+
+    const handleAssessmentStarted = (data: any) => {
+      if (data?.lessonId === lessonId && data?.assignmentId) {
+        setClassroomAssessment({
+          assignmentId: data.assignmentId,
+          title: data.title || (lang === 'zh' ? '随堂测评' : 'Classroom Assessment'),
+          kind: data.kind || 'quiz',
+          durationSec: data.durationSec ?? null,
+          totalItems: data.totalItems ?? 0,
+          maxScore: data.maxScore ?? 0,
+        });
+        setAssessmentModalState('prompt');
+      }
+    };
+
     socket.on('student-active-segment-changed', handleSegmentChanged);
+    socket.on('classroom:assessment_started', handleAssessmentStarted);
     return () => {
       if (typeof socket.off === 'function') {
         socket.off('student-active-segment-changed', handleSegmentChanged);
+        socket.off('classroom:assessment_started', handleAssessmentStarted);
       }
     };
-  }, [lessonId]);
+  }, [lessonId, lang]);
+
+  const startClassroomAssessmentAttempt = async () => {
+    if (!classroomAssessment) return;
+    setAssessmentLoading(true);
+    setAssessmentError(null);
+    try {
+      const payload = await assessmentApi.startAttempt(classroomAssessment.assignmentId);
+      setAssessmentPayload(payload);
+      setAssessmentModalState('answering');
+    } catch (err: any) {
+      setAssessmentError(err?.message || String(err));
+    } finally {
+      setAssessmentLoading(false);
+    }
+  };
 
   // 加载当前课节的大纲环节名称字典
   useEffect(() => {
@@ -614,6 +663,110 @@ export function StudentInteractiveOverlay({
           setExitTicketSubmitted(true);
         }}
       />
+
+      {/* 课内即时测评：收到发起广播后的提示卡片 */}
+      {classroomAssessment && assessmentModalState === 'prompt' && (
+        <div
+          data-testid="student-classroom-assessment-card"
+          className="fixed bottom-20 left-6 z-50 bg-surface rounded-2xl border border-indigo-500/40 p-5 shadow-2xl w-80 flex flex-col gap-3 animate-slide-up"
+        >
+          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+            <span className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+              <ClipboardList size={14} />
+              {lang === 'zh' ? '随堂测评已发起' : 'Classroom Assessment'}
+            </span>
+            <button
+              onClick={() => setAssessmentModalState('closed')}
+              aria-label={lang === 'zh' ? '关闭' : 'Close'}
+              className="p-1 rounded-lg text-muted hover:text-foreground cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <p className="font-bold text-sm text-foreground">{classroomAssessment.title}</p>
+
+          <div className="flex items-center gap-2 text-2xs text-muted flex-wrap">
+            <span className="px-2 py-0.5 rounded-full bg-surface-secondary border border-theme">
+              {classroomAssessment.kind === 'exam'
+                ? lang === 'zh'
+                  ? '考试'
+                  : 'Exam'
+                : classroomAssessment.kind === 'survey'
+                  ? lang === 'zh'
+                    ? '问卷'
+                    : 'Survey'
+                  : lang === 'zh'
+                    ? '测试'
+                    : 'Quiz'}
+            </span>
+            <span>
+              {classroomAssessment.totalItems} {lang === 'zh' ? '道题' : 'items'}
+            </span>
+            <span>
+              {lang === 'zh' ? '满分' : 'Total'} {classroomAssessment.maxScore}
+            </span>
+            {classroomAssessment.durationSec && (
+              <span className="inline-flex items-center gap-1">
+                <Clock size={11} />
+                {Math.round(classroomAssessment.durationSec / 60)} {lang === 'zh' ? '分钟' : 'min'}
+              </span>
+            )}
+          </div>
+
+          {assessmentError && (
+            <p className="text-2xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 p-1.5 rounded-lg">
+              {assessmentError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void startClassroomAssessmentAttempt()}
+            disabled={assessmentLoading}
+            className="w-full py-2 px-3 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            {assessmentLoading ? <span className="animate-spin text-xs">⏳</span> : <Play size={13} />}
+            {lang === 'zh' ? '立即开始作答' : 'Start Assessment'}
+          </button>
+        </div>
+      )}
+
+      {/* 课内测评答题模态框（全屏/大视窗接管） */}
+      {assessmentModalState === 'answering' && assessmentPayload && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+          <div className="w-full max-w-4xl h-[92vh] flex flex-col">
+            <AssessmentRunner
+              lang={lang}
+              payload={assessmentPayload}
+              initialAnswers={assessmentPayload.answers}
+              onSubmitted={(result) => {
+                setAssessmentResult(result);
+                setAssessmentModalState('result');
+              }}
+              onExit={() => setAssessmentModalState('closed')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 课内测评提交后结果查看模态框 */}
+      {assessmentModalState === 'result' && assessmentResult && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+          <div className="w-full max-w-4xl h-[92vh] flex flex-col">
+            <ResultView
+              lang={lang}
+              result={assessmentResult}
+              onBack={() => {
+                setAssessmentModalState('closed');
+                setClassroomAssessment(null);
+                setAssessmentPayload(null);
+                setAssessmentResult(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
