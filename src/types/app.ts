@@ -72,11 +72,11 @@ export type ClassType = {
   class_passcode?: string | null;
   class_passcode_expires_at?: number | null;
   created_at: number;
-  /** 班级学生数（来自 class_students�? */
+  /** 班级学生数（来自 class_students） */
   student_count?: number;
-  /** 班级课程数（来自 schedules，按 lesson 排课�? */
+  /** 班级课程数（来自 schedules，按 lesson 排课） */
   course_count?: number;
-  /** 班级作业数（来自 assignments�? */
+  /** 班级作业数（来自 assignments） */
   assignment_count?: number;
 };
 
@@ -184,7 +184,7 @@ export interface SessionType {
   name: string;
   studentId?: string;
   email?: string;
-  /** ͷ�� URL��/uploads/avatars/...����δ����ʱΪ undefined */
+  /** 头像 URL（/uploads/avatars/...），未设置时为 undefined */
   avatar?: string;
   /** SEC-AUTH-06: 仍在使用种子默认密码（admin/admin、teacher/teacher），须强制改密 */
   mustChangePassword?: boolean;

@@ -511,7 +511,7 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
       path.join(REPO_ROOT, 'packages/core/worker-runtime/bootstrap/sections/message-handler.ts'),
       'utf8',
     );
-    const installSrc = fs.readFileSync(path.join(REPO_ROOT, 'packages/core/plugin-host/install.ts'), 'utf8');
+    const installSrc = fs.readFileSync(path.join(REPO_ROOT, 'packages/core/plugin-host/uninstall.ts'), 'utf8');
     expect(boot).toContain('workerData.tablePrefix ||');
     expect(boot).not.toContain("var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId)");
     expect(installSrc).toContain('pluginTablePrefix(pluginId)');

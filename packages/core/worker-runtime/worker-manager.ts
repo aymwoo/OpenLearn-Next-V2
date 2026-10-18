@@ -105,6 +105,32 @@ const POINTS_SERVICE_TOKENS = Object.freeze([
  * 而上面的白名单常量只到服务名。剥掉版本范围后做全等比较，避免 `includes` 子串匹配
  * 被 `IAmPointsLedgerServiceButFake` 之类伪造条目命中。
  */
+/**
+ * 计算隔离插件在 Node 权限模型下**额外**需要只读的路径。
+ *
+ * 插件产物把 `@openlearn/plugin-sdk` 标成 external，由宿主在
+ * `<pluginsDir>/node_modules/@openlearn/plugin-sdk` 建链接提供。该路径既不在
+ * 插件自己的目录里，也不在 `<root>/node_modules` 里，权限模型会直接
+ * `ERR_ACCESS_DENIED (FileSystemRead)`。这里返回链接目录与它解析后的真实目录
+ * （Node 的 ESM 解析会把符号链接还原成真实路径，两处都要放行）。
+ *
+ * @param pluginDir - 插件自身目录（`<pluginsDir>/<uuid>`）
+ */
+export function collectSharedReadPaths(pluginDir?: string): string[] {
+  if (!pluginDir) return [];
+  const paths = new Set<string>();
+  const nodeModulesDir = path.join(path.dirname(pluginDir), 'node_modules');
+  paths.add(nodeModulesDir);
+  const sdkLink = path.join(nodeModulesDir, '@openlearn', 'plugin-sdk');
+  try {
+    // realpath 会跟随符号链接；链接不存在或权限不足时忽略。
+    if (fs.existsSync(sdkLink)) paths.add(fs.realpathSync(sdkLink));
+  } catch {
+    /* 链接未建立时无需额外放行 */
+  }
+  return [...paths];
+}
+
 function normalizeDepEntry(entry: string): string {
   const slash = entry.indexOf('/');
   if (slash === -1) return entry;
@@ -773,7 +799,16 @@ export class WorkerManager {
           // 这样任何 spawn 路径（含测试直接调 spawnPluginChild）都自动受约束，
           // 而不存在「WorkerManager 记得传、别处忘了传」的口子。
           // ⚠️ 仅对 process 原语生效；worker_threads 侧未启用（见 plugin-permission.ts）。
-          permissionPaths: { pluginDir: pluginDir, rootPath: process.cwd() },
+          //
+          // sharedReadPaths：隔离插件从 `<pluginsDir>/<id>/index.js` 里 import
+          // `@openlearn/plugin-sdk`，解析到的是 `<pluginsDir>/node_modules/...` 这条
+          // 宿主建立的链接（以及它指向的真实 SDK 目录）。两者都不在 pluginDir 之下，
+          // 不放行就会被 `--permission` 以 ERR_ACCESS_DENIED 拦下（Issue #147 实测）。
+          permissionPaths: {
+            pluginDir: pluginDir,
+            rootPath: process.cwd(),
+            sharedReadPaths: collectSharedReadPaths(pluginDir),
+          },
         });
         childProcess = spawned.child;
         transport = spawned.transport;

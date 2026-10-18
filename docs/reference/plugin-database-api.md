@@ -92,54 +92,72 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 
 ## 3. Migration / 版本升级范式
 
-插件自有表拥有**正式的 `migrate()` API**（v0.2.5+，`buildContext()` 中构造的 `dbApi.migrate()`，见 `packages/core/plugin-host/context-builder.ts`）：
+平台自 Issue #142 起正式支持**声明式 SQL 版本化迁移**，并对既有命令式 `ctx.db.migrate()` 提供完全向后兼容与事务原子性增强。
+
+### 3.1 声明式版本化迁移（推荐，Issue #142）
+
+插件包根目录下可提供 `migrations/` 目录，宿主在插件激活（无论是 Inline 还是 Worker 隔离模式）前自动执行尚未应用的增量迁移：
+
+```text
+my-plugin/
+├── manifest.json
+├── index.js
+└── migrations/
+    ├── 001_initial_schema.sql
+    ├── 002_add_student_notes.sql
+    └── 003_create_indexes.sql
+```
+
+#### 规范与特性
+
+1. **命名与排序**：
+   - 文件名约定：`NNN_name.sql`（`NNN` 为前导正整数序列号，如 `001_`、`02_`、`10_`）。宿主按数字版本号自然序升序排列执行。
+2. **语法标记**：
+   - 与平台核心迁移对齐，支持 `-- UP` 与 `-- DOWN` 分段注释。若省略标记，整篇文件默认作为 `-- UP` 执行：
+     ```sql
+     -- UP
+     CREATE TABLE IF NOT EXISTS {{prefix}}homework (
+       id TEXT PRIMARY KEY,
+       title TEXT NOT NULL,
+       created_at INTEGER NOT NULL
+     );
+
+     -- DOWN
+     DROP TABLE IF EXISTS {{prefix}}homework;
+     ```
+3. **占位符自动展开**：
+   - 支持在 SQL 中使用 `{{prefix}}` 或 `{{table_prefix}}`，宿主在执行时自动替换为该插件规范的命名空间前缀 `plugin_<scopeId>_`（对齐安装主键 UUID 或内置插件 scopeId）。
+4. **单步事务与失败回滚**：
+   - 每一步迁移均包裹在 SQLite `db.transaction()` 内原子执行。若某步发生语法错误或执行异常，该步事务**自动完全回滚**，已执行的前序迁移保留，后续迁移中止，插件进入 `ERROR` 状态并抛出 `PluginMigrationExecutionError`。
+5. **拒绝版本降级保护（Downgrade Protection）**：
+   - 宿主在激活前检查数据库元表记录的最大已应用版本 `maxAppliedVersion` 与当前插件包内的最大声明版本 `maxDeclaredVersion`。
+   - 若 `maxAppliedVersion > maxDeclaredVersion`（例如已升级至 v2 的数据库被意外安装了 v1 旧版插件包），宿主抛出 `PluginMigrationDowngradeError` 并强行拒绝激活，杜绝旧版代码破坏新版表结构或读写异常。
+6. **元表与数据生命周期**：
+   - 迁移状态记录在 `plugin_declared_migrations (plugin_id, version, name, checksum, applied_at)` 元表中，包含 SHA/简单校验和防篡改校验。
+   - 卸载策略协同（Issue #141）：当卸载插件且选择保留数据（`keep`，默认）时，迁移元表记录原样保留；重新安装同插件时自动识别既有版本并增量续跑；选择彻底清除（`purge`）时随插件私有表一并清理。
+7. **单元测试支持**：
+   - `@openlearn/plugin-test-kit` 导出 `runTestPluginMigrations(db, pluginId, migrationsDir)` 辅助函数，方便插件开发者在单测中测试多版本数据升级与演进。
+
+---
+
+### 3.2 命令式 `ctx.db.migrate`（向后兼容）
+
+既有使用 `ctx.db.migrate()` 的插件无需修改代码即可平滑运行：
 
 ```typescript
-async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void) {
-  db.exec(`CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)`);
-  const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId);
-  const currentVersion = row ? row.version : 0;
-  if (currentVersion < targetVersion) {
-    await upgradeFn(db);
-    db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(pluginId, targetVersion);
+async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void)
+```
+
+- **行为**：在 `plugin_migrations` 表记录版本（`plugin_id` 主键）。若当前版本小于 `targetVersion`，则调用 `upgradeFn(db)` 并更新版本号。
+- **事务增强**：底层已增加 `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` 事务包裹，单步失败时自动回滚，版本号不被错误提升。
+- **范式示例**：
+  ```typescript
+  export async function activate(ctx: PluginContext) {
+    await ctx.db.migrate(1, async (sqliteDb) => {
+      sqliteDb.prepare(`CREATE TABLE IF NOT EXISTS my_table (id TEXT PRIMARY KEY, data TEXT)`).run();
+    });
   }
-}
-```
-
-**行为**：在 `plugin_migrations` 表记录版本（`plugin_id` 主键）。`migrate(target, fn)` 读取当前版本（默认 0）；若 `current < target` 则执行 `upgradeFn(db)`（Inline 下为进程内原始 `better-sqlite3` 实例，可 `exec` / `prepare().run()` / `transaction()`；Worker 下为仅含 `prepare()` 的受限代理），再写入 `target`。**幂等**。
-
-**标准范式**（官方教程 §8.6 声明式数据库迁移，见 [插件开发教程](../tutorials/plugin-development-tutorial.md)）：
-
-```typescript
-export async function activate(ctx: PluginContext) {
-  // v1：建表（用 prepare().run() 以同时兼容 Inline 与 Worker）
-  await ctx.db.migrate(1, async (sqliteDb) => {
-    sqliteDb
-      .prepare(`CREATE TABLE IF NOT EXISTS my_table (id TEXT PRIMARY KEY, data TEXT)`)
-      .run();
-  });
-  // v2：加列
-  await ctx.db.migrate(2, async (sqliteDb) => {
-    sqliteDb.prepare(`ALTER TABLE my_table ADD COLUMN extra TEXT DEFAULT ''`).run();
-  });
-  // v3：再加索引等
-  await ctx.db.migrate(3, async (sqliteDb) => {
-    sqliteDb.prepare(`CREATE INDEX IF NOT EXISTS idx_my_table_extra ON my_table(extra)`).run();
-  });
-}
-```
-
-> 每次版本升级只需新增一个更高 `targetVersion` 的 `migrate` 调用；旧版本已应用过则自动跳过。
-
-> ⚠️ **不要在 `upgradeFn` 中使用 `sqliteDb.exec()`**：Worker 模式的 `upgradeFn` 只能拿到 `prepare()` 代理（无 `exec`、无 `transaction`），使用 `exec()` 的迁移脚本切换到 Worker 模式会直接报错。始终用 `prepare().run()` 即可两种模式通吃。
->
-> ⚠️ `upgradeFn` 中的表名**不会**自动加 `plugin_{pluginId}_` 前缀（上例的 `my_table` 就是最终表名）；需要命名空间隔离请改用 `ctx.db.ensureTable()` / `ctx.db.table()`。
-
-**注意**：
-
-- 插件表**没有 down-migration / 回滚**机制，只有 `dropAllTables()`（卸载时自动调用）。
-- `migrate` 的 `upgradeFn` 在**进程内**拿到完整 `better-sqlite3` 实例（可用 `exec`）；worker 隔离模式下为受限包装（见 §2）。
-- `migrations/` 目录 + `server/utils/migrate.ts` 的 `runMigrations` 是**核心平台 schema** 迁移系统，**不是**插件迁移系统；核心 `packages/core/db/index.ts` 当前仍用遗留的 `try/catch ALTER` 引导模式。插件请只用 §3 的 `ctx.db.migrate`。
+  ```
 
 ---
 

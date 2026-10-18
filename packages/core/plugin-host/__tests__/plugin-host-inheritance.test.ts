@@ -31,6 +31,7 @@ const CHAIN = [
   { file: 'lifecycle.ts', cls: 'PluginHostLifecycle' },
   { file: 'reload.ts', cls: 'PluginHostReload' },
   { file: 'install.ts', cls: 'PluginHostInstall' },
+  { file: 'uninstall.ts', cls: 'PluginHostUninstall' },
 ] as const;
 
 const src = (f: string) => fs.readFileSync(path.join(DIR, f), 'utf-8');
@@ -76,8 +77,8 @@ describe('L-2 阶段 2 · PluginHost 继承链结构', () => {
 
   it('index.ts 的 PluginHost 继承链末端', () => {
     const idx = src('index.ts');
-    expect(idx).toContain(`import { PluginHostInstall } from './install.js';`);
-    expect(idx).toMatch(/export class PluginHost extends PluginHostInstall \{\}/);
+    expect(idx).toContain(`import { PluginHostUninstall } from './uninstall.js';`);
+    expect(idx).toMatch(/export class PluginHost extends PluginHostUninstall \{\}/);
   });
 
   it('⚠️ 没有方法在两层里重复定义（防止"复制一份塞进模块"这种腐化）', () => {

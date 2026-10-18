@@ -23,6 +23,7 @@ import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
+import { warnDeprecation } from '../extension-points/index.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -761,6 +762,18 @@ export async function buildContext(
   Object.setPrototypeOf(wrappedAI, null);
 
   // 4. 构建 services 容器并冻结（D-06）
+  if (manifest) {
+    const allTokens = [
+      ...(Array.isArray(manifest.requires) ? manifest.requires : []),
+      ...(Array.isArray(manifest.optional) ? manifest.optional : []),
+    ];
+    for (const rawToken of allTokens) {
+      const lastAt = rawToken.lastIndexOf('@');
+      const tokenName = lastAt > 0 ? rawToken.slice(0, lastAt) : rawToken;
+      warnDeprecation('service', tokenName, manifest.id || pluginId);
+    }
+  }
+
   const services = {
     commandBus: wrappedCommandBus,
     eventBus: wrappedEventBus,
@@ -837,11 +850,22 @@ export async function buildContext(
         { version: number } | undefined;
       const currentVersion = row ? row.version : 0;
       if (currentVersion < targetVersion) {
-        await upgradeFn(db);
-        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
-          pluginId,
-          targetVersion,
-        );
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          await upgradeFn(db);
+          db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
+            pluginId,
+            targetVersion,
+          );
+          db.exec('COMMIT');
+        } catch (err) {
+          try {
+            db.exec('ROLLBACK');
+          } catch {
+            // 忽略 ROLLBACK 在已回滚状态下的异常
+          }
+          throw err;
+        }
       }
     },
   };

@@ -155,3 +155,14 @@
 - `IFrontendAPI` 需**按路径前缀**门禁（`post('/api/grade-sync')`、`del('/api/plugins/x')` 会绕过任何纯方法名规则）
 - `ISemesterGradeService` 需 `grades:write` 专属 capability（`grades:read` 不应解锁写入）
 - `ISocketService.disconnect()` 对 worker 一律拒绝（无正当理由让插件杀掉课堂 socket）
+
+---
+
+## 阶段九：信任边界与网络代理现状对齐（Issue #144）—— ✅ 已完成
+
+| 项 | 根因 | 状态 |
+| --- | --- | --- |
+| `plugin-trust-boundary.md` 滞后陈述 (TB-09 / R-04) | PR #32 已实现 `plugin-net-preload.cjs` 出站拦截与宿主 IPC 代发，文档仍陈述 process 模式网络不受限 | ✅ 已同步更新矩阵与已知缺口说明，明确各模式网络边界 |
+| `plugin-trust-boundary.md:91` 表格语法错误 (TB-08) | 运营建议表格首行误写为 `<|channel|>` | ✅ 修复表格语法 |
+| `worker_threads` / `inline` 模式网络覆盖核实 | 确认同进程共享网络栈无 preload 拦截；但策略层 `execution-policy.ts` 强制对不受信第三方插件转为 `process` 模式 | ✅ 文档明确事实与防御闭环，并增加自动化测试守住契约 |
+

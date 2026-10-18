@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { EventBus } from '../event-bus/index.js';
+import { warnDeprecation } from '../extension-points/index.js';
 
 export interface CommandMetadata {
   readonly correlationId?: string;
@@ -49,6 +50,7 @@ export class CommandBus {
   }
 
   public registerHandler(commandType: string, handler: CommandHandler) {
+    warnDeprecation('command', commandType);
     if (this.handlers.has(commandType)) {
       throw new Error(`Command handler for ${commandType} is already registered.`);
     }
@@ -63,6 +65,7 @@ export class CommandBus {
    * as fallback when no modern handler exists for the command type.
    */
   public registerLegacyHandler(commandType: string, handler: CommandHandler) {
+    warnDeprecation('command', commandType);
     this.legacyHandlers.set(commandType, handler);
   }
 
@@ -97,6 +100,8 @@ export class CommandBus {
     if (this.interceptor) {
       await this.interceptor(normalizedCommand);
     }
+
+    warnDeprecation('command', normalizedCommand.type, normalizedCommand.actorId);
 
     // D-11: Priority routing — modern handler first, legacy fallback
     const handler = this.handlers.get(normalizedCommand.type) ?? this.legacyHandlers.get(normalizedCommand.type);

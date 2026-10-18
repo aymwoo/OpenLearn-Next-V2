@@ -18,8 +18,8 @@ import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
 import { resolvePluginExecutionMode } from './execution-policy.js';
 import { clearPluginGrants } from './plugin-grants.js';
-import { isSafePluginTablePrefix, pluginTablePrefix, listAllowedPluginTablePrefixes } from './plugin-tables.js';
-import { clearPublicRouteApprovals } from './public-routes.js';
+import { deleteOrphanDataRecord, findAdoptableOrphanData, type OrphanDataRecord } from './orphan-data.js';
+import { recordSecurityAudit } from '../observability/audit-log.js';
 import { installPluginDependencies, parsePluginDependencies } from './dependency-install.js';
 import { checkMissingDeps } from './dependency-resolver.js';
 import semver from 'semver';
@@ -31,6 +31,50 @@ import { createPluginStaticMiddleware } from './base.js';
 import type { PluginHost } from './index.js';
 
 export abstract class PluginHostInstall extends PluginHostReload {
+  /**
+   * 查找可复用的孤立数据（Issue #141），**不注销登记**。
+   *
+   * 复用原安装 UUID：`pluginTablePrefix(pluginId)`、`plugin_migrations.plugin_id`
+   * 与 `plugin_storage.plugin_id` 三处键空间都由该 UUID 派生，因此旧表、迁移版本
+   * 与存储键会**天然命中**，插件无需感知数据曾被卸载过。
+   *
+   * 登记在安装成功后（`finishOrphanDataAdoption`）才注销；安装中途失败时登记
+   * 仍留在管理页可见可清理，不会出现「表还在但没人知道」的盲区。
+   *
+   * 失败不阻断安装：旧库未跑迁移 034 时只是失去「复用」机会，安装本身仍应成功。
+   */
+  private findOrphanDataForInstall(manifestId: string): OrphanDataRecord | null {
+    try {
+      const record = findAdoptableOrphanData(this.db, manifestId);
+      if (record) {
+        console.log(
+          `[PluginHost] Reusing orphaned data for "${manifestId}": pluginId=${record.pluginId}, ` +
+            `tables=${record.tableNames.length}, rows=${record.rowCount}`,
+        );
+      }
+      return record;
+    } catch (error) {
+      console.warn(`[PluginHost] Failed to look up orphaned data for "${manifestId}":`, error);
+      return null;
+    }
+  }
+
+  /** 安装成功落库后注销孤立数据登记（数据已回到插件名下）。 */
+  private finishOrphanDataAdoption(record: OrphanDataRecord | null): void {
+    if (!record) return;
+    try {
+      deleteOrphanDataRecord(this.db, record.manifestId, record.pluginId);
+      recordSecurityAudit('plugin.orphan_data_adopted', {
+        manifestId: record.manifestId,
+        pluginId: record.pluginId,
+        tables: record.tableNames.length,
+        rows: record.rowCount,
+      });
+    } catch (error) {
+      console.warn(`[PluginHost] Failed to clear orphaned data record for "${record.manifestId}":`, error);
+    }
+  }
+
   /**
    * 安装插件到数据库。
    *
@@ -109,8 +153,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
         );
       }
     }
-    // 3. 生成 pluginId
-    const pluginId = uuidv7();
+    // 3. 生成 pluginId。若库里存在同 manifest.id 的孤立数据（上次 keep 卸载留下），
+    //    复用它原本的安装 UUID，让旧表 / plugin_migrations / plugin_storage 全部命中。
+    const adoptedOrphan = this.findOrphanDataForInstall(manifest.id);
+    const pluginId = adoptedOrphan?.pluginId ?? uuidv7();
     const pluginDir = this.getPluginDir(pluginId);
     const filePath = this.getPluginFilePath(pluginId);
     const manifestPath = this.getPluginManifestPath(pluginId);
@@ -175,6 +221,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
       // 7. 设置状态为 INSTALLED（上方 INSERT 已写入 status='installed'，此处只同步内存）
       this.setPluginState(pluginId, PluginState.INSTALLED);
 
+      // 8. 安装成功落库后才注销孤立数据登记（Issue #141）：中途失败会走 catch
+      //    回滚 DB 行与文件，此时登记必须仍在，否则表还在却没人知道。
+      this.finishOrphanDataAdoption(adoptedOrphan);
+
       console.log(`[PluginHost] Plugin "${manifest.id}" installed to ${filePath} (${pluginId})`);
       return manifest;
     } catch (err) {
@@ -192,172 +242,6 @@ export abstract class PluginHostInstall extends PluginHostReload {
       this.pluginStates.delete(pluginId);
       throw err;
     }
-  }
-
-  /**
-   * 卸载插件。
-   *
-   * 方法 4: uninstallPlugin(pluginId: string): Promise<void>
-   *
-   * 流程：
-   * 1. 如果 ACTIVE，先调用 deactivatePlugin()
-   * 2. 验证状态转换 INACTIVE/ERROR/INSTALLED → UNINSTALLED
-   * 3. 从 DB DELETE（plugins + plugin_storage）
-   * 4. 清理内存状态
-   *
-   * @param pluginId - 插件标识符
-   */
-  private dropPluginTables(prefix: string): number {
-    if (!isSafePluginTablePrefix(prefix)) return 0;
-    try {
-      const tables = this.db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
-        .all(`${prefix}%`) as { name: string }[];
-      let dropped = 0;
-      for (const table of tables) {
-        if (!table.name.startsWith(prefix) || !/^plugin_[A-Za-z0-9_]+$/.test(table.name)) continue;
-        this.db.exec(`DROP TABLE IF EXISTS ${table.name}`);
-        dropped += 1;
-      }
-      return dropped;
-    } catch (error) {
-      console.warn(`[PluginHost] Failed to drop plugin tables for prefix "${prefix}":`, error);
-      return 0;
-    }
-  }
-
-  async uninstallPlugin(pluginId: string): Promise<void> {
-    pluginId = this.resolvePluginUuid(pluginId);
-    if (this.isSystemPluginRecord(pluginId)) {
-      throw new Error(`Cannot uninstall system plugin: ${pluginId}`);
-    }
-
-    // 等待在飞的生命周期操作结束（审计 H-2）。
-    //
-    // 修复前：下方只判断 `currentState === ACTIVE`，若插件此刻正在 ACTIVATING 就跳过停用、
-    // 直接 DELETE DB 行，而在飞的 activate 随后完成 → **已删除的插件仍留在 commandBus 上**，
-    // 其 handler 永久泄漏。典型触发：装完插件立刻点卸载。
-    await this.waitForLifecycleIdle(pluginId);
-
-    const currentState = this.pluginStates.get(pluginId);
-
-    // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）
-    if (currentState === PluginState.ACTIVE) {
-      // Phase 5: If worker-mode, ensure Worker is terminated before DB deletion
-      // 判据用 requiresIsolatedExecution（审计 F-1）：process 模式的卸载
-      // 也必须走 deactivateWorker，否则子进程在 DB 行删除后仍在运行。
-      const execMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
-      if (requiresIsolatedExecution(execMode)) {
-        await this.deactivateWorker(pluginId);
-      } else {
-        await this.deactivatePlugin(pluginId);
-      }
-    }
-
-    // 1b. 兜底资源回收：插件若非 ACTIVE 态（如 ERROR / INACTIVE / INSTALLED），
-    // 上面的停用分支不会执行，其命令、事件订阅、定时器与路由可能仍然残留
-    // （典型场景：activate 中途失败、reload 失败后直接卸载）。
-    // disposeAll 幂等，对已回收过的插件为无操作，故无条件执行。
-    this.resourceTracker.disposeAll(pluginId);
-
-    // 2. 获取当前状态（可能已被 deactivatePlugin 修改）
-    const state = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
-
-    // 3. 查询 file_path 和 manifest（DELETE 之前必须获取）
-    const row = this.db.prepare('SELECT manifest, file_path FROM plugins WHERE id = ?').get(pluginId) as
-      { manifest: string; file_path?: string } | undefined;
-
-    // 幂等：已卸载且 DB 无残留记录时直接返回，避免 uninstalled → uninstalled 非法转换
-    if (state === PluginState.UNINSTALLED && !row) {
-      this.pluginStates.delete(pluginId);
-      return;
-    }
-
-    // 验证状态转换（已处于 UNINSTALLED 但仍有残留记录时跳过校验，继续清理）
-    if (state !== PluginState.UNINSTALLED) {
-      this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
-    }
-    const manifestId = (() => {
-      if (!row) return pluginId;
-      try {
-        const m = JSON.parse(row.manifest);
-        return m.id ?? pluginId;
-      } catch {
-        return pluginId;
-      }
-    })();
-    const pluginDir = row?.file_path ? this.getPluginDir(pluginId) : null;
-
-    // 4. 从 DB 删除
-    this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
-    this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
-    this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(pluginId);
-    clearPublicRouteApprovals(this.db, [pluginId, manifestId]);
-    // 建表与删表统一使用复合前缀；同时清掉该插件相关的历史合法前缀表：
-    // pluginTablePrefix(pluginId) 与 pluginTablePrefix(manifestId)
-    const otherPluginSharingManifest = this.db
-      .prepare('SELECT id FROM plugins WHERE id != ? AND manifest LIKE ?')
-      .get(pluginId, `%"id":"${manifestId}"%`);
-
-    const prefixes = listAllowedPluginTablePrefixes(pluginId, manifestId, true);
-    let totalDropped = 0;
-    for (const prefix of prefixes) {
-      // 若仍有同 manifestId 的兄弟插件已安装，保留旧前缀避免误删
-      if (otherPluginSharingManifest && prefix === pluginTablePrefix(manifestId)) {
-        continue;
-      }
-      totalDropped += this.dropPluginTables(prefix);
-    }
-    if (totalDropped > 0) {
-      console.log(`[PluginHost] Dropped ${totalDropped} plugin tables for "${pluginId}"`);
-    }
-
-    // 4b. 撤销插件能力（与 T-04-20 等价的兜底）
-    // 非 ACTIVE 态卸载不会走 deactivate 路径，也就不会执行 revokeAll，
-    // 会造成已授予能力在内存中残留（权限泄漏）。此处无条件撤销一次。
-    // 与 activate/deactivate 共用 revokeCapabilities（P1：能力授予/撤销
-    // 从 7 处内联收敛为单一来源，避免只改一处造成漂移）。
-    await this.revokeCapabilities(`plugin:${manifestId}`);
-
-    // 4c. Deregister static routes registered by deploy (best-effort cleanup)
-    if (this.expressApp && this._registeredRoutes.has(manifestId)) {
-      try {
-        const route = this._registeredRoutes.get(manifestId);
-        const stack = this.expressApp._router?.stack || [];
-        for (let i = stack.length - 1; i >= 0; i--) {
-          const layer = stack[i];
-          if (layer.route === undefined && layer.regexp && new RegExp(layer.regexp).test(route + '/')) {
-            stack.splice(i, 1);
-            // 审计 R-6：原先此处 `break` —— createPluginStaticMiddleware 挂载的是
-            // **两个**中间件（CSP 头 + express.static），只摘一个会留下一个
-            // 空转层（继续给已卸载插件的路由设 header）。从后往前遍历时
-            // splice 不影响更小的索引，故可安全删除全部匹配层。
-          }
-        }
-        this._registeredRoutes.delete(manifestId);
-        console.log(`[PluginHost] Deregistered static route "${route}" for plugin "${manifestId}"`);
-      } catch (routeErr: any) {
-        console.warn(`[PluginHost] Failed to deregister static route for "${manifestId}":`, routeErr.message);
-      }
-    }
-    // 5. 清理文件系统
-    if (pluginDir && fs.existsSync(pluginDir)) {
-      try {
-        fs.rmSync(pluginDir, { recursive: true, force: true });
-        console.log(`[PluginHost] Removed plugin directory: ${pluginDir}`);
-      } catch (e) {
-        console.warn(`[PluginHost] Failed to remove plugin directory "${pluginDir}":`, e);
-      }
-    }
-
-    // 6. 清理内存
-    this.setPluginState(pluginId, PluginState.UNINSTALLED);
-    this.pluginInstances.delete(pluginId);
-
-    // 6a. V3.0: 清理贡献注册
-    this.contributionRegistry.unregister(manifestId);
-
-    console.log(`[PluginHost] Plugin "${pluginId}" uninstalled`);
   }
 
   /**
@@ -433,8 +317,10 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
     }
 
-    // 3. 生成 ID
-    const pluginId = uuidv7();
+    // 3. 生成 ID。若库里存在同 manifest.id 的孤立数据（上次 keep 卸载留下），
+    //    复用它原本的安装 UUID，让旧表 / plugin_migrations / plugin_storage 全部命中。
+    const adoptedOrphan = this.findOrphanDataForInstall(manifest.id);
+    const pluginId = adoptedOrphan?.pluginId ?? uuidv7();
     const pluginDir = this.getPluginDir(pluginId);
     const filePath = this.getPluginFilePath(pluginId);
     const manifestPath = this.getPluginManifestPath(pluginId);
@@ -649,6 +535,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
 
       // 6. 设置状态（同上：INSERT 已落 DB，这里只同步内存）
       this.setPluginState(pluginId, PluginState.INSTALLED);
+
+      // 6b. 安装成功落库后才注销孤立数据登记（Issue #141），理由同 installPluginExclusive
+      this.finishOrphanDataAdoption(adoptedOrphan);
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
       this.emitProgress(manifest.id, 'complete', 'Installation complete');
@@ -1036,3 +925,4 @@ export abstract class PluginHostInstall extends PluginHostReload {
     }
   }
 }
+

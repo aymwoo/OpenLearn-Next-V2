@@ -9,8 +9,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { EventEmitter } from 'events';
-import { WorkerManager, WorkerRegistry } from '../worker-manager.js';
+import { WorkerManager, WorkerRegistry, collectSharedReadPaths } from '../worker-manager.js';
 import { ServiceHost } from '../service-host.js';
 import { NodeWorkerTransport } from '../transport.js';
 import type { IWorkerTransport } from '../types.js';
@@ -385,5 +388,44 @@ describe('WorkerManager', () => {
     );
     const elapsed = Date.now() - start;
     expect(elapsed).toBeLessThan(5000);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Plugin SDK 解析路径（Node 权限模型放行范围）
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('collectSharedReadPaths', () => {
+  it('放行插件根 node_modules 与 @openlearn/plugin-sdk 链接的真实目标', () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ol-shared-read-'));
+    try {
+      const pluginDir = path.join(dataDir, 'plugins', 'uuid-1');
+      fs.mkdirSync(pluginDir, { recursive: true });
+      const sdkReal = path.join(dataDir, 'sdk-real');
+      fs.mkdirSync(sdkReal, { recursive: true });
+      const linkParent = path.join(dataDir, 'plugins', 'node_modules', '@openlearn');
+      fs.mkdirSync(linkParent, { recursive: true });
+      fs.symlinkSync(sdkReal, path.join(linkParent, 'plugin-sdk'), 'dir');
+
+      const paths = collectSharedReadPaths(pluginDir);
+
+      expect(paths).toContain(path.join(dataDir, 'plugins', 'node_modules'));
+      // ESM 解析会把符号链接还原成真实路径，真实目录也必须放行
+      expect(paths).toContain(fs.realpathSync(sdkReal));
+    } finally {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('链接还没建立时只放行插件根 node_modules，不抛错', () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ol-shared-read-none-'));
+    try {
+      const pluginDir = path.join(dataDir, 'plugins', 'uuid-2');
+      fs.mkdirSync(pluginDir, { recursive: true });
+      expect(collectSharedReadPaths(pluginDir)).toEqual([path.join(dataDir, 'plugins', 'node_modules')]);
+      expect(collectSharedReadPaths(undefined)).toEqual([]);
+    } finally {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 });

@@ -144,6 +144,10 @@ interface ActionDescriptor {
 interface ICommandBusService {
   execute<T extends PlatformCommand>(command: T): Promise<unknown>;
   registerHandler(commandType: string, handler: CommandHandler): void | Promise<void>;
+  /**
+   * @deprecated 注册遗留命令处理器。请使用标准 `registerHandler` 替代。
+   */
+  registerLegacyHandler?(commandType: string, handler: CommandHandler): void | Promise<void>;
   unregisterHandler(commandType: string): void | Promise<void>;
   createCommand<T>(
     type: string,

@@ -209,3 +209,48 @@ export class PluginSignatureInvalidError extends PluginSignatureError {
     this.name = 'PluginSignatureInvalidError';
   }
 }
+// ── Issue #142: Declarative Migration Errors ──────────────────────────────
+
+/**
+ * PluginMigrationError — 插件数据库迁移异常基类。
+ */
+export class PluginMigrationError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    message: string,
+  ) {
+    super(`Plugin "${pluginId}" migration failed: ${message}`);
+    this.name = 'PluginMigrationError';
+  }
+}
+
+/**
+ * PluginMigrationExecutionError — 插件单步迁移 SQL 执行失败且已回滚事务。
+ */
+export class PluginMigrationExecutionError extends PluginMigrationError {
+  constructor(
+    pluginId: string,
+    public readonly migrationName: string,
+    public readonly cause: Error,
+  ) {
+    super(pluginId, `Execution of migration "${migrationName}" failed: ${cause.message}`);
+    this.name = 'PluginMigrationExecutionError';
+  }
+}
+
+/**
+ * PluginMigrationDowngradeError — 插件版本降级被拒绝（数据库版本高于插件包声明版本）。
+ */
+export class PluginMigrationDowngradeError extends PluginMigrationError {
+  constructor(
+    pluginId: string,
+    public readonly currentDbVersion: number,
+    public readonly packageVersion: number,
+  ) {
+    super(
+      pluginId,
+      `Downgrade rejected: Database has migration version ${currentDbVersion}, but package only declares version ${packageVersion}. Downgrading plugin database schema is not permitted.`,
+    );
+    this.name = 'PluginMigrationDowngradeError';
+  }
+}

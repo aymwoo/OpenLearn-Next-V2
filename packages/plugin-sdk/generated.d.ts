@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：240 个（入口导出但手写 d.ts 未声明的 240 项及其类型引用闭包）
+ * 覆盖符号：243 个（入口导出但手写 d.ts 未声明的 243 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -1215,6 +1215,10 @@ declare class PluginContextAdapter implements IUnifiedPluginContext {
   readonly _context: PluginContext;
 }
 
+/** @see packages/core/plugin-host/orphan-data.ts */
+/** 卸载时的数据处理策略。`keep` 为默认，`purge` 必须显式指定。 */
+type PluginDataPolicy = 'keep' | 'purge';
+
 /** @see packages/core/plugin-host/plugin-distribution-manager.ts */
 declare class PluginDistributionManager implements IPluginDistributionManager {
   readonly id: any;
@@ -1275,7 +1279,7 @@ declare class PluginLifecycleManager implements IPluginLifecycleManager {
   activatePlugin(pluginId: string): Promise<void>;
   deactivatePlugin(pluginId: string): Promise<void>;
   reloadPlugin(pluginId: string, newCode?: string): Promise<void>;
-  uninstallPlugin(pluginId: string): Promise<void>;
+  uninstallPlugin(pluginId: string, options?: UninstallPluginOptions): Promise<UninstallPluginResult>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
   readonly pluginHost: PluginHost;
@@ -2203,6 +2207,31 @@ declare class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
 }): void;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
+}
+
+/** @see packages/core/plugin-host/orphan-data.ts */
+interface UninstallPluginOptions {
+    /** 默认 `keep`：保留数据；`purge` 需显式指定且调用方必须已完成二次确认。 */
+    dataPolicy?: PluginDataPolicy;
+    /** purge 归档目录；默认与 pluginsDir 同级的数据目录 `plugin-data-exports`。 */
+    exportDir?: string;
+    /** 审计日志里的操作者标识。 */
+    actorId?: string;
+}
+
+/** @see packages/core/plugin-host/orphan-data.ts */
+interface UninstallPluginResult {
+    pluginId: string;
+    manifestId: string;
+    dataPolicy: PluginDataPolicy;
+    /** keep 策略下继续保留在库中的表（供接口回显/审计）。 */
+    keptTables: string[];
+    keptRows: number;
+    /** purge 策略下实际删除的表数量。 */
+    droppedTables: number;
+    /** purge 策略下的归档文件路径（先导出后删除；导出失败则中止卸载）。 */
+    exportFile?: string;
+    orphanRegistered: boolean;
 }
 
 /** @see packages/core/classroom-runtime/types.ts */

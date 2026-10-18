@@ -1,0 +1,180 @@
+name: Upgrade regression
+
+# Issue #147：每个 PR 都要证明「上一正式版的库 + 已装插件 + 旧数据」能升级到当前 main：
+# 启动正常、迁移幂等、插件仍 ACTIVE、数据仍可读。
+#
+# 为什么不用 docker-rehearsal：那个作业验证的是**空库冷启动**，
+# 空库永远不会暴露「旧迁移 checksum 被改写」「插件表被误删」「旧数据读不回」这类问题。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+# 同一分支只保留最新一次：升级作业会用上一版的库跑真实迁移，历史结果没有参考价值。
+concurrency:
+  group: upgrade-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # PR / main：解析上一正式版 tag → 取缓存或现场建 fixture → 用 PR head 代码升级并断言。
+  upgrade-regression:
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/heads/')
+    name: Upgrade from last release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要完整 tag 历史才能解析「上一正式版」。
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install platform dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve previous release tag
+        id: release
+        run: |
+          # 只认三段式 semver tag；仓库里的 v1.0 / v2.0 是里程碑归档，不是可升级的发行版。
+          TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD || true)
+          if [ -z "$TAG" ]; then
+            echo "::error::找不到上一正式版 tag（vX.Y.Z），升级回归无法确定基线"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "上一正式版：$TAG（当前 HEAD：$(git rev-parse --short HEAD)）"
+
+      - name: Restore fixture cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .upgrade-fixtures
+          key: upgrade-fixture-${{ steps.release.outputs.tag }}-${{ hashFiles('.github/actions/build-plugin-fixtures/action.yml', 'scripts/stage-plugin-compat-fixture.mjs') }}
+
+      - name: Build plugin ZIP fixtures
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/build-plugin-fixtures
+
+      - name: Build fixture from release tag
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # 用 release tag 的**服务端代码**建库：这样迁移集合与 checksum 都来自真实发行版，
+          # 而 builder 脚本本身用 PR head 的版本（tag 里还没有这个脚本）。
+          git worktree add ../prev-src "$TAG"
+          (
+            cd ../prev-src
+            pnpm install --frozen-lockfile
+            # 旧 tag 的根 package.json 没有 prepare，SDK dist 需要显式构建，
+            # 否则服务端 import '@openlearn/plugin-sdk' 会 ERR_MODULE_NOT_FOUND。
+            if [ -f packages/plugin-sdk/build.mjs ]; then
+              (cd packages/plugin-sdk && node build.mjs)
+            elif [ -f scripts/build-plugin-sdk.mjs ]; then
+              node scripts/build-plugin-sdk.mjs
+            fi
+          )
+          pnpm exec tsx scripts/upgrade-regression/build-fixture.ts \
+            --server-cwd ../prev-src \
+            --plugins-dir .plugin-compatibility-fixtures \
+            --out ".upgrade-fixtures/upgrade-fixture-${TAG}.zip" \
+            --label "$TAG"
+
+      - name: Verify upgrade to PR head
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/upgrade-regression/verify-upgrade.ts \
+            --fixture ".upgrade-fixtures/upgrade-fixture-${TAG}.zip"
+
+      - name: Upload fixture (diagnostics)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-fixture-${{ steps.release.outputs.tag }}
+          path: .upgrade-fixtures/*.zip
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # 打 tag 时用**该 tag 自己的代码**生成 fixture 并归档，便于回溯某次发版的库形态。
+  publish-fixture:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    name: Publish release fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 用默认分支的工具链，配合 --server-cwd 指向 tag 的 worktree：
+          # tag 里还没有 scripts/upgrade-regression，直接在该 checkout 上跑会找不到脚本。
+          ref: main
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install platform dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin ZIP fixtures
+        uses: ./.github/actions/build-plugin-fixtures
+
+      - name: Build fixture for this tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git worktree add ../tag-src "$TAG"
+          (
+            cd ../tag-src
+            pnpm install --frozen-lockfile
+            if [ -f packages/plugin-sdk/build.mjs ]; then
+              (cd packages/plugin-sdk && node build.mjs)
+            elif [ -f scripts/build-plugin-sdk.mjs ]; then
+              node scripts/build-plugin-sdk.mjs
+            fi
+          )
+          pnpm exec tsx scripts/upgrade-regression/build-fixture.ts \
+            --server-cwd ../tag-src \
+            --plugins-dir .plugin-compatibility-fixtures \
+            --out ".upgrade-fixtures/upgrade-fixture-${TAG}.zip" \
+            --label "$TAG"
+
+      - name: Upload fixture artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-fixture-${{ github.ref_name }}
+          path: .upgrade-fixtures/*.zip
+          retention-days: 90
+
+      # release 可能不存在（本仓库部分 tag 没有对应 Release），失败不影响作业结论。
+      - name: Attach fixture to GitHub release (best effort)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG" ".upgrade-fixtures/upgrade-fixture-${TAG}.zip" --clobber
