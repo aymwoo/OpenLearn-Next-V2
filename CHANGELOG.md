@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **白板读接口向学生泄露测验答案与跨学生作业白板越权（Issue #127）**：
+  - `GET /api/lessons/:id/whiteboard` 按角色脱敏：学生视角对元素 `data` 递归剥离 `correctIndex` / `correctAnswer` / `answer` / `solution` 等答案字段（`ANSWER_KEYS` 补齐 `correctIndex` 系列键），教师/管理员仍返回完整数据；判分结果继续由 `POST /quiz-submit` 在提交后回传，学生端高亮逻辑不受影响。
+  - 读授权与写授权对齐：`assignment-<aid>-student-<sid>` 伪课节，学生只能读绑定自己的房间（读他人作业白板返回 403）；已有开课记录的真实课节，只有开课班级成员可读（与 socket `canJoinLessonRoom` 同口径）；未开课的自学/预览场景不额外设限。教师/管理员保持可读（课堂观察与作业批注）。
+  - 新增 `server/__tests__/whiteboard-read-auth.test.ts`（7 例）：学生答案剥离、教师/管理员完整返回、跨班 403、未开课放行、他人伪课节 403、教师批注可读、未登录 401。
 - **学生写操作与学生私有备忘的对象级授权修复（P0 IDOR）**：
   - `PUT /api/students/:id` 与 `DELETE /api/students/:id` 此前只校验角色（`teacher`/`administrator`），不校验学生归属，任意教师可修改或删除任意学校学生的姓名、学号、密码、锁定课节与私有备忘。现新增 `resolveWritableStudentId`：管理员不限，教师仅可写 `teacherCanSeeStudent` 判定可见的学生（即其 `owner_user_id` 名下班级的在册学生），其余一律 403；入参支持 `student_number` 并统一解析为规范 id。
   - `GET /api/students/:id/dashboard` 的 `profile` 此前无条件 `SELECT private_notes`，学生本人即可读到教师给其写的「特别关注/行为」备忘。现改为仅在教师/管理员视角查询该列，学生视角的 `profile` 不再包含 `private_notes`（`locked_lesson_id` 等学生端自用字段保留）。

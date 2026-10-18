@@ -4,7 +4,7 @@ import { getUploadsDir } from '../utils/paths.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
-import { classRoom } from '../presence.js';
+import { classRoom, pseudoRoomStudentId } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
@@ -15,6 +15,7 @@ import {
   authorizeLessonStaff,
   isAdministrator,
   isTeacher,
+  redactAnswerPayload,
   rejectUnless,
   studentActorId,
 } from '../services/class-access.js';
@@ -123,6 +124,35 @@ export function requireWhiteboardWriteAccess() {
         'Forbidden: You do not have permission to modify this lesson whiteboard because it was created by another teacher',
     });
   };
+}
+
+/**
+ * 白板读操作权限（SEC-AUTH #127）。
+ *
+ * - 教师/管理员：沿用既有行为，可读取任意课节与作业白板（课堂观察、作业批注）；
+ * - 学生 · 作业伪课节（`assignment-<aid>-student-<sid>`）：只允许 sid === 本人；
+ * - 学生 · 真实课节：与 socket `canJoinLessonRoom` 同口径 —— 该课节已有开课记录时，
+ *   仅开课班级的成员可读；未开课（自学/预览）不额外设限。
+ */
+export function canReadWhiteboard(session: any, roomId: string): boolean {
+  if (!session) return false;
+  if (isAdministrator(session) || isTeacher(session)) return true;
+
+  const actorId = studentActorId(session) || session.userId || null;
+  const pseudoSid = pseudoRoomStudentId(roomId);
+  if (pseudoSid !== null) return !!actorId && pseudoSid === actorId;
+
+  const db = kernelContainer.getReadDb();
+  const sessionRow = db
+    .prepare('SELECT class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+    .get(roomId) as { class_id: string } | undefined;
+  const classId = sessionRow?.class_id ?? null;
+  if (!classId) return true;
+  if (!actorId) return false;
+  const member = db
+    .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1')
+    .get(classId, actorId) as { ok: number } | undefined;
+  return !!member;
 }
 
 export function registerLessonsRoutes(ctx: ServerContext) {
@@ -371,8 +401,18 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   // ── 交互白板 API ──────────────────────────────────────────────────────────
   app.get('/api/lessons/:id/whiteboard', requireAuth(), (req, res) => {
     try {
-      const elements = whiteboardService.getWhiteboardElements(req.params.id);
-      res.json(elements);
+      const session = (req as any).session;
+      const roomId = req.params.id;
+      if (!canReadWhiteboard(session, roomId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: no access to this whiteboard' });
+      }
+      const elements = whiteboardService.getWhiteboardElements(roomId);
+      const isStaff = isAdministrator(session) || isTeacher(session);
+      // 学生视角剥离答案字段（correctIndex / correctAnswer 等）；
+      // 判分结果由 POST /quiz-submit 在提交后回传，前端已按此设计。
+      res.json(
+        isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })),
+      );
     } catch (e: any) {
       sendSafeError(res, e);
     }
