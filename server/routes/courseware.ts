@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
@@ -279,23 +277,6 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       setCoursewareDocumentCsp(res);
       const html = injectLmsSdk(node.content || '', req, { id: node.id, name: node.name, uuid: node.id });
       res.send(html);
-    } catch (e: any) {
-      sendSafeError(res, e);
-    }
-  });
-
-  app.post('/api/courseware/debug', requireScopedAuth('authenticated'), (req, res) => {
-    try {
-      const { msg, url, student, courseware } = req.body;
-      const safeMsg = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000);
-      const safeUrl = typeof url === 'string' ? url.slice(0, 1000) : String(url).slice(0, 1000);
-      const logMsg = `[CLIENT DEBUG] ${safeMsg} | URL: ${safeUrl} | Student: ${JSON.stringify(student)?.slice(0, 1000)} | Courseware: ${JSON.stringify(courseware)?.slice(0, 1000)}`;
-      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${safeMsg}`);
-
-      const logFile = path.join(process.cwd(), 'client_debug.log');
-      fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
-
-      res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
