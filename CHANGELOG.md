@@ -160,6 +160,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
 - **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
 
+### CI
+
+- **新增「上一正式版 → main」升级回归门禁（Issue #147）**：此前 CI 只有「当前 main 新装三个第三方插件」（`plugin-compatibility`）与「空库冷启动」（`docker-rehearsal`），没有任何作业验证「旧库 + 已装插件 + 旧数据」的升级路径。
+  - 新增 `scripts/upgrade-regression/build-fixture.ts`：以 release tag 的服务端代码起真实进程，管理员登录后经 `POST /api/plugins/upload-zip-raw` 安装三个真实第三方插件并激活，创建样例班级/学生，停服后用 `VACUUM INTO` 生成一致快照，连同 `plugins/`、`storage/` 与 `metadata.json` 打包为 fixture。
+  - 新增 `scripts/upgrade-regression/verify-upgrade.ts`：恢复 fixture 后用当前 `main` 启动，断言 `/health`、插件全部 `active`、旧班级/学生/成员关系可读、插件 `plugin_storage` 标记可读回、已执行迁移 checksum 未被改写、旧表全部仍在，并二次启动验证「零新迁移」。作业以 `MIGRATION_CHECKSUM_STRICT=true` 运行，历史迁移被改写会直接启动失败。
+  - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
+  - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
+  - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
+
 ### Docs
 
 - **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
