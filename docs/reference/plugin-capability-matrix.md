@@ -143,6 +143,7 @@ throw err;
 - **`ai:*`** —— 不存在。AI 层使用 `capability_*` ID（`packages/core/ai-capability/capabilities/` 下实测 7 个：`capability_analytics`、`capability_chat`、`capability_completion`、`capability_lesson`、`capability_plugin`、`capability_tool`、`capability_whiteboard`），而非 `ai:read` / `ai:write`。
 - **`lesson:control` / `stage:navigate` / `whiteboard:draw` / `quiz:submit` / `plugin:execute` / `ai:invoke` / `session:manage`** —— 属于第 2 套 `RuntimePermission`（见 §1.3），**不是** `capabilityRequired` 字符串。
 - **`storage:write`** —— 仅出现在 `packages/core/__tests__/plugin-http-streaming.test.ts` 的测试 manifest 中，生产代码无任何消费点。
+- **`network:*` / `net:*`** —— 不存在。出站网络访问不属于 `resource:action` 字符串机制，而是由独立的 `plugin_network_grants` 域名白名单与 manifest `network.outbound` 共同管控，并由宿主代发执行（详见 [信任边界矩阵](./plugin-trust-boundary.md)）。
 
 ---
 
