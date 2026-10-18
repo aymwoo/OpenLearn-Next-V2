@@ -24,6 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 同一学生重入题目集合/顺序不变；不同学生卷面不同；同卷不重复；可用题不足时抛 409，**不静默少题**。
   - 作答载荷、自动保存、判分与结果页全部按本卷题目集过滤；题库后续修改不影响已组卷内容（快照）。
   - 测试：`assessment-bank-draw.test.ts`（4 例：每人一卷稳定性/不同卷、题库不足 409、标签与难度过滤、共享可见性）。文档：`docs/architecture/assessment-model.md` §7。
+- **存量白板 quiz 与预置投票导入新测评模型（Issue #185）**：
+  - 新增 `server/services/legacy-assessment-import.ts` 与 CLI `scripts/migrate-legacy-assessments.ts`（支持 `--dry-run`）：把 `whiteboard_elements.type='quiz'` 与有正确答案的 `lesson_preset_polls` 转为 `assessments(kind=quiz)` + 单选题目；有 `schedules` 排课时按班级创建已发布 assignment 并把 `lesson_quiz_submissions` 导入为 attempts/answers。
+  - **幂等**：`settings_json.legacy.sourceId` 标记；二次执行为空操作（`already_imported`）。**只读旧表**：不修改/删除任何 legacy 数据，旧接口行为不变。
+  - 纯投票（无 `correct_option`）与结构非法的旧数据跳过并在报告中列出原因；预置投票的作答无持久表可回放，仅导入试卷与题目。
+  - 文档：`docs/architecture/assessment-model.md` §8（范围、执行、已知差异与回滚）。
+  - 测试：`legacy-assessment-import.test.ts`（3 例：幂等导入与历史作答、dry-run 不写入、新模型可读卷面与得分）。
 ### Features
 
 - **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：
