@@ -170,3 +170,29 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 
 - 迁移 `039_question_bank_sharing_and_papers.sql` 只加两列（幂等；DOWN 可回滚）。
 - 关闭抽题：把 settings.draw 去掉后，新作答恢复整卷；已有 `paper_json` 的旧作答仍按各自的卷面判分与展示。
+## 8. 存量数据导入：白板 quiz 与预置投票（Issue #185）
+
+### 8.1 范围
+
+| 旧来源 | 新模型 | 说明 |
+| --- | --- | --- |
+| `whiteboard_elements.type='quiz'` | `assessments(kind=quiz)` + 1 道单选 | 题干/选项/正确答案来自元素 `data`；历史 `lesson_quiz_submissions` 导入为 attempts/answers |
+| `lesson_preset_polls`（有 `correct_option`） | `assessments(kind=quiz)` + 1 道单选 | `A/B/C/D` 映射为选项索引；**纯投票（无正确答案）不导入**，报告为 `no_correct_option` |
+
+### 8.2 执行方式
+
+```bash
+pnpm exec tsx scripts/migrate-legacy-assessments.ts --dry-run   # 只统计
+pnpm exec tsx scripts/migrate-legacy-assessments.ts             # 正式导入
+```
+
+- **幂等**：以 `assessments.settings_json.legacy.sourceId` 为标记；二次执行全部记 `already_imported`，不产生新行。
+- **只读旧表**：不修改/删除任何 legacy 数据；旧接口（白板 quiz、预置投票）行为不变，可继续读写。
+- **班级归属**：有 `schedules`（lesson → class）时创建已发布 assignment 并导入历史作答；无排课时只创建草稿试卷。
+- **可追溯**：`settings_json.legacy = { source, sourceId, lessonId }`。
+
+### 8.3 已知差异与回滚
+
+- 历史作答的 `score` 按旧记录原样保留；旧数据未记录的建议/解析不会凭空生成。
+- 预置投票的作答只存在于课堂会话运行时，没有可按学生回放的持久表 → **不导入作答**（试卷与题目仍导入）。
+- 回滚：删除带对应 `legacy.sourceId` 标记的 assessments（级联删除 items/assignments/attempts/answers）；旧数据始终未被改动。
