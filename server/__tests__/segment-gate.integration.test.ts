@@ -80,6 +80,16 @@ describe('教学环节门槛（segment-access）', () => {
       'SG0001',
       now,
     );
+    // 教师管辖班级 + 学生在班：预览学生（evaluatingOther）需通过 teacherCanSeeStudent 归属校验
+    const segClassId = 'cls-seg-gate-0001';
+    db.prepare(
+      'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(segClassId, '环节门槛班', 'segment gate fixture', 'pass-seg-gate', teacherId, now);
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      segClassId,
+      studentId,
+      now,
+    );
     const sessionData = (userId: string, role: string, extra: Record<string, string> = {}) =>
       JSON.stringify({ userId, role, username: userId, name: userId, ...extra });
     db.prepare(
@@ -122,6 +132,8 @@ describe('教学环节门槛（segment-access）', () => {
     db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
     db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);
     db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+    db.prepare('DELETE FROM class_students WHERE class_id = ?').run('cls-seg-gate-0001');
+    db.prepare('DELETE FROM classes WHERE id = ?').run('cls-seg-gate-0001');
     db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
     lessonActiveSegments.delete(lessonId);

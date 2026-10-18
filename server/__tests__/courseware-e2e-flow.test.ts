@@ -63,12 +63,12 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
         now + 60 * 60 * 1000,
       );
 
-    // Class
+    // Class（owner_user_id 必填：教师班级切片 / authorizeClass 依赖归属判定）
     kernelContainer.db
       .prepare(
-        'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
-      .run(classId, className, 'E2E 测试班级', 'pass-e2e', now);
+      .run(classId, className, 'E2E 测试班级', 'pass-e2e', teacherId, now);
 
     // Student
     kernelContainer.db
