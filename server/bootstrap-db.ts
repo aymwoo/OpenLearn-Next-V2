@@ -116,7 +116,7 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
     console.error('Error creating agent_conversations table:', e);
   }
 
-  // SEC-AUTH-03: client_sessions 添加 expires_at �?
+  // SEC-AUTH-03: client_sessions 添加 expires_at 列
   try {
     db.exec(`ALTER TABLE client_sessions ADD COLUMN expires_at INTEGER`);
     console.log('client_sessions.expires_at column ensured.');
@@ -124,7 +124,7 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
     /* 列已存在 */
   }
 
-  // SEC-AUTH-03: 启动时清理过? session
+  // SEC-AUTH-03: 启动时清理过期 session
   try {
     const now = Date.now();
     const idleTimeout = 24 * 60 * 60 * 1000;

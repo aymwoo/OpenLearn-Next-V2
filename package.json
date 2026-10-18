@@ -56,6 +56,7 @@
     "lint": "tsc --noEmit",
     "lint:strict": "tsc --noEmit -p tsconfig.strict.json",
     "lint:eslint": "eslint . --ext .ts,.tsx --ignore-pattern dist --ignore-pattern node_modules",
+    "lint:encoding": "node scripts/check-source-encoding.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
