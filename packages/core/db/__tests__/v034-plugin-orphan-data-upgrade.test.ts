@@ -43,13 +43,20 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
     const newer = all.filter((migration) => migrationNumber(migration.name) >= 34);
 
     expect(legacy).toHaveLength(34);
-    // 035（课前破冰打卡）、036（保留策略所需 created_at）都是 034 之后合入的迁移。
-    expect(newer.map((migration) => migration.name)).toEqual([
+    // 断言真正的风险：**迁移编号唯一**（同号迁移会让顺序不确定，曾撞过 034）。
+    // 不再固定清单：新增迁移不应迫使每个 PR 改这份测试，也不该因清单过期而误报。
+    const newerNumbers = newer.map((migration) => migrationNumber(migration.name));
+    expect(new Set(newerNumbers).size).toBe(newerNumbers.length);
+    // 已知基线仍在（防回退）。
+    const newerNames = newer.map((migration) => migration.name);
+    for (const expected of [
       '034_plugin_orphan_data',
       '035_icebreaker_checkins',
       '036_student_read_notifications_created_at',
       '037_plugin_config_scopes',
-    ]);
+    ]) {
+      expect(newerNames).toContain(expected);
+    }
 
     const db = openMemory();
     runMigrations(db, legacy);
