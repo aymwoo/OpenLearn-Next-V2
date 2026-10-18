@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getUploadsDir } from '../utils/paths.js';
@@ -67,7 +68,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
   const rosterService = new RosterService(kernelContainer.db, kernelContainer.getReadDb());
 
-  app.get('/api/classes', requireAuth(), (req, res) => {
+  app.get('/api/classes', requireScopedAuth('self'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
       const session = (req as any).session;
@@ -107,7 +108,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:id/students', requireAuth(), (req, res) => {
+  app.get('/api/classes/:id/students', requireScopedAuth('class-member'), (req, res) => {
     try {
       const decision = authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
@@ -823,7 +824,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // --- STUDENT READ NOTIFICATIONS APIS ---
-  app.get('/api/students/:id/read_notifications', requireAuth(), (req, res) => {
+  app.get('/api/students/:id/read_notifications', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
@@ -852,7 +853,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/read_notifications', requireAuth(), async (req, res) => {
+  app.post('/api/students/:id/read_notifications', requireScopedAuth('self'), async (req, res) => {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
@@ -1024,7 +1025,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // --- COMPUTER LABS AND SEATING APIS ---
-  app.get('/api/labs', requireAuth(), (req, res) => {
+  app.get('/api/labs', requireScopedAuth('authenticated'), (req, res) => {
     try {
       res.json(rosterService.listLabs());
     } catch (e: any) {
@@ -1059,7 +1060,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/seats', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/seats', requireScopedAuth('class-member'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member')))
         return;
@@ -1170,7 +1171,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/students/:id/progress', requireAuth(), (req, res) => {
+  app.get('/api/students/:id/progress', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session as any;
       const currentUserId = session?.userId || session?.studentId;
@@ -1226,7 +1227,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/progress', requireAuth(), async (req, res) => {
+  app.post('/api/students/:id/progress', requireScopedAuth('self'), async (req, res) => {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
@@ -1340,7 +1341,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:id/progress', requireAuth(), (req, res) => {
+  app.get('/api/classes/:id/progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff'))) return;
       const progress = kernelContainer.getReadDb()
@@ -1361,7 +1362,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/lessons/:lessonId/progress', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/lessons/:lessonId/progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'staff')))
         return;
@@ -1404,7 +1405,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/dashboard', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/dashboard', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
@@ -1473,7 +1474,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // Assignments & Quizzes
-  app.get('/api/students/:id/dashboard', requireAuth(), (req, res) => {
+  app.get('/api/students/:id/dashboard', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
@@ -1632,7 +1633,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // 学生多学年对比接口（严格 IDOR 权限校验：学生仅可查本人，教师仅可查本班，管理员可查全部）
-  app.get('/api/students/:id/academic-year-comparison', requireAuth(), async (req, res) => {
+  app.get('/api/students/:id/academic-year-comparison', requireScopedAuth('self'), async (req, res) => {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
@@ -1672,7 +1673,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // --- Smart Fair & Tiered Random Picker APIs ---
 
 
-  app.get('/api/classes/:classId/picker-candidates', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/picker-candidates', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
@@ -1750,7 +1751,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   };
 
   // 列出某班级的分组（可选 scope=default 只看默认方案）
-  app.get('/api/classes/:id/groups', requireAuth(), (req, res) => {
+  app.get('/api/classes/:id/groups', requireScopedAuth('class-member'), (req, res) => {
     try {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.id, 'member'))) return;
       res.json(rosterService.listClassGroups(req.params.id, req.query.scope as string));

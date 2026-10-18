@@ -886,7 +886,17 @@ export async function buildContext(
   };
 
   // 5.8. RESTful API 路由支持（V5.2）
-  const httpRouter = new PluginHttpRouter();
+  // Issue #140：插件路由数据范围声明的迁移期告警。未声明 scope 的路由只告警、
+  // 不拒绝请求，避免已装插件新约束突然失效；下一大版本再默认拒绝。
+  const httpRouter = new PluginHttpRouter({
+    pluginId: manifest.id,
+    onUnscopedRoute: ({ method, pattern }) => {
+      pluginLogger.warn(
+        { method, pattern, pluginId: manifest.id },
+        `[RouteScope] 插件 ${manifest.id} 的路由 ${method} ${pattern} 未声明数据范围（迁移期仅告警）`,
+      );
+    },
+  });
   tracker.track(pluginId, {
     dispose: () => {
       httpRouter.clear();

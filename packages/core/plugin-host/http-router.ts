@@ -24,6 +24,25 @@ interface RouteEntry {
   handler?: PluginApiHandler;
   streamHandler?: PluginStreamHandler;
   isStream?: boolean;
+  /** 数据范围声明（Issue #140，迁移期可选）。 */
+  scope?: PluginRouteScope;
+}
+
+/** 插件路由数据范围声明（Issue #140）。 */
+export type PluginRouteScope = 'authenticated' | 'self' | 'class-member' | 'class-staff' | 'admin';
+
+export interface PluginRouteOptions {
+  /**
+   * 声明该路由访问的数据范围。未声明时宿主在迁移期仅打印告警、不拒绝请求，
+   * 下一大版本再默认拒绝。
+   */
+  scope?: PluginRouteScope;
+}
+
+export interface PluginHttpRouterOptions {
+  pluginId?: string;
+  /** 注册了未声明 scope 的路由时回调；默认打印告警。 */
+  onUnscopedRoute?: (info: { pluginId?: string; method: string; pattern: string }) => void;
 }
 
 /**
@@ -53,13 +72,21 @@ export function compileRoutePattern(pattern: string): { regex: RegExp; paramName
 export class PluginHttpRouter implements IPluginHttpRouter {
   private routes: RouteEntry[] = [];
 
+  constructor(private readonly options: PluginHttpRouterOptions = {}) {}
+
   /**
    * 注册指定动词与路径的 Handler
    */
-  route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void {
+  route<TBody = unknown, TRes = unknown>(
+    method: string,
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+    options: PluginRouteOptions = {},
+  ): void {
     const upperMethod = method.toUpperCase();
     const normalized = path.startsWith('/') ? path : '/' + path;
     const { regex, paramNames } = compileRoutePattern(normalized);
+    this.warnIfUnscoped(upperMethod, normalized, options);
     this.routes.push({
       method: upperMethod,
       pattern: normalized,
@@ -67,27 +94,53 @@ export class PluginHttpRouter implements IPluginHttpRouter {
       paramNames,
       handler: handler as PluginApiHandler,
       isStream: false,
+      scope: options.scope,
     });
   }
 
-  get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void {
-    this.route('GET', path, handler);
+  get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>, options?: PluginRouteOptions): void {
+    this.route('GET', path, handler, options);
   }
 
-  post<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void {
-    this.route('POST', path, handler);
+  post<TBody = unknown, TRes = unknown>(
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+    options?: PluginRouteOptions,
+  ): void {
+    this.route('POST', path, handler, options);
   }
 
-  put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void {
-    this.route('PUT', path, handler);
+  put<TBody = unknown, TRes = unknown>(
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+    options?: PluginRouteOptions,
+  ): void {
+    this.route('PUT', path, handler, options);
   }
 
-  patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void {
-    this.route('PATCH', path, handler);
+  patch<TBody = unknown, TRes = unknown>(
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+    options?: PluginRouteOptions,
+  ): void {
+    this.route('PATCH', path, handler, options);
   }
 
-  delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void {
-    this.route('DELETE', path, handler);
+  delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>, options?: PluginRouteOptions): void {
+    this.route('DELETE', path, handler, options);
+  }
+
+  private warnIfUnscoped(method: string, pattern: string, options: PluginRouteOptions): void {
+    if (options.scope) return;
+    const info = { pluginId: this.options.pluginId, method, pattern };
+    if (this.options.onUnscopedRoute) {
+      this.options.onUnscopedRoute(info);
+      return;
+    }
+    console.warn(
+      `[RouteScope] 插件${this.options.pluginId ? ` ${this.options.pluginId}` : ''} 路由 ${method} ${pattern} ` +
+        `未声明数据范围（迁移期仅告警）`,
+    );
   }
 
   /**
@@ -259,12 +312,18 @@ export class PluginHttpRouter implements IPluginHttpRouter {
   /**
    * 获取所有已注册的路由元数据（用于调试或内省）
    */
-  getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean }> {
+  getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean; scope?: PluginRouteScope }> {
     return this.routes.map((r) => ({
       method: r.method,
       pattern: r.pattern,
       isStream: r.isStream,
+      scope: r.scope,
     }));
+  }
+
+  /** 列出尚未声明数据范围的已注册路由（Issue #140 迁移期巡检用）。 */
+  getUnscopedRoutes(): Array<{ method: string; pattern: string }> {
+    return this.routes.filter((r) => !r.scope).map((r) => ({ method: r.method, pattern: r.pattern }));
   }
 
   /**

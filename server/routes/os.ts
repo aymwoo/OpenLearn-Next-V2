@@ -6,6 +6,7 @@ import { filterXSS } from 'xss';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { decryptApiKey, detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { listAIPersonas } from '../ai-persona-registry.js';
@@ -130,7 +131,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/commands/registered', requireAuth(), (req, res) => {
+  app.get('/api/commands/registered', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const actions = kernelContainer.actionRegistry.getAllActions();
       res.json(actions);
@@ -142,7 +143,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   //  Activity Ecosystem REST (Sprint P7-01)
   // List registered activity providers, filtered by role. Reuses the same
   // registry the Workspace and plugins share. No business logic is duplicated.
-  app.get('/api/activities', requireAuth(), async (req, res) => {
+  app.get('/api/activities', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const role = (req.query.role as string) || 'all';
       const list =
@@ -158,7 +159,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   // Start an activity: builds an ActivityContext from the existing kernel
   // services and drives the provider lifecycle (reuses Command Bus + Event Bus
   // + Permission runtime). Permission isolation is enforced by startActivity().
-  app.post('/api/activities/:id/start', requireAuth(), async (req, res) => {
+  app.post('/api/activities/:id/start', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const { payload, actorId } = req.body || {};
       const context = createActivityContext({
@@ -180,7 +181,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   // the dashboard "Activity Center" status monitor  it shows live status and
   // hides itself when nothing is running. State is in-memory on the provider
   // instances, so this reflects the live server process only.
-  app.get('/api/activities/running', requireAuth(), (_req, res) => {
+  app.get('/api/activities/running', requireScopedAuth('authenticated'), (_req, res) => {
     try {
       const activities = activityRegistry
         .listProviders()
@@ -202,7 +203,7 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   // Finish (end) a running activity
   // dashboard. Reuses the same ActivityContext as start().
-  app.post('/api/activities/:id/finish', requireAuth(), async (req, res) => {
+  app.post('/api/activities/:id/finish', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -223,7 +224,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Pause a running activity (dashboard management action).
-  app.post('/api/activities/:id/pause', requireAuth(), async (req, res) => {
+  app.post('/api/activities/:id/pause', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -244,7 +245,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Resume a paused activity (dashboard management action).
-  app.post('/api/activities/:id/resume', requireAuth(), async (req, res) => {
+  app.post('/api/activities/:id/resume', requireScopedAuth('authenticated'), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -266,7 +267,7 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   // OS Agent interaction
   // P2: ai.agent.persona —— 角色模板列表（聊天面板下拉选择器）
-  app.get('/api/agent/personas', requireAuth(), (_req, res) => {
+  app.get('/api/agent/personas', requireScopedAuth('authenticated'), (_req, res) => {
     try {
       res.json({ success: true, personas: listAIPersonas() });
     } catch (e: any) {
@@ -274,7 +275,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/agent/chat', requireAuth(), aiLimiter, async (req, res) => {
+  app.post('/api/agent/chat', requireScopedAuth('self'), aiLimiter, async (req, res) => {
     try {
       let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
 
@@ -386,7 +387,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Retrieve the kernel assistant's stored memory for the current user + lesson
-  app.get('/api/agent/conversations', requireAuth(), (req, res) => {
+  app.get('/api/agent/conversations', requireScopedAuth('self'), (req, res) => {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
@@ -408,7 +409,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Clear the kernel assistant's memory for the current user + lesson
-  app.delete('/api/agent/conversations', requireAuth(), (req, res) => {
+  app.delete('/api/agent/conversations', requireScopedAuth('self'), (req, res) => {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;

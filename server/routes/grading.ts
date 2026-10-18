@@ -5,6 +5,7 @@ import {
   IPointsLedgerServiceToken,
 } from '../../packages/core/di/interfaces.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { GradingService } from '../services/grading-service.js';
@@ -24,7 +25,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     rejectUnless(res, authorizeClass(kernelContainer.db, req.session, classId, level));
 
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/attendance-summary', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/attendance-summary', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'staff')) return;
       const summary = gradingService.getAttendanceSummary(req.params.classId, 30, (req.query.academicYear as string) || null);
@@ -34,7 +35,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/schedules/:scheduleId/attendance', requireAuth(), (req, res) => {
+  app.get('/api/schedules/:scheduleId/attendance', requireScopedAuth('class-member'), (req, res) => {
     try {
       const session = (req as any).session;
       const sch = kernelContainer.db
@@ -70,7 +71,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   });
 
   // ── 2. 成绩权重配置 ────────────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/grade-weights', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/grade-weights', requireScopedAuth('class-member'), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'member')) return;
       const weights = gradingService.getGradeWeights(req.params.classId);
@@ -100,7 +101,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   });
 
   // ── 3. 考试管理与分数录入 ──────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/exams', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/exams', requireScopedAuth('class-member'), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'member')) return;
       const exams = gradingService.listExams(req.params.classId, (req.query.academicYear as string) || null);
@@ -122,7 +123,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/exams/:examId/scores', requireAuth(), (req, res) => {
+  app.get('/api/exams/:examId/scores', requireScopedAuth('class-member'), (req, res) => {
     try {
       const session = (req as any).session;
       const exam = kernelContainer.db.prepare('SELECT class_id FROM exams WHERE id = ?').get(req.params.examId) as
@@ -163,7 +164,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   });
 
   // ── 4. 学期综合成绩与报告 ──────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/semester-grades', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/semester-grades', requireScopedAuth('class-member'), (req, res) => {
     try {
       const classId = req.params.classId;
       const session = (req as any).session;
@@ -204,7 +205,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ─────────────────────────────────────────────────────────────────
   // Points Ledger & Dimension Extensions API
   // ─────────────────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/points-dimensions', requireAuth(), async (req, res) => {
+  app.get('/api/classes/:classId/points-dimensions', requireScopedAuth('class-member'), async (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'member')) return;
       const dimensionRegistry = await kernelContainer.serviceRegistry.resolve(IPointsDimensionRegistryToken);
@@ -252,7 +253,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/students/:studentId/points-logs', requireAuth(), async (req, res) => {
+  app.get('/api/students/:studentId/points-logs', requireScopedAuth('self'), async (req, res) => {
     try {
       const { studentId } = req.params;
       const session = (req as any).session;

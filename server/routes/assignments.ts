@@ -1,5 +1,6 @@
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { AssignmentService } from '../services/assignment-service.js';
@@ -14,7 +15,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const assignmentService = new AssignmentService();
 
-  app.get('/api/classes/:classId/assignments', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/assignments', requireScopedAuth('class-member'), (req, res) => {
     try {
       const decision = authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
@@ -73,7 +74,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
     },
   );
 
-  app.post('/api/assignments/:id/submissions', requireAuth(), (req, res) => {
+  app.post('/api/assignments/:id/submissions', requireScopedAuth('class-member'), (req, res) => {
     try {
       const { studentId, content } = req.body;
       const session = (req as any).session;

@@ -1,5 +1,6 @@
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { parsePagination } from '../utils/pagination.js';
@@ -13,7 +14,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   /**
    * 今日/指定日期的排课查询 (支持周循环课表匹配)
    */
-  app.get('/api/schedules/today', requireAuth(), (req, res) => {
+  app.get('/api/schedules/today', requireScopedAuth('class-member'), (req, res) => {
     try {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const schedules = scheduleService.getTodaySchedules(
@@ -30,7 +31,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   /**
    * 全量排课列表 (A7 标准分页信封)
    */
-  app.get('/api/schedules', requireAuth(), (req, res) => {
+  app.get('/api/schedules', requireScopedAuth('class-member'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
       const result = scheduleService.listSchedules(
@@ -47,7 +48,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   /**
    * 排课冲突预检端点
    */
-  app.post('/api/schedules/check-conflict', requireAuth(), (req, res) => {
+  app.post('/api/schedules/check-conflict', requireScopedAuth('class-member'), (req, res) => {
     try {
       const { classId, scheduledDate, timeSlot, lessonId, excludeScheduleId } = req.body;
       if (!classId || !scheduledDate) {
@@ -70,7 +71,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   /**
    * 指定班级的排课列表 (保持裸数组兼容)
    */
-  app.get('/api/classes/:classId/schedules', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/schedules', requireScopedAuth('class-member'), (req, res) => {
     try {
       if (
         rejectUnless(

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getUploadsDir } from '../utils/paths.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { classRoom, pseudoRoomStudentId } from '../presence.js';
@@ -12,6 +13,7 @@ import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
 import {
+  authorizeClass,
   authorizeLessonStaff,
   isAdministrator,
   isTeacher,
@@ -165,13 +167,13 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     kernelContainer.getReadDb(),
   );
 
-  app.get('/api/lessons', requireAuth(), (req, res) => {
+  app.get('/api/lessons', requireScopedAuth('authenticated'), (req, res) => {
     // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
     const pg = parsePagination(req.query as any);
     res.json(lessonService.listLessons(pg));
   });
 
-  app.get('/api/lessons/:id', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:id', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const lesson = lessonService.getLesson(req.params.id);
       if (!lesson) {
@@ -184,7 +186,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── 作业上传与互评插件 API ──────────────────────────────────────────────
-  app.get('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:lessonId/eval-submissions', requireScopedAuth('class-member'), (req, res) => {
     try {
       const session = (req as any).session;
       if (!isAdministrator(session) && !isTeacher(session)) {
@@ -211,7 +213,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
+  app.get('/api/eval-submissions/:submissionId/reviews', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session;
       const submission = kernelContainer
@@ -230,7 +232,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/lessons/:lessonId/students/:studentId/eval-status', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:lessonId/students/:studentId/eval-status', requireScopedAuth('self'), (req, res) => {
     try {
       const { lessonId, studentId } = req.params;
       const session = (req as any).session;
@@ -248,7 +250,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   // ── v0.6.1 数据真实性：学生端「作业提交 / 互评」专用写入端点 ────────────
   // 此前学生端走 /api/commands（教师专用端点）→ 必 403，每次点击报错。
   // 学生只能以**本人身份**提交/互评（session.studentId 强制对齐）。
-  app.post('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
+  app.post('/api/lessons/:lessonId/eval-submissions', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session;
       const { studentId, filePath, textContent } = req.body || {};
@@ -290,7 +292,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/lessons/:lessonId/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
+  app.post('/api/lessons/:lessonId/eval-submissions/:submissionId/reviews', requireScopedAuth('self'), (req, res) => {
     try {
       const session = (req as any).session;
       const { score, comment } = req.body || {};
@@ -400,7 +402,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── 交互白板 API ──────────────────────────────────────────────────────────
-  app.get('/api/lessons/:id/whiteboard', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:id/whiteboard', requireScopedAuth('class-member'), (req, res) => {
     try {
       const session = (req as any).session;
       const roomId = req.params.id;
@@ -575,7 +577,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── Quiz submission counts (all authenticated roles) ───────────────────────
-  app.get('/api/lessons/:id/quiz-counts', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:id/quiz-counts', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const { id: lessonId } = req.params;
       const quizzes = diagnosticService.getQuizCounts(lessonId);
@@ -630,7 +632,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── 课程统计 API (删除确认弹窗用) ─────────────────────────────────────────
-  app.get('/api/lessons/:id/stats', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:id/stats', requireScopedAuth('authenticated'), (req, res) => {
     try {
       res.json(lessonService.getLessonStats(req.params.id));
     } catch (e: any) {
@@ -652,7 +654,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── Pre-Class Diagnostic Hub & Pre-flight Healthcheck APIs ────────────────
-  app.get('/api/lessons/:lessonId/pre-class-diagnostic', requireAuth(), (req, res) => {
+  app.get('/api/lessons/:lessonId/pre-class-diagnostic', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
       const classId = req.query.classId as string | undefined;
@@ -663,7 +665,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/checkin/icebreaker', requireAuth(), (req, res) => {
+  // TODO(#131)：scope 已声明为 class-member（目标态），但 handler 仍未校验班级归属与去重；
+  // 本 issue 只做声明门禁，行为修复留给 #131。
+  app.post('/api/classes/:classId/checkin/icebreaker', requireScopedAuth('class-member'), (req, res) => {
     try {
       const classId = req.params.classId;
       const { mood } = req.body;
@@ -682,10 +686,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/preflight-health', requireAuth(), (req, res) => {
+  app.get('/api/classes/:classId/preflight-health', requireScopedAuth('class-staff'), (req, res) => {
     // v0.6.1 数据真实性：逐项真实探测（数据层延迟 / 课件存储可写 / 内核插件链 /
     // 实时广播总线），健康分 = 通过项占比。此前 SELECT 1 之外全部硬编码
     // 「98 分 + 全部 passed」。
+    if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
+      return;
     try {
       const classId = req.params.classId;
       // 混合形状：延迟为数值字段，其余为探测结论对象（与客户端 CheckResult 契约一致）

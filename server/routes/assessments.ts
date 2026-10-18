@@ -13,6 +13,7 @@
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import type { ServerContext } from '../context.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireScopedAuth } from '../middleware/data-scope.js';
 import {
   accessibleClassIds,
   actorUserId,
@@ -39,7 +40,7 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
 
   /* ───────────────────────── 元信息：已注册题型 ───────────────────────── */
 
-  app.get('/api/assessment-question-types', requireAuth(), (_req, res) => {
+  app.get('/api/assessment-question-types', requireScopedAuth('authenticated'), (_req, res) => {
     try {
       res.json({ questionTypes: assessmentGraderRegistry.listQuestionTypes() });
     } catch (e: any) {
