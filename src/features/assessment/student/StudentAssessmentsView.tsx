@@ -480,7 +480,7 @@ function AssessmentRunner({
           type="button"
           onClick={() => void submit()}
           disabled={submitting}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
         >
           {submitting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
           {zh ? '提交交卷' : 'Submit'}
