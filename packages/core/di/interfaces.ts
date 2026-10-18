@@ -863,6 +863,49 @@ export interface IStageGuardService {
   checkAccess(ctx: StageGuardContext): Promise<StageGuardResult>;
 }
 
+/**
+ * 测评题型注册表（Issue #100 / #120）。
+ *
+ * 为什么单开 token 而不走 capability provider：capability 的语义是「可被 AI/教师调用的能力」
+ * （descriptor + 输入输出 schema + 角色权限），而判分是**内部同步钩子**——硬塞进去要伪造
+ * 一堆 descriptor 字段，还会让每题每次提交多走一层权限与序列化。需要时可以在 P2 再加一层
+ * 薄适配把 grader 暴露成 capability。
+ *
+ * 内置 5 种题型与插件题型走同一个注册路径，避免插件题型成为二等公民。
+ */
+export interface IAssessmentQuestionTypeSummary {
+  type: string;
+  label: { zh: string; en: string };
+  category: string;
+  supports: string[];
+  autoGradable: boolean;
+  pluginId?: string;
+}
+
+export interface IAssessmentGraderRegistry {
+  /** 注册题型（含判分实现）。`pluginId` 非空表示插件题型，卸载时按 pluginId 批量清理。 */
+  registerQuestionType(
+    definition: import('../assessment/question-types/types.js').QuestionTypeDefinition<any, any>,
+    options?: { pluginId?: string },
+  ): void;
+  unregisterQuestionType(type: string, pluginId?: string): boolean;
+  clearOwnedQuestionTypes(pluginId: string): number;
+  getQuestionType(
+    type: string,
+  ): import('../assessment/question-types/types.js').QuestionTypeDefinition<any, any> | undefined;
+  listQuestionTypes(): IAssessmentQuestionTypeSummary[];
+  /** 判一题（宿主内部使用；题型未注册时返回 `score: null` 进人工队列）。 */
+  gradeItem(
+    item: import('../assessment/types.js').AssessmentItemRecord,
+    answer: unknown,
+    ctx: Omit<import('../assessment/question-types/types.js').GradeContext, 'maxScore'>,
+  ): import('../assessment/types.js').ItemGradeResult;
+}
+
+export const IAssessmentGraderRegistryToken = new Token<IAssessmentGraderRegistry>(
+  '@openlearn/core:IAssessmentGraderRegistry',
+);
+
 export const IStageGuardServiceToken = new Token<IStageGuardService>('@openlearn/core:IStageGuardService');
 
 // ── 插件可解析的 Token 白名单（审计 E-2）─────────────────────────────────
@@ -908,6 +951,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
+  IAssessmentGraderRegistryToken,
 ] as const;
 
 // IActivityRegistryToken 定义在 activity-ecosystem（interfaces.ts import 它会形成
