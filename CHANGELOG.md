@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
-- **隔离模式插件激活前补齐宿主 SDK 解析链接（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫。
+- **隔离模式插件激活前补齐宿主 SDK 解析链接，并放行权限模型读取（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；同时 `process` 隔离的 Node 权限模型新增 `sharedReadPaths`，把 `<pluginsDir>/node_modules` 与 SDK 链接的真实目录按只读放行（此前会被 `ERR_ACCESS_DENIED (FileSystemRead)` 二次拦下）。`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫，`plugin-permission.test.ts` / `worker-manager.test.ts` 覆盖只读旗标与路径收集。
 - **未获 `agent:tool` 的插件注册 action 改为降级而非拒绝（Issue #147 实测发现）**：`method-policy` 原先把「未声明 `agent:tool` 却注册对外暴露 action」直接抛错，而 `ActionDescriptor.exposeToAgent` 默认 `true`、旧插件（含最新版 class-manager / attendance-record）根本不知道这条新规 —— 结果是 worker/process 隔离下 `activate()` 失败、插件整体 `state=error`，把「不暴露给 AI Agent」放大成「升级后插件不能用」。现由 `sanitizeActionRegisterArgs` 把未授权的 descriptor 强制改写为 `exposeToAgent: false` 后放行：安全语义不变（仍不进 `getAgentTools()`），插件功能保留；`checkMethodPolicy` 中的拒绝分支保留为纵深防御。新增 `service-host.test.ts` 用例覆盖降级与「已授权时原样透传」。
 - **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
 
@@ -174,6 +174,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
   - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
   - 定位修正：ZIP 安装落库的 `plugins.file_path` 是构库机器的绝对路径，而校验在另一个临时目录里恢复 fixture，插件代码文件搬了家、库里那列没搬 —— `loadPluginModule` 找不到文件、ZIP 插件的 `source_code` 又是空串，三个插件全被打成 `state=error`，看起来像升级把插件弄坏了。现在 `restoreFixture` 会按 `/plugins/` 相对结构把 `file_path` 重定位到恢复后的数据目录（真实升级同目录，不受影响），并在插件非 active 时把服务端日志尾巴打进 CI，病因不再藏在被捕获的日志里。
+  - 定位修正（SDK 解析链接）：fixture 的 zip 打包刻意跳过 symlink —— `plugins/node_modules/@openlearn/plugin-sdk` 这个宿主为插件建的解析链接，target 是构库机器的绝对路径，打进 fixture 恢复后也是悬空链接。而 v0.6.1 之后第三方插件默认跑 worker 模式，worker 的导入路径不像 inline 路径那样会自建链接，于是恢复后 worker 加载 `index.js` 抛 `ERR_MODULE_NOT_FOUND: Cannot find package '@openlearn/plugin-sdk'`，插件再次全部 `state=error`。真实升级不受影响（用户磁盘上的链接随数据目录保留），这是校验工具搬家后必须自补的环境件：`restoreFixture` 现在调用 `ensurePluginSdkSymlink`，按当前机器的宿主 SDK 重建链接，悬空链接/解引用空目录先清掉再建（避免 `EEXIST`），已有可用链接幂等保留。
   - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
 
 ### Docs

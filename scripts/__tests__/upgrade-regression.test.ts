@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runMigrations, type Migration } from '../../packages/core/db/migrator.js';
 import {
   compareMigrations,
+  ensurePluginSdkSymlink,
   fixtureIntegrityIssues,
   isPluginActive,
   pluginManifestId,
@@ -257,6 +258,86 @@ describe('fixture 快照与恢复', () => {
       outside,
     );
     check.close();
+  });
+
+  it('恢复后重建插件 SDK 解析链接（fixture 不携带构库机器的悬空链接）', async () => {
+    // 构库：数据目录 A，插件目录旁有宿主建的 SDK 链接（v0.6.1 inline 激活时创建），
+    // target 是构库机器的绝对路径 —— zip 打包跳过 symlink，fixture 里没有它。
+    const sourceDir = makeTempDir('ol-upgrade-sdk-source-');
+    const sourceDbPath = path.join(sourceDir, 'educational_os.db');
+    const sourceDb = new Database(sourceDbPath);
+    sourceDb.exec('CREATE TABLE plugins (id TEXT PRIMARY KEY, file_path TEXT);');
+    const pluginDir = path.join(sourceDir, 'plugins', 'plugin-uuid-1');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(path.join(pluginDir, 'index.js'), 'export default {};\n');
+    sourceDb.prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)').run('plugin-uuid-1', path.join(pluginDir, 'index.js'));
+    sourceDb.close();
+    const buildMachineLink = path.join(sourceDir, 'plugins', 'node_modules', '@openlearn', 'plugin-sdk');
+    fs.mkdirSync(path.dirname(buildMachineLink), { recursive: true });
+    fs.symlinkSync(path.join(sourceDir, 'gone-with-the-build-machine'), buildMachineLink, 'junction');
+
+    const metadata: FixtureMetadata = {
+      label: 'unit-test',
+      platformVersion: '0.0.0-test',
+      createdAt: new Date().toISOString(),
+      migrations: [],
+      tables: ['plugins'],
+      plugins: [{ manifestId: '@ext/demo', dbId: 'plugin-uuid-1', version: '1.0.0' }],
+      sample: { classId: 'c1', className: '一班', studentIds: [], studentNumbers: [] },
+      markerKey: 'unused',
+      markerValue: 'unused',
+    };
+    const fixtureFile = path.join(makeTempDir('ol-upgrade-sdk-fixture-'), 'fixture.zip');
+    await snapshotFixture({ dataDir: sourceDir, outFile: fixtureFile, metadata });
+
+    // 校验：恢复到数据目录 B 后，链接必须存在且解析到当前机器的宿主 SDK。
+    const restoredDir = makeTempDir('ol-upgrade-sdk-restored-');
+    await restoreFixture(fixtureFile, restoredDir);
+    const linkPath = path.join(restoredDir, 'plugins', 'node_modules', '@openlearn', 'plugin-sdk');
+    expect(fs.lstatSync(linkPath).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(linkPath)).toBe(true);
+    const sdkPackage = JSON.parse(fs.readFileSync(path.join(linkPath, 'package.json'), 'utf8')) as { name: string };
+    expect(sdkPackage.name).toBe('@openlearn/plugin-sdk');
+    expect(fs.realpathSync(linkPath).startsWith(sourceDir)).toBe(false);
+  });
+
+  it('恢复时把挡路的悬空 SDK 链接换掉，而不是 EEXIST 崩溃', async () => {
+    const sourceDir = makeTempDir('ol-upgrade-sdk-dangling-source-');
+    const sourceDb = new Database(path.join(sourceDir, 'educational_os.db'));
+    sourceDb.exec('CREATE TABLE plugins (id TEXT PRIMARY KEY, file_path TEXT);');
+    sourceDb.close();
+    const metadata: FixtureMetadata = {
+      label: 'unit-test',
+      platformVersion: '0.0.0-test',
+      createdAt: new Date().toISOString(),
+      migrations: [],
+      tables: ['plugins'],
+      plugins: [],
+      sample: { classId: 'c1', className: '一班', studentIds: [], studentNumbers: [] },
+      markerKey: 'unused',
+      markerValue: 'unused',
+    };
+    const fixtureFile = path.join(makeTempDir('ol-upgrade-sdk-dangling-fixture-'), 'fixture.zip');
+    await snapshotFixture({ dataDir: sourceDir, outFile: fixtureFile, metadata });
+
+    const restoredDir = makeTempDir('ol-upgrade-sdk-dangling-restored-');
+    const dangling = path.join(restoredDir, 'plugins', 'node_modules', '@openlearn', 'plugin-sdk');
+    fs.mkdirSync(path.dirname(dangling), { recursive: true });
+    fs.symlinkSync(path.join(restoredDir, 'nowhere'), dangling, 'junction');
+
+    await restoreFixture(fixtureFile, restoredDir);
+    expect(fs.existsSync(dangling)).toBe(true);
+  });
+
+  it('ensurePluginSdkSymlink 幂等：已有可用链接时原样保留', () => {
+    const dataDir = makeTempDir('ol-upgrade-sdk-idempotent-');
+    const first = ensurePluginSdkSymlink(dataDir);
+    expect(first).not.toBeNull();
+    const firstTarget = fs.realpathSync(first as string);
+
+    const second = ensurePluginSdkSymlink(dataDir);
+    expect(second).toBe(first);
+    expect(fs.realpathSync(second as string)).toBe(firstTarget);
   });
 });
 

@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import JSZip from 'jszip';
@@ -494,6 +495,10 @@ function addDirectoryToZip(zip: JSZip, sourceDir: string, zipPrefix: string): vo
     } else if (entry.isFile()) {
       zip.file(zipPath, fs.readFileSync(sourcePath));
     }
+    // symlink（isDirectory/isFile 均为 false）刻意不打包：plugins 下唯一的 symlink 是
+    // 宿主为插件建的 SDK 解析链接，target 是构库机器的绝对路径，打进 fixture 恢复后也是
+    // 悬空链接，还会挡住恢复时重建（见 ensurePluginSdkSymlink）。插件代码本体都是普通
+    // 文件，不受影响；链接由恢复侧按当前机器的宿主 SDK 重建。
   }
 }
 
@@ -555,7 +560,68 @@ export async function restoreFixture(fixtureFile: string, targetDir: string): Pr
   if (rebased > 0) {
     console.log(`[restore-fixture] 已把 ${rebased} 个插件的 file_path 重定位到 ${targetDir}`);
   }
+  // fixture 不携带 SDK 解析链接（zip 跳过 symlink），恢复后按当前机器的宿主 SDK 重建，
+  // 否则 worker 模式加载插件会 ERR_MODULE_NOT_FOUND（见 ensurePluginSdkSymlink）。
+  const sdkLink = ensurePluginSdkSymlink(targetDir);
+  if (sdkLink) {
+    console.log(`[restore-fixture] 已建立插件 SDK 解析链接：${sdkLink}`);
+  }
   return metadata;
+}
+
+/**
+ * 在恢复出的数据目录里重建 `plugins/node_modules/@openlearn/plugin-sdk` 解析链接。
+ *
+ * 为什么必须做：插件打包时 SDK 是 external，运行时靠这个链接解析到宿主 SDK
+ * （平台侧见 `packages/core/plugin-host/core.ts` 的 `ensureHostSdkResolution`，
+ * 但只有 inline 加载路径会调它；v0.6.1 之后第三方插件默认跑 worker 模式，那条路
+ * 不建链接）。构库时链接确实存在（v0.6.1 inline 激活建的），可 zip 打包跳过
+ * symlink，fixture 里没有它 —— 恢复后 worker 导入 `<pluginsDir>/<id>/index.js`
+ * 时 Node 向上找不到 `@openlearn/plugin-sdk`，抛 ERR_MODULE_NOT_FOUND，插件全部
+ * `state=error`。真实升级不受影响（用户磁盘上的链接随数据目录保留），这是校验工具
+ * 搬家后必须自己补上的环境件。
+ *
+ * 已存在且可用的链接原样保留；挡路的悬空链接 / 被解引用的空目录先清掉再建
+ * （直接 symlinkSync 会 EEXIST）。
+ *
+ * @returns 链接路径；解析不到宿主 SDK 时返回 null（调用方记日志，不静默）。
+ */
+export function ensurePluginSdkSymlink(targetDataDir: string): string | null {
+  const linkPath = path.join(targetDataDir, 'plugins', 'node_modules', '@openlearn', 'plugin-sdk');
+  const sdkDir = resolveHostSdkDir();
+  if (!sdkDir) return null;
+
+  // 已是可用链接（symlink 且 target 存在）→ 幂等返回
+  try {
+    if (fs.lstatSync(linkPath).isSymbolicLink() && fs.existsSync(linkPath)) return linkPath;
+  } catch {
+    /* 不存在，往下走 */
+  }
+
+  // 清掉挡路条目：悬空 symlink（构库机器的链接若被某种工具保留）、解引用出来的
+  // 目录/文件。symlinkSync 对已存在路径一律 EEXIST，必须先移除。
+  try {
+    const stat = fs.lstatSync(linkPath);
+    if (stat.isDirectory()) fs.rmSync(linkPath, { recursive: true, force: true });
+    else fs.unlinkSync(linkPath);
+  } catch {
+    /* 不存在，往下走 */
+  }
+
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+  // junction：Windows 下无需提权即可创建目录链接，POSIX 下等价为普通软链
+  fs.symlinkSync(sdkDir, linkPath, 'junction');
+  return linkPath;
+}
+
+/** 定位仓库内的 @openlearn/plugin-sdk 目录（与平台侧 resolveHostSdkDir 同策略）。 */
+function resolveHostSdkDir(): string | null {
+  try {
+    const req = createRequire(import.meta.url);
+    return path.dirname(req.resolve('@openlearn/plugin-sdk/package.json'));
+  } catch {
+    return null;
+  }
 }
 
 /**
