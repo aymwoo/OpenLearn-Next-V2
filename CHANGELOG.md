@@ -101,6 +101,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
+  - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。
+  - 修复：按 SQLite 标准重构表规范改为「新建临时表包含 DEFAULT 定义 + 迁移存量数据并回填时间戳 + DROP 旧表 + RENAME 替换」，保留原有主键约束与存量数据；补充安全 DOWN 回滚。
+  - 测试：新增 `packages/core/db/__tests__/v036-student-read-notifications-upgrade.test.ts`，覆盖存量非空库升级、时间戳回填、新插入默认值以及 DOWN 回滚。
+
 - **插件签名校验与分发安全性阻塞项加固（Issue #176，跟踪修复 PR #172 阻塞项）**：
   - **B1 嵌入式签名密码学闭环**：宿主 `extractEmbeddedSignature` 在解析 `signature.json` 时移除该条目并计算确定性 `unsignedIntegrity`，使嵌入式签名验证载荷与 CLI 签名计算对齐；CLI 重构抽取 `signZip` 共享 helper 与 `ATTESTATION_V2_PREFIX` 单一载荷前缀常量；新增无外置 metadata 传参下的纯嵌入式签名真实 round-trip 验签测试（杜绝抓控制台输出正则）。
   - **B2 社区与本地来源防绕过模型**：重构路由层 `assertCommunityZipAttestation`，默认按严格安全策略校验；未签名包直接上传默认被拒（400 `COMMUNITY_ATTESTATION_REQUIRED`），严防通过去除请求头绕过检测；本地免签安装必须由管理员显式传入 `x-allow-unsigned: true`。
