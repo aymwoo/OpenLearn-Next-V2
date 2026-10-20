@@ -136,7 +136,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **插件卸载级联清理**：`uninstallPlugin` 现在按 `actor_id = 'plugin:<pluginId>'` 与 `actor_id = 'plugin:<manifestId>'` 两种形式级联删除挂起指令。此前插件卸载后，其审批单仍是「待审批」，管理员点「批准」只会拿到 403 `COMMAND_NOT_REGISTERED` —— 且失败分支不删记录，于是变成既批不掉也删不掉、只能手工改库的死项。
   - **审批执行容错**：`POST /api/approvals/:id/approve` 区分两类失败。确定性失效（命令描述符/处理器已不存在，报 `COMMAND_NOT_REGISTERED` 或 `No handler registered for command`）→ **清除记录**并返回 `410 + code: APPROVAL_STALE_CLEARED, cleared: true`；其它执行错误（业务失败、临时故障）→ **保留记录**交由调用方重试，绝不因一次偶发失败吞掉审批单。
   - **文档**：`.env.example` 补充该环境变量说明（并注明 `0` 不影响卸载/失效的即时清理）。
-  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。
+  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。- **修复功能巡检（`pnpm sweep`）学生端与互动课堂抓到的三处请求缺陷**：
+  - **学生锁定状态从未生效（真缺陷，非噪音）**：学生外壳每次加载都请求 `GET /api/students?pageSize=all`，该端点原先限定教师/管理员 → 学生恒定 403；而学生端要在本地执行「答题锁定 / 锁定课节」，判定依据是自己这一行的 `locked_lesson_id` / `lock_mode` / `lock_target`（见 `src/hooks/useStudentViewState.ts`）。取不到自己那行 → **教师锁了学生、学生端却不受约束**。现在该端点放行学生但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）。
+  - **互动课堂无会话时 view-state 稳定 404**：`POST /api/classroom/sessions/:lessonId/view-state` 按恢复协议在无会话时返回 404，但组件挂载即防抖回写 → 每次打开互动课堂都刷一条 404。现在只在确有进行中会话（`hasActiveSession`）时回写，有会话时行为不变。
+  - **学生端 DB 状态徽章与 5s 心跳**：`/api/db-status` 只开放给教师/管理员，且本身是平台运维指标（`page_size` / `integrity_check` 等），学生端每 5s 请求一次恒定 403、徽章不该出现在学生界面。现在心跳与徽章都按角色门控，教师/管理员（`role: 'teacher'`，含 `subRole: 'administrator'`）能力不受影响。
+  - **测试**：新增 `server/__tests__/student-self-roster-scope.test.ts`（学生只拿到自己一条 / 必带锁定字段 / 不含邮箱与私有备注）、`src/components/__tests__/shell-request-hygiene.test.tsx`（学生不心跳、教师与管理员照旧心跳、学生不渲染徽章）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（无会话不回写 / 有会话照旧回写）与 `e2e/shell-request-hygiene.spec.ts`。>>>>>>> 6dbe74f (fix(shell): 修复巡检发现的学生锁定失效、view-state 404 刷屏与 DB 徽章越权)
 
 - **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
   - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。

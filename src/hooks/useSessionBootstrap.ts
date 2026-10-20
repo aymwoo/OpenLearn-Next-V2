@@ -31,6 +31,10 @@ export function useSessionBootstrap(deps: { fetchStudents: () => Promise<void> }
   // DB 状态心跳：登录后每 5 秒检查
   useEffect(() => {
     if (!session) return;
+    // DB 状态是**平台运维指标**：`/api/db-status` 只开放给教师/管理员。
+    // 学生端发起只会恒定拿到 403（每 5s 一次，白白刷一串控制台错误），
+    // 因此学生端不轮询（AppHeader 也不渲染该指示器）。
+    if (session.role !== 'teacher') return;
     const checkDb = async () => {
       try {
         const { ok, status, data } = await fetchDbStatus();

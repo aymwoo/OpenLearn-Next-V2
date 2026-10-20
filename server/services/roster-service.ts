@@ -41,6 +41,18 @@ export interface StudentItem {
   joined_at?: number;
 }
 
+/**
+ * 学生自查可见的字段子集。
+ *
+ * 学生端只需要「自己这一条」来在本地执行锁定状态（`locked_lesson_id` /
+ * `lock_mode` / `lock_target`，见 `useStudentViewState`），因此**不下发**
+ * 邮箱与教师私有备注（`private_notes`）。
+ */
+export type StudentSelfItem = Pick<
+  StudentItem,
+  'id' | 'student_number' | 'name' | 'avatar' | 'locked_lesson_id' | 'lock_mode' | 'lock_target' | 'created_at'
+>;
+
 export interface BulkEnrollInput {
   name: string;
   email?: string;
@@ -504,6 +516,32 @@ export class RosterService {
 
     const pageSize = pg.isAll ? total : ((pg as any).pageSize ?? (pg as any).limit ?? 20);
     return { data: students, total, page: pg.page ?? 1, pageSize };
+  }
+
+  /**
+   * 取「学生自己」这一条记录（自查范围）。
+   *
+   * ## 为什么需要
+   *
+   * 学生端要在本地执行「答题锁定 / 锁定课节」，判定依据是**自己这一行**的
+   * `locked_lesson_id` / `lock_mode` / `lock_target`（见
+   * `src/hooks/useStudentViewState.ts`）。此前学生只能通过
+   * `GET /api/students` 取花名册，而该端点限定教师/管理员 → 学生恒定拿到 403，
+   * 于是自己那一行永远取不到，**教师锁了学生、学生端却不受约束**。
+   *
+   * 因此这里提供一条**只返回自己**的路径：字段子集不含邮箱与教师私有备注。
+   */
+  public getStudentSelf(studentId: string): StudentSelfItem | null {
+    if (!studentId) return null;
+    const row = this.reader
+      .prepare(
+        `SELECT s.id, s.student_number, s.name, s.avatar, s.locked_lesson_id, s.lock_mode, s.lock_target, s.created_at
+         FROM students s
+         WHERE s.id = ? OR s.student_number = ?
+         LIMIT 1`,
+      )
+      .get(studentId, studentId) as StudentSelfItem | undefined;
+    return row ?? null;
   }
 
   public createStudent(params: { name: string; email?: string; student_number?: string; password?: string }): {
