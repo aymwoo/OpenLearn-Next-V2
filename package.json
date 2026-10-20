@@ -62,6 +62,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "sweep": "tsx scripts/sweep/index.ts",
     "db:backup": "npx tsx scripts/backup-db.ts",
     "db:restore": "npx tsx scripts/restore-db.ts",
     "db:clean-test-data": "node scripts/cleanup-test-data.mjs",

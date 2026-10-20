@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **试卷导入**：新增 `POST /api/assessments/paper/import`（json/csv），建一份新草稿卷。逐题核对 `QuestionTypeRegistry`：题型未安装返回 `400 QUESTION_TYPE_NOT_INSTALLED` + `missingTypes` 清单（提示去插件中心安装），而不是静默丢题或让题目落库后渲染成白屏；并用题型自己的 `validateConfig` / `validateAnswerKey` 校验外部数据。机器可读错误码经 `sendSafeError` 透传，前端不必嗅探中文文案。
   - **文档**：`docs/architecture/assessment-model.md` 新增 §9 协议规范（钩子语义表、`openlearn.assessment.paper/v1` 协议、导入校验链路、错误码表、向后兼容策略）。
   - **测试**：新增 `server/__tests__/assessment-plugin-question-types.test.ts`（6 条：自定义提示词生效且不拼接内置模板、`null` 保守拒绝不调 AI、JSON 往返配置与题型标记零丢失、CSV 往返、未安装题型明确报错、导入用题型校验器验配置）。
+- **功能巡检工具 `pnpm sweep`（全角色自动遍历 + 缺陷报告）**：
+  - 新增 `scripts/sweep/`：`index.ts`（CLI）/ `manifest.ts`（巡检计划）/ `probe.ts`（浏览器巡检）/ `prepare.ts`（前置数据）/ `report.ts`（报告）/ `server.ts`（一次性演示服务器）。
+  - **登录全程不碰登录页**：`POST /api/auth/login` 拿 `edu_os_token` Cookie 直接注入浏览器上下文，页面加载即已登录，不受改密门影响。
+  - **导航项运行时发现**：教师/管理员工作台侧边栏的 `button[aria-label]` 实时枚举，新增导航项与插件页签自动纳入巡检（不再维护会过期的视图清单）；教师端走 hash 路由（`#/courses` 等）。
+  - **前置数据按需补齐**：无已发布作业则建作业、无课堂会话则建会话（课前就绪 / 授课中两种阶段），全部落在一次性演示库 `storage/demo.db`，不碰开发库。
+  - **5 轮巡检**：管理员 → 学生（无会话）→ 学生（课中）→ 教师 → 教师（授课中）。顺序有硬约束：有进行中会话时学生端被锁进课中视图；教师打开互动课堂会开启「全课专注锁定」——因此学生课中轮必须排在教师轮之前。
+  - **全局问题与视图问题分离**：启动期探针抓到的、或在某个角色 ≥70% 视图里都出现的问题归为「全局问题」单独成节，不计入各视图成败，避免启动期噪音淹没真信号。
+  - **只读不写**：命中「删除 / 清空 / 发布 / 导出」等危险词的按钮一律不点；只覆盖 Chromium。
+  - 产物：`artifacts/sweep/report.md`（可直接贴进 issue）+ `report.json` + `screenshots/*.png`；有视图级错误时退出码 1（`--no-fail` 可关闭）。
+  - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--no-fail`。
+  - 文档：`docs/feature-sweep.md`（原理、轮次约束、数据环境、与 `e2e/` 断言式套件的分工）。
 
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
