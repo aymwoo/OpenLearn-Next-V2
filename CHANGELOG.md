@@ -36,6 +36,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--no-fail`。
   - 文档：`docs/feature-sweep.md`（原理、轮次约束、数据环境、与 `e2e/` 断言式套件的分工）。
 
+### Fixes
+
+- **功能巡检发现的外壳请求缺陷（三处，其中一处是真缺陷）**：
+  - **学生锁定状态从未生效（真缺陷，非噪音）**：`GET /api/students` 原先限定教师/管理员 → 学生恒定 403；而学生端要靠**自己那一行**的 `locked_lesson_id` / `lock_mode` / `lock_target` 在本地执行「答题锁定 / 锁定课节」（`useStudentViewState`）。即：教师锁了学生，学生端却不受约束。现在放行学生，但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）；教师/管理员的取数范围不变。
+  - **互动课堂无会话时 view-state 稳定 404**：写入端点按「课堂会话保存与恢复」协议在无会话时返回 404，但 `LiveClassroomView` 挂载即防抖回写当前环节 → 每次打开互动课堂都刷一条 404 + 控制台错误。现在**仅在确有进行中会话时**回写（恢复协议本身不变）。
+  - **学生端 DB 状态徽章与 5s 心跳越权**：`/api/db-status` 只开放给教师/管理员，学生端每 5s 心跳一次恒定 403，且该端点返回 SQLite 内部信息（page_size / integrity_check），本不该出现在学生界面。DB 心跳与顶栏徽章改为**按角色门控**，教师/管理员能力不受影响。
+  - **学生端默认选中全局 `lessons[0]`**（同族缺陷，由新增的 e2e 回归用例发现）：课程列表对所有已登录角色开放，而 `GET /api/lessons/:id/whiteboard` 只对**该课节所在班级的成员**开放 → 学生默认选中别人的课节后，白板轮询稳定吃 403。现在学生端不再默认选中课节（当前课节由自己的课表 / 进度 / 进行中会话决定），教师端行为不变。
+  - 测试：`server/__tests__/student-self-roster-scope.test.ts`（服务端数据范围 7 例）、`src/components/__tests__/shell-request-hygiene.test.tsx`（心跳与徽章门控 4 例）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（view-state 门控 2 例）、`src/store/__tests__/lessonSlice.auto-select.test.ts`（默认选中门控 4 例）、`e2e/shell-request-hygiene.spec.ts`（**浏览器级**：教师/学生外壳加载不得出现任何 console 错误或 4xx/5xx）。
+
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
   - 教师确认（可修改后确认）走既有 `PUT .../grade`：写分并 `manual_override = 1`，`regrade` 不再覆盖；请求带 `acceptedAiSuggestion: true` 时记 `assessment.ai_grading_accepted` 审计（建议分 vs 实际分），建议生成本身记 `assessment.ai_grading_suggested`。
