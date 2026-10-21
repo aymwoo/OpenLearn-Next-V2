@@ -13,9 +13,20 @@ const TEACHER_A = 'usr-bank-teacher-a';
 const TEACHER_B = 'usr-bank-teacher-b';
 const STUDENT_1 = 'stu-bank-1';
 const STUDENT_2 = 'stu-bank-2';
+/** 抽样用：验证「并非全员同卷」需要多名学生。 */
+const SAMPLE_STUDENTS = ['stu-bank-1', 'stu-bank-2', 'stu-bank-3', 'stu-bank-4', 'stu-bank-5'];
 const CLASS = 'cls-bank-draw';
 
 const service = new AssessmentService({ db: db as any });
+
+/** 读取某次 attempt 持久化的抽题种子（paper_json.seed）。 */
+function seedOf(attemptId: string): string {
+  const row = db.prepare('SELECT paper_json FROM assessment_attempts WHERE id = ?').get(attemptId) as
+    | { paper_json?: string | null }
+    | undefined;
+  const parsed = JSON.parse(row?.paper_json || '{}') as { seed?: string };
+  return String(parsed.seed ?? '');
+}
 
 async function buildDrawAssessment(settings: Record<string, unknown>, itemCount = 5) {
   const assessment = service.createAssessment({ ownerId: TEACHER_A, kind: 'quiz', title: '抽题卷', settings });
@@ -38,8 +49,7 @@ describe('题库共享与按规则抽题（Issue #186）', () => {
     for (const [id, username, role] of [
       [TEACHER_A, 'bank_teacher_a', 'teacher'],
       [TEACHER_B, 'bank_teacher_b', 'teacher'],
-      [STUDENT_1, 'bank_student_1', 'student'],
-      [STUDENT_2, 'bank_student_2', 'student'],
+      ...SAMPLE_STUDENTS.map((sid, i) => [sid, 'bank_student_' + (i + 1), 'student'] as const),
     ] as const) {
       db.prepare(
         'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -60,10 +70,14 @@ describe('题库共享与按规则抽题（Issue #186）', () => {
     db.prepare('DELETE FROM assessments WHERE owner_id = ?').run(TEACHER_A);
     db.prepare('DELETE FROM question_bank_items WHERE owner_id IN (?, ?)').run(TEACHER_A, TEACHER_B);
     db.prepare('DELETE FROM classes WHERE id = ?').run(CLASS);
-    db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?)').run(TEACHER_A, TEACHER_B, STUDENT_1, STUDENT_2);
+    db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?, ?, ?, ?)').run(
+      TEACHER_A,
+      TEACHER_B,
+      ...SAMPLE_STUDENTS,
+    );
   });
 
-  it('每人一卷：抽到 count 道、同学生重入稳定、不同学生卷面不同', async () => {
+  it('每人一卷：抽到 count 道、同学生重入稳定、不同学生种子不同', async () => {
     const { assignment } = await buildDrawAssessment({ draw: { count: 3 } }, 6);
     const a: any = service.startAttempt(assignment.id, STUDENT_1);
     const b: any = service.startAttempt(assignment.id, STUDENT_2);
@@ -72,7 +86,13 @@ describe('题库共享与按规则抽题（Issue #186）', () => {
     expect(b.items).toHaveLength(3);
     const idsA = a.items.map((i: any) => i.id);
     const idsB = b.items.map((i: any) => i.id);
-    expect(JSON.stringify(idsA)).not.toBe(JSON.stringify(idsB));
+
+    // 「每人一卷」的机制是种子里带 studentId，所以这里断言**种子不同**——
+    // 确定性，不依赖概率。（卷面是否相同见下一个用例，那里有 1/120 的固有概率，
+    // 不能写成「任意两名学生卷面必不同」，那正是此前偶发失败的原因。）
+    expect(seedOf(a.attempt.id)).not.toBe(seedOf(b.attempt.id));
+    expect(seedOf(a.attempt.id)).toContain(STUDENT_1);
+    expect(seedOf(b.attempt.id)).toContain(STUDENT_2);
 
     // 同一学生再次进入（未交卷）复用同一卷面
     const again: any = service.startAttempt(assignment.id, STUDENT_1);
@@ -81,6 +101,18 @@ describe('题库共享与按规则抽题（Issue #186）', () => {
 
     // 只能作答本卷题目：不存在的题 → 404（同步抛错）
     expect(() => service.saveAnswer(a.attempt.id, STUDENT_1, 'it-not-exist', 'x')).toThrowError(/item not found/);
+  });
+
+  it('不同学生的卷面不会全部相同（抽样断言，全同概率可忽略）', async () => {
+    // 6 题抽 3 的有序三元组共 120 种，任意两名学生撞卷概率 1/120 ≈ 0.83%。
+    // 因此不断言「两两不同」，而是抽样多人断言「并非全员同卷」：
+    // n 人全同的概率 = (1/120)^(n-1)，n=5 时约 5e-9，等价于确定性。
+    const { assignment } = await buildDrawAssessment({ draw: { count: 3 } }, 6);
+    const papers = SAMPLE_STUDENTS.map((sid) => {
+      const attempt: any = service.startAttempt(assignment.id, sid);
+      return attempt.items.map((i: any) => i.id).join(',');
+    });
+    expect(new Set(papers).size).toBeGreaterThan(1);
   });
 
   it('题库不足：抽题数量超过可用题量时报 409，不静默少题', async () => {

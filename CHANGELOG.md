@@ -17,7 +17,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `package.json` 中 vite 版本下限由 `^6.2.3` 抬到 `^6.4.5`，防止后续重新解析回脆弱版本；lockfile 同步更新（仅 vite 6.4.3 → 6.4.5 及其 peer 后缀，无其他依赖变动）。
   - 背景：`security-audit` job（`pnpm audit --audit-level high`）自 2026-10-20 深夜起对所有分支转红，与仓库代码无关 —— lockfile 未变，是 npm 新发布公告所致。升级后该命令返回 `No known vulnerabilities found`。
   - 兼容性：peer 依赖 `@vitejs/plugin-react@5.2.0`、`@tailwindcss/vite@4.3.0`、`vitest@4.1.11` 均声明接受 vite 6.x，无变动。
-  - 验证：`pnpm audit --audit-level high` 通过、`vite build` 通过、`tsc --noEmit` 干净、全量 `vitest run` 4558 passed / 0 failed。
+  - 验证：`pnpm audit --audit-level high` 通过、`vite build` 通过、`tsc --noEmit` 干净、全量 `vitest run` 4558 passed / 0 failed。### Fixes
+
+- **修复抽题/乱序 PRNG 的种子哈希雪崩不足，并消除由此产生的偶发测试失败（Issue #186）**：
+  - `seededShuffle` 原先用 `h = imul(31, h) + c`（Java `String.hashCode`）派生种子状态，**雪崩不足**：实测真实种子格式 `assignmentId:studentId:attemptNo` 改一个字符只有 **6/32** 个比特变化，短种子仅 **1/32**。LCG 的低位演化与高位无关，两个只在低位相同的初始状态会产出相关的随机流。
+  - 可观测后果：同一学生相邻两次 attempt 的卷面碰撞率 **1.63%**，是理论值（6 题抽 3 的有序三元组共 120 种，1/120 ≈ 0.83%）的近两倍；相近学生 id 的卷面也偏相关。
+  - 修复：种子哈希换成 xmur3 风格多轮混合（实测改一个字符 **13~21/32** 比特变化），随机数生成换成 splitmix32。实测相邻 attempt 碰撞率回落到 **0.89%**（≈ 理论值），排列分布不变（卡方 636 vs 旧 627，df=719）。
+  - `seededShuffle` 改为导出，新增 `server/services/__tests__/seeded-shuffle.test.ts`（6 例）直接钉住契约：同 seed 同排列、结果是合法排列、相近 seed 可区分、相邻 attempt 碰撞率低于阈值、60000 次采样覆盖全部 720 种排列。
+  - 同时修复 `assessment-bank-draw.test.ts` 的**固有偶发断言**：原断言「任意两名学生卷面必不同」在 120 种卷面下本就有 1/120 ≈ 0.83% 失败概率（CI 上已实际发生过）。改为确定性断言「不同学生的抽题**种子**不同」+ 抽样 5 人断言「并非全员同卷」（全同概率 ≈ 5e-9）。
+  - 兼容性：`paper_json` 已持久化 `{ seed, itemIds }`，既有 attempt 的卷面不受影响；`shuffleItems` / `shuffleOptions` 的顺序未持久化，会随本次修复改变呈现顺序（无数据损坏）。
+  - 验证：改动文件 `tsc --noEmit` 干净、`eslint` 0 error；全量 `vitest run` **4565 passed / 0 failed**；修复后的 `assessment-bank-draw.test.ts` 连跑 **40 次 0 失败**。>>>>>>> d1bcc2e (fix(assessment): 修复抽题 PRNG 种子哈希雪崩不足并消除偶发测试失败)
 
 ### Features
 
