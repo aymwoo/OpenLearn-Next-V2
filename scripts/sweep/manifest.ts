@@ -15,7 +15,7 @@
  * @module
  */
 
-import type { SweepRole, SweepSubTab, SweepTarget } from './types.js';
+import type { SweepRole, SweepScenario, SweepSubTab, SweepTarget } from './types.js';
 
 /**
  * 视图内的二级页签，按「点击导航后落到的 hash tab」索引。
@@ -198,7 +198,6 @@ export const SWEEP_ROLES: SweepRole[] = [
 
 /**
  * 危险操作黑名单：命中这些词的按钮一律不点。
- *
  * 巡检跑在一次性演示库上，但仍然要守住「巡检只读、不搞破坏」的底线：
  * 删除、清空、发布、结束这类操作一旦误点，报告里的结论就不可信了
  * （页面状态被改了，后续视图的报错可能只是数据被删了）。
@@ -208,3 +207,106 @@ export const DANGEROUS_ACTION_PATTERN =
 
 /** 巡检时默认不点开的按钮（会打开新窗口/下载/新标签页，扰乱巡检上下文）。 */
 export const SKIP_ACTION_PATTERN = /在新标签页打开|Open .* in a new tab|导出|Export|下载/i;
+
+/**
+ * 写流程剧本（“写”链路巡检）。
+ *
+ * 只读巡检回答「打开每个视图有没有报错」；剧本回答「**做完一笔真实业务**之后，
+ * 打开相关界面会不会冒 403/500」。
+ *
+ * 业务写入走 API（契约稳定，UI 改版不会让剧本碎），观察走浏览器（那里才有渲染噪音）。
+ * 剧本只在一次性演示库上跑，且动作是显式编写的 —— 不会误触删除类按钮。
+ */
+export const SWEEP_SCENARIOS: SweepScenario[] = [
+  {
+    id: 'assignment-loop',
+    label: '作业闭环（发布 → 提交 → 批改 → 回看）',
+    roles: ['teacher', 'student'],
+    steps: [
+      {
+        label: '教师发布作业到演示班',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/assignments',
+          body: {
+            title: '巡检剧本作业',
+            description: '功能巡检（写流程剧本）自动创建，仅存在于一次性演示库。',
+            classId: 'demo-class',
+            allowText: true,
+            teacherWeight: 1,
+            peerWeight: 0,
+            status: 'published',
+          },
+        },
+        capture: { name: 'assignmentId', path: 'assignmentId' },
+        expect: { path: 'assignmentId', notEmpty: true },
+      },
+      {
+        label: '教师打开班级管理（看到新作业）',
+        role: 'teacher',
+        view: { hash: 'classes' },
+      },
+      {
+        label: '教师打开测评中心',
+        role: 'teacher',
+        view: { hash: 'assessments' },
+      },
+      {
+        label: '学生提交作答',
+        role: 'student',
+        api: {
+          method: 'POST',
+          path: '/api/assignments/{{assignmentId}}/submit',
+          body: { textContent: '巡检剧本学生的作答内容' },
+        },
+        capture: { name: 'submissionId', path: 'submissionId' },
+        expect: { path: 'submissionId', notEmpty: true },
+      },
+      {
+        label: '学生打开我的作业（看到已提交）',
+        role: 'student',
+        view: { path: '/' },
+      },
+      {
+        label: '教师批改给分',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/commands',
+          body: {
+            commandType: 'assignment.grade',
+            payload: {
+              submissionId: '{{submissionId}}',
+              teacherScore: 88,
+              teacherComment: '巡检剧本自动批改',
+              teacherWeight: 1,
+              peerWeight: 0,
+              status: 'confirmed',
+            },
+          },
+        },
+        expect: { path: 'result.calculatedFinalScore', equals: 88 },
+      },
+      {
+        label: '教师查看该作业的成绩',
+        role: 'teacher',
+        api: {
+          method: 'GET',
+          path: '/api/assignments/{{assignmentId}}?studentId=DEMO-S01',
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师回到班级管理（看已批改）',
+        role: 'teacher',
+        view: { hash: 'classes' },
+      },
+      {
+        label: '学生回看分数',
+        role: 'student',
+        view: { path: '/' },
+      },
+    ],
+  },
+];

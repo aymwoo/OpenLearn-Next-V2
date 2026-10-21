@@ -265,6 +265,12 @@ jobs:
       - name: Run accessibility gate
         run: pnpm exec playwright test e2e/a11y-gate.spec.ts
 
+      # 外壳请求卫生：教师/学生外壳加载过程中不得出现任何 console 错误或 4xx/5xx 响应。
+      # 这类缺陷（学生端请求越权接口吃 403、外壳回写拿到 404）单测抓不到 ——
+      # 只有真实浏览器才知道「学生登录后那个外壳到底发了哪些请求」。
+      - name: Run shell request hygiene gate
+        run: pnpm exec playwright test e2e/shell-request-hygiene.spec.ts
+
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
   # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
   # 生产启动拒绝种子口令等于用户名，本 job 使用强测试口令。口令等于用户名时的强制改密由单元测试覆盖。
@@ -292,6 +298,65 @@ jobs:
 
       - name: Run public beta journey
         run: pnpm exec playwright test --config=playwright.beta.config.ts
+
+  # 全角色功能巡检（pnpm sweep）：枚举所有角色、所有视图的入口，逐个访问并收集
+  # 「未捕获异常 / 导航失败 / 任何 4xx·5xx 响应」。
+  #
+  # 与 browser-workflow-e2e 互补：那些 spec 是**点选式**覆盖（点过的地方），
+  # sweep 是**枚举式**覆盖（侧边栏每个导航项 + 运行时发现的插件页签）。
+  # 阻断性问题即红（退出码 1）；报告与截图作为 artifact 上传。
+  feature-sweep:
+    name: Feature sweep (all roles)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin SDK
+        run: node scripts/build-plugin-sdk.mjs
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 巡检在**一次性演示库**（storage/demo.db）上跑，不碰开发库；
+      # 内部自己起服务、跑完自己停。
+      - name: Run feature sweep
+        run: pnpm sweep
+
+      # 报告进 job summary：PR 里不用下载 artifact 就能看到「哪个视图坏了」
+      - name: Append sweep report to job summary
+        if: always()
+        run: |
+          if [ -f artifacts/sweep/report.md ]; then
+            echo '## 功能巡检报告' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/sweep/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '巡检未产出报告（详见 artifacts/sweep/server.log）' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sweep report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: feature-sweep-report
+          path: |
+            artifacts/sweep/report.md
+            artifacts/sweep/report.json
+            artifacts/sweep/screenshots/
+            artifacts/sweep/server.log
+          if-no-files-found: warn
 
   docs-drift-audit:
     runs-on: ubuntu-latest

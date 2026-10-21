@@ -39,6 +39,76 @@ export interface SweepSubTab {
   preClick?: SweepClickSpec;
 }
 
+/** 一个待巡检的写流程剧本。 */
+export interface SweepScenario {
+  /** 机器可读 ID。 */
+  id: string;
+  /** 报告中显示的中文名。 */
+  label: string;
+  /** 需要哪些角色参与（引擎为它们各开一个浏览器上下文，全程保持登录态）。 */
+  roles: SweepRoleId[];
+  /** 剧本步骤（按顺序执行）。 */
+  steps: SweepScenarioStep[];
+}
+
+/** 剧本里的一步。 */
+export interface SweepScenarioStep {
+  /** 步骤名（报告里显示）。 */
+  label: string;
+  /** 执行这一步的角色。 */
+  role: SweepRoleId;
+  /**
+   * 业务动作：在该角色的会话下调用 API。
+   *
+   * 写操作走 API 而不是 UI —— UI 一改版剧本就碎，而 API 契约是稳定的。
+   * 剧本的价值不在「把按钮点一遍」，而在**动作前后浏览器的真实渲染**。
+   */
+  api?: {
+    method: 'POST' | 'GET';
+    path: string;
+    body?: Record<string, unknown>;
+  };
+  /** 动作后要打开的界面（浏览器），用于收集沿途噪音。 */
+  view?: {
+    /** 路径（含查询串），默认 `/` */
+    path?: string;
+    /** hash 路由（如 `classes` → `/#/classes`） */
+    hash?: string;
+  };
+  /** 断言：API 响应体里某个点分路径的字段。 */
+  expect?: {
+    /** 点分路径，如 `assignmentId` / `result.calculatedFinalScore` */
+    path: string;
+    equals?: unknown;
+    notEmpty?: boolean;
+  };
+  /** 把 API 响应体里某个字段存成变量，供后续步骤用 `{{name}}` 引用。 */
+  capture?: {
+    name: string;
+    path: string;
+  };
+}
+
+/** 剧本里单步的结果。 */
+export interface SweepScenarioStepResult {
+  label: string;
+  role: SweepRoleId;
+  roleLabel: string;
+  status: 'ok' | 'error' | 'skipped';
+  issues: SweepIssue[];
+  screenshot?: string;
+  detail?: string;
+  durationMs: number;
+}
+
+/** 一个剧本的整体结果。 */
+export interface SweepScenarioResult {
+  id: string;
+  label: string;
+  status: 'ok' | 'error' | 'skipped';
+  steps: SweepScenarioStepResult[];
+}
+
 /** 一个待巡检的视图。 */
 export interface SweepTarget {
   /** 机器可读 ID（截图文件名由此生成）。 */

@@ -51,8 +51,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **全局问题与视图问题分离**：启动期探针抓到的、或在某个角色 ≥70% 视图里都出现的问题归为「全局问题」单独成节，不计入各视图成败，避免启动期噪音淹没真信号。
   - **只读不写**：命中「删除 / 清空 / 发布 / 导出」等危险词的按钮一律不点；只覆盖 Chromium。
   - 产物：`artifacts/sweep/report.md`（可直接贴进 issue）+ `report.json` + `screenshots/*.png`；有视图级错误时退出码 1（`--no-fail` 可关闭）。
-  - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--no-fail`。
+  - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--skip-scenarios` / `--no-fail`。
   - 文档：`docs/feature-sweep.md`（原理、轮次约束、数据环境、与 `e2e/` 断言式套件的分工）。
+
+### CI
+
+- **功能巡检接入 CI（新增 `feature-sweep` job）**：
+  - `.github/workflows/ci.yml` 新增 `feature-sweep` job：装 Chromium → 跑 `pnpm sweep` → 把 `artifacts/sweep/report.md` + 截图作为 artifact 上传 → **存在阻断性问题即红**；报告同时写入 job summary。
+  - `browser-workflow-e2e` job 新增一步跑 `e2e/shell-request-hygiene.spec.ts`（外壳请求卫生的浏览器级回归）。
+  - **门禁口径与报告口径正交**：报告会把「几乎每个视图都出现」的问题归为全局问题并把视图状态重算为正常（为了不被启动期噪音淹没）；但门禁另起一套判定 —— 未捕获异常 / 导航失败 / 任何 4xx·5xx 响应 → 阻断（哪怕它是全局问题：「每个页面都 403」正是最该拦住的回归）；仅 console 错误不阻断（它多半是前几类的回声，重复计只会让门禁吵闹）。该口径由 `scripts/sweep/__tests__/gate.test.ts` 守住（10 例）。
+  - 演示服务器的启动等待上限从 180s 提到 300s（CI 容器冷启动更慢）。
+
+### Features
+
+- **功能巡检扩展到写流程（剧本机制）**：
+  - 新增 `scripts/sweep/scenario.ts` 与 `manifest.ts` 的 `SWEEP_SCENARIOS`：剧本 = **业务写入走 API**（契约稳定，UI 改版不会让剧本碎）+ **观察走浏览器**（动作前后打开相关界面，沿途收集 console 错误与 4xx/5xx）。多个角色的浏览器上下文在剧本期间全程保持登录态，因此“教师批改”与“学生回看”发生在同一条世界线上。
+  - 首个剧本：**作业闭环**（教师发布 → 学生提交作答 → 教师批改给分 88 → 教师查成绩 → 学生回看），共 9 步，含 API 断言（`calculatedFinalScore === 88`）。
+  - 剧本排在**角色巡检之前**跑：此时还没有进行中的课堂会话，学生端不会被“全班专注锁定”锁进课中视图，否则回看分数那一步只会拍到盖住整页的弹窗。
+  - 报告新增「写流程剧本」小节；剧本里的阻断性问题同样计入退出码。新增 `--skip-scenarios` 开关。
 
 ### Fixes
 

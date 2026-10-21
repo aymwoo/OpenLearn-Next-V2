@@ -146,7 +146,8 @@ interface Collector {
   detach: () => void;
 }
 
-function attachCollector(page: Page): Collector {
+/** 挂上诊断收集器（剧本引擎也用它收集沿途噪音）。 */
+export function attachCollector(page: Page): Collector {
   const issues: SweepIssue[] = [];
 
   const onConsole = (msg: {
@@ -214,7 +215,7 @@ function attachCollector(page: Page): Collector {
 }
 
 /** 等待页面稳定：DOM 就绪 → 网络静默（尽力）→ 额外静置。 */
-async function settle(page: Page): Promise<void> {
+export async function settle(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => {});
   await page.waitForTimeout(SETTLE_MS);
@@ -665,7 +666,7 @@ async function preparePage(page: Page): Promise<void> {
  *
  * 不做泛化的「关掉所有弹窗」——那会误伤视图里本该看的东西。
  */
-async function dismissBlockingModals(page: Page): Promise<void> {
+export async function dismissBlockingModals(page: Page): Promise<void> {
   const icebreaker = page.locator('[data-testid="student-icebreaker-modal"]');
   const visible = await icebreaker
     .waitFor({ state: 'visible', timeout: 2_000 })
@@ -723,7 +724,7 @@ async function probe(
 }
 
 /** 截图；失败不视为缺陷（截图只是证据）。 */
-async function capture(
+export async function capture(
   page: Page,
   screenshotDir: string,
   roleId: SweepRoleId,
