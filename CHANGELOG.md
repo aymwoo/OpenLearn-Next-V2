@@ -69,7 +69,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **管理员**：全部；
   - **教师**：**自己教的** —— 自己创建的，或出现在自己所带班级（排课 / 作业 / 课堂会话）里的；另含 `creator_id` 为空的历史课节（与 `authorizeLessonStaff` 的既有约定一致，避免历史数据在教师端变成死数据）；
   - **学生**：**自己班的** —— 自己所在班级关联的，或自己有学习进度记录的。
-- **单条端点 `GET /api/lessons/:id` 同步收窄**：列表收窄后，学生仍能按 id 拉任意课节内容；现在同口径鉴权。**先判存在性（404）再判可见性（403）** —— 不存在的课节没有「越权」可言。
+- **单条端点 `GET /api/lessons/:id` 同步收窄**：列表收窄后，学生仍能按 id 拉任意课节内容；现在同口径鉴权。**先判存在性（404）再判可见性（403）** —— 不存在的课节没有「越权」可言。- **课程包（Course Package）导入通道 + 课程导入流程审计**：
+  - 审计报告 `docs/audit/course-import-audit.md`：现有「批量导入课程（CSV）」只搬运 `title` / `content` 两列，落库后 `lessons.timeline` 为 NULL、`whiteboard_elements` 为 0 条 —— 导入得到的是一节**空课**；且逐条独立提交、中途失败无回滚，失败原因只进 `console.warn`，教师看不到逐条结果。
+  - 新增**课程包**格式（`openlearn.course-package`，自包含单个 JSON）：课程正文 + 教学环节 + 白板元素 + 课件附件。附件以 base64 内联，元素数据用 `${asset:<id>}` 占位符引用 —— 导入时重新落盘并回填真实 `/uploads/xxx` URL，解决「`fileUrl` 指向本机 uploads 目录、换台机器即 404」的问题。
+  - 新增 `GET /api/course-packages/template`（下载内置模板）与 `POST /api/course-packages/import`（**单事务**写 `lessons` + `whiteboard_elements` + 课件附件；失败整体回滚，并补偿清理已落盘的孤儿文件）。教师 / 管理员鉴权。
+  - 内置模板「OpenLearn 预设组件全览 · 测试样例课」覆盖**全部 8 个预设组件**（课件演示 / 随堂测试 / 代码沙箱 / 数学函数 / 交互网页课件 / 作业提交 / 随机点名 / 问候插件）**+ 3 个基础图元**、5 类教学环节、2 个白板页，并自带 3 页 PDF 讲义 + 2 页 PPTX 课件 —— 覆盖「课件演示」的 Markdown / PDF / PPTX 三种数据源。资产由代码现场生成（jsPDF / JSZip + OOXML），不依赖任何外部二进制。
+  - 前端：课程库工具栏新增「下载课程模板」；导入弹窗拖放区同时接受 `.csv` 与 `.json`，选中课程包时切换为课程包预览（环节数 / 元素数 / 附件数 / 覆盖的组件类型）。
+  - 顺带修复：CSV 解析成功后导入状态被重置为 `'idle'`，导致预览表格与「开始导入」按钮**永远不可达** —— CSV 导入在 UI 层实际是断的。
+  - 测试：`server/services/__tests__/course-package.test.ts`（13 例：模板覆盖全部预设组件、PDF/PPTX 资产真实可用、校验拦截坏包）+ `server/__tests__/course-package-routes.test.ts`（5 例：鉴权、模板下载、完整导入、坏包 400、元素写失败时整单回滚且不留孤儿行）。>>>>>>> 8b5a00e (feat(plugin): 新增课程包导入通道与课程导入流程审计)
 
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。

@@ -104,6 +104,7 @@ import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
+import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
 import { registerAdminRoutes } from './server/routes/admin.js';
@@ -395,6 +396,7 @@ async function startServer() {
   registerCoursewareRoutes(ctx);
   registerBridgeRoutes(ctx);
   registerLessonsRoutes(ctx);
+  registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);
 
   // Approvals APIs

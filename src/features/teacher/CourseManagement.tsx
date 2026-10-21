@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   UserCheck,
   Eye,
+  FileJson,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
@@ -56,6 +57,7 @@ export function CourseManagement() {
     setFilterThisMonth,
     copyingLessonId,
     fetchLessons,
+    downloadCourseTemplate,
   } = useAppData();
 
   // 原回调 prop 的闭包封装（onClick 直接传 setter 会把 MouseEvent 误写入状态）
@@ -126,7 +128,20 @@ export function CourseManagement() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
             >
               <Upload size={14} />
-              {lang === 'zh' ? '批量导入课程 (CSV)' : 'Import Lessons (CSV)'}
+              {lang === 'zh' ? '批量导入课程' : 'Import Lessons'}
+            </button>
+            <button
+              id="download-course-template-btn"
+              onClick={() => void downloadCourseTemplate()}
+              title={
+                lang === 'zh'
+                  ? '下载自包含的课程模板（教学环节 + 全部预设组件 + PDF/PPTX 课件附件）'
+                  : 'Download a self-contained course template (segments + every preset component + PDF/PPTX assets)'
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
+            >
+              <FileJson size={14} />
+              {lang === 'zh' ? '下载课程模板' : 'Course Template'}
             </button>
             <button
               id="add-course-wizard-btn"
@@ -136,10 +151,7 @@ export function CourseManagement() {
               <Plus size={14} />
               {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
             </button>
-            <ExtensionPointRenderer
-              slot="course.list.toolbar.action"
-              slotProps={{ lang, onRefresh: fetchLessons }}
-            />
+            <ExtensionPointRenderer slot="course.list.toolbar.action" slotProps={{ lang, onRefresh: fetchLessons }} />
           </div>
         </div>
         {lessons.length > 0 && (

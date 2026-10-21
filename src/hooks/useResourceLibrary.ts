@@ -12,6 +12,12 @@ import {
   submitCSVLessons,
 } from '../services/bulkImportService';
 import { fetchLibraryResources as fetchLibraryResourcesApi } from '../services/sessionService.js';
+import {
+  downloadCourseTemplate as downloadCourseTemplateApi,
+  importCoursePackage as importCoursePackageApi,
+  readCoursePackageFile,
+  type CoursePackagePreview,
+} from '../services/coursePackageService.js';
 
 export function useResourceLibrary(deps: {
   lang: 'zh' | 'en';
@@ -68,6 +74,12 @@ export function useResourceLibrary(deps: {
   const [previewImportData, setPreviewImportData] = useState<{ title: string; content: string }[]>([]);
   const [isDraggingImport, setIsDraggingImport] = useState(false);
 
+  // ── 课程包（Course Package）导入 ──
+  // 课程包是自包含的单个 JSON：课程本体 + 教学环节 + 白板元素 + 课件附件。
+  // 与 CSV 批量导入并存 —— CSV 只能带标题和正文，课程包才是一节完整的课。
+  const [packagePreview, setPackagePreview] = useState<CoursePackagePreview | null>(null);
+  const [pendingCoursePackage, setPendingCoursePackage] = useState<any | null>(null);
+
   const downloadCsvTemplate = () => {
     downloadCSVTemplateService('class', lang);
   };
@@ -84,11 +96,84 @@ export function useResourceLibrary(deps: {
     try {
       const parsedList = await parseLessonCSV(file, lang);
       setPreviewImportData(parsedList);
-      setImportStatus('idle');
+      // 保持 'parsing'（=预览态）：此前这里重置为 'idle'，导致预览表格与
+      // 「开始导入」按钮永远不可达 —— CSV 导入流程实际是断的。
     } catch (err: any) {
       setImportStatus('error');
       setImportErrorMsg(err.message || String(err));
     }
+  };
+
+  /**
+   * 导入框的统一文件入口：按后缀分派到 CSV 批量导入或课程包导入。
+   */
+  const handleImportFileChange = async (file: File) => {
+    if (!file) return;
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.json')) {
+      setImportErrorMsg('');
+      try {
+        const result = await readCoursePackageFile(file);
+        if (!result.ok) {
+          setPackagePreview(null);
+          setPendingCoursePackage(null);
+          setImportStatus('error');
+          setImportErrorMsg(result.error);
+          return;
+        }
+        setPendingCoursePackage(result.package);
+        setPackagePreview(result.preview);
+        setPreviewImportData([]);
+        // 同上：停在预览态，等教师点「导入课程包」。
+        setImportStatus('parsing');
+      } catch (err: any) {
+        setImportStatus('error');
+        setImportErrorMsg(err?.message || String(err));
+      }
+      return;
+    }
+    setPackagePreview(null);
+    setPendingCoursePackage(null);
+    await handleCSVFileChange(file);
+  };
+
+  /** 下载内置课程模板（JSON，自包含附件）。 */
+  const downloadCourseTemplate = async () => {
+    const result = await downloadCourseTemplateApi();
+    if (!result.ok) {
+      setImportStatus('error');
+      setImportErrorMsg(result.error || (lang === 'zh' ? '模板下载失败' : 'Failed to download template'));
+      return;
+    }
+    addToast(
+      lang === 'zh' ? '模板已下载' : 'Template downloaded',
+      lang === 'zh'
+        ? 'openlearn-course-template.json 可直接拖回导入框完成导入。'
+        : 'Drag openlearn-course-template.json back into the import dialog to finish.',
+      'success',
+    );
+  };
+
+  /** 提交课程包导入。 */
+  const handlePackageImportSubmit = async () => {
+    if (!pendingCoursePackage) return;
+    setImportStatus('importing');
+    setImportErrorMsg('');
+    const result = await importCoursePackageApi(pendingCoursePackage);
+    if (result.ok && result.result) {
+      setImportStatus('success');
+      await fetchLessons();
+      addToast(
+        lang === 'zh' ? '课程包导入成功' : 'Course package imported',
+        lang === 'zh'
+          ? `已导入「${result.result.title}」：${result.result.segments} 个教学环节、${result.result.elements} 个白板元素、${result.result.assets} 份课件附件。`
+          : `Imported "${result.result.title}": ${result.result.segments} segments, ${result.result.elements} elements, ${result.result.assets} assets.`,
+        'success',
+      );
+      return;
+    }
+    setImportStatus('error');
+    setImportErrorMsg(result.error || (lang === 'zh' ? '课程包导入失败' : 'Course package import failed'));
   };
 
   const handleCSVImportSubmit = async () => {
@@ -174,6 +259,13 @@ export function useResourceLibrary(deps: {
     downloadCsvTemplate,
     handleCSVFileChange,
     handleCSVImportSubmit,
+    // 课程包导入
+    packagePreview,
+    setPackagePreview,
+    pendingCoursePackage,
+    handleImportFileChange,
+    handlePackageImportSubmit,
+    downloadCourseTemplate,
     // 班级/学生批量导入
     showImportModal,
     setShowImportModal,
