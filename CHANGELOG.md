@@ -107,6 +107,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **跨 run 幂等**：测试库文件名带 `VITEST_POOL_ID` **与 `process.pid`** —— pool id 会被 Vitest 跨进程世代复用，两代共享同一库文件会同时跑迁移并报 `UNIQUE constraint failed: _migrations.name`（实测）；带上 pid 后每个进程一份全新库，无需「启动时删除」，也就没有删除与使用之间的竞态。旧文件按 24h 粗粒度回收。
   - **用例清理**：`plugin-audit-poc.test.ts` 的 `afterEach` 清理自身写入全局库的 `audit.poc.*` 挂起指令。
   - **防退化测试**：新增 `packages/core/db/__tests__/test-db-isolation.test.ts`（5 条断言：环境变量被清除、数据目录在临时区、`getDbPath()` 不落在仓库库上、库名含 pid、注入真实开发库路径后仍走临时库）。
+- **待审批指令（`pending_commands`）的生命周期管理（Issue #195）**：
+  - **保留策略**：新增 `purgeExpiredPendingCommands`，纳入 `purgeAllExpiredData` 启动清理，默认保留 **14 天**，支持 `OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS`（`0` 禁用，与既有类别一致，非法值回退默认并告警）。比其它类别短 —— 一条两周无人审批的指令已失去当时的上下文。
+  - **插件卸载级联清理**：`uninstallPlugin` 现在按 `actor_id = 'plugin:<pluginId>'` 与 `actor_id = 'plugin:<manifestId>'` 两种形式级联删除挂起指令。此前插件卸载后，其审批单仍是「待审批」，管理员点「批准」只会拿到 403 `COMMAND_NOT_REGISTERED` —— 且失败分支不删记录，于是变成既批不掉也删不掉、只能手工改库的死项。
+  - **审批执行容错**：`POST /api/approvals/:id/approve` 区分两类失败。确定性失效（命令描述符/处理器已不存在，报 `COMMAND_NOT_REGISTERED` 或 `No handler registered for command`）→ **清除记录**并返回 `410 + code: APPROVAL_STALE_CLEARED, cleared: true`；其它执行错误（业务失败、临时故障）→ **保留记录**交由调用方重试，绝不因一次偶发失败吞掉审批单。
+  - **文档**：`.env.example` 补充该环境变量说明（并注明 `0` 不影响卸载/失效的即时清理）。
+  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。
 
 - **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
   - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。
