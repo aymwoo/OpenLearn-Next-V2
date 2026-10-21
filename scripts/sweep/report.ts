@@ -23,7 +23,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { SweepIssue, SweepViewResult } from './types.js';
+import type { SweepIssue, SweepScenarioResult, SweepViewResult } from './types.js';
 
 export interface ReportMeta {
   startedAt: string;
@@ -146,6 +146,43 @@ function count(results: SweepViewResult[], status: SweepViewResult['status']): n
   return results.filter((r) => r.status === status).length;
 }
 
+export function issuesHaveBlocking(issues: SweepIssue[]): boolean {
+  return issues.some((issue) => {
+    switch (issue.kind) {
+      case 'pageerror':
+        return true;
+      case 'nav':
+        return issue.severity === 'error';
+      case 'http':
+        return (issue.status ?? 0) >= 400;
+      default:
+        return false;
+    }
+  });
+}
+
+/**
+ * 判定某个视图结果里是否存在**阻断性问题**。
+ *
+ * ## 为什么不直接看 status
+ *
+ * `classifyGlobalIssues` 会把「几乎每个视图都出现」的问题归为全局问题，并把视图
+ * 状态重算为正常 —— 那是给**报告**用的可读性分层，**不是**严重性判断。
+ * 但对 CI 门禁来说，「每个页面都 403」恰恰是最该拦住的回归。
+ *
+ * 所以阻断判定另起一套口径（与「全局/视图」分类正交）：
+ *
+ * - `pageerror`（未捕获异常）→ 阻断；
+ * - `nav` 错误（导航/点击失败）→ 阻断；
+ * - 任何 http 4xx/5xx 响应 → 阻断（接口失败）；
+ * - **只有** console 错误 → **不**阻断：浏览器会给每个失败资源都打一条
+ *   “Failed to load resource: … 404”，它多半是上面两类的**回声**，
+ *   重复计一次只会让门禁变得吵闹。
+ */
+export function hasBlockingIssue(result: SweepViewResult): boolean {
+  return issuesHaveBlocking(result.issues);
+}
+
 /** 收集全局问题（按签名去重，附出现次数）。 */
 function collectGlobalIssues(results: SweepViewResult[]): {
   signature: string;
@@ -190,7 +227,11 @@ export function collectGlobalSummaries(results: SweepViewResult[]): {
 }
 
 /** 渲染 Markdown 报告。 */
-export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): string {
+export function renderMarkdown(
+  results: SweepViewResult[],
+  scenarios: SweepScenarioResult[],
+  meta: ReportMeta,
+): string {
   const lines: string[] = [];
 
   lines.push('# 功能巡检报告');
@@ -204,19 +245,23 @@ export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): st
   const roleIds = Array.from(new Set(results.map((r) => r.role)));
   lines.push('## 概要');
   lines.push('');
-  lines.push('| 角色 | 视图数 | ✅ 正常 | ⚠️ 告警 | ❌ 错误 | ⭕ 未找到 |');
-  lines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
+  lines.push('| 角色 | 视图数 | ✅ 正常 | ⚠️ 告警 | ❌ 错误 | ⭕ 未找到 | 🚨 阻断 |');
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const roleId of roleIds) {
     const roleResults = results.filter((r) => r.role === roleId);
     lines.push(
       `| ${roleResults[0]!.roleLabel} | ${roleResults.length} | ${count(roleResults, 'ok')} | ` +
-        `${count(roleResults, 'warn')} | ${count(roleResults, 'error')} | ${count(roleResults, 'missing')} |`,
+        `${count(roleResults, 'warn')} | ${count(roleResults, 'error')} | ${count(roleResults, 'missing')} | ` +
+        `${roleResults.filter(hasBlockingIssue).length} |`,
     );
   }
   lines.push(
     `| **合计** | **${results.length}** | **${count(results, 'ok')}** | **${count(results, 'warn')}** | ` +
-      `**${count(results, 'error')}** | **${count(results, 'missing')}** |`,
+      `**${count(results, 'error')}** | **${count(results, 'missing')}** | **${results.filter(hasBlockingIssue).length}** |`,
   );
+  lines.push('');
+  lines.push('> 🚨 阻断 = 存在未捕获异常 / 导航失败 / 任何 4xx·5xx 响应。');
+  lines.push('> 它与「全局 / 视图」分类**正交**：全局问题也会阻断（“每个页面都 403” 正是最该拦住的回归）。');
   lines.push('');
 
   // ── 全局问题 ──────────────────────────────────────────────────
@@ -240,8 +285,8 @@ export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): st
   // ── 明细表 ────────────────────────────────────────────────────
   lines.push('## 明细');
   lines.push('');
-  lines.push('| 角色 | 视图 | 状态 | 页面异常 | console | 请求失败 | 4xx/5xx | 全局 | 截图 |');
-  lines.push('| --- | --- | :-: | ---: | ---: | ---: | ---: | ---: | --- |');
+  lines.push('| 角色 | 视图 | 状态 | 🚨 | 页面异常 | console | 请求失败 | 4xx/5xx | 全局 | 截图 |');
+  lines.push('| --- | --- | :-: | :-: | ---: | ---: | ---: | ---: | ---: | --- |');
   for (const result of results) {
     const counts = countByKind(result.issues);
     const viewName = result.subTabLabel ? `${result.targetLabel} / ${result.subTabLabel}` : result.targetLabel;
@@ -249,6 +294,7 @@ export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): st
     const globalCount = result.issues.filter((issue) => issue.global).length;
     lines.push(
       `| ${result.roleLabel} | ${viewName} | ${STATUS_ICON[result.status]} ${STATUS_TEXT[result.status]} | ` +
+        `${hasBlockingIssue(result) ? '🚨' : '—'} | ` +
         `${counts.pageerror ?? 0} | ${counts.console ?? 0} | ${counts.requestfailed ?? 0} | ${counts.http ?? 0} | ` +
         `${globalCount} | ${shot} |`,
     );
@@ -259,6 +305,27 @@ export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): st
   const broken = results.filter(
     (r) => (r.status === 'error' || r.status === 'warn') && r.issues.some((issue) => !issue.global),
   );
+  const blocking = results.filter(hasBlockingIssue);
+
+  if (blocking.length > 0) {
+    lines.push('## 阻断性问题（CI 门禁口径）');
+    lines.push('');
+    lines.push('存在未捕获异常、导航失败或 4xx/5xx 响应的视图 —— **无论它是不是全局问题**。');
+    lines.push('');
+    for (const result of blocking) {
+      const viewName = result.subTabLabel ? `${result.targetLabel} / ${result.subTabLabel}` : result.targetLabel;
+      lines.push(`### 🚨 ${result.roleLabel} / ${viewName}`);
+      lines.push('');
+      lines.push(`- 落点 URL：\`${shortenUrl(result.url)}\``);
+      for (const issue of result.issues) {
+        if (issue.kind === 'console') continue;
+        const tag = issue.kind === 'http' ? `http ${issue.status ?? ''}` : issue.kind;
+        lines.push(`- **${tag}**：${issue.message}${issue.global ? '（全局）' : ''}`);
+      }
+      lines.push('');
+    }
+  }
+
   if (broken.length === 0) {
     lines.push('## 视图问题详情');
     lines.push('');
@@ -311,6 +378,39 @@ export function renderMarkdown(results: SweepViewResult[], meta: ReportMeta): st
     lines.push('');
   }
 
+  // ── 写流程剧本 ────────────────────────────────────────────────
+  if (scenarios.length > 0) {
+    lines.push('## 写流程剧本');
+    lines.push('');
+    lines.push('“做一笔真实业务之后，相关界面会不会报错” —— 只读巡检看不到这一层。');
+    lines.push('');
+    for (const scenario of scenarios) {
+      const scenarioBlocking = scenario.steps.filter((step) => issuesHaveBlocking(step.issues));
+      const icon = scenario.status === 'ok' ? '✅' : scenario.status === 'skipped' ? '⭕' : '❌';
+      lines.push(`### ${icon} ${scenario.label}`);
+      lines.push('');
+      lines.push('| 步骤 | 角色 | 状态 | 🚨 | 说明 |');
+      lines.push('| --- | --- | :-: | :-: | --- |');
+      for (const step of scenario.steps) {
+        const stepIcon = step.status === 'ok' ? '✅' : step.status === 'skipped' ? '⭕' : '❌';
+        const detail = step.detail ?? '';
+        lines.push(
+          `| ${step.label} | ${step.roleLabel} | ${stepIcon} | ` +
+            `${issuesHaveBlocking(step.issues) ? '🚨' : '—'} | ${detail.replace(/\|/g, '\\|')} |`,
+        );
+      }
+      lines.push('');
+      for (const step of scenarioBlocking) {
+        for (const issue of step.issues) {
+          if (issue.kind === 'console') continue;
+          const tag = issue.kind === 'http' ? `http ${issue.status ?? ''}` : issue.kind;
+          lines.push(`- 🚨 **${step.label}**（${tag}）：${issue.message}`);
+        }
+      }
+      if (scenarioBlocking.length > 0) lines.push('');
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -326,6 +426,7 @@ function escapeCell(text: string): string {
  */
 export function writeReport(
   results: SweepViewResult[],
+  scenarios: SweepScenarioResult[],
   meta: ReportMeta,
   outDir: string,
 ): { markdown: string; json: string } {
@@ -334,7 +435,7 @@ export function writeReport(
   const markdownPath = path.join(outDir, 'report.md');
   const jsonPath = path.join(outDir, 'report.json');
 
-  fs.writeFileSync(markdownPath, renderMarkdown(results, meta), 'utf8');
+  fs.writeFileSync(markdownPath, renderMarkdown(results, scenarios, meta), 'utf8');
   fs.writeFileSync(
     jsonPath,
     JSON.stringify(
@@ -346,8 +447,15 @@ export function writeReport(
           warn: count(results, 'warn'),
           error: count(results, 'error'),
           missing: count(results, 'missing'),
+          blocking: results.filter(hasBlockingIssue).length,
+          scenarios: scenarios.length,
+          scenarioBlocking: scenarios.reduce(
+            (acc, scenario) => acc + scenario.steps.filter((step) => issuesHaveBlocking(step.issues)).length,
+            0,
+          ),
         },
         results,
+        scenarios,
       },
       null,
       2,

@@ -25,9 +25,10 @@
  */
 
 import path from 'node:path';
-import { SWEEP_ROLES } from './manifest.js';
+import { SWEEP_ROLES, SWEEP_SCENARIOS } from './manifest.js';
 import { icon, runSweep } from './probe.js';
-import { classifyGlobalIssues, collectGlobalSummaries, writeReport } from './report.js';
+import { runScenarios } from './scenario.js';
+import { classifyGlobalIssues, collectGlobalSummaries, hasBlockingIssue, issuesHaveBlocking, writeReport } from './report.js';
 import { startDemoServer } from './server.js';
 import type { SweepRoleId } from './types.js';
 
@@ -38,6 +39,8 @@ interface CliOptions {
   roles: SweepRoleId[];
   resetDb: boolean;
   failOnError: boolean;
+  /** 跳过写流程剧本（只跑只读巡检）。 */
+  skipScenarios: boolean;
 }
 
 /** 打印帮助。 */
@@ -54,6 +57,7 @@ function printHelp(): void {
   --out <dir>        产物目录（默认 artifacts/sweep）
   --roles <list>     参与巡检的角色，逗号分隔：admin,teacher,student,student-live,teacher-live（默认全部）
   --keep-db          保留现有演示库，不重建（默认重建，保证数据干净）
+  --skip-scenarios   跳过写流程剧本，只跑只读巡检
   --no-fail          即使发现错误也返回退出码 0
   -h, --help         显示本帮助
 `);
@@ -67,6 +71,7 @@ function parseArgs(argv: string[]): CliOptions {
     roles: SWEEP_ROLES.map((role) => role.id),
     resetDb: true,
     failOnError: true,
+    skipScenarios: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -106,6 +111,9 @@ function parseArgs(argv: string[]): CliOptions {
       case '--no-fail':
         options.failOnError = false;
         break;
+      case '--skip-scenarios':
+        options.skipScenarios = true;
+        break;
       default:
         if (arg.startsWith('--')) {
           console.warn(`[sweep] 忽略未知参数：${arg}`);
@@ -144,7 +152,22 @@ async function main(): Promise<void> {
   log(`开始巡检，角色：${roles.map((role) => role.label).join(' / ')}`);
 
   let results;
+  let scenarioResults: Awaited<ReturnType<typeof runScenarios>> = [];
   try {
+    // ── 先跑写流程剧本 ──────────────────────────────────────────
+    // 顺序有意为之：剧本要在**还没有进行中课堂会话**时跑 ——
+    // 否则学生端会被锁进课中视图（“全班专注锁定”），根本看不到自己的作业列表，
+    // 回看分数那一步就变成了截图里盖着弹窗的假象。
+    if (!options.skipScenarios) {
+      scenarioResults = await runScenarios({
+        baseUrl,
+        scenarios: SWEEP_SCENARIOS,
+        roles,
+        screenshotDir: path.join(options.outDir, 'screenshots'),
+        onProgress: log,
+      });
+    }
+
     results = await runSweep({
       baseUrl,
       outDir: options.outDir,
@@ -173,9 +196,26 @@ async function main(): Promise<void> {
   const globals = collectGlobalSummaries(results);
   console.log('');
   if (globals.length > 0) {
-    console.log('全局问题（每次进系统都会复现，不计入各视图成败）：');
+    console.log('全局问题（每次进系统都会复现，不计入各视图成败，但**仍然阻断**）：');
     for (const item of globals) {
       console.log(`  · ${item.message}  ×${item.occurrences}`);
+    }
+    console.log('');
+  }
+
+  // ── 阻断判定：与「全局/视图」分类正交 ─────────────────────────
+  // 「每个页面都 403」这类回归在视图成败口径下是「全局、正常」，但它恰恰是
+  // 最该拦住的 —— 所以门禁另起一套口径（见 report.ts 的 hasBlockingIssue）。
+  const blocking = results.filter(hasBlockingIssue);
+  if (blocking.length > 0) {
+    console.log('阻断性问题：');
+    for (const result of blocking) {
+      const viewName = result.subTabLabel ? `${result.targetLabel} / ${result.subTabLabel}` : result.targetLabel;
+      console.log(`  🚨 ${result.roleLabel} / ${viewName}`);
+      for (const issue of result.issues) {
+        if (issue.kind === 'console') continue;
+        console.log(`      [${issue.kind}] ${issue.message}${issue.global ? '（全局）' : ''}`);
+      }
     }
     console.log('');
   }
@@ -203,7 +243,31 @@ async function main(): Promise<void> {
     console.log('');
   }
 
-  const { markdown, json } = writeReport(results, meta, options.outDir);
+  // ── 剧本结果 ──────────────────────────────────────────────────
+  const scenarioBlocking = scenarioResults.flatMap((scenario) =>
+    scenario.steps
+      .filter((step) => issuesHaveBlocking(step.issues))
+      .map((step) => ({ scenario, step })),
+  );
+  if (scenarioResults.length > 0) {
+    console.log('写流程剧本：');
+    for (const scenario of scenarioResults) {
+      const icon2 = scenario.status === 'ok' ? '✅' : scenario.status === 'skipped' ? '⭕' : '❌';
+      console.log(`  ${icon2} ${scenario.label}`);
+      for (const step of scenario.steps) {
+        if (step.status === 'ok' && !issuesHaveBlocking(step.issues)) continue;
+        const stepIcon = step.status === 'ok' ? '🚨' : step.status === 'skipped' ? '⭕' : '❌';
+        console.log(`      ${stepIcon} ${step.label}${step.detail ? ` —— ${step.detail}` : ''}`);
+        for (const issue of step.issues) {
+          if (issue.kind === 'console') continue;
+          console.log(`           [${issue.kind}] ${issue.message}`);
+        }
+      }
+    }
+    console.log('');
+  }
+
+  const { markdown, json } = writeReport(results, scenarioResults, meta, options.outDir);
 
   const errorCount = results.filter((r) => r.status === 'error').length;
   const warnCount = results.filter((r) => r.status === 'warn').length;
@@ -211,13 +275,17 @@ async function main(): Promise<void> {
 
   console.log('');
   console.log('══════════════════════════════════════════════════════════');
-  console.log(`  巡检完成：共 ${results.length} 个视图`);
-  console.log(`  ❌ 错误 ${errorCount} · ⚠️ 告警 ${warnCount} · ⭕ 未找到 ${missingCount}`);
+  console.log(`  巡检完成：共 ${results.length} 个视图` + (scenarioResults.length ? ` + ${scenarioResults.length} 个剧本` : ''));
+  console.log(
+    `  ❌ 错误 ${errorCount} · ⚠️ 告警 ${warnCount} · ⭕ 未找到 ${missingCount} · 🚨 阻断 ${blocking.length + scenarioBlocking.length}`,
+  );
   console.log(`  报告：${markdown}`);
   console.log(`  机器可读：${json}`);
   console.log('══════════════════════════════════════════════════════════');
 
-  if (errorCount > 0 && options.failOnError) {
+  // 门禁口径：只要存在阻断性问题就失败（全局问题也算 —— “每个页面都 403”
+  // 正是最该被拦住的回归，不能因为它出现在每个视图而被“平均”掉）。
+  if ((blocking.length > 0 || scenarioBlocking.length > 0) && options.failOnError) {
     process.exit(1);
   }
 }

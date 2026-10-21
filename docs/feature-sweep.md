@@ -148,14 +148,93 @@ const labels = await sidebar.locator('button[aria-label]').evaluateAll(/* … */
 `packages/core/db/__tests__/playwright-test-production-guard.test.ts`
 断言 `NODE_ENV=production` 下必须拒绝启动。
 
+## 巡检的两种镜头
+
+| 镜头 | 回答的问题 | 实现 |
+| --- | --- | --- |
+| **只读巡检** | 打开每个视图有没有报错？ | 运行时发现导航项 → 逐个点击 → 收集信号 |
+| **写流程剧本** | **做完一笔真实业务之后**，相关界面会不会报错？ | 业务写入走 API + 观察走浏览器 |
+
+两者互补：只读巡检看不见「写」这条路上的问题（教师批改完作业后，学生端打开作业页
+会不会冒出 403？），剧本看不见「读」这条路上的问题（每个菜单点一遍）。
+
+### 写流程剧本的设计取舍
+
+- **写操作走 API，不点 UI** —— UI 一改版剧本就碎，而 API 契约稳定。剧本的价值不在
+  「把按钮点一遍」，而在**动作前后浏览器的真实渲染**。
+- **观察走浏览器** —— 每一步之后在对应角色的浏览器里打开相关界面，沿途收集
+  console 错误与 4xx/5xx。多个角色的浏览器上下文在剧本期间**全程保持登录态**，
+  所以「教师批改」和「学生回看」是在同一个世界线里发生的。
+- **安全边界** —— 剧本只在一次性演示库上跑；动作是**显式编写**的，不会像只读巡检
+  那样「点到什么算什么」，因此不会误触删除类按钮。
+
+### 加一个自己的剧本
+
+在 `scripts/sweep/manifest.ts` 的 `SWEEP_SCENARIOS` 里追加：
+
+```ts
+{
+  id: 'my-loop',
+  label: '我的闭环',
+  roles: ['teacher', 'student'],       // 需要哪些角色参与
+  steps: [
+    {
+      label: '教师发布作业',
+      role: 'teacher',
+      api: { method: 'POST', path: '/api/assignments', body: { /* ... */ } },
+      capture: { name: 'assignmentId', path: 'assignmentId' },   // 存成变量
+      expect: { path: 'assignmentId', notEmpty: true },
+    },
+    {
+      label: '学生看到新作业',
+      role: 'student',
+      view: { path: '/' },               // 动作后打开的界面（浏览器观察）
+    },
+  ],
+}
+```
+
+变量用 `{{name}}` 引用（如 `path: '/api/assignments/{{assignmentId}}/submit'`）。
+步骤失败会**中止**剧本后续步骤（后续依赖前面的结果），并在报告里标为 `skipped`。
+
+> 剧本必须在**还没有进行中课堂会话**时跑（当前实现把它排在角色巡检之前）：
+> 否则学生端会被锁进课中视图（“全班专注锁定”），看不到自己的作业列表。
+
+## CI 接入
+
+`.github/workflows/ci.yml` 里有两个相关 job：
+
+| job | 作用 | 失败含义 |
+| --- | --- | --- |
+| `browser-workflow-e2e` | 多加一步跑 `e2e/shell-request-hygiene.spec.ts` | 外壳加载出现 console 错误或 4xx/5xx |
+| `feature-sweep` | 跑 `pnpm sweep`，把报告与截图作为 artifact 上传 | 存在阻断性问题 |
+
+### 门禁口径（与报告口径正交）
+
+报告会把「几乎每个视图都出现」的问题归为**全局问题**并把视图状态重算为正常 ——
+那是为了让报告不被启动期噪音淹没。但对门禁来说，「每个页面都 403」恰恰是**最该拦住的
+回归**，不能因为它出现在每个视图就被“平均”掉。
+
+所以阻断判定另起一套口径：
+
+| 信号 | 阻断？ | 理由 |
+| --- | :-: | --- |
+| 未捕获异常（pageerror） | ✅ | 页面真的坏了 |
+| 导航 / 点击失败（nav error） | ✅ | 入口坏了 |
+| 任何 4xx / 5xx 响应 | ✅ | 接口调用失败 |
+| 仅 console 错误 | ❌ | 多半是上面三类的**回声**（浏览器会给每个失败资源都打一条 “Failed to load resource”），重复计只会让门禁吵闹 |
+
+这套口径由 `scripts/sweep/__tests__/gate.test.ts` 守住（10 例）——
+门禁自己的逻辑不能静默失效。
+
 ## 与 `e2e/` 下的 Playwright 套件的区别
 
 | | `pnpm test:e2e` | `pnpm sweep` |
 | --- | --- | --- |
 | 形态 | Playwright test runner | 独立脚本 |
 | 目的 | **断言**「功能必须这样表现」 | **发现**「哪里坏了」 |
-| 覆盖 | 手写的关键旅程 | 自动枚举的全部入口 |
-| 失败时 | test failed，CI 变红 | 出一份可读的缺陷报告 |
+| 覆盖 | 手写的关键旅程 | 自动枚举的全部入口 + 写流程剧本 |
+| 失败时 | test failed，CI 变红 | 出一份可读的缺陷报告 + CI 变红 |
 | 适合 | 防回归 | 验收 / 摸底 / 大版本自检 |
 
 两者互补：先用 sweep 摸清现状，再把高频路径固化成断言式回归测试。

@@ -38,8 +38,13 @@ export interface DemoServerHandle {
   stop: () => Promise<void>;
 }
 
-/** 轮询 /health 直到就绪的最长等待时间（毫秒）。 */
-const HEALTH_TIMEOUT_MS = 180_000;
+/**
+ * 轮询 /health 直到就绪的最长等待时间（毫秒）。
+ *
+ * 一次性演示服务器要跑迁移 + 起 Vite 中间件，冷启动在慢机器上可能到分钟级
+ * （CI 容器尤甚）。给得宽一点：启动慢不是失败，等不到才是。
+ */
+const HEALTH_TIMEOUT_MS = 300_000;
 /** 单次健康检查请求超时（毫秒）。 */
 const HEALTH_PROBE_TIMEOUT_MS = 3_000;
 
@@ -187,8 +192,12 @@ export async function startDemoServer(options: StartDemoServerOptions): Promise<
       PORT: String(port),
       PLAYWRIGHT_TEST: '1',
       NODE_ENV: process.env.NODE_ENV || 'development',
-      // 演示库的数据目录也隔离出去，避免和开发库共享 storage 产物
-      OPENLEARN_DATA_DIR: path.join(repoRoot(), 'storage'),
+      // 注意：**不要**改写 OPENLEARN_DATA_DIR。
+      //
+      // 加密密钥文件的位置是从它派生的（`getStorageDir() = join(dataDir, 'storage')`），
+      // 改了就等于换了一把钥匙：已有密文（班级口令等）解不开，巡检会在
+      // ENCRYPTION_KEY_MISMATCH 上直接死掉。演示库本来就是独立的
+      // （storage/demo.db），数据隔离不靠这个变量。
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
