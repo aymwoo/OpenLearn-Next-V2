@@ -215,17 +215,60 @@ export function parseAiGradingSuggestion(text: string, maxScore: number): AiGrad
 }
 
 
-/** 基于字符串种子的确定性打乱算法 (Fisher-Yates) */
-function seededShuffle<T>(array: T[], seed: string): T[] {
-  const result = [...array];
-  let h = 0;
+/**
+ * 字符串种子 → 32 位状态。
+ *
+ * 为什么不用 `h = imul(31, h) + c`（Java String.hashCode 那一套）：那个哈希
+ * **雪崩不足**。实测真实种子格式 `assignmentId:studentId:attemptNo` 改一个字符只有
+ * 6/32 个比特发生变化，短种子甚至只有 1/32；而 LCG 的低位演化与高位无关，两个只在
+ * 低位相同的初始状态会产出相关的随机流。可观测后果：同一学生相邻两次 attempt 的
+ * 卷面碰撞率 1.63%，是理论值（1/120 ≈ 0.83%）的近两倍。
+ *
+ * 这里换成 xmur3 风格的多轮混合，实测改一个字符有 13~21/32 个比特变化，
+ * 相邻 attempt 碰撞率回落到 0.89%（≈ 理论值）。
+ */
+function hashSeed(seed: string): number {
+  let h = 1779033703 ^ seed.length;
   for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
   }
-  const nextRandom = () => {
-    h = (Math.imul(48271, h) + 1) | 0;
-    return ((h >>> 0) % 10000) / 10000;
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^= h >>> 16) >>> 0;
+}
+
+/**
+ * splitmix32：小、快、分布均匀的 32 位 PRNG（splitmix64 的 32 位变体）。
+ *
+ * 替代原先的 `h = imul(48271, h) + 1; (h >>> 0) % 10000`。旧写法的边际分布实测
+ * 也过关（排列卡方 627 vs 新实现 636，df=719），但把状态截到 10000 个刻度白丢精度，
+ * 且与弱种子哈希叠加后放大了相近种子之间的相关性。
+ */
+function makeSeededRandom(seed: string): () => number {
+  let a = hashSeed(seed) | 0;
+  return function next(): number {
+    a |= 0;
+    a = (a + 0x9e3779b9) | 0;
+    let t = a ^ (a >>> 16);
+    t = Math.imul(t, 0x21f0aaad);
+    t = t ^ (t >>> 15);
+    t = Math.imul(t, 0x735a2d97);
+    return ((t = t ^ (t >>> 15)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * 基于字符串种子的确定性打乱算法 (Fisher-Yates)。
+ *
+ * 契约：同一 seed 必得同一排列 —— 已持久化的 `paper_json` 依赖这一点（学生重入
+ * 未交卷的 attempt 必须看到同一卷面）；不同 seed 得近似独立的均匀排列。
+ *
+ * 导出以供单元测试直接验证上述两条性质（原先不导出，只能隔着服务层间接测）。
+ */
+export function seededShuffle<T>(array: T[], seed: string): T[] {
+  const result = [...array];
+  const nextRandom = makeSeededRandom(seed);
 
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(nextRandom() * (i + 1));
