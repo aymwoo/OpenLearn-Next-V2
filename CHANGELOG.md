@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **升级 vite 至 6.4.5，修复高危依赖公告 GHSA-587h-7wmj-h5pm**：
+  - `vite <= 6.4.3` 经 `launch-editor` 间接依赖引入「`fs.existsSync()` 存在性检查可被绕过」问题（影响 Windows），修复版本 `>= 6.4.4`。
+  - `package.json` 中 vite 版本下限由 `^6.2.3` 抬到 `^6.4.5`，防止后续重新解析回脆弱版本；lockfile 同步更新（仅 vite 6.4.3 → 6.4.5 及其 peer 后缀，无其他依赖变动）。
+  - 背景：`security-audit` job（`pnpm audit --audit-level high`）自 2026-10-20 深夜起对所有分支转红，与仓库代码无关 —— lockfile 未变，是 npm 新发布公告所致。升级后该命令返回 `No known vulnerabilities found`。
+  - 兼容性：peer 依赖 `@vitejs/plugin-react@5.2.0`、`@tailwindcss/vite@4.3.0`、`vitest@4.1.11` 均声明接受 vite 6.x，无变动。
+  - 验证：`pnpm audit --audit-level high` 通过、`vite build` 通过、`tsc --noEmit` 干净、全量 `vitest run` 4558 passed / 0 failed。
+
 ### Features
 
 - **本地开发环境可跳过强制改密门（Issue #197）**：
@@ -71,6 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 纯投票（无 `correct_option`）与结构非法的旧数据跳过并在报告中列出原因；预置投票的作答无持久表可回放，仅导入试卷与题目。
   - 文档：`docs/architecture/assessment-model.md` §8（范围、执行、已知差异与回滚）。
   - 测试：`legacy-assessment-import.test.ts`（3 例：幂等导入与历史作答、dry-run 不写入、新模型可读卷面与得分）。
+
 ### Features
 
 - **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：
@@ -85,6 +95,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **props 白名单**：新增 `src/features/assessment/extension-slot-props.ts`，扩展只拿到显式列出的摘要字段（列表：id/kind/title/description/status/itemCount/totalScore/settings/时间戳；统计：聚合计数 + 逐题聚合，**不含 `answerKey` / `answer_key_json` / 学生身份**），与 `packages/core/assessment/serialize.ts` 同一条白名单原则；单测用哨兵字段做全量断言。
   - 卸载/停用插件时由既有 `unregisterPluginResources` 路径统一清理已挂载扩展，无需新增生命周期代码。
   - 测试：`assessment-extension-slots.test.ts`（白名单 2 例）+ `manifest-schema.test.ts`（三个槽位声明被 schema 接受）。
+
 ### Docs
 
 - **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
@@ -199,6 +210,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`purge`（显式）**：先导出可重放的 SQL 归档（建表语句 + 数据 + 迁移版本 + 存储键），导出失败即中止卸载（数据、DB 行、文件都完好）；成功后删表 / 迁移记录 / 存储键并写 `plugin.data_purged` 审计。授权状态（公开路由审批、能力授予、静态路由与内存资源）无论策略都照常清除 —— 它们是授权而非数据。
   - **HTTP 与前端**：`DELETE /api/plugins/:id` 接受 `dataPolicy`（purge 需 `confirm=purge`）；新增 `GET /api/plugins/orphan-data`（列表）、`POST /api/plugins/orphan-data/:key/export`（导出 + `plugin.data_exported` 审计）、`GET .../archive`（下载，路径限定在归档目录内）、`DELETE .../:key`（需 `confirm=<pluginId>`，服务端先自动导出再清除）。插件中心新增「插件数据」页签（列出 / 导出 / 下载 / 两步清除）与卸载对话框（保留/清除二选一、purge 需勾选不可恢复确认），替代原 `window.confirm`；归档固定写到数据目录的 `plugin-data-exports/`（与 `/plugins` 静态服务隔离，避免登录用户可读归档）。
   - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
+
 ### Security
 
 - **插件包发布者签名与来源分级安全验签（Issue #143）**：
