@@ -440,8 +440,15 @@ export function AppHeader(props: AppHeaderProps) {
         <ThemeSelector lang={lang} />
 
         {/* Database Connection Status Icon Indicator */}
-        {(() => {
-          const statusColor =
+        {/* Database Connection Status Icon Indicator
+         *
+         * 仅教师/管理员可见：`/api/db-status` 只开放给这两个角色，学生端发起
+         * 只会恒定拿到 403（每 5s 一次），而且它本身是平台运维指标
+         * （page_size / integrity_check 等 SQLite 内部信息），不应该出现在
+         * 学生界面上。 */}
+        {activeRole !== 'student' &&
+          (() => {
+            const statusColor =
             dbStatus === 'error' || !dbConnected
               ? {
                   bg: 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse',
@@ -478,7 +485,7 @@ export function AppHeader(props: AppHeaderProps) {
               </span>
             </div>
           );
-        })()}
+          })()}
 
         <UserMenu session={session} lang={lang} onLogout={handleLogout} onProfile={() => setProfileOpen(true)} />
       </div>

@@ -308,6 +308,15 @@ export function LiveClassroomView({
   const [isHardwareSettingsOpen, setIsHardwareSettingsOpen] = useState(false);
   /** 真实开课时间（来自 classroom_sessions.started_at），用于计算已用时长 */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  /**
+   * 该课节是否存在**进行中的课堂会话**。
+   *
+   * 会话恢复协议的写入端点（POST .../view-state）在“无会话”时按契约返回 404
+   * （见 server/__tests__/classroom-session-resume.test.ts）。此前本组件在
+   * 尚无会话时也会防抖回写环节/页码 → 每次打开互动课堂都稳定产生一条 404
+   * + 控制台错误。现在只有在确有会话时才回写。
+   */
+  const [hasActiveSession, setHasActiveSession] = useState(false);
   /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
   const [attempts, setAttempts] = useState<any[]>([]);
 
@@ -333,6 +342,7 @@ export function LiveClassroomView({
         .then((data) => {
           if (!mounted) return;
           if (!data) return;
+          setHasActiveSession(Boolean(data.hasActiveSession));
           if (viewingSpecificReportRef.current) {
             setClassroomStage('ARCHIVED_REPORT');
           } else if (data.hasActiveSession && data.stage) {
@@ -1025,8 +1035,10 @@ export function LiveClassroomView({
   useEffect(() => {
     syncChannelRef.current?.broadcastChangeSegment(activeSegmentId);
     // 会话保存：环节切换防抖回写（恢复协议的 activeSegmentId 来源）
-    if (selectedLesson && segWriteTimerRef.current) clearTimeout(segWriteTimerRef.current);
-    if (selectedLesson) {
+    // 仅在**确有进行中会话**时回写：无会话时该端点按契约返回 404，
+    // 回写只会平白刷出控制台错误（见 hasActiveSession 声明处的说明）。
+    if (selectedLesson && hasActiveSession && segWriteTimerRef.current) clearTimeout(segWriteTimerRef.current);
+    if (selectedLesson && hasActiveSession) {
       segWriteTimerRef.current = setTimeout(() => {
         fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/view-state`, {
           method: 'POST',
@@ -1035,7 +1047,7 @@ export function LiveClassroomView({
         }).catch(() => {});
       }, 500);
     }
-  }, [activeSegmentId, selectedLesson]);
+  }, [activeSegmentId, selectedLesson, hasActiveSession]);
 
   // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染。
   // v0.6.1 审计 C-1 修复：此前用裸 `io()` 新建独立连接且从不 join-room ——

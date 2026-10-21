@@ -12,6 +12,7 @@ import { stripReasoningArtifacts } from '../../packages/core/ai/strip-reasoning.
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { lessonActiveSegments, clearLessonRuntimeState } from '../shared-state.js';
 import type { Pagination } from '../utils/pagination.js';
+import { buildLessonVisibilityClause, type LessonVisibilityScope } from './class-access.js';
 
 export interface LessonOwnershipResult {
   allowed: boolean;
@@ -108,9 +109,21 @@ export class LessonService {
 
   /**
    * 分页查询课时列表 (A7 标准分页信封)
+   *
+   * ## 数据范围
+   *
+   * `scope` 决定「谁能看到哪些课节」：
+   * - 管理员：全部；
+   * - 教师：自己创建的 + 自己所带班级（排课 / 作业 / 课堂会话）关联的；
+   * - 学生：自己所在班级关联的 + 自己有学习进度的。
+   *
+   * 口径与 `server/services/class-access.ts` 的 `buildLessonVisibilityClause` 一致
+   * （列表与单条查询共用同一份 SQL 片段，不会漂移）。
    */
-  public listLessons(pg: Pagination) {
-    const total = (this.reader.prepare('SELECT COUNT(*) AS n FROM lessons').get() as any)?.n || 0;
+  public listLessons(pg: Pagination, scope: LessonVisibilityScope = { mode: 'all' }) {
+    const { where, params } = buildLessonVisibilityClause(scope);
+    const total =
+      (this.reader.prepare(`SELECT COUNT(*) AS n FROM lessons l WHERE ${where}`).get(...params) as any)?.n || 0;
     const lessons = this.reader
       .prepare(
         `
@@ -118,11 +131,12 @@ export class LessonService {
         (SELECT COUNT(*) FROM student_lesson_progress WHERE lesson_id = l.id) as enrollment_count
       FROM lessons l
       LEFT JOIN users u ON l.creator_id = u.id
+      WHERE ${where}
       ORDER BY l.created_at DESC
       LIMIT ? OFFSET ?
     `,
       )
-      .all(pg.isAll ? -1 : pg.pageSize, pg.offset);
+      .all(...params, pg.isAll ? -1 : pg.pageSize, pg.offset);
 
     return {
       data: lessons,

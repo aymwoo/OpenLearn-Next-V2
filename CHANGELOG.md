@@ -36,6 +36,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--no-fail`。
   - 文档：`docs/feature-sweep.md`（原理、轮次约束、数据环境、与 `e2e/` 断言式套件的分工）。
 
+### Fixes
+
+- **功能巡检发现的外壳请求缺陷（三处，其中一处是真缺陷）**：
+  - **学生锁定状态从未生效（真缺陷，非噪音）**：`GET /api/students` 原先限定教师/管理员 → 学生恒定 403；而学生端要靠**自己那一行**的 `locked_lesson_id` / `lock_mode` / `lock_target` 在本地执行「答题锁定 / 锁定课节」（`useStudentViewState`）。即：教师锁了学生，学生端却不受约束。现在放行学生，但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）；教师/管理员的取数范围不变。
+  - **互动课堂无会话时 view-state 稳定 404**：写入端点按「课堂会话保存与恢复」协议在无会话时返回 404，但 `LiveClassroomView` 挂载即防抖回写当前环节 → 每次打开互动课堂都刷一条 404 + 控制台错误。现在**仅在确有进行中会话时**回写（恢复协议本身不变）。
+  - **学生端 DB 状态徽章与 5s 心跳越权**：`/api/db-status` 只开放给教师/管理员，学生端每 5s 心跳一次恒定 403，且该端点返回 SQLite 内部信息（page_size / integrity_check），本不该出现在学生界面。DB 心跳与顶栏徽章改为**按角色门控**，教师/管理员能力不受影响。
+  - **学生端默认选中全局 `lessons[0]`**（同族缺陷，由新增的 e2e 回归用例发现）：课程列表对所有已登录角色开放，而 `GET /api/lessons/:id/whiteboard` 只对**该课节所在班级的成员**开放 → 学生默认选中别人的课节后，白板轮询稳定吃 403。现在学生端不再默认选中课节（当前课节由自己的课表 / 进度 / 进行中会话决定），教师端行为不变。
+  - 测试：`server/__tests__/student-self-roster-scope.test.ts`（服务端数据范围 7 例）、`src/components/__tests__/shell-request-hygiene.test.tsx`（心跳与徽章门控 4 例）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（view-state 门控 2 例）、`src/store/__tests__/lessonSlice.auto-select.test.ts`（默认选中门控 4 例）、`e2e/shell-request-hygiene.spec.ts`（**浏览器级**：教师/学生外壳加载不得出现任何 console 错误或 4xx/5xx）。
+
+### Security
+
+- **课程列表按角色收窄（`GET /api/lessons`）**：该端点原对**任何已登录角色**返回**全平台课程** —— 学生能枚举所有课程的标题与内容（越权），且学生端外壳会把 `lessons[0]` 默认选为当前课节 → 白板轮询去拉**别人课节**的白板（`requireScopedAuth('class-member')`）→ 每次进外壳稳定吃 403。现在按角色收窄（口径集中在 `server/services/class-access.ts` 的 `lessonVisibilityScope` / `buildLessonVisibilityClause`，列表与单条查询共用同一份 SQL 片段）：
+  - **管理员**：全部；
+  - **教师**：**自己教的** —— 自己创建的，或出现在自己所带班级（排课 / 作业 / 课堂会话）里的；另含 `creator_id` 为空的历史课节（与 `authorizeLessonStaff` 的既有约定一致，避免历史数据在教师端变成死数据）；
+  - **学生**：**自己班的** —— 自己所在班级关联的，或自己有学习进度记录的。
+- **单条端点 `GET /api/lessons/:id` 同步收窄**：列表收窄后，学生仍能按 id 拉任意课节内容；现在同口径鉴权。**先判存在性（404）再判可见性（403）** —— 不存在的课节没有「越权」可言。
+
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
   - 教师确认（可修改后确认）走既有 `PUT .../grade`：写分并 `manual_override = 1`，`regrade` 不再覆盖；请求带 `acceptedAiSuggestion: true` 时记 `assessment.ai_grading_accepted` 审计（建议分 vs 实际分），建议生成本身记 `assessment.ai_grading_suggested`。
@@ -136,7 +153,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **插件卸载级联清理**：`uninstallPlugin` 现在按 `actor_id = 'plugin:<pluginId>'` 与 `actor_id = 'plugin:<manifestId>'` 两种形式级联删除挂起指令。此前插件卸载后，其审批单仍是「待审批」，管理员点「批准」只会拿到 403 `COMMAND_NOT_REGISTERED` —— 且失败分支不删记录，于是变成既批不掉也删不掉、只能手工改库的死项。
   - **审批执行容错**：`POST /api/approvals/:id/approve` 区分两类失败。确定性失效（命令描述符/处理器已不存在，报 `COMMAND_NOT_REGISTERED` 或 `No handler registered for command`）→ **清除记录**并返回 `410 + code: APPROVAL_STALE_CLEARED, cleared: true`；其它执行错误（业务失败、临时故障）→ **保留记录**交由调用方重试，绝不因一次偶发失败吞掉审批单。
   - **文档**：`.env.example` 补充该环境变量说明（并注明 `0` 不影响卸载/失效的即时清理）。
-  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。
+  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。- **修复功能巡检（`pnpm sweep`）学生端与互动课堂抓到的三处请求缺陷**：
+  - **学生锁定状态从未生效（真缺陷，非噪音）**：学生外壳每次加载都请求 `GET /api/students?pageSize=all`，该端点原先限定教师/管理员 → 学生恒定 403；而学生端要在本地执行「答题锁定 / 锁定课节」，判定依据是自己这一行的 `locked_lesson_id` / `lock_mode` / `lock_target`（见 `src/hooks/useStudentViewState.ts`）。取不到自己那行 → **教师锁了学生、学生端却不受约束**。现在该端点放行学生但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）。
+  - **互动课堂无会话时 view-state 稳定 404**：`POST /api/classroom/sessions/:lessonId/view-state` 按恢复协议在无会话时返回 404，但组件挂载即防抖回写 → 每次打开互动课堂都刷一条 404。现在只在确有进行中会话（`hasActiveSession`）时回写，有会话时行为不变。
+  - **学生端 DB 状态徽章与 5s 心跳**：`/api/db-status` 只开放给教师/管理员，且本身是平台运维指标（`page_size` / `integrity_check` 等），学生端每 5s 请求一次恒定 403、徽章不该出现在学生界面。现在心跳与徽章都按角色门控，教师/管理员（`role: 'teacher'`，含 `subRole: 'administrator'`）能力不受影响。
+  - **测试**：新增 `server/__tests__/student-self-roster-scope.test.ts`（学生只拿到自己一条 / 必带锁定字段 / 不含邮箱与私有备注）、`src/components/__tests__/shell-request-hygiene.test.tsx`（学生不心跳、教师与管理员照旧心跳、学生不渲染徽章）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（无会话不回写 / 有会话照旧回写）与 `e2e/shell-request-hygiene.spec.ts`。>>>>>>> 6dbe74f (fix(shell): 修复巡检发现的学生锁定失效、view-state 404 刷屏与 DB 徽章越权)
 
 - **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
   - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。

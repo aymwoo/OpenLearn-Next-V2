@@ -92,10 +92,22 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
+  app.get('/api/students', requireAuth('teacher', 'administrator', 'student'), (req, res) => {
     try {
       const pg = parsePagination(req.query as any);
       const session = (req as any).session;
+
+      // 学生：花名册是教师/管理员的职责，但学生端需要「自己这一条」来在本地
+      // 执行锁定状态（locked_lesson_id / lock_mode / lock_target，见
+      // useStudentViewState）。此前该端点对学生一律 403 → 学生永远取不到自己
+      // 那一行 → 教师锁了学生、学生端却不受约束。
+      // 这里只返回自己一条，且字段子集不含邮箱与教师私有备注。
+      if (session?.role === 'student') {
+        const self = rosterService.getStudentSelf(String(session.studentId || session.userId || ''));
+        const data = self ? [self] : [];
+        return res.json({ data, total: data.length, page: 1, pageSize: data.length || 1 });
+      }
+
       const scope = isAdministrator(session)
         ? ({ mode: 'all' } as const)
         : ({
