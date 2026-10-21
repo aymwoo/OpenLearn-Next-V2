@@ -232,6 +232,108 @@ export function teacherCanSeeStudent(
 }
 
 /**
+ * 课节（lesson）的可见性范围。
+ *
+ * - 管理员：全部课节。
+ * - 教师：**自己教的**课节 —— 自己创建的，或出现在自己所带班级（排课 / 作业 /
+ *   课堂会话）里的；另含 `creator_id` 为空的历史课节（与 `authorizeLessonStaff`
+ *   的既有约定一致，避免历史数据在教师端变成死数据）。
+ * - 学生：**自己班的**课节 —— 出现在自己所在班级（排课 / 作业 / 课堂会话）里的，
+ *   或自己有学习进度记录的。
+ */
+export type LessonVisibilityScope =
+  | { mode: 'all' }
+  | { mode: 'teacher'; userId: string; username: string; classIds: string[] }
+  | { mode: 'student'; studentId: string; classIds: string[] };
+
+/** 从会话推出课节可见性范围。 */
+export function lessonVisibilityScope(
+  db: Database.Database,
+  session: AccessSession | null | undefined,
+): LessonVisibilityScope {
+  if (!session) return { mode: 'student', studentId: '', classIds: [] };
+  if (isAdministrator(session)) return { mode: 'all' };
+
+  const classIds = accessibleClassIds(db, session) ?? [];
+
+  if (isTeacher(session)) {
+    return {
+      mode: 'teacher',
+      userId: actorUserId(session) || '',
+      username: session.username || '',
+      classIds,
+    };
+  }
+
+  return {
+    mode: 'student',
+    studentId: studentActorId(session) || session.userId || '',
+    classIds,
+  };
+}
+
+/**
+ * 构造课节可见性的 SQL 片段（供列表与单条查询共用，避免两套口径漂移）。
+ *
+ * 返回的片段一律带 `l.` 前缀（列表查询里 lessons 的别名是 `l`）。
+ */
+export function buildLessonVisibilityClause(scope: LessonVisibilityScope): {
+  where: string;
+  params: unknown[];
+} {
+  if (scope.mode === 'all') {
+    return { where: '1 = 1', params: [] };
+  }
+
+  const classIds = scope.classIds;
+  // 班级集合为空时不必再查关联表（也避免生成 `IN ()` 这种非法 SQL）
+  const classIdsClause = classIds.length
+    ? `class_id IN (${classIds.map(() => '?').join(',')})`
+    : '1 = 0';
+
+  const linkedByClass = [
+    `l.id IN (SELECT lesson_id FROM schedules WHERE ${classIdsClause})`,
+    `l.id IN (SELECT lesson_id FROM assignments WHERE ${classIdsClause})`,
+    `l.id IN (SELECT lesson_id FROM classroom_sessions WHERE ${classIdsClause})`,
+  ];
+
+  if (scope.mode === 'teacher') {
+    const params: unknown[] = [...classIds, ...classIds, ...classIds];
+    return {
+      where: `(l.creator_id = ? OR l.creator_id = ? OR l.creator_id IS NULL OR ${linkedByClass.join(' OR ')})`,
+      params: [scope.userId, scope.username, ...params],
+    };
+  }
+
+  const params: unknown[] = [...classIds, ...classIds, ...classIds, scope.studentId];
+  return {
+    where: `(${linkedByClass.join(' OR ')} OR l.id IN (SELECT lesson_id FROM student_lesson_progress WHERE student_id = ?))`,
+    params,
+  };
+}
+
+/**
+ * 单条课节是否对当前会话可见。
+ *
+ * 与 {@link buildLessonVisibilityClause} 同口径（列表能看到的，单条也能看到）。
+ */
+export function canSeeLesson(
+  db: Database.Database,
+  session: AccessSession | null | undefined,
+  lessonId: string,
+): boolean {
+  if (!session || !lessonId) return false;
+  if (isAdministrator(session)) return true;
+
+  const scope = lessonVisibilityScope(db, session);
+  const { where, params } = buildLessonVisibilityClause(scope);
+  const row = db
+    .prepare(`SELECT 1 AS ok FROM lessons l WHERE l.id = ? AND ${where} LIMIT 1`)
+    .get(lessonId, ...params) as { ok: number } | undefined;
+  return !!row;
+}
+
+/**
  * 课时作业/互评：创建者教师或管理员可读全班；creator_id 为空的历史课时保持向教师开放。
  * 没有 lessons 行时不在这里判 404（部分互评数据只挂在 plugin_submissions 上）。
  */

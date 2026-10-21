@@ -15,8 +15,10 @@ import { segmentGateService } from '../services/segment-gate-service.js';
 import {
   authorizeClass,
   authorizeLessonStaff,
+  canSeeLesson,
   isAdministrator,
   isTeacher,
+  lessonVisibilityScope,
   redactAnswerPayload,
   rejectUnless,
   studentActorId,
@@ -170,14 +172,23 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons', requireScopedAuth('authenticated'), (req, res) => {
     // A7: 分页信封 { data, total, page, pageSize }（pageSize=all 返回全量）
     const pg = parsePagination(req.query as any);
-    res.json(lessonService.listLessons(pg));
+    // 按角色收窄：管理员看全部；教师只见自己教的；学生只见自己班的。
+    const scope = lessonVisibilityScope(kernelContainer.getReadDb(), (req as any).session);
+    res.json(lessonService.listLessons(pg, scope));
   });
 
   app.get('/api/lessons/:id', requireScopedAuth('authenticated'), (req, res) => {
     try {
+      const session = (req as any).session;
       const lesson = lessonService.getLesson(req.params.id);
+      // 先判存在性（404），再判可见性（403）：不存在的课节没有「越权」可言，
+      // 直接报 403 会把「不存在」与「无权访问」混为一谈。
       if (!lesson) {
         return res.status(404).json({ success: false, error: 'Lesson not found' });
+      }
+      // 列表收窄了，单条也得同一口径 —— 否则学生仍能按 id 拉任意课节内容。
+      if (!canSeeLesson(kernelContainer.getReadDb(), session, req.params.id)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: no access to this lesson' });
       }
       res.json(lesson);
     } catch (err: any) {
