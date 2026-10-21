@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件题型生态深化：自定义 AI 批改提示词与试卷导入导出互通（Issue #196）**：
+  - **`QuestionTypeDefinition.getAiGradingPrompt?(config, answerKey, answer)`**：插件题型可自带 AI 批改提示词（代码题的测试用例、语音题的评分细则都能交给大模型），`POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest` 优先使用它。三种返回语义：字符串 = 用它；`null` = 本题型不提供 AI 建议（保守拒绝）；未实现 = 回退内置通用模板（**全部内置题型行为不变**）。仍只生成建议、不改分。
+  - **试卷导出**：新增 `GET /api/assessments/:id/paper/export?format=json|csv|xlsx`（与既有成绩矩阵 CSV 区分 —— 这里导的是试卷本体）。插件题型的 `config` 与题型标记 `<pluginId>:<name>` 整份带走；CSV/XLSX 中 `config`/`answerKey` 以 JSON 字符串存放（不展平 —— 每类题型 config 形状不同，展平必丢字段）。
+  - **试卷导入**：新增 `POST /api/assessments/paper/import`（json/csv），建一份新草稿卷。逐题核对 `QuestionTypeRegistry`：题型未安装返回 `400 QUESTION_TYPE_NOT_INSTALLED` + `missingTypes` 清单（提示去插件中心安装），而不是静默丢题或让题目落库后渲染成白屏；并用题型自己的 `validateConfig` / `validateAnswerKey` 校验外部数据。机器可读错误码经 `sendSafeError` 透传，前端不必嗅探中文文案。
+  - **文档**：`docs/architecture/assessment-model.md` 新增 §9 协议规范（钩子语义表、`openlearn.assessment.paper/v1` 协议、导入校验链路、错误码表、向后兼容策略）。
+  - **测试**：新增 `server/__tests__/assessment-plugin-question-types.test.ts`（6 条：自定义提示词生效且不拼接内置模板、`null` 保守拒绝不调 AI、JSON 往返配置与题型标记零丢失、CSV 往返、未安装题型明确报错、导入用题型校验器验配置）。
+
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
   - 教师确认（可修改后确认）走既有 `PUT .../grade`：写分并 `manual_override = 1`，`regrade` 不再覆盖；请求带 `acceptedAiSuggestion: true` 时记 `assessment.ai_grading_accepted` 审计（建议分 vs 实际分），建议生成本身记 `assessment.ai_grading_suggested`。

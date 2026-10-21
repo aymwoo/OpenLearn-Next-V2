@@ -88,6 +88,8 @@ registry.registerQuestionType(
     autoGradable: true,
     createDefaultConfig: () => ({ tests: [] }),
     validateConfig: () => null,
+    // 可选：插件题型自带的 AI 批改提示词（见 §9.1）；不实现则回退内置通用模板
+    getAiGradingPrompt: (config, answerKey, answer) => `测试用例：${JSON.stringify(config.tests)}\n学生代码：${answer}`,
     grade: async () => ({ score: null, needsManualReview: true }),
   },
   { pluginId: 'ext-code' },
@@ -116,6 +118,8 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 | GET | `/api/assessment-assignments/:id/attempts` · `/stats` · `/export?format=csv` |
 | GET | `/api/assessment-assignments/:id/item-analysis`（难度/区分度） |
 | GET | `/api/assessment-assignments/:id/item-analysis/export?format=csv\|json\|xlsx` |
+| GET | `/api/assessments/:id/paper/export?format=json\|csv\|xlsx`（试卷本体导出，插件题型互通） |
+| POST | `/api/assessments/paper/import`（建新草稿卷，见 §9） |
 | PUT | `/api/assessment-attempts/:id/answers/:itemId/grade`（人工批改） |
 | POST | `/api/assessment-attempts/:id/regrade` |
 
@@ -196,3 +200,93 @@ pnpm exec tsx scripts/migrate-legacy-assessments.ts             # 正式导入
 - 历史作答的 `score` 按旧记录原样保留；旧数据未记录的建议/解析不会凭空生成。
 - 预置投票的作答只存在于课堂会话运行时，没有可按学生回放的持久表 → **不导入作答**（试卷与题目仍导入）。
 - 回滚：删除带对应 `legacy.sourceId` 标记的 assessments（级联删除 items/assignments/attempts/answers）；旧数据始终未被改动。
+
+## 9. 插件题型的 AI 批改与试卷导入导出协议（Issue #196）
+
+测评中心的题型扩展点（#100 / #120 / #183 / #187）让第三方插件能注册自己的题型。§9 补的是
+"插件题型如何与 AI 批改、试卷导入导出深度协作"——否则插件题型在生态里只能出题、不能迁移。
+
+### 9.1 AI 批改提示词：`getAiGradingPrompt`
+
+```ts
+interface QuestionTypeDefinition<TConfig, TAnswer> {
+  // …既有字段
+  getAiGradingPrompt?(config: TConfig, answerKey: unknown, answer: TAnswer): string | null;
+}
+```
+
+内置通用提示词只看得见 **题干 / 满分 / 标准答案 / 学生作答**。对代码题它看不到测试用例，
+对语音评测题它不知道评分细则 —— 建议质量只能泛泛。题型自己知道 `config` 里有什么，所以
+把提示词的**组装权交给题型**。
+
+返回值的三种语义（区分它们是这套协议的关键）：
+
+| 返回 | 含义 | 服务端行为 |
+| --- | --- | --- |
+| `string`（非空） | 用我这条提示词 | 直接交给 AI Provider，**不再拼接内置模板** |
+| `null` | 本题型不提供 AI 建议 | 保守拒绝：`400 该题型不提供 AI 批改建议`，不调用 AI |
+| 未实现（`undefined`） | 走通用逻辑 | 回退内置通用模板（**全部内置题型走这条，行为不变**） |
+
+约束：
+
+- 纯函数（不得读库、不得依赖时间/随机数），与 `grade` 同一约束；
+- 返回值仍是"提示词"，**不参与判分**：`suggestAiGrade` 只写 `assessment_answers.ai_suggestion_json`，
+  教师确认才落分并置 `manual_override = 1`（见 §3、#187）；
+- 仍受题型 `category === 'subjective'` 的前置限制与 AI 建议限流约束。
+
+### 9.2 试卷导出 / 导入（`openlearn.assessment.paper/v1`）
+
+与 `/api/assessment-assignments/:id/export`（成绩矩阵 CSV，导的是**作答结果**）不同，
+`/api/assessments/:id/paper/export` 导的是**试卷本体**，目标是"在另一个环境重新变成一份试卷"。
+
+JSON 协议：
+
+```jsonc
+{
+  "schema": "openlearn.assessment.paper/v1",
+  "exportedAt": 1730000000000,
+  "assessment": { "title": "期中卷", "kind": "exam", "description": null, "settings": { /* AssessmentSettings */ } },
+  "items": [
+    {
+      "order": 1,
+      "section": null,
+      "type": "ext-code:python",           // 题型标记：内置为 single_choice 等，插件为 <pluginId>:<name>
+      "stem": "请实现累加函数",
+      "config": { "testCases": [], "rubric": "…" },  // 插件自定义结构，原样保留
+      "answerKey": "def add(n): …",                  // 教师可见，导入时由题型校验
+      "maxScore": 10
+    }
+  ]
+}
+```
+
+CSV / XLSX 是**同一个数据模型的扁平视图**（列：`order,section,type,stem,config,answerKey,maxScore`）：
+
+- `config` / `answerKey` 以 **JSON 字符串**存放。不展平成列 —— 每类题型的 config 形状都不同，
+  展平等于把插件题型塞回内置题型的形状，必然丢字段；拆多文件则再导入时对齐成本高。
+- XLSX 导出带一张人读的「试卷」汇总页 + 一张「题目」明细页；**导入只接受 json/csv**
+  （表格编辑后容易改坏 JSON 单元格，返回 400 明确拒绝，不是解析崩溃）。
+
+导入语义：
+
+1. **建一份新草稿卷**（`status = 'draft'`），不覆盖任何既有试卷；`assessment.kind` 缺失时默认 `quiz`；
+2. **逐题核对题型是否已安装**（`QuestionTypeRegistry.has(type)`）。缺失时返回
+   `400 QUESTION_TYPE_NOT_INSTALLED` 并附 `missingTypes` 清单，提示"请先在插件中心安装对应插件"。
+   不能静默丢题或让题目落库 —— 那样学生会看到一道渲染不出来、也判不了分的题；
+3. **用题型自己的校验器验内容**：`validateConfig` / `validateAnswerKey`，任一处不合法返回
+   `400 PAPER_IMPORT_INVALID_ITEM`（附前 5 条明细）。导入是外部数据入口，不因"看起来对"就信任；
+4. CSV 不携带标题，需在请求体额外传 `title`（缺失 → `400 PAPER_IMPORT_MISSING_TITLE`）。
+
+机器可读错误码（4xx 会经 `sendSafeError` 透传 `code`，前端据此分支）：
+
+| code | 场景 |
+| --- | --- |
+| `PAPER_IMPORT_INVALID_JSON` | 内容不是合法 JSON |
+| `PAPER_IMPORT_INVALID_SHAPE` | 缺 `items` 数组或不是对象 |
+| `PAPER_IMPORT_INVALID_CSV` | CSV 缺必需列 / 内容为空 |
+| `PAPER_IMPORT_EMPTY` | 一道题都没有 |
+| `QUESTION_TYPE_NOT_INSTALLED` | 题型未安装（附 `missingTypes`） |
+| `PAPER_IMPORT_INVALID_ITEM` | 题干/满分/配置/标准答案非法（附 `invalidItems`） |
+| `PAPER_IMPORT_MISSING_TITLE` | 缺试卷标题 |
+
+协议向后兼容策略：`schema` 不匹配只**告警不报错**（导入结果里带 `warnings`），字段顺序与语义保持不变。

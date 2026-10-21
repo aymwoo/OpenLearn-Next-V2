@@ -1251,7 +1251,13 @@ export class AssessmentService {
     const item = items.find((i) => i.id === itemId);
     if (!item) throw notFound('item');
     // 题型定义（内置或插件）声明 category；未注册的题型不提供 AI 建议（保守拒绝）
-    const definition = this.registry.get(item.type) as { category?: string } | undefined;
+    const definition = this.registry.get(item.type) as
+      | {
+          category?: string;
+          /** Issue #196：插件题型可自带提示词组装（返回 null = 本题型不提供 AI 建议） */
+          getAiGradingPrompt?: (config: unknown, answerKey: unknown, answer: unknown) => string | null;
+        }
+      | undefined;
     if (definition?.category !== 'subjective') throw badRequest('AI 建议仅适用于主观题');
 
     const answerRow = this.db
@@ -1275,12 +1281,28 @@ export class AssessmentService {
 
     this.enforceAiSuggestRateLimit(options.actorId ?? ownerId);
 
-    const prompt = buildAiGradingPrompt({
-      stem: item.stem,
-      maxScore: item.maxScore,
-      answerKey: item.answerKey,
-      studentAnswer,
-    });
+    // Issue #196：题型自带提示词优先。
+    //
+    // 内置通用提示词只看得见题干/满分/答案/学生作答；对插件题型（代码题、语音题、
+    // 实验仿真题）则看不到测试用例与判分细则，建议质量只能泛泛。题型自己知道
+    // `config` 里有什么，因此把组装权交给它；没实现该钩子的题型（含全部内置题型）
+    // 继续走通用模板，行为不变。
+    let prompt: string;
+    if (typeof definition.getAiGradingPrompt === 'function') {
+      const custom = definition.getAiGradingPrompt(item.config, item.answerKey, studentAnswer);
+      if (custom === null) throw badRequest('该题型不提供 AI 批改建议');
+      if (typeof custom !== 'string' || custom.trim() === '') {
+        throw badRequest('该题型的 AI 批改提示词为空');
+      }
+      prompt = custom;
+    } else {
+      prompt = buildAiGradingPrompt({
+        stem: item.stem,
+        maxScore: item.maxScore,
+        answerKey: item.answerKey,
+        studentAnswer,
+      });
+    }
 
     let text: string;
     try {
@@ -1451,6 +1473,280 @@ export class AssessmentService {
 
     const kindLabel = settings.anonymous ? 'survey-anonymous' : assessment.kind;
     return { filename: `assessment-${assignmentId}-${kindLabel}.csv`, csv: `${lines.join('\n')}\n` };
+  }
+
+  /* ────────────────────── 试卷导出 / 导入（Issue #196）────────────────────── */
+
+  /**
+   * 试卷导出（JSON / CSV / XLSX）。
+   *
+   * ## 对插件题型的关键点
+   *
+   * 必须整份带走两样东西：
+   * 1. `type` —— 就是题型标记 `<pluginId>:<name>`（如 `ext-code:python`）；
+   * 2. `config` —— 插件自己定义的结构（测试用例、判分细则…）。
+   *
+   * CSV 里 `config` / `answerKey` 以 **JSON 字符串** 存放：不展平成列（每类题型的
+   * config 形状都不同，展平等于把插件题型塞回内置题型的形状，必然丢字段），
+   * 也不拆成多文件（再导入时对齐成本高）。
+   */
+  async exportPaper(
+    assessmentId: string,
+    ownerId: string,
+    format: 'json' | 'csv' | 'xlsx',
+  ): Promise<{ filename: string; contentType: string; body: string | Buffer }> {
+    const assessment = this.requireOwnedAssessment(assessmentId, ownerId);
+    const items = this.readItems(assessmentId).sort((a, b) => a.sortOrder - b.sortOrder);
+    const settings = parseAssessmentSettings(assessment.kind, safeJsonParse(assessment.settings_json, {}));
+    const base = `assessment-${assessmentId}-paper`;
+
+    const paper: PaperExport = {
+      schema: PAPER_EXPORT_SCHEMA,
+      exportedAt: this.now(),
+      assessment: {
+        title: assessment.title,
+        kind: assessment.kind,
+        description: assessment.description ?? null,
+        settings,
+      },
+      items: items.map((item, index) => ({
+        order: index + 1,
+        section: item.section,
+        type: item.type,
+        stem: item.stem,
+        config: item.config,
+        answerKey: item.answerKey,
+        maxScore: item.maxScore,
+      })),
+    };
+
+    if (format === 'json') {
+      return {
+        filename: `${base}.json`,
+        contentType: 'application/json; charset=utf-8',
+        body: `${JSON.stringify(paper, null, 2)}\n`,
+      };
+    }
+
+    const rows = paper.items.map((item) => [
+      String(item.order),
+      item.section ?? '',
+      item.type,
+      item.stem,
+      JSON.stringify(item.config ?? {}),
+      item.answerKey === null || item.answerKey === undefined ? '' : JSON.stringify(item.answerKey),
+      String(item.maxScore),
+    ]);
+
+    if (format === 'csv') {
+      const lines = [PAPER_CSV_COLUMNS.join(','), ...rows.map((row) => row.map(csvCell).join(','))];
+      return { filename: `${base}.csv`, contentType: 'text/csv; charset=utf-8', body: `${lines.join('\n')}\n` };
+    }
+
+    // XLSX：动态 import，避免把 exceljs 拉进每次服务启动的主路径。
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    // 汇总页：人读元信息（导入只认明细页，不依赖这里的文字）
+    const meta = workbook.addWorksheet('试卷');
+    meta.addRow(['标题', paper.assessment.title]);
+    meta.addRow(['类型', paper.assessment.kind]);
+    meta.addRow(['说明', paper.assessment.description ?? '']);
+    meta.addRow(['导出协议', PAPER_EXPORT_SCHEMA]);
+    const sheet = workbook.addWorksheet('题目');
+    sheet.addRow([...PAPER_CSV_COLUMNS]);
+    for (const row of rows) sheet.addRow(row);
+    const headerRow = typeof (sheet as any).getRow === 'function' ? sheet.getRow(1) : null;
+    if (headerRow) headerRow.font = { bold: true };
+    if (Array.isArray(sheet.columns)) {
+      sheet.columns.forEach((column) => {
+        column.width = 24;
+      });
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    return {
+      filename: `${base}.xlsx`,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      body: Buffer.from(buffer as ArrayBuffer),
+    };
+  }
+
+  /**
+   * 试卷导入（JSON / CSV）—— 建一份**新的草稿**试卷。
+   *
+   * ## 为什么必须校验题型是否已安装
+   *
+   * 导出包里可能包含别人环境装的插件题型（`ext-code:python`）。导入方没装那个插件时，
+   * 直接落库会得到一个**渲染不出来、也判不了分**的题 —— 学生打开就是白屏。
+   * 所以这里先逐题核对 `QuestionTypeRegistry`，缺题型就带上**缺失清单**报错：
+   * `400 QUESTION_TYPE_NOT_INSTALLED`，而不是解析崩掉或静默丢题。
+   *
+   * 配置与标准答案同样用题型自己的 `validateConfig` / `validateAnswerKey` 验一遍：
+   * 导入是外部数据进入系统的主要入口，不能因为“格式看起来对”就信任。
+   */
+  importPaper(
+    ownerId: string,
+    payload: string,
+    format: 'json' | 'csv',
+    options: { title?: string } = {},
+  ): { assessmentId: string; title: string; kind: AssessmentKind; itemCount: number; warnings: string[] } {
+    let raw: unknown;
+    let parsedTitle: string | undefined;
+    let parsedKind: string | undefined;
+    let parsedDescription: string | null | undefined;
+    let parsedSettings: unknown;
+    let rawItems: unknown[];
+    const warnings: string[] = [];
+
+    if (format === 'json') {
+      try {
+        raw = JSON.parse(payload);
+      } catch {
+        throw codedError(400, '导入内容不是合法 JSON', 'PAPER_IMPORT_INVALID_JSON');
+      }
+      const doc = raw as Partial<PaperExport> & { items?: unknown };
+      if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+        throw codedError(400, '导入内容必须是试卷对象', 'PAPER_IMPORT_INVALID_SHAPE');
+      }
+      if (doc.schema && doc.schema !== PAPER_EXPORT_SCHEMA) {
+        warnings.push(`试卷协议版本为 ${String(doc.schema)}，当前支持 ${PAPER_EXPORT_SCHEMA}`);
+      }
+      if (!Array.isArray(doc.items)) {
+        throw codedError(400, '导入内容缺少 items 数组', 'PAPER_IMPORT_INVALID_SHAPE');
+      }
+      rawItems = doc.items;
+      parsedTitle = (doc.assessment?.title as string | undefined) ?? undefined;
+      parsedKind = doc.assessment?.kind as string | undefined;
+      parsedDescription = (doc.assessment?.description as string | null | undefined) ?? null;
+      parsedSettings = doc.assessment?.settings;
+    } else {
+      const rows = parseCsvRows(payload);
+      if (rows.length === 0) throw codedError(400, 'CSV 内容为空', 'PAPER_IMPORT_INVALID_CSV');
+      const header = rows[0].map((cell) => cell.trim());
+      const missingColumns = PAPER_CSV_COLUMNS.filter((column) => !header.includes(column));
+      if (missingColumns.length > 0) {
+        throw codedError(
+          400,
+          `CSV 缺少必需列：${missingColumns.join(', ')}`,
+          'PAPER_IMPORT_INVALID_CSV',
+        );
+      }
+      const index = (name: string) => header.indexOf(name);
+      rawItems = rows.slice(1)
+        .filter((cells) => cells.some((cell) => cell.trim() !== ''))
+        .map((cells) => ({
+          order: Number(cells[index('order')] ?? 0) || undefined,
+          section: cells[index('section')] ?? null,
+          type: cells[index('type')],
+          stem: cells[index('stem')],
+          config: optionalJsonCell(cells[index('config')]),
+          answerKey: optionalJsonCell(cells[index('answerKey')]),
+          maxScore: Number(cells[index('maxScore')] ?? 1),
+        }));
+      // CSV 不适合放长元信息：标题缺省时由调用方补，缺失在第 7 步统一报错
+      parsedTitle = undefined;
+      parsedKind = 'quiz';
+      parsedDescription = null;
+    }
+
+    if (rawItems.length === 0) throw codedError(400, '导入内容不含任何题目', 'PAPER_IMPORT_EMPTY');
+
+    // 1. 先把每道题归一化（类型/满分/配置）
+    const normalized = rawItems.map((entry, idx) => {
+      const item = entry as Record<string, unknown>;
+      const type = typeof item.type === 'string' ? item.type.trim() : '';
+      const stem = typeof item.stem === 'string' ? item.stem : '';
+      if (!type) throw codedError(400, `第 ${idx + 1} 题缺少题型`, 'PAPER_IMPORT_INVALID_ITEM');
+      if (!stem.trim()) throw codedError(400, `第 ${idx + 1} 题（${type}）缺少题干`, 'PAPER_IMPORT_INVALID_ITEM');
+      const maxScore = typeof item.maxScore === 'number' && Number.isFinite(item.maxScore) ? item.maxScore : 1;
+      if (maxScore <= 0) throw codedError(400, `第 ${idx + 1} 题满分必须大于 0`, 'PAPER_IMPORT_INVALID_ITEM');
+      return {
+        section: typeof item.section === 'string' && item.section.trim() !== '' ? item.section : null,
+        type,
+        stem,
+        config: item.config ?? {},
+        answerKey: item.answerKey ?? null,
+        maxScore,
+      };
+    });
+
+    // 2. 题型是否已安装（插件未装时给明确清单，而不是让题目落库后渲染成白屏）
+    const missingTypes = Array.from(new Set(normalized.map((item) => item.type).filter((type) => !this.registry.has(type))));
+    if (missingTypes.length > 0) {
+      throw Object.assign(
+        codedError(
+          400,
+          `导入包中包含未安装的题型：${missingTypes.join('、')}。请先在「插件中心」安装对应插件后重试。`,
+          'QUESTION_TYPE_NOT_INSTALLED',
+        ),
+        { missingTypes },
+      );
+    }
+
+    // 3. 用题型自己的校验器验配置与标准答案（外部数据不能因为“看起来对”就信任）
+    const invalidItems: Array<{ order: number; type: string; reason: string }> = [];
+    normalized.forEach((item, idx) => {
+      const definition = this.registry.get(item.type)!;
+      const configError = definition.validateConfig(item.config);
+      if (configError) invalidItems.push({ order: idx + 1, type: item.type, reason: `配置非法：${configError}` });
+      const keyError = definition.validateAnswerKey?.(item.config as never, item.answerKey) ?? null;
+      if (keyError) invalidItems.push({ order: idx + 1, type: item.type, reason: `标准答案非法：${keyError}` });
+    });
+    if (invalidItems.length > 0) {
+      throw Object.assign(
+        codedError(
+          400,
+          `导入包中有 ${invalidItems.length} 处题目内容不合法：${invalidItems
+            .slice(0, 5)
+            .map((it) => `第 ${it.order} 题(${it.type}) ${it.reason}`)
+            .join('；')}`,
+          'PAPER_IMPORT_INVALID_ITEM',
+        ),
+        { invalidItems },
+      );
+    }
+
+    // 4. 创建草稿试卷 + 逐题写入（组卷即物化快照，与手工组卷一致）
+    const kind = (['quiz', 'exam', 'survey'].includes(String(parsedKind)) ? parsedKind : 'quiz') as AssessmentKind;
+    // CSV 不携带长元信息：标题由调用方补（JSON 包自带时以包内为准）
+    const title = ((parsedTitle ?? options.title) ?? '').trim() || undefined;
+    if (!title) {
+      throw codedError(
+        400,
+        '导入包缺少试卷标题（CSV 导入请在请求体里提供 title）',
+        'PAPER_IMPORT_MISSING_TITLE',
+      );
+    }
+
+    const created = this.createAssessment({
+      ownerId,
+      kind,
+      title,
+      description: parsedDescription ?? null,
+      settings: parsedSettings,
+    });
+
+    const now = this.now();
+    const insert = this.db.prepare(
+      `INSERT INTO assessment_items
+         (id, assessment_id, bank_item_id, section, sort_order, type, stem, config_json, answer_key_json, max_score)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    normalized.forEach((item, index) => {
+      insert.run(
+        randomId(),
+        created.id,
+        item.section,
+        index + 1,
+        item.type,
+        item.stem,
+        JSON.stringify(item.config ?? {}),
+        item.answerKey === null || item.answerKey === undefined ? null : JSON.stringify(item.answerKey),
+        item.maxScore,
+      );
+    });
+    this.db.prepare('UPDATE assessments SET updated_at = ? WHERE id = ?').run(now, created.id);
+
+    return { assessmentId: created.id, title, kind, itemCount: normalized.length, warnings };
   }
 
   /**
@@ -2097,6 +2393,107 @@ interface AssignmentView {
 function csvCell(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
+}
+
+/* ────────────────────── 试卷导出 / 导入辅助（Issue #196）────────────────────── */
+
+/** 导出协议标识。导入时版本不匹配只告警不报错（向前兼容），字段顺序与语义保持不变。 */
+export const PAPER_EXPORT_SCHEMA = 'openlearn.assessment.paper/v1';
+
+/** CSV/XLSX 明细页的列序。导出与导入共用同一份定义，避免两边逐字码。 */
+export const PAPER_CSV_COLUMNS = ['order', 'section', 'type', 'stem', 'config', 'answerKey', 'maxScore'] as const;
+
+export interface PaperExportItem {
+  order: number;
+  section: string | null;
+  /** 题型标记：内置如 `single_choice`，插件题型为 `<pluginId>:<name>` */
+  type: string;
+  stem: string;
+  config: unknown;
+  answerKey: unknown;
+  maxScore: number;
+}
+
+export interface PaperExport {
+  schema: typeof PAPER_EXPORT_SCHEMA;
+  exportedAt: number;
+  assessment: { title: string; kind: AssessmentKind; description: string | null; settings: unknown };
+  items: PaperExportItem[];
+}
+
+/**
+ * 带机器可读 `code` 的错误（路由层会透传 4xx 的 code）。
+ *
+ * 导入是外部数据入口，前端需要按 code 分支处理（`QUESTION_TYPE_NOT_INSTALLED` 要引导去
+ * 装插件，`PAPER_IMPORT_INVALID_JSON` 要提示文件坏了），不能靠中文文案做字符串嗅探。
+ */
+function codedError(status: number, message: string, code: string): AssessmentError & { code: string } {
+  return Object.assign(new AssessmentError(status, message), { code });
+}
+
+/** CSV 单元格 → JSON。空串视为缺失（`undefined`），不是 `null` —— 两款语义不同：
+ *  `undefined` = 导出时就没写，`null` = 明确无标准答案（进人工批改队列）。 */
+function optionalJsonCell(cell: string | undefined): unknown {
+  const text = (cell ?? '').trim();
+  if (text === '') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    // 不是 JSON 就当纯字符串用（例如老师手工填的参考答案）
+    return text;
+  }
+}
+
+/**
+ * 最小 RFC4180 CSV 解析（支持引号、转义双引号、CRLF）。
+ *
+ * 不引第三方库：这里只需要“把自家导出的文件读回来”，而仓库已有 csv 写入侧
+ * 的 `csvCell`；引一个解析库会让插件题型的 config（含嵌套 JSON）多一层依赖面。
+ */
+export function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+  // 去掉 BOM：Excel 另存后的 CSV 开头会带 U+FEFF，否则首列表头永远匹配不上
+  const input = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          cell += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (char === '\n' || char === '\r') {
+      // CRLF 当单个换行：`\r` 后紧跟 `\n` 时跳过后一个
+      if (char === '\r' && input[i + 1] === '\n') i += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
 }
 
 /** 进程内单例（路由使用）。 */
