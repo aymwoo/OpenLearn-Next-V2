@@ -307,6 +307,58 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     }
   });
 
+  /**
+   * Issue #196：试卷导出 —— 插件题型的 `config` 与题型标记 `<pluginId>:<name>` 整份带走。
+   *
+   * 与上面 `/export`（成绩矩阵 CSV）不同：那个导的是作答结果，这个导的是**试卷本身**，
+   * 目的就是“能在另一个环境重新变成一份试卷”。
+   */
+  app.get('/api/assessments/:id/paper/export', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const format = String(req.query.format ?? 'json').toLowerCase();
+      if (format !== 'json' && format !== 'csv' && format !== 'xlsx') {
+        return res.status(400).json({ error: 'format must be one of json, csv, xlsx' });
+      }
+      const exported = await service.exportPaper(req.params.id, teacherActor(req), format);
+      res.setHeader('Content-Type', exported.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+      // CSV 补 BOM，让 Excel 正确识别 UTF-8 中文
+      res.send(format === 'csv' ? `\uFEFF${exported.body}` : exported.body);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * Issue #196：试卷导入 —— 建一份新草稿。
+   *
+   * `payload` 可以是字符串（文件原文），也可以是已解析的 JSON 对象（前端直接转发）。
+   * CSV 不携带试卷标题，需额外传 `title`。
+   */
+  app.post('/api/assessments/paper/import', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const format = String(req.body?.format ?? 'json').toLowerCase();
+      if (format !== 'json' && format !== 'csv') {
+        return res.status(400).json({ error: 'format must be json or csv（xlsx 导出供人读/表格编辑，导入请用 json/csv）' });
+      }
+      const rawPayload = req.body?.payload;
+      const payload =
+        typeof rawPayload === 'string'
+          ? rawPayload
+          : rawPayload && typeof rawPayload === 'object'
+            ? JSON.stringify(rawPayload)
+            : '';
+      if (!payload.trim()) return res.status(400).json({ error: 'payload is required' });
+
+      const result = service.importPaper(teacherActor(req), payload, format, {
+        title: typeof req.body?.title === 'string' ? req.body.title : undefined,
+      });
+      res.status(201).json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.put('/api/assessment-attempts/:id/answers/:itemId/grade', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const body = req.body ?? {};

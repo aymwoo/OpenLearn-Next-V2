@@ -45,6 +45,23 @@ export interface QuestionTypeDefinition<TConfig = Record<string, unknown>, TAnsw
   validateAnswerKey?(config: TConfig, answerKey: unknown): string | null;
 
   /**
+   * 自定义 AI 批改提示词（Issue #196）。
+   *
+   * 内置通用提示词只能看到题干 / 满分 / 答案 / 学生作答 —— 对「代码编程题」它看不到
+   * 测试用例，对「语音评测题」它不知道评分细则，于是建议质量必然泛泛。插件题型
+   * 知道自己 `config` 里有什么（测试用例、参考代码、判分细则），因此把提示词的
+   * 组装权交给题型自己。
+   *
+   * 约定：
+   * - 返回**字符串** → 直接用该提示词调大模型（不再拼接内置模板）；
+   * - 返回 **`null`** → 本题型**不提供** AI 建议（保守拒绝，与内置「非主观题不给建议」一致）；
+   * - 未实现该钩子（`undefined`）→ 回退到内置通用提示词（内置题型全部走这条）。
+   *
+   * 纯函数：不得读库、不得依赖时间/随机数（与 `grade` 同一约束）。
+   */
+  getAiGradingPrompt?(config: TConfig, answerKey: unknown, answer: TAnswer): string | null;
+
+  /**
    * 判分。
    *
    * 契约（不可违反）：
