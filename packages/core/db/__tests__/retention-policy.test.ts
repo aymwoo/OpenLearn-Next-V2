@@ -9,6 +9,7 @@ import {
   purgeExpiredNotifications,
   purgeExpiredRollcalls,
   purgeExpiredSessions,
+  purgeExpiredPendingCommands,
   purgeAllExpiredData,
   type RetentionPolicyLogger,
 } from '../retention-policy.js';
@@ -147,6 +148,13 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
           expires_at INTEGER,
           updated_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS pending_commands (
+          id TEXT PRIMARY KEY,
+          command_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
       `);
     });
 
@@ -277,7 +285,75 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
       expect(remaining[0].id).toBe('sess-3');
     });
 
-    it('purgeAllExpiredData: 聚合清理所有 5 个类别并返回各类别明细', () => {
+    it('purgeExpiredPendingCommands: 清理超期挂起指令，保留未超期的（Issue #195）', () => {
+      const stale = now - 15 * DAY_MS; // > 默认 14 天
+      const fresh = now - 3 * DAY_MS;
+      db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)').run(
+        'pc-old',
+        'site.destroy',
+        '{}',
+        'plugin:legacy',
+        stale,
+      );
+      db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)').run(
+        'pc-new',
+        'site.destroy',
+        '{}',
+        'plugin:legacy',
+        fresh,
+      );
+
+      const res = purgeExpiredPendingCommands(db, { now, log: mockLog });
+
+      expect(res.category).toBe('pendingCommands');
+      expect(res.disabled).toBe(false);
+      expect(res.days).toBe(DEFAULT_RETENTION_DAYS.pendingCommands);
+      expect(res.deleted).toBe(1);
+      const remaining = db.prepare('SELECT id FROM pending_commands').all() as Array<{ id: string }>;
+      expect(remaining.map((r) => r.id)).toEqual(['pc-new']);
+    });
+
+    it('purgeExpiredPendingCommands: 配置为 0 时禁用清理（不删任何挂起指令）', () => {
+      const ancient = now - 5000 * DAY_MS;
+      db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)').run(
+        'pc-ancient',
+        'site.destroy',
+        '{}',
+        'plugin:legacy',
+        ancient,
+      );
+
+      const res = purgeExpiredPendingCommands(db, { now, retentionRaw: 0, log: mockLog });
+
+      expect(res.disabled).toBe(true);
+      expect(res.deleted).toBe(0);
+      expect(db.prepare('SELECT id FROM pending_commands').all()).toHaveLength(1);
+    });
+
+    it('purgeExpiredPendingCommands: 无 config 时按 OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS 清理', () => {
+      const oldTime = now - 4 * DAY_MS;
+      db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)').run(
+        'pc-env',
+        'site.destroy',
+        '{}',
+        'plugin:legacy',
+        oldTime,
+      );
+
+      const original = process.env.OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS;
+      process.env.OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS = '3';
+      try {
+        const summary = purgeAllExpiredData(db, { now, log: mockLog });
+        expect(summary.pendingCommands.disabled).toBe(false);
+        expect(summary.pendingCommands.days).toBe(3);
+        expect(summary.pendingCommands.deleted).toBe(1);
+      } finally {
+        if (original === undefined) delete process.env.OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS;
+        else process.env.OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS = original;
+      }
+    });
+
+    it('purgeAllExpiredData: 聚合清理所有 6 个类别并返回各类别明细', () => {
       const oldTime = now - 500 * DAY_MS;
       db.prepare('INSERT INTO events (id, type, timestamp) VALUES (?, ?, ?)').run('e-all', 'test', oldTime);
       db.prepare('INSERT INTO attendance (schedule_id, student_id, recorded_at) VALUES (?, ?, ?)').run(
@@ -294,6 +370,13 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
         oldTime,
         oldTime,
       );
+      db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)').run(
+        'pc-all',
+        'site.destroy',
+        '{}',
+        'plugin:legacy',
+        oldTime,
+      );
 
       const summary = purgeAllExpiredData(db, {
         now,
@@ -303,6 +386,7 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
           notificationsDays: 30,
           rollcallsDays: 180,
           sessionsDays: 30,
+          pendingCommandsDays: 14,
         },
         log: mockLog,
       });
@@ -312,6 +396,7 @@ describe('Data Retention Policy & Regular Purge (Issue #145)', () => {
       expect(summary.notifications.deleted).toBe(1);
       expect(summary.rollcalls.deleted).toBe(1);
       expect(summary.sessions.deleted).toBe(1);
+      expect(summary.pendingCommands.deleted).toBe(1);
     });
 
     it('purgeAllExpiredData: 无 config 时遵守环境变量禁用开关（不得显式传 undefined 绕过 env）', () => {

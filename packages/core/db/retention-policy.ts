@@ -10,6 +10,7 @@
  * - student_read_notifications (已读通知标记): 30 天
  * - student_rollcalls (课堂点名流水): 180 天
  * - client_sessions (客户端会话): 30 天
+ * - pending_commands (等待人工审批的高危指令): 14 天
  *
  * @module
  */
@@ -24,6 +25,13 @@ export const DEFAULT_RETENTION_DAYS = Object.freeze({
   notifications: 30,
   rollcalls: 180,
   sessions: 30,
+  /**
+   * 等待人工审批的高危指令（Issue #195）。
+   *
+   * 比其它类别短得多：一条没人审批的挂起指令没有任何长期价值 —— 越早动手越可能
+   * 符合当时的上下文，放两周后管理员只看得到一个没人记得起因的批准按钮。
+   */
+  pendingCommands: 14,
 });
 
 export interface RetentionDecision {
@@ -314,6 +322,63 @@ export function purgeExpiredSessions(
   }
 }
 
+/**
+ * 清理过期待审批指令 (pending_commands)。
+ *
+ * ## 为什么需要保留策略（Issue #195）
+ *
+ * 内核高危操作拦截器拦到无人工授权的指令后，把记录暂存到 `pending_commands` 等管理员审批。
+ * 但一个管理员可能永远不看它 —— 没有过期策略就会**永久溜留**：后台待审批列表越积越长，
+ * 而且没人记得那些七天前的指令当初为什么会被拦下来。
+ *
+ * ## 为什么还要额外处理“指令已失效”的情况
+ *
+ * 指令的合法性属于**发出时**的快照：插件被卸载、命令描述符被注销后，那条审批单就是
+ * 确定性失效的 —— 点“批准”只会拿到 `COMMAND_NOT_REGISTERED`。此类死项由
+ * `server/routes/processes.ts` 在审批失败时清除，以及卸载时级联清理（见
+ * `packages/core/plugin-host/uninstall.ts`），**不靠本函数兼底**。
+ */
+export function purgeExpiredPendingCommands(
+  db: Database.Database,
+  options?: PurgeCategoryOptions,
+): PurgeCategoryResult {
+  const raw =
+    options && 'retentionRaw' in options
+      ? options.retentionRaw
+      : // Issue #195 指定的规范名优先级最高；后面两个是历史命名风格的回退。
+        process.env.OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS ||
+        process.env.OPENLEARN_PENDING_COMMANDS_RETENTION_DAYS ||
+        process.env.RETENTION_PENDING_COMMANDS_DAYS;
+  const decision = resolveRetentionDecision(raw, DEFAULT_RETENTION_DAYS.pendingCommands, options?.now ?? Date.now());
+  const log = options?.log ?? defaultLogger;
+
+  if (decision.invalidRaw) {
+    log.warn(
+      `[Retention] 非法的 pending_commands 保留天数配置 "${raw}"，已回退到默认 ${DEFAULT_RETENTION_DAYS.pendingCommands} 天。`,
+    );
+  }
+  if (decision.disabled || decision.cutoffMs === null) {
+    return { category: 'pendingCommands', deleted: 0, disabled: true, days: 0, cutoffMs: null };
+  }
+
+  try {
+    const info = db.prepare('DELETE FROM pending_commands WHERE created_at < ?').run(decision.cutoffMs);
+    if (info.changes > 0) {
+      log.info(`[Retention] 已清理 ${info.changes} 条超过 ${decision.days} 天的 pending_commands 数据。`);
+    }
+    return {
+      category: 'pendingCommands',
+      deleted: info.changes,
+      disabled: false,
+      days: decision.days,
+      cutoffMs: decision.cutoffMs,
+    };
+  } catch (err) {
+    log.warn(`[Retention] 清理 pending_commands 数据时出错: ${err instanceof Error ? err.message : String(err)}`);
+    return { category: 'pendingCommands', deleted: 0, disabled: false, days: decision.days, cutoffMs: decision.cutoffMs };
+  }
+}
+
 export interface PurgeAllOptions {
   now?: number;
   config?: {
@@ -322,6 +387,7 @@ export interface PurgeAllOptions {
     notificationsDays?: number | string | null;
     rollcallsDays?: number | string | null;
     sessionsDays?: number | string | null;
+    pendingCommandsDays?: number | string | null;
   };
   log?: RetentionPolicyLogger;
 }
@@ -339,7 +405,7 @@ export interface PurgeAllOptions {
  */
 function categoryOptions(
   opts: PurgeAllOptions,
-  key: 'eventsDays' | 'attendanceDays' | 'notificationsDays' | 'rollcallsDays' | 'sessionsDays',
+  key: 'eventsDays' | 'attendanceDays' | 'notificationsDays' | 'rollcallsDays' | 'sessionsDays' | 'pendingCommandsDays',
 ): PurgeCategoryOptions {
   const options: PurgeCategoryOptions = { now: opts.now, log: opts.log };
   if (opts.config && key in opts.config) {
@@ -363,6 +429,7 @@ export function purgeAllExpiredData(
   results.notifications = purgeExpiredNotifications(db, categoryOptions(opts, 'notificationsDays'));
   results.rollcalls = purgeExpiredRollcalls(db, categoryOptions(opts, 'rollcallsDays'));
   results.sessions = purgeExpiredSessions(db, categoryOptions(opts, 'sessionsDays'));
+  results.pendingCommands = purgeExpiredPendingCommands(db, categoryOptions(opts, 'pendingCommandsDays'));
 
   return results;
 }

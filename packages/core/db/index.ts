@@ -564,6 +564,7 @@ export {
   purgeAllExpiredData,
   purgeExpiredEvents,
   purgeExpiredAttendance,
+  purgeExpiredPendingCommands,
   purgeExpiredNotifications,
   purgeExpiredRollcalls,
   purgeExpiredSessions,
