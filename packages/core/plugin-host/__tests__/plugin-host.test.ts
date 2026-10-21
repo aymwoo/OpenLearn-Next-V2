@@ -508,6 +508,42 @@ describe('PluginHost — 完整生命周期', () => {
     expect(rows).toHaveLength(0);
   });
 
+  // ── Test 8b: uninstallPlugin 级联清理待审批指令（Issue #195） ────────
+
+  it('uninstallPlugin 级联清理该插件发起的待审批指令（manifest id 与 uuid 两种 actor 形式）', async () => {
+    // 生产环境该表由迁移 000 创建；本测试库是精简内联 schema，按需补齐。
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pending_commands (
+        id TEXT PRIMARY KEY,
+        command_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    const sourceCode = 'cascade-uninstall-source';
+    const module = makePluginModule('cascade-uninstall', 'Cascade Uninstall');
+    loadMap.set(sourceCode, module);
+
+    await host.installPlugin(sourceCode);
+    const [installed] = db.prepare('SELECT id FROM plugins').all() as any[];
+
+    const insert = db.prepare(
+      'INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?,?,?,?,?)',
+    );
+    // 插件通常自报 `plugin:<manifest.id>`；部分调用路径用数据库行 id。两者都必须清。
+    insert.run('pc-manifest', 'site.destroy', '{}', 'plugin:cascade-uninstall', Date.now());
+    insert.run('pc-uuid', 'site.destroy', '{}', `plugin:${installed.id}`, Date.now());
+    insert.run('pc-other', 'site.destroy', '{}', 'plugin:someone-else', Date.now());
+
+    await host.uninstallPlugin(installed.id);
+
+    const remaining = db.prepare('SELECT id FROM pending_commands').all() as Array<{ id: string }>;
+    // 只清本插件的（默认 dataPolicy='keep' 也要清 —— 死审批与数据保留策略无关）
+    expect(remaining.map((r) => r.id)).toEqual(['pc-other']);
+  });
+
   // ── Test 9: uninstallPlugin 在已安装但未激活的插件上有效 ─────────────
 
   it('uninstallPlugin 在已安装但未激活的插件上有效（直接卸载）', async () => {

@@ -193,6 +193,31 @@ export abstract class PluginHostUninstall extends PluginHostInstall {
     // 4c. 从 DB 删除 plugins 行（数据按策略处理）
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
 
+    // 4c-bis. 级联清理该插件发起的待审批高危指令（Issue #195）。
+    //
+    // ## 不加这段的后果（实测的“死循环死项”）
+    //
+    // 插件发的命令被内核高危拦截后，拦截器会把记录暂存进 `pending_commands` 等管理员审批。
+    // 插件一卸载，它注册的命令描述符与 handler 都没了 —— 那条审批单从此确定性失效：
+    // 管理员点“批准”只会拿到 403 `COMMAND_NOT_REGISTERED`，**而旧版审批端点失败时不会
+    // 删除记录**，于是它从“待审批”变成“永远批不掉的死项”，列表里清不掉也批不动。
+    //
+    // 必须同时匹配两种 actor 形式：插件通常自报 `plugin:<manifest.id>`（如
+    // `plugin:ext-community`），而部分调用路径用数据库行 id（`plugin:<uuid>`）。
+    // 表不存在时（旧库/精简测试库）静默跳过，不阻断卸载。
+    try {
+      const actorIds = Array.from(new Set([`plugin:${pluginId}`, `plugin:${manifestId}`]));
+      const placeholders = actorIds.map(() => '?').join(', ');
+      const purged = this.db
+        .prepare(`DELETE FROM pending_commands WHERE actor_id IN (${placeholders})`)
+        .run(...actorIds);
+      if (purged.changes > 0) {
+        console.log(`[PluginHost] Purged ${purged.changes} pending command(s) for "${pluginId}"`);
+      }
+    } catch {
+      // pending_commands 表不存在（旧库/内联测试库）：无待审批记录可清。
+    }
+
     let totalDropped = 0;
     let orphanRegistered = false;
     if (dataPolicy === 'purge') {
