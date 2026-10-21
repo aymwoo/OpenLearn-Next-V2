@@ -101,6 +101,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **测试库与本地开发库物理隔离（Issue #194）**：
+  - **根因**：`packages/core/db/index.ts` 的 `dbPath` 解析让 `OPENLEARN_DB_PATH` **优先于** `VITEST`。本地 `.env` 声明了该变量，而 `dotenv` 不覆写既有键 —— 只要进程里有人先调过 `dotenv.config()`（`server.ts` 就会）、开发者自己 `export` 过，或 `pnpm dev` 的环境被继承，**测试就把数据写进真实开发库**。实测后果：`plugin-audit-poc.test.ts` 里 `new Kernel(...)` 触发高危命令拦截，`audit.poc.highrisk.*` 被永久留在开发库 `pending_commands`，后台待审批列表挂一条既批不掉也删不掉的死项；而 `pnpm test` 依旧全绿，污染完全隐形。
+  - **两道防线**：① `vitest.setup.ts` 在任何测试模块与 `ensureTestSchema()` 之前**清除**继承的 `OPENLEARN_DB_PATH`（清除而非改写：该变量还有 `cli-cleaner.mjs` 等其他读者，改写会误伤其 `dbPath` 解析），并把 `OPENLEARN_DATA_DIR` 重定向到临时目录；② `db/index.ts` 中 `VITEST` 分支**优先于** `OPENLEARN_DB_PATH`，即使某测试先 `dotenv.config()` 再动态 import db 也落不到真实数据目录。
+  - **跨 run 幂等**：测试库文件名带 `VITEST_POOL_ID` **与 `process.pid`** —— pool id 会被 Vitest 跨进程世代复用，两代共享同一库文件会同时跑迁移并报 `UNIQUE constraint failed: _migrations.name`（实测）；带上 pid 后每个进程一份全新库，无需「启动时删除」，也就没有删除与使用之间的竞态。旧文件按 24h 粗粒度回收。
+  - **用例清理**：`plugin-audit-poc.test.ts` 的 `afterEach` 清理自身写入全局库的 `audit.poc.*` 挂起指令。
+  - **防退化测试**：新增 `packages/core/db/__tests__/test-db-isolation.test.ts`（5 条断言：环境变量被清除、数据目录在临时区、`getDbPath()` 不落在仓库库上、库名含 pid、注入真实开发库路径后仍走临时库）。
+
 - **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
   - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。
   - 修复：按 SQLite 标准重构表规范改为「新建临时表包含 DEFAULT 定义 + 迁移存量数据并回填时间戳 + DROP 旧表 + RENAME 替换」，保留原有主键约束与存量数据；补充安全 DOWN 回滚。

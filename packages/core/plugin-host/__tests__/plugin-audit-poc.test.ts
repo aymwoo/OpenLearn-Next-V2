@@ -23,6 +23,7 @@ import { BASE_WORKER_SERVICE_TOKENS } from '../../worker-runtime/worker-manager.
 import { approveDeclaredPublicRoutes, isPublicRouteApproved } from '../public-routes.js';
 import { normalizeCommunityEntry } from '../../../../server/services/community-registry.js';
 import { createDb, makeHost, makeTmpDir, removeTmpDir } from './helpers/audit-host.js';
+import { db as globalDb } from '../../db/index.js';
 import { tmpZipPath } from '../../esm-loader/__tests__/helpers/tmp-zip.js';
 import type { InvokeMessage, IWorkerTransport } from '../../worker-runtime/types.js';
 import Database from 'better-sqlite3';
@@ -42,7 +43,35 @@ afterEach(() => {
     if (savedEnv[key] === undefined) delete process.env[key];
     else process.env[key] = savedEnv[key];
   }
+  purgeAuditPendingCommands();
 });
+
+/**
+ * 清理本文件向**全局库** `pending_commands` 写入的挂起指令（Issue #194）。
+ *
+ * ## 为什么需要
+ *
+ * 「内核命令拦截器信任调用方自报的 actor」那组用例为了断言「高危命令必须走人工审批」，
+ * 会真的让 `Kernel` 构造一个 `audit.poc.highrisk.<timestamp>` 命令并执行 —— 拦截器
+ * 先把记录插进 `pending_commands` 再抛 `requires human approval`。这条记录就这样留在库里。
+ *
+ * 库指向临时目录时它只是垃圾；但历史上库曾指向本地开发库（见 db/index.ts 的注释），
+ * 于是后台待审批列表会挂上一条永远批不掉的死项。这里保证：无论库指向哪里，
+ * 用例产生的记录都不会残留。
+ *
+ * 表不存在是正常情况（本次 worker 里还没有任何代码跑过迁移）—— 那时也就没有东西要清。
+ */
+function purgeAuditPendingCommands(): void {
+  try {
+    const hasTable = globalDb
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pending_commands'")
+      .get();
+    if (!hasTable) return;
+    globalDb.prepare("DELETE FROM pending_commands WHERE command_type LIKE 'audit.poc.%'").run();
+  } catch {
+    // 库不可用（已被关闭 / 只读 / 尚未建表）：没有残留可清，静默跳过。
+  }
+}
 
 function rememberEnv() {
   for (const key of ENV_KEYS) savedEnv[key] = process.env[key];

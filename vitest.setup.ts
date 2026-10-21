@@ -24,8 +24,90 @@ afterEach(() => {
 if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
   process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
 }
-if (!process.env.OPENLEARN_DATA_DIR) {
-  process.env.OPENLEARN_DATA_DIR = path.join(os.tmpdir(), `openlearn_test_data_${process.env.VITEST_POOL_ID || '0'}`);
+
+/**
+ * 测试库物理隔离（Issue #194）。
+ *
+ * ## 为什么必须在这里动手
+ *
+ * `packages/core/db/index.ts` 的 `dbPath` 解析原先让 `process.env.OPENLEARN_DB_PATH`
+ * **优先于** `process.env.VITEST`。本地开发机的 `.env` 恰好声明了
+ * `OPENLEARN_DB_PATH=<repo>/packages/core/db/educational_os.db`，而 `dotenv` 不覆写
+ * 已存在的 env 键 —— 所以只要有任何一条路径把 `.env` 灌进 `process.env`
+ * （`server.ts` 的 `dotenv.config()`、开发者自己 `export`、`pnpm dev` 继承的环境），
+ * 测试就会把数据写进**真实开发库**。
+ *
+ * 实测后果（非推断）：
+ * - 插件的审计用例（如 `plugin-audit-poc.test.ts` 里 `new Kernel(...)` 触发高危命令
+ *   拦截）会把 `audit.poc.highrisk.*` 记录永久留在开发库的 `pending_commands` 里，
+ *   后台待审批列表挂着一条永远批不掉的死项；
+ * - 这类污染不带任何失败信号，`pnpm test` 依旧全绿，只能在数据库里发现。
+ *
+ * 因此在**任何测试模块、`ensureTestSchema()` 之前**做两件事：
+ * 1. **清除**继承来的 `OPENLEARN_DB_PATH`（而不是改写成临时路径 —— 理由见下方注释，
+ *    全局变量还有其他读者，改写会误伤 `cli-cleaner`）；
+ * 2. 把 `OPENLEARN_DATA_DIR` 重定向到临时目录（storage/ 与插件产物都从它派生）。
+ *
+ * 清掉后路径由 `packages/core/db/index.ts` 的 `VITEST` 分支接管；那里另有一道
+ * 「`VITEST` 优先于 `OPENLEARN_DB_PATH`」的硬防线（双层），即使某测试自己先调了
+ * `dotenv.config()` 再 import db，也落不到真实数据目录。
+ */
+{
+  const poolId = process.env.VITEST_POOL_ID || '1';
+  // 与 vitest.config.ts 里的隔离键一致：一个 worker 一个库文件，进程生命周期内复用。
+  // 不复用会变成「每个测试文件一个库」：`kernelContainer` 这类单例在进程内只初始化一次，
+  // 文件间删各自临时库会产生「A 删掉 B 还在用」的竞态。
+  const testDbDir = path.join(os.tmpdir(), 'openlearn_test_dbs');
+  nodeFs.mkdirSync(testDbDir, { recursive: true });
+
+  /**
+   * 回收旧进程留下的库文件（按小时粒度，不碰当前进程的库）。
+   *
+   * 库文件名带 `process.pid`（见 `packages/core/db/index.ts` 的 `VITEST` 分支），
+   * 所以**每个 worker 进程天然拿到一份全新的库**：不需要“启动时删除”，也就没有
+   * “删除与使用之间的竞态” —— 曾用 pid 哨兵文件做过一轮，被 pid 复用坑了：
+   * 新一轮复用到同一 pid 就跳过重置，带着上一轮残留的 `_migrations` 行再跑迁移，
+   * 实测报 `UNIQUE constraint failed: _migrations.name`。
+   *
+   * 代价是旧 pid 的文件会留在 /tmp：这里按 24h 粗粒度收回（24 小时前的文件不可能是
+   * 正在跑的套件），避免无限堆积。失败不影响测试。
+   */
+  try {
+    const now = Date.now();
+    for (const entry of nodeFs.readdirSync(testDbDir)) {
+      if (!/^openlearn_test_.*\.db(-wal|-shm)?$/.test(entry)) continue;
+      const full = path.join(testDbDir, entry);
+      if (now - nodeFs.statSync(full).mtimeMs > 24 * 60 * 60 * 1000) nodeFs.rmSync(full, { force: true });
+    }
+    // 清理历史遗留的 pid 哨兵（旧方案产物）。
+    for (const entry of nodeFs.readdirSync(testDbDir)) {
+      if (entry.startsWith('.reset-')) nodeFs.rmSync(path.join(testDbDir, entry), { force: true });
+    }
+  } catch {
+    // 回收失败不影响测试正确性。
+  }
+
+  const ambientDbPath = process.env.OPENLEARN_DB_PATH;
+  if (ambientDbPath) {
+    // 不静默吞掉：开发者需要知道自己的 OPENLEARN_DB_PATH 在测试里被无视了。
+    console.warn(
+      `[vitest.setup] 已清除继承的 OPENLEARN_DB_PATH=${ambientDbPath}，` +
+        '测试一律使用临时库，避免自动化测试污染本地开发库（Issue #194）。',
+    );
+  }
+  // 为什么是“清除”而不是“改写成一个临时路径”：
+  //
+  // 该变量是**全局**的，除 db 模块之外还有读者，而它们的语义并不一致。
+  // 实例：`cli-cleaner.mjs` 的 `dataDir` 尊重调用方传入的 customDataDir，但
+  // `dbPath` 无条件优先 `OPENLEARN_DB_PATH` —— 若我们把它改成临时库路径，
+  // `packages/core/__tests__/cli-cleaner.test.ts` 就会去清一个不相关的文件，
+  // 三条用例立即变红（实测）。清除后各读者各自回到自己的默认逻辑：
+  // - `packages/core/db/index.ts` → 走 `VITEST` 分支（临时库）
+  // - `server/utils/paths.ts` / `cli-cleaner.mjs` → 回到调用方指定的目录
+  delete process.env.OPENLEARN_DB_PATH;
+  // 数据目录同属一条隔离链（storage/ 与插件产物路径都从这里派生），一并重定向；
+  // 测试自己如果在用例里赋值会覆盖本值（setup 先于用例运行）。
+  process.env.OPENLEARN_DATA_DIR = path.join(os.tmpdir(), `openlearn_test_data_${poolId}`);
 }
 
 const nodeUint8Array = new TextEncoder().encode('').constructor;

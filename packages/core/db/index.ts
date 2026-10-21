@@ -107,14 +107,30 @@ export function verifyPassword(pwd: string, storedHash: string): { valid: boolea
 
 // Use import.meta.url directly — it's available at module scope in tsx ESM.
 let dbPath: string;
-if (process.env.OPENLEARN_DB_PATH) {
-  dbPath = process.env.OPENLEARN_DB_PATH;
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-} else if (process.env.VITEST) {
-  const poolId = process.env.VITEST_POOL_ID || process.pid;
+// ⚠️ 顺序有意义：`VITEST` 必须优先于 `OPENLEARN_DB_PATH`（Issue #194）。
+//
+// 本地开发机的 `.env` 会声明 `OPENLEARN_DB_PATH=<repo>/packages/core/db/educational_os.db`，
+// 而 `dotenv` 不覆写已存在的 env 键 —— 因此只要进程里有人先调过 `dotenv.config()`
+// （`server.ts` 就会）或开发者自己 `export` 过它，原先“环境变量优先”的顺序会把
+// **测试数据写进真实开发库**（高危审批拦截产生的 `pending_commands` 死项就是由此而来）。
+// 测试进程里不该有任何理由去写真实数据目录，所以 `VITEST` 无条件胜出。
+if (process.env.VITEST) {
+  // 文件名同时带 `VITEST_POOL_ID` 与 `process.pid` —— **进程级唯一**。
+  //
+  // 为什么不能只用 pool id：pool id 会被 Vitest 跨进程世代复用（旧 worker 退出后
+  // 新 worker 取得同一个 id），两个世代共享同一个库文件就会同时跑迁移，
+  // 实测报 `UNIQUE constraint failed: _migrations.name`。带上 pid 后每个进程一份库，
+  // **既不用“启动时删除”，也就没有删除与使用之间的竞态**；跨 run 天然归零。
+  //
+  // 残留文件（旧 pid 的库）由 `vitest.setup.ts` 的清洁逻辑按小时粗粒度收回，
+  // 不会无限堆积。
+  const poolId = process.env.VITEST_POOL_ID || '1';
   const testDbDir = path.join(os.tmpdir(), 'openlearn_test_dbs');
   mkdirSync(testDbDir, { recursive: true });
-  dbPath = path.join(testDbDir, `openlearn_test_${poolId}.db`);
+  dbPath = path.join(testDbDir, `openlearn_test_${poolId}_${process.pid}.db`);
+} else if (process.env.OPENLEARN_DB_PATH) {
+  dbPath = process.env.OPENLEARN_DB_PATH;
+  mkdirSync(path.dirname(dbPath), { recursive: true });
 } else {
   if (typeof __dirname !== 'undefined') {
     dbPath = path.join(__dirname, 'educational_os.db');
