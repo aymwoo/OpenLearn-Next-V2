@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **本地开发环境可跳过强制改密门（Issue #197）**：
+  - **开关**：`OPENLEARN_SKIP_PASSWORD_CHANGE_GATE=true`（别名 `DEV_BYPASS_PASSWORD_CHANGE_GATE`）。打开后使用 `admin`/`admin` 这类默认口令登录不再打 `mustChangePassword` 标记，`enforcePasswordChanged` 与 socket 握手也不再拦截 —— 本地反复重启/清库联调时不必再被全屏改密页挡住。
+  - **生产硬防线**：`NODE_ENV=production` 时该变量被**严格忽略**并输出一次性告警（`server/utils/password-gate.ts`）。一个误配的环境变量不能变成线上弱口令的后门。开关只影响「是否给会话打标」，不改密码校验、不改任何权限判断。
+  - **一处判定、三处生效**：登录（`roster.ts`）、HTTP 拦截（`auth.ts`）、socket 握手（`auth.ts`）共用同一个判定函数，避免出现「登录放行了但 socket 还在拦」的半开半关状态；已带标记的老会话在开关打开后**无需重新登录**即被放行。
+  - **文档与测试**：`.env.example` 补充说明（含生产忽略条款）；新增 `server/__tests__/password-change-gate-bypass.test.ts`（9 条：判定矩阵、生产忽略 + 只告警一次、非生产生效、别名生效、开关关闭时行为不变、老会话即时放行）。
+
 - **插件题型生态深化：自定义 AI 批改提示词与试卷导入导出互通（Issue #196）**：
   - **`QuestionTypeDefinition.getAiGradingPrompt?(config, answerKey, answer)`**：插件题型可自带 AI 批改提示词（代码题的测试用例、语音题的评分细则都能交给大模型），`POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest` 优先使用它。三种返回语义：字符串 = 用它；`null` = 本题型不提供 AI 建议（保守拒绝）；未实现 = 回退内置通用模板（**全部内置题型行为不变**）。仍只生成建议、不改分。
   - **试卷导出**：新增 `GET /api/assessments/:id/paper/export?format=json|csv|xlsx`（与既有成绩矩阵 CSV 区分 —— 这里导的是试卷本体）。插件题型的 `config` 与题型标记 `<pluginId>:<name>` 整份带走；CSV/XLSX 中 `config`/`answerKey` 以 JSON 字符串存放（不展平 —— 每类题型 config 形状不同，展平必丢字段）。
