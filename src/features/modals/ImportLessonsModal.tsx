@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
-import { Upload, Download, Loader2, CheckCircle2, Check } from 'lucide-react';
+import { Upload, Download, Loader2, CheckCircle2, Check, FileJson, Package } from 'lucide-react';
+import type { CoursePackagePreview } from '../../services/coursePackageService';
 
 export interface ImportRow {
   title: string;
@@ -16,7 +17,15 @@ export interface ImportLessonsModalProps {
   importStatus: ImportStatus;
   setIsDraggingImport: (v: boolean) => void;
   handleCSVFileChange: (file: File) => void;
+  /** 导入框的统一文件入口（按后缀分派到 CSV / 课程包）。 */
+  handleImportFileChange: (file: File) => void;
   downloadCsvTemplate: () => void;
+  /** 下载内置课程模板（JSON，自包含课件附件）。 */
+  downloadCourseTemplate: () => void;
+  /** 已选中的课程包摘要；非空时预览区切换为课程包视图。 */
+  packagePreview: CoursePackagePreview | null;
+  /** 提交课程包导入。 */
+  handlePackageImportSubmit: () => void;
   isDraggingImport: boolean;
   previewImportData: ImportRow[];
   setPreviewImportData: Dispatch<SetStateAction<ImportRow[]>>;
@@ -36,7 +45,11 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
     importStatus,
     setIsDraggingImport,
     handleCSVFileChange,
+    handleImportFileChange,
     downloadCsvTemplate,
+    downloadCourseTemplate,
+    packagePreview,
+    handlePackageImportSubmit,
     isDraggingImport,
     previewImportData,
     setPreviewImportData,
@@ -66,12 +79,12 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 </div>
                 <div>
                   <h2 className="font-bold text-gray-850 text-base md:text-lg">
-                    {lang === 'zh' ? '批量导入课程 (CSV)' : 'Bulk-Import Courses (CSV)'}
+                    {lang === 'zh' ? '批量导入课程' : 'Bulk-Import Courses'}
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {lang === 'zh'
-                      ? '上传包含标准表头的 CSV 教案，一键实现秒级批量底库写入。'
-                      : 'Upload a standard CSV file matching our predefined schema to perform instantaneous bulk curriculum imports.'}
+                      ? '支持 CSV 批量导入（仅标题与正文）与课程包 JSON 导入（完整课程：教学环节 + 白板组件 + 课件附件）。'
+                      : 'Import a CSV (title and body only) or a course package JSON (full lesson: segments, components and assets).'}
                   </p>
                 </div>
               </div>
@@ -118,7 +131,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                           : 'Syllabus content supporting rich markdown.'}
                       </li>
                     </ul>
-                    <div className="mt-3.5 flex justify-start">
+                    <div className="mt-3.5 flex flex-wrap gap-2 justify-start">
                       <button
                         onClick={downloadCsvTemplate}
                         className="flex items-center gap-1 p-2 text-xs font-bold text-indigo-700 bg-white border border-indigo-200 rounded-lg shadow-3xs hover:bg-indigo-50 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
@@ -126,7 +139,20 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                         <Download size={12} />
                         {lang === 'zh' ? '获取标准 CSV 模板' : 'Download Template CSV'}
                       </button>
+                      <button
+                        onClick={downloadCourseTemplate}
+                        data-testid="download-course-package-template-btn"
+                        className="flex items-center gap-1 p-2 text-xs font-bold text-emerald-700 bg-white border border-emerald-200 rounded-lg shadow-3xs hover:bg-emerald-50 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
+                      >
+                        <FileJson size={12} />
+                        {lang === 'zh' ? '下载课程模板（JSON）' : 'Download Course Template (JSON)'}
+                      </button>
                     </div>
+                    <p className="text-[11px] text-indigo-800/80 mt-2.5 leading-relaxed">
+                      {lang === 'zh'
+                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。'
+                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson.'}
+                    </p>
                   </div>
 
                   {/* Drag-and-drop Dropzone */}
@@ -140,7 +166,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       e.preventDefault();
                       setIsDraggingImport(false);
                       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                        handleCSVFileChange(e.dataTransfer.files[0]);
+                        handleImportFileChange(e.dataTransfer.files[0]);
                       }
                     }}
                     onClick={() => {
@@ -155,11 +181,11 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     <input
                       id="import-csv-file-picker"
                       type="file"
-                      accept=".csv"
+                      accept=".csv,.json"
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
-                          handleCSVFileChange(e.target.files[0]);
+                          handleImportFileChange(e.target.files[0]);
                         }
                       }}
                     />
@@ -167,17 +193,108 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       <Upload size={24} />
                     </div>
                     <span className="text-sm font-bold text-gray-800">
-                      {lang === 'zh' ? '选择 CSV 文件或拖放至此处' : 'Click to select or drag and drop CSV file here'}
+                      {lang === 'zh'
+                        ? '选择 CSV / 课程包 JSON 文件，或拖放至此处'
+                        : 'Click to select or drag and drop a CSV / course-package JSON file here'}
                     </span>
                     <span className="text-xs text-gray-400 mt-1">
-                      {lang === 'zh' ? '支持标准 CSV 文件，最大不超过 5MB' : 'Supports standard CSV format up to 5MB'}
+                      {lang === 'zh'
+                        ? '支持标准 CSV 与课程包 JSON，最大不超过 20MB'
+                        : 'Supports standard CSV and course-package JSON, up to 20MB'}
                     </span>
                   </div>
                 </div>
               )}
 
               {/* PARSING state -> Show Preview of file */}
-              {importStatus === 'parsing' && previewImportData.length > 0 && (
+              {importStatus === 'parsing' && packagePreview && (
+                <div className="space-y-4" data-testid="course-package-preview">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                      ✓{' '}
+                      {lang === 'zh'
+                        ? `课程包解析成功：${packagePreview.segments} 个教学环节 · ${packagePreview.elements} 个白板元素`
+                        : `Course package parsed: ${packagePreview.segments} segments · ${packagePreview.elements} elements`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPreviewImportData([]);
+                        setImportStatus('idle');
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                    >
+                      {lang === 'zh' ? '重新上传' : 'Upload Different File'}
+                    </button>
+                  </div>
+
+                  <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-3xs">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg text-emerald-600">
+                        <Package size={18} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-gray-800 truncate" title={packagePreview.title}>
+                          {packagePreview.title}
+                        </h4>
+                        {packagePreview.metaName && (
+                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{packagePreview.metaName}</p>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-0.5 font-mono truncate">{packagePreview.fileName}</p>
+                      </div>
+                    </div>
+
+                    <dl className="grid grid-cols-3 gap-2 mt-3">
+                      <div className="p-2 bg-gray-50 border border-gray-150 rounded-lg">
+                        <dt className="text-[10px] text-gray-500 font-semibold">
+                          {lang === 'zh' ? '教学环节' : 'Segments'}
+                        </dt>
+                        <dd className="text-base font-bold text-gray-800">{packagePreview.segments}</dd>
+                      </div>
+                      <div className="p-2 bg-gray-50 border border-gray-150 rounded-lg">
+                        <dt className="text-[10px] text-gray-500 font-semibold">
+                          {lang === 'zh' ? '白板元素' : 'Elements'}
+                        </dt>
+                        <dd className="text-base font-bold text-gray-800">{packagePreview.elements}</dd>
+                      </div>
+                      <div className="p-2 bg-gray-50 border border-gray-150 rounded-lg">
+                        <dt className="text-[10px] text-gray-500 font-semibold">
+                          {lang === 'zh' ? '课件附件' : 'Assets'}
+                        </dt>
+                        <dd className="text-base font-bold text-gray-800">{packagePreview.assets}</dd>
+                      </div>
+                    </dl>
+
+                    {packagePreview.componentTypes.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[10px] text-gray-500 font-semibold mb-1.5">
+                          {lang === 'zh' ? '覆盖的预设组件' : 'Covered components'}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {packagePreview.componentTypes.map((type) => (
+                            <span
+                              key={type}
+                              className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-[10px] font-mono text-indigo-700"
+                            >
+                              {type}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-100 text-amber-900 text-xs rounded-xl p-3 flex gap-2.5 items-start">
+                    <span className="text-base leading-none">⚠️</span>
+                    <p className="leading-relaxed">
+                      {lang === 'zh'
+                        ? '导入将以单个事务写入：教学环节、白板元素与课件附件要么全部成功，要么全部回滚，不会留下半截课程。'
+                        : 'The import runs as a single transaction: segments, whiteboard elements and assets are either all written or all rolled back.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {importStatus === 'parsing' && !packagePreview && previewImportData.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
@@ -237,7 +354,28 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
               )}
 
               {/* IMPORTING state -> Show beautiful step progress */}
-              {importStatus === 'importing' && (
+              {importStatus === 'importing' && packagePreview && (
+                <div className="py-8 flex flex-col items-center justify-center space-y-4">
+                  <div className="relative w-20 h-20 flex items-center justify-center">
+                    <Loader2 size={36} className="text-indigo-600 animate-spin" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-bold text-gray-800 text-sm">
+                      {lang === 'zh' ? '正在导入课程包' : 'Importing course package'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {lang === 'zh'
+                        ? `正在写入 ${packagePreview.segments} 个教学环节、${packagePreview.elements} 个白板元素与 ${packagePreview.assets} 份课件附件...`
+                        : `Writing ${packagePreview.segments} segments, ${packagePreview.elements} elements and ${packagePreview.assets} assets...`}
+                    </p>
+                  </div>
+                  <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-xs text-gray-400">
+                    <div>{'[API] POST /api/course-packages/import -> single transaction...'}</div>
+                  </div>
+                </div>
+              )}
+
+              {importStatus === 'importing' && !packagePreview && (
                 <div className="py-8 flex flex-col items-center justify-center space-y-4">
                   <div className="relative w-20 h-20 flex items-center justify-center">
                     <Loader2 size={36} className="text-indigo-600 animate-spin" />
@@ -262,7 +400,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     />
                   </div>
                   <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-xs text-gray-400 max-h-[140px] overflow-y-auto">
-                    <div>{'[API] POST /api/lessons -> Request batch transaction...'}</div>
+                    <div>{'[API] POST /api/lessons -> one request per course (no cross-course transaction)'}</div>
                     {previewImportData.slice(0, importProgress).map((p, idx) => (
                       <div key={idx} className="text-indigo-600 font-bold mt-1">
                         {`✓ [${idx + 1}] "${p.title}" -> status 200 (Success)`}
@@ -283,9 +421,13 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       {lang === 'zh' ? '🎉 批量导入大功告成' : '🎉 Bulk-Import Complete'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                      {lang === 'zh'
-                        ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。`
-                        : `All ${previewImportData.length} curriculum lessons records have been successfully saved into security logs and SQLite storage.`}
+                      {packagePreview
+                        ? lang === 'zh'
+                          ? `课程包已导入：${packagePreview.segments} 个教学环节、${packagePreview.elements} 个白板元素、${packagePreview.assets} 份课件附件均已写入。`
+                          : `Course package imported: ${packagePreview.segments} segments, ${packagePreview.elements} elements and ${packagePreview.assets} assets written.`
+                        : lang === 'zh'
+                          ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。`
+                          : `All ${previewImportData.length} curriculum lessons records have been successfully saved into security logs and SQLite storage.`}
                     </p>
                   </div>
                 </div>
@@ -351,7 +493,17 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   >
                     {lang === 'zh' ? '取消' : 'Cancel'}
                   </button>
-                  {importStatus === 'parsing' && (
+                  {importStatus === 'parsing' && packagePreview && (
+                    <button
+                      onClick={handlePackageImportSubmit}
+                      data-testid="import-course-package-btn"
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check size={12} />
+                      {lang === 'zh' ? '导入课程包' : 'Import Course Package'}
+                    </button>
+                  )}
+                  {importStatus === 'parsing' && !packagePreview && (
                     <button
                       onClick={handleCSVImportSubmit}
                       className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"

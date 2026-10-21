@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Lesson, ClassType, VFSNode } from '../types/app';
 import type { WizardSegment } from '../features/modals/CourseWizardModal';
 import type { ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
+import type { CoursePackagePreview } from '../services/coursePackageService';
 import type { useCourseWizard } from '../hooks/useCourseWizard';
 import type { useQuizGenerator } from '../hooks/useQuizGenerator';
 import type { useClassBatchOperations } from '../hooks/useClassBatchOperations';
@@ -89,7 +90,11 @@ export interface AppModalsProps {
   importStatus?: ImportStatus;
   setIsDraggingImport?: (v: boolean) => void;
   handleCSVFileChange?: (file: File) => void;
+  handleImportFileChange?: (file: File) => void;
   downloadCsvTemplate?: () => void;
+  downloadCourseTemplate?: () => void;
+  packagePreview?: CoursePackagePreview | null;
+  handlePackageImportSubmit?: () => void;
   isDraggingImport?: boolean;
   previewImportData?: ImportRow[];
   setPreviewImportData?: Dispatch<SetStateAction<ImportRow[]>>;
@@ -222,7 +227,11 @@ export function AppModals(props: AppModalsProps = {}) {
     importStatus = a?.importStatus ?? 'idle',
     setIsDraggingImport = a?.setIsDraggingImport ?? (() => {}),
     handleCSVFileChange = a?.handleCSVFileChange ?? (() => {}),
+    handleImportFileChange = a?.handleImportFileChange ?? (() => {}),
     downloadCsvTemplate = a?.downloadCsvTemplate ?? (() => {}),
+    downloadCourseTemplate = a?.downloadCourseTemplate ?? (() => {}),
+    packagePreview = a?.packagePreview ?? null,
+    handlePackageImportSubmit = a?.handlePackageImportSubmit ?? (() => {}),
     isDraggingImport = a?.isDraggingImport ?? false,
     previewImportData = a?.previewImportData ?? [],
     setPreviewImportData = a?.setPreviewImportData ?? (() => {}),
@@ -387,7 +396,11 @@ export function AppModals(props: AppModalsProps = {}) {
         importStatus={importStatus}
         setIsDraggingImport={setIsDraggingImport}
         handleCSVFileChange={handleCSVFileChange}
+        handleImportFileChange={handleImportFileChange}
         downloadCsvTemplate={downloadCsvTemplate}
+        downloadCourseTemplate={downloadCourseTemplate}
+        packagePreview={packagePreview}
+        handlePackageImportSubmit={handlePackageImportSubmit}
         isDraggingImport={isDraggingImport}
         previewImportData={previewImportData}
         setPreviewImportData={setPreviewImportData}
