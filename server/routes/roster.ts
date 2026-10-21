@@ -9,6 +9,7 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getUploadsDir } from '../utils/paths.js';
+import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
@@ -674,8 +675,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
         // 为 E2E 准备的让步会泄漏进单元测试，打掉 force-password-change.test.ts
         // 对 SEC-AUTH-06 的守护（实测 6 条断言由该耦合失效）。
         const isE2e = !!process.env.PLAYWRIGHT_TEST;
+        // Issue #197：本地开仑放开关（生产环境严格忽略，见 server/utils/password-gate.ts）。
+        // 开关只影响“是否给会话打标”，不改密码校验、不改任何权限判断。
+        const gateSkipped = !isE2e && isPasswordChangeGateSkipped();
+        if (gateSkipped && Number(userObj.must_change_password) === 1) {
+          rlog.warn(
+            `[SECURITY] ${userObj.username} 仍在使用默认口令，但已配置开发豁免开关（非生产环境），本次不强制改密`,
+          );
+        }
         const mustChangePassword =
-          !isE2e && (Number(userObj.must_change_password) === 1 || password === userObj.username);
+          !isE2e && !gateSkipped && (Number(userObj.must_change_password) === 1 || password === userObj.username);
         if (mustChangePassword) {
           rlog.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
         }

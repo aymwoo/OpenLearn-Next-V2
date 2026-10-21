@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { Socket } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { markAuthMiddleware } from '../security/route-scope.js';
+import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
 
 // ── Session 工具函数 ──────────────────────────────────────────────
 
@@ -155,6 +156,12 @@ export function enforcePasswordChanged(req: Request, res: Response, next: NextFu
   if (process.env.PLAYWRIGHT_TEST) {
     return next();
   }
+  // Issue #197：非生产环境的开发豁免（生产环境由 isPasswordChangeGateSkipped 硬拒）。
+  // 放在这里而不只放在登录处，是为了让**已存在的会话**也能立即生效 ——
+  // 否则开发者开了开关还得先手动登出再登入一次，而这正是开关想省掉的动作。
+  if (isPasswordChangeGateSkipped()) {
+    return next();
+  }
   const path = req.path || '';
   if (!path.startsWith('/api/')) {
     return next();
@@ -221,7 +228,9 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
     }
 
     // SEC-AUTH-06 兜底：默认密码未改的会话不允许建立 socket 连接
-    if ((session as any).mustChangePassword) {
+    // （Issue #197：非生产环境的开发豁免同样作用于 socket，否则“HTTP 放行、socket 拦截”
+    // 会让互动课堂类页面依旧不可用，开关等于半残）
+    if ((session as any).mustChangePassword && !isPasswordChangeGateSkipped()) {
       return next(new Error('FORBIDDEN_DEFAULT_PASSWORD'));
     }
 
