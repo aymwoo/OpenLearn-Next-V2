@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **修复升级回归 fixture 构建被插件签名门禁阻断（v0.7.0 起相关 CI 作业转红）**：
+  - `scripts/upgrade-regression/lib.ts` 的 `installPluginZip()` 上传本地构建的测试插件 ZIP 时未声明 `x-allow-unsigned`，被 v0.6.1 起引入的签名门禁（`server/routes/plugins.ts`，B2 安全基线）以 400 `COMMUNITY_ATTESTATION_REQUIRED` 拒绝。这是两个 PR（#166 升级回归门禁 vs #172/#180 签名门禁）之间的潜伏冲突，v0.6.1 tag 早于该工作流引入，故 v0.7.0 是首个暴露它的 tag。
+  - **影响面**：v0.7.0 成为「上一正式版」基线后，「Upgrade from last release」（每个 PR 与 main 推送都跑）与 tag 上的「Publish release fixture」均失败——前者在缓存未命中时用 tag 的服务端代码建 fixture，同样撞门禁。
+  - **修复**：上传时显式携带 `x-allow-unsigned: true`。本地自建 fixture 正是门禁所述的「本地可信插件」场景；对尚无此门禁的旧 tag 服务端，该头被忽略，向后兼容。
+  - **测试**：新增单测钉住上传请求头（`x-allow-unsigned` / `x-approve-capabilities` / `x-approve-public-routes` / `content-type` / `x-filename`），防止门禁再次演进时静默回归。
+
 ## [0.7.0] - 2026-10-22
 
 ### Features

@@ -363,6 +363,12 @@ export async function installPluginZip(session: HttpSession, zipPath: string): P
       // 升级后「插件仍能激活」的断言就失去了意义。
       'x-approve-capabilities': 'true',
       'x-approve-public-routes': 'true',
+      // 这些 ZIP 由本仓库 build-plugin-fixtures 现场生成、没有 Ed25519 签名；
+      // 签名门禁（B2 安全基线，server/routes/plugins.ts）要求未签名包必须由管理员
+      // 显式声明 x-allow-unsigned 才放行。本地自建 fixture 正是门禁所述的
+      // 「本地可信插件」场景，不涉及任何外部来源的包。
+      // 对尚无此门禁的旧 tag 服务端，该头会被忽略，向后兼容。
+      'x-allow-unsigned': 'true',
     },
   });
 }

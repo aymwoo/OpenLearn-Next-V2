@@ -18,6 +18,8 @@ import {
   compareMigrations,
   ensurePluginSdkSymlink,
   fixtureIntegrityIssues,
+  HttpSession,
+  installPluginZip,
   isPluginActive,
   pluginManifestId,
   readAppliedMigrations,
@@ -254,9 +256,9 @@ describe('fixture 快照与恢复', () => {
 
     expect(rebasePluginPaths(dbPath, dataDir)).toBe(0);
     const check = new Database(dbPath, { readonly: true });
-    expect((check.prepare('SELECT file_path FROM plugins WHERE id = ?').get('p1') as { file_path: string }).file_path).toBe(
-      outside,
-    );
+    expect(
+      (check.prepare('SELECT file_path FROM plugins WHERE id = ?').get('p1') as { file_path: string }).file_path,
+    ).toBe(outside);
     check.close();
   });
 
@@ -270,7 +272,9 @@ describe('fixture 快照与恢复', () => {
     const pluginDir = path.join(sourceDir, 'plugins', 'plugin-uuid-1');
     fs.mkdirSync(pluginDir, { recursive: true });
     fs.writeFileSync(path.join(pluginDir, 'index.js'), 'export default {};\n');
-    sourceDb.prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)').run('plugin-uuid-1', path.join(pluginDir, 'index.js'));
+    sourceDb
+      .prepare('INSERT INTO plugins (id, file_path) VALUES (?, ?)')
+      .run('plugin-uuid-1', path.join(pluginDir, 'index.js'));
     sourceDb.close();
     const buildMachineLink = path.join(sourceDir, 'plugins', 'node_modules', '@openlearn', 'plugin-sdk');
     fs.mkdirSync(path.dirname(buildMachineLink), { recursive: true });
@@ -355,5 +359,44 @@ describe('插件状态判定', () => {
     ).toBe('@ext/demo');
     expect(pluginManifestId({ id: 'uuid', name: 'a', version: '1', manifest: '{not json' })).toBeNull();
     expect(pluginManifestId({ id: 'uuid', name: 'a', version: '1' })).toBeNull();
+  });
+});
+
+describe('fixture 插件安装请求头', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('上传本地测试插件 ZIP 时显式声明 x-allow-unsigned，并保留能力/公开路由批准', async () => {
+    // 签名门禁（server/routes/plugins.ts 的 B2 安全基线）要求未签名包必须由管理员
+    // 显式声明 x-allow-unsigned 才放行。缺这个头时 build-fixture 会在带门禁的
+    // 服务端（v0.7.0+）上拿到 400 COMMUNITY_ATTESTATION_REQUIRED，
+    // 导致「Publish release fixture」与「Upgrade from last release」双双转红。
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return new Response(JSON.stringify({ success: true, pluginId: 'p1', manifest: { id: '@ext/demo' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const zipPath = path.join(makeTempDir('ol-upgrade-plugin-zip-'), 'ext-demo.zip');
+    fs.writeFileSync(zipPath, 'PK\u0003\u0004not-a-real-zip');
+
+    const session = new HttpSession('http://upgrade.test');
+    const result = await installPluginZip(session, zipPath);
+
+    expect(result.success).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('http://upgrade.test/api/plugins/upload-zip-raw');
+    expect(calls[0].init.method).toBe('POST');
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers['x-allow-unsigned']).toBe('true');
+    expect(headers['x-approve-capabilities']).toBe('true');
+    expect(headers['x-approve-public-routes']).toBe('true');
+    expect(headers['content-type']).toBe('application/zip');
+    expect(headers['x-filename']).toBe('ext-demo.zip');
   });
 });
