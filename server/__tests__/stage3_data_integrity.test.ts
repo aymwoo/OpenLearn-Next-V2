@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { LessonService } from '../services/lesson-service.js';
 import { checkCoreVersionDrift } from '../../cli-doctor.mjs';
@@ -22,17 +24,22 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
       const now = Date.now();
 
       // 1. 创建学生与班级
-      db.prepare(
-        'INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)',
-      ).run(testClassId, '第三阶段测试班级', '测试用', now);
+      db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+        testClassId,
+        '第三阶段测试班级',
+        '测试用',
+        now,
+      );
 
       db.prepare(
         'INSERT INTO students (id, student_number, name, email, password, locked_lesson_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(testStudentId, `SN_S3_${now}`, '三期测试生', 'stage3@test.com', 'pwd_hash', testLessonId, now);
 
-      db.prepare(
-        'INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
-      ).run(testClassId, testStudentId, now);
+      db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+        testClassId,
+        testStudentId,
+        now,
+      );
 
       // 2. 创建主测课时与对照课时
       db.prepare(
@@ -44,9 +51,13 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
       ).run(otherLessonId, '对照无关课时', '课时内容', 'teacher', now, now);
 
       // 3. 关联白板与学情
-      db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run(`wb_${now}`, testLessonId, 'rectangle', '{}', now);
+      db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        `wb_${now}`,
+        testLessonId,
+        'rectangle',
+        '{}',
+        now,
+      );
 
       db.prepare(
         'INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, assigned_at) VALUES (?, ?, ?, ?, ?)',
@@ -57,9 +68,12 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
         'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(testScheduleId, testClassId, testLessonId, '2026-10-15', '09:00 - 09:45', 'scheduled', now);
 
-      db.prepare(
-        'INSERT INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
-      ).run(testScheduleId, testStudentId, 'present', now);
+      db.prepare('INSERT INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)').run(
+        testScheduleId,
+        testStudentId,
+        'present',
+        now,
+      );
 
       // 5. 作业与作业提交 (重点孤儿防范)
       db.prepare(
@@ -94,7 +108,18 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
 
       db.prepare(
         'INSERT INTO classroom_peer_reviews (id, session_id, lesson_id, reviewer_id, target_student_id, target_attempt_id, score, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(testReviewId, testSessionId, testLessonId, testStudentId, 'other_student', 'att_1', 4.5, '精彩的作品', now, now);
+      ).run(
+        testReviewId,
+        testSessionId,
+        testLessonId,
+        testStudentId,
+        'other_student',
+        'att_1',
+        4.5,
+        '精彩的作品',
+        now,
+        now,
+      );
 
       db.prepare(
         'INSERT INTO classroom_peer_rubric_dimensions (id, session_id, lesson_id, label, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -142,31 +167,51 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
       expect(student.locked_lesson_id).toBeNull();
 
       // 验证考勤与排课被彻底清除
-      const schedules = db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(testLessonId) as any;
+      const schedules = db
+        .prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(schedules.count).toBe(0);
-      const attendance = db.prepare('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?').get(testScheduleId) as any;
+      const attendance = db
+        .prepare('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?')
+        .get(testScheduleId) as any;
       expect(attendance.count).toBe(0);
 
       // 验证作业与作业提交被彻底清除
-      const assignments = db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(testLessonId) as any;
+      const assignments = db
+        .prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(assignments.count).toBe(0);
-      const submissions = db.prepare('SELECT COUNT(*) as count FROM assignment_submissions WHERE assignment_id = ?').get(testAssignmentId) as any;
+      const submissions = db
+        .prepare('SELECT COUNT(*) as count FROM assignment_submissions WHERE assignment_id = ?')
+        .get(testAssignmentId) as any;
       expect(submissions.count).toBe(0);
 
       // 验证课堂会话与子项被彻底清除
-      const sessions = db.prepare('SELECT COUNT(*) as count FROM classroom_sessions WHERE lesson_id = ?').get(testLessonId) as any;
+      const sessions = db
+        .prepare('SELECT COUNT(*) as count FROM classroom_sessions WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(sessions.count).toBe(0);
-      const polls = db.prepare('SELECT COUNT(*) as count FROM classroom_quick_polls WHERE id = ?').get(testPollId) as any;
+      const polls = db
+        .prepare('SELECT COUNT(*) as count FROM classroom_quick_polls WHERE id = ?')
+        .get(testPollId) as any;
       expect(polls.count).toBe(0);
 
       // 验证互评体系被彻底清除
-      const reviews = db.prepare('SELECT COUNT(*) as count FROM classroom_peer_reviews WHERE lesson_id = ?').get(testLessonId) as any;
+      const reviews = db
+        .prepare('SELECT COUNT(*) as count FROM classroom_peer_reviews WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(reviews.count).toBe(0);
-      const dimensions = db.prepare('SELECT COUNT(*) as count FROM classroom_peer_rubric_dimensions WHERE lesson_id = ?').get(testLessonId) as any;
+      const dimensions = db
+        .prepare('SELECT COUNT(*) as count FROM classroom_peer_rubric_dimensions WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(dimensions.count).toBe(0);
-      const danmaku = db.prepare('SELECT COUNT(*) as count FROM classroom_danmaku WHERE lesson_id = ?').get(testLessonId) as any;
+      const danmaku = db
+        .prepare('SELECT COUNT(*) as count FROM classroom_danmaku WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(danmaku.count).toBe(0);
-      const rollcalls = db.prepare('SELECT COUNT(*) as count FROM student_rollcalls WHERE lesson_id = ?').get(testLessonId) as any;
+      const rollcalls = db
+        .prepare('SELECT COUNT(*) as count FROM student_rollcalls WHERE lesson_id = ?')
+        .get(testLessonId) as any;
       expect(rollcalls.count).toBe(0);
 
       // 验证对照课节不受影响
@@ -192,13 +237,9 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
         now,
         now,
       );
-      db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        busScheduleId,
-        'cls_dummy',
-        busLessonId,
-        '2026-10-15',
-        now,
-      );
+      db.prepare(
+        'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(busScheduleId, 'cls_dummy', busLessonId, '2026-10-15', now);
       db.prepare('INSERT INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)').run(
         busScheduleId,
         'stu_dummy',
@@ -212,22 +253,27 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
         'Bus 作业',
         now,
       );
-      db.prepare('INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, status) VALUES (?, ?, ?, ?)').run(
-        busAssignmentId,
-        'stu_dummy',
-        now,
-        'submitted',
-      );
+      db.prepare(
+        'INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, status) VALUES (?, ?, ?, ?)',
+      ).run(busAssignmentId, 'stu_dummy', now, 'submitted');
 
-      const cmd = kernelContainer.commandBus.createCommand('lesson.delete', { lessonId: busLessonId }, 'user:admin:administrator');
+      const cmd = kernelContainer.commandBus.createCommand(
+        'lesson.delete',
+        { lessonId: busLessonId },
+        'user:admin:administrator',
+      );
       const res = (await kernelContainer.commandBus.execute(cmd)) as any;
       expect(res.success).toBe(true);
 
       expect(db.prepare('SELECT COUNT(*) as c FROM lessons WHERE id = ?').get(busLessonId)).toEqual({ c: 0 });
       expect(db.prepare('SELECT COUNT(*) as c FROM schedules WHERE id = ?').get(busScheduleId)).toEqual({ c: 0 });
-      expect(db.prepare('SELECT COUNT(*) as c FROM attendance WHERE schedule_id = ?').get(busScheduleId)).toEqual({ c: 0 });
+      expect(db.prepare('SELECT COUNT(*) as c FROM attendance WHERE schedule_id = ?').get(busScheduleId)).toEqual({
+        c: 0,
+      });
       expect(db.prepare('SELECT COUNT(*) as c FROM assignments WHERE id = ?').get(busAssignmentId)).toEqual({ c: 0 });
-      expect(db.prepare('SELECT COUNT(*) as c FROM assignment_submissions WHERE assignment_id = ?').get(busAssignmentId)).toEqual({ c: 0 });
+      expect(
+        db.prepare('SELECT COUNT(*) as c FROM assignment_submissions WHERE assignment_id = ?').get(busAssignmentId),
+      ).toEqual({ c: 0 });
     });
 
     it('cleans groups and submissions when class.delete is dispatched via CommandBus', async () => {
@@ -237,22 +283,35 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
       const now = Date.now();
 
       db.prepare('INSERT INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(busClassId, '待删测试班', now);
-      db.prepare('INSERT INTO assignments (id, class_id, title, created_at) VALUES (?, ?, ?, ?)').run(busAsgId, busClassId, '班级作业', now);
-      db.prepare('INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, status) VALUES (?, ?, ?, ?)').run(
+      db.prepare('INSERT INTO assignments (id, class_id, title, created_at) VALUES (?, ?, ?, ?)').run(
         busAsgId,
-        'stu_dummy_2',
+        busClassId,
+        '班级作业',
         now,
-        'submitted',
       );
-      db.prepare('INSERT INTO class_groups (id, class_id, name, created_at) VALUES (?, ?, ?, ?)').run(busGroupId, busClassId, '第一大组', now);
+      db.prepare(
+        'INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, status) VALUES (?, ?, ?, ?)',
+      ).run(busAsgId, 'stu_dummy_2', now, 'submitted');
+      db.prepare('INSERT INTO class_groups (id, class_id, name, created_at) VALUES (?, ?, ?, ?)').run(
+        busGroupId,
+        busClassId,
+        '第一大组',
+        now,
+      );
 
-      const cmd = kernelContainer.commandBus.createCommand('class.delete', { classId: busClassId }, 'user:admin:administrator');
+      const cmd = kernelContainer.commandBus.createCommand(
+        'class.delete',
+        { classId: busClassId },
+        'user:admin:administrator',
+      );
       const res = (await kernelContainer.commandBus.execute(cmd)) as any;
       expect(res.success).toBe(true);
 
       expect(db.prepare('SELECT COUNT(*) as c FROM classes WHERE id = ?').get(busClassId)).toEqual({ c: 0 });
       expect(db.prepare('SELECT COUNT(*) as c FROM assignments WHERE id = ?').get(busAsgId)).toEqual({ c: 0 });
-      expect(db.prepare('SELECT COUNT(*) as c FROM assignment_submissions WHERE assignment_id = ?').get(busAsgId)).toEqual({ c: 0 });
+      expect(
+        db.prepare('SELECT COUNT(*) as c FROM assignment_submissions WHERE assignment_id = ?').get(busAsgId),
+      ).toEqual({ c: 0 });
       expect(db.prepare('SELECT COUNT(*) as c FROM class_groups WHERE id = ?').get(busGroupId)).toEqual({ c: 0 });
     });
   });
@@ -262,7 +321,9 @@ describe('Stage 3 Data Integrity and Tooling Suite', () => {
       const check = checkCoreVersionDrift();
       expect(check.status).toBe('ok');
       expect(check.name).toBe('Core Version Drift');
-      expect(check.message).toContain('v0.6.1');
+      // 动态读取根 package.json 版本，避免每次发版都要改这条断言
+      const pkgVersion = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')).version;
+      expect(check.message).toContain(`v${pkgVersion}`);
       expect(check.message).toContain('对齐');
     });
   });

@@ -10,23 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Security
-
-- **升级 vite 至 6.4.5，修复高危依赖公告 GHSA-587h-7wmj-h5pm**：
-  - `vite <= 6.4.3` 经 `launch-editor` 间接依赖引入「`fs.existsSync()` 存在性检查可被绕过」问题（影响 Windows），修复版本 `>= 6.4.4`。
-  - `package.json` 中 vite 版本下限由 `^6.2.3` 抬到 `^6.4.5`，防止后续重新解析回脆弱版本；lockfile 同步更新（仅 vite 6.4.3 → 6.4.5 及其 peer 后缀，无其他依赖变动）。
-  - 背景：`security-audit` job（`pnpm audit --audit-level high`）自 2026-10-20 深夜起对所有分支转红，与仓库代码无关 —— lockfile 未变，是 npm 新发布公告所致。升级后该命令返回 `No known vulnerabilities found`。
-  - 兼容性：peer 依赖 `@vitejs/plugin-react@5.2.0`、`@tailwindcss/vite@4.3.0`、`vitest@4.1.11` 均声明接受 vite 6.x，无变动。
-  - 验证：`pnpm audit --audit-level high` 通过、`vite build` 通过、`tsc --noEmit` 干净、全量 `vitest run` 4558 passed / 0 failed。### Fixes
-
-- **修复抽题/乱序 PRNG 的种子哈希雪崩不足，并消除由此产生的偶发测试失败（Issue #186）**：
-  - `seededShuffle` 原先用 `h = imul(31, h) + c`（Java `String.hashCode`）派生种子状态，**雪崩不足**：实测真实种子格式 `assignmentId:studentId:attemptNo` 改一个字符只有 **6/32** 个比特变化，短种子仅 **1/32**。LCG 的低位演化与高位无关，两个只在低位相同的初始状态会产出相关的随机流。
-  - 可观测后果：同一学生相邻两次 attempt 的卷面碰撞率 **1.63%**，是理论值（6 题抽 3 的有序三元组共 120 种，1/120 ≈ 0.83%）的近两倍；相近学生 id 的卷面也偏相关。
-  - 修复：种子哈希换成 xmur3 风格多轮混合（实测改一个字符 **13~21/32** 比特变化），随机数生成换成 splitmix32。实测相邻 attempt 碰撞率回落到 **0.89%**（≈ 理论值），排列分布不变（卡方 636 vs 旧 627，df=719）。
-  - `seededShuffle` 改为导出，新增 `server/services/__tests__/seeded-shuffle.test.ts`（6 例）直接钉住契约：同 seed 同排列、结果是合法排列、相近 seed 可区分、相邻 attempt 碰撞率低于阈值、60000 次采样覆盖全部 720 种排列。
-  - 同时修复 `assessment-bank-draw.test.ts` 的**固有偶发断言**：原断言「任意两名学生卷面必不同」在 120 种卷面下本就有 1/120 ≈ 0.83% 失败概率（CI 上已实际发生过）。改为确定性断言「不同学生的抽题**种子**不同」+ 抽样 5 人断言「并非全员同卷」（全同概率 ≈ 5e-9）。
-  - 兼容性：`paper_json` 已持久化 `{ seed, itemIds }`，既有 attempt 的卷面不受影响；`shuffleItems` / `shuffleOptions` 的顺序未持久化，会随本次修复改变呈现顺序（无数据损坏）。
-  - 验证：改动文件 `tsc --noEmit` 干净、`eslint` 0 error；全量 `vitest run` **4565 passed / 0 failed**；修复后的 `assessment-bank-draw.test.ts` 连跑 **40 次 0 失败**。>>>>>>> d1bcc2e (fix(assessment): 修复抽题 PRNG 种子哈希雪崩不足并消除偶发测试失败)
+## [0.7.0] - 2026-10-22
 
 ### Features
 
@@ -42,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **试卷导入**：新增 `POST /api/assessments/paper/import`（json/csv），建一份新草稿卷。逐题核对 `QuestionTypeRegistry`：题型未安装返回 `400 QUESTION_TYPE_NOT_INSTALLED` + `missingTypes` 清单（提示去插件中心安装），而不是静默丢题或让题目落库后渲染成白屏；并用题型自己的 `validateConfig` / `validateAnswerKey` 校验外部数据。机器可读错误码经 `sendSafeError` 透传，前端不必嗅探中文文案。
   - **文档**：`docs/architecture/assessment-model.md` 新增 §9 协议规范（钩子语义表、`openlearn.assessment.paper/v1` 协议、导入校验链路、错误码表、向后兼容策略）。
   - **测试**：新增 `server/__tests__/assessment-plugin-question-types.test.ts`（6 条：自定义提示词生效且不拼接内置模板、`null` 保守拒绝不调 AI、JSON 往返配置与题型标记零丢失、CSV 往返、未安装题型明确报错、导入用题型校验器验配置）。
+
 - **功能巡检工具 `pnpm sweep`（全角色自动遍历 + 缺陷报告）**：
   - 新增 `scripts/sweep/`：`index.ts`（CLI）/ `manifest.ts`（巡检计划）/ `probe.ts`（浏览器巡检）/ `prepare.ts`（前置数据）/ `report.ts`（报告）/ `server.ts`（一次性演示服务器）。
   - **登录全程不碰登录页**：`POST /api/auth/login` 拿 `edu_os_token` Cookie 直接注入浏览器上下文，页面加载即已登录，不受改密门影响。
@@ -54,45 +39,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 参数：`--port` / `--base-url` / `--out` / `--roles` / `--keep-db` / `--skip-scenarios` / `--no-fail`。
   - 文档：`docs/feature-sweep.md`（原理、轮次约束、数据环境、与 `e2e/` 断言式套件的分工）。
 
-### CI
-
-- **功能巡检接入 CI（新增 `feature-sweep` job）**：
-  - `.github/workflows/ci.yml` 新增 `feature-sweep` job：装 Chromium → 跑 `pnpm sweep` → 把 `artifacts/sweep/report.md` + 截图作为 artifact 上传 → **存在阻断性问题即红**；报告同时写入 job summary。
-  - `browser-workflow-e2e` job 新增一步跑 `e2e/shell-request-hygiene.spec.ts`（外壳请求卫生的浏览器级回归）。
-  - **门禁口径与报告口径正交**：报告会把「几乎每个视图都出现」的问题归为全局问题并把视图状态重算为正常（为了不被启动期噪音淹没）；但门禁另起一套判定 —— 未捕获异常 / 导航失败 / 任何 4xx·5xx 响应 → 阻断（哪怕它是全局问题：「每个页面都 403」正是最该拦住的回归）；仅 console 错误不阻断（它多半是前几类的回声，重复计只会让门禁吵闹）。该口径由 `scripts/sweep/__tests__/gate.test.ts` 守住（10 例）。
-  - 演示服务器的启动等待上限从 180s 提到 300s（CI 容器冷启动更慢）。
-
-### Features
-
 - **功能巡检扩展到写流程（剧本机制）**：
   - 新增 `scripts/sweep/scenario.ts` 与 `manifest.ts` 的 `SWEEP_SCENARIOS`：剧本 = **业务写入走 API**（契约稳定，UI 改版不会让剧本碎）+ **观察走浏览器**（动作前后打开相关界面，沿途收集 console 错误与 4xx/5xx）。多个角色的浏览器上下文在剧本期间全程保持登录态，因此“教师批改”与“学生回看”发生在同一条世界线上。
   - 首个剧本：**作业闭环**（教师发布 → 学生提交作答 → 教师批改给分 88 → 教师查成绩 → 学生回看），共 9 步，含 API 断言（`calculatedFinalScore === 88`）。
   - 剧本排在**角色巡检之前**跑：此时还没有进行中的课堂会话，学生端不会被“全班专注锁定”锁进课中视图，否则回看分数那一步只会拍到盖住整页的弹窗。
   - 报告新增「写流程剧本」小节；剧本里的阻断性问题同样计入退出码。新增 `--skip-scenarios` 开关。
 
-### Fixes
-
-- **功能巡检发现的外壳请求缺陷（三处，其中一处是真缺陷）**：
-  - **学生锁定状态从未生效（真缺陷，非噪音）**：`GET /api/students` 原先限定教师/管理员 → 学生恒定 403；而学生端要靠**自己那一行**的 `locked_lesson_id` / `lock_mode` / `lock_target` 在本地执行「答题锁定 / 锁定课节」（`useStudentViewState`）。即：教师锁了学生，学生端却不受约束。现在放行学生，但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）；教师/管理员的取数范围不变。
-  - **互动课堂无会话时 view-state 稳定 404**：写入端点按「课堂会话保存与恢复」协议在无会话时返回 404，但 `LiveClassroomView` 挂载即防抖回写当前环节 → 每次打开互动课堂都刷一条 404 + 控制台错误。现在**仅在确有进行中会话时**回写（恢复协议本身不变）。
-  - **学生端 DB 状态徽章与 5s 心跳越权**：`/api/db-status` 只开放给教师/管理员，学生端每 5s 心跳一次恒定 403，且该端点返回 SQLite 内部信息（page_size / integrity_check），本不该出现在学生界面。DB 心跳与顶栏徽章改为**按角色门控**，教师/管理员能力不受影响。
-  - **学生端默认选中全局 `lessons[0]`**（同族缺陷，由新增的 e2e 回归用例发现）：课程列表对所有已登录角色开放，而 `GET /api/lessons/:id/whiteboard` 只对**该课节所在班级的成员**开放 → 学生默认选中别人的课节后，白板轮询稳定吃 403。现在学生端不再默认选中课节（当前课节由自己的课表 / 进度 / 进行中会话决定），教师端行为不变。
-  - 测试：`server/__tests__/student-self-roster-scope.test.ts`（服务端数据范围 7 例）、`src/components/__tests__/shell-request-hygiene.test.tsx`（心跳与徽章门控 4 例）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（view-state 门控 2 例）、`src/store/__tests__/lessonSlice.auto-select.test.ts`（默认选中门控 4 例）、`e2e/shell-request-hygiene.spec.ts`（**浏览器级**：教师/学生外壳加载不得出现任何 console 错误或 4xx/5xx）。
-
-### Security
-
-- **课程列表按角色收窄（`GET /api/lessons`）**：该端点原对**任何已登录角色**返回**全平台课程** —— 学生能枚举所有课程的标题与内容（越权），且学生端外壳会把 `lessons[0]` 默认选为当前课节 → 白板轮询去拉**别人课节**的白板（`requireScopedAuth('class-member')`）→ 每次进外壳稳定吃 403。现在按角色收窄（口径集中在 `server/services/class-access.ts` 的 `lessonVisibilityScope` / `buildLessonVisibilityClause`，列表与单条查询共用同一份 SQL 片段）：
-  - **管理员**：全部；
-  - **教师**：**自己教的** —— 自己创建的，或出现在自己所带班级（排课 / 作业 / 课堂会话）里的；另含 `creator_id` 为空的历史课节（与 `authorizeLessonStaff` 的既有约定一致，避免历史数据在教师端变成死数据）；
-  - **学生**：**自己班的** —— 自己所在班级关联的，或自己有学习进度记录的。
-- **单条端点 `GET /api/lessons/:id` 同步收窄**：列表收窄后，学生仍能按 id 拉任意课节内容；现在同口径鉴权。**先判存在性（404）再判可见性（403）** —— 不存在的课节没有「越权」可言。- **课程包（Course Package）导入通道 + 课程导入流程审计**：
+- **课程包（Course Package）导入通道 + 课程导入流程审计**：
   - 审计报告 `docs/audit/course-import-audit.md`：现有「批量导入课程（CSV）」只搬运 `title` / `content` 两列，落库后 `lessons.timeline` 为 NULL、`whiteboard_elements` 为 0 条 —— 导入得到的是一节**空课**；且逐条独立提交、中途失败无回滚，失败原因只进 `console.warn`，教师看不到逐条结果。
   - 新增**课程包**格式（`openlearn.course-package`，自包含单个 JSON）：课程正文 + 教学环节 + 白板元素 + 课件附件。附件以 base64 内联，元素数据用 `${asset:<id>}` 占位符引用 —— 导入时重新落盘并回填真实 `/uploads/xxx` URL，解决「`fileUrl` 指向本机 uploads 目录、换台机器即 404」的问题。
   - 新增 `GET /api/course-packages/template`（下载内置模板）与 `POST /api/course-packages/import`（**单事务**写 `lessons` + `whiteboard_elements` + 课件附件；失败整体回滚，并补偿清理已落盘的孤儿文件）。教师 / 管理员鉴权。
   - 内置模板「OpenLearn 预设组件全览 · 测试样例课」覆盖**全部 8 个预设组件**（课件演示 / 随堂测试 / 代码沙箱 / 数学函数 / 交互网页课件 / 作业提交 / 随机点名 / 问候插件）**+ 3 个基础图元**、5 类教学环节、2 个白板页，并自带 3 页 PDF 讲义 + 2 页 PPTX 课件 —— 覆盖「课件演示」的 Markdown / PDF / PPTX 三种数据源。资产由代码现场生成（jsPDF / JSZip + OOXML），不依赖任何外部二进制。
   - 前端：课程库工具栏新增「下载课程模板」；导入弹窗拖放区同时接受 `.csv` 与 `.json`，选中课程包时切换为课程包预览（环节数 / 元素数 / 附件数 / 覆盖的组件类型）。
   - 顺带修复：CSV 解析成功后导入状态被重置为 `'idle'`，导致预览表格与「开始导入」按钮**永远不可达** —— CSV 导入在 UI 层实际是断的。
-  - 测试：`server/services/__tests__/course-package.test.ts`（13 例：模板覆盖全部预设组件、PDF/PPTX 资产真实可用、校验拦截坏包）+ `server/__tests__/course-package-routes.test.ts`（5 例：鉴权、模板下载、完整导入、坏包 400、元素写失败时整单回滚且不留孤儿行）。>>>>>>> 8b5a00e (feat(plugin): 新增课程包导入通道与课程导入流程审计)
+  - 测试：`server/services/__tests__/course-package.test.ts`（13 例：模板覆盖全部预设组件、PDF/PPTX 资产真实可用、校验拦截坏包）+ `server/__tests__/course-package-routes.test.ts`（5 例：鉴权、模板下载、完整导入、坏包 400、元素写失败时整单回滚且不留孤儿行）。
 
 - **AI 辅助批改建议（教师确认后生效，Issue #187）**：
   - 新增 `POST /api/assessment-attempts/:id/answers/:itemId/ai-suggest`：对主观题调用当前启用的 AI Provider，返回 `{ suggestedScore, rationale, confidence }`；**只写建议，不改分** —— 结果落到新增列 `assessment_answers.ai_suggestion_json`（迁移 `038_assessment_ai_grading_suggestion.sql`），`score` / `feedback` / `manual_override` 一概不动；未判分时 `grader` 记 `ai_suggested` 作为来源标记。
@@ -100,20 +60,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 稳定性：单次生成 15s 超时、每操作者 60s 内 20 次限流；Provider 未配置（503）/超时/输出非 JSON 或越界（502）均给出明确错误，**不阻塞人工批改**，也不产生脏建议。
   - 前端批改面板对需人工批改的题提供「AI 建议」：展示建议分/理由/置信度，「采纳并填入分数」只填输入框，仍需点「保存评分」才落分。
   - 测试：`assessment-ai-grading.test.ts`（5 例：建议不改分 + 审计、确认落分且 regrade 不覆盖、非法输出 502、Provider 缺失 503 且人工批改可用、客观题 400）。
+
 - **题库共享与按规则随机抽题（每人一卷，Issue #186）**：
   - `question_bank_items.visibility`（`private` 默认 | `school` 同实例教师可见）：共享不复制条目，列表返回「自己的 + school 共享」；读取他校/私有条目仍 403，写/删限 owner。题库创建表单新增「可见范围」。
   - `assessments.settings_json.draw`：按 `type` / `tags` / `difficultyMin..Max` 从试卷题目池抽 `count` 道；种子 `assignmentId:studentKey:attemptNo` 确定性洗牌，结果与种子写入 `assessment_attempts.paper_json`（迁移 `039_question_bank_sharing_and_papers.sql`）。
   - 同一学生重入题目集合/顺序不变；不同学生卷面不同；同卷不重复；可用题不足时抛 409，**不静默少题**。
   - 作答载荷、自动保存、判分与结果页全部按本卷题目集过滤；题库后续修改不影响已组卷内容（快照）。
   - 测试：`assessment-bank-draw.test.ts`（4 例：每人一卷稳定性/不同卷、题库不足 409、标签与难度过滤、共享可见性）。文档：`docs/architecture/assessment-model.md` §7。
+
 - **存量白板 quiz 与预置投票导入新测评模型（Issue #185）**：
   - 新增 `server/services/legacy-assessment-import.ts` 与 CLI `scripts/migrate-legacy-assessments.ts`（支持 `--dry-run`）：把 `whiteboard_elements.type='quiz'` 与有正确答案的 `lesson_preset_polls` 转为 `assessments(kind=quiz)` + 单选题目；有 `schedules` 排课时按班级创建已发布 assignment 并把 `lesson_quiz_submissions` 导入为 attempts/answers。
   - **幂等**：`settings_json.legacy.sourceId` 标记；二次执行为空操作（`already_imported`）。**只读旧表**：不修改/删除任何 legacy 数据，旧接口行为不变。
   - 纯投票（无 `correct_option`）与结构非法的旧数据跳过并在报告中列出原因；预置投票的作答无持久表可回放，仅导入试卷与题目。
   - 文档：`docs/architecture/assessment-model.md` §8（范围、执行、已知差异与回滚）。
   - 测试：`legacy-assessment-import.test.ts`（3 例：幂等导入与历史作答、dry-run 不写入、新模型可读卷面与得分）。
-
-### Features
 
 - **测评项分析：难度与区分度 + CSV/JSON/XLSX 导出（Issue #184，父 #124）**：
   - 新增 `packages/core/assessment/item-analysis.ts`（纯函数）：难度 (p) = 该题平均得分 / 满分；区分度 (r) = 题目得分与**剩余卷面分**的 Pearson 相关（避免 part-whole 虚高）。
@@ -128,15 +88,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 卸载/停用插件时由既有 `unregisterPluginResources` 路径统一清理已挂载扩展，无需新增生命周期代码。
   - 测试：`assessment-extension-slots.test.ts`（白名单 2 例）+ `manifest-schema.test.ts`（三个槽位声明被 schema 接受）。
 
-### Docs
-
-- **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
-  - 新增 `docs/architecture/adr-001-tenant-and-db-abstraction.md`（决策、理由、代价、备选方案与数据库抽象评估结论）。
-  - 新增 `docs/deployment/multi-school.md`（逐实例 `.env`、Compose 项目隔离、Nginx Host 路由、逐实例升级/备份/恢复、观测与容量边界）。
-  - `docs/deployment/production-guide.md` 增加「2.5 多校部署」入口；`docs/architecture/database-and-migrations.md` 补充选型边界；文档索引同步。
-
-### Features
-
 - **插件配置分层：平台 → 学校 → 班级（Issue #151）**：
   - **新存储**：新增迁移 `037_plugin_config_scopes.sql` 与 `plugin_config(plugin_id, scope_type, scope_id, key, value, updated_at)` 表；旧 `plugin_storage` 里的 `config:<key>` 值在迁移时原样搬到平台层（`scope_type='platform'`），二次迁移幂等。
   - **解析顺序**：`班级 > 学校 > 平台 > manifest 默认值`。`ctx.config.get(key, { classId, schoolId })` 与 `getAll(options)` 返回该作用域下的有效值；不传 options 时行为与旧版一致（平台值）。
@@ -150,6 +101,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`restore` 安全加固**：`npx openlearn-next restore --snapshot <pre_migration_*.db>` 现在先做 `PRAGMA integrity_check` 与迁移兼容性预检（快照含当前代码不认识的迁移默认拒绝，`--force` 才放行回滚），再用 `VACUUM INTO` 生成 `pre_restore_*.db` 安全副本，最后以临时文件 + `rename` 原子替换并清理 `-wal`/`-shm`。CLI 帮助与 `docs/beta/operations.md` 同步。
   - **CI 演练**：新增 `scripts/db/migration-restore-drill.ts` 与 `docker-rehearsal` 工作流的 `migration-restore-drill` 作业 —— 建库 → 注入一条中途失败的迁移（断言整条事务回滚）→ 从 `pre_migration` 快照恢复（断言完整性、迁移条数与业务数据）→ 用恢复后的库启动真实服务（`/health`、`/health/ready` 200，且不产生新迁移）。
   - **文档**：`docs/architecture/observability.md` 增加 §4.1 插件指标表与 PromQL 示例。
+
 - **测评子系统 · 严格考试模式、课内发起与成绩回写（Issue #123）**：
   - **严格考试模式与防作弊机制**：
     - **单次作答限制**：已交卷或已批改的作答禁止二次作答，再次尝试直接抛出 409 Conflict。
@@ -183,7 +135,142 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **命令式 `ctx.db.migrate` 事务原子化**：旧版命令式 `ctx.db.migrate(targetVersion, upgradeFn)` 升级为在原生 SQLite 事务中执行并支持失败回滚，保持完全向后兼容。
   - **测试套件支持**：`@openlearn/plugin-test-kit` 新增导出 `runTestPluginMigrations` 助手，并在 mock context 的 `db.migrate` 中增加事务与错误回滚模拟。
 
+- **扩展点生命周期与弃用策略规范及插件升级兼容性预检报告（Issue #146）**：
+  - **核心扩展点元数据契约**：在 `packages/core/extension-points/metadata.ts` 建立平台统一扩展点元数据契约（`CORE_EXTENSION_POINTS`），涵盖 Commands、Events、UI Slots (contributes)、DI Services (requires/optional) 四大扩展原语，定义 `since`、`deprecated`、`removedIn`、`replacement` 规范字段。
+  - **弃用缓冲期承诺**：约定任何扩展点一旦标记为弃用，平台承诺至少保留 1 个完整的 minor 版本周期（在 `deprecated <= platformVersion < removedIn` 期间保持向后兼容），直至目标版本 `removedIn` 才彻底物理移除；并在 `docs/plugin/plugin-manifest-spec.md` 写入第 3 节规范。
+  - **运行时结构化弃用告警**：在 `CommandBus`、`EventBus`、`ContributionRegistry`、`ContextBuilder` 四大接入层全面接入弃用检测与单进程 Set 去重告警机制，输出包含调用方插件 ID、弃用版本、计划移除版本与替代建议的 `[DeprecationWarning]`，有效避免高频调用刷屏。
+  - **升级前兼容性预检报告**：在 CLI 中提供 `npx openlearn-next doctor --compat-report` 与 `npx openlearn-next compat-report [--target-version <ver>]`，零外部依赖扫描已安装插件清单，从 Engines 约束、UI 插槽、依赖注入服务与命令等多维度评估升级兼容性；并在存在破坏性不兼容时退出码返回 1，方便接入自动化 CI。单测覆盖 CI 3 个第三方插件（attendance-record, class_manager, interactive-courseware）及各种弃用/移除边界条件。
+  - **SDK 类型标注**：在 `packages/plugin-sdk/openlearn.d.ts` 为弃用扩展点方法补充 `@deprecated` JSDoc 注解。
+
+- **插件卸载数据语义：默认保留数据、清除前先导出、重装自动复用（Issue #141）**：卸载此前无条件 `DROP TABLE` 插件私有表并删除 `plugin_migrations` / `plugin_storage`（更新路径却保留数据，同一份数据在两条路径上语义相反），误点卸载即丢学生作业、考勤与成绩。
+  - **卸载 ≠ 删数据**：`PluginHost.uninstallPlugin(pluginId, { dataPolicy: 'keep' | 'purge' })` 默认 `keep` 并在返回值中回显保留/删除的表名、行数与归档路径；新模块 `packages/core/plugin-host/orphan-data.ts` 负责数据摘要、孤立登记、SQL 归档与清除。
+  - **`keep`（默认）**：插件私有表、`plugin_migrations` 版本记录与 `plugin_storage` 键值原样保留，并写入新表 `plugin_orphan_data`（迁移 `034_plugin_orphan_data.sql`）登记；无数据的插件不登记，避免管理页噪声。
+  - **重装复用**：同 `manifest.id` 重装自动复用原安装 UUID（表前缀 / 迁移版本 / 存储键三处键空间天然命中，无需数据搬迁），安装成功落库后才注销登记；安装中途失败时登记仍在，不会出现「表还在但没人知道」的盲区。
+  - **`purge`（显式）**：先导出可重放的 SQL 归档（建表语句 + 数据 + 迁移版本 + 存储键），导出失败即中止卸载（数据、DB 行、文件都完好）；成功后删表 / 迁移记录 / 存储键并写 `plugin.data_purged` 审计。授权状态（公开路由审批、能力授予、静态路由与内存资源）无论策略都照常清除 —— 它们是授权而非数据。
+  - **HTTP 与前端**：`DELETE /api/plugins/:id` 接受 `dataPolicy`（purge 需 `confirm=purge`）；新增 `GET /api/plugins/orphan-data`（列表）、`POST /api/plugins/orphan-data/:key/export`（导出 + `plugin.data_exported` 审计）、`GET .../archive`（下载，路径限定在归档目录内）、`DELETE .../:key`（需 `confirm=<pluginId>`，服务端先自动导出再清除）。插件中心新增「插件数据」页签（列出 / 导出 / 下载 / 两步清除）与卸载对话框（保留/清除二选一、purge 需勾选不可恢复确认），替代原 `window.confirm`；归档固定写到数据目录的 `plugin-data-exports/`（与 `/plugins` 静态服务隔离，避免登录用户可读归档）。
+  - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
+
+- **学生端测评作答（Issue #100 / 子 issue #122）**：新增「我的测评」全屏视图（学生看板新挂件 `assessments` 进入，挂件显示待完成数量与最近截止时间），列表按**待完成 / 已完成**分组并按截止时间排序，未开始与已截止的测评按钮禁用；作答界面渲染 5 种内置题型的作答控件（单选/多选/判断/填空/简答，形状与后端判分器逐字段一致）、**1.5s 防抖自动保存**（交卷前 flush，最后 1 秒的改动不会丢）、**服务端计时为准的倒计时**（归零自动交卷，服务端仍会惰性结算作双保险）、断线续答（进入时服务端直接返回 `in_progress` 尝试与已存作答）；结果页完全由服务端 `showScore` / `showAnalysis` 决定展示分数、对错与参考答案（考试未发布成绩时不泄露任何答案），并展示多次作答聚合与「含待批改」提示。前端题型注册表新增可选 `Answer` 组件：插件题型若未提供作答组件，作答页退化为 JSON 文本框而不是卡死。`e2e/a11y-gate.spec.ts` 新增「学生端·我的测评列表」与「学生端·测评作答界面」两个工作区。测试：`StudentAssessmentsView.test.tsx` 7 例（分组与截止禁用、开始作答渲染控件、防抖自动保存、交卷前 flush 顺序、成绩未发布不泄露、倒计时归零自动交卷）+ `answer-uis.test.tsx` 6 例（各题型产出形状、readOnly）。
+
+- **测评中心（教师端 UI，Issue #100 / 子 issue #121）**：新增教师工作区 `#/assessments`（`NavigationSidebar` 教学工具分组「测评中心」），包含试卷列表（类型/状态徽标、题数与满分、草稿可删）、新建对话框（测试/考试/问卷三选一并说明各自差异）、试卷编辑器（设置项即时保存、组卷、题目上下移/删除、题库取题）、发布到班级（可选限时与截止时间）、布置列表（交卷进度、待批改数、发布成绩、关闭、CSV 导出、进入批改/统计）、人工批改页（逐题作答原文 + 打分 + 评语，写入 `manual_override` 后自动判分不再覆盖）与统计页（均分/正确率逐题表格 + CSV 导出）。新增前端题型 UI 注册表 `assessmentQuestionTypeUiRegistry`（zustand + `pluginId` 所有权 + `clearOwned`）与 5 种内置题型出题编辑器，插件可经 `ctx.ui.registerAssessmentQuestionType` 注入、卸载时自动清理，**与后端 `IAssessmentGraderRegistry` 共用同一个 `type`**。后端补齐 UI 所需两个端点：`GET /api/assessments/:id/assignments`（含班级名与交卷进度）与 `GET /api/assessment-attempts/:id/teacher-view`（逐题作答 + 标准答案，教师无需等成绩发布）。`e2e/a11y-gate.spec.ts` 覆盖范围新增 `#/assessments`。测试：前端 25 例（列表/新建/只读/组卷/发布/批改/统计/5 种编辑器/注册表所有权）+ 后端新增 3 例；本地实测 axe-core WCAG 2.0/2.1 A+AA 在「列表 / 已发布详情 / 草稿编辑器 / 640px 窄屏」四种状态均 0 违规。
+
+- **互动课堂学生专注力监控支持点击固定选中概况面板（Issue #115）**：此前右侧学生专注力监控圆环仅支持 `hoveredStudentId` 瞬时悬浮预览，鼠标移开或移向下方控制台时立即恢复全班概况，教师无法驻留查看单个学生的详细环节进度或随堂测验得分。现在引入 `pinnedStudentId` 状态持久固定显示：
+  - **点击卡片锁定/切换**：点击学生卡片可锁定选中该学生，卡片呈现主题色高光环与小图钉（`Pin`）徽标，右侧下方概况面板持久显示该学生测验得分、各环节通关打勾清单与异常徽标，移开鼠标不再丢失详情；再次点击卡片或点击面板右上角「取消固定」按钮恢复全班学情概况；
+  - **临时悬浮平滑预览**：已有固定学生时，将鼠标悬浮于其他学生卡片上可临时优先预览（展示「预览」徽标），移开鼠标后平滑恢复至已固定学生；
+  - **无障碍与快捷取消**：学生卡片具备标准 `role="button"`、`tabIndex={0}` 与 `aria-pressed` 属性，支持键盘 `Enter` 与 `Space` 键选中；支持按键盘 `Esc` 键或点击网格空白处清空固定状态；切换授课班级自动重置；
+  - **卡片内部事件冒泡隔离**：对卡片内的进度预警提醒（`Send`）、环节门禁强制放行（`Unlock`）、单人锁定控制（`Shield`）以及异常中心徽标按钮调用 `e.stopPropagation()`，避免点击操作按钮误触卡片选中/取消；
+  - 补充 `LiveClassroomView.test.tsx` 交互测试套件（卡片点击固定持久化、临时悬浮预览与平滑恢复、Esc 快捷清空、键盘 a11y 及操作按钮防冒泡隔离）。
+
+- **测评子系统地基：数据模型 + 判分引擎 + REST API（Issue #100 / 子 issue #120）**：新增 `migrations/031_assessment_core.sql`（`assessments` / `question_bank_items` / `assessment_items` / `assessment_assignments` / `assessment_attempts` / `assessment_answers`）与前后端共用的纯领域层 `packages/core/assessment/`（设置归一化、5 种内置题型、判分引擎、组卷快照、匿名 key、惰性超时结算、响应白名单）。**组卷即快照**（草稿自包含，发布只改状态，删题库不影响已组卷内容）；**以选项索引为权威**的判分口径（多选全对满分 / 少选按命中比例 / 错选 0 分，`partialCredit` 可关；填空每空等分 + 确定性归一化，不做模糊匹配）；`score: null` 一律进人工批改队列，**绝不兜底成 0 或满分**；**判分幂等**且 `manual_override = 1` 的行不被自动判分覆盖。新增 `IAssessmentGraderRegistryToken`（由内核注册，内置题型与插件题型走同一路径，插件用 `ctx.resolve` 注册并以 `pluginId` 隔离），`GET /api/assessment-question-types` 可查注册表。多教师/学生 REST API（试卷 CRUD、题库、整卷覆盖、发布到班级、关闭、发布成绩、人工批改、重新判分、统计、CSV 导出、开始作答、自动保存、交卷、结果），**标准答案经白名单序列化保证不出接口**并有哨兵单测门禁；**匿名问卷**用 `HMAC(ENCRYPTION_KEY, assignmentId:studentId)` 去重，教师端响应不含 `student_id`/`anon_key`，仅管理员可经带审计的 `reveal-identity` 反查；多次作答的 `first/last/highest/average` 实时聚合不落冗余列；超时用惰性结算（读取时判定），不引入后台定时器。文档见 `docs/architecture/assessment-model.md`。测试：`packages/core/assessment/__tests__/`（60 例）+ `server/__tests__/assessment-api.test.ts`（20 例，含答案泄漏哨兵断言、匿名去重、人工改分不被覆盖、超时结算）。
+
+- **随堂测验与作业「答题锁定」解耦模式（Issue #110）**：将传统「专注锁定」的页面导航限制（禁止切出、返回看板、离开课堂）与内容交互限制（白板只读、禁止作答输入）解耦，新增 `navigation`（答题锁定）模式。
+  - **解耦契约与数据模型**：在 SQLite `students` 表新增 `lock_mode TEXT DEFAULT 'full'` 与 `lock_target TEXT DEFAULT NULL`（数据库迁移 `migrations/033_student_lock_mode.sql`）。`full`（完全/专注锁定）限制导航且白板只读跟随；`navigation`（答题锁定）限制导航但**完全放开白板作答、选择题点选与作业输入提交**；单人与全班锁定支持携带目标 Tab（如 `lock_target: { tab: 'courseware' }`）自动统一切换目标工作区。
+  - **服务端与事件路由升级**：`roster-service.ts` 的查询与更新支持 `lock_mode` 与 `lock_target`，单人或全班解锁时自动重置为默认 `'full'`；`POST /api/classes/:classId/lock_lesson` 接受 `mode` 与 `target` 参数并经 `class-lock-status-changed` Socket 事件与广播通道实时通知所有在线学生；`GET /api/students/:id/dashboard` 包含 `lock_mode` 与已解析的 `lock_target`。
+  - **学生端状态解耦与视觉反馈**：`useStudentViewState` 将 `isStudentLocked` 细化派生为 `isNavigationLocked`（两种模式均锁导航）与 `isInteractionLocked`（仅 `full` 模式只读），保留原有 `isStudentLocked` 保证向后兼容；白板交互属性对齐 `readOnly={isInteractionLocked}`，随堂练习与白板作答自由输入；`StudentLessonHeader`、`StudentLessonInteractionPanel`、`AppHeader`、`StudentLiveHeader` 根据锁定模式分别显示琥珀金「✏️ 答题锁定」或靛蓝「🔒 全班专注锁定」徽标，拦截切 Tab 操作并弹出专属 Toast。
+  - **教师端分体控制与精细学情监控**：`LiveClassroomView` 顶栏全班锁定按钮升级为分体按钮组：未锁定时支持分别一键开启「全班专注」（`full`）或「答题锁定」（`navigation`）；锁定时显示当前模式徽标，提供「一键解锁全班」与「⇄ 切专注 / 切答题」即时模式切换；学生监控圆环区分玫瑰红（专注锁定）与琥珀金（答题锁定），学情卡片支持单人一键切换答题锁/专注锁与解除锁定，概况面板统计专注与答题人数分布。
+  - **测试覆盖与学生端档案桥接**：在 `useStudentOps`（`fetchStudentDashboard`）与 `useClassroomSocket`（`class-lock-status-changed`）中打通学生个人档案（`locked_lesson_id`、`lock_mode`）向全局 `appStore.students` 的受控写入与即时同步，根治学生身份无法访问 `/api/students` 导致锁定徽章未显现的边界问题；新增端到端测试 `e2e/classroom-answer-lock.spec.ts`，全面覆盖答题锁定下页面导航受限、作答提交放开、教师无缝切回全班专注锁定与一键解锁全流程；并更新 `server/__tests__/roster-routes.test.ts`、`server/__tests__/migrate-safety.test.ts`、`StudentLessonHeader.test.tsx`、`StudentLessonInteractionPanel.test.tsx`、`LiveClassroomView.test.tsx` 单测。
+
+- **帮助页指令调试列表改为响应式多列网格（Issue #117）**：`CommandBusPlayground` 的命令列表此前是 `space-y-4 max-w-5xl mx-auto` 单列纵向堆叠，宽屏下每张卡片独占一行、右侧大片空白、信息密度低。现在改为 `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` 的响应式网格（上限放宽到 `max-w-[1600px]`，去掉 `max-w-5xl` 窄栏），卡片改为纵向紧凑布局（第一行图标 + `commandType`、第二行权限/高风险标签、第三行描述最多两行、底部 `mt-auto` 对齐 ID 与调试入口）因而同行等高；展开的调试面板卡片用 `col-span-full` 占满整行，参数与 payload 两栏仍有充足宽度，不挤压相邻卡片。长 `commandType` 用 `break-all`、描述用 `line-clamp-2`、ID 用 `truncate`，不会再撑破网格。**同时修掉三处 a11y 缺陷**：卡头从 `<div onClick>` 改为真正的 `<button aria-expanded aria-controls>`（原先键盘完全不可达，且内部套了一个嵌套 `<button>`，非法 HTML），移除了会触发 axe `label-content-name-mismatch` 的自定义 `aria-label`，给 Payload textarea 补上 `id`/`htmlFor`（原先缺可访问名），并把展开面板里 `text-gray-400`/`text-red-500` 换成 `text-subtle`/`text-red-700` 修掉对比度。顺带清理 `render 期间给 state 对象赋值` 的老问题（默认 payload 改由 `useMemo` 预计算，取值走 `payloadOf()` 回落）。新增 6 个单测（网格类名、按钮 `aria-*`、`col-span-full`、长文本截断、搜索重排、默认 payload 回落与恢复）。
+
+- **互动课堂进入方式：先看「进行中的课堂会话」列表，不再自动进入未结束会话（Issue #91）**：此前 `LiveClassroomView` 的会话轮询只要发现当前课节存在未结束的会话就 `setShowEntryPortal(false)` 直接跳进授课视图，教师既无法改用另一场进行中的会话，也看不见自己手上挂着几节课。现在进入 `live_class` 的第一屏是新增的 `InProgressSessionList`：逐条展示课程名、班级、阶段徽标（授课进行中 / 结课出门票 / 课前准备）、开课时间、已用时长与**在场学生数**，每条可「继续上课」或「结束并归档」（二次确认后复用 `POST /api/classroom/sessions/:id/archive`），页头提供「开始一节新课」与「全部会话档案」入口；一场进行中的会话都没有时自动回退到原起始门户（行为与旧版一致）。进行中会话的**班级锁定保护保持不变**（`?classId=` 与内存里的班级都会被会话自身的 `class_id` 覆盖）。为兼顾刷新与切标签页回来，新增 `live-class-resume-memory.ts` 把「本标签页显式进入的课节」记在 `sessionStorage`，重新挂载时命中即直接回授课视图，教师主动「返回门户 / 开始新课 / 归档」时清除。服务端 `GET /api/classroom/sessions` 列表项新增 `presentCount`（由 `getPresentStudentIds(lessonId)` 派生，历史签到与已离开的学生不计入）。新增 `InProgressSessionList.test.tsx`（9 例：渲染字段 / 只取 active / 继续上课 / 归档二次确认 / 取消 / 空态回调 / 错误重试 / 英文文案）与 `live-class-resume-memory.test.ts`（3 例），`LiveClassroomView.test.tsx` 改写原「自动进入授课视图」断言为新流程并补「重新挂载不重选」用例。
+
+- **统一机房座位管理拖拽调座与排座扩展插槽（Issue #86）**：在 `ComputerLabManager.tsx` 中为座位网格引入 HTML5 拖拽调座——已入座学生卡片可拖动到其它座位（空位移动、有人两人交换），未排座学生列表可拖入座位（目标有人时原占位者回到未排座池），拖拽过程高亮落点并区分「移动」（绿环）与「交换」（琥珀环）视觉提示，拖回原位或网格外无变化；点击式安排行为同步升级为「拿起已入座学生 → 放到有人座位 = 交换」，与拖拽保持一致，且统一走 `applySeatMove` 入口并置 `isDirty`（沿用现有保存按钮持久化，不自动保存）；`computer_lab.seat.overlay` 与「移出」按钮的点击冒泡隔离保持不变。新增 3 个扩展插槽：`computer_lab.seating.toolbar`（排座工具栏，提供 `setAssignedSeats` 排座写通道，**不提供** `onSeatMove` 之类的宿主回调——插件按响应式的 `assignedSeats` 自行 diff 校验/回滚）、`computer_lab.unassigned.item`（未排座学生条目标签）、`computer_lab.seating.sidebar`（座位网格下方统计区）；同步 `ExtensionSlot` 联合类型、SlotProps/贡献 Config 类型、manifest zod schema、plugin-sdk 类型再生成与 `docs/reference/plugin-ui-extension-slots.md` 槽位清单（98 个成员）；补充 `ComputerLabManager.test.tsx` 交换逻辑单测与 `e2e/teacher-computer-labs.spec.ts` 拖拽交换+刷新持久化场景。
+
+- **生态与全局增强环节扩展插槽扩充（Phase 3）**：
+  - **备课时间线环节节点与卡片微徽章扩展**：在 `TimelineRail` 和 `SegmentEditorCard` 头部操作区新增 `editor.timeline.node_badge` 插槽，支持无侵入式挂载器材清单徽章、AI 评估就绪标识或前置门禁指示。
+  - **学生端环节步骤导航微徽标扩展**：在 `StudentLessonContentPanel` 顶部环节步骤导航按钮中新增 `student.segment.badge` 插槽，支持动态渲染学科素养标签、难度星级与门禁锁定状态。
+  - **全局顶栏后台任务中心项扩展**：在 `AppHeader` 状态区新增 `header.async_task.item` 插槽，为第三方插件提供全局异步长任务（如大文件后台导出、批量排课同步等）的状态胶囊与导航交互挂载能力。
+
+- **业务协同环节扩展插槽扩充（Phase 2）**：
+  - **课表外部导入源与条目动作扩展**：在 `TimetableOcrView` 中新增 `timetable.import.source` 插槽，支持扩展第三方教务排课系统、Excel/CSV 模板导入解析；在 `TimetableCalendarView` 中为日历卡片和列表视图新增 `timetable.entry.action` 插槽，支持一键调课申请、排课同步等插件动作。
+  - **课堂活跃环节主交互区扩展**：在 `LiveClassroomView` 中新增 `classroom.active_segment.main` 插槽与顶部专属工作区 Tab / 引导提示条，当处于活跃环节且插件注册该插槽时支持无缝切入专属工作区（如虚拟仿真实验大屏、团队竞赛对战等），与默认白板自由双向切换并向后兼容降级。
+  - **学生端学年成长对比指标扩展卡片**：在 `StudentAcademicYearComparison` 核心指标网格中新增 `student.academic_year.metric_card` 插槽，支持插件无侵入挂载核心素养发展值、学科竞赛积分、跨学科项目实践等自定义多学年对比指标卡。
+
+- **核心环节扩展插槽扩充（Phase 1）**：
+  - **作业批改面板扩展**：在 `TeacherAssignmentGradePanel` 中新增 `assignment.grade.toolbar.action`（支持批量操作/AI初评/导出）、`assignment.grade.item.addon`（支持代码自动测试报告/AI评语推荐/查重）与 `assignment.grade.rubric.addon`（评分细则量规微调）。
+  - **学生端环节门禁解锁引导**：在 `StudentLessonInteractionPanel` 中将原本硬编码的纯文本提示升级为 `student.segment.gate_fallback` 交互插槽，允许插件挂载解锁前置答题、补签卡片或放行申请。
+  - **备课端环节形态专属配置**：在 `SegmentEditorCard` 中新增 `editor.segment.type_config` 插槽，支持根据 `segment.type` 动态渲染专属配置面板（如数字化探究实验器材配置、编程实战预设等）。
+
+- **课表识别后台异步运行与完成全局通知**：将课表图片 AI 识别升级为全局后台任务管理（`asyncTaskStore`）。教师启动识别后，任务与请求生命周期脱离单个页面的 DOM 挂载，页面可自由跳转浏览课程、批改作业等；顶栏（`AppHeader`）实时显示后台运行动画状态与完成气泡，识别成功后通过全局 Toast 弹出完成提醒并支持「查看并导入课表」一键导航回课表管理；重新进入课表管理自动恢复识别结果表格与班级匹配，并支持失败友好重试与状态清理。
+
+- **学生端多学年对比 UI 与服务（PR / Issue #65）**：在学生端新增跨学年综合学业对比功能；支持多学年选择器（多选 Chips，默认选当前与上一学年）、作业提交率/按时率/均分/课程数概览卡片、同比/环比变化 Badge（升降幅）、分组对比柱状趋势图与科目维度成绩分布明细；后端新增 `AcademicYearComparisonService` 与 `GET /api/students/:id/academic-year-comparison` 接口，具备严格的三道防线 IDOR 权限控制与插件自定义指标扩展点；引入 `migrations/030_backfill_academic_year.sql` 与启动阶段幂等回填函数 `backfillAcademicYearData`，平滑兼容历史老数据库。
+
+- **学年维度基础（ PR 1 ）**：新增 `academic_year` 字段与索引（schedules/assignments/attendance/exams/semester reports/lesson progress/classroom sessions），site_settings 增加当前学年配置；ScheduleService 支持按学年筛选/衍生学年；`/api/site-settings` 返回 `currentAcademicYear`/`academicStartMonth`，管理员可更新并校验格式 `YYYY-YYYY`。
+
+- **学年维度前端管理与筛选基础（PR 2）**：AdminPanel 增加当前学年与学年起始月份配置；新增 `src/utils/academicYear.ts` 与可复用 `AcademicYearFilter` 组件，支持学年归一化、默认值与筛选交互，含组件测试。
+
+- **学年上下文接入（PR 3）**：新增 `AcademicYearContext`（URL/localStorage/服务端默认同步）并在 App shell 全局挂载；支持 API 值规范化为 `academicYear` 查询参数，含上下文测试。
+
+- **学年筛选接入 TimetableManager（PR 4）**：课表管理拉取排课时自动带上当前 `academicYear`；在 Provider 缺失时安全降级为不筛选，保持既有测试通过。
+
+- **学年筛选接入排课管理（PR 5）**：`useLabAndSchedule.fetchClassSchedules` 按当前 `academicYear` 请求班级排课，Provider 缺失时保持原有行为。
+
+- **ClassesView 学年筛选 UI（PR 14）**：班级管理增加 `AcademicYearFilter`，可切换单一年份并更新全局学术年。
+
+- **排课创建显式写入学年（PR 13）**：ClassScheduleAttendance 创建排课时附带由日期推导的 `academicYear`，并补全前端工具函数。
+
+- **TimetableManager 学年选择 UI（PR 11）**：课表管理增加 `AcademicYearFilter`，可切换单一年份并触发重新拉取，空数据/无 Provider 时安全降级。
+
+- **学年维度扩展到课堂会话（PR 7）**：classroom_sessions 支持按 `academic_year` 过滤；新会话自动归属当前学年；list SQL 暴露 academic_year。
+
+- **学年维度扩展到考试（PR 8）**：exams 按 `academic_year` 存储与过滤，`/api/classes/:classId/exams` 支持 `academicYear`。
+
+- **学年维度扩展到考勤（PR 9）**：attendance 按关联排课学年存储，`/api/classes/:classId/attendance-summary` 支持 `academicYear`。
+
+- **Attendance export 学年文件名（PR 16）**：考勤导出支持可选 `academicYear`，并在文件名中体现学年。
+
+- **学年维度扩展到学期报告（PR 10）**：semester reports 归档时写入 `academic_year`（由学期名称推导），schema 已支持后续按学年筛选。
+
+- **学年维度扩展到学期综合成绩（PR 12）**：`computeSemesterGrades` 支持按 `academic_year` 过滤考勤、进度、作业、考试与报告。
+
+- **学年筛选扩展到作业（PR 6）**：assignments 按 `academic_year` 存储与过滤，`/api/classes/:classId/assignments` 支持 `academicYear` 查询参数。
+
+- **互动课堂会话与档案管理看板（Live Class Session Management）**：新增 `ClassroomSessionManager` 看板与 `ClassroomSessionDeleteModal` 安全删除弹窗，在课堂启动门户（`ClassroomEntryPortal`）与授课中控栏（`LiveClassroomView`）提供快捷切换入口。后端新增 `GET /api/classroom/sessions`（支持分页、按班级/课节/阶段筛选、模糊搜索及投票/通票/动态指标聚合）、`POST /api/classroom/sessions/:sessionId/archive`（一键归档并释放班级占用）与 `DELETE /api/classroom/sessions/:sessionId`（数据库事务级联物理删除关联的随堂投票、选票、抢答、结课通票、弹幕、互评及动态流记录）。
+
+- **左侧导航「在新标签页打开」**：教学工具 / 系统管理 / 帮助支持 / 扩展应用四组共 8 个内置导航项（课程管理 / 互动课堂 / 班级管理 / 课表管理 / 机房管理 / 插件中心 / 管理后台 / 帮助文档）以及插件通过 `teacher.tab` 扩展点注册的动态导航项，悬停时显示 ↗ 按钮，点击在浏览器新标签页打开该 tab，源 tab 不切换焦点。新 tab 启动时通过 hash 路由自动定位到目标 tab（`useSessionSlice` 在挂载时读 `window.location.hash`）。`tabToHash` / `hashToTab` 从 `useSessionSlice` 抽出到 `src/utils/teacherTabHash.ts`，新增 `buildTeacherTabUrl` 与 `openTeacherTabInNewTab`（用 `noopener,noreferrer`）。Admin Center（管理员专用）在原文件内联渲染也获得同样的 ↗ 按钮。测试覆盖 tab ↔ hash 双向编解码、URL 拼接（保留 `pathname` / `search`）与 `window.open` 调用。
+
+- **教学环节进入条件**：环节 `gates` 存在 `lessons.timeline`。内置 `quiz_completed`、`quiz_accuracy`、`assignment_submitted`、`dwell_seconds`、`checked_in`。学生核对与教师推进全班环节都经过 `SegmentGateService`；未达标学生看到锁定和进度，全班仍共用一个当前环节。四阶段课堂生命周期不再调用 `StageGuardPipeline`。教师可按学生与环节放行并写入审计。插件用 `contributes['segment.gate_type']` 声明条件，宿主调用其只读命令。课级 `progress_mode` / `progress_conditions` 标记废弃，仅在环节没有自己的 gates 时兼容回退。
+
+- **备课编辑器扩展槽收敛**：`SegmentEditorCard` 教学形态下拉改为消费 `getAllSegmentTypes()` / `useAllSegmentTypes()`，插件注册的自定义环节类型真正进入 UI；宿主暴露 `ctx.ui.registerSegmentType` / `unregisterSegmentType`（停用时按 `pluginId` 自动回收）；`manifest.contributes['editor.palette_item']` 与含 `labelZh`+`labelEn` 的 `editor.timeline_segment` 声明式贡献分别桥接到 `paletteItemRegistry` 与环节类型注册表，与命令式 API 对齐。
+
+- **`live_class` 起始门户顶部挂「下一节课」**：教师进入 portal 时拉取今日 / 明日 / 最多 7 天的 \`/api/schedules/today?date=YYYY-MM-DD\`，按 \`time_slot\` 起始时间挑出最近一节未开始的课，显示相对日（今天 / 明天 / +N 天）、时间段与班级。点击顶部标题预选该课的 \`lessonId\` 与 \`classId\`。接口 5xx 或 7 天都空时降级为「今日课表尚未设置」并提供「前往课表设置」入口（需要 \`onGoToTimetable\` 回调，由 \`LiveClassroomView\` 写入 \`setTeacherTab('timetable')\`）。
+
+- **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
+
+- **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
+
+- **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
+
+- **指标增加迁移积压、备份年龄和 events 行数**。`GET /metrics` 增加三条 Prometheus gauge：`openlearn_migrations_pending`（磁盘上尚未记入 `_migrations` 的迁移个数，读不到时为 `-1`）、`openlearn_backup_age_seconds`（备份目录里最新文件的年龄，单位秒，没有文件时为 `-1`）、`openlearn_events_rows`（`events` 表当前行数，查询失败时为 `-1`）。三项在进程内缓存 15 秒。指标文本不包含路径或错误字符串。`GET /health/ready` 的响应体仍然只有 `status`。
+
+- **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
+
+- **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
+
+- **白板课件演示套件重构（替换为现代化 OOXML PPTX Viewer）**：
+  - 彻底移除已废弃且存在渲染空白与挂死缺陷的 `pptx-preview@0.0.5`；
+  - 接入企业级高保真演示套件 [ChristopherVR/ooxml](https://github.com/ChristopherVR/ooxml) 官方 React 绑定 `pptx-react-viewer`，天然兼容 React 19；
+  - 修复 PPTX 课件视口尺寸计算、异步加载及单页放映逻辑，实现与白板教师/学生翻页状态双向同步及总页数自动更新；
+  - 解决全屏放映与普通卡片视图下的 DOM Ref 冲突，提供优雅的加载态与错误重试机制；
+  - 优化 Vite 分包策略，将 `pptx-react-viewer` 及 `ooxml` 依赖精准打包至独立的 `vendor-pptx` chunk，保障首屏体积不膨胀。
+
 ### Fixes
+
+- **修复抽题/乱序 PRNG 的种子哈希雪崩不足，并消除由此产生的偶发测试失败（Issue #186）**：
+  - `seededShuffle` 原先用 `h = imul(31, h) + c`（Java `String.hashCode`）派生种子状态，**雪崩不足**：实测真实种子格式 `assignmentId:studentId:attemptNo` 改一个字符只有 **6/32** 个比特变化，短种子仅 **1/32**。LCG 的低位演化与高位无关，两个只在低位相同的初始状态会产出相关的随机流。
+  - 可观测后果：同一学生相邻两次 attempt 的卷面碰撞率 **1.63%**，是理论值（6 题抽 3 的有序三元组共 120 种，1/120 ≈ 0.83%）的近两倍；相近学生 id 的卷面也偏相关。
+  - 修复：种子哈希换成 xmur3 风格多轮混合（实测改一个字符 **13~21/32** 比特变化），随机数生成换成 splitmix32。实测相邻 attempt 碰撞率回落到 **0.89%**（≈ 理论值），排列分布不变（卡方 636 vs 旧 627，df=719）。
+  - `seededShuffle` 改为导出，新增 `server/services/__tests__/seeded-shuffle.test.ts`（6 例）直接钉住契约：同 seed 同排列、结果是合法排列、相近 seed 可区分、相邻 attempt 碰撞率低于阈值、60000 次采样覆盖全部 720 种排列。
+  - 同时修复 `assessment-bank-draw.test.ts` 的**固有偶发断言**：原断言「任意两名学生卷面必不同」在 120 种卷面下本就有 1/120 ≈ 0.83% 失败概率（CI 上已实际发生过）。改为确定性断言「不同学生的抽题**种子**不同」+ 抽样 5 人断言「并非全员同卷」（全同概率 ≈ 5e-9）。
+  - 兼容性：`paper_json` 已持久化 `{ seed, itemIds }`，既有 attempt 的卷面不受影响；`shuffleItems` / `shuffleOptions` 的顺序未持久化，会随本次修复改变呈现顺序（无数据损坏）。
+  - 验证：改动文件 `tsc --noEmit` 干净、`eslint` 0 error；全量 `vitest run` **4565 passed / 0 failed**；修复后的 `assessment-bank-draw.test.ts` 连跑 **40 次 0 失败**。
+
+- **功能巡检发现的外壳请求缺陷（三处，其中一处是真缺陷）**：
+  - **学生锁定状态从未生效（真缺陷，非噪音）**：`GET /api/students` 原先限定教师/管理员 → 学生恒定 403；而学生端要靠**自己那一行**的 `locked_lesson_id` / `lock_mode` / `lock_target` 在本地执行「答题锁定 / 锁定课节」（`useStudentViewState`）。即：教师锁了学生，学生端却不受约束。现在放行学生，但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）；教师/管理员的取数范围不变。
+  - **互动课堂无会话时 view-state 稳定 404**：写入端点按「课堂会话保存与恢复」协议在无会话时返回 404，但 `LiveClassroomView` 挂载即防抖回写当前环节 → 每次打开互动课堂都刷一条 404 + 控制台错误。现在**仅在确有进行中会话时**回写（恢复协议本身不变）。
+  - **学生端 DB 状态徽章与 5s 心跳越权**：`/api/db-status` 只开放给教师/管理员，学生端每 5s 心跳一次恒定 403，且该端点返回 SQLite 内部信息（page_size / integrity_check），本不该出现在学生界面。DB 心跳与顶栏徽章改为**按角色门控**，教师/管理员能力不受影响。
+  - **学生端默认选中全局 `lessons[0]`**（同族缺陷，由新增的 e2e 回归用例发现）：课程列表对所有已登录角色开放，而 `GET /api/lessons/:id/whiteboard` 只对**该课节所在班级的成员**开放 → 学生默认选中别人的课节后，白板轮询稳定吃 403。现在学生端不再默认选中课节（当前课节由自己的课表 / 进度 / 进行中会话决定），教师端行为不变。
+  - 测试：`server/__tests__/student-self-roster-scope.test.ts`（服务端数据范围 7 例）、`src/components/__tests__/shell-request-hygiene.test.tsx`（心跳与徽章门控 4 例）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（view-state 门控 2 例）、`src/store/__tests__/lessonSlice.auto-select.test.ts`（默认选中门控 4 例）、`e2e/shell-request-hygiene.spec.ts`（**浏览器级**：教师/学生外壳加载不得出现任何 console 错误或 4xx/5xx）。
 
 - **测试库与本地开发库物理隔离（Issue #194）**：
   - **根因**：`packages/core/db/index.ts` 的 `dbPath` 解析让 `OPENLEARN_DB_PATH` **优先于** `VITEST`。本地 `.env` 声明了该变量，而 `dotenv` 不覆写既有键 —— 只要进程里有人先调过 `dotenv.config()`（`server.ts` 就会）、开发者自己 `export` 过，或 `pnpm dev` 的环境被继承，**测试就把数据写进真实开发库**。实测后果：`plugin-audit-poc.test.ts` 里 `new Kernel(...)` 触发高危命令拦截，`audit.poc.highrisk.*` 被永久留在开发库 `pending_commands`，后台待审批列表挂一条既批不掉也删不掉的死项；而 `pnpm test` 依旧全绿，污染完全隐形。
@@ -191,16 +278,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **跨 run 幂等**：测试库文件名带 `VITEST_POOL_ID` **与 `process.pid`** —— pool id 会被 Vitest 跨进程世代复用，两代共享同一库文件会同时跑迁移并报 `UNIQUE constraint failed: _migrations.name`（实测）；带上 pid 后每个进程一份全新库，无需「启动时删除」，也就没有删除与使用之间的竞态。旧文件按 24h 粗粒度回收。
   - **用例清理**：`plugin-audit-poc.test.ts` 的 `afterEach` 清理自身写入全局库的 `audit.poc.*` 挂起指令。
   - **防退化测试**：新增 `packages/core/db/__tests__/test-db-isolation.test.ts`（5 条断言：环境变量被清除、数据目录在临时区、`getDbPath()` 不落在仓库库上、库名含 pid、注入真实开发库路径后仍走临时库）。
+
 - **待审批指令（`pending_commands`）的生命周期管理（Issue #195）**：
   - **保留策略**：新增 `purgeExpiredPendingCommands`，纳入 `purgeAllExpiredData` 启动清理，默认保留 **14 天**，支持 `OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS`（`0` 禁用，与既有类别一致，非法值回退默认并告警）。比其它类别短 —— 一条两周无人审批的指令已失去当时的上下文。
   - **插件卸载级联清理**：`uninstallPlugin` 现在按 `actor_id = 'plugin:<pluginId>'` 与 `actor_id = 'plugin:<manifestId>'` 两种形式级联删除挂起指令。此前插件卸载后，其审批单仍是「待审批」，管理员点「批准」只会拿到 403 `COMMAND_NOT_REGISTERED` —— 且失败分支不删记录，于是变成既批不掉也删不掉、只能手工改库的死项。
   - **审批执行容错**：`POST /api/approvals/:id/approve` 区分两类失败。确定性失效（命令描述符/处理器已不存在，报 `COMMAND_NOT_REGISTERED` 或 `No handler registered for command`）→ **清除记录**并返回 `410 + code: APPROVAL_STALE_CLEARED, cleared: true`；其它执行错误（业务失败、临时故障）→ **保留记录**交由调用方重试，绝不因一次偶发失败吞掉审批单。
   - **文档**：`.env.example` 补充该环境变量说明（并注明 `0` 不影响卸载/失效的即时清理）。
-  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。- **修复功能巡检（`pnpm sweep`）学生端与互动课堂抓到的三处请求缺陷**：
-  - **学生锁定状态从未生效（真缺陷，非噪音）**：学生外壳每次加载都请求 `GET /api/students?pageSize=all`，该端点原先限定教师/管理员 → 学生恒定 403；而学生端要在本地执行「答题锁定 / 锁定课节」，判定依据是自己这一行的 `locked_lesson_id` / `lock_mode` / `lock_target`（见 `src/hooks/useStudentViewState.ts`）。取不到自己那行 → **教师锁了学生、学生端却不受约束**。现在该端点放行学生但**只返回自己一条**（新增 `RosterService.getStudentSelf`，字段子集不含邮箱与教师私有备注）。
-  - **互动课堂无会话时 view-state 稳定 404**：`POST /api/classroom/sessions/:lessonId/view-state` 按恢复协议在无会话时返回 404，但组件挂载即防抖回写 → 每次打开互动课堂都刷一条 404。现在只在确有进行中会话（`hasActiveSession`）时回写，有会话时行为不变。
-  - **学生端 DB 状态徽章与 5s 心跳**：`/api/db-status` 只开放给教师/管理员，且本身是平台运维指标（`page_size` / `integrity_check` 等），学生端每 5s 请求一次恒定 403、徽章不该出现在学生界面。现在心跳与徽章都按角色门控，教师/管理员（`role: 'teacher'`，含 `subRole: 'administrator'`）能力不受影响。
-  - **测试**：新增 `server/__tests__/student-self-roster-scope.test.ts`（学生只拿到自己一条 / 必带锁定字段 / 不含邮箱与私有备注）、`src/components/__tests__/shell-request-hygiene.test.tsx`（学生不心跳、教师与管理员照旧心跳、学生不渲染徽章）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（无会话不回写 / 有会话照旧回写）与 `e2e/shell-request-hygiene.spec.ts`。>>>>>>> 6dbe74f (fix(shell): 修复巡检发现的学生锁定失效、view-state 404 刷屏与 DB 徽章越权)
+  - **测试**：新增 `server/__tests__/approvals-stale-clearing.test.ts`（失效清除 / 非失效不吞 / reject 仍可用 / 不存在返回 404），另在 `retention-policy.test.ts` 补 3 条保留策略用例、`plugin-host.test.ts` 补卸载级联用例（两种 actor 形式，默认 `keep` 策略下同样清理）。
 
 - **修复迁移 036 在非空库上因 SQLite 非字面常量默认值限制报错（Issue #145 回归）**：
   - 根因：`migrations/036_student_read_notifications_created_at.sql` 使用 `ALTER TABLE student_read_notifications ADD COLUMN created_at INTEGER DEFAULT (strftime('%s','now')*1000)`，在表已有存量数据时被 SQLite 语法解析器以 `Cannot add a column with non-constant default` 阻断。
@@ -222,28 +306,234 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试覆盖**：新增 `server/__tests__/icebreaker-checkin.test.ts`（8 例覆盖未认证 401、跨班 403、不存在 404、非法 mood 400、去重修改与重启持久化）和 `src/features/student/__tests__/StudentIcebreakerModal.test.tsx`（6 例覆盖选项渲染、提交回调、跳过标记与错误呈现）。
 
 - **隔离模式插件激活前补齐宿主 SDK 解析链接，并放行权限模型读取（Issue #147 实测发现）**：`@openlearn/plugin-sdk` 在插件产物里是 external，子进程/线程按 `<dataDir>/plugins/<id>/index.js` 向上解析裸模块，只有 `plugins/node_modules/@openlearn/plugin-sdk` 这条链接能救它。此前链接只在 inline 激活路径（`loadPluginModule`）里建立，于是「全新数据目录 + 只有隔离插件」必然 `ERR_MODULE_NOT_FOUND`（升级回归实测三个第三方插件全挂）。现在 `activateWorker` 在 `createWorker` 之前调用 `ensureHostSdkResolution()`；同时 `process` 隔离的 Node 权限模型新增 `sharedReadPaths`，把 `<pluginsDir>/node_modules` 与 SDK 链接的真实目录按只读放行（此前会被 `ERR_ACCESS_DENIED (FileSystemRead)` 二次拦下）。`execution-mode.test.ts` 增加「链接必须早于 worker 创建」的守卫，`plugin-permission.test.ts` / `worker-manager.test.ts` 覆盖只读旗标与路径收集。
+
 - **未获 `agent:tool` 的插件注册 action 改为降级而非拒绝（Issue #147 实测发现）**：`method-policy` 原先把「未声明 `agent:tool` 却注册对外暴露 action」直接抛错，而 `ActionDescriptor.exposeToAgent` 默认 `true`、旧插件（含最新版 class-manager / attendance-record）根本不知道这条新规 —— 结果是 worker/process 隔离下 `activate()` 失败、插件整体 `state=error`，把「不暴露给 AI Agent」放大成「升级后插件不能用」。现由 `sanitizeActionRegisterArgs` 把未授权的 descriptor 强制改写为 `exposeToAgent: false` 后放行：安全语义不变（仍不进 `getAgentTools()`），插件功能保留；`checkMethodPolicy` 中的拒绝分支保留为纵深防御。新增 `service-host.test.ts` 用例覆盖降级与「已授权时原样透传」。
+
 - **`@openlearn/plugin-sdk` 发布入口不再静态加载 express（Issue #147 实测发现）**：SDK 的 `index.ts` 曾从 `../core/plugin-host/index.js` 再导出运行时类，那个入口会实例化 `PluginHost extends PluginHostInstall`，把 `base.js` 的 `import express from 'express'` 一路带进 SDK 产物。于是**任何**第三方插件只要 `import '@openlearn/plugin-sdk'`，隔离进程就要加载 express → body-parser → depd 的 `new Function`，被 `--disallow-code-generation-from-strings` 拦成 `EvalError`，插件直接激活失败（升级回归实测：attendance-record / interactive-courseware 全挂）。现在改为从各模块直接再导出，产物无 express；`dist-entrypoint.test.ts` 增加「产物不得 import express」的守卫。
+
 - **隔离插件里 host RPC 的拒绝不再当场杀掉 worker（Issue #147 实测发现）**：旧插件是按 inline 的**同步**语义写的（`rawDb.prepare(...).run()` 不 `await`，幂等迁移靠 `try/catch`）。在隔离模式下同一次调用变成异步 rejection，`try/catch` 接不住，而 bootstrap 的 `unhandledRejection` 处理器一律上报错误并退出子进程 —— attendance-record 的 `duplicate column name: status`（列本来就在）因此把整个插件打成 `state=error`。现在 worker 侧的 RPC 代理会给宿主错误打 `__openlearnRpcError` 标记，`unhandledRejection` 识别后只记告警、继续运行；插件自己 Promise 爆炸仍走原来的致命路径（`worker-manager` 的 rejection 用例保持原断言）。
+
 - **修复 Issue #140 测试矩阵与 #139 班级切片模型相悖导致的 main CI 全红**：`39f0bf5`（Issue #140）新增的 `server/__tests__/route-data-scope-matrix.test.ts` courseware 两例仍按「教师读任意作答 200」的旧口径断言，与已合入的 #139 教师班级切片（教师仅见本班学生、管理员全校）相悖，自该提交起 `typecheck-and-test` 与 `coverage` 两个必跑作业一直失败，阻断后续所有 PR。现按 #139 安全模型修正断言：原始作答——教师读本班学生 200、读外班学生 403、B 班教师读本班 200、管理员读任意 200；作答列表——A/B 班教师各只见本班学生、管理员拿全部。产品行为不变（`courseware.ts` 的 `teacherCanSeeStudent` 门禁本就正确），仅测试期望回归真实口径；修复后 server 全量 1363 例通过。
 
-### Features
+- **源码中文编码损坏修复与 CI 编码门禁（Issue #130）**：修复 9 个文件中 29 处被非 UTF-8 编码写入损坏的中文（7 个源码文件 27 处 + 2 个 md 文档 2 处），其中 2 处为用户可见文案：学生看板未绑定课节的课表标题恢复为 `未设定内容 (上课时自由选择)`（与 `schedule-service` / `grading-service` 一致），AI 对话注入检测提示恢复为 `检测到潜在的 prompt 注入尝试，请修改您的输入。`；其余为被 GBK 字节污染的注释（`roster.ts` 的 profile/avatar 段等），已逐处从损坏前的提交还原原文。issue 复现命令未覆盖的根 `server.ts:153`（`rg ... server src packages` 只扫目录，漏掉根文件）及 2 处 md 文档同类损坏一并修复。防回归：新增 `scripts/check-source-encoding.mjs`（`pnpm lint:encoding`）扫描全仓 TS/TSX/MJS/CJS/JS 中的 U+FFFD 字面量与非法 UTF-8 字节并接入 CI `typecheck-and-test`；新增最小 `.editorconfig`（`charset = utf-8`）；检查脚本附带 4 例单元测试。
 
-- **扩展点生命周期与弃用策略规范及插件升级兼容性预检报告（Issue #146）**：
-  - **核心扩展点元数据契约**：在 `packages/core/extension-points/metadata.ts` 建立平台统一扩展点元数据契约（`CORE_EXTENSION_POINTS`），涵盖 Commands、Events、UI Slots (contributes)、DI Services (requires/optional) 四大扩展原语，定义 `since`、`deprecated`、`removedIn`、`replacement` 规范字段。
-  - **弃用缓冲期承诺**：约定任何扩展点一旦标记为弃用，平台承诺至少保留 1 个完整的 minor 版本周期（在 `deprecated <= platformVersion < removedIn` 期间保持向后兼容），直至目标版本 `removedIn` 才彻底物理移除；并在 `docs/plugin/plugin-manifest-spec.md` 写入第 3 节规范。
-  - **运行时结构化弃用告警**：在 `CommandBus`、`EventBus`、`ContributionRegistry`、`ContextBuilder` 四大接入层全面接入弃用检测与单进程 Set 去重告警机制，输出包含调用方插件 ID、弃用版本、计划移除版本与替代建议的 `[DeprecationWarning]`，有效避免高频调用刷屏。
-  - **升级前兼容性预检报告**：在 CLI 中提供 `npx openlearn-next doctor --compat-report` 与 `npx openlearn-next compat-report [--target-version <ver>]`，零外部依赖扫描已安装插件清单，从 Engines 约束、UI 插槽、依赖注入服务与命令等多维度评估升级兼容性；并在存在破坏性不兼容时退出码返回 1，方便接入自动化 CI。单测覆盖 CI 3 个第三方插件（attendance-record, class_manager, interactive-courseware）及各种弃用/移除边界条件。
-  - **SDK 类型标注**：在 `packages/plugin-sdk/openlearn.d.ts` 为弃用扩展点方法补充 `@deprecated` JSDoc 注解。
-- **插件卸载数据语义：默认保留数据、清除前先导出、重装自动复用（Issue #141）**：卸载此前无条件 `DROP TABLE` 插件私有表并删除 `plugin_migrations` / `plugin_storage`（更新路径却保留数据，同一份数据在两条路径上语义相反），误点卸载即丢学生作业、考勤与成绩。
-  - **卸载 ≠ 删数据**：`PluginHost.uninstallPlugin(pluginId, { dataPolicy: 'keep' | 'purge' })` 默认 `keep` 并在返回值中回显保留/删除的表名、行数与归档路径；新模块 `packages/core/plugin-host/orphan-data.ts` 负责数据摘要、孤立登记、SQL 归档与清除。
-  - **`keep`（默认）**：插件私有表、`plugin_migrations` 版本记录与 `plugin_storage` 键值原样保留，并写入新表 `plugin_orphan_data`（迁移 `034_plugin_orphan_data.sql`）登记；无数据的插件不登记，避免管理页噪声。
-  - **重装复用**：同 `manifest.id` 重装自动复用原安装 UUID（表前缀 / 迁移版本 / 存储键三处键空间天然命中，无需数据搬迁），安装成功落库后才注销登记；安装中途失败时登记仍在，不会出现「表还在但没人知道」的盲区。
-  - **`purge`（显式）**：先导出可重放的 SQL 归档（建表语句 + 数据 + 迁移版本 + 存储键），导出失败即中止卸载（数据、DB 行、文件都完好）；成功后删表 / 迁移记录 / 存储键并写 `plugin.data_purged` 审计。授权状态（公开路由审批、能力授予、静态路由与内存资源）无论策略都照常清除 —— 它们是授权而非数据。
-  - **HTTP 与前端**：`DELETE /api/plugins/:id` 接受 `dataPolicy`（purge 需 `confirm=purge`）；新增 `GET /api/plugins/orphan-data`（列表）、`POST /api/plugins/orphan-data/:key/export`（导出 + `plugin.data_exported` 审计）、`GET .../archive`（下载，路径限定在归档目录内）、`DELETE .../:key`（需 `confirm=<pluginId>`，服务端先自动导出再清除）。插件中心新增「插件数据」页签（列出 / 导出 / 下载 / 两步清除）与卸载对话框（保留/清除二选一、purge 需勾选不可恢复确认），替代原 `window.confirm`；归档固定写到数据目录的 `plugin-data-exports/`（与 `/plugins` 静态服务隔离，避免登录用户可读归档）。
-  - **测试**：新增 `packages/core/plugin-host/__tests__/uninstall-data-policy.test.ts`（5 例：keep 保留与登记、重装复用 UUID 读回旧数据、无数据不登记、purge 归档 + 审计、导出失败中止卸载且数据完好）、`packages/core/db/__tests__/v034-plugin-orphan-data-upgrade.test.ts`（2 例：旧库升级建表 + 既有插件数据不受影响 + 二次迁移幂等）与 `src/components/__tests__/plugin-uninstall-data-policy.test.tsx`（6 例：对话框 keep/purge 确认流、面板空态/导出/两步清除）。卸载逻辑自 `install.ts` 抽出为继承链新层 `uninstall.ts`，维持 1200 行结构守卫约束。
+- **课堂情绪追踪与优秀学员组件实时通道死链修复（Issue #129）**：`src/hooks/useSocket.ts`（已删除）每次调用都新建裸 `io()` 连接且从不参加任何房间，而服务端课堂事件经 `emitClassroomEvent` 只投递到 `[lessonId, classroom-broadcast]` 房间（`server/presence.ts`），导致教师端「课堂情绪追踪」（`ClassroomMoodTracker`）的 `classroom:pacing_updated` / `classroom:quick_poll_updated` / `classroom:buzzer_winner` 与「优秀学员」（`TopPerformersWidget`）的 `whiteboard-quiz-answered` 监听 100% 收不到，只能靠手动刷新或 15s 轮询兜底。现删除该废弃 hook，两个组件统一改用 `onSocketInstance` 挂 App 主 socket（`useClassroomSocket` 连接时已加入 `classroom-broadcast`，与 `LiveClassroomView` v0.6.1 审计 C-1 修复同模式），并顺带移除 `quiz.answered` / `classroom:quiz_response_received` 两个全仓无任何 emit 的死监听。测试：`ClassroomMoodTracker.test.tsx` 与 `TopPerformersWidget.test.tsx` 各新增回归用例（主 socket 派发事件 → 组件实时更新、非本课节事件过滤、`io()` 不再被调用）。
+
+- **HTTP 访问日志分级与轮询刷屏静默优化（Issue #116）**：
+  - **默认静默正常成功请求**：在 `server/middleware/request-observability.ts` 中引入请求级别分级（`resolveHttpAccessLogLevel`）与策略控制（`resolveHttpAccessLogMode`），默认模式（`HTTP_ACCESS_LOG=errors`）下正常的 200/304 快速响应不再输出控制台与访问日志，彻底根除前端高频轮询（`/api/classroom/sessions/:id`、`/api/vfs` 等）造成的日志刷屏噪音；
+  - **异常响应与慢请求分级告警**：`status >= 500` 使用 `error` 级别输出；`status >= 400`（401/403/404/429 等）与耗时超过阈值的慢请求（`durationMs >= HTTP_SLOW_MS`，默认 1000ms）使用 `warn` 级别输出，并始终保留携带 `requestId` 以供排障定位；
+  - **动态配置与排障支持**：新增配置项 `HTTP_ACCESS_LOG=off|errors|all`（设为 `all` 或 `LOG_LEVEL=debug` 时输出全量访问日志，正常请求降为 `debug` 级别）、`HTTP_SLOW_MS`（慢请求阈值，默认 1000ms）与 `HTTP_ACCESS_LOG_IGNORE`（特定高频接口前缀静默名单）；在 `packages/core/observability/logger.ts` 中支持 `LOG_CONSOLE_LEVEL` 独立配置控制台级别；
+  - **指标与安全链路解耦**：Prometheus 响应计数（`recordHttpResponse`）、403/429 安全审计与 5xx 错误捕获（`captureError`）完全不受日志开关影响；
+  - **测试与文档**：更新 `request-observability.test.ts` 补充全部分级、静默与配置用例，同步 `.env.example`、`docs/configuration/system-configuration.md` 与 `docs/architecture/observability.md`。
+
+- **随堂测验正确答案统一到 `correctIndex`（Issue #107）**：此前同一道测验题有两个答案字段且各模块各读各的 —— 组件默认数据只写 `correctIndex: 0`，属性栏「正确答案」下拉写 `correctAnswer`（选项文本），服务端判分与环节门禁 `looksLikeQuiz` 只读 `correctAnswer`，全屏测验视图统计与正确选项高亮只读 `correctIndex`。后果是「新建测验不设答案就全员 0 分」「教师选了非 A 的答案后大屏正确率与服务端得分对不上」「选项本身是单个字母时提交格式可能误判」。现在统一以**选项索引**为权威：新增 `packages/core/whiteboard/quiz-answer.ts`（前后端共用的纯函数：`resolveCorrectIndex` / `resolveSubmittedIndex` / `gradeQuizSubmission` / `buildQuizAnswerFields` / `looksLikeQuizAnswerData`），属性栏下拉改为写索引并同时同步 `correctAnswer` 文本（`handlePropsUpdate` 一次原子写入），学生提交统一发送选项索引，服务端判分、大屏统计、环节门禁全部走同一解析。**旧数据无需迁移**：只有 `correctAnswer` 时按「选项文本 → 字母 → 数字」换算成索引，历史提交里的字母 / 索引 / 选项文本三种作答写法也统一归一化（此前 `parseInt('B')` 得 NaN，大屏会把已答对的学生计成未答）。服务端判分结果与 `GET /api/lessons/:id/quiz-submissions` 均新增 `correctIndex`（提交后才回传，学生端据此高亮正确选项），`quiz.answered` 事件契约同步补充该字段。新增 `packages/core/whiteboard/__tests__/quiz-answer.test.ts`（26 例）、`server/__tests__/quiz-answer-grading.test.ts`（7 例），并补充 `quiz-fullscreen.test.tsx`（旧字段高亮 / 提交发送索引）与 `whiteboard-properties-sidebar.test.tsx`（下拉写入两字段 / 旧数据回显）。
+
+- **学生端「返回正在进行的课堂」入口（Issue #109）**：新增服务端 `GET /api/student/active-session`（`requireAuth('student','teacher','administrator')`）——按登录学生的班级成员关系查询未归档（`stage != ARCHIVED_REPORT`）的课堂会话并优先返回 `IN_CLASS_TEACHING`/`WRAP_UP_EXIT_TICKET` 的会话；**学生身份强制使用会话内 `studentId`，忽略客户端 `?studentId=` 越权参数**，教师/管理员可用该参数模拟学生视角。前端新增 `useStudentActiveSession`（模块级 store + `StudentView` 顶层 20s 轮询 + 标签页可见/窗口聚焦即时刷新）与 `StudentActiveClassBanner`：学生离开课堂后在看板顶部看到「正在上课：<课节名> · 返回课堂」醒目横幅，一键回到真实进行中的课节；`StudentDashboardHeader` 常驻返回按钮；`StudentQuickActionsFloatingMenu` 的「进入实时课堂」改用真实会话数据（无会话时隐藏该入口，不再回退 `schedules[0]`/`progress[0]` 猜测课节）；`StudentLessonHeader` 在课堂仍在进行时点击 Back to Dashboard 会提示「可随时从看板顶部返回」。课堂归档后入口经轮询/刷新自动消失。补充 `student-active-session.test.ts`（跨班不可见/越权参数忽略/归档不返回/教师模拟）、`StudentActiveClassBanner`、看板/头部/课节头/悬浮菜单单测与 e2e `student-return-to-class.spec.ts`（离开→返回→刷新保留→归档消失）。
+
+- **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
+  - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
+  - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
+  - **异步更新失败安全回滚**：当 `onElementUpdate` 抛出错误时安全回退至上一版几何覆盖层；
+  - **回归单测建设**：新增 `src/features/whiteboard/__tests__/whiteboard-drag-flicker.test.tsx`（4 个高精度回归单测，覆盖松手首帧坐标保持、二次连续拖拽叠加、缩放首帧尺寸保持及保存失败回滚）。
+
+- **课表页「快速开始上这节课」一键开课入口（Issue #90）**：在 `TimetableCalendarView` 的周视图排课卡片、列表视图操作列以及课表页顶部新增「当前/下一节课」快捷卡片（按当前日期与 `time_slot` 自动定位正在进行或即将开始的课），均提供「▶ 开始上课」一键入口；点击弹出轻量确认框展示排课信息与教学模式选择（数据复用 `fetchTeachingModes`，不选即用默认模式），确认后走与门户同一接口 `POST /api/classroom/sessions/:lessonId/init` 初始化会话（服务端 get-or-create，已有进行中会话自动复用），成功后经 `uiStore.pendingLiveClassLaunch` 信号切到互动课堂并由 `LiveClassroomView` 跳过启动门户直接进入授课视图，初始化失败停留在课表页并提示错误；停课/假期排课与未关联课程的排课入口禁用并带可访问名提示（`aria-label`/`title`）；进入课表页时拉取 `status=active` 会话列表，已有进行中会话的排课按钮自动变为「进入课堂」直接进入不重新初始化；与 `timetable.card.badge`/`timetable.entry.action` 插槽共存。补充 `TimetableManager.test.tsx`（入口可用性/进行中文案/初始化调用与信号/失败停留）与 `LiveClassroomView.test.tsx`（信号消费跳过门户）单测及 `teacher-timetable-flow.spec.ts` e2e（一键开课直达授课视图 + 回页变「进入课堂」）。
+
+- **大屏作业互评赏析统一数据契约、多模态渲染与入口修复（Issue #95）**：
+  - **后端统一跨表作品池聚合与分配**：新增 `server/services/showcase-work-service.ts`（`getUnifiedShowcaseWorks` 与 `getUnifiedShowcaseWorksResult`），打破原本只读 `courseware_attempt` 单一课件来源的局限，无缝聚合课堂作业提交（`plugin_submissions` + `plugin_submission_versions`，含附件清单、运行截图与作答文本）、课件作答（`courseware_attempt` + `submission_result`）与传统作业（`assignments` + `assignment_submissions`）；新增端点 `GET /api/classroom/sessions/:lessonId/showcase-works`；重构 `auto-assign` 互评自动分配逻辑，支持按全局唯一 `workId` 进行跨来源作业分层对调与匹配，并在 `GET /peer-review` 响应中回传 `showcaseWorks`。
+  - **大屏焦点对比多模态预览与扩展插槽**：升级 `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`，支持图片缩略图列表与点击全屏大图预览、多格式文件附件下载卡片、文本作答流与代码语法高亮，消除文件型作品误显“无作答内容”缺陷；为卡片新增来源标识 Badge（课件作答 / 课堂作业 / 插件作业）；新增 `peer_review.work.preview` 扩展插槽并为 `peer_review.showcase.widget` 注入完整上下文 props。
+  - **全班作品池抽屉与自由对焦切换**：在 `PeerReviewShowcaseModal.tsx` 中新增「本节提交作品池」折叠面板抽屉，直观展示全班提交的所有作品（含双盲匿名姓名掩码与附件计数），支持教师随时点击「设为焦点 A」/「设为焦点 B」动态切换大屏对比作品；使用 `useEffect` 修复原 props 变更未受控同步导致作品卡片停滞的缺陷。
+  - **课堂顶栏中控快捷入口补齐**：在 `ClassroomToolbarQuickActions.tsx` 中新增「🌟 全班大屏作业互评与协同赏析秀场」快捷按钮，并在 `LiveClassroomView.tsx` 中接通触发状态并透传全量作品池。
+  - **插件 SDK 与文档同步**：在 `src/plugin-host/types.ts` 中注册 `peer_review.work.preview` 槽位并导出 `PeerReviewWorkPreviewSlotProps` 与 `PeerReviewShowcaseWidgetSlotProps`；同步更新 `docs/reference/plugin-ui-extension-slots.md`。
+
+- **课表识别结果草稿持久化与完成直达入口（Issue #89）**：在 `asyncTaskStore` 中为课表 AI 识别引入 `timetableOcrDraft` 草稿现场（结果条目、勾选索引、图片预览/base64、文件名、AI 提供方），随任务状态一并持久化到 `sessionStorage`（刷新/新开窗口可恢复；图片字段超配额时自动降级为去除图片保存，条目与勾选必保）；`TimetableManager` 挂载时恢复草稿现场并在识别任务运行中/已完成时自动落在「AI 图片识课」子页（不再默认落在「查看」子页让用户误以为识别结果丢失），识别完成时若已停留在课表中心也自动切换到识别子页；完成 Toast「查看并导入课表」与顶栏「课表识别已完成 · 查看」徽标经 `uiStore.pendingTimetableSubTab` 子页导航信号直达识别审核界面；导入成功或重新选图即清除草稿。补充 `asyncTaskStore.test.ts`（草稿合并持久化/配额降级/sessionStorage 水合/完成 Toast 子页信号）与 e2e `teacher-timetable-flow.spec.ts`（徽标直达 + 刷新现场恢复场景）。
+
+- **消除插件 bootstrap 临时文件被并发进程误删导致的 CI 随机挂**：`packages/core/worker-runtime/child-spawn.ts` 的 `writeBootstrapTempFile()` 现把**属主进程 pid** 写进文件名（`ol-bootstrap-<pid>-<rand>.mjs`），`cleanupStaleBootstrapFiles()` 改为只在「属主进程已退出」时才删除——旧实现对临时目录下所有 `ol-bootstrap-*.mjs` 无差别删除，而清理在模块加载时执行，vitest `fileParallelism` 下另一个 worker 的孤儿清理会把本 worker 刚写好、子进程尚未 exec 的 bootstrap 文件删掉，子进程随后报 `Cannot find module '/tmp/ol-bootstrap-….mjs'` 并以 code 1 退出，表现为 `plugin-heap-limit.test.ts`「正常插件在默认上限下不受影响」与 `plugin-permission.test.ts`「rw 策略下原始 socket 被入口脚本拒绝」随机失败（main 与多个 PR 均中过）；旧格式（无 pid 段）文件因无从判断属主，只在超过 1 小时未修改时才视为残留。补充 4 个生命周期单测（含「属主仍存活不得删除」的回归防盗门）。
+
+- **学生登录不再强制修改密码（Issue #94，SEC-AUTH-06b 策略调整）**：在 `server/routes/roster.ts` 中移除「学生以初始默认口令 123456 完成个人密码登录 → 打 `mustChangePassword` 标记」的逻辑——学生会话不再被前端 `ForcedPasswordChangeGate` 全屏拦截，接口也不受 `enforcePasswordChanged` 限制，可直接进入学生端（不拖慢课堂进课节奏）；改为会话携带 `usedDefaultPassword` 提示标记，由新增的 `StudentDefaultPasswordBanner` 在应用外壳顶部展示一条**可关闭的非阻塞横幅**引导到「个人资料」修改密码（关闭状态按 userId 持久化到 localStorage，改密成功后标记清除）。班级临时口令登录行为不变；教师/管理员种子账号（密码等于用户名）的强制改密门控保持不变。更新 `force-password-change.test.ts`（原 06b 打标断言改为提示标记 + 写操作放行）、新增 `StudentDefaultPasswordBanner.test.tsx`、e2e `public-beta-journey.spec.ts` 补充学生会话无强制标记断言，并同步 `docs/architecture/security-permissions.md` 与管理员手册 §2.3。
+
+- **导航侧边栏「在新窗口打开」Hash 路由保持与登录恢复（Issue #88）**：在 `src/store/uiStore.ts` 中引入 `getInitialTeacherTab()`，在客户端初始化时优先读取并解析 `window.location.hash` 中的有效 tab，消除因硬编码默认 `'live_class'` 导致的初始状态漂移；在 `src/hooks/useSessionSlice.ts` 中引入首次挂载守卫 `isFirstMountRef`，当挂载时 URL 中已有非空合法 tab 且与 store 不一致时跳过首帧强制改写，消除写 effect 抢先覆盖 URL 并反向触发 `hashchange` 的竞态缺陷；在 `src/hooks/useSessionBootstrap.ts` 的 `handleLoginSuccess` 中，优先保留 `window.location.hash` 指定的工作区，仅在无 hash 时回退到 `'live_class'`；补充 `useTeacherTabRouting.test.tsx` 与 `uiStore.test.ts` 单元测试覆盖。
+
+- **导航侧边栏展开宽度与文本可见性解绑断点**：在 `NavigationSidebar.tsx` 与 `extension-point-renderer.tsx` 中，将展开状态（`!mainNavCollapsed`）的类名从 `w-16 md:w-44` 修复为 `w-44 md:w-44 shrink-0`，同时将内部文本与标题样式的 `hidden md:block` / `hidden md:inline` 解绑断点限制为 `block` / `inline`。彻底解决在笔记本系统缩放（125%/150%）、小视口窗口、分屏或未最大化状态下点击展开导航栏时，宽度依然只有 64px 且不显示文字的问题；补充 `NavigationSidebar.test.tsx` 单元测试覆盖。
+
+- **请求观测中间件静态资源与入口探活静默**：在 `server/middleware/request-observability.ts` 中引入 `isQuietRequest` 判定，将公共静态入口（`/`, `/index.html`, `/favicon.ico`, `/robots.txt`）以及开发模式下的 Vite 编译资产路径（`/@vite/`, `/src/` 等）在正常响应（`< 400`）时保持静默，消除 IDE 探活与开发刷新时控制台频繁输出 `http.request` 的刷屏噪音；异常状态（`>= 400`）与业务 API 依然严格记录日志。
+
+- **全站无障碍（WCAG 2.0/2.1 A+AA）审计与修复**：用 axe-core 对登录页与教师端 8 个主要工作区（工作台/课程/班级/课表/互动课堂/插件中心/管理后台/帮助）跑完整规则集，从 **99 个违规节点清零到 0**，并把门禁固化进 CI。修复项：
+  1. **可访问名缺失（critical，每个页面 8 处）**：侧边栏导航按钮的标签 span 在折叠态与 `<md` 窄屏下是 `hidden`，按钮只剩无语义图标 → 补 `aria-label` 与 `aria-current="page"`；氛围仪表盘的课节 `<select>` 补 `aria-label`。
+  2. **次级文字对比度不足（serious，8 个页面各自出现）**：AppHeader 版本号 `text-slate-400`（2.63:1）、RightSidebar「OS Core Options」`text-gray-400`（2.6:1）、课表/帮助/插件空态里的 `text-gray-400` / `text-gray-300`（1.4–4.43:1）、互动课堂「待选择/暂无学生名单」`text-amber-600`（3.19:1）、插件中心「从 ZIP 安装」`text-teal-600`（3.55:1）→ 统一改用语义令牌 `text-subtle` / `text-muted` 或达标的深色阶（amber-700 / teal-700），四套主题下自动跟随。
+  3. **自动化门禁**：新增 `e2e/a11y-gate.spec.ts`（登录页 + 8 个工作区，完整 axe 规则集，断言零违规），已加入 CI 的 `Browser workflow E2E` job，与 `live-class-contrast.spec.ts`（逐主题只查对比度）互补。
+
+- **无障碍门禁扩展到学生仪表盘与作业面板**：`e2e/a11y-gate.spec.ts` 新增第四个用例，覆盖学生仪表盘与作业作答/互评面板（通过 API 造出班级、课节、作业与学生数据前置），跑完整 axe 规则集断言零违规；顺带修复互评面板一批**非法 Tailwind 色阶**（`indigo-650` / `teal-650` —— Tailwind 无此档位，样式此前静默失效）：提交按钮改 `indigo-600`（白字 5.17:1）、互评空态 `text-slate-400 italic` 改语义令牌 `text-subtle`。
+
+- **无障碍门禁扩展到学生端课中与互动浮层**：`e2e/a11y-gate.spec.ts` 新增第三个用例，覆盖学生端课中界面与三个互动浮层（极速投票作答卡 / 毫秒抢答 / 60 秒结课通票），通过 API 造出对应状态后逐一跑完整 axe 规则集断言零违规；同时修复暴露出的 17 处违规：
+  1. **节奏信号三枚按钮**（听懂了/有疑问/讲太慢，含选中态）`text-amber-600` / `text-emerald-600` / `text-rose-600` → 统一提到 `-700`（浅色底 3.19:1 → 5.02:1），深色主题保留 `dark:text-*-400`。
+  2. **可访问名缺失**：结课通票的 5 颗星级评分按钮是纯图标 → 补 `aria-label="N 星"` + `aria-pressed`；班级行展开/收起箭头补 `aria-label` + `aria-expanded`；Toast 关闭按钮补 `aria-label`；课程排序、互动课堂课程选择、作业权重滑杆、完成度门槛滑杆等控件补 `aria-label`。
+  3. **次级文字对比度**：学生直播页眉「已与教师中控台实时联动」`text-emerald-600`、成长档案积分徽章、AppShell/StudentView 的加载占位 `text-slate-400`、作业批改面板说明文字、课程管理「排序方式」与「复制课程 ID」、互动课堂页码徽章 `bg-white/20 text-white`（白字压半透明主色底）、班级锁定提示 → 改用语义令牌或达标深色阶。
+  4. **语义修正**：互动课堂班级徽章误用 `aria-readonly`（非控件属性，`aria-allowed-attr` 报错）→ 改为 `role="status"` 表达只读状态。
+
+- **live_class 课中授课页面文字对比度达 WCAG AA（Issue #77）**：极速投票及课中其它互动组件的文字/背景对比度此前多处不达标（投影到大屏更明显）。修复三类根因：
+  1. **写死的亮色底配白字**（`bg-amber-500 text-white` 仅 2.15:1、`bg-rose-500` 3.67:1、`bg-emerald-500` 2.54:1、`bg-blue-500` 3.68:1）→ 统一改用达标的深色阶（`-600/-700/-800`），覆盖中控（极速投票/结束投票/抢答/积分榜/PacingDashboard/诊断/宏引擎/家长通知/退出通票词云/小组白板）、学生端互动浮层、大屏展台（`text-slate-500` → `text-slate-400`、非法类 `to-slate-850` → `to-slate-800`）与 `LiveClassroomView`。
+  2. **主题令牌本身不达标**（浅色 `--text-subtle` #94a3b8 在白底仅 2.56:1、`--text-muted` 在 `--bg-surface-secondary` 上 4.34:1；深色/护眼 `--text-subtle` 仅 3.08/3.01:1）→ 四套主题的 muted/subtle 重选至 surface 与 surface-secondary 上均 ≥ 4.5:1，`themeStore` 下发给课件 iframe 的令牌同步保持一致。
+  3. **主色令牌角色冲突 + 第三方令牌劫持**：填充型主色与文本型主色拆成 `--primary-solid*` / `--primary-ink*`（深色/黑板主题的亮主色配白字仅 4.47/2.78:1，反之深主色压在深色底也不达标）；并用 `html[data-theme]` 高优先级重新钉住语义别名，避免 pptx 查看器与 reveal.js 运行时注入的非 layer `:root` 规则把 `--color-muted` 劫持成 `#1f2937`（曾使深色主题下 `text-muted` 只有 1.2:1）。
+
+- **对比度自动化回归**：新增 `src/store/__tests__/theme-contrast.test.ts`（解析 `src/index.css` 计算四套主题令牌的 WCAG 对比度：正文 ≥ 4.5:1、填充主色上的白字 ≥ 4.5:1，并断言与 `themeStore` 令牌不漂移）与 `e2e/live-class-contrast.spec.ts`（axe-core `color-contrast` 在真实浏览器里逐主题审计中控、极速投票配置弹窗与学生端作答卡），后者已接入 CI 的 `Browser workflow E2E` job。
+
+- **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
+
+- **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
+
+- **课表识别自动兜底默认可用 AI 提供商与前端初始选中修复（ScheduleService & TimetableManager）**：修复在设置中已配置 AI Provider 且连接成功后、课表多模态 OCR 识别仍报“未检测到可用的 AI 提供商”的缺陷。在 `ScheduleService.processTimetableOcr` 增加未传或指定无效 `providerId` 时自动兜底查询首个有效提供商的机制（与 Agent 对话、作业批改保持一致）；并在前端 `TimetableManager` 拉取模型列表后自动将 `ocrProviderId` 默认初始化为首个可用提供商。
+
+- **白板/互动课件属性编辑器操作按钮文案精简优化（WhiteboardPropertiesSidebar）**：将课程编辑与课堂白板中互动课件及组件属性编辑器侧边栏底部的操作按钮文案从「应用修改并强制同步」（加载态「正在广播同步...」）精简为更直观符合直觉的「保存」（加载态「正在保存...」），按钮图标同步更新为 `<Save />`，降低教师操作认知负荷。
+
+- **课程向导底部步骤指示器优化（CourseWizardModal）**：移除向导弹窗左下角写死且无业务状态的底层技术黑话（`⚙️ SQLITE 写入预检通过`），替换为对教师更直观的动态步骤进度指示器（如 `第 1 步 / 共 4 步 · 内容选题`，支持中英文双语），提升备课流程的用户体验。
+
+- **课程列表与大纲生成模型思维链 `<think>` 剥离与卡片摘要净化 (#62)**：在 `packages/core/ai/strip-reasoning.ts` 与 `AIProviderGateway` 统一拦截剥离推理模型（DeepSeek-R1、QwQ、Claude 思考模式等）输出的 `<think>...</think>`、未闭合 `<think>` 及代码围栏思维链，并在 `generateOutlineWithAi` 中深度净化大纲正文；在 `CourseManagement` 引入 `extractCourseSummary` 纯文本摘要提取器兜底展示已有数据；新增迁移 `029_clean_lesson_think_artifacts.sql` 与 `cleanStoredLessonThinkArtifacts` 启动期幂等清洗历史受污染课程。
+
+- **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
+
+- **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
+
+- **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。
+
+- **PPT 课件演示不再显示 `pptx.*` 原始 i18n 键名**：`RevealPresentationWrapper` 初始化 i18next 时原先只挂载空资源（`{ translation: {} }`），导致 `pptx-react-viewer` 经 `useTranslation` 查不到词条、直接回显原始键（如幻灯片左下角的 `pptx.notes.title`）。现改为载入 viewer 自带的扁平英文词典 `translationsEn`（`pptx-react-viewer/i18n`），并按扁平原样关闭 `keySeparator` / `nsSeparator`，另加 `parseMissingKeyHandler: keyToLabel` 兜底——未收录的键回退为人类可读标签，绝不会露出 `pptx.*` 键名。
+
+- **SQL 守卫嵌套子查询与括号表名解析防御 (`CRITICAL-01`)**：修复 `packages/core/plugin-host/sql-guard.ts` 中 `extractTableNames` 对 `FROM ((subquery))` 括号包裹嵌套子查询时抛出未捕获错误或漏检的问题。增加递归括号解包与兜底 Fail-Closed 机制，全面杜绝通过复杂括号嵌套绕过插件表名授权检查。
+
+- **授课中控会话归档/删除前端状态即时同步 (`CRITICAL-02`)**：修复 `src/components/LiveClassroomView.tsx` 中教师在看板中归档或删除历史会话后，前端活跃状态与持久化引用未重置导致的跨会话状态残留与指令发往已销毁会话的缺陷。
+
+- **课堂简报历史会话精准报告与真实投票聚合 (`CRITICAL-03`)**：修复 `src/features/classroom/ClassroomBriefingView.tsx` 与 `server/routes/classroom.ts` 中简报仅拉取全局活跃会话、以及随堂投票使用前端硬编码模拟数据的缺陷。支持通过 `?sessionId=` 查看历史已归档会话简报，并从数据库聚合真实投票选项分布与参与率。
+
+- **Browser Worker Manager 激活流程内部 RPC 路由器保活 (`CRITICAL-04`)**：修复 `src/plugin-host/browser-worker-manager.ts` 中插件 `activate()` 覆盖 `self.onmessage` 时导致宿主内部 Worker RPC 通信链路中断的缺陷。改为包装代理原消息分发器。
+
+- **课堂会话管理跨教师越权防护 IDOR Defense (`HIGH-01`)**：在 `server/routes/classroom.ts` 中为 `GET /api/classroom/sessions`、`POST /api/classroom/sessions/:sessionId/transition`、`POST /api/classroom/sessions/:sessionId/archive`、`DELETE /api/classroom/sessions/:sessionId` 以及会话详情接口增加 `canManageClassroomSession` 权限校验，防止普通教师越权操作或删除其他教师的课堂会话。
+
+- **插件网络代理私有地址/元数据/DNS 重绑定防护 (`HIGH-02`)**：加固 `packages/core/worker-runtime/plugin-net-proxy.ts` 与 `service-host.ts`，禁止插件通过 `fetch` 访问回环地址、RFC 1918 私网网段、云厂商链路本地与元数据服务（169.254.169.254、fd00::/8 等），并在宿主代发请求前增加基于 `dns.lookup` 的解析 IP 边界校验，阻断 DNS 重绑定 SSRF 攻击。
+
+- **课堂实时事件广播 Room 命名空间规范化与锁定状态释放 (`HIGH-03`)**：规范 `server/routes/classroom.ts` 中的 Socket 事件广播，统一使用 `emitClassroomEvent` 向真实订阅的课堂 Room 广播，移除历史遗留的无效房间前缀；在课堂会话归档或删除时自动释放受影响学生的 `locked_lesson_id` 锁定。
+
+- **班级删除级联清理课堂会话与插件作业生态 (`HIGH-04`)**：完善 `server/services/roster-service.ts` 中的 `deleteClassCascade` 事务，同步物理清理关联的课堂会话（含投票、选票、抢答、结课通票、节奏信号、弹幕、互评与动态流）及插件作业生态（含提交版本、附件、互评任务与评分），杜绝孤儿数据残留。
+
+- **前端 SocketService 重连与身份切换事件监听器保活 (`HIGH-05`)**：在 `src/services/socket-service.ts` 引入 `onSocketInstance` 监听机制，确保底层 Socket 实例因网络波动重连或身份切换重新初始化时，既有组件注册的业务监听器能够平滑重新挂载，避免事件静默丢失。
+
+- **插件前端沙箱二次导航熔断与崩溃感知 (`HIGH-06`)**：在 `server/utils/plugin-sandbox-frame.ts` 与 `src/plugin-host/plugin-host.ts` 中强化 iframe 沙箱，注入 `location.replace/assign` 与 `window.open` 拦截钩子，发生二次导航时自动熔断并向宿主上报安全违规；宿主渲染器增加崩溃探测心跳与 Suspense 错误边界保护。
+
+- **课堂会话看板搜索防抖与请求竞态取消 (`HIGH-07`)**：在 `src/features/classroom/ClassroomSessionManager.tsx` 引入 250ms 搜索输入防抖与 `AbortController` 请求取消机制，消除输入高频请求抖动与并发竞态乱序覆盖问题。
+
+- **社区插件 Ed25519 签名与流式哈希完整性校验 (`MEDIUM-02`)**：在 `server/services/community-attest.ts` 与 `server/routes/plugins.ts` 中收紧社区插件安装与发布校验，验证 `.openlearn-package-attestation.json` 签名并在校验失败时即时清理临时解压目录与暂存文件。
+
+- **随堂倒计时运行时定时器清理与状态隔离 (`MEDIUM-03`)**：在 `server/shared-state.ts` 与 `server/routes/classroom.ts` 中规范化倒计时运行时维护，新增 `clearLessonRuntimeState`，在课节结束或删除时彻底清除内存中残留的定时器句柄与状态。
+
+- **课节级联删除深度覆盖独立插件提交与评分 (`MEDIUM-04`)**：在 `server/services/lesson-service.ts` 中的 `deleteLessonCascade` 事务中补充对无作业外键关联的独立插件提交（`assignment_id IS NULL`）、历史版本文件、互评与成绩的级联清理，并在删除后触发 `clearLessonRuntimeState`。
+
+- **课堂会话删除弹窗无障碍与授课视图定时器泄漏修复 (`MEDIUM-06`)**：修复 `ClassroomSessionDeleteModal.tsx` 的 ESC 键与遮罩交互处理；在 `LiveClassroomView.tsx` 组件卸载时安全清理画板恢复定时器与学生窗口检查定时器。
+
+- **班级/学生名册导入后页面自动刷新**。以前教师通过 ImportModal 上传 CSV 完成后，必须手动刷新页面才能在 ClassesView 看到新增的班级与学生。`bulkImportService` 已经调用了 `fetchClasses()` / `fetchStudents()`，但 `classSlice` 的 `set({ classes })` 之后 `useAppStore` 订阅在某些边界场景下被浅比较判定为未变化，整条 `useAppComposer → appData → AppDataProvider → ClassesView` 重渲染链路不触发。`classSlice` 引入 `dataVersion` 自增计数器：`loadClasses` / `loadStudents` 完成后 `dataVersion+1`；`useLessonsSlice` / `useClassroomSlice` / `useSessionSlice` 均订阅 `dataVersion`，从而在数组引用未变化时仍强制 `appData` 引用更新。导入完成后 ClassesView 立即看到新班级与新学生。
+
+- **会话桥 `requires` 精确匹配**。插件网关下发 `edu_os_token` 前，用与宿主相同的 `parseRequiresEntry` 去掉版本后缀，再要求 Token 全名等于 `@openlearn/core:IAuthSessionBridgeService`。只包含该名字子串的声明（例如 `NotReallyIAuthSessionBridgeServiceX`）不再获得 `Set-Cookie`。声明 `@openlearn/core:IAuthSessionBridgeService@^1.0.0` 的插件行为不变。
+
+- **从 v0.6.1 升级时，迁移前快照失败会中止，更新的库也不会在旧二进制上被当成就绪**。非测试进程里 `VACUUM INTO` 失败会在应用 SQL 前抛错。`/health/ready` 发现 `_migrations` 含有磁盘迁移清单里没有的名字时返回 503，名字只写日志。备份校验同时要求 `lessons` 与 `_migrations`。`duplicate column name` 仍会被忽略，校验和算法不变。
+
+- **公测旅程 CI 在生产模式下改用强测试口令启动**。`scripts/e2e-beta-server.mjs` 不再把 `OPENLEARN_ADMIN_PASSWORD` 设为 `admin`，否则启动校验拒绝启动，Playwright 等不到服务。该口令只用于这条旅程；应用的生产口令策略不变。教师口令本来就不等于用户名 `teacher`，未改。
+
+- **插件类型补上 `INetworkProxyServiceToken`**。运行时已经从 `@openlearn/plugin-sdk` 导出该 Token，`packages/plugin-sdk/openlearn.d.ts` 此前没有声明，插件 `import` 会报 TS2305。声明与导出与运行时对齐。Worker 出站仍由宿主代理，默认拒绝未列入允许名单的地址，行为不变。
+
+- **恢复已装插件时复检 `engines.openlearn`**。重启时 `restoreActivePlugins` 不再无条件激活 `status=active` 的插件。声明了 `engines.openlearn` 且宿主版本不满足该范围（含非法 semver）时，跳过激活、把状态写成 `error`、在日志里记下范围和宿主版本，插件文件留在磁盘上。没有 `engines` 的插件仍按原来的方式恢复。装上之后需要更新那些被跳过的包。
+
+- **进行中的 live_class 不能再换班**。进入授课后顶栏班级改为只读，并提示「需结束本节课才能换班」。`IN_CLASS_TEACHING` / `WRAP_UP_EXIT_TICKET` 期间，初始化会话、阶段推进和 `teacher-broadcast-lesson` 若携带另一个 `classId` 会得到 409，数据库里的班级保持不变。刷新、地址栏 `classId` 和起始门户「下一节课」都会被拉回本节课已绑定的班级。课前准备阶段仍可在起始门户重选；结束或归档后新会话可以换班。
+
+- **随机点名助手只抽取已经进入本节课的学生**。候选不再是全班花名册：服务端 `GET /api/classes/:classId/picker-candidates?lessonId=` 与白板组件都按 Socket.IO 在场状态过滤（当前在线，且 `enter-lesson` 指向这一节）。学生 `leave-lesson` 或断线后立即离开候选池；没人在场时提示「当前课堂没有在场学生」，不再退回演示名单。公平加权（本堂 / 学期抽中次数）仍作用在在场池上。不带 `lessonId` 的旧调用仍返回全班名单。
+
+- **互动课堂「本节课教学蓝图」不再把环节时长显示成 NaN**。教案时间线存的是 `5m` 这类字符串，蓝图、课前就绪页和课堂节奏派生却把 `duration` 当数字秒相加，`"5m" / 60` 得到 NaN，进度条宽度也变成 0。现在统一解析 `5m` / `90s` / `1h`、数字秒，以及旧字段 `durationMinutes`、`durationMin`、`estimatedDurationSeconds`。字段缺失时蓝图按 5 分钟，写了但无法识别时显示「未设置」，不再出现 NaN。
+
+- **Socket.IO 握手会拒绝协议版本不匹配的连接**。`engine.io` 下限升到 `>=6.6.10`（当前解析 6.6.11，修复 GHSA-2gc4-cqfq-p2gv / CVE-2026-102599）。正常的 `socket.io` 4.8 客户端不受影响。自制或过旧的 Engine.IO 客户端如果故意发送不匹配的协议修订号，连接会被断开，而不是把进程挂住。直接依赖同步为 `socket.io` / `socket.io-client` `^4.8.4`。
+
+- **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
+
+- **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
+
+- **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
+
+- **CI 的 pnpm 固定为 `package.json` 的 `packageManager`（`pnpm@10.33.4`）**。`pnpm/action-setup` 不再使用 `version: latest`。pnpm 12 默认的 `minimumReleaseAge` 会拒绝锁文件里当天发布的 `caniuse-lite` 与 `electron-to-chromium`，`pnpm install --frozen-lockfile` 在安装阶段失败。仓库的 `.npmrc` 仍是 `minimum-release-age=0`，没有为了过 CI 关掉这条策略。GitHub Actions 的 JavaScript action 升到各自的 Node 24 主版本。
+
+- **架构文档漂移审计的三处误报**：发布说明里已下线的 `national-smart-edu` 不再被当成当前插件；`audit-tools/reports/` 是 gitignore 的生成物；「已于某日删除」算墓碑。`packages/core/types` 只有 `semver` 的 ambient 声明，不算子系统。
+
+- **Windows 权限探针不再读 `/etc/hostname`**。该路径在 Windows 上不存在，`off` 策略得到 `ENOENT`，平台探测 job 里的 worker-runtime 用例失败，随后的 verbose dump 也失败。探针改为读取测试自己创建的、位于插件目录之外的文件。
+
+- **Windows 上 `019_plugins_version.sql` 的分段测试认 CRLF**。`core.autocrlf=true` 时文件是 `-- UP\r\n`，用例用 `-- UP\n` 查找，整组报「缺少 -- UP 段」。读入后先把换行归一成 LF。
+
+- **备课「添加到画板」会等白板挂载**。调色板在主包，白板是 lazy chunk。chunk 还没好时 `whiteboardRef` 为空，点击被静默丢掉，元素不落库。现在最多等 15 秒再插入。浏览器 E2E 会先等到画布出现，并按班级名称点选；检索框只在班级超过 2 个时才出现，不能当必经步骤。
+
+- **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
+
+- **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
+
+- **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
+
+- **PM2 配置会把 `TRUST_PROXY`、种子口令和数据目录从 `.env` 传进进程**。此前 `ecosystem.config.cjs` 的 `env` 块没有这些键，反代后面的限流仍按连接地址分桶。
+
+- **`reset-admin` 不再把口令重置成 `admin`**。未指定 `--password` 时随机生成并打印一次；口令等于用户名时把 `must_change_password` 置 1。
+
+- **生产环境加载 plugin-sdk 不再依赖 `pino-pretty`**。日志目录不可写时只打到 stdout，并说明原因，而不是在 import 阶段退出。容器默认 `LOG_DIR=/data/logs`。
+
+- **容器里的插件目录跟数据卷走**。设置 `OPENLEARN_DATA_DIR` 时，内核插件目录是 `<数据目录>/plugins`，不再是进程工作目录下的 `/app/plugins`（node 用户写不了，容器一重建插件也没了）。创建失败时日志以 `[Kernel] FATAL` 开头。
+
+- **生产镜像保留 `esbuild`**。插件安装会在运行时 `import('esbuild')` 做安全扫描和打包。它原先只在 `devDependencies`，`pnpm prune --prod` 把它删掉后，容器里安装插件返回 500 `Cannot find package 'esbuild'`。现在它是生产依赖。
+
+- **已批准的插件公开 GET 不再被详情路由提前 401**。`GET /api/plugins/:id(*)` 会先匹配 `/api/plugins/<id>/<子路径>`。鉴权写在路由中间件上时，`next()` 放行网关的代码根本执行不到，管理员写入 `plugin_public_routes` 之后匿名 GET 仍是 401。现在含 `/` 的路径先交给网关，纯插件 id 的详情查询仍然要登录。
+
+- **第三方插件激活日志写出真实隔离方式**。子进程隔离此前仍打印 `activated in WORKER mode`。现在打印 `process` 或 `thread`。只读数据卷启动失败时，入口先打一行 `[Startup] FATAL`，不再先刷满 `chown` 错误。
+
+- **严格类型检查 14 处诊断**：退出票在没有题目时不再读取 `coreQuestion` / `challengeQuestion`；课后反思的 `lectureRatio` 改为 `number | null`，简报在未采集讲授时长时显示「讲授用时未采集」，不再把空值当成 0% 或渲染成 `null%`。命令面板和快速插入把扩展点 `slotProps` 按字段校验，`getCommand` / `getItem` 改为登记表上的必选方法。
+
+- **插件 ZIP 上传中断后不再留下临时文件**。`createWriteStream` 的 `open` 发生在下一拍；若在此之前 `rmSync`，随后的 `open` 会把同一路径重新创建出来。现在等写入流 `close` 之后再删除。
+
+- **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。
+  - **迁移**：需要某个自研插件继续进程内运行时，在环境变量写 `OPENLEARN_TRUSTED_INLINE_PLUGINS=ext-your-plugin,ext-other` 后重启。预加载进宿主的内置代码不受此限制。已安装的库内记录会在下次启动恢复时改写。子进程仍受 `OPENLEARN_PLUGIN_PERMISSION`（默认 `rw`）与 `OPENLEARN_PLUGIN_MAX_HEAP_MB` 约束；Node 权限模型目前约束不了出站网络。
+
+- **插件清单 `auth: false` 不再让路由匿名可访问**。它只表示插件申请公开。匿名放行还要求管理员把 `METHOD + path` 写入 `plugin_public_routes`（迁移 `022`）。批准方式：安装/更新请求体 `approvePublicRoutes: true`，或头 `x-approve-public-routes: true`，或 `POST /api/plugins/:id/public-routes` 且 body `{ "approvePublicRoutes": true }`。对该端点省略或传 `false` 会清掉该插件已批准的公开路由。卸载插件时一并删除。
+  - **迁移**：升级后，原先靠 `auth: false` 对匿名用户开放的接口会返回 401。由管理员按上面三种方式之一重新批准。不要在社区一键安装时默认勾选。
+
+- **`POST /api/plugins/install-from-url` 在 URL 安全校验通过后、下载之前要求 `acknowledgeRisk: true`**。缺失时返回 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`。管理界面会先弹出风险说明，确认后才发请求。
+  - **迁移**：调用该接口的脚本补上 `"acknowledgeRisk": true`。公开路由仍须另传 `"approvePublicRoutes": true`。
+
+- **`pnpm install` 会通过 `prepare` 构建 `@openlearn/plugin-sdk` 的 `dist/`**。`pnpm build`、CI 与 Docker 镜像同样包含这一步，生产镜像内可以 `require('@openlearn/plugin-sdk')`。
+  - **迁移**：使用 `pnpm install --ignore-scripts` 时，在 `pnpm lint` / 启动前执行 `node scripts/build-plugin-sdk.mjs`。不要把未构建的 SDK 目录拷进只含 `node_modules` 的运行镜像。
+
+- **种子账号不再长期使用 `admin` / `admin`、`teacher` / `teacher`**。空库首次启动：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或从启动日志与 `storage/bootstrap-credentials.txt` 读取随机口令。存量库若口令仍等于用户名，仍可登录，但 `must_change_password` 会置位，除改密、登出、`/api/auth/session`、`/api/auth/me` 外的 `/api` 请求（含 GET）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。生产环境不要设置 `PLAYWRIGHT_TEST`。
+
+- **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
+
+- **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
+
+- **依赖审计清零并收紧 CI 门禁**：`pnpm-workspace.yaml` overrides 钉死 `engine.io`、`ip-address`、`uuid`、`dompurify`、`undici@>=7 <8`（7.30.0）、`brace-expansion@>=4` 等已修补版本；升级 `socket.io` / `socket.io-client` 与 `vitest`。锁文件用 `pnpm@10.33.4` 重新生成，不关闭 `minimum-release-age`，也不把同日 browserslist 数据库钉死在更旧版本上。`pnpm audit`（官方 registry）对 high+ 失败即红（`security-audit` 不再 `continue-on-error`）。
+
+- **严格类型检查通过并并入主 tsconfig**：修复退出票空值、`lectureRatio: number | null`、命令面板 / 快捷插入隐式 any 与可选 registry 方法共 14 条 `lint:strict` 诊断；主 `tsconfig.json` 开启 `strict` / `noImplicitAny` / `strictNullChecks`。
+
+- **PPTX 演示组件国际化运行时异常修复**：
+  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
+  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
+
+- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
+
+- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
+
+- **`AppDataContext` 漏传 `fetchClasses` 致 `/#/classes` 页面「随机生成 / 清除 / 创建班级」报 `TypeError: fetchClasses is not a function`**：根因为 `useAppComposer.appData` 拼装时漏了 `fetchClasses,`，且 `AppExtras` 类型未声明该字段；`ClassesView` 通过 `useAppData() as unknown as ClassesViewProps` 撒谎式透传到 `ClassPasscodeController` / `CreateClassButton`，单测因直接 mock prop 未发现。修复：`AppExtras` 补 `fetchClasses: () => Promise<void>`，`useAppComposer.appData` 补 `fetchClasses,`；同步加 `AppDataContext.test.tsx` 类型层守卫（`pnpm lint` 拦截）以防回归。
 
 ### Security
+
+- **升级 vite 至 6.4.5，修复高危依赖公告 GHSA-587h-7wmj-h5pm**：
+  - `vite <= 6.4.3` 经 `launch-editor` 间接依赖引入「`fs.existsSync()` 存在性检查可被绕过」问题（影响 Windows），修复版本 `>= 6.4.4`。
+  - `package.json` 中 vite 版本下限由 `^6.2.3` 抬到 `^6.4.5`，防止后续重新解析回脆弱版本；lockfile 同步更新（仅 vite 6.4.3 → 6.4.5 及其 peer 后缀，无其他依赖变动）。
+  - 背景：`security-audit` job（`pnpm audit --audit-level high`）自 2026-10-20 深夜起对所有分支转红，与仓库代码无关 —— lockfile 未变，是 npm 新发布公告所致。升级后该命令返回 `No known vulnerabilities found`。
+  - 兼容性：peer 依赖 `@vitejs/plugin-react@5.2.0`、`@tailwindcss/vite@4.3.0`、`vitest@4.1.11` 均声明接受 vite 6.x，无变动。
+  - 验证：`pnpm audit --audit-level high` 通过、`vite build` 通过、`tsc --noEmit` 干净、全量 `vitest run` 4558 passed / 0 failed。
+
+- **课程列表按角色收窄（`GET /api/lessons`）**：该端点原对**任何已登录角色**返回**全平台课程** —— 学生能枚举所有课程的标题与内容（越权），且学生端外壳会把 `lessons[0]` 默认选为当前课节 → 白板轮询去拉**别人课节**的白板（`requireScopedAuth('class-member')`）→ 每次进外壳稳定吃 403。现在按角色收窄（口径集中在 `server/services/class-access.ts` 的 `lessonVisibilityScope` / `buildLessonVisibilityClause`，列表与单条查询共用同一份 SQL 片段）：
+  - **管理员**：全部；
+  - **教师**：**自己教的** —— 自己创建的，或出现在自己所带班级（排课 / 作业 / 课堂会话）里的；另含 `creator_id` 为空的历史课节（与 `authorizeLessonStaff` 的既有约定一致，避免历史数据在教师端变成死数据）；
+  - **学生**：**自己班的** —— 自己所在班级关联的，或自己有学习进度记录的。
+
+- **单条端点 `GET /api/lessons/:id` 同步收窄**：列表收窄后，学生仍能按 id 拉任意课节内容；现在同口径鉴权。**先判存在性（404）再判可见性（403）** —— 不存在的课节没有「越权」可言。
 
 - **插件包发布者签名与来源分级安全验签（Issue #143）**：
   - **核心非对称验签引擎**：新增 `packages/core/security/plugin-signature.ts`，基于 Ed25519 算法对插件完整性与发布者身份进行事前密码学校验；签名载荷支持结构化元数据绑定（`openlearn-plugin-attestation-v2\n<id>\n<version>\n<integrity>`），杜绝版本降级与冒名攻击，同时向下兼容纯哈希签名。
@@ -251,12 +541,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **分发管理器与错误类**：扩展 `PluginPackageMetadata` 支持 `signature` 与 `publisher` 字段；`packages/core/plugin-host/errors.ts` 新增 `PluginSignatureError`、`PluginIntegrityRequiredError`、`PluginAttestationRequiredError`、`PluginIntegrityMismatchError` 与 `PluginSignatureInvalidError`。
   - **SDK CLI 签名工具**：`@openlearn/plugin-sdk` CLI 新增 `sign` 命令与 `build --key <private.pem>` 选项，支持开发者使用 Ed25519 私钥为打包产物一键签名并自动嵌入 `signature.json`。
   - **存量兼容**：平台升级后已安装插件在宿主启动时无需重复验签，保证存量系统平滑运行。
+
 - **插件访问学生个人数据的能力声明与审计，插件表纳入导出/删除与保留策略（P1 安全，Issue #145）**：
   - **学生个人数据能力声明与统一审计**：在 `packages/core/plugin-host/method-policy.ts` 中引入专有的 `CAP_STUDENT_DATA_READ = 'student-data:read'` 与 `CAP_STUDENT_DATA_WRITE = 'student-data:write'` 能力常量；在 Inline 代理层（`context-builder.ts`）与 Worker 隔离层（`service-host.ts`）拦截插件对 `pointsLedger`（读 `getLogs`/`getStudentTotalByDimension`/`getStudentDimensionSummary`，写 `addPoints`）的学生数据访问，统一记录 `plugin.student_data_access` 安全审计日志；提供平滑迁移兼容期，对未声明能力的存量插件输出控制台警告并标记 `migrationWarning: true`。
   - **插件扩展数据 GDPR 导出与级联删除**：在 `PluginInstance`、`PluginModule` 与 `@openlearn/plugin-sdk` 规范中引入可选的 `onStudentExport(studentId)` 与 `onStudentDelete(studentId)` 扩展生命周期钩子；`PluginHost` 新增 `exportStudentDataFromPlugins` 与 `deleteStudentDataFromPlugins`（委托至 `student-data-privacy.ts`），统一支持 Inline 异步与 Worker 隔离消息 RPC（带 10s 超时保护），未实现的插件标记 `{ status: 'not_implemented' }`；
   - **花名册级联事务与导出纳管**：`RosterService.deleteStudentCascade` 将学生积分流水（`student_point_logs`）纳入单事务原子清理，并在事务提交后并发调度活跃插件的 `deleteStudentDataFromPlugins` 并记入 `student.gdpr_deleted` 安全审计；`RosterService.exportStudentData` 聚合输出 `pointLogs` 以及各活跃插件返回的 `pluginData`，实现学生数据完整覆盖与脱敏导出；
   - **多类别数据保留策略与定期清理**：新增迁移 `036_student_read_notifications_created_at.sql`；新增 `packages/core/db/retention-policy.ts`，定义 5 大类别保留窗口：`events`（90 天）、`attendance`（365 天）、`student_rollcalls`（180 天）、`student_read_notifications`（30 天）、`client_sessions`（30 天），支持独立环境变量自定义及 `0` 禁用；服务端启动及数据库就绪时自动调用 `purgeAllExpiredData` 清理超期数据；
   - **测试与文档**：新增 `plugin-student-data-audit.test.ts`（5 例）、`plugin-student-privacy-hooks.test.ts`（5 例）与 `retention-policy.test.ts`（11 例），更新现有花名册测试与 `plugin-capability-matrix.md`、`privacy.md` 及 `known-issues.md`。
+
 - **下线废弃写盘调试接口 `POST /api/courseware/debug`（Issue #132）**：
   - 彻底移除 `server/routes/courseware.ts` 中废弃的 `POST /api/courseware/debug` 路由，消除任意登录用户通过 `fs.appendFileSync` 无上限同步追加写 `client_debug.log` 导致的磁盘写满与事件循环阻塞（DoS）安全隐患。
   - 同步更新契约文档 `docs/api/courseware-attempts-contract.md`，对齐最新 API 契约，明确课件客户端错误上报统一经 `/api/client-errors` 走标准错误流。
@@ -269,277 +561,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 同类写路由跨班级越权加固：`POST /api/courseware/attempts/mark-absent`、`POST /api/courseware/attempts/:attemptId/promote` 与 `POST /api/courseware/attempts/auto-record` 增加基于 `authorizeClass` 的班级管理权判定，且 `mark-absent` 校验学生班级归属；缺少 `classId` 校验（400）或跨班操作统一拒绝（403）。
   - 课时分段评估加固：`POST /api/lessons/:id/segment-access` 在教师跨学生评估（`evaluatingOther`）时增加 `teacherCanSeeStudent` 校验。
   - 新增 `server/__tests__/courseware-access-scope.test.ts`（17 例完整覆盖教师隔离、跨班读写 403、管理员全量、学生脱敏），并更新 `courseware-bridge.journey.test.ts` 班级归属夹具。
+
 - **`presence-update` 全局广播全校在线学生及所在课节（Issue #133）**：`server/presence.ts` 不再用 `io.emit` 向所有连接广播在线名单。新增 `presence-staff` 房间，仅教师/管理员在连接时自动加入（客户端手动 `join-room` 一律拒绝），`presence-update` 只投递到该房间；学生连接时的初始推送与 `request-presence` 只返回本人状态（是否在线 + 本人所在课节）。教师端在线监控、专注力、点名与课堂大屏不受影响。`server/__tests__/presence.test.ts` 新增 6 例：学生不入房且手动入房被拒、在线变化不再有全局广播、学生初始/按需拉取只见本人、教师仍拿全量。
+
 - **VFS 与文件下载对任意登录用户开放（Issue #128）**：`GET /api/vfs` 与 `GET /files/*` 收紧为教师/管理员。此前学生可借 `parentId=virtual-lessons` 拉取全校课节完整正文、`parentId=virtual-assignments` 拉取全校作业列表，并通过默认分支与 `/files/*` 读取任意 VFS 文件。`virtual-submissions` 的学生自助分支随角色收紧一并移除；前端 VFS 轮询只在教师会话下发起，学生端不再产生 403 噪声。新增 `server/__tests__/vfs-auth.test.ts`（11 例：学生各分支与下载均 403、教师/管理员正常、未登录 401）。
+
 - **白板读接口向学生泄露测验答案与跨学生作业白板越权（Issue #127）**：
   - `GET /api/lessons/:id/whiteboard` 按角色脱敏：学生视角对元素 `data` 递归剥离 `correctIndex` / `correctAnswer` / `answer` / `solution` 等答案字段（`ANSWER_KEYS` 补齐 `correctIndex` 系列键），教师/管理员仍返回完整数据；判分结果继续由 `POST /quiz-submit` 在提交后回传，学生端高亮逻辑不受影响。
   - 读授权与写授权对齐：`assignment-<aid>-student-<sid>` 伪课节，学生只能读绑定自己的房间（读他人作业白板返回 403）；已有开课记录的真实课节，只有开课班级成员可读（与 socket `canJoinLessonRoom` 同口径）；未开课的自学/预览场景不额外设限。教师/管理员保持可读（课堂观察与作业批注）。
   - 新增 `server/__tests__/whiteboard-read-auth.test.ts`（7 例）：学生答案剥离、教师/管理员完整返回、跨班 403、未开课放行、他人伪课节 403、教师批注可读、未登录 401。
+
 - **学生写操作与学生私有备忘的对象级授权修复（P0 IDOR）**：
   - `PUT /api/students/:id` 与 `DELETE /api/students/:id` 此前只校验角色（`teacher`/`administrator`），不校验学生归属，任意教师可修改或删除任意学校学生的姓名、学号、密码、锁定课节与私有备忘。现新增 `resolveWritableStudentId`：管理员不限，教师仅可写 `teacherCanSeeStudent` 判定可见的学生（即其 `owner_user_id` 名下班级的在册学生），其余一律 403；入参支持 `student_number` 并统一解析为规范 id。
   - `GET /api/students/:id/dashboard` 的 `profile` 此前无条件 `SELECT private_notes`，学生本人即可读到教师给其写的「特别关注/行为」备忘。现改为仅在教师/管理员视角查询该列，学生视角的 `profile` 不再包含 `private_notes`（`locked_lesson_id` 等学生端自用字段保留）。
   - 新增 `server/__tests__/student-write-auth.test.ts`（8 例）：跨班教师 PUT/DELETE 均 403 且数据不变、本班教师与管理员可写、学生角色仍被拒、学生本人 dashboard 无 `private_notes`、本班教师可见、跨班教师 dashboard 403；并更新 `roster-routes.test.ts` 的创建流程，按真实 UI 的「创建 → 编入班级」顺序建立归属后再验证写操作。
+
 - **学生私有备忘存储型 XSS 与花名册全库越权修复（P1）**：
   - 新增 `packages/core/security/html-sanitize.ts`（前后端共用）：基于 `xss` 白名单净化备忘富文本，仅保留排版标签与 `color`/`background-color`/`text-align`/`font-*`/`text-decoration`，剥离 `script`/`img`/事件属性/`javascript:` 链接；保持 `{"category","html"}` 存储格式，非法分类回落 `General`。
   - **写入侧**：`RosterService.updateStudent`（`PUT /api/students/:id`）与 `RosterService.importStudents`（`POST /api/students/import`、批量入班）落库前净化 `private_notes`，CSV 导入不再是绕过口。
   - **读取侧**：`StudentPrivateNotesEditor` 在 `innerHTML` 赋值前净化，保存前再次净化，覆盖修复前的历史脏数据（此前恶意 `<img onerror>` 会在教师打开备忘时执行）。
   - `GET /api/students` 改为按教师班级归属过滤（`listStudents` 新增 `scope`）：管理员全库，教师仅返回其 `owner_user_id` 名下班级的在册学生，分页 `total` 同步收敛；此前任意教师可拉取全库学生名单及其私有备忘。
   - 新增 `html-sanitize.test.ts`（7 例）、`student-private-notes-security.test.ts`（5 例：PUT/导入净化、教师列表隔离、管理员全量）与 `StudentPrivateNotesEditor.test.tsx`（2 例：历史脏数据渲染、保存净化）。
+
 - **学生自报学习进度不再直接计入成绩（P1）**：`student_lesson_progress` 新增 `verified` 与 `verified_progress_percent`（迁移 `032_progress_verification.sql`，历史数据回填为已验证以保持既有成绩口径）。学生端进度滑杆 /「已完成」按钮写入的行标记为未验证，只影响展示；教师/管理员在同一次 `POST /api/students/:id/progress` 中的写入、课件自动录入（`auto-record-score`）与受信插件 `student.set_progress` 标记为已验证并记下验证值。`GradingService` 的进度分只聚合已验证进度，学生后续修改展示进度也无法覆盖教师已验证的数值。教师端学生进度列表新增「已验证 / 自报」徽标与一键「确认」按钮，学生端进度控件文案标注「教师确认后计入成绩」。新增 `student-progress-verification.test.ts`（4 例）并更新自动录入断言。
+
 - **学生档案 P2 安全加固**：
   - **密码写入**：教师端不再把 `password` 渲染成带占位值 `123456` 的可编辑输入框，也取消逐字符 `PUT`；改为「设置新密码」内联表单，一次性提交且不回显。`PUT /api/students/:id` 拒绝空/纯空白密码（400），避免空串哈希导致账号无法登录。
   - **敏感变更审计**：`PUT /api/students/:id` 比较更新前后的 `password` / `private_notes` / `locked_lesson_id`，变更时写入 `student.sensitive_fields_updated`（操作者、目标学生、字段名），不记录密码明文/哈希或备忘内容。
   - **进度事件**：教师端班级花名册通过 `useClassroomSocket` 新增的 `onStudentProgressUpdated` 回调就地刷新已加载学生的进度（此前该广播只有课堂大屏消费）；`GET /api/students/:id/progress` 从 `segment_visits` 中已离开的环节派生并合并 `completed_segments`，大屏「环节完成度」不再长期为空。
   - **成绩口径**：没有任何已验证进度时 `progressScore` 返回 `null` 并从总评中排除，总分按剩余可用权重重新归一化（不再默认 100 分，也不惩罚未使用进度追踪的班级）；归档快照中该项按 0 记录。
 
-### Fixes
-
-- **源码中文编码损坏修复与 CI 编码门禁（Issue #130）**：修复 9 个文件中 29 处被非 UTF-8 编码写入损坏的中文（7 个源码文件 27 处 + 2 个 md 文档 2 处），其中 2 处为用户可见文案：学生看板未绑定课节的课表标题恢复为 `未设定内容 (上课时自由选择)`（与 `schedule-service` / `grading-service` 一致），AI 对话注入检测提示恢复为 `检测到潜在的 prompt 注入尝试，请修改您的输入。`；其余为被 GBK 字节污染的注释（`roster.ts` 的 profile/avatar 段等），已逐处从损坏前的提交还原原文。issue 复现命令未覆盖的根 `server.ts:153`（`rg ... server src packages` 只扫目录，漏掉根文件）及 2 处 md 文档同类损坏一并修复。防回归：新增 `scripts/check-source-encoding.mjs`（`pnpm lint:encoding`）扫描全仓 TS/TSX/MJS/CJS/JS 中的 U+FFFD 字面量与非法 UTF-8 字节并接入 CI `typecheck-and-test`；新增最小 `.editorconfig`（`charset = utf-8`）；检查脚本附带 4 例单元测试。
-- **课堂情绪追踪与优秀学员组件实时通道死链修复（Issue #129）**：`src/hooks/useSocket.ts`（已删除）每次调用都新建裸 `io()` 连接且从不参加任何房间，而服务端课堂事件经 `emitClassroomEvent` 只投递到 `[lessonId, classroom-broadcast]` 房间（`server/presence.ts`），导致教师端「课堂情绪追踪」（`ClassroomMoodTracker`）的 `classroom:pacing_updated` / `classroom:quick_poll_updated` / `classroom:buzzer_winner` 与「优秀学员」（`TopPerformersWidget`）的 `whiteboard-quiz-answered` 监听 100% 收不到，只能靠手动刷新或 15s 轮询兜底。现删除该废弃 hook，两个组件统一改用 `onSocketInstance` 挂 App 主 socket（`useClassroomSocket` 连接时已加入 `classroom-broadcast`，与 `LiveClassroomView` v0.6.1 审计 C-1 修复同模式），并顺带移除 `quiz.answered` / `classroom:quiz_response_received` 两个全仓无任何 emit 的死监听。测试：`ClassroomMoodTracker.test.tsx` 与 `TopPerformersWidget.test.tsx` 各新增回归用例（主 socket 派发事件 → 组件实时更新、非本课节事件过滤、`io()` 不再被调用）。
-- **HTTP 访问日志分级与轮询刷屏静默优化（Issue #116）**：
-  - **默认静默正常成功请求**：在 `server/middleware/request-observability.ts` 中引入请求级别分级（`resolveHttpAccessLogLevel`）与策略控制（`resolveHttpAccessLogMode`），默认模式（`HTTP_ACCESS_LOG=errors`）下正常的 200/304 快速响应不再输出控制台与访问日志，彻底根除前端高频轮询（`/api/classroom/sessions/:id`、`/api/vfs` 等）造成的日志刷屏噪音；
-  - **异常响应与慢请求分级告警**：`status >= 500` 使用 `error` 级别输出；`status >= 400`（401/403/404/429 等）与耗时超过阈值的慢请求（`durationMs >= HTTP_SLOW_MS`，默认 1000ms）使用 `warn` 级别输出，并始终保留携带 `requestId` 以供排障定位；
-  - **动态配置与排障支持**：新增配置项 `HTTP_ACCESS_LOG=off|errors|all`（设为 `all` 或 `LOG_LEVEL=debug` 时输出全量访问日志，正常请求降为 `debug` 级别）、`HTTP_SLOW_MS`（慢请求阈值，默认 1000ms）与 `HTTP_ACCESS_LOG_IGNORE`（特定高频接口前缀静默名单）；在 `packages/core/observability/logger.ts` 中支持 `LOG_CONSOLE_LEVEL` 独立配置控制台级别；
-  - **指标与安全链路解耦**：Prometheus 响应计数（`recordHttpResponse`）、403/429 安全审计与 5xx 错误捕获（`captureError`）完全不受日志开关影响；
-  - **测试与文档**：更新 `request-observability.test.ts` 补充全部分级、静默与配置用例，同步 `.env.example`、`docs/configuration/system-configuration.md` 与 `docs/architecture/observability.md`。
-- **随堂测验正确答案统一到 `correctIndex`（Issue #107）**：此前同一道测验题有两个答案字段且各模块各读各的 —— 组件默认数据只写 `correctIndex: 0`，属性栏「正确答案」下拉写 `correctAnswer`（选项文本），服务端判分与环节门禁 `looksLikeQuiz` 只读 `correctAnswer`，全屏测验视图统计与正确选项高亮只读 `correctIndex`。后果是「新建测验不设答案就全员 0 分」「教师选了非 A 的答案后大屏正确率与服务端得分对不上」「选项本身是单个字母时提交格式可能误判」。现在统一以**选项索引**为权威：新增 `packages/core/whiteboard/quiz-answer.ts`（前后端共用的纯函数：`resolveCorrectIndex` / `resolveSubmittedIndex` / `gradeQuizSubmission` / `buildQuizAnswerFields` / `looksLikeQuizAnswerData`），属性栏下拉改为写索引并同时同步 `correctAnswer` 文本（`handlePropsUpdate` 一次原子写入），学生提交统一发送选项索引，服务端判分、大屏统计、环节门禁全部走同一解析。**旧数据无需迁移**：只有 `correctAnswer` 时按「选项文本 → 字母 → 数字」换算成索引，历史提交里的字母 / 索引 / 选项文本三种作答写法也统一归一化（此前 `parseInt('B')` 得 NaN，大屏会把已答对的学生计成未答）。服务端判分结果与 `GET /api/lessons/:id/quiz-submissions` 均新增 `correctIndex`（提交后才回传，学生端据此高亮正确选项），`quiz.answered` 事件契约同步补充该字段。新增 `packages/core/whiteboard/__tests__/quiz-answer.test.ts`（26 例）、`server/__tests__/quiz-answer-grading.test.ts`（7 例），并补充 `quiz-fullscreen.test.tsx`（旧字段高亮 / 提交发送索引）与 `whiteboard-properties-sidebar.test.tsx`（下拉写入两字段 / 旧数据回显）。
-- **学生端「返回正在进行的课堂」入口（Issue #109）**：新增服务端 `GET /api/student/active-session`（`requireAuth('student','teacher','administrator')`）——按登录学生的班级成员关系查询未归档（`stage != ARCHIVED_REPORT`）的课堂会话并优先返回 `IN_CLASS_TEACHING`/`WRAP_UP_EXIT_TICKET` 的会话；**学生身份强制使用会话内 `studentId`，忽略客户端 `?studentId=` 越权参数**，教师/管理员可用该参数模拟学生视角。前端新增 `useStudentActiveSession`（模块级 store + `StudentView` 顶层 20s 轮询 + 标签页可见/窗口聚焦即时刷新）与 `StudentActiveClassBanner`：学生离开课堂后在看板顶部看到「正在上课：<课节名> · 返回课堂」醒目横幅，一键回到真实进行中的课节；`StudentDashboardHeader` 常驻返回按钮；`StudentQuickActionsFloatingMenu` 的「进入实时课堂」改用真实会话数据（无会话时隐藏该入口，不再回退 `schedules[0]`/`progress[0]` 猜测课节）；`StudentLessonHeader` 在课堂仍在进行时点击 Back to Dashboard 会提示「可随时从看板顶部返回」。课堂归档后入口经轮询/刷新自动消失。补充 `student-active-session.test.ts`（跨班不可见/越权参数忽略/归档不返回/教师模拟）、`StudentActiveClassBanner`、看板/头部/课节头/悬浮菜单单测与 e2e `student-return-to-class.spec.ts`（离开→返回→刷新保留→归档消失）。
-- **白板组件拖拽闪烁/短暂消失与二次起跳缺陷修复（Issue #99）**：
-  - **消除松手瞬态渲染空窗**：在 `InteractiveWhiteboard.tsx` 的 `onPointerUp` 拖拽与缩放事件处理中，将 `setLocalGeometry` 调整为**先同步立即写入乐观几何覆盖层**，紧接着在同一渲染批次中清空临时状态 `setActiveDragElement(null)` / `setResizingState(null)`。彻底消除了原实现中因先清空瞬态、经历 `await onElementUpdate(...)` 异步微任务让出执行流导致 `renderElement` 回退取旧服务端 `data.x/y` 产生的**闪回原位、抖动或短暂消失**缺陷；
-  - **二次连续拖拽起点坐标继承**：在 `handleElementDragStart` 与 `onPointerMove` 中引入对 `localGeometryRef` 乐观几何的优先继承与 `dragRef.current.initialX/Y` 绑定，避免防抖自动保存完成前回传旧坐标导致的二次拖拽从旧原点“起跳”问题；
-  - **异步更新失败安全回滚**：当 `onElementUpdate` 抛出错误时安全回退至上一版几何覆盖层；
-  - **回归单测建设**：新增 `src/features/whiteboard/__tests__/whiteboard-drag-flicker.test.tsx`（4 个高精度回归单测，覆盖松手首帧坐标保持、二次连续拖拽叠加、缩放首帧尺寸保持及保存失败回滚）。
-- **课表页「快速开始上这节课」一键开课入口（Issue #90）**：在 `TimetableCalendarView` 的周视图排课卡片、列表视图操作列以及课表页顶部新增「当前/下一节课」快捷卡片（按当前日期与 `time_slot` 自动定位正在进行或即将开始的课），均提供「▶ 开始上课」一键入口；点击弹出轻量确认框展示排课信息与教学模式选择（数据复用 `fetchTeachingModes`，不选即用默认模式），确认后走与门户同一接口 `POST /api/classroom/sessions/:lessonId/init` 初始化会话（服务端 get-or-create，已有进行中会话自动复用），成功后经 `uiStore.pendingLiveClassLaunch` 信号切到互动课堂并由 `LiveClassroomView` 跳过启动门户直接进入授课视图，初始化失败停留在课表页并提示错误；停课/假期排课与未关联课程的排课入口禁用并带可访问名提示（`aria-label`/`title`）；进入课表页时拉取 `status=active` 会话列表，已有进行中会话的排课按钮自动变为「进入课堂」直接进入不重新初始化；与 `timetable.card.badge`/`timetable.entry.action` 插槽共存。补充 `TimetableManager.test.tsx`（入口可用性/进行中文案/初始化调用与信号/失败停留）与 `LiveClassroomView.test.tsx`（信号消费跳过门户）单测及 `teacher-timetable-flow.spec.ts` e2e（一键开课直达授课视图 + 回页变「进入课堂」）。
-- **大屏作业互评赏析统一数据契约、多模态渲染与入口修复（Issue #95）**：
-  - **后端统一跨表作品池聚合与分配**：新增 `server/services/showcase-work-service.ts`（`getUnifiedShowcaseWorks` 与 `getUnifiedShowcaseWorksResult`），打破原本只读 `courseware_attempt` 单一课件来源的局限，无缝聚合课堂作业提交（`plugin_submissions` + `plugin_submission_versions`，含附件清单、运行截图与作答文本）、课件作答（`courseware_attempt` + `submission_result`）与传统作业（`assignments` + `assignment_submissions`）；新增端点 `GET /api/classroom/sessions/:lessonId/showcase-works`；重构 `auto-assign` 互评自动分配逻辑，支持按全局唯一 `workId` 进行跨来源作业分层对调与匹配，并在 `GET /peer-review` 响应中回传 `showcaseWorks`。
-  - **大屏焦点对比多模态预览与扩展插槽**：升级 `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`，支持图片缩略图列表与点击全屏大图预览、多格式文件附件下载卡片、文本作答流与代码语法高亮，消除文件型作品误显“无作答内容”缺陷；为卡片新增来源标识 Badge（课件作答 / 课堂作业 / 插件作业）；新增 `peer_review.work.preview` 扩展插槽并为 `peer_review.showcase.widget` 注入完整上下文 props。
-  - **全班作品池抽屉与自由对焦切换**：在 `PeerReviewShowcaseModal.tsx` 中新增「本节提交作品池」折叠面板抽屉，直观展示全班提交的所有作品（含双盲匿名姓名掩码与附件计数），支持教师随时点击「设为焦点 A」/「设为焦点 B」动态切换大屏对比作品；使用 `useEffect` 修复原 props 变更未受控同步导致作品卡片停滞的缺陷。
-  - **课堂顶栏中控快捷入口补齐**：在 `ClassroomToolbarQuickActions.tsx` 中新增「🌟 全班大屏作业互评与协同赏析秀场」快捷按钮，并在 `LiveClassroomView.tsx` 中接通触发状态并透传全量作品池。
-  - **插件 SDK 与文档同步**：在 `src/plugin-host/types.ts` 中注册 `peer_review.work.preview` 槽位并导出 `PeerReviewWorkPreviewSlotProps` 与 `PeerReviewShowcaseWidgetSlotProps`；同步更新 `docs/reference/plugin-ui-extension-slots.md`。
-- **课表识别结果草稿持久化与完成直达入口（Issue #89）**：在 `asyncTaskStore` 中为课表 AI 识别引入 `timetableOcrDraft` 草稿现场（结果条目、勾选索引、图片预览/base64、文件名、AI 提供方），随任务状态一并持久化到 `sessionStorage`（刷新/新开窗口可恢复；图片字段超配额时自动降级为去除图片保存，条目与勾选必保）；`TimetableManager` 挂载时恢复草稿现场并在识别任务运行中/已完成时自动落在「AI 图片识课」子页（不再默认落在「查看」子页让用户误以为识别结果丢失），识别完成时若已停留在课表中心也自动切换到识别子页；完成 Toast「查看并导入课表」与顶栏「课表识别已完成 · 查看」徽标经 `uiStore.pendingTimetableSubTab` 子页导航信号直达识别审核界面；导入成功或重新选图即清除草稿。补充 `asyncTaskStore.test.ts`（草稿合并持久化/配额降级/sessionStorage 水合/完成 Toast 子页信号）与 e2e `teacher-timetable-flow.spec.ts`（徽标直达 + 刷新现场恢复场景）。
-- **消除插件 bootstrap 临时文件被并发进程误删导致的 CI 随机挂**：`packages/core/worker-runtime/child-spawn.ts` 的 `writeBootstrapTempFile()` 现把**属主进程 pid** 写进文件名（`ol-bootstrap-<pid>-<rand>.mjs`），`cleanupStaleBootstrapFiles()` 改为只在「属主进程已退出」时才删除——旧实现对临时目录下所有 `ol-bootstrap-*.mjs` 无差别删除，而清理在模块加载时执行，vitest `fileParallelism` 下另一个 worker 的孤儿清理会把本 worker 刚写好、子进程尚未 exec 的 bootstrap 文件删掉，子进程随后报 `Cannot find module '/tmp/ol-bootstrap-….mjs'` 并以 code 1 退出，表现为 `plugin-heap-limit.test.ts`「正常插件在默认上限下不受影响」与 `plugin-permission.test.ts`「rw 策略下原始 socket 被入口脚本拒绝」随机失败（main 与多个 PR 均中过）；旧格式（无 pid 段）文件因无从判断属主，只在超过 1 小时未修改时才视为残留。补充 4 个生命周期单测（含「属主仍存活不得删除」的回归防盗门）。
-- **学生登录不再强制修改密码（Issue #94，SEC-AUTH-06b 策略调整）**：在 `server/routes/roster.ts` 中移除「学生以初始默认口令 123456 完成个人密码登录 → 打 `mustChangePassword` 标记」的逻辑——学生会话不再被前端 `ForcedPasswordChangeGate` 全屏拦截，接口也不受 `enforcePasswordChanged` 限制，可直接进入学生端（不拖慢课堂进课节奏）；改为会话携带 `usedDefaultPassword` 提示标记，由新增的 `StudentDefaultPasswordBanner` 在应用外壳顶部展示一条**可关闭的非阻塞横幅**引导到「个人资料」修改密码（关闭状态按 userId 持久化到 localStorage，改密成功后标记清除）。班级临时口令登录行为不变；教师/管理员种子账号（密码等于用户名）的强制改密门控保持不变。更新 `force-password-change.test.ts`（原 06b 打标断言改为提示标记 + 写操作放行）、新增 `StudentDefaultPasswordBanner.test.tsx`、e2e `public-beta-journey.spec.ts` 补充学生会话无强制标记断言，并同步 `docs/architecture/security-permissions.md` 与管理员手册 §2.3。
-- **导航侧边栏「在新窗口打开」Hash 路由保持与登录恢复（Issue #88）**：在 `src/store/uiStore.ts` 中引入 `getInitialTeacherTab()`，在客户端初始化时优先读取并解析 `window.location.hash` 中的有效 tab，消除因硬编码默认 `'live_class'` 导致的初始状态漂移；在 `src/hooks/useSessionSlice.ts` 中引入首次挂载守卫 `isFirstMountRef`，当挂载时 URL 中已有非空合法 tab 且与 store 不一致时跳过首帧强制改写，消除写 effect 抢先覆盖 URL 并反向触发 `hashchange` 的竞态缺陷；在 `src/hooks/useSessionBootstrap.ts` 的 `handleLoginSuccess` 中，优先保留 `window.location.hash` 指定的工作区，仅在无 hash 时回退到 `'live_class'`；补充 `useTeacherTabRouting.test.tsx` 与 `uiStore.test.ts` 单元测试覆盖。
-- **导航侧边栏展开宽度与文本可见性解绑断点**：在 `NavigationSidebar.tsx` 与 `extension-point-renderer.tsx` 中，将展开状态（`!mainNavCollapsed`）的类名从 `w-16 md:w-44` 修复为 `w-44 md:w-44 shrink-0`，同时将内部文本与标题样式的 `hidden md:block` / `hidden md:inline` 解绑断点限制为 `block` / `inline`。彻底解决在笔记本系统缩放（125%/150%）、小视口窗口、分屏或未最大化状态下点击展开导航栏时，宽度依然只有 64px 且不显示文字的问题；补充 `NavigationSidebar.test.tsx` 单元测试覆盖。
-- **请求观测中间件静态资源与入口探活静默**：在 `server/middleware/request-observability.ts` 中引入 `isQuietRequest` 判定，将公共静态入口（`/`, `/index.html`, `/favicon.ico`, `/robots.txt`）以及开发模式下的 Vite 编译资产路径（`/@vite/`, `/src/` 等）在正常响应（`< 400`）时保持静默，消除 IDE 探活与开发刷新时控制台频繁输出 `http.request` 的刷屏噪音；异常状态（`>= 400`）与业务 API 依然严格记录日志。
-
-### Features
-
-- **学生端测评作答（Issue #100 / 子 issue #122）**：新增「我的测评」全屏视图（学生看板新挂件 `assessments` 进入，挂件显示待完成数量与最近截止时间），列表按**待完成 / 已完成**分组并按截止时间排序，未开始与已截止的测评按钮禁用；作答界面渲染 5 种内置题型的作答控件（单选/多选/判断/填空/简答，形状与后端判分器逐字段一致）、**1.5s 防抖自动保存**（交卷前 flush，最后 1 秒的改动不会丢）、**服务端计时为准的倒计时**（归零自动交卷，服务端仍会惰性结算作双保险）、断线续答（进入时服务端直接返回 `in_progress` 尝试与已存作答）；结果页完全由服务端 `showScore` / `showAnalysis` 决定展示分数、对错与参考答案（考试未发布成绩时不泄露任何答案），并展示多次作答聚合与「含待批改」提示。前端题型注册表新增可选 `Answer` 组件：插件题型若未提供作答组件，作答页退化为 JSON 文本框而不是卡死。`e2e/a11y-gate.spec.ts` 新增「学生端·我的测评列表」与「学生端·测评作答界面」两个工作区。测试：`StudentAssessmentsView.test.tsx` 7 例（分组与截止禁用、开始作答渲染控件、防抖自动保存、交卷前 flush 顺序、成绩未发布不泄露、倒计时归零自动交卷）+ `answer-uis.test.tsx` 6 例（各题型产出形状、readOnly）。
-- **测评中心（教师端 UI，Issue #100 / 子 issue #121）**：新增教师工作区 `#/assessments`（`NavigationSidebar` 教学工具分组「测评中心」），包含试卷列表（类型/状态徽标、题数与满分、草稿可删）、新建对话框（测试/考试/问卷三选一并说明各自差异）、试卷编辑器（设置项即时保存、组卷、题目上下移/删除、题库取题）、发布到班级（可选限时与截止时间）、布置列表（交卷进度、待批改数、发布成绩、关闭、CSV 导出、进入批改/统计）、人工批改页（逐题作答原文 + 打分 + 评语，写入 `manual_override` 后自动判分不再覆盖）与统计页（均分/正确率逐题表格 + CSV 导出）。新增前端题型 UI 注册表 `assessmentQuestionTypeUiRegistry`（zustand + `pluginId` 所有权 + `clearOwned`）与 5 种内置题型出题编辑器，插件可经 `ctx.ui.registerAssessmentQuestionType` 注入、卸载时自动清理，**与后端 `IAssessmentGraderRegistry` 共用同一个 `type`**。后端补齐 UI 所需两个端点：`GET /api/assessments/:id/assignments`（含班级名与交卷进度）与 `GET /api/assessment-attempts/:id/teacher-view`（逐题作答 + 标准答案，教师无需等成绩发布）。`e2e/a11y-gate.spec.ts` 覆盖范围新增 `#/assessments`。测试：前端 25 例（列表/新建/只读/组卷/发布/批改/统计/5 种编辑器/注册表所有权）+ 后端新增 3 例；本地实测 axe-core WCAG 2.0/2.1 A+AA 在「列表 / 已发布详情 / 草稿编辑器 / 640px 窄屏」四种状态均 0 违规。
-- **互动课堂学生专注力监控支持点击固定选中概况面板（Issue #115）**：此前右侧学生专注力监控圆环仅支持 `hoveredStudentId` 瞬时悬浮预览，鼠标移开或移向下方控制台时立即恢复全班概况，教师无法驻留查看单个学生的详细环节进度或随堂测验得分。现在引入 `pinnedStudentId` 状态持久固定显示：
-  - **点击卡片锁定/切换**：点击学生卡片可锁定选中该学生，卡片呈现主题色高光环与小图钉（`Pin`）徽标，右侧下方概况面板持久显示该学生测验得分、各环节通关打勾清单与异常徽标，移开鼠标不再丢失详情；再次点击卡片或点击面板右上角「取消固定」按钮恢复全班学情概况；
-  - **临时悬浮平滑预览**：已有固定学生时，将鼠标悬浮于其他学生卡片上可临时优先预览（展示「预览」徽标），移开鼠标后平滑恢复至已固定学生；
-  - **无障碍与快捷取消**：学生卡片具备标准 `role="button"`、`tabIndex={0}` 与 `aria-pressed` 属性，支持键盘 `Enter` 与 `Space` 键选中；支持按键盘 `Esc` 键或点击网格空白处清空固定状态；切换授课班级自动重置；
-  - **卡片内部事件冒泡隔离**：对卡片内的进度预警提醒（`Send`）、环节门禁强制放行（`Unlock`）、单人锁定控制（`Shield`）以及异常中心徽标按钮调用 `e.stopPropagation()`，避免点击操作按钮误触卡片选中/取消；
-  - 补充 `LiveClassroomView.test.tsx` 交互测试套件（卡片点击固定持久化、临时悬浮预览与平滑恢复、Esc 快捷清空、键盘 a11y 及操作按钮防冒泡隔离）。
-- **测评子系统地基：数据模型 + 判分引擎 + REST API（Issue #100 / 子 issue #120）**：新增 `migrations/031_assessment_core.sql`（`assessments` / `question_bank_items` / `assessment_items` / `assessment_assignments` / `assessment_attempts` / `assessment_answers`）与前后端共用的纯领域层 `packages/core/assessment/`（设置归一化、5 种内置题型、判分引擎、组卷快照、匿名 key、惰性超时结算、响应白名单）。**组卷即快照**（草稿自包含，发布只改状态，删题库不影响已组卷内容）；**以选项索引为权威**的判分口径（多选全对满分 / 少选按命中比例 / 错选 0 分，`partialCredit` 可关；填空每空等分 + 确定性归一化，不做模糊匹配）；`score: null` 一律进人工批改队列，**绝不兜底成 0 或满分**；**判分幂等**且 `manual_override = 1` 的行不被自动判分覆盖。新增 `IAssessmentGraderRegistryToken`（由内核注册，内置题型与插件题型走同一路径，插件用 `ctx.resolve` 注册并以 `pluginId` 隔离），`GET /api/assessment-question-types` 可查注册表。多教师/学生 REST API（试卷 CRUD、题库、整卷覆盖、发布到班级、关闭、发布成绩、人工批改、重新判分、统计、CSV 导出、开始作答、自动保存、交卷、结果），**标准答案经白名单序列化保证不出接口**并有哨兵单测门禁；**匿名问卷**用 `HMAC(ENCRYPTION_KEY, assignmentId:studentId)` 去重，教师端响应不含 `student_id`/`anon_key`，仅管理员可经带审计的 `reveal-identity` 反查；多次作答的 `first/last/highest/average` 实时聚合不落冗余列；超时用惰性结算（读取时判定），不引入后台定时器。文档见 `docs/architecture/assessment-model.md`。测试：`packages/core/assessment/__tests__/`（60 例）+ `server/__tests__/assessment-api.test.ts`（20 例，含答案泄漏哨兵断言、匿名去重、人工改分不被覆盖、超时结算）。
-- **随堂测验与作业「答题锁定」解耦模式（Issue #110）**：将传统「专注锁定」的页面导航限制（禁止切出、返回看板、离开课堂）与内容交互限制（白板只读、禁止作答输入）解耦，新增 `navigation`（答题锁定）模式。
-  - **解耦契约与数据模型**：在 SQLite `students` 表新增 `lock_mode TEXT DEFAULT 'full'` 与 `lock_target TEXT DEFAULT NULL`（数据库迁移 `migrations/033_student_lock_mode.sql`）。`full`（完全/专注锁定）限制导航且白板只读跟随；`navigation`（答题锁定）限制导航但**完全放开白板作答、选择题点选与作业输入提交**；单人与全班锁定支持携带目标 Tab（如 `lock_target: { tab: 'courseware' }`）自动统一切换目标工作区。
-  - **服务端与事件路由升级**：`roster-service.ts` 的查询与更新支持 `lock_mode` 与 `lock_target`，单人或全班解锁时自动重置为默认 `'full'`；`POST /api/classes/:classId/lock_lesson` 接受 `mode` 与 `target` 参数并经 `class-lock-status-changed` Socket 事件与广播通道实时通知所有在线学生；`GET /api/students/:id/dashboard` 包含 `lock_mode` 与已解析的 `lock_target`。
-  - **学生端状态解耦与视觉反馈**：`useStudentViewState` 将 `isStudentLocked` 细化派生为 `isNavigationLocked`（两种模式均锁导航）与 `isInteractionLocked`（仅 `full` 模式只读），保留原有 `isStudentLocked` 保证向后兼容；白板交互属性对齐 `readOnly={isInteractionLocked}`，随堂练习与白板作答自由输入；`StudentLessonHeader`、`StudentLessonInteractionPanel`、`AppHeader`、`StudentLiveHeader` 根据锁定模式分别显示琥珀金「✏️ 答题锁定」或靛蓝「🔒 全班专注锁定」徽标，拦截切 Tab 操作并弹出专属 Toast。
-  - **教师端分体控制与精细学情监控**：`LiveClassroomView` 顶栏全班锁定按钮升级为分体按钮组：未锁定时支持分别一键开启「全班专注」（`full`）或「答题锁定」（`navigation`）；锁定时显示当前模式徽标，提供「一键解锁全班」与「⇄ 切专注 / 切答题」即时模式切换；学生监控圆环区分玫瑰红（专注锁定）与琥珀金（答题锁定），学情卡片支持单人一键切换答题锁/专注锁与解除锁定，概况面板统计专注与答题人数分布。
-  - **测试覆盖与学生端档案桥接**：在 `useStudentOps`（`fetchStudentDashboard`）与 `useClassroomSocket`（`class-lock-status-changed`）中打通学生个人档案（`locked_lesson_id`、`lock_mode`）向全局 `appStore.students` 的受控写入与即时同步，根治学生身份无法访问 `/api/students` 导致锁定徽章未显现的边界问题；新增端到端测试 `e2e/classroom-answer-lock.spec.ts`，全面覆盖答题锁定下页面导航受限、作答提交放开、教师无缝切回全班专注锁定与一键解锁全流程；并更新 `server/__tests__/roster-routes.test.ts`、`server/__tests__/migrate-safety.test.ts`、`StudentLessonHeader.test.tsx`、`StudentLessonInteractionPanel.test.tsx`、`LiveClassroomView.test.tsx` 单测。
-- **帮助页指令调试列表改为响应式多列网格（Issue #117）**：`CommandBusPlayground` 的命令列表此前是 `space-y-4 max-w-5xl mx-auto` 单列纵向堆叠，宽屏下每张卡片独占一行、右侧大片空白、信息密度低。现在改为 `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` 的响应式网格（上限放宽到 `max-w-[1600px]`，去掉 `max-w-5xl` 窄栏），卡片改为纵向紧凑布局（第一行图标 + `commandType`、第二行权限/高风险标签、第三行描述最多两行、底部 `mt-auto` 对齐 ID 与调试入口）因而同行等高；展开的调试面板卡片用 `col-span-full` 占满整行，参数与 payload 两栏仍有充足宽度，不挤压相邻卡片。长 `commandType` 用 `break-all`、描述用 `line-clamp-2`、ID 用 `truncate`，不会再撑破网格。**同时修掉三处 a11y 缺陷**：卡头从 `<div onClick>` 改为真正的 `<button aria-expanded aria-controls>`（原先键盘完全不可达，且内部套了一个嵌套 `<button>`，非法 HTML），移除了会触发 axe `label-content-name-mismatch` 的自定义 `aria-label`，给 Payload textarea 补上 `id`/`htmlFor`（原先缺可访问名），并把展开面板里 `text-gray-400`/`text-red-500` 换成 `text-subtle`/`text-red-700` 修掉对比度。顺带清理 `render 期间给 state 对象赋值` 的老问题（默认 payload 改由 `useMemo` 预计算，取值走 `payloadOf()` 回落）。新增 6 个单测（网格类名、按钮 `aria-*`、`col-span-full`、长文本截断、搜索重排、默认 payload 回落与恢复）。
-- **互动课堂进入方式：先看「进行中的课堂会话」列表，不再自动进入未结束会话（Issue #91）**：此前 `LiveClassroomView` 的会话轮询只要发现当前课节存在未结束的会话就 `setShowEntryPortal(false)` 直接跳进授课视图，教师既无法改用另一场进行中的会话，也看不见自己手上挂着几节课。现在进入 `live_class` 的第一屏是新增的 `InProgressSessionList`：逐条展示课程名、班级、阶段徽标（授课进行中 / 结课出门票 / 课前准备）、开课时间、已用时长与**在场学生数**，每条可「继续上课」或「结束并归档」（二次确认后复用 `POST /api/classroom/sessions/:id/archive`），页头提供「开始一节新课」与「全部会话档案」入口；一场进行中的会话都没有时自动回退到原起始门户（行为与旧版一致）。进行中会话的**班级锁定保护保持不变**（`?classId=` 与内存里的班级都会被会话自身的 `class_id` 覆盖）。为兼顾刷新与切标签页回来，新增 `live-class-resume-memory.ts` 把「本标签页显式进入的课节」记在 `sessionStorage`，重新挂载时命中即直接回授课视图，教师主动「返回门户 / 开始新课 / 归档」时清除。服务端 `GET /api/classroom/sessions` 列表项新增 `presentCount`（由 `getPresentStudentIds(lessonId)` 派生，历史签到与已离开的学生不计入）。新增 `InProgressSessionList.test.tsx`（9 例：渲染字段 / 只取 active / 继续上课 / 归档二次确认 / 取消 / 空态回调 / 错误重试 / 英文文案）与 `live-class-resume-memory.test.ts`（3 例），`LiveClassroomView.test.tsx` 改写原「自动进入授课视图」断言为新流程并补「重新挂载不重选」用例。
-- **统一机房座位管理拖拽调座与排座扩展插槽（Issue #86）**：在 `ComputerLabManager.tsx` 中为座位网格引入 HTML5 拖拽调座——已入座学生卡片可拖动到其它座位（空位移动、有人两人交换），未排座学生列表可拖入座位（目标有人时原占位者回到未排座池），拖拽过程高亮落点并区分「移动」（绿环）与「交换」（琥珀环）视觉提示，拖回原位或网格外无变化；点击式安排行为同步升级为「拿起已入座学生 → 放到有人座位 = 交换」，与拖拽保持一致，且统一走 `applySeatMove` 入口并置 `isDirty`（沿用现有保存按钮持久化，不自动保存）；`computer_lab.seat.overlay` 与「移出」按钮的点击冒泡隔离保持不变。新增 3 个扩展插槽：`computer_lab.seating.toolbar`（排座工具栏，提供 `setAssignedSeats` 排座写通道，**不提供** `onSeatMove` 之类的宿主回调——插件按响应式的 `assignedSeats` 自行 diff 校验/回滚）、`computer_lab.unassigned.item`（未排座学生条目标签）、`computer_lab.seating.sidebar`（座位网格下方统计区）；同步 `ExtensionSlot` 联合类型、SlotProps/贡献 Config 类型、manifest zod schema、plugin-sdk 类型再生成与 `docs/reference/plugin-ui-extension-slots.md` 槽位清单（98 个成员）；补充 `ComputerLabManager.test.tsx` 交换逻辑单测与 `e2e/teacher-computer-labs.spec.ts` 拖拽交换+刷新持久化场景。
-- **生态与全局增强环节扩展插槽扩充（Phase 3）**：
-  - **备课时间线环节节点与卡片微徽章扩展**：在 `TimelineRail` 和 `SegmentEditorCard` 头部操作区新增 `editor.timeline.node_badge` 插槽，支持无侵入式挂载器材清单徽章、AI 评估就绪标识或前置门禁指示。
-  - **学生端环节步骤导航微徽标扩展**：在 `StudentLessonContentPanel` 顶部环节步骤导航按钮中新增 `student.segment.badge` 插槽，支持动态渲染学科素养标签、难度星级与门禁锁定状态。
-  - **全局顶栏后台任务中心项扩展**：在 `AppHeader` 状态区新增 `header.async_task.item` 插槽，为第三方插件提供全局异步长任务（如大文件后台导出、批量排课同步等）的状态胶囊与导航交互挂载能力。
-- **业务协同环节扩展插槽扩充（Phase 2）**：
-  - **课表外部导入源与条目动作扩展**：在 `TimetableOcrView` 中新增 `timetable.import.source` 插槽，支持扩展第三方教务排课系统、Excel/CSV 模板导入解析；在 `TimetableCalendarView` 中为日历卡片和列表视图新增 `timetable.entry.action` 插槽，支持一键调课申请、排课同步等插件动作。
-  - **课堂活跃环节主交互区扩展**：在 `LiveClassroomView` 中新增 `classroom.active_segment.main` 插槽与顶部专属工作区 Tab / 引导提示条，当处于活跃环节且插件注册该插槽时支持无缝切入专属工作区（如虚拟仿真实验大屏、团队竞赛对战等），与默认白板自由双向切换并向后兼容降级。
-  - **学生端学年成长对比指标扩展卡片**：在 `StudentAcademicYearComparison` 核心指标网格中新增 `student.academic_year.metric_card` 插槽，支持插件无侵入挂载核心素养发展值、学科竞赛积分、跨学科项目实践等自定义多学年对比指标卡。
-- **核心环节扩展插槽扩充（Phase 1）**：
-  - **作业批改面板扩展**：在 `TeacherAssignmentGradePanel` 中新增 `assignment.grade.toolbar.action`（支持批量操作/AI初评/导出）、`assignment.grade.item.addon`（支持代码自动测试报告/AI评语推荐/查重）与 `assignment.grade.rubric.addon`（评分细则量规微调）。
-  - **学生端环节门禁解锁引导**：在 `StudentLessonInteractionPanel` 中将原本硬编码的纯文本提示升级为 `student.segment.gate_fallback` 交互插槽，允许插件挂载解锁前置答题、补签卡片或放行申请。
-  - **备课端环节形态专属配置**：在 `SegmentEditorCard` 中新增 `editor.segment.type_config` 插槽，支持根据 `segment.type` 动态渲染专属配置面板（如数字化探究实验器材配置、编程实战预设等）。
-- **课表识别后台异步运行与完成全局通知**：将课表图片 AI 识别升级为全局后台任务管理（`asyncTaskStore`）。教师启动识别后，任务与请求生命周期脱离单个页面的 DOM 挂载，页面可自由跳转浏览课程、批改作业等；顶栏（`AppHeader`）实时显示后台运行动画状态与完成气泡，识别成功后通过全局 Toast 弹出完成提醒并支持「查看并导入课表」一键导航回课表管理；重新进入课表管理自动恢复识别结果表格与班级匹配，并支持失败友好重试与状态清理。
-- **学生端多学年对比 UI 与服务（PR / Issue #65）**：在学生端新增跨学年综合学业对比功能；支持多学年选择器（多选 Chips，默认选当前与上一学年）、作业提交率/按时率/均分/课程数概览卡片、同比/环比变化 Badge（升降幅）、分组对比柱状趋势图与科目维度成绩分布明细；后端新增 `AcademicYearComparisonService` 与 `GET /api/students/:id/academic-year-comparison` 接口，具备严格的三道防线 IDOR 权限控制与插件自定义指标扩展点；引入 `migrations/030_backfill_academic_year.sql` 与启动阶段幂等回填函数 `backfillAcademicYearData`，平滑兼容历史老数据库。
-- **学年维度基础（ PR 1 ）**：新增 `academic_year` 字段与索引（schedules/assignments/attendance/exams/semester reports/lesson progress/classroom sessions），site_settings 增加当前学年配置；ScheduleService 支持按学年筛选/衍生学年；`/api/site-settings` 返回 `currentAcademicYear`/`academicStartMonth`，管理员可更新并校验格式 `YYYY-YYYY`。
-
-- **学年维度前端管理与筛选基础（PR 2）**：AdminPanel 增加当前学年与学年起始月份配置；新增 `src/utils/academicYear.ts` 与可复用 `AcademicYearFilter` 组件，支持学年归一化、默认值与筛选交互，含组件测试。
-- **学年上下文接入（PR 3）**：新增 `AcademicYearContext`（URL/localStorage/服务端默认同步）并在 App shell 全局挂载；支持 API 值规范化为 `academicYear` 查询参数，含上下文测试。
-- **学年筛选接入 TimetableManager（PR 4）**：课表管理拉取排课时自动带上当前 `academicYear`；在 Provider 缺失时安全降级为不筛选，保持既有测试通过。
-- **学年筛选接入排课管理（PR 5）**：`useLabAndSchedule.fetchClassSchedules` 按当前 `academicYear` 请求班级排课，Provider 缺失时保持原有行为。
-- **ClassesView 学年筛选 UI（PR 14）**：班级管理增加 `AcademicYearFilter`，可切换单一年份并更新全局学术年。
-- **排课创建显式写入学年（PR 13）**：ClassScheduleAttendance 创建排课时附带由日期推导的 `academicYear`，并补全前端工具函数。
-- **TimetableManager 学年选择 UI（PR 11）**：课表管理增加 `AcademicYearFilter`，可切换单一年份并触发重新拉取，空数据/无 Provider 时安全降级。
-- **学年维度扩展到课堂会话（PR 7）**：classroom_sessions 支持按 `academic_year` 过滤；新会话自动归属当前学年；list SQL 暴露 academic_year。
-- **学年维度扩展到考试（PR 8）**：exams 按 `academic_year` 存储与过滤，`/api/classes/:classId/exams` 支持 `academicYear`。
-- **学年维度扩展到考勤（PR 9）**：attendance 按关联排课学年存储，`/api/classes/:classId/attendance-summary` 支持 `academicYear`。
-- **Attendance export 学年文件名（PR 16）**：考勤导出支持可选 `academicYear`，并在文件名中体现学年。
-- **学年维度扩展到学期报告（PR 10）**：semester reports 归档时写入 `academic_year`（由学期名称推导），schema 已支持后续按学年筛选。
-- **学年维度扩展到学期综合成绩（PR 12）**：`computeSemesterGrades` 支持按 `academic_year` 过滤考勤、进度、作业、考试与报告。
-- **学年筛选扩展到作业（PR 6）**：assignments 按 `academic_year` 存储与过滤，`/api/classes/:classId/assignments` 支持 `academicYear` 查询参数。
-- **互动课堂会话与档案管理看板（Live Class Session Management）**：新增 `ClassroomSessionManager` 看板与 `ClassroomSessionDeleteModal` 安全删除弹窗，在课堂启动门户（`ClassroomEntryPortal`）与授课中控栏（`LiveClassroomView`）提供快捷切换入口。后端新增 `GET /api/classroom/sessions`（支持分页、按班级/课节/阶段筛选、模糊搜索及投票/通票/动态指标聚合）、`POST /api/classroom/sessions/:sessionId/archive`（一键归档并释放班级占用）与 `DELETE /api/classroom/sessions/:sessionId`（数据库事务级联物理删除关联的随堂投票、选票、抢答、结课通票、弹幕、互评及动态流记录）。
-- **左侧导航「在新标签页打开」**：教学工具 / 系统管理 / 帮助支持 / 扩展应用四组共 8 个内置导航项（课程管理 / 互动课堂 / 班级管理 / 课表管理 / 机房管理 / 插件中心 / 管理后台 / 帮助文档）以及插件通过 `teacher.tab` 扩展点注册的动态导航项，悬停时显示 ↗ 按钮，点击在浏览器新标签页打开该 tab，源 tab 不切换焦点。新 tab 启动时通过 hash 路由自动定位到目标 tab（`useSessionSlice` 在挂载时读 `window.location.hash`）。`tabToHash` / `hashToTab` 从 `useSessionSlice` 抽出到 `src/utils/teacherTabHash.ts`，新增 `buildTeacherTabUrl` 与 `openTeacherTabInNewTab`（用 `noopener,noreferrer`）。Admin Center（管理员专用）在原文件内联渲染也获得同样的 ↗ 按钮。测试覆盖 tab ↔ hash 双向编解码、URL 拼接（保留 `pathname` / `search`）与 `window.open` 调用。
-- **教学环节进入条件**：环节 `gates` 存在 `lessons.timeline`。内置 `quiz_completed`、`quiz_accuracy`、`assignment_submitted`、`dwell_seconds`、`checked_in`。学生核对与教师推进全班环节都经过 `SegmentGateService`；未达标学生看到锁定和进度，全班仍共用一个当前环节。四阶段课堂生命周期不再调用 `StageGuardPipeline`。教师可按学生与环节放行并写入审计。插件用 `contributes['segment.gate_type']` 声明条件，宿主调用其只读命令。课级 `progress_mode` / `progress_conditions` 标记废弃，仅在环节没有自己的 gates 时兼容回退。
-- **备课编辑器扩展槽收敛**：`SegmentEditorCard` 教学形态下拉改为消费 `getAllSegmentTypes()` / `useAllSegmentTypes()`，插件注册的自定义环节类型真正进入 UI；宿主暴露 `ctx.ui.registerSegmentType` / `unregisterSegmentType`（停用时按 `pluginId` 自动回收）；`manifest.contributes['editor.palette_item']` 与含 `labelZh`+`labelEn` 的 `editor.timeline_segment` 声明式贡献分别桥接到 `paletteItemRegistry` 与环节类型注册表，与命令式 API 对齐。
-- **`live_class` 起始门户顶部挂「下一节课」**：教师进入 portal 时拉取今日 / 明日 / 最多 7 天的 \`/api/schedules/today?date=YYYY-MM-DD\`，按 \`time_slot\` 起始时间挑出最近一节未开始的课，显示相对日（今天 / 明天 / +N 天）、时间段与班级。点击顶部标题预选该课的 \`lessonId\` 与 \`classId\`。接口 5xx 或 7 天都空时降级为「今日课表尚未设置」并提供「前往课表设置」入口（需要 \`onGoToTimetable\` 回调，由 \`LiveClassroomView\` 写入 \`setTeacherTab('timetable')\`）。
-- **公测可观测性**：未捕获异常、路由 5xx 和浏览器运行时错误写入结构化日志；配置 `SENTRY_DSN` 或 `OPENLEARN_ERROR_DSN` 时转发到 Sentry 兼容接口（自建 Sentry / GlitchTip），不配置时不外连。上报内容脱敏，不含口令、会话、班级口令和学生作答。
-- **访问日志与安全审计**：`http.request` 带请求 ID、用户 ID、耗时和状态码。登录失败、限流 429、越权 403、插件安装/启用、公开路由批准写入 `audit.log`。访问日志与审计日志按大小轮转（`LOG_MAX_*`、`AUDIT_LOG_MAX_*`）。
-- **存活 / 就绪 / 指标**：`GET /health` 只表示进程存活。`GET /health/ready` 检查数据库、存储可写和迁移完成，失败时 503 且不返回内部细节。`GET /metrics` 为 Prometheus 文本，默认仅管理员会话或 `METRICS_TOKEN` 可访问。
-- **指标增加迁移积压、备份年龄和 events 行数**。`GET /metrics` 增加三条 Prometheus gauge：`openlearn_migrations_pending`（磁盘上尚未记入 `_migrations` 的迁移个数，读不到时为 `-1`）、`openlearn_backup_age_seconds`（备份目录里最新文件的年龄，单位秒，没有文件时为 `-1`）、`openlearn_events_rows`（`events` 表当前行数，查询失败时为 `-1`）。三项在进程内缓存 15 秒。指标文本不包含路径或错误字符串。`GET /health/ready` 的响应体仍然只有 `status`。
-- **公测旅程 E2E**：`playwright.beta.config.ts` 覆盖强制改密、建班布置、学生提交、批改、跨班拒绝、插件安装启用。CI job `Public beta journey` 失败即红。
 - **启动期环境变量强校验（P1 信任边界）**：新增 `server/security/env-validation.ts`，在 `startServer()` 最早期拦截配置笔误。`PORT`、`TRUST_PROXY`、`ENCRYPTION_KEY`、`OPENLEARN_WORKER_ISOLATE`、`OPENLEARN_PLUGIN_PERMISSION`、`OPENLEARN_PLUGIN_MAX_HEAP_MB`、`OPENLEARN_WORKER_LIVENESS`、`BRIDGE_HOOK_TELEMETRY`、`ALLOWED_ORIGINS` 等非法取值直接拒绝启动；生产环境把种子口令设为用户名也拒绝启动。宽松归一化不再静默吞掉拼写错误。
-- **课程向导 Quick Apply 扩展槽**：在 `CourseWizardModal` 课堂框架模板区注册 `course.wizard.quick_apply` 扩展槽，第三方插件可向「点击应用典型课堂框架模板 (Quick Apply)」区域贡献模板按钮/卡片，并通过插槽上下文获得 `lang`、`wizardCourseCategory`、`wizardCourseTitle`、`wizardCourseTimeline`、`setWizardCourseTimeline`、`addToast` 以直接写入课程时间轴。
-
-### Refactor / Performance
-
-- **课程编辑器属性栏移除 X/Y 坐标输入（Issue #97）**：`WhiteboardPropertiesSidebar.tsx` 的「物理定位 & 尺寸」卡片不再提供 X 坐标 / Y 坐标数字输入框，标题简化为「尺寸」——组件位置统一通过在画布上拖动调整（`x`/`y` 数据结构与保存逻辑不变，拖动后照常落库），消除属性栏与拖拽两条位置修改通道并存导致的不一致。宽度 / 高度 / 半径输入保留不变；`InteractiveWhiteboard.tsx` 复用同一属性栏，互动课堂白板行为同步收敛。
-
-### Fixes
-
-- **全站无障碍（WCAG 2.0/2.1 A+AA）审计与修复**：用 axe-core 对登录页与教师端 8 个主要工作区（工作台/课程/班级/课表/互动课堂/插件中心/管理后台/帮助）跑完整规则集，从 **99 个违规节点清零到 0**，并把门禁固化进 CI。修复项：
-  1. **可访问名缺失（critical，每个页面 8 处）**：侧边栏导航按钮的标签 span 在折叠态与 `<md` 窄屏下是 `hidden`，按钮只剩无语义图标 → 补 `aria-label` 与 `aria-current="page"`；氛围仪表盘的课节 `<select>` 补 `aria-label`。
-  2. **次级文字对比度不足（serious，8 个页面各自出现）**：AppHeader 版本号 `text-slate-400`（2.63:1）、RightSidebar「OS Core Options」`text-gray-400`（2.6:1）、课表/帮助/插件空态里的 `text-gray-400` / `text-gray-300`（1.4–4.43:1）、互动课堂「待选择/暂无学生名单」`text-amber-600`（3.19:1）、插件中心「从 ZIP 安装」`text-teal-600`（3.55:1）→ 统一改用语义令牌 `text-subtle` / `text-muted` 或达标的深色阶（amber-700 / teal-700），四套主题下自动跟随。
-  3. **自动化门禁**：新增 `e2e/a11y-gate.spec.ts`（登录页 + 8 个工作区，完整 axe 规则集，断言零违规），已加入 CI 的 `Browser workflow E2E` job，与 `live-class-contrast.spec.ts`（逐主题只查对比度）互补。
-- **无障碍门禁扩展到学生仪表盘与作业面板**：`e2e/a11y-gate.spec.ts` 新增第四个用例，覆盖学生仪表盘与作业作答/互评面板（通过 API 造出班级、课节、作业与学生数据前置），跑完整 axe 规则集断言零违规；顺带修复互评面板一批**非法 Tailwind 色阶**（`indigo-650` / `teal-650` —— Tailwind 无此档位，样式此前静默失效）：提交按钮改 `indigo-600`（白字 5.17:1）、互评空态 `text-slate-400 italic` 改语义令牌 `text-subtle`。
-- **无障碍门禁扩展到学生端课中与互动浮层**：`e2e/a11y-gate.spec.ts` 新增第三个用例，覆盖学生端课中界面与三个互动浮层（极速投票作答卡 / 毫秒抢答 / 60 秒结课通票），通过 API 造出对应状态后逐一跑完整 axe 规则集断言零违规；同时修复暴露出的 17 处违规：
-  1. **节奏信号三枚按钮**（听懂了/有疑问/讲太慢，含选中态）`text-amber-600` / `text-emerald-600` / `text-rose-600` → 统一提到 `-700`（浅色底 3.19:1 → 5.02:1），深色主题保留 `dark:text-*-400`。
-  2. **可访问名缺失**：结课通票的 5 颗星级评分按钮是纯图标 → 补 `aria-label="N 星"` + `aria-pressed`；班级行展开/收起箭头补 `aria-label` + `aria-expanded`；Toast 关闭按钮补 `aria-label`；课程排序、互动课堂课程选择、作业权重滑杆、完成度门槛滑杆等控件补 `aria-label`。
-  3. **次级文字对比度**：学生直播页眉「已与教师中控台实时联动」`text-emerald-600`、成长档案积分徽章、AppShell/StudentView 的加载占位 `text-slate-400`、作业批改面板说明文字、课程管理「排序方式」与「复制课程 ID」、互动课堂页码徽章 `bg-white/20 text-white`（白字压半透明主色底）、班级锁定提示 → 改用语义令牌或达标深色阶。
-  4. **语义修正**：互动课堂班级徽章误用 `aria-readonly`（非控件属性，`aria-allowed-attr` 报错）→ 改为 `role="status"` 表达只读状态。
-
-- **live_class 课中授课页面文字对比度达 WCAG AA（Issue #77）**：极速投票及课中其它互动组件的文字/背景对比度此前多处不达标（投影到大屏更明显）。修复三类根因：
-  1. **写死的亮色底配白字**（`bg-amber-500 text-white` 仅 2.15:1、`bg-rose-500` 3.67:1、`bg-emerald-500` 2.54:1、`bg-blue-500` 3.68:1）→ 统一改用达标的深色阶（`-600/-700/-800`），覆盖中控（极速投票/结束投票/抢答/积分榜/PacingDashboard/诊断/宏引擎/家长通知/退出通票词云/小组白板）、学生端互动浮层、大屏展台（`text-slate-500` → `text-slate-400`、非法类 `to-slate-850` → `to-slate-800`）与 `LiveClassroomView`。
-  2. **主题令牌本身不达标**（浅色 `--text-subtle` #94a3b8 在白底仅 2.56:1、`--text-muted` 在 `--bg-surface-secondary` 上 4.34:1；深色/护眼 `--text-subtle` 仅 3.08/3.01:1）→ 四套主题的 muted/subtle 重选至 surface 与 surface-secondary 上均 ≥ 4.5:1，`themeStore` 下发给课件 iframe 的令牌同步保持一致。
-  3. **主色令牌角色冲突 + 第三方令牌劫持**：填充型主色与文本型主色拆成 `--primary-solid*` / `--primary-ink*`（深色/黑板主题的亮主色配白字仅 4.47/2.78:1，反之深主色压在深色底也不达标）；并用 `html[data-theme]` 高优先级重新钉住语义别名，避免 pptx 查看器与 reveal.js 运行时注入的非 layer `:root` 规则把 `--color-muted` 劫持成 `#1f2937`（曾使深色主题下 `text-muted` 只有 1.2:1）。
-- **对比度自动化回归**：新增 `src/store/__tests__/theme-contrast.test.ts`（解析 `src/index.css` 计算四套主题令牌的 WCAG 对比度：正文 ≥ 4.5:1、填充主色上的白字 ≥ 4.5:1，并断言与 `themeStore` 令牌不漂移）与 `e2e/live-class-contrast.spec.ts`（axe-core `color-contrast` 在真实浏览器里逐主题审计中控、极速投票配置弹窗与学生端作答卡），后者已接入 CI 的 `Browser workflow E2E` job。
-- **随堂测试组件纳入白板自动平铺（Issue #70）**：`auto-tiling` 的类型黑名单此前误把 `quiz`（随堂测试）列为「不可平铺」，导致点击平铺按钮时它保持原有位置和尺寸、不参与镶嵌布局。现在黑名单只保留没有矩形几何的 `page_meta` / `pen` / `highlighter`，其余组件（含随堂测试与插件注册的自定义图元）一律参与平铺，插件组件无需改动。同时修正平铺前快照 `__preTile` 的取值：改用候选元素的有效几何（缺失宽高时回退到类型默认尺寸），避免随堂测试等创建时未显式写宽高的组件在取消平铺后塌缩成 0 尺寸。
-- **未注册描述符的命令返回 403 而非 500（Issue #71）**：内核 `CommandBus` 拦截器的 default-deny 与能力校验分支此前抛裸 `Error`，`/api/commands` 统一回落成 HTTP 500（前端会误报为服务端崩溃）。现在两条拒绝路径都携带 `status=403` 与机器可读 `code`（`COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`），`sendSafeError` 对 4xx 透传 `code`（5xx 不透传，避免泄露内部错误码）。同时把已随「清理废弃插件」下线的示范命令 `hello.say` 的描述符与 handler 补回核心插件（宿主内置「问候插件」白板组件仍在调用它），并在插件加载阶段对「有 handler 无 ActionDescriptor」的命令输出清晰告警（`PluginHost` / `ServiceHost`），不改变默认拒绝策略。
-
-### CI
-
-- **新增「上一正式版 → main」升级回归门禁（Issue #147）**：此前 CI 只有「当前 main 新装三个第三方插件」（`plugin-compatibility`）与「空库冷启动」（`docker-rehearsal`），没有任何作业验证「旧库 + 已装插件 + 旧数据」的升级路径。
-  - 新增 `scripts/upgrade-regression/build-fixture.ts`：以 release tag 的服务端代码起真实进程，管理员登录后经 `POST /api/plugins/upload-zip-raw` 安装三个真实第三方插件并激活，创建样例班级/学生，停服后用 `VACUUM INTO` 生成一致快照，连同 `plugins/`、`storage/` 与 `metadata.json` 打包为 fixture。
-  - 新增 `scripts/upgrade-regression/verify-upgrade.ts`：恢复 fixture 后用当前 `main` 启动，断言 `/health`、插件全部 `active`、旧班级/学生/成员关系可读、插件 `plugin_storage` 标记可读回、已执行迁移 checksum 未被改写、旧表全部仍在，并二次启动验证「零新迁移」。作业以 `MIGRATION_CHECKSUM_STRICT=true` 运行，历史迁移被改写会直接启动失败。
-  - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
-  - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
-  - 定位修正：ZIP 安装落库的 `plugins.file_path` 是构库机器的绝对路径，而校验在另一个临时目录里恢复 fixture，插件代码文件搬了家、库里那列没搬 —— `loadPluginModule` 找不到文件、ZIP 插件的 `source_code` 又是空串，三个插件全被打成 `state=error`，看起来像升级把插件弄坏了。现在 `restoreFixture` 会按 `/plugins/` 相对结构把 `file_path` 重定位到恢复后的数据目录（真实升级同目录，不受影响），并在插件非 active 时把服务端日志尾巴打进 CI，病因不再藏在被捕获的日志里。
-  - 定位修正（SDK 解析链接）：fixture 的 zip 打包刻意跳过 symlink —— `plugins/node_modules/@openlearn/plugin-sdk` 这个宿主为插件建的解析链接，target 是构库机器的绝对路径，打进 fixture 恢复后也是悬空链接。而 v0.6.1 之后第三方插件默认跑 worker 模式，worker 的导入路径不像 inline 路径那样会自建链接，于是恢复后 worker 加载 `index.js` 抛 `ERR_MODULE_NOT_FOUND: Cannot find package '@openlearn/plugin-sdk'`，插件再次全部 `state=error`。真实升级不受影响（用户磁盘上的链接随数据目录保留），这是校验工具搬家后必须自补的环境件：`restoreFixture` 现在调用 `ensurePluginSdkSymlink`，按当前机器的宿主 SDK 重建链接，悬空链接/解引用空目录先清掉再建（避免 `EEXIST`），已有可用链接幂等保留。
-  - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
-
-### Docs
-
-- **信任边界文档与各执行模式网络代理现状对齐（Issue #144）**：
-  - 更新 `docs/reference/plugin-trust-boundary.md`：
-    - §1 执行模式对照表与 §2 五大能力面矩阵：纠正旧有的「process 模式出站网络不受限」表述，如实反映 `process`（rw/ro）模式通过 `plugin-net-preload.cjs`（拦截底层 Socket/UDP/DNS/TLS/HTTP2）与宿主 IPC 代发（`plugin-net-proxy.ts`）实现的默认拒绝与白名单代理，标注 `process (off)` 逃生舱完全放行；
-    - §1 与 §4 明确 `inline` 与 `worker_threads` 模式未注入网络沙箱、同进程共享宿主网络栈的客观现状，并说明加载策略层（`execution-policy.ts:resolvePluginExecutionMode`）已强制将所有不受信的第三方插件改写（coerce）为 `process` 模式运行，形成防御闭环；
-    - §5 运营建议：修复第 91 行 Markdown 表格首行误写为 `<|channel|>` 的语法渲染错误（审计报告 `TB-08`）；
-    - §7 长期路线图：将已交付的网络代理标记为完成，调整演进目标为细粒度流控配额与 eBPF 网络度量。
-  - 更新 `docs/reference/plugin-capability-matrix.md`：补充 `network:*` 说明，明确出站网络不属于 `capabilitiesProposed` 字符串，而是由 `plugin_network_grants` 白名单与 manifest `network.outbound` 独立管控。
-  - 同步更新 `docs-drift-remediation-tracker.md`（阶段九）与 `docs/trust-boundary-hardening-audit-2026-10-14.md`（标记 TB-08、TB-09、R-04 已修复）。
-  - 新增自动化防漂移与网络覆盖测试 `packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts`（10 个测试用例守住文档一致性与策略层执行模式收敛门禁）。
-- **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
-- **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
-- **版本迁移指南补上 023**：`docs/migration/version-migration.md` 说明从 v0.6.1 tag 之后的当前 `main`（平台版本号仍是 `0.6.1`）如何处理班级临时口令。`migrations/023_encrypt_class_passcodes.sql` 只留下密文约定的标记；启动时把仍是明文的行加密为 `olenc1:`，已经是该前缀的行跳过。教师口令接口仍返回原文。列表、审计日志和 `scripts/site-backup.mjs` 的数据库快照不提供明文，钥匙文件要单独备份。
-- **可观测性架构与代码对齐**：`docs/architecture/observability.md` 按 `packages/core/observability/` 现有文件重写清单，覆盖平台日志、安全审计、错误上报、请求 ID、存活/就绪探针和 `GET /metrics`。指标记录进程存活、运行时间、常驻内存、按 HTTP 状态类累计的响应次数，以及运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`。
-- **Cloud Agent 开发数据目录**：`AGENTS.md` 说明开发服务把 SQLite、加密密钥和日志放到 `$HOME/openlearn-data`，避免仓库里的 `storage/encryption-key` 与 Vitest 自带的 `ENCRYPTION_KEY` 冲突。
-- **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
-- **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
-- **插件数据库 API 前缀文档统一规范 (`MEDIUM-01`)**：更新 `docs/reference/plugin-database-api.md`、`docs/sdk/plugin-sdk.md` 与 `docs/tutorials/plugin-development-tutorial.md`，将旧有的 `plugin_<id>_` 描述全部修正为最新的方案 A 复合表前缀 `plugin_<scopeId>_`。
-- **主文档导航索引收录插件安全加固迁移指南 (`LOW-01`)**：在 `docs/index.md` 核心架构与安全指南清单中补充收录 `plugin/plugin-security-migration.md`。
-
-### Breaking Changes
-
-- **总线事件表默认只保留 90 天**。进程启动、数据库初始化结束时执行一次 `DELETE FROM events WHERE timestamp < ?`，删掉早于窗口的行，日志只记删除条数。`OPENLEARN_EVENT_RETENTION_DAYS=0` 关闭清理，恢复此前不删除的行为；设成其他非负整数则改保留天数。安全审计文件 `audit.log` 是另一份日志，不受影响。需要超过 90 天的总线历史时，必须在第一次用本版本重启之前设好该变量；若这张表是合规记录，先备份数据库。
-- **生产环境的跨域只认 `ALLOWED_ORIGINS`**。`NODE_ENV=production` 时，本机另一个端口，以及只靠把 `Host` 改成与 Origin 相同的反代，都不再带着 `edu_os_token` 通过 CORS。部署前把浏览器实际访问的公网来源写进 `ALLOWED_ORIGINS`。请求不带 `Origin` 的同源导航、curl 和非生产环境保持原样。
-- **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
-- **明文学生口令不能再登录，GDPR 删除只保留给管理员**。`students.password` 不以 `$2` 开头、也不是 64 位十六进制的学生，在花名册重设密码之前无法用个人口令登录。旧 SHA-256 学生仍可登录一次并升级为 bcrypt。教师会话调用 `DELETE /api/students/:id/gdpr-delete` 得到 403；管理员仍须 `{ "confirm": true }`。
-
-- **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
-
-- **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
-- **第三方插件安全边界重构（PL-01 至 PL-08 & 审计加固）**：进程内执行只接受预加载内置插件、`OPENLEARN_TRUSTED_INLINE_PLUGINS` 精确名单或 `packages/plugins` 入口，第三方插件强制子进程隔离；新建表使用方案 A 语义复合前缀 `plugin_<manifestSlug>_<shortUuid>_<table>` 并由 AST 词法守卫 `assertPluginSqlAllowed` 严格拦截 SQL 注入与模式探测；前端沙箱接入专用 `sandbox-command` 路由与二次导航熔断，根除 Confused Deputy 越权；出站网络全面封锁 UDP、DNS 全方法与底层连接，宿主代发代理放行第三方 API `Authorization` 头并限制 10MB 请求/响应与 30 秒超时；社区包强制 Ed25519 签名与流式哈希。迁移步骤见 `docs/plugin/plugin-security-migration.md`。
-
-### Fixes
-
-- **课表识别自动兜底默认可用 AI 提供商与前端初始选中修复（ScheduleService & TimetableManager）**：修复在设置中已配置 AI Provider 且连接成功后、课表多模态 OCR 识别仍报“未检测到可用的 AI 提供商”的缺陷。在 `ScheduleService.processTimetableOcr` 增加未传或指定无效 `providerId` 时自动兜底查询首个有效提供商的机制（与 Agent 对话、作业批改保持一致）；并在前端 `TimetableManager` 拉取模型列表后自动将 `ocrProviderId` 默认初始化为首个可用提供商。
-
-- **白板/互动课件属性编辑器操作按钮文案精简优化（WhiteboardPropertiesSidebar）**：将课程编辑与课堂白板中互动课件及组件属性编辑器侧边栏底部的操作按钮文案从「应用修改并强制同步」（加载态「正在广播同步...」）精简为更直观符合直觉的「保存」（加载态「正在保存...」），按钮图标同步更新为 `<Save />`，降低教师操作认知负荷。
-
-- **课程向导底部步骤指示器优化（CourseWizardModal）**：移除向导弹窗左下角写死且无业务状态的底层技术黑话（`⚙️ SQLITE 写入预检通过`），替换为对教师更直观的动态步骤进度指示器（如 `第 1 步 / 共 4 步 · 内容选题`，支持中英文双语），提升备课流程的用户体验。
-
-- **课程列表与大纲生成模型思维链 `<think>` 剥离与卡片摘要净化 (#62)**：在 `packages/core/ai/strip-reasoning.ts` 与 `AIProviderGateway` 统一拦截剥离推理模型（DeepSeek-R1、QwQ、Claude 思考模式等）输出的 `<think>...</think>`、未闭合 `<think>` 及代码围栏思维链，并在 `generateOutlineWithAi` 中深度净化大纲正文；在 `CourseManagement` 引入 `extractCourseSummary` 纯文本摘要提取器兜底展示已有数据；新增迁移 `029_clean_lesson_think_artifacts.sql` 与 `cleanStoredLessonThinkArtifacts` 启动期幂等清洗历史受污染课程。
-
-- **系统导航栏选中/未选中状态优化与常驻方框修复**：统一左侧导航栏全部按钮（含课程管理、互动课堂、班级管理、课表管理、机房管理、插件中心、管理后台、帮助文档及动态注册的 `teacher.tab`）的选中与未选中视觉状态。修复原先管理后台硬编码 `border border-indigo-100/80` 与 `bg-slate-50/50` 导致在未选中态下仍常驻显眼蓝色方框（在插件中心下方干扰视觉）的异常；未选中状态统一为 `border-transparent text-muted`，选中状态统一为 `bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs`，并优化折叠收起状态下的图标水平居中布局与焦点外框体验。
-- **互动课堂起始门户顶部「今日教学排期」恢复横向排列**：`ClassroomEntryPortal` 顶部横幅原先仅在 `xl`（≥1280px）断点才左问候、右遥测并排，视口低于 1280px 时误塌为纵向堆叠。现改为 `lg`（≥1024px）断点即左右横向排列，与设计稿「左：今日排期问候 + 右：单行四格遥测岛」一致。
-- **PPT 课件演示默认收起右侧属性边栏**：课程编辑器中的「课件演示」（`presentation`，`RevealPresentationWrapper`）在放映 PPTX 时，`pptx-react-viewer` 会默认弹出右侧「属性 / 检查器」边栏（显示主题、幻灯片尺寸、演示设置等，且因宿主未加载其 i18n 资源而呈现 `PPTX.SLIDEINSPECTOR.*` 原始键名），挤占放映区域。现向 `PowerPointViewer` 传入 `customization={{ hiddenPanels: ['inspector'] }}`，该边栏默认关闭。
-- **PPT 课件演示不再显示 `pptx.*` 原始 i18n 键名**：`RevealPresentationWrapper` 初始化 i18next 时原先只挂载空资源（`{ translation: {} }`），导致 `pptx-react-viewer` 经 `useTranslation` 查不到词条、直接回显原始键（如幻灯片左下角的 `pptx.notes.title`）。现改为载入 viewer 自带的扁平英文词典 `translationsEn`（`pptx-react-viewer/i18n`），并按扁平原样关闭 `keySeparator` / `nsSeparator`，另加 `parseMissingKeyHandler: keyToLabel` 兜底——未收录的键回退为人类可读标签，绝不会露出 `pptx.*` 键名。
-- **SQL 守卫嵌套子查询与括号表名解析防御 (`CRITICAL-01`)**：修复 `packages/core/plugin-host/sql-guard.ts` 中 `extractTableNames` 对 `FROM ((subquery))` 括号包裹嵌套子查询时抛出未捕获错误或漏检的问题。增加递归括号解包与兜底 Fail-Closed 机制，全面杜绝通过复杂括号嵌套绕过插件表名授权检查。
-- **授课中控会话归档/删除前端状态即时同步 (`CRITICAL-02`)**：修复 `src/components/LiveClassroomView.tsx` 中教师在看板中归档或删除历史会话后，前端活跃状态与持久化引用未重置导致的跨会话状态残留与指令发往已销毁会话的缺陷。
-- **课堂简报历史会话精准报告与真实投票聚合 (`CRITICAL-03`)**：修复 `src/features/classroom/ClassroomBriefingView.tsx` 与 `server/routes/classroom.ts` 中简报仅拉取全局活跃会话、以及随堂投票使用前端硬编码模拟数据的缺陷。支持通过 `?sessionId=` 查看历史已归档会话简报，并从数据库聚合真实投票选项分布与参与率。
-- **Browser Worker Manager 激活流程内部 RPC 路由器保活 (`CRITICAL-04`)**：修复 `src/plugin-host/browser-worker-manager.ts` 中插件 `activate()` 覆盖 `self.onmessage` 时导致宿主内部 Worker RPC 通信链路中断的缺陷。改为包装代理原消息分发器。
-- **课堂会话管理跨教师越权防护 IDOR Defense (`HIGH-01`)**：在 `server/routes/classroom.ts` 中为 `GET /api/classroom/sessions`、`POST /api/classroom/sessions/:sessionId/transition`、`POST /api/classroom/sessions/:sessionId/archive`、`DELETE /api/classroom/sessions/:sessionId` 以及会话详情接口增加 `canManageClassroomSession` 权限校验，防止普通教师越权操作或删除其他教师的课堂会话。
-- **插件网络代理私有地址/元数据/DNS 重绑定防护 (`HIGH-02`)**：加固 `packages/core/worker-runtime/plugin-net-proxy.ts` 与 `service-host.ts`，禁止插件通过 `fetch` 访问回环地址、RFC 1918 私网网段、云厂商链路本地与元数据服务（169.254.169.254、fd00::/8 等），并在宿主代发请求前增加基于 `dns.lookup` 的解析 IP 边界校验，阻断 DNS 重绑定 SSRF 攻击。
-- **课堂实时事件广播 Room 命名空间规范化与锁定状态释放 (`HIGH-03`)**：规范 `server/routes/classroom.ts` 中的 Socket 事件广播，统一使用 `emitClassroomEvent` 向真实订阅的课堂 Room 广播，移除历史遗留的无效房间前缀；在课堂会话归档或删除时自动释放受影响学生的 `locked_lesson_id` 锁定。
-- **班级删除级联清理课堂会话与插件作业生态 (`HIGH-04`)**：完善 `server/services/roster-service.ts` 中的 `deleteClassCascade` 事务，同步物理清理关联的课堂会话（含投票、选票、抢答、结课通票、节奏信号、弹幕、互评与动态流）及插件作业生态（含提交版本、附件、互评任务与评分），杜绝孤儿数据残留。
-- **前端 SocketService 重连与身份切换事件监听器保活 (`HIGH-05`)**：在 `src/services/socket-service.ts` 引入 `onSocketInstance` 监听机制，确保底层 Socket 实例因网络波动重连或身份切换重新初始化时，既有组件注册的业务监听器能够平滑重新挂载，避免事件静默丢失。
-- **插件前端沙箱二次导航熔断与崩溃感知 (`HIGH-06`)**：在 `server/utils/plugin-sandbox-frame.ts` 与 `src/plugin-host/plugin-host.ts` 中强化 iframe 沙箱，注入 `location.replace/assign` 与 `window.open` 拦截钩子，发生二次导航时自动熔断并向宿主上报安全违规；宿主渲染器增加崩溃探测心跳与 Suspense 错误边界保护。
-- **课堂会话看板搜索防抖与请求竞态取消 (`HIGH-07`)**：在 `src/features/classroom/ClassroomSessionManager.tsx` 引入 250ms 搜索输入防抖与 `AbortController` 请求取消机制，消除输入高频请求抖动与并发竞态乱序覆盖问题。
-- **社区插件 Ed25519 签名与流式哈希完整性校验 (`MEDIUM-02`)**：在 `server/services/community-attest.ts` 与 `server/routes/plugins.ts` 中收紧社区插件安装与发布校验，验证 `.openlearn-package-attestation.json` 签名并在校验失败时即时清理临时解压目录与暂存文件。
-- **随堂倒计时运行时定时器清理与状态隔离 (`MEDIUM-03`)**：在 `server/shared-state.ts` 与 `server/routes/classroom.ts` 中规范化倒计时运行时维护，新增 `clearLessonRuntimeState`，在课节结束或删除时彻底清除内存中残留的定时器句柄与状态。
-- **课节级联删除深度覆盖独立插件提交与评分 (`MEDIUM-04`)**：在 `server/services/lesson-service.ts` 中的 `deleteLessonCascade` 事务中补充对无作业外键关联的独立插件提交（`assignment_id IS NULL`）、历史版本文件、互评与成绩的级联清理，并在删除后触发 `clearLessonRuntimeState`。
-- **课堂会话删除弹窗无障碍与授课视图定时器泄漏修复 (`MEDIUM-06`)**：修复 `ClassroomSessionDeleteModal.tsx` 的 ESC 键与遮罩交互处理；在 `LiveClassroomView.tsx` 组件卸载时安全清理画板恢复定时器与学生窗口检查定时器。
-- **班级/学生名册导入后页面自动刷新**。以前教师通过 ImportModal 上传 CSV 完成后，必须手动刷新页面才能在 ClassesView 看到新增的班级与学生。`bulkImportService` 已经调用了 `fetchClasses()` / `fetchStudents()`，但 `classSlice` 的 `set({ classes })` 之后 `useAppStore` 订阅在某些边界场景下被浅比较判定为未变化，整条 `useAppComposer → appData → AppDataProvider → ClassesView` 重渲染链路不触发。`classSlice` 引入 `dataVersion` 自增计数器：`loadClasses` / `loadStudents` 完成后 `dataVersion+1`；`useLessonsSlice` / `useClassroomSlice` / `useSessionSlice` 均订阅 `dataVersion`，从而在数组引用未变化时仍强制 `appData` 引用更新。导入完成后 ClassesView 立即看到新班级与新学生。
-- **会话桥 `requires` 精确匹配**。插件网关下发 `edu_os_token` 前，用与宿主相同的 `parseRequiresEntry` 去掉版本后缀，再要求 Token 全名等于 `@openlearn/core:IAuthSessionBridgeService`。只包含该名字子串的声明（例如 `NotReallyIAuthSessionBridgeServiceX`）不再获得 `Set-Cookie`。声明 `@openlearn/core:IAuthSessionBridgeService@^1.0.0` 的插件行为不变。
-
-- **从 v0.6.1 升级时，迁移前快照失败会中止，更新的库也不会在旧二进制上被当成就绪**。非测试进程里 `VACUUM INTO` 失败会在应用 SQL 前抛错。`/health/ready` 发现 `_migrations` 含有磁盘迁移清单里没有的名字时返回 503，名字只写日志。备份校验同时要求 `lessons` 与 `_migrations`。`duplicate column name` 仍会被忽略，校验和算法不变。
-
-- **公测旅程 CI 在生产模式下改用强测试口令启动**。`scripts/e2e-beta-server.mjs` 不再把 `OPENLEARN_ADMIN_PASSWORD` 设为 `admin`，否则启动校验拒绝启动，Playwright 等不到服务。该口令只用于这条旅程；应用的生产口令策略不变。教师口令本来就不等于用户名 `teacher`，未改。
-
-- **插件类型补上 `INetworkProxyServiceToken`**。运行时已经从 `@openlearn/plugin-sdk` 导出该 Token，`packages/plugin-sdk/openlearn.d.ts` 此前没有声明，插件 `import` 会报 TS2305。声明与导出与运行时对齐。Worker 出站仍由宿主代理，默认拒绝未列入允许名单的地址，行为不变。
-
-- **恢复已装插件时复检 `engines.openlearn`**。重启时 `restoreActivePlugins` 不再无条件激活 `status=active` 的插件。声明了 `engines.openlearn` 且宿主版本不满足该范围（含非法 semver）时，跳过激活、把状态写成 `error`、在日志里记下范围和宿主版本，插件文件留在磁盘上。没有 `engines` 的插件仍按原来的方式恢复。装上之后需要更新那些被跳过的包。
-- **进行中的 live_class 不能再换班**。进入授课后顶栏班级改为只读，并提示「需结束本节课才能换班」。`IN_CLASS_TEACHING` / `WRAP_UP_EXIT_TICKET` 期间，初始化会话、阶段推进和 `teacher-broadcast-lesson` 若携带另一个 `classId` 会得到 409，数据库里的班级保持不变。刷新、地址栏 `classId` 和起始门户「下一节课」都会被拉回本节课已绑定的班级。课前准备阶段仍可在起始门户重选；结束或归档后新会话可以换班。
-
-- **随机点名助手只抽取已经进入本节课的学生**。候选不再是全班花名册：服务端 `GET /api/classes/:classId/picker-candidates?lessonId=` 与白板组件都按 Socket.IO 在场状态过滤（当前在线，且 `enter-lesson` 指向这一节）。学生 `leave-lesson` 或断线后立即离开候选池；没人在场时提示「当前课堂没有在场学生」，不再退回演示名单。公平加权（本堂 / 学期抽中次数）仍作用在在场池上。不带 `lessonId` 的旧调用仍返回全班名单。
-
-- **互动课堂「本节课教学蓝图」不再把环节时长显示成 NaN**。教案时间线存的是 `5m` 这类字符串，蓝图、课前就绪页和课堂节奏派生却把 `duration` 当数字秒相加，`"5m" / 60` 得到 NaN，进度条宽度也变成 0。现在统一解析 `5m` / `90s` / `1h`、数字秒，以及旧字段 `durationMinutes`、`durationMin`、`estimatedDurationSeconds`。字段缺失时蓝图按 5 分钟，写了但无法识别时显示「未设置」，不再出现 NaN。
-- **Socket.IO 握手会拒绝协议版本不匹配的连接**。`engine.io` 下限升到 `>=6.6.10`（当前解析 6.6.11，修复 GHSA-2gc4-cqfq-p2gv / CVE-2026-102599）。正常的 `socket.io` 4.8 客户端不受影响。自制或过旧的 Engine.IO 客户端如果故意发送不匹配的协议修订号，连接会被断开，而不是把进程挂住。直接依赖同步为 `socket.io` / `socket.io-client` `^4.8.4`。
-- **限流使用的 `ip-address` 下限升到 `>=10.7.1`**（当前 10.7.4）。`isInSubnet()` / `isHostInSubnet()` 不再把不同地址族当成同一个地址空间（GHSA-j6r3-76f7-8jcv）。如果部署里有人依赖「IPv4 与 IPv6 互相命中白名单」这个错误行为，升级后这些地址会被拒绝。`Address6` 对超长字符串也不再无界分配（GHSA-h3mg-xc3c-68pw）。
-- **`exceljs` 内部的 `uuid` 从 8.3.2 换到 11.1.1**。exceljs 4.4.0 仍声明 `uuid@^8.3.0`，上游没有带修复的版本，因此只用 pnpm override 替换 `exceljs > uuid` 这一条边（GHSA-w5hq-g745-h8pq）。exceljs 只调用 CJS `v4()`，11.1.1 仍提供该导出。平台自己的直接依赖本来就是 `uuid` 14，不在这次替换范围内。不要从 exceljs 的依赖树里再取 uuid v8 的 buffer API。
-
-### Refactor / Performance
-
-- **管理后台 AI 提供商页从 `AdminPanel` 拆出**：列表、表单状态和编辑弹层移到 `src/features/admin/AiProvidersPanel.tsx`。`ai_providers` 标签、扩展点参数、请求路径和页面文案保持不变。
-- **启动时清理过期总线事件**。`events` 不再无限增长；默认保留 90 天（破坏性行为，见上方 Breaking Changes）。谓词只比较 `timestamp`，使用已有的 `idx_events_timestamp`。
-- **课节进度一次聚合，班级仪表盘不再返回作业×学生的空单元格**。`GET /api/classes/:classId/lessons/:lessonId/progress` 用连接和 `GROUP BY` 计算每个学生在该课作业上的最高分，字段与原来相同。班级仪表盘的 `performance` 只包含已有提交的行（`assignment_id`、`assignment_title`、`student_id`、`student_name`、`score`、`submission_status`、`submitted_at`、`graded_at`、`feedback`）。成绩热力图对缺失格子仍显示「-」。迁移 `025` 为 `assignment_submissions(student_id)` 和 `assignments(lesson_id)` 建索引，可重复执行。
-
-- **激活 SQLite WAL 只读连接池实现读写物理隔离 (PERF-01)**：
-  - 激活内建的 `ReadConnectionPool`（按 CPU 核心数自动池化伸缩并开启 `PRAGMA query_only = ON`）；
-  - `ScheduleService`、`LessonService`、`DiagnosticService`、`RosterService` 及其对应的只读 REST 端点（课表、课节列表/详情/统计/互评、学情诊断/错题排行/卓越答题榜、班级花名册/机房座位/学情进度矩阵/通知已读）平滑迁移至只读连接执行；
-  - 彻底解耦高频与慢速读查询与写事务的物理句柄竞争，消除耗时列表与聚合查询造成的主写连接霸占，杜绝 `SQLITE_BUSY` 假死。
-- **课堂互动高频查询与级联删除数据库索引优化 (`MEDIUM-05`)**：新增 `migrations/028_classroom_indexes.sql`，为 `classroom_buzzers(session_id, student_id)`、`classroom_buzzers(session_id, buzzed_at)` 以及 `classroom_sessions(academic_year, stage)` 建立复合索引，大幅提升高并发抢答查重与多维历史档案检索效率。
-
-### Security
 
 - **白板代码沙箱不再携带页面会话**。点击「运行」仍会执行片段，但片段跑在 Blob Worker 里，执行前会去掉 `fetch`、XHR、WebSocket、`importScripts`、嵌套 `Worker` 以及 `eval` / `Function`，因此不能再用当前登录 Cookie 调用平台接口。组件上的说明改为 “Pure computation only. No page session, cookies, document, or LMS API.”。只做本地计算的演示保持可用；依赖 `document` 或同源 `/api` 的旧片段会失败。
+
 - **AI 对话、批改和课表不再跟随未复检的重定向**。出站请求改为逐跳手动跟随：公网 http(s) 可以继续，跨主机指向回环、私网或链路本地（含云元数据地址）的跳转会中止，并且不会把已解密的 Bearer 发到那个地址。管理员写明的首跳仍可以是本机或内网推理服务；链路本地和云元数据主机名在首跳也会被拒绝。失败信息只保留 HTTP 状态码，不再附带响应体。若提供商必须经过跳转才能到达接口，把 `api_url` 改成最终的 https 地址后重新保存密钥。
+
 - **生产环境拒绝 `PLAYWRIGHT_TEST`**。`NODE_ENV` 精确为 `production` 且 `PLAYWRIGHT_TEST` 为 `1` 或 `true` 时，启动打印致命日志并中止，进程不会开始监听。变量若在进程环境里，数据库初始化直接抛错；若只写在 `.env`（入口在依赖初始化之后才加载），则在监听前退出。该变量会跳过默认口令门禁，并放宽登录、写入和 AI 限流。`NODE_ENV=test` 的 Vitest，以及未处于 production 的 Playwright 开发服务器，仍可使用该变量。公测旅程配置本来就不会设置它。升级前从生产 `.env` 和 PM2 ecosystem 中删除 `PLAYWRIGHT_TEST`。
+
 - **启动时加密仍为明文的 AI Provider API Key**。数据库就绪后，`ai_providers.api_key` 里非空且不是 `iv:tag:cipher` 三段十六进制的值会用现有 `ENCRYPTION_KEY` 做 AES-256-GCM 写回。空字符串保持为空；已经是密文的行跳过，可以重复执行，逐行提交。此后 `decryptApiKey` 遇到非密文直接抛错（`status` 500），不再把历史明文原样返回。更换 `ENCRYPTION_KEY` 后旧密文仍然无法解密，与现在相同。
+
 - **生产 CORS 只接受显式来源**。`NODE_ENV=production` 时，带 `Origin` 的请求只有列在 `ALLOWED_ORIGINS` 中才会回写 `Access-Control-Allow-Origin` 与 `Access-Control-Allow-Credentials: true`。`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0` 不再自动放行，Origin 的 host 与 `Host` 头相同也不再当成同源。没有 `Origin` 的请求仍然放行。非生产环境继续放行回环地址和任意来源。`ALLOWED_ORIGINS=*` 仍是不带凭证的通配。
+
 - **学生登录拒绝明文口令，失败文案不再暴露账号是否存在**。库存口令不以 `$2` 开头时不再与提交值做相等比较。64 位十六进制（旧 SHA-256）仍在登录成功时升级为 bcrypt。其它非 bcrypt 值登录失败，审计原因为 `plaintext_password_rejected`，响应和审计都不回显口令，也不把该行改写成新哈希。教师的「用户不存在 / 密码错误」与学生的「学号不存在 / 口令错误」对客户端都返回 `Incorrect username or password`；审计日志仍区分原因。禁用账号仍是 403。
+
 - **GDPR 删除改为仅管理员**。`DELETE /api/students/:id/gdpr-delete` 不再把 `teacher` 列入 `requireAuth`。能看到该生的教师也不能擦除。
+
 - **插件开发面板改为静态解析 Manifest**。编辑器里的源码不再用 `new Function` 执行。预览复用静态提取，仍显示 `id`、`name`、`version`、`author`。只有执行脚本才能算出的清单不再进入预览。
+
 - **班级临时口令改为加密存储**。`classes.class_passcode` 用现有 `ENCRYPTION_KEY` 做 AES-256-GCM（密文前缀 `olenc1:`）。教师接口仍返回原文。登录按学生所在班级取出密文，解密后做常量时间比较。迁移 `023` 会在启动时把仍是明文的行加密，已加密的行跳过，可以重复执行。列表、访问日志和审计日志不返回口令或密文。`site-backup` 导出的数据库里是密文，并排除 `storage/encryption-key`。
+
 - **未设置 `ENCRYPTION_KEY` 时不再使用临时内存密钥**。首次启动用 `crypto.randomBytes` 生成 64 位 hex，写入数据目录 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动读取它。启动日志和管理后台会警告：正在使用自动生成的密钥，应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与已持久化的文件不一致时拒绝启动并说明如何处理。代码里没有默认密钥。
+
 - **AI Agent 工具权限隔离与真实 Actor 透传 (SEC-01)**：
   - 学生端调用 `/api/agent/chat` 时动态过滤掉系统管理、写操作、进程派生、VFS 写入等高危动作，并注入学生专属只读启发式引导词；
   - 工具派发严格使用调用方会话的真实 `actorId`（如 `user:${studentId}:student`），彻底废除将非管理员无条件提升为全局写权限特权身份 `agent-system-0` 的漏洞，杜绝学生通过自然语言诱导 AI 越权篡改课程与班级。
+
 - **学生已读通知接口 IDOR 水平越权修补 (SEC-02)**：
   - `GET` 与 `POST /api/students/:id/read_notifications` 增加所有权与教职工归属判定，阻断学生枚举或伪造标记全校其他学生的通知状态。
+
 - **全局 BodyParser 收紧与限流前置防护 (SEC-03)**：
   - 全局 `express.json` 体积上限从 110MB 严格收紧至安全默认值 2MB；仅在 `/api/courseware/upload` 等大文件上传端点局部放开；
   - 将写操作限流中间件前置于请求体解析之前，杜绝攻击者通过并发畸形大 Payload 耗尽 V8 堆内存造成 DoS。
+
 - **课件上传同级逃逸与 Zip Bomb 防护 (SEC-04)**：
   - `builtin.ts` 课件解压对齐带路径分隔符的严格沙箱前缀校验（`storageDir + path.sep`），防御同级目录逃逸；
   - 解压前增加预检门禁：解压后未压缩尺寸上限 300MB、条目数上限 2,000，阻断 Zip 炸弹攻击。
+
 - **插件信任边界 PL-01 至 PL-08。** 伪造的 `@openlearn/` 前缀不能 inline；插件前端离开主页面；命令 actor 由宿主注入并拒绝空 actor；能力与出站域名要管理员批准；SQL 改为表前缀白名单；建表和卸载使用同一个安装主键；社区包校验哈希与签名；子进程经入口脚本拒绝未批准的出站连接，并加上 RSS 与 CPU 窗口。对应回归在 `packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts`。
+
 - 依赖审计从审计报告记录的 36 项（1 critical、11 high、18 moderate、6 low；本分支开工时 lockfile 已无 critical，仍为 11 high、18 moderate、6 low）收到 **0 项**。没有使用 audit 忽略配置。CI 的 `security-audit` 去掉 `continue-on-error`，对官方 registry 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败。`pnpm lint:strict` 继续作为 `typecheck-and-test` 的阻断步骤（此前已在该 job 中，现在能通过）。
+
 - 其余安全下界（均写在 `pnpm-workspace.yaml` 的 `overrides`，按版本范围精确替换，没有整包忽略）：
   - `brace-expansion@>=4` → `5.0.12`（minimatch 10 / typescript-eslint；v1/v2 不动）
   - `undici@>=7 <8` → `7.30.0`（jsdom 29 的测试环境；不升到 undici 8）
@@ -551,63 +643,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `@tailwindcss/typography>postcss-selector-parser` → `7.1.6`（typography 0.5.20 把 6.0.10 钉死，6.x 没有补丁；构建期 API `astSync` / `selector()` 保持可用）
   - `vitest` 升到 `^4.1.11`（GHSA-82fw-gwwq-j7x9，测试期路径穿越）
   - `express-rate-limit` 升到 `^8.7.1`（仍依赖 `ip-address@^10`，实际修复靠上面的 override）
+
 - **课件嵌入默认收紧为同源（P0-1）**：未设置 `ALLOWED_FRAME_ORIGINS` 时，生产环境 `frame-ancestors` 与 `frame-src` 只保留 `'self'`，不再回退到 `http://localhost:*`。此前反代漏配 `ALLOWED_FRAME_ORIGINS` 时，任何能起本地 Web 服务的进程（被攻陷 sidecar、恶意插件起的静态服务器、共租户邻居）都能把平台嵌进 click-jacking 页面。开发环境仍保留 `localhost:*`（`NODE_ENV` 非 `production`）；需要额外嵌入来源时显式配置 `ALLOWED_FRAME_ORIGINS`。
+
 - **桥接 SDK 出站消息不再静默广播到 `"*"`（P0-2）**：`LMS.submit` / `saveProgress` / `finish` / `log` / `getProgress` 与 fetch / XHR / axios / beacon / form 遥测统一经 `__lmsHostOrigin()` 定向到宿主 origin；`__LMS_HOST_ORIGIN__` 缺失或为空（反代剥掉 Host 头、curl 直连等）时默认拒绝发送，仅在显式 `window.__LMS_ENFORCE_ORIGIN__ = false` 时才回退旧行为。`/bridge.js`（白板 srcDoc 路径）与 `injectLmsSdk`（`/runtime`、`/api/resources`、`/api/courseware` 直出 HTML）按请求 Host 注入宿主 origin 与 enforce 标志，origin 解析共用 `resolveRequestHostOrigin()`，避免两处推导漂移。
 
-### Fixes
+### Refactor / Performance
 
-- **生产镜像可以按文档从零构建**。`Dockerfile` 在 `pnpm install` 之前复制 `.npmrc`，并把 pnpm 钉在 `10.33.4`。此前 `corepack prepare pnpm@latest` 使用默认的 `minimumReleaseAge`，锁文件里当天发布的传递依赖会被拒绝，构建在安装阶段失败。`pnpm prune --prod` 在无 TTY 的构建里还会中止，现改为 `CI=true`。
-- **CI 的 pnpm 固定为 `package.json` 的 `packageManager`（`pnpm@10.33.4`）**。`pnpm/action-setup` 不再使用 `version: latest`。pnpm 12 默认的 `minimumReleaseAge` 会拒绝锁文件里当天发布的 `caniuse-lite` 与 `electron-to-chromium`，`pnpm install --frozen-lockfile` 在安装阶段失败。仓库的 `.npmrc` 仍是 `minimum-release-age=0`，没有为了过 CI 关掉这条策略。GitHub Actions 的 JavaScript action 升到各自的 Node 24 主版本。
-- **架构文档漂移审计的三处误报**：发布说明里已下线的 `national-smart-edu` 不再被当成当前插件；`audit-tools/reports/` 是 gitignore 的生成物；「已于某日删除」算墓碑。`packages/core/types` 只有 `semver` 的 ambient 声明，不算子系统。
-- **Windows 权限探针不再读 `/etc/hostname`**。该路径在 Windows 上不存在，`off` 策略得到 `ENOENT`，平台探测 job 里的 worker-runtime 用例失败，随后的 verbose dump 也失败。探针改为读取测试自己创建的、位于插件目录之外的文件。
-- **Windows 上 `019_plugins_version.sql` 的分段测试认 CRLF**。`core.autocrlf=true` 时文件是 `-- UP\r\n`，用例用 `-- UP\n` 查找，整组报「缺少 -- UP 段」。读入后先把换行归一成 LF。
-- **备课「添加到画板」会等白板挂载**。调色板在主包，白板是 lazy chunk。chunk 还没好时 `whiteboardRef` 为空，点击被静默丢掉，元素不落库。现在最多等 15 秒再插入。浏览器 E2E 会先等到画布出现，并按班级名称点选；检索框只在班级超过 2 个时才出现，不能当必经步骤。
-- **迁移失败拒绝启动**。缺迁移目录、迁移 SQL 失败、种子账号写不进去，都会以 `[Migration] FATAL` 或 `[DB SSOT] FATAL` 打到 stderr 后退出。迁移前快照改为 `VACUUM INTO`，避免只复制主库文件时漏掉 WAL。
-- **种子口令文件写到数据目录的 `storage/`**。容器设置 `OPENLEARN_DATA_DIR` 后，`bootstrap-credentials.txt` 与课件在同一卷。
-- **空归属班级可以按用户名回填**：`node scripts/backfill-class-owners.mjs --assign <用户名>`。站点备份脚本同时打包数据库和 `storage` / `plugins` / `uploads`。
-- **PM2 配置会把 `TRUST_PROXY`、种子口令和数据目录从 `.env` 传进进程**。此前 `ecosystem.config.cjs` 的 `env` 块没有这些键，反代后面的限流仍按连接地址分桶。
-- **`reset-admin` 不再把口令重置成 `admin`**。未指定 `--password` 时随机生成并打印一次；口令等于用户名时把 `must_change_password` 置 1。
-- **生产环境加载 plugin-sdk 不再依赖 `pino-pretty`**。日志目录不可写时只打到 stdout，并说明原因，而不是在 import 阶段退出。容器默认 `LOG_DIR=/data/logs`。
-- **容器里的插件目录跟数据卷走**。设置 `OPENLEARN_DATA_DIR` 时，内核插件目录是 `<数据目录>/plugins`，不再是进程工作目录下的 `/app/plugins`（node 用户写不了，容器一重建插件也没了）。创建失败时日志以 `[Kernel] FATAL` 开头。
-- **生产镜像保留 `esbuild`**。插件安装会在运行时 `import('esbuild')` 做安全扫描和打包。它原先只在 `devDependencies`，`pnpm prune --prod` 把它删掉后，容器里安装插件返回 500 `Cannot find package 'esbuild'`。现在它是生产依赖。
-- **已批准的插件公开 GET 不再被详情路由提前 401**。`GET /api/plugins/:id(*)` 会先匹配 `/api/plugins/<id>/<子路径>`。鉴权写在路由中间件上时，`next()` 放行网关的代码根本执行不到，管理员写入 `plugin_public_routes` 之后匿名 GET 仍是 401。现在含 `/` 的路径先交给网关，纯插件 id 的详情查询仍然要登录。
-- **第三方插件激活日志写出真实隔离方式**。子进程隔离此前仍打印 `activated in WORKER mode`。现在打印 `process` 或 `thread`。只读数据卷启动失败时，入口先打一行 `[Startup] FATAL`，不再先刷满 `chown` 错误。
+- **课程编辑器属性栏移除 X/Y 坐标输入（Issue #97）**：`WhiteboardPropertiesSidebar.tsx` 的「物理定位 & 尺寸」卡片不再提供 X 坐标 / Y 坐标数字输入框，标题简化为「尺寸」——组件位置统一通过在画布上拖动调整（`x`/`y` 数据结构与保存逻辑不变，拖动后照常落库），消除属性栏与拖拽两条位置修改通道并存导致的不一致。宽度 / 高度 / 半径输入保留不变；`InteractiveWhiteboard.tsx` 复用同一属性栏，互动课堂白板行为同步收敛。
 
-- **严格类型检查 14 处诊断**：退出票在没有题目时不再读取 `coreQuestion` / `challengeQuestion`；课后反思的 `lectureRatio` 改为 `number | null`，简报在未采集讲授时长时显示「讲授用时未采集」，不再把空值当成 0% 或渲染成 `null%`。命令面板和快速插入把扩展点 `slotProps` 按字段校验，`getCommand` / `getItem` 改为登记表上的必选方法。
-- **插件 ZIP 上传中断后不再留下临时文件**。`createWriteStream` 的 `open` 发生在下一拍；若在此之前 `rmSync`，随后的 `open` 会把同一路径重新创建出来。现在等写入流 `close` 之后再删除。
+- **管理后台 AI 提供商页从 `AdminPanel` 拆出**：列表、表单状态和编辑弹层移到 `src/features/admin/AiProvidersPanel.tsx`。`ai_providers` 标签、扩展点参数、请求路径和页面文案保持不变。
 
-- **未受信任插件不能再在宿主进程或 Worker 线程里运行**。manifest id 不以 `@openlearn/` 开头、且不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 中的插件，在安装、更新、激活和进程启动恢复（`restoreActivePlugins`）时都会被改写成 `executionMode=process`（独立子进程 + 最小环境变量，不继承名称含 KEY/SECRET/TOKEN/PASSWORD/AUTH 的变量，也不继承 `NODE_OPTIONS`）。清单或安装参数里的 `inline` / `worker` 会被忽略，接口返回 `executionMode: "process"` 与 `executionModeCoerced: true`。Worker 线程与宿主共享 `process.env`，因此不再作为第三方插件的隔离方式。
-  - **迁移**：需要某个自研插件继续进程内运行时，在环境变量写 `OPENLEARN_TRUSTED_INLINE_PLUGINS=ext-your-plugin,ext-other` 后重启。预加载进宿主的内置代码不受此限制。已安装的库内记录会在下次启动恢复时改写。子进程仍受 `OPENLEARN_PLUGIN_PERMISSION`（默认 `rw`）与 `OPENLEARN_PLUGIN_MAX_HEAP_MB` 约束；Node 权限模型目前约束不了出站网络。
-- **插件清单 `auth: false` 不再让路由匿名可访问**。它只表示插件申请公开。匿名放行还要求管理员把 `METHOD + path` 写入 `plugin_public_routes`（迁移 `022`）。批准方式：安装/更新请求体 `approvePublicRoutes: true`，或头 `x-approve-public-routes: true`，或 `POST /api/plugins/:id/public-routes` 且 body `{ "approvePublicRoutes": true }`。对该端点省略或传 `false` 会清掉该插件已批准的公开路由。卸载插件时一并删除。
-  - **迁移**：升级后，原先靠 `auth: false` 对匿名用户开放的接口会返回 401。由管理员按上面三种方式之一重新批准。不要在社区一键安装时默认勾选。
-- **`POST /api/plugins/install-from-url` 在 URL 安全校验通过后、下载之前要求 `acknowledgeRisk: true`**。缺失时返回 400，`code` 为 `COMMUNITY_RISK_ACK_REQUIRED`。管理界面会先弹出风险说明，确认后才发请求。
-  - **迁移**：调用该接口的脚本补上 `"acknowledgeRisk": true`。公开路由仍须另传 `"approvePublicRoutes": true`。
-- **`pnpm install` 会通过 `prepare` 构建 `@openlearn/plugin-sdk` 的 `dist/`**。`pnpm build`、CI 与 Docker 镜像同样包含这一步，生产镜像内可以 `require('@openlearn/plugin-sdk')`。
-  - **迁移**：使用 `pnpm install --ignore-scripts` 时，在 `pnpm lint` / 启动前执行 `node scripts/build-plugin-sdk.mjs`。不要把未构建的 SDK 目录拷进只含 `node_modules` 的运行镜像。
+- **启动时清理过期总线事件**。`events` 不再无限增长；默认保留 90 天（破坏性行为，见上方 Breaking Changes）。谓词只比较 `timestamp`，使用已有的 `idx_events_timestamp`。
 
-- **种子账号不再长期使用 `admin` / `admin`、`teacher` / `teacher`**。空库首次启动：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或从启动日志与 `storage/bootstrap-credentials.txt` 读取随机口令。存量库若口令仍等于用户名，仍可登录，但 `must_change_password` 会置位，除改密、登出、`/api/auth/session`、`/api/auth/me` 外的 `/api` 请求（含 GET）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。生产环境不要设置 `PLAYWRIGHT_TEST`。
-- **`TRUST_PROXY` 默认改为不信任转发头**（未设置、空、`false`、`0` 均为关闭）。Nginx / 其他反代部署必须显式配置，例如 `TRUST_PROXY=1`。直连公网的进程不要打开信任，否则写请求限流可被伪造的 `X-Forwarded-For` 拆桶。
-- **历史班级 `owner_user_id` 为空时仅管理员可访问**。升级后请由管理员执行 `UPDATE classes SET owner_user_id = '<教师用户 id>' WHERE owner_user_id IS NULL;`，或 `PUT /api/classes/:id` 传入 `owner_user_id`（仅管理员）。班级列表与学生仪表盘不再返回 `class_passcode`；任课教师读取已保存口令用 `GET /api/classes/:id/passcode-setting`（不轮换）。课堂临时口令仍走会轮换的 `GET /api/classes/:id/passcode`。
+- **课节进度一次聚合，班级仪表盘不再返回作业×学生的空单元格**。`GET /api/classes/:classId/lessons/:lessonId/progress` 用连接和 `GROUP BY` 计算每个学生在该课作业上的最高分，字段与原来相同。班级仪表盘的 `performance` 只包含已有提交的行（`assignment_id`、`assignment_title`、`student_id`、`student_name`、`score`、`submission_status`、`submitted_at`、`graded_at`、`feedback`）。成绩热力图对缺失格子仍显示「-」。迁移 `025` 为 `assignment_submissions(student_id)` 和 `assignments(lesson_id)` 建索引，可重复执行。
 
-### Features
+- **激活 SQLite WAL 只读连接池实现读写物理隔离 (PERF-01)**：
+  - 激活内建的 `ReadConnectionPool`（按 CPU 核心数自动池化伸缩并开启 `PRAGMA query_only = ON`）；
+  - `ScheduleService`、`LessonService`、`DiagnosticService`、`RosterService` 及其对应的只读 REST 端点（课表、课节列表/详情/统计/互评、学情诊断/错题排行/卓越答题榜、班级花名册/机房座位/学情进度矩阵/通知已读）平滑迁移至只读连接执行；
+  - 彻底解耦高频与慢速读查询与写事务的物理句柄竞争，消除耗时列表与聚合查询造成的主写连接霸占，杜绝 `SQLITE_BUSY` 假死。
 
-- **白板课件演示套件重构（替换为现代化 OOXML PPTX Viewer）**：
-  - 彻底移除已废弃且存在渲染空白与挂死缺陷的 `pptx-preview@0.0.5`；
-  - 接入企业级高保真演示套件 [ChristopherVR/ooxml](https://github.com/ChristopherVR/ooxml) 官方 React 绑定 `pptx-react-viewer`，天然兼容 React 19；
-  - 修复 PPTX 课件视口尺寸计算、异步加载及单页放映逻辑，实现与白板教师/学生翻页状态双向同步及总页数自动更新；
-  - 解决全屏放映与普通卡片视图下的 DOM Ref 冲突，提供优雅的加载态与错误重试机制；
-  - 优化 Vite 分包策略，将 `pptx-react-viewer` 及 `ooxml` 依赖精准打包至独立的 `vendor-pptx` chunk，保障首屏体积不膨胀。
+- **课堂互动高频查询与级联删除数据库索引优化 (`MEDIUM-05`)**：新增 `migrations/028_classroom_indexes.sql`，为 `classroom_buzzers(session_id, student_id)`、`classroom_buzzers(session_id, buzzed_at)` 以及 `classroom_sessions(academic_year, stage)` 建立复合索引，大幅提升高并发抢答查重与多维历史档案检索效率。
 
-### Fixes
+### Docs
 
-- **依赖审计清零并收紧 CI 门禁**：`pnpm-workspace.yaml` overrides 钉死 `engine.io`、`ip-address`、`uuid`、`dompurify`、`undici@>=7 <8`（7.30.0）、`brace-expansion@>=4` 等已修补版本；升级 `socket.io` / `socket.io-client` 与 `vitest`。锁文件用 `pnpm@10.33.4` 重新生成，不关闭 `minimum-release-age`，也不把同日 browserslist 数据库钉死在更旧版本上。`pnpm audit`（官方 registry）对 high+ 失败即红（`security-audit` 不再 `continue-on-error`）。
-- **严格类型检查通过并并入主 tsconfig**：修复退出票空值、`lectureRatio: number | null`、命令面板 / 快捷插入隐式 any 与可选 registry 方法共 14 条 `lint:strict` 诊断；主 `tsconfig.json` 开启 `strict` / `noImplicitAny` / `strictNullChecks`。
-- **PPTX 演示组件国际化运行时异常修复**：
-  - 修复 `pptx-react-viewer` 在宿主未显式配置 i18n 资源时访问 `i18n.options.resources` 导致的 `Cannot read properties of undefined` 崩溃；
-  - 宿主侧安全初始化 `i18next` 实例并传入 `availableLocales` / `defaultLocale="zh-CN"` 双重兜底。
-- **班级 / 作业 / 提交 / 成绩按角色和班级成员授权**：学生只能访问自己所在班级和自己的提交与成绩；教师只能访问 `owner_user_id` 指向自己的班级；管理员保持全量。作业 JSON 对学生隐藏答案字段。管理插件的班级列表与学生列表同样去掉口令与密码哈希。
-- **限流不再信任伪造的 `X-Forwarded-For`**：`trust proxy` 默认关闭；登录桶按账号（含学号），写请求桶按当前信任设置下的客户端地址。`proxy-addr` 锁定到 `>=2.0.8`（修复 GHSA-jqcg-44mw-7w3h）。
-- **`AppDataContext` 漏传 `fetchClasses` 致 `/#/classes` 页面「随机生成 / 清除 / 创建班级」报 `TypeError: fetchClasses is not a function`**：根因为 `useAppComposer.appData` 拼装时漏了 `fetchClasses,`，且 `AppExtras` 类型未声明该字段；`ClassesView` 通过 `useAppData() as unknown as ClassesViewProps` 撒谎式透传到 `ClassPasscodeController` / `CreateClassButton`，单测因直接 mock prop 未发现。修复：`AppExtras` 补 `fetchClasses: () => Promise<void>`，`useAppComposer.appData` 补 `fetchClasses,`；同步加 `AppDataContext.test.tsx` 类型层守卫（`pnpm lint` 拦截）以防回归。
+- **多租户决策：一校一实例（ADR-001，Issue #149）**：明确平台采用「一个学校 = 一个实例 = 一个数据库 = 一个数据目录」，多校通过多容器 / 多库部署，不引入 `school_id` 横切核心表与插件表；数据库继续使用 SQLite，暂不引入 ORM / 查询构建器，并给出触发重新评估的条件（托管 SaaS、单实例写瓶颈、跨库统一报表）。
+  - 新增 `docs/architecture/adr-001-tenant-and-db-abstraction.md`（决策、理由、代价、备选方案与数据库抽象评估结论）。
+  - 新增 `docs/deployment/multi-school.md`（逐实例 `.env`、Compose 项目隔离、Nginx Host 路由、逐实例升级/备份/恢复、观测与容量边界）。
+  - `docs/deployment/production-guide.md` 增加「2.5 多校部署」入口；`docs/architecture/database-and-migrations.md` 补充选型边界；文档索引同步。
+
+- **信任边界文档与各执行模式网络代理现状对齐（Issue #144）**：
+  - 更新 `docs/reference/plugin-trust-boundary.md`：
+    - §1 执行模式对照表与 §2 五大能力面矩阵：纠正旧有的「process 模式出站网络不受限」表述，如实反映 `process`（rw/ro）模式通过 `plugin-net-preload.cjs`（拦截底层 Socket/UDP/DNS/TLS/HTTP2）与宿主 IPC 代发（`plugin-net-proxy.ts`）实现的默认拒绝与白名单代理，标注 `process (off)` 逃生舱完全放行；
+    - §1 与 §4 明确 `inline` 与 `worker_threads` 模式未注入网络沙箱、同进程共享宿主网络栈的客观现状，并说明加载策略层（`execution-policy.ts:resolvePluginExecutionMode`）已强制将所有不受信的第三方插件改写（coerce）为 `process` 模式运行，形成防御闭环；
+    - §5 运营建议：修复第 91 行 Markdown 表格首行误写为 `<|channel|>` 的语法渲染错误（审计报告 `TB-08`）；
+    - §7 长期路线图：将已交付的网络代理标记为完成，调整演进目标为细粒度流控配额与 eBPF 网络度量。
+  - 更新 `docs/reference/plugin-capability-matrix.md`：补充 `network:*` 说明，明确出站网络不属于 `capabilitiesProposed` 字符串，而是由 `plugin_network_grants` 白名单与 manifest `network.outbound` 独立管控。
+  - 同步更新 `docs-drift-remediation-tracker.md`（阶段九）与 `docs/trust-boundary-hardening-audit-2026-10-14.md`（标记 TB-08、TB-09、R-04 已修复）。
+  - 新增自动化防漂移与网络覆盖测试 `packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts`（10 个测试用例守住文档一致性与策略层执行模式收敛门禁）。
+
+- **插件开发教程补充 default-deny 说明（Issue #71）**：新增 §3.3.4「命令必须有 ActionDescriptor（内核 default-deny）」，说明注册顺序、403 + `COMMAND_NOT_REGISTERED` 的 HTTP 表现与旧插件迁移指引；交付前检查清单增加「每个 Command Handler 都有对应 Action」一项；`docs/api/courseware-attempts-contract.md` 中 CapabilityGuard 拦截的响应从 500 修正为 403 `COMMAND_CAPABILITY_DENIED`。
+
+- **信任边界与部署链路加固审计报告入库**：新增 `docs/trust-boundary-hardening-audit-2026-10-14.md`，记录 PR #26 / #28 / #29 / #31 / #32 / #53 的发现、处置与残余风险（原始未提交草稿已丢失，本版按修复后代码重建）。
+
+- **版本迁移指南补上 023**：`docs/migration/version-migration.md` 说明从 v0.6.1 tag 之后的当前 `main`（平台版本号仍是 `0.6.1`）如何处理班级临时口令。`migrations/023_encrypt_class_passcodes.sql` 只留下密文约定的标记；启动时把仍是明文的行加密为 `olenc1:`，已经是该前缀的行跳过。教师口令接口仍返回原文。列表、审计日志和 `scripts/site-backup.mjs` 的数据库快照不提供明文，钥匙文件要单独备份。
+
+- **可观测性架构与代码对齐**：`docs/architecture/observability.md` 按 `packages/core/observability/` 现有文件重写清单，覆盖平台日志、安全审计、错误上报、请求 ID、存活/就绪探针和 `GET /metrics`。指标记录进程存活、运行时间、常驻内存、按 HTTP 状态类累计的响应次数，以及运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`。
+
+- **Cloud Agent 开发数据目录**：`AGENTS.md` 说明开发服务把 SQLite、加密密钥和日志放到 `$HOME/openlearn-data`，避免仓库里的 `storage/encryption-key` 与 Vitest 自带的 `ENCRYPTION_KEY` 冲突。
+
+- **公测准备材料**：`docs/beta/` 增加面向学校教师的公测说明、已知问题与限制、反馈流程、隐私与学生数据草稿、运营手册。公测上线检查清单补充 2026-10-14 的完成状态。仓库增加缺陷报告与功能建议的 GitHub Issue 模板。
+
+- **公测材料与清单 4.1 对齐加密行为**：班级临时口令改为密文存储（`olenc1:`）；未设置 `ENCRYPTION_KEY` 时改为持久化 `storage/encryption-key`，不再写成明文落库或临时内存密钥。
+
+- **插件数据库 API 前缀文档统一规范 (`MEDIUM-01`)**：更新 `docs/reference/plugin-database-api.md`、`docs/sdk/plugin-sdk.md` 与 `docs/tutorials/plugin-development-tutorial.md`，将旧有的 `plugin_<id>_` 描述全部修正为最新的方案 A 复合表前缀 `plugin_<scopeId>_`。
+
+- **主文档导航索引收录插件安全加固迁移指南 (`LOW-01`)**：在 `docs/index.md` 核心架构与安全指南清单中补充收录 `plugin/plugin-security-migration.md`。
+
+### CI
+
+- **功能巡检接入 CI（新增 `feature-sweep` job）**：
+  - `.github/workflows/ci.yml` 新增 `feature-sweep` job：装 Chromium → 跑 `pnpm sweep` → 把 `artifacts/sweep/report.md` + 截图作为 artifact 上传 → **存在阻断性问题即红**；报告同时写入 job summary。
+  - `browser-workflow-e2e` job 新增一步跑 `e2e/shell-request-hygiene.spec.ts`（外壳请求卫生的浏览器级回归）。
+  - **门禁口径与报告口径正交**：报告会把「几乎每个视图都出现」的问题归为全局问题并把视图状态重算为正常（为了不被启动期噪音淹没）；但门禁另起一套判定 —— 未捕获异常 / 导航失败 / 任何 4xx·5xx 响应 → 阻断（哪怕它是全局问题：「每个页面都 403」正是最该拦住的回归）；仅 console 错误不阻断（它多半是前几类的回声，重复计只会让门禁吵闹）。该口径由 `scripts/sweep/__tests__/gate.test.ts` 守住（10 例）。
+  - 演示服务器的启动等待上限从 180s 提到 300s（CI 容器冷启动更慢）。
+
+- **新增「上一正式版 → main」升级回归门禁（Issue #147）**：此前 CI 只有「当前 main 新装三个第三方插件」（`plugin-compatibility`）与「空库冷启动」（`docker-rehearsal`），没有任何作业验证「旧库 + 已装插件 + 旧数据」的升级路径。
+  - 新增 `scripts/upgrade-regression/build-fixture.ts`：以 release tag 的服务端代码起真实进程，管理员登录后经 `POST /api/plugins/upload-zip-raw` 安装三个真实第三方插件并激活，创建样例班级/学生，停服后用 `VACUUM INTO` 生成一致快照，连同 `plugins/`、`storage/` 与 `metadata.json` 打包为 fixture。
+  - 新增 `scripts/upgrade-regression/verify-upgrade.ts`：恢复 fixture 后用当前 `main` 启动，断言 `/health`、插件全部 `active`、旧班级/学生/成员关系可读、插件 `plugin_storage` 标记可读回、已执行迁移 checksum 未被改写、旧表全部仍在，并二次启动验证「零新迁移」。作业以 `MIGRATION_CHECKSUM_STRICT=true` 运行，历史迁移被改写会直接启动失败。
+  - 新增 `.github/workflows/upgrade-regression.yml`（PR 必跑、main 预热缓存、`v*.*.*` tag 归档 fixture）与共用 composite action `.github/actions/build-plugin-fixtures`。
+  - 反向验证：`scripts/__tests__/upgrade-regression.test.ts` 覆盖「注入非幂等迁移必须失败」「迁移中途失败必须回滚」「改写已执行迁移必须报错」，确保门禁本身有效。
+  - 定位修正：ZIP 安装落库的 `plugins.file_path` 是构库机器的绝对路径，而校验在另一个临时目录里恢复 fixture，插件代码文件搬了家、库里那列没搬 —— `loadPluginModule` 找不到文件、ZIP 插件的 `source_code` 又是空串，三个插件全被打成 `state=error`，看起来像升级把插件弄坏了。现在 `restoreFixture` 会按 `/plugins/` 相对结构把 `file_path` 重定位到恢复后的数据目录（真实升级同目录，不受影响），并在插件非 active 时把服务端日志尾巴打进 CI，病因不再藏在被捕获的日志里。
+  - 定位修正（SDK 解析链接）：fixture 的 zip 打包刻意跳过 symlink —— `plugins/node_modules/@openlearn/plugin-sdk` 这个宿主为插件建的解析链接，target 是构库机器的绝对路径，打进 fixture 恢复后也是悬空链接。而 v0.6.1 之后第三方插件默认跑 worker 模式，worker 的导入路径不像 inline 路径那样会自建链接，于是恢复后 worker 加载 `index.js` 抛 `ERR_MODULE_NOT_FOUND: Cannot find package '@openlearn/plugin-sdk'`，插件再次全部 `state=error`。真实升级不受影响（用户磁盘上的链接随数据目录保留），这是校验工具搬家后必须自补的环境件：`restoreFixture` 现在调用 `ensurePluginSdkSymlink`，按当前机器的宿主 SDK 重建链接，悬空链接/解引用空目录先清掉再建（避免 `EEXIST`），已有可用链接幂等保留。
+  - 文档：新增 `docs/developer-guide/upgrade-regression.md`。
+
+### Breaking Changes
+
+- **总线事件表默认只保留 90 天**。进程启动、数据库初始化结束时执行一次 `DELETE FROM events WHERE timestamp < ?`，删掉早于窗口的行，日志只记删除条数。`OPENLEARN_EVENT_RETENTION_DAYS=0` 关闭清理，恢复此前不删除的行为；设成其他非负整数则改保留天数。安全审计文件 `audit.log` 是另一份日志，不受影响。需要超过 90 天的总线历史时，必须在第一次用本版本重启之前设好该变量；若这张表是合规记录，先备份数据库。
+
+- **生产环境的跨域只认 `ALLOWED_ORIGINS`**。`NODE_ENV=production` 时，本机另一个端口，以及只靠把 `Host` 改成与 Origin 相同的反代，都不再带着 `edu_os_token` 通过 CORS。部署前把浏览器实际访问的公网来源写进 `ALLOWED_ORIGINS`。请求不带 `Origin` 的同源导航、curl 和非生产环境保持原样。
+
+- **迁移前快照失败会阻止启动；比当前构建更新的数据库不再被视为就绪**。非测试进程里快照失败时，迁移会在执行待应用 SQL 之前抛错，进程按既有致命错误路径退出。`_migrations` 里出现当前构建没有的迁移名时，`GET /health/ready` 返回 503，响应体仍只有 `status`。备份必须含 `_migrations` 表，否则拒绝恢复。
+
+- **明文学生口令不能再登录，GDPR 删除只保留给管理员**。`students.password` 不以 `$2` 开头、也不是 64 位十六进制的学生，在花名册重设密码之前无法用个人口令登录。旧 SHA-256 学生仍可登录一次并升级为 bcrypt。教师会话调用 `DELETE /api/students/:id/gdpr-delete` 得到 403；管理员仍须 `{ "confirm": true }`。
+
+- **`GET /health/ready` 与 `GET /metrics` 的响应合同收紧**。就绪接口不再返回 `db`、`workers`、`walBytes`、`lastBackupAgeH` 或错误文本，只有 `status`。`/metrics` 从 JSON 改为 Prometheus 文本，匿名访问返回 401。
+
+- **Docker 数据目录改为 `/data` 与 `/backups`**。`OPENLEARN_DATA_DIR=/data`，库文件是 `/data/educational_os.db`，课件、插件、上传都在这个卷里。旧的「库挂 `/app/packages/core/db`、课件挂 `/app/storage`」和运行时路径不一致：设置了 `OPENLEARN_DB_PATH` 且未设置 `OPENLEARN_DATA_DIR` 时，课件写到库文件的同级目录，`/app/storage` 卷里没有课件。公测前按 `docker-compose.yml` 重新挂卷。入口改为 root 修正属主后再降到 `node`，不要再假设镜像以 `USER node` 直接启动。
+
+- **第三方插件安全边界重构（PL-01 至 PL-08 & 审计加固）**：进程内执行只接受预加载内置插件、`OPENLEARN_TRUSTED_INLINE_PLUGINS` 精确名单或 `packages/plugins` 入口，第三方插件强制子进程隔离；新建表使用方案 A 语义复合前缀 `plugin_<manifestSlug>_<shortUuid>_<table>` 并由 AST 词法守卫 `assertPluginSqlAllowed` 严格拦截 SQL 注入与模式探测；前端沙箱接入专用 `sandbox-command` 路由与二次导航熔断，根除 Confused Deputy 越权；出站网络全面封锁 UDP、DNS 全方法与底层连接，宿主代发代理放行第三方 API `Authorization` 头并限制 10MB 请求/响应与 30 秒超时；社区包强制 Ed25519 签名与流式哈希。迁移步骤见 `docs/plugin/plugin-security-migration.md`。
 
 ## [0.6.1] - 2026-10-13
 
