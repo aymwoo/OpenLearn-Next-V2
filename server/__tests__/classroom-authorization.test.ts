@@ -356,4 +356,22 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     );
     expect(otherTeacherControl.status).toBe(403);
   });
+
+  it('active-sessions 按归属裁剪且不下发签到码与设置原文（Issue #241）', async () => {
+    // 教师自己的视图：能看到自己的活跃会话，且行内不含敏感字段
+    const own = await call('GET', '/api/classroom/active-sessions', teacherAToken);
+    expect(own.status).toBe(200);
+    const ownBody = (await own.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(ownBody.sessions.some((row) => row.lesson_id === lessonSelfStudy)).toBe(true);
+    for (const row of ownBody.sessions) {
+      expect('checkin_code' in row).toBe(false);
+      expect('settings_json' in row).toBe(false);
+    }
+
+    // 非归属教师 B：看不到教师 A 的活跃会话
+    const cross = await call('GET', '/api/classroom/active-sessions', teacherBToken);
+    expect(cross.status).toBe(200);
+    const crossBody = (await cross.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(crossBody.sessions.some((row) => row.lesson_id === lessonSelfStudy)).toBe(false);
+  });
 });
