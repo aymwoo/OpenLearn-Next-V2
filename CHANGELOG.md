@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课堂交互路由补齐对象级授权与答案脱敏**：
+  - **问题**：课堂交互路由（会话、投票、抢答、倒计时、节奏、结课通票、大屏数据等）此前多数只校验角色（`teacher` / `student`），不校验「这个会话是不是你的」。多教师部署下，任意教师可操作他班进行中的投票、抢答、倒计时与通票汇总；任意学生可凭 `lessonId` 读取其他班级的进行中会话、投票正确答案与动态流回放。
+  - **修复**：`server/services/class-access.ts` 新增 `authorizeClassroomControl` / `authorizeClassroomRead`，把会话 `teacher_id`、绑定班级 `owner_user_id`、课节 `creator_id` 统一成一条判定链；没有明确归属人的历史会话与空 `creator_id` 课节保持既有兼容口径，归档会话不阻塞下一节新会话。课堂路由逐条接入：写操作要求可控制，读操作要求可控制或在班。
+  - **学生端脱敏**：会话响应不再下发 `settings_json` 与教师用的 `feedReplay`（含其他学生姓名）；极速投票的 `correct_option` / `correctOption` 标记为答案字段并脱敏。未绑定班级的自学/演示课堂对已登录学生保持开放。
+  - **测试**：新增 `server/__tests__/classroom-authorization.test.ts`（6 条：跨班读/写拒绝、学生答案脱敏与跨班投票拒绝、教师跨班控制拒绝、抢答器归属与课节错配拒绝、节奏与结课通票在班校验及归档后拒绝晚交、无班级自学课堂可读）。课堂相关 17 个测试文件共 184 例全部通过。
+
 - **修复升级回归 fixture 构建被插件签名门禁阻断（v0.7.0 起相关 CI 作业转红）**：
   - `scripts/upgrade-regression/lib.ts` 的 `installPluginZip()` 上传本地构建的测试插件 ZIP 时未声明 `x-allow-unsigned`，被 v0.6.1 起引入的签名门禁（`server/routes/plugins.ts`，B2 安全基线）以 400 `COMMUNITY_ATTESTATION_REQUIRED` 拒绝。这是两个 PR（#166 升级回归门禁 vs #172/#180 签名门禁）之间的潜伏冲突，v0.6.1 tag 早于该工作流引入，故 v0.7.0 是首个暴露它的 tag。
   - **影响面**：v0.7.0 成为「上一正式版」基线后，「Upgrade from last release」（每个 PR 与 main 推送都跑）与 tag 上的「Publish release fixture」均失败——前者在缓存未命中时用 tag 的服务端代码建 fixture，同样撞门禁。
