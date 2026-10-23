@@ -1,3 +1,9 @@
+/**
+ * 归属：课堂 / 抢答器 —— 抢答器并发与抢答结果一致性
+ *
+ * Issue #230：CI 改为跑 e2e/ 下**全部**用例（pnpm test:e2e），
+ * 本注释用于标明该用例覆盖的能力域 —— 新增用例时按同一口径挂靠。
+ */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';

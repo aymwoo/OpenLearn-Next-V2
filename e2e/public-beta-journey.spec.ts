@@ -1,3 +1,9 @@
+/**
+ * 归属：公测 / 关键旅程 —— 公测关键旅程（独立 beta 配置运行）
+ *
+ * Issue #230：CI 改为跑 e2e/ 下**全部**用例（pnpm test:e2e），
+ * 本注释用于标明该用例覆盖的能力域 —— 新增用例时按同一口径挂靠。
+ */
 import { expect, request as playwrightRequest, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';

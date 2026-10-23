@@ -16,6 +16,7 @@
  * 2. **审计前冻结动画**：axe 会按元素不透明度把前景色与背景混合，
  *    `animate-pulse` / `animate-slide-up` 在采样瞬间可能只有几成不透明度，
  *    于是算出「几乎白字」的假阳性。
+ * 归属：课中授课 / 对比度 —— 课中授课页面文字对比度（WCAG AA）
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';

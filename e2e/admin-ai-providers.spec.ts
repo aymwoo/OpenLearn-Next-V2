@@ -12,6 +12,7 @@
  * 7. 真实渲染全幅截图存盘 (Generates Artifact: Screenshot)
  * 8. 触发二次确认弹窗并注销删除提供商记录，验证表格行被移除
  * 9. 输出测试证据日志并执行自闭环清理
+ * 归属：管理端 / AI 提供商 —— 管理员配置 AI 提供商（增删改与可用性）
  */
 
 import { test, expect } from '@playwright/test';
