@@ -48,7 +48,7 @@ import {
   type QuestionTypeRegistry,
 } from '../../packages/core/assessment/index.js';
 import { getEncryptionKey } from '../../packages/core/di/api-key-crypto.js';
-import { getCurrentAcademicYear, normalizeAcademicYear } from '../utils/academic-year.js';
+import { getCurrentAcademicYear, normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { assessmentGraderRegistry } from './assessment-grader-registry.js';
 
@@ -679,10 +679,13 @@ export class AssessmentService {
         } else {
           examId = randomId('exam');
           const maxScore = this.readItems(assessment.id).reduce((sum, it) => sum + (it.maxScore || 1), 0);
+          // 学年必须落库（Issue #219）：此前这里创建的考试 academic_year 恒为 NULL，
+          // 连带下方的 exam_scores 也没有学年 —— 按学年查看学期总评时整段成绩会被过滤掉。
+          const examAcademicYear = asg.academicYear ?? deriveAcademicYear(now);
           this.db
             .prepare(
-              `INSERT INTO exams (id, class_id, title, description, max_score, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO exams (id, class_id, title, description, max_score, created_at, academic_year)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               examId,
@@ -691,6 +694,7 @@ export class AssessmentService {
               assessment.description || '',
               maxScore > 0 ? Math.round(maxScore) : 100,
               now,
+              examAcademicYear,
             );
         }
 
@@ -708,16 +712,24 @@ export class AssessmentService {
       let syncedCount = 0;
       let skippedCount = 0;
 
+      // 学年以父考试为准（Issue #219）：exam_scores.academic_year 必须与 exams 一致，
+      // 否则按学年过滤学期总评时，这批成绩会被整段丢掉。
+      const examYearRow = this.db.prepare('SELECT academic_year FROM exams WHERE id = ?').get(examId) as
+        | { academic_year: string | null }
+        | undefined;
+      const scoreAcademicYear = examYearRow?.academic_year ?? asg.academicYear ?? deriveAcademicYear(now);
+
       const checkExistingScore = this.db.prepare(
         'SELECT score, notes FROM exam_scores WHERE exam_id = ? AND student_id = ?',
       );
 
       const upsertScore = this.db.prepare(
-        `INSERT INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO exam_scores (exam_id, student_id, score, notes, academic_year, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(exam_id, student_id) DO UPDATE SET
            score = excluded.score,
            notes = excluded.notes,
+           academic_year = excluded.academic_year,
            recorded_at = excluded.recorded_at`,
       );
 
@@ -739,6 +751,7 @@ export class AssessmentService {
           att.student_id,
           finalScore,
           `assessment:${asg.id}`,
+          scoreAcademicYear,
           now,
         );
         syncedCount++;
