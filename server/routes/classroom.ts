@@ -2863,22 +2863,70 @@ export function registerClassroomRoutes(
     },
   );
 
-  // 获取当前所有活跃中的授课会话
+  // 获取当前活跃中的授课会话
+  //
+  // Issue #241：此前 SELECT s.* 且无归属裁剪，任意教师可读取全平台活跃会话整行
+  // （含 checkin_code / settings_json）。现与 /api/classroom/sessions 列表端点
+  // 同口径 —— 非管理员按 teacher/班级/课节归属裁剪，且投影收窄为显式列，
+  // 不再下发 checkin_code 与 settings_json。
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
+      const conditions = ["s.stage != 'ARCHIVED_REPORT'"];
+      const params: any[] = [];
+
+      const httpSession = (req as any).session;
+      if (!isAdministrator(httpSession)) {
+        const uid = actorUserId(httpSession) || '';
+        const username = httpSession?.username ? String(httpSession.username).trim() : '';
+        const actorFull = (getActorId(req) || '').trim();
+        const actorTokens = Array.from(new Set([uid, username, actorFull].filter(Boolean)));
+        if (actorTokens.length === 0) {
+          conditions.push('1 = 0');
+        } else {
+          const ph = actorTokens.map(() => '?').join(',');
+          conditions.push(
+            `(
+              s.teacher_id IN (${ph})
+              OR c.owner_user_id IN (${ph})
+              OR l.creator_id IN (${ph})
+              OR (
+                (s.teacher_id IS NULL OR s.teacher_id = '' OR s.teacher_id = 'teacher')
+                AND (c.owner_user_id IS NULL OR c.owner_user_id = '')
+                AND (l.creator_id IS NULL OR l.creator_id = '')
+              )
+            )`,
+          );
+          params.push(...actorTokens, ...actorTokens, ...actorTokens);
+        }
+      }
+
       const activeSessions = db
         .prepare(
           `
-          SELECT s.*, l.title as lesson_title, c.name as class_name
+          SELECT
+            s.id,
+            s.lesson_id,
+            s.class_id,
+            s.teacher_id,
+            s.stage,
+            s.current_segment_id,
+            s.focus_mode,
+            s.started_at,
+            s.ended_at,
+            s.created_at,
+            s.teaching_mode_id,
+            s.academic_year,
+            l.title AS lesson_title,
+            c.name AS class_name
           FROM classroom_sessions s
           LEFT JOIN lessons l ON s.lesson_id = l.id
           LEFT JOIN classes c ON s.class_id = c.id
-          WHERE s.stage != 'ARCHIVED_REPORT'
+          WHERE ${conditions.join(' AND ')}
           ORDER BY s.created_at DESC
           LIMIT 10
         `,
         )
-        .all() as any[];
+        .all(...params) as any[];
 
       res.json({ success: true, sessions: activeSessions });
     } catch (e: any) {
