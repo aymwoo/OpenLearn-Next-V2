@@ -246,9 +246,7 @@ export const CORE_EXTENSION_POINTS: ReadonlyArray<ExtensionPointMetadata> = [
   },
 ];
 
-const EXTENSION_POINT_MAP = new Map<string, ExtensionPointMetadata>(
-  CORE_EXTENSION_POINTS.map((ep) => [ep.id, ep]),
-);
+const EXTENSION_POINT_MAP = new Map<string, ExtensionPointMetadata>(CORE_EXTENSION_POINTS.map((ep) => [ep.id, ep]));
 
 /**
  * Get metadata for an extension point by its identifier.
@@ -273,11 +271,7 @@ export function resetDeprecationWarnings(): void {
  * Issue a runtime deprecation warning if the given extension point is deprecated.
  * Returns the warning message string if emitted, or null otherwise.
  */
-export function warnDeprecation(
-  kind: ExtensionPointKind,
-  name: string,
-  callerPluginId?: string,
-): string | null {
+export function warnDeprecation(kind: ExtensionPointKind, name: string, callerPluginId?: string): string | null {
   const meta = getExtensionPointMetadata(name);
   if (!meta || !meta.deprecated) {
     return null;

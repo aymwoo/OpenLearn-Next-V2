@@ -97,7 +97,9 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
     // 登记表初始为空，且按 manifest 查询走索引
     expect((db.prepare('SELECT COUNT(*) AS n FROM plugin_orphan_data').get() as { n: number }).n).toBe(0);
     expect(
-      db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_plugin_orphan_data_manifest'").get(),
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_plugin_orphan_data_manifest'")
+        .get(),
     ).toBeTruthy();
 
     // 幂等：第二次迁移不改动任何已应用记录
@@ -141,8 +143,6 @@ describe('从迁移 000–033 升级到 034（plugin_orphan_data）', () => {
     expect(
       (db.prepare('SELECT COUNT(*) AS n FROM plugin_019f_uuid_scores WHERE score = 42').get() as { n: number }).n,
     ).toBe(1);
-    expect(
-      (db.prepare('SELECT COUNT(*) AS n FROM plugin_storage').get() as { n: number }).n,
-    ).toBe(1);
+    expect((db.prepare('SELECT COUNT(*) AS n FROM plugin_storage').get() as { n: number }).n).toBe(1);
   });
 });

@@ -188,8 +188,10 @@ async function assertCommunityZipAttestation(
   }
 
   const isCommunityFlag = headerFlag(req, 'x-community-install');
-  const hasExtSignature = typeof req.headers['x-signature'] === 'string' && req.headers['x-signature'].trim().length > 0;
-  const hasExtIntegrity = typeof req.headers['x-integrity'] === 'string' && req.headers['x-integrity'].trim().length > 0;
+  const hasExtSignature =
+    typeof req.headers['x-signature'] === 'string' && req.headers['x-signature'].trim().length > 0;
+  const hasExtIntegrity =
+    typeof req.headers['x-integrity'] === 'string' && req.headers['x-integrity'].trim().length > 0;
   const isSigned = hasExtSignature || hasEmbeddedSignature;
   const allowUnsigned = headerFlag(req, 'x-allow-unsigned');
 
@@ -1210,7 +1212,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const key = decodeURIComponent(req.params.key);
       const { record, ambiguous, notFound } = resolveOrphanRecord(key);
-      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (ambiguous)
+        return res
+          .status(409)
+          .json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
       if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
       const exported = exportOrphanData(record);
       recordSecurityAudit('plugin.data_exported', {
@@ -1231,10 +1236,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const key = decodeURIComponent(req.params.key);
       const { record, ambiguous, notFound } = resolveOrphanRecord(key);
-      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (ambiguous)
+        return res
+          .status(409)
+          .json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
       if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
       if (!record.lastExportPath) {
-        return res.status(404).json({ success: false, error: 'No archive exported yet; call the export endpoint first' });
+        return res
+          .status(404)
+          .json({ success: false, error: 'No archive exported yet; call the export endpoint first' });
       }
       const resolved = path.resolve(record.lastExportPath);
       if (!resolved.startsWith(path.resolve(pluginDataExportDir) + path.sep)) {
@@ -1253,7 +1263,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const key = decodeURIComponent(req.params.key);
       const { record, ambiguous, notFound } = resolveOrphanRecord(key);
-      if (ambiguous) return res.status(409).json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
+      if (ambiguous)
+        return res
+          .status(409)
+          .json({ success: false, error: `Orphan data key "${key}" matches multiple records; use plugin id` });
       if (notFound || !record) return res.status(404).json({ success: false, error: `Orphan data not found: ${key}` });
       // 二次确认：清除数据不可恢复，必须显式带 confirm=<pluginId>。
       if (String(req.body?.confirm ?? req.query.confirm ?? '') !== record.pluginId) {
@@ -1288,13 +1301,16 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const rawId = decodeURIComponent(req.params.id);
       const requestedPolicy = String(req.query.dataPolicy ?? req.body?.dataPolicy ?? 'keep');
       if (requestedPolicy !== 'keep' && requestedPolicy !== 'purge') {
-        return res.status(400).json({ success: false, error: `Invalid dataPolicy "${requestedPolicy}" (expected keep | purge)` });
+        return res
+          .status(400)
+          .json({ success: false, error: `Invalid dataPolicy "${requestedPolicy}" (expected keep | purge)` });
       }
       // 卸载即清除数据（purge）是不可恢复操作：必须显式带 confirm=purge 二次确认。
       if (requestedPolicy === 'purge' && String(req.query.confirm ?? req.body?.confirm ?? '') !== 'purge') {
         return res.status(400).json({
           success: false,
-          error: 'dataPolicy=purge removes plugin data irreversibly after exporting an archive; pass confirm=purge to proceed',
+          error:
+            'dataPolicy=purge removes plugin data irreversibly after exporting an archive; pass confirm=purge to proceed',
         });
       }
       const cmd = kernelContainer.commandBus.createCommand(
@@ -1524,11 +1540,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
       const expectedUpdateId = kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId;
-      const attestation = await assertCommunityZipAttestation(
-        req,
-        zipPath,
-        expectedUpdateId,
-      );
+      const attestation = await assertCommunityZipAttestation(req, zipPath, expectedUpdateId);
       if (!attestation.ok) {
         return res.status(attestation.status).json(attestation.body);
       }
@@ -1798,7 +1810,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.get('/api/site-settings', (req, res) => {
     try {
       const row = kernelContainer.db
-        .prepare('SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?')
+        .prepare(
+          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?',
+        )
         .get('global') as any;
       const academicStartMonth = row?.academic_start_month ?? 9;
       const currentAcademicYear = row?.current_academic_year || getCurrentAcademicYear(academicStartMonth);
@@ -1866,7 +1880,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           normalizedStartMonth ?? null,
         );
       const row = kernelContainer.db
-        .prepare('SELECT upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?')
+        .prepare(
+          'SELECT upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?',
+        )
         .get('global') as any;
       res.json({
         success: true,

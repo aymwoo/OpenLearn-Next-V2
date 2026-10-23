@@ -154,11 +154,7 @@ describe('学生端进行中课堂会话接口（Issue #109）', () => {
     db.prepare('DELETE FROM lessons WHERE id IN (?, ?)').run(lessonId, otherLessonId);
     db.prepare('DELETE FROM classes WHERE id IN (?, ?)').run(classId, otherClassId);
     db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
-    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(
-      studentToken,
-      otherStudentToken,
-      teacherToken,
-    );
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(studentToken, otherStudentToken, teacherToken);
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

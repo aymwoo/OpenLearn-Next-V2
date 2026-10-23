@@ -169,10 +169,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           : lang === 'zh'
             ? '快速开始上这节课'
             : 'Quick start this class';
-    const cls =
-      size === 'sm'
-        ? 'px-2.5 py-1 text-xs gap-1'
-        : 'px-1.5 py-0.5 text-[11px] gap-0.5';
+    const cls = size === 'sm' ? 'px-2.5 py-1 text-xs gap-1' : 'px-1.5 py-0.5 text-[11px] gap-0.5';
     return (
       <button
         type="button"
@@ -190,13 +187,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
         } ${cls}`}
       >
         {isActiveSession ? <DoorOpen size={11} aria-hidden="true" /> : <Play size={11} aria-hidden="true" />}
-        {isActiveSession
-          ? lang === 'zh'
-            ? '进入课堂'
-            : 'Enter'
-          : lang === 'zh'
-            ? '开始上课'
-            : 'Start'}
+        {isActiveSession ? (lang === 'zh' ? '进入课堂' : 'Enter') : lang === 'zh' ? '开始上课' : 'Start'}
       </button>
     );
   };
@@ -272,10 +263,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                       ? '正常'
                       : 'Active'}
             </span>
-            <ExtensionPointRenderer
-              slot="timetable.card.badge"
-              slotProps={{ schedule: sch, lang }}
-            />
+            <ExtensionPointRenderer slot="timetable.card.badge" slotProps={{ schedule: sch, lang }} />
             {renderQuickStartButton(sch)}
           </div>
 
@@ -443,9 +431,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           id="timetable_quick_start_card"
           data-testid="timetable-quick-start-card"
           className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border shadow-2xs ${
-            currentSchedule
-              ? 'bg-emerald-50/60 border-emerald-200/70'
-              : 'bg-indigo-50/60 border-indigo-200/60'
+            currentSchedule ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-indigo-50/60 border-indigo-200/60'
           }`}
         >
           <div
@@ -456,13 +442,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             }`}
           >
             <Zap size={12} aria-hidden="true" />
-            {currentSchedule
-              ? lang === 'zh'
-                ? '正在进行'
-                : 'In Progress'
-              : lang === 'zh'
-                ? '下一节课'
-                : 'Up Next'}
+            {currentSchedule ? (lang === 'zh' ? '正在进行' : 'In Progress') : lang === 'zh' ? '下一节课' : 'Up Next'}
           </div>
           <div className="flex-1 min-w-[180px] leading-snug">
             <div className="text-sm font-bold text-slate-800">

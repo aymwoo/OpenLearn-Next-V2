@@ -59,10 +59,7 @@ describe('ForcedPasswordChangeGate', () => {
     fireEvent.click(screen.getByTestId('force-change-submit'));
 
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/auth/change-password',
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/change-password', expect.objectContaining({ method: 'POST' }));
   });
 
   it('服务端拒绝（旧密码错误）→ 展示错误且不调 onDone', async () => {
@@ -75,7 +72,9 @@ describe('ForcedPasswordChangeGate', () => {
     fireEvent.change(inputs[2], { target: { value: 'NewPass-2026' } });
     fireEvent.click(screen.getByTestId('force-change-submit'));
 
-    await waitFor(() => expect(screen.getByTestId('force-change-error').textContent).toContain('Incorrect old password'));
+    await waitFor(() =>
+      expect(screen.getByTestId('force-change-error').textContent).toContain('Incorrect old password'),
+    );
     expect(onDone).not.toHaveBeenCalled();
   });
 });

@@ -192,6 +192,7 @@
 插件可通过 `contributes.locales` 提供多语言本地化字典，支持两种声明形态：
 
 1. **内联字典形态** (`Record<string, Record<string, string>>`)：
+
 ```json
 "contributes": {
   "locales": {
@@ -215,6 +216,7 @@
 ```
 
 2. **独立文件路径形态** (`Record<string, string>`)：
+
 ```json
 "contributes": {
   "locales": {
@@ -285,8 +287,8 @@ const all = ctx.config.getAll({ classId });
 写入（一般由管理端或平台 API 调用）：
 
 ```ts
-await ctx.config.set('weight', 20);                                    // 平台层
-await ctx.config.set('weight', 30, { scopeType: 'class', scopeId });   // 班级覆盖
+await ctx.config.set('weight', 20); // 平台层
+await ctx.config.set('weight', 30, { scopeType: 'class', scopeId }); // 班级覆盖
 ```
 
 存储落点是 `plugin_config(plugin_id, scope_type, scope_id, key, value, updated_at)`（迁移 `037_plugin_config_scopes.sql`）。旧库升级时，`plugin_storage` 里的 `config:<key>` 值会原样搬到平台层；迁移未执行时 `ConfigService` 仍会回退读取旧位置。
@@ -384,15 +386,15 @@ await ctx.config.set('weight', 30, { scopeType: 'class', scopeId });   // 班级
 
 平台内核维护标准化的扩展点元数据契约（`CORE_EXTENSION_POINTS`）：
 
-| 属性 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `id` | `string` | 扩展点唯一标识符（如命令 `lesson.create`、事件 `quiz.answered`、插槽 `teacher.tab`、服务 `@openlearn/core:IStorageService`） |
-| `kind` | `'command' \| 'event' \| 'slot' \| 'service'` | 扩展原语种类 |
-| `description` | `string` | 功能简述 |
-| `since` | `string` | 首次引入该扩展点的平台语义化版本（如 `"0.1.0"`） |
-| `deprecated` | `string` (可选) | 标记弃用的平台版本（如 `"0.6.0"`） |
-| `removedIn` | `string` (可选) | 计划彻底移除该扩展点的目标版本（如 `"0.7.0"`） |
-| `replacement` | `string` (可选) | 推荐的官方替代扩展点或迁移指引（如 `"Use 'quiz.answered' instead"`） |
+| 属性          | 类型                                          | 说明                                                                                                                         |
+| :------------ | :-------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | `string`                                      | 扩展点唯一标识符（如命令 `lesson.create`、事件 `quiz.answered`、插槽 `teacher.tab`、服务 `@openlearn/core:IStorageService`） |
+| `kind`        | `'command' \| 'event' \| 'slot' \| 'service'` | 扩展原语种类                                                                                                                 |
+| `description` | `string`                                      | 功能简述                                                                                                                     |
+| `since`       | `string`                                      | 首次引入该扩展点的平台语义化版本（如 `"0.1.0"`）                                                                             |
+| `deprecated`  | `string` (可选)                               | 标记弃用的平台版本（如 `"0.6.0"`）                                                                                           |
+| `removedIn`   | `string` (可选)                               | 计划彻底移除该扩展点的目标版本（如 `"0.7.0"`）                                                                               |
+| `replacement` | `string` (可选)                               | 推荐的官方替代扩展点或迁移指引（如 `"Use 'quiz.answered' instead"`）                                                         |
 
 ### 3.2 弃用策略与缓冲期约定
 
@@ -405,15 +407,18 @@ await ctx.config.set('weight', 30, { scopeType: 'class', scopeId });   // 班级
 ### 3.3 运行时弃用告警机制
 
 当插件在运行时注册或使用已弃用的扩展点时，宿主四大接入层将自动输出统一格式的结构化告警：
+
 - **命令总线 (`CommandBus`)**：注册遗留处理器或执行弃用命令时触发；
 - **事件总线 (`EventBus`)**：订阅或发布弃用事件时触发；
 - **贡献注册表 (`ContributionRegistry`)**：遍历插件 manifest 声明的弃用 UI 插槽（`contributes`）时触发；
 - **上下文构造器 (`ContextBuilder`)**：为插件依赖注入注入声明的弃用服务（`requires`/`optional`）时触发。
 
 告警输出范式：
+
 ```
 [DeprecationWarning] Plugin "plugin-id" is using deprecated <kind> "<name>" (deprecated since v0.6.0, will be removed in v0.7.0). Replacement: Use 'new-name' instead.
 ```
+
 宿主内置单进程 Set 去重机制（`callerPluginId:kind:name`），防止高频调用与循环触发造成控制台刷屏。
 
 ### 3.4 升级前兼容性预检报告 (CLI Doctor)
@@ -432,10 +437,10 @@ npx openlearn-next compat-report --target-version 0.8.0
 ```
 
 预检引擎将自动核验：
+
 1. **Engines 约束**：检查各插件 `engines.openlearn` 是否满足目标版本范围；
 2. **UI 插槽贡献**：扫描 `contributes` 中是否存在已弃用或将在目标版本移除的插槽；
 3. **DI 服务依赖**：扫描 `requires` 与 `optional` 中声明的服务 Token 是否在目标版本已移除或已弃用；
 4. **Commands / Events**：扫描插件显式声明的命令与事件生命周期。
 
 报告汇总插件的兼容状态（`compatible`、`has_warnings`、`incompatible`），并在存在阻断性冲突时返回非零退出码（exit code 1），方便集成至 CI/CD 自动化部署前置检查中。
-

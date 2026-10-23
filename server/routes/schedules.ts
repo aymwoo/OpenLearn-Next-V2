@@ -54,7 +54,8 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       if (!classId || !scheduledDate) {
         return res.status(400).json({ error: 'classId and scheduledDate are required' });
       }
-      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, classId, 'member'))) return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, classId, 'member')))
+        return;
       const report = scheduleService.detectConflicts({
         classId,
         scheduledDate,
@@ -80,7 +81,10 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         )
       )
         return;
-      const schedules = scheduleService.getClassSchedules(req.params.classId, (req.query.academicYear as string) || null);
+      const schedules = scheduleService.getClassSchedules(
+        req.params.classId,
+        (req.query.academicYear as string) || null,
+      );
       res.json(schedules);
     } catch (e: any) {
       sendSafeError(res, e);

@@ -7,12 +7,7 @@
  *   pnpm db:clean-demo     # 清理全部演示数据，还原纯净环境
  */
 import { db } from '../packages/core/db/index.js';
-import {
-  seedDemoData,
-  cleanupDemoData,
-  getDemoDataStatus,
-  DEMO_TEACHER,
-} from '../server/services/demo-data.js';
+import { seedDemoData, cleanupDemoData, getDemoDataStatus, DEMO_TEACHER } from '../server/services/demo-data.js';
 
 const args = process.argv.slice(2);
 const isReset = args.includes('--reset');

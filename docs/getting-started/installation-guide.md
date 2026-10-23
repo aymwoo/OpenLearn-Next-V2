@@ -1,11 +1,12 @@
 # OpenLearnV2 安装与使用指南
 
 > ⚠️ **内容待复核（2026-10-03 审计）**：§2 快速开始与 §3 环境变量基本可用，但部署与包管理器章节有会直接导致故障的错误：
+>
 > - §9 PM2 段写 `pm2 logs openlearn`；`ecosystem.config.cjs:11` 的应用名是 **`openlearnv2`**，照抄会报「process not found」。
 > - §9 Docker 段建议 `docker run -v ./data:/app/data openlearnv2`；`Dockerfile:49` 把 `OPENLEARN_DB_PATH` 固定为 `/app/packages/core/db/educational_os.db`，`/app/data` **不是**任何数据目录。按本文挂载，容器一重启**全部数据丢失**。必须挂载 `/app/packages/core/db`（另含 `Dockerfile:34` 创建的 `/app/storage`、`/app/backups`）。
 > - 包管理器自相矛盾：§1 声明「pnpm 为准」，§2 方式二/三与 §9 手动部署却用 `npm install` / `npm run build` / `npm start`，§10 重置系统又用 `pnpm dev`；仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），混用会生成第二份依赖树。另 §2 方式三的 `./dev.sh` 未在 §1 说明，且 `package.json` 名为 `openlearn-next`。
 > - §10 备份/重置的数据库路径只覆盖「本地开发」与「npx 安装」两态，未覆盖 §9 自己推荐的 Docker 部署（此时路径是容器内 `/app/packages/core/db/educational_os.db`），照做会找不到文件。
-> 逐条修复前请勿将其作为实现依据。
+>   逐条修复前请勿将其作为实现依据。
 
 ## 目录
 
@@ -152,13 +153,13 @@ LOG_LEVEL=info
 ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-| 变量                | 必需 | 说明                                                                                                                                                                                   |
-| ------------------- | :--: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`              |  —   | 服务端口，默认 `9000`                                                                                                                                                                  |
+| 变量                | 必需 | 说明                                                                                                                                                                                                                 |
+| ------------------- | :--: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`              |  —   | 服务端口，默认 `9000`                                                                                                                                                                                                |
 | `ENCRYPTION_KEY`    |  —   | 64 位 hex，加密 AI Provider API Key 和班级临时口令。未配置时首次启动生成 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），重启后仍能解密。建议改为环境变量并离线备份。不要留空字符串占位 |
-| `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录                                                                                                           |
-| `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                                                                                                                             |
-| `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                                                                                                                  |
+| `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录                                                                                                                                         |
+| `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                                                                                                                                                           |
+| `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                                                                                                                                                |
 
 > **提示**：系统完全采用后台动态 AI 提供商管理（OpenAI 兼容 API），系统启动后在「系统管理 -> AI 提供商管理」中配置即可，无需在环境变量中写入 AI 密钥。
 
@@ -467,12 +468,12 @@ docker-compose up -d
 
 OpenLearnV2 使用 SQLite 数据库存储所有数据。数据库路径由 `OPENLEARN_DB_PATH` 环境变量决定（`packages/core/db/index.ts` 读取），未设置时为项目内的默认路径。按部署方式分四种：
 
-| 部署方式         | 数据库路径                                                | 备份方式                       |
-| ---------------- | --------------------------------------------------------- | ------------------------------ |
-| 本地开发         | `<项目根>/packages/core/db/educational_os.db`              | 停服后 `cp` 该文件             |
-| PM2 裸机         | 同上（`cwd` = 项目根）                                     | 停服后 `cp` 该文件             |
-| Docker 容器      | 容器内 `/data/educational_os.db`，课件在同卷 `storage/`     | `docker compose exec app node scripts/site-backup.mjs` |
-| `npx` 全局安装   | `~/openlearn-next/data.db`                                 | 停服后 `cp` 该文件             |
+| 部署方式       | 数据库路径                                              | 备份方式                                               |
+| -------------- | ------------------------------------------------------- | ------------------------------------------------------ |
+| 本地开发       | `<项目根>/packages/core/db/educational_os.db`           | 停服后 `cp` 该文件                                     |
+| PM2 裸机       | 同上（`cwd` = 项目根）                                  | 停服后 `cp` 该文件                                     |
+| Docker 容器    | 容器内 `/data/educational_os.db`，课件在同卷 `storage/` | `docker compose exec app node scripts/site-backup.mjs` |
+| `npx` 全局安装 | `~/openlearn-next/data.db`                              | 停服后 `cp` 该文件                                     |
 
 ```bash
 # 本地开发 / PM2 裸机：数据库 + storage/plugins/uploads

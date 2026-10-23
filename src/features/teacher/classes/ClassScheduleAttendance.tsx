@@ -145,7 +145,11 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
             const res = await fetch(`/api/classes/${cls.id}/schedules`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lessonId: newScheduleLessonId, scheduledDate: newScheduleDate, academicYear: deriveAcademicYear(newScheduleDate) }),
+              body: JSON.stringify({
+                lessonId: newScheduleLessonId,
+                scheduledDate: newScheduleDate,
+                academicYear: deriveAcademicYear(newScheduleDate),
+              }),
             });
             if (res.ok) {
               setNewScheduleDate('');

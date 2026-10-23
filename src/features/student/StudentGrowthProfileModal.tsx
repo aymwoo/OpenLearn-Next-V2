@@ -525,339 +525,344 @@ ${
         {activeTab === 'overview' ? (
           <>
             {/* ── 2. Top Summary Metric Cards Strip (4 Metrics) ── */}
-        <section className="px-5 py-3 bg-surface-secondary/40 border-b border-border/70 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-          {/* Card 1: Points */}
-          <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
-            <div>
-              <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '本节总积分' : 'Total Points'}</div>
-              <div className="text-lg font-extrabold text-indigo-700 dark:text-indigo-300 font-mono flex items-baseline gap-1">
-                {studentPoints}{' '}
-                <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '分' : 'pts'}</span>
-                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded ml-0.5">
-                  +{studentDelta}
-                </span>
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                {lang === 'zh' ? '组内贡献率: ' : 'Team Share: '}
-                <strong className="text-primary-theme font-semibold">26%</strong>
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-lg shadow-3xs">
-              <Trophy size={18} />
-            </div>
-          </div>
-
-          {/* Card 2: Focus */}
-          <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
-            <div>
-              <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '本堂专注度' : 'Focus Rate'}</div>
-              <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono flex items-baseline gap-1">
-                {typeof focusRate === 'number' ? `${focusRate}%` : '—'}{' '}
-                {typeof focusRate === 'number' && (
-                  <span className="text-[10px] text-muted font-normal font-sans">
-                    {focusRate >= 80 ? (lang === 'zh' ? '优良' : 'Good') : lang === 'zh' ? '待提升' : 'Needs work'}
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                {lang === 'zh' ? '击败全班 ' : 'Top '}
-                <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">96%</strong>{' '}
-                {lang === 'zh' ? '同学' : 'students'}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shadow-3xs">
-              <Lightbulb size={18} />
-            </div>
-          </div>
-
-          {/* Card 3: Accuracy */}
-          <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
-            <div>
-              <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '答题正确率' : 'Accuracy'}</div>
-              <div className="text-lg font-extrabold text-foreground font-mono flex items-baseline gap-1">
-                {typeof accuracyRate === 'number' ? `${accuracyRate}%` : '—'}{' '}
-                {typeof accuracyRate === 'number' && (
-                  <span className="text-[10px] text-muted font-normal">
-                    {accuracyRate >= 90
-                      ? lang === 'zh'
-                        ? '优秀'
-                        : 'Excellent'
-                      : lang === 'zh'
-                        ? '待巩固'
-                        : 'Needs review'}
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                {lang === 'zh' ? '共 2 次提交 · 2 次首发通过' : '2 Submissions · 100% 1st pass'}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg shadow-3xs">
-              <ShieldCheck size={18} />
-            </div>
-          </div>
-
-          {/* Card 4: Peer Assistance */}
-          <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
-            <div>
-              <div className="text-[11px] text-muted font-medium">
-                {lang === 'zh' ? '互助答疑频次' : 'Collaboration'}
-              </div>
-              <div className="text-lg font-extrabold text-sky-600 dark:text-sky-400 font-mono flex items-baseline gap-1">
-                {helpCount} <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '次' : 'times'}</span>
-              </div>
-              <div className="text-[10px] text-muted mt-0.5">
-                {lang === 'zh' ? '协助解决嵌套语法障碍' : 'Resolved loop syntax obstacles'}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center text-lg shadow-3xs">
-              <Users size={18} />
-            </div>
-          </div>
-        </section>
-
-        {/* ── 3. Main Split Body: Left 5 cols (Radar + AI Review), Right 7 cols (Live Timeline) ── */}
-        <div className="p-4 flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-4 bg-surface-secondary/20">
-          {/* Left Column: Pentagon Competency Radar & AI Pedagogical Review (5 Cols) */}
-          <div className="md:col-span-5 flex flex-col gap-3">
-            {/* Competency Radar Card */}
-            <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <TrendingUp size={15} className="text-primary-theme" />
-                  <h4 className="text-xs font-bold text-foreground">
-                    {lang === 'zh' ? '多维素养与计算思维雷达' : 'Competency Radar'}
-                  </h4>
-                </div>
-                <span
-                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                    hasAnyCompetencyData
-                      ? 'text-primary-theme bg-primary-theme/10 border-primary-theme/20'
-                      : 'text-muted bg-surface-secondary border-border/60'
-                  }`}
-                  title={
-                    missingDimensionLabels.length > 0
-                      ? `${lang === 'zh' ? '暂无数据' : 'No data'}: ${missingDimensionLabels.join(', ')}`
-                      : undefined
-                  }
-                >
-                  {hasAnyCompetencyData
-                    ? `${lang === 'zh' ? '综合评级' : 'Rating'} ${compositeRating}`
-                    : lang === 'zh'
-                      ? '暂无数据'
-                      : 'No data'}
-                </span>
-              </div>
-
-              {/* Native SVG Pentagon Radar */}
-              <div className="flex items-center justify-center py-1">
-                <svg className="w-52 h-52 select-none" viewBox="0 0 200 200" aria-label="Competency Radar Chart">
-                  {/* Concentric grid pentagons */}
-                  {radarGeometry.gridLevels.map((pts, idx) => (
-                    <polygon
-                      key={idx}
-                      points={pts}
-                      fill="none"
-                      stroke="currentColor"
-                      className="text-border/60"
-                      strokeWidth="1"
-                    />
-                  ))}
-
-                  {/* Radial axes */}
-                  {radarGeometry.axes.map((ax, idx) => (
-                    <line
-                      key={idx}
-                      x1={ax.x1}
-                      y1={ax.y1}
-                      x2={ax.x2}
-                      y2={ax.y2}
-                      stroke="currentColor"
-                      className="text-border/50"
-                      strokeWidth="1"
-                    />
-                  ))}
-
-                  {/* Data filled polygon（无真实数据时降低不透明度并虚化描边） */}
-                  <polygon
-                    points={radarGeometry.dataPolygonString}
-                    fill={hasAnyCompetencyData ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.12)'}
-                    stroke={hasAnyCompetencyData ? '#6366f1' : '#94a3b8'}
-                    strokeWidth="2"
-                    strokeDasharray={hasAnyCompetencyData ? undefined : '4 3'}
-                  />
-
-                  {/* Data vertices（仅真实维度绘制实心点） */}
-                  {radarGeometry.dataPoints.map((pt, idx) => (
-                    <circle
-                      key={idx}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r="3"
-                      fill={defaultDimensions[idx]?.available ? '#6366f1' : '#cbd5e1'}
-                    />
-                  ))}
-
-                  {/* Dimension text labels */}
-                  <text x="100" y="14" textAnchor="middle" fill="#6366f1" fontSize="9" fontWeight="bold">
-                    {defaultDimensions[0].label} {defaultDimensions[0].score}
-                  </text>
-                  <text x="180" y="80" textAnchor="start" fill="currentColor" fontSize="9" fontWeight="bold">
-                    {defaultDimensions[1].label} {defaultDimensions[1].score}
-                  </text>
-                  <text x="145" y="180" textAnchor="start" fill="currentColor" fontSize="9" fontWeight="bold">
-                    {defaultDimensions[2].label} {defaultDimensions[2].score}
-                  </text>
-                  <text x="55" y="180" textAnchor="end" fill="currentColor" fontSize="9" fontWeight="bold">
-                    {defaultDimensions[3].label} {defaultDimensions[3].score}
-                  </text>
-                  <text x="20" y="80" textAnchor="end" fill="#10b981" fontSize="9" fontWeight="bold">
-                    {defaultDimensions[4].label} {defaultDimensions[4].score}
-                  </text>
-                </svg>
-              </div>
-
-              {/* Dimension Score Progress Bars */}
-              <div className="space-y-1.5 pt-2 border-t border-border/70 text-xs">
-                {defaultDimensions.slice(0, 3).map((dim) => (
-                  <div key={dim.key} className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted">{dim.label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-24 bg-surface-secondary h-1.5 rounded-full overflow-hidden border border-border/40">
-                        <div
-                          className="bg-primary-theme h-1.5 rounded-full transition-all duration-300"
-                          style={{ width: `${dim.score}%` }}
-                        />
-                      </div>
-                      <span className="font-mono font-bold text-foreground text-[10px] w-7 text-right">
-                        {dim.score}
-                      </span>
-                    </div>
+            <section className="px-5 py-3 bg-surface-secondary/40 border-b border-border/70 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+              {/* Card 1: Points */}
+              <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-muted font-medium">
+                    {lang === 'zh' ? '本节总积分' : 'Total Points'}
                   </div>
-                ))}
+                  <div className="text-lg font-extrabold text-indigo-700 dark:text-indigo-300 font-mono flex items-baseline gap-1">
+                    {studentPoints}{' '}
+                    <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '分' : 'pts'}</span>
+                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded ml-0.5">
+                      +{studentDelta}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-muted mt-0.5">
+                    {lang === 'zh' ? '组内贡献率: ' : 'Team Share: '}
+                    <strong className="text-primary-theme font-semibold">26%</strong>
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-lg shadow-3xs">
+                  <Trophy size={18} />
+                </div>
               </div>
 
-              {/* Plugin Slot: student.profile.dimension */}
-              <ExtensionPointRenderer
-                slot="student.profile.dimension"
-                slotProps={{ student, dimensions: defaultDimensions }}
-              />
-            </div>
-
-            {/* AI Pedagogical Review & Growth Recommendations */}
-            <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Bot size={15} className="text-amber-500" />
-                  <h4 className="text-xs font-bold text-foreground">
-                    {lang === 'zh' ? 'AI 导师学情评语与成长潜质' : 'AI Pedagogical Insights'}
-                  </h4>
+              {/* Card 2: Focus */}
+              <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-muted font-medium">
+                    {lang === 'zh' ? '本堂专注度' : 'Focus Rate'}
+                  </div>
+                  <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono flex items-baseline gap-1">
+                    {typeof focusRate === 'number' ? `${focusRate}%` : '—'}{' '}
+                    {typeof focusRate === 'number' && (
+                      <span className="text-[10px] text-muted font-normal font-sans">
+                        {focusRate >= 80 ? (lang === 'zh' ? '优良' : 'Good') : lang === 'zh' ? '待提升' : 'Needs work'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted mt-0.5">
+                    {lang === 'zh' ? '击败全班 ' : 'Top '}
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">96%</strong>{' '}
+                    {lang === 'zh' ? '同学' : 'students'}
+                  </div>
                 </div>
-                {/*
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shadow-3xs">
+                  <Lightbulb size={18} />
+                </div>
+              </div>
+
+              {/* Card 3: Accuracy */}
+              <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '答题正确率' : 'Accuracy'}</div>
+                  <div className="text-lg font-extrabold text-foreground font-mono flex items-baseline gap-1">
+                    {typeof accuracyRate === 'number' ? `${accuracyRate}%` : '—'}{' '}
+                    {typeof accuracyRate === 'number' && (
+                      <span className="text-[10px] text-muted font-normal">
+                        {accuracyRate >= 90
+                          ? lang === 'zh'
+                            ? '优秀'
+                            : 'Excellent'
+                          : lang === 'zh'
+                            ? '待巩固'
+                            : 'Needs review'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted mt-0.5">
+                    {lang === 'zh' ? '共 2 次提交 · 2 次首发通过' : '2 Submissions · 100% 1st pass'}
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg shadow-3xs">
+                  <ShieldCheck size={18} />
+                </div>
+              </div>
+
+              {/* Card 4: Peer Assistance */}
+              <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-muted font-medium">
+                    {lang === 'zh' ? '互助答疑频次' : 'Collaboration'}
+                  </div>
+                  <div className="text-lg font-extrabold text-sky-600 dark:text-sky-400 font-mono flex items-baseline gap-1">
+                    {helpCount}{' '}
+                    <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '次' : 'times'}</span>
+                  </div>
+                  <div className="text-[10px] text-muted mt-0.5">
+                    {lang === 'zh' ? '协助解决嵌套语法障碍' : 'Resolved loop syntax obstacles'}
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center text-lg shadow-3xs">
+                  <Users size={18} />
+                </div>
+              </div>
+            </section>
+
+            {/* ── 3. Main Split Body: Left 5 cols (Radar + AI Review), Right 7 cols (Live Timeline) ── */}
+            <div className="p-4 flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-4 bg-surface-secondary/20">
+              {/* Left Column: Pentagon Competency Radar & AI Pedagogical Review (5 Cols) */}
+              <div className="md:col-span-5 flex flex-col gap-3">
+                {/* Competency Radar Card */}
+                <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp size={15} className="text-primary-theme" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        {lang === 'zh' ? '多维素养与计算思维雷达' : 'Competency Radar'}
+                      </h4>
+                    </div>
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                        hasAnyCompetencyData
+                          ? 'text-primary-theme bg-primary-theme/10 border-primary-theme/20'
+                          : 'text-muted bg-surface-secondary border-border/60'
+                      }`}
+                      title={
+                        missingDimensionLabels.length > 0
+                          ? `${lang === 'zh' ? '暂无数据' : 'No data'}: ${missingDimensionLabels.join(', ')}`
+                          : undefined
+                      }
+                    >
+                      {hasAnyCompetencyData
+                        ? `${lang === 'zh' ? '综合评级' : 'Rating'} ${compositeRating}`
+                        : lang === 'zh'
+                          ? '暂无数据'
+                          : 'No data'}
+                    </span>
+                  </div>
+
+                  {/* Native SVG Pentagon Radar */}
+                  <div className="flex items-center justify-center py-1">
+                    <svg className="w-52 h-52 select-none" viewBox="0 0 200 200" aria-label="Competency Radar Chart">
+                      {/* Concentric grid pentagons */}
+                      {radarGeometry.gridLevels.map((pts, idx) => (
+                        <polygon
+                          key={idx}
+                          points={pts}
+                          fill="none"
+                          stroke="currentColor"
+                          className="text-border/60"
+                          strokeWidth="1"
+                        />
+                      ))}
+
+                      {/* Radial axes */}
+                      {radarGeometry.axes.map((ax, idx) => (
+                        <line
+                          key={idx}
+                          x1={ax.x1}
+                          y1={ax.y1}
+                          x2={ax.x2}
+                          y2={ax.y2}
+                          stroke="currentColor"
+                          className="text-border/50"
+                          strokeWidth="1"
+                        />
+                      ))}
+
+                      {/* Data filled polygon（无真实数据时降低不透明度并虚化描边） */}
+                      <polygon
+                        points={radarGeometry.dataPolygonString}
+                        fill={hasAnyCompetencyData ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.12)'}
+                        stroke={hasAnyCompetencyData ? '#6366f1' : '#94a3b8'}
+                        strokeWidth="2"
+                        strokeDasharray={hasAnyCompetencyData ? undefined : '4 3'}
+                      />
+
+                      {/* Data vertices（仅真实维度绘制实心点） */}
+                      {radarGeometry.dataPoints.map((pt, idx) => (
+                        <circle
+                          key={idx}
+                          cx={pt.x}
+                          cy={pt.y}
+                          r="3"
+                          fill={defaultDimensions[idx]?.available ? '#6366f1' : '#cbd5e1'}
+                        />
+                      ))}
+
+                      {/* Dimension text labels */}
+                      <text x="100" y="14" textAnchor="middle" fill="#6366f1" fontSize="9" fontWeight="bold">
+                        {defaultDimensions[0].label} {defaultDimensions[0].score}
+                      </text>
+                      <text x="180" y="80" textAnchor="start" fill="currentColor" fontSize="9" fontWeight="bold">
+                        {defaultDimensions[1].label} {defaultDimensions[1].score}
+                      </text>
+                      <text x="145" y="180" textAnchor="start" fill="currentColor" fontSize="9" fontWeight="bold">
+                        {defaultDimensions[2].label} {defaultDimensions[2].score}
+                      </text>
+                      <text x="55" y="180" textAnchor="end" fill="currentColor" fontSize="9" fontWeight="bold">
+                        {defaultDimensions[3].label} {defaultDimensions[3].score}
+                      </text>
+                      <text x="20" y="80" textAnchor="end" fill="#10b981" fontSize="9" fontWeight="bold">
+                        {defaultDimensions[4].label} {defaultDimensions[4].score}
+                      </text>
+                    </svg>
+                  </div>
+
+                  {/* Dimension Score Progress Bars */}
+                  <div className="space-y-1.5 pt-2 border-t border-border/70 text-xs">
+                    {defaultDimensions.slice(0, 3).map((dim) => (
+                      <div key={dim.key} className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted">{dim.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-24 bg-surface-secondary h-1.5 rounded-full overflow-hidden border border-border/40">
+                            <div
+                              className="bg-primary-theme h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${dim.score}%` }}
+                            />
+                          </div>
+                          <span className="font-mono font-bold text-foreground text-[10px] w-7 text-right">
+                            {dim.score}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Plugin Slot: student.profile.dimension */}
+                  <ExtensionPointRenderer
+                    slot="student.profile.dimension"
+                    slotProps={{ student, dimensions: defaultDimensions }}
+                  />
+                </div>
+
+                {/* AI Pedagogical Review & Growth Recommendations */}
+                <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Bot size={15} className="text-amber-500" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        {lang === 'zh' ? 'AI 导师学情评语与成长潜质' : 'AI Pedagogical Insights'}
+                      </h4>
+                    </div>
+                    {/*
                   AI 评语：优先使用调用方传入的真实评语（aiComment）；
                   未提供时**不再编造**「循环变量步长」等具体结论，而是基于本节
                   真实掌握度给出一段可追溯的描述，数据不足则明确说明。
                 */}
-                <p className="text-[11px] text-muted leading-relaxed bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 mb-2">
-                  {insightText}
-                </p>
-              </div>
+                    <p className="text-[11px] text-muted leading-relaxed bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 mb-2">
+                      {insightText}
+                    </p>
+                  </div>
 
-              <div className="flex items-center justify-between text-[10px] text-muted pt-1">
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                  <CheckCircle2 size={12} />
-                  <span>{recommendationText}</span>
-                </span>
-                <span className="text-primary-theme font-semibold cursor-pointer hover:underline">
-                  {lang === 'zh' ? '历次报告' : 'History'}
-                </span>
-              </div>
-            </div>
-
-            {/* ── Learning Progress Trend Chart (Recharts AreaChart) ── */}
-            {activeProgressHistory && activeProgressHistory.length > 0 && (
-              <LearningProgressTrendChart progressHistory={activeProgressHistory} lang={lang} compact />
-            )}
-
-            {/* Plugin Slot: student.profile.card */}
-            <ExtensionPointRenderer slot="student.profile.card" slotProps={{ student, lessonId, classId }} />
-          </div>
-
-          {/* Right Column: Live Timeline & Submissions (7 Cols) */}
-          <div className="md:col-span-7 flex flex-col gap-3">
-            <div className="bg-surface rounded-xl border border-border/80 p-4 shadow-3xs flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <Clock size={15} className="text-primary-theme" />
-                  <h4 className="text-xs font-bold text-foreground">
-                    {lang === 'zh' ? '本堂答题与互动轨迹 (Live Timeline)' : 'Live Interactive Timeline'}
-                  </h4>
-                </div>
-                <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>{lang === 'zh' ? '实时追踪中' : 'Tracking'}</span>
-                </div>
-              </div>
-
-              {/* Chronological Timeline（真实数据为空时显示空态，不编造轨迹） */}
-              {timelineEvents.length === 0 && (
-                <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-[11px] text-muted flex-1 flex items-center justify-center">
-                  {lang === 'zh'
-                    ? '本节暂无作答或互动记录（尚未参与随堂测 / 投票 / 抢答）。'
-                    : 'No in-class activity recorded for this session yet.'}
-                </div>
-              )}
-              <div className="space-y-3 relative before:absolute before:inset-0 before:left-3 before:w-0.5 before:bg-border text-xs pl-0.5 flex-1">
-                {timelineEvents.map((evt) => (
-                  <div key={evt.id} className="relative flex items-start gap-3 pl-6">
-                    <span className="absolute left-1.5 top-1 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-primary-theme text-white flex items-center justify-center text-[8px] ring-4 ring-surface">
-                      <CheckCircle2 size={10} />
+                  <div className="flex items-center justify-between text-[10px] text-muted pt-1">
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                      <CheckCircle2 size={12} />
+                      <span>{recommendationText}</span>
                     </span>
+                    <span className="text-primary-theme font-semibold cursor-pointer hover:underline">
+                      {lang === 'zh' ? '历次报告' : 'History'}
+                    </span>
+                  </div>
+                </div>
 
-                    <div className="flex-1 bg-surface-secondary/40 rounded-xl p-2.5 border border-border/80 hover:border-primary-theme/40 transition">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-primary-theme text-[10px]">{evt.time}</span>
-                          <span className="font-bold text-foreground text-xs">{evt.title}</span>
-                        </div>
-                        {evt.points !== undefined && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
-                            +{evt.points}
-                          </span>
-                        )}
-                      </div>
+                {/* ── Learning Progress Trend Chart (Recharts AreaChart) ── */}
+                {activeProgressHistory && activeProgressHistory.length > 0 && (
+                  <LearningProgressTrendChart progressHistory={activeProgressHistory} lang={lang} compact />
+                )}
 
-                      <p className="text-[11px] text-muted mb-1.5">{evt.description}</p>
-                      {evt.details && (
-                        <div className="text-[10px] text-foreground/80 bg-surface p-1.5 rounded-lg border border-border/60">
-                          {evt.details}
-                        </div>
-                      )}
+                {/* Plugin Slot: student.profile.card */}
+                <ExtensionPointRenderer slot="student.profile.card" slotProps={{ student, lessonId, classId }} />
+              </div>
 
-                      {evt.submissionId && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            onClick={() => onInspectSandbox?.(student.id, evt.submissionId)}
-                            className="px-2 py-1 bg-primary-theme text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-3xs cursor-pointer hover:bg-primary-theme/90"
-                          >
-                            <Code2 size={11} />
-                            <span>{lang === 'zh' ? '查验代码沙箱' : 'Inspect Sandbox'}</span>
-                          </button>
-                        </div>
-                      )}
+              {/* Right Column: Live Timeline & Submissions (7 Cols) */}
+              <div className="md:col-span-7 flex flex-col gap-3">
+                <div className="bg-surface rounded-xl border border-border/80 p-4 shadow-3xs flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={15} className="text-primary-theme" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        {lang === 'zh' ? '本堂答题与互动轨迹 (Live Timeline)' : 'Live Interactive Timeline'}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>{lang === 'zh' ? '实时追踪中' : 'Tracking'}</span>
                     </div>
                   </div>
-                ))}
 
-                {/* Plugin Slot: student.profile.timeline_item */}
-                <ExtensionPointRenderer
-                  slot="student.profile.timeline_item"
-                  slotProps={{ student, lessonId, classId }}
-                />
+                  {/* Chronological Timeline（真实数据为空时显示空态，不编造轨迹） */}
+                  {timelineEvents.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-[11px] text-muted flex-1 flex items-center justify-center">
+                      {lang === 'zh'
+                        ? '本节暂无作答或互动记录（尚未参与随堂测 / 投票 / 抢答）。'
+                        : 'No in-class activity recorded for this session yet.'}
+                    </div>
+                  )}
+                  <div className="space-y-3 relative before:absolute before:inset-0 before:left-3 before:w-0.5 before:bg-border text-xs pl-0.5 flex-1">
+                    {timelineEvents.map((evt) => (
+                      <div key={evt.id} className="relative flex items-start gap-3 pl-6">
+                        <span className="absolute left-1.5 top-1 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-primary-theme text-white flex items-center justify-center text-[8px] ring-4 ring-surface">
+                          <CheckCircle2 size={10} />
+                        </span>
+
+                        <div className="flex-1 bg-surface-secondary/40 rounded-xl p-2.5 border border-border/80 hover:border-primary-theme/40 transition">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-primary-theme text-[10px]">{evt.time}</span>
+                              <span className="font-bold text-foreground text-xs">{evt.title}</span>
+                            </div>
+                            {evt.points !== undefined && (
+                              <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
+                                +{evt.points}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-muted mb-1.5">{evt.description}</p>
+                          {evt.details && (
+                            <div className="text-[10px] text-foreground/80 bg-surface p-1.5 rounded-lg border border-border/60">
+                              {evt.details}
+                            </div>
+                          )}
+
+                          {evt.submissionId && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                onClick={() => onInspectSandbox?.(student.id, evt.submissionId)}
+                                className="px-2 py-1 bg-primary-theme text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-3xs cursor-pointer hover:bg-primary-theme/90"
+                              >
+                                <Code2 size={11} />
+                                <span>{lang === 'zh' ? '查验代码沙箱' : 'Inspect Sandbox'}</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Plugin Slot: student.profile.timeline_item */}
+                    <ExtensionPointRenderer
+                      slot="student.profile.timeline_item"
+                      slotProps={{ student, lessonId, classId }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
           </>
         ) : (
           <div className="p-4 flex-1 overflow-y-auto bg-surface-secondary/20">

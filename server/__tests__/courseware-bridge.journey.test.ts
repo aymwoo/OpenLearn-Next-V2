@@ -482,7 +482,9 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
 
     it('4.4 验证 assignment_submissions 自动写入张三的 92 分并标记为 graded', async () => {
       const submission = kernelContainer.db
-        .prepare('SELECT score, status, feedback FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .prepare(
+          'SELECT score, status, feedback FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
+        )
         .get(createdAssignmentId, studentId) as { score: number; status: string; feedback: string };
       expect(submission).toBeDefined();
       expect(submission.score).toBe(92);
@@ -491,7 +493,9 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
 
     it('4.5 验证张三在该课程的进度 student_lesson_progress 自动达到 100%', async () => {
       const progress = kernelContainer.db
-        .prepare('SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+        .prepare(
+          'SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?',
+        )
         .get(studentId, lessonId) as { completed: number; progress_percent: number };
       expect(progress).toBeDefined();
       expect(progress.completed).toBe(1);
@@ -527,9 +531,7 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
 
     it('5.3 携带其他课件 UUID 铸造的 Token 访问沙箱返回 401', async () => {
       const foreignToken = mintCoursewareToken('foreign-other-uuid');
-      const res = await fetch(
-        `${baseUrl}/runtime/${createdCoursewareUuid}/?ct=${encodeURIComponent(foreignToken)}`,
-      );
+      const res = await fetch(`${baseUrl}/runtime/${createdCoursewareUuid}/?ct=${encodeURIComponent(foreignToken)}`);
       expect(res.status).toBe(401);
     });
 

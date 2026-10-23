@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import {
-  checkI18nSymmetry,
-  checkBufferEncoding,
-  runI18nAudit,
-  extractBaseTranslations,
-} from '../check-i18n.mjs';
+import { checkI18nSymmetry, checkBufferEncoding, runI18nAudit, extractBaseTranslations } from '../check-i18n.mjs';
 
 describe('check-i18n script validation', () => {
   describe('checkI18nSymmetry', () => {

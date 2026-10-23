@@ -233,8 +233,11 @@ function showcaseWorkToSpotlightItem(
   const codeLines = content?.lines?.length
     ? content.lines
     : work.codeSnippet
-    ? work.codeSnippet.split('\n').slice(0, 16).map((text) => ({ text, indent: 0 }))
-    : undefined;
+      ? work.codeSnippet
+          .split('\n')
+          .slice(0, 16)
+          .map((text) => ({ text, indent: 0 }))
+      : undefined;
 
   return {
     id: work.workId,
@@ -497,7 +500,16 @@ export function usePeerReviewData({
         total: studentCount,
       },
     };
-  }, [serverData, attempts, topPerformers, studentCount, workContents, showcaseWorks, selectedWorkAId, selectedWorkBId]);
+  }, [
+    serverData,
+    attempts,
+    topPerformers,
+    studentCount,
+    workContents,
+    showcaseWorks,
+    selectedWorkAId,
+    selectedWorkBId,
+  ]);
 
   return {
     data,

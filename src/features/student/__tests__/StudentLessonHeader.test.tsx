@@ -64,20 +64,12 @@ describe('StudentLessonHeader', () => {
     const setStudentViewStatus = vi.fn();
     const setSelectedLesson = vi.fn();
 
-    render(
-      <StudentLessonHeader
-        {...makeProps({ addToast, setStudentViewStatus, setSelectedLesson, lang: 'zh' })}
-      />,
-    );
+    render(<StudentLessonHeader {...makeProps({ addToast, setStudentViewStatus, setSelectedLesson, lang: 'zh' })} />);
     fireEvent.click(screen.getByText('Back to Dashboard'));
 
     expect(setStudentViewStatus).toHaveBeenCalledWith('dashboard');
     expect(setSelectedLesson).toHaveBeenCalledWith(null);
-    expect(addToast).toHaveBeenCalledWith(
-      '课堂仍在进行',
-      expect.stringContaining('返回课堂'),
-      'info',
-    );
+    expect(addToast).toHaveBeenCalledWith('课堂仍在进行', expect.stringContaining('返回课堂'), 'info');
 
     studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
   });

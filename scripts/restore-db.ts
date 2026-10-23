@@ -12,12 +12,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  listBackups,
-  performRestore,
-  getDefaultDbPath,
-  getDefaultBackupDir,
-} from '../packages/core/db/index.js';
+import { listBackups, performRestore, getDefaultDbPath, getDefaultBackupDir } from '../packages/core/db/index.js';
 
 const args = process.argv.slice(2);
 const has = (flag: string) => args.includes(flag);
@@ -27,7 +22,8 @@ const dbPath = getDefaultDbPath();
 const backupDir = getDefaultBackupDir();
 
 async function main(): Promise<void> {
-  if (has('--list')) {    const files = listBackups(backupDir);
+  if (has('--list')) {
+    const files = listBackups(backupDir);
     if (!files.length) {
       console.log(`（${backupDir} 下没有备份文件）`);
       return;

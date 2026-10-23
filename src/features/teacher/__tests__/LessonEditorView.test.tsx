@@ -45,7 +45,11 @@ function makeProps(overrides: Record<string, any> = {}): Record<string, any> {
 
 describe('LessonEditorView', () => {
   it('renders the editor header (zh) and the no-lesson placeholder when no lesson is selected', () => {
-    render(<AppDataProvider value={makeProps() as any}><LessonEditorView /></AppDataProvider>);
+    render(
+      <AppDataProvider value={makeProps() as any}>
+        <LessonEditorView />
+      </AppDataProvider>,
+    );
 
     // Header title + fallback are joined into one text node.
     expect(screen.getByText('课程编辑器: 未选择课程')).toBeTruthy();
@@ -55,28 +59,40 @@ describe('LessonEditorView', () => {
   });
 
   it('renders the English header and fallback when lang is en', () => {
-    render(<AppDataProvider value={makeProps({ lang: 'en' }) as any}><LessonEditorView /></AppDataProvider>);
+    render(
+      <AppDataProvider value={makeProps({ lang: 'en' }) as any}>
+        <LessonEditorView />
+      </AppDataProvider>,
+    );
 
     expect(screen.getByText('Lesson Editor: No Lesson Selected')).toBeTruthy();
   });
 
   it('shows the saving badge when editorSaveStatus is saving and a lesson is selected', () => {
-    render(<AppDataProvider value={makeProps({ selectedLesson: 'lesson-1', editorSaveStatus: 'saving' }) as any}><LessonEditorView /></AppDataProvider>);
+    render(
+      <AppDataProvider value={makeProps({ selectedLesson: 'lesson-1', editorSaveStatus: 'saving' }) as any}>
+        <LessonEditorView />
+      </AppDataProvider>,
+    );
 
     expect(screen.getByText('同步 SQLite...')).toBeTruthy();
   });
 
   it('disables timeline, palette and whiteboard editing for another teacher’s lesson', () => {
     render(
-      <AppDataProvider value={makeProps({
-          session: { userId: 'viewer-id', username: 'viewer', role: 'teacher' } as any,
-          lessons: [{ id: 'lesson-1', title: '共享课程', creator_id: 'owner-id' } as any],
-          selectedLesson: 'lesson-1',
-          timelineSegments: [{ id: 'segment-1', title: '导入', duration: '5m', type: 'intro' }],
-          activeSegmentId: 'segment-1',
-        }) as any}>
+      <AppDataProvider
+        value={
+          makeProps({
+            session: { userId: 'viewer-id', username: 'viewer', role: 'teacher' } as any,
+            lessons: [{ id: 'lesson-1', title: '共享课程', creator_id: 'owner-id' } as any],
+            selectedLesson: 'lesson-1',
+            timelineSegments: [{ id: 'segment-1', title: '导入', duration: '5m', type: 'intro' }],
+            activeSegmentId: 'segment-1',
+          }) as any
+        }
+      >
         <LessonEditorView />
-      </AppDataProvider>
+      </AppDataProvider>,
     );
 
     expect(screen.getByTestId('editor-whiteboard').getAttribute('data-read-only')).toBe('true');
@@ -87,14 +103,18 @@ describe('LessonEditorView', () => {
 
   it('keeps the lesson editor read-only in student preview mode', () => {
     render(
-      <AppDataProvider value={makeProps({
-          session: { userId: 'owner-id', username: 'owner', role: 'teacher' } as any,
-          lessons: [{ id: 'lesson-1', title: '我的课程', creator_id: 'owner-id' } as any],
-          selectedLesson: 'lesson-1',
-          activeRole: 'student',
-        }) as any}>
+      <AppDataProvider
+        value={
+          makeProps({
+            session: { userId: 'owner-id', username: 'owner', role: 'teacher' } as any,
+            lessons: [{ id: 'lesson-1', title: '我的课程', creator_id: 'owner-id' } as any],
+            selectedLesson: 'lesson-1',
+            activeRole: 'student',
+          }) as any
+        }
+      >
         <LessonEditorView />
-      </AppDataProvider>
+      </AppDataProvider>,
     );
 
     expect(screen.getByTestId('editor-whiteboard').getAttribute('data-read-only')).toBe('true');
@@ -106,12 +126,16 @@ describe('LessonEditorView', () => {
     vi.stubGlobal('open', openMock);
 
     render(
-      <AppDataProvider value={makeProps({
-          selectedLesson: 'lesson-42',
-          lessons: [{ id: 'lesson-42', title: '物理实验课' } as any],
-        }) as any}>
+      <AppDataProvider
+        value={
+          makeProps({
+            selectedLesson: 'lesson-42',
+            lessons: [{ id: 'lesson-42', title: '物理实验课' } as any],
+          }) as any
+        }
+      >
         <LessonEditorView />
-      </AppDataProvider>
+      </AppDataProvider>,
     );
 
     const studentBtn = screen.getByRole('button', { name: /学生视角/ });
@@ -128,7 +152,11 @@ describe('LessonEditorView', () => {
   });
 
   it('keeps the perspective switcher next to the "返回课程库" button', () => {
-    render(<AppDataProvider value={makeProps({ selectedLesson: 'lesson-42' }) as any}><LessonEditorView /></AppDataProvider>);
+    render(
+      <AppDataProvider value={makeProps({ selectedLesson: 'lesson-42' }) as any}>
+        <LessonEditorView />
+      </AppDataProvider>,
+    );
 
     const studentBtn = screen.getByRole('button', { name: /学生视角/ });
     const backBtn = screen.getByRole('button', { name: /返回课程库/ });
