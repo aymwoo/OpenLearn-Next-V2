@@ -39,6 +39,53 @@ export function splitCsvLine(line: string, separator = ','): string[] {
 }
 
 /**
+ * 把多行 CSV 合并成「逻辑记录」。
+ *
+ * `splitCsvLine` 只能处理**一行**，而 CSV 允许一个引号字段里包含真实换行
+ * （Markdown 教学大纲几乎必然带换行）。逐物理行解析会把一条记录撕成两半：
+ * 后半段因缺少 Title 列被静默丢弃 —— 教师看到「导入成功」，但内容少了一截。
+ *
+ * 这里按引号奇偶性判断记录是否结束：只有在**引号外**遇到的换行才是记录边界，
+ * 引号内的换行原样保留。`""` 转义由奇偶性自然处理（连续两个引号开合相消）。
+ *
+ * @param lines 物理行（已按 `\r?\n` 切开，**不含表头**）
+ * @returns 逻辑记录数组（已去掉行尾的 `\r`）
+ */
+export function splitCsvRecords(lines: string[]): string[] {
+  const records: string[] = [];
+  let current = '';
+  let insideQuote = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\r$/, '');
+    if (!current && !insideQuote && !line.trim()) continue;
+
+    current = current ? current + '\n' + line : line;
+
+    // 扫描本行的引号，更新「是否仍在引号内」
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') {
+        if (insideQuote && line[i + 1] === '"') {
+          i++; // 转义引号，不改变状态
+        } else {
+          insideQuote = !insideQuote;
+        }
+      }
+    }
+
+    if (!insideQuote) {
+      records.push(current);
+      current = '';
+    }
+  }
+
+  // 文件末尾遗留未闭合引号：把剩下的当作最后一条记录，而不是静默丢弃 ——
+  // 解析器不是校验器，丢数据比报错给教师的伤害更大。
+  if (current) records.push(current);
+  return records;
+}
+
+/**
  * 在已小写化的表头数组里定位列位置。
  *
  * 两级匹配，兼顾「精确」与「容错」：
@@ -459,7 +506,11 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
           );
         }
 
-        const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+        // 表头用 splitCsvLine 解析（而不是 lines[0].split(',')）——
+        // 同一文件里的学生/班级导入早就走状态机了，只有课程导入还停在
+        // 「按逗号盲切」的旧实现（审计 G-05）。两种解析对同一个文件的切分
+        // 结果不一致，是真正的隐患：带引号的表头会被切歪。
+        const headers = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
         const titleIndex = headers.findIndex((h) => h.includes('title') || h.includes('标题') || h.includes('课程'));
         const contentIndex = headers.findIndex(
           (h) => h.includes('content') || h.includes('内容') || h.includes('正文'),
@@ -473,16 +524,20 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
           );
         }
 
+        // 按「逻辑记录」切行：一个引号字段可以跨物理行。
+        //
+        // 此前是逐物理行解析，正文里的换行（Markdown 大纲几乎必然带换行）
+        // 会把一条记录撕成两半：后半段因缺少 Title 列被静默丢弃 ——
+        // 教师看到的是「导入了，但内容少了一截」。
+        const records = splitCsvRecords(lines.slice(1));
+
         const parsedList: { title: string; content: string }[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
+        for (const record of records) {
+          if (!record.trim()) continue;
 
-          const parts = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
-          const cleanParts = parts.map((p) => p.replace(/^"|"$/g, '').trim());
-
-          const title = cleanParts[titleIndex];
-          const content = cleanParts[contentIndex];
+          const cells = splitCsvLine(record);
+          const title = cells[titleIndex]?.trim();
+          const content = cells[contentIndex]?.trim();
 
           if (title && content) {
             parsedList.push({ title, content });

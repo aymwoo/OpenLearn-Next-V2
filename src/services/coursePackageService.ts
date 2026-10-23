@@ -37,6 +37,33 @@ export interface CoursePackageImportResult {
   elements: number;
   assets: number;
   assetFiles: Array<{ filename: string; fileUrl: string; fileType: string; slideCount: number }>;
+  /** 本次导入的课程包去重键。 */
+  packageKey?: string;
+  /** 内容哈希。 */
+  packageHash?: string;
+  /** 包声明的 meta.id（可空）。 */
+  packageId?: string | null;
+  /** 是否为「强制导入的副本」（命中去重后仍导入了）。 */
+  duplicate?: boolean;
+}
+
+/**
+ * 命中去重时服务端返回的冲突信息（HTTP 409）。
+ *
+ * 「已存在同名课程」不等于「禁止导入」——教师有时确实要导两份
+ * （两个班各上一门），所以服务端把冲突信息原样带回，由前端询问后再决定。
+ */
+export interface CoursePackageDuplicate {
+  /** 已存在的课程 id。 */
+  lessonId: string;
+  /** 已存在的课程标题。 */
+  lessonTitle: string;
+  /** 已存在课程的创建时间（毫秒时间戳）。 */
+  importedAt: number;
+  /** 命中的去重键。 */
+  packageKey: string;
+  /** 包是否声明了 meta.id。 */
+  hasDeclaredId: boolean;
 }
 
 /**
@@ -121,21 +148,36 @@ export async function readCoursePackageFile(
   };
 }
 
-/** 提交导入。 */
-export async function importCoursePackage(pkg: any): Promise<{
+/**
+ * 提交导入。
+ *
+ * `allowDuplicate` 为 true 时，即使命中去重（409）也会照常导入一份副本 ——
+ * 对应「教师确认过了，我就是要导两份」。
+ */
+export async function importCoursePackage(
+  pkg: any,
+  options: { allowDuplicate?: boolean } = {},
+): Promise<{
   ok: boolean;
   result?: CoursePackageImportResult;
   error?: string;
+  /** 命中去重时的冲突信息（仅 409 时存在）。 */
+  duplicate?: CoursePackageDuplicate;
 }> {
   try {
     const res = await fetch('/api/course-packages/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: pkg }),
+      body: JSON.stringify({ package: pkg, allowDuplicate: options.allowDuplicate === true }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || body?.success === false) {
-      return { ok: false, error: body?.error || `课程包导入失败（HTTP ${res.status}）` };
+      const duplicate = body?.duplicate as CoursePackageDuplicate | undefined;
+      return {
+        ok: false,
+        error: body?.error || `课程包导入失败（HTTP ${res.status}）`,
+        ...(duplicate ? { duplicate } : {}),
+      };
     }
     return { ok: true, result: body.result as CoursePackageImportResult };
   } catch (err: any) {

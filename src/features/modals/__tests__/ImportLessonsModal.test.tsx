@@ -17,6 +17,8 @@ function makeProps(overrides: Partial<ImportLessonsModalProps> = {}): ImportLess
     downloadCourseTemplate: vi.fn(),
     packagePreview: null,
     handlePackageImportSubmit: vi.fn(),
+    packageDuplicate: null,
+    handlePackageDuplicateDismiss: vi.fn(),
     isDraggingImport: false,
     previewImportData: [] as ImportRow[],
     setPreviewImportData: vi.fn(),
@@ -49,6 +51,43 @@ describe('ImportLessonsModal', () => {
   it('offers the course-package template download button', () => {
     render(<ImportLessonsModal {...makeProps()} />);
     expect(screen.getByTestId('download-course-package-template-btn')).toBeTruthy();
+  });
+
+  it('shows the duplicate notice with an explicit "import a copy" escape hatch (G-06)', () => {
+    render(
+      <ImportLessonsModal
+        {...makeProps({
+          importStatus: 'error',
+          packagePreview: {
+            fileName: 'openlearn-course-template.json',
+            title: '示例课程',
+            metaName: 'meta',
+            segments: 5,
+            elements: 14,
+            assets: 2,
+            componentTypes: ['presentation'],
+          },
+          packageDuplicate: {
+            lessonId: 'les_dup_1',
+            lessonTitle: '【样例】OpenLearn 预设组件全览',
+            importedAt: Date.now(),
+            packageKey: 'sha256:abc',
+            hasDeclaredId: false,
+          },
+        })}
+      />,
+    );
+    // 幂等命中不是「故障」：必须给出确认态 + 显式出口，而不是普通报错
+    expect(screen.getByTestId('course-package-duplicate-notice')).toBeTruthy();
+    expect(screen.getByTestId('course-package-duplicate-force')).toBeTruthy();
+    expect(screen.getByTestId('course-package-duplicate-cancel')).toBeTruthy();
+    expect(screen.queryByText('Import or Parsing Error')).toBeNull();
+  });
+
+  it('shows the ordinary error panel when there is no duplicate conflict', () => {
+    render(<ImportLessonsModal {...makeProps({ importStatus: 'error', importErrorMsg: '坏了' })} />);
+    expect(screen.getByText('Import or Parsing Error')).toBeTruthy();
+    expect(screen.queryByTestId('course-package-duplicate-notice')).toBeNull();
   });
 
   it('shows the course package preview instead of the CSV table when a package is selected', () => {
