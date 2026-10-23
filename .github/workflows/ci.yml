@@ -13,6 +13,18 @@ on:
   push:
     branches: [main]
 
+# Issue #229：路由数据范围声明门禁（route-scope）。
+#
+# 服务端启动时会审计所有「已认证但未声明数据范围」的路由
+# （server/security/route-scope.ts 的 assertRouteDataScopes）：
+# - 默认只告警（迁移期口径）；
+# - ROUTE_SCOPE_ENFORCE=true 时直接抛错 —— 服务器**起不来**，CI 即红。
+#
+# 这个变量此前从未被设置过，门禁形同虚设：新增路由不声明数据范围不会被任何人发现。
+# 现在在 CI 全局启用，让「漏声明」变成硬失败。
+env:
+  ROUTE_SCOPE_ENFORCE: 'true'
+
 jobs:
   typecheck-and-test:
     runs-on: ubuntu-latest
