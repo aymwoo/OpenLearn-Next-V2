@@ -996,19 +996,26 @@ export class ServiceHost {
         const isRead = msg.method !== 'addPoints';
         const requiredCap = isRead ? CAP_STUDENT_DATA_READ : CAP_STUDENT_DATA_WRITE;
         const hasCap = hasCapability(this.manifestCapabilities ?? [], requiredCap);
-        if (!hasCap) {
-          console.warn(
-            `[PluginSecurity] Worker plugin "${pluginId}" ${isRead ? 'accessed' : 'modified'} student data via ${msg.method} without declaring "${requiredCap}". In future versions this will be blocked.`,
-          );
-        }
+        // Issue #225：缺能力时**直接拒绝调用**，不再「只告警后放行」。
+        // 此前那句 "In future versions this will be blocked" 只是承诺 ——
+        // 未获 student-data:write 的插件仍能修改任意学生的积分（写）、读取积分（读）。
+        // 审计事件先落，再抛错：被拒绝的调用同样要留痕（pluginId / studentId / method）。
         recordSecurityAudit('plugin.student_data_access', {
           pluginId,
           studentId,
           method: msg.method,
           operation: isRead ? 'read' : 'write',
           hasCapability: hasCap,
-          ...(hasCap ? {} : { migrationWarning: true }),
+          ...(hasCap ? {} : { denied: true }),
         });
+        if (!hasCap) {
+          throw new WorkerCapabilityError(
+            this.pluginActorId,
+            msg.token,
+            `Capability denied for actor ${this.pluginActorId}: ` +
+              `${isRead ? '读取' : '写入'}学生数据需要 '${requiredCap}' 能力`,
+          );
+        }
       }
 
       // ── Get the method from the service instance ───────────────────

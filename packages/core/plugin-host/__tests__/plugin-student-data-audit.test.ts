@@ -129,7 +129,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
   });
 
   describe('Inline Plugin PointsLedger Wrapping', () => {
-    it('当插件声明 student-data:read 能力时，访问学生积分数据记录审计且无 migrationWarning', async () => {
+    it('当插件声明 student-data:read 能力时，访问学生积分数据记录审计且未被拒绝', async () => {
       const manifest: any = {
         id: 'test-audit-plugin',
         name: 'Test Audit Plugin',
@@ -153,11 +153,10 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       expect(audit?.method).toBe('getLogs');
       expect(audit?.operation).toBe('read');
       expect(audit?.hasCapability).toBe(true);
-      expect(audit?.migrationWarning).toBeUndefined();
+      expect(audit?.denied).toBeUndefined();
     });
 
-    it('当插件未声明 student-data:read 能力时，放行读取，输出警告并标记 migrationWarning: true', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('当插件未声明 student-data:read 能力时，读取被拒绝且不触达账本（Issue #225）', async () => {
       const manifest: any = {
         id: 'test-legacy-plugin',
         name: 'Legacy Plugin',
@@ -169,12 +168,11 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       const ctx = await buildContext(serviceRegistry, tracker, 'test-legacy-plugin', manifest, db);
       const ledger = ctx.services.pointsLedger as IPointsLedgerService;
 
-      const summary = await ledger.getStudentDimensionSummary('stu-202', 'class-1');
-      expect(summary).toEqual({ 'dim-1': 50 });
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('without declaring "student-data:read"'),
+      // Issue #225：此前是「告警后放行」，现在真正阻断。
+      await expect(ledger.getStudentDimensionSummary('stu-202', 'class-1')).rejects.toThrow(
+        /student-data:read/,
       );
+      expect(mockLedger.getStudentDimensionSummary).not.toHaveBeenCalled();
 
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access');
       expect(audit).toBeDefined();
@@ -182,13 +180,10 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       expect(audit?.method).toBe('getStudentDimensionSummary');
       expect(audit?.operation).toBe('read');
       expect(audit?.hasCapability).toBe(false);
-      expect(audit?.migrationWarning).toBe(true);
-
-      warnSpy.mockRestore();
+      expect(audit?.denied).toBe(true);
     });
 
-    it('当插件调用 addPoints 写入数据时，按 student-data:write 鉴权并记录 write 操作审计', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('当插件只声明 read 时，addPoints 写入被拒绝且不产生积分变更（Issue #225）', async () => {
       const manifest: any = {
         id: 'test-writer-plugin',
         name: 'Writer Plugin',
@@ -200,20 +195,17 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       const ctx = await buildContext(serviceRegistry, tracker, 'test-writer-plugin', manifest, db);
       const ledger = ctx.services.pointsLedger as IPointsLedgerService;
 
-      await ledger.addPoints('stu-303', 'class-1', 'dim-1', 5, '课堂表现优秀');
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('without declaring "student-data:write"'),
+      await expect(ledger.addPoints('stu-303', 'class-1', 'dim-1', 5, '课堂表现优秀')).rejects.toThrow(
+        /student-data:write/,
       );
+      expect(mockLedger.addPoints).not.toHaveBeenCalled();
 
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access' && r.operation === 'write');
       expect(audit).toBeDefined();
       expect(audit?.studentId).toBe('stu-303');
       expect(audit?.method).toBe('addPoints');
       expect(audit?.hasCapability).toBe(false);
-      expect(audit?.migrationWarning).toBe(true);
-
-      warnSpy.mockRestore();
+      expect(audit?.denied).toBe(true);
     });
   });
 
@@ -254,7 +246,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       expect(audit?.method).toBe('getLogs');
       expect(audit?.operation).toBe('read');
       expect(audit?.hasCapability).toBe(true);
-      expect(audit?.migrationWarning).toBeUndefined();
+      expect(audit?.denied).toBeUndefined();
 
       expect(postedMessages).toContainEqual(
         expect.objectContaining({
@@ -264,8 +256,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       );
     });
 
-    it('Worker 插件未声明能力调用写入时，放行并记录 migrationWarning', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('Worker 插件未声明 student-data:write 调用写入时被拒绝，且不产生积分变更（Issue #225）', async () => {
       const postedMessages: unknown[] = [];
       const mockTransport = {
         postMessage: vi.fn((msg) => postedMessages.push(msg)),
@@ -294,13 +285,25 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
 
       await serviceHost.handleInvoke(invokeMsg, mockTransport);
 
+      // 调用被拒：返回错误而不是结果
+      expect(postedMessages).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          invokeId: 'inv-2',
+        }),
+      );
+      const err = postedMessages.find((m: any) => m.type === 'error') as any;
+      expect(err.code).toBe('WorkerCapabilityError');
+      expect(err.message).toContain('student-data:write');
+
+      // 关键：积分账本**未被调用** —— 不产生任何积分变更
+      expect(mockLedger.addPoints).not.toHaveBeenCalled();
+
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access' && r.studentId === 'stu-worker-2');
       expect(audit).toBeDefined();
       expect(audit?.operation).toBe('write');
       expect(audit?.hasCapability).toBe(false);
-      expect(audit?.migrationWarning).toBe(true);
-
-      warnSpy.mockRestore();
+      expect(audit?.denied).toBe(true);
     });
   });
 });

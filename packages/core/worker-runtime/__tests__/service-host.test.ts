@@ -901,7 +901,8 @@ describe('ServiceHost ActionRegistry tracking', () => {
         registry as any,
         capGuard as any,
         'plugin:test',
-        ['points:read'],
+        // Issue #225：调用积分账本需要 student-data:read 能力，缺能力会被拒绝。
+        ['points:read', 'student-data:read'],
         undefined,
         undefined,
         undefined,

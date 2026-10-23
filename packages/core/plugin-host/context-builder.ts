@@ -25,6 +25,7 @@ import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
 import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
+import { PluginCapabilityDeniedError } from './errors.js';
 import { warnDeprecation } from '../extension-points/index.js';
 import {
   ICommandBusServiceToken,
@@ -580,19 +581,21 @@ function wrapPointsLedgerService(
     requiredCap: string,
   ) => {
     const hasCap = hasCapability(capabilities ?? [], requiredCap);
-    if (!hasCap) {
-      console.warn(
-        `[PluginSecurity] Plugin "${pluginId}" ${operation === 'read' ? 'accessed' : 'modified'} student data via ${method} without declaring "${requiredCap}". In future versions this will be blocked.`,
-      );
-    }
+    // Issue #225：缺能力时**直接拒绝**，不再只告警后放行。
+    // 与 worker 侧（worker-runtime/service-host.ts）同一口径 ——
+    // inline 与 worker 两条隔离路径不能一个拦一个放。
+    // 审计先落再抛：被拒绝的调用同样要留痕。
     recordSecurityAudit('plugin.student_data_access', {
       pluginId,
       studentId,
       method,
       operation,
       hasCapability: hasCap,
-      ...(hasCap ? {} : { migrationWarning: true }),
+      ...(hasCap ? {} : { denied: true }),
     });
+    if (!hasCap) {
+      throw new PluginCapabilityDeniedError(pluginId, requiredCap, operation, method);
+    }
   };
 
   return {
