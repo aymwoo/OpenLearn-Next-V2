@@ -69,7 +69,7 @@ graph TD
 | # | 风险 | 说明 | 建议 |
 | --- | --- | --- | --- |
 | R-01 | `worker_threads` / `inline` 模式原始网络不受限 | 虽已由 `plugin-net-preload.cjs` 封锁 `process` 模式原始网络，但 `worker_threads` 与 `inline` 同进程共享网络栈不受拦截 | 当前已由 `resolvePluginExecutionMode` 在加载期强门禁强制对第三方插件降级至 `process` 模式兜底；中长期探索 Worker 线程级沙箱或全面统一 process 隔离 |
-| R-02 | 出站 allowlist 的可见性 | manifest 可自行声明 `network.outbound`，但安装/启用 UI 尚未突出展示「该插件将能访问哪些域名」 | 在管理员插件详情页展示 allowlist，并要求批准高危域名；考虑对私有/敏感域名二次确认 |
+| R-02 | 出站 allowlist 的可见性 | ✅ 已修：安装向导逐条列出清单声明的出站域名并默认不批准；管理员另有 `GET/POST/DELETE /api/plugins/:id/network-grants` 查看/批准/撤销。**复查时发现原描述低估了缺口**：`approvePluginNetHosts` 当时在整个仓库里没有任何调用方 —— 不只是「UI 没展示」，而是授权链路根本不存在（第三方插件永远拿不到出站权）。现已在安装/更新路径接受 `x-approve-network-hosts` 补上该链路，回环/私有/保留地址与通配符一律不可批准并回显原因 |
 | R-03 | CPU 饥饿不等于崩溃 | 存活探活只处理「卡死且不响应」；持续吃 CPU 但让出 event loop 的插件仍存活 | P2：进程级 CPU/内存配额（cgroup 或 watchdog quota） |
 | R-04 | 信任边界文档漂移 | TB-08 的渲染缺陷与 TB-09 的「网络 unrestricted」表述仍留在文档里，容易与 #32 之后的实现矛盾 | ✅ 已修（Issue #144）：同步 `plugin-trust-boundary.md`，并加入自动化防漂移测试 |
 | R-05 | 环境校验只覆盖 `server.ts` 入口 | `cli.mjs` 的子命令（doctor/migrate/backup）不经过 `assertStartupEnv()`，理论上仍可用非法环境变量运行非服务命令 | 视需要在 CLI 子命令入口复用同一校验器；服务入口已覆盖 |

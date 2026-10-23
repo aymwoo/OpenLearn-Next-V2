@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件出站域名授权链路补齐（审计残余风险 R-02）**：
+  - **缺口比文档写的更大**：`docs/trust-boundary-hardening-audit-2026-10-14.md` 把 R-02 记为「安装/启用 UI 尚未突出展示 allowlist」，但复查发现 `approvePluginNetHosts` 在整个仓库里**没有任何调用方** —— 不只是界面不可见，而是授权链路本身不存在：第三方插件的出站白名单永远是空的（fail-closed 安全，但管理员也无从授权）。
+  - **补上链路**：安装/更新（`upload-zip-raw` / `update-zip-raw` / `install-from-url`）接受 `x-approve-network-hosts`，把清单 `network.outbound` 中**通过归一化**的域名写入 `plugin_network_grants`；响应里把「清单声明」「已授权」「永远不可批准（带原因）」三类分开返回，避免把「声明了」误当成「已授权」。
+  - **管理员管理接口**：新增 `GET /api/plugins/:id/network-grants`（提案 / 已批准 / 已拒绝）、`POST`（批准指定域名）、`DELETE`（撤销单个域名），均仅限 administrator 并写 `plugin.network_grant_approved` / `_revoked` 安全审计。撤销返回「是否真的删掉了一行」，不把「本来就没有」当成功。
+  - **拒绝有原因**：新增 `classifyNetHostProposals` —— `normalizeNetHost` 只返回 null，管理员看到 `localhost` 从列表里消失时无法判断是平台丢数据还是被 SSRF 防线挡了。现在回环/私有/保留地址、通配符、带协议或端口的写法各自给出具体原因。
+  - **安装向导**：出站域名逐条展示（默认**不勾选**），不可批准的项单独列出并注明原因；前端复用宿主同一套分类函数，避免界面显示「看起来能批准、实际授权表永不接受」的项。
+  - **测试**：`plugin-network-grants.test.ts` 10 例（分类原因矩阵、脏输入不抛异常、授权表本身挡住回环/通配符、撤销的三种返回值）；`PluginInstallWizard.outbound.test.tsx` 3 例（默认不勾选、拒绝项带原因、勾选后透传到安装选项）；`plugin-route-auth.test.ts` 新增 5 例（三个新端点仅管理员、授权头默认 false、批准必经分类过滤）。
+
 - **课程导入补齐幂等与 CSV 多行解析（审计 G-06 / G-05，`docs/audit/course-import-audit.md`）**：
   - **幂等**：课程包格式没有天然主键，去重键由 `server/services/course-package-identity.ts` 派生 —— 包声明了 `meta.id` 就用 `id:<meta.id>`（作者给的稳定标识，改标题重新导出仍被认作同一个包），否则退回 `sha256:<规范化内容哈希>`（递归排序对象键、剔除 `assets[].base64` 与 `meta.description/author/tags` 等装饰字段，避免「不同导出器键序」与「改个描述」制造假差异）。命中重复返回 `409 COURSE_PACKAGE_DUPLICATE` 并带回已存在课程，前端切成「重复导入」询问态；教师可用 `allowDuplicate: true` 显式导入副本。查重作用域是**按创建者** —— 内置模板要能被每位教师各导一份，全局去重会让第二位教师永远导不进模板。去重键落在 `lessons` 三列（迁移 `041_course_package_idempotency.sql`），删课即释放，无需额外清理链路。
   - **CSV 解析**：`parseLessonCSV` 此前是「按逗号盲切 + 正则凑合」，与同文件里学生/班级导入用的 `splitCsvLine` 状态机不一致（带引号的表头会被切歪）。现改为复用 `splitCsvLine`，并新增 `splitCsvRecords` 按引号奇偶性判断记录边界 —— 此前逐物理行解析会把带 Markdown 换行的正文撕成两半，后半段因缺 Title 列被**静默丢弃**（教师看到「导入成功」但内容少了一截）。
