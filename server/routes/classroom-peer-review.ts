@@ -29,6 +29,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { authorizeClassroomControl, authorizeClassroomRead } from '../services/class-access.js';
 import {
   getUnifiedShowcaseWorks,
   getUnifiedShowcaseWorksResult,
@@ -51,6 +52,35 @@ function currentStudentId(req: Request): string | null {
 function isPrivileged(req: Request): boolean {
   const role = (req as any).session?.role;
   return role === 'teacher' || role === 'administrator' || role === 'admin';
+}
+
+/**
+ * 课中互评的班级归属授权（Issue #221）。
+ *
+ * 此前本文件 7 个路由**全部只做角色校验**，没有任何班级 / 课节归属判断：
+ * 任意登录用户凭任意 lessonId 就能读写别人班的互评数据 ——
+ *   - GET  互评展示：读到他班的互评匹配矩阵（谁评了谁、量规得分、评语）
+ *   - POST 弹幕：往别人课堂刷屏
+ *   - POST 勋章 / 提名：污染别人课堂的勋章流与提名榜
+ *
+ * 这里接入平台既有的课堂授权 helper：
+ *   - `control`：教师写操作（分配互评任务）—— 需是本课堂的任课教师 / 管理员
+ *   - `read`：展示与学生参与 —— 教师同上；学生须属于该课堂所在班级
+ */
+function requirePeerReviewAccess(req: Request, res: Response, mode: 'read' | 'control'): boolean {
+  const db = kernelContainer.db as any;
+  const httpSession = (req as any).session;
+  const { lessonId } = req.params;
+  const actorId = getActorId(req);
+  const decision =
+    mode === 'control'
+      ? authorizeClassroomControl(db, httpSession, lessonId, { actorId })
+      : authorizeClassroomRead(db, httpSession, lessonId, { actorId });
+  if (!decision.ok) {
+    res.status(decision.status).json({ success: false, error: decision.error || 'Forbidden' });
+    return false;
+  }
+  return true;
 }
 
 /** 校验并按 (session, lesson) 取出课堂会话；不存在返回 null */
@@ -109,6 +139,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const session = resolveSession(lessonId);
         const works = getUnifiedShowcaseWorks(db, lessonId, session?.id, session?.classId);
         return res.json({ success: true, works });
@@ -126,6 +157,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'control')) return;
         const perStudent = Math.min(5, Math.max(1, Number(req.body?.perStudent) || 2));
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session for this lesson' });
@@ -203,6 +235,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session for this lesson' });
 
@@ -396,6 +429,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId, taskId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const { score, comment, dimensionScores } = req.body ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
@@ -472,6 +506,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const { receiverId, badgeKey } = req.body ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
@@ -519,6 +554,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const { nominatedStudentId, honorKey } = req.body ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
@@ -555,6 +591,7 @@ function ensureRoutes(app: Express): void {
       try {
         const db = kernelContainer.db as any;
         const { lessonId } = req.params;
+        if (!requirePeerReviewAccess(req, res, 'read')) return;
         const { text, type, voiceDuration } = req.body ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
