@@ -19,8 +19,19 @@ import {
   findActiveLessonForStudent,
   markStudentAbsent,
   promoteAttemptToGrade,
+  type AutoRecordReport,
 } from '../utils/auto-record-score.js';
 import { isAdministrator, isTeacher, teacherCanSeeStudent, type AccessSession } from './class-access.js';
+
+/** 预期内的自动录入跳过：每次提交都打一行会淹没真正需要排查的异常 */
+const QUIET_AUTO_RECORD_REASONS = new Set<string>([
+  'rule-disabled',
+  'not-finished',
+  'missing-score',
+  'below-min-completion',
+  'placeholder-student',
+  'already-recorded',
+]);
 
 export interface CoursewareSessionInfo extends AccessSession {
   userId?: string;
@@ -366,6 +377,34 @@ export class CoursewareService {
       if (activeLesson) {
         const outcome = autoRecordAttempt(this.db as any, attemptId, activeLesson);
         autoRecord = outcome.ok ? { recorded: true } : { recorded: false, reason: outcome.reason };
+        if (outcome.ok) {
+          console.info(
+            '[courseware.submit] auto-record recorded',
+            JSON.stringify({
+              attemptId,
+              studentId,
+              lessonId: activeLesson.lessonId,
+              classId: activeLesson.classId,
+              assignmentId: outcome.assignmentId,
+              score: outcome.score,
+            }),
+          );
+        } else if (!QUIET_AUTO_RECORD_REASONS.has(outcome.reason as string)) {
+          const line = JSON.stringify({
+            attemptId,
+            studentId,
+            lessonId: activeLesson.lessonId,
+            classId: activeLesson.classId,
+            reason: outcome.reason,
+            ruleSource: outcome.ruleSource,
+          });
+          // 这两类属于数据不一致/落库失败，需要运维可见；保护类跳过只作诊断信息
+          if (outcome.reason === 'student-not-in-class' || outcome.reason === 'attempt-not-found') {
+            console.warn('[courseware.submit] auto-record rejected', line);
+          } else {
+            console.info('[courseware.submit] auto-record skipped', line);
+          }
+        }
       } else {
         autoRecord = { recorded: false, reason: 'no-active-lesson' };
       }
@@ -619,11 +658,27 @@ export class CoursewareService {
     });
 
     if (!result.ok) {
+      console.warn(
+        '[courseware.promote] rejected',
+        JSON.stringify({ attemptId, lessonId, classId, reason: result.reason }),
+      );
       const err: any = new Error(describePromoteReason(result.reason));
       err.status = result.reason === 'attempt-not-found' ? 404 : 422;
       err.reason = result.reason;
       throw err;
     }
+
+    console.info(
+      '[courseware.promote] recorded',
+      JSON.stringify({
+        attemptId,
+        studentId: result.studentId,
+        lessonId,
+        classId,
+        assignmentId: result.assignmentId,
+        score: result.score,
+      }),
+    );
 
     await publishClassroomEvent(
       CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
@@ -641,12 +696,31 @@ export class CoursewareService {
     return { assignmentId: result.assignmentId, score: result.score };
   }
 
-  public autoRecordForLesson(lessonId: string, classId: string, limit?: number): any {
+  public autoRecordForLesson(lessonId: string, classId: string, limit?: number): AutoRecordReport {
     if (!lessonId || !classId) {
       const err: any = new Error('Missing lessonId or classId');
       err.status = 400;
       throw err;
     }
-    return autoRecordForLesson(this.db as any, { lessonId, classId, limit });
+    const report = autoRecordForLesson(this.db as any, { lessonId, classId, limit });
+    // 教师一次点击只记一行摘要；跳过原因按数量聚合，便于回答「为什么没录上」
+    const reasons: Record<string, number> = {};
+    for (const detail of report.details) {
+      if (!detail.recorded && detail.reason) {
+        reasons[detail.reason] = (reasons[detail.reason] ?? 0) + 1;
+      }
+    }
+    console.info(
+      '[courseware.auto-record]',
+      JSON.stringify({
+        lessonId,
+        classId,
+        recorded: report.recorded,
+        skipped: report.skipped,
+        absentGenerated: report.absentGenerated ?? 0,
+        reasons,
+      }),
+    );
+    return report;
   }
 }
