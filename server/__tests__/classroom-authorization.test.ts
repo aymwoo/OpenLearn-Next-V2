@@ -129,6 +129,13 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     expect(initA.status).toBe(200);
     const initB = await call('POST', `/api/classroom/sessions/${lessonB}/init`, teacherBToken, { classId: classB });
     expect(initB.status).toBe(200);
+
+    // Issue #241 的用例断言「教师能在自己的 active-sessions 里看到自学课会话」，
+    // 但此前从未为 `lessonSelfStudy` 建过会话 —— 那条断言永远不可能成立，
+    // 也让 #241 想覆盖的「无班级、仅靠 lesson.creator_id 归属」分支从未被真正测到。
+    // 这里补上：自学课不带 classId，归属只能靠课节创建者。
+    const initSelf = await call('POST', `/api/classroom/sessions/${lessonSelfStudy}/init`, teacherAToken, {});
+    expect(initSelf.status).toBe(200);
   });
 
   afterAll(async () => {
