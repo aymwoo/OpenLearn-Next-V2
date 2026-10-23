@@ -30,6 +30,9 @@ const ANSWER_KEYS = new Set([
   'correct_index',
   'correctIndexes',
   'correct_indexes',
+  // 课堂极速投票：试题答案不能随活动投票下发到学生端
+  'correct_option',
+  'correctOption',
   'answer',
   'answers',
   'referenceAnswer',
@@ -287,9 +290,7 @@ export function buildLessonVisibilityClause(scope: LessonVisibilityScope): {
 
   const classIds = scope.classIds;
   // 班级集合为空时不必再查关联表（也避免生成 `IN ()` 这种非法 SQL）
-  const classIdsClause = classIds.length
-    ? `class_id IN (${classIds.map(() => '?').join(',')})`
-    : '1 = 0';
+  const classIdsClause = classIds.length ? `class_id IN (${classIds.map(() => '?').join(',')})` : '1 = 0';
 
   const linkedByClass = [
     `l.id IN (SELECT lesson_id FROM schedules WHERE ${classIdsClause})`,
@@ -351,4 +352,175 @@ export function authorizeLessonStaff(
   const uid = actorUserId(session);
   if (lesson.creator_id === uid || lesson.creator_id === session.username) return { ok: true, level: 'teacher' };
   return { ok: false, status: 403, error: 'Forbidden' };
+}
+
+// ── 课堂会话对象级授权 ────────────────────────────────────────────────
+//
+// 课堂路由此前多数只校验角色（teacher / student），不校验「这个会话是不是你的」。
+// 多教师部署下，任意教师可操作他班进行中的投票、抢答、倒计时与结课通票；
+// 任意学生可凭 lessonId 读取其他班级的进行中会话与答案。以下两个 helper 把
+// 会话行、班级归属与课节创建者统一成一条判定链，供路由层复用。
+
+export interface ClassroomSessionRef {
+  id?: string;
+  lesson_id?: string;
+  class_id?: string | null;
+  teacher_id?: string | null;
+  stage?: string | null;
+}
+
+export interface ClassroomAuthOptions {
+  /** getActorId(req) 的返回值；会话里的 teacher_id 可能以该形态落库 */
+  actorId?: string;
+  /**
+   * 已加载的会话行。`undefined` = 由 helper 查询；
+   * `null` = 明确表示「该课节没有（进行中的）会话」。
+   */
+  sessionRow?: ClassroomSessionRef | null;
+}
+
+const CLASSROOM_PLACEHOLDER_OWNERS = new Set(['', 'teacher', 'anonymous', 'demo']);
+
+function loadClassroomSession(
+  db: Database.Database,
+  lessonId: string,
+  activeOnly: boolean,
+): ClassroomSessionRef | undefined {
+  const where = activeOnly ? "AND stage != 'ARCHIVED_REPORT'" : '';
+  return db
+    .prepare(
+      `SELECT id, lesson_id, class_id, teacher_id, stage
+         FROM classroom_sessions
+        WHERE lesson_id = ? ${where}
+        ORDER BY created_at DESC
+        LIMIT 1`,
+    )
+    .get(lessonId) as ClassroomSessionRef | undefined;
+}
+
+function classroomActorTokens(session: AccessSession | null | undefined, actorId?: string): string[] {
+  const uid = actorUserId(session);
+  const rawRole = session?.subRole || session?.role;
+  const candidates = [
+    uid,
+    session?.username,
+    actorId,
+    uid && rawRole ? `user:${uid}:${rawRole}` : null,
+    uid ? `user:${uid}:teacher` : null,
+  ];
+  return Array.from(
+    new Set(
+      candidates
+        .map((token) => (token == null ? '' : String(token).trim()))
+        .filter((token) => !CLASSROOM_PLACEHOLDER_OWNERS.has(token)),
+    ),
+  );
+}
+
+function ownerMatches(value: string | null | undefined, tokens: string[]): boolean {
+  const owner = value == null ? '' : String(value).trim();
+  return owner !== '' && tokens.includes(owner);
+}
+
+function lessonHasOwnedScheduledClass(db: Database.Database, lessonId: string, tokens: string[]): boolean {
+  if (tokens.length === 0) return false;
+  const placeholders = tokens.map(() => '?').join(',');
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok
+         FROM schedules s
+         JOIN classes c ON c.id = s.class_id
+        WHERE s.lesson_id = ? AND c.owner_user_id IN (${placeholders})
+        LIMIT 1`,
+    )
+    .get(lessonId, ...tokens) as { ok: number } | undefined;
+  return !!row;
+}
+
+/**
+ * 课堂**控制**权限：推进阶段、倒计时、投票、抢答、教学模式等写操作。
+ *
+ * - 管理员：全部。
+ * - 教师：会话 teacher_id、会话绑定班级的 owner、课节 creator_id 任一匹配即可；
+ *   没有进行中会话时，还允许「课节无 creator 的历史数据」或「自己班级有排课」。
+ * - 学生：一律拒绝。
+ *
+ * `sessionRow` 默认取该课节**进行中**的会话（归档会话不应阻塞下一节新会话），
+ * 显式传入时可校验历史会话（例如结课通票汇总、抢答器归属）。
+ */
+export function authorizeClassroomControl(
+  db: Database.Database,
+  session: AccessSession | null | undefined,
+  lessonId: string,
+  opts: ClassroomAuthOptions = {},
+): AccessDecision {
+  if (!session) return { ok: false, status: 403, error: 'Forbidden' };
+  if (isAdministrator(session)) return { ok: true, level: 'admin' };
+  if (!isTeacher(session)) return { ok: false, status: 403, error: 'Forbidden' };
+  if (!lessonId) return { ok: false, status: 404, error: 'Lesson not found' };
+
+  const tokens = classroomActorTokens(session, opts.actorId);
+  if (tokens.length === 0) return { ok: false, status: 403, error: 'Forbidden' };
+
+  const lesson = db.prepare('SELECT id, creator_id FROM lessons WHERE id = ?').get(lessonId) as
+    { id: string; creator_id: string | null } | undefined;
+  const sessionRow = opts.sessionRow === undefined ? loadClassroomSession(db, lessonId, true) : opts.sessionRow;
+  const classOwner = sessionRow?.class_id ? loadClassOwner(db, sessionRow.class_id)?.owner_user_id : null;
+  const lessonCreator = lesson?.creator_id ?? null;
+  const sessionTeacher = sessionRow?.teacher_id ?? null;
+
+  if (ownerMatches(sessionTeacher, tokens) || ownerMatches(classOwner, tokens) || ownerMatches(lessonCreator, tokens)) {
+    return { ok: true, level: 'teacher' };
+  }
+
+  if (sessionRow) {
+    // 与课堂会话列表保持同一兼容口径：没有明确归属人的历史会话不向某位教师锁死。
+    const noExplicitOwner =
+      CLASSROOM_PLACEHOLDER_OWNERS.has(String(sessionTeacher ?? '').trim()) &&
+      CLASSROOM_PLACEHOLDER_OWNERS.has(String(classOwner ?? '').trim()) &&
+      CLASSROOM_PLACEHOLDER_OWNERS.has(String(lessonCreator ?? '').trim());
+    return noExplicitOwner ? { ok: true, level: 'teacher' } : { ok: false, status: 403, error: 'Forbidden' };
+  }
+
+  // 没有进行中会话：允许课节创建者（上方已判）、排课班级的 owner，
+  // 以及 creator 为空的历史课节（与 authorizeLessonStaff 的既有约定一致）。
+  if (!lesson) return { ok: false, status: 404, error: 'Lesson not found' };
+  if (!lessonCreator || CLASSROOM_PLACEHOLDER_OWNERS.has(String(lessonCreator).trim())) {
+    return { ok: true, level: 'teacher' };
+  }
+  if (lessonHasOwnedScheduledClass(db, lessonId, tokens)) return { ok: true, level: 'teacher' };
+  return { ok: false, status: 403, error: 'Forbidden' };
+}
+
+/**
+ * 课堂**读取**权限：会话恢复、倒计时查询、节奏晴雨表、大屏数据等。
+ *
+ * - 教师：必须能控制该课堂（复用 {@link authorizeClassroomControl}），避免跨班旁听。
+ * - 学生：会话绑定班级时必须在班；未绑定班级的自学/演示课堂没有花名册可校验，
+ *   保持对已登录学生开放（敏感字段由路由层脱敏）。
+ * - 无会话：没有课堂数据可泄露，保持既有的「空课堂可安全渲染」行为。
+ */
+export function authorizeClassroomRead(
+  db: Database.Database,
+  session: AccessSession | null | undefined,
+  lessonId: string,
+  opts: ClassroomAuthOptions = {},
+): AccessDecision {
+  if (!session) return { ok: false, status: 403, error: 'Forbidden' };
+  if (isAdministrator(session)) return { ok: true, level: 'admin' };
+
+  const sessionRow = opts.sessionRow === undefined ? loadClassroomSession(db, lessonId, false) : opts.sessionRow;
+
+  if (isTeacher(session)) {
+    return authorizeClassroomControl(db, session, lessonId, {
+      actorId: opts.actorId,
+      sessionRow: sessionRow ?? null,
+    });
+  }
+
+  if (!sessionRow) return { ok: true, level: 'student' };
+  if (!sessionRow.class_id) return { ok: true, level: 'student' };
+  return studentEnrolled(db, sessionRow.class_id, session)
+    ? { ok: true, level: 'student' }
+    : { ok: false, status: 403, error: 'Forbidden' };
 }

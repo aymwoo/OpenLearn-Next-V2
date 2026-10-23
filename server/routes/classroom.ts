@@ -20,7 +20,16 @@ import {
   type ActiveCountdownState,
 } from '../shared-state.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
-import { actorUserId, authorizeClass, authorizeLessonStaff, isAdministrator } from '../services/class-access.js';
+import {
+  actorUserId,
+  authorizeClass,
+  authorizeClassroomControl,
+  authorizeClassroomRead,
+  authorizeLessonStaff,
+  isAdministrator,
+  redactAnswerKeys,
+  rejectUnless,
+} from '../services/class-access.js';
 import { assessmentService } from '../services/assessment-service.js';
 
 /**
@@ -130,7 +139,6 @@ export function registerClassroomRoutes(
 
   // ── 课堂倒计时管理（持久化 & 插件可扩展，来自 shared-state） ─────────────────────────
 
-
   /**
    * 校验当前请求者是否有权管理（查看/归档/删除/推进）指定课堂会话。
    * - 管理员：允许管理全部课堂会话
@@ -153,8 +161,7 @@ export function registerClassroomRoutes(
     let classOwner = '';
     if (session?.class_id) {
       const cls = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(session.class_id) as
-        | { owner_user_id: string | null }
-        | undefined;
+        { owner_user_id: string | null } | undefined;
       classOwner = cls?.owner_user_id ? String(cls.owner_user_id).trim() : '';
       if (classOwner && tokens.has(classOwner)) return true;
     }
@@ -162,8 +169,7 @@ export function registerClassroomRoutes(
     let lessonCreator = '';
     if (session?.lesson_id) {
       const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(session.lesson_id) as
-        | { creator_id: string | null }
-        | undefined;
+        { creator_id: string | null } | undefined;
       lessonCreator = lesson?.creator_id ? String(lesson.creator_id).trim() : '';
       if (lessonCreator && tokens.has(lessonCreator)) return true;
     }
@@ -172,6 +178,15 @@ export function registerClassroomRoutes(
       (sessionTeacher !== '' && sessionTeacher !== 'teacher') || classOwner !== '' || lessonCreator !== '';
     return !hasExplicitOwner;
   };
+
+  const findClassroomSessionById = (sessionId: string): any =>
+    db.prepare('SELECT id, lesson_id, class_id, teacher_id, stage FROM classroom_sessions WHERE id = ?').get(sessionId);
+
+  const controlDecision = (req: Request, lessonId: string, sessionRow?: any) =>
+    authorizeClassroomControl(db, (req as any).session, lessonId, { actorId: getActorId(req), sessionRow });
+
+  const readDecision = (req: Request, lessonId: string, sessionRow?: any) =>
+    authorizeClassroomRead(db, (req as any).session, lessonId, { actorId: getActorId(req), sessionRow });
 
   /**
    * 当课节不再存在任何进行中会话时，清理其内存态与学生锁定状态。
@@ -834,8 +849,11 @@ export function registerClassroomRoutes(
           });
         }
 
+        const readAuth = readDecision(req, lessonId, session);
+        if (rejectUnless(res, readAuth)) return;
+
         // 附加当前活动互动（如果有）
-        const activePoll = db
+        let activePoll = db
           .prepare(
             'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
           )
@@ -878,7 +896,15 @@ export function registerClassroomRoutes(
         } catch (_) {
           viewState = {};
         }
-        const feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+        let feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+
+        if (readAuth.ok && readAuth.level === 'student') {
+          // 答案字段不随课堂对象下发；学生端只消费显式字段，不下发整列 settings_json。
+          // 动态流回放是教师端恢复现场用的，含其他学生姓名，学生端不返回。
+          if (activePoll) activePoll = redactAnswerKeys(activePoll) as any;
+          delete session.settings_json;
+          feedReplay = [];
+        }
 
         res.json({
           hasActiveSession: session.stage !== ARCHIVED_REPORT_STAGE,
@@ -906,6 +932,8 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const readAuth = readDecision(req, lessonId);
+        if (rejectUnless(res, readAuth)) return;
         const countdown = getCountdownForLesson(lessonId);
         res.json({ success: true, countdown });
       } catch (e: any) {
@@ -921,6 +949,8 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         const { action = 'start', duration, addSeconds, label } = req.body;
         const countdown = applyCountdownAction(lessonId, action, { duration, addSeconds, label });
         res.json({ success: true, countdown });
@@ -955,9 +985,8 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: 'Invalid classId' });
         }
         if (normalizedClassId) {
-          const cls = db
-            .prepare('SELECT id, owner_user_id FROM classes WHERE id = ?')
-            .get(normalizedClassId) as { id: string; owner_user_id: string | null } | undefined;
+          const cls = db.prepare('SELECT id, owner_user_id FROM classes WHERE id = ?').get(normalizedClassId) as
+            { id: string; owner_user_id: string | null } | undefined;
           if (!cls) {
             return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
           }
@@ -1023,12 +1052,24 @@ export function registerClassroomRoutes(
 
         const session = db
           .prepare(
-            'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, stage, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
           )
-          .get(lessonId, ARCHIVED_REPORT_STAGE) as { id: string; settings_json: string | null } | undefined;
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as
+          | {
+              id: string;
+              lesson_id: string;
+              class_id: string | null;
+              teacher_id: string | null;
+              stage: string;
+              settings_json: string | null;
+            }
+          | undefined;
         if (!session) {
           return res.status(404).json({ error: 'No active session for this lesson' });
         }
+
+        const control = controlDecision(req, lessonId, session);
+        if (rejectUnless(res, control)) return;
 
         if (currentPage !== undefined) {
           const page = Number(currentPage);
@@ -1090,9 +1131,8 @@ export function registerClassroomRoutes(
         }
 
         if (typeof classId === 'string' && classId.trim()) {
-          const cls = db
-            .prepare('SELECT id, owner_user_id FROM classes WHERE id = ?')
-            .get(classId.trim()) as { id: string; owner_user_id: string | null } | undefined;
+          const cls = db.prepare('SELECT id, owner_user_id FROM classes WHERE id = ?').get(classId.trim()) as
+            { id: string; owner_user_id: string | null } | undefined;
           if (cls?.owner_user_id && cls.owner_user_id.trim()) {
             const clsAuth = authorizeClass(db, httpSession, classId.trim(), 'staff');
             if (clsAuth.ok === false) {
@@ -1130,9 +1170,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const session = (req as any).session;
-        const staff = authorizeLessonStaff(db, session, lessonId);
-        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
 
         const raw = req.body?.activeSegmentId;
         if (typeof raw !== 'string' || !raw.trim()) {
@@ -1159,9 +1198,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const session = (req as any).session;
-        const staff = authorizeLessonStaff(db, session, lessonId);
-        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         const studentId = typeof req.body?.studentId === 'string' ? req.body.studentId.trim() : '';
         const segmentId = typeof req.body?.segmentId === 'string' ? req.body.segmentId.trim().slice(0, 128) : '';
         if (!studentId || !segmentId) {
@@ -1183,9 +1221,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const session = (req as any).session;
-        const staff = authorizeLessonStaff(db, session, lessonId);
-        if (!staff.ok) return res.status(staff.status).json({ error: staff.error });
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         const studentId = typeof req.body?.studentId === 'string' ? req.body.studentId.trim() : '';
         const segmentId = typeof req.body?.segmentId === 'string' ? req.body.segmentId.trim().slice(0, 128) : '';
         if (!studentId || !segmentId) {
@@ -1217,10 +1254,14 @@ export function registerClassroomRoutes(
 
         const cs = db
           .prepare(
-            'SELECT id, class_id, stage, checkin_code FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, stage, checkin_code FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
           )
           .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
         if (!cs) return res.status(404).json({ error: 'No active session for this lesson' });
+
+        const readAuth = readDecision(req, lessonId, cs);
+        if (rejectUnless(res, readAuth)) return;
+
         if (cs.stage !== 'IN_CLASS_TEACHING' && cs.stage !== 'PRE_CLASS_READY' && cs.stage !== 'WRAP_UP_EXIT_TICKET') {
           return res.status(400).json({ error: 'Checkin not open at this stage' });
         }
@@ -1280,6 +1321,9 @@ export function registerClassroomRoutes(
           correctOption,
         } = req.body;
         const teacherId = getActorId(req) || 'teacher';
+
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
@@ -1353,6 +1397,13 @@ export function registerClassroomRoutes(
         if (poll.lesson_id && poll.lesson_id !== lessonId) {
           return res.status(400).json({ error: 'Poll does not belong to this lesson' });
         }
+
+        const pollSession = poll.session_id ? findClassroomSessionById(poll.session_id) : null;
+        if (pollSession && pollSession.lesson_id !== lessonId) {
+          return res.status(403).json({ error: 'Poll does not belong to this lesson' });
+        }
+        const readAuth = readDecision(req, lessonId, pollSession ?? null);
+        if (rejectUnless(res, readAuth)) return;
 
         if (!votedOption) {
           return res.status(400).json({ error: 'Missing vote option' });
@@ -1430,6 +1481,11 @@ export function registerClassroomRoutes(
         if (poll.lesson_id && poll.lesson_id !== lessonId) {
           return res.status(403).json({ error: 'Poll does not belong to this lesson' });
         }
+
+        const pollSession = poll.session_id ? findClassroomSessionById(poll.session_id) : null;
+        const control = controlDecision(req, lessonId, pollSession ?? null);
+        if (rejectUnless(res, control)) return;
+
         db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
 
         const rows = db
@@ -1468,16 +1524,23 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: 'assessmentId is required' });
         }
         const teacherId = actorUserId((req as any).session) || getActorId(req) || 'teacher';
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
         const classId = session?.class_id || session?.classId || req.body?.classId;
         if (!classId) {
           return res.status(400).json({ error: 'No class linked to this lesson session' });
         }
+        const cls = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(classId) as
+          { owner_user_id: string | null } | undefined;
+        if (cls?.owner_user_id && cls.owner_user_id.trim()) {
+          const clsAuth = authorizeClass(db, (req as any).session, classId, 'staff');
+          if (rejectUnless(res, clsAuth)) return;
+        }
 
         const assessRow = db.prepare('SELECT owner_id, title, kind FROM assessments WHERE id = ?').get(assessmentId) as
-          | { owner_id: string; title: string; kind: string }
-          | undefined;
+          { owner_id: string; title: string; kind: string } | undefined;
         if (!assessRow) {
           return res.status(404).json({ error: 'Assessment not found' });
         }
@@ -1538,6 +1601,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         let assignmentId = req.query.assignmentId as string | undefined;
 
         if (!assignmentId) {
@@ -1574,6 +1639,10 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const { title = '全班极速抢答' } = req.body;
         const teacherId = getActorId(req) || 'teacher';
+
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
+
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
         const buzzerId = randomId('bz_');
@@ -1622,6 +1691,13 @@ export function registerClassroomRoutes(
         if (!buzzer) {
           return res.status(404).json({ error: 'Buzzer not found' });
         }
+        if (buzzer.lesson_id && buzzer.lesson_id !== lessonId) {
+          return res.status(403).json({ error: 'Buzzer does not belong to this lesson' });
+        }
+
+        const buzzerSession = buzzer.session_id ? findClassroomSessionById(buzzer.session_id) : null;
+        const readAuth = readDecision(req, lessonId, buzzerSession ?? null);
+        if (rejectUnless(res, readAuth)) return;
 
         if (buzzer.status === 'LOCKED') {
           return res.json({
@@ -1693,13 +1769,18 @@ export function registerClassroomRoutes(
         const { lessonId, buzzerId } = req.params;
         // v0.6.1 审计 N-4：reset 与 vote 同样的课节归属校验 —— 此前仅凭
         // buzzerId 即可重置任意课节的抢答器。
-        const buzzer = db.prepare('SELECT lesson_id FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+        const buzzer = db
+          .prepare('SELECT lesson_id, session_id FROM classroom_buzzers WHERE id = ?')
+          .get(buzzerId) as any;
         if (!buzzer) {
           return res.status(404).json({ error: 'Buzzer not found' });
         }
         if (buzzer.lesson_id && buzzer.lesson_id !== lessonId) {
           return res.status(403).json({ error: 'Buzzer does not belong to this lesson' });
         }
+        const buzzerSession = buzzer.session_id ? findClassroomSessionById(buzzer.session_id) : null;
+        const control = controlDecision(req, lessonId, buzzerSession ?? null);
+        if (rejectUnless(res, control)) return;
         const now = Date.now();
         db.prepare(
           `
@@ -1744,9 +1825,13 @@ export function registerClassroomRoutes(
 
         const activeSession = db
           .prepare(
-            'SELECT id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
           )
           .get(lessonId) as any;
+
+        const readAuth = readDecision(req, lessonId, activeSession ?? null);
+        if (rejectUnless(res, readAuth)) return;
+
         const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
 
         // 环节标识：如果请求中指定则用指定的，否则使用当前课节正在进行的环节，未指定则归一化为 'default'
@@ -1895,7 +1980,7 @@ export function registerClassroomRoutes(
 
         const activeSession = db
           .prepare(
-            'SELECT id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
           )
           .get(lessonId) as any;
         if (!activeSession) {
@@ -1908,6 +1993,10 @@ export function registerClassroomRoutes(
             segmentsBreakdown: {},
           });
         }
+
+        const readAuth = readDecision(req, lessonId, activeSession);
+        if (rejectUnless(res, readAuth)) return;
+
         const sessionId = activeSession.id;
         const targetSegmentId =
           segmentId !== undefined && segmentId !== null && String(segmentId).trim()
@@ -1996,13 +2085,22 @@ export function registerClassroomRoutes(
         const studentName = session.studentName || session.name || studentId;
 
         const activeSession = db
-          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .prepare(
+            'SELECT id, lesson_id, class_id, teacher_id, stage FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
           .get(lessonId) as any;
         // v0.6.1 数据真实性：无活动会话拒绝提交 —— 此前写入合成 `s_${lessonId}`
         // 会话的「无主票据」，伪造会话归属且绕过阶段校验
         if (!activeSession) {
           return res.status(404).json({ error: '当前课节没有进行中的课堂会话，无法提交结课通票' });
         }
+        if (activeSession.stage === ARCHIVED_REPORT_STAGE) {
+          return res.status(409).json({ error: '课堂已归档，无法再提交结课通票' });
+        }
+
+        const readAuth = readDecision(req, lessonId, activeSession);
+        if (rejectUnless(res, readAuth)) return;
+
         const sessionId = activeSession.id;
 
         const ticketId = randomId('ticket_');
@@ -2094,13 +2192,19 @@ export function registerClassroomRoutes(
       try {
         const { lessonId } = req.params;
         const activeSession = db
-          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .prepare(
+            'SELECT id, lesson_id, class_id, teacher_id, stage FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
           .get(lessonId) as any;
         // v0.6.1 数据真实性：无活动会话拒绝提交 —— 此前写入合成 `s_${lessonId}`
         // 会话的「无主票据」，伪造会话归属且绕过阶段校验
         if (!activeSession) {
           return res.status(404).json({ error: '当前课节没有进行中的课堂会话，无法提交结课通票' });
         }
+
+        const control = controlDecision(req, lessonId, activeSession);
+        if (rejectUnless(res, control)) return;
+
         const sessionId = activeSession.id;
 
         let rows: any[] = [];
@@ -2163,6 +2267,11 @@ export function registerClassroomRoutes(
       const session = db
         .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
         .get(lessonId) as any;
+
+      if (session) {
+        const readAuth = readDecision(req, lessonId, session);
+        if (rejectUnless(res, readAuth)) return;
+      }
 
       // 提取活动投票（仅聚合，脱敏）
       let activePollData = null;
@@ -2860,6 +2969,19 @@ export function registerClassroomRoutes(
         const { teachingModeId, classId } = req.body || {};
         const teacherId = getActorId(req) || 'teacher';
 
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
+
+        const normalizedClassId = typeof classId === 'string' && classId.trim() ? classId.trim() : null;
+        if (normalizedClassId) {
+          const cls = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(normalizedClassId) as
+            { owner_user_id: string | null } | undefined;
+          if (cls?.owner_user_id && cls.owner_user_id.trim()) {
+            const clsAuth = authorizeClass(db, (req as any).session, normalizedClassId, 'staff');
+            if (rejectUnless(res, clsAuth)) return;
+          }
+        }
+
         const modeValidation = validateTeachingModeId(teachingModeId);
         if (modeValidation.ok === false) {
           return res.status(modeValidation.status).json({ error: modeValidation.error });
@@ -2892,6 +3014,9 @@ export function registerClassroomRoutes(
         const session = db
           .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
           .get(lessonId) as any;
+
+        const control = controlDecision(req, lessonId, session ?? null);
+        if (rejectUnless(res, control)) return;
 
         const sessionId = session ? session.id : null;
 
@@ -3060,6 +3185,9 @@ export function registerClassroomRoutes(
         const { prompt = '当前教学节奏与理解度实时脉搏自检', durationSec = 30 } = req.body;
         const teacherId = getActorId(req) || 'teacher';
 
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
+
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
         const pulseCheckPayload = {
@@ -3146,6 +3274,8 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const control = controlDecision(req, lessonId);
+        if (rejectUnless(res, control)) return;
         const results = await diagnosticService.simulateQuizResponses(lessonId, (eventPayload) => {
           if (io) {
             emitClassroomEvent(io, lessonId, 'whiteboard-quiz-answered', eventPayload);

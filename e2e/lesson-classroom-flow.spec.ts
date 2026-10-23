@@ -101,15 +101,22 @@ async function openCourseEditor(page: Page, courseTitle: string): Promise<void> 
 }
 
 async function courseHasSegment(request: APIRequestContext, title: string, segmentTitle: string): Promise<boolean> {
-  const response = await request.get('/api/lessons');
-  if (!response.ok()) return false;
-
-  const raw = await response.json();
-  const lessons = (Array.isArray(raw) ? raw : (raw as any)?.data || []) as Array<{ title: string; timeline?: string | unknown[] | null }>;
-  const lesson = lessons.find((item) => item.title === title);
-  if (!lesson?.timeline) return false;
-
+  // Playwright 1.61 的 expect.poll 把轮询函数放在 try/catch 之外调用：
+  // 轮询函数一旦抛异常，整条轮询立即中断（不会重试）。
+  // 所以这里把瞬时网络错误（连接被 RST、超时）一律吞掉并返回 false，
+  // 让轮询继续跑到条件成立为止，而不是让整条用例崩在这里。
   try {
+    const response = await request.get('/api/lessons');
+    if (!response.ok()) return false;
+
+    const raw = await response.json();
+    const lessons = (Array.isArray(raw) ? raw : (raw as any)?.data || []) as Array<{
+      title: string;
+      timeline?: string | unknown[] | null;
+    }>;
+    const lesson = lessons.find((item) => item.title === title);
+    if (!lesson?.timeline) return false;
+
     const timeline = typeof lesson.timeline === 'string' ? JSON.parse(lesson.timeline) : lesson.timeline;
     return Array.isArray(timeline) && timeline.some((segment) => segment.title === segmentTitle);
   } catch {
@@ -118,10 +125,15 @@ async function courseHasSegment(request: APIRequestContext, title: string, segme
 }
 
 async function courseHasElement(request: APIRequestContext, lessonId: string, type: string): Promise<boolean> {
-  const response = await request.get(`/api/lessons/${lessonId}/whiteboard`);
-  if (!response.ok()) return false;
-  const elements = (await response.json()) as Array<{ type: string }>;
-  return Array.isArray(elements) && elements.some((element) => element.type === type);
+  // 同上：瞬时网络错误不应中断 expect.poll 的轮询。
+  try {
+    const response = await request.get(`/api/lessons/${lessonId}/whiteboard`);
+    if (!response.ok()) return false;
+    const elements = (await response.json()) as Array<{ type: string }>;
+    return Array.isArray(elements) && elements.some((element) => element.type === type);
+  } catch {
+    return false;
+  }
 }
 
 test.describe('课程管理与课堂工作流 E2E 测试', () => {
