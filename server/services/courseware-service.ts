@@ -618,7 +618,14 @@ export class CoursewareService {
 
   // ── 7. 成绩转录与缺考管理 ──────────────────────────────────────────────────
 
-  public markAbsent(params: { lessonId: string; classId: string; studentId: string; coursewareId: string }): any {
+  public markAbsent(params: {
+    lessonId: string;
+    classId: string;
+    studentId: string;
+    coursewareId: string;
+    actorId?: string | null;
+    actorRole?: string | null;
+  }): any {
     const { lessonId, classId, studentId, coursewareId } = params;
     if (!lessonId || !classId || !studentId || !coursewareId) {
       const err: any = new Error('Missing lessonId, classId, studentId or coursewareId');
@@ -626,7 +633,14 @@ export class CoursewareService {
       throw err;
     }
 
-    const result = markStudentAbsent(this.db as any, { lessonId, classId, studentId, coursewareId });
+    const result = markStudentAbsent(this.db as any, {
+      lessonId,
+      classId,
+      studentId,
+      coursewareId,
+      actorId: params.actorId ?? null,
+      actorRole: params.actorRole ?? null,
+    });
     if (!result.ok) {
       const text =
         result.reason === 'student-not-in-class'
@@ -641,7 +655,12 @@ export class CoursewareService {
     return { studentId: result.studentId, coursewareName: result.coursewareName };
   }
 
-  public async promoteAttempt(attemptId: string, lessonId: string, classId: string): Promise<any> {
+  public async promoteAttempt(
+    attemptId: string,
+    lessonId: string,
+    classId: string,
+    actor?: { actorId?: string | null; actorRole?: string | null },
+  ): Promise<any> {
     if (!lessonId || !classId) {
       const err: any = new Error('Missing lessonId or classId');
       err.status = 400;
@@ -655,6 +674,8 @@ export class CoursewareService {
       source: 'manual',
       ignoreMinCompletion: true,
       ignoreNotFinished: true,
+      actorId: actor?.actorId ?? null,
+      actorRole: actor?.actorRole ?? null,
     });
 
     if (!result.ok) {

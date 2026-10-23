@@ -36,6 +36,7 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
     db.prepare('DELETE FROM lessons WHERE id = ?').run(testLessonId);
     db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(testLessonId);
     db.prepare('DELETE FROM assignments WHERE id = ?').run(`plugin-lesson-${testLessonId}`);
+    db.prepare('DELETE FROM assignment_grade_history WHERE assignment_id = ?').run(`plugin-lesson-${testLessonId}`);
     db.prepare('DELETE FROM assignment_submissions WHERE assignment_id = ?').run(`plugin-lesson-${testLessonId}`);
 
     // Also clean up plugin tables if any records exist
@@ -75,6 +76,17 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
     expect(submission.score).toBe(88);
     expect(submission.status).toBe('graded');
     expect(submission.academic_year).toBe('2025-2026');
+    // 插件同步的成绩来源与审计：不能留 NULL，否则自动规则会把人工确认分当成未保护行
+    expect(submission.source).toBe('plugin');
+
+    const history = db
+      .prepare(
+        `SELECT old_score, new_score, new_source FROM assignment_grade_history
+         WHERE assignment_id = ? AND student_id = ? ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(`plugin-lesson-${testLessonId}`, testStudentId) as any[];
+    expect(history.length).toBeGreaterThanOrEqual(1);
+    expect(history[0]).toMatchObject({ old_score: null, new_score: 88, new_source: 'plugin' });
 
     // Sync updated score 95 to verify overwrite behavior
     await service.saveSemesterGrade(testLessonId, testStudentId, 95);
@@ -83,6 +95,38 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
       .prepare('SELECT * FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
       .get(`plugin-lesson-${testLessonId}`, testStudentId) as any;
     expect(submission.score).toBe(95);
+  });
+
+  it('教师手动分受保护：插件同步默认不覆盖，教师显式 override 才改判', async () => {
+    const protectedStudentId = 'test-grade-student-protected';
+    const service = new SemesterGradeService(db);
+    const assignmentId = `plugin-lesson-${testLessonId}`;
+
+    await service.saveSemesterGrade(testLessonId, protectedStudentId, 70, { actorId: 'user:t1:teacher' });
+    // 模拟教师在学期成绩页手动改判（该行现在属于 manual）
+    db.prepare(
+      `UPDATE assignment_submissions SET score = 72, source = 'manual', graded_by = 'user:t1:teacher'
+       WHERE assignment_id = ? AND student_id = ?`,
+    ).run(assignmentId, protectedStudentId);
+
+    const blocked = await service.saveSemesterGrade(testLessonId, protectedStudentId, 50);
+    expect(blocked && blocked.ok).toBe(false);
+    expect(blocked && blocked.reason).toBe('manual-protected');
+    let row = db
+      .prepare('SELECT score FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, protectedStudentId) as any;
+    expect(row.score).toBe(72);
+
+    const overridden = await service.saveSemesterGrade(testLessonId, protectedStudentId, 50, {
+      actorId: 'user:t1:teacher',
+      overrideProtected: true,
+    });
+    expect(overridden && overridden.ok).toBe(true);
+    row = db
+      .prepare('SELECT score, source FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, protectedStudentId) as any;
+    expect(row.score).toBe(50);
+    expect(row.source).toBe('plugin');
   });
 
   it('should fallback to class_students when no schedule exists for the lesson', async () => {
@@ -173,6 +217,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
     db.prepare('DELETE FROM lessons WHERE id = ?').run(testLessonId);
     db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(testLessonId);
     db.prepare('DELETE FROM assignments WHERE id = ?').run(`plugin-lesson-${testLessonId}`);
+    db.prepare('DELETE FROM assignment_grade_history WHERE assignment_id = ?').run(`plugin-lesson-${testLessonId}`);
     db.prepare('DELETE FROM assignment_submissions WHERE assignment_id = ?').run(`plugin-lesson-${testLessonId}`);
     db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(testLessonId);
     cleanupPluginsDir(pluginsDir);

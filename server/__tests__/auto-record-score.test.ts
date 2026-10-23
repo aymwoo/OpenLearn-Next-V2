@@ -139,10 +139,16 @@ beforeEach(() => {
     CREATE TABLE assignment_submissions (
       id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL,
       content TEXT, score REAL, feedback TEXT, submitted_at INTEGER, graded_at INTEGER, status TEXT,
-      academic_year TEXT
+      academic_year TEXT, graded_by TEXT
     );
     CREATE UNIQUE INDEX idx_assignment_submissions_unique
       ON assignment_submissions(assignment_id, student_id);
+    CREATE TABLE assignment_grade_history (
+      id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL,
+      old_score REAL, new_score REAL, old_status TEXT, new_status TEXT,
+      old_source TEXT, new_source TEXT, actor_id TEXT, actor_role TEXT,
+      reason TEXT, created_at INTEGER NOT NULL
+    );
     CREATE TABLE student_lesson_progress (
       student_id TEXT NOT NULL, lesson_id TEXT NOT NULL, completed INTEGER,
       progress_percent REAL, completed_segments TEXT, assigned_at INTEGER,
@@ -644,6 +650,57 @@ describe('autoRecordForLesson 批量补录', () => {
     expect(submissionRow('分数乐园', 's2').source).toBe('manual');
   });
 
+  it('手动录入写入成绩历史（旧值/新值/操作者/原因）', () => {
+    seedAttempt({ attemptId: 'att_hist', studentId: 's1', score: 77 });
+    const result = promoteAttemptToGrade(db as any, 'att_hist', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      source: 'manual',
+      actorId: 'user:t1:teacher',
+      ignoreMinCompletion: true,
+      ignoreNotFinished: true,
+    });
+    expect(result.ok).toBe(true);
+
+    const history = db
+      .prepare(
+        `SELECT old_score, new_score, new_source, actor_id, actor_role, reason
+         FROM assignment_grade_history WHERE student_id = 's1'`,
+      )
+      .all() as any[];
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      old_score: null,
+      new_score: 77,
+      new_source: 'manual',
+      actor_id: 'user:t1:teacher',
+      actor_role: 'teacher',
+      reason: 'courseware-promote',
+    });
+  });
+
+  it('自动录入不覆盖插件确认分（只刷新 source=auto 的行）', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    enableRule();
+
+    promoteAttemptToGrade(db as any, 'att_a', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      source: 'manual',
+      ignoreMinCompletion: true,
+      ignoreNotFinished: true,
+    });
+    db.prepare(`UPDATE assignment_submissions SET source = 'plugin' WHERE student_id = 's1'`).run();
+
+    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
+    // seed 的时间戳取自 Date.now()，两次插入可能同毫秒；显式拉开顺序，确保去重后保留 att_a2
+    db.prepare('UPDATE courseware_attempt SET finished_at = finished_at + 1000 WHERE id = ?').run('att_a2');
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(report.details.find((d) => d.attemptId === 'att_a2')?.reason).toBe('manual-protected');
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+    expect(submissionRow('分数乐园', 's1').source).toBe('plugin');
+  });
+
   it('skip（manual 保护/缺考保护）时不推进 student_lesson_progress', () => {
     seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
     enableRule();
@@ -708,6 +765,7 @@ describe('markStudentAbsent 标缺考', () => {
       classId: CLASS_ID,
       studentId: 's1',
       coursewareId: 'cw_1',
+      actorId: 'user:t1:teacher',
     });
     expect(first.ok).toBe(true);
     expect(first.coursewareName).toBe('分数乐园');
@@ -716,6 +774,17 @@ describe('markStudentAbsent 标缺考', () => {
     expect(row.status).toBe('absent');
     expect(row.score).toBeNull();
     expect(row.source).toBe('manual');
+
+    const history = db
+      .prepare(`SELECT new_score, new_status, actor_id, reason FROM assignment_grade_history WHERE student_id = 's1'`)
+      .all() as any[];
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      new_score: null,
+      new_status: 'absent',
+      actor_id: 'user:t1:teacher',
+      reason: 'mark-absent',
+    });
 
     // 幂等：重复标记不产生重复行
     markStudentAbsent(db as any, { lessonId: LESSON, classId: CLASS_ID, studentId: 's1', coursewareId: 'cw_1' });

@@ -9,6 +9,7 @@ import type { PluginContext } from '@openlearn/plugin-sdk';
 import { resolveAssignmentStageId, enforceStageAccess } from '../core/lesson-engine/stage-resolver.js';
 import { defaultStageGuardPipeline } from '../core/lesson-engine/stage-guard-pipeline.js';
 import { IStageGuardServiceToken } from '../core/di/interfaces.js';
+import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
 
 /**
  * 作业中心（Assignment Hub）
@@ -1158,8 +1159,20 @@ export const AssignmentEvalPlugin = {
           let projectedByHost = false;
           if (submission.lesson_id) {
             try {
-              await gradeService.saveSemesterGrade(submission.lesson_id, submission.student_id, calculatedFinalScore);
+              const write = await gradeService.saveSemesterGrade(
+                submission.lesson_id,
+                submission.student_id,
+                calculatedFinalScore,
+                {
+                  actorId: command.actorId,
+                  source: 'plugin',
+                  overrideProtected: isPrivilegedGradeActor(command.actorId),
+                },
+              );
               projectedByHost = true;
+              if (write && !write.ok) {
+                ctx.log?.warn?.(`[assignment-eval] 学期成绩未写入（${write.reason}）：教师手动分/缺考保护生效`);
+              }
             } catch (err) {
               ctx.log?.warn?.(`[assignment-eval] 同步学期成绩失败: ${(err as Error)?.message}`);
             }
@@ -1177,28 +1190,36 @@ export const AssignmentEvalPlugin = {
                  title = excluded.title,
                  description = excluded.description,
                  academic_year = COALESCE(assignments.academic_year, excluded.academic_year)`,
-            ).run(assignment.id, assignment.class_id, assignment.lesson_id, assignment.title, '', '', now, academicYear);
-
-            db.prepare(
-              `INSERT INTO assignment_submissions
-                 (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, academic_year)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?)
-               ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-                 score = excluded.score,
-                 feedback = excluded.feedback,
-                 graded_at = excluded.graded_at,
-                 status = 'graded',
-                 academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
             ).run(
               assignment.id,
-              submission.student_id,
+              assignment.class_id,
+              assignment.lesson_id,
+              assignment.title,
               '',
-              calculatedFinalScore,
-              teacherComment || '',
-              now,
+              '',
               now,
               academicYear,
             );
+
+            const write = applyGradeChange(db, {
+              assignmentId: assignment.id,
+              studentId: submission.student_id,
+              content: '',
+              score: calculatedFinalScore,
+              feedback: teacherComment || '',
+              submittedAt: now,
+              gradedAt: now,
+              status: 'graded',
+              source: 'plugin',
+              actorId: command.actorId,
+              reason: 'assignment-eval-confirmed',
+              academicYear,
+              createIfMissing: true,
+              overrideProtected: isPrivilegedGradeActor(command.actorId),
+            });
+            if (!write.ok) {
+              ctx.log?.warn?.(`[assignment-eval] 成绩投影未写入（${write.reason}）`);
+            }
           }
 
           await publishEvent(

@@ -22,6 +22,7 @@ import {
   STUDENT_ASSIGNMENT_QUOTA_BYTES,
   parseAllowedExt,
 } from '../utils/assignment-upload-policy.js';
+import { isPrivilegedGradeActor } from '../../packages/core/db/assignment-grade-writer.js';
 
 export function safeSegment(value: string): string {
   const cleaned = String(value || '').replace(/[^A-Za-z0-9._-]/g, '');
@@ -270,7 +271,13 @@ Output pure JSON only without markdown code blocks, matching this structure:
         `
       INSERT INTO assignment_submissions (assignment_id, student_id, content, submitted_at, status)
       VALUES (?, ?, ?, ?, 'submitted')
-      ON CONFLICT(assignment_id, student_id) DO UPDATE SET content = excluded.content, submitted_at = excluded.submitted_at, status = 'submitted'
+      ON CONFLICT(assignment_id, student_id) DO UPDATE SET
+        content = excluded.content,
+        submitted_at = excluded.submitted_at,
+        status = CASE
+          WHEN assignment_submissions.status IN ('graded', 'absent') THEN assignment_submissions.status
+          ELSE 'submitted'
+        END
     `,
       )
       .run(assignmentId, studentId, content, Date.now());
@@ -293,6 +300,7 @@ Output pure JSON only without markdown code blocks, matching this structure:
   public async gradeTraditionalAssignment(
     assignmentId: string,
     studentId: string,
+    actorId?: string,
   ): Promise<{ score: number; feedback: string }> {
     const asb = this.db
       .prepare('SELECT * FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
@@ -379,13 +387,15 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       await this.commandBus.execute({
         id: uuidv7(),
         type: 'ai.apply_grade',
-        actorId: 'system',
+        actorId: actorId || 'system',
         timestamp: Date.now(),
         payload: {
           assignmentId,
           studentId,
           score: grade.score,
           feedback: grade.feedback,
+          // AI 自动批改默认不得覆盖教师手动分；教师显式触发批改时才允许改判。
+          overrideManual: isPrivilegedGradeActor(actorId),
         },
       });
     }

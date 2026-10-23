@@ -24,6 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **修复**：`CoursewareService` 在三个入口输出单行 JSON 日志：手动录入成功（`attemptId` / `studentId` / `lessonId` / `classId` / `assignmentId` / `score`）与拒绝（原因）；实时自动录入成功或非预期跳过（`student-not-in-class`、`attempt-not-found` 走 `warn`，保护类跳过走 `info`，规则未开启/分数缺失等预期跳过不打日志）；批量补录输出 `recorded` / `skipped` / `absentGenerated` 与按原因聚合的 `reasons`。日志只含内部 ID，不含姓名与作答内容。
   - **测试**：新增 `server/__tests__/grade-academic-year-visibility.test.ts`（3 条）：手动录入按排课学年落库且只在对应学年的学期成绩里可见；课件改名后重录复用同一作业行；批量补录对手工成绩给出 `manual-protected` 原因分布并可在日志中还原。日志断言直接校验结构化字段。
 
+- **成绩写入收敛为唯一入口：补审计历史、手动分/缺考保护与改判留痕**：
+  - **问题**：`assignment_submissions.score` 有六七条写入路径（课件自动录入、教师手动录入/补录、教师标记缺考、考勤联动缺考、AI 批改、作业中心插件、学期成绩同步、`assignment-eval` 投影），各自散落 `INSERT ... ON CONFLICT` / `UPDATE`。保护规则只在自动录入与 `ai.apply_grade` 两处各写一份，学期成绩同步与插件投影仍会静默覆盖教师手动分；改过一次分之后没有任何记录能回答「谁在什么时候把它从多少改成了多少」。更隐蔽的是重新提交作业：`assignment.submit` 的冲突更新会把已批改行打回 `submitted`，学生重交即可冲掉待复核的成绩。
+  - **修复**：新增 `packages/core/db/assignment-grade-writer.ts`，所有改分路径（含插件）统一调用 `applyGradeChange`，在单个事务内完成「读旧值 → 保护判定 → upsert → 写历史」：
+    - **保护**：非 manual 来源（auto/ai/system/plugin）不得覆盖 `source` 为 manual/plugin/历史 NULL 的已出分行（`manual-protected`），也不得改判缺考行（`absent-protected`）；同来源刷新（ai→ai、plugin→plugin）与对自动分的覆盖仍允许；学生刚提交、尚未出分的行不触发保护，AI/自动批改照常工作。只有教师/管理员 `overrideProtected` 才越过保护（`ai.apply_grade` 新增 `overrideManual` 参数，仅特权 actor 生效）。
+    - **审计**：新增迁移 `040_assignment_grade_history.sql`，建 `assignment_grade_history`（旧/新分数、状态、来源、actor、reason、时间）与索引，并给 `assignment_submissions` 加 `graded_by`。分数/状态/来源真正变化时才写历史（null→0 视为变化），幂等重写不产生噪音；历史遗留 `source IS NULL` 回填为 `manual`，否则它们会被自动规则当成「未保护」冲掉。
+    - **口径**：分数取整并限定 0~100，缺考之外不允许空分；`createIfMissing=false` 时缺行返回 `submission-not-found`，作业不存在返回 `assignment-not-found`。
+  - **重复提交不再降级成绩**：`server/services/assignment-service.ts` 与 `management` 插件的 `assignment.submit` 冲突更新改为 `CASE WHEN status IN ('graded','absent') THEN status ELSE 'submitted' END`，重交只更新作答内容，不把已批改/缺考行打回待批改。
+  - **测试**：新增 `server/__tests__/grade-audit-history.test.ts`（9 条，跑真实迁移）：手动改分留痕与 actor、幂等不写历史、自动分保护 manual、AI 与插件互不越权、教师 override 改判、缺考保护与手动改判、submitted 行可被 AI 批改、分数越界、缺行/缺作业拒绝。`ai-planner` / `management` / `assignment-hub` / `semester-grade` / `auto-record-score` / `assignment-service` 补齐历史与保护断言（含 `history` 序列 `[null→80, 80→85, 85→70]`、`graded_by`、重交保留成绩）。目标套件 7 文件 86 例通过。
+
 - **成绩链路补齐稳定关联、学年口径与写入边界（课件成绩不再错挂/丢失/跨班注入）**：
   - **稳定关联**：自动录入/缺考标记/`isPromoted` 不再用「`互动课件: {课件名}` 标题 + 课节/班级」定位作业，改为匹配 `assignments.content` 中的 `{"type":"interactive_courseware","coursewareUuid":"..."}` 标记（SQLite `instr()`，避免 `json_extract` 在脏数据上抛错）。课件改名不再让历史成绩「断链」另建作业；同课节两个同名课件不再互相覆盖成绩。无标记的历史作业仅在标题匹配时兜底复用，一旦有 UUID 标记就不再按标题猜。
   - **学年口径**：运行时自动创建的课件作业、成绩行与 `student_lesson_progress` 现在都写入 `academic_year`（取值优先课堂会话 → 排课学年 → 排课日期推导 → 当前学年），重跑时用 `COALESCE` 保留已有学年；已存在但学年为空的作业会被回填。此前这些行常年为 `NULL`，在按学年过滤的学期报表与学年对比里直接消失。`SemesterGradeService.saveSemesterGrade` 与作业中心插件对无课时作业的直接投影同样补写学年，前者并把「作业壳 + 成绩行」收进同一事务。

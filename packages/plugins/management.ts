@@ -6,6 +6,7 @@ import {
   IDatabaseToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
 
 function parseUserActor(actorId: unknown): { userId: string; role: string } | null {
   const match = /^user:([^:]+):(administrator|admin|teacher|student)$/.exec(String(actorId || ''));
@@ -678,7 +679,10 @@ export const ManagementPlugin = {
           ON CONFLICT(assignment_id, student_id) DO UPDATE SET
             content = excluded.content,
             submitted_at = excluded.submitted_at,
-            status = 'submitted'
+            status = CASE
+              WHEN assignment_submissions.status IN ('graded', 'absent') THEN assignment_submissions.status
+              ELSE 'submitted'
+            END
         `,
         ).run(payload.assignmentId, payload.studentId, payload.content, Date.now());
         return { success: true, assignmentId: payload.assignmentId, studentId: payload.studentId };
@@ -707,17 +711,30 @@ export const ManagementPlugin = {
     await commandBus.registerHandler(assignmentGradeCmd, {
       async execute(command) {
         const payload = command.payload as any;
-        db.prepare(
-          `
-          INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
-          VALUES (?, ?, '', ?, ?, ?, ?, 'graded')
-          ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-            score = excluded.score,
-            feedback = excluded.feedback,
-            graded_at = excluded.graded_at,
-            status = 'graded'
-        `,
-        ).run(payload.assignmentId, payload.studentId, payload.score, payload.feedback || '', Date.now(), Date.now());
+        const actorId = command.actorId || null;
+        const result = applyGradeChange(db, {
+          assignmentId: payload.assignmentId,
+          studentId: payload.studentId,
+          score: payload.score,
+          feedback: payload.feedback || '',
+          status: 'graded',
+          source: 'manual',
+          actorId,
+          reason: 'management-grade',
+          createIfMissing: true,
+          overrideProtected: isPrivilegedGradeActor(actorId),
+        });
+        if (!result.ok) {
+          const err: any = new Error(
+            result.reason === 'invalid-score'
+              ? '成绩必须是 0~100 的数值'
+              : result.reason === 'assignment-not-found'
+                ? '作业不存在，无法录入成绩'
+                : '成绩写入被拒绝',
+          );
+          err.reason = result.reason;
+          throw err;
+        }
 
         await eventBus.publish({
           id: uuidv7(),
@@ -726,7 +743,7 @@ export const ManagementPlugin = {
           payload: {
             assignmentId: payload.assignmentId,
             studentId: payload.studentId,
-            score: payload.score,
+            score: result.newScore,
             feedback: payload.feedback || '',
           },
           timestamp: Date.now(),
@@ -737,7 +754,8 @@ export const ManagementPlugin = {
           success: true,
           assignmentId: payload.assignmentId,
           studentId: payload.studentId,
-          score: payload.score,
+          score: result.newScore,
+          historyId: result.historyId,
         };
       },
     });

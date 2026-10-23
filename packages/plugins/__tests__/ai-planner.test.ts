@@ -19,6 +19,7 @@ import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
 import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
+import { applyGradeChange } from '../../core/db/assignment-grade-writer.js';
 
 describe('AiPlannerPlugin', () => {
   let db: Database.Database;
@@ -75,16 +76,37 @@ describe('AiPlannerPlugin', () => {
         title TEXT,
         description TEXT,
         content TEXT,
-        created_at INTEGER
+        created_at INTEGER,
+        academic_year TEXT
       );
       CREATE TABLE IF NOT EXISTS assignment_submissions (
         assignment_id TEXT,
         student_id TEXT,
+        content TEXT,
         score REAL,
         feedback TEXT,
+        submitted_at INTEGER,
         graded_at INTEGER,
         status TEXT,
+        source TEXT,
+        academic_year TEXT,
+        graded_by TEXT,
         PRIMARY KEY (assignment_id, student_id)
+      );
+      CREATE TABLE IF NOT EXISTS assignment_grade_history (
+        id TEXT PRIMARY KEY,
+        assignment_id TEXT NOT NULL,
+        student_id TEXT NOT NULL,
+        old_score REAL,
+        new_score REAL,
+        old_status TEXT,
+        new_status TEXT,
+        old_source TEXT,
+        new_source TEXT,
+        actor_id TEXT,
+        actor_role TEXT,
+        reason TEXT,
+        created_at INTEGER NOT NULL
       );
     `);
 
@@ -182,5 +204,88 @@ describe('AiPlannerPlugin', () => {
       },
       '@openlearn/plugin-ai-planner',
     );
+  });
+
+  it('ai.apply_grade 保护教师手动分，教师显式 overrideManual 才覆盖', async () => {
+    const pluginId = '@openlearn/plugin-ai-planner';
+    pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'AI Planner', JSON.stringify(AiPlannerPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    await pluginHost.activatePlugin(pluginId);
+
+    const assignmentId = 'ast-ai-audit';
+    const studentId = 'stu-ai-audit';
+    db.prepare('INSERT INTO assignments (id, class_id, title, created_at, academic_year) VALUES (?, ?, ?, ?, ?)').run(
+      assignmentId,
+      'cls-ai-audit',
+      'AI 批改审计',
+      Date.now(),
+      '2025-2026',
+    );
+    db.prepare(
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, submitted_at, status)
+       VALUES (?, ?, ?, ?, 'submitted')`,
+    ).run(assignmentId, studentId, '学生作答', Date.now());
+
+    const apply = (actorId: string, score: number, overrideManual?: boolean) =>
+      commandBus.execute({
+        id: `cmd-ai-grade-${score}-${actorId}`,
+        type: 'ai.apply_grade',
+        actorId,
+        timestamp: Date.now(),
+        payload: { assignmentId, studentId, score, feedback: `AI ${score}`, overrideManual },
+      });
+
+    // 1. 系统 AI 批改未出分的提交：允许
+    const applied = (await apply('system', 80)) as any;
+    expect(applied.success).toBe(true);
+    let row = db
+      .prepare('SELECT score, source FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, studentId) as any;
+    expect(row.score).toBe(80);
+    expect(row.source).toBe('ai');
+
+    // 2. 教师手动改分后，系统 AI 再次批改不得覆盖
+    applyGradeChange(db, {
+      assignmentId,
+      studentId,
+      score: 85,
+      status: 'graded',
+      source: 'manual',
+      actorId: 'user:t1:teacher',
+      reason: 'teacher-manual',
+    });
+
+    await expect(apply('system', 70)).rejects.toThrow(/教师已手动录入/);
+    row = db
+      .prepare('SELECT score FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, studentId) as any;
+    expect(row.score).toBe(85);
+
+    // 3. 教师显式确认改判：允许覆盖并留下审计
+    const override = (await apply('user:t1:teacher', 70, true)) as any;
+    expect(override.success).toBe(true);
+    row = db
+      .prepare('SELECT score, source, graded_by FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, studentId) as any;
+    expect(row.score).toBe(70);
+    expect(row.source).toBe('ai');
+    expect(row.graded_by).toBe('user:t1:teacher');
+
+    const history = db
+      .prepare(
+        `SELECT old_score, new_score, actor_id, reason FROM assignment_grade_history
+         WHERE assignment_id = ? AND student_id = ? ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(assignmentId, studentId) as any[];
+    expect(history).toHaveLength(3);
+    expect(history.map((h) => [h.old_score, h.new_score])).toEqual([
+      [null, 80],
+      [80, 85],
+      [85, 70],
+    ]);
+    expect(history[2].actor_id).toBe('user:t1:teacher');
+    expect(history[2].reason).toBe('ai-apply-grade');
   });
 });

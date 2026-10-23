@@ -82,8 +82,26 @@ const LEGACY_SCHEMA = `
     submitted_at INTEGER NOT NULL,
     graded_at INTEGER,
     status TEXT NOT NULL DEFAULT 'submitted',
+    source TEXT,
     academic_year TEXT,
+    graded_by TEXT,
     PRIMARY KEY (assignment_id, student_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS assignment_grade_history (
+    id TEXT PRIMARY KEY,
+    assignment_id TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    old_score REAL,
+    new_score REAL,
+    old_status TEXT,
+    new_status TEXT,
+    old_source TEXT,
+    new_source TEXT,
+    actor_id TEXT,
+    actor_role TEXT,
+    reason TEXT,
+    created_at INTEGER NOT NULL
   );
 `;
 

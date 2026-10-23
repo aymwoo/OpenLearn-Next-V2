@@ -4,7 +4,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
 } from '../../packages/core/di/interfaces.js';
-import { requireAuth } from '../middleware/auth.js';
+import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -194,7 +194,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
       }
 
       const gradeService = await kernelContainer.serviceRegistry.resolve(ISemesterGradeServiceToken);
-      await gradeService.saveSemesterGrade(lessonId, studentId, Math.round(Number(grade)));
+      await gradeService.saveSemesterGrade(lessonId, studentId, Math.round(Number(grade)), {
+        actorId: getActorId(req),
+        source: 'manual',
+        overrideProtected: true,
+      });
 
       res.json({ success: true });
     } catch (e: any) {

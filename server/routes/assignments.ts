@@ -1,5 +1,5 @@
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -112,7 +112,11 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
       try {
         if (rejectUnless(res, authorizeAssignment(kernelContainer.db, (req as any).session, req.params.id, 'staff')))
           return;
-        const grade = await assignmentService.gradeTraditionalAssignment(req.params.id, req.params.studentId);
+        const grade = await assignmentService.gradeTraditionalAssignment(
+          req.params.id,
+          req.params.studentId,
+          getActorId(req),
+        );
         res.json({
           success: true,
           pendingApproval: true,
