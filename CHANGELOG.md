@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试侧加固**：`e2e/lesson-classroom-flow.spec.ts` 的 `courseHasSegment` / `courseHasElement` 把瞬时网络错误（连接被 RST、超时）吞掉并返回 `false`，让 `expect.poll` 能重试到条件成立，而不是让整条用例崩在一次抖动上。
   - **验证**：同一台机器、同一份 SQLite 库（置于仓库内、会被 watcher 命中的位置）下复现并修复 —— 修复前 `Browser workflow E2E` 作业 5 passed / 6 failed、期间共触发 **93 次** Vite 整页刷新；修复后 11 passed / 0 failed、**0 次**刷新。`tsc --noEmit` 干净。
 
+- **成绩链路可观测性：录入、补录与跳过都留下结构化日志，并补学年可见性集成回归**：
+  - **问题**：课件成绩写入此前只在客户端响应里带一个 `reason`。学生看到「成绩没录上」、教师点了补录却没有变化时，服务端没有任何可查记录；成绩是按哪个学年落的、是否命中了受保护的 manual/缺考行，只能靠翻库猜测。
+  - **修复**：`CoursewareService` 在三个入口输出单行 JSON 日志：手动录入成功（`attemptId` / `studentId` / `lessonId` / `classId` / `assignmentId` / `score`）与拒绝（原因）；实时自动录入成功或非预期跳过（`student-not-in-class`、`attempt-not-found` 走 `warn`，保护类跳过走 `info`，规则未开启/分数缺失等预期跳过不打日志）；批量补录输出 `recorded` / `skipped` / `absentGenerated` 与按原因聚合的 `reasons`。日志只含内部 ID，不含姓名与作答内容。
+  - **测试**：新增 `server/__tests__/grade-academic-year-visibility.test.ts`（3 条）：手动录入按排课学年落库且只在对应学年的学期成绩里可见；课件改名后重录复用同一作业行；批量补录对手工成绩给出 `manual-protected` 原因分布并可在日志中还原。日志断言直接校验结构化字段。
+
 - **成绩链路补齐稳定关联、学年口径与写入边界（课件成绩不再错挂/丢失/跨班注入）**：
   - **稳定关联**：自动录入/缺考标记/`isPromoted` 不再用「`互动课件: {课件名}` 标题 + 课节/班级」定位作业，改为匹配 `assignments.content` 中的 `{"type":"interactive_courseware","coursewareUuid":"..."}` 标记（SQLite `instr()`，避免 `json_extract` 在脏数据上抛错）。课件改名不再让历史成绩「断链」另建作业；同课节两个同名课件不再互相覆盖成绩。无标记的历史作业仅在标题匹配时兜底复用，一旦有 UUID 标记就不再按标题猜。
   - **学年口径**：运行时自动创建的课件作业、成绩行与 `student_lesson_progress` 现在都写入 `academic_year`（取值优先课堂会话 → 排课学年 → 排课日期推导 → 当前学年），重跑时用 `COALESCE` 保留已有学年；已存在但学年为空的作业会被回填。此前这些行常年为 `NULL`，在按学年过滤的学期报表与学年对比里直接消失。`SemesterGradeService.saveSemesterGrade` 与作业中心插件对无课时作业的直接投影同样补写学年，前者并把「作业壳 + 成绩行」收进同一事务。
