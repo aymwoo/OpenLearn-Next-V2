@@ -338,22 +338,47 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     expect(archivedSummary.status).toBe(200);
   });
 
-  it('未绑定班级的自学课堂仍对已登录学生开放，但不对其他教师开放', async () => {
-    const init = await call('POST', `/api/classroom/sessions/${lessonSelfStudy}/init`, teacherAToken, {});
-    expect(init.status).toBe(200);
+  it('preset-polls CRUD 仅课节创建者可读写，正确答案不泄露给其他教师（Issue #240）', async () => {
+    // 建立者教师 A 正常创建一条预设投票（含 correctOption）
+    const create = await call('POST', `/api/lessons/${lessonA}/preset-polls`, teacherAToken, {
+      title: '课堂小测：水的沸点',
+      questionType: 'ABCD',
+      options: ['90°C', '100°C', '110°C', '80°C'],
+      correctOption: 'B',
+    });
+    expect(create.status).toBe(200);
+    const pollId = ((await create.json()) as any).preset.id as string;
+    expect(pollId).toBeTruthy();
 
-    const studentRead = await call('GET', `/api/classroom/sessions/${lessonSelfStudy}`, studentBToken);
-    expect(studentRead.status).toBe(200);
+    // 创建者可读，且能看到正确答案
+    const ownerRead = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherAToken);
+    expect(ownerRead.status).toBe(200);
+    const ownerPresets = ((await ownerRead.json()) as any).presets as Array<{
+      id: string;
+      correctOption: string;
+    }>;
+    expect(ownerPresets.some((p) => p.correctOption === 'B')).toBe(true);
 
-    const otherTeacherRead = await call('GET', `/api/classroom/sessions/${lessonSelfStudy}`, teacherBToken);
-    expect(otherTeacherRead.status).toBe(403);
+    // 非创建者教师 B：读、写、改、删全部 403 —— 正确答案不得泄露
+    const crossRead = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherBToken);
+    expect(crossRead.status).toBe(403);
 
-    const otherTeacherControl = await call(
-      'POST',
-      `/api/classroom/sessions/${lessonSelfStudy}/countdown`,
-      teacherBToken,
-      { action: 'start', duration: 30 },
-    );
-    expect(otherTeacherControl.status).toBe(403);
+    const crossCreate = await call('POST', `/api/lessons/${lessonA}/preset-polls`, teacherBToken, {
+      title: '越权写入',
+      options: ['A', 'B'],
+    });
+    expect(crossCreate.status).toBe(403);
+
+    const crossUpdate = await call('PUT', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherBToken, {
+      title: '越权修改',
+    });
+    expect(crossUpdate.status).toBe(403);
+
+    const crossDelete = await call('DELETE', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherBToken);
+    expect(crossDelete.status).toBe(403);
+
+    // 越权链全部拒绝后，创建者仍可正常删除
+    const ownerDelete = await call('DELETE', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherAToken);
+    expect(ownerDelete.status).toBe(200);
   });
 });

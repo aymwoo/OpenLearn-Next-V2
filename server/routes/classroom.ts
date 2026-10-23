@@ -3366,6 +3366,10 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
         const rows = db
           .prepare('SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC')
           .all(lessonId) as Array<{
@@ -3407,6 +3411,10 @@ export function registerClassroomRoutes(
       try {
         const { lessonId } = req.params;
         const { title, questionType = 'ABCD', options, correctOption, sortOrder = 0 } = req.body;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
 
         if (!title || !options || !Array.isArray(options) || options.length < 2) {
           res.status(400).json({ error: 'title and options (array with >= 2 items) are required' });
@@ -3451,6 +3459,10 @@ export function registerClassroomRoutes(
       try {
         const { lessonId, id } = req.params;
         const { title, questionType, options, correctOption, sortOrder } = req.body;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const existing = db
           .prepare('SELECT id FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?')
@@ -3526,6 +3538,10 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId, id } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
         const result = db.prepare('DELETE FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').run(id, lessonId);
         if ((result as any).changes === 0) {
           res.status(404).json({ error: 'Preset poll not found' });
