@@ -1051,10 +1051,10 @@ export function LiveClassroomView({
 
   // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染。
   // v0.6.1 审计 C-1 修复：此前用裸 `io()` 新建独立连接且从不 join-room ——
-  // 服务端只把该事件投递到 [lessonId, classroom-broadcast] 房间，这条
-  // 监听 100% 收不到（实时通道死链，仅剩 15s 轮询兜底）。现挂到主 socket
-  // （useClassroomSocket 已加入 classroom-broadcast / lesson 房间），
-  // 经 onSocketInstance 处理「socket 晚于本组件诞生」的时序。
+  // 服务端只把该事件投递到课节 + 班级房间，这条监听 100% 收不到
+  // （实时通道死链，仅剩 15s 轮询兜底）。现挂到主 socket
+  // （useClassroomSocket 已加入 lesson / 班级房间），经 onSocketInstance
+  // 处理「socket 晚于本组件诞生」的时序。
   useEffect(() => {
     if (!selectedLesson) return;
     const handler = (entry: any) => {

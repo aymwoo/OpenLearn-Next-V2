@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试侧加固**：`e2e/lesson-classroom-flow.spec.ts` 的 `courseHasSegment` / `courseHasElement` 把瞬时网络错误（连接被 RST、超时）吞掉并返回 `false`，让 `expect.poll` 能重试到条件成立，而不是让整条用例崩在一次抖动上。
   - **验证**：同一台机器、同一份 SQLite 库（置于仓库内、会被 watcher 命中的位置）下复现并修复 —— 修复前 `Browser workflow E2E` 作业 5 passed / 6 failed、期间共触发 **93 次** Vite 整页刷新；修复后 11 passed / 0 failed、**0 次**刷新。`tsc --noEmit` 干净。
 
+- **课堂事件改为按房间定向投递：删除 `classroom-broadcast` 常驻房间，学生数据不再全平台广播**：
+  - **问题**：`useClassroomSocket` 与展台窗口让**每个**客户端加入 `classroom-broadcast`，而倒计时、投票、抢答、签到、结课通票、课堂动态流等事件同时投「课节房间 + 该房间」——等于把每节课的课堂状态推给全平台学生。`student-picked`、`student-acknowledged`、`student-error-alert`、作业评分、积分到账、课件 attempt 等仍是直接 `io.emit`，任意学生都能从 socket 帧里读到他人姓名、成绩与错误堆栈；极速投票帧还携带 `correctOption`（答案）与 `latestVoter`（投票人姓名）。
+  - **修复**：`presence.ts` 以 `ClassroomEventTarget { classId?, userIds?, staff? }` 统一「课节 + 班级 + 指定用户（+ 教师房间）」的并集投递（`io.to(rooms)`，Socket.IO 自动去重），并删除 `CLASSROOM_BROADCAST_ROOM` 及客户端加入逻辑。连接时按 `session.userId` 自动加入 `user-<id>` 个人房间，客户端 `join-room` 一律拒绝。投放口径按语义收敛：作业评分只投被评分学生；积分/课件 attempt 投本人 + 教师房间；课堂状态投课节 + 班级房间；学生错误只投教师房间；`assignment-*` 伪课节只投自身房间。
+  - **脱敏**：`quick_poll_started` 广播前剥离 `correctOption`，`quick_poll_updated` 不再携带 `latestVoter`。
+  - **测试**：新增 `server/__tests__/socket-event-scope.test.ts`（6 条真实 Socket.IO 集成用例：跨班不可达、班级房间兜底可达、个人房间隔离、attempt 归属缺失回退教师房间）；`quiz-answered-e2e` 新增「未加入课节房间收不到、加入后收到」断言；presence / event-routing / realtime-bridge / classroom-* 与两个 e2e 共 156 例通过。
+
 - **课堂交互路由补齐对象级授权与答案脱敏**：
   - **问题**：课堂交互路由（会话、投票、抢答、倒计时、节奏、结课通票、大屏数据等）此前多数只校验角色（`teacher` / `student`），不校验「这个会话是不是你的」。多教师部署下，任意教师可操作他班进行中的投票、抢答、倒计时与通票汇总；任意学生可凭 `lessonId` 读取其他班级的进行中会话、投票正确答案与动态流回放。
   - **修复**：`server/services/class-access.ts` 新增 `authorizeClassroomControl` / `authorizeClassroomRead`，把会话 `teacher_id`、绑定班级 `owner_user_id`、课节 `creator_id` 统一成一条判定链；没有明确归属人的历史会话与空 `creator_id` 课节保持既有兼容口径，归档会话不阻塞下一节新会话。课堂路由逐条接入：写操作要求可控制，读操作要求可控制或在班。

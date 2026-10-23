@@ -113,9 +113,9 @@ export function ClassroomMoodTracker({
 
   const [timeline, setTimeline] = useState<TimelineDataPoint[]>([]);
 
-  // 实时遥测订阅 App 主 socket（由 useClassroomSocket 创建并加入 classroom-broadcast）。
+  // 实时遥测订阅 App 主 socket（由 useClassroomSocket 创建并加入 lesson / 班级房间）。
   // Issue #129 / v0.6.1 审计 C-1：此前用 useSocket 每次挂载新建裸 `io()` 且从不入房，
-  // 服务端只投 [lessonId, classroom-broadcast]，监听实际收不到任何事件。
+  // 服务端只投课节 + 班级房间，监听实际收不到任何事件。
 
   // Pick default lesson if none selected
   useEffect(() => {

@@ -36,9 +36,11 @@ function buildMocks(
     emit: (event: string, payload: unknown) => {
       globalEmitted.push({ scope: 'global', event, payload });
     },
-    to: (room: string) => ({
+    to: (rooms: string | string[]) => ({
       emit: (event: string, payload: unknown) => {
-        globalEmitted.push({ scope: 'room', room, event, payload });
+        for (const room of Array.isArray(rooms) ? rooms : [rooms]) {
+          globalEmitted.push({ scope: 'room', room, event, payload });
+        }
       },
     }),
   } as any;
@@ -224,16 +226,15 @@ describe('setupPresence', () => {
     ]);
   });
 
-  it('teacher-pick-student broadcasts student-picked exactly once (global superset, no room duplicates)', () => {
+  it('teacher-pick-student 只投课节 + 班级 + 被点名学生，不再全局广播', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket.trigger('teacher-pick-student', { studentId: 's1', studentName: 'Alice', lessonId: 'L1', classId: 'c1' });
 
-    // 历史版本三重投递（lesson 房间 + class 房间 + 全局），学生同时命中多房间会收到 2-3 次重复弹窗。
-    // 现收敛为单次全局广播：io.emit 是任何房间定向投递的超集，语义等价。
+    // 房间数组由 Socket.IO 去重：命中多个房间的客户端也只收一次。
     const pickedEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'student-picked');
-    expect(pickedEvents.length).toBe(1);
-    expect(pickedEvents[0].scope).toBe('global');
+    expect(pickedEvents.map((e) => e.room)).toEqual(['L1', 'class-c1', 'user-s1']);
+    expect(pickedEvents.every((e) => e.scope === 'room')).toBe(true);
     expect(pickedEvents[0].payload).toMatchObject({
       studentId: 's1',
       studentName: 'Alice',
@@ -242,13 +243,13 @@ describe('setupPresence', () => {
     });
   });
 
-  it('student-acknowledge-pick broadcasts student-acknowledged globally', () => {
+  it('student-acknowledge-pick 只投课节 + 本人 + 教师房间', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
 
     const ackEvents = m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged');
-    expect(ackEvents.length).toBe(1);
+    expect(ackEvents.map((e) => e.room)).toEqual(['L1', 'user-s1', PRESENCE_STAFF_ROOM]);
     expect(ackEvents[0].payload).toEqual({ studentId: 's1', lessonId: 'L1' });
   });
 
@@ -418,8 +419,16 @@ describe('setupPresence', () => {
       const m = buildMocks();
       const socket = m.connect('sock-1', studentSession);
       socket.trigger('join-room', 'whiteboard-broadcast');
-      socket.trigger('join-room', 'classroom-broadcast');
-      expect(socket._joinedRooms).toEqual(['whiteboard-broadcast', 'classroom-broadcast']);
+      expect(socket._joinedRooms).toEqual(['user-s1', 'whiteboard-broadcast']);
+    });
+
+    it('个人房间只由服务端按会话加入，客户端主动 join 被拒', () => {
+      const m = buildMocks();
+      const socket = m.connect('sock-1', studentSession);
+      socket._joinedRooms.length = 0;
+      socket.trigger('join-room', 'user-s2');
+      expect(socket._joinedRooms).toEqual([]);
+      expect(socket._emitted.some((e: Emitted) => e.event === 'error')).toBe(true);
     });
 
     it('学生可加入自己所属的班级房间，跨班被拒', () => {
@@ -427,7 +436,7 @@ describe('setupPresence', () => {
       const socket = m.connect('sock-1', studentSession);
       socket.trigger('join-room', 'class-c1');
       socket.trigger('join-room', 'class-c2');
-      expect(socket._joinedRooms).toEqual(['class-c1']);
+      expect(socket._joinedRooms).toEqual(['user-s1', 'class-c1']);
       expect(socket._emitted.some((e: Emitted) => e.event === 'error')).toBe(true);
     });
 
@@ -436,7 +445,7 @@ describe('setupPresence', () => {
       const socket = m.connect('sock-1', teacherSession);
       socket.trigger('join-room', 'class-c9');
       socket.trigger('join-room', 'L1');
-      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-c9', 'L1']);
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'user-usr_t', 'class-c9', 'L1']);
     });
 
     it('学生加入开课课节房间须属于开课班级；未开课课节不设限', () => {
@@ -447,7 +456,7 @@ describe('setupPresence', () => {
       const socket = m.connect('sock-1', studentSession);
       socket.trigger('join-room', 'L_live'); // 开课班级 c9 ≠ 学生班级 c1 → 拒
       socket.trigger('join-room', 'L_self'); // 无课堂会话 → 允许（自学）
-      expect(socket._joinedRooms).toEqual(['L_self']);
+      expect(socket._joinedRooms).toEqual(['user-s1', 'L_self']);
     });
 
     it('学生可加入绑定自己的作业伪课节房间，他人的被拒', () => {
@@ -455,7 +464,7 @@ describe('setupPresence', () => {
       const socket = m.connect('sock-1', studentSession);
       socket.trigger('join-room', 'assignment-a1-student-s1');
       socket.trigger('join-room', 'assignment-a1-student-s2');
-      expect(socket._joinedRooms).toEqual(['assignment-a1-student-s1']);
+      expect(socket._joinedRooms).toEqual(['user-s1', 'assignment-a1-student-s1']);
     });
 
     it('无会话 socket（测试环境握手豁免口径）不设限', () => {
@@ -514,7 +523,8 @@ describe('setupPresence', () => {
       expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged')).toHaveLength(0);
 
       socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
-      expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged')).toHaveLength(1);
+      expect(m.globalEmitted.filter((e: Emitted) => e.event === 'student-acknowledged').length).toBeGreaterThan(0);
+      expect(m.globalEmitted.every((e: Emitted) => e.scope !== 'global')).toBe(true);
     });
   });
 
@@ -655,9 +665,10 @@ describe('setupPresence', () => {
         }),
       );
 
-      // 2. Verify global broadcast of student-error-alert
+      // 2. Verify student-error-alert only reaches the staff room
       expect(m.globalEmitted).toContainEqual({
-        scope: 'global',
+        scope: 'room',
+        room: PRESENCE_STAFF_ROOM,
         event: 'student-error-alert',
         payload: {
           studentId: 's1',
@@ -667,6 +678,7 @@ describe('setupPresence', () => {
           error: errorPayload,
         },
       });
+      expect(m.globalEmitted.some((e: Emitted) => e.scope === 'global')).toBe(false);
     });
 
     it('rejects teacher-broadcast-lesson that retargets an in-progress session class', () => {

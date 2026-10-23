@@ -15,8 +15,9 @@
  *
  * Why a server-level e2e (not just a hook-level test):
  *  - Confirms the server actually emits with the field shape the hook expects
- *  - Confirms the io.emit (not io.to(room)) reaches the client (since
- *    useClassroomSocket connects to the default namespace)
+ *  - Confirms the event is delivered to the lesson room, which is where
+ *    `useClassroomSocket` puts students/teachers (via server-side join, not a
+ *    global io.emit), and that clients outside those rooms do not receive it
  *  - Replicates the production wiring students/teachers will exercise
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -150,6 +151,9 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       client.once('connect', () => resolve());
       client.once('connect_error', (err) => reject(err));
     });
+    // 这个 e2e 没有挂载 presence 处理器（join-room 无消费者），
+    // 因此直接由服务端把测试客户端放进课节房间，模拟生产环境中的学生端。
+    if (client.id) io.in(client.id).socketsJoin(lessonId);
   });
 
   afterAll(async () => {
@@ -200,7 +204,7 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
         correctAnswer,
         question: '光合作用的产物是？',
       };
-      io.emit('whiteboard-quiz-answered', payload);
+      io.to(lessonId).emit('whiteboard-quiz-answered', payload);
     }
 
     // Wait up to 1500ms for the client to receive the event
@@ -217,8 +221,8 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     expect(typeof e.time).toBe('number');
   });
 
-  it('emits globally (not room-scoped), so dashboards without lesson-room join still receive', async () => {
-    // Reconnect without joining any room — the global emit must still arrive.
+  it('does not leak quiz answers to clients outside the lesson/class rooms', async () => {
+    // 换一个没有加入任何房间的连接：课节范围的事件不得抵达。
     client.disconnect();
     client = ioClient(baseUrl, {
       transports: ['websocket'],
@@ -230,11 +234,11 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       client.once('connect_error', (err) => reject(err));
     });
 
-    const events: WhiteboardQuizAnswered[] = [];
-    client.on('whiteboard-quiz-answered', (data) => events.push(data));
+    const received: WhiteboardQuizAnswered[] = [];
+    client.on('whiteboard-quiz-answered', (data) => received.push(data));
 
-    // Synthetic emit — simulates what server/routes/lessons.ts:590 does
-    io.emit('whiteboard-quiz-answered', {
+    // 模拟路由层实际投递方式：只发往课节房间，而不是全局广播。
+    io.to(lessonId).emit('whiteboard-quiz-answered', {
       lessonId,
       elementId: 'el-quiz-e2e-002',
       studentId,
@@ -245,9 +249,23 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     });
 
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(events).toHaveLength(1);
-    expect(events[0].elementId).toBe('el-quiz-e2e-002');
-    expect(events[0].isCorrect).toBe(false);
+    expect(received).toHaveLength(0);
+
+    // 加入课节房间后，同一条事件应当抵达——证明范围过滤而非丢消息。
+    if (client.id) io.in(client.id).socketsJoin(lessonId);
+    io.to(lessonId).emit('whiteboard-quiz-answered', {
+      lessonId,
+      elementId: 'el-quiz-e2e-003',
+      studentId,
+      answer: 'A',
+      score: 0,
+      isCorrect: false,
+      time: Date.now(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(received).toHaveLength(1);
+    expect(received[0].elementId).toBe('el-quiz-e2e-003');
+    expect(received[0].isCorrect).toBe(false);
   });
 
   it('teacher GET /api/lessons/:id/quiz-submissions successfully retrieves merged relational submissions', async () => {
@@ -278,15 +296,15 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     expect(res.ok).toBe(true);
 
     // 白板元素 data JSON 中的 submissions 不再被更新（并发读改写已移除）
-    const row = kernelContainer.db
-      .prepare('SELECT data FROM whiteboard_elements WHERE id = ?')
-      .get(elementId) as any;
+    const row = kernelContainer.db.prepare('SELECT data FROM whiteboard_elements WHERE id = ?').get(elementId) as any;
     const parsed = JSON.parse(row.data);
     expect(parsed.submissions?.[studentId]).toBeUndefined();
 
     // 关系表为唯一权威
     const rel = kernelContainer.db
-      .prepare('SELECT answer, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
+      .prepare(
+        'SELECT answer, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?',
+      )
       .get(lessonId, elementId, studentId) as any;
     expect(rel).toBeDefined();
     expect(rel.answer).toBe('A');

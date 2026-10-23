@@ -145,10 +145,8 @@ export class ClassroomFeedService {
           actorName: row.actor_name,
           _meta: { eventId: event.id, type: event.type, source: event.source, timestamp: row.created_at },
         };
-        // 课节房间 + 常驻课堂广播房间（此前只投 `lesson-${lessonId}` 幽灵房间，
-        // 全靠紧跟的 class- 兜底才「能用」）
-        emitClassroomEvent(this.io, lessonId, 'classroom:feed_appended', socketPayload);
-        if (class_id) this.io.to(`class-${class_id}`).emit('classroom:feed_appended', socketPayload);
+        // 课节房间 + 班级房间，并集单次投递（避免重复事件）
+        emitClassroomEvent(this.io, lessonId, 'classroom:feed_appended', socketPayload, { classId: class_id });
       }
     } catch (e) {
       console.error('[classroom-feed] handleEvent failed:', e);

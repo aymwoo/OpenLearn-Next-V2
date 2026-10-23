@@ -2,21 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
-import { CLASSROOM_BROADCAST_ROOM } from '../presence.js';
 import path from 'path';
 
 describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
   let db: Database.Database;
   let service: ClassroomRuntimeService;
-  let emittedEvents: Array<{ event: string; payload: any; room?: string }> = [];
+  let emittedEvents: Array<{ event: string; payload: any; rooms?: string | string[] }> = [];
 
   const mockIo = {
     emit: (event: string, payload: any) => {
       emittedEvents.push({ event, payload });
     },
-    to: (room: string) => ({
+    to: (rooms: string | string[]) => ({
       emit: (event: string, payload: any) => {
-        emittedEvents.push({ event: `${room}:${event}`, payload, room });
+        emittedEvents.push({ event, payload, rooms });
       },
     }),
   } as any;
@@ -97,20 +96,17 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     const teachingStage = await service.getStage('les_101');
     expect(teachingStage).toBe('IN_CLASS_TEACHING');
 
-    // 投递口径：课节房间（**裸 lessonId**）+ 常驻课堂广播房间。
+    // 投递口径：课节房间（**裸 lessonId**）+ 班级房间，并集单次投递。
     // 此前投到 `lesson-les_101`（带前缀）—— 那是个无人加入的房间，
     // 该测试当时正是把这个错误房间名当作正确行为钉住了。
-    const stageEvents = emittedEvents.filter((e) => e.event.endsWith(':classroom:stage_changed'));
-    expect(stageEvents.map((e) => e.room)).toEqual(
-      expect.arrayContaining(['les_101', CLASSROOM_BROADCAST_ROOM, 'class-cls_1']),
-    );
-    for (const e of stageEvents) {
-      expect(e.payload.stage).toBe('IN_CLASS_TEACHING');
-    }
+    const stageEvents = emittedEvents.filter((e) => e.event === 'classroom:stage_changed');
+    expect(stageEvents).toHaveLength(1);
+    expect(stageEvents[0].rooms).toEqual(['les_101', 'class-cls_1']);
+    expect(stageEvents[0].payload.stage).toBe('IN_CLASS_TEACHING');
 
     // 同概念双事件名（stage_changed / stage_event）已收敛为前者：
     // stage_event 全平台零监听（含插件目录），是纯粹的重复投递
-    expect(emittedEvents.some((e) => e.event.endsWith(':classroom:stage_event'))).toBe(false);
+    expect(emittedEvents.some((e) => e.event === 'classroom:stage_event')).toBe(false);
   });
 
   it('allows plugins to intercept and guard stage transitions', async () => {
@@ -403,14 +399,14 @@ describe('门禁失效策略（D-3）', () => {
 
 describe('ClassroomRuntimeService 与教学环节门槛分离', () => {
   let db: Database.Database;
-  let emittedEvents: Array<{ event: string; payload: any; room?: string }> = [];
+  let emittedEvents: Array<{ event: string; payload: any; rooms?: string | string[] }> = [];
   const mockIo = {
     emit: (event: string, payload: any) => {
       emittedEvents.push({ event, payload });
     },
-    to: (room: string) => ({
+    to: (rooms: string | string[]) => ({
       emit: (event: string, payload: any) => {
-        emittedEvents.push({ event: `${room}:${event}`, payload, room });
+        emittedEvents.push({ event, payload, rooms });
       },
     }),
   } as any;

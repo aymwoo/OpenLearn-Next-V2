@@ -255,7 +255,7 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       )
       .run(toStage, classId || null, startedAt, endedAt, session.id);
 
-    // Broadcast stage transition to both lesson and class socket rooms
+    // Broadcast stage transition to the lesson and class socket rooms (union delivery)
     if (this.io) {
       const payload = {
         lessonId,
@@ -264,11 +264,9 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
         fromStage: currentStage,
         timestamp: now,
       };
-      // 课节房间 + 常驻课堂广播房间
-      emitClassroomEvent(this.io, lessonId, 'classroom:stage_changed', payload);
-      if (classId) {
-        this.io.to(`class-${classId}`).emit('classroom:stage_changed', payload);
-      }
+      emitClassroomEvent(this.io, lessonId, 'classroom:stage_changed', payload, {
+        classId: classId || session.class_id || null,
+      });
     }
 
     return { success: true, stage: toStage };

@@ -206,6 +206,10 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
       socketClient.once('connect', () => resolve());
       socketClient.once('connect_error', (err) => reject(err));
     });
+
+    // 该套件不挂载 presence 处理器，直接由服务端把监听端放进课节房间，
+    // 以及学生 1 的个人房间（作业批改通知只投递给本人）。
+    if (socketClient.id) io.in(socketClient.id).socketsJoin([lessonId, `user-${student1Id}`]);
   });
 
   afterAll(async () => {

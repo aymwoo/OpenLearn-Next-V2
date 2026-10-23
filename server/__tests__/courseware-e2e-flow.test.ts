@@ -9,6 +9,7 @@ import { registerLessonsRoutes } from '../routes/lessons.js';
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
 import { registerGradingRoutes } from '../routes/grading.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
+import { PRESENCE_STAFF_ROOM } from '../presence.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 /**
@@ -135,7 +136,9 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
       app,
       io: {
         emit: (event: string, payload: any) => emittedEvents.push({ event, payload }),
-        to: () => ({ emit: () => {} }),
+        to: (rooms: string | string[]) => ({
+          emit: (event: string, payload: any) => emittedEvents.push({ event, payload, rooms }),
+        }),
       },
     };
     registerCoursewareRoutes(ctx);
@@ -157,7 +160,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     baseUrl = `http://127.0.0.1:${port}`;
   });
 
-  const emittedEvents: Array<{ event: string; payload: any }> = [];
+  const emittedEvents: Array<{ event: string; payload: any; rooms?: string | string[] }> = [];
 
   afterAll(async () => {
     // ── Cleanup ───────────────────────────────────────────────────
@@ -244,8 +247,10 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     expect(resultRow.score).toBe(88);
     expect(resultRow.completion).toBe(1);
 
-    // Socket 广播：教师端实时面板能收到
-    expect(emittedEvents.some((e) => e.event === 'courseware-attempt-updated')).toBe(true);
+    // Socket 广播：教师端实时面板能收到（attempt 无 lesson_id，投归属学生 + 教师房间）
+    const attemptEvent = emittedEvents.find((e) => e.event === 'courseware-attempt-updated');
+    expect(attemptEvent).toBeDefined();
+    expect(attemptEvent?.rooms).toEqual(expect.arrayContaining([`user-${studentId}`, PRESENCE_STAFF_ROOM]));
 
     // ── D. 教师侧 GET /api/courseware/attempts?coursewareUuid=X 看到该生成绩 ──
     // （这正是我刚加的 filter —— HtmlAppletFrame 实时面板用这个端点）

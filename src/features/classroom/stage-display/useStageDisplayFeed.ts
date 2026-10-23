@@ -176,9 +176,8 @@ export function useStageDisplayFeed(
     const unsubscribe = onSocketInstance((socket) => {
       cleanupSocket?.();
 
-      // 确保展台独立窗口加入课节房间与常驻广播房间
+      // 确保展台独立窗口加入课节房间（课堂事件按课节 + 班级定向投递）
       socket.emit('join-room', lessonId);
-      socket.emit('join-room', 'classroom-broadcast');
 
       const handlers = LIVE_EVENTS.map((evt) => {
         const handler = (payload: any) => {

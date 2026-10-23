@@ -1,26 +1,31 @@
-import { describe, it, expect, vi } from 'vitest';
-import { CLASSROOM_BROADCAST_ROOM, classroomEventRooms, emitClassroomEvent, isRealLessonRoom } from '../presence.js';
+import { describe, it, expect } from 'vitest';
+import {
+  classroomEventRooms,
+  emitClassroomEvent,
+  isRealLessonRoom,
+  PRESENCE_STAFF_ROOM,
+  userRoom,
+} from '../presence.js';
 
 /**
  * 课堂事件的投递房间口径。
  *
- * 历史包袱：服务端有 13 处投到 `lesson-${lessonId}`（**带前缀**），而客户端加入的
- * 课节房间是**裸 lessonId**（`enter-lesson` 的 `socket.join(data.lessonId)`）。
- * 那些投递打进了无人加入的房间；其中 11 处靠紧随其后的 `io.emit(...)` 全局广播
- * 掩盖，于是功能看似正常、代价是全平台串流量，而 `classroom:exit_ticket_submitted`
- * 没有兜底，彻底失效。
+ * 历史包袱：先是投到 `lesson-${lessonId}`（**带前缀**，无人加入的幽灵房间），
+ * 后来用 `classroom-broadcast` 常驻房间兜底 —— 可达性修好了，却把每个课节的
+ * 倒计时/投票/抢答/动态流投给了全平台客户端。
  *
- * 本测试锁死「课节房间 + 常驻课堂广播房间」这一口径，防止退化回全局广播或幽灵房间。
+ * 本测试锁死当前口径：课节房间 + 班级房间 + 指定用户房间（+ 教师房间）的并集，
+ * 防止退化回全局广播，或把 A 班事件串到 B 班。
  */
 
-type Emitted = { room: string; event: string; payload: unknown };
+type Emitted = { rooms: string | string[]; event: string; payload: unknown };
 
 function buildIo() {
   const emitted: Emitted[] = [];
   const io = {
-    to: (room: string) => ({
+    to: (rooms: string | string[]) => ({
       emit: (event: string, payload: unknown) => {
-        emitted.push({ room, event, payload });
+        emitted.push({ rooms, event, payload });
       },
     }),
   };
@@ -28,20 +33,39 @@ function buildIo() {
 }
 
 describe('classroomEventRooms', () => {
-  it('真实课节 → 课节房间 + 常驻课堂广播房间', () => {
-    expect(classroomEventRooms('L1')).toEqual(['L1', CLASSROOM_BROADCAST_ROOM]);
+  it('真实课节 → 课节房间', () => {
+    expect(classroomEventRooms('L1')).toEqual(['L1']);
   });
 
-  it('作业工作区的伪课节只投自己的房间，不进广播房间', () => {
+  it('班级 / 用户 / 教师目标按并集去重投递', () => {
+    expect(
+      classroomEventRooms('L1', {
+        classId: 'C1',
+        userIds: ['stu_1', null, undefined, ''],
+        staff: true,
+      }),
+    ).toEqual(['L1', 'class-C1', userRoom('stu_1'), PRESENCE_STAFF_ROOM]);
+  });
+
+  it('作业工作区的伪课节只投自己的房间，不扩散到班级/教师房间', () => {
     // 客户端在「当前没有选中课节」时会 setSelectedLesson(roomId) +
     // setStudentViewStatus('lesson')，把学生拉进一个并不存在的课节视图
-    expect(classroomEventRooms('assignment-a1-student-stu_alice')).toEqual(['assignment-a1-student-stu_alice']);
+    expect(
+      classroomEventRooms('assignment-a1-student-stu_alice', {
+        classId: 'C1',
+        userIds: ['stu_alice'],
+        staff: true,
+      }),
+    ).toEqual(['assignment-a1-student-stu_alice']);
   });
 
-  it('缺少 lessonId 时只投常驻广播房间（不制造 undefined 房间）', () => {
-    expect(classroomEventRooms(null)).toEqual([CLASSROOM_BROADCAST_ROOM]);
-    expect(classroomEventRooms(undefined)).toEqual([CLASSROOM_BROADCAST_ROOM]);
-    expect(classroomEventRooms('')).toEqual([CLASSROOM_BROADCAST_ROOM]);
+  it('缺少 lessonId 时使用班级/用户/教师房间，不制造 undefined 房间', () => {
+    expect(classroomEventRooms(null)).toEqual([]);
+    expect(classroomEventRooms(undefined)).toEqual([]);
+    expect(classroomEventRooms('')).toEqual([]);
+    expect(classroomEventRooms(null, { classId: 'C1' })).toEqual(['class-C1']);
+    expect(classroomEventRooms(null, { userIds: ['u1'] })).toEqual([userRoom('u1')]);
+    expect(classroomEventRooms(null, { staff: true })).toEqual([PRESENCE_STAFF_ROOM]);
   });
 });
 
@@ -56,25 +80,28 @@ describe('isRealLessonRoom', () => {
 });
 
 describe('emitClassroomEvent', () => {
-  it('每个事件只投递一次，覆盖课节房间与广播房间', () => {
+  it('并集单次投递（Socket.IO 对多房间命中去重）', () => {
     const { emitted, io } = buildIo();
 
-    emitClassroomEvent(io, 'L1', 'classroom:buzzer_winner', { studentName: '王超' });
+    emitClassroomEvent(io, 'L1', 'classroom:buzzer_winner', { studentName: '王超' }, { classId: 'C1' });
 
-    // 关键回归点：原实现是「幽灵房间 + 紧随的 io.emit」，
-    // 若只改房间名而不删 io.emit，就会变成同一个事件推两次
+    // 关键回归点：不能再退回「逐房间 emit 多次」或「全局 io.emit」，
+    // 否则同时命中课节/班级房间的客户端会重复弹窗。
     expect(emitted).toEqual([
-      { room: 'L1', event: 'classroom:buzzer_winner', payload: { studentName: '王超' } },
-      { room: CLASSROOM_BROADCAST_ROOM, event: 'classroom:buzzer_winner', payload: { studentName: '王超' } },
+      {
+        rooms: ['L1', 'class-C1'],
+        event: 'classroom:buzzer_winner',
+        payload: { studentName: '王超' },
+      },
     ]);
   });
 
-  it('结课通票事件不再只投幽灵房间（此前无任何兜底 → 彻底失效）', () => {
+  it('没有任何目标房间时静默跳过', () => {
     const { emitted, io } = buildIo();
 
-    emitClassroomEvent(io, 'L1', 'classroom:exit_ticket_submitted', { totalSubmitted: 3 });
+    emitClassroomEvent(io, null, 'classroom:stage_changed', {});
 
-    expect(emitted.map((e) => e.room)).toEqual(['L1', CLASSROOM_BROADCAST_ROOM]);
+    expect(emitted).toEqual([]);
   });
 
   it('io 缺失时静默跳过（不抛错）', () => {
