@@ -2,6 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -40,7 +41,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  */
 export async function loadEnvValidation(env = process.env) {
   try {
-    const mod = await import('./dist/env-validation.cjs');
+    // 必须用 createRequire + 运行时拼路径，而不是 `await import('./dist/env-validation.cjs')`：
+    // 后者会被 Vite/Vitest 的 import-analysis 在**转换期**静态解析，源码检出里没有
+    // dist/ 时直接抛 "Failed to resolve import"，try/catch 拦不住（实测 CI 红）。
+    // require 是运行期行为，文件不存在时才走到我们自己的 catch。
+    const requireFromHere = createRequire(import.meta.url);
+    const artifactPath = join(__dirname, 'dist', 'env-validation.cjs');
+    const mod = requireFromHere(artifactPath);
     const validate = mod.validateStartupEnv || mod.default?.validateStartupEnv;
     if (typeof validate !== 'function') return { available: false, errors: [], warnings: [] };
     const result = validate(env) || {};
