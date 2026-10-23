@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **修复 E2E 断言中途被整页刷新打断（CI `Browser workflow E2E` 转红）**：
+  - **故障链**：`server.ts` 给 Vite 开发服务器传的内联 `server.watch: {}` 覆盖了 `vite.config.ts` 里「`PLAYWRIGHT_TEST` / `DISABLE_HMR` 时把监听置 `null`（关闭）、否则排除 `**/*.db` 等运行时产物」的策略 —— `mergeConfig` 遇到「文件侧为 `null`、内联侧为对象」时直接采用内联值，于是本该关闭的文件监听被重新打开，且忽略清单一并丢失。内联的 `hmr: { server }` 同样覆盖了文件侧的 `hmr: false`。
+  - **后果**：E2E 写 SQLite 时 WAL 文件（`**/*.db-wal`）变动 → Vite watcher 命中 → 因「没有匹配的模块」给浏览器发 `full-reload` → 页面在断言中途被整页刷新。同一根因有两种表现：本地是 `element was detached from the DOM`；CI 上是 `GET /api/lessons` 报 `ECONNRESET` —— 整页重载会阻塞事件循环，Playwright 的 API 请求上下文（`http.Agent({ keepAlive: true })`）此时复用了已被服务端 `keepAliveTimeout` 关闭的空闲连接，服务端回 RST；而 Playwright 1.61 的 `expect.poll` 把轮询函数放在 `try/catch` 之外调用，一次网络抖动就会直接中断整条轮询。
+  - **修复**：`server.ts` 不再内联 `server.watch`（交回 `vite.config.ts` 统一裁决），并让内联的 `hmr` 与同一套 `PLAYWRIGHT_TEST` / `DISABLE_HMR` 开关保持一致 —— 这两个开关此前同样被内联配置架空，实际从未生效。
+  - **测试侧加固**：`e2e/lesson-classroom-flow.spec.ts` 的 `courseHasSegment` / `courseHasElement` 把瞬时网络错误（连接被 RST、超时）吞掉并返回 `false`，让 `expect.poll` 能重试到条件成立，而不是让整条用例崩在一次抖动上。
+  - **验证**：同一台机器、同一份 SQLite 库（置于仓库内、会被 watcher 命中的位置）下复现并修复 —— 修复前 `Browser workflow E2E` 作业 5 passed / 6 failed、期间共触发 **93 次** Vite 整页刷新；修复后 11 passed / 0 failed、**0 次**刷新。`tsc --noEmit` 干净。
+
 - **课堂交互路由补齐对象级授权与答案脱敏**：
   - **问题**：课堂交互路由（会话、投票、抢答、倒计时、节奏、结课通票、大屏数据等）此前多数只校验角色（`teacher` / `student`），不校验「这个会话是不是你的」。多教师部署下，任意教师可操作他班进行中的投票、抢答、倒计时与通票汇总；任意学生可凭 `lessonId` 读取其他班级的进行中会话、投票正确答案与动态流回放。
   - **修复**：`server/services/class-access.ts` 新增 `authorizeClassroomControl` / `authorizeClassroomRead`，把会话 `teacher_id`、绑定班级 `owner_user_id`、课节 `creator_id` 统一成一条判定链；没有明确归属人的历史会话与空 `creator_id` 课节保持既有兼容口径，归档会话不阻塞下一节新会话。课堂路由逐条接入：写操作要求可控制，读操作要求可控制或在班。

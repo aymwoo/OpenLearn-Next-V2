@@ -490,11 +490,25 @@ async function startServer() {
   // Vite Middleware for Development
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
+    // HMR 复用同一个 HTTP 端口，避免开发时额外开 24678。
+    // 但 PLAYWRIGHT_TEST / DISABLE_HMR 下必须把 HMR 与文件监听一起关掉。
+    //
+    // 为什么必须显式关：E2E 会写 SQLite，SQLite 的 WAL 会改动 **/*.db-wal。
+    // 只要 watcher 还活着，Vite 就会因为「没有匹配的模块」给浏览器发 full-reload，
+    // 页面在断言中途被整页刷新 —— 本地表现为「element was detached from the DOM」，
+    // CI 上则因为整页重载阻塞事件循环、复用已失效的 keep-alive 连接，
+    // 表现为 GET /api/lessons 的 ECONNRESET（Playwright 1.61 的 expect.poll
+    // 把轮询函数放在 try/catch 之外调用，一次网络抖动就会直接中断轮询）。
+    const viteHmrDisabled = process.env.PLAYWRIGHT_TEST === '1' || process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== 'true' ? { server: httpServer } : false,
-        watch: process.env.DISABLE_HMR === 'true' ? null : {},
+        hmr: viteHmrDisabled ? false : { server: httpServer },
+        // 刻意不内联 server.watch：vite.config.ts 已按 PLAYWRIGHT_TEST / DISABLE_HMR
+        // 决定是否监听（true 时置 null 即关闭），并在开启时排除 **/*.db 等运行时产物。
+        // 内联一个 watch 会覆盖掉那份 null —— mergeConfig 遇到「文件侧为 null、
+        // 内联侧为对象」时直接采用内联值，于是本该关闭的监听器被重新打开，
+        // 且忽略清单一并丢失（见上方注释里的故障链）。
       },
       appType: 'spa',
     });
