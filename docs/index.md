@@ -190,6 +190,7 @@ roadmap/documentation-roadmap
 :maxdepth: 2
 :caption: 📋 发布日志 (Release Notes)
 
+release-notes/v0.7.1
 release-notes/v0.7.0
 release-notes/v0.6.1
 release-notes/v0.6.0

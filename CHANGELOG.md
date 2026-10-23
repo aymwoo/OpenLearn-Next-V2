@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-23
+
 ### Fixes
 
 - **修复 E2E 断言中途被整页刷新打断（CI `Browser workflow E2E` 转红）**：
