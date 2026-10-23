@@ -82,13 +82,32 @@ describe('B-3：Barrier 2 两端语义一致', () => {
     const backend = read('packages/core/worker-runtime/service-host.ts');
     const frontend = read('src/plugin-host/service-host.ts');
 
-    const backendGuard = backend.match(/manifestCapabilities\.length === 0 && ([^\n]+)/)?.[1]?.trim();
+    // 后端判定的是**已授予（管理员已审批）**的能力集合（Issue #224），
+    // 前端浏览器侧没有 CapabilityGuard，仍以清单声明值为准 ——
+    // 两端左值不同是**有意为之**，需要一致的是右侧的方法名判定。
+    const backendGuard = backend.match(/effectiveCapabilities\.length === 0 && ([^\n]+)/)?.[1]?.trim();
     const frontendGuard = frontend.match(/manifestCapabilities\.length === 0 && ([^\n]+)/)?.[1]?.trim();
 
     expect(backendGuard).toBeTruthy();
     expect(frontendGuard).toBeTruthy();
     expect(backendGuard).toBe(frontendGuard);
     expect(backendGuard).toContain("startsWith('get')");
+  });
+
+  it('后端读的是已授予集合，前端读的是声明集合（Issue #224 的有意差异）', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const read = (rel: string) => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf-8');
+
+    const backend = read('packages/core/worker-runtime/service-host.ts');
+    const frontend = read('src/plugin-host/service-host.ts');
+
+    // 后端：运行时能力 = 声明 ∩ 已授予（管理员审批）
+    expect(backend).toContain('effectiveCapabilities');
+    expect(backend).toContain('declared.filter(cap => guard.check');
+    // 前端：浏览器侧无 CapabilityGuard，仍是清单声明值
+    expect(frontend).toContain('manifestCapabilities');
   });
 
   it('getUserList / getAllActions 两端判定结果相同（只读降级放行）', () => {
