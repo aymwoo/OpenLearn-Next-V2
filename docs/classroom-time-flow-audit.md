@@ -22,16 +22,21 @@
 
 ---
 
-## 0. 已实施：房间口径统一为「课节房间 + 常驻课堂广播房间」
+## 0. 已实施：房间口径收敛为「课节 + 班级 + 指定用户（+ 教师）」
 
-`server/presence.ts` 成为房间口径的唯一真源（与白板侧对称）：
+`server/presence.ts` 是房间口径的唯一真源：
 
-- `CLASSROOM_BROADCAST_ROOM = 'classroom-broadcast'` —— 与 `WHITEBOARD_BROADCAST_ROOM` 同构，
-  客户端连接即加入（`useClassroomSocket.syncPresenceAndRooms`），因此**停在仪表盘的学生也能收到**；
-- `isRealLessonRoom()` —— 伪课节（`assignment-*-student-*`）不进任何广播房间；
-- `classroomEventRooms()` / `emitClassroomEvent()` —— 统一投递入口。
+- `classroomEventRooms(lessonId, target)` / `emitClassroomEvent(...)` —— 统一投递入口，
+  按 `ClassroomEventTarget { classId?, userIds?, staff? }` 取并集，`io.to(rooms)` 一次投递
+  （Socket.IO 对命中多个房间的客户端去重）；
+- `userRoom(userId)` —— `user-<id>` 个人房间，连接时按 `session.userId` 自动加入，
+  客户端 `join-room` 一律拒绝；
+- `isRealLessonRoom()` —— 伪课节（`assignment-*-student-*`）只投自身房间，不扩散。
 
-13 处幽灵房间投递全部改为 `emitClassroomEvent(io, lessonId, EVENT, PAYLOAD)`：
+> 历史上的 `classroom-broadcast` 常驻房间已删除：它让**每个**客户端都加入，
+> 把每节课的倒计时/投票/抢答/动态流推给了全平台。可达性现由班级房间承接。
+
+课堂事件统一改为 `emitClassroomEvent(io, lessonId, EVENT, PAYLOAD, target)`：
 
 ```
 classroom:countdown_updated   classroom:quick_poll_started   classroom:quick_poll_updated
@@ -41,11 +46,20 @@ classroom:pulse_check_requested  whiteboard-quiz-answered   classroom:feed_appen
 classroom:stage_changed
 ```
 
+投放口径：
+
+- 课堂状态（倒计时/投票/抢答/签到/通票/节奏/阶段/动态流/随堂作答）→ 课节 + 班级房间；
+- 点名/积分/已读回执 → 对应学生 `user-<id>`（监控类同时投 `presence-staff`）；
+- 作业评分 → 仅被评分学生；
+- 学生端错误 → 仅 `presence-staff`。
+
 ### ⚠️ 关键陷阱（已避开）
 
 11 处原本是「幽灵房间 + 紧跟一行全局 `io.emit`」。**只把房间名改对而不处理
 `io.emit`，会让同一个事件推送两次**（一次房间、一次全局）。因此这里做的是
-**替换而非新增**：删掉那 11 行 `io.emit`，由 `emitClassroomEvent` 一次性投两房间。
+**替换而非新增**：删掉那 11 行 `io.emit`，由 `emitClassroomEvent` 一次性投递。
+同样地，课节与班级两个房间必须用房间数组一次 `io.to([lesson, class]).emit(...)`
+联合投递，分成两次 `io.to(...)` 会让同时命中两个房间的客户端收到两份。
 
 `server/__tests__/classroom-event-rooms.test.ts` 的 `emitClassroomEvent` 用例
 把这个「只发一次」钉死。
@@ -215,8 +229,8 @@ exambank 是「插件还没进这个仓」。
   而 `PreClassReadyView` 只由 `LiveClassroomView` 挂载，`LiveClassroomView` 只由
   `TeacherView` 挂载 —— **这是纯教师端 UI**，学生只负责打卡、不看统计。
 - 但**班级房间只有学生加入**（服务端 `presence.ts` 的 `register-student` 分支
-  才 `socket.join(classRoom(...))`），教师只 join 了 `whiteboard-broadcast` 与
-  `classroom-broadcast`。
+  才 `socket.join(classRoom(...))`），教师只 join 了 `whiteboard-broadcast`，
+  直到客户端按当前班级补 join 班级房间。
 - 也就是说：我上一轮把 `icebreaker_updated` 从全局 `io.emit` 改成投班级房间，
   等于**把这个事件对唯一的消费方屏蔽掉了**。收窄投递范围是对的，但漏了投递对象。
 
@@ -314,7 +328,7 @@ grep -rn 'io\.to(`lesson-' --include="*.ts" server/ packages/
 # 房间口径真源
 grep -n -A 20 "classroomEventRooms" server/presence.ts
 
-# 客户端加入广播房间
+# 已删除的常驻课堂广播房间（应无输出）
 grep -n "classroom-broadcast" src/hooks/useClassroomSocket.ts
 
 # 仍有 producer 但无人监听的事件

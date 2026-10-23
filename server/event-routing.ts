@@ -13,7 +13,15 @@
 
 import type { Server } from 'socket.io';
 import type { PlatformEvent } from '../packages/core/event-bus/index.js';
-import { classRoom, isRealLessonRoom, WHITEBOARD_BROADCAST_ROOM } from './presence.js';
+import {
+  classRoom,
+  classroomEventRooms,
+  isRealLessonRoom,
+  PRESENCE_STAFF_ROOM,
+  userRoom,
+  WHITEBOARD_BROADCAST_ROOM,
+} from './presence.js';
+import { loadLessonClassId } from './services/classroom-class-lock.js';
 
 /**
  * 转发 `presence.ts` 的定义，避免房间名出现两份来源：
@@ -54,8 +62,9 @@ export interface SocketRoute<TPayload = any> {
   readonly socketEvent: string;
   /**
    * 目标房间。`null` 表示全局广播；返回空数组表示「只执行 effect，不投递」。
+   * 需要按课节反查班级等数据库信息时，使用第二个参数 `deps`。
    */
-  readonly rooms: (event: PlatformEvent<TPayload>) => string[] | null;
+  readonly rooms: (event: PlatformEvent<TPayload>, deps: SocketRouteDeps) => string[] | null;
   /** payload 转换。默认原样透传 `event.payload`。 */
   readonly map?: (event: PlatformEvent<TPayload>, deps: SocketRouteDeps) => unknown;
   /** 投递前执行的副作用（落库等）。 */
@@ -68,7 +77,7 @@ export interface SocketRoute<TPayload = any> {
 
 const TITLE_SQL = 'SELECT title FROM assignments WHERE id = ?';
 const ELEMENT_SQL = 'SELECT * FROM whiteboard_elements WHERE id = ?';
-const SCHEDULE_SQL = 'SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1';
+const ATTEMPT_STUDENT_SQL = 'SELECT student_id FROM courseware_attempt WHERE id = ?';
 const ROLLCALL_EXISTS_SQL = 'SELECT id FROM student_rollcalls WHERE id = ?';
 const ROLLCALL_INSERT_SQL =
   'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)';
@@ -84,6 +93,27 @@ function lessonAndBroadcastRooms(event: PlatformEvent<any>): string[] | null {
   const rooms = lessonRoom(event);
   if (rooms === null || rooms.length === 0) return [];
   return rooms.some(isRealLessonRoom) ? [...rooms, WHITEBOARD_BROADCAST_ROOM] : rooms;
+}
+
+/** 课节当前班级：进行中会话优先，其次课表；伪课节不反查。 */
+function lessonClassId(event: PlatformEvent<any>, deps: SocketRouteDeps): string | null {
+  const lessonId = event.payload?.lessonId;
+  if (typeof lessonId !== 'string' || !lessonId || !isRealLessonRoom(lessonId)) return null;
+  return loadLessonClassId(deps.db, lessonId);
+}
+
+/**
+ * 课堂语义事件的默认投递面：课节房间 + 班级房间。
+ *
+ * 班级房间是必要的兜底：学生停在仪表盘 / 作业工作区时不在课节房间，
+ * 只投课节房间会让「抽中、答题、进度」这类课堂状态静默丢失。
+ */
+function lessonAndClassRooms(event: PlatformEvent<any>, deps: SocketRouteDeps): string[] {
+  const payload = event.payload as any;
+  return classroomEventRooms(payload?.lessonId ?? null, {
+    classId: lessonClassId(event, deps),
+    userIds: payload?.studentId ? [payload.studentId] : [],
+  });
 }
 
 function refreshMessage(event: PlatformEvent<any>) {
@@ -130,10 +160,10 @@ const LAYOUT_ONLY_ELEMENT_TYPES: ReadonlySet<string> = new Set([
 
 /** 点名后刷新课节房间 + 广播房间的学生端白板。 */
 function broadcastWhiteboardRefresh(event: PlatformEvent<any>, deps: SocketRouteDeps): void {
+  const rooms = lessonAndBroadcastRooms(event) ?? [];
+  if (rooms.length === 0) return;
   const refresh = attachMeta(refreshMessage(event), event);
-  for (const room of lessonAndBroadcastRooms(event) ?? []) {
-    if (room) deps.io.to(room).emit('whiteboard-sync', refresh);
-  }
+  deps.io.to(rooms).emit('whiteboard-sync', refresh);
 }
 
 /**
@@ -155,13 +185,8 @@ function persistRollcallPick(el: any, elementId: string, deps: SocketRouteDeps):
 
     const studentId = elData.selectedStudent.id;
     const studentName = elData.selectedStudent.name;
-    let classId: string = elData.classId || '';
     const lessonId = el.lesson_id;
-
-    if (!classId && lessonId) {
-      const sched = deps.db.prepare(SCHEDULE_SQL).get(lessonId) as any;
-      if (sched) classId = sched.class_id;
-    }
+    const classId: string = elData.classId || (lessonId ? loadLessonClassId(deps.db, lessonId) : null) || '';
 
     const pickedTimeStr = elData.pickedTime || new Date().toISOString();
     const pickedTime = new Date(pickedTimeStr).getTime();
@@ -172,15 +197,18 @@ function persistRollcallPick(el: any, elementId: string, deps: SocketRouteDeps):
 
     deps.db.prepare(ROLLCALL_INSERT_SQL).run(rollcallId, studentId, classId, lessonId, pickedTime);
     console.log(`[Rollcall] Saved rollcall for student ${studentId} (${studentName})`);
-    // 单次全局：与 presence.ts 点名语义一致，保证未进房间的教师端也能收到
-    deps.io.emit('student-picked', {
-      rollcallId,
-      studentId,
-      studentName,
-      classId,
-      lessonId,
-      pickedTime,
-    });
+    // 与 presence.ts 手动抽问同口径：课节 + 班级 + 被点名学生，不再全局广播
+    const rooms = classroomEventRooms(lessonId, { classId, userIds: [studentId] });
+    if (rooms.length > 0) {
+      deps.io.to(rooms).emit('student-picked', {
+        rollcallId,
+        studentId,
+        studentName,
+        classId,
+        lessonId,
+        pickedTime,
+      });
+    }
 
     return true;
   } catch (e) {
@@ -227,7 +255,11 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'assignment.graded',
     socketEvent: 'assignment-graded-toast',
-    rooms: () => null,
+    // 个人通知：只投被评分学生的用户房间，避免全班/全校收到他人成绩
+    rooms: (event) => {
+      const studentId = (event.payload as any)?.studentId;
+      return typeof studentId === 'string' && studentId ? [userRoom(studentId)] : [];
+    },
     map: (event, deps) => {
       const payload = event.payload as any;
       const assignment = deps.db.prepare(TITLE_SQL).get(payload.assignmentId) as any;
@@ -294,8 +326,8 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'whiteboard.quiz_answered',
     socketEvent: 'whiteboard-quiz-answered',
-    rooms: () => null,
-    description: '随堂练习作答 → 全局广播（教师/学生面板均可摄取）',
+    rooms: lessonAndClassRooms,
+    description: '随堂练习作答 → 课节 + 班级房间（教师大屏与同班学生面板摄取）',
   },
 
   // ── 作业中心（assignment-eval 插件）────────────────────────────────────
@@ -382,32 +414,56 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'classroom.lock_changed',
     socketEvent: 'class-lock-status-changed',
-    rooms: () => null,
-    description: '全班锁屏/解锁 → 全局广播',
+    // 锁屏是班级级指令：班级房间覆盖已离开课节视图的学生，课节房间覆盖试听端
+    rooms: (event) => {
+      const payload = event.payload as any;
+      const rooms = new Set<string>();
+      if (typeof payload?.lessonId === 'string' && payload.lessonId) rooms.add(payload.lessonId);
+      if (typeof payload?.classId === 'string' && payload.classId) rooms.add(classRoom(payload.classId));
+      return [...rooms];
+    },
+    description: '全班锁屏/解锁 → 班级 + 课节房间',
   },
   {
     eventType: 'student.notification_acknowledged',
     socketEvent: 'student-acknowledged',
-    rooms: () => null,
-    description: '学生已读通知 → 全局广播',
+    // 已读回执由教师端监控消费；投本人 + 教师房间，不再通知全校
+    rooms: (event) => {
+      const studentId = (event.payload as any)?.studentId;
+      return studentId ? [userRoom(String(studentId)), PRESENCE_STAFF_ROOM] : [PRESENCE_STAFF_ROOM];
+    },
+    description: '学生已读通知 → 本人 + 教师房间',
   },
   {
     eventType: 'student.progress_updated',
     socketEvent: 'student-progress-updated',
-    rooms: () => null,
-    description: '学生课节进度变化 → 全局广播',
+    rooms: lessonAndClassRooms,
+    description: '学生课节进度变化 → 课节 + 班级房间（学生本人 + 教师监控）',
   },
   {
     eventType: 'courseware.attempt_updated',
     socketEvent: 'courseware-attempt-updated',
-    rooms: () => null,
-    description: '课件 attempt 日志/提交/认领 → 全局广播（仅失效通知，客户端需回拉）',
+    // attempt 表没有 lesson_id，无法按课节定向；投 attempt 归属学生 + 教师房间，
+    // 既让本人课件刷新，也让教师大屏/评分面板收到失效通知（客户端仍回拉详情）。
+    rooms: (event, deps) => {
+      const attemptId = (event.payload as any)?.attemptId;
+      if (typeof attemptId !== 'string' || !attemptId) return [PRESENCE_STAFF_ROOM];
+      try {
+        const row = deps.db.prepare(ATTEMPT_STUDENT_SQL).get(attemptId) as { student_id?: string } | undefined;
+        const studentId = row?.student_id;
+        if (studentId && studentId !== 'guest') return [userRoom(studentId), PRESENCE_STAFF_ROOM];
+      } catch {
+        // 查不到归属时只投教师房间（客户端仍可回拉）
+      }
+      return [PRESENCE_STAFF_ROOM];
+    },
+    description: '课件 attempt 日志/提交/认领 → 归属学生 + 教师房间（仅失效通知，客户端需回拉）',
   },
   {
     eventType: 'lesson.progress_mode_changed',
     socketEvent: 'lesson-progress-mode-changed',
-    rooms: () => null,
-    description: '课节进度模式切换 → 全局广播',
+    rooms: lessonAndClassRooms,
+    description: '课节进度模式切换 → 课节 + 班级房间',
   },
   {
     eventType: 'segment.gate_overridden',
@@ -424,10 +480,13 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'points.awarded',
     socketEvent: 'classroom:points_awarded',
-    // 积分是全平台账户级事实（可来自作业评分、课堂归因、插件），不隶属某一课节，
-    // 故走全局广播。消费端按 payload.studentId 过滤自己的那条。
-    rooms: () => null,
-    description: '积分/金币变更 → 全局广播（消费端按 studentId 过滤）',
+    // 积分是账户级事实、不隶属某一课节：只投获得者本人与教师房间。
+    // 此前全局广播把「谁加了多少分」推给全校，学生端只能靠 payload.studentId 自行过滤。
+    rooms: (event) => {
+      const studentId = (event.payload as any)?.studentId;
+      return studentId ? [userRoom(String(studentId)), PRESENCE_STAFF_ROOM] : [PRESENCE_STAFF_ROOM];
+    },
+    description: '积分/金币变更 → 获得者本人 + 教师房间',
   },
 
   // ── 关于被删除的 spotlight 路由 ──────────────────────────────────────────
@@ -484,14 +543,15 @@ export function createRouteDispatcher(routes: readonly SocketRoute[], deps: Sock
       const mapped = route.map ? route.map(event, deps) : event.payload;
       const payload = route.attachMeta === false ? mapped : attachMeta(mapped, event);
 
-      const rooms = route.rooms(event);
+      const rooms = route.rooms(event, deps);
       if (rooms === null) {
         deps.io.emit(route.socketEvent, payload);
         return;
       }
-      for (const room of rooms) {
-        if (room) deps.io.to(room).emit(route.socketEvent, payload);
-      }
+      const targets = rooms.filter(Boolean);
+      if (targets.length === 0) return;
+      // 并集投递：客户端同时命中课节/班级/用户房间时只收一次，避免重复弹窗
+      deps.io.to(targets).emit(route.socketEvent, payload);
     } catch (e) {
       console.error(`[event-routing] Error dispatching "${event.type}" to "${route.socketEvent}":`, e);
     }

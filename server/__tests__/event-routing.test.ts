@@ -6,19 +6,20 @@ import {
   type RouteDb,
   type SocketRouteDeps,
 } from '../event-routing.js';
+import { PRESENCE_STAFF_ROOM, userRoom } from '../presence.js';
 import type { PlatformEvent } from '../../packages/core/event-bus/index.js';
 
-type Emitted = { scope: 'global' | 'room'; room?: string; event: string; payload: unknown };
+type Emitted = { scope: 'global' | 'room'; rooms?: string | string[]; event: string; payload: unknown };
 
-function buildDeps() {
+function buildDeps(dbGet: (sql: string) => unknown = () => undefined) {
   const emitted: Emitted[] = [];
   const io = {
     emit: (event: string, payload: unknown) => emitted.push({ scope: 'global', event, payload }),
-    to: (room: string) => ({
-      emit: (event: string, payload: unknown) => emitted.push({ scope: 'room', room, event, payload }),
+    to: (rooms: string | string[]) => ({
+      emit: (event: string, payload: unknown) => emitted.push({ scope: 'room', rooms, event, payload }),
     }),
   } as any;
-  const db: RouteDb = { prepare: () => ({ get: () => undefined, run: () => undefined }) } as any;
+  const db: RouteDb = { prepare: (sql: string) => ({ get: () => dbGet(sql), run: () => undefined }) } as any;
   const deps: SocketRouteDeps = { io, db };
   return { emitted, io, db, deps };
 }
@@ -71,7 +72,7 @@ describe('createRouteDispatcher', () => {
     expect(emitted).toHaveLength(0);
   });
 
-  it('broadcasts classroom.lock_changed globally with event meta attached', () => {
+  it('routes classroom.lock_changed to the class + lesson rooms with event meta attached', () => {
     const { emitted, deps } = buildDeps();
     const dispatch = createRouteDispatcher(SOCKET_ROUTES, deps);
 
@@ -79,7 +80,8 @@ describe('createRouteDispatcher', () => {
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].event).toBe('class-lock-status-changed');
-    expect(emitted[0].scope).toBe('global');
+    expect(emitted[0].scope).toBe('room');
+    expect(emitted[0].rooms).toEqual(['L1', 'class-C1']);
     expect(emitted[0].payload).toMatchObject({ classId: 'C1', lessonId: 'L1', locked: true });
     // 元信息守恒：前端可据此去重、排序、串联业务流
     expect(meta(emitted[0].payload)).toEqual({
@@ -91,8 +93,10 @@ describe('createRouteDispatcher', () => {
     });
   });
 
-  it('broadcasts courseware.attempt_updated globally', () => {
-    const { emitted, deps } = buildDeps();
+  it('routes courseware.attempt_updated to the attempt owner + staff room', () => {
+    const { emitted, deps } = buildDeps((sql) =>
+      sql.includes('courseware_attempt') ? { student_id: 'stu_1' } : undefined,
+    );
     createRouteDispatcher(
       SOCKET_ROUTES,
       deps,
@@ -100,25 +104,110 @@ describe('createRouteDispatcher', () => {
 
     expect(emitted).toEqual([
       expect.objectContaining({
-        scope: 'global',
+        scope: 'room',
+        rooms: [userRoom('stu_1'), PRESENCE_STAFF_ROOM],
         event: 'courseware-attempt-updated',
         payload: expect.objectContaining({ attemptId: 'att_1', type: 'submit' }),
       }),
     ]);
   });
 
-  it('routes whiteboard.element_drawn to both the lesson room and the broadcast room', () => {
+  it('falls back to the staff room when a courseware attempt has no owner', () => {
+    const { emitted, deps } = buildDeps();
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('courseware.attempt_updated', { attemptId: 'att_guest', type: 'log' }, 'att_guest'));
+
+    expect(emitted[0]).toMatchObject({ scope: 'room', rooms: [PRESENCE_STAFF_ROOM] });
+  });
+
+  it('routes whiteboard.element_drawn to the lesson + broadcast rooms in one union emit', () => {
     const { emitted, deps } = buildDeps();
     createRouteDispatcher(SOCKET_ROUTES, deps)(event('whiteboard.element_drawn', { lessonId: 'L9', elementId: 'e1' }));
 
-    expect(emitted).toHaveLength(2);
-    expect(emitted[0]).toMatchObject({ scope: 'room', room: 'L9', event: 'whiteboard-sync' });
-    expect(emitted[1]).toMatchObject({
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
       scope: 'room',
-      room: WHITEBOARD_BROADCAST_ROOM,
+      rooms: ['L9', WHITEBOARD_BROADCAST_ROOM],
       event: 'whiteboard-sync',
     });
     expect(emitted[0].payload).toMatchObject({ roomId: 'L9', type: 'refresh' });
+  });
+
+  it('delivers assignment.graded only to the graded student', () => {
+    const { emitted, deps } = buildDeps((sql) => (sql.includes('assignments') ? { title: 'Midterm' } : undefined));
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('assignment.graded', { assignmentId: 'a1', studentId: 's1', score: 95 }, 'a1'));
+
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        scope: 'room',
+        rooms: [userRoom('s1')],
+        event: 'assignment-graded-toast',
+        payload: expect.objectContaining({ studentId: 's1', score: 95, assignmentTitle: 'Midterm' }),
+      }),
+    ]);
+  });
+
+  it('delivers points.awarded to the awarded student + staff room', () => {
+    const { emitted, deps } = buildDeps();
+    createRouteDispatcher(SOCKET_ROUTES, deps)(event('points.awarded', { studentId: 's1', deltaPoints: 5 }, 's1'));
+
+    expect(emitted[0]).toMatchObject({
+      scope: 'room',
+      rooms: [userRoom('s1'), PRESENCE_STAFF_ROOM],
+      event: 'classroom:points_awarded',
+    });
+  });
+
+  it('delivers student.progress_updated to the lesson + class + student user room', () => {
+    const { emitted, deps } = buildDeps((sql) =>
+      sql.includes('classroom_sessions') ? { class_id: 'C1', stage: 'IN_CLASS_TEACHING' } : undefined,
+    );
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('student.progress_updated', { studentId: 's1', lessonId: 'L1', progressPercent: 60 }, 'L1'));
+
+    expect(emitted[0]).toMatchObject({
+      scope: 'room',
+      rooms: ['L1', 'class-C1', userRoom('s1')],
+      event: 'student-progress-updated',
+    });
+  });
+
+  it('delivers student-picked only to the lesson + class + picked student', () => {
+    const pickedTime = '2026-01-02T03:04:05.000Z';
+    const { emitted, deps } = buildDeps((sql) => {
+      if (sql.includes('whiteboard_elements')) {
+        return {
+          type: 'rollcall',
+          lesson_id: 'L1',
+          data: JSON.stringify({
+            selectedStudent: { id: 's1', name: 'Stu' },
+            status: 'picked',
+            classId: 'C1',
+            pickedTime,
+          }),
+        };
+      }
+      return undefined;
+    });
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('whiteboard.element_drawn', { type: 'rollcall', elementId: 'el1', lessonId: 'L1' }));
+
+    const picked = emitted.find((e) => e.event === 'student-picked');
+    expect(picked).toMatchObject({
+      scope: 'room',
+      rooms: ['L1', 'class-C1', userRoom('s1')],
+      payload: expect.objectContaining({ studentId: 's1', classId: 'C1', lessonId: 'L1' }),
+    });
+    expect(emitted.some((e) => e.scope === 'global')).toBe(false);
   });
 
   it('sends no socket message when the room list is empty (effect-only route)', () => {

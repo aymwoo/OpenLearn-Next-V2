@@ -482,12 +482,13 @@ describe('useClassroomSocket — 教师端加入当前班级房间', () => {
     expect(joinedRooms().some((r) => r.startsWith('class-'))).toBe(false);
   });
 
-  it('教师无论是否在课节都至少加入两个常驻广播房间', () => {
+  it('加入白板广播房间，但不再加入全平台的课堂广播房间', () => {
     const options = makeOptions({ activeRole: 'teacher', activeStudentId: null, selectedLesson: null });
     renderHook(() => useClassroomSocket(options));
 
     const rooms = joinedRooms();
     expect(rooms).toContain('whiteboard-broadcast');
-    expect(rooms).toContain('classroom-broadcast');
+    // 课堂事件按「课节 + 班级」定向投递，不再有全平台常驻房间
+    expect(rooms).not.toContain('classroom-broadcast');
   });
 });

@@ -5,7 +5,7 @@ import { segmentGateService } from './services/segment-gate-service.js';
 import { randomId } from './utils/id.js';
 import { createLogger } from '../packages/core/observability/logger.js';
 import { kernelContainer } from '../packages/core/kernel/index.js';
-import { CLASS_LOCK_MESSAGE, loadInProgressSessionClass } from './services/classroom-class-lock.js';
+import { CLASS_LOCK_MESSAGE, loadInProgressSessionClass, loadLessonClassId } from './services/classroom-class-lock.js';
 
 const plog = createLogger('presence');
 export interface PresenceDeps {
@@ -56,12 +56,13 @@ export const PRESENCE_STAFF_ROOM = 'presence-staff';
 export const WHITEBOARD_BROADCAST_ROOM = 'whiteboard-broadcast';
 
 /**
- * 常驻课堂广播房间名。
+ * 用户私有房间前缀。
  *
- * 与白板广播房间同构：连接即加入，课堂事件（倒计时 / 投票 / 抢答 / 阶段 / 节奏信号）
- * 同时投递到「课节房间 + 本房间」，使**尚未进入课节视图**的客户端也能收到并预热状态。
+ * 连接时按 session.userId 自动加入，仅服务端可投递（客户端 `join-room` 一律拒绝）。
+ * 用于账户级/个人事件：作业评分、积分到账、课件 attempt、点名确认等。
  */
-export const CLASSROOM_BROADCAST_ROOM = 'classroom-broadcast';
+export const USER_ROOM_PREFIX = 'user-';
+export const userRoom = (userId: string): string => `${USER_ROOM_PREFIX}${userId}`;
 
 /**
  * 是否为「真实课节」房间。
@@ -91,19 +92,43 @@ export function pseudoRoomStudentId(roomId: string): string | null {
   return idx >= 0 ? roomId.slice(idx + marker.length) : null;
 }
 
+/** 课堂事件的定向投递目标。缺省只投课节房间。 */
+export interface ClassroomEventTarget {
+  /** 事件所属班级。课节开课时必须传，保证已离开课节视图的班级成员仍能收到。 */
+  classId?: string | null;
+  /** 需要定向投递的个人（被点名学生、积分获得者等），投到各自的 `user-<id>` 房间。 */
+  userIds?: Array<string | null | undefined>;
+  /** 是否同时投给教师/管理员房间（学生不可见的监控类事件）。 */
+  staff?: boolean;
+}
+
 /**
  * 课堂事件的投递房间。
  *
- * 历史上服务端有 13 处投到 `lesson-${lessonId}`（**带前缀**），而客户端加入的
- * 课节房间是**裸 lessonId**（`enter-lesson` 的 `socket.join(data.lessonId)`），
- * 那些投递打进了无人加入的房间；其中 11 处靠紧随其后的 `io.emit(...)` 全局广播
- * 掩盖，于是功能看似正常、代价是全平台串流量。`classroom:exit_ticket_submitted`
- * 没有全局兜底，因此彻底失效。
+ * 历史问题：服务端曾把课堂事件投到 `lesson-${lessonId}`（**带前缀**，无人加入），
+ * 再靠紧随其后的全局 `io.emit` 掩盖。后来引入 `classroom-broadcast` 常驻房间，
+ * 虽然修好了可达性，却把所有课节的倒计时/投票/抢答/动态流投给了**全平台**客户端。
+ *
+ * 现在的口径是「课节 + 班级 + 指定用户（+ 教师房间）」的并集：
+ * - 课节房间：正在听课的学生与试听端；
+ * - 班级房间：已离开课节视图（仪表盘/作业工作区/课件）的班级成员；
+ * - 用户房间：账户级事件的唯一接收人；
+ * - 教师房间：在线监控类事件，学生永不加入。
+ *
+ * 作业工作区的伪课节（`assignment-*`）只投它自己的房间，不扩散。
  */
-export function classroomEventRooms(lessonId: string | null | undefined): string[] {
-  if (typeof lessonId !== 'string' || !lessonId) return [CLASSROOM_BROADCAST_ROOM];
-  if (!isRealLessonRoom(lessonId)) return [lessonId];
-  return [lessonId, CLASSROOM_BROADCAST_ROOM];
+export function classroomEventRooms(lessonId: string | null | undefined, target: ClassroomEventTarget = {}): string[] {
+  const rooms = new Set<string>();
+  if (typeof lessonId === 'string' && lessonId) {
+    if (!isRealLessonRoom(lessonId)) return [lessonId];
+    rooms.add(lessonId);
+  }
+  if (target.classId) rooms.add(classRoom(target.classId));
+  for (const userId of target.userIds ?? []) {
+    if (userId) rooms.add(userRoom(String(userId)));
+  }
+  if (target.staff) rooms.add(PRESENCE_STAFF_ROOM);
+  return [...rooms];
 }
 
 /**
@@ -111,13 +136,14 @@ export function classroomEventRooms(lessonId: string | null | undefined): string
  *
  * 刻意只声明用到的那一截：真实的 `Server` 满足它，单元测试的轻量 mock 也满足，
  * 而 `Pick<Server, 'to'>` 会把 `BroadcastOperator` 的全部方法都拖进类型契约。
+ * `to` 接受房间数组：Socket.IO 会对命中多个房间的客户端去重，避免重复弹窗。
  */
 export interface ClassroomEventEmitter {
-  to: (room: string) => { emit: (event: string, ...args: unknown[]) => void };
+  to: (room: string | string[]) => { emit: (event: string, ...args: unknown[]) => void };
 }
 
 /**
- * 投递一个课堂事件到「课节房间 + 常驻课堂广播房间」。
+ * 投递一个课堂事件到「课节房间 + 班级房间 + 指定用户房间（+ 教师房间）」。
  *
  * 取代原先的「幽灵房间投递 + 紧跟一行全局 `io.emit`」写法：
  * 房间归属显式化，且每个事件只发一次。
@@ -127,11 +153,12 @@ export function emitClassroomEvent(
   lessonId: string | null | undefined,
   event: string,
   payload: unknown,
+  target: ClassroomEventTarget = {},
 ): void {
   if (!io) return;
-  for (const room of classroomEventRooms(lessonId)) {
-    io.to(room).emit(event, payload);
-  }
+  const rooms = classroomEventRooms(lessonId, target);
+  if (rooms.length === 0) return;
+  io.to(rooms).emit(event, payload);
 }
 
 /** 教师端广播白板最大化视图时下发给学生的 Socket.IO 事件名 */
@@ -253,12 +280,18 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       socket.join(PRESENCE_STAFF_ROOM);
     }
 
+    // 个人房间：账户级事件（作业评分 / 积分 / 课件 attempt）只投给本人。
+    // 由服务端按 session 加入，不依赖客户端声明，也无法被客户端冒用。
+    if (session?.userId) {
+      socket.join(userRoom(String(session.userId)));
+    }
+
     // ── SEC-AUTH: 房间归属校验 ────────────────────────────────────
     // 握手鉴权在 NODE_ENV=test 下豁免（此时 socket 无 session），与各处理器的
     // `if (session && ...)` 口径一致：无会话一律放行，生产行为由握手层兜底。
 
     /** 常驻广播房间：任何已连接客户端（教师/学生）都允许加入 */
-    const PUBLIC_BROADCAST_ROOMS = new Set([WHITEBOARD_BROADCAST_ROOM, CLASSROOM_BROADCAST_ROOM]);
+    const PUBLIC_BROADCAST_ROOMS = new Set([WHITEBOARD_BROADCAST_ROOM]);
 
     const studentClassIds = (userId: string): string[] => lookupStudentClassIds?.(userId) ?? [];
 
@@ -272,6 +305,8 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     const canJoinRoom = (roomId: unknown): boolean => {
       if (!session) return true;
       if (typeof roomId !== 'string' || !roomId) return false;
+      // 个人房间与教师房间只由服务端按会话加入，任何角色都不得主动订阅
+      if (roomId.startsWith(USER_ROOM_PREFIX)) return false;
       if (PUBLIC_BROADCAST_ROOMS.has(roomId)) return true;
       // 在线状态房间只能由连接时的角色判定自动加入，客户端不得主动 join（防学生自荐收听）
       if (roomId === PRESENCE_STAFF_ROOM) return false;
@@ -458,8 +493,9 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           correlationId: lessonId || undefined,
         });
 
-        // 3. 广播给教师端实时感知（单次全局：教师可能未进课节房间，定向会漏）
-        io.emit('student-error-alert', {
+        // 3. 只投教师/管理员房间：学生端异常属于教师监控数据，
+        //    此前全局广播会把任意学生的报错（含课节、姓名）推给所有学生。
+        io.to(PRESENCE_STAFF_ROOM).emit('student-error-alert', {
           studentId: data.studentId,
           studentName,
           lessonId,
@@ -530,23 +566,20 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
       }
     });
 
-    // 教师端全班锁屏指令全网广播
+    // 教师端全班锁屏指令：课节 + 班级房间，单次联合投递（同一 socket 命中多个房间也只收一次）
     socket.on('teacher-broadcast-lock', (data: { lessonId: string; locked: boolean; classId?: string }) => {
       if (session && !isTeacherOrAdmin) {
         plog.warn(`[Presence Security] Unauthorized teacher-broadcast-lock by ${session?.userId}`);
         return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast lock' });
       }
       if (!data?.lessonId) return;
-      io.to(data.lessonId).emit('class-lock-status-changed', {
-        lessonId: data.lessonId,
-        locked: Boolean(data.locked),
-      });
-      if (data.classId) {
-        io.to(classRoom(data.classId)).emit('class-lock-status-changed', {
-          lessonId: data.lessonId,
-          locked: Boolean(data.locked),
-        });
-      }
+      emitClassroomEvent(
+        io,
+        data.lessonId,
+        'class-lock-status-changed',
+        { lessonId: data.lessonId, locked: Boolean(data.locked) },
+        { classId: data.classId ?? null },
+      );
     });
 
     // 教师端切换演示 Tab 广播
@@ -586,6 +619,9 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can pick students' });
         }
         if (!data?.studentId) return;
+        // 班级兜底：教师端只传 lessonId 时，从进行中会话/课表反查，
+        // 保证事件能投到班级房间（学生离开课节视图后仍会收到点名提示）。
+        const classId = data.classId || (data.lessonId ? loadLessonClassId(kernelContainer.db, data.lessonId) : null);
         plog.info(
           `[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`,
         );
@@ -593,7 +629,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
           studentId: data.studentId,
           studentName: data.studentName,
           lessonId: data.lessonId,
-          classId: data.classId,
+          classId,
           pickedTime: Date.now(),
         };
         // v0.6.1 数据真实性（R-3）：手动抽问与白板 rollcall 同等落库 —— 此前
@@ -605,14 +641,16 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
             .prepare(
               'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)',
             )
-            .run(rollcallId, data.studentId, data.classId || '', data.lessonId || '', payload.pickedTime);
+            .run(rollcallId, data.studentId, classId || '', data.lessonId || '', payload.pickedTime);
         } catch (e: any) {
           plog.warn(`[Presence] Failed to persist manual rollcall: ${e?.message}`);
         }
-        // 单次全局广播：io.emit 是任何房间定向投递的超集。
-        // 历史上曾对 lesson 房间 + class 房间 + 全局三重投递，学生同时命中多房间时会收到 2-3 次重复事件（弹窗重复）。
-        // 点名是低频手动操作，全局单次可保证教师仪表盘（未进课节房间）也能收到；高频 presence 已另做合并。
-        io.emit('student-picked', payload);
+        // 只投「课节 + 班级 + 被点名学生」：既保证全班提示与被抽中者强提醒，
+        // 又不会把 A 班的点名串到 B 班。房间数组由 Socket.IO 去重，命中多个也只收一次。
+        emitClassroomEvent(io, data.lessonId ?? null, 'student-picked', payload, {
+          classId,
+          userIds: [data.studentId],
+        });
       },
     );
 
@@ -625,7 +663,14 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
         return;
       }
       plog.info(`[Presence] Student acknowledged pick: ${data.studentId}`);
-      io.emit('student-acknowledged', { studentId: data.studentId, lessonId: data.lessonId });
+      const classId = data.lessonId ? loadLessonClassId(kernelContainer.db, data.lessonId) : null;
+      emitClassroomEvent(
+        io,
+        data.lessonId ?? null,
+        'student-acknowledged',
+        { studentId: data.studentId, lessonId: data.lessonId },
+        { classId, userIds: [data.studentId], staff: true },
+      );
     });
 
     // 教师端课堂控制信令总线（透传至课节房间内所有远程学生端）

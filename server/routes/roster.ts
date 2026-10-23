@@ -1729,20 +1729,26 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const payload = rosterService.evaluateRollcall(req.body || {});
 
       if (io) {
-        // 投递到「课节房间 + 常驻课堂广播房间」：原为全局 io.emit，会推给
-        // 全平台客户端（A 课节的评价事件串到 B 课节）。消费端按 lessonId 过滤，
-        // 但那是运气，不是设计。
-        emitClassroomEvent(io, payload.lessonId ?? null, 'rollcall:evaluated', payload);
+        // 投递到「课节 + 班级 + 被评价学生」：同班可见的课堂公开评价，
+        // 但不把 A 班的评价串到 B 班（原为全局 io.emit）。
+        const target = { classId: payload.classId, userIds: [payload.studentId] };
+        emitClassroomEvent(io, payload.lessonId ?? null, 'rollcall:evaluated', payload, target);
         // 金币到账的通用信号：补 lessonId/classId，否则消费端无从按课节过滤。
         // 注意与上面同源同动作，消费端只应订阅其中之一，否则会双重提示。
-        emitClassroomEvent(io, payload.lessonId ?? null, 'student:coins_awarded', {
-          studentId: payload.studentId,
-          studentName: payload.studentName,
-          classId: payload.classId,
-          lessonId: payload.lessonId,
-          coins: payload.rewardCoins,
-          reason: `课堂抽问答对激励 (${payload.rating})`,
-        });
+        emitClassroomEvent(
+          io,
+          payload.lessonId ?? null,
+          'student:coins_awarded',
+          {
+            studentId: payload.studentId,
+            studentName: payload.studentName,
+            classId: payload.classId,
+            lessonId: payload.lessonId,
+            coins: payload.rewardCoins,
+            reason: `课堂抽问答对激励 (${payload.rating})`,
+          },
+          target,
+        );
       }
 
       res.json({ success: true, rollcall: payload });

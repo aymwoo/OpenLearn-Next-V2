@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { setupRealtimeBridge, type RealtimeBridgeDeps } from '../realtime-bridge.js';
 import { SOCKET_ROUTES, WHITEBOARD_BROADCAST_ROOM } from '../event-routing.js';
+import { userRoom } from '../presence.js';
 
 type Emitted = {
   scope: 'global' | 'room';
@@ -28,9 +29,11 @@ function buildMocks() {
     emit: (event: string, payload: unknown) => {
       emitted.push({ scope: 'global', event, payload });
     },
-    to: (room: string) => ({
+    to: (rooms: string | string[]) => ({
       emit: (event: string, payload: unknown) => {
-        emitted.push({ scope: 'room', room, event, payload });
+        for (const room of Array.isArray(rooms) ? rooms : [rooms]) {
+          emitted.push({ scope: 'room', room, event, payload });
+        }
       },
     }),
   } as any;
@@ -96,7 +99,8 @@ describe('setupRealtimeBridge', () => {
 
     expect(m.emitted).toHaveLength(1);
     expect(m.emitted[0]).toMatchObject({
-      scope: 'global',
+      scope: 'room',
+      room: userRoom('s1'),
       event: 'assignment-graded-toast',
       payload: { assignmentId: 'a1', assignmentTitle: 'Midterm', studentId: 's1', score: 95, feedback: 'good' },
     });
@@ -163,11 +167,16 @@ describe('setupRealtimeBridge', () => {
     expect(rollcallId).toBe(`rollcall-el1-${new Date(pickedTime).getTime()}`);
     expect(picked).toBe(new Date(pickedTime).getTime());
 
-    const studentPicked = m.emitted.find((e) => e.event === 'student-picked');
-    expect(studentPicked).toMatchObject({
-      scope: 'global',
-      payload: { rollcallId, studentId: 's1', studentName: 'Stu', classId: 'C1', lessonId: 'L1' },
+    const pickedEvents = m.emitted.filter((e) => e.event === 'student-picked');
+    expect(pickedEvents.map((e) => e.room)).toEqual(['L1', 'class-C1', userRoom('s1')]);
+    expect(pickedEvents[0].payload).toMatchObject({
+      rollcallId,
+      studentId: 's1',
+      studentName: 'Stu',
+      classId: 'C1',
+      lessonId: 'L1',
     });
+    expect(m.emitted.some((e) => e.scope === 'global')).toBe(false);
     expect(m.emitted.filter((e) => e.event === 'whiteboard-sync')).toHaveLength(2);
   });
 

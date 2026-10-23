@@ -11,6 +11,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds, getPresentStudentIds } from '../presence.js';
+import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import {
   lessonActiveSegments,
@@ -280,9 +281,11 @@ export function registerClassroomRoutes(
       ).run(JSON.stringify(state), lessonId);
     } catch (_) {}
 
-    // 广播到所有连接的客户端与房间
+    // 只投本课节的课节房间 + 班级房间
     if (io) {
-      emitClassroomEvent(io, lessonId, 'classroom:countdown_updated', state);
+      emitClassroomEvent(io, lessonId, 'classroom:countdown_updated', state, {
+        classId: loadLessonClassId(db, lessonId),
+      });
     }
 
     // 触发内核事件总线，供第三方插件监听
@@ -726,12 +729,18 @@ export function registerClassroomRoutes(
         cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
 
         try {
-          emitClassroomEvent(io, session.lesson_id, 'classroom:stage_changed', {
-            lessonId: session.lesson_id,
-            stage: ARCHIVED_REPORT_STAGE,
-            classId: session.class_id,
-            sessionId,
-          });
+          emitClassroomEvent(
+            io,
+            session.lesson_id,
+            'classroom:stage_changed',
+            {
+              lessonId: session.lesson_id,
+              stage: ARCHIVED_REPORT_STAGE,
+              classId: session.class_id,
+              sessionId,
+            },
+            { classId: session.class_id },
+          );
         } catch (_) {}
 
         try {
@@ -814,10 +823,16 @@ export function registerClassroomRoutes(
         cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
 
         try {
-          emitClassroomEvent(io, session.lesson_id, 'classroom:session_deleted', {
-            sessionId,
-            lessonId: session.lesson_id,
-          });
+          emitClassroomEvent(
+            io,
+            session.lesson_id,
+            'classroom:session_deleted',
+            {
+              sessionId,
+              lessonId: session.lesson_id,
+            },
+            { classId: session.class_id },
+          );
         } catch (_) {}
 
         res.json({
@@ -1297,7 +1312,17 @@ export function registerClassroomRoutes(
         } catch (_) {}
 
         segmentGateService.recordCheckin(lessonId, studentId);
-        if (io) emitClassroomEvent(io, lessonId, 'classroom:checkin_submitted', { lessonId, studentId });
+        if (io) {
+          emitClassroomEvent(
+            io,
+            lessonId,
+            'classroom:checkin_submitted',
+            { lessonId, studentId },
+            {
+              classId: cs.class_id,
+            },
+          );
+        }
         res.json({ success: true, attendanceScheduled });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -1357,9 +1382,15 @@ export function registerClassroomRoutes(
           totalVotes: 0,
         };
 
-        // 广播给学生端和大屏展台
+        // 广播给学生端和大屏展台。
+        // 正确答案只随 HTTP 响应回到发起教师，不进 socket 广播 ——
+        // 否则先看到事件的学生可直接从帧里读到答案。
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_started', pollData);
+          const publicPoll: Record<string, unknown> = { ...pollData };
+          delete publicPoll.correctOption;
+          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_started', publicPoll, {
+            classId: session.class_id,
+          });
         }
 
         res.json({ success: true, poll: pollData });
@@ -1446,16 +1477,19 @@ export function registerClassroomRoutes(
           total += r.count;
         });
 
-        // 实时广播聚合数据
+        // 实时广播聚合数据。
+        // 不再携带 latestVoter：投票应匿名，聚合分布已足够驱动大屏动画，
+        // 而投票人姓名不应被同班其他学生从 socket 帧里读到。
         if (io) {
           const updatePayload = {
             pollId,
             lessonId,
             distribution,
             totalVotes: total,
-            latestVoter: studentName,
           };
-          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_updated', updatePayload);
+          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_updated', updatePayload, {
+            classId: pollSession?.class_id,
+          });
         }
 
         res.json({ success: true, distribution, totalVotes: total });
@@ -1501,7 +1535,13 @@ export function registerClassroomRoutes(
         });
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
+          emitClassroomEvent(
+            io,
+            lessonId,
+            'classroom:quick_poll_closed',
+            { pollId, distribution, totalVotes: total },
+            { classId: pollSession?.class_id },
+          );
         }
 
         res.json({ success: true, distribution, totalVotes: total });
@@ -1579,7 +1619,7 @@ export function registerClassroomRoutes(
         );
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:assessment_started', activeAssessment);
+          emitClassroomEvent(io, lessonId, 'classroom:assessment_started', activeAssessment, { classId });
         }
 
         res.status(201).json({
@@ -1666,7 +1706,7 @@ export function registerClassroomRoutes(
         };
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:buzzer_ready', buzzerData);
+          emitClassroomEvent(io, lessonId, 'classroom:buzzer_ready', buzzerData, { classId: session.class_id });
         }
 
         res.json({ success: true, buzzer: buzzerData });
@@ -1735,7 +1775,9 @@ export function registerClassroomRoutes(
             responseTimeMs,
           };
           if (io) {
-            emitClassroomEvent(io, lessonId, 'classroom:buzzer_winner', winnerPayload);
+            emitClassroomEvent(io, lessonId, 'classroom:buzzer_winner', winnerPayload, {
+              classId: buzzerSession?.class_id,
+            });
           }
         }
 
@@ -1791,7 +1833,15 @@ export function registerClassroomRoutes(
         ).run(now, buzzerId);
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:buzzer_reset', { buzzerId, lessonId });
+          emitClassroomEvent(
+            io,
+            lessonId,
+            'classroom:buzzer_reset',
+            { buzzerId, lessonId },
+            {
+              classId: buzzerSession?.class_id,
+            },
+          );
         }
 
         res.json({ success: true });
@@ -1946,12 +1996,18 @@ export function registerClassroomRoutes(
         });
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:pacing_updated', {
+          emitClassroomEvent(
+            io,
             lessonId,
-            segmentId: targetSegmentId,
-            summary,
-            overallSummary,
-          });
+            'classroom:pacing_updated',
+            {
+              lessonId,
+              segmentId: targetSegmentId,
+              summary,
+              overallSummary,
+            },
+            { classId: activeSession?.class_id },
+          );
         }
 
         res.json({
@@ -2171,10 +2227,16 @@ export function registerClassroomRoutes(
         if (io) {
           // 此前这里只投 `lesson-${lessonId}`（无人加入的房间）且**没有任何全局兜底**，
           // 导致学生提交结课通票后教师大屏永远收不到该事件，只能刷新页面。
-          emitClassroomEvent(io, lessonId, 'classroom:exit_ticket_submitted', {
+          emitClassroomEvent(
+            io,
             lessonId,
-            totalSubmitted: countRow?.count || 1,
-          });
+            'classroom:exit_ticket_submitted',
+            {
+              lessonId,
+              totalSubmitted: countRow?.count || 1,
+            },
+            { classId: activeSession.class_id },
+          );
         }
 
         res.json({ success: true, totalSubmitted: countRow?.count || 1 });
@@ -3204,7 +3266,9 @@ export function registerClassroomRoutes(
         };
 
         if (io) {
-          emitClassroomEvent(io, lessonId, 'classroom:pulse_check_requested', pulseCheckPayload);
+          emitClassroomEvent(io, lessonId, 'classroom:pulse_check_requested', pulseCheckPayload, {
+            classId: session.class_id,
+          });
         }
 
         res.json({ success: true, pulseCheck: pulseCheckPayload });
@@ -3276,9 +3340,10 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const control = controlDecision(req, lessonId);
         if (rejectUnless(res, control)) return;
+        const classId = loadLessonClassId(db, lessonId);
         const results = await diagnosticService.simulateQuizResponses(lessonId, (eventPayload) => {
           if (io) {
-            emitClassroomEvent(io, lessonId, 'whiteboard-quiz-answered', eventPayload);
+            emitClassroomEvent(io, lessonId, 'whiteboard-quiz-answered', eventPayload, { classId });
           }
         });
 

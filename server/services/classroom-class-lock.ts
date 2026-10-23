@@ -33,18 +33,32 @@ export function assertSessionClassChangeAllowed(session: SessionClassRow, reques
 
 type DbLike = { prepare: (sql: string) => { get: (...args: any[]) => unknown } };
 
+const SESSION_CLASS_SQL = `SELECT class_id, stage FROM classroom_sessions
+  WHERE lesson_id = ? AND stage != 'ARCHIVED_REPORT'
+  ORDER BY created_at DESC LIMIT 1`;
+
 /** 进行中会话已绑定的班级；没有进行中会话或查询失败时返回 null（不阻断无关广播）。 */
 export function loadInProgressSessionClass(db: DbLike, lessonId: string): string | null {
   try {
-    const row = db
-      .prepare(
-        `SELECT class_id, stage FROM classroom_sessions
-         WHERE lesson_id = ? AND stage != 'ARCHIVED_REPORT'
-         ORDER BY created_at DESC LIMIT 1`,
-      )
-      .get(lessonId) as SessionClassRow;
+    const row = db.prepare(SESSION_CLASS_SQL).get(lessonId) as SessionClassRow;
     if (!row?.class_id || !isInProgressClassLocked(row.stage)) return null;
     return row.class_id;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 课节当前归属的班级：优先取最近一次未归档的课堂会话，其次取课表。
+ * 用于把课堂事件投递到班级房间（学生离开课节视图后仍能收到）。
+ */
+export function loadLessonClassId(db: DbLike, lessonId: string): string | null {
+  try {
+    const session = db.prepare(SESSION_CLASS_SQL).get(lessonId) as SessionClassRow;
+    if (session?.class_id) return session.class_id;
+    const scheduled = db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1').get(lessonId) as
+      { class_id?: string | null } | undefined;
+    return scheduled?.class_id ?? null;
   } catch {
     return null;
   }

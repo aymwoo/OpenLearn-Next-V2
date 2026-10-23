@@ -5,6 +5,7 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
+import { PRESENCE_STAFF_ROOM } from '../presence.js';
 
 // ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
 // 该端点每次调用都会写一行 events 审计记录并向全体在线用户广播，
@@ -95,7 +96,8 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       });
 
       if (ctx.io) {
-        ctx.io.emit('student-error-alert', {
+        // 学生端异常只给教师/管理员看；此前全局广播会把报错推给所有学生
+        ctx.io.to(PRESENCE_STAFF_ROOM).emit('student-error-alert', {
           studentId,
           studentName,
           lessonId: data.lessonId || null,

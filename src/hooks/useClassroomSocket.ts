@@ -175,9 +175,6 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     const syncPresenceAndRooms = () => {
       // Join global whiteboard broadcast room
       socket.emit('join-room', 'whiteboard-broadcast');
-      // Join global classroom broadcast room（倒计时/投票/抢答/阶段等课堂事件）。
-      // 连接即加入，因此停留在仪表盘的学生也能收到并预热课堂状态。
-      socket.emit('join-room', 'classroom-broadcast');
 
       /**
        * 教师端也要加入**当前所教班级**的房间。
