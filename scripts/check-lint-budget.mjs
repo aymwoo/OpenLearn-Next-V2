@@ -14,6 +14,11 @@
  *
  * 注意：ESLint 的告警数只取决于仓库里的文件集合，与机器无关 —— 同一份代码在任何
  * 机器上都是同一个数字，所以基线可以安全地提交进仓库。
+ *
+ * 基线必须与它所守护的那棵代码树一致。issue 里记的 6186 是在更早的基点测的；本分支
+ * rebase 到当前 main 之后实测为 6198 —— 差的 12 条全部来自 main 新增的课程包导入
+ * 代码（多为失效的 eslint-disable 指令）。用 6186 做基线会让本 PR 一落地就红，
+ * 而那 12 条与本 PR 无关；基线的意义是「从今天起不许再涨」，不是「追某个历史数字」。
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -23,21 +28,20 @@ const ROOT = process.cwd();
 const BUDGET_FILE = path.join(ROOT, 'config', 'lint-budget.json');
 
 /** 与 package.json 的 lint:eslint 脚本保持一致 —— 同一份文件集合，数字才有可比性。 */
-const ESLINT_ARGS = [
-  '.',
-  '--ext',
-  '.ts,.tsx',
-  '--ignore-pattern',
-  'dist',
-  '--ignore-pattern',
-  'node_modules',
-];
+const ESLINT_ARGS = ['.', '--ext', '.ts,.tsx', '--ignore-pattern', 'dist', '--ignore-pattern', 'node_modules'];
 
 function readBudget() {
   if (!existsSync(BUDGET_FILE)) {
     throw new Error(`缺少基线文件 ${path.relative(ROOT, BUDGET_FILE)}`);
   }
   return JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
+}
+
+/** 本地日历日（YYYY-MM-DD）。 */
+function localDateStamp() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function runEslint() {
@@ -79,7 +83,9 @@ if (process.argv.includes('--update')) {
       {
         ...budget,
         eslintMaxWarnings: warnings,
-        updatedAt: new Date().toISOString().slice(0, 10),
+        // 用**本地日期**而不是 UTC —— 仓库里其它带日期的记录（审计报告、issue、
+        // 基线文件）都按本地日历来写，用 UTC 会在跨零点的时段里写下"昨天"。
+        updatedAt: localDateStamp(),
       },
       null,
       2,
