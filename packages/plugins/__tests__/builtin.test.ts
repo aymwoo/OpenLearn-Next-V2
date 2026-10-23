@@ -4,6 +4,7 @@ import { ServiceRegistry } from '../../core/di/service-registry.js';
 import { NodeEsmLoader } from '../../core/esm-loader/index.js';
 import { PluginHost } from '../../core/plugin-host/index.js';
 import { BuiltinPlugin } from '../builtin.js';
+import { verifyPassword } from '../../core/db/index.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -238,5 +239,57 @@ describe('BuiltinPlugin', () => {
     expect(monitor.source.length).toBeGreaterThan(500);
     expect(monitor.source.toLowerCase().includes('</script')).toBe(false);
     expect(() => new Function(monitor.source)).not.toThrow();
+  });
+
+  /**
+   * Issue #227：builtin.user 的 user.create / user.update 此前用**无盐 SHA-256**
+   * 存口令摘要（同一个 users 表里因此并存两种摘要）。SHA-256 无盐、无工作因子，
+   * 库一旦泄露，爆破成本几乎为零。
+   */
+  it('Issue #227: user.create / user.update 用 bcrypt 存口令（不再是裸 SHA-256）', async () => {
+    const pluginId = '@openlearn/plugin-builtin';
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      BuiltinPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    );
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    await pluginHost.activatePlugin(pluginId);
+
+    const actorId = `plugin:${BuiltinPlugin.manifest.id}`;
+    capabilityGuard.grant(actorId, 'management:write');
+
+    const password = 'S3cret-passphrase';
+    await commandBus.execute({
+      id: 'cmd-user-create',
+      type: 'user.create',
+      actorId,
+      payload: { username: 'teacher-hashed', password, role: 'teacher', name: '哈希老师' },
+      timestamp: Date.now(),
+    });
+
+    const created = db.prepare('SELECT * FROM users WHERE username = ?').get('teacher-hashed') as any;
+    expect(created).toBeDefined();
+
+    // 必须是 bcrypt 摘要（$2 前缀），而不是 64 位裸 SHA-256
+    expect(created.password_hash.startsWith('$2')).toBe(true);
+    expect(created.password_hash).not.toMatch(/^[a-f0-9]{64}$/);
+    expect(verifyPassword(password, created.password_hash)).toEqual({ valid: true, needsUpgrade: false });
+
+    // 改口令同样走 bcrypt
+    const newPassword = 'another-S3cret-passphrase';
+    await commandBus.execute({
+      id: 'cmd-user-update',
+      type: 'user.update',
+      actorId,
+      payload: { userId: created.id, password: newPassword },
+      timestamp: Date.now(),
+    });
+
+    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(created.id) as any;
+    expect(updated.password_hash.startsWith('$2')).toBe(true);
+    expect(verifyPassword(newPassword, updated.password_hash)).toEqual({ valid: true, needsUpgrade: false });
+    expect(verifyPassword(password, updated.password_hash).valid).toBe(false);
   });
 });
