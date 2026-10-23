@@ -298,8 +298,16 @@ export class CoursewareService {
       .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
       .get(attemptId) as { student_id: string } | undefined;
 
+    // 不存在的 attempt 不能再落 submission_raw / submission_result：
+    // 否则会留下永远无法 promote、也无法归属学生的孤儿成绩行。
+    if (!attemptRow) {
+      const err: any = new Error('Attempt not found');
+      err.status = 404;
+      throw err;
+    }
+
     if (session.role !== 'teacher' && session.role !== 'administrator') {
-      if (attemptRow && attemptRow.student_id !== session.userId) {
+      if (attemptRow.student_id !== session.userId) {
         const err: any = new Error('Forbidden: Cannot submit scores for another student');
         err.status = 403;
         throw err;
@@ -413,7 +421,13 @@ export class CoursewareService {
                SELECT COUNT(*) FROM assignment_submissions sub
                JOIN assignments ast ON sub.assignment_id = ast.id
                WHERE sub.student_id = a.student_id
-                 AND ast.title = '互动课件: ' || cw.name
+                 AND (
+                   instr(COALESCE(ast.content, ''), '"coursewareUuid":"' || cw.uuid || '"') > 0
+                   OR (
+                     instr(COALESCE(ast.content, ''), '"coursewareUuid"') = 0
+                     AND ast.title = '互动课件: ' || cw.name
+                   )
+                 )
              ) as isPromoted
       FROM courseware_attempt a
       JOIN courseware cw ON a.courseware_id = cw.id

@@ -48,6 +48,13 @@ function actorUserId(actorId?: string): string | null {
   return parseActorId(actorId)?.userId ?? actorId ?? null;
 }
 
+/** 9 月学年起点的当前学年；与宿主 assignment/submission 的学年口径保持一致 */
+function currentAcademicYear(now: number): string {
+  const date = new Date(now);
+  const startYear = date.getMonth() + 1 >= 9 ? date.getFullYear() : date.getFullYear() - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
 /**
  * 所属权校验：学生只能对自己名下的数据执行写操作。
  * 特权角色（教师/管理员/系统）放行，便于教师代交、试评与终评。
@@ -1160,26 +1167,38 @@ export const AssignmentEvalPlugin = {
 
           // 纯班级作业（无 lesson_id）宿主服务无法映射，由插件自行投影
           if (!projectedByHost && assignment && assignment.class_id) {
+            const academicYear = currentAcademicYear(now);
             db.prepare(
-              `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+              `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  class_id = excluded.class_id,
                  lesson_id = excluded.lesson_id,
                  title = excluded.title,
-                 description = excluded.description`,
-            ).run(assignment.id, assignment.class_id, assignment.lesson_id, assignment.title, '', '', now);
+                 description = excluded.description,
+                 academic_year = COALESCE(assignments.academic_year, excluded.academic_year)`,
+            ).run(assignment.id, assignment.class_id, assignment.lesson_id, assignment.title, '', '', now, academicYear);
 
             db.prepare(
               `INSERT INTO assignment_submissions
-                 (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
+                 (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, academic_year)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?)
                ON CONFLICT(assignment_id, student_id) DO UPDATE SET
                  score = excluded.score,
                  feedback = excluded.feedback,
                  graded_at = excluded.graded_at,
-                 status = 'graded'`,
-            ).run(assignment.id, submission.student_id, '', calculatedFinalScore, teacherComment || '', now, now);
+                 status = 'graded',
+                 academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
+            ).run(
+              assignment.id,
+              submission.student_id,
+              '',
+              calculatedFinalScore,
+              teacherComment || '',
+              now,
+              now,
+              academicYear,
+            );
           }
 
           await publishEvent(

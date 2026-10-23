@@ -69,11 +69,21 @@ function seedAttempt(opts: {
 function submissionRow(attemptCoursewareName: string, studentId: string) {
   return db
     .prepare(
-      `SELECT s.score, s.feedback, s.status, s.source FROM assignment_submissions s
+      `SELECT s.score, s.feedback, s.status, s.source, s.academic_year,
+              a.id AS assignment_id, a.academic_year AS assignment_year
+       FROM assignment_submissions s
        JOIN assignments a ON a.id = s.assignment_id
        WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?`,
     )
     .get(CLASS_ID, LESSON, `互动课件: ${attemptCoursewareName}`, studentId) as any;
+}
+
+/** 记录本课节的排课与学年 */
+function seedSchedule(academicYear: string | null, scheduledDate = '2026-03-01') {
+  db.prepare(
+    `INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at, academic_year)
+     VALUES ('sched_year', ?, ?, ?, ?, ?)`,
+  ).run(CLASS_ID, LESSON, scheduledDate, Date.now(), academicYear);
 }
 
 function enableRule(minCompletion = 0) {
@@ -85,10 +95,11 @@ function enableRule(minCompletion = 0) {
 }
 
 /** 记录某学生在本课节的考勤状态（缺考联动测试用） */
-function seedAttendance(studentId: string, status: string) {
+function seedAttendance(studentId: string, status: string, academicYear: string | null = null) {
   db.prepare(
-    'INSERT OR IGNORE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
-  ).run('sched_1', CLASS_ID, LESSON, '2026-01-01', Date.now());
+    `INSERT OR IGNORE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at, academic_year)
+     VALUES ('sched_1', ?, ?, ?, ?, ?)`,
+  ).run(CLASS_ID, LESSON, '2026-01-01', Date.now(), academicYear);
   db.prepare(
     'INSERT OR REPLACE INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
   ).run('sched_1', studentId, status, Date.now());
@@ -123,11 +134,12 @@ beforeEach(() => {
     );
     CREATE TABLE assignments (
       id TEXT PRIMARY KEY, class_id TEXT NOT NULL, lesson_id TEXT NOT NULL, title TEXT NOT NULL,
-      description TEXT, content TEXT, created_at INTEGER NOT NULL
+      description TEXT, content TEXT, created_at INTEGER NOT NULL, academic_year TEXT
     );
     CREATE TABLE assignment_submissions (
       id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL,
-      content TEXT, score REAL, feedback TEXT, submitted_at INTEGER, graded_at INTEGER, status TEXT
+      content TEXT, score REAL, feedback TEXT, submitted_at INTEGER, graded_at INTEGER, status TEXT,
+      academic_year TEXT
     );
     CREATE UNIQUE INDEX idx_assignment_submissions_unique
       ON assignment_submissions(assignment_id, student_id);
@@ -135,6 +147,7 @@ beforeEach(() => {
       student_id TEXT NOT NULL, lesson_id TEXT NOT NULL, completed INTEGER,
       progress_percent REAL, completed_segments TEXT, assigned_at INTEGER,
       verified INTEGER NOT NULL DEFAULT 0, verified_progress_percent INTEGER,
+      academic_year TEXT,
       PRIMARY KEY (student_id, lesson_id)
     );
     CREATE TABLE students (id TEXT PRIMARY KEY, name TEXT);
@@ -142,12 +155,12 @@ beforeEach(() => {
     CREATE TABLE class_students (class_id TEXT NOT NULL, student_id TEXT NOT NULL);
     CREATE TABLE classroom_sessions (
       id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, class_id TEXT, stage TEXT,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL, academic_year TEXT
     );
     CREATE TABLE schedules (
       id TEXT PRIMARY KEY, class_id TEXT NOT NULL, lesson_id TEXT NOT NULL,
       scheduled_date TEXT NOT NULL, time_slot TEXT, status TEXT, notes TEXT,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL, academic_year TEXT
     );
     CREATE TABLE attendance (
       schedule_id TEXT NOT NULL, student_id TEXT NOT NULL,
@@ -315,6 +328,77 @@ describe('promoteAttemptToGrade', () => {
     // 课件完成属于已验证进度，成绩计算才会采用
     expect(progress.verified).toBe(1);
     expect(progress.verified_progress_percent).toBe(100);
+  });
+
+  it('作业、成绩行与课节进度写入同一学年（取自排课）', () => {
+    seedSchedule('2025-2026');
+    seedAttempt({ attemptId: 'att_year', studentId: 's1', score: 77 });
+
+    const result = promoteAttemptToGrade(db as any, 'att_year', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(true);
+
+    const row = submissionRow('分数乐园', 's1');
+    expect(row.assignment_year).toBe('2025-2026');
+    expect(row.academic_year).toBe('2025-2026');
+
+    const progress = db
+      .prepare('SELECT academic_year FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+      .get('s1', LESSON) as { academic_year: string | null };
+    expect(progress.academic_year).toBe('2025-2026');
+  });
+
+  it('排课只有日期时按日期推导学年', () => {
+    seedSchedule(null, '2024-10-01');
+    seedAttempt({ attemptId: 'att_date_year', studentId: 's1', score: 66 });
+
+    promoteAttemptToGrade(db as any, 'att_date_year', { lessonId: LESSON, classId: CLASS_ID });
+    expect(submissionRow('分数乐园', 's1').academic_year).toBe('2024-2025');
+  });
+
+  it('课件改名后仍复用同一作业（按 UUID 关联，不按标题重建）', () => {
+    seedAttempt({ attemptId: 'att_rename', studentId: 's1', score: 80 });
+    const first = promoteAttemptToGrade(db as any, 'att_rename', { lessonId: LESSON, classId: CLASS_ID });
+    expect(first.ok).toBe(true);
+
+    db.prepare("UPDATE courseware SET name = '改名后的课件' WHERE id = 'cw_1'").run();
+    const second = promoteAttemptToGrade(db as any, 'att_rename', { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(second.ok).toBe(true);
+    expect(second.assignmentId).toBe(first.assignmentId);
+    const count = db
+      .prepare('SELECT COUNT(*) AS n FROM assignments WHERE class_id = ? AND lesson_id = ?')
+      .get(CLASS_ID, LESSON) as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('同名课件各自独立建作业，成绩不会互相覆盖', () => {
+    seedCourseware('cw_2', '分数乐园');
+    seedAttempt({ attemptId: 'att_same_1', studentId: 's1', score: 80, coursewareId: 'cw_1' });
+    seedAttempt({ attemptId: 'att_same_2', studentId: 's1', score: 40, coursewareId: 'cw_2' });
+
+    const first = promoteAttemptToGrade(db as any, 'att_same_1', { lessonId: LESSON, classId: CLASS_ID });
+    const second = promoteAttemptToGrade(db as any, 'att_same_2', { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(first.assignmentId).not.toBe(second.assignmentId);
+    const rows = db
+      .prepare(
+        `SELECT s.score FROM assignment_submissions s
+         JOIN assignments a ON a.id = s.assignment_id
+         WHERE s.student_id = 's1' ORDER BY s.score`,
+      )
+      .all() as Array<{ score: number }>;
+    expect(rows.map((r) => r.score)).toEqual([40, 80]);
+  });
+
+  it('学生不在目标班级时拒绝录入（防止跨班成绩注入）', () => {
+    db.prepare('INSERT INTO students (id, name) VALUES (?, ?)').run('s_out', '外班学生');
+    seedAttempt({ attemptId: 'att_out', studentId: 's_out', score: 95 });
+
+    const result = promoteAttemptToGrade(db as any, 'att_out', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('student-not-in-class');
+    const count = db.prepare('SELECT COUNT(*) AS n FROM assignment_submissions').get() as { n: number };
+    expect(count.n).toBe(0);
   });
 });
 
@@ -644,6 +728,21 @@ describe('markStudentAbsent 标缺考', () => {
     expect(count.n).toBe(1);
   });
 
+  it('缺考行同样写入排课学年', () => {
+    seedSchedule('2025-2026');
+    markStudentAbsent(db as any, {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      studentId: 's1',
+      coursewareId: 'cw_1',
+    });
+
+    const row = submissionRow('分数乐园', 's1');
+    expect(row.status).toBe('absent');
+    expect(row.assignment_year).toBe('2025-2026');
+    expect(row.academic_year).toBe('2025-2026');
+  });
+
   it('课件不存在 / 学生不在班级时拒绝', () => {
     expect(
       markStudentAbsent(db as any, {
@@ -687,6 +786,19 @@ describe('考勤联动生成缺考行', () => {
     // 重复补录：absent 行已存在 → 不再生成
     const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
     expect(second.absentGenerated).toBeUndefined();
+  });
+
+  it('考勤联动生成的缺考行带学年', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    seedAttendance('s2', 'absent', '2025-2026');
+    enableRule();
+
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(report.absentGenerated).toBe(1);
+
+    const row = submissionRow('分数乐园', 's2');
+    expect(row.status).toBe('absent');
+    expect(row.academic_year).toBe('2025-2026');
   });
 
   it('缺考行受自动规则保护：学生补交后 auto 路径跳过（absent-protected）', () => {
