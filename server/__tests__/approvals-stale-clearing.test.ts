@@ -52,7 +52,9 @@ describe('待审批指令的失效清理', () => {
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     ).run(
       adminToken,
-      JSON.stringify({ userId: adminId, role: 'teacher', username: 'admin', name: '管理员' }),
+      // Issue #226：管理员身份在 session.subRole 里（role 恒为 'teacher'，
+      // 见 server/routes/roster.ts 的 staff 登录分支），不再是 username==='admin' 兜底。
+      JSON.stringify({ userId: adminId, role: 'teacher', subRole: 'administrator', username: 'admin', name: '管理员' }),
       now,
       now + 3600_000,
     );

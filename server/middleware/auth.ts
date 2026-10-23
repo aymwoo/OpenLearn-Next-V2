@@ -6,6 +6,8 @@ import type { Socket } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { markAuthMiddleware } from '../security/route-scope.js';
 import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
+// Issue #226：会话角色的唯一真源 —— requireAuth / getActorId / checkIsTeacherOrAdmin 共用。
+import { resolveSessionRole } from '../services/session-role.js';
 
 // ── Session 工具函数 ──────────────────────────────────────────────
 
@@ -86,22 +88,14 @@ export function getActorId(req: Request): string {
   try {
     const session = getValidSession(token);
     if (!session) return 'anonymous';
-    let role = session.subRole || session.role;
-    if (
-      session.username === 'admin' ||
-      session.userId === 'usr_admin' ||
-      role === 'admin' ||
-      role === 'administrator'
-    ) {
-      role = 'administrator';
-    }
+    // Issue #226：角色口径统一走 resolveSessionRole（subRole 优先、回退 role）。
+    // 此前这里读 `subRole || role` 而 requireAuth 读 `role` —— 同一个管理员账号
+    // 在路由守卫里被拒、在能力判定里放行。
+    const role = resolveSessionRole(session);
     // 加固：userId 去除 ':' 与非法字符，防止 actorId 注入导致 capability 越权
     const rawUserId = session.userId || session.studentId || 'demo';
     const safeUserId = String(rawUserId).replace(/[:\s]/g, '_').slice(0, 64);
-    if (role) {
-      return `user:${safeUserId}:${role}`;
-    }
-    return 'anonymous';
+    return `user:${safeUserId}:${role}`;
   } catch {
     return 'anonymous';
   }
@@ -117,10 +111,11 @@ export function requireAuth(...roles: string[]) {
     const session = getValidSession(token);
     if (!session) return res.status(401).json({ success: false, error: 'Session expired or invalid' });
     if (roles.length > 0) {
-      let userRole = session.role;
-      if (session.username === 'admin' || session.userId === 'usr_admin' || userRole === 'admin') {
-        userRole = 'administrator';
-      }
+      // Issue #226：与 getActorId / isAdministrator 共用同一套角色口径 ——
+      // 此前这里读 `session.role`，而 staff 会话的 session.role 恒为 'teacher'，
+      // 管理员身份只在 `subRole` 里，于是通过用户管理创建的 administrator 账号
+      // 走 `requireAuth('administrator')` 一律 403。
+      const userRole = resolveSessionRole(session);
       const effectiveRoles = roles.map((r) => (r === 'admin' ? 'administrator' : r));
       if (!effectiveRoles.includes(userRole)) {
         return res
@@ -250,7 +245,9 @@ export function checkIsTeacherOrAdmin(req: Request): boolean {
   try {
     const session = getValidSession(token);
     if (!session) return false;
-    return session.role === 'teacher' || session.role === 'administrator';
+    // Issue #226：与 requireAuth / getActorId 同一口径。
+    const role = resolveSessionRole(session);
+    return role === 'teacher' || role === 'administrator';
   } catch {
     return false;
   }

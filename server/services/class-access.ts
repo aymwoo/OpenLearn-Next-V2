@@ -7,6 +7,8 @@
  */
 import type { Response } from 'express';
 import type Database from 'better-sqlite3';
+// Issue #226：管理员 / 教师判定统一走会话角色唯一真源，避免各路由各写一套。
+import { isAdministrator as isAdministratorRole, resolveSessionRole } from './session-role.js';
 
 export interface AccessSession {
   userId?: string;
@@ -44,22 +46,12 @@ const ANSWER_KEYS = new Set([
 ]);
 
 export function isAdministrator(session: AccessSession | null | undefined): boolean {
-  if (!session) return false;
-  const role = session.role;
-  const sub = session.subRole;
-  return (
-    role === 'administrator' ||
-    role === 'admin' ||
-    sub === 'administrator' ||
-    sub === 'admin' ||
-    session.userId === 'usr_admin' ||
-    session.username === 'admin'
-  );
+  return isAdministratorRole(session);
 }
 
 export function isTeacher(session: AccessSession | null | undefined): boolean {
-  if (!session || isAdministrator(session)) return false;
-  return session.role === 'teacher' || session.subRole === 'teacher';
+  if (!session || isAdministratorRole(session)) return false;
+  return resolveSessionRole(session) === 'teacher';
 }
 
 export function actorUserId(session: AccessSession | null | undefined): string | null {
@@ -400,7 +392,7 @@ function loadClassroomSession(
 
 function classroomActorTokens(session: AccessSession | null | undefined, actorId?: string): string[] {
   const uid = actorUserId(session);
-  const rawRole = session?.subRole || session?.role;
+  const rawRole = session ? resolveSessionRole(session) : null;
   const candidates = [
     uid,
     session?.username,

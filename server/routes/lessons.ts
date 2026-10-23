@@ -265,7 +265,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session;
       const { studentId, filePath, textContent } = req.body || {};
-      const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
+      // Issue #226：管理员判定统一走会话角色唯一真源（与 requireAuth / getActorId 同口径）。
+      const isPrivileged = isAdministrator(session);
       const targetStudentId = isPrivileged ? String(studentId || '') : String(session?.studentId || '');
       if (!targetStudentId) {
         return res.status(400).json({ success: false, error: 'Missing studentId' });
@@ -307,7 +308,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session;
       const { score, comment } = req.body || {};
-      const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
+      // Issue #226：管理员判定统一走会话角色唯一真源（与 requireAuth / getActorId 同口径）。
+      const isPrivileged = isAdministrator(session);
       const reviewerId = isPrivileged
         ? String((req.body || {}).reviewerId || session?.studentId || '')
         : String(session?.studentId || '');

@@ -18,6 +18,7 @@ import type { Request, Response, NextFunction } from 'express';
 import path from 'node:path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, getCookieToken, getValidSession } from '../middleware/auth.js';
+import { resolveSessionRole } from '../services/session-role.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import type {
   PluginApiRequest,
@@ -241,10 +242,9 @@ function resolveAuthContext(req: Request): {
     };
   }
 
-  let userRole = session.subRole || session.role || 'anonymous';
-  if (session.username === 'admin' || session.userId === 'usr_admin' || userRole === 'admin') {
-    userRole = 'administrator';
-  }
+  // Issue #226：管理员判定统一走会话角色唯一真源（与 requireAuth / getActorId 同口径），
+  // 去掉 username==='admin' / userId==='usr_admin' 这类硬编码身份兜底。
+  const userRole = resolveSessionRole(session);
 
   return {
     actorId,
