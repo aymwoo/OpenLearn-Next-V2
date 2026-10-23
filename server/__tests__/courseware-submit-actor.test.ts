@@ -152,6 +152,24 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
     expect(res.status).toBe(403);
   });
 
+  it('提交不存在的 attempt → 404，且不产生孤儿 submission_raw/result', async () => {
+    const res = await fetch(`${baseUrl}/api/courseware/attempts/att-does-not-exist/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
+      body: JSON.stringify({ score: 90, status: 'completed' }),
+    });
+    expect(res.status).toBe(404);
+
+    const raw = kernelContainer.db
+      .prepare('SELECT COUNT(*) as c FROM submission_raw WHERE attempt_id = ?')
+      .get('att-does-not-exist') as { c: number };
+    const result = kernelContainer.db
+      .prepare('SELECT COUNT(*) as c FROM submission_result WHERE attempt_id = ?')
+      .get('att-does-not-exist') as { c: number };
+    expect(raw.c).toBe(0);
+    expect(result.c).toBe(0);
+  });
+
   it('教师预览（attempt.student_id = teacher_preview）提交 → 200', async () => {
     const res = await fetch(`${baseUrl}/api/courseware/attempts/${teacherAttemptId}/submit`, {
       method: 'POST',

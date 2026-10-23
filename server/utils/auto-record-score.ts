@@ -16,6 +16,7 @@
 import crypto from 'crypto';
 import type { SqliteLike } from '../../packages/plugins/courseware-score.js';
 import { resolveScoreConfig, type CoursewareScoreConfig } from '../../packages/plugins/courseware-score.js';
+import { deriveAcademicYear } from './academic-year.js';
 
 /** 视为「已完成」的 attempt 终态。
  *  注意与前端 LiveClassroomView 的 FINISHED_STATUSES 保持一致 —— 曾因前端漏掉
@@ -36,6 +37,7 @@ export interface PromoteResult {
     | 'below-min-completion'
     | 'rule-disabled'
     | 'already-recorded'
+    | 'student-not-in-class'
     | 'manual-protected'
     | 'absent-protected'
     | 'not-higher';
@@ -142,6 +144,10 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   if (PLACEHOLDER_STUDENT_IDS.has(attempt.student_id)) {
     return { ok: false, reason: 'placeholder-student', studentId: attempt.student_id };
   }
+  // 成绩必须落在学生实际所在班级：防止教师把别班学生的 attempt 录进本班成绩。
+  if (!isEnrolledInClass(db, classId, attempt.student_id)) {
+    return { ok: false, reason: 'student-not-in-class', studentId: attempt.student_id };
+  }
 
   // 铁律 1：没有聚合分就不录
   const finalScore = normalizePercentScore(attempt.score);
@@ -161,8 +167,8 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   }
 
   const coursewareName = attempt.courseware_name || '互动课件';
-  const assignmentTitle = `互动课件: ${coursewareName}`;
   const now = Date.now();
+  const academicYear = resolveLessonAcademicYear(db, classId, lessonId, now);
   const sourceLabel = options.sourceLabel ?? '教师在课堂中保存录入';
   const source = options.source ?? 'manual';
   const strategy = options.strategy ?? 'latest';
@@ -170,16 +176,17 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   type RunOutcome = { assignmentId?: string; skipReason?: PromoteResult['reason'] };
 
   const run = (): RunOutcome => {
-    // 自动路径守卫：先查已有成绩行（经 assignments 的课节/班级/课件标题定位，无需建行）
-    if (source === 'auto') {
+    const existingAssignment = findCoursewareAssignment(db, classId, lessonId, coursewareName, attempt.courseware_uuid);
+
+    // 自动路径守卫：先查已有成绩行（经课件 UUID 稳定定位，无需建行）
+    if (source === 'auto' && existingAssignment) {
       const existing = db
         .prepare(
-          `SELECT s.score, s.status, s.source FROM assignment_submissions s
-           JOIN assignments a ON a.id = s.assignment_id
-           WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?
+          `SELECT score, status, source FROM assignment_submissions
+           WHERE assignment_id = ? AND student_id = ?
            LIMIT 1`,
         )
-        .get(classId, lessonId, assignmentTitle, attempt.student_id) as
+        .get(existingAssignment.id, attempt.student_id) as
         | { score: number | null; status: string | null; source: string | null }
         | undefined;
       if (existing) {
@@ -200,19 +207,22 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       }
     }
 
-    const assignmentId = findOrCreateCoursewareAssignment(
-      db,
-      classId,
-      lessonId,
-      coursewareName,
-      JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
-      now,
-    );
+    const assignment = existingAssignment
+      ? backfillAssignmentAcademicYear(db, existingAssignment, academicYear)
+      : createCoursewareAssignment(
+          db,
+          classId,
+          lessonId,
+          coursewareName,
+          attempt.courseware_uuid,
+          now,
+          academicYear,
+        );
 
     // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）
     db.prepare(
-      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?)
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?, ?)
        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
          content = excluded.content,
          score = excluded.score,
@@ -220,9 +230,10 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
          submitted_at = excluded.submitted_at,
          graded_at = excluded.graded_at,
          status = 'graded',
-         source = excluded.source`,
+         source = excluded.source,
+         academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
     ).run(
-      assignmentId,
+      assignment.id,
       attempt.student_id,
       attempt.extra_json || '{}',
       finalScore,
@@ -230,20 +241,22 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       now,
       now,
       source,
+      assignment.academicYear,
     );
 
     db.prepare(
       `INSERT INTO student_lesson_progress
-         (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent)
-       VALUES (?, ?, 1, 100, '[]', ?, 1, 100)
+         (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent, academic_year)
+       VALUES (?, ?, 1, 100, '[]', ?, 1, 100, ?)
        ON CONFLICT(student_id, lesson_id) DO UPDATE SET
          completed = 1,
          progress_percent = 100,
          verified = 1,
-         verified_progress_percent = 100`,
-    ).run(attempt.student_id, lessonId, now);
+         verified_progress_percent = 100,
+         academic_year = COALESCE(excluded.academic_year, student_lesson_progress.academic_year)`,
+    ).run(attempt.student_id, lessonId, now, assignment.academicYear);
 
-    return { assignmentId };
+    return { assignmentId: assignment.id };
   };
 
   // better-sqlite3 风格的 transaction；非事务环境（Worker RPC 代理）直接执行。
@@ -298,11 +311,13 @@ export function markStudentAbsent(
   }
 
   let coursewareName: string | null = null;
+  let coursewareUuid: string | null = null;
   try {
-    const cw = db.prepare('SELECT name FROM courseware WHERE id = ?').get(coursewareId) as
-      | { name: string }
+    const cw = db.prepare('SELECT name, uuid FROM courseware WHERE id = ?').get(coursewareId) as
+      | { name: string; uuid: string | null }
       | undefined;
     coursewareName = cw?.name ?? null;
+    coursewareUuid = cw?.uuid ?? null;
   } catch {
     coursewareName = null;
   }
@@ -323,18 +338,27 @@ export function markStudentAbsent(
 
   const run = (): void => {
     const now = Date.now();
-    const assignmentId = findOrCreateCoursewareAssignment(db, classId, lessonId, coursewareName as string, '{}', now);
+    const assignment = ensureCoursewareAssignment(
+      db,
+      classId,
+      lessonId,
+      coursewareName as string,
+      coursewareUuid,
+      now,
+      resolveLessonAcademicYear(db, classId, lessonId, now),
+    );
     // 幂等：重复标记只更新同一行；教师重复点击不会产生重复成绩
     db.prepare(
-      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
-       VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual')
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
+       VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual', ?)
        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
          score = excluded.score,
          feedback = excluded.feedback,
          graded_at = excluded.graded_at,
          status = 'absent',
-         source = 'manual'`,
-    ).run(assignmentId, studentId, '教师标记缺考（无分数，学期结算按 0 分计）', now, now);
+         source = 'manual',
+         academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
+    ).run(assignment.id, studentId, '教师标记缺考（无分数，学期结算按 0 分计）', now, now, assignment.academicYear);
   };
   if (typeof (db as any).transaction === 'function') (db as any).transaction(run)();
   else run();
@@ -348,33 +372,161 @@ function randomHex(bytes: number): string {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
-/** 查找或创建「互动课件: {name}」作业壳行（自动录入与缺考标记共用同一套作业定位口径） */
-function findOrCreateCoursewareAssignment(
+interface CoursewareAssignmentRef {
+  id: string;
+  academicYear: string | null;
+}
+
+/** 学生是否属于该班级：成绩只能落在学生实际所在的班级。 */
+function isEnrolledInClass(db: SqliteLike, classId: string, studentId: string): boolean {
+  try {
+    const row = db
+      .prepare('SELECT 1 AS hit FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1')
+      .get(classId, studentId) as { hit?: number } | undefined;
+    return Boolean(row?.hit);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 课件的学年口径：课堂会话 → 排课学年/排课日期 → 当前时间。
+ * 学期成绩按 academic_year 过滤，缺失学年的成绩会直接消失在报表里。
+ */
+function resolveLessonAcademicYear(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  now: number,
+): string | null {
+  try {
+    const session = db
+      .prepare(
+        `SELECT academic_year FROM classroom_sessions
+         WHERE lesson_id = ? AND class_id = ? AND academic_year IS NOT NULL
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(lessonId, classId) as { academic_year?: string | null } | undefined;
+    if (session?.academic_year) return session.academic_year;
+
+    const schedule = db
+      .prepare(
+        `SELECT academic_year, scheduled_date FROM schedules
+         WHERE lesson_id = ? AND class_id = ?
+         ORDER BY scheduled_date DESC, created_at DESC LIMIT 1`,
+      )
+      .get(lessonId, classId) as { academic_year?: string | null; scheduled_date?: string | null } | undefined;
+    if (schedule?.academic_year) return schedule.academic_year;
+    if (schedule?.scheduled_date) {
+      const derived = deriveAcademicYear(schedule.scheduled_date);
+      if (derived) return derived;
+    }
+  } catch {
+    // 老库或精简测试库可能缺表/缺列，退回当前学年
+  }
+  return deriveAcademicYear(now);
+}
+
+/**
+ * 课件对应的作业壳行：以 assignments.content 里的 coursewareUuid 作为稳定关联键。
+ * 只有历史上没有 UUID 标记的行才回退标题匹配，避免不同课件同名时互相覆盖成绩。
+ */
+function findCoursewareAssignment(
   db: SqliteLike,
   classId: string,
   lessonId: string,
   coursewareName: string,
-  content: string,
+  coursewareUuid?: string | null,
+): CoursewareAssignmentRef | null {
+  try {
+    if (coursewareUuid) {
+      const byUuid = db
+        .prepare(
+          `SELECT id, academic_year FROM assignments
+           WHERE class_id = ? AND lesson_id = ? AND instr(COALESCE(content, ''), ?) > 0
+           ORDER BY created_at ASC LIMIT 1`,
+        )
+        .get(classId, lessonId, `"coursewareUuid":"${coursewareUuid}"`) as
+        | { id: string; academic_year: string | null }
+        | undefined;
+      if (byUuid) return { id: byUuid.id, academicYear: byUuid.academic_year ?? null };
+    }
+
+    const legacy = db
+      .prepare(
+        `SELECT id, academic_year FROM assignments
+         WHERE class_id = ? AND lesson_id = ? AND title = ?
+           AND instr(COALESCE(content, ''), '"coursewareUuid"') = 0
+         ORDER BY created_at ASC LIMIT 1`,
+      )
+      .get(classId, lessonId, `互动课件: ${coursewareName}`) as
+      | { id: string; academic_year: string | null }
+      | undefined;
+    return legacy ? { id: legacy.id, academicYear: legacy.academic_year ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+
+function backfillAssignmentAcademicYear(
+  db: SqliteLike,
+  assignment: CoursewareAssignmentRef,
+  academicYear: string | null,
+): CoursewareAssignmentRef {
+  if (assignment.academicYear || !academicYear) return assignment;
+  try {
+    db.prepare('UPDATE assignments SET academic_year = ? WHERE id = ? AND academic_year IS NULL').run(
+      academicYear,
+      assignment.id,
+    );
+  } catch {
+    return assignment;
+  }
+  return { id: assignment.id, academicYear };
+}
+
+function createCoursewareAssignment(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  coursewareName: string,
+  coursewareUuid: string | null | undefined,
   createdAt: number,
-): string {
-  const title = `互动课件: ${coursewareName}`;
-  const existing = db
-    .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
-    .get(classId, lessonId, title) as { id: string } | undefined;
-  if (existing?.id) return existing.id;
+  academicYear: string | null,
+): CoursewareAssignmentRef {
   const id = 'ast-cw-' + randomHex(8);
+  const content = JSON.stringify({
+    type: 'interactive_courseware',
+    ...(coursewareUuid ? { coursewareUuid } : {}),
+  });
   db.prepare(
-    'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(
     id,
     classId,
     lessonId,
-    title,
+    `互动课件: ${coursewareName}`,
     `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
     content,
     createdAt,
+    academicYear,
   );
-  return id;
+  return { id, academicYear };
+}
+
+/** 查找或创建「互动课件: {name}」作业壳行（自动录入与缺考标记共用同一套作业定位口径） */
+function ensureCoursewareAssignment(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  coursewareName: string,
+  coursewareUuid: string | null | undefined,
+  createdAt: number,
+  academicYear: string | null,
+): CoursewareAssignmentRef {
+  const existing = findCoursewareAssignment(db, classId, lessonId, coursewareName, coursewareUuid);
+  if (existing) return backfillAssignmentAcademicYear(db, existing, academicYear);
+  return createCoursewareAssignment(db, classId, lessonId, coursewareName, coursewareUuid, createdAt, academicYear);
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +633,7 @@ export function autoRecordForLesson(
     rows = db
       .prepare(
         `SELECT a.id AS attempt_id, a.student_id, cw.id AS courseware_id, cw.name AS courseware_name,
-                r.score, r.completion
+                cw.uuid AS courseware_uuid, r.score, r.completion
          FROM courseware_attempt a
          JOIN courseware cw ON a.courseware_id = cw.id
          JOIN class_students cst ON cst.student_id = a.student_id AND cst.class_id = ?
@@ -502,7 +654,8 @@ export function autoRecordForLesson(
   // highest 策略也只应与最新 attempt 比较（旧行已按 finished_at DESC 排序，首个即最新）。
   const seenPairs = new Set<string>();
   const dedupedRows = rows.filter((row) => {
-    const key = `${row.student_id}::${row.courseware_name ?? ''}`;
+    // 用课件 ID 去重：同名课件是不同作业，不能被合并成一条
+    const key = `${row.student_id}::${row.courseware_id ?? ''}`;
     if (seenPairs.has(key)) return false;
     seenPairs.add(key);
     return true;
@@ -532,7 +685,14 @@ export function autoRecordForLesson(
 
     // 已有成绩行时按状态/来源判定：缺考行与手动行受保护（缺考行 source 也是
     // 'manual'，故先判 status）；auto 行不再硬跳过 —— latest 策略需要刷新为最新分。
-    const existingGrade = getRecordedGrade(db, classId, lessonId, coursewareName, studentId);
+    const existingGrade = getRecordedGrade(
+      db,
+      classId,
+      lessonId,
+      coursewareName,
+      row.courseware_uuid ?? null,
+      studentId,
+    );
     if (existingGrade?.status === 'absent') {
       report.skipped += 1;
       report.details.push({
@@ -578,20 +738,18 @@ export function autoRecordForLesson(
   }
 
   // 考勤联动：把本课节缺考且无成绩行的学生生成为缺考成绩行（见 generateAttendanceAbsentRows）
-  const involvedCoursewares = new Map<string, string>();
+  const involvedCoursewares = new Map<string, { id: string; name: string; uuid: string | null }>();
   for (const row of dedupedRows) {
-    if (row.courseware_id && !involvedCoursewares.has(String(row.courseware_name ?? ''))) {
-      involvedCoursewares.set(String(row.courseware_name ?? ''), String(row.courseware_id));
+    const coursewareId = String(row.courseware_id ?? '');
+    if (coursewareId && !involvedCoursewares.has(coursewareId)) {
+      involvedCoursewares.set(coursewareId, {
+        id: coursewareId,
+        name: String(row.courseware_name ?? ''),
+        uuid: row.courseware_uuid ?? null,
+      });
     }
   }
-  generateAttendanceAbsentRows(
-    db,
-    classId,
-    lessonId,
-    Array.from(involvedCoursewares, ([name, id]) => ({ id, name })),
-    studentNames,
-    report,
-  );
+  generateAttendanceAbsentRows(db, classId, lessonId, Array.from(involvedCoursewares.values()), studentNames, report);
 
   return report;
 }
@@ -607,7 +765,7 @@ function generateAttendanceAbsentRows(
   db: SqliteLike,
   classId: string,
   lessonId: string,
-  involvedCoursewares: Array<{ id: string; name: string }>,
+  involvedCoursewares: Array<{ id: string; name: string; uuid: string | null }>,
   studentNames: Map<string, string>,
   report: AutoRecordReport,
 ): void {
@@ -630,16 +788,24 @@ function generateAttendanceAbsentRows(
   if (absentStudents.length === 0) return;
 
   const now = Date.now();
+  const academicYear = resolveLessonAcademicYear(db, classId, lessonId, now);
   let generated = 0;
   for (const cw of involvedCoursewares) {
     for (const { student_id: studentId } of absentStudents) {
-      if (getRecordedGrade(db, classId, lessonId, cw.name, studentId)) continue;
+      if (getRecordedGrade(db, classId, lessonId, cw.name, cw.uuid, studentId)) continue;
       try {
-        const assignmentId = findOrCreateCoursewareAssignment(db, classId, lessonId, cw.name, '{}', now);
+        const assignment = ensureCoursewareAssignment(db, classId, lessonId, cw.name, cw.uuid, now, academicYear);
         db.prepare(
-          `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
-           VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual')`,
-        ).run(assignmentId, studentId, '由考勤缺考记录自动生成（教师改判请手动录入覆盖）', now, now);
+          `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
+           VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual', ?)`,
+        ).run(
+          assignment.id,
+          studentId,
+          '由考勤缺考记录自动生成（教师改判请手动录入覆盖）',
+          now,
+          now,
+          assignment.academicYear,
+        );
         generated += 1;
         report.details.push({
           attemptId: `absent:${cw.id}:${studentId}`,
@@ -663,17 +829,19 @@ function getRecordedGrade(
   classId: string,
   lessonId: string,
   coursewareName: string,
+  coursewareUuid: string | null,
   studentId: string,
 ): { score: number | null; status: string | null; source: string | null } | null {
+  const assignment = findCoursewareAssignment(db, classId, lessonId, coursewareName, coursewareUuid);
+  if (!assignment) return null;
   try {
     const row = db
       .prepare(
-        `SELECT s.score, s.status, s.source FROM assignment_submissions s
-         JOIN assignments a ON a.id = s.assignment_id
-         WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?
+        `SELECT score, status, source FROM assignment_submissions
+         WHERE assignment_id = ? AND student_id = ?
          LIMIT 1`,
       )
-      .get(classId, lessonId, `互动课件: ${coursewareName}`, studentId) as
+      .get(assignment.id, studentId) as
       | { score: number | null; status: string | null; source: string | null }
       | undefined;
     return row ?? null;
@@ -691,6 +859,7 @@ export const PROMOTE_REASON_TEXT: Record<NonNullable<PromoteResult['reason']>, s
   'below-min-completion': '完成度未达到规则设定的门槛',
   'rule-disabled': '自动录入规则未开启',
   'already-recorded': '已录入学期成绩，无需重复录入',
+  'student-not-in-class': '该学生不在目标班级中，不能录入成绩',
   'manual-protected': '教师已手动录入/调整过该分数，自动规则不覆盖',
   'absent-protected': '该生已被标记缺考，自动规则不覆盖（教师改判请走手动录入）',
   'not-higher': '本次分数未高于已录分数（最高分策略），保持原分',

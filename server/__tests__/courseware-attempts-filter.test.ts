@@ -88,6 +88,34 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
     insertResult.run('sr-A-2', 'att-A-2', 95, null, 1, null);
     insertResult.run('sr-B-1', 'att-B-1', 60, null, 1, null);
 
+    // isPromoted 口径：现代行以 content.coursewareUuid 关联；无标记旧行才回退标题。
+    // 这个作业标题与 A 相同、但标记指向 B —— 用来证明同名课件不会互相误标。
+    kernelContainer.db
+      .prepare(
+        `INSERT OR REPLACE INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+         VALUES (?, ?, NULL, ?, '', ?, ?, ?)`,
+      )
+      .run(
+        'ast-filter-other-uuid',
+        classId,
+        '互动课件: 课件 A',
+        JSON.stringify({ type: 'interactive_courseware', coursewareUuid: uuidB }),
+        now,
+        '2025-2026',
+      );
+    kernelContainer.db
+      .prepare(
+        `INSERT OR REPLACE INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+         VALUES (?, ?, NULL, ?, '', '{}', ?, ?)`,
+      )
+      .run('ast-filter-legacy-b', classId, '互动课件: 课件 B', now, '2025-2026');
+    const insertFilterSubmission = kernelContainer.db.prepare(
+      `INSERT OR REPLACE INTO assignment_submissions (assignment_id, student_id, content, score, submitted_at, status, academic_year)
+       VALUES (?, ?, '{}', ?, ?, 'graded', '2025-2026')`,
+    );
+    insertFilterSubmission.run('ast-filter-other-uuid', studentId, 50, now);
+    insertFilterSubmission.run('ast-filter-legacy-b', studentId, 55, now);
+
     app = express();
     app.use(express.json());
     registerCoursewareRoutes({
@@ -103,6 +131,12 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
 
   afterAll(async () => {
     // Cleanup
+    kernelContainer.db
+      .prepare('DELETE FROM assignment_submissions WHERE assignment_id IN (?, ?)')
+      .run('ast-filter-other-uuid', 'ast-filter-legacy-b');
+    kernelContainer.db
+      .prepare('DELETE FROM assignments WHERE id IN (?, ?)')
+      .run('ast-filter-other-uuid', 'ast-filter-legacy-b');
     kernelContainer.db
       .prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)')
       .run('att-A-1', 'att-A-2', 'att-B-1');
@@ -166,6 +200,21 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
     expect(rows.length).toBe(1);
     expect(rows[0].attemptId).toBe('att-B-1');
     expect(rows[0].score).toBe(60);
+  });
+
+  it('isPromoted 按课件 UUID 关联：同名课件的成绩不会误标，无标记旧行仍按标题兼容', async () => {
+    const rowsA = ((await (
+      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidA}`, { headers: cookie(teacherToken) })
+    ).json()) as any).data as Array<{ attemptId: string; isPromoted: number }>;
+    expect(rowsA.length).toBe(2);
+    // 标题同为「互动课件: 课件 A」但标记 uuidB 的作业不应计入 A
+    expect(rowsA.every((r) => r.isPromoted === 0)).toBe(true);
+
+    const rowsB = ((await (
+      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidB}`, { headers: cookie(teacherToken) })
+    ).json()) as any).data as Array<{ attemptId: string; isPromoted: number }>;
+    // 一条现代 UUID 标记 + 一条无标记旧标题行
+    expect(rowsB[0].isPromoted).toBe(2);
   });
 
   it('returns empty array for non-existent coursewareUuid (not 500)', async () => {

@@ -69,7 +69,8 @@ const LEGACY_SCHEMA = `
     title TEXT NOT NULL,
     description TEXT,
     content TEXT,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    academic_year TEXT
   );
 
   CREATE TABLE IF NOT EXISTS assignment_submissions (
@@ -81,6 +82,7 @@ const LEGACY_SCHEMA = `
     submitted_at INTEGER NOT NULL,
     graded_at INTEGER,
     status TEXT NOT NULL DEFAULT 'submitted',
+    academic_year TEXT,
     PRIMARY KEY (assignment_id, student_id)
   );
 `;

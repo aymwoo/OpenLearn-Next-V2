@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试侧加固**：`e2e/lesson-classroom-flow.spec.ts` 的 `courseHasSegment` / `courseHasElement` 把瞬时网络错误（连接被 RST、超时）吞掉并返回 `false`，让 `expect.poll` 能重试到条件成立，而不是让整条用例崩在一次抖动上。
   - **验证**：同一台机器、同一份 SQLite 库（置于仓库内、会被 watcher 命中的位置）下复现并修复 —— 修复前 `Browser workflow E2E` 作业 5 passed / 6 failed、期间共触发 **93 次** Vite 整页刷新；修复后 11 passed / 0 failed、**0 次**刷新。`tsc --noEmit` 干净。
 
+- **成绩链路补齐稳定关联、学年口径与写入边界（课件成绩不再错挂/丢失/跨班注入）**：
+  - **稳定关联**：自动录入/缺考标记/`isPromoted` 不再用「`互动课件: {课件名}` 标题 + 课节/班级」定位作业，改为匹配 `assignments.content` 中的 `{"type":"interactive_courseware","coursewareUuid":"..."}` 标记（SQLite `instr()`，避免 `json_extract` 在脏数据上抛错）。课件改名不再让历史成绩「断链」另建作业；同课节两个同名课件不再互相覆盖成绩。无标记的历史作业仅在标题匹配时兜底复用，一旦有 UUID 标记就不再按标题猜。
+  - **学年口径**：运行时自动创建的课件作业、成绩行与 `student_lesson_progress` 现在都写入 `academic_year`（取值优先课堂会话 → 排课学年 → 排课日期推导 → 当前学年），重跑时用 `COALESCE` 保留已有学年；已存在但学年为空的作业会被回填。此前这些行常年为 `NULL`，在按学年过滤的学期报表与学年对比里直接消失。`SemesterGradeService.saveSemesterGrade` 与作业中心插件对无课时作业的直接投影同样补写学年，前者并把「作业壳 + 成绩行」收进同一事务。
+  - **写入边界**：手动录入成绩前校验学生确在目标班级内（新增 `student-not-in-class` 拒绝原因），阻断教师把 A 班学生的课件成绩写入 B 班；对不存在的 attempt 提交（`POST /api/courseware/attempts/:id/submit`）返回 404，不再落下一批永远无法归到学生/课件的孤儿 `submission_raw` / `submission_result` 行。
+  - **测试**：`auto-record-score` 新增 7 例（排课学年、日期推导学年、改名复用同一作业、同名课件各自独立、非在班学生拒绝、缺考行学年、考勤联动缺考行学年）；`courseware-attempts-filter` 新增 UUID 与历史标题标记的 `isPromoted` 区分用例；`courseware-submit-actor` 新增不存在 attempt 的 404 + 零落库断言。全量 `pnpm test` 4677 例通过。
+
 - **课堂事件改为按房间定向投递：删除 `classroom-broadcast` 常驻房间，学生数据不再全平台广播**：
   - **问题**：`useClassroomSocket` 与展台窗口让**每个**客户端加入 `classroom-broadcast`，而倒计时、投票、抢答、签到、结课通票、课堂动态流等事件同时投「课节房间 + 该房间」——等于把每节课的课堂状态推给全平台学生。`student-picked`、`student-acknowledged`、`student-error-alert`、作业评分、积分到账、课件 attempt 等仍是直接 `io.emit`，任意学生都能从 socket 帧里读到他人姓名、成绩与错误堆栈；极速投票帧还携带 `correctOption`（答案）与 `latestVoter`（投票人姓名）。
   - **修复**：`presence.ts` 以 `ClassroomEventTarget { classId?, userIds?, staff? }` 统一「课节 + 班级 + 指定用户（+ 教师房间）」的并集投递（`io.to(rooms)`，Socket.IO 自动去重），并删除 `CLASSROOM_BROADCAST_ROOM` 及客户端加入逻辑。连接时按 `session.userId` 自动加入 `user-<id>` 个人房间，客户端 `join-room` 一律拒绝。投放口径按语义收敛：作业评分只投被评分学生；积分/课件 attempt 投本人 + 教师房间；课堂状态投课节 + 班级房间；学生错误只投教师房间；`assignment-*` 伪课节只投自身房间。

@@ -64,6 +64,8 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
     expect(assignment).toBeDefined();
     expect(assignment.lesson_id).toBe(testLessonId);
     expect(assignment.class_id).toBe(testClassId);
+    // 学年由排课日期 2026-06-20 推导（9 月起点），否则成绩会被学年报表过滤掉
+    expect(assignment.academic_year).toBe('2025-2026');
 
     // Verify submission is updated with score 88
     let submission = db
@@ -72,6 +74,7 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
     expect(submission).toBeDefined();
     expect(submission.score).toBe(88);
     expect(submission.status).toBe('graded');
+    expect(submission.academic_year).toBe('2025-2026');
 
     // Sync updated score 95 to verify overwrite behavior
     await service.saveSemesterGrade(testLessonId, testStudentId, 95);
