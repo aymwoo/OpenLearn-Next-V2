@@ -443,20 +443,36 @@ export class DiagnosticService {
     //    旧数据只有 correctAnswer（选项文本 / 字母 / 数字）时自动换算成索引）
     const grade = gradeQuizSubmission(dataObj, answer);
     const { isCorrect, score } = grade;
-    const correctAnswer = dataObj.correctAnswer ?? (grade.correctIndex !== null ? dataObj.options?.[grade.correctIndex] : null);
 
-    // 3. 关系型原子 upsert，唯一权威数据源（CONCUR-01）
+    // 3. 首次提交即定分（Issue #223）
+    //
+    //     此前是 upsert 覆盖：学生提交一次即可在响应里拿到 correctIndex（提交后回传
+    //     答案解析，是既有的产品设计），再用正确选项重交一次即可把分数改成满分。
+    //     改为「首次提交即定分」：已有提交时直接返回落库结果，既不覆盖分数，
+    //     也不重复派发作答事件（大屏统计不会被重复提交刷屏）。
+    const existingSubmission = this.db
+      .prepare(
+        'SELECT score, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?',
+      )
+      .get(lessonId, elementId, studentId) as { score: number; is_correct: number } | undefined;
+
+    if (existingSubmission) {
+      return {
+        success: true,
+        isCorrect: existingSubmission.is_correct === 1,
+        score: existingSubmission.score,
+        studentId,
+        // 已提交过的学生仍可查看答案解析（沿用既有设计）
+        correctIndex: grade.correctIndex,
+      };
+    }
+
     this.db
       .prepare(
         `INSERT INTO lesson_quiz_submissions
            (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
-           answer = excluded.answer,
-           score = excluded.score,
-           is_correct = excluded.is_correct,
-           time_spent_ms = excluded.time_spent_ms,
-           submitted_at = excluded.submitted_at`,
+         ON CONFLICT(lesson_id, element_id, student_id) DO NOTHING`,
       )
       .run(
         `lqs-${lessonId}-${elementId}-${studentId}`,
@@ -484,9 +500,10 @@ export class DiagnosticService {
           score,
           isCorrect,
           time: Date.now(),
-          correctAnswer: correctAnswer ?? null,
-          // Issue #107：索引是权威字段，事件里一并下发，避免下游各读各的
-          correctIndex: grade.correctIndex,
+          // 不下发答案（Issue #223）：该事件投递给**课节房间 + 班级房间**，全班学生都会收到。
+          // 带着 correctAnswer / correctIndex 广播，等于把答案实时发给每一个学生 ——
+          // 学生只要等别人答完就能拿到正确答案，在自己作答前抢先提交。
+          // 教师大屏的「正确答案」高亮来自白板元素 payload（教师端不脱敏），不依赖本事件。
           question: dataObj.question || null,
         },
         { correlationId: lessonId },

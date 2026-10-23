@@ -128,7 +128,7 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(lastEvent.payload.score).toBe(100);
     });
 
-    it('提交错误答案时判定 0 分，重复提交触发 upsert 覆盖', async () => {
+    it('提交错误答案时判定 0 分，重复提交不覆盖首次成绩', async () => {
       const res = await service.submitQuiz({
         lessonId: testLessonId,
         elementId: testElementId1,
@@ -142,6 +142,8 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(res.score).toBe(0);
 
       // 学生 2 改正重答为 'B'
+      // Issue #223：首次提交即定分 —— 已有提交时直接返回落库结果，
+      // 不覆盖分数（否则「先错后对」重交一次即可把分数刷成满分）。
       const retryRes = await service.submitQuiz({
         lessonId: testLessonId,
         elementId: testElementId1,
@@ -151,14 +153,16 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
         timeSpentMs: 12000,
       });
 
-      expect(retryRes.isCorrect).toBe(true);
-      expect(retryRes.score).toBe(100);
+      expect(retryRes.isCorrect).toBe(false);
+      expect(retryRes.score).toBe(0);
 
-      // DB 中该 (lessonId, elementId, studentId) 应只有一条记录，且为最新更新
+      // DB 中该 (lessonId, elementId, studentId) 应只有一条记录，且为首次的 0 分
       const allForStudent2 = db
         .prepare('SELECT * FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
         .all(testLessonId, testElementId1, testStudentId2);
       expect(allForStudent2).toHaveLength(1);
+      expect((allForStudent2[0] as any).score).toBe(0);
+      expect((allForStudent2[0] as any).is_correct).toBe(0);
     });
   });
 

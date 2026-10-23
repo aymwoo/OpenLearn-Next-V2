@@ -286,7 +286,7 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
   });
 
   it('DATA-INT-02: quiz-submit 不再写白板 JSON，lesson_quiz_submissions 为唯一权威', async () => {
-    // 提交一条新答案（覆盖该学生的旧答案）
+    // 再提交一次（同一学生同一题）
     const studentToken = (globalThis as any).__quizE2EStudentToken;
     const res = await fetch(`${baseUrl}/api/lessons/${lessonId}/quiz-submit`, {
       method: 'POST',
@@ -307,8 +307,11 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       )
       .get(lessonId, elementId, studentId) as any;
     expect(rel).toBeDefined();
-    expect(rel.answer).toBe('A');
-    expect(rel.is_correct).toBe(0);
+    // Issue #223：首次提交即定分 —— 再次提交不覆盖已有成绩。
+    // 提交响应会回传 correctIndex（提交后看答案解析是既有设计），若允许覆盖，
+    // 学生可以「先错后对」把分数刷成满分。
+    expect(rel.answer).toBe(correctAnswer);
+    expect(rel.is_correct).toBe(1);
   });
 
   it('DATA-INT-02: GET /quiz-counts 返回计数且不泄露答案明细', async () => {
