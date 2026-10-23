@@ -918,6 +918,9 @@ export function registerClassroomRoutes(
           // 动态流回放是教师端恢复现场用的，含其他学生姓名，学生端不返回。
           if (activePoll) activePoll = redactAnswerKeys(activePoll) as any;
           delete session.settings_json;
+          // Issue #239：签到码对学生的会话视图一并剥离 —— 此前随 SELECT * 下发，
+          // 学生读码即可远程 POST /checkin 伪造在场出勤
+          delete session.checkin_code;
           feedReplay = [];
         }
 
