@@ -463,6 +463,35 @@ async function startServer() {
         .get(lessonId) as { class_id: string } | undefined;
       return row?.class_id ?? null;
     },
+    // Issue #242: teacher socket auto-joins owned class rooms and active
+    // lesson rooms at connect, so room-targeted events (assignment.submitted,
+    // student.progress_updated, ...) reach the teacher in any view.
+    // Ownership semantics mirror class-access teacherOwnsClass: owner_user_id
+    // accepts both the user id and username legacy forms; active lessons are
+    // matched via session teacher / lesson creator / class owner.
+    lookupTeacherClassIds: (userId: string) =>
+      (
+        kernelContainer.db
+          .prepare(
+            'SELECT id FROM classes WHERE owner_user_id = ? OR owner_user_id = (SELECT username FROM users WHERE id = ?)',
+          )
+          .all(userId, userId) as { id: string }[]
+      ).map((row) => row.id),
+    lookupTeacherLessonIds: (userId: string) => {
+      const user = kernelContainer.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId) as
+        | { id: string; username: string }
+        | undefined;
+      if (!user) return [];
+      const uid = user.id;
+      const username = user.username;
+      return (
+        kernelContainer.db
+          .prepare(
+            "SELECT DISTINCT cs.lesson_id AS lesson_id FROM classroom_sessions cs LEFT JOIN lessons l ON cs.lesson_id = l.id LEFT JOIN classes c ON cs.class_id = c.id WHERE cs.stage != 'ARCHIVED_REPORT' AND (cs.teacher_id IN (?, ?) OR l.creator_id IN (?, ?) OR c.owner_user_id IN (?, ?))",
+          )
+          .all(uid, username, uid, username, uid, username) as { lesson_id: string }[]
+      ).map((row) => row.lesson_id);
+    },
   });
 
   // ── 健康检查与指标端点 (存活 / 就绪 / Prometheus) ───────────────────
