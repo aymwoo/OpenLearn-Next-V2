@@ -17,6 +17,7 @@ import {
   importCoursePackage as importCoursePackageApi,
   readCoursePackageFile,
   type CoursePackagePreview,
+  type CoursePackageDuplicate,
 } from '../services/coursePackageService.js';
 
 export function useResourceLibrary(deps: {
@@ -79,6 +80,13 @@ export function useResourceLibrary(deps: {
   // 与 CSV 批量导入并存 —— CSV 只能带标题和正文，课程包才是一节完整的课。
   const [packagePreview, setPackagePreview] = useState<CoursePackagePreview | null>(null);
   const [pendingCoursePackage, setPendingCoursePackage] = useState<any | null>(null);
+  /**
+   * 命中去重时的冲突信息（服务端 409）。
+   *
+   * 非空时导入框切到「重复导入」询问态：告知教师已存在同名课程，
+   * 并提供「仍然导入副本」的出口 —— 幂等不等于禁止，导两份确实是合理诉求。
+   */
+  const [packageDuplicate, setPackageDuplicate] = useState<CoursePackageDuplicate | null>(null);
 
   const downloadCsvTemplate = () => {
     downloadCSVTemplateService('class', lang);
@@ -154,14 +162,19 @@ export function useResourceLibrary(deps: {
     );
   };
 
-  /** 提交课程包导入。 */
-  const handlePackageImportSubmit = async () => {
+  /**
+   * 提交课程包导入。
+   *
+   * @param allowDuplicate 命中去重时仍然导入一份副本（教师确认后的显式选择）。
+   */
+  const handlePackageImportSubmit = async (allowDuplicate = false) => {
     if (!pendingCoursePackage) return;
     setImportStatus('importing');
     setImportErrorMsg('');
-    const result = await importCoursePackageApi(pendingCoursePackage);
+    const result = await importCoursePackageApi(pendingCoursePackage, { allowDuplicate });
     if (result.ok && result.result) {
       setImportStatus('success');
+      setPackageDuplicate(null);
       await fetchLessons();
       addToast(
         lang === 'zh' ? '课程包导入成功' : 'Course package imported',
@@ -172,8 +185,23 @@ export function useResourceLibrary(deps: {
       );
       return;
     }
+    // 命中去重（409）：切到「重复导入」询问态，而不是普通报错。
+    // 教师在这里能看到已存在的课程，并选择「仍然导入副本」或取消。
+    if (result.duplicate) {
+      setPackageDuplicate(result.duplicate);
+      setImportStatus('error');
+      setImportErrorMsg(result.error || '');
+      return;
+    }
     setImportStatus('error');
     setImportErrorMsg(result.error || (lang === 'zh' ? '课程包导入失败' : 'Course package import failed'));
+  };
+
+  /** 取消「重复导入」询问，回到预览态。 */
+  const handlePackageDuplicateDismiss = () => {
+    setPackageDuplicate(null);
+    setImportErrorMsg('');
+    setImportStatus('parsing');
   };
 
   const handleCSVImportSubmit = async () => {
@@ -263,6 +291,8 @@ export function useResourceLibrary(deps: {
     packagePreview,
     setPackagePreview,
     pendingCoursePackage,
+    packageDuplicate,
+    handlePackageDuplicateDismiss,
     handleImportFileChange,
     handlePackageImportSubmit,
     downloadCourseTemplate,

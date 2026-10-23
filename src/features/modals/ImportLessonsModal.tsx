@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { Upload, Download, Loader2, CheckCircle2, Check, FileJson, Package } from 'lucide-react';
-import type { CoursePackagePreview } from '../../services/coursePackageService';
+import type { CoursePackagePreview, CoursePackageDuplicate } from '../../services/coursePackageService';
 
 export interface ImportRow {
   title: string;
@@ -24,8 +24,16 @@ export interface ImportLessonsModalProps {
   downloadCourseTemplate: () => void;
   /** 已选中的课程包摘要；非空时预览区切换为课程包视图。 */
   packagePreview: CoursePackagePreview | null;
-  /** 提交课程包导入。 */
-  handlePackageImportSubmit: () => void;
+  /**
+   * 提交课程包导入。
+   *
+   * @param allowDuplicate 命中去重时仍然导入一份副本。
+   */
+  handlePackageImportSubmit: (allowDuplicate?: boolean) => void;
+  /** 命中去重时的冲突信息；非空时错误区切换为「重复导入」确认视图。 */
+  packageDuplicate?: CoursePackageDuplicate | null;
+  /** 取消「重复导入」询问，回到预览态。 */
+  handlePackageDuplicateDismiss?: () => void;
   isDraggingImport: boolean;
   previewImportData: ImportRow[];
   setPreviewImportData: Dispatch<SetStateAction<ImportRow[]>>;
@@ -50,6 +58,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
     downloadCourseTemplate,
     packagePreview,
     handlePackageImportSubmit,
+    packageDuplicate = null,
+    handlePackageDuplicateDismiss = () => {},
     isDraggingImport,
     previewImportData,
     setPreviewImportData,
@@ -436,37 +446,91 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
               {/* ERROR state -> Display alerts */}
               {importStatus === 'error' && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-start">
-                    <span className="text-rose-600 font-bold text-lg leading-none">⚠️</span>
-                    <div>
-                      <h4 className="text-xs font-bold text-rose-850">
-                        {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
-                      </h4>
-                      <p className="text-xs text-rose-900 mt-1 leading-relaxed">
-                        {importErrorMsg ||
-                          (lang === 'zh'
-                            ? '未知异常或文件破损。'
-                            : 'An unknown exception or corrupted CSV formatting occurred.')}
-                      </p>
+                  {packageDuplicate ? (
+                    /* 命中去重（409）：这不是故障，而是「你已经导过这个包了」的确认。
+                       展示已存在的课程，并给出「仍然导入副本」的出口。 */
+                    <div
+                      className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3 items-start"
+                      data-testid="course-package-duplicate-notice"
+                    >
+                      <span className="text-amber-600 font-bold text-lg leading-none">⧉</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-850">
+                          {lang === 'zh' ? '该课程包已经导入过了' : 'This course package was already imported'}
+                        </h4>
+                        <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                          {lang === 'zh' ? (
+                            <>
+                              已存在课程「{packageDuplicate.lessonTitle}」
+                              {packageDuplicate.hasDeclaredId ? '（同一个课程包 id）' : '（内容完全相同）'}，
+                              再次导入会得到两节内容相同的课程。
+                            </>
+                          ) : (
+                            <>
+                              A lesson named &quot;{packageDuplicate.lessonTitle}&quot; already exists
+                              {packageDuplicate.hasDeclaredId
+                                ? ' (same course-package id)'
+                                : ' (identical content)'}
+                              . Importing again would create two lessons with the same content.
+                            </>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-start">
+                      <span className="text-rose-600 font-bold text-lg leading-none">⚠️</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-rose-850">
+                          {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
+                        </h4>
+                        <p className="text-xs text-rose-900 mt-1 leading-relaxed">
+                          {importErrorMsg ||
+                            (lang === 'zh'
+                              ? '未知异常或文件破损。'
+                              : 'An unknown exception or corrupted CSV formatting occurred.')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => {
-                        setImportStatus('idle');
-                        setImportErrorMsg('');
-                      }}
-                      className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
-                    >
-                      {lang === 'zh' ? '返回重试' : 'Go Back & Retry'}
-                    </button>
-                    <button
-                      onClick={() => setIsImportLessonsOpen(false)}
-                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 cursor-pointer hover:bg-indigo-700 rounded-lg transition-all"
-                    >
-                      {lang === 'zh' ? '关闭窗口' : 'Close'}
-                    </button>
+                    {packageDuplicate ? (
+                      <>
+                        <button
+                          onClick={handlePackageDuplicateDismiss}
+                          data-testid="course-package-duplicate-cancel"
+                          className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '取消' : 'Cancel'}
+                        </button>
+                        <button
+                          onClick={() => handlePackageImportSubmit(true)}
+                          data-testid="course-package-duplicate-force"
+                          className="px-4 py-2 text-xs font-bold text-white bg-amber-600 cursor-pointer hover:bg-amber-700 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '仍然导入副本' : 'Import as a Copy Anyway'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            setImportStatus('idle');
+                            setImportErrorMsg('');
+                          }}
+                          className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '返回重试' : 'Go Back & Retry'}
+                        </button>
+                        <button
+                          onClick={() => setIsImportLessonsOpen(false)}
+                          className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 cursor-pointer hover:bg-indigo-700 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '关闭窗口' : 'Close'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -495,7 +559,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   </button>
                   {importStatus === 'parsing' && packagePreview && (
                     <button
-                      onClick={handlePackageImportSubmit}
+                      onClick={() => handlePackageImportSubmit(false)}
                       data-testid="import-course-package-btn"
                       className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                     >
