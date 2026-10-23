@@ -100,6 +100,25 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       expect(names).toContain('Installed Plugins');
     });
 
+    it('3.0b PORT 非法时 doctor 不崩溃，并把它报成阻断项（R-05）', async () => {
+      // 修复前：`parseInt('abc')` → NaN → `server.listen(NaN)` 抛
+      // ERR_SOCKET_BAD_PORT，诊断工具自己先崩了。
+      const prev = process.env.PORT;
+      process.env.PORT = 'abc';
+      try {
+        const res = await runDoctor({ silent: true, dbPath });
+        const portCheck = res.checks.find((c) => c.name === 'PORT 配置');
+        expect(portCheck, 'PORT 非法必须被报出来').toBeTruthy();
+        expect(portCheck!.status).toBe('err');
+        // 仍然继续探测默认端口，而不是整体失败退出
+        expect(res.checks.some((c) => c.name.startsWith('Port '))).toBe(true);
+        expect(res.ok).toBe(false);
+      } finally {
+        if (prev === undefined) delete process.env.PORT;
+        else process.env.PORT = prev;
+      }
+    });
+
     it('3.1 satisfiesVersionRange 支持完整的 SemVer 范围语法', () => {
       expect(satisfiesVersionRange('0.3.9', '>=0.2.5')).toBe(true);
       expect(satisfiesVersionRange('0.3.9', '>= 0.2.5')).toBe(true);

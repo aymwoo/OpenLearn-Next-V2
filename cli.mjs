@@ -20,6 +20,73 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
+ * 启动期环境校验的 CLI 前置检查（审计残余风险 R-05）。
+ *
+ * ## 为什么需要
+ *
+ * `assertStartupEnv()` 只在 `server.ts` 的 `startServer()` 最早期执行。CLI 子命令
+ * （`backup` / `restore` / `migrate` / `reset-admin` / `clean`）**不经过 `server.ts`**，
+ * 于是同一个拼错的环境变量在服务入口会 fail-fast，在 CLI 里却静默沿用更宽的策略 ——
+ * 而这几条命令正是要对真实数据库做破坏性操作（还原、回滚迁移、改管理员口令）。
+ *
+ * ## 为什么不是复制一份规则
+ *
+ * 校验规则只有一处真相源（`server/security/env-validation.ts`）。构建时用 esbuild 把
+ * 它单独打成 `dist/env-validation.cjs`，CLI 动态加载它。加载不到（源码检出、未构建）
+ * 时**不阻断**命令，只提示「本次未做环境校验」—— CLI 的可用性不该被构建产物绑架。
+ *
+ * @param {Record<string, string|undefined>} env 待校验环境（测试注入用）
+ * @returns {Promise<{available: boolean, errors: Array<{key: string, message: string}>, warnings: Array<{key: string, message: string}>}>}
+ */
+export async function loadEnvValidation(env = process.env) {
+  try {
+    const mod = await import('./dist/env-validation.cjs');
+    const validate = mod.validateStartupEnv || mod.default?.validateStartupEnv;
+    if (typeof validate !== 'function') return { available: false, errors: [], warnings: [] };
+    const result = validate(env) || {};
+    return {
+      available: true,
+      errors: Array.isArray(result.errors) ? result.errors : [],
+      warnings: Array.isArray(result.warnings) ? result.warnings : [],
+    };
+  } catch {
+    // 生产安装包里一定有 dist/env-validation.cjs；源码检出没有 —— 不当作错误。
+    return { available: false, errors: [], warnings: [] };
+  }
+}
+
+/** 需要读写的命令：环境非法时应当拒绝执行，而不是带着错误配置去动真实数据。 */
+const ENV_BLOCKING_COMMANDS = new Set(['backup', 'restore', 'migrate', 'reset-admin', 'clean']);
+
+/**
+ * 判定「环境校验结果」对该命令是阻断、告警还是忽略。
+ *
+ * 抽成纯函数是为了能单测：`startCli` 里再判断的话，只能靠 spawn 子进程去验。
+ *
+ * - `doctor` / `compat-report`：只读诊断，永不被环境错误挡住（诊断工具自己先挂了就没意义）；
+ * - 写命令：errors 非空 → 阻断；
+ * - 无命令（启动服务）：不预检，交给 `server.ts` 的 `assertStartupEnv()`（避免同一份规则报两次）。
+ */
+export function decideEnvPreflight(command, result) {
+  if (!result?.available) return { action: 'skip', reason: 'validation-artifact-missing' };
+  if (result.errors.length > 0 && ENV_BLOCKING_COMMANDS.has(command)) {
+    return { action: 'block', reason: 'invalid-env' };
+  }
+  if (result.errors.length > 0) return { action: 'warn', reason: 'invalid-env-diagnostic-command' };
+  if (result.warnings.length > 0) return { action: 'warn', reason: 'env-warnings' };
+  return { action: 'pass' };
+}
+
+/** 把校验结果打印成人能读的一段（与 `formatEnvIssues` 的呈现保持一致）。 */
+export function formatEnvPreflight(result) {
+  const fmt = (list) => list.map((i) => `  [${(i.severity || 'ERROR').toUpperCase()}] ${i.key}: ${i.message}`).join('\n');
+  const parts = [];
+  if (result.warnings.length > 0) parts.push(`[openlearn-next] 启动期环境变量告警:\n${fmt(result.warnings)}`);
+  if (result.errors.length > 0) parts.push(`[openlearn-next] 启动期环境变量非法:\n${fmt(result.errors)}`);
+  return parts.join('\n');
+}
+
+/**
  * 健壮的 CLI 参数解析器 (Zero External Dependencies)
  * 支持 --flag=value 展开、任意位置放置子命令与选项、参数缺失校验
  */
@@ -281,6 +348,31 @@ Environment Variables:
     process.env.OPENLEARN_DB_PATH = join(dataDir, 'data.db');
   } else if (!process.env.OPENLEARN_DATA_DIR) {
     process.env.OPENLEARN_DATA_DIR = dirname(resolve(process.env.OPENLEARN_DB_PATH));
+  }
+
+  // ── 启动期环境预检（R-05）──────────────────────────────────────────────────
+  //
+  // 放在命令分发之前、help/version 之后：写命令必须先过这一关，否则
+  // 「服务入口 fail-fast、CLI 静默放行」的口径分叉会一直存在。
+  if (command && command !== 'check-update') {
+    const envResult = await loadEnvValidation();
+    const decision = decideEnvPreflight(command, envResult);
+    if (decision.action === 'warn') {
+      const text = formatEnvPreflight(envResult);
+      if (text) console.warn(text);
+      if (decision.reason === 'invalid-env-diagnostic-command') {
+        console.warn(
+          '[openlearn-next] 以上问题会让 `openlearn-next`（启动服务）直接拒绝启动；诊断命令继续执行以便排查。',
+        );
+      }
+    } else if (decision.action === 'block') {
+      console.error(formatEnvPreflight(envResult));
+      console.error(
+        `[openlearn-next] 环境变量非法，已拒绝执行 \`${command}\`。这几条命令会改动真实数据，` +
+          '带着错误配置执行比直接停下更危险。请修正后重试；确需跳过请先修正环境变量，而不是绕过校验。',
+      );
+      process.exit(1);
+    }
   }
 
   // ── Command Dispatcher ────────────────────────────────────────────────────

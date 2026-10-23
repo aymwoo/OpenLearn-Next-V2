@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **CLI 子命令复用启动期环境校验（审计残余风险 R-05）**：
+  - **问题**：`assertStartupEnv()` 只在 `server.ts:startServer()` 最早期执行；`backup` / `restore` / `migrate` / `reset-admin` / `clean` 不经过那一层，于是同一个拼错的环境变量在服务入口 fail-fast，在 CLI 里却静默沿用更宽的策略 —— 而这几条命令正要动真实数据（还原数据库、回滚迁移、改管理员口令）。
+  - **单一真相源**：构建时用 esbuild 把 `server/security/env-validation.ts` 单独打成 `dist/env-validation.cjs`（已加入 `files`），CLI 动态加载它，不在 CLI 里复制一份规则。加载不到（源码检出）时**跳过**并继续执行，CLI 的可用性不应被构建产物绑架。
+  - **判定矩阵**：写命令 + 非法环境 → 阻断（退出码 1，并说明理由）；诊断命令（`doctor` / `compat-report` / `plugins` / `check-update`）+ 非法环境 → 告警但继续（诊断工具自己被挡住就失去意义）；启动服务（无子命令）不做预检，交给 `server.ts` 避免同一份规则报两次。
+  - **顺带修掉 doctor 自己的崩溃**：`PORT=abc` 时 `parseInt` 得 `NaN`、`NaN || x` 仍是 `NaN`，`server.listen(NaN)` 抛 `ERR_SOCKET_BAD_PORT` —— 「诊断工具」把自己搞崩了。现回落到 9000 继续探测，并把 `PORT 配置` 作为 `err` 级检查项报出（用自造的 `'fail'` 状态会让「报了问题但退出码 0」同时成立，故用既有的 `'err'`）。
+  - **测试**：`cli-env-preflight.test.ts` 9 例（判定矩阵逐组合、告警/错误的格式化、产物缺失时降级不抛异常）；`cli-enhanced.test.ts` 新增 1 例（`PORT=abc` 下 doctor 不崩溃、报 `err` 项、仍探测默认端口、`ok=false`）。
+
 - **插件出站域名授权链路补齐（审计残余风险 R-02）**：
   - **缺口比文档写的更大**：`docs/trust-boundary-hardening-audit-2026-10-14.md` 把 R-02 记为「安装/启用 UI 尚未突出展示 allowlist」，但复查发现 `approvePluginNetHosts` 在整个仓库里**没有任何调用方** —— 不只是界面不可见，而是授权链路本身不存在：第三方插件的出站白名单永远是空的（fail-closed 安全，但管理员也无从授权）。
   - **补上链路**：安装/更新（`upload-zip-raw` / `update-zip-raw` / `install-from-url`）接受 `x-approve-network-hosts`，把清单 `network.outbound` 中**通过归一化**的域名写入 `plugin_network_grants`；响应里把「清单声明」「已授权」「永远不可批准（带原因）」三类分开返回，避免把「声明了」误当成「已授权」。
