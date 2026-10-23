@@ -10,7 +10,7 @@
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { buildTemplateCoursePackage, parseCoursePackage } from '../services/course-package.js';
-import { importCoursePackage } from '../services/course-package-import.js';
+import { importCoursePackage, CoursePackageDuplicateError } from '../services/course-package-import.js';
 import type { ServerContext } from '../context.js';
 
 /** 模板下载文件名（Content-Disposition 用）。 */
@@ -41,11 +41,15 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
    * 导入一个课程包。
    *
    * 请求体既接受 `{ package: {...} }`，也接受课程包本身（顶层即 package）。
+   *
+   * `allowDuplicate: true` 表示「命中去重也照常导入一份副本」——
+   * 教师确实想导两份时（例如两个班各上一门）用这个开关绕开幂等保护。
    */
   app.post('/api/course-packages/import', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const body = req.body;
       const raw = body && typeof body === 'object' && 'package' in body ? (body as any).package : body;
+      const allowDuplicate = Boolean(body && typeof body === 'object' && (body as any).allowDuplicate === true);
 
       const parsed = parseCoursePackage(raw);
       if (!parsed.ok) {
@@ -55,10 +59,25 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || getActorId(req) || 'usr_teacher';
 
-      const result = await importCoursePackage(parsed.package, { creatorId });
+      const result = await importCoursePackage(parsed.package, { creatorId, allowDuplicate });
 
       res.json({ success: true, result });
     } catch (e: any) {
+      // 命中去重：409 + 现有课程信息，前端据此渲染「仍然导入副本」。
+      if (e instanceof CoursePackageDuplicateError) {
+        return res.status(409).json({
+          success: false,
+          code: e.code,
+          error: e.message,
+          duplicate: {
+            lessonId: e.existingLessonId,
+            lessonTitle: e.existingLessonTitle,
+            importedAt: e.existingCreatedAt,
+            packageKey: e.packageKey,
+            hasDeclaredId: e.hasDeclaredId,
+          },
+        });
+      }
       console.error('[CoursePackage] 导入失败:', e);
       sendSafeError(res, e);
     }

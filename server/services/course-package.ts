@@ -74,6 +74,14 @@ const CoursePackageSchema = z.object({
   version: z.number().int().positive(),
   meta: z
     .object({
+      /**
+       * 课程包的稳定身份（可选）。
+       *
+       * 有了它，「同一个包」就不再依赖内容哈希 —— 教师改了课程标题后重新导出，
+       * 身份不变，仍然被认作同一个包（见 `resolveCoursePackageIdentity`）。
+       * 缺省时退化为内容哈希。
+       */
+      id: z.string().min(1).optional(),
       name: z.string().min(1),
       description: z.string().default(''),
       author: z.string().default(''),
