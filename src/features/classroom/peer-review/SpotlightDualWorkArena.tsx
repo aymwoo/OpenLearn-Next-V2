@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import type { SpotlightWorkItem, TeacherPeerAnnotation, ShowcaseWorkFile } from './types';
-
+import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 export interface SpotlightDualWorkArenaProps {
   workA: SpotlightWorkItem;
   workB: SpotlightWorkItem;
@@ -96,19 +96,34 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
             ))}
             {nonImages.length > 0 && (
               <div className="h-full flex flex-col justify-center gap-1 shrink-0 pl-1">
-                {nonImages.map((file, idx) => (
-                  <a
-                    key={idx}
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] text-[11px] text-[#c0c1ff] hover:text-white transition-colors"
-                  >
-                    <File size={13} className="text-[#8083ff]" />
-                    <span className="max-w-[120px] truncate">{file.name}</span>
-                    <ExternalLink size={11} className="opacity-70" />
-                  </a>
-                ))}
+                {nonImages.map((file, idx) => {
+                  // Issue #228：附件 url 来自插件/同学提交的数据 —— 进 href 前过协议白名单
+                  const safeUrl = sanitizeHref(file.url);
+                  if (!safeUrl) {
+                    return (
+                      <span
+                        key={idx}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-[#171f33] border border-[#2d3449] text-[11px] text-[#c0c1ff]"
+                      >
+                        <File size={13} className="text-[#8083ff]" />
+                        <span className="max-w-[120px] truncate">{file.name}</span>
+                      </span>
+                    );
+                  }
+                  return (
+                    <a
+                      key={idx}
+                      href={safeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] text-[11px] text-[#c0c1ff] hover:text-white transition-colors"
+                    >
+                      <File size={13} className="text-[#8083ff]" />
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      <ExternalLink size={11} className="opacity-70" />
+                    </a>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -132,9 +147,9 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
                     </span>
                   )}
                 </div>
-                {file.url && (
+                {file.url && sanitizeHref(file.url) && (
                   <a
-                    href={file.url}
+                    href={sanitizeHref(file.url) as string}
                     target="_blank"
                     rel="noreferrer"
                     download={file.name}

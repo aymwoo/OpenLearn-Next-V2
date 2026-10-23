@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -686,9 +687,9 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                       {plugin.license && <span className="font-mono">{plugin.license}</span>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {plugin.repository && (
+                      {sanitizeHref(plugin.repository) && (
                         <a
-                          href={plugin.repository}
+                          href={sanitizeHref(plugin.repository) as string}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={zh ? '查看源码仓库' : 'View source repository'}
@@ -698,9 +699,9 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                           <span>{zh ? '源码' : 'Code'}</span>
                         </a>
                       )}
-                      {plugin.homepage && (
+                      {sanitizeHref(plugin.homepage) && (
                         <a
-                          href={plugin.homepage}
+                          href={sanitizeHref(plugin.homepage) as string}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={zh ? '打开主页' : 'Open homepage'}

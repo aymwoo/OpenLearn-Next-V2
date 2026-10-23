@@ -23,7 +23,7 @@ import { PluginDevPanel } from './plugin-center/sub-views/PluginDevPanel';
 import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
 import { PluginDataPanel } from './plugin-center/sub-views/PluginDataPanel';
 import { PluginUninstallDialog } from './PluginUninstallDialog';
-
+import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 export type { PluginType, PluginCenterProps } from './plugin-center/types';
 
 export function PluginCenter({
@@ -483,9 +483,9 @@ export function PluginCenter({
                   v{changelogModalPlugin.marketItem?.latestVersion || '1.2.0'}
                 </span>
               </div>
-              {changelogModalPlugin.marketItem?.repository && (
+              {sanitizeHref(changelogModalPlugin.marketItem?.repository) && (
                 <a
-                  href={changelogModalPlugin.marketItem.repository}
+                  href={sanitizeHref(changelogModalPlugin.marketItem?.repository) as string}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-xs font-mono text-indigo-600 hover:text-indigo-800 font-medium"

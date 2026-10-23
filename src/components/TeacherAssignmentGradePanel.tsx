@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 import { getOptionalSocket } from '../services/socket-service';
 import {
   FileText,
@@ -377,17 +378,24 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                       </span>
                     )}
 
-                    <a
-                      href={sub.filePath}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-indigo-600 hover:text-indigo-850 font-medium hover:underline flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-4xs"
-                      title={sub.filePath}
-                    >
-                      <FileText size={11} />
-                      {zh ? '查看作业' : 'View File'}
-                      <ExternalLink size={8} />
-                    </a>
+                    {/* Issue #228：filePath 由学生填写 —— 渲染进 href 前过协议白名单 */}
+                    {(() => {
+                      const safePath = sanitizeHref(sub.filePath);
+                      if (!safePath) return null;
+                      return (
+                        <a
+                          href={safePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-indigo-600 hover:text-indigo-850 font-medium hover:underline flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-4xs"
+                          title={sub.filePath}
+                        >
+                          <FileText size={11} />
+                          {zh ? '查看作业' : 'View File'}
+                          <ExternalLink size={8} />
+                        </a>
+                      );
+                    })()}
                   </div>
                 </div>
 

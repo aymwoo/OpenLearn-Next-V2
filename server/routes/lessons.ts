@@ -5,6 +5,7 @@ import { getCookieToken, getValidSession, getActorId, requireAuth } from '../mid
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
+import { isSafeHref } from '../../packages/core/security/url-safety.js';
 import { classRoom, pseudoRoomStudentId } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
@@ -272,6 +273,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
       if (filePath && typeof filePath !== 'string') {
         return res.status(400).json({ success: false, error: 'filePath must be a string' });
+      }
+      // Issue #228：写入侧也过协议白名单 —— filePath / linkUrl 会被渲染进 href，
+      // `javascript:` / `data:` 之类不该进库（读取侧还会再过一次）。
+      if (filePath && !isSafeHref(filePath)) {
+        return res.status(400).json({ success: false, error: 'filePath contains an unsupported URL scheme' });
       }
       const now = Date.now();
       const existing = kernelContainer.db
