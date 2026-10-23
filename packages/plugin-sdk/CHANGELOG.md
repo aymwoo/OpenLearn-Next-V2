@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features & Types
 
+- **成绩写入结果与审计选项 (`SemesterGradeWriteOptions`, `GradeWriteSummary`)**:
+  - `ISemesterGradeService.saveSemesterGrade` 新增可选第 4 参 `SemesterGradeWriteOptions`：`actorId` / `actorRole`（写入成绩审计历史）、`source`（`manual | plugin | ai | system`，默认 `plugin`）、`overrideProtected`（仅教师显式改判时越过手动分/缺考保护）。
+  - 返回值由 `Promise<void>` 扩展为 `Promise<GradeWriteSummary | void>`：被手动分/缺考保护拒绝时返回 `{ ok: false, reason }`，插件据此提示教师而不是当作成功；旧调用方可继续忽略返回值。
+  - 宿主统一成绩写入入口在保护生效时**不会**静默覆盖，且每次分数/状态/来源真正变化都会写 `assignment_grade_history`。
+
 - **教学环节条件类型 (`SegmentGateTypeContribution`)**:
   - 导出 `SegmentGateTypeContribution`，供插件在 `contributes['segment.gate_type']` 声明 `id`、`labelZh`、`labelEn`、`commandType` 与可选 `paramsSchema`；
   - 宿主用该命令做只读判定（`capabilityRequired: 'segment:gate_eval'`）。不要把判定函数注册进宿主。

@@ -122,6 +122,24 @@ describe('AssignmentService 领域服务单元测试 (E3 深化)', () => {
       expect(submissions[0].content).toBe('我的作答内容');
     });
 
+    it('学生重交已评分作业不会把 graded 降级为 submitted', () => {
+      const astId = service.createTraditionalAssignment(testClassId, null, '重交保护', '', '');
+      service.submitTraditionalAssignment(astId, testStudentId, '第一版');
+      db.prepare(
+        `UPDATE assignment_submissions
+         SET score = 88, status = 'graded', source = 'manual', graded_by = 'user:t:teacher'
+         WHERE assignment_id = ? AND student_id = ?`,
+      ).run(astId, testStudentId);
+
+      service.submitTraditionalAssignment(astId, testStudentId, '第二版');
+      const row = db
+        .prepare('SELECT status, score, content FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .get(astId, testStudentId) as any;
+      expect(row.status).toBe('graded');
+      expect(row.score).toBe(88);
+      expect(row.content).toBe('第二版');
+    });
+
     it('AI 出题建议与智能批改', async () => {
       const generated = await service.generateQuizWithAi(testClassId, 'Python 变量');
       expect(generated.id).toBeTruthy();

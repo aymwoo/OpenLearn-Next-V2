@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import type { SqliteLike } from '../../packages/plugins/courseware-score.js';
 import { resolveScoreConfig, type CoursewareScoreConfig } from '../../packages/plugins/courseware-score.js';
 import { deriveAcademicYear } from './academic-year.js';
+import { applyGradeChange } from '../../packages/core/db/assignment-grade-writer.js';
 
 /** 视为「已完成」的 attempt 终态。
  *  注意与前端 LiveClassroomView 的 FINISHED_STATUSES 保持一致 —— 曾因前端漏掉
@@ -40,7 +41,8 @@ export interface PromoteResult {
     | 'student-not-in-class'
     | 'manual-protected'
     | 'absent-protected'
-    | 'not-higher';
+    | 'not-higher'
+    | 'invalid-grade';
   score?: number;
   assignmentId?: string;
   studentId?: string;
@@ -101,6 +103,9 @@ export interface PromoteOptions {
   sourceLabel?: string;
   /** 强制忽略完成度门槛（手动录入时教师已自行判断） */
   ignoreMinCompletion?: boolean;
+  /** 操作者（`user:<id>:<role>` 或 system），写入成绩历史 */
+  actorId?: string | null;
+  actorRole?: string | null;
   /**
    * 成绩来源（migration 013 的 assignment_submissions.source 列）：
    * - 'manual'（默认）：教师录入/改判，落库后受自动规则保护（auto 路径遇 manual 行跳过）；
@@ -193,8 +198,9 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
         // 教师标记的缺考行受保护（自动规则不覆盖；教师改判走手动路径显式覆盖）。
         // 注意缺考行（含考勤联动生成）的 source 也是 'manual'，必须先于 source 判定。
         if (existing.status === 'absent') return { skipReason: 'absent-protected' };
-        // 教师手动录入/改判的分数受保护，自动规则绝不覆盖（否则手改分会被课件分冲掉）
-        if (existing.source === 'manual') return { skipReason: 'manual-protected' };
+        // 只有自动录入自己的行可以刷新（latest/highest）；manual/plugin/ai/历史 NULL
+        // 一律视为「人工确认过」，自动规则绝不覆盖。
+        if (existing.source !== 'auto') return { skipReason: 'manual-protected' };
         // highest 策略：仅新分更高才覆盖（无已录分数视为可覆盖）
         if (
           strategy === 'highest' &&
@@ -219,30 +225,31 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
           academicYear,
         );
 
-    // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）
-    db.prepare(
-      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?, ?)
-       ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-         content = excluded.content,
-         score = excluded.score,
-         feedback = excluded.feedback,
-         submitted_at = excluded.submitted_at,
-         graded_at = excluded.graded_at,
-         status = 'graded',
-         source = excluded.source,
-         academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
-    ).run(
-      assignment.id,
-      attempt.student_id,
-      attempt.extra_json || '{}',
-      finalScore,
-      `由${sourceLabel}。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '—'}`,
-      now,
-      now,
+    // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）；
+    // 统一走成绩写入器，手动分/缺考保护与历史审计在事务内完成。
+    const write = applyGradeChange(db, {
+      assignmentId: assignment.id,
+      studentId: attempt.student_id,
+      content: attempt.extra_json || '{}',
+      score: finalScore,
+      feedback: `由${sourceLabel}。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '—'}`,
+      submittedAt: now,
+      gradedAt: now,
+      status: 'graded',
       source,
-      assignment.academicYear,
-    );
+      actorId: options.actorId ?? (source === 'auto' ? 'system' : null),
+      actorRole: options.actorRole,
+      reason: source === 'auto' ? 'auto-record' : 'courseware-promote',
+      academicYear: assignment.academicYear,
+      createIfMissing: true,
+      // 教师手动录入是人工判断，可显式覆盖缺考/自动分；自动路径永远不越过保护。
+      overrideProtected: source === 'manual',
+    });
+    if (!write.ok) {
+      const reason =
+        write.reason === 'manual-protected' || write.reason === 'absent-protected' ? write.reason : 'invalid-grade';
+      return { skipReason: reason };
+    }
 
     db.prepare(
       `INSERT INTO student_lesson_progress
@@ -300,7 +307,14 @@ export interface MarkAbsentResult {
  */
 export function markStudentAbsent(
   db: SqliteLike,
-  options: { lessonId: string; classId: string; studentId: string; coursewareId: string },
+  options: {
+    lessonId: string;
+    classId: string;
+    studentId: string;
+    coursewareId: string;
+    actorId?: string | null;
+    actorRole?: string | null;
+  },
 ): MarkAbsentResult {
   const { lessonId, classId, studentId, coursewareId } = options;
   if (!lessonId || !classId || !studentId || !coursewareId) {
@@ -347,18 +361,25 @@ export function markStudentAbsent(
       now,
       resolveLessonAcademicYear(db, classId, lessonId, now),
     );
-    // 幂等：重复标记只更新同一行；教师重复点击不会产生重复成绩
-    db.prepare(
-      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
-       VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual', ?)
-       ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-         score = excluded.score,
-         feedback = excluded.feedback,
-         graded_at = excluded.graded_at,
-         status = 'absent',
-         source = 'manual',
-         academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)`,
-    ).run(assignment.id, studentId, '教师标记缺考（无分数，学期结算按 0 分计）', now, now, assignment.academicYear);
+    // 幂等：重复标记只更新同一行；教师重复点击不会产生重复成绩。
+    // 缺考行 source='manual' 受自动规则保护，教师后续改判走手动录入显式覆盖。
+    applyGradeChange(db, {
+      assignmentId: assignment.id,
+      studentId,
+      content: '{}',
+      score: null,
+      feedback: '教师标记缺考（无分数，学期结算按 0 分计）',
+      submittedAt: now,
+      gradedAt: now,
+      status: 'absent',
+      source: 'manual',
+      actorId: options.actorId ?? null,
+      actorRole: options.actorRole,
+      reason: 'mark-absent',
+      academicYear: assignment.academicYear,
+      createIfMissing: true,
+      overrideProtected: true,
+    });
   };
   if (typeof (db as any).transaction === 'function') (db as any).transaction(run)();
   else run();
@@ -795,17 +816,24 @@ function generateAttendanceAbsentRows(
       if (getRecordedGrade(db, classId, lessonId, cw.name, cw.uuid, studentId)) continue;
       try {
         const assignment = ensureCoursewareAssignment(db, classId, lessonId, cw.name, cw.uuid, now, academicYear);
-        db.prepare(
-          `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source, academic_year)
-           VALUES (?, ?, '{}', NULL, ?, ?, ?, 'absent', 'manual', ?)`,
-        ).run(
-          assignment.id,
+        const write = applyGradeChange(db, {
+          assignmentId: assignment.id,
           studentId,
-          '由考勤缺考记录自动生成（教师改判请手动录入覆盖）',
-          now,
-          now,
-          assignment.academicYear,
-        );
+          content: '{}',
+          score: null,
+          feedback: '由考勤缺考记录自动生成（教师改判请手动录入覆盖）',
+          submittedAt: now,
+          gradedAt: now,
+          status: 'absent',
+          source: 'manual',
+          actorId: 'system',
+          actorRole: 'system',
+          reason: 'attendance-absent',
+          academicYear: assignment.academicYear,
+          createIfMissing: true,
+          overrideProtected: true,
+        });
+        if (!write.ok) continue;
         generated += 1;
         report.details.push({
           attemptId: `absent:${cw.id}:${studentId}`,
@@ -863,6 +891,7 @@ export const PROMOTE_REASON_TEXT: Record<NonNullable<PromoteResult['reason']>, s
   'manual-protected': '教师已手动录入/调整过该分数，自动规则不覆盖',
   'absent-protected': '该生已被标记缺考，自动规则不覆盖（教师改判请走手动录入）',
   'not-higher': '本次分数未高于已录分数（最高分策略），保持原分',
+  'invalid-grade': '分数无效（需为 0~100 的数值），未写入成绩',
 };
 
 export function describePromoteReason(reason: PromoteResult['reason'] | undefined): string {

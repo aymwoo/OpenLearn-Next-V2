@@ -7,6 +7,7 @@ import {
   IEventBusServiceToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
 
 interface AiPlannerPayload {
   taskType: string;
@@ -193,6 +194,10 @@ export const AiPlannerPlugin = {
           studentId: { type: 'STRING' },
           score: { type: 'NUMBER' },
           feedback: { type: 'STRING' },
+          overrideManual: {
+            type: 'BOOLEAN',
+            description: '是否允许覆盖教师手动分（仅教师/管理员显式确认时生效）',
+          },
         },
         required: ['assignmentId', 'studentId', 'score', 'feedback'],
       },
@@ -201,13 +206,34 @@ export const AiPlannerPlugin = {
     await commandBus.registerHandler('ai.apply_grade', {
       async execute(command) {
         const payload = command.payload as any;
-        db.prepare(
-          `
-          UPDATE assignment_submissions 
-          SET score = ?, feedback = ?, graded_at = ?, status = 'graded'
-          WHERE assignment_id = ? AND student_id = ?
-        `,
-        ).run(payload.score, payload.feedback, Date.now(), payload.assignmentId, payload.studentId);
+        const actorId = command.actorId || 'system';
+        // AI 默认只覆盖自动/AI 生成的成绩；只有教师/管理员显式要求改判时才越过手动分。
+        const result = applyGradeChange(db, {
+          assignmentId: payload.assignmentId,
+          studentId: payload.studentId,
+          score: payload.score,
+          feedback: payload.feedback || '',
+          status: 'graded',
+          source: 'ai',
+          actorId,
+          reason: 'ai-apply-grade',
+          createIfMissing: false,
+          overrideProtected: payload.overrideManual === true && isPrivilegedGradeActor(actorId),
+        });
+
+        if (!result.ok) {
+          const message =
+            result.reason === 'manual-protected'
+              ? '教师已手动录入该生成绩，AI 批改未覆盖（如需改判请由教师显式确认）'
+              : result.reason === 'absent-protected'
+                ? '该生已被标记缺考，AI 批改未覆盖'
+                : result.reason === 'submission-not-found'
+                  ? '学生尚未提交该作业，无法应用成绩'
+                  : 'AI 成绩无效或目标不存在';
+          const err: any = new Error(message);
+          err.reason = result.reason;
+          throw err;
+        }
 
         await eventBus.publish({
           id: uuidv7(),
@@ -216,14 +242,19 @@ export const AiPlannerPlugin = {
           payload: {
             assignmentId: payload.assignmentId,
             studentId: payload.studentId,
-            score: payload.score,
+            score: result.newScore,
             feedback: payload.feedback || '',
           },
           timestamp: Date.now(),
           correlationId: command.id,
         });
 
-        return { success: true, details: `Applied grade ${payload.score} successfully.` };
+        return {
+          success: true,
+          details: `Applied grade ${result.newScore} successfully.`,
+          changed: result.changed,
+          historyId: result.historyId,
+        };
       },
     });
   },

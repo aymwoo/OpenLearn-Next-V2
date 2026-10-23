@@ -1,4 +1,5 @@
-import { ISemesterGradeService } from './interfaces.js';
+import { ISemesterGradeService, SemesterGradeWriteOptions } from './interfaces.js';
+import { applyGradeChange, type GradeWriteResult } from '../db/assignment-grade-writer.js';
 import type { Database } from 'better-sqlite3';
 
 /** 排课日期/学年缺失时按 9 月学年起点回退到当前学年，避免成绩在学年报表里不可见 */
@@ -32,7 +33,12 @@ export class SemesterGradeService implements ISemesterGradeService {
     this.db = db;
   }
 
-  async saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void> {
+  async saveSemesterGrade(
+    lessonId: string,
+    studentId: string,
+    grade: number,
+    options: SemesterGradeWriteOptions = {},
+  ): Promise<GradeWriteResult | void> {
     if (!lessonId || !studentId) {
       throw new Error('lessonId and studentId are required');
     }
@@ -78,6 +84,7 @@ export class SemesterGradeService implements ISemesterGradeService {
 
     // 代表作业与成绩行必须同事务落库：避免只写了作业壳、成绩行失败后
     // 学期报表出现「有作业无成绩」的半成品。
+    let writeResult: GradeWriteResult | undefined;
     const write = this.db.transaction(() => {
       // 2. Ensure representative assignment exists in host assignments table
       this.db
@@ -100,34 +107,26 @@ export class SemesterGradeService implements ISemesterGradeService {
           academicYear,
         );
 
-      // 3. Write or update assignment_submissions score
-      this.db
-        .prepare(
-          `
-        INSERT INTO assignment_submissions (
-          assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, academic_year
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-          score = excluded.score,
-          feedback = excluded.feedback,
-          graded_at = excluded.graded_at,
-          status = excluded.status,
-          academic_year = COALESCE(excluded.academic_year, assignment_submissions.academic_year)
-      `,
-        )
-        .run(
-          assignmentId,
-          studentId,
-          '[微应用插件同步平时成绩]',
-          grade,
-          '平时作业互评与评分系统确认成绩',
-          now,
-          now,
-          'graded',
-          academicYear,
-        );
+      // 3. 统一走成绩写入器：手动分/缺考保护 + 历史审计
+      writeResult = applyGradeChange(this.db, {
+        assignmentId,
+        studentId,
+        content: '[微应用插件同步平时成绩]',
+        score: grade,
+        feedback: '平时作业互评与评分系统确认成绩',
+        submittedAt: now,
+        gradedAt: now,
+        status: 'graded',
+        source: options.source ?? 'plugin',
+        actorId: options.actorId ?? null,
+        actorRole: options.actorRole ?? null,
+        reason: 'semester-grade-sync',
+        academicYear,
+        createIfMissing: true,
+        overrideProtected: options.overrideProtected === true,
+      });
     });
     write();
+    return writeResult;
   }
 }

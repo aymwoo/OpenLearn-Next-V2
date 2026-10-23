@@ -194,7 +194,13 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       if (studentId && isTeacher(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
         return res.status(403).json({ success: false, error: 'Forbidden: student does not belong to your class' });
       }
-      const result = coursewareService.markAbsent({ lessonId, classId, studentId, coursewareId });
+      const result = coursewareService.markAbsent({
+        lessonId,
+        classId,
+        studentId,
+        coursewareId,
+        actorId: getActorId(req),
+      });
       res.json({ success: true, studentId: result.studentId, coursewareName: result.coursewareName });
     } catch (e: any) {
       if (e.status) {
@@ -214,7 +220,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
       const decision = authorizeClass(kernelContainer.db, session, classId, 'staff');
       if (rejectUnless(res, decision)) return;
-      const result = await coursewareService.promoteAttempt(attemptId, lessonId, classId);
+      const result = await coursewareService.promoteAttempt(attemptId, lessonId, classId, {
+        actorId: getActorId(req),
+      });
       res.json({ success: true, assignmentId: result.assignmentId, score: result.score });
     } catch (e: any) {
       if (e.status) {

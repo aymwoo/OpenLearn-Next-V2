@@ -33,6 +33,7 @@ import type { PlatformCommand, CommandHandler, CommandMetadata } from '../comman
 import type { PlatformEvent, EventSubscriber } from '../event-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { ProcessHandler } from '../process-manager/index.js';
+import type { GradeWriteResult } from '../db/assignment-grade-writer.js';
 
 export type { CommandHandler, CommandMetadata } from '../command-bus/index.js';
 export type { EventSubscriber } from '../event-bus/index.js';
@@ -465,13 +466,34 @@ export const IAuthSessionBridgeToken = new Token<IAuthSessionBridgeService>(
  * Interface for SemesterGradeService.
  * Handles syncing final calculated regular scores into the host's semester grades system.
  */
+export interface SemesterGradeWriteOptions {
+  /** 操作者（`user:<id>:<role>` 或 system），写入成绩历史 */
+  actorId?: string | null;
+  actorRole?: string | null;
+  /** 成绩来源，默认 'plugin'（插件确认的平时成绩） */
+  source?: 'manual' | 'plugin' | 'ai' | 'system';
+  /**
+   * 是否允许覆盖教师手动分/缺考标记。
+   * 默认 false：插件同步不得静默冲掉教师在学期成绩页的改判。
+   */
+  overrideProtected?: boolean;
+}
+
 export interface ISemesterGradeService {
   /**
    * Sync calculated regular score to host database structures.
    * Internal implementation handles mapping lessonId -> classId, ensuring the
    * representative assignment exists, and inserting/updating assignment_submissions.
+   *
+   * 返回值描述本次写入结果（被手动分/缺考保护拒绝时 ok=false），调用方据此决定
+   * 是否提示教师；为兼容旧调用方，返回值可忽略。
    */
-  saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
+  saveSemesterGrade(
+    lessonId: string,
+    studentId: string,
+    grade: number,
+    options?: SemesterGradeWriteOptions,
+  ): Promise<GradeWriteResult | void>;
 }
 
 /**

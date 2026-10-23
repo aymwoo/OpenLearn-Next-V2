@@ -525,8 +525,38 @@ interface PointLogItem {
   createdAt: number;
 }
 
+interface SemesterGradeWriteOptions {
+  /** 操作者（`user:<id>:<role>` 或 system），写入成绩审计历史 */
+  actorId?: string | null;
+  actorRole?: string | null;
+  /** 成绩来源，默认 'plugin'（插件确认的平时成绩） */
+  source?: 'manual' | 'plugin' | 'ai' | 'system';
+  /** 是否允许覆盖教师手动分/缺考标记，默认 false */
+  overrideProtected?: boolean;
+}
+
+interface GradeWriteSummary {
+  ok: boolean;
+  reason?: string;
+  assignmentId: string;
+  studentId: string;
+  historyId?: string;
+  changed?: boolean;
+  oldScore?: number | null;
+  newScore?: number | null;
+}
+
 interface ISemesterGradeService {
-  saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
+  /**
+   * 同步平时成绩到宿主学期成绩。
+   * 返回写入结果：被手动分/缺考保护拒绝时 ok=false，调用方据此提示教师。
+   */
+  saveSemesterGrade(
+    lessonId: string,
+    studentId: string,
+    grade: number,
+    options?: SemesterGradeWriteOptions,
+  ): Promise<GradeWriteSummary | void>;
 }
 
 interface IPointsDimensionRegistry {
@@ -1295,6 +1325,8 @@ export type {
   PointsDimensionSpec,
   PointLogItem,
   ISemesterGradeService,
+  SemesterGradeWriteOptions,
+  GradeWriteSummary,
   IPointsDimensionRegistry,
   IPointsLedgerService,
   ILessonEngineService,

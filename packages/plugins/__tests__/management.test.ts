@@ -79,7 +79,8 @@ describe('ManagementPlugin', () => {
         title TEXT NOT NULL,
         description TEXT,
         content TEXT,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        academic_year TEXT
       );
 
       CREATE TABLE IF NOT EXISTS assignment_submissions (
@@ -91,7 +92,26 @@ describe('ManagementPlugin', () => {
         submitted_at INTEGER NOT NULL,
         graded_at INTEGER,
         status TEXT NOT NULL DEFAULT 'submitted',
+        source TEXT,
+        academic_year TEXT,
+        graded_by TEXT,
         PRIMARY KEY (assignment_id, student_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS assignment_grade_history (
+        id TEXT PRIMARY KEY,
+        assignment_id TEXT NOT NULL,
+        student_id TEXT NOT NULL,
+        old_score REAL,
+        new_score REAL,
+        old_status TEXT,
+        new_status TEXT,
+        old_source TEXT,
+        new_source TEXT,
+        actor_id TEXT,
+        actor_role TEXT,
+        reason TEXT,
+        created_at INTEGER NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS schedules (
@@ -259,5 +279,93 @@ describe('ManagementPlugin', () => {
     expect(getStudentsRes.students.length).toBe(1);
     expect(getStudentsRes.students[0].id).toBe(studentId);
     expect(getStudentsRes.students[0].name).toBe('Alice');
+  });
+
+  it('assignment.grade 写入手动分与审计；学生重交不把 graded 降级', async () => {
+    const pluginId = '@openlearn/plugin-management';
+    pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Management', JSON.stringify(ManagementPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    await pluginHost.activatePlugin(pluginId);
+
+    const assignmentId = 'ast-management-audit';
+    const studentId = 'stu-management-audit';
+    db.prepare(
+      `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(assignmentId, 'cls-mgmt', null, '管理插件作业', '', '', Date.now(), '2025-2026');
+
+    const submit = () =>
+      commandBus.execute({
+        id: `cmd-submit-${Math.random()}`,
+        type: 'assignment.submit',
+        actorId: `user:${studentId}:student`,
+        timestamp: Date.now(),
+        payload: { assignmentId, studentId, content: '学生作答' },
+      });
+
+    await submit();
+    let row = db
+      .prepare('SELECT status, score, source FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, studentId) as any;
+    expect(row.status).toBe('submitted');
+
+    const graded = (await commandBus.execute({
+      id: 'cmd-grade-management-audit',
+      type: 'assignment.grade',
+      actorId: 'user:teacher-mgmt:teacher',
+      timestamp: Date.now(),
+      payload: { assignmentId, studentId, score: 88, feedback: '完成度好' },
+    })) as any;
+    expect(graded.success).toBe(true);
+    expect(graded.score).toBe(88);
+
+    row = db
+      .prepare(
+        'SELECT status, score, source, graded_by FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
+      )
+      .get(assignmentId, studentId) as any;
+    expect(row.status).toBe('graded');
+    expect(row.score).toBe(88);
+    expect(row.source).toBe('manual');
+    expect(row.graded_by).toBe('user:teacher-mgmt:teacher');
+
+    const history = db
+      .prepare(
+        'SELECT old_score, new_score, actor_id, reason FROM assignment_grade_history WHERE assignment_id = ? AND student_id = ?',
+      )
+      .all(assignmentId, studentId) as any[];
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      old_score: null,
+      new_score: 88,
+      actor_id: 'user:teacher-mgmt:teacher',
+      reason: 'management-grade',
+    });
+
+    // 学生重交：保留已评状态与分数，只更新作答内容
+    db.prepare('UPDATE assignment_submissions SET content = ? WHERE assignment_id = ? AND student_id = ?').run(
+      '旧内容',
+      assignmentId,
+      studentId,
+    );
+    await submit();
+    row = db
+      .prepare('SELECT status, score, content FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(assignmentId, studentId) as any;
+    expect(row.status).toBe('graded');
+    expect(row.score).toBe(88);
+    expect(row.content).toBe('学生作答');
+
+    await expect(
+      commandBus.execute({
+        id: 'cmd-grade-invalid',
+        type: 'assignment.grade',
+        actorId: 'user:teacher-mgmt:teacher',
+        timestamp: Date.now(),
+        payload: { assignmentId, studentId, score: 120, feedback: '越界' },
+      }),
+    ).rejects.toThrow(/0~100/);
   });
 });

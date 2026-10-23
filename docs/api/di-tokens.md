@@ -351,8 +351,15 @@ AI 能力注册表（与 `resource:action` 权限字符串无关，见 [能力�
 ### `ISemesterGradeServiceToken` → `ISemesterGradeService`（`packages/core/di/interfaces.ts`）
 
 ```typescript
-saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
+saveSemesterGrade(
+  lessonId: string,
+  studentId: string,
+  grade: number,
+  options?: SemesterGradeWriteOptions,
+): Promise<GradeWriteResult | void>;
 ```
+
+`SemesterGradeWriteOptions`：`actorId` / `actorRole`（写入审计历史）、`source`（默认 `plugin`）、`overrideProtected`（教师显式改判时越过手动分/缺考保护）。返回值在保护生效时带 `ok: false` 与 `reason`。
 
 ### `IPointsDimensionRegistryToken` → `IPointsDimensionRegistry`（`packages/core/di/interfaces.ts`）
 
