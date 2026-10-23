@@ -1,0 +1,5 @@
+{
+  "eslintMaxWarnings": 6186,
+  "note": "Issue #231：ESLint 告警预算棘轮。超过基线即 CI 失败（不许欠新债）；清理告警后运行 `node scripts/check-lint-budget.mjs --update` 收紧。",
+  "updatedAt": "2026-10-24"
+}
