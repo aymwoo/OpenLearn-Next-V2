@@ -66,7 +66,9 @@ describe('PluginInstallWizard outbound hosts (R-02)', () => {
   });
 
   it('passes approveNetworkHosts through to the install options when checked', async () => {
-    const onConfirmInstall = vi.fn(async () => undefined);
+    const onConfirmInstall = vi.fn(
+      async (_file: File, _mode: string, _opts?: { approveNetworkHosts?: boolean }) => undefined,
+    );
     const file = await zipFile({
       id: 'ext-outbound-2',
       name: '出站示例2',
