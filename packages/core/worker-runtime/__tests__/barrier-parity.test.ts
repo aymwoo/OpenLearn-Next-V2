@@ -105,7 +105,9 @@ describe('B-3：Barrier 2 两端语义一致', () => {
 
     // 后端：运行时能力 = 声明 ∩ 已授予（管理员审批）
     expect(backend).toContain('effectiveCapabilities');
-    expect(backend).toContain('declared.filter(cap => guard.check');
+    // 用正则而非字面量：全仓 prettier（`arrowParens: "always"`）会把
+    // `cap =>` 改写成 `(cap) =>`，字面量断言会被纯格式化改动打断。
+    expect(backend).toMatch(/declared\.filter\(\(?cap\)?\s*=>\s*guard\.check/);
     // 前端：浏览器侧无 CapabilityGuard，仍是清单声明值
     expect(frontend).toContain('manifestCapabilities');
   });
