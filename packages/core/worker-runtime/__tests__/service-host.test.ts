@@ -896,7 +896,8 @@ describe('ServiceHost ActionRegistry tracking', () => {
       const registry = createMockServiceRegistry({
         '@openlearn/core:IPointsLedgerService': svc,
       });
-      const capGuard = { assertAllowed: vi.fn() };
+      // Issue #224：运行时能力以「已授予」为准 —— check() 决定某项能力是否被授予。
+      const capGuard = { assertAllowed: vi.fn(), check: vi.fn(() => true) };
       const host = new ServiceHost(
         registry as any,
         capGuard as any,
@@ -950,7 +951,8 @@ describe('ServiceHost ActionRegistry tracking', () => {
       const registry = createMockServiceRegistry({
         '@openlearn/core:IPointsLedgerService': { addPoints: vi.fn() },
       });
-      const capGuard = { assertAllowed: vi.fn() };
+      // Issue #224：运行时能力以「已授予」为准 —— check() 决定某项能力是否被授予。
+      const capGuard = { assertAllowed: vi.fn(), check: vi.fn(() => true) };
       // 仅授予 IDatabase，未授予积分服务
       const host = new ServiceHost(
         registry as any,
