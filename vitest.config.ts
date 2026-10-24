@@ -66,6 +66,10 @@ export default defineConfig({
         'packages/plugins/**/*.{ts,tsx,js,mjs}',
         'server/**/*.{ts,tsx,js,mjs}',
         'src/**/*.{ts,tsx,js,mjs}',
+        // Issue #232：运维关键路径（备份/恢复/演示数据）纳入覆盖分母，不再 0 覆盖游离于门禁外
+        'scripts/db/backup-db.ts',
+        'scripts/db/restore-db.ts',
+        'scripts/seed-demo-data.ts',
       ],
       exclude: [
         '**/node_modules/**',
@@ -76,12 +80,14 @@ export default defineConfig({
         'v2_plugins/**',
         'scripts/**',
       ],
-      // 覆盖率阈值：显式配置 include 消除 137 个零覆盖源文件脱离分母的虚高失真（诚实基线）
+      // 覆盖率阈值：底线（实测水位 −5pp，Issue #232）。
+      // 真正的棘轮在 scripts/coverage-ratchet.mjs + coverage-baseline.json ——
+      // CI 中实际值低于基线即红；高于基线时应随手上调基线，只升不降。
       thresholds: {
-        lines: 45,
-        branches: 35,
-        functions: 40,
-        statements: 44,
+        lines: 57,
+        branches: 46,
+        functions: 52,
+        statements: 55,
       },
     },
   },

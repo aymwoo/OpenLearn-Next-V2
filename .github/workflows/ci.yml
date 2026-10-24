@@ -615,6 +615,10 @@ jobs:
             echo "coverage-summary.json 未生成（测试执行发生致命错误或中断）" >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Coverage ratchet (Issue #232)
+        if: always()
+        run: node scripts/coverage-ratchet.mjs coverage/coverage-summary.json
+
       - name: Upload coverage summary
         if: always()
         uses: actions/upload-artifact@v7

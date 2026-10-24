@@ -1,0 +1,7 @@
+{
+  "_comment": "覆盖率棘轮基线（Issue #232）。由全量实测（scripts/db/backup-db.ts、restore-db.ts、seed-demo-data.ts 已纳入分母）校准。只升不降：覆盖率上升后随 PR 手动上调；下调需在 PR 中说明理由。CI 中实际值低于基线 -0.5pp 容差即失败（scripts/coverage-ratchet.mjs）。",
+  "lines": 62.55,
+  "statements": 60.95,
+  "functions": 57.03,
+  "branches": 51.22
+}

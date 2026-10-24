@@ -65,6 +65,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:ratchet": "node scripts/coverage-ratchet.mjs",
     "test:e2e": "playwright test",
     "sweep": "tsx scripts/sweep/index.ts",
     "db:backup": "npx tsx scripts/backup-db.ts",
