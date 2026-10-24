@@ -236,6 +236,12 @@ export function performBackup(options: BackupOptions = {}): BackupResult {
   try {
     // 使用 SQLite 原生 VACUUM INTO 生成热备快照（转义单引号防语法注入）
     dbInstance.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
+    // 快照是未加密的学生数据副本：创建时即收紧权限，不依赖 umask（Issue #233）
+    try {
+      fs.chmodSync(backupPath, 0o600);
+    } catch {
+      // Windows 等不支持 chmod 的环境忽略
+    }
   } finally {
     if (shouldClose && dbInstance) {
       dbInstance.close();

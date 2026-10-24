@@ -36,6 +36,7 @@ import helmet from 'helmet';
 import { createAiLimiter, createLoginLimiter, createWriteLimiter } from './server/security/rate-limit.js';
 import { resolveTrustProxy } from './server/security/trust-proxy.js';
 import { assertStartupEnv } from './server/security/env-validation.js';
+import { warnSensitiveFilePermissions } from './server/security/file-permissions.js';
 import { filterXSS } from 'xss';
 import {
   hasDataSubmission,
@@ -127,6 +128,8 @@ let currentCleanup: (() => Promise<void>) | null = null;
 async function startServer() {
   // P1 trust boundary：在碰数据库/插件运行时之前先强校验环境变量，配置笔误不允许带着跑。
   assertStartupEnv();
+  // Issue #233：.env / 主库 / 备份快照权限基线自检（只 WARN 不阻断；win32 跳过）
+  warnSensitiveFilePermissions();
 
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
   await ServerBootstrapAdapter.bootstrap({
