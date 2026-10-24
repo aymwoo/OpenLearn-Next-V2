@@ -51,7 +51,9 @@ describe('AssignmentService 领域服务单元测试 (E3 深化)', () => {
     // 清理历史测试数据
     db.prepare('DELETE FROM plugin_assignment_files WHERE assignment_id = ?').run(testAssignmentId);
     db.prepare('DELETE FROM plugin_assignments WHERE id = ?').run(testAssignmentId);
-    db.prepare('DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)').run(testClassId);
+    db.prepare(
+      'DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)',
+    ).run(testClassId);
     db.prepare('DELETE FROM assignments WHERE class_id = ?').run(testClassId);
     db.prepare('DELETE FROM class_students WHERE class_id = ?').run(testClassId);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(testLessonId);
@@ -59,24 +61,50 @@ describe('AssignmentService 领域服务单元测试 (E3 深化)', () => {
     db.prepare('DELETE FROM students WHERE id IN (?, ?)').run(testStudentId, testOtherStudentId);
 
     // 初始化基础数据
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(testClassId, '物理高一(1)班', now);
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, created_at) VALUES (?, ?, ?, ?)').run(testStudentId, 'ASG_001', '小明', now);
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, created_at) VALUES (?, ?, ?, ?)').run(testOtherStudentId, 'ASG_002', '小红', now);
-    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(testClassId, testStudentId, now);
-    db.prepare('INSERT OR REPLACE INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-      testLessonId,
-      '牛顿运动定律',
-      '第一定律：物体在没有外力作用时保持匀速运动或静止。',
-      now,
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+      testClassId,
+      '物理高一(1)班',
       now,
     );
+    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, created_at) VALUES (?, ?, ?, ?)').run(
+      testStudentId,
+      'ASG_001',
+      '小明',
+      now,
+    );
+    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, created_at) VALUES (?, ?, ?, ?)').run(
+      testOtherStudentId,
+      'ASG_002',
+      '小红',
+      now,
+    );
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      testClassId,
+      testStudentId,
+      now,
+    );
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(testLessonId, '牛顿运动定律', '第一定律：物体在没有外力作用时保持匀速运动或静止。', now, now);
 
     // 初始化作业中心作业对象
     db.prepare(
       `INSERT OR REPLACE INTO plugin_assignments
        (id, title, class_id, lesson_id, status, max_files, max_file_size, allow_late, allowed_ext, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(testAssignmentId, '牛顿力学综合实验报告', testClassId, testLessonId, 'published', 3, 1024 * 1024, 1, '.pdf,.png,.zip', now, now);
+    ).run(
+      testAssignmentId,
+      '牛顿力学综合实验报告',
+      testClassId,
+      testLessonId,
+      'published',
+      3,
+      1024 * 1024,
+      1,
+      '.pdf,.png,.zip',
+      now,
+      now,
+    );
   });
 
   afterAll(() => {
@@ -89,7 +117,13 @@ describe('AssignmentService 领域服务单元测试 (E3 深化)', () => {
 
   describe('1. 传统作业与测试生命周期', () => {
     it('应成功创建传统作业并能按班级列出', () => {
-      const astId = service.createTraditionalAssignment(testClassId, testLessonId, '牛顿第二定律作业', '课后习题', 'F=ma计算');
+      const astId = service.createTraditionalAssignment(
+        testClassId,
+        testLessonId,
+        '牛顿第二定律作业',
+        '课后习题',
+        'F=ma计算',
+      );
       expect(astId).toBeTruthy();
 
       const list = service.listClassAssignments(testClassId);
@@ -137,6 +171,64 @@ describe('AssignmentService 领域服务单元测试 (E3 深化)', () => {
         .get(astId, testStudentId) as any;
       expect(row.status).toBe('graded');
       expect(row.score).toBe(88);
+      expect(row.content).toBe('第二版');
+    });
+
+    /**
+     * Issue #248：保留分数意味着「分数是针对**旧内容**给的」这个事实不能被悄悄抹掉。
+     * 重交把已批改行的内容换掉时，必须在审计历史里留痕。
+     */
+    it('学生重交已批改作业：分数保留，但内容替换记入审计历史', () => {
+      const astId = service.createTraditionalAssignment(testClassId, null, '重交留痕', '', '');
+      service.submitTraditionalAssignment(astId, testStudentId, '第一版');
+      db.prepare(
+        `UPDATE assignment_submissions
+         SET score = 88, status = 'graded', source = 'manual', graded_by = 'user:t:teacher'
+         WHERE assignment_id = ? AND student_id = ?`,
+      ).run(astId, testStudentId);
+
+      service.submitTraditionalAssignment(astId, testStudentId, '第二版');
+
+      // 分数与状态不降级（#215 的既有保证）
+      const row = db
+        .prepare('SELECT status, score, content FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .get(astId, testStudentId) as any;
+      expect(row.status).toBe('graded');
+      expect(row.score).toBe(88);
+      expect(row.content).toBe('第二版');
+
+      // 内容替换必须留痕：分数没动，但审计历史里查得到这次替换
+      const history = db
+        .prepare(
+          `SELECT old_score, new_score, old_status, new_status, reason, old_content
+           FROM assignment_grade_history WHERE assignment_id = ? AND student_id = ?`,
+        )
+        .all(astId, testStudentId) as any[];
+      expect(history).toHaveLength(1);
+      expect(history[0]).toMatchObject({
+        old_score: 88,
+        new_score: 88,
+        old_status: 'graded',
+        new_status: 'graded',
+        reason: 'resubmit-content-replaced',
+        old_content: '第一版',
+      });
+    });
+
+    it('未评分的行重交不写审计历史（换内容是常态，不必每次留痕）', () => {
+      const astId = service.createTraditionalAssignment(testClassId, null, '重交不留痕', '', '');
+      service.submitTraditionalAssignment(astId, testStudentId, '第一版');
+      service.submitTraditionalAssignment(astId, testStudentId, '第二版');
+
+      const history = db
+        .prepare('SELECT id FROM assignment_grade_history WHERE assignment_id = ? AND student_id = ?')
+        .all(astId, testStudentId) as any[];
+      expect(history).toHaveLength(0);
+
+      const row = db
+        .prepare('SELECT status, content FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+        .get(astId, testStudentId) as any;
+      expect(row.status).toBe('submitted');
       expect(row.content).toBe('第二版');
     });
 

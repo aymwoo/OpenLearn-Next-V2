@@ -33,6 +33,7 @@ const WATCHED_EVENTS = [
   'assignment-graded-toast',
   'classroom:points_awarded',
   'whiteboard-quiz-answered',
+  'whiteboard-quiz-answered-staff',
   'courseware-attempt-updated',
   'class-lock-status-changed',
   'student-progress-updated',
@@ -186,16 +187,33 @@ describe('Socket 事件投递范围（学生数据不得全局广播）', () => 
       lessonId: LESSON_A,
       elementId: 'el-scope',
       studentId: STUDENT_A,
+      studentName: '甲同学',
       answer: 'B',
       isCorrect: true,
       score: 100,
+      correctAnswer: 'B',
+      correctIndex: 1,
+      question: '测试题面',
     });
 
     expect(eventsOf(studentA, 'whiteboard-quiz-answered')).toHaveLength(1);
     // 离开课节视图的同班学生靠班级房间兜底，仍能看到答题进度
     expect(eventsOf(classmateA, 'whiteboard-quiz-answered')).toHaveLength(1);
     expect(eventsOf(studentB, 'whiteboard-quiz-answered')).toHaveLength(0);
+
+    // Issue #238：学生房间收到的 payload 必须已脱敏（无正确答案/作答内容）
+    const classmatePacket = eventsOf(classmateA, 'whiteboard-quiz-answered')[0] as any;
+    expect(classmatePacket.payload.correctAnswer).toBeUndefined();
+    expect(classmatePacket.payload.correctIndex).toBeUndefined();
+    expect(classmatePacket.payload.answer).toBeUndefined();
+    expect(classmatePacket.payload.studentId).toBe(STUDENT_A);
+
+    // 教师房间收到全量镜像事件（含正确答案），且主事件不重复投给 staff
     expect(eventsOf(staff, 'whiteboard-quiz-answered')).toHaveLength(0);
+    const staffPacket = eventsOf(staff, 'whiteboard-quiz-answered-staff')[0] as any;
+    expect(staffPacket.payload.answer).toBe('B');
+    expect(staffPacket.payload.correctAnswer).toBe('B');
+    expect(staffPacket.payload.correctIndex).toBe(1);
   });
 
   it('classroom.lock_changed：班级级指令覆盖全班，跨班与教师房间不收', async () => {

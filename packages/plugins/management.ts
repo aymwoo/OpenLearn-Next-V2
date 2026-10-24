@@ -7,6 +7,7 @@ import {
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
+import { applyResubmission } from '../core/db/assignment-resubmit.js';
 
 function parseUserActor(actorId: unknown): { userId: string; role: string } | null {
   const match = /^user:([^:]+):(administrator|admin|teacher|student)$/.exec(String(actorId || ''));
@@ -672,20 +673,23 @@ export const ManagementPlugin = {
     await commandBus.registerHandler(assignmentSubmitCmd, {
       async execute(command) {
         const payload = command.payload as any;
-        db.prepare(
-          `
-          INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, status)
-          VALUES (?, ?, ?, NULL, NULL, ?, 'submitted')
-          ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-            content = excluded.content,
-            submitted_at = excluded.submitted_at,
-            status = CASE
-              WHEN assignment_submissions.status IN ('graded', 'absent') THEN assignment_submissions.status
-              ELSE 'submitted'
-            END
-        `,
-        ).run(payload.assignmentId, payload.studentId, payload.content, Date.now());
-        return { success: true, assignmentId: payload.assignmentId, studentId: payload.studentId };
+        // 重交走唯一入口（packages/core/db/assignment-resubmit.ts）：
+        // 「重交不降级」（#215）由它保证，「内容替换要留痕」（#248）也由它保证。
+        // 此前这条路径与 server 侧各写一份 ON CONFLICT，口径迟早会漂。
+        const result = applyResubmission(db as any, {
+          assignmentId: payload.assignmentId,
+          studentId: payload.studentId,
+          content: payload.content,
+          actorId: `user:${payload.studentId}:student`,
+          actorRole: 'student',
+        });
+        return {
+          success: true,
+          assignmentId: payload.assignmentId,
+          studentId: payload.studentId,
+          /** 本次重交是否替换了已批改行的作答内容（内容替换已记入审计历史）。 */
+          contentReplaced: result.contentReplaced,
+        };
       },
     });
 

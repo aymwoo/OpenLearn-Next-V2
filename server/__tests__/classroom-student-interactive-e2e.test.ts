@@ -329,12 +329,14 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
 
       const evt1 = receivedSocketEvents.find((e) => e.studentId === student1Id);
       expect(evt1).toBeDefined();
-      expect(evt1.answer).toBe('C');
+      // v0.6.1 Issue #238：socket 广播对学生房间脱敏 —— 作答内容以下方 DB
+      // 关系表断言为权威，广播帧不再携带答案原文
+      expect(evt1.answer).toBeUndefined();
       expect(evt1.isCorrect).toBe(true);
 
       const evt2 = receivedSocketEvents.find((e) => e.studentId === student2Id);
       expect(evt2).toBeDefined();
-      expect(evt2.answer).toBe('A');
+      expect(evt2.answer).toBeUndefined();
       expect(evt2.isCorrect).toBe(false);
 
       // 验证关系表中的原子落库 (lesson_quiz_submissions)
