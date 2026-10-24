@@ -24,6 +24,28 @@ export class PluginHostError extends Error {
 }
 
 /**
+ * PluginCapabilityDeniedError — 插件缺少必需能力，调用被拒绝（Issue #225）。
+ *
+ * 此前「未声明 student-data:write 却要写学生积分」这类调用只是打一条告警便放行，
+ * 属于「事后可见、事前不拦」。现在改为真正阻断，并保留 pluginId / 能力名 /
+ * 操作类型 / 方法名，便于审计与追溯。
+ */
+export class PluginCapabilityDeniedError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    public readonly requiredCapability: string,
+    public readonly operation: 'read' | 'write',
+    public readonly method: string,
+  ) {
+    super(
+      `Plugin "${pluginId}" denied: ${operation === 'read' ? '读取' : '写入'}学生数据需要 ` +
+        `'${requiredCapability}' 能力（调用 ${method} 被拒绝）`,
+    );
+    this.name = 'PluginCapabilityDeniedError';
+  }
+}
+
+/**
  * PluginActivateError — 插件激活失败时抛出。
  *
  * 携带 pluginId 上下文，与 EsmActivationError 模式一致。
