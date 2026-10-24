@@ -269,7 +269,10 @@ describe('BuiltinPlugin', () => {
       timestamp: Date.now(),
     });
 
-    const created = db.prepare('SELECT * FROM users WHERE username = ?').get('teacher-hashed') as any;
+    const created = db.prepare('SELECT * FROM users WHERE username = ?').get('teacher-hashed') as {
+      id: string;
+      password_hash: string;
+    };
     expect(created).toBeDefined();
 
     // 必须是 bcrypt 摘要（$2 前缀），而不是 64 位裸 SHA-256
@@ -287,7 +290,7 @@ describe('BuiltinPlugin', () => {
       timestamp: Date.now(),
     });
 
-    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(created.id) as any;
+    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(created.id) as { password_hash: string };
     expect(updated.password_hash.startsWith('$2')).toBe(true);
     expect(verifyPassword(newPassword, updated.password_hash)).toEqual({ valid: true, needsUpgrade: false });
     expect(verifyPassword(password, updated.password_hash).valid).toBe(false);
