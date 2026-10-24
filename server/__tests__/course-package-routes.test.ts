@@ -177,7 +177,7 @@ describe('course package routes', () => {
     const lessonId = body.result.lessonId as string;
     const rows = db
       .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
-      .all(lessonId) as any[];
+      .all(lessonId) as Array<{ data: string }>;
     const fileUrls = rows.map((r) => JSON.parse(r.data).fileUrl).filter(Boolean);
     expect(fileUrls.length).toBeGreaterThanOrEqual(2);
     for (const url of fileUrls) {
@@ -379,14 +379,14 @@ describe('course package routes', () => {
         filename: '第3章讲义.docx',
         contentType: 'docx',
         base64: docxBytes.toString('base64'),
-      } as any,
+      },
     ];
     template.elements = [
       {
         type: 'presentation',
         segmentId: template.lesson.timeline[0].id,
         data: { fileUrl: '${asset:handout}', fileType: 'docx', fileName: '第3章讲义.docx' },
-      } as any,
+      },
     ];
 
     const res = await fetch(baseUrl + '/api/course-packages/import', {
@@ -402,7 +402,7 @@ describe('course package routes', () => {
 
     const row = db
       .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
-      .get(lessonId) as any;
+      .get(lessonId) as { data: string };
     const data = JSON.parse(row.data);
     // 引用是真的：URL 指向落盘后的 /uploads 文件
     expect(typeof data.fileUrl).toBe('string');
@@ -425,7 +425,7 @@ describe('course package routes', () => {
         filename: '伪装.docx',
         contentType: 'docx',
         base64: Buffer.from('%PDF-1.4 not really a docx').toString('base64'),
-      } as any,
+      },
     ];
     template.elements = [];
 
@@ -449,7 +449,7 @@ describe('course package routes', () => {
         filename: '大纲.md',
         contentType: 'md',
         base64: Buffer.from([0x23, 0x00, 0x01, 0x02]).toString('base64'),
-      } as any,
+      },
     ];
     template.elements = [];
 
