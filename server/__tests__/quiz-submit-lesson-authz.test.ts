@@ -14,6 +14,8 @@ import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerLessonsRoutes } from '../routes/lessons.js';
+import type { ServerContext } from '../context.js';
+import type { ClassroomEventType } from '../classroom-events.js';
 import { DiagnosticService } from '../services/diagnostic-service.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ensureTestSchema } from './helpers/test-schema.js';
@@ -23,7 +25,7 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
   let server: Server;
   let baseUrl: string;
 
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
 
   const classA = 'cls-qauthz-a';
   const classB = 'cls-qauthz-b';
@@ -51,11 +53,11 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
     app.use(express.json());
     registerLessonsRoutes({
       app,
-      io: { emit: () => {} } as any,
+      io: { emit: () => {} },
       loginLimiter: null,
       aiLimiter: null,
       activityRegistry: null,
-    } as any);
+    } as unknown as ServerContext);
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, '127.0.0.1', () => resolve());
@@ -163,7 +165,7 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
   it('本班学生提交随堂测验正常放行', async () => {
     const res = await post(studentInBToken, lessonB, elementB, 1);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { success?: boolean; isCorrect?: boolean; score?: number };
     expect(body.success).toBe(true);
     expect(body.isCorrect).toBe(true);
     expect(body.score).toBe(100);
@@ -175,17 +177,18 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
     expect(res.status).toBe(200);
     const row = db
       .prepare('SELECT score, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
-      .get(lessonB, elementB, studentInB) as any;
+      .get(lessonB, elementB, studentInB) as { score: number; is_correct: number };
     // 分数仍是首次提交的 100 —— 否则学生可以「先错后对」用答案解析刷满分
     expect(row.score).toBe(100);
     expect(row.is_correct).toBe(1);
   });
 
   it('作答事件不再广播答案（correctAnswer / correctIndex）', async () => {
-    const published: any[] = [];
-    const publisher = (async (type: string, payload: any) => {
-      published.push({ type, payload });
-    }) as any;
+    const published: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    // 泛型签名与 publishClassroomEvent<T> 对齐，才能直接作为 DiagnosticService 的 publisher。
+    const publisher = async <T>(type: ClassroomEventType, payload: T) => {
+      published.push({ type, payload: payload as unknown as Record<string, unknown> });
+    };
     const service = new DiagnosticService(kernelContainer.db, publisher);
 
     await service.submitQuiz({

@@ -161,8 +161,8 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
         .prepare('SELECT * FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
         .all(testLessonId, testElementId1, testStudentId2);
       expect(allForStudent2).toHaveLength(1);
-      expect((allForStudent2[0] as any).score).toBe(0);
-      expect((allForStudent2[0] as any).is_correct).toBe(0);
+      expect((allForStudent2[0] as { score: number; is_correct: number }).score).toBe(0);
+      expect((allForStudent2[0] as { score: number; is_correct: number }).is_correct).toBe(0);
     });
   });
 
