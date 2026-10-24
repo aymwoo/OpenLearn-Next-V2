@@ -16,9 +16,10 @@
  * 机器上都是同一个数字，所以基线可以安全地提交进仓库。
  *
  * 基线必须与它所守护的那棵代码树一致。issue 里记的 6186 是在更早的基点测的；本分支
- * rebase 到当前 main 之后实测为 6198 —— 差的 12 条全部来自 main 新增的课程包导入
- * 代码（多为失效的 eslint-disable 指令）。用 6186 做基线会让本 PR 一落地就红，
- * 而那 12 条与本 PR 无关；基线的意义是「从今天起不许再涨」，不是「追某个历史数字」。
+ * rebase 到当前 main 之后实测为 6243 —— 相对 issue 里的 6186，多的部分来自 main
+ * 自身前进（含课程包导入代码，多为失效的 eslint-disable 指令），以及此后合入的
+ * #276/#277/#279/#280 四个 PR。用 6186 做基线会让本 PR 一落地就红，而那些增量与
+ * 本 PR 无关；基线的意义是「从今天起不许再涨」，不是「追某个历史数字」。
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
