@@ -285,6 +285,19 @@ export interface ExtensionPointConfig {
   placement?: 'before' | 'after';
   /** v3: 可选自定义渲染函数（返回 React 节点，用于非组件式扩展点） */
   render?: (props?: Record<string, any>) => React.ReactNode;
+  /**
+   * 注册来源。决定「插件前端出问题时该扩展点是否被摘除」：
+   *
+   * - `'manifest'` —— manifest **声明式**贡献（`contributes` / `classroomTools`）。
+   *   贡献本体是**数据**（标题、图标、commandType），其执行后端在服务端插件宿主
+   *   里，与前端 bundle 无关。因此插件前端加载失败或崩溃时**必须保留**：摘掉它
+   *   会让 Tab「闪现后消失」，用户无从得知插件出了什么事（v0.7.0 熔断越权修复）。
+   * - `'runtime'` —— 插件运行时通过 `ctx.ui.registerExtensionPoint` 等命令式 API
+   *   注册的扩展点。承载插件自己的渲染逻辑，随插件前端健康度生死。
+   *
+   * 缺省视为 `'runtime'`（历史注册路径均为命令式注册）。
+   */
+  origin?: 'manifest' | 'runtime';
 }
 
 // ── Frontend Service Interfaces ──────────────────────────────────────────

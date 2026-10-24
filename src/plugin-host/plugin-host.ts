@@ -142,6 +142,28 @@ function bridgeTimelineSegmentContribution(entry: Record<string, unknown>, plugi
 const NullExtensionComponent = () => null;
 
 /**
+ * 把激活异常归一成一句可展示给用户的短描述（v0.7.0）。
+ *
+ * 错误态要出现在插件面板里，因此必须是**面向用户**的短句，不能把整段堆栈
+ * 糊到 UI 上；但也不能只剩一句「加载失败」—— 用户需要知道是拉不到前端包
+ * 还是包跑不起来。
+ */
+export function describeActivationError(err: unknown): string {
+  if (err instanceof Error && err.message) {
+    // 常见失败形态归一化，避免把 HTTP 状态码/超时等内部措辞直接抛给用户
+    const msg = err.message;
+    if (/Failed to fetch frontend\.js/i.test(msg)) return '前端资源加载失败（HTTP 错误）';
+    if (/Activation timeout/i.test(msg)) return '插件激活超时（5 秒）';
+    if (/Cannot read properties of undefined/i.test(msg)) {
+      return '插件依赖缺失：宿主未提供共享运行时（React 等）';
+    }
+    if (/Invalid plugin|missing manifest|activate function/i.test(msg)) return '插件入口格式不合法';
+    return msg.length > 160 ? `${msg.slice(0, 160)}…` : msg;
+  }
+  return '未知错误';
+}
+
+/**
  * manifest 静态贡献注册 —— classroomTools（legacy）+ contributes 通用桥接。
  *
  * **两条激活路径（activatePlugin / activateRemotePlugin）必须共用本函数**：
@@ -180,6 +202,7 @@ export function registerManifestContributions(
         slotProps: tool.commandType ? { commandType: tool.commandType } : undefined,
         component: NullExtensionComponent,
         pluginId,
+        origin: 'manifest',
       });
     }
   }
@@ -221,6 +244,7 @@ export function registerManifestContributions(
             : entry,
           component: NullExtensionComponent,
           pluginId,
+          origin: 'manifest',
         });
         // 数据型备课扩展：声明式 contributes → 运行时 Registry（与命令式 API 对齐）
         if (slotName === 'editor.palette_item') {
@@ -286,6 +310,14 @@ export class FrontendPluginHost {
    * 上限告警，页面会话内只增不减）。
    */
   private disposers = new Map<string, Array<() => void>>();
+  /**
+   * pluginId → manifest 缓存（v0.7.0）。
+   *
+   * 激活失败后用户点「重试」需要重新拿到 manifest 才能再次激活（远程路径
+   * `activateRemotePlugin` 以 manifest 为入参）。manifest 本身来自服务端，
+   * 前端不重复拉取 —— 这里留存最后一次成功读到（或读到但激活失败）的副本。
+   */
+  private manifests = new Map<string, FrontendPluginManifest>();
   /** 远程前端插件的不透明源 iframe。停用时摘掉。 */
   private sandboxFrames = new Map<string, HTMLIFrameElement>();
   /** 远程前端沙箱常驻消息监听器与生命周期清理回调。 */
@@ -599,7 +631,11 @@ export class FrontendPluginHost {
         const slot = String(args[0] ?? '') as AnyExtensionSlot;
         const config =
           args[1] && typeof args[1] === 'object' ? (args[1] as ExtensionPointConfig) : ({} as ExtensionPointConfig);
-        usePluginHostStore.getState().registerExtensionPoint(slot, { ...config, pluginId: ctx.pluginId });
+        usePluginHostStore.getState().registerExtensionPoint(slot, {
+          ...config,
+          pluginId: ctx.pluginId,
+          origin: 'runtime',
+        });
         value = true;
       } else if (op === 'ui.toast') {
         const message = String(args[0] ?? '');
@@ -635,6 +671,10 @@ export class FrontendPluginHost {
 
     store.updatePluginState(pluginId, PluginState.ACTIVATING);
 
+    // 缓存 manifest —— 激活失败后用户点「重试」需要它再走一次远程激活
+    // （必须在 try 之前缓存：失败的 manifest 同样要留给重试路径用）
+    this.manifests.set(pluginId, manifest);
+
     try {
       const url = `/plugins/${pluginId}/frontend.js`;
       const res = await fetch(url, { credentials: 'same-origin' });
@@ -664,11 +704,16 @@ export class FrontendPluginHost {
       // 死代码，blown 标志永驻，重新激活后扩展点被 isPluginBlown 全部跳过
       store.updatePluginState(pluginId, PluginState.ACTIVE);
       resetPluginBreaker(pluginId);
+      store.clearPluginError(pluginId);
     } catch (err) {
       console.error(`[FrontendPluginHost] Failed to activate remote plugin "${pluginId}":`, err);
       store.updatePluginState(pluginId, PluginState.ERROR);
       this.destroySandboxFrame(pluginId);
-      this.unregisterPluginResources(pluginId);
+      // v0.7.0 熔断越权修复：**保留** manifest 声明式贡献 —— 它们由服务端
+      // 插件宿主执行，与前端 bundle 无关。此前整包摘除导致 Tab「闪现后消失」。
+      // 改为记录显式错误 → 渲染层显示「加载失败 + 重试」。
+      this.unregisterPluginResources(pluginId, { preserveManifestContributions: true });
+      store.setPluginError(pluginId, describeActivationError(err));
       throw err;
     }
   }
@@ -730,9 +775,13 @@ export class FrontendPluginHost {
       // 激活成功即复位熔断（同 activateRemotePlugin，v0.6.1 审计 C-2）
       store.updatePluginState(pluginId, PluginState.ACTIVE);
       resetPluginBreaker(pluginId);
+      store.clearPluginError(pluginId);
+      this.manifests.set(pluginId, manifest);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
-      this.unregisterPluginResources(pluginId);
+      // v0.7.0 熔断越权修复：保留 manifest 声明式贡献（服务端执行，与前端无关）
+      this.unregisterPluginResources(pluginId, { preserveManifestContributions: true });
+      store.setPluginError(pluginId, describeActivationError(err));
       throw err;
     }
   }
@@ -799,9 +848,12 @@ export class FrontendPluginHost {
       });
 
       store.updatePluginState(pluginId, PluginState.ACTIVE);
+      store.clearPluginError(pluginId);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
-      this.unregisterPluginResources(pluginId);
+      // v0.7.0 熔断越权修复：保留 manifest 声明式贡献（服务端执行，与前端无关）
+      this.unregisterPluginResources(pluginId, { preserveManifestContributions: true });
+      store.setPluginError(pluginId, describeActivationError(err));
       throw err;
     }
   }
@@ -838,6 +890,78 @@ export class FrontendPluginHost {
   }
 
   /**
+   * 熔断降级 —— 停掉插件的**运行时代码**，但保留 manifest 声明式贡献。
+   *
+   * 与 `deactivatePlugin` 的区别是**语义**上的：deactivate 是「用户主动停用
+   * 插件」，插件确实不再参与平台，声明式贡献也该一并消失；suspend 是「插件
+   * 前端反复崩溃，平台把它降级」，插件的服务端部分与声明式贡献仍然有效，
+   * 只是前端不再渲染。因此：
+   * - 只摘除**运行时**注册的扩展点，manifest 声明式贡献保留（Tab 仍可见）；
+   * - 保留熔断记录，让「已熔断」状态持续存在（否则下次崩溃从 0 重新计数，
+   *   熔断阈值形同虚设）；
+   * - 记录显式错误 → 渲染层显示「加载失败 + 重试」，而不是静默留白。
+   */
+  async suspendPlugin(pluginId: string): Promise<void> {
+    const store = usePluginHostStore.getState();
+
+    try {
+      const instance = this.pluginModules.get(pluginId);
+      if (instance?.deactivate) {
+        await Promise.race([
+          instance.deactivate(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Deactivation timeout (5000ms)')), 5000)),
+        ]);
+      }
+    } catch (err) {
+      console.error(`[FrontendPluginHost] Suspend error for "${pluginId}":`, err);
+    } finally {
+      this.unregisterPluginResources(pluginId, {
+        preserveManifestContributions: true,
+        keepBreakerState: true,
+      });
+      this.pluginModules.delete(pluginId);
+      store.updatePluginState(pluginId, PluginState.ERROR);
+      // 取最新快照（而不是函数入口的 store）—— deactivate 期间可能已有新的错误记录
+      if (!usePluginHostStore.getState().pluginErrors.get(pluginId)) {
+        store.setPluginError(pluginId, '插件前端连续崩溃，已自动降级');
+      }
+    }
+  }
+
+  /**
+   * 重试激活失败的插件（错误态面板上的「重试」按钮）。
+   *
+   * 走与首次激活同源的路径：远程插件用缓存的 manifest 重走 iframe 沙箱，
+   * 内联/worker 插件走各自的既有激活路径。成功后清除错误态，失败则覆盖为
+   * 新的错误描述（用户能看出「重试也失败了」）。
+   */
+  async retryPlugin(pluginId: string): Promise<boolean> {
+    const store = usePluginHostStore.getState();
+    const pluginInfo = store.activePlugins.find((p) => p.id === pluginId);
+    if (!pluginInfo) return false;
+
+    // 先摘掉旧的运行时扩展点，避免重试过程中新旧实现并存
+    store.unregisterPluginRuntimeExtensionPoints(pluginId);
+    store.clearPluginError(pluginId);
+
+    try {
+      const manifest = this.manifests.get(pluginId);
+      if (pluginInfo.executionMode === 'inline' || pluginInfo.executionMode === 'worker') {
+        await this.activatePlugin(pluginId);
+      } else if (manifest) {
+        await this.activateRemotePlugin(pluginId, manifest);
+      } else {
+        throw new Error(`无法重试插件 "${pluginId}"：缺少 manifest 缓存`);
+      }
+      return true;
+    } catch (err) {
+      console.error(`[FrontendPluginHost] Retry failed for plugin "${pluginId}":`, err);
+      store.setPluginError(pluginId, describeActivationError(err));
+      return false;
+    }
+  }
+
+  /**
    * Uninstall a plugin (removes it from local state and calls server-side DELETE).
    *
    * Deactivates first if currently active, then removes from zustand store
@@ -859,8 +983,10 @@ export class FrontendPluginHost {
 
     this.sourceCodes.delete(pluginId);
     this.pluginModules.delete(pluginId);
+    this.manifests.delete(pluginId);
     this.unregisterPluginResources(pluginId);
     store.removePlugin(pluginId);
+    store.clearPluginError(pluginId);
   }
 
   // ── Extension Points ─────────────────────────────────────────────────
@@ -880,8 +1006,19 @@ export class FrontendPluginHost {
    *
    * v3.5: whiteboard registries are host singletons; plugins reach them only
    * through ctx.ui, so the host must evict their registrations here.
+   *
+   * v0.7.0 熔断越权修复：`opts.preserveManifestContributions` 为真时**保留**
+   * manifest 声明式贡献（只摘除运行时注册的扩展点）。插件前端起不来不代表
+   * 声明式贡献不可用 —— 那些贡献的执行后端在服务端插件宿主，与前端 bundle
+   * 无关。整包摘除会让用户看到 Tab「闪现后消失」（v0.6.1 审计 C-2 的遗留越权）。
+   *
+   * `opts.keepBreakerState` 为真时不清除熔断记录 —— 熔断降级路径要让「已熔断」
+   * 状态持续存在，否则下一次崩溃会从 0 重新计数，熔断阈值形同虚设。
    */
-  public unregisterPluginResources(pluginId: string): void {
+  public unregisterPluginResources(
+    pluginId: string,
+    opts?: { preserveManifestContributions?: boolean; keepBreakerState?: boolean },
+  ): void {
     // 审计 E-5：先退订该插件登记的全部订阅型资源（appStore subscribe 等）。
     // 放在最前 —— 后续清理可能触发 store 变更，若订阅还在会回调进已半拆的插件。
     const pending = this.disposers.get(pluginId);
@@ -897,7 +1034,11 @@ export class FrontendPluginHost {
       this.disposers.delete(pluginId);
     }
     this.destroySandboxFrame(pluginId);
-    usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
+    if (opts?.preserveManifestContributions) {
+      usePluginHostStore.getState().unregisterPluginRuntimeExtensionPoints(pluginId);
+    } else {
+      usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
+    }
     fullscreenRendererRegistry.unregisterPlugin(pluginId);
     propertyEditorRegistry.unregisterPlugin(pluginId);
     coursewareSourceRegistry.unregisterPlugin(pluginId);
@@ -909,7 +1050,9 @@ export class FrontendPluginHost {
     unregisterPluginLocales(pluginId);
     // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
     // 此前不随生命周期回收，卸载后残留条目（重新安装后若曾 blown 会被跳过）
-    resetPluginBreaker(pluginId);
+    if (!opts?.keepBreakerState) {
+      resetPluginBreaker(pluginId);
+    }
   }
 
   /**
@@ -970,6 +1113,7 @@ export class FrontendPluginHost {
           usePluginHostStore.getState().registerExtensionPoint(slot, {
             ...config,
             pluginId,
+            origin: 'runtime',
           });
         },
         // 归属守卫：注入调用方 pluginId，插件只能注销自己的扩展点（v0.6.1 审计 R-2）
@@ -1091,6 +1235,7 @@ export class FrontendPluginHost {
         usePluginHostStore.getState().registerExtensionPoint(slot, {
           ...config,
           pluginId,
+          origin: 'runtime',
         });
       },
       registerMenu: (config: any) => {
@@ -1098,12 +1243,14 @@ export class FrontendPluginHost {
         usePluginHostStore.getState().registerExtensionPoint(slot, {
           ...config,
           pluginId,
+          origin: 'runtime',
         });
       },
       registerToolbarButton: (config: any) => {
         usePluginHostStore.getState().registerExtensionPoint('classroom.tool', {
           ...config,
           pluginId,
+          origin: 'runtime',
         });
       },
     };

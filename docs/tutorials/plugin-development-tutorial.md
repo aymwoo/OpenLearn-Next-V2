@@ -1503,6 +1503,14 @@ const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
 
 ### 6.7 宿主依赖共享网关 (HostSharedDeps) 与动态转译
 
+> ⚠️ **先读这一条（v0.7.0 勘误）**：`window.HostSharedDeps` **只注入到宿主父页面**。
+> 远程（process 沙箱）插件的前端代码跑在 `sandbox="allow-scripts"` 的不透明源 iframe 里，
+> iframe 与父页面不共享 `window` → 它拿不到 `HostSharedDeps`，读到的值是 `undefined`。
+> 因此**本节的 external 指引只适用于「与宿主同 realm 执行」的插件**；
+> 远程沙箱插件照做会**必然激活失败**（`Cannot read properties of undefined (reading 'React')`）。
+> 远程插件的正确构建方式见本节末尾的「远程沙箱插件」小节，
+> 完整能力边界见 `docs/plugin/frontend-sandbox-capability-boundary.md`。
+
 为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)** 以及 **全形态 ESM 裸模块导入转译器 (`transformBareModuleImports`)**。全局 `window.HostSharedDeps` 暴露以下共享运行时：
 
 - `React` / `'react'`: React 核心与 Hooks API
@@ -1526,6 +1534,32 @@ esbuild.build({
 });
 ```
 
+#### 远程沙箱插件：把 React 打进自己的 bundle
+
+远程（process 沙箱）插件的 iframe 是**隐藏**的（`display: none`）执行体 —— 它不渲染任何
+用户可见 UI，可见界面只能来自 manifest 声明式贡献（`contributes`），由宿主渲染。
+由于 iframe 取不到 `HostSharedDeps`，远程插件**不要**把 react 系列库设为 external：
+
+```javascript
+import esbuild from 'esbuild';
+
+esbuild.build({
+  entryPoints: ['src/frontend.tsx'],
+  bundle: true,
+  outfile: 'dist/frontend.js',
+  // 注意：这里**不要**把 react / react-dom 列进 external —— 沙箱 iframe 取不到
+  // 宿主的 window.HostSharedDeps，external 会导致激活时求值为 undefined 而失败。
+  external: ['@openlearn/plugin-sdk'],
+  format: 'esm',
+  platform: 'browser',
+});
+```
+
+> ⚠️ SDK CLI（`openlearn-plugin-sdk build`）对前端构建**强制**注入
+> `external: ['react','react-dom','recharts','lucide-react']` —— 该预置只对内联执行环境成立。
+> 远程插件需要自建前端 bundle。相关工具链修复已登记，见
+> `docs/plugin/frontend-sandbox-capability-boundary.md` §5。
+
 ### 6.7 前端 JSX 转换配置
 
 宿主通过 `window.HostSharedDeps` 与转译器提供的完整共享库：
@@ -1541,7 +1575,7 @@ esbuild.build({
 
 > **提示**：从平台 `v0.3.15+` 起，宿主已内置 `react/jsx-runtime` 映射，现代 `tsconfig.json` 的 `"jsx": "react-jsx"`（自动模式）与经典 `"jsx": "react"`（经典模式）均可原生支持。
 
-**推荐 esbuild 构建配置：**
+**推荐 esbuild 构建配置（内联执行环境）：**
 
 ```javascript
 import esbuild from 'esbuild';
@@ -1560,11 +1594,12 @@ esbuild.build({
 
 **常见错误排查：**
 
-| 错误信息                                                 | 原因                                                 | 解决方法                               |
-| -------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------- |
-| `Failed to resolve module specifier "react/jsx-runtime"` | `tsconfig.json` 中 `jsx` 为 `"react-jsx"`            | 改为 `"react"`                         |
-| `React is not defined`                                   | 前端未声明 `react` 为 `peerDependency` 或 `external` | 在构建配置中添加 `external: ['react']` |
-| `process is not defined`                                 | 构建 `platform` 未设为 `browser`                     | 设置 `platform: 'browser'`             |
+| 错误信息                                                 | 原因                                                                         | 解决方法                                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Failed to resolve module specifier "react/jsx-runtime"` | `tsconfig.json` 中 `jsx` 为 `"react-jsx"`                                    | 改为 `"react"`                                                          |
+| `React is not defined`                                   | 前端未声明 `react` 为 `peerDependency` 或 `external`                         | 内联插件：加 `external: ['react']`；远程插件：去掉 external，改为自打包 |
+| `Cannot read properties of undefined (reading 'React')`  | 远程插件把 react 设为 external，但沙箱 iframe 读不到 `window.HostSharedDeps` | 远程插件去掉 react 的 external，改为自打包                              |
+| `process is not defined`                                 | 构建 `platform` 未设为 `browser`                                             | 设置 `platform: 'browser'`                                              |
 
 ### 6.8 前端组件如何获取通信能力（完整示例）
 
@@ -2190,7 +2225,8 @@ describe('my-plugin', () => {
 ### 前端检查
 
 - [ ] `tsconfig.json` 中 `jsx` 为 `"react"`（非 `"react-jsx"`）
-- [ ] `react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
+- [ ] **内联插件**：`react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
+- [ ] **远程沙箱插件**：`react` / `react-dom` **不要**标记为 `external`（沙箱 iframe 取不到 `window.HostSharedDeps`，external 会导致激活失败）—— 改为自打包
 - [ ] 不直接 import React hooks 之外的 React 子路径（如 `react/jsx-runtime`）
 - [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#version-compat-table)）
 - [ ] 前端调用的命令在服务端有对应的 handler

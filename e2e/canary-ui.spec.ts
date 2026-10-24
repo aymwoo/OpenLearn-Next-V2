@@ -317,20 +317,34 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
     expect(fs.existsSync(SCREENSHOT_PATH)).toBe(true);
 
-    // 7.1.c：插件前端在**宿主页面**渲染 Tab / React 面板 —— PL-02 信任边界整改后不可达：
-    // 远程插件前端一律进 sandbox="allow-scripts" 的不透明源 iframe 执行，
-    // 1) React 组件函数无法穿过 postMessage 桥（src/plugin-host/sandbox-frame.ts、
-    //    docs/plugin/plugin-security-migration.md「前端沙箱」一节），且 iframe 自身 display:none；
-    // 2) frontend.js 里 `import React from 'react'` 会被改写成读取 `window.HostSharedDeps`，
-    //    而该对象只存在于父页面 —— 依赖 React 的远程插件前端在沙箱内无法激活，
-    //    宿主会记 activate-error 并触发熔断，进而把 manifest 声明式贡献一并撤销
-    //    （ExtensionPointRenderer 的 handleBreakerTrip → unregisterPluginExtensionPoints）。
-    //    所以「Tab 是否出现」在当前架构下是时序相关的，不能作为稳定断言。
-    //    沙箱依赖注入（让 iframe 拿到 HostSharedDeps）属于独立待办项。
-    test.skip(
-      true,
-      'PL-02 沙箱整改后远程插件前端无法在宿主页面渲染 React 面板；依赖 React 的 frontend.js 在不透明源沙箱内无法激活（window.HostSharedDeps 不可达），Tab 挂载断言时序相关不可稳定断言',
-    );
+    // 7.1.c：插件前端在宿主页面渲染 Tab —— 断言「manifest 声明式贡献在插件
+    // 前端失败时仍然稳定可见」（v0.7.0 熔断越权修复）。
+    //
+    // 背景：金丝雀的 frontend.js 依赖 React（import { useState } from "react"），
+    // 而远程插件前端一律进 sandbox="allow-scripts" 的不透明源 iframe 执行：
+    //   1) React 组件函数无法穿过 postMessage 桥，且 iframe 自身 display:none；
+    //   2) `import React from 'react'` 被宿主改写成读取 `window.HostSharedDeps`，
+    //      而该对象只存在于父页面 —— 依赖 React 的远程插件前端在沙箱内无法激活。
+    // 修复前：激活失败 → 熔断 → unregisterPluginExtensionPoints 把 manifest
+    // 声明式贡献一并撤销 → Tab「闪现后消失」，断言时序相关、无法稳定。
+    // 修复后：声明式贡献（由服务端插件宿主执行，与前端 bundle 无关）保留，
+    // Tab **稳定可见**，面板区给出显式的「插件加载失败 + 重试」错误态。
+    //
+    // 注：插件自己的 React 面板在当前架构下依然不可达（独立待办，见
+    // docs/plugin/frontend-sandbox-capability-boundary.md），此处断言的是
+    // 「声明式贡献保留 + 显式错误态」这一条契约。
+    // 进入管理后台（admin.tab 扩展按钮挂在管理后台的分段 Tab 条上）
+    const adminNavBtn = page.locator('#nav_btn_admin_directory, button:has-text("管理后台")').first();
+    await expect(adminNavBtn).toBeVisible({ timeout: 20000 });
+    await adminNavBtn.click();
+
+    const canaryAdminTab = page.getByRole('button', { name: /金丝雀控制台/ });
+    await expect(canaryAdminTab).toBeVisible({ timeout: 30000 });
+
+    await canaryAdminTab.first().click();
+    // 面板区显示显式错误态：可读的错误说明 + 重试入口
+    await expect(page.getByText('插件加载失败')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: '重试', exact: true })).toBeVisible();
   });
 
   test('7.5 机房座位图 4 大扩展槽位的数据契约与截图 (Generates Artifact: Screenshot)', async ({ page }) => {

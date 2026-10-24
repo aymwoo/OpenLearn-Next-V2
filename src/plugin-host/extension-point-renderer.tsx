@@ -16,7 +16,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2, Puzzle, ExternalLink } from 'lucide-react';
+import { Loader2, Puzzle, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
 import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
@@ -37,20 +37,27 @@ export { isPluginBlown, resetPluginBreaker };
 
 /**
  * 熔断触发的统一降级（v0.6.1 审计 C-2）：
- * 1. 摘除该插件全部扩展点 —— 脱离生命周期的直注册插件（如内置包）也能被降级；
+ * 1. 摘除该插件**运行时**注册的扩展点 —— 脱离生命周期的直注册插件（如内置包）
+ *    也能被降级；
  * 2. 内置包同步写入停用表 —— 管理卡片如实显示「已停用」，重新启用时经
  *    装配模块的重注册 → resetPluginBreaker 恢复；
- * 3. 生命周期内插件再走宿主 deactivatePlugin（失败仅记日志）。
+ * 3. 生命周期内插件再走宿主 suspendPlugin（失败仅记日志）。
+ *
+ * v0.7.0 熔断越权修复：第 1 步此前调用 `unregisterPluginExtensionPoints`
+ * **连同 manifest 声明式贡献一起摘掉** —— 声明式贡献（Tab / 命令面板项 /
+ * 画布调色板项）由服务端插件宿主执行，与前端 bundle 无关，前端崩溃不该让
+ * 它们凭空消失。实测表现为失败插件的 Tab「闪现后消失」（单跑出现、全跑消失，
+ * 取决于渲染时序）。现在只摘运行时扩展点，声明式贡献保留，由错误态面板
+ * 显式告知用户「插件加载失败 + 重试」。
  */
 function handleBreakerTrip(
   pid: string,
-  host: { deactivatePlugin: (id: string) => Promise<void> } | null | undefined,
+  host: { suspendPlugin?: (id: string) => Promise<void>; deactivatePlugin: (id: string) => Promise<void> } | null,
 ): void {
   const store = usePluginHostStore.getState();
-  store.unregisterPluginExtensionPoints(pid);
-  void host
-    ?.deactivatePlugin(pid)
-    .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
+  store.unregisterPluginRuntimeExtensionPoints(pid);
+  const suspend = host?.suspendPlugin ? host.suspendPlugin(pid) : host?.deactivatePlugin(pid);
+  void suspend?.catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
 }
 
 // ── LoadingSkeleton ──────────────────────────────────────────────────────────
@@ -72,6 +79,72 @@ function LoadingSkeleton() {
         <Loader2 size={24} className="text-gray-400 animate-spin" />
         <span className="text-xs text-gray-400">Loading...</span>
       </div>
+    </div>
+  );
+}
+
+// ── PluginErrorState ────────────────────────────────────────────────────────
+
+/**
+ * 插件前端的**显式错误态**（v0.7.0）。
+ *
+ * 此前插件前端加载失败 / 被熔断时，扩展点区域要么整包被摘除（Tab 闪现后
+ * 消失），要么 `isPluginBlown` 直接 return null（留白）—— 用户既看不到
+ * 任何提示，也无从判断是「插件没装」还是「插件挂了」。这里给出可操作的
+ * 错误面板：说明发生了什么 + 提供重试入口。
+ */
+export function PluginErrorState({
+  pluginId,
+  message,
+  lang = 'zh',
+  compact = false,
+}: {
+  pluginId: string;
+  message: string;
+  lang?: 'zh' | 'en';
+  compact?: boolean;
+}) {
+  const host = useOptionalPluginHost();
+  const [retrying, setRetrying] = React.useState(false);
+  const isZh = lang === 'zh';
+
+  const handleRetry = React.useCallback(() => {
+    if (!host || retrying) return;
+    setRetrying(true);
+    void host
+      .retryPlugin(pluginId)
+      .catch(() => false)
+      .finally(() => setRetrying(false));
+  }, [host, pluginId, retrying]);
+
+  const title = isZh ? '插件加载失败' : 'Plugin failed to load';
+  const retryLabel = isZh ? '重试' : 'Retry';
+
+  return (
+    <div
+      role="alert"
+      data-testid={`plugin-error-state-${pluginId}`}
+      className={`flex flex-col items-center justify-center text-center ${compact ? 'py-4 px-3' : 'py-10 px-6'}`}
+    >
+      <AlertTriangle size={compact ? 20 : 32} className="text-amber-500 mb-2" aria-hidden="true" />
+      <p className={`font-semibold text-amber-800 ${compact ? 'text-xs' : 'text-sm'}`}>{title}</p>
+      <p className="text-xs text-muted mt-1 max-w-md break-words">{message}</p>
+      <button
+        type="button"
+        onClick={handleRetry}
+        disabled={retrying || !host}
+        data-testid={`plugin-retry-btn-${pluginId}`}
+        // amber-700 + 白字 = 5.02:1（AA 要求 4.5:1）—— amber-600 只有 3.19:1，
+        // 会踩 a11y-gate 的对比度门禁（v0.7.0 与 PR #291 同类修复）
+        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        {retrying ? (
+          <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+        ) : (
+          <RefreshCw size={13} aria-hidden="true" />
+        )}
+        {retrying ? (isZh ? '重试中…' : 'Retrying…') : retryLabel}
+      </button>
     </div>
   );
 }
@@ -322,6 +395,7 @@ export function ExtensionPointRenderer({
   const host = useOptionalPluginHost();
   const activePlugins = usePluginHostStore((s) => s.activePlugins);
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);
+  const pluginErrors = usePluginHostStore((s) => s.pluginErrors);
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
 
@@ -337,6 +411,12 @@ export function ExtensionPointRenderer({
   if (extensions.length === 0) return null;
 
   const renderTabPanelContent = (activeExt: any, extraProps: Record<string, any>, fallbackText: string) => {
+    // v0.7.0：显式错误态优先 —— 插件前端失败/被熔断时给出「错误 + 重试」，
+    // 而不是静默留白（此前 isPluginBlown 直接 return null）。
+    const pluginError = pluginErrors.get(activeExt.pluginId);
+    if (pluginError) {
+      return <PluginErrorState pluginId={activeExt.pluginId} message={pluginError} />;
+    }
     if (isPluginBlown(activeExt.pluginId)) {
       if (!warnedPluginsRef.current.has(activeExt.pluginId)) {
         warnedPluginsRef.current.add(activeExt.pluginId);
@@ -344,7 +424,17 @@ export function ExtensionPointRenderer({
           `[ExtensionBreaker] Plugin "${activeExt.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
         );
       }
-      return null;
+      return (
+        <PluginErrorState
+          pluginId={activeExt.pluginId}
+          message={
+            lang === 'en'
+              ? 'The plugin frontend crashed repeatedly and was suspended.'
+              : '插件前端连续崩溃，已自动降级。'
+          }
+          lang={lang === 'en' ? 'en' : 'zh'}
+        />
+      );
     }
     const isReact = typeof activeExt.component === 'function';
     const isDOM = typeof activeExt.render === 'function';
@@ -660,6 +750,9 @@ export function ExtensionPointRenderer({
           const label = resolveLabel(rawLabel, ext.pluginId, lang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
+          // v0.7.0：插件前端出错时给 Tab 一个轻量视觉标记（不改文案，避免
+          // 影响依赖标签文本的断言）；详细错误与重试在面板区。
+          const hasError = pluginErrors.has(ext.pluginId);
           const ariaNewTab = lang === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
           const sanitizedId = tabValue.replace(/[^a-zA-Z0-9_-]/g, '_');
           return (
@@ -669,7 +762,7 @@ export function ExtensionPointRenderer({
                 isActive
                   ? 'bg-primary-theme-light text-primary-theme font-bold border border-primary-theme/25 shadow-3xs'
                   : 'border border-transparent text-muted hover:bg-surface-secondary hover:text-main'
-              } ${slotProps?.mainNavCollapsed ? 'justify-center' : ''}`}
+              } ${hasError ? 'ring-1 ring-amber-400/70' : ''} ${slotProps?.mainNavCollapsed ? 'justify-center' : ''}`}
               title={label}
             >
               <button
@@ -723,6 +816,11 @@ export function ExtensionPointRenderer({
     });
     if (!activeExt) return null;
 
+    // v0.7.0：显式错误态优先（与其他渲染路径一致）
+    const rendererError = pluginErrors.get(activeExt.pluginId);
+    if (rendererError) {
+      return <PluginErrorState pluginId={activeExt.pluginId} message={rendererError} compact />;
+    }
     if (isPluginBlown(activeExt.pluginId)) {
       if (!warnedPluginsRef.current.has(activeExt.pluginId)) {
         warnedPluginsRef.current.add(activeExt.pluginId);
@@ -730,7 +828,18 @@ export function ExtensionPointRenderer({
           `[ExtensionBreaker] Plugin "${activeExt.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
         );
       }
-      return null;
+      return (
+        <PluginErrorState
+          pluginId={activeExt.pluginId}
+          message={
+            lang === 'en'
+              ? 'The plugin frontend crashed repeatedly and was suspended.'
+              : '插件前端连续崩溃，已自动降级。'
+          }
+          lang={lang === 'en' ? 'en' : 'zh'}
+          compact
+        />
+      );
     }
 
     const isReact = typeof activeExt.component === 'function';
@@ -784,6 +893,11 @@ export function ExtensionPointRenderer({
         if (slot === 'teacher.dashboard.widget' && visibility.get(ext.pluginId) === false) return null;
         if (!isReact && !isDOM) return null;
 
+        // v0.7.0：显式错误态优先 —— 插件前端失败/被熔断时给出「错误 + 重试」
+        const extError = pluginErrors.get(ext.pluginId);
+        if (extError) {
+          return <PluginErrorState key={`${ext.pluginId}/${ext.id}`} pluginId={ext.pluginId} message={extError} />;
+        }
         if (isPluginBlown(ext.pluginId)) {
           if (!warnedPluginsRef.current.has(ext.pluginId)) {
             warnedPluginsRef.current.add(ext.pluginId);
@@ -791,7 +905,18 @@ export function ExtensionPointRenderer({
               `[ExtensionBreaker] Plugin "${ext.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
             );
           }
-          return null;
+          return (
+            <PluginErrorState
+              key={`${ext.pluginId}/${ext.id}`}
+              pluginId={ext.pluginId}
+              message={
+                lang === 'en'
+                  ? 'The plugin frontend crashed repeatedly and was suspended.'
+                  : '插件前端连续崩溃，已自动降级。'
+              }
+              lang={lang === 'en' ? 'en' : 'zh'}
+            />
+          );
         }
         return (
           <ExtensionErrorBoundary

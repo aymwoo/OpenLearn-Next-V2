@@ -32,9 +32,14 @@
 ## 前端沙箱
 
 - 活跃插件的 `frontend.js` 在 iframe 中执行。iframe 拥有 `sandbox="allow-scripts"`，源是 `/plugin-sandbox/frame`。
+- iframe 是**不透明源**（无 `allow-same-origin`）且**隐藏**（`display: none`）：插件代码不能访问宿主 DOM，也不能渲染任何用户可见内容。可见 UI 只能来自 manifest 声明式贡献（`contributes`），由宿主用自己的 React 渲染。
+- 宿主注入的 `window.HostSharedDeps` **只存在于父页面**，iframe 的 `window` 是独立 realm，取不到。因此远程插件不应把 `react` 系列库设为 external（详见 `docs/reference/plugin-host-shared-deps.md` §0）。
 - 长生命周期 RPC 监听器与激活 Promise 彻底解耦，防止插件初始化后 API 调用失效挂起。
 - 接入 iframe 二次异常导航监控，一旦检测到内部重定向外逃行为立即安全熔断并销毁 frame。
+- 插件前端加载失败或被熔断时，宿主**保留**该插件的 manifest 声明式贡献（它们由服务端插件宿主执行，与前端 bundle 无关），并在扩展点区域显示**显式错误态与重试入口**，而不是让 Tab 静默消失。
 - `GET /plugins/...` 需要有效会话，和 `/uploads` 一样。
+
+> 远程前端插件的完整能力边界与已确认的「声明式 slot DSL」方向，见 `docs/plugin/frontend-sandbox-capability-boundary.md`。
 
 ## 社区包认证
 
