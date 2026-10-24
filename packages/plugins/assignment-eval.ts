@@ -10,7 +10,7 @@ import { resolveAssignmentStageId, enforceStageAccess } from '../core/lesson-eng
 import { defaultStageGuardPipeline } from '../core/lesson-engine/stage-guard-pipeline.js';
 import { IStageGuardServiceToken } from '../core/di/interfaces.js';
 import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
-
+import { isSafeHref } from '../core/security/url-safety.js';
 /**
  * 作业中心（Assignment Hub）
  *
@@ -766,6 +766,13 @@ export const AssignmentEvalPlugin = {
         }
         if (linkUrl && !assignment.allow_link) {
           throw new Error('Access Denied: Link answers are not allowed for this assignment');
+        }
+        // Issue #228：链接答案会渲染进 href —— 写入侧过协议白名单。
+        if (linkUrl && !isSafeHref(linkUrl)) {
+          throw new Error('Access Denied: Link answer contains an unsupported URL scheme');
+        }
+        if (filePath && !isSafeHref(filePath)) {
+          throw new Error('Access Denied: File path contains an unsupported URL scheme');
         }
 
         const fileIds: string[] = Array.isArray(payload.fileIds)

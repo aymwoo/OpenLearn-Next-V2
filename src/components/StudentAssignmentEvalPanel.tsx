@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 import {
   Upload,
   FileText,
@@ -199,6 +200,8 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
   }
 
   const mySubmission = myStatus?.submission;
+  // Issue #228：我自己填的链接同样要过协议白名单再进 href。
+  const myLinkHref = sanitizeHref(mySubmission?.linkUrl);
   const myGrade = myStatus?.grade;
   const myReviewsWritten = myStatus?.reviewsWritten || [];
 
@@ -262,9 +265,9 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   {mySubmission.textContent && (
                     <p className="whitespace-pre-wrap break-all max-h-20 overflow-hidden">{mySubmission.textContent}</p>
                   )}
-                  {mySubmission.linkUrl && (
+                  {myLinkHref && (
                     <a
-                      href={mySubmission.linkUrl}
+                      href={myLinkHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block truncate text-indigo-600 hover:underline"
@@ -274,7 +277,9 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   )}
                   {Array.isArray(mySubmission.files) &&
                     mySubmission.files.map((f: any, idx: number) => {
-                      const href = fileHref(mySubmission, f);
+                      // Issue #228：进 href 前过协议白名单（附件下载端点是站内相对路径，
+                      // 但同一条渲染路径也可能承载外部链接）。
+                      const href = sanitizeHref(fileHref(mySubmission, f));
                       return href ? (
                         <a
                           key={f.fileId ?? idx}
@@ -443,8 +448,10 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
               const submittingReview = reviewLoading[peerSub.id] || false;
               // 同班同学可能只提交了文字 / 链接 / 附件（file_path 为 NULL）
               const peerFiles = Array.isArray(peerSub.files) ? peerSub.files : [];
-              const peerDownloadHref = peerSub.file_path || fileHref(peerSub, peerFiles[0]) || null;
-              const peerLinkHref = peerDownloadHref || peerSub.linkUrl || null;
+              // Issue #228：同伴提交的 file_path / linkUrl 是**别的学生**填的，
+              // 原样渲染进 href 等于把钓鱼链接摆在同学面前 —— 渲染前过协议白名单。
+              const peerDownloadHref = sanitizeHref(peerSub.file_path || fileHref(peerSub, peerFiles[0]) || null);
+              const peerLinkHref = peerDownloadHref || sanitizeHref(peerSub.linkUrl) || null;
 
               return (
                 <div

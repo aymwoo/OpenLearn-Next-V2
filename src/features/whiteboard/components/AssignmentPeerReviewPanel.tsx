@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Loader2, RefreshCw, Users } from 'lucide-react';
-
+import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 /**
  * 学生端互评面板。
  *
@@ -288,16 +288,21 @@ export function AssignmentPeerReviewPanel({
                 <div className="text-[11px] text-muted">{zh ? '该同学没有留下文本作答。' : 'No text answer.'}</div>
               )}
 
-              {peerSubmission.linkUrl ? (
-                <a
-                  href={peerSubmission.linkUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-orange-600 hover:underline break-all"
-                >
-                  <ExternalLink size={11} /> {peerSubmission.linkUrl}
-                </a>
-              ) : null}
+              {/* Issue #228：linkUrl 由学生填写 —— 渲染进 href 前过协议白名单 */}
+              {(() => {
+                const safeLink = sanitizeHref(peerSubmission.linkUrl);
+                if (!safeLink) return null;
+                return (
+                  <a
+                    href={safeLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-orange-600 hover:underline break-all"
+                  >
+                    <ExternalLink size={11} /> {peerSubmission.linkUrl}
+                  </a>
+                );
+              })()}
 
               {peerSubmission.files.length > 0 && (
                 <div className="space-y-1">

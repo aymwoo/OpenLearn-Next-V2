@@ -125,6 +125,36 @@ describe('PluginCommunityPanel', () => {
       expect(calls[0].url).toBe('/api/plugins/community');
     });
 
+    // Issue #228：registry 里的 repository / homepage 是外部数据 —— 协议不受限的话，
+    // `javascript:` 之类会直接进 href。
+    it('drops links whose scheme is not http(s)', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      repository: 'javascript:alert(1)',
+                      homepage: 'data:text/html,<script>alert(1)</script>',
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+
+      expect(await screen.findByText('作业中心')).toBeTruthy();
+      const card = within(screen.getByTestId(HOMEWORK_CARD));
+      // 非法协议的链接整条不渲染
+      expect(card.queryByRole('link', { name: /源码/ })).toBeNull();
+      expect(card.queryByRole('link')).toBeNull();
+      expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
+      expect(document.querySelector('a[href^="data:"]')).toBeNull();
+    });
+
     it('explains how to configure the registry when none is set', async () => {
       const { fetcher } = makeFetcher([
         (url) =>
