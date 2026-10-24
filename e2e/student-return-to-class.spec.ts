@@ -59,7 +59,8 @@ test.describe('学生端「返回课堂」入口 (Issue #109)', () => {
         data: { student_number: studentNum, name: `返回课堂学生${suffix.slice(-4)}`, password: studentPwd },
       });
       expect(stuRes.ok()).toBeTruthy();
-      studentId = (await stuRes.json()).id;
+      const stuData = (await stuRes.json()) as { id: string; initial_password?: string };
+      studentId = stuData.id;
       await request.post(`/api/classes/${classId}/students`, { data: { studentId } });
 
       const initRes = await request.post(`/api/classroom/sessions/${lessonId}/init`, {
@@ -72,8 +73,12 @@ test.describe('学生端「返回课堂」入口 (Issue #109)', () => {
       expect(stageRes.ok(), await stageRes.text()).toBeTruthy();
 
       // 2. 学生登录并进入看板
+      // 弱口令（'123456'）会被服务端换成随机初始口令并随创建响应返回
+      // （见 roster-service.createStudent 与 docs/beta/announcement.md），
+      // 因此这里必须用返回的 initial_password 登录，用提交值必然登录失败。
+      const effectivePwd = stuData.initial_password || studentPwd;
       const studentLogin = await student.request.post('/api/auth/login', {
-        data: { entrance: 'student', studentId: studentNum, password: studentPwd },
+        data: { entrance: 'student', studentId: studentNum, password: effectivePwd },
       });
       expect(studentLogin.ok()).toBeTruthy();
       await studentPage.addInitScript(() => {
@@ -89,6 +94,18 @@ test.describe('学生端「返回课堂」入口 (Issue #109)', () => {
       // 3. 返回课堂 → 进入课节视图
       await banner.getByRole('button', { name: '返回课堂' }).click();
       await expect(studentPage.getByText('Back to Dashboard')).toBeVisible({ timeout: 15_000 });
+
+      // Issue #131：进入课中视图会自动弹出「课前破冰心情打卡」弹窗，
+      // 它是 aria-modal 的全屏遮罩，会拦截「Back to Dashboard」的点击 —— 先跳过。
+      const icebreakerModal = studentPage.getByTestId('student-icebreaker-modal');
+      const icebreakerShown = await icebreakerModal
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (icebreakerShown) {
+        await studentPage.getByTestId('icebreaker-skip-btn').click();
+        await expect(icebreakerModal).toBeHidden({ timeout: 10_000 });
+      }
 
       // 4. 学生离开课堂（Back to Dashboard）→ 横幅仍在，可再次返回
       await studentPage.getByText('Back to Dashboard').click();

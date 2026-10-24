@@ -170,12 +170,25 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             ? '快速开始上这节课'
             : 'Quick start this class';
     const cls = size === 'sm' ? 'px-2.5 py-1 text-xs gap-1' : 'px-1.5 py-0.5 text-[11px] gap-0.5';
+    // WCAG 2.5.3（Label in Name）：无障碍名称必须**包含**可见文字。
+    // 此处此前把 aria-label 写成「快速开始上这节课：<课程名>」，
+    // 完全不含可见文字「开始上课」/「进入课堂」——
+    // 语音控制用户说「点击开始上课」无法命中，
+    // axe 的 label-content-name-mismatch 规则也会判违规。
+    // 修法：可见文字放在最前，状态说明与目标在后。
+    const actionLabel = isActiveSession
+      ? lang === 'zh'
+        ? '进入课堂'
+        : 'Enter class'
+      : lang === 'zh'
+        ? '开始上课'
+        : 'Start class';
     return (
       <button
         type="button"
         data-testid={`quick-start-${sch.id}`}
         disabled={disabled}
-        aria-label={`${title}：${sch.lesson_title || sch.class_name || sch.id}`}
+        aria-label={`${actionLabel}：${title}：${sch.lesson_title || sch.class_name || sch.id}`}
         title={title}
         onClick={() => onQuickStart(sch)}
         className={`flex items-center rounded-md font-bold transition-all ${

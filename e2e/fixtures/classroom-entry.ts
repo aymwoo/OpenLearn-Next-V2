@@ -37,3 +37,21 @@ export async function enterTeachingView(page: Page, cockpitSelector = '#classroo
   // 2) 旧路径：进行中会话被锁定时门户里的「回到课堂」
   await clickIfVisible(page.getByRole('button', { name: '回到课堂' }).first(), 3_000);
 }
+
+/**
+ * Issue #91：进入互动课堂后落到「起始门户」（选课 → 选班 → 开始上课）。
+ *
+ * 新首屏是「进行中的课堂会话」列表。而 e2e 全部 spec 串行跑在**同一个 dev 库**上，
+ * 前一个用例残留的未归档会话（例如 a11y-gate 的 A11Y2 课节）会让列表非空，
+ * 于是列表首屏就取代了起始门户 —— 期望「选择授课课程」的用例必然找不到。
+ *
+ * 这里显式点「开始一节新课」把列表交回起始门户（该按钮的既定语义就是
+ * 「回到门户开新课，不影响其它进行中的会话」），让门户路径的用例可稳定执行。
+ */
+export async function enterEntryPortal(page: Page): Promise<void> {
+  const portalCourseDeck = page.getByText('选择授课课程');
+  if (await portalCourseDeck.isVisible().catch(() => false)) return;
+
+  await clickIfVisible(page.getByRole('button', { name: /开始一节新课|Start a new lesson/ }).first(), 10_000);
+  await portalCourseDeck.waitFor({ state: 'visible', timeout: 15_000 });
+}

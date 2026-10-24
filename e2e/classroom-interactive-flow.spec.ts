@@ -260,7 +260,9 @@ test.describe('互动课堂学生端答题与全链路采集 Playwright E2E 测�
       const quizResult = submissionsJson.quizzes[0];
       expect(quizResult.submissions[studentId]).toBeDefined();
       expect(quizResult.submissions[studentId].score).toBe(100);
-      expect(quizResult.submissions[studentId].answer).toBe('A');
+      // Issue #107：客户端提交统一发**选项索引**（0 = A），服务端原样落库。
+      // 断言字母 'A' 是旧契约 —— 读回来的是索引 0。
+      expect(quizResult.submissions[studentId].answer).toBe(0);
       if (quizResult.submissions[studentId].isCorrect !== undefined) {
         expect(quizResult.submissions[studentId].isCorrect).toBe(true);
       }

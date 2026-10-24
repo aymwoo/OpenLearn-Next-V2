@@ -8,6 +8,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import { enterEntryPortal } from './fixtures/classroom-entry';
 
 function purgeLessonClassroomFlowFromDb() {
   const dbPath = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
@@ -211,6 +212,8 @@ test.describe('课程管理与课堂工作流 E2E 测试', () => {
       await expect.poll(() => courseHasElement(request, lessonId!, 'hello-world')).toBe(true);
 
       await page.locator('button:has-text("互动课堂")').first().click();
+      // Issue #91：首屏是「进行中的课堂会话」列表 —— 回到起始门户再开课。
+      await enterEntryPortal(page);
       await expect(page.getByText('选择授课课程')).toBeVisible();
       await page.getByRole('button', { name: new RegExp(courseTitle) }).click();
 

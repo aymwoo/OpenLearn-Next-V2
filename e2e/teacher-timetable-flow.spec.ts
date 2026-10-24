@@ -38,6 +38,24 @@ function purgeTimetableE2EFromDb() {
   }
 }
 
+/**
+ * 本周一的**本地**日期（YYYY-MM-DD）。
+ *
+ * 用例里排课必须落在一个必定可见的格子里：周视图默认只渲染周一~周五
+ * （showWeekend 默认 false，见 TimetableManager 的 showWeekend 初值），
+ * 排到周六/周日时卡片不渲染，用例会随运行日期变成 flaky。
+ * 周一恒定可见，且与前端 getWeekDates 的本地日期口径一致。
+ */
+function mondayOfThisWeekLocal(): string {
+  const now = new Date();
+  const dow = now.getDay(); // 0=周日
+  const diff = dow === 0 ? -6 : 1 - dow; // 周一为 0，周日回退到上周一
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  const m = String(monday.getMonth() + 1).padStart(2, '0');
+  const d = String(monday.getDate()).padStart(2, '0');
+  return `${monday.getFullYear()}-${m}-${d}`;
+}
+
 test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', () => {
   test.beforeAll(() => {
     purgeTimetableE2EFromDb();
@@ -127,8 +145,11 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
         await lessonSelect.selectOption(createdLessonId);
       }
 
-      // 设置排课日期为今天
-      const todayStr = new Date().toISOString().split('T')[0];
+      // 设置排课日期为**本周一**。
+      // 不能用「今天」：周视图默认只显示周一~周五（showWeekend 默认 false），
+      // 排到周六/周日时卡片根本不渲染 —— 用例会随运行日期变成 flaky。
+      // 也不能用 toISOString()（UTC），它与本地日历日期可能差一天。
+      const todayStr = mondayOfThisWeekLocal();
       const dateInput = page.locator('form input[type="date"]');
       await dateInput.fill(todayStr);
 
