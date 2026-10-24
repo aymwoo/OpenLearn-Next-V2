@@ -26,6 +26,8 @@ import {
 // R-4：命令 handler 的 base64 Buffer → 临时 ZIP 文件（安装链路只持路径）
 import { removeTempZip, writeBufferToTempZip } from '../core/esm-loader/install-utils.js';
 import { recordSecurityAudit } from '../core/observability/audit-log.js';
+// Issue #227：口令摘要统一走 bcrypt（与种子账号 / 名册入口同源）。
+import { hashPassword } from '../core/db/index.js';
 
 /** 平台原生课件运行时脚本注册表的引用（供 deactivate 声明式回收） */
 let nativeRuntimeScriptRegistry: any = null;
@@ -1245,7 +1247,9 @@ export const BuiltinPlugin = {
         }
 
         const id = 'usr_' + crypto.randomBytes(6).toString('hex');
-        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        // Issue #227：口令摘要改用 bcrypt —— SHA-256 无盐、无工作因子，
+        // 库一旦泄露，爆破成本极低。与种子账号 / 名册入口保持同一口径。
+        const hash = hashPassword(password);
 
         db.prepare(
           'INSERT INTO users (id, username, password_hash, role, name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -1311,7 +1315,9 @@ export const BuiltinPlugin = {
         }
         if (password !== undefined && password !== '') {
           updates.push('password_hash = ?');
-          const hash = crypto.createHash('sha256').update(password).digest('hex');
+          // Issue #227：口令摘要改用 bcrypt —— SHA-256 无盐、无工作因子，
+          // 库一旦泄露，爆破成本极低。与种子账号 / 名册入口保持同一口径。
+          const hash = hashPassword(password);
           params.push(hash);
         }
         if (role !== undefined) {
