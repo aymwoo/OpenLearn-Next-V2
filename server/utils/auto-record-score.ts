@@ -192,8 +192,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
            LIMIT 1`,
         )
         .get(existingAssignment.id, attempt.student_id) as
-        | { score: number | null; status: string | null; source: string | null }
-        | undefined;
+        { score: number | null; status: string | null; source: string | null } | undefined;
       if (existing) {
         // 教师标记的缺考行受保护（自动规则不覆盖；教师改判走手动路径显式覆盖）。
         // 注意缺考行（含考勤联动生成）的 source 也是 'manual'，必须先于 source 判定。
@@ -215,15 +214,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
 
     const assignment = existingAssignment
       ? backfillAssignmentAcademicYear(db, existingAssignment, academicYear)
-      : createCoursewareAssignment(
-          db,
-          classId,
-          lessonId,
-          coursewareName,
-          attempt.courseware_uuid,
-          now,
-          academicYear,
-        );
+      : createCoursewareAssignment(db, classId, lessonId, coursewareName, attempt.courseware_uuid, now, academicYear);
 
     // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）；
     // 统一走成绩写入器，手动分/缺考保护与历史审计在事务内完成。
@@ -268,8 +259,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
 
   // better-sqlite3 风格的 transaction；非事务环境（Worker RPC 代理）直接执行。
   // 必须以 db.transaction(run)() 调用：解构出 transaction 再调会丢失 this 绑定。
-  const outcome: RunOutcome =
-    typeof (db as any).transaction === 'function' ? (db as any).transaction(run)() : run();
+  const outcome: RunOutcome = typeof (db as any).transaction === 'function' ? (db as any).transaction(run)() : run();
 
   // 跳过时整体不落库（含 student_lesson_progress 不推进），
   // 避免「分数被保护但进度被自动置 100」的不一致。
@@ -294,8 +284,8 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
 /** 教师把学生标记为缺考的结果 */
 export interface MarkAbsentResult {
   ok: boolean;
-  /** 失败原因：课件不存在 / 学生不在该班级 */
-  reason?: 'courseware-not-found' | 'student-not-in-class';
+  /** 失败原因：课件不存在 / 学生不在该班级 / 已有成绩行 */
+  reason?: 'courseware-not-found' | 'student-not-in-class' | 'already-recorded';
   studentId?: string;
   coursewareName?: string;
 }
@@ -304,6 +294,15 @@ export interface MarkAbsentResult {
  * 教师手动标记缺考：写一行 status='absent'、score=NULL、source='manual' 的成绩。
  * source='manual' 使其受自动规则保护 —— 学生之后补交课件也不会冲掉缺考标记；
  * 教师改判（允许该生成绩）走手动「录入成绩」路径显式覆盖。
+ *
+ * ## 已批改行的保护（Issue #248）
+ *
+ * 此前这条路径带 `overrideProtected: true`，因此可以把**教师已经批改过的成绩行**
+ * 静默覆盖成缺考（分数被抹掉）。考勤联动缺考路径有 `getRecordedGrade` 防护，
+ * 手动路径没有 —— 只剩 #215 的审计历史兜底（事后能查，但分数已经没了）。
+ *
+ * 现在手动路径补同一道防护：**已有分数的行不再被覆盖**。
+ * 教师要改判请走手动「录入成绩」路径（那里有显式 override，是有意为之的改判入口）。
  */
 export function markStudentAbsent(
   db: SqliteLike,
@@ -328,8 +327,7 @@ export function markStudentAbsent(
   let coursewareUuid: string | null = null;
   try {
     const cw = db.prepare('SELECT name, uuid FROM courseware WHERE id = ?').get(coursewareId) as
-      | { name: string; uuid: string | null }
-      | undefined;
+      { name: string; uuid: string | null } | undefined;
     coursewareName = cw?.name ?? null;
     coursewareUuid = cw?.uuid ?? null;
   } catch {
@@ -350,6 +348,8 @@ export function markStudentAbsent(
     return { ok: false, reason: 'student-not-in-class', studentId, coursewareName };
   }
 
+  let blockedByExistingGrade = false;
+
   const run = (): void => {
     const now = Date.now();
     const assignment = ensureCoursewareAssignment(
@@ -361,6 +361,17 @@ export function markStudentAbsent(
       now,
       resolveLessonAcademicYear(db, classId, lessonId, now),
     );
+
+    // Issue #248：已有分数的行不被缺考覆盖（与考勤联动缺考路径同一道防护）。
+    // 「已提交但未评分」的行不算 —— 教师标记缺考正是针对这类行。
+    const existing = db
+      .prepare('SELECT score, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ? LIMIT 1')
+      .get(assignment.id, studentId) as { score: number | null; status: string | null } | undefined;
+    if (existing && (existing.score !== null || existing.status === 'graded')) {
+      blockedByExistingGrade = true;
+      return;
+    }
+
     // 幂等：重复标记只更新同一行；教师重复点击不会产生重复成绩。
     // 缺考行 source='manual' 受自动规则保护，教师后续改判走手动录入显式覆盖。
     applyGradeChange(db, {
@@ -383,6 +394,11 @@ export function markStudentAbsent(
   };
   if (typeof (db as any).transaction === 'function') (db as any).transaction(run)();
   else run();
+
+  if (blockedByExistingGrade) {
+    // 不覆盖已批改行：分数保留，改判请走手动「录入成绩」（那里有显式 override）。
+    return { ok: false, reason: 'already-recorded', studentId, coursewareName };
+  }
 
   return { ok: true, studentId, coursewareName };
 }
@@ -414,12 +430,7 @@ function isEnrolledInClass(db: SqliteLike, classId: string, studentId: string): 
  * 课件的学年口径：课堂会话 → 排课学年/排课日期 → 当前时间。
  * 学期成绩按 academic_year 过滤，缺失学年的成绩会直接消失在报表里。
  */
-function resolveLessonAcademicYear(
-  db: SqliteLike,
-  classId: string,
-  lessonId: string,
-  now: number,
-): string | null {
+function resolveLessonAcademicYear(db: SqliteLike, classId: string, lessonId: string, now: number): string | null {
   try {
     const session = db
       .prepare(
@@ -468,8 +479,7 @@ function findCoursewareAssignment(
            ORDER BY created_at ASC LIMIT 1`,
         )
         .get(classId, lessonId, `"coursewareUuid":"${coursewareUuid}"`) as
-        | { id: string; academic_year: string | null }
-        | undefined;
+        { id: string; academic_year: string | null } | undefined;
       if (byUuid) return { id: byUuid.id, academicYear: byUuid.academic_year ?? null };
     }
 
@@ -481,8 +491,7 @@ function findCoursewareAssignment(
          ORDER BY created_at ASC LIMIT 1`,
       )
       .get(classId, lessonId, `互动课件: ${coursewareName}`) as
-      | { id: string; academic_year: string | null }
-      | undefined;
+      { id: string; academic_year: string | null } | undefined;
     return legacy ? { id: legacy.id, academicYear: legacy.academic_year ?? null } : null;
   } catch {
     return null;
@@ -870,8 +879,7 @@ function getRecordedGrade(
          LIMIT 1`,
       )
       .get(assignment.id, studentId) as
-      | { score: number | null; status: string | null; source: string | null }
-      | undefined;
+      { score: number | null; status: string | null; source: string | null } | undefined;
     return row ?? null;
   } catch (e) {
     return null;
