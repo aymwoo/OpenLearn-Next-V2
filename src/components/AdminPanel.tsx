@@ -1302,42 +1302,42 @@ export function AdminPanel({
                     : 'Size cap for file uploads (PDF/PPTX), 1–90 MB. Takes effect immediately after saving.'}
                 </p>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '当前学年 (YYYY-YYYY)' : 'Current Academic Year (YYYY-YYYY)'}
-                </label>
-                <input
-                  type="text"
-                  value={currentAcademicYear}
-                  onChange={(e) => setCurrentAcademicYear(e.target.value)}
-                  placeholder={lang === 'zh' ? '例如：2025-2026' : 'e.g. 2025-2026'}
-                  className="w-48 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  {lang === 'zh'
-                    ? '平台默认学年筛选与新数据归属会使用该值；格式必须连续，如 2025-2026。'
-                    : 'Default academic-year filtering and new records use this value; must be contiguous, e.g. 2025-2026.'}
-                </p>
-              </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {lang === 'zh' ? '当前学年 (YYYY-YYYY)' : 'Current Academic Year (YYYY-YYYY)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={currentAcademicYear}
+                    onChange={(e) => setCurrentAcademicYear(e.target.value)}
+                    placeholder={lang === 'zh' ? '例如：2025-2026' : 'e.g. 2025-2026'}
+                    className="w-48 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    {lang === 'zh'
+                      ? '平台默认学年筛选与新数据归属会使用该值；格式必须连续，如 2025-2026。'
+                      : 'Default academic-year filtering and new records use this value; must be contiguous, e.g. 2025-2026.'}
+                  </p>
+                </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '学年起始月份' : 'Academic Year Start Month'}
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={academicStartMonth}
-                  onChange={(e) => setAcademicStartMonth(Number(e.target.value))}
-                  className="w-24 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  {lang === 'zh'
-                    ? '用于根据日期自动推断学年，默认 9 月。'
-                    : 'Used to derive academic year from dates; defaults to September.'}
-                </p>
-              </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {lang === 'zh' ? '学年起始月份' : 'Academic Year Start Month'}
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={academicStartMonth}
+                    onChange={(e) => setAcademicStartMonth(Number(e.target.value))}
+                    className="w-24 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    {lang === 'zh'
+                      ? '用于根据日期自动推断学年，默认 9 月。'
+                      : 'Used to derive academic year from dates; defaults to September.'}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">

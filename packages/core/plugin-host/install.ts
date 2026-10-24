@@ -925,4 +925,3 @@ export abstract class PluginHostInstall extends PluginHostReload {
     }
   }
 }
-

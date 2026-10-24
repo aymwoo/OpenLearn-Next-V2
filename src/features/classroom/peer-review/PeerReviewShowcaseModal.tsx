@@ -347,24 +347,28 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
           均由调用方通过 props 传入真实数据。无数据时明确告知教师原因，
           而不是用假学生/假分数让界面「看起来有内容」。
         */}
-        {!workA && !workB && showcaseWorks.length === 0 && matchingItems.length === 0 && podiumStudents.length === 0 && (
-          <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-3 text-[11px] text-[#908fa0]">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-            <span className="flex-1">
-              本节暂无可展示的互评数据（需至少 2 份学生提交作品）。点击右侧按钮按「1 生评 2 份」自动分配。
-            </span>
-            {onAutoAssign && (
-              <button
-                type="button"
-                disabled={autoAssigning}
-                onClick={() => void onAutoAssign()}
-                className="px-3 py-1 rounded-lg bg-[#8083ff] text-white text-[11px] font-bold hover:bg-[#9497ff] transition-colors disabled:opacity-50 shrink-0"
-              >
-                {autoAssigning ? '分配中…' : '一键分配互评'}
-              </button>
-            )}
-          </div>
-        )}
+        {!workA &&
+          !workB &&
+          showcaseWorks.length === 0 &&
+          matchingItems.length === 0 &&
+          podiumStudents.length === 0 && (
+            <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-3 text-[11px] text-[#908fa0]">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+              <span className="flex-1">
+                本节暂无可展示的互评数据（需至少 2 份学生提交作品）。点击右侧按钮按「1 生评 2 份」自动分配。
+              </span>
+              {onAutoAssign && (
+                <button
+                  type="button"
+                  disabled={autoAssigning}
+                  onClick={() => void onAutoAssign()}
+                  className="px-3 py-1 rounded-lg bg-[#8083ff] text-white text-[11px] font-bold hover:bg-[#9497ff] transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {autoAssigning ? '分配中…' : '一键分配互评'}
+                </button>
+              )}
+            </div>
+          )}
 
         {/* 全班多模态作品池切换抽屉 / 面板 */}
         {showcaseWorks && showcaseWorks.length > 0 && (
@@ -405,8 +409,8 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
                         isA
                           ? 'bg-[#8083ff]/15 border-[#8083ff]'
                           : isB
-                          ? 'bg-[#00a572]/15 border-[#00a572]'
-                          : 'bg-[#171f33] border-[#2d3449]/80 hover:border-[#8083ff]/40'
+                            ? 'bg-[#00a572]/15 border-[#00a572]'
+                            : 'bg-[#171f33] border-[#2d3449]/80 hover:border-[#8083ff]/40'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1">
@@ -416,8 +420,8 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
                             work.source === 'plugin'
                               ? 'bg-[#8083ff]/20 text-[#c0c1ff] border-[#8083ff]/30'
                               : work.source === 'assignment'
-                              ? 'bg-[#00a572]/20 text-[#4edea3] border-[#00a572]/30'
-                              : 'bg-[#ca8100]/20 text-[#ffb95f] border-[#ca8100]/30'
+                                ? 'bg-[#00a572]/20 text-[#4edea3] border-[#00a572]/30'
+                                : 'bg-[#ca8100]/20 text-[#ffb95f] border-[#ca8100]/30'
                           }`}
                         >
                           {work.sourceLabel}

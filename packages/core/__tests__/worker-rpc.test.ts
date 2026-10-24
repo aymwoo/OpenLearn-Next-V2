@@ -545,20 +545,24 @@ export default {
       // 等待看门狗拉起新 worker 并重新注册 handler
       let res: any;
       let attempt = 0;
-      await waitForCondition(async () => {
-        try {
-          attempt++;
-          res = await kernel.commandBus.execute({
-            id: `cmd-watchdog-rc-${crashId}-${attempt}`,
-            type: 'ext-test-watchdog.get_run_status',
-            actorId: 'role:administrator',
-            payload: {},
-          });
-          return res?.status === 'ok';
-        } catch {
-          return false;
-        }
-      }, 4000, 10);
+      await waitForCondition(
+        async () => {
+          try {
+            attempt++;
+            res = await kernel.commandBus.execute({
+              id: `cmd-watchdog-rc-${crashId}-${attempt}`,
+              type: 'ext-test-watchdog.get_run_status',
+              actorId: 'role:administrator',
+              payload: {},
+            });
+            return res?.status === 'ok';
+          } catch {
+            return false;
+          }
+        },
+        4000,
+        10,
+      );
       expect(res.status).toBe('ok');
     };
 
@@ -580,16 +584,22 @@ export default {
     });
 
     // Wait for breaker (circuit breaker fires immediately upon 4th crash)
-    await waitForCondition(() => {
-      try {
-        const row = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as {
-          status: string;
-        } | undefined;
-        return row?.status === 'error' && crashedEventReceived;
-      } catch {
-        return false;
-      }
-    }, 4000, 10);
+    await waitForCondition(
+      () => {
+        try {
+          const row = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as
+            | {
+                status: string;
+              }
+            | undefined;
+          return row?.status === 'error' && crashedEventReceived;
+        } catch {
+          return false;
+        }
+      },
+      4000,
+      10,
+    );
 
     // Verify plugin is now marked as 'error' state in DB
     const finalRow = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as {

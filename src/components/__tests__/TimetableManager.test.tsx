@@ -66,7 +66,7 @@ describe('TimetableManager Component', () => {
           ok: true,
           json: async () => ({}),
         });
-      })
+      }),
     );
   });
 
@@ -76,14 +76,7 @@ describe('TimetableManager Component', () => {
   });
 
   it('renders the header title and default calendar tab in Chinese', async () => {
-    render(
-      <TimetableManager
-        classes={mockClasses}
-        lessons={mockLessons}
-        lang="zh"
-        onSchedulesUpdated={vi.fn()}
-      />
-    );
+    render(<TimetableManager classes={mockClasses} lessons={mockLessons} lang="zh" onSchedulesUpdated={vi.fn()} />);
 
     expect(screen.getByText('班级课表中心 & 动态调整')).toBeTruthy();
     expect(screen.getByText(/统一管理日常排课/)).toBeTruthy();
@@ -101,14 +94,7 @@ describe('TimetableManager Component', () => {
   });
 
   it('renders the header title in English when lang is en', () => {
-    render(
-      <TimetableManager
-        classes={mockClasses}
-        lessons={mockLessons}
-        lang="en"
-        onSchedulesUpdated={vi.fn()}
-      />
-    );
+    render(<TimetableManager classes={mockClasses} lessons={mockLessons} lang="en" onSchedulesUpdated={vi.fn()} />);
 
     expect(screen.getByText('Timetable Center & Adjustments')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Schedule Grid/ })).toBeTruthy();
@@ -118,14 +104,7 @@ describe('TimetableManager Component', () => {
   });
 
   it('switches between tabs cleanly', async () => {
-    render(
-      <TimetableManager
-        classes={mockClasses}
-        lessons={mockLessons}
-        lang="zh"
-        onSchedulesUpdated={vi.fn()}
-      />
-    );
+    render(<TimetableManager classes={mockClasses} lessons={mockLessons} lang="zh" onSchedulesUpdated={vi.fn()} />);
 
     // 1. Switch to Holiday Adjusts tab
     const adjustTabBtn = screen.getByRole('button', { name: /🛠️ 临时调休调课/ });
@@ -164,18 +143,11 @@ describe('TimetableManager Component', () => {
         Promise.resolve({
           ok: true,
           json: async () => [],
-        })
-      )
+        }),
+      ),
     );
 
-    render(
-      <TimetableManager
-        classes={[]}
-        lessons={[]}
-        lang="zh"
-        onSchedulesUpdated={vi.fn()}
-      />
-    );
+    render(<TimetableManager classes={[]} lessons={[]} lang="zh" onSchedulesUpdated={vi.fn()} />);
 
     expect(screen.getByText('班级课表中心 & 动态调整')).toBeTruthy();
     expect(screen.getByRole('button', { name: /🗓️ 课表看板/ })).toBeTruthy();
@@ -226,7 +198,10 @@ describe('TimetableManager 快速开始上课 (Issue #90)', () => {
   const mockFetch = (overrides: { initStatus?: number; initBody?: any } = {}) =>
     vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes('/api/classroom/sessions?') && url.includes('status=active')) {
-        return Promise.resolve({ ok: true, json: async () => ({ items: [{ lessonId: 'l1', stage: 'IN_CLASS_TEACHING' }] }) });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [{ lessonId: 'l1', stage: 'IN_CLASS_TEACHING' }] }),
+        });
       }
       if (url.includes('/api/classroom/teaching-modes')) {
         return Promise.resolve({
@@ -234,15 +209,39 @@ describe('TimetableManager 快速开始上课 (Issue #90)', () => {
           json: async () => ({
             success: true,
             modes: [
-              { id: 'mode_explore', name: '探究实验', nameEn: 'Explore', description: '', descriptionEn: null, icon: 'FlaskConical', color: 'emerald', isBuiltin: true, sortOrder: 1 },
-              { id: 'mode_lecture', name: '讲授', nameEn: 'Lecture', description: '', descriptionEn: null, icon: 'Presentation', color: 'indigo', isBuiltin: true, sortOrder: 2 },
+              {
+                id: 'mode_explore',
+                name: '探究实验',
+                nameEn: 'Explore',
+                description: '',
+                descriptionEn: null,
+                icon: 'FlaskConical',
+                color: 'emerald',
+                isBuiltin: true,
+                sortOrder: 1,
+              },
+              {
+                id: 'mode_lecture',
+                name: '讲授',
+                nameEn: 'Lecture',
+                description: '',
+                descriptionEn: null,
+                icon: 'Presentation',
+                color: 'indigo',
+                isBuiltin: true,
+                sortOrder: 2,
+              },
             ],
           }),
         });
       }
       if (url.includes('/api/classroom/sessions/') && url.includes('/init')) {
         if (overrides.initStatus) {
-          return Promise.resolve({ ok: false, status: overrides.initStatus, json: async () => ({ error: overrides.initBody?.error || 'boom' }) });
+          return Promise.resolve({
+            ok: false,
+            status: overrides.initStatus,
+            json: async () => ({ error: overrides.initBody?.error || 'boom' }),
+          });
         }
         return Promise.resolve({ ok: true, json: async () => ({ success: true, session: { id: 'ses_1' } }) });
       }
@@ -253,7 +252,10 @@ describe('TimetableManager 快速开始上课 (Issue #90)', () => {
         return Promise.resolve({ ok: true, json: async () => quickSchedules });
       }
       if (url.includes('/api/schedules')) {
-        return Promise.resolve({ ok: true, json: async () => ({ data: quickSchedules, total: quickSchedules.length, page: 1, pageSize: 50 }) });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: quickSchedules, total: quickSchedules.length, page: 1, pageSize: 50 }),
+        });
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });

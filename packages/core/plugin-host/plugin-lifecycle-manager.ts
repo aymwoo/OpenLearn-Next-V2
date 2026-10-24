@@ -53,10 +53,7 @@ export class PluginLifecycleManager implements IPluginLifecycleManager {
     await this.pluginHost.reloadPlugin(pluginId, newCode);
   }
 
-  public async uninstallPlugin(
-    pluginId: string,
-    options?: UninstallPluginOptions,
-  ): Promise<UninstallPluginResult> {
+  public async uninstallPlugin(pluginId: string, options?: UninstallPluginOptions): Promise<UninstallPluginResult> {
     return this.pluginHost.uninstallPlugin(pluginId, options);
   }
 

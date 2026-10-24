@@ -46,9 +46,12 @@ describe('GradingService 领域服务单元测试 (E3)', () => {
     enroll.run(testClassId, testStudentBob, now);
 
     // 2. 初始化课节与课表
-    db.prepare(
-      'INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
-    ).run('les-svc-dummy', '服务测试课节', now, now);
+    db.prepare('INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
+      'les-svc-dummy',
+      '服务测试课节',
+      now,
+      now,
+    );
 
     db.prepare(
       'INSERT OR REPLACE INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

@@ -149,7 +149,10 @@ describe('AiPlannerPlugin', () => {
 
   it('should successfully register, activate and run AI Planner commands', async () => {
     const pluginId = '@openlearn/plugin-ai-planner';
-    pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    ); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(
@@ -208,7 +211,10 @@ describe('AiPlannerPlugin', () => {
 
   it('ai.apply_grade 保护教师手动分，教师显式 overrideManual 才覆盖', async () => {
     const pluginId = '@openlearn/plugin-ai-planner';
-    pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      AiPlannerPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    ); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
     db.prepare(
       'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
     ).run(pluginId, 'AI Planner', JSON.stringify(AiPlannerPlugin.manifest), '', 'installed', Date.now(), 'esm');

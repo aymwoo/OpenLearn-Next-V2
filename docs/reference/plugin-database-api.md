@@ -18,6 +18,7 @@
 > ℹ️ **表前缀命名规范（已统一）**：
 >
 > 平台已统一收敛表前缀生成规则为 `plugin_<scopeId>_`（`pluginTablePrefix(scopeId)`）：
+>
 > 1. 上传与社区安装的插件统一使用其安装主键（`plugins` 表的行 UUID），在 Inline 与 Worker（子进程/独立进程）两种模式下均保持一致，实现存储物理隔离与防冲突；
 > 2. 内置核心插件使用其规范 scopeId（如 `@openlearn/plugin-vfs` → `plugin__openlearn_plugin_vfs_`）；
 > 3. 前缀中所有非 `[A-Za-z0-9_]` 字符一律替换为 `_`。卸载插件时，宿主依据统一安装主键精准识别并级联清理私有表。
@@ -45,11 +46,11 @@ interface PluginDatabaseAPI {
 
 插件通过 ZIP 上传，表名与 schema 属**不可信输入**，宿主在拼接 DDL 前强制校验（inline 与 Worker 双模式同等实现）：
 
-| 规则        | 约束                                                                                                                                      | 违例报错                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 表名格式    | 正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/` —— 字母/下划线开头，仅字母数字下划线，**最长 64 字符**（不允许连字符 `-`、点 `.`、`$`）            | `[SEC] Invalid SQL identifier for ensureTable(tableName): …`           |
-| schema 长度 | 非空字符串，**≤ 4000 字符**                                                                                                               | `[SEC] createTable schema must be a non-empty string (max 4000 chars)` |
-| schema 内容 | **禁止包含分号 `;`**（阻断多语句注入，如 `…); DROP TABLE events; --`）                                                                    | `[SEC] createTable schema must not contain ";" …`                      |
+| 规则        | 约束                                                                                                                                                                                 | 违例报错                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 表名格式    | 正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/` —— 字母/下划线开头，仅字母数字下划线，**最长 64 字符**（不允许连字符 `-`、点 `.`、`$`）                                                       | `[SEC] Invalid SQL identifier for ensureTable(tableName): …`           |
+| schema 长度 | 非空字符串，**≤ 4000 字符**                                                                                                                                                          | `[SEC] createTable schema must be a non-empty string (max 4000 chars)` |
+| schema 内容 | **禁止包含分号 `;`**（阻断多语句注入，如 `…); DROP TABLE events; --`）                                                                                                               | `[SEC] createTable schema must not contain ";" …`                      |
 | 表名前缀    | 实际表名为 `plugin_<pluginId>_` + tableName；pluginId 中非 `[A-Za-z0-9_]` 字符会被替换为 `_`（Inline 模式下为 UUID 型 id，前缀形如 `plugin_9f2c______`；Worker 模式下为 manifestId） | —                                                                      |
 
 另有两个配套防护：`dropAllTables()` 只清理本插件前缀的表、对 `sqlite_master` 返回的表名二次校验后才拼 DDL；ZIP 安装时有 300MB 解压总大小上限与路径穿越（`..` / 前导 `/`）检查。
@@ -163,11 +164,11 @@ async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | voi
 
 ## 4. 命名空间与获取方式
 
-| 项目     | 路径 A `ctx.db`                                                    | 路径 B `ctx.resolve(IDatabaseToken)` |
-| -------- | ------------------------------------------------------------------ | ------------------------------------ |
-| 命名空间 | 自动前缀 `plugin_<scopeId>_`（统一为安装行 UUID 或内置插件 scopeId，见 §1 说明） | 无，整个平台库                       |
+| 项目     | 路径 A `ctx.db`                                                                                                                               | 路径 B `ctx.resolve(IDatabaseToken)`                                                    |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 命名空间 | 自动前缀 `plugin_<scopeId>_`（统一为安装行 UUID 或内置插件 scopeId，见 §1 说明）                                                              | 无，整个平台库                                                                          |
 | 暴露位置 | `PluginContext.db`（`packages/core/plugin-host/types.ts`）/ `buildContext()` 构造的 `dbApi`（`packages/core/plugin-host/context-builder.ts`） | `ServiceRegistry` 注册 `IDatabaseToken`（`packages/core/kernel/index.ts` 的服务注册段） |
-| 适用     | 插件私有表                                                         | 跨表查询 / 读写平台表 / 事务         |
+| 适用     | 插件私有表                                                                                                                                    | 跨表查询 / 读写平台表 / 事务                                                            |
 
 **KV 存储（非 SQL）**：`ctx.services.storage`（`IStorageService` 的 `get` / `set` / `delete`）后端为 `plugin_storage` 表，**按 `plugin_id` 自动命名空间隔离**。注意此处 `plugin_id` 列写入的是 **`manifest.id`**（`buildContext()` 中 `wrapStorage()` 的实现，见 `packages/core/plugin-host/context-builder.ts`）。适合简单键值，无需建表。
 

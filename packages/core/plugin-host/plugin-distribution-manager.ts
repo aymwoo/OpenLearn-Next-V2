@@ -185,16 +185,10 @@ export class PluginDistributionManager implements IPluginDistributionManager {
       if (verifyResult.code === 'COMMUNITY_ATTESTATION_REQUIRED') {
         throw new PluginAttestationRequiredError(pluginId, verifyResult.error);
       }
-      if (
-        verifyResult.code === 'COMMUNITY_INTEGRITY_MISMATCH' ||
-        verifyResult.code === 'LOCAL_INTEGRITY_MISMATCH'
-      ) {
+      if (verifyResult.code === 'COMMUNITY_INTEGRITY_MISMATCH' || verifyResult.code === 'LOCAL_INTEGRITY_MISMATCH') {
         throw new PluginIntegrityMismatchError(pluginId, verifyResult.error);
       }
-      if (
-        verifyResult.code === 'COMMUNITY_SIGNATURE_INVALID' ||
-        verifyResult.code === 'LOCAL_SIGNATURE_INVALID'
-      ) {
+      if (verifyResult.code === 'COMMUNITY_SIGNATURE_INVALID' || verifyResult.code === 'LOCAL_SIGNATURE_INVALID') {
         throw new PluginSignatureInvalidError(pluginId, verifyResult.error);
       }
       throw new PluginSignatureError(pluginId, verifyResult.code, verifyResult.error);

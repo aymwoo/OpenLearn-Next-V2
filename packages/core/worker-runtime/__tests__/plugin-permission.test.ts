@@ -281,9 +281,7 @@ describe('L-1 P2 · 权限旗标构造', () => {
     expect(args).toContain('--allow-fs-read=/data/plugins/node_modules/*');
     expect(args).toContain('--allow-fs-read=/repo/packages/plugin-sdk/*');
     // 只读：不能因为这些路径是「宿主的」就顺带给出写权限
-    expect(args.filter((a) => a.startsWith('--allow-fs-write='))).toEqual([
-      '--allow-fs-write=/data/plugins/uuid-1/*',
-    ]);
+    expect(args.filter((a) => a.startsWith('--allow-fs-write='))).toEqual(['--allow-fs-write=/data/plugins/uuid-1/*']);
   });
 
   it('反斜杠路径归一为正斜杠（Node 通配符不认反斜杠）', () => {

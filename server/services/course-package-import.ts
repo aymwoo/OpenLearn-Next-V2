@@ -320,10 +320,7 @@ function findExistingImport(
   identity: CoursePackageIdentity,
 ): { id: string; title: string; created_at: number } | null {
   const row = db
-    .prepare(
-      'SELECT id, title, created_at FROM lessons ' +
-        'WHERE creator_id = ? AND source_package_key = ? LIMIT 1',
-    )
+    .prepare('SELECT id, title, created_at FROM lessons ' + 'WHERE creator_id = ? AND source_package_key = ? LIMIT 1')
     .get(creatorId, identity.key) as { id: string; title: string; created_at: number } | undefined;
   return row ?? null;
 }

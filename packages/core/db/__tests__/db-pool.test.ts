@@ -38,7 +38,9 @@ describe('Database WAL & Connection Pool (P1-1)', () => {
 
     // Verify readonly mode prevents writes
     expect(() => {
-      readDb.prepare("INSERT INTO events (id, type, source, payload, timestamp) VALUES ('fake', 'test', 'test', '{}', 1)").run();
+      readDb
+        .prepare("INSERT INTO events (id, type, source, payload, timestamp) VALUES ('fake', 'test', 'test', '{}', 1)")
+        .run();
     }).toThrow(/readonly|attempt to write a readonly database/i);
 
     // Verify readonly query works
@@ -71,9 +73,13 @@ describe('Database WAL & Connection Pool (P1-1)', () => {
 
     // 在主写连接上开启事务，写入记录但先不提交
     const tx = db.transaction(() => {
-      db.prepare(
-        'INSERT INTO events (id, type, source, payload, timestamp) VALUES (?, ?, ?, ?, ?)',
-      ).run(testId, 'test.concurrency', 'test', '{}', Date.now());
+      db.prepare('INSERT INTO events (id, type, source, payload, timestamp) VALUES (?, ?, ?, ?, ?)').run(
+        testId,
+        'test.concurrency',
+        'test',
+        '{}',
+        Date.now(),
+      );
 
       // 在写事务内部，使用只读池并发查询：由于事务未提交，只读连接不应该被锁死（不会抛出 SQLITE_BUSY）
       const readResult = queryReadOne('SELECT id FROM events WHERE id = ?', testId);

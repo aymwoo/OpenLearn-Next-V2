@@ -79,8 +79,6 @@ describe('@openlearn/plugin-sdk 构建产物', () => {
       stdio: 'inherit',
     });
     const dist = fs.readFileSync(path.join(root, 'packages/plugin-sdk/dist/index.js'), 'utf8');
-    expect(dist, 'SDK 产物不应再 import express —— 插件运行时不需要宿主 HTTP 栈').not.toMatch(
-      /from\s+["']express["']/,
-    );
+    expect(dist, 'SDK 产物不应再 import express —— 插件运行时不需要宿主 HTTP 栈').not.toMatch(/from\s+["']express["']/);
   });
 });

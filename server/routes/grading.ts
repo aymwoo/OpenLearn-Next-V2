@@ -28,7 +28,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/attendance-summary', requireScopedAuth('class-staff'), (req, res) => {
     try {
       if (gate(req, res, req.params.classId, 'staff')) return;
-      const summary = gradingService.getAttendanceSummary(req.params.classId, 30, (req.query.academicYear as string) || null);
+      const summary = gradingService.getAttendanceSummary(
+        req.params.classId,
+        30,
+        (req.query.academicYear as string) || null,
+      );
       res.json(summary);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -171,7 +175,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const decision = authorizeClass(kernelContainer.db, session, classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
       const semesterName = (req.query.semesterName as string) || '2026年春季学期';
-      const result: any = gradingService.computeSemesterGrades(classId, semesterName, (req.query.academicYear as string) || null);
+      const result: any = gradingService.computeSemesterGrades(
+        classId,
+        semesterName,
+        (req.query.academicYear as string) || null,
+      );
       if (decision.level === 'student' && result && Array.isArray(result.students)) {
         const sid = studentActorId(session);
         result.students = result.students.filter((s: any) => (s.student_id || s.studentId || s.id) === sid);

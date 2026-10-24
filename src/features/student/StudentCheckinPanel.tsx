@@ -74,7 +74,13 @@ export function StudentCheckinPanel({ lessonId, lang, addToast }: StudentCheckin
       );
       addToast(
         lang === 'zh' ? '签到成功' : 'Checked in',
-        recorded ? (lang === 'zh' ? '出勤已记录' : 'Attendance recorded') : (lang === 'zh' ? '会话级签到，未计入正式出勤' : 'Session-level check-in only'),
+        recorded
+          ? lang === 'zh'
+            ? '出勤已记录'
+            : 'Attendance recorded'
+          : lang === 'zh'
+            ? '会话级签到，未计入正式出勤'
+            : 'Session-level check-in only',
         'success',
       );
     } catch {
@@ -107,7 +113,13 @@ export function StudentCheckinPanel({ lessonId, lang, addToast }: StudentCheckin
             disabled={status === 'submitting'}
             className="px-3 py-1 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
           >
-            {status === 'submitting' ? (lang === 'zh' ? '提交中…' : 'Submitting…') : lang === 'zh' ? '签到' : 'Check in'}
+            {status === 'submitting'
+              ? lang === 'zh'
+                ? '提交中…'
+                : 'Submitting…'
+              : lang === 'zh'
+                ? '签到'
+                : 'Check in'}
           </button>
         </>
       )}

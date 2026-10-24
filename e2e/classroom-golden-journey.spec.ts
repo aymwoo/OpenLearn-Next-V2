@@ -19,9 +19,7 @@ function purgeGoldenJourneyFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 黄金旅程%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 黄金旅程%'").all() as { id: string }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -57,7 +55,9 @@ function purgeGoldenJourneyFromDb() {
             db.prepare(`DELETE FROM classroom_feed WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
           } catch {}
           try {
-            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
+            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(
+              ...sessionIds,
+            );
           } catch {}
         }
         db.prepare(`DELETE FROM classroom_sessions WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
@@ -66,9 +66,7 @@ function purgeGoldenJourneyFromDb() {
       db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 黄金班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 黄金班级%'").all() as { id: string }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -79,9 +77,9 @@ function purgeGoldenJourneyFromDb() {
       db.prepare(`DELETE FROM classes WHERE id IN (${placeholders})`).run(...classIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_GOLDEN_%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_GOLDEN_%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -209,8 +207,10 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
             { key: 'D', text: '变力做功的数值与运动路径完全无关' },
           ],
           correctOption: 'B',
-          explanation: '变力方向或大小随位置改变，不能直接套用恒力公式；微元法（微分与积分思想）是求解变力功的根本物理方法。',
-          scaffoldHint: '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
+          explanation:
+            '变力方向或大小随位置改变，不能直接套用恒力公式；微元法（微分与积分思想）是求解变力功的根本物理方法。',
+          scaffoldHint:
+            '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
         },
         exitTicketChallengeQuestion: {
           id: 'challenge-golden-1',

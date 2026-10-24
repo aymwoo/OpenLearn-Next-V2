@@ -127,9 +127,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
                   <File size={15} className="text-[#8083ff] shrink-0" />
                   <span className="text-[#dae2fd] truncate font-medium">{file.name}</span>
                   {typeof file.size === 'number' && (
-                    <span className="text-[10px] text-[#908fa0] shrink-0">
-                      ({(file.size / 1024).toFixed(1)} KB)
-                    </span>
+                    <span className="text-[10px] text-[#908fa0] shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
                   )}
                 </div>
                 {file.url && (
@@ -252,8 +250,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
                         workA.source === 'plugin'
                           ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
                           : workA.source === 'assignment'
-                          ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
-                          : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
+                            ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
+                            : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
                       }`}
                     >
                       {workA.sourceLabel}
@@ -318,8 +316,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
                         workB.source === 'plugin'
                           ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
                           : workB.source === 'assignment'
-                          ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
-                          : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
+                            ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
+                            : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
                       }`}
                     >
                       {workB.sourceLabel}
