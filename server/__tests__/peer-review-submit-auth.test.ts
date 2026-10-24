@@ -133,16 +133,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
            (id, assignment_id, submission_id, reviewer_id, anonymous, status, due_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(
-        taskId,
-        assignmentId,
-        targetSubmissionId,
-        reviewerId,
-        1,
-        'pending',
-        null,
-        now,
-      );
+      .run(taskId, assignmentId, targetSubmissionId, reviewerId, 1, 'pending', null, now);
 
     app = express();
     app.use(express.json());
@@ -153,15 +144,13 @@ describe('互评提交接口的对象级授权（#217）', () => {
   });
 
   afterAll(async () => {
-    kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)').run(
-      ownerSubmissionId,
-      targetSubmissionId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)')
+      .run(ownerSubmissionId, targetSubmissionId);
     kernelContainer.db.prepare('DELETE FROM plugin_peer_review_tasks WHERE id = ?').run(taskId);
-    kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE id IN (?, ?)').run(
-      ownerSubmissionId,
-      targetSubmissionId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM plugin_submissions WHERE id IN (?, ?)')
+      .run(ownerSubmissionId, targetSubmissionId);
     kernelContainer.db.prepare('DELETE FROM plugin_assignments WHERE id = ?').run(assignmentId);
     kernelContainer.db
       .prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)')

@@ -15,8 +15,7 @@
 import type Database from 'better-sqlite3';
 
 export type PeerReviewAccessDecision =
-  | { ok: true; assignmentId: string | null; taskId: string | null }
-  | { ok: false; status: 403 | 404; error: string };
+  { ok: true; assignmentId: string | null; taskId: string | null } | { ok: false; status: 403 | 404; error: string };
 
 export interface PeerReviewAccessParams {
   /** 被评的提交 id */
@@ -71,13 +70,9 @@ export function authorizePeerReviewSubmission(
   const submission = (
     params.lessonId
       ? db
-          .prepare(
-            'SELECT id, student_id, assignment_id FROM plugin_submissions WHERE id = ? AND lesson_id = ?',
-          )
+          .prepare('SELECT id, student_id, assignment_id FROM plugin_submissions WHERE id = ? AND lesson_id = ?')
           .get(submissionId, params.lessonId)
-      : db
-          .prepare('SELECT id, student_id, assignment_id FROM plugin_submissions WHERE id = ?')
-          .get(submissionId)
+      : db.prepare('SELECT id, student_id, assignment_id FROM plugin_submissions WHERE id = ?').get(submissionId)
   ) as SubmissionRow | undefined;
 
   if (!submission) {
@@ -107,9 +102,9 @@ export function authorizePeerReviewSubmission(
 
   if (!task && assignmentId) {
     const taskCount = (
-      db
-        .prepare('SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ?')
-        .get(assignmentId) as { c: number }
+      db.prepare('SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ?').get(assignmentId) as {
+        c: number;
+      }
     ).c;
     if (taskCount > 0) {
       return {
@@ -135,9 +130,8 @@ export function authorizePeerReviewSubmission(
 function loadAssignmentDueAt(db: Database.Database, assignmentId: string | null): number | null {
   if (!assignmentId) return null;
   try {
-    const row = db
-      .prepare('SELECT peer_review_due_at FROM plugin_assignments WHERE id = ?')
-      .get(assignmentId) as { peer_review_due_at: number | null } | undefined;
+    const row = db.prepare('SELECT peer_review_due_at FROM plugin_assignments WHERE id = ?').get(assignmentId) as
+      { peer_review_due_at: number | null } | undefined;
     return row?.peer_review_due_at ?? null;
   } catch {
     // 旧库可能还没有 plugin_assignments 表 —— 视为未设置截止时间
