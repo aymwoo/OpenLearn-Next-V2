@@ -66,7 +66,6 @@ export interface PluginHostStoreActions {
 
   /** Bulk-initialize dashboard visibility (called on app startup). */
   setDashboardVisibilityBatch: (entries: Array<[string, boolean]>) => void;
-
 }
 
 // 跨标签页同步：仪表盘可见性写入 localStorage 后，其他标签页经

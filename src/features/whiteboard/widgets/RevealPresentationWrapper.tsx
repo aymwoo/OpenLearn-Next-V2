@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown from 'react-markdown';
+import { FileDown } from 'lucide-react';
 
 // 上传大小上限（MB）——管理后台站点设置可配置（site_settings.upload_max_file_mb）。
 // 模块级缓存：每个浏览器会话只拉取一次公开端点 /api/site-settings。
@@ -87,7 +88,12 @@ export function RevealPresentationWrapper({
   const isTeacher = userRole === 'teacher';
   const isStudent = userRole === 'student';
   const fileUrl = data.fileUrl || '';
-  const fileType = data.fileType || 'md'; // 'md' | 'pdf' | 'pptx'
+  // 'md' | 'pdf' | 'pptx' | 'file'
+  //   'file' = 课程包携带的**非可内联渲染**附件（docx/xlsx/zip/png/md/txt/csv…）。
+  //   服务端在导入时把这类元素标成 'file'（见 course-package-import.ts），
+  //   这里渲染成一张可下载的卡片 —— 这就是审计里「白板元素侧缺少对任意文件的
+  //   引用机制」补上的那一环：能看见、能下载、知道它是什么，而不是空白或一直转圈。
+  const fileType = data.fileType || 'md';
   const fileName = data.fileName || '';
   const isFileLoaded = !!fileUrl;
   const [uploading, setUploading] = useState(false);
@@ -486,6 +492,65 @@ export function RevealPresentationWrapper({
     return headers;
   };
   const outline = extractOutline();
+
+  // ── 任意附件：下载卡片 ────────────────────────────────────────────────
+  //
+  // 放在全屏分支之前：一个 docx/zip 没有「放映」的概念，进全屏只会更难看。
+  if (fileType === 'file' && isFileLoaded) {
+    const extLabel = (fileName.split('.').pop() || 'file').toLowerCase();
+    return (
+      <div
+        className="w-full h-full flex flex-col items-center justify-center gap-3 p-5 bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-xl"
+        data-testid="course-package-file-card"
+      >
+        <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+          <FileDown size={22} className="text-indigo-600" />
+        </div>
+        <div className="text-center max-w-full">
+          <p className="text-sm font-bold text-slate-800 truncate" title={fileName || fileUrl}>
+            {fileName || '课程附件'}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5 font-mono uppercase">{extLabel}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={fileUrl}
+            download={fileName || undefined}
+            data-testid="course-package-file-download"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+            // 学生端不得被外层拖拽/选择逻辑吃掉点击
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileDown size={13} />
+            下载附件
+          </a>
+          {isTeacher && onElementUpdate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm('确定要移除此附件引用吗？（不会删除已上传的文件）')) {
+                  onElementUpdate(elementId, {
+                    ...data,
+                    fileUrl: '',
+                    fileName: '',
+                    fileType: 'md',
+                    slideCount: 0,
+                  });
+                }
+              }}
+              data-testid="course-package-file-clear"
+              className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
+            >
+              移除引用
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-slate-400 text-center leading-relaxed max-w-[240px]">
+          该类型没有白板内联渲染器，以附件形式提供下载。
+        </p>
+      </div>
+    );
+  }
 
   if (isContainerFullscreen && typeof document !== 'undefined') {
     return (

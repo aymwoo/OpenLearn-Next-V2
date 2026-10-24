@@ -14,11 +14,11 @@
 
 实现在 `server/security/rate-limit.ts`，限额在 `server.ts` 里（未设置 `PLAYWRIGHT_TEST` 时）：
 
-| 动作 | 限额 | 按什么分桶 |
-| --- | --- | --- |
-| 登录 | 每分钟 5 次 | 用户名或学号。学生登录读 `studentId` |
-| 写请求 | 每分钟 60 次 | 客户端地址 |
-| AI 请求 | 每分钟 10 次 | 客户端地址 |
+| 动作    | 限额         | 按什么分桶                           |
+| ------- | ------------ | ------------------------------------ |
+| 登录    | 每分钟 5 次  | 用户名或学号。学生登录读 `studentId` |
+| 写请求  | 每分钟 60 次 | 客户端地址                           |
+| AI 请求 | 每分钟 10 次 | 客户端地址                           |
 
 同一间教室共用一个出口地址时，写请求会挤在一个桶里。登录桶按账号，不会因为别人猜错密码而锁住全班。直连公网时不要设置 `TRUST_PROXY`，否则客户端可以改 `X-Forwarded-For`，写请求的地址桶会被拆开。反代有几层，`TRUST_PROXY` 就要写几层；演练用的是一层 Nginx 配 `1`。
 
@@ -111,16 +111,16 @@
 
 2026-10-13 审计里的下列项，已经能在当前代码、演练或 CI 配置上对上。公测缺陷单请不要按旧报告原样重开。若现场仍能复现，按新问题上报，并写明请求和响应。
 
-| 编号 | 当时的问题 | 现在能对上的事实 |
-| --- | --- | --- |
-| H-1 | 班级作业与成绩缺少对象级授权 | 班级仪表盘等接口调用 `authorizeClass`。公测旅程覆盖跨班拒绝。学生仪表盘不再返回 `class_passcode` |
-| H-2 | 默认可伪造 IP 冲掉限流 | `resolveTrustProxy` 默认不信任转发头。登录桶按账号，含学号 |
-| H-3 | 种子口令改密前仍能读数据 | 除改密、登出和会话查询外，`/api` 的 GET 也返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。演练与公测旅程都断言过 |
-| H-4 | 第三方插件默认在宿主进程 | 非内置插件安装、激活和恢复时改为 `process`。`auth: false` 还要管理员批准 |
-| H-5 | SDK 的 `dist/` 不进构建与 CI | `pnpm install` 的 `prepare`、`pnpm build`、CI 和镜像都会构建 SDK |
-| M-7 | 主 tsconfig 未开 strict，严格检查失败 | `tsconfig.json` 已设 `strict`、`noImplicitAny`、`strictNullChecks`。CI 的 `pnpm lint:strict` 失败即红 |
-| M-9 | 依赖审计有 critical/high，且 CI 不阻断 | `CHANGELOG.md` 记录审计项已收到 0。CI 执行 `pnpm audit --audit-level high`，无 `continue-on-error`。起草时未重跑审计 |
-| MED-04 | 班级临时口令明文落库，登录做字符串相等比较 | `classes.class_passcode` 为 AES-256-GCM（前缀 `olenc1:`）。登录解密后做常量时间比较。授权教师的口令接口返回原文，列表不返回该列。迁移 `023` 在启动时加密剩余明文行，已是密文的跳过。`site-backup` 的数据库快照是密文 |
-| M-6 密钥回退 | 空的 `ENCRYPTION_KEY` 使用临时内存钥匙，重启后旧密文无法解密 | 未设置时持久化 `storage/encryption-key`（0600）。启动日志和管理后台警告应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与文件不一致则拒绝启动。代码里没有默认密钥 |
+| 编号         | 当时的问题                                                   | 现在能对上的事实                                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H-1          | 班级作业与成绩缺少对象级授权                                 | 班级仪表盘等接口调用 `authorizeClass`。公测旅程覆盖跨班拒绝。学生仪表盘不再返回 `class_passcode`                                                                                                                     |
+| H-2          | 默认可伪造 IP 冲掉限流                                       | `resolveTrustProxy` 默认不信任转发头。登录桶按账号，含学号                                                                                                                                                           |
+| H-3          | 种子口令改密前仍能读数据                                     | 除改密、登出和会话查询外，`/api` 的 GET 也返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。演练与公测旅程都断言过                                                                                                              |
+| H-4          | 第三方插件默认在宿主进程                                     | 非内置插件安装、激活和恢复时改为 `process`。`auth: false` 还要管理员批准                                                                                                                                             |
+| H-5          | SDK 的 `dist/` 不进构建与 CI                                 | `pnpm install` 的 `prepare`、`pnpm build`、CI 和镜像都会构建 SDK                                                                                                                                                     |
+| M-7          | 主 tsconfig 未开 strict，严格检查失败                        | `tsconfig.json` 已设 `strict`、`noImplicitAny`、`strictNullChecks`。CI 的 `pnpm lint:strict` 失败即红                                                                                                                |
+| M-9          | 依赖审计有 critical/high，且 CI 不阻断                       | `CHANGELOG.md` 记录审计项已收到 0。CI 执行 `pnpm audit --audit-level high`，无 `continue-on-error`。起草时未重跑审计                                                                                                 |
+| MED-04       | 班级临时口令明文落库，登录做字符串相等比较                   | `classes.class_passcode` 为 AES-256-GCM（前缀 `olenc1:`）。登录解密后做常量时间比较。授权教师的口令接口返回原文，列表不返回该列。迁移 `023` 在启动时加密剩余明文行，已是密文的跳过。`site-backup` 的数据库快照是密文 |
+| M-6 密钥回退 | 空的 `ENCRYPTION_KEY` 使用临时内存钥匙，重启后旧密文无法解密 | 未设置时持久化 `storage/encryption-key`（0600）。启动日志和管理后台警告应设置 `ENCRYPTION_KEY` 并离线备份该文件。环境变量优先；与文件不一致则拒绝启动。代码里没有默认密钥                                            |
 
 审计报告第 3.4 节列出的「当时不成立」的项（前端包不含 AI Key、Cookie 为 HttpOnly、CSRF 门控、课件 iframe 沙箱等）没有在本次被推翻。那些句子描述的是审计当天的树；公测以本节和上文的开放项为准。

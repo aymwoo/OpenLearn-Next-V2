@@ -22,8 +22,7 @@ const service = new AssessmentService({ db: db as any });
 /** 读取某次 attempt 持久化的抽题种子（paper_json.seed）。 */
 function seedOf(attemptId: string): string {
   const row = db.prepare('SELECT paper_json FROM assessment_attempts WHERE id = ?').get(attemptId) as
-    | { paper_json?: string | null }
-    | undefined;
+    { paper_json?: string | null } | undefined;
   const parsed = JSON.parse(row?.paper_json || '{}') as { seed?: string };
   return String(parsed.seed ?? '');
 }
@@ -62,19 +61,23 @@ describe('题库共享与按规则抽题（Issue #186）', () => {
   });
 
   afterAll(() => {
-    const assessmentIds = "SELECT id FROM assessments WHERE owner_id = ?";
-    db.prepare('DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (' + assessmentIds + ')))').run(TEACHER_A);
-    db.prepare('DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (' + assessmentIds + '))').run(TEACHER_A);
+    const assessmentIds = 'SELECT id FROM assessments WHERE owner_id = ?';
+    db.prepare(
+      'DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (' +
+        assessmentIds +
+        ')))',
+    ).run(TEACHER_A);
+    db.prepare(
+      'DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (' +
+        assessmentIds +
+        '))',
+    ).run(TEACHER_A);
     db.prepare('DELETE FROM assessment_assignments WHERE assessment_id IN (' + assessmentIds + ')').run(TEACHER_A);
     db.prepare('DELETE FROM assessment_items WHERE assessment_id IN (' + assessmentIds + ')').run(TEACHER_A);
     db.prepare('DELETE FROM assessments WHERE owner_id = ?').run(TEACHER_A);
     db.prepare('DELETE FROM question_bank_items WHERE owner_id IN (?, ?)').run(TEACHER_A, TEACHER_B);
     db.prepare('DELETE FROM classes WHERE id = ?').run(CLASS);
-    db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?, ?, ?, ?)').run(
-      TEACHER_A,
-      TEACHER_B,
-      ...SAMPLE_STUDENTS,
-    );
+    db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?, ?, ?, ?)').run(TEACHER_A, TEACHER_B, ...SAMPLE_STUDENTS);
   });
 
   it('每人一卷：抽到 count 道、同学生重入稳定、不同学生种子不同', async () => {

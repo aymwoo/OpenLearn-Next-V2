@@ -202,7 +202,9 @@ describe('B-5 · 跨插件边界：taskType 命名空间与 kill 归属', () => 
       }),
       spawn: vi.fn(async (_name: string, _taskType: string, _payload: unknown, _ownerHint?: string) => 'pid-new'),
       kill: vi.fn(async () => {}),
-      registerInterval: vi.fn(async (_name: string, _intervalMs: number, _tick: unknown, _ownerHint?: string) => 'pid-new'),
+      registerInterval: vi.fn(
+        async (_name: string, _intervalMs: number, _tick: unknown, _ownerHint?: string) => 'pid-new',
+      ),
       restore: vi.fn(async () => {}),
       getProcessOwner: (pid: string) => owners[pid],
     };

@@ -42,14 +42,9 @@ const CI_THIRD_PARTY_PLUGINS = [
     main: 'index.js',
     engines: { openlearn: '>=0.2.0' },
     contributes: {
-      'teacher.tab': [
-        { id: 'attendance', label: '考勤', icon: 'Calendar', position: 2 },
-      ],
+      'teacher.tab': [{ id: 'attendance', label: '考勤', icon: 'Calendar', position: 2 }],
     },
-    requires: [
-      '@openlearn/core:IDatabase@^1.0.0',
-      '@openlearn/core:ICommandBusService@^1.0.0',
-    ],
+    requires: ['@openlearn/core:IDatabase@^1.0.0', '@openlearn/core:ICommandBusService@^1.0.0'],
   },
   {
     id: '@ext/class-manager',
@@ -58,14 +53,9 @@ const CI_THIRD_PARTY_PLUGINS = [
     main: 'index.js',
     engines: { openlearn: '>=0.2.0' },
     contributes: {
-      'teacher.tab': [
-        { id: 'class-mgmt', label: '班级', icon: 'Users', position: 1 },
-      ],
+      'teacher.tab': [{ id: 'class-mgmt', label: '班级', icon: 'Users', position: 1 }],
     },
-    requires: [
-      '@openlearn/core:IDatabase@^1.0.0',
-      '@openlearn/core:ICommandBusService@^1.0.0',
-    ],
+    requires: ['@openlearn/core:IDatabase@^1.0.0', '@openlearn/core:ICommandBusService@^1.0.0'],
     pluginDependencies: ['@openlearn/plugin-management', '@openlearn/plugin-builtin'],
   },
   {
@@ -75,9 +65,7 @@ const CI_THIRD_PARTY_PLUGINS = [
     main: 'index.js',
     engines: { openlearn: '>=0.2.5' },
     contributes: {
-      'classroom.tool': [
-        { id: 'courseware-tool', name: '课件', commandType: 'courseware.launch' },
-      ],
+      'classroom.tool': [{ id: 'courseware-tool', name: '课件', commandType: 'courseware.launch' }],
     },
     requires: ['@openlearn/core:IStorageService@^1.0.0'],
   },
@@ -206,11 +194,7 @@ describe('插件升级兼容性分析 (Issue #146)', () => {
 
       // 写入一个合规插件和一个含弃用插槽的插件
       const stmt = db.prepare('INSERT INTO plugins (id, name, manifest) VALUES (?, ?, ?)');
-      stmt.run(
-        CI_THIRD_PARTY_PLUGINS[0].id,
-        CI_THIRD_PARTY_PLUGINS[0].name,
-        JSON.stringify(CI_THIRD_PARTY_PLUGINS[0]),
-      );
+      stmt.run(CI_THIRD_PARTY_PLUGINS[0].id, CI_THIRD_PARTY_PLUGINS[0].name, JSON.stringify(CI_THIRD_PARTY_PLUGINS[0]));
       stmt.run(
         'deprecated-plugin',
         'Deprecated Plugin',

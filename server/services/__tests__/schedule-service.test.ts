@@ -52,15 +52,27 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
     ).run(TEACHER_2, 'tea_sch_2', 'hash', 'teacher', '李老师', now);
 
     // 预置机房与班级
-    db.prepare(
-      'INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(CLASS_1, '高一(1)班', '实验班', LAB_ID, now);
-    db.prepare(
-      'INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(CLASS_2, '高一(2)班', '普通班', LAB_ID, now);
-    db.prepare(
-      'INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(CLASS_3, '高二(1)班', '文科班', null, now);
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      CLASS_1,
+      '高一(1)班',
+      '实验班',
+      LAB_ID,
+      now,
+    );
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      CLASS_2,
+      '高一(2)班',
+      '普通班',
+      LAB_ID,
+      now,
+    );
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, description, lab_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      CLASS_3,
+      '高二(1)班',
+      '文科班',
+      null,
+      now,
+    );
 
     // 预置课时
     LESSON_1 = `les_sch_${uuidv7()}`;
@@ -89,11 +101,9 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
 
   beforeEach(() => {
     // 清空测试班级的排课与考勤
-    db.prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id IN (?, ?, ?))').run(
-      CLASS_1,
-      CLASS_2,
-      CLASS_3,
-    );
+    db.prepare(
+      'DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id IN (?, ?, ?))',
+    ).run(CLASS_1, CLASS_2, CLASS_3);
     db.prepare('DELETE FROM schedules WHERE class_id IN (?, ?, ?)').run(CLASS_1, CLASS_2, CLASS_3);
   });
 
@@ -138,20 +148,15 @@ describe('ScheduleService 领域服务与冲突检测引擎', () => {
     it('expandRecurringSchedules: 准确按周期展开未来日期', () => {
       const items = expandRecurringSchedules({
         startDate: '2026-10-12', // 2026-10-12 是周一
-        endDate: '2026-10-25',   // 跨两周
-        daysOfWeek: [1, 3],      // 每周一、周三
+        endDate: '2026-10-25', // 跨两周
+        daysOfWeek: [1, 3], // 每周一、周三
         timeSlot: '08:00 - 08:45',
         notes: '周期性上课',
       });
 
       // 2 周内应有 4 次课：10-12(周一), 10-14(周三), 10-19(周一), 10-21(周三)
       expect(items.length).toBe(4);
-      expect(items.map((i) => i.scheduledDate)).toEqual([
-        '2026-10-12',
-        '2026-10-14',
-        '2026-10-19',
-        '2026-10-21',
-      ]);
+      expect(items.map((i) => i.scheduledDate)).toEqual(['2026-10-12', '2026-10-14', '2026-10-19', '2026-10-21']);
       expect(items[0].timeSlot).toBe('08:00 - 08:45');
       expect(items[0].notes).toBe('周期性上课');
     });

@@ -9,6 +9,7 @@ import { classRoom, pseudoRoomStudentId } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService, VALID_ICEBREAKER_MOODS } from '../services/diagnostic-service.js';
+import { authorizePeerReviewSubmission } from '../services/peer-review-access.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
@@ -308,7 +309,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session;
       const { score, comment } = req.body || {};
-      const isPrivileged = session?.role === 'administrator' || session?.subRole === 'administrator';
+      const isPrivileged = isAdministrator(session);
       const reviewerId = isPrivileged
         ? String((req.body || {}).reviewerId || session?.studentId || '')
         : String(session?.studentId || '');
@@ -319,20 +320,42 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100) {
         return res.status(400).json({ success: false, error: 'Score must be 0-100' });
       }
-      const submission = kernelContainer.db
-        .prepare('SELECT id FROM plugin_submissions WHERE id = ? AND lesson_id = ?')
-        .get(req.params.submissionId, req.params.lessonId);
-      if (!submission) {
-        return res.status(404).json({ success: false, error: 'Submission not found for this lesson' });
+      // 对象级授权：与插件命令路径（assignment.eval.submitReview）同源 —— Issue #217
+      // 补齐「禁止自评」「必须持有互评任务」「截止时间」三项判定。
+      const decision = authorizePeerReviewSubmission(kernelContainer.db, {
+        submissionId: req.params.submissionId,
+        lessonId: req.params.lessonId,
+        reviewerId,
+        privileged: isPrivileged,
+      });
+      if (!decision.ok) {
+        return res.status(decision.status).json({ success: false, error: decision.error });
       }
       const id = randomId('evalrev_');
       const now = Date.now();
       kernelContainer.db
         .prepare(
-          `INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, comment, assignment_id, anonymous, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, NULL, 0, 'submitted', ?, ?)`,
+          `INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, comment, assignment_id, task_id, anonymous, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'submitted', ?, ?)
+           ON CONFLICT(submission_id, reviewer_id) DO UPDATE SET
+             score = excluded.score,
+             comment = excluded.comment,
+             assignment_id = excluded.assignment_id,
+             task_id = excluded.task_id,
+             status = 'submitted',
+             updated_at = excluded.updated_at`,
         )
-        .run(id, req.params.submissionId, reviewerId, numericScore, comment || '', now, now);
+        .run(
+          id,
+          req.params.submissionId,
+          reviewerId,
+          numericScore,
+          comment || '',
+          decision.assignmentId,
+          decision.taskId,
+          now,
+          now,
+        );
       res.json({ success: true, reviewId: id });
     } catch (err: any) {
       sendSafeError(res, err);
@@ -425,9 +448,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const isStaff = isAdministrator(session) || isTeacher(session);
       // 学生视角剥离答案字段（correctIndex / correctAnswer 等）；
       // 判分结果由 POST /quiz-submit 在提交后回传，前端已按此设计。
-      res.json(
-        isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })),
-      );
+      res.json(isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })));
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -703,7 +724,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const studentId = studentActorId(session) || 'anonymous';
-      const resolvedLessonId = typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
+      const resolvedLessonId =
+        typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
       const current = diagnosticService.recordIcebreakerCheckin(classId, mood, studentId, resolvedLessonId);
 
       if (ctx.io) {

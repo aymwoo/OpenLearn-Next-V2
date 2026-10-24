@@ -74,15 +74,15 @@ interface WhiteboardEvent {
 
 ## 2. 事件来源 (`WhiteboardEventSource`)
 
-| 值                   | 含义                                  | 典型采集层                                               |
-| -------------------- | ------------------------------------- | -------------------------------------------------------- |
-| `iframe.postMessage` | iframe 直接 postMessage（未规范化）   | `HtmlAppletFrame.messageHandler`                         |
+| 值                   | 含义                                                          | 典型采集层                                                                                                                    |
+| -------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `iframe.postMessage` | iframe 直接 postMessage（未规范化）                           | `HtmlAppletFrame.messageHandler`                                                                                              |
 | `iframe.bridge`      | 父窗口 LMS Bridge 处理后的协议事件，或 server socket 广播映射 | `src/services/lms-bridge.ts` 的 `emitCoursewareEvent`；`src/hooks/useClassroomSocket.ts` 的 `courseware-attempt-updated` 监听 |
-| `applet.score`       | 来自 HtmlAppletFrame 解析后的成绩事件 | `HtmlAppletFrame.messageHandler` (courseware:score 分支) |
-| `widget.quiz`        | 原生 quiz widget                      | `useClassroomSocket` 监听 `whiteboard-quiz-answered`（**已接入**，见 §3.2） |
-| `widget.canvas`      | 原生画布 widget                       | （待接入）                                               |
-| `widget.custom`      | 通用自定义 widget                     | （待接入）                                               |
-| `manual`             | 手动 emit（UI / 调试代码 / 业务事件） | 任意代码直接调用 `whiteboardEventSlot.ingest` 或 `useEmitWhiteboardEvent`（缺省 source 即 `'manual'`） |
+| `applet.score`       | 来自 HtmlAppletFrame 解析后的成绩事件                         | `HtmlAppletFrame.messageHandler` (courseware:score 分支)                                                                      |
+| `widget.quiz`        | 原生 quiz widget                                              | `useClassroomSocket` 监听 `whiteboard-quiz-answered`（**已接入**，见 §3.2）                                                   |
+| `widget.canvas`      | 原生画布 widget                                               | （待接入）                                                                                                                    |
+| `widget.custom`      | 通用自定义 widget                                             | （待接入）                                                                                                                    |
+| `manual`             | 手动 emit（UI / 调试代码 / 业务事件）                         | 任意代码直接调用 `whiteboardEventSlot.ingest` 或 `useEmitWhiteboardEvent`（缺省 source 即 `'manual'`）                        |
 
 ---
 
@@ -96,9 +96,9 @@ interface WhiteboardEvent {
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `courseware.submitted`       | iframe 内 `LMS.submit` / `OpenLearn.submit` 被调用；或 server `courseware-attempt-updated` type=`submit` 广播 | `score`, `total`, `completion`, `comment`, `source` |
 | `courseware.progress_saved`  | iframe 内 `LMS.saveProgress` 被调用                                                                           | `score`, `completion`                               |
-| `courseware.finished`        | iframe 内 `LMS.finish` 被调用；或 server 广播 type=`promote` 映射                                              | —                                                   |
+| `courseware.finished`        | iframe 内 `LMS.finish` 被调用；或 server 广播 type=`promote` 映射                                             | —                                                   |
 | `courseware.config_reported` | iframe 内 `LMS_CONFIG` 上报                                                                                   | （取决于课件；通常包含互动能力清单）                |
-| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入；或 server 广播 type=`log` 映射                                            | （取决于 iframe 消息内容）                          |
+| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入；或 server 广播 type=`log` 映射                                           | （取决于 iframe 消息内容）                          |
 | `courseware.unknown`         | 未识别的 `LMS_*` 协议事件                                                                                     | `originalType`                                      |
 
 **双路径汇合**：plugin `submitScore` (courseware-hub) 和 LMS Bridge 都会触发 server 的 `courseware-attempt-updated` 广播。`useClassroomSocket`（`src/hooks/useClassroomSocket.ts`）监听该 socket 事件，把 `data.type` 映射后 ingest（`source='iframe.bridge'`）：
@@ -108,7 +108,7 @@ interface WhiteboardEvent {
 | `submit`           | `courseware.submitted`         |
 | `log`              | `courseware.event_logged`      |
 | `promote`          | `courseware.finished`          |
-| 其它（含 `adopt`） | 兜底 `courseware.event_logged`  |
+| 其它（含 `adopt`） | 兜底 `courseware.event_logged` |
 
 > ⚠️ **映射与实际广播值有缺口**：服务端目前只发 `log` / `submit` / `adopt` 三种（见 `publishAttemptUpdated` 的类型签名），**不发 `promote`**。因此 `courseware.finished` 分支在真实链路上不会被触发，而 `adopt` 会落进兜底分支被标成 `courseware.event_logged`。这属于**前端映射表与服务端广播值的漂移**，尚未修复，见 §10。
 >
@@ -116,8 +116,8 @@ interface WhiteboardEvent {
 
 ### 3.2 `quiz.*` （原生 quiz widget）
 
-| `type`          | 触发时机                                                         | `payload` 字段                                                      |
-| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `type`          | 触发时机                                                         | `payload` 字段                                                                      |
+| --------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `quiz.answered` | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功 | `answer`, `score`, `isCorrect`, `correctAnswer`, `correctIndex`, `question`, `time` |
 
 **数据流**：学生点击 quiz 答案 → POST `/api/lessons/:id/quiz-submit`（`server/routes/lessons.ts` 的 `quiz-submit` 路由）→ 判定 `isCorrect`/`score`（答对 100 / 答错 0）→ `INSERT ... ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE` 写 `lesson_quiz_submissions` → `publishClassroomEvent(CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED, {...})` → 由 `server/event-routing.ts` 投递为 socket 事件 `whiteboard-quiz-answered` → 前端 `useClassroomSocket` 监听 → `whiteboardEventSlot.ingest({ source:'widget.quiz', type:'quiz.answered', ...})`。
@@ -288,11 +288,11 @@ function toPlatformEvent(event: WhiteboardEvent): PlatformEvent {
 
 ### 需要跨端信号时的正确做法
 
-| 需求                     | 正确通路                                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| 需求                             | 正确通路                                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | 状态变更（白板图元、课件登记……） | REST/命令总线：`PUT /api/lessons/:id/whiteboard/:elementId` → `whiteboard.update` 命令 → 服务端 `eventBus` → `server/event-routing.ts` 投递 |
-| 即时通知                 | 直接用 socket（插件可用 `ctx.services.socketService`）                                           |
-| AI 侧感知课堂事件         | 走服务端事件：课件提交 → `courseware.attempt_updated`；学生进度 → `student.progress_updated` 等   |
+| 即时通知                         | 直接用 socket（插件可用 `ctx.services.socketService`）                                                                                      |
+| AI 侧感知课堂事件                | 走服务端事件：课件提交 → `courseware.attempt_updated`；学生进度 → `student.progress_updated` 等                                             |
 
 ### `lms-bridge.ts` 的双写入
 
@@ -352,17 +352,17 @@ import { WhiteboardEventPanel } from '@/features/whiteboard/events';
 
 ## 12. 相关源文件
 
-| 路径                                                   | 内容                                                       |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| `src/features/whiteboard/events/types.ts`              | `WhiteboardEvent` / `EventFilter` / `toPlatformEvent` / `DEFAULT_QUEUE_CAPACITY` |
-| `src/features/whiteboard/events/WhiteboardEventSlot.ts` | 单例实现：ingest / subscribe / query / stats / clear      |
-| `src/features/whiteboard/events/useWhiteboardEvents.ts` | `useWhiteboardEvents` / `useWhiteboardEventListener` / `useEmitWhiteboardEvent` |
-| `src/features/whiteboard/events/index.ts`              | barrel 导出                                                |
-| `src/services/event-bus.ts`                            | `frontendEventBus`（**仅本进程内**，§7）                   |
-| `src/services/lms-bridge.ts`                           | `emitCoursewareEvent`（双写入，见 §7）                     |
-| `src/hooks/useClassroomSocket.ts`                      | socket → 槽的映射（`quiz.answered` / `courseware.*`）      |
-| `server/routes/lessons.ts`                              | `POST /api/lessons/:id/quiz-submit` 广播 `whiteboard.quiz_answered` |
-| `server/routes/classroom.ts`                            | `simulate-quiz-responses` 演示广播                          |
-| `server/classroom-events.ts` / `server/event-routing.ts` | 课堂事件发布与 Socket 投递路由表                           |
-| `src/services/__tests__/event-bus.test.ts`             | 断言 `setSocketBridge` 不得复活的回归测试                   |
-| `src/hooks/__tests__/whiteboard-quiz-ingest.test.tsx`  | `whiteboard-quiz-answered` → 槽 ingest 的回归测试          |
+| 路径                                                     | 内容                                                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/features/whiteboard/events/types.ts`                | `WhiteboardEvent` / `EventFilter` / `toPlatformEvent` / `DEFAULT_QUEUE_CAPACITY` |
+| `src/features/whiteboard/events/WhiteboardEventSlot.ts`  | 单例实现：ingest / subscribe / query / stats / clear                             |
+| `src/features/whiteboard/events/useWhiteboardEvents.ts`  | `useWhiteboardEvents` / `useWhiteboardEventListener` / `useEmitWhiteboardEvent`  |
+| `src/features/whiteboard/events/index.ts`                | barrel 导出                                                                      |
+| `src/services/event-bus.ts`                              | `frontendEventBus`（**仅本进程内**，§7）                                         |
+| `src/services/lms-bridge.ts`                             | `emitCoursewareEvent`（双写入，见 §7）                                           |
+| `src/hooks/useClassroomSocket.ts`                        | socket → 槽的映射（`quiz.answered` / `courseware.*`）                            |
+| `server/routes/lessons.ts`                               | `POST /api/lessons/:id/quiz-submit` 广播 `whiteboard.quiz_answered`              |
+| `server/routes/classroom.ts`                             | `simulate-quiz-responses` 演示广播                                               |
+| `server/classroom-events.ts` / `server/event-routing.ts` | 课堂事件发布与 Socket 投递路由表                                                 |
+| `src/services/__tests__/event-bus.test.ts`               | 断言 `setSocketBridge` 不得复活的回归测试                                        |
+| `src/hooks/__tests__/whiteboard-quiz-ingest.test.tsx`    | `whiteboard-quiz-answered` → 槽 ingest 的回归测试                                |

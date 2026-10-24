@@ -43,4 +43,3 @@ export async function getStudentAcademicYearComparison(
   }
   return { ok: true, data: await res.json() };
 }
-

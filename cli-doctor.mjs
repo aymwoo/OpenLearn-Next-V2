@@ -414,10 +414,7 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
       }
 
       if (fix) {
-        const updated = coreContent.replace(
-          /PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/,
-          `PLATFORM_VERSION = '${pkgVer}'`,
-        );
+        const updated = coreContent.replace(/PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/, `PLATFORM_VERSION = '${pkgVer}'`);
         fs.writeFileSync(coreVersionFile, updated, 'utf-8');
         fixes.push(`已自动将 packages/core/version.ts 同步为 v${pkgVer}`);
         return check('ok', `v${pkgVer} (已自动修复版本漂移: 从 v${coreVer} 同步为 v${pkgVer})`);
@@ -441,10 +438,7 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
       }
 
       if (fix) {
-        const updated = coreContent.replace(
-          /FALLBACK_VERSION\s*=\s*['"][^'"]+['"]/,
-          `FALLBACK_VERSION = '${pkgVer}'`,
-        );
+        const updated = coreContent.replace(/FALLBACK_VERSION\s*=\s*['"][^'"]+['"]/, `FALLBACK_VERSION = '${pkgVer}'`);
         fs.writeFileSync(coreVersionFile, updated, 'utf-8');
         fixes.push(`已自动将 packages/core/version.ts FALLBACK_VERSION 同步为 v${pkgVer}`);
         return check('ok', `v${pkgVer} (已自动修复版本漂移: FALLBACK_VERSION 从 v${fallbackVer} 同步为 v${pkgVer})`);

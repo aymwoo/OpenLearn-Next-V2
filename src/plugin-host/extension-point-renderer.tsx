@@ -660,8 +660,7 @@ export function ExtensionPointRenderer({
           const label = resolveLabel(rawLabel, ext.pluginId, lang);
           const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
           const icon = ext.icon || pluginInfo?.icon;
-          const ariaNewTab =
-            lang === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
+          const ariaNewTab = lang === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
           const sanitizedId = tabValue.replace(/[^a-zA-Z0-9_-]/g, '_');
           return (
             <div
@@ -753,24 +752,24 @@ export function ExtensionPointRenderer({
       >
         <Suspense fallback={fallback ?? <LoadingSkeleton />}>
           <CrashResetProbe pluginId={activeExt.pluginId}>
-          {isReact ? (
-            React.createElement(resolveExtensionComponent(activeExt), {
-              ...activeExt.slotProps,
-              ...slotProps,
-              dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-            })
-          ) : (
-            <DOMExtensionWrapper
-              ext={activeExt}
-              route={activeExt.route || route}
-              slotProps={{
+            {isReact ? (
+              React.createElement(resolveExtensionComponent(activeExt), {
                 ...activeExt.slotProps,
                 ...slotProps,
                 dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
-              }}
-              slot={slot}
-            />
-          )}
+              })
+            ) : (
+              <DOMExtensionWrapper
+                ext={activeExt}
+                route={activeExt.route || route}
+                slotProps={{
+                  ...activeExt.slotProps,
+                  ...slotProps,
+                  dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
+                }}
+                slot={slot}
+              />
+            )}
           </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
@@ -807,29 +806,29 @@ export function ExtensionPointRenderer({
           >
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
               <CrashResetProbe pluginId={ext.pluginId}>
-              {isReact ? (
-                React.createElement(resolveExtensionComponent(ext), {
-                  route: ext.route || route,
-                  lessonId: selectedLesson,
-                  classId: liveClassSelectedClassId,
-                  dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
-                  ...ext.slotProps,
-                  ...slotProps,
-                })
-              ) : (
-                <DOMExtensionWrapper
-                  ext={ext}
-                  route={ext.route || route}
-                  slotProps={{
+                {isReact ? (
+                  React.createElement(resolveExtensionComponent(ext), {
+                    route: ext.route || route,
                     lessonId: selectedLesson,
                     classId: liveClassSelectedClassId,
                     dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
                     ...ext.slotProps,
                     ...slotProps,
-                  }}
-                  slot={slot}
-                />
-              )}
+                  })
+                ) : (
+                  <DOMExtensionWrapper
+                    ext={ext}
+                    route={ext.route || route}
+                    slotProps={{
+                      lessonId: selectedLesson,
+                      classId: liveClassSelectedClassId,
+                      dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
+                      ...ext.slotProps,
+                      ...slotProps,
+                    }}
+                    slot={slot}
+                  />
+                )}
               </CrashResetProbe>
             </Suspense>
           </ExtensionErrorBoundary>

@@ -84,15 +84,15 @@ publish(event: PlatformEvent): Promise<void> {
 
 「组件是否消费 `data`」一列是**逐文件走查**结果：把 `data` 的语义字段复制进 `useState` 却不回填的，就是点名同款 bug。
 
-| 类型                     | 关键内容字段                                | 组件是否消费 `data`                                     | 广播策略（P0 后）   | 综合判定                            |
-| ------------------------ | ------------------------------------------- | ------------------------------------------------------- | ------------------- | ----------------------------------- |
-| `rollcall`               | `selectedStudent` / `status` / `evaluation` | ✅ 已加回填 effect                                      | ✅ 抽中新学生时补发 | ✅ 已修                             |
-| `math-graph`             | `equation`                                  | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
-| `code-sandbox`           | `code`                                      | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
-| `presentation`           | `markdown` / `slideX`                       | ✅ 原本就有（`RevealPresentationWrapper.tsx:72-83`）    | ✅ 默认广播         | ✅ 已通（原先靠 2s 轮询）           |
+| 类型                     | 关键内容字段                                                                      | 组件是否消费 `data`                                     | 广播策略（P0 后）   | 综合判定                            |
+| ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------- | ----------------------------------- |
+| `rollcall`               | `selectedStudent` / `status` / `evaluation`                                       | ✅ 已加回填 effect                                      | ✅ 抽中新学生时补发 | ✅ 已修                             |
+| `math-graph`             | `equation`                                                                        | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
+| `code-sandbox`           | `code`                                                                            | ✅ 已加回填 effect                                      | ✅ 默认广播         | ✅ 已修                             |
+| `presentation`           | `markdown` / `slideX`                                                             | ✅ 原本就有（`RevealPresentationWrapper.tsx:72-83`）    | ✅ 默认广播         | ✅ 已通（原先靠 2s 轮询）           |
 | `quiz`                   | `question` / `options` / `correctIndex`（权威；旧 `correctAnswer` 见 Issue #107） | 未走独立 Widget 组件，内联渲染（`data` 变化直接重渲染） | ✅ 默认广播         | ✅ 已通                             |
-| `assignment`             | `title` / `description` / `assignmentId`    | 同上，内联渲染                                          | ✅ 默认广播         | ✅ 已通                             |
-| `plugin` / `hello-world` | 插件自有数据                                | 与白板 `data` **无关**（见 §2.4）                       | ✅ 默认广播         | ➖ 主机侧已通；插件内同步由插件自负 |
+| `assignment`             | `title` / `description` / `assignmentId`                                          | 同上，内联渲染                                          | ✅ 默认广播         | ✅ 已通                             |
+| `plugin` / `hello-world` | 插件自有数据                                                                      | 与白板 `data` **无关**（见 §2.4）                       | ✅ 默认广播         | ➖ 主机侧已通；插件内同步由插件自负 |
 
 > **「默认广播」= 未列入 `LAYOUT_ONLY_ELEMENT_TYPES` 的一律广播。** 这是 fail-safe 方向：新增元素类型默认走广播（多刷一次，代价可接受），而不会静默不同步。
 

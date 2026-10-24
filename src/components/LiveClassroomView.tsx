@@ -279,9 +279,7 @@ export function LiveClassroomView({
    * 既有单测），那种情况同样算作显式进课。
    * Issue #90 的一键开课信号同理（课表页已完成 init，直达授课视图）。
    */
-  const enteredClassroomRef = useRef(
-    !initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal,
-  );
+  const enteredClassroomRef = useRef(!initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal);
 
   // 消费一键开课信号（Issue #90）：与门户 handlePortalEnter 同一恢复路径（选中课程/班级 + 拉取白板要素）
   useEffect(() => {
@@ -571,9 +569,9 @@ export function LiveClassroomView({
   };
 
   // Interactive courseware submission states
-  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers' | 'segment_main'>(
-    'whiteboard',
-  );
+  const [middleTab, setMiddleTab] = useState<
+    'whiteboard' | 'submissions' | 'assignment' | 'top_performers' | 'segment_main'
+  >('whiteboard');
   const host = useOptionalPluginHost();
   const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
   const hasSegmentMainExtension = segmentMainExtensions.length > 0;
@@ -1923,9 +1921,7 @@ export function LiveClassroomView({
                 onClick={() => handleToggleClassLock(false)}
                 disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
                 className={`px-3 py-1.5 rounded-l-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 text-white ${
-                  classLockMode === 'navigation'
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-rose-600 hover:bg-rose-700'
+                  classLockMode === 'navigation' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-rose-600 hover:bg-rose-700'
                 }`}
                 title={
                   lang === 'zh'
@@ -1948,9 +1944,7 @@ export function LiveClassroomView({
                 onClick={() => handleToggleClassLock(true, classLockMode === 'navigation' ? 'full' : 'navigation')}
                 disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
                 className={`px-2 py-1.5 rounded-r-lg font-bold text-[11px] flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0 text-white border-l border-white/20 ${
-                  classLockMode === 'navigation'
-                    ? 'bg-amber-700 hover:bg-amber-800'
-                    : 'bg-rose-700 hover:bg-rose-800'
+                  classLockMode === 'navigation' ? 'bg-amber-700 hover:bg-amber-800' : 'bg-rose-700 hover:bg-rose-800'
                 }`}
                 title={
                   classLockMode === 'navigation'
@@ -2685,7 +2679,9 @@ export function LiveClassroomView({
                   className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
                   title={lang === 'zh' ? '已锁定学生屏幕人数 (专注 / 答题)' : 'Locked count (Focus / Answer)'}
                 >
-                  <span>🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}</span>
+                  <span>
+                    🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
+                  </span>
                   {students.some((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation') && (
                     <span className="text-amber-600 text-[9px] font-sans">✏️答题</span>
                   )}
@@ -3020,11 +3016,19 @@ export function LiveClassroomView({
                           <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
                           <span className="font-bold font-mono text-xs mt-0.5">
                             <span className="text-rose-600" title="专注锁定">
-                              {students.filter((s) => s.locked_lesson_id === selectedLesson && s.lock_mode !== 'navigation').length}
+                              {
+                                students.filter(
+                                  (s) => s.locked_lesson_id === selectedLesson && s.lock_mode !== 'navigation',
+                                ).length
+                              }
                             </span>
                             <span className="text-muted">/</span>
                             <span className="text-amber-600" title="答题锁定">
-                              {students.filter((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation').length}
+                              {
+                                students.filter(
+                                  (s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation',
+                                ).length
+                              }
                             </span>
                           </span>
                         </div>
@@ -3122,8 +3126,8 @@ export function LiveClassroomView({
                         )}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {selectedLesson && (
-                          st.locked_lesson_id === selectedLesson ? (
+                        {selectedLesson &&
+                          (st.locked_lesson_id === selectedLesson ? (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -3152,8 +3156,7 @@ export function LiveClassroomView({
                             >
                               答题锁
                             </button>
-                          )
-                        )}
+                          ))}
                         <span className="text-xs text-primary-ink font-mono font-black">{progPercent}%</span>
                         {isPinned && (
                           <button

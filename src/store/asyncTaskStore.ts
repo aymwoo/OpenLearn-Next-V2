@@ -246,5 +246,4 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
   },
 }));
 
-export const useAsyncTaskStore = <T>(selector: (state: AsyncTaskState) => T): T =>
-  useStore(asyncTaskStore, selector);
+export const useAsyncTaskStore = <T>(selector: (state: AsyncTaskState) => T): T => useStore(asyncTaskStore, selector);

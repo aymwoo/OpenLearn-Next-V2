@@ -76,25 +76,26 @@ PLUGIN_COMMUNITY_REGISTRY_URL="https://example.com/community-plugins.json"
 
 ### 字段说明
 
-| 字段                      | 必填 | 说明                                                                                                             |
-| ------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
-| `id`                      | ✅   | 插件逻辑 id，必须与插件 `manifest.json` 的 `id` 完全一致，用于识别「已安装 / 可更新」。允许 `@scope/name` 形式。 |
-| `downloadUrl`             | ✅   | 插件 ZIP 包地址。**必须为公网 HTTP(S)**，否则整条记录被丢弃。服务端与浏览器均会访问该地址。                      |
-| `name`                    | —    | 展示名称，缺失时回落为 `id`。                                                                                    |
-| `author`                  | —    | 作者，缺失时回落为 `Community`。                                                                                 |
-| `version`                 | —    | 语义化版本。与本地已安装版本比较以决定是否显示「更新」。非 semver 的值仍会展示，但永不判定为可更新。             |
-| `icon`                    | —    | 图片 URL 或 emoji（如 `"📚"`）。                                                                                 |
-| `homepage` / `repository` | —    | 仅接受公网 HTTP(S) 地址；不安全时置空但保留记录。                                                                |
-| `tags`                    | —    | 数组或逗号分隔字符串，最多保留 8 个标签，用于前端筛选。                                                          |
-| `capabilities`            | —    | 插件申请的权限，用于在卡片上提示权限数量（悬停查看完整列表）。                                                   |
-| `downloads` / `stars`     | —    | 非负数字或数字字符串，用于展示与默认排序。                                                                       |
+| 字段                      | 必填   | 说明                                                                                                                                                                                         |
+| ------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | ✅     | 插件逻辑 id，必须与插件 `manifest.json` 的 `id` 完全一致，用于识别「已安装 / 可更新」。允许 `@scope/name` 形式。                                                                             |
+| `downloadUrl`             | ✅     | 插件 ZIP 包地址。**必须为公网 HTTP(S)**，否则整条记录被丢弃。服务端与浏览器均会访问该地址。                                                                                                  |
+| `name`                    | —      | 展示名称，缺失时回落为 `id`。                                                                                                                                                                |
+| `author`                  | —      | 作者，缺失时回落为 `Community`。                                                                                                                                                             |
+| `version`                 | —      | 语义化版本。与本地已安装版本比较以决定是否显示「更新」。非 semver 的值仍会展示，但永不判定为可更新。                                                                                         |
+| `icon`                    | —      | 图片 URL 或 emoji（如 `"📚"`）。                                                                                                                                                             |
+| `homepage` / `repository` | —      | 仅接受公网 HTTP(S) 地址；不安全时置空但保留记录。                                                                                                                                            |
+| `tags`                    | —      | 数组或逗号分隔字符串，最多保留 8 个标签，用于前端筛选。                                                                                                                                      |
+| `capabilities`            | —      | 插件申请的权限，用于在卡片上提示权限数量（悬停查看完整列表）。                                                                                                                               |
+| `downloads` / `stars`     | —      | 非负数字或数字字符串，用于展示与默认排序。                                                                                                                                                   |
 | `integrity` / `signature` | 安装时 | `integrity` 是 ZIP 的 sha256 十六进制或 `sha256-` base64。`signature` 是对结构化元数据载荷（或哈希原文）的 Ed25519 签名（base64）。社区来源强制要求同时存在 `integrity` 与有效 `signature`。 |
-| `publisher`               | —    | 发布者标识或公钥 ID，与签名元数据保持一致。 |
-| `verified` / `featured`   | —    | `featured` 仍由注册表布尔值决定。`verified` 会被服务端忽略，不再把条目标成已认证。 |
+| `publisher`               | —      | 发布者标识或公钥 ID，与签名元数据保持一致。                                                                                                                                                  |
+| `verified` / `featured`   | —      | `featured` 仍由注册表布尔值决定。`verified` 会被服务端忽略，不再把条目标成已认证。                                                                                                           |
 
 ### 签名载荷与 SDK 签名工具
 
 社区插件包要求使用 Ed25519 私钥签署。签名载荷遵循结构化绑定格式：
+
 ```text
 openlearn-plugin-attestation-v2
 <plugin-id>
@@ -103,6 +104,7 @@ openlearn-plugin-attestation-v2
 ```
 
 插件开发者可通过 `@openlearn/plugin-sdk` CLI 一键完成打包并签名：
+
 ```bash
 # 构建并直接签名打包
 npx @openlearn/plugin-sdk build --key publisher-private.pem --publisher "Alice Dev"
@@ -110,8 +112,8 @@ npx @openlearn/plugin-sdk build --key publisher-private.pem --publisher "Alice D
 # 为已有 ZIP 签署签名并注入 signature.json
 npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice Dev" my-plugin.zip
 ```
-执行后将输出计算得到的 `Integrity` 与 `Signature`，可直接填入注册表清单；同时 ZIP 根目录下会自动嵌入包含发布者身份信息的 `signature.json`。
 
+执行后将输出计算得到的 `Integrity` 与 `Signature`，可直接填入注册表清单；同时 ZIP 根目录下会自动嵌入包含发布者身份信息的 `signature.json`。
 
 ### 归一化与容错策略
 
@@ -180,13 +182,13 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 
 **错误码说明**：
 
-| 错误代码 | 说明 |
-| :--- | :--- |
-| `COMMUNITY_INTEGRITY_REQUIRED` | 社区插件包未声明 `integrity` (SHA-256)，被拒绝 |
-| `COMMUNITY_ATTESTATION_REQUIRED` | 社区包缺少 `signature` 或请求体/请求头缺少凭据 |
-| `COMMUNITY_PUBKEY_MISSING` | 宿主未配置信任公钥 (`OPENLEARN_COMMUNITY_PUBKEY`)，拒绝安装社区包 |
-| `COMMUNITY_INTEGRITY_MISMATCH` | 完整性哈希与下载包不匹配（防网络损坏与中间人篡改） |
-| `COMMUNITY_SIGNATURE_INVALID` | 签名无效、密钥不匹配或非受信发布者 |
+| 错误代码                         | 说明                                                              |
+| :------------------------------- | :---------------------------------------------------------------- |
+| `COMMUNITY_INTEGRITY_REQUIRED`   | 社区插件包未声明 `integrity` (SHA-256)，被拒绝                    |
+| `COMMUNITY_ATTESTATION_REQUIRED` | 社区包缺少 `signature` 或请求体/请求头缺少凭据                    |
+| `COMMUNITY_PUBKEY_MISSING`       | 宿主未配置信任公钥 (`OPENLEARN_COMMUNITY_PUBKEY`)，拒绝安装社区包 |
+| `COMMUNITY_INTEGRITY_MISMATCH`   | 完整性哈希与下载包不匹配（防网络损坏与中间人篡改）                |
+| `COMMUNITY_SIGNATURE_INVALID`    | 签名无效、密钥不匹配或非受信发布者                                |
 
 ---
 
@@ -203,16 +205,15 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 
 ## 5. 相关实现
 
-| 文件                                                              | 职责                                                                 |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 文件                                                              | 职责                                                                              |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `packages/core/security/plugin-signature.ts`                      | 统一非对称签名校验、Ed25519 载荷结构化绑定、多公钥 Keyring 解析与来源分级安全策略 |
-| `packages/core/plugin-host/plugin-distribution-manager.ts`        | 插件分发与仓库管理，集成完整性与签名门禁                             |
-| `packages/plugin-sdk/cli.mjs`                                     | SDK CLI 打包构建与 `sign` 签名命令                                   |
-| `server/services/community-attest.ts`                           | 社区包验签服务桥接                                                   |
-| `server/utils/url-safety.ts`                                      | 共享出站 URL 安全校验（SSRF 防护）                                   |
-| `server/routes/plugins.ts`                                        | `GET /api/plugins/community` 与 `POST /api/plugins/install-from-url` |
-| `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx` | 社区页 UI 与安装交互                                                 |
-| `server/__tests__/community-registry.test.ts`                     | 归一化 / 缓存 / 安全校验 / 下载限制单测                              |
-| `server/__tests__/community-routes.test.ts`                       | 路由鉴权与入参门禁契约测试                                           |
-| `src/components/__tests__/PluginCommunityPanel.test.tsx`          | 面板渲染 / 筛选 / 安装与回退路径测试                                 |
-
+| `packages/core/plugin-host/plugin-distribution-manager.ts`        | 插件分发与仓库管理，集成完整性与签名门禁                                          |
+| `packages/plugin-sdk/cli.mjs`                                     | SDK CLI 打包构建与 `sign` 签名命令                                                |
+| `server/services/community-attest.ts`                             | 社区包验签服务桥接                                                                |
+| `server/utils/url-safety.ts`                                      | 共享出站 URL 安全校验（SSRF 防护）                                                |
+| `server/routes/plugins.ts`                                        | `GET /api/plugins/community` 与 `POST /api/plugins/install-from-url`              |
+| `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx` | 社区页 UI 与安装交互                                                              |
+| `server/__tests__/community-registry.test.ts`                     | 归一化 / 缓存 / 安全校验 / 下载限制单测                                           |
+| `server/__tests__/community-routes.test.ts`                       | 路由鉴权与入参门禁契约测试                                                        |
+| `src/components/__tests__/PluginCommunityPanel.test.tsx`          | 面板渲染 / 筛选 / 安装与回退路径测试                                              |

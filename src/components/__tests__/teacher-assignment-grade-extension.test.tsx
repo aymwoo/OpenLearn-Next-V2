@@ -21,9 +21,7 @@ const mockSubmissions = [
     version: 1,
     filePath: '/storage/assignments/test.py',
     updatedAt: 1712000000000,
-    peerReviews: [
-      { id: 'rev_1', reviewer_name: '李四', score: 85, comment: '代码逻辑清晰' },
-    ],
+    peerReviews: [{ id: 'rev_1', reviewer_name: '李四', score: 85, comment: '代码逻辑清晰' }],
     peerAverageScore: 85,
     grade: null,
   },
@@ -63,10 +61,7 @@ describe('TeacherAssignmentGradePanel extension slots', () => {
     const BatchAiGradingPlugin = (props: any) => {
       capturedToolbarProps = props;
       return (
-        <button
-          data-testid="batch-ai-grade-btn"
-          onClick={() => props.refresh?.()}
-        >
+        <button data-testid="batch-ai-grade-btn" onClick={() => props.refresh?.()}>
           AI 批量初评 ({props.submissions?.length || 0})
         </button>
       );
@@ -84,11 +79,7 @@ describe('TeacherAssignmentGradePanel extension slots', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <TeacherAssignmentGradePanel
-          lessonId="les_001"
-          lang="zh"
-          addToast={addToastMock}
-        />
+        <TeacherAssignmentGradePanel lessonId="les_001" lang="zh" addToast={addToastMock} />
       </PluginHostProvider>,
     );
 
@@ -139,11 +130,7 @@ describe('TeacherAssignmentGradePanel extension slots', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <TeacherAssignmentGradePanel
-          lessonId="les_001"
-          lang="zh"
-          addToast={addToastMock}
-        />
+        <TeacherAssignmentGradePanel lessonId="les_001" lang="zh" addToast={addToastMock} />
       </PluginHostProvider>,
     );
 
@@ -174,10 +161,7 @@ describe('TeacherAssignmentGradePanel extension slots', () => {
       capturedRubricProps = props;
       return (
         <div data-testid="rubric-addon">
-          <button
-            data-testid="tune-weights-btn"
-            onClick={() => props.onTeacherWeightChange?.(70)}
-          >
+          <button data-testid="tune-weights-btn" onClick={() => props.onTeacherWeightChange?.(70)}>
             调整为70%
           </button>
         </div>
@@ -196,11 +180,7 @@ describe('TeacherAssignmentGradePanel extension slots', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <TeacherAssignmentGradePanel
-          lessonId="les_001"
-          lang="zh"
-          addToast={addToastMock}
-        />
+        <TeacherAssignmentGradePanel lessonId="les_001" lang="zh" addToast={addToastMock} />
       </PluginHostProvider>,
     );
 

@@ -574,86 +574,86 @@ const L = T - V; // 拉格朗日量
                       : 'grid-cols-1 md:grid-cols-2 grid-rows-2'
                 }`}
               >
-              {activeWorks.map((work, idx) => {
-                const displayName = isAnonymous ? `作答方案 ${String.fromCharCode(65 + idx)}` : work.studentName;
+                {activeWorks.map((work, idx) => {
+                  const displayName = isAnonymous ? `作答方案 ${String.fromCharCode(65 + idx)}` : work.studentName;
 
-                return (
-                  <div
-                    key={work.studentId}
-                    className="bg-surface border border-theme rounded-2xl shadow-sm flex flex-col overflow-hidden transition-all hover:border-purple-500/50"
-                  >
-                    {/* 卡片顶部标头 */}
-                    <div className="bg-surface-secondary/60 px-4 py-2.5 border-b border-theme flex items-center justify-between shrink-0">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                          {String.fromCharCode(65 + idx)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-xs text-main">{displayName}</span>
-                            {!isAnonymous && work.seatNumber && (
-                              <span className="text-3xs text-muted font-mono bg-surface px-1.5 py-0.5 rounded border border-theme">
-                                {work.seatNumber}
-                              </span>
-                            )}
+                  return (
+                    <div
+                      key={work.studentId}
+                      className="bg-surface border border-theme rounded-2xl shadow-sm flex flex-col overflow-hidden transition-all hover:border-purple-500/50"
+                    >
+                      {/* 卡片顶部标头 */}
+                      <div className="bg-surface-secondary/60 px-4 py-2.5 border-b border-theme flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                            {String.fromCharCode(65 + idx)}
                           </div>
-                          <span className="text-[10px] text-muted truncate block">{work.title}</span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-xs text-main">{displayName}</span>
+                              {!isAnonymous && work.seatNumber && (
+                                <span className="text-3xs text-muted font-mono bg-surface px-1.5 py-0.5 rounded border border-theme">
+                                  {work.seatNumber}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted truncate block">{work.title}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {work.durationSec && (
+                            <span className="text-2xs font-mono text-muted flex items-center gap-0.5">
+                              <Clock size={11} />
+                              {Math.floor(work.durationSec / 60)}分{work.durationSec % 60}秒
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-2xs font-bold font-mono ${
+                              (work.accuracyScore ?? 0) >= 90
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                            }`}
+                          >
+                            {work.accuracyScore}%
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        {work.durationSec && (
-                          <span className="text-2xs font-mono text-muted flex items-center gap-0.5">
-                            <Clock size={11} />
-                            {Math.floor(work.durationSec / 60)}分{work.durationSec % 60}秒
-                          </span>
-                        )}
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-2xs font-bold font-mono ${
-                            (work.accuracyScore ?? 0) >= 90
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                          }`}
-                        >
-                          {work.accuracyScore}%
+                      {/* 卡片作答与解题展示主体 */}
+                      <div className="flex-1 p-4 overflow-y-auto font-mono text-xs leading-relaxed bg-surface/40">
+                        <div className="flex flex-wrap gap-1 mb-2.5">
+                          {work.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2 py-0.5 rounded-md text-3xs font-bold bg-surface-secondary border border-theme text-main"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* 代码/演算展示区块 */}
+                        <pre className="p-3.5 rounded-xl bg-slate-950 text-slate-100 dark:bg-black/90 font-mono text-2xs overflow-x-auto border border-slate-800 shadow-inner">
+                          <code>{work.content}</code>
+                        </pre>
+                      </div>
+
+                      {/* 卡片底部简析 */}
+                      <div className="px-4 py-2 bg-surface-secondary/40 border-t border-theme flex items-center justify-between text-2xs text-muted">
+                        <span>
+                          {work.category === 'exemplary'
+                            ? '🌟 步骤严谨规范，适合作为全班示范'
+                            : work.category === 'typical_error'
+                              ? '⚠️ 存在临界条件缺失，建议重点剖析'
+                              : '💡 包含创新视角，可启发多元思维'}
                         </span>
+                        <span className="font-mono text-3xs">{work.source}</span>
                       </div>
                     </div>
-
-                    {/* 卡片作答与解题展示主体 */}
-                    <div className="flex-1 p-4 overflow-y-auto font-mono text-xs leading-relaxed bg-surface/40">
-                      <div className="flex flex-wrap gap-1 mb-2.5">
-                        {work.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2 py-0.5 rounded-md text-3xs font-bold bg-surface-secondary border border-theme text-main"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* 代码/演算展示区块 */}
-                      <pre className="p-3.5 rounded-xl bg-slate-950 text-slate-100 dark:bg-black/90 font-mono text-2xs overflow-x-auto border border-slate-800 shadow-inner">
-                        <code>{work.content}</code>
-                      </pre>
-                    </div>
-
-                    {/* 卡片底部简析 */}
-                    <div className="px-4 py-2 bg-surface-secondary/40 border-t border-theme flex items-center justify-between text-2xs text-muted">
-                      <span>
-                        {work.category === 'exemplary'
-                          ? '🌟 步骤严谨规范，适合作为全班示范'
-                          : work.category === 'typical_error'
-                            ? '⚠️ 存在临界条件缺失，建议重点剖析'
-                            : '💡 包含创新视角，可启发多元思维'}
-                      </span>
-                      <span className="font-mono text-3xs">{work.source}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

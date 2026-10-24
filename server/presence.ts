@@ -229,9 +229,14 @@ export function getPresentStudentIds(lessonId: string | null | undefined): strin
   return present;
 }
 
-export function setupPresence(
-  { io, eventBus, lookupStudentClassIds, lookupLessonClassId, lookupTeacherClassIds, lookupTeacherLessonIds }: PresenceDeps,
-): void {
+export function setupPresence({
+  io,
+  eventBus,
+  lookupStudentClassIds,
+  lookupLessonClassId,
+  lookupTeacherClassIds,
+  lookupTeacherLessonIds,
+}: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId

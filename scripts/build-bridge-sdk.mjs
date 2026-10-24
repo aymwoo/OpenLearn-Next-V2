@@ -25,9 +25,7 @@ if (!fs.existsSync(sourceFile)) {
 const rawCode = fs.readFileSync(sourceFile, 'utf8');
 
 // 仅转义反引号与模板插值 ${，保留原生的 JavaScript 转义符
-const sanitizedCode = rawCode
-  .replace(/`/g, '\\`')
-  .replace(/\${/g, '\\${');
+const sanitizedCode = rawCode.replace(/`/g, '\\`').replace(/\${/g, '\\${');
 
 const outputTs = `/**
  * AUTO-GENERATED FILE — DO NOT EDIT DIRECTLY.
@@ -44,4 +42,6 @@ export const BRIDGE_SDK_CODE = \`${sanitizedCode}\`;
 `;
 
 fs.writeFileSync(targetFile, outputTs, 'utf8');
-console.log(`[build-bridge-sdk] Successfully compiled packages/bridge-sdk/src/bridge.js (${rawCode.length} bytes) -> server/utils/bridge-sdk.ts`);
+console.log(
+  `[build-bridge-sdk] Successfully compiled packages/bridge-sdk/src/bridge.js (${rawCode.length} bytes) -> server/utils/bridge-sdk.ts`,
+);
