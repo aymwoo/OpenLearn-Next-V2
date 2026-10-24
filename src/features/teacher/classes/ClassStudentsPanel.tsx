@@ -900,7 +900,9 @@ export function ClassStudentsPanel({
                                             setPasswordError('');
                                           }}
                                           className="px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-xs font-semibold cursor-pointer"
-                                          title={lang === 'zh' ? '为学生设置新密码' : 'Set a new password for this student'}
+                                          title={
+                                            lang === 'zh' ? '为学生设置新密码' : 'Set a new password for this student'
+                                          }
                                         >
                                           {lang === 'zh' ? '设置新密码' : 'Set password'}
                                         </button>
@@ -1059,7 +1061,11 @@ export function ClassStudentsPanel({
                                                     ? `确认 ${p.lesson_title} 的进度并计入成绩`
                                                     : `Verify progress for ${p.lesson_title}`
                                                 }
-                                                title={lang === 'zh' ? '确认该进度并计入成绩' : 'Verify and count toward grade'}
+                                                title={
+                                                  lang === 'zh'
+                                                    ? '确认该进度并计入成绩'
+                                                    : 'Verify and count toward grade'
+                                                }
                                                 onClick={async (e) => {
                                                   e.stopPropagation();
                                                   const res = await fetch(`/api/students/${st.id}/progress`, {

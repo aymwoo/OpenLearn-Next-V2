@@ -165,9 +165,7 @@ describe('worker 模式 capabilities 数据链', () => {
         transport,
       );
 
-      expect(transport.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'result', invokeId: 'i1' }),
-      );
+      expect(transport.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'result', invokeId: 'i1' }));
       expect(storageService.set).toHaveBeenCalledWith('k', 'v');
     });
   });

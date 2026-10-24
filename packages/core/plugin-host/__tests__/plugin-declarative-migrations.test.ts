@@ -10,10 +10,7 @@ import {
   getPluginAppliedMigrations,
   parseMigrationFileName,
 } from '../declarative-migrator.js';
-import {
-  PluginMigrationExecutionError,
-  PluginMigrationDowngradeError,
-} from '../errors.js';
+import { PluginMigrationExecutionError, PluginMigrationDowngradeError } from '../errors.js';
 import { PluginHost } from '../index.js';
 import { ServiceRegistry } from '../../di/service-registry.js';
 import { EsmLoader } from '../../esm-loader/esm-loader.js';

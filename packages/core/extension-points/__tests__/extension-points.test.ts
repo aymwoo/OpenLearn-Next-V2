@@ -190,9 +190,7 @@ describe('Extension Points Metadata & Lifecycle Contract (Issue #146)', () => {
         actorId: 'teacher-1',
         payload: { title: 'Test Lesson' },
       });
-      const deprecationCalls = warnSpy.mock.calls.filter((c) =>
-        String(c[0]).includes('[DeprecationWarning]'),
-      );
+      const deprecationCalls = warnSpy.mock.calls.filter((c) => String(c[0]).includes('[DeprecationWarning]'));
       expect(deprecationCalls.length).toBe(0);
     });
   });
@@ -229,9 +227,7 @@ describe('Extension Points Metadata & Lifecycle Contract (Issue #146)', () => {
         timestamp: Date.now(),
         payload: { answer: 1, correctIndex: 1 },
       });
-      const deprecationCalls = warnSpy.mock.calls.filter((c) =>
-        String(c[0]).includes('[DeprecationWarning]'),
-      );
+      const deprecationCalls = warnSpy.mock.calls.filter((c) => String(c[0]).includes('[DeprecationWarning]'));
       expect(deprecationCalls.length).toBe(0);
     });
   });
@@ -251,9 +247,7 @@ describe('Extension Points Metadata & Lifecycle Contract (Issue #146)', () => {
           '[DeprecationWarning] Plugin "plugin-with-legacy-tab" is using deprecated slot "legacy.classroom.tab"',
         ),
       );
-      const deprecationCalls = warnSpy.mock.calls.filter((c) =>
-        String(c[0]).includes('[DeprecationWarning]'),
-      );
+      const deprecationCalls = warnSpy.mock.calls.filter((c) => String(c[0]).includes('[DeprecationWarning]'));
       expect(deprecationCalls.length).toBe(1);
     });
   });

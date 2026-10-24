@@ -163,8 +163,7 @@ export function getUnifiedShowcaseWorks(
           const uuid = parsed?.coursewareUuid ?? parsed?.uuid;
           if (typeof uuid === 'string' && uuid.trim()) {
             const cw = db.prepare('SELECT id FROM courseware WHERE uuid = ?').get(uuid.trim()) as
-              | { id: string }
-              | undefined;
+              { id: string } | undefined;
             if (cw?.id && !coursewareIds.includes(cw.id)) coursewareIds.push(cw.id);
           }
         } catch {}

@@ -199,11 +199,7 @@ describe('ExtensionPointRenderer — Custom Plugin Icons for NavigationSidebar',
 
     fireEvent.click(newTabBtn!);
     expect(openSpy).toHaveBeenCalledTimes(1);
-    expect(openSpy).toHaveBeenCalledWith(
-      '/teacher#/ext-newtab/open-in-newtab',
-      '_blank',
-      'noopener,noreferrer',
-    );
+    expect(openSpy).toHaveBeenCalledWith('/teacher#/ext-newtab/open-in-newtab', '_blank', 'noopener,noreferrer');
 
     vi.unstubAllGlobals();
   });

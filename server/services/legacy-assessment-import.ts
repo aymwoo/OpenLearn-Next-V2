@@ -69,7 +69,7 @@ export function importLegacyAssessments(
     "INSERT INTO assessments (id, kind, title, description, owner_id, settings_json, status, academic_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'draft', NULL, ?, ?)",
   );
   const insertItem = db.prepare(
-    "INSERT INTO assessment_items (id, assessment_id, bank_item_id, section, sort_order, type, stem, config_json, answer_key_json, max_score) VALUES (?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?)",
+    'INSERT INTO assessment_items (id, assessment_id, bank_item_id, section, sort_order, type, stem, config_json, answer_key_json, max_score) VALUES (?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?)',
   );
   const insertAssignment = db.prepare(
     "INSERT INTO assessment_assignments (id, assessment_id, class_id, lesson_id, schedule_id, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)",
@@ -91,7 +91,13 @@ export function importLegacyAssessments(
     correctIndex: number;
     maxScore: number;
     ownerId: string;
-    attempts?: Array<{ studentId: string; answer: unknown; score: number; isCorrect: boolean | null; submittedAt: number }>;
+    attempts?: Array<{
+      studentId: string;
+      answer: unknown;
+      score: number;
+      isCorrect: boolean | null;
+      submittedAt: number;
+    }>;
   }): boolean => {
     if (alreadyImported(db, input.source, input.sourceId)) {
       report.skipped.push({ source: input.source, sourceId: input.sourceId, reason: 'already_imported' });
@@ -109,7 +115,16 @@ export function importLegacyAssessments(
     const settings = JSON.stringify({
       legacy: { source: input.source, sourceId: input.sourceId, lessonId: input.lessonId },
     });
-    insertAssessment.run(assessmentId, 'quiz', input.title, '旧数据导入（Issue #185）', input.ownerId, settings, ts, ts);
+    insertAssessment.run(
+      assessmentId,
+      'quiz',
+      input.title,
+      '旧数据导入（Issue #185）',
+      input.ownerId,
+      settings,
+      ts,
+      ts,
+    );
     report.created.assessments += 1;
 
     insertItem.run(
@@ -176,13 +191,18 @@ export function importLegacyAssessments(
     const question = typeof data.question === 'string' ? data.question.trim() : '';
     const options = parseOptions(data.options);
     const correctIndex = Number(data.correctIndex);
-    if (!question || !options || !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) {
+    if (
+      !question ||
+      !options ||
+      !Number.isInteger(correctIndex) ||
+      correctIndex < 0 ||
+      correctIndex >= options.length
+    ) {
       report.skipped.push({ source: 'whiteboard_quiz', sourceId: element.id, reason: 'invalid_quiz_shape' });
       continue;
     }
     const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(element.lesson_id) as
-      | { creator_id: string | null }
-      | undefined;
+      { creator_id: string | null } | undefined;
     const submissions = db
       .prepare(
         'SELECT student_id, answer, score, is_correct, submitted_at FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ?',
@@ -216,7 +236,13 @@ export function importLegacyAssessments(
   // ── 2. 预置投票（仅有正确答案的条目） ───────────────────────────────
   const polls = db
     .prepare('SELECT id, lesson_id, title, options_json, correct_option FROM lesson_preset_polls')
-    .all() as Array<{ id: string; lesson_id: string; title: string; options_json: string; correct_option: string | null }>;
+    .all() as Array<{
+    id: string;
+    lesson_id: string;
+    title: string;
+    options_json: string;
+    correct_option: string | null;
+  }>;
   for (const poll of polls) {
     if (!poll.correct_option || !poll.correct_option.trim()) {
       report.skipped.push({ source: 'preset_poll', sourceId: poll.id, reason: 'no_correct_option' });
@@ -234,8 +260,7 @@ export function importLegacyAssessments(
       continue;
     }
     const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(poll.lesson_id) as
-      | { creator_id: string | null }
-      | undefined;
+      { creator_id: string | null } | undefined;
     importOne({
       source: 'preset_poll',
       sourceId: poll.id,

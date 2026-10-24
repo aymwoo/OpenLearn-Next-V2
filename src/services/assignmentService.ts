@@ -23,10 +23,7 @@ export async function postAssignmentSubmission(
   return { ok: res.ok };
 }
 
-export async function postGenerateAssignment(
-  classId: string,
-  topic: string,
-): Promise<{ ok: boolean; data?: any }> {
+export async function postGenerateAssignment(classId: string, topic: string): Promise<{ ok: boolean; data?: any }> {
   const res = await fetch(`/api/classes/${classId}/assignments/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -9,7 +9,11 @@ import { appStore, useAppStore } from '../store/appStore';
 import { postLesson, deleteLesson, postCloneLesson, getLessonWhiteboard } from '../services/lessonService.js';
 import type { AddToast } from './useToast';
 
-export function useLessonCrud(deps: { lang: 'zh' | 'en'; addToast: AddToast; setCopyingLessonId: (id: string | null) => void }) {
+export function useLessonCrud(deps: {
+  lang: 'zh' | 'en';
+  addToast: AddToast;
+  setCopyingLessonId: (id: string | null) => void;
+}) {
   const { lang, addToast, setCopyingLessonId } = deps;
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);

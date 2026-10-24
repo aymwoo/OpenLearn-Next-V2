@@ -347,8 +347,7 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
       return p;
     },
     staffMirror: { socketEvent: 'whiteboard-quiz-answered-staff' },
-    description:
-      '随堂练习作答 → 课节 + 班级房间（学生房间脱敏版）；教师全量版镜像至 presence-staff（Issue #238）',
+    description: '随堂练习作答 → 课节 + 班级房间（学生房间脱敏版）；教师全量版镜像至 presence-staff（Issue #238）',
   },
 
   // ── 作业中心（assignment-eval 插件）────────────────────────────────────

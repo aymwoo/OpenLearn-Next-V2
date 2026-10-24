@@ -45,13 +45,21 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       'INSERT INTO lessons (id, title, content, progress_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(testLessonId, '牛顿第一定律与惯性', '课堂核心内容', 'teacher_led', now, now);
 
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testStudentId1, 'STU001', '张小明', 's1@test.com', now);
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testStudentId1,
+      'STU001',
+      '张小明',
+      's1@test.com',
+      now,
+    );
 
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testStudentId2, 'STU002', '李小红', 's2@test.com', now);
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testStudentId2,
+      'STU002',
+      '李小红',
+      's2@test.com',
+      now,
+    );
 
     db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
       testClassId,
@@ -71,9 +79,13 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       correctAnswer: 'B',
       submissions: {},
     });
-    db.prepare(
-      'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testElementId1, testLessonId, 'quiz', quiz1Data, now);
+    db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testElementId1,
+      testLessonId,
+      'quiz',
+      quiz1Data,
+      now,
+    );
 
     const quiz2Data = JSON.stringify({
       question: '物体在不受外力作用时，总保持什么状态？',
@@ -81,9 +93,13 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       correctAnswer: 'C',
       submissions: {},
     });
-    db.prepare(
-      'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testElementId2, testLessonId, 'quiz', quiz2Data, now);
+    db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testElementId2,
+      testLessonId,
+      'quiz',
+      quiz2Data,
+      now,
+    );
   });
 
   describe('1. 随堂测验提交与批改判分 (submitQuiz)', () => {

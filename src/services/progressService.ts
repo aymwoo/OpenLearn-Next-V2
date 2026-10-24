@@ -30,10 +30,7 @@ export async function postStudentProgress(
   });
 }
 
-export async function getClassLessonProgress(
-  classId: string,
-  lessonId: string,
-): Promise<{ ok: boolean; data?: any }> {
+export async function getClassLessonProgress(classId: string, lessonId: string): Promise<{ ok: boolean; data?: any }> {
   const res = await fetch(`/api/classes/${classId}/lessons/${lessonId}/progress`);
   if (!res.ok) return { ok: false };
   return { ok: true, data: await res.json() };

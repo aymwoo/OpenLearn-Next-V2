@@ -260,8 +260,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `class.batch.action`                 | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ classId, cls, lang, selectedStudentIds, selectedStudents, allStudents, disabled, onRefresh }`                      |
 | `student.row.panel`                  | `src/features/teacher/classes/ClassStudentsPanel.tsx`                                                                                   | `{ studentId }`                                                                                                       |
 | `editor.header.action`               | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, currentLesson, lang, isReadOnly, onSave }`                                                               |
-| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`（UI 附加面板）；`labelZh`+`labelEn` 的数据贡献另桥接环节类型注册表 |
-| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`（自定义 UI）；数据贡献桥接 `paletteItemRegistry` 进入组件网格           |
+| `editor.timeline_segment`            | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch }`（UI 附加面板）；`labelZh`+`labelEn` 的数据贡献另桥接环节类型注册表             |
+| `editor.palette_item`                | `src/features/teacher/lesson-editor/LessonPalette.tsx`                                                                                  | `{ lang, onActivate, readOnly }`（自定义 UI）；数据贡献桥接 `paletteItemRegistry` 进入组件网格                        |
 | `whiteboard.dock.plugin`             | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
 | `whiteboard.canvas.widget`           | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ lessonId, classId, userRole, readOnly }`                                                                           |
 | `whiteboard.autosave.status`         | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, status, lastSavedTime }`                                                                                 |
@@ -271,7 +271,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `peer_review.rubric.dimension`       | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                     |
 | `peer_review.badge`                  | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                     |
 | `peer_review.action`                 | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                     |
-| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | `{ workA, workB, annotations, isAnonymous }`                                                                         |
+| `peer_review.showcase.widget`        | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | `{ workA, workB, annotations, isAnonymous }`                                                                          |
 | `peer_review.work.preview`           | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                                         | `{ work, slot, isAnonymous }`                                                                                         |
 | `timetable.tab`（button 形态）       | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'button', timetableActiveTab, setTimetableActiveTab }`                                                 |
 | `timetable.tab`（panel 形态）        | `src/components/TimetableManager.tsx`                                                                                                   | `{ renderType: 'panel', timetableActiveTab, classes, lessons, lang, onSchedulesUpdated }`                             |
@@ -284,7 +284,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `course.list.toolbar.action`         | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ selectedCourseIds, courses, lang, onRefresh }`                                                                     |
 | `course.card.badge`                  | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ course, lang }`                                                                                                    |
 | `course.card.action`                 | `src/features/teacher/CourseManagement.tsx`                                                                                             | `{ course, lang, onRefresh }`                                                                                         |
-| `editor.segment.action`              | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch, segmentId }`                                                                      |
+| `editor.segment.action`              | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segment, lang, readOnly, onPatch, segmentId }`                                                                     |
 | `classroom.alert.banner`             | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage, lang }`                                                                                  |
 | `classroom.cockpit.drawer.item`      | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                                                | `{ lessonId, classId, stage, lang }`                                                                                  |
 | `classroom.stage.display.ticker`     | `src/features/classroom/stage-display/StageDisplayPanel.tsx`                                                                            | `{ lessonId, lessonTitle, stage, data, lang }`                                                                        |
@@ -293,7 +293,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `timetable.card.badge`               | `src/components/timetable/sub-views/TimetableCalendarView.tsx`                                                                          | `{ schedule, lang }`                                                                                                  |
 | `computer_lab.toolbar.action`        | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ activeLab, computerLabs, onRefresh, lang }`                                                                        |
 | `computer_lab.seat.overlay`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, row, col, seat, isOccupied }`                                                                               |
-| `computer_lab.seating.toolbar`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, setAssignedSeats, lang }`                                                          |
+| `computer_lab.seating.toolbar`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, setAssignedSeats, lang }`                                                           |
 | `computer_lab.unassigned.item`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ student, classId, labId }`                                                                                         |
 | `computer_lab.seating.sidebar`       | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, unassignedStudents }`                                                               |
 | `student.dashboard.hero_widget`      | `src/features/student/StudentDashboardPanel.tsx`                                                                                        | `{ studentId, students, studentDashboardData, lang }`                                                                 |
@@ -303,7 +303,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `admin.dashboard.card`               | `src/components/AdminPanel.tsx`                                                                                                         | `{ sqliteStats, lang }`                                                                                               |
 | `admin.user.action`                  | `src/components/AdminPanel.tsx`                                                                                                         | `{ users, filteredUsers, lang, onRefresh }`                                                                           |
 | `header.status_pill`                 | `src/components/AppHeader.tsx`                                                                                                          | `{ dbConnected, dbStatus, lang }`                                                                                     |
-| `ai_sidebar.tab`（button 形态）      | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'button', activeTab, setActiveTab, lang }`                                                            |
+| `ai_sidebar.tab`（button 形态）      | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'button', activeTab, setActiveTab, lang }`                                                             |
 | `ai_sidebar.tab`（panel 形态）       | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'panel', activeTab, lang }`                                                                            |
 | `ai.prompt.template`                 | `src/features/shared/AiPromptTemplatePicker.tsx`（Agent 输入区模板选择器）                                                              | `{ title, description, category, prompt, parameters[{name,label,default}] }`（slotProps 即完整模板配置）              |
 | `ai.skill.provider`                  | `server/ai-agent.ts`（Agent 工具注入，非渲染槽位）                                                                                      | `{ id, name, description, commandType, parametersSchema? }`（经 commandBus 以插件 actor 派发）                        |
@@ -802,18 +802,21 @@ export interface WhiteboardRendererSlotProps {
 本次升级新增的 20 个高价值扩展槽位，覆盖备课中心、互动课堂、大屏展台、课表、机房、学生端、管理后台以及 AI 侧边栏，为连接“国家智慧教育公共服务平台”等外部权威平台提供了完整的集成挂载点。
 
 ### 11.1 备课中心与课程库（国家平台对接 / 资源生态）
+
 - **`course.list.toolbar.action`**：在 `CourseManagement` 顶部工具栏注入，Props 包含 `{ selectedCourseIds, courses, lang, onRefresh }`。国家教育平台插件可通过此槽位挂载「从国家智慧教育平台导入精品课」或「批量同步课程资源」操作按钮。
 - **`course.card.badge`**：在课程卡片标题旁渲染，Props 包含 `{ course, lang }`。插件可基于课程元数据展示「国家级精品课」、「部优课程」等官方认证角标。
 - **`course.card.action`**：在课程卡片底部操作区渲染，Props 包含 `{ course, lang, onRefresh }`。插件可挂载「上报至智慧教育平台」或「查看国家云资源链接」等单课操作项。
 - **`editor.segment.action`**：在课程备课编辑器 `SegmentEditorCard` 环节卡片工具栏渲染，Props 包含 `{ segment, lang, readOnly, onPatch, segmentId }`。供国家平台微课资源插入、智能教案辅助等教学环节级工具接入。
 
 ### 11.2 课堂互动与执教大屏
+
 - **`classroom.alert.banner`**：在交互驾驶舱顶部横幅区域渲染，Props 包含 `{ lessonId, classId, stage, lang }`。用于全班广播、设备异常警告或国家平台直播/推流提醒。
 - **`classroom.cockpit.drawer.item`**：在驾驶舱侧边抽屉中渲染，Props 包含 `{ lessonId, classId, stage, lang }`。
 - **`classroom.stage.display.ticker`**：在大屏展台底部跑马灯/状态条渲染，Props 包含 `{ lessonId, lessonTitle, stage, data, lang }`。支持全屏展示时滚动国家平台同步信息、全班公告等。
 - **`classroom.post_class.exporter`**：在课后总结报告页 `PostClassWrapupView` 导出按钮区渲染，Props 包含 `{ lessonId, classId, summaryData, lang }`（`summaryData` 为本堂课真实统计：`lessonTitle/className/attemptsCount/exitTicketStats`）。支持一键导出符合国家教育平台标准格式的学情分析与教学评价报告。
 
 ### 11.3 课表与机房管理
+
 - **`timetable.toolbar.action`**：在课表管理工具栏渲染，Props 包含 `{ schedules, currentWeekMonday, lang, onRefresh }`。用于学期课表一键同步或对接外部排课系统。
 - **`timetable.card.badge`**：在日历课表卡片中渲染，Props 包含 `{ schedule, lang }`。展示公开课、国家平台同步直播课等标记。
 - **`computer_lab.toolbar.action`**：在机房管理工具栏渲染，Props 包含 `{ activeLab, computerLabs, onRefresh, lang }`。
@@ -824,17 +827,20 @@ export interface WhiteboardRendererSlotProps {
 - **`computer_lab.seating.sidebar`**：在座位网格下方的统计区渲染，Props 包含 `{ labId, classId, assignedSeats, unassignedStudents }`。适用于排座统计、规则校验结果展示。
 
 ### 11.4 学生学习门户与作业闭环
+
 - **`student.dashboard.hero_widget`**：在学生主页 Hero 区域渲染，Props 包含 `{ studentId, students, studentDashboardData, lang }`。用于展示国家平台自主学习任务流、每日推荐资源等。
 - **`student.assignment.toolbar.action`**：在作业详情顶栏渲染，Props 包含 `{ assignment }`。
 - **`student.lesson.notes_addon`**：在学生端随堂笔记区域挂载插件工具，Props 包含 `{ lessonId, studentId, activeSegmentId, lang }`。
 - **`student.lesson.toolbox`**：在学生端课堂工具箱区域挂载，Props 包含 `{ lessonId, studentId, lang }`。
 
 ### 11.5 管理后台与全域底座
+
 - **`admin.dashboard.card`**：在管理员控制台概览区渲染卡片，Props 包含 `{ sqliteStats, lang }`。支持接入国家平台连接状态监控卡片、全校数据上报大屏。
 - **`admin.user.action`**：在用户管理操作区渲染，Props 包含 `{ users, filteredUsers, lang, onRefresh }`。支持国家统一身份认证账号绑定与实名校验。
 - **`header.status_pill`**：在全局顶栏右侧状态区渲染胶囊徽标，Props 包含 `{ dbConnected, dbStatus, lang }`（连通状态由插件组件自行探测其目标服务并如实呈现）。
 
 ### 11.6 AI 助手侧边栏
+
 - **`ai_sidebar.tab`**：在全局右侧侧边栏中渲染，支持 `button`（顶部 Tab 切换按钮，Props `{ renderType: 'button', activeTab, setActiveTab, lang }`）与 `panel`（Tab 激活时的自定义面板，Props `{ renderType: 'panel', activeTab, lang }`）两种渲染态，渲染器按 `activeTab === 'plugin:{pluginId}/{extId}'` 过滤单面板。允许第三方 AI 助手或智能教研 Agent 深度嵌入右侧抽屉。
 - **`ai.prompt.template`**：在 Agent 聊天输入框旁的模板选择器（`AiPromptTemplatePicker`）中消费，slotProps 即完整模板配置 `{ title, description?, category?, prompt, parameters?[{name,label,default?}] }`；`{{参数名}}` 占位经填参渲染后插入输入框。无插件注册时选择器零渲染。
 - **`ai.skill.provider`**：**非渲染槽位**，由服务端 AI Agent 消费（`server/ai-agent.ts`）：manifest `contributes['ai.skill.provider']` 的命令经 `pskill_*` 工具名注入 OpenAI function-calling 工具列表，模型调用后以**贡献插件自身 actor**（`plugin:{manifest.id}`，持有 capabilitiesProposed 授权）经 commandBus 派发，内核拦截器照常做 descriptor/inputSchema/能力检查；descriptor 缺失时 fail-closed 拒绝派发。

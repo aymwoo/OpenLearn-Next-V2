@@ -47,9 +47,7 @@ export class SemesterGradeService implements ISemesterGradeService {
     let classId: string | undefined;
     const schedule = this.db
       .prepare('SELECT class_id, academic_year, scheduled_date FROM schedules WHERE lesson_id = ? LIMIT 1')
-      .get(lessonId) as
-      | { class_id: string; academic_year?: string | null; scheduled_date?: string | null }
-      | undefined;
+      .get(lessonId) as { class_id: string; academic_year?: string | null; scheduled_date?: string | null } | undefined;
     if (schedule?.class_id) {
       classId = schedule.class_id;
     } else {

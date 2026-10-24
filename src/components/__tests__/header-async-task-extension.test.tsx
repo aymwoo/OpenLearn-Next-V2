@@ -91,7 +91,14 @@ describe('header.async_task.item extension slot', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <AppHeader {...makeProps({ setTeacherTab: mockSetTeacherTab, lang: 'zh', activeRole: 'teacher', teacherTab: 'live_class' })} />
+        <AppHeader
+          {...makeProps({
+            setTeacherTab: mockSetTeacherTab,
+            lang: 'zh',
+            activeRole: 'teacher',
+            teacherTab: 'live_class',
+          })}
+        />
       </PluginHostProvider>,
     );
 

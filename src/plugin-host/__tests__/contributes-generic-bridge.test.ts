@@ -81,9 +81,7 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
   it('command_palette.item 的 commandType 按插件命名空间前缀化', async () => {
     await activateWithManifest({
       contributes: {
-        'command_palette.item': [
-          { id: 'cmd1', title: '计算器', commandType: 'calc.run', payload: { precision: 2 } },
-        ],
+        'command_palette.item': [{ id: 'cmd1', title: '计算器', commandType: 'calc.run', payload: { precision: 2 } }],
       },
     });
 
@@ -140,19 +138,14 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
     // 该测试直接钉共享注册函数的双 id 语义 —— 归属 id（unregisterPluginResources
     // 的清理键）与命名空间 id（plugin-namespace 契约要求 manifest.id）分离。
     const dbId = '019f6029-884d-71dd-a4f1-31f815fa9698';
-    registerManifestContributions(
-      usePluginHostStore.getState(),
-      dbId,
-      '@scope/remote-plugin',
-      {
-        id: '@scope/remote-plugin',
-        name: 'Remote',
-        version: '1.0.0',
-        contributes: {
-          'command_palette.item': [{ id: 'cmd1', title: '远程命令', commandType: 'remote.act' }],
-        },
-      } as any,
-    );
+    registerManifestContributions(usePluginHostStore.getState(), dbId, '@scope/remote-plugin', {
+      id: '@scope/remote-plugin',
+      name: 'Remote',
+      version: '1.0.0',
+      contributes: {
+        'command_palette.item': [{ id: 'cmd1', title: '远程命令', commandType: 'remote.act' }],
+      },
+    } as any);
     const entries = usePluginHostStore.getState().getExtensions('command_palette.item');
     expect(entries).toHaveLength(1);
     expect(entries[0].pluginId).toBe(dbId);

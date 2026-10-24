@@ -122,12 +122,9 @@ describe('HostActionDispatcher Core Unit Tests', () => {
   it('respects timeoutMs and rejects if action handler takes too long', async () => {
     dispatcher.registerHandler('test:slow', () => new Promise((resolve) => setTimeout(resolve, 500)));
 
-    await expect(
-      dispatcher.dispatch(
-        { type: 'test:slow', payload: {} },
-        { timeoutMs: 50 },
-      ),
-    ).rejects.toThrow('timed out after 50ms');
+    await expect(dispatcher.dispatch({ type: 'test:slow', payload: {} }, { timeoutMs: 50 })).rejects.toThrow(
+      'timed out after 50ms',
+    );
   });
 
   it('creates scoped dispatcher that automatically injects sourcePluginId', async () => {
@@ -303,10 +300,7 @@ describe('HostActionDispatcher Integration with PluginHost & Slots', () => {
       version: '1.0.0',
     };
 
-    await host.installPlugin(
-      manifest,
-      'export default { activate(ctx) {} };',
-    );
+    await host.installPlugin(manifest, 'export default { activate(ctx) {} };');
 
     // Mock moduleLoader
     (host as any).moduleLoader = vi.fn().mockResolvedValue({

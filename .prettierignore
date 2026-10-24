@@ -26,3 +26,41 @@
 
 plugin-system-remediation-tracker.md
 audit-plugin-system-2026-10-06.md
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 插件脚手架模板：占位符不是合法 TS，prettier 解析必然报错
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# packages/plugin-sdk/scaffold/templates/** 下的模板里含 `{{componentName}}`
+# 这类**未替换的占位符** —— 它们不是合法的 TypeScript（`export default function
+# {{componentName}}()` 直接是语法错误），prettier 解析时必然报
+# SyntaxError: '(' expected。
+#
+# 这些模板是**要原样保留**的：格式化会破坏占位符形态，而且脚手架输出时的
+# 缩进由模板自身决定。排查格式问题时应看真实文件，而不是模板。
+packages/plugin-sdk/scaffold/templates/
+
+# 故意写坏语法的测试夹具：esbuild 安装期拦截用的「语法错误样本」。
+# prettier 解析它必然报 SyntaxError —— 它就该保持坏着。
+packages/core/esm-loader/__tests__/fixtures/syntax-error.js
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 自动生成的类型声明：build 时被覆盖，格式化它等于跟生成器对着干
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# packages/plugin-sdk/generated.d.ts 由 packages/plugin-sdk/generate-dts.mjs
+# 生成，文件头自己就写着「自动生成，请勿手工编辑 / 本文件会在 build 时被覆盖」。
+#
+# 为什么不参与 prettier：
+#   · 生成器（TypeScript printer）输出 4 空格缩进，prettier 要 2 空格 ——
+#     两者必有一方被改写；
+#   · `pnpm install` 的 prepare 钩子会跑 build-plugin-sdk.mjs → build.mjs →
+#     generate-dts.mjs，**每次安装都会把文件重写成生成器的输出**。
+#     所以 prettier 改它 → 下次安装就被覆盖回去 → 工作区永远是脏的；
+#   · packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts 用 `--check` 模式
+#     比对「生成器输出 vs 仓库里的文件」，**逐字符相等**才通过。
+#     把它 prettier 化 = 直接让这条防漂移测试变红。
+#
+# 结论：生成物由生成器负责，prettier 不碰。真正需要人维护的是
+# packages/plugin-sdk/openlearn.d.ts（手写契约），那个文件照常参与格式化。
+packages/plugin-sdk/generated.d.ts

@@ -3,6 +3,7 @@
 > **当前版本**：`package.json` 为 **`0.6.1`**（`main` 在 v0.6.1 tag 之后还有安全修复），`@openlearn/plugin-sdk` 为 **`3.7.0`**。
 >
 > 本文覆盖两类迁移：
+>
 > 1. **平台数据库 schema 迁移**（`migrations/000`–`023`）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
 > 2. **插件侧迁移**（`ctx.db.migrate`）—— 插件作者在自己插件的 `activate` 中调用
 >
@@ -125,15 +126,15 @@ if (migrations.length > 0) {
 
 ### 1.2 迁移运行器语义（`server/utils/migrate.ts`）
 
-| 行为              | 实现                                                                                     |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| 文件排序          | `loadMigrationsFromDirectory` 用 `localeCompare(a, b, { numeric: true })`，**数字序而非字典序** |
-| 幂等              | `_migrations` 表记录已应用的 `name`，已应用则 `continue` 跳过                          |
-| 断点续跑          | 单条失败即 `throw`，中断整个循环；重启后从未应用的那条继续                              |
-| 重复列容错        | `executeSqlStatements` 捕获 `duplicate column name` 并 `continue`（`warn` 不中断）      |
-| 校验和            | `simpleChecksum`（djb2 变体，32 位）写入 `_migrations.checksum`——**仅记录，不校验**     |
-| 回滚              | `rollbackMigration` 需要迁移提供非空 `-- DOWN` 段，否则 `throw`                          |
-| 影子表            | 部分迁移在 `migrate.ts` 中建 `*__rollback` 临时表用于数据搬迁，搬完保留（勿当业务表读） |
+| 行为       | 实现                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| 文件排序   | `loadMigrationsFromDirectory` 用 `localeCompare(a, b, { numeric: true })`，**数字序而非字典序** |
+| 幂等       | `_migrations` 表记录已应用的 `name`，已应用则 `continue` 跳过                                   |
+| 断点续跑   | 单条失败即 `throw`，中断整个循环；重启后从未应用的那条继续                                      |
+| 重复列容错 | `executeSqlStatements` 捕获 `duplicate column name` 并 `continue`（`warn` 不中断）              |
+| 校验和     | `simpleChecksum`（djb2 变体，32 位）写入 `_migrations.checksum`——**仅记录，不校验**             |
+| 回滚       | `rollbackMigration` 需要迁移提供非空 `-- DOWN` 段，否则 `throw`                                 |
+| 影子表     | 部分迁移在 `migrate.ts` 中建 `*__rollback` 临时表用于数据搬迁，搬完保留（勿当业务表读）         |
 
 `_migrations` 表结构：`name TEXT PRIMARY KEY` / `applied_at INTEGER NOT NULL` / `checksum TEXT NOT NULL`。
 
@@ -162,23 +163,23 @@ DROP TABLE IF EXISTS foo;
 
 > ⚠️ `migrations/README.md` 中 009 条目的表名（`classroom_peer_review_groups` / `classroom_peer_review_submissions`）**与脚本实际内容不符**——以脚本为准。
 
-| 序号    | 文件                                  | 建表                                                                                            | 关键增量                                                                                                  | 有 DOWN |
-| ------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | :-----: |
-| `000`   | `000_initial_schema.sql`              | 内核初始 schema（`events` / `users` / `client_sessions` / `plugins` / `vfs_nodes` / `processes` / `pending_commands` 等） | —                                                                                       |  ✅ |
-| `001`   | `001_add_execution_mode.sql`          | —                                                                                                | `plugins.execution_mode`（`inline` / `worker`，默认 `inline`）                                            |  ✅ |
-| `002`   | `002_add_client_session_expiry.sql`   | —                                                                                                | `client_sessions.expires_at`（会话绝对过期）                                                              |  ✅ |
-| `003`   | `003_classroom_runtime.sql`            | `student_rollcalls` / `site_settings` / `agent_conversations`                                     | 随机点名、站点设置、AI 对话记忆                                                                          |  ✅ |
-| `004`   | `004_courseware_score_config.sql`     | `courseware_score_config`                                                                        | 课件成绩归集策略；`courseware_id = '*'` 为全局默认                                                        |  ✅ |
-| `005`   | `005_assignment_hub.sql`               | `plugin_assignments` / `plugin_submission_versions` / `plugin_assignment_files` / `plugin_peer_review_tasks` | 作业升为一等实体；重交留档不丢历史；`assignment_submissions` 等表加 `assignment_id` / `task_id` / `anonymous` / `status` / `updated_at` |  ✅ |
-| `006`   | `006_classroom_event_bus.sql`          | —                                                                                                | `events` 补课堂维度：加 `lesson_id` 列与 `(type,timestamp)` / correlationId / `(lesson_id,timestamp)` 索引 |  ✅ |
-| `007`   | `007_interactive_classroom.sql`        | `lesson_quiz_submissions` / `classroom_sessions` / `classroom_quick_polls` / `classroom_poll_votes` / `classroom_buzzers` / `classroom_exit_tickets` / `classroom_pacing_signals` | 互动课堂与课节生命周期                                                                 |  ✅ |
-| `008`   | `008_teaching_modes.sql`              | `teaching_modes`                                                                                 | `classroom_sessions.teaching_mode_id`；内置模式定义在代码常量，**不 seed**                              |  ✅ |
-| `009`   | `009_classroom_peer_review.sql`        | `classroom_peer_review_tasks` / `classroom_peer_reviews` / `classroom_peer_badges` / `classroom_peer_nominations` / `classroom_danmaku` / `classroom_peer_rubric_dimensions` | 课中全班大屏互评（**课堂为中心**，随 session 生命周期）                                                  |  ❌ |
-| `010`   | `010_class_groups.sql`                | `class_groups`                                                                                   | 班级固定分组；`member_ids` / `leader_id` 用 JSON 存整组，`is_default` 标记上课默认方案                  |  ✅ |
-| `011`   | `011_classroom_feed.sql`              | `classroom_feed`                                                                                 | 课堂动态流落库，教师重进课堂可按 lesson 回放（此前是纯前端内存态，上限 50 条）                          |  ❌ |
-| `012`   | `012_auto_record_score.sql`           | —                                                                                                | `courseware_score_config` 加 `auto_record_enabled`（默认 **0 关闭**）/ `auto_record_min_completion`       |  ✅ |
-| `013`   | `013_score_source_strategy.sql`       | —                                                                                                | `assignment_submissions.source`（`manual` / `auto`）+ `courseware_score_config.auto_record_strategy`（`latest` / `highest`） |  ✅ |
-| `014`   | `014_performance_indexes.sql`         | —（**只建索引**）                                                                                | `vfs_nodes(parent_id)` / `plugin_submissions(lesson_id)` / `student_point_logs(student_id)` / `student_rollcalls(class_id, student_id)` |  ✅ |
+| 序号  | 文件                                | 建表                                                                                                                                                                              | 关键增量                                                                                                                                | 有 DOWN |
+| ----- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :-----: |
+| `000` | `000_initial_schema.sql`            | 内核初始 schema（`events` / `users` / `client_sessions` / `plugins` / `vfs_nodes` / `processes` / `pending_commands` 等）                                                         | —                                                                                                                                       |   ✅    |
+| `001` | `001_add_execution_mode.sql`        | —                                                                                                                                                                                 | `plugins.execution_mode`（`inline` / `worker`，默认 `inline`）                                                                          |   ✅    |
+| `002` | `002_add_client_session_expiry.sql` | —                                                                                                                                                                                 | `client_sessions.expires_at`（会话绝对过期）                                                                                            |   ✅    |
+| `003` | `003_classroom_runtime.sql`         | `student_rollcalls` / `site_settings` / `agent_conversations`                                                                                                                     | 随机点名、站点设置、AI 对话记忆                                                                                                         |   ✅    |
+| `004` | `004_courseware_score_config.sql`   | `courseware_score_config`                                                                                                                                                         | 课件成绩归集策略；`courseware_id = '*'` 为全局默认                                                                                      |   ✅    |
+| `005` | `005_assignment_hub.sql`            | `plugin_assignments` / `plugin_submission_versions` / `plugin_assignment_files` / `plugin_peer_review_tasks`                                                                      | 作业升为一等实体；重交留档不丢历史；`assignment_submissions` 等表加 `assignment_id` / `task_id` / `anonymous` / `status` / `updated_at` |   ✅    |
+| `006` | `006_classroom_event_bus.sql`       | —                                                                                                                                                                                 | `events` 补课堂维度：加 `lesson_id` 列与 `(type,timestamp)` / correlationId / `(lesson_id,timestamp)` 索引                              |   ✅    |
+| `007` | `007_interactive_classroom.sql`     | `lesson_quiz_submissions` / `classroom_sessions` / `classroom_quick_polls` / `classroom_poll_votes` / `classroom_buzzers` / `classroom_exit_tickets` / `classroom_pacing_signals` | 互动课堂与课节生命周期                                                                                                                  |   ✅    |
+| `008` | `008_teaching_modes.sql`            | `teaching_modes`                                                                                                                                                                  | `classroom_sessions.teaching_mode_id`；内置模式定义在代码常量，**不 seed**                                                              |   ✅    |
+| `009` | `009_classroom_peer_review.sql`     | `classroom_peer_review_tasks` / `classroom_peer_reviews` / `classroom_peer_badges` / `classroom_peer_nominations` / `classroom_danmaku` / `classroom_peer_rubric_dimensions`      | 课中全班大屏互评（**课堂为中心**，随 session 生命周期）                                                                                 |   ❌    |
+| `010` | `010_class_groups.sql`              | `class_groups`                                                                                                                                                                    | 班级固定分组；`member_ids` / `leader_id` 用 JSON 存整组，`is_default` 标记上课默认方案                                                  |   ✅    |
+| `011` | `011_classroom_feed.sql`            | `classroom_feed`                                                                                                                                                                  | 课堂动态流落库，教师重进课堂可按 lesson 回放（此前是纯前端内存态，上限 50 条）                                                          |   ❌    |
+| `012` | `012_auto_record_score.sql`         | —                                                                                                                                                                                 | `courseware_score_config` 加 `auto_record_enabled`（默认 **0 关闭**）/ `auto_record_min_completion`                                     |   ✅    |
+| `013` | `013_score_source_strategy.sql`     | —                                                                                                                                                                                 | `assignment_submissions.source`（`manual` / `auto`）+ `courseware_score_config.auto_record_strategy`（`latest` / `highest`）            |   ✅    |
+| `014` | `014_performance_indexes.sql`       | —（**只建索引**）                                                                                                                                                                 | `vfs_nodes(parent_id)` / `plugin_submissions(lesson_id)` / `student_point_logs(student_id)` / `student_rollcalls(class_id, student_id)` |   ✅    |
 
 **没有 DOWN 段的两条**：`009` 与 `011`。`rollbackMigration` 对它们会直接 `throw`。
 
@@ -214,10 +215,10 @@ DROP TABLE IF EXISTS foo;
 
 这是 v0.1.x 之后**对教学数据影响最大**的一组变更：
 
-| 迁移   | 变更                                                                                     | 兼容性 |
-| ------ | ---------------------------------------------------------------------------------------- | ------ |
-| `012`  | `courseware_score_config` 加 `auto_record_enabled`（**默认 0 = 关闭**）与 `auto_record_min_completion` | ✅ 默认关闭，**升级后行为与旧版完全一致**；教师需显式开启 |
-| `013`  | `assignment_submissions` 加 `source` 列（`manual` / `auto`），并回填存量数据            | ✅ 回填规则：自动路径写入的 `feedback` 以「由自动录入规则。」开头，据此判定；其余为 `manual` |
+| 迁移  | 变更                                                                                                   | 兼容性                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `012` | `courseware_score_config` 加 `auto_record_enabled`（**默认 0 = 关闭**）与 `auto_record_min_completion` | ✅ 默认关闭，**升级后行为与旧版完全一致**；教师需显式开启                                    |
+| `013` | `assignment_submissions` 加 `source` 列（`manual` / `auto`），并回填存量数据                           | ✅ 回填规则：自动路径写入的 `feedback` 以「由自动录入规则。」开头，据此判定；其余为 `manual` |
 
 > ⚠️ **`013` 之后教师手动改的分数受保护**。自动路径遇 `source='manual'` 的行会跳过（`manual-protected`），教师标记的缺考行（`status='absent'`）同样受保护（`absent-protected`）。若你的运维脚本直接 `UPDATE assignment_submissions` 改分，**不会**被自动规则冲掉——这正是 `013` 要修的缺陷。
 >
@@ -237,16 +238,16 @@ DROP TABLE IF EXISTS foo;
 
 这些不走 `migrations/`，但跨版本升级时行为有变：
 
-| 变更                                     | 现状                                                                 | 源码位置                              |
-| ---------------------------------------- | -------------------------------------------------------------------- | ------------------------------------- |
-| 密码哈希升级为 bcrypt                    | `verifyPassword` 兼容旧 SHA-256，`needsUpgrade: true` 时自动重算    | `packages/core/db/index.ts`           |
-| 会话改为不透明 Cookie + 查表              | 令牌是 `client_sessions` 表主键，**不是 JWT**                        | `server/middleware/auth.ts`           |
-| 强制改密门控                             | 种子账号带 `mustChangePassword`，除改密、登出、会话查询外的 `/api`（含 GET）一律 403 | `enforcePasswordChanged`              |
-| CSRF 门控                                | 写请求按 `Sec-Fetch-Site` 判定，`cross-site` 走豁免清单             | `server/middleware/csrf.ts`           |
-| 前端 `setSocketBridge` 死代码被删除       | 白板事件**不再跨端转发**（从来就没生效过）                          | `src/services/event-bus.ts`           |
-| 课件 HTML 改用 `?ct=` 短时令牌鉴权        | 沙箱 iframe 不带 cookie 的替代方案                                  | `server/utils/courseware-access.ts`   |
-| 成绩榜对学生脱敏 `extra_json` / `comment` | 学生只拿榜单信息                                                     | `server/routes/courseware.ts`         |
-| 插件 Token 白名单（前后端）               | worker / inline 两条链路都按 manifest 计算允许访问的 Token           | `packages/core/worker-runtime/`、`src/plugin-host/allowed-tokens.ts` |
+| 变更                                      | 现状                                                                                 | 源码位置                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 密码哈希升级为 bcrypt                     | `verifyPassword` 兼容旧 SHA-256，`needsUpgrade: true` 时自动重算                     | `packages/core/db/index.ts`                                          |
+| 会话改为不透明 Cookie + 查表              | 令牌是 `client_sessions` 表主键，**不是 JWT**                                        | `server/middleware/auth.ts`                                          |
+| 强制改密门控                              | 种子账号带 `mustChangePassword`，除改密、登出、会话查询外的 `/api`（含 GET）一律 403 | `enforcePasswordChanged`                                             |
+| CSRF 门控                                 | 写请求按 `Sec-Fetch-Site` 判定，`cross-site` 走豁免清单                              | `server/middleware/csrf.ts`                                          |
+| 前端 `setSocketBridge` 死代码被删除       | 白板事件**不再跨端转发**（从来就没生效过）                                           | `src/services/event-bus.ts`                                          |
+| 课件 HTML 改用 `?ct=` 短时令牌鉴权        | 沙箱 iframe 不带 cookie 的替代方案                                                   | `server/utils/courseware-access.ts`                                  |
+| 成绩榜对学生脱敏 `extra_json` / `comment` | 学生只拿榜单信息                                                                     | `server/routes/courseware.ts`                                        |
+| 插件 Token 白名单（前后端）               | worker / inline 两条链路都按 manifest 计算允许访问的 Token                           | `packages/core/worker-runtime/`、`src/plugin-host/allowed-tokens.ts` |
 
 > ⚠️ **升级前务必核对 `ENCRYPTION_KEY`**：从 v0.3.x 起 AI Provider API Key 一律 AES-256-GCM 加密。迁移 `023` 起，班级临时口令也用同一把钥匙加密（前缀 `olenc1:`）。未设置环境变量时，钥匙在 `storage/encryption-key`。密钥变更会导致 API Key 和班级口令都无法解密。`site-backup` 不包含该文件，要单独备份。
 
@@ -289,11 +290,11 @@ export default {
 
 ### 4.3 平台数据库 vs 插件私有数据
 
-| 需求                     | 推荐做法                                              | 反例                                   |
-| ------------------------ | ----------------------------------------------------- | -------------------------------------- |
-| 插件自己的业务数据       | `ctx.db.migrate()` + `ctx.db.table('foo')`（自动加前缀） | 手工拼 `plugin_xxx_` 前缀             |
-| 简单键值                 | `ctx.services.storage`（`plugin_storage` 表）           | 自建 KV 表                            |
-| 读平台核心表（只读查询） | `ctx.resolve(IDatabaseToken)`                          | ——                                     |
+| 需求                     | 推荐做法                                                 | 反例                      |
+| ------------------------ | -------------------------------------------------------- | ------------------------- |
+| 插件自己的业务数据       | `ctx.db.migrate()` + `ctx.db.table('foo')`（自动加前缀） | 手工拼 `plugin_xxx_` 前缀 |
+| 简单键值                 | `ctx.services.storage`（`plugin_storage` 表）            | 自建 KV 表                |
+| 读平台核心表（只读查询） | `ctx.resolve(IDatabaseToken)`                            | ——                        |
 
 ⚠️ 平台核心表的完整清单与权限边界见[平台数据表参考](../reference/platform-data-tables)——那里明确标注了「插件能否访问 `IDatabaseToken`」在文档层尚有矛盾，依赖前请先确认。
 
@@ -333,16 +334,16 @@ sqlite3 packages/core/db/educational_os.db "PRAGMA integrity_check;"
 
 ## 6. 相关源文件
 
-| 路径                                | 内容                                                   |
-| ----------------------------------- | ------------------------------------------------------ |
-| `migrations/*.sql`                  | 版本化 SQL。完整清单见 `migrations/README.md`；第 2 节表只列到 `014` |
-| `migrations/README.md`              | 迁移约定（⚠️ 009 的表名与脚本实际内容不符）           |
-| `server/utils/migrate.ts`           | `loadMigrationsFromDirectory` / `runMigrations` / `rollbackMigration` / `simpleChecksum` |
-| `server.ts`                         | 启动时触发迁移（`startServer` 内）                     |
-| `packages/core/db/index.ts`         | `initializeDatabase`（SQL 之后调用 `applyStartupDataMigrations`）/ `hashPassword` / `verifyPassword` |
-| `packages/core/db/class-passcode-crypto.ts` | 启动时把仍是明文的 `classes.class_passcode` 密封为 `olenc1:` |
-| `packages/core/plugin-host/types.ts` | `PluginDatabaseAPI.migrate` 签名                    |
-| `packages/core/plugin-host/context-builder.ts` | `migrate` 实现、插件 DB 前缀注入         |
-| `packages/core/di/interfaces.ts`    | `IPointsDimensionRegistryToken` / `IPointsLedgerServiceToken` |
-| `scripts/restore-db.ts`             | 备份枚举与恢复                                         |
-| `docs/architecture/database-and-migrations.md` | 架构视角的迁移说明                     |
+| 路径                                           | 内容                                                                                                 |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `migrations/*.sql`                             | 版本化 SQL。完整清单见 `migrations/README.md`；第 2 节表只列到 `014`                                 |
+| `migrations/README.md`                         | 迁移约定（⚠️ 009 的表名与脚本实际内容不符）                                                          |
+| `server/utils/migrate.ts`                      | `loadMigrationsFromDirectory` / `runMigrations` / `rollbackMigration` / `simpleChecksum`             |
+| `server.ts`                                    | 启动时触发迁移（`startServer` 内）                                                                   |
+| `packages/core/db/index.ts`                    | `initializeDatabase`（SQL 之后调用 `applyStartupDataMigrations`）/ `hashPassword` / `verifyPassword` |
+| `packages/core/db/class-passcode-crypto.ts`    | 启动时把仍是明文的 `classes.class_passcode` 密封为 `olenc1:`                                         |
+| `packages/core/plugin-host/types.ts`           | `PluginDatabaseAPI.migrate` 签名                                                                     |
+| `packages/core/plugin-host/context-builder.ts` | `migrate` 实现、插件 DB 前缀注入                                                                     |
+| `packages/core/di/interfaces.ts`               | `IPointsDimensionRegistryToken` / `IPointsLedgerServiceToken`                                        |
+| `scripts/restore-db.ts`                        | 备份枚举与恢复                                                                                       |
+| `docs/architecture/database-and-migrations.md` | 架构视角的迁移说明                                                                                   |

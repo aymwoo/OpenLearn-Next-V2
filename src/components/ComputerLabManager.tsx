@@ -893,9 +893,16 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               const isSelfDragSource =
                                 !!dragState?.from && dragState.from.row === rIdx && dragState.from.col === cIdx;
                               const isDropTarget =
-                                !!dragState && !!dropTarget && dropTarget.row === rIdx && dropTarget.col === cIdx && !isSelfDragSource;
+                                !!dragState &&
+                                !!dropTarget &&
+                                dropTarget.row === rIdx &&
+                                dropTarget.col === cIdx &&
+                                !isSelfDragSource;
                               const isSwapTarget =
-                                isDropTarget && isOccupied && dragState?.type === 'seat' && seat.student_id !== dragState.studentId;
+                                isDropTarget &&
+                                isOccupied &&
+                                dragState?.type === 'seat' &&
+                                seat.student_id !== dragState.studentId;
                               const isMoveTarget = isDropTarget && (!isOccupied || dragState?.type === 'pool');
 
                               return (
@@ -953,19 +960,13 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                   }}
                                   className={`group relative rounded-xl flex flex-col items-center justify-center transition-all select-none shadow-sm ${
                                     selectedClassId && isOccupied ? 'cursor-grab' : 'cursor-pointer'
-                                  } ${
-                                    selectedClassId ? 'w-20 h-14' : 'w-11 h-11'
-                                  } ${
+                                  } ${selectedClassId ? 'w-20 h-14' : 'w-11 h-11'} ${
                                     isOccupied
                                       ? 'bg-slate-850 border border-indigo-500/70 hover:border-indigo-400 shadow-indigo-950/50'
                                       : isTargetPlacement
                                         ? 'bg-indigo-950/40 border border-dashed border-indigo-400 hover:bg-indigo-900/50 ring-1 ring-indigo-400/50 animate-pulse'
                                         : 'bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850'
-                                  }${
-                                    isSwapTarget
-                                      ? ' ring-2 ring-amber-400 border-amber-400 bg-amber-950/40'
-                                      : ''
-                                  }${
+                                  }${isSwapTarget ? ' ring-2 ring-amber-400 border-amber-400 bg-amber-950/40' : ''}${
                                     isMoveTarget && !isSwapTarget
                                       ? ' ring-2 ring-emerald-400 border-emerald-400 bg-emerald-950/40'
                                       : ''
@@ -1001,10 +1002,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                         {/* 座位扩展 overlay：点击冒泡必须被隔离——
                                             座位根节点 onClick 是座位安排/移除入口，
                                             插件 overlay 内的任何点击都不得触发（v0.6.0 审计 R-8） */}
-                                        <div
-                                          className="w-full min-w-0"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
+                                        <div className="w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                                           <ExtensionPointRenderer
                                             slot="computer_lab.seat.overlay"
                                             slotProps={{
