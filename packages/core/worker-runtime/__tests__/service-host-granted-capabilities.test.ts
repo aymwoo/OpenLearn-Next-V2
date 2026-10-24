@@ -17,23 +17,38 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ServiceHost } from '../service-host.js';
 import { CapabilityGuard } from '../../capability/guard/capability-guard.js';
+import type { IWorkerTransport, InvokeMessage } from '../types.js';
+import type { ServiceRegistry } from '../../di/service-registry.js';
 
 // ── 测试脚手架 ───────────────────────────────────────────────────────────────
 
-function createMockTransport() {
-  const messages: any[] = [];
+/** transport 收到的消息 —— 只声明断言用得到的字段，其余键放行。 */
+interface MockWorkerMessage {
+  type?: string;
+  code?: string;
+  message?: string;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+interface MockTransport extends IWorkerTransport {
+  messages: MockWorkerMessage[];
+}
+
+function createMockTransport(): MockTransport {
+  const messages: MockWorkerMessage[] = [];
   return {
     messages,
-    postMessage: vi.fn((msg: any) => {
-      messages.push(msg);
+    postMessage: vi.fn((msg: unknown) => {
+      messages.push(msg as MockWorkerMessage);
     }),
     onMessage: vi.fn(),
     terminate: vi.fn(async () => {}),
     id: 'mock-host',
-  } as any;
+  };
 }
 
-function createMockServiceRegistry(services: Record<string, unknown>) {
+function createMockServiceRegistry(services: Record<string, unknown>): ServiceRegistry {
   return {
     resolveByName: vi.fn(async (name: string) => {
       const svc = services[name];
@@ -43,7 +58,7 @@ function createMockServiceRegistry(services: Record<string, unknown>) {
     resolve: vi.fn(async () => {
       throw new Error('resolve() not expected — use resolveByName');
     }),
-  } as any;
+  } as unknown as ServiceRegistry;
 }
 
 const PROCESS_TOKEN = '@openlearn/core:IProcessService';
@@ -99,7 +114,7 @@ describe('ServiceHost 运行时能力以已审批集合为准（Issue #224）', 
         token: PROCESS_TOKEN,
         method: 'registerHandler',
         args: [{ id: 'x' }],
-      } as any,
+      } as InvokeMessage,
       transport,
     );
 
@@ -127,7 +142,7 @@ describe('ServiceHost 运行时能力以已审批集合为准（Issue #224）', 
         token: PROCESS_TOKEN,
         method: 'registerHandler',
         args: [{ id: 'x' }],
-      } as any,
+      } as InvokeMessage,
       transport,
     );
 
@@ -152,7 +167,7 @@ describe('ServiceHost 运行时能力以已审批集合为准（Issue #224）', 
         token: STORAGE_TOKEN,
         method: 'set',
         args: ['k', 'v'],
-      } as any,
+      } as InvokeMessage,
       transport,
     );
 
@@ -180,7 +195,7 @@ describe('ServiceHost 运行时能力以已审批集合为准（Issue #224）', 
         token: STORAGE_TOKEN,
         method: 'get',
         args: ['k'],
-      } as any,
+      } as InvokeMessage,
       transport,
     );
 
@@ -207,7 +222,7 @@ describe('ServiceHost 运行时能力以已审批集合为准（Issue #224）', 
         token: PROCESS_TOKEN,
         method: 'registerHandler',
         args: [{ id: 'x' }],
-      } as any,
+      } as InvokeMessage,
       transport,
     );
 
