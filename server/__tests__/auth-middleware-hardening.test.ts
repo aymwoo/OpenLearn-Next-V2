@@ -257,10 +257,22 @@ describe('Auth 中间件加固（role 白名单 + actorId 净化）', () => {
       expect(viaAdministrator.next).toHaveBeenCalledTimes(1);
     });
 
-    it('username=admin 的会话获得 administrator 权限', () => {
+    it('username=admin 的会话**不再**自动获得 administrator 权限（Issue #226）', () => {
+      // 修复前：只要 username==='admin' 就会被判成 administrator ——
+      // 那是一条与角色无关的硬编码身份兜底，同一个 users 表里任何叫 admin 的
+      // 会话都会因此拿到管理员权限。Issue #226 起管理员身份只认 role / subRole。
       const token = 'tok-harden-username-admin';
       mkSession(token, { userId: 'usr_plain', role: 'teacher', username: 'admin' });
-      const { next } = run(token, 'administrator');
+      const { res, next } = run(token, 'administrator');
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('subRole=administrator 的会话获得 administrator 权限（真实登录形态）', () => {
+      const token = 'tok-harden-subrole-admin';
+      mkSession(token, { userId: 'usr_admin_2', role: 'teacher', subRole: 'administrator', username: 'admin2' });
+      const { res, next } = run(token, 'administrator');
+      expect(res.status).not.toHaveBeenCalled();
       expect(next).toHaveBeenCalledTimes(1);
     });
   });
