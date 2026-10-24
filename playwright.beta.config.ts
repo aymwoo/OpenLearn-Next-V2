@@ -23,5 +23,9 @@ export default defineConfig({
     url: 'http://127.0.0.1:9107/health',
     reuseExistingServer: false,
     timeout: 180_000,
+    env: {
+      // Issue #229：路由数据范围声明门禁（未声明数据范围的已认证路由 → 服务器起不来）。
+      ROUTE_SCOPE_ENFORCE: 'true',
+    },
   },
 });

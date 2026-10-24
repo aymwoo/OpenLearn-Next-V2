@@ -37,6 +37,9 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       PLAYWRIGHT_TEST: '1',
+      // Issue #229：CI 里启用的路由数据范围声明门禁。
+      // 显式带上而不是只依赖进程 env —— 避免不同 Playwright 版本对 env 合并语义的差异。
+      ROUTE_SCOPE_ENFORCE: 'true',
     },
   },
 });

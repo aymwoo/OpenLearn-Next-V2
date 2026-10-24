@@ -44,6 +44,7 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **VFS 访问（#128）**: `GET /api/vfs`（含 `virtual-lessons` / `virtual-assignments` / `virtual-submissions` / 物理节点）与 `GET /files/*` 仅教师/管理员可用，学生一律 403。VFS 是教师工作台的系统资源浏览器，前端也只在教师会话下拉取。
 - **Socket 握手鉴权**: `socketAuthMiddleware(socket, next)` 从 cookie `edu_os_token` 或 `socket.handshake.auth.token` 取令牌校验会话，并同样拒绝带 `mustChangePassword` 标记的连接（与 HTTP 层同用 `FORBIDDEN_DEFAULT_PASSWORD` 错误码）。
 - **CSRF**: `server/middleware/csrf.ts` 的 `csrfGuard`。
+- **路由数据范围声明门禁（#140 / #229）**: 只做 `requireAuth()`（不限角色）的已认证路由必须在认证之外**声明**数据范围 —— `requireScopedAuth('self' | 'class-member' | 'class-staff' | 'admin' | 'authenticated')`。服务端启动时 `server/security/route-scope.ts` 的 `assertRouteDataScopes()` 遍历 Express 路由栈审计：默认只告警；`ROUTE_SCOPE_ENFORCE=true` 时**直接抛错、服务器起不来**。该变量已在 CI（`.github/workflows/ci.yml`）全局启用，因此「新增路由漏声明数据范围」是硬失败而非静默放行。迁移期白名单 `server/security/route-scope-whitelist.ts` 必须保持为空 —— 新增路由应直接声明，而不是加白名单绕过审计。门禁由 `server/__tests__/route-scope-enforce.test.ts` 覆盖（运行时审计 + CI 配置自检）。
 
 ---
 
