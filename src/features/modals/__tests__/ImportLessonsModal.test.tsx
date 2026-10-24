@@ -53,6 +53,23 @@ describe('ImportLessonsModal', () => {
     expect(screen.getByTestId('download-course-package-template-btn')).toBeTruthy();
   });
 
+  it('labels the CSV channel as a quick import so teachers do not expect segments/assets (审计尾巴)', () => {
+    // CSV 通道只有两列；此前文案只说「支持 CSV 与课程包」，教师会把「导入了 CSV」
+    // 误当成「导入了完整课程」，再去白板上找不到任何组件。徽标把边界摆在明面上。
+    render(<ImportLessonsModal {...makeProps({ lang: 'zh', isImportLessonsOpen: true })} />);
+    expect(screen.getByTestId('csv-simple-import-badge')).toBeTruthy();
+    expect(screen.getByText('简易导入（CSV）')).toBeTruthy();
+    expect(screen.getByText('仅标题 + 正文')).toBeTruthy();
+    // 头部副标题也要把两条通道的分工说清
+    expect(screen.getByText(/CSV 为「简易导入」/)).toBeTruthy();
+  });
+
+  it('uses the same distinction in English', () => {
+    render(<ImportLessonsModal {...makeProps({ lang: 'en', isImportLessonsOpen: true })} />);
+    expect(screen.getByText('Quick import (CSV)')).toBeTruthy();
+    expect(screen.getByText('title + body only')).toBeTruthy();
+  });
+
   it('shows the duplicate notice with an explicit "import a copy" escape hatch (G-06)', () => {
     render(
       <ImportLessonsModal

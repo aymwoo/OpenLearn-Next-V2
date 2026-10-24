@@ -97,8 +97,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {lang === 'zh'
-                      ? '支持 CSV 批量导入（仅标题与正文）与课程包 JSON 导入（完整课程：教学环节 + 白板组件 + 课件附件）。'
-                      : 'Import a CSV (title and body only) or a course package JSON (full lesson: segments, components and assets).'}
+                      ? 'CSV 为「简易导入」（仅标题与正文）；需要教学环节 + 白板组件 + 课件附件的完整课程请用课程包 JSON。'
+                      : 'CSV is a "quick import" (title and body only). For a complete lesson — segments, whiteboard components and assets — use a course package JSON.'}
                   </p>
                 </div>
               </div>
@@ -122,13 +122,20 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 <div className="space-y-4">
                   {/* Schema instructions */}
                   <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
-                    <h4 className="text-xs font-bold text-indigo-850 uppercase tracking-wide flex items-center gap-1">
+                    <h4 className="text-xs font-bold text-indigo-850 uppercase tracking-wide flex items-center gap-2">
                       <span>📌</span>
-                      {lang === 'zh' ? '预定义数据格式说明' : 'Predefined Schema Information'}
+                      {lang === 'zh' ? '简易导入（CSV）' : 'Quick import (CSV)'}
+                      {/* 定位徽标：CSV 通道只有两列，别让教师以为它也能带环节/组件/附件 */}
+                      <span
+                        className="text-[10px] font-mono font-normal normal-case tracking-normal text-indigo-700 bg-indigo-100 border border-indigo-200 rounded px-1.5 py-0.5"
+                        data-testid="csv-simple-import-badge"
+                      >
+                        {lang === 'zh' ? '仅标题 + 正文' : 'title + body only'}
+                      </span>
                     </h4>
                     <p className="text-xs text-indigo-900 mt-1 leading-relaxed">
                       {lang === 'zh'
-                        ? 'CSV 文件的首行必须 define 列标题（分大小写且无多余空格），包含以下两项必需内容：'
+                        ? 'CSV 文件的首行必须定义列标题（不区分大小写、无多余空格），包含以下两项必需内容：'
                         : 'Your CSV file must include exactly these header columns on the first row (case-insensitive):'}
                     </p>
                     <ul className="list-disc pl-5 mt-2 text-xs text-indigo-950 space-y-1">
@@ -164,8 +171,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     </div>
                     <p className="text-[11px] text-indigo-800/80 mt-2.5 leading-relaxed">
                       {lang === 'zh'
-                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。'
-                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson.'}
+                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。完整课程统一走这条通道，CSV 只做批量建空壳。'
+                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson. Complete lessons go through this path; CSV only creates shells in bulk.'}
                     </p>
                   </div>
 
@@ -214,8 +221,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     <span className="text-xs text-gray-400 mt-1">
                       {/* 上限文案直接取常量，避免「承诺 20MB」与实际校验口径再次漂移（Issue #246） */}
                       {lang === 'zh'
-                        ? `支持标准 CSV 与课程包 JSON，最大不超过 ${IMPORT_MAX_FILE_MB}MB`
-                        : `Supports standard CSV and course-package JSON, up to ${IMPORT_MAX_FILE_MB}MB`}
+                        ? `CSV（简易导入）或课程包 JSON（完整课程），单文件最大 ${IMPORT_MAX_FILE_MB}MB`
+                        : `CSV (quick import) or course-package JSON (full lesson), up to ${IMPORT_MAX_FILE_MB}MB`}
                     </span>
                   </div>
                 </div>
