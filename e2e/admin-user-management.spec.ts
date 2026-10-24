@@ -93,7 +93,10 @@ test.describe('管理后台：教工与管理员账号生命周期治理 E2E 测
       await submitUserBtn.click();
 
       // 6. 验证教工列表中出现该新账号卡片
-      const userCard = page.locator('div.rounded-xl').filter({ hasText: `@${testUsername}` }).first();
+      const userCard = page
+        .locator('div.rounded-xl')
+        .filter({ hasText: `@${testUsername}` })
+        .first();
       await expect(userCard).toBeVisible({ timeout: 15_000 });
 
       // 7. 测试即时搜索过滤
@@ -118,7 +121,11 @@ test.describe('管理后台：教工与管理员账号生命周期治理 E2E 测
       await saveChangesBtn.click();
 
       // 验证姓名已更新
-      const updatedUserCard = page.locator('div.rounded-xl').filter({ hasText: `@${testUsername}` }).filter({ hasText: updatedName }).first();
+      const updatedUserCard = page
+        .locator('div.rounded-xl')
+        .filter({ hasText: `@${testUsername}` })
+        .filter({ hasText: updatedName })
+        .first();
       await expect(updatedUserCard).toBeVisible({ timeout: 15_000 });
 
       // 9. 截取教职目录管理真实渲染截图存盘 (Generates Artifact: Screenshot)

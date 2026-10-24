@@ -264,8 +264,7 @@ export class ServiceHost {
       const methodDenied = checkMethodPolicy(msg.token, msg.method, msg.args, this.manifestCapabilities);
       if (methodDenied) {
         const err = new Error(
-          `Call denied for actor ${this.pluginActorId}: ` +
-            `${msg.token}.${msg.method}() — ${methodDenied}`,
+          `Call denied for actor ${this.pluginActorId}: ` + `${msg.token}.${msg.method}() — ${methodDenied}`,
         );
         err.name = 'WorkerCapabilityError';
         throw err;

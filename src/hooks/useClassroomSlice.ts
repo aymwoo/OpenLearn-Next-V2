@@ -258,7 +258,12 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
             usePluginHostStore.setState((s) => ({
               activePlugins: s.activePlugins.map((p) =>
                 p.id === plugin.id
-                  ? { ...p, version: plugin.version ?? '', name: plugin.name, capabilitiesProposed: declaredCapabilities }
+                  ? {
+                      ...p,
+                      version: plugin.version ?? '',
+                      name: plugin.name,
+                      capabilitiesProposed: declaredCapabilities,
+                    }
                   : p,
               ),
             }));

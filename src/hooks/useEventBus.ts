@@ -24,14 +24,8 @@ export function useEventBus<K extends FrontendEventType>(
   eventType: K,
   handler: (payload: FrontendEventMap[K], event: PlatformEvent<FrontendEventMap[K]>) => void,
 ): void;
-export function useEventBus<T = any>(
-  eventType: string,
-  handler: (payload: T, event: PlatformEvent<T>) => void,
-): void;
-export function useEventBus(
-  eventType: string,
-  handler: (payload: any, event: PlatformEvent) => void,
-): void {
+export function useEventBus<T = any>(eventType: string, handler: (payload: T, event: PlatformEvent<T>) => void): void;
+export function useEventBus(eventType: string, handler: (payload: any, event: PlatformEvent) => void): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 

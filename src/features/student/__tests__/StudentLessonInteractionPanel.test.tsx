@@ -120,9 +120,7 @@ describe('StudentLessonInteractionPanel', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
       render(
         <Suspense fallback={null}>
-          <StudentLessonInteractionPanel
-            {...(makeProps({ isStudentLocked: true, lockMode: 'navigation' }) as any)}
-          />
+          <StudentLessonInteractionPanel {...(makeProps({ isStudentLocked: true, lockMode: 'navigation' }) as any)} />
         </Suspense>,
       );
 
@@ -154,11 +152,7 @@ describe('StudentLessonInteractionPanel', () => {
 
       screen.getByText('Interactive Courseware Viewer').click();
       expect(setStudentLessonTab).not.toHaveBeenCalled();
-      expect(addToast).toHaveBeenCalledWith(
-        '🔒 答题锁定',
-        expect.stringContaining('答题锁定中'),
-        'warning',
-      );
+      expect(addToast).toHaveBeenCalledWith('🔒 答题锁定', expect.stringContaining('答题锁定中'), 'warning');
       expect(screen.getByText('✏️ 答题锁定')).toBeTruthy();
     });
   });

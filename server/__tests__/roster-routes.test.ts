@@ -356,7 +356,9 @@ describe('Roster routes integration & permission mesh (D1b)', () => {
         }),
       });
       expect(updateRes.status).toBe(200);
-      const updatedStudent = kernelContainer.db.prepare('SELECT lock_mode FROM students WHERE id = ?').get(studentId) as any;
+      const updatedStudent = kernelContainer.db
+        .prepare('SELECT lock_mode FROM students WHERE id = ?')
+        .get(studentId) as any;
       expect(updatedStudent.lock_mode).toBe('full');
 
       // POST /api/classes/:classId/unlock_lesson 解锁全班重置

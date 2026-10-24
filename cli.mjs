@@ -86,7 +86,8 @@ export function decideEnvPreflight(command, result) {
 
 /** 把校验结果打印成人能读的一段（与 `formatEnvIssues` 的呈现保持一致）。 */
 export function formatEnvPreflight(result) {
-  const fmt = (list) => list.map((i) => `  [${(i.severity || 'ERROR').toUpperCase()}] ${i.key}: ${i.message}`).join('\n');
+  const fmt = (list) =>
+    list.map((i) => `  [${(i.severity || 'ERROR').toUpperCase()}] ${i.key}: ${i.message}`).join('\n');
   const parts = [];
   if (result.warnings.length > 0) parts.push(`[openlearn-next] 启动期环境变量告警:\n${fmt(result.warnings)}`);
   if (result.errors.length > 0) parts.push(`[openlearn-next] 启动期环境变量非法:\n${fmt(result.errors)}`);

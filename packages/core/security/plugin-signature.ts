@@ -110,10 +110,7 @@ export function buildAttestationPayloadString(id: string, version: string, integ
 /**
  * Build deterministic signing payload for attestation.
  */
-export function buildAttestationPayload(
-  integrity: string,
-  metadata?: { id?: string; version?: string },
-): Buffer {
+export function buildAttestationPayload(integrity: string, metadata?: { id?: string; version?: string }): Buffer {
   const trimmedHash = integrity.trim();
   if (metadata && metadata.id) {
     return Buffer.from(buildAttestationPayloadString(metadata.id, metadata.version || '', trimmedHash), 'utf8');
@@ -221,10 +218,7 @@ export async function extractEmbeddedSignature(
 /**
  * Resolve trusted public keys from parameters and environment.
  */
-export function resolveTrustedPublicKeys(
-  explicitKeys?: string[],
-  env: NodeJS.ProcessEnv = process.env,
-): string[] {
+export function resolveTrustedPublicKeys(explicitKeys?: string[], env: NodeJS.ProcessEnv = process.env): string[] {
   const keys: string[] = [];
   if (explicitKeys && explicitKeys.length > 0) {
     keys.push(...explicitKeys);
@@ -275,9 +269,7 @@ export function resolveTrustedPublicKeys(
 /**
  * Comprehensive verification of plugin package integrity and publisher signature.
  */
-export async function verifyPluginPackage(
-  options: VerifyPluginPackageOptions,
-): Promise<VerifyPluginPackageResult> {
+export async function verifyPluginPackage(options: VerifyPluginPackageOptions): Promise<VerifyPluginPackageResult> {
   const { packageSource, sourceType, metadata, allowUnsignedLocal = true } = options;
   const env = options.env ?? process.env;
 

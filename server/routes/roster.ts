@@ -193,8 +193,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
    */
   app.get('/api/classes/:id/passcode-setting', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff'))) return;
-      const row = kernelContainer.getReadDb()
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff')))
+        return;
+      const row = kernelContainer
+        .getReadDb()
         .prepare('SELECT class_passcode, class_passcode_expires_at FROM classes WHERE id = ?')
         .get(req.params.id) as
         { class_passcode?: string | null; class_passcode_expires_at?: number | null } | undefined;
@@ -799,7 +801,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
         // 教师/管理员种子账号的强制改密（上方 teacher 分支）保持不变。
         const studentUsedDefaultPassword = matchesOwnPassword && providedPassword === '123456';
         if (studentUsedDefaultPassword) {
-          rlog.info(`[Auth] Student ${studentObj.student_number || studentObj.id} logged in with default password (hint only)`);
+          rlog.info(
+            `[Auth] Student ${studentObj.student_number || studentObj.id} logged in with default password (hint only)`,
+          );
         }
         sessionData = {
           role: 'student',
@@ -848,7 +852,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session;
       const currentUserId = session?.userId || session?.studentId;
-      const studentRow = kernelContainer.getReadDb()
+      const studentRow = kernelContainer
+        .getReadDb()
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
@@ -864,7 +869,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.status(403).json({ error: 'Forbidden: Cannot access another student notifications' });
       }
 
-      const rows = kernelContainer.getReadDb()
+      const rows = kernelContainer
+        .getReadDb()
         .prepare('SELECT notification_id FROM student_read_notifications WHERE student_id = ?')
         .all(studentId) as any[];
       res.json(rows.map((r) => r.notification_id));
@@ -1200,7 +1206,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session as any;
       const currentUserId = session?.userId || session?.studentId;
-      const studentRow = kernelContainer.getReadDb()
+      const studentRow = kernelContainer
+        .getReadDb()
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
@@ -1212,7 +1219,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (!sessionAllows) {
         return res.status(403).json({ error: 'Forbidden: Cannot read another student progress' });
       }
-      const progress = kernelContainer.getReadDb()
+      const progress = kernelContainer
+        .getReadDb()
         .prepare(
           `
         SELECT slp.*, l.title as lesson_title,
@@ -1368,8 +1376,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:id/progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff'))) return;
-      const progress = kernelContainer.getReadDb()
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.id, 'staff')))
+        return;
+      const progress = kernelContainer
+        .getReadDb()
         .prepare(
           `
         SELECT l.id as lesson_id, l.title as lesson_title, AVG(slp.progress_percent) as average_progress
@@ -1389,9 +1399,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.get('/api/classes/:classId/lessons/:lessonId/progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'staff')))
+      if (
+        rejectUnless(
+          res,
+          authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'staff'),
+        )
+      )
         return;
-      const progress = kernelContainer.getReadDb()
+      const progress = kernelContainer
+        .getReadDb()
         .prepare(
           `
         SELECT cs.student_id,
@@ -1696,7 +1712,6 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // --- Smart Fair & Tiered Random Picker APIs ---
-
 
   app.get('/api/classes/:classId/picker-candidates', requireScopedAuth('class-staff'), (req, res) => {
     try {

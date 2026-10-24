@@ -175,10 +175,7 @@ export function AppHeader(props: AppHeaderProps) {
         </button>
 
         {/* header.status_pill 状态指示胶囊扩展（WebSocket 通道延迟、离线 PWA 状态） */}
-        <ExtensionPointRenderer
-          slot="header.status_pill"
-          slotProps={{ dbConnected, dbStatus, lang }}
-        />
+        <ExtensionPointRenderer slot="header.status_pill" slotProps={{ dbConnected, dbStatus, lang }} />
 
         {/* 全局后台任务指示器：课表识别运行中 */}
         {timetableOcrTask?.status === 'running' && (
@@ -449,42 +446,42 @@ export function AppHeader(props: AppHeaderProps) {
         {activeRole !== 'student' &&
           (() => {
             const statusColor =
-            dbStatus === 'error' || !dbConnected
-              ? {
-                  bg: 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse',
-                  dot: 'bg-rose-500',
-                  ping: 'bg-rose-400',
-                  label: lang === 'zh' ? 'SQLite 数据库连接出错或已断开' : 'SQLite DB Error / Disconnected',
-                }
-              : dbStatus === 'warning'
+              dbStatus === 'error' || !dbConnected
                 ? {
-                    bg: 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100',
-                    dot: 'bg-amber-500',
-                    ping: 'bg-amber-400',
-                    label: lang === 'zh' ? 'SQLite 数据库存在状态警告' : 'SQLite DB Warning',
+                    bg: 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse',
+                    dot: 'bg-rose-500',
+                    ping: 'bg-rose-400',
+                    label: lang === 'zh' ? 'SQLite 数据库连接出错或已断开' : 'SQLite DB Error / Disconnected',
                   }
-                : {
-                    bg: 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100',
-                    dot: 'bg-emerald-500',
-                    ping: 'bg-emerald-400',
-                    label: lang === 'zh' ? 'SQLite 数据库连接正常' : 'SQLite DB Connected & Normal',
-                  };
+                : dbStatus === 'warning'
+                  ? {
+                      bg: 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100',
+                      dot: 'bg-amber-500',
+                      ping: 'bg-amber-400',
+                      label: lang === 'zh' ? 'SQLite 数据库存在状态警告' : 'SQLite DB Warning',
+                    }
+                  : {
+                      bg: 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100',
+                      dot: 'bg-emerald-500',
+                      ping: 'bg-emerald-400',
+                      label: lang === 'zh' ? 'SQLite 数据库连接正常' : 'SQLite DB Connected & Normal',
+                    };
 
-          return (
-            <div
-              id="db-connection-status-badge"
-              className={`w-8 h-8 rounded-lg border flex items-center justify-center relative select-none shrink-0 cursor-pointer transition-colors shadow-3xs ${statusColor.bg}`}
-              title={statusColor.label}
-            >
-              <Database size={15} />
-              <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                <span
-                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor.ping}`}
-                />
-                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${statusColor.dot}`} />
-              </span>
-            </div>
-          );
+            return (
+              <div
+                id="db-connection-status-badge"
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center relative select-none shrink-0 cursor-pointer transition-colors shadow-3xs ${statusColor.bg}`}
+                title={statusColor.label}
+              >
+                <Database size={15} />
+                <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor.ping}`}
+                  />
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${statusColor.dot}`} />
+                </span>
+              </div>
+            );
           })()}
 
         <UserMenu session={session} lang={lang} onLogout={handleLogout} onProfile={() => setProfileOpen(true)} />

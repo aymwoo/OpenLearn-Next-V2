@@ -264,10 +264,14 @@ describe('Issue #123 严格考试模式与防作弊', () => {
 
     // 验证 exams 表中已自动创建与回写
     const db = kernelContainer.db;
-    const examRow: any = db.prepare('SELECT * FROM exams WHERE class_id = ? AND title = ?').get(CLASS_ID, '期末物理期末大考');
+    const examRow: any = db
+      .prepare('SELECT * FROM exams WHERE class_id = ? AND title = ?')
+      .get(CLASS_ID, '期末物理期末大考');
     expect(examRow).toBeDefined();
 
-    const scoreRow: any = db.prepare('SELECT * FROM exam_scores WHERE exam_id = ? AND student_id = ?').get(examRow.id, STU_1);
+    const scoreRow: any = db
+      .prepare('SELECT * FROM exam_scores WHERE exam_id = ? AND student_id = ?')
+      .get(examRow.id, STU_1);
     expect(scoreRow).toBeDefined();
     expect(scoreRow.notes).toBe(`assessment:${assignmentId}`);
 
@@ -282,15 +286,19 @@ describe('Issue #123 严格考试模式与防作弊', () => {
 
   it('严格防覆盖：已有教师手工录入成绩时绝不覆盖', async () => {
     const db = kernelContainer.db;
-    const examRow: any = db.prepare('SELECT * FROM exams WHERE class_id = ? AND title = ?').get(CLASS_ID, '期末物理期末大考');
+    const examRow: any = db
+      .prepare('SELECT * FROM exams WHERE class_id = ? AND title = ?')
+      .get(CLASS_ID, '期末物理期末大考');
     expect(examRow).toBeDefined();
 
     // 教师在成绩单手工为李四 (STU_2) 录入 99 分，notes 为普通教师备注
     const now = Date.now();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR REPLACE INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(examRow.id, STU_2, 99, '教师期末人工加分补录', now);
+    `,
+    ).run(examRow.id, STU_2, 99, '教师期末人工加分补录', now);
 
     // 模拟李四在测评系统作答得到了 50 分，且处于交卷状态
     const attempt2 = assessmentService.startAttempt(assignmentId, STU_2);
@@ -303,7 +311,9 @@ describe('Issue #123 严格考试模式与防作弊', () => {
     expect(syncRes.status).toBe(200);
 
     // 验证李四的成绩仍然是 99 分，且备注仍然保留为教师人工录入备注！
-    const scoreAfter: any = db.prepare('SELECT * FROM exam_scores WHERE exam_id = ? AND student_id = ?').get(examRow.id, STU_2);
+    const scoreAfter: any = db
+      .prepare('SELECT * FROM exam_scores WHERE exam_id = ? AND student_id = ?')
+      .get(examRow.id, STU_2);
     expect(scoreAfter.score).toBe(99);
     expect(scoreAfter.notes).toBe('教师期末人工加分补录');
   });

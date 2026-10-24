@@ -97,15 +97,7 @@ describe('PluginUninstallDialog（Issue #141）', () => {
 describe('PluginDataPanel（Issue #141）', () => {
   it('空列表显示空态，并在挂载时拉取一次', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
-    render(
-      <PluginDataPanel
-        lang="zh"
-        items={[]}
-        onRefresh={onRefresh}
-        onExport={vi.fn()}
-        onPurge={vi.fn()}
-      />,
-    );
+    render(<PluginDataPanel lang="zh" items={[]} onRefresh={onRefresh} onExport={vi.fn()} onPurge={vi.fn()} />);
 
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
     expect(screen.getByText('暂无保留的插件数据')).toBeDefined();
@@ -114,15 +106,7 @@ describe('PluginDataPanel（Issue #141）', () => {
   it('列出孤立数据摘要，导出按钮回调携带该项', () => {
     const onExport = vi.fn();
     const item = makeOrphanItem();
-    render(
-      <PluginDataPanel
-        lang="zh"
-        items={[item]}
-        onRefresh={vi.fn()}
-        onExport={onExport}
-        onPurge={vi.fn()}
-      />,
-    );
+    render(<PluginDataPanel lang="zh" items={[item]} onRefresh={vi.fn()} onExport={onExport} onPurge={vi.fn()} />);
 
     expect(screen.getByText('作业中心')).toBeDefined();
     expect(screen.getByText('ext-homework-hub')).toBeDefined();
@@ -135,15 +119,7 @@ describe('PluginDataPanel（Issue #141）', () => {
   it('清除为两步确认：先展开提示，再「确认清除」才回调', () => {
     const onPurge = vi.fn();
     const item = makeOrphanItem();
-    render(
-      <PluginDataPanel
-        lang="zh"
-        items={[item]}
-        onRefresh={vi.fn()}
-        onExport={vi.fn()}
-        onPurge={onPurge}
-      />,
-    );
+    render(<PluginDataPanel lang="zh" items={[item]} onRefresh={vi.fn()} onExport={vi.fn()} onPurge={onPurge} />);
 
     fireEvent.click(screen.getByRole('button', { name: /清除数据/ }));
     expect(onPurge).not.toHaveBeenCalled();

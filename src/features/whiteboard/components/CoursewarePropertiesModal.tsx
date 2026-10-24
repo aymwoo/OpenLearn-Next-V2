@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  X,
-  ShieldCheck,
-  Save,
-  Globe,
-  Upload,
-  Maximize2,
-  RefreshCw,
-  Code,
-  FileCode,
-  AlertCircle,
-} from 'lucide-react';
+import { X, ShieldCheck, Save, Globe, Upload, Maximize2, RefreshCw, Code, FileCode, AlertCircle } from 'lucide-react';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 
 export type HtmlAppletData = HtmlAppletPayload & {
@@ -167,9 +156,7 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
               <h3 id="courseware-props-modal-title" className="text-sm font-bold text-main leading-tight">
                 课堂课件属性临时调整
               </h3>
-              <p className="text-xs text-muted mt-0.5">
-                实时调节互动课件展示属性与数据源
-              </p>
+              <p className="text-xs text-muted mt-0.5">实时调节互动课件展示属性与数据源</p>
             </div>
           </div>
           <button
@@ -266,9 +253,7 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
 
           {/* 3. 课件数据源选择 */}
           <div className="space-y-3">
-            <label className="block text-xs font-semibold text-muted">
-              关联课件源 (选择现有课件包或使用独立代码)
-            </label>
+            <label className="block text-xs font-semibold text-muted">关联课件源 (选择现有课件包或使用独立代码)</label>
 
             {/* 下拉选择系统已有课件 */}
             <div className="flex gap-2">
@@ -292,11 +277,7 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
                 }`}
                 title="上传本地互动课件包 (.zip / .html)"
               >
-                {isUploading ? (
-                  <RefreshCw size={13} className="animate-spin" />
-                ) : (
-                  <Upload size={13} />
-                )}
+                {isUploading ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />}
                 <span>{isUploading ? '正在上传...' : '上传新课件'}</span>
                 <input
                   type="file"

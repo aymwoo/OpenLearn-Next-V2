@@ -6,12 +6,12 @@ Platform Kernel 在 `packages/core/kernel/index.ts` 中实现了明确的 4 层�
 
 ## 4 层拓扑映射表
 
-| 层级        | 职责描述             | Kernel 公开属性名（`kernelContainer.<name>`）                                                                                                                                                            | 无依赖保证     |
-| ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **Layer 0** | 零依赖基础设施       | `eventBus`, `capabilityGuard`, `serviceRegistry`, `storageService`, `aiService`, `esmLoader`, `db`                                                                                         | ✅ 零内部依赖  |
-| **Layer 1** | 能力 / AI / 领域内核 | `aiRuntime`, `aiCapability`, `capabilityFrameworkRuntime`, `capabilityGovernance`, `platformServiceRegistryKernel`, `analyticsEngine`, `collaborationEngine`, `presenceEngine`, `classroomRuntime`, `lessonRuntime`, `commandBus`, `actionRegistry` | 依赖 Layer 0   |
-| **Layer 2** | 宿主与后台任务       | `processManager`, `pluginHost`                                                                                                                                                                 | 依赖 Kernel / db |
-| **Layer 3** | 线程隔离与生态门面   | `workerManager`, `pluginRuntimeComposition`, `pluginLifecycleManager`, `pluginDistributionManager`, `unifiedExtensionRegistry`, `capabilityRegistry`, `pluginCapabilityGateway`                       | 依赖 Layer 0-2 |
+| 层级        | 职责描述             | Kernel 公开属性名（`kernelContainer.<name>`）                                                                                                                                                                                                       | 无依赖保证       |
+| ----------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| **Layer 0** | 零依赖基础设施       | `eventBus`, `capabilityGuard`, `serviceRegistry`, `storageService`, `aiService`, `esmLoader`, `db`                                                                                                                                                  | ✅ 零内部依赖    |
+| **Layer 1** | 能力 / AI / 领域内核 | `aiRuntime`, `aiCapability`, `capabilityFrameworkRuntime`, `capabilityGovernance`, `platformServiceRegistryKernel`, `analyticsEngine`, `collaborationEngine`, `presenceEngine`, `classroomRuntime`, `lessonRuntime`, `commandBus`, `actionRegistry` | 依赖 Layer 0     |
+| **Layer 2** | 宿主与后台任务       | `processManager`, `pluginHost`                                                                                                                                                                                                                      | 依赖 Kernel / db |
+| **Layer 3** | 线程隔离与生态门面   | `workerManager`, `pluginRuntimeComposition`, `pluginLifecycleManager`, `pluginDistributionManager`, `unifiedExtensionRegistry`, `capabilityRegistry`, `pluginCapabilityGateway`                                                                     | 依赖 Layer 0-2   |
 
 > 合计 **29 个** `public readonly` 属性（`db` 与 `ready` 计入其中）。
 
@@ -21,11 +21,11 @@ Platform Kernel 在 `packages/core/kernel/index.ts` 中实现了明确的 4 层�
 
 文档、类名与属性名在若干处不一致，按**类名**去 `kernelContainer` 上取属性会拿到 `undefined`：
 
-| 类名                       | 实际属性名                   | 所在包                                             |
-| -------------------------- | ---------------------------- | -------------------------------------------------- |
-| `ServiceRegistryKernel`    | `platformServiceRegistryKernel` | `packages/core/service-registry/`               |
-| `CapabilityRuntimeKernel`  | `capabilityFrameworkRuntime` | `packages/core/capability/`                      |
-| `CapabilityGovernanceKernel` | `capabilityGovernance`     | `packages/core/capability-governance/`           |
+| 类名                         | 实际属性名                      | 所在包                                 |
+| ---------------------------- | ------------------------------- | -------------------------------------- |
+| `ServiceRegistryKernel`      | `platformServiceRegistryKernel` | `packages/core/service-registry/`      |
+| `CapabilityRuntimeKernel`    | `capabilityFrameworkRuntime`    | `packages/core/capability/`            |
+| `CapabilityGovernanceKernel` | `capabilityGovernance`          | `packages/core/capability-governance/` |
 
 同理，`AIRuntimeKernel` / `AICapabilityKernel` / `CapabilityGovernanceKernel` / `AnalyticsEngineKernel` / `CollaborationEngineKernel` / `PresenceEngineKernel` / `ClassroomRuntimeKernel` / `LessonRuntime` 的属性名与类名一致。
 

@@ -74,7 +74,18 @@ describe('测评扩展槽 props 白名单（Issue #183）', () => {
     expect(props.itemCount).toBe(3);
     expect(props.totalScore).toBe(30);
     expect(Object.keys(props).sort()).toEqual(
-      ['createdAt', 'description', 'id', 'itemCount', 'kind', 'settings', 'status', 'title', 'totalScore', 'updatedAt'].sort(),
+      [
+        'createdAt',
+        'description',
+        'id',
+        'itemCount',
+        'kind',
+        'settings',
+        'status',
+        'title',
+        'totalScore',
+        'updatedAt',
+      ].sort(),
     );
   });
 
@@ -86,7 +97,18 @@ describe('测评扩展槽 props 白名单（Issue #183）', () => {
     expect(json).not.toContain('answer_key_json');
     expect(props.items).toHaveLength(1);
     expect(Object.keys(props.items[0]).sort()).toEqual(
-      ['answered', 'avgScore', 'correct', 'correctRate', 'distribution', 'graded', 'itemId', 'maxScore', 'stem', 'type'].sort(),
+      [
+        'answered',
+        'avgScore',
+        'correct',
+        'correctRate',
+        'distribution',
+        'graded',
+        'itemId',
+        'maxScore',
+        'stem',
+        'type',
+      ].sort(),
     );
   });
 });

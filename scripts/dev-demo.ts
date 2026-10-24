@@ -27,8 +27,7 @@ import path from 'node:path';
 const DEMO_DB_PATH = path.resolve(process.cwd(), 'storage/demo.db');
 
 /** 解析 `pnpm dev:demo -- --reset` 透传进来的重置标记。 */
-const wantsReset =
-  process.argv.includes('--reset') || process.env.DEMO_RESET === '1';
+const wantsReset = process.argv.includes('--reset') || process.env.DEMO_RESET === '1';
 
 function log(msg: string) {
   console.log(`[dev:demo] ${msg}`);
@@ -61,17 +60,12 @@ if (isFresh) {
 const { db, initializeDatabase } = await import('../packages/core/db/index.js');
 initializeDatabase(db);
 
-const { seedDemoData, getDemoDataStatus, DEMO_TEACHER, DEMO_IDS } = await import(
-  '../server/services/demo-data.js'
-);
+const { seedDemoData, getDemoDataStatus, DEMO_TEACHER, DEMO_IDS } = await import('../server/services/demo-data.js');
 
 const status = getDemoDataStatus(db);
 if (!status.seeded) {
   const seeded = seedDemoData(db);
-  log(
-    `已播种演示数据：${seeded.total} 条 ` +
-      `(课程 1 / 班级 2 / 学生 ${seeded.counts.student} / 课表 1)`,
-  );
+  log(`已播种演示数据：${seeded.total} 条 ` + `(课程 1 / 班级 2 / 学生 ${seeded.counts.student} / 课表 1)`);
 } else {
   log(`演示数据已就绪（${status.total} 条），跳过播种`);
 }

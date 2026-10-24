@@ -132,7 +132,7 @@ describe('Issue #99: 白板组件拖拽闪烁/空窗与二次起跳缺陷回归�
     });
 
     expect(wrapper.style.left).toBe('170px'); // 20 + 150
-    expect(wrapper.style.top).toBe('230px');  // 30 + 200
+    expect(wrapper.style.top).toBe('230px'); // 30 + 200
 
     // 3. 松开鼠标。关键断言：在 onElementUpdate 的 Promise 尚未 resolve 之前，
     //    组件首帧必须通过同步 setLocalGeometry 保持在 (170px, 230px)，绝对不能回滚到 (20px, 30px)
@@ -143,10 +143,7 @@ describe('Issue #99: 白板组件拖拽闪烁/空窗与二次起跳缺陷回归�
     expect(wrapper.style.left).toBe('170px');
     expect(wrapper.style.top).toBe('230px');
     expect(onElementUpdate).toHaveBeenCalledTimes(1);
-    expect(onElementUpdate).toHaveBeenCalledWith(
-      'el-drag-test-1',
-      expect.objectContaining({ x: 170, y: 230 }),
-    );
+    expect(onElementUpdate).toHaveBeenCalledWith('el-drag-test-1', expect.objectContaining({ x: 170, y: 230 }));
 
     // 4. 后续服务端异步保存完成，坐标依然稳定在新位置
     await act(async () => {
@@ -196,10 +193,7 @@ describe('Issue #99: 白板组件拖拽闪烁/空窗与二次起跳缺陷回归�
 
     expect(wrapper.style.left).toBe('150px');
     expect(wrapper.style.top).toBe('170px');
-    expect(onElementUpdate).toHaveBeenLastCalledWith(
-      'el-drag-test-1',
-      expect.objectContaining({ x: 150, y: 170 }),
-    );
+    expect(onElementUpdate).toHaveBeenLastCalledWith('el-drag-test-1', expect.objectContaining({ x: 150, y: 170 }));
   });
 
   it('【失败容灾回滚】onElementUpdate 抛错时覆盖层安全回滚到旧位置', async () => {
@@ -265,7 +259,7 @@ describe('Issue #99: 白板组件拖拽闪烁/空窗与二次起跳缺陷回归�
       fireEvent.pointerUp(window, { clientX: 500, clientY: 390, pointerId: 1 });
     });
 
-    expect(card.style.width).toBe('480px');  // 400 + 80
+    expect(card.style.width).toBe('480px'); // 400 + 80
     expect(card.style.height).toBe('360px'); // 300 + 60
     expect(onElementUpdate).toHaveBeenCalledWith(
       'el-drag-test-1',

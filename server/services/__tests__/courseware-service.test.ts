@@ -51,9 +51,9 @@ describe('CoursewareService 领域服务单元测试 (E3 深化)', () => {
     });
 
     it('不存在的 attempt 认领应抛出 404', async () => {
-      await expect(
-        service.adoptAttempt('non-existent-attempt', { userId: stuAlice, role: 'student' }),
-      ).rejects.toThrow('Attempt not found');
+      await expect(service.adoptAttempt('non-existent-attempt', { userId: stuAlice, role: 'student' })).rejects.toThrow(
+        'Attempt not found',
+      );
     });
 
     it('教师或管理员预览认领应直接放行 (adopted: false, reused: true)', async () => {
@@ -162,9 +162,9 @@ describe('CoursewareService 领域服务单元测试 (E3 深化)', () => {
       expect(uuid2).toBe(uuid1);
 
       // 验证写入数据库
-      const row = kernelContainer.db
-        .prepare('SELECT content FROM system_resources WHERE id = ?')
-        .get(uuid1) as { content: string };
+      const row = kernelContainer.db.prepare('SELECT content FROM system_resources WHERE id = ?').get(uuid1) as {
+        content: string;
+      };
       expect(row.content).toBe(sampleCode);
     });
   });

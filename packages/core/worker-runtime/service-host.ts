@@ -66,7 +66,11 @@ import net from 'node:net';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
-import { checkMethodPolicy, sanitizeActionRegisterArgs, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
+import {
+  checkMethodPolicy,
+  sanitizeActionRegisterArgs,
+  type MethodPolicyTokens,
+} from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
 import { isBlockedPluginCapability, isPrivateOrReservedHost } from '../plugin-host/plugin-grants.js';
 import {
@@ -1184,11 +1188,7 @@ export class ServiceHost {
       const formatted = msg.startsWith('Worker plugin is not permitted')
         ? msg.replace('Worker plugin', `Worker plugin "${pluginId}"`)
         : `Worker plugin "${pluginId}": ${msg}`;
-      throw new WorkerCapabilityError(
-        this.pluginActorId,
-        '@openlearn/core:IDatabase',
-        formatted,
-      );
+      throw new WorkerCapabilityError(this.pluginActorId, '@openlearn/core:IDatabase', formatted);
     }
   }
 }

@@ -50,7 +50,8 @@ const result = await kernelContainer.commandBus.execute(createLessonCmd);
 ```
 
 > 真实范例见 `packages/plugins/builtin.ts` 的 LESSON HANDLER 注册：它用 `uuidv7()` 生成 id 后直接 `INSERT INTO lessons (...)`，并以 `command.actorId` 作为 `creatorId` 的回退值（`payload.creatorId` 优先，且会剥去 `user:` 前缀）。
-```
+
+````
 
 `PlatformCommand` 的字段与约束：
 
@@ -63,7 +64,7 @@ export interface PlatformCommand<T = unknown> {
   readonly timestamp?: number;
   readonly metadata?: CommandMetadata;
 }
-```
+````
 
 > 手写 `PlatformCommand` 字面量时**必须**带 `actorId`，否则无法通过类型检查。优先用 `createCommand(type, payload, actorId, metadata?)`——它会生成 UUID v7 的 `id`、补 `timestamp`、并把 `metadata` 兜底为 `{}`。
 
@@ -144,12 +145,11 @@ await kernelContainer.eventBus.publish({
 
 ## 架构对比总结
 
-| 特性         | CommandBus                              | EventBus                                                        |
-| ------------ | ---------------------------------------- | --------------------------------------------------------------- |
-| **模式**     | 1-to-1 (Command -> Handler)              | 1-to-N (Pub / Sub)，支持 `'*'` 通配                              |
-| **命名契约** | 祈使句 (`lesson.create`)                 | 过去时 (`lesson.created`)                                        |
-| **注册方法** | `registerHandler` / `registerLegacyHandler` | `subscribe`（返回取消函数）                                  |
-| **分发入口** | `execute(command)`                       | `publish(event)` / `publishDetailed(event)`                      |
-| **返回值**   | 返回 handler 的执行结果 Promise          | `publish` 返回 `Promise<void>`；`publishDetailed` 返回 `DispatchResult` |
-| **失败处理** | 报错直接抛给调用方                      | 单个订阅者异常/超时不影响其他订阅者                             |
-
+| 特性         | CommandBus                                  | EventBus                                                                |
+| ------------ | ------------------------------------------- | ----------------------------------------------------------------------- |
+| **模式**     | 1-to-1 (Command -> Handler)                 | 1-to-N (Pub / Sub)，支持 `'*'` 通配                                     |
+| **命名契约** | 祈使句 (`lesson.create`)                    | 过去时 (`lesson.created`)                                               |
+| **注册方法** | `registerHandler` / `registerLegacyHandler` | `subscribe`（返回取消函数）                                             |
+| **分发入口** | `execute(command)`                          | `publish(event)` / `publishDetailed(event)`                             |
+| **返回值**   | 返回 handler 的执行结果 Promise             | `publish` 返回 `Promise<void>`；`publishDetailed` 返回 `DispatchResult` |
+| **失败处理** | 报错直接抛给调用方                          | 单个订阅者异常/超时不影响其他订阅者                                     |
