@@ -145,7 +145,9 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
       correctOption: 'D',
     });
     expect(res.status).toBe(403);
-    const row = db.prepare('SELECT correct_option FROM lesson_preset_polls WHERE id = ?').get(pollId) as { correct_option: string };
+    const row = db.prepare('SELECT correct_option FROM lesson_preset_polls WHERE id = ?').get(pollId) as {
+      correct_option: string;
+    };
     expect(row.correct_option).toBe('B');
   });
 
