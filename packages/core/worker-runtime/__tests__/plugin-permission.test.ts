@@ -71,6 +71,7 @@ function makeDb(): Database.Database {
  */
 const probePlugin = (dir: string, outsideFile: string) => `
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import cp from 'node:child_process';
 import wt from 'node:worker_threads';
@@ -112,10 +113,12 @@ export default {
       return typeof u === 'function' || typeof u === 'object' ? 'resolved' : 'unexpected';
     });
 
-    // ── 已知缺口：网络**不受**权限模型约束 ──
+    // ── 出网管控（Issue #237 收口）──
     // 只判断「建连动作是否被同步拒绝」。真实连接成败是异步的，与权限无关。
+    // 原先这里经 process.getBuiltinModule 取 net —— 那是绕过 ctx.require
+    // 名单的官方后门，现已列入 process-masking 屏蔽名单；探针改走与普通
+    // 插件代码相同的静态 import 通道。
     probe('netConnect', () => {
-      const net = process.getBuiltinModule('node:net');
       const sock = net.connect(9, '127.0.0.1');
       sock.on('error', () => {});
       sock.destroy();
@@ -141,7 +144,12 @@ interface ProbeResult {
  * 不回传结果 —— 结果由插件自己写文件（或抛错）。这样 `runProbes` 才能在
  * `ro` 策略下复用同一个通道：`ro` 禁止一切写，**用写文件回传结果本身就是错的**。
  */
-async function runPlugin(pluginSrc: string, policy: string, dir: string): Promise<void> {
+async function runPlugin(
+  pluginSrc: string,
+  policy: string,
+  dir: string,
+  isolateKind: 'process' | 'thread' = 'process',
+): Promise<void> {
   const prev = process.env.OPENLEARN_PLUGIN_PERMISSION;
   process.env.OPENLEARN_PLUGIN_PERMISSION = policy;
 
@@ -156,7 +164,7 @@ async function runPlugin(pluginSrc: string, policy: string, dir: string): Promis
       undefined,
       dir,
       undefined,
-      { isolateKind: 'process' },
+      { isolateKind },
     );
   } finally {
     wm.livenessMonitor.stop();
@@ -387,5 +395,69 @@ describe('L-1 P2 · 真实子进程中的能力收敛', () => {
   it('rw 策略下原始 socket 被入口脚本拒绝', async () => {
     const r = await runProbes('rw');
     expect(r.netConnect).toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
+  }, 60_000);
+});
+
+/**
+ * Issue #237：worker 模式出网守卫回归。
+ *
+ * 此前 worker（worker_threads）隔离档位既没有子进程模式的 net preload，
+ * 也没有屏蔽 process.getBuiltinModule —— 受信任插件在 worker 模式下可
+ * 任意出网。收口后三道断言：
+ *   1. getBuiltinModule 被屏蔽（低层原生绕过入口，与 dlopen/binding 同列）
+ *   2. 原始 socket 建连被拒（bootstrap 内 net-guard section）
+ *   3. fetch 到未批准域名被拒（approvedNetHosts 名单来自宿主授权）
+ */
+describe('Issue #237 · worker 模式出网守卫', () => {
+  const workerGuardPlugin = (dir: string) => `
+import fs from 'node:fs';
+import net from 'node:net';
+const DIR = ${JSON.stringify(dir)};
+export default {
+  manifest: { id: 'ext-perm-worker-guard', name: 'Worker Guard Probe', version: '1.0.0', main: 'index.js' },
+  async activate() {
+    const results = {};
+    const probe = (name, fn) => {
+      try {
+        results[name] = { ok: true, value: fn() };
+      } catch (e) {
+        results[name] = { ok: false, err: e.code || e.name };
+      }
+    };
+
+    probe('builtinModule', () => process.getBuiltinModule('node:fs'));
+    probe('netConnect', () => {
+      const sock = net.connect(9, '127.0.0.1');
+      sock.on('error', () => {});
+      sock.destroy();
+      return 'attempted';
+    });
+    // 异步探针：未批准域名的 fetch 必须被守卫同步口径拒绝（不触网）
+    results.fetchUnapproved = await fetch('https://unapproved.example.invalid/path').then(
+      () => ({ ok: true, value: 'allowed' }),
+      (e) => ({ ok: false, err: e.code || e.name }),
+    );
+
+    fs.writeFileSync(DIR + '/guard-probes.json', JSON.stringify(results, null, 2));
+    return 'probed';
+  },
+  async deactivate() {},
+};
+`;
+
+  it('getBuiltinModule 屏蔽 + 原始 socket 拒绝 + 未批准 fetch 拒绝', async () => {
+    const dir = makePluginDir();
+    try {
+      await runPlugin(workerGuardPlugin(dir), DEFAULT_PERMISSION_POLICY, dir, 'thread');
+      const results = JSON.parse(fs.readFileSync(path.join(dir, 'guard-probes.json'), 'utf8')) as Record<
+        string,
+        ProbeResult
+      >;
+      expect(results.builtinModule).toMatchObject({ ok: false, err: 'Error' });
+      expect(results.netConnect).toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
+      expect(results.fetchUnapproved).toMatchObject({ ok: false, err: 'ERR_ACCESS_DENIED' });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }, 60_000);
 });

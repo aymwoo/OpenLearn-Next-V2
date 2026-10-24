@@ -27,15 +27,16 @@ export function isNetProxyRequest(msg: unknown): msg is NetProxyRequest {
 }
 
 export async function handleNetProxy(
-  child: ChildProcess,
+  /** 子进程（ChildProcess.send）或 worker（Worker.postMessage）的发送端 */
+  sender: { send(msg: unknown): void },
   msg: NetProxyRequest,
   approvedHosts: ReadonlySet<string>,
 ): Promise<void> {
   const reply = (payload: Record<string, unknown>) => {
     try {
-      child.send({ type: 'ol-net-proxy-result', id: msg.id, ...payload });
+      sender.send({ type: 'ol-net-proxy-result', id: msg.id, ...payload });
     } catch {
-      /* 子进程已经退出 */
+      /* 发送端已退出 */
     }
   };
 

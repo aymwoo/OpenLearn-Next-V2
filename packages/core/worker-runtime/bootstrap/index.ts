@@ -27,6 +27,7 @@
 
 import { RUNTIME_SHIM_SECTION } from './sections/runtime-shim.js';
 import { PROCESS_MASKING_SECTION, extractProcessMaskingBlock } from './sections/process-masking.js';
+import { NET_GUARD_SECTION } from './sections/net-guard.js';
 import { RPC_PROXY_SECTION } from './sections/rpc-proxy.js';
 import { HTTP_ROUTER_SECTION } from './sections/http-router.js';
 import { MESSAGE_HANDLER_SECTION } from './sections/message-handler.js';
@@ -54,6 +55,7 @@ const requireFn = createRequire('${requirePath}');`;
     header,
     RUNTIME_SHIM_SECTION,
     PROCESS_MASKING_SECTION,
+    NET_GUARD_SECTION,
     RPC_PROXY_SECTION,
     HTTP_ROUTER_SECTION,
     MESSAGE_HANDLER_SECTION,
@@ -66,6 +68,7 @@ const requireFn = createRequire('${requirePath}');`;
 export const BOOTSTRAP_SECTION_NAMES = [
   'runtime-shim',
   'process-masking',
+  'net-guard',
   'rpc-proxy',
   'http-router',
   'message-handler',

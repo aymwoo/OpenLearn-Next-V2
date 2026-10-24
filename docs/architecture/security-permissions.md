@@ -60,6 +60,20 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **并发上限**: `MAX_WORKERS = 32`，超出时创建 Worker 直接抛错。
 - **激活超时**: 默认 60s（`OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 可覆盖）；Worker `error` / `exit` 事件在等待期内立即 reject。
 
+### 2.1a 两种隔离原语的出网管控（Issue #237）
+
+插件 Worker 路径有两种隔离原语，出网管控**同口径**：
+
+| 能力 | `process`（子进程） | `thread`（worker_threads） |
+| --- | --- | --- |
+| 原始 socket / UDP / TLS / HTTP2 / DNS | ⛔ `plugin-net-preload.cjs`（`--require` 入口脚本） | ⛔ bootstrap 内 `net-guard` section |
+| `fetch` 未批准域名 | ⛔ 拒绝 | ⛔ 拒绝 |
+| `fetch` 已批准域名 | ✅ 宿主代发（`ol-net-proxy` 协议） | ✅ 宿主代发（同一协议，经 transport 路由） |
+| `http(s).request` 直连 | 已批准域名由 preload 的 shim 代理 | ⛔ 被底层 socket 封锁兜底拒绝（内置插件无直连用法，出网请走 `fetch`） |
+| `process.getBuiltinModule` | ⛔ process-masking 屏蔽（Node ≥22.3 的官方 require/import 绕过入口） | ⛔ 同左 |
+
+两条路径共用 `plugin-net-proxy.ts` 的宿主代发实现（内网/环回/元数据地址阻断、DNS rebinding 防护、10MB 体积上限），批准名单同源于插件出站授权。
+
 > ⚠️ **没有 CPU / 内存采样与自动挂起**。代码中**不存在**「监控 CPU 与内存占用，超限自动挂起」的实现，也没有把插件状态置为 `PAUSED` 的路径 —— `PluginState` 只有 7 个值（`installed` / `activating` / `active` / `deactivating` / `inactive` / `error` / `uninstalled`），其中不含 `PAUSED`。当前唯一的资源约束是上面那条 V8 堆上限（超限表现为 OOM 崩溃，由 Worker `exit` 处理器标记 `crashed`），而非采样驱动的主动挂起。
 
 ### 2.2 共享模块白名单
