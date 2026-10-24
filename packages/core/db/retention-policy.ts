@@ -111,10 +111,7 @@ export interface PurgeCategoryOptions {
 /**
  * 清理过期总线事件 (events)。
  */
-export function purgeExpiredEvents(
-  db: Database.Database,
-  options?: PurgeCategoryOptions,
-): PurgeCategoryResult {
+export function purgeExpiredEvents(db: Database.Database, options?: PurgeCategoryOptions): PurgeCategoryResult {
   const raw =
     options && 'retentionRaw' in options
       ? options.retentionRaw
@@ -150,10 +147,7 @@ export function purgeExpiredEvents(
 /**
  * 清理过期考勤记录 (attendance)。
  */
-export function purgeExpiredAttendance(
-  db: Database.Database,
-  options?: PurgeCategoryOptions,
-): PurgeCategoryResult {
+export function purgeExpiredAttendance(db: Database.Database, options?: PurgeCategoryOptions): PurgeCategoryResult {
   const raw =
     options && 'retentionRaw' in options
       ? options.retentionRaw
@@ -191,10 +185,7 @@ export function purgeExpiredAttendance(
 /**
  * 清理过期已读通知标记 (student_read_notifications)。
  */
-export function purgeExpiredNotifications(
-  db: Database.Database,
-  options?: PurgeCategoryOptions,
-): PurgeCategoryResult {
+export function purgeExpiredNotifications(db: Database.Database, options?: PurgeCategoryOptions): PurgeCategoryResult {
   const raw =
     options && 'retentionRaw' in options
       ? options.retentionRaw
@@ -216,7 +207,13 @@ export function purgeExpiredNotifications(
     const cols = db.prepare("PRAGMA table_info('student_read_notifications')").all() as Array<{ name: string }>;
     const hasCreatedAt = cols.some((c) => c.name === 'created_at');
     if (!hasCreatedAt) {
-      return { category: 'notifications', deleted: 0, disabled: false, days: decision.days, cutoffMs: decision.cutoffMs };
+      return {
+        category: 'notifications',
+        deleted: 0,
+        disabled: false,
+        days: decision.days,
+        cutoffMs: decision.cutoffMs,
+      };
     }
 
     const info = db
@@ -233,7 +230,9 @@ export function purgeExpiredNotifications(
       cutoffMs: decision.cutoffMs,
     };
   } catch (err) {
-    log.warn(`[Retention] 清理 student_read_notifications 数据时出错: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `[Retention] 清理 student_read_notifications 数据时出错: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { category: 'notifications', deleted: 0, disabled: false, days: decision.days, cutoffMs: decision.cutoffMs };
   }
 }
@@ -241,10 +240,7 @@ export function purgeExpiredNotifications(
 /**
  * 清理过期点名记录 (student_rollcalls)。
  */
-export function purgeExpiredRollcalls(
-  db: Database.Database,
-  options?: PurgeCategoryOptions,
-): PurgeCategoryResult {
+export function purgeExpiredRollcalls(db: Database.Database, options?: PurgeCategoryOptions): PurgeCategoryResult {
   const raw =
     options && 'retentionRaw' in options
       ? options.retentionRaw
@@ -282,10 +278,7 @@ export function purgeExpiredRollcalls(
 /**
  * 清理过期客户端会话 (client_sessions)。
  */
-export function purgeExpiredSessions(
-  db: Database.Database,
-  options?: PurgeCategoryOptions,
-): PurgeCategoryResult {
+export function purgeExpiredSessions(db: Database.Database, options?: PurgeCategoryOptions): PurgeCategoryResult {
   const raw =
     options && 'retentionRaw' in options
       ? options.retentionRaw
@@ -294,9 +287,7 @@ export function purgeExpiredSessions(
   const log = options?.log ?? defaultLogger;
 
   if (decision.invalidRaw) {
-    log.warn(
-      `[Retention] 非法的 sessions 保留天数配置 "${raw}"，已回退到默认 ${DEFAULT_RETENTION_DAYS.sessions} 天。`,
-    );
+    log.warn(`[Retention] 非法的 sessions 保留天数配置 "${raw}"，已回退到默认 ${DEFAULT_RETENTION_DAYS.sessions} 天。`);
   }
   if (decision.disabled || decision.cutoffMs === null) {
     return { category: 'sessions', deleted: 0, disabled: true, days: 0, cutoffMs: null };
@@ -375,7 +366,13 @@ export function purgeExpiredPendingCommands(
     };
   } catch (err) {
     log.warn(`[Retention] 清理 pending_commands 数据时出错: ${err instanceof Error ? err.message : String(err)}`);
-    return { category: 'pendingCommands', deleted: 0, disabled: false, days: decision.days, cutoffMs: decision.cutoffMs };
+    return {
+      category: 'pendingCommands',
+      deleted: 0,
+      disabled: false,
+      days: decision.days,
+      cutoffMs: decision.cutoffMs,
+    };
   }
 }
 

@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Search,
-  RefreshCw,
-  Trophy,
-  Zap,
-  Database,
-  FileText,
-  Eye,
-  Check,
-} from 'lucide-react';
+import { Search, RefreshCw, Trophy, Zap, Database, FileText, Eye, Check } from 'lucide-react';
 
 export const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
 export const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
@@ -185,9 +176,7 @@ export function LiveSubmissionsPanel({
               step={5}
               value={Math.round(autoRecordRule.minCompletion * 100)}
               disabled={savingAutoRecordRule}
-              onChange={(e) =>
-                saveAutoRecordRule({ ...autoRecordRule, minCompletion: Number(e.target.value) / 100 })
-              }
+              onChange={(e) => saveAutoRecordRule({ ...autoRecordRule, minCompletion: Number(e.target.value) / 100 })}
               onMouseUp={() => void saveAutoRecordRule(autoRecordRule)}
               onTouchEnd={() => void saveAutoRecordRule(autoRecordRule)}
               className="w-24 accent-primary-theme cursor-pointer disabled:opacity-50"
@@ -235,13 +224,7 @@ export function LiveSubmissionsPanel({
         >
           <Database size={12} className={autoRecordRunning ? 'animate-pulse' : ''} />
           <span>
-            {autoRecordRunning
-              ? lang === 'zh'
-                ? '补录中…'
-                : 'Recording…'
-              : lang === 'zh'
-                ? '立即补录'
-                : 'Run now'}
+            {autoRecordRunning ? (lang === 'zh' ? '补录中…' : 'Recording…') : lang === 'zh' ? '立即补录' : 'Run now'}
           </span>
         </button>
       </div>
@@ -251,9 +234,7 @@ export function LiveSubmissionsPanel({
         {loadingAttempts ? (
           <div className="h-full flex flex-col items-center justify-center text-muted gap-2">
             <RefreshCw size={24} className="animate-spin text-primary-theme mb-2" />
-            <span className="text-xs">
-              {lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}
-            </span>
+            <span className="text-xs">{lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}</span>
           </div>
         ) : (
           (() => {
@@ -309,20 +290,14 @@ export function LiveSubmissionsPanel({
                       : 'N/A';
 
                     return (
-                      <tr
-                        key={a.attemptId}
-                        className="hover:bg-surface-secondary/50 transition-colors group"
-                      >
+                      <tr key={a.attemptId} className="hover:bg-surface-secondary/50 transition-colors group">
                         <td className="p-3">
                           <div className="font-semibold text-main">{a.studentName}</div>
                           <div className="text-xs text-muted mt-0.5">
                             {lang === 'zh' ? '时间' : 'Time'}: {formattedTime}
                           </div>
                         </td>
-                        <td
-                          className="p-3 font-medium text-main max-w-[150px] truncate"
-                          title={a.coursewareName}
-                        >
+                        <td className="p-3 font-medium text-main max-w-[150px] truncate" title={a.coursewareName}>
                           {a.coursewareName}
                         </td>
                         <td className="p-3">

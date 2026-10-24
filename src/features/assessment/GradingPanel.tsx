@@ -114,7 +114,9 @@ export function GradingPanel({
         return next;
       });
     } catch (e: any) {
-      setError(zh ? 'AI 建议不可用：' + (e?.message ?? String(e)) : 'AI suggestion unavailable: ' + (e?.message ?? String(e)));
+      setError(
+        zh ? 'AI 建议不可用：' + (e?.message ?? String(e)) : 'AI suggestion unavailable: ' + (e?.message ?? String(e)),
+      );
     } finally {
       setSuggestBusy(null);
     }
@@ -262,10 +264,10 @@ export function GradingPanel({
             </h2>
             {detail && Number((detail.attempt.proctor as any)?.summary?.total ?? 0) > 0 && (
               <div className="px-2 py-0.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 text-2xs font-semibold">
-                ⚠️ {zh ? '监考异常' : 'Proctor alert'}：
-                {zh ? '切屏' : 'tab switch'} {(detail.attempt.proctor as any)?.summary?.visibility_hidden ?? 0} ·{' '}
-                {zh ? '失焦' : 'blur'} {(detail.attempt.proctor as any)?.summary?.blur ?? 0} ·{' '}
-                {zh ? '退出全屏' : 'exit fullscreen'} {(detail.attempt.proctor as any)?.summary?.fullscreen_exit ?? 0}
+                ⚠️ {zh ? '监考异常' : 'Proctor alert'}：{zh ? '切屏' : 'tab switch'}{' '}
+                {(detail.attempt.proctor as any)?.summary?.visibility_hidden ?? 0} · {zh ? '失焦' : 'blur'}{' '}
+                {(detail.attempt.proctor as any)?.summary?.blur ?? 0} · {zh ? '退出全屏' : 'exit fullscreen'}{' '}
+                {(detail.attempt.proctor as any)?.summary?.fullscreen_exit ?? 0}
               </div>
             )}
           </div>

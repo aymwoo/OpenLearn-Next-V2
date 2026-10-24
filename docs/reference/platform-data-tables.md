@@ -24,16 +24,16 @@
 
 ## 0. 表的来源与计数（实测）
 
-| 来源                                       | 表数 | 说明                                                             |
-| ------------------------------------------ | ---- | ---------------------------------------------------------------- |
-| `packages/core/db/index.ts`                | 41   | 内核 schema 初始化（`CREATE TABLE IF NOT EXISTS`）                |
-| `server/bootstrap-db.ts`                   | 3    | `student_rollcalls` / `site_settings` / `agent_conversations`     |
-| `server/utils/migrate.ts`                  | 1    | `_migrations`（另含 2 张 `*__rollback` 影子表，仅迁移回滚用）     |
-| `migrations/000_initial_schema.sql`        | 36   | 全新安装的初始 schema                                            |
-| `migrations/003`–`013`（11 个脚本）        | 28   | 课堂运行时 / 成绩归集 / 作业中枢 / 互动课堂 / 教学模式 / 同伴互评 / 分组 / 课堂信息流 / 自动录入 / 分数来源策略 |
-| `migrations/014_performance_indexes.sql`   | 0    | 只建索引，不建表                                                  |
-| **去重后核心表**                           | **62** | 上述全部来源去重的并集                                           |
-| 插件私有表（运行时动态创建）               | 34   | `plugin_{pluginId}_*`，**数量随安装的插件而变**                   |
+| 来源                                     | 表数   | 说明                                                                                                            |
+| ---------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `packages/core/db/index.ts`              | 41     | 内核 schema 初始化（`CREATE TABLE IF NOT EXISTS`）                                                              |
+| `server/bootstrap-db.ts`                 | 3      | `student_rollcalls` / `site_settings` / `agent_conversations`                                                   |
+| `server/utils/migrate.ts`                | 1      | `_migrations`（另含 2 张 `*__rollback` 影子表，仅迁移回滚用）                                                   |
+| `migrations/000_initial_schema.sql`      | 36     | 全新安装的初始 schema                                                                                           |
+| `migrations/003`–`013`（11 个脚本）      | 28     | 课堂运行时 / 成绩归集 / 作业中枢 / 互动课堂 / 教学模式 / 同伴互评 / 分组 / 课堂信息流 / 自动录入 / 分数来源策略 |
+| `migrations/014_performance_indexes.sql` | 0      | 只建索引，不建表                                                                                                |
+| **去重后核心表**                         | **62** | 上述全部来源去重的并集                                                                                          |
+| 插件私有表（运行时动态创建）             | 34     | `plugin_{pluginId}_*`，**数量随安装的插件而变**                                                                 |
 
 > 复核命令：`migrations/` 共 **15 个** SQL 脚本（`000`–`014`），外加 `README.md`。测试库 `server/__tests__/canary/` 中的 `plugin_submissions_new` / `plugin_submissions_legacy` 是测试夹具，不计入上表。
 
@@ -45,19 +45,19 @@
 
 插件注册表。
 
-| 列               | 类型    | 说明                                                        |
-| ---------------- | ------- | ----------------------------------------------------------- |
+| 列               | 类型    | 说明                                                                         |
+| ---------------- | ------- | ---------------------------------------------------------------------------- |
 | `id`             | TEXT PK | 插件 UUID（**不是** `manifest.id`，见[插件数据库 API](plugin-database-api)） |
-| `name`           | TEXT    | 名称                                                        |
-| `manifest`       | TEXT    | manifest JSON 字符串                                        |
-| `source_code`    | TEXT    | 源码                                                        |
-| `status`         | TEXT    | `active` / `inactive` / `error` 等                          |
-| `created_at`     | INTEGER | 时间戳                                                      |
-| `execution_mode` | TEXT    | `inline` / `worker`                                          |
-| `loader_version` | TEXT    | 加载器版本（迁移执行器选择与兼容性判定用）                    |
-| `zip_package`    | TEXT    | 原始 ZIP 包的 base64；**in-place update 依赖此列**定位回滚源  |
-| `file_path`      | TEXT    | 磁盘源码路径（`plugins/{uuid}/index.js`）                    |
-| `updated_at`     | INTEGER | 最后更新时间                                                |
+| `name`           | TEXT    | 名称                                                                         |
+| `manifest`       | TEXT    | manifest JSON 字符串                                                         |
+| `source_code`    | TEXT    | 源码                                                                         |
+| `status`         | TEXT    | `active` / `inactive` / `error` 等                                           |
+| `created_at`     | INTEGER | 时间戳                                                                       |
+| `execution_mode` | TEXT    | `inline` / `worker`                                                          |
+| `loader_version` | TEXT    | 加载器版本（迁移执行器选择与兼容性判定用）                                   |
+| `zip_package`    | TEXT    | 原始 ZIP 包的 base64；**in-place update 依赖此列**定位回滚源                 |
+| `file_path`      | TEXT    | 磁盘源码路径（`plugins/{uuid}/index.js`）                                    |
+| `updated_at`     | INTEGER | 最后更新时间                                                                 |
 
 > `execution_mode` / `loader_version` / `zip_package` / `file_path` / `updated_at` 五列均由 `ALTER TABLE plugins ADD COLUMN` 增量加入（`packages/core/db/index.ts` 的 `ensureColumn` 调用）。按本文清单做 INSERT 会丢更新时刻与 ZIP 来源；装插件时**务必带上 `zip_package`**，否则 in-place 更新无法回滚。
 
@@ -134,15 +134,15 @@
 
 ### `lessons`
 
-| 列                          | 类型    | 说明        |
-| --------------------------- | ------- | ----------- |
-| `id`                        | TEXT PK | 课节 ID     |
-| `title`                     | TEXT    | 标题        |
-| `content`                   | TEXT    | 内容        |
-| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]` |
+| 列                          | 类型    | 说明                                                                        |
+| --------------------------- | ------- | --------------------------------------------------------------------------- |
+| `id`                        | TEXT PK | 课节 ID                                                                     |
+| `title`                     | TEXT    | 标题                                                                        |
+| `content`                   | TEXT    | 内容                                                                        |
+| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]`                     |
 | `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退 |
-| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates` |
-| `created_at` / `updated_at` | INTEGER | 时间戳      |
+| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`       |
+| `created_at` / `updated_at` | INTEGER | 时间戳                                                                      |
 
 ### `segment_visits`
 
@@ -229,13 +229,13 @@
 
 ### 同伴互评一组（迁移 `009`）
 
-| 表                            | 关键列                                                                                                                             |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `classroom_peer_rubric_dimensions` | `id` / `session_id` / `lesson_id` / `label` / `color_class` / `bar_color_class` / `max_score` / `weight` / `sort_order` / `created_at` |
-| `classroom_peer_review_tasks`     | `id` / `session_id` / `lesson_id` / `class_id` / `reviewer_id` / `reviewer_name` / `target_student_id` / `target_student_name` / `target_attempt_id` / `target_work_title` / `target_score` / `tier` / `status` / `created_at` / `submitted_at` |
-| `classroom_peer_reviews`          | `id` / `session_id` / `lesson_id` / `reviewer_id` / `reviewer_name` / `target_student_id` / `target_attempt_id` / `score` / `max_score` / `comment` / `dimension_scores_json` / `created_at` / `updated_at` |
-| `classroom_peer_nominations`      | `id` / `session_id` / `lesson_id` / `nominator_id` / `nominated_student_id` / `nominated_student_name` / `honor_key` / `created_at` |
-| `classroom_peer_badges`           | `id` / `session_id` / `lesson_id` / `sender_id` / `sender_name` / `receiver_id` / `receiver_name` / `badge_key` / `created_at` |
+| 表                                 | 关键列                                                                                                                                                                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classroom_peer_rubric_dimensions` | `id` / `session_id` / `lesson_id` / `label` / `color_class` / `bar_color_class` / `max_score` / `weight` / `sort_order` / `created_at`                                                                                                          |
+| `classroom_peer_review_tasks`      | `id` / `session_id` / `lesson_id` / `class_id` / `reviewer_id` / `reviewer_name` / `target_student_id` / `target_student_name` / `target_attempt_id` / `target_work_title` / `target_score` / `tier` / `status` / `created_at` / `submitted_at` |
+| `classroom_peer_reviews`           | `id` / `session_id` / `lesson_id` / `reviewer_id` / `reviewer_name` / `target_student_id` / `target_attempt_id` / `score` / `max_score` / `comment` / `dimension_scores_json` / `created_at` / `updated_at`                                     |
+| `classroom_peer_nominations`       | `id` / `session_id` / `lesson_id` / `nominator_id` / `nominated_student_id` / `nominated_student_name` / `honor_key` / `created_at`                                                                                                             |
+| `classroom_peer_badges`            | `id` / `session_id` / `lesson_id` / `sender_id` / `sender_name` / `receiver_id` / `receiver_name` / `badge_key` / `created_at`                                                                                                                  |
 
 ### `classroom_feed`（迁移 `011`）
 
@@ -265,12 +265,12 @@
 
 ⚠️ 这四张表名字带 `plugin_` 前缀，但它们是**内核表**（在 `packages/core/db/index.ts` 与 `migrations/005_assignment_hub.sql` 中创建），**不是**插件私有表。插件私有表的判据是 `plugin_{pluginId}_`（UUID 或 manifestId 前缀，见[插件数据库 API](plugin-database-api)）。
 
-| 表                          | 用途与关键列                                                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `plugin_assignments`        | 作业中枢主表；`class_id` / `lesson_id` / `element_id` / `title` / `instructions` / `due_at` / `allow_late` / `allow_text` / `allow_link` / `max_files` / `max_file_size` / `allowed_ext` / `peer_review_mode` / `peer_review_count` / `peer_review_due_at` / `teacher_weight` / `peer_weight` / `status` / `created_by` |
-| `plugin_submission_versions`| 提交版本历史；`submission_id` / `assignment_id` / `student_id` / `version` / `files_json` / `text_content` / `link_url` / `is_late` / `submitted_at` |
-| `plugin_assignment_files`   | 作业/提交附件；`assignment_id` / `submission_id` / `version_id` / `student_id` / `original_name` / `stored_path` / `size` / `mime` / `sha256` / `uploaded_at` / `deleted_at` |
-| `plugin_peer_review_tasks`  | 同伴互评任务；`assignment_id` / `submission_id` / `reviewer_id` / `anonymous` / `status` / `due_at` / `created_at`       |
+| 表                           | 用途与关键列                                                                                                                                                                                                                                                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugin_assignments`         | 作业中枢主表；`class_id` / `lesson_id` / `element_id` / `title` / `instructions` / `due_at` / `allow_late` / `allow_text` / `allow_link` / `max_files` / `max_file_size` / `allowed_ext` / `peer_review_mode` / `peer_review_count` / `peer_review_due_at` / `teacher_weight` / `peer_weight` / `status` / `created_by` |
+| `plugin_submission_versions` | 提交版本历史；`submission_id` / `assignment_id` / `student_id` / `version` / `files_json` / `text_content` / `link_url` / `is_late` / `submitted_at`                                                                                                                                                                    |
+| `plugin_assignment_files`    | 作业/提交附件；`assignment_id` / `submission_id` / `version_id` / `student_id` / `original_name` / `stored_path` / `size` / `mime` / `sha256` / `uploaded_at` / `deleted_at`                                                                                                                                            |
+| `plugin_peer_review_tasks`   | 同伴互评任务；`assignment_id` / `submission_id` / `reviewer_id` / `anonymous` / `status` / `due_at` / `created_at`                                                                                                                                                                                                      |
 
 ### `exams` / `exam_scores`
 
@@ -325,20 +325,20 @@
 
 互动课件的**原生成绩归集策略**配置。`courseware_id` 为主键，`'*'` 表示全局默认配置。
 
-| 列                          | 说明                                                                       |
-| --------------------------- | -------------------------------------------------------------------------- |
-| `courseware_id`             | 课件 ID（主键）；`GLOBAL_SCORE_CONFIG_KEY` 即 `'*'`                        |
-| `courseware_name`           | 课件名（便于识别）                                                          |
-| `score_policy`              | `LATEST`（默认）/ `MAX` / `AVERAGE` / `FIRST`                                |
-| `score_fields`              | 分数所在字段路径，逗号分隔，如 `score,data.points`                          |
-| `raw_full_score`            | 课件原始满分                                                                |
-| `target_full_score`         | 归集后的目标满分                                                            |
-| `weight_percentage`         | 该课件在总评中的权重（百分比）                                              |
-| `lesson_id`                 | 关联课节（可选）                                                            |
-| `auto_record_enabled`       | 是否开启「自动录入成绩」（迁移 `012`）                                      |
-| `auto_record_min_completion`| 自动录入的完成度门槛（0~1，迁移 `012`）                                     |
-| `auto_record_strategy`      | 自动录入的更新策略 `latest` / `highest`（迁移 `013`）                       |
-| `updated_at`                | 更新时间                                                                    |
+| 列                           | 说明                                                  |
+| ---------------------------- | ----------------------------------------------------- |
+| `courseware_id`              | 课件 ID（主键）；`GLOBAL_SCORE_CONFIG_KEY` 即 `'*'`   |
+| `courseware_name`            | 课件名（便于识别）                                    |
+| `score_policy`               | `LATEST`（默认）/ `MAX` / `AVERAGE` / `FIRST`         |
+| `score_fields`               | 分数所在字段路径，逗号分隔，如 `score,data.points`    |
+| `raw_full_score`             | 课件原始满分                                          |
+| `target_full_score`          | 归集后的目标满分                                      |
+| `weight_percentage`          | 该课件在总评中的权重（百分比）                        |
+| `lesson_id`                  | 关联课节（可选）                                      |
+| `auto_record_enabled`        | 是否开启「自动录入成绩」（迁移 `012`）                |
+| `auto_record_min_completion` | 自动录入的完成度门槛（0~1，迁移 `012`）               |
+| `auto_record_strategy`       | 自动录入的更新策略 `latest` / `highest`（迁移 `013`） |
+| `updated_at`                 | 更新时间                                              |
 
 逻辑实现见 `packages/plugins/courseware-score.ts`（`resolveScoreConfig` / `aggregateAttemptScore` / `normalizeScorePolicy` / `describeAggregation`）。
 

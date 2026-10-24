@@ -195,4 +195,3 @@ describe('班级与作业对象级授权', () => {
     expect(adminComp.status).toBe(200);
   });
 });
-

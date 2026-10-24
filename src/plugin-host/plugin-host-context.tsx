@@ -63,4 +63,3 @@ export function useHostActionDispatcher(): IHostActionDispatcher {
   const host = usePluginHost();
   return host.getDispatcher();
 }
-

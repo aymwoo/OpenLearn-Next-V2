@@ -160,13 +160,7 @@ describe('StageGuard 资源级物理强门禁 (Resource-level Enforcement)', () 
     const globalElId = `el_quiz_global_${uuidv7()}`;
     db.prepare(
       'INSERT OR REPLACE INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(
-      globalElId,
-      lessonId,
-      'quiz',
-      JSON.stringify({ question: '1+1=?', correctAnswer: '2' }),
-      Date.now(),
-    );
+    ).run(globalElId, lessonId, 'quiz', JSON.stringify({ question: '1+1=?', correctAnswer: '2' }), Date.now());
 
     // 注册全局门禁：非 seg-1 环节需要 100 分
     defaultStageGuardPipeline.registerGuard({

@@ -242,8 +242,13 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
     try {
       // 4-6. 加载模块、提取导出、合并 manifest、schema 校验
-      const { manifest: codeManifest, activate, deactivate, onStudentExport, onStudentDelete } =
-        await this.loadPluginModule(pluginId, row);
+      const {
+        manifest: codeManifest,
+        activate,
+        deactivate,
+        onStudentExport,
+        onStudentDelete,
+      } = await this.loadPluginModule(pluginId, row);
 
       // Merge stored package manifest (from DB) with code-level manifest to ensure
       // all required fields (e.g. main, requires) are present

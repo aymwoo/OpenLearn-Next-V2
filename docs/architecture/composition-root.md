@@ -31,16 +31,16 @@ Composition Root 负责：
 
 **大部分 Token 绑定并不在 `server.ts` 里**，而在 `packages/core/kernel/index.ts` 的 `Kernel` 构造函数中按分层顺序完成：
 
-| 层     | 顺序与内容                                                                                                                                                              |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Layer 0 | `eventBus`、`capabilityGuard`、`serviceRegistry`、`storageService`、`aiService`、`esmLoader`（均无依赖）                                                                  |
-| Layer 1 | 领域内核：`aiRuntime` → `aiCapability` → `capabilityFrameworkRuntime` → `capabilityGovernance` → `platformServiceRegistryKernel` → `analyticsEngine` → `collaborationEngine` → `presenceEngine` → `classroomRuntime` → `lessonRuntime` |
-| 依赖 L0/L1 | `commandBus`（依赖 `eventBus`）、`actionRegistry`、`processManager`、`pluginHost`（依赖 `serviceRegistry` + `esmLoader` + `db`，并 `mkdirSync` 出 `plugins/` 目录） |
-| Layer 3 | `workerManager`（依赖 `serviceRegistry` + `capabilityGuard` + `db`），随后 `pluginHost.setWorkerManager(workerManager)` 反向接线 |
-| 插件 facade | `pluginRuntimeComposition`、`pluginLifecycleManager`、`pluginDistributionManager`、`unifiedExtensionRegistry`、`pluginCapabilityGateway`；并调用 `PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose(...)`（失败仅 `console.warn`，不阻断启动） |
-| **Token 注册** | 一次性 `serviceRegistry.register(...)` 注册全部 DI Token：7 个基础服务 + 5 个插件 facade + `IDatabaseToken` + `ICapabilityRegistryToken` + 学期成绩/积分三件套 + 8 个引擎门面 + `IAuthSessionBridgeToken` + `ICoursewareRuntimeScriptRegistryToken` |
-| 拦截器 | `commandBus.setInterceptor(...)`：JSON Schema 入参校验 → 能力检查（admin 角色豁免）→ 高危操作人工审批（`pending_commands` 表 + `approval.requested` 事件） |
-| 收尾 | `bootstrapSharedModules()` 异步注册 `ctx.require` 白名单；`this.ready = this.bootstrapSystemPlugins()`（7 个内置插件，critical 失败 `process.exit(1)`）；开发模式下挂 `HotReloadController` |
+| 层             | 顺序与内容                                                                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layer 0        | `eventBus`、`capabilityGuard`、`serviceRegistry`、`storageService`、`aiService`、`esmLoader`（均无依赖）                                                                                                                                                                            |
+| Layer 1        | 领域内核：`aiRuntime` → `aiCapability` → `capabilityFrameworkRuntime` → `capabilityGovernance` → `platformServiceRegistryKernel` → `analyticsEngine` → `collaborationEngine` → `presenceEngine` → `classroomRuntime` → `lessonRuntime`                                              |
+| 依赖 L0/L1     | `commandBus`（依赖 `eventBus`）、`actionRegistry`、`processManager`、`pluginHost`（依赖 `serviceRegistry` + `esmLoader` + `db`，并 `mkdirSync` 出 `plugins/` 目录）                                                                                                                 |
+| Layer 3        | `workerManager`（依赖 `serviceRegistry` + `capabilityGuard` + `db`），随后 `pluginHost.setWorkerManager(workerManager)` 反向接线                                                                                                                                                    |
+| 插件 facade    | `pluginRuntimeComposition`、`pluginLifecycleManager`、`pluginDistributionManager`、`unifiedExtensionRegistry`、`pluginCapabilityGateway`；并调用 `PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose(...)`（失败仅 `console.warn`，不阻断启动） |
+| **Token 注册** | 一次性 `serviceRegistry.register(...)` 注册全部 DI Token：7 个基础服务 + 5 个插件 facade + `IDatabaseToken` + `ICapabilityRegistryToken` + 学期成绩/积分三件套 + 8 个引擎门面 + `IAuthSessionBridgeToken` + `ICoursewareRuntimeScriptRegistryToken`                                 |
+| 拦截器         | `commandBus.setInterceptor(...)`：JSON Schema 入参校验 → 能力检查（admin 角色豁免）→ 高危操作人工审批（`pending_commands` 表 + `approval.requested` 事件）                                                                                                                          |
+| 收尾           | `bootstrapSharedModules()` 异步注册 `ctx.require` 白名单；`this.ready = this.bootstrapSystemPlugins()`（7 个内置插件，critical 失败 `process.exit(1)`）；开发模式下挂 `HotReloadController`                                                                                         |
 
 `server.ts` 只在其上**追加** 3 个 Token：`IActivityRegistryToken`（`startServer()` 内）、`IClassroomLifecycleServiceToken` 与 `IInteractionRuntimeServiceToken`（二者绑定同一个 `classroomRuntimeService` 实例）。
 
@@ -82,4 +82,3 @@ Composition Root 将 Kernel 依赖直接解算并注入到路由与 WebSocket �
 - **活动生态**: `startServer()` 中实例化 `ActivityRegistry`（`packages/activity-ecosystem/registry.ts`）、调用 `registerOfficialActivities` 把官方活动注册为 Provider 并把 AI Action 贡献进 `kernelContainer.actionRegistry`，最后 `serviceRegistry.register(IActivityRegistryToken, activityRegistry)` —— 插件随后即可用 `ctx.resolve(IActivityRegistryToken)` 取到。
 
 > ⚠️ `IActivityRegistryToken` 定义在 `packages/activity-ecosystem/index.ts`（标识串 `@openlearn/activity-ecosystem:IActivityRegistry`），**不在 `packages/core/di/interfaces.ts`**，但由 `packages/plugin-sdk/openlearn.d.ts` 导出，插件侧可直接 import。
-

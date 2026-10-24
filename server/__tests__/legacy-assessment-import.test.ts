@@ -25,13 +25,9 @@ describe('存量测评导入（Issue #185）', () => {
     db.prepare(
       'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(CLASS, '导入班', '', 'x', OWNER, now);
-    db.prepare('INSERT OR REPLACE INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-      LESSON,
-      '导入课',
-      '',
-      now,
-      now,
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(LESSON, '导入课', '', now, now);
     db.prepare('UPDATE lessons SET creator_id = ? WHERE id = ?').run(OWNER, LESSON);
     db.prepare(
       'INSERT OR REPLACE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -61,10 +57,16 @@ describe('存量测评导入（Issue #185）', () => {
   });
 
   afterAll(() => {
-    const ids = db.prepare("SELECT id FROM assessments WHERE json_extract(settings_json, '$.legacy.sourceId') IN (?, ?, ?)").all(ELEMENT, POLL_WITH_KEY, POLL_NO_KEY) as Array<{ id: string }>;
+    const ids = db
+      .prepare("SELECT id FROM assessments WHERE json_extract(settings_json, '$.legacy.sourceId') IN (?, ?, ?)")
+      .all(ELEMENT, POLL_WITH_KEY, POLL_NO_KEY) as Array<{ id: string }>;
     for (const { id } of ids) {
-      db.prepare('DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id = ?))').run(id);
-      db.prepare('DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id = ?)').run(id);
+      db.prepare(
+        'DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id = ?))',
+      ).run(id);
+      db.prepare(
+        'DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id = ?)',
+      ).run(id);
       db.prepare('DELETE FROM assessment_assignments WHERE assessment_id = ?').run(id);
       db.prepare('DELETE FROM assessment_items WHERE assessment_id = ?').run(id);
       db.prepare('DELETE FROM assessments WHERE id = ?').run(id);
