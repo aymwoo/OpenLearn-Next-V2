@@ -234,6 +234,46 @@ export function validateStartupEnv(env: NodeJS.ProcessEnv = process.env): EnvVal
     });
   }
 
+  // ── 进程内身份开关（R-01 的运营面）────────────────────────────────────
+  //
+  // `execution-policy.ts` 用 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'`
+  // 判断「Vitest 下是否恢复生产策略」—— 写成 `true` / `yes` / `1 ` 都会**静默
+  // 判为未开启**，与 TB-03 同一类：运维以为锁上了，实际没锁。
+  const enforce = trimmed(env, 'OPENLEARN_ENFORCE_PLUGIN_ISOLATION');
+  if (enforce && !['1', '0'].includes(enforce)) {
+    errors.push({
+      key: 'OPENLEARN_ENFORCE_PLUGIN_ISOLATION',
+      severity: 'error',
+      message:
+        `OPENLEARN_ENFORCE_PLUGIN_ISOLATION 只能是 "1" 或 "0"，实际为 "${enforce}"。` +
+        ' 判定处是 `!== \'1\'` —— 写成 true/yes 会被静默当成"未开启"，因此拒绝启动而不是继续。',
+    });
+  }
+
+  // 信任名单里的插件与宿主**共享进程、环境变量与网络栈**（见 execution-policy.ts）。
+  // 名单本身是管理员的有意决定，不是错误；但如果生产环境里出现，必须在启动日志里
+  // 留下一条可检索的告警 —— 否则事后排查「这个插件为什么能直接出网」只能翻 .env。
+  const trustedInline = trimmed(env, 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+  if (trustedInline) {
+    const ids = splitList(trustedInline);
+    if (ids.length === 0) {
+      warnings.push({
+        key: 'OPENLEARN_TRUSTED_INLINE_PLUGINS',
+        severity: 'warning',
+        message: 'OPENLEARN_TRUSTED_INLINE_PLUGINS 只含空白/逗号，等同于未配置。',
+      });
+    } else if (isProduction) {
+      warnings.push({
+        key: 'OPENLEARN_TRUSTED_INLINE_PLUGINS',
+        severity: 'warning',
+        message:
+          `生产环境信任了 ${ids.length} 个插件在**进程内**运行：${ids.join(', ')}。` +
+          ' 它们与宿主共享环境变量与网络栈，出站网络拦截对它们不生效。' +
+          ' 确认这是有意为之；否则清空该变量让它们回到 process 子进程隔离。',
+      });
+    }
+  }
+
   // ── 插件资源配额与探活调参 ───────────────────────────────────────────
   //
   // 这些键由 `plugin-quota.ts` / `liveness-monitor.ts` 的 `normalizePositiveInt`

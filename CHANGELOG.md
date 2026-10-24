@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **进程内身份开关的运营面护栏（R-01 复核）**：
+  - **复核结论**：R-01（`worker_threads` / `inline` 原始网络不受限）的缓解是真实存在的 —— `resolvePluginExecutionMode` 会把未受信任的第三方插件强制降级到 `process`，且已有 5 例测试钉住「激活/恢复时改写 DB 并走子进程原语」。但审计行只写了「已由强门禁兜底」，没写清**残余风险的准确形态**：真实暴露面只有 ① 管理员显式写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件、② `packages/plugins` 内置目录代码。
+  - **静默失效方向**：`execution-policy.ts` 的判定是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'` —— 写成 `true` / `yes` / `on` 都会被**静默判为未开启**（与 TB-03 同类）。现纳入启动期强校验，只接受 `1` / `0`，写错直接拒绝启动。
+  - **信任名单要留痕**：`OPENLEARN_TRUSTED_INLINE_PLUGINS` 在生产环境出现时，启动日志必留一条可检索告警，写明「这些插件与宿主共享网络栈、出站拦截对它们不生效」，而不是只写进 `.env` 等人去翻。名单只含空白/逗号时也会指出「等同于未配置」。
+  - **测试**：`env-validation.test.ts` 新增 3 例（`true`/`yes`/`on` 被拒而 `1`/`0` 通过、生产环境信任名单产生带插件 id 与代价说明的告警但不阻断、非生产不过度告警且空名单被指认）。
+  - **文档**：`.env.example` 补上「进程内 = 出站拦截不生效」与「ENFORCE 只能写 1/0」；审计文档 R-01 行改写为残余风险的具体形态 + 本轮护栏。
+
 - **插件资源配额与探活调参纳入启动期强校验（补 R-03 复核缺口）**：
   - **复核结论**：R-03（CPU 饥饿不等于崩溃）在 `packages/core/worker-runtime/plugin-quota.ts` 里**早已实现** —— `startProcessQuota()` 在子进程 spawn 处按 1s 节奏采样 `/proc/<pid>` 的 RSS 与 CPU 时间，超限 `SIGKILL` 后交给既有崩溃看门狗（退避 + 熔断）。此前把这项记为「P2 待办」是文档滞后，已更正。
   - **真正的缺口**：这五个调参键（`OPENLEARN_PLUGIN_MAX_RSS_MB` / `_CPU_QUOTA_MS` / `_CPU_WINDOW_MS` / `OPENLEARN_PLUGIN_QUOTA` / `OPENLEARN_WORKER_LIVENESS_*`）不在 `assertStartupEnv` 里，而解析器 `normalizePositiveInt` 对非法值是**静默回落默认**的 —— 与 TB-03「拼错就静默回落」完全同类：`OPENLEARN_PLUGIN_CPU_QUOTA_MS=20s` 或开关写成 `of` 都会被无声吞掉，运维以为放宽了配额。

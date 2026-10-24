@@ -7,6 +7,44 @@ function errorKeys(env: NodeJS.ProcessEnv): string[] {
   return validateStartupEnv(env).errors.map((issue) => issue.key);
 }
 
+describe('进程内身份开关（R-01 的运营面）', () => {
+  it('ENFORCE_PLUGIN_ISOLATION 只接受 1 / 0 —— 写成 true 会静默不生效', () => {
+    // 判定处是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'`：
+    // 'true' / 'yes' / '1 ' 都会被当成"未开启"，与 TB-03 同类。
+    // 注意 `'1 '` 不算错：`trimmed()` 会先去空白，那是我们希望的行为。
+    for (const bad of ['true', 'yes', 'on']) {
+      expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: bad }), bad).toEqual([
+        'OPENLEARN_ENFORCE_PLUGIN_ISOLATION',
+      ]);
+    }
+    expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: '1' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: '0' })).toEqual([]);
+  });
+
+  it('生产环境信任进程内插件时留下可检索告警，但不阻断启动', () => {
+    const result = validateStartupEnv({
+      NODE_ENV: 'production',
+      OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a, ext-b',
+    });
+    expect(result.errors).toEqual([]);
+    const warning = result.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(warning?.message).toContain('ext-a');
+    expect(warning?.message).toContain('ext-b');
+    // 说清代价：与宿主共享网络栈，出站拦截对它们不生效
+    expect(warning?.message).toContain('出站网络拦截');
+  });
+
+  it('非生产环境不过度告警；只含空白的名单会被指出等同未配置', () => {
+    expect(
+      validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a' }).warnings.map((w) => w.key),
+    ).not.toContain('OPENLEARN_TRUSTED_INLINE_PLUGINS');
+
+    const blank = validateStartupEnv({ NODE_ENV: 'production', OPENLEARN_TRUSTED_INLINE_PLUGINS: ' , ' });
+    const blankWarning = blank.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(blankWarning?.message).toContain('等同于未配置');
+  });
+});
+
 describe('插件资源配额与探活调参（TB-03 同类：拼错不能静默回落）', () => {
   it('接受 off / none / 0 与正整数', () => {
     for (const value of ['off', 'none', '0', '512', '32768']) {
