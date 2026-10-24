@@ -31,7 +31,13 @@ import {
 import JSZip from 'jszip';
 import { communityInstallEnabled, verifyCommunityPackage, communityPublicKeys } from '../services/community-attest.js';
 import { verifyPluginPackage } from '../../packages/core/security/plugin-signature.js';
-import { approvePluginCapabilities } from '../../packages/core/plugin-host/plugin-grants.js';
+import {
+  approvePluginCapabilities,
+  approvePluginNetHosts,
+  classifyNetHostProposals,
+  listApprovedNetHosts,
+  revokePluginNetHost,
+} from '../../packages/core/plugin-host/plugin-grants.js';
 import {
   exportPluginDataToSql,
   listOrphanData,
@@ -64,11 +70,26 @@ function sanitizeFileNameSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._@-]/g, '_');
 }
 
+/**
+ * 从清单里取出出站域名提案。
+ *
+ * 清单的 `network.outbound` **只是申请**：真正生效的是管理员写入
+ * `plugin_network_grants` 的域名（`listApprovedNetHosts` 是运行时唯一真相源）。
+ * 这里把两者分开返回，避免前端（或插件作者）把「声明了」误当成「已授权」。
+ */
+function manifestOutboundHosts(manifest: unknown): string[] {
+  const network = (manifest as { network?: { outbound?: unknown } } | null | undefined)?.network;
+  const outbound = network?.outbound;
+  if (!Array.isArray(outbound)) return [];
+  return outbound.filter((h): h is string => typeof h === 'string' && h.trim().length > 0);
+}
+
 function installationSecurityFields(
-  manifest: { id?: string; executionMode?: unknown; executionModeCoerced?: unknown },
+  manifest: { id?: string; executionMode?: unknown; executionModeCoerced?: unknown; network?: unknown },
   pluginId: string,
   approvePublic: boolean,
   approveCapabilities = false,
+  approveNetworkHosts = false,
 ) {
   const keys = [pluginId, manifest.id].filter((key): key is string => typeof key === 'string' && key.length > 0);
   const publicRoutesApproved = approvePublic ? approveDeclaredPublicRoutes(kernelContainer.db, keys, manifest) : [];
@@ -79,11 +100,32 @@ function installationSecurityFields(
     : [];
   const capabilitiesApproved =
     approveCapabilities === true ? approvePluginCapabilities(kernelContainer.db as never, keys, proposed) : [];
+
+  // 出站域名：声明与授权分开报。没有授权时 `networkHostsApproved` 为空，
+  // 插件发起的出站请求会被运行时拒（fail-closed），而不是静默放行。
+  const networkVerdicts = classifyNetHostProposals(manifestOutboundHosts(manifest));
+  const networkHostsApproved =
+    approveNetworkHosts === true
+      ? approvePluginNetHosts(
+          kernelContainer.db as never,
+          keys,
+          networkVerdicts.filter((v) => v.approvable).map((v) => v.host as string),
+        )
+      : [];
+
   return {
     executionMode: typeof manifest.executionMode === 'string' ? manifest.executionMode : undefined,
     executionModeCoerced: manifest.executionModeCoerced === true,
     publicRoutesApproved,
     capabilitiesApproved,
+    /** 清单申请的出站域名（归一化后），未授权前只是提案。 */
+    networkHostsProposed: networkVerdicts.filter((v) => v.approvable).map((v) => v.host as string),
+    /** 清单里声明了但**永远不可批准**的项（回环/私有/通配符），带原因。 */
+    networkHostsRejected: networkVerdicts
+      .filter((v) => !v.approvable)
+      .map((v) => ({ host: v.raw, reason: v.reason })),
+    /** 本次安装/更新实际写入授权表的域名。 */
+    networkHostsApproved,
   };
 }
 
@@ -616,6 +658,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         acknowledgeRisk,
         approvePublicRoutes,
         approveCapabilities,
+        approveNetworkHosts,
         integrity,
         signature,
       } = req.body || {};
@@ -712,6 +755,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
               result.pluginId,
               approvePublicRoutes === true,
               approveCapabilities === true,
+              approveNetworkHosts === true,
             ),
           });
         }
@@ -735,6 +779,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             result.pluginId,
             approvePublicRoutes === true,
             approveCapabilities === true,
+            approveNetworkHosts === true,
           ),
         });
       } finally {
@@ -984,6 +1029,119 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── 插件出站域名（R-02）：提案 / 已批准 / 已拒绝三项分开返回 ────────────────
+  //
+  // 背景（`docs/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
+  // 清单里的 `network.outbound` **只是申请**，真正放行的是管理员写入
+  // `plugin_network_grants` 的域名（运行时 `listApprovedNetHosts` 是唯一真相源）。
+  // 此前 `approvePluginNetHosts` 没有任何调用方 —— 第三方插件无论如何都拿不到
+  // 出站权（fail-closed 安全，但管理员也无从授权，且界面上完全看不到）。
+  // 这组接口把那条路补上，并把「声明了但永远不可批准」的项连原因一起回显。
+
+  /** 解析插件并取得授权表用的双键（DB UUID + manifest.id）。 */
+  function resolvePluginGrantKeys(rawId: string): { pluginId: string; manifest: any; keys: string[] } | null {
+    const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
+    const row = kernelContainer.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
+      | { manifest: string }
+      | undefined;
+    if (!row) return null;
+    let manifest: any = {};
+    try {
+      manifest = JSON.parse(row.manifest);
+    } catch {
+      manifest = {};
+    }
+    const keys = [pluginId, manifest?.id].filter((k): k is string => typeof k === 'string' && k.length > 0);
+    return { pluginId, manifest, keys };
+  }
+
+  app.get('/api/plugins/:id(*)/network-grants', requireAuth('administrator'), (req, res) => {
+    try {
+      const resolved = resolvePluginGrantKeys(decodeURIComponent(req.params.id));
+      if (!resolved) return res.status(404).json({ success: false, error: 'Plugin not found' });
+      const verdicts = classifyNetHostProposals(manifestOutboundHosts(resolved.manifest));
+      res.json({
+        success: true,
+        pluginId: resolved.pluginId,
+        manifestId: resolved.manifest?.id ?? null,
+        /** 清单申请且可批准的域名（尚未授权的仍在里面）。 */
+        proposed: verdicts.filter((v) => v.approvable).map((v) => v.host as string),
+        /** 已写入授权表、运行时真正放行的域名。 */
+        approved: listApprovedNetHosts(kernelContainer.db as never, resolved.keys),
+        /** 声明了但永远造不了授权的项（回环/私有/通配符），带原因。 */
+        rejected: verdicts.filter((v) => !v.approvable).map((v) => ({ host: v.raw, reason: v.reason })),
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/plugins/:id(*)/network-grants', requireAuth('administrator'), (req, res) => {
+    try {
+      const resolved = resolvePluginGrantKeys(decodeURIComponent(req.params.id));
+      if (!resolved) return res.status(404).json({ success: false, error: 'Plugin not found' });
+
+      const requested = (req.body as { hosts?: unknown })?.hosts;
+      if (!Array.isArray(requested) || requested.length === 0) {
+        return res.status(400).json({ success: false, error: 'hosts 必须是非空字符串数组' });
+      }
+
+      // 只接受归一化后能通过的项。回环/私有/通配符在这里就被挡掉，
+      // 不依赖前端是否做了校验。
+      const verdicts = classifyNetHostProposals(requested);
+      const accepted = approvePluginNetHosts(
+        kernelContainer.db as never,
+        resolved.keys,
+        verdicts.filter((v) => v.approvable).map((v) => v.host as string),
+      );
+      const rejected = verdicts
+        .filter((v) => !v.approvable)
+        .map((v) => ({ host: v.raw, reason: v.reason }));
+
+      recordSecurityAudit('plugin.network_grant_approved', {
+        actorId: getActorId(req),
+        pluginId: resolved.pluginId,
+        manifestId: resolved.manifest?.id,
+        hosts: accepted,
+      });
+
+      res.json({
+        success: accepted.length > 0,
+        approved: accepted,
+        rejected,
+        ...(accepted.length === 0 ? { error: '没有可批准的域名（均未通过归一化校验）' } : {}),
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /** 撤销：允许用 body.host 或 query.host（DELETE 带 body 不总被支持）。 */
+  app.delete('/api/plugins/:id(*)/network-grants', requireAuth('administrator'), (req, res) => {
+    try {
+      const resolved = resolvePluginGrantKeys(decodeURIComponent(req.params.id));
+      if (!resolved) return res.status(404).json({ success: false, error: 'Plugin not found' });
+
+      const host = (req.body as { host?: unknown })?.host ?? req.query.host;
+      if (typeof host !== 'string' || !host.trim()) {
+        return res.status(400).json({ success: false, error: 'host 必须是字符串' });
+      }
+      const removed = revokePluginNetHost(kernelContainer.db as never, resolved.keys, host);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: `未找到已批准的域名：${host}` });
+      }
+      recordSecurityAudit('plugin.network_grant_revoked', {
+        actorId: getActorId(req),
+        pluginId: resolved.pluginId,
+        manifestId: resolved.manifest?.id,
+        host,
+      });
+      res.json({ success: true, revoked: host });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.post('/api/plugins/:id(*)/toggle', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
@@ -994,7 +1152,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       sendSafeError(res, err);
     }
   });
-
   // ── 插件数据（孤立数据）管理（Issue #141）────────────────────────────────
   //
   // 卸载默认保留插件数据（dataPolicy=keep）：表 / plugin_migrations / plugin_storage
@@ -1242,6 +1399,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       const approvePublicRoutes = headerFlag(req, 'x-approve-public-routes');
       const approveCapabilities = headerFlag(req, 'x-approve-capabilities');
+      const approveNetworkHosts = headerFlag(req, 'x-approve-network-hosts');
       const communityInstall = headerFlag(req, 'x-community-install');
 
       if (modeHeader === 'update' && !headerFlag(req, 'x-acknowledge-risk')) {
@@ -1329,7 +1487,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         pluginId: result.pluginId,
         manifest: result.manifest,
         filename,
-        ...installationSecurityFields(result.manifest, result.pluginId, approvePublicRoutes, approveCapabilities),
+        ...installationSecurityFields(
+          result.manifest,
+          result.pluginId,
+          approvePublicRoutes,
+          approveCapabilities,
+          approveNetworkHosts,
+        ),
       });
     } catch (err: any) {
       // 413 已在流式中间件里直接响应过
@@ -1412,6 +1576,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           result.pluginId,
           headerFlag(req, 'x-approve-public-routes'),
           headerFlag(req, 'x-approve-capabilities'),
+          headerFlag(req, 'x-approve-network-hosts'),
         ),
       });
     } catch (err: any) {
