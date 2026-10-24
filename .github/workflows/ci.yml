@@ -73,6 +73,18 @@ jobs:
       - name: Strict type check
         run: pnpm lint:strict
 
+      # Issue #231：ESLint 告警预算棘轮 —— 超过 config/lint-budget.json 里的基线即红
+      # （不许欠新债）。基线只能往下走：清理告警后运行
+      # `node scripts/check-lint-budget.mjs --update` 收紧。
+      # 此前 lint:eslint 完全不在 CI 里，6186 条告警（其中 no-explicit-any 占大头）
+      # 可以无限增长；而类型检查对 `any` 这类位置无能为力。
+      - name: ESLint warning budget
+        run: node scripts/check-lint-budget.mjs
+
+      # Issue #231：中文硬编码检查 —— package.json 里一直有 lint:i18n，此前同样不在 CI。
+      - name: i18n hardcode check
+        run: pnpm lint:i18n
+
       - name: Run tests
         run: pnpm test
 

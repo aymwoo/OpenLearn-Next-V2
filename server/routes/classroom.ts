@@ -918,6 +918,9 @@ export function registerClassroomRoutes(
           // 动态流回放是教师端恢复现场用的，含其他学生姓名，学生端不返回。
           if (activePoll) activePoll = redactAnswerKeys(activePoll) as any;
           delete session.settings_json;
+          // Issue #239：签到码对学生的会话视图一并剥离 —— 此前随 SELECT * 下发，
+          // 学生读码即可远程 POST /checkin 伪造在场出勤
+          delete session.checkin_code;
           feedReplay = [];
         }
 
@@ -1875,9 +1878,16 @@ export function registerClassroomRoutes(
 
         const activeSession = db
           .prepare(
-            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id, stage FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
           )
           .get(lessonId) as any;
+
+        // Issue #248：归档会话不再接收节奏信号。
+        // 与结课通票对齐（exit-ticket 显式拒绝归档）—— 此前只有通票守住了
+        // 「课已结束就别再往里写」的边界，节奏信号仍能往归档会话里塞「无主」数据。
+        if (activeSession && activeSession.stage === ARCHIVED_REPORT_STAGE) {
+          return res.status(409).json({ error: '课堂已归档，无法再提交节奏信号' });
+        }
 
         const readAuth = readDecision(req, lessonId, activeSession ?? null);
         if (rejectUnless(res, readAuth)) return;
@@ -2430,6 +2440,8 @@ export function registerClassroomRoutes(
         }
 
         // 实到 = 至少产生过一条课堂痕迹的学生
+        // 「痕迹」包含扫码签到（Issue #245）——此前签到完全不在聚合里，
+        // 只扫码不互动的学生会被算成「没来」。
         // 注意：classroom_poll_votes 只有 poll_id，没有 session_id，必须 join 投票表过滤
         if (expectedStudents > 0) {
           try {
@@ -2447,10 +2459,40 @@ export function registerClassroomRoutes(
                 SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
                 UNION
                 SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
+                UNION
+                -- Issue #245：扫码签到此前完全不被「实到」消费 —— 只扫码不参与
+                -- 任何互动的学生被漏计（恰恰是最安静的那批）。
+                -- 1) lesson_checkins：签到成功时必定写入的课节级到课事实
+                --    （没有排课时也会写，见 /checkin 的 recordCheckin 调用）
+                SELECT lc.student_id
+                  FROM lesson_checkins lc
+                  JOIN class_students lc_cs ON lc_cs.class_id = ? AND lc_cs.student_id = lc.student_id
+                 WHERE lc.lesson_id = ?
+                UNION
+                -- 2) attendance：教师在考勤台账登记的到课事实（挂 schedule_id，
+                --    需经 schedules 关联课节）。关联口径与签到写侧一致：排课归属
+                --    本班 + 课节直配或班级级排课（lesson_id 为空串）；
+                --    只认「到场」状态 —— absent（缺考）与 excused（请假）不算实到。
+                SELECT sa.student_id
+                  FROM attendance sa
+                  JOIN schedules sch ON sch.id = sa.schedule_id
+                  JOIN class_students sa_cs ON sa_cs.class_id = sch.class_id AND sa_cs.student_id = sa.student_id
+                 WHERE sa.status IN ('present', 'late', 'leave_early')
+                   AND sch.class_id = ?
+                   AND (sch.lesson_id = ? OR sch.lesson_id = '')
               )
             `,
               )
-              .get(session.id, session.id, session.id, lessonId) as any;
+              .get(
+                session.id,
+                session.id,
+                session.id,
+                lessonId,
+                session.class_id,
+                lessonId,
+                session.class_id,
+                lessonId,
+              ) as any;
             attendedStudents = Number(touched?.n) || 0;
           } catch (e) {
             console.warn('[classroom.stage] attended query failed:', e);
@@ -2860,28 +2902,110 @@ export function registerClassroomRoutes(
     },
   );
 
-  // 获取当前所有活跃中的授课会话
+  // 获取当前活跃中的授课会话
+  //
+  // Issue #241：此前 SELECT s.* 且无归属裁剪，任意教师可读取全平台活跃会话整行
+  // （含 checkin_code / settings_json）。现与 /api/classroom/sessions 列表端点
+  // 同口径 —— 非管理员按 teacher/班级/课节归属裁剪，且投影收窄为显式列，
+  // 不再下发 checkin_code 与 settings_json。
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
+      const conditions = ["s.stage != 'ARCHIVED_REPORT'"];
+      const params: any[] = [];
+
+      const httpSession = (req as any).session;
+      if (!isAdministrator(httpSession)) {
+        const uid = actorUserId(httpSession) || '';
+        const username = httpSession?.username ? String(httpSession.username).trim() : '';
+        const actorFull = (getActorId(req) || '').trim();
+        const actorTokens = Array.from(new Set([uid, username, actorFull].filter(Boolean)));
+        if (actorTokens.length === 0) {
+          conditions.push('1 = 0');
+        } else {
+          const ph = actorTokens.map(() => '?').join(',');
+          conditions.push(
+            `(
+              s.teacher_id IN (${ph})
+              OR c.owner_user_id IN (${ph})
+              OR l.creator_id IN (${ph})
+              OR (
+                (s.teacher_id IS NULL OR s.teacher_id = '' OR s.teacher_id = 'teacher')
+                AND (c.owner_user_id IS NULL OR c.owner_user_id = '')
+                AND (l.creator_id IS NULL OR l.creator_id = '')
+              )
+            )`,
+          );
+          params.push(...actorTokens, ...actorTokens, ...actorTokens);
+        }
+      }
+
       const activeSessions = db
         .prepare(
           `
-          SELECT s.*, l.title as lesson_title, c.name as class_name
+          SELECT
+            s.id,
+            s.lesson_id,
+            s.class_id,
+            s.teacher_id,
+            s.stage,
+            s.current_segment_id,
+            s.focus_mode,
+            s.started_at,
+            s.ended_at,
+            s.created_at,
+            s.teaching_mode_id,
+            s.academic_year,
+            l.title AS lesson_title,
+            c.name AS class_name
           FROM classroom_sessions s
           LEFT JOIN lessons l ON s.lesson_id = l.id
           LEFT JOIN classes c ON s.class_id = c.id
-          WHERE s.stage != 'ARCHIVED_REPORT'
+          WHERE ${conditions.join(' AND ')}
           ORDER BY s.created_at DESC
           LIMIT 10
         `,
         )
-        .all() as any[];
+        .all(...params) as any[];
 
       res.json({ success: true, sessions: activeSessions });
     } catch (e: any) {
       sendSafeError(res, e, 500);
     }
   });
+
+  // 手动抽问按日计数（Issue #243）：读侧补齐 —— 写侧（手动抽问 presence.ts、
+  // 白板 rollcall event-routing.ts）早已落库 student_rollcalls，但此前没有
+  // 任何读取端点按日聚合，归因弹窗的「今日抽中 N 次」只能硬编码 0。
+  // 口径：服务器本地时区的当日 0 点起，全量学生（跨课节公平性统计）。
+  app.get(
+    '/api/lessons/:lessonId/rollcall-counts',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+        const rows = db
+          .prepare(
+            `SELECT student_id, COUNT(*) AS cnt
+               FROM student_rollcalls
+              WHERE picked_time >= ?
+              GROUP BY student_id`,
+          )
+          .all(dayStart.getTime()) as { student_id: string; cnt: number }[];
+
+        const counts: Record<string, number> = {};
+        for (const r of rows) counts[r.student_id] = r.cnt;
+        res.json({ success: true, counts, dayStart: dayStart.getTime() });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
 
   // ── 教学模式 (Teaching Modes — 课堂启动门户的模式选择器) ──────────
   // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
@@ -3363,6 +3487,10 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
         const rows = db
           .prepare('SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC')
           .all(lessonId) as Array<{
@@ -3404,6 +3532,10 @@ export function registerClassroomRoutes(
       try {
         const { lessonId } = req.params;
         const { title, questionType = 'ABCD', options, correctOption, sortOrder = 0 } = req.body;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
 
         if (!title || !options || !Array.isArray(options) || options.length < 2) {
           res.status(400).json({ error: 'title and options (array with >= 2 items) are required' });
@@ -3448,6 +3580,10 @@ export function registerClassroomRoutes(
       try {
         const { lessonId, id } = req.params;
         const { title, questionType, options, correctOption, sortOrder } = req.body;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const existing = db
           .prepare('SELECT id FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?')
@@ -3523,6 +3659,10 @@ export function registerClassroomRoutes(
     (req: Request, res: Response) => {
       try {
         const { lessonId, id } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
         const result = db.prepare('DELETE FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').run(id, lessonId);
         if ((result as any).changes === 0) {
           res.status(404).json({ error: 'Preset poll not found' });
