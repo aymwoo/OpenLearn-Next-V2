@@ -56,7 +56,9 @@ export function ClassroomToolbarQuickActions({
         onClick={onOpenGroupCollab}
         className="w-7 h-7 sm:w-8 sm:h-8 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
         title={lang === 'zh' ? '随堂小组协作与画廊互评展台 (Jigsaw & Gallery Walk)' : 'Group Collab & Gallery Walk'}
-        aria-label={lang === 'zh' ? '随堂小组协作与画廊互评展台 (Jigsaw & Gallery Walk)' : 'Group Collab & Gallery Walk'}
+        aria-label={
+          lang === 'zh' ? '随堂小组协作与画廊互评展台 (Jigsaw & Gallery Walk)' : 'Group Collab & Gallery Walk'
+        }
       >
         👥
       </button>
@@ -81,15 +83,9 @@ export function ClassroomToolbarQuickActions({
           id="btn-open-peer-review-showcase"
           onClick={onOpenPeerReviewShowcase}
           className="w-7 h-7 sm:w-8 sm:h-8 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
-          title={
-            lang === 'zh'
-              ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)'
-              : 'Peer Review & Showcase'
-          }
+          title={lang === 'zh' ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)' : 'Peer Review & Showcase'}
           aria-label={
-            lang === 'zh'
-              ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)'
-              : 'Peer Review & Showcase'
+            lang === 'zh' ? '全班大屏作业互评与协同赏析秀场 (Peer Review & Showcase)' : 'Peer Review & Showcase'
           }
         >
           🌟

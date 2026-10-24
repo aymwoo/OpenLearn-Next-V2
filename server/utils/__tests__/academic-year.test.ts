@@ -51,4 +51,3 @@ describe('academic-year utils', () => {
     expect(getDefaultComparisonAcademicYears(9, fixedNow)).toEqual(['2024-2025', '2025-2026']);
   });
 });
-

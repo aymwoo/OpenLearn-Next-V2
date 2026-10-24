@@ -160,4 +160,3 @@ describe('ClassroomSyncChannel', () => {
     setSocketInstance(null as any);
   });
 });
-

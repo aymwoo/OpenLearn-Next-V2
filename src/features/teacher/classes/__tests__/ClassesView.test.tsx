@@ -144,7 +144,7 @@ describe('ClassesView', () => {
     render(
       <AppDataProvider value={makeProps() as any}>
         <ClassesView />
-      </AppDataProvider>
+      </AppDataProvider>,
     );
     expect(screen.getByText('班级管理 & 学生管理')).toBeTruthy();
   });
@@ -153,7 +153,7 @@ describe('ClassesView', () => {
     render(
       <AppDataProvider value={makeProps() as any}>
         <ClassesView />
-      </AppDataProvider>
+      </AppDataProvider>,
     );
     expect(screen.getByText('批量管理')).toBeTruthy();
   });

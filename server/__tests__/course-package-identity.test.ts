@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildTemplateCoursePackage } from '../services/course-package.js';
-import {
-  computeCoursePackageHash,
-  resolveCoursePackageIdentity,
-} from '../services/course-package-identity.js';
+import { computeCoursePackageHash, resolveCoursePackageIdentity } from '../services/course-package-identity.js';
 
 /**
  * 课程包身份（G-06 去重键的派生规则）。

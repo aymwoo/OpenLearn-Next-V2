@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { splitCsvLine, splitCsvRecords, downloadCSVTemplate, parseAndImportClassesOrStudents } from '../bulkImportService';
+import {
+  splitCsvLine,
+  splitCsvRecords,
+  downloadCSVTemplate,
+  parseAndImportClassesOrStudents,
+} from '../bulkImportService';
 
 describe('splitCsvLine', () => {
   it('splits a plain comma line', () => {

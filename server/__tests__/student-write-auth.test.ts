@@ -186,7 +186,8 @@ describe('学生写操作与私有备忘的对象级授权', () => {
     });
   });
 
-  describe('GET /api/students/:id/dashboard 私有备忘隔离', () => {    it('学生本人查看自己的仪表盘时不会收到 private_notes', async () => {
+  describe('GET /api/students/:id/dashboard 私有备忘隔离', () => {
+    it('学生本人查看自己的仪表盘时不会收到 private_notes', async () => {
       const res = await fetch(`${baseUrl}/api/students/${studentA}/dashboard`, { headers: cookie(tokStudentA) });
       expect(res.status).toBe(200);
       const body: any = await res.json();

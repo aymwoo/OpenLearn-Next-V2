@@ -70,10 +70,7 @@ describe('迁移 · checksum 校验', () => {
 
 describe('迁移 · 逐条事务', () => {
   it('UP 中途失败时不留下半应用状态', () => {
-    const broken = mig(
-      '001_partial',
-      'CREATE TABLE good_table (id TEXT);\nTHIS IS NOT VALID SQL;',
-    );
+    const broken = mig('001_partial', 'CREATE TABLE good_table (id TEXT);\nTHIS IS NOT VALID SQL;');
     expect(() => runMigrations(db, [broken])).toThrow();
 
     // 第一条语句应当已被回滚
@@ -110,9 +107,7 @@ describe('迁移 · 逐条事务', () => {
 
 describe('迁移 · 回滚', () => {
   it('缺 DOWN 段时明确报错（而非静默跳过）', () => {
-    expect(() => rollbackMigration(db, mig('001_x', 'CREATE TABLE a (id TEXT);'))).toThrow(
-      /does not provide a DOWN/,
-    );
+    expect(() => rollbackMigration(db, mig('001_x', 'CREATE TABLE a (id TEXT);'))).toThrow(/does not provide a DOWN/);
   });
 
   it('有 DOWN 段时可回滚', () => {
@@ -165,4 +160,3 @@ describe('迁移 · 执行前物理快照', () => {
     }
   });
 });
-

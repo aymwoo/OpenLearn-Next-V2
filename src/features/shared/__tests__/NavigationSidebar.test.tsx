@@ -209,4 +209,3 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     expect(screen.queryByText('系统导航')).toBeNull();
   });
 });
-

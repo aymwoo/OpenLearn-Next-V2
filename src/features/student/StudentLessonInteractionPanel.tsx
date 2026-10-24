@@ -150,7 +150,9 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
               <span className="ml-1.5 text-xs font-bold text-indigo-500">🔒 {lang === 'zh' ? '只读' : 'RO'}</span>
             )}
             {!interactionLocked && navigationLocked && studentLessonTab === 'whiteboard' && (
-              <span className="ml-1.5 text-xs font-bold text-amber-600">✏️ {lang === 'zh' ? '答题锁定' : 'Answering'}</span>
+              <span className="ml-1.5 text-xs font-bold text-amber-600">
+                ✏️ {lang === 'zh' ? '答题锁定' : 'Answering'}
+              </span>
             )}
           </button>
           <button onClick={() => handleTabChange('courseware')} className={tabButtonClass('courseware')}>

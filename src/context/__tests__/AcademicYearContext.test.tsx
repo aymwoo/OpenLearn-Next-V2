@@ -9,10 +9,13 @@ function Probe() {
 
 describe('AcademicYearContext', () => {
   it('renders provider and resolves', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ currentAcademicYear: '2025-2026', academicStartMonth: 9 }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ currentAcademicYear: '2025-2026', academicStartMonth: 9 }),
+      }),
+    );
     render(
       <AcademicYearProvider>
         <Probe />

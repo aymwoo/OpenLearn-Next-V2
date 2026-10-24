@@ -32,7 +32,9 @@ const cleanupTx = db.transaction(() => {
     console.log(`  ✓ Removed ${delWb.changes} whiteboard elements`);
 
     // 级联清理 student_lesson_progress
-    const delProg = db.prepare(`DELETE FROM student_lesson_progress WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+    const delProg = db
+      .prepare(`DELETE FROM student_lesson_progress WHERE lesson_id IN (${placeholders})`)
+      .run(...lessonIds);
     console.log(`  ✓ Removed ${delProg.changes} student lesson progress rows`);
 
     // 级联清理 schedules
@@ -44,24 +46,32 @@ const cleanupTx = db.transaction(() => {
     console.log(`  ✓ Removed ${delAss.changes} assignments`);
 
     // 级联清理 quiz submissions
-    const delQuiz = db.prepare(`DELETE FROM lesson_quiz_submissions WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+    const delQuiz = db
+      .prepare(`DELETE FROM lesson_quiz_submissions WHERE lesson_id IN (${placeholders})`)
+      .run(...lessonIds);
     console.log(`  ✓ Removed ${delQuiz.changes} quiz submissions`);
 
     // 级联清理 preset polls (if table exists)
     try {
-      const delPreset = db.prepare(`DELETE FROM lesson_preset_polls WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      const delPreset = db
+        .prepare(`DELETE FROM lesson_preset_polls WHERE lesson_id IN (${placeholders})`)
+        .run(...lessonIds);
       console.log(`  ✓ Removed ${delPreset.changes} preset polls`);
     } catch {}
 
     // 级联清理 classroom sessions and poll votes
     try {
-      const sessions = db.prepare(`SELECT id FROM classroom_sessions WHERE lesson_id IN (${placeholders})`).all(...lessonIds);
+      const sessions = db
+        .prepare(`SELECT id FROM classroom_sessions WHERE lesson_id IN (${placeholders})`)
+        .all(...lessonIds);
       if (sessions.length > 0) {
         const sessionIds = sessions.map((s) => s.id);
         const sPlaceholders = sessionIds.map(() => '?').join(',');
 
         try {
-          db.prepare(`DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`).run(...sessionIds);
+          db.prepare(
+            `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`,
+          ).run(...sessionIds);
         } catch {}
         try {
           db.prepare(`DELETE FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
@@ -82,7 +92,9 @@ const cleanupTx = db.transaction(() => {
           db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
         } catch {}
       }
-      const delSessions = db.prepare(`DELETE FROM classroom_sessions WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      const delSessions = db
+        .prepare(`DELETE FROM classroom_sessions WHERE lesson_id IN (${placeholders})`)
+        .run(...lessonIds);
       console.log(`  ✓ Removed ${delSessions.changes} classroom sessions`);
     } catch {}
 
@@ -93,7 +105,9 @@ const cleanupTx = db.transaction(() => {
 
   // 2. 查找并清理所有 E2E / 探针测试学生 (STU_ 开头带有时间戳的临时学生，严禁误伤普通测试学生)
   const testStudents = db
-    .prepare("SELECT id, student_number, name FROM students WHERE (student_number LIKE 'STU_%-%') OR (student_number LIKE 'STU_POLL_%-%') OR student_number LIKE '%CANARY%'")
+    .prepare(
+      "SELECT id, student_number, name FROM students WHERE (student_number LIKE 'STU_%-%') OR (student_number LIKE 'STU_POLL_%-%') OR student_number LIKE '%CANARY%'",
+    )
     .all();
 
   console.log(`[cleanup-test-data] Found ${testStudents.length} leftover test students:`);
@@ -146,7 +160,9 @@ const cleanupTx = db.transaction(() => {
     // 课堂会话挂在 class_id 上，而按 lesson_id 的级联清理只覆盖测试**课节**；
     // 若用例只建班不建课节，投票/抢答/通票/动态流都会残留
     try {
-      const sessions = db.prepare(`SELECT id FROM classroom_sessions WHERE class_id IN (${cPlaceholders})`).all(...classIds);
+      const sessions = db
+        .prepare(`SELECT id FROM classroom_sessions WHERE class_id IN (${cPlaceholders})`)
+        .all(...classIds);
       if (sessions.length > 0) {
         const ids = sessions.map((s) => s.id);
         const p2 = ids.map(() => '?').join(',');
@@ -155,7 +171,13 @@ const cleanupTx = db.transaction(() => {
             `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${p2}))`,
           ).run(...ids);
         } catch {}
-        for (const t of ['classroom_quick_polls', 'classroom_buzzers', 'classroom_exit_tickets', 'classroom_feed', 'classroom_danmaku']) {
+        for (const t of [
+          'classroom_quick_polls',
+          'classroom_buzzers',
+          'classroom_exit_tickets',
+          'classroom_feed',
+          'classroom_danmaku',
+        ]) {
           try {
             db.prepare(`DELETE FROM ${t} WHERE session_id IN (${p2})`).run(...ids);
           } catch {}
@@ -171,7 +193,9 @@ const cleanupTx = db.transaction(() => {
   // 4. 查找并清理所有 E2E / 金丝雀测试机房 (room_number LIKE 'E2E %' OR '%canary%')
   try {
     const testLabs = db
-      .prepare("SELECT id, room_number FROM computer_labs WHERE room_number LIKE 'E2E %' OR room_number LIKE '%canary%'")
+      .prepare(
+        "SELECT id, room_number FROM computer_labs WHERE room_number LIKE 'E2E %' OR room_number LIKE '%canary%'",
+      )
       .all();
 
     console.log(`[cleanup-test-data] Found ${testLabs.length} leftover test computer labs:`);

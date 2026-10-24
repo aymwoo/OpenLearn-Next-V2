@@ -144,8 +144,7 @@ describe('课节进度聚合与班级仪表盘', () => {
     db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
   });
 
-  const get = (url: string) =>
-    fetch(`${baseUrl}${url}`, { headers: { Cookie: `edu_os_token=${teacherToken}` } });
+  const get = (url: string) => fetch(`${baseUrl}${url}`, { headers: { Cookie: `edu_os_token=${teacherToken}` } });
 
   it('课节进度 JSON 与手算最高分一致，另一课的 100 分不计入', async () => {
     const res = await get(`/api/classes/${classId}/lessons/${lessonId}/progress`);

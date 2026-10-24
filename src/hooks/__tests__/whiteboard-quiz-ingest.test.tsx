@@ -103,9 +103,7 @@ describe('useClassroomSocket — student-progress-updated → onStudentProgressU
   it('forwards lesson, percent, completed and verified flags to the callback', () => {
     const onStudentProgressUpdated = vi.fn();
     const setLiveClassStudentProgress = vi.fn();
-    renderHook(() =>
-      useClassroomSocket({ ...baseOptions, setLiveClassStudentProgress, onStudentProgressUpdated }),
-    );
+    renderHook(() => useClassroomSocket({ ...baseOptions, setLiveClassStudentProgress, onStudentProgressUpdated }));
 
     act(() => {
       mockSocket.fire('student-progress-updated', {

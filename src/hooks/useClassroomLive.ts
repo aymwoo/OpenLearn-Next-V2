@@ -56,9 +56,7 @@ export function useClassroomLive() {
   // 按 2s 一条进度事件计一小时约 7.2 万条）且渲染层整表 map，每条新事件
   // 全量重渲染。服务端 feed_replay 本就是有界窗口（最近 12 条），200 条
   // 对课堂时间轴足够。
-  const setLiveClassFeed = (
-    updater: any[] | ((prev: any[]) => any[]),
-  ): void => {
+  const setLiveClassFeed = (updater: any[] | ((prev: any[]) => any[])): void => {
     setLiveClassFeedRaw((prev: any[]) => {
       const next = typeof updater === 'function' ? (updater as (p: any[]) => any[])(prev) : updater;
       return Array.isArray(next) && next.length > 200 ? next.slice(0, 200) : next;

@@ -255,13 +255,9 @@ describe('Plugin Student Privacy Hooks & GDPR Integration (Issue #145)', () => {
         now,
       );
       db.prepare('INSERT INTO class_students (class_id, student_id) VALUES (?, ?)').run('c-1', sid);
-      db.prepare('INSERT INTO student_point_logs (id, student_id, delta_points, reason, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        'pt-1',
-        sid,
-        15,
-        '课堂积分',
-        now,
-      );
+      db.prepare(
+        'INSERT INTO student_point_logs (id, student_id, delta_points, reason, created_at) VALUES (?, ?, ?, ?, ?)',
+      ).run('pt-1', sid, 15, '课堂积分', now);
 
       const delResult = await rosterService.deleteStudentCascade(sid);
 
@@ -298,13 +294,9 @@ describe('Plugin Student Privacy Hooks & GDPR Integration (Issue #145)', () => {
         '赵测试',
         now,
       );
-      db.prepare('INSERT INTO student_point_logs (id, student_id, delta_points, reason, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        'pt-exp-1',
-        sid,
-        25,
-        '测试积分',
-        now,
-      );
+      db.prepare(
+        'INSERT INTO student_point_logs (id, student_id, delta_points, reason, created_at) VALUES (?, ?, ?, ?, ?)',
+      ).run('pt-exp-1', sid, 25, '测试积分', now);
 
       const exportReport = await rosterService.exportStudentData(sid);
 

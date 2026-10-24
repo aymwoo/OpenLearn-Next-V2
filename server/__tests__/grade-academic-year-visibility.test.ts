@@ -69,9 +69,14 @@ describe('课件成绩 — 学年可见性、稳定关联与可观测性', () =>
   beforeAll(() => {
     cleanup();
     const now = Date.now();
-    db.prepare(
-      'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(teacherId, 'grade_year_teacher', 'placeholder', 'teacher', '学年测试教师', now);
+    db.prepare('INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      teacherId,
+      'grade_year_teacher',
+      'placeholder',
+      'teacher',
+      '学年测试教师',
+      now,
+    );
     db.prepare(
       'INSERT INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(classId, '学年可见性班', 'grade year fixture', 'pass-grade-year', teacherId, now);
@@ -96,9 +101,14 @@ describe('课件成绩 — 学年可见性、稳定关联与可观测性', () =>
     db.prepare(
       'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(scheduleId, classId, lessonId, '2026-03-01', now, academicYear);
-    db.prepare(
-      'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(coursewareId, coursewareUuid, '学年测试课件', 'html', 'index.html', now);
+    db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      coursewareId,
+      coursewareUuid,
+      '学年测试课件',
+      'html',
+      'index.html',
+      now,
+    );
 
     insertAttempt('att-grade-year-1', 88, now + 1000);
   });

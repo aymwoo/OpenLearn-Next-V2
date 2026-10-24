@@ -164,9 +164,7 @@ describe('课节列表按角色收窄', () => {
     db.prepare('DELETE FROM classroom_sessions WHERE id = ?').run('cs-lscope-a');
     db.prepare('DELETE FROM assignments WHERE id = ?').run('asg-lscope-a');
     db.prepare('DELETE FROM schedules WHERE id = ?').run('sch-lscope-a');
-    db.prepare(
-      'DELETE FROM lessons WHERE id IN (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(
+    db.prepare('DELETE FROM lessons WHERE id IN (?, ?, ?, ?, ?, ?, ?, ?)').run(
       lessonByTeacherA,
       lessonByTeacherB,
       lessonScheduledInA,

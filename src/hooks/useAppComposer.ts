@@ -13,7 +13,6 @@ import { useClassroomSlice } from './useClassroomSlice';
 import type { AppDataValue } from '../context/AppDataContext';
 
 export function useAppComposer() {
-
   useGlobalErrorCapture();
   const lang = useAppStore((s) => s.lang);
   const t = translations[lang] ?? translations['zh'];
@@ -222,7 +221,6 @@ export function useAppComposer() {
     isFollowingTeacher: session.isFollowingTeacher,
     setIsFollowingTeacher: session.setIsFollowingTeacher,
   };
-
 
   return {
     appData,

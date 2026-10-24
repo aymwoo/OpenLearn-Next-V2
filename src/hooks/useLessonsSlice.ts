@@ -37,7 +37,15 @@ export interface LessonsSliceParams {
  *
  * 行为与拆分前 useAppComposer 内联实现逐行一致，仅做物理搬运。
  */
-export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, fetchClasses, chatLogRef }: LessonsSliceParams) {
+export function useLessonsSlice({
+  lang,
+  addToast,
+  host,
+  session,
+  fetchStudents,
+  fetchClasses,
+  chatLogRef,
+}: LessonsSliceParams) {
   const lessons = useAppStore((s) => s.lessons);
   const setLessons = useAppStore((s) => s.setLessons);
   // ── Hook: 课程筛选、搜索与排序 ──
@@ -108,13 +116,7 @@ export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, 
 
   // ── C1-R2c: 课程/班级 hooks ──────────────────────────────────────────────
   const lessonCrudData = useLessonCrud({ lang, addToast, setCopyingLessonId });
-  const {
-    fetchLessons,
-    handleQuickCreateLesson,
-    handleDeleteCourse,
-    handleCopyCourse,
-    fetchElements,
-  } = lessonCrudData;
+  const { fetchLessons, handleQuickCreateLesson, handleDeleteCourse, handleCopyCourse, fetchElements } = lessonCrudData;
   const classOpsData = useClassOps({ fetchClassSchedules });
   const {
     classStudentsMap,
@@ -162,8 +164,7 @@ export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, 
     const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
       const add = whiteboardRef.current?.addElementAtCenter as
-        | ((type: string, content: Record<string, any>) => Promise<void>)
-        | undefined;
+        ((type: string, content: Record<string, any>) => Promise<void>) | undefined;
       if (typeof add === 'function') {
         await add(pending.type, data);
         return;
@@ -221,7 +222,14 @@ export function useLessonsSlice({ lang, addToast, host, session, fetchStudents, 
     fetchProcesses,
     fetchProcessLogs,
   } = systemData;
-  const resourceLibraryData = useResourceLibrary({ lang, session, fetchClasses, fetchStudents, fetchLessons, addToast });
+  const resourceLibraryData = useResourceLibrary({
+    lang,
+    session,
+    fetchClasses,
+    fetchStudents,
+    fetchLessons,
+    addToast,
+  });
   const {
     isCloudDriveOpen,
     setIsCloudDriveOpen,

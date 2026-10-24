@@ -5,8 +5,6 @@ import { StudentAcademicYearComparison } from '../StudentAcademicYearComparison'
 import * as dashboardService from '../../../services/dashboardService';
 
 afterEach(() => {
-
-
   cleanup();
   vi.restoreAllMocks();
 });
@@ -86,11 +84,8 @@ describe('StudentAcademicYearComparison 组件', () => {
     expect(screen.getByText('作业平均分')).toBeTruthy();
     expect(screen.getByText('在读 / 已完成课程')).toBeTruthy();
 
-
     // 无数据学年提示条
-    expect(
-      screen.getByText('提示：部分选中的历史学年暂无排课或作业提交记录，指标以 0 显示。'),
-    ).toBeTruthy();
+    expect(screen.getByText('提示：部分选中的历史学年暂无排课或作业提交记录，指标以 0 显示。')).toBeTruthy();
 
     // 课程成绩列表
     expect(screen.getByText('数学分析')).toBeTruthy();
@@ -115,7 +110,6 @@ describe('StudentAcademicYearComparison 组件', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith('s1', ['2024-2025']);
   });
-
 
   it('加载失败时渲染错误提示与重试按钮', async () => {
     vi.spyOn(dashboardService, 'getStudentAcademicYearComparison').mockResolvedValue({

@@ -110,7 +110,9 @@ export class AcademicYearComparisonService {
          WHERE cs.student_id = ? AND s.academic_year IS NOT NULL`,
       )
       .all(studentId) as Array<{ academic_year: string }>;
-    scheduleYears.forEach((r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year));
+    scheduleYears.forEach(
+      (r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year),
+    );
 
     // 2. 从 assignments 中找
     const assignmentYears = this.db
@@ -121,7 +123,9 @@ export class AcademicYearComparisonService {
          WHERE cs.student_id = ? AND a.academic_year IS NOT NULL`,
       )
       .all(studentId) as Array<{ academic_year: string }>;
-    assignmentYears.forEach((r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year));
+    assignmentYears.forEach(
+      (r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year),
+    );
 
     // 3. 从 student_lesson_progress 中找
     const progressYears = this.db
@@ -131,7 +135,9 @@ export class AcademicYearComparisonService {
          WHERE student_id = ? AND academic_year IS NOT NULL`,
       )
       .all(studentId) as Array<{ academic_year: string }>;
-    progressYears.forEach((r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year));
+    progressYears.forEach(
+      (r) => r.academic_year && isValidAcademicYear(r.academic_year) && yearsSet.add(r.academic_year),
+    );
 
     // 兜底补齐当前与上一学年
     const [prev, curr] = getDefaultComparisonAcademicYears();
@@ -174,10 +180,8 @@ export class AcademicYearComparisonService {
     // 作业提交即视作按时提交
     const onTimeCount = submittedCount;
 
-    const submissionRate =
-      totalAssignments > 0 ? Math.round((submittedCount / totalAssignments) * 1000) / 10 : 0;
-    const onTimeRate =
-      submittedCount > 0 ? Math.round((onTimeCount / submittedCount) * 1000) / 10 : 0;
+    const submissionRate = totalAssignments > 0 ? Math.round((submittedCount / totalAssignments) * 1000) / 10 : 0;
+    const onTimeRate = submittedCount > 0 ? Math.round((onTimeCount / submittedCount) * 1000) / 10 : 0;
 
     const scoredRows = assignments.filter((a) => a.score != null && !Number.isNaN(Number(a.score)));
     const averageScore =
@@ -218,7 +222,6 @@ export class AcademicYearComparisonService {
       (p) => (p.progress_percent != null && p.progress_percent >= 100) || p.completed === 1 || p.completed === true,
     ).length;
 
-
     // 3. 按课程统计成绩分布
     const courseScoresMap = new Map<
       string,
@@ -230,8 +233,7 @@ export class AcademicYearComparisonService {
       if (!courseScoresMap.has(a.lesson_id)) {
         let lessonTitle = a.title || '未命名课程';
         const lessonRow = this.db.prepare('SELECT title FROM lessons WHERE id = ?').get(a.lesson_id) as
-          | { title: string }
-          | undefined;
+          { title: string } | undefined;
         if (lessonRow?.title) {
           lessonTitle = lessonRow.title;
         }

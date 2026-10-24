@@ -1,6 +1,6 @@
 name: 功能建议
 description: 建议公测之后或公测期间增加的教学能力。当前版本做不到的缺陷请用缺陷报告。
-title: "[建议] "
+title: '[建议] '
 body:
   - type: markdown
     attributes:

@@ -32,6 +32,35 @@ export function getMaxUncompressedSize(): number {
 }
 
 /**
+ * target 是否严格位于 root 内部（root 自身不算在内）。
+ *
+ * 用 `path.relative` 而不是字符串前缀：root=/a/b 时 /a/b2/c 不应通过
+ * （startsWith('/a/b') 会误判）。语义与 server/utils/path-guard.ts 的
+ * isPathInsideRoot 一致，但 packages/core 是底层包，不能反向依赖 server/。
+ */
+function isInsideRoot(root: string, target: string): boolean {
+  if (!root || !target) return false;
+  const rel = path.relative(path.resolve(root), path.resolve(target));
+  if (rel === '') return false;
+  if (path.isAbsolute(rel)) return false;
+  return rel !== '..' && !rel.startsWith('..' + path.sep);
+}
+
+/** realpath 失败（路径不存在等）时返回 null，不抛错 */
+function realPathOrNull(target: string): string | null {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return null;
+  }
+}
+
+/** realpath 失败时退回原路径（用于根目录本身，保证比较基准稳定） */
+function realPathOrSelf(target: string): string {
+  return realPathOrNull(target) ?? path.resolve(target);
+}
+
+/**
  * 插件 ZIP 上传的 HTTP body 上限（审计 R-4）。
  *
  * 此前路由层硬编码 `'400mb'`，与上面的解压上限（默认 300MB）是**两个各写各的
@@ -488,6 +517,31 @@ export async function bundlePlugin(entryCode: string, resolveDir: string): Promi
 export async function bundlePlugin(entryCode: string, resolveDir: string, outfile: string): Promise<void>;
 export async function bundlePlugin(entryCode: string, resolveDir: string, outfile?: string): Promise<string | void> {
   const esbuild = await import('esbuild');
+  // 插件目录边界：相对导入解析后必须仍在其中（Issue #218）。
+  //
+  // allowedRoots 除插件自身目录外，还可能包含**显式放行的宿主目录** ——
+  // 目前只有 `packages/core/di`（插件需要 DI Token 的类型声明）。该放行是既有设计
+  // （见下方 core/di/interfaces 分支），因此它连同该目录自身的相对导入一起允许，
+  // 但不放行宿主目录里的其他任何文件。
+  const allowedRoots: Array<{ lexical: string; real: string }> = [];
+
+  const allowRoot = (dir: string): void => {
+    const lexical = path.resolve(dir);
+    if (allowedRoots.some((r) => r.lexical === lexical)) return;
+    allowedRoots.push({ lexical, real: realPathOrSelf(lexical) });
+  };
+
+  allowRoot(resolveDir);
+
+  /** 目标路径（词法或 realpath 形式）是否落在任一允许目录内 */
+  const isPermittedPath = (target: string): boolean => {
+    const resolved = path.resolve(target);
+    if (allowedRoots.some((r) => isInsideRoot(r.lexical, resolved))) return true;
+    const real = realPathOrNull(resolved);
+    if (!real) return false;
+    return allowedRoots.some((r) => isInsideRoot(r.real, real));
+  };
+
   const result = await esbuild.build({
     stdin: {
       contents: entryCode,
@@ -513,10 +567,12 @@ export async function bundlePlugin(entryCode: string, resolveDir: string, outfil
             if (args.path.includes('core/di/interfaces')) {
               const tsPath = path.resolve(process.cwd(), 'packages/core/di/interfaces.ts');
               if (fs.existsSync(tsPath)) {
+                allowRoot(path.dirname(tsPath));
                 return { path: tsPath };
               }
               const jsPath = path.resolve(process.cwd(), 'packages/core/di/interfaces.js');
               if (fs.existsSync(jsPath)) {
+                allowRoot(path.dirname(jsPath));
                 return { path: jsPath };
               }
             }
@@ -533,8 +589,42 @@ export async function bundlePlugin(entryCode: string, resolveDir: string, outfil
                 ],
               };
             }
-            // 相对路径由 esbuild 正常解析
+            // 相对路径：必须**解析后仍在插件目录内**（M-6 补齐，Issue #218）。
+            //
+            // 此前这里直接 `return undefined` 交回 esbuild 默认解析，而 esbuild 的相对
+            // 解析不做目录归属限制 —— `../../` 可以逃出插件的临时解压目录，把宿主的
+            // 任意文件（.env、SQLite 库、宿主 package.json…）读进来并**内联进插件产物**。
+            // 读取发生在宿主进程的打包阶段，不在插件的 `--permission` 权限模型约束内，
+            // 因此 `process` 隔离模式也拦不住。
             if (args.path.startsWith('.')) {
+              const importerDir = args.resolveDir || path.resolve(resolveDir);
+              const candidate = path.resolve(importerDir, args.path);
+              if (!isPermittedPath(candidate)) {
+                return {
+                  errors: [
+                    {
+                      text:
+                        `Import of "${args.path}" escapes the plugin directory. ` +
+                        `Plugins may only import files inside their own package; ` +
+                        `relative imports must not traverse outside it.`,
+                    },
+                  ],
+                };
+              }
+              // 符号链接兜底：词法路径在目录内，但软链接可能指向目录外（ZIP 里的软链接
+              // 条目指向宿主文件）。目标存在时用 realpath 再确认一次。
+              const realCandidate = realPathOrNull(candidate);
+              if (realCandidate && !isPermittedPath(realCandidate)) {
+                return {
+                  errors: [
+                    {
+                      text:
+                        `Import of "${args.path}" resolves outside the plugin directory ` +
+                        `via a symbolic link. Plugins may only import files inside their own package.`,
+                    },
+                  ],
+                };
+              }
               return undefined;
             }
             // @openlearn Token 导入 — 标记为 external 保留

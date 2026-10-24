@@ -64,20 +64,12 @@ describe('学生私有备忘净化与花名册范围隔离', () => {
     db.prepare(
       'INSERT OR REPLACE INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(classB, '备忘乙班', '', teacherB, now);
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
-      studentA,
-      'NOTES-SEC-A',
-      '甲班学生',
-      '',
-      now,
-    );
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
-      studentB,
-      'NOTES-SEC-B',
-      '乙班学生',
-      '',
-      now,
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(studentA, 'NOTES-SEC-A', '甲班学生', '', now);
+    db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(studentB, 'NOTES-SEC-B', '乙班学生', '', now);
     db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
       classA,
       studentA,
@@ -151,8 +143,9 @@ describe('学生私有备忘净化与花名册范围隔离', () => {
       });
       expect(res.status).toBe(200);
 
-      const stored = (db.prepare('SELECT private_notes FROM students WHERE student_number = ?').get(importedNumber) as any)
-        ?.private_notes as string;
+      const stored = (
+        db.prepare('SELECT private_notes FROM students WHERE student_number = ?').get(importedNumber) as any
+      )?.private_notes as string;
       expect(stored).toContain('导入备注');
       expect(stored).not.toContain('<img');
       expect(stored).not.toContain('onerror');
