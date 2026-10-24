@@ -38,7 +38,11 @@ export interface BackupSchedulerHandle {
 }
 
 /** 下一次每日备份时刻距今毫秒数（本地时区，可单测） */
-export function msUntilNextDailyRun(nowMs: number, atHour: number, dateCtor: new (...args: any[]) => Date = Date): number {
+export function msUntilNextDailyRun(
+  nowMs: number,
+  atHour: number,
+  dateCtor: new (...args: any[]) => Date = Date,
+): number {
   const next = new (dateCtor as any)(nowMs);
   next.setHours(atHour, 0, 0, 0);
   if (next.getTime() <= nowMs) {
@@ -118,7 +122,9 @@ export function startBackupScheduler(deps: BackupSchedulerDeps): BackupScheduler
   };
 
   // 打印启动时的库路径与目标，便于排障第一眼定位备错库问题
-  console.log(`[BackupScheduler] enabled db=${dbPath} keep=${keep} dailyAt=${atHour}:00 checkpointEvery=${Math.round(checkpointInterval / 60000)}min`);
+  console.log(
+    `[BackupScheduler] enabled db=${dbPath} keep=${keep} dailyAt=${atHour}:00 checkpointEvery=${Math.round(checkpointInterval / 60000)}min`,
+  );
   track(setTimeout(doCheckpoint, checkpointInterval));
   track(setTimeout(doBackup, msUntilNextDailyRun(Date.now(), atHour)));
 

@@ -138,7 +138,13 @@ describe('student.profile.tab extension slot', () => {
   it('integrates seamlessly with StudentGrowthProfileModal: default overview and tab switching', async () => {
     const mockDispatchResult = vi.fn();
 
-    const DiagnosticsTabComponent = ({ student, dispatcher }: { student: StudentProfileData; dispatcher: IHostActionDispatcher }) => {
+    const DiagnosticsTabComponent = ({
+      student,
+      dispatcher,
+    }: {
+      student: StudentProfileData;
+      dispatcher: IHostActionDispatcher;
+    }) => {
       return (
         <div data-testid="ai-profile-panel">
           <h3>诊断面板：{student.name}</h3>

@@ -766,9 +766,7 @@ interface PluginHost {
   exportStudentDataFromPlugins(
     studentId: string,
   ): Promise<Record<string, { status: 'ok' | 'not_implemented' | 'error'; data?: unknown; error?: string }>>;
-  deleteStudentDataFromPlugins(
-    studentId: string,
-  ): Promise<Record<string, { success: boolean; error?: string }>>;
+  deleteStudentDataFromPlugins(studentId: string): Promise<Record<string, { success: boolean; error?: string }>>;
 }
 
 // ── Capability & Platform Kernel Services (v0.3.17+) ─────────────────────

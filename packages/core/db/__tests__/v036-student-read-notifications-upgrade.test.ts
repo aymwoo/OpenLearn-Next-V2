@@ -108,7 +108,10 @@ describe('从迁移 000–035 升级到 036（student_read_notifications 增加 
     expect(m036).toBeTruthy();
 
     const db = openMemory();
-    runMigrations(db, all.filter((m) => migrationNumber(m.name) <= 36));
+    runMigrations(
+      db,
+      all.filter((m) => migrationNumber(m.name) <= 36),
+    );
 
     // 执行 DOWN 回滚
     const downStatements = splitSqlStatements(m036!.down);

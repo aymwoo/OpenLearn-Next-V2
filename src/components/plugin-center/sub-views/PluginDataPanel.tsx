@@ -28,7 +28,15 @@ function formatTime(ts: number): string {
   }
 }
 
-export function PluginDataPanel({ lang, items, loading, onRefresh, onExport, onPurge, onDownloadArchive }: PluginDataPanelProps) {
+export function PluginDataPanel({
+  lang,
+  items,
+  loading,
+  onRefresh,
+  onExport,
+  onPurge,
+  onDownloadArchive,
+}: PluginDataPanelProps) {
   const zh = lang === 'zh';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -77,7 +85,9 @@ export function PluginDataPanel({ lang, items, loading, onRefresh, onExport, onP
           <HardDrive size={28} className="mb-3 text-gray-300" />
           <p className="text-sm font-medium text-gray-500">{zh ? '暂无保留的插件数据' : 'No retained plugin data'}</p>
           <p className="mt-1 text-xs text-gray-400">
-            {zh ? '卸载插件时若选择「保留数据」，会在这里出现。' : 'Data appears here when a plugin is uninstalled with "keep data".'}
+            {zh
+              ? '卸载插件时若选择「保留数据」，会在这里出现。'
+              : 'Data appears here when a plugin is uninstalled with "keep data".'}
           </p>
         </div>
       ) : (
@@ -112,10 +122,12 @@ export function PluginDataPanel({ lang, items, loading, onRefresh, onExport, onP
                         {zh ? '配置键' : 'Storage keys'}: <strong className="text-gray-700">{item.storageKeys}</strong>
                       </span>
                       <span>
-                        {zh ? '迁移版本' : 'Migration'}: <strong className="text-gray-700">{item.migrationVersion ?? '-'}</strong>
+                        {zh ? '迁移版本' : 'Migration'}:{' '}
+                        <strong className="text-gray-700">{item.migrationVersion ?? '-'}</strong>
                       </span>
                       <span>
-                        {zh ? '卸载时间' : 'Uninstalled'}: <strong className="text-gray-700">{formatTime(item.uninstalledAt)}</strong>
+                        {zh ? '卸载时间' : 'Uninstalled'}:{' '}
+                        <strong className="text-gray-700">{formatTime(item.uninstalledAt)}</strong>
                       </span>
                     </div>
                     {item.lastExportPath && (

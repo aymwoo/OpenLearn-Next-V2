@@ -1,17 +1,21 @@
-(function() {
+(function () {
   // Mock document.cookie to prevent SecurityError in sandboxed iframes lacking 'allow-same-origin'
   try {
     Object.defineProperty(document, 'cookie', {
-      get: function() { return ""; },
-      set: function(val) {},
-      configurable: true
+      get: function () {
+        return '';
+      },
+      set: function (val) {},
+      configurable: true,
     });
   } catch (e) {
     try {
       Object.defineProperty(Document.prototype, 'cookie', {
-        get: function() { return ""; },
-        set: function(val) {},
-        configurable: true
+        get: function () {
+          return '';
+        },
+        set: function (val) {},
+        configurable: true,
       });
     } catch (err) {}
   }
@@ -30,7 +34,7 @@
     if (window.__LMS_ENFORCE_ORIGIN__ !== false) {
       throw new Error(
         '[LMS bridge] __LMS_HOST_ORIGIN__ missing; refusing to broadcast to "*". ' +
-          'Set window.__LMS_ENFORCE_ORIGIN__ = false to override.'
+          'Set window.__LMS_ENFORCE_ORIGIN__ = false to override.',
       );
     }
     return '*';
@@ -38,7 +42,7 @@
 
   // ── Helper: create a safe postMessage wrapper that normalises 'null' → '*' ──
   function __makeSafePostMessage(realTarget, label) {
-    return function(message, targetOrigin, transfer) {
+    return function (message, targetOrigin, transfer) {
       try {
         if (message && typeof message === 'object') {
           if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
@@ -76,22 +80,28 @@
     try {
       var safePost = __makeSafePostMessage(realRef, propName + '.postMessage');
       var proxyObj = new Proxy(realRef, {
-        get: function(target, prop) {
+        get: function (target, prop) {
           if (prop === 'postMessage') return safePost;
           try {
             var val = target[prop];
             if (typeof val === 'function') return val.bind(target);
             return val;
-          } catch (e) { return undefined; }
-        }
+          } catch (e) {
+            return undefined;
+          }
+        },
       });
       Object.defineProperty(window, propName, {
-        get: function() { return proxyObj; },
-        configurable: true
+        get: function () {
+          return proxyObj;
+        },
+        configurable: true,
       });
     } catch (e) {
       // Proxy or defineProperty not supported, fall back to direct override attempt
-      try { realRef.postMessage = __makeSafePostMessage(realRef, propName + '.postMessage (fallback)'); } catch (_) {}
+      try {
+        realRef.postMessage = __makeSafePostMessage(realRef, propName + '.postMessage (fallback)');
+      } catch (_) {}
     }
   }
 
@@ -99,7 +109,7 @@
   try {
     // 1. Override window.postMessage (self-targeting, always works)
     var originalPostMessage = window.postMessage;
-    window.postMessage = function(message, targetOrigin, transfer) {
+    window.postMessage = function (message, targetOrigin, transfer) {
       try {
         if (message && typeof message === 'object') {
           if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
@@ -110,7 +120,7 @@
           }
         }
       } catch (e) {}
-      
+
       var origin = targetOrigin;
       if (origin === 'null' || origin === null || origin === undefined) {
         console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" for postMessage call');
@@ -142,23 +152,28 @@
     // 4. Intercept message event listeners to sanitize event.source.postMessage replies
     var origAddEventListener = window.addEventListener;
     if (typeof origAddEventListener === 'function') {
-      window.addEventListener = function(type, listener, options) {
+      window.addEventListener = function (type, listener, options) {
         if (type === 'message' && typeof listener === 'function') {
-          var wrappedListener = function(event) {
+          var wrappedListener = function (event) {
             try {
               if (event && event.source && typeof event.source.postMessage === 'function') {
                 var origSourcePostMessage = event.source.postMessage;
-                event.source.postMessage = function(msg, targetOrigin, transfer) {
+                event.source.postMessage = function (msg, targetOrigin, transfer) {
                   var origin = targetOrigin;
                   if (origin === 'null' || origin === null) {
-                    console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" on event.source.postMessage');
+                    console.warn(
+                      '[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" on event.source.postMessage',
+                    );
                     origin = '*';
                   }
                   try {
                     return origSourcePostMessage.call(event.source, msg, origin, transfer);
                   } catch (err) {
                     if (err.name === 'SyntaxError' && origin !== '*') {
-                      console.warn('[LMS Bridge Notice] Recovered SyntaxError on event.source.postMessage, fallback to "*"', err);
+                      console.warn(
+                        '[LMS Bridge Notice] Recovered SyntaxError on event.source.postMessage, fallback to "*"',
+                        err,
+                      );
                       return origSourcePostMessage.call(event.source, msg, '*', transfer);
                     }
                     throw err;
@@ -181,7 +196,9 @@
 
   // HOOK 遥测总闸：服务端注入 window.__LMS_HOOK_TELEMETRY__（默认 true；
   // BRIDGE_HOOK_TELEMETRY=off 可关闭 fetch/XHR/axios/beacon/form 上报）。
-  function __hookAllowed() { return window.__LMS_HOOK_TELEMETRY__ !== false; }
+  function __hookAllowed() {
+    return window.__LMS_HOOK_TELEMETRY__ !== false;
+  }
 
   function __applyThemeTokens(themeData) {
     if (!themeData || typeof themeData !== 'object') return;
@@ -207,7 +224,7 @@
     __applyThemeTokens(window.__LMS_THEME__);
   }
 
-  window.addEventListener('message', function(event) {
+  window.addEventListener('message', function (event) {
     var d = event.data;
     if (!d || typeof d !== 'object') return;
     // P4 修复：入站无 origin 校验，任意页面可伪造宿主命令/假进度。
@@ -215,11 +232,14 @@
     // 同页恶意 iframe 的 origin 为 'null'，直接拒收。__LMS_HOST_ORIGIN__ 由服务端注入，
     // 有则必须精确匹配，无则至少拒绝 'null'/非 parent 来源。
     var expectedHost = window.__LMS_HOST_ORIGIN__ || null;
-    var isHostCmd = (d.type === 'LMS_HOST_COMMAND' || d.type === 'LMS_THEME_CHANGED' || d.type === 'LMS_PROGRESS_RESPONSE');
+    var isHostCmd =
+      d.type === 'LMS_HOST_COMMAND' || d.type === 'LMS_THEME_CHANGED' || d.type === 'LMS_PROGRESS_RESPONSE';
     if (isHostCmd) {
       try {
         if (event.source !== window.parent) return;
-      } catch (e) { return; }
+      } catch (e) {
+        return;
+      }
       if (expectedHost) {
         if (event.origin !== expectedHost) return;
       } else if (!event.origin || event.origin === 'null') {
@@ -232,13 +252,17 @@
       }
       var cbs = __lmsHandlers[d.event] || [];
       for (var i = 0; i < cbs.length; i++) {
-        try { cbs[i](d.payload); } catch (e) {}
+        try {
+          cbs[i](d.payload);
+        } catch (e) {}
       }
     } else if (d.type === 'LMS_THEME_CHANGED' && (d.theme || d.tokens)) {
       __applyThemeTokens(d);
       var themeCbs = __lmsHandlers['theme:changed'] || [];
       for (var j = 0; j < themeCbs.length; j++) {
-        try { themeCbs[j](d); } catch (e) {}
+        try {
+          themeCbs[j](d);
+        } catch (e) {}
       }
     } else if (d.type === 'LMS_PROGRESS_RESPONSE' && d.requestId) {
       var pending = __lmsPendingRequests[d.requestId];
@@ -252,28 +276,37 @@
 
   window.LMS = {
     submit(data) {
-      window.parent.postMessage({
-        type: "LMS_SUBMIT",
-        uuid: window.__LMS_COURSEWARE__?.uuid,
-        attempt_id: window.__LMS_STUDENT__?.attempt_id,
-        payload: data
-      }, __lmsHostOrigin());
+      window.parent.postMessage(
+        {
+          type: 'LMS_SUBMIT',
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          payload: data,
+        },
+        __lmsHostOrigin(),
+      );
     },
     saveProgress(data) {
-      window.parent.postMessage({
-        type: "LMS_SAVE_PROGRESS",
-        uuid: window.__LMS_COURSEWARE__?.uuid,
-        attempt_id: window.__LMS_STUDENT__?.attempt_id,
-        payload: data
-      }, __lmsHostOrigin());
+      window.parent.postMessage(
+        {
+          type: 'LMS_SAVE_PROGRESS',
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          payload: data,
+        },
+        __lmsHostOrigin(),
+      );
     },
     finish(data) {
-      window.parent.postMessage({
-        type: "LMS_FINISH",
-        uuid: window.__LMS_COURSEWARE__?.uuid,
-        attempt_id: window.__LMS_STUDENT__?.attempt_id,
-        payload: data
-      }, __lmsHostOrigin());
+      window.parent.postMessage(
+        {
+          type: 'LMS_FINISH',
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          payload: data,
+        },
+        __lmsHostOrigin(),
+      );
     },
     getStudent() {
       return window.__LMS_STUDENT__;
@@ -285,17 +318,20 @@
       return window.__LMS_THEME__ || null;
     },
     log(event, data) {
-      window.parent.postMessage({
-        type: "LMS_LOG",
-        uuid: window.__LMS_COURSEWARE__?.uuid,
-        attempt_id: window.__LMS_STUDENT__?.attempt_id,
-        event: event,
-        payload: data
-      }, __lmsHostOrigin());
+      window.parent.postMessage(
+        {
+          type: 'LMS_LOG',
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          event: event,
+          payload: data,
+        },
+        __lmsHostOrigin(),
+      );
     },
     on(event, callback) {
       (__lmsHandlers[event] = __lmsHandlers[event] || []).push(callback);
-      return function() {
+      return function () {
         var arr = __lmsHandlers[event] || [];
         var idx = arr.indexOf(callback);
         if (idx >= 0) arr.splice(idx, 1);
@@ -307,55 +343,72 @@
       if (idx >= 0) arr.splice(idx, 1);
     },
     setConfig(config) {
-      window.parent.postMessage({
-        type: "LMS_CONFIG",
-        uuid: window.__LMS_COURSEWARE__?.uuid,
-        attempt_id: window.__LMS_STUDENT__?.attempt_id,
-        config: config
-      }, __lmsHostOrigin());
+      window.parent.postMessage(
+        {
+          type: 'LMS_CONFIG',
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          config: config,
+        },
+        __lmsHostOrigin(),
+      );
     },
     getProgress() {
-      return new Promise(function(resolve) {
+      return new Promise(function (resolve) {
         var requestId = 'prog_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-        var timer = setTimeout(function() {
+        var timer = setTimeout(function () {
           delete __lmsPendingRequests[requestId];
           resolve(null);
         }, 5000);
         __lmsPendingRequests[requestId] = { resolve: resolve, timer: timer };
-        window.parent.postMessage({
-          type: "LMS_GET_PROGRESS",
-          uuid: window.__LMS_COURSEWARE__?.uuid,
-          attempt_id: window.__LMS_STUDENT__?.attempt_id,
-          requestId: requestId
-        }, __lmsHostOrigin());
+        window.parent.postMessage(
+          {
+            type: 'LMS_GET_PROGRESS',
+            uuid: window.__LMS_COURSEWARE__?.uuid,
+            attempt_id: window.__LMS_STUDENT__?.attempt_id,
+            requestId: requestId,
+          },
+          __lmsHostOrigin(),
+        );
       });
-    }
+    },
   };
 
   try {
     if (window.fetch) {
       const originalFetch = window.fetch;
-      window.fetch = function(input, init) {
+      window.fetch = function (input, init) {
         try {
-          const url = (typeof input === 'string') ? input : (input?.url || '');
+          const url = typeof input === 'string' ? input : input?.url || '';
           const method = init?.method || input?.method || 'GET';
           const headers = init?.headers || input?.headers || {};
           let body = init?.body || input?.body || null;
 
           if (body && typeof body === 'object') {
-            try { body = JSON.stringify(body); } catch(e){}
+            try {
+              body = JSON.stringify(body);
+            } catch (e) {}
           }
 
           if (url && !url.includes('/api/courseware/attempts/')) {
-            if (__hookAllowed()) window.parent.postMessage({
-              type: "HOOK_FETCH",
-              uuid: window.__LMS_COURSEWARE__?.uuid,
-              attempt_id: window.__LMS_STUDENT__?.attempt_id,
-              payload: { url, method, headers: JSON.parse(JSON.stringify(headers)), body: body ? body.toString() : null }
-            }, __lmsHostOrigin());
+            if (__hookAllowed())
+              window.parent.postMessage(
+                {
+                  type: 'HOOK_FETCH',
+                  uuid: window.__LMS_COURSEWARE__?.uuid,
+                  attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                  payload: {
+                    url,
+                    method,
+                    headers: JSON.parse(JSON.stringify(headers)),
+                    body: body ? body.toString() : null,
+                  },
+                },
+                __lmsHostOrigin(),
+              );
           }
         } catch (e) {
-          console.error("Bridge Hook fetch error", e);
+          console.error('Bridge Hook fetch error', e);
         }
         return originalFetch.apply(this, arguments);
       };
@@ -364,27 +417,33 @@
     if (window.XMLHttpRequest) {
       const originalOpen = XMLHttpRequest.prototype.open;
       const originalSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(method, url) {
+      XMLHttpRequest.prototype.open = function (method, url) {
         this._method = method;
         this._url = url;
         return originalOpen.apply(this, arguments);
       };
-      XMLHttpRequest.prototype.send = function(body) {
+      XMLHttpRequest.prototype.send = function (body) {
         try {
           let bodyStr = body;
           if (body && typeof body === 'object') {
-            try { bodyStr = JSON.stringify(body); } catch(e){}
+            try {
+              bodyStr = JSON.stringify(body);
+            } catch (e) {}
           }
           if (this._url && !this._url.includes('/api/courseware/attempts/')) {
-            if (__hookAllowed()) window.parent.postMessage({
-              type: "HOOK_XHR",
-              uuid: window.__LMS_COURSEWARE__?.uuid,
-              attempt_id: window.__LMS_STUDENT__?.attempt_id,
-              payload: { url: this._url, method: this._method, body: bodyStr ? bodyStr.toString() : null }
-            }, __lmsHostOrigin());
+            if (__hookAllowed())
+              window.parent.postMessage(
+                {
+                  type: 'HOOK_XHR',
+                  uuid: window.__LMS_COURSEWARE__?.uuid,
+                  attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                  payload: { url: this._url, method: this._method, body: bodyStr ? bodyStr.toString() : null },
+                },
+                __lmsHostOrigin(),
+              );
           }
         } catch (e) {
-          console.error("Bridge Hook XHR error", e);
+          console.error('Bridge Hook XHR error', e);
         }
         return originalSend.apply(this, arguments);
       };
@@ -392,21 +451,30 @@
 
     function attachToAxios(axiosInstance) {
       if (axiosInstance && axiosInstance.interceptors && axiosInstance.interceptors.request) {
-        axiosInstance.interceptors.request.use(function(config) {
-          try {
-            if (config.url && !config.url.includes('/api/courseware/attempts/')) {
-              if (__hookAllowed()) window.parent.postMessage({
-                type: "HOOK_AXIOS",
-                uuid: window.__LMS_COURSEWARE__?.uuid,
-                attempt_id: window.__LMS_STUDENT__?.attempt_id,
-                payload: { url: config.url, method: config.method, data: config.data }
-              }, __lmsHostOrigin());
+        axiosInstance.interceptors.request.use(
+          function (config) {
+            try {
+              if (config.url && !config.url.includes('/api/courseware/attempts/')) {
+                if (__hookAllowed())
+                  window.parent.postMessage(
+                    {
+                      type: 'HOOK_AXIOS',
+                      uuid: window.__LMS_COURSEWARE__?.uuid,
+                      attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                      payload: { url: config.url, method: config.method, data: config.data },
+                    },
+                    __lmsHostOrigin(),
+                  );
+              }
+            } catch (e) {
+              console.error('Bridge Hook Axios error', e);
             }
-          } catch (e) {
-            console.error("Bridge Hook Axios error", e);
-          }
-          return config;
-        }, function(error) { return Promise.reject(error); });
+            return config;
+          },
+          function (error) {
+            return Promise.reject(error);
+          },
+        );
       }
     }
     if (window.axios) {
@@ -414,53 +482,67 @@
     }
     var _axios = window.axios;
     Object.defineProperty(window, 'axios', {
-      get: function() { return _axios; },
-      set: function(val) {
+      get: function () {
+        return _axios;
+      },
+      set: function (val) {
         _axios = val;
         attachToAxios(val);
       },
-      configurable: true
+      configurable: true,
     });
 
     if (navigator && navigator.sendBeacon) {
       const originalSendBeacon = navigator.sendBeacon;
-      navigator.sendBeacon = function(url, data) {
+      navigator.sendBeacon = function (url, data) {
         try {
           if (url && !url.includes('/api/courseware/attempts/')) {
-            if (__hookAllowed()) window.parent.postMessage({
-              type: "HOOK_BEACON",
-              uuid: window.__LMS_COURSEWARE__?.uuid,
-              attempt_id: window.__LMS_STUDENT__?.attempt_id,
-              payload: { url: url, data: data ? data.toString() : null }
-            }, __lmsHostOrigin());
+            if (__hookAllowed())
+              window.parent.postMessage(
+                {
+                  type: 'HOOK_BEACON',
+                  uuid: window.__LMS_COURSEWARE__?.uuid,
+                  attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                  payload: { url: url, data: data ? data.toString() : null },
+                },
+                __lmsHostOrigin(),
+              );
           }
         } catch (e) {
-          console.error("Bridge Hook Beacon error", e);
+          console.error('Bridge Hook Beacon error', e);
         }
         return originalSendBeacon.apply(this, arguments);
       };
     }
 
-    window.addEventListener('submit', function(e) {
-      try {
-        const form = e.target;
-        const formData = new FormData(form);
-        const data = {};
-        formData.forEach(function(value, key) {
-          data[key] = value;
-        });
-        if (form.action && !form.action.includes('/api/courseware/attempts/')) {
-          if (__hookAllowed()) window.parent.postMessage({
-            type: "HOOK_FORM",
-            uuid: window.__LMS_COURSEWARE__?.uuid,
-            attempt_id: window.__LMS_STUDENT__?.attempt_id,
-            payload: { action: form.action, method: form.method, data: data }
-          }, __lmsHostOrigin());
+    window.addEventListener(
+      'submit',
+      function (e) {
+        try {
+          const form = e.target;
+          const formData = new FormData(form);
+          const data = {};
+          formData.forEach(function (value, key) {
+            data[key] = value;
+          });
+          if (form.action && !form.action.includes('/api/courseware/attempts/')) {
+            if (__hookAllowed())
+              window.parent.postMessage(
+                {
+                  type: 'HOOK_FORM',
+                  uuid: window.__LMS_COURSEWARE__?.uuid,
+                  attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                  payload: { action: form.action, method: form.method, data: data },
+                },
+                __lmsHostOrigin(),
+              );
+          }
+        } catch (err) {
+          console.error('Bridge Hook Form error', err);
         }
-      } catch (err) {
-        console.error("Bridge Hook Form error", err);
-      }
-    }, true);
+      },
+      true,
+    );
 
     // --- SMART DOM SCRAPER FOR GENERIC COURSEWARES ---
     function logToServer(msg, detail) {
@@ -473,26 +555,50 @@
     function findScoreInDOM() {
       const logData = [];
       try {
-        const commonVars = ['score', 'points', 'grade', 'totalScore', 'currentScore', 'userScore', 'finalScore', 'correctCount'];
+        const commonVars = [
+          'score',
+          'points',
+          'grade',
+          'totalScore',
+          'currentScore',
+          'userScore',
+          'finalScore',
+          'correctCount',
+        ];
         for (const v of commonVars) {
           if (typeof window[v] === 'number') {
-            logData.push("Global var " + v + " is number: " + window[v]);
+            logData.push('Global var ' + v + ' is number: ' + window[v]);
             return { score: window[v], log: logData };
           }
           if (typeof window[v] === 'string') {
             const num = parseFloat(window[v]);
             if (!isNaN(num)) {
-              logData.push("Global var " + v + " is string with number: " + window[v]);
+              logData.push('Global var ' + v + ' is string with number: ' + window[v]);
               return { score: num, log: logData };
             }
           }
         }
 
         const selectors = [
-          '#score', '#scoreDisplay', '#score-num', '#scoreDisplaySpan', '#points', '#grade',
-          '.score', '.points', '.grade', '.score-num', '.score-value',
-          '[id*="score" i]', '[id*="point" i]', '[id*="grade" i]', '[id*="result" i]',
-          '[class*="score" i]', '[class*="point" i]', '[class*="grade" i]', '[class*="result" i]'
+          '#score',
+          '#scoreDisplay',
+          '#score-num',
+          '#scoreDisplaySpan',
+          '#points',
+          '#grade',
+          '.score',
+          '.points',
+          '.grade',
+          '.score-num',
+          '.score-value',
+          '[id*="score" i]',
+          '[id*="point" i]',
+          '[id*="grade" i]',
+          '[id*="result" i]',
+          '[class*="score" i]',
+          '[class*="point" i]',
+          '[class*="grade" i]',
+          '[class*="result" i]',
         ];
 
         for (const selector of selectors) {
@@ -508,7 +614,7 @@
                   const den = parseFloat(fractionMatch[3]);
                   if (den > 0) {
                     const pct = (num / den) * 100;
-                    logData.push("Parsed fraction: " + num + "/" + den + " -> " + pct);
+                    logData.push('Parsed fraction: ' + num + '/' + den + ' -> ' + pct);
                     return { score: pct, log: logData };
                   }
                 }
@@ -516,7 +622,7 @@
                 if (match) {
                   const num = parseFloat(match[0]);
                   if (!isNaN(num)) {
-                    logData.push("Parsed decimal: " + num);
+                    logData.push('Parsed decimal: ' + num);
                     return { score: num, log: logData };
                   }
                 }
@@ -533,7 +639,7 @@
             if (id.includes('score') || name.includes('score') || id.includes('point') || name.includes('point')) {
               const val = parseFloat(input.value);
               if (!isNaN(val)) {
-                logData.push("Input id=" + id + " name=" + name + " value: " + input.value);
+                logData.push('Input id=' + id + ' name=' + name + ' value: ' + input.value);
                 return { score: val, log: logData };
               }
             }
@@ -551,12 +657,17 @@
             if (el.children.length === 0) {
               const txt = (el.textContent || el.innerText || '').trim();
               if (txt) {
-                const hasKey = txt.includes('得分') || txt.includes('分数') || txt.includes('成绩') || txt.toLowerCase().includes('score') || txt.toLowerCase().includes('points');
+                const hasKey =
+                  txt.includes('得分') ||
+                  txt.includes('分数') ||
+                  txt.includes('成绩') ||
+                  txt.toLowerCase().includes('score') ||
+                  txt.toLowerCase().includes('points');
                 if (hasKey) {
                   const m = txt.match(/\\d+(\\.\\d+)?/);
                   if (m) {
                     const val = parseFloat(m[0]);
-                    logData.push("Fallback leaf <" + el.tagName + "> '" + txt + "' parsed: " + val);
+                    logData.push('Fallback leaf <' + el.tagName + "> '" + txt + "' parsed: " + val);
                     return { score: val, log: logData };
                   }
                 }
@@ -564,9 +675,8 @@
             }
           }
         } catch (e) {}
-
       } catch (err) {
-        logData.push("Scraper error: " + err.message);
+        logData.push('Scraper error: ' + err.message);
       }
       return { score: null, log: logData };
     }
@@ -580,7 +690,8 @@
     var __lmsResultPolling = false;
 
     // 强结束信号：只认结算/结果页文案，避免答题过程中误触发
-    var __LMS_DONE_RE = /(闯关|挑战|答题|测试|游戏|本轮|本关)(结束|完成|成功)|通关|结算|查看解析|正确率|最终得分|总得分|全部答完|答题完毕/;
+    var __LMS_DONE_RE =
+      /(闯关|挑战|答题|测试|游戏|本轮|本关)(结束|完成|成功)|通关|结算|查看解析|正确率|最终得分|总得分|全部答完|答题完毕/;
     // 用 [0-9] / [^0-9] 代替 \\d / \\s，规避模板字符串的转义陷阱
     var __LMS_RATIO_RE = /([0-9]+(?:[.][0-9]+)?)[^0-9]*[/／|之][^0-9]*([0-9]+)/;
     var __LMS_NUM_RE = /[0-9]+(?:[.][0-9]+)?/;
@@ -590,7 +701,9 @@
         if (!document.body) return '';
         if (typeof document.body.innerText === 'string') return document.body.innerText;
         return document.body.textContent || '';
-      } catch (e) { return ''; }
+      } catch (e) {
+        return '';
+      }
     }
 
     function __lmsIsShown(el) {
@@ -605,18 +718,30 @@
           node = node.parentElement;
         }
         return true;
-      } catch (e) { return false; }
+      } catch (e) {
+        return false;
+      }
     }
 
     // 仅从「可见」的分数元素取值，避免结算页尚未展开时读到隐藏的初始值 0
     function __lmsFindVisibleScore() {
       var selectors = [
-        '#finalScore', '#score', '#scoreDisplay', '.score', '.final-score',
-        '[id*="score" i]', '[id*="point" i]', '[id*="grade" i]'
+        '#finalScore',
+        '#score',
+        '#scoreDisplay',
+        '.score',
+        '.final-score',
+        '[id*="score" i]',
+        '[id*="point" i]',
+        '[id*="grade" i]',
       ];
       for (var i = 0; i < selectors.length; i++) {
         var nodes = [];
-        try { nodes = document.querySelectorAll(selectors[i]); } catch (e) { nodes = []; }
+        try {
+          nodes = document.querySelectorAll(selectors[i]);
+        } catch (e) {
+          nodes = [];
+        }
         for (var j = 0; j < nodes.length; j++) {
           if (!__lmsIsShown(nodes[j])) continue;
           var txt = (nodes[j].textContent || '').trim();
@@ -637,12 +762,20 @@
     function __lmsExtractResultScore() {
       // 1) 正确题数 X/Y → 百分制（口径最稳定）
       var ratioSelectors = [
-        '#correctCount', '[id*="correct" i]', '[id*="accuracy" i]',
-        '[class*="correct" i]', '[class*="accuracy" i]', '[id*="ratio" i]'
+        '#correctCount',
+        '[id*="correct" i]',
+        '[id*="accuracy" i]',
+        '[class*="correct" i]',
+        '[class*="accuracy" i]',
+        '[id*="ratio" i]',
       ];
       for (var i = 0; i < ratioSelectors.length; i++) {
         var nodes = [];
-        try { nodes = document.querySelectorAll(ratioSelectors[i]); } catch (e) { nodes = []; }
+        try {
+          nodes = document.querySelectorAll(ratioSelectors[i]);
+        } catch (e) {
+          nodes = [];
+        }
         for (var j = 0; j < nodes.length; j++) {
           if (!__lmsIsShown(nodes[j])) continue;
           var m = (nodes[j].textContent || '').trim().match(__LMS_RATIO_RE);
@@ -688,10 +821,10 @@
     function initResultWatcher() {
       try {
         if (!document.body) return;
-        var observer = new MutationObserver(function() {
+        var observer = new MutationObserver(function () {
           if (__lmsResultSubmitted || __lmsResultScheduled) return;
           __lmsResultScheduled = true;
-          setTimeout(function() {
+          setTimeout(function () {
             __lmsResultScheduled = false;
             __lmsMaybeSubmitResult();
           }, 600);
@@ -707,9 +840,9 @@
     function attachListeners() {
       try {
         const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], .btn, .button');
-        buttons.forEach(function(btn) {
+        buttons.forEach(function (btn) {
           if (btn.dataset.lmsHooked) return;
-          btn.dataset.lmsHooked = "true";
+          btn.dataset.lmsHooked = 'true';
 
           const text = (btn.textContent || btn.value || '').trim();
 
@@ -721,7 +854,8 @@
               classNameStr = btn.className.baseVal;
             }
           }
-          const hasClassKeyword = classNameStr.toLowerCase().includes('submit') || classNameStr.toLowerCase().includes('finish');
+          const hasClassKeyword =
+            classNameStr.toLowerCase().includes('submit') || classNameStr.toLowerCase().includes('finish');
 
           const isSubmitBtn =
             text.includes('提交') ||
@@ -736,8 +870,10 @@
             hasClassKeyword;
 
           if (isSubmitBtn) {
-            logToServer("Hooked submit button: '" + text + "' | ID: '" + btn.id + "' | Classes: '" + classNameStr + "'");
-            btn.addEventListener('click', function() {
+            logToServer(
+              "Hooked submit button: '" + text + "' | ID: '" + btn.id + "' | Classes: '" + classNameStr + "'",
+            );
+            btn.addEventListener('click', function () {
               logToServer("Submit button clicked: '" + text + "'");
 
               let highestScore = null;
@@ -748,11 +884,16 @@
               function checkScore() {
                 if (checkCount >= delays.length) {
                   const finalScore = highestScore !== null ? highestScore : 0;
-                  logToServer("Polling completed. Submitting final score: " + finalScore + ". Logs: " + JSON.stringify(attemptLogs));
+                  logToServer(
+                    'Polling completed. Submitting final score: ' +
+                      finalScore +
+                      '. Logs: ' +
+                      JSON.stringify(attemptLogs),
+                  );
                   window.LMS.submit({
                     score: finalScore,
                     completion: 1.0,
-                    comment: "自动提取得分"
+                    comment: '自动提取得分',
                   });
                   return;
                 }
@@ -766,11 +907,16 @@
                   }
 
                   if (result.score > 0) {
-                    logToServer("Found positive score " + result.score + ". Submitting early. Logs: " + JSON.stringify(attemptLogs));
+                    logToServer(
+                      'Found positive score ' +
+                        result.score +
+                        '. Submitting early. Logs: ' +
+                        JSON.stringify(attemptLogs),
+                    );
                     window.LMS.submit({
                       score: result.score,
                       completion: 1.0,
-                      comment: "自动提取得分"
+                      comment: '自动提取得分',
                     });
                     return;
                   }
@@ -785,21 +931,21 @@
           }
         });
       } catch (e) {
-        logToServer("Error in attachListeners: " + e.message);
+        logToServer('Error in attachListeners: ' + e.message);
       }
     }
 
     function initAutoSubmit() {
       try {
-        logToServer("Initializing AutoSubmit SDK");
-        const observer = new MutationObserver(function() {
+        logToServer('Initializing AutoSubmit SDK');
+        const observer = new MutationObserver(function () {
           attachListeners();
         });
         observer.observe(document.body, { childList: true, subtree: true });
         attachListeners();
         initResultWatcher();
       } catch (e) {
-        logToServer("Error in initAutoSubmit: " + e.message);
+        logToServer('Error in initAutoSubmit: ' + e.message);
       }
     }
 
@@ -809,6 +955,6 @@
       document.addEventListener('DOMContentLoaded', initAutoSubmit);
     }
   } catch (err) {
-    console.error("Failed to initialize Bridge SDK intercept hooks:", err);
+    console.error('Failed to initialize Bridge SDK intercept hooks:', err);
   }
 })();

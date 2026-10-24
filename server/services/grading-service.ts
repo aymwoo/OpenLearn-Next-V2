@@ -173,7 +173,8 @@ export class GradingService {
   }
 
   public recordAttendance(scheduleId: string, studentId: string, status: string): void {
-    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as { academic_year?: string | null } | undefined;
+    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as
+      { academic_year?: string | null } | undefined;
     const academicYear = sch?.academic_year ?? null;
     this.db
       .prepare(
@@ -189,9 +190,8 @@ export class GradingService {
   // ── 2. 成绩权重标准化与持久化 ──────────────────────────────────────────────────
 
   public getGradeWeights(classId: string): GradeWeights {
-    const row = this.db
-      .prepare('SELECT * FROM class_grade_weights WHERE class_id = ?')
-      .get(classId) as GradeWeights | undefined;
+    const row = this.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(classId) as
+      GradeWeights | undefined;
 
     if (!row) {
       return {
@@ -225,9 +225,16 @@ export class GradingService {
     }
 
     // 统一归一化为 0-1 的浮点比例
-    const att = Number(weights.attendance_weight) > 1 ? Number(weights.attendance_weight) / 100 : Number(weights.attendance_weight);
-    const prog = Number(weights.progress_weight) > 1 ? Number(weights.progress_weight) / 100 : Number(weights.progress_weight);
-    const assign = Number(weights.assignment_weight) > 1 ? Number(weights.assignment_weight) / 100 : Number(weights.assignment_weight);
+    const att =
+      Number(weights.attendance_weight) > 1
+        ? Number(weights.attendance_weight) / 100
+        : Number(weights.attendance_weight);
+    const prog =
+      Number(weights.progress_weight) > 1 ? Number(weights.progress_weight) / 100 : Number(weights.progress_weight);
+    const assign =
+      Number(weights.assignment_weight) > 1
+        ? Number(weights.assignment_weight) / 100
+        : Number(weights.assignment_weight);
     const ex = Number(weights.exam_weight) > 1 ? Number(weights.exam_weight) / 100 : Number(weights.exam_weight);
 
     this.db
@@ -339,7 +346,10 @@ export class GradingService {
         ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; status: string }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      status: string;
+    }>;
 
     // 4. 批量拉取学习进度（成绩只采用已验证进度，学生自报仅作展示）
     const progressList = this.db
@@ -365,7 +375,10 @@ export class GradingService {
         ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number | null }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      score: number | null;
+    }>;
 
     // 6. 批量拉取考试得分
     const examScoresList = this.db
@@ -377,7 +390,11 @@ export class GradingService {
       ${academicYear ? 'AND e.academic_year = ? AND es.academic_year = ?' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number; max_score: number }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      score: number;
+      max_score: number;
+    }>;
 
     // 7. 拉取已归档学期成绩报告（已归档直接复用归档快照）
     const archivedReports = this.db
@@ -524,11 +541,7 @@ export class GradingService {
 
   // ── 5. 成绩归档保存事务 ────────────────────────────────────────────────────────
 
-  public archiveSemesterReports(
-    classId: string,
-    semesterName: string,
-    reports: SemesterReportArchiveItem[],
-  ): void {
+  public archiveSemesterReports(classId: string, semesterName: string, reports: SemesterReportArchiveItem[]): void {
     if (!semesterName) throw new Error('semesterName is required');
     if (!Array.isArray(reports)) throw new Error('reports array is required');
 
@@ -595,8 +608,7 @@ export class GradingService {
     const { classId, studentId, semesterName = '2026年春季学期', providerId } = params;
 
     const student = this.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as
-      | { name: string }
-      | undefined;
+      { name: string } | undefined;
     if (!student) {
       throw new Error('Student not found');
     }
@@ -649,9 +661,8 @@ export class GradingService {
         .join(', ') || '暂无出勤记录';
     const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
     const assignmentsText =
-      assignmentGrades
-        .map((a) => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`)
-        .join('\n') || '- 暂无平时作业记录';
+      assignmentGrades.map((a) => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`).join('\n') ||
+      '- 暂无平时作业记录';
     const examsText =
       examGrades.map((e) => `- 《${e.title}》得分: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
 

@@ -23,11 +23,7 @@ import { RotatingFileStream, resolveRotationConfig } from './rotating-file-strea
  */
 const defaultLevel =
   process.env.LOG_LEVEL ||
-  (process.env.HTTP_ACCESS_LOG === 'all'
-    ? 'debug'
-    : process.env.NODE_ENV === 'production'
-      ? 'info'
-      : 'debug');
+  (process.env.HTTP_ACCESS_LOG === 'all' ? 'debug' : process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const consoleLevel = process.env.LOG_CONSOLE_LEVEL || defaultLevel;
 const fileLevel = defaultLevel;
 
@@ -60,7 +56,9 @@ function consoleStream(): NodeJS.WritableStream {
   }
 }
 
-const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [{ level: consoleLevel, stream: consoleStream() }];
+const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [
+  { level: consoleLevel, stream: consoleStream() },
+];
 
 // 轮转替代原先的 fs.createWriteStream(logFile, { flags: 'a' })：
 // 此前是无限增长的单文件（实测已达 11.3 MB 且无上限、无切分）。

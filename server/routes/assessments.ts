@@ -339,7 +339,9 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     try {
       const format = String(req.body?.format ?? 'json').toLowerCase();
       if (format !== 'json' && format !== 'csv') {
-        return res.status(400).json({ error: 'format must be json or csv（xlsx 导出供人读/表格编辑，导入请用 json/csv）' });
+        return res
+          .status(400)
+          .json({ error: 'format must be json or csv（xlsx 导出供人读/表格编辑，导入请用 json/csv）' });
       }
       const rawPayload = req.body?.payload;
       const payload =

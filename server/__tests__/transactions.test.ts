@@ -62,9 +62,13 @@ function seedStudentChildRows(studentId: string) {
   db.prepare(
     'INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, assigned_at) VALUES (?, ?, 1, 100, ?)',
   ).run(studentId, 'lesson-tx-1', now);
-  db.prepare(
-    'INSERT INTO assignments (id, class_id, lesson_id, title, created_at) VALUES (?, ?, ?, ?, ?)',
-  ).run('ast-tx-1', 'cls-tx-1', 'lesson-tx-1', 'tx 作业', now);
+  db.prepare('INSERT INTO assignments (id, class_id, lesson_id, title, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    'ast-tx-1',
+    'cls-tx-1',
+    'lesson-tx-1',
+    'tx 作业',
+    now,
+  );
   db.prepare(
     'INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, status) VALUES (?, ?, ?, ?)',
   ).run('ast-tx-1', studentId, now, 'submitted');
@@ -95,9 +99,13 @@ function seedStudentChildRows(studentId: string) {
   db.prepare(
     'INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run('prev-tx-1', 'psub-tx-1', studentId, 5, now);
-  db.prepare(
-    'INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)',
-  ).run('cls-tx-1', studentId, 'lab-tx-1', 0, 0);
+  db.prepare('INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES (?, ?, ?, ?, ?)').run(
+    'cls-tx-1',
+    studentId,
+    'lab-tx-1',
+    0,
+    0,
+  );
   db.prepare('INSERT INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)').run(
     studentId,
     'notif-tx-1',
@@ -267,29 +275,33 @@ describe('PERF-N1: eval-grades 批量归并与逐条查询等价', () => {
     db.prepare('DELETE FROM plugin_grades WHERE submission_id IN (?, ?)').run('psub-p1', 'psub-p2');
     db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run('stu-p1', 'stu-p2', 'stu-p3');
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run('stu-p1', 'STU-P1', '学生一', '', now);
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run('stu-p2', 'STU-P2', '学生二', '', now);
-    db.prepare(
-      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run('stu-p3', 'STU-P3', '学生三', '', now);
-    db.prepare('INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(
-      'psub-p1',
-      lessonId,
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
       'stu-p1',
-      now,
+      'STU-P1',
+      '学生一',
+      '',
       now,
     );
-    db.prepare('INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(
-      'psub-p2',
-      lessonId,
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
       'stu-p2',
-      now,
+      'STU-P2',
+      '学生二',
+      '',
       now,
     );
+    db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      'stu-p3',
+      'STU-P3',
+      '学生三',
+      '',
+      now,
+    );
+    db.prepare(
+      'INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)',
+    ).run('psub-p1', lessonId, 'stu-p1', now, now);
+    db.prepare(
+      'INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)',
+    ).run('psub-p2', lessonId, 'stu-p2', now, now);
     // p1: 两条互评 (80+90 → 均分 85)，有评分 77
     db.prepare(
       'INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, created_at) VALUES (?, ?, ?, ?, ?)',

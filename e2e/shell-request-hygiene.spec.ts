@@ -176,10 +176,7 @@ test.describe('外壳请求卫生：加载教师/学生外壳不产生错误请�
       noise.badResponses,
       `学生外壳出现失败请求：\n${noise.badResponses.map((r) => `${r.status} ${r.url}`).join('\n')}`,
     ).toEqual([]);
-    expect(
-      noise.consoleErrors,
-      `学生外壳出现 console 错误：\n${noise.consoleErrors.join('\n')}`,
-    ).toEqual([]);
+    expect(noise.consoleErrors, `学生外壳出现 console 错误：\n${noise.consoleErrors.join('\n')}`).toEqual([]);
 
     // 学生必须能取到「自己这一条」（含锁定字段），否则教师端的锁在学生端失效。
     const roster = await context.request.get('/api/students?pageSize=all');

@@ -24,10 +24,7 @@ export function normalizeAcademicYear(value: unknown): string | null {
  * 根据日期（YYYY-MM-DD 或 Unix ms）推导所属学年。
  * startMonth 默认 9，表示 9 月起算新学年。
  */
-export function deriveAcademicYear(
-  date: string | number | Date,
-  startMonth = 9,
-): string | null {
+export function deriveAcademicYear(date: string | number | Date, startMonth = 9): string | null {
   let year: number;
   let month: number; // 0-based
   if (typeof date === 'string') {
@@ -55,7 +52,6 @@ export function getCurrentAcademicYear(startMonth = 9, now: Date = new Date()): 
   const academicStartYear = month >= startMonth ? year : year - 1;
   return `${academicStartYear}-${academicStartYear + 1}`;
 }
-
 
 /**
  * 从学期名称推导学年（如 "2026年春季学期" -> "2025-2026"；"2025年秋季学期" -> "2025-2026"）
@@ -111,4 +107,3 @@ export function getDefaultComparisonAcademicYears(startMonth = 9, now: Date = ne
     `${parseInt(current.split('-')[0], 10) - 1}-${parseInt(current.split('-')[0], 10)}`;
   return [prev, current];
 }
-

@@ -1092,10 +1092,7 @@ export abstract class PluginHostCore extends PluginHostBase {
    * @param studentId 学生 ID
    * @returns 各活跃插件的删除结果字典
    */
-  async deleteStudentDataFromPlugins(
-    studentId: string,
-  ): Promise<Record<string, { success: boolean; error?: string }>> {
+  async deleteStudentDataFromPlugins(studentId: string): Promise<Record<string, { success: boolean; error?: string }>> {
     return dispatchStudentDelete(this.pluginInstances, studentId);
   }
 }
-

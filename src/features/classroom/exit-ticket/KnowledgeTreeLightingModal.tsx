@@ -23,7 +23,10 @@ export const KnowledgeTreeLightingModal: React.FC<KnowledgeTreeLightingModalProp
   puzzledConcepts = [],
   lang = 'zh',
 }) => {
-  const concepts = puzzledConcepts.map((c) => c.trim()).filter(Boolean).slice(0, 3);
+  const concepts = puzzledConcepts
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .slice(0, 3);
   const [isLighting, setIsLighting] = useState(false);
   const [isFullyLit, setIsFullyLit] = useState(false);
 
@@ -188,7 +191,13 @@ export const KnowledgeTreeLightingModal: React.FC<KnowledgeTreeLightingModalProp
               >
                 <Sparkles size={18} />
                 <span>
-                  {isLighting ? (zh ? '正在连接知识图谱...' : 'Lighting...') : zh ? '🌟 点亮本堂课困惑点知识树' : 'Light Up Tree'}
+                  {isLighting
+                    ? zh
+                      ? '正在连接知识图谱...'
+                      : 'Lighting...'
+                    : zh
+                      ? '🌟 点亮本堂课困惑点知识树'
+                      : 'Light Up Tree'}
                 </span>
               </button>
             ) : (

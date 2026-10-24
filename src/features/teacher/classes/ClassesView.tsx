@@ -204,7 +204,14 @@ export function ClassesView() {
           <div className="flex items-center gap-2 flex-wrap">
             <AcademicYearFilter
               value={academicYearValue}
-              options={Array.from(new Set([currentAcademicYear, ...(currentAcademicYear ? [`${Number(currentAcademicYear.split('-')[0]) - 1}-${currentAcademicYear.split('-')[0]}`] : [])]))}
+              options={Array.from(
+                new Set([
+                  currentAcademicYear,
+                  ...(currentAcademicYear
+                    ? [`${Number(currentAcademicYear.split('-')[0]) - 1}-${currentAcademicYear.split('-')[0]}`]
+                    : []),
+                ]),
+              )}
               lang={props.lang as 'zh' | 'en'}
               onChange={(value) => academicYearCtx?.setAcademicYear?.(value === 'all' ? null : value)}
             />
