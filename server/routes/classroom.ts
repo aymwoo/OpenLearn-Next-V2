@@ -2433,6 +2433,8 @@ export function registerClassroomRoutes(
         }
 
         // 实到 = 至少产生过一条课堂痕迹的学生
+        // 「痕迹」包含扫码签到（Issue #245）——此前签到完全不在聚合里，
+        // 只扫码不互动的学生会被算成「没来」。
         // 注意：classroom_poll_votes 只有 poll_id，没有 session_id，必须 join 投票表过滤
         if (expectedStudents > 0) {
           try {
@@ -2450,10 +2452,40 @@ export function registerClassroomRoutes(
                 SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
                 UNION
                 SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
+                UNION
+                -- Issue #245：扫码签到此前完全不被「实到」消费 —— 只扫码不参与
+                -- 任何互动的学生被漏计（恰恰是最安静的那批）。
+                -- 1) lesson_checkins：签到成功时必定写入的课节级到课事实
+                --    （没有排课时也会写，见 /checkin 的 recordCheckin 调用）
+                SELECT lc.student_id
+                  FROM lesson_checkins lc
+                  JOIN class_students lc_cs ON lc_cs.class_id = ? AND lc_cs.student_id = lc.student_id
+                 WHERE lc.lesson_id = ?
+                UNION
+                -- 2) attendance：教师在考勤台账登记的到课事实（挂 schedule_id，
+                --    需经 schedules 关联课节）。关联口径与签到写侧一致：排课归属
+                --    本班 + 课节直配或班级级排课（lesson_id 为空串）；
+                --    只认「到场」状态 —— absent（缺考）与 excused（请假）不算实到。
+                SELECT sa.student_id
+                  FROM attendance sa
+                  JOIN schedules sch ON sch.id = sa.schedule_id
+                  JOIN class_students sa_cs ON sa_cs.class_id = sch.class_id AND sa_cs.student_id = sa.student_id
+                 WHERE sa.status IN ('present', 'late', 'leave_early')
+                   AND sch.class_id = ?
+                   AND (sch.lesson_id = ? OR sch.lesson_id = '')
               )
             `,
               )
-              .get(session.id, session.id, session.id, lessonId) as any;
+              .get(
+                session.id,
+                session.id,
+                session.id,
+                lessonId,
+                session.class_id,
+                lessonId,
+                session.class_id,
+                lessonId,
+              ) as any;
             attendedStudents = Number(touched?.n) || 0;
           } catch (e) {
             console.warn('[classroom.stage] attended query failed:', e);
