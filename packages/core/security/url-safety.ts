@@ -25,6 +25,7 @@ const SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
  * 控制字符（不含空格）：浏览器会忽略 URL 里的 `\n` / `\t` / `\r`，
  * 于是 `java\nscript:alert(1)` 在部分环境下会被拼成可执行的 `javascript:` 协议。
  */
+// eslint-disable-next-line no-control-regex -- 有意匹配控制字符：这里正是要检测 URL 里的 \n / \t / \r
 const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
 
 /**
