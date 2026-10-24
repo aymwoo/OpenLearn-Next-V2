@@ -75,7 +75,9 @@ export default function ForcedPasswordChangeGate({ lang, username, onDone, onLog
           <div className="p-2 rounded-lg bg-amber-100">
             <ShieldAlert size={20} className="text-amber-600" />
           </div>
-          <h1 className="text-lg font-bold text-slate-800">{zh ? '安全要求：修改默认密码' : 'Security: Change Default Password'}</h1>
+          <h1 className="text-lg font-bold text-slate-800">
+            {zh ? '安全要求：修改默认密码' : 'Security: Change Default Password'}
+          </h1>
         </div>
         <p className="text-xs text-slate-500 leading-relaxed mb-5">
           {zh
@@ -85,21 +87,48 @@ export default function ForcedPasswordChangeGate({ lang, username, onDone, onLog
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{zh ? '当前密码' : 'Current password'}</label>
-            <input type="password" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} className={inputCls} autoComplete="current-password" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {zh ? '当前密码' : 'Current password'}
+            </label>
+            <input
+              type="password"
+              value={oldPwd}
+              onChange={(e) => setOldPwd(e.target.value)}
+              className={inputCls}
+              autoComplete="current-password"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{zh ? '新密码（至少 8 位，含字母和数字）' : 'New password (8+ chars, letters & numbers)'}</label>
-            <input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} className={inputCls} autoComplete="new-password" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {zh ? '新密码（至少 8 位，含字母和数字）' : 'New password (8+ chars, letters & numbers)'}
+            </label>
+            <input
+              type="password"
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              className={inputCls}
+              autoComplete="new-password"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{zh ? '确认新密码' : 'Confirm new password'}</label>
-            <input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} className={inputCls} autoComplete="new-password" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {zh ? '确认新密码' : 'Confirm new password'}
+            </label>
+            <input
+              type="password"
+              value={confirmPwd}
+              onChange={(e) => setConfirmPwd(e.target.value)}
+              className={inputCls}
+              autoComplete="new-password"
+            />
           </div>
         </div>
 
         {error && (
-          <div data-testid="force-change-error" className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <div
+            data-testid="force-change-error"
+            className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+          >
             {error}
           </div>
         )}

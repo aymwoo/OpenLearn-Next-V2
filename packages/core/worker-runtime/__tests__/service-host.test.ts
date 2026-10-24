@@ -569,7 +569,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
     expect(actionRegistry.unregister).toHaveBeenCalledWith('action-foo');
   });
 
-  it("未获 agent:tool 的插件注册 action 时降级为 exposeToAgent=false，而不是让 activate 失败", async () => {
+  it('未获 agent:tool 的插件注册 action 时降级为 exposeToAgent=false，而不是让 activate 失败', async () => {
     // 旧插件（第三方普遍如此）不知道 exposeToAgent / agent:tool 的存在。
     // 直接拒绝会让 activate() 抛错 → 整个插件 state=error（Issue #147 实测）。
     // 期望：放行注册、强制不暴露给 Agent，插件功能不受影响。
@@ -896,7 +896,8 @@ describe('ServiceHost ActionRegistry tracking', () => {
       const registry = createMockServiceRegistry({
         '@openlearn/core:IPointsLedgerService': svc,
       });
-      const capGuard = { assertAllowed: vi.fn() };
+      // Issue #224：运行时能力以「已授予」为准 —— check() 决定某项能力是否被授予。
+      const capGuard = { assertAllowed: vi.fn(), check: vi.fn(() => true) };
       const host = new ServiceHost(
         registry as any,
         capGuard as any,
@@ -950,7 +951,8 @@ describe('ServiceHost ActionRegistry tracking', () => {
       const registry = createMockServiceRegistry({
         '@openlearn/core:IPointsLedgerService': { addPoints: vi.fn() },
       });
-      const capGuard = { assertAllowed: vi.fn() };
+      // Issue #224：运行时能力以「已授予」为准 —— check() 决定某项能力是否被授予。
+      const capGuard = { assertAllowed: vi.fn(), check: vi.fn(() => true) };
       // 仅授予 IDatabase，未授予积分服务
       const host = new ServiceHost(
         registry as any,

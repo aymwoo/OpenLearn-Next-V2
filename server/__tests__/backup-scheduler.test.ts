@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  msUntilNextDailyRun,
-  shouldFullCheckpoint,
-  startBackupScheduler,
-} from '../backup-scheduler.js';
+import { msUntilNextDailyRun, shouldFullCheckpoint, startBackupScheduler } from '../backup-scheduler.js';
 
 describe('backup-scheduler (R2)', () => {
   beforeEach(() => {

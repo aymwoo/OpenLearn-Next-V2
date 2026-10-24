@@ -495,7 +495,9 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                           />
                           <input
                             type="range"
-                            aria-label={zh ? `${sub.studentName || '学生'} 的得分` : `Score for ${sub.studentName || 'student'}`}
+                            aria-label={
+                              zh ? `${sub.studentName || '学生'} 的得分` : `Score for ${sub.studentName || 'student'}`
+                            }
                             min="0"
                             max="100"
                             disabled={isConfirmed}

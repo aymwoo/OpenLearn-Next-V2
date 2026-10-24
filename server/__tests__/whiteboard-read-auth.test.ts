@@ -84,20 +84,12 @@ describe('白板读取授权与答案脱敏（#127）', () => {
     db.prepare(
       'INSERT OR REPLACE INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(classB, '白板乙班', '', teacherB, now);
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
-      studentA,
-      'WBREAD-A',
-      '甲班学生',
-      '',
-      now,
-    );
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
-      studentB,
-      'WBREAD-B',
-      '乙班学生',
-      '',
-      now,
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(studentA, 'WBREAD-A', '甲班学生', '', now);
+    db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(studentB, 'WBREAD-B', '乙班学生', '', now);
     db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
       classA,
       studentA,

@@ -18,9 +18,12 @@ let server: Server;
 let baseUrl = '';
 
 const post = (path: string, headers: Record<string, string> = {}) =>
-  fetch(`${baseUrl}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}' });
-const get = (path: string, headers: Record<string, string> = {}) =>
-  fetch(`${baseUrl}${path}`, { headers });
+  fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: '{}',
+  });
+const get = (path: string, headers: Record<string, string> = {}) => fetch(`${baseUrl}${path}`, { headers });
 
 beforeAll(async () => {
   const app = express();

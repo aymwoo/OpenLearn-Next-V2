@@ -301,7 +301,11 @@ export class ScheduleService {
   /**
    * 今日/指定日期的课表查询 (支持每周循环匹配与窗口排名)
    */
-  public getTodaySchedules(clientDate: string, classIds: string[] | null = null, academicYear?: string | null): ScheduleRecord[] {
+  public getTodaySchedules(
+    clientDate: string,
+    classIds: string[] | null = null,
+    academicYear?: string | null,
+  ): ScheduleRecord[] {
     // P1 修复：校验 YYYY-MM-DD（此前任意字符串进 strftime，行为未定义）；
     // 循环投影仅取 scheduled 状态，cancelled 不再幽灵复现；返回加 isRecurringProjection 语义注释
     if (!/^\d{4}-\d{2}-\d{2}$/.test(clientDate || '')) return [];
@@ -327,7 +331,9 @@ export class ScheduleService {
       WHERE r.rn = 1
       ORDER BY r.time_slot ASC, r.created_at ASC
     `;
-    return this.reader.prepare(query).all(clientDate, ...(classIds ?? []), ...(academicYear ? [academicYear] : []), clientDate) as ScheduleRecord[];
+    return this.reader
+      .prepare(query)
+      .all(clientDate, ...(classIds ?? []), ...(academicYear ? [academicYear] : []), clientDate) as ScheduleRecord[];
   }
 
   /**
@@ -530,8 +536,7 @@ export class ScheduleService {
     const { classId, lessonId, scheduledDate, timeSlot, status, notes, academicYear } = params;
     assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
 
-    const resolvedAcademicYear =
-      normalizeAcademicYear(academicYear) ?? deriveAcademicYear(scheduledDate);
+    const resolvedAcademicYear = normalizeAcademicYear(academicYear) ?? deriveAcademicYear(scheduledDate);
 
     // P0 竞态修复：detect+insert 同事务（better-sqlite3 同进程串行），事務内重查
     const tx = this.db.transaction(() => {
@@ -557,7 +562,17 @@ export class ScheduleService {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         )
-        .run(id, classId, lessonId || '', scheduledDate, timeSlot || null, status || 'scheduled', notes || null, now, resolvedAcademicYear);
+        .run(
+          id,
+          classId,
+          lessonId || '',
+          scheduledDate,
+          timeSlot || null,
+          status || 'scheduled',
+          notes || null,
+          now,
+          resolvedAcademicYear,
+        );
       return {
         id,
         class_id: classId,
@@ -587,9 +602,7 @@ export class ScheduleService {
     assertValidScheduleInput(this.db, { classId, lessonId, scheduledDate, timeSlot, status });
 
     const resolvedAcademicYear =
-      academicYear === undefined
-        ? deriveAcademicYear(scheduledDate)
-        : normalizeAcademicYear(academicYear);
+      academicYear === undefined ? deriveAcademicYear(scheduledDate) : normalizeAcademicYear(academicYear);
 
     const tx = this.db.transaction(() => {
       if (!options?.allowConflict) {
@@ -723,9 +736,18 @@ export class ScheduleService {
       for (const n of norm) {
         const id = randomId('sch-');
         createdIds.push(id);
-        const resolvedAcademicYear =
-          normalizeAcademicYear(n.academicYear) ?? deriveAcademicYear(n.scheduledDate);
-        insertStmt.run(id, classId, n.lessonId, n.scheduledDate, n.timeSlot, n.status, n.notes, now, resolvedAcademicYear);
+        const resolvedAcademicYear = normalizeAcademicYear(n.academicYear) ?? deriveAcademicYear(n.scheduledDate);
+        insertStmt.run(
+          id,
+          classId,
+          n.lessonId,
+          n.scheduledDate,
+          n.timeSlot,
+          n.status,
+          n.notes,
+          now,
+          resolvedAcademicYear,
+        );
       }
     });
 

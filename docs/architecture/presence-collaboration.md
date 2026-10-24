@@ -16,8 +16,16 @@ OpenLearn V2 在 `packages/core/presence-engine/` 与 `packages/core/collaborati
 
 ```typescript
 export type EntityType =
-  | 'teacher' | 'student' | 'assistant' | 'ai' | 'plugin'
-  | 'whiteboard' | 'teaching_object' | 'lesson' | 'stage' | 'group';
+  | 'teacher'
+  | 'student'
+  | 'assistant'
+  | 'ai'
+  | 'plugin'
+  | 'whiteboard'
+  | 'teaching_object'
+  | 'lesson'
+  | 'stage'
+  | 'group';
 ```
 
 > 注意大小写：`EntityType` 是小写，而同文件中的 `EntityRole`、`FocusState`、`ConnectionState` 等类型是 PascalCase 或小写混合，各不相同。实体在 `PresenceEntity.type` 字段上使用小写形式。
@@ -40,15 +48,15 @@ export type EntityType =
 
 共 **7** 个取值，**均为带空格的英文短语**（由 `CollaborationModeManager` 管理，构造时以 `'Teacher Presentation'` 为默认并立即套用其权限矩阵）：
 
-| 取值                    | 含义                       |
-| ----------------------- | -------------------------- |
-| `'Teacher Presentation'` | 教师讲授演示（默认模式）   |
-| `'Teacher + Student'`    | 师生共同操作               |
-| `'Student Independent'`  | 学生个人独立               |
-| `'Small Group'`          | 小组协同                   |
-| `'Whole Class'`          | 全班协同                   |
-| `'Teacher Review'`       | 教师评审                   |
-| `'AI Assisted'`          | AI 辅助模式                |
+| 取值                     | 含义                     |
+| ------------------------ | ------------------------ |
+| `'Teacher Presentation'` | 教师讲授演示（默认模式） |
+| `'Teacher + Student'`    | 师生共同操作             |
+| `'Student Independent'`  | 学生个人独立             |
+| `'Small Group'`          | 小组协同                 |
+| `'Whole Class'`          | 全班协同                 |
+| `'Teacher Review'`       | 教师评审                 |
+| `'AI Assisted'`          | AI 辅助模式              |
 
 > 代码中**不存在** `Broadcast` / `InteractiveGroup` / `Individual` 这三个标识符——`Broadcast` 是 `CollaborationPermission` 中的一个权限名，不是模式名。`CollaborationModeManager.setMode` 每次切换都会重新 `applyModePermissions(nextMode)` 并通知订阅者。
 

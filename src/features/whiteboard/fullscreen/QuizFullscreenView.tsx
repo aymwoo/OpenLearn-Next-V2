@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import type { FullscreenRendererProps } from './FullscreenRendererRegistry';
 import { listFromEnvelope } from '../../../utils/listEnvelope.js';
-import { gradeQuizSubmission, resolveCorrectIndex, resolveSubmittedIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
+import {
+  gradeQuizSubmission,
+  resolveCorrectIndex,
+  resolveSubmittedIndex,
+} from '../../../../packages/core/whiteboard/quiz-answer.js';
 
 interface QuizSubmission {
   answer?: number | string;

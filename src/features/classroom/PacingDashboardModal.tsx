@@ -89,7 +89,10 @@ export function PacingDashboardModal({
         text: zh ? '🐢 较多学生希望加快节奏' : '🐢 Many students want you to speed up',
         tone: 'text-indigo-600',
       };
-    return { text: zh ? '✓ 节奏反馈健康，可按当前节奏继续' : '✓ Pace is healthy — carry on', tone: 'text-emerald-700 dark:text-emerald-400' };
+    return {
+      text: zh ? '✓ 节奏反馈健康，可按当前节奏继续' : '✓ Pace is healthy — carry on',
+      tone: 'text-emerald-700 dark:text-emerald-400',
+    };
   }, [windowSignals, total, zh]);
 
   const pieData = counts

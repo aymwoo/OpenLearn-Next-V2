@@ -254,6 +254,35 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
     expect(whiteboardViewStore.getState().remoteFullscreenElementId).toBeNull();
   });
 
+  describe('白板刷新的课节过滤（#222）', () => {
+    it('其他课节的白板刷新不得拉取元素，也不得加入那个课节房间', () => {
+      const options = makeOptions({ selectedLesson: 'l1' });
+      renderHook(() => useClassroomSocket(options));
+      fakeSocket.emit.mockClear();
+
+      trigger('whiteboard-sync', { roomId: 'l2', type: 'refresh' });
+
+      // 跨课节拉取会把别的课节的白板写进同一个全局 elements 状态
+      expect(options.fetchElements).not.toHaveBeenCalled();
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith('join-room', 'l2');
+      // 当前课节的白板仍照常处理
+      trigger('whiteboard-sync', { roomId: 'l1', type: 'refresh' });
+      expect(options.fetchElements).toHaveBeenCalledWith('l1');
+    });
+
+    it('当前没有选中课节时仍按原逻辑跟随（学生后进课堂场景）', () => {
+      const options = makeOptions({ selectedLesson: null as never });
+      renderHook(() => useClassroomSocket(options));
+      fakeSocket.emit.mockClear();
+
+      trigger('whiteboard-sync', { roomId: 'l2', type: 'refresh' });
+
+      expect(options.fetchElements).toHaveBeenCalledWith('l2');
+      expect(options.setSelectedLesson).toHaveBeenCalledWith('l2');
+      expect(fakeSocket.emit).toHaveBeenCalledWith('join-room', 'l2');
+    });
+  });
+
   describe('student-picked 随机抽问广播提示', () => {
     it('着重提示被抽中的学生并弹出模态框', () => {
       const setPickedAlertData = vi.fn();

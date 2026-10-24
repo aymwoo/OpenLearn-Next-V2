@@ -81,8 +81,7 @@ export function classPasscodeMatches(stored: string | null | undefined, provided
 
 export function encryptStoredClassPasscodes(db: Database.Database): { updated: number; skipped: number } {
   const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'classes'").get() as
-    | { name: string }
-    | undefined;
+    { name: string } | undefined;
   if (!table) return { updated: 0, skipped: 0 };
 
   const rows = db
@@ -234,7 +233,9 @@ export function backfillAcademicYearData(db: Database.Database): { updated: numb
 
       // 若仍有未分类的，按 submitted_at 推导
       const unassignedSubs = db
-        .prepare('SELECT assignment_id, student_id, submitted_at FROM assignment_submissions WHERE academic_year IS NULL')
+        .prepare(
+          'SELECT assignment_id, student_id, submitted_at FROM assignment_submissions WHERE academic_year IS NULL',
+        )
         .all() as Array<{ assignment_id: string; student_id: string; submitted_at?: string | null }>;
       const updateSub = db.prepare(
         'UPDATE assignment_submissions SET academic_year = ? WHERE assignment_id = ? AND student_id = ?',
@@ -263,9 +264,7 @@ export function backfillAcademicYearData(db: Database.Database): { updated: numb
       const unassignedAtt = db
         .prepare('SELECT schedule_id, student_id, recorded_at FROM attendance WHERE academic_year IS NULL')
         .all() as Array<{ schedule_id: string; student_id: string; recorded_at?: string | null }>;
-      const updateAtt = db.prepare(
-        'UPDATE attendance SET academic_year = ? WHERE schedule_id = ? AND student_id = ?',
-      );
+      const updateAtt = db.prepare('UPDATE attendance SET academic_year = ? WHERE schedule_id = ? AND student_id = ?');
       for (const item of unassignedAtt) {
         const y = deriveYear(item.recorded_at);
         if (y) {
@@ -317,7 +316,9 @@ export function backfillAcademicYearData(db: Database.Database): { updated: numb
               : null;
         if (dateCol) {
           const unassignedProgress = db
-            .prepare(`SELECT lesson_id, student_id, ${dateCol} as date_val FROM student_lesson_progress WHERE academic_year IS NULL`)
+            .prepare(
+              `SELECT lesson_id, student_id, ${dateCol} as date_val FROM student_lesson_progress WHERE academic_year IS NULL`,
+            )
             .all() as Array<{ lesson_id: string; student_id: string; date_val?: string | null }>;
           const updateProgress = db.prepare(
             'UPDATE student_lesson_progress SET academic_year = ? WHERE lesson_id = ? AND student_id = ?',
@@ -337,8 +338,6 @@ export function backfillAcademicYearData(db: Database.Database): { updated: numb
   run();
   return { updated: totalUpdated };
 }
-
-
 
 /** 审计事件入库前去掉口令字段和 olenc1 密文，不改调用方拿到的原对象。 */
 export function redactPasscodeMaterial(value: unknown, depth = 0): unknown {

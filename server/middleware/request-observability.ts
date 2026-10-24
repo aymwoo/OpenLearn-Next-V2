@@ -12,22 +12,9 @@ import { recordHttpResponse } from '../../packages/core/observability/metrics.js
 import { captureError } from '../../packages/core/observability/error-reporter.js';
 
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,64}$/;
-const QUIET_PATHS = new Set([
-  '/health',
-  '/health/ready',
-  '/',
-  '/index.html',
-  '/favicon.ico',
-  '/robots.txt',
-]);
+const QUIET_PATHS = new Set(['/health', '/health/ready', '/', '/index.html', '/favicon.ico', '/robots.txt']);
 
-const DEV_QUIET_PREFIXES = [
-  '/@vite/',
-  '/@fs/',
-  '/src/',
-  '/node_modules/',
-  '/@id/',
-];
+const DEV_QUIET_PREFIXES = ['/@vite/', '/@fs/', '/src/', '/node_modules/', '/@id/'];
 
 export type HttpAccessLogMode = 'off' | 'errors' | 'all';
 export const DEFAULT_HTTP_SLOW_MS = 1000;
@@ -153,8 +140,7 @@ export function requestObservability() {
       if (!quiet) {
         const logLevel = resolveHttpAccessLogLevel(status, durationMs);
         if (logLevel) {
-          const effectiveLevel =
-            logLevel === 'debug' && !logger.isLevelEnabled('debug') ? 'info' : logLevel;
+          const effectiveLevel = logLevel === 'debug' && !logger.isLevelEnabled('debug') ? 'info' : logLevel;
           logger[effectiveLevel](
             {
               requestId,

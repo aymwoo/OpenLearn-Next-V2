@@ -49,7 +49,8 @@ const pythonType: QuestionTypeDefinition<PythonConfig, string> = {
   autoGradable: false,
   createDefaultConfig: () => ({ testCases: [{ input: '1', expected: '1' }], rubric: '按用例通过数给分' }),
   // validateConfig 的形参是 `unknown`（外部数据入口），这里显式收窄后再看字段
-  validateConfig: (config) => (Array.isArray((config as PythonConfig | null)?.testCases) ? null : 'config.testCases 必须是数组'),
+  validateConfig: (config) =>
+    Array.isArray((config as PythonConfig | null)?.testCases) ? null : 'config.testCases 必须是数组',
   validateAnswer: () => null,
   validateAnswerKey: () => null,
   grade: () => ({ score: null, needsManualReview: true }),

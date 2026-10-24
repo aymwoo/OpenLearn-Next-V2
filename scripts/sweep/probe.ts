@@ -105,9 +105,7 @@ export async function login(baseUrl: string, credentials: SweepLogin): Promise<s
   });
 
   const setCookie =
-    typeof res.headers.getSetCookie === 'function'
-      ? res.headers.getSetCookie()
-      : [res.headers.get('set-cookie') ?? ''];
+    typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [res.headers.get('set-cookie') ?? ''];
   const raw = setCookie.join('; ');
   const match = /edu_os_token=([^;]+)/.exec(raw);
 
@@ -150,11 +148,7 @@ interface Collector {
 export function attachCollector(page: Page): Collector {
   const issues: SweepIssue[] = [];
 
-  const onConsole = (msg: {
-    type: () => string;
-    text: () => string;
-    location: () => { url?: string };
-  }) => {
+  const onConsole = (msg: { type: () => string; text: () => string; location: () => { url?: string } }) => {
     if (msg.type() !== 'error') return;
     const text = msg.text();
     const location = msg.location()?.url ?? '';
@@ -330,19 +324,16 @@ async function discoverNavLabels(page: Page): Promise<string[]> {
     return [];
   }
 
-  const labels = await sidebar.locator('button[aria-label]').evaluateAll((nodes) =>
-    nodes.map((node) => (node as HTMLElement).getAttribute('aria-label') ?? ''),
-  );
+  const labels = await sidebar
+    .locator('button[aria-label]')
+    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).getAttribute('aria-label') ?? ''));
 
   return Array.from(
     new Set(
       labels
         .map((label) => label.trim())
         .filter(
-          (label) =>
-            label.length > 0 &&
-            !SKIP_ACTION_PATTERN.test(label) &&
-            !DANGEROUS_ACTION_PATTERN.test(label),
+          (label) => label.length > 0 && !SKIP_ACTION_PATTERN.test(label) && !DANGEROUS_ACTION_PATTERN.test(label),
         ),
     ),
   );
@@ -418,10 +409,7 @@ export async function runSweep(options: SweepRunOptions): Promise<SweepViewResul
         if (teacherRole) {
           const fixtures = await ensureFixtures(baseUrl, teacherRole.login, prepareKinds);
           for (const fixture of fixtures) {
-            log(
-              `  ⓘ 前置数据 ${fixture.kind}：${fixture.detail}` +
-                (fixture.error ? `（${fixture.error}）` : ''),
-            );
+            log(`  ⓘ 前置数据 ${fixture.kind}：${fixture.detail}` + (fixture.error ? `（${fixture.error}）` : ''));
           }
         }
       }
@@ -490,16 +478,10 @@ async function sweepWorkspace(
   await preparePage(page);
 
   // ── 冷启动：单独记一条，把「系统启动就有问题」与「某视图有问题」分开 ──
-  const boot = await probe(
-    page,
-    role,
-    { id: '__boot__', label: '系统启动', path: '/' },
-    ctx,
-    async () => {
-      await page.goto(`${ctx.baseUrl}/?sweep=${ctx.nextNonce()}`, { waitUntil: 'domcontentloaded' });
-      await settle(page);
-    },
-  );
+  const boot = await probe(page, role, { id: '__boot__', label: '系统启动', path: '/' }, ctx, async () => {
+    await page.goto(`${ctx.baseUrl}/?sweep=${ctx.nextNonce()}`, { waitUntil: 'domcontentloaded' });
+    await settle(page);
+  });
   results.push(boot.result);
   ctx.log(`  · 系统启动（冷加载）（${describeIssues(boot.result.issues)}）`);
 
@@ -546,25 +528,32 @@ async function sweepWorkspace(
     const tabId = extractTabId(navProbe.result.url);
     const subTabs = tabId ? (SUB_TABS_BY_TAB[tabId] ?? []) : [];
     for (const subTab of subTabs) {
-      const subProbe = await probe(page, role, target, ctx, async () => {
-        // 回到父视图（当前就在父视图，但保险起见重新点一次）
-        await clickByName(page, `^${escapeRegExp(label)}$`, '#navigation_sidebar');
-        await settle(page);
-        await dismissBlockingModals(page);
-
-        // 页签可能需要前置操作（例如先展开某个班级，页签才出现）。
-        // 先直接找页签，找不到再做前置点击 —— 前置点击往往是**开关**，
-        // 重复点会把已经展开的内容又收起来。
-        let clicked = await clickByName(page, subTab.name);
-        if (!clicked && subTab.preClick) {
-          const prepared = await performClick(page, subTab.preClick);
-          if (!prepared) throw new Error(`未找到前置入口（${describeClick(subTab.preClick)}）`);
+      const subProbe = await probe(
+        page,
+        role,
+        target,
+        ctx,
+        async () => {
+          // 回到父视图（当前就在父视图，但保险起见重新点一次）
+          await clickByName(page, `^${escapeRegExp(label)}$`, '#navigation_sidebar');
           await settle(page);
-          clicked = await clickByName(page, subTab.name);
-        }
-        if (!clicked) throw new Error(`未找到页签按钮「${subTab.label}」`);
-        await settle(page);
-      }, subTab);
+          await dismissBlockingModals(page);
+
+          // 页签可能需要前置操作（例如先展开某个班级，页签才出现）。
+          // 先直接找页签，找不到再做前置点击 —— 前置点击往往是**开关**，
+          // 重复点会把已经展开的内容又收起来。
+          let clicked = await clickByName(page, subTab.name);
+          if (!clicked && subTab.preClick) {
+            const prepared = await performClick(page, subTab.preClick);
+            if (!prepared) throw new Error(`未找到前置入口（${describeClick(subTab.preClick)}）`);
+            await settle(page);
+            clicked = await clickByName(page, subTab.name);
+          }
+          if (!clicked) throw new Error(`未找到页签按钮「${subTab.label}」`);
+          await settle(page);
+        },
+        subTab,
+      );
       results.push(subProbe.result);
       ctx.log(`    · ${label} / ${subTab.label}（${describeIssues(subProbe.result.issues)}）`);
     }
@@ -626,9 +615,7 @@ async function sweepStudent(
       if (target.click) {
         const clicked = await performClick(page, target.click);
         if (!clicked) {
-          throw new Error(
-            `未找到可点击入口（${describeClick(target.click)}）`,
-          );
+          throw new Error(`未找到可点击入口（${describeClick(target.click)}）`);
         }
         await settle(page);
         await dismissBlockingModals(page);
@@ -676,7 +663,10 @@ export async function dismissBlockingModals(page: Page): Promise<void> {
 
   const skipByTestId = icebreaker.locator('[data-testid="icebreaker-skip-btn"]');
   if ((await skipByTestId.count()) > 0) {
-    await skipByTestId.first().click({ timeout: 3_000 }).catch(() => {});
+    await skipByTestId
+      .first()
+      .click({ timeout: 3_000 })
+      .catch(() => {});
   } else {
     const alt = icebreaker.getByRole('button', { name: /稍后再说|跳过|Skip/ }).first();
     await alt.click({ timeout: 3_000 }).catch(() => {});

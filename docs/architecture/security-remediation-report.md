@@ -49,13 +49,13 @@
 
 #### MEDIUM（5 项，已修复 3 项）
 
-| 编号   | 位置                           | 问题描述                        | 状态                                      |
-| ------ | ------------------------------ | ------------------------------- | ----------------------------------------- |
-| MED-01 | `server.ts:160`                | CSP 全局禁用                    | 保留（AI Studio iframe 嵌入需求）         |
-| MED-02 | `server.ts:159`                | xFrameOptions 禁用（点击劫持）  | **已修复** → `sameorigin`                 |
-| MED-03 | `server.ts:181-192`            | 上传目录 auth 中间件未实际执行  | **已修复**                                |
-| MED-04 | `server/routes/roster.ts`       | 课堂口令明文存储和比较          | **已修复** → AES-256-GCM 落库（`olenc1:`），登录解密后常量时间比较；教师接口仍返回原文 |
-| MED-05 | `server/routes/lessons.ts:605` | 测验提交 read-modify-write 竞态 | 保留（已有 secondary atomic upsert 兜底） |
+| 编号   | 位置                           | 问题描述                        | 状态                                                                                   |
+| ------ | ------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------- |
+| MED-01 | `server.ts:160`                | CSP 全局禁用                    | 保留（AI Studio iframe 嵌入需求）                                                      |
+| MED-02 | `server.ts:159`                | xFrameOptions 禁用（点击劫持）  | **已修复** → `sameorigin`                                                              |
+| MED-03 | `server.ts:181-192`            | 上传目录 auth 中间件未实际执行  | **已修复**                                                                             |
+| MED-04 | `server/routes/roster.ts`      | 课堂口令明文存储和比较          | **已修复** → AES-256-GCM 落库（`olenc1:`），登录解密后常量时间比较；教师接口仍返回原文 |
+| MED-05 | `server/routes/lessons.ts:605` | 测验提交 read-modify-write 竞态 | 保留（已有 secondary atomic upsert 兜底）                                              |
 
 ### 2.2 架构与工程化问题
 
@@ -109,16 +109,16 @@
 > ⚠️ **上表中的三个 download 端点已于 2026-10-04 移除**（管理后台的「下载审计报告 /
 > 下载修补路线 / 下载课堂优化方案」按钮及其对应的三份 md 一并下线）。本表保留
 > 2026-09-25 审计时的原始记录，不再反映当前端点清单。
-| `GET /api/commands/registered`                  | 任意认证用户           | os.ts        |
-| `GET /api/activities`                           | 任意认证用户           | os.ts        |
-| `POST /api/activities/:id/start`                | 任意认证用户           | os.ts        |
-| `GET /api/activities/running`                   | 任意认证用户           | os.ts        |
-| `POST /api/activities/:id/finish`               | 任意认证用户           | os.ts        |
-| `POST /api/activities/:id/pause`                | 任意认证用户           | os.ts        |
-| `POST /api/activities/:id/resume`               | 任意认证用户           | os.ts        |
-| `POST /api/agent/chat`                          | 任意认证用户           | os.ts        |
-| `GET /api/agent/conversations`                  | 任意认证用户           | os.ts        |
-| `DELETE /api/agent/conversations`               | 任意认证用户           | os.ts        |
+> | `GET /api/commands/registered` | 任意认证用户 | os.ts |
+> | `GET /api/activities` | 任意认证用户 | os.ts |
+> | `POST /api/activities/:id/start` | 任意认证用户 | os.ts |
+> | `GET /api/activities/running` | 任意认证用户 | os.ts |
+> | `POST /api/activities/:id/finish` | 任意认证用户 | os.ts |
+> | `POST /api/activities/:id/pause` | 任意认证用户 | os.ts |
+> | `POST /api/activities/:id/resume` | 任意认证用户 | os.ts |
+> | `POST /api/agent/chat` | 任意认证用户 | os.ts |
+> | `GET /api/agent/conversations` | 任意认证用户 | os.ts |
+> | `DELETE /api/agent/conversations` | 任意认证用户 | os.ts |
 
 ### 3.2 P1 — 高优先级安全修复
 

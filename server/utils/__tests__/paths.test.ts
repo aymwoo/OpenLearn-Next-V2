@@ -1,13 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'path';
 import os from 'os';
-import {
-  getDataDir,
-  getUploadsDir,
-  getStorageDir,
-  getPluginsDir,
-  getBackupsDir,
-} from '../paths.js';
+import { getDataDir, getUploadsDir, getStorageDir, getPluginsDir, getBackupsDir } from '../paths.js';
 
 describe('Paths Utility (OPENLEARN_DATA_DIR SSOT)', () => {
   const originalDataDir = process.env.OPENLEARN_DATA_DIR;

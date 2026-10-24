@@ -1,14 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import {
-  PlayCircle,
-  Presentation,
-  Wrench,
-  HelpCircle,
-  CheckCircle2,
-  Layers,
-} from 'lucide-react';
+import { PlayCircle, Presentation, Wrench, HelpCircle, CheckCircle2, Layers } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
