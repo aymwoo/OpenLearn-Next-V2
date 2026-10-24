@@ -180,4 +180,3 @@ describe('CourseWizardModal 底部步骤指示器', () => {
     expect(screen.getByText(text)).toBeTruthy();
   });
 });
-

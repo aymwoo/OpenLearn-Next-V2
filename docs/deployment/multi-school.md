@@ -21,10 +21,10 @@
 
 两种落地方式，按运维能力选择：
 
-| 方式 | 适用 | 要点 |
-| --- | --- | --- |
+| 方式                        | 适用                     | 要点                                                                                   |
+| --------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
 | 多 Compose 项目（同一主机） | 学校数量少、主机资源充足 | 每校一个目录 + 独立 `.env` + 独立端口 + 独立卷名；用 `docker compose -p school-a` 隔离 |
-| 每校一台主机 / 一个 VM | 学校数量多、运维边界清晰 | 完全独立，升级与故障互不影响；统一用同一镜像 tag |
+| 每校一台主机 / 一个 VM      | 学校数量多、运维边界清晰 | 完全独立，升级与故障互不影响；统一用同一镜像 tag                                       |
 
 ## 2. 逐实例配置
 
@@ -92,13 +92,13 @@ server {
 
 一校一实例意味着**所有变更按实例粒度进行**，不做「一次升级全校生效」：
 
-| 操作 | 命令 / 位置 | 注意 |
-| --- | --- | --- |
-| 升级 | 每实例拉新镜像/新代码后重启 | 先在 1 个实例试点；观察 `/health/ready` 与 `openlearn_plugin_*` 指标 |
-| 升级前快照 | 启动日志里的 `pre_migration_*.db`（`BACKUP_DIR`） | 每实例一份，互不覆盖 |
-| 迁移失败恢复 | `npx openlearn-next restore --snapshot <pre_migration_*.db>` | 见 [运维手册 · 快照恢复](../beta/operations) |
-| 整站备份 | `scripts/site-backup.mjs`（容器内 `docker compose exec app node scripts/site-backup.mjs`） | 含数据库、`storage/`、`plugins/`、`uploads/` |
-| 恢复演练 | 迁移失败 → 快照恢复 → 启动的 CI 演练；本地 `pnpm exec tsx scripts/db/migration-restore-drill.ts` | 建议每学期在预发实例跑一次 |
+| 操作         | 命令 / 位置                                                                                      | 注意                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 升级         | 每实例拉新镜像/新代码后重启                                                                      | 先在 1 个实例试点；观察 `/health/ready` 与 `openlearn_plugin_*` 指标 |
+| 升级前快照   | 启动日志里的 `pre_migration_*.db`（`BACKUP_DIR`）                                                | 每实例一份，互不覆盖                                                 |
+| 迁移失败恢复 | `npx openlearn-next restore --snapshot <pre_migration_*.db>`                                     | 见 [运维手册 · 快照恢复](../beta/operations)                         |
+| 整站备份     | `scripts/site-backup.mjs`（容器内 `docker compose exec app node scripts/site-backup.mjs`）       | 含数据库、`storage/`、`plugins/`、`uploads/`                         |
+| 恢复演练     | 迁移失败 → 快照恢复 → 启动的 CI 演练；本地 `pnpm exec tsx scripts/db/migration-restore-drill.ts` | 建议每学期在预发实例跑一次                                           |
 
 > 不要把某校的 `ENCRYPTION_KEY`、备份或数据目录复制到另一校。备份文件跨实例恢复只适用于「同一校的灾备」。
 

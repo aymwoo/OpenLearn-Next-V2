@@ -108,9 +108,7 @@ describe('student.segment.gate_fallback extension slot', () => {
   it('does not render student.segment.gate_fallback when blockSegmentContent is false', () => {
     render(
       <Suspense fallback={null}>
-        <StudentLessonInteractionPanel
-          {...(makeProps({ blockSegmentContent: false }) as any)}
-        />
+        <StudentLessonInteractionPanel {...(makeProps({ blockSegmentContent: false }) as any)} />
       </Suspense>,
     );
 

@@ -60,7 +60,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const host = useOptionalPluginHost();
   const academicYearCtx = useOptionalAcademicYear();
   const academicYear = academicYearCtx?.academicYear === 'all' ? null : (academicYearCtx?.academicYear ?? null);
-  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import' | (string & {})>('view');
+  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import' | (string & {})>(
+    'view',
+  );
   const [viewMode, setViewMode] = useState<'list' | 'week' | 'cycle'>('week');
 
   // Weekly calendar states
@@ -399,7 +401,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   useEffect(() => {
     if (timetableOcrTask?.status === 'running') {
       setOcrLoading(true);
-      setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在后台分析提取课表...' : '🧠 AI analyzing timetable in background...');
+      setOcrProgressStatus(
+        lang === 'zh' ? '🧠 AI 正在后台分析提取课表...' : '🧠 AI analyzing timetable in background...',
+      );
       setActiveTab('ocr_import');
     } else if (timetableOcrTask?.status === 'completed') {
       setOcrLoading(false);
@@ -469,7 +473,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         // 注意：子资源端点 /api/classes/:id/schedules 暂维持裸数组（A7 未覆盖）
         const cls = classes.find((c) => c.id === selectedClassId);
         if (cls) {
-          const res = await fetch(`/api/classes/${cls.id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`);
+          const res = await fetch(
+            `/api/classes/${cls.id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`,
+          );
           if (res.ok) {
             all = (await res.json()) as ScheduleType[];
             all.forEach((sch) => {

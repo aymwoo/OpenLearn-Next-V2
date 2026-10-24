@@ -63,8 +63,9 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
         'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(classId, 'Actor 测试班', 'submit actor fixture', 'pass-actor-1', teacherId, now);
-    const enroll = kernelContainer.db
-      .prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
+    const enroll = kernelContainer.db.prepare(
+      'INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
+    );
     enroll.run(classId, studentId, now);
     enroll.run(classId, otherStudentId, now);
     kernelContainer.db

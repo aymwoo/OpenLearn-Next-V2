@@ -569,7 +569,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
     expect(actionRegistry.unregister).toHaveBeenCalledWith('action-foo');
   });
 
-  it("未获 agent:tool 的插件注册 action 时降级为 exposeToAgent=false，而不是让 activate 失败", async () => {
+  it('未获 agent:tool 的插件注册 action 时降级为 exposeToAgent=false，而不是让 activate 失败', async () => {
     // 旧插件（第三方普遍如此）不知道 exposeToAgent / agent:tool 的存在。
     // 直接拒绝会让 activate() 抛错 → 整个插件 state=error（Issue #147 实测）。
     // 期望：放行注册、强制不暴露给 Agent，插件功能不受影响。

@@ -41,10 +41,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
   });
 
   it('course.list.toolbar.action 槽位向插件注入 lang 与 onRefresh', async () => {
-    const NationalEduToolbarPlugin: React.FC<{ lang?: string; onRefresh?: () => void }> = ({
-      lang,
-      onRefresh,
-    }) => (
+    const NationalEduToolbarPlugin: React.FC<{ lang?: string; onRefresh?: () => void }> = ({ lang, onRefresh }) => (
       <button data-testid="national-edu-sync-btn" onClick={() => onRefresh?.()}>
         {lang === 'zh' ? '国家智慧教育平台同步' : 'Sync National Platform'}
       </button>
@@ -60,10 +57,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
     const refreshMock = vi.fn();
     render(
       <PluginHostProvider host={host}>
-        <ExtensionPointRenderer
-          slot="course.list.toolbar.action"
-          slotProps={{ lang: 'zh', onRefresh: refreshMock }}
-        />
+        <ExtensionPointRenderer slot="course.list.toolbar.action" slotProps={{ lang: 'zh', onRefresh: refreshMock }} />
       </PluginHostProvider>,
     );
 
@@ -157,12 +151,7 @@ describe('Course & Lesson Extension Slots Integration', () => {
 
     render(
       <PluginHostProvider host={host}>
-        <SegmentEditorCard
-          lang="zh"
-          segment={mockSegment}
-          onPatch={patchMock}
-          onDelete={vi.fn()}
-        />
+        <SegmentEditorCard lang="zh" segment={mockSegment} onPatch={patchMock} onDelete={vi.fn()} />
       </PluginHostProvider>,
     );
 

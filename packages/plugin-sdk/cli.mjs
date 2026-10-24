@@ -497,9 +497,7 @@ async function cmdSign(args) {
     if (zipFiles.length === 1) {
       targetZip = join(cwd, zipFiles[0]);
     } else if (zipFiles.length > 1) {
-      console.error(
-        `${c.red}Error:${c.reset} Multiple ZIP files found in directory. Specify one explicitly.`,
-      );
+      console.error(`${c.red}Error:${c.reset} Multiple ZIP files found in directory. Specify one explicitly.`);
       process.exit(1);
     } else {
       console.error(`${c.red}Error:${c.reset} No ZIP file specified or found in current directory.`);
@@ -596,4 +594,3 @@ switch (command) {
     console.error(`Available: init, build, sign`);
     process.exit(1);
 }
-

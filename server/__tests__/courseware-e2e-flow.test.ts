@@ -321,11 +321,13 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     expect(emittedEvents.some((e) => e.event === 'student-progress-updated')).toBe(true);
 
     // F.5 — isPromoted 计数现在 >= 1
-    const filterRowsAfter = ((await (
-      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`, {
-        headers: { Cookie: `edu_os_token=${teacherToken}` },
-      })
-    ).json()) as any).data as Array<{ isPromoted: number }>;
+    const filterRowsAfter = (
+      (await (
+        await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`, {
+          headers: { Cookie: `edu_os_token=${teacherToken}` },
+        })
+      ).json()) as any
+    ).data as Array<{ isPromoted: number }>;
     expect(filterRowsAfter[0].isPromoted).toBeGreaterThanOrEqual(1);
 
     // F.6 — 幂等：第二次 promote 不会重复建作业，submission 行只增不改

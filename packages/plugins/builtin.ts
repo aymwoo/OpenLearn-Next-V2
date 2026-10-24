@@ -441,9 +441,9 @@ export const BuiltinPlugin = {
 
           // 7. 互动课堂会话与子项
           try {
-            const sessionRows = db
-              .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?')
-              .all(lessonId) as { id: string }[];
+            const sessionRows = db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?').all(lessonId) as {
+              id: string;
+            }[];
             for (const s of sessionRows) {
               db.prepare(
                 'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id = ?)',

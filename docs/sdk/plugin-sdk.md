@@ -111,20 +111,20 @@ import {
 
 ```ts
 import type { PluginApiRequest } from '@openlearn/plugin-sdk';
-type Actor = PluginApiRequest['actor'];   // ✅ 正确写法
+type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 // import type { PluginApiActor } from '@openlearn/plugin-sdk';  // ❌ SDK 未导出该名字，会编译报错
 ```
 
-| 字段      | 类型                                                        | 说明                                        |
-| --------- | ----------------------------------------------------------- | ------------------------------------------- |
-| `method`  | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE' \| string`  | HTTP 动词（大写）                           |
-| `path`    | `string`                                                     | 插件命名空间下的相对路径（如 `/students/101`） |
-| `params`  | `Record<string, string>`                                     | 动态路由提取参数（如 `{ id: '101' }`）       |
-| `query`   | `Record<string, string \| string[]>`                        | 解析后的查询参数                            |
-| `headers` | `Record<string, string>`                                     | **经白名单清洗后**的安全请求头（只读）      |
-| `body`    | `TBody`（默认 `unknown`）                                    | 已解析的请求体；实际请求体上限由全局 `express.json({ limit: '10mb' })`（`server.ts`）决定 |
-| `ip`      | `string`                                                     | 客户端 IP                                   |
-| `actor`   | 内联匿名对象（只读）                                         | 宿主注入的发起者上下文，**不可伪造**         |
+| 字段      | 类型                                                        | 说明                                                                                      |
+| --------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `method`  | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE' \| string` | HTTP 动词（大写）                                                                         |
+| `path`    | `string`                                                    | 插件命名空间下的相对路径（如 `/students/101`）                                            |
+| `params`  | `Record<string, string>`                                    | 动态路由提取参数（如 `{ id: '101' }`）                                                    |
+| `query`   | `Record<string, string \| string[]>`                        | 解析后的查询参数                                                                          |
+| `headers` | `Record<string, string>`                                    | **经白名单清洗后**的安全请求头（只读）                                                    |
+| `body`    | `TBody`（默认 `unknown`）                                   | 已解析的请求体；实际请求体上限由全局 `express.json({ limit: '10mb' })`（`server.ts`）决定 |
+| `ip`      | `string`                                                    | 客户端 IP                                                                                 |
+| `actor`   | 内联匿名对象（只读）                                        | 宿主注入的发起者上下文，**不可伪造**                                                      |
 
 `actor` 的完整形状：
 

@@ -56,7 +56,7 @@ describe('AI 辅助批改建议（Issue #187）', () => {
       'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(OWNER, 'ai_grade_owner', 'x', 'teacher', 'AI 批改教师', now);
     db.prepare(
-      "INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(STUDENT, 'ai_grade_student', 'x', 'student', 'AI 批改学生', now);
     db.prepare(
       'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -66,10 +66,18 @@ describe('AI 辅助批改建议（Issue #187）', () => {
 
   afterAll(() => {
     setAuditSinkForTests(null);
-    db.prepare('DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)))').run(OWNER);
-    db.prepare('DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?))').run(OWNER);
-    db.prepare('DELETE FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)').run(OWNER);
-    db.prepare('DELETE FROM assessment_items WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)').run(OWNER);
+    db.prepare(
+      'DELETE FROM assessment_answers WHERE attempt_id IN (SELECT id FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)))',
+    ).run(OWNER);
+    db.prepare(
+      'DELETE FROM assessment_attempts WHERE assignment_id IN (SELECT id FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?))',
+    ).run(OWNER);
+    db.prepare(
+      'DELETE FROM assessment_assignments WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)',
+    ).run(OWNER);
+    db.prepare(
+      'DELETE FROM assessment_items WHERE assessment_id IN (SELECT id FROM assessments WHERE owner_id = ?)',
+    ).run(OWNER);
     db.prepare('DELETE FROM assessments WHERE owner_id = ?').run(OWNER);
     db.prepare('DELETE FROM classes WHERE id = ?').run(CLASS);
     db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(OWNER, STUDENT);
@@ -85,7 +93,9 @@ describe('AI 辅助批改建议（Issue #187）', () => {
     expect(suggestion.confidence).toBe(0.8);
 
     const row: any = db
-      .prepare('SELECT score, grader, manual_override, ai_suggestion_json FROM assessment_answers WHERE attempt_id = ? AND item_id = ?')
+      .prepare(
+        'SELECT score, grader, manual_override, ai_suggestion_json FROM assessment_answers WHERE attempt_id = ? AND item_id = ?',
+      )
       .get(attemptId, itemId);
     expect(row.score).toBeNull();
     expect(row.manual_override).toBe(0);

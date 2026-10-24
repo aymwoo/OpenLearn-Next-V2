@@ -245,7 +245,11 @@ Topic: "物理实验"
       const ai = makeAiService(reasoningOutput);
       const svc = new LessonService(db, kernelContainer.commandBus, ai);
 
-      const result = await svc.generateOutlineWithAi({ title: '物理实验：单摆周期探究', category: 'Physics', lang: 'zh' });
+      const result = await svc.generateOutlineWithAi({
+        title: '物理实验：单摆周期探究',
+        category: 'Physics',
+        lang: 'zh',
+      });
 
       expect(result).not.toContain('<think>');
       expect(result).not.toContain('The user wants me to create');

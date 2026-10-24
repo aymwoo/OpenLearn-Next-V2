@@ -112,7 +112,18 @@ describe('学生自查花名册端点的数据范围', () => {
       '教师私有备注：甲',
       now,
     );
-    insertStudent.run(studentB, 'SELF-B', '自查学生乙', 'b@example.com', null, null, null, null, '教师私有备注：乙', now);
+    insertStudent.run(
+      studentB,
+      'SELF-B',
+      '自查学生乙',
+      'b@example.com',
+      null,
+      null,
+      null,
+      null,
+      '教师私有备注：乙',
+      now,
+    );
 
     // 教师拥有班级 cls-selfscope-a，学生甲在其中；学生乙不属于任何班级。
     // 于是 owner 范围下：教师看得到甲，看不到乙。

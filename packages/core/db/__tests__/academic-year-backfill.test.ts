@@ -75,9 +75,12 @@ describe('backfillAcademicYearData 学年历史数据平滑回填', () => {
     db.prepare(
       'INSERT INTO assignment_submissions (assignment_id, student_id, submitted_at, academic_year) VALUES (?, ?, ?, ?)',
     ).run('ast_1', 'stu_1', '2025-10-02', null);
-    db.prepare(
-      'INSERT INTO attendance (schedule_id, student_id, recorded_at, academic_year) VALUES (?, ?, ?, ?)',
-    ).run('sch_1', 'stu_1', '2024-09-10', null);
+    db.prepare('INSERT INTO attendance (schedule_id, student_id, recorded_at, academic_year) VALUES (?, ?, ?, ?)').run(
+      'sch_1',
+      'stu_1',
+      '2024-09-10',
+      null,
+    );
 
     const result = backfillAcademicYearData(db);
     expect(result.updated).toBeGreaterThanOrEqual(4);
@@ -88,7 +91,9 @@ describe('backfillAcademicYearData 学年历史数据平滑回填', () => {
     const s2 = db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get('sch_2') as { academic_year: string };
     expect(s2.academic_year).toBe('2024-2025');
 
-    const a1 = db.prepare('SELECT academic_year FROM assignments WHERE id = ?').get('ast_1') as { academic_year: string };
+    const a1 = db.prepare('SELECT academic_year FROM assignments WHERE id = ?').get('ast_1') as {
+      academic_year: string;
+    };
     expect(a1.academic_year).toBe('2025-2026');
 
     const sub = db
@@ -113,7 +118,9 @@ describe('backfillAcademicYearData 学年历史数据平滑回填', () => {
     const first = backfillAcademicYearData(db);
     expect(first.updated).toBe(0);
 
-    const row = db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get('sch_custom') as { academic_year: string };
+    const row = db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get('sch_custom') as {
+      academic_year: string;
+    };
     expect(row.academic_year).toBe('2030-2031');
   });
 

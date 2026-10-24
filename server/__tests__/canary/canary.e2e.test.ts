@@ -197,7 +197,9 @@ function createExtraServices(): Record<string, unknown> {
       clear: vi.fn(),
     },
     authSessionBridge: { createSession: vi.fn().mockResolvedValue({ token: 'tok', maxAge: 3600 }) },
-    networkProxy: { fetch: vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', headers: {}, body: '', url: '' }) },
+    networkProxy: {
+      fetch: vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', headers: {}, body: '', url: '' }),
+    },
   };
 }
 

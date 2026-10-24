@@ -29,7 +29,12 @@ describe('Lesson routes & API 404 gate integration test', () => {
 
     db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
-    ).run(teacherToken, JSON.stringify({ userId: teacherId, role: 'teacher', username: 'teacher_route_test' }), now, expiresAt);
+    ).run(
+      teacherToken,
+      JSON.stringify({ userId: teacherId, role: 'teacher', username: 'teacher_route_test' }),
+      now,
+      expiresAt,
+    );
 
     // 2. 预置课节数据
     const timelineData = JSON.stringify([

@@ -29,12 +29,7 @@ export interface StageAccessEnforceContext {
 /**
  * 解析教学图元（测验、作业、白板对象）所属的环节 ID
  */
-export function resolveElementStageId(
-  db: any,
-  lessonId: string,
-  elementId: string,
-  dataObj?: any,
-): string | null {
+export function resolveElementStageId(db: any, lessonId: string, elementId: string, dataObj?: any): string | null {
   if (!db || !lessonId || !elementId) return null;
 
   // 1. 如果显式传入的 dataObj 中已标记 segmentId，直接返回
@@ -62,12 +57,10 @@ export function resolveElementStageId(
 
   // 3. 从 lessons 表查 timeline 中的 segment.elementIds / segment.elementId
   try {
-    const lessonRow = db
-      .prepare('SELECT timeline FROM lessons WHERE id = ?')
-      .get(lessonId) as { timeline: string | null } | undefined;
+    const lessonRow = db.prepare('SELECT timeline FROM lessons WHERE id = ?').get(lessonId) as
+      { timeline: string | null } | undefined;
     if (lessonRow?.timeline) {
-      const segments =
-        typeof lessonRow.timeline === 'string' ? JSON.parse(lessonRow.timeline) : lessonRow.timeline;
+      const segments = typeof lessonRow.timeline === 'string' ? JSON.parse(lessonRow.timeline) : lessonRow.timeline;
       if (Array.isArray(segments)) {
         for (const seg of segments) {
           if (!seg || typeof seg !== 'object') continue;
@@ -106,12 +99,10 @@ export function resolveAssignmentStageId(
 
   // 2. 查 timeline 中的 segment.assignmentIds 或 segment.elementIds 包含 assignmentId
   try {
-    const lessonRow = db
-      .prepare('SELECT timeline FROM lessons WHERE id = ?')
-      .get(lessonId) as { timeline: string | null } | undefined;
+    const lessonRow = db.prepare('SELECT timeline FROM lessons WHERE id = ?').get(lessonId) as
+      { timeline: string | null } | undefined;
     if (lessonRow?.timeline) {
-      const segments =
-        typeof lessonRow.timeline === 'string' ? JSON.parse(lessonRow.timeline) : lessonRow.timeline;
+      const segments = typeof lessonRow.timeline === 'string' ? JSON.parse(lessonRow.timeline) : lessonRow.timeline;
       if (Array.isArray(segments)) {
         for (const seg of segments) {
           if (!seg || typeof seg !== 'object') continue;
@@ -137,10 +128,7 @@ export function resolveAssignmentStageId(
 /**
  * 物理资源级门禁执行：未满足条件时抛出 403 异常拒绝写入
  */
-export async function enforceStageAccess(
-  pipeline: any,
-  ctx: StageAccessEnforceContext,
-): Promise<void> {
+export async function enforceStageAccess(pipeline: any, ctx: StageAccessEnforceContext): Promise<void> {
   if (!pipeline || typeof pipeline.checkAccess !== 'function') return;
 
   const result = await pipeline.checkAccess({
@@ -155,9 +143,7 @@ export async function enforceStageAccess(
   });
 
   if (!result.allowed) {
-    const err = new Error(
-      `Stage access denied: ${result.reason || '尚未满足进入该环节的前置条件'}`
-    ) as any;
+    const err = new Error(`Stage access denied: ${result.reason || '尚未满足进入该环节的前置条件'}`) as any;
     err.status = 403;
     err.code = 'STAGE_ACCESS_DENIED';
     err.reason = result.reason;

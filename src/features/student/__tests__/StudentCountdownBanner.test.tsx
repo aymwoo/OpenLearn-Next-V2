@@ -22,7 +22,10 @@ const handlers = new Map<string, Array<(data: unknown) => void>>();
 const fakeSocket = {
   on: (evt: string, h: (data: unknown) => void) => handlers.set(evt, [...(handlers.get(evt) ?? []), h]),
   off: (evt: string, h: (data: unknown) => void) =>
-    handlers.set(evt, (handlers.get(evt) ?? []).filter((x) => x !== h)),
+    handlers.set(
+      evt,
+      (handlers.get(evt) ?? []).filter((x) => x !== h),
+    ),
   emit: vi.fn(),
 };
 
@@ -106,4 +109,3 @@ describe('StudentCountdownBanner — 服务端权威事件 + 提示音复位', (
     expect(screen.getByText('课堂限时任务')).toBeDefined();
   });
 });
-

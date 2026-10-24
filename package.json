@@ -62,6 +62,7 @@
     "lint:encoding": "node scripts/check-source-encoding.mjs",
     "lint:i18n": "node scripts/check-i18n.mjs",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",

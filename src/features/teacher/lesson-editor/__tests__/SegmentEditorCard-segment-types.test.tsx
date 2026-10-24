@@ -3,10 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { FlaskConical } from 'lucide-react';
 import { SegmentEditorCard } from '../SegmentEditorCard';
-import {
-  registerCustomSegmentType,
-  unregisterCustomSegmentType,
-} from '../timelineConfig';
+import { registerCustomSegmentType, unregisterCustomSegmentType } from '../timelineConfig';
 import { FrontendPluginHost } from '../../../../plugin-host/plugin-host';
 import { PluginHostProvider } from '../../../../plugin-host/plugin-host-context';
 import { usePluginHostStore } from '../../../../plugin-host/plugin-host-store';

@@ -17,7 +17,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { getStudentAcademicYearComparison } from '../../services/dashboardService';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type {
-
   AcademicYearComparisonResult,
   AcademicYearMetrics,
   AcademicYearComparisonDelta,
@@ -30,21 +29,40 @@ export interface StudentAcademicYearComparisonProps {
 }
 
 const YEAR_COLORS = [
-  { bg: 'bg-indigo-50 dark:bg-indigo-950/40', border: 'border-indigo-200 dark:border-indigo-800', bar: '#6366f1', text: 'text-indigo-600 dark:text-indigo-400' },
-  { bg: 'bg-teal-50 dark:bg-teal-950/40', border: 'border-teal-200 dark:border-teal-800', bar: '#14b8a6', text: 'text-teal-600 dark:text-teal-400' },
-  { bg: 'bg-amber-50 dark:bg-amber-950/40', border: 'border-amber-200 dark:border-amber-800', bar: '#f59e0b', text: 'text-amber-600 dark:text-amber-400' },
-  { bg: 'bg-rose-50 dark:bg-rose-950/40', border: 'border-rose-200 dark:border-rose-800', bar: '#f43f5e', text: 'text-rose-600 dark:text-rose-400' },
+  {
+    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
+    border: 'border-indigo-200 dark:border-indigo-800',
+    bar: '#6366f1',
+    text: 'text-indigo-600 dark:text-indigo-400',
+  },
+  {
+    bg: 'bg-teal-50 dark:bg-teal-950/40',
+    border: 'border-teal-200 dark:border-teal-800',
+    bar: '#14b8a6',
+    text: 'text-teal-600 dark:text-teal-400',
+  },
+  {
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    border: 'border-amber-200 dark:border-amber-800',
+    bar: '#f59e0b',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  {
+    bg: 'bg-rose-50 dark:bg-rose-950/40',
+    border: 'border-rose-200 dark:border-rose-800',
+    bar: '#f43f5e',
+    text: 'text-rose-600 dark:text-rose-400',
+  },
 ];
 
-export function StudentAcademicYearComparison({
-  studentId,
-  lang = 'zh',
-}: StudentAcademicYearComparisonProps) {
+export function StudentAcademicYearComparison({ studentId, lang = 'zh' }: StudentAcademicYearComparisonProps) {
   const [data, setData] = useState<AcademicYearComparisonResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
-  const [activeMetricTab, setActiveMetricTab] = useState<'submissionRate' | 'averageScore' | 'enrolledCourses'>('submissionRate');
+  const [activeMetricTab, setActiveMetricTab] = useState<'submissionRate' | 'averageScore' | 'enrolledCourses'>(
+    'submissionRate',
+  );
 
   const fetchData = useCallback(
     async (years?: string[]) => {
@@ -90,8 +108,7 @@ export function StudentAcademicYearComparison({
     if (delta.direction === 'up') {
       return (
         <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded-full">
-          <TrendingUp size={12} />
-          +{delta.diff}
+          <TrendingUp size={12} />+{delta.diff}
           {suffix}
         </span>
       );
@@ -107,8 +124,7 @@ export function StudentAcademicYearComparison({
     }
     return (
       <span className="inline-flex items-center gap-0.5 text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
-        <Minus size={12} />
-        0{suffix}
+        <Minus size={12} />0{suffix}
       </span>
     );
   };
@@ -215,14 +231,11 @@ export function StudentAcademicYearComparison({
                 <span>{year}</span>
                 {!hasData && (
                   <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      isSelected ? 'bg-amber-300' : 'bg-amber-500'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected ? 'bg-amber-300' : 'bg-amber-500'}`}
                   />
                 )}
               </button>
             );
-
           })}
         </div>
       </div>
@@ -244,9 +257,7 @@ export function StudentAcademicYearComparison({
         {/* 作业提交率卡片 */}
         <div className="bg-surface p-4 border border-theme rounded-xl shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              {lang === 'zh' ? '作业提交率' : 'Submission Rate'}
-            </span>
+            <span className="text-xs font-medium text-muted">{lang === 'zh' ? '作业提交率' : 'Submission Rate'}</span>
             <Award className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="space-y-2">
@@ -274,9 +285,7 @@ export function StudentAcademicYearComparison({
         {/* 按时提交率卡片 */}
         <div className="bg-surface p-4 border border-theme rounded-xl shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              {lang === 'zh' ? '按时提交率' : 'On-time Rate'}
-            </span>
+            <span className="text-xs font-medium text-muted">{lang === 'zh' ? '按时提交率' : 'On-time Rate'}</span>
             <TrendingUp className="w-4 h-4 text-teal-500" />
           </div>
           <div className="space-y-2">
@@ -304,9 +313,7 @@ export function StudentAcademicYearComparison({
         {/* 作业平均分卡片 */}
         <div className="bg-surface p-4 border border-theme rounded-xl shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              {lang === 'zh' ? '作业平均分' : 'Average Score'}
-            </span>
+            <span className="text-xs font-medium text-muted">{lang === 'zh' ? '作业平均分' : 'Average Score'}</span>
             <BarChart2 className="w-4 h-4 text-amber-500" />
           </div>
           <div className="space-y-2">
@@ -452,9 +459,7 @@ export function StudentAcademicYearComparison({
                       style={{ backgroundColor: colorTheme.bar }}
                     />
                   </div>
-                  <span className="text-xs font-semibold text-muted text-center truncate w-full">
-                    {m.academicYear}
-                  </span>
+                  <span className="text-xs font-semibold text-muted text-center truncate w-full">{m.academicYear}</span>
                 </div>
               );
             })}
@@ -509,9 +514,7 @@ export function StudentAcademicYearComparison({
                           <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">
                             {c.averageScore}
                           </span>
-                          <span className="text-[10px] text-muted block">
-                            {lang === 'zh' ? '均分' : 'avg'}
-                          </span>
+                          <span className="text-[10px] text-muted block">{lang === 'zh' ? '均分' : 'avg'}</span>
                         </div>
                       </div>
                     ))}

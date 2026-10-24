@@ -125,7 +125,9 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
 
     // 清理可能遗留的历史旅程数据
     try {
-      db.prepare("DELETE FROM students WHERE id = ? OR student_number LIKE 'STU_JOURNEY_%' OR email LIKE '%_journey@test.com'").run(studentId);
+      db.prepare(
+        "DELETE FROM students WHERE id = ? OR student_number LIKE 'STU_JOURNEY_%' OR email LIKE '%_journey@test.com'",
+      ).run(studentId);
       db.prepare("DELETE FROM classes WHERE name LIKE '旅程测试%' OR name LIKE '高一(1)班%'").run();
       db.prepare("DELETE FROM assignments WHERE id LIKE 'asg_journey_%'").run();
       db.prepare("DELETE FROM assignment_submissions WHERE assignment_id LIKE 'asg_journey_%'").run();
@@ -192,7 +194,9 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
     try {
       db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(adminToken, teacherToken, studentToken);
       db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(adminId, teacherId);
-      db.prepare("DELETE FROM students WHERE id = ? OR student_number LIKE 'STU_JOURNEY_%' OR email LIKE '%_journey@test.com'").run(studentId);
+      db.prepare(
+        "DELETE FROM students WHERE id = ? OR student_number LIKE 'STU_JOURNEY_%' OR email LIKE '%_journey@test.com'",
+      ).run(studentId);
       db.prepare("DELETE FROM classes WHERE name LIKE '旅程测试%' OR name LIKE '高一(1)班%'").run();
       db.prepare("DELETE FROM assignments WHERE id LIKE 'asg_journey_%'").run();
       db.prepare("DELETE FROM assignment_submissions WHERE assignment_id LIKE 'asg_journey_%'").run();
@@ -452,9 +456,7 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
 
       // 验证全员覆盖，无遗漏无重复
       const allMembers = json.groups.flatMap((g: any) => g.memberIds);
-      expect(allMembers.sort()).toEqual(
-        [studentAliceId, studentZhang1Id, studentZhang2Id, studentXssId].sort(),
-      );
+      expect(allMembers.sort()).toEqual([studentAliceId, studentZhang1Id, studentZhang2Id, studentXssId].sort());
     });
 
     it('查询班级分组列表 GET /api/classes/:id/groups', async () => {
@@ -515,9 +517,10 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
         'INSERT OR REPLACE INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
       ).run('sched_fake', studentXssId, 'present', now);
 
-      db.prepare(
-        'INSERT OR REPLACE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)',
-      ).run(studentXssId, 'notif_01');
+      db.prepare('INSERT OR REPLACE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)').run(
+        studentXssId,
+        'notif_01',
+      );
       // 上一阶段已退课。重新入班，便于删除前仍能查到该生的班级关联数据。
       db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
         primaryClassId,
@@ -555,9 +558,7 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
 
       // 验证学生记录及所有外键关联表数据归零
       expect(db.prepare('SELECT 1 FROM students WHERE id = ?').get(studentXssId)).toBeUndefined();
-      expect(
-        db.prepare('SELECT 1 FROM assignment_submissions WHERE student_id = ?').get(studentXssId),
-      ).toBeUndefined();
+      expect(db.prepare('SELECT 1 FROM assignment_submissions WHERE student_id = ?').get(studentXssId)).toBeUndefined();
       expect(db.prepare('SELECT 1 FROM attendance WHERE student_id = ?').get(studentXssId)).toBeUndefined();
       expect(db.prepare('SELECT 1 FROM student_seats WHERE student_id = ?').get(studentXssId)).toBeUndefined();
       expect(
@@ -624,10 +625,7 @@ describe('业务黄金旅程场景测试：班级与学生全生命周期 (Roste
       // 5. assignments
       checkZero('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?', primaryClassId);
       // 6. assignment_submissions
-      checkZero(
-        'SELECT COUNT(*) as count FROM assignment_submissions WHERE assignment_id = ?',
-        asgId,
-      );
+      checkZero('SELECT COUNT(*) as count FROM assignment_submissions WHERE assignment_id = ?', asgId);
       // 7. schedules
       checkZero('SELECT COUNT(*) as count FROM schedules WHERE class_id = ?', primaryClassId);
       // 8. attendance

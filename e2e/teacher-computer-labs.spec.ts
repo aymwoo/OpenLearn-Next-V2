@@ -8,9 +8,7 @@ function purgeComputerLabE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLabs = db
-      .prepare("SELECT id FROM computer_labs WHERE room_number LIKE 'E2E %'")
-      .all() as { id: string }[];
+    const e2eLabs = db.prepare("SELECT id FROM computer_labs WHERE room_number LIKE 'E2E %'").all() as { id: string }[];
 
     if (e2eLabs.length > 0) {
       const labIds = e2eLabs.map((l) => l.id);
@@ -19,9 +17,7 @@ function purgeComputerLabE2EFromDb() {
       db.prepare(`DELETE FROM computer_labs WHERE id IN (${placeholders})`).run(...labIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 机房班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 机房班级%'").all() as { id: string }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -31,9 +27,9 @@ function purgeComputerLabE2EFromDb() {
       db.prepare(`DELETE FROM classes WHERE id IN (${placeholders})`).run(...classIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_LAB_%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_LAB_%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -136,7 +132,10 @@ test.describe('教务管理端：机房物理网格与座位分配治理 E2E 测
       await saveLabBtn.click();
 
       // 7. 验证机房列表中成功出现该机房卡片
-      const labItem = page.locator('div', { hasText: labName }).filter({ hasText: /3 行 × 4 列|12 个机位/ }).first();
+      const labItem = page
+        .locator('div', { hasText: labName })
+        .filter({ hasText: /3 行 × 4 列|12 个机位/ })
+        .first();
       await expect(labItem).toBeVisible({ timeout: 15_000 });
 
       // 获取创建后的 Lab ID
@@ -178,9 +177,9 @@ test.describe('教务管理端：机房物理网格与座位分配治理 E2E 测
       await saveSeatsBtn.click();
 
       // 验证保存成功的持久化提示
-      await expect(
-        page.getByText(/已成功持久化至系统|Seating assignments saved/i).first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(/已成功持久化至系统|Seating assignments saved/i).first()).toBeVisible({
+        timeout: 10_000,
+      });
 
       // 10.5 刷新页面验证拖拽交换结果已持久化到 student_seats
       await page.reload();

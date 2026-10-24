@@ -65,9 +65,11 @@ describe('Issue #131: 课前破冰心情打卡端到端与持久化集成测试'
     db.prepare(
       'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(student1Id, 'S001', '张小明', 's1@test.com', now);
-    db.prepare(
-      'INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
-    ).run(testClassId, student1Id, now);
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      testClassId,
+      student1Id,
+      now,
+    );
     db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     ).run(
@@ -84,9 +86,11 @@ describe('Issue #131: 课前破冰心情打卡端到端与持久化集成测试'
     db.prepare(
       'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
     ).run(student2Id, 'S002', '李小红', 's2@test.com', now);
-    db.prepare(
-      'INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
-    ).run(testClassId, student2Id, now);
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      testClassId,
+      student2Id,
+      now,
+    );
     db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     ).run(
@@ -131,7 +135,11 @@ describe('Issue #131: 课前破冰心情打卡端到端与持久化集成测试'
     db.prepare('DELETE FROM icebreaker_checkins WHERE class_id = ?').run(testClassId);
     db.prepare('DELETE FROM class_students WHERE class_id = ?').run(testClassId);
     db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run(student1Id, student2Id, otherStudentId);
-    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(student1Token, student2Token, otherStudentToken);
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(
+      student1Token,
+      student2Token,
+      otherStudentToken,
+    );
     db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?)').run(teacherId, student1Id, student2Id, otherStudentId);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(testLessonId);
     db.prepare('DELETE FROM classes WHERE id = ?').run(testClassId);

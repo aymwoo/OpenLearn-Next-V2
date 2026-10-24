@@ -19,7 +19,10 @@ const handlers = new Map<string, Array<(data: unknown) => void>>();
 const fakeSocket = {
   on: (evt: string, h: (data: unknown) => void) => handlers.set(evt, [...(handlers.get(evt) ?? []), h]),
   off: (evt: string, h: (data: unknown) => void) =>
-    handlers.set(evt, (handlers.get(evt) ?? []).filter((x) => x !== h)),
+    handlers.set(
+      evt,
+      (handlers.get(evt) ?? []).filter((x) => x !== h),
+    ),
   emit: vi.fn(),
 };
 
@@ -47,10 +50,7 @@ const diagnosticResponse = {
 describe('PreClassDiagnosticHub — 破冰统计实时更新', () => {
   beforeEach(() => {
     handlers.clear();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => diagnosticResponse }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => diagnosticResponse }));
   });
 
   afterEach(() => {

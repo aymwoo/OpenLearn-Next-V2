@@ -39,7 +39,7 @@ const originalFetch = globalThis.fetch;
 function installFetchStub(handler: (url: string) => { status?: number; body?: unknown } = () => ({})) {
   const calls: string[] = [];
   const stub = vi.fn(async (input: any) => {
-    const url = String(typeof input === 'string' ? input : input?.url ?? input);
+    const url = String(typeof input === 'string' ? input : (input?.url ?? input));
     calls.push(url);
     const { status = 200, body = {} } = handler(url);
     return {
@@ -92,7 +92,9 @@ describe('外壳请求卫生', () => {
     const { calls } = installFetchStub();
     // 管理员与会话类型里同为 `role: 'teacher'`，靠 subRole 区分。守住这条是为了
     // 防止将来把门控收窄成「只认 subRole !== 'administrator'」而误伤管理员。
-    appStore.getState().setSession({ role: 'teacher', subRole: 'administrator', userId: 'usr-2', name: '管理员' } as any);
+    appStore
+      .getState()
+      .setSession({ role: 'teacher', subRole: 'administrator', userId: 'usr-2', name: '管理员' } as any);
 
     renderHook(() => useSessionBootstrap({ fetchStudents: vi.fn().mockResolvedValue(undefined) }));
 

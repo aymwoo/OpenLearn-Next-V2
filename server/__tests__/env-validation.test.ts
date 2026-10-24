@@ -35,9 +35,9 @@ describe('进程内身份开关（R-01 的运营面）', () => {
   });
 
   it('非生产环境不过度告警；只含空白的名单会被指出等同未配置', () => {
-    expect(
-      validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a' }).warnings.map((w) => w.key),
-    ).not.toContain('OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a' }).warnings.map((w) => w.key)).not.toContain(
+      'OPENLEARN_TRUSTED_INLINE_PLUGINS',
+    );
 
     const blank = validateStartupEnv({ NODE_ENV: 'production', OPENLEARN_TRUSTED_INLINE_PLUGINS: ' , ' });
     const blankWarning = blank.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
