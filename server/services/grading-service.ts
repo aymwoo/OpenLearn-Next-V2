@@ -295,8 +295,7 @@ export class GradingService {
     // 而学期总评查询按 es.academic_year 过滤 —— 新录入的成绩会在「按学年查看」时整段消失，
     // 分子少、分母不减，总评被系统性拉低。
     const examRow = this.db.prepare('SELECT academic_year FROM exams WHERE id = ?').get(examId) as
-      | { academic_year: string | null }
-      | undefined;
+      { academic_year: string | null } | undefined;
     const academicYear = examRow?.academic_year ?? deriveAcademicYear(now);
 
     const insertStmt = this.db.prepare(`
@@ -456,13 +455,14 @@ export class GradingService {
     const totalPublishedAssignments =
       (this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?').get(classId) as any)?.count || 0;
 
-    const totalPublishedExams = (
-      this.db
-        .prepare(
-          `SELECT COUNT(*) as count FROM exams WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
-        )
-        .get(...(academicYear ? [classId, academicYear] : [classId])) as any
-    )?.count || 0;
+    const totalPublishedExams =
+      (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as count FROM exams WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
+          )
+          .get(...(academicYear ? [classId, academicYear] : [classId])) as any
+      )?.count || 0;
 
     // 9. 计算每个学生的综合总评
     const computedStudents: StudentSemesterGrade[] = students.map((student) => {

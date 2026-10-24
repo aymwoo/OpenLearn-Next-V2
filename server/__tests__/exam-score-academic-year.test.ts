@@ -31,13 +31,9 @@ describe('考试成绩 — 学年落库与学期总评可见性（#219）', () =
   const academicYear = '2025-2026';
 
   const insertStudent = () => {
-    db.prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
-      studentId,
-      'exam-year-1',
-      '学年成绩学生',
-      'examyear@test',
-      Date.now(),
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(studentId, 'exam-year-1', '学年成绩学生', 'examyear@test', Date.now());
     db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
       classId,
       studentId,
@@ -73,7 +69,9 @@ describe('考试成绩 — 学年落库与学期总评可见性（#219）', () =
 
   it('批量录分写入的 exam_scores.academic_year 与父考试一致', () => {
     service.batchSaveExamScores(examId, [{ studentId, score: 90 }]);
-    const row = db.prepare('SELECT academic_year FROM exam_scores WHERE exam_id = ? AND student_id = ?').get(examId, studentId) as {
+    const row = db
+      .prepare('SELECT academic_year FROM exam_scores WHERE exam_id = ? AND student_id = ?')
+      .get(examId, studentId) as {
       academic_year: string | null;
     };
     expect(row.academic_year).toBe(academicYear);
