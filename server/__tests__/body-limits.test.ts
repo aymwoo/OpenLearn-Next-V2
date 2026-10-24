@@ -5,7 +5,7 @@
  * 而前端对教师的承诺是「最大不超过 20MB」—— 真实课件必然 413。
  *
  * 这里在裸 express app 上装配真实的中间件（而不是 mock），
- * 断言的是真实行为：多���请求体到底放不放行、超限时返回什么。
+ * 断言的是真实行为：多大的请求体到底放不放行、超限时返回什么。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
