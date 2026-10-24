@@ -43,10 +43,13 @@ import { registerClassroomExtrasRoutes } from '../routes/classroom-extras.js';
 import { registerClassroomPeerReviewRoutes } from '../routes/classroom-peer-review.js';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { ActivityRegistry } from '../../packages/activity-ecosystem/index.js';
+import type { ServerContext } from '../context.js';
+import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
+import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 
-function buildStubContext(app: express.Express) {
-  const io: any = { emit: () => undefined, to: () => ({ emit: () => undefined }) };
-  const noop = (_req: any, _res: any, next: any) => next();
+function buildStubContext(app: express.Express): ServerContext {
+  const io = { emit: () => undefined, to: () => ({ emit: () => undefined }) };
+  const noop: express.RequestHandler = (_req, _res, next) => next();
   return {
     app,
     io,
@@ -56,13 +59,13 @@ function buildStubContext(app: express.Express) {
     lessonActiveSegments: new Map<string, string>(),
     buildAgentSystemInstruction: () => '',
     buildAgentFinalMessage: () => '',
-    normalizeToolSchema: (schema: any) => schema,
+    normalizeToolSchema: (schema: unknown) => schema,
     buildOpenAITools: () => [],
     executeAgentToolCall: async () => undefined,
     buildOpenAIChatUrl: (apiUrl: string) => apiUrl,
     runGeminiAgentChat: async () => ({ text: '' }),
     runOpenAIAgentChat: async () => ({ text: '' }),
-  } as any;
+  } as unknown as ServerContext;
 }
 
 describe('路由数据范围声明门禁（Issue #229）', () => {
@@ -94,7 +97,11 @@ describe('路由数据范围声明门禁（Issue #229）', () => {
       registerClassroomPeerReviewRoutes(ctx.app);
       // 课堂路由需要运行时服务；这里只借用其**注册**行为（审计只看路由栈），
       // 用最小 stub 即可 —— 不会真的跑课堂逻辑。
-      registerClassroomRoutes(ctx, {} as any, {} as any);
+      registerClassroomRoutes(
+        ctx,
+        {} as unknown as ClassroomRuntimeService,
+        {} as unknown as ClassroomFeedService,
+      );
 
       const audit = auditRouteScopes(app, ROUTE_SCOPE_WHITELIST);
       expect(
