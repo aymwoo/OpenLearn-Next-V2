@@ -91,13 +91,17 @@ function parseDrawRules(raw: unknown): AssessmentSettings['draw'] | undefined {
   const draw: NonNullable<AssessmentSettings['draw']> = { count };
   if (typeof input.type === 'string' && input.type.trim()) draw.type = input.type.trim();
   if (Array.isArray(input.tags)) {
-    const tags = input.tags.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
+    const tags = input.tags
+      .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+      .map((t) => t.trim());
     if (tags.length > 0) draw.tags = tags;
   }
   const min = typeof input.difficultyMin === 'number' ? input.difficultyMin : Number(input.difficultyMin);
   const max = typeof input.difficultyMax === 'number' ? input.difficultyMax : Number(input.difficultyMax);
-  if (input.difficultyMin !== undefined && input.difficultyMin !== null && Number.isFinite(min)) draw.difficultyMin = min;
-  if (input.difficultyMax !== undefined && input.difficultyMax !== null && Number.isFinite(max)) draw.difficultyMax = max;
+  if (input.difficultyMin !== undefined && input.difficultyMin !== null && Number.isFinite(min))
+    draw.difficultyMin = min;
+  if (input.difficultyMax !== undefined && input.difficultyMax !== null && Number.isFinite(max))
+    draw.difficultyMax = max;
   if (draw.difficultyMin !== undefined && draw.difficultyMax !== undefined && draw.difficultyMin > draw.difficultyMax) {
     return undefined;
   }

@@ -15,16 +15,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-import {
-  parseMigrationSql,
-  executeSqlStatements,
-  simpleChecksum,
-  type Migration,
-} from '../db/migrator.js';
-import {
-  PluginMigrationExecutionError,
-  PluginMigrationDowngradeError,
-} from './errors.js';
+import { parseMigrationSql, executeSqlStatements, simpleChecksum, type Migration } from '../db/migrator.js';
+import { PluginMigrationExecutionError, PluginMigrationDowngradeError } from './errors.js';
 import { pluginTablePrefix } from './plugin-tables.js';
 
 export interface PluginMigrationItem extends Migration {
@@ -129,9 +121,7 @@ export function loadPluginMigrations(migrationsDir: string): PluginMigrationItem
  */
 export function expandSqlPlaceholders(sql: string, tablePrefix?: string): string {
   if (!tablePrefix) return sql;
-  return sql
-    .replace(/\{\{\s*prefix\s*\}\}/g, tablePrefix)
-    .replace(/\{\{\s*table_prefix\s*\}\}/g, tablePrefix);
+  return sql.replace(/\{\{\s*prefix\s*\}\}/g, tablePrefix).replace(/\{\{\s*table_prefix\s*\}\}/g, tablePrefix);
 }
 
 /**
@@ -198,10 +188,12 @@ export function runPluginDeclarativeMigrations(
 
     const applyTransaction = db.transaction(() => {
       executeSqlStatements(db, sqlToRun);
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO plugin_declared_migrations (plugin_id, version, name, checksum, applied_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(pluginId, migration.version, migration.name, checksum, Date.now());
+      `,
+      ).run(pluginId, migration.version, migration.name, checksum, Date.now());
     });
 
     try {
@@ -239,10 +231,7 @@ export function rollbackPluginDeclarativeMigration(
 
   const rollbackTransaction = db.transaction(() => {
     executeSqlStatements(db, sqlToRun);
-    db.prepare('DELETE FROM plugin_declared_migrations WHERE plugin_id = ? AND name = ?').run(
-      pluginId,
-      migration.name,
-    );
+    db.prepare('DELETE FROM plugin_declared_migrations WHERE plugin_id = ? AND name = ?').run(pluginId, migration.name);
   });
 
   rollbackTransaction();
@@ -251,10 +240,7 @@ export function rollbackPluginDeclarativeMigration(
 /**
  * 获取某个插件当前在库中已应用的声明式迁移记录。
  */
-export function getPluginAppliedMigrations(
-  db: Database.Database,
-  pluginId: string,
-): AppliedPluginMigration[] {
+export function getPluginAppliedMigrations(db: Database.Database, pluginId: string): AppliedPluginMigration[] {
   ensurePluginDeclaredMigrationsTable(db);
   return db
     .prepare(

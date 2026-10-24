@@ -17,7 +17,7 @@
  *                            |
  *                   handleInvoke
  *                            |
- *                 1. Capability check (manifestCapabilities)
+ *                 1. Capability check (granted capabilities)
  *                 2. Resolve service by token name
  *                 3. Get method from service instance
  *                 4. Execute method with args
@@ -33,11 +33,14 @@
  *
  * ## Capability Enforcement (Phase 5 Pragmatic Rule)
  *
- * If the Worker plugin has an empty `manifestCapabilities` array, it can
- * ONLY call `'get'` methods (read-only). Mutation methods (`'set'`,
- * `'register'`, `'delete'`, `'spawn'`, etc.) are denied with a
- * WorkerCapabilityError. Full per-method capability mapping is deferred
- * to a separate concern (Plan 6+).
+ * If the Worker plugin has no **granted** capability (the CapabilityGuard grant
+ * table is empty — i.e. the administrator approved none of its declared
+ * capabilities), it can ONLY call `'get'` methods (read-only). Mutation methods
+ * (`'set'`, `'register'`, `'delete'`, `'spawn'`, etc.) are denied with a
+ * WorkerCapabilityError.
+ *
+ * The capability set used here is the **granted** one, not the manifest's
+ * self-declared list — see {@link ServiceHost.effectiveCapabilities} (Issue #224).
  *
  * @module
  */
@@ -63,7 +66,11 @@ import net from 'node:net';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from '../plugin-host/plugin-namespace.js';
 import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
-import { checkMethodPolicy, sanitizeActionRegisterArgs, type MethodPolicyTokens } from '../plugin-host/method-policy.js';
+import {
+  checkMethodPolicy,
+  sanitizeActionRegisterArgs,
+  type MethodPolicyTokens,
+} from '../plugin-host/method-policy.js';
 import { bindPluginCommand } from '../command-bus/plugin-command.js';
 import { isBlockedPluginCapability, isPrivateOrReservedHost } from '../plugin-host/plugin-grants.js';
 import {
@@ -137,7 +144,7 @@ export function sanitizeClonableValue(val: unknown, depth = 0, seen = new WeakSe
  * checks, and returns results or serialized errors.
  *
  * Each ServiceHost instance is bound to a specific plugin (via pluginActorId
- * and manifestCapabilities). Multiple Workers each have their own ServiceHost.
+ * and granted capabilities). Multiple Workers each have their own ServiceHost.
  */
 export class ServiceHost {
   /**
@@ -145,6 +152,7 @@ export class ServiceHost {
    * @param capabilityGuard - CapabilityGuard instance (sync access, NOT async ICapabilityService wrapper)
    * @param pluginActorId - Actor identity for all invokes (e.g. `'plugin:ext-my-service'`)
    * @param manifestCapabilities - Capability strings from manifest.capabilitiesProposed
+   *   （清单自声明值；**运行时判定以已批准（已授予）的能力为准**，见 effectiveCapabilities）
    * @param eventBus - Optional EventBus for event forwarding (Plan 4). When provided,
    *                   subscribe/unsubscribe messages from Worker create EventForwarder
    *                   subscriptions on the real EventBus. When absent, subscribe/unsubscribe
@@ -219,6 +227,31 @@ export class ServiceHost {
    */
   setManifestCapabilities(caps: string[]): void {
     this.manifestCapabilities = caps;
+  }
+
+  /**
+   * 运行时**真正生效**的能力集合 = 清单声明 ∩ 已授予（管理员已审批）。
+   *
+   * Issue #224：此前本层直接用 `manifestCapabilities`（插件清单里**自声明**的能力）
+   * 做判定 —— 管理员「拒绝 / 尚未审批」某项能力声明，在 worker 插件的运行时服务调用上
+   * 完全不生效：审批只决定「授予什么」（lifecycle.ts 的 grantCapabilities），
+   * 运行时却不查授予表，治理口径与实际执行对不上。
+   *
+   * 现在改为逐项用 CapabilityGuard 判定「这项能力是否真的被授予」。对插件 actor
+   * （`plugin:<id>`），`check()` **只查授予表** —— 角色回退与管理员旁路仅对
+   * `user:` 形态 actor 生效（见 capability-guard.ts 的 isUserActor 判定），
+   * 因此判定结果就是「管理员已批准的能力」，与审批表同源。
+   *
+   * 授予只发生在管理员审批通过之后（plugin-host/lifecycle.ts 的 grantCapabilities），
+   * 而 grant 的入参就是清单声明的能力本身 ⇒ 授予表 ⊆ 声明表。
+   */
+  private get effectiveCapabilities(): string[] {
+    const declared = this.manifestCapabilities ?? [];
+    if (declared.length === 0) return [];
+    const guard = this.capabilityGuard as { check?: (actorId: string, cap: string) => boolean };
+    // 守卫不支持判定时**保守拒绝**（fail closed）：不能因为判定能力缺失就放行。
+    if (typeof guard.check !== 'function') return [];
+    return declared.filter((cap) => guard.check!(this.pluginActorId, cap));
   }
 
   // ── Message dispatch ───────────────────────────────────────────────────
@@ -679,7 +712,7 @@ export class ServiceHost {
       }
 
       // ── Security Barrier 2: Capability check on empty manifest ─────
-      // If manifestCapabilities is empty, the Worker plugin has no
+      // If no capability was granted, the Worker plugin has no
       // declared capabilities. Block all mutation methods and only allow
       // read-only 'get' methods.
       // B-3：此处与浏览器侧 `src/plugin-host/service-host.ts` 曾是同一道 Barrier 的**两种语义** ——
@@ -689,12 +722,11 @@ export class ServiceHost {
       //
       // 统一为 `startsWith('get')`：Barrier 2 的意图是「manifest 未声明任何 capability 时降级为只读」，
       // 而 getter 语义在两端都由 `get*` 命名约定承载。前端本已是该语义，故改后端。
-      if (this.manifestCapabilities.length === 0 && !msg.method.startsWith('get')) {
+      if (this.effectiveCapabilities.length === 0 && !msg.method.startsWith('get')) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '__rpc__',
-          `Capability denied for actor ${this.pluginActorId}: ` +
-            `empty manifestCapabilities, only 'get' methods allowed`,
+          `Capability denied for actor ${this.pluginActorId}: ` + `no granted capability, only 'get' methods allowed`,
         );
       }
 
@@ -712,7 +744,7 @@ export class ServiceHost {
         msg.method,
         msg.args,
         CORE_WORKER_TOKENS,
-        this.manifestCapabilities,
+        this.effectiveCapabilities,
       );
       if (actionSanitized.downgraded) {
         console.warn(`[ServiceHost] ${actionSanitized.downgraded} (${this.pluginActorId})`);
@@ -723,7 +755,7 @@ export class ServiceHost {
         token: msg.token,
         method: msg.method,
         args: effectiveArgs,
-        caps: this.manifestCapabilities,
+        caps: this.effectiveCapabilities,
         tokens: CORE_WORKER_TOKENS,
       });
       if (methodDenial) {
@@ -995,7 +1027,7 @@ export class ServiceHost {
         const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
         const isRead = msg.method !== 'addPoints';
         const requiredCap = isRead ? CAP_STUDENT_DATA_READ : CAP_STUDENT_DATA_WRITE;
-        const hasCap = hasCapability(this.manifestCapabilities ?? [], requiredCap);
+        const hasCap = hasCapability(this.effectiveCapabilities, requiredCap);
         if (!hasCap) {
           console.warn(
             `[PluginSecurity] Worker plugin "${pluginId}" ${isRead ? 'accessed' : 'modified'} student data via ${msg.method} without declaring "${requiredCap}". In future versions this will be blocked.`,
@@ -1155,11 +1187,7 @@ export class ServiceHost {
       const formatted = msg.startsWith('Worker plugin is not permitted')
         ? msg.replace('Worker plugin', `Worker plugin "${pluginId}"`)
         : `Worker plugin "${pluginId}": ${msg}`;
-      throw new WorkerCapabilityError(
-        this.pluginActorId,
-        '@openlearn/core:IDatabase',
-        formatted,
-      );
+      throw new WorkerCapabilityError(this.pluginActorId, '@openlearn/core:IDatabase', formatted);
     }
   }
 }

@@ -357,8 +357,7 @@ function NavButton({
   const isActive = teacherTab === tab;
   const langNarrow = narrowLang(lang);
   const t = translations[langNarrow];
-  const newTabLabel =
-    langNarrow === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
+  const newTabLabel = langNarrow === 'zh' ? `在新标签页打开"${label}"` : `Open "${label}" in a new tab`;
 
   return (
     <div

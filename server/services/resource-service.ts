@@ -77,8 +77,7 @@ export class ResourceService {
    */
   public getResource(id: string): SystemResourceItem | null {
     const resource = this.db.prepare('SELECT * FROM system_resources WHERE id = ?').get(id) as
-      | SystemResourceItem
-      | undefined;
+      SystemResourceItem | undefined;
     return resource || null;
   }
 

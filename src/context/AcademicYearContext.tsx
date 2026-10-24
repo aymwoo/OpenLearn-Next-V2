@@ -43,7 +43,9 @@ function writeStoredYear(value: string | null) {
 }
 
 export function AcademicYearProvider({ children }: { children: React.ReactNode }) {
-  const [academicYear, setAcademicYearState] = useState<AcademicYearValue>(() => readUrlYear() || readStoredYear() || null);
+  const [academicYear, setAcademicYearState] = useState<AcademicYearValue>(
+    () => readUrlYear() || readStoredYear() || null,
+  );
   const [currentAcademicYear, setCurrentAcademicYear] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,8 +87,7 @@ export function AcademicYearProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const apiAcademicYear =
-    academicYear === 'all' || academicYear === null ? null : academicYear;
+  const apiAcademicYear = academicYear === 'all' || academicYear === null ? null : academicYear;
 
   const value = useMemo(
     () => ({

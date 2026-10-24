@@ -27,24 +27,24 @@
 
 `server/routes/courseware.ts` 中 `registerCoursewareRoutes` 注册的全部端点（按注册顺序）：
 
-| 方法   | 路径                                              | 角色              | 用途                                    |
-| ------ | ------------------------------------------------- | ----------------- | --------------------------------------- |
-| POST   | `/api/courseware/upload`                          | 教师/管理员       | 上传课件（base64）→ 落 VFS              |
-| POST   | `/api/courseware/confirm`                         | 教师/管理员       | 上传后登记 `courseware` 行              |
-| GET    | `/api/courseware`                                 | 任意登录          | 课件列表（**无 `/list` 后缀**）          |
-| DELETE | `/api/courseware/:id`                             | 教师/管理员       | 删除课件（**不是 POST**）               |
-| POST   | `/api/courseware/attempts/:attemptId/log`         | 学生/教师         | 学生答题过程事件流                      |
-| POST   | `/api/courseware/attempts/:attemptId/submit`      | 学生/教师         | 学生最终提交分数                        |
-| POST   | `/api/courseware/attempts/:attemptId/adopt`       | 任意登录          | 把无主 attempt 认领到当前学生名下      |
-| GET    | `/api/courseware/attempts`                        | 任意登录          | 成绩榜（分页信封 + 角色脱敏，见 §4）    |
-| GET    | `/api/courseware/attempts/:attemptId/raw`         | 本人/教师         | 拉取 attempt 的原始事件流               |
-| GET    | `/api/courseware/attempts/:attemptId/progress`    | 本人/教师         | 拉取 attempt 当前成绩快照               |
-| POST   | `/api/courseware/attempts/mark-absent`            | 教师/管理员       | 教师标记缺考                            |
-| POST   | `/api/courseware/attempts/:attemptId/promote`     | 教师/管理员       | 把成绩写入作业/进度                     |
-| POST   | `/api/courseware/attempts/auto-record`            | 教师/管理员       | 按规则批量补录成绩                      |
-| GET    | `/api/courseware/:id/access-token`                | 任意登录          | 铸造课件 HTML 短时访问令牌              |
-| POST   | `/api/courseware/inline`                          | 任意登录          | 手写 HTML 课件落库（按内容 sha256 幂等） |
-| GET    | `/api/courseware/:id`                             | 持 `?ct=` 令牌    | 单课件详情（VFS 节点 → HTML）           |
+| 方法   | 路径                                           | 角色           | 用途                                     |
+| ------ | ---------------------------------------------- | -------------- | ---------------------------------------- |
+| POST   | `/api/courseware/upload`                       | 教师/管理员    | 上传课件（base64）→ 落 VFS               |
+| POST   | `/api/courseware/confirm`                      | 教师/管理员    | 上传后登记 `courseware` 行               |
+| GET    | `/api/courseware`                              | 任意登录       | 课件列表（**无 `/list` 后缀**）          |
+| DELETE | `/api/courseware/:id`                          | 教师/管理员    | 删除课件（**不是 POST**）                |
+| POST   | `/api/courseware/attempts/:attemptId/log`      | 学生/教师      | 学生答题过程事件流                       |
+| POST   | `/api/courseware/attempts/:attemptId/submit`   | 学生/教师      | 学生最终提交分数                         |
+| POST   | `/api/courseware/attempts/:attemptId/adopt`    | 任意登录       | 把无主 attempt 认领到当前学生名下        |
+| GET    | `/api/courseware/attempts`                     | 任意登录       | 成绩榜（分页信封 + 角色脱敏，见 §4）     |
+| GET    | `/api/courseware/attempts/:attemptId/raw`      | 本人/教师      | 拉取 attempt 的原始事件流                |
+| GET    | `/api/courseware/attempts/:attemptId/progress` | 本人/教师      | 拉取 attempt 当前成绩快照                |
+| POST   | `/api/courseware/attempts/mark-absent`         | 教师/管理员    | 教师标记缺考                             |
+| POST   | `/api/courseware/attempts/:attemptId/promote`  | 教师/管理员    | 把成绩写入作业/进度                      |
+| POST   | `/api/courseware/attempts/auto-record`         | 教师/管理员    | 按规则批量补录成绩                       |
+| GET    | `/api/courseware/:id/access-token`             | 任意登录       | 铸造课件 HTML 短时访问令牌               |
+| POST   | `/api/courseware/inline`                       | 任意登录       | 手写 HTML 课件落库（按内容 sha256 幂等） |
+| GET    | `/api/courseware/:id`                          | 持 `?ct=` 令牌 | 单课件详情（VFS 节点 → HTML）            |
 
 > **路由顺序陷阱**：`/api/courseware/attempts/:attemptId/promote` 等 `:attemptId` 形态的路由与 `/api/courseware/attempts/mark-absent`、`/api/courseware/attempts/auto-record` 这类**字面量**路径共存时，Express 按注册顺序匹配。新增 `/api/courseware/attempts/<字面量>` 端点时必须注册在 `attempts/:attemptId/*` 之前，否则会被当作 attemptId 吞掉。
 >
@@ -184,11 +184,11 @@ Content-Type: application/json
 
 ### Query 参数
 
-| 名称             | 类型   | 必填 | 描述                                                                                                        |
-| ---------------- | ------ | ---- | ----------------------------------------------------------------------------------------------------------- |
-| `coursewareUuid` | string | 否   | 过滤该课件的 attempts；缺省返回全部。**白板 HtmlAppletFrame 实时面板必须传此参数**避免拉整张表            |
-| `page`           | number | 否   | 页码，默认 1（< 1 或非数字按 1 处理）                                                                       |
-| `pageSize`       | number \| `all` | 否 | 每页条数，默认 50，clamp 到 1..500；特殊值 `all` 返回全量（`LIMIT -1`），此时响应 `pageSize = total`   |
+| 名称             | 类型            | 必填 | 描述                                                                                                 |
+| ---------------- | --------------- | ---- | ---------------------------------------------------------------------------------------------------- |
+| `coursewareUuid` | string          | 否   | 过滤该课件的 attempts；缺省返回全部。**白板 HtmlAppletFrame 实时面板必须传此参数**避免拉整张表       |
+| `page`           | number          | 否   | 页码，默认 1（< 1 或非数字按 1 处理）                                                                |
+| `pageSize`       | number \| `all` | 否   | 每页条数，默认 50，clamp 到 1..500；特殊值 `all` 返回全量（`LIMIT -1`），此时响应 `pageSize = total` |
 
 分页参数由 `server/utils/pagination.ts` 的 `parsePagination` 统一解析（A7 约定，全站列表端点一致）。
 
@@ -293,12 +293,12 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 
 `submission_result.score` 经 `normalizePercentScore`（`server/utils/auto-record-score.ts`）归一化：
 
-| 原始值                    | 处理                    | 备注                                                |
-| ------------------------- | ----------------------- | --------------------------------------------------- |
-| `null` / `undefined` / `''` | 返回 `null` → **拒绝录入** | 铁律 1：「没有分数就不录」，绝不兜底成 0 或 100     |
-| 非有限数（`NaN` / `Infinity`） | 返回 `null` → 拒绝   |                                                     |
-| `0 < x ≤ 1.0`             | `Math.round(x * 100)`   | 0.85 → 85；这是**唯一**会被乘 100 的分支            |
-| 其它                      | `Math.round(x)` 后 clamp 到 `0..100` | 88 → 88；-5 → 0；120 → 100                  |
+| 原始值                         | 处理                                 | 备注                                            |
+| ------------------------------ | ------------------------------------ | ----------------------------------------------- |
+| `null` / `undefined` / `''`    | 返回 `null` → **拒绝录入**           | 铁律 1：「没有分数就不录」，绝不兜底成 0 或 100 |
+| 非有限数（`NaN` / `Infinity`） | 返回 `null` → 拒绝                   |                                                 |
+| `0 < x ≤ 1.0`                  | `Math.round(x * 100)`                | 0.85 → 85；这是**唯一**会被乘 100 的分支        |
+| 其它                           | `Math.round(x)` 后 clamp 到 `0..100` | 88 → 88；-5 → 0；120 → 100                      |
 
 > ✅ **历史陷阱已修**：旧实现是 `let finalScore = 100`，`score` 为 `NULL` 时直接给满分、`x === 0` 也落进满分兜底。现已改为「无分数拒绝录入 + 0 保持 0 + 结果 clamp」。
 >
@@ -323,12 +323,12 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 - `404 { success: false, error: <describePromoteReason('attempt-not-found')>, reason: 'attempt-not-found' }`
 - `422` — 其余业务前置条件不满足，`reason` 取值见下表（`error` 文本由 `describePromoteReason` 生成）
 
-| `reason`            | 触发条件                                                          |
-| ------------------- | ----------------------------------------------------------------- |
-| `not-finished`      | attempt.status 不在 `FINISHED_ATTEMPT_STATUSES` 内（手动路径已用 `ignoreNotFinished` 放宽） |
-| `placeholder-student` | `student_id ∈ {guest, teacher, teacher_preview, ''}`             |
-| `missing-score`     | `normalizePercentScore` 返回 `null`（**没有分数就不录**）         |
-| `below-min-completion` | 完成度低于门槛（手动路径已用 `ignoreMinCompletion` 放宽）       |
+| `reason`               | 触发条件                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `not-finished`         | attempt.status 不在 `FINISHED_ATTEMPT_STATUSES` 内（手动路径已用 `ignoreNotFinished` 放宽） |
+| `placeholder-student`  | `student_id ∈ {guest, teacher, teacher_preview, ''}`                                        |
+| `missing-score`        | `normalizePercentScore` 返回 `null`（**没有分数就不录**）                                   |
+| `below-min-completion` | 完成度低于门槛（手动路径已用 `ignoreMinCompletion` 放宽）                                   |
 
 > 手动录入以 `ignoreMinCompletion: true` + `ignoreNotFinished: true` + `source: 'manual'` 调用，与「自动录入规则」共用同一落库实现（`promoteAttemptToGrade`），保证两条路径口径一致。
 >
@@ -386,10 +386,10 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 
 课件侧事件先经 `server/classroom-events.ts` 的 `publishClassroomEvent` 进入内核 EventBus（落 `events` 审计表、带 `correlationId`），再由 `server/event-routing.ts` 的声明式路由表投递到 Socket.IO。
 
-| 内核事件类型                | Socket 事件名                | 触发条件                     | Payload                                                                  |
-| --------------------------- | ---------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
-| `courseware.attempt_updated` | `courseware-attempt-updated` | `/log`、`/submit`、`/adopt` | `{ attemptId, type: 'log' \| 'submit' \| 'adopt' }`                     |
-| `student.progress_updated`  | `student-progress-updated`   | `/promote` 成功后           | `{ studentId, lessonId, progressPercent, completed, completedSegments }` |
+| 内核事件类型                 | Socket 事件名                | 触发条件                    | Payload                                                                  |
+| ---------------------------- | ---------------------------- | --------------------------- | ------------------------------------------------------------------------ |
+| `courseware.attempt_updated` | `courseware-attempt-updated` | `/log`、`/submit`、`/adopt` | `{ attemptId, type: 'log' \| 'submit' \| 'adopt' }`                      |
+| `student.progress_updated`   | `student-progress-updated`   | `/promote` 成功后           | `{ studentId, lessonId, progressPercent, completed, completedSegments }` |
 
 > `/promote` **不**发 `courseware-attempt-updated`（它改的是学期成绩而非 attempt 流水），只发 `student-progress-updated`。
 
@@ -422,31 +422,31 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 ## 10. 相关源文件
 
-| 路径                                                     | 内容                                                                            |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `server/routes/courseware.ts`                            | 全部 HTTP 端点实现                                                              |
-| `server/utils/score-extract.ts`                          | `extractScoreCommentCompletion` 分数/评语/完成度探测                               |
-| `server/utils/pagination.ts`                             | `parsePagination` 全站分页信封约定                                                |
-| `server/utils/auto-record-score.ts`                      | `promoteAttemptToGrade` / `markStudentAbsent` / `autoRecordForLesson` / `normalizePercentScore` |
-| `server/utils/courseware-access.ts`                      | `mintCoursewareToken` / `verifyCoursewareToken`（课件 HTML 短时 HMAC 令牌）       |
-| `server/classroom-events.ts`                             | `publishClassroomEvent` / `CLASSROOM_EVENTS` 课堂事件统一发布入口                 |
-| `server/event-routing.ts`                                | 内核事件 → Socket.IO 投递的声明式路由表                                          |
-| `packages/plugins/courseware-score.ts`                   | `aggregateAttemptScore` / `describeAggregation` 成绩归集策略                      |
+| 路径                                                     | 内容                                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `server/routes/courseware.ts`                            | 全部 HTTP 端点实现                                                                                                        |
+| `server/utils/score-extract.ts`                          | `extractScoreCommentCompletion` 分数/评语/完成度探测                                                                      |
+| `server/utils/pagination.ts`                             | `parsePagination` 全站分页信封约定                                                                                        |
+| `server/utils/auto-record-score.ts`                      | `promoteAttemptToGrade` / `markStudentAbsent` / `autoRecordForLesson` / `normalizePercentScore`                           |
+| `server/utils/courseware-access.ts`                      | `mintCoursewareToken` / `verifyCoursewareToken`（课件 HTML 短时 HMAC 令牌）                                               |
+| `server/classroom-events.ts`                             | `publishClassroomEvent` / `CLASSROOM_EVENTS` 课堂事件统一发布入口                                                         |
+| `server/event-routing.ts`                                | 内核事件 → Socket.IO 投递的声明式路由表                                                                                   |
+| `packages/plugins/courseware-score.ts`                   | `aggregateAttemptScore` / `describeAggregation` 成绩归集策略                                                              |
 | `packages/plugins/builtin.ts`                            | `courseware.submit_attempt` / `courseware.get_attempt_raw_data` / `courseware.list` / `courseware.delete` command handler |
-| `packages/core/capability-system/index.ts`               | 学生需具备 `student:write` capability 才能 submit_attempt                       |
-| `server/utils/bridge-sdk.ts`                             | LMS Bridge SDK 服务端代理                                                       |
-| `src/features/whiteboard/utils/bridgeUtils.ts`           | LMS Bridge SDK 前端注入（`wrapSrcDocWithBridge`）                               |
-| `src/features/whiteboard/components/HtmlAppletFrame.tsx` | 白板课件 iframe + 实时成绩浮层                                                  |
+| `packages/core/capability-system/index.ts`               | 学生需具备 `student:write` capability 才能 submit_attempt                                                                 |
+| `server/utils/bridge-sdk.ts`                             | LMS Bridge SDK 服务端代理                                                                                                 |
+| `src/features/whiteboard/utils/bridgeUtils.ts`           | LMS Bridge SDK 前端注入（`wrapSrcDocWithBridge`）                                                                         |
+| `src/features/whiteboard/components/HtmlAppletFrame.tsx` | 白板课件 iframe + 实时成绩浮层                                                                                            |
 
 ### 回归测试
 
-| 路径                                                    | 覆盖点                                                 |
-| ------------------------------------------------------- | ------------------------------------------------------ |
-| `server/__tests__/courseware-e2e-flow.test.ts`          | log → submit → promote 主链路                          |
-| `server/__tests__/courseware-attempts-filter.test.ts`   | `?coursewareUuid=` 过滤与成绩榜字段                     |
-| `server/__tests__/courseware-access-token.test.ts`      | `?ct=` 短时令牌鉴权                                     |
-| `server/__tests__/courseware-submit-actor.test.ts`      | `/submit` 的 actorId `:role` 后缀归一化（曾致 500）      |
-| `server/__tests__/courseware-score-capture-e2e.test.ts` | 分数/评语捕获与成绩归集                                 |
+| 路径                                                    | 覆盖点                                              |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| `server/__tests__/courseware-e2e-flow.test.ts`          | log → submit → promote 主链路                       |
+| `server/__tests__/courseware-attempts-filter.test.ts`   | `?coursewareUuid=` 过滤与成绩榜字段                 |
+| `server/__tests__/courseware-access-token.test.ts`      | `?ct=` 短时令牌鉴权                                 |
+| `server/__tests__/courseware-submit-actor.test.ts`      | `/submit` 的 actorId `:role` 后缀归一化（曾致 500） |
+| `server/__tests__/courseware-score-capture-e2e.test.ts` | 分数/评语捕获与成绩归集                             |
 
 ---
 
@@ -474,12 +474,12 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 背景：课件 iframe 以 `credentialless` + `sandbox`（无 `allow-same-origin`）加载，访问 `/runtime/:uuid/` 时**不携带会话 cookie**，`injectLmsSdk` 只能识别为匿名，建出一条 `student_id='guest'` 的共享 attempt。结果所有学生共用一个 attempt，真实学生 `POST /submit` 时因 `attempt.student_id('guest') !== session.userId` 被 403 丢弃。父窗口在转发上报前先调本端点把 attempt 认领回来。
 
-| 情形                                | 行为                                             | 响应                                                    |
-| ----------------------------------- | ------------------------------------------------ | ------------------------------------------------------- |
-| 教师/管理员会话                     | 预览用，不参与归属约束                           | `{ attemptId, adopted: false, reused: true, role }`     |
-| 已是本人 attempt                    | 幂等，原样返回                                   | `{ attemptId, adopted: false, reused: true }`           |
-| 无主（`guest`/`teacher`/`teacher_preview`/`''`） | 直接改 `student_id`，保留已产生的原始流水 | `{ attemptId, adopted: true, reused: true }`            |
-| 已被其他真实学生占用                | 为当前学生复用/新建自己的 `active` attempt        | `{ attemptId, adopted: false, reused: true, reason: 'attempt-owned-by-another-student' }`（`attemptId` 是**新的** id） |
+| 情形                                             | 行为                                       | 响应                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 教师/管理员会话                                  | 预览用，不参与归属约束                     | `{ attemptId, adopted: false, reused: true, role }`                                                                    |
+| 已是本人 attempt                                 | 幂等，原样返回                             | `{ attemptId, adopted: false, reused: true }`                                                                          |
+| 无主（`guest`/`teacher`/`teacher_preview`/`''`） | 直接改 `student_id`，保留已产生的原始流水  | `{ attemptId, adopted: true, reused: true }`                                                                           |
+| 已被其他真实学生占用                             | 为当前学生复用/新建自己的 `active` attempt | `{ attemptId, adopted: false, reused: true, reason: 'attempt-owned-by-another-student' }`（`attemptId` 是**新的** id） |
 
 **错误**：`401 Authentication required to adopt an attempt`、`404 Attempt not found`、`400 Session has no student identity`。认领成功会发 `courseware-attempt-updated`（`type: 'adopt'`）。
 

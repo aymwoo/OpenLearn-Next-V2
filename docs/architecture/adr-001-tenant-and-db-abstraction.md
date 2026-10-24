@@ -10,14 +10,14 @@
 
 在 Issue #149 提出时，代码库的事实基础如下（均已在本仓库核实）：
 
-| 事实 | 证据 |
-| --- | --- |
-| 当前是单实例单校模型 | `server/`、`packages/`、`migrations/` 中搜索 `tenant` / `school_id` / `campus` 无业务实现 |
-| 数据库为 SQLite（better-sqlite3） | `package.json` 依赖；`packages/core/db/migrator.ts` |
-| 插件可直接写 SQL | `ctx.db.ensureTable()` / `ctx.db.table()` / `resolve(IDatabaseToken)`；`plugin-host/sql-guard.ts` 只做表前缀白名单 |
-| 迁移与备份按「一个库」设计 | `_migrations`、`VACUUM INTO` 迁移前快照、`pre_migration_*.db`、`site-backup.mjs` |
-| 部署形态是「一个应用进程 + 一个数据目录」 | `docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`Dockerfile` 的 `OPENLEARN_DATA_DIR` |
-| 插件私有表按「安装 UUID」建表 | `plugin_table_prefix()`；插件迁移记录存 `plugin_declared_migrations(plugin_id, …)` |
+| 事实                                      | 证据                                                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 当前是单实例单校模型                      | `server/`、`packages/`、`migrations/` 中搜索 `tenant` / `school_id` / `campus` 无业务实现                          |
+| 数据库为 SQLite（better-sqlite3）         | `package.json` 依赖；`packages/core/db/migrator.ts`                                                                |
+| 插件可直接写 SQL                          | `ctx.db.ensureTable()` / `ctx.db.table()` / `resolve(IDatabaseToken)`；`plugin-host/sql-guard.ts` 只做表前缀白名单 |
+| 迁移与备份按「一个库」设计                | `_migrations`、`VACUUM INTO` 迁移前快照、`pre_migration_*.db`、`site-backup.mjs`                                   |
+| 部署形态是「一个应用进程 + 一个数据目录」 | `docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`Dockerfile` 的 `OPENLEARN_DATA_DIR`     |
+| 插件私有表按「安装 UUID」建表             | `plugin_table_prefix()`；插件迁移记录存 `plugin_declared_migrations(plugin_id, …)`                                 |
 
 这些事实意味着：引入 `school_id` 不是加一列，而是要同时改核心表、插件表前缀、插件 SDK、所有已装插件的 SQL 与迁移，以及备份/恢复语义。
 
@@ -55,12 +55,12 @@
 
 ## 4. 代价与缓解
 
-| 代价 | 缓解 |
-| --- | --- |
+| 代价                  | 缓解                                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | 每校一套升级/备份流程 | 复用 `docs/deployment/multi-school.md` 的逐实例清单；升级回归门禁（Issue #147）与恢复演练（Issue #150）按实例模板执行 |
-| 跨校报表需要额外管道 | 统一导出格式（`site-backup` / `snapshot` + 只读副本），在离线数仓聚合；不在线联邦查询 |
-| 无法跨校共享账号 | 明确不支持；如需统一身份，走外部 IdP 单点登录（未来独立评估） |
-| 资源利用率低于共享库 | 单实例资源可按校配额；空闲实例可降配 |
+| 跨校报表需要额外管道  | 统一导出格式（`site-backup` / `snapshot` + 只读副本），在离线数仓聚合；不在线联邦查询                                 |
+| 无法跨校共享账号      | 明确不支持；如需统一身份，走外部 IdP 单点登录（未来独立评估）                                                         |
+| 资源利用率低于共享库  | 单实例资源可按校配额；空闲实例可降配                                                                                  |
 
 ## 5. 数据库抽象层评估结论
 

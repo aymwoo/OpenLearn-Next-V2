@@ -158,7 +158,10 @@ export function PluginNetworkGrantsPanel({ pluginId, lang }: PluginNetworkGrants
       </p>
 
       {error && (
-        <div className="mb-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5" role="alert">
+        <div
+          className="mb-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5"
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -192,7 +195,10 @@ export function PluginNetworkGrantsPanel({ pluginId, lang }: PluginNetworkGrants
           </ul>
         ) : (
           <p className="text-xs text-gray-400 italic" data-testid="no-approved">
-            {t('尚未批准任何域名 —— 该插件无法发起出站请求。', 'No host approved yet — this plugin cannot make outbound requests.')}
+            {t(
+              '尚未批准任何域名 —— 该插件无法发起出站请求。',
+              'No host approved yet — this plugin cannot make outbound requests.',
+            )}
           </p>
         )}
       </div>

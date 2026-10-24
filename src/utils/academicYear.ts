@@ -14,10 +14,7 @@ export function normalizeAcademicYear(value: unknown): string | null {
   return isValidAcademicYear(trimmed) ? trimmed : null;
 }
 
-export function deriveAcademicYear(
-  date: string | number | Date,
-  startMonth = 9,
-): string | null {
+export function deriveAcademicYear(date: string | number | Date, startMonth = 9): string | null {
   let year: number;
   let month: number; // 0-based
   if (typeof date === 'string') {
@@ -44,9 +41,9 @@ export function getCurrentAcademicYear(startMonth = 9, now: Date = new Date()): 
 }
 
 /**
-  * 解析并标准化外部输入的学年列表字符串（逗号分隔或数组）
-  * 过滤非法学年并按升序排列
-  */
+ * 解析并标准化外部输入的学年列表字符串（逗号分隔或数组）
+ * 过滤非法学年并按升序排列
+ */
 export function parseAcademicYearList(input: unknown): string[] {
   if (!input) return [];
   let rawList: string[] = [];
@@ -65,8 +62,8 @@ export function parseAcademicYearList(input: unknown): string[] {
 }
 
 /**
-  * 获取相邻学年（如 2025-2026 前一年为 2024-2025，后一年为 2026-2027）
-  */
+ * 获取相邻学年（如 2025-2026 前一年为 2024-2025，后一年为 2026-2027）
+ */
 export function getAdjacentAcademicYear(year: string, offset = -1): string | null {
   if (!isValidAcademicYear(year)) return null;
   const start = parseInt(year.split('-')[0], 10);
@@ -75,8 +72,8 @@ export function getAdjacentAcademicYear(year: string, offset = -1): string | nul
 }
 
 /**
-  * 获取默认对比学年（当前学年及前一学年）
-  */
+ * 获取默认对比学年（当前学年及前一学年）
+ */
 export function getDefaultComparisonAcademicYears(startMonth = 9, now: Date = new Date()): [string, string] {
   const current = getCurrentAcademicYear(startMonth, now);
   const prev =
@@ -84,4 +81,3 @@ export function getDefaultComparisonAcademicYears(startMonth = 9, now: Date = ne
     `${parseInt(current.split('-')[0], 10) - 1}-${parseInt(current.split('-')[0], 10)}`;
   return [prev, current];
 }
-

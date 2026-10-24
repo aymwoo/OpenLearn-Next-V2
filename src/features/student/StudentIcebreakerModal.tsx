@@ -168,7 +168,9 @@ export function StudentIcebreakerModal({
               </h2>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {zh ? '分享你此刻的心态，帮助老师更好地调整上课节奏' : 'Share your status so the teacher can tailor the lesson'}
+              {zh
+                ? '分享你此刻的心态，帮助老师更好地调整上课节奏'
+                : 'Share your status so the teacher can tailor the lesson'}
             </p>
           </div>
           <button

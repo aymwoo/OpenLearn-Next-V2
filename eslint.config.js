@@ -81,6 +81,10 @@ export default [
       'packages/plugin-sdk/scaffold/templates/**',
       'scratch/**',
       'artifacts/**',
+      // 覆盖率报告是生成物（.gitignore 已忽略）。漏掉这里会让「本地跑过 --coverage
+      // 再跑 check-lint-budget」凭空多出 1 条告警（coverage/block-navigation.js）——
+      // 棘轮只许往下，那条假告警会把人挡在 CI 门外，而 CI 上根本没有 coverage/。
+      'coverage/**',
       'v2_plugins/**',
       '*.cjs',
       '*.min.js',

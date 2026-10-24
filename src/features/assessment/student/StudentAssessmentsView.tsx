@@ -381,8 +381,12 @@ export function AssessmentRunner({
         setProctorViolations((prev) => prev + 1);
         const warningMap = {
           blur: zh ? '检测到窗口失去焦点，已记录监考日志！' : 'Window lost focus — logged to proctor record!',
-          visibility_hidden: zh ? '检测到切换屏幕/应用，已记录监考日志！' : 'Screen/tab switched — logged to proctor record!',
-          fullscreen_exit: zh ? '检测到退出全屏作答，已记录监考日志！' : 'Exited fullscreen — logged to proctor record!',
+          visibility_hidden: zh
+            ? '检测到切换屏幕/应用，已记录监考日志！'
+            : 'Screen/tab switched — logged to proctor record!',
+          fullscreen_exit: zh
+            ? '检测到退出全屏作答，已记录监考日志！'
+            : 'Exited fullscreen — logged to proctor record!',
         };
         setProctorWarning(warningMap[type]);
         await assessmentApi.reportProctor(attemptId, { type });
@@ -685,7 +689,15 @@ export function AssessmentRunner({
 
 /* ─────────────────────────── 结果 ─────────────────────────── */
 
-export function ResultView({ lang, result, onBack }: { lang: 'zh' | 'en'; result: StudentResultPayload; onBack: () => void }) {
+export function ResultView({
+  lang,
+  result,
+  onBack,
+}: {
+  lang: 'zh' | 'en';
+  result: StudentResultPayload;
+  onBack: () => void;
+}) {
   const zh = lang === 'zh';
   const { attempt, assignment } = result;
   return (

@@ -140,7 +140,10 @@ beforeEach(() => {
         return { ok: true, json: async () => ({ success: true, result: { success: true } }) } as any;
       }
       if (url.includes('/api/courseware/attempts')) {
-        return { ok: true, json: async () => ({ data: attempts, total: attempts.length, page: 1, pageSize: 50 }) } as any;
+        return {
+          ok: true,
+          json: async () => ({ data: attempts, total: attempts.length, page: 1, pageSize: 50 }),
+        } as any;
       }
       // 课堂会话：必须返回 IN_CLASS_TEACHING，否则 LiveClassroomView 会停在
       // PRE_CLASS_READY 视图（PreClassReadyView），中间列的 tab 根本不会渲染
@@ -175,7 +178,11 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
   it('【历史 bug】completed 状态的记录按钮可点击（同文件筛选下拉也认这个状态）', async () => {
     // 数据库实际写入的终态就是 completed
     attempts = [attempt({ attemptId: 'att-c', status: 'completed', score: 92 })];
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -184,7 +191,11 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('无分数的记录按钮禁用，且提示不会凭空记分', async () => {
     attempts = [attempt({ attemptId: 'att-ns', status: 'completed', score: null })];
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -194,7 +205,11 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('进行中的记录按钮禁用，提示需先完成', async () => {
     attempts = [attempt({ attemptId: 'att-a', status: 'active', score: 90 })];
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     const recordBtn = await screen.findByText('录入成绩');
@@ -204,7 +219,11 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 
   it('已录入的记录显示「已归档」而非按钮（不重复录入）', async () => {
     attempts = [attempt({ attemptId: 'att-d', status: 'completed', score: 95, isPromoted: 1 })];
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     expect(await screen.findByText('已归档')).toBeTruthy();
@@ -214,7 +233,11 @@ describe('学生提交数据 · 录入成绩按钮可用性', () => {
 describe('学生提交数据 · 自动录入规则', () => {
   it('规则关闭时不自动补录', async () => {
     ruleEnabled = false;
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     await screen.findByText('自动录入成绩');
@@ -226,7 +249,11 @@ describe('学生提交数据 · 自动录入规则', () => {
 
   it('规则开启时进入页面自动补录一次（不多次）', async () => {
     ruleEnabled = true;
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     await screen.findByText('自动录入成绩');
@@ -242,7 +269,11 @@ describe('学生提交数据 · 自动录入规则', () => {
   });
 
   it('勾选开关会把规则保存到全局默认行', async () => {
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     const checkbox = (await screen.findByText('自动录入成绩')).closest('label')?.querySelector('input');
@@ -254,7 +285,11 @@ describe('学生提交数据 · 自动录入规则', () => {
   });
 
   it('【契约】请求 /api/commands 时必须用 commandType，不能用 type', async () => {
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
     await screen.findByText('自动录入成绩');
 
@@ -271,7 +306,11 @@ describe('学生提交数据 · 自动录入规则', () => {
 
   it('「立即补录」按钮可手动重跑', async () => {
     ruleEnabled = true;
-    render(<AppDataProvider value={baseProps as any}><LiveClassroomView initialPortalOpen={false} /></AppDataProvider>);
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
     await openSubmissionsTab();
 
     const runBtn = await screen.findByText('立即补录');

@@ -64,4 +64,3 @@ export class FrontendAPIService implements IFrontendAPI {
 }
 
 export const frontendApi = new FrontendAPIService();
-

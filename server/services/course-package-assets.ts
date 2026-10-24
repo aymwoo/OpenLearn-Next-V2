@@ -20,8 +20,44 @@ import { getUploadsDir } from '../utils/paths.js';
 import { validateMagicBytes } from '../utils/upload.js';
 
 /** 课程包内允许出现的资产类型（与 /api/upload 保持一致）。 */
-export const PACKAGE_ASSET_TYPES = ['pdf', 'pptx'] as const;
+/**
+ * 课程包可携带的附件类型。
+ *
+ * ## 为什么从「只有 PDF / PPTX」放开
+ *
+ * 审计 `docs/audit/course-import-audit.md` 的最后一项：课程包只能带 PDF/PPTX，
+ * 而真实备课时要发的是「讲义 docx / 成绩 xlsx / 素材 zip / 示意图 png / 大纲 md」。
+ * 这些文件平台完全能存（`/uploads` + express static 本来就按扩展名给
+ * Content-Type），缺的只是**白板元素侧的引用机制**（见 `EMBEDDABLE_ASSET_TYPES`）。
+ *
+ * ## 只放「能校验得住」的类型
+ *
+ * 放开不等于放任：每种类型都必须能通过 `validateMagicBytes` 的签名校验，
+ * 或本身就是纯文本（无签名可验，但也没有可执行面）。刻意**不**加一个
+ * 「任意二进制」桶 —— 那会让课程包变成传播任意载荷的信封。
+ */
+export const PACKAGE_ASSET_TYPES = ['pdf', 'pptx', 'docx', 'xlsx', 'zip', 'png', 'jpg', 'md', 'txt', 'csv'] as const;
 export type PackageAssetType = (typeof PACKAGE_ASSET_TYPES)[number];
+
+/**
+ * 可在白板元素里**内联渲染**的类型。
+ *
+ * PDF 走 pdf.js、PPTX 走 PowerPointViewer；其余类型没有内联渲染器，
+ * 导入时标记为 `fileType: 'file'`，由「课件演示」元素渲染成一张下载卡片
+ * —— 这就是审计所说「白板元素侧缺失的引用机制」。
+ */
+export const EMBEDDABLE_ASSET_TYPES = ['pdf', 'pptx'] as const;
+
+/** 无签名可验的纯文本类型（不做 magic bytes 校验，但走同一套体积/扩展名约束）。 */
+const TEXT_ASSET_TYPES = ['md', 'txt', 'csv'] as const;
+
+export function isEmbeddableAssetType(type: string): boolean {
+  return (EMBEDDABLE_ASSET_TYPES as readonly string[]).includes(type);
+}
+
+export function isTextAssetType(type: string): boolean {
+  return (TEXT_ASSET_TYPES as readonly string[]).includes(type);
+}
 
 /** 资产占位符：`${asset:pptx-deck}` → 导入后被替换为真实 /uploads URL。 */
 export const ASSET_PLACEHOLDER_PATTERN = /\$\{asset:([A-Za-z0-9_-]+)\}/g;
@@ -453,15 +489,23 @@ export async function materializePackageAssets(
   try {
     for (const asset of assets) {
       if (!PACKAGE_ASSET_TYPES.includes(asset.contentType)) {
-        throw new Error(`课程包资产 "${asset.id}" 的类型不受支持：${asset.contentType}`);
+        throw new Error(
+          `课程包资产 "${asset.id}" 的类型不受支持：${asset.contentType}（可用：${PACKAGE_ASSET_TYPES.join(' / ')}）`,
+        );
       }
       const ext = `.${asset.contentType}`;
       const buffer = Buffer.from(asset.base64, 'base64');
       if (buffer.length === 0) {
         throw new Error(`课程包资产 "${asset.id}" 内容为空`);
       }
-      if (!validateMagicBytes(buffer, asset.filename)) {
-        throw new Error(`课程包资产 "${asset.id}" 的内容与声明的文件类型不符`);
+      // 声明类型驱动的校验：签名表按**声明的 contentType** 取，而不是用户提供的
+      // filename —— 否则「filename 写 .txt、contentType 报 pdf」就能绕过校验。
+      if (!isTextAssetType(asset.contentType) && !validateMagicBytes(buffer, `asset${ext}`)) {
+        throw new Error(`课程包资产 "${asset.id}" 的内容与声明的类型不符（声明 ${asset.contentType}，签名不匹配）`);
+      }
+      if (isTextAssetType(asset.contentType) && buffer.includes(0)) {
+        // 纯文本类型里出现 NUL 字节 ⇒ 实际是二进制伪装成文本
+        throw new Error(`课程包资产 "${asset.id}" 声明为 ${asset.contentType} 但内容是二进制`);
       }
 
       const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
@@ -469,7 +513,12 @@ export async function materializePackageAssets(
       fs.writeFileSync(filePath, buffer);
       writtenPaths.push(filePath);
 
-      const slideCount = asset.contentType === 'pdf' ? countPdfPages(buffer) : await countPptxSlides(buffer);
+      // 只有可内联渲染的类型才有页数/幻灯片数；其余记 0，元素侧据 fileType 走下载卡片。
+      const slideCount = isEmbeddableAssetType(asset.contentType)
+        ? asset.contentType === 'pdf'
+          ? countPdfPages(buffer)
+          : await countPptxSlides(buffer)
+        : 0;
 
       result.set(asset.id, {
         id: asset.id,

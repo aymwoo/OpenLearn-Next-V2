@@ -1001,6 +1001,4 @@ export interface OutboundFetchResponse {
   body: string;
   url: string;
 }
-export const INetworkProxyServiceToken = new Token<INetworkProxyService>(
-  "@openlearn/core:INetworkProxyService",
-);
+export const INetworkProxyServiceToken = new Token<INetworkProxyService>('@openlearn/core:INetworkProxyService');

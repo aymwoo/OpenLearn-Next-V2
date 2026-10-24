@@ -375,7 +375,13 @@ describe('setupPresence', () => {
         name: 't1',
       });
 
-      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-cls-1', 'class-cls-2', 'les-live-1', 'user-usr-t1']);
+      expect(socket._joinedRooms).toEqual([
+        PRESENCE_STAFF_ROOM,
+        'class-cls-1',
+        'class-cls-2',
+        'les-live-1',
+        'user-usr-t1',
+      ]);
     });
 
     it('作业工作区伪课节房间不参与教师自动加入', () => {

@@ -381,7 +381,16 @@ export function useAutoTilingState({
         setIsSyncing(false);
       }
     },
-    [onElementUpdate, safeElements, getCurrentPageElements, containerSize, setLocalGeometry, localGeometryRef, lessonId, setIsSyncing],
+    [
+      onElementUpdate,
+      safeElements,
+      getCurrentPageElements,
+      containerSize,
+      setLocalGeometry,
+      localGeometryRef,
+      lessonId,
+      setIsSyncing,
+    ],
   );
 
   // 6. 开关切换
@@ -502,7 +511,7 @@ export function useAutoTilingState({
       if (!activeSplitterDragRef.current) return;
       const { splitter, startPointerPos, initialBoxes } = activeSplitterDragRef.current;
       const isHorizontal = splitter.orientation === 'horizontal';
-      const currentPos = isHorizontal ? window.event ? (window.event as any).clientY : 0 : 0;
+      const currentPos = isHorizontal ? (window.event ? (window.event as any).clientY : 0) : 0;
       // Using delta directly
       setActiveSplitterDrag(null);
 
