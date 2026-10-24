@@ -84,6 +84,7 @@
    - 虽然 Node 官方目前仍无 `--allow-net` 启动旗标，但平台在 `process` 模式（默认 `rw` / `ro`）下通过子进程入口注入 `plugin-net-preload.cjs` 与宿主 IPC 代理实现了网络沙箱闭环：
      - **原始底层连接完全阻断**：原始 Socket、UDP (`dgram`)、DNS (`dns.lookup`/`resolve*`)、TLS 与 HTTP2 底层连接均被彻底封锁并抛出 `ERR_ACCESS_DENIED`。
      - **应用层受控代发**：`fetch` 与 `http(s).request` 仅放行在 `plugin_network_grants` 表中获批的目标域名，并通过 IPC 通道（`ol-net-proxy`）转交宿主代发。宿主侧内建防 SSRF 校验（阻断本地环回、私有 IP、云元数据地址与 DNS 重绑定）。
+     - **白名单怎么变成白名单**：清单的 `network.outbound` **只是申请**，写入授权表需要管理员显式动作 —— 安装/更新时勾选「批准出站域名」（`x-approve-network-hosts`），或事后在插件中心 → 插件设置 → 「出站网络域名」里逐条批准/撤销（`GET/POST/DELETE /api/plugins/:id/network-grants`，仅 administrator）。未批准即零白名单（fail-closed），插件发起的任何出站请求都会被拒。回环/私有/保留地址与通配符**永远不可批准**，界面上会连原因一起列出。
      - **执行模式边界覆盖**：`inline` 与 `worker_threads` 模式不受 `plugin-net-preload.cjs` 约束，同进程共享宿主网络栈；但平台在加载策略层（`execution-policy.ts`）已实施强门禁，所有非内置且未受显式信任的第三方插件一律强制改写（coerce）为 `process` 模式运行，从而杜绝不受信代码在无网络拦截模式下运行。
 2. **CPU 不受 permission model 约束**：吃 CPU 但让出 event loop 的插件仍可通过探活；需要进程级 watchdog/resource quota（P2）。
 3. **读取的共享依赖范围**：防的是宿主 `.env`/源码，不能阻止插件读取所有 `node_modules` 内的文件（只含 JS 依赖）。

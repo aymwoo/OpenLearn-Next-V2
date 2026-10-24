@@ -12,6 +12,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **进程内身份开关的运营面护栏（R-01 复核）**：
+  - **复核结论**：R-01（`worker_threads` / `inline` 原始网络不受限）的缓解是真实存在的 —— `resolvePluginExecutionMode` 会把未受信任的第三方插件强制降级到 `process`，且已有 5 例测试钉住「激活/恢复时改写 DB 并走子进程原语」。但审计行只写了「已由强门禁兜底」，没写清**残余风险的准确形态**：真实暴露面只有 ① 管理员显式写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件、② `packages/plugins` 内置目录代码。
+  - **静默失效方向**：`execution-policy.ts` 的判定是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'` —— 写成 `true` / `yes` / `on` 都会被**静默判为未开启**（与 TB-03 同类）。现纳入启动期强校验，只接受 `1` / `0`，写错直接拒绝启动。
+  - **信任名单要留痕**：`OPENLEARN_TRUSTED_INLINE_PLUGINS` 在生产环境出现时，启动日志必留一条可检索告警，写明「这些插件与宿主共享网络栈、出站拦截对它们不生效」，而不是只写进 `.env` 等人去翻。名单只含空白/逗号时也会指出「等同于未配置」。
+  - **测试**：`env-validation.test.ts` 新增 3 例（`true`/`yes`/`on` 被拒而 `1`/`0` 通过、生产环境信任名单产生带插件 id 与代价说明的告警但不阻断、非生产不过度告警且空名单被指认）。
+  - **文档**：`.env.example` 补上「进程内 = 出站拦截不生效」与「ENFORCE 只能写 1/0」；审计文档 R-01 行改写为残余风险的具体形态 + 本轮护栏。
+
+- **插件资源配额与探活调参纳入启动期强校验（补 R-03 复核缺口）**：
+  - **复核结论**：R-03（CPU 饥饿不等于崩溃）在 `packages/core/worker-runtime/plugin-quota.ts` 里**早已实现** —— `startProcessQuota()` 在子进程 spawn 处按 1s 节奏采样 `/proc/<pid>` 的 RSS 与 CPU 时间，超限 `SIGKILL` 后交给既有崩溃看门狗（退避 + 熔断）。此前把这项记为「P2 待办」是文档滞后，已更正。
+  - **真正的缺口**：这五个调参键（`OPENLEARN_PLUGIN_MAX_RSS_MB` / `_CPU_QUOTA_MS` / `_CPU_WINDOW_MS` / `OPENLEARN_PLUGIN_QUOTA` / `OPENLEARN_WORKER_LIVENESS_*`）不在 `assertStartupEnv` 里，而解析器 `normalizePositiveInt` 对非法值是**静默回落默认**的 —— 与 TB-03「拼错就静默回落」完全同类：`OPENLEARN_PLUGIN_CPU_QUOTA_MS=20s` 或开关写成 `of` 都会被无声吞掉，运维以为放宽了配额。
+  - **修法**：逐个纳入启动期强校验 —— 带单位/负数/零以外的非整数 → 拒绝启动（并说明会静默回落）；`OPENLEARN_PLUGIN_CPU_WINDOW_MS < 1000` 只告警（采样本身 1s 一次，窗口过短会让判定抖动）。
+  - **测试**：`env-validation.test.ts` 新增 5 例（合法值矩阵、带单位与负数被拒、开关拼错 fail-fast、探活调参必须正整数、过小窗口只告警）。
+  - **文档**：`.env.example` 补上「这些键会被强校验」的说明；`docs/trust-boundary-hardening-audit-2026-10-14.md` 的 R-03 行更正为已修并写明实现位置与互补关系。
+
+- **已安装插件的出站域名可见可撤销（补齐 R-02 的后半段）**：
+  - **动机**：上一批改动补上了授权链路，但只在**安装向导**里可见 —— 已安装插件的管理员仍无处查看与撤销。撤销恰恰是授权机制最该有的另一半：只批不撤等于永久放行。
+  - **界面**：插件中心 → 插件设置新增「出站网络域名」区块（`PluginNetworkGrantsPanel`），与「这个插件被允许做什么」的其他配置同屏。三个列表**刻意分开**：已批准（带撤销）/ 清单申请中（带批准）/ 不可批准（带原因，无按钮）—— 合并成一张列表会让「清单写了」看起来像「已经能访问」。
+  - **默认拒绝要说人话**：未批准任何域名时显示「该插件无法发起出站请求」，而不是留一片空白；没有声明也没有授权的插件整块不渲染（绝大多数插件属此类）。
+  - **权限**：端点仅 administrator；非管理员打开时后端 403，面板整块隐藏 —— 「你没有权限」的红框对教师毫无意义。
+  - **测试**：`PluginNetworkGrantsPanel.test.tsx` 6 例 —— 三区分离与去重、批准载荷与刷新、撤销走 `DELETE ?host=`、403 隐藏、空清单不渲染、零白名单提示文案。
+
 - **CLI 子命令复用启动期环境校验（审计残余风险 R-05）**：
   - **问题**：`assertStartupEnv()` 只在 `server.ts:startServer()` 最早期执行；`backup` / `restore` / `migrate` / `reset-admin` / `clean` 不经过那一层，于是同一个拼错的环境变量在服务入口 fail-fast，在 CLI 里却静默沿用更宽的策略 —— 而这几条命令正要动真实数据（还原数据库、回滚迁移、改管理员口令）。
   - **单一真相源**：构建时用 esbuild 把 `server/security/env-validation.ts` 单独打成 `dist/env-validation.cjs`（已加入 `files`），CLI 动态加载它，不在 CLI 里复制一份规则。加载不到（源码检出）时**跳过**并继续执行，CLI 的可用性不应被构建产物绑架。
