@@ -118,7 +118,9 @@ export function TopPerformersWidget({
       setLoading(true);
       try {
         const classQuery = classId ? `&classId=${encodeURIComponent(classId)}` : '';
-        const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(activeId)}/top-performers?limit=5${classQuery}`);
+        const res = await fetch(
+          `/api/classroom/sessions/${encodeURIComponent(activeId)}/top-performers?limit=5${classQuery}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.topPerformers) && data.topPerformers.length > 0) {

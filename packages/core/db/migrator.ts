@@ -45,11 +45,7 @@ export function parseMigrationSql(name: string, content: string): Migration {
   // 于是 DOWN 段被当作 UP 一起执行 —— 建完表立刻被自己 DROP 掉，且**不报错**。
   // 该陷阱曾真实发生：009/011 长期缺少 -- UP 标记，补 DOWN 后表反而消失。
   // 现在有 DOWN 就按 DOWN 切分，缺 UP 标记也不再吞掉回滚脚本。
-  const up = upMatch
-    ? upMatch[1].trim()
-    : downMatch
-      ? content.slice(0, downMatch.index).trim()
-      : content.trim();
+  const up = upMatch ? upMatch[1].trim() : downMatch ? content.slice(0, downMatch.index).trim() : content.trim();
   const down = downMatch ? downMatch[1].trim() : '';
 
   return { name, up, down };
@@ -115,9 +111,10 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
     );
   `);
 
-  const appliedRows = db
-    .prepare('SELECT name, checksum FROM _migrations')
-    .all() as { name: string; checksum: string }[];
+  const appliedRows = db.prepare('SELECT name, checksum FROM _migrations').all() as {
+    name: string;
+    checksum: string;
+  }[];
   const applied = new Map(appliedRows.map((r) => [r.name, r.checksum]));
 
   const byName = new Map(migrations.map((m) => [m.name, m]));
@@ -215,23 +212,91 @@ export function sqlMigration(name: string, up: string, down = ''): Migration {
 /**
  * 解析并定位项目根目录下的 migrations 目录
  */
-export function getDefaultMigrationsDir(): string {
-  // 1. 若当前运行在 CJS 环境，优先使用原生的 __dirname
-  if (typeof __dirname !== 'undefined') {
-    const candidate = path.resolve(__dirname, '../../../migrations');
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  // 2. ESM 模块模式探测
+/**
+ * 定位 `migrations/` 目录。
+ *
+ * ## 为什么不能只写死相对层级
+ *
+ * 曾经这里是 `path.resolve(__dirname, '../../../migrations')` —— 它**只在源码布局里成立**
+ * （`packages/core/db/` 上溯三级 = 仓库根）。但 `dist/server.cjs` 里同一个 `__dirname`
+ * 是 `<pkg>/dist`，上溯三级已经跑到包外；而 `migrations/` 此前又不在 `files` 清单里。
+ * 两者叠加的结果是：**发布包（`npx openlearn-next`）里 cwd 下没有 migrations/ 就直接
+ * FATAL 拒绝启动**。Docker 之所以没暴露，是因为 Dockerfile 显式 `COPY migrations` 且
+ * `WORKDIR=/app`，让最后那条 cwd 兜底恰好命中。
+ *
+ * ## 解析顺序
+ *
+ * 1. `OPENLEARN_MIGRATIONS_DIR`（显式覆盖，部署方可指向只读挂载的迁移目录）；
+ * 2. 从**本模块所在位置**逐级上溯，找「package.json 的 name 是 openlearn-next 且同级
+ *    存在 migrations/*.sql」的包根 —— 这一条同时覆盖源码布局与 `dist/` 布局；
+ * 3. `process.cwd()/migrations`（Docker / 传统部署的兜底，保持既有行为）。
+ *
+ * 上溯时**不**接受 `packages/core/package.json`（name 为 `@openlearn/core`），
+ * 否则 monorepo 里会在错误的层级停住。
+ */
+export interface MigrationsDirOptions {
+  /** 环境变量读取源（测试注入）。 */
+  env?: NodeJS.ProcessEnv;
+  /**
+   * 上溯起点（默认取本模块所在位置）。
+   *
+   * 之所以可注入：这条路径的关键分支是「打包后 `__dirname` 变成 `<pkg>/dist`」，
+   * 而那在单进程测试里无法自然复现。注入起点让「发布包布局」可被真实断言，
+   * 而不是靠读代码相信它成立 —— 这个 P0 正是读代码时被漏掉的。
+   */
+  startDirs?: string[];
+  /** cwd 兜底用的目录（测试注入，避免 chdir 影响同进程其它用例）。 */
+  cwd?: string;
+}
+
+export function getDefaultMigrationsDir(options: MigrationsDirOptions = {}): string {
+  const env = options.env ?? process.env;
+  const cwd = options.cwd ?? process.cwd();
+  /** 目录里是否真的有用得上的 .sql（空目录等于没找到）。 */
+  const hasSql = (dir: string): boolean => {
+    try {
+      return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith('.sql'));
+    } catch {
+      return false;
+    }
+  };
+
+  // 1. 显式覆盖
+  const override = env.OPENLEARN_MIGRATIONS_DIR;
+  if (override && hasSql(override)) return path.resolve(override);
+
+  // 2. 从模块位置向上找「openlearn-next 包根/migrations」
+  const starts: string[] = options.startDirs ? [...options.startDirs] : [];
+  if (!options.startDirs && typeof __dirname !== 'undefined') starts.push(__dirname);
   try {
-    if (typeof import.meta !== 'undefined' && import.meta.url) {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dir = path.dirname(__filename);
-      const candidate = path.resolve(__dir, '../../../migrations');
-      if (fs.existsSync(candidate)) return candidate;
+    if (!options.startDirs && typeof import.meta !== 'undefined' && import.meta.url) {
+      starts.push(path.dirname(fileURLToPath(import.meta.url)));
     }
   } catch {
-    // 忽略特定环境下的 import.meta 解析异常
+    // CJS 产物中 import.meta 不可用
   }
-  // 3. 回退至 process.cwd()/migrations
-  return path.resolve(process.cwd(), 'migrations');
+
+  for (const start of starts) {
+    let dir = path.resolve(start);
+    for (;;) {
+      const pkgPath = path.join(dir, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { name?: string };
+          if (pkg.name === 'openlearn-next') {
+            const candidate = path.join(dir, 'migrations');
+            if (hasSql(candidate)) return candidate;
+          }
+        } catch {
+          /* 坏掉的 package.json 不该阻断解析，继续上溯 */
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+
+  // 3. 传统部署兜底（Docker 的 WORKDIR=/app + COPY migrations 走这里）
+  return path.resolve(cwd, 'migrations');
 }

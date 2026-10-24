@@ -33,13 +33,13 @@ graph LR
 
 各阶段的 `id` / `name` / `description` 与实际行为如下（`description` 描述的是**设计意图**，与 `execute()` 的实际行为不符）：
 
-| 类                    | `id`                  | `name`（`PlatformStage`）| `description`（代码注释原文）                                | `execute()` 实际行为      |
-| --------------------- | --------------------- | ------------------------ | ---------------------------------------------------------- | ------------------------- |
-| `StartupStageImpl`    | `stage_startup`       | `Created`                | Environment & configuration validation                      | `setStage(Configuring)`   |
-| `RegistrationStageImpl` | `stage_registration` | `Registering`            | Core Service Contracts & DI Tokens registration            | `setStage(Registering)`   |
-| `InitializationStageImpl` | `stage_initialization` | `Initializing`      | Subsystem Kernels initialization                            | `setStage(Initializing)`  |
-| `ActivationStageImpl` | `stage_activation`    | `Activating`             | Plugin Host discovery & ESM plugins activation              | `setStage(Activating)`    |
-| `ReadyStageImpl`      | `stage_ready`         | `Ready`                  | HTTP & Socket.IO server readiness                           | `setStage(Ready)`         |
+| 类                        | `id`                   | `name`（`PlatformStage`） | `description`（代码注释原文）                   | `execute()` 实际行为     |
+| ------------------------- | ---------------------- | ------------------------- | ----------------------------------------------- | ------------------------ |
+| `StartupStageImpl`        | `stage_startup`        | `Created`                 | Environment & configuration validation          | `setStage(Configuring)`  |
+| `RegistrationStageImpl`   | `stage_registration`   | `Registering`             | Core Service Contracts & DI Tokens registration | `setStage(Registering)`  |
+| `InitializationStageImpl` | `stage_initialization` | `Initializing`            | Subsystem Kernels initialization                | `setStage(Initializing)` |
+| `ActivationStageImpl`     | `stage_activation`     | `Activating`              | Plugin Host discovery & ESM plugins activation  | `setStage(Activating)`   |
+| `ReadyStageImpl`          | `stage_ready`          | `Ready`                   | HTTP & Socket.IO server readiness               | `setStage(Ready)`        |
 
 > `PlatformStage` 枚举（`packages/core/bootstrap/types/index.ts`）实为 8 值：`Created` / `Configuring` / `Registering` / `Initializing` / `Activating` / `Ready` / `ShuttingDown` / `Disposed`。上表的 `name` 是各阶段**声明的起始名**，而 `execute()` 设置的是下一阶段的 `Configuring`…`Ready` —— 即阶段在推进时状态前进一格。
 
@@ -76,10 +76,10 @@ export interface IBootstrapPipeline {
 ```typescript
 class BootstrapPipeline implements IBootstrapPipeline {
   constructor(stages?: ReadonlyArray<IBootstrapStage>); // 不传则装配 5 个标准阶段
-  get stages(): ReadonlyArray<IBootstrapStage>;        // Object.freeze 返回
+  get stages(): ReadonlyArray<IBootstrapStage>; // Object.freeze 返回
   addStage(stage: IBootstrapStage): this;
   addListener(listener: PipelineDiagnosticListener): () => void; // 返回取消订阅函数
-  run(context: IBootstrapContext): Promise<void>;       // status === 'Failed' 时抛 result.error
+  run(context: IBootstrapContext): Promise<void>; // status === 'Failed' 时抛 result.error
   execute(context: IBootstrapContext): Promise<PipelineResult>; // 委托给 PipelineExecutor
 }
 ```
@@ -98,10 +98,10 @@ export interface StageExecutionResult {
 }
 
 export interface PipelineResult {
-  readonly totalDurationMs: number;   // 注意：不是 durationMs
-  readonly status: PipelineStatus;    // 注意：不是 'Completed' | 'Failed'
+  readonly totalDurationMs: number; // 注意：不是 durationMs
+  readonly status: PipelineStatus; // 注意：不是 'Completed' | 'Failed'
   readonly stageResults: ReadonlyArray<StageExecutionResult>;
-  readonly failedStage?: string;      // 值是 stage.id
+  readonly failedStage?: string; // 值是 stage.id
   readonly error?: Error;
 }
 

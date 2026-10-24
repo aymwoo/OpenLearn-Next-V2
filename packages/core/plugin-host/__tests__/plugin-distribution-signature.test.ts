@@ -162,10 +162,7 @@ describe('PluginDistributionManager 发布者签名与来源分级安全门禁 (
     const zipBuf = await createPluginZip('ext-comm-ok');
     const sha = computeSha256(zipBuf);
 
-    const validSig = signPayload(
-      buildAttestationPayload(sha.hex, { id: 'ext-comm-ok', version: '1.0.0' }),
-      privPem,
-    );
+    const validSig = signPayload(buildAttestationPayload(sha.hex, { id: 'ext-comm-ok', version: '1.0.0' }), privPem);
 
     repo.add(
       {

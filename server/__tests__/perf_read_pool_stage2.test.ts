@@ -30,9 +30,7 @@ describe('PERF-01 Read Connection Pool Integration (Stage 2)', () => {
       .run(testLessonId, '只读连接性能测试课时', '课时内容', 'teacher', now, now);
 
     primaryDb
-      .prepare(
-        'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(testStudentId, `SN_${now}`, '性能测试生', 'perf@test.com', 'pwd_hash', now);
 
     primaryDb
@@ -40,13 +38,17 @@ describe('PERF-01 Read Connection Pool Integration (Stage 2)', () => {
       .run(testClassId, testStudentId, now);
 
     primaryDb
-      .prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
       .run(`sch_perf_${now}`, testClassId, testLessonId, '2026-10-14', '08:00 - 08:45', 'scheduled', now);
   });
 
   it('verifies readDb is configured with query_only = ON to reject writes', () => {
     expect(() => {
-      readDb.prepare("INSERT INTO events (id, type, source, payload, timestamp) VALUES ('fake', 'test', 'test', '{}', 1)").run();
+      readDb
+        .prepare("INSERT INTO events (id, type, source, payload, timestamp) VALUES ('fake', 'test', 'test', '{}', 1)")
+        .run();
     }).toThrow(/readonly|attempt to write a readonly database/i);
   });
 

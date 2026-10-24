@@ -8,13 +8,13 @@
 `assessments.kind ∈ {quiz, exam, survey}`，行为差异**全部**集中在 `settings_json`
 （`packages/core/assessment/settings.ts`）：
 
-| 配置 | quiz | exam | survey |
-| --- | --- | --- | --- |
-| `maxAttempts` | 可配（默认 1） | **强制 1** | **强制 1** |
-| `countsTowardGrade` | 可选 | **强制 true** | **强制 false** |
-| `resultVisibility` | 可配 | `immediate` 会被强制改为 `after_release` | **强制 `score_only`** |
-| `showItemAnalysis` | 可配 | 可配 | **强制 false** |
-| `anonymous` | 强制 false | 强制 false | 可配 |
+| 配置                | quiz           | exam                                     | survey                |
+| ------------------- | -------------- | ---------------------------------------- | --------------------- |
+| `maxAttempts`       | 可配（默认 1） | **强制 1**                               | **强制 1**            |
+| `countsTowardGrade` | 可选           | **强制 true**                            | **强制 false**        |
+| `resultVisibility`  | 可配           | `immediate` 会被强制改为 `after_release` | **强制 `score_only`** |
+| `showItemAnalysis`  | 可配           | 可配                                     | **强制 false**        |
+| `anonymous`         | 强制 false     | 强制 false                               | 可配                  |
 
 非法取值一律回落到该类型默认值（拼错不能静默放宽约束）。
 
@@ -45,13 +45,13 @@ question_bank_items                          （题库，独立于试卷）
 
 ## 3. 判分口径
 
-| 题型 | 规则 |
-| --- | --- |
-| 单选 | 索引相等 → 满分，否则 0 |
-| 多选 | 全对满分；**错选（选了错误项）得 0**；少选按 `命中数/正确总数 × 满分`（`partialCredit` 可关） |
-| 判断 | 严格布尔（容忍 `对/错`、`1/0`） |
+| 题型 | 规则                                                                                                                                     |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 单选 | 索引相等 → 满分，否则 0                                                                                                                  |
+| 多选 | 全对满分；**错选（选了错误项）得 0**；少选按 `命中数/正确总数 × 满分`（`partialCredit` 可关）                                            |
+| 判断 | 严格布尔（容忍 `对/错`、`1/0`）                                                                                                          |
 | 填空 | 每空等分；答案接受列表任一命中；归一化 = `trim` + 全角→半角 + 大小写折叠（可配）；`numeric` 按数值比较（容差需显式配置）；**无模糊匹配** |
-| 简答 | 永不自动判分 → `score: null` + `needsManualReview: true` |
+| 简答 | 永不自动判分 → `score: null` + `needsManualReview: true`                                                                                 |
 
 三条不变量：
 
@@ -61,9 +61,9 @@ question_bank_items                          （题库，独立于试卷）
 
 ### 3.5 项分析：难度与区分度（#184）
 
-| 指标 | 口径 | 退化规则 |
-| --- | --- | --- |
-| 难度 (p) | 该题已判分作答的平均得分 / 该题满分 | 无已判分作答 → `null` |
+| 指标       | 口径                                                             | 退化规则                                                           |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 难度 (p)   | 该题已判分作答的平均得分 / 该题满分                              | 无已判分作答 → `null`                                              |
 | 区分度 (r) | 题目得分与该考生**剩余卷面分**（总分 − 本题得分）的 Pearson 相关 | 样本量 < 5、题目得分方差为 0（全对/全错）、剩余分方差为 0 → `null` |
 
 - 用剩余分而不是总分，避免题目自身贡献总分导致相关系数虚高；二分题下等价于点二列相关。
@@ -81,7 +81,7 @@ question_bank_items                          （题库，独立于试卷）
 const registry = await ctx.resolve(IAssessmentGraderRegistryToken);
 registry.registerQuestionType(
   {
-    type: 'ext-code:python',            // 必须 <pluginId>:<name>
+    type: 'ext-code:python', // 必须 <pluginId>:<name>
     label: { zh: 'Python 代码题', en: 'Python code' },
     category: 'objective',
     supports: ['quiz', 'exam'],
@@ -107,36 +107,36 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 
 教师（`requireAuth('teacher','administrator')`，一律按 `assessments.owner_id` 判归属）：
 
-| 方法 | 路径 |
-| --- | --- |
-| GET/POST | `/api/assessments` |
-| GET/PUT/DELETE | `/api/assessments/:id` |
-| PUT | `/api/assessments/:id/items`（整卷覆盖） |
-| GET/POST | `/api/question-bank`，GET/DELETE `/api/question-bank/:id` |
-| POST | `/api/assessments/:id/publish` |
-| POST | `/api/assessment-assignments/:id/close` · `/release` |
-| GET | `/api/assessment-assignments/:id/attempts` · `/stats` · `/export?format=csv` |
-| GET | `/api/assessment-assignments/:id/item-analysis`（难度/区分度） |
-| GET | `/api/assessment-assignments/:id/item-analysis/export?format=csv\|json\|xlsx` |
-| GET | `/api/assessments/:id/paper/export?format=json\|csv\|xlsx`（试卷本体导出，插件题型互通） |
-| POST | `/api/assessments/paper/import`（建新草稿卷，见 §9） |
-| PUT | `/api/assessment-attempts/:id/answers/:itemId/grade`（人工批改） |
-| POST | `/api/assessment-attempts/:id/regrade` |
+| 方法           | 路径                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| GET/POST       | `/api/assessments`                                                                       |
+| GET/PUT/DELETE | `/api/assessments/:id`                                                                   |
+| PUT            | `/api/assessments/:id/items`（整卷覆盖）                                                 |
+| GET/POST       | `/api/question-bank`，GET/DELETE `/api/question-bank/:id`                                |
+| POST           | `/api/assessments/:id/publish`                                                           |
+| POST           | `/api/assessment-assignments/:id/close` · `/release`                                     |
+| GET            | `/api/assessment-assignments/:id/attempts` · `/stats` · `/export?format=csv`             |
+| GET            | `/api/assessment-assignments/:id/item-analysis`（难度/区分度）                           |
+| GET            | `/api/assessment-assignments/:id/item-analysis/export?format=csv\|json\|xlsx`            |
+| GET            | `/api/assessments/:id/paper/export?format=json\|csv\|xlsx`（试卷本体导出，插件题型互通） |
+| POST           | `/api/assessments/paper/import`（建新草稿卷，见 §9）                                     |
+| PUT            | `/api/assessment-attempts/:id/answers/:itemId/grade`（人工批改）                         |
+| POST           | `/api/assessment-attempts/:id/regrade`                                                   |
 
 学生（`requireAuth('student')`）：
 
-| 方法 | 路径 |
-| --- | --- |
-| GET | `/api/me/assessments` |
-| POST | `/api/assessment-assignments/:id/attempts`（开始/续答） |
-| PUT | `/api/assessment-attempts/:id/answers/:itemId`（自动保存） |
-| POST | `/api/assessment-attempts/:id/submit` |
-| GET | `/api/assessment-attempts/:id/result` |
+| 方法 | 路径                                                       |
+| ---- | ---------------------------------------------------------- |
+| GET  | `/api/me/assessments`                                      |
+| POST | `/api/assessment-assignments/:id/attempts`（开始/续答）    |
+| PUT  | `/api/assessment-attempts/:id/answers/:itemId`（自动保存） |
+| POST | `/api/assessment-attempts/:id/submit`                      |
+| GET  | `/api/assessment-attempts/:id/result`                      |
 
 管理员专用：
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
+| 方法 | 路径                                           | 说明                                                            |
+| ---- | ---------------------------------------------- | --------------------------------------------------------------- |
 | POST | `/api/assessment-attempts/:id/reveal-identity` | 匿名反查，**必写审计** `assessment.anonymous_identity_revealed` |
 
 ## 6. 本期未做（后续阶段）
@@ -174,14 +174,15 @@ P0b 的出题编辑器直接消费这份定义；React 组件在 PR B 里补充�
 
 - 迁移 `039_question_bank_sharing_and_papers.sql` 只加两列（幂等；DOWN 可回滚）。
 - 关闭抽题：把 settings.draw 去掉后，新作答恢复整卷；已有 `paper_json` 的旧作答仍按各自的卷面判分与展示。
+
 ## 8. 存量数据导入：白板 quiz 与预置投票（Issue #185）
 
 ### 8.1 范围
 
-| 旧来源 | 新模型 | 说明 |
-| --- | --- | --- |
-| `whiteboard_elements.type='quiz'` | `assessments(kind=quiz)` + 1 道单选 | 题干/选项/正确答案来自元素 `data`；历史 `lesson_quiz_submissions` 导入为 attempts/answers |
-| `lesson_preset_polls`（有 `correct_option`） | `assessments(kind=quiz)` + 1 道单选 | `A/B/C/D` 映射为选项索引；**纯投票（无正确答案）不导入**，报告为 `no_correct_option` |
+| 旧来源                                       | 新模型                              | 说明                                                                                      |
+| -------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `whiteboard_elements.type='quiz'`            | `assessments(kind=quiz)` + 1 道单选 | 题干/选项/正确答案来自元素 `data`；历史 `lesson_quiz_submissions` 导入为 attempts/answers |
+| `lesson_preset_polls`（有 `correct_option`） | `assessments(kind=quiz)` + 1 道单选 | `A/B/C/D` 映射为选项索引；**纯投票（无正确答案）不导入**，报告为 `no_correct_option`      |
 
 ### 8.2 执行方式
 
@@ -221,11 +222,11 @@ interface QuestionTypeDefinition<TConfig, TAnswer> {
 
 返回值的三种语义（区分它们是这套协议的关键）：
 
-| 返回 | 含义 | 服务端行为 |
-| --- | --- | --- |
-| `string`（非空） | 用我这条提示词 | 直接交给 AI Provider，**不再拼接内置模板** |
-| `null` | 本题型不提供 AI 建议 | 保守拒绝：`400 该题型不提供 AI 批改建议`，不调用 AI |
-| 未实现（`undefined`） | 走通用逻辑 | 回退内置通用模板（**全部内置题型走这条，行为不变**） |
+| 返回                  | 含义                 | 服务端行为                                           |
+| --------------------- | -------------------- | ---------------------------------------------------- |
+| `string`（非空）      | 用我这条提示词       | 直接交给 AI Provider，**不再拼接内置模板**           |
+| `null`                | 本题型不提供 AI 建议 | 保守拒绝：`400 该题型不提供 AI 批改建议`，不调用 AI  |
+| 未实现（`undefined`） | 走通用逻辑           | 回退内置通用模板（**全部内置题型走这条，行为不变**） |
 
 约束：
 
@@ -245,18 +246,18 @@ JSON 协议：
 {
   "schema": "openlearn.assessment.paper/v1",
   "exportedAt": 1730000000000,
-  "assessment": { "title": "期中卷", "kind": "exam", "description": null, "settings": { /* AssessmentSettings */ } },
+  "assessment": { "title": "期中卷", "kind": "exam", "description": null, "settings": {/* AssessmentSettings */} },
   "items": [
     {
       "order": 1,
       "section": null,
-      "type": "ext-code:python",           // 题型标记：内置为 single_choice 等，插件为 <pluginId>:<name>
+      "type": "ext-code:python", // 题型标记：内置为 single_choice 等，插件为 <pluginId>:<name>
       "stem": "请实现累加函数",
-      "config": { "testCases": [], "rubric": "…" },  // 插件自定义结构，原样保留
-      "answerKey": "def add(n): …",                  // 教师可见，导入时由题型校验
-      "maxScore": 10
-    }
-  ]
+      "config": { "testCases": [], "rubric": "…" }, // 插件自定义结构，原样保留
+      "answerKey": "def add(n): …", // 教师可见，导入时由题型校验
+      "maxScore": 10,
+    },
+  ],
 }
 ```
 
@@ -279,14 +280,14 @@ CSV / XLSX 是**同一个数据模型的扁平视图**（列：`order,section,ty
 
 机器可读错误码（4xx 会经 `sendSafeError` 透传 `code`，前端据此分支）：
 
-| code | 场景 |
-| --- | --- |
-| `PAPER_IMPORT_INVALID_JSON` | 内容不是合法 JSON |
-| `PAPER_IMPORT_INVALID_SHAPE` | 缺 `items` 数组或不是对象 |
-| `PAPER_IMPORT_INVALID_CSV` | CSV 缺必需列 / 内容为空 |
-| `PAPER_IMPORT_EMPTY` | 一道题都没有 |
-| `QUESTION_TYPE_NOT_INSTALLED` | 题型未安装（附 `missingTypes`） |
-| `PAPER_IMPORT_INVALID_ITEM` | 题干/满分/配置/标准答案非法（附 `invalidItems`） |
-| `PAPER_IMPORT_MISSING_TITLE` | 缺试卷标题 |
+| code                          | 场景                                             |
+| ----------------------------- | ------------------------------------------------ |
+| `PAPER_IMPORT_INVALID_JSON`   | 内容不是合法 JSON                                |
+| `PAPER_IMPORT_INVALID_SHAPE`  | 缺 `items` 数组或不是对象                        |
+| `PAPER_IMPORT_INVALID_CSV`    | CSV 缺必需列 / 内容为空                          |
+| `PAPER_IMPORT_EMPTY`          | 一道题都没有                                     |
+| `QUESTION_TYPE_NOT_INSTALLED` | 题型未安装（附 `missingTypes`）                  |
+| `PAPER_IMPORT_INVALID_ITEM`   | 题干/满分/配置/标准答案非法（附 `invalidItems`） |
+| `PAPER_IMPORT_MISSING_TITLE`  | 缺试卷标题                                       |
 
 协议向后兼容策略：`schema` 不匹配只**告警不报错**（导入结果里带 `warnings`），字段顺序与语义保持不变。

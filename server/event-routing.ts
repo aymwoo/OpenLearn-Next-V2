@@ -71,6 +71,16 @@ export interface SocketRoute<TPayload = any> {
   readonly effect?: (event: PlatformEvent<TPayload>, deps: SocketRouteDeps) => void;
   /** 是否附加 `_meta`（默认 true）。关闭仅用于严格兼容旧前端契约的路由。 */
   readonly attachMeta?: boolean;
+  /**
+   * 教员专属镜像事件（Issue #238）：当主事件对学生房间下发**脱敏 payload**
+   * 时，通过此字段把**全量 payload** 以独立事件名镜像到 PRESENCE_STAFF_ROOM。
+   * 教师客户端监听镜像事件名，学生客户端只收主事件 —— 同班学生无法从
+   * WebSocket 帧里读到正确答案与他人作答。
+   */
+  readonly staffMirror?: {
+    /** 镜像事件名（如 `whiteboard-quiz-answered-staff`）。 */
+    readonly socketEvent: string;
+  };
   /** 人类可读说明，供审计与排障。 */
   readonly description: string;
 }
@@ -327,7 +337,17 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     eventType: 'whiteboard.quiz_answered',
     socketEvent: 'whiteboard-quiz-answered',
     rooms: lessonAndClassRooms,
-    description: '随堂练习作答 → 课节 + 班级房间（教师大屏与同班学生面板摄取）',
+    // Issue #238：学生房间脱敏 —— 剥离作答内容/正确答案/正确选项索引。
+    // 保留 studentId/studentName/score/isCorrect 供同班答题进度展示。
+    map: (event) => {
+      const p = { ...(event.payload as Record<string, unknown>) };
+      delete p.answer;
+      delete p.correctAnswer;
+      delete p.correctIndex;
+      return p;
+    },
+    staffMirror: { socketEvent: 'whiteboard-quiz-answered-staff' },
+    description: '随堂练习作答 → 课节 + 班级房间（学生房间脱敏版）；教师全量版镜像至 presence-staff（Issue #238）',
   },
 
   // ── 作业中心（assignment-eval 插件）────────────────────────────────────
@@ -552,6 +572,12 @@ export function createRouteDispatcher(routes: readonly SocketRoute[], deps: Sock
       if (targets.length === 0) return;
       // 并集投递：客户端同时命中课节/班级/用户房间时只收一次，避免重复弹窗
       deps.io.to(targets).emit(route.socketEvent, payload);
+      // 教员专属镜像（Issue #238）：镜像投递**原始** event.payload（未经 map 脱敏），
+      // 只进 PRESENCE_STAFF_ROOM；学生房间收到的才是 map 层脱敏后的版本
+      if (route.staffMirror) {
+        const staffPayload = route.attachMeta === false ? event.payload : attachMeta(event.payload, event);
+        deps.io.to(PRESENCE_STAFF_ROOM).emit(route.staffMirror.socketEvent, staffPayload);
+      }
     } catch (e) {
       console.error(`[event-routing] Error dispatching "${event.type}" to "${route.socketEvent}":`, e);
     }

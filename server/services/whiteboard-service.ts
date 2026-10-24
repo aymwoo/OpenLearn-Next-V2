@@ -121,12 +121,7 @@ export class WhiteboardService {
   /**
    * 绘制/新增白板元素
    */
-  public async drawElement(params: {
-    lessonId: string;
-    type: string;
-    data: any;
-    actorId?: string;
-  }): Promise<any> {
+  public async drawElement(params: { lessonId: string; type: string; data: any; actorId?: string }): Promise<any> {
     const { lessonId, type, data, actorId = 'user-frontend' } = params;
     const cmd = this.commandBus.createCommand(
       'whiteboard.draw',
@@ -168,12 +163,7 @@ export class WhiteboardService {
    * 清空课节所有白板元素
    */
   public async clearWhiteboard(lessonId: string, actorId = 'user-frontend'): Promise<any> {
-    const cmd = this.commandBus.createCommand(
-      'whiteboard.clear',
-      { lessonId },
-      actorId,
-      { approved: true },
-    );
+    const cmd = this.commandBus.createCommand('whiteboard.clear', { lessonId }, actorId, { approved: true });
     return this.commandBus.execute(cmd);
   }
 
@@ -181,12 +171,9 @@ export class WhiteboardService {
    * 删除指定白板元素
    */
   public async deleteElement(lessonId: string, elementId: string, actorId = 'user-frontend'): Promise<any> {
-    const cmd = this.commandBus.createCommand(
-      'whiteboard.delete',
-      { lessonId, elementId },
-      actorId,
-      { approved: true },
-    );
+    const cmd = this.commandBus.createCommand('whiteboard.delete', { lessonId, elementId }, actorId, {
+      approved: true,
+    });
     return this.commandBus.execute(cmd);
   }
 }

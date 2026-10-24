@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Shield, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, X, Loader2, CheckCircle, Zap } from 'lucide-react';
 import JSZip from 'jszip';
+import { classifyNetHostProposals } from '../../packages/core/plugin-host/plugin-grants';
 
 export type ZipInstallOptions = {
   mode: 'install' | 'update';
@@ -10,6 +11,13 @@ export type ZipInstallOptions = {
   approvePublicRoutes?: boolean;
   /** 管理员确认清单申请的能力。通配符仍然不会被授予。 */
   approveCapabilities?: boolean;
+  /**
+   * 管理员确认清单申请的出站域名（R-02）。
+   *
+   * 清单里的 `network.outbound` 只是申请：不勾选则运行时按「零白名单」处理，
+   * 插件的出站请求会被拒（fail-closed）。回环/私有/通配符即使勾选也不会被授予。
+   */
+  approveNetworkHosts?: boolean;
 };
 
 type SandboxChoice = 'worker' | 'inline' | 'process';
@@ -205,6 +213,7 @@ export function PluginInstallWizard({
   const [executionMode, setExecutionMode] = useState<SandboxChoice>('process');
   const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   const [approveCapabilities, setApproveCapabilities] = useState(false);
+  const [approveNetworkHosts, setApproveNetworkHosts] = useState(false);
   const [zipObj, setZipObj] = useState<JSZip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -464,6 +473,7 @@ export function PluginInstallWizard({
         allowDowngrade: isDowngrade ? allowDowngrade : false,
         approvePublicRoutes,
         approveCapabilities,
+        approveNetworkHosts,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -506,6 +516,7 @@ export function PluginInstallWizard({
         allowDowngrade: true,
         approvePublicRoutes,
         approveCapabilities,
+        approveNetworkHosts,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -524,6 +535,21 @@ export function PluginInstallWizard({
   };
 
   if (!isOpen) return null;
+
+  /**
+   * 出站域名：把清单声明分成「可批准」与「永远不可批准（带原因）」。
+   *
+   * 复用宿主的 `classifyNetHostProposals`，而不是在前端再写一份规则 ——
+   * 前端与运行时对「什么算合法域名」的判断一旦分叉，界面就会显示一堆
+   * 看起来能批准、实际授权表永远不接受的项。
+   */
+  const outboundProposals = classifyNetHostProposals(
+    Array.isArray(manifest?.network?.outbound) ? manifest.network.outbound : [],
+  );
+  const outboundHosts = outboundProposals.filter((v) => v.approvable).map((v) => v.host as string);
+  const blockedOutboundHosts = outboundProposals
+    .filter((v) => !v.approvable)
+    .map((v) => ({ raw: v.raw, reason: v.reason || '' }));
 
   // Determine risk profile of capability with full row color coding
   const getRiskBadge = (cap: string) => {
@@ -1139,6 +1165,70 @@ export function PluginInstallWizard({
                         : 'Approve the capabilities this manifest requests. Leave unchecked and they stay inactive. Wildcard capabilities are never granted.'}
                     </span>
                   </label>
+
+                  {/* R-02：出站域名白名单。清单声明只是申请，这里才是授权。 */}
+                  {outboundHosts.length > 0 && (
+                    <div className="border border-amber-200 bg-amber-50/60 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-amber-900">
+                          {lang === 'zh' ? '出站网络域名（清单申请）' : 'Outbound hosts requested by the manifest'}
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                          {outboundHosts.length}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {outboundHosts.map((host) => {
+                          const blocked = blockedOutboundHosts.some((b) => b.raw === host);
+                          return (
+                            <span
+                              key={host}
+                              title={
+                                blocked
+                                  ? blockedOutboundHosts.find((b) => b.raw === host)?.reason
+                                  : lang === 'zh'
+                                    ? '批准后该域名可被插件访问'
+                                    : 'Approve to allow the plugin to reach this host'
+                              }
+                              className={
+                                'font-mono text-[11px] rounded px-1.5 py-0.5 border ' +
+                                (blocked
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 line-through'
+                                  : 'bg-white text-slate-700 border-slate-200')
+                              }
+                            >
+                              {host}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      {blockedOutboundHosts.length > 0 && (
+                        <p className="text-[11px] text-rose-700 leading-relaxed">
+                          {lang === 'zh'
+                            ? `${blockedOutboundHosts.length} 项声明永远不会被批准：${blockedOutboundHosts
+                                .map((b) => `${b.raw}（${b.reason}）`)
+                                .join('、')}`
+                            : `${blockedOutboundHosts.length} declaration(s) can never be approved: ${blockedOutboundHosts
+                                .map((b) => `${b.raw} (${b.reason})`)
+                                .join(', ')}`}
+                        </p>
+                      )}
+                      <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          data-testid="approve-network-hosts"
+                          checked={approveNetworkHosts}
+                          onChange={(e) => setApproveNetworkHosts(e.target.checked)}
+                        />
+                        <span>
+                          {lang === 'zh'
+                            ? '批准清单申请的上方可访问域名。不勾选则插件无法发起任何出站请求（默认拒绝）。私有/回环/通配符即使勾选也不会被授予。'
+                            : 'Approve the outbound hosts above. Leave unchecked and the plugin cannot reach any external host (default deny). Private/loopback/wildcard entries are never granted.'}
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </>

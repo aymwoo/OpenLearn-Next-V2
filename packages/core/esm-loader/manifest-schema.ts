@@ -579,10 +579,7 @@ const frontendSlotsShape = {
 export const pluginLocalesSchema = z
   .record(
     z.string().min(1, { error: '语言代码不能为空' }),
-    z.union([
-      z.string().min(1, { error: '语言包文件路径不能为空' }),
-      z.record(z.string().min(1), z.string()),
-    ]),
+    z.union([z.string().min(1, { error: '语言包文件路径不能为空' }), z.record(z.string().min(1), z.string())]),
   )
   .optional();
 

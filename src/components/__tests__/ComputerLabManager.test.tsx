@@ -210,9 +210,7 @@ describe('ComputerLabManager (Unified Computer Lab Seating)', () => {
 });
 
 describe('ComputerLabManager (拖拽调座与交换逻辑)', () => {
-  const mockLabs = [
-    { id: 'lab_1', room_number: '305综合机房', rows: 2, cols: 3, created_at: 1000 },
-  ];
+  const mockLabs = [{ id: 'lab_1', room_number: '305综合机房', rows: 2, cols: 3, created_at: 1000 }];
 
   const mockClasses = [{ id: 'class_1', name: '高一(1)班', lab_id: 'lab_1' }];
 
@@ -334,7 +332,11 @@ describe('ComputerLabManager (拖拽调座与交换逻辑)', () => {
     expect(within(container).getAllByText(/1 人未排/).length).toBeGreaterThanOrEqual(1);
 
     // 保存持久化：李明(st_2) 应落在 0_0
-    fireEvent.click(within(container).getByText(/保存排座/).closest('button')!);
+    fireEvent.click(
+      within(container)
+        .getByText(/保存排座/)
+        .closest('button')!,
+    );
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
         '/api/classes/class_1/seats',

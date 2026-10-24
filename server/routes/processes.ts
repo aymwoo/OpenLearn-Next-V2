@@ -59,9 +59,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
             success: false,
             code: 'APPROVAL_STALE_CLEARED',
             cleared: true,
-            error:
-              `指令 "${pending.command_type}" 已失效（对应的插件或命令已不存在），` +
-              '该待审批记录已被自动清除。',
+            error: `指令 "${pending.command_type}" 已失效（对应的插件或命令已不存在），` + '该待审批记录已被自动清除。',
           });
         }
         throw execErr;

@@ -10,22 +10,22 @@
 
 以下来自当前库表和接口，不是计划中的功能。
 
-| 数据 | 放在哪里 | 谁写入 |
-| --- | --- | --- |
-| 姓名、学号、邮箱、头像、登录口令的哈希、名册备注 `private_notes` | 表 `students` | 教师或管理员创建、导入 |
-| 班级成员关系 | 表 `class_students` | 教师或管理员 |
-| 班级临时口令（AES-256-GCM 密文，前缀 `olenc1:`） | 表 `classes.class_passcode` | 教师或管理员。教师读取口令的接口解密后显示原文。登录先解密，再做常量时间比较。启动时把仍是明文的旧行加密 |
-| 作业正文与学生提交（含 `content`）、分数、反馈 | 表 `assignments`、`assignment_submissions` | 教师布置，学生提交，教师批改 |
-| 课时进度、完成标记 | 表 `student_lesson_progress` | 服务端事件，也可由学生本人调用进度接口写入 |
-| 出勤 | 表 `attendance` | 课堂点名相关流程 |
-| 考试成绩、学期报告 | 表 `exam_scores`、`student_semester_reports` | 教师或管理员 |
-| 课堂点名记录 | 表 `student_rollcalls` | 教师 |
-| 插件作业提交、同伴互评 | 表 `plugin_submissions`、`plugin_peer_reviews` 等 | 取决于已启用的插件 |
-| 课件文件、上传文件 | 数据目录 `storage/`、`uploads/` | 教师上传为主。头像在 `/uploads/avatars/`，该路径不校验登录 |
-| AI 对话的角色与正文 | 表 `agent_conversations` | 使用 AI 的教师（及能调用该接口的会话） |
-| 登录会话 | 表 `client_sessions` | 登录时写入。Cookie 为 HttpOnly |
-| 内核事件 | 表 `events` | 平台自动写入 |
-| 访问日志与安全审计 | `openlearn.log`、`audit.log`（compose 在 `/data/logs`） | 平台自动写入。字段含用户 ID、路径、状态码、耗时。设计上不写口令、Cookie、班级口令和学生作答 |
+| 数据                                                             | 放在哪里                                                | 谁写入                                                                                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 姓名、学号、邮箱、头像、登录口令的哈希、名册备注 `private_notes` | 表 `students`                                           | 教师或管理员创建、导入                                                                                   |
+| 班级成员关系                                                     | 表 `class_students`                                     | 教师或管理员                                                                                             |
+| 班级临时口令（AES-256-GCM 密文，前缀 `olenc1:`）                 | 表 `classes.class_passcode`                             | 教师或管理员。教师读取口令的接口解密后显示原文。登录先解密，再做常量时间比较。启动时把仍是明文的旧行加密 |
+| 作业正文与学生提交（含 `content`）、分数、反馈                   | 表 `assignments`、`assignment_submissions`              | 教师布置，学生提交，教师批改                                                                             |
+| 课时进度、完成标记                                               | 表 `student_lesson_progress`                            | 服务端事件，也可由学生本人调用进度接口写入                                                               |
+| 出勤                                                             | 表 `attendance`                                         | 课堂点名相关流程                                                                                         |
+| 考试成绩、学期报告                                               | 表 `exam_scores`、`student_semester_reports`            | 教师或管理员                                                                                             |
+| 课堂点名记录                                                     | 表 `student_rollcalls`                                  | 教师                                                                                                     |
+| 插件作业提交、同伴互评                                           | 表 `plugin_submissions`、`plugin_peer_reviews` 等       | 取决于已启用的插件                                                                                       |
+| 课件文件、上传文件                                               | 数据目录 `storage/`、`uploads/`                         | 教师上传为主。头像在 `/uploads/avatars/`，该路径不校验登录                                               |
+| AI 对话的角色与正文                                              | 表 `agent_conversations`                                | 使用 AI 的教师（及能调用该接口的会话）                                                                   |
+| 登录会话                                                         | 表 `client_sessions`                                    | 登录时写入。Cookie 为 HttpOnly                                                                           |
+| 内核事件                                                         | 表 `events`                                             | 平台自动写入                                                                                             |
+| 访问日志与安全审计                                               | `openlearn.log`、`audit.log`（compose 在 `/data/logs`） | 平台自动写入。字段含用户 ID、路径、状态码、耗时。设计上不写口令、Cookie、班级口令和学生作答              |
 
 邮箱是否收集，取决于建档时有没有填。系统没有单独的「家长手机号」「家庭住址」「身份证号」字段。**【待学校/法务确认】学校是否禁止教师把这类信息写进备注、作业或 AI 对话。**
 
@@ -92,13 +92,13 @@
 
 系统在 `packages/core/db/retention-policy.ts` 中内置了多类别数据保留与定期清理策略（Issue #145）。服务启动与数据库就绪时会自动执行超期数据清理，各类别支持通过环境变量独立配置保留天数（设置为 `0` 表示禁用清理）：
 
-| 数据类别 | 对应表名 | 默认保留天数 | 环境变量配置项 |
-| --- | --- | --- | --- |
-| 总线事件 | `events` | 90 天 | `OPENLEARN_EVENT_RETENTION_DAYS` |
-| 考勤流水 | `attendance` | 365 天 | `OPENLEARN_ATTENDANCE_RETENTION_DAYS` |
-| 点名记录 | `student_rollcalls` | 180 天 | `OPENLEARN_ROLLCALLS_RETENTION_DAYS` |
-| 已读通知标记 | `student_read_notifications` | 30 天 | `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS` |
-| 客户端会话 | `client_sessions` | 30 天 | `OPENLEARN_SESSIONS_RETENTION_DAYS` |
+| 数据类别     | 对应表名                     | 默认保留天数 | 环境变量配置项                           |
+| ------------ | ---------------------------- | ------------ | ---------------------------------------- |
+| 总线事件     | `events`                     | 90 天        | `OPENLEARN_EVENT_RETENTION_DAYS`         |
+| 考勤流水     | `attendance`                 | 365 天       | `OPENLEARN_ATTENDANCE_RETENTION_DAYS`    |
+| 点名记录     | `student_rollcalls`          | 180 天       | `OPENLEARN_ROLLCALLS_RETENTION_DAYS`     |
+| 已读通知标记 | `student_read_notifications` | 30 天        | `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS` |
+| 客户端会话   | `client_sessions`            | 30 天        | `OPENLEARN_SESSIONS_RETENTION_DAYS`      |
 
 **核心名册、班级与作业数据**：
 数据库中的 `students` 核心名册、班级关系与正式作业提交等业务数据不会被保留策略自动删除，将一直保留直至管理员/教师手动删除或触发 GDPR 级联删除。

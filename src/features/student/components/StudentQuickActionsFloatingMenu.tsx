@@ -446,32 +446,32 @@ export function StudentQuickActionsFloatingMenu({
                     onClick={handleJoinLiveSession}
                     className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-indigo-50/60 hover:border-indigo-300 transition-all cursor-pointer shadow-3xs"
                   >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 text-white flex items-center justify-center shrink-0 shadow-xs relative">
-                      <Radio size={18} className="animate-pulse" />
-                      <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-indigo-900 transition-colors">
-                          {lang === 'zh' ? '进入实时课堂' : 'Join Live Session'}
-                        </span>
-                        <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">
-                          LIVE
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 text-white flex items-center justify-center shrink-0 shadow-xs relative">
+                        <Radio size={18} className="animate-pulse" />
+                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
                         </span>
                       </div>
-                      <p className="text-2xs text-slate-500 truncate mt-0.5">
-                        {activeSessionSchedule.lesson_title || activeSessionSchedule.class_name || '当前课堂'}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-indigo-900 transition-colors">
+                            {lang === 'zh' ? '进入实时课堂' : 'Join Live Session'}
+                          </span>
+                          <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">
+                            LIVE
+                          </span>
+                        </div>
+                        <p className="text-2xs text-slate-500 truncate mt-0.5">
+                          {activeSessionSchedule.lesson_title || activeSessionSchedule.class_name || '当前课堂'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="text-slate-400 group-hover/item:text-indigo-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
-                  />
+                    <ChevronRight
+                      size={16}
+                      className="text-slate-400 group-hover/item:text-indigo-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
+                    />
                   </div>
                 )}
 

@@ -561,9 +561,7 @@ describe('ExtensionPointRenderer — unmarked lazy factory self-healing (R-1)', 
     // 此前该形态会永久悬挂 Suspense 且不抛错；探针自愈后正常渲染
     const el = await screen.findByTestId('healed', undefined, { timeout: 3000 });
     expect(el).toBeTruthy();
-    expect(
-      errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory')),
-    ).toBe(true);
+    expect(errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory'))).toBe(true);
   });
 
   it('直接组件（含 hooks）不误报 —— 探针捕获无参调用抛错后按直组件处理', async () => {
@@ -584,8 +582,6 @@ describe('ExtensionPointRenderer — unmarked lazy factory self-healing (R-1)', 
     renderWithHost(<ExtensionPointRenderer slot="probe.direct" />);
     const el = await screen.findByTestId('direct', undefined, { timeout: 3000 });
     expect(el).toBeTruthy();
-    expect(
-      errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory')),
-    ).toBe(false);
+    expect(errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory'))).toBe(false);
   });
 });

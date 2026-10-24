@@ -111,7 +111,8 @@ describe('ManagementPlugin', () => {
         actor_id TEXT,
         actor_role TEXT,
         reason TEXT,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        old_content TEXT
       );
 
       CREATE TABLE IF NOT EXISTS schedules (
@@ -198,7 +199,10 @@ describe('ManagementPlugin', () => {
 
   it('should successfully register, activate and run Management commands', async () => {
     const pluginId = '@openlearn/plugin-management';
-    pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    ); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
 
     // Setup initial DB entry
     db.prepare(
@@ -283,7 +287,10 @@ describe('ManagementPlugin', () => {
 
   it('assignment.grade 写入手动分与审计；学生重交不把 graded 降级', async () => {
     const pluginId = '@openlearn/plugin-management';
-    pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      ManagementPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    ); // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
     db.prepare(
       'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
     ).run(pluginId, 'Management', JSON.stringify(ManagementPlugin.manifest), '', 'installed', Date.now(), 'esm');
@@ -357,6 +364,21 @@ describe('ManagementPlugin', () => {
     expect(row.status).toBe('graded');
     expect(row.score).toBe(88);
     expect(row.content).toBe('学生作答');
+
+    // Issue #248：内容替换必须留痕 —— 分数没动，但审计历史里查得到这次替换
+    const resubmitHistory = db
+      .prepare(
+        `SELECT old_score, new_score, reason, old_content FROM assignment_grade_history
+         WHERE assignment_id = ? AND student_id = ? AND reason = 'resubmit-content-replaced'`,
+      )
+      .all(assignmentId, studentId) as any[];
+    expect(resubmitHistory).toHaveLength(1);
+    expect(resubmitHistory[0]).toMatchObject({
+      old_score: 88,
+      new_score: 88,
+      reason: 'resubmit-content-replaced',
+      old_content: '旧内容',
+    });
 
     await expect(
       commandBus.execute({

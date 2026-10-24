@@ -16,26 +16,26 @@ function purgeResilienceAndModalsFromDb() {
   if (!fs.existsSync(DB_PATH)) return;
   const db = new Database(DB_PATH);
   try {
-    const lessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 容灾与模态课节%'")
-      .all() as { id: string }[];
+    const lessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 容灾与模态课节%'").all() as {
+      id: string;
+    }[];
     for (const l of lessons) {
       db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(l.id);
       db.prepare('DELETE FROM classroom_feed WHERE lesson_id = ?').run(l.id);
       db.prepare('DELETE FROM lessons WHERE id = ?').run(l.id);
     }
 
-    const classes = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 容灾与模态班级%'")
-      .all() as { id: string }[];
+    const classes = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 容灾与模态班级%'").all() as {
+      id: string;
+    }[];
     for (const c of classes) {
       db.prepare('DELETE FROM class_students WHERE class_id = ?').run(c.id);
       db.prepare('DELETE FROM classes WHERE id = ?').run(c.id);
     }
 
-    const students = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_RESILIENCE_%'")
-      .all() as { id: string }[];
+    const students = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_RESILIENCE_%'").all() as {
+      id: string;
+    }[];
     for (const s of students) {
       db.prepare('DELETE FROM class_students WHERE student_id = ?').run(s.id);
       db.prepare('DELETE FROM students WHERE id = ?').run(s.id);

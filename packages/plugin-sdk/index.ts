@@ -38,10 +38,7 @@ export type {
 export { PluginState } from '../core/plugin-host/types.js';
 
 export { PluginHttpRouter } from '../core/plugin-host/http-router.js';
-export {
-  CAP_STUDENT_DATA_READ,
-  CAP_STUDENT_DATA_WRITE,
-} from '../core/plugin-host/method-policy.js';
+export { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE } from '../core/plugin-host/method-policy.js';
 
 // ── Unified Foundation Layer (P7 Sprints) ──────────────────────────────
 
@@ -73,9 +70,7 @@ export { PluginContextAdapter } from '../core/plugin-host/plugin-context-adapter
 export { PluginLifecycleManager } from '../core/plugin-host/plugin-lifecycle-manager.js';
 export { PluginCapabilityGateway } from '../core/plugin-host/plugin-capability-gateway.js';
 export { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
-export {
-  PluginDistributionManager,
-} from '../core/plugin-host/plugin-distribution-manager.js';
+export { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 

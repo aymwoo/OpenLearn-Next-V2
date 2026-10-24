@@ -19,7 +19,8 @@ export function StudentLiveHeader(props: StudentLiveHeaderProps) {
   const appData = useOptionalAppData();
 
   const lang = (props.lang ?? appData?.lang ?? 'zh') as 'zh' | 'en';
-  const activeStudentId = props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
+  const activeStudentId =
+    props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
   const students = props.students ?? appData?.students ?? [];
   const selectedLesson = props.selectedLesson !== undefined ? props.selectedLesson : (appData?.selectedLesson ?? null);
   const lessons = props.lessons ?? appData?.lessons ?? [];

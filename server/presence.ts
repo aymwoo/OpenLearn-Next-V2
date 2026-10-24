@@ -30,6 +30,26 @@ export interface PresenceDeps {
    * 缺省不传时学生对课节房间不设限，保持向后兼容。
    */
   lookupLessonClassId?: (lessonId: string) => string | null;
+  /**
+   * 查询教师（或管理员）拥有的班级 id 列表。
+   *
+   * Issue #242：#212 将课堂事件改为房间定向投递后，教师加入班级房间只剩
+   * 前端 syncPresenceAndRooms（socket connect 时刻）一条路径，而教师主 socket
+   * 在 connect 时并不知道自己在哪个班级（liveClassSelectedClassId 刷新即清空）
+   * —— 教师停留在作业中心/课表时，assignment.submitted 等班级事件静默丢失。
+   * 教师 socket 连接时按此清单自动加入所属班级房间，与学生 register-student
+   * 的同构逻辑对齐。缺省不传时教师不自动加入班级房间，保持向后兼容。
+   */
+  lookupTeacherClassIds?: (userId: string) => string[];
+  /**
+   * 查询教师名下活跃（未归档）课节的 lessonId 列表。
+   *
+   * progress_mode_changed / quiz_answered 等事件仅投课节房间（payload 不带
+   * classId），仅加入班级房间覆盖不到。教师连接时按此清单自动加入课节房间，
+   * 使其停留在任意视图都能收到自己课堂的实时事件。
+   * 缺省不传时不自动加入课节房间，保持向后兼容。
+   */
+  lookupTeacherLessonIds?: (userId: string) => string[];
 }
 
 /** 班级房间名。与课节房间（直接用 lessonId）互不冲突。 */
@@ -209,7 +229,14 @@ export function getPresentStudentIds(lessonId: string | null | undefined): strin
   return present;
 }
 
-export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLessonClassId }: PresenceDeps): void {
+export function setupPresence({
+  io,
+  eventBus,
+  lookupStudentClassIds,
+  lookupLessonClassId,
+  lookupTeacherClassIds,
+  lookupTeacherLessonIds,
+}: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
@@ -278,6 +305,26 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLesso
     // 在线状态只对教师/管理员可见（无 session 的测试连接按特权处理）
     if (!session || isTeacherOrAdmin) {
       socket.join(PRESENCE_STAFF_ROOM);
+    }
+
+    // Issue #242：教师/管理员连接即加入其任教班级房间与名下活跃课节房间。
+    // #212 房间定向投递后，assignment.submitted / student.progress_updated /
+    // lesson.progress_mode_changed / whiteboard.quiz_answered 只进
+    // lesson/class 房间；教师停留在作业中心或课表（未进 live classroom 视图）
+    // 时主 socket 从未加入这些房间，事件静默丢失。归属由服务端按会话查询
+    // （班级 owner / 活跃会话 teacher），客户端无法冒领。
+    if (isTeacherOrAdmin && session?.userId) {
+      try {
+        for (const classId of lookupTeacherClassIds?.(String(session.userId)) ?? []) {
+          if (classId) socket.join(classRoom(classId));
+        }
+        for (const lessonId of lookupTeacherLessonIds?.(String(session.userId)) ?? []) {
+          // 排除作业工作区伪课节房间（assignment- 前缀由学生专属逻辑管理）
+          if (lessonId && isRealLessonRoom(lessonId)) socket.join(lessonId);
+        }
+      } catch (err) {
+        plog.warn({ err }, `[Presence] Failed to resolve rooms for teacher ${session.userId}`);
+      }
     }
 
     // 个人房间：账户级事件（作业评分 / 积分 / 课件 attempt）只投给本人。

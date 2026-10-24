@@ -53,11 +53,11 @@ describe('i18n core & plugin locales', () => {
       registerPluginLocales('ext-homework', {
         zh: {
           'tab.title': '作业中心',
-          'welcome': '欢迎, {user}!',
+          welcome: '欢迎, {user}!',
         },
         en: {
           'tab.title': 'Homework Hub',
-          'welcome': 'Welcome, {user}!',
+          welcome: 'Welcome, {user}!',
         },
       });
 
@@ -92,7 +92,7 @@ describe('i18n core & plugin locales', () => {
 
     it('unregisters plugin locales upon deactivation', () => {
       registerPluginLocales('ext-temp', {
-        zh: { 'status': '已就绪' },
+        zh: { status: '已就绪' },
       });
       expect(t('ext-temp:status')).toBe('已就绪');
 

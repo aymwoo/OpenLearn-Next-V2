@@ -134,12 +134,7 @@ describe('Issue #144 · 各执行模式网络覆盖与策略层防护闭环', ()
 
     it('仓库内置 packages/plugins 目录内的插件允许进程内执行', () => {
       const builtinPath = path.join(builtinPluginsDir(), 'builtin.ts');
-      const decision = resolvePluginExecutionMode(
-        'builtin',
-        'inline',
-        fakeIsolatedEnv,
-        builtinPath,
-      );
+      const decision = resolvePluginExecutionMode('builtin', 'inline', fakeIsolatedEnv, builtinPath);
 
       expect(decision.mode).toBe('inline');
       expect(decision.coerced).toBe(false);

@@ -42,8 +42,12 @@ describe('课内即时测评发起与课堂实时看板', () => {
 
   const seedSession = (token: string, session: Record<string, unknown>) => {
     db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
-    db.prepare('INSERT INTO client_sessions (id, session_data, expires_at, updated_at) VALUES (?, ?, ?, ?)')
-      .run(token, JSON.stringify(session), Date.now() + 3_600_000, Date.now());
+    db.prepare('INSERT INTO client_sessions (id, session_data, expires_at, updated_at) VALUES (?, ?, ?, ?)').run(
+      token,
+      JSON.stringify(session),
+      Date.now() + 3_600_000,
+      Date.now(),
+    );
   };
 
   const call = async (method: string, path: string, token: string | null, body?: unknown) => {
@@ -129,21 +133,17 @@ describe('课内即时测评发起与课堂实时看板', () => {
       },
     });
     assessmentId = paper.id;
-    assessmentService.replaceItems(
-      paper.id,
-      teacherId,
-      [
-        {
-          id: 'q_1',
-          type: 'single_choice',
-          stem: '力是改变物体什么状态的原因？',
-          config: { options: ['运动状态', '静止状态', '质量', '体积'] },
-          answerKey: { index: 0 },
-          maxScore: 10,
-          sortOrder: 0,
-        },
-      ],
-    );
+    assessmentService.replaceItems(paper.id, teacherId, [
+      {
+        id: 'q_1',
+        type: 'single_choice',
+        stem: '力是改变物体什么状态的原因？',
+        config: { options: ['运动状态', '静止状态', '质量', '体积'] },
+        answerKey: { index: 0 },
+        maxScore: 10,
+        sortOrder: 0,
+      },
+    ]);
 
     const app = express();
     app.use(express.json());

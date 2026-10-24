@@ -62,7 +62,9 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
     if (origin === 'null') {
       // opaque origin（如非同源沙箱 iframe）仅允许豁免路径
       if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
-        res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Opaque origin write request blocked' });
+        res
+          .status(403)
+          .json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Opaque origin write request blocked' });
         return;
       }
     } else {
@@ -70,7 +72,11 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
         const originHost = new URL(origin).host;
         if (host && originHost.toLowerCase() !== host.toLowerCase()) {
           if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
-            res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Cross-site write request blocked (Origin mismatch)' });
+            res.status(403).json({
+              success: false,
+              code: 'FORBIDDEN_CROSS_SITE',
+              error: 'Cross-site write request blocked (Origin mismatch)',
+            });
             return;
           }
         }
@@ -85,7 +91,11 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
       const refererHost = new URL(referer).host;
       if (host && refererHost.toLowerCase() !== host.toLowerCase()) {
         if (!EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p))) {
-          res.status(403).json({ success: false, code: 'FORBIDDEN_CROSS_SITE', error: 'Cross-site write request blocked (Referer mismatch)' });
+          res.status(403).json({
+            success: false,
+            code: 'FORBIDDEN_CROSS_SITE',
+            error: 'Cross-site write request blocked (Referer mismatch)',
+          });
           return;
         }
       }

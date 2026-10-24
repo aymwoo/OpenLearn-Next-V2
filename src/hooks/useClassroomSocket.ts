@@ -595,14 +595,22 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
 
     socket.on('whiteboard-sync', (data: any) => {
       const { roomId, type } = data || {};
-      if (type === 'refresh' && roomId) {
-        fetchElements(roomId);
-        if (!selectedLessonRef.current && activeRoleRef.current === 'student') {
-          setSelectedLesson(roomId);
-          setStudentViewStatus('lesson');
-        }
-        socket.emit('join-room', roomId);
+      if (type !== 'refresh' || !roomId) return;
+      // 白板刷新事件会经全局广播房间 `whiteboard-broadcast` 推给**所有**已连接客户端
+      // （服务端不知道每个客户端当前在看哪个课节），因此这里必须按当前课节做一次过滤：
+      // 只处理「正在看的那个课节」的白板刷新。
+      // 否则 A 课节的白板变更会把 B 课节的白板内容写进同一个全局 elements 状态里，
+      // 两个课节的白板互相覆盖（Issue #222）。
+      const currentLesson = selectedLessonRef.current;
+      if (currentLesson && currentLesson !== roomId) return;
+      fetchElements(roomId);
+      if (!currentLesson && activeRoleRef.current === 'student') {
+        setSelectedLesson(roomId);
+        setStudentViewStatus('lesson');
       }
+      // 只加入「当前正在看的」课节房间：加入别的课节房间会收到那个课节的
+      // temp-draw / page-change 等实时事件，同样会污染当前白板状态。
+      socket.emit('join-room', roomId);
     });
 
     /**
@@ -708,8 +716,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       syncPresenceAndRooms();
     });
 
-    // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）
-    socket.on('whiteboard-quiz-answered', (data: any) => {
+    const ingestQuizAnswered = (data: any) => {
       try {
         if (!data) return;
         whiteboardEventSlot.ingest({
@@ -734,6 +741,19 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       } catch (e) {
         console.error('[useClassroomSocket] quiz.answered ingest failed', e);
       }
+    };
+
+    // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）
+    // v0.6.1 Issue #238：主事件对学生房间脱敏（无 correctAnswer/correctIndex/answer），
+    // 教师端改吃 presence-staff 房间的全量镜像事件；学生端只收主事件。
+    socket.on('whiteboard-quiz-answered-staff', (data: any) => {
+      if (activeRoleRef.current !== 'teacher' && session?.role !== 'administrator') return;
+      ingestQuizAnswered(data);
+    });
+    socket.on('whiteboard-quiz-answered', (data: any) => {
+      // 教师在 lesson 房间也会收到脱敏主事件 —— 避免与 staff 镜像重复 ingest
+      if (activeRoleRef.current === 'teacher' || session?.role === 'administrator') return;
+      ingestQuizAnswered(data);
     });
 
     // 课件提交（plugin submitScore / LMS Bridge 双路径汇合点）→ ingest 到 WhiteboardEventSlot

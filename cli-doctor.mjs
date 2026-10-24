@@ -414,10 +414,7 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
       }
 
       if (fix) {
-        const updated = coreContent.replace(
-          /PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/,
-          `PLATFORM_VERSION = '${pkgVer}'`,
-        );
+        const updated = coreContent.replace(/PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/, `PLATFORM_VERSION = '${pkgVer}'`);
         fs.writeFileSync(coreVersionFile, updated, 'utf-8');
         fixes.push(`已自动将 packages/core/version.ts 同步为 v${pkgVer}`);
         return check('ok', `v${pkgVer} (已自动修复版本漂移: 从 v${coreVer} 同步为 v${pkgVer})`);
@@ -441,10 +438,7 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
       }
 
       if (fix) {
-        const updated = coreContent.replace(
-          /FALLBACK_VERSION\s*=\s*['"][^'"]+['"]/,
-          `FALLBACK_VERSION = '${pkgVer}'`,
-        );
+        const updated = coreContent.replace(/FALLBACK_VERSION\s*=\s*['"][^'"]+['"]/, `FALLBACK_VERSION = '${pkgVer}'`);
         fs.writeFileSync(coreVersionFile, updated, 'utf-8');
         fixes.push(`已自动将 packages/core/version.ts FALLBACK_VERSION 同步为 v${pkgVer}`);
         return check('ok', `v${pkgVer} (已自动修复版本漂移: FALLBACK_VERSION 从 v${fallbackVer} 同步为 v${pkgVer})`);
@@ -628,7 +622,24 @@ export async function runDoctor(options = {}) {
   }
 
   // 4. 端口可用性检查
-  const targetPort = options.port || parseInt(process.env.PORT || '9000', 10);
+  // PORT 非法时 `parseInt` 会得到 NaN，`NaN || x` 仍是 NaN —— 随后
+  // `server.listen(NaN)` 抛 ERR_SOCKET_BAD_PORT，把「诊断工具」自己搞崩。
+  // doctor 的职责是把问题**报出来**，所以这里回落到默认端口并把非法值记成一条检查项。
+  const rawPort = options.port ?? parseInt(process.env.PORT || '9000', 10);
+  const portInvalid = !Number.isInteger(rawPort) || rawPort < 1 || rawPort > 65535;
+  const targetPort = portInvalid ? 9000 : rawPort;
+  if (portInvalid) {
+    // 先把「PORT 本身非法」作为一条失败项报出来，否则用户只会看到
+    // 「Port 9000 可用」这种与真实配置无关的结论。
+    checks.push({
+      name: 'PORT 配置',
+      // 必须是 'err'：`allOk` 只把 'err' 判为阻断（'warn' 仍算通过），
+      // 用一个自造的状态会让「报了问题但退出码 0」同时成立。
+      status: 'err',
+      message: `PORT 非法（实际为 ${JSON.stringify(process.env.PORT ?? options.port ?? null)}）：服务入口会拒绝启动。已按 9000 继续探测。`,
+      fixable: false,
+    });
+  }
   const isPortAvailable = await checkPortAvailable(targetPort);
   if (isPortAvailable) {
     checks.push({

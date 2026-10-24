@@ -25,9 +25,7 @@ describe('StudentDefaultPasswordBanner (Issue #94: 学生默认密码非阻塞�
   });
 
   it('dismissible: hides after clicking dismiss and persists per userId in localStorage', () => {
-    const { unmount } = render(
-      <StudentDefaultPasswordBanner userId="stu_1" lang="zh" onOpenProfile={vi.fn()} />,
-    );
+    const { unmount } = render(<StudentDefaultPasswordBanner userId="stu_1" lang="zh" onOpenProfile={vi.fn()} />);
 
     fireEvent.click(screen.getByLabelText('关闭提示'));
     // 立即消失

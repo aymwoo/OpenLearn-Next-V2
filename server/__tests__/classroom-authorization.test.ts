@@ -356,4 +356,90 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     );
     expect(otherTeacherControl.status).toBe(403);
   });
+
+  it('preset-polls CRUD 仅课节创建者可读写，正确答案不泄露给其他教师（Issue #240）', async () => {
+    // 建立者教师 A 正常创建一条预设投票（含 correctOption）
+    const create = await call('POST', `/api/lessons/${lessonA}/preset-polls`, teacherAToken, {
+      title: '课堂小测：水的沸点',
+      questionType: 'ABCD',
+      options: ['90°C', '100°C', '110°C', '80°C'],
+      correctOption: 'B',
+    });
+    expect(create.status).toBe(200);
+    const pollId = ((await create.json()) as any).preset.id as string;
+    expect(pollId).toBeTruthy();
+
+    // 创建者可读，且能看到正确答案
+    const ownerRead = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherAToken);
+    expect(ownerRead.status).toBe(200);
+    const ownerPresets = ((await ownerRead.json()) as any).presets as Array<{
+      id: string;
+      correctOption: string;
+    }>;
+    expect(ownerPresets.some((p) => p.correctOption === 'B')).toBe(true);
+
+    // 非创建者教师 B：读、写、改、删全部 403 —— 正确答案不得泄露
+    const crossRead = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherBToken);
+    expect(crossRead.status).toBe(403);
+
+    const crossCreate = await call('POST', `/api/lessons/${lessonA}/preset-polls`, teacherBToken, {
+      title: '越权写入',
+      options: ['A', 'B'],
+    });
+    expect(crossCreate.status).toBe(403);
+
+    const crossUpdate = await call('PUT', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherBToken, {
+      title: '越权修改',
+    });
+    expect(crossUpdate.status).toBe(403);
+
+    const crossDelete = await call('DELETE', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherBToken);
+    expect(crossDelete.status).toBe(403);
+
+    // 越权链全部拒绝后，创建者仍可正常删除
+    const ownerDelete = await call('DELETE', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherAToken);
+    expect(ownerDelete.status).toBe(200);
+  });
+
+  it('rollcall-counts 按日聚合且仅课节创建者可读（Issue #243）', async () => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayTs = todayStart.getTime() + 3_600_000;
+    const yesterdayTs = todayStart.getTime() - 3_600_000;
+    const insert = db.prepare(
+      'INSERT OR REPLACE INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)',
+    );
+    insert.run('rc-243-a1', studentA, classA, lessonA, todayTs);
+    insert.run('rc-243-a2', studentA, classA, lessonA, todayTs + 1);
+    insert.run('rc-243-a3', studentA, classA, lessonA, yesterdayTs); // 昨日不计入今日
+
+    // 非创建者教师 B 不可读
+    const cross = await call('GET', `/api/lessons/${lessonA}/rollcall-counts`, teacherBToken);
+    expect(cross.status).toBe(403);
+
+    // 创建者教师 A：今日计数 = 2（昨日记录不计）
+    const own = await call('GET', `/api/lessons/${lessonA}/rollcall-counts`, teacherAToken);
+    expect(own.status).toBe(200);
+    const body = (await own.json()) as { counts: Record<string, number>; dayStart: number };
+    expect(body.counts[studentA]).toBe(2);
+    expect(body.dayStart).toBe(todayStart.getTime());
+  });
+
+  it('active-sessions 按归属裁剪且不下发签到码与设置原文（Issue #241）', async () => {
+    // 教师自己的视图：能看到自己的活跃会话，且行内不含敏感字段
+    const own = await call('GET', '/api/classroom/active-sessions', teacherAToken);
+    expect(own.status).toBe(200);
+    const ownBody = (await own.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(ownBody.sessions.some((row) => row.lesson_id === lessonSelfStudy)).toBe(true);
+    for (const row of ownBody.sessions) {
+      expect('checkin_code' in row).toBe(false);
+      expect('settings_json' in row).toBe(false);
+    }
+
+    // 非归属教师 B：看不到教师 A 的活跃会话
+    const cross = await call('GET', '/api/classroom/active-sessions', teacherBToken);
+    expect(cross.status).toBe(200);
+    const crossBody = (await cross.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(crossBody.sessions.some((row) => row.lesson_id === lessonSelfStudy)).toBe(false);
+  });
 });

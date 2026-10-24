@@ -34,9 +34,9 @@ function purgeClassesE2EFromDb() {
       db.prepare(`DELETE FROM classes WHERE id IN (${placeholders})`).run(...classIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_E2E_%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_E2E_%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -128,9 +128,14 @@ test.describe('教务管理端：班级生命周期与学生花名册治理 E2E 
       await randomGenBtn.click();
 
       // 断言输入框生成了 4 位随机口令
-      await expect.poll(async () => {
-        return (await passcodeInput.inputValue()).trim().length;
-      }, { timeout: 10_000 }).toBe(4);
+      await expect
+        .poll(
+          async () => {
+            return (await passcodeInput.inputValue()).trim().length;
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(4);
 
       // 点击「清除」口令
       const clearPinBtn = page.getByRole('button', { name: /清除/ }).first();
@@ -182,9 +187,7 @@ test.describe('教务管理端：班级生命周期与学生花名册治理 E2E 
       await attendanceTabBtn.click();
 
       // 验证考勤 Tab 区域成功挂载
-      await expect(
-        page.getByText(/该班级暂无课表记录|日常出勤|课表考勤/).first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(/该班级暂无课表记录|日常出勤|课表考勤/).first()).toBeVisible({ timeout: 10_000 });
 
       // 10. 截取班级花名册治理真实渲染截图存盘 (Generates Artifact: Screenshot)
       const SCREENSHOT_PATH = path.resolve(process.cwd(), 'artifacts/screenshots/teacher_classes_roster.png');

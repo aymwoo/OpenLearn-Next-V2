@@ -8,16 +8,16 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台。基于
 
 ## 常用命令
 
-| 命令 | 用途 |
-| ---- | ---- |
-| `pnpm dev` | 启动开发服务器（Express + Vite HMR，端口 9000） |
-| `pnpm lint` | TypeScript 类型检查 (`tsc --noEmit`) |
-| `pnpm lint:eslint` | ESLint 静态代码检查 |
-| `pnpm format` | Prettier 自动代码格式化 |
-| `pnpm test` | 运行 Vitest 测试套件（支持并行 worker 隔离 SQLite） |
-| `pnpm build` | 生产构建（Vite 前端构建 → 插件构建 → esbuild 打包 server.ts → `dist/server.cjs`） |
-| `pnpm start` | 生产环境运行 `node dist/server.cjs` |
-| `pnpm clean` | 清理构建产物与临时文件 |
+| 命令               | 用途                                                                              |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `pnpm dev`         | 启动开发服务器（Express + Vite HMR，端口 9000）                                   |
+| `pnpm lint`        | TypeScript 类型检查 (`tsc --noEmit`)                                              |
+| `pnpm lint:eslint` | ESLint 静态代码检查                                                               |
+| `pnpm format`      | Prettier 自动代码格式化                                                           |
+| `pnpm test`        | 运行 Vitest 测试套件（支持并行 worker 隔离 SQLite）                               |
+| `pnpm build`       | 生产构建（Vite 前端构建 → 插件构建 → esbuild 打包 server.ts → `dist/server.cjs`） |
+| `pnpm start`       | 生产环境运行 `node dist/server.cjs`                                               |
+| `pnpm clean`       | 清理构建产物与临时文件                                                            |
 
 环境要求：AI 功能完全由管理后台的「AI 提供商管理」动态配置第三方 AI（OpenAI 兼容接口，支持 DeepSeek、Qwen、Ollama、OpenAI 等），系统不再依赖任何静态 API Key 环境变量。
 
@@ -115,8 +115,12 @@ export default {
     ctx.log.info('Plugin activated');
     const limit = ctx.config.get<number>('maxQuestions');
     ctx.actionRegistry.register({ id: 'my-action', commandType: 'my.tool', description: 'Sample tool' });
-    ctx.commandBus.registerHandler('my.tool', { execute: async (cmd) => { /* 执行逻辑 */ } });
-    await ctx.provide('ext-my-plugin:IMyService', { /* 服务实现 */ });
+    ctx.commandBus.registerHandler('my.tool', {
+      execute: async (cmd) => {
+        /* 执行逻辑 */
+      },
+    });
+    await ctx.provide('ext-my-plugin:IMyService', {/* 服务实现 */});
   },
 
   deactivate: async () => {
@@ -166,6 +170,7 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 ### 前端状态架构
 
 前端彻底摆脱早期巨石单体设计：
+
 - `App.tsx` 保持极简装配（~130 行），根据当前用户角色和路由渲染对应的 Feature 容器。
 - 状态集中于 `src/store/` 的各个 Zustand Store（如 `useUserStore`, `useClassroomStore`, `useThemeStore` 等）。
 - 复杂业务模块高度自治在 `src/features/` 下。

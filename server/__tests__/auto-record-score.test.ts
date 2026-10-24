@@ -713,9 +713,7 @@ describe('autoRecordForLesson 批量补录', () => {
       ignoreMinCompletion: true,
       ignoreNotFinished: true,
     });
-    db.prepare(
-      `UPDATE assignment_submissions SET score = 85, source = 'manual' WHERE student_id = 's1'`,
-    ).run();
+    db.prepare(`UPDATE assignment_submissions SET score = 85, source = 'manual' WHERE student_id = 's1'`).run();
     db.prepare(`UPDATE student_lesson_progress SET completed = 0, progress_percent = 40 WHERE student_id = 's1'`).run();
 
     seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
@@ -829,6 +827,66 @@ describe('markStudentAbsent 标缺考', () => {
         coursewareId: 'cw_1',
       }).reason,
     ).toBe('student-not-in-class');
+  });
+
+  /**
+   * Issue #248：手动标记缺考此前带 `overrideProtected: true`，
+   * 能把**已批改**的成绩行静默覆盖成缺考（分数被抹掉）。
+   * 考勤联动路径有防护，手动路径没有 —— 现在补上同一道。
+   */
+  it('已有分数的成绩行不被标记缺考覆盖（与考勤联动路径同一道防护）', () => {
+    // 先标记一次缺考（顺带建出课件作业壳），再把该行改成「已批改」
+    const first = markStudentAbsent(db as any, {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      studentId: 's1',
+      coursewareId: 'cw_1',
+      actorId: 'user:t1:teacher',
+    });
+    expect(first.ok).toBe(true);
+
+    db.prepare(
+      `UPDATE assignment_submissions
+       SET score = 92, status = 'graded', source = 'manual'
+       WHERE assignment_id = (SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?)
+         AND student_id = 's1'`,
+    ).run(CLASS_ID, LESSON, '互动课件: 分数乐园');
+
+    const result = markStudentAbsent(db as any, {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      studentId: 's1',
+      coursewareId: 'cw_1',
+      actorId: 'user:t1:teacher',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('already-recorded');
+
+    // 分数必须原样保留 —— 缺考不得抹掉已批改的成绩
+    const row = submissionRow('分数乐园', 's1');
+    expect(row.status).toBe('graded');
+    expect(row.score).toBe(92);
+  });
+
+  it('已提交但未评分（无分数）的行仍可标记缺考', () => {
+    // s2 在本班，先提交一次（无分数）
+    db.prepare(
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, submitted_at, status)
+       SELECT id, 's2', '{}', ?, 'submitted' FROM assignments WHERE lesson_id = ? AND class_id = ? LIMIT 1`,
+    ).run(Date.now(), LESSON, CLASS_ID);
+
+    const result = markStudentAbsent(db as any, {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      studentId: 's2',
+      coursewareId: 'cw_1',
+    });
+    expect(result.ok).toBe(true);
+
+    const row = submissionRow('分数乐园', 's2');
+    expect(row.status).toBe('absent');
+    expect(row.score).toBeNull();
   });
 });
 

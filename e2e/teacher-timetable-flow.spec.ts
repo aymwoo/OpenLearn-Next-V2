@@ -14,9 +14,7 @@ function purgeTimetableE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 课表班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 课表班级%'").all() as { id: string }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -27,9 +25,7 @@ function purgeTimetableE2EFromDb() {
       db.prepare(`DELETE FROM classes WHERE id IN (${placeholders})`).run(...classIds);
     }
 
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 课表课程%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 课表课程%'").all() as { id: string }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -217,8 +213,22 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
     await page.addInitScript(
       ({ subjectA, subjectB }) => {
         const entries = [
-          { dayOfWeek: 1, periodNumber: 1, timeSlot: '08:00 - 08:40', className: '高一(1)班', subject: subjectA, location: '机房1' },
-          { dayOfWeek: 2, periodNumber: 2, timeSlot: '08:50 - 09:30', className: '高一(2)班', subject: subjectB, location: '教室2' },
+          {
+            dayOfWeek: 1,
+            periodNumber: 1,
+            timeSlot: '08:00 - 08:40',
+            className: '高一(1)班',
+            subject: subjectA,
+            location: '机房1',
+          },
+          {
+            dayOfWeek: 2,
+            periodNumber: 2,
+            timeSlot: '08:50 - 09:30',
+            className: '高一(2)班',
+            subject: subjectB,
+            location: '教室2',
+          },
         ];
         sessionStorage.setItem(
           'openlearn_timetable_ocr_task',
@@ -268,12 +278,18 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
     await expect(page.getByText(subjectB).first()).toBeVisible({ timeout: 10_000 });
 
     // 6. 截图留证 (Generates Artifact: Screenshot)
-    const SCREENSHOT_PATH = path.resolve(process.cwd(), 'artifacts/screenshots/teacher_timetable_ocr_draft_restore.png');
+    const SCREENSHOT_PATH = path.resolve(
+      process.cwd(),
+      'artifacts/screenshots/teacher_timetable_ocr_draft_restore.png',
+    );
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
     expect(fs.existsSync(SCREENSHOT_PATH)).toBe(true);
   });
 
-  test('课表「快速开始上课」：一键初始化会话直达授课视图，回页后显示进入课堂 (Issue #90)', async ({ page, context }) => {
+  test('课表「快速开始上课」：一键初始化会话直达授课视图，回页后显示进入课堂 (Issue #90)', async ({
+    page,
+    context,
+  }) => {
     const ts = Date.now().toString(36).toUpperCase();
     const className = `E2E 课表班级-${ts}`;
     const lessonTitle = `E2E 课表课程-${ts}`;
@@ -350,9 +366,9 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
 
       // 6. 回到课表页：入口变为「进入课堂」
       await timetableNavBtn.click();
-      await expect(page.getByTestId('timetable-quick-start-card').getByRole('button', { name: /进入课堂/ })).toBeVisible(
-        { timeout: 10_000 },
-      );
+      await expect(
+        page.getByTestId('timetable-quick-start-card').getByRole('button', { name: /进入课堂/ }),
+      ).toBeVisible({ timeout: 10_000 });
 
       // 7. 截图留证 (Generates Artifact: Screenshot)
       const SCREENSHOT_PATH = path.resolve(process.cwd(), 'artifacts/screenshots/teacher_timetable_quick_start.png');

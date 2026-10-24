@@ -35,7 +35,8 @@ export interface PreClassDiagnosticResult {
     completedCount: number;
     pendingCount: number;
     completionRate: number;
-    averageTimeSpentMins: number;
+    /** 白板事件流没有真实用时数据：无值时为 null（前端显示「—」），绝不编造 */
+    averageTimeSpentMins: number | null;
   };
   topMistakes: TopMistakeItem[];
   studentDistribution: {
@@ -140,9 +141,8 @@ export class DiagnosticService {
    * 获取课前学情诊断综合报表（课前完成度、错题排行、分层掌握、破冰心态）
    */
   public getPreClassDiagnostic(lessonId: string, classId?: string): PreClassDiagnosticResult {
-    const lesson = this.reader
-      .prepare('SELECT id, title, content FROM lessons WHERE id = ?')
-      .get(lessonId) as { id: string; title: string; content?: string } | undefined;
+    const lesson = this.reader.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as
+      { id: string; title: string; content?: string } | undefined;
 
     if (!lesson) {
       const err = new Error('Lesson not found') as any;
@@ -150,8 +150,9 @@ export class DiagnosticService {
       throw err;
     }
 
-    // 获取班级总学生数
-    let totalStudents = 32;
+    // 获取班级总学生数：无 classId 或班级无名单时分母为 0，完成率随之 0 ——
+    // 不再凭空回退 32 人（Issue #244，编造分母会让完成率呈现貌似真实的统计）
+    let totalStudents = 0;
     if (classId) {
       const countRow = this.reader
         .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
@@ -218,7 +219,8 @@ export class DiagnosticService {
         completedCount,
         pendingCount: Math.max(0, totalStudents - completedCount),
         completionRate,
-        averageTimeSpentMins: completedCount > 0 ? 15 : 0,
+        // 白板事件流没有真实用时来源：置 null 而非写死 15 分钟（Issue #244）
+        averageTimeSpentMins: null,
       },
       topMistakes,
       studentDistribution: {
@@ -443,20 +445,36 @@ export class DiagnosticService {
     //    旧数据只有 correctAnswer（选项文本 / 字母 / 数字）时自动换算成索引）
     const grade = gradeQuizSubmission(dataObj, answer);
     const { isCorrect, score } = grade;
-    const correctAnswer = dataObj.correctAnswer ?? (grade.correctIndex !== null ? dataObj.options?.[grade.correctIndex] : null);
 
-    // 3. 关系型原子 upsert，唯一权威数据源（CONCUR-01）
+    // 3. 首次提交即定分（Issue #223）
+    //
+    //     此前是 upsert 覆盖：学生提交一次即可在响应里拿到 correctIndex（提交后回传
+    //     答案解析，是既有的产品设计），再用正确选项重交一次即可把分数改成满分。
+    //     改为「首次提交即定分」：已有提交时直接返回落库结果，既不覆盖分数，
+    //     也不重复派发作答事件（大屏统计不会被重复提交刷屏）。
+    const existingSubmission = this.db
+      .prepare(
+        'SELECT score, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?',
+      )
+      .get(lessonId, elementId, studentId) as { score: number; is_correct: number } | undefined;
+
+    if (existingSubmission) {
+      return {
+        success: true,
+        isCorrect: existingSubmission.is_correct === 1,
+        score: existingSubmission.score,
+        studentId,
+        // 已提交过的学生仍可查看答案解析（沿用既有设计）
+        correctIndex: grade.correctIndex,
+      };
+    }
+
     this.db
       .prepare(
         `INSERT INTO lesson_quiz_submissions
            (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
-           answer = excluded.answer,
-           score = excluded.score,
-           is_correct = excluded.is_correct,
-           time_spent_ms = excluded.time_spent_ms,
-           submitted_at = excluded.submitted_at`,
+         ON CONFLICT(lesson_id, element_id, student_id) DO NOTHING`,
       )
       .run(
         `lqs-${lessonId}-${elementId}-${studentId}`,
@@ -484,9 +502,10 @@ export class DiagnosticService {
           score,
           isCorrect,
           time: Date.now(),
-          correctAnswer: correctAnswer ?? null,
-          // Issue #107：索引是权威字段，事件里一并下发，避免下游各读各的
-          correctIndex: grade.correctIndex,
+          // 不下发答案（Issue #223）：该事件投递给**课节房间 + 班级房间**，全班学生都会收到。
+          // 带着 correctAnswer / correctIndex 广播，等于把答案实时发给每一个学生 ——
+          // 学生只要等别人答完就能拿到正确答案，在自己作答前抢先提交。
+          // 教师大屏的「正确答案」高亮来自白板元素 payload（教师端不脱敏），不依赖本事件。
           question: dataObj.question || null,
         },
         { correlationId: lessonId },
@@ -618,12 +637,8 @@ export class DiagnosticService {
     // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
     // 过滤掉模拟假数据 (id NOT LIKE 'sim-quiz-%')，并支持按 classId 过滤
     let rows: any[] = [];
-    const classFilter = classId
-      ? 'AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
-      : '';
-    const queryParams = classId
-      ? [lessonId, classId, limit]
-      : [lessonId, limit];
+    const classFilter = classId ? 'AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)' : '';
+    const queryParams = classId ? [lessonId, classId, limit] : [lessonId, limit];
 
     try {
       rows = this.reader
@@ -782,8 +797,8 @@ export class DiagnosticService {
 
   private getGlobalTopPerformers(limit: number, classId?: string): TopPerformersResult {
     const classFilter = classId
-      ? 'WHERE s.id NOT LIKE \'sim-quiz-%\' AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
-      : 'WHERE s.id NOT LIKE \'sim-quiz-%\'';
+      ? "WHERE s.id NOT LIKE 'sim-quiz-%' AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)"
+      : "WHERE s.id NOT LIKE 'sim-quiz-%'";
     const queryParams = classId ? [classId, limit] : [limit];
 
     const rows = this.reader
@@ -880,18 +895,7 @@ export class DiagnosticService {
             submitted_at = excluded.submitted_at
         `,
           )
-          .run(
-            subId,
-            lessonId,
-            dummyElementId,
-            st.id,
-            st.name,
-            'A',
-            score,
-            isCorrect ? 1 : 0,
-            timeSpent,
-            Date.now(),
-          );
+          .run(subId, lessonId, dummyElementId, st.id, st.name, 'A', score, isCorrect ? 1 : 0, timeSpent, Date.now());
       } catch {
         // ignore conflict errors
       }

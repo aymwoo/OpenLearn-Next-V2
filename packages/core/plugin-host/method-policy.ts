@@ -314,8 +314,10 @@ export function checkMethodPolicy(input: MethodPolicyInput): string | null {
  *    但它同样是数据变更。
  * 2. **路径前缀表是静态的**，新增高危端点时若忘记登记，新端点会以「普通路径」
  *    被放行。因此新增写端点时应同步检查本表。
- * 3. **capability 字符串仍由插件自填**。声明 `api:admin` 就真的拿到了它 ——
- *    本层只要求「声明得更具体」，不构成独立于 manifest 的授权。
+ * 3. **capability 的授权来源两端不同**。服务端（worker / process 隔离）传入的
+ *    `caps` 是「清单声明 ∩ 管理员已审批」—— 自声明但未审批的能力不生效
+ *    （Issue #224）。浏览器侧没有 CapabilityGuard，仍是清单自声明值 ——
+ *    那里声明 `api:admin` 就真的拿到了它。
  * 4. **只读路径同样可被用于信息聚合**：插件可以连续 `get` 任意路径收集数据后外传。
  * 5. 真正的兜底是服务端每个端点自己的 `requireAuth` / `requireAuth(role)` 与
  *    CapabilityGuard。本层只是降低失误与被植入逻辑时的爆炸半径。

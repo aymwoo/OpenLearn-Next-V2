@@ -122,7 +122,11 @@ export type AppExtras = {
   isProcessesCollapsed: boolean;
   setIsProcessesCollapsed: (v: boolean) => void;
   studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
-  setStudentActiveTabs: (updater: (prev: Record<string, 'progress' | 'settings' | 'notes'>) => Record<string, 'progress' | 'settings' | 'notes'>) => void;
+  setStudentActiveTabs: (
+    updater: (
+      prev: Record<string, 'progress' | 'settings' | 'notes'>,
+    ) => Record<string, 'progress' | 'settings' | 'notes'>,
+  ) => void;
   /** 语义别名（源自 useSessionBootstrap.handleLogout / usePluginManagement.fetchAIProviders / useLessonCrud） */
   onLogout: () => void;
   onAIProvidersChanged: () => void;

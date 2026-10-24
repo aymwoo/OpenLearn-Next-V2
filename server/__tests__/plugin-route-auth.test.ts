@@ -76,6 +76,31 @@ describe('G-3：插件详情端点必须鉴权', () => {
   });
 });
 
+describe('R-02：出站域名授权接口仅管理员可用', () => {
+  // 出站域名白名单决定插件能访问哪些外部主机 —— 这是信任边界，
+  // 不能让教师/学生自助扩权，也不能与插件自身命令总线混在一起。
+  for (const method of ['get', 'post', 'delete'] as const) {
+    it(`${method.toUpperCase()} /api/plugins/:id(*)/network-grants 限定 administrator`, () => {
+      const decl = declaration(method, '/api/plugins/:id(*)/network-grants');
+      expect(decl, `${method} decl`).toContain("requireAuth('administrator')");
+    });
+  }
+
+  it('安装/更新路径把出站域名授权交给显式请求头，而不是默认放开', () => {
+    // 默认必须是「未授权」（fail-closed）：头缺失时 approveNetworkHosts 为 false
+    expect(src).toContain("headerFlag(req, 'x-approve-network-hosts')");
+    expect(src).toMatch(/approveNetworkHosts\s*=\s*false/);
+  });
+
+  it('批准的域名统一经 classifyNetHostProposals 过滤，回环/私有/通配符不进授权表', () => {
+    const idx = src.indexOf("'/api/plugins/:id(*)/network-grants'");
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 4000);
+    expect(block).toContain('classifyNetHostProposals');
+    expect(block).toContain('approvePluginNetHosts');
+  });
+});
+
 describe('G-2：execute-command 不做后缀模糊匹配', () => {
   it('路由仍保留认证且不限制角色（本端点由学生端宿主共用）', () => {
     const decl = declaration('post', '/api/plugins/execute-command');

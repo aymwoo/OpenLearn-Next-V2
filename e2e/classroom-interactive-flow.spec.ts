@@ -16,7 +16,7 @@ function purgeInteractiveE2EFromDb() {
   try {
     const e2eLessons = db
       .prepare(
-        "SELECT id FROM lessons WHERE title LIKE 'E2E %' OR title LIKE '%E2E 互动测验%' OR title LIKE '%E2E 快速投票%'"
+        "SELECT id FROM lessons WHERE title LIKE 'E2E %' OR title LIKE '%E2E 互动测验%' OR title LIKE '%E2E 快速投票%'",
       )
       .all() as { id: string }[];
 
@@ -39,7 +39,7 @@ function purgeInteractiveE2EFromDb() {
           const sPlaceholders = sessionIds.map(() => '?').join(',');
           try {
             db.prepare(
-              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`
+              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`,
             ).run(...sessionIds);
           } catch {}
           try {
@@ -63,7 +63,7 @@ function purgeInteractiveE2EFromDb() {
 
     const e2eStudents = db
       .prepare(
-        "SELECT id FROM students WHERE (student_number LIKE 'STU_%-%') OR (student_number LIKE 'STU_POLL_%-%') OR student_number LIKE '%CANARY%'"
+        "SELECT id FROM students WHERE (student_number LIKE 'STU_%-%') OR (student_number LIKE 'STU_POLL_%-%') OR student_number LIKE '%CANARY%'",
       )
       .all() as { id: string }[];
 
@@ -97,11 +97,7 @@ async function cleanupInteractiveE2EViaApi(request: APIRequestContext) {
       const lessons = await listRes.json();
       const arr = Array.isArray(lessons) ? lessons : [];
       for (const l of arr) {
-        if (
-          l.title?.startsWith('E2E ') ||
-          l.title?.includes('E2E 互动测验') ||
-          l.title?.includes('E2E 快速投票')
-        ) {
+        if (l.title?.startsWith('E2E ') || l.title?.includes('E2E 互动测验') || l.title?.includes('E2E 快速投票')) {
           await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
         }
       }

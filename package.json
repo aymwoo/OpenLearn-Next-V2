@@ -25,8 +25,11 @@
   "files": [
     "dist/index.html",
     "dist/server.cjs",
+    "dist/env-validation.cjs",
     "dist/assets/",
     "dist/plugins/",
+    "dist/cli-migrator.cjs",
+    "migrations/",
     "cli.mjs",
     "cli-cleaner.mjs",
     "cli-doctor.mjs",
@@ -49,7 +52,7 @@
     "build:bridge-sdk": "node scripts/build-bridge-sdk.mjs",
     "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs",
     "prepare": "node scripts/build-plugin-sdk.mjs",
-    "build": "node scripts/build-plugin-sdk.mjs && node scripts/build-bridge-sdk.mjs && vite build && node scripts/build-plugins.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && cp packages/core/worker-runtime/plugin-net-preload.cjs dist/plugin-net-preload.cjs",
+    "build": "node scripts/build-plugin-sdk.mjs && node scripts/build-bridge-sdk.mjs && vite build && node scripts/build-plugins.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/security/env-validation.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/env-validation.cjs && esbuild packages/core/db/migrator.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/cli-migrator.cjs && cp packages/core/worker-runtime/plugin-net-preload.cjs dist/plugin-net-preload.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -59,6 +62,7 @@
     "lint:encoding": "node scripts/check-source-encoding.mjs",
     "lint:i18n": "node scripts/check-i18n.mjs",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
@@ -104,7 +108,7 @@
     "socket.io-client": "^4.8.4",
     "uuid": "^14.0.0",
     "xss": "^1.0.15",
-    "zod": "^4.4.3",
+    "zod": "^4.6.7",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -127,7 +131,7 @@
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",
     "@vitejs/plugin-react": "^5.0.4",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "autoprefixer": "^10.4.21",
     "eslint": "^10.5.0",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -140,6 +144,6 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.4.5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

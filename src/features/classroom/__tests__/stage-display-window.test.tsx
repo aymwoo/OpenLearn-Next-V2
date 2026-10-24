@@ -94,6 +94,7 @@ function FeedProbe({ lessonId }: { lessonId: string | null }) {
       <span data-testid="poll">{data.activePoll?.id ?? 'none'}</span>
       <span data-testid="calls">{stageCallCount}</span>
       <span data-testid="synced">{lastSyncedAt === null ? 'never' : 'yes'}</span>
+      <span data-testid="attended">{String(data.attendance?.attended ?? 'none')}</span>
     </div>
   );
 }
@@ -127,6 +128,38 @@ describe('useStageDisplayFeed · 保持连接', () => {
 
     await waitFor(() => expect(screen.getByTestId('poll').textContent).toBe('poll_1'));
     expect(stageCallCount).toBe(2);
+  });
+
+  /**
+   * Issue #245：`classroom:checkin_submitted` 此前全仓零消费 ——
+   * 学生扫码签到后，教师端的「实到人数」只能等低频对账轮询才更新。
+   */
+  it('扫码签到事件即时刷新「实到」', async () => {
+    render(<FeedProbe lessonId="les_1" />);
+    await waitFor(() => expect(screen.getByTestId('health').textContent).toBe('live'));
+    expect(stageCallCount).toBe(1);
+
+    stageResponses.push({
+      stage: 'IN_CLASS_TEACHING',
+      checkinCode: null,
+      activePoll: null,
+      activeBuzzer: null,
+      pacing: { TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 },
+      attendance: { online: 1, onlineInClass: 1, expected: 5, attended: 1 },
+    });
+    await act(async () => {
+      fakeSocket.fire('classroom:checkin_submitted', { lessonId: 'les_1', studentId: 'stu_1' });
+      await new Promise((r) => setTimeout(r, 200));
+    });
+
+    expect(stageCallCount).toBe(2);
+    await waitFor(() => expect(screen.getByTestId('attended').textContent).toBe('1'));
+  });
+
+  it('扫码签到事件确实被注册（曾零消费）', async () => {
+    render(<FeedProbe lessonId="les_1" />);
+    await waitFor(() => expect(stageCallCount).toBe(1));
+    expect(fakeSocket.count('classroom:checkin_submitted')).toBe(1);
   });
 
   it('忽略其它课节的事件', async () => {

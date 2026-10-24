@@ -43,9 +43,7 @@ describe('seededShuffle', () => {
     }
     expect(seen.size).toBeGreaterThan(1);
 
-    const students = ['stu-1', 'stu-2', 'stu-3', 'stu-4'].map((s) =>
-      seededShuffle(POOL, 'asg-1:' + s + ':1').join(''),
-    );
+    const students = ['stu-1', 'stu-2', 'stu-3', 'stu-4'].map((s) => seededShuffle(POOL, 'asg-1:' + s + ':1').join(''));
     expect(new Set(students).size).toBeGreaterThan(1);
   });
 
@@ -56,8 +54,12 @@ describe('seededShuffle', () => {
     let adjacentCollisions = 0;
     for (let t = 0; t < trials; t++) {
       const asg = 'asg-' + t;
-      const x = seededShuffle(POOL, asg + ':stu-1:1').slice(0, 3).join(',');
-      const y = seededShuffle(POOL, asg + ':stu-1:2').slice(0, 3).join(',');
+      const x = seededShuffle(POOL, asg + ':stu-1:1')
+        .slice(0, 3)
+        .join(',');
+      const y = seededShuffle(POOL, asg + ':stu-1:2')
+        .slice(0, 3)
+        .join(',');
       if (x === y) adjacentCollisions++;
     }
     const rate = adjacentCollisions / trials;

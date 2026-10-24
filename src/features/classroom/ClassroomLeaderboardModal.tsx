@@ -496,71 +496,71 @@ export function ClassroomLeaderboardModal({
               {[...students]
                 .sort((a, b) => (b.currentPoints ?? 0) - (a.currentPoints ?? 0))
                 .map((student, idx) => (
-                <div
-                  key={student.id}
-                  className="p-3 rounded-xl border border-border/80 bg-surface flex items-center justify-between text-xs hover:bg-surface-secondary/30 transition shadow-3xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-6 h-6 rounded-lg font-mono font-bold text-xs flex items-center justify-center ${
-                        idx === 0
-                          ? 'bg-amber-700 text-white'
-                          : idx === 1
-                            ? 'bg-slate-400 text-white'
-                            : idx === 2
-                              ? 'bg-amber-700/80 text-white'
-                              : 'bg-surface-secondary text-muted'
-                      }`}
-                    >
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-foreground">{student.name}</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
-                          {groupNameOf(student.id)}
-                        </span>
+                  <div
+                    key={student.id}
+                    className="p-3 rounded-xl border border-border/80 bg-surface flex items-center justify-between text-xs hover:bg-surface-secondary/30 transition shadow-3xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-6 h-6 rounded-lg font-mono font-bold text-xs flex items-center justify-center ${
+                          idx === 0
+                            ? 'bg-amber-700 text-white'
+                            : idx === 1
+                              ? 'bg-slate-400 text-white'
+                              : idx === 2
+                                ? 'bg-amber-700/80 text-white'
+                                : 'bg-surface-secondary text-muted'
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-foreground">{student.name}</span>
+                          <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
+                            {groupNameOf(student.id)}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-muted font-mono">{student.studentNo}</span>
                       </div>
-                      <span className="text-[11px] text-muted font-mono">{student.studentNo}</span>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
-                      <Flame size={12} />
-                      <span>{typeof student.focusScore === 'number' ? `${student.focusScore}%` : '—'}</span>
-                    </span>
-                    <span className="font-mono font-extrabold text-sm text-primary-theme">
-                      {student.currentPoints ?? 0} <span className="text-xs font-normal text-muted">分</span>
-                    </span>
-                    <button
-                      onClick={() => {
-                        if (onViewStudentProfile) {
-                          onViewStudentProfile(student);
-                        } else {
-                          setSelectedStudentForProfile(student);
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-surface-secondary hover:bg-surface text-foreground font-semibold text-xs transition border border-border cursor-pointer flex items-center gap-1 shadow-3xs"
-                      title={lang === 'zh' ? '查看学情成长雷达档案' : 'View Growth Profile'}
-                    >
-                      <TrendingUp size={12} className="text-primary-theme" />
-                      <span>{lang === 'zh' ? '档案' : 'Profile'}</span>
-                    </button>
-                    {onSelectStudentToAward && (
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
+                        <Flame size={12} />
+                        <span>{typeof student.focusScore === 'number' ? `${student.focusScore}%` : '—'}</span>
+                      </span>
+                      <span className="font-mono font-extrabold text-sm text-primary-theme">
+                        {student.currentPoints ?? 0} <span className="text-xs font-normal text-muted">分</span>
+                      </span>
                       <button
                         onClick={() => {
-                          onClose();
-                          onSelectStudentToAward(student);
+                          if (onViewStudentProfile) {
+                            onViewStudentProfile(student);
+                          } else {
+                            setSelectedStudentForProfile(student);
+                          }
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-primary-theme/10 hover:bg-primary-theme/20 text-primary-theme font-bold text-xs transition cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-surface-secondary hover:bg-surface text-foreground font-semibold text-xs transition border border-border cursor-pointer flex items-center gap-1 shadow-3xs"
+                        title={lang === 'zh' ? '查看学情成长雷达档案' : 'View Growth Profile'}
                       >
-                        {lang === 'zh' ? '加分' : 'Award'}
+                        <TrendingUp size={12} className="text-primary-theme" />
+                        <span>{lang === 'zh' ? '档案' : 'Profile'}</span>
                       </button>
-                    )}
+                      {onSelectStudentToAward && (
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onSelectStudentToAward(student);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-primary-theme/10 hover:bg-primary-theme/20 text-primary-theme font-bold text-xs transition cursor-pointer"
+                        >
+                          {lang === 'zh' ? '加分' : 'Award'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </div>

@@ -2,11 +2,11 @@
 
 能力相关子系统在**三个**目录中实现，彼此**独立、没有调用链关系**：
 
-| 目录 | 职责 | 鉴权维度 |
-| ---- | ---- | -------- |
-| `packages/core/capability-system/` | `CapabilityGuard` —— 命令总线的**字符串权限**守卫 | `resource:action` 字符串 |
-| `packages/core/capability/` | 通用能力 Provider 调用框架（`CapabilityRuntimeKernel`） | `CapabilityRole` 角色数组 |
-| `packages/core/capability-governance/` | 能力治理元数据（`CapabilityGovernanceKernel`） | 无运行时鉴权，纯元数据登记 |
+| 目录                                   | 职责                                                    | 鉴权维度                   |
+| -------------------------------------- | ------------------------------------------------------- | -------------------------- |
+| `packages/core/capability-system/`     | `CapabilityGuard` —— 命令总线的**字符串权限**守卫       | `resource:action` 字符串   |
+| `packages/core/capability/`            | 通用能力 Provider 调用框架（`CapabilityRuntimeKernel`） | `CapabilityRole` 角色数组  |
+| `packages/core/capability-governance/` | 能力治理元数据（`CapabilityGovernanceKernel`）          | 无运行时鉴权，纯元数据登记 |
 
 > ⚠️ 旧版本文档描述的 `CapabilityGuard → CapabilityRuntimeKernel → CapabilityGovernanceKernel` 串行链路**在代码中并不存在**。三者由 `Kernel` 构造函数各自独立实例化（分别是 `capabilityGuard` / `capabilityFrameworkRuntime` / `capabilityGovernance`），彼此无 import 关系。
 > 另注：仓库中还有**第四套**相关机制 `RuntimePermissionManager`（`packages/core/classroom-runtime/permission-manager.ts`），见 [plugin-capability-matrix](../reference/plugin-capability-matrix.md)。
@@ -63,15 +63,16 @@ graph TD
 
 `packages/core/capability/capability-runtime-kernel.ts` 的 `CapabilityRuntimeKernel` 是调用框架的组合根，只暴露 **5 个 `readonly` 子对象 + 1 个 `dispose()`**，**自身没有任何 `invoke` 方法**：
 
-| 属性 | 类型 | 来源 |
-| ---- | ---- | ---- |
+| 属性       | 类型                          | 来源                                                                 |
+| ---------- | ----------------------------- | -------------------------------------------------------------------- |
 | `registry` | `CapabilityFrameworkRegistry` | `packages/core/capability/registry/capability-framework-registry.ts` |
-| `pipeline` | `CapabilityPipeline` | `packages/core/capability/pipeline/capability-pipeline.ts` |
-| `engine` | `InvocationEngine` | `packages/core/capability/invocation/invocation-engine.ts` |
-| `eventBus` | `CapabilityEventBus` | `packages/core/capability/event/capability-event-bus.ts` |
-| `sdk` | `CapabilitySDK` | `packages/core/capability/sdk/capability-sdk.ts` |
+| `pipeline` | `CapabilityPipeline`          | `packages/core/capability/pipeline/capability-pipeline.ts`           |
+| `engine`   | `InvocationEngine`            | `packages/core/capability/invocation/invocation-engine.ts`           |
+| `eventBus` | `CapabilityEventBus`          | `packages/core/capability/event/capability-event-bus.ts`             |
+| `sdk`      | `CapabilitySDK`               | `packages/core/capability/sdk/capability-sdk.ts`                     |
 
 构造函数可选接收 `AICapabilityKernel`，并通过私有方法 `registerStandardProviderAdapters` 注册提供者适配器：
+
 - 有传入时注册 `AICapabilityProviderHandler`（`packages/core/capability/providers/ai-capability-provider.ts`）；
 - 总是注册 `LessonCapabilityProviderHandler`（`packages/core/capability/providers/lesson-capability-provider.ts`）与 `AnalyticsCapabilityProviderHandler`（`packages/core/capability/providers/analytics-capability-provider.ts`）。
 
@@ -121,12 +122,18 @@ export interface CapabilityDescriptor {
 ```typescript
 export type CapabilityRole = 'Teacher' | 'Student' | 'Plugin' | 'AI' | 'Observer' | 'System';
 
-export type CapabilityCategory =
-  | 'lesson' | 'whiteboard' | 'notebook' | 'plugin' | 'analytics' | 'ai' | string;
+export type CapabilityCategory = 'lesson' | 'whiteboard' | 'notebook' | 'plugin' | 'analytics' | 'ai' | string;
 
 export type ResultType =
-  | 'teaching_object' | 'whiteboard_object' | 'markdown' | 'quiz' | 'code'
-  | 'image' | 'analytics_insight' | 'plugin_data' | 'generic';
+  | 'teaching_object'
+  | 'whiteboard_object'
+  | 'markdown'
+  | 'quiz'
+  | 'code'
+  | 'image'
+  | 'analytics_insight'
+  | 'plugin_data'
+  | 'generic';
 
 export interface ICapabilityProviderHandler {
   readonly descriptor: CapabilityDescriptor;
@@ -141,7 +148,7 @@ export interface CapabilityContext {
   readonly analyticsSessionId?: string;
   readonly conversationId?: string;
   readonly pluginId?: string;
-  readonly actorRole: CapabilityRole;   // 必填
+  readonly actorRole: CapabilityRole; // 必填
 }
 
 export interface InvocationRequest {
@@ -171,28 +178,36 @@ export interface CapabilityResult<T = unknown> {
 
 `CapabilityEventType = keyof CapabilityEventMap`，共 **6** 个事件：
 
-| 事件 | payload |
-| ---- | ------- |
+| 事件                  | payload                          |
+| --------------------- | -------------------------------- |
 | `CapabilityRequested` | `{ request: InvocationRequest }` |
-| `CapabilityStarted` | `{ invocationId, capabilityId }` |
-| `CapabilityFinished` | `{ result: CapabilityResult }` |
-| `CapabilityCancelled` | `{ invocationId, reason }` |
-| `CapabilityFailed` | `{ invocationId, error }` |
-| `CapabilityPublished` | `{ result: CapabilityResult }` |
+| `CapabilityStarted`   | `{ invocationId, capabilityId }` |
+| `CapabilityFinished`  | `{ result: CapabilityResult }`   |
+| `CapabilityCancelled` | `{ invocationId, reason }`       |
+| `CapabilityFailed`    | `{ invocationId, error }`        |
+| `CapabilityPublished` | `{ result: CapabilityResult }`   |
 
 ### 3. 治理类型（`packages/core/capability-governance/types/index.ts`）
 
 ```typescript
-export type CapabilityLifecycleStatus =
-  | 'Draft' | 'Experimental' | 'Preview' | 'Stable' | 'Deprecated' | 'Archived';
+export type CapabilityLifecycleStatus = 'Draft' | 'Experimental' | 'Preview' | 'Stable' | 'Deprecated' | 'Archived';
 
 export type ApprovalTier = 'Official' | 'Community' | 'Experimental' | 'Internal';
 
 export type VisibilityTier = 'Public' | 'Private' | 'Protected';
 
 export type GovernanceCategory =
-  | 'Teaching' | 'Assessment' | 'Whiteboard' | 'Notebook' | 'AI'
-  | 'Analytics' | 'Storage' | 'Media' | 'Runtime' | 'Plugin' | 'Utility';
+  | 'Teaching'
+  | 'Assessment'
+  | 'Whiteboard'
+  | 'Notebook'
+  | 'AI'
+  | 'Analytics'
+  | 'Storage'
+  | 'Media'
+  | 'Runtime'
+  | 'Plugin'
+  | 'Utility';
 ```
 
 > **三个治理枚举的全部成员已更正**（旧文档写的 `Automatic | ManualApproval | AdminOnly`、`Public | Internal | Restricted | Deprecated`、`Proposed | Active | Deprecated | Retired` **均不存在**）。
@@ -213,14 +228,14 @@ export type GovernanceCategory =
 import { kernelContainer } from './packages/core/kernel/index.js';
 import type { CapabilityResult } from './packages/core/capability/types/index.js';
 
-const result = await kernelContainer.capabilityFrameworkRuntime.sdk.invokeCapability<string>(
-  'cap_lesson_flow',                                  // CapabilityDescriptor.id
-  { anything: 'you like' },                           // payload: Record<string, unknown>
+const result = (await kernelContainer.capabilityFrameworkRuntime.sdk.invokeCapability<string>(
+  'cap_lesson_flow', // CapabilityDescriptor.id
+  { anything: 'you like' }, // payload: Record<string, unknown>
   {
-    actorRole: 'Teacher',                             // CapabilityContext.actorRole 必填
+    actorRole: 'Teacher', // CapabilityContext.actorRole 必填
     lessonId: 'les_demo',
   },
-) as CapabilityResult<string>;
+)) as CapabilityResult<string>;
 
 if (result.success) {
   console.log(result.data, result.executionTimeMs);

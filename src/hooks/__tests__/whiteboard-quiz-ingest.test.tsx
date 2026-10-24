@@ -103,9 +103,7 @@ describe('useClassroomSocket — student-progress-updated → onStudentProgressU
   it('forwards lesson, percent, completed and verified flags to the callback', () => {
     const onStudentProgressUpdated = vi.fn();
     const setLiveClassStudentProgress = vi.fn();
-    renderHook(() =>
-      useClassroomSocket({ ...baseOptions, setLiveClassStudentProgress, onStudentProgressUpdated }),
-    );
+    renderHook(() => useClassroomSocket({ ...baseOptions, setLiveClassStudentProgress, onStudentProgressUpdated }));
 
     act(() => {
       mockSocket.fire('student-progress-updated', {
@@ -143,9 +141,11 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
     renderHook(() => useClassroomSocket(baseOptions));
 
     expect(mockSocket.listenerCount('whiteboard-quiz-answered')).toBe(1);
+    // Issue #238：教师端监听 presence-staff 房间的全量镜像事件
+    expect(mockSocket.listenerCount('whiteboard-quiz-answered-staff')).toBe(1);
 
     act(() => {
-      mockSocket.fire('whiteboard-quiz-answered', {
+      mockSocket.fire('whiteboard-quiz-answered-staff', {
         lessonId: 'L-001',
         elementId: 'el-1',
         studentId: 'stu-1',
@@ -180,7 +180,7 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
 
     expect(() =>
       act(() => {
-        mockSocket.fire('whiteboard-quiz-answered', {
+        mockSocket.fire('whiteboard-quiz-answered-staff', {
           lessonId: 'L-001',
           elementId: 'el-2',
           studentId: 'stu-2',
@@ -201,8 +201,8 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
 
     expect(() =>
       act(() => {
-        mockSocket.fire('whiteboard-quiz-answered', null);
-        mockSocket.fire('whiteboard-quiz-answered', undefined);
+        mockSocket.fire('whiteboard-quiz-answered-staff', null);
+        mockSocket.fire('whiteboard-quiz-answered-staff', undefined);
       }),
     ).not.toThrow();
 
@@ -223,7 +223,7 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
     renderHook(() => useClassroomSocket(baseOptions));
 
     act(() => {
-      mockSocket.fire('whiteboard-quiz-answered', {
+      mockSocket.fire('whiteboard-quiz-answered-staff', {
         lessonId: 'L-999',
         elementId: 'el-x',
         studentId: 'stu-x',

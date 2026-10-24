@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { splitCsvLine, downloadCSVTemplate, parseAndImportClassesOrStudents } from '../bulkImportService';
+import {
+  splitCsvLine,
+  splitCsvRecords,
+  downloadCSVTemplate,
+  parseAndImportClassesOrStudents,
+} from '../bulkImportService';
 
 describe('splitCsvLine', () => {
   it('splits a plain comma line', () => {
@@ -16,6 +21,34 @@ describe('splitCsvLine', () => {
 
   it('supports an alternate separator', () => {
     expect(splitCsvLine('a;b', ';')).toEqual(['a', 'b']);
+  });
+});
+
+describe('splitCsvRecords (G-05：引号字段跨物理行)', () => {
+  it('keeps a multi-line quoted field as one record', () => {
+    const records = splitCsvRecords(['"课程A","第一行', '第二行', '第三行",']);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toContain('第一行\n第二行\n第三行');
+  });
+
+  it('splits by newline outside quotes', () => {
+    expect(splitCsvRecords(['a,b', 'c,d'])).toEqual(['a,b', 'c,d']);
+  });
+
+  it('does not let doubled quotes break the record boundary', () => {
+    // "" 是转义引号，开合相消，记录不应被误判为「仍在引号内」
+    const records = splitCsvRecords(['"He said ""hi""",x', 'next,row']);
+    expect(records).toEqual(['"He said ""hi""",x', 'next,row']);
+  });
+
+  it('skips blank lines between records', () => {
+    expect(splitCsvRecords(['a,b', '', '  ', 'c,d'])).toEqual(['a,b', 'c,d']);
+  });
+
+  it('keeps an unterminated trailing quote instead of dropping data', () => {
+    const records = splitCsvRecords(['a,b', '"未闭合']);
+    expect(records).toHaveLength(2);
+    expect(records[1]).toBe('"未闭合');
   });
 });
 

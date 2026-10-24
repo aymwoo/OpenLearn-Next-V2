@@ -127,9 +127,7 @@ export function PostClassWrapupView({
               count: data.totalCount,
               avgRating: data.avgRating ?? prev.avgRating,
               topConcepts:
-                data.puzzledConcepts && data.puzzledConcepts.length > 0
-                  ? data.puzzledConcepts
-                  : prev.topConcepts,
+                data.puzzledConcepts && data.puzzledConcepts.length > 0 ? data.puzzledConcepts : prev.topConcepts,
             }));
           }
         }
@@ -551,7 +549,9 @@ export function PostClassWrapupView({
                           {t.puzzled_concept}”
                         </p>
                       ) : (
-                        <p className="text-muted/60 italic">{lang === 'zh' ? '（未填写留言）' : '(No written feedback)'}</p>
+                        <p className="text-muted/60 italic">
+                          {lang === 'zh' ? '（未填写留言）' : '(No written feedback)'}
+                        </p>
                       )}
                     </div>
                   ))
@@ -653,8 +653,8 @@ export function PostClassWrapupView({
           exitTicketStats.topConcepts.length > 0
             ? exitTicketStats.topConcepts
             : rawPuzzledConcepts.length > 0
-            ? rawPuzzledConcepts
-            : clusteredConcepts.map((c) => c.concept)
+              ? rawPuzzledConcepts
+              : clusteredConcepts.map((c) => c.concept)
         }
         lang={lang}
       />

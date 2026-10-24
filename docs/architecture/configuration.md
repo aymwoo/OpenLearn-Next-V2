@@ -39,68 +39,68 @@
 
 ### 1.1 服务与网络
 
-| 变量            | 默认值     | 说明                                                                                  |
-| --------------- | ---------- | ------------------------------------------------------------------------------------- |
-| `PORT`          | `9000`     | HTTP 端口。`server.ts` 的 `startServer()` 与 Vite 代理目标各自读取；`cli.mjs -p` 可覆盖  |
-| `HOST`          | `0.0.0.0`  | 监听地址。`cli.mjs -H` 可覆盖                                                        |
-| `NODE_ENV`      | 见下      | `production` / 非生产。影响 HMR、静态资源策略、日志级别、仅生产启用的 HTTPS 判定      |
-| `TERM`          | —          | `server.ts` 的 `startServer()` 中用于决定终端超链接是否渲染（`dumb` 时关闭）          |
-| `OPEN_BROWSER`  | 关闭       | `true` 时启动后自动打开浏览器。`cli.mjs -o` 会设置此变量                             |
+| 变量           | 默认值    | 说明                                                                                    |
+| -------------- | --------- | --------------------------------------------------------------------------------------- |
+| `PORT`         | `9000`    | HTTP 端口。`server.ts` 的 `startServer()` 与 Vite 代理目标各自读取；`cli.mjs -p` 可覆盖 |
+| `HOST`         | `0.0.0.0` | 监听地址。`cli.mjs -H` 可覆盖                                                           |
+| `NODE_ENV`     | 见下      | `production` / 非生产。影响 HMR、静态资源策略、日志级别、仅生产启用的 HTTPS 判定        |
+| `TERM`         | —         | `server.ts` 的 `startServer()` 中用于决定终端超链接是否渲染（`dumb` 时关闭）            |
+| `OPEN_BROWSER` | 关闭      | `true` 时启动后自动打开浏览器。`cli.mjs -o` 会设置此变量                                |
 
 `NODE_ENV` 在非测试生产代码中被读取 **19 次**，是覆盖面最广的变量。
 
 ### 1.2 安全与代理
 
-| 变量                    | 说明                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| `ALLOWED_ORIGINS`       | CORS 白名单，逗号分隔；`cli.mjs --cors` 可覆盖。`ecosystem.config.cjs` 从 `.env` 透传          |
-| `ALLOWED_FRAME_ORIGINS` | Helmet `frame-src` / `frame-ancestors` 白名单（课件 iframe 场景）                              |
-| `LTI_ALLOWED_LMS_ORIGINS` | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                    |
-| `TRUST_PROXY`           | Express `trust proxy`。默认不信任（未设置 / 空 / `false` / `0`）。反代后设为 `1` 或 `loopback`。直连公网不要打开，否则写限流可被伪造的 `X-Forwarded-For` 绕过 |
-| `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` | 空库种子口令。留空则随机生成并写入 `storage/bootstrap-credentials.txt`。等于用户名时登录后强制改密 |
-| `ENABLE_HTTPS`          | `true` 且 `NODE_ENV=production` 时按 HTTPS 语义生成自引用 URL（`server/routes/` 下 3 处）      |
-| `ENABLE_HSTS`           | `true` 时启用 HSTS                                                                            |
-| `FORCE_HTTPS`           | 生产环境下为 `true` 时**隐含** `ENABLE_HSTS`（二者在 `startServer()` 的 `enableHsts` 同一行）  |
-| `ENCRYPTION_KEY`        | 64 位 hex。加密 AI Provider API Key 与班级临时口令。未设置时写入 `storage/encryption-key`（0600），不再使用临时内存密钥 |
+| 变量                                                      | 说明                                                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOWED_ORIGINS`                                         | CORS 白名单，逗号分隔；`cli.mjs --cors` 可覆盖。`ecosystem.config.cjs` 从 `.env` 透传                                                                         |
+| `ALLOWED_FRAME_ORIGINS`                                   | Helmet `frame-src` / `frame-ancestors` 白名单（课件 iframe 场景）                                                                                             |
+| `LTI_ALLOWED_LMS_ORIGINS`                                 | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                                                                    |
+| `TRUST_PROXY`                                             | Express `trust proxy`。默认不信任（未设置 / 空 / `false` / `0`）。反代后设为 `1` 或 `loopback`。直连公网不要打开，否则写限流可被伪造的 `X-Forwarded-For` 绕过 |
+| `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` | 空库种子口令。留空则随机生成并写入 `storage/bootstrap-credentials.txt`。等于用户名时登录后强制改密                                                            |
+| `ENABLE_HTTPS`                                            | `true` 且 `NODE_ENV=production` 时按 HTTPS 语义生成自引用 URL（`server/routes/` 下 3 处）                                                                     |
+| `ENABLE_HSTS`                                             | `true` 时启用 HSTS                                                                                                                                            |
+| `FORCE_HTTPS`                                             | 生产环境下为 `true` 时**隐含** `ENABLE_HSTS`（二者在 `startServer()` 的 `enableHsts` 同一行）                                                                 |
+| `ENCRYPTION_KEY`                                          | 64 位 hex。加密 AI Provider API Key 与班级临时口令。未设置时写入 `storage/encryption-key`（0600），不再使用临时内存密钥                                       |
 
 认证**不使用**任何 JWT 签名密钥环境变量——登录态是基于 Cookie 的不透明会话令牌，由 `client_sessions` 表校验。旧文档中的 `JWT_SECRET` 在当前代码中零命中。
 
 ### 1.3 存储与插件包
 
-| 变量                     | 默认值                              | 说明                                             |
-| ------------------------ | ----------------------------------- | ------------------------------------------------ |
-| `OPENLEARN_DB_PATH`      | 见下                                | SQLite 文件路径                                  |
-| `OPENLEARN_MAX_ZIP_SIZE` | `300 * 1024 * 1024`（300MB）        | ZIP 内所有文件的**未压缩**总大小上限，ZIP bomb 防护 |
+| 变量                     | 默认值                       | 说明                                                |
+| ------------------------ | ---------------------------- | --------------------------------------------------- |
+| `OPENLEARN_DB_PATH`      | 见下                         | SQLite 文件路径                                     |
+| `OPENLEARN_MAX_ZIP_SIZE` | `300 * 1024 * 1024`（300MB） | ZIP 内所有文件的**未压缩**总大小上限，ZIP bomb 防护 |
 
 两者均通过具名 getter 暴露（`getMaxUncompressedSize()`），而非散落读取。`OPENLEARN_DB_PATH` 的默认值随运行方式变化：本地开发指向 `packages/core/db/educational_os.db`，npx 安装指向 `~/openlearn-next/data.db`。
 
 ### 1.4 插件运行时
 
-| 变量                                        | 说明                                                                                |
-| ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `ALLOW_UNSAFE_PLUGIN_SCRIPTS`               | **非 `true` 时，manifest 中声明的 `deploy.script` 外部部署脚本被拦截**（SEC-RCE-02 默认安全策略，仅打印 `[SECURITY WARNING]` 不执行）。`packages/core/plugin-host/index.ts` 读取 1 处 |
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`      | Worker 插件激活超时，默认 `60_000`ms；解析后要求 `>= 5000` 且为有限数，否则回落默认值 |
-| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | `ctx.reportProgress` 心跳的滑动续期窗口                                            |
+| 变量                                          | 说明                                                                                                                                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOW_UNSAFE_PLUGIN_SCRIPTS`                 | **非 `true` 时，manifest 中声明的 `deploy.script` 外部部署脚本被拦截**（SEC-RCE-02 默认安全策略，仅打印 `[SECURITY WARNING]` 不执行）。`packages/core/plugin-host/index.ts` 读取 1 处 |
+| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | Worker 插件激活超时，默认 `60_000`ms；解析后要求 `>= 5000` 且为有限数，否则回落默认值                                                                                                 |
+| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | `ctx.reportProgress` 心跳的滑动续期窗口                                                                                                                                               |
 
 注意 inline 路径**没有**对应的环境变量：`packages/core/plugin-host/index.ts` 顶部的 `ACTIVATION_TIMEOUT_MS` 与 `DEACTIVATION_TIMEOUT_MS` 都是硬编码 `5000`，覆盖 inline 路径的 `activate` 与 `deactivate` 计时。两者与 Worker 路径的 `ACTIVATE_TIMEOUT_MS`（60s 起步、可环境变量覆盖）是**互相独立**的两套阈值。
 
 ### 1.5 日志与调试
 
-| 变量                | 说明                                                                                      |
-| ------------------- | ----------------------------------------------------------------------------------------- |
+| 变量                | 说明                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LOG_LEVEL`         | pino 日志级别。**唯一被 `packages/core/observability/logger.ts` 读取的变量**；`docker-compose.yml` 与 `ecosystem.config.cjs` 都显式设为 `info` |
-| `DEBUG`             | 包含 `commandbus` 时 `CommandBus` 打印全部命令日志                                        |
-| `DEBUG_COMMAND_BUS` | 同上的开关式写法（`true` 生效）                                                            |
+| `DEBUG`             | 包含 `commandbus` 时 `CommandBus` 打印全部命令日志                                                                                             |
+| `DEBUG_COMMAND_BUS` | 同上的开关式写法（`true` 生效）                                                                                                                |
 
 后两者在 `packages/core/command-bus/index.ts` 的同一处条件里被同时判断。
 
 ### 1.6 构建期与测试
 
-| 变量              | 说明                                                                    |
-| ----------------- | ----------------------------------------------------------------------- |
-| `DISABLE_HMR`     | `true` 时关闭 Vite HMR 与 watch。**同时被 `server.ts` 与 `vite.config.ts` 读取** |
-| `VITEST`          | 存在时数据库改走临时库分支                                              |
-| `VITEST_POOL_ID`  | 配合 `VITEST`，按 vitest worker 隔离临时库名（缺省回退 `process.pid`）  |
+| 变量             | 说明                                                                             |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `DISABLE_HMR`    | `true` 时关闭 Vite HMR 与 watch。**同时被 `server.ts` 与 `vite.config.ts` 读取** |
+| `VITEST`         | 存在时数据库改走临时库分支                                                       |
+| `VITEST_POOL_ID` | 配合 `VITEST`，按 vitest worker 隔离临时库名（缺省回退 `process.pid`）           |
 
 ### 1.7 声明但无消费方的变量
 
@@ -150,14 +150,14 @@ schema 由 `packages/core/esm-loader/manifest-schema.ts` 的 `manifestSchema` �
 
 单个属性的合法字段共 6 个。该对象未开启 `.passthrough()`，因此**未列出的字段会被 Zod 静默剔除（strip）而非报错**——写错字段名不会得到提示，只会发现读回来是 `undefined`：
 
-| 字段         | 类型                                | 约束                       |
-| ------------ | ----------------------------------- | -------------------------- |
-| `type`       | 必填                                | `'string' \| 'number' \| 'boolean' \| 'integer'` |
-| `default`    | 任意                                | `z.unknown()`，可选        |
-| `description`| `string`                            | 可选                       |
-| `enum`       | 任意数组                            | 可选                       |
-| `minimum`    | `number`                            | 可选，仅数值类型生效       |
-| `maximum`    | `number`                            | 可选，仅数值类型生效       |
+| 字段          | 类型     | 约束                                             |
+| ------------- | -------- | ------------------------------------------------ |
+| `type`        | 必填     | `'string' \| 'number' \| 'boolean' \| 'integer'` |
+| `default`     | 任意     | `z.unknown()`，可选                              |
+| `description` | `string` | 可选                                             |
+| `enum`        | 任意数组 | 可选                                             |
+| `minimum`     | `number` | 可选，仅数值类型生效                             |
+| `maximum`     | `number` | 可选，仅数值类型生效                             |
 
 对应的 TS 类型 `ConfigProperty` 定义在 `packages/core/plugin-host/config-service.ts`。`ConfigDeclaration` 是 `NonNullable<Manifest['configuration']>`，即直接从 Zod schema 推导，避免手写类型与 schema 漂移。
 
@@ -171,10 +171,10 @@ schema 由 `packages/core/esm-loader/manifest-schema.ts` 的 `manifestSchema` �
 
 ```typescript
 export interface IConfigService {
-  get<T = unknown>(key: string): T;          // 内存缓存 → DB → schema 默认值 → undefined
-  getAll(): Record<string, unknown>;         // 遍历 schema 中声明的全部 key
+  get<T = unknown>(key: string): T; // 内存缓存 → DB → schema 默认值 → undefined
+  getAll(): Record<string, unknown>; // 遍历 schema 中声明的全部 key
   set(key: string, value: unknown): Promise<void>;
-  onChange(callback: ConfigChangeCallback): () => void;   // 单参，返回退订函数
+  onChange(callback: ConfigChangeCallback): () => void; // 单参，返回退订函数
 }
 
 export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: unknown) => void;
@@ -212,10 +212,10 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 
 定义在 `server/routes/plugins.ts`，路径参数 `:id(*)` 允许 manifest.id 中带斜杠的作用域形式：
 
-| 方法   | 路径                          | 权限                 | 行为                                                                       |
-| ------ | ----------------------------- | -------------------- | -------------------------------------------------------------------------- |
-| `GET`  | `/api/plugins/:id(*)/config`  | 需登录               | 返回 `{ schema: manifest.configuration?.properties ?? {}, values }`        |
-| `POST` | `/api/plugins/:id(*)/config`  | 仅 `administrator`   | 请求体为键值对对象，逐键 `setSync()`                                        |
+| 方法   | 路径                         | 权限               | 行为                                                                |
+| ------ | ---------------------------- | ------------------ | ------------------------------------------------------------------- |
+| `GET`  | `/api/plugins/:id(*)/config` | 需登录             | 返回 `{ schema: manifest.configuration?.properties ?? {}, values }` |
+| `POST` | `/api/plugins/:id(*)/config` | 仅 `administrator` | 请求体为键值对对象，逐键 `setSync()`                                |
 
 读配置对任何登录用户开放，写配置收紧到 `administrator`，是刻意的权限分层。
 
@@ -225,10 +225,10 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 
 ## 3. 速查
 
-| 问题                                       | 答案                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------------- |
-| 有 `PlatformConfiguration` 吗？            | **没有**。目录已于 2026-10-01 作为死代码整体删除（`207ca36`）              |
+| 问题                                         | 答案                                                                                                                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 有 `PlatformConfiguration` 吗？              | **没有**。目录已于 2026-10-01 作为死代码整体删除（`207ca36`）                                                                                                     |
 | 有内核级配置（线程池/沙箱上限/总线超时）吗？ | **没有**。Worker 资源限制是 `worker-manager.ts` 里的硬编码字面量（`maxOldGenerationSizeMb: 128`、`maxYoungGenerationSizeMb: 32`），不可配置；事件总线无超时配置项 |
-| 配置会热更新吗？                            | 插件配置**不热更新**（见 §2.6）；环境变量**永不热更新**，改后须重启          |
-| 插件配置存哪？                              | `plugin_storage` 表，`plugin_id` + `config:` 前缀的 key                    |
-| 改一个不存在的环境变量会怎样？                | 静默失效，该处回落 `||` 兜底值，无任何告警                                 |
+| 配置会热更新吗？                             | 插件配置**不热更新**（见 §2.6）；环境变量**永不热更新**，改后须重启                                                                                               |
+| 插件配置存哪？                               | `plugin_storage` 表，`plugin_id` + `config:` 前缀的 key                                                                                                           |
+| 改一个不存在的环境变量会怎样？               | 静默失效，该处回落 `                                                                                                                                              |     | ` 兜底值，无任何告警 |
