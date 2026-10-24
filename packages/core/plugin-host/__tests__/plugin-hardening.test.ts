@@ -216,6 +216,9 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   it('should intercept IStorageService in ServiceHost to enforce namespace isolation for Worker plugins', async () => {
     const mockDb = createTestDb();
     const guard = new CapabilityGuard();
+    // Issue #224：运行时能力以「管理员已审批（已授予）」为准，
+    // 未授予的能力不生效 —— 这里显式授予插件声明的 whiteboard:write。
+    guard.grant('plugin:ext-test-isolated', 'whiteboard:write');
 
     // Create ServiceHost bound to plugin:ext-test-isolated
     const serviceHost = new ServiceHost(
