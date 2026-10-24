@@ -248,6 +248,37 @@ const cleanupTx = db.transaction(() => {
   } catch (err) {
     console.warn('[cleanup-test-data] Warning cleaning up ai_providers:', err.message);
   }
+  // 7. 清理**孤儿课堂会话**：课节已被删除、但会话还挂在库里的残留。
+  // 上面的级联清理按 lesson_id / class_id 删会话，用例把课节删掉后
+  // 会话就成了孤儿 —— 它仍会以「进行中的课堂会话」出现在互动课堂首屏，
+  // 污染后续用例（e.g. a11y-gate 的互动课堂检查面）并让断言时序相关。
+  try {
+    const orphans = db
+      .prepare(
+        `SELECT id FROM classroom_sessions
+         WHERE lesson_id NOT IN (SELECT id FROM lessons)
+            OR (class_id IS NOT NULL AND class_id NOT IN (SELECT id FROM classes))`,
+      )
+      .all();
+    if (orphans.length > 0) {
+      const ids = orphans.map((o) => o.id);
+      const ph = ids.map(() => '?').join(',');
+      for (const sql of [
+        `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${ph}))`,
+        `DELETE FROM classroom_quick_polls WHERE session_id IN (${ph})`,
+        `DELETE FROM classroom_pacing_signals WHERE session_id IN (${ph})`,
+        `DELETE FROM classroom_danmaku WHERE session_id IN (${ph})`,
+        `DELETE FROM classroom_sessions WHERE id IN (${ph})`,
+      ]) {
+        try {
+          db.prepare(sql).run(...ids);
+        } catch {}
+      }
+      console.log(`  ✓ Removed ${ids.length} orphaned classroom sessions`);
+    }
+  } catch (err) {
+    console.warn('[cleanup-test-data] Warning cleaning up orphaned classroom sessions:', err.message);
+  }
 });
 
 try {

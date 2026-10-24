@@ -358,4 +358,48 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     await freezeAnimations(page);
     await expectNoViolations(page, '学生端·作业提交与互评');
   });
+
+  // 清理：本用例建的课节/班级/学生/课堂会话一律不留残。
+  // 否则未归档的会话会以「进行中的课堂会话」出现在后续用例的互动课堂首屏，
+  // 既改变被检查的页面（a11y 结论不再可比），也让断言时序相关。
+  test.afterAll(async ({ request }) => {
+    await request
+      .post('/api/auth/login', {
+        data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+      })
+      .catch(() => {});
+
+    const lessonsRes = await request.get('/api/lessons').catch(() => null);
+    if (lessonsRes?.ok()) {
+      const lessons = await lessonsRes.json();
+      const arr = Array.isArray(lessons) ? lessons : (lessons?.lessons ?? lessons?.data ?? []);
+      for (const l of arr) {
+        if (String(l.title ?? '').startsWith('A11Y2 ')) {
+          await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
+        }
+      }
+    }
+
+    const classesRes = await request.get('/api/classes').catch(() => null);
+    if (classesRes?.ok()) {
+      const classes = await classesRes.json();
+      const arr = Array.isArray(classes) ? classes : (classes?.classes ?? classes?.data ?? []);
+      for (const c of arr) {
+        if (String(c.name ?? '').startsWith('A11Y2 ')) {
+          await request.delete(`/api/classes/${encodeURIComponent(c.id)}`).catch(() => {});
+        }
+      }
+    }
+
+    const studentsRes = await request.get('/api/students').catch(() => null);
+    if (studentsRes?.ok()) {
+      const students = await studentsRes.json();
+      const arr = Array.isArray(students) ? students : (students?.students ?? students?.data ?? []);
+      for (const s of arr) {
+        if (String(s.student_number ?? '').startsWith('STU_A11Y2_')) {
+          await request.delete(`/api/students/${encodeURIComponent(s.id)}`).catch(() => {});
+        }
+      }
+    }
+  });
 });

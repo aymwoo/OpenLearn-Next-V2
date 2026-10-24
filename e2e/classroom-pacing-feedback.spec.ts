@@ -195,6 +195,18 @@ test.describe('在线教学分环节学习节奏晴雨表（Pacing Signals）全
       await page.addInitScript(() => localStorage.setItem('edu_os_tour_completed', 'true'));
       await page.goto(`/?mode=student_live&lessonId=${lessonId}`);
 
+      // Issue #131：进入课中视图时自动弹出「课前破冰心情打卡」弹窗，
+      // 它是 aria-modal 的全屏遮罩，会拦截浮动工具栏的点击 —— 先跳过。
+      const icebreakerModal = page.getByTestId('student-icebreaker-modal');
+      const icebreakerShown = await icebreakerModal
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (icebreakerShown) {
+        await page.getByTestId('icebreaker-skip-btn').click();
+        await expect(icebreakerModal).toBeHidden({ timeout: 10_000 });
+      }
+
       // 3. 定位底部悬浮课堂互动工具栏
       const toolbar = page.locator('aside[aria-label*="课堂互动工具栏"]');
       await expect(toolbar).toBeVisible({ timeout: 25_000 });

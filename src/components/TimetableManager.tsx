@@ -45,6 +45,7 @@ import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 import { useAsyncTaskStore, asyncTaskStore } from '../store/asyncTaskStore';
 import { uiStore, useUIStore } from '../store/uiStore';
+import { appStore } from '../store/appStore';
 import { fetchTeachingModes, type TeachingMode } from '../features/classroom/teaching-modes-client';
 
 export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
@@ -261,6 +262,17 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
   const pendingTimetableSubTab = useUIStore((s) => s.pendingTimetableSubTab);
 
+  /**
+   * Issue #89：本次挂载是否是从草稿（sessionStorage）恢复出条目。
+   *
+   * 用 ref 而不是 state —— 挂载 effect 与「联动全局后台任务」effect 在**同一次
+   * 提交**里按声明顺序执行，任务 effect 若用 state 判断，读到的仍是初始值。
+   *
+   * 用途：草稿已恢复出条目时，任务 effect 不能再用「识别成功」覆盖
+   * 「已恢复上次的识别结果」提示（Issue #89 的核心反馈）。
+   */
+  const restoredFromDraftRef = useRef(false);
+
   // ── Issue #89: 识别草稿现场恢复与持久化 ─────────────────────────────────
   // 挂载时（进入/切回课表中心）：恢复草稿（结果条目、勾选、图片、提供方），
   // 并在识别任务运行中/已完成时自动落在「AI 识别导入」子页，而不是默认的「查看」子页。
@@ -268,6 +280,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     const draft = asyncTaskStore.getState().timetableOcrDraft;
     if (draft) {
       if (draft.entries.length > 0) {
+        restoredFromDraftRef.current = true;
         setOcrEntries(draft.entries);
         setOcrSelectedEntries(new Set(draft.selected));
         setOcrMessage({
@@ -386,7 +399,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         classId: launchTarget.class_id,
         teachingModeId,
       });
-      uiStore.getState().setTeacherTab('live_class');
+      // 必须走 appStore 的 setter —— teacherTab 的权威源是 appStore
+      // （hash 路由与页面分发都订阅它），直接写 uiStore 只会改镜像副本，
+      // 导致「开始上课」后既不切页也不改 URL（见 sharedUISlice.setTeacherTab）。
+      appStore.getState().setTeacherTab('live_class');
       setLaunchTarget(null);
     } catch (e: any) {
       setLaunchError(
@@ -410,7 +426,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       setOcrProgress(100);
       setActiveTab('ocr_import');
       const entries = timetableOcrTask.result?.entries || [];
-      if (entries.length > 0 && ocrEntries.length === 0) {
+      // 草稿已经恢复出条目时，保留「已恢复上次的识别结果」提示，
+      // 不要用「识别成功」覆盖它（Issue #89：刷新/回跳后现场提示要稳定）。
+      if (entries.length > 0 && ocrEntries.length === 0 && !restoredFromDraftRef.current) {
         setOcrEntries(entries);
         setOcrSelectedEntries(new Set(entries.map((_: any, i: number) => i)));
         setOcrMessage({

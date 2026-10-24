@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { uiStore } from './uiStore';
+import { appStore } from './appStore';
 
 export type AsyncTaskType = 'timetable_ocr' | 'outline_generation' | 'batch_grading';
 export type AsyncTaskStatus = 'idle' | 'running' | 'completed' | 'failed';
@@ -189,7 +190,9 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
         action: {
           label: lang === 'zh' ? '查看并导入课表' : 'View Timetable',
           onClick: () => {
-            uiStore.getState().setTeacherTab('timetable');
+            // 走 appStore 的 setter —— teacherTab 的权威源是 appStore，
+            // 直接写 uiStore 只会改镜像副本，页面不会真的切到课表页。
+            appStore.getState().setTeacherTab('timetable');
             uiStore.getState().setPendingTimetableSubTab('ocr_import');
           },
         },

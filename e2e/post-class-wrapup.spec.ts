@@ -234,13 +234,23 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
       expect(submitTicketRes.ok()).toBeTruthy();
 
       // 将课堂推进至 WRAP_UP_EXIT_TICKET (结课通票与复盘阶段)
+      // 阶段机白名单只允许 PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET，
+      // 直接跳阶段会被判「Illegal transition」——按合法路径逐级推进。
+      const advanceToTeachingRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+        data: {
+          stage: 'IN_CLASS_TEACHING',
+          classId,
+        },
+      });
+      expect(advanceToTeachingRes.ok(), await advanceToTeachingRes.text()).toBeTruthy();
+
       const advanceToWrapupRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
         data: {
           stage: 'WRAP_UP_EXIT_TICKET',
           classId,
         },
       });
-      expect(advanceToWrapupRes.ok()).toBeTruthy();
+      expect(advanceToWrapupRes.ok(), await advanceToWrapupRes.text()).toBeTruthy();
 
       // 2. 浏览器 context 登录并进入应用
       const ctxLoginRes = await context.request.post('/api/auth/login', {
@@ -306,13 +316,16 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
       await expect(treeModal.getByText('课堂知识树即时点亮仪式')).toBeVisible();
 
       // 点击弹窗内的点亮大按钮
-      const lightUpTreeActionBtn = treeModal.getByRole('button', { name: /🌟 点亮本堂课知识树/ });
+      // 注意文案：面板入口是「🌟 点亮本堂课知识树」，弹窗内的大按钮是
+      // 「🌟 点亮本堂课困惑点知识树」（多「困惑点」三字），别写成同一个。
+      const lightUpTreeActionBtn = treeModal.getByRole('button', { name: /🌟 点亮本堂课困惑点知识树/ });
       await expect(lightUpTreeActionBtn).toBeVisible();
       await lightUpTreeActionBtn.click();
 
       // 验证变更为全员达成勋章或点亮完成
       await expect(treeModal.locator('[data-testid="tree-lit-badge"]')).toBeVisible({ timeout: 10_000 });
-      await expect(treeModal.getByText('知识图谱已点亮')).toBeVisible();
+      // 勋章文案是「N 个真实困惑点已全班集体复盘！」（不是「知识图谱已点亮」）
+      await expect(treeModal.getByText(/个真实困惑点已全班集体复盘/)).toBeVisible();
 
       // 证据 2：知识树点亮仪式全景截图
       await page.screenshot({

@@ -319,7 +319,7 @@ export function InProgressSessionList({
                   <button
                     type="button"
                     onClick={() => onResume(s)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm hover:bg-emerald-700 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold shadow-sm hover:bg-emerald-800 cursor-pointer"
                   >
                     <Play size={13} />
                     {zh ? '继续上课' : 'Resume'}

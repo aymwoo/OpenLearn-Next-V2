@@ -8,6 +8,7 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import { enterEntryPortal } from './fixtures/classroom-entry';
 
 function logEvidence(msg: string) {
   const logDir = path.resolve(process.cwd(), 'artifacts/logs');
@@ -270,6 +271,9 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       logEvidence('Stage 1: 教师通过开课门户选班并启动课堂');
       await teacherPage.goto(`/?mode=teacher_live&lessonId=${lessonId}`);
 
+      // Issue #91：首屏是「进行中的课堂会话」列表 —— 回到起始门户再走选班开课流程。
+      await enterEntryPortal(teacherPage);
+
       // 开课门户：等待并选择班级，点击「开始上课」
       const classSelectBtn = teacherPage.getByRole('button', { name: new RegExp(className) }).first();
       await expect(classSelectBtn).toBeVisible({ timeout: 15_000 });
@@ -295,6 +299,18 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       // 学生端加入课前课堂
       await studentPage.goto(`/?mode=student_live&lessonId=${lessonId}`);
       await expect(studentPage.getByText('互动课堂 · 学生端')).toBeVisible({ timeout: 20_000 });
+
+      // Issue #131：进入课中视图会自动弹出「课前破冰心情打卡」弹窗，
+      // 它是 aria-modal 的全屏遮罩，会拦截浮动工具栏的点击 —— 先跳过。
+      const icebreakerModal = studentPage.getByTestId('student-icebreaker-modal');
+      const icebreakerShown = await icebreakerModal
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (icebreakerShown) {
+        await studentPage.getByTestId('icebreaker-skip-btn').click();
+        await expect(icebreakerModal).toBeHidden({ timeout: 10_000 });
+      }
 
       // 截图存盘：Stage 1 课前准备
       const STAGE1_SHOT = path.join(screenshotDir, 'golden_journey_stage1_pre_class.png');

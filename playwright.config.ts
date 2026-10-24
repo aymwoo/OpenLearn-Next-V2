@@ -5,6 +5,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+  // Issue #230：`pnpm test:e2e` 会把 e2e/ 下全部用例扫进来。
+  // 但 `public-beta-journey.spec.ts` 属于**独立**的公测配置
+  // （playwright.beta.config.ts）：它跑在 9107 端口的独立服务上，
+  // 且刻意不豁免强制改密门 —— 用本配置的 9000 端口服务去跑它必然
+  // ECONNREFUSED / 端口错配。它由 `pnpm test:e2e:beta` 单独驱动。
+  testIgnore: 'public-beta-journey.spec.ts',
   timeout: 60_000,
   expect: {
     timeout: 15_000,
