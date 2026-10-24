@@ -114,12 +114,12 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
     });
     expect(created.status).toBe(200);
     const body = (await created.json()) as { preset?: { id?: string } };
-    pollId = body.preset?.id;
+    pollId = body.preset?.id ?? '';
     expect(pollId).toBeTruthy();
 
     const list = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherAToken);
     expect(list.status).toBe(200);
-    const rows = (await list.json()) as { presets?: Array<{ correctOption?: string }> };
+    const rows = (await list.json()) as { presets: Array<{ correctOption?: string }> };
     expect(rows.presets).toHaveLength(1);
     expect(rows.presets[0].correctOption).toBe('B');
   });
