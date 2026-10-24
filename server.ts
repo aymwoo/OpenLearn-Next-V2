@@ -45,7 +45,7 @@ import {
 import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
-import { loadMigrationsFromDirectory, runMigrations } from './server/utils/migrate.js';
+import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './server/utils/migrate.js';
 import { lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
@@ -135,7 +135,12 @@ async function startServer() {
   });
 
   try {
-    const migrationsDir = path.join(process.cwd(), 'migrations');
+    // 复用内核的解析器（`packages/core/db/migrator.ts`）而不是自己拼 `process.cwd()`。
+    //
+    // 这里有第二份硬编码的路径解析：cwd 版在 Docker（WORKDIR=/app + COPY migrations）里
+    // 恰好成立，但对 `npx openlearn-next`（cwd 是用户目录、包内才对）直接 FATAL。
+    // 两处解析器分叉的代价是：内核那侧修好了，这一侧仍会把启动拦下来 —— 实测如此。
+    const migrationsDir = getDefaultMigrationsDir();
     const migrations = loadMigrationsFromDirectory(migrationsDir);
     if (migrations.length === 0) {
       throw new Error(`[Migration] FATAL: ${migrationsDir} 中没有迁移文件，拒绝启动。`);
