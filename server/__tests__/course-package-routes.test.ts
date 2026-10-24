@@ -362,6 +362,129 @@ describe('course package routes', () => {
     expect(secondBody.result.duplicate).toBe(false);
   });
 
+  // ── 任意附件类型 → 白板侧引用机制（审计最后一项）─────────────────────────
+
+  it('carries a non-embeddable asset as a downloadable reference instead of a broken viewer', async () => {
+    // 课程包此前只能带 PDF/PPTX。现在能带 docx，但**渲染侧**没有 docx 的
+    // 内联渲染器 —— 若原样保留 fileType='docx'，渲染器会拿 zip 字节去喂
+    // PowerPointViewer，表现为「一直解析中」。所以导入时必须降级成 fileType='file'。
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】任意附件';
+    template.meta = { ...template.meta, id: 'cpkg-any-asset-docx' };
+    // 一个最小 docx（ZIP 容器签名 PK\x03\x04），后面补足内容让 magic bytes 通过
+    const docxBytes = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('fake-docx-body')]);
+    template.assets = [
+      {
+        id: 'handout',
+        filename: '第3章讲义.docx',
+        contentType: 'docx',
+        base64: docxBytes.toString('base64'),
+      } as any,
+    ];
+    template.elements = [
+      {
+        type: 'presentation',
+        segmentId: template.lesson.timeline[0].id,
+        data: { fileUrl: '${asset:handout}', fileType: 'docx', fileName: '第3章讲义.docx' },
+      } as any,
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+    expect(body.result.assets).toBe(1);
+
+    const row = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
+      .get(lessonId) as any;
+    const data = JSON.parse(row.data);
+    // 引用是真的：URL 指向落盘后的 /uploads 文件
+    expect(typeof data.fileUrl).toBe('string');
+    expect(data.fileUrl.startsWith('/uploads/')).toBe(true);
+    expect(fs.existsSync(path.join(getUploadsDir(), path.basename(data.fileUrl)))).toBe(true);
+    // 且渲染器不会误以为这是 PPTX
+    expect(data.fileType).toBe('file');
+    expect(data.fileName).toBe('第3章讲义.docx');
+    expect(data.slideCount).toBe(0);
+  });
+
+  it('rejects an asset whose bytes do not match the declared type', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】类型不符';
+    template.meta = { ...template.meta, id: 'cpkg-any-asset-mismatch' };
+    // 声明 docx（ZIP 容器），实际给 PDF 字节
+    template.assets = [
+      {
+        id: 'liar',
+        filename: '伪装.docx',
+        contentType: 'docx',
+        base64: Buffer.from('%PDF-1.4 not really a docx').toString('base64'),
+      } as any,
+    ];
+    template.elements = [];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(500);
+    // 关键：整体回滚，不留下半截课程
+    expect(db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】类型不符'").get()).toBeUndefined();
+  });
+
+  it('rejects a text asset that is actually binary', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】文本伪装';
+    template.meta = { ...template.meta, id: 'cpkg-any-asset-binary-as-text' };
+    template.assets = [
+      {
+        id: 'bin-as-txt',
+        filename: '大纲.md',
+        contentType: 'md',
+        base64: Buffer.from([0x23, 0x00, 0x01, 0x02]).toString('base64'),
+      } as any,
+    ];
+    template.elements = [];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(500);
+    expect(db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】文本伪装'").get()).toBeUndefined();
+  });
+
+  it('still embeds PDF/PPTX inline (no regression on the original two types)', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】PDF 仍内联';
+    template.meta = { ...template.meta, id: 'cpkg-any-asset-pdf-inline' };
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+    const rows = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
+      .all(lessonId) as any[];
+    const types = rows.map((r) => JSON.parse(r.data).fileType);
+    expect(types).toContain('pdf');
+    expect(types).toContain('pptx');
+    expect(types).not.toContain('file');
+  });
+
   it('rejects a malformed package with 400 and writes nothing', async () => {
     const res = await fetch(baseUrl + '/api/course-packages/import', {
       method: 'POST',

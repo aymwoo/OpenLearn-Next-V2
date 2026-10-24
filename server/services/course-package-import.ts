@@ -27,7 +27,13 @@ import { v7 as uuidv7 } from 'uuid';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getUploadsDir } from '../utils/paths.js';
-import { materializePackageAssets, resolveAssetPlaceholders, type MaterializedAsset } from './course-package-assets.js';
+import {
+  ASSET_PLACEHOLDER_PATTERN,
+  materializePackageAssets,
+  resolveAssetPlaceholders,
+  isEmbeddableAssetType,
+  type MaterializedAsset,
+} from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
 import type { CoursePackage } from './course-package.js';
 
@@ -205,6 +211,22 @@ export async function importCoursePackage(
         throw new Error(`课程包包含不支持的白板元素类型：${element.type}`);
       }
       const data = resolveAssetPlaceholders(element.data, materialized) as Record<string, unknown>;
+
+      // ── 非可内联渲染的附件：把「课件演示」元素降级成下载卡片 ──────────────
+      //
+      // 课程包现在可以带 docx/xlsx/zip/png/md… 这类没有内联渲染器的附件
+      // （审计最后一项：白板元素侧缺少对任意文件的引用机制）。
+      // 元素里存的仍是占位符解析后的真实 `/uploads/...`，但 `fileType` 必须
+      // 从「pdf/pptx」改成 `file` —— 否则渲染器会拿 zip 的字节去喂 PowerPointViewer，
+      // 表现为「一直解析中」而不是一张可下载的卡片。
+      if (element.type === 'presentation' && typeof data.fileUrl === 'string') {
+        const referenced = findReferencedAsset(element.data, materialized);
+        if (referenced && !isEmbeddableAssetType(referenced.fileType)) {
+          data.fileType = 'file';
+          data.fileName = referenced.fileName;
+          data.slideCount = 0;
+        }
+      }
       // 定位与分页信息统一写进 data（与 whiteboard.draw 的补齐逻辑一致）
       if (element.x !== undefined) data.x = element.x;
       if (element.y !== undefined) data.y = element.y;
@@ -326,6 +348,49 @@ function findExistingImport(
     )
     .get(creatorId, identity.key) as { id: string; title: string; created_at: number } | undefined;
   return row ?? null;
+}
+
+/**
+ * 从元素原始数据里找出它引用的课程包资产。
+ *
+ * 元素数据里存的是 `${asset:<id>}` 占位符，解析后就只剩 URL 了 —— 而我们需要
+ * 「这个 URL 对应的资产类型是否能内联渲染」。这里按占位符回查，避免再去比对 URL。
+ */
+function findReferencedAsset(
+  rawData: unknown,
+  assets: Map<string, MaterializedAsset>,
+): MaterializedAsset | null {
+  const seen = new Set<string>();
+  const walk = (value: unknown): MaterializedAsset | null => {
+    if (typeof value === 'string') {
+      ASSET_PLACEHOLDER_PATTERN.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = ASSET_PLACEHOLDER_PATTERN.exec(value)) !== null) {
+        const id = match[1];
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const asset = assets.get(id);
+        if (asset) return asset;
+      }
+      return null;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = walk(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (value && typeof value === 'object') {
+      for (const item of Object.values(value as Record<string, unknown>)) {
+        const found = walk(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    return null;
+  };
+  return walk(rawData);
 }
 
 /** 删除已落盘的附件文件（导入失败时的补偿动作）。 */
