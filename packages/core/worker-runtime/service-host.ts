@@ -251,7 +251,7 @@ export class ServiceHost {
     const guard = this.capabilityGuard as { check?: (actorId: string, cap: string) => boolean };
     // 守卫不支持判定时**保守拒绝**（fail closed）：不能因为判定能力缺失就放行。
     if (typeof guard.check !== 'function') return [];
-    return declared.filter(cap => guard.check!(this.pluginActorId, cap));
+    return declared.filter((cap) => guard.check!(this.pluginActorId, cap));
   }
 
   // ── Message dispatch ───────────────────────────────────────────────────
@@ -726,8 +726,7 @@ export class ServiceHost {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '__rpc__',
-          `Capability denied for actor ${this.pluginActorId}: ` +
-            `no granted capability, only 'get' methods allowed`,
+          `Capability denied for actor ${this.pluginActorId}: ` + `no granted capability, only 'get' methods allowed`,
         );
       }
 
