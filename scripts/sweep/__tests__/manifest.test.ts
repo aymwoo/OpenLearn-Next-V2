@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { SWEEP_ROLES, SWEEP_SCENARIOS } from '../manifest.js';
+import { parseArgs } from '../cli-args.js';
 import { CROSS_TENANT_TEACHER, ensureCrossTenantTeacher } from '../prepare.js';
 import { isStatusAsExpected } from '../scenario.js';
 import type { SweepRoleId } from '../types.js';
@@ -121,6 +122,34 @@ describe('巡检剧本 · 结构约束（Issue #247）', () => {
     expect(role).toBeTruthy();
     expect(role!.login.username).toBe(CROSS_TENANT_TEACHER.username);
     expect(role!.login.password).toBe(CROSS_TENANT_TEACHER.password);
+  });
+});
+
+describe('命令行 --roles 白名单（Issue #247 review 修正）', () => {
+  it('白名单与角色清单一致 —— 不得再有手写副本', () => {
+    // 此前白名单是硬编码字面量，新增 teacher-2 时被漏掉：
+    // `--roles teacher-2` 会被判「取值无效」，--help 的可选值列表也少一项。
+    const fromManifest = SWEEP_ROLES.map((r) => r.id).sort();
+    expect(fromManifest).toContain('teacher-2');
+  });
+
+  it('--roles 能指定第二教师', () => {
+    const opts = parseArgs(['--roles', 'teacher-2']);
+    expect(opts.roles).toEqual(['teacher-2']);
+  });
+
+  it('--roles 能指定多个角色', () => {
+    const opts = parseArgs(['--roles', 'teacher,teacher-2,student']);
+    expect(opts.roles).toEqual(['teacher', 'teacher-2', 'student']);
+  });
+
+  it('--roles 遇到非法值要报错并点名，不能静默丢弃', () => {
+    expect(() => parseArgs(['--roles', 'teacher,bogus'])).toThrow(/bogus/);
+    expect(() => parseArgs(['--roles', 'bogus'])).toThrow(/可选/);
+  });
+
+  it('默认参与角色 = 角色清单全量', () => {
+    expect(parseArgs([]).roles.sort()).toEqual(SWEEP_ROLES.map((r) => r.id).sort());
   });
 });
 
