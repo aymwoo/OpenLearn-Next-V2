@@ -55,6 +55,7 @@ plugin/plugin-registry
 plugin/community-plugin-registry
 plugin/extension-registry
 plugin/anchor-slots
+plugin/frontend-sandbox-capability-boundary
 plugin/plugin-documentation-report
 plugin/plugin-security-migration
 ```

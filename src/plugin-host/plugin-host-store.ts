@@ -10,6 +10,7 @@
  * - services: Reference to the FrontendServiceRegistry (set on initialize)
  * - initialized: Boolean flag indicating the host is ready
  * - dashboardVisibility: Map<pluginId, boolean> — per-plugin dashboard widget toggle
+ * - pluginErrors: Map<pluginId, string> — 插件前端错误（渲染层显示显式错误态）
  *
  * Pitfall 5: This store manages ONLY PluginHost infrastructure state.
  * Application business state (lessons, classes, students) remains in
@@ -29,6 +30,14 @@ export interface PluginHostStoreState {
   initialized: boolean;
   /** Per-plugin dashboard widget visibility. true (default, show) | false (hidden). */
   dashboardVisibility: Map<string, boolean>;
+  /**
+   * 插件前端错误信息（pluginId → 错误描述）。
+   *
+   * 记录「插件前端加载失败 / 被熔断降级」的事实，供扩展点渲染层显示**显式错误态**
+   * （错误文案 + 重试按钮），而不是让贡献条目静默消失 —— 静默消失会让用户以为
+   * 插件压根没装（v0.7.0 熔断越权修复）。
+   */
+  pluginErrors: Map<string, string>;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -58,11 +67,26 @@ export interface PluginHostStoreActions {
   /** Unregister all extension points belonging to a plugin. */
   unregisterPluginExtensionPoints: (pluginId: string) => void;
 
+  /**
+   * 仅摘除插件**运行时**注册的扩展点，保留 manifest 声明式贡献。
+   *
+   * 熔断降级与激活失败走这条路径：插件的前端 bundle 起不来，不代表它的
+   * 声明式贡献（Tab / 命令面板项 / 画布调色板项）不可用 —— 那些贡献的执行
+   * 后端在服务端插件宿主，与前端无关。整包摘除会让用户看到 Tab「闪现后消失」。
+   */
+  unregisterPluginRuntimeExtensionPoints: (pluginId: string) => void;
+
   /** Get all extension point configs for a slot. */
   getExtensions: (slot: AnyExtensionSlot) => ExtensionPointConfig[];
 
   /** Set dashboard widget visibility for a single plugin. */
   setDashboardVisibility: (pluginId: string, visible: boolean) => void;
+
+  /** 记录插件前端错误（激活失败 / 熔断降级）—— 渲染层据此显示显式错误态。 */
+  setPluginError: (pluginId: string, message: string) => void;
+
+  /** 清除插件前端错误（重新激活成功时调用）。 */
+  clearPluginError: (pluginId: string) => void;
 
   /** Bulk-initialize dashboard visibility (called on app startup). */
   setDashboardVisibilityBatch: (entries: Array<[string, boolean]>) => void;
@@ -101,6 +125,7 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
   extensionPoints: new Map(),
   services: null,
   dashboardVisibility: loadDashboardVisibility(),
+  pluginErrors: new Map(),
   initialized: false,
 
   // ── Actions ────────────────────────────────────────────────────────
@@ -191,6 +216,25 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       return { extensionPoints: updated };
     }),
 
+  unregisterPluginRuntimeExtensionPoints: (pluginId) =>
+    set((state) => {
+      const updated = new Map(state.extensionPoints);
+      let changed = false;
+      for (const [slot, configs] of updated) {
+        // origin 缺省视为 'runtime' —— 历史注册路径全部是命令式注册
+        const filtered = configs.filter((c) => c.pluginId !== pluginId || c.origin === 'manifest');
+        if (filtered.length !== configs.length) {
+          changed = true;
+          if (filtered.length === 0) {
+            updated.delete(slot);
+          } else {
+            updated.set(slot, filtered);
+          }
+        }
+      }
+      return changed ? { extensionPoints: updated } : state;
+    }),
+
   getExtensions: (slot) => {
     const list = get().extensionPoints.get(slot) ?? [];
     // 按 position 升序排序（缺省 100），同一 slot 内跨插件稳定排序。
@@ -204,6 +248,21 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       next.set(pluginId, visible);
       saveDashboardVisibility(next);
       return { dashboardVisibility: next };
+    }),
+
+  setPluginError: (pluginId, message) =>
+    set((state) => {
+      const next = new Map(state.pluginErrors);
+      next.set(pluginId, message);
+      return { pluginErrors: next };
+    }),
+
+  clearPluginError: (pluginId) =>
+    set((state) => {
+      if (!state.pluginErrors.has(pluginId)) return state;
+      const next = new Map(state.pluginErrors);
+      next.delete(pluginId);
+      return { pluginErrors: next };
     }),
 
   setDashboardVisibilityBatch: (entries) =>

@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { Puzzle } from 'lucide-react';
 import { usePluginHostStore } from '../plugin-host/plugin-host-store';
 import { useAppStore } from '../store/appStore';
-import { DOMExtensionWrapper } from '../plugin-host/extension-point-renderer';
+import { DOMExtensionWrapper, PluginErrorState } from '../plugin-host/extension-point-renderer';
 
 function ActiveTabComponent({
   component,
@@ -19,6 +19,7 @@ function ActiveTabComponent({
 
 function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
   const extensionPoints = usePluginHostStore((state) => state.extensionPoints);
+  const pluginErrors = usePluginHostStore((state) => state.pluginErrors);
   const lang = useAppStore((state) => state.lang);
   const lessonId = useAppStore((state) => state.selectedLesson);
   const classId = useAppStore((state) => state.liveClassSelectedClassId);
@@ -28,12 +29,16 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
   const effectiveActive = activeNavPlugin || (tabs.length > 0 ? tabs[0].pluginId : null);
 
   const activeTab = tabs.find((t) => t.pluginId === effectiveActive);
+  // v0.7.0：插件前端失败时给出显式错误态（错误 + 重试），而不是渲染空白面板
+  const pluginError = activeTab ? pluginErrors.get(activeTab.pluginId) : undefined;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Active panel */}
       <div className="flex-1 overflow-auto">
-        {activeTab?.component ? (
+        {pluginError ? (
+          <PluginErrorState pluginId={activeTab!.pluginId} message={pluginError} lang={lang === 'en' ? 'en' : 'zh'} />
+        ) : activeTab?.component ? (
           <ActiveTabComponent component={activeTab.component} lessonId={lessonId} classId={classId} />
         ) : activeTab && typeof (activeTab as any).render === 'function' ? (
           <DOMExtensionWrapper
