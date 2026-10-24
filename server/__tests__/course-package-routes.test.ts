@@ -187,6 +187,181 @@ describe('course package routes', () => {
     }
   });
 
+  // ── G-06：导入幂等（docs/audit/course-import-audit.md）────────────────────
+
+  it('rejects a second import of the same package with 409 and writes nothing', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】幂等';
+
+    const first = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    recordImport(firstBody);
+    expect(firstBody.result.duplicate).toBe(false);
+    expect(firstBody.result.packageKey).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const countBefore = (db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE title = '【CPKG-TEST】幂等'").get() as any)
+      .n;
+    expect(countBefore).toBe(1);
+
+    const second = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(second.status).toBe(409);
+    const secondBody = await second.json();
+    expect(secondBody.success).toBe(false);
+    expect(secondBody.code).toBe('COURSE_PACKAGE_DUPLICATE');
+    expect(secondBody.duplicate.lessonId).toBe(firstBody.result.lessonId);
+    expect(secondBody.duplicate.lessonTitle).toBe('【CPKG-TEST】幂等');
+    expect(secondBody.duplicate.hasDeclaredId).toBe(false);
+
+    // 关键断言：被拒绝的导入不能留下第二节课程，也不能留下白板元素
+    const countAfter = (db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE title = '【CPKG-TEST】幂等'").get() as any)
+      .n;
+    expect(countAfter).toBe(1);
+    const orphans = db
+      .prepare('SELECT COUNT(*) AS n FROM whiteboard_elements WHERE lesson_id NOT IN (SELECT id FROM lessons)')
+      .get() as any;
+    expect(orphans.n).toBe(0);
+  });
+
+  it('uses meta.id as the dedup key when the package declares one', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】带 id 的包';
+    template.meta = { ...template.meta, id: 'cpkg-test-declared-id' };
+
+    const first = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    recordImport(firstBody);
+    expect(firstBody.result.packageKey).toBe('id:cpkg-test-declared-id');
+    expect(firstBody.result.packageId).toBe('cpkg-test-declared-id');
+
+    // 改了标题、改了正文 —— 内容哈希变了，但 meta.id 没变，仍视为同一个包。
+    // 这正是 meta.id 相对纯内容哈希的价值：作者声明的身份抗内容漂移。
+    template.lesson.title = '【CPKG-TEST】带 id 的包（改名后）';
+    template.lesson.content = '改了正文内容';
+
+    const second = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(second.status).toBe(409);
+    const secondBody = await second.json();
+    expect(secondBody.duplicate.packageKey).toBe('id:cpkg-test-declared-id');
+    expect(secondBody.duplicate.hasDeclaredId).toBe(true);
+  });
+
+  it('imports a copy anyway when allowDuplicate is set', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】强制副本';
+
+    const first = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    recordImport(firstBody);
+
+    const second = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template, allowDuplicate: true }),
+    });
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    recordImport(secondBody);
+    expect(secondBody.result.duplicate).toBe(true);
+    expect(secondBody.result.lessonId).not.toBe(firstBody.result.lessonId);
+
+    const rows = db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】强制副本'").all() as any[];
+    expect(rows).toHaveLength(2);
+  });
+
+  it('does not deduplicate across different creators', async () => {
+    // 内置模板要能被每位教师各导一份 —— 全局去重会让第二位教师永远导不进模板。
+    const otherTeacherId = 'usr-cpkg-teacher-2';
+    const otherToken = 'tok-cpkg-teacher-2';
+    const now = Date.now();
+    db.prepare(
+      'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(otherTeacherId, 'cpkg_teacher_2', 'hash_placeholder', 'teacher', '课程包教师2', now);
+    db.prepare(
+      'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+    ).run(
+      otherToken,
+      JSON.stringify({ userId: otherTeacherId, role: 'teacher', username: 'cpkg_teacher_2' }),
+      now,
+      now + 60 * 60 * 1000,
+    );
+
+    try {
+      const template = await buildTemplateCoursePackage();
+      template.lesson.title = '【CPKG-TEST】跨教师';
+
+      const first = await fetch(baseUrl + '/api/course-packages/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+        body: JSON.stringify({ package: template }),
+      });
+      expect(first.status).toBe(200);
+      recordImport(await first.json());
+
+      const second = await fetch(baseUrl + '/api/course-packages/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(otherToken) },
+        body: JSON.stringify({ package: template }),
+      });
+      expect(second.status).toBe(200);
+      recordImport(await second.json());
+    } finally {
+      db.prepare('DELETE FROM client_sessions WHERE id = ?').run(otherToken);
+      db.prepare('DELETE FROM users WHERE id = ?').run(otherTeacherId);
+    }
+  });
+
+  it('allows re-importing after the lesson is deleted (the key is released)', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】删后重导';
+
+    const first = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    recordImport(firstBody);
+
+    // 模拟教师删课：键随课程行一起消失，不需要额外的清理链路。
+    const lessonId = firstBody.result.lessonId as string;
+    db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(lessonId);
+    db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
+
+    const second = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    recordImport(secondBody);
+    expect(secondBody.result.duplicate).toBe(false);
+  });
+
   it('rejects a malformed package with 400 and writes nothing', async () => {
     const res = await fetch(baseUrl + '/api/course-packages/import', {
       method: 'POST',
@@ -197,6 +372,89 @@ describe('course package routes', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.error).toBeTruthy();
+  });
+
+  // ── Issue #246：附件落盘失败不留孤儿文件；请求体上限与产品承诺对齐 ────────
+
+  it('does not leave orphan files when a later asset fails validation', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】孤儿清理';
+
+    // 第一个附件合法（会真的落盘），第二个附件内容与声明类型不符 → 抛错
+    const good = template.assets[0];
+    template.assets = [
+      { id: 'good-asset', filename: 'ok.pdf', contentType: 'pdf', base64: good.base64 },
+      {
+        id: 'bad-asset',
+        filename: 'broken.pdf',
+        contentType: 'pdf',
+        base64: Buffer.from('this is definitely not a pdf').toString('base64'),
+      },
+    ];
+
+    const uploadsDir = getUploadsDir();
+    const before = new Set(fs.readdirSync(uploadsDir));
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.ok).toBe(false);
+
+    // 关键断言：第一个附件已经写盘，但它不能在失败后被遗弃在 uploads 目录里
+    const leaked = fs.readdirSync(uploadsDir).filter((name) => !before.has(name));
+    expect(leaked, `孤儿附件未被清理: ${leaked.join(', ')}`).toEqual([]);
+
+    // 数据库侧同样不留痕迹
+    const lesson = db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】孤儿清理'").get();
+    expect(lesson).toBeUndefined();
+  });
+
+  it('imports a package whose request body is far beyond the global 2MB limit', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】大体积';
+
+    // 3MB 的「PDF」：magic bytes 只看前 4 字节，后缀填充即可。
+    // 保留原资产 id —— 白板元素里的 ${asset:...} 占位符指向它们。
+    const bigPdf = Buffer.concat([Buffer.from('%PDF-1.4'), Buffer.alloc(3 * 1024 * 1024, 0x20)]);
+    template.assets[0].base64 = bigPdf.toString('base64');
+
+    const payload = JSON.stringify({ package: template });
+    expect(Buffer.byteLength(payload)).toBeGreaterThan(2 * 1024 * 1024);
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: payload,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    expect(body.success).toBe(true);
+    expect(body.result.assets).toBe(template.assets.length);
+  });
+
+  it('rejects a package whose decoded assets exceed the product limit with a clear 413', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】超限';
+
+    // 解码后 21MB > 20MB 上限
+    const hugePdf = Buffer.concat([Buffer.from('%PDF-1.4'), Buffer.alloc(21 * 1024 * 1024, 0x20)]);
+    template.assets = [
+      { id: 'huge-asset', filename: 'huge.pdf', contentType: 'pdf', base64: hugePdf.toString('base64') },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('COURSE_PACKAGE_TOO_LARGE');
+    expect(String(body.error)).toContain('20MB');
   });
 
   it('rolls the whole import back when a whiteboard element write fails', async () => {

@@ -45,7 +45,7 @@ import {
 import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
-import { loadMigrationsFromDirectory, runMigrations } from './server/utils/migrate.js';
+import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './server/utils/migrate.js';
 import { lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
@@ -81,6 +81,7 @@ import { assertRouteDataScopes } from './server/security/route-scope.js';
 import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
+import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -135,7 +136,12 @@ async function startServer() {
   });
 
   try {
-    const migrationsDir = path.join(process.cwd(), 'migrations');
+    // 复用内核的解析器（`packages/core/db/migrator.ts`）而不是自己拼 `process.cwd()`。
+    //
+    // 这里有第二份硬编码的路径解析：cwd 版在 Docker（WORKDIR=/app + COPY migrations）里
+    // 恰好成立，但对 `npx openlearn-next`（cwd 是用户目录、包内才对）直接 FATAL。
+    // 两处解析器分叉的代价是：内核那侧修好了，这一侧仍会把启动拦下来 —— 实测如此。
+    const migrationsDir = getDefaultMigrationsDir();
     const migrations = loadMigrationsFromDirectory(migrationsDir);
     if (migrations.length === 0) {
       throw new Error(`[Migration] FATAL: ${migrationsDir} 中没有迁移文件，拒绝启动。`);
@@ -272,18 +278,9 @@ async function startServer() {
     next();
   });
 
-  // 2. 局部大文件上传解析器（110MB）：仅向特定大文件上传端点放开，必须在全局 parser 之前挂载
-  const largeUploadEndpoints = [
-    '/api/upload',
-    '/api/courseware/upload',
-    '/api/courseware/inline',
-    '/api/plugins/upload-zip',
-  ];
-  app.use(
-    largeUploadEndpoints,
-    express.json({ limit: '110mb' }),
-    express.urlencoded({ limit: '110mb', extended: true }),
-  );
+  // 2. 局部大文件上传解析器：仅向特定大文件上传端点放开，必须在全局 parser 之前挂载。
+  //    装配细节（白名单、各端点上限、超限错误文案）见 server/middleware/body-limits.ts。
+  mountLargeBodyParsers(app);
 
   // 3. 全局 JSON 体积收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险
   app.use(express.json({ limit: '2mb' }));
@@ -462,6 +459,34 @@ async function startServer() {
         .prepare('SELECT class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
         .get(lessonId) as { class_id: string } | undefined;
       return row?.class_id ?? null;
+    },
+    // Issue #242: teacher socket auto-joins owned class rooms and active
+    // lesson rooms at connect, so room-targeted events (assignment.submitted,
+    // student.progress_updated, ...) reach the teacher in any view.
+    // Ownership semantics mirror class-access teacherOwnsClass: owner_user_id
+    // accepts both the user id and username legacy forms; active lessons are
+    // matched via session teacher / lesson creator / class owner.
+    lookupTeacherClassIds: (userId: string) =>
+      (
+        kernelContainer.db
+          .prepare(
+            'SELECT id FROM classes WHERE owner_user_id = ? OR owner_user_id = (SELECT username FROM users WHERE id = ?)',
+          )
+          .all(userId, userId) as { id: string }[]
+      ).map((row) => row.id),
+    lookupTeacherLessonIds: (userId: string) => {
+      const user = kernelContainer.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId) as
+        { id: string; username: string } | undefined;
+      if (!user) return [];
+      const uid = user.id;
+      const username = user.username;
+      return (
+        kernelContainer.db
+          .prepare(
+            "SELECT DISTINCT cs.lesson_id AS lesson_id FROM classroom_sessions cs LEFT JOIN lessons l ON cs.lesson_id = l.id LEFT JOIN classes c ON cs.class_id = c.id WHERE cs.stage != 'ARCHIVED_REPORT' AND (cs.teacher_id IN (?, ?) OR l.creator_id IN (?, ?) OR c.owner_user_id IN (?, ?))",
+          )
+          .all(uid, username, uid, username, uid, username) as { lesson_id: string }[]
+      ).map((row) => row.lesson_id);
     },
   });
 

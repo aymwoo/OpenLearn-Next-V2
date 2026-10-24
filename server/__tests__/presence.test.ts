@@ -24,6 +24,8 @@ function buildMocks(
     studentClassIds?: Record<string, string[]>;
     lookupThrows?: boolean;
     lessonClassIds?: Record<string, string | null>;
+    teacherClassIds?: Record<string, string[]>;
+    teacherLessonIds?: Record<string, string[]>;
   } = {},
 ) {
   const globalEmitted: Emitted[] = [];
@@ -60,6 +62,14 @@ function buildMocks(
     lookupLessonClassId: (lessonId: string) => {
       const v = opts.lessonClassIds?.[lessonId];
       return v === undefined ? null : v;
+    },
+    lookupTeacherClassIds: (userId: string) => {
+      if (opts.lookupThrows) throw new Error('db unavailable');
+      return opts.teacherClassIds?.[userId] ?? [];
+    },
+    lookupTeacherLessonIds: (userId: string) => {
+      if (opts.lookupThrows) throw new Error('db unavailable');
+      return opts.teacherLessonIds?.[userId] ?? [];
     },
   } as any;
   setupPresence(deps);
@@ -351,6 +361,64 @@ describe('setupPresence', () => {
 
       // 无 session 的测试连接按特权处理，会先加入 presence-staff
       expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-c1', 'class-c2']);
+    });
+
+    it('教师连接即自动加入任教班级房间与名下活跃课节房间（Issue #242）', () => {
+      const m = buildMocks({
+        teacherClassIds: { 'usr-t1': ['cls-1', 'cls-2'] },
+        teacherLessonIds: { 'usr-t1': ['les-live-1'] },
+      });
+      const socket = m.connect('sock-t', {
+        userId: 'usr-t1',
+        role: 'teacher',
+        username: 't1',
+        name: 't1',
+      });
+
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-cls-1', 'class-cls-2', 'les-live-1', 'user-usr-t1']);
+    });
+
+    it('作业工作区伪课节房间不参与教师自动加入', () => {
+      const m = buildMocks({
+        teacherClassIds: { 'usr-t1': ['cls-1'] },
+        teacherLessonIds: { 'usr-t1': ['assignment-asg-1-student-s1'] },
+      });
+      const socket = m.connect('sock-t', {
+        userId: 'usr-t1',
+        role: 'teacher',
+        username: 't1',
+        name: 't1',
+      });
+
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'class-cls-1', 'user-usr-t1']);
+    });
+
+    it('学生连接不自动加入教师房间归属清单', () => {
+      const m = buildMocks({
+        teacherClassIds: { 'usr-t1': ['cls-1'] },
+        teacherLessonIds: { 'usr-t1': ['les-live-1'] },
+      });
+      const socket = m.connect('sock-s', {
+        userId: 'stu-1',
+        role: 'student',
+        username: 'stu-1',
+        name: 'stu-1',
+      });
+
+      // 学生不进 presence-staff，也不进教师归属房间；仅个人房间
+      expect(socket._joinedRooms).toEqual(['user-stu-1']);
+    });
+
+    it('归属查询抛错不阻断连接', () => {
+      const m = buildMocks({ lookupThrows: true });
+      const socket = m.connect('sock-t', {
+        userId: 'usr-t1',
+        role: 'teacher',
+        username: 't1',
+        name: 't1',
+      });
+
+      expect(socket._joinedRooms).toEqual([PRESENCE_STAFF_ROOM, 'user-usr-t1']);
     });
 
     it('still registers presence when the class lookup fails', () => {

@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, Save, Settings } from 'lucide-react';
+import { PluginNetworkGrantsPanel } from './plugin-center/sub-views/PluginNetworkGrantsPanel';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -245,6 +246,10 @@ export function PluginSettingsModal({ pluginId, pluginName, manifestStr, lang, o
               {Object.entries(schema).map(([key, prop]) => renderField(key, prop as ConfigProperty))}
             </div>
           )}
+
+          {/* 出站域名授权（审计 R-02）：与「插件设置」同处一屏，因为它们都是
+              「这个插件被允许做什么」的一部分。没有声明也没有授权的插件整块不渲染。 */}
+          <PluginNetworkGrantsPanel pluginId={pluginId} lang={lang} />
         </div>
 
         {/* Footer */}

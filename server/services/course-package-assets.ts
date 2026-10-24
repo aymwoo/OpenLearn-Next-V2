@@ -426,6 +426,15 @@ export function countPdfPages(buffer: Buffer): number {
  * - 复用 `/api/upload` 的同一套校验（扩展名白名单 + magic bytes）；
  * - 文件名加随机后缀，避免同名覆盖；
  * - 返回 `/uploads/xxx` 相对 URL，元素数据里存这个值即可在导入方实例上正常加载。
+ *
+ * ## 失败补偿（Issue #246）
+ *
+ * 资产是**逐个**落盘的：第 N 个附件校验失败时，前 N-1 个文件已经躺在
+ * uploads 目录里。调用方（importCoursePackage）拿不到已经写盘的那部分，
+ * 也就没法清理 —— 于是留下孤儿文件（uploads 目录无界增长）。
+ *
+ * 因此本函数自己负责补偿：任何一步抛错都把本次已写盘的文件删掉再抛，
+ * 保证「要么全部落盘，要么一个都不留」。
  */
 export async function materializePackageAssets(
   assets: Array<{ id: string; filename: string; contentType: PackageAssetType; base64: string }>,
@@ -438,31 +447,49 @@ export async function materializePackageAssets(
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  for (const asset of assets) {
-    if (!PACKAGE_ASSET_TYPES.includes(asset.contentType)) {
-      throw new Error(`课程包资产 "${asset.id}" 的类型不受支持：${asset.contentType}`);
-    }
-    const ext = `.${asset.contentType}`;
-    const buffer = Buffer.from(asset.base64, 'base64');
-    if (buffer.length === 0) {
-      throw new Error(`课程包资产 "${asset.id}" 内容为空`);
-    }
-    if (!validateMagicBytes(buffer, asset.filename)) {
-      throw new Error(`课程包资产 "${asset.id}" 的内容与声明的文件类型不符`);
-    }
+  /** 本次已经写盘的绝对路径（失败时逐个删除）。 */
+  const writtenPaths: string[] = [];
 
-    const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    fs.writeFileSync(path.join(uploadsDir, uniqueName), buffer);
+  try {
+    for (const asset of assets) {
+      if (!PACKAGE_ASSET_TYPES.includes(asset.contentType)) {
+        throw new Error(`课程包资产 "${asset.id}" 的类型不受支持：${asset.contentType}`);
+      }
+      const ext = `.${asset.contentType}`;
+      const buffer = Buffer.from(asset.base64, 'base64');
+      if (buffer.length === 0) {
+        throw new Error(`课程包资产 "${asset.id}" 内容为空`);
+      }
+      if (!validateMagicBytes(buffer, asset.filename)) {
+        throw new Error(`课程包资产 "${asset.id}" 的内容与声明的文件类型不符`);
+      }
 
-    const slideCount = asset.contentType === 'pdf' ? countPdfPages(buffer) : await countPptxSlides(buffer);
+      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const filePath = path.join(uploadsDir, uniqueName);
+      fs.writeFileSync(filePath, buffer);
+      writtenPaths.push(filePath);
 
-    result.set(asset.id, {
-      id: asset.id,
-      fileUrl: `/uploads/${uniqueName}`,
-      fileName: asset.filename,
-      fileType: asset.contentType,
-      slideCount,
-    });
+      const slideCount = asset.contentType === 'pdf' ? countPdfPages(buffer) : await countPptxSlides(buffer);
+
+      result.set(asset.id, {
+        id: asset.id,
+        fileUrl: `/uploads/${uniqueName}`,
+        fileName: asset.filename,
+        fileType: asset.contentType,
+        slideCount,
+      });
+    }
+  } catch (err) {
+    // 补偿清理：把本次写盘的文件全部删掉，不留孤儿附件。
+    for (const filePath of writtenPaths) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupErr) {
+        // 删不掉就记一笔告警：不能因为清理失败而吞掉原始错误
+        console.warn('[course-package] 附件补偿清理失败:', (cleanupErr as Error).message);
+      }
+    }
+    throw err;
   }
 
   return result;
