@@ -353,10 +353,7 @@ function findExistingImport(
  * 元素数据里存的是 `${asset:<id>}` 占位符，解析后就只剩 URL 了 —— 而我们需要
  * 「这个 URL 对应的资产类型是否能内联渲染」。这里按占位符回查，避免再去比对 URL。
  */
-function findReferencedAsset(
-  rawData: unknown,
-  assets: Map<string, MaterializedAsset>,
-): MaterializedAsset | null {
+function findReferencedAsset(rawData: unknown, assets: Map<string, MaterializedAsset>): MaterializedAsset | null {
   const seen = new Set<string>();
   const walk = (value: unknown): MaterializedAsset | null => {
     if (typeof value === 'string') {

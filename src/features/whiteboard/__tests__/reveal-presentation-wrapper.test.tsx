@@ -137,9 +137,13 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
 
     cleanup();
     render(
-      <RevealPresentationWrapper elementId="pres-file-3" data={data} userRole="student" onElementUpdate={onElementUpdate} />,
+      <RevealPresentationWrapper
+        elementId="pres-file-3"
+        data={data}
+        userRole="student"
+        onElementUpdate={onElementUpdate}
+      />,
     );
     expect(screen.queryByTestId('course-package-file-clear')).toBeNull();
   });
-
 });
