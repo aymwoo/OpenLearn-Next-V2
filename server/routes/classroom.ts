@@ -1878,9 +1878,16 @@ export function registerClassroomRoutes(
 
         const activeSession = db
           .prepare(
-            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, lesson_id, class_id, teacher_id, current_segment_id, stage FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
           )
           .get(lessonId) as any;
+
+        // Issue #248：归档会话不再接收节奏信号。
+        // 与结课通票对齐（exit-ticket 显式拒绝归档）—— 此前只有通票守住了
+        // 「课已结束就别再往里写」的边界，节奏信号仍能往归档会话里塞「无主」数据。
+        if (activeSession && activeSession.stage === ARCHIVED_REPORT_STAGE) {
+          return res.status(409).json({ error: '课堂已归档，无法再提交节奏信号' });
+        }
 
         const readAuth = readDecision(req, lessonId, activeSession ?? null);
         if (rejectUnless(res, readAuth)) return;
