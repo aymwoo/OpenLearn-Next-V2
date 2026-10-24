@@ -25,7 +25,10 @@ overrides:
   # GHSA-p98j-92pf-mc4p / GHSA-6688-9rhm-gjv2。jspdf 4.2.1 仍带入 <=3.4.15。
   dompurify: '>=3.4.16'
   qs: '>=6.16.0'
-  body-parser: '>=1.20.6'
+  # GHSA-27r3-jxmh-p828：body-parser <1.20.9 存在压缩请求体尾部字节 DoS。
+  body-parser: '>=1.20.9'
+  # GHSA-mrhx-c7xc-m3w5：zod <4.6.6 在校验超大受限集合时可能耗尽内存。
+  zod: '>=4.6.6'
   protobufjs: '>=7.6.5'
   ooxml-core: '1.8.2'
   ooxml-ui: '1.8.3'
