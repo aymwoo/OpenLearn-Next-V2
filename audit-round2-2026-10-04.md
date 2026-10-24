@@ -13,12 +13,12 @@
 
 但审计出 **3 个确定性功能损坏**（其中 1 个我已实测复现）和 **2 个权限/数据隔离缺口**。
 
-| 级别 | 数量 | 说明 |
-|---|---|---|
-| 🔴 确定性功能损坏 | 3 | 用户点得到、必错 |
-| 🟠 权限/归属校验丢失 | 2 | 1 个是搬迁遗漏，1 个是既有 |
-| 🟡 契约回归 | 1 组 | 4xx → 500，8 个端点受影响 |
-| ✅ 审计通过 | 2 | E1 数据库、E2 能力目录 |
+| 级别                 | 数量 | 说明                       |
+| -------------------- | ---- | -------------------------- |
+| 🔴 确定性功能损坏    | 3    | 用户点得到、必错           |
+| 🟠 权限/归属校验丢失 | 2    | 1 个是搬迁遗漏，1 个是既有 |
+| 🟡 契约回归          | 1 组 | 4xx → 500，8 个端点受影响  |
+| ✅ 审计通过          | 2    | E1 数据库、E2 能力目录     |
 
 ---
 
@@ -29,6 +29,7 @@
 `214a848 perf(bundle)` 重写了 `gradeReportService.ts:164-165` 的动态 import，但没验证 `autoTable` 可用。
 
 **实测结果**：
+
 ```
 autoTable 存在: undefined          ← 当前代码路径
 模块导出键: [Cell, CellHookData, Column, ...]
@@ -42,11 +43,13 @@ applyPlugin 后 autoTable: function ← 正确写法
 **测试覆盖：0 处**（`grep generateClassPDFReport` 在测试中零命中）。
 
 **修复**：
+
 ```ts
 const { jsPDF } = await import('jspdf');
 const { applyPlugin } = await import('jspdf-autotable');
 applyPlugin(jsPDF);
 ```
+
 并补一条 jsdom 冒烟测试。
 
 > 注：该缺陷早于本批提交（`git log -S` 显示 v5 自项目初始即锁定），但 `214a848` 恰好重写这两行却未验证，属"改了没测"。
@@ -56,12 +59,14 @@ applyPlugin(jsPDF);
 `088cc50 perf(mfe)` 把 `emitCoursewareEvent()` 里对 `whiteboardEventSlot.ingest()` 的直接调用删掉，改为"解耦"——靠事件总线转发。
 
 **但通配符订阅根本不存在**（我已实测确认）：
+
 ```ts
 // src/services/event-bus.ts:33-37  subscribe 把事件名当字面量 Map key
-this.handlers.set(eventType, new Set());          // 存的是 'courseware.*' 这个字面量
+this.handlers.set(eventType, new Set()); // 存的是 'courseware.*' 这个字面量
 // src/services/event-bus.ts:87    publish 只做精确查找
-const handlers = this.handlers.get(event.type);   // 查 'courseware.submitted' → undefined
+const handlers = this.handlers.get(event.type); // 查 'courseware.submitted' → undefined
 ```
+
 而订阅方 `WhiteboardEventSlot.ts:249` 订阅的是 `frontendEventBus.subscribe('courseware.*', ...)`。
 
 **后果**：`courseware.submitted` / `courseware.progress_saved` / `courseware.event_logged` / `courseware.config_reported` 四类事件**永远进不了白板事件槽**。教师面板 `WhiteboardEventPanel.tsx:17,51` 与调试面板 `useWhiteboardEvents.ts:24,46,50` 永久静默失效。后端 socket 的 `courseware-attempt-updated` 路径仍会 ingest，所以表现为"部分事件有、部分没有"，极难定位。
@@ -128,17 +133,18 @@ app.post('/api/rollcalls/evaluate', requireAuth(), (req, res) => {
 
 E3 重构把原先的 `return res.status(4xx).json({error:'具体消息'})` 换成 service `throw new Error('具体消息')`，但**只有 courseware / assignment-hub / grading 三个路由层采用了 `e.status` 约定**，roster / lessons / classroom 全部退化成 500 + 生产环境吞掉消息。
 
-| 端点 | 重构前 | 现在 |
-|---|---|---|
-| `GET /lessons/:id/pre-class-diagnostic` | 404 | **500** |
-| `POST /lessons/:id/quiz-submit`（缺参 / 元素不存在） | 400 / 404 | **500** |
-| `POST /classroom/sessions/:id/simulate-quiz-responses` | 400 | **500** |
-| `POST /api/classes`（空 name） | 200 建空名班 | **500** |
-| `POST /api/students`（空 name） | 200 建空名学生 | **500** |
-| `PUT /api/classes/:id`（班级不存在） | 200 静默成功 | **500** |
-| `POST /api/classes/:id/students`（脏数据） | 200 静默成功 | **500** |
+| 端点                                                   | 重构前         | 现在    |
+| ------------------------------------------------------ | -------------- | ------- |
+| `GET /lessons/:id/pre-class-diagnostic`                | 404            | **500** |
+| `POST /lessons/:id/quiz-submit`（缺参 / 元素不存在）   | 400 / 404      | **500** |
+| `POST /classroom/sessions/:id/simulate-quiz-responses` | 400            | **500** |
+| `POST /api/classes`（空 name）                         | 200 建空名班   | **500** |
+| `POST /api/students`（空 name）                        | 200 建空名学生 | **500** |
+| `PUT /api/classes/:id`（班级不存在）                   | 200 静默成功   | **500** |
+| `POST /api/classes/:id/students`（脏数据）             | 200 静默成功   | **500** |
 
 **深层病因**：代码库现在有**两套错误状态约定**——
+
 - 类型化（健壮）：`err.status = 403` + 路由 `if (e.status)`（courseware 全部、assignment-service 21 处）
 - 字符串嗅探（脆弱）：路由层 `e.message?.includes('not found' | 'required' | ...)`（roster 8 处、assignments 2 处、grading 3 处）
 
@@ -156,6 +162,7 @@ E3 重构把原先的 `return res.status(4xx).json({error:'具体消息'})` 换�
 ```
 
 配合路由层 `if (name)` 门控（`roster.ts:67`），产生两个缺陷：
+
 1. **任何只带 `name` 的请求会清空 `description` 与 `lab_id`** —— `lab_id` 是班级↔机房绑定，`getClassSeats` 依赖它，置空后排座 UI 失效
 2. **只改 `description` 的请求被完全忽略**（旧代码是 `if (description !== undefined)`）
 
@@ -184,36 +191,31 @@ E3 重构把原先的 `return res.status(4xx).json({error:'具体消息'})` 换�
 
 ## 6. 中低危清单
 
-| # | 问题 | 位置 |
-|---|---|---|
-| M1 | **新包零测试覆盖**：bridge 是裸 IIFE，**既无幂等守卫也无幂等测试**；同一课件若同时命中 `injectLmsSdk` 与 `/bridge.js` 会被二次包装 | `packages/bridge-sdk/` 无 `__tests__/` |
-| M2 | **`pnpm dev` 不跑生成脚本**：改 `bridge.js` 后跑 dev 服务的是**已提交的旧字符串**，沙箱代码改动在开发态完全不可见 | `package.json:46,48` |
-| M3 | **`@openlearn/bridge-sdk` 从未被 import**：声明了 `main` 但全仓零引用，易误导后续开发者绕过 `BRIDGE_SDK_CODE` | `packages/bridge-sdk/package.json` |
-| M4 | **element-cache 返回共享可变引用**并直接进 React state，还传给第三方插件属性编辑器；当前无原地写入，是"任何后续 mutation 都会全局污染"的陷阱 | `element-cache.ts:31-37` → `InteractiveWhiteboard.tsx:440` |
-| M5 | **登出后 ≤45s 可无会话复用 token**（`tokenMemoryCache` 键只有 coursewareId）。真正问题是铸造端点 `courseware.ts:216` 只有 `requireAuth()`、**无归属校验**——缓存只是把既有 IDOR 冻结了 45s | `InteractiveCoursewareViewer.tsx:12` |
-| M6 | **能力目录改用桶文件**后，`kernel/index.ts` 与 `worker-manager.ts` 为一个类付出整个 capability + AI 基础设施层的加载代价（目前无 import-time 副作用，非功能缺陷） | `packages/core/kernel/index.ts:4` |
-| M7 | **死配置**：`vendor-reveal` 分包规则永不生效——`Reveal`/`RevealMarkdown` 被 tree-shake，产物 43 个 chunk 无一含 reveal 代码 | `vite.config.ts:88-90` |
-| M8 | **6 处文档仍写 `packages/core/capability-system/`** 为权威位置，第三方插件若照此导入，将来删除垫片即断链 | `capability-gateway.md` 等 |
-| M9 | **既有双轨权限实现**：`pipeline/permission-checker.ts`（按 `CapabilityRole` 枚举）与 `CapabilityGuard`（按 `resource:action` 字符串）同处一个目录，易被误认为同源 | `packages/core/capability/pipeline/` |
-| M10 | **测试分层缺口**：46 个 service 测试全不经过路由 catch，H1 与全部 8 个状态码回归因此逃逸 | `server/services/__tests__/` |
+| #   | 问题                                                                                                                                                                                      | 位置                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| M1  | **新包零测试覆盖**：bridge 是裸 IIFE，**既无幂等守卫也无幂等测试**；同一课件若同时命中 `injectLmsSdk` 与 `/bridge.js` 会被二次包装                                                        | `packages/bridge-sdk/` 无 `__tests__/`                     |
+| M2  | **`pnpm dev` 不跑生成脚本**：改 `bridge.js` 后跑 dev 服务的是**已提交的旧字符串**，沙箱代码改动在开发态完全不可见                                                                         | `package.json:46,48`                                       |
+| M3  | **`@openlearn/bridge-sdk` 从未被 import**：声明了 `main` 但全仓零引用，易误导后续开发者绕过 `BRIDGE_SDK_CODE`                                                                             | `packages/bridge-sdk/package.json`                         |
+| M4  | **element-cache 返回共享可变引用**并直接进 React state，还传给第三方插件属性编辑器；当前无原地写入，是"任何后续 mutation 都会全局污染"的陷阱                                              | `element-cache.ts:31-37` → `InteractiveWhiteboard.tsx:440` |
+| M5  | **登出后 ≤45s 可无会话复用 token**（`tokenMemoryCache` 键只有 coursewareId）。真正问题是铸造端点 `courseware.ts:216` 只有 `requireAuth()`、**无归属校验**——缓存只是把既有 IDOR 冻结了 45s | `InteractiveCoursewareViewer.tsx:12`                       |
+| M6  | **能力目录改用桶文件**后，`kernel/index.ts` 与 `worker-manager.ts` 为一个类付出整个 capability + AI 基础设施层的加载代价（目前无 import-time 副作用，非功能缺陷）                         | `packages/core/kernel/index.ts:4`                          |
+| M7  | **死配置**：`vendor-reveal` 分包规则永不生效——`Reveal`/`RevealMarkdown` 被 tree-shake，产物 43 个 chunk 无一含 reveal 代码                                                                | `vite.config.ts:88-90`                                     |
+| M8  | **6 处文档仍写 `packages/core/capability-system/`** 为权威位置，第三方插件若照此导入，将来删除垫片即断链                                                                                  | `capability-gateway.md` 等                                 |
+| M9  | **既有双轨权限实现**：`pipeline/permission-checker.ts`（按 `CapabilityRole` 枚举）与 `CapabilityGuard`（按 `resource:action` 字符串）同处一个目录，易被误认为同源                         | `packages/core/capability/pipeline/`                       |
+| M10 | **测试分层缺口**：46 个 service 测试全不经过路由 catch，H1 与全部 8 个状态码回归因此逃逸                                                                                                  | `server/services/__tests__/`                               |
 
 ---
 
 ## 7. 建议修复顺序
 
 **第 1 批（确定性功能损坏，用户点得到）**
+
 1. PDF 导出 `applyPlugin` + 冒烟测试
 2. 课件事件链：给 EventBus 加前缀订阅（或恢复直接 ingest）+ 端到端断言
 
-**第 2 批（权限/数据）**
-3. `deleteGroup` 加回 `AND class_id = ?`（同文件 `updateGroup` 已有正确写法可直接照抄）
-4. `updateClass` 改动态 SET（趁无调用方）
-5. `adoptedAttemptIds` 键加用户维度 + 登出清理
+**第 2 批（权限/数据）** 3. `deleteGroup` 加回 `AND class_id = ?`（同文件 `updateGroup` 已有正确写法可直接照抄）4. `updateClass` 改动态 SET（趁无调用方）5. `adoptedAttemptIds` 键加用户维度 + 登出清理
 
-**第 3 批（机制）**
-6. 统一错误状态约定到 `err.status`，消除字符串嗅探
-7. 补路由级状态码测试 + bridge 行为测试 + 生成物漂移 CI 检查
-8. `rollcalls/evaluate` 补角色限制（可独立立项）
+**第 3 批（机制）** 6. 统一错误状态约定到 `err.status`，消除字符串嗅探 7. 补路由级状态码测试 + bridge 行为测试 + 生成物漂移 CI 检查 8. `rollcalls/evaluate` 补角色限制（可独立立项）
 
 ---
 

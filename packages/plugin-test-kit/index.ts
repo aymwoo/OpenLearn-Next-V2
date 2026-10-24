@@ -629,10 +629,12 @@ export function runTestPluginMigrations(
       for (const stmt of stmts) {
         db.exec(stmt);
       }
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO plugin_declared_migrations (plugin_id, version, name, checksum, applied_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(pluginId, version, baseName, 'test-checksum', Date.now());
+      `,
+      ).run(pluginId, version, baseName, 'test-checksum', Date.now());
     });
 
     tx();
@@ -641,4 +643,3 @@ export function runTestPluginMigrations(
 
   return { appliedCount: appliedNames.length, appliedNames };
 }
-

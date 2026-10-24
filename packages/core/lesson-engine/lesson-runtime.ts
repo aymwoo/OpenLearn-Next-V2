@@ -97,12 +97,10 @@ export class LessonRuntime {
   public async startLesson(lesson: Lesson, flowId?: string): Promise<void> {
     // Prevent double-starting the same active lesson
     if (this.currentLesson && this.currentLesson.id === lesson.id && this.stateMachine.status === 'active') {
-      throw new InvalidLessonStateTransitionError(
-        lesson.id,
-        this.stateMachine.status,
-        'active',
-        ['paused', 'completed'],
-      );
+      throw new InvalidLessonStateTransitionError(lesson.id, this.stateMachine.status, 'active', [
+        'paused',
+        'completed',
+      ]);
     }
 
     this.stateMachine.setLessonId(lesson.id);

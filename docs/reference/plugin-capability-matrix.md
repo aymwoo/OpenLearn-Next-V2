@@ -7,12 +7,12 @@
 >
 > **关键事实**：代码库中存在**四套互不相干的 "capability" 机制**，请勿混淆：
 >
-> | # | 机制 | 载体 | 鉴权维度 | 拒绝信号 |
-> | - | ---- | ---- | -------- | -------- |
-> | 1 | **字符串权限 / RBAC** | `CapabilityGuard`（`packages/core/capability-system/index.ts`） | `resource:action` 字符串 | `[CapabilityGuard] Access Denied: ...` |
-> | 2 | **课堂运行时角色权限** | `RuntimePermissionManager`（`packages/core/classroom-runtime/permission-manager.ts`） | `RuntimePermission` 枚举（7 成员） | 见 [capability-gateway](../architecture/capability-gateway.md) |
-> | 3 | **能力 Provider 框架** | `PermissionChecker`（`packages/core/capability/pipeline/permission-checker.ts`） | `CapabilityRole` 角色数组（6 成员） | `Access Denied: Role '<r>' is not authorized for capability '<id>'` |
-> | 4 | **AI 功能 ID** | `packages/core/ai-capability/capabilities/` | `capability_*` 功能 ID（**不是**权限字符串） | — |
+> | #   | 机制                   | 载体                                                                                  | 鉴权维度                                     | 拒绝信号                                                            |
+> | --- | ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+> | 1   | **字符串权限 / RBAC**  | `CapabilityGuard`（`packages/core/capability-system/index.ts`）                       | `resource:action` 字符串                     | `[CapabilityGuard] Access Denied: ...`                              |
+> | 2   | **课堂运行时角色权限** | `RuntimePermissionManager`（`packages/core/classroom-runtime/permission-manager.ts`） | `RuntimePermission` 枚举（7 成员）           | 见 [capability-gateway](../architecture/capability-gateway.md)      |
+> | 3   | **能力 Provider 框架** | `PermissionChecker`（`packages/core/capability/pipeline/permission-checker.ts`）      | `CapabilityRole` 角色数组（6 成员）          | `Access Denied: Role '<r>' is not authorized for capability '<id>'` |
+> | 4   | **AI 功能 ID**         | `packages/core/ai-capability/capabilities/`                                           | `capability_*` 功能 ID（**不是**权限字符串） | —                                                                   |
 >
 > **不存在**名为 `CAPABILITY_DENIED` 的常量。唯一的 `PERMISSION_DENIED` 出现在**活动生态**（`packages/activity-ecosystem/registry.ts` 的 `startActivity`），与本页第 1 套机制无关——详见 §1.3。
 
@@ -29,27 +29,27 @@
 
 ### 1.1 作为 `capabilityRequired` 使用的 19 个字符串
 
-| 权限 | 声明处数 | 声明文件 | 绑定的命令类型（全部） |
-| ---- | -------- | -------- | --------------------- |
-| `management:write` | 24 | `packages/plugins/builtin.ts`、`packages/plugins/management.ts` | `user.create`、`user.update`、`user.delete`(高危)；`class.create`、`student.create`、`class.add_student`、`class.update`、`class.delete`、`student.update`、`student.delete`、`class.remove_student`、`class.template_download`、`student.template_download`、`student.add_note`、`assignment.create`、`assignment.submit`、`assignment.grade`、`schedule.create`、`attendance.record`、`student.set_progress`、`lab.create`、`lab.assign_seat`、`schedule.cancel` |
-| `lesson:write` | 11 | `packages/plugins/builtin.ts`、`packages/plugins/ai-planner.ts` | `lesson.create`、`lesson.update`、`lesson.update_timeline`、`lesson.add_segment`、`lesson.remove_segment`；`courseware.upload`、`courseware.confirm`、`courseware.save_score_config`、`courseware.regrade_attempts`、`courseware.delete`；`ai.apply_recommendation`(高危) |
-| `whiteboard:write` | 9 | `packages/plugins/builtin.ts` | `whiteboard.draw`、`whiteboard.update`、`whiteboard.delete`、`whiteboard.clear`、`whiteboard.batch_draw`、`whiteboard.duplicate` |
-| `management:read` | 6 | `packages/plugins/builtin.ts`、`packages/plugins/management.ts` | `user.list`；`class.list`、`student.list`、`class.get_students`、`lab.list`、`schedule.list` |
-| `plugin:write` | 5 | `packages/plugins/builtin.ts` | `plugin.install`(高危)、`plugin.install_zip`(高危)、`plugin.update_zip`(高危)、`plugin.toggle`(高危)、`plugin.uninstall`(高危) |
-| `lesson:read` | 4 | `packages/plugins/builtin.ts` | `courseware.get_score_config`、`courseware.list_score_configs`、`courseware.get_attempt_raw_data`、`courseware.list` |
-| `vfs:write` | 3 | `packages/plugins/vfs.ts` | `vfs.write_file`、`vfs.mkdir` |
-| `process:write` | 3 | `packages/plugins/process.ts`、`packages/plugins/ai-planner.ts` | `process.spawn`、`process.kill`；`ai.start_generation` |
-| `assignment:manage` | 3 | `packages/plugins/assignment-eval.ts` | `assignment.create`、`assignment.assign_peer_reviews`、`assignment.grade` |
-| `whiteboard:read` | 2 | `packages/plugins/builtin.ts` | `whiteboard.query`、`whiteboard.get_element` |
-| `vfs:read` | 2 | `packages/plugins/vfs.ts` | `vfs.read_file`、`vfs.list_dir` |
-| `process:read` | 2 | `packages/plugins/process.ts` | `process.list`、`process.logs` |
-| `assignment:read` | 2 | `packages/plugins/assignment-eval.ts` | `assignment.list`、`assignment.get` |
-| `lesson:delete` | 1 | `packages/plugins/builtin.ts` | `lesson.delete`（高危） |
-| `plugin:read` | 1 | `packages/plugins/builtin.ts` | `plugin.info`（显式 `isHighRisk: false`） |
-| `student:write` | 1 | `packages/plugins/builtin.ts` | `courseware.submit_attempt` |
-| `assignment:write` | 1 | `packages/plugins/ai-planner.ts` | `ai.apply_grade`（高危） |
-| `assignment:submit` | 1 | `packages/plugins/assignment-eval.ts` | `assignment.submit` |
-| `assignment:review` | 1 | `packages/plugins/assignment-eval.ts` | `assignment.peer_review` |
+| 权限                | 声明处数 | 声明文件                                                        | 绑定的命令类型（全部）                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------- | -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `management:write`  | 24       | `packages/plugins/builtin.ts`、`packages/plugins/management.ts` | `user.create`、`user.update`、`user.delete`(高危)；`class.create`、`student.create`、`class.add_student`、`class.update`、`class.delete`、`student.update`、`student.delete`、`class.remove_student`、`class.template_download`、`student.template_download`、`student.add_note`、`assignment.create`、`assignment.submit`、`assignment.grade`、`schedule.create`、`attendance.record`、`student.set_progress`、`lab.create`、`lab.assign_seat`、`schedule.cancel` |
+| `lesson:write`      | 11       | `packages/plugins/builtin.ts`、`packages/plugins/ai-planner.ts` | `lesson.create`、`lesson.update`、`lesson.update_timeline`、`lesson.add_segment`、`lesson.remove_segment`；`courseware.upload`、`courseware.confirm`、`courseware.save_score_config`、`courseware.regrade_attempts`、`courseware.delete`；`ai.apply_recommendation`(高危)                                                                                                                                                                                          |
+| `whiteboard:write`  | 9        | `packages/plugins/builtin.ts`                                   | `whiteboard.draw`、`whiteboard.update`、`whiteboard.delete`、`whiteboard.clear`、`whiteboard.batch_draw`、`whiteboard.duplicate`                                                                                                                                                                                                                                                                                                                                   |
+| `management:read`   | 6        | `packages/plugins/builtin.ts`、`packages/plugins/management.ts` | `user.list`；`class.list`、`student.list`、`class.get_students`、`lab.list`、`schedule.list`                                                                                                                                                                                                                                                                                                                                                                       |
+| `plugin:write`      | 5        | `packages/plugins/builtin.ts`                                   | `plugin.install`(高危)、`plugin.install_zip`(高危)、`plugin.update_zip`(高危)、`plugin.toggle`(高危)、`plugin.uninstall`(高危)                                                                                                                                                                                                                                                                                                                                     |
+| `lesson:read`       | 4        | `packages/plugins/builtin.ts`                                   | `courseware.get_score_config`、`courseware.list_score_configs`、`courseware.get_attempt_raw_data`、`courseware.list`                                                                                                                                                                                                                                                                                                                                               |
+| `vfs:write`         | 3        | `packages/plugins/vfs.ts`                                       | `vfs.write_file`、`vfs.mkdir`                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `process:write`     | 3        | `packages/plugins/process.ts`、`packages/plugins/ai-planner.ts` | `process.spawn`、`process.kill`；`ai.start_generation`                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `assignment:manage` | 3        | `packages/plugins/assignment-eval.ts`                           | `assignment.create`、`assignment.assign_peer_reviews`、`assignment.grade`                                                                                                                                                                                                                                                                                                                                                                                          |
+| `whiteboard:read`   | 2        | `packages/plugins/builtin.ts`                                   | `whiteboard.query`、`whiteboard.get_element`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `vfs:read`          | 2        | `packages/plugins/vfs.ts`                                       | `vfs.read_file`、`vfs.list_dir`                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `process:read`      | 2        | `packages/plugins/process.ts`                                   | `process.list`、`process.logs`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `assignment:read`   | 2        | `packages/plugins/assignment-eval.ts`                           | `assignment.list`、`assignment.get`                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `lesson:delete`     | 1        | `packages/plugins/builtin.ts`                                   | `lesson.delete`（高危）                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `plugin:read`       | 1        | `packages/plugins/builtin.ts`                                   | `plugin.info`（显式 `isHighRisk: false`）                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `student:write`     | 1        | `packages/plugins/builtin.ts`                                   | `courseware.submit_attempt`                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `assignment:write`  | 1        | `packages/plugins/ai-planner.ts`                                | `ai.apply_grade`（高危）                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `assignment:submit` | 1        | `packages/plugins/assignment-eval.ts`                           | `assignment.submit`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `assignment:review` | 1        | `packages/plugins/assignment-eval.ts`                           | `assignment.peer_review`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 > ⚠️ **同名命令的权限归属不唯一**：`assignment.create` / `assignment.submit` / `assignment.grade` 在 `packages/plugins/management.ts` 中要求 `management:write`，而在 `packages/plugins/assignment-eval.ts` 中分别要求 `assignment:manage` / `assignment:submit` / `assignment:manage`。两处注册的 action id 必须不同，否则 `ActionRegistry.register` 会因 id 重复抛错。插件应同时声明 `management:write` 与 `assignment:*` 以避免落空。
 
@@ -57,11 +57,11 @@
 
 以下 3 个字符串在**内置插件的 manifest** 中被声明，但**任何源码位置都没有把它们用作 `capabilityRequired`**。声明它们无害（多授无害），但不构成实际约束：
 
-| 权限 | 声明位置 |
-| ---- | -------- |
-| `class:read` | `packages/plugins/management.ts` 的 `manifest.capabilitiesProposed` |
-| `class:write` | 同上 |
-| `student:read` | 同上 |
+| 权限           | 声明位置                                                            |
+| -------------- | ------------------------------------------------------------------- |
+| `class:read`   | `packages/plugins/management.ts` 的 `manifest.capabilitiesProposed` |
+| `class:write`  | 同上                                                                |
+| `student:read` | 同上                                                                |
 
 > 因此**不存在** `class:*` 这个权限模块。`packages/plugins/management.ts` 的所有读写动作实际用的是 `management:read` / `management:write`。
 
@@ -104,22 +104,22 @@ throw err;
 
 ### 1.4 通配符与超级管理员绕过
 
-| 权限 | 说明 |
-| ---- | ---- |
-| `*:*:*` / `*` | 超级管理员绕过。`CapabilityGuard` 构造函数给 `user-demo` 预置 `['*:*:*']`；`check()` 的显式授予分支同时接受 `*:*:*` 与 `*`。 |
-| `lesson:*` 等部分通配 | `check()` 末段把 `requiredCap` 拆为 `resource:action`，与已授能力逐条比较，`res` 或 `act` 命中 `*` 即通过。 |
-| 管理员 actorId 短路 | `check()` 首段直接放行：`role:administrator`、`admin`、`usr_admin`、`admin-demo`，或 `extractRole` 解析出 `administrator` / `admin`。 |
+| 权限                  | 说明                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `*:*:*` / `*`         | 超级管理员绕过。`CapabilityGuard` 构造函数给 `user-demo` 预置 `['*:*:*']`；`check()` 的显式授予分支同时接受 `*:*:*` 与 `*`。          |
+| `lesson:*` 等部分通配 | `check()` 末段把 `requiredCap` 拆为 `resource:action`，与已授能力逐条比较，`res` 或 `act` 命中 `*` 即通过。                           |
+| 管理员 actorId 短路   | `check()` 首段直接放行：`role:administrator`、`admin`、`usr_admin`、`admin-demo`，或 `extractRole` 解析出 `administrator` / `admin`。 |
 
 ### 1.5 `CapabilityGuard` 构造函数预置的默认 actor
 
-| actorId | 预置能力 |
-| ------- | -------- |
-| `user-demo` | `['*:*:*']` |
-| `user-frontend` | `lesson:*`、`whiteboard:*`、`management:*`、`quiz:*`、`vfs:*`、`process:*`、`plugin:*` |
-| `anonymous` | `[]`（无权限） |
+| actorId          | 预置能力                                                                                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user-demo`      | `['*:*:*']`                                                                                                                                                                       |
+| `user-frontend`  | `lesson:*`、`whiteboard:*`、`management:*`、`quiz:*`、`vfs:*`、`process:*`、`plugin:*`                                                                                            |
+| `anonymous`      | `[]`（无权限）                                                                                                                                                                    |
 | `agent-system-0` | `lesson:write`、`lesson:delete`、`whiteboard:write`、`quiz:write`、`plugin:read`、`vfs:read`、`vfs:write`、`management:write`、`management:read`、`process:write`、`process:read` |
-| `teacher-demo` | `lesson:*`、`whiteboard:*`、`management:*`、`quiz:*`、`vfs:*` |
-| `student-demo` | `student:write`、`lesson:read`、`whiteboard:read` |
+| `teacher-demo`   | `lesson:*`、`whiteboard:*`、`management:*`、`quiz:*`、`vfs:*`                                                                                                                     |
+| `student-demo`   | `student:write`、`lesson:read`、`whiteboard:read`                                                                                                                                 |
 
 此外 `check()` 内还有两张**角色兜底表**（对 `extractRole` 解析出 `teacher` / `student` 的任意 `actorId` 生效，硬编码在 `check` 方法体中，**不是**构造函数的预置表）：
 
@@ -151,11 +151,11 @@ throw err;
 
 声明**仅通过 manifest 字段 `capabilitiesProposed: string[]`**，运行期没有单独的 ctx API 用来声明权限。
 
-| 位置 | 符号 |
-| ---- | ---- |
-| SDK 类型 | `packages/plugin-sdk/openlearn.d.ts` 的 `Manifest.capabilitiesProposed?: string[]` |
+| 位置               | 符号                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| SDK 类型           | `packages/plugin-sdk/openlearn.d.ts` 的 `Manifest.capabilitiesProposed?: string[]`                                                        |
 | Zod Schema（权威） | `packages/core/esm-loader/manifest-schema.ts` 的 `capabilitiesProposed: z.array(z.string()).optional()`（在两个 schema 分支中各出现一次） |
-| 消费侧 | `packages/core/registry/index.ts` 的 `ActionDescriptor.capabilityRequired: string`（必填） |
+| 消费侧             | `packages/core/registry/index.ts` 的 `ActionDescriptor.capabilityRequired: string`（必填）                                                |
 
 内置插件的真实 manifest 声明（`packages/plugins/*.ts` 的 `manifest.capabilitiesProposed`）：
 
@@ -190,18 +190,18 @@ throw err;
 
 实测全仓库（`packages/core`、`packages/plugins`、`src/`、`server.ts`，排除 `node_modules`）共 **9 处** `isHighRisk: true`，以及 **1 处**显式 `isHighRisk: false`：
 
-| 命令类型 | 所需权限 | 声明位置 | 高危 |
-| -------- | -------- | -------- | ---- |
-| `lesson.delete` | `lesson:delete` | `packages/plugins/builtin.ts` | ✅ |
-| `plugin.install` | `plugin:write` | `packages/plugins/builtin.ts` | ✅ |
-| `plugin.install_zip` | `plugin:write` | `packages/plugins/builtin.ts` | ✅ |
-| `plugin.update_zip` | `plugin:write` | `packages/plugins/builtin.ts` | ✅ |
-| `plugin.toggle` | `plugin:write` | `packages/plugins/builtin.ts` | ✅ |
-| `plugin.uninstall` | `plugin:write` | `packages/plugins/builtin.ts` | ✅ |
-| `user.delete` | `management:write` | `packages/plugins/builtin.ts` | ✅ |
-| `ai.apply_recommendation` | `lesson:write` | `packages/plugins/ai-planner.ts` | ✅ |
-| `ai.apply_grade` | `assignment:write` | `packages/plugins/ai-planner.ts` | ✅ |
-| `plugin.info` | `plugin:read` | `packages/plugins/builtin.ts` | ❌ 显式 `false` |
+| 命令类型                  | 所需权限           | 声明位置                         | 高危            |
+| ------------------------- | ------------------ | -------------------------------- | --------------- |
+| `lesson.delete`           | `lesson:delete`    | `packages/plugins/builtin.ts`    | ✅              |
+| `plugin.install`          | `plugin:write`     | `packages/plugins/builtin.ts`    | ✅              |
+| `plugin.install_zip`      | `plugin:write`     | `packages/plugins/builtin.ts`    | ✅              |
+| `plugin.update_zip`       | `plugin:write`     | `packages/plugins/builtin.ts`    | ✅              |
+| `plugin.toggle`           | `plugin:write`     | `packages/plugins/builtin.ts`    | ✅              |
+| `plugin.uninstall`        | `plugin:write`     | `packages/plugins/builtin.ts`    | ✅              |
+| `user.delete`             | `management:write` | `packages/plugins/builtin.ts`    | ✅              |
+| `ai.apply_recommendation` | `lesson:write`     | `packages/plugins/ai-planner.ts` | ✅              |
+| `ai.apply_grade`          | `assignment:write` | `packages/plugins/ai-planner.ts` | ✅              |
+| `plugin.info`             | `plugin:read`      | `packages/plugins/builtin.ts`    | ❌ 显式 `false` |
 
 > `plugin.update_zip` 是旧文档**遗漏**的高危动作。
 
@@ -275,10 +275,12 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 ### 5.3 学生个人数据隐私与安全审计能力声明（Issue #145）
 
 平台在 `packages/core/plugin-host/method-policy.ts` 中引入了两项专用的学生个人数据能力常量：
+
 - `CAP_STUDENT_DATA_READ = 'student-data:read'`：声明插件有权读取学生个人数据（如通过 `pointsLedger` 访问积分日志、统计与维度汇总）。
 - `CAP_STUDENT_DATA_WRITE = 'student-data:write'`：声明插件有权写入或修改学生个人数据（如通过 `pointsLedger.addPoints` 记录积分）。
 
 **审计与迁移策略**：
+
 1. **双端统一审计**：Inline 模式下的上下文代理包装器与 Worker 隔离模式下的 `ServiceHost` RPC 拦截器均对学生数据读写调用进行统一拦截，记录 `plugin.student_data_access` 安全审计日志。
 2. **渐进迁移兼容期**：对于尚未声明该能力的存量插件，当前版本在控制台输出警告并放行，在审计记录中标记 `migrationWarning: true`；待升级周期结束后将强制阻断未声明能力的插件访问。
 
@@ -295,4 +297,3 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 - 内置插件 manifest 中 `capabilitiesProposed` 声明：**7** 个插件，其中 1 个为空数组。
 
 > 统计更新至 Issue #145 学生个人数据能力声明与审计策略落地。
-

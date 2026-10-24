@@ -18,4 +18,4 @@ console.log('  created:', JSON.stringify(report.created));
 for (const item of report.skipped) {
   console.log('  skipped:', item.source, item.sourceId, '—', item.reason);
 }
-console.log('  合计：创建 ' + (report.created.assessments) + ' 份试卷，跳过 ' + report.skipped.length + ' 条来源。');
+console.log('  合计：创建 ' + report.created.assessments + ' 份试卷，跳过 ' + report.skipped.length + ' 条来源。');

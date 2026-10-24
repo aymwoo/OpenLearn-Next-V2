@@ -42,19 +42,19 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 
 ### 1.2 核心子系统
 
-| 子系统                 | 文件                                            | 职责                                                                                    |
-| ---------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
-| **Kernel**             | `packages/core/kernel/index.ts`                 | 全局单例容器，分层组装所有子系统（Layer 0-3），引导系统插件启动                         |
-| **CommandBus**         | `packages/core/command-bus/index.ts`            | 命令执行管线：注册 handler → 拦截器链（JSON Schema校验→CapabilityGuard→高危审批）→ 执行 |
-| **EventBus**           | `packages/core/event-bus/index.ts`              | 发布/订阅事件，支持通配符 `*`，异步并行通知                                             |
-| **ActionRegistry**     | `packages/core/registry/index.ts`               | 注册 AI Agent 可发现的工具                                                              |
-| **CapabilityGuard**    | `packages/core/capability-system/index.ts`      | 基于字符串的 RBAC 权限控制                                                              |
-| **ProcessManager**     | `packages/core/process-manager/index.ts`        | 后台进程和定时任务管理                                                                  |
-| **PluginHost**         | `packages/core/plugin-host/index.ts`            | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道                                    |
-| **ServiceRegistry**    | `packages/core/di/service-registry.ts`          | 依赖注入容器，Token 驱动，依赖图验证                                                    |
-| **ResourceTracker**    | `packages/core/plugin-host/resource-tracker.ts` | 按 pluginId 管理 Disposable 资源，保证精确清理                                          |
-| **WorkerManager**      | `packages/core/worker-runtime/worker-manager.ts` | Worker Thread 隔离模式管理（`ACTIVATE_TIMEOUT_MS` 常量、dbApi 构造、Worker 引导脚本）      |
-| **FrontendPluginHost** | `src/plugin-host/plugin-host.ts`                | 前端插件生命周期管理，支持 inline/worker 模式                                           |
+| 子系统                 | 文件                                             | 职责                                                                                    |
+| ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| **Kernel**             | `packages/core/kernel/index.ts`                  | 全局单例容器，分层组装所有子系统（Layer 0-3），引导系统插件启动                         |
+| **CommandBus**         | `packages/core/command-bus/index.ts`             | 命令执行管线：注册 handler → 拦截器链（JSON Schema校验→CapabilityGuard→高危审批）→ 执行 |
+| **EventBus**           | `packages/core/event-bus/index.ts`               | 发布/订阅事件，支持通配符 `*`，异步并行通知                                             |
+| **ActionRegistry**     | `packages/core/registry/index.ts`                | 注册 AI Agent 可发现的工具                                                              |
+| **CapabilityGuard**    | `packages/core/capability-system/index.ts`       | 基于字符串的 RBAC 权限控制                                                              |
+| **ProcessManager**     | `packages/core/process-manager/index.ts`         | 后台进程和定时任务管理                                                                  |
+| **PluginHost**         | `packages/core/plugin-host/index.ts`             | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道                                    |
+| **ServiceRegistry**    | `packages/core/di/service-registry.ts`           | 依赖注入容器，Token 驱动，依赖图验证                                                    |
+| **ResourceTracker**    | `packages/core/plugin-host/resource-tracker.ts`  | 按 pluginId 管理 Disposable 资源，保证精确清理                                          |
+| **WorkerManager**      | `packages/core/worker-runtime/worker-manager.ts` | Worker Thread 隔离模式管理（`ACTIVATE_TIMEOUT_MS` 常量、dbApi 构造、Worker 引导脚本）   |
+| **FrontendPluginHost** | `src/plugin-host/plugin-host.ts`                 | 前端插件生命周期管理，支持 inline/worker 模式                                           |
 
 ### 1.3 数据流
 
@@ -238,11 +238,11 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 >
 > ⚠️ **版本号说明**：OpenLearn 存在独立的版本号维度，请勿混淆：
 >
-> | 版本          | 说明          | 用途                                                                 |
-> | ------------- | ------------- | -------------------------------------------------------------------- |
+> | 版本          | 说明         | 用途                                                                 |
+> | ------------- | ------------ | -------------------------------------------------------------------- |
 > | 平台发行版本  | 当前 `0.5.0` | 主应用平台发布版本（根目录 `package.json`）                          |
 > | 宿主 API 版本 | 当前 `0.5.0` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
-> | SDK 版本      | 当前 `3.7.0`  | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理               |
+> | SDK 版本      | 当前 `3.7.0` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理               |
 >
 > **`engines.openlearn` 应填写宿主版本兼容范围（推荐声明为 `>=0.2.5`）**，而非 SDK 版本。
 
@@ -558,7 +558,7 @@ await commandBus.registerHandler('myplugin.open_panel', {
 
 - **注册顺序**：先 `actionRegistry.register()`，再 `commandBus.registerHandler()`。
   顺序反了不会报错，但插件加载时会打印一条 `[PluginHost] ... without a matching
-  ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
+ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
 - **HTTP 表现**：经 `/api/commands` 派发被拒时返回 **HTTP 403**，
   响应体为 `{ "success": false, "code": "COMMAND_NOT_REGISTERED", "error": "…" }`。
   前端应按 `code` 分支处理，不要把它当作 500 服务端崩溃上报。
@@ -1430,13 +1430,16 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 每个插件在开发时，都可以设置专属于自己的不同图标，并直接展示在系统左侧边栏导航（`NavigationSidebar`）的「扩展应用」列表中。
 
 #### 1. 配置途径与优先级
+
 系统支持声明式配置与动态编程式配置，优先级如下：
+
 1. **动态注册传参（最高优先级）**：调用 `ctx.ui.registerExtensionPoint('teacher.tab', { icon: 'BookOpen', ... })` 时传入；
 2. **Manifest 贡献点声明**：在 `manifest.json` 的 `contributes['teacher.tab'][i].icon` 中配置；
 3. **Manifest 插件主图标**：在 `manifest.json` 根级声明 `"icon": "BookOpen"`；
 4. **默认安全回退**：若未配置或解析失败，自动回退到系统标准的 `<Puzzle />` 图标。
 
 #### 2. 支持的图标格式
+
 - **Lucide 图标名称（推荐）**：支持常用的 Lucide 图标字符串（PascalCase 或 kebab-case 均可，如 `'BookOpen'`, `'Award'`, `'BarChart'`, `'GraduationCap'`, `'Calculator'`, `'FileText'`, `'HelpCircle'` 等）。
 - **Emoji 符号**：直接使用 Emoji 字符（如 `'📚'`, `'🧪'`, `'📊'`, `'⚡'`, `'🎯'`）。
 - **图片 / SVG 资源路径**：以 `http://`、`https://`、`data:image/` 或 `/` 开头的 URL 字符串。
@@ -1445,6 +1448,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 #### 3. 示例代码
 
 **方式 A：前端动态注册时指定图标与展示排序：**
+
 ```typescript
 export default {
   activate: async (ctx: FrontendPluginContext) => {
@@ -1452,7 +1456,7 @@ export default {
       id: 'quiz-hub',
       label: '随堂测验中心',
       icon: 'BookOpen', // 指定 Lucide 图标名，或使用 Emoji '📚'
-      position: 15,     // 决定在左侧导航栏扩展应用中的排列次序（数值越小越靠前）
+      position: 15, // 决定在左侧导航栏扩展应用中的排列次序（数值越小越靠前）
       component: () => import('./QuizHubView'),
     });
   },
@@ -1460,6 +1464,7 @@ export default {
 ```
 
 **方式 B：在 `manifest.json` 中配置：**
+
 ```json
 {
   "id": "@openlearn/plugin-quiz-hub",
@@ -1481,6 +1486,7 @@ export default {
 ```
 
 #### 4. 侧边栏交互与视觉特性
+
 - **与系统内置导航无缝对齐**：采用相同的 18px 矢量比例、圆角、悬停交互与主题动态变色；
 - **折叠态居中展示**：当用户点击侧边栏收起按钮时，文本自动隐藏，插件自定义图标居中对齐，鼠标悬浮时展示带有插件名称的浮窗提示（Tooltip）；
 - **按 `position` 升序排列**：多个已激活的第三方插件将依据开发者设置的 `position` 数值从小到大平滑排序。
@@ -1880,18 +1886,19 @@ Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext
 | `ctx.services.eventBus`       | `on()` / `off()`             | `subscribe()` / `unsubscribe()`           | 方法名不同                                                           |
 | `ctx.services.actionRegistry` | 完整                         | `register()`                              | —                                                                    |
 | `ctx.http`                    | 完整 `PluginHttpRouter`      | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
-| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用       | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**           |
+| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用       | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**          |
 | `ctx.db.table()`              | 返回 UUID 前缀               | 返回 manifest ID 前缀                     | 两种模式前缀不同，切换执行模式会导致表名变化，详见下方说明           |
 | `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步) | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
 | `ctx.config`                  | 可用                         | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
 | `ctx.provide()`               | 可用                         | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
 | `ctx.log`                     | 可用                         | 可用                                      | —                                                                    |
-| `ctx.pluginId`                | `plugins` 表行 UUID          | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                      |
+| `ctx.pluginId`                | `plugins` 表行 UUID          | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                     |
 | `ctx.manifest`                | 可用                         | 可用                                      | —                                                                    |
 
 **`ctx.db.table()` 表前缀语义（已统一收敛）：**
 
 平台已统一收敛表前缀生成规则为 `plugin_<scopeId>_`（统一调用 `pluginTablePrefix(scopeId)`）：
+
 1. 外部上传与社区安装的插件一律使用 `plugins` 表主键 UUID 作为 `scopeId`，在 Inline 与独立进程/Worker 模式下完全一致，保障存储物理隔离与跨模式迁移一致性；
 2. 内置核心插件使用规范 scopeId（如 `@openlearn/plugin-vfs` → `plugin__openlearn_plugin_vfs_`）；
 3. 前缀中所有非 `[A-Za-z0-9_]` 字符一律替换为 `_`。卸载插件时，宿主依据统一安装主键精准识别并级联清理自建表。

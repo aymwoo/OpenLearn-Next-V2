@@ -23,29 +23,30 @@ pie title 生产源码覆盖状况 (全仓 916 个源码文件)
 
 ### 关键量化指标对比
 
-| 评估维度 | 官方报告口径 (当前配置) | 全真全量口径 (纳入全量源码) | 状态与趋势 |
-| :--- | :--- | :--- | :--- |
-| **测试文件总数** | 496 个 | 496 个 | 494 passed, 1 failed, 1 skipped |
-| **测试用例总数** | 4,018 个 | 4,018 个 | 4,014 passed, 1 failed, 3 skipped |
-| **未捕获全局异常** | **2 个** (`ReferenceError: window is not defined`) | 2 个 | ⚠️ React 19 异步调度器生命周期泄漏 |
-| **测试套件运行耗时** | 216.56s（**3.6 分钟**） | 216.56s | ⚠️ 单文件最长占 21.16s（18s 硬 sleep） |
-| **纳统源码文件数** | **768 个**（排除未引入文件） | **916 个**（全量生产源文件） | 🚨 **137 个文件被移出分母** |
-| **代码行覆盖率 (Lines)** | **64.30%** (27,002 / 41,989) | **45.41%** (27,002 / 59,463) | 🚨 **虚高 18.89%** |
-| **语句覆盖率 (Statements)**| **62.69%** (28,799 / 45,938) | ≈ **44.8%** | 🚨 统计失真 |
-| **函数覆盖率 (Functions)** | **59.05%** (5,676 / 9,611) | ≈ **43.2%** | 🚨 核心逻辑大面积空白 |
-| **分支覆盖率 (Branches)**  | **51.80%** (21,834 / 42,145) | ≈ **36.5%** | 🚨 边界条件防线薄弱 |
-| **覆盖率门禁阈值** | Lines 54 / Branch 44 / Fn 50 | 门禁未包含全量源码 | ⚠️ 门禁形同虚设 |
+| 评估维度                    | 官方报告口径 (当前配置)                            | 全真全量口径 (纳入全量源码)  | 状态与趋势                             |
+| :-------------------------- | :------------------------------------------------- | :--------------------------- | :------------------------------------- |
+| **测试文件总数**            | 496 个                                             | 496 个                       | 494 passed, 1 failed, 1 skipped        |
+| **测试用例总数**            | 4,018 个                                           | 4,018 个                     | 4,014 passed, 1 failed, 3 skipped      |
+| **未捕获全局异常**          | **2 个** (`ReferenceError: window is not defined`) | 2 个                         | ⚠️ React 19 异步调度器生命周期泄漏     |
+| **测试套件运行耗时**        | 216.56s（**3.6 分钟**）                            | 216.56s                      | ⚠️ 单文件最长占 21.16s（18s 硬 sleep） |
+| **纳统源码文件数**          | **768 个**（排除未引入文件）                       | **916 个**（全量生产源文件） | 🚨 **137 个文件被移出分母**            |
+| **代码行覆盖率 (Lines)**    | **64.30%** (27,002 / 41,989)                       | **45.41%** (27,002 / 59,463) | 🚨 **虚高 18.89%**                     |
+| **语句覆盖率 (Statements)** | **62.69%** (28,799 / 45,938)                       | ≈ **44.8%**                  | 🚨 统计失真                            |
+| **函数覆盖率 (Functions)**  | **59.05%** (5,676 / 9,611)                         | ≈ **43.2%**                  | 🚨 核心逻辑大面积空白                  |
+| **分支覆盖率 (Branches)**   | **51.80%** (21,834 / 42,145)                       | ≈ **36.5%**                  | 🚨 边界条件防线薄弱                    |
+| **覆盖率门禁阈值**          | Lines 54 / Branch 44 / Fn 50                       | 门禁未包含全量源码           | ⚠️ 门禁形同虚设                        |
 
 ### 问题严重度全景
 
-| 级别 | 数量 | 状态 | 核心定义与影响 |
-| :--- | :---: | :---: | :--- |
-| **P0 严重** | **2** | 🟡 1 修复 / 1 待决策 | 覆盖率分母失真待确认门禁方案；**跨测试 fetch 污染已闭环修复**（全量套件 100% 绿灯）。 |
-| **P1 重要** | **4** | 🟡 1 修复 / 3 待推进 | **React 19 调度器泄漏已闭环修复（未捕获异常归零）**；硬 sleep、前端空白与 CI 漂移待排期。 |
-| **P2 建议** | **5** | ⚪ 待推进 | 空断言与清理钩子倒置、E2E 废弃空调试文件、硬编码 76 处 sleep、DB 迁移冗余补偿、孤儿测试排除 |
-| **P3 锦上添花**| **3** | ⚪ 待推进 | 虚拟时钟迁移指南、覆盖率分级报警看板、变异测试探索 |
+| 级别            | 数量  |         状态         | 核心定义与影响                                                                              |
+| :-------------- | :---: | :------------------: | :------------------------------------------------------------------------------------------ |
+| **P0 严重**     | **2** | 🟡 1 修复 / 1 待决策 | 覆盖率分母失真待确认门禁方案；**跨测试 fetch 污染已闭环修复**（全量套件 100% 绿灯）。       |
+| **P1 重要**     | **4** | 🟡 1 修复 / 3 待推进 | **React 19 调度器泄漏已闭环修复（未捕获异常归零）**；硬 sleep、前端空白与 CI 漂移待排期。   |
+| **P2 建议**     | **5** |      ⚪ 待推进       | 空断言与清理钩子倒置、E2E 废弃空调试文件、硬编码 76 处 sleep、DB 迁移冗余补偿、孤儿测试排除 |
+| **P3 锦上添花** | **3** |      ⚪ 待推进       | 虚拟时钟迁移指南、覆盖率分级报警看板、变异测试探索                                          |
 
 > **第一阶段快速收敛成果**（2026-10-17 复测）：
+>
 > - 存证日志：[`artifacts/logs/test_system_final_all_green.log`](file:///home/wuxf/Develop/openlearnv2/artifacts/logs/test_system_final_all_green.log)
 > - **套件通过率**：**495 / 496 测试套件通过，4,015 / 4,018 用例全绿，0 失败**；
 > - **全局未捕获异常**：从 2 次 `ReferenceError: window is not defined` **彻底降为 0**。
@@ -59,9 +60,11 @@ pie title 生产源码覆盖状况 (全仓 916 个源码文件)
 - **责任文件**：[`vitest.config.ts:58-76`](file:///home/wuxf/Develop/openlearnv2/vitest.config.ts#L58-L76)
 - **实测根因**：
   Vitest 4 覆盖率引擎在未显式声明 `coverage.include` 时，默认遵循官方策略：
-  > *"By default only files covered by tests are included."*
-  
+
+  > _"By default only files covered by tests are included."_
+
   这导致**从未被任何测试文件 `import` 的源码文件直接不计入覆盖率分母**！
+
 - **数据佐证**：
   1. 仓库内实际存在 **916 个生产源码文件**（排除 `__tests__`、`__mocks__`、`dist`、`node_modules`）；
   2. 但当前 `coverage-summary.json` 仅跟踪了 **768 个文件**，整整 **137 个生产源码文件（含 17,474 行核心业务代码）完全未被纳入统计**；
@@ -158,8 +161,9 @@ pie title 生产源码覆盖状况 (全仓 916 个源码文件)
 - **责任文件**：[`.github/workflows/ci.yml:364-367`](file:///home/wuxf/Develop/openlearnv2/.github/workflows/ci.yml#L364-L367)
 - **现状分析**：
   CI 配置文件中注明：
-  > *"已知行为：vitest 4 在测试运行存在失败用例时会静默跳过覆盖报告...若需失败场景也出报告，需升级 vitest 或拆分失败用例。"*
-  
+
+  > _"已知行为：vitest 4 在测试运行存在失败用例时会静默跳过覆盖报告...若需失败场景也出报告，需升级 vitest 或拆分失败用例。"_
+
   实际上，Vitest 4 原生支持 CLI 标志 `--coverage.reportOnFailure=true`。只要加上该配置，即使测试集存在偶发失败，覆盖率报表仍然能够稳定生成与上传，无需盲目等待升级或拆分。
 
 ---
@@ -201,28 +205,28 @@ pie title 生产源码覆盖状况 (全仓 916 个源码文件)
 
 全量套件共花费 **216.56 秒**，耗时主要集中于子进程沙箱拉起、网络穿透与高频硬延迟等待：
 
-| 排名 | 测试文件 | 用例数 | 实测耗时 | 性能瓶颈根因剖析 |
-| :---: | :--- | :---: | :---: | :--- |
-| **1** | [`packages/core/__tests__/worker-rpc.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/worker-rpc.test.ts) | 5 | **21,163ms** | **严重硬延迟**：7 处物理 sleep 累加 18.0 秒 |
-| **2** | [`packages/core/worker-runtime/__tests__/liveness-probe.integration.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/liveness-probe.integration.test.ts) | 3 | **4,805ms** | 真实 Worker 子进程心跳探针与超时恢复轮询 |
-| **3** | [`packages/core/worker-runtime/__tests__/child-process-isolation.integration.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/child-process-isolation.integration.test.ts) | 7 | **4,513ms** | 跨进程 IPC 通信通道建立与退出信号监听 |
-| **4** | [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx) | 16 | **3,988ms** | JSDOM 模拟多扩展插槽 React 渲染与卸载 |
-| **5** | [`packages/plugin-sdk/__tests__/dist-entrypoint.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugin-sdk/__tests__/dist-entrypoint.test.ts) | 3 | **2,919ms** | 现场调用 esbuild 打包产物并动态 require 验证 |
-| **6** | [`src/features/whiteboard/__tests__/rollcall-tiered-picker.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/__tests__/rollcall-tiered-picker.test.tsx) | 8 | **2,514ms** | 点名组件复杂动画与分层计时器模拟 |
-| **7** | [`packages/core/worker-runtime/__tests__/plugin-heap-limit.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/plugin-heap-limit.test.ts) | 7 | **2,376ms** | V8 堆内存上限压测与 OOM 进程守卫捕获 |
-| **8** | [`packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts) | 9 | **2,257ms** | TypeScript AST 解析与 generated.d.ts 逐符号校验 |
-| **9** | [`server/services/__tests__/roster-service.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/services/__tests__/roster-service.test.ts) | 25 | **2,029ms** | 复杂班级名册级联事务与大量 SQLite 读写 |
-| **10** | [`server/__tests__/classroom-runtime-service.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/classroom-runtime-service.test.ts) | 18 | **1,998ms** | 课堂实时状态机转换与 Socket.IO 事件广播 |
-| **11** | [`packages/core/worker-runtime/__tests__/worker-terminability.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/worker-terminability.test.ts) | 4 | **1,973ms** | SIGTERM / SIGKILL 进程终止延迟验证 |
-| **12** | [`src/features/classroom/__tests__/ClassroomEntryPortal.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/classroom/__tests__/ClassroomEntryPortal.test.tsx) | 36 | **1,887ms** | 包含 36 个交互用例的复合门户大组件渲染 |
-| **13** | [`server/__tests__/force-password-change.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/force-password-change.test.ts) | 9 | **1,854ms** | 密码哈希多次计算 (bcrypt 10 rounds) 累加 CPU 负载 |
-| **14** | [`server/__tests__/stage-guard-server-enforcement.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/stage-guard-server-enforcement.test.ts) | 10 | **1,676ms** | 教学阶段状态守卫拦截校验 |
-| **15** | [`packages/core/__tests__/plugin-http-streaming.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/plugin-http-streaming.test.ts) | 12 | **1,604ms** | 流式 HTTP 响应断点模拟 |
-| **16** | [`src/features/classroom/__tests__/stage-display-view.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/classroom/__tests__/stage-display-view.test.tsx) | 8 | **1,465ms** | 课堂大屏窗口多组件挂载 |
-| **17** | [`server/__tests__/demo-data.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/demo-data.test.ts) | 17 | **1,408ms** | 全量演示数据播种与还原 |
-| **18** | [`packages/core/worker-runtime/__tests__/isolate-benchmark.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/isolate-benchmark.test.ts) | 3 | **1,376ms** | 沙箱基准性能测定 |
-| **19** | [`src/components/__tests__/AppShell.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/__tests__/AppShell.test.tsx) | 2 | **1,356ms** | 顶层 AppShell 主框架组件树挂载 |
-| **20** | [`src/features/teacher/__tests__/course-management-extension-slots.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/__tests__/course-management-extension-slots.test.tsx) | 4 | **1,299ms** | 课程管理扩展点插槽注入 |
+|  排名  | 测试文件                                                                                                                                                                                                         | 用例数 |   实测耗时   | 性能瓶颈根因剖析                                  |
+| :----: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :----------: | :------------------------------------------------ |
+| **1**  | [`packages/core/__tests__/worker-rpc.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/worker-rpc.test.ts)                                                                                 |   5    | **21,163ms** | **严重硬延迟**：7 处物理 sleep 累加 18.0 秒       |
+| **2**  | [`packages/core/worker-runtime/__tests__/liveness-probe.integration.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/liveness-probe.integration.test.ts)                   |   3    | **4,805ms**  | 真实 Worker 子进程心跳探针与超时恢复轮询          |
+| **3**  | [`packages/core/worker-runtime/__tests__/child-process-isolation.integration.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/child-process-isolation.integration.test.ts) |   7    | **4,513ms**  | 跨进程 IPC 通信通道建立与退出信号监听             |
+| **4**  | [`src/plugin-host/__tests__/extension-point-renderer.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/plugin-host/__tests__/extension-point-renderer.test.tsx)                                               |   16   | **3,988ms**  | JSDOM 模拟多扩展插槽 React 渲染与卸载             |
+| **5**  | [`packages/plugin-sdk/__tests__/dist-entrypoint.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugin-sdk/__tests__/dist-entrypoint.test.ts)                                                           |   3    | **2,919ms**  | 现场调用 esbuild 打包产物并动态 require 验证      |
+| **6**  | [`src/features/whiteboard/__tests__/rollcall-tiered-picker.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/__tests__/rollcall-tiered-picker.test.tsx)                                   |   8    | **2,514ms**  | 点名组件复杂动画与分层计时器模拟                  |
+| **7**  | [`packages/core/worker-runtime/__tests__/plugin-heap-limit.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/plugin-heap-limit.test.ts)                                     |   7    | **2,376ms**  | V8 堆内存上限压测与 OOM 进程守卫捕获              |
+| **8**  | [`packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugin-sdk/__tests__/sdk-drift-parity.test.ts)                                                         |   9    | **2,257ms**  | TypeScript AST 解析与 generated.d.ts 逐符号校验   |
+| **9**  | [`server/services/__tests__/roster-service.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/services/__tests__/roster-service.test.ts)                                                                     |   25   | **2,029ms**  | 复杂班级名册级联事务与大量 SQLite 读写            |
+| **10** | [`server/__tests__/classroom-runtime-service.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/classroom-runtime-service.test.ts)                                                                 |   18   | **1,998ms**  | 课堂实时状态机转换与 Socket.IO 事件广播           |
+| **11** | [`packages/core/worker-runtime/__tests__/worker-terminability.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/worker-terminability.test.ts)                               |   4    | **1,973ms**  | SIGTERM / SIGKILL 进程终止延迟验证                |
+| **12** | [`src/features/classroom/__tests__/ClassroomEntryPortal.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/classroom/__tests__/ClassroomEntryPortal.test.tsx)                                         |   36   | **1,887ms**  | 包含 36 个交互用例的复合门户大组件渲染            |
+| **13** | [`server/__tests__/force-password-change.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/force-password-change.test.ts)                                                                         |   9    | **1,854ms**  | 密码哈希多次计算 (bcrypt 10 rounds) 累加 CPU 负载 |
+| **14** | [`server/__tests__/stage-guard-server-enforcement.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/stage-guard-server-enforcement.test.ts)                                                       |   10   | **1,676ms**  | 教学阶段状态守卫拦截校验                          |
+| **15** | [`packages/core/__tests__/plugin-http-streaming.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/plugin-http-streaming.test.ts)                                                           |   12   | **1,604ms**  | 流式 HTTP 响应断点模拟                            |
+| **16** | [`src/features/classroom/__tests__/stage-display-view.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/classroom/__tests__/stage-display-view.test.tsx)                                             |   8    | **1,465ms**  | 课堂大屏窗口多组件挂载                            |
+| **17** | [`server/__tests__/demo-data.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/demo-data.test.ts)                                                                                                 |   17   | **1,408ms**  | 全量演示数据播种与还原                            |
+| **18** | [`packages/core/worker-runtime/__tests__/isolate-benchmark.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/__tests__/isolate-benchmark.test.ts)                                     |   3    | **1,376ms**  | 沙箱基准性能测定                                  |
+| **19** | [`src/components/__tests__/AppShell.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/__tests__/AppShell.test.tsx)                                                                                 |   2    | **1,356ms**  | 顶层 AppShell 主框架组件树挂载                    |
+| **20** | [`src/features/teacher/__tests__/course-management-extension-slots.test.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/__tests__/course-management-extension-slots.test.tsx)                   |   4    | **1,299ms**  | 课程管理扩展点插槽注入                            |
 
 ---
 
@@ -239,12 +243,12 @@ xychart-beta
     bar [74.20, 66.40, 34.80, 54.38, 45.41]
 ```
 
-| 子系统目录 | 源码文件数 (跟踪/全量) | 官方报表 Lines | 真实全量 Lines | 覆盖率评估与质量定性 |
-| :--- | :---: | :---: | :---: | :--- |
-| **`packages/core`** | 283 / 289 | **75.96%** | **74.20%** | 🟢 **优秀**。内核 DI、事件总线、SQL Guard 与 Worker 隔离具备密集测试。 |
-| **`server/`** | 68 / 75 | **67.99%** | **66.40%** | 🟡 **良好**。核心 API 路由与安全中间件覆盖完整，部分辅助脚本缺少测试。 |
-| **`src/` (前端)** | 397 / **510** | **57.01%** | **34.80%** | 🔴 **严重薄弱**。113 个前端组件/页面脱保，实际全真行覆盖率不足 35%。 |
-| **根目录 CLI 脚本** | 4 / 4 | **54.38%** | **54.38%** | 🟡 **中等**。`cli-cleaner` 达 93%，`cli.mjs` 仅 31%。 |
+| 子系统目录          | 源码文件数 (跟踪/全量) | 官方报表 Lines | 真实全量 Lines | 覆盖率评估与质量定性                                                   |
+| :------------------ | :--------------------: | :------------: | :------------: | :--------------------------------------------------------------------- |
+| **`packages/core`** |       283 / 289        |   **75.96%**   |   **74.20%**   | 🟢 **优秀**。内核 DI、事件总线、SQL Guard 与 Worker 隔离具备密集测试。 |
+| **`server/`**       |        68 / 75         |   **67.99%**   |   **66.40%**   | 🟡 **良好**。核心 API 路由与安全中间件覆盖完整，部分辅助脚本缺少测试。 |
+| **`src/` (前端)**   |     397 / **510**      |   **57.01%**   |   **34.80%**   | 🔴 **严重薄弱**。113 个前端组件/页面脱保，实际全真行覆盖率不足 35%。   |
+| **根目录 CLI 脚本** |         4 / 4          |   **54.38%**   |   **54.38%**   | 🟡 **中等**。`cli-cleaner` 达 93%，`cli.mjs` 仅 31%。                  |
 
 ---
 

@@ -21,28 +21,14 @@ describe('StudentIcebreakerModal', () => {
 
   it('isOpen 为 false 时不渲染任何内容', () => {
     const { container } = render(
-      <StudentIcebreakerModal
-        isOpen={false}
-        onClose={onClose}
-        classId="C1"
-        lessonId="L1"
-        studentId="S1"
-        lang="zh"
-      />,
+      <StudentIcebreakerModal isOpen={false} onClose={onClose} classId="C1" lessonId="L1" studentId="S1" lang="zh" />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it('isOpen 为 true 时正常渲染 3 个心态选项及标题', () => {
     render(
-      <StudentIcebreakerModal
-        isOpen={true}
-        onClose={onClose}
-        classId="C1"
-        lessonId="L1"
-        studentId="S1"
-        lang="zh"
-      />,
+      <StudentIcebreakerModal isOpen={true} onClose={onClose} classId="C1" lessonId="L1" studentId="S1" lang="zh" />,
     );
     expect(screen.getByText('课前破冰心情打卡')).toBeDefined();
     expect(screen.getByText('充满电')).toBeDefined();
@@ -52,14 +38,7 @@ describe('StudentIcebreakerModal', () => {
 
   it('未选择任何心情时，打卡按钮处于禁用状态', () => {
     render(
-      <StudentIcebreakerModal
-        isOpen={true}
-        onClose={onClose}
-        classId="C1"
-        lessonId="L1"
-        studentId="S1"
-        lang="zh"
-      />,
+      <StudentIcebreakerModal isOpen={true} onClose={onClose} classId="C1" lessonId="L1" studentId="S1" lang="zh" />,
     );
     const submitBtn = screen.getByTestId('icebreaker-submit-btn');
     expect(submitBtn.hasAttribute('disabled')).toBe(true);
@@ -111,14 +90,7 @@ describe('StudentIcebreakerModal', () => {
 
   it('点击「稍后再说 / 跳过」记录 sessionStorage 状态并触发 onClose', () => {
     render(
-      <StudentIcebreakerModal
-        isOpen={true}
-        onClose={onClose}
-        classId="C1"
-        lessonId="L1"
-        studentId="S1"
-        lang="zh"
-      />,
+      <StudentIcebreakerModal isOpen={true} onClose={onClose} classId="C1" lessonId="L1" studentId="S1" lang="zh" />,
     );
 
     fireEvent.click(screen.getByTestId('icebreaker-skip-btn'));
@@ -134,14 +106,7 @@ describe('StudentIcebreakerModal', () => {
     });
 
     render(
-      <StudentIcebreakerModal
-        isOpen={true}
-        onClose={onClose}
-        classId="C1"
-        lessonId="L1"
-        studentId="S1"
-        lang="zh"
-      />,
+      <StudentIcebreakerModal isOpen={true} onClose={onClose} classId="C1" lessonId="L1" studentId="S1" lang="zh" />,
     );
 
     fireEvent.click(screen.getByTestId('mood-option-needHelp'));

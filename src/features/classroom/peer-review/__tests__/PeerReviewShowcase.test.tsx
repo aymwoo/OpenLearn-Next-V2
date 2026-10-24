@@ -332,13 +332,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
         ],
       };
 
-      render(
-        <SpotlightDualWorkArena
-          workA={multimodalWork}
-          workB={sampleWorkB}
-          annotations={[]}
-        />,
-      );
+      render(<SpotlightDualWorkArena workA={multimodalWork} workB={sampleWorkB} annotations={[]} />);
 
       expect(screen.getByText('插件作业')).toBeDefined();
       expect(screen.getByText('solution.png')).toBeDefined();

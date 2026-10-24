@@ -217,8 +217,15 @@ describe('请求观测', () => {
       // 1. 正常 200 与 304 请求，全部静默
       await fetch(`${base}/api/ok`);
       await fetch(`${base}/api/not-modified`);
-      const hasOkLog = [...errorSpy.mock.calls, ...warnSpy.mock.calls, ...infoSpy.mock.calls, ...debugSpy.mock.calls].some(
-        (call) => call[1] === 'http.request' && ((call[0] as any)?.path === '/api/ok' || (call[0] as any)?.path === '/api/not-modified'),
+      const hasOkLog = [
+        ...errorSpy.mock.calls,
+        ...warnSpy.mock.calls,
+        ...infoSpy.mock.calls,
+        ...debugSpy.mock.calls,
+      ].some(
+        (call) =>
+          call[1] === 'http.request' &&
+          ((call[0] as any)?.path === '/api/ok' || (call[0] as any)?.path === '/api/not-modified'),
       );
       expect(hasOkLog).toBe(false);
 
@@ -301,4 +308,3 @@ describe('请求观测', () => {
     });
   });
 });
-

@@ -173,7 +173,8 @@ export class GradingService {
   }
 
   public recordAttendance(scheduleId: string, studentId: string, status: string): void {
-    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as { academic_year?: string | null } | undefined;
+    const sch = this.db.prepare('SELECT academic_year FROM schedules WHERE id = ?').get(scheduleId) as
+      { academic_year?: string | null } | undefined;
     const academicYear = sch?.academic_year ?? null;
     this.db
       .prepare(
@@ -189,9 +190,8 @@ export class GradingService {
   // ── 2. 成绩权重标准化与持久化 ──────────────────────────────────────────────────
 
   public getGradeWeights(classId: string): GradeWeights {
-    const row = this.db
-      .prepare('SELECT * FROM class_grade_weights WHERE class_id = ?')
-      .get(classId) as GradeWeights | undefined;
+    const row = this.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(classId) as
+      GradeWeights | undefined;
 
     if (!row) {
       return {
@@ -225,9 +225,16 @@ export class GradingService {
     }
 
     // 统一归一化为 0-1 的浮点比例
-    const att = Number(weights.attendance_weight) > 1 ? Number(weights.attendance_weight) / 100 : Number(weights.attendance_weight);
-    const prog = Number(weights.progress_weight) > 1 ? Number(weights.progress_weight) / 100 : Number(weights.progress_weight);
-    const assign = Number(weights.assignment_weight) > 1 ? Number(weights.assignment_weight) / 100 : Number(weights.assignment_weight);
+    const att =
+      Number(weights.attendance_weight) > 1
+        ? Number(weights.attendance_weight) / 100
+        : Number(weights.attendance_weight);
+    const prog =
+      Number(weights.progress_weight) > 1 ? Number(weights.progress_weight) / 100 : Number(weights.progress_weight);
+    const assign =
+      Number(weights.assignment_weight) > 1
+        ? Number(weights.assignment_weight) / 100
+        : Number(weights.assignment_weight);
     const ex = Number(weights.exam_weight) > 1 ? Number(weights.exam_weight) / 100 : Number(weights.exam_weight);
 
     this.db
@@ -283,23 +290,32 @@ export class GradingService {
       throw new Error('Scores array is required');
     }
 
+    const now = Date.now();
+    // 学年必须与父考试一致（Issue #219）：此前写入不带 academic_year，新行恒为 NULL；
+    // 而学期总评查询按 es.academic_year 过滤 —— 新录入的成绩会在「按学年查看」时整段消失，
+    // 分子少、分母不减，总评被系统性拉低。
+    const examRow = this.db.prepare('SELECT academic_year FROM exams WHERE id = ?').get(examId) as
+      { academic_year: string | null } | undefined;
+    const academicYear = examRow?.academic_year ?? deriveAcademicYear(now);
+
     const insertStmt = this.db.prepare(`
-      INSERT INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO exam_scores (exam_id, student_id, score, notes, academic_year, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(exam_id, student_id) DO UPDATE SET
         score = excluded.score,
         notes = excluded.notes,
+        academic_year = excluded.academic_year,
         recorded_at = excluded.recorded_at
     `);
 
     const tx = this.db.transaction((scoresList: ExamScoreInput[]) => {
-      const now = Date.now();
       for (const item of scoresList) {
         insertStmt.run(
           examId,
           item.studentId,
           item.score !== undefined && item.score !== null ? Number(item.score) : null,
           item.notes || null,
+          academicYear,
           now,
         );
       }
@@ -339,7 +355,10 @@ export class GradingService {
         ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; status: string }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      status: string;
+    }>;
 
     // 4. 批量拉取学习进度（成绩只采用已验证进度，学生自报仅作展示）
     const progressList = this.db
@@ -365,19 +384,28 @@ export class GradingService {
         ${academicYear ? 'AND academic_year = ?' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number | null }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      score: number | null;
+    }>;
 
     // 6. 批量拉取考试得分
+    //    学年过滤：父考试 e.academic_year 是权威口径；es.academic_year 是冗余列，
+    //    存量行可能为 NULL（旧写入路径没落学年），故兼容 NULL —— 否则历史成绩会被整段丢掉（Issue #219）。
     const examScoresList = this.db
       .prepare(
         `
       SELECT es.student_id, es.score, e.max_score FROM exam_scores es
       JOIN exams e ON es.exam_id = e.id
       WHERE e.class_id = ? AND es.score IS NOT NULL
-      ${academicYear ? 'AND e.academic_year = ? AND es.academic_year = ?' : ''}
+      ${academicYear ? 'AND e.academic_year = ? AND (es.academic_year = ? OR es.academic_year IS NULL)' : ''}
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{ student_id: string; score: number; max_score: number }>;
+      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      student_id: string;
+      score: number;
+      max_score: number;
+    }>;
 
     // 7. 拉取已归档学期成绩报告（已归档直接复用归档快照）
     const archivedReports = this.db
@@ -418,11 +446,23 @@ export class GradingService {
       examMap.get(e.student_id)!.push({ score: e.score, max: e.max_score });
     }
 
+    // 分母必须与分子同口径（Issue #219）：分子按学年过滤，分母也必须按学年过滤。
+    // 否则「本学年没有考试」的班级会因为别的学年存在考试而被判成「缺考记 0 分」。
+    //
+    // 注意：作业分母 `totalPublishedAssignments` 仍**不**按学年过滤 ——
+    // 那是 #214 明确钉住的行为（见 server/__tests__/grade-academic-year-visibility.test.ts
+    // 「其他学年看不到这条成绩」断言为 0），改动它属于另一个口径决策，不在本 issue 范围内。
     const totalPublishedAssignments =
       (this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?').get(classId) as any)?.count || 0;
 
     const totalPublishedExams =
-      (this.db.prepare('SELECT COUNT(*) as count FROM exams WHERE class_id = ?').get(classId) as any)?.count || 0;
+      (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as count FROM exams WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
+          )
+          .get(...(academicYear ? [classId, academicYear] : [classId])) as any
+      )?.count || 0;
 
     // 9. 计算每个学生的综合总评
     const computedStudents: StudentSemesterGrade[] = students.map((student) => {
@@ -524,11 +564,7 @@ export class GradingService {
 
   // ── 5. 成绩归档保存事务 ────────────────────────────────────────────────────────
 
-  public archiveSemesterReports(
-    classId: string,
-    semesterName: string,
-    reports: SemesterReportArchiveItem[],
-  ): void {
+  public archiveSemesterReports(classId: string, semesterName: string, reports: SemesterReportArchiveItem[]): void {
     if (!semesterName) throw new Error('semesterName is required');
     if (!Array.isArray(reports)) throw new Error('reports array is required');
 
@@ -595,8 +631,7 @@ export class GradingService {
     const { classId, studentId, semesterName = '2026年春季学期', providerId } = params;
 
     const student = this.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as
-      | { name: string }
-      | undefined;
+      { name: string } | undefined;
     if (!student) {
       throw new Error('Student not found');
     }
@@ -649,9 +684,8 @@ export class GradingService {
         .join(', ') || '暂无出勤记录';
     const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
     const assignmentsText =
-      assignmentGrades
-        .map((a) => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`)
-        .join('\n') || '- 暂无平时作业记录';
+      assignmentGrades.map((a) => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`).join('\n') ||
+      '- 暂无平时作业记录';
     const examsText =
       examGrades.map((e) => `- 《${e.title}》得分: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
 

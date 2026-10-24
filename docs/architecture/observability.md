@@ -10,27 +10,27 @@
 
 `packages/core/observability/` 没有 `index.ts`。调用方按文件路径深导入。
 
-| 文件 | 职责 |
-| --- | --- |
-| `packages/core/observability/logger.ts` | 平台 pino 单例 `logger` 与 `createLogger(component)` |
-| `packages/core/observability/redaction.ts` | pino 字段路径脱敏（`buildRedactOptions`） |
-| `packages/core/observability/rotating-file-stream.ts` | 访问日志与审计日志的按大小轮转 |
-| `packages/core/observability/sanitize.ts` | 即将离开进程的错误载荷和审计字段的递归脱敏 |
-| `packages/core/observability/request-context.ts` | 当前 HTTP 请求的 `requestId`（`AsyncLocalStorage`） |
-| `packages/core/observability/audit-log.ts` | 安全审计，写入 `audit.log` |
-| `packages/core/observability/error-reporter.ts` | 脱敏后的错误事件；配置 DSN 时再转发 |
-| `packages/core/observability/health.ts` | 就绪判定，以及存活 / 就绪的公开 JSON |
-| `packages/core/observability/metrics.ts` | Prometheus 文本 |
+| 文件                                                  | 职责                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| `packages/core/observability/logger.ts`               | 平台 pino 单例 `logger` 与 `createLogger(component)` |
+| `packages/core/observability/redaction.ts`            | pino 字段路径脱敏（`buildRedactOptions`）            |
+| `packages/core/observability/rotating-file-stream.ts` | 访问日志与审计日志的按大小轮转                       |
+| `packages/core/observability/sanitize.ts`             | 即将离开进程的错误载荷和审计字段的递归脱敏           |
+| `packages/core/observability/request-context.ts`      | 当前 HTTP 请求的 `requestId`（`AsyncLocalStorage`）  |
+| `packages/core/observability/audit-log.ts`            | 安全审计，写入 `audit.log`                           |
+| `packages/core/observability/error-reporter.ts`       | 脱敏后的错误事件；配置 DSN 时再转发                  |
+| `packages/core/observability/health.ts`               | 就绪判定，以及存活 / 就绪的公开 JSON                 |
+| `packages/core/observability/metrics.ts`              | Prometheus 文本                                      |
 
 HTTP 入口不在这个目录里：
 
-| 入口 | 文件 |
-| --- | --- |
-| `GET /health`、`GET /health/ready`、`GET /metrics` | `server/routes/health.ts` |
-| 访问日志、状态类计数、403/429 审计、未捕获的 5xx | `server/middleware/request-observability.ts` |
-| `POST /api/client-errors` | `server/routes/client-errors.ts` |
-| 路由 `sendSafeError` 的 5xx | `server/utils/error-handler.ts` |
-| 进程级 `uncaughtException` / `unhandledRejection` | `server.ts` |
+| 入口                                               | 文件                                         |
+| -------------------------------------------------- | -------------------------------------------- |
+| `GET /health`、`GET /health/ready`、`GET /metrics` | `server/routes/health.ts`                    |
+| 访问日志、状态类计数、403/429 审计、未捕获的 5xx   | `server/middleware/request-observability.ts` |
+| `POST /api/client-errors`                          | `server/routes/client-errors.ts`             |
+| 路由 `sendSafeError` 的 5xx                        | `server/utils/error-handler.ts`              |
+| 进程级 `uncaughtException` / `unhandledRejection`  | `server.ts`                                  |
 
 `server/utils/logger.ts` 只 re-export `logger` 与 `createLogger`。生产代码直接 import `packages/core/observability/logger.ts`。`packages/core/__tests__/layering.test.ts` 禁止 `packages/core` 再去 import `server/`。
 
@@ -102,30 +102,30 @@ HTTP 入口不在这个目录里：
 
 当前文本只有这些序列：
 
-| 名称 | 类型 | 含义 |
-| --- | --- | --- |
-| `openlearn_up` | gauge | 常量 `1`，表示渲染函数在跑 |
-| `openlearn_process_uptime_seconds` | gauge | 自 `metrics.ts` 被加载以来的秒数，三位小数 |
-| `openlearn_process_resident_memory_bytes` | gauge | `process.memoryUsage().rss` |
-| `openlearn_http_responses_total` | counter | 标签 `status_class` 为 `2xx`、`3xx`、`4xx`、`5xx` 或 `other` |
-| `openlearn_migrations_pending` | gauge | 磁盘上尚未记入 `_migrations` 的迁移个数；读不到时为 `-1` |
-| `openlearn_backup_age_seconds` | gauge | 备份目录里最新文件的年龄（秒）；没有文件时为 `-1` |
-| `openlearn_events_rows` | gauge | `events` 表当前行数；查询失败时为 `-1` |
+| 名称                                      | 类型    | 含义                                                         |
+| ----------------------------------------- | ------- | ------------------------------------------------------------ |
+| `openlearn_up`                            | gauge   | 常量 `1`，表示渲染函数在跑                                   |
+| `openlearn_process_uptime_seconds`        | gauge   | 自 `metrics.ts` 被加载以来的秒数，三位小数                   |
+| `openlearn_process_resident_memory_bytes` | gauge   | `process.memoryUsage().rss`                                  |
+| `openlearn_http_responses_total`          | counter | 标签 `status_class` 为 `2xx`、`3xx`、`4xx`、`5xx` 或 `other` |
+| `openlearn_migrations_pending`            | gauge   | 磁盘上尚未记入 `_migrations` 的迁移个数；读不到时为 `-1`     |
+| `openlearn_backup_age_seconds`            | gauge   | 备份目录里最新文件的年龄（秒）；没有文件时为 `-1`            |
+| `openlearn_events_rows`                   | gauge   | `events` 表当前行数；查询失败时为 `-1`                       |
 
 ### 4.1 按插件维度的指标（Issue #150）
 
 同一份 `/metrics` 文本在进程级序列之后追加按插件维度的计数（`packages/core/observability/plugin-metrics.ts`）。没有任何插件指标时这一段为空，不产生空样本。
 
-| 名称 | 类型 | 含义 |
-| --- | --- | --- |
-| `openlearn_plugin_commands_total{plugin,result}` | counter | 命令派发次数；`result` 为 `ok` / `error` |
-| `openlearn_plugin_command_duration_seconds_sum{plugin}` | counter | 命令派发累计耗时（秒） |
-| `openlearn_plugin_command_duration_seconds_count{plugin}` | counter | 参与计时的命令数，与 sum 配对求平均 |
-| `openlearn_plugin_events_total{plugin}` | counter | 插件发出的事件数（`event.source = plugin:<id>`） |
-| `openlearn_plugin_http_requests_total{plugin,status}` | counter | 插件 REST 网关请求数；`status` 为状态类 `2xx`…`other` |
-| `openlearn_plugin_http_request_duration_seconds_sum{plugin}` | counter | 网关派发累计耗时（秒） |
-| `openlearn_plugin_worker_crashes_total{plugin}` | counter | Worker 非零退出次数（含激活期崩溃） |
-| `openlearn_plugin_worker_restarts_total{plugin}` | counter | 看门狗排定的重启次数（熔断后不再增加） |
+| 名称                                                         | 类型    | 含义                                                  |
+| ------------------------------------------------------------ | ------- | ----------------------------------------------------- |
+| `openlearn_plugin_commands_total{plugin,result}`             | counter | 命令派发次数；`result` 为 `ok` / `error`              |
+| `openlearn_plugin_command_duration_seconds_sum{plugin}`      | counter | 命令派发累计耗时（秒）                                |
+| `openlearn_plugin_command_duration_seconds_count{plugin}`    | counter | 参与计时的命令数，与 sum 配对求平均                   |
+| `openlearn_plugin_events_total{plugin}`                      | counter | 插件发出的事件数（`event.source = plugin:<id>`）      |
+| `openlearn_plugin_http_requests_total{plugin,status}`        | counter | 插件 REST 网关请求数；`status` 为状态类 `2xx`…`other` |
+| `openlearn_plugin_http_request_duration_seconds_sum{plugin}` | counter | 网关派发累计耗时（秒）                                |
+| `openlearn_plugin_worker_crashes_total{plugin}`              | counter | Worker 非零退出次数（含激活期崩溃）                   |
+| `openlearn_plugin_worker_restarts_total{plugin}`             | counter | 看门狗排定的重启次数（熔断后不再增加）                |
 
 归因规则：`actorId` 以 `plugin:` 开头时取 manifest id；否则看命令命名空间，**只有内核能解析到已安装插件**（`PluginHost.findByManifestId`）时才归因，避免把核心命令算到插件头上。`plugin` 标签值会做 Prometheus 转义与长度截断；登记条目超过 200 个后落到 `plugin="__overflow__"`，防止安装/卸载反复产生新 id 把基数拖爆。
 
@@ -149,10 +149,10 @@ sum by (plugin) (rate(openlearn_plugin_command_duration_seconds_sum[5m]))
 
 `packages/core/observability/logger.ts` 在 import 时创建 pino 单例。级别是 `LOG_LEVEL`，否则生产为 `info`、非生产为 `debug`。改环境变量后要重启。
 
-| 路 | 去向 |
-| --- | --- |
+| 路     | 去向                                                                                                                                |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | 控制台 | 生产：`stdout` 上的 JSON 行。非生产：`pino-pretty`（`package.json` 的 devDependency）。pretty 加载失败时退回 `stdout`，进程仍能启动 |
-| 文件 | 目录可写时，`RotatingFileStream` 写 `<LOG_DIR>/openlearn.log`。默认目录是进程 cwd 下的 `logs/`。目录不可写时只留控制台 |
+| 文件   | 目录可写时，`RotatingFileStream` 写 `<LOG_DIR>/openlearn.log`。默认目录是进程 cwd 下的 `logs/`。目录不可写时只留控制台              |
 
 两路默认使用同一个级别；亦可通过 `LOG_CONSOLE_LEVEL` 针对控制台独立设置日志级别（例如控制台设为 `warn` 保持清爽，文件保留 `debug` 全量记录）。脱敏发生在分发之前，所以控制台和文件看到的是同一份已脱敏记录。
 
@@ -162,14 +162,14 @@ sum by (plugin) (rate(openlearn_plugin_command_duration_seconds_sum[5m]))
 
 `packages/core/observability/rotating-file-stream.ts` 用同步 `fs.writeSync`，不引入额外 npm 包。写入前若超出上限，先删最旧的一份，再把 `.1` … `.N` 依次后移；rename 前先 unlink 目标，避免 Windows 不能覆盖已存在文件。首次写入才打开文件。模块级只注册一个 `process.on('exit')` 去 `dispose()`。
 
-| 变量 | 默认 | 作用于 |
-| --- | --- | --- |
-| `LOG_DIR` | `<cwd>/logs` | 访问日志与审计日志的目录 |
-| `LOG_MAX_SIZE_MB` | 10 | `openlearn.log` |
-| `LOG_MAX_FILES` | 5 | `openlearn.log` 的历史份数 |
-| `LOG_LEVEL` | 生产 `info`，否则 `debug` | 平台 logger 与文件日志级别；审计 logger 的 pino 级别同样读取它 |
-| `LOG_CONSOLE_LEVEL` | 继承 `LOG_LEVEL` | 控制台单独级别（可选） |
-| `LOG_REDACT` | 开启 | 设为 `false`、`0`、`off`、`no` 时关闭 pino 字段脱敏 |
+| 变量                | 默认                      | 作用于                                                         |
+| ------------------- | ------------------------- | -------------------------------------------------------------- |
+| `LOG_DIR`           | `<cwd>/logs`              | 访问日志与审计日志的目录                                       |
+| `LOG_MAX_SIZE_MB`   | 10                        | `openlearn.log`                                                |
+| `LOG_MAX_FILES`     | 5                         | `openlearn.log` 的历史份数                                     |
+| `LOG_LEVEL`         | 生产 `info`，否则 `debug` | 平台 logger 与文件日志级别；审计 logger 的 pino 级别同样读取它 |
+| `LOG_CONSOLE_LEVEL` | 继承 `LOG_LEVEL`          | 控制台单独级别（可选）                                         |
+| `LOG_REDACT`        | 开启                      | 设为 `false`、`0`、`off`、`no` 时关闭 pino 字段脱敏            |
 
 非法的大小或份数回退到默认值并告警一次。
 
@@ -207,14 +207,14 @@ pino 路径**刻意不**脱敏 `token`。仓库里大量 `token` 是依赖注入
 
 当前写入的事件：
 
-| `event` | 调用位置 | 记录什么 |
-| --- | --- | --- |
-| `auth.login_failed` | `server/routes/roster.ts` 的登录处理 | `reason`、`entrance`、截断后的 `account`。不写口令 |
-| `auth.forbidden` | `server/middleware/request-observability.ts` | 响应 403，且路径不是登录接口。带 `requestId`、`userId`、`method`、`path` |
-| `rate_limit.triggered` | 同上 | 响应 429。字段同上 |
-| `plugin.installed` | `packages/plugins/builtin.ts`、`server/routes/plugins.ts` | `actorId`、插件标识，以及 `via`（`source`、`zip`、`url`、`zip-raw`）。不写压缩包字节 |
-| `plugin.enabled` | `packages/plugins/builtin.ts` | `actorId`、`pluginId` |
-| `plugin.public_route_approved` | `server/routes/plugins.ts` | `actorId`、`pluginId`、`manifestId`、获准的路由列表 |
+| `event`                        | 调用位置                                                  | 记录什么                                                                             |
+| ------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `auth.login_failed`            | `server/routes/roster.ts` 的登录处理                      | `reason`、`entrance`、截断后的 `account`。不写口令                                   |
+| `auth.forbidden`               | `server/middleware/request-observability.ts`              | 响应 403，且路径不是登录接口。带 `requestId`、`userId`、`method`、`path`             |
+| `rate_limit.triggered`         | 同上                                                      | 响应 429。字段同上                                                                   |
+| `plugin.installed`             | `packages/plugins/builtin.ts`、`server/routes/plugins.ts` | `actorId`、插件标识，以及 `via`（`source`、`zip`、`url`、`zip-raw`）。不写压缩包字节 |
+| `plugin.enabled`               | `packages/plugins/builtin.ts`                             | `actorId`、`pluginId`                                                                |
+| `plugin.public_route_approved` | `server/routes/plugins.ts`                                | `actorId`、`pluginId`、`manifestId`、获准的路由列表                                  |
 
 这张表不是总线事件表。领域事件仍进 §8 的 `events`。
 
@@ -228,11 +228,11 @@ pino 路径**刻意不**脱敏 `token`。仓库里大量 `token` 是依赖注入
 
 `source` 可以是 `uncaught`、`unhandledRejection`、`http`、`client`、`runtime`、`promise`。
 
-| 来源 | 位置 |
-| --- | --- |
-| 未处理的 rejection / 未捕获异常 | `server.ts` 调用 `captureUnknownError` |
-| HTTP 5xx | `server/utils/error-handler.ts` 与 `server/middleware/request-observability.ts` |
-| 浏览器 | `POST /api/client-errors`（`server/routes/client-errors.ts`） |
+| 来源                            | 位置                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| 未处理的 rejection / 未捕获异常 | `server.ts` 调用 `captureUnknownError`                                          |
+| HTTP 5xx                        | `server/utils/error-handler.ts` 与 `server/middleware/request-observability.ts` |
+| 浏览器                          | `POST /api/client-errors`（`server/routes/client-errors.ts`）                   |
 
 浏览器入口不要求登录，响应恒为 204，不回显正文。`Content-Length` 大于 16 KiB、没有 `message`，或 body 不是对象时直接丢掉。`source` 只接受 `client`、`runtime`、`promise`，其余按 `client`。
 
@@ -264,12 +264,12 @@ Worker 里的 `ctx.log` 由 `packages/core/worker-runtime/bootstrap/sections/mes
 
 ## 10. 速查
 
-| 问题 | 答案 |
-| --- | --- |
-| 目录里有哪些实现？ | §1 的九个文件。没有 barrel，没有追踪 |
-| 探针怎么分？ | `/health` 只表示进程活着。`/health/ready` 查数据库、存储可写、迁移文件都已应用。失败体只有 `status` |
-| `/metrics` 现在有什么？ | `openlearn_up`、运行秒数、RSS、按状态类的 `openlearn_http_responses_total`，运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`，以及按插件维度的 `openlearn_plugin_*`（§4.1）。要管理员会话或 `METRICS_TOKEN` |
-| 日志文件在哪？ | `<LOG_DIR>/openlearn.log`，审计在同目录 `audit.log`。Compose 的目录是 `/data/logs` |
-| 有脱敏吗？ | pino 按 §5.3 的字段名。审计和错误上报再用 §5.4。字符串里的秘密和裸 `console.*` 仍可能漏出 |
-| 插件怎么打日志？ | `PluginContext.log`，不是 DI。Worker 的 console 经 stdout/stderr 进入同一子 logger |
-| 安全审计和 `events` 表是一回事吗？ | 不是。审计是 `audit.log` 里 §6 的事件。`events` 是总线全量记录 |
+| 问题                               | 答案                                                                                                                                                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 目录里有哪些实现？                 | §1 的九个文件。没有 barrel，没有追踪                                                                                                                                                                                                                          |
+| 探针怎么分？                       | `/health` 只表示进程活着。`/health/ready` 查数据库、存储可写、迁移文件都已应用。失败体只有 `status`                                                                                                                                                           |
+| `/metrics` 现在有什么？            | `openlearn_up`、运行秒数、RSS、按状态类的 `openlearn_http_responses_total`，运维 gauge `openlearn_migrations_pending`、`openlearn_backup_age_seconds`、`openlearn_events_rows`，以及按插件维度的 `openlearn_plugin_*`（§4.1）。要管理员会话或 `METRICS_TOKEN` |
+| 日志文件在哪？                     | `<LOG_DIR>/openlearn.log`，审计在同目录 `audit.log`。Compose 的目录是 `/data/logs`                                                                                                                                                                            |
+| 有脱敏吗？                         | pino 按 §5.3 的字段名。审计和错误上报再用 §5.4。字符串里的秘密和裸 `console.*` 仍可能漏出                                                                                                                                                                     |
+| 插件怎么打日志？                   | `PluginContext.log`，不是 DI。Worker 的 console 经 stdout/stderr 进入同一子 logger                                                                                                                                                                            |
+| 安全审计和 `events` 表是一回事吗？ | 不是。审计是 `audit.log` 里 §6 的事件。`events` 是总线全量记录                                                                                                                                                                                                |

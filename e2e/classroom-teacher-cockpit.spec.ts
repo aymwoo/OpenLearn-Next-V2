@@ -10,9 +10,7 @@ function purgeTeacherCockpitE2EFromDb() {
   if (!fs.existsSync(DB_PATH)) return;
   const db = new Database(DB_PATH);
   try {
-    const lessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 中控操控课节%'")
-      .all() as { id: string }[];
+    const lessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 中控操控课节%'").all() as { id: string }[];
     for (const l of lessons) {
       db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(l.id);
       db.prepare('DELETE FROM classroom_quick_polls WHERE lesson_id = ?').run(l.id);
@@ -21,17 +19,15 @@ function purgeTeacherCockpitE2EFromDb() {
       db.prepare('DELETE FROM lessons WHERE id = ?').run(l.id);
     }
 
-    const classes = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 中控操控班级%'")
-      .all() as { id: string }[];
+    const classes = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 中控操控班级%'").all() as { id: string }[];
     for (const c of classes) {
       db.prepare('DELETE FROM class_students WHERE class_id = ?').run(c.id);
       db.prepare('DELETE FROM classes WHERE id = ?').run(c.id);
     }
 
-    const students = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_COCKPIT_%'")
-      .all() as { id: string }[];
+    const students = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_COCKPIT_%'").all() as {
+      id: string;
+    }[];
     for (const s of students) {
       db.prepare('DELETE FROM class_students WHERE student_id = ?').run(s.id);
       db.prepare('DELETE FROM students WHERE id = ?').run(s.id);
@@ -86,8 +82,18 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
           grade: '高一',
           content: '变力做功与微元累加综合探究',
           timeline_segments: JSON.stringify([
-            { id: `seg_1_${suffix}`, title: '1. 情境导入与实验演示', duration: '5m', notes: '观察弹簧振子与非恒力拉伸' },
-            { id: `seg_2_${suffix}`, title: '2. 微元离散分析与积分推导', duration: '15m', notes: '将位移划分为无限小段求和' },
+            {
+              id: `seg_1_${suffix}`,
+              title: '1. 情境导入与实验演示',
+              duration: '5m',
+              notes: '观察弹簧振子与非恒力拉伸',
+            },
+            {
+              id: `seg_2_${suffix}`,
+              title: '2. 微元离散分析与积分推导',
+              duration: '15m',
+              notes: '将位移划分为无限小段求和',
+            },
             { id: `seg_3_${suffix}`, title: '3. 随堂随测与变式训练', duration: '10m', notes: '独立作答随堂测试题' },
           ]),
         },

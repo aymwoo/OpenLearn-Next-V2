@@ -1,9 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  LessonStateMachine,
-  VALID_LESSON_TRANSITIONS,
-  InvalidLessonStateTransitionError,
-} from '../state-machine.js';
+import { LessonStateMachine, VALID_LESSON_TRANSITIONS, InvalidLessonStateTransitionError } from '../state-machine.js';
 
 describe('LessonStateMachine (Phase C3)', () => {
   it('should initialize with default status idle', () => {

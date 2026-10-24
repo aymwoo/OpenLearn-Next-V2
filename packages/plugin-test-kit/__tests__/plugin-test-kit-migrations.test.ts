@@ -59,10 +59,10 @@ describe('@openlearn/plugin-test-kit runTestPluginMigrations (Issue #142)', () =
       sqliteDb.exec('CREATE TABLE dummy_items (id INT);');
     });
 
-    const check: any = (ctx as any).resolve
-      ? await ctx.resolve({ name: '@openlearn/core:IDatabase' } as any)
-      : null;
-    expect(check.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='dummy_items'").get()).toBeDefined();
+    const check: any = (ctx as any).resolve ? await ctx.resolve({ name: '@openlearn/core:IDatabase' } as any) : null;
+    expect(
+      check.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='dummy_items'").get(),
+    ).toBeDefined();
 
     // 失败迁移应抛错且不提升版本
     await expect(
@@ -72,7 +72,9 @@ describe('@openlearn/plugin-test-kit runTestPluginMigrations (Issue #142)', () =
       }),
     ).rejects.toThrow('Forced failure in upgradeFn');
 
-    const migRow = check.prepare('SELECT version FROM plugin_migrations WHERE plugin_id = ?').get('ext-atomic-test') as any;
+    const migRow = check
+      .prepare('SELECT version FROM plugin_migrations WHERE plugin_id = ?')
+      .get('ext-atomic-test') as any;
     expect(migRow.version).toBe(1);
   });
 });

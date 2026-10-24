@@ -6,7 +6,11 @@ import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter'
 import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
 import { useFontSizeStore } from '../../../store/fontSizeStore';
 import { useAppStore } from '../../../store/appStore';
-import { broadcastThemeToIframes, broadcastFontScaleToIframes, registerManagedIframe } from '../../../services/lms-bridge';
+import {
+  broadcastThemeToIframes,
+  broadcastFontScaleToIframes,
+  registerManagedIframe,
+} from '../../../services/lms-bridge';
 import { getSocketInstance } from '../../../services/socket-service';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 import { whiteboardEventSlot } from '../events/WhiteboardEventSlot';
@@ -301,13 +305,14 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     return () => window.removeEventListener('message', messageHandler);
   }, [mounted, elementId, data.title, data.coursewareUuid, lessonId]);
 
-  const src =
-    data.coursewareUuid
-      ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
-      : data.resourceId
-        ? `/api/resources/${data.resourceId}/`
-        : (customSrc ??
-          (inlineUuid ? `/runtime/${inlineUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}` : undefined));
+  const src = data.coursewareUuid
+    ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
+    : data.resourceId
+      ? `/api/resources/${data.resourceId}/`
+      : (customSrc ??
+        (inlineUuid
+          ? `/runtime/${inlineUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
+          : undefined));
 
   useEffect(() => {
     if (!mounted) return;

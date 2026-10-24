@@ -18,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **边界**：只改表达，**没有**限制 CSV 能力 —— CSV 仍是两列，只是不再让教师在界面上误解它。审计文档该项已标为已修并写明这一点。
   - **测试**：`ImportLessonsModal.test.tsx` 新增 2 例（中英双语的徽标与副标题措辞）。
 
+- **课程包支持任意教学附件，并补上白板侧的引用机制（课程导入审计收尾项）**：
+  - **问题**：课程包此前只能带 PDF / PPTX。真实备课要发的却是「讲义 docx / 成绩 xlsx / 素材 zip / 示意图 png / 大纲 md」，这些文件平台完全能存（`/uploads` + express static 按扩展名给 Content-Type），缺的只是**白板元素侧的引用机制**。
+  - **附件类型放开**：`pdf / pptx / docx / xlsx / zip / png / jpg / md / txt / csv`。放开不等于放任 —— 每种都要过 `validateMagicBytes` 的签名校验，且校验用**声明的 `contentType`** 而非用户提供的 filename 去取签名表（否则「filename 写 .txt、contentType 报 pdf」即可绕过）；纯文本类型额外拒绝含 NUL 字节的内容（二进制伪装成文本）。刻意**不加**「任意二进制」桶，避免课程包变成传播任意载荷的信封。
+  - **引用机制**：PDF/PPTX 仍内联渲染；其余类型在导入时把「课件演示」元素降级为 `fileType: 'file'`，由 `RevealPresentationWrapper` 渲染成**下载卡片**（文件名 / 类型 / 下载按钮；教师可「移除引用」，学生看不到该入口）。若不做这步降级，渲染器会拿 zip 字节去喂 `PowerPointViewer`，表现为「一直解析中」而不是一张可下载的卡片。
+  - **顺带修掉一处歧义断言**：`reveal-presentation-wrapper.test.tsx` 的「切换文档模式」用例原本断言 `getByText('Overview')` —— 而 doc 模式下该文案会同时出现在大纲侧栏与正文标题里，断言本身歧义；它此前能过只是因为点击没生效、mode 没真的切过去。现改为断言 doc 模式独有的「文档大纲」，并补 `afterEach(cleanup)` 消除用例间 DOM 泄漏。
+  - **测试**：`course-package-routes.test.ts` 新增 4 例（docx 落成下载引用且 `slideCount=0`、字节与声明类型不符被拒且整体回滚、文本类型伪装二进制被拒、PDF/PPTX 仍内联无回归）；`reveal-presentation-wrapper.test.tsx` 新增 2 例（下载卡片渲染与链接、教师可移除引用而学生不可见）。
+  - **审计文档**：该项标为已修，并更正原文「`system_resources` 已能承载任意文件」的说法 —— 它是 HTML 课件库（前端当 iframe src 渲染），塞二进制会坏掉，所以走的是 `/uploads` + 元素引用。
+
 - **修复发布包（`npx openlearn-next`）因迁移目录不在包内而无法启动（P0）**：
   - **现象（实测复现，非推断）**：按 `package.json` 的 `files` 清单在临时目录还原发布包布局后启动，直接 FATAL：
     `[DB SSOT] FATAL: 迁移目录 /tmp/user-cwd/migrations 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`

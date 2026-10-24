@@ -26,19 +26,31 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
     db.prepare('DELETE FROM courseware WHERE id LIKE ?').run('res-test-%');
 
     // 种子数据 1: HTML 单文件
-    db.prepare(
-      'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testResId1, '物理仿真实验.html', 'html', '<html><body><h1>物理实验</h1></body></html>', now - 1000);
+    db.prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testResId1,
+      '物理仿真实验.html',
+      'html',
+      '<html><body><h1>物理实验</h1></body></html>',
+      now - 1000,
+    );
 
     // 种子数据 2: Folder 目录包
     const folderFiles = JSON.stringify([
       { path: 'index.html', content: '<html><body>入口</body></html>' },
       { path: 'css/style.css', content: 'body { color: red; }' },
-      { path: 'images/dot.png', content: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' },
+      {
+        path: 'images/dot.png',
+        content:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      },
     ]);
-    db.prepare(
-      'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testResId2, '探究牛顿环课件包', 'folder', folderFiles, now);
+    db.prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testResId2,
+      '探究牛顿环课件包',
+      'folder',
+      folderFiles,
+      now,
+    );
   });
 
   afterAll(() => {
@@ -154,9 +166,9 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
     });
 
     it('删除资源后查询返回空', () => {
-      const created = db.prepare(
-        'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run('res-test-delete', '测试删除', 'html', '', Date.now());
+      const created = db
+        .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run('res-test-delete', '测试删除', 'html', '', Date.now());
 
       const deleted = service.deleteResource('res-test-delete');
       expect(deleted).toBe(true);
