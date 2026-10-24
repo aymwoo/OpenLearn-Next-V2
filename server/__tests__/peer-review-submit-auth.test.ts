@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerLessonsRoutes } from '../routes/lessons.js';
+import type { ServerContext } from '../context.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 /**
@@ -132,35 +133,24 @@ describe('互评提交接口的对象级授权（#217）', () => {
            (id, assignment_id, submission_id, reviewer_id, anonymous, status, due_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(
-        taskId,
-        assignmentId,
-        targetSubmissionId,
-        reviewerId,
-        1,
-        'pending',
-        null,
-        now,
-      );
+      .run(taskId, assignmentId, targetSubmissionId, reviewerId, 1, 'pending', null, now);
 
     app = express();
     app.use(express.json());
-    registerLessonsRoutes({ app, io: { emit: () => {} } } as any);
+    registerLessonsRoutes({ app, io: { emit: () => {} } } as unknown as ServerContext);
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   afterAll(async () => {
-    kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)').run(
-      ownerSubmissionId,
-      targetSubmissionId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)')
+      .run(ownerSubmissionId, targetSubmissionId);
     kernelContainer.db.prepare('DELETE FROM plugin_peer_review_tasks WHERE id = ?').run(taskId);
-    kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE id IN (?, ?)').run(
-      ownerSubmissionId,
-      targetSubmissionId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM plugin_submissions WHERE id IN (?, ?)')
+      .run(ownerSubmissionId, targetSubmissionId);
     kernelContainer.db.prepare('DELETE FROM plugin_assignments WHERE id = ?').run(assignmentId);
     kernelContainer.db
       .prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)')
@@ -175,7 +165,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
   it('学生不得给自己的作业提交互评（自评被拒）', async () => {
     const res = await postReview(ownerToken, ownerSubmissionId);
     expect(res.status).toBe(403);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { error?: string };
     expect(body.error).toMatch(/own assignments/i);
     expect(reviewRows().filter((r) => r.submission_id === ownerSubmissionId)).toHaveLength(0);
   });
@@ -183,7 +173,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
   it('未被分配互评任务的学生不得提交（作业已建立分配式互评）', async () => {
     const res = await postReview(outsiderToken, targetSubmissionId);
     expect(res.status).toBe(403);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { error?: string };
     expect(body.error).toMatch(/not assigned to you/i);
     expect(reviewRows().filter((r) => r.submission_id === targetSubmissionId)).toHaveLength(0);
   });
@@ -220,7 +210,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
     try {
       const res = await postReview(reviewerToken, targetSubmissionId);
       expect(res.status).toBe(403);
-      const body = (await res.json()) as any;
+      const body = (await res.json()) as { error?: string };
       expect(body.error).toMatch(/deadline/i);
     } finally {
       kernelContainer.db

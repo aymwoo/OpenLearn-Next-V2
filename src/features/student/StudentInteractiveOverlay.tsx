@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Sparkles, TrendingUp, CheckCircle2, HelpCircle, Zap, Star, X, ClipboardList, Clock, Play } from 'lucide-react';
+import {
+  Bell,
+  Sparkles,
+  TrendingUp,
+  CheckCircle2,
+  HelpCircle,
+  Zap,
+  Star,
+  X,
+  ClipboardList,
+  Clock,
+  Play,
+} from 'lucide-react';
 import { StudentCountdownBanner } from './StudentCountdownBanner';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
@@ -55,7 +67,9 @@ export function StudentInteractiveOverlay({
     totalItems: number;
     maxScore: number;
   } | null>(null);
-  const [assessmentModalState, setAssessmentModalState] = useState<'closed' | 'prompt' | 'answering' | 'result'>('closed');
+  const [assessmentModalState, setAssessmentModalState] = useState<'closed' | 'prompt' | 'answering' | 'result'>(
+    'closed',
+  );
   const [assessmentPayload, setAssessmentPayload] = useState<StudentAttemptPayload | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<StudentResultPayload | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
@@ -122,9 +136,7 @@ export function StudentInteractiveOverlay({
             // 同步限时任务倒计时
             if (json.activeCountdown) {
               try {
-                window.dispatchEvent(
-                  new CustomEvent('openlearn:countdown:updated', { detail: json.activeCountdown }),
-                );
+                window.dispatchEvent(new CustomEvent('openlearn:countdown:updated', { detail: json.activeCountdown }));
               } catch (_) {}
             }
 
@@ -715,9 +727,7 @@ export function StudentInteractiveOverlay({
           </div>
 
           {assessmentError && (
-            <p className="text-2xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 p-1.5 rounded-lg">
-              {assessmentError}
-            </p>
+            <p className="text-2xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 p-1.5 rounded-lg">{assessmentError}</p>
           )}
 
           <button

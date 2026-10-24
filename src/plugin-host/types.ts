@@ -899,5 +899,3 @@ export interface PeerReviewShowcaseWidgetSlotProps {
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
-
-

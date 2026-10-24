@@ -431,15 +431,11 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'academic-comparison'}
           >
-            <StudentAcademicYearComparison
-              studentId={activeStudentId || ''}
-              lang={lang}
-            />
+            <StudentAcademicYearComparison studentId={activeStudentId || ''} lang={lang} />
           </DashboardWidgetCard>
         );
 
       case 'extension-views':
-
         return (
           <DashboardWidgetCard
             id="extension-views"
@@ -576,9 +572,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         setSelectedLesson={setSelectedLesson}
         setStudentViewStatus={setStudentViewStatus}
         setSelectedAssignment={setSelectedAssignment}
-        addToast={(title: string, description: string, type?: string) =>
-          addToast(title, description, type ?? 'info')
-        }
+        addToast={(title: string, description: string, type?: string) => addToast(title, description, type ?? 'info')}
         lang={lang}
         onExpandWidget={handleExpandWidget}
       />

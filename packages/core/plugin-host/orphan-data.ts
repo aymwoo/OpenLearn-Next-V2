@@ -180,8 +180,7 @@ export function countPluginStorageRows(db: OrphanDataDb, keys: string[]): number
     if (!key) continue;
     try {
       const row = db.prepare('SELECT COUNT(*) AS c FROM plugin_storage WHERE plugin_id = ?').get(key) as
-        | { c: number }
-        | undefined;
+        { c: number } | undefined;
       total += Number(row?.c ?? 0);
     } catch {
       // plugin_storage 不存在时视为 0
@@ -194,8 +193,7 @@ export function countPluginStorageRows(db: OrphanDataDb, keys: string[]): number
 export function readPluginMigrationVersion(db: OrphanDataDb, pluginId: string): number | null {
   try {
     const row = db.prepare('SELECT version FROM plugin_migrations WHERE plugin_id = ?').get(pluginId) as
-      | { version: number }
-      | undefined;
+      { version: number } | undefined;
     return row ? Number(row.version) : null;
   } catch {
     return null;
@@ -370,10 +368,9 @@ function countOtherDataOwners(db: OrphanDataDb, manifestId: string, pluginId: st
     // 登记表缺失等同于没有其他持有者
   }
   try {
-    const row = db.prepare(`SELECT COUNT(*) AS c FROM plugins WHERE id != ? AND manifest LIKE ?`).get(
-      pluginId,
-      `%"id":"${manifestId}"%`,
-    ) as { c: number } | undefined;
+    const row = db
+      .prepare(`SELECT COUNT(*) AS c FROM plugins WHERE id != ? AND manifest LIKE ?`)
+      .get(pluginId, `%"id":"${manifestId}"%`) as { c: number } | undefined;
     others += Number(row?.c ?? 0);
   } catch {
     // plugins 表在极简测试库里可能不存在
@@ -416,12 +413,11 @@ export function exportPluginDataToSql(db: OrphanDataDb, options: ExportPluginDat
 
   for (const table of tables) {
     const meta = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name = ?`).get(table.name) as
-      | { sql: string | null }
-      | undefined;
+      { sql: string | null } | undefined;
     if (!meta) continue;
-    const columns = (
-      db.prepare(`PRAGMA table_info(${quoteIdent(table.name)})`).all() as Array<{ name: string }>
-    ).map((c) => c.name);
+    const columns = (db.prepare(`PRAGMA table_info(${quoteIdent(table.name)})`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
     if (columns.length === 0) continue;
     lines.push('');
     lines.push(`-- table: ${table.name} (rows: ${table.rowCount})`);

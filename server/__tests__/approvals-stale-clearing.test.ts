@@ -43,8 +43,7 @@ describe('待审批指令的失效清理', () => {
     ).run(id, commandType, '{}', 'plugin:ghost-plugin', Date.now());
   };
 
-  const pendingExists = (id: string) =>
-    Boolean(db.prepare('SELECT 1 FROM pending_commands WHERE id = ?').get(id));
+  const pendingExists = (id: string) => Boolean(db.prepare('SELECT 1 FROM pending_commands WHERE id = ?').get(id));
 
   beforeAll(async () => {
     const now = Date.now();

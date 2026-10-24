@@ -80,7 +80,9 @@ function printClasses(rows) {
     return;
   }
   for (const row of rows) {
-    const owner = row.owner_user_id ? `${row.owner_username || '?'} (${row.owner_user_id})` : '（无归属，仅管理员可见）';
+    const owner = row.owner_user_id
+      ? `${row.owner_username || '?'} (${row.owner_user_id})`
+      : '（无归属，仅管理员可见）';
     console.log(`  ${row.id}  ${row.name}  归属=${owner}`);
   }
 }

@@ -23,7 +23,8 @@ export function ImpersonationBanner(props: ImpersonationBannerProps) {
   const isStudentPreviewMode = props.isStudentPreviewMode ?? appData?.isStudentPreviewMode ?? false;
   const lang = (props.lang ?? appData?.lang ?? 'zh') as 'zh' | 'en';
   const students = props.students ?? appData?.students ?? [];
-  const activeStudentId = props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
+  const activeStudentId =
+    props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
 
   if (!(session?.role === 'teacher' && activeRole === 'student' && !isStudentLiveMode)) {
     return null;

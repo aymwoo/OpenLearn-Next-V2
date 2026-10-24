@@ -202,12 +202,18 @@ function seedPluginData(db: Database.Database, pluginId: string, manifestId: str
   const table = `${pluginTablePrefix(pluginId)}items`;
   db.exec(`CREATE TABLE ${table} (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`);
   db.prepare(`INSERT INTO ${table} (name) VALUES (?), (?)`).run('apple', 'banana');
-  db.prepare(
-    'INSERT OR REPLACE INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)',
-  ).run(pluginId, 'config:theme', 'dark', Date.now());
-  db.prepare(
-    'INSERT OR REPLACE INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)',
-  ).run(manifestId, 'shared:notes', 'hello', Date.now());
+  db.prepare('INSERT OR REPLACE INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)').run(
+    pluginId,
+    'config:theme',
+    'dark',
+    Date.now(),
+  );
+  db.prepare('INSERT OR REPLACE INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)').run(
+    manifestId,
+    'shared:notes',
+    'hello',
+    Date.now(),
+  );
   db.prepare('INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)').run(pluginId, 3);
 }
 
@@ -252,10 +258,7 @@ describe('uninstallPlugin — 卸载数据语义（Issue #141）', () => {
   });
 
   /** 安装一个带数据的测试插件，返回运行期 pluginId 与 manifest.id。 */
-  async function installWithData(
-    manifestId: string,
-    name: string,
-  ): Promise<{ pluginId: string; manifestId: string }> {
+  async function installWithData(manifestId: string, name: string): Promise<{ pluginId: string; manifestId: string }> {
     const source = simpleSource(manifestId, name);
     loadMap.set(source, makePluginModule(manifestId, name));
     await host.installPlugin(source);

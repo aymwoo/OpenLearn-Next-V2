@@ -338,6 +338,9 @@ describe('PoC: worker 插件的数据库与能力面', () => {
 
   it('只要声明任意 capability，就能通过 ICapabilityService.grant 给自己授予 *', async () => {
     const guard = new CapabilityGuard();
+    // Issue #224：运行时能力以「已授予」为准 —— 先授予 storage:read，
+    // 让 Barrier 2 放行，本用例才能真正走到「通配符能力被拒」那条路径。
+    guard.grant('plugin:ext-community', 'storage:read');
     const registry = { resolve: async () => guard, resolveByName: async () => guard };
     const host = new ServiceHost(
       registry as never,
@@ -418,9 +421,12 @@ describe('PoC: worker 插件的数据库与能力面', () => {
       },
     });
     const registry = { resolve: async () => bus, resolveByName: async () => bus };
+    const guard = new CapabilityGuard();
+    // Issue #224：运行时能力以「管理员已审批（已授予）」为准 —— 显式授予 storage:read。
+    guard.grant('plugin:ext-community', 'storage:read');
     const host = new ServiceHost(
       registry as never,
-      new CapabilityGuard(),
+      guard,
       'plugin:ext-community',
       ['storage:read'],
       undefined,

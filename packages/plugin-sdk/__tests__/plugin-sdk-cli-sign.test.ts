@@ -37,10 +37,9 @@ describe('@openlearn/plugin-sdk CLI 签名能力 (Issue #143)', () => {
       fs.writeFileSync(zipPath, zipBuf);
 
       // 3. 执行 CLI sign 命令
-      const output = execSync(
-        `node ${cliPath} sign --key ${privKeyFile} --publisher "Alice Dev" ${zipPath}`,
-        { encoding: 'utf8' },
-      );
+      const output = execSync(`node ${cliPath} sign --key ${privKeyFile} --publisher "Alice Dev" ${zipPath}`, {
+        encoding: 'utf8',
+      });
       expect(output).toContain('Successfully signed ext-signed-test.zip');
       expect(output).toContain('Publisher: Alice Dev');
 

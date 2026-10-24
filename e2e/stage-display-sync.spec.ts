@@ -8,9 +8,7 @@ function purgeStageDisplayE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 大屏展台%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 大屏展台%'").all() as { id: string }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -25,7 +23,7 @@ function purgeStageDisplayE2EFromDb() {
           const sPlaceholders = sessionIds.map(() => '?').join(',');
           try {
             db.prepare(
-              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`
+              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`,
             ).run(...sessionIds);
           } catch {}
           try {
@@ -41,7 +39,9 @@ function purgeStageDisplayE2EFromDb() {
             db.prepare(`DELETE FROM classroom_feed WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
           } catch {}
           try {
-            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
+            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(
+              ...sessionIds,
+            );
           } catch {}
           try {
             db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
@@ -57,9 +57,9 @@ function purgeStageDisplayE2EFromDb() {
       db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_STAGE_%-%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_STAGE_%-%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -69,9 +69,9 @@ function purgeStageDisplayE2EFromDb() {
       db.prepare(`DELETE FROM students WHERE id IN (${sPlaceholders})`).run(...studentIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 大屏展台班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 大屏展台班级%'").all() as {
+      id: string;
+    }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -280,16 +280,13 @@ test.describe('大屏独立展台（StageDisplayView）投屏与实时交互同�
       expect(advanceStageRes.ok()).toBeTruthy();
 
       const pollQuestion = `在变力做功过程中，微元位移下的恒力功累加对应什么？ (${suffix.slice(0, 4)})`;
-      const startPollRes = await request.post(
-        `/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll`,
-        {
-          data: {
-            title: pollQuestion,
-            options: ['A', 'B', 'C', 'D'],
-            type: 'single',
-          },
-        }
-      );
+      const startPollRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll`, {
+        data: {
+          title: pollQuestion,
+          options: ['A', 'B', 'C', 'D'],
+          type: 'single',
+        },
+      });
       expect(startPollRes.ok()).toBeTruthy();
       const pollJson = await startPollRes.json();
       const pollId = pollJson.poll?.id || pollJson.id || pollJson.data?.id;
@@ -308,7 +305,7 @@ test.describe('大屏独立展台（StageDisplayView）投屏与实时交互同�
           data: {
             option: 'A',
           },
-        }
+        },
       );
       expect(voteRes.ok()).toBeTruthy();
 

@@ -200,6 +200,66 @@ export function accessibleClassIds(db: Database.Database, session: AccessSession
   return rows.map((row) => row.id);
 }
 
+/**
+ * 课节参与权：课内作答（随堂测验等）能不能在这个课节里写入自己的成绩。
+ *
+ * 与 `canSeeLesson`（课节**可见性**）的区别：可见性回答「列表里能不能看到」，
+ * 允许 `creator_id` 为空的历史课节对全体教师开放；参与权回答「能不能在这个课节里
+ * 作答 / 写入成绩」，必须落到具体的班级边界上，否则学生可以对**别人班**的课节提交
+ * 随堂测验，既读到该题答案（提交后回传 correctIndex）又留下成绩记录（Issue #223）。
+ *
+ * 判定：
+ * - 管理员：放行。
+ * - 该课节**未绑定任何班级**（全局课节 / 作业工作区伪课节）：放行 —— 没有班级边界可校验。
+ * - 学生：必须属于该课节关联的某个班级。
+ * - 教师：必须创建该课节，或拥有该课节关联的某个班级。
+ */
+export function authorizeLessonParticipation(
+  db: Database.Database,
+  session: AccessSession | null | undefined,
+  lessonId: string,
+): AccessDecision {
+  if (!session) return { ok: false, status: 403, error: 'Forbidden' };
+  if (isAdministrator(session)) return { ok: true, level: 'admin' };
+  if (!lessonId) return { ok: false, status: 404, error: 'Lesson not found' };
+
+  const linkedClassIds = lessonLinkedClassIds(db, lessonId);
+  if (linkedClassIds.length === 0) {
+    // 未绑定班级的课节：没有班级边界，按开放课节处理
+    return { ok: true, level: isTeacher(session) ? 'teacher' : 'student' };
+  }
+
+  const myClassIds = accessibleClassIds(db, session) ?? [];
+  const shared = myClassIds.filter((id) => linkedClassIds.includes(id));
+  if (shared.length > 0) {
+    return { ok: true, level: isTeacher(session) ? 'teacher' : 'student' };
+  }
+
+  // 教师还可以是课节创建者
+  if (isTeacher(session)) {
+    const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(lessonId) as
+      { creator_id: string | null } | undefined;
+    const uid = actorUserId(session);
+    if (lesson?.creator_id && (lesson.creator_id === uid || lesson.creator_id === session.username)) {
+      return { ok: true, level: 'teacher' };
+    }
+  }
+
+  return { ok: false, status: 403, error: 'Forbidden' };
+}
+
+/** 该课节关联的班级集合（排课 / 课堂会话 / 作业三个来源）。 */
+function lessonLinkedClassIds(db: Database.Database, lessonId: string): string[] {
+  const rows = db
+    .prepare(
+      `SELECT class_id FROM schedules WHERE lesson_id = ? AND class_id IS NOT NULL
+       UNION SELECT class_id FROM classroom_sessions WHERE lesson_id = ? AND class_id IS NOT NULL
+       UNION SELECT class_id FROM assignments WHERE lesson_id = ? AND class_id IS NOT NULL`,
+    )
+    .all(lessonId, lessonId, lessonId) as Array<{ class_id: string }>;
+  return Array.from(new Set(rows.map((r) => r.class_id).filter(Boolean)));
+}
+
 export function teacherCanSeeStudent(
   db: Database.Database,
   session: AccessSession | null | undefined,

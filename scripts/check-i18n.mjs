@@ -218,7 +218,9 @@ export function runI18nAudit(repoRoot) {
                     issues.push(`[Encoding] ${fullLocPath} contains UTF-8 replacement character (\\uFFFD)`);
                   }
                   if (locEnc.invalidOffset !== -1) {
-                    issues.push(`[Encoding] ${fullLocPath} contains invalid UTF-8 bytes at offset ${locEnc.invalidOffset}`);
+                    issues.push(
+                      `[Encoding] ${fullLocPath} contains invalid UTF-8 bytes at offset ${locEnc.invalidOffset}`,
+                    );
                   }
                 }
               }

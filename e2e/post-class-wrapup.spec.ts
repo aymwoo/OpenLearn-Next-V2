@@ -9,9 +9,7 @@ function purgePostClassWrapupE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 课后复盘%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 课后复盘%'").all() as { id: string }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -26,7 +24,7 @@ function purgePostClassWrapupE2EFromDb() {
           const sPlaceholders = sessionIds.map(() => '?').join(',');
           try {
             db.prepare(
-              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`
+              `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${sPlaceholders}))`,
             ).run(...sessionIds);
           } catch {}
           try {
@@ -42,7 +40,9 @@ function purgePostClassWrapupE2EFromDb() {
             db.prepare(`DELETE FROM classroom_feed WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
           } catch {}
           try {
-            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
+            db.prepare(`DELETE FROM classroom_pacing_signals WHERE session_id IN (${sPlaceholders})`).run(
+              ...sessionIds,
+            );
           } catch {}
           try {
             db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sPlaceholders})`).run(...sessionIds);
@@ -58,9 +58,9 @@ function purgePostClassWrapupE2EFromDb() {
       db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_WRAP_%-%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_WRAP_%-%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -70,9 +70,9 @@ function purgePostClassWrapupE2EFromDb() {
       db.prepare(`DELETE FROM students WHERE id IN (${sPlaceholders})`).run(...studentIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 课后复盘班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 课后复盘班级%'").all() as {
+      id: string;
+    }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -223,20 +223,17 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
             feedback: studentFeedbackText,
             tierLevel: 'passed',
           },
-        }
+        },
       );
       expect(submitTicketRes.ok()).toBeTruthy();
 
       // 将课堂推进至 WRAP_UP_EXIT_TICKET (结课通票与复盘阶段)
-      const advanceToWrapupRes = await request.post(
-        `/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`,
-        {
-          data: {
-            stage: 'WRAP_UP_EXIT_TICKET',
-            classId,
-          },
-        }
-      );
+      const advanceToWrapupRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/stage`, {
+        data: {
+          stage: 'WRAP_UP_EXIT_TICKET',
+          classId,
+        },
+      });
       expect(advanceToWrapupRes.ok()).toBeTruthy();
 
       // 2. 浏览器 context 登录并进入应用
@@ -258,10 +255,7 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
 
       // Issue #91: 首屏是进行中会话列表 —— 等列表拉回来后点「继续上课」；
       // 没有首屏（无进行中会话）时退回旧门户的「回到课堂」。
-      const clickedResume = await clickIfVisible(
-        page.getByRole('button', { name: /继续上课|Resume/ }).first(),
-        10_000,
-      );
+      const clickedResume = await clickIfVisible(page.getByRole('button', { name: /继续上课|Resume/ }).first(), 10_000);
       if (!clickedResume) {
         const resumeBtn = page.getByRole('button', { name: '回到课堂' });
         await expect(resumeBtn).toBeVisible({ timeout: 15_000 });

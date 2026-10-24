@@ -59,6 +59,7 @@ import {
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
 import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
+import { approvePluginCapabilities } from '../../../packages/core/plugin-host/plugin-grants.js';
 import { PROBE_MATRIX, MODE_DIFFS, TOKEN_SWEEP, REQUIRE_SWEEP } from './expectations';
 
 process.env.OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS = '20000';
@@ -196,7 +197,9 @@ function createExtraServices(): Record<string, unknown> {
       clear: vi.fn(),
     },
     authSessionBridge: { createSession: vi.fn().mockResolvedValue({ token: 'tok', maxAge: 3600 }) },
-    networkProxy: { fetch: vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', headers: {}, body: '', url: '' }) },
+    networkProxy: {
+      fetch: vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', headers: {}, body: '', url: '' }),
+    },
   };
 }
 
@@ -213,6 +216,11 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
 
     db = createTestDb();
     const sr = new ServiceRegistry();
+
+    // Issue #224：ICapabilityService 与 WorkerManager 共用**同一个** CapabilityGuard 实例
+    // （与生产 wiring 一致，见 packages/core/kernel/index.ts）——
+    // 否则「管理员批准 → 授予」到不了 ServiceHost 持有的那个守卫。
+    const capabilityGuard = new CapabilityGuard();
 
     services = {
       commandBus: {
@@ -235,11 +243,12 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
         getActionByToolName: vi.fn().mockResolvedValue(undefined),
         getActionByCommandType: vi.fn().mockResolvedValue(undefined),
       },
-      capability: {
-        grant: vi.fn().mockResolvedValue(undefined),
-        revokeAll: vi.fn().mockResolvedValue(undefined),
-        check: vi.fn().mockResolvedValue(true),
-      },
+      // Issue #224：这里用**真实**的 CapabilityGuard，而不是 mock ——
+      // 生产 wiring（packages/core/kernel/index.ts）里，serviceRegistry 注册的
+      // ICapabilityService 与 WorkerManager 持有的是同一个实例，
+      // 能力授予因此能到达 ServiceHost 的运行时判定。
+      // mock 的 grant 是空实现 → 授予到不了 WorkerManager 持有的守卫。
+      capability: capabilityGuard,
       processManager: {
         spawn: vi.fn().mockResolvedValue('p'),
         kill: vi.fn().mockResolvedValue(undefined),
@@ -320,7 +329,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
     await sr.register(IPluginHostToken, host);
 
     // 绑定 WorkerManager
-    workerManager = new WorkerManager(sr, new CapabilityGuard(), db);
+    workerManager = new WorkerManager(sr, capabilityGuard, db);
     host.setWorkerManager(workerManager);
 
     await bootstrapSharedModules();
@@ -329,6 +338,15 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
     const zip = await buildCanaryZip();
     const manifest = await host.installPluginFromZip(tmpZipPath(zip), 'inline');
     pluginId = (manifest as unknown as { pluginId?: string }).pluginId ?? manifest.id;
+
+    // Issue #224：worker 模式的**运行时**能力以「管理员已审批（已写入批准表）」为准 ——
+    // 清单里的声明只是申请。这里等价于安装向导里勾选「批准能力」，
+    // 否则 worker 模式下插件没有任何有效能力，会被降级为只读而无法激活。
+    approvePluginCapabilities(
+      db as never,
+      [pluginId, (manifest as unknown as { id?: string }).id ?? 'ext-canary'],
+      (manifest as unknown as { capabilitiesProposed?: string[] }).capabilitiesProposed ?? [],
+    );
   }, 120_000);
 
   afterAll(async () => {

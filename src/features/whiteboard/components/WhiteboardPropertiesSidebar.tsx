@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  Settings,
-  Undo2,
-  Redo2,
-  X,
-  Trash2,
-  Plus,
-  Paintbrush,
-  Loader2,
-  Save,
-} from 'lucide-react';
+import { Settings, Undo2, Redo2, X, Trash2, Plus, Paintbrush, Loader2, Save } from 'lucide-react';
 import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
@@ -139,9 +129,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           >
             <Undo2 size={13} />
             {(propertyUndoStack[selectedShapeId] || []).length > 0 && (
-              <span className="text-xs font-bold text-muted">
-                {(propertyUndoStack[selectedShapeId] || []).length}
-              </span>
+              <span className="text-xs font-bold text-muted">{(propertyUndoStack[selectedShapeId] || []).length}</span>
             )}
           </button>
 
@@ -158,9 +146,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           >
             <Redo2 size={13} />
             {(propertyRedoStack[selectedShapeId] || []).length > 0 && (
-              <span className="text-xs font-bold text-muted">
-                {(propertyRedoStack[selectedShapeId] || []).length}
-              </span>
+              <span className="text-xs font-bold text-muted">{(propertyRedoStack[selectedShapeId] || []).length}</span>
             )}
           </button>
 
@@ -199,9 +185,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
 
         {/* 通用属性: 尺寸（位置仅通过画布拖动调整，不再提供 X/Y 坐标输入 —— Issue #97） */}
         <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-          <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">
-            尺寸
-          </h4>
+          <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">尺寸</h4>
 
           {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
             <div className="grid grid-cols-2 gap-2 mt-2">
@@ -289,9 +273,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
                     if (field.kind === 'textarea') {
                       return (
                         <div key={field.key}>
-                          <label className="block text-xs text-muted font-semibold mb-1">
-                            {field.labelZh}
-                          </label>
+                          <label className="block text-xs text-muted font-semibold mb-1">{field.labelZh}</label>
                           <textarea
                             value={val}
                             onChange={(e) => handleLocalPropChange(field.key, e.target.value)}
@@ -305,9 +287,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
                     if (field.kind === 'select') {
                       return (
                         <div key={field.key}>
-                          <label className="block text-xs text-muted font-semibold mb-1">
-                            {field.labelZh}
-                          </label>
+                          <label className="block text-xs text-muted font-semibold mb-1">{field.labelZh}</label>
                           <select
                             value={val}
                             onChange={(e) => {
@@ -366,9 +346,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
             {/* Correct answer selector（Issue #107：以选项索引 correctIndex 为权威，同时同步旧字段 correctAnswer） */}
             {(editingProperties.options || []).length > 0 && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
-                <label className="block text-xs text-amber-500 font-bold mb-1.5">
-                  ⚠️ 正确答案 (Correct Answer)
-                </label>
+                <label className="block text-xs text-amber-500 font-bold mb-1.5">⚠️ 正确答案 (Correct Answer)</label>
                 <select
                   value={quizCorrectIndex === null ? '' : String(quizCorrectIndex)}
                   onChange={(e) => {
@@ -520,9 +498,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
                 <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-xs text-muted space-y-2">
                   <span className="font-bold text-main block">上传新课件 (自动生成独立运行实例):</span>
                   <label className="w-full flex flex-col items-center justify-center p-3 bg-indigo-50 hover:bg-indigo-100 border border-dashed border-indigo-300 hover:border-indigo-400 rounded-lg cursor-pointer text-center transition-all">
-                    <span className="font-bold text-indigo-700 text-xs">
-                      ✨ 上传互动网络课件 (.zip / .html)
-                    </span>
+                    <span className="font-bold text-indigo-700 text-xs">✨ 上传互动网络课件 (.zip / .html)</span>
                     <span className="text-xs text-indigo-500 mt-0.5">
                       支持多文件打包 ZIP 或单页 HTML，自动接入 LMS Bridge
                     </span>
@@ -575,9 +551,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
 
             {(!editingProperties.coursewareUuid || selectedEl.type === 'code-sandbox') && (
               <div>
-                <label className="block text-xs text-slate-400 font-semibold mb-1">
-                  沙箱程序代码 (Source Code)
-                </label>
+                <label className="block text-xs text-slate-400 font-semibold mb-1">沙箱程序代码 (Source Code)</label>
                 <textarea
                   value={editingProperties.code || ''}
                   onChange={(e) => handleLocalPropChange('code', e.target.value)}
@@ -734,9 +708,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
         {/* 10. HIGHLIGHTER */}
         {selectedEl.type === 'highlighter' && (
           <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-            <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
-              高亮荧光标记 (Highlighter)
-            </h4>
+            <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">高亮荧光标记 (Highlighter)</h4>
             <div>
               <label className="block text-xs text-muted font-semibold mb-1">荧光笔颜色</label>
               <div className="flex items-center gap-2">

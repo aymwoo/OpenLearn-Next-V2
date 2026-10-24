@@ -57,23 +57,23 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 
 `migrations/` 下现有 **`000`–`014` 共 15 个 `.sql` 脚本**（按文件名数字序升序执行）：
 
-| 序号  | 迁移文件                            | 职责说明                                                                                                                  |
-| ----- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `000` | `000_initial_schema.sql`            | 核心基础数据表（30+ 表）与性能索引全量建表                                                                                |
-| `001` | `001_add_execution_mode.sql`        | `plugins` 表新增 `execution_mode`（支持 worker/inline）                                                                   |
-| `002` | `002_add_client_session_expiry.sql` | `client_sessions` 表新增 `expires_at` 会话超时字段                                                                        |
-| `003` | `003_classroom_runtime.sql`         | 课堂工具与 AI 对话记忆表（`student_rollcalls`, `site_settings`, `agent_conversations`）                                    |
-| `004` | `004_courseware_score_config.sql`   | 互动课件成绩归集策略表 `courseware_score_config`（宿主侧按策略从样本历史算最终分）                                         |
-| `005` | `005_assignment_hub.sql`            | 作业中心：新增 `plugin_assignments` / `plugin_submission_versions` / `plugin_assignment_files` / 互评任务表，并重建 `plugin_submissions` 以支持「按作业」唯一 |
-| `006` | `006_classroom_event_bus.sql`       | `events` 审计表补课堂维度：新增 `lesson_id` 列与 `timestamp` / `correlationId` / `(lesson_id, timestamp)` 索引            |
+| 序号  | 迁移文件                            | 职责说明                                                                                                                                                                                                  |
+| ----- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `000` | `000_initial_schema.sql`            | 核心基础数据表（30+ 表）与性能索引全量建表                                                                                                                                                                |
+| `001` | `001_add_execution_mode.sql`        | `plugins` 表新增 `execution_mode`（支持 worker/inline）                                                                                                                                                   |
+| `002` | `002_add_client_session_expiry.sql` | `client_sessions` 表新增 `expires_at` 会话超时字段                                                                                                                                                        |
+| `003` | `003_classroom_runtime.sql`         | 课堂工具与 AI 对话记忆表（`student_rollcalls`, `site_settings`, `agent_conversations`）                                                                                                                   |
+| `004` | `004_courseware_score_config.sql`   | 互动课件成绩归集策略表 `courseware_score_config`（宿主侧按策略从样本历史算最终分）                                                                                                                        |
+| `005` | `005_assignment_hub.sql`            | 作业中心：新增 `plugin_assignments` / `plugin_submission_versions` / `plugin_assignment_files` / 互评任务表，并重建 `plugin_submissions` 以支持「按作业」唯一                                             |
+| `006` | `006_classroom_event_bus.sql`       | `events` 审计表补课堂维度：新增 `lesson_id` 列与 `timestamp` / `correlationId` / `(lesson_id, timestamp)` 索引                                                                                            |
 | `007` | `007_interactive_classroom.sql`     | 互动课堂与课节生命周期：`lesson_quiz_submissions` / `classroom_sessions` / `classroom_quick_polls` / `classroom_poll_votes` / `classroom_buzzers` / `classroom_exit_tickets` / `classroom_pacing_signals` |
-| `008` | `008_teaching_modes.sql`            | 教学模式表 `teaching_modes` 与 `classroom_sessions.teaching_mode_id`（课堂启动门户的模式选择器数据源）                    |
-| `009` | `009_classroom_peer_review.sql`     | 课中全班大屏互评：`classroom_peer_review_tasks` / `classroom_peer_reviews` / `classroom_peer_badges` / `classroom_peer_nominations` / `classroom_danmaku` / `classroom_peer_rubric_dimensions` |
-| `010` | `010_class_groups.sql`              | 小组表 `class_groups`                                                                                                       |
-| `011` | `011_classroom_feed.sql`            | 课堂动态流表 `classroom_feed`（教师离开课堂再回来后可按 lesson 回放）                                                     |
-| `012` | `012_auto_record_score.sql`         | `courseware_score_config` 补自动录入规则列 `auto_record_enabled` / `auto_record_min_completion`                            |
-| `013` | `013_score_source_strategy.sql`     | `assignment_submissions` 补 `source` 列（manual/auto 分流）+ `courseware_score_config` 补 `auto_record_strategy`（latest/highest） |
-| `014` | `014_performance_indexes.sql`       | 五个高频查询索引（`vfs_nodes.parent_id`、`plugin_submissions.lesson_id`、`student_point_logs.student_id`、`student_rollcalls.class_id` / `student_id`） |
+| `008` | `008_teaching_modes.sql`            | 教学模式表 `teaching_modes` 与 `classroom_sessions.teaching_mode_id`（课堂启动门户的模式选择器数据源）                                                                                                    |
+| `009` | `009_classroom_peer_review.sql`     | 课中全班大屏互评：`classroom_peer_review_tasks` / `classroom_peer_reviews` / `classroom_peer_badges` / `classroom_peer_nominations` / `classroom_danmaku` / `classroom_peer_rubric_dimensions`            |
+| `010` | `010_class_groups.sql`              | 小组表 `class_groups`                                                                                                                                                                                     |
+| `011` | `011_classroom_feed.sql`            | 课堂动态流表 `classroom_feed`（教师离开课堂再回来后可按 lesson 回放）                                                                                                                                     |
+| `012` | `012_auto_record_score.sql`         | `courseware_score_config` 补自动录入规则列 `auto_record_enabled` / `auto_record_min_completion`                                                                                                           |
+| `013` | `013_score_source_strategy.sql`     | `assignment_submissions` 补 `source` 列（manual/auto 分流）+ `courseware_score_config` 补 `auto_record_strategy`（latest/highest）                                                                        |
+| `014` | `014_performance_indexes.sql`       | 五个高频查询索引（`vfs_nodes.parent_id`、`plugin_submissions.lesson_id`、`student_point_logs.student_id`、`student_rollcalls.class_id` / `student_id`）                                                   |
 
 > `012` / `013` 的 DOWN 段采用「建 `*__rollback` 临时表 → 重命名覆盖」的方式回滚 `ADD COLUMN`，因为旧版 SQLite 内核不支持 `ALTER TABLE ... DROP COLUMN`，且迁移执行器只对 `duplicate column` 做容错。
 

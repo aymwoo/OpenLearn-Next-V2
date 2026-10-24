@@ -86,11 +86,7 @@ export function useStudentViewState(deps: {
    * 锁定期间只放行 'lesson'（教师当前授课），其余跳转
    * （Dashboard、作业工作区、通知直达等）一律拦截并提示。
    */
-  const setStudentViewStatus = (
-    next:
-      | StudentViewStatus
-      | ((prev: StudentViewStatus) => StudentViewStatus),
-  ) => {
+  const setStudentViewStatus = (next: StudentViewStatus | ((prev: StudentViewStatus) => StudentViewStatus)) => {
     const resolved = typeof next === 'function' ? next(studentViewStatusRef.current) : next;
     if (isNavigationLockedRef.current && resolved !== 'lesson') {
       notifyLockedNavigation();

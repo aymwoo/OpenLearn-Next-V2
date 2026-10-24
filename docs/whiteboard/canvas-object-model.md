@@ -47,11 +47,11 @@ export interface CanvasObject<T = Record<string, unknown>> {
 
 宿主内置、当前确有渲染分支的取值（实测自上述文件的分支判断）：
 
-| 类别     | 取值                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 类别     | 取值                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | 绘图     | `pen`（自由画笔）、`highlighter`（荧光笔）、`rectangle`、`circle`、`shape`（`data.shape` 区分 `rect` / `circle`）、`text` |
-| 教学组件 | `quiz`、`assignment`、`rollcall`、`code-sandbox`、`math-graph`、`presentation`、`html-applet`、`hello-world`                |
-| 扩展     | `plugin`（`PluginCardRenderer`）、`page_meta`（页面配置元数据，非可见元素）                                                    |
+| 教学组件 | `quiz`、`assignment`、`rollcall`、`code-sandbox`、`math-graph`、`presentation`、`html-applet`、`hello-world`              |
+| 扩展     | `plugin`（`PluginCardRenderer`）、`page_meta`（页面配置元数据，非可见元素）                                               |
 
 > ⚠️ **不存在**的取值（勿凭直觉捏造）：`custom`、`geogebra-widget`、`timer` 在代码中零命中。`path` / `image` 仅作为**渲染缓存分类**（`rendering-engine/cache/cache-manager.ts` 的 `CacheManager.get/set` 参数）与**工具栏图标名**（`tool-system/default-tools.ts` 的 `createDefaultTool`）出现，**不是** `CanvasObject.type` 的取值。新增 `type` 取值需同时补上 `buildElementData` 的 `switch` 分支与 `renderElement` 的渲染分支。
 

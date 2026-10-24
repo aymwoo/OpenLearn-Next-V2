@@ -179,8 +179,7 @@ export const skillToolName = (commandType: string): string =>
  */
 export const collectPluginSkills = (
   manifestSources: Array<string | object | null | undefined>,
-  isRegistered: (commandType: string) => boolean = (ct) =>
-    !!kernelContainer.actionRegistry.getActionByCommandType(ct),
+  isRegistered: (commandType: string) => boolean = (ct) => !!kernelContainer.actionRegistry.getActionByCommandType(ct),
 ): PluginSkillTool[] => {
   const skills: PluginSkillTool[] = [];
   for (const source of manifestSources) {
@@ -245,10 +244,11 @@ export const buildPluginSkillTools = (skills: PluginSkillTool[]) =>
       name: skill.toolName,
       description: skill.description || skill.skillName,
       parameters: normalizeToolSchema(
-        skill.parametersSchema ?? kernelContainer.actionRegistry.getActionByCommandType(skill.commandType)?.inputSchema ?? {
-          type: 'OBJECT',
-          properties: {},
-        },
+        skill.parametersSchema ??
+          kernelContainer.actionRegistry.getActionByCommandType(skill.commandType)?.inputSchema ?? {
+            type: 'OBJECT',
+            properties: {},
+          },
       ),
     },
   }));

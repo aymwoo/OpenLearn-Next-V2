@@ -15,6 +15,7 @@ import { LessonService } from '../services/lesson-service.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
 import {
   authorizeClass,
+  authorizeLessonParticipation,
   authorizeLessonStaff,
   canSeeLesson,
   isAdministrator,
@@ -449,9 +450,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const isStaff = isAdministrator(session) || isTeacher(session);
       // 学生视角剥离答案字段（correctIndex / correctAnswer 等）；
       // 判分结果由 POST /quiz-submit 在提交后回传，前端已按此设计。
-      res.json(
-        isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })),
-      );
+      res.json(isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })));
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -596,6 +595,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const studentId = session.studentId || session.userId || 'guest';
       const studentName = session.studentName || session.name || null;
 
+      // 课节归属校验（Issue #223）：此前只做了角色校验，任意登录用户可对**任意** lessonId
+      // 提交随堂测验 —— 既能读到该题的正确答案（提交后回传 correctIndex），
+      // 又能在不属于自己的班级里留下成绩记录。
+      // 口径与课节可见性一致（canSeeLesson）：学生须在相关班级 / 有该课节进度，
+      // 教师须是自己的课节或自己的班级，管理员不受限。
+      const participation = authorizeLessonParticipation(kernelContainer.getReadDb(), session, lessonId);
+      if (!participation.ok) {
+        return res.status(participation.status).json({ success: false, error: participation.error });
+      }
+
       const result = await diagnosticService.submitQuiz({
         lessonId,
         elementId,
@@ -717,7 +726,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const studentId = studentActorId(session) || 'anonymous';
-      const resolvedLessonId = typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
+      const resolvedLessonId =
+        typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
       const current = diagnosticService.recordIcebreakerCheckin(classId, mood, studentId, resolvedLessonId);
 
       if (ctx.io) {

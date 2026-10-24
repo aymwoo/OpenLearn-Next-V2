@@ -70,7 +70,8 @@ export function issueSignature(issue: SweepIssue): string {
  *
  * 会就地修改传入的 results（给 issue 打 global 标记、重算 status）。
  */
-export function classifyGlobalIssues(results: SweepViewResult[]): void {  const globalSignatures = new Set<string>();
+export function classifyGlobalIssues(results: SweepViewResult[]): void {
+  const globalSignatures = new Set<string>();
 
   // ① 启动期探针抓到的问题 = 每次进系统都会复现
   for (const result of results) {
@@ -227,18 +228,12 @@ export function collectGlobalSummaries(results: SweepViewResult[]): {
 }
 
 /** 渲染 Markdown 报告。 */
-export function renderMarkdown(
-  results: SweepViewResult[],
-  scenarios: SweepScenarioResult[],
-  meta: ReportMeta,
-): string {
+export function renderMarkdown(results: SweepViewResult[], scenarios: SweepScenarioResult[], meta: ReportMeta): string {
   const lines: string[] = [];
 
   lines.push('# 功能巡检报告');
   lines.push('');
-  lines.push(
-    `> 生成于 ${meta.startedAt} · 服务地址 \`${meta.baseUrl}\` · 数据环境：${meta.dataEnv}`,
-  );
+  lines.push(`> 生成于 ${meta.startedAt} · 服务地址 \`${meta.baseUrl}\` · 数据环境：${meta.dataEnv}`);
   lines.push('');
 
   // ── 按角色汇总 ────────────────────────────────────────────────
@@ -269,9 +264,7 @@ export function renderMarkdown(
   if (globals.length > 0) {
     lines.push('## 全局问题');
     lines.push('');
-    lines.push(
-      '这些问题在**几乎所有视图里都会复现**（每次进系统都会遇到），因此不计入各视图的成败判定：',
-    );
+    lines.push('这些问题在**几乎所有视图里都会复现**（每次进系统都会遇到），因此不计入各视图的成败判定：');
     lines.push('');
     lines.push('| 类型 | 出现次数 | 描述 |');
     lines.push('| --- | ---: | --- |');
@@ -353,9 +346,7 @@ export function renderMarkdown(
   if (missing.length > 0) {
     lines.push('## 未找到的入口');
     lines.push('');
-    lines.push(
-      '这些入口在本次运行中没有找到（可能是角色限制、数据前置条件或文案调整），**不计入缺陷**：',
-    );
+    lines.push('这些入口在本次运行中没有找到（可能是角色限制、数据前置条件或文案调整），**不计入缺陷**：');
     lines.push('');
     for (const result of missing) {
       const viewName = result.subTabLabel ? `${result.targetLabel} / ${result.subTabLabel}` : result.targetLabel;

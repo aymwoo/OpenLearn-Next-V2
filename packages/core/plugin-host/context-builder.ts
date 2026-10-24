@@ -573,12 +573,7 @@ function wrapPointsLedgerService(
   pluginId: string,
   capabilities?: readonly string[],
 ): IPointsLedgerService {
-  const auditAccess = (
-    studentId: string,
-    method: string,
-    operation: 'read' | 'write',
-    requiredCap: string,
-  ) => {
+  const auditAccess = (studentId: string, method: string, operation: 'read' | 'write', requiredCap: string) => {
     const hasCap = hasCapability(capabilities ?? [], requiredCap);
     if (!hasCap) {
       console.warn(
@@ -1084,12 +1079,14 @@ function friendlyFormatKey(rawKey: string): string {
     key = key.split(':').slice(1).join(':');
   }
   const segments = key.split('.').filter(Boolean);
-  const targetSegment = segments.length > 1 ? segments.slice(-2).join(' ') : (segments[0] || key);
-  return targetSegment
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') || rawKey;
+  const targetSegment = segments.length > 1 ? segments.slice(-2).join(' ') : segments[0] || key;
+  return (
+    targetSegment
+      .replace(/[_-]+/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || rawKey
+  );
 }
