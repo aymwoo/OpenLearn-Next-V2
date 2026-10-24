@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **修复发布包（`npx openlearn-next`）因迁移目录不在包内而无法启动（P0）**：
+  - **现象（实测复现，非推断）**：按 `package.json` 的 `files` 清单在临时目录还原发布包布局后启动，直接 FATAL：
+    `[DB SSOT] FATAL: 迁移目录 /tmp/user-cwd/migrations 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`
+  - **根因是两处叠加 + 一处分叉**：① `migrations/` 不在 `files` 清单里，发布包根本没带迁移文件；② `getDefaultMigrationsDir()` 写死 `path.resolve(__dirname, '../../../migrations')` —— 只在源码布局成立（`packages/core/db/` 上溯三级 = 仓库根），打包成 `dist/server.cjs` 后 `__dirname` 是 `<pkg>/dist`，上溯三级已到包外；③ `server.ts` 还有**第二份**独立解析 `path.join(process.cwd(), 'migrations')`，因此只修内核那侧仍会被它拦下（实测如此）。
+  - **为什么一直没暴露**：Dockerfile 显式 `COPY migrations` 且 `WORKDIR=/app`，让 cwd 兜底恰好命中；而解析器此前**没有任何测试**。
+  - **修法**：解析器改为「`OPENLEARN_MIGRATIONS_DIR` 覆盖 → 从模块位置向上找『`name === openlearn-next` 且同级有 `migrations/*.sql`』的包根 → `cwd/migrations` 兜底」，并支持注入起点以便真实断言发布包布局；`server.ts` 改为复用同一解析器；`files` 补上 `migrations/`。
+  - **顺带修掉 CLI 的同源缺陷**：`cli-data.mjs` 的 `import('./packages/core/db/migrator.js')` 在任何环境都不存在（源码只有 `.ts`，发布包只有 `dist/*`），于是 `openlearn-next migrate status` / `migrate rollback` 走到加载点必然 `MODULE_NOT_FOUND` —— 它长期被「空库时更早分支提前返回」掩盖，只有库里已有迁移记录的真实用户会踩到。现改为加载构建产物 `dist/cli-migrator.cjs`（createRequire，避免 Vite 转换期静态解析），产物缺失时给出带 code 的可操作报错。
+  - **测试**：新增 `migrator-resolver.test.ts`（10 例：仓库基线、覆盖优先生效、坏覆盖被忽略、**发布包 `<pkg>/dist` 布局**、monorepo 不被 `@openlearn/core` 截停、缺 migrations 的畸形包落到 cwd 兜底、以及「`server.ts` 不得再自己拼 cwd」「migrator 不得再写死三级上溯」「`migrations/` 与 `dist/cli-migrator.cjs` 必须在 `files` 里」三条回归护栏）；新增 `cli-migrator-loader.test.ts`（2 例）。
+  - **验证**：还原发布包布局后在**用户目录**启动 → `[DB SSOT] 迁移已就绪（42 个文件，目录 <pkg>/migrations）` → `[Migration] 启动复查完成` → `OpenLearn Next v0.7.1 ready`；`OPENLEARN_DB_PATH=<已有 _migrations 的库> openlearn-next migrate status` 正确列出 42 个迁移与待应用清单。
+
 - **进程内身份开关的运营面护栏（R-01 复核）**：
   - **复核结论**：R-01（`worker_threads` / `inline` 原始网络不受限）的缓解是真实存在的 —— `resolvePluginExecutionMode` 会把未受信任的第三方插件强制降级到 `process`，且已有 5 例测试钉住「激活/恢复时改写 DB 并走子进程原语」。但审计行只写了「已由强门禁兜底」，没写清**残余风险的准确形态**：真实暴露面只有 ① 管理员显式写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件、② `packages/plugins` 内置目录代码。
   - **静默失效方向**：`execution-policy.ts` 的判定是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'` —— 写成 `true` / `yes` / `on` 都会被**静默判为未开启**（与 TB-03 同类）。现纳入启动期强校验，只接受 `1` / `0`，写错直接拒绝启动。
