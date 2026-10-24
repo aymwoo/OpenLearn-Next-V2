@@ -49,7 +49,10 @@ export function quotaExceeded(input: {
 export function readProcSample(pid: number): { cpuMs: number; rssKb: number } | null {
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
-    const rest = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
+    const rest = stat
+      .slice(stat.lastIndexOf(')') + 2)
+      .trim()
+      .split(/\s+/);
     const utime = Number(rest[11]);
     const stime = Number(rest[12]);
     if (!Number.isFinite(utime) || !Number.isFinite(stime)) return null;

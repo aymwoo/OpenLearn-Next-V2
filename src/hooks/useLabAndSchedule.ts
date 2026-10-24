@@ -59,15 +59,20 @@ export function useLabAndSchedule() {
     }
   }, []);
 
-  const fetchClassSchedules = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/classes/${id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`);
-      if (res.ok) {
-        const data = await res.json();
-        setClassSchedulesMap((prev) => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  }, [academicYear]);
+  const fetchClassSchedules = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(
+          `/api/classes/${id}/schedules${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ''}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setClassSchedulesMap((prev) => ({ ...prev, [id]: data }));
+        }
+      } catch (e) {}
+    },
+    [academicYear],
+  );
 
   const fetchScheduleAttendance = useCallback(async (id: string) => {
     try {

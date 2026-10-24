@@ -24,9 +24,7 @@ export interface ICustomService {
 }
 
 // ✅ 正确：名称必须带 @scope/domain: 前缀
-export const ICustomServiceToken = new Token<ICustomService>(
-  '@openlearn/demo:ICustomService',
-);
+export const ICustomServiceToken = new Token<ICustomService>('@openlearn/demo:ICustomService');
 ```
 
 ### 2. ServiceRegistry (容器)

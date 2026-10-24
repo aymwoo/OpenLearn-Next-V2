@@ -90,8 +90,7 @@ export class CapabilityLogger {
   constructor(options: CapabilityLoggerOptions = {}) {
     this.maxEntries = options.maxEntries ?? envInt('AI_CAPABILITY_LOG_MAX_ENTRIES', DEFAULT_MAX_ENTRIES);
     this.ttlMs = options.ttlMs ?? envInt('AI_CAPABILITY_LOG_TTL_MS', DEFAULT_TTL_MS);
-    this.capturePayload =
-      options.capturePayload ?? envBool('AI_CAPABILITY_LOG_CAPTURE_PAYLOAD', false);
+    this.capturePayload = options.capturePayload ?? envBool('AI_CAPABILITY_LOG_CAPTURE_PAYLOAD', false);
     this.payloadPreviewChars = options.payloadPreviewChars ?? DEFAULT_PAYLOAD_PREVIEW_CHARS;
   }
 

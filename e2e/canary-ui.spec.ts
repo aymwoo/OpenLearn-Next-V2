@@ -82,9 +82,7 @@ function purgeCanaryDirectFromDb() {
     }
 
     // 5. 删除测试金丝雀课程
-    const canaryLessons = db
-      .prepare('SELECT id FROM lessons WHERE title LIKE ?')
-      .all('%金丝雀%') as { id: string }[];
+    const canaryLessons = db.prepare('SELECT id FROM lessons WHERE title LIKE ?').all('%金丝雀%') as { id: string }[];
     for (const l of canaryLessons) {
       db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(l.id);
       db.prepare('DELETE FROM lessons WHERE id = ?').run(l.id);
@@ -380,7 +378,9 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
 
     // 2. 定位并点击金丝雀课程或首个课程进入备课编辑器 (LessonEditorView)
     const canaryCard = page.locator('div:has-text("金丝雀白板测试课")').first();
-    const canaryBtn = canaryCard.locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")').first();
+    const canaryBtn = canaryCard
+      .locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")')
+      .first();
     const fallbackBtn = page
       .locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")')
       .first();

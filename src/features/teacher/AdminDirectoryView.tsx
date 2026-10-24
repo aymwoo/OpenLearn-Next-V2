@@ -9,18 +9,27 @@ import { useAppData } from '../../context/AppDataContext';
  * （session/lang 由 useSessionBootstrap 与 store 提供，均在 context 中）
  */
 export function AdminDirectoryView() {
-  const { session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour, siteInfo, onSiteInfoChanged } =
-    useAppData() as {
-      session: SessionType | null;
-      lang: string;
-      onLogout: () => void;
-      aiProviders: AIProvider[];
-      testingProviderId: string | null;
-      onAIProvidersChanged: () => void;
-      onTriggerTour?: () => void;
-      siteInfo?: SiteInfo;
-      onSiteInfoChanged?: (info: SiteInfo) => void;
-    };
+  const {
+    session,
+    lang,
+    onLogout,
+    aiProviders,
+    testingProviderId,
+    onAIProvidersChanged,
+    onTriggerTour,
+    siteInfo,
+    onSiteInfoChanged,
+  } = useAppData() as {
+    session: SessionType | null;
+    lang: string;
+    onLogout: () => void;
+    aiProviders: AIProvider[];
+    testingProviderId: string | null;
+    onAIProvidersChanged: () => void;
+    onTriggerTour?: () => void;
+    siteInfo?: SiteInfo;
+    onSiteInfoChanged?: (info: SiteInfo) => void;
+  };
 
   if (session?.subRole !== 'administrator') {
     return (

@@ -32,10 +32,7 @@ const TEMPLATE_WITH_PARAMS = {
 
 describe('renderPromptTemplate', () => {
   it('{{占位}} 按填参替换，缺省回退 default，双端无值保留占位', () => {
-    const params = [
-      { name: 'grade', default: '高一' },
-      { name: 'topic' },
-    ];
+    const params = [{ name: 'grade', default: '高一' }, { name: 'topic' }];
     expect(renderPromptTemplate('为 {{grade}} 出 {{topic}} 与 {{extra}} 题', params, {})).toBe(
       '为 高一 出 {{topic}} 与 {{extra}} 题',
     );

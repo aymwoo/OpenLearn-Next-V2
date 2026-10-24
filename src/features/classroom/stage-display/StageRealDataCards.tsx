@@ -138,7 +138,9 @@ export function StageCoursewareCard({ stats, zh = true }: { stats?: StageCoursew
       ) : (
         <p className="text-[11px] text-slate-400 leading-relaxed flex items-center gap-2">
           <FileCheck2 size={14} className="shrink-0" />
-          {zh ? '还没有学生打开互动课件。展示口径为平台累计（含往期课节），作答数据将在学生开始操作后实时出现。' : 'No courseware activity yet.'}
+          {zh
+            ? '还没有学生打开互动课件。展示口径为平台累计（含往期课节），作答数据将在学生开始操作后实时出现。'
+            : 'No courseware activity yet.'}
         </p>
       )}
     </div>

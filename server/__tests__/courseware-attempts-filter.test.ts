@@ -203,16 +203,20 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
   });
 
   it('isPromoted 按课件 UUID 关联：同名课件的成绩不会误标，无标记旧行仍按标题兼容', async () => {
-    const rowsA = ((await (
-      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidA}`, { headers: cookie(teacherToken) })
-    ).json()) as any).data as Array<{ attemptId: string; isPromoted: number }>;
+    const rowsA = (
+      (await (
+        await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidA}`, { headers: cookie(teacherToken) })
+      ).json()) as any
+    ).data as Array<{ attemptId: string; isPromoted: number }>;
     expect(rowsA.length).toBe(2);
     // 标题同为「互动课件: 课件 A」但标记 uuidB 的作业不应计入 A
     expect(rowsA.every((r) => r.isPromoted === 0)).toBe(true);
 
-    const rowsB = ((await (
-      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidB}`, { headers: cookie(teacherToken) })
-    ).json()) as any).data as Array<{ attemptId: string; isPromoted: number }>;
+    const rowsB = (
+      (await (
+        await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidB}`, { headers: cookie(teacherToken) })
+      ).json()) as any
+    ).data as Array<{ attemptId: string; isPromoted: number }>;
     // 一条现代 UUID 标记 + 一条无标记旧标题行
     expect(rowsB[0].isPromoted).toBe(2);
   });

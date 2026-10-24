@@ -40,22 +40,26 @@ export default function App() {
 
   if (sessionLoading) {
     return (
-      <AcademicYearProvider><AppDataProvider value={appData}>
-        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-          <Loader2 size={48} className="text-indigo-500 animate-spin" />
-          <span className="text-white text-sm mt-4 font-semibold tracking-wide">
-            {lang === 'zh' ? '正在连接安全核心数据库...' : 'Connecting Secure OS Core Database...'}
-          </span>
-        </div>
-      </AppDataProvider></AcademicYearProvider>
+      <AcademicYearProvider>
+        <AppDataProvider value={appData}>
+          <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+            <Loader2 size={48} className="text-indigo-500 animate-spin" />
+            <span className="text-white text-sm mt-4 font-semibold tracking-wide">
+              {lang === 'zh' ? '正在连接安全核心数据库...' : 'Connecting Secure OS Core Database...'}
+            </span>
+          </div>
+        </AppDataProvider>
+      </AcademicYearProvider>
     );
   }
 
   if (!session) {
     return (
-      <AcademicYearProvider><AppDataProvider value={appData}>
-        <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />
-      </AppDataProvider></AcademicYearProvider>
+      <AcademicYearProvider>
+        <AppDataProvider value={appData}>
+          <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />
+        </AppDataProvider>
+      </AcademicYearProvider>
     );
   }
 
@@ -63,83 +67,87 @@ export default function App() {
   // 不渲染应用外壳；服务端 enforcePasswordChanged 对写操作兜底拦截
   if (session.mustChangePassword) {
     return (
-      <AcademicYearProvider><AppDataProvider value={appData}>
-        <ForcedPasswordChangeGate
-          lang={lang}
-          username={session.username}
-          onDone={() => setSession({ ...session, mustChangePassword: false })}
-          onLogout={handleLogout}
-        />
-      </AppDataProvider></AcademicYearProvider>
+      <AcademicYearProvider>
+        <AppDataProvider value={appData}>
+          <ForcedPasswordChangeGate
+            lang={lang}
+            username={session.username}
+            onDone={() => setSession({ ...session, mustChangePassword: false })}
+            onLogout={handleLogout}
+          />
+        </AppDataProvider>
+      </AcademicYearProvider>
     );
   }
 
   return (
-    <AcademicYearProvider><AppDataProvider value={appData}>
-      <>
-        {/* 大屏展台独立窗口：占满整个视口，不渲染平台外壳（导航/侧栏/顶栏都无意义） */}
-        {isStageDisplayMode && (
-          <StageDisplayView
-            lessonId={stageLessonParam || selectedLesson}
-            lessonTitle={stageTitleParam || lessons.find((l) => l.id === (stageLessonParam || selectedLesson))?.title}
-            lang={stageLangParam === 'en' ? 'en' : 'zh'}
-          />
-        )}
+    <AcademicYearProvider>
+      <AppDataProvider value={appData}>
+        <>
+          {/* 大屏展台独立窗口：占满整个视口，不渲染平台外壳（导航/侧栏/顶栏都无意义） */}
+          {isStageDisplayMode && (
+            <StageDisplayView
+              lessonId={stageLessonParam || selectedLesson}
+              lessonTitle={stageTitleParam || lessons.find((l) => l.id === (stageLessonParam || selectedLesson))?.title}
+              lang={stageLangParam === 'en' ? 'en' : 'zh'}
+            />
+          )}
 
-        {!isStageDisplayMode && (
-          <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
-            {/* Main Content Area: App Shell representing the Plugin Views */}
-            <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
-              {/* 全局模拟学生提示条 */}
-              <ImpersonationBanner />
+          {!isStageDisplayMode && (
+            <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
+              {/* Main Content Area: App Shell representing the Plugin Views */}
+              <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
+                {/* 全局模拟学生提示条 */}
+                <ImpersonationBanner />
 
-              {/* Issue #94: 学生默认密码非阻塞提示（教师/管理员强制改密走 ForcedPasswordChangeGate，不经过此处） */}
-              {session.role === 'student' && session.usedDefaultPassword && (
-                <StudentDefaultPasswordBanner
-                  userId={session.studentId || session.userId}
+                {/* Issue #94: 学生默认密码非阻塞提示（教师/管理员强制改密走 ForcedPasswordChangeGate，不经过此处） */}
+                {session.role === 'student' && session.usedDefaultPassword && (
+                  <StudentDefaultPasswordBanner
+                    userId={session.studentId || session.userId}
+                    lang={lang}
+                    onOpenProfile={() => setProfileOpen(true)}
+                  />
+                )}
+
+                {/* Top Navbar */}
+                <AppHeader />
+
+                <ProfileModal
+                  open={profileOpen}
+                  session={session}
                   lang={lang}
-                  onOpenProfile={() => setProfileOpen(true)}
+                  onClose={() => setProfileOpen(false)}
+                  onSaved={(name) => {
+                    if (session) setSession({ ...session, name });
+                    setProfileOpen(false);
+                  }}
+                  onAvatar={(avatar) => {
+                    if (session) setSession({ ...session, avatar: avatar ?? undefined });
+                  }}
                 />
-              )}
 
-              {/* Top Navbar */}
-              <AppHeader />
+                <AppShell activeRole={activeRole} />
 
-              <ProfileModal
-                open={profileOpen}
-                session={session}
-                lang={lang}
-                onClose={() => setProfileOpen(false)}
-                onSaved={(name) => {
-                  if (session) setSession({ ...session, name });
-                  setProfileOpen(false);
-                }}
-                onAvatar={(avatar) => {
-                  if (session) setSession({ ...session, avatar: avatar ?? undefined });
-                }}
-              />
+                {/* 全局底部状态栏（statusbar.item 扩展槽；无插件贡献时不渲染） */}
+                <AppStatusBar />
+              </div>
 
-              <AppShell activeRole={activeRole} />
+              <RightSidebar />
 
-              {/* 全局底部状态栏（statusbar.item 扩展槽；无插件贡献时不渲染） */}
-              <AppStatusBar />
+              <AppModals />
+
+              {/* 课堂随机提问/点名应答与学生端实时互动浮层 */}
+              <ClassroomOverlays />
+
+              {/* Real-time Toast Notifications */}
+              <ToastContainer />
+
+              {/* Global System Error Diagnostics Center & Floating Pill */}
+              <SystemErrorCenterModal />
             </div>
-
-            <RightSidebar />
-
-            <AppModals />
-
-            {/* 课堂随机提问/点名应答与学生端实时互动浮层 */}
-            <ClassroomOverlays />
-
-            {/* Real-time Toast Notifications */}
-            <ToastContainer />
-
-            {/* Global System Error Diagnostics Center & Floating Pill */}
-            <SystemErrorCenterModal />
-          </div>
-        )}
-      </>
-    </AppDataProvider></AcademicYearProvider>
+          )}
+        </>
+      </AppDataProvider>
+    </AcademicYearProvider>
   );
 }

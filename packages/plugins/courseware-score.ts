@@ -135,7 +135,13 @@ export function clamp(value: number, min: number, max: number): number {
  * 自动录入更新策略归一：只认 'latest'/'highest'（大小写/连字符宽容），非法值回落 'latest'。
  */
 export function normalizeAutoRecordStrategy(value: unknown): 'latest' | 'highest' {
-  const text = typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s-]+/g, '_') : '';
+  const text =
+    typeof value === 'string'
+      ? value
+          .trim()
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_')
+      : '';
   return text === 'highest' ? 'highest' : 'latest';
 }
 

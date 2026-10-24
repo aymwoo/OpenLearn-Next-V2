@@ -8,9 +8,9 @@ function purgeExitTicketE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 结课通票课节%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 结课通票课节%'").all() as {
+      id: string;
+    }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -40,9 +40,9 @@ function purgeExitTicketE2EFromDb() {
       db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_TICKET_%-%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_TICKET_%-%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -52,9 +52,9 @@ function purgeExitTicketE2EFromDb() {
       db.prepare(`DELETE FROM students WHERE id IN (${sPlaceholders})`).run(...studentIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 结课通票班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 结课通票班级%'").all() as {
+      id: string;
+    }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);
@@ -178,8 +178,10 @@ test.describe('在线教学 60s 自适应结课通票（Adaptive Exit Ticket）�
               { key: 'D', text: '变力做功的数值与运动路径完全无关' },
             ],
             correctOption: 'B',
-            explanation: '变力方向或大小随位置改变，不能直接套用恒力公式；微元法（微分与积分思想）是求解变力功的根本物理方法。',
-            scaffoldHint: '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
+            explanation:
+              '变力方向或大小随位置改变，不能直接套用恒力公式；微元法（微分与积分思想）是求解变力功的根本物理方法。',
+            scaffoldHint:
+              '⚠️ 巩固支架提示：请回顾牛顿第二定律与微积分思想，变力无法一次求和，必须采用 F-s 面积或微元累加！',
           },
           exitTicketChallengeQuestion: {
             id: 'challenge-q-1',

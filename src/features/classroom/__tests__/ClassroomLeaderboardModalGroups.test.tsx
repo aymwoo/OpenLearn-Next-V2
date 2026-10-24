@@ -21,7 +21,10 @@ const handlers = new Map<string, Array<(data: unknown) => void>>();
 const fakeSocket = {
   on: (evt: string, h: (data: unknown) => void) => handlers.set(evt, [...(handlers.get(evt) ?? []), h]),
   off: (evt: string, h: (data: unknown) => void) =>
-    handlers.set(evt, (handlers.get(evt) ?? []).filter((x) => x !== h)),
+    handlers.set(
+      evt,
+      (handlers.get(evt) ?? []).filter((x) => x !== h),
+    ),
   emit: vi.fn(),
 };
 

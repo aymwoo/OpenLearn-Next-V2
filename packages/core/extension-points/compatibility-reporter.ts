@@ -50,9 +50,7 @@ export interface PluginManifestInput {
   readonly [k: string]: any;
 }
 
-const EXT_POINT_MAP = new Map<string, ExtensionPointMetadata>(
-  CORE_EXTENSION_POINTS.map((p) => [p.id, p]),
-);
+const EXT_POINT_MAP = new Map<string, ExtensionPointMetadata>(CORE_EXTENSION_POINTS.map((p) => [p.id, p]));
 
 /**
  * Compare target version with lifecycle versions (using semver).

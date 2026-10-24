@@ -151,10 +151,7 @@ let currentGlobalLanguage: Language = 'zh';
  * @param pluginId 插件唯一标识符
  * @param locales 语言包字典，如 { zh: { "tab.title": "作业中心" }, en: { "tab.title": "Homework Hub" } }
  */
-export function registerPluginLocales(
-  pluginId: string,
-  locales: Record<string, Record<string, string>>,
-): void {
+export function registerPluginLocales(pluginId: string, locales: Record<string, Record<string, string>>): void {
   if (!pluginId || !locales || typeof locales !== 'object') return;
   const normalized: Record<string, Record<string, string>> = {};
   for (const [langKey, dict] of Object.entries(locales)) {
@@ -167,9 +164,7 @@ export function registerPluginLocales(
   pluginLocalesRegistry.set(pluginId, {
     ...existing,
     ...normalized,
-    ...Object.fromEntries(
-      Object.entries(normalized).map(([k, v]) => [k, { ...(existing[k] || {}), ...v }]),
-    ),
+    ...Object.fromEntries(Object.entries(normalized).map(([k, v]) => [k, { ...(existing[k] || {}), ...v }])),
   });
 }
 
@@ -183,9 +178,7 @@ export function unregisterPluginLocales(pluginId: string): void {
 /**
  * 获取插件已注册的语言包
  */
-export function getPluginLocales(
-  pluginId: string,
-): Record<string, Record<string, string>> | undefined {
+export function getPluginLocales(pluginId: string): Record<string, Record<string, string>> | undefined {
   return pluginLocalesRegistry.get(pluginId);
 }
 
@@ -238,16 +231,18 @@ export function friendlyFormatKey(rawKey: string): string {
   }
   // 3. 针对点号分段的键 (如 pptx.notes.title -> 取最后两段或整段转化为大写单词)
   const segments = key.split('.').filter(Boolean);
-  const targetSegment = segments.length > 1 ? segments.slice(-2).join(' ') : (segments[0] || key);
-  
+  const targetSegment = segments.length > 1 ? segments.slice(-2).join(' ') : segments[0] || key;
+
   // 4. 将下划线、破折号转换为空格，并将每个单词首字母大写
-  return targetSegment
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') || rawKey;
+  return (
+    targetSegment
+      .replace(/[_-]+/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || rawKey
+  );
 }
 
 export interface I18nTranslateOptions {
@@ -335,11 +330,7 @@ export function t(
  * 2. 纯字面量文本 (如 "物理仿真实验室"，直接原样返回)
  * 3. 命名空间键名 (如 "ext-chart:title")
  */
-export function resolveLabel(
-  label: string | undefined | null,
-  pluginId?: string,
-  lang?: Language,
-): string {
+export function resolveLabel(label: string | undefined | null, pluginId?: string, lang?: Language): string {
   if (!label) return '';
   const str = String(label).trim();
 
@@ -388,4 +379,3 @@ export function resolveLabel(
  * 兼容原有 translations[lang][key] 的直接访问
  */
 export const translations = baseTranslations;
-

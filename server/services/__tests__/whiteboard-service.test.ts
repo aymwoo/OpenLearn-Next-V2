@@ -39,9 +39,13 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
     );
 
     // 种子元素
-    db.prepare(
-      'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(testElementId, testLessonId, 'text', JSON.stringify({ text: '牛顿力学导学' }), now);
+    db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      testElementId,
+      testLessonId,
+      'text',
+      JSON.stringify({ text: '牛顿力学导学' }),
+      now,
+    );
   });
 
   describe('1. 白板元素检索与首次自动快照 (getWhiteboardElements)', () => {
@@ -71,9 +75,13 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
     });
 
     it('作业白板 (assignment-*) 不会触发快照创建', () => {
-      db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run('elem-asg-01', testAssignmentWbId, 'pen', '{}', Date.now());
+      db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        'elem-asg-01',
+        testAssignmentWbId,
+        'pen',
+        '{}',
+        Date.now(),
+      );
 
       service.getWhiteboardElements(testAssignmentWbId);
 
@@ -98,9 +106,13 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
 
     it('常规课节白板重置时在事务内原子恢复至初始快照状态', () => {
       // 在当前白板额外增加涂鸦元素
-      db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run('elem-extra-dirty', testLessonId, 'pen', '{"strokes":[]}', Date.now());
+      db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        'elem-extra-dirty',
+        testLessonId,
+        'pen',
+        '{"strokes":[]}',
+        Date.now(),
+      );
 
       let currentCount = (
         db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(testLessonId) as any
@@ -113,9 +125,7 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
       expect(res.message).toContain('start state');
 
       // 验证恢复为初始的 1 个元素
-      const restored = db
-        .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
-        .all(testLessonId) as any[];
+      const restored = db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(testLessonId) as any[];
       expect(restored).toHaveLength(1);
       expect(restored[0].id).toBe(testElementId); // 剥离了 snapshot- 前缀
       expect(restored[0].type).toBe('text');
@@ -123,9 +133,13 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
 
     it('无快照时重置直接清空', () => {
       const noSnapId = 'les-test-wb-nosnap';
-      db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run('elem-nosnap-01', noSnapId, 'shape', '{}', Date.now());
+      db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        'elem-nosnap-01',
+        noSnapId,
+        'shape',
+        '{}',
+        Date.now(),
+      );
 
       const res = service.resetWhiteboard(noSnapId);
       expect(res.success).toBe(true);

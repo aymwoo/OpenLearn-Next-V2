@@ -27,11 +27,7 @@ export interface WhiteboardElementLike {
 /**
  * 判断元素是否属于指定页面
  */
-export function belongsToPage(
-  el: WhiteboardElementLike,
-  targetPage: number,
-  pages: WhiteboardPageItem[],
-): boolean {
+export function belongsToPage(el: WhiteboardElementLike, targetPage: number, pages: WhiteboardPageItem[]): boolean {
   if (el.type === 'page_meta') return false;
   try {
     const data = JSON.parse(el.data);
@@ -87,11 +83,7 @@ export function createPageItem(
 /**
  * 重命名页面
  */
-export function renamePageItem(
-  pages: WhiteboardPageItem[],
-  idx: number,
-  newTitle: string,
-): WhiteboardPageItem[] {
+export function renamePageItem(pages: WhiteboardPageItem[], idx: number, newTitle: string): WhiteboardPageItem[] {
   const trimmed = newTitle.trim();
   if (!trimmed) return pages;
   return pages.map((p, i) => (i === idx ? { ...p, title: trimmed } : p));

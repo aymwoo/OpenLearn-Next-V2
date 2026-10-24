@@ -74,37 +74,37 @@ graph TD
 
 `Kernel` 类共暴露 **29 个 `public readonly` 属性**（下表按声明顺序），以及 1 个公开方法 `initAuditLog()`。
 
-| # | 属性 | 类型 | 层 |
-| - | ---- | ---- | -- |
-| 1 | `eventBus` | `EventBus` | 0 |
-| 2 | `commandBus` | `CommandBus` | 1→0 |
-| 3 | `actionRegistry` | `ActionRegistry` | 1→0 |
-| 4 | `capabilityGuard` | `CapabilityGuard` | 0 |
-| 5 | `processManager` | `ProcessManager` | 2 |
-| 6 | `esmLoader` | `NodeEsmLoader` | 0 |
-| 7 | `db` | `Database`（`packages/core/db/index.ts` 的 `db` 单例） | 0 |
-| 8 | `serviceRegistry` | `ServiceRegistry`（`packages/core/di/service-registry.ts`） | 0 |
-| 9 | `storageService` | `StorageService` | 0 |
-| 10 | `aiService` | `AIService` | 0 |
-| 11 | `pluginHost` | `PluginHost` | 2 |
-| 12 | `workerManager` | `WorkerManager` | 2 |
-| 13 | `pluginRuntimeComposition` | `PluginRuntimeComposition` | 3 |
-| 14 | `pluginLifecycleManager` | `PluginLifecycleManager` | 3 |
-| 15 | `pluginDistributionManager` | `PluginDistributionManager` | 3 |
-| 16 | `unifiedExtensionRegistry` | `UnifiedExtensionRegistry` | 3 |
-| 17 | `capabilityRegistry` | `CapabilityRegistry`（取自 `aiCapability.registry`，非新实例） | 3 |
-| 18 | `pluginCapabilityGateway` | `PluginCapabilityGateway` | 3 |
-| 19 | `lessonRuntime` | `LessonRuntime` | 1 |
-| 20 | `classroomRuntime` | `ClassroomRuntimeKernel` | 1 |
-| 21 | `presenceEngine` | `PresenceEngineKernel` | 1 |
-| 22 | `collaborationEngine` | `CollaborationEngineKernel` | 1 |
-| 23 | `analyticsEngine` | `AnalyticsEngineKernel` | 1 |
-| 24 | `aiRuntime` | `AIRuntimeKernel` | 1 |
-| 25 | `aiCapability` | `AICapabilityKernel` | 1 |
-| 26 | `capabilityFrameworkRuntime` | `CapabilityRuntimeKernel` | 1 |
-| 27 | `capabilityGovernance` | `CapabilityGovernanceKernel` | 1 |
-| 28 | `platformServiceRegistryKernel` | `ServiceRegistryKernel` | 1 |
-| 29 | `ready` | `Promise<void>` | — |
+| #   | 属性                            | 类型                                                           | 层  |
+| --- | ------------------------------- | -------------------------------------------------------------- | --- |
+| 1   | `eventBus`                      | `EventBus`                                                     | 0   |
+| 2   | `commandBus`                    | `CommandBus`                                                   | 1→0 |
+| 3   | `actionRegistry`                | `ActionRegistry`                                               | 1→0 |
+| 4   | `capabilityGuard`               | `CapabilityGuard`                                              | 0   |
+| 5   | `processManager`                | `ProcessManager`                                               | 2   |
+| 6   | `esmLoader`                     | `NodeEsmLoader`                                                | 0   |
+| 7   | `db`                            | `Database`（`packages/core/db/index.ts` 的 `db` 单例）         | 0   |
+| 8   | `serviceRegistry`               | `ServiceRegistry`（`packages/core/di/service-registry.ts`）    | 0   |
+| 9   | `storageService`                | `StorageService`                                               | 0   |
+| 10  | `aiService`                     | `AIService`                                                    | 0   |
+| 11  | `pluginHost`                    | `PluginHost`                                                   | 2   |
+| 12  | `workerManager`                 | `WorkerManager`                                                | 2   |
+| 13  | `pluginRuntimeComposition`      | `PluginRuntimeComposition`                                     | 3   |
+| 14  | `pluginLifecycleManager`        | `PluginLifecycleManager`                                       | 3   |
+| 15  | `pluginDistributionManager`     | `PluginDistributionManager`                                    | 3   |
+| 16  | `unifiedExtensionRegistry`      | `UnifiedExtensionRegistry`                                     | 3   |
+| 17  | `capabilityRegistry`            | `CapabilityRegistry`（取自 `aiCapability.registry`，非新实例） | 3   |
+| 18  | `pluginCapabilityGateway`       | `PluginCapabilityGateway`                                      | 3   |
+| 19  | `lessonRuntime`                 | `LessonRuntime`                                                | 1   |
+| 20  | `classroomRuntime`              | `ClassroomRuntimeKernel`                                       | 1   |
+| 21  | `presenceEngine`                | `PresenceEngineKernel`                                         | 1   |
+| 22  | `collaborationEngine`           | `CollaborationEngineKernel`                                    | 1   |
+| 23  | `analyticsEngine`               | `AnalyticsEngineKernel`                                        | 1   |
+| 24  | `aiRuntime`                     | `AIRuntimeKernel`                                              | 1   |
+| 25  | `aiCapability`                  | `AICapabilityKernel`                                           | 1   |
+| 26  | `capabilityFrameworkRuntime`    | `CapabilityRuntimeKernel`                                      | 1   |
+| 27  | `capabilityGovernance`          | `CapabilityGovernanceKernel`                                   | 1   |
+| 28  | `platformServiceRegistryKernel` | `ServiceRegistryKernel`                                        | 1   |
+| 29  | `ready`                         | `Promise<void>`                                                | —   |
 
 **公开方法**：`initAuditLog()` —— 订阅 `eventBus` 的 `'*'` 通配事件，把每个事件写入 SQLite `events` 表（`packages/core/kernel/index.ts` 的 `initAuditLog`）。
 
@@ -163,15 +163,15 @@ export const kernelContainer = new Proxy({} as Kernel, {
 
 按下列顺序逐个「确保 `plugins` 表有记录 → `pluginHost.registerPreloadedPlugin` → `pluginHost.activatePlugin`」：
 
-| 顺序 | 插件 id | 导出符号（`packages/plugins/`） | critical |
-| ---- | ------- | ------------------------------- | -------- |
-| 1 | `@openlearn/plugin-vfs` | `VfsPlugin`（`packages/plugins/vfs.ts`） | ✅ |
-| 2 | `@openlearn/plugin-process` | `ProcessPlugin`（`packages/plugins/process.ts`） | ✅ |
-| 3 | `@openlearn/plugin-management` | `ManagementPlugin`（`packages/plugins/management.ts`） | ✅ |
-| 4 | `@openlearn/plugin-builtin` | `BuiltinPlugin`（`packages/plugins/builtin.ts`） | ✅ |
-| 5 | `@openlearn/plugin-ai-planner` | `AiPlannerPlugin`（`packages/plugins/ai-planner.ts`） | ❌ |
-| 6 | `@openlearn/plugin-ai-submit-injector` | `AiSubmitInjectorPlugin`（`packages/plugins/ai-submit-injector.ts`） | ❌ |
-| 7 | `@openlearn/plugin-assignment-eval` | `AssignmentEvalPlugin`（`packages/plugins/assignment-eval.ts`） | ❌ |
+| 顺序 | 插件 id                                | 导出符号（`packages/plugins/`）                                      | critical |
+| ---- | -------------------------------------- | -------------------------------------------------------------------- | -------- |
+| 1    | `@openlearn/plugin-vfs`                | `VfsPlugin`（`packages/plugins/vfs.ts`）                             | ✅       |
+| 2    | `@openlearn/plugin-process`            | `ProcessPlugin`（`packages/plugins/process.ts`）                     | ✅       |
+| 3    | `@openlearn/plugin-management`         | `ManagementPlugin`（`packages/plugins/management.ts`）               | ✅       |
+| 4    | `@openlearn/plugin-builtin`            | `BuiltinPlugin`（`packages/plugins/builtin.ts`）                     | ✅       |
+| 5    | `@openlearn/plugin-ai-planner`         | `AiPlannerPlugin`（`packages/plugins/ai-planner.ts`）                | ❌       |
+| 6    | `@openlearn/plugin-ai-submit-injector` | `AiSubmitInjectorPlugin`（`packages/plugins/ai-submit-injector.ts`） | ❌       |
+| 7    | `@openlearn/plugin-assignment-eval`    | `AssignmentEvalPlugin`（`packages/plugins/assignment-eval.ts`）      | ❌       |
 
 `critical: true` 的插件引导失败会 **rethrow**，导致 `bootstrapSystemPlugins()` 的 `.catch` 触发 `process.exit(1)` 硬崩溃；`critical: false` 的插件失败只 `console.warn` 软失败。
 

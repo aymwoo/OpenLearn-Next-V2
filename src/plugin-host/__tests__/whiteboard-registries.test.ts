@@ -11,10 +11,7 @@ import type {
   FullscreenRendererProps,
 } from '../../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import type { PropertyEditorComponent } from '../../features/whiteboard/properties/PropertyEditorRegistry';
-import {
-  getSegmentType,
-  unregisterPluginSegmentTypes,
-} from '../../features/teacher/lesson-editor/timelineConfig';
+import { getSegmentType, unregisterPluginSegmentTypes } from '../../features/teacher/lesson-editor/timelineConfig';
 import { FlaskConical } from 'lucide-react';
 import type {
   IFrontendAPI,

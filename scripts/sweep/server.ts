@@ -67,9 +67,7 @@ function resolveTsxBin(): string {
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate;
   }
-  throw new Error(
-    `找不到 tsx 可执行文件（已尝试：${candidates.join(', ')}）。请先执行 pnpm install。`,
-  );
+  throw new Error(`找不到 tsx 可执行文件（已尝试：${candidates.join(', ')}）。请先执行 pnpm install。`);
 }
 
 /** 等待服务健康检查通过。 */
@@ -102,11 +100,7 @@ async function waitForHealth(baseUrl: string, logFile: string): Promise<void> {
 function readLogTail(logFile: string, lines: number): string {
   try {
     if (!fs.existsSync(logFile)) return '(日志文件不存在)';
-    return fs
-      .readFileSync(logFile, 'utf8')
-      .split('\n')
-      .slice(-lines)
-      .join('\n');
+    return fs.readFileSync(logFile, 'utf8').split('\n').slice(-lines).join('\n');
   } catch (err) {
     return `(读取日志失败：${(err as Error).message})`;
   }
