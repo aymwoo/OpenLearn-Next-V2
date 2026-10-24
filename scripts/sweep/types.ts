@@ -5,7 +5,14 @@
  */
 
 /** 参与巡检的角色。 */
-export type SweepRoleId = 'admin' | 'teacher' | 'student' | 'student-live' | 'teacher-live';
+export type SweepRoleId =
+  | 'admin'
+  | 'teacher'
+  /** 第二位教师账号 —— 跨教师/跨班的对象级授权回归（#211 防的）需要它才可能触发。 */
+  | 'teacher-2'
+  | 'student'
+  | 'student-live'
+  | 'teacher-live';
 
 /**
  * 一次巡检中「点击某个可访问名称的按钮」的描述。
@@ -82,6 +89,15 @@ export interface SweepScenarioStep {
     equals?: unknown;
     notEmpty?: boolean;
   };
+  /**
+   * 期望的 HTTP 状态码 —— 用于「**应当**被拒绝」的断言。
+   *
+   * 例：越权访问他班课节必须返回 403。写上这一项时，状态码匹配才算通过
+   * （否则默认口径是「任何非 2xx 都算失败」）。
+   *
+   * 不写这一项时沿用从严口径：任何非 2xx 响应都判为失败。
+   */
+  expectStatus?: number;
   /** 把 API 响应体里某个字段存成变量，供后续步骤用 `{{name}}` 引用。 */
   capture?: {
     name: string;

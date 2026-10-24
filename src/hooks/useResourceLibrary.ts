@@ -16,8 +16,20 @@ import {
   downloadCourseTemplate as downloadCourseTemplateApi,
   importCoursePackage as importCoursePackageApi,
   readCoursePackageFile,
+  formatMegabytes,
+  COURSE_PACKAGE_MAX_FILE_BYTES,
+  COURSE_PACKAGE_MAX_FILE_MB,
   type CoursePackagePreview,
+  type CoursePackageDuplicate,
 } from '../services/coursePackageService.js';
+
+/**
+ * 导入框（CSV 与课程包 JSON 通用）的文件体积上限。
+ *
+ * 与服务端 `COURSE_PACKAGE_MAX_FILE_BYTES` 同值 —— 前端提前拦，
+ * 服务端兜底，两侧口径必须一致，否则会出现「前端放行、服务端 413」。
+ */
+const IMPORT_MAX_FILE_BYTES = COURSE_PACKAGE_MAX_FILE_BYTES;
 
 export function useResourceLibrary(deps: {
   lang: 'zh' | 'en';
@@ -79,6 +91,13 @@ export function useResourceLibrary(deps: {
   // 与 CSV 批量导入并存 —— CSV 只能带标题和正文，课程包才是一节完整的课。
   const [packagePreview, setPackagePreview] = useState<CoursePackagePreview | null>(null);
   const [pendingCoursePackage, setPendingCoursePackage] = useState<any | null>(null);
+  /**
+   * 命中去重时的冲突信息（服务端 409）。
+   *
+   * 非空时导入框切到「重复导入」询问态：告知教师已存在同名课程，
+   * 并提供「仍然导入副本」的出口 —— 幂等不等于禁止，导两份确实是合理诉求。
+   */
+  const [packageDuplicate, setPackageDuplicate] = useState<CoursePackageDuplicate | null>(null);
 
   const downloadCsvTemplate = () => {
     downloadCSVTemplateService('class', lang);
@@ -109,6 +128,20 @@ export function useResourceLibrary(deps: {
    */
   const handleImportFileChange = async (file: File) => {
     if (!file) return;
+    // Issue #246：导入框对教师的承诺是「最大不超过 20MB」（CSV 与课程包 JSON 通用）。
+    // 此前这里**只校验后缀**，体积交给服务端，于是超限文件变成一个裸 413 ——
+    // 教师既不知道自己文件多大，也不知道该怎么改。体积校验必须在前端先发生。
+    if (file.size > IMPORT_MAX_FILE_BYTES) {
+      setImportStatus('error');
+      setImportErrorMsg(
+        lang === 'zh'
+          ? `文件 ${formatMegabytes(file.size)} 超过 ${COURSE_PACKAGE_MAX_FILE_MB}MB 上限，请精简后重试。`
+          : `File is ${formatMegabytes(file.size)}, over the ${COURSE_PACKAGE_MAX_FILE_MB}MB limit.`,
+      );
+      setPackagePreview(null);
+      setPendingCoursePackage(null);
+      return;
+    }
     const lower = file.name.toLowerCase();
     if (lower.endsWith('.json')) {
       setImportErrorMsg('');
@@ -154,14 +187,19 @@ export function useResourceLibrary(deps: {
     );
   };
 
-  /** 提交课程包导入。 */
-  const handlePackageImportSubmit = async () => {
+  /**
+   * 提交课程包导入。
+   *
+   * @param allowDuplicate 命中去重时仍然导入一份副本（教师确认后的显式选择）。
+   */
+  const handlePackageImportSubmit = async (allowDuplicate = false) => {
     if (!pendingCoursePackage) return;
     setImportStatus('importing');
     setImportErrorMsg('');
-    const result = await importCoursePackageApi(pendingCoursePackage);
+    const result = await importCoursePackageApi(pendingCoursePackage, { allowDuplicate });
     if (result.ok && result.result) {
       setImportStatus('success');
+      setPackageDuplicate(null);
       await fetchLessons();
       addToast(
         lang === 'zh' ? '课程包导入成功' : 'Course package imported',
@@ -172,8 +210,23 @@ export function useResourceLibrary(deps: {
       );
       return;
     }
+    // 命中去重（409）：切到「重复导入」询问态，而不是普通报错。
+    // 教师在这里能看到已存在的课程，并选择「仍然导入副本」或取消。
+    if (result.duplicate) {
+      setPackageDuplicate(result.duplicate);
+      setImportStatus('error');
+      setImportErrorMsg(result.error || '');
+      return;
+    }
     setImportStatus('error');
     setImportErrorMsg(result.error || (lang === 'zh' ? '课程包导入失败' : 'Course package import failed'));
+  };
+
+  /** 取消「重复导入」询问，回到预览态。 */
+  const handlePackageDuplicateDismiss = () => {
+    setPackageDuplicate(null);
+    setImportErrorMsg('');
+    setImportStatus('parsing');
   };
 
   const handleCSVImportSubmit = async () => {
@@ -263,6 +316,8 @@ export function useResourceLibrary(deps: {
     packagePreview,
     setPackagePreview,
     pendingCoursePackage,
+    packageDuplicate,
+    handlePackageDuplicateDismiss,
     handleImportFileChange,
     handlePackageImportSubmit,
     downloadCourseTemplate,

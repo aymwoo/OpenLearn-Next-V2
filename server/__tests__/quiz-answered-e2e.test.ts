@@ -204,7 +204,15 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
         correctAnswer,
         question: '光合作用的产物是？',
       };
-      io.to(lessonId).emit('whiteboard-quiz-answered', payload);
+      // v0.6.1 Issue #238：模拟路由层的两段式投递 —— 学生房间收脱敏版，
+      // 教师房间（presence-staff）收全量镜像
+      io.to(lessonId).emit('whiteboard-quiz-answered', {
+        ...payload,
+        answer: undefined,
+        correctAnswer: undefined,
+        correctIndex: undefined,
+      });
+      io.to('presence-staff').emit('whiteboard-quiz-answered-staff', payload);
     }
 
     // Wait up to 1500ms for the client to receive the event
@@ -215,7 +223,8 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     expect(e.lessonId).toBe(lessonId);
     expect(e.elementId).toBe(elementId);
     expect(e.studentId).toBe(studentId);
-    expect(typeof e.answer).toBe('string');
+    // 学生帧不再携带答案原文（Issue #238）
+    expect(e.answer).toBeUndefined();
     expect(typeof e.isCorrect).toBe('boolean');
     expect(typeof e.score === 'number' || typeof e.score === 'undefined').toBe(true);
     expect(typeof e.time).toBe('number');
