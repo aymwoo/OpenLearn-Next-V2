@@ -108,20 +108,12 @@ describe('课中互评的班级归属授权（#221）', () => {
       teacherB,
       now,
     );
-    db.prepare('INSERT OR REPLACE INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-      lessonA,
-      '互评A课节',
-      teacherA,
-      now,
-      now,
-    );
-    db.prepare('INSERT OR REPLACE INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-      lessonB,
-      '互评B课节',
-      teacherB,
-      now,
-      now,
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(lessonA, '互评A课节', teacherA, now, now);
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(lessonB, '互评B课节', teacherB, now, now);
 
     for (const [id, name] of [
       [studentA, '学生A'],
@@ -201,7 +193,9 @@ describe('课中互评的班级归属授权（#221）', () => {
   it('不在该班的学生发弹幕被拒，且未落库', async () => {
     const res = await call('POST', `/api/classroom/sessions/${lessonA}/danmaku`, outsiderToken, { text: '越权弹幕' });
     expect(res.status).toBe(403);
-    const rows = db.prepare('SELECT id FROM classroom_danmaku WHERE lesson_id = ? AND text = ?').all(lessonA, '越权弹幕');
+    const rows = db
+      .prepare('SELECT id FROM classroom_danmaku WHERE lesson_id = ? AND text = ?')
+      .all(lessonA, '越权弹幕');
     expect(rows).toHaveLength(0);
   });
 
@@ -218,7 +212,9 @@ describe('课中互评的班级归属授权（#221）', () => {
   it('本班学生发弹幕正常放行（修复未误伤正常路径）', async () => {
     const res = await call('POST', `/api/classroom/sessions/${lessonA}/danmaku`, studentAToken, { text: '本班弹幕' });
     expect(res.status).toBe(200);
-    const rows = db.prepare('SELECT id FROM classroom_danmaku WHERE lesson_id = ? AND text = ?').all(lessonA, '本班弹幕');
+    const rows = db
+      .prepare('SELECT id FROM classroom_danmaku WHERE lesson_id = ? AND text = ?')
+      .all(lessonA, '本班弹幕');
     expect(rows).toHaveLength(1);
   });
 });
