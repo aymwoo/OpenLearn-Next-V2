@@ -18,8 +18,15 @@ import { isAdministrator, isTeacher } from '../services/class-access.js';
 import { resolveSessionRole } from '../services/session-role.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
+interface MockResponse {
+  statusCode?: number;
+  body?: unknown;
+  status: (code: number) => MockResponse;
+  json: (body: unknown) => MockResponse;
+}
+
 describe('会话角色口径统一（Issue #226）', () => {
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
 
   const mkSession = (token: string, data: Record<string, unknown>) => {
     const now = Date.now();
@@ -39,16 +46,17 @@ describe('会话角色口径统一（Issue #226）', () => {
   };
 
   const mkRes = () => {
-    const res: any = {};
-    res.status = vi.fn((code: number) => {
-      res.statusCode = code;
-      return res;
-    });
-    res.json = vi.fn((body: unknown) => {
-      res.body = body;
-      return res;
-    });
-    return res as Response & { statusCode?: number; body?: any };
+    const res: MockResponse = {
+      status: vi.fn((code: number) => {
+        res.statusCode = code;
+        return res;
+      }),
+      json: vi.fn((body: unknown) => {
+        res.body = body;
+        return res;
+      }),
+    };
+    return res as unknown as Response & MockResponse;
   };
 
   const runAuth = (token: string | null, ...roles: string[]) => {
