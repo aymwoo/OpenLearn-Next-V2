@@ -12,6 +12,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **进程内身份开关的运营面护栏（R-01 复核）**：
+  - **复核结论**：R-01（`worker_threads` / `inline` 原始网络不受限）的缓解是真实存在的 —— `resolvePluginExecutionMode` 会把未受信任的第三方插件强制降级到 `process`，且已有 5 例测试钉住「激活/恢复时改写 DB 并走子进程原语」。但审计行只写了「已由强门禁兜底」，没写清**残余风险的准确形态**：真实暴露面只有 ① 管理员显式写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件、② `packages/plugins` 内置目录代码。
+  - **静默失效方向**：`execution-policy.ts` 的判定是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'` —— 写成 `true` / `yes` / `on` 都会被**静默判为未开启**（与 TB-03 同类）。现纳入启动期强校验，只接受 `1` / `0`，写错直接拒绝启动。
+  - **信任名单要留痕**：`OPENLEARN_TRUSTED_INLINE_PLUGINS` 在生产环境出现时，启动日志必留一条可检索告警，写明「这些插件与宿主共享网络栈、出站拦截对它们不生效」，而不是只写进 `.env` 等人去翻。名单只含空白/逗号时也会指出「等同于未配置」。
+  - **测试**：`env-validation.test.ts` 新增 3 例（`true`/`yes`/`on` 被拒而 `1`/`0` 通过、生产环境信任名单产生带插件 id 与代价说明的告警但不阻断、非生产不过度告警且空名单被指认）。
+  - **文档**：`.env.example` 补上「进程内 = 出站拦截不生效」与「ENFORCE 只能写 1/0」；审计文档 R-01 行改写为残余风险的具体形态 + 本轮护栏。
+
+- **插件资源配额与探活调参纳入启动期强校验（补 R-03 复核缺口）**：
+  - **复核结论**：R-03（CPU 饥饿不等于崩溃）在 `packages/core/worker-runtime/plugin-quota.ts` 里**早已实现** —— `startProcessQuota()` 在子进程 spawn 处按 1s 节奏采样 `/proc/<pid>` 的 RSS 与 CPU 时间，超限 `SIGKILL` 后交给既有崩溃看门狗（退避 + 熔断）。此前把这项记为「P2 待办」是文档滞后，已更正。
+  - **真正的缺口**：这五个调参键（`OPENLEARN_PLUGIN_MAX_RSS_MB` / `_CPU_QUOTA_MS` / `_CPU_WINDOW_MS` / `OPENLEARN_PLUGIN_QUOTA` / `OPENLEARN_WORKER_LIVENESS_*`）不在 `assertStartupEnv` 里，而解析器 `normalizePositiveInt` 对非法值是**静默回落默认**的 —— 与 TB-03「拼错就静默回落」完全同类：`OPENLEARN_PLUGIN_CPU_QUOTA_MS=20s` 或开关写成 `of` 都会被无声吞掉，运维以为放宽了配额。
+  - **修法**：逐个纳入启动期强校验 —— 带单位/负数/零以外的非整数 → 拒绝启动（并说明会静默回落）；`OPENLEARN_PLUGIN_CPU_WINDOW_MS < 1000` 只告警（采样本身 1s 一次，窗口过短会让判定抖动）。
+  - **测试**：`env-validation.test.ts` 新增 5 例（合法值矩阵、带单位与负数被拒、开关拼错 fail-fast、探活调参必须正整数、过小窗口只告警）。
+  - **文档**：`.env.example` 补上「这些键会被强校验」的说明；`docs/trust-boundary-hardening-audit-2026-10-14.md` 的 R-03 行更正为已修并写明实现位置与互补关系。
+
+- **已安装插件的出站域名可见可撤销（补齐 R-02 的后半段）**：
+  - **动机**：上一批改动补上了授权链路，但只在**安装向导**里可见 —— 已安装插件的管理员仍无处查看与撤销。撤销恰恰是授权机制最该有的另一半：只批不撤等于永久放行。
+  - **界面**：插件中心 → 插件设置新增「出站网络域名」区块（`PluginNetworkGrantsPanel`），与「这个插件被允许做什么」的其他配置同屏。三个列表**刻意分开**：已批准（带撤销）/ 清单申请中（带批准）/ 不可批准（带原因，无按钮）—— 合并成一张列表会让「清单写了」看起来像「已经能访问」。
+  - **默认拒绝要说人话**：未批准任何域名时显示「该插件无法发起出站请求」，而不是留一片空白；没有声明也没有授权的插件整块不渲染（绝大多数插件属此类）。
+  - **权限**：端点仅 administrator；非管理员打开时后端 403，面板整块隐藏 —— 「你没有权限」的红框对教师毫无意义。
+  - **测试**：`PluginNetworkGrantsPanel.test.tsx` 6 例 —— 三区分离与去重、批准载荷与刷新、撤销走 `DELETE ?host=`、403 隐藏、空清单不渲染、零白名单提示文案。
+
+- **CLI 子命令复用启动期环境校验（审计残余风险 R-05）**：
+  - **问题**：`assertStartupEnv()` 只在 `server.ts:startServer()` 最早期执行；`backup` / `restore` / `migrate` / `reset-admin` / `clean` 不经过那一层，于是同一个拼错的环境变量在服务入口 fail-fast，在 CLI 里却静默沿用更宽的策略 —— 而这几条命令正要动真实数据（还原数据库、回滚迁移、改管理员口令）。
+  - **单一真相源**：构建时用 esbuild 把 `server/security/env-validation.ts` 单独打成 `dist/env-validation.cjs`（已加入 `files`），CLI 动态加载它，不在 CLI 里复制一份规则。加载不到（源码检出）时**跳过**并继续执行，CLI 的可用性不应被构建产物绑架。
+  - **判定矩阵**：写命令 + 非法环境 → 阻断（退出码 1，并说明理由）；诊断命令（`doctor` / `compat-report` / `plugins` / `check-update`）+ 非法环境 → 告警但继续（诊断工具自己被挡住就失去意义）；启动服务（无子命令）不做预检，交给 `server.ts` 避免同一份规则报两次。
+  - **顺带修掉 doctor 自己的崩溃**：`PORT=abc` 时 `parseInt` 得 `NaN`、`NaN || x` 仍是 `NaN`，`server.listen(NaN)` 抛 `ERR_SOCKET_BAD_PORT` —— 「诊断工具」把自己搞崩了。现回落到 9000 继续探测，并把 `PORT 配置` 作为 `err` 级检查项报出（用自造的 `'fail'` 状态会让「报了问题但退出码 0」同时成立，故用既有的 `'err'`）。
+  - **测试**：`cli-env-preflight.test.ts` 9 例（判定矩阵逐组合、告警/错误的格式化、产物缺失时降级不抛异常）；`cli-enhanced.test.ts` 新增 1 例（`PORT=abc` 下 doctor 不崩溃、报 `err` 项、仍探测默认端口、`ok=false`）。
+
+- **插件出站域名授权链路补齐（审计残余风险 R-02）**：
+  - **缺口比文档写的更大**：`docs/trust-boundary-hardening-audit-2026-10-14.md` 把 R-02 记为「安装/启用 UI 尚未突出展示 allowlist」，但复查发现 `approvePluginNetHosts` 在整个仓库里**没有任何调用方** —— 不只是界面不可见，而是授权链路本身不存在：第三方插件的出站白名单永远是空的（fail-closed 安全，但管理员也无从授权）。
+  - **补上链路**：安装/更新（`upload-zip-raw` / `update-zip-raw` / `install-from-url`）接受 `x-approve-network-hosts`，把清单 `network.outbound` 中**通过归一化**的域名写入 `plugin_network_grants`；响应里把「清单声明」「已授权」「永远不可批准（带原因）」三类分开返回，避免把「声明了」误当成「已授权」。
+  - **管理员管理接口**：新增 `GET /api/plugins/:id/network-grants`（提案 / 已批准 / 已拒绝）、`POST`（批准指定域名）、`DELETE`（撤销单个域名），均仅限 administrator 并写 `plugin.network_grant_approved` / `_revoked` 安全审计。撤销返回「是否真的删掉了一行」，不把「本来就没有」当成功。
+  - **拒绝有原因**：新增 `classifyNetHostProposals` —— `normalizeNetHost` 只返回 null，管理员看到 `localhost` 从列表里消失时无法判断是平台丢数据还是被 SSRF 防线挡了。现在回环/私有/保留地址、通配符、带协议或端口的写法各自给出具体原因。
+  - **安装向导**：出站域名逐条展示（默认**不勾选**），不可批准的项单独列出并注明原因；前端复用宿主同一套分类函数，避免界面显示「看起来能批准、实际授权表永不接受」的项。
+  - **测试**：`plugin-network-grants.test.ts` 10 例（分类原因矩阵、脏输入不抛异常、授权表本身挡住回环/通配符、撤销的三种返回值）；`PluginInstallWizard.outbound.test.tsx` 3 例（默认不勾选、拒绝项带原因、勾选后透传到安装选项）；`plugin-route-auth.test.ts` 新增 5 例（三个新端点仅管理员、授权头默认 false、批准必经分类过滤）。
+
 - **课程导入补齐幂等与 CSV 多行解析（审计 G-06 / G-05，`docs/audit/course-import-audit.md`）**：
   - **幂等**：课程包格式没有天然主键，去重键由 `server/services/course-package-identity.ts` 派生 —— 包声明了 `meta.id` 就用 `id:<meta.id>`（作者给的稳定标识，改标题重新导出仍被认作同一个包），否则退回 `sha256:<规范化内容哈希>`（递归排序对象键、剔除 `assets[].base64` 与 `meta.description/author/tags` 等装饰字段，避免「不同导出器键序」与「改个描述」制造假差异）。命中重复返回 `409 COURSE_PACKAGE_DUPLICATE` 并带回已存在课程，前端切成「重复导入」询问态；教师可用 `allowDuplicate: true` 显式导入副本。查重作用域是**按创建者** —— 内置模板要能被每位教师各导一份，全局去重会让第二位教师永远导不进模板。去重键落在 `lessons` 三列（迁移 `041_course_package_idempotency.sql`），删课即释放，无需额外清理链路。
   - **CSV 解析**：`parseLessonCSV` 此前是「按逗号盲切 + 正则凑合」，与同文件里学生/班级导入用的 `splitCsvLine` 状态机不一致（带引号的表头会被切歪）。现改为复用 `splitCsvLine`，并新增 `splitCsvRecords` 按引号奇偶性判断记录边界 —— 此前逐物理行解析会把带 Markdown 换行的正文撕成两半，后半段因缺 Title 列被**静默丢弃**（教师看到「导入成功」但内容少了一截）。

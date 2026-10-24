@@ -342,6 +342,8 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       allowDowngrade?: boolean;
       approvePublicRoutes?: boolean;
       approveCapabilities?: boolean;
+      /** 批准清单申请的出站域名（R-02）；缺省为 false（运行时零白名单）。 */
+      approveNetworkHosts?: boolean;
     },
   ) => {
     setInstallingPlugin(true);
@@ -359,6 +361,9 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       }
       if (opts?.approveCapabilities) {
         headers['X-Approve-Capabilities'] = 'true';
+      }
+      if (opts?.approveNetworkHosts) {
+        headers['X-Approve-Network-Hosts'] = 'true';
       }
       if (isUpdate) {
         headers['X-Acknowledge-Risk'] = 'true';
