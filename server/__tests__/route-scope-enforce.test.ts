@@ -97,11 +97,7 @@ describe('路由数据范围声明门禁（Issue #229）', () => {
       registerClassroomPeerReviewRoutes(ctx.app);
       // 课堂路由需要运行时服务；这里只借用其**注册**行为（审计只看路由栈），
       // 用最小 stub 即可 —— 不会真的跑课堂逻辑。
-      registerClassroomRoutes(
-        ctx,
-        {} as unknown as ClassroomRuntimeService,
-        {} as unknown as ClassroomFeedService,
-      );
+      registerClassroomRoutes(ctx, {} as unknown as ClassroomRuntimeService, {} as unknown as ClassroomFeedService);
 
       const audit = auditRouteScopes(app, ROUTE_SCOPE_WHITELIST);
       expect(
