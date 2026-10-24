@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerClassroomRoutes } from '../routes/classroom.js';
+import type { ServerContext } from '../context.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ensureTestSchema } from './helpers/test-schema.js';
@@ -21,7 +22,7 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
   let server: Server;
   let baseUrl: string;
 
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
 
   const teacherA = 'usr-poll-ta';
   const teacherAToken = 'tok-poll-ta';
@@ -52,7 +53,7 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
 
     const app = express();
     app.use(express.json());
-    registerClassroomRoutes({ app, io: undefined } as any, new ClassroomRuntimeService(db));
+    registerClassroomRoutes({ app, io: undefined } as unknown as ServerContext, new ClassroomRuntimeService(db));
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, () => resolve());
@@ -112,13 +113,13 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
       correctOption: 'B',
     });
     expect(created.status).toBe(200);
-    const body = (await created.json()) as any;
+    const body = (await created.json()) as { preset?: { id?: string } };
     pollId = body.preset?.id;
     expect(pollId).toBeTruthy();
 
     const list = await call('GET', `/api/lessons/${lessonA}/preset-polls`, teacherAToken);
     expect(list.status).toBe(200);
-    const rows = (await list.json()) as any;
+    const rows = (await list.json()) as { presets?: Array<{ correctOption?: string }> };
     expect(rows.presets).toHaveLength(1);
     expect(rows.presets[0].correctOption).toBe('B');
   });
@@ -144,7 +145,7 @@ describe('课节预设投票题的课节归属授权（#220）', () => {
       correctOption: 'D',
     });
     expect(res.status).toBe(403);
-    const row = db.prepare('SELECT correct_option FROM lesson_preset_polls WHERE id = ?').get(pollId) as any;
+    const row = db.prepare('SELECT correct_option FROM lesson_preset_polls WHERE id = ?').get(pollId) as { correct_option: string };
     expect(row.correct_option).toBe('B');
   });
 
