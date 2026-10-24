@@ -31,7 +31,7 @@ export const DEMO_IDS = {
 /** 巡检用作业的标题（用于幂等判断）。 */
 const FIXTURE_ASSIGNMENT_TITLE = '巡检用作业';
 
-export type FixtureKind = 'assignment' | 'classroomSession' | 'classroomInProgress';
+export type FixtureKind = 'assignment' | 'classroomSession' | 'classroomInProgress' | 'crossTenantTeacher';
 
 /** 作业列表接口的返回形状（只取用得到的字段）。 */
 interface AssignmentSummary {
@@ -75,30 +75,37 @@ async function loginHeaders(baseUrl: string, credentials: SweepLogin): Promise<R
     throw new Error(`准备数据时教师登录失败（HTTP ${res.status}）`);
   }
   const setCookie =
-    typeof res.headers.getSetCookie === 'function'
-      ? res.headers.getSetCookie()
-      : [res.headers.get('set-cookie') ?? ''];
+    typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [res.headers.get('set-cookie') ?? ''];
   const match = /edu_os_token=([^;]+)/.exec(setCookie.join(';'));
   if (!match) throw new Error('准备数据时教师登录没有拿到会话 Cookie');
   return { cookie: `edu_os_token=${match[1]}` };
 }
 
 /**
+ * 试登录：成功返回请求头，失败返回 null（不抛）。
+ *
+ * 用于幂等检查 —— 「账号是否已经存在」只能靠**能不能登录上**来判断，
+ * 因为巡检没有直接访问数据库的口子。
+ */
+async function tryLoginHeaders(baseUrl: string, credentials: SweepLogin): Promise<Record<string, string> | null> {
+  try {
+    return await loginHeaders(baseUrl, credentials);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 确保演示班级里有一份已发布的作业（学生端「待办作业」的来源）。
  */
-async function ensureAssignment(
-  baseUrl: string,
-  headers: Record<string, string>,
-): Promise<FixtureResult> {
+async function ensureAssignment(baseUrl: string, headers: Record<string, string>): Promise<FixtureResult> {
   const kind: FixtureKind = 'assignment';
 
   try {
     const listRes = await fetch(`${baseUrl}/api/assignments?classId=${DEMO_IDS.primaryClass}`, { headers });
     if (listRes.ok) {
       const body = (await listRes.json()) as AssignmentListResponse;
-      const items: AssignmentSummary[] = Array.isArray(body)
-        ? body
-        : (body.assignments ?? body.data ?? []);
+      const items: AssignmentSummary[] = Array.isArray(body) ? body : (body.assignments ?? body.data ?? []);
       if (items.some((item) => item?.title === FIXTURE_ASSIGNMENT_TITLE)) {
         return { kind, created: false, detail: '巡检用作业已存在，跳过' };
       }
@@ -209,6 +216,74 @@ async function ensureClassroomSession(
     };
   } catch (err) {
     return { kind, created: false, detail: '创建失败', error: (err as Error).message };
+  }
+}
+
+/**
+ * 巡检用的**第二教师**账号。
+ *
+ * ## 为什么需要它
+ *
+ * 演示世界里原本只有一位教师（`demo_teacher`）与两个都归他所有的班级。
+ * 于是「A 教师越权访问 B 教师的课节」这条链路**在结构上不可能触发** ——
+ * 单教师世界里任何授权判定都必然放行，#211 补的对象级授权在巡检里是盲区。
+ *
+ * 这里用产品自己的 `user.create` 命令建一个真实的第二教师账号，
+ * 让跨教师边界可以被真实地踩到（而不是靠 mock 断言）。
+ */
+export const CROSS_TENANT_TEACHER = {
+  username: 'sweep_teacher_2',
+  password: 'Sweep@2026',
+  name: '巡检第二教师',
+} as const;
+
+/**
+ * 确保演示环境里存在第二教师账号。
+ *
+ * 幂等：先试登录，登录得上就说明账号已存在（例如 `--keep-db` 复用旧库），
+ * 直接跳过 —— 绝不重复创建（`user.create` 遇到重名会报错）。
+ */
+export async function ensureCrossTenantTeacher(baseUrl: string, adminCredentials: SweepLogin): Promise<FixtureResult> {
+  const kind: FixtureKind = 'crossTenantTeacher';
+
+  try {
+    const existing = await tryLoginHeaders(baseUrl, {
+      entrance: 'teacher',
+      username: CROSS_TENANT_TEACHER.username,
+      password: CROSS_TENANT_TEACHER.password,
+    });
+    if (existing) {
+      return { kind, created: false, detail: '第二教师账号已存在，跳过' };
+    }
+
+    const adminHeaders = await loginHeaders(baseUrl, adminCredentials);
+    const res = await fetch(`${baseUrl}/api/commands`, {
+      method: 'POST',
+      headers: { ...adminHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        commandType: 'user.create',
+        payload: {
+          username: CROSS_TENANT_TEACHER.username,
+          password: CROSS_TENANT_TEACHER.password,
+          role: 'teacher',
+          name: CROSS_TENANT_TEACHER.name,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return {
+        kind,
+        created: false,
+        detail: '创建第二教师失败',
+        error: `HTTP ${res.status} ${text.slice(0, 200)}`,
+      };
+    }
+
+    return { kind, created: true, detail: `已创建第二教师 ${CROSS_TENANT_TEACHER.username}` };
+  } catch (err) {
+    return { kind, created: false, detail: '创建第二教师失败', error: (err as Error).message };
   }
 }
 
