@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import Database from 'better-sqlite3';
-import { validateBackup, listBackups, pruneBackups, performBackup, performRestore } from '../backup-manager';
+import { validateBackup, listBackups, pruneBackups, pruneMigratorSnapshots, performBackup, performRestore } from '../backup-manager';
 
 describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
   let tempDir: string;
@@ -237,5 +237,69 @@ describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
       expect(check.ok).toBe(true);
       expect(check.lessons).toBe(3);
     });
+  });
+});
+
+describe('迁移前快照保留策略（Issue #234）', () => {
+  let tempDir: string;
+  let backupDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openlearn-premig-test-'));
+    backupDir = path.join(tempDir, 'backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    delete process.env.PRE_MIGRATION_KEEP;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    delete process.env.PRE_MIGRATION_KEEP;
+  });
+
+  const seed = (name: string) => fs.writeFileSync(path.join(backupDir, name), 'x');
+
+  it('超过保留份数时删最旧的 pre_migration_，pre_restore_ 与 backup_ 不受影响', () => {
+    for (let i = 1; i <= 8; i++) {
+      seed(`pre_migration_2026010${i}_000000.db`);
+    }
+    seed('pre_restore_20260101_000000.db');
+    seed('backup_20260101_000000.db');
+
+    const pruned = pruneMigratorSnapshots(backupDir, 5);
+    expect(pruned).toBe(3);
+
+    const left = fs.readdirSync(backupDir).sort();
+    expect(left.filter((f) => f.startsWith('pre_migration_')).length).toBe(5);
+    // 最旧的 3 份被删（时间戳字典序 = 时间序）
+    expect(left).not.toContain('pre_migration_20260101_000000.db');
+    expect(left).not.toContain('pre_migration_20260102_000000.db');
+    expect(left).not.toContain('pre_migration_20260103_000000.db');
+    expect(left).toContain('pre_migration_20260108_000000.db');
+    // 其他前缀原样保留
+    expect(left).toContain('pre_restore_20260101_000000.db');
+    expect(left).toContain('backup_20260101_000000.db');
+  });
+
+  it('PRE_MIGRATION_KEEP 环境变量生效，且 0 也会兜底保留 1 份', () => {
+    for (let i = 1; i <= 4; i++) {
+      seed(`pre_migration_2026010${i}_000000.db`);
+    }
+    process.env.PRE_MIGRATION_KEEP = '2';
+    expect(pruneMigratorSnapshots(backupDir)).toBe(2);
+    expect(fs.readdirSync(backupDir).filter((f) => f.startsWith('pre_migration_')).length).toBe(2);
+
+    // 兜底：配置为 0 也会保留最近 1 份恢复点（2 → 1）
+    process.env.PRE_MIGRATION_KEEP = '0';
+    expect(pruneMigratorSnapshots(backupDir)).toBe(1);
+    expect(fs.readdirSync(backupDir).filter((f) => f.startsWith('pre_migration_')).length).toBe(1);
+    // 已只剩 1 份（=兜底下限），再剪不再删
+    expect(pruneMigratorSnapshots(backupDir, 0)).toBe(0);
+    expect(fs.readdirSync(backupDir).filter((f) => f.startsWith('pre_migration_')).length).toBe(1);
+  });
+
+  it('不足保留份数时不删除', () => {
+    seed('pre_migration_20260101_000000.db');
+    expect(pruneMigratorSnapshots(backupDir, 5)).toBe(0);
+    expect(fs.readdirSync(backupDir).length).toBe(1);
   });
 });

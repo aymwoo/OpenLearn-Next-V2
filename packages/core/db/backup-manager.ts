@@ -156,30 +156,51 @@ export function listBackups(backupDir = getDefaultBackupDir()): BackupFileInfo[]
   return entries.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 }
 
-/** 按照保留份数修剪过期备份文件 */
-export function pruneBackups(backupDir = getDefaultBackupDir(), keepCount = 10): number {
+/** 按文件名前缀修剪：文件名含时间戳（字典序即时间序），保留最新 keepCount 份 */
+function pruneByPrefix(backupDir: string, prefix: string, keepCount: number): number {
   if (keepCount <= 0 || !fs.existsSync(backupDir)) return 0;
-  // 仅修剪常规自动备份（前缀 backup_），保留 pre_restore_ 安全副本
-  const backups = fs
+  const files = fs
     .readdirSync(backupDir)
-    .filter((f) => f.startsWith('backup_') && f.endsWith('.db'))
-    .map((f) => path.join(backupDir, f))
+    .filter((f) => f.startsWith(prefix) && f.endsWith('.db'))
     .sort()
     .reverse();
 
-  if (backups.length <= keepCount) return 0;
+  if (files.length <= keepCount) return 0;
 
-  const toDelete = backups.slice(keepCount);
   let pruned = 0;
-  for (const file of toDelete) {
+  for (const file of files.slice(keepCount)) {
     try {
-      fs.unlinkSync(file);
+      fs.unlinkSync(path.join(backupDir, file));
       pruned++;
     } catch {
       // 忽略单个文件清理失败
     }
   }
   return pruned;
+}
+
+/** 按照保留份数修剪过期备份文件 */
+export function pruneBackups(backupDir = getDefaultBackupDir(), keepCount = 10): number {
+  // 仅修剪常规自动备份（前缀 backup_），保留 pre_restore_ 人工恢复快照
+  return pruneByPrefix(backupDir, 'backup_', keepCount);
+}
+
+/** 迁移前快照保留份数：PRE_MIGRATION_KEEP 可调，默认 5，下限 1（永远留一个可用恢复点） */
+function resolvePreMigrationKeep(): number {
+  const n = Number(process.env.PRE_MIGRATION_KEEP ?? 5);
+  const keep = Number.isFinite(n) ? Math.floor(n) : 5;
+  return Math.max(1, keep);
+}
+
+/**
+ * 修剪迁移前快照（pre_migration_，Issue #234）。
+ *
+ * 迁移在启动路径上，每次带新迁移的启动都会产生一份全库快照，此前无任何
+ * 清理策略，backups/ 会单调增长。pre_restore_ 是人工恢复快照，不在此列、
+ * 不自动删。
+ */
+export function pruneMigratorSnapshots(backupDir = getDefaultBackupDir(), keepCount?: number): number {
+  return pruneByPrefix(backupDir, 'pre_migration_', Math.max(1, keepCount ?? resolvePreMigrationKeep()));
 }
 
 /** 执行数据库热备份 */

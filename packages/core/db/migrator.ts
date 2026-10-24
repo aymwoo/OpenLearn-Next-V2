@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { pruneMigratorSnapshots } from './backup-manager.js';
 
 export interface Migration {
   name: string;
@@ -158,6 +159,19 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
       // 复制主库文件会漏掉尚未 checkpoint 的 WAL。VACUUM INTO 生成一致性快照。
       const escaped = backupFile.replace(/'/g, "''");
       db.exec(`VACUUM INTO '${escaped}'`);
+      // 快照是未加密的学生数据副本：创建时即收紧权限，不依赖 umask（Issue #234）
+      try {
+        fs.chmodSync(backupFile, 0o600);
+      } catch {
+        // Windows 等不支持 chmod 的环境忽略
+      }
+      // 同步修剪历史快照（PRE_MIGRATION_KEEP，默认 5）——只增不减会无界增长
+      try {
+        const pruned = pruneMigratorSnapshots(backupDir);
+        if (pruned > 0) console.log(`[Migration] Pruned ${pruned} old pre-migration snapshot(s)`);
+      } catch (pErr: unknown) {
+        console.warn('[Migration] Warning: failed to prune old pre-migration snapshots:', pErr);
+      }
       console.log(`[Migration] Safety snapshot created before applying ${pending.length} migration(s): ${backupFile}`);
     } catch (bErr: unknown) {
       const message = bErr instanceof Error ? bErr.message : String(bErr);
