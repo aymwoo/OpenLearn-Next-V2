@@ -28,101 +28,16 @@ import path from 'node:path';
 import { SWEEP_ROLES, SWEEP_SCENARIOS } from './manifest.js';
 import { icon, runSweep } from './probe.js';
 import { runScenarios } from './scenario.js';
-import { classifyGlobalIssues, collectGlobalSummaries, hasBlockingIssue, issuesHaveBlocking, writeReport } from './report.js';
+import {
+  classifyGlobalIssues,
+  collectGlobalSummaries,
+  hasBlockingIssue,
+  issuesHaveBlocking,
+  writeReport,
+} from './report.js';
 import { startDemoServer } from './server.js';
-import type { SweepRoleId } from './types.js';
-
-interface CliOptions {
-  port: number;
-  baseUrl?: string;
-  outDir: string;
-  roles: SweepRoleId[];
-  resetDb: boolean;
-  failOnError: boolean;
-  /** 跳过写流程剧本（只跑只读巡检）。 */
-  skipScenarios: boolean;
-}
-
-/** 打印帮助。 */
-function printHelp(): void {
-  console.log(`
-功能巡检（sweep）—— 自动遍历全部角色的所有视图，收集运行时错误并出报告
-
-用法：
-  pnpm sweep [选项]
-
-选项：
-  --port <n>          一次性演示服务器端口（默认 9300）
-  --base-url <url>   巡检已在运行的服务（给出后不再启动演示服务器，也不重建演示库）
-  --out <dir>        产物目录（默认 artifacts/sweep）
-  --roles <list>     参与巡检的角色，逗号分隔：admin,teacher,student,student-live,teacher-live（默认全部）
-  --keep-db          保留现有演示库，不重建（默认重建，保证数据干净）
-  --skip-scenarios   跳过写流程剧本，只跑只读巡检
-  --no-fail          即使发现错误也返回退出码 0
-  -h, --help         显示本帮助
-`);
-}
-
-/** 解析命令行参数。 */
-function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = {
-    port: 9300,
-    outDir: path.resolve(process.cwd(), 'artifacts', 'sweep'),
-    roles: SWEEP_ROLES.map((role) => role.id),
-    resetDb: true,
-    failOnError: true,
-    skipScenarios: false,
-  };
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]!;
-    switch (arg) {
-      case '-h':
-      case '--help':
-        printHelp();
-        process.exit(0);
-        break;
-      case '--port':
-        options.port = Number(argv[++i]);
-        break;
-      case '--base-url':
-        options.baseUrl = argv[++i];
-        options.resetDb = false;
-        break;
-      case '--out':
-        options.outDir = path.resolve(process.cwd(), argv[++i]!);
-        break;
-      case '--roles': {
-        const raw = (argv[++i] ?? '').split(',').map((item) => item.trim()).filter(Boolean);
-        const valid = raw.filter((item): item is SweepRoleId =>
-          ['admin', 'teacher', 'student', 'student-live', 'teacher-live'].includes(item),
-        );
-        if (valid.length === 0) {
-          throw new Error(
-            `--roles 取值无效：「${raw.join(',')}」。可选：admin,teacher,student,student-live,teacher-live`,
-          );
-        }
-        options.roles = valid;
-        break;
-      }
-      case '--keep-db':
-        options.resetDb = false;
-        break;
-      case '--no-fail':
-        options.failOnError = false;
-        break;
-      case '--skip-scenarios':
-        options.skipScenarios = true;
-        break;
-      default:
-        if (arg.startsWith('--')) {
-          console.warn(`[sweep] 忽略未知参数：${arg}`);
-        }
-    }
-  }
-
-  return options;
-}
+import { ensureCrossTenantTeacher } from './prepare.js';
+import { parseArgs } from './cli-args.js';
 
 /** 主流程。 */
 async function main(): Promise<void> {
@@ -154,7 +69,20 @@ async function main(): Promise<void> {
   let results;
   let scenarioResults: Awaited<ReturnType<typeof runScenarios>> = [];
   try {
-    // ── 先跑写流程剧本 ──────────────────────────────────────────
+    // ── 先铺「第二教师」这条世界线 ─────────────────────────────────
+    //
+    // 跨教师/跨班的对象级授权回归（#211 防的）在单教师世界里**结构上不可能触发** ——
+    // 任何授权判定都必然放行，那条判定链在巡检里是盲区。
+    //
+    // 用产品自己的 `user.create` 命令建一个真实的第二教师账号（幂等）：
+    // 已存在就跳过，绝不重复创建。
+    const adminRole = SWEEP_ROLES.find((role) => role.id === 'admin');
+    if (adminRole) {
+      const fixture = await ensureCrossTenantTeacher(baseUrl, adminRole.login);
+      log(`  ⓘ 前置数据 ${fixture.kind}：${fixture.detail}` + (fixture.error ? `（${fixture.error}）` : ''));
+    }
+
+    // ── 再跑写流程剧本 ──────────────────────────────────────────
     // 顺序有意为之：剧本要在**还没有进行中课堂会话**时跑 ——
     // 否则学生端会被锁进课中视图（“全班专注锁定”），根本看不到自己的作业列表，
     // 回看分数那一步就变成了截图里盖着弹窗的假象。
@@ -172,7 +100,9 @@ async function main(): Promise<void> {
       baseUrl,
       outDir: options.outDir,
       screenshotDir: path.join(options.outDir, 'screenshots'),
-      roles,
+      // 只读巡检不带「第二教师」：它没有自己的视图要巡检，
+      // 只作为剧本里的越权方出现 —— 它的登录失败不该让整场巡检红掉。
+      roles: roles.filter((role) => role.id !== 'teacher-2'),
       onProgress: log,
     });
   } finally {
@@ -245,9 +175,7 @@ async function main(): Promise<void> {
 
   // ── 剧本结果 ──────────────────────────────────────────────────
   const scenarioBlocking = scenarioResults.flatMap((scenario) =>
-    scenario.steps
-      .filter((step) => issuesHaveBlocking(step.issues))
-      .map((step) => ({ scenario, step })),
+    scenario.steps.filter((step) => issuesHaveBlocking(step.issues)).map((step) => ({ scenario, step })),
   );
   if (scenarioResults.length > 0) {
     console.log('写流程剧本：');
@@ -275,7 +203,9 @@ async function main(): Promise<void> {
 
   console.log('');
   console.log('══════════════════════════════════════════════════════════');
-  console.log(`  巡检完成：共 ${results.length} 个视图` + (scenarioResults.length ? ` + ${scenarioResults.length} 个剧本` : ''));
+  console.log(
+    `  巡检完成：共 ${results.length} 个视图` + (scenarioResults.length ? ` + ${scenarioResults.length} 个剧本` : ''),
+  );
   console.log(
     `  ❌ 错误 ${errorCount} · ⚠️ 告警 ${warnCount} · ⭕ 未找到 ${missingCount} · 🚨 阻断 ${blocking.length + scenarioBlocking.length}`,
   );

@@ -11,6 +11,26 @@
 /** 课程包格式标识 —— 与服务端 server/services/course-package.ts 保持一致。 */
 export const COURSE_PACKAGE_FORMAT = 'openlearn.course-package';
 
+/**
+ * 课程包文件体积上限（字节）—— 导入框对教师的承诺是「最大不超过 20MB」。
+ *
+ * 与服务端 `server/services/course-package.ts` 的同名常量保持一致
+ * （前端不能 import 服务端模块，两处靠注释对齐）。
+ *
+ * Issue #246：此前客户端**只校验后缀、不校验大小**，于是超限文件被一路送到
+ * 服务端，又被全局 2MB body 上限以裸 413 拒掉 —— 教师看到的是一个既不指向
+ * 真实原因、也不说自己文件多大的失败。体积校验必须在前端这一侧就发生。
+ */
+export const COURSE_PACKAGE_MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+/** 上限的 MB 表示（整数，用于文案）。 */
+export const COURSE_PACKAGE_MAX_FILE_MB = Math.round(COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024));
+
+/** 把字节数渲染成人类可读的 MB 文本（保留一位小数）。 */
+export function formatMegabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
 /** 课程包预览信息（导入框里展示给教师看）。 */
 export interface CoursePackagePreview {
   /** 选中的文件名。 */
@@ -37,6 +57,33 @@ export interface CoursePackageImportResult {
   elements: number;
   assets: number;
   assetFiles: Array<{ filename: string; fileUrl: string; fileType: string; slideCount: number }>;
+  /** 本次导入的课程包去重键。 */
+  packageKey?: string;
+  /** 内容哈希。 */
+  packageHash?: string;
+  /** 包声明的 meta.id（可空）。 */
+  packageId?: string | null;
+  /** 是否为「强制导入的副本」（命中去重后仍导入了）。 */
+  duplicate?: boolean;
+}
+
+/**
+ * 命中去重时服务端返回的冲突信息（HTTP 409）。
+ *
+ * 「已存在同名课程」不等于「禁止导入」——教师有时确实要导两份
+ * （两个班各上一门），所以服务端把冲突信息原样带回，由前端询问后再决定。
+ */
+export interface CoursePackageDuplicate {
+  /** 已存在的课程 id。 */
+  lessonId: string;
+  /** 已存在的课程标题。 */
+  lessonTitle: string;
+  /** 已存在课程的创建时间（毫秒时间戳）。 */
+  importedAt: number;
+  /** 命中的去重键。 */
+  packageKey: string;
+  /** 包是否声明了 meta.id。 */
+  hasDeclaredId: boolean;
 }
 
 /**
@@ -82,6 +129,17 @@ export async function downloadCourseTemplate(): Promise<{ ok: boolean; error?: s
 export async function readCoursePackageFile(
   file: File,
 ): Promise<{ ok: true; package: any; preview: CoursePackagePreview } | { ok: false; error: string }> {
+  // Issue #246：体积校验前置。超限的文件此前会被送到服务端，被全局 body 上限
+  // 以裸 413 拒掉 —— 教师既不知道自己的文件多大，也不知道该怎么改。
+  if (file.size > COURSE_PACKAGE_MAX_FILE_BYTES) {
+    return {
+      ok: false,
+      error:
+        `课程包文件 ${formatMegabytes(file.size)} 超过 ${COURSE_PACKAGE_MAX_FILE_MB}MB 上限。` +
+        '请精简包内附件后重试（附件以 base64 内联，体积约放大 1.37 倍）。',
+    };
+  }
+
   let text: string;
   try {
     text = await file.text();
@@ -121,21 +179,36 @@ export async function readCoursePackageFile(
   };
 }
 
-/** 提交导入。 */
-export async function importCoursePackage(pkg: any): Promise<{
+/**
+ * 提交导入。
+ *
+ * `allowDuplicate` 为 true 时，即使命中去重（409）也会照常导入一份副本 ——
+ * 对应「教师确认过了，我就是要导两份」。
+ */
+export async function importCoursePackage(
+  pkg: any,
+  options: { allowDuplicate?: boolean } = {},
+): Promise<{
   ok: boolean;
   result?: CoursePackageImportResult;
   error?: string;
+  /** 命中去重时的冲突信息（仅 409 时存在）。 */
+  duplicate?: CoursePackageDuplicate;
 }> {
   try {
     const res = await fetch('/api/course-packages/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: pkg }),
+      body: JSON.stringify({ package: pkg, allowDuplicate: options.allowDuplicate === true }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || body?.success === false) {
-      return { ok: false, error: body?.error || `课程包导入失败（HTTP ${res.status}）` };
+      const duplicate = body?.duplicate as CoursePackageDuplicate | undefined;
+      return {
+        ok: false,
+        error: body?.error || `课程包导入失败（HTTP ${res.status}）`,
+        ...(duplicate ? { duplicate } : {}),
+      };
     }
     return { ok: true, result: body.result as CoursePackageImportResult };
   } catch (err: any) {

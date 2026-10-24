@@ -57,6 +57,19 @@ function pick(body: unknown, path: string): unknown {
   }, body);
 }
 
+/**
+ * 判断一次 API 调用的状态码是否符合剧本预期。
+ *
+ * - **没有** `expectStatus`：从严 —— 任何非 2xx 都算失败（默认口径）。
+ * - **有** `expectStatus`：只有匹配才算通过。
+ *   这是「**应当**被拒绝」的断言口，例如越权访问他班课节必须返回 403 ——
+ *   403 是我们要的答案，不是噪音，因此不记为问题。
+ */
+export function isStatusAsExpected(status: number, expectStatus?: number): boolean {
+  if (expectStatus !== undefined) return status === expectStatus;
+  return status >= 200 && status < 300;
+}
+
 /** 把 `{{name}}` 占位符替换成剧本里捕获到的变量。 */
 function interpolate(value: unknown, vars: Record<string, string>): unknown {
   if (typeof value === 'string') {
@@ -179,9 +192,7 @@ async function openSessions(
       locale: 'zh-CN',
       timezoneId: 'Asia/Shanghai',
     });
-    await context.addCookies([
-      { name: 'edu_os_token', value: token, url: baseUrl, httpOnly: true, sameSite: 'Lax' },
-    ]);
+    await context.addCookies([{ name: 'edu_os_token', value: token, url: baseUrl, httpOnly: true, sameSite: 'Lax' }]);
     const page = await context.newPage();
     await page.addInitScript(() => {
       try {
@@ -234,9 +245,12 @@ async function runStep(
         parsed = text;
       }
 
-      if (!res.ok) {
+      if (!isStatusAsExpected(res.status, step.expectStatus)) {
         failed = true;
-        detail = `API ${step.api.method} ${path} → HTTP ${res.status}：${text.slice(0, 200)}`;
+        detail =
+          step.expectStatus !== undefined
+            ? `期望 HTTP ${step.expectStatus}，实际 HTTP ${res.status}：${text.slice(0, 200)}`
+            : `API ${step.api.method} ${path} → HTTP ${res.status}：${text.slice(0, 200)}`;
         issues.push({
           kind: 'nav',
           severity: 'error',
@@ -245,6 +259,9 @@ async function runStep(
           status: res.status,
         });
       } else {
+        if (step.expectStatus !== undefined) {
+          detail = `按预期返回 HTTP ${res.status}`;
+        }
         // 捕获变量
         if (step.capture) {
           const captured = pick(parsed, step.capture.path);

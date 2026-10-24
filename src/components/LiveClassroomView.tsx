@@ -404,6 +404,33 @@ export function LiveClassroomView({
     };
   }, [selectedLesson]);
 
+  // Issue #243：归因弹窗「今日抽中 N 次」改为真实计数 —— 手动抽问与白板
+  // rollcall 写侧早已落库 student_rollcalls，此处按会话轮询同节奏（15s）
+  // 拉取按日聚合，抽问后计数随之增长。
+  const [rollcallCounts, setRollcallCounts] = React.useState<Map<string, number>>(new Map());
+  React.useEffect(() => {
+    if (!selectedLesson) {
+      setRollcallCounts(new Map());
+      return;
+    }
+    let mounted = true;
+    const fetchCounts = () => {
+      fetch(`/api/lessons/${selectedLesson}/rollcall-counts`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!mounted || !data?.counts) return;
+          setRollcallCounts(new Map(Object.entries(data.counts as Record<string, number>)));
+        })
+        .catch(() => {});
+    };
+    fetchCounts();
+    const timer = setInterval(fetchCounts, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [selectedLesson]);
+
   // 课堂真实数据派生层：把已有 props/state 统一派生为 AI/报表可用的真实指标
   const liveData = useClassroomLiveData({
     students,
@@ -466,11 +493,11 @@ export function LiveClassroomView({
         seatNumber: (students[idx] as any)?.seat_number ?? undefined,
         currentPoints: pointsById.get(m.studentId) ?? 0,
         focusScore: m.progressPercent,
-        pickedCountToday: 0,
+        pickedCountToday: rollcallCounts.get(m.studentId) ?? 0,
         competencyScores: Object.keys(competencyScores).length > 0 ? competencyScores : undefined,
       };
     });
-  }, [liveData.studentMetrics, topPerformers, students]);
+  }, [liveData.studentMetrics, topPerformers, students, rollcallCounts]);
 
   const handleStageChange = async (newStage: string) => {
     // v0.6.1 审计 R-2：阶段推进先等服务端裁决（守卫可能 403），成功才更新

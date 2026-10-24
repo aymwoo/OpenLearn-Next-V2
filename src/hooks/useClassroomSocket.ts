@@ -708,8 +708,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       syncPresenceAndRooms();
     });
 
-    // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）
-    socket.on('whiteboard-quiz-answered', (data: any) => {
+    const ingestQuizAnswered = (data: any) => {
       try {
         if (!data) return;
         whiteboardEventSlot.ingest({
@@ -734,6 +733,19 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       } catch (e) {
         console.error('[useClassroomSocket] quiz.answered ingest failed', e);
       }
+    };
+
+    // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）
+    // v0.6.1 Issue #238：主事件对学生房间脱敏（无 correctAnswer/correctIndex/answer），
+    // 教师端改吃 presence-staff 房间的全量镜像事件；学生端只收主事件。
+    socket.on('whiteboard-quiz-answered-staff', (data: any) => {
+      if (activeRoleRef.current !== 'teacher' && session?.role !== 'administrator') return;
+      ingestQuizAnswered(data);
+    });
+    socket.on('whiteboard-quiz-answered', (data: any) => {
+      // 教师在 lesson 房间也会收到脱敏主事件 —— 避免与 staff 镜像重复 ingest
+      if (activeRoleRef.current === 'teacher' || session?.role === 'administrator') return;
+      ingestQuizAnswered(data);
     });
 
     // 课件提交（plugin submitScore / LMS Bridge 双路径汇合点）→ ingest 到 WhiteboardEventSlot
