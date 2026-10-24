@@ -81,6 +81,7 @@ import { assertRouteDataScopes } from './server/security/route-scope.js';
 import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
+import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -277,18 +278,9 @@ async function startServer() {
     next();
   });
 
-  // 2. 局部大文件上传解析器（110MB）：仅向特定大文件上传端点放开，必须在全局 parser 之前挂载
-  const largeUploadEndpoints = [
-    '/api/upload',
-    '/api/courseware/upload',
-    '/api/courseware/inline',
-    '/api/plugins/upload-zip',
-  ];
-  app.use(
-    largeUploadEndpoints,
-    express.json({ limit: '110mb' }),
-    express.urlencoded({ limit: '110mb', extended: true }),
-  );
+  // 2. 局部大文件上传解析器：仅向特定大文件上传端点放开，必须在全局 parser 之前挂载。
+  //    装配细节（白名单、各端点上限、超限错误文案）见 server/middleware/body-limits.ts。
+  mountLargeBodyParsers(app);
 
   // 3. 全局 JSON 体积收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险
   app.use(express.json({ limit: '2mb' }));
@@ -484,8 +476,7 @@ async function startServer() {
       ).map((row) => row.id),
     lookupTeacherLessonIds: (userId: string) => {
       const user = kernelContainer.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId) as
-        | { id: string; username: string }
-        | undefined;
+        { id: string; username: string } | undefined;
       if (!user) return [];
       const uid = user.id;
       const username = user.username;

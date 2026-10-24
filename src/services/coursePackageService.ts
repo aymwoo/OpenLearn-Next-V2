@@ -11,6 +11,26 @@
 /** 课程包格式标识 —— 与服务端 server/services/course-package.ts 保持一致。 */
 export const COURSE_PACKAGE_FORMAT = 'openlearn.course-package';
 
+/**
+ * 课程包文件体积上限（字节）—— 导入框对教师的承诺是「最大不超过 20MB」。
+ *
+ * 与服务端 `server/services/course-package.ts` 的同名常量保持一致
+ * （前端不能 import 服务端模块，两处靠注释对齐）。
+ *
+ * Issue #246：此前客户端**只校验后缀、不校验大小**，于是超限文件被一路送到
+ * 服务端，又被全局 2MB body 上限以裸 413 拒掉 —— 教师看到的是一个既不指向
+ * 真实原因、也不说自己文件多大的失败。体积校验必须在前端这一侧就发生。
+ */
+export const COURSE_PACKAGE_MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+/** 上限的 MB 表示（整数，用于文案）。 */
+export const COURSE_PACKAGE_MAX_FILE_MB = Math.round(COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024));
+
+/** 把字节数渲染成人类可读的 MB 文本（保留一位小数）。 */
+export function formatMegabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
 /** 课程包预览信息（导入框里展示给教师看）。 */
 export interface CoursePackagePreview {
   /** 选中的文件名。 */
@@ -109,6 +129,17 @@ export async function downloadCourseTemplate(): Promise<{ ok: boolean; error?: s
 export async function readCoursePackageFile(
   file: File,
 ): Promise<{ ok: true; package: any; preview: CoursePackagePreview } | { ok: false; error: string }> {
+  // Issue #246：体积校验前置。超限的文件此前会被送到服务端，被全局 body 上限
+  // 以裸 413 拒掉 —— 教师既不知道自己的文件多大，也不知道该怎么改。
+  if (file.size > COURSE_PACKAGE_MAX_FILE_BYTES) {
+    return {
+      ok: false,
+      error:
+        `课程包文件 ${formatMegabytes(file.size)} 超过 ${COURSE_PACKAGE_MAX_FILE_MB}MB 上限。` +
+        '请精简包内附件后重试（附件以 base64 内联，体积约放大 1.37 倍）。',
+    };
+  }
+
   let text: string;
   try {
     text = await file.text();

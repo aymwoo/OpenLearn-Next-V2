@@ -222,7 +222,8 @@ describe('course package routes', () => {
     expect(secondBody.duplicate.hasDeclaredId).toBe(false);
 
     // 关键断言：被拒绝的导入不能留下第二节课程，也不能留下白板元素
-    const countAfter = (db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE title = '【CPKG-TEST】幂等'").get() as any).n;
+    const countAfter = (db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE title = '【CPKG-TEST】幂等'").get() as any)
+      .n;
     expect(countAfter).toBe(1);
     const orphans = db
       .prepare('SELECT COUNT(*) AS n FROM whiteboard_elements WHERE lesson_id NOT IN (SELECT id FROM lessons)')
@@ -371,6 +372,89 @@ describe('course package routes', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.error).toBeTruthy();
+  });
+
+  // ── Issue #246：附件落盘失败不留孤儿文件；请求体上限与产品承诺对齐 ────────
+
+  it('does not leave orphan files when a later asset fails validation', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】孤儿清理';
+
+    // 第一个附件合法（会真的落盘），第二个附件内容与声明类型不符 → 抛错
+    const good = template.assets[0];
+    template.assets = [
+      { id: 'good-asset', filename: 'ok.pdf', contentType: 'pdf', base64: good.base64 },
+      {
+        id: 'bad-asset',
+        filename: 'broken.pdf',
+        contentType: 'pdf',
+        base64: Buffer.from('this is definitely not a pdf').toString('base64'),
+      },
+    ];
+
+    const uploadsDir = getUploadsDir();
+    const before = new Set(fs.readdirSync(uploadsDir));
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.ok).toBe(false);
+
+    // 关键断言：第一个附件已经写盘，但它不能在失败后被遗弃在 uploads 目录里
+    const leaked = fs.readdirSync(uploadsDir).filter((name) => !before.has(name));
+    expect(leaked, `孤儿附件未被清理: ${leaked.join(', ')}`).toEqual([]);
+
+    // 数据库侧同样不留痕迹
+    const lesson = db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】孤儿清理'").get();
+    expect(lesson).toBeUndefined();
+  });
+
+  it('imports a package whose request body is far beyond the global 2MB limit', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】大体积';
+
+    // 3MB 的「PDF」：magic bytes 只看前 4 字节，后缀填充即可。
+    // 保留原资产 id —— 白板元素里的 ${asset:...} 占位符指向它们。
+    const bigPdf = Buffer.concat([Buffer.from('%PDF-1.4'), Buffer.alloc(3 * 1024 * 1024, 0x20)]);
+    template.assets[0].base64 = bigPdf.toString('base64');
+
+    const payload = JSON.stringify({ package: template });
+    expect(Buffer.byteLength(payload)).toBeGreaterThan(2 * 1024 * 1024);
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: payload,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    expect(body.success).toBe(true);
+    expect(body.result.assets).toBe(template.assets.length);
+  });
+
+  it('rejects a package whose decoded assets exceed the product limit with a clear 413', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】超限';
+
+    // 解码后 21MB > 20MB 上限
+    const hugePdf = Buffer.concat([Buffer.from('%PDF-1.4'), Buffer.alloc(21 * 1024 * 1024, 0x20)]);
+    template.assets = [
+      { id: 'huge-asset', filename: 'huge.pdf', contentType: 'pdf', base64: hugePdf.toString('base64') },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('COURSE_PACKAGE_TOO_LARGE');
+    expect(String(body.error)).toContain('20MB');
   });
 
   it('rolls the whole import back when a whiteboard element write fails', async () => {

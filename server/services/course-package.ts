@@ -29,6 +29,28 @@ export const COURSE_PACKAGE_FORMAT = 'openlearn.course-package';
 /** 当前课程包格式版本。 */
 export const COURSE_PACKAGE_VERSION = 1;
 
+/**
+ * 课程包文件体积上限（字节）—— 前端导入框对教师的承诺是「最大不超过 20MB」。
+ *
+ * 与 `src/services/coursePackageService.ts` 的同名常量保持一致
+ * （前端不能直接 import 服务端模块，两处靠注释对齐）。
+ */
+export const COURSE_PACKAGE_MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * 课程包导入端点的**请求体**上限（字节）。
+ *
+ * 请求体是「课程包 JSON + base64 内联的附件」：base64 会把二进制膨胀约 1.37 倍，
+ * 再叠加 JSON 结构本身的开销，因此请求体上限必须高于文件上限 ——
+ * 否则就出现 Issue #246 里那种「文件合规、请求被全局 2MB 上限拒掉」的矛盾。
+ *
+ * 32MB ≈ 20MB 文件（base64 后 27.4MB）+ JSON 结构余量。
+ */
+export const COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
+
+/** 课程包导入端点路径（服务端解析器与前端/文档共用同一字符串）。 */
+export const COURSE_PACKAGE_IMPORT_PATH = '/api/course-packages/import';
+
 /** 教学环节类型（与 src/features/teacher/lesson-editor/timelineConfig.ts 的 SEGMENT_TYPES 对齐）。 */
 export const PACKAGE_SEGMENT_TYPES = ['intro', 'lecture', 'practice', 'quiz', 'summary'] as const;
 export type PackageSegmentType = (typeof PACKAGE_SEGMENT_TYPES)[number];
