@@ -45,11 +45,7 @@ export function parseMigrationSql(name: string, content: string): Migration {
   // 于是 DOWN 段被当作 UP 一起执行 —— 建完表立刻被自己 DROP 掉，且**不报错**。
   // 该陷阱曾真实发生：009/011 长期缺少 -- UP 标记，补 DOWN 后表反而消失。
   // 现在有 DOWN 就按 DOWN 切分，缺 UP 标记也不再吞掉回滚脚本。
-  const up = upMatch
-    ? upMatch[1].trim()
-    : downMatch
-      ? content.slice(0, downMatch.index).trim()
-      : content.trim();
+  const up = upMatch ? upMatch[1].trim() : downMatch ? content.slice(0, downMatch.index).trim() : content.trim();
   const down = downMatch ? downMatch[1].trim() : '';
 
   return { name, up, down };
@@ -115,9 +111,10 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
     );
   `);
 
-  const appliedRows = db
-    .prepare('SELECT name, checksum FROM _migrations')
-    .all() as { name: string; checksum: string }[];
+  const appliedRows = db.prepare('SELECT name, checksum FROM _migrations').all() as {
+    name: string;
+    checksum: string;
+  }[];
   const applied = new Map(appliedRows.map((r) => [r.name, r.checksum]));
 
   const byName = new Map(migrations.map((m) => [m.name, m]));

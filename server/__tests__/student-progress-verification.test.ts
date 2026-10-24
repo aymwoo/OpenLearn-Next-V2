@@ -66,7 +66,12 @@ describe('学生进度验证与成绩口径', () => {
     const insertSession = db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     );
-    insertSession.run(tokTeacher, JSON.stringify({ userId: teacherId, role: 'teacher', username: 'verify_p1' }), now, exp);
+    insertSession.run(
+      tokTeacher,
+      JSON.stringify({ userId: teacherId, role: 'teacher', username: 'verify_p1' }),
+      now,
+      exp,
+    );
     insertSession.run(
       tokStudent,
       JSON.stringify({ userId: studentId, studentId, role: 'student', username: 'verify_p1_s' }),
@@ -74,9 +79,13 @@ describe('学生进度验证与成绩口径', () => {
       exp,
     );
 
-    db.prepare(
-      'INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(classId, '进度验证班', '', teacherId, now);
+    db.prepare('INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      classId,
+      '进度验证班',
+      '',
+      teacherId,
+      now,
+    );
     db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
       studentId,
       'VERIFY-P1-A',

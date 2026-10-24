@@ -10,16 +10,16 @@
 
 ## 修复状态（2026-10-14）
 
-| 编号 | 状态 |
-| --- | --- |
-| PL-01 | 已修复。进程内身份只看 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 或内置目录；预加载内置插件单独放行。 |
-| PL-02 | 已修复。远程前端进入 `sandbox="allow-scripts"` 的不透明源 iframe，经 postMessage 桥调用宿主；`/plugins` 需要有效会话。 |
-| PL-03 | 已修复。插件命令的 actor 由宿主写成 `plugin:<id>`，`metadata.approved` 被丢掉；空 actor 在命令总线被拒绝。 |
-| PL-04 | 已修复。第三方能力要管理员写入批准表；`*`、`*:*`、`*:*:*` 不能授予；插件不能调用 `grant` / `revokeAll`。 |
-| PL-05 | 已修复。SQL 只允许插件自己的表前缀、`plugin_migrations`，以及显式授权的研究表。 |
-| PL-06 | 已修复。建表和删表都用安装主键；卸载同时清掉旧的 manifest id 前缀。 |
-| PL-07 | 已修复。社区安装默认关闭；安装和更新要求完整性哈希与 Ed25519 签名；注册表的 `verified` 字段不再点亮「已认证」。 |
-| PL-08 | 已修复。子进程默认拒绝原始 socket 和 DNS；HTTP 只经宿主代理访问已批准域名；另有 RSS 与 CPU 窗口上限。 |
+| 编号           | 状态                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| PL-01          | 已修复。进程内身份只看 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 或内置目录；预加载内置插件单独放行。                                      |
+| PL-02          | 已修复。远程前端进入 `sandbox="allow-scripts"` 的不透明源 iframe，经 postMessage 桥调用宿主；`/plugins` 需要有效会话。              |
+| PL-03          | 已修复。插件命令的 actor 由宿主写成 `plugin:<id>`，`metadata.approved` 被丢掉；空 actor 在命令总线被拒绝。                          |
+| PL-04          | 已修复。第三方能力要管理员写入批准表；`*`、`*:*`、`*:*:*` 不能授予；插件不能调用 `grant` / `revokeAll`。                            |
+| PL-05          | 已修复。SQL 只允许插件自己的表前缀、`plugin_migrations`，以及显式授权的研究表。                                                     |
+| PL-06          | 已修复。建表和删表都用安装主键；卸载同时清掉旧的 manifest id 前缀。                                                                 |
+| PL-07          | 已修复。社区安装默认关闭；安装和更新要求完整性哈希与 Ed25519 签名；注册表的 `verified` 字段不再点亮「已认证」。                     |
+| PL-08          | 已修复。子进程默认拒绝原始 socket 和 DNS；HTTP 只经宿主代理访问已批准域名；另有 RSS 与 CPU 窗口上限。                               |
 | PL-09 至 PL-15 | 未在本次修复。公开路由批准、符号链接跟随、开发面板 `new Function`、会话桥子串、审计覆盖、不安全部署脚本、兼容测试范围仍按下文描述。 |
 
 威胁模型：管理员会安装社区注册表或 ZIP 里的第三方包。产品界面把这类包装成「未受信任、进子进程、不继承密钥」。学生和教师打开应用后，活跃插件的前端会在他们的页面里执行。审计问题是：这个边界是否真的挡住了第三方代码，而不是管理员是否「自愿」执行任意程序。
@@ -28,12 +28,12 @@
 
 ## 1. 和上次全系统审计的关系
 
-| 上次编号 | 上次结论 | 本次 |
-| --- | --- | --- |
-| H-4 第三方插件默认 inline | 缺省 `executionMode` 落成宿主进程 | **部分修复，关键洞还在。** 不以 `@openlearn/` 开头的 id 会被改写成 `process`（PoC 已安装两份 ZIP 对照）。但任意 ZIP 只要把 `manifest.id` 写成 `@openlearn/...`，策略就把它当成内置插件，安装结果是 `inline`。没有签名。 |
-| M-5 `/plugins` 静态目录无鉴权 | 匿名可拉插件源码 | **仍在。** `server.ts:298` |
-| 插件前端 Blob URL | CSP `scriptSrc` 含 `blob:` | **仍在，而且比「源码泄露」严重。** 活跃插件的 `frontend.js` 会在主页面里 `import()`，和学生/教师同源。 |
-| H-5 SDK `dist/` 不进构建 | 干净环境类型检查失败 | 不在本次范围。当前根 `package.json` 的 `prepare` 和 `build` 都会跑 `scripts/build-plugin-sdk.mjs`，本次 `pnpm install` 已生成 `dist/`。没有重跑 CI。 |
+| 上次编号                      | 上次结论                          | 本次                                                                                                                                                                                                                    |
+| ----------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H-4 第三方插件默认 inline     | 缺省 `executionMode` 落成宿主进程 | **部分修复，关键洞还在。** 不以 `@openlearn/` 开头的 id 会被改写成 `process`（PoC 已安装两份 ZIP 对照）。但任意 ZIP 只要把 `manifest.id` 写成 `@openlearn/...`，策略就把它当成内置插件，安装结果是 `inline`。没有签名。 |
+| M-5 `/plugins` 静态目录无鉴权 | 匿名可拉插件源码                  | **仍在。** `server.ts:298`                                                                                                                                                                                              |
+| 插件前端 Blob URL             | CSP `scriptSrc` 含 `blob:`        | **仍在，而且比「源码泄露」严重。** 活跃插件的 `frontend.js` 会在主页面里 `import()`，和学生/教师同源。                                                                                                                  |
+| H-5 SDK `dist/` 不进构建      | 干净环境类型检查失败              | 不在本次范围。当前根 `package.json` 的 `prepare` 和 `build` 都会跑 `scripts/build-plugin-sdk.mjs`，本次 `pnpm install` 已生成 `dist/`。没有重跑 CI。                                                                    |
 
 上次报告建议「非 `@openlearn/` 默认 process，inline 只允许白名单」。白名单做成了「字符串前缀」，没有做成「这份代码确实来自平台」。
 
@@ -59,10 +59,10 @@
 
 **状态：已修复。** 下文保留发现时的证据。当前策略见 `execution-policy.ts` 与迁移说明。
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                              |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `packages/core/plugin-host/execution-policy.ts:19`、`:35`–`:37`；`packages/core/esm-loader/manifest-schema.ts:761`–`:764`；`packages/core/plugin-host/install.ts:599`–`:606`；`packages/core/plugin-host/core.ts:890`–`:893` |
-| 证据 | PoC「生产环境策略把任意 `@openlearn/not-a-builtin` 当成内置插件」与「ZIP 安装落成 inline」。同一测试里 `ext-audit-community` 在 `OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1` 下被改写成 `process`。 |
+| 证据 | PoC「生产环境策略把任意 `@openlearn/not-a-builtin` 当成内置插件」与「ZIP 安装落成 inline」。同一测试里 `ext-audit-community` 在 `OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1` 下被改写成 `process`。                                |
 
 `isTrustedInProcessPlugin` 只看 `manifestId.startsWith('@openlearn/')`，或者 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 里的精确 id。schema 只禁止 id 里出现冒号，防止 `plugin:@evil:admin` 这种旧的角色后缀伪造，不禁止占用平台前缀。
 
@@ -88,10 +88,10 @@ inline 之后插件与宿主同进程，权限模型和 `buildMinimalEnv` 都不
 
 **状态：已修复。** 远程激活改走 `/plugin-sandbox/frame`。父页面里的 Blob `import()` 只留在内联单测加载器。
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `src/plugin-host/plugin-host.ts:412`–`:446`；`src/hooks/useClassroomSlice.ts:220`–`:269`；`src/App.tsx:37`（`useAppComposer` → 该 slice）；`server.ts:190`–`:199`、`:298`；`packages/core/plugin-host/method-policy.ts:255`–`:266` |
-| 证据 | PoC 锁定了源码里的 `URL.createObjectURL`、`import(blobUrl)`、slice 里写死的 `executionMode: 'inline'`、CSP 的 `blob:`，以及 `/plugins` 的 `express.static`。 |
+| 证据 | PoC 锁定了源码里的 `URL.createObjectURL`、`import(blobUrl)`、slice 里写死的 `executionMode: 'inline'`、CSP 的 `blob:`，以及 `/plugins` 的 `express.static`。                                                                       |
 
 `activateRemotePlugin` 拉取 `/plugins/<uuid>/frontend.js`，包成 Blob，在主页面 `import()`。Blob URL 继承页面源。会话 cookie `edu_os_token` 是 HttpOnly（`server/routes/roster.ts:776`），脚本读不到 cookie 文本，但同源 `fetch` 会带上它。CSRF 门控按 `Sec-Fetch-Site` 放行 same-origin（`server/middleware/csrf.ts:39`–`:41`），页面内脚本发的写请求过这道门。
 
@@ -117,9 +117,9 @@ inline 之后插件与宿主同进程，权限模型和 `buildMinimalEnv` 都不
 
 **状态：已修复。** 插件边界改写 actor 并删除 `metadata.approved`。宿主自己的 `admin` / `user:*:administrator` 调用不受影响。 这发生在 PL-01 之外：普通 `ext-*` 插件、已经进了子进程，依然能走通。
 
-| | |
-| --- | --- |
-| 位置 | `packages/core/worker-runtime/service-host.ts:789`–`:831` 与 `:860`–`:872`；`packages/core/worker-runtime/bootstrap/sections/message-handler.ts:214`；`packages/core/kernel/index.ts:310`–`:331`；`packages/core/command-bus/index.ts:88`–`:91`；`packages/core/capability/guard/capability-guard.ts:24`–`:36` |
+|      |                                                                                                                                                                                                                                                                                                                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 位置 | `packages/core/worker-runtime/service-host.ts:789`–`:831` 与 `:860`–`:872`；`packages/core/worker-runtime/bootstrap/sections/message-handler.ts:214`；`packages/core/kernel/index.ts:310`–`:331`；`packages/core/command-bus/index.ts:88`–`:91`；`packages/core/capability/guard/capability-guard.ts:24`–`:36`                                   |
 | 证据 | PoC「命令 execute 原样转发 actorId=admin 与 metadata.approved=true」。PoC「真实 Kernel：`actorId: 'admin'` 执行高危命令成功并打印 Bypassing human approval；插件自己的 actor 被 CapabilityGuard 拒绝；授予对应能力后 `metadata.approved: true` 不再要求人工审批；`actorId: ''` 被改写成 `agent-system-0` 并执行了需要 `lesson:delete` 的命令」。 |
 
 Worker 基础白名单包含 `ICommandBusService`（`worker-manager.ts:72`）。`registerHandler` 会加插件命名空间，`execute` 不会改写命令体。内核把下面这些 actor 当成管理员，跳过能力检查和高危审批：
@@ -148,10 +148,10 @@ Worker 基础白名单包含 `ICommandBusService`（`worker-manager.ts:72`）。
 
 **公测前必须修。** 它让 PL-03 不必冒充 `admin`：先拿到 `*`，再自批高危命令。
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `packages/core/plugin-host/lifecycle.ts:427`–`:432`（激活时同样的调用在 `:173`、`:251`、`:483`）；`packages/core/capability/guard/capability-guard.ts:41`–`:46`、`:134`；`packages/core/plugin-host/method-policy.ts:96`–`:98`、`:262`–`:263`；`packages/core/worker-runtime/worker-manager.ts:75`；`packages/core/plugin-host/context-builder.ts:459`–`:465` |
-| 证据 | PoC：清单里只要有任意一项能力（测试用 `storage:read`），RPC `ICapabilityService.grant('plugin:ext-community', '*')` 成功，随后 `guard.check(..., 'site:destroy')` 为 true。能力列表为空时，同一调用被 Barrier 2 拒绝。 |
+| 证据 | PoC：清单里只要有任意一项能力（测试用 `storage:read`），RPC `ICapabilityService.grant('plugin:ext-community', '*')` 成功，随后 `guard.check(..., 'site:destroy')` 为 true。能力列表为空时，同一调用被 Barrier 2 拒绝。                                                                                                                                        |
 
 `grantCapabilities` 把 `capabilitiesProposed` 里的每个字符串原样 `grant` 给 `plugin:<manifestId>`，没有平台侧能力目录，也没有管理员批准。`check()` 看到 `*` 或 `*:*:*` 直接通过。方法策略的 `hasCapability` 同样把 `*` 当成「拥有该项」。
 
@@ -171,9 +171,9 @@ Worker 基础白名单始终下发 `ICapabilityService`。`wrapCapability` 把 `
 
 **公测前必须修。**
 
-| | |
-| --- | --- |
-| 位置 | `packages/core/worker-runtime/service-host.ts:940`–`:1085`，黑名单 `:965`–`:1007`，研究表特例 `:1016`–`:1023`；`packages/core/worker-runtime/worker-manager.ts:71`–`:79` |
+|      |                                                                                                                                                                                                                                                                                                     |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 位置 | `packages/core/worker-runtime/service-host.ts:940`–`:1085`，黑名单 `:965`–`:1007`，研究表特例 `:1016`–`:1023`；`packages/core/worker-runtime/worker-manager.ts:71`–`:79`                                                                                                                            |
 | 证据 | PoC：`SELECT password_hash FROM users` 返回 error；下面这些返回 result：`submission_raw`、`submission_result`、`vfs_nodes`、`classroom_poll_votes`、`classroom_danmaku`、`sqlite_master`、`class_groups`。`ext-research-helper` 可以 `SELECT` `plugin_research_grades`，`ext-homework-hub` 不可以。 |
 
 `IDatabase` 在基础白名单里，不需要清单声明。守卫做了三件事：禁止 ATTACH / PRAGMA / VACUUM / 触发器和视图；DDL 和 `plugin_` 表限制在自己的命名空间；核心表名用正则扫整段 SQL。
@@ -201,10 +201,10 @@ PoC `invokeSql`。修复前，worker 插件执行 `SELECT * FROM submission_raw`
 
 **公测前必须修。**
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                         |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | 建表：`packages/core/worker-runtime/bootstrap/sections/message-handler.ts:287`。删除：`packages/core/plugin-host/install.ts:273`–`:280`。inline 建表用的是传入的 `pluginId`（UUID）：`packages/core/plugin-host/context-builder.ts:759` |
-| 证据 | PoC 计算 `plugin_ext_homework_hub_scores` 不以 `plugin_<uuid>_` 开头，并锁定两处源码公式。 |
+| 证据 | PoC 计算 `plugin_ext_homework_hub_scores` 不以 `plugin_<uuid>_` 开头，并锁定两处源码公式。                                                                                                                                              |
 
 子进程 `tablePrefix` 用 `workerData.manifestId`。卸载在 `resolvePluginUuid` 之后用 DB UUID 做 `LIKE` 前缀并 `DROP`。两边对不上。`plugin_storage` 和公开路由是按 manifest id 删的（`install.ts:270`–`:271`），自建表不是。
 
@@ -224,10 +224,10 @@ inline 与 process 的前缀规则也不一样，同一插件换执行模式后�
 
 **社区市场对外开放前必须修。** 只做管理员手工 ZIP、且 PL-01–PL-06 已修时，可以降为安装确认文案问题。
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `server/services/community-registry.ts:124`–`:126`、`:166`；`src/components/plugin-center/sub-views/PluginCommunityPanel.tsx:597`–`:604`；完整性校验只在 `packages/core/plugin-host/plugin-distribution-manager.ts:156`–`:176`，且仅当仓库元数据自带 `integrity` |
-| 证据 | PoC：`normalizeCommunityEntry` 接受 `verified: 'true'` 和 id `@openlearn/not-a-builtin`。面板把 `verified` 标成「官方校验来源 / VERIFIED」。 |
+| 证据 | PoC：`normalizeCommunityEntry` 接受 `verified: 'true'` 和 id `@openlearn/not-a-builtin`。面板把 `verified` 标成「官方校验来源 / VERIFIED」。                                                                                                                     |
 
 注册表条目没有公钥、没有包哈希字段。`install-from-url` 不核对哈希。`one-click-update`（`server/routes/plugins.ts:600`）也不核对，并且不要求 `acknowledgeRisk`（PoC 锁定该路由处理函数片段里没有这两个词）。更新源可以是清单里插件作者自己写的 URL，只要通过 `isSafeExternalUrl`。
 
@@ -244,10 +244,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 **出网：在 PL-05 修掉之前必须修，否则读到的学生数据可以直接送出。** 只修 PL-05、出网仍开放，则降为「插件能把自己收到的请求外传」，界面已经有这句话，可以记为已知限制。
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                                                                                         |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `packages/core/worker-runtime/plugin-permission.ts:33`–`:39`、`:102`–`:125`；`packages/core/worker-runtime/plugin-limits.ts:30`–`:44`；`packages/core/worker-runtime/liveness-monitor.ts:1`–`:26`；`packages/core/worker-runtime/worker-manager.ts:149`–`:150`；`packages/core/plugin-host/base.ts:123` |
-| 证据 | PoC 在 `--permission` 下对 `127.0.0.1` 建连成功，输出 `NET_OK`，不是 `ERR_ACCESS_DENIED`。Node v22.14.0 的 `--help` 没有 `--allow-net`。 |
+| 证据 | PoC 在 `--permission` 下对 `127.0.0.1` 建连成功，输出 `NET_OK`，不是 `ERR_ACCESS_DENIED`。Node v22.14.0 的 `--help` 没有 `--allow-net`。                                                                                                                                                                |
 
 已核实的其它边界（同一 Node，手工探针，未写进 Vitest）：
 
@@ -271,10 +271,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-09 中 — 公开路由批准不跟代码版本走
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 位置 | `packages/core/plugin-host/public-routes.ts:44`–`:65`；清除只出现在卸载 `install.ts:271`。`updatePluginFromZipExclusive` 起始于 `install.ts:689`，函数体内没有 `clearPublicRouteApprovals`（PoC 锁定） |
-| 证据 | PoC 写入批准后 `isPublicRouteApproved` 为 true；更新函数源码不调用清除。 |
+| 证据 | PoC 写入批准后 `isPublicRouteApproved` 为 true；更新函数源码不调用清除。                                                                                                                               |
 
 管理员勾了一次 `approvePublicRoutes` 之后，同一 method + path 在包被一键更新替换后仍然匿名可访问。新代码不需要再次批准。
 
@@ -282,9 +282,9 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-10 中 — 权限模型会跟随插件目录里已经存在的符号链接
 
-| | |
-| --- | --- |
-| 位置 | `packages/core/worker-runtime/plugin-permission.ts:114`–`:118`（`--allow-fs-read/write=<pluginDir>/*`） |
+|      |                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 位置 | `packages/core/worker-runtime/plugin-permission.ts:114`–`:118`（`--allow-fs-read/write=<pluginDir>/*`）                                                       |
 | 证据 | PoC：目录外的 `secret.txt` 经 `plugin/via-symlink` 被读出 `TOPSECRET`，随后被写成 `PWNED`。同一进程里 `fs.symlinkSync` 指向外部路径返回 `ERR_ACCESS_DENIED`。 |
 
 当前安装链没有把这个洞接上，所以不是「上传 ZIP 就能写宿主机文件」：
@@ -299,10 +299,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-11 中 — 开发面板用 `new Function` 执行编辑器里的源码，界面写着静态解析
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 位置 | `src/components/plugin-center/utils/pluginCenterUtils.ts:1`–`:26`；调用点 `src/components/plugin-center/sub-views/PluginDevPanel.tsx:164`–`:165`。同仓库 `src/utils/pluginParsers.ts:22` 已经改成正则提取，并注释禁止 `new Function` |
-| 证据 | PoC 锁定 `pluginCenterUtils.ts` 含 `new Function`。 |
+| 证据 | PoC 锁定 `pluginCenterUtils.ts` 含 `new Function`。                                                                                                                                                                                  |
 
 每次渲染都执行文本框内容。默认模板是本地示例，不会自动加载已安装的社区包。能打开这个面板的人执行的是自己贴进去的代码，影响面是该浏览器会话。标签写「MANIFEST 实时解析」「Live Static」，和实现不符。生产 CSP 没有 `unsafe-eval` 时，这里会直接抛错或被 CSP 拦住；开发环境 `script-src` 含 `unsafe-eval`（`server.ts:199`）。
 
@@ -310,9 +310,9 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-12 中 — 会话桥的 cookie 注入用子串匹配
 
-| | |
-| --- | --- |
-| 位置 | `server/routes/plugin-api-gateway.ts:497`–`:516` |
+|      |                                                                                                                                                                                                                                                            |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 位置 | `server/routes/plugin-api-gateway.ts:497`–`:516`                                                                                                                                                                                                           |
 | 证据 | PoC：`requires` 含 `@evil/pkg:NotReallyIAuthSessionBridgeServiceX` 时，`includes('IAuthSessionBridgeService')` 为 true。`computeAllowedWorkerTokens` 即使清单写了真正的 `@openlearn/core:IAuthSessionBridgeService`，也不会把该 Token 放进 worker 白名单。 |
 
 网关在插件响应里看到 `sessionToken` 以 `token_` 开头、且 `requires` 子串命中时，设置 `edu_os_token`。子进程插件拿不到这个服务，不能自己 `createSession`。inline 插件（PL-01 或受信名单）可以，因为字符串白名单包含该 Token。子串匹配是积分服务已经修过的同类错误（`worker-manager.ts:125`–`:127` 改为精确比较），这里没跟上。
@@ -323,10 +323,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-13 中 — 审计日志盖不住插件的实际权力
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `recordSecurityAudit` 的插件调用点：`server/routes/plugins.ts:527`、`:878`（安装）、`:1021`（公开路由批准）；`packages/plugins/builtin.ts:872`、`:910`、`:992`。实现：`packages/core/observability/audit-log.ts:58` |
-| 证据 | 全库检索。没有卸载、激活、执行模式被改写、命令派发、SQL、能力授予的审计事件。 |
+| 证据 | 全库检索。没有卸载、激活、执行模式被改写、命令派发、SQL、能力授予的审计事件。                                                                                                                                       |
 
 安装事件记录 actor 和 manifest id，不记录最终 `executionMode`、是否被改写、包哈希。`one-click-update` 成功路径不写审计。日志在本地轮转，没有外送。
 
@@ -334,10 +334,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-14 低 — 开启 `ALLOW_UNSAFE_PLUGIN_SCRIPTS` 时，部署脚本在宿主里用 shell 执行
 
-| | |
-| --- | --- |
+|      |                                                                                                      |
+| ---- | ---------------------------------------------------------------------------------------------------- |
 | 位置 | `packages/core/plugin-host/install.ts:514`–`:532`。更新路径只把脚本写进目录（`:826`–`:829`），不执行 |
-| 证据 | 默认 `!== 'true'` 时只打警告，不执行。本次没有设置该变量，因此没有跑脚本。 |
+| 证据 | 默认 `!== 'true'` 时只打警告，不执行。本次没有设置该变量，因此没有跑脚本。                           |
 
 一旦设为 `true`，`execSync(\`node "${deployScriptPath}" "${process.cwd()}"\`)` 在宿主进程执行，隔离策略还没开始。脚本路径来自清单。这是显式逃生舱，不是默认配置。
 
@@ -345,10 +345,10 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 ### PL-15 低 — 第三方插件兼容测试没有覆盖这次的信任边界
 
-| | |
-| --- | --- |
+|      |                                                                                                                                                                                                                                                                                                                        |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 位置 | `vitest.config.ts:42`–`:45` 排除 `packages/core/__tests__/lti-provider-plugin.test.ts`（依赖不在仓库里的 `v2_plugins/`）。既有 canary 在 `server/__tests__/canary/`，覆盖 ZIP 炸弹、路径穿越等畸形包。`execution-policy.test.ts` 把 `@openlearn/` 前缀当成合法信任来源，没有用例要求非预加载的 `@openlearn/` id 被拒绝 |
-| 证据 | 配置与测试名。本次 PoC 补上了前缀、SQL 黑名单缺口、actor 冒充、能力自授、符号链接和出网。 |
+| 证据 | 配置与测试名。本次 PoC 补上了前缀、SQL 黑名单缺口、actor 冒充、能力自授、符号链接和出网。                                                                                                                                                                                                                              |
 
 没有「拿一个仓库外的第三方插件，对当前 SDK 契约跑通安装—激活—卸载」的套件。LTI 插件测试被排除在默认 `pnpm test` 之外。
 
@@ -360,19 +360,19 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 这些不是漏洞，避免和上面的洞混在一起。
 
-| 控制 | 结果 |
-| --- | --- |
-| 不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS`、且不在内置目录的包 | 清单写 `inline` 也会安装成 `process`。`@openlearn/` 前缀同样不能单独放行。PoC 两份 ZIP 对照通过 |
-| `buildMinimalEnv` | 不继承 `OPENAI_API_KEY`、`NODE_OPTIONS`。PoC 通过 |
-| 权限模型禁止插件再起子进程、禁止 `eval`、禁止读 `/proc/self/environ` | Node v22.14.0 手工探针成立 |
-| 插件在权限模型下不能新建指向外部的符号链接或硬链接 | PoC 与手工探针。既有符号链接读穿仍见 PL-10 |
-| 插件自己的表前缀之外的表 | worker SQL 被拒。`users`、提交、VFS、投票不再靠黑名单。PoC 通过 |
-| 空 `capabilitiesProposed` | worker 不能调用非 `get*` 方法，`grant` 被拒。PoC 通过 |
-| worker 白名单不含 `IAuthSessionBridgeService`、不含 `IPluginHost` | `computeAllowedWorkerTokens` PoC；`IPluginHost` 不在 `BASE_WORKER_SERVICE_TOKENS` |
-| `auth: false` | 仍要管理员写入 `plugin_public_routes` 才匿名放行。本次没有推翻既有 `plugin-rest-api` 测试。批准不会在更新时失效，见 PL-09 |
-| 依赖安装 | `dependency-install.ts` 使用 `--ignore-scripts`，安装与更新共用。本次没有发现更新路径再次漏掉该旗标 |
-| ZIP 路径穿越 | `install.ts` 对 `..` 和越出插件目录的目标抛错。canary 已有用例。本次没有新的穿越样本 |
-| 部署脚本 | 默认不执行（PL-14） |
+| 控制                                                                 | 结果                                                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 不在 `OPENLEARN_TRUSTED_INLINE_PLUGINS`、且不在内置目录的包          | 清单写 `inline` 也会安装成 `process`。`@openlearn/` 前缀同样不能单独放行。PoC 两份 ZIP 对照通过                           |
+| `buildMinimalEnv`                                                    | 不继承 `OPENAI_API_KEY`、`NODE_OPTIONS`。PoC 通过                                                                         |
+| 权限模型禁止插件再起子进程、禁止 `eval`、禁止读 `/proc/self/environ` | Node v22.14.0 手工探针成立                                                                                                |
+| 插件在权限模型下不能新建指向外部的符号链接或硬链接                   | PoC 与手工探针。既有符号链接读穿仍见 PL-10                                                                                |
+| 插件自己的表前缀之外的表                                             | worker SQL 被拒。`users`、提交、VFS、投票不再靠黑名单。PoC 通过                                                           |
+| 空 `capabilitiesProposed`                                            | worker 不能调用非 `get*` 方法，`grant` 被拒。PoC 通过                                                                     |
+| worker 白名单不含 `IAuthSessionBridgeService`、不含 `IPluginHost`    | `computeAllowedWorkerTokens` PoC；`IPluginHost` 不在 `BASE_WORKER_SERVICE_TOKENS`                                         |
+| `auth: false`                                                        | 仍要管理员写入 `plugin_public_routes` 才匿名放行。本次没有推翻既有 `plugin-rest-api` 测试。批准不会在更新时失效，见 PL-09 |
+| 依赖安装                                                             | `dependency-install.ts` 使用 `--ignore-scripts`，安装与更新共用。本次没有发现更新路径再次漏掉该旗标                       |
+| ZIP 路径穿越                                                         | `install.ts` 对 `..` 和越出插件目录的目标抛错。canary 已有用例。本次没有新的穿越样本                                      |
+| 部署脚本                                                             | 默认不执行（PL-14）                                                                                                       |
 
 ---
 
@@ -380,14 +380,14 @@ ZIP 上传同样不验证来源。这在「管理员明确上传本地文件」�
 
 PL-01 到 PL-08 修复时改过的说明：
 
-| 文档 | 现在怎么写 |
-| --- | --- |
-| `docs/plugin/plugin-architecture.md` | 未受信任插件走子进程。Worker 线程只给白名单或内置目录。插件前端是 `sandbox="allow-scripts"` 的不透明源 iframe |
-| `docs/plugin/community-plugin-registry.md` | 社区安装默认关闭，要哈希和签名。`verified` 被服务端忽略。`@openlearn/` 前缀不能单独获得进程内身份 |
-| `docs/plugin/plugin-security-migration.md` | 兼容性变化和迁移步骤 |
-| `.env.example` | 白名单、社区开关、研究表名单、网络与配额 |
-| `PluginCommunityPanel.tsx` | 徽章标题是「平台公钥验签通过」 |
-| `plugin-permission.ts` | 权限模型仍没有 `--allow-net`；出站由入口脚本和宿主代理补上 |
+| 文档                                       | 现在怎么写                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `docs/plugin/plugin-architecture.md`       | 未受信任插件走子进程。Worker 线程只给白名单或内置目录。插件前端是 `sandbox="allow-scripts"` 的不透明源 iframe |
+| `docs/plugin/community-plugin-registry.md` | 社区安装默认关闭，要哈希和签名。`verified` 被服务端忽略。`@openlearn/` 前缀不能单独获得进程内身份             |
+| `docs/plugin/plugin-security-migration.md` | 兼容性变化和迁移步骤                                                                                          |
+| `.env.example`                             | 白名单、社区开关、研究表名单、网络与配额                                                                      |
+| `PluginCommunityPanel.tsx`                 | 徽章标题是「平台公钥验签通过」                                                                                |
+| `plugin-permission.ts`                     | 权限模型仍没有 `--allow-net`；出站由入口脚本和宿主代理补上                                                    |
 
 仍成立、且没有被这次修复关掉的说明：`docs/plugin/plugin-lifecycle.md` 里 inline 同步死循环会卡住宿主。第三方包默认进不了这条路径。
 

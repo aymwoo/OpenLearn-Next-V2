@@ -25,18 +25,24 @@ export interface ClassroomOverlaysProps {
 export function ClassroomOverlays(props: ClassroomOverlaysProps) {
   const appData = useOptionalAppData();
 
-  const pickedAnnouncement = props.pickedAnnouncement !== undefined ? props.pickedAnnouncement : appData?.pickedAnnouncement;
+  const pickedAnnouncement =
+    props.pickedAnnouncement !== undefined ? props.pickedAnnouncement : appData?.pickedAnnouncement;
   const setPickedAnnouncement = props.setPickedAnnouncement ?? appData?.setPickedAnnouncement;
   const pickedAlertData = props.pickedAlertData !== undefined ? props.pickedAlertData : appData?.pickedAlertData;
   const setPickedAlertData = props.setPickedAlertData ?? appData?.setPickedAlertData;
   const lang = (props.lang ?? appData?.lang ?? 'zh') as 'zh' | 'en';
   const selectedLesson = props.selectedLesson !== undefined ? props.selectedLesson : (appData?.selectedLesson ?? null);
-  const liveClassSelectedClassId = props.liveClassSelectedClassId !== undefined ? props.liveClassSelectedClassId : (appData?.liveClassSelectedClassId ?? null);
-  const activeStudentId = props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
+  const liveClassSelectedClassId =
+    props.liveClassSelectedClassId !== undefined
+      ? props.liveClassSelectedClassId
+      : (appData?.liveClassSelectedClassId ?? null);
+  const activeStudentId =
+    props.activeStudentId !== undefined ? props.activeStudentId : (appData?.activeStudentId ?? null);
   const students = props.students ?? appData?.students ?? [];
   const activeRole = props.activeRole ?? appData?.activeRole ?? 'teacher';
   const isStudentLiveMode = props.isStudentLiveMode ?? appData?.isStudentLiveMode ?? false;
-  const liveStudentParam = props.liveStudentParam !== undefined ? props.liveStudentParam : (appData?.liveStudentParam ?? null);
+  const liveStudentParam =
+    props.liveStudentParam !== undefined ? props.liveStudentParam : (appData?.liveStudentParam ?? null);
   const addToast = props.addToast ?? appData?.addToast ?? (() => {});
   const setReadNotifications = props.setReadNotifications ?? appData?.setReadNotifications ?? (() => {});
 

@@ -484,9 +484,14 @@ describe('课中互评 API（classroom-peer-review）', () => {
       expect(reviewBody.showcaseWorks.length).toBe(works.length);
 
       // 6. 验证 auto-assign 支持全量作品
-      const assignRes = await call('POST', `/api/classroom/sessions/${lessonId}/peer-review/auto-assign`, teacherToken, {
-        perStudent: 2,
-      });
+      const assignRes = await call(
+        'POST',
+        `/api/classroom/sessions/${lessonId}/peer-review/auto-assign`,
+        teacherToken,
+        {
+          perStudent: 2,
+        },
+      );
       expect(assignRes.status).toBe(200);
       const assignBody = (await assignRes.json()) as any;
       expect(assignBody.works).toBe(works.length);

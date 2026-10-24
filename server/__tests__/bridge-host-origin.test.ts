@@ -26,9 +26,9 @@ describe('P0-2: 桥接出站 origin 守卫', () => {
   });
 
   it('resolveRequestHostOrigin 从 Host + X-Forwarded-Proto 推导 origin', () => {
-    expect(
-      resolveRequestHostOrigin({ headers: { host: 'lms.example.com', 'x-forwarded-proto': 'https' } }),
-    ).toBe('https://lms.example.com');
+    expect(resolveRequestHostOrigin({ headers: { host: 'lms.example.com', 'x-forwarded-proto': 'https' } })).toBe(
+      'https://lms.example.com',
+    );
     expect(resolveRequestHostOrigin({ headers: { host: 'localhost:9000' }, protocol: 'http' })).toBe(
       'http://localhost:9000',
     );

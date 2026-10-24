@@ -29,11 +29,11 @@
 
 ### 活着没有
 
-| 检查 | 正常 | 不正常时 |
-| --- | --- | --- |
-| `GET /health` | 200，`status` 为 `ok` | 进程没在听。看 `docker inspect` 的 Health 和 `RestartCount` |
+| 检查                | 正常                               | 不正常时                                                                                                     |
+| ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `GET /health`       | 200，`status` 为 `ok`              | 进程没在听。看 `docker inspect` 的 Health 和 `RestartCount`                                                  |
 | `GET /health/ready` | 200，正文只有 `{"status":"ready"}` | 503 `{"status":"not_ready"}`。原因在服务端日志，不在响应里。常见是数据库打不开、`storage` 不可写、迁移没做完 |
-| 容器 Health | `healthy` | 一直 `unhealthy` 时不要对教师开放 |
+| 容器 Health         | `healthy`                          | 一直 `unhealthy` 时不要对教师开放                                                                            |
 
 `docker kill` 之后容器保持停止。要恢复服务用 `docker compose start`，不要等 `unless-stopped` 把它拉起来。
 
@@ -53,21 +53,21 @@ curl -fsS -H "Authorization: Bearer $METRICS_TOKEN" http://127.0.0.1:9000/metric
 
 `LOG_LEVEL` 在生产默认 `info`。目录由 `LOG_DIR` 决定，compose 为 `/data/logs`。目录不可写时只打 stdout，进程仍会启动。
 
-| 文件 | 默认保留 | 变量 |
-| --- | --- | --- |
-| `openlearn.log` | 10MB × 当前文件加 5 份历史 | `LOG_MAX_SIZE_MB`、`LOG_MAX_FILES` |
-| `audit.log` | 20MB × 当前文件加 20 份历史 | `AUDIT_LOG_MAX_SIZE_MB`、`AUDIT_LOG_MAX_FILES` |
+| 文件            | 默认保留                    | 变量                                           |
+| --------------- | --------------------------- | ---------------------------------------------- |
+| `openlearn.log` | 10MB × 当前文件加 5 份历史  | `LOG_MAX_SIZE_MB`、`LOG_MAX_FILES`             |
+| `audit.log`     | 20MB × 当前文件加 20 份历史 | `AUDIT_LOG_MAX_SIZE_MB`、`AUDIT_LOG_MAX_FILES` |
 
 安全审计事件：
 
-| 事件 | 何时 |
-| --- | --- |
-| `auth.login_failed` | 登录 401/403。有账号和原因，没有口令 |
-| `rate_limit.triggered` | HTTP 429 |
-| `auth.forbidden` | HTTP 403（登录接口走上面的登录失败事件） |
-| `plugin.installed` | 源码或 ZIP 安装成功 |
-| `plugin.enabled` | 插件被切换为 `active` |
-| `plugin.public_route_approved` | 管理员批准公开路由 |
+| 事件                           | 何时                                     |
+| ------------------------------ | ---------------------------------------- |
+| `auth.login_failed`            | 登录 401/403。有账号和原因，没有口令     |
+| `rate_limit.triggered`         | HTTP 429                                 |
+| `auth.forbidden`               | HTTP 403（登录接口走上面的登录失败事件） |
+| `plugin.installed`             | 源码或 ZIP 安装成功                      |
+| `plugin.enabled`               | 插件被切换为 `active`                    |
+| `plugin.public_route_approved` | 管理员批准公开路由                       |
 
 抽查时确认这些行里没有口令、Cookie、班级口令和学生作答。`LOG_REDACT` 被关掉之后，这个保证不再成立。
 
@@ -79,13 +79,13 @@ curl -fsS -H "Authorization: Bearer $METRICS_TOKEN" http://127.0.0.1:9000/metric
 
 先判断要不要停写。
 
-| 现象 | 先做 |
-| --- | --- |
-| 个别教师报错，健康检查正常 | 记下 `x-request-id`，按 [反馈流程](feedback.md) 收集。不要停服 |
-| `/health` 失败或容器反复重启 | 看日志里的 `[Startup] FATAL`、`[Kernel] FATAL`、`[Migration] FATAL`、`[DB SSOT] FATAL`。先恢复进程，再决定要不要回滚数据 |
-| 误删班级、错误迁移、磁盘上的库已损坏 | 停服，从站点备份恢复。不要在服务开着时覆盖数据库文件 |
-| 怀疑学生数据被不该看的人打开 | 停掉对外端口或反代。保留日志。不要在公开 Issue 里贴样本。通知学校联系人。**【待作者确认：谁有权决定停站】** |
-| AI 报解密失败或 `[UNDECRYPTABLE]` | 不要旋转 `ENCRYPTION_KEY`。把环境变量改回备份时那一把，再重启 |
+| 现象                                 | 先做                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| 个别教师报错，健康检查正常           | 记下 `x-request-id`，按 [反馈流程](feedback.md) 收集。不要停服                                                           |
+| `/health` 失败或容器反复重启         | 看日志里的 `[Startup] FATAL`、`[Kernel] FATAL`、`[Migration] FATAL`、`[DB SSOT] FATAL`。先恢复进程，再决定要不要回滚数据 |
+| 误删班级、错误迁移、磁盘上的库已损坏 | 停服，从站点备份恢复。不要在服务开着时覆盖数据库文件                                                                     |
+| 怀疑学生数据被不该看的人打开         | 停掉对外端口或反代。保留日志。不要在公开 Issue 里贴样本。通知学校联系人。**【待作者确认：谁有权决定停站】**              |
+| AI 报解密失败或 `[UNDECRYPTABLE]`    | 不要旋转 `ENCRYPTION_KEY`。把环境变量改回备份时那一把，再重启                                                            |
 
 ### 停服并恢复站点备份
 

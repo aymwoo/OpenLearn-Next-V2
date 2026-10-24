@@ -48,7 +48,7 @@ import {
   type QuestionTypeRegistry,
 } from '../../packages/core/assessment/index.js';
 import { getEncryptionKey } from '../../packages/core/di/api-key-crypto.js';
-import { getCurrentAcademicYear, normalizeAcademicYear } from '../utils/academic-year.js';
+import { getCurrentAcademicYear, normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { assessmentGraderRegistry } from './assessment-grader-registry.js';
 
@@ -173,7 +173,8 @@ export function buildAiGradingPrompt(input: {
   answerKey: unknown;
   studentAnswer: unknown;
 }): string {
-  const answerText = typeof input.studentAnswer === `string` ? input.studentAnswer : JSON.stringify(input.studentAnswer);
+  const answerText =
+    typeof input.studentAnswer === `string` ? input.studentAnswer : JSON.stringify(input.studentAnswer);
   const keyText = input.answerKey == null ? `（无）` : JSON.stringify(input.answerKey);
   return [
     `你是一名严谨的教师，正在批改一道主观题。请只输出一个 JSON 对象，不要输出任何解释或代码块。`,
@@ -213,7 +214,6 @@ export function parseAiGradingSuggestion(text: string, maxScore: number): AiGrad
   }
   return { suggestedScore: Math.round(score * 100) / 100, rationale, confidence };
 }
-
 
 /**
  * 字符串种子 → 32 位状态。
@@ -335,8 +335,9 @@ export class AssessmentService {
   /** 解析 AI 生成器：显式注入优先；null = 禁用；undefined = 运行时取内核服务。 */
   private resolveAi(): { generateText: (prompt: string) => Promise<string> } | null {
     if (this.aiOverride !== undefined) return this.aiOverride;
-    return (kernelContainer as unknown as { aiService?: { generateText: (p: string) => Promise<string> } })
-      .aiService ?? null;
+    return (
+      (kernelContainer as unknown as { aiService?: { generateText: (p: string) => Promise<string> } }).aiService ?? null
+    );
   }
 
   /** Issue #187：每个操作者 60 秒内最多 20 次建议请求（内存级，多实例部署下为每进程口径）。 */
@@ -661,7 +662,8 @@ export class AssessmentService {
     ownerId: string,
   ): { examId: string; syncedCount: number; skippedCount: number } {
     const asg = this.requireOwnedAssignment(assignmentId, ownerId);
-    const assessment = this.db.prepare('SELECT * FROM assessments WHERE id = ?').get(asg.assessmentId) as AssessmentRow | undefined;
+    const assessment = this.db.prepare('SELECT * FROM assessments WHERE id = ?').get(asg.assessmentId) as
+      AssessmentRow | undefined;
     if (!assessment) throw notFound('assessment');
 
     return this.db.transaction(() => {
@@ -679,10 +681,13 @@ export class AssessmentService {
         } else {
           examId = randomId('exam');
           const maxScore = this.readItems(assessment.id).reduce((sum, it) => sum + (it.maxScore || 1), 0);
+          // 学年必须落库（Issue #219）：此前这里创建的考试 academic_year 恒为 NULL，
+          // 连带下方的 exam_scores 也没有学年 —— 按学年查看学期总评时整段成绩会被过滤掉。
+          const examAcademicYear = asg.academicYear ?? deriveAcademicYear(now);
           this.db
             .prepare(
-              `INSERT INTO exams (id, class_id, title, description, max_score, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO exams (id, class_id, title, description, max_score, created_at, academic_year)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               examId,
@@ -691,6 +696,7 @@ export class AssessmentService {
               assessment.description || '',
               maxScore > 0 ? Math.round(maxScore) : 100,
               now,
+              examAcademicYear,
             );
         }
 
@@ -708,23 +714,29 @@ export class AssessmentService {
       let syncedCount = 0;
       let skippedCount = 0;
 
+      // 学年以父考试为准（Issue #219）：exam_scores.academic_year 必须与 exams 一致，
+      // 否则按学年过滤学期总评时，这批成绩会被整段丢掉。
+      const examYearRow = this.db.prepare('SELECT academic_year FROM exams WHERE id = ?').get(examId) as
+        { academic_year: string | null } | undefined;
+      const scoreAcademicYear = examYearRow?.academic_year ?? asg.academicYear ?? deriveAcademicYear(now);
+
       const checkExistingScore = this.db.prepare(
         'SELECT score, notes FROM exam_scores WHERE exam_id = ? AND student_id = ?',
       );
 
       const upsertScore = this.db.prepare(
-        `INSERT INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO exam_scores (exam_id, student_id, score, notes, academic_year, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(exam_id, student_id) DO UPDATE SET
            score = excluded.score,
            notes = excluded.notes,
+           academic_year = excluded.academic_year,
            recorded_at = excluded.recorded_at`,
       );
 
       for (const att of attempts) {
         const existing = checkExistingScore.get(examId, att.student_id) as
-          | { score: number; notes: string | null }
-          | undefined;
+          { score: number; notes: string | null } | undefined;
 
         // 验收标准：不覆盖教师手工录入的同名成绩！
         // 若已有成绩且 notes 不是以 'assessment:' 开头，说明是教师手工在成绩表直接录入的，跳过
@@ -734,13 +746,7 @@ export class AssessmentService {
         }
 
         const finalScore = roundScore(att.score);
-        upsertScore.run(
-          examId,
-          att.student_id,
-          finalScore,
-          `assessment:${asg.id}`,
-          now,
-        );
+        upsertScore.run(examId, att.student_id, finalScore, `assessment:${asg.id}`, scoreAcademicYear, now);
         syncedCount++;
       }
 
@@ -822,9 +828,8 @@ export class AssessmentService {
    */
   getProgressSummary(assignmentId: string, ownerId?: string) {
     const asg = ownerId ? this.requireOwnedAssignment(assignmentId, ownerId) : this.getAssignment(assignmentId);
-    const assessment = this.db
-      .prepare('SELECT title, kind FROM assessments WHERE id = ?')
-      .get(asg.assessmentId) as { title: string; kind: string } | undefined;
+    const assessment = this.db.prepare('SELECT title, kind FROM assessments WHERE id = ?').get(asg.assessmentId) as
+      { title: string; kind: string } | undefined;
 
     const roster = this.db
       .prepare(
@@ -1091,7 +1096,11 @@ export class AssessmentService {
     const id = randomId();
     // Issue #186：按学生种子成卷（同学生稳定、不同学生不同卷）；题库不足在此抛 409
     const paperJson = settings.draw
-      ? this.buildPaper(assessment.id, settings.draw, assignmentId + ':' + (isAnonymous ? anonKey : studentId) + ':' + attemptNo)
+      ? this.buildPaper(
+          assessment.id,
+          settings.draw,
+          assignmentId + ':' + (isAnonymous ? anonKey : studentId) + ':' + attemptNo,
+        )
       : null;
     this.db
       .prepare(
@@ -1306,7 +1315,9 @@ export class AssessmentService {
     const answerRow = this.db
       .prepare('SELECT answer_json FROM assessment_answers WHERE attempt_id = ? AND item_id = ?')
       .get(attemptId, itemId) as { answer_json: string | null } | undefined;
-    const studentAnswer = answerRow?.answer_json ? safeJsonParse<unknown>(answerRow.answer_json, answerRow.answer_json) : null;
+    const studentAnswer = answerRow?.answer_json
+      ? safeJsonParse<unknown>(answerRow.answer_json, answerRow.answer_json)
+      : null;
     if (
       studentAnswer === null ||
       studentAnswer === undefined ||
@@ -1367,13 +1378,13 @@ export class AssessmentService {
     const suggestion = { ...parsed, generatedAt };
     this.db
       .prepare(
-        "INSERT INTO assessment_answers" +
-          " (attempt_id, item_id, answer_json, score, max_score, is_correct, grader, feedback, graded_by, graded_at, manual_override, ai_suggestion_json, updated_at)" +
+        'INSERT INTO assessment_answers' +
+          ' (attempt_id, item_id, answer_json, score, max_score, is_correct, grader, feedback, graded_by, graded_at, manual_override, ai_suggestion_json, updated_at)' +
           " VALUES (?, ?, NULL, NULL, ?, NULL, 'ai_suggested', NULL, NULL, NULL, 0, ?, ?)" +
-          " ON CONFLICT(attempt_id, item_id) DO UPDATE SET" +
-          " ai_suggestion_json = excluded.ai_suggestion_json," +
+          ' ON CONFLICT(attempt_id, item_id) DO UPDATE SET' +
+          ' ai_suggestion_json = excluded.ai_suggestion_json,' +
           " grader = CASE WHEN assessment_answers.score IS NULL THEN 'ai_suggested' ELSE assessment_answers.grader END," +
-          " updated_at = excluded.updated_at",
+          ' updated_at = excluded.updated_at',
       )
       .run(attemptId, itemId, item.maxScore, JSON.stringify(suggestion), generatedAt);
 
@@ -1667,14 +1678,11 @@ export class AssessmentService {
       const header = rows[0].map((cell) => cell.trim());
       const missingColumns = PAPER_CSV_COLUMNS.filter((column) => !header.includes(column));
       if (missingColumns.length > 0) {
-        throw codedError(
-          400,
-          `CSV 缺少必需列：${missingColumns.join(', ')}`,
-          'PAPER_IMPORT_INVALID_CSV',
-        );
+        throw codedError(400, `CSV 缺少必需列：${missingColumns.join(', ')}`, 'PAPER_IMPORT_INVALID_CSV');
       }
       const index = (name: string) => header.indexOf(name);
-      rawItems = rows.slice(1)
+      rawItems = rows
+        .slice(1)
         .filter((cells) => cells.some((cell) => cell.trim() !== ''))
         .map((cells) => ({
           order: Number(cells[index('order')] ?? 0) || undefined,
@@ -1713,7 +1721,9 @@ export class AssessmentService {
     });
 
     // 2. 题型是否已安装（插件未装时给明确清单，而不是让题目落库后渲染成白屏）
-    const missingTypes = Array.from(new Set(normalized.map((item) => item.type).filter((type) => !this.registry.has(type))));
+    const missingTypes = Array.from(
+      new Set(normalized.map((item) => item.type).filter((type) => !this.registry.has(type))),
+    );
     if (missingTypes.length > 0) {
       throw Object.assign(
         codedError(
@@ -1751,13 +1761,9 @@ export class AssessmentService {
     // 4. 创建草稿试卷 + 逐题写入（组卷即物化快照，与手工组卷一致）
     const kind = (['quiz', 'exam', 'survey'].includes(String(parsedKind)) ? parsedKind : 'quiz') as AssessmentKind;
     // CSV 不携带长元信息：标题由调用方补（JSON 包自带时以包内为准）
-    const title = ((parsedTitle ?? options.title) ?? '').trim() || undefined;
+    const title = (parsedTitle ?? options.title ?? '').trim() || undefined;
     if (!title) {
-      throw codedError(
-        400,
-        '导入包缺少试卷标题（CSV 导入请在请求体里提供 title）',
-        'PAPER_IMPORT_MISSING_TITLE',
-      );
+      throw codedError(400, '导入包缺少试卷标题（CSV 导入请在请求体里提供 title）', 'PAPER_IMPORT_MISSING_TITLE');
     }
 
     const created = this.createAssessment({
@@ -1978,11 +1984,7 @@ export class AssessmentService {
    * 供 startAttempt 写入 assessment_attempts.paper_json：同一学生重入复用同一条 attempt，
    * 因此卷面稳定；不同学生种子不同 → 卷不同。题库不足时抛 409（不静默少题）。
    */
-  private buildPaper(
-    assessmentId: string,
-    rules: NonNullable<AssessmentSettings['draw']>,
-    seed: string,
-  ): string {
+  private buildPaper(assessmentId: string, rules: NonNullable<AssessmentSettings['draw']>, seed: string): string {
     const items = this.readItems(assessmentId);
     let pool = items;
     if (

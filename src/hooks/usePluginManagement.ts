@@ -119,12 +119,9 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
     [addToast, fetchOrphanData, lang],
   );
 
-  const handleDownloadOrphanArchive = useCallback(
-    (item: OrphanDataItem) => {
-      window.open(`/api/plugins/orphan-data/${encodeURIComponent(item.pluginId)}/archive`, '_blank');
-    },
-    [],
-  );
+  const handleDownloadOrphanArchive = useCallback((item: OrphanDataItem) => {
+    window.open(`/api/plugins/orphan-data/${encodeURIComponent(item.pluginId)}/archive`, '_blank');
+  }, []);
 
   const togglingPluginsRef = useRef<Set<string>>(new Set());
 

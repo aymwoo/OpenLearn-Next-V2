@@ -161,7 +161,7 @@ describe('class.batch.action extension slot', () => {
     renderWithHost(
       <ClassStudentsPanel
         cls={mockClass}
-        classStudentsMap={{ 'cls_201': mockStudents }}
+        classStudentsMap={{ cls_201: mockStudents }}
         students={mockStudents}
         lang="zh"
         selectedStudentIds={new Set(['stu_1', 'stu_2'])}

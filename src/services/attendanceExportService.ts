@@ -230,7 +230,15 @@ export async function exportClassAllSchedulesAttendanceCSV(options: {
   academicYear?: string | null;
   fetchScheduleAttendance?: (scheduleId: string) => Promise<void> | void;
 }): Promise<void> {
-  const { classInfo, schedules, students, scheduleAttendanceMap, lang = 'en', academicYear, fetchScheduleAttendance } = options;
+  const {
+    classInfo,
+    schedules,
+    students,
+    scheduleAttendanceMap,
+    lang = 'en',
+    academicYear,
+    fetchScheduleAttendance,
+  } = options;
 
   if (!schedules || schedules.length === 0) {
     const msg =

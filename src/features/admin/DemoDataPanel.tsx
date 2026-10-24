@@ -132,7 +132,8 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        text: lang === 'zh' ? `初始化失败：${err.message || '网络异常'}` : `Seed failed: ${err.message || 'Network error'}`,
+        text:
+          lang === 'zh' ? `初始化失败：${err.message || '网络异常'}` : `Seed failed: ${err.message || 'Network error'}`,
       });
     } finally {
       setSeeding(false);
@@ -174,7 +175,8 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        text: lang === 'zh' ? `清理失败：${err.message || '网络异常'}` : `Purge failed: ${err.message || 'Network error'}`,
+        text:
+          lang === 'zh' ? `清理失败：${err.message || '网络异常'}` : `Purge failed: ${err.message || 'Network error'}`,
       });
     } finally {
       setCleaning(false);
@@ -258,12 +260,8 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
                     key={field.key}
                     className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border border-gray-200 bg-gray-50/60"
                   >
-                    <span className="text-xs text-gray-500">
-                      {lang === 'zh' ? field.zh : field.en}
-                    </span>
-                    <span className="text-xs font-bold text-gray-700 font-mono">
-                      {status.counts[field.key] ?? 0}
-                    </span>
+                    <span className="text-xs text-gray-500">{lang === 'zh' ? field.zh : field.en}</span>
+                    <span className="text-xs font-bold text-gray-700 font-mono">{status.counts[field.key] ?? 0}</span>
                   </div>
                 ))}
               </div>
@@ -279,8 +277,7 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-800">
                 <span>
-                  {lang === 'zh' ? '姓名' : 'Name'}:{' '}
-                  <span className="font-semibold">{status.credentials.name}</span>
+                  {lang === 'zh' ? '姓名' : 'Name'}: <span className="font-semibold">{status.credentials.name}</span>
                 </span>
                 <span>
                   {lang === 'zh' ? '用户名' : 'Username'}:{' '}
@@ -320,7 +317,13 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
               disabled={busy}
               className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
             >
-              {seeding ? <Loader2 size={13} className="animate-spin" /> : hasDemoData ? <RefreshCw size={14} /> : <Sparkles size={14} />}
+              {seeding ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : hasDemoData ? (
+                <RefreshCw size={14} />
+              ) : (
+                <Sparkles size={14} />
+              )}
               <span>
                 {seeding
                   ? lang === 'zh'

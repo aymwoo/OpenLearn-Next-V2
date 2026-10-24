@@ -16,7 +16,8 @@ describe('Bridge Runtime Routes - Arbitrary HTML & Fallback Discovery', () => {
   const testDir = path.resolve(process.cwd(), 'storage', 'courseware');
   // SEC-AUTH: /runtime 需要 ?ct= token（与 uuid 绑定）或浏览器 Sec-Fetch 元数据；
   // 测试的 fetch 不带 Sec-Fetch 头，统一走 token 通道
-  const runtimeUrl = (uuid: string) => `${baseUrl}/runtime/${uuid}/?ct=${encodeURIComponent(mintCoursewareToken(uuid))}`;
+  const runtimeUrl = (uuid: string) =>
+    `${baseUrl}/runtime/${uuid}/?ct=${encodeURIComponent(mintCoursewareToken(uuid))}`;
 
   beforeAll(async () => {
     app = express();
@@ -84,7 +85,9 @@ describe('Bridge Runtime Routes - Arbitrary HTML & Fallback Discovery', () => {
 
     try {
       // Request /index.html explicitly
-      const res = await fetch(`${baseUrl}/runtime/${testUuid}/index.html?ct=${encodeURIComponent(mintCoursewareToken(testUuid))}`);
+      const res = await fetch(
+        `${baseUrl}/runtime/${testUuid}/index.html?ct=${encodeURIComponent(mintCoursewareToken(testUuid))}`,
+      );
       expect(res.status).toBe(200);
       const text = await res.text();
       expect(text).toContain('Snow Map');

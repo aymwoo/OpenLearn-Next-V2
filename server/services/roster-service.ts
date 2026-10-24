@@ -423,7 +423,9 @@ export class RosterService {
           this.db.prepare(`DELETE FROM classroom_danmaku WHERE session_id IN (${sessionSubquery})`).run(classId);
         }
         if (tableExists('classroom_peer_review_tasks')) {
-          this.db.prepare(`DELETE FROM classroom_peer_review_tasks WHERE session_id IN (${sessionSubquery})`).run(classId);
+          this.db
+            .prepare(`DELETE FROM classroom_peer_review_tasks WHERE session_id IN (${sessionSubquery})`)
+            .run(classId);
         }
         if (tableExists('classroom_peer_reviews')) {
           this.db.prepare(`DELETE FROM classroom_peer_reviews WHERE session_id IN (${sessionSubquery})`).run(classId);
@@ -432,7 +434,9 @@ export class RosterService {
           this.db.prepare(`DELETE FROM classroom_peer_badges WHERE session_id IN (${sessionSubquery})`).run(classId);
         }
         if (tableExists('classroom_peer_nominations')) {
-          this.db.prepare(`DELETE FROM classroom_peer_nominations WHERE session_id IN (${sessionSubquery})`).run(classId);
+          this.db
+            .prepare(`DELETE FROM classroom_peer_nominations WHERE session_id IN (${sessionSubquery})`)
+            .run(classId);
         }
         if (tableExists('classroom_peer_rubric_dimensions')) {
           this.db
@@ -612,12 +616,17 @@ export class RosterService {
       this.db.prepare('UPDATE students SET lock_mode = ? WHERE id = ?').run(validMode, id);
     }
     if (lock_target !== undefined && locked_lesson_id !== null) {
-      const targetStr =
-        lock_target ? (typeof lock_target === 'string' ? lock_target : JSON.stringify(lock_target)) : null;
+      const targetStr = lock_target
+        ? typeof lock_target === 'string'
+          ? lock_target
+          : JSON.stringify(lock_target)
+        : null;
       this.db.prepare('UPDATE students SET lock_target = ? WHERE id = ?').run(targetStr, id);
     }
     if (private_notes !== undefined)
-      this.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(sanitizePrivateNotes(private_notes), id);
+      this.db
+        .prepare('UPDATE students SET private_notes = ? WHERE id = ?')
+        .run(sanitizePrivateNotes(private_notes), id);
     if (student_number !== undefined)
       this.db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(student_number, id);
   }
@@ -696,7 +705,9 @@ export class RosterService {
       .prepare('SELECT * FROM student_semester_reports WHERE student_id = ?')
       .all(studentId);
     const rollcalls = this.reader.prepare('SELECT * FROM student_rollcalls WHERE student_id = ?').all(studentId);
-    const pluginSubmissions = this.reader.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
+    const pluginSubmissions = this.reader
+      .prepare('SELECT * FROM plugin_submissions WHERE student_id = ?')
+      .all(studentId);
     const peerReviews = this.reader.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
 
     let pointLogs: any[] = [];

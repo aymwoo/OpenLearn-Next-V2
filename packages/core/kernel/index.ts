@@ -343,8 +343,7 @@ export class Kernel {
 
         // 插件 actor 不能靠自己带上 metadata.approved 跳过人工审批。
         // 宿主审批路由和 AI 管理员路径使用的是 user: / agent-system-0 等非 plugin: actor。
-        const pluginSuppliedApproval =
-          typeof command.actorId === 'string' && command.actorId.startsWith('plugin:');
+        const pluginSuppliedApproval = typeof command.actorId === 'string' && command.actorId.startsWith('plugin:');
         if (action.isHighRisk && (command.metadata?.approved !== true || pluginSuppliedApproval)) {
           if (isAdmin && !pluginSuppliedApproval) {
             console.log(
@@ -481,7 +480,10 @@ export class Kernel {
 
         // Register in PluginHost's preloadedPlugins map
         // strict: SDK/core PluginContext 可空性漂移，运行时此处非空
-        this.pluginHost.registerPreloadedPlugin(plugin.id, plugin.mod as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1]);
+        this.pluginHost.registerPreloadedPlugin(
+          plugin.id,
+          plugin.mod as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+        );
 
         // Activate plugin
         await this.pluginHost.activatePlugin(plugin.id);

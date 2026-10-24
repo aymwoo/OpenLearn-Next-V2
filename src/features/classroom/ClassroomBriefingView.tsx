@@ -576,9 +576,7 @@ export function ClassroomBriefingView({
                     }`}
                   >
                     <span
-                      className={`font-bold ${
-                        idx === 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted'
-                      }`}
+                      className={`font-bold ${idx === 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted'}`}
                     >
                       {lang === 'zh' ? `选项 ${item.option}` : `Option ${item.option}`}
                     </span>

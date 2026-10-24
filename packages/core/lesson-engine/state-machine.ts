@@ -29,11 +29,7 @@ export class InvalidLessonStateTransitionError extends Error {
   }
 }
 
-export type StateTransitionListener = (
-  fromStatus: LessonStatus,
-  toStatus: LessonStatus,
-  lessonId: string,
-) => void;
+export type StateTransitionListener = (fromStatus: LessonStatus, toStatus: LessonStatus, lessonId: string) => void;
 
 export class LessonStateMachine {
   private _status: LessonStatus;

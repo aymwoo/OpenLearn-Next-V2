@@ -73,7 +73,11 @@ describe('StudentQuickActionsFloatingMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Issue #109: 悬浮菜单的「进入实时课堂」只认服务端真实会话
-    studentActiveSessionStore.setState({ activeSession: activeSessionFixture, loading: false, studentKey: 'student-bob' });
+    studentActiveSessionStore.setState({
+      activeSession: activeSessionFixture,
+      loading: false,
+      studentKey: 'student-bob',
+    });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
@@ -138,7 +142,8 @@ describe('StudentQuickActionsFloatingMenu', () => {
     );
   });
 
-  it('triggers onExpandWidget and locates assignment on clicking View Latest Assignments', () => {    const onExpandWidget = vi.fn();
+  it('triggers onExpandWidget and locates assignment on clicking View Latest Assignments', () => {
+    const onExpandWidget = vi.fn();
 
     // Create a dummy widget in document
     const dummyWidget = document.createElement('div');

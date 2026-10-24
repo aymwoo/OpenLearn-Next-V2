@@ -8,9 +8,9 @@ function purgeBuzzerE2EFromDb() {
   if (!fs.existsSync(dbPath)) return;
   const db = new Database(dbPath);
   try {
-    const e2eLessons = db
-      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 抢答测试课节%'")
-      .all() as { id: string }[];
+    const e2eLessons = db.prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 抢答测试课节%'").all() as {
+      id: string;
+    }[];
 
     if (e2eLessons.length > 0) {
       const lessonIds = e2eLessons.map((l) => l.id);
@@ -40,9 +40,9 @@ function purgeBuzzerE2EFromDb() {
       db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
     }
 
-    const e2eStudents = db
-      .prepare("SELECT id FROM students WHERE student_number LIKE 'STU_BUZZ_%-%'")
-      .all() as { id: string }[];
+    const e2eStudents = db.prepare("SELECT id FROM students WHERE student_number LIKE 'STU_BUZZ_%-%'").all() as {
+      id: string;
+    }[];
 
     if (e2eStudents.length > 0) {
       const studentIds = e2eStudents.map((s) => s.id);
@@ -52,9 +52,9 @@ function purgeBuzzerE2EFromDb() {
       db.prepare(`DELETE FROM students WHERE id IN (${sPlaceholders})`).run(...studentIds);
     }
 
-    const e2eClasses = db
-      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 抢答测试班级%'")
-      .all() as { id: string }[];
+    const e2eClasses = db.prepare("SELECT id FROM classes WHERE name LIKE 'E2E 抢答测试班级%'").all() as {
+      id: string;
+    }[];
 
     if (e2eClasses.length > 0) {
       const classIds = e2eClasses.map((c) => c.id);

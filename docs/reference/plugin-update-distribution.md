@@ -59,8 +59,8 @@ installFromZip(zipPath: string, executionMode?: 'worker' | 'inline' | 'process')
 
 ### 命令总线入口（builtin 插件）
 
-| 命令类型            | 权限           | 高危  | 入参                                                                                                            |
-| ------------------- | -------------- | ----- | --------------------------------------------------------------------------------------------------------------- |
+| 命令类型            | 权限           | 高危  | 入参                                                                                                                                                                                                                     |
+| ------------------- | -------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `plugin.update_zip` | `plugin:write` | ✅ 是 | `{ base64Data: string, targetPluginId?: string, executionMode?: 'worker'\|'inline'\|'process', allowDowngrade?: boolean }`。非受信插件的 `executionMode` 会被改写为 `process`，且不会因为清单 `auth: false` 自动公开路由 |
 
 该命令将 Base64 ZIP 交给 `distributionManager.updateFromZip`。

@@ -56,4 +56,3 @@ export function clearLessonRuntimeState(lessonId: string): void {
   lessonActiveSegments.delete(lessonId);
   activeCountdowns.delete(lessonId);
 }
-
