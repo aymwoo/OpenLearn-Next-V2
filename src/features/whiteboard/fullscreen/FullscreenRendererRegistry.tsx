@@ -357,20 +357,11 @@ function DefaultFullscreenRenderer({ data, lessonId }: FullscreenRendererProps) 
     // Issue #228：白板元素里的 url 会渲染进 href —— 过协议白名单。
     const safeUrl = sanitizeHref(data.url);
     if (!safeUrl) {
-      return (
-        <div className="flex items-center justify-center h-full text-sm text-slate-400">
-          {String(data.url)}
-        </div>
-      );
+      return <div className="flex items-center justify-center h-full text-sm text-slate-400">{String(data.url)}</div>;
     }
     return (
       <div className="flex items-center justify-center h-full">
-        <a
-          href={safeUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-indigo-600 underline text-lg"
-        >
+        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline text-lg">
           {String(data.url)}
         </a>
       </div>

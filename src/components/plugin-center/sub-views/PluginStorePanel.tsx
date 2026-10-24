@@ -283,13 +283,13 @@ export function PluginStorePanel({
                         <Users size={10} className="shrink-0 text-gray-400" />
                         <span className="truncate">{manifestInfo.author}</span>
                       </span>
-                      {sanitizeHref(
-                        manifestInfo.repository || manifestInfo.homepage || marketItem?.repository,
-                      ) && (
+                      {sanitizeHref(manifestInfo.repository || manifestInfo.homepage || marketItem?.repository) && (
                         <a
-                          href={sanitizeHref(
-                            manifestInfo.repository || manifestInfo.homepage || marketItem?.repository,
-                          ) as string}
+                          href={
+                            sanitizeHref(
+                              manifestInfo.repository || manifestInfo.homepage || marketItem?.repository,
+                            ) as string
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           title={lang === 'zh' ? '查看 Git 开源仓库 (GitHub/Gitee)' : 'View Git Repository'}
