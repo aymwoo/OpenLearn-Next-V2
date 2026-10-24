@@ -141,9 +141,8 @@ export class DiagnosticService {
    * 获取课前学情诊断综合报表（课前完成度、错题排行、分层掌握、破冰心态）
    */
   public getPreClassDiagnostic(lessonId: string, classId?: string): PreClassDiagnosticResult {
-    const lesson = this.reader
-      .prepare('SELECT id, title, content FROM lessons WHERE id = ?')
-      .get(lessonId) as { id: string; title: string; content?: string } | undefined;
+    const lesson = this.reader.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as
+      { id: string; title: string; content?: string } | undefined;
 
     if (!lesson) {
       const err = new Error('Lesson not found') as any;
@@ -638,12 +637,8 @@ export class DiagnosticService {
     // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
     // 过滤掉模拟假数据 (id NOT LIKE 'sim-quiz-%')，并支持按 classId 过滤
     let rows: any[] = [];
-    const classFilter = classId
-      ? 'AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
-      : '';
-    const queryParams = classId
-      ? [lessonId, classId, limit]
-      : [lessonId, limit];
+    const classFilter = classId ? 'AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)' : '';
+    const queryParams = classId ? [lessonId, classId, limit] : [lessonId, limit];
 
     try {
       rows = this.reader
@@ -802,8 +797,8 @@ export class DiagnosticService {
 
   private getGlobalTopPerformers(limit: number, classId?: string): TopPerformersResult {
     const classFilter = classId
-      ? 'WHERE s.id NOT LIKE \'sim-quiz-%\' AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)'
-      : 'WHERE s.id NOT LIKE \'sim-quiz-%\'';
+      ? "WHERE s.id NOT LIKE 'sim-quiz-%' AND s.student_id IN (SELECT student_id FROM class_students WHERE class_id = ?)"
+      : "WHERE s.id NOT LIKE 'sim-quiz-%'";
     const queryParams = classId ? [classId, limit] : [limit];
 
     const rows = this.reader
@@ -900,18 +895,7 @@ export class DiagnosticService {
             submitted_at = excluded.submitted_at
         `,
           )
-          .run(
-            subId,
-            lessonId,
-            dummyElementId,
-            st.id,
-            st.name,
-            'A',
-            score,
-            isCorrect ? 1 : 0,
-            timeSpent,
-            Date.now(),
-          );
+          .run(subId, lessonId, dummyElementId, st.id, st.name, 'A', score, isCorrect ? 1 : 0, timeSpent, Date.now());
       } catch {
         // ignore conflict errors
       }

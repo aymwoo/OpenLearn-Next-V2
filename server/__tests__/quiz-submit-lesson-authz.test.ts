@@ -135,9 +135,13 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
 
     // 随堂测验元素：正确答案 B
     db.prepare('DELETE FROM whiteboard_elements WHERE id = ?').run(elementB);
-    db.prepare(
-      'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(elementB, lessonB, 'quiz', JSON.stringify({ question: '哪一项？', options: ['A', 'B', 'C', 'D'], correctIndex: 1 }), now);
+    db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      elementB,
+      lessonB,
+      'quiz',
+      JSON.stringify({ question: '哪一项？', options: ['A', 'B', 'C', 'D'], correctIndex: 1 }),
+      now,
+    );
   });
 
   afterAll(async () => {
@@ -176,7 +180,9 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
     const res = await post(studentInBToken, lessonB, elementB, 0);
     expect(res.status).toBe(200);
     const row = db
-      .prepare('SELECT score, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?')
+      .prepare(
+        'SELECT score, is_correct FROM lesson_quiz_submissions WHERE lesson_id = ? AND element_id = ? AND student_id = ?',
+      )
       .get(lessonB, elementB, studentInB) as { score: number; is_correct: number };
     // 分数仍是首次提交的 100 —— 否则学生可以「先错后对」用答案解析刷满分
     expect(row.score).toBe(100);

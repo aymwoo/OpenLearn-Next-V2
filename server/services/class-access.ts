@@ -246,8 +246,7 @@ export function authorizeLessonParticipation(
   // 教师还可以是课节创建者
   if (isTeacher(session)) {
     const lesson = db.prepare('SELECT creator_id FROM lessons WHERE id = ?').get(lessonId) as
-      | { creator_id: string | null }
-      | undefined;
+      { creator_id: string | null } | undefined;
     const uid = actorUserId(session);
     if (lesson?.creator_id && (lesson.creator_id === uid || lesson.creator_id === session.username)) {
       return { ok: true, level: 'teacher' };
