@@ -36,8 +36,9 @@ overrides:
   engine.io: '>=6.6.10'
   # brace-expansion 5.x DoS（CVE-2026-14257 及后续）。v1/v2 属于 minimatch 3/5，不在公告范围内，不能整包抬到 5。
   'brace-expansion@>=4': '5.0.12'
-  # jsdom 29 使用 undici 7。不要抬到 8（那是 jsdom 30 的主版本）。7.30.0 高于 #7 的 7.29.1。
-  'undici@>=7 <8': '7.30.0'
+  # jsdom 29 使用 undici 7。不要抬到 8（那是 jsdom 30 的主版本）。
+  # 7.30.1 起修复「过多 content-encoding 触发未处理错误导致 DoS」（GHSA-xjj6-f33q-929c，<=7.30.0 受影响）。
+  'undici@>=7 <8': '7.30.1'
   # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g。4.29 同时带上已修复的 baseline-browser-mapping >=2.11。
   browserslist: '>=4.28.7'
   baseline-browser-mapping: '>=2.11.0'
