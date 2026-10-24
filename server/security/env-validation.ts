@@ -32,6 +32,21 @@ const ISOLATE_KINDS = ['thread', 'process'] as const;
 const PERMISSION_POLICIES = ['rw', 'ro', 'off'] as const;
 const LIVENESS_VALUES = ['on', 'off'] as const;
 const TELEMETRY_VALUES = ['on', 'off'] as const;
+/**
+ * 插件资源配额（`packages/core/worker-runtime/plugin-quota.ts`）的可调键。
+ *
+ * 每一项都接受 `off` / `none` / `0`（= 不限制）或正整数，与
+ * `normalizePositiveInt` 的解析口径一致。之所以要在这里逐个校验：那套解析器
+ * 对非法输入是**静默回落默认值**的，于是 `OPENLEARN_PLUGIN_CPU_QUOTA_MS=20s`
+ * 会安静地变成 8000 —— 运维以为放宽了配额，实际没有。
+ */
+const QUOTA_INT_KEYS = [
+  'OPENLEARN_PLUGIN_MAX_RSS_MB',
+  'OPENLEARN_PLUGIN_CPU_QUOTA_MS',
+  'OPENLEARN_PLUGIN_CPU_WINDOW_MS',
+] as const;
+const QUOTA_SWITCH_KEYS = ['OPENLEARN_PLUGIN_QUOTA'] as const;
+const LIVENESS_INT_KEYS = ['OPENLEARN_WORKER_LIVENESS_INTERVAL_MS', 'OPENLEARN_WORKER_LIVENESS_GRACE_MS'] as const;
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 function trimmed(env: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -217,6 +232,56 @@ export function validateStartupEnv(env: NodeJS.ProcessEnv = process.env): EnvVal
       severity: 'error',
       message: `OPENLEARN_WORKER_LIVENESS 只能是 on / off，实际为 "${liveness}"。`,
     });
+  }
+
+  // ── 插件资源配额与探活调参 ───────────────────────────────────────────
+  //
+  // 这些键由 `plugin-quota.ts` / `liveness-monitor.ts` 的 `normalizePositiveInt`
+  // 解析，而它对非法值**静默回落默认值**（TB-03 的同一类问题）。所以拼错单位、
+  // 写成负数、或把开关写成 `of` 都必须 fail-fast，否则运维会以为改动生效了。
+  for (const key of QUOTA_SWITCH_KEYS) {
+    const value = trimmed(env, key);
+    if (value && !(LIVENESS_VALUES as readonly string[]).includes(value.toLowerCase())) {
+      errors.push({
+        key,
+        severity: 'error',
+        message: `${key} 只能是 on / off，实际为 "${value}"。写错会静默保持配额生效，看起来像"关掉了但没用"。`,
+      });
+    }
+  }
+
+  for (const key of QUOTA_INT_KEYS) {
+    const value = trimmed(env, key);
+    if (!value) continue;
+    const lower = value.toLowerCase();
+    if (lower === 'off' || lower === 'none' || lower === '0') continue;
+    if (!/^\d+$/.test(value) || Number(value) <= 0) {
+      errors.push({
+        key,
+        severity: 'error',
+        message:
+          `${key} 必须是 "off"/"none"/"0" 或正整数（毫秒 / MB），实际为 "${value}"。` +
+          ' 带单位（如 20s、512MB）会静默回落默认值，因此拒绝启动而不是继续。',
+      });
+    } else if (key.endsWith('_WINDOW_MS') && Number(value) < 1000) {
+      warnings.push({
+        key,
+        severity: 'warning',
+        message: `${key}=${value} 小于 1 秒，采样窗口过短会让 CPU 配额判定抖动（采样本身是 1s 一次）。`,
+      });
+    }
+  }
+
+  for (const key of LIVENESS_INT_KEYS) {
+    const value = trimmed(env, key);
+    if (!value) continue;
+    if (!/^\d+$/.test(value) || Number(value) <= 0) {
+      errors.push({
+        key,
+        severity: 'error',
+        message: `${key} 必须是正整数（毫秒），实际为 "${value}"。非法值会静默回落默认探活节奏。`,
+      });
+    }
   }
 
   const telemetry = trimmed(env, 'BRIDGE_HOOK_TELEMETRY');

@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件资源配额与探活调参纳入启动期强校验（补 R-03 复核缺口）**：
+  - **复核结论**：R-03（CPU 饥饿不等于崩溃）在 `packages/core/worker-runtime/plugin-quota.ts` 里**早已实现** —— `startProcessQuota()` 在子进程 spawn 处按 1s 节奏采样 `/proc/<pid>` 的 RSS 与 CPU 时间，超限 `SIGKILL` 后交给既有崩溃看门狗（退避 + 熔断）。此前把这项记为「P2 待办」是文档滞后，已更正。
+  - **真正的缺口**：这五个调参键（`OPENLEARN_PLUGIN_MAX_RSS_MB` / `_CPU_QUOTA_MS` / `_CPU_WINDOW_MS` / `OPENLEARN_PLUGIN_QUOTA` / `OPENLEARN_WORKER_LIVENESS_*`）不在 `assertStartupEnv` 里，而解析器 `normalizePositiveInt` 对非法值是**静默回落默认**的 —— 与 TB-03「拼错就静默回落」完全同类：`OPENLEARN_PLUGIN_CPU_QUOTA_MS=20s` 或开关写成 `of` 都会被无声吞掉，运维以为放宽了配额。
+  - **修法**：逐个纳入启动期强校验 —— 带单位/负数/零以外的非整数 → 拒绝启动（并说明会静默回落）；`OPENLEARN_PLUGIN_CPU_WINDOW_MS < 1000` 只告警（采样本身 1s 一次，窗口过短会让判定抖动）。
+  - **测试**：`env-validation.test.ts` 新增 5 例（合法值矩阵、带单位与负数被拒、开关拼错 fail-fast、探活调参必须正整数、过小窗口只告警）。
+  - **文档**：`.env.example` 补上「这些键会被强校验」的说明；`docs/trust-boundary-hardening-audit-2026-10-14.md` 的 R-03 行更正为已修并写明实现位置与互补关系。
+
 - **已安装插件的出站域名可见可撤销（补齐 R-02 的后半段）**：
   - **动机**：上一批改动补上了授权链路，但只在**安装向导**里可见 —— 已安装插件的管理员仍无处查看与撤销。撤销恰恰是授权机制最该有的另一半：只批不撤等于永久放行。
   - **界面**：插件中心 → 插件设置新增「出站网络域名」区块（`PluginNetworkGrantsPanel`），与「这个插件被允许做什么」的其他配置同屏。三个列表**刻意分开**：已批准（带撤销）/ 清单申请中（带批准）/ 不可批准（带原因，无按钮）—— 合并成一张列表会让「清单写了」看起来像「已经能访问」。

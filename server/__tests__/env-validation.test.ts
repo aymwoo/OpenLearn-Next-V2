@@ -7,6 +7,40 @@ function errorKeys(env: NodeJS.ProcessEnv): string[] {
   return validateStartupEnv(env).errors.map((issue) => issue.key);
 }
 
+describe('插件资源配额与探活调参（TB-03 同类：拼错不能静默回落）', () => {
+  it('接受 off / none / 0 与正整数', () => {
+    for (const value of ['off', 'none', '0', '512', '32768']) {
+      expect(errorKeys({ OPENLEARN_PLUGIN_MAX_RSS_MB: value }), value).toEqual([]);
+    }
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_QUOTA_MS: '20000' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '10000' })).toEqual([]);
+  });
+
+  it('拒绝带单位/负数的配额值（否则会静默回落默认值）', () => {
+    expect(errorKeys({ OPENLEARN_PLUGIN_MAX_RSS_MB: '512MB' })).toEqual(['OPENLEARN_PLUGIN_MAX_RSS_MB']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_QUOTA_MS: '20s' })).toEqual(['OPENLEARN_PLUGIN_CPU_QUOTA_MS']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '-1' })).toEqual(['OPENLEARN_PLUGIN_CPU_WINDOW_MS']);
+  });
+
+  it('配额总开关拼错时 fail-fast，而不是「看起来关了其实没关」', () => {
+    expect(errorKeys({ OPENLEARN_PLUGIN_QUOTA: 'of' })).toEqual(['OPENLEARN_PLUGIN_QUOTA']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_QUOTA: 'off' })).toEqual([]);
+  });
+
+  it('探活调参必须是正整数', () => {
+    expect(errorKeys({ OPENLEARN_WORKER_LIVENESS_INTERVAL_MS: '30s' })).toEqual([
+      'OPENLEARN_WORKER_LIVENESS_INTERVAL_MS',
+    ]);
+    expect(errorKeys({ OPENLEARN_WORKER_LIVENESS_GRACE_MS: '15000' })).toEqual([]);
+  });
+
+  it('过小的采样窗口只告警，不阻断', () => {
+    const result = validateStartupEnv({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '200' });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.map((w) => w.key)).toContain('OPENLEARN_PLUGIN_CPU_WINDOW_MS');
+  });
+});
+
 describe('startup env validation', () => {
   it('默认空环境不产生任何 error', () => {
     expect(validateStartupEnv(EMPTY_ENV).errors).toHaveLength(0);
