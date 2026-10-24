@@ -1316,8 +1316,8 @@ export const BuiltinPlugin = {
         if (password !== undefined && password !== '') {
           updates.push('password_hash = ?');
           // Issue #227：口令摘要改用 bcrypt —— SHA-256 无盐、无工作因子，
-        // 库一旦泄露，爆破成本极低。与种子账号 / 名册入口保持同一口径。
-        const hash = hashPassword(password);
+          // 库一旦泄露，爆破成本极低。与种子账号 / 名册入口保持同一口径。
+          const hash = hashPassword(password);
           params.push(hash);
         }
         if (role !== undefined) {
