@@ -292,7 +292,9 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
           invokeId: 'inv-2',
         }),
       );
-      const err = postedMessages.find((m: any) => m.type === 'error') as any;
+      const err = postedMessages.find(
+        (m): m is { code?: string; message?: string } => (m as { type?: string })?.type === 'error',
+      );
       expect(err.code).toBe('WorkerCapabilityError');
       expect(err.message).toContain('student-data:write');
 
