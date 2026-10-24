@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **把 CSV 导入通道明确标为「简易导入」（课程导入审计收尾项）**：
+  - **问题**：CSV 通道只有 `title + content` 两列，但界面上一直只说「支持 CSV 与课程包 JSON 导入」。教师导完 CSV 再去白板找不到任何教学环节或组件，只能认为是导入失败 —— 而平台其实什么都没丢，只是这条通道本来就不带这些。
+  - **改法**：导入框的 schema 区标题改为「简易导入（CSV）」并配「仅标题 + 正文」徽标；头部副标题写明两条通道的分工（完整课程用课程包 JSON）；课程包模板说明末尾补一句「完整课程统一走这条通道，CSV 只做批量建空壳」。
+  - **边界**：只改表达，**没有**限制 CSV 能力 —— CSV 仍是两列，只是不再让教师在界面上误解它。审计文档该项已标为已修并写明这一点。
+  - **测试**：`ImportLessonsModal.test.tsx` 新增 2 例（中英双语的徽标与副标题措辞）。
+
 - **修复发布包（`npx openlearn-next`）因迁移目录不在包内而无法启动（P0）**：
   - **现象（实测复现，非推断）**：按 `package.json` 的 `files` 清单在临时目录还原发布包布局后启动，直接 FATAL：
     `[DB SSOT] FATAL: 迁移目录 /tmp/user-cwd/migrations 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`
