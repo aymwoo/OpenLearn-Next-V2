@@ -12,6 +12,7 @@
  * 7. 检验演示数据（Demo）状态查询与一键刷新功能
  * 8. 真实渲染全幅截图存盘 (Generates Artifact: Screenshot)
  * 9. 输出测试证据日志
+ * 归属：管理端 / 系统监控 —— 管理员查看系统运行指标与健康状态
  */
 
 import { test, expect } from '@playwright/test';

@@ -362,6 +362,62 @@ jobs:
       - name: Run shell request hygiene gate
         run: pnpm exec playwright test e2e/shell-request-hygiene.spec.ts
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 全量 e2e（Issue #230）
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # 此前 CI 只点名跑了 6 个 spec（26 个里的 23%）—— 课堂互动、并发一致性、
+  # 教师工作流等核心链路的 e2e 从不在 CI 运行，回归只能靠人工点。
+  #
+  # 本 job 跑**全部** e2e（`pnpm test:e2e` = 默认配置覆盖 e2e/ 下所有 spec），
+  # 新增 spec 自动进 CI，不必再维护一份「点名清单」。
+  #
+  # 为什么先 `continue-on-error: true`：
+  # 与本文件里的 `windows-platform-probe` 同一思路 —— **首跑是为了把现状摸出来**。
+  # 本地全量跑（main，25 个 spec）实测 26 通过 / 11 失败 / 2 未跑；失败集中在
+  # 课堂黄金旅程、课表、机房、课后复盘等**长链路**用例，其中也包含当前已在 CI 跑的
+  # `lesson-classroom-flow` —— 说明其中一部分是环境/时序敏感的既有不稳定项，
+  # 而不是「一直没跑所以坏了」。
+  #
+  # 因此先让它们**在 CI 里跑起来并暴露状态**（而不是静默地不在 CI 跑），
+  # 下一轮再把失败用例分类：能修的修，确实不稳定的用 `test.describe.skip`
+  # **登记原因**（见 issue 建议修法第 2 条），之后去掉 continue-on-error 转为阻塞门禁。
+  e2e-full-coverage:
+    name: E2E full coverage (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run all e2e specs
+        run: pnpm test:e2e
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-full-coverage-artifacts
+          path: |
+            test-results/
+            artifacts/
+          if-no-files-found: warn
+
   # 公测关键旅程。失败即阻断合并：不设置 continue-on-error。
   # 覆盖教师建班布置、学生加入并提交、教师批改、跨班越权、管理员安装并启用插件。
   # 生产启动拒绝种子口令等于用户名，本 job 使用强测试口令。口令等于用户名时的强制改密由单元测试覆盖。

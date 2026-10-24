@@ -9,6 +9,7 @@
  * 1. 每个页面只跑一次 axe —— 同一 document 上重复 analyze 会把元素 computed
  *    color 留在错误状态，导致下一次检查报出并不存在的违规。
  * 2. 审计前冻结动画 —— axe 按元素不透明度混合前景/背景，动效中途采样会产生假阳性。
+ * 归属：无障碍 —— axe-core 全站无障碍门禁（WCAG 2.0/2.1 A+AA）
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';

@@ -1,3 +1,9 @@
+/**
+ * 归属：插件 / 金丝雀 —— 金丝雀插件的安装、激活与界面回归
+ *
+ * Issue #230：CI 改为跑 e2e/ 下**全部**用例（pnpm test:e2e），
+ * 本注释用于标明该用例覆盖的能力域 —— 新增用例时按同一口径挂靠。
+ */
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
