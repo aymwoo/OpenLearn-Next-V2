@@ -68,9 +68,9 @@ graph TD
 
 | # | 风险 | 说明 | 建议 |
 | --- | --- | --- | --- |
-| R-01 | `worker_threads` / `inline` 模式原始网络不受限 | 虽已由 `plugin-net-preload.cjs` 封锁 `process` 模式原始网络，但 `worker_threads` 与 `inline` 同进程共享网络栈不受拦截 | 当前已由 `resolvePluginExecutionMode` 在加载期强门禁强制对第三方插件降级至 `process` 模式兜底；中长期探索 Worker 线程级沙箱或全面统一 process 隔离 |
-| R-02 | 出站 allowlist 的可见性 | manifest 可自行声明 `network.outbound`，但安装/启用 UI 尚未突出展示「该插件将能访问哪些域名」 | 在管理员插件详情页展示 allowlist，并要求批准高危域名；考虑对私有/敏感域名二次确认 |
-| R-03 | CPU 饥饿不等于崩溃 | 存活探活只处理「卡死且不响应」；持续吃 CPU 但让出 event loop 的插件仍存活 | P2：进程级 CPU/内存配额（cgroup 或 watchdog quota） |
+| R-01 | `worker_threads` / `inline` 模式原始网络不受限 | 虽已由 `plugin-net-preload.cjs` 封锁 `process` 模式原始网络，但 `worker_threads` 与 `inline` 同进程共享网络栈不受拦截。**残余风险的准确形态**：第三方插件默认都会被强制降级到 `process`（`resolvePluginExecutionMode`，已有 5 例测试钉住「激活/恢复时改写 DB 并走子进程原语」），因此真实暴露面只剩两类 —— ① 管理员显式写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件；② `packages/plugins` 内置目录里的代码。② 是自有代码，① 是显式决定。本轮补上运营面护栏：该名单在生产环境出现时启动日志必留一条告警（写明共享网络栈、出站拦截不生效），`OPENLEARN_ENFORCE_PLUGIN_ISOLATION` 写错（true/yes）此前会静默判为未开启，现直接拒绝启动 | 当前已由 `resolvePluginExecutionMode` 在加载期强门禁强制对第三方插件降级至 `process` 模式兜底；中长期探索 Worker 线程级沙箱或全面统一 process 隔离 |
+| R-02 | 出站 allowlist 的可见性 | ✅ 已修：安装向导逐条列出清单声明的出站域名并默认不批准；管理员另有 `GET/POST/DELETE /api/plugins/:id/network-grants` 查看/批准/撤销。**复查时发现原描述低估了缺口**：`approvePluginNetHosts` 当时在整个仓库里没有任何调用方 —— 不只是「UI 没展示」，而是授权链路根本不存在（第三方插件永远拿不到出站权）。现已在安装/更新路径接受 `x-approve-network-hosts` 补上该链路，回环/私有/保留地址与通配符一律不可批准并回显原因 |
+| R-03 | CPU 饥饿不等于崩溃 | ✅ 已修（本报告收尾复核时核实）：`packages/core/worker-runtime/plugin-quota.ts` 的 `startProcessQuota()` 在子进程 spawn 处启动 1s 一次的 `/proc/<pid>` 采样，按 `OPENLEARN_PLUGIN_MAX_RSS_MB`（默认 512）与 `OPENLEARN_PLUGIN_CPU_QUOTA_MS`/`_WINDOW_MS`（默认 8000/10000）判定，超限 `SIGKILL` 后交给既有崩溃看门狗（指数退避 + 熔断）。存活探活（`liveness-monitor.ts`）负责「卡死但零 CPU」的另一半——两者是互补的两条检测路径，不是替代关系。**复核时补上的缺口**：这五个调参键此前不在 `assertStartupEnv` 里，而解析器对非法值是静默回落默认的（`20s` / `512MB` / 开关写成 `of` 都会被无声吞掉）—— 与 TB-03 同一类问题，现已逐个纳入启动期强校验 |
 | R-04 | 信任边界文档漂移 | TB-08 的渲染缺陷与 TB-09 的「网络 unrestricted」表述仍留在文档里，容易与 #32 之后的实现矛盾 | ✅ 已修（Issue #144）：同步 `plugin-trust-boundary.md`，并加入自动化防漂移测试 |
 | R-05 | 环境校验只覆盖 `server.ts` 入口 | `cli.mjs` 的子命令（doctor/migrate/backup）不经过 `assertStartupEnv()`，理论上仍可用非法环境变量运行非服务命令 | 视需要在 CLI 子命令入口复用同一校验器；服务入口已覆盖 |
 | R-06 | 部署侧其余已知项 | AI Provider 种子失败只告警不拒绝启动；`TRUST_PROXY` 跳数必须等于真实反代层数；恢复后的 AI Key 依赖备份时的 `ENCRYPTION_KEY` | 维持 `docs/DEPLOY_REHEARSAL.md` 的「仍未关闭的风险」清单，纳入每次发布检查 |

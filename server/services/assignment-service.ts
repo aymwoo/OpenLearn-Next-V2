@@ -23,6 +23,7 @@ import {
   parseAllowedExt,
 } from '../utils/assignment-upload-policy.js';
 import { isPrivilegedGradeActor } from '../../packages/core/db/assignment-grade-writer.js';
+import { applyResubmission } from '../../packages/core/db/assignment-resubmit.js';
 
 export function safeSegment(value: string): string {
   const cleaned = String(value || '').replace(/[^A-Za-z0-9._-]/g, '');
@@ -99,7 +100,16 @@ export class AssignmentService {
       .prepare(
         'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, classId, lessonId || null, title || 'Untitled Assignment', description || '', content || '', now, resolvedAcademicYear);
+      .run(
+        id,
+        classId,
+        lessonId || null,
+        title || 'Untitled Assignment',
+        description || '',
+        content || '',
+        now,
+        resolvedAcademicYear,
+      );
     return id;
   }
 
@@ -221,7 +231,16 @@ Output pure JSON only without markdown code blocks, matching this structure:
       .prepare(
         'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, classId, lessonId || null, title || 'AI Suggested Quiz', description || '', contentJson, now, deriveAcademicYear(now));
+      .run(
+        id,
+        classId,
+        lessonId || null,
+        title || 'AI Suggested Quiz',
+        description || '',
+        contentJson,
+        now,
+        deriveAcademicYear(now),
+      );
 
     return id;
   }
@@ -266,21 +285,15 @@ Output pure JSON only without markdown code blocks, matching this structure:
         throw err;
       }
     }
-    this.db
-      .prepare(
-        `
-      INSERT INTO assignment_submissions (assignment_id, student_id, content, submitted_at, status)
-      VALUES (?, ?, ?, ?, 'submitted')
-      ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-        content = excluded.content,
-        submitted_at = excluded.submitted_at,
-        status = CASE
-          WHEN assignment_submissions.status IN ('graded', 'absent') THEN assignment_submissions.status
-          ELSE 'submitted'
-        END
-    `,
-      )
-      .run(assignmentId, studentId, content, Date.now());
+    // 重交走唯一入口（packages/core/db/assignment-resubmit.ts）：
+    // 「重交不降级」（#215）由它保证，「内容替换要留痕」（#248）也由它保证。
+    applyResubmission(this.db as any, {
+      assignmentId,
+      studentId,
+      content,
+      actorId: `user:${studentId}:student`,
+      actorRole: 'student',
+    });
   }
 
   public listTraditionalSubmissions(assignmentId: string): TraditionalSubmissionItem[] {

@@ -293,6 +293,43 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
       expect(res.status).toBe(400);
       expect((await res.json()).error).toBe('Invalid pacing signal');
     });
+
+    /**
+     * Issue #248：归档会话不再接收节奏信号 —— 与结课通票的口径对齐
+     * （exit-ticket 早就显式拒绝归档，此前只有通票守住了这条边界）。
+     */
+    it('归档后的课堂不再接收节奏信号（409）', async () => {
+      // 先建一个会话（发一次投票即可让服务端建出会话）
+      await createPoll(['A', 'B']);
+
+      db.prepare(`UPDATE classroom_sessions SET stage = 'ARCHIVED_REPORT' WHERE lesson_id = ?`).run(lessonId);
+
+      try {
+        const countSignals = () =>
+          (
+            db
+              .prepare(
+                `SELECT COUNT(*) AS n FROM classroom_pacing_signals
+                 WHERE session_id IN (SELECT id FROM classroom_sessions WHERE lesson_id = ?)`,
+              )
+              .get(lessonId) as { n: number }
+          ).n;
+        const before = countSignals();
+
+        const res = await post(`/api/classroom/sessions/${lessonId}/pacing`, studentToken, {
+          signal: 'CONFUSED',
+          segmentId: 'seg_intro',
+        });
+        expect(res.status).toBe(409);
+        expect((await res.json()).error).toContain('已归档');
+
+        // 归档会话里不该新增任何节奏信号
+        expect(countSignals()).toBe(before);
+      } finally {
+        // 还原阶段：本套件共用同一个课节，归档态会污染后续用例
+        db.prepare(`UPDATE classroom_sessions SET stage = 'PRE_CLASS_READY' WHERE lesson_id = ?`).run(lessonId);
+      }
+    });
   });
 
   describe('结课通票文字反馈字段名', () => {
