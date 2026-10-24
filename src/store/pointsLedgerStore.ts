@@ -77,4 +77,5 @@ export const pointsLedgerStore = createStore<PointsLedgerState>((set, get) => ({
   },
 }));
 
-export const usePointsLedgerStore = <T>(selector: (s: PointsLedgerState) => T): T => useStore(pointsLedgerStore, selector);
+export const usePointsLedgerStore = <T>(selector: (s: PointsLedgerState) => T): T =>
+  useStore(pointsLedgerStore, selector);

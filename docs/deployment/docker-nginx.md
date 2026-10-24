@@ -65,17 +65,17 @@ curl -fsS http://127.0.0.1:9000/health
 
 镜像内置的环境变量：
 
-| 变量                                                      | 值                        | 说明                                                      |
-| --------------------------------------------------------- | ------------------------- | --------------------------------------------------------- |
-| `NODE_ENV`                                                | `production`              | 决定前端资源与调试开关                                    |
-| `PORT`                                                    | `9000`                    | `server.ts` 的 `startServer` 读取                         |
-| `OPENLEARN_DATA_DIR`                                      | `/data`                   | 课件、插件、上传的根                                      |
-| `OPENLEARN_DB_PATH`                                       | `/data/educational_os.db` | 主库路径                                                  |
+| 变量                                                      | 值                        | 说明                                                                                                               |
+| --------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                                                | `production`              | 决定前端资源与调试开关                                                                                             |
+| `PORT`                                                    | `9000`                    | `server.ts` 的 `startServer` 读取                                                                                  |
+| `OPENLEARN_DATA_DIR`                                      | `/data`                   | 课件、插件、上传的根                                                                                               |
+| `OPENLEARN_DB_PATH`                                       | `/data/educational_os.db` | 主库路径                                                                                                           |
 | `ENCRYPTION_KEY`                                          | 由 `.env` 注入            | 64 位 hex。空着时首次启动写入 `/data/storage/encryption-key`（0600），并在日志里警告应改设环境变量且单独备份该文件 |
-| `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` | 空则随机生成              | 写入 `/data/storage/bootstrap-credentials.txt`            |
-| `TRUST_PROXY`                                             | 空（不信任）              | 使用 `--profile proxy` 时必须设为 `1`                     |
-| `LOG_LEVEL`                                               | `info`                    | 日志级别                                                  |
-| `BACKUP_DIR`                                              | `/backups`                | 站点备份目录                                              |
+| `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` | 空则随机生成              | 写入 `/data/storage/bootstrap-credentials.txt`                                                                     |
+| `TRUST_PROXY`                                             | 空（不信任）              | 使用 `--profile proxy` 时必须设为 `1`                                                                              |
+| `LOG_LEVEL`                                               | `info`                    | 日志级别                                                                                                           |
+| `BACKUP_DIR`                                              | `/backups`                | 站点备份目录                                                                                                       |
 
 > ⚠️ **`ENCRYPTION_KEY` 一旦设定就不能改**。改动后既有 AI Provider API Key 和班级临时口令全部无法解密。API Key 只能在「系统管理 → AI 提供商管理」重新保存；班级口令需要教师重新设置。若环境变量与 `/data/storage/encryption-key` 不一致，进程会拒绝启动并打印处理步骤。`node scripts/site-backup.mjs` 不包含该密钥文件，恢复后要单独放回。
 >

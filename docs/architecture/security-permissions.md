@@ -11,23 +11,24 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **不透明会话 ID + HttpOnly Cookie**: 登录成功后签发随机会话 ID（`edu_os_token` Cookie），服务端在 `client_sessions` 表中查表校验。**这不是 JWT**——令牌不含任何签名或载荷，无法离线验证，所有有效性判断都依赖服务端查表（实现见 `server/middleware/auth.ts` 的 `getValidSession`）。
 - **角色校验中间件**: `requireAuth(...roles)`（`server/middleware/auth.ts`）返回 Express 中间件，未带有效会话返回 401，角色不匹配返回 403。全仓 `requireAuth(` 实测调用分布：
 
-  | 调用形式                                            | 次数（`server/routes/*.ts`） | 含义                                       |
-  | --------------------------------------------------- | ---------------------------- | ------------------------------------------ |
-  | `requireAuth()`                                      | 83                           | 仅要求已登录，不限角色                     |
-  | `requireAuth('teacher', 'administrator')`            | 88                           | 教师与管理员（含 1 处无空格写法）          |
-  | `requireAuth('administrator')`                       | 31                           | 仅管理员（用户、站点配置、插件安装等）     |
+  | 调用形式                                             | 次数（`server/routes/*.ts`）    | 含义                                   |
+  | ---------------------------------------------------- | ------------------------------- | -------------------------------------- |
+  | `requireAuth()`                                      | 83                              | 仅要求已登录，不限角色                 |
+  | `requireAuth('teacher', 'administrator')`            | 88                              | 教师与管理员（含 1 处无空格写法）      |
+  | `requireAuth('administrator')`                       | 31                              | 仅管理员（用户、站点配置、插件安装等） |
   | `requireAuth('student', 'teacher', 'administrator')` | 12 + 1（末位为 `student` 在后） | 三种角色均可                           |
-  | `requireAuth('administrator', 'teacher')`            | 1                            | 同上，仅顺序不同                           |
+  | `requireAuth('administrator', 'teacher')`            | 1                               | 同上，仅顺序不同                       |
 
   `requireAuth` 内部会把字面量 `'admin'` 归一为 `'administrator'`，并对 `username === 'admin'` / `userId === 'usr_admin'` 的种子账号做同样的角色提升。
+
 - **`checkIsTeacherOrAdmin(req)`** 是同类逻辑的布尔版本（`session.role === 'teacher' || 'administrator'`），供非中间件形态的调用点使用。
 
-| 操作 / API         | Admin | Teacher | Student    | Plugin                            |
-| ------------------ | ----- | ------- | ---------- | --------------------------------- |
-| 创建/修改课程      | ✅    | ✅      | ❌         | 依赖 Manifest 授权                |
-| 查看全班学习分析   | ✅    | ✅      | 仅查看个人 | 依赖 Manifest 授权                |
-| 访问 SQLite 数据库 | ✅    | ❌      | ❌         | 见下方「插件与数据库的权限边界」  |
-| 修改系统密钥配置   | ✅    | ❌      | ❌         | ❌                                |
+| 操作 / API         | Admin | Teacher | Student    | Plugin                           |
+| ------------------ | ----- | ------- | ---------- | -------------------------------- |
+| 创建/修改课程      | ✅    | ✅      | ❌         | 依赖 Manifest 授权               |
+| 查看全班学习分析   | ✅    | ✅      | 仅查看个人 | 依赖 Manifest 授权               |
+| 访问 SQLite 数据库 | ✅    | ❌      | ❌         | 见下方「插件与数据库的权限边界」 |
+| 修改系统密钥配置   | ✅    | ❌      | ❌         | ❌                               |
 
 ### 其他认证层控制
 
@@ -74,11 +75,11 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
 全部在 `packages/core/worker-runtime/service-host.ts` 的 `handleInvoke` 入口处，**按顺序**执行：
 
-| 顺序 | 门禁                        | 实现                                                                                  |
-| ---- | --------------------------- | ------------------------------------------------------------------------------------- |
-| 1    | **Token 白名单**            | `ServiceHost` 构造时接收 `allowedTokens` 存入 `allowedServiceTokens`；`handleInvoke` 首行校验 `msg.token` 是否在集合内，不在则抛 `WorkerCapabilityError`。**在 `resolveService` 之前拦截**。 |
-| 2    | **manifest 能力检查**       | 若 `manifestCapabilities.length === 0`（插件未声明任何能力），只允许 `msg.method === 'get'`，其余一律拒绝。 |
-| 3    | **数据库语句守卫**          | `assertDatabaseAccessAllowed(sql)`：见下。                                             |
+| 顺序 | 门禁                  | 实现                                                                                                                                                                                         |
+| ---- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | **Token 白名单**      | `ServiceHost` 构造时接收 `allowedTokens` 存入 `allowedServiceTokens`；`handleInvoke` 首行校验 `msg.token` 是否在集合内，不在则抛 `WorkerCapabilityError`。**在 `resolveService` 之前拦截**。 |
+| 2    | **manifest 能力检查** | 若 `manifestCapabilities.length === 0`（插件未声明任何能力），只允许 `msg.method === 'get'`，其余一律拒绝。                                                                                  |
+| 3    | **数据库语句守卫**    | `assertDatabaseAccessAllowed(sql)`：见下。                                                                                                                                                   |
 
 白名单由 `packages/core/worker-runtime/worker-manager.ts` 的 `computeAllowedWorkerTokens(manifest, serviceTokens)` 计算并注入 `new ServiceHost(..., allowedTokens)`：
 
@@ -95,7 +96,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
    > ⚠️ 这仍是一张**黑名单**：任何将来新增的核心表若未登记，默认对插件开放。彻底解法是改为白名单（只允许 `plugin_*` 自有表 + 少量显式共享表），但那会改变现有插件的可见面，需单独评估。
 
 3. **DML 命名空间隔离**（SEC-DB-03，2026-10-04 新增）: 此前命名空间校验**只作用于 DDL**（`CREATE/DROP/ALTER TABLE`），DML（`SELECT/INSERT/UPDATE/DELETE`）完全没有约束 —— 任何 worker 插件都能任意读写**其他插件的私有表**（实测库中 19 张 `plugin_<id>_*` 表，跨插件读写畅通无阻）。现改为：从 `FROM / INTO / UPDATE / JOIN / TABLE` 位置提取**表名**（不能用全文搜 `plugin_`，否则 `plugin_id` 这类**列名**会被误判），凡 `plugin_` 前缀且不在本插件命名空间内的一律拒绝。`plugin_migrations` / `plugin_storage` 作为共享表豁免。
-3. **DDL 命名空间白名单**: `CREATE|DROP|ALTER TABLE` 的目标表名必须以插件专属前缀开头（`plugin_<dbPluginId>_` 或 `plugin_<pluginId>_`，特殊字符转义为 `_`），或为 `plugin_migrations`；另有为 `lianyun-course` 插件放行的 `plugin_research_` 前缀。这既允许插件在自己作用域内建表，也防止表名拦截本身引发的 Supervisor 重启崩溃循环。
+4. **DDL 命名空间白名单**: `CREATE|DROP|ALTER TABLE` 的目标表名必须以插件专属前缀开头（`plugin_<dbPluginId>_` 或 `plugin_<pluginId>_`，特殊字符转义为 `_`），或为 `plugin_migrations`；另有为 `lianyun-course` 插件放行的 `plugin_research_` 前缀。这既允许插件在自己作用域内建表，也防止表名拦截本身引发的 Supervisor 重启崩溃循环。
 
 ### 2.5 插件与数据库的权限边界
 
@@ -112,11 +113,11 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
 前端有**独立实现**的一套门禁（`src/plugin-host/`），与后端同名同规则但**不共享代码**（后端 `worker-manager.ts` 依赖 `node:worker_threads` / `better-sqlite3`，浏览器无法直接 import）：
 
-| 顺序 | 门禁                | 实现位置                                              |
-| ---- | ------------------- | ----------------------------------------------------- |
-| 1    | Token 白名单        | `src/plugin-host/allowed-tokens.ts` 的 `computeAllowedWorkerTokens` + `BASE_FRONTEND_WORKER_SERVICE_TOKENS`（4 项：`IFrontendAPI` / `ISocketService` / `IUIService` / `IStorageService`），在 `src/plugin-host/service-host.ts` 的 `handleInvoke` 校验 |
-| 2    | manifest 能力检查   | 同文件 `handleInvoke`：空能力集时只允许 `'get'`       |
-| 3    | 方法 / 路径门禁     | `src/plugin-host/method-policy.ts` 的 `checkMethodPolicy` |
+| 顺序 | 门禁              | 实现位置                                                                                                                                                                                                                                               |
+| ---- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Token 白名单      | `src/plugin-host/allowed-tokens.ts` 的 `computeAllowedWorkerTokens` + `BASE_FRONTEND_WORKER_SERVICE_TOKENS`（4 项：`IFrontendAPI` / `ISocketService` / `IUIService` / `IStorageService`），在 `src/plugin-host/service-host.ts` 的 `handleInvoke` 校验 |
+| 2    | manifest 能力检查 | 同文件 `handleInvoke`：空能力集时只允许 `'get'`                                                                                                                                                                                                        |
+| 3    | 方法 / 路径门禁   | `src/plugin-host/method-policy.ts` 的 `checkMethodPolicy`                                                                                                                                                                                              |
 
 前端第 3 道的具体判定（`method-policy.ts`）：
 
@@ -145,5 +146,6 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
   > 与之配套的 `connectSrc` 为 `["'self'", 'ws:', 'wss:']`，注释明确说明这是**刻意去掉** `http: https:`（等于无出站限制）；`scriptSrc` 在生产环境为 `["'self'", 'blob:']`（`blob:` 是插件前端 Blob URL 加载通道所必需），非生产环境额外放开 `'unsafe-inline'` / `'unsafe-eval'`。
   >
   > 第三方课件 HTML 由独立路由直出并用**自有宽松 CSP** 覆盖（`server/routes/shared.ts` 的 `setCoursewareDocumentCsp`），不继承全局头。
+
 - **iframe sandbox attribute**: 课件 iframe 使用 `sandbox="allow-scripts allow-forms allow-downloads"`（**不含** `allow-same-origin`），以保证严格的跨源隔离。运行位置为 `src/features/courseware/InteractiveCoursewareViewer.tsx`（互动课件）与 `src/features/whiteboard/components/HtmlAppletFrame.tsx`（白板内课件组件）。
 - **Bridge SDK Proxy pattern**: 跨源 `postMessage` 归一化由 Bridge SDK 通过 `Object.defineProperty + Proxy` 模式遮蔽跨源 WindowProxy 上的 `window.parent` / `window.top` 来安全处理（`server/utils/bridge-sdk.ts` 的 `BRIDGE_SDK_CODE`）。

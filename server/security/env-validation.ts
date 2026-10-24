@@ -57,10 +57,7 @@ function trimmed(env: NodeJS.ProcessEnv, key: string): string | undefined {
 }
 
 function unquote(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1).trim();
   }
   return value;
@@ -418,8 +415,7 @@ export function assertStartupEnv(env: NodeJS.ProcessEnv = process.env): void {
 
   if (errors.length > 0) {
     const message =
-      `[Security] FATAL: 启动期环境变量校验失败，拒绝启动（${errors.length} 项）：\n` +
-      formatEnvIssues(errors);
+      `[Security] FATAL: 启动期环境变量校验失败，拒绝启动（${errors.length} 项）：\n` + formatEnvIssues(errors);
     const error = new Error(message);
     error.name = 'StartupEnvValidationError';
     throw error;

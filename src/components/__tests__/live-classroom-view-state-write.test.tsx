@@ -87,7 +87,7 @@ const baseProps: Record<string, any> = {
 function installFetchStub(hasActiveSession: boolean) {
   const calls: string[] = [];
   const stub = vi.fn(async (input: any) => {
-    const url = String(typeof input === 'string' ? input : input?.url ?? input);
+    const url = String(typeof input === 'string' ? input : (input?.url ?? input));
     calls.push(url);
     const body = url.includes('/api/classroom/sessions/')
       ? {

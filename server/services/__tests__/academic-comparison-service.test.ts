@@ -115,7 +115,6 @@ describe('AcademicYearComparisonService 跨学年指标计算与对比', () => {
       'INSERT INTO student_lesson_progress (lesson_id, student_id, progress_percent, completed, academic_year) VALUES (?, ?, ?, ?, ?)',
     ).run('les_cs', 's1', 50, 0, '2025-2026');
 
-
     const result = await service.getAcademicYearComparison('s1', ['2024-2025', '2025-2026']);
 
     expect(result.metricsByYear).toHaveLength(2);

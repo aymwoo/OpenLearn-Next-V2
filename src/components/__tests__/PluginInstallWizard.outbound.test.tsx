@@ -48,9 +48,7 @@ describe('PluginInstallWizard outbound hosts (R-02)', () => {
       network: { outbound: ['api.openai.com', 'localhost', '*.evil.com'] },
     });
 
-    render(
-      <PluginInstallWizard isOpen lang="zh" file={file} onClose={() => undefined} onConfirmInstall={vi.fn()} />,
-    );
+    render(<PluginInstallWizard isOpen lang="zh" file={file} onClose={() => undefined} onConfirmInstall={vi.fn()} />);
 
     await advanceToSecurityStep();
 
@@ -79,7 +77,13 @@ describe('PluginInstallWizard outbound hosts (R-02)', () => {
     });
 
     render(
-      <PluginInstallWizard isOpen lang="zh" file={file} onClose={() => undefined} onConfirmInstall={onConfirmInstall} />,
+      <PluginInstallWizard
+        isOpen
+        lang="zh"
+        file={file}
+        onClose={() => undefined}
+        onConfirmInstall={onConfirmInstall}
+      />,
     );
 
     await advanceToSecurityStep();
@@ -87,9 +91,7 @@ describe('PluginInstallWizard outbound hosts (R-02)', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认安装并上传' }));
 
     await waitFor(() => expect(onConfirmInstall).toHaveBeenCalledTimes(1));
-    expect(onConfirmInstall.mock.calls[0]?.[2]).toEqual(
-      expect.objectContaining({ approveNetworkHosts: true }),
-    );
+    expect(onConfirmInstall.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ approveNetworkHosts: true }));
   });
 
   it('renders no outbound section for plugins that request nothing', async () => {
@@ -101,9 +103,7 @@ describe('PluginInstallWizard outbound hosts (R-02)', () => {
       description: '第三方',
     });
 
-    render(
-      <PluginInstallWizard isOpen lang="zh" file={file} onClose={() => undefined} onConfirmInstall={vi.fn()} />,
-    );
+    render(<PluginInstallWizard isOpen lang="zh" file={file} onClose={() => undefined} onConfirmInstall={vi.fn()} />);
 
     await advanceToSecurityStep();
     expect(screen.queryByTestId('approve-network-hosts')).toBeNull();

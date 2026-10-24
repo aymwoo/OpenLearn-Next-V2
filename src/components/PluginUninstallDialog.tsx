@@ -19,7 +19,13 @@ interface PluginUninstallDialogProps {
   onConfirm: (dataPolicy: PluginDataPolicy) => void;
 }
 
-export function PluginUninstallDialog({ pluginName, manifestId, lang, onCancel, onConfirm }: PluginUninstallDialogProps) {
+export function PluginUninstallDialog({
+  pluginName,
+  manifestId,
+  lang,
+  onCancel,
+  onConfirm,
+}: PluginUninstallDialogProps) {
   const [purgeSelected, setPurgeSelected] = useState(false);
   const [purgeAcknowledged, setPurgeAcknowledged] = useState(false);
   const zh = lang === 'zh';
@@ -147,7 +153,13 @@ export function PluginUninstallDialog({ pluginName, manifestId, lang, onCancel, 
                 : 'bg-indigo-600 hover:bg-indigo-700'
             }`}
           >
-            {purgeSelected ? (zh ? '卸载并清除数据' : 'Uninstall & purge') : zh ? '卸载并保留数据' : 'Uninstall & keep data'}
+            {purgeSelected
+              ? zh
+                ? '卸载并清除数据'
+                : 'Uninstall & purge'
+              : zh
+                ? '卸载并保留数据'
+                : 'Uninstall & keep data'}
           </button>
         </div>
       </div>

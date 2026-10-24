@@ -447,9 +447,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const isStaff = isAdministrator(session) || isTeacher(session);
       // 学生视角剥离答案字段（correctIndex / correctAnswer 等）；
       // 判分结果由 POST /quiz-submit 在提交后回传，前端已按此设计。
-      res.json(
-        isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })),
-      );
+      res.json(isStaff ? elements : elements.map((el) => ({ ...el, data: redactAnswerPayload(el.data) as string })));
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -715,7 +713,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const studentId = studentActorId(session) || 'anonymous';
-      const resolvedLessonId = typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
+      const resolvedLessonId =
+        typeof lessonId === 'string' && lessonId.trim() ? lessonId.trim() : (req.query.lessonId as string | undefined);
       const current = diagnosticService.recordIcebreakerCheckin(classId, mood, studentId, resolvedLessonId);
 
       if (ctx.io) {

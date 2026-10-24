@@ -191,7 +191,10 @@ export class PluginAttestationRequiredError extends PluginSignatureError {
 }
 
 export class PluginIntegrityMismatchError extends PluginSignatureError {
-  constructor(pluginId: string, message = `Integrity verification failed for plugin "${pluginId}". Downloaded ZIP checksum does not match repository metadata.`) {
+  constructor(
+    pluginId: string,
+    message = `Integrity verification failed for plugin "${pluginId}". Downloaded ZIP checksum does not match repository metadata.`,
+  ) {
     super(
       pluginId,
       'COMMUNITY_INTEGRITY_MISMATCH',

@@ -108,7 +108,9 @@ function canonicalContent(pkg: CoursePackage): unknown {
  * 导出为独立函数，便于测试直接断言「同一内容 → 同一哈希」。
  */
 export function computeCoursePackageHash(pkg: CoursePackage): string {
-  return createHash('sha256').update(stableStringify(canonicalContent(pkg))).digest('hex');
+  return createHash('sha256')
+    .update(stableStringify(canonicalContent(pkg)))
+    .digest('hex');
 }
 
 /**

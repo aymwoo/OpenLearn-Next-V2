@@ -172,9 +172,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       const summary = await ledger.getStudentDimensionSummary('stu-202', 'class-1');
       expect(summary).toEqual({ 'dim-1': 50 });
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('without declaring "student-data:read"'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('without declaring "student-data:read"'));
 
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access');
       expect(audit).toBeDefined();
@@ -202,9 +200,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
 
       await ledger.addPoints('stu-303', 'class-1', 'dim-1', 5, '课堂表现优秀');
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('without declaring "student-data:write"'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('without declaring "student-data:write"'));
 
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access' && r.operation === 'write');
       expect(audit).toBeDefined();

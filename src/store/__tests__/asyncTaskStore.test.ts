@@ -202,20 +202,27 @@ describe('asyncTaskStore (Issue #89: 识别草稿持久化)', () => {
   it('persists the task lifecycle and clears both task and draft from sessionStorage on clear', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, entries: [{ dayOfWeek: 1 }], providerUsed: { id: 'p', name: 'n', model_name: 'm' } }),
+      json: async () => ({
+        success: true,
+        entries: [{ dayOfWeek: 1 }],
+        providerUsed: { id: 'p', name: 'n', model_name: 'm' },
+      }),
     } as any);
 
-    return asyncTaskStore.getState().startTimetableOcr({ imageBase64: 'data:x', lang: 'zh' }).then(() => {
-      expect(JSON.parse(sessionStorage.getItem('openlearn_timetable_ocr_task')!).status).toBe('completed');
+    return asyncTaskStore
+      .getState()
+      .startTimetableOcr({ imageBase64: 'data:x', lang: 'zh' })
+      .then(() => {
+        expect(JSON.parse(sessionStorage.getItem('openlearn_timetable_ocr_task')!).status).toBe('completed');
 
-      asyncTaskStore.getState().setTimetableOcrDraft({ entries: [{ dayOfWeek: 1 }], selected: [0] });
-      expect(sessionStorage.getItem('openlearn_timetable_ocr_draft')).toBeTruthy();
+        asyncTaskStore.getState().setTimetableOcrDraft({ entries: [{ dayOfWeek: 1 }], selected: [0] });
+        expect(sessionStorage.getItem('openlearn_timetable_ocr_draft')).toBeTruthy();
 
-      asyncTaskStore.getState().clearTimetableOcrTask();
-      expect(asyncTaskStore.getState().timetableOcrDraft).toBeNull();
-      expect(sessionStorage.getItem('openlearn_timetable_ocr_task')).toBeNull();
-      expect(sessionStorage.getItem('openlearn_timetable_ocr_draft')).toBeNull();
-    });
+        asyncTaskStore.getState().clearTimetableOcrTask();
+        expect(asyncTaskStore.getState().timetableOcrDraft).toBeNull();
+        expect(sessionStorage.getItem('openlearn_timetable_ocr_task')).toBeNull();
+        expect(sessionStorage.getItem('openlearn_timetable_ocr_draft')).toBeNull();
+      });
   });
 
   it('falls back to stripping image fields when sessionStorage quota is exceeded', () => {
@@ -261,7 +268,15 @@ describe('asyncTaskStore (Issue #89: 识别草稿持久化)', () => {
       startedAt: Date.now(),
       result: { entries: [{ dayOfWeek: 3 }], providerUsed: { id: 'p', name: 'n', model_name: 'm' } },
     };
-    const draft = { imagePreview: null, imageBase64: null, fileName: 'x.png', providerId: '', entries: [{ dayOfWeek: 3 }], selected: [0], updatedAt: Date.now() };
+    const draft = {
+      imagePreview: null,
+      imageBase64: null,
+      fileName: 'x.png',
+      providerId: '',
+      entries: [{ dayOfWeek: 3 }],
+      selected: [0],
+      updatedAt: Date.now(),
+    };
     sessionStorage.setItem('openlearn_timetable_ocr_task', JSON.stringify(task));
     sessionStorage.setItem('openlearn_timetable_ocr_draft', JSON.stringify(draft));
 
