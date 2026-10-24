@@ -30,6 +30,7 @@ import { randomId } from '../utils/id.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { authorizeClassroomControl, authorizeClassroomRead } from '../services/class-access.js';
+import type { AccessSession } from '../services/class-access.js';
 import {
   getUnifiedShowcaseWorks,
   getUnifiedShowcaseWorksResult,
@@ -68,8 +69,8 @@ function isPrivileged(req: Request): boolean {
  *   - `read`：展示与学生参与 —— 教师同上；学生须属于该课堂所在班级
  */
 function requirePeerReviewAccess(req: Request, res: Response, mode: 'read' | 'control'): boolean {
-  const db = kernelContainer.db as any;
-  const httpSession = (req as any).session;
+  const db = kernelContainer.db;
+  const httpSession = (req as Request & { session?: AccessSession }).session;
   const { lessonId } = req.params;
   const actorId = getActorId(req);
   const decision =

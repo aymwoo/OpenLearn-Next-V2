@@ -20,7 +20,7 @@ import { ensureTestSchema } from './helpers/test-schema.js';
 describe('课中互评的班级归属授权（#221）', () => {
   let server: Server;
   let baseUrl: string;
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
 
   const classA = 'cls-prauth-a';
   const classB = 'cls-prauth-b';
