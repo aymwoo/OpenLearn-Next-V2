@@ -46,6 +46,7 @@ import { CapabilityGuard } from '../capability/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { NodeWorkerTransport } from './transport.js';
 import type { IWorkerTransport } from './types.js';
+import { handleNetProxy, isNetProxyRequest } from './plugin-net-proxy.js';
 import { ServiceHost } from './service-host.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { createLogger } from '../observability/logger.js';
@@ -1022,6 +1023,16 @@ export class WorkerManager {
     };
 
     transport.onMessage((msg: unknown) => {
+      // Issue #237：worker 模式的出网代理请求与子进程模式共用宿主代发
+      // （plugin-net-proxy 的内网地址 / DNS-rebinding / 体积防护全部生效）
+      if (isNetProxyRequest(msg)) {
+        // 子进程模式的代发由 ChildProcessTransport 自行处理，不会转发到这里；
+        // 此处仅 worker 需要宿主路由
+        if (worker) {
+          void handleNetProxy({ send: (m: unknown) => worker.postMessage(m) }, msg, new Set(approvedNetHosts));
+        }
+        return;
+      }
       const typed = msg as { type?: string; stage?: string; message?: string };
 
       // 任何入站消息都是存活证据（L-1 P0），不只认 pong：

@@ -22,7 +22,7 @@
  * | `child_process` 拉子进程 | ⛔ 默认即禁 | 需显式 `--allow-child-process` 才放行 |
  * | 创建 worker | ⛔ 默认即禁 | 同上，需 `--allow-worker` |
  * | IPC `process.send` / `on('message')` | ✅ 放行 | transport 不受影响 |
- * | **网络（`net` / `dns`）** | ⛔ 入口脚本拒绝 | Node 仍没有 `--allow-net`。`plugin-net-preload.cjs` 拦住原始 socket 与 DNS；`fetch` / `http(s)` 只把已批准域名交给宿主代理 |
+ * | **网络（`net` / `dns`）** | ⛔ 沙箱拒绝（两种隔离模式同口径） | Node 仍没有 `--allow-net`。`process` 模式由 `plugin-net-preload.cjs`、`thread` 模式由 bootstrap 内 net-guard section 拦住原始 socket 与 DNS（Issue #237）；`fetch` 只把已批准域名交给宿主代理。低层绕过入口 `process.getBuiltinModule` 已列入 process-masking 屏蔽名单 |
  *
  * ### 旗标名在版本间变过
  *
@@ -32,9 +32,12 @@
  *
  * ## 两个必须说清的缺口
  *
- * 1. **权限模型本身不覆盖网络。** 没有 `--allow-net`。出站由
- *    `plugin-net-preload.cjs` 补上：原始 socket 与 DNS 默认拒绝，HTTP 只经宿主代理。
- *    `OPENLEARN_PLUGIN_PERMISSION=off` 会连这个入口脚本一起关掉。
+ * 1. **权限模型本身不覆盖网络。** 没有 `--allow-net`。出站由沙箱补上：
+ *    `process` 模式经 `plugin-net-preload.cjs`（`--require` 入口脚本）、
+ *    `thread` 模式经 bootstrap 内 net-guard section —— 原始 socket 与 DNS
+ *    默认拒绝，`fetch` 只经宿主代理已批准域名（Issue #237）。
+ *    注意：`OPENLEARN_PLUGIN_PERMISSION=off` 只关掉 `process` 模式的入口脚本
+ *    preload；`thread` 模式的 net-guard 属于 bootstrap 本体，不受该开关影响。
  * 2. **不覆盖 CPU。** 权限模型管的是「能做什么」，不是「能算多久」。RSS 与 CPU
  *    窗口由 `plugin-quota.ts` 采样；`OPENLEARN_PLUGIN_QUOTA=off` 关闭采样。
  *

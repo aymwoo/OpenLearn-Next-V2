@@ -20,6 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { composeBootstrapCode, BOOTSTRAP_SECTION_NAMES, extractProcessMaskingBlock } from '../bootstrap/index.js';
 import { RUNTIME_SHIM_SECTION } from '../bootstrap/sections/runtime-shim.js';
 import { PROCESS_MASKING_SECTION } from '../bootstrap/sections/process-masking.js';
+import { NET_GUARD_SECTION } from '../bootstrap/sections/net-guard.js';
 import { RPC_PROXY_SECTION } from '../bootstrap/sections/rpc-proxy.js';
 import { HTTP_ROUTER_SECTION } from '../bootstrap/sections/http-router.js';
 import { MESSAGE_HANDLER_SECTION } from '../bootstrap/sections/message-handler.js';
@@ -27,6 +28,7 @@ import { MESSAGE_HANDLER_SECTION } from '../bootstrap/sections/message-handler.j
 const SECTIONS: Record<(typeof BOOTSTRAP_SECTION_NAMES)[number], string> = {
   'runtime-shim': RUNTIME_SHIM_SECTION,
   'process-masking': PROCESS_MASKING_SECTION,
+  'net-guard': NET_GUARD_SECTION,
   'rpc-proxy': RPC_PROXY_SECTION,
   'http-router': HTTP_ROUTER_SECTION,
   'message-handler': MESSAGE_HANDLER_SECTION,

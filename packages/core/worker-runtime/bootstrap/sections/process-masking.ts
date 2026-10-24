@@ -61,11 +61,13 @@ process.exit = function(code) {
 // PLUGIN_SHARED_MODULES 白名单里，是官方支持的插件依赖 —— 为了挡一个威胁
 // 有限的 API 而打断一条受支持的加载路径，是净损失。
 //
-// 名单只留三类真威胁：
+// 名单只留四类真威胁：
 //   · kill / abort          —— 能杀宿主进程
 //   · setuid / setgid / seteuid / setegid —— 能改宿主进程身份
 //   · dlopen / binding      —— 低层原生入口，可绕过模块级 denylist
-for (const __blocked of ['kill', 'abort', 'setuid', 'setgid', 'seteuid', 'setegid', 'dlopen', 'binding']) {
+//   · getBuiltinModule      —— Node 官方公开 API，专用于绕过 require/import
+//     限制（Node ≥22.3）：不经 ctx.require 名单直接取原生模块实例（Issue #237）
+for (const __blocked of ['kill', 'abort', 'setuid', 'setgid', 'seteuid', 'setegid', 'dlopen', 'binding', 'getBuiltinModule']) {
   try {
     Object.defineProperty(process, __blocked, {
       configurable: false,
