@@ -116,6 +116,78 @@ export function approvePluginNetHosts(db: SqlDb, keys: string[], hosts: string[]
   return accepted;
 }
 
+/**
+ * 把一个清单声明的出站域名归类为「可批准」或「拒绝 + 原因」。
+ *
+ * `normalizeNetHost` 只返回 null，不告诉调用方**为什么**被拒。管理员在审批页
+ * 上需要知道「我声明的 `localhost` 为什么没出现在可批准列表里」，否则只能
+ * 以为是平台丢了数据。
+ */
+export interface NetHostProposalVerdict {
+  /** 原样声明值（未归一化），便于回显给管理员。 */
+  raw: string;
+  /** 归一化后的可批准域名；被拒时为 null。 */
+  host: string | null;
+  /** 是否可批准。 */
+  approvable: boolean;
+  /** 被拒原因（approvable=false 时非空）。 */
+  reason?: string;
+}
+
+export function classifyNetHostProposals(hosts: unknown[]): NetHostProposalVerdict[] {
+  const verdicts: NetHostProposalVerdict[] = [];
+  for (const raw of hosts) {
+    if (typeof raw !== 'string') {
+      verdicts.push({ raw: String(raw), host: null, approvable: false, reason: '不是字符串' });
+      continue;
+    }
+    const trimmed = raw.trim();
+    const normalized = normalizeNetHost(trimmed);
+    if (normalized) {
+      verdicts.push({ raw: trimmed, host: normalized, approvable: true });
+      continue;
+    }
+    let reason = '不是合法的域名或 IP';
+    if (!trimmed) reason = '空字符串';
+    else if (trimmed.length > 253) reason = '域名过长（>253）';
+    else if (trimmed.includes('*')) reason = '不支持通配符，请逐个列出域名';
+    else if (trimmed.includes('/') || trimmed.includes(':') || trimmed.includes(' '))
+      reason = '只能写主机名，不能带协议、端口或路径';
+    else if (isPrivateOrReservedHost(trimmed)) reason = '回环/私有/保留地址一律拒绝（SSRF 防线）';
+    else if (/^\d+\.\d+\.\d+\.\d+$/.test(trimmed)) reason = '非法 IPv4 字面量';
+    verdicts.push({ raw: trimmed, host: null, approvable: false, reason });
+  }
+  return verdicts;
+}
+
+/**
+ * 撤销单个已批准的出站域名。
+ *
+ * 返回是否真的删掉了一行 —— 管理员点「撤销」时需要区分「撤了」与
+ * 「本来就没有」，而不是一律显示成功。
+ */
+export function revokePluginNetHost(db: SqlDb, keys: string[], host: string): boolean {
+  const normalized = normalizeNetHost(host);
+  if (!normalized) return false;
+  try {
+    ensurePluginGrantTables(db);
+  } catch {
+    return false;
+  }
+  const stmt = db.prepare(`DELETE FROM ${PLUGIN_NETWORK_GRANTS_TABLE} WHERE plugin_key = ? AND host = ?`);
+  let removed = false;
+  for (const key of keys) {
+    if (!key) continue;
+    const result = stmt.run(key, normalized) as { changes?: number } | undefined;
+    if (result && typeof result.changes === 'number') {
+      if (result.changes > 0) removed = true;
+    } else {
+      removed = true; // 兼容不返回 changes 的驱动
+    }
+  }
+  return removed;
+}
+
 export function listApprovedNetHosts(db: SqlDb, keys: string[]): string[] {
   try {
     ensurePluginGrantTables(db);

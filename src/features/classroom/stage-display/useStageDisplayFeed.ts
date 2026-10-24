@@ -103,6 +103,9 @@ const LIVE_EVENTS = [
   'classroom:exit_ticket_submitted',
   'classroom:feed_appended',
   'classroom:pulse_check_requested',
+  // Issue #245：学生扫码签到即时刷新「实到」——此前该事件零消费，
+  // 出勤展示只能等低频对账轮询
+  'classroom:checkin_submitted',
 ] as const;
 
 /** 对账轮询间隔：Socket 漏事件时的兜底，同时让倒计时/时钟类数据不会长时间不更新 */

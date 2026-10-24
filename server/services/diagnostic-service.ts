@@ -35,7 +35,8 @@ export interface PreClassDiagnosticResult {
     completedCount: number;
     pendingCount: number;
     completionRate: number;
-    averageTimeSpentMins: number;
+    /** 白板事件流没有真实用时数据：无值时为 null（前端显示「—」），绝不编造 */
+    averageTimeSpentMins: number | null;
   };
   topMistakes: TopMistakeItem[];
   studentDistribution: {
@@ -150,8 +151,9 @@ export class DiagnosticService {
       throw err;
     }
 
-    // 获取班级总学生数
-    let totalStudents = 32;
+    // 获取班级总学生数：无 classId 或班级无名单时分母为 0，完成率随之 0 ——
+    // 不再凭空回退 32 人（Issue #244，编造分母会让完成率呈现貌似真实的统计）
+    let totalStudents = 0;
     if (classId) {
       const countRow = this.reader
         .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
@@ -218,7 +220,8 @@ export class DiagnosticService {
         completedCount,
         pendingCount: Math.max(0, totalStudents - completedCount),
         completionRate,
-        averageTimeSpentMins: completedCount > 0 ? 15 : 0,
+        // 白板事件流没有真实用时来源：置 null 而非写死 15 分钟（Issue #244）
+        averageTimeSpentMins: null,
       },
       topMistakes,
       studentDistribution: {
