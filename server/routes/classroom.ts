@@ -2934,6 +2934,40 @@ export function registerClassroomRoutes(
     }
   });
 
+  // 手动抽问按日计数（Issue #243）：读侧补齐 —— 写侧（手动抽问 presence.ts、
+  // 白板 rollcall event-routing.ts）早已落库 student_rollcalls，但此前没有
+  // 任何读取端点按日聚合，归因弹窗的「今日抽中 N 次」只能硬编码 0。
+  // 口径：服务器本地时区的当日 0 点起，全量学生（跨课节公平性统计）。
+  app.get(
+    '/api/lessons/:lessonId/rollcall-counts',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const httpSession = (req as any).session;
+        if (!authorizeLessonStaff(db, httpSession, lessonId).ok && !isAdministrator(httpSession)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+        const rows = db
+          .prepare(
+            `SELECT student_id, COUNT(*) AS cnt
+               FROM student_rollcalls
+              WHERE picked_time >= ?
+              GROUP BY student_id`,
+          )
+          .all(dayStart.getTime()) as { student_id: string; cnt: number }[];
+
+        const counts: Record<string, number> = {};
+        for (const r of rows) counts[r.student_id] = r.cnt;
+        res.json({ success: true, counts, dayStart: dayStart.getTime() });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
   // ── 教学模式 (Teaching Modes — 课堂启动门户的模式选择器) ──────────
   // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
   app.get('/api/classroom/teaching-modes', requireScopedAuth('authenticated'), (req: Request, res: Response) => {

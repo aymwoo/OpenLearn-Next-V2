@@ -338,6 +338,25 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     expect(archivedSummary.status).toBe(200);
   });
 
+  it('未绑定班级的自学课堂仍对已登录学生开放，但不对其他教师开放', async () => {
+    const init = await call('POST', `/api/classroom/sessions/${lessonSelfStudy}/init`, teacherAToken, {});
+    expect(init.status).toBe(200);
+
+    const studentRead = await call('GET', `/api/classroom/sessions/${lessonSelfStudy}`, studentBToken);
+    expect(studentRead.status).toBe(200);
+
+    const otherTeacherRead = await call('GET', `/api/classroom/sessions/${lessonSelfStudy}`, teacherBToken);
+    expect(otherTeacherRead.status).toBe(403);
+
+    const otherTeacherControl = await call(
+      'POST',
+      `/api/classroom/sessions/${lessonSelfStudy}/countdown`,
+      teacherBToken,
+      { action: 'start', duration: 30 },
+    );
+    expect(otherTeacherControl.status).toBe(403);
+  });
+
   it('preset-polls CRUD 仅课节创建者可读写，正确答案不泄露给其他教师（Issue #240）', async () => {
     // 建立者教师 A 正常创建一条预设投票（含 correctOption）
     const create = await call('POST', `/api/lessons/${lessonA}/preset-polls`, teacherAToken, {
@@ -380,6 +399,30 @@ describe('课堂对象级授权（教师归属 / 学生班级 / 答案脱敏）'
     // 越权链全部拒绝后，创建者仍可正常删除
     const ownerDelete = await call('DELETE', `/api/lessons/${lessonA}/preset-polls/${pollId}`, teacherAToken);
     expect(ownerDelete.status).toBe(200);
+  });
+
+  it('rollcall-counts 按日聚合且仅课节创建者可读（Issue #243）', async () => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayTs = todayStart.getTime() + 3_600_000;
+    const yesterdayTs = todayStart.getTime() - 3_600_000;
+    const insert = db.prepare(
+      'INSERT OR REPLACE INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)',
+    );
+    insert.run('rc-243-a1', studentA, classA, lessonA, todayTs);
+    insert.run('rc-243-a2', studentA, classA, lessonA, todayTs + 1);
+    insert.run('rc-243-a3', studentA, classA, lessonA, yesterdayTs); // 昨日不计入今日
+
+    // 非创建者教师 B 不可读
+    const cross = await call('GET', `/api/lessons/${lessonA}/rollcall-counts`, teacherBToken);
+    expect(cross.status).toBe(403);
+
+    // 创建者教师 A：今日计数 = 2（昨日记录不计）
+    const own = await call('GET', `/api/lessons/${lessonA}/rollcall-counts`, teacherAToken);
+    expect(own.status).toBe(200);
+    const body = (await own.json()) as { counts: Record<string, number>; dayStart: number };
+    expect(body.counts[studentA]).toBe(2);
+    expect(body.dayStart).toBe(todayStart.getTime());
   });
 
   it('active-sessions 按归属裁剪且不下发签到码与设置原文（Issue #241）', async () => {
