@@ -1,7 +1,11 @@
 import { Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { Upload, Download, Loader2, CheckCircle2, Check, FileJson, Package } from 'lucide-react';
-import type { CoursePackagePreview } from '../../services/coursePackageService';
+import type { CoursePackagePreview, CoursePackageDuplicate } from '../../services/coursePackageService';
+import { COURSE_PACKAGE_MAX_FILE_BYTES } from '../../services/coursePackageService';
+
+/** 导入框承诺的文件体积上限（MB）—— 与实际校验口径同源。 */
+const IMPORT_MAX_FILE_MB = Math.round(COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024));
 
 export interface ImportRow {
   title: string;
@@ -24,8 +28,16 @@ export interface ImportLessonsModalProps {
   downloadCourseTemplate: () => void;
   /** 已选中的课程包摘要；非空时预览区切换为课程包视图。 */
   packagePreview: CoursePackagePreview | null;
-  /** 提交课程包导入。 */
-  handlePackageImportSubmit: () => void;
+  /**
+   * 提交课程包导入。
+   *
+   * @param allowDuplicate 命中去重时仍然导入一份副本。
+   */
+  handlePackageImportSubmit: (allowDuplicate?: boolean) => void;
+  /** 命中去重时的冲突信息；非空时错误区切换为「重复导入」确认视图。 */
+  packageDuplicate?: CoursePackageDuplicate | null;
+  /** 取消「重复导入」询问，回到预览态。 */
+  handlePackageDuplicateDismiss?: () => void;
   isDraggingImport: boolean;
   previewImportData: ImportRow[];
   setPreviewImportData: Dispatch<SetStateAction<ImportRow[]>>;
@@ -50,6 +62,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
     downloadCourseTemplate,
     packagePreview,
     handlePackageImportSubmit,
+    packageDuplicate = null,
+    handlePackageDuplicateDismiss = () => {},
     isDraggingImport,
     previewImportData,
     setPreviewImportData,
@@ -83,8 +97,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {lang === 'zh'
-                      ? '支持 CSV 批量导入（仅标题与正文）与课程包 JSON 导入（完整课程：教学环节 + 白板组件 + 课件附件）。'
-                      : 'Import a CSV (title and body only) or a course package JSON (full lesson: segments, components and assets).'}
+                      ? 'CSV 为「简易导入」（仅标题与正文）；需要教学环节 + 白板组件 + 课件附件的完整课程请用课程包 JSON。'
+                      : 'CSV is a "quick import" (title and body only). For a complete lesson — segments, whiteboard components and assets — use a course package JSON.'}
                   </p>
                 </div>
               </div>
@@ -108,13 +122,20 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 <div className="space-y-4">
                   {/* Schema instructions */}
                   <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
-                    <h4 className="text-xs font-bold text-indigo-850 uppercase tracking-wide flex items-center gap-1">
+                    <h4 className="text-xs font-bold text-indigo-850 uppercase tracking-wide flex items-center gap-2">
                       <span>📌</span>
-                      {lang === 'zh' ? '预定义数据格式说明' : 'Predefined Schema Information'}
+                      {lang === 'zh' ? '简易导入（CSV）' : 'Quick import (CSV)'}
+                      {/* 定位徽标：CSV 通道只有两列，别让教师以为它也能带环节/组件/附件 */}
+                      <span
+                        className="text-[10px] font-mono font-normal normal-case tracking-normal text-indigo-700 bg-indigo-100 border border-indigo-200 rounded px-1.5 py-0.5"
+                        data-testid="csv-simple-import-badge"
+                      >
+                        {lang === 'zh' ? '仅标题 + 正文' : 'title + body only'}
+                      </span>
                     </h4>
                     <p className="text-xs text-indigo-900 mt-1 leading-relaxed">
                       {lang === 'zh'
-                        ? 'CSV 文件的首行必须 define 列标题（分大小写且无多余空格），包含以下两项必需内容：'
+                        ? 'CSV 文件的首行必须定义列标题（不区分大小写、无多余空格），包含以下两项必需内容：'
                         : 'Your CSV file must include exactly these header columns on the first row (case-insensitive):'}
                     </p>
                     <ul className="list-disc pl-5 mt-2 text-xs text-indigo-950 space-y-1">
@@ -150,8 +171,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     </div>
                     <p className="text-[11px] text-indigo-800/80 mt-2.5 leading-relaxed">
                       {lang === 'zh'
-                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。'
-                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson.'}
+                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。完整课程统一走这条通道，CSV 只做批量建空壳。'
+                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson. Complete lessons go through this path; CSV only creates shells in bulk.'}
                     </p>
                   </div>
 
@@ -198,9 +219,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                         : 'Click to select or drag and drop a CSV / course-package JSON file here'}
                     </span>
                     <span className="text-xs text-gray-400 mt-1">
+                      {/* 上限文案直接取常量，避免「承诺 20MB」与实际校验口径再次漂移（Issue #246） */}
                       {lang === 'zh'
-                        ? '支持标准 CSV 与课程包 JSON，最大不超过 20MB'
-                        : 'Supports standard CSV and course-package JSON, up to 20MB'}
+                        ? `CSV（简易导入）或课程包 JSON（完整课程），单文件最大 ${IMPORT_MAX_FILE_MB}MB`
+                        : `CSV (quick import) or course-package JSON (full lesson), up to ${IMPORT_MAX_FILE_MB}MB`}
                     </span>
                   </div>
                 </div>
@@ -436,37 +458,89 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
               {/* ERROR state -> Display alerts */}
               {importStatus === 'error' && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-start">
-                    <span className="text-rose-600 font-bold text-lg leading-none">⚠️</span>
-                    <div>
-                      <h4 className="text-xs font-bold text-rose-850">
-                        {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
-                      </h4>
-                      <p className="text-xs text-rose-900 mt-1 leading-relaxed">
-                        {importErrorMsg ||
-                          (lang === 'zh'
-                            ? '未知异常或文件破损。'
-                            : 'An unknown exception or corrupted CSV formatting occurred.')}
-                      </p>
+                  {packageDuplicate ? (
+                    /* 命中去重（409）：这不是故障，而是「你已经导过这个包了」的确认。
+                       展示已存在的课程，并给出「仍然导入副本」的出口。 */
+                    <div
+                      className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3 items-start"
+                      data-testid="course-package-duplicate-notice"
+                    >
+                      <span className="text-amber-600 font-bold text-lg leading-none">⧉</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-850">
+                          {lang === 'zh' ? '该课程包已经导入过了' : 'This course package was already imported'}
+                        </h4>
+                        <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                          {lang === 'zh' ? (
+                            <>
+                              已存在课程「{packageDuplicate.lessonTitle}」
+                              {packageDuplicate.hasDeclaredId ? '（同一个课程包 id）' : '（内容完全相同）'}，
+                              再次导入会得到两节内容相同的课程。
+                            </>
+                          ) : (
+                            <>
+                              A lesson named &quot;{packageDuplicate.lessonTitle}&quot; already exists
+                              {packageDuplicate.hasDeclaredId ? ' (same course-package id)' : ' (identical content)'}.
+                              Importing again would create two lessons with the same content.
+                            </>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-start">
+                      <span className="text-rose-600 font-bold text-lg leading-none">⚠️</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-rose-850">
+                          {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
+                        </h4>
+                        <p className="text-xs text-rose-900 mt-1 leading-relaxed">
+                          {importErrorMsg ||
+                            (lang === 'zh'
+                              ? '未知异常或文件破损。'
+                              : 'An unknown exception or corrupted CSV formatting occurred.')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => {
-                        setImportStatus('idle');
-                        setImportErrorMsg('');
-                      }}
-                      className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
-                    >
-                      {lang === 'zh' ? '返回重试' : 'Go Back & Retry'}
-                    </button>
-                    <button
-                      onClick={() => setIsImportLessonsOpen(false)}
-                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 cursor-pointer hover:bg-indigo-700 rounded-lg transition-all"
-                    >
-                      {lang === 'zh' ? '关闭窗口' : 'Close'}
-                    </button>
+                    {packageDuplicate ? (
+                      <>
+                        <button
+                          onClick={handlePackageDuplicateDismiss}
+                          data-testid="course-package-duplicate-cancel"
+                          className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '取消' : 'Cancel'}
+                        </button>
+                        <button
+                          onClick={() => handlePackageImportSubmit(true)}
+                          data-testid="course-package-duplicate-force"
+                          className="px-4 py-2 text-xs font-bold text-white bg-amber-600 cursor-pointer hover:bg-amber-700 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '仍然导入副本' : 'Import as a Copy Anyway'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            setImportStatus('idle');
+                            setImportErrorMsg('');
+                          }}
+                          className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '返回重试' : 'Go Back & Retry'}
+                        </button>
+                        <button
+                          onClick={() => setIsImportLessonsOpen(false)}
+                          className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 cursor-pointer hover:bg-indigo-700 rounded-lg transition-all"
+                        >
+                          {lang === 'zh' ? '关闭窗口' : 'Close'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -495,7 +569,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   </button>
                   {importStatus === 'parsing' && packagePreview && (
                     <button
-                      onClick={handlePackageImportSubmit}
+                      onClick={() => handlePackageImportSubmit(false)}
                       data-testid="import-course-package-btn"
                       className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                     >

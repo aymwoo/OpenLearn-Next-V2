@@ -16,6 +16,7 @@
  */
 
 import type { SweepRole, SweepScenario, SweepSubTab, SweepTarget } from './types.js';
+import { CROSS_TENANT_TEACHER } from './prepare.js';
 
 /**
  * 视图内的二级页签，按「点击导航后落到的 hash tab」索引。
@@ -27,10 +28,30 @@ export const SUB_TABS_BY_TAB: Record<string, SweepSubTab[]> = {
   // 班级管理：ClassTabs.tsx
   // 页签要**先展开某个班级**才出现，因此需要 preClick 点开班级行。
   classes: [
-    { id: 'students', label: '学生名单', name: '学生名单|^Students$', preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 } },
-    { id: 'assignments', label: '作业成绩', name: '作业成绩|^Assignments$', preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 } },
-    { id: 'attendance', label: '课表考勤', name: '课表考勤|^Attendance$', preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 } },
-    { id: 'grades', label: '学期总评', name: '学期总评|^Grades$', preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 } },
+    {
+      id: 'students',
+      label: '学生名单',
+      name: '学生名单|^Students$',
+      preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 },
+    },
+    {
+      id: 'assignments',
+      label: '作业成绩',
+      name: '作业成绩|^Assignments$',
+      preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 },
+    },
+    {
+      id: 'attendance',
+      label: '课表考勤',
+      name: '课表考勤|^Attendance$',
+      preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 },
+    },
+    {
+      id: 'grades',
+      label: '学期总评',
+      name: '学期总评|^Grades$',
+      preClick: { text: '\\[演示\\].*班|一年级.*班', nth: 0 },
+    },
   ],
   // 测评中心：AssessmentCenter.tsx
   assessments: [
@@ -194,6 +215,25 @@ export const SWEEP_ROLES: SweepRole[] = [
     prepare: ['classroomInProgress'],
     targets: [DASHBOARD_TARGET],
   },
+  {
+    id: 'teacher-2',
+    label: '教师（另一账号）',
+    // 第二教师账号由 prepare.ts 的 `ensureCrossTenantTeacher` 用产品自己的
+    // `user.create` 命令创建（幂等：已存在就跳过）。
+    //
+    // **它存在的唯一理由**是让「跨教师/跨班的对象级授权」在巡检里**可触发**：
+    // 演示世界原本只有一位教师，单教师世界里任何授权判定都必然放行，
+    // #211 补的那条判定链在巡检中是盲区。
+    //
+    // 不给 targets —— 它不参与只读巡检，只作为剧本里的越权方出现。
+    login: {
+      entrance: 'teacher',
+      username: CROSS_TENANT_TEACHER.username,
+      password: CROSS_TENANT_TEACHER.password,
+    },
+    prepare: [],
+    targets: [],
+  },
 ];
 
 /**
@@ -306,6 +346,386 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
         label: '学生回看分数',
         role: 'student',
         view: { path: '/' },
+      },
+    ],
+  },
+
+  /**
+   * 课堂互动全链（投票 → 抢答 → 通票 → 倒计时）—— #211 对象级授权面。
+   *
+   * ## 为什么自建一节课而不是复用 `demo-lesson`
+   *
+   * 只读巡检的角色顺序刻意让「管理员 / 学生」先跑，此时**还没有课堂会话** ——
+   * 这样才看得到「无会话时前端仍去 POST view-state 拿到 404」这类冷启动缺陷。
+   * 剧本在只读巡检**之前**跑，如果这里给 `demo-lesson` 建了会话，那层覆盖就没了。
+   * 所以剧本自建一节专用课节，边界互不干扰。
+   */
+  {
+    id: 'classroom-interaction-loop',
+    label: '课堂互动全链（投票 → 抢答 → 倒计时 → 通票）',
+    roles: ['teacher', 'student'],
+    steps: [
+      {
+        label: '教师新建一节专用巡检课节',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/lessons',
+          body: { title: '巡检课堂互动课节', content: '功能巡检（写流程剧本）自动创建，仅存在于一次性演示库。' },
+        },
+        capture: { name: 'lessonId', path: 'result.lessonId' },
+        expect: { path: 'result.lessonId', notEmpty: true },
+      },
+      {
+        label: '教师建立课堂会话并绑定演示班',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/init',
+          body: { classId: 'demo-class', teachingModeId: 'lecture' },
+        },
+        capture: { name: 'sessionId', path: 'session.id' },
+        expect: { path: 'session.id', notEmpty: true },
+      },
+      {
+        label: '教师发起极速投票',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/quick-poll',
+          body: {
+            questionType: 'ABCD',
+            title: '巡检极速投票：下列哪一项属于信息？',
+            options: ['一张纸质地图', '一段程序代码', '一段旋律', '以上都是'],
+            correctOption: 'D',
+          },
+        },
+        capture: { name: 'pollId', path: 'poll.id' },
+        expect: { path: 'poll.id', notEmpty: true },
+      },
+      {
+        label: '学生投票',
+        role: 'student',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/quick-poll/{{pollId}}/vote',
+          // 选项必须落在教师建投票时给出的选项里（服务端会校验），
+          // 否则 400「Invalid vote option」。
+          body: { option: '以上都是' },
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师确认投票已生效',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/classroom/sessions/{{lessonId}}' },
+        expect: { path: 'activePoll.id', notEmpty: true },
+      },
+      {
+        label: '教师开启抢答器',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/buzzer',
+          body: { title: '巡检抢答' },
+        },
+        capture: { name: 'buzzerId', path: 'buzzer.id' },
+        expect: { path: 'buzzer.id', notEmpty: true },
+      },
+      {
+        label: '学生抢答',
+        role: 'student',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/buzzer/{{buzzerId}}/buzz',
+          body: {},
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师启动倒计时',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/countdown',
+          body: { action: 'start', duration: 60 },
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '学生提交结课通票',
+        role: 'student',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{lessonId}}/exit-ticket',
+          body: { rating: 5, feedback: '巡检通票：课堂互动全链可达' },
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师读取结课通票汇总',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/classroom/sessions/{{lessonId}}/exit-ticket-summary' },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师打开班级管理（观察互动写入后的渲染）',
+        role: 'teacher',
+        view: { hash: 'classes' },
+      },
+    ],
+  },
+
+  /**
+   * 课件提交 → 自动录分 → 成绩查询 —— #213 / #215 的成绩写入面。
+   *
+   * 自动录分走**教师触发的** `/api/courseware/attempts/auto-record`
+   * （提交瞬间的实时自动录入依赖「进行中」的课堂会话，会把演示课节推进到
+   * 授课中 —— 那会锁住学生端、破坏只读巡检的覆盖，所以不取那条路）。
+   *
+   * 成绩落库后从班级作业列表里取回**刚自动生成的那条**作业，再查它的成绩行 ——
+   * 这正是 #215「成绩写入收敛为唯一入口」要守住的那条链。
+   */
+  {
+    id: 'courseware-grade-loop',
+    label: '课件提交 → 自动录分 → 成绩查询',
+    roles: ['teacher', 'student'],
+    steps: [
+      {
+        label: '教师上传一个互动课件',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/courseware/upload',
+          body: {
+            name: '巡检互动课件',
+            filename: 'index.html',
+            // 一段最小可运行的课件 HTML（base64）。课件必须真实落盘，
+            // 否则 /runtime 拿不到入口文件，也就没有 attempt 可提交。
+            base64Data: 'PGh0bWw+PGJvZHk+PGgxPlx6dVBpYyBpbnRlcmFjdGl2ZSBjb3Vyc2V3YXJlPC9oMT48L2JvZHk+PC9odG1sPg==',
+          },
+        },
+        capture: { name: 'coursewareUuid', path: 'uuid' },
+        expect: { path: 'uuid', notEmpty: true },
+      },
+      {
+        label: '学生铸造课件访问令牌',
+        role: 'student',
+        // /runtime 是课件沙箱直出入口，SEC-AUTH 之后必须带 `?ct=` 短时令牌
+        // （父页面就是这么做的）。令牌与课件 uuid 绑定。
+        api: { method: 'GET', path: '/api/courseware/{{coursewareUuid}}/access-token' },
+        capture: { name: 'coursewareToken', path: 'token' },
+        expect: { path: 'token', notEmpty: true },
+      },
+      {
+        label: '学生打开课件运行时（建立 attempt）',
+        role: 'student',
+        // 结尾的斜杠是必须的：`/runtime/:uuid`（无斜杠）会 302 到 `/runtime/:uuid/`，
+        // 而 Express 的 res.redirect **不保留原查询串** —— `?ct=` 令牌会被丢掉，
+        // 于是落到 401。产品前端用的也是带斜杠的地址。
+        api: { method: 'GET', path: '/runtime/{{coursewareUuid}}/?ct={{coursewareToken}}' },
+      },
+      {
+        label: '学生查询自己的课件 attempt',
+        role: 'student',
+        api: { method: 'GET', path: '/api/courseware/attempts?coursewareUuid={{coursewareUuid}}' },
+        // 列表接口返回 { data: [...], total, page, pageSize }
+        capture: { name: 'attemptId', path: 'data.0.attemptId' },
+        expect: { path: 'data.0.attemptId', notEmpty: true },
+      },
+      {
+        label: '学生提交课件成绩',
+        role: 'student',
+        api: {
+          method: 'POST',
+          path: '/api/courseware/attempts/{{attemptId}}/submit',
+          body: {
+            score: 88,
+            completion: 100,
+            status: 'completed',
+            comment: '巡检剧本：课件作答完成',
+            lessonId: 'demo-lesson',
+          },
+        },
+        expect: { path: 'success', equals: true },
+      },
+      {
+        label: '教师开启课件自动录分规则',
+        role: 'teacher',
+        // 自动录分**默认关闭**（`auto_record_enabled: false`）——
+        // 不先开规则，「教师触发自动录分」必然 recorded=0。
+        api: {
+          method: 'POST',
+          path: '/api/commands',
+          body: {
+            commandType: 'courseware.save_score_config',
+            payload: {
+              coursewareId: '*',
+              autoRecordEnabled: true,
+              autoRecordMinCompletion: 0,
+            },
+          },
+        },
+        expect: { path: 'result.success', equals: true },
+      },
+      {
+        label: '教师触发自动录分',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/courseware/attempts/auto-record',
+          body: { lessonId: 'demo-lesson', classId: 'demo-class' },
+        },
+        expect: { path: 'recorded', equals: 1 },
+      },
+      {
+        label: '教师取回自动生成的作业（最新一条）',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/classes/demo-class/assignments' },
+        capture: { name: 'assignmentId', path: '0.id' },
+        expect: { path: '0.id', notEmpty: true },
+      },
+      {
+        label: '教师查询该作业的成绩行',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/assignments/{{assignmentId}}/submissions' },
+        expect: { path: '0.score', equals: 88 },
+      },
+    ],
+  },
+
+  /**
+   * 课程包导入 → 课程出现 —— #204 的导入通道面。
+   *
+   * 导入请求体是「课程包 JSON」，附件用 base64 内联；这里带一份**最小可用**的
+   * 课程包（含一个教学环节与一个白板元素），验证的是「导入 → 课程真的出现」。
+   *
+   * `allowDuplicate: true` 是必须的：课程包按创建者 + 包身份去重，
+   * 同一个包导第二次会返回 409（这是产品的幂等设计，不是缺陷）。
+   */
+  {
+    id: 'course-package-import-loop',
+    label: '课程包导入 → 课程出现',
+    roles: ['teacher'],
+    steps: [
+      {
+        label: '教师导入一份课程包',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/course-packages/import',
+          body: {
+            allowDuplicate: true,
+            package: {
+              format: 'openlearn.course-package',
+              version: 1,
+              meta: { name: '巡检课程包', description: '功能巡检（写流程剧本）自动创建。' },
+              lesson: {
+                title: '巡检导入课程包',
+                content: '功能巡检（写流程剧本）自动创建，仅存在于一次性演示库。',
+                progressMode: 'manual',
+                timeline: [{ id: 'seg-1', title: '导入校验', type: 'prepare', duration: '5min' }],
+              },
+              assets: [],
+              elements: [{ type: 'text', data: { text: '巡检课程包白板元素' } }],
+            },
+          },
+        },
+        capture: { name: 'importedLessonId', path: 'result.lessonId' },
+        expect: { path: 'result.lessonId', notEmpty: true },
+      },
+      {
+        label: '教师打开刚导入的课程',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/lessons/{{importedLessonId}}' },
+        // 单条课节接口直接返回课节对象（没有 success 包装层）
+        expect: { path: 'title', equals: '巡检导入课程包' },
+      },
+      {
+        label: '教师打开课程管理（观察导入结果）',
+        role: 'teacher',
+        view: { hash: 'courses' },
+      },
+    ],
+  },
+
+  /**
+   * 跨教师 / 跨班的对象级授权 —— #211 防的那类回归。
+   *
+   * ## 为什么这条必须在结构上可触发
+   *
+   * 演示世界原本只有一位教师、两个都归他所有的班级 ——
+   * 「A 教师越权访问 B 教师的课节」在单教师世界里**不可能发生**，
+   * 于是 #211 补的判定链在巡检里是盲区：真出问题时没有任何一步会红。
+   *
+   * 这里用第二教师账号建自己的班级与课节，再让**另一位教师**与**别班学生**
+   * 去碰它 —— 期望被 403 拒绝。403 是**期望值**，因此这一步用 `expectStatus`。
+   */
+  {
+    id: 'cross-tenant-authorization',
+    label: '跨教师 / 跨班访问应被 403 拒绝',
+    roles: ['teacher', 'teacher-2', 'student'],
+    steps: [
+      {
+        label: '第二教师建立自己的班级',
+        role: 'teacher-2',
+        api: {
+          method: 'POST',
+          path: '/api/classes',
+          body: { name: '巡检隔离班（第二教师）', description: '功能巡检自动创建，用于跨班授权回归。' },
+        },
+        capture: { name: 'otherClassId', path: 'id' },
+        expect: { path: 'id', notEmpty: true },
+      },
+      {
+        label: '第二教师建立自己的课节',
+        role: 'teacher-2',
+        api: {
+          method: 'POST',
+          path: '/api/lessons',
+          body: { title: '巡检隔离课节（第二教师）', content: '功能巡检自动创建，用于跨教师授权回归。' },
+        },
+        capture: { name: 'otherLessonId', path: 'result.lessonId' },
+        expect: { path: 'result.lessonId', notEmpty: true },
+      },
+      {
+        label: '第二教师在隔离班里开课',
+        role: 'teacher-2',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{otherLessonId}}/init',
+          body: { classId: '{{otherClassId}}', teachingModeId: 'lecture' },
+        },
+        capture: { name: 'otherSessionId', path: 'session.id' },
+        expect: { path: 'session.id', notEmpty: true },
+      },
+      {
+        label: '另一教师读取他班课节 → 应 403',
+        role: 'teacher',
+        api: { method: 'GET', path: '/api/classroom/sessions/{{otherLessonId}}' },
+        expectStatus: 403,
+      },
+      {
+        label: '另一教师操作他班投票 → 应 403',
+        role: 'teacher',
+        api: {
+          method: 'POST',
+          path: '/api/classroom/sessions/{{otherLessonId}}/quick-poll',
+          body: { title: '越权投票', options: ['A', 'B'] },
+        },
+        expectStatus: 403,
+      },
+      {
+        label: '别班学生读取他班课节 → 应 403',
+        role: 'student',
+        api: { method: 'GET', path: '/api/classroom/sessions/{{otherLessonId}}' },
+        expectStatus: 403,
+      },
+      {
+        label: '第二教师自己读自己的课节 → 应 200',
+        role: 'teacher-2',
+        api: { method: 'GET', path: '/api/classroom/sessions/{{otherLessonId}}' },
+        expectStatus: 200,
       },
     ],
   },

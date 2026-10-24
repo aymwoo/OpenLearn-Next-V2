@@ -7,6 +7,78 @@ function errorKeys(env: NodeJS.ProcessEnv): string[] {
   return validateStartupEnv(env).errors.map((issue) => issue.key);
 }
 
+describe('进程内身份开关（R-01 的运营面）', () => {
+  it('ENFORCE_PLUGIN_ISOLATION 只接受 1 / 0 —— 写成 true 会静默不生效', () => {
+    // 判定处是 `env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1'`：
+    // 'true' / 'yes' / '1 ' 都会被当成"未开启"，与 TB-03 同类。
+    // 注意 `'1 '` 不算错：`trimmed()` 会先去空白，那是我们希望的行为。
+    for (const bad of ['true', 'yes', 'on']) {
+      expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: bad }), bad).toEqual([
+        'OPENLEARN_ENFORCE_PLUGIN_ISOLATION',
+      ]);
+    }
+    expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: '1' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_ENFORCE_PLUGIN_ISOLATION: '0' })).toEqual([]);
+  });
+
+  it('生产环境信任进程内插件时留下可检索告警，但不阻断启动', () => {
+    const result = validateStartupEnv({
+      NODE_ENV: 'production',
+      OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a, ext-b',
+    });
+    expect(result.errors).toEqual([]);
+    const warning = result.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(warning?.message).toContain('ext-a');
+    expect(warning?.message).toContain('ext-b');
+    // 说清代价：与宿主共享网络栈，出站拦截对它们不生效
+    expect(warning?.message).toContain('出站网络拦截');
+  });
+
+  it('非生产环境不过度告警；只含空白的名单会被指出等同未配置', () => {
+    expect(
+      validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a' }).warnings.map((w) => w.key),
+    ).not.toContain('OPENLEARN_TRUSTED_INLINE_PLUGINS');
+
+    const blank = validateStartupEnv({ NODE_ENV: 'production', OPENLEARN_TRUSTED_INLINE_PLUGINS: ' , ' });
+    const blankWarning = blank.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(blankWarning?.message).toContain('等同于未配置');
+  });
+});
+
+describe('插件资源配额与探活调参（TB-03 同类：拼错不能静默回落）', () => {
+  it('接受 off / none / 0 与正整数', () => {
+    for (const value of ['off', 'none', '0', '512', '32768']) {
+      expect(errorKeys({ OPENLEARN_PLUGIN_MAX_RSS_MB: value }), value).toEqual([]);
+    }
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_QUOTA_MS: '20000' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '10000' })).toEqual([]);
+  });
+
+  it('拒绝带单位/负数的配额值（否则会静默回落默认值）', () => {
+    expect(errorKeys({ OPENLEARN_PLUGIN_MAX_RSS_MB: '512MB' })).toEqual(['OPENLEARN_PLUGIN_MAX_RSS_MB']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_QUOTA_MS: '20s' })).toEqual(['OPENLEARN_PLUGIN_CPU_QUOTA_MS']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '-1' })).toEqual(['OPENLEARN_PLUGIN_CPU_WINDOW_MS']);
+  });
+
+  it('配额总开关拼错时 fail-fast，而不是「看起来关了其实没关」', () => {
+    expect(errorKeys({ OPENLEARN_PLUGIN_QUOTA: 'of' })).toEqual(['OPENLEARN_PLUGIN_QUOTA']);
+    expect(errorKeys({ OPENLEARN_PLUGIN_QUOTA: 'off' })).toEqual([]);
+  });
+
+  it('探活调参必须是正整数', () => {
+    expect(errorKeys({ OPENLEARN_WORKER_LIVENESS_INTERVAL_MS: '30s' })).toEqual([
+      'OPENLEARN_WORKER_LIVENESS_INTERVAL_MS',
+    ]);
+    expect(errorKeys({ OPENLEARN_WORKER_LIVENESS_GRACE_MS: '15000' })).toEqual([]);
+  });
+
+  it('过小的采样窗口只告警，不阻断', () => {
+    const result = validateStartupEnv({ OPENLEARN_PLUGIN_CPU_WINDOW_MS: '200' });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.map((w) => w.key)).toContain('OPENLEARN_PLUGIN_CPU_WINDOW_MS');
+  });
+});
+
 describe('startup env validation', () => {
   it('默认空环境不产生任何 error', () => {
     expect(validateStartupEnv(EMPTY_ENV).errors).toHaveLength(0);

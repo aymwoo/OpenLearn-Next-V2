@@ -28,7 +28,7 @@ interface DiagnosticData {
     completedCount: number;
     pendingCount: number;
     completionRate: number;
-    averageTimeSpentMins: number;
+    averageTimeSpentMins: number | null;
   };
   topMistakes: {
     rank: number;
@@ -126,7 +126,7 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
     completedCount: 0,
     pendingCount: 0,
     completionRate: 0,
-    averageTimeSpentMins: 0,
+    averageTimeSpentMins: null,
   };
 
   const topMistakes = data?.topMistakes || [];
@@ -176,7 +176,11 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
               {prepSummary.completionRate}%
             </span>
             <span className="text-2xs text-muted font-mono">
-              ({prepSummary.completedCount}/{prepSummary.totalStudents} 人)
+              {prepSummary.totalStudents > 0
+                ? `(${prepSummary.completedCount}/${prepSummary.totalStudents} 人)`
+                : lang === 'zh'
+                  ? '（暂无班级名单）'
+                  : '(no roster)'}
             </span>
           </div>
           <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-1.5">

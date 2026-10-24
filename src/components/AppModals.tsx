@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Lesson, ClassType, VFSNode } from '../types/app';
 import type { WizardSegment } from '../features/modals/CourseWizardModal';
 import type { ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
-import type { CoursePackagePreview } from '../services/coursePackageService';
+import type { CoursePackagePreview, CoursePackageDuplicate } from '../services/coursePackageService';
 import type { useCourseWizard } from '../hooks/useCourseWizard';
 import type { useQuizGenerator } from '../hooks/useQuizGenerator';
 import type { useClassBatchOperations } from '../hooks/useClassBatchOperations';
@@ -94,7 +94,9 @@ export interface AppModalsProps {
   downloadCsvTemplate?: () => void;
   downloadCourseTemplate?: () => void;
   packagePreview?: CoursePackagePreview | null;
-  handlePackageImportSubmit?: () => void;
+  handlePackageImportSubmit?: (allowDuplicate?: boolean) => void;
+  packageDuplicate?: CoursePackageDuplicate | null;
+  handlePackageDuplicateDismiss?: () => void;
   isDraggingImport?: boolean;
   previewImportData?: ImportRow[];
   setPreviewImportData?: Dispatch<SetStateAction<ImportRow[]>>;
@@ -232,6 +234,8 @@ export function AppModals(props: AppModalsProps = {}) {
     downloadCourseTemplate = a?.downloadCourseTemplate ?? (() => {}),
     packagePreview = a?.packagePreview ?? null,
     handlePackageImportSubmit = a?.handlePackageImportSubmit ?? (() => {}),
+    packageDuplicate = a?.packageDuplicate ?? null,
+    handlePackageDuplicateDismiss = a?.handlePackageDuplicateDismiss ?? (() => {}),
     isDraggingImport = a?.isDraggingImport ?? false,
     previewImportData = a?.previewImportData ?? [],
     setPreviewImportData = a?.setPreviewImportData ?? (() => {}),
@@ -401,6 +405,8 @@ export function AppModals(props: AppModalsProps = {}) {
         downloadCourseTemplate={downloadCourseTemplate}
         packagePreview={packagePreview}
         handlePackageImportSubmit={handlePackageImportSubmit}
+        packageDuplicate={packageDuplicate}
+        handlePackageDuplicateDismiss={handlePackageDuplicateDismiss}
         isDraggingImport={isDraggingImport}
         previewImportData={previewImportData}
         setPreviewImportData={setPreviewImportData}
