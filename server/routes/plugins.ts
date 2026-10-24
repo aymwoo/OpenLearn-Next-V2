@@ -121,9 +121,7 @@ function installationSecurityFields(
     /** 清单申请的出站域名（归一化后），未授权前只是提案。 */
     networkHostsProposed: networkVerdicts.filter((v) => v.approvable).map((v) => v.host as string),
     /** 清单里声明了但**永远不可批准**的项（回环/私有/通配符），带原因。 */
-    networkHostsRejected: networkVerdicts
-      .filter((v) => !v.approvable)
-      .map((v) => ({ host: v.raw, reason: v.reason })),
+    networkHostsRejected: networkVerdicts.filter((v) => !v.approvable).map((v) => ({ host: v.raw, reason: v.reason })),
     /** 本次安装/更新实际写入授权表的域名。 */
     networkHostsApproved,
   };
@@ -1044,8 +1042,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   function resolvePluginGrantKeys(rawId: string): { pluginId: string; manifest: any; keys: string[] } | null {
     const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
     const row = kernelContainer.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
-      | { manifest: string }
-      | undefined;
+      { manifest: string } | undefined;
     if (!row) return null;
     let manifest: any = {};
     try {
@@ -1096,9 +1093,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         resolved.keys,
         verdicts.filter((v) => v.approvable).map((v) => v.host as string),
       );
-      const rejected = verdicts
-        .filter((v) => !v.approvable)
-        .map((v) => ({ host: v.raw, reason: v.reason }));
+      const rejected = verdicts.filter((v) => !v.approvable).map((v) => ({ host: v.raw, reason: v.reason }));
 
       recordSecurityAudit('plugin.network_grant_approved', {
         actorId: getActorId(req),
