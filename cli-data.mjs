@@ -2,6 +2,40 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const requireFromHere = createRequire(import.meta.url);
+
+/**
+ * 加载迁移器（`pnpm build` 产出的 `dist/cli-migrator.cjs`）。
+ *
+ * ## 为什么不再直接 `import('./packages/core/db/migrator.js')`
+ *
+ * 那条路径**在任何环境都不存在**：源码检出里只有 `migrator.ts`，发布包的 `files`
+ * 清单里也只有 `dist/*` 与几个 `cli-*.mjs`。于是 `openlearn-next migrate status` /
+ * `migrate rollback` 一旦走到加载点就抛 MODULE_NOT_FOUND —— 两条帮助里宣传的命令
+ * 实际从未可用（`_migrations` 表不存在时会在更早的分支提前返回，把这个缺陷藏住了）。
+ *
+ * 现在与 `env-validation` 同法：构建期打成独立 CJS，运行时用 createRequire 载入
+ * （而不是 `await import('...')`，后者会被 Vite/Vitest 在转换期静态解析）。
+ *
+ * 产物缺失时给出**可操作**的报错，而不是让用户对着 MODULE_NOT_FOUND 猜。
+ */
+export function loadCliMigrator() {
+  const artifact = path.join(__dirname, 'dist', 'cli-migrator.cjs');
+  if (!fs.existsSync(artifact)) {
+    const error = new Error(
+      `迁移器构建产物缺失：${artifact}\n` +
+        '  源码检出请先执行 `pnpm build`（或 `bash scripts/build-cli-artifacts.sh`）；\n' +
+        '  若你安装的是发布包，这属于打包缺陷，请反馈。',
+    );
+    error.code = 'CLI_MIGRATOR_ARTIFACT_MISSING';
+    throw error;
+  }
+  return requireFromHere(artifact);
+}
 
 /**
  * 解析本地目标数据库路径
@@ -569,7 +603,7 @@ export async function runMigrateStatus(options = {}) {
     const appliedRows = db.prepare('SELECT name, applied_at, checksum FROM _migrations ORDER BY applied_at ASC').all();
     db.close();
 
-    const { loadMigrationsFromDirectory, getDefaultMigrationsDir } = await import('./packages/core/db/migrator.js');
+    const { loadMigrationsFromDirectory, getDefaultMigrationsDir } = loadCliMigrator();
     const allMigrations = loadMigrationsFromDirectory(getDefaultMigrationsDir());
     const appliedSet = new Set(appliedRows.map((r) => r.name));
     const pending = allMigrations.filter((m) => !appliedSet.has(m.name));
@@ -636,8 +670,7 @@ export async function runMigrateRollback(options = {}) {
       return { ok: true };
     }
 
-    const { loadMigrationsFromDirectory, getDefaultMigrationsDir, rollbackMigration } =
-      await import('./packages/core/db/migrator.js');
+    const { loadMigrationsFromDirectory, getDefaultMigrationsDir, rollbackMigration } = loadCliMigrator();
     const allMigrations = loadMigrationsFromDirectory(getDefaultMigrationsDir());
     const targetMigration = allMigrations.find((m) => m.name === lastRow.name);
 

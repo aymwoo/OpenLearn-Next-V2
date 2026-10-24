@@ -25,7 +25,10 @@ overrides:
   # GHSA-p98j-92pf-mc4p / GHSA-6688-9rhm-gjv2。jspdf 4.2.1 仍带入 <=3.4.15。
   dompurify: '>=3.4.16'
   qs: '>=6.16.0'
-  body-parser: '>=1.20.6'
+  # GHSA-27r3-jxmh-p828：body-parser <1.20.9 存在压缩请求体尾部字节 DoS。
+  body-parser: '>=1.20.9'
+  # GHSA-mrhx-c7xc-m3w5：zod <4.6.6 在校验超大受限集合时可能耗尽内存。
+  zod: '>=4.6.6'
   protobufjs: '>=7.6.5'
   ooxml-core: '1.8.2'
   ooxml-ui: '1.8.3'
@@ -33,8 +36,9 @@ overrides:
   engine.io: '>=6.6.10'
   # brace-expansion 5.x DoS（CVE-2026-14257 及后续）。v1/v2 属于 minimatch 3/5，不在公告范围内，不能整包抬到 5。
   'brace-expansion@>=4': '5.0.12'
-  # jsdom 29 使用 undici 7。不要抬到 8（那是 jsdom 30 的主版本）。7.30.0 高于 #7 的 7.29.1。
-  'undici@>=7 <8': '7.30.0'
+  # jsdom 29 使用 undici 7。不要抬到 8（那是 jsdom 30 的主版本）。
+  # 7.30.1 起修复「过多 content-encoding 触发未处理错误导致 DoS」（GHSA-xjj6-f33q-929c，<=7.30.0 受影响）。
+  'undici@>=7 <8': '7.30.1'
   # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g。4.29 同时带上已修复的 baseline-browser-mapping >=2.11。
   browserslist: '>=4.28.7'
   baseline-browser-mapping: '>=2.11.0'

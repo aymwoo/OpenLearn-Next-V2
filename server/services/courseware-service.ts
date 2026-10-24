@@ -193,9 +193,8 @@ export class CoursewareService {
     }
 
     if (session.role !== 'teacher' && session.role !== 'administrator') {
-      const attemptRow = this.db
-        .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-        .get(attemptId) as { student_id: string } | undefined;
+      const attemptRow = this.db.prepare('SELECT student_id FROM courseware_attempt WHERE id = ?').get(attemptId) as
+        { student_id: string } | undefined;
       if (attemptRow && attemptRow.student_id !== session.userId) {
         const err: any = new Error('Forbidden: Cannot modify logs for another student');
         err.status = 403;
@@ -237,9 +236,7 @@ export class CoursewareService {
         if (!isNaN(num)) parsedCompletion = num;
       }
 
-      const existing = this.db
-        .prepare('SELECT * FROM submission_result WHERE attempt_id = ?')
-        .get(attemptId) as any;
+      const existing = this.db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
 
       if (!existing) {
         this.db
@@ -305,9 +302,8 @@ export class CoursewareService {
       throw err;
     }
 
-    const attemptRow = this.db
-      .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-      .get(attemptId) as { student_id: string } | undefined;
+    const attemptRow = this.db.prepare('SELECT student_id FROM courseware_attempt WHERE id = ?').get(attemptId) as
+      { student_id: string } | undefined;
 
     // 不存在的 attempt 不能再落 submission_raw / submission_result：
     // 否则会留下永远无法 promote、也无法归属学生的孤儿成绩行。
@@ -423,8 +419,7 @@ export class CoursewareService {
     sessionOrIsStaff?: AccessSession | boolean | null,
     requesterStudentId?: string,
   ): ListAttemptsResult {
-    const coursewareUuid =
-      typeof queryParams.coursewareUuid === 'string' ? queryParams.coursewareUuid.trim() : '';
+    const coursewareUuid = typeof queryParams.coursewareUuid === 'string' ? queryParams.coursewareUuid.trim() : '';
 
     let isStaff = false;
     let isAdmin = false;
@@ -535,9 +530,8 @@ export class CoursewareService {
   // ── 5. 作答进度查询 ────────────────────────────────────────────────────────
 
   public getAttemptProgress(attemptId: string, session?: CoursewareSessionInfo | null): any {
-    const owner = this.db
-      .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-      .get(attemptId) as { student_id: string } | undefined;
+    const owner = this.db.prepare('SELECT student_id FROM courseware_attempt WHERE id = ?').get(attemptId) as
+      { student_id: string } | undefined;
 
     if (!owner) {
       return null;
@@ -607,9 +601,7 @@ export class CoursewareService {
 
     if (!existing) {
       this.db
-        .prepare(
-          'INSERT OR REPLACE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
-        )
+        .prepare('INSERT OR REPLACE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(uuid, 'index.html', 'html', code, Date.now());
     }
 
@@ -645,7 +637,10 @@ export class CoursewareService {
       const text =
         result.reason === 'student-not-in-class'
           ? '该学生不在所选班级中，无法标记缺考'
-          : '课件不存在，无法标记缺考';
+          : result.reason === 'already-recorded'
+            ? // Issue #248：已有分数的成绩行不被缺考覆盖（与考勤联动路径同一道防护）。
+              '该生已有成绩记录，不能直接标记缺考；如需改判请走「录入成绩」覆盖。'
+            : '课件不存在，无法标记缺考';
       const err: any = new Error(text);
       err.status = 422;
       err.reason = result.reason;

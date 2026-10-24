@@ -9,12 +9,25 @@
  */
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { buildTemplateCoursePackage, parseCoursePackage } from '../services/course-package.js';
-import { importCoursePackage } from '../services/course-package-import.js';
+import {
+  buildTemplateCoursePackage,
+  parseCoursePackage,
+  COURSE_PACKAGE_MAX_FILE_BYTES,
+} from '../services/course-package.js';
+import { importCoursePackage, CoursePackageDuplicateError } from '../services/course-package-import.js';
 import type { ServerContext } from '../context.js';
 
 /** 模板下载文件名（Content-Disposition 用）。 */
 const TEMPLATE_FILENAME = 'openlearn-course-template.json';
+
+/**
+ * 课程包内附件的**解码后**总体积上限（字节）。
+ *
+ * 请求体上限挡的是「传输体积」，这里挡的是「真正落盘的文件体积」：
+ * 两者不是一回事（base64 膨胀 1.37 倍），但教师关心的是后者 ——
+ * 「我的课件到底能带多大」。超出时给出能指到真实原因的错误。
+ */
+const MAX_DECODED_ASSET_BYTES = COURSE_PACKAGE_MAX_FILE_BYTES;
 
 export function registerCoursePackageRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -41,24 +54,59 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
    * 导入一个课程包。
    *
    * 请求体既接受 `{ package: {...} }`，也接受课程包本身（顶层即 package）。
+   *
+   * `allowDuplicate: true` 表示「命中去重也照常导入一份副本」——
+   * 教师确实想导两份时（例如两个班各上一门）用这个开关绕开幂等保护。
    */
   app.post('/api/course-packages/import', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const body = req.body;
       const raw = body && typeof body === 'object' && 'package' in body ? (body as any).package : body;
+      const allowDuplicate = Boolean(body && typeof body === 'object' && (body as any).allowDuplicate === true);
 
       const parsed = parseCoursePackage(raw);
       if (!parsed.ok) {
         return res.status(400).json({ success: false, error: parsed.error });
       }
 
+      // Issue #246：附件解码后的总体积上限。请求体上限管的是「传输体积」，
+      // 这里管的是「真正落盘的体积」——教师看到的是后者。
+      let decodedBytes = 0;
+      for (const asset of parsed.package.assets) {
+        decodedBytes += Buffer.byteLength(asset.base64, 'base64');
+      }
+      if (decodedBytes > MAX_DECODED_ASSET_BYTES) {
+        return res.status(413).json({
+          success: false,
+          code: 'COURSE_PACKAGE_TOO_LARGE',
+          error:
+            `课程包附件解码后共 ${(decodedBytes / (1024 * 1024)).toFixed(1)}MB，` +
+            `超过 ${MAX_DECODED_ASSET_BYTES / (1024 * 1024)}MB 上限。请精简附件后重试。`,
+        });
+      }
+
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || getActorId(req) || 'usr_teacher';
 
-      const result = await importCoursePackage(parsed.package, { creatorId });
+      const result = await importCoursePackage(parsed.package, { creatorId, allowDuplicate });
 
       res.json({ success: true, result });
     } catch (e: any) {
+      // 命中去重：409 + 现有课程信息，前端据此渲染「仍然导入副本」。
+      if (e instanceof CoursePackageDuplicateError) {
+        return res.status(409).json({
+          success: false,
+          code: e.code,
+          error: e.message,
+          duplicate: {
+            lessonId: e.existingLessonId,
+            lessonTitle: e.existingLessonTitle,
+            importedAt: e.existingCreatedAt,
+            packageKey: e.packageKey,
+            hasDeclaredId: e.hasDeclaredId,
+          },
+        });
+      }
       console.error('[CoursePackage] 导入失败:', e);
       sendSafeError(res, e);
     }
