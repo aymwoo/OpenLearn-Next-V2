@@ -169,9 +169,7 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       const ledger = ctx.services.pointsLedger as IPointsLedgerService;
 
       // Issue #225：此前是「告警后放行」，现在真正阻断。
-      await expect(ledger.getStudentDimensionSummary('stu-202', 'class-1')).rejects.toThrow(
-        /student-data:read/,
-      );
+      await expect(ledger.getStudentDimensionSummary('stu-202', 'class-1')).rejects.toThrow(/student-data:read/);
       expect(mockLedger.getStudentDimensionSummary).not.toHaveBeenCalled();
 
       const audit = auditLogs.find((r) => r.event === 'plugin.student_data_access');
@@ -295,8 +293,8 @@ describe('Plugin Student Data Privacy & Audit (Issue #145)', () => {
       const err = postedMessages.find(
         (m): m is { code?: string; message?: string } => (m as { type?: string })?.type === 'error',
       );
-      expect(err.code).toBe('WorkerCapabilityError');
-      expect(err.message).toContain('student-data:write');
+      expect(err?.code).toBe('WorkerCapabilityError');
+      expect(err?.message).toContain('student-data:write');
 
       // 关键：积分账本**未被调用** —— 不产生任何积分变更
       expect(mockLedger.addPoints).not.toHaveBeenCalled();
