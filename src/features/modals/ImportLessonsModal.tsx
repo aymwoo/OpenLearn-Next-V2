@@ -2,6 +2,10 @@ import { Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { Upload, Download, Loader2, CheckCircle2, Check, FileJson, Package } from 'lucide-react';
 import type { CoursePackagePreview, CoursePackageDuplicate } from '../../services/coursePackageService';
+import { COURSE_PACKAGE_MAX_FILE_BYTES } from '../../services/coursePackageService';
+
+/** 导入框承诺的文件体积上限（MB）—— 与实际校验口径同源。 */
+const IMPORT_MAX_FILE_MB = Math.round(COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024));
 
 export interface ImportRow {
   title: string;
@@ -208,9 +212,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                         : 'Click to select or drag and drop a CSV / course-package JSON file here'}
                     </span>
                     <span className="text-xs text-gray-400 mt-1">
+                      {/* 上限文案直接取常量，避免「承诺 20MB」与实际校验口径再次漂移（Issue #246） */}
                       {lang === 'zh'
-                        ? '支持标准 CSV 与课程包 JSON，最大不超过 20MB'
-                        : 'Supports standard CSV and course-package JSON, up to 20MB'}
+                        ? `支持标准 CSV 与课程包 JSON，最大不超过 ${IMPORT_MAX_FILE_MB}MB`
+                        : `Supports standard CSV and course-package JSON, up to ${IMPORT_MAX_FILE_MB}MB`}
                     </span>
                   </div>
                 </div>
@@ -468,10 +473,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                           ) : (
                             <>
                               A lesson named &quot;{packageDuplicate.lessonTitle}&quot; already exists
-                              {packageDuplicate.hasDeclaredId
-                                ? ' (same course-package id)'
-                                : ' (identical content)'}
-                              . Importing again would create two lessons with the same content.
+                              {packageDuplicate.hasDeclaredId ? ' (same course-package id)' : ' (identical content)'}.
+                              Importing again would create two lessons with the same content.
                             </>
                           )}
                         </p>

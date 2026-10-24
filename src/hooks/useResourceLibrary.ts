@@ -16,9 +16,20 @@ import {
   downloadCourseTemplate as downloadCourseTemplateApi,
   importCoursePackage as importCoursePackageApi,
   readCoursePackageFile,
+  formatMegabytes,
+  COURSE_PACKAGE_MAX_FILE_BYTES,
+  COURSE_PACKAGE_MAX_FILE_MB,
   type CoursePackagePreview,
   type CoursePackageDuplicate,
 } from '../services/coursePackageService.js';
+
+/**
+ * 导入框（CSV 与课程包 JSON 通用）的文件体积上限。
+ *
+ * 与服务端 `COURSE_PACKAGE_MAX_FILE_BYTES` 同值 —— 前端提前拦，
+ * 服务端兜底，两侧口径必须一致，否则会出现「前端放行、服务端 413」。
+ */
+const IMPORT_MAX_FILE_BYTES = COURSE_PACKAGE_MAX_FILE_BYTES;
 
 export function useResourceLibrary(deps: {
   lang: 'zh' | 'en';
@@ -117,6 +128,20 @@ export function useResourceLibrary(deps: {
    */
   const handleImportFileChange = async (file: File) => {
     if (!file) return;
+    // Issue #246：导入框对教师的承诺是「最大不超过 20MB」（CSV 与课程包 JSON 通用）。
+    // 此前这里**只校验后缀**，体积交给服务端，于是超限文件变成一个裸 413 ——
+    // 教师既不知道自己文件多大，也不知道该怎么改。体积校验必须在前端先发生。
+    if (file.size > IMPORT_MAX_FILE_BYTES) {
+      setImportStatus('error');
+      setImportErrorMsg(
+        lang === 'zh'
+          ? `文件 ${formatMegabytes(file.size)} 超过 ${COURSE_PACKAGE_MAX_FILE_MB}MB 上限，请精简后重试。`
+          : `File is ${formatMegabytes(file.size)}, over the ${COURSE_PACKAGE_MAX_FILE_MB}MB limit.`,
+      );
+      setPackagePreview(null);
+      setPendingCoursePackage(null);
+      return;
+    }
     const lower = file.name.toLowerCase();
     if (lower.endsWith('.json')) {
       setImportErrorMsg('');
