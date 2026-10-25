@@ -2,48 +2,115 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
+RED='\033[0.31m'
+GREEN='\033[0.32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log()  { echo -e "${GREEN}[publish]${NC} $*"; }
+warn() { echo -e "${YELLOW}[publish]${NC} $*"; }
 err()  { echo -e "${RED}[error]${NC} $*"; exit 1; }
 
-# ── 0. Preflight Quality Gate & Version Consistency ────────────────
+usage() {
+  cat <<'EOF'
+用法: scripts/publish.sh [--dry-run]
+
+  --dry-run   走完整发布流程但不真正发布：npm publish --dry-run + 跳过镜像同步。
+              用于发布前验证产物（包内容、版本、依赖改写结果）。
+  -h,--help   显示本帮助。
+
+发布顺序: @openlearn/plugin-sdk → @openlearn/plugin-test-kit → openlearn-next → npmmirror 同步。
+EOF
+}
+
+DRY_RUN=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    -h|--help) usage; exit 0 ;;
+    *) err "未知参数: ${arg}（用 --help 查看用法）" ;;
+  esac
+done
+
+if [ "$DRY_RUN" = true ]; then
+  warn "DRY-RUN 模式：不会真正发布到 npm，也不会同步镜像。"
+fi
+
+# ── 0. Preflight Quality Gate & Version Consistency ─────────────────
 log "Running Preflight Quality Gates (lint & version-consistency)..."
 pnpm lint || err "TypeScript check failed"
 pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Version consistency gate failed! Check package.json vs packages/core/version.ts"
 
-# ── 1. Publish @openlearn/plugin-sdk ───────────────────────────────
+# ── 0b. 版本占用门禁（防「tag 与 npm 包指向不同代码」）─────────────
+#
+# 为什么需要这道门禁：版本号一旦与**既有 git tag** 撞车，就会出现
+# 「tag v0.7.1 指向 47 个提交之前的代码，而 npm 上的 openlearn-next@0.7.1
+# 却是 47 个提交之后的代码」——同一个版本号指向两批不同的代码，且不可逆。
+# npm 侧有自己的保护（不允许覆盖已发布版本），git 侧没有。
+#
+# 只对**即将发布**的包调用：已发布且版本未变的包走「跳过发布」分支，不该被拦。
+assert_version_not_taken() {
+  local pkg_name="$1" version="$2"
+
+  if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null 2>&1; then
+    err "版本占用：git tag v${version} 已存在（$(git rev-list -n1 "v${version}" 2>/dev/null | cut -c1-12)）。请提升版本号 —— 当前 ${version} 已被占用，发出去会与该 tag 指向不同代码。"
+  fi
+
+  local remote_versions
+  remote_versions="$(npm view "${pkg_name}" versions --json 2>/dev/null || echo '[]')"
+  if printf '%s' "$remote_versions" | grep -q "\"${version}\""; then
+    err "版本占用：npm 上 ${pkg_name}@${version} 已发布。请提升版本号。"
+  fi
+}
+
+log "Checking version occupancy (git tags & npm registry)..."
+APP_VER="$(node -p "require('./package.json').version")"
+# 平台包每次都会发布 → 占用检查在预检阶段就做（早失败，别等 build 完才发现）。
+assert_version_not_taken openlearn-next "$APP_VER"
+
+SDK_DIR="packages/plugin-sdk"
+TK_DIR="packages/plugin-test-kit"
+SDK_VER="$(node -p "require('./$SDK_DIR/package.json').version")"
+TK_VER="$(node -p "require('./$TK_DIR/package.json').version")"
+log "Version occupancy check passed (openlearn-next@${APP_VER})."
+
+# ── 发布辅助：dry-run 时走 npm publish --dry-run ───────────────────
+publish_pkg() {
+  local dir="$1" name="$2"
+  if [ "$DRY_RUN" = true ]; then
+    warn "[dry-run] npm publish --dry-run --registry=https://registry.npmjs.org （${name}，不会真正发布）"
+    (cd "$dir" && npm publish --dry-run --registry=https://registry.npmjs.org)
+  else
+    (cd "$dir" && npm publish --registry=https://registry.npmjs.org)
+  fi
+}
+
+# ── 1. Publish @openlearn/plugin-sdk ─────────────────────────────────
 log "Checking @openlearn/plugin-sdk..."
-cd packages/plugin-sdk
-SDK_VER=$(node -p "require('./package.json').version")
-REMOTE_SDK_VER=$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")
+REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")"
 if [ "$SDK_VER" != "$REMOTE_SDK_VER" ]; then
-  log "Publishing @openlearn/plugin-sdk@${SDK_VER}..."
-  npm publish --registry=https://registry.npmjs.org || err "plugin-sdk publish failed"
+  # 即将发布 → 才需要占用检查（已发布且版本不变的包走下面的跳过分支，不该被拦）。
+  assert_version_not_taken @openlearn/plugin-sdk "$SDK_VER"
+  publish_pkg "$SDK_DIR" "@openlearn/plugin-sdk@${SDK_VER}"
   log "@openlearn/plugin-sdk@${SDK_VER} published"
 else
   log "@openlearn/plugin-sdk@${SDK_VER} already published on npm, skipping publish"
 fi
-cd ../..
 
 # ── 2. Publish @openlearn/plugin-test-kit ──────────────────────────
 log "Checking @openlearn/plugin-test-kit..."
-cd packages/plugin-test-kit
-TK_VER=$(node -p "require('./package.json').version")
-REMOTE_TK_VER=$(npm view @openlearn/plugin-test-kit version 2>/dev/null || echo "")
+REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version 2>/dev/null || echo "")"
 if [ "$TK_VER" != "$REMOTE_TK_VER" ]; then
-  log "Publishing @openlearn/plugin-test-kit@${TK_VER}..."
-  sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' package.json
-  npm publish --registry=https://registry.npmjs.org || err "plugin-test-kit publish failed"
+  assert_version_not_taken @openlearn/plugin-test-kit "$TK_VER"
+  # workspace 协议改写为精确 SDK 版本后再发布（发布后还原）。
+  sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' "$TK_DIR/package.json"
+  publish_pkg "$TK_DIR" "@openlearn/plugin-test-kit@${TK_VER}"
   log "@openlearn/plugin-test-kit@${TK_VER} published"
   # Restore workspace protocol for local dev
-  git checkout -- package.json
+  git checkout -- "$TK_DIR/package.json"
 else
   log "@openlearn/plugin-test-kit@${TK_VER} already published on npm, skipping publish"
 fi
-cd ../..
 
 # ── 3. Build & publish openlearn-next ──────────────────────────────
 log "Building openlearn-next..."
@@ -51,16 +118,23 @@ pnpm build || err "build failed"
 # 将 workspace 协议重写为精确 SDK 版本再发布：npx/npm 消费者安装时按
 # 精确 pin 解析，与 server.cjs 构建时所用的 SDK 版本强绑定，防止版本漂移。
 sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|' package.json
-npm publish --registry=https://registry.npmjs.org || err "openlearn-next publish failed"
-APP_VER=$(node -p "require('./package.json').version")
+publish_pkg "." "openlearn-next@${APP_VER}"
 log "openlearn-next@${APP_VER} published"
 # Restore workspace protocol for local dev
 sed -i 's|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|"@openlearn/plugin-sdk": "workspace:\*"|' package.json
 
 # ── 4. Sync to npmmirror ──────────────────────────────────────────
-log "Syncing to npmmirror..."
-cnpm sync openlearn-next        || log "sync openlearn-next failed (non-fatal)"
-cnpm sync @openlearn/plugin-sdk || log "sync @openlearn/plugin-sdk failed (non-fatal)"
-cnpm sync @openlearn/plugin-test-kit || log "sync @openlearn/plugin-test-kit failed (non-fatal)"
+if [ "$DRY_RUN" = true ]; then
+  warn "[dry-run] 跳过 npmmirror 同步（镜像同步只对已发布版本有意义）。"
+else
+  log "Syncing to npmmirror..."
+  cnpm sync openlearn-next        || log "sync openlearn-next failed (non-fatal)"
+  cnpm sync @openlearn/plugin-sdk || log "sync @openlearn/plugin-sdk failed (non-fatal)"
+  cnpm sync @openlearn/plugin-test-kit || log "sync @openlearn/plugin-test-kit failed (non-fatal)"
+fi
 
-log "Done. Packages published and synced."
+if [ "$DRY_RUN" = true ]; then
+  warn "DRY-RUN 完成：以上产物与元数据均可发布，但**没有**任何内容被发布到 npm。"
+else
+  log "Done. Packages published and synced."
+fi

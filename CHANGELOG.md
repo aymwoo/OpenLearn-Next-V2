@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-25
+
 ### Fixes
 
 - **把 CSV 导入通道明确标为「简易导入」（课程导入审计收尾项）**：
@@ -76,6 +78,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **幂等**：课程包格式没有天然主键，去重键由 `server/services/course-package-identity.ts` 派生 —— 包声明了 `meta.id` 就用 `id:<meta.id>`（作者给的稳定标识，改标题重新导出仍被认作同一个包），否则退回 `sha256:<规范化内容哈希>`（递归排序对象键、剔除 `assets[].base64` 与 `meta.description/author/tags` 等装饰字段，避免「不同导出器键序」与「改个描述」制造假差异）。命中重复返回 `409 COURSE_PACKAGE_DUPLICATE` 并带回已存在课程，前端切成「重复导入」询问态；教师可用 `allowDuplicate: true` 显式导入副本。查重作用域是**按创建者** —— 内置模板要能被每位教师各导一份，全局去重会让第二位教师永远导不进模板。去重键落在 `lessons` 三列（迁移 `041_course_package_idempotency.sql`），删课即释放，无需额外清理链路。
   - **CSV 解析**：`parseLessonCSV` 此前是「按逗号盲切 + 正则凑合」，与同文件里学生/班级导入用的 `splitCsvLine` 状态机不一致（带引号的表头会被切歪）。现改为复用 `splitCsvLine`，并新增 `splitCsvRecords` 按引号奇偶性判断记录边界 —— 此前逐物理行解析会把带 Markdown 换行的正文撕成两半，后半段因缺 Title 列被**静默丢弃**（教师看到「导入成功」但内容少了一截）。
   - **测试**：`course-package-routes.test.ts` 新增 6 例真实 DB/路由用例（重复导入 409 且零落库、`meta.id` 抗内容漂移、`allowDuplicate` 强制副本、跨创建者不互相去重、删课后键释放可重导）；新增 `course-package-identity.test.ts` 7 例（键序无关、内容变更改变哈希、装饰字段不影响身份、`meta.id` 优先、空白 id 视为缺省）；`bulkImportService.test.ts` 新增 5 例（引号字段跨行、引号外换行才是边界、`""` 转义、空行跳过、未闭合引号不丢数据）。
+
+- **修复发布包缺少 `dist/plugin-net-preload.cjs`，导致 npm 用户的第三方插件无法启动（P0）**：
+  - **现象**：发布包（`npm pack` 产物）里没有这个文件 —— 构建脚本会 `cp` 它到 `dist/`，但 `package.json` 的 `files` 清单漏了它。第三方插件被策略强制降级到 `process` 隔离模式（`packages/core/plugin-host/execution-policy.ts`），而该模式正是靠这个 preload 脚本封锁插件的原始 socket / DNS（Issue #237）。
+  - **后果**：不是「防护悄悄失效」，而是**插件根本起不来** —— `resolveNetPreloadPath()` 是 fail-closed，在发布包布局下四个候选路径全部落空（`<pkg>/dist/...` 包内没有该文件；两条 cwd 候选依赖用户当前目录；`import.meta.url` 那条被 **esbuild 在 CJS 产物里 shim 成 `{}`** 而永久失效），于是抛 `[PluginNet] preload script not found`。
+  - **为什么 CI 抓不到**：CI 跑在仓库源码布局下，`cwd/dist/plugin-net-preload.cjs` 恰好命中本地构建产物，缺陷被完全掩盖 —— 只有「按 `files` 清单还原的发布包」才会暴露。这与 v0.7.2 已修的 `migrations/` 缺失（`npx` 起不来）属于同一类打包缺陷。
+  - **修复**：① `files` 补入 `dist/plugin-net-preload.cjs`；② 把 `resolveNetPreloadPath()` 重构为支持注入解析起点（`NetPreloadResolutionOptions.startDirs/cwd`，对齐 `getDefaultMigrationsDir` 的既有模式），使「发布包布局」可被真实测试覆盖；③ 新增护栏测试 `packages/core/worker-runtime/__tests__/plugin-net-preload-packaging.test.ts`（5 例：`files` 必须含该文件 / 构建脚本必须产出它 / 发布包布局下解析必须成功 / 缺文件时必须抛错 / 打进包的那份必须是真的 socket+DNS 拦截脚本）；④ 新增 `scripts/verify-packaged-plugin-preload.mjs` 端到端验证脚本。
+  - **验证**：tarball 113 → **114 个文件**；端到端 A/B —— 发布包实例（cwd = 用户目录）安装并激活 `process` 模式第三方插件：带该文件 → 激活 `200 {"status":"active"}`；删掉该文件 → 激活 `500` 且日志出现 `[PluginNet] preload script not found`。
+
+- **发布版本号占用：版本号与既有 tag 撞车，且发布脚本缺少 dry-run 与占用防护**：
+  - **问题**：`package.json` 版本仍是 `0.7.1`，而 `v0.7.1` 这个 tag 已存在（指向 47 个提交之前），npm 上 `openlearn-next` 最新则是 `0.6.0` —— 直接执行 `scripts/publish.sh` 会把「47 个提交之后的内容」以 `0.7.1` 的名义发出去，tag 与 npm 包指向**不同的代码**。同时 `scripts/publish.sh` 没有 dry-run 模式，无法在不发布的前提下验证产物。
+  - **修复**：版本升到 `0.7.2`（同步 `package.json` 与 `packages/core/version.ts` 的 `FALLBACK_VERSION`，`docs/conf.py` 动态读取 `package.json` 无需改）；新增 `docs/release-notes/v0.7.2.md`；`scripts/publish.sh` 增加 `--dry-run`（走 `npm publish --dry-run`、跳过镜像同步、临时改写 `workspace:*` 后复原以便核对最终 manifest）与**版本占用前置门禁**（版本号已被 git tag 或 npm 占用时直接拒绝发布）。
+
+- **平台自建的主库与备份目录「创建即合规」，并补上基线漏检的 WAL/SHM 侧车**：
+  - **问题**：权限基线只负责**检查**，而平台自己创建这些文件时用的是默认 umask —— 主库与 WAL/SHM 侧车落在 **644**、备份目录落在 **755**。于是「门禁在自己的开箱状态下就是红的」：全新部署启动即报 2 条 ERROR，`pnpm ops:check-perms` 直接以退出码 1 失败。
+  - **更隐蔽的一处**：基线此前**只查主库**，而 WAL/SHM 侧车在 WAL 模式下装着尚未 checkpoint 的全量学生数据 —— 「主库 600 + WAL 644」等于没设防。侧车现已纳入同口径检查。
+  - **修复**：新增 `packages/core/db/secure-files.ts` 共享收紧原语，文件在 `open(..., 0o600)` 时产生、目录在 `mkdir(mode: 0o700)` 时产生 —— **创建即合规**，不依赖 umask，也没有「先宽后紧」的暴露窗口；只收紧不放宽（0400 不会被改成 0600）。覆盖主库、WAL/SHM 侧车、备份目录（热备与迁移快照）、恢复前的安全副本与恢复覆盖后的主库。
+  - **既有部署的 remediation**：`pnpm ops:check-perms --fix` 按基线收紧（文件 600 / 目录 700）。`.env` 属用户自写文件，启动期不自动改，只能经该命令显式处理。
+  - **验证**：全新实例（发布包 + 空数据目录）启动后主库 / `-wal` / `-shm` 均为 600、`backups/` 为 700，启动期自检零 ERROR；新增 `packages/core/db/__tests__/secure-file-permissions.test.ts`（8 例）+ 扩展 `server/__tests__/file-permissions.test.ts`（侧车与 `--fix` 共 6 例）。
+
+- **修复全仓格式债务，并把格式门禁从「只查本次变更」改成全仓基线棘轮**：
+  - **问题**：审计发现 5 个文件格式不合规（`admin-manual.md`、`security-permissions.md`、`backup-restore.test.ts`、`coverage-ratchet.mjs`、`file-permissions.test.ts`），而这些文件来自当天合入的 #287/#288/#289/#290 —— 那三次 main push 的 CI **确实红了**（失败 job 就是 Format check），但因为门禁只检查「本次变更触及的文件」，文件一旦合入 main 就**再也不会被任何一次 CI 检查**，于是 HEAD 的 CI 11 个 job 全绿而 main 里仍躺着不合规文件。**「CI 绿」在这里是不真实的。**
+  - **修复一**：5 个文件全部格式化 → 全仓 1877 个文件 100% 合规。
+  - **修复二**：新增 `scripts/check-format-budget.mjs` + `config/format-budget.json`（与 ESLint 告警预算棘轮同构：清单外出现不合规即失败，清理后 `--update` 收紧），CI 的 `format-check` 作业从「只检查本次变更触及的文件」换成全仓棘轮；基线清单当前为空 —— 即**全仓必须合规**。
+  - **为什么零基线之后整仓检查不再「惩罚无关 PR」**：不合规只可能由某次提交引入，而那次提交对应的 PR 就是第一个看到全仓检查失败的地方 —— 也就是引入它的那一次。
+  - **测试**：新增 `scripts/__tests__/format-budget.test.ts`（6 例，含「CI 里不得再出现 `Collect changed files`」这条防回退断言）。
 
 ## [0.7.1] - 2026-10-23
 
