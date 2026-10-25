@@ -149,9 +149,11 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 - `body: any`: 响应内容（必填）。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
 - `sessionToken?: string`: **（v0.3.15 新增）** 可选的 SSO 会话凭证（配合 `IAuthSessionBridgeToken` 签发，由安全网关自动写入跨域安全 Cookie）。
 
-#### `ctx.reportProgress(stage?, message?)`（v0.3.15+ 新增）
+#### `ctx.reportProgress(stage?, message?)`（worker 模式动态注入，非 `PluginContext` 接口成员）
 
 激活期心跳上报与超时滑动续期函数。耗时初始化（如大模型加载、数据结构批量迁移）期间周期性调用，向宿主汇报阶段状态并自动延长激活等待窗口，防止被误判超时。
+
+> ⚠️ 该函数**不在 `PluginContext` 类型上**，只由 `worker-manager.ts` 的引导脚本动态注入到 worker 侧 `ctx`：inline 模式下为 `undefined`，直接调用会抛 `TypeError`。详见[插件生命周期](../plugin/plugin-lifecycle)的相关警告。
 
 ---
 
@@ -161,7 +163,7 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 
 ### 导出 Token 清单
 
-> 完整 33 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
+> 当前 SDK 值导出 **32 个** Token（`packages/plugin-sdk/index.ts` 实测）。方法签名与标识字符串以 [DI Token 字典](../api/di-tokens) 为权威；下表为速查。**随版本增减，新增 Token（如 `INetworkProxyServiceToken`、`IClassroomCountdownServiceToken` 等）以 SDK 导出为准**。
 
 | Token 常量名                         | 服务接口类型                      | 说明                                                                                 |
 | :----------------------------------- | :-------------------------------- | :----------------------------------------------------------------------------------- |
@@ -182,9 +184,6 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 | `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | 学习分析与指标引擎                                                                   |
 | `IPluginLifecycleManagerToken`       | `PluginLifecycleManager`          | 插件生命周期统一接口                                                                 |
 | `IPluginDistributionManagerToken`    | `PluginDistributionManager`       | 插件分发与仓库管理                                                                   |
-| `IPluginRuntimeCompositionToken`     | `PluginRuntimeComposition`        | 插件运行时组合                                                                       |
-| `IUnifiedExtensionRegistryToken`     | `UnifiedExtensionRegistry`        | 统一扩展注册表                                                                       |
-| `IPluginCapabilityGatewayToken`      | `PluginCapabilityGateway`         | 插件能力网关                                                                         |
 | `ICapabilityRegistryToken`           | `CapabilityRegistry`              | AI 能力注册表                                                                        |
 | `ISemesterGradeServiceToken`         | `ISemesterGradeService`           | 学期成绩                                                                             |
 | `IPointsDimensionRegistryToken`      | `IPointsDimensionRegistry`        | 积分维度注册表                                                                       |

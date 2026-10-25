@@ -24,10 +24,10 @@
 
 实测口径（`grep -rh "capabilityRequired: *'" --include=*.ts`，排除 `__tests__` 与 `node_modules`）：
 
-- **19 个**不同的权限字符串
-- **82 处** `capabilityRequired` 声明
+- **20 个**不同的权限字符串（2026-10-25 实测：新增 `segment:gate_eval`；实测口径为排除 `__tests__` 后的 `capabilityRequired` 上下文行）
+- **101 处** `capabilityRequired` 相关声明行
 
-### 1.1 作为 `capabilityRequired` 使用的 19 个字符串
+### 1.1 作为 `capabilityRequired` 使用的 20 个字符串（当前实测；逐项以 `grep -rn capabilityRequired` 为准）
 
 | 权限                | 声明处数 | 声明文件                                                        | 绑定的命令类型（全部）                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------- | -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -288,9 +288,9 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 
 ## 6. 统计口径
 
-- `capabilityRequired` 不同的权限字符串：**19** 个。
+- `capabilityRequired` 不同的权限字符串：**20** 个（2026-10-25 实测，新增 `segment:gate_eval`）。
 - 专有学生数据能力声明（隐私审计）：**2** 个（`student-data:read` / `student-data:write`）。
-- `capabilityRequired` 声明点（后端非测试源码）：**82** 处。
+- `capabilityRequired` 声明点（后端非测试源码）：**101** 行（2026-10-25 实测）。
 - `isHighRisk: true`：**9** 处；显式 `isHighRisk: false`：**1** 处（`plugin.info`）。
 - `CapabilityGuard` 构造函数预置默认 actor：**6** 个；`check()` 内角色兜底表：**2** 张（`teacher` / `student`）。
 - `RuntimePermission` 成员：**7** 个；`CapabilityRole` 成员：**6** 个。

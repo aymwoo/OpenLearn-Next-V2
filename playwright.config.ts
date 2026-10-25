@@ -9,7 +9,8 @@ export default defineConfig({
   // 但 `public-beta-journey.spec.ts` 属于**独立**的公测配置
   // （playwright.beta.config.ts）：它跑在 9107 端口的独立服务上，
   // 且刻意不豁免强制改密门 —— 用本配置的 9000 端口服务去跑它必然
-  // ECONNREFUSED / 端口错配。它由 `pnpm test:e2e:beta` 单独驱动。
+  // ECONNREFUSED / 端口错配。它由 CI 的 `pnpm exec playwright test
+  // --config=playwright.beta.config.ts` 单独驱动（无独立 npm script）。
   testIgnore: 'public-beta-journey.spec.ts',
   timeout: 60_000,
   expect: {

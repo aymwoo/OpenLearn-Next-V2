@@ -32,6 +32,14 @@ anchor:{页面或区域}:{锚点 id}
 | `anchor:whiteboard-toolbar:ai-tutor`     | 「请求 AI 助教建议」按钮 (`Wand2` 图标)      | 前后各可插入一个插件按钮 |
 | `anchor:whiteboard-toolbar:grid`         | 「开启/关闭网格背景」按钮 (`Grid` 图标)      | 前后各可插入一个插件按钮 |
 
+### 课堂归因弹窗 (`classroom-attribution`)
+
+教师端归因/激励弹窗（`src/features/classroom/ClassroomAttributionModal.tsx`）：
+
+| 锚点槽位                              | 锚点目标                                                           | 说明                     |
+| :------------------------------------ | :----------------------------------------------------------------- | :----------------------- |
+| `anchor:classroom-attribution:awards` | 归因弹窗的奖励区（`placement="before"`，`slotProps` 携带选中学生） | 在奖励区块前插入插件卡片 |
+
 ## 3. 插件使用方式
 
 ### 3.1 命令式注册（前端实际渲染走这条）

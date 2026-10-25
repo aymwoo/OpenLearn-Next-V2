@@ -49,7 +49,7 @@ stateDiagram-v2
     UNINSTALLED --> [*]
 ```
 
-### 合法转换矩阵 (`VALID_TRANSITIONS`)
+### 合法转换矩阵 (`VALID_TRANSITIONS`，实现在 `packages/core/plugin-host/base.ts`)
 
 实现在 `packages/core/plugin-host/index.ts`。任意未列在表中的状态转换均会被 `validatePluginStateTransition()` 拦截并抛出 `IllegalStateTransitionError`：
 

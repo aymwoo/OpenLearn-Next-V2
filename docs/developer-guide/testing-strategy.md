@@ -15,6 +15,15 @@ pnpm vitest run -t "Kernel"
 
 # 监听模式
 pnpm vitest watch
+
+# 覆盖率 + 棘轮（Issue #232/#289）：阈值是底线，coverage-baseline.json 是棘轮——
+# 实际覆盖率低于基线（-0.5pp 容差）CI 即红；升高后随手把基线上调
+pnpm test:coverage -- --coverage.reporter=json-summary --coverage.reportOnFailure=true
+pnpm test:ratchet
+
+# 端到端（Playwright，#264 起全量 e2e 进 CI 的 e2e-full-coverage job）
+pnpm test:e2e
+# 公测旅程走独立配置与端口，由 CI 单独驱动（playwright.beta.config.ts）
 ```
 
 ---
