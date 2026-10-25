@@ -59,7 +59,7 @@ const result = await kernelContainer.commandBus.execute(createLessonCmd);
 export interface PlatformCommand<T = unknown> {
   readonly id: string;
   readonly type: string; // Namespace format, e.g., "lesson.create"
-  readonly actorId: string; // 必填；为空时 execute() 兜底为 'agent-system-0'
+  readonly actorId: string; // 必填；为空时 execute() 直接拒绝（'[Security] Command actorId is required'），无兜底
   readonly payload: T;
   readonly timestamp?: number;
   readonly metadata?: CommandMetadata;

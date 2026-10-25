@@ -17,7 +17,7 @@
 
 ## 数据表与 SQL 隔离
 
-- **方案 A 复合表前缀**：新建表使用语义复合前缀 `plugin_<manifestSlug>_<shortUuid>_<table>`（例如 `@courseware/hub` 的 `scores` 表名为 `plugin_courseware_hub_01a1404b_scores`）。既保证了数据库中表名的业务可读性，又通过实例 UUID 前缀防止命名冲突与数据越权。同时平滑兼容历史单前缀 `plugin_<uuid>_` 与 `plugin_<manifestId>_`。
+- **安装作用域表前缀**：新建表统一使用 `plugin_<scopeId>_<table>`（`scopeId` = `plugins` 表主键：内置插件用规范标识如 `plugin__openlearn_plugin_vfs_scores`，外部上传插件用安装生成的 UUID），由 `pluginTablePrefix()`（`packages/core/plugin-host/plugin-tables.ts`）生成 —— `scopeId` 非字母数字下划线字符一律折成 `_`，防 SQL 注入也防跨实例撞名。SQL 守卫与卸载清理用 `listAllowedPluginTablePrefixes()` 兼容历史 `plugin_<uuid>_` / `plugin_<manifestId>_` 前缀。
 - **AST 级 SQL 守卫**：引入 `assertPluginSqlAllowed` 词法解析器，彻底剥离注释（`--`、`/* */`）、字符串字面量、括号与别名，严格阻断逗号隐式 JOIN（`FROM own_table, users`）、注释注入与 `sqlite_master` 任意模式窃取。
 - 直接对 `users`、`vfs_nodes`、提交、投票等平台内核核心表执行 SQL 会被绝对拒绝。
 - 卸载会精确删除该安装实例对应的复合前缀与 UUID 前缀表；仅在无其他兄弟插件共享同一 `manifest.id` 时才清理历史旧前缀表，杜绝误删风险。

@@ -106,7 +106,8 @@ export interface ObjectLock {
    [Server presence.ts / routes/workspace.ts]
         │
         ├─ 审计日志落盘: kernel.eventBus.publish({ type: 'student.client_error', payload }) -> SQLite events 表
-        └─ 教师端实时广播: io.to(`lesson:${lessonId}`).emit('student-error-alert', payload)
+        └─ 教师端实时提醒: 仅投 PRESENCE_STAFF_ROOM（教师/管理员房间，学生永不收听）
+              io.to(PRESENCE_STAFF_ROOM).emit('student-error-alert', payload)
               │
               ▼
          [教师端 LiveClassroomView & SystemErrorCenterModal]
