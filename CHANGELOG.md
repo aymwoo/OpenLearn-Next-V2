@@ -42,6 +42,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证（对照观测）**：linked worktree 里 `.git` 是文件、普通 checkout 里是目录；registry 上「普通 checkout 发的 0.7.3 有 gitHead / linked worktree 发的 0.7.4 没有」—— 与判据一致。**产物内容不受影响**：0.7.4 的 registry `dist.shasum`（`d263a0b3d15fdb9d63fb437623926850a3d1bdd0`）与 tag 构建逐字节一致，消费者安装与启动均实测通过。
   - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
 
+- **课表页两处 WCAG 对比度不达标（a11y 门禁全量跑时的失败根因）**：
+  - **现象**：`e2e/a11y-gate.spec.ts` 全量跑时「教师端主要工作区」在**课表管理**报 `color-contrast/serious`，点名 `.text-sky-600`（"上午课程 (AM)" 徽标）与 `.text-slate-400`（"☕ 午休时间" 胶囊）。
+  - **实测对比度**：`sky-600` on `sky-50` = **3.84:1**、`slate-400` on white = **2.56:1**，都低于 AA 的 4.5:1。
+  - **为什么之前一直是绿的**：这两个元素**数据依赖** —— 只有排了课、渲染出上午/午休分行时才出现。空库时门禁扫不到它们，一旦库里有排课就红。这与之前修的 toast 是同一类问题。
+  - **改法**：徽标 `sky-600 → sky-700`（**5.57:1**），午休胶囊 `slate-400 → slate-500`（**4.76:1**）。语义色系不变，只加深一档。
+  - **验证**：`a11y-gate` 5/5 通过。
+
+- **机房管理：刷新页面后丢失当前选中的机房/班级，回落到列表第一台**：
+  - **现象**：`e2e/teacher-computer-labs.spec.ts` 在「排座 → 保存 → 刷新」后断言失败 —— 表面像是"排座没存住"，实际**数据是存住的**。
+  - **根因**：`ComputerLabManager` 的 `selectedLabId` 与 `selectedClassId` 两个 `useState` 都从 `computerLabs[0]` 初始化。老师切到别的机房、给那个班排完座，一刷新就跳回第一台机房，界面上展示的是**另一个班**的座位。开发库里有 2 台机房（410 / 411）之后这条用例就必红。
+  - **改法**：把「当前看的机房 / 班级」落盘到 `localStorage`（`openlearn_computer_lab_selected` / `..._selected_class`），初始化时恢复。两个关键细节：
+    1. 恢复的班级必须**仍绑定在恢复出来的那台机房**下才采用，避免张冠李戴；
+    2. 首屏 `classes` 往往还没拉回来，初始化读不到 → 在"自动选中绑定班级"的 effect 里**再重试一次**恢复，否则会被"该机房第一个班"覆盖。`localStorage` 不可用（隐私模式/配额）时安静回退。
+  - **验证**：该用例由失败转为通过（且耗时从 18.7s 降到 3.7s —— 不再需要在错误的机房里空等 15s 超时）。
+
+- **全量 e2e 至此 36 passed / 0 failed**（此前长期挂着上述 2 条既有失败）。
+
 ## [0.7.4] - 2026-10-25
 
 ### Fixes
@@ -59,7 +76,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **改法**：新增 `scripts/assert-publishable.mjs`，挂到根 `package.json` 的 `prepublishOnly`，在 npm 打包前做三道断言：① `dependencies` / `optionalDependencies` / `peerDependencies` 里不允许出现 `workspace:` / `link:` / `file:` 协议；② `packages/core/version.ts` 的 `FALLBACK_VERSION` 必须等于 `package.json` 的 `version`；③ 当前 HEAD 必须正好被 `v<version>` 这个 tag 指向（发布必须发生在打了发布 tag 的提交上）。于是「发布前提」不再只活在某个脚本里，npm 自己也会检查。
   - **验证（实测退出码）**：SDK 仍是 `workspace:*` 且未打 tag → 退出码 1，逐条打印「本地协议」与「HEAD 未被 tag 指向」两条原因；改写成精确 pin `3.7.0` 但仍未打 tag → 退出码 1，只剩「HEAD 未被 tag 指向」一条；改写 pin 且 HEAD 已被 `v0.7.4` 指向 → 退出码 0 放行。**反向验证**：护栏能力未被削弱 —— 三种状态分别命中三条断言中的对应条，不是无条件放行。
   - **影响面**：`scripts/` 不在 `package.json` 的 `files` 清单内、不进入发布包本体；根 `package.json` 多一条 `prepublishOnly` 生命周期脚本声明，不影响消费者安装（registry tarball 安装不会执行 `prepublishOnly`）。
-
 - **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
   - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
   - **为什么致命**：对**棘轮**门禁而言，格式判定会随环境漂移（基线失去意义）；ESLint 那边更糟 —— 新版 eslint 往往带来新规则，告警数只涨不跌，基线会被冲破。
