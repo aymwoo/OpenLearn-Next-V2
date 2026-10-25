@@ -12,6 +12,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **开发环境里「同页两份 React」让白板一挂载就崩：Vite 预打包缓存改为按仓库根隔离，并显式 dedupe/预打包白板重依赖链**：
+  - **现象（实测）**：学生端一进互动课堂就白屏，报 `Cannot read properties of null (reading 'useRef')`，栈顶是 react-konva 的 `StageWrap`；React 自己的诊断是「You might have more than one copy of React in the same app」。E2E `classroom-interactive-flow` 的学生端用例同一处挂不上画布（被错误边界替换成「界面渲染遇到意外错误」）。只在「本机同时有另一个 checkout / linked worktree 也跑着 Vite」时出现，单 checkout 永远不复现 —— 所以它长期被当成偶发白屏。
+  - **根因（Vite 依赖预打包缓存被两个 root 共用）**：Vite 默认把预打包产物写进 `node_modules/.vite`。worktree / 并列 checkout 习惯把 `node_modules` **软链**回主仓库（本机实测：`~/.cache/ol-crash-repro/node_modules -> <主仓库>/node_modules`），于是 `<worktree>/node_modules/.vite` 与主仓库**物理上是同一个目录**，两个 Vite root 抢同一份缓存各自写盘互相覆盖。两者的 browserHash 随 root 变化、chunk 划分也不同，浏览器同一页面里会同时加载**两代产物**；而 react 的 CJS 模块在两代里落在**不同 chunk 文件** → 页面上两份 React，react-konva 拿到的那份 `ReactSharedInternals.H` 永远是 null。
+  - **改法**：
+    1. `cacheDir` 固定到**仓库根**下的 `.vite-cache/`（不再落 `node_modules` 下）—— 每个 root 各写各的，跨 worktree 不再互相覆盖；同步进 `.gitignore` 与 `pnpm clean`。
+    2. `resolve.dedupe: ['react', 'react-dom']` —— `react-dom` / `react-konva` / 插件各自 `import 'react'` 必须落到同一份副本。
+    3. `optimizeDeps.include` 显式纳入白板这条重依赖链（`react` / `react-dom` / `react-dom/client` / `react-konva` / `react-konva-utils` / `konva`）。它们原本在**运行时**才被发现（白板是 `React.lazy`，插件走 Blob URL 动态导入，静态扫描扫不到），一旦触发 Vite 的**增量预打包**，那次增量会把 react CJS **再打包一份**到新 chunk —— 同样是同页两份 React，且与缓存是否共享无关。
+    4. 新增配置守卫单测 `src/__tests__/vite-single-react.test.ts`（3 例）：`cacheDir` 不得落在 `node_modules` 下、`dedupe` 必须覆盖 react/react-dom、`optimizeDeps.include` 必须含上述重依赖。这三条任一被改回去，就是把崩溃放回来。
+    5. E2E 加**看门狗**（`e2e/classroom-interactive-flow.spec.ts`）：先收集 `Invalid hook call` / `reading 'useRef'` / `more than one copy of React` 三类报错，画布没挂上时**先**断言 hooks 失效为空 —— 让失败信息直指根因，而不是让下游断言只报一句「元素找不到」。
+    6. **连带修补**：缓存目录从 `node_modules/` 挪到仓库根后，它会首次进入各「全仓扫描」门禁的视野。`scripts/check-source-encoding.mjs` 实测会因此**变红** —— 预打包产物里有字面 U+FFFD 字符（`url/decoder` 的 `"\uFFFD"` 被 esbuild 输出成真实字符），报 126 处「编码损坏」。已把 `.vite-cache` 加进该脚本的排除目录（与既有的 `.vite` 同类）；`tsconfig.json` / `tsconfig.strict.json` / `eslint.config.js` 同样加上忽略，避免「本地跑过 dev server 之后，tsc / ESLint 的输入文件集合与 CI 不再等价」。
+  - **验证**：
+    1. 新守卫单测 3 例通过；
+    2. E2E `classroom-interactive-flow.spec.ts` **2 例全绿**（含新看门狗）—— 学生端白板正常挂上 konva 画布、随堂测卡片可见、答题链路采集到记录，全程无 hooks 失效；
+    3. `tsc --noEmit` 与 `tsc --noEmit -p tsconfig.strict.json` 均通过；ESLint 告警 **6243 = 基线 6243**（error 0）；格式基线 **1892 文件 0 不合规**；编码门禁 **1693 文件通过**；
+    4. **反向验证**（编码门禁那条连带修补）：把 `.vite-cache` 从排除目录里去掉、在缓存已生成的情况下重跑 `pnpm lint:encoding` → **立刻退出码 1**（126 处 U+FFFD 误报），还原后恢复退出码 0 —— 说明这条不是锦上添花，缺了它修完必被挡在 CI 门外。
+    5. 诚实说明：**单 checkout 下无法复现**这个故障（永远是单 React 实例），所以 E2E 只起看门狗作用，真正拦住回归的是第 4 条的配置守卫；根因判定来自隔离现场（linked worktree + 软链 `node_modules` 的并列 checkout）。
+  - **影响面**：`vite.config.ts`（`cacheDir` / `dedupe` / `optimizeDeps.include`，只影响 dev server 的依赖预打包路径，不影响 `vite build` 产物）、`.gitignore` 与 `pnpm clean`、`scripts/check-source-encoding.mjs`（排除目录）、`tsconfig*.json` 与 `eslint.config.js`（忽略）、`e2e/classroom-interactive-flow.spec.ts`（看门狗）、新增 `src/__tests__/vite-single-react.test.ts`。所有在**本机多 checkout / worktree 并跑**的环境里做前端开发的人都受益；CI 单 checkout 不受影响。
+
 - **白板画布在窗口不够大时不再「够不着」：画布逻辑尺寸与容器可视尺寸解耦，装不下时由容器出滚动条**：
   - **现象（实测，真实浏览器 + 隔离实例）**：live_class 的白板**没有任何滚动条**。在 1440×520 的视口下，白板画布的可视高度只剩 **124px**（整窗 520px 里，工具栏与各级 chrome 吃掉绝大部分）；把一个组件画在画布坐标 y=1600 处后，它**既看不见也拖不动**，且**没有任何办法**把它拉回视口 —— 在 520 / 900 / 1400 三个视口高度下均复现。
   - **根因（三层，逐层实测定位）**：
