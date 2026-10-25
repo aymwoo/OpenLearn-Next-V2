@@ -843,7 +843,10 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
 
               {/* 2. Morning Row Grid */}
               <div className="bg-slate-50/30 border border-slate-200/50 rounded-2xl p-3 flex flex-col gap-2.5">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg w-fit select-none border border-sky-100/60 shadow-3xs">
+                {/* 对比度：sky-600 on sky-50 只有 3.84:1，低于 WCAG AA 的 4.5:1
+                    （a11y 门禁实测报 color-contrast/serious）。sky-700 提到 5.57:1，
+                    视觉上仍是同一套蓝色语义。 */}
+                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-lg w-fit select-none border border-sky-100/60 shadow-3xs">
                   <Sparkles size={10} className="animate-pulse" />
                   {lang === 'zh' ? '上午课程 (AM)' : 'Morning (AM)'}
                 </div>
@@ -874,7 +877,9 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                 <div className="absolute inset-0 flex items-center" aria-hidden="true">
                   <div className="w-full border-t-2 border-dashed border-slate-200/80"></div>
                 </div>
-                <div className="relative flex justify-center text-xs font-extrabold uppercase tracking-wider text-slate-400 bg-white px-4 py-1.5 rounded-full border border-slate-200/60 shadow-3xs">
+                {/* 对比度：slate-400 on white 只有 2.56:1。这层是纯装饰性的分隔标签，
+                    但它承载文字，仍必须满足 AA。slate-500 提到 4.76:1。 */}
+                <div className="relative flex justify-center text-xs font-extrabold uppercase tracking-wider text-slate-500 bg-white px-4 py-1.5 rounded-full border border-slate-200/60 shadow-3xs">
                   ☕ {lang === 'zh' ? '午休时间 / Midday Break' : 'Lunch Break'}
                 </div>
               </div>

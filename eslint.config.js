@@ -86,6 +86,10 @@ export default [
       // 棘轮只许往下，那条假告警会把人挡在 CI 门外，而 CI 上根本没有 coverage/。
       'coverage/**',
       'v2_plugins/**',
+      // Vite 依赖预打包缓存（见 vite.config.ts 的 cacheDir）。跑过 dev server 就会生成，
+      // 是纯生成物且已进 .gitignore —— 不忽略它，本地跑过 dev 之后 ESLint 的文件集合
+      // 与 CI 就不再是同一份，告警预算棘轮会凭空多出噪音。
+      '.vite-cache/**',
       '*.cjs',
       '*.min.js',
       '**/*.min.js',

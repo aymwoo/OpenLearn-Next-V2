@@ -26,6 +26,10 @@ const DEFAULT_EXCLUDE_DIRS = [
   'storage',
   'coverage',
   '.vite',
+  // Vite 依赖预打包缓存（仓库根下的 `.vite-cache/`，见 vite.config.ts 的 cacheDir）。
+  // 它是**生成物**：预打包后的依赖里含字面 U+FFFD 字符（如 url/decoder 的
+  // `"\uFFFD"` 被 esbuild 输出成真实字符），会误报编码损坏。与上面的 `.vite` 同类。
+  '.vite-cache',
   'build',
   'test-results',
   'playwright-report',

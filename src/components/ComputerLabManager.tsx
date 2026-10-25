@@ -72,18 +72,41 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
   const [submitting, setSubmitting] = useState(false);
 
   // Selected lab for preview / seating
-  const [selectedLabId, setSelectedLabId] = useState<string | null>(
-    computerLabs.length > 0 ? computerLabs[0].id : null,
-  );
+  //
+  // 刷新后要回到老师刚才在看的那台机房，而不是默默跳回列表第一台。
+  // 旧实现两个 useState 都从 `computerLabs[0]` 初始化 → 整页刷新后
+  // 选中态全丢（E2E `teacher-computer-labs` 就是因为这个断言失败：
+  // 排座明明存住了，但刷新后界面展示的是**另一台机房**的座位）。
+  const SELECTED_LAB_STORAGE_KEY = 'openlearn_computer_lab_selected';
+  const SELECTED_CLASS_STORAGE_KEY = 'openlearn_computer_lab_selected_class';
+
+  const [selectedLabId, setSelectedLabId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem(SELECTED_LAB_STORAGE_KEY);
+      if (saved && computerLabs.some((l) => l.id === saved)) return saved;
+    } catch {
+      // localStorage 不可用（隐私模式 / 配额）时安静回退
+    }
+    return computerLabs.length > 0 ? computerLabs[0].id : null;
+  });
 
   const activePreviewLab = computerLabs.find((lab) => lab.id === (selectedLabId || computerLabs[0]?.id));
 
   // --- Classes & Seating state ---
   const [internalClasses, setInternalClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(() => {
-    const activeLab = computerLabs[0];
-    if (!activeLab) return null;
-    const bound = (propsClasses || []).find((c) => c.lab_id === activeLab.id);
+    const lab = activePreviewLab ?? computerLabs[0];
+    if (!lab) return null;
+    const all = propsClasses || [];
+    try {
+      const saved = localStorage.getItem(SELECTED_CLASS_STORAGE_KEY);
+      const restored = saved ? all.find((c) => c.id === saved) : undefined;
+      // 只有仍然绑定在「当前恢复出来的机房」下才采用，避免张冠李戴
+      if (restored && restored.lab_id === lab.id) return restored.id;
+    } catch {
+      // 同上
+    }
+    const bound = all.find((c) => c.lab_id === lab.id);
     return bound ? bound.id : null;
   });
   const [classStudents, setClassStudents] = useState<StudentItem[]>([]);
@@ -135,12 +158,42 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
       // Keep selected class if user picked one
       return;
     }
+    // 首屏时 classes 往往还没拉回来（props 为空、异步请求未返回），初始化阶段
+    // 读不到 localStorage 里那个班级。等 classes 到齐后重试一次恢复，
+    // 否则会直接跳到「该机房的第一个班级」，把老师刚才的选择覆盖掉。
+    try {
+      const saved = localStorage.getItem(SELECTED_CLASS_STORAGE_KEY);
+      const restored = saved ? classes.find((c) => c.id === saved) : undefined;
+      if (restored && restored.lab_id === activePreviewLab.id) {
+        setSelectedClassId(restored.id);
+        return;
+      }
+    } catch {
+      // localStorage 不可用时忽略
+    }
     // Auto-select bound class if there's any bound class and none selected
     const bound = classes.find((c) => c.lab_id === activePreviewLab.id);
     if (bound) {
       setSelectedClassId(bound.id);
     }
   }, [activePreviewLab?.id, classes]);
+
+  // 把「当前看的机房 / 班级」落盘，供刷新后恢复（见上方初始化注释）
+  useEffect(() => {
+    try {
+      if (selectedLabId) localStorage.setItem(SELECTED_LAB_STORAGE_KEY, selectedLabId);
+    } catch {
+      // 忽略
+    }
+  }, [selectedLabId]);
+
+  useEffect(() => {
+    try {
+      if (selectedClassId) localStorage.setItem(SELECTED_CLASS_STORAGE_KEY, selectedClassId);
+    } catch {
+      // 忽略
+    }
+  }, [selectedClassId]);
 
   // Fetch seats and students when selectedClassId or activePreviewLab changes
   const loadClassSeatsAndStudents = useCallback(async (classId: string, labId?: string) => {
