@@ -85,6 +85,46 @@ publish_pkg() {
   fi
 }
 
+# ── 发布清单核对（dry-run 专用）────────────────────────────────────
+#
+# 断言四件事，缺一即视为「这次发布不能发」：
+#   1. package.json 的 version 与待发布版本一致（防止改写错版本号）；
+#   2. @openlearn/plugin-sdk 是**精确 pin**（不是 workspace:* —— 消费者装不上）；
+#   3. files 清单含 dist/plugin-net-preload.cjs（P0-1 的回归护栏）；
+#   4. 该文件在构建产物里真实存在（files 指向空气同样会炸）。
+verify_release_manifest() {
+  local dir="$1" expected_version="$2" expected_sdk="$3"
+  local report
+  report="$(cd "$dir" && node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf-8"));
+    const out = [];
+    const version = pkg.version;
+    const sdk = (pkg.dependencies || {})["@openlearn/plugin-sdk"];
+    const files = pkg.files || [];
+    const preload = "dist/plugin-net-preload.cjs";
+    out.push(`version=${version}`);
+    out.push(`sdk=${sdk}`);
+    out.push(`preloadInFiles=${files.includes(preload)}`);
+    out.push(`preloadExists=${fs.existsSync(path.join("dist", "plugin-net-preload.cjs"))}`);
+    console.log(out.join(" "));
+  ')"
+  log "[dry-run] 发布清单核对：${report}"
+
+  local version sdk preload_in_files preload_exists
+  version="$(printf '%s' "$report" | sed -n 's/.*version=\([^ ]*\).*/\1/p')"
+  sdk="$(printf '%s' "$report" | sed -n 's/.*sdk=\([^ ]*\).*/\1/p')"
+  preload_in_files="$(printf '%s' "$report" | sed -n 's/.*preloadInFiles=\([^ ]*\).*/\1/p')"
+  preload_exists="$(printf '%s' "$report" | sed -n 's/.*preloadExists=\([^ ]*\).*/\1/p')"
+
+  [ "$version" = "$expected_version" ] || err "发布清单核对失败：version=${version}（期望 ${expected_version}）"
+  [ "$sdk" = "$expected_sdk" ] || err "发布清单核对失败：@openlearn/plugin-sdk=${sdk}（期望精确 pin ${expected_sdk}；workspace:* 消费者装不上）"
+  [ "$preload_in_files" = "true" ] || err "发布清单核对失败：files 清单缺 dist/plugin-net-preload.cjs（npm 用户的第三方插件会起不来，见 P0-1）"
+  [ "$preload_exists" = "true" ] || err "发布清单核对失败：dist/plugin-net-preload.cjs 在构建产物里不存在（files 指向了空气）"
+  log "[dry-run] 发布清单核对通过。"
+}
+
 # ── 1. Publish @openlearn/plugin-sdk ─────────────────────────────────
 log "Checking @openlearn/plugin-sdk..."
 REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")"
@@ -120,6 +160,12 @@ pnpm build || err "build failed"
 sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|' package.json
 publish_pkg "." "openlearn-next@${APP_VER}"
 log "openlearn-next@${APP_VER} published"
+# Dry-run 额外核对：消费者实际看到的清单（package.json 原样进包）。
+# 这一步不是形式主义 —— P0-1（发布包缺 plugin-net-preload.cjs）正是「产物内容对不上」
+# 这一类缺陷，而 npm publish --dry-run 只打印文件清单，不会替你断言清单本身对不对。
+if [ "$DRY_RUN" = true ]; then
+  verify_release_manifest "." "$APP_VER" "$SDK_VER"
+fi
 # Restore workspace protocol for local dev
 sed -i 's|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|"@openlearn/plugin-sdk": "workspace:\*"|' package.json
 
