@@ -20,6 +20,82 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试**：`navigation-registry.test.ts` 重写为 8 例（守真实模型：分组顺序、9 个 tab 清单、id/tab 唯一、管理员可见性、排序、双语解析、highlight）；新增 `builtin-commands.test.tsx` 9 例、`builtin-items.test.tsx` 5 例、`e2e/command-palette.spec.ts` 2 例（真实浏览器里唤起→搜索→执行→侧边栏进入选中态）。
   - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
 
+### Fixes
+
+- **白板画布在窗口不够大时不再「够不着」：画布逻辑尺寸与容器可视尺寸解耦，装不下时由容器出滚动条**：
+  - **现象（实测，真实浏览器 + 隔离实例）**：live_class 的白板**没有任何滚动条**。在 1440×520 的视口下，白板画布的可视高度只剩 **124px**（整窗 520px 里，工具栏与各级 chrome 吃掉绝大部分）；把一个组件画在画布坐标 y=1600 处后，它**既看不见也拖不动**，且**没有任何办法**把它拉回视口 —— 在 520 / 900 / 1400 三个视口高度下均复现。
+  - **根因（三层，逐层实测定位）**：
+    1. konva `Stage` 的宽高**严格等于容器尺寸**（`ResizeObserver` → `offsetWidth/offsetHeight` → `<Stage width height>`），容器一矮画布就跟着矮；
+    2. 从画布往上的**每一级祖先**都是 `min-h-0` + `overflow-hidden` —— 溢出被**裁掉**而不是滚动，整条链上**没有任何一级可滚动**（实测 10 级祖先的 `overflow-y` 全为 `hidden`/`visible`）；
+    3. 真正动手裁剪的是 `InteractiveWhiteboard` 里 `absolute inset-0 w-full h-full overflow-hidden` 那层 —— 它**绝对定位**在画布容器内，既裁掉溢出，又因为不参与父级滚动高度计算而让外层容器的 `scrollHeight` 始终等于可视高度（画布逻辑高 1920px，容器 `scrollHeight` 却是 124px）。
+  - **改法**：
+    1. 新增纯函数模块 `src/features/whiteboard/utils/canvas-bounds.ts`：**画布逻辑尺寸 = max(容器可视尺寸, 当前页内容包围盒底边 + 80px 留白)**。内容装得下时画布 == 容器，**行为与修复前逐像素一致**（不会凭空多出滚动条）；装不下时画布撑到内容高度。
+    2. 画布容器 `overflow-hidden` → `overflow-auto`，并去掉上述那层承载者的 `overflow-hidden` —— **滚动容器是画布容器**，裁剪与滚动都归它。
+    3. **14 处鼠标坐标 → 画布坐标的换算**统一走 `toCanvasPoint()`：容器变成滚动容器后，`getBoundingClientRect()` 给的是可视框位置，必须把 `scrollLeft/scrollTop` 加回来，否则画布一滚动鼠标位置与图元位置就整体错位（拖拽看起来「跳」）。未滚动时滚动偏移恒为 0，与修复前**逐像素等价**。拖拽本身用的是**增量**（`dx = clientX - startPointerX`），与滚动无关，无需改动；自由绘制用的是 konva 自己的 `getPointerPosition()`，同样天然考虑滚动。
+    4. 顺带修掉一个**真实缺陷**：容器有 1px 边框，而画布尺寸此前取的是 `offsetWidth/offsetHeight`（边框盒）—— 画布比内容框高出 2px，**即便内容完全装得下也会多出一条 2px 滚动范围**（凭空冒出滚动条）。画布改用**内容框**尺寸（`clientWidth/clientHeight`）后消失。
+  - **验证**：① 新增纯函数单测 13 例（包围盒、逻辑尺寸、坐标换算三组）通过；② 新增 E2E `e2e/classroom-whiteboard-scroll.spec.ts` 2 例通过 —— 「组件画在画布下方时画布区出现滚动条且滚动后组件可达」+「内容装得下时不凭空多出滚动条」；③ **反向验证**：把源码回退（只保留测试锚点）后重跑同一 E2E → 立刻变红，报「画布逻辑高度应至少覆盖 y=1600 的组件」；还原后全绿 —— 护栏能力未被削弱；④ 全仓 ESLint 6243 = 基线 6243、error 0；格式基线 0 不合规；`tsc --noEmit` 与 `tsc --noEmit -p tsconfig.strict.json` 均通过；白板测试 26 文件 270 例全绿。
+  - **影响面**：`src/features/whiteboard/InteractiveWhiteboard.tsx`（画布尺寸与滚动）、新增 `src/features/whiteboard/utils/canvas-bounds.ts`（纯函数）、新增 E2E 用例；一条白板单测的画布宿主选择器从写死类名改为 `data-testid`（更抗改动）。教师端驾驶舱、学生端课节页、备课画板、学生工作台与作业面板共用该组件，**均受益**；大屏展台使用独立渲染路径，不受影响。
+
+- **bridge SDK 的单测不再对着「不会发布的陈旧产物」校验（并补上生成物同步守卫）**：
+  - **现象（实测）**：0.7.4 发布后 main 的 CI 转红 —— `server/__tests__/bridge-hook-telemetry.test.ts` 报「expected +0 to be 5」：它用正则 `/type: "HOOK_[A-Z]+"/` 统计 HOOK 上报点，在**重新生成**后的 `server/utils/bridge-sdk.ts` 上匹配到 **0** 处。
+  - **根因（两层，比表面严重）**：
+    1. `packages/bridge-sdk/src/bridge.js`（唯一真相源）用的是**单引号**（`type: 'HOOK_FETCH'` 等 5 处），而仓库里**提交的** `server/utils/bridge-sdk.ts` 还是旧的**双引号**形态 —— 源码改了、生成物没跟着刷新。
+    2. 这条单测的断言硬编码了**双引号**，于是它长期校验的是那份**陈旧生成物**；而构建（`pnpm build`）会先重新生成再打包 —— **真正发布出去的那份代码用的是单引号**。也就是说这条测试一直在给一份不会上线的代码开绿灯。
+  - **改法**：① 单测的正则改成引号无关（`/type: ['"]HOOK_[A-Z]+['"]/`），**断言强度不变**（仍要求恰好 5 处、且每处都受 `__hookAllowed()` 门控），但校验的变成了真正上线的形态；② 把 `scripts/build-bridge-sdk.mjs` 的生成逻辑抽成纯函数 `renderBridgeSdkTs()` 并导出，新增 `server/__tests__/bridge-sdk-generated.test.ts` —— 断言「提交的生成物 == 源码的生成结果」，源码一改而生成物没刷新就立刻变红。
+  - **验证**：① 生成器重构后跑 `node scripts/build-bridge-sdk.mjs`，产物与改动前**逐字节一致**（`git diff` 为空）；② 两条测试 4 例通过；③ **反向验证**：给源码加一行注释而**不**重新生成 → 同步守卫立刻变红（1 failed），还原后恢复全绿 —— 护栏能力未被削弱。
+  - **影响面**：`scripts/build-bridge-sdk.mjs`（纯函数抽取，行为等价）、`server/utils/bridge-sdk.ts`（生成物刷新为与源码一致）、一条单测的引号无关化 + 一条新的同步守卫。`server/utils/bridge-sdk.ts` 只在**构建时**进入产物，仓库里它的形态变化不影响已发布的 0.7.4（0.7.4 的产物本就是重新生成后打包的，与本次刷新后的内容一致）。
+
+- **发布时提醒：从 git linked worktree 发布，npm 采集不到 gitHead（0.7.4 的实测遗留）**：
+  - **现象（实测）**：0.7.4 从 `git worktree` 出来的 linked worktree 发布，registry 上该版本的 `gitHead` 字段为空 —— 消费者在 npm 页面看不到来源提交。对照：15:22 那个坏版本是在**普通 checkout** 里发的，`gitHead` 正常记录为 `cf9be45…`。
+  - **根因**：npm 采集 `gitHead` 时要求包目录下的 `.git` 是**目录**；而 linked worktree 里 `.git` 是一个 66 字节的文本文件（内容是 `gitdir: …`），采集直接落空。
+  - **改法**：`scripts/publish.sh` 在发布前检测 `.git` 的形态 —— 是 linked worktree 就明确警告，提示改在普通 checkout 里发布（不阻断发布：这只影响**元数据可追溯性**，不影响产物内容）。
+  - **验证（对照观测）**：linked worktree 里 `.git` 是文件、普通 checkout 里是目录；registry 上「普通 checkout 发的 0.7.3 有 gitHead / linked worktree 发的 0.7.4 没有」—— 与判据一致。**产物内容不受影响**：0.7.4 的 registry `dist.shasum`（`d263a0b3d15fdb9d63fb437623926850a3d1bdd0`）与 tag 构建逐字节一致，消费者安装与启动均实测通过。
+  - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
+
+## [0.7.4] - 2026-10-25
+
+### Fixes
+
+- **版本占用门禁改为查权威 registry，不再查镜像（镜像滞后会把「已发布」误判成「未占用」）**：
+  - **问题**：版本占用门禁里的 `npm view <pkg> versions` 没有指定 registry —— 而本机（以及大量国内开发机）的默认 registry 是 npmmirror。**镜像的同步有延迟**，于是「本站已经发布、镜像还没同步」的版本会被判成「未占用」，占用门禁在镜像追平之前形同虚设；子包「是否已在 npm 上」的判定同样走镜像，镜像一旦滞后就会去重发一个已存在的版本。
+  - **为什么致命**：占用门禁存在的意义是「同一个版本号不能指向两批不同的代码」。判据查错源，等于门禁只在镜像追平之后才生效。
+  - **改法**：三处 `npm view` 全部显式加 `--registry=https://registry.npmjs.org`（版本占用检查 + SDK / test-kit 的远端版本查询），与发布实际写入的 registry 保持一致。
+  - **验证**：三处 `npm view` 均已指向权威源；占用检查在权威源上判定 `openlearn-next@0.7.4` 未发布 → 放行；`@openlearn/plugin-sdk@3.7.0` 与 `@openlearn/plugin-test-kit@3.3.3` 在权威源上均已存在 → 两个子包走「跳过发布」分支，不会被重发。
+  - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
+
+- **发布前守卫：任何绕过 `scripts/publish.sh` 的直接 `npm publish` 都会被当场拦下（0.7.3 事故的直接防线）**：
+  - **事故（实测）**：2026-10-25 15:22，npm 上的 `openlearn-next@0.7.3` 被一次**直接 `npm publish`**（绕过 `scripts/publish.sh`）发布出去。产物的 `gitHead` 是 `cf9be45`（主工作区分支 HEAD）而不是发布 tag `7220214`；`package.json` 里 `@openlearn/plugin-sdk` 仍是 `"workspace:*"` —— 消费者安装该版本必然报 `EUNSUPPORTEDPROTOCOL`（`Unsupported URL Type "workspace:"`），**整个版本装不上**（最小复现 + `npm-package-arg` 直接 throw 双重确认）。
+  - **根因**：`publish.sh` 里那条把 SDK 依赖改写成精确 pin（`3.7.0`）的 `sed` **只在脚本流程内生效**。绕开脚本，就绕开了它 —— 于是 `workspace:` 这类本地协议原样进了发布包，而 npm 不会替发布者改写它。同一时刻 tag 同源校验也一并失效，npm 上的版本与仓库 tag 失去对应。
+  - **改法**：新增 `scripts/assert-publishable.mjs`，挂到根 `package.json` 的 `prepublishOnly`，在 npm 打包前做三道断言：① `dependencies` / `optionalDependencies` / `peerDependencies` 里不允许出现 `workspace:` / `link:` / `file:` 协议；② `packages/core/version.ts` 的 `FALLBACK_VERSION` 必须等于 `package.json` 的 `version`；③ 当前 HEAD 必须正好被 `v<version>` 这个 tag 指向（发布必须发生在打了发布 tag 的提交上）。于是「发布前提」不再只活在某个脚本里，npm 自己也会检查。
+  - **验证（实测退出码）**：SDK 仍是 `workspace:*` 且未打 tag → 退出码 1，逐条打印「本地协议」与「HEAD 未被 tag 指向」两条原因；改写成精确 pin `3.7.0` 但仍未打 tag → 退出码 1，只剩「HEAD 未被 tag 指向」一条；改写 pin 且 HEAD 已被 `v0.7.4` 指向 → 退出码 0 放行。**反向验证**：护栏能力未被削弱 —— 三种状态分别命中三条断言中的对应条，不是无条件放行。
+  - **影响面**：`scripts/` 不在 `package.json` 的 `files` 清单内、不进入发布包本体；根 `package.json` 多一条 `prepublishOnly` 生命周期脚本声明，不影响消费者安装（registry tarball 安装不会执行 `prepublishOnly`）。
+
+- **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
+  - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
+  - **为什么致命**：对**棘轮**门禁而言，格式判定会随环境漂移（基线失去意义）；ESLint 那边更糟 —— 新版 eslint 往往带来新规则，告警数只涨不跌，基线会被冲破。
+  - **改法**：两个脚本都显式解析仓库内的工具入口（`node_modules/prettier/bin/prettier.cjs`、`node_modules/eslint/bin/eslint.js`），用当前 node 直接执行；找不到就**明确报错并提示 pnpm install**，而不是悄悄换一个版本去跑。
+  - **验证**：缺 node_modules → 明确报错、退出码 1；装上锁定版本 → 格式不合规 0 个、ESLint 6243 = 基线 6243、error 0；**护栏能力未被削弱** —— 故意弄脏 `packages/core/version.ts` 仍报红（退出码 1），还原后恢复 0。
+  - **影响面**：仅 `scripts/` 下两个门禁脚本，不在 `package.json` 的 `files` 清单内，不进入发布包。
+
+- **A11Y 无障碍门禁不再往开发库里堆空白课节 / 空班级（`afterAll` 前缀写错导致的永久泄漏）**：
+  - **现象（实测）**：开发库里堆了 **5 个完全空白的课节**（`whiteboard_elements = 0`、`timeline = null`、无排课）+ **10 个空班级**，全部叫 `A11Y 学生端课节 …` / `A11Y 班级 …` / `A11Y 测评班 …`。按前缀统计可见铁证：`A11Y ` 前缀残留 5+10，而 `A11Y2` 前缀残留 **0**。
+  - **根因**：门禁三个子用例分别建 `A11Y 学生端课节` / `A11Y 测评班` / `A11Y2 仪表盘课节`，而 `test.afterAll` 的清理条件写的是 `startsWith('A11Y2 ')` —— 只命中第三块，前两块每次运行都永久留下 1 个空课节 + 2 个空班级。另外 `classroom cleanup` 的全局脚本（`scripts/cleanup-test-data.mjs`）只认 `E2E ` / `canary` / `金丝雀`，也不认 `A11Y`，所以连“兜底”这道也没掘住。
+  - **改法**：
+    1. `e2e/a11y-gate.spec.ts`：把前缀抽成 `TEST_TAG` / `LESSON_PREFIX` / `CLASS_PREFIX` / `STUDENT_PREFIX` 四个常量，**创建与清理全从同一组常量派生**，不可能再漂移；顺手给原先无前缀的「全班极速抢枪」补上 tag。
+    2. `scripts/cleanup-test-data.mjs`：把测试数据前缀抽成 `TEST_NAME_PREFIXES` / `TEST_NAME_MARKERS` 常量并补上 `A11Y `，无法再“改 5 处 SQL 还漏一处”；并把 `segment_visits` / `segment_gate_overrides` 纳入课节级联（实测：原先留下 19 条孤儿访问记录）。
+    3. 同一脚本里测试学生的匹配从只认 `STU_%-%` 扩展为枚举 15 个 spec tag：`student-return-to-class.spec.ts` 用的是 `STU_RETURN_${Date.now().toString(36).toUpperCase()}`（base36 时间戳**不带横杠**），于是永远漏网（实测残留 2 个 `STU_RETURN_*` 学生）。刻意**不**退化成「`STU_` 开头就删」—— 那会误伤人工建的普通测试学生。
+  - **验证**：修复后跑一次门禁 → 课节/班级/学生残留均为 **0**，同时清掉 5 条 `segment_visits` 与 5 个课堂会话；全量 e2e 36 passed / 0 failed。
+  - **补漏（合并后实测发现）**：`cleanup-test-data.mjs` 原本**完全没有 `assessments`** —— 测评不挂在课节上，既不会被课节级联带走、也不在清理范围内，而 a11y 门禁的「学生端我的测评」用例恰恰会建 `A11Y 测评 <suffix>`（quiz / published / owner=admin）。实测开发库里因此残留 **13 份 A11Y 测评**，而课节/班级/学生都被清掉了 —— 清理脚本漏掉了整整一类表。现补上测评清理（含 `assessment_items` / `assessment_assignments` 子表级联）。
+  - **副本验证**：在真库的**在线备份副本**上执行 → 课节 3→0、班级 6→0、测评 13→0、`assessment_items` 26→0，而 `test` 与 `[演示]` 课节、2 个演示班级、12 个学生、132 个白板元素**分毫未动**（先在副本上验证，确认无误后才作用于真库）。
+  - **发现但**未在本次修**（已登记）**：`e2e/classroom-answer-lock.spec.ts` 的 `loginAdmin()` 在 `mustChangePassword` 为真时会**把 admin 密码永久改成 `AdminPassword123`** 且不还原，会弄挂同一开发库上后续所有假定 `admin/admin` 的用例。
+- **版本占用门禁改判「tag 是否与本次发布的提交同源」，而不是「tag 是否存在」**：
+  - **问题**：v0.7.2 引入的版本占用门禁写成了「git tag v<version> 存在即拒绝发布」，但仓库既定的发布顺序恰恰是「提交（含版本提升）→ 打 tag → 执行 `publish.sh`」。于是 **tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
+  - **实测暴露**：v0.7.3 真正执行发布时，`publish.sh` 在预检阶段即报「版本占用：git tag v0.7.3 已存在（7220214b9601）。请提升版本号」—— 而这正是要发布的那次提交，门禁把**正确状态**当成了违规。
+  - **根因**：门禁想防的是「同一个版本号指向两批不同的代码」（tag 指向旧提交、npm 发的是新提交），却用「tag 存在」当代理判据；真正要判的是 **tag 指向的提交是否就是本次发布的提交**。
+  - **改法**：判据改为三态 —— ① tag 不存在 → 放行（尚未打 tag，允许先发后补）；② tag 存在且指向本次提交 → 放行（正是想要的状态：tag 与 npm 包同源）；③ tag 存在但指向别的提交 → 拒绝（同一个版本号会指向两批不同的代码）。npm 侧判据不变（已发布即拒绝，不可覆盖）。
+  - **验证**：四组判据逐一实测退出码 —— tag 同源 → 0；tag 指向别的提交 → 1（并指名两个 commit）；无 tag → 0；npm 上已发布 → 1。
+  - **影响面**：仅 `scripts/publish.sh`，该文件不在 `package.json` 的 `files` 清单内、不进入发布包，不影响任何已发布产物，也不影响 tag ↔ npm 的代码对应关系。
+
 ## [0.7.3] - 2026-10-25
 
 ### Fixes

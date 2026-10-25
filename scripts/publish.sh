@@ -43,21 +43,38 @@ pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Vers
 
 # ── 0b. 版本占用门禁（防「tag 与 npm 包指向不同代码」）─────────────
 #
-# 为什么需要这道门禁：版本号一旦与**既有 git tag** 撞车，就会出现
-# 「tag v0.7.1 指向 47 个提交之前的代码，而 npm 上的 openlearn-next@0.7.1
-# 却是 47 个提交之后的代码」——同一个版本号指向两批不同的代码，且不可逆。
+# 为什么需要这道门禁：同一个版本号可能同时存在于 git tag 与 npm 上，而
+# **两者可以指向两批不同的代码** —— 已发布的 npm 版本不可覆盖、不可逆。
 # npm 侧有自己的保护（不允许覆盖已发布版本），git 侧没有。
+#
+# 判据不是「tag 不能存在」，而是「**tag 必须与本次发布的提交同源**」：
+#
+#   · tag 不存在             → 通过（尚未打 tag，允许先发后补）
+#   · tag 存在且指向本次提交 → 通过（正是想要的状态：tag 与 npm 包同源）
+#   · tag 存在但指向别的提交 → 拒绝（同一个版本号会指向两批不同的代码）
+#
+# 为什么不能简单写成「tag 存在即拒绝」：仓库既定的发布顺序是
+# 「提交（含版本提升）→ 打 tag → 执行 publish.sh」（见审计报告的发布流程）。
+# 若按「tag 存在即拒绝」，**tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
+# v0.7.2 首次实现的就是后者，直到 v0.7.3 真正执行发布时才暴露出来。
 #
 # 只对**即将发布**的包调用：已发布且版本未变的包走「跳过发布」分支，不该被拦。
 assert_version_not_taken() {
   local pkg_name="$1" version="$2"
 
-  if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null 2>&1; then
-    err "版本占用：git tag v${version} 已存在（$(git rev-list -n1 "v${version}" 2>/dev/null | cut -c1-12)）。请提升版本号 —— 当前 ${version} 已被占用，发出去会与该 tag 指向不同代码。"
+  local tag_commit head_commit
+  tag_commit="$(git rev-parse -q --verify "refs/tags/v${version}^{commit}" 2>/dev/null || true)"
+  head_commit="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$tag_commit" ]; then
+    if [ "$tag_commit" != "$head_commit" ]; then
+      err "版本占用：git tag v${version} 已存在但指向 ${tag_commit:0:12}，与本次发布的提交 ${head_commit:0:12} 不同 —— 同一个版本号会指向两批不同的代码。请提升版本号。"
+    fi
+    log "git tag v${version} 与本次发布的提交同源（${tag_commit:0:12}）—— tag 与 npm 包指向同一批代码，允许发布。"
   fi
 
   local remote_versions
-  remote_versions="$(npm view "${pkg_name}" versions --json 2>/dev/null || echo '[]')"
+  # 必须查权威 registry：本机的默认 registry 是 npmmirror，镜像滞后会让「已发布」误判成「未占用」
+  remote_versions="$(npm view "${pkg_name}" versions --json --registry=https://registry.npmjs.org 2>/dev/null || echo '[]')"
   if printf '%s' "$remote_versions" | grep -q "\"${version}\""; then
     err "版本占用：npm 上 ${pkg_name}@${version} 已发布。请提升版本号。"
   fi
@@ -67,6 +84,13 @@ log "Checking version occupancy (git tags & npm registry)..."
 APP_VER="$(node -p "require('./package.json').version")"
 # 平台包每次都会发布 → 占用检查在预检阶段就做（早失败，别等 build 完才发现）。
 assert_version_not_taken openlearn-next "$APP_VER"
+
+# npm 采集 gitHead 要求包目录下的 .git 是**目录**；linked worktree 里 .git 是一个
+# 指向真实 gitdir 的文本文件 → 采集落空，registry 上该版本没有 gitHead 字段，
+# 消费者无从追溯来源提交（产物内容不受影响）。
+if [ -e .git ] && [ ! -d .git ]; then
+  warn "当前目录是 git linked worktree（.git 是文件而非目录）—— npm 采集不到 gitHead，发布后 registry 不会记录来源提交。建议改在普通 checkout（.git 是目录）里发布。"
+fi
 
 SDK_DIR="packages/plugin-sdk"
 TK_DIR="packages/plugin-test-kit"
@@ -127,7 +151,7 @@ verify_release_manifest() {
 
 # ── 1. Publish @openlearn/plugin-sdk ─────────────────────────────────
 log "Checking @openlearn/plugin-sdk..."
-REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")"
+REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$SDK_VER" != "$REMOTE_SDK_VER" ]; then
   # 即将发布 → 才需要占用检查（已发布且版本不变的包走下面的跳过分支，不该被拦）。
   assert_version_not_taken @openlearn/plugin-sdk "$SDK_VER"
@@ -139,7 +163,7 @@ fi
 
 # ── 2. Publish @openlearn/plugin-test-kit ──────────────────────────
 log "Checking @openlearn/plugin-test-kit..."
-REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version 2>/dev/null || echo "")"
+REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$TK_VER" != "$REMOTE_TK_VER" ]; then
   assert_version_not_taken @openlearn/plugin-test-kit "$TK_VER"
   # workspace 协议改写为精确 SDK 版本后再发布（发布后还原）。
