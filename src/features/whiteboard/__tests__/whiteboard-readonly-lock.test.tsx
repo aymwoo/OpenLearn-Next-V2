@@ -135,14 +135,14 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
 
   it('disables canvas pointer events when readOnly so drawing cannot start', () => {
     const { container } = renderBoard(true);
-    const canvasHost = container.querySelector('.absolute.inset-0.w-full.h-full.overflow-hidden');
+    const canvasHost = container.querySelector('[data-testid="whiteboard-stage-host"]');
     expect(canvasHost).toBeTruthy();
     expect((canvasHost as HTMLElement).style.pointerEvents).toBe('none');
   });
 
   it('keeps canvas pointer events enabled when not readOnly', () => {
     const { container } = renderBoard(false);
-    const canvasHost = container.querySelector('.absolute.inset-0.w-full.h-full.overflow-hidden');
+    const canvasHost = container.querySelector('[data-testid="whiteboard-stage-host"]');
     expect((canvasHost as HTMLElement).style.pointerEvents).toBe('auto');
   });
 
