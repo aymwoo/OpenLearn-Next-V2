@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-25
+
 ### Fixes
 
 - **测试进程不再把 `BACKUP_DIR` 泄漏到生产备份目录（3 条单测变红 + 污染生产数据）**：
@@ -29,6 +31,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **改法**：在 `cli-data.mjs` 内联 `hardenFile()` / `ensureSecureDir()`（口径与 `secure-files.ts` 一致：目录 700、文件 600、只收紧不放宽、Windows 忽略），应用到冷备、整包备份、还原安全副本、暂存文件与还原后的主库。之所以内联而不 `import`：CLI 必须能在**发布包**里独立运行，而发布清单只有 `cli-*.mjs` 与 `dist/*.cjs`，源码里的 `secure-files.ts` 并不存在（与 `loadCliMigrator` 踩的是同一个坑）。
   - **测试**：`scripts/__tests__/cli-data-restore.test.ts` 新增 1 例，断言还原产物权限合规（安全副本 600、备份目录 700、还原后主库 600）；已用「撤掉硬化」的反证确认它会变红。
   - **运维**：存量 14 个 644 的历史备份文件用 `pnpm ops:check-perms --fix` 回补为 600，`pnpm ops:check-perms` 现已全绿。
+
+- **启动期结构金样终检 + 严格台账防降级（数据库自动适应收口）**：
+  - **问题**：迁移台账追平 ≠ 库结构正确。台账记着「迁移已应用」不代表库里真有那些表和列；用未来备份恢复旧代码（降级）时，平台会带着一个「比代码新」的结构继续启动。
+  - **改法 1（严格台账防降级）**：两个启动入口（`server.ts` 与 kernel `initializeDatabase`）均以 `strictLedger: true` 调用 `runMigrations` —— 台账里存在、但迁移目录中已不存在的条目即 FATAL，报错同时指出「用未来备份恢复了旧代码（降级）」与「已应用迁移被改名」两种成因；有意的降级运维可用 `MIGRATION_ALLOW_UNKNOWN_LEDGER=true` 显式放行。库函数默认不拦 —— 迁移子集调用是升级演练（v034/v036/v061）的合法用法。
+  - **改法 2（schema 金样终检）**：新增 `migrations/schema-golden.json`（空库跑完 44 个迁移后的表→列快照，随包发布，改迁移后用 `pnpm db:gen-golden` 重新生成）。`assertSchemaMatchesGolden` 在两个启动入口迁移后校验：实际库缺金样声明的表/列 → FATAL 并列出缺在哪；多出的表/列（插件自建表、expand-contract 过渡列）不报错。金样文件缺失 = packaging 级 FATAL（与 #283 漏发 migrations 同类故障）。
+  - **配套测试**：新增 `schema-golden.test.ts`（金样对账 —— 改迁移忘再生成立刻红并提示跑 gen / 整表缺失 / 列缺失（DROP COLUMN）/ 多余结构合法 / 金样缺失报错 / 严格台账 FATAL-放行-子集合法三态）；新增真实迁移链 DOWN 烟雾测试（回滚 → 重放 → 金样对账），钉住「DOWN 脚本不静默烂掉」；既有 migrate-safety 用例按新契约更新（子集合法 + strict 拦截）。
+
+### Docs
+
+- **修正五处「照文档操作会出事故」级失实（文档审计 P0 第一批，86 篇内容级核查的第一批修复）**：
+  - **admin-manual.md**：容器卷要求挂 `/app/packages/core/db` —— **实际是 `/data`/`/backups`，方向写反**（照做重启丢全部数据）；`OPENLEARN_DB_PATH` 的容器路径停在旧 `/app` 布局，与同文 §6.4 自相矛盾，误导排障。
+  - **quickstart.md**：默认账户写成 `admin/admin` —— 代码已明确废除，按文档登录必然失败。
+  - **version-migration.md**：「迁移失败不阻止启动」—— 实际是 FATAL + `throw`，进程退出，不在半迁移的库上提供服务；「checksum 仅记录不校验」—— 实际每次启动都比对，文档反而掩盖了真实存在的保护机制。
+  - **同时对齐**：平台版本、迁移清单范围（000–043）、迁移器 SSOT 位置（`packages/core/db/migrator.ts`）、删除已不存在的 `runStartupMigrations` 与「Applied: xxx」日志标志、补记 schema 金样终检与严格台账。
+
+### CI
+
+- **修掉 #294/#295 引入的格式与 ESLint 门禁债务（main 连续两次 push 转红）**：
+  - **问题**：#294、#295 是带着失败的检查被合并的 —— main 的 Format check（格式基线棘轮）与 typecheck-and-test（ESLint 告警预算）两个作业连续两次 push 转红。格式不合规 5 个文件；ESLint 6246 > 基线 6243。
+  - **定位**：逐文件比对基线树与合并后的树，精确锁定 3 条**新增**告警（`schema-golden.ts` 抛错未带 `cause`、`gen-schema-golden.ts` 与 `migration-down-smoke.test.ts` 各一处未使用 import），净增 3 = 6246 − 6243，与实测吻合。
+  - **修法 1（格式根因）**：4 个新文件直接 prettier；但 `migrations/schema-golden.json` 是**生成物** —— 生成器写 `JSON.stringify(x, null, 2)`（短数组全展开）而 prettier 把短数组折成单行，手工格式化只是把「生成 → 不合规 → CI 红 → 手改 → 再生成又红」的死循环往后推一轮。因此把**生成器**改成用 prettier 按 `.prettierrc` 排版输出，生成即合规，prettier 成为排版的唯一来源。
+  - **修法 2（ESLint）**：删掉两处未使用 import；金样解析失败改为 `throw new Error(..., { cause: err })` —— 既过 `preserve-caught-error`，也真正保住根因异常。
+  - **验证**：格式门禁不合规 0 个；ESLint 6243 = 基线 6243（不新增欠债）；重跑 `pnpm db:gen-golden`，生成物 `prettier --check` 通过且与提交版仅差 `generatedAt` 一个字段（根因反向验证）；格式化后的金样 JSON 与格式化前语义完全等价，严格 `JSON.parse` 可解析（82 表、无尾逗号），启动期终检不受影响。
+  - **顺带封掉版本一致性门禁的盲区**：原断言 1 拿 `PLATFORM_VERSION` 与 `package.json.version` 比 —— 而 `PLATFORM_VERSION` 正是**运行时从 package.json 读出来的**，两者同源，**恒等**，无论 `packages/core/version.ts` 里的 `FALLBACK_VERSION` 字面量写成什么都不会红（实测：字面量停在 0.7.2、package.json 已是 0.7.3 时，6 例断言依然全绿）。而该字面量在**无法定位平台 package.json** 时（只拷了 `dist/` 的部署方式）就是对外展示的版本号，漏改会让启动横幅显示旧版本且无人拦截。现新增断言 2b 直接读源码抠出字面量比对，并做**反向验证**：字面量改成 `0.0.1` → 精确报「版本漂移拦截」；改回 → 7 例全绿。
 
 ## [0.7.2] - 2026-10-25
 

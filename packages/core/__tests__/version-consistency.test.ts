@@ -30,6 +30,28 @@ describe('Version Consistency Gate (防版本漂移自动化质量门禁)', () =
     expect(OPENLEARN_VERSION).toBe(PLATFORM_VERSION);
   });
 
+  it('2b. packages/core/version.ts 的 FALLBACK_VERSION 字面量必须与 package.json.version 一致', () => {
+    // 为什么断言 1 不够：PLATFORM_VERSION 是**运行时从 package.json 读出来的**，
+    // 断言 1 拿它和 package.json 比 —— 两者本来就是同一个来源，**恒等**，
+    // 无论 version.ts 里的 FALLBACK_VERSION 字面量写成什么都不会红。
+    //
+    // 但 FALLBACK_VERSION 不是装饰品：当无法定位平台 package.json 时
+    // （发布包 dist/ 布局、只拷了 dist/ 的部署方式）它就是对外展示的版本号 ——
+    // 漏改会让启动横幅显示旧版本，而且**没有任何门禁会拦住**。
+    //
+    // 这里直接读源码把字面量抠出来比对，堵住这个盲区。
+    const versionSrcPath = resolve(__dirname, '../version.ts');
+    const src = readFileSync(versionSrcPath, 'utf-8');
+    const matched = src.match(/const\s+FALLBACK_VERSION\s*=\s*'([^']+)'/);
+
+    expect(matched, `未能从 ${versionSrcPath} 解析出 FALLBACK_VERSION 字面量（写法可能变了？）`).not.toBeNull();
+    expect(
+      matched![1],
+      `[版本漂移拦截] packages/core/version.ts 的 FALLBACK_VERSION (${matched![1]}) 与 package.json (${currentVersion}) 不一致！` +
+        '该字面量在无法定位平台 package.json 时会被当作对外版本号，漏改会让启动横幅显示旧版本。',
+    ).toBe(currentVersion);
+  });
+
   it('3. Bootstrap 内核导出的 PLATFORM_VERSION 必须严格与核心版本一致', () => {
     expect(BOOTSTRAP_VERSION).toBe(PLATFORM_VERSION);
   });
