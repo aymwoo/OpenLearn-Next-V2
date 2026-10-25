@@ -163,7 +163,7 @@ import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { AssignmentSubmitDialog } from './components/AssignmentSubmitDialog';
-import { WhiteboardPropertiesSidebar } from './components/WhiteboardPropertiesSidebar';
+import { WhiteboardPropertiesSidebar, type ElementUpdateResult } from './components/WhiteboardPropertiesSidebar';
 import { WhiteboardEmptyState } from './components/WhiteboardEmptyState';
 import { WhiteboardFullscreenOverlay } from './components/WhiteboardFullscreenOverlay';
 import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
@@ -1098,9 +1098,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     }, [selectedShapeId, elements]);
 
-    const handleUpdateElementData = async (updatedFields: any) => {
+    const handleUpdateElementData = async (updatedFields: any): Promise<ElementUpdateResult> => {
       const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
-      if (!selectedEl) return;
+      if (!selectedEl) return 'noop';
       const parsedData = parseElementData(selectedEl, {});
 
       const updatedData = {
@@ -1140,12 +1140,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             correlationId: lessonId,
           });
           if (onRefresh) onRefresh();
+          return 'saved';
         } catch (e) {
+          // 旧实现只 console.error：属性侧栏上完全看不出保存失败，老师会以为存住了。
+          // 现在把结果返回给调用方，由侧栏在按钮下方显式提示。
           console.error('更新属性失败:', e);
+          return 'failed';
         } finally {
           setIsSyncing(false);
         }
       }
+      return 'noop';
     };
 
     /** 课堂授课临时生效（仅本次授课在内存与本地画布生效，不向后端持久化） */

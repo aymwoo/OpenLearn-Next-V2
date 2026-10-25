@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import {
   WhiteboardPropertiesSidebar,
   type WhiteboardPropertiesSidebarProps,
@@ -199,6 +199,73 @@ describe('WhiteboardPropertiesSidebar Component Tests', () => {
     const applyBtn = screen.getByText('保存');
     fireEvent.click(applyBtn);
     expect(handleUpdate).toHaveBeenCalledWith(defaultProps.editingProperties);
+  });
+
+  describe('保存结果就地反馈（按钮下方）', () => {
+    it('7a. 返回 saved → 按钮下方出现「已保存」', async () => {
+      const handleUpdate = vi.fn().mockResolvedValue('saved');
+      render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
+
+      expect(screen.queryByTestId('save-feedback-success')).toBeNull();
+      fireEvent.click(screen.getByText('保存'));
+
+      expect(await screen.findByTestId('save-feedback-success')).toBeDefined();
+      expect(screen.getByText('已保存')).toBeDefined();
+    });
+
+    it('7b. 返回 failed → 提示保存失败（而不是只 console.error）', async () => {
+      const handleUpdate = vi.fn().mockResolvedValue('failed');
+      render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
+
+      fireEvent.click(screen.getByText('保存'));
+
+      expect(await screen.findByTestId('save-feedback-error')).toBeDefined();
+      expect(screen.getByText('保存失败，请重试')).toBeDefined();
+    });
+
+    it('7c. 返回 noop（未落库）→ 不提示，绝不谎报成功', async () => {
+      const handleUpdate = vi.fn().mockResolvedValue('noop');
+      render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
+
+      fireEvent.click(screen.getByText('保存'));
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(screen.queryByTestId('save-feedback-success')).toBeNull();
+      expect(screen.queryByTestId('save-feedback-error')).toBeNull();
+    });
+
+    it('7d. 旧调用方返回 undefined（未接新约定）→ 同样不提示', async () => {
+      const handleUpdate = vi.fn().mockResolvedValue(undefined);
+      render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
+
+      fireEvent.click(screen.getByText('保存'));
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(screen.queryByTestId('save-feedback-success')).toBeNull();
+    });
+
+    it('7e. “已保存”会在超时后自动消失', async () => {
+      vi.useFakeTimers();
+      try {
+        const handleUpdate = vi.fn().mockResolvedValue('saved');
+        render(<WhiteboardPropertiesSidebar {...defaultProps} handleUpdateElementData={handleUpdate} />);
+
+        fireEvent.click(screen.getByText('保存'));
+        // 先让 await handleUpdateElementData 的 promise 链结完，提示才会被设置
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(screen.getByTestId('save-feedback-success')).toBeDefined();
+
+        // 再推进计时器，让自动消失生效
+        await act(async () => {
+          vi.advanceTimersByTime(3_000);
+        });
+        expect(screen.queryByTestId('save-feedback-success')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('9. Issue #107：选择正确答案时一次写入 correctIndex（权威）与 correctAnswer（兼容）', () => {

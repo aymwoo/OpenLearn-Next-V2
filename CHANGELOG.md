@@ -12,6 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **组件属性编辑器：保存成功/失败就地提示（按钮下方），不再“点了没反应”**：
+  - **问题**：属性侧栏的「保存」按钮只在提交期间显示「正在保存…」，请求结束后按钮又变回「保存」—— 成功没任何反馈，老师无法确认到底存住没存住；**更糟的是失败也看不出来**：`InteractiveWhiteboard.handleUpdateElementData` 的 catch 只 `console.error`，界面上与成功完全一样。
+  - **改法**：
+    1. `handleUpdateElementData` 返回 `ElementUpdateResult`（`'saved' | 'failed' | 'noop'`）而不是默默吞掉错误；
+    2. 属性侧栏在保存按钮**正下方**渲染一行就地提示：成功后显示「✓ 已保存」（2.5s 自动消失），失败显示「⚠ 保存失败，请重试」（5s，给足时间看清）；带 `role="status"` + `aria-live="polite"`，读屏也会播报；
+    3. 刻意**不**用全局 toast：属性侧栏贴屏幕右/下侧，弹窗提示会把视线拽到屏幕另一头；
+    4. 返回 `noop`（未选中元素 / 无持久化通道）时**不提示** —— 什么都没发生时提示「已保存」是假反馈。同样兼容旧调用方返回 `undefined`。
+  - **测试**：`whiteboard-properties-sidebar.test.tsx` 新增 5 例：`saved` 显示已保存、`failed` 显示失败、`noop` 不提示、旧调用方 `undefined` 不提示、提示超时自动消失。
+  - **验证**：`tsc` 通过；该文件 15/15 通过；全量单测（Node 24）601 files / 4980 passed。
+  - **发现但**未**在本次修**（已登记）：`CoursewarePropertiesModal` 的 `handleApply` 同样没 try/catch —— `onSavePermanent` 抛错时弹窗既不关也不报错，与本次修的是同一类问题。
+
 - **版本占用门禁改判「tag 是否与本次发布的提交同源」，而不是「tag 是否存在」**：
   - **问题**：v0.7.2 引入的版本占用门禁写成了「git tag v<version> 存在即拒绝发布」，但仓库既定的发布顺序恰恰是「提交（含版本提升）→ 打 tag → 执行 `publish.sh`」。于是 **tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
   - **实测暴露**：v0.7.3 真正执行发布时，`publish.sh` 在预检阶段即报「版本占用：git tag v0.7.3 已存在（7220214b9601）。请提升版本号」—— 而这正是要发布的那次提交，门禁把**正确状态**当成了违规。

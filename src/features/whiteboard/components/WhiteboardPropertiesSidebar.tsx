@@ -1,10 +1,22 @@
-import React from 'react';
-import { Settings, Undo2, Redo2, X, Trash2, Plus, Paintbrush, Loader2, Save } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Settings, Undo2, Redo2, X, Trash2, Plus, Paintbrush, Loader2, Save, Check, AlertCircle } from 'lucide-react';
 import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
 import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
+
+/**
+ * 属性保存的结果。
+ *
+ * 为什么不用 `boolean`：这里要区分三种状态 ——
+ * - `saved`：真的落库了，可以提示“已保存”；
+ * - `failed`：请求抛错，必须提示失败（旧实现在这里只 `console.error`，
+ *   界面上完全看不出来，老师会以为存住了）；
+ * - `noop`：没有选中元素 / 没有持久化通道，什么都没发生 ——
+ *   此时**不能**提示“已保存”，那是在骗人。
+ */
+export type ElementUpdateResult = 'saved' | 'failed' | 'noop';
 
 export interface WhiteboardPropertiesSidebarProps {
   isEditMode: boolean;
@@ -18,7 +30,7 @@ export interface WhiteboardPropertiesSidebarProps {
   handlePropBlur: (key: string, val: any) => void;
   handleNumericPropBlur: (key: string, val: any) => void;
   handlePropsUpdate: (propsToUpdate: any) => void;
-  handleUpdateElementData: (props: any) => void;
+  handleUpdateElementData: (props: any) => void | ElementUpdateResult | Promise<void | ElementUpdateResult>;
   handleElementDelete: (id: string) => void;
   handleUndoProp: () => void;
   handleRedoProp: () => void;
@@ -71,12 +83,40 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
   handleOptionChangeLocal,
   handleOptionBlur,
 }) => {
+  // 保存反馈（必须在下方 early-return 之前声明：React 要求 hooks 无条件执行）
+  const [saveFeedback, setSaveFeedback] = useState<'saved' | 'failed' | null>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    },
+    [],
+  );
+
   if (!isEditMode || !selectedShapeId || !editingProperties) {
     return null;
   }
 
   const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
   if (!selectedEl) return null;
+
+  /**
+   * 点「保存」：等真实结果再给反馈。
+   *
+   * `noop`（无选中元素 / 无持久化通道）时**不提示** —— 什么都不该说，
+   * 否则「已保存」就是假提示。
+   */
+  const handleSaveClick = async () => {
+    const result = await handleUpdateElementData(editingProperties);
+    const kind = result === 'saved' || result === 'failed' ? result : null;
+    if (!kind) return;
+
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    setSaveFeedback(kind);
+    // 失败留久一点，给老师时间看清
+    feedbackTimer.current = setTimeout(() => setSaveFeedback(null), kind === 'failed' ? 5000 : 2500);
+  };
 
   // 窗体类小组件仅在用户显式点击标题栏“属性图标”或右键菜单“配置组件属性”时展开侧栏
   const isWidget =
@@ -733,7 +773,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
       {/* 底部操作按钮 */}
       <div className="p-3 border-t border-slate-200 bg-white flex flex-col gap-2 shrink-0">
         <button
-          onClick={() => handleUpdateElementData(editingProperties)}
+          onClick={handleSaveClick}
           disabled={isSyncing}
           className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-all shadow-sm hover:shadow active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 text-xs"
         >
@@ -749,6 +789,29 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
             </>
           )}
         </button>
+
+        {/* 保存结果：就在按钮下方，不依赖全局 toast（侧栏底部本来就窄，
+            弹窗提示容易把视线拽到屏幕另一头） */}
+        <div role="status" aria-live="polite" className="min-h-[16px] text-center">
+          {saveFeedback === 'saved' && (
+            <span
+              data-testid="save-feedback-success"
+              className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600"
+            >
+              <Check size={12} />
+              已保存
+            </span>
+          )}
+          {saveFeedback === 'failed' && (
+            <span
+              data-testid="save-feedback-error"
+              className="inline-flex items-center gap-1 text-xs font-bold text-red-600"
+            >
+              <AlertCircle size={12} />
+              保存失败，请重试
+            </span>
+          )}
+        </div>
         <button
           onClick={() => {
             handleElementDelete(selectedShapeId);
