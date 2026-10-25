@@ -81,6 +81,7 @@ import {
   type StackDirection,
 } from './utils/auto-tiling';
 import { parseElementData } from './utils/element-cache';
+import { computeContentBounds, resolveCanvasSize, toCanvasPoint } from './utils/canvas-bounds';
 import {
   belongsToPage,
   filterCurrentPageElements,
@@ -196,6 +197,14 @@ import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-regis
 // quiz 的渲染器是宿主注册的完整实现（提交 + 评分 + 成绩表格，有独立单测覆盖），
 // 走「宿主保留」通道而非插件通道
 fullscreenRendererRegistry.registerHostBuiltin('quiz', QuizFullscreenView);
+
+/**
+ * 画布内容底部的留白（像素）。
+ *
+ * 画布逻辑高度 = max(容器可视高, 内容底边 + 该留白)。留白让最下方的图元
+ * 不会紧贴画布边缘 —— 否则它的缩放手柄/标签会被画布边界切掉。
+ */
+const CANVAS_CONTENT_PADDING = 80;
 
 const ReadOnlyLockCover: React.FC<{ title?: string }> = ({ title = '教师已开启全班专注锁定，当前为只读演示视图' }) => (
   <div
@@ -666,6 +675,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [isDrawing, setIsDrawing] = useState(false);
     const stageRef = useRef<any>(null);
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+    /** 画布承载容器的**内容框**尺寸（已扣边框与滚动条占位）—— 画布逻辑尺寸的基准。 */
+    const [canvasBox, setCanvasBox] = useState({ width: 0, height: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const socketRef = useRef<any>(null);
@@ -946,6 +957,59 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       swapTileElementsRef.current = swapTileElements;
       insertTileInDirectionRef.current = insertTileInDirection;
     }, [applyAutoTilingForElements, swapTileElements, insertTileInDirection]);
+
+    /**
+     * 画布「逻辑尺寸」—— 与容器可视尺寸解耦。
+     *
+     * 修复前 konva Stage 的宽高**严格等于容器尺寸**，而从画布往上的每一级祖先
+     * 都是 `min-h-0` + `overflow-hidden`：溢出被裁掉，整条链上没有一级可滚动。
+     * 于是窗口一矮（实测 1440×520 视口下画布可视高只剩 124px），画在下部的组件
+     * 就既看不见也拖不动，而且**没有任何办法**把它们拉回视口。
+     *
+     * 现在画布至少要装得下当前页全部组件；容器装不下时由**容器**出滚动条，
+     * 画布本身保持逻辑尺寸不变。内容装得下时画布 == 容器，行为与修复前逐像素一致。
+     */
+    const canvasContentBounds = useMemo(() => {
+      // localGeometryVersion 仅用于让覆盖层的增删触发重算（与 renderElement 同口径）
+      void localGeometryVersion;
+      const boxes: { x: number; y: number; width: number; height: number }[] = [];
+      for (const el of getCurrentPageElements()) {
+        try {
+          const data = parseElementData(el);
+          const overlay = localGeometryRef.current.get(el.id);
+          const fallback = getDefaultElementSize(el.type, data);
+          boxes.push({
+            x: overlay?.x ?? (Number.isFinite(data.x) ? data.x : 0),
+            y: overlay?.y ?? (Number.isFinite(data.y) ? data.y : 0),
+            width: overlay?.width ?? (Number.isFinite(data.width) ? data.width : fallback.width),
+            height: overlay?.height ?? (Number.isFinite(data.height) ? data.height : fallback.height),
+          });
+        } catch {
+          // 单个图元数据损坏不应影响其余图元的包围盒计算
+        }
+      }
+      return computeContentBounds(boxes);
+    }, [getCurrentPageElements, localGeometryVersion]);
+
+    const canvasSize = useMemo(
+      () => resolveCanvasSize(canvasBox, canvasContentBounds, CANVAS_CONTENT_PADDING),
+      [canvasBox, canvasContentBounds],
+    );
+
+    /**
+     * viewport 坐标 → 画布坐标。
+     *
+     * 画布容器在内容装不下时是**滚动容器**，`getBoundingClientRect()` 给的是
+     * 「可视框」位置，滚动后它随内容上移。必须把容器滚动偏移加回来，否则画布一滚动，
+     * 鼠标位置与图元位置整体错位（拖拽看起来「跳」）。
+     * 未滚动时 scrollLeft/scrollTop 恒为 0，与修复前逐像素等价。
+     */
+    const toCanvasPointFromEvent = useCallback((clientX: number, clientY: number) => {
+      const el = containerRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return toCanvasPoint(clientX, clientY, rect, { scrollLeft: el.scrollLeft, scrollTop: el.scrollTop });
+    }, []);
 
     const dragRef = useRef<{
       id: string;
@@ -1510,10 +1574,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
         // 平铺模式下的拖拽悬停碰撞检测（Drag to Swap）
         if (autoTileEnabled) {
-          const containerRect = containerRef.current?.getBoundingClientRect();
-          if (containerRect) {
-            const pointerCanvasX = e.clientX - containerRect.left;
-            const pointerCanvasY = e.clientY - containerRect.top;
+          const pointer = toCanvasPointFromEvent(e.clientX, e.clientY);
+          if (pointer) {
+            const pointerCanvasX = pointer.x;
+            const pointerCanvasY = pointer.y;
 
             const tileBoxes: BoxWithId[] = [];
             let totalTileCount = 0;
@@ -2066,11 +2130,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       if (!containerRef.current) return;
       const observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
-          // Use offsetWidth and offsetHeight for accurate display size calculations including border
+          // 两个尺寸概念，各司其职：
+          //   containerSize —— 边框盒（offsetWidth/offsetHeight）。给「自动平铺」的铺排
+          //     区域与全屏覆盖层用；**不含滚动条**，尺寸稳定，不会因为滚动条出现与否
+          //     而反复触发重排。
+          //   canvasBox —— 内容框（clientWidth/clientHeight）。给画布逻辑尺寸用：
+          //     它已经扣掉边框与滚动条占位，画布取它才不会比可视区多出边框那 2px
+          //     （多出来的 2px 会凭空冒出一条横向滚动范围）。
           if (containerRef.current) {
             setContainerSize({
               width: containerRef.current.offsetWidth,
               height: containerRef.current.offsetHeight,
+            });
+            setCanvasBox({
+              width: containerRef.current.clientWidth,
+              height: containerRef.current.clientHeight,
             });
           }
         }
@@ -2083,6 +2157,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           setContainerSize({
             width: containerRef.current.offsetWidth,
             height: containerRef.current.offsetHeight,
+          });
+          setCanvasBox({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
           });
         }
       };
@@ -2490,11 +2568,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -2608,11 +2686,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -2681,11 +2759,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -2780,11 +2858,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -2886,11 +2964,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3233,11 +3311,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3345,11 +3423,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3457,11 +3535,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3559,11 +3637,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3661,11 +3739,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       e.stopPropagation();
                       return;
                     }
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
                       setContextMenu({
-                        x: e.clientX - containerRect.left,
-                        y: e.clientY - containerRect.top,
+                        x: point.x,
+                        y: point.y,
                         elementId: el.id,
                       });
                     }
@@ -3819,8 +3897,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const addElementAtCenter = async (type: string, contentData: Record<string, any>) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const x = Math.round(rect.width / 2);
-      const y = Math.round(rect.height / 2);
+      // 画布容器可能是滚动容器 —— 「可视区中心」在画布坐标系里要加上滚动偏移
+      const x = Math.round(rect.width / 2 + containerRef.current.scrollLeft);
+      const y = Math.round(rect.height / 2 + containerRef.current.scrollTop);
       setIsSyncing(true);
       try {
         await onElementAdd(type, buildElementData(type, contentData, x, y));
@@ -4014,8 +4093,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           return;
         }
         const stageBox = containerRef.current.getBoundingClientRect();
-        let dropX = e.clientX - stageBox.left;
-        let dropY = e.clientY - stageBox.top;
+        // 画布容器可能是滚动容器 —— 落点必须换算到画布坐标系（加回滚动偏移）
+        let dropX = e.clientX - stageBox.left + containerRef.current.scrollLeft;
+        let dropY = e.clientY - stageBox.top + containerRef.current.scrollTop;
 
         console.log(`Adding whiteboard element of type ${payload.type} at (${dropX}, ${dropY})`);
         setIsSyncing(true);
@@ -4080,7 +4160,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
           <div
             ref={containerRef}
-            className="flex-1 rounded-xl border border-theme/80 relative overflow-hidden w-full shadow-inner transition-colors"
+            data-testid="whiteboard-canvas-viewport"
+            // overflow-auto：画布逻辑高度大于容器可视高度时由**本容器**出滚动条 ——
+            // 修复前这里是 overflow-hidden，溢出被裁掉且整条祖先链无可滚动容器，
+            // 画在下部的组件因此永远够不着（见 canvas-bounds.ts 的说明）。
+            className="flex-1 rounded-xl border border-theme/80 relative overflow-auto w-full shadow-inner transition-colors"
             style={{
               backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
               backgroundSize: '24px 24px',
@@ -4126,7 +4210,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             />
 
             <div
-              className="absolute inset-0 w-full h-full overflow-hidden"
+              data-testid="whiteboard-stage-host"
+              // 这层是画布内容的实际承载者。**不能带 overflow-hidden**：
+              // 画布逻辑高度可能大于容器可视高度（见 canvas-bounds.ts），
+              // 裁掉溢出就等于把画在下部的组件永久藏起来。裁剪交给外层画布容器
+              // （overflow-auto）负责 —— 它才是滚动容器。
+              className="absolute inset-0 w-full h-full"
               style={{ pointerEvents: isDragOverBoard || readOnly ? 'none' : 'auto' }}
             >
               <WhiteboardFullscreenOverlay
@@ -4145,17 +4234,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 renderElement={renderElement}
               >
                 <Stage
-                  width={containerSize.width}
-                  height={containerSize.height}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
                   onMouseDown={handleMouseDown}
                   onMousemove={handleMouseMove}
                   onMouseup={handleMouseUp}
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
-                    const containerRect = containerRef.current?.getBoundingClientRect();
-                    if (containerRect) {
-                      const x = e.evt.clientX - containerRect.left;
-                      const y = e.evt.clientY - containerRect.top;
+                    const point = toCanvasPointFromEvent(e.evt.clientX, e.evt.clientY);
+                    if (point) {
+                      const { x, y } = point;
 
                       const node = e.target;
                       const targetId = node.id();
@@ -4176,6 +4264,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   ref={stageRef}
+                  // konva 用**内联** width/height 决定画布尺寸（内联优先于这两个 class，
+                  // 它们只在 konva 未写内联尺寸时兜底，避免画布塌成 0）
                   className="w-full h-full cursor-crosshair"
                 >
                   <Layer>

@@ -73,7 +73,8 @@ assert_version_not_taken() {
   fi
 
   local remote_versions
-  remote_versions="$(npm view "${pkg_name}" versions --json 2>/dev/null || echo '[]')"
+  # 必须查权威 registry：本机的默认 registry 是 npmmirror，镜像滞后会让「已发布」误判成「未占用」
+  remote_versions="$(npm view "${pkg_name}" versions --json --registry=https://registry.npmjs.org 2>/dev/null || echo '[]')"
   if printf '%s' "$remote_versions" | grep -q "\"${version}\""; then
     err "版本占用：npm 上 ${pkg_name}@${version} 已发布。请提升版本号。"
   fi
@@ -83,6 +84,13 @@ log "Checking version occupancy (git tags & npm registry)..."
 APP_VER="$(node -p "require('./package.json').version")"
 # 平台包每次都会发布 → 占用检查在预检阶段就做（早失败，别等 build 完才发现）。
 assert_version_not_taken openlearn-next "$APP_VER"
+
+# npm 采集 gitHead 要求包目录下的 .git 是**目录**；linked worktree 里 .git 是一个
+# 指向真实 gitdir 的文本文件 → 采集落空，registry 上该版本没有 gitHead 字段，
+# 消费者无从追溯来源提交（产物内容不受影响）。
+if [ -e .git ] && [ ! -d .git ]; then
+  warn "当前目录是 git linked worktree（.git 是文件而非目录）—— npm 采集不到 gitHead，发布后 registry 不会记录来源提交。建议改在普通 checkout（.git 是目录）里发布。"
+fi
 
 SDK_DIR="packages/plugin-sdk"
 TK_DIR="packages/plugin-test-kit"
@@ -143,7 +151,7 @@ verify_release_manifest() {
 
 # ── 1. Publish @openlearn/plugin-sdk ─────────────────────────────────
 log "Checking @openlearn/plugin-sdk..."
-REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")"
+REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$SDK_VER" != "$REMOTE_SDK_VER" ]; then
   # 即将发布 → 才需要占用检查（已发布且版本不变的包走下面的跳过分支，不该被拦）。
   assert_version_not_taken @openlearn/plugin-sdk "$SDK_VER"
@@ -155,7 +163,7 @@ fi
 
 # ── 2. Publish @openlearn/plugin-test-kit ──────────────────────────
 log "Checking @openlearn/plugin-test-kit..."
-REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version 2>/dev/null || echo "")"
+REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$TK_VER" != "$REMOTE_TK_VER" ]; then
   assert_version_not_taken @openlearn/plugin-test-kit "$TK_VER"
   # workspace 协议改写为精确 SDK 版本后再发布（发布后还原）。
