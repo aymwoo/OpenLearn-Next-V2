@@ -296,9 +296,7 @@ const cleanupTx = db.transaction(() => {
     try {
       db.prepare(`DELETE FROM assessment_assignments WHERE assessment_id IN (${aPlaceholders})`).run(...assessmentIds);
     } catch {}
-    const delAssessments = db
-      .prepare(`DELETE FROM assessments WHERE id IN (${aPlaceholders})`)
-      .run(...assessmentIds);
+    const delAssessments = db.prepare(`DELETE FROM assessments WHERE id IN (${aPlaceholders})`).run(...assessmentIds);
     console.log(`  ✓ Removed ${delAssessments.changes} assessments`);
   }
 

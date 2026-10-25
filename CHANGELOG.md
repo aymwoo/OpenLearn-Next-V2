@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixes
+
 - **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
   - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
   - **为什么致命**：对**棘轮**门禁而言，格式判定会随环境漂移（基线失去意义）；ESLint 那边更糟 —— 新版 eslint 往往带来新规则，告警数只涨不跌，基线会被冲破。
@@ -40,7 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.7.3] - 2026-10-25
 
 ### Fixes
-
 
 - **测试进程不再把 `BACKUP_DIR` 泄漏到生产备份目录（3 条单测变红 + 污染生产数据）**：
   - **现象（实测）**：`migrate-safety` / `cli-data-restore` / `cli-enhanced` 三条用例报「备份目录不存在」而变红；同一时间生产 `backups/` 下多出 `pre_migration_*.db` / `pre_restore_*.db`（全是测试库残骸）。
