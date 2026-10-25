@@ -9,6 +9,61 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const requireFromHere = createRequire(import.meta.url);
 
 /**
+ * 敏感文件权限收紧（与 `packages/core/db/secure-files.ts` 同一口径）。
+ *
+ * ## 为什么在这里内联而不是 import
+ *
+ * CLI 脚本必须能在**发布包**里独立运行 —— 发布清单（package.json `files`）只有
+ * `cli-*.mjs` 与 `dist/*.cjs`，源码里的 `secure-files.ts` 并不存在。走 `import()`
+ * 会在任何非源码检出环境直接 MODULE_NOT_FOUND（与 `loadCliMigrator` 踩的是同一个坑）。
+ *
+ * ## 口径
+ *
+ * - 备份目录 0700、备份文件 0600：备份是**全量学生数据的未加密副本**。
+ * - **只收紧不放宽**：已合规（或比基线更严，如 0400）时不动，只在真的含有
+ *   group/other 位时才 chmod。
+ * - Windows 等不支持 chmod 的环境：try/catch 吞掉，不阻断备份/还原。
+ */
+const SECURE_FILE_MODE = 0o600;
+const SECURE_DIR_MODE = 0o700;
+/** group/other 位掩码：任何一位为 1 即视为「宽于基线」 */
+const GROUP_OTHER_BITS = 0o077;
+
+/**
+ * 把已存在的文件收紧到 600。
+ * @returns 是否发生了实际变更
+ */
+function hardenFile(filePath) {
+  try {
+    const mode = fs.statSync(filePath).mode & 0o777;
+    if ((mode & GROUP_OTHER_BITS) === 0) return false;
+    fs.chmodSync(filePath, SECURE_FILE_MODE);
+    return true;
+  } catch {
+    // 不存在 / Windows 不支持 chmod：交给调用方后续处理
+    return false;
+  }
+}
+
+/**
+ * 确保目录存在且合规：不存在则按 0700 创建，已存在但过宽则收紧。
+ */
+function ensureSecureDir(dirPath) {
+  try {
+    // mode 只对**新建**目录生效；0700 不含 group/other 位，因此 umask 不会削掉任何一位。
+    fs.mkdirSync(dirPath, { recursive: true, mode: SECURE_DIR_MODE });
+  } catch {
+    // 目录可能已存在或不可创建
+  }
+  try {
+    const mode = fs.statSync(dirPath).mode & 0o777;
+    if ((mode & GROUP_OTHER_BITS) !== 0) fs.chmodSync(dirPath, SECURE_DIR_MODE);
+  } catch {
+    // 同上
+  }
+}
+
+/**
  * 加载迁移器（`pnpm build` 产出的 `dist/cli-migrator.cjs`）。
  *
  * ## 为什么不再直接 `import('./packages/core/db/migrator.js')`
@@ -73,7 +128,7 @@ export async function runBackup(outputFile, options = {}) {
     ? path.resolve(outputFile)
     : path.resolve(process.cwd(), `openlearn_${isFull ? 'full_backup' : 'backup'}_${timestamp}${defaultExt}`);
 
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  ensureSecureDir(path.dirname(target));
 
   if (isFull) {
     try {
@@ -131,6 +186,8 @@ export async function runBackup(outputFile, options = {}) {
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
       fs.writeFileSync(target, zipBuffer);
+      // 整包备份含全量学生数据（数据库 + 课件 + 作业）—— 落盘即 0600
+      hardenFile(target);
       const stat = fs.statSync(target);
       const sizeKb = Math.round(stat.size / 1024);
       log(`✓ 系统全量整包备份完成（数据库 + 课件 uploads + 作业 storage）！`);
@@ -147,6 +204,8 @@ export async function runBackup(outputFile, options = {}) {
     const db = new Database(dbPath, { readonly: true });
     await db.backup(target);
     db.close();
+    // 冷备是全量学生数据的未加密副本 —— 落盘即 0600
+    hardenFile(target);
 
     const stat = fs.statSync(target);
     const sizeKb = Math.round(stat.size / 1024);
@@ -157,6 +216,8 @@ export async function runBackup(outputFile, options = {}) {
     // 降级为物理文件复制
     try {
       fs.copyFileSync(dbPath, target);
+      // copyFileSync 按默认 umask 落盘 → 收紧到 600
+      hardenFile(target);
       const stat = fs.statSync(target);
       const sizeKb = Math.round(stat.size / 1024);
       log(`✓ 数据库文件冷备完成（直接镜像模式）：${target} (${sizeKb} KB)`);
@@ -246,7 +307,8 @@ function checkMigrationCompatibility(snapshotMigrations, migrationsDir) {
 /** 用 VACUUM INTO 生成一致性安全副本（直接 copy 会漏掉 WAL 里未 checkpoint 的页）。 */
 async function createSafetySnapshot(dbPath, backupsDir) {
   const Database = (await import('better-sqlite3')).default;
-  fs.mkdirSync(backupsDir, { recursive: true });
+  // 备份目录装着全量学生数据副本：创建即 0700，不依赖 umask
+  ensureSecureDir(backupsDir);
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
@@ -257,6 +319,8 @@ async function createSafetySnapshot(dbPath, backupsDir) {
   } finally {
     db.close();
   }
+  // VACUUM INTO 生成的文件按默认 umask 落盘（实测 644）→ 收紧到 600
+  hardenFile(target);
   return target;
 }
 
@@ -335,6 +399,9 @@ export async function runRestore(sourceFile, options = {}) {
     } else {
       fs.copyFileSync(src, stagePath);
     }
+    // 暂存文件随后会被 rename 成主库 —— 权限按默认 umask 落盘（实测 644），
+    // 这里先收紧到 600，避免主库以宽权限重生。
+    hardenFile(stagePath);
 
     const inspection = await inspectSqliteSnapshot(stagePath);
     if (!inspection.ok) {
@@ -368,6 +435,8 @@ export async function runRestore(sourceFile, options = {}) {
 
     // ── 4. 原子替换 + 清理 WAL/SHM ──────────────────────────────────────
     fs.renameSync(stagePath, dbPath);
+    // rename 会继承源文件的权限位；再收紧一次，确保主库始终 ≤600
+    hardenFile(dbPath);
     for (const suffix of ['-wal', '-shm']) {
       const sidecar = `${dbPath}${suffix}`;
       if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);

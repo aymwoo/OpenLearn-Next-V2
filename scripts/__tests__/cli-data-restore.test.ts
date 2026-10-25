@@ -138,4 +138,35 @@ describe('restore · 安全还原', () => {
     expect(result.pendingMigrations).toBe(1);
     expect(readMarker(dbPath)).toBe('older');
   });
+
+  it('还原产物权限合规：安全副本 600、备份目录 700、还原后的主库 600', async () => {
+    // chmod 在 Windows 上是空操作，断言只对 POSIX 有意义
+    if (process.platform === 'win32') return;
+
+    const work = makeTempDir('ol-restore-perm-');
+    const migrationsDir = writeMigrationsDir(path.join(work, 'migrations'), ['001_a.sql']);
+    const dbPath = path.join(work, 'data', 'educational_os.db');
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+    createDb(dbPath, ['001_a'], 'current');
+    const snapshot = path.join(work, 'snap.db');
+    createDb(snapshot, ['001_a'], 'snapshot');
+
+    const backupsDir = path.join(work, 'backups');
+    const result = await runRestore(snapshot, { dbPath, migrationsDir, backupsDir, silent: true });
+    expect(result.ok, result.error).toBe(true);
+
+    // 安全副本是全量学生数据的未加密副本 —— 不得含 group/other 位
+    const safety = result.safetyBackup as string;
+    const safetyMode = fs.statSync(safety).mode & 0o777;
+    expect(safetyMode & 0o077, `安全副本权限 ${safetyMode.toString(8)} 宽于 600`).toBe(0);
+
+    // 备份目录同理
+    const dirMode = fs.statSync(backupsDir).mode & 0o777;
+    expect(dirMode & 0o077, `备份目录权限 ${dirMode.toString(8)} 宽于 700`).toBe(0);
+
+    // 还原后的主库是暂存文件 rename 而来 —— 同样不得含 group/other 位
+    const dbMode = fs.statSync(dbPath).mode & 0o777;
+    expect(dbMode & 0o077, `还原后主库权限 ${dbMode.toString(8)} 宽于 600`).toBe(0);
+  });
 });
