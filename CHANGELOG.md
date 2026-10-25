@@ -10,6 +10,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **测试进程不再把 `BACKUP_DIR` 泄漏到生产备份目录（3 条单测变红 + 污染生产数据）**：
+  - **现象（实测）**：`migrate-safety` / `cli-data-restore` / `cli-enhanced` 三条用例报「备份目录不存在」而变红；同一时间生产 `backups/` 下多出 `pre_migration_*.db` / `pre_restore_*.db`（全是测试库残骸）。
+  - **根因**：本地开发机常把 `BACKUP_DIR` 导进 shell 环境，而 `packages/core/db/migrator.ts` 与 `cli-data.mjs` 都是 `process.env.BACKUP_DIR || <默认目录>` 的写法。`vitest.setup.ts` 此前只清了 `OPENLEARN_DB_PATH`（Issue #194）并重定向了 `OPENLEARN_DATA_DIR`，**唯独漏了 `BACKUP_DIR`** —— 于是测试的迁移前快照与还原安全副本都写进了生产备份目录，断言「快照落在临时目录」的用例必然失败。
+  - **改法**：在 `vitest.setup.ts` 的隔离块里与 `OPENLEARN_DB_PATH` 并列地 `delete process.env.BACKUP_DIR`，并在控制台显式告知（不静默吞掉）。选择「清除」而非「改写成临时路径」：该变量的读者语义各不相同（`server/utils/paths.ts` 的 `getBackupsDir`、`cli-data.mjs` 的 `runRestore`、`scripts/site-backup.mjs`），改写会让某些读者指向语义不对的目录；用例自己 `set` 的值仍然生效。
+  - **验证**：带生产 `BACKUP_DIR` 跑这三条用例 → 31/31 通过，且生产 `backups/` 不再新增文件。
+
+- **全局 toast 的说明文字不再掉出 WCAG 对比度，且无障碍门禁不再「单跑绿 / 全量跑红」**：
+  - **现象（实测，非推断）**：`e2e/a11y-gate.spec.ts` 单跑 5/5 通过，全量跑则报出一条「测评中心存在 color-contrast 违规」。用 axe + 采样定位到：违规元素是全局 toast 的说明文字 `<p class="text-xs text-gray-500 dark:text-gray-400">`。
+  - **根因（两层）**：① toast 整块带 `motion` 透明度淡入淡出，axe 按元素不透明度混合前景/背景 —— 实测入场动画经过 opacity 0.26 / 0.4 / 0.55 时，说明文字的实际对比度跌到 4.5:1 以下，即「刚弹出来的那 0.3 秒」里次要说明文字不可读；② toast 是**全局**浮层且由**上一个工作区**的动作触发（进入「互动课堂」会自动锁定全班并弹一条「🔒 锁状态更新」），而 SPA 的 hash 路由切换**不重新加载页面**（`page.goto('/#/x')` 在只改 hash 时是同文档导航），于是这条 toast 跨工作区残留，并恰好在下一个工作区的扫描窗口里入场。
+  - **改法**：① `ToastContainer` 的说明文字改用 `text-gray-600 dark:text-gray-300`（浅色 7.56:1 / 深色 12.1:1，原先 4.83:1 / 7.03:1 余量太薄），并**去掉透明度淡入淡出**（只保留位移与缩放），文字全程以完整不透明度渲染；② `a11y-gate.spec.ts` 新增 `settleOverlays()`，扫描前等浮层不透明度归位 —— 既保留「toast 自身也要合规」的覆盖，又让门禁不再依赖 toast 出现的时机。冻结 CSS 动画/过渡挡不住 `motion`（它用 rAF 直接改 style），这是原先的漏网原因。
+  - **测试**：新增 `src/features/shared/__tests__/ToastContainer.a11y.test.tsx`（3 例：浅色对比度 ≥ 7:1、深色 ≥ 10:1、无透明度淡入）—— 确定性单元门禁，不依赖浏览器采样时机；已用「把颜色改回 gray-500/gray-400」的反证确认它会变红。
+
+- **`cli-data.mjs` 的备份/还原产物补上权限硬化（补齐 P1-2 在 CLI 路径上的缺口）**：
+  - **问题**：`packages/core/db/secure-files.ts`（Issue #233）只覆盖内核侧的 `backup-manager.ts` / `migrator.ts`；`cli-data.mjs` 走的是**自己的一套**实现 —— `createSafetySnapshot()` 用 `VACUUM INTO` 落盘、`copyFileSync` 冷备、暂存文件 rename 成主库，这些产物全按默认 umask 落盘（实测 644），且备份目录按 `mkdirSync` 建为 755。证据：生产 `backups/` 里 `pre_restore_*.db` 全部是 644，而同一目录下新生成的 `pre_migration_*.db` 已是 600。
+  - **改法**：在 `cli-data.mjs` 内联 `hardenFile()` / `ensureSecureDir()`（口径与 `secure-files.ts` 一致：目录 700、文件 600、只收紧不放宽、Windows 忽略），应用到冷备、整包备份、还原安全副本、暂存文件与还原后的主库。之所以内联而不 `import`：CLI 必须能在**发布包**里独立运行，而发布清单只有 `cli-*.mjs` 与 `dist/*.cjs`，源码里的 `secure-files.ts` 并不存在（与 `loadCliMigrator` 踩的是同一个坑）。
+  - **测试**：`scripts/__tests__/cli-data-restore.test.ts` 新增 1 例，断言还原产物权限合规（安全副本 600、备份目录 700、还原后主库 600）；已用「撤掉硬化」的反证确认它会变红。
+  - **运维**：存量 14 个 644 的历史备份文件用 `pnpm ops:check-perms --fix` 回补为 600，`pnpm ops:check-perms` 现已全绿。
+
 ## [0.7.2] - 2026-10-25
 
 ### Fixes
