@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **A11Y 无障碍门禁不再往开发库里堆空白课节 / 空班级（`afterAll` 前缀写错导致的永久泄漏）**：
+  - **现象（实测）**：开发库里堆了 **5 个完全空白的课节**（`whiteboard_elements = 0`、`timeline = null`、无排课）+ **10 个空班级**，全部叫 `A11Y 学生端课节 …` / `A11Y 班级 …` / `A11Y 测评班 …`。按前缀统计可见铁证：`A11Y ` 前缀残留 5+10，而 `A11Y2` 前缀残留 **0**。
+  - **根因**：门禁三个子用例分别建 `A11Y 学生端课节` / `A11Y 测评班` / `A11Y2 仪表盘课节`，而 `test.afterAll` 的清理条件写的是 `startsWith('A11Y2 ')` —— 只命中第三块，前两块每次运行都永久留下 1 个空课节 + 2 个空班级。另外 `classroom cleanup` 的全局脚本（`scripts/cleanup-test-data.mjs`）只认 `E2E ` / `canary` / `金丝雀`，也不认 `A11Y`，所以连“兜底”这道也没掘住。
+  - **改法**：
+    1. `e2e/a11y-gate.spec.ts`：把前缀抽成 `TEST_TAG` / `LESSON_PREFIX` / `CLASS_PREFIX` / `STUDENT_PREFIX` 四个常量，**创建与清理全从同一组常量派生**，不可能再漂移；顺手给原先无前缀的「全班极速抢枪」补上 tag。
+    2. `scripts/cleanup-test-data.mjs`：把测试数据前缀抽成 `TEST_NAME_PREFIXES` / `TEST_NAME_MARKERS` 常量并补上 `A11Y `，无法再“改 5 处 SQL 还漏一处”；并把 `segment_visits` / `segment_gate_overrides` 纳入课节级联（实测：原先留下 19 条孤儿访问记录）。
+    3. 同一脚本里测试学生的匹配从只认 `STU_%-%` 扩展为枚举 15 个 spec tag：`student-return-to-class.spec.ts` 用的是 `STU_RETURN_${Date.now().toString(36).toUpperCase()}`（base36 时间戳**不带横杠**），于是永远漏网（实测残留 2 个 `STU_RETURN_*` 学生）。刻意**不**退化成「`STU_` 开头就删」—— 那会误伤人工建的普通测试学生。
+  - **验证**：修复后跑一次门禁 → 课节/班级/学生残留均为 **0**，同时清掉 5 条 `segment_visits` 与 5 个课堂会话；全量 e2e 36 passed / 0 failed。
+  - **发现但**未在本次修**（已登记）**：`e2e/classroom-answer-lock.spec.ts` 的 `loginAdmin()` 在 `mustChangePassword` 为真时会**把 admin 密码永久改成 `AdminPassword123`** 且不还原，会弄挂同一开发库上后续所有假定 `admin/admin` 的用例。
+
 - **测试进程不再把 `BACKUP_DIR` 泄漏到生产备份目录（3 条单测变红 + 污染生产数据）**：
   - **现象（实测）**：`migrate-safety` / `cli-data-restore` / `cli-enhanced` 三条用例报「备份目录不存在」而变红；同一时间生产 `backups/` 下多出 `pre_migration_*.db` / `pre_restore_*.db`（全是测试库残骸）。
   - **根因**：本地开发机常把 `BACKUP_DIR` 导进 shell 环境，而 `packages/core/db/migrator.ts` 与 `cli-data.mjs` 都是 `process.env.BACKUP_DIR || <默认目录>` 的写法。`vitest.setup.ts` 此前只清了 `OPENLEARN_DB_PATH`（Issue #194）并重定向了 `OPENLEARN_DATA_DIR`，**唯独漏了 `BACKUP_DIR`** —— 于是测试的迁移前快照与还原安全副本都写进了生产备份目录，断言「快照落在临时目录」的用例必然失败。

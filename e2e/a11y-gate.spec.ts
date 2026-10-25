@@ -16,6 +16,27 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+/**
+ * 本 spec 建的测试数据统一前缀。
+ *
+ * ## 为什么必须共用一个常量
+ *
+ * 此前这里踩过一个「创建用的前缀」与「清理用的前缀」不一致的坑：三个用例分别建
+ * `A11Y 学生端课节` / `A11Y 测评班` / `A11Y2 仪表盘课节`，而 `afterAll` 只按
+ * `startsWith(LESSON_PREFIX)` 过滤 —— 于是只有第三块的数据被删，前两块每跑一次就永久
+ * 留下 1 个空课节 + 2 个空班级（实测：开发库里堆了 5 个空白课节 + 10 个空班级，
+ * 而 `A11Y2` 前缀的残留为 0）。
+ *
+ * 现在创建与清理都从这一组常量派生，不可能再漂移。
+ */
+const TEST_TAG = 'A11Y';
+/** 课节标题前缀 */
+const LESSON_PREFIX = `${TEST_TAG} `;
+/** 班级名称前缀 */
+const CLASS_PREFIX = `${TEST_TAG} `;
+/** 学生学号前缀（学生名另用 `${TEST_TAG}学生` 形式） */
+const STUDENT_PREFIX = `STU_${TEST_TAG}_`;
+
 const TABS = [
   { name: '课程管理', hash: '#/courses' },
   { name: '班级管理', hash: '#/classes' },
@@ -116,25 +137,27 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     test.setTimeout(360_000);
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const studentNum = `STU_A11Y_${suffix}`;
+    const studentNum = `${STUDENT_PREFIX}${suffix}`;
 
     // 1. 教师侧准备：课节 + 班级 + 学生 + 会话进入课中
     await request.post('/api/auth/login', {
       data: { entrance: 'teacher', username: 'admin', password: 'admin' },
     });
     const lessonRes = await request.post('/api/lessons', {
-      data: { title: `A11Y 学生端课节 ${suffix}`, content: '无障碍门禁' },
+      data: { title: `${LESSON_PREFIX}学生端课节 ${suffix}`, content: '无障碍门禁' },
     });
     expect(lessonRes.ok()).toBeTruthy();
     const lessonJson = await lessonRes.json();
     const lessonId: string = lessonJson.result?.lessonId || lessonJson.lessonId || lessonJson.id;
 
-    const classRes = await request.post('/api/classes', { data: { name: `A11Y 班级 ${suffix}`, grade: '高一' } });
+    const classRes = await request.post('/api/classes', {
+      data: { name: `${CLASS_PREFIX}班级 ${suffix}`, grade: '高一' },
+    });
     expect(classRes.ok()).toBeTruthy();
     const classId: string = (await classRes.json()).id;
 
     const stuRes = await request.post('/api/students', {
-      data: { student_number: studentNum, name: `A11Y学生${suffix.slice(0, 4)}`, password: 'password123' },
+      data: { student_number: studentNum, name: `${TEST_TAG}学生${suffix.slice(0, 4)}`, password: 'password123' },
     });
     expect(stuRes.ok()).toBeTruthy();
     await request.post(`/api/classes/${encodeURIComponent(classId)}/students`, {
@@ -170,7 +193,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
 
     // 4. 极速投票作答卡
     const pollRes = await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll`, {
-      data: { title: `A11Y 投票 ${suffix}`, questionType: 'ABCD', options: ['A', 'B', 'C', 'D'] },
+      data: { title: `${TEST_TAG} 投票 ${suffix}`, questionType: 'ABCD', options: ['A', 'B', 'C', 'D'] },
     });
     expect(pollRes.ok()).toBeTruthy();
     await loadStudent();
@@ -185,7 +208,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       )}/close`,
     );
     await request.post(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/buzzer`, {
-      data: { title: '全班极速抢答' },
+      data: { title: `${TEST_TAG} 全班极速抢答` },
     });
     await loadStudent();
     await expect(page.getByRole('button', { name: '抢！' })).toBeVisible({ timeout: 25_000 });
@@ -211,18 +234,18 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     test.setTimeout(360_000);
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const studentNum = `STU_A11Y3_${suffix}`;
+    const studentNum = `${STUDENT_PREFIX}${suffix}`;
 
     // 1. 教师侧准备：班级 + 学生 + 一份已发布的测评
     await request.post('/api/auth/login', {
       data: { entrance: 'teacher', username: 'admin', password: 'admin' },
     });
-    const classRes = await request.post('/api/classes', { data: { name: `A11Y 测评班 ${suffix}` } });
+    const classRes = await request.post('/api/classes', { data: { name: `${CLASS_PREFIX}测评班 ${suffix}` } });
     expect(classRes.ok()).toBeTruthy();
     const classId: string = (await classRes.json()).id;
 
     const stuRes = await request.post('/api/students', {
-      data: { student_number: studentNum, name: `A11Y测评生${suffix.slice(0, 4)}`, password: 'password123' },
+      data: { student_number: studentNum, name: `${TEST_TAG}测评生${suffix.slice(0, 4)}`, password: 'password123' },
     });
     expect(stuRes.ok()).toBeTruthy();
     await request.post(`/api/classes/${encodeURIComponent(classId)}/students`, {
@@ -230,7 +253,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     });
 
     const assessmentRes = await request.post('/api/assessments', {
-      data: { kind: 'quiz', title: `A11Y 测评 ${suffix}`, description: '无障碍门禁覆盖' },
+      data: { kind: 'quiz', title: `${TEST_TAG} 测评 ${suffix}`, description: '无障碍门禁覆盖' },
     });
     expect(assessmentRes.ok()).toBeTruthy();
     const assessmentId: string = (await assessmentRes.json()).id;
@@ -303,7 +326,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     test.setTimeout(360_000);
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const studentNum = `STU_A11Y2_${suffix}`;
+    const studentNum = `${STUDENT_PREFIX}${suffix}`;
 
     // 1. 教师侧准备：课节 + 班级 + 学生（不发起课堂，避免 locked_lesson_id
     //    把学生强行推进课中视图 —— 仪表盘只在未锁定时可达）
@@ -311,18 +334,20 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       data: { entrance: 'teacher', username: 'admin', password: 'admin' },
     });
     const lessonRes = await request.post('/api/lessons', {
-      data: { title: `A11Y2 仪表盘课节 ${suffix}`, content: '无障碍门禁' },
+      data: { title: `${LESSON_PREFIX}仪表盘课节 ${suffix}`, content: '无障碍门禁' },
     });
     expect(lessonRes.ok()).toBeTruthy();
     const lessonJson = await lessonRes.json();
     const lessonId: string = lessonJson.result?.lessonId || lessonJson.lessonId || lessonJson.id;
 
-    const classRes = await request.post('/api/classes', { data: { name: `A11Y2 班级 ${suffix}`, grade: '高一' } });
+    const classRes = await request.post('/api/classes', {
+      data: { name: `${CLASS_PREFIX}班级 ${suffix}`, grade: '高一' },
+    });
     expect(classRes.ok()).toBeTruthy();
     const classId: string = (await classRes.json()).id;
 
     const stuRes = await request.post('/api/students', {
-      data: { student_number: studentNum, name: `A11Y2学生${suffix.slice(0, 4)}`, password: 'password123' },
+      data: { student_number: studentNum, name: `${TEST_TAG}学生${suffix.slice(0, 4)}`, password: 'password123' },
     });
     expect(stuRes.ok()).toBeTruthy();
     const studentId: string = (await stuRes.json()).id;
@@ -331,7 +356,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     // 2. 布置一份作业（含题目），学生端「作业」Tab 才会出现作答入口
     const asgRes = await request.post('/api/assignments', {
       data: {
-        title: `A11Y2 作业 ${suffix}`,
+        title: `${TEST_TAG} 作业 ${suffix}`,
         description: '无障碍门通用例',
         classId,
         lessonId,
@@ -407,7 +432,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       const lessons = await lessonsRes.json();
       const arr = Array.isArray(lessons) ? lessons : (lessons?.lessons ?? lessons?.data ?? []);
       for (const l of arr) {
-        if (String(l.title ?? '').startsWith('A11Y2 ')) {
+        if (String(l.title ?? '').startsWith(LESSON_PREFIX)) {
           await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
         }
       }
@@ -418,7 +443,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       const classes = await classesRes.json();
       const arr = Array.isArray(classes) ? classes : (classes?.classes ?? classes?.data ?? []);
       for (const c of arr) {
-        if (String(c.name ?? '').startsWith('A11Y2 ')) {
+        if (String(c.name ?? '').startsWith(CLASS_PREFIX)) {
           await request.delete(`/api/classes/${encodeURIComponent(c.id)}`).catch(() => {});
         }
       }
@@ -429,7 +454,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
       const students = await studentsRes.json();
       const arr = Array.isArray(students) ? students : (students?.students ?? students?.data ?? []);
       for (const s of arr) {
-        if (String(s.student_number ?? '').startsWith('STU_A11Y2_')) {
+        if (String(s.student_number ?? '').startsWith(STUDENT_PREFIX)) {
           await request.delete(`/api/students/${encodeURIComponent(s.id)}`).catch(() => {});
         }
       }

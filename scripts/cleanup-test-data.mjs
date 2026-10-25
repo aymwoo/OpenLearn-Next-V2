@@ -12,11 +12,74 @@ if (!fs.existsSync(dbPath)) {
 const db = new Database(dbPath);
 console.log('[cleanup-test-data] Scanning database for leftover test/E2E records in:', dbPath);
 
+/**
+ * 测试数据的命名前缀（课节标题 / 班级名）。
+ *
+ * ## 为什么集中成一常量
+ *
+ * 清理规则最初只写了 `E2E ` 与 canary，而 `e2e/a11y-gate.spec.ts` 建的是
+ * `A11Y 学生端课节` / `A11Y 班级` / `A11Y 测评班` —— 前缀不在清单里，于是每跑
+ * 一次无障碍门禁就永久留下 1 个空课节 + 2 个空班级（实测：开发库里堆了 5 个
+ * 空白课节 + 10 个空班级，全部 `whiteboard_elements = 0`）。
+ *
+ * 现在新增 spec 只需要把前缀加到这里，不必再改 5 处 SQL；
+ * 同时 `e2e/a11y-gate.spec.ts` 已改为「创建与清理共用同一组常量」，
+ * 本清单是**第二道保险**（防其它 spec 或历史残留）。
+ */
+const TEST_NAME_PREFIXES = ['E2E ', 'A11Y ', 'A11Y2 ', 'A11Y3 '];
+/** 按子串匹配的前缀（可以出现在名字任意位置） */
+const TEST_NAME_MARKERS = ['canary', '金丝雀'];
+
+/**
+ * 测试学生的学号前缀。
+ *
+ * 原先只用 `STU_%-%`（带横杠）兜底，但 `student-return-to-class.spec.ts` 用的是
+ * `STU_RETURN_${Date.now().toString(36).toUpperCase()}` —— base36 时间戳**不带横杠**，
+ * 于是永远漏网（实测：开发库里留下了 `STU_RETURN_MVM67ALV` 这类学生）。
+ *
+ * 这里把各 spec 的 tag 全枚举出来，比“`STU_` 开头就删”更安全 ——
+ * 后者会误伤人工建的普通测试学生（原注释已明确要求不得误伤）。
+ */
+const TEST_STUDENT_PREFIXES = [
+  'STU_BUZZ_',
+  'STU_COCKPIT_',
+  'STU_CONTRAST_',
+  'STU_E2E_',
+  'STU_GATE_',
+  'STU_GOLDEN_',
+  'STU_LAB_',
+  'STU_LOCK_',
+  'STU_PACE_',
+  'STU_POLL_',
+  'STU_RESILIENCE_',
+  'STU_RETURN_',
+  'STU_STAGE_',
+  'STU_TICKET_',
+  'STU_WRAP_',
+  'STU_A11Y_',
+];
+
+/** 生成「课节 title / 班级 name」匹配条件的 SQL 片段与参数。 */
+function nameMatchClause(column) {
+  const parts = [];
+  const params = [];
+  for (const prefix of TEST_NAME_PREFIXES) {
+    parts.push(`${column} LIKE ?`);
+    params.push(`${prefix}%`);
+  }
+  for (const marker of TEST_NAME_MARKERS) {
+    parts.push(`${column} LIKE ?`);
+    params.push(`%${marker}%`);
+  }
+  return { sql: parts.join(' OR '), params };
+}
+
+const lessonMatch = nameMatchClause('title');
+const classNameMatch = nameMatchClause('name');
+
 const cleanupTx = db.transaction(() => {
-  // 1. 查找所有 E2E / 金丝雀测试课程
-  const testLessons = db
-    .prepare("SELECT id, title FROM lessons WHERE title LIKE 'E2E %' OR title LIKE '%canary%' OR title LIKE '%金丝雀%'")
-    .all();
+  // 1. 查找所有测试课程（E2E / A11Y / 金丝雀）
+  const testLessons = db.prepare(`SELECT id, title FROM lessons WHERE ${lessonMatch.sql}`).all(...lessonMatch.params);
 
   console.log(`[cleanup-test-data] Found ${testLessons.length} leftover test lessons:`);
   for (const l of testLessons) {
@@ -44,6 +107,19 @@ const cleanupTx = db.transaction(() => {
     // 级联清理 assignments
     const delAss = db.prepare(`DELETE FROM assignments WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
     console.log(`  ✓ Removed ${delAss.changes} assignments`);
+
+    // 级联清理环节门禁履历（曾漏清：a11y 门禁跑一次就留下 19 条孤儿 segment_visits）
+    for (const [table, label] of [
+      ['segment_visits', 'segment visits'],
+      ['segment_gate_overrides', 'segment gate overrides'],
+    ]) {
+      try {
+        const del = db.prepare(`DELETE FROM ${table} WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+        if (del.changes > 0) console.log(`  ✓ Removed ${del.changes} ${label}`);
+      } catch {
+        // 老库可能没有这张表
+      }
+    }
 
     // 级联清理 quiz submissions
     const delQuiz = db
@@ -106,9 +182,14 @@ const cleanupTx = db.transaction(() => {
   // 2. 查找并清理所有 E2E / 探针测试学生 (STU_ 开头带有时间戳的临时学生，严禁误伤普通测试学生)
   const testStudents = db
     .prepare(
-      "SELECT id, student_number, name FROM students WHERE (student_number LIKE 'STU_%-%') OR (student_number LIKE 'STU_POLL_%-%') OR student_number LIKE '%CANARY%'",
+      'SELECT id, student_number, name FROM students WHERE ' +
+        // 带横杠的时间戳后缀（多数 spec 的写法）
+        "(student_number LIKE 'STU_%-%') OR " +
+        // 枚举的 spec tag（覆盖 base36 等无横杠后缀）
+        TEST_STUDENT_PREFIXES.map(() => 'student_number LIKE ?').join(' OR ') +
+        " OR student_number LIKE '%CANARY%'",
     )
-    .all();
+    .all(...TEST_STUDENT_PREFIXES.map((p) => `${p}%`));
 
   console.log(`[cleanup-test-data] Found ${testStudents.length} leftover test students:`);
   if (testStudents.length > 0) {
@@ -140,10 +221,10 @@ const cleanupTx = db.transaction(() => {
     console.log(`  ✓ Successfully deleted ${delStudents.changes} test students.`);
   }
 
-  // 3. 查找并清理所有 E2E / 金丝雀测试班级
+  // 3. 查找并清理所有测试班级（E2E / A11Y / 金丝雀）
   const testClasses = db
-    .prepare("SELECT id, name FROM classes WHERE name LIKE 'E2E %' OR name LIKE '%canary%' OR name LIKE '%金丝雀%'")
-    .all();
+    .prepare(`SELECT id, name FROM classes WHERE ${classNameMatch.sql}`)
+    .all(...classNameMatch.params);
 
   console.log(`[cleanup-test-data] Found ${testClasses.length} leftover test classes:`);
   if (testClasses.length > 0) {
