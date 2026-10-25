@@ -2,7 +2,8 @@
  * 测试库 Schema 兜底
  *
  * 背景（曾导致 `classroom-session-resume.test.ts` 间歇性报 `no such table: classroom_sessions`）：
- *   - `packages/core/db/index.ts` 的内联 schema 块**不包含**课堂相关表
+ *   - `packages/core/db/index.ts` 的内联 schema 块（历史产物，现已移除——
+ *     模块加载即跑 migrations/ 全量迁移）当年**不包含**课堂相关表
  *     （classroom_sessions / classroom_feed / teaching_modes 等都来自 migrations/*.sql）；
  *   - `runMigrations` 只在 `server.ts` 启动时执行，**测试环境从不在 setup 阶段跑迁移**；
  *   - 于是有 7 个测试文件各自在 `beforeAll` 里手动 `runMigrations` 兜底，
