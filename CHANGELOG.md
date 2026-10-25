@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **版本占用门禁改为查权威 registry，不再查镜像（镜像滞后会把「已发布」误判成「未占用」）**：
+  - **问题**：版本占用门禁里的 `npm view <pkg> versions` 没有指定 registry —— 而本机（以及大量国内开发机）的默认 registry 是 npmmirror。**镜像的同步有延迟**，于是「本站已经发布、镜像还没同步」的版本会被判成「未占用」，占用门禁在镜像追平之前形同虚设；子包「是否已在 npm 上」的判定同样走镜像，镜像一旦滞后就会去重发一个已存在的版本。
+  - **为什么致命**：占用门禁存在的意义是「同一个版本号不能指向两批不同的代码」。判据查错源，等于门禁只在镜像追平之后才生效。
+  - **改法**：三处 `npm view` 全部显式加 `--registry=https://registry.npmjs.org`（版本占用检查 + SDK / test-kit 的远端版本查询），与发布实际写入的 registry 保持一致。
+  - **验证**：三处 `npm view` 均已指向权威源；占用检查在权威源上判定 `openlearn-next@0.7.4` 未发布 → 放行；`@openlearn/plugin-sdk@3.7.0` 与 `@openlearn/plugin-test-kit@3.3.3` 在权威源上均已存在 → 两个子包走「跳过发布」分支，不会被重发。
+  - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
+
 - **发布前守卫：任何绕过 `scripts/publish.sh` 的直接 `npm publish` 都会被当场拦下（0.7.3 事故的直接防线）**：
   - **事故（实测）**：2026-10-25 15:22，npm 上的 `openlearn-next@0.7.3` 被一次**直接 `npm publish`**（绕过 `scripts/publish.sh`）发布出去。产物的 `gitHead` 是 `cf9be45`（主工作区分支 HEAD）而不是发布 tag `7220214`；`package.json` 里 `@openlearn/plugin-sdk` 仍是 `"workspace:*"` —— 消费者安装该版本必然报 `EUNSUPPORTEDPROTOCOL`（`Unsupported URL Type "workspace:"`），**整个版本装不上**（最小复现 + `npm-package-arg` 直接 throw 双重确认）。
   - **根因**：`publish.sh` 里那条把 SDK 依赖改写成精确 pin（`3.7.0`）的 `sed` **只在脚本流程内生效**。绕开脚本，就绕开了它 —— 于是 `workspace:` 这类本地协议原样进了发布包，而 npm 不会替发布者改写它。同一时刻 tag 同源校验也一并失效，npm 上的版本与仓库 tag 失去对应。
