@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Blocks,
   Search,
@@ -19,6 +19,8 @@ import { PaletteCard } from './PaletteCard';
 import { PALETTE_GROUPS, PALETTE_ITEMS, COLOR_THEME } from './paletteConfig';
 import { usePluginPaletteItems } from './palette-item-registry';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { QuickInsertMenu, globalQuickInsertRegistry } from '../../quick-insert/quick-insert-menu';
+import { registerBuiltinQuickInsertItems } from '../../quick-insert/builtin-items';
 import type { WhiteboardPageItem, WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
 
 export interface LessonPaletteProps {
@@ -62,6 +64,9 @@ export function LessonPalette({
   };
 
   const [searchQuery, setSearchQuery] = useState('');
+  // 「/」进入命令式快速插入：浮层接管输入（组件面板保持浏览态）
+  const [quickInsertOpen, setQuickInsertOpen] = useState(false);
+  const [quickInsertQuery, setQuickInsertQuery] = useState('');
   const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
   const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
   const [editingPageTitle, setEditingPageTitle] = useState('');
@@ -111,6 +116,20 @@ export function LessonPalette({
   const toggleGroupCollapse = (groupId: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   };
+
+  // 把可插入内容登记到快速插入注册表（语言变化时刷新文案；按 id 覆盖，幂等）
+  //
+  // handleActivate 每次渲染都是新函数，放进依赖数组会让登记在每次渲染时重跑；
+  // 用 ref 持有最新实现，依赖数组只留真正需要触发重新登记的 lang / readOnly。
+  const activateRef = useRef(handleActivate);
+  activateRef.current = handleActivate;
+  useEffect(() => {
+    registerBuiltinQuickInsertItems(globalQuickInsertRegistry, {
+      lang,
+      onActivate: (type: string) => activateRef.current(type),
+      readOnly,
+    });
+  }, [lang, readOnly]);
 
   const pluginItems = usePluginPaletteItems();
   const allItems = [...PALETTE_ITEMS, ...pluginItems];
@@ -480,8 +499,20 @@ export function LessonPalette({
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={lang === 'zh' ? '搜索画板组件...' : 'Search components...'}
+          onChange={(e) => {
+            const value = e.target.value;
+            // 以「/」开头 → 切到命令式快速插入（浮层接管输入，面板回到浏览态）
+            if (value.startsWith('/')) {
+              setQuickInsertQuery(value);
+              setQuickInsertOpen(true);
+              setSearchQuery('');
+              return;
+            }
+            setSearchQuery(value);
+          }}
+          placeholder={
+            lang === 'zh' ? '搜索画板组件...（输入 / 快速插入）' : 'Search components... (type / to quick insert)'
+          }
           className="w-full pl-8 pr-7 py-1.5 bg-surface border border-theme rounded-xl text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-1 focus:ring-primary-theme transition-all shadow-2xs"
         />
         {searchQuery && (
@@ -632,6 +663,17 @@ export function LessonPalette({
           }}
         />
       </div>
+
+      {/* 命令式快速插入：在组件面板搜索框输入「/」唤起 */}
+      <QuickInsertMenu
+        isOpen={quickInsertOpen}
+        onClose={() => {
+          setQuickInsertOpen(false);
+          setQuickInsertQuery('');
+        }}
+        registry={globalQuickInsertRegistry}
+        initialQuery={quickInsertQuery}
+      />
     </div>
   );
 }
