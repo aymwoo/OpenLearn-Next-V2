@@ -49,7 +49,9 @@ for (const metric of METRICS) {
     fail(`指标 ${metric} 缺失（actual=${actual}, baseline=${base}）`);
   }
   if (actual < base - TOLERANCE_PP) {
-    regressions.push(`  ${metric}: 实际 ${actual.toFixed(2)}% < 基线 ${base.toFixed(2)}%（回退 ${(base - actual).toFixed(2)}pp）`);
+    regressions.push(
+      `  ${metric}: 实际 ${actual.toFixed(2)}% < 基线 ${base.toFixed(2)}%（回退 ${(base - actual).toFixed(2)}pp）`,
+    );
   } else if (actual > base + TOLERANCE_PP) {
     improvements.push(`  ${metric}: ${base.toFixed(2)} → ${actual.toFixed(2)}%（可上调基线）`);
   }

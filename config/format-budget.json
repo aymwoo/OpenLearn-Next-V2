@@ -1,0 +1,5 @@
+{
+  "allowedNonCompliantFiles": [],
+  "note": "Issue #236 后续（审计 P1-1）：格式基线棘轮。清单里的文件允许暂时不合规；清单之外出现不合规文件即 CI 失败（不许欠新债）。清理后运行 `node scripts/check-format-budget.mjs --update` 收紧。基线为空 = 全仓必须合规。2026-10-25：4 个遗留不合规文件（admin-manual.md / security-permissions.md / backup-restore.test.ts / coverage-ratchet.mjs）已格式化并清零，基线从此为空 —— 全仓必须合规。",
+  "updatedAt": "2026-10-25"
+}

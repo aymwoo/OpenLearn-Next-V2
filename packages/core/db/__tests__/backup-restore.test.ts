@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import Database from 'better-sqlite3';
-import { validateBackup, listBackups, pruneBackups, pruneMigratorSnapshots, performBackup, performRestore } from '../backup-manager';
+import {
+  validateBackup,
+  listBackups,
+  pruneBackups,
+  pruneMigratorSnapshots,
+  performBackup,
+  performRestore,
+} from '../backup-manager';
 
 describe('SQLite Backup & Disaster Recovery Engine (P1-5)', () => {
   let tempDir: string;

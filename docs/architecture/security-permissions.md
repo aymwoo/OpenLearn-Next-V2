@@ -64,13 +64,13 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 
 插件 Worker 路径有两种隔离原语，出网管控**同口径**：
 
-| 能力 | `process`（子进程） | `thread`（worker_threads） |
-| --- | --- | --- |
-| 原始 socket / UDP / TLS / HTTP2 / DNS | ⛔ `plugin-net-preload.cjs`（`--require` 入口脚本） | ⛔ bootstrap 内 `net-guard` section |
-| `fetch` 未批准域名 | ⛔ 拒绝 | ⛔ 拒绝 |
-| `fetch` 已批准域名 | ✅ 宿主代发（`ol-net-proxy` 协议） | ✅ 宿主代发（同一协议，经 transport 路由） |
-| `http(s).request` 直连 | 已批准域名由 preload 的 shim 代理 | ⛔ 被底层 socket 封锁兜底拒绝（内置插件无直连用法，出网请走 `fetch`） |
-| `process.getBuiltinModule` | ⛔ process-masking 屏蔽（Node ≥22.3 的官方 require/import 绕过入口） | ⛔ 同左 |
+| 能力                                  | `process`（子进程）                                                  | `thread`（worker_threads）                                            |
+| ------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 原始 socket / UDP / TLS / HTTP2 / DNS | ⛔ `plugin-net-preload.cjs`（`--require` 入口脚本）                  | ⛔ bootstrap 内 `net-guard` section                                   |
+| `fetch` 未批准域名                    | ⛔ 拒绝                                                              | ⛔ 拒绝                                                               |
+| `fetch` 已批准域名                    | ✅ 宿主代发（`ol-net-proxy` 协议）                                   | ✅ 宿主代发（同一协议，经 transport 路由）                            |
+| `http(s).request` 直连                | 已批准域名由 preload 的 shim 代理                                    | ⛔ 被底层 socket 封锁兜底拒绝（内置插件无直连用法，出网请走 `fetch`） |
+| `process.getBuiltinModule`            | ⛔ process-masking 屏蔽（Node ≥22.3 的官方 require/import 绕过入口） | ⛔ 同左                                                               |
 
 两条路径共用 `plugin-net-proxy.ts` 的宿主代发实现（内网/环回/元数据地址阻断、DNS rebinding 防护、10MB 体积上限），批准名单同源于插件出站授权。
 

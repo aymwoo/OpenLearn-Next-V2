@@ -112,19 +112,25 @@ jobs:
             });
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # 格式门禁（Issue #236）
+  # 格式门禁（Issue #236；2026-10-25 改为全仓基线棘轮）
   # ═══════════════════════════════════════════════════════════════════════════
   #
   # 存在的理由：仓库此前从未整体跑过 prettier，风格各文件各写各的。格式统一的
   # 成果如果不挂门禁，几周内就会被新的改动侵蚀干净 —— 所以必须挂。
   #
-  # **检查范围是「本次变更触及的文件」，不是整仓**。理由：
-  #   · 整仓检查会把「别人的历史遗留格式问题」变成「当前 PR 的失败」——
-  #     一个 PR 因为它没碰过的文件而红，这是在惩罚无关的人；
-  #   · 文件进入 main 的唯一通道是 PR，所以「每个 PR 检查自己触及的文件」
-  #     已经能保证 main 里的文件都是格式化过的 —— 这才是真正要保的不变量；
-  #   · 整仓检查还有一个更实际的问题：main 在本 PR 合并前可能已经被别的
-  #     PR 弄脏，那会让本 PR 一落地就红，而那些红项与本 PR 无关。
+  # **检查范围：全仓**（`scripts/check-format-budget.mjs`，与 ESLint 告警预算棘轮同构）。
+  #
+  # 为什么从「本次变更触及的文件」改成全仓 —— 那是**责任漂移**漏洞：
+  # 文件一旦合入 main，只要后续没有 PR 再碰它，就再也不会被任何一次 CI 检查。
+  # 实测（2026-10-24 审计）：5 个文件不合规，其中 4 个来自当天合入的
+  # #287/#288/#289/#290 —— 那三次 main push 的 CI **确实红了**（失败 job 就是
+  # Format check），但因为后续 PR 不再触碰这些文件，HEAD 的 CI 11 个 job 全绿，
+  # 而 main 里仍躺着不合规文件。**「CI 绿」在这里是不真实的。**
+  #
+  # 零基线之后，「整仓检查会把别人的历史遗留问题变成当前 PR 的失败」这个顾虑
+  # 不再成立：不合规只可能由某次提交引入，而那次提交对应的 PR 就是第一个看到
+  # 全仓检查失败的地方 —— 也就是引入它的那一次。基线清单（config/format-budget.json）
+  # 当前为空，即**全仓必须合规**。
   #
   # 失败即红，不加 continue-on-error：格式问题必须当场修，不能靠「反正不阻断」。
   format-check:
@@ -134,9 +140,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-        with:
-          # 需要基线提交来算「本次变更触及了哪些文件」，所以要完整历史。
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -148,35 +151,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # PR 事件：与基线提交做三点比对，取出本次变更触及的文件。
-      # push 事件（合并进 main）：取本次推送的提交所改动的文件。
-      - name: Collect changed files
-        id: changed
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            RANGE="$BASE...HEAD"
-          else
-            RANGE="HEAD~1..HEAD"
-          fi
-          echo "range=$RANGE" >> "$GITHUB_OUTPUT"
-          git diff --name-only --diff-filter=ACMR "$RANGE" -- \
-            '*.ts' '*.tsx' '*.md' '*.mjs' '*.js' '*.json' '*.yml' '*.yaml' '*.css' \
-            > changed-files.txt || true
-          echo "files=$(wc -l < changed-files.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
-          cat changed-files.txt
-
-      - name: Check formatting
-        if: steps.changed.outputs.files != '0'
-        run: |
-          set -euo pipefail
-          # 用 NUL 分隔，避免文件名里的空格把参数拆开。
-          tr '\n' '\0' < changed-files.txt | xargs -0 -r pnpm exec prettier --check
-
-      - name: No files to check
-        if: steps.changed.outputs.files == '0'
-        run: echo "本次变更未触及需格式检查的文件。"
+      # 全仓格式基线棘轮：清单之外出现不合规文件即失败（不许欠新债）。
+      # 清理后运行 `node scripts/check-format-budget.mjs --update` 收紧基线。
+      - name: Format budget ratchet
+        run: node scripts/check-format-budget.mjs
 
   # 固定版本的真实插件作为宿主兼容性金丝雀。
   # 更新插件基线时同步修改下方三处 ref；每个门禁运行都可复现相同插件源码。

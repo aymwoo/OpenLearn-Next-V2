@@ -363,17 +363,16 @@ node scripts/backfill-class-owners.mjs --assign teacher
 | `scripts/restore-db.ts`              | 备份枚举与恢复                                               |
 | `docker-compose.yml` / `Dockerfile`  | 部署卷与环境变量                                             |
 
-
 ## 文件权限基线（Issue #233）
 
 以下文件等价于全量学生数据（名册、作业、成绩、加密密钥），在多用户机器上必须收敛权限，避免同机任意账号读走：
 
-| 路径 | 基线 | 说明 |
-| --- | --- | --- |
-| `.env` | 600 | 含 `ENCRYPTION_KEY` |
-| `packages/core/db/educational_os.db`（或 `OPENLEARN_DB_PATH`） | 600 | SQLite 主库（`-wal`/`-shm` 随库） |
-| `BACKUP_DIR` 目录及其下 `*.db` | 700 / 600 | 含 `backup_`、`pre_migration_`、`pre_restore_` 全部快照 |
-| `storage/encryption-key` | 600 | 自动生成密钥（创建时已强制 600） |
+| 路径                                                           | 基线      | 说明                                                    |
+| -------------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| `.env`                                                         | 600       | 含 `ENCRYPTION_KEY`                                     |
+| `packages/core/db/educational_os.db`（或 `OPENLEARN_DB_PATH`） | 600       | SQLite 主库（`-wal`/`-shm` 随库）                       |
+| `BACKUP_DIR` 目录及其下 `*.db`                                 | 700 / 600 | 含 `backup_`、`pre_migration_`、`pre_restore_` 全部快照 |
+| `storage/encryption-key`                                       | 600       | 自动生成密钥（创建时已强制 600）                        |
 
 - **服务端启动自检**：启动时自动检查以上路径，宽于基线打 WARN（生产环境 ERROR 级日志），不阻断启动。
 - **部署后人工/流水线检查**：`pnpm ops:check-perms`，有违规退出码 1。
