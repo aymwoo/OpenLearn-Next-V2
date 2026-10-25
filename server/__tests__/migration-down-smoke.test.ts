@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
 import path from 'node:path';
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadMigrationsFromDirectory, runMigrations, rollbackMigration } from '../utils/migrate.js';
 import { extractSchemaSnapshot, loadSchemaGolden } from '../../packages/core/db/schema-golden.js';
@@ -31,7 +30,10 @@ describe('迁移链 DOWN 烟雾测试（回滚 → 重放 → 金样对账）', 
       expect(extractSchemaSnapshot(db)).toEqual(golden.tables);
 
       // 从链尾向前取最近 N 条「有 DOWN」的迁移
-      const tail = [...migrations].reverse().filter((m) => m.down.trim() !== '').slice(0, SMOKE_TAIL);
+      const tail = [...migrations]
+        .reverse()
+        .filter((m) => m.down.trim() !== '')
+        .slice(0, SMOKE_TAIL);
       expect(tail.length).toBe(SMOKE_TAIL);
 
       for (const migration of tail) {
