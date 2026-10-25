@@ -80,7 +80,16 @@
 
 ## Environment
 
+**Node 版本：用 22（见 `.nvmrc`）**。`pnpm dev` / `pnpm test` / `pnpm test:e2e` 都请在同一版本上跑 —— 换主版本会连带触发两类问题：
+
+1. **原生模块 ABI 不匹配**：`better-sqlite3` 是按主版本编译的（Node 22 → ABI 127、24 → 137、26 → 147）。换版本后不重编就会启动即崩，报 `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` 不匹配。修法：在当前 Node 下执行 `pnpm rebuild better-sqlite3`。
+2. **Node 26 无法跑测试**：Node 26 内置了实验性的 Web Storage，`globalThis.localStorage` **存在但值为 `undefined`**（需要 `--localstorage-file` 才可用，否则访问会打 `ExperimentalWarning`）。vitest 的 jsdom 环境会跳过 Node 已经定义过的全局，于是留下那个坏掉的 `localStorage`，表现为大量用例报 `Cannot read properties of undefined (reading 'clear')`（实测：213 个测试文件 / 298 条用例全红；换回 22 或 24 即恢复）。
+
+CI 也钉在 `node-version: 22`，本地对齐它就是对齐合并门禁。
+
 Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") with any OpenAI-compatible model provider (such as DeepSeek, Qwen, Ollama, OpenAI, etc.). Seed usernames are `admin` (administrator) and `teacher` (teacher); passwords come from `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` or a one-time random value in `storage/bootstrap-credentials.txt`. Do not set `PLAYWRIGHT_TEST` in production. `TRUST_PROXY` defaults to off; set it explicitly behind a reverse proxy. The SQLite database is at `packages/core/db/educational_os.db`.
+
+> 跑测试时如果 shell 里导出了 `BACKUP_DIR` / `OPENLEARN_DB_PATH`，请注意 `vitest.setup.ts` 会主动清除它们（防止测试把快照/数据写进真实目录）。这是预期行为，不是配置失效。
 
 ## Plugin Development
 
