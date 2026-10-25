@@ -213,7 +213,41 @@ test.describe('互动课堂学生端答题与全链路采集 Playwright E2E 测�
         localStorage.setItem('edu_os_tour_completed', 'true');
       });
 
+      // 看门狗：白板挂载不得出现「hooks 失效」。
+      //
+      // 2026-10-25 实测到的真实故障：学生端一进课堂就崩在 react-konva 的 StageWrap 上，
+      // 报 `Cannot read properties of null (reading 'useRef')`，React 自己的诊断是
+      // 「You might have more than one copy of React in the same app」——
+      // 同一页面里被加载了两份 React（Vite 依赖预打包产物跨 root 互相覆盖所致，
+      // 详见 vite.config.ts 的 cacheDir / dedupe / optimizeDeps 注释）。
+      const hookFailures: string[] = [];
+      const collectHookFailure = (text: string) => {
+        if (/Invalid hook call|reading 'useRef'|more than one copy of React/i.test(text)) {
+          hookFailures.push(text.slice(0, 300));
+        }
+      };
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') collectHookFailure(msg.text());
+      });
+      page.on('pageerror', (err) => collectHookFailure(`${err.message}\n${err.stack ?? ''}`));
+
       await page.goto(`/?mode=student_live&lessonId=${lessonId}`);
+
+      // 白板画布必须真的挂上（而不是被错误边界替换成「界面渲染遇到意外错误」）。
+      // 挂不上时**先**看是不是 hooks 失效 —— 那样失败信息能直接指出根因，
+      // 而不是让下游断言报一句「元素找不到」。
+      const konvaCanvas = page.locator('.konvajs-content').first();
+      const canvasMounted = await konvaCanvas
+        .waitFor({ state: 'visible', timeout: 25_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!canvasMounted) {
+        expect(
+          hookFailures,
+          '白板画布没挂上：学生端出现 hooks 失效 —— 同页加载了两份 React（Vite 预打包产物跨 root 互相覆盖）',
+        ).toEqual([]);
+      }
+      await expect(konvaCanvas).toBeVisible({ timeout: 25_000 });
 
       // 验证白板画布成功渲染随堂测卡片（防普通画布 return null 断层回归）
       const quizCard = page.locator(`[data-testid^="whiteboard-quiz-"]`).first();
@@ -266,6 +300,11 @@ test.describe('互动课堂学生端答题与全链路采集 Playwright E2E 测�
       if (quizResult.submissions[studentId].isCorrect !== undefined) {
         expect(quizResult.submissions[studentId].isCorrect).toBe(true);
       }
+
+      // 5. 看门狗收口：整场交互不得出现 hooks 失效（同页两份 React）
+      expect(hookFailures, '学生端出现 hooks 失效 —— 同页加载了两份 React（Vite 预打包产物跨 root 互相覆盖）').toEqual(
+        [],
+      );
     } finally {
       // 5. 立即彻底清理本次测试创建的课程与学生
       if (lessonId) {

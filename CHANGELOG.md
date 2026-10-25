@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Refactor / Performance
+
+- **清点 `src/features/` 下 12 个「有实现、有单测、但生产零引用」的孤儿模块，按风险分三组处置**：
+  - **怎么发现的**：从真实入口（`src/App.tsx` / `src/main.tsx` / `server.ts` / `cli-data.mjs`）做可达性分析（解析相对路径、`@/` 别名、`.js`→`.ts`、动态 `import()`）：859 / 983 个文件可达，**124 个不可达，其中 17 个是整模块**。
+  - **⚠️ 一个必须记住的陷阱**：只统计「有没有外部 import」会把死模块误判成活的 —— `workspace` / `resource-runtime` / `ai-teacher-workspace` 的引用方只有彼此和 `student-workspace` 这个**自洽循环**，从入口出发根本到不了。判断「活的」必须从入口做可达性。
+  - **A 组 · 删除（4 个，共 1,029 行源码 + 6 个测试文件）**：`lesson-workflow` / `ai-teaching-workflow` / `classroom-runtime` / `interaction-runtime`。
+    - 前两个是 61L/55L 的裸 setter（`advanceStage(target)` 不校验、不落库、不发事件）—— 接线等于给服务端门禁（`CLASS_LOCKED`→409 / `Illegal transition`→400）开后门；
+    - `classroom-runtime` 自带的 9 阶段（`Create/Prepare/Ready/Teaching/Paused/Resumed/Finished/Archived/Disposed`）与在用的 `classroom_sessions.stage`（含 `ARCHIVED_REPORT`）词表不兼容，且有独立的 `classroom.created/paused/…` 事件命名空间，接上会与 socket 事件流**双写**；
+    - `interaction-runtime` 是第二个 Keyboard/Mouse/Touch 派发器，而白板已自接管 DOM 事件（111 文件、E2E 覆盖最重）—— 接它=双处理，或得拆掉白板的 handler。
+  - **B 组 · 标注 `@experimental` 不接线（4 个）**：`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context`。理由：`server/ai-agent.ts` 并不查它们，插件贡献 AI 能力已走活的扩展槽位（`ai_sidebar.tab`、`anchor:whiteboard-toolbar:ai-tutor`）与通用通道 `/api/plugins/execute-command` —— **功能上是冗余的**；而接线要重写一条正在工作的 AI 链路，且 AI 功能需配 provider 才能验证，CI 覆盖不到。每个 `index.ts` 头部写明「为什么保留」与「接线前置条件」（首要一条：不能让新注册表绕过 `action.capabilityRequired` 的授权）。
+  - **C 组 · 留待产品决策（4 个）**：`student-workspace` + 依赖它的 `workspace` / `resource-runtime` / `ai-teacher-workspace`。它们是**第二套学生端壳**，接通 = 替换现在能跑的 `src/features/student`（63 文件、6 个引用方）；25 条 E2E 里 22 条涉及学生端。已写入迁移前置条件（功能对齐 / 全量学生端 E2E 重验 / 插件槽位兼容 / 可一键回滚）。
+  - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
+  - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
+
 ### Fixes
 
 - **组件属性编辑器：保存成功/失败就地提示（按钮下方），不再“点了没反应”**：
@@ -22,6 +36,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **测试**：`whiteboard-properties-sidebar.test.tsx` 新增 5 例：`saved` 显示已保存、`failed` 显示失败、`noop` 不提示、旧调用方 `undefined` 不提示、提示超时自动消失。
   - **验证**：`tsc` 通过；该文件 15/15 通过；全量单测（Node 24）601 files / 4980 passed。
   - **发现但**未**在本次修**（已登记）：`CoursewarePropertiesModal` 的 `handleApply` 同样没 try/catch —— `onSavePermanent` 抛错时弹窗既不关也不报错，与本次修的是同一类问题。
+
+- **开发环境里「同页两份 React」让白板一挂载就崩：Vite 预打包缓存改为按仓库根隔离，并显式 dedupe/预打包白板重依赖链**：
+  - **现象（实测）**：学生端一进互动课堂就白屏，报 `Cannot read properties of null (reading 'useRef')`，栈顶是 react-konva 的 `StageWrap`；React 自己的诊断是「You might have more than one copy of React in the same app」。E2E `classroom-interactive-flow` 的学生端用例同一处挂不上画布（被错误边界替换成「界面渲染遇到意外错误」）。只在「本机同时有另一个 checkout / linked worktree 也跑着 Vite」时出现，单 checkout 永远不复现 —— 所以它长期被当成偶发白屏。
+  - **根因（Vite 依赖预打包缓存被两个 root 共用）**：Vite 默认把预打包产物写进 `node_modules/.vite`。worktree / 并列 checkout 习惯把 `node_modules` **软链**回主仓库（本机实测：`~/.cache/ol-crash-repro/node_modules -> <主仓库>/node_modules`），于是 `<worktree>/node_modules/.vite` 与主仓库**物理上是同一个目录**，两个 Vite root 抢同一份缓存各自写盘互相覆盖。两者的 browserHash 随 root 变化、chunk 划分也不同，浏览器同一页面里会同时加载**两代产物**；而 react 的 CJS 模块在两代里落在**不同 chunk 文件** → 页面上两份 React，react-konva 拿到的那份 `ReactSharedInternals.H` 永远是 null。
+  - **改法**：
+    1. `cacheDir` 固定到**仓库根**下的 `.vite-cache/`（不再落 `node_modules` 下）—— 每个 root 各写各的，跨 worktree 不再互相覆盖；同步进 `.gitignore` 与 `pnpm clean`。
+    2. `resolve.dedupe: ['react', 'react-dom']` —— `react-dom` / `react-konva` / 插件各自 `import 'react'` 必须落到同一份副本。
+    3. `optimizeDeps.include` 显式纳入白板这条重依赖链（`react` / `react-dom` / `react-dom/client` / `react-konva` / `react-konva-utils` / `konva`）。它们原本在**运行时**才被发现（白板是 `React.lazy`，插件走 Blob URL 动态导入，静态扫描扫不到），一旦触发 Vite 的**增量预打包**，那次增量会把 react CJS **再打包一份**到新 chunk —— 同样是同页两份 React，且与缓存是否共享无关。
+    4. 新增配置守卫单测 `src/__tests__/vite-single-react.test.ts`（3 例）：`cacheDir` 不得落在 `node_modules` 下、`dedupe` 必须覆盖 react/react-dom、`optimizeDeps.include` 必须含上述重依赖。这三条任一被改回去，就是把崩溃放回来。
+    5. E2E 加**看门狗**（`e2e/classroom-interactive-flow.spec.ts`）：先收集 `Invalid hook call` / `reading 'useRef'` / `more than one copy of React` 三类报错，画布没挂上时**先**断言 hooks 失效为空 —— 让失败信息直指根因，而不是让下游断言只报一句「元素找不到」。
+    6. **连带修补**：缓存目录从 `node_modules/` 挪到仓库根后，它会首次进入各「全仓扫描」门禁的视野。`scripts/check-source-encoding.mjs` 实测会因此**变红** —— 预打包产物里有字面 U+FFFD 字符（`url/decoder` 的 `"\uFFFD"` 被 esbuild 输出成真实字符），报 126 处「编码损坏」。已把 `.vite-cache` 加进该脚本的排除目录（与既有的 `.vite` 同类）；`tsconfig.json` / `tsconfig.strict.json` / `eslint.config.js` 同样加上忽略，避免「本地跑过 dev server 之后，tsc / ESLint 的输入文件集合与 CI 不再等价」。
+  - **验证**：
+    1. 新守卫单测 3 例通过；
+    2. E2E `classroom-interactive-flow.spec.ts` **2 例全绿**（含新看门狗）—— 学生端白板正常挂上 konva 画布、随堂测卡片可见、答题链路采集到记录，全程无 hooks 失效；
+    3. `tsc --noEmit` 与 `tsc --noEmit -p tsconfig.strict.json` 均通过；ESLint 告警 **6243 = 基线 6243**（error 0）；格式基线 **1892 文件 0 不合规**；编码门禁 **1693 文件通过**；
+    4. **反向验证**（编码门禁那条连带修补）：把 `.vite-cache` 从排除目录里去掉、在缓存已生成的情况下重跑 `pnpm lint:encoding` → **立刻退出码 1**（126 处 U+FFFD 误报），还原后恢复退出码 0 —— 说明这条不是锦上添花，缺了它修完必被挡在 CI 门外。
+    5. 诚实说明：**单 checkout 下无法复现**这个故障（永远是单 React 实例），所以 E2E 只起看门狗作用，真正拦住回归的是第 4 条的配置守卫；根因判定来自隔离现场（linked worktree + 软链 `node_modules` 的并列 checkout）。
+  - **影响面**：`vite.config.ts`（`cacheDir` / `dedupe` / `optimizeDeps.include`，只影响 dev server 的依赖预打包路径，不影响 `vite build` 产物）、`.gitignore` 与 `pnpm clean`、`scripts/check-source-encoding.mjs`（排除目录）、`tsconfig*.json` 与 `eslint.config.js`（忽略）、`e2e/classroom-interactive-flow.spec.ts`（看门狗）、新增 `src/__tests__/vite-single-react.test.ts`。所有在**本机多 checkout / worktree 并跑**的环境里做前端开发的人都受益；CI 单 checkout 不受影响。
 
 - **白板画布在窗口不够大时不再「够不着」：画布逻辑尺寸与容器可视尺寸解耦，装不下时由容器出滚动条**：
   - **现象（实测，真实浏览器 + 隔离实例）**：live_class 的白板**没有任何滚动条**。在 1440×520 的视口下，白板画布的可视高度只剩 **124px**（整窗 520px 里，工具栏与各级 chrome 吃掉绝大部分）；把一个组件画在画布坐标 y=1600 处后，它**既看不见也拖不动**，且**没有任何办法**把它拉回视口 —— 在 520 / 900 / 1400 三个视口高度下均复现。
@@ -53,6 +85,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证（对照观测）**：linked worktree 里 `.git` 是文件、普通 checkout 里是目录；registry 上「普通 checkout 发的 0.7.3 有 gitHead / linked worktree 发的 0.7.4 没有」—— 与判据一致。**产物内容不受影响**：0.7.4 的 registry `dist.shasum`（`d263a0b3d15fdb9d63fb437623926850a3d1bdd0`）与 tag 构建逐字节一致，消费者安装与启动均实测通过。
   - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
 
+- **课表页两处 WCAG 对比度不达标（a11y 门禁全量跑时的失败根因）**：
+  - **现象**：`e2e/a11y-gate.spec.ts` 全量跑时「教师端主要工作区」在**课表管理**报 `color-contrast/serious`，点名 `.text-sky-600`（"上午课程 (AM)" 徽标）与 `.text-slate-400`（"☕ 午休时间" 胶囊）。
+  - **实测对比度**：`sky-600` on `sky-50` = **3.84:1**、`slate-400` on white = **2.56:1**，都低于 AA 的 4.5:1。
+  - **为什么之前一直是绿的**：这两个元素**数据依赖** —— 只有排了课、渲染出上午/午休分行时才出现。空库时门禁扫不到它们，一旦库里有排课就红。这与之前修的 toast 是同一类问题。
+  - **改法**：徽标 `sky-600 → sky-700`（**5.57:1**），午休胶囊 `slate-400 → slate-500`（**4.76:1**）。语义色系不变，只加深一档。
+  - **验证**：`a11y-gate` 5/5 通过。
+
+- **机房管理：刷新页面后丢失当前选中的机房/班级，回落到列表第一台**：
+  - **现象**：`e2e/teacher-computer-labs.spec.ts` 在「排座 → 保存 → 刷新」后断言失败 —— 表面像是"排座没存住"，实际**数据是存住的**。
+  - **根因**：`ComputerLabManager` 的 `selectedLabId` 与 `selectedClassId` 两个 `useState` 都从 `computerLabs[0]` 初始化。老师切到别的机房、给那个班排完座，一刷新就跳回第一台机房，界面上展示的是**另一个班**的座位。开发库里有 2 台机房（410 / 411）之后这条用例就必红。
+  - **改法**：把「当前看的机房 / 班级」落盘到 `localStorage`（`openlearn_computer_lab_selected` / `..._selected_class`），初始化时恢复。两个关键细节：
+    1. 恢复的班级必须**仍绑定在恢复出来的那台机房**下才采用，避免张冠李戴；
+    2. 首屏 `classes` 往往还没拉回来，初始化读不到 → 在"自动选中绑定班级"的 effect 里**再重试一次**恢复，否则会被"该机房第一个班"覆盖。`localStorage` 不可用（隐私模式/配额）时安静回退。
+  - **验证**：该用例由失败转为通过（且耗时从 18.7s 降到 3.7s —— 不再需要在错误的机房里空等 15s 超时）。
+
+- **全量 e2e 至此 36 passed / 0 failed**（此前长期挂着上述 2 条既有失败）。
+
 ## [0.7.4] - 2026-10-25
 
 ### Fixes
@@ -70,7 +119,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **改法**：新增 `scripts/assert-publishable.mjs`，挂到根 `package.json` 的 `prepublishOnly`，在 npm 打包前做三道断言：① `dependencies` / `optionalDependencies` / `peerDependencies` 里不允许出现 `workspace:` / `link:` / `file:` 协议；② `packages/core/version.ts` 的 `FALLBACK_VERSION` 必须等于 `package.json` 的 `version`；③ 当前 HEAD 必须正好被 `v<version>` 这个 tag 指向（发布必须发生在打了发布 tag 的提交上）。于是「发布前提」不再只活在某个脚本里，npm 自己也会检查。
   - **验证（实测退出码）**：SDK 仍是 `workspace:*` 且未打 tag → 退出码 1，逐条打印「本地协议」与「HEAD 未被 tag 指向」两条原因；改写成精确 pin `3.7.0` 但仍未打 tag → 退出码 1，只剩「HEAD 未被 tag 指向」一条；改写 pin 且 HEAD 已被 `v0.7.4` 指向 → 退出码 0 放行。**反向验证**：护栏能力未被削弱 —— 三种状态分别命中三条断言中的对应条，不是无条件放行。
   - **影响面**：`scripts/` 不在 `package.json` 的 `files` 清单内、不进入发布包本体；根 `package.json` 多一条 `prepublishOnly` 生命周期脚本声明，不影响消费者安装（registry tarball 安装不会执行 `prepublishOnly`）。
-
 - **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
   - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
   - **为什么致命**：对**棘轮**门禁而言，格式判定会随环境漂移（基线失去意义）；ESLint 那边更糟 —— 新版 eslint 往往带来新规则，告警数只涨不跌，基线会被冲破。
