@@ -11,7 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixes
+- **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
+  - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
+  - **为什么致命**：对**棘轮**门禁而言，格式判定会随环境漂移（基线失去意义）；ESLint 那边更糟 —— 新版 eslint 往往带来新规则，告警数只涨不跌，基线会被冲破。
+  - **改法**：两个脚本都显式解析仓库内的工具入口（`node_modules/prettier/bin/prettier.cjs`、`node_modules/eslint/bin/eslint.js`），用当前 node 直接执行；找不到就**明确报错并提示 pnpm install**，而不是悄悄换一个版本去跑。
+  - **验证**：缺 node_modules → 明确报错、退出码 1；装上锁定版本 → 格式不合规 0 个、ESLint 6243 = 基线 6243、error 0；**护栏能力未被削弱** —— 故意弄脏 `packages/core/version.ts` 仍报红（退出码 1），还原后恢复 0。
+  - **影响面**：仅 `scripts/` 下两个门禁脚本，不在 `package.json` 的 `files` 清单内，不进入发布包。
 
+- **A11Y 无障碍门禁不再往开发库里堆空白课节 / 空班级（`afterAll` 前缀写错导致的永久泄漏）**：
+  - **现象（实测）**：开发库里堆了 **5 个完全空白的课节**（`whiteboard_elements = 0`、`timeline = null`、无排课）+ **10 个空班级**，全部叫 `A11Y 学生端课节 …` / `A11Y 班级 …` / `A11Y 测评班 …`。按前缀统计可见铁证：`A11Y ` 前缀残留 5+10，而 `A11Y2` 前缀残留 **0**。
+  - **根因**：门禁三个子用例分别建 `A11Y 学生端课节` / `A11Y 测评班` / `A11Y2 仪表盘课节`，而 `test.afterAll` 的清理条件写的是 `startsWith('A11Y2 ')` —— 只命中第三块，前两块每次运行都永久留下 1 个空课节 + 2 个空班级。另外 `classroom cleanup` 的全局脚本（`scripts/cleanup-test-data.mjs`）只认 `E2E ` / `canary` / `金丝雀`，也不认 `A11Y`，所以连“兜底”这道也没掘住。
+  - **改法**：
+    1. `e2e/a11y-gate.spec.ts`：把前缀抽成 `TEST_TAG` / `LESSON_PREFIX` / `CLASS_PREFIX` / `STUDENT_PREFIX` 四个常量，**创建与清理全从同一组常量派生**，不可能再漂移；顺手给原先无前缀的「全班极速抢枪」补上 tag。
+    2. `scripts/cleanup-test-data.mjs`：把测试数据前缀抽成 `TEST_NAME_PREFIXES` / `TEST_NAME_MARKERS` 常量并补上 `A11Y `，无法再“改 5 处 SQL 还漏一处”；并把 `segment_visits` / `segment_gate_overrides` 纳入课节级联（实测：原先留下 19 条孤儿访问记录）。
+    3. 同一脚本里测试学生的匹配从只认 `STU_%-%` 扩展为枚举 15 个 spec tag：`student-return-to-class.spec.ts` 用的是 `STU_RETURN_${Date.now().toString(36).toUpperCase()}`（base36 时间戳**不带横杠**），于是永远漏网（实测残留 2 个 `STU_RETURN_*` 学生）。刻意**不**退化成「`STU_` 开头就删」—— 那会误伤人工建的普通测试学生。
+  - **验证**：修复后跑一次门禁 → 课节/班级/学生残留均为 **0**，同时清掉 5 条 `segment_visits` 与 5 个课堂会话；全量 e2e 36 passed / 0 failed。
+  - **发现但**未在本次修**（已登记）**：`e2e/classroom-answer-lock.spec.ts` 的 `loginAdmin()` 在 `mustChangePassword` 为真时会**把 admin 密码永久改成 `AdminPassword123`** 且不还原，会弄挂同一开发库上后续所有假定 `admin/admin` 的用例。
 - **版本占用门禁改判「tag 是否与本次发布的提交同源」，而不是「tag 是否存在」**：
   - **问题**：v0.7.2 引入的版本占用门禁写成了「git tag v<version> 存在即拒绝发布」，但仓库既定的发布顺序恰恰是「提交（含版本提升）→ 打 tag → 执行 `publish.sh`」。于是 **tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
   - **实测暴露**：v0.7.3 真正执行发布时，`publish.sh` 在预检阶段即报「版本占用：git tag v0.7.3 已存在（7220214b9601）。请提升版本号」—— 而这正是要发布的那次提交，门禁把**正确状态**当成了违规。
@@ -23,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.7.3] - 2026-10-25
 
 ### Fixes
+
 
 - **测试进程不再把 `BACKUP_DIR` 泄漏到生产备份目录（3 条单测变红 + 污染生产数据）**：
   - **现象（实测）**：`migrate-safety` / `cli-data-restore` / `cli-enhanced` 三条用例报「备份目录不存在」而变红；同一时间生产 `backups/` 下多出 `pre_migration_*.db` / `pre_restore_*.db`（全是测试库残骸）。
