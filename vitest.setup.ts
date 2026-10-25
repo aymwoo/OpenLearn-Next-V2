@@ -105,6 +105,31 @@ if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
   // - `packages/core/db/index.ts` → 走 `VITEST` 分支（临时库）
   // - `server/utils/paths.ts` / `cli-cleaner.mjs` → 回到调用方指定的目录
   delete process.env.OPENLEARN_DB_PATH;
+
+  // ── BACKUP_DIR 同样必须清掉（与 OPENLEARN_DB_PATH 同一类泄漏）──────────
+  //
+  // 背景：本地开发机常把 `BACKUP_DIR` 导进 shell 环境（生产部署的 .env 也会声明它），
+  // 而 `packages/core/db/migrator.ts` 与 `cli-data.mjs` 都是
+  // `process.env.BACKUP_DIR || <默认目录>` 的写法 —— 不清掉的话，测试会
+  //   1) 把「迁移前快照 / 还原安全副本」写进**生产备份目录**（实测：测试运行期间
+  //      backups/ 下多出 pre_migration_*.db / pre_restore_*.db，全是测试库残骸）；
+  //   2) 让断言「快照落在临时目录」的用例必然失败（实测：migrate-safety /
+  //      cli-data-restore / cli-enhanced 三条用例因备份目录指向生产路径而变红）。
+  //
+  // 为什么必须「清除」而不是「改写成临时路径」：BACKUP_DIR 的读者语义各不相同
+  // （`server/utils/paths.ts` 的 getBackupsDir、`cli-data.mjs` 的 runRestore、
+  // `scripts/site-backup.mjs`），改写会让某些读者指向一个语义不对的目录。
+  // 清除后各读者回到自己的默认逻辑（库文件同级 backups/），测试用例里
+  // 自己 set 的值（v061-upgrade.test.ts 等）依然生效 —— setup 先于用例运行。
+  const ambientBackupDir = process.env.BACKUP_DIR;
+  if (ambientBackupDir) {
+    console.warn(
+      `[vitest.setup] 已清除继承的 BACKUP_DIR=${ambientBackupDir}，` +
+        '测试的备份/快照一律落在临时目录，避免污染生产备份目录。',
+    );
+  }
+  delete process.env.BACKUP_DIR;
+
   // 数据目录同属一条隔离链（storage/ 与插件产物路径都从这里派生），一并重定向；
   // 测试自己如果在用例里赋值会覆盖本值（setup 先于用例运行）。
   process.env.OPENLEARN_DATA_DIR = path.join(os.tmpdir(), `openlearn_test_data_${poolId}`);
