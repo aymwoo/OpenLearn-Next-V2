@@ -57,7 +57,7 @@
     "build": "node scripts/build-plugin-sdk.mjs && node scripts/build-bridge-sdk.mjs && vite build && node scripts/build-plugins.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/security/env-validation.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/env-validation.cjs && esbuild packages/core/db/migrator.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/cli-migrator.cjs && cp packages/core/worker-runtime/plugin-net-preload.cjs dist/plugin-net-preload.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist server.js .vite-cache",
     "lint": "tsc --noEmit",
     "lint:strict": "tsc --noEmit -p tsconfig.strict.json",
     "lint:eslint": "eslint . --ext .ts,.tsx --ignore-pattern dist --ignore-pattern node_modules",

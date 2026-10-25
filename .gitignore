@@ -3,6 +3,9 @@ build/
 dist/
 /plugins/
 coverage/
+# Vite 依赖预打包缓存（见 vite.config.ts 的 cacheDir）：
+# 放在仓库根而非 node_modules 下，避免 linked worktree 与主仓库共用同一份缓存。
+.vite-cache/
 .DS_Store
 *.log
 client_debug.log
