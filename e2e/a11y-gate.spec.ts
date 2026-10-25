@@ -9,6 +9,8 @@
  * 1. 每个页面只跑一次 axe —— 同一 document 上重复 analyze 会把元素 computed
  *    color 留在错误状态，导致下一次检查报出并不存在的违规。
  * 2. 审计前冻结动画 —— axe 按元素不透明度混合前景/背景，动效中途采样会产生假阳性。
+ *    注意：冻结 CSS 动画/过渡**挡不住 motion.js**（它用 rAF 直接改 style），
+ *    所以另有 settleOverlays() 等浮层稳定。
  * 归属：无障碍 —— axe-core 全站无障碍门禁（WCAG 2.0/2.1 A+AA）
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -33,7 +35,38 @@ async function freezeAnimations(page: Page) {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 
+/**
+ * 等浮层（toast）稳定后再扫描。
+ *
+ * 背景：toast 是**全局**浮层，由上一个工作区的动作触发 —— 例如进入「互动课堂」时
+ * 会自动锁定全班并弹一条「🔒 锁状态更新」。而 SPA 的 hash 路由切换**不重新加载页面**
+ * （`page.goto('/#/x')` 在只改 hash 时是同文档导航），于是这条 toast 会跨工作区残留。
+ *
+ * 实测（2026-10-25）：它恰好在「测评中心」的扫描窗口里入场，axe 按元素不透明度混合
+ * 前景/背景 → 报出一条并不存在的对比度违规，让整条无障碍门禁在「单跑绿 / 全量跑红」
+ * 之间摇摆（`e2e-full-coverage` job 因带 continue-on-error 一直没人看见）。
+ *
+ * 这里等入场动画跑完（不透明度归位）再扫描：既保留「toast 自身也要合规」的覆盖，
+ * 又让门禁不再依赖 toast 出现的时机。配合 ToastContainer 不再做透明度淡入
+ * （文字全程以完整不透明度渲染），这一步实际上总是立即满足。
+ */
+async function settleOverlays(page: Page) {
+  await page
+    .waitForFunction(
+      () => {
+        const toasts = Array.from(document.querySelectorAll('[id^="toast-"]'));
+        return toasts.every((t) => Number(getComputedStyle(t).opacity) >= 0.99);
+      },
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      // 超时不视为失败：没有 toast 时条件立即成立；始终不满足时由随后的 axe 断言兜底。
+    });
+}
+
 async function expectNoViolations(page: Page, surface: string) {
+  await settleOverlays(page);
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   const offenders = results.violations.flatMap((v) =>
     v.nodes.slice(0, 5).map((n) => {
