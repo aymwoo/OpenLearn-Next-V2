@@ -45,10 +45,35 @@ function localDateStamp() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * 定位**仓库锁定的** eslint 可执行入口。
+ *
+ * 为什么不能用 `npx eslint`：本地找不到 eslint 时 `npx` 会**联网拉一个最新版**来跑。
+ * 对一个**棘轮**门禁来说这是致命的 —— 告警条数取决于「当时装的是哪个 eslint、
+ * 哪套规则」，同一份代码在不同机器/不同时间会得到不同数字，基线随之失去意义
+ * （`npx` 拉来的新版 eslint 往往带来新的规则，告警数只涨不跌，基线会被冲破）。
+ * 所以这里显式解析仓库内的 eslint，找不到就**明确报错**。
+ */
+function resolveEslint() {
+  const candidates = [
+    path.join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.js'),
+    path.join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.mjs'),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    '找不到仓库内的 eslint（node_modules/eslint 不存在）。\n' +
+      '  请先执行 `pnpm install` —— 本门禁刻意不使用 `npx eslint`：\n' +
+      '  npx 会联网拉取最新版 eslint，告警条数会随环境漂移，棘轮基线将失去意义。',
+  );
+}
+
 function runEslint() {
+  const eslintBin = resolveEslint();
   let stdout = '';
   try {
-    stdout = execFileSync('npx', ['eslint', ...ESLINT_ARGS, '--format', 'json'], {
+    stdout = execFileSync(process.execPath, [eslintBin, ...ESLINT_ARGS, '--format', 'json'], {
       cwd: ROOT,
       encoding: 'utf8',
       maxBuffer: 256 * 1024 * 1024,

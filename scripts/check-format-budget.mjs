@@ -71,13 +71,41 @@ function collectFiles() {
     .filter((f) => EXTENSIONS.some((ext) => f.endsWith(`.${ext}`)));
 }
 
+/**
+ * 定位**仓库锁定的** prettier 可执行入口。
+ *
+ * 为什么不能用 `npx prettier`：`npx` 在本地找不到 prettier 时会**联网拉一个最新版**
+ * 来跑。实测（2026-10-25）：仓库锁定 prettier 3.9.4，而某次在缺 `node_modules` 的
+ * worktree 里 `npx` 拉到了 3.9.10 —— 同一份 README.md 被判成「不合规」，
+ * 用锁定版本复判则完全合规。
+ *
+ * 对一个**棘轮**门禁来说这是致命的：判定结果取决于「当时装的是哪个 prettier」，
+ * 于是同一份代码在不同机器/不同时间会得到不同结论，基线也就失去了意义。
+ * 所以这里显式解析仓库内的 prettier，找不到就**明确报错**（而不是悄悄换一个版本）。
+ */
+function resolvePrettier() {
+  const candidates = [
+    path.join(ROOT, 'node_modules', 'prettier', 'bin', 'prettier.cjs'),
+    path.join(ROOT, 'node_modules', 'prettier', 'bin-prettier.js'),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    '找不到仓库内的 prettier（node_modules/prettier 不存在）。\n' +
+      '  请先执行 `pnpm install` —— 本门禁刻意不使用 `npx prettier`：\n' +
+      '  npx 会联网拉取最新版 prettier，导致同一份代码的判定随环境漂移。',
+  );
+}
+
 /** 返回当前不合规（prettier --list-different）的文件列表。 */
 function findNonCompliant(files) {
+  const prettierBin = resolvePrettier();
   const bad = [];
   for (let i = 0; i < files.length; i += BATCH_SIZE) {
     const batch = files.slice(i, i + BATCH_SIZE);
     try {
-      const stdout = execFileSync('npx', ['prettier', '--list-different', '--', ...batch], {
+      const stdout = execFileSync(process.execPath, [prettierBin, '--list-different', '--', ...batch], {
         cwd: ROOT,
         encoding: 'utf8',
         maxBuffer: 64 * 1024 * 1024,
