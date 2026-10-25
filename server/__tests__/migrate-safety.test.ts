@@ -51,9 +51,22 @@ describe('迁移 · checksum 校验', () => {
     expect(() => runMigrations(db, [tampered])).toThrow(/被修改过/);
   });
 
-  it('迁移文件已从磁盘移除时不误报', () => {
+  it('迁移文件已从磁盘移除时不再静默跳过——未知台账条目拒绝（数据库自动适应终检）', () => {
     runMigrations(db, [mig('001_add', 'CREATE TABLE a (id TEXT);')]);
-    // 磁盘上已没有该迁移
+    // 磁盘上已没有该迁移：旧契约是静默跳过（continue），新契约是 FATAL ——
+    // 台账比代码新只有两种成因（代码降级 / 已应用迁移被改名删除），都该被拦下。
+    // checksum 漂移检查本身仍跳过未知条目（不会把它误报成「被修改过」）。
+    expect(() => runMigrations(db, [], { strictLedger: true })).toThrow(/001_add/);
+
+    // 显式降级运维放行
+    process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER = 'true';
+    try {
+      expect(runMigrations(db, [], { strictLedger: true })).toEqual([]);
+    } finally {
+      delete process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER;
+    }
+
+    // 非严格口径（库函数默认）：迁移子集是合法用法（升级演练），只提示不拦
     expect(runMigrations(db, [])).toEqual([]);
   });
 

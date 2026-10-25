@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { writeFileSync } from 'fs';
 import bcrypt from 'bcryptjs';
 import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './migrator.js';
+import { assertSchemaMatchesGolden } from './schema-golden.js';
 import { applyStartupDataMigrations } from './class-passcode-crypto.js';
 import { purgeExpiredEvents } from './event-retention.js';
 import { purgeAllExpiredData } from './retention-policy.js';
@@ -237,7 +238,17 @@ export function initializeDatabase(instance: Database.Database): void {
     if (migrations.length === 0) {
       throw new Error(`[DB SSOT] FATAL: 迁移目录 ${migrationsDir} 里没有 .sql 文件。拒绝在没有 schema 的库上启动。`);
     }
-    runMigrations(instance, migrations);
+    runMigrations(instance, migrations, { strictLedger: true });
+    // 结构终检（VITEST 下降级为告警：测试库可能被个别用例改出特殊形态）
+    if (process.env.VITEST) {
+      try {
+        assertSchemaMatchesGolden(instance, migrationsDir);
+      } catch (err) {
+        console.warn('[SchemaGolden] 测试环境结构终检未通过（忽略）：', err instanceof Error ? err.message : err);
+      }
+    } else {
+      assertSchemaMatchesGolden(instance, migrationsDir);
+    }
     applyStartupDataMigrations(instance);
     // 结构迁移完成、对外提供解密之前：把历史明文 API Key 密封。
     // 逐行提交，崩溃后下次启动会补上剩余明文。

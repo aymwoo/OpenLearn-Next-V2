@@ -47,6 +47,7 @@ import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
 import { loadMigrationsFromDirectory, runMigrations, getDefaultMigrationsDir } from './server/utils/migrate.js';
+import { assertSchemaMatchesGolden } from './packages/core/db/schema-golden.js';
 import { lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
@@ -149,8 +150,12 @@ async function startServer() {
     if (migrations.length === 0) {
       throw new Error(`[Migration] FATAL: ${migrationsDir} 中没有迁移文件，拒绝启动。`);
     }
-    runMigrations(kernelContainer.db, migrations);
+    runMigrations(kernelContainer.db, migrations, { strictLedger: true });
     console.log(`[Migration] 启动复查完成：${migrationsDir}（${migrations.length} 个文件）`);
+    // 启动终检：台账追平 ≠ 库长得对（手动改库/外部工具/旧备份部分恢复都会漂移）。
+    // 金样 = 空库跑完全部迁移后的表→列快照；实际库缺任何金样声明的结构即拒绝服务。
+    assertSchemaMatchesGolden(kernelContainer.db, migrationsDir);
+    console.log('[SchemaGolden] 启动终检通过：数据库结构覆盖代码期望的全部表与列。');
   } catch (err) {
     console.error('[Migration] FATAL: 数据库迁移失败，拒绝在未完成迁移的库上提供服务。');
     console.error(err);
