@@ -265,15 +265,15 @@
 
 ### 6.2 站点级安全配置
 
-| 配置项              | 作用                                                                                          | 生效位置                             |
-| ------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `ENCRYPTION_KEY`    | AES-256-GCM 主密钥（AI Provider API Key 与班级临时口令）。未设置时用 `storage/encryption-key` | `packages/core/di/api-key-crypto.ts` |
-| `ALLOWED_ORIGINS`   | 逗号分隔的 CORS 白名单；**未配置时**对无 `Origin` 头与同源请求智能放行                        | `server.ts` 的 `isOriginAllowed`     |
-| `PORT`              | 监听端口，默认 `9000`                                                                         | `server.ts` 的 `startServer`         |
-| `OPENLEARN_DB_PATH` | SQLite 主库路径（容器内固定为 `/app/packages/core/db/educational_os.db`）                     | `packages/core/db/index.ts`          |
-| `BACKUP_DIR`        | 备份目录（默认 `backups`）                                                                    | `scripts/restore-db.ts`              |
-| `LOG_LEVEL`         | 日志级别（compose 默认 `info`）                                                               | 日志子系统                           |
-| `DISABLE_HMR`       | 置真后关闭 Vite HMR（生产/AI Studio 兼容）                                                    | 前端构建                             |
+| 配置项              | 作用                                                                                                                                                 | 生效位置                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `ENCRYPTION_KEY`    | AES-256-GCM 主密钥（AI Provider API Key 与班级临时口令）。未设置时用 `storage/encryption-key`                                                        | `packages/core/di/api-key-crypto.ts` |
+| `ALLOWED_ORIGINS`   | 逗号分隔的 CORS 白名单；**未配置时**对无 `Origin` 头与同源请求智能放行                                                                               | `server.ts` 的 `isOriginAllowed`     |
+| `PORT`              | 监听端口，默认 `9000`                                                                                                                                | `server.ts` 的 `startServer`         |
+| `OPENLEARN_DB_PATH` | SQLite 主库路径（源码默认 `packages/core/db/educational_os.db`；容器内固定为 `/data/educational_os.db`，见 `Dockerfile` 的 `ENV OPENLEARN_DB_PATH`） | `packages/core/db/index.ts`          |
+| `BACKUP_DIR`        | 备份目录（默认 `backups`）                                                                                                                           | `scripts/restore-db.ts`              |
+| `LOG_LEVEL`         | 日志级别（compose 默认 `info`）                                                                                                                      | 日志子系统                           |
+| `DISABLE_HMR`       | 置真后关闭 Vite HMR（生产/AI Studio 兼容）                                                                                                           | 前端构建                             |
 
 完整环境变量清单见 [系统配置](../configuration/system-configuration)。
 
@@ -331,18 +331,18 @@ node scripts/backfill-class-owners.mjs --assign teacher
 
 ## 7. 排障速查
 
-| 现象                            | 根因与处置                                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 教师账号调管理端点返回 403      | 端点是 `requireAuth('administrator')`，不含 teacher。改用管理员账号。                                                          |
-| 登录后立刻被弹回改密页          | 种子账号带 `mustChangePassword`。走 `POST /api/auth/change-password`。                                                         |
-| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在 AI 提供商管理逐个重存 Key。                               |
-| 登录被限流 429                  | `loginLimiter` 5 次/分钟/IP。等待或从 nginx 层确认不是反向代理把大量用户汇聚成同一 IP。                                        |
-| 写操作 403 `CORS not allowed`   | `ALLOWED_ORIGINS` 未包含实际访问来源。注意未配置时对无 `Origin` 头与同源请求是放行的。                                         |
-| 写操作 403 且响应来自 csrfGuard | `Sec-Fetch-Site: cross-site` 且路径不在豁免清单。检查是否有第三方页面在跨站调用本站写接口。                                    |
-| 上课中途白板同步断掉            | nginx 缺 `proxy_read_timeout`（默认 60s）。见 [Docker & Nginx](../deployment/docker-nginx) §2。                                |
-| 课件 iframe 一直「加载中」      | `GET /api/courseware/:id` 需要 `?ct=` 短时令牌（父页面经 `GET /api/courseware/:id/access-token` 铸造）。检查父页面是否被拦截。 |
-| 插件安装后功能不出现            | 核对 manifest 的 `capabilitiesProposed` 与 `contributes`；用 `GET /api/plugins/:id/contributions` 查看实际注册的贡献。         |
-| 容器重启后数据全没              | 卷挂错路径。必须挂 `/app/packages/core/db`（不是 `/app/data`）。见 [Docker & Nginx](../deployment/docker-nginx) §1.2。         |
+| 现象                            | 根因与处置                                                                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 教师账号调管理端点返回 403      | 端点是 `requireAuth('administrator')`，不含 teacher。改用管理员账号。                                                                                                       |
+| 登录后立刻被弹回改密页          | 种子账号带 `mustChangePassword`。走 `POST /api/auth/change-password`。                                                                                                      |
+| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在 AI 提供商管理逐个重存 Key。                                                                            |
+| 登录被限流 429                  | `loginLimiter` 5 次/分钟/IP。等待或从 nginx 层确认不是反向代理把大量用户汇聚成同一 IP。                                                                                     |
+| 写操作 403 `CORS not allowed`   | `ALLOWED_ORIGINS` 未包含实际访问来源。注意未配置时对无 `Origin` 头与同源请求是放行的。                                                                                      |
+| 写操作 403 且响应来自 csrfGuard | `Sec-Fetch-Site: cross-site` 且路径不在豁免清单。检查是否有第三方页面在跨站调用本站写接口。                                                                                 |
+| 上课中途白板同步断掉            | nginx 缺 `proxy_read_timeout`（默认 60s）。见 [Docker & Nginx](../deployment/docker-nginx) §2。                                                                             |
+| 课件 iframe 一直「加载中」      | `GET /api/courseware/:id` 需要 `?ct=` 短时令牌（父页面经 `GET /api/courseware/:id/access-token` 铸造）。检查父页面是否被拦截。                                              |
+| 插件安装后功能不出现            | 核对 manifest 的 `capabilitiesProposed` 与 `contributes`；用 `GET /api/plugins/:id/contributions` 查看实际注册的贡献。                                                      |
+| 容器重启后数据全没              | 卷挂错路径。容器数据卷是 **`/data`**（数据库/密钥/上传件都在其中）与 **`/backups`**，见 `docker-compose.yml` volumes 与 [Docker & Nginx](../deployment/docker-nginx) §1.2。 |
 
 ---
 
