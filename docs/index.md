@@ -35,7 +35,6 @@ architecture/theming-system
 architecture/service-registry
 architecture/whiteboard-subsystems
 architecture/classroom-runtime
-architecture/interaction-runtime
 architecture/resource-runtime
 architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
