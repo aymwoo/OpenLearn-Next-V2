@@ -308,22 +308,47 @@ export function cleanupStaleBootstrapFiles(now = Date.now()): number {
 // 模块加载时执行一次孤儿清理（只清属主已退出的，不会误伤并发进程的在用文件）
 cleanupStaleBootstrapFiles();
 
-/** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
-export function resolveNetPreloadPath(): string {
-  const candidates: string[] = [
-    path.resolve(process.cwd(), 'packages/core/worker-runtime/plugin-net-preload.cjs'),
-    path.resolve(process.cwd(), 'dist/plugin-net-preload.cjs'),
-  ];
+/**
+ * preload 入口脚本的解析选项。
+ *
+ * 注入 `startDirs` / `cwd` 是为了能在**测试里复现发布包布局**：
+ * 源码布局下模块自身位于 `packages/core/worker-runtime/`，而按 `files` 清单
+ * 还原的发布包里 `server.cjs` 位于 `<pkg>/dist/` —— 两者是不同目录，
+ * 解析结果可能完全不同（见 `plugin-net-preload-packaging.test.ts`）。
+ */
+export interface NetPreloadResolutionOptions {
+  /** 解析起点目录；默认取模块自身所在目录（源码布局 / 发布包布局各不同）。 */
+  startDirs?: string[];
+  /** 工作目录基准；默认 `process.cwd()`。 */
+  cwd?: string;
+}
+
+/** 解析起点的默认值：模块自身所在目录（ESM 用 import.meta.url，CJS 用 __dirname）。 */
+function defaultNetPreloadStartDirs(): string[] {
+  const dirs: string[] = [];
   try {
     const url = import.meta.url;
     if (typeof url === 'string' && url.startsWith('file:')) {
-      candidates.unshift(path.join(path.dirname(fileURLToPath(url)), 'plugin-net-preload.cjs'));
+      dirs.push(path.dirname(fileURLToPath(url)));
     }
   } catch {
-    // CJS 产物里 import.meta.url 不可用。
+    // CJS 产物里 import.meta.url 不可用（esbuild 会把它 shim 成 {}）。
   }
   if (typeof __dirname !== 'undefined') {
-    candidates.unshift(path.join(__dirname, 'plugin-net-preload.cjs'));
+    dirs.push(__dirname);
+  }
+  return dirs;
+}
+
+/** 入口脚本既可能躺在源码目录，也可能在生产构建时被复制到 dist/。 */
+export function resolveNetPreloadPath(options: NetPreloadResolutionOptions = {}): string {
+  const cwd = options.cwd ?? process.cwd();
+  const candidates: string[] = [
+    path.resolve(cwd, 'packages/core/worker-runtime/plugin-net-preload.cjs'),
+    path.resolve(cwd, 'dist/plugin-net-preload.cjs'),
+  ];
+  for (const dir of options.startDirs ?? defaultNetPreloadStartDirs()) {
+    candidates.unshift(path.join(dir, 'plugin-net-preload.cjs'));
   }
   const found = candidates.find((candidate) => fs.existsSync(candidate));
   if (!found) {

@@ -29,6 +29,7 @@
     "dist/assets/",
     "dist/plugins/",
     "dist/cli-migrator.cjs",
+    "dist/plugin-net-preload.cjs",
     "migrations/",
     "cli.mjs",
     "cli-cleaner.mjs",
