@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+
+- **用 `.nvmrc` / `.node-version` 把 Node 钉到 22，并在 `AGENTS.md` 写清「为什么不能用 26」**：
+  - **背景**：仓库只在 `AGENTS.md` 的 Cursor Cloud 小节里提过一句 "Node 22"，`package.json` 的 `engines` 是宽松的 `>=20`，且**没有任何版本锁定文件** —— 本地跑哪个 Node 全靠运气，而 CI 一直钉的是 `node-version: 22`。
+  - **两类实际踩到的坑（这次会话都撞到了）**：
+    1. **原生模块 ABI**：`better-sqlite3` 按主版本编译（22 → ABI 127 / 24 → 137 / 26 → 147）。混用版本会启动即崩，报 `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` 不匹配；
+    2. **Node 26 跑不了测试**：26 内置了实验性 Web Storage，`globalThis.localStorage` 存在但值为 `undefined`（需 `--localstorage-file`，否则访问会打 `ExperimentalWarning`）。vitest 的 jsdom 环境会跳过 Node 已定义的全局，于是留下坏掉的 `localStorage` —— 实测 213 个测试文件 / 298 条用例全红（`Cannot read properties of undefined (reading 'clear')`），换回 22/24 立刻恢复。
+  - **改法**：新增 `.nvmrc` 与 `.node-version`（都是 `22`，`fnm` / `nvm` / `asdf` / `mise` 都认），`AGENTS.md` 的 Environment 段补上这两类问题的成因与修法（`pnpm rebuild better-sqlite3`），并说明「本地对齐 CI 的 22 就是对齐合并门禁」。
+  - **验证**：Node 22 上全量单测 **601 files / 4975 passed**（与 24 同水平，仅剩 1 条 `proxy-addr` 符号链接缺失的环境问题）；E2E 冒烟集（黄金旅程 / 课程开课 / 环节门禁 / 外壳请求卫生）**5 passed**。
+
 ### Fixes
 
 - **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
