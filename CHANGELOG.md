@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Refactor / Performance
+
+- **清点 `src/features/` 下 12 个「有实现、有单测、但生产零引用」的孤儿模块，按风险分三组处置**：
+  - **怎么发现的**：从真实入口（`src/App.tsx` / `src/main.tsx` / `server.ts` / `cli-data.mjs`）做可达性分析（解析相对路径、`@/` 别名、`.js`→`.ts`、动态 `import()`）：859 / 983 个文件可达，**124 个不可达，其中 17 个是整模块**。
+  - **⚠️ 一个必须记住的陷阱**：只统计「有没有外部 import」会把死模块误判成活的 —— `workspace` / `resource-runtime` / `ai-teacher-workspace` 的引用方只有彼此和 `student-workspace` 这个**自洽循环**，从入口出发根本到不了。判断「活的」必须从入口做可达性。
+  - **A 组 · 删除（4 个，共 1,029 行源码 + 6 个测试文件）**：`lesson-workflow` / `ai-teaching-workflow` / `classroom-runtime` / `interaction-runtime`。
+    - 前两个是 61L/55L 的裸 setter（`advanceStage(target)` 不校验、不落库、不发事件）—— 接线等于给服务端门禁（`CLASS_LOCKED`→409 / `Illegal transition`→400）开后门；
+    - `classroom-runtime` 自带的 9 阶段（`Create/Prepare/Ready/Teaching/Paused/Resumed/Finished/Archived/Disposed`）与在用的 `classroom_sessions.stage`（含 `ARCHIVED_REPORT`）词表不兼容，且有独立的 `classroom.created/paused/…` 事件命名空间，接上会与 socket 事件流**双写**；
+    - `interaction-runtime` 是第二个 Keyboard/Mouse/Touch 派发器，而白板已自接管 DOM 事件（111 文件、E2E 覆盖最重）—— 接它=双处理，或得拆掉白板的 handler。
+  - **B 组 · 标注 `@experimental` 不接线（4 个）**：`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context`。理由：`server/ai-agent.ts` 并不查它们，插件贡献 AI 能力已走活的扩展槽位（`ai_sidebar.tab`、`anchor:whiteboard-toolbar:ai-tutor`）与通用通道 `/api/plugins/execute-command` —— **功能上是冗余的**；而接线要重写一条正在工作的 AI 链路，且 AI 功能需配 provider 才能验证，CI 覆盖不到。每个 `index.ts` 头部写明「为什么保留」与「接线前置条件」（首要一条：不能让新注册表绕过 `action.capabilityRequired` 的授权）。
+  - **C 组 · 留待产品决策（4 个）**：`student-workspace` + 依赖它的 `workspace` / `resource-runtime` / `ai-teacher-workspace`。它们是**第二套学生端壳**，接通 = 替换现在能跑的 `src/features/student`（63 文件、6 个引用方）；25 条 E2E 里 22 条涉及学生端。已写入迁移前置条件（功能对齐 / 全量学生端 E2E 重验 / 插件槽位兼容 / 可一键回滚）。
+  - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
+  - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
+
 ### Fixes
 
 - **白板画布在窗口不够大时不再「够不着」：画布逻辑尺寸与容器可视尺寸解耦，装不下时由容器出滚动条**：
