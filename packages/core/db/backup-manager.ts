@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import { ensureSecureDir, hardenFile } from './secure-files.js';
 
 export interface BackupValidationResult {
   ok: boolean;
@@ -210,7 +211,8 @@ export function performBackup(options: BackupOptions = {}): BackupResult {
   const keep = typeof options.keep === 'number' ? options.keep : 10;
 
   if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
+    // 备份目录装着全量学生数据快照：创建即 0700，不依赖 umask（审计 P1-2）。
+    ensureSecureDir(backupDir);
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -237,11 +239,7 @@ export function performBackup(options: BackupOptions = {}): BackupResult {
     // 使用 SQLite 原生 VACUUM INTO 生成热备快照（转义单引号防语法注入）
     dbInstance.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
     // 快照是未加密的学生数据副本：创建时即收紧权限，不依赖 umask（Issue #233）
-    try {
-      fs.chmodSync(backupPath, 0o600);
-    } catch {
-      // Windows 等不支持 chmod 的环境忽略
-    }
+    hardenFile(backupPath);
   } finally {
     if (shouldClose && dbInstance) {
       dbInstance.close();
@@ -291,11 +289,13 @@ export function performRestore(options: RestoreOptions = {}): RestoreResult {
   if (fs.existsSync(dbPath)) {
     if (!options.force) {
       if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
+        ensureSecureDir(backupDir);
       }
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       safetyBackupPath = path.join(backupDir, `pre_restore_${stamp}.db`);
       fs.copyFileSync(dbPath, safetyBackupPath);
+      // copyFileSync 产生的新文件按默认 umask 落盘 → 收紧到 600（审计 P1-2）
+      hardenFile(safetyBackupPath);
     }
   }
 
@@ -314,6 +314,8 @@ export function performRestore(options: RestoreOptions = {}): RestoreResult {
   // 原子复制覆盖
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.copyFileSync(resolvedBackup, dbPath);
+  // 覆盖后的主库沿用目标文件原权限；若来源备份本身偏宽则一并收紧（审计 P1-2）
+  hardenFile(dbPath);
 
   // 恢复后验证
   const postCheck = validateBackup(dbPath);

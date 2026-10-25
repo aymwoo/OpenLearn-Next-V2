@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pruneMigratorSnapshots } from './backup-manager.js';
+import { ensureSecureDir, hardenFile } from './secure-files.js';
 
 export interface Migration {
   name: string;
@@ -151,7 +152,8 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
   ) {
     try {
       const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(db.name), 'backups');
-      fs.mkdirSync(backupDir, { recursive: true });
+      // 快照目录装着全量学生数据副本：创建即 0700，不依赖 umask（审计 P1-2）
+      ensureSecureDir(backupDir);
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
       const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
@@ -160,11 +162,7 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
       const escaped = backupFile.replace(/'/g, "''");
       db.exec(`VACUUM INTO '${escaped}'`);
       // 快照是未加密的学生数据副本：创建时即收紧权限，不依赖 umask（Issue #234）
-      try {
-        fs.chmodSync(backupFile, 0o600);
-      } catch {
-        // Windows 等不支持 chmod 的环境忽略
-      }
+      hardenFile(backupFile);
       // 同步修剪历史快照（PRE_MIGRATION_KEEP，默认 5）——只增不减会无界增长
       try {
         const pruned = pruneMigratorSnapshots(backupDir);

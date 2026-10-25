@@ -11,6 +11,7 @@ import { applyStartupDataMigrations } from './class-passcode-crypto.js';
 import { purgeExpiredEvents } from './event-retention.js';
 import { purgeAllExpiredData } from './retention-policy.js';
 import { encryptStoredPlaintextApiKeys, logEncryptionKeyStartupWarning } from '../di/api-key-crypto.js';
+import { ensureSecureFile, secureDatabaseFiles } from './secure-files.js';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -352,22 +353,45 @@ export function initializeDatabase(instance: Database.Database): void {
 export function createDatabase(customPath?: string): Database.Database {
   const targetPath = customPath || dbPath;
   mkdirSync(path.dirname(targetPath), { recursive: true });
+  // 先以 0600 把文件「造出来」，再交给 better-sqlite3 打开 ——
+  // 否则 SQLite 按默认 umask 创建，落在 644（全局可读，审计 P1-2）。
+  ensureSecureFile(targetPath);
   const instance = new Database(targetPath);
   applyPragmas(instance);
+  // WAL 模式下的 -wal / -shm 侧车与主库等价（内含全量学生数据），一并收紧。
+  secureDatabaseFiles(targetPath);
   initializeDatabase(instance);
+  secureDatabaseFiles(targetPath);
   return instance;
 }
 
 export * from './backup-manager.js';
 export * from './migrator.js';
+// 注意：`secure-files` 是内部实现细节，**不**再导出 —— 它一旦进入 core 的公共面，
+// 就会被 @openlearn/plugin-sdk 的声明打包器收进 generated.d.ts，在那里以
+// 「已定义未使用」的形态触发 ESLint 告警（棘轮上限不容许）。
+
+// 主库在**打开前**就以 0600 落盘：better-sqlite3 按默认 umask 创建会落在 644
+// （全局可读 = 全量学生数据暴露，审计 P1-2）。
+//
+// ⚠️ 这里刻意写成**顶层语句**而不是塞进 `db` 的初始化表达式：SDK 声明生成器
+// （packages/plugin-sdk/generate-dts.mjs）的闭包会跟随「入口导出符号的声明节点里
+// 引用到的每个标识符」，把 helper 写进 `db` 的初始化式就会把它们拖进
+// generated.d.ts —— 那里它们是「已定义未使用」的形态，直接顶破 ESLint 告警棘轮。
+ensureSecureFile(dbPath);
 
 export const db = new Database(dbPath);
 
 // 应用高并发 WAL 与性能优化 Pragma
 applyPragmas(db);
+// WAL / SHM 侧车与主库等价（内含未 checkpoint 的学生数据），一并收紧。
+secureDatabaseFiles(dbPath);
 
 // 基于 migrations/ 执行单一来源数据库初始化
 initializeDatabase(db);
+
+// 迁移会写入数据 → WAL / SHM 侧车此时才真正出现，再收一次。
+secureDatabaseFiles(dbPath);
 
 // 入口的 dotenv / NODE_ENV 回落发生在本模块求值之后，这里再查一次，仍在 listen 之前。
 if (!process.env.VITEST) {

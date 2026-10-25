@@ -82,6 +82,10 @@ export function checkSensitiveFilePermissions(options: FilePermissionCheckOption
 
   checkFile(envPath, '600', 'env');
   checkFile(dbPath, '600', 'database');
+  // WAL / SHM 侧车与主库等价（WAL 模式下装着尚未 checkpoint 的全量学生数据）。
+  // 不查它们等于「主库 600 + WAL 644」—— 等于没设防（审计 P1-2）。
+  checkFile(`${dbPath}-wal`, '600', 'database');
+  checkFile(`${dbPath}-shm`, '600', 'database');
   checkFile(encryptionKeyPath, '600', 'encryption-key');
 
   const dirMode = modeOf(backupDir);
@@ -99,6 +103,34 @@ export function checkSensitiveFilePermissions(options: FilePermissionCheckOption
   }
 
   return issues;
+}
+
+/**
+ * 按基线收紧权限（修复模式）。
+ *
+ * 与 `checkSensitiveFilePermissions` 的关系：检查只报告，修复要**显式**调用 ——
+ * 收紧权限会影响同机其他账号对文件的访问，必须是管理员的明确动作。
+ * 因此平台在**自建**文件时直接按基线创建（`packages/core/db/secure-files.ts`），
+ * 而对既有文件（含用户自己写的 `.env`）只在这里提供显式修复入口。
+ *
+ * @returns 实际被修复的条目
+ */
+export function fixSensitiveFilePermissions(options: FilePermissionCheckOptions = {}): FilePermissionIssue[] {
+  const platform = options.platform ?? process.platform;
+  if (platform === 'win32') return [];
+
+  const issues = checkSensitiveFilePermissions(options);
+  const fixed: FilePermissionIssue[] = [];
+  for (const issue of issues) {
+    try {
+      // 目录 → 700，文件 → 600。只收紧，不放宽。
+      fs.chmodSync(issue.path, issue.kind === 'backup-dir' ? 0o700 : 0o600);
+      fixed.push(issue);
+    } catch {
+      // 不可写 / 已被删除等：跳过，留给报告里继续提示
+    }
+  }
+  return fixed;
 }
 
 /** 启动期自检：逐条 WARN（生产环境升格 console.error），不阻断启动 */

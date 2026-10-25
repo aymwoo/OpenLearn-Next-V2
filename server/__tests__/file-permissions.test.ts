@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkSensitiveFilePermissions } from '../security/file-permissions.js';
+import { checkSensitiveFilePermissions, fixSensitiveFilePermissions } from '../security/file-permissions.js';
 
 /**
  * Issue #233 回归：敏感文件权限基线自检。
@@ -82,8 +82,72 @@ describe('checkSensitiveFilePermissions（Issue #233）', () => {
     expect(issues).toEqual([]);
 
     const wide = seed('.env', 0o666);
+    expect(checkSensitiveFilePermissions({ envPath: wide, platform: 'win32' })).toEqual([]);
+  });
+
+  it('主库的 WAL / SHM 侧车一并纳入基线（侧车装着未 checkpoint 的学生数据）', () => {
+    const envPath = seed('.env', 0o600);
+    const dbPath = seed('data/educational_os.db', 0o600);
+    const walPath = seed('data/educational_os.db-wal', 0o644);
+    const shmPath = seed('data/educational_os.db-shm', 0o644);
+    const backupDir = path.join(tempDir, 'data', 'backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.chmodSync(backupDir, 0o700);
+    const keyPath = seed('storage/encryption-key', 0o600);
+
+    const issues = checkSensitiveFilePermissions({
+      envPath,
+      dbPath,
+      backupDir,
+      encryptionKeyPath: keyPath,
+      platform: 'linux',
+    });
+
+    expect(issues.map((i) => i.path).sort()).toEqual([walPath, shmPath].sort());
+    expect(issues.every((i) => i.kind === 'database' && i.expected === '600')).toBe(true);
+  });
+
+  it('fixSensitiveFilePermissions 把文件收敛到 600、目录收敛到 700', () => {
+    const envPath = seed('.env', 0o644);
+    const dbPath = seed('data/educational_os.db', 0o644);
+    const walPath = seed('data/educational_os.db-wal', 0o644);
+    const backupDir = path.join(tempDir, 'data', 'backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.chmodSync(backupDir, 0o755);
+    seed('data/backups/backup_1.db', 0o644);
+    const keyPath = seed('storage/encryption-key', 0o644);
+
+    const fixed = fixSensitiveFilePermissions({
+      envPath,
+      dbPath,
+      backupDir,
+      encryptionKeyPath: keyPath,
+      platform: 'linux',
+    });
+
+    expect(fixed.length).toBeGreaterThan(0);
+    expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(walPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(keyPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(backupDir).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(path.join(backupDir, 'backup_1.db')).mode & 0o777).toBe(0o600);
+
+    // 修完再查应为空
     expect(
-      checkSensitiveFilePermissions({ envPath: wide, platform: 'win32' }),
+      checkSensitiveFilePermissions({
+        envPath,
+        dbPath,
+        backupDir,
+        encryptionKeyPath: keyPath,
+        platform: 'linux',
+      }),
     ).toEqual([]);
+  });
+
+  it('win32 下修复模式不动作', () => {
+    const wide = seed('.env', 0o666);
+    expect(fixSensitiveFilePermissions({ envPath: wide, platform: 'win32' })).toEqual([]);
+    expect(fs.statSync(wide).mode & 0o777).toBe(0o666);
   });
 });
