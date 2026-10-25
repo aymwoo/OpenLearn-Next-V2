@@ -119,7 +119,7 @@ pnpm vitest run packages/core/worker-runtime/__tests__/plugin-permission.test.ts
 pnpm vitest run packages/core/worker-runtime/__tests__/plugin-trust-boundary-network-modes.test.ts
 
 # Token allowlist 负向
-pnpm vitest run packages/core/worker-runtime/__tests__/service-host-allowlist.test.ts
+pnpm vitest run src/plugin-host/__tests__/service-host-allowlist.test.ts
 
 # Worker 原语安全性
 pnpm vitest run packages/core/worker-runtime/__tests__/sandbox-confinement.test.ts

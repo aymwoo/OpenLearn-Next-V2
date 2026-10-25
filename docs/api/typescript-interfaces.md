@@ -21,7 +21,7 @@ interface PluginContext {
     capability: ICapabilityService;
     processManager: IProcessService;
     storage: IStorageService;
-    ai: IAIService;
+    ai: IAIService | null; // Provider 未配置时为 null
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };

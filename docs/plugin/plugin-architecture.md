@@ -129,7 +129,7 @@ export interface PluginContext {
     capability: ICapabilityService;
     processManager: IProcessService;
     storage: IStorageService;
-    ai: IAIService;
+    ai: IAIService | null; // AI Provider 未配置时为 null（运行时判定）
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
@@ -141,9 +141,15 @@ export interface PluginContext {
   log: IPluginLogger;
   contributions: ContributionAccessor;
   config: IConfigService;
+  http: IPluginHttpRouter; // worker 模式 RESTful 路由注册
+  i18n: PluginI18nAPI; // 插件文案 i18n
   require(moduleName: string): any;
 }
 ```
+
+> ⚠️ 以上为节选快照（`packages/core/plugin-host/types.ts` 为权威，字段随版本增减——如 worker 模式还有动态注入的 `ctx.reportProgress`，见[插件生命周期](plugin-lifecycle)）。
+
+````
 
 ### 上下文包装器与代理拦截 (`buildContext`)
 
@@ -165,7 +171,7 @@ export interface PluginContext {
 export interface Disposable {
   dispose(): void;
 }
-```
+````
 
 当插件触发停用（`deactivatePlugin`）或卸载（`uninstallPlugin`）时，`PluginHost` 自动调用：
 
@@ -232,7 +238,7 @@ resourceTracker.disposeAll(pluginId);
 - `lucide-react`
 - `uuid`
 
-引用不在白名单中的第三方 Node 模块将强行抛出 `Error: Module ${moduleName} is not in the plugin shared modules whitelist.`。
+引用不在白名单中的第三方 Node 模块将强行抛错：宿主侧为 `Shared module "X" is not registered.`（context-builder.ts），worker 侧为 `Shared module "X" is not available in worker: …`（bootstrap message-handler）。
 
 ---
 
