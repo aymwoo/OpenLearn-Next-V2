@@ -10,7 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-25
+
 ### Fixes
+
+- **发布前守卫：任何绕过 `scripts/publish.sh` 的直接 `npm publish` 都会被当场拦下（0.7.3 事故的直接防线）**：
+  - **事故（实测）**：2026-10-25 15:22，npm 上的 `openlearn-next@0.7.3` 被一次**直接 `npm publish`**（绕过 `scripts/publish.sh`）发布出去。产物的 `gitHead` 是 `cf9be45`（主工作区分支 HEAD）而不是发布 tag `7220214`；`package.json` 里 `@openlearn/plugin-sdk` 仍是 `"workspace:*"` —— 消费者安装该版本必然报 `EUNSUPPORTEDPROTOCOL`（`Unsupported URL Type "workspace:"`），**整个版本装不上**（最小复现 + `npm-package-arg` 直接 throw 双重确认）。
+  - **根因**：`publish.sh` 里那条把 SDK 依赖改写成精确 pin（`3.7.0`）的 `sed` **只在脚本流程内生效**。绕开脚本，就绕开了它 —— 于是 `workspace:` 这类本地协议原样进了发布包，而 npm 不会替发布者改写它。同一时刻 tag 同源校验也一并失效，npm 上的版本与仓库 tag 失去对应。
+  - **改法**：新增 `scripts/assert-publishable.mjs`，挂到根 `package.json` 的 `prepublishOnly`，在 npm 打包前做三道断言：① `dependencies` / `optionalDependencies` / `peerDependencies` 里不允许出现 `workspace:` / `link:` / `file:` 协议；② `packages/core/version.ts` 的 `FALLBACK_VERSION` 必须等于 `package.json` 的 `version`；③ 当前 HEAD 必须正好被 `v<version>` 这个 tag 指向（发布必须发生在打了发布 tag 的提交上）。于是「发布前提」不再只活在某个脚本里，npm 自己也会检查。
+  - **验证（实测退出码）**：SDK 仍是 `workspace:*` 且未打 tag → 退出码 1，逐条打印「本地协议」与「HEAD 未被 tag 指向」两条原因；改写成精确 pin `3.7.0` 但仍未打 tag → 退出码 1，只剩「HEAD 未被 tag 指向」一条；改写 pin 且 HEAD 已被 `v0.7.4` 指向 → 退出码 0 放行。**反向验证**：护栏能力未被削弱 —— 三种状态分别命中三条断言中的对应条，不是无条件放行。
+  - **影响面**：`scripts/` 不在 `package.json` 的 `files` 清单内、不进入发布包本体；根 `package.json` 多一条 `prepublishOnly` 生命周期脚本声明，不影响消费者安装（registry tarball 安装不会执行 `prepublishOnly`）。
 
 - **两个棘轮门禁改用仓库锁定的 prettier/eslint，不再让 npx 静默换版本**：
   - **问题**：格式棘轮与 ESLint 告警预算都用 `npx prettier` / `npx eslint` 调用工具，而 npx 在本地找不到对应包时会**联网拉一个最新版**来跑 —— 门禁的判定结果取决于「当时装的是哪个版本」。实测：仓库锁定 prettier 3.9.4，某次在缺 `node_modules` 的 worktree 里 npx 拉到 3.9.10，同一份 README.md 被判「不合规」，用锁定版本复判则完全合规（一度看着像真实回归，实为版本漂移假阳性）。
