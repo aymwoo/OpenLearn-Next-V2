@@ -271,6 +271,37 @@ const cleanupTx = db.transaction(() => {
     console.log(`  ✓ Successfully deleted ${delClasses.changes} test classes.`);
   }
 
+  // 3.5 查找并清理所有测试测评（E2E / A11Y / 金丝雀）
+  //
+  // 为什么单独补这一段：测评**不挂在课节上**，所以它既不会被「课节级联」带走，
+  // 也不在原先的清理范围里 —— 而 `e2e/a11y-gate.spec.ts` 的「学生端我的测评」
+  // 用例恰恰会建 `A11Y 测评 <suffix>`（quiz，status=published，owner=admin）。
+  // 实测：开发库里因此残留 13 份 A11Y 测评，而课节/班级/学生都被清掉了 ——
+  // 清理脚本「漏掉了一整类表」。
+  const testAssessments = db
+    .prepare(`SELECT id, title FROM assessments WHERE ${nameMatchClause('title').sql}`)
+    .all(...nameMatchClause('title').params);
+
+  console.log(`[cleanup-test-data] Found ${testAssessments.length} leftover test assessments:`);
+  for (const a of testAssessments) {
+    console.log(`  - [${a.id}] ${a.title}`);
+  }
+  if (testAssessments.length > 0) {
+    const assessmentIds = testAssessments.map((a) => a.id);
+    const aPlaceholders = assessmentIds.map(() => '?').join(',');
+    // 子表先删（SQLite 默认无级联）：题目与作业挂靠
+    try {
+      db.prepare(`DELETE FROM assessment_items WHERE assessment_id IN (${aPlaceholders})`).run(...assessmentIds);
+    } catch {}
+    try {
+      db.prepare(`DELETE FROM assessment_assignments WHERE assessment_id IN (${aPlaceholders})`).run(...assessmentIds);
+    } catch {}
+    const delAssessments = db
+      .prepare(`DELETE FROM assessments WHERE id IN (${aPlaceholders})`)
+      .run(...assessmentIds);
+    console.log(`  ✓ Removed ${delAssessments.changes} assessments`);
+  }
+
   // 4. 查找并清理所有 E2E / 金丝雀测试机房 (room_number LIKE 'E2E %' OR '%canary%')
   try {
     const testLabs = db

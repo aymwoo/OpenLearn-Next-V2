@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     2. `scripts/cleanup-test-data.mjs`：把测试数据前缀抽成 `TEST_NAME_PREFIXES` / `TEST_NAME_MARKERS` 常量并补上 `A11Y `，无法再“改 5 处 SQL 还漏一处”；并把 `segment_visits` / `segment_gate_overrides` 纳入课节级联（实测：原先留下 19 条孤儿访问记录）。
     3. 同一脚本里测试学生的匹配从只认 `STU_%-%` 扩展为枚举 15 个 spec tag：`student-return-to-class.spec.ts` 用的是 `STU_RETURN_${Date.now().toString(36).toUpperCase()}`（base36 时间戳**不带横杠**），于是永远漏网（实测残留 2 个 `STU_RETURN_*` 学生）。刻意**不**退化成「`STU_` 开头就删」—— 那会误伤人工建的普通测试学生。
   - **验证**：修复后跑一次门禁 → 课节/班级/学生残留均为 **0**，同时清掉 5 条 `segment_visits` 与 5 个课堂会话；全量 e2e 36 passed / 0 failed。
+  - **补漏（合并后实测发现）**：`cleanup-test-data.mjs` 原本**完全没有 `assessments`** —— 测评不挂在课节上，既不会被课节级联带走、也不在清理范围内，而 a11y 门禁的「学生端我的测评」用例恰恰会建 `A11Y 测评 <suffix>`（quiz / published / owner=admin）。实测开发库里因此残留 **13 份 A11Y 测评**，而课节/班级/学生都被清掉了 —— 清理脚本漏掉了整整一类表。现补上测评清理（含 `assessment_items` / `assessment_assignments` 子表级联）。
+  - **副本验证**：在真库的**在线备份副本**上执行 → 课节 3→0、班级 6→0、测评 13→0、`assessment_items` 26→0，而 `test` 与 `[演示]` 课节、2 个演示班级、12 个学生、132 个白板元素**分毫未动**（先在副本上验证，确认无误后才作用于真库）。
   - **发现但**未在本次修**（已登记）**：`e2e/classroom-answer-lock.spec.ts` 的 `loginAdmin()` 在 `mustChangePassword` 为真时会**把 admin 密码永久改成 `AdminPassword123`** 且不还原，会弄挂同一开发库上后续所有假定 `admin/admin` 的用例。
 - **版本占用门禁改判「tag 是否与本次发布的提交同源」，而不是「tag 是否存在」**：
   - **问题**：v0.7.2 引入的版本占用门禁写成了「git tag v<version> 存在即拒绝发布」，但仓库既定的发布顺序恰恰是「提交（含版本提升）→ 打 tag → 执行 `publish.sh`」。于是 **tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
