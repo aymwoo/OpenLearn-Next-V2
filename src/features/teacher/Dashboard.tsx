@@ -282,19 +282,30 @@ export function Dashboard() {
                           return (
                             <div
                               key={sch.id}
+                              // 不用行级 opacity 表示「已完成 / 停课」：
+                              // opacity-50 会让行内所有文字的实际对比度腰斩 ——
+                              // slate-700 在白底本是 8.6:1，乘以 0.5 后只剩 ~2.4:1，
+                              // 一条真实的 WCAG A/AA 违规（a11y 门禁带数据扫描时拖出）。
+                              // 改用「淡淡底色 + 文字降一级色阶」表达弱化，全程保持 ≥ 4.5:1。
                               className={`flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-b-0 ${
-                                isFinished ? 'opacity-50' : isCancel ? 'opacity-35 line-through' : ''
+                                isFinished ? 'bg-slate-50/70' : ''
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="font-mono text-xs text-slate-500 shrink-0">{sch.time_slot}</span>
                                 <span
-                                  className={`font-bold truncate max-w-[120px] lg:max-w-[150px] ${isNext ? 'text-indigo-650' : 'text-slate-700'}`}
+                                  className={`font-bold truncate max-w-[120px] lg:max-w-[150px] ${
+                                    isNext
+                                      ? 'text-indigo-700'
+                                      : isFinished || isCancel
+                                        ? 'text-slate-500'
+                                        : 'text-slate-700'
+                                  } ${isCancel ? 'line-through' : ''}`}
                                   title={sch.lesson_title}
                                 >
                                   {sch.lesson_title}
                                 </span>
-                                <span className="text-xs text-slate-455 truncate max-w-[60px] lg:max-w-[80px]">
+                                <span className="text-xs text-slate-500 truncate max-w-[60px] lg:max-w-[80px]">
                                   ({sch.class_name})
                                 </span>
                               </div>
@@ -305,7 +316,7 @@ export function Dashboard() {
                                   </span>
                                 )}
                                 {isFinished && (
-                                  <span className="bg-slate-100 text-slate-500 text-xs px-1.5 py-0.5 rounded font-bold">
+                                  <span className="bg-slate-200 text-slate-700 text-xs px-1.5 py-0.5 rounded font-bold">
                                     已完
                                   </span>
                                 )}

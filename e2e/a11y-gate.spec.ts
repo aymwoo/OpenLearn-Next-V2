@@ -37,6 +37,82 @@ const CLASS_PREFIX = `${TEST_TAG} `;
 /** 学生学号前缀（学生名另用 `${TEST_TAG}学生` 形式） */
 const STUDENT_PREFIX = `STU_${TEST_TAG}_`;
 
+/**
+ * 教师端扫描前先播一份「像在用」的数据。
+ *
+ * ## 为什么必须要播种
+ *
+ * 无障碍门禁原来跑在**空库**上：没排课的课表页不渲染「上午课程」徽标与「午休时间」胶囊，
+ * 没班级的班级页不渲染花名册……于是门禁一直是绿的。一旦库里有真实数据，同一批页面
+ * 立刻报 `color-contrast` —— 实测已经因此漏过两次真实违规：
+ *   1. 全局 toast 说明文字（弹出来那 0.3 秒不可读）；
+ *   2. 课表页 `text-sky-600 on bg-sky-50`（3.84:1）与 `text-slate-400 on white`（2.56:1）。
+ *
+ * 两者都是「内容一出现就违规」，靠人肉看着库状态去发现不可持续。所以这里在扫教师端
+ * 9 个页面前，先用真实 API 建一个「有排课、有学生、有课节」的最小现场 —— 让这一类
+ * 问题**在 CI 里就红**，而不是等老师看到。
+ *
+ * 注意：这里播种的数据量刻意很小（1 班 / 2 学生 / 1 课节 / 2 条排课），
+ * 目标是**触发填充态渲染**，不是造一个完整学期。
+ */
+interface SeededFixture {
+  classId?: string;
+  lessonId?: string;
+}
+
+async function seedTeacherWorkspaceData(request: import('@playwright/test').APIRequestContext): Promise<SeededFixture> {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const seeded: SeededFixture = {};
+
+  // 1. 课节
+  const lessonRes = await request.post('/api/lessons', {
+    data: { title: `${LESSON_PREFIX}门禁现场课节 ${suffix}`, content: '无障碍门禁数据现场' },
+  });
+  if (lessonRes.ok()) {
+    const body = await lessonRes.json();
+    seeded.lessonId = body?.result?.lessonId || body?.id;
+  }
+
+  // 2. 班级
+  const classRes = await request.post('/api/classes', {
+    data: { name: `${CLASS_PREFIX}门禁现场班级 ${suffix}`, grade: '高一' },
+  });
+  if (classRes.ok()) {
+    seeded.classId = (await classRes.json())?.id;
+  }
+
+  // 3. 两名学生入班（班级页 / 课堂页的花名册填充态）
+  if (seeded.classId) {
+    await request
+      .post(`/api/classes/${seeded.classId}/students/bulk-enroll`, {
+        data: {
+          students: [
+            { name: `${TEST_TAG}甲生`, student_number: `${STUDENT_PREFIX}${suffix}_1` },
+            { name: `${TEST_TAG}乙生`, student_number: `${STUDENT_PREFIX}${suffix}_2` },
+          ],
+        },
+      })
+      .catch(() => {});
+  }
+
+  // 4. 两条排课（今天的上午 + 下午）—— 课表页的分行渲染靠它触发
+  if (seeded.classId && seeded.lessonId) {
+    const today = new Date().toISOString().split('T')[0];
+    await request
+      .post(`/api/classes/${seeded.classId}/schedules/batch`, {
+        data: {
+          schedules: [
+            { lessonId: seeded.lessonId, scheduledDate: today, timeSlot: '08:00 - 08:45', status: 'scheduled' },
+            { lessonId: seeded.lessonId, scheduledDate: today, timeSlot: '14:00 - 14:45', status: 'scheduled' },
+          ],
+        },
+      })
+      .catch(() => {});
+  }
+
+  return seeded;
+}
+
 const TABS = [
   { name: '课程管理', hash: '#/courses' },
   { name: '班级管理', hash: '#/classes' },
@@ -122,6 +198,13 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     });
     await page.goto('/');
     // 侧边栏只在已登录的教师壳里渲染 —— 用它而不是文本长度判断「壳已就绪」。
+    await page.waitForSelector('#nav_btn_courses', { timeout: 30_000 });
+
+    // 先播一份数据现场，让 9 个页面进入「填充态」再扫 ——
+    // 否则空库下不渲染的元素（课表分行、花名册…）永远不会被检查到。
+    await seedTeacherWorkspaceData(context.request);
+    // 播种后重新载入，确保各页首次拉取就带着数据
+    await page.reload();
     await page.waitForSelector('#nav_btn_courses', { timeout: 30_000 });
 
     for (const tab of TABS) {
