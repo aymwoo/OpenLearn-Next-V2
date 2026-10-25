@@ -3,11 +3,11 @@
 <!-- doc-version: sdk=3.7.0 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.0`
-> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（实测 62 张中的绝大部分），作为插件跨表查询/读写时的参考。
+> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 82 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
 >
 > ⚠️ **权限边界待澄清（文档层矛盾，非本页可单方面裁定）**：`docs/architecture/security-permissions.md` §1 的 RBAC 表把「访问 SQLite 数据库」对 Plugin 标为 ❌「只能用 Plugin DB」，而本页描述的 `IDatabaseToken` 能力恰好是**整个平台共享数据库句柄**。两处口径冲突：**在你依赖本页做跨表读写前，请先确认平台是否对插件开放 `IDatabaseToken`**。保守做法是优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
 >
-> ⚠️ **本页不是完整字典**：插件安装后会按需动态创建 `plugin_{pluginId}_*` 私有表（实测某开发库中 34 张），且 `courseware_score_config`、`teaching_modes` 这类表仍可能随迁移加列。**权威清单始终以 `sqlite_master` 为准**：
+> ⚠️ **本页不是完整字典**：插件安装后会按需动态创建 `plugin_{pluginId}_*` 私有表（数量随安装的插件而变），且各类表仍可能随迁移加列。**结构权威清单是 `migrations/schema-golden.json`（金样）与 `sqlite_master`**——改迁移后跑 `pnpm db:gen-golden && pnpm db:gen-tables` 同步金样与本页文末清单：
 >
 > ```sql
 > -- 核心表（排除插件私有表与影子表）
@@ -24,18 +24,12 @@
 
 ## 0. 表的来源与计数（实测）
 
-| 来源                                     | 表数   | 说明                                                                                                            |
-| ---------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
-| `packages/core/db/index.ts`              | 41     | 内核 schema 初始化（`CREATE TABLE IF NOT EXISTS`）                                                              |
-| `server/bootstrap-db.ts`                 | 3      | `student_rollcalls` / `site_settings` / `agent_conversations`                                                   |
-| `server/utils/migrate.ts`                | 1      | `_migrations`（另含 2 张 `*__rollback` 影子表，仅迁移回滚用）                                                   |
-| `migrations/000_initial_schema.sql`      | 36     | 全新安装的初始 schema                                                                                           |
-| `migrations/003`–`013`（11 个脚本）      | 28     | 课堂运行时 / 成绩归集 / 作业中枢 / 互动课堂 / 教学模式 / 同伴互评 / 分组 / 课堂信息流 / 自动录入 / 分数来源策略 |
-| `migrations/014_performance_indexes.sql` | 0      | 只建索引，不建表                                                                                                |
-| **去重后核心表**                         | **62** | 上述全部来源去重的并集                                                                                          |
-| 插件私有表（运行时动态创建）             | 34     | `plugin_{pluginId}_*`，**数量随安装的插件而变**                                                                 |
+| 来源                                | 表数       | 说明                                                                                |
+| ----------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
+| `migrations/*.sql`（唯一结构 SSOT） | **82**     | 空库顺序跑完 `000`–`043` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
+| 插件私有表（运行时动态创建）        | 随安装而变 | `plugin_{scopeId}_*`，不在金样/本页清单内                                           |
 
-> 复核命令：`migrations/` 共 **15 个** SQL 脚本（`000`–`014`），外加 `README.md`。测试库 `server/__tests__/canary/` 中的 `plugin_submissions_new` / `plugin_submissions_legacy` 是测试夹具，不计入上表。
+> 早期的「内核内联 schema / bootstrap-db 建表」来源已收敛：`packages/core/db/index.ts` 模块加载即跑全量迁移，`server/bootstrap-db.ts` 只做旧插件升级与过期会话清理，不建表。逐迁移职责见 `migrations/README.md`。
 
 ---
 
@@ -53,13 +47,14 @@
 | `source_code`    | TEXT    | 源码                                                                         |
 | `status`         | TEXT    | `active` / `inactive` / `error` 等                                           |
 | `created_at`     | INTEGER | 时间戳                                                                       |
-| `execution_mode` | TEXT    | `inline` / `worker`                                                          |
+| `execution_mode` | TEXT    | `inline` / `worker` / `process`（第三方插件强制 `process`）                  |
+| `version`        | TEXT    | 插件版本（迁移 `019`）                                                       |
 | `loader_version` | TEXT    | 加载器版本（迁移执行器选择与兼容性判定用）                                   |
 | `zip_package`    | TEXT    | 原始 ZIP 包的 base64；**in-place update 依赖此列**定位回滚源                 |
 | `file_path`      | TEXT    | 磁盘源码路径（`plugins/{uuid}/index.js`）                                    |
 | `updated_at`     | INTEGER | 最后更新时间                                                                 |
 
-> `execution_mode` / `loader_version` / `zip_package` / `file_path` / `updated_at` 五列均由 `ALTER TABLE plugins ADD COLUMN` 增量加入（`packages/core/db/index.ts` 的 `ensureColumn` 调用）。按本文清单做 INSERT 会丢更新时刻与 ZIP 来源；装插件时**务必带上 `zip_package`**，否则 in-place 更新无法回滚。
+> `version`（迁移 `019`）等增量列均经由迁移 `ALTER TABLE plugins ADD COLUMN` 加入。按本文清单做 INSERT 会丢更新时刻与 ZIP 来源；装插件时**务必带上 `zip_package`**，否则 in-place 更新无法回滚。
 
 ### `plugin_storage`
 
@@ -78,7 +73,7 @@
 
 ### `processes`
 
-受控后台进程。`id` / `name` / `status` / `task_type` / `payload` / `state` / `logs` / `created_at` / `updated_at`。
+受控后台进程。`id` / `name` / `plugin_id`（归属插件，迁移 `018`） / `status` / `task_type` / `payload` / `state` / `logs` / `created_at` / `updated_at`。
 
 ### `pending_commands`
 
@@ -90,11 +85,11 @@
 
 ### `events`
 
-事件总线持久化。`id` / `type` / `source` / `payload` / `timestamp` / `correlationId`。
+事件总线持久化。`id` / `type` / `source` / `payload` / `timestamp` / `correlationId` / `lesson_id`（迁移 `006` 补课堂维度，配套 `(type,timestamp)` / `correlationId` / `(lesson_id,timestamp)` 索引）。
 
 ### `_migrations`
 
-核心 schema 迁移记录（`server/utils/migrate.ts`）。
+核心 schema 迁移记录（SSOT 在 `packages/core/db/migrator.ts`）。
 
 ---
 
@@ -122,11 +117,11 @@
 
 ### `classes`
 
-`id` / `name` / `description` / `class_passcode` / `created_at`。`class_passcode` 落库为 AES-256-GCM 密文（前缀 `olenc1:`），教师接口解密后返回原文。
+`id` / `name` / `description` / `class_passcode` / `class_passcode_expires_at` / `lab_id` / `owner_user_id` / `created_at`。`class_passcode` 落库为 AES-256-GCM 密文（前缀 `olenc1:`），教师接口解密后返回原文；`owner_user_id` 用于班级归属授权（迁移 `021`）。
 
 ### `students`
 
-`id` / `student_number`(UNIQUE) / `name` / `email` / `password` / `locked_lesson_id` / `private_notes` / `created_at`。
+`id` / `student_number`(UNIQUE) / `name` / `email` / `password` / `locked_lesson_id` / `private_notes` / `avatar` / `lock_mode` / `lock_target` / `created_at`（`avatar` 见迁移早期；`lock_mode`/`lock_target` 见迁移 `033` 学生锁定模式）。
 
 ### `class_students`
 
@@ -196,7 +191,7 @@
 
 ### `classroom_sessions`
 
-课堂会话主表。`id` / `lesson_id` / `class_id` / `teacher_id` / `stage` / `current_segment_id` / `checkin_code` / `focus_mode` / `started_at` / `ended_at` / `settings_json` / `created_at` / `teaching_mode_id`。
+课堂会话主表。`id` / `lesson_id` / `class_id` / `teacher_id` / `stage` / `current_segment_id` / `checkin_code` / `focus_mode` / `started_at` / `ended_at` / `settings_json` / `created_at` / `teaching_mode_id` / `academic_year`（迁移 `027`）。
 
 > `stage = 'IN_CLASS_TEACHING'` 是「正在进行中的课节」的判据，`server/utils/auto-record-score.ts` 的 `findActiveLessonForStudent` 用它决定学生提交时是否实时录入成绩。
 > `focus_mode` 承载全班锁屏 / 解锁。
@@ -386,17 +381,179 @@ AI 助手对话记忆。`id` / `conv_key` / `role` / `content` / `created_at`。
 
 ### `mfe_remotes`
 
-微前端远程。`name` / `entry` / `meta` / `created_at` / `updated_at`。
+MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。`created_at` / `entry` / `meta` / `name` / `updated_at`
 
-> **提示（实测）**：
->
-> - 核心 schema 初始化于 `packages/core/db/index.ts`（41 张 `CREATE TABLE IF NOT EXISTS`）
-> - `server/bootstrap-db.ts` 补 3 张：`student_rollcalls` / `site_settings` / `agent_conversations`
-> - `server/utils/migrate.ts` 维护 `_migrations`，另建 2 张 `*__rollback` 影子表（仅迁移回滚用，勿当业务表读）
-> - 增量迁移在 `migrations/`，**共 15 个脚本 `000`–`014`**（`014_performance_indexes.sql` 只建索引不建表）
-> - 上述来源去重后，核心表 **62 张**
-> - 另有插件私有表 `plugin_{pluginId}_*`，数量随安装的插件而变（某开发库实测 34 张），不计入核心表
->
-> 复核方式：见本文 §0 开头给出的 `sqlite_master` 查询。**本文不是完整字典**，以 `sqlite_master` 为准。
+---
 
-> 最后更新：2026-10-03（表清单与列结构按 `packages/core/db/index.ts`、`migrations/000`–`014` 及本地 `educational_os.db` 实测校准）
+## 9. 测评与题库表（迁移 `031` / `038` / `039`）
+
+### `assessments`
+
+测评主表（试卷/测验）。`academic_year` / `created_at` / `description` / `id` / `kind` / `owner_id` / `published_at` / `settings_json` / `status` / `title` / `updated_at`。
+
+### `assessment_items`
+
+测评条目。`answer_key_json` / `assessment_id` / `bank_item_id` / `config_json` / `id` / `max_score` / `section` / `sort_order` / `stem` / `type`（`bank_item_id` 关联题库条目）。
+
+### `assessment_assignments`
+
+测评指派。`academic_year` / `assessment_id` / `class_id` / `closes_at` / `created_at` / `created_by` / `duration_sec` / `exam_id` / `id` / `lesson_id` / `opens_at` / `schedule_id` / `score_released` / `session_id` / `status`。
+
+### `assessment_attempts`
+
+测评作答。`academic_year` / `anon_key` / `assignment_id` / `attempt_no` / `deadline_at` / `id` / `max_score` / `needs_manual_review` / `paper_json` / `proctor_json` / `score` / `started_at` / `status` / `student_id` / `submitted_at`（`anon_key` 支持匿名批改；`proctor_json` 记录监考事件，见 `PUT /api/assessment-attempts/:id/proctor`）。
+
+### `assessment_answers`
+
+逐题作答。`ai_suggestion_json` / `answer_json` / `attempt_id` / `feedback` / `graded_at` / `graded_by` / `grader` / `is_correct` / `item_id` / `manual_override` / `max_score` / `score` / `updated_at`（`ai_suggestion_json` 为 AI 批改建议，迁移 `038`）。
+
+### `question_bank_items`（迁移 `039`）
+
+题库条目（跨测评复用，`visibility` 控制共享范围）。
+
+`answer_key_json` / `config_json` / `created_at` / `difficulty` / `id` / `owner_id` / `stem` / `tags_json` / `type` / `updated_at` / `visibility`
+
+---
+
+## 10. 插件治理与配置表（迁移 `022` / `026` / `034` / `037`）
+
+### `plugin_config`
+
+插件配置键值（`scope_type` 见 [ADR-001](../architecture/adr-001-tenant-and-db-abstraction)：`school` 为预留枚举位，一校一实例下无自动来源）。
+
+`key` / `plugin_id` / `scope_id` / `scope_type` / `updated_at` / `value`
+
+### `plugin_public_routes` / `plugin_network_grants` / `plugin_capability_grants`
+
+插件公开路由、出站域名、能力授权的**管理员批准记录**（R-02 出站授权闭环）。
+
+- `plugin_public_routes`: `approved_at` / `method` / `path` / `plugin_key`
+- `plugin_network_grants`: `approved_at` / `host` / `plugin_key`
+- `plugin_capability_grants`: `approved_at` / `capability` / `plugin_key`
+
+### `plugin_orphan_data`（迁移 `034`）
+
+卸载插件时的数据导出登记（便于事后追溯/恢复）。
+
+`last_export_path` / `manifest_id` / `migration_version` / `plugin_id` / `plugin_name` / `plugin_version` / `row_count` / `storage_keys` / `table_names` / `table_prefixes` / `uninstalled_at`
+
+---
+
+## 11. 其余平台表
+
+### `assignment_grade_history`（迁移 `040`）
+
+成绩变更审计（重交内容留痕，Issue #248）。
+
+`actor_id` / `actor_role` / `assignment_id` / `created_at` / `id` / `new_score` / `new_source` / `new_status` / `old_content` / `old_score` / `old_source` / `old_status` / `reason` / `student_id`
+
+### `icebreaker_checkins`（迁移 `035`）
+
+课前心态打卡（破冰基线统计的数据源）。
+
+`checkin_date` / `class_id` / `created_at` / `id` / `lesson_id` / `mood` / `scope_key` / `student_id` / `updated_at`
+
+### `demo_data_registry`（迁移 `015`）
+
+演示数据登记（`pnpm dev:demo` 播种、`PURGE_DEMO_DATA` 清理的依据）。
+
+`created_at` / `entity_id` / `entity_type`
+
+### 迁移标记表 `_academic_year_backfill` / `_class_passcode_encryption` / `_lesson_think_cleanup`
+
+一次性数据回填/清理迁移的**完成标记**（行存在即表示该迁移已执行，勿当业务表读写）。
+
+---
+
+## 12. 完整表清单（自动生成，勿手改）
+
+由 `migrations/schema-golden.json` 生成。改迁移后先 `pnpm db:gen-golden`（再生成金样），再 `pnpm db:gen-tables`（刷新本段）；两步都跑，数据字典就不会随迁移漂移。
+
+<!-- AUTO-GENERATED:table-inventory BEGIN -->
+
+共 **82** 张表（迁移 44 个，金样生成于 2026-10-25T04:30:00.287Z）。列清单为列名（类型与约束见迁移 SQL）：
+
+- `_academic_year_backfill`: backfilled_at, id
+- `_class_passcode_encryption`: id, note
+- `_lesson_think_cleanup`: id, note
+- `_migrations`: applied_at, checksum, name
+- `agent_conversations`: content, conv_key, created_at, id, role
+- `ai_providers`: api_key, api_url, created_at, id, model_name, name, updated_at
+- `assessment_answers`: ai_suggestion_json, answer_json, attempt_id, feedback, graded_at, graded_by, grader, is_correct, item_id, manual_override, max_score, score, updated_at
+- `assessment_assignments`: academic_year, assessment_id, class_id, closes_at, created_at, created_by, duration_sec, exam_id, id, lesson_id, opens_at, schedule_id, score_released, session_id, status
+- `assessment_attempts`: academic_year, anon_key, assignment_id, attempt_no, deadline_at, id, max_score, needs_manual_review, paper_json, proctor_json, score, started_at, status, student_id, submitted_at
+- `assessment_items`: answer_key_json, assessment_id, bank_item_id, config_json, id, max_score, section, sort_order, stem, type
+- `assessments`: academic_year, created_at, description, id, kind, owner_id, published_at, settings_json, status, title, updated_at
+- `assignment_grade_history`: actor_id, actor_role, assignment_id, created_at, id, new_score, new_source, new_status, old_content, old_score, old_source, old_status, reason, student_id
+- `assignment_submissions`: academic_year, assignment_id, content, feedback, graded_at, graded_by, score, source, status, student_id, submitted_at
+- `assignments`: academic_year, class_id, content, created_at, description, id, lesson_id, title
+- `attendance`: academic_year, recorded_at, schedule_id, status, student_id
+- `class_grade_weights`: assignment_weight, attendance_weight, class_id, exam_weight, progress_weight, updated_at
+- `class_groups`: class_id, color, created_at, id, is_default, leader_id, member_ids, name, name_en, sort_order, updated_at
+- `class_students`: class_id, joined_at, student_id
+- `classes`: class_passcode, class_passcode_expires_at, created_at, description, id, lab_id, name, owner_user_id
+- `classroom_buzzers`: created_at, id, lesson_id, session_id, status, title, winner_response_time_ms, winner_student_id, winner_student_name
+- `classroom_danmaku`: created_at, id, lesson_id, sender_id, sender_name, session_id, text, top_percent, type, voice_duration_seconds
+- `classroom_exit_tickets`: challenge_answer, core_answer, created_at, feedback, id, is_correct, lesson_id, puzzled_concept, rating, session_id, student_id, student_name, tier_level
+- `classroom_feed`: actor_id, actor_name, class_id, created_at, id, lesson_id, message, session_id, source, type
+- `classroom_pacing_signals`: created_at, id, segment_id, session_id, signal_type, student_id
+- `classroom_peer_badges`: badge_key, created_at, id, lesson_id, receiver_id, receiver_name, sender_id, sender_name, session_id
+- `classroom_peer_nominations`: created_at, honor_key, id, lesson_id, nominated_student_id, nominated_student_name, nominator_id, session_id
+- `classroom_peer_review_tasks`: class_id, created_at, id, lesson_id, reviewer_id, reviewer_name, session_id, status, submitted_at, target_attempt_id, target_score, target_student_id, target_student_name, target_work_title, tier
+- `classroom_peer_reviews`: comment, created_at, dimension_scores_json, id, lesson_id, max_score, reviewer_id, reviewer_name, score, session_id, target_attempt_id, target_student_id, updated_at
+- `classroom_peer_rubric_dimensions`: bar_color_class, color_class, created_at, id, label, lesson_id, max_score, session_id, sort_order, weight
+- `classroom_poll_votes`: id, poll_id, selected_option, student_id, student_name, voted_at
+- `classroom_quick_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, session_id, status, title
+- `classroom_sessions`: academic_year, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
+- `client_sessions`: expires_at, id, session_data, updated_at
+- `computer_labs`: cols, created_at, id, room_number, rows
+- `courseware`: created_at, entry, id, name, type, uuid
+- `courseware_attempt`: courseware_id, finished_at, id, started_at, status, student_id
+- `courseware_score_config`: auto_record_enabled, auto_record_min_completion, auto_record_strategy, courseware_id, courseware_name, lesson_id, raw_full_score, score_fields, score_policy, target_full_score, updated_at, weight_percentage
+- `demo_data_registry`: created_at, entity_id, entity_type
+- `events`: correlationId, id, lesson_id, payload, source, timestamp, type
+- `exam_scores`: academic_year, exam_id, notes, recorded_at, score, student_id
+- `exams`: academic_year, class_id, created_at, description, id, max_score, title
+- `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
+- `lesson_checkins`: checked_in_at, lesson_id, student_id
+- `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
+- `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
+- `lessons`: content, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `mfe_remotes`: created_at, entry, meta, name, updated_at
+- `pending_commands`: actor_id, command_type, created_at, id, payload
+- `plugin_assignment_files`: assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
+- `plugin_assignments`: allow_late, allow_link, allow_text, allowed_ext, class_id, created_at, created_by, description, due_at, element_id, id, instructions, lesson_id, max_file_size, max_files, peer_review_count, peer_review_due_at, peer_review_mode, peer_weight, status, teacher_weight, title, updated_at
+- `plugin_capability_grants`: approved_at, capability, plugin_key
+- `plugin_config`: key, plugin_id, scope_id, scope_type, updated_at, value
+- `plugin_grades`: assignment_id, calculated_final_score, graded_at, graded_by, id, peer_average_score, peer_weight, published_at, source, status, submission_id, teacher_comment, teacher_score, teacher_weight
+- `plugin_network_grants`: approved_at, host, plugin_key
+- `plugin_orphan_data`: last_export_path, manifest_id, migration_version, plugin_id, plugin_name, plugin_version, row_count, storage_keys, table_names, table_prefixes, uninstalled_at
+- `plugin_peer_review_tasks`: anonymous, assignment_id, created_at, due_at, id, reviewer_id, status, submission_id
+- `plugin_peer_reviews`: anonymous, assignment_id, comment, created_at, id, reviewer_id, score, status, submission_id, task_id, updated_at
+- `plugin_public_routes`: approved_at, method, path, plugin_key
+- `plugin_storage`: key, plugin_id, updated_at, value
+- `plugin_submission_versions`: assignment_id, files_json, id, is_late, link_url, student_id, submission_id, submitted_at, text_content, version
+- `plugin_submissions`: assignment_id, created_at, file_path, id, lesson_id, student_id, updated_at, version
+- `plugins`: created_at, execution_mode, file_path, id, loader_version, manifest, name, source_code, status, updated_at, version, zip_package
+- `processes`: created_at, id, logs, name, payload, plugin_id, state, status, task_type, updated_at
+- `question_bank_items`: answer_key_json, config_json, created_at, difficulty, id, owner_id, stem, tags_json, type, updated_at, visibility
+- `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
+- `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
+- `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
+- `site_settings`: academic_start_month, current_academic_year, id, logo_url, site_name, slogan, upload_max_file_mb
+- `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
+- `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
+- `student_read_notifications`: created_at, notification_id, student_id
+- `student_rollcalls`: class_id, difficulty, id, lesson_id, picked_time, rating, reward_coins, score, student_id
+- `student_seats`: class_id, col_idx, lab_id, row_idx, student_id
+- `student_semester_reports`: academic_year, ai_evaluation, assignment_score, attendance_score, class_id, created_at, dimension_scores, exam_score, grade_level, id, progress_score, semester_name, student_id, teacher_evaluation, total_score, updated_at
+- `students`: avatar, created_at, email, id, lock_mode, lock_target, locked_lesson_id, name, password, private_notes, student_number
+- `submission_raw`: attempt_id, created_at, event_type, id, payload_json
+- `submission_result`: attempt_id, comment, completion, extra_json, id, score
+- `system_resources`: content, created_at, id, name, type
+- `teaching_modes`: color, created_at, description, description_en, icon, id, is_builtin, name, name_en, sort_order, updated_at
+- `users`: avatar, created_at, id, must_change_password, name, password_hash, role, status, username
+- `vfs_nodes`: content, created_at, id, name, parent_id, type, updated_at
+- `whiteboard_elements`: created_at, data, id, lesson_id, type
+
+<!-- AUTO-GENERATED:table-inventory END -->
