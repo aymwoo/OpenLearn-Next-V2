@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **bridge SDK 的单测不再对着「不会发布的陈旧产物」校验（并补上生成物同步守卫）**：
+  - **现象（实测）**：0.7.4 发布后 main 的 CI 转红 —— `server/__tests__/bridge-hook-telemetry.test.ts` 报「expected +0 to be 5」：它用正则 `/type: "HOOK_[A-Z]+"/` 统计 HOOK 上报点，在**重新生成**后的 `server/utils/bridge-sdk.ts` 上匹配到 **0** 处。
+  - **根因（两层，比表面严重）**：
+    1. `packages/bridge-sdk/src/bridge.js`（唯一真相源）用的是**单引号**（`type: 'HOOK_FETCH'` 等 5 处），而仓库里**提交的** `server/utils/bridge-sdk.ts` 还是旧的**双引号**形态 —— 源码改了、生成物没跟着刷新。
+    2. 这条单测的断言硬编码了**双引号**，于是它长期校验的是那份**陈旧生成物**；而构建（`pnpm build`）会先重新生成再打包 —— **真正发布出去的那份代码用的是单引号**。也就是说这条测试一直在给一份不会上线的代码开绿灯。
+  - **改法**：① 单测的正则改成引号无关（`/type: ['"]HOOK_[A-Z]+['"]/`），**断言强度不变**（仍要求恰好 5 处、且每处都受 `__hookAllowed()` 门控），但校验的变成了真正上线的形态；② 把 `scripts/build-bridge-sdk.mjs` 的生成逻辑抽成纯函数 `renderBridgeSdkTs()` 并导出，新增 `server/__tests__/bridge-sdk-generated.test.ts` —— 断言「提交的生成物 == 源码的生成结果」，源码一改而生成物没刷新就立刻变红。
+  - **验证**：① 生成器重构后跑 `node scripts/build-bridge-sdk.mjs`，产物与改动前**逐字节一致**（`git diff` 为空）；② 两条测试 4 例通过；③ **反向验证**：给源码加一行注释而**不**重新生成 → 同步守卫立刻变红（1 failed），还原后恢复全绿 —— 护栏能力未被削弱。
+  - **影响面**：`scripts/build-bridge-sdk.mjs`（纯函数抽取，行为等价）、`server/utils/bridge-sdk.ts`（生成物刷新为与源码一致）、一条单测的引号无关化 + 一条新的同步守卫。`server/utils/bridge-sdk.ts` 只在**构建时**进入产物，仓库里它的形态变化不影响已发布的 0.7.4（0.7.4 的产物本就是重新生成后打包的，与本次刷新后的内容一致）。
+
 - **发布时提醒：从 git linked worktree 发布，npm 采集不到 gitHead（0.7.4 的实测遗留）**：
   - **现象（实测）**：0.7.4 从 `git worktree` 出来的 linked worktree 发布，registry 上该版本的 `gitHead` 字段为空 —— 消费者在 npm 页面看不到来源提交。对照：15:22 那个坏版本是在**普通 checkout** 里发的，`gitHead` 正常记录为 `cf9be45…`。
   - **根因**：npm 采集 `gitHead` 时要求包目录下的 `.git` 是**目录**；而 linked worktree 里 `.git` 是一个 66 字节的文本文件（内容是 `gitdir: …`），采集直接落空。
