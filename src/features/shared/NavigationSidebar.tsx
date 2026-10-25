@@ -1,26 +1,15 @@
-import React, { useState } from 'react';
-import {
-  Home,
-  BookOpen,
-  Presentation,
-  Users,
-  Calendar as CalendarIcon,
-  LayoutTemplate,
-  Puzzle,
-  Shield,
-  HelpCircle,
-  Menu,
-  ChevronLeft,
-  ChevronDown,
-  Clock,
-  ExternalLink,
-  ClipboardList,
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Menu, ChevronLeft, ChevronDown, Clock, ExternalLink } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { openTeacherTabInNewTab } from '../../utils/teacherTabHash';
 import { translations } from '../../i18n';
 import type { Language } from '../../i18n';
+import {
+  resolveBuiltinNavigationItems,
+  resolveGroupLabel,
+  type NavigationGroupKey,
+} from '../navigation/navigation-registry';
 
 /** Narrow an untyped lang string to the i18n literal union, defaulting to 'zh'. */
 function narrowLang(lang: string | undefined): Language {
@@ -96,6 +85,19 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
     });
   };
 
+  // 内置入口的**唯一数据源**是 navigation registry —— 组件只负责按数据渲染，
+  // 组标题、顺序、图标、文案、角色可见性都不再散落在 JSX 里。
+  const navItems = useMemo(
+    () =>
+      resolveBuiltinNavigationItems(
+        session?.subRole === 'administrator' ? 'administrator' : 'teacher',
+        lang === 'en' ? 'en' : 'zh',
+      ),
+    [session?.subRole, lang],
+  );
+
+  const itemsByGroup = (groupKey: NavigationGroupKey) => navItems.filter((item) => item.group === groupKey);
+
   return (
     <div
       id="navigation_sidebar"
@@ -128,128 +130,63 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
       </div>
 
       <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-2.5'} flex flex-col gap-2 overflow-y-auto flex-1`}>
-        {/* Group 1: 教学工具 */}
-        <NavGroupHeader
-          label={lang === 'zh' ? '教学工具' : 'TEACHING'}
-          groupKey="teaching"
-          mainNavCollapsed={mainNavCollapsed}
-          isCollapsed={!!collapsedGroups['teaching']}
-          onToggle={() => toggleGroup('teaching')}
-          lang={lang}
-        />
-        {(!collapsedGroups['teaching'] || mainNavCollapsed) && (
-          <div className="flex flex-col gap-1">
-            <NavButton
-              icon={BookOpen}
-              label={lang === 'zh' ? '课程管理' : 'Courses'}
-              tab="courses"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-            <NavButton
-              icon={Presentation}
-              label={lang === 'zh' ? '互动课堂' : 'Live Class'}
-              tab="live_class"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-              highlight
-            />
-            <NavButton
-              icon={Users}
-              label={lang === 'zh' ? '班级管理' : 'Classes & Students'}
-              tab="classes"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-            <NavButton
-              icon={ClipboardList}
-              label={lang === 'zh' ? '测评中心' : 'Assessment Center'}
-              tab="assessments"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-          </div>
-        )}
-
-        {/* Group 2: 系统管理 */}
-        <NavGroupHeader
-          label={lang === 'zh' ? '系统管理' : 'SYSTEM MANAGEMENT'}
-          groupKey="system"
-          mainNavCollapsed={mainNavCollapsed}
-          isCollapsed={!!collapsedGroups['system']}
-          onToggle={() => toggleGroup('system')}
-          lang={lang}
-        />
-        {(!collapsedGroups['system'] || mainNavCollapsed) && (
-          <div className="flex flex-col gap-1">
-            <NavButton
-              icon={CalendarIcon}
-              label={lang === 'zh' ? '课表管理' : 'Timetable Routine'}
-              tab="timetable"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-            <NavButton
-              icon={LayoutTemplate}
-              label={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}
-              tab="computer_labs"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-            <NavButton
-              icon={Puzzle}
-              label={lang === 'zh' ? '插件中心' : 'App Store / Plugins'}
-              tab="plugins"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-
-            {session?.subRole === 'administrator' && (
-              <NavButton
-                icon={Shield}
-                label={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
-                tab="admin_directory"
-                isAdmin
-                {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Group 3: 扩展应用 (Dynamic plugin-registered tab buttons) */}
-        {pluginTabs.length > 0 && (
-          <>
-            <NavGroupHeader
-              label={lang === 'zh' ? '扩展应用' : 'EXTENSIONS'}
-              groupKey="extensions"
-              mainNavCollapsed={mainNavCollapsed}
-              isCollapsed={!!collapsedGroups['extensions']}
-              onToggle={() => toggleGroup('extensions')}
-              lang={lang}
-            />
-            {(!collapsedGroups['extensions'] || mainNavCollapsed) && (
-              <div className="flex flex-col gap-1">
-                <ExtensionPointRenderer
-                  slot="teacher.tab"
-                  slotProps={{ renderType: 'button', mainNavCollapsed, teacherTab, setTeacherTab, lang }}
+        {/* 分组按 registry 的 position 顺序渲染：teaching → system → extensions → support */}
+        {(['teaching', 'system', 'extensions', 'support'] as NavigationGroupKey[]).map((groupKey) => {
+          // 扩展应用分组的内容来自插件贡献（slot teacher.tab），由 ExtensionPointRenderer 渲染
+          if (groupKey === 'extensions') {
+            if (pluginTabs.length === 0) return null;
+            return (
+              <React.Fragment key={groupKey}>
+                <NavGroupHeader
+                  label={resolveGroupLabel('extensions', lang === 'en' ? 'en' : 'zh')}
+                  groupKey="extensions"
+                  mainNavCollapsed={mainNavCollapsed}
+                  isCollapsed={!!collapsedGroups['extensions']}
+                  onToggle={() => toggleGroup('extensions')}
+                  lang={lang}
                 />
-              </div>
-            )}
-          </>
-        )}
+                {(!collapsedGroups['extensions'] || mainNavCollapsed) && (
+                  <div className="flex flex-col gap-1">
+                    <ExtensionPointRenderer
+                      slot="teacher.tab"
+                      slotProps={{ renderType: 'button', mainNavCollapsed, teacherTab, setTeacherTab, lang }}
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          }
 
-        {/* Group 4: 帮助支持 */}
-        <NavGroupHeader
-          label={lang === 'zh' ? '帮助支持' : 'HELP & SUPPORT'}
-          groupKey="support"
-          mainNavCollapsed={mainNavCollapsed}
-          isCollapsed={!!collapsedGroups['support']}
-          onToggle={() => toggleGroup('support')}
-          lang={lang}
-        />
-        {(!collapsedGroups['support'] || mainNavCollapsed) && (
-          <div className="flex flex-col gap-1">
-            <NavButton
-              icon={HelpCircle}
-              label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'}
-              tab="help"
-              {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
-            />
-          </div>
-        )}
+          const groupItems = itemsByGroup(groupKey);
+          if (groupItems.length === 0) return null;
+          return (
+            <React.Fragment key={groupKey}>
+              <NavGroupHeader
+                label={resolveGroupLabel(groupKey, lang === 'en' ? 'en' : 'zh')}
+                groupKey={groupKey}
+                mainNavCollapsed={mainNavCollapsed}
+                isCollapsed={!!collapsedGroups[groupKey]}
+                onToggle={() => toggleGroup(groupKey)}
+                lang={lang}
+              />
+              {(!collapsedGroups[groupKey] || mainNavCollapsed) && (
+                <div className="flex flex-col gap-1">
+                  {groupItems.map((item) => (
+                    <NavButton
+                      key={item.id}
+                      icon={item.icon}
+                      label={item.label}
+                      tab={item.tab}
+                      highlight={item.highlight}
+                      isAdmin={item.administratorOnly}
+                      {...{ teacherTab, setTeacherTab, mainNavCollapsed, lang }}
+                    />
+                  ))}
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
       </div>
 
       {/* Today's Schedules Sidebar Widget */}

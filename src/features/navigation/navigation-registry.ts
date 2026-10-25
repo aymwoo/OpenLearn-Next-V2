@@ -1,14 +1,39 @@
 /**
- * OpenLearn V2 - Navigation System Registry Adapter (PF-02)
- * Decouples built-in tabs and plugin-contributed tabs into a unified,
- * grouped, and permission-guarded Navigation Architecture.
+ * OpenLearn V2 — Navigation Registry（教师工作区侧边栏的**唯一数据源**）
+ *
+ * ## 为什么要有这一层
+ *
+ * 侧边栏曾经把 9 个入口硬编码在 `NavigationSidebar.tsx` 里：组标题、顺序、图标、
+ * 文案、角色可见性全散在 JSX 中。新增/调整一个入口要改组件、而插件贡献的 tab
+ * 走的是另一条渲染路径（`ExtensionPointRenderer` + slot `teacher.tab`）——两套机制
+ * 各自为政。
+ *
+ * 本模块把「内置入口」抽成数据：组件只负责按数据渲染，插件贡献仍走
+ * `ExtensionPointRenderer`（那条路径要渲染的是插件自带的 React 组件，与内置按钮
+ * 不是一回事，不应该硬塞进同一份数据）。
+ *
+ * ## 口径
+ *
+ * - `tab` 是教师工作区的 hash 路由值（`#/courses` 等），与 `appStore.setTeacherTab`
+ *   的入参一致。
+ * - `administratorOnly` 对应会话里的 `subRole === 'administrator'`。
+ * - 侧边栏只出现在教师工作区（`TeacherView`），学生端不渲染它，因此这里不按
+ *   teacher/student 过滤。
  */
-
 import React from 'react';
-import { BookOpen, Presentation, Users, Calendar as CalendarIcon, Home, BarChart2 } from 'lucide-react';
-import type { ExtensionPointConfig } from '../../plugin-host/types';
+import {
+  BookOpen,
+  Presentation,
+  Users,
+  ClipboardList,
+  Calendar as CalendarIcon,
+  LayoutTemplate,
+  Puzzle,
+  Shield,
+  HelpCircle,
+} from 'lucide-react';
 
-export type NavigationGroupKey = 'teaching' | 'management' | 'analytics' | 'extension';
+export type NavigationGroupKey = 'teaching' | 'system' | 'extensions' | 'support';
 
 export interface NavigationGroupMetadata {
   key: NavigationGroupKey;
@@ -19,187 +44,168 @@ export interface NavigationGroupMetadata {
 export const NAVIGATION_GROUPS: Record<NavigationGroupKey, NavigationGroupMetadata> = {
   teaching: {
     key: 'teaching',
-    label: { zh: '教学工具', en: 'Teaching Tools' },
+    label: { zh: '教学工具', en: 'TEACHING' },
     position: 10,
   },
-  management: {
-    key: 'management',
-    label: { zh: '系统管理', en: 'System Management' },
+  system: {
+    key: 'system',
+    label: { zh: '系统管理', en: 'SYSTEM MANAGEMENT' },
     position: 20,
   },
-  analytics: {
-    key: 'analytics',
-    label: { zh: '数据分析', en: 'Analytics & Reports' },
+  extensions: {
+    key: 'extensions',
+    label: { zh: '扩展应用', en: 'EXTENSIONS' },
     position: 30,
   },
-  extension: {
-    key: 'extension',
-    label: { zh: '扩展应用', en: 'Extensions' },
+  support: {
+    key: 'support',
+    label: { zh: '帮助支持', en: 'HELP & SUPPORT' },
     position: 40,
   },
 };
 
 export interface BuiltinNavItem {
+  /** 稳定标识（插件贡献的 id 不能与之冲突） */
   id: string;
+  /** 教师工作区的 hash 路由值 */
+  tab: string;
   label: { zh: string; en: string };
   icon: React.ComponentType<{ size?: number; className?: string }>;
   group: NavigationGroupKey;
-  rolesAllowed: ('admin' | 'teacher' | 'student')[];
   position: number;
-  badge?: number | string;
-  lazyComponent?: () => Promise<{ default: React.ComponentType<any> }>;
+  /** 仅管理员可见（会话 subRole === 'administrator'） */
+  administratorOnly?: boolean;
+  /** 图标常驻主题色（未选中时也强调），用于「互动课堂」这类主入口 */
+  highlight?: boolean;
 }
 
 /**
- * Registry catalog of all built-in platform navigation entries.
+ * 内置导航入口清单。
+ *
+ * 顺序即 `position` 升序；组内顺序 + 组间顺序都由 position 决定，
+ * 组件不再自行决定「先渲染哪一组」。
  */
 export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
   {
-    id: 'courseware',
-    label: { zh: '课件库', en: 'Courseware' },
+    id: 'courses',
+    tab: 'courses',
+    label: { zh: '课程管理', en: 'Courses' },
     icon: BookOpen,
     group: 'teaching',
-    rolesAllowed: ['admin', 'teacher', 'student'],
     position: 10,
   },
   {
-    id: 'whiteboard',
-    label: { zh: '互动白板', en: 'Whiteboard' },
+    id: 'live_class',
+    tab: 'live_class',
+    label: { zh: '互动课堂', en: 'Live Class' },
     icon: Presentation,
     group: 'teaching',
-    rolesAllowed: ['admin', 'teacher', 'student'],
     position: 20,
+    highlight: true,
   },
   {
-    id: 'class',
-    label: { zh: '课堂监控', en: 'Live Class' },
+    id: 'classes',
+    tab: 'classes',
+    label: { zh: '班级管理', en: 'Classes & Students' },
     icon: Users,
     group: 'teaching',
-    rolesAllowed: ['admin', 'teacher'],
     position: 30,
   },
   {
+    id: 'assessments',
+    tab: 'assessments',
+    label: { zh: '测评中心', en: 'Assessment Center' },
+    icon: ClipboardList,
+    group: 'teaching',
+    position: 40,
+  },
+  {
     id: 'timetable',
-    label: { zh: '课程表', en: 'Timetable' },
+    tab: 'timetable',
+    label: { zh: '课表管理', en: 'Timetable Routine' },
     icon: CalendarIcon,
-    group: 'management',
-    rolesAllowed: ['admin', 'teacher'],
+    group: 'system',
     position: 10,
-    lazyComponent: () => import('../../components/TimetableManager').then((m) => ({ default: m.TimetableManager })),
   },
   {
-    id: 'computer-lab',
-    label: { zh: '电子机房', en: 'Computer Lab' },
-    icon: Home,
-    group: 'management',
-    rolesAllowed: ['admin', 'teacher'],
+    id: 'computer_labs',
+    tab: 'computer_labs',
+    label: { zh: '机房管理', en: 'Computer Lab Seating' },
+    icon: LayoutTemplate,
+    group: 'system',
     position: 20,
-    lazyComponent: () => import('../../components/ComputerLabManager').then((m) => ({ default: m.ComputerLabManager })),
   },
   {
-    id: 'semester-grades',
-    label: { zh: '成绩管理', en: 'Semester Grades' },
-    icon: BarChart2,
-    group: 'analytics',
-    rolesAllowed: ['admin', 'teacher'],
+    id: 'plugins',
+    tab: 'plugins',
+    label: { zh: '插件中心', en: 'App Store / Plugins' },
+    icon: Puzzle,
+    group: 'system',
+    position: 30,
+  },
+  {
+    id: 'admin_directory',
+    tab: 'admin_directory',
+    label: { zh: '管理后台', en: '⭐ Admin Center' },
+    icon: Shield,
+    group: 'system',
+    position: 40,
+    administratorOnly: true,
+  },
+  {
+    id: 'help',
+    tab: 'help',
+    label: { zh: '帮助文档', en: 'System Commands / Help' },
+    icon: HelpCircle,
+    group: 'support',
     position: 10,
-    lazyComponent: () =>
-      import('../../components/SemesterGradeManager').then((m) => ({ default: m.SemesterGradeManager })),
   },
 ];
 
-/**
- * Unified Navigation Entry Item (Builtin or Plugin-contributed)
- */
-export interface UnifiedNavItem {
+export interface ResolvedNavItem {
   id: string;
-  pluginId?: string;
+  tab: string;
+  /** 已按语言解析好的展示文案 */
   label: string;
-  icon?: React.ComponentType<{ size?: number; className?: string }> | string;
+  /** 双语文案（命令面板等需要同时产出两种语言的场合使用） */
+  labelZh: string;
+  labelEn: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
   group: NavigationGroupKey;
   position: number;
-  rolesAllowed?: ('admin' | 'teacher' | 'student')[];
-  badge?: number | string;
-  isPlugin: boolean;
-  rawPluginConfig?: ExtensionPointConfig;
-  lazyComponent?: () => Promise<{ default: React.ComponentType<any> }>;
+  administratorOnly: boolean;
+  highlight: boolean;
 }
 
 /**
- * 把 ExtensionPointConfig.component（直组件 | lazy 工厂联合）归一化为导航侧的
- * lazy 工厂。与 resolveExtensionComponent 的约定一致：带 `__isLazyFactory` 标记
- * 的才是工厂，未打标的一律视为直接组件——包装成已决 Promise 交给 React.lazy。
+ * 按角色与语言解析内置导航入口。
+ *
+ * @param role 教师工作区内的角色：'teacher' | 'administrator'
+ * @param lang 界面语言
  */
-function toNavLazyFactory(
-  component: ExtensionPointConfig['component'],
-): () => Promise<{ default: React.ComponentType<any> }> {
-  if ((component as { __isLazyFactory?: boolean }).__isLazyFactory === true) {
-    return component as () => Promise<{ default: React.ComponentType<any> }>;
-  }
-  const direct = component as React.ComponentType<any>;
-  return () => Promise.resolve({ default: direct });
-}
-
-/**
- * Filter and resolve navigation items by current user role and active plugins.
- */
-export function resolveUnifiedNavigationItems(
-  role: 'admin' | 'teacher' | 'student',
-  lang: 'zh' | 'en',
-  pluginExtensionPoints: ExtensionPointConfig[],
-): Record<NavigationGroupKey, UnifiedNavItem[]> {
-  const groups: Record<NavigationGroupKey, UnifiedNavItem[]> = {
-    teaching: [],
-    management: [],
-    analytics: [],
-    extension: [],
-  };
-
-  // 1. Process Built-in Items
-  for (const item of BUILTIN_NAV_ITEMS) {
-    if (!item.rolesAllowed.includes(role)) continue;
-
-    groups[item.group].push({
+export function resolveBuiltinNavigationItems(role: 'teacher' | 'administrator', lang: 'zh' | 'en'): ResolvedNavItem[] {
+  return BUILTIN_NAV_ITEMS.filter((item) => !item.administratorOnly || role === 'administrator')
+    .map((item) => ({
       id: item.id,
-      label: item.label[lang] || item.label.zh,
+      tab: item.tab,
+      label: item.label[lang] ?? item.label.zh,
+      labelZh: item.label.zh,
+      labelEn: item.label.en,
       icon: item.icon,
       group: item.group,
       position: item.position,
-      rolesAllowed: item.rolesAllowed,
-      badge: item.badge,
-      isPlugin: false,
-      lazyComponent: item.lazyComponent,
+      administratorOnly: item.administratorOnly ?? false,
+      highlight: item.highlight ?? false,
+    }))
+    .sort((a, b) => {
+      const ga = NAVIGATION_GROUPS[a.group].position;
+      const gb = NAVIGATION_GROUPS[b.group].position;
+      if (ga !== gb) return ga - gb;
+      return a.position - b.position;
     });
-  }
+}
 
-  // 2. Process Plugin Contributions (Slot: teacher.tab)
-  for (const pluginItem of pluginExtensionPoints) {
-    if (pluginItem.rolesAllowed && !pluginItem.rolesAllowed.includes(role)) {
-      continue;
-    }
-
-    const targetGroup: NavigationGroupKey = (pluginItem.group as NavigationGroupKey) || 'extension';
-    const groupKey: NavigationGroupKey = groups[targetGroup] ? targetGroup : 'extension';
-
-    groups[groupKey].push({
-      id: pluginItem.id,
-      pluginId: pluginItem.pluginId,
-      label: pluginItem.label,
-      icon: pluginItem.icon,
-      group: groupKey,
-      position: pluginItem.position ?? 100,
-      rolesAllowed: pluginItem.rolesAllowed,
-      badge: pluginItem.badge,
-      isPlugin: true,
-      rawPluginConfig: pluginItem,
-      lazyComponent: toNavLazyFactory(pluginItem.component),
-    });
-  }
-
-  // 3. Sort items inside each group by position ascending
-  for (const key of Object.keys(groups) as NavigationGroupKey[]) {
-    groups[key].sort((a, b) => a.position - b.position);
-  }
-
-  return groups;
+/** 分组标题文案（按语言解析）。 */
+export function resolveGroupLabel(group: NavigationGroupKey, lang: 'zh' | 'en'): string {
+  return NAVIGATION_GROUPS[group].label[lang] ?? NAVIGATION_GROUPS[group].label.zh;
 }

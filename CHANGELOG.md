@@ -24,6 +24,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
   - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
 
+### Features
+
+- **把三个「已实现、有单测、但零生产引用」的前端模块接进产品**（审计收尾项）：
+  - **导航注册表（`src/features/navigation`）成为侧边栏唯一数据源**：此前 9 个入口的组标题、顺序、图标、文案、角色可见性全硬编码在 `NavigationSidebar.tsx` 的 JSX 里，插件贡献的 tab 又走另一条渲染路径（`ExtensionPointRenderer` + slot `teacher.tab`），两套机制各自为政。现改为按 registry 数据渲染；plugin 贡献仍走扩展槽 —— 那要渲染插件自带的 React 组件，与内置按钮不是一回事，不硬塞进同一份数据。同时把 registry 里那套**从未被任何组件使用过**的草案模型（`'admin'`/`'student'` 角色词表、`management`/`analytics` 分组、插件合并函数）改成**已上线**的真实模型（只出现在教师工作区的 4 个分组、9 个入口、`administratorOnly`）。
+  - **全局命令面板（`src/features/command-palette`）**：`Cmd/Ctrl + K` 唤起。内置跳转命令**由 navigation registry 生成**，与侧边栏同源 —— 新增入口只改一处，两处同时出现，不会漂移；另含界面开关与 4 个主题切换，共 18 条。命令面板组件本身早已被插件贡献用法（`command_palette.item`）复用，所以另做一个宿主 `CommandPaletteHost` 去读 AppDataContext，不把上下文依赖塞进可复用组件。
+  - **「/」快速插入（`src/features/quick-insert`）**：在组件面板搜索框输入 `/` 唤起伏层。插入项**由 `paletteConfig.PALETTE_ITEMS` 派生** —— 可插入内容的唯一事实来源是画板组件清单，绝不另立一份（两份必然漂移，插入的元素类型会对不上）。
+  - **没有接的 14 个（有意为之，见 PR 说明）**：`ai-teaching-workflow` / `lesson-workflow` 是 36L/42L 的 getter-setter 空壳，且与**已在跑**的 `packages/core/lesson-engine` + `server/services/classroom-runtime-service.ts`（真实的 9 阶段状态机 + 服务端门禁）重叠；`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context` 是一套没有任何生产消费方的 AI 注册层（`server/ai-agent.ts` 并不查它们）；`classroom-runtime` / `interaction-runtime` 分别与已上线的课堂链路、白板 DOM 事件重叠；`student-workspace`(+`workspace`/`resource-runtime`/`ai-teacher-workspace`) 是**第二套学生端壳**，与当前在跑的 `src/features/student`（6 个引用方、63 个文件）互斥。强行接线 = 替换已验证可用的子系统，应单独立项。
+  - **测试**：`navigation-registry.test.ts` 重写为 8 例（守真实模型：分组顺序、9 个 tab 清单、id/tab 唯一、管理员可见性、排序、双语解析、highlight）；新增 `builtin-commands.test.tsx` 9 例、`builtin-items.test.tsx` 5 例、`e2e/command-palette.spec.ts` 2 例（真实浏览器里唤起→搜索→执行→侧边栏进入选中态）。
+  - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
+
 ### Fixes
 
 - **开发环境里「同页两份 React」让白板一挂载就崩：Vite 预打包缓存改为按仓库根隔离，并显式 dedupe/预打包白板重依赖链**：

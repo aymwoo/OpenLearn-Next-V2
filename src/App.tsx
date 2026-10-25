@@ -15,6 +15,7 @@ import { RightSidebar } from './features/shared/RightSidebar';
 import { AppModals } from './components/AppModals';
 import { ClassroomOverlays } from './components/ClassroomOverlays';
 import { ToastContainer } from './features/shared/ToastContainer';
+import { CommandPaletteHost } from './features/command-palette/CommandPaletteHost';
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
 import { useAppComposer } from './hooks/useAppComposer';
 
@@ -141,6 +142,9 @@ export default function App() {
 
               {/* Real-time Toast Notifications */}
               <ToastContainer />
+
+              {/* 全局命令面板（Cmd/Ctrl + K 唤起） */}
+              <CommandPaletteHost />
 
               {/* Global System Error Diagnostics Center & Floating Pill */}
               <SystemErrorCenterModal />
