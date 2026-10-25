@@ -1,41 +1,14 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
   "migrationCount": 44,
-  "generatedAt": "2026-10-24T15:18:46.294Z",
+  "generatedAt": "2026-10-25T04:30:00.287Z",
   "tables": {
-    "_academic_year_backfill": [
-      "backfilled_at",
-      "id"
-    ],
-    "_class_passcode_encryption": [
-      "id",
-      "note"
-    ],
-    "_lesson_think_cleanup": [
-      "id",
-      "note"
-    ],
-    "_migrations": [
-      "applied_at",
-      "checksum",
-      "name"
-    ],
-    "agent_conversations": [
-      "content",
-      "conv_key",
-      "created_at",
-      "id",
-      "role"
-    ],
-    "ai_providers": [
-      "api_key",
-      "api_url",
-      "created_at",
-      "id",
-      "model_name",
-      "name",
-      "updated_at"
-    ],
+    "_academic_year_backfill": ["backfilled_at", "id"],
+    "_class_passcode_encryption": ["id", "note"],
+    "_lesson_think_cleanup": ["id", "note"],
+    "_migrations": ["applied_at", "checksum", "name"],
+    "agent_conversations": ["content", "conv_key", "created_at", "id", "role"],
+    "ai_providers": ["api_key", "api_url", "created_at", "id", "model_name", "name", "updated_at"],
     "assessment_answers": [
       "ai_suggestion_json",
       "answer_json",
@@ -139,23 +112,8 @@
       "student_id",
       "submitted_at"
     ],
-    "assignments": [
-      "academic_year",
-      "class_id",
-      "content",
-      "created_at",
-      "description",
-      "id",
-      "lesson_id",
-      "title"
-    ],
-    "attendance": [
-      "academic_year",
-      "recorded_at",
-      "schedule_id",
-      "status",
-      "student_id"
-    ],
+    "assignments": ["academic_year", "class_id", "content", "created_at", "description", "id", "lesson_id", "title"],
+    "attendance": ["academic_year", "recorded_at", "schedule_id", "status", "student_id"],
     "class_grade_weights": [
       "assignment_weight",
       "attendance_weight",
@@ -177,11 +135,7 @@
       "sort_order",
       "updated_at"
     ],
-    "class_students": [
-      "class_id",
-      "joined_at",
-      "student_id"
-    ],
+    "class_students": ["class_id", "joined_at", "student_id"],
     "classes": [
       "class_passcode",
       "class_passcode_expires_at",
@@ -242,14 +196,7 @@
       "source",
       "type"
     ],
-    "classroom_pacing_signals": [
-      "created_at",
-      "id",
-      "segment_id",
-      "session_id",
-      "signal_type",
-      "student_id"
-    ],
+    "classroom_pacing_signals": ["created_at", "id", "segment_id", "session_id", "signal_type", "student_id"],
     "classroom_peer_badges": [
       "badge_key",
       "created_at",
@@ -315,14 +262,7 @@
       "sort_order",
       "weight"
     ],
-    "classroom_poll_votes": [
-      "id",
-      "poll_id",
-      "selected_option",
-      "student_id",
-      "student_name",
-      "voted_at"
-    ],
+    "classroom_poll_votes": ["id", "poll_id", "selected_option", "student_id", "student_name", "voted_at"],
     "classroom_quick_polls": [
       "correct_option",
       "created_at",
@@ -350,35 +290,10 @@
       "teacher_id",
       "teaching_mode_id"
     ],
-    "client_sessions": [
-      "expires_at",
-      "id",
-      "session_data",
-      "updated_at"
-    ],
-    "computer_labs": [
-      "cols",
-      "created_at",
-      "id",
-      "room_number",
-      "rows"
-    ],
-    "courseware": [
-      "created_at",
-      "entry",
-      "id",
-      "name",
-      "type",
-      "uuid"
-    ],
-    "courseware_attempt": [
-      "courseware_id",
-      "finished_at",
-      "id",
-      "started_at",
-      "status",
-      "student_id"
-    ],
+    "client_sessions": ["expires_at", "id", "session_data", "updated_at"],
+    "computer_labs": ["cols", "created_at", "id", "room_number", "rows"],
+    "courseware": ["created_at", "entry", "id", "name", "type", "uuid"],
+    "courseware_attempt": ["courseware_id", "finished_at", "id", "started_at", "status", "student_id"],
     "courseware_score_config": [
       "auto_record_enabled",
       "auto_record_min_completion",
@@ -393,37 +308,10 @@
       "updated_at",
       "weight_percentage"
     ],
-    "demo_data_registry": [
-      "created_at",
-      "entity_id",
-      "entity_type"
-    ],
-    "events": [
-      "correlationId",
-      "id",
-      "lesson_id",
-      "payload",
-      "source",
-      "timestamp",
-      "type"
-    ],
-    "exam_scores": [
-      "academic_year",
-      "exam_id",
-      "notes",
-      "recorded_at",
-      "score",
-      "student_id"
-    ],
-    "exams": [
-      "academic_year",
-      "class_id",
-      "created_at",
-      "description",
-      "id",
-      "max_score",
-      "title"
-    ],
+    "demo_data_registry": ["created_at", "entity_id", "entity_type"],
+    "events": ["correlationId", "id", "lesson_id", "payload", "source", "timestamp", "type"],
+    "exam_scores": ["academic_year", "exam_id", "notes", "recorded_at", "score", "student_id"],
+    "exams": ["academic_year", "class_id", "created_at", "description", "id", "max_score", "title"],
     "icebreaker_checkins": [
       "checkin_date",
       "class_id",
@@ -435,11 +323,7 @@
       "student_id",
       "updated_at"
     ],
-    "lesson_checkins": [
-      "checked_in_at",
-      "lesson_id",
-      "student_id"
-    ],
+    "lesson_checkins": ["checked_in_at", "lesson_id", "student_id"],
     "lesson_preset_polls": [
       "correct_option",
       "created_at",
@@ -477,20 +361,8 @@
       "title",
       "updated_at"
     ],
-    "mfe_remotes": [
-      "created_at",
-      "entry",
-      "meta",
-      "name",
-      "updated_at"
-    ],
-    "pending_commands": [
-      "actor_id",
-      "command_type",
-      "created_at",
-      "id",
-      "payload"
-    ],
+    "mfe_remotes": ["created_at", "entry", "meta", "name", "updated_at"],
+    "pending_commands": ["actor_id", "command_type", "created_at", "id", "payload"],
     "plugin_assignment_files": [
       "assignment_id",
       "deleted_at",
@@ -530,19 +402,8 @@
       "title",
       "updated_at"
     ],
-    "plugin_capability_grants": [
-      "approved_at",
-      "capability",
-      "plugin_key"
-    ],
-    "plugin_config": [
-      "key",
-      "plugin_id",
-      "scope_id",
-      "scope_type",
-      "updated_at",
-      "value"
-    ],
+    "plugin_capability_grants": ["approved_at", "capability", "plugin_key"],
+    "plugin_config": ["key", "plugin_id", "scope_id", "scope_type", "updated_at", "value"],
     "plugin_grades": [
       "assignment_id",
       "calculated_final_score",
@@ -559,11 +420,7 @@
       "teacher_score",
       "teacher_weight"
     ],
-    "plugin_network_grants": [
-      "approved_at",
-      "host",
-      "plugin_key"
-    ],
+    "plugin_network_grants": ["approved_at", "host", "plugin_key"],
     "plugin_orphan_data": [
       "last_export_path",
       "manifest_id",
@@ -600,18 +457,8 @@
       "task_id",
       "updated_at"
     ],
-    "plugin_public_routes": [
-      "approved_at",
-      "method",
-      "path",
-      "plugin_key"
-    ],
-    "plugin_storage": [
-      "key",
-      "plugin_id",
-      "updated_at",
-      "value"
-    ],
+    "plugin_public_routes": ["approved_at", "method", "path", "plugin_key"],
+    "plugin_storage": ["key", "plugin_id", "updated_at", "value"],
     "plugin_submission_versions": [
       "assignment_id",
       "files_json",
@@ -684,22 +531,8 @@
       "status",
       "time_slot"
     ],
-    "segment_gate_overrides": [
-      "actor_id",
-      "created_at",
-      "lesson_id",
-      "reason",
-      "segment_id",
-      "student_id"
-    ],
-    "segment_visits": [
-      "entered_at",
-      "id",
-      "left_at",
-      "lesson_id",
-      "segment_id",
-      "student_id"
-    ],
+    "segment_gate_overrides": ["actor_id", "created_at", "lesson_id", "reason", "segment_id", "student_id"],
+    "segment_visits": ["entered_at", "id", "left_at", "lesson_id", "segment_id", "student_id"],
     "site_settings": [
       "academic_start_month",
       "current_academic_year",
@@ -730,11 +563,7 @@
       "reason",
       "student_id"
     ],
-    "student_read_notifications": [
-      "created_at",
-      "notification_id",
-      "student_id"
-    ],
+    "student_read_notifications": ["created_at", "notification_id", "student_id"],
     "student_rollcalls": [
       "class_id",
       "difficulty",
@@ -746,13 +575,7 @@
       "score",
       "student_id"
     ],
-    "student_seats": [
-      "class_id",
-      "col_idx",
-      "lab_id",
-      "row_idx",
-      "student_id"
-    ],
+    "student_seats": ["class_id", "col_idx", "lab_id", "row_idx", "student_id"],
     "student_semester_reports": [
       "academic_year",
       "ai_evaluation",
@@ -784,28 +607,9 @@
       "private_notes",
       "student_number"
     ],
-    "submission_raw": [
-      "attempt_id",
-      "created_at",
-      "event_type",
-      "id",
-      "payload_json"
-    ],
-    "submission_result": [
-      "attempt_id",
-      "comment",
-      "completion",
-      "extra_json",
-      "id",
-      "score"
-    ],
-    "system_resources": [
-      "content",
-      "created_at",
-      "id",
-      "name",
-      "type"
-    ],
+    "submission_raw": ["attempt_id", "created_at", "event_type", "id", "payload_json"],
+    "submission_result": ["attempt_id", "comment", "completion", "extra_json", "id", "score"],
+    "system_resources": ["content", "created_at", "id", "name", "type"],
     "teaching_modes": [
       "color",
       "created_at",
@@ -830,21 +634,7 @@
       "status",
       "username"
     ],
-    "vfs_nodes": [
-      "content",
-      "created_at",
-      "id",
-      "name",
-      "parent_id",
-      "type",
-      "updated_at"
-    ],
-    "whiteboard_elements": [
-      "created_at",
-      "data",
-      "id",
-      "lesson_id",
-      "type"
-    ]
+    "vfs_nodes": ["content", "created_at", "id", "name", "parent_id", "type", "updated_at"],
+    "whiteboard_elements": ["created_at", "data", "id", "lesson_id", "type"]
   }
 }

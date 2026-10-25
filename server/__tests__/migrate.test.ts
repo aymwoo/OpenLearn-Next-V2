@@ -211,7 +211,9 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
 describe('未知台账条目防护（数据库比代码新即拒绝）', () => {
   const mk = () => {
     const db = new Database(':memory:');
-    runMigrations(db, [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')]);
+    runMigrations(db, [
+      sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;'),
+    ]);
     return db;
   };
   const prevFlag = process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER;
@@ -238,7 +240,9 @@ describe('未知台账条目防护（数据库比代码新即拒绝）', () => {
     const db = mk();
     db.prepare("INSERT INTO _migrations (name, applied_at, checksum) VALUES ('999_from_future', 1, 'x')").run();
     expect(() =>
-      runMigrations(db, [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')]),
+      runMigrations(db, [
+        sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;'),
+      ]),
     ).not.toThrow();
     db.close();
   });

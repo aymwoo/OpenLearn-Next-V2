@@ -42,19 +42,16 @@ export function extractSchemaSnapshot(db: Database.Database): Record<string, str
 
   const snapshot: Record<string, string[]> = {};
   for (const { name } of tables) {
-    const columns = (
-      db.prepare(`PRAGMA table_info(${JSON.stringify(name)})`).all() as { name: string }[]
-    ).map((c) => c.name);
+    const columns = (db.prepare(`PRAGMA table_info(${JSON.stringify(name)})`).all() as { name: string }[]).map(
+      (c) => c.name,
+    );
     snapshot[name] = columns.sort();
   }
   return snapshot;
 }
 
 /** 校验实际库是否覆盖金样声明的全部结构；返回缺失清单（空数组 = 通过） */
-export function verifySchemaAgainstGolden(
-  db: Database.Database,
-  golden: SchemaGolden,
-): SchemaGoldenDrift[] {
+export function verifySchemaAgainstGolden(db: Database.Database, golden: SchemaGolden): SchemaGoldenDrift[] {
   const actual = extractSchemaSnapshot(db);
   const drifts: SchemaGoldenDrift[] = [];
   for (const [table, expectedColumns] of Object.entries(golden.tables)) {
@@ -99,7 +96,8 @@ export function loadSchemaGolden(migrationsDir: string): SchemaGolden {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8')) as SchemaGolden;
   } catch (err) {
-    throw new Error(`[SchemaGolden] FATAL: 金样文件解析失败（${filePath}）：${String(err)}`);
+    // cause 带上原始异常：解析失败时，根因（SyntaxError 的具体位置）不能丢。
+    throw new Error(`[SchemaGolden] FATAL: 金样文件解析失败（${filePath}）：${String(err)}`, { cause: err });
   }
 }
 

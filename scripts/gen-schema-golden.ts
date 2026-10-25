@@ -8,7 +8,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import * as prettier from 'prettier';
 import { getDefaultMigrationsDir, loadMigrationsFromDirectory, runMigrations } from '../packages/core/db/migrator.js';
 import { extractSchemaSnapshot, SCHEMA_GOLDEN_FILENAME } from '../packages/core/db/schema-golden.js';
 
@@ -16,9 +16,7 @@ import { extractSchemaSnapshot, SCHEMA_GOLDEN_FILENAME } from '../packages/core/
 process.env.VITEST = '1';
 
 const migrationsDir =
-  process.argv[2] && fs.existsSync(process.argv[2])
-    ? path.resolve(process.argv[2])
-    : getDefaultMigrationsDir();
+  process.argv[2] && fs.existsSync(process.argv[2]) ? path.resolve(process.argv[2]) : getDefaultMigrationsDir();
 const migrations = loadMigrationsFromDirectory(migrationsDir);
 if (migrations.length === 0) {
   console.error(`[gen-schema-golden] FATAL: ${migrationsDir} 没有迁移文件。`);
@@ -39,7 +37,21 @@ try {
     tables,
   };
   const outPath = path.join(migrationsDir, SCHEMA_GOLDEN_FILENAME);
-  fs.writeFileSync(outPath, JSON.stringify(golden, null, 2) + '\n');
+  // 生成物同样要满足格式基线棘轮（scripts/check-format-budget.mjs，基线为空 = 全仓必须合规）。
+  //
+  // 直接写 `JSON.stringify(golden, null, 2)` 的排版会被 prettier 判为不合规 ——
+  // prettier 会把短数组折成单行，而 JSON.stringify 永远全展开。于是会形成死循环：
+  // 「生成 → 不合规 → CI 红 → 手工 prettier 一下 → 下次生成又红」。
+  //
+  // 这里让 prettier 按仓库配置（.prettierrc）排版：生成即合规，prettier 成为排版的
+  // 唯一来源。prettier 是 devDependency，而 scripts/ 不进发布包（package.json files
+  // 只含 migrations/），所以 npm 消费者不受影响。
+  const prettierConfig = await prettier.resolveConfig(outPath);
+  const formatted = await prettier.format(JSON.stringify(golden, null, 2), {
+    ...prettierConfig,
+    parser: 'json',
+  });
+  fs.writeFileSync(outPath, formatted);
   console.log(`[gen-schema-golden] OK: ${Object.keys(tables).length} 张表 → ${outPath}（${migrations.length} 个迁移）`);
 } finally {
   db.close();
