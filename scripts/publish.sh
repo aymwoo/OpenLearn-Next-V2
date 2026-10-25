@@ -85,6 +85,13 @@ APP_VER="$(node -p "require('./package.json').version")"
 # 平台包每次都会发布 → 占用检查在预检阶段就做（早失败，别等 build 完才发现）。
 assert_version_not_taken openlearn-next "$APP_VER"
 
+# npm 采集 gitHead 要求包目录下的 .git 是**目录**；linked worktree 里 .git 是一个
+# 指向真实 gitdir 的文本文件 → 采集落空，registry 上该版本没有 gitHead 字段，
+# 消费者无从追溯来源提交（产物内容不受影响）。
+if [ -e .git ] && [ ! -d .git ]; then
+  warn "当前目录是 git linked worktree（.git 是文件而非目录）—— npm 采集不到 gitHead，发布后 registry 不会记录来源提交。建议改在普通 checkout（.git 是目录）里发布。"
+fi
+
 SDK_DIR="packages/plugin-sdk"
 TK_DIR="packages/plugin-test-kit"
 SDK_VER="$(node -p "require('./$SDK_DIR/package.json').version")"

@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **发布时提醒：从 git linked worktree 发布，npm 采集不到 gitHead（0.7.4 的实测遗留）**：
+  - **现象（实测）**：0.7.4 从 `git worktree` 出来的 linked worktree 发布，registry 上该版本的 `gitHead` 字段为空 —— 消费者在 npm 页面看不到来源提交。对照：15:22 那个坏版本是在**普通 checkout** 里发的，`gitHead` 正常记录为 `cf9be45…`。
+  - **根因**：npm 采集 `gitHead` 时要求包目录下的 `.git` 是**目录**；而 linked worktree 里 `.git` 是一个 66 字节的文本文件（内容是 `gitdir: …`），采集直接落空。
+  - **改法**：`scripts/publish.sh` 在发布前检测 `.git` 的形态 —— 是 linked worktree 就明确警告，提示改在普通 checkout 里发布（不阻断发布：这只影响**元数据可追溯性**，不影响产物内容）。
+  - **验证（对照观测）**：linked worktree 里 `.git` 是文件、普通 checkout 里是目录；registry 上「普通 checkout 发的 0.7.3 有 gitHead / linked worktree 发的 0.7.4 没有」—— 与判据一致。**产物内容不受影响**：0.7.4 的 registry `dist.shasum`（`d263a0b3d15fdb9d63fb437623926850a3d1bdd0`）与 tag 构建逐字节一致，消费者安装与启动均实测通过。
+  - **影响面**：仅 `scripts/publish.sh`（该文件不在 `package.json` 的 `files` 清单内，不进入发布包）。
+
 ## [0.7.4] - 2026-10-25
 
 ### Fixes
