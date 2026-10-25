@@ -59,9 +59,16 @@ export function ToastContainer() {
           return (
             <motion.div
               key={toast.id}
-              initial={{ opacity: 0, y: 50, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
+              // 不做透明度淡入/淡出（只保留位移与缩放）。
+              //
+              // 为什么：淡入期间整块 toast 的不透明度 < 1，文字与背景同比例被稀释，
+              // WCAG 对比度随之下滑。实测（axe + 采样）：入场动画经过 opacity 0.26 /
+              // 0.4 / 0.55 时，message 文字的实际对比度跌到 4.5:1 以下 —— 也就是说
+              // 「刚弹出来的那 0.3 秒」里，次要说明文字是不可读的。
+              // 保留位移+缩放既有入场手感，又保证文字全程以完整不透明度渲染。
+              initial={{ y: 50, x: 50, scale: 0.9 }}
+              animate={{ y: 0, x: 0, scale: 1 }}
+              exit={{ scale: 0.85, transition: { duration: 0.2 } }}
               transition={{ type: 'spring', stiffness: 300, damping: 24 }}
               className={`pointer-events-auto w-full bg-white dark:bg-slate-900 ring-1 ring-black/5 shadow-2xl rounded-xl p-4 flex gap-3 ${style.border} overflow-hidden text-gray-900 dark:text-gray-100`}
               id={`toast-${toast.id}`}
@@ -91,7 +98,11 @@ export function ToastContainer() {
                   )}
                 </div>
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 leading-relaxed font-sans break-words">
+                {/* 颜色基线：浅色 text-gray-600（#4b5563 / 白底 7.56:1）、
+                    深色 text-gray-300（#d1d5db / slate-900 12.1:1）——
+                    两者都远高于 WCAG AA 的 4.5:1，原先的 gray-500/gray-400
+                    在各自的实际背景上只有 4.83:1 / 7.03:1，余量太薄。 */}
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed font-sans break-words">
                   {toast.message}
                 </p>
 
