@@ -1,13 +1,13 @@
 # Version Migration Guide 版本迁移指南
 
-> **当前版本**：`package.json` 为 **`0.6.1`**（`main` 在 v0.6.1 tag 之后还有安全修复），`@openlearn/plugin-sdk` 为 **`3.7.0`**。
+> **当前版本**：`package.json` 为 **`0.7.2`**，`@openlearn/plugin-sdk` 为 **`3.7.0`**。
 >
 > 本文覆盖两类迁移：
 >
-> 1. **平台数据库 schema 迁移**（`migrations/000`–`023`）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
+> 1. **平台数据库 schema 迁移**（`migrations/000`–`043`，以 `migrations/` 目录为准）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
 > 2. **插件侧迁移**（`ctx.db.migrate`）—— 插件作者在自己插件的 `activate` 中调用
 >
-> 从 **v0.6.1 tag（PR #4 合并之前）** 升到当前 `main` 时，平台 `package.json` 的版本号仍是 **`0.6.1`**。自动迁移之外还有三件必须人工做的事（0.1–0.3）。班级口令在 0.4 由启动过程加密，钥匙要和库一起带走。清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。
+> 跨版本升级时：自动迁移之外的人工步骤见下文各节；班级口令在 0.4 由启动过程加密，`ENCRYPTION_KEY`（或 `storage/encryption-key`）必须和库一起带走。迁移清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。
 
 ---
 
@@ -70,7 +70,7 @@ curl -sS -b /tmp/ol.cj -H 'Content-Type: application/json' \
 
 ### 0.4 班级临时口令改为密文（迁移 023）
 
-这一步对应的仍是 **v0.6.1 tag 之后的当前 `main`**。`package.json` 里的平台版本还是 **`0.6.1`**，没有单独再发一版。
+这一节记录的是 **v0.6.1 tag 之后那段窗口**的升级步骤（历史说明）；当前平台版本见文首，早已越过该窗口。
 
 `migrations/023_encrypt_class_passcodes.sql` 是标记，不改写 `classes.class_passcode`。SQL 读不到 `ENCRYPTION_KEY`，只创建单行表 `_class_passcode_encryption`，表示这一列按密文约定存储，并在 `_migrations` 记下 `023_encrypt_class_passcodes`。
 
@@ -120,25 +120,28 @@ if (migrations.length > 0) {
 }
 ```
 
-随后还有一步 `runStartupMigrations(kernelContainer.db)`（`packages/core/db/index.ts` 的 `ensureColumn` 系列，负责 `plugins` 等表的增量加列）。
+迁移 SSOT 在 `packages/core/db/migrator.ts`（`server/utils/migrate.ts` 仅是兼容转发）；
+`server.ts` 启动复查之后还会接 `assertSchemaMatchesGolden`（`schema-golden.json` 金样终检，Issue 见 #294）。
 
-> ⚠️ 迁移失败**不会阻止服务启动**——`server.ts` 用 try/catch 包住并只打 `console.error`。**部署后务必看启动日志确认 `[Migration] Applied: xxx` 全部出现。**
+> ✅ 迁移失败**会阻止服务启动**——`server.ts` 打出 `[Migration] FATAL` 后 `throw`，进程退出，不在半迁移的库上提供服务（快照创建失败同样中止）。部署后确认启动日志出现 `[Migration] 启动复查完成：…（N 个文件）` 与 `[SchemaGolden] 启动终检通过`。
 
-### 1.2 迁移运行器语义（`server/utils/migrate.ts`）
+### 1.2 迁移运行器语义（`packages/core/db/migrator.ts`，SSOT）
 
-| 行为       | 实现                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| 文件排序   | `loadMigrationsFromDirectory` 用 `localeCompare(a, b, { numeric: true })`，**数字序而非字典序** |
-| 幂等       | `_migrations` 表记录已应用的 `name`，已应用则 `continue` 跳过                                   |
-| 断点续跑   | 单条失败即 `throw`，中断整个循环；重启后从未应用的那条继续                                      |
-| 重复列容错 | `executeSqlStatements` 捕获 `duplicate column name` 并 `continue`（`warn` 不中断）              |
-| 校验和     | `simpleChecksum`（djb2 变体，32 位）写入 `_migrations.checksum`——**仅记录，不校验**             |
-| 回滚       | `rollbackMigration` 需要迁移提供非空 `-- DOWN` 段，否则 `throw`                                 |
-| 影子表     | 部分迁移在 `migrate.ts` 中建 `*__rollback` 临时表用于数据搬迁，搬完保留（勿当业务表读）         |
+| 行为       | 实现                                                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文件排序   | `loadMigrationsFromDirectory` 用 `localeCompare(a, b, { numeric: true })`，**数字序而非字典序**                                                          |
+| 幂等       | `_migrations` 表记录已应用的 `name`，已应用则 `continue` 跳过                                                                                            |
+| 断点续跑   | 单条失败即 `throw`，中断整个循环；重启后从未应用的那条继续                                                                                               |
+| 重复列容错 | `executeSqlStatements` 捕获 `duplicate column name` 并 `continue`（`warn` 不中断）                                                                       |
+| 校验和     | `simpleChecksum`（djb2 变体，32 位）写入 `_migrations.checksum`，**每次启动与已应用记录比对**：漂移默认告警，`MIGRATION_CHECKSUM_STRICT=true` 时直接抛错 |
+| 未知台账   | 台账条目在迁移目录中不存在时（库比代码新/迁移被改名），启动链路（`strictLedger`）FATAL 拒绝启动；`MIGRATION_ALLOW_UNKNOWN_LEDGER=true` 显式放行降级运维  |
+| 迁移前快照 | 应用 pending 迁移前 `VACUUM INTO` 一致性快照到 `backups/pre_migration_*.db`（600 权限），失败即中止；保留份数 `PRE_MIGRATION_KEEP`（默认 5）             |
+| 回滚       | `rollbackMigration` 需要迁移提供非空 `-- DOWN` 段，否则 `throw`                                                                                          |
+| 影子表     | 个别迁移（如 `012`）在自己的 SQL 里建 `*__rollback` 临时表用于数据搬迁，搬完保留（勿当业务表读）                                                         |
 
 `_migrations` 表结构：`name TEXT PRIMARY KEY` / `applied_at INTEGER NOT NULL` / `checksum TEXT NOT NULL`。
 
-> ⚠️ **没有迁移框架的「已改过就报错」保护**。`simpleChecksum` 算出来了但从不比对，因此**修改已发布的迁移文件是安全的（对已应用库无害）但对未应用库会产生分叉**。正确做法是新增一条迁移，不要改旧文件。
+> ⚠️ **已执行迁移的 UP 脚本不可修改**。每次启动都会把已应用记录的 checksum 与当前文件比对：默认在日志告警漂移，`MIGRATION_CHECKSUM_STRICT=true`（升级回归 CI 即此模式）直接抛错拒绝启动。正确做法永远是新增一条迁移，不要改旧文件。
 
 ### 1.3 文件格式约定
 
@@ -317,7 +320,7 @@ grep ENCRYPTION_KEY .env
 pnpm start 2>&1 | tee /tmp/openlearn-migrate.log
 grep '\[Migration\]' /tmp/openlearn-migrate.log
 # 期望：Applying/Applied 成对出现，覆盖尚未应用的迁移
-# 从 v0.6.1 tag 升到当前 main（版本号仍是 0.6.1）时，还要有 021、022、023，见第 0 节
+# 从 v0.6.1 tag 窗口升级时，还要有 021、022、023，见第 0 节（历史说明）
 
 # 5. 校验
 curl -fsS http://127.0.0.1:9000/health
