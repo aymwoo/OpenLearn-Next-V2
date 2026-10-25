@@ -212,12 +212,12 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 
 定义在 `server/routes/plugins.ts`，路径参数 `:id(*)` 允许 manifest.id 中带斜杠的作用域形式：
 
-| 方法   | 路径                         | 权限               | 行为                                                                |
-| ------ | ---------------------------- | ------------------ | ------------------------------------------------------------------- |
-| `GET`  | `/api/plugins/:id(*)/config` | 需登录             | 返回 `{ schema: manifest.configuration?.properties ?? {}, values }` |
-| `POST` | `/api/plugins/:id(*)/config` | 仅 `administrator` | 请求体为键值对对象，逐键 `setSync()`                                |
+| 方法   | 路径                         | 权限                           | 行为                                                                |
+| ------ | ---------------------------- | ------------------------------ | ------------------------------------------------------------------- |
+| `GET`  | `/api/plugins/:id(*)/config` | 仅 `teacher` / `administrator` | 返回 `{ schema: manifest.configuration?.properties ?? {}, values }` |
+| `POST` | `/api/plugins/:id(*)/config` | 仅 `administrator`             | 请求体为键值对对象，逐键 `setSync()`                                |
 
-读配置对任何登录用户开放，写配置收紧到 `administrator`，是刻意的权限分层。
+配置值可能含第三方服务密钥等秘密，因此读写都收紧：读 `teacher`/`administrator`、写仅 `administrator`（审计 R-5 收紧，此前「登录即可读」允许学生读走任意插件全部配置值）。
 
 ⚠️ **POST 无事务性**：`setPluginConfig()` 是普通的 `for...of` 顺序循环，一旦某个键校验失败就抛出中断，而**排在它之前的键已经落库**。因此一次失败的更新会留下部分生效的配置，没有自动回滚。调用方需要自行避免在同一个请求里混入会失败的键。
 
