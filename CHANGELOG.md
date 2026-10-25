@@ -46,7 +46,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     （34 基线 + 2 新增），2 条失败是 #306 正在修的既有问题（课表对比度 / 机房选中态），
     与本 PR 无关。
 
+### Refactor / Performance
+
+- **清点 `src/features/` 下 12 个「有实现、有单测、但生产零引用」的孤儿模块，按风险分三组处置**：
+  - **怎么发现的**：从真实入口（`src/App.tsx` / `src/main.tsx` / `server.ts` / `cli-data.mjs`）做可达性分析（解析相对路径、`@/` 别名、`.js`→`.ts`、动态 `import()`）：859 / 983 个文件可达，**124 个不可达，其中 17 个是整模块**。
+  - **⚠️ 一个必须记住的陷阱**：只统计「有没有外部 import」会把死模块误判成活的 —— `workspace` / `resource-runtime` / `ai-teacher-workspace` 的引用方只有彼此和 `student-workspace` 这个**自洽循环**，从入口出发根本到不了。判断「活的」必须从入口做可达性。
+  - **A 组 · 删除（4 个，共 1,029 行源码 + 6 个测试文件）**：`lesson-workflow` / `ai-teaching-workflow` / `classroom-runtime` / `interaction-runtime`。
+    - 前两个是 61L/55L 的裸 setter（`advanceStage(target)` 不校验、不落库、不发事件）—— 接线等于给服务端门禁（`CLASS_LOCKED`→409 / `Illegal transition`→400）开后门；
+    - `classroom-runtime` 自带的 9 阶段（`Create/Prepare/Ready/Teaching/Paused/Resumed/Finished/Archived/Disposed`）与在用的 `classroom_sessions.stage`（含 `ARCHIVED_REPORT`）词表不兼容，且有独立的 `classroom.created/paused/…` 事件命名空间，接上会与 socket 事件流**双写**；
+    - `interaction-runtime` 是第二个 Keyboard/Mouse/Touch 派发器，而白板已自接管 DOM 事件（111 文件、E2E 覆盖最重）—— 接它=双处理，或得拆掉白板的 handler。
+  - **B 组 · 标注 `@experimental` 不接线（4 个）**：`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context`。理由：`server/ai-agent.ts` 并不查它们，插件贡献 AI 能力已走活的扩展槽位（`ai_sidebar.tab`、`anchor:whiteboard-toolbar:ai-tutor`）与通用通道 `/api/plugins/execute-command` —— **功能上是冗余的**；而接线要重写一条正在工作的 AI 链路，且 AI 功能需配 provider 才能验证，CI 覆盖不到。每个 `index.ts` 头部写明「为什么保留」与「接线前置条件」（首要一条：不能让新注册表绕过 `action.capabilityRequired` 的授权）。
+  - **C 组 · 留待产品决策（4 个）**：`student-workspace` + 依赖它的 `workspace` / `resource-runtime` / `ai-teacher-workspace`。它们是**第二套学生端壳**，接通 = 替换现在能跑的 `src/features/student`（63 文件、6 个引用方）；25 条 E2E 里 22 条涉及学生端。已写入迁移前置条件（功能对齐 / 全量学生端 E2E 重验 / 插件槽位兼容 / 可一键回滚）。
+  - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
+  - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
+
 ### Fixes
+
+- **白板画布在窗口不够大时不再「够不着」：画布逻辑尺寸与容器可视尺寸解耦，装不下时由容器出滚动条**：
+  - **现象（实测，真实浏览器 + 隔离实例）**：live_class 的白板**没有任何滚动条**。在 1440×520 的视口下，白板画布的可视高度只剩 **124px**（整窗 520px 里，工具栏与各级 chrome 吃掉绝大部分）；把一个组件画在画布坐标 y=1600 处后，它**既看不见也拖不动**，且**没有任何办法**把它拉回视口 —— 在 520 / 900 / 1400 三个视口高度下均复现。
+  - **根因（三层，逐层实测定位）**：
+    1. konva `Stage` 的宽高**严格等于容器尺寸**（`ResizeObserver` → `offsetWidth/offsetHeight` → `<Stage width height>`），容器一矮画布就跟着矮；
+    2. 从画布往上的**每一级祖先**都是 `min-h-0` + `overflow-hidden` —— 溢出被**裁掉**而不是滚动，整条链上**没有任何一级可滚动**（实测 10 级祖先的 `overflow-y` 全为 `hidden`/`visible`）；
+    3. 真正动手裁剪的是 `InteractiveWhiteboard` 里 `absolute inset-0 w-full h-full overflow-hidden` 那层 —— 它**绝对定位**在画布容器内，既裁掉溢出，又因为不参与父级滚动高度计算而让外层容器的 `scrollHeight` 始终等于可视高度（画布逻辑高 1920px，容器 `scrollHeight` 却是 124px）。
+  - **改法**：
+    1. 新增纯函数模块 `src/features/whiteboard/utils/canvas-bounds.ts`：**画布逻辑尺寸 = max(容器可视尺寸, 当前页内容包围盒底边 + 80px 留白)**。内容装得下时画布 == 容器，**行为与修复前逐像素一致**（不会凭空多出滚动条）；装不下时画布撑到内容高度。
+    2. 画布容器 `overflow-hidden` → `overflow-auto`，并去掉上述那层承载者的 `overflow-hidden` —— **滚动容器是画布容器**，裁剪与滚动都归它。
+    3. **14 处鼠标坐标 → 画布坐标的换算**统一走 `toCanvasPoint()`：容器变成滚动容器后，`getBoundingClientRect()` 给的是可视框位置，必须把 `scrollLeft/scrollTop` 加回来，否则画布一滚动鼠标位置与图元位置就整体错位（拖拽看起来「跳」）。未滚动时滚动偏移恒为 0，与修复前**逐像素等价**。拖拽本身用的是**增量**（`dx = clientX - startPointerX`），与滚动无关，无需改动；自由绘制用的是 konva 自己的 `getPointerPosition()`，同样天然考虑滚动。
+    4. 顺带修掉一个**真实缺陷**：容器有 1px 边框，而画布尺寸此前取的是 `offsetWidth/offsetHeight`（边框盒）—— 画布比内容框高出 2px，**即便内容完全装得下也会多出一条 2px 滚动范围**（凭空冒出滚动条）。画布改用**内容框**尺寸（`clientWidth/clientHeight`）后消失。
+  - **验证**：① 新增纯函数单测 13 例（包围盒、逻辑尺寸、坐标换算三组）通过；② 新增 E2E `e2e/classroom-whiteboard-scroll.spec.ts` 2 例通过 —— 「组件画在画布下方时画布区出现滚动条且滚动后组件可达」+「内容装得下时不凭空多出滚动条」；③ **反向验证**：把源码回退（只保留测试锚点）后重跑同一 E2E → 立刻变红，报「画布逻辑高度应至少覆盖 y=1600 的组件」；还原后全绿 —— 护栏能力未被削弱；④ 全仓 ESLint 6243 = 基线 6243、error 0；格式基线 0 不合规；`tsc --noEmit` 与 `tsc --noEmit -p tsconfig.strict.json` 均通过；白板测试 26 文件 270 例全绿。
+  - **影响面**：`src/features/whiteboard/InteractiveWhiteboard.tsx`（画布尺寸与滚动）、新增 `src/features/whiteboard/utils/canvas-bounds.ts`（纯函数）、新增 E2E 用例；一条白板单测的画布宿主选择器从写死类名改为 `data-testid`（更抗改动）。教师端驾驶舱、学生端课节页、备课画板、学生工作台与作业面板共用该组件，**均受益**；大屏展台使用独立渲染路径，不受影响。
 
 - **bridge SDK 的单测不再对着「不会发布的陈旧产物」校验（并补上生成物同步守卫）**：
   - **现象（实测）**：0.7.4 发布后 main 的 CI 转红 —— `server/__tests__/bridge-hook-telemetry.test.ts` 报「expected +0 to be 5」：它用正则 `/type: "HOOK_[A-Z]+"/` 统计 HOOK 上报点，在**重新生成**后的 `server/utils/bridge-sdk.ts` 上匹配到 **0** 处。
