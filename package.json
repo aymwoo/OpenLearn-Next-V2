@@ -70,6 +70,7 @@
     "sweep": "tsx scripts/sweep/index.ts",
     "db:backup": "npx tsx scripts/backup-db.ts",
     "db:restore": "npx tsx scripts/restore-db.ts",
+    "db:gen-golden": "tsx scripts/gen-schema-golden.ts",
     "ops:check-perms": "tsx scripts/check-file-permissions.ts",
     "db:clean-test-data": "node scripts/cleanup-test-data.mjs",
     "db:seed": "npx tsx scripts/seed-demo-data.ts",

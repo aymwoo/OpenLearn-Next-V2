@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -205,5 +205,74 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
       const sessionCols = (db.prepare('PRAGMA table_info(client_sessions)').all() as any[]).map((c) => c.name);
       expect(sessionCols).toContain('expires_at');
     });
+  });
+});
+
+describe('未知台账条目防护（数据库比代码新即拒绝）', () => {
+  const mk = () => {
+    const db = new Database(':memory:');
+    runMigrations(db, [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')]);
+    return db;
+  };
+  const prevFlag = process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER;
+
+  afterEach(() => {
+    if (prevFlag === undefined) delete process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER;
+    else process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER = prevFlag;
+  });
+
+  it('严格口径（启动链路）下台账条目缺失即 FATAL', () => {
+    const db = mk();
+    db.prepare("INSERT INTO _migrations (name, applied_at, checksum) VALUES ('999_from_future', 1, 'x')").run();
+    expect(() =>
+      runMigrations(
+        db,
+        [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')],
+        { strictLedger: true },
+      ),
+    ).toThrow(/999_from_future/);
+    db.close();
+  });
+
+  it('默认口径（库函数）下迁移子集调用合法——升级演练不被拦', () => {
+    const db = mk();
+    db.prepare("INSERT INTO _migrations (name, applied_at, checksum) VALUES ('999_from_future', 1, 'x')").run();
+    expect(() =>
+      runMigrations(db, [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')]),
+    ).not.toThrow();
+    db.close();
+  });
+
+  it('报错文案同时指出「代码降级」与「迁移文件被改名」两种成因', () => {
+    const db = mk();
+    db.prepare("INSERT INTO _migrations (name, applied_at, checksum) VALUES ('999_from_future', 1, 'x')").run();
+    try {
+      runMigrations(
+        db,
+        [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')],
+        { strictLedger: true },
+      );
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      const msg = String(e);
+      expect(msg).toContain('MIGRATION_ALLOW_UNKNOWN_LEDGER');
+      expect(msg).toContain('备份');
+      expect(msg).toContain('改名');
+    }
+    db.close();
+  });
+
+  it('显式环境变量放行（有意的降级运维）', () => {
+    process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER = 'true';
+    const db = mk();
+    db.prepare("INSERT INTO _migrations (name, applied_at, checksum) VALUES ('999_from_future', 1, 'x')").run();
+    expect(() =>
+      runMigrations(
+        db,
+        [sqlMigration('001_probe', 'CREATE TABLE probe_t (id TEXT PRIMARY KEY);', 'DROP TABLE probe_t;')],
+        { strictLedger: true },
+      ),
+    ).not.toThrow();
+    db.close();
   });
 });

@@ -8,6 +8,8 @@
 - 每个文件包含 `-- UP`（应用迁移）和 `-- DOWN`（回滚迁移）两部分
 - 迁移由 `server/utils/migrate.ts` 在服务启动时自动执行
 - 已应用的迁移记录在 `_migrations` 表中
+- 已应用的迁移**不可改名/修改**（checksum 台账会检出漂移）；台账条目在目录中不存在时启动直接 FATAL（代码降级或文件被删，可用 `MIGRATION_ALLOW_UNKNOWN_LEDGER=true` 显式放行降级运维）
+- `schema-golden.json`：结构金样（空库跑完全部迁移后的表→列快照，自动生成勿手改）。启动终检实际库必须覆盖金样全部结构，缺表/缺列即拒绝服务——改迁移后必须跑 `pnpm db:gen-golden` 再生成，`server/__tests__/schema-golden.test.ts` 会对账
 
 ## 当前迁移列表
 

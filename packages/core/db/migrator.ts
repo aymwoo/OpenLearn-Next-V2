@@ -102,7 +102,21 @@ export function simpleChecksum(text: string): string {
 /**
  * 执行全量未应用的迁移
  */
-export function runMigrations(db: Database.Database, migrations: Migration[]): ChecksumDrift[] {
+export interface RunMigrationsOptions {
+  /**
+   * 启动链路口径（server.ts / kernel initializeDatabase 传 true）：
+   * 台账条目在迁移列表中不存在 → FATAL（代码降级或已应用迁移被改名）。
+   * 默认 false：仅 console.warn —— runMigrations 作为库函数，「迁移子集」
+   * 是合法用法（升级演练测试先跑 000–035 再单跑 036），不该被拦。
+   */
+  strictLedger?: boolean;
+}
+
+export function runMigrations(
+  db: Database.Database,
+  migrations: Migration[],
+  options: RunMigrationsOptions = {},
+): ChecksumDrift[] {
   // 确保 _migrations 元表存在
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -119,6 +133,32 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): C
   const applied = new Map(appliedRows.map((r) => [r.name, r.checksum]));
 
   const byName = new Map(migrations.map((m) => [m.name, m]));
+
+  // 台账里有、迁移目录里没有的条目 = 数据库比代码「新」。
+  //
+  // 两种成因，都危险：用未来版本的备份恢复了旧代码环境（代码对着自己不认识的
+  // schema 运行，运行时 prepare 报错才暴露），或已应用的迁移文件被改名/删除
+  // （台账与链路分叉）。此前这里是 `continue` 静默跳过 —— 现在默认拒绝，
+  // 只允许运维用显式环境变量说明「我知道我在降级」后放行。
+  const unknown = [...applied.keys()].filter((name) => !byName.has(name));
+  if (unknown.length > 0) {
+    const detail = unknown.map((n) => `  - ${n}`).join('\n');
+    const msg =
+      `[Migration] 台账里有 ${unknown.length} 个本次迁移列表未包含的条目：\n${detail}\n` +
+      (options.strictLedger
+        ? `  启动链路判定为 FATAL：\n` +
+          `  成因一：用更新版本的备份恢复了旧代码（代码降级）——请先升级代码再启动；\n` +
+          `  成因二：已应用的迁移文件被改名或删除——迁移一旦应用不可改名，请恢复文件或补一条新迁移。\n` +
+          `  确属有意的降级运维：设置 MIGRATION_ALLOW_UNKNOWN_LEDGER=true 放行（不推荐）。`
+        : `  （非严格口径：迁移子集调用属合法用法，仅提示）`);
+    if (process.env.MIGRATION_ALLOW_UNKNOWN_LEDGER === 'true') {
+      console.warn('[Migration] WARNING: 未知台账条目已按 MIGRATION_ALLOW_UNKNOWN_LEDGER 放行：\n' + msg);
+    } else if (options.strictLedger) {
+      throw new Error(msg);
+    } else {
+      console.warn('[Migration] ' + msg);
+    }
+  }
 
   // 校验已执行迁移的 checksum 是否被改动
   const drift: ChecksumDrift[] = [];
