@@ -1,7 +1,5 @@
 # 数据库与版本化迁移架构 (Database & Migrations)
 
-# 数据库与版本化迁移架构 (Database & Migrations)
-
 OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提供高吞吐并发读写能力，并通过版本化迁移体系保障 Schema 演进的可靠性与幂等性。
 
 > **选型边界**：平台采用「一校一实例」，不为多租户引入 `school_id`，也**不承诺** PostgreSQL 兼容、不引入 ORM / 查询构建器。决策依据、代价与重新评估条件见 [ADR-001：多租户 / 多校区与数据库抽象层](adr-001-tenant-and-db-abstraction)；多校部署方式见 [多校部署（一校一实例）](../deployment/multi-school)。
@@ -17,14 +15,15 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
   PRAGMA foreign_keys = ON;
   ```
 - **多环境路径解析**:
-  - **生产与标准开发**: 默认存放于 `packages/core/db/educational_os.db`，支持通过环境变量 `OPENLEARN_DB_PATH` 自定义重定向。
-  - **Vitest 测试并发隔离**: 当检测到 `process.env.VITEST` 激活时，按 Worker 进程 Pool ID / PID 在临时目录分配独立数据库（`/tmp/openlearn_test_dbs/openlearn_test_${poolId}.db`），彻底消除并发测试时的文件写锁争用，支持 170+ 测试套件高速并行回归。
+  - **生产与标准开发**: 默认存放于 `packages/core/db/educational_os.db`，支持通过环境变量 `OPENLEARN_DB_PATH` 自定义重定向（容器内固定 `/data/educational_os.db`）。
+  - **Vitest 测试并发隔离**: 当检测到 `process.env.VITEST` 激活时，按 Worker 进程 Pool ID / PID 在临时目录分配独立数据库（`/tmp/openlearn_test_dbs/openlearn_test_${poolId}.db`），彻底消除并发测试时的文件写锁争用，支持数百套测试高速并行回归。
+- **读连接池**: 内核另维护只读连接池（`getReadDb` / `queryRead` 等），报表类查询走读库，不与主写连接争锁。
 
 ---
 
-## 2. 版本化迁移引擎 (Phase 20 - DB-MIG-01)
+## 2. 版本化迁移引擎（SSOT：`packages/core/db/migrator.ts`）
 
-为替代遗留的散落 `try/catch ALTER TABLE` 模式，平台在 `server/utils/migrate.ts` 中构建了轻量可靠的版本化数据库迁移运行器。
+迁移运行器的单一真实来源在 **`packages/core/db/migrator.ts`**；`server/utils/migrate.ts` 只是向后兼容的 `@deprecated` 转发出口。内核侧入口是 `packages/core/db/index.ts` 的 `initializeDatabase()`（模块加载即执行），`server.ts` 启动时再做一次复查（幂等）。
 
 ### 迁移约定与文件规范
 
@@ -33,7 +32,7 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 1. **命名格式**: `NNN_description.sql`（`NNN` 为三位序号升序执行）；
 2. **段落切分**: 使用 `-- UP` 声明正向迁移操作，使用 `-- DOWN` 声明回滚逆操作。`parseMigrationSql` 对二者均为可选：未匹配到 `-- UP` 时**整份文件内容**即视为 UP，未匹配到 `-- DOWN` 时 `down` 为空串。
    - 因此「缺少 DOWN 段」不会阻塞**正向**应用，但 `rollbackMigration` 会在该迁移上直接 `throw new Error('Migration ... does not provide a DOWN rollback script.')`。**若希望某个迁移可回滚，`-- DOWN` 段是硬性要求。**
-   - `migrations/` 下的迁移文件都带 `-- UP` / `-- DOWN` 段（2026-10-04 补齐了 `009_classroom_peer_review.sql` 与 `011_classroom_feed.sql` 的 DOWN，二者此前整篇被当作 UP 执行且不可回滚）。有 DOWN 段后 `rollbackMigration()` 对全部迁移均可用。`023` 的 DOWN 只去掉标记表，不会把班级口令密文还原成明文。
+   - 携带敏感数据的迁移（如 `023` 班级口令加密）的 DOWN 只回退结构，不会把密文还原成明文。
 3. **元表追踪**: 引擎自动维护 `_migrations` 状态表：
    ```sql
    CREATE TABLE IF NOT EXISTS _migrations (
@@ -42,38 +41,34 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
      checksum TEXT NOT NULL
    );
    ```
+4. **结构金样**: `migrations/schema-golden.json` 记录「空库跑完全部迁移后的表 → 列快照」（`pnpm db:gen-golden` 再生成，自动产物勿手改）。**改迁移后必须重新生成金样**，`server/__tests__/schema-golden.test.ts` 会对账。
 
-### 关键容错与幂等机制
+### 关键容错与安全机制（按启动时序）
 
 - **增量比对**: 启动时查询 `_migrations` 已有记录，仅应用增量脚本（按 `name` 精确匹配）。
-- ✅ **校验和已实际校验**（2026-10-04 修复）：`runMigrations` 现在读出 `_migrations.checksum` 并与磁盘上 UP 段的 `simpleChecksum` 比对，检出漂移时返回 `ChecksumDrift[]` 并打印醒目告警。设 `MIGRATION_CHECKSUM_STRICT=true` 可改为直接抛错阻断启动（默认不阻断 —— 已执行的部分无法靠抛错回退，拒绝启动并不能修复它）。迁移文件已从磁盘移除的情况会跳过，不误报。
-- ✅ **逐条事务**（2026-10-04 修复）：此前 UP 脚本逐条 `db.exec` 且**不在事务内**，中途失败会留下半应用状态，且 `_migrations` 行未写入 → 重启后重跑已执行过的语句。现将「执行 + 登记 checksum」放进同一个 `db.transaction`，失败即整体回滚。
-- **无事务包裹**: 单条迁移的 UP 段由 `executeSqlStatements` 逐句 `db.exec`，语句间不显式开事务；中途失败会留下「部分已执行」的中间态，而 `_migrations` 记录不会写入，重启后会重跑该迁移（依赖上面的 `duplicate column name` 容错才能不炸）。
-- **历史库平滑升级 (Duplicate Column Tolerate)**: 执行 DDL 时，若遇到旧版本已手工添加的列报错（`duplicate column name`），`executeSqlStatements` 打印 `console.warn` 并 `continue`，迁移器自动记录安全提示并继续执行，保障存量老库无痛过渡至版本化管理。
+- **未知台账守卫（strictLedger）**: 台账条目在迁移目录中不存在（库比代码新：误用未来版本的备份恢复了旧代码；或已应用迁移被改名/删除）时，启动链路直接 FATAL 拒绝启动，报错同时指出两种成因。`MIGRATION_ALLOW_UNKNOWN_LEDGER=true` 可显式放行有意的降级运维。`runMigrations` 作为库函数默认非严格（迁移子集调用是升级演练测试的合法用法），`server.ts` 与 `initializeDatabase()` 两个启动入口均以 `{ strictLedger: true }` 调用。
+- **校验和实际校验**: `runMigrations` 读出 `_migrations.checksum` 并与磁盘上 UP 段的 `simpleChecksum` 比对，检出「已执行迁移被修改」漂移时返回 `ChecksumDrift[]` 并打印醒目告警；`MIGRATION_CHECKSUM_STRICT=true`（升级回归 CI 即此模式）直接抛错阻断启动。**已执行迁移的 UP 脚本不可修改**，修正永远走新增迁移。
+- **迁移前安全快照**: 应用 pending 迁移前先 `VACUUM INTO` 一致性快照到 `backups/pre_migration_*.db`（落盘即 `chmod 600`；快照是未加密的学生数据副本）；正式进程快照失败即中止、不应用任何 SQL。历史快照按 `PRE_MIGRATION_KEEP`（默认 5，下限 1）保留修剪；`pre_restore_` 人工恢复快照不自动删。
+- **逐条事务**: 「执行 + 登记 checksum」在同一个 `db.transaction` 内，单条迁移中途失败整体回滚，不留半应用状态。
+- **启动终检（金样）**: 两个启动入口在迁移后调用 `assertSchemaMatchesGolden`——实际库必须包含 `schema-golden.json` 声明的每张表与每个列（子集校验：插件自建表、expand-contract 过渡列等多出的结构不报错），缺结构即 FATAL 并列出缺在哪。这层把「手动改库 / 外部工具 / 旧备份部分恢复」造成的漂移从运行时 SQL 报错提前到启动期明确报错。
+- **历史库平滑升级 (Duplicate Column Tolerate)**: 执行 DDL 时，若遇到旧版本已手工添加的列报错（`duplicate column name`），`executeSqlStatements` 打印 `console.warn` 并 `continue`，保障存量老库无痛过渡至版本化管理。
+- **DOWN 烟雾测试**: `server/__tests__/migration-down-smoke.test.ts` 对迁移链尾部做「回滚 → 重放 → 金样对账」闭环；无 DOWN 的迁移清单被钉住（新增无 DOWN 迁移需扩名单或补 DOWN）。
 
 ---
 
 ## 3. 当前标准迁移序列
 
-`migrations/` 下现有 **`000`–`014` 共 15 个 `.sql` 脚本**（按文件名数字序升序执行）：
+`migrations/` 现有 **`000`–`043` 共 44 个 `.sql` 脚本**（按文件名数字序升序执行）。完整清单以 **`migrations/README.md` 的迁移表**为权威（随每个迁移同步更新）；结构真源是 **`migrations/schema-golden.json`**（82 张表的表 → 列快照）。
 
-| 序号  | 迁移文件                            | 职责说明                                                                                                                                                                                                  |
-| ----- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `000` | `000_initial_schema.sql`            | 核心基础数据表（30+ 表）与性能索引全量建表                                                                                                                                                                |
-| `001` | `001_add_execution_mode.sql`        | `plugins` 表新增 `execution_mode`（支持 worker/inline）                                                                                                                                                   |
-| `002` | `002_add_client_session_expiry.sql` | `client_sessions` 表新增 `expires_at` 会话超时字段                                                                                                                                                        |
-| `003` | `003_classroom_runtime.sql`         | 课堂工具与 AI 对话记忆表（`student_rollcalls`, `site_settings`, `agent_conversations`）                                                                                                                   |
-| `004` | `004_courseware_score_config.sql`   | 互动课件成绩归集策略表 `courseware_score_config`（宿主侧按策略从样本历史算最终分）                                                                                                                        |
-| `005` | `005_assignment_hub.sql`            | 作业中心：新增 `plugin_assignments` / `plugin_submission_versions` / `plugin_assignment_files` / 互评任务表，并重建 `plugin_submissions` 以支持「按作业」唯一                                             |
-| `006` | `006_classroom_event_bus.sql`       | `events` 审计表补课堂维度：新增 `lesson_id` 列与 `timestamp` / `correlationId` / `(lesson_id, timestamp)` 索引                                                                                            |
-| `007` | `007_interactive_classroom.sql`     | 互动课堂与课节生命周期：`lesson_quiz_submissions` / `classroom_sessions` / `classroom_quick_polls` / `classroom_poll_votes` / `classroom_buzzers` / `classroom_exit_tickets` / `classroom_pacing_signals` |
-| `008` | `008_teaching_modes.sql`            | 教学模式表 `teaching_modes` 与 `classroom_sessions.teaching_mode_id`（课堂启动门户的模式选择器数据源）                                                                                                    |
-| `009` | `009_classroom_peer_review.sql`     | 课中全班大屏互评：`classroom_peer_review_tasks` / `classroom_peer_reviews` / `classroom_peer_badges` / `classroom_peer_nominations` / `classroom_danmaku` / `classroom_peer_rubric_dimensions`            |
-| `010` | `010_class_groups.sql`              | 小组表 `class_groups`                                                                                                                                                                                     |
-| `011` | `011_classroom_feed.sql`            | 课堂动态流表 `classroom_feed`（教师离开课堂再回来后可按 lesson 回放）                                                                                                                                     |
-| `012` | `012_auto_record_score.sql`         | `courseware_score_config` 补自动录入规则列 `auto_record_enabled` / `auto_record_min_completion`                                                                                                           |
-| `013` | `013_score_source_strategy.sql`     | `assignment_submissions` 补 `source` 列（manual/auto 分流）+ `courseware_score_config` 补 `auto_record_strategy`（latest/highest）                                                                        |
-| `014` | `014_performance_indexes.sql`       | 五个高频查询索引（`vfs_nodes.parent_id`、`plugin_submissions.lesson_id`、`student_point_logs.student_id`、`student_rollcalls.class_id` / `student_id`）                                                   |
+早期序列（`000`–`014`）摘要：
+
+| 序号        | 迁移文件                 | 职责摘要                                                                                                                                        |
+| ----------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `000`       | `000_initial_schema.sql` | 核心基础数据表（30+ 表）与性能索引全量建表                                                                                                      |
+| `001`–`002` |                          | `plugins.execution_mode`、`client_sessions.expires_at`                                                                                          |
+| `003`–`014` |                          | 课堂运行时 / 课件成绩策略 / 作业中心 / 事件审计补课堂维度 / 互动课堂 / 教学模式 / 课中互评 / 小组 / 课堂动态流 / 自动录入 / 成绩来源 / 性能索引 |
+
+`015` 之后的关键节点：`016` 预设投票、`021` 班级归属、`023` 班级口令加密、`024` 环节门控、`027/030` 学年与回填、`031` 测评核心（assessments 全家）、`037` 插件配置 scope、`039` 题库共享、`041` 课程包幂等、`043` SHA-256 口令标记强制改密。
 
 > `012` / `013` 的 DOWN 段采用「建 `*__rollback` 临时表 → 重命名覆盖」的方式回滚 `ADD COLUMN`，因为旧版 SQLite 内核不支持 `ALTER TABLE ... DROP COLUMN`，且迁移执行器只对 `duplicate column` 做容错。
 
@@ -81,28 +76,30 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 
 ## 4. 架构时序
 
-启动时 `startServer()`（`server.ts`）在 `ServerBootstrapAdapter.bootstrap(...)` 之后、`await kernelContainer.ready` 之前执行版本化迁移。整段被 `try/catch` 包裹，失败只 `console.error('[Migration] Failed to run database migrations:', err)`，**不阻断服务启动**。
+启动时 `startServer()`（`server.ts`）在 `assertStartupEnv()` / 敏感文件权限自检之后、`await kernelContainer.ready` 之前执行版本化迁移复查（内核 `initializeDatabase()` 在模块加载时已先跑过一遍，二者幂等）。**迁移失败、快照失败、金样终检失败都会 FATAL 并 `throw`，进程退出，不在未完成迁移的库上提供服务。**
 
-紧随其后的 `runStartupMigrations(kernelContainer.db)`（`server/bootstrap-db.ts`）是另一套**独立的**启动期修补逻辑（旧版内置插件升级、遗留 `try/catch ALTER TABLE` 式建表），与 `_migrations` 版本化体系无关，两者是先后串行、互不感知的。
+紧随其后的 `await runStartupMigrations(db)`（`server/bootstrap-db.ts`，表征测试 `server/__tests__/bootstrap-db.test.ts`）是**独立的**启动期修补逻辑：旧内置插件升级（删除过时 Quiz / 随机点名插件行）与 SEC-AUTH-03 过期会话清理，与 `_migrations` 版本化体系无关、先后串行、互不感知。
 
 ```mermaid
 sequenceDiagram
     participant Boot as server.ts (startServer)
-    participant Migrate as server/utils/migrate.ts
-    participant FS as migrations/*.sql
-    participant DB as SQLite (kernelContainer.db)
+    participant Kernel as db/index.ts (initializeDatabase, 模块加载)
+    participant Migrator as packages/core/db/migrator.ts
+    participant Golden as schema-golden.ts
+    participant FS as migrations/*.sql + schema-golden.json
+    participant DB as SQLite
 
-    Boot->>Migrate: loadMigrationsFromDirectory(path.join(process.cwd(), 'migrations'))
-    Migrate->>FS: 读取 *.sql 并按文件名数字序排序
-    FS-->>Migrate: 返回 Migration[]（parseMigrationSql 切分 UP / DOWN）
-    Boot->>Migrate: runMigrations(db, migrations)
-    Migrate->>DB: 确保 _migrations 表存在
-    Migrate->>DB: SELECT name FROM _migrations
+    Kernel->>Migrator: runMigrations(db, all, { strictLedger: true })
+    Boot->>Migrator: 启动复查 runMigrations(db, all, { strictLedger: true })
+    Migrator->>DB: 未知台账/校验和漂移检查（strict: FATAL）
+    Migrator->>DB: VACUUM INTO pre_migration_*.db（600）
+    Migrator->>FS: 读取 *.sql 数字序排序
     loop 未应用的迁移
-        Migrate->>DB: executeSqlStatements(migration.up)（容错 duplicate column）
-        Migrate->>DB: INSERT INTO _migrations(name, applied_at, checksum)
+        Migrator->>DB: db.transaction( 执行 UP + 登记 checksum )
     end
-    Migrate-->>Boot: 迁移执行完成
-    Boot->>Boot: runStartupMigrations(db)（server/bootstrap-db.ts，非版本化）
+    Migrator->>DB: pruneMigratorSnapshots（PRE_MIGRATION_KEEP）
+    Boot->>Golden: assertSchemaMatchesGolden(db, migrationsDir)
+    Golden->>FS: 加载 schema-golden.json
+    Golden->>DB: PRAGMA table_info 逐表逐列比对（缺结构 FATAL）
     Boot->>Boot: await kernelContainer.ready
 ```

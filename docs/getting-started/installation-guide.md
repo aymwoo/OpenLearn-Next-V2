@@ -1,12 +1,6 @@
 # OpenLearnV2 安装与使用指南
 
-> ⚠️ **内容待复核（2026-10-03 审计）**：§2 快速开始与 §3 环境变量基本可用，但部署与包管理器章节有会直接导致故障的错误：
->
-> - §9 PM2 段写 `pm2 logs openlearn`；`ecosystem.config.cjs:11` 的应用名是 **`openlearnv2`**，照抄会报「process not found」。
-> - §9 Docker 段建议 `docker run -v ./data:/app/data openlearnv2`；`Dockerfile:49` 把 `OPENLEARN_DB_PATH` 固定为 `/app/packages/core/db/educational_os.db`，`/app/data` **不是**任何数据目录。按本文挂载，容器一重启**全部数据丢失**。必须挂载 `/app/packages/core/db`（另含 `Dockerfile:34` 创建的 `/app/storage`、`/app/backups`）。
-> - 包管理器自相矛盾：§1 声明「pnpm 为准」，§2 方式二/三与 §9 手动部署却用 `npm install` / `npm run build` / `npm start`，§10 重置系统又用 `pnpm dev`；仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），混用会生成第二份依赖树。另 §2 方式三的 `./dev.sh` 未在 §1 说明，且 `package.json` 名为 `openlearn-next`。
-> - §10 备份/重置的数据库路径只覆盖「本地开发」与「npx 安装」两态，未覆盖 §9 自己推荐的 Docker 部署（此时路径是容器内 `/app/packages/core/db/educational_os.db`），照做会找不到文件。
->   逐条修复前请勿将其作为实现依据。
+> ✅ **2026-10-03 审计警告已全部解决（2026-10-25 复核）**：PM2 应用名、Docker `/data` 卷布局、包管理器口径（全仓 pnpm）、备份/重置路径覆盖均已在正文修正。若发现正文与 `Dockerfile` / `ecosystem.config.cjs` / `package.json` 冲突，以代码为准并提 issue。
 
 ## 目录
 
@@ -42,7 +36,7 @@
 
 ```bash
 node --version   # 应输出 v20.0.0 或更高
-pnpm --version   # 应输出 8.0.0 或更高
+pnpm --version   # 应输出 10.x（仓库 `packageManager` 钉 `10.33.4`，Corepack 会自动对齐）
 ```
 
 ---
@@ -133,7 +127,7 @@ pnpm run dev
 open http://localhost:9000
 ```
 
-> ⚠️ **不要用 `npm install`**。本仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），含 4 个子包：`packages/core`、`packages/plugin-sdk`、`packages/plugin-test-kit`、`packages/mfe-whiteboard`。`npm install` 会生成第二份依赖树（`package-lock.json`），与 pnpm 的 `allowBuilds` 白名单（`better-sqlite3` 等原生模块需编译）行为不一致，容易在启动时抛原生模块加载错误。
+> ⚠️ **不要用 `npm install`**。本仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），含 4 个子包：`packages/core`、`packages/plugin-sdk`、`packages/plugin-test-kit`、`packages/bridge-sdk`（MFE 边界已移除，`mfe-whiteboard` 不复存在）。`npm install` 会生成第二份依赖树（`package-lock.json`），与 pnpm 的 `allowBuilds` 白名单（`better-sqlite3` 等原生模块需编译）行为不一致，容易在启动时抛原生模块加载错误。
 >
 > `pnpm-workspace.yaml` 里的 `overrides` 段还固定了若干传递依赖的安全下界（`ws` `>=8.21.0`、`qs` `>=6.16.0`、`engine.io` `>=6.6.10`、`ip-address` `>=10.7.1` 等）。替换按版本范围写，避免把 minimatch 3/5 的 `brace-expansion` 1.x/2.x 或生产打包用的 esbuild 0.25 一并抬走。这些约束只在 pnpm 下生效。CI 的 `security-audit` 对 `https://registry.npmjs.org/` 执行 `pnpm audit --audit-level high`，存在 high 或 critical 时失败；`pnpm lint:strict` 同样是阻断步骤。
 >

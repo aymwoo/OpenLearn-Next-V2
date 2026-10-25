@@ -120,8 +120,7 @@ if (migrations.length > 0) {
 }
 ```
 
-迁移 SSOT 在 `packages/core/db/migrator.ts`（`server/utils/migrate.ts` 仅是兼容转发）；
-`server.ts` 启动复查之后还会接 `assertSchemaMatchesGolden`（`schema-golden.json` 金样终检，Issue 见 #294）。
+迁移 SSOT 在 `packages/core/db/migrator.ts`（`server/utils/migrate.ts` 仅是兼容转发）；`server.ts` 启动复查之后还会接 `assertSchemaMatchesGolden`（`schema-golden.json` 金样终检，见 #294），以及 `runStartupMigrations`（`server/bootstrap-db.ts`：旧内置插件升级与过期会话清理，非版本化、独立于 `_migrations`）。
 
 > ✅ 迁移失败**会阻止服务启动**——`server.ts` 打出 `[Migration] FATAL` 后 `throw`，进程退出，不在半迁移的库上提供服务（快照创建失败同样中止）。部署后确认启动日志出现 `[Migration] 启动复查完成：…（N 个文件）` 与 `[SchemaGolden] 启动终检通过`。
 

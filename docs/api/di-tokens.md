@@ -36,7 +36,7 @@ interface PluginContext {
     capability: ICapabilityService;
     processManager: IProcessService;
     storage: IStorageService;
-    ai: IAIService;
+    ai: IAIService | null; // Provider 未配置时为 null
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
@@ -61,7 +61,7 @@ interface PluginContext {
 
 ---
 
-## 2. 完整 Token 列表（33 个）
+## 2. 完整 Token 列表（SDK 值导出 32 个，以 `packages/plugin-sdk/index.ts` 导出为准）
 
 `Token<T>` 本身是一个运行时常量（`packages/core/di/token.ts`），其 `name` 形如 `@openlearn/core:ICommandBusService`，`T` 仅用于编译期类型携带。
 
@@ -153,6 +153,11 @@ interface PluginContext {
 | `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | `@openlearn/core:IInteractionRuntimeService`       |
 | `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | `@openlearn/core:IClassroomCountdownService`       |
 | `IStageGuardServiceToken`               | `IStageGuardService`               | `@openlearn/core:IStageGuardService`               |
+| `IAssessmentGraderRegistryToken`        | `IAssessmentGraderRegistry`        | 测评批改器注册表（自定义 AI/规则批改器）           |
+| `INetworkProxyServiceToken`             | `INetworkProxyService`             | 插件出站网络宿主代发（R-02 授权闭环）              |
+| `IClassroomLifecycleServiceToken`       | `IClassroomLifecycleService`       | 课堂生命周期扩展（阶段守卫/快捷活动）              |
+| `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | 课堂互动运行时（抢答/点名处理器贡献）              |
+| `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | 课堂倒计时描述符注册                               |
 
 ---
 
