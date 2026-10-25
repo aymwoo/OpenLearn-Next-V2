@@ -43,17 +43,33 @@ pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Vers
 
 # ── 0b. 版本占用门禁（防「tag 与 npm 包指向不同代码」）─────────────
 #
-# 为什么需要这道门禁：版本号一旦与**既有 git tag** 撞车，就会出现
-# 「tag v0.7.1 指向 47 个提交之前的代码，而 npm 上的 openlearn-next@0.7.1
-# 却是 47 个提交之后的代码」——同一个版本号指向两批不同的代码，且不可逆。
+# 为什么需要这道门禁：同一个版本号可能同时存在于 git tag 与 npm 上，而
+# **两者可以指向两批不同的代码** —— 已发布的 npm 版本不可覆盖、不可逆。
 # npm 侧有自己的保护（不允许覆盖已发布版本），git 侧没有。
+#
+# 判据不是「tag 不能存在」，而是「**tag 必须与本次发布的提交同源**」：
+#
+#   · tag 不存在             → 通过（尚未打 tag，允许先发后补）
+#   · tag 存在且指向本次提交 → 通过（正是想要的状态：tag 与 npm 包同源）
+#   · tag 存在但指向别的提交 → 拒绝（同一个版本号会指向两批不同的代码）
+#
+# 为什么不能简单写成「tag 存在即拒绝」：仓库既定的发布顺序是
+# 「提交（含版本提升）→ 打 tag → 执行 publish.sh」（见审计报告的发布流程）。
+# 若按「tag 存在即拒绝」，**tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
+# v0.7.2 首次实现的就是后者，直到 v0.7.3 真正执行发布时才暴露出来。
 #
 # 只对**即将发布**的包调用：已发布且版本未变的包走「跳过发布」分支，不该被拦。
 assert_version_not_taken() {
   local pkg_name="$1" version="$2"
 
-  if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null 2>&1; then
-    err "版本占用：git tag v${version} 已存在（$(git rev-list -n1 "v${version}" 2>/dev/null | cut -c1-12)）。请提升版本号 —— 当前 ${version} 已被占用，发出去会与该 tag 指向不同代码。"
+  local tag_commit head_commit
+  tag_commit="$(git rev-parse -q --verify "refs/tags/v${version}^{commit}" 2>/dev/null || true)"
+  head_commit="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$tag_commit" ]; then
+    if [ "$tag_commit" != "$head_commit" ]; then
+      err "版本占用：git tag v${version} 已存在但指向 ${tag_commit:0:12}，与本次发布的提交 ${head_commit:0:12} 不同 —— 同一个版本号会指向两批不同的代码。请提升版本号。"
+    fi
+    log "git tag v${version} 与本次发布的提交同源（${tag_commit:0:12}）—— tag 与 npm 包指向同一批代码，允许发布。"
   fi
 
   local remote_versions
