@@ -1,6 +1,6 @@
 # Version Migration Guide 版本迁移指南
 
-> **当前版本**：`package.json` 为 **`0.7.2`**，`@openlearn/plugin-sdk` 为 **`3.7.0`**。
+> **当前版本**：`package.json` 为 **`0.7.4`**，`@openlearn/plugin-sdk` 为 **`3.7.1`**。
 >
 > 本文覆盖两类迁移：
 >

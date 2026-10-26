@@ -1,8 +1,8 @@
 # 社区插件市场 (Community Plugin Registry)
 
-<!-- doc-version: sdk=3.7.0 -->
+<!-- doc-version: sdk=3.7.1 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.1`
 
 社区插件市场允许管理员从**运维自管的远端 JSON 注册表**中发现并一键安装第三方插件，无需用户手工下载 ZIP 再上传。
 

@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [3.7.1] - 2026-10-27
+
+> **升级理由**：`init` 生成的插件此前**装得上、构建得过、一激活就报 `missing activate function`**。
+> 3.7.1 修掉了这个模板缺陷，并把 3.7.0 之后累积的类型契约一并发布（全部为新增导出，向后兼容）。
+> 装法：`npm i -D @openlearn/plugin-sdk@3.7.1`。
+
 ### Fixes
 
 - **脚手架模板的前端入口改为沙箱桥接（`frontend.tsx` 不再导出 React 组件）**：

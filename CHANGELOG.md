@@ -3,7 +3,7 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.0**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.7.1**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
@@ -131,6 +131,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
 
 ### Docs
+
+- **`@openlearn/plugin-sdk@3.7.1` 已发布到 npm**（脚手架 `frontend.tsx` 契约修复，详见该包 CHANGELOG）：
+  - 文档侧同步：26 篇的 `<!-- doc-version: sdk=3.7.0 -->` 与「适用范围」升到 `3.7.1`；`scaffold-cli` / 教程里两处「3.7.0 上仍需手改」的提示改为「3.7.1 起已修好，升级即免手改」。
+  - 顺带修正 `version-migration.md` 头部的版本快照（平台 `0.7.2` → `0.7.4`，SDK `3.7.0` → `3.7.1`）。
+  - **发布前按消费者视角实测**：`npm pack` → 空项目 `npm i <tarball>` → 装到的 CLI 跑 `init`/`build` → `import dist/frontend.js` 断言 `activate` 是函数。包内 17 个文件，`scaffold/templates/` 12 个文件齐全。
 
 - **插件教程 §6 拆成两篇：`plugin-frontend-guide` 与 `plugin-courseware-extensions`**：
   - **动因**：§6 单章 580 行、占全文 22%，且混了两类读者前提不同的内容——「前端 bundle 怎么被加载」与「教学内容怎么进课堂」。上一轮审计已指出这 580 行里的 React 组件写法对第三方插件不可用，留在主教程里只会继续误导。
