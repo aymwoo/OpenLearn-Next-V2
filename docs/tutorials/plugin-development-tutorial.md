@@ -104,20 +104,16 @@ export default {
 `execution-policy.ts` 的强制改写规则：manifest id 不以 `@openlearn/` 开头、且不在白名单、且文件不在内置目录的插件，安装/更新/激活/启动恢复时**一律被改写为 `process`**，响应里带 `executionModeCoerced: true`。**manifest id 前缀本身不构成任何信任**。
 
 ```
-┌─ 服务端（Node.js） ─────────────────────────────┐
-│  PluginHost                                      │
-│  • inline   内置插件，同进程直接调用              │
-│  • worker   受信插件，Worker Thread（共享进程）    │
-│  • process  第三方插件，子进程 + 权限限制 + 出网   │
-│              默认拒绝                             │
-└──────────────────────────────────────────────────┘
+服务端
+  PluginHost
+    inline   ── 内置插件，同进程直接调用
+    worker   ── 受信插件，Worker Thread（共享进程，非安全沙箱）
+    process  ── 第三方插件，子进程 + Node 权限 + 出网默认拒绝   ← ZIP 插件在这一层
 
-┌─ 前端（浏览器） ────────────────────────────────┐
-│  FrontendPluginHost                              │
-│  • inline/受信：动态 import()，可注册 React 组件  │
-│  • process/三方：不透明源隐藏 iframe，只能发数据、  │
-│    不能提供组件，也不能渲染可见 UI                │
-└──────────────────────────────────────────────────┘
+前端
+  FrontendPluginHost
+    inline/受信  ── 动态 import()，可注册 React 组件
+    process/三方 ── 不透明源隐藏 iframe，只能发数据，不渲染 UI
 ```
 
 > ⚠️ **这条决定后面一半文档是否适用于你。** 如果你在开发第三方插件（ZIP 分发），你**不能**：
