@@ -35,6 +35,7 @@
     "cli-cleaner.mjs",
     "cli-doctor.mjs",
     "cli-data.mjs",
+    "scripts/assert-node-runtime.mjs",
     "package.json",
     "README.md"
   ],
@@ -44,10 +45,11 @@
     "registry": "https://registry.npmjs.org/"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "20.x || 22.x || 24.x"
   },
   "packageManager": "pnpm@10.33.4",
   "scripts": {
+    "preinstall": "node scripts/assert-node-runtime.mjs",
     "dev": "tsx server.ts",
     "dev:demo": "tsx scripts/dev-demo.ts",
     "build:bridge-sdk": "node scripts/build-bridge-sdk.mjs",

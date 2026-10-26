@@ -112,6 +112,61 @@ jobs:
             });
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Node 运行时守卫：受支持版本矩阵（20 / 22 / 24）
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # 存在的理由：better-sqlite3 是**原生模块**，`.node` 二进制按 Node ABI 编译。
+  # 客户机换 Node 版本后复用旧 node_modules，会在运行期炸出 ERR_DLOPEN_FAILED ——
+  # 那条原生报错对客户不可操作。平台因此只承诺**实测过**的主版本，并在安装期与
+  # 启动期各设一道闸（scripts/assert-node-runtime.mjs + server/security/runtime-preflight.ts）。
+  #
+  # 这个矩阵 job 证明三件事：
+  #   1. 受支持版本上安装期守卫放行（`pnpm install` 本身就会跑 preinstall 钩子）；
+  #   2. 该 Node 版本上 better-sqlite3 原生绑定**能加载** —— ABI 真的匹配，
+  #      这是「该版本真的可用」的判据（安装期守卫查不到这一层）；
+  #   3. 守卫自身的单测在该版本上通过。
+  #
+  # 只跑这三件事，不跑全量单测：全量套件已在 Node 22 上跑（typecheck-and-test），
+  # 这里要的是「版本矩阵上的运行时事实」，不是把测试重复一遍。
+  #
+  # ⚠️ 若某条依赖日后把 engines 抬到 Node 22+，本矩阵的 Node 20 一档会红 ——
+  #    那不是「CI 坏了」，而是「Node 20 已经不再受支持」，此时应把 20 从
+  #    SUPPORTED_NODE_MAJORS / engines / 矩阵里一起摘掉，而不是把矩阵关掉。
+  node-runtime-compat:
+    name: Node runtime guard (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      # 这一步本身就会执行 package.json 的 preinstall 守卫：版本不受支持时
+      # 安装当场失败，而不是装完才在运行期炸。
+      - name: Install dependencies (preinstall guard runs here)
+        run: pnpm install --frozen-lockfile
+
+      - name: Runtime guard accepts this Node version
+        run: node scripts/assert-node-runtime.mjs
+
+      - name: Native binding loads on this Node ABI
+        # ⚠️ 必须 **new 一个库**，不能只 require —— better-sqlite3 v12 懒加载原生
+        #    绑定：require 本身永远成功，.node 的加载发生在 Database 构造函数里。
+        #    只写 require 的话，这一步在 ABI 失配时照样绿灯，是一道假检查。
+        run: node -e "const D = require('better-sqlite3'); const db = new D(':memory:'); db.close(); console.log('better-sqlite3 OK on Node ' + process.version + ' (ABI ' + process.versions.modules + ')');"
+
+      - name: Node runtime guard unit tests
+        run: pnpm vitest run scripts/__tests__/node-runtime-guard.test.ts
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # 格式门禁（Issue #236；2026-10-25 改为全仓基线棘轮）
   # ═══════════════════════════════════════════════════════════════════════════
   #

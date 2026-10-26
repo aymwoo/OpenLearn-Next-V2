@@ -28,16 +28,42 @@
 
 ### 软件要求
 
-- **Node.js** ≥ 20.x（LTS 推荐，`package.json` 的 `engines` 约束为 `>=20.0.0`）
+- **Node.js** 20.x / 22.x / 24.x（LTS 推荐 22.x；`package.json` 的 `engines` 约束为 `20.x || 22.x || 24.x`）
 - **pnpm**（**本仓库是 pnpm workspace**，见 `pnpm-workspace.yaml`；全部命令以 `pnpm` 为准，**不要用 `npm install`**——会生成第二份依赖树）
 - **操作系统**：Linux（推荐）、macOS、Windows（WSL2 推荐）
+
+> **为什么不是「Node ≥ 20」**：本平台的硬依赖 `better-sqlite3` 是**原生模块**，它的
+> `.node` 二进制按 Node 的 ABI 编译，不是跨版本通用的 JS 包。同一份 `node_modules`
+> 换到另一个 Node 主版本上就会在运行期炸出 `ERR_DLOPEN_FAILED /
+NODE_MODULE_VERSION 不一致` —— 这条原生报错对客户不可操作。平台因此只承诺
+> **实测过的**主版本：20.x（现场旧 LTS）、22.x（CI / Docker / `.nvmrc` 全程钉它）、
+> 24.x（当前 LTS）。21.x / 23.x 非 LTS 且 better-sqlite3 官方不提供 21.x 预编译产物；
+> 25.x 及以上本项目未验证。
 
 验证安装：
 
 ```bash
-node --version   # 应输出 v20.0.0 或更高
+node --version   # 应输出 v20.x / v22.x / v24.x 之一（仓库 .nvmrc 已钉住 22）
 pnpm --version   # 应输出 10.x（仓库 `packageManager` 钉 `10.33.4`，Corepack 会自动对齐）
 ```
+
+### Node 版本守卫：拦在哪、拦成什么样
+
+平台在**三个位置**拦版本问题，报的都是同一份可执行指引（`scripts/assert-node-runtime.mjs`）：
+
+| 位置                   | 触发时机                            | 行为                                                        |
+| ---------------------- | ----------------------------------- | ----------------------------------------------------------- |
+| 安装期（`preinstall`） | `npm install` / 源码 `pnpm install` | **硬失败**：安装当场中止，打印修复指引                      |
+| CLI 入口               | 执行 `openlearn-next <命令>`        | **硬失败**：非诊断类命令直接拒绝执行并退出码 1              |
+| 服务启动期             | `node dist/server.cjs` / `pnpm dev` | **硬失败**：把 `ERR_DLOPEN_FAILED` 翻译成「重建还是换版本」 |
+
+两处已知边界，说清楚免得误判：
+
+- **pnpm v10 默认不执行依赖的生命周期脚本**，所以「从 npm registry 安装本平台」时，
+  安装期那道闸在 pnpm 下**不会触发**（npm 下会触发）。此时兜底的是 CLI 与启动期两道闸 ——
+  客户敲下第一条命令就会看到人话报错，而不是原生栈。
+- `doctor` / `compat-report` / `check-update` 是**只读诊断**命令，即便版本不受支持也
+  照常可用 —— 客户在环境有问题时最需要能跑起来的正是它们。
 
 ---
 

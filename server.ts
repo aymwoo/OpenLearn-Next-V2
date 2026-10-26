@@ -1,3 +1,9 @@
+// ⚠️ 必须是**第一个** import：运行时守卫要在内核 / DB 模块求值之前跑完 ——
+// packages/core/db/index.ts 顶层静态 import better-sqlite3，原生绑定在模块求值期
+// 就加载，ABI 不匹配时进程会在 startServer() 之前抛异常退出，届时任何写在
+// startServer 里的检查都来不及执行。详见 server/security/runtime-preflight.ts。
+import './server/security/runtime-preflight.js';
+
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
