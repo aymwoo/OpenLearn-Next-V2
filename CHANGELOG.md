@@ -31,6 +31,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学生上传的作业附件终于能预览了，并留出扩展插槽给插件接管冷门格式**：
+  - **问题**：学生上传的作业附件过去**只有文件名** —— 待提交列表只能看到名字和大小，
+    已归档提交（`files_json` 快照）里连附件名都没渲染；想看内容只能下载下来自己打开。
+    而 docx/pptx/xlsx/zip 这些格式，浏览器原生**根本渲染不了**。
+  - **内置预览（四种形态，判定规则前后端共用同一份）**：
+    - 图片（png/jpg/gif/webp/bmp/svg/heic）→ `<img>`；
+    - PDF → `<iframe>`（服务端以 `inline` 返回，浏览器内置查看器渲染）；
+    - 纯文本 / 代码 / 数据（txt/md/csv/json/xml/html/css/各类源码）→ `<pre>`，
+      **按文本渲染，绝不解析成 HTML**；
+    - 其余（docx/pptx/xlsx/zip/rtf…）→ 明确提示「暂不支持预览」+ 下载入口，
+      并展示扩展插槽里声明能处理该类型的插件。
+  - **docx/pptx/xlsx 故意不内置解析**：要么引入重依赖，要么自己写 OOXML 解析器
+    （既是安全面也是维护面）。平台不猜，插件声明自己能处理什么类型 ——
+    这就是新增的 `assignment.file.preview` **数据型扩展插槽**。
+  - **插槽契约**：`extensions` / `mimeTypes` 声明能处理的类型（宿主按当前附件的
+    扩展名比对，命中才渲染 —— 只会处理 `.docx` 的预览器不会出现在 `.png` 的对话框里）；
+    点击后由宿主派发 `commandType`，payload 带 `fileId` / `assignmentId` /
+    `downloadUrl` / `inlineUrl`。远程插件也能用（数据型贡献不依赖 React 组件）。
+  - **接入三个真实入口**：学生「提交作业」弹窗（待提交附件 + 已归档提交里的附件快照）、
+    作业互评面板（同伴附件）、学生作业评估面板。
+  - **安全口径（三条铁律）**：
+    1. 内容一律走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+       不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）；
+    2. 服务端按**扩展名**推导 Content-Type，**绝不采信上传时客户端自报的 mime**
+       （那是客户端说了算的，拿它决定浏览器的解释方式等于把「文件被当成什么」
+       交给上传者）；
+    3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），
+       不允许 inline —— inline 回去等于把学生上传的文件变成同源页面，能读 cookie、
+       能调本平台 API。SVG 仍可预览，但只走 `<img>`（图片上下文不执行 SVG 脚本）。
+  - **判定规则单点化**：`packages/core/assignment/file-preview-policy.ts`（前后端共用），
+    避免前端认为是图片、后端按 text/plain 返回这类漂移。
+  - **验证**：策略单测 13 例；作业中心路由单测 25 例（含 inline 的 Content-Type 推导、
+    可执行文档强制下载、预览模式不放水鉴权）；预览组件单测 7 例（渲染形态选择、
+    文本不进 innerHTML、插槽按类型匹配）。
+  - **影响面**：新增 `packages/core/assignment/file-preview-policy.ts`、
+    `src/components/AssignmentFilePreview.tsx`；
+    改动 `server/routes/assignment-hub.ts`（下载端点支持 `?disposition=inline`）、
+    `src/plugin-host/types.ts`（新增槽位与 props）、`packages/core/esm-loader/manifest-schema.ts`
+    （manifest 收录新槽位）、`src/plugin-host/extension-point-renderer.tsx`（按扩展名过滤）、
+    三个前端接入点。
+
 - **C 组立项并启动实施：Student Workspace 迁移 P1（特性开关并行预览）**
   - **立项前先纠正了前提 —— 这不是"搬迁"，是"重建"**。代码级对齐的结论与直觉相反：
 

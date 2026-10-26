@@ -242,6 +242,64 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(asTeacher.status, await asTeacher.text()).toBe(200);
   });
 
+  it('预览模式（?disposition=inline）：Content-Type 由服务端推导，可执行文档强制下载', async () => {
+    // 夹具作业的 max_files=3，逐个「上传 → 断言 → 删除」，避免把配额打满影响后续用例。
+    const withUploadedFile = async (fileName: string, body: Buffer, assert: (res: Response) => Promise<void>) => {
+      const uploaded: any = await (await upload(body, fileName, studentToken)).json();
+      expect(uploaded.file, `上传 ${fileName} 失败：${JSON.stringify(uploaded)}`).toBeTruthy();
+      const stored = kernelContainer.db
+        .prepare('SELECT stored_path FROM plugin_assignment_files WHERE id = ?')
+        .get(uploaded.file.id) as { stored_path: string } | undefined;
+      if (stored) createdFiles.push(path.resolve(process.cwd(), stored.stored_path));
+
+      const fileUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${uploaded.file.id}`;
+      const res = await fetch(`${fileUrl}?disposition=inline`, { headers: cookie(studentToken) });
+      try {
+        await assert(res);
+      } finally {
+        // 清理：未归档附件可删
+        await fetch(fileUrl, { method: 'DELETE', headers: cookie(studentToken) });
+      }
+      return uploaded.file as { id: string };
+    };
+
+    // PDF → application/pdf + inline
+    await withUploadedFile('inline.pdf', pdfBytes, async (res) => {
+      expect(res.status, await res.text()).toBe(200);
+      expect(res.headers.get('content-type')).toContain('application/pdf');
+      expect(res.headers.get('content-disposition')).toContain('inline');
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    });
+
+    // 纯文本 → text/plain + inline
+    await withUploadedFile('note.txt', Buffer.from('hello 文本内容'), async (res) => {
+      expect(res.headers.get('content-type')).toContain('text/plain');
+      expect(res.headers.get('content-disposition')).toContain('inline');
+    });
+
+    // .html → 仍然按 text/plain 内联（**不是** text/html）：浏览器不会把它当页面执行
+    await withUploadedFile('page.html', Buffer.from('<script>alert(1)</script>'), async (res) => {
+      expect(res.headers.get('content-type')).toContain('text/plain');
+      expect(res.headers.get('content-type')).not.toContain('text/html');
+    });
+
+    // .svg → 强制 attachment：SVG 在顶层文档里是可执行的，不能 inline
+    await withUploadedFile('icon.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), async (res) => {
+      expect(res.headers.get('content-disposition')).toContain('attachment');
+    });
+
+    // 预览模式不放水鉴权：未登录 401，他人文件 403
+    const pdf = await (await upload(pdfBytes, 'auth-check.pdf', studentToken)).json();
+    const pdfUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${pdf.file.id}?disposition=inline`;
+    expect((await fetch(pdfUrl)).status).toBe(401);
+    const asOther = await fetch(pdfUrl, { headers: cookie(otherToken) });
+    expect(asOther.status).toBe(403);
+    await fetch(`${baseUrl}/api/assignments/${assignmentId}/files/${pdf.file.id}`, {
+      method: 'DELETE',
+      headers: cookie(studentToken),
+    });
+  });
+
   it('未挂版本的本人文件可删（200），已挂到提交版本的文件不可删（409）', async () => {
     const uploaded: any = await (await upload(pdfBytes, 'deletable.pdf', studentToken)).json();
     const stored = kernelContainer.db

@@ -31,6 +31,7 @@ import {
   CRASH_BREAKER_THRESHOLD,
 } from './extension-breaker';
 import type { ExtensionSlot } from './types';
+import { matchesDeclaredExtension } from '../../packages/core/assignment/file-preview-policy.js';
 
 // 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
 export { isPluginBlown, resetPluginBreaker };
@@ -406,6 +407,26 @@ export function ExtensionPointRenderer({
   // 本侧只渲染与 placement 匹配的扩展（未声明的默认视为 'after'）。
   if (placement) {
     extensions = extensions.filter((ext) => (ext.placement ?? 'after') === placement);
+  }
+
+  // assignment.file.preview —— 作业附件预览插槽：只渲染「声明能处理当前文件类型」的贡献。
+  //
+  // 与 whiteboard.renderer 的 targetType 匹配同构：插槽是**按文件类型**分发的，
+  // 一个只会处理 .docx 的预览器不该出现在 .png 的预览对话框里。
+  // 声明字段：extensions（扩展名数组）+ mimeTypes（MIME 数组），两者命中其一即可。
+  if (slot === 'assignment.file.preview') {
+    const fileExtension = String(slotProps?.fileExtension ?? '').toLowerCase();
+    if (!fileExtension) return null;
+    extensions = extensions.filter((ext) => {
+      const cfg = (ext.slotProps ?? {}) as Record<string, unknown>;
+      const declaredExtensions = Array.isArray(cfg.extensions) ? cfg.extensions : [];
+      if (matchesDeclaredExtension(declaredExtensions, fileExtension)) return true;
+      const declaredMimes = Array.isArray(cfg.mimeTypes)
+        ? cfg.mimeTypes.filter((m): m is string => typeof m === 'string').map((m) => m.toLowerCase())
+        : [];
+      const currentMime = String(slotProps?.file?.mime ?? '').toLowerCase();
+      return currentMime !== '' && declaredMimes.includes(currentMime);
+    });
   }
 
   if (extensions.length === 0) return null;

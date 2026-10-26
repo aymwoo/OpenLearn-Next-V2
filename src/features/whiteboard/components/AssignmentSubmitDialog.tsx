@@ -4,6 +4,7 @@ import {
   Award,
   CheckCircle2,
   Clock,
+  Eye,
   FileText,
   Link2,
   Loader2,
@@ -14,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { AssignmentPeerReviewPanel, type PeerReviewTaskItem } from './AssignmentPeerReviewPanel';
+import { AssignmentFilePreview } from '../../../components/AssignmentFilePreview';
 
 /**
  * 学生端「提交作业」弹窗 —— 课程编辑器里「课堂作业任务」对象的真实落地入口。
@@ -80,6 +82,30 @@ function formatTime(value?: number | null): string {
   }
 }
 
+/**
+ * 解析提交版本里的附件清单。
+ *
+ * `plugin_submission_versions.files_json` 存的是提交那一刻的附件快照
+ * （`[{ fileId, name, size, mime }]`）—— 提交后文件本身仍在
+ * `plugin_assignment_files` 里，按 fileId 下载即可。解析失败一律当作空清单：
+ * 快照损坏不该让整个提交历史渲染不出来。
+ */
+function parseVersionFiles(version: any): Array<{ fileId: string; name: string; size: number }> {
+  try {
+    const raw = typeof version?.files_json === 'string' ? JSON.parse(version.files_json) : version?.files_json;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((item) => item && typeof item.fileId === 'string')
+      .map((item) => ({
+        fileId: String(item.fileId),
+        name: String(item.name ?? item.fileId),
+        size: Number(item.size ?? 0),
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 'zh' }: AssignmentSubmitDialogProps) {
   const zh = lang === 'zh';
   const [loading, setLoading] = useState(true);
@@ -97,6 +123,8 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
   const [tab, setTab] = useState<'submit' | 'peer'>('submit');
   /** onToast 缺省时（例如白板里没有 toast 宿主）在自己内部显示一条提示 */
   const [notice, setNotice] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
+  /** 当前正在预览的附件（null = 未打开预览） */
+  const [previewFile, setPreviewFile] = useState<{ id: string; original_name: string; size: number } | null>(null);
   /** queue key → 待上传的 File（XHR 需要原始 File，不能只靠 state） */
   const fileMapRef = useRef<Map<string, File>>(new Map());
   const xhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
@@ -531,6 +559,17 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
                         <span className="flex-1 truncate text-main">{file.original_name}</span>
                         <span className="text-[11px] text-muted shrink-0">{formatBytes(file.size)}</span>
                         <button
+                          onClick={() =>
+                            setPreviewFile({ id: file.id, original_name: file.original_name, size: file.size })
+                          }
+                          className="p-1 rounded text-muted hover:text-primary-theme hover:bg-surface-secondary"
+                          title={zh ? '预览' : 'Preview'}
+                          aria-label={zh ? `预览 ${file.original_name}` : `Preview ${file.original_name}`}
+                          data-testid="assignment-pending-file-preview"
+                        >
+                          <Eye size={12} />
+                        </button>
+                        <button
                           onClick={() => void removeRemoteFile(file.id)}
                           className="p-1 rounded text-orange-600 hover:text-red-500 hover:bg-surface-secondary"
                           title={zh ? '移除' : 'Remove'}
@@ -624,22 +663,53 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
                     {zh ? `提交历史（共 ${versions.length} 版）` : `Submission history (${versions.length})`}
                   </div>
                   <ul className="space-y-1">
-                    {versions.map((version) => (
-                      <li
-                        key={version.id}
-                        className="flex items-center gap-2 rounded-lg border border-theme px-2 py-1.5 text-xs"
-                      >
-                        <span className="px-1.5 py-0.5 rounded bg-surface-secondary border border-theme text-[11px] text-main shrink-0">
-                          v{version.version}
-                        </span>
-                        <span className="flex-1 truncate text-muted">
-                          {version.text_content || version.link_url || '—'}
-                        </span>
-                        <span className="text-[11px] text-muted shrink-0">
-                          {formatTime(version.created_at || version.submitted_at)}
-                        </span>
-                      </li>
-                    ))}
+                    {versions.map((version) => {
+                      const versionFiles = parseVersionFiles(version);
+                      return (
+                        <li key={version.id} className="rounded-lg border border-theme px-2 py-1.5 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="px-1.5 py-0.5 rounded bg-surface-secondary border border-theme text-[11px] text-main shrink-0">
+                              v{version.version}
+                            </span>
+                            <span className="flex-1 truncate text-muted">
+                              {version.text_content || version.link_url || '—'}
+                            </span>
+                            {versionFiles.length > 0 && (
+                              <span className="text-[11px] text-muted shrink-0">
+                                {zh ? `${versionFiles.length} 个附件` : `${versionFiles.length} file(s)`}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-muted shrink-0">
+                              {formatTime(version.created_at || version.submitted_at)}
+                            </span>
+                          </div>
+                          {/* 已归档附件：提交时快照在 files_json 里，文件本体仍可按 fileId 取回 */}
+                          {versionFiles.length > 0 && (
+                            <ul className="mt-1 flex flex-wrap gap-1">
+                              {versionFiles.map((item) => (
+                                <li key={item.fileId}>
+                                  <button
+                                    onClick={() =>
+                                      setPreviewFile({
+                                        id: item.fileId,
+                                        original_name: item.name,
+                                        size: item.size,
+                                      })
+                                    }
+                                    className="flex items-center gap-1 rounded border border-theme px-1.5 py-0.5 text-[11px] text-main hover:border-orange-300"
+                                    title={zh ? '预览' : 'Preview'}
+                                    data-testid="assignment-version-file-preview"
+                                  >
+                                    <Eye size={11} className="shrink-0" />
+                                    <span className="max-w-[160px] truncate">{item.name}</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
@@ -688,6 +758,16 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
           </div>
         </div>
       </div>
+
+      {/* 附件预览：走带鉴权的 /api/assignments/:id/files/:fileId，不经过任何静态目录 */}
+      {previewFile && (
+        <AssignmentFilePreview
+          assignmentId={assignmentId}
+          file={previewFile}
+          lang={lang}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }

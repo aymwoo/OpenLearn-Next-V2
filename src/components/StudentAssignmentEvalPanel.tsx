@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 import {
   Upload,
+  Eye,
   FileText,
   CheckCircle,
   MessageSquare,
@@ -14,6 +15,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { AssignmentFilePreview } from './AssignmentFilePreview';
 
 interface StudentAssignmentEvalPanelProps {
   lessonId: string;
@@ -62,6 +64,13 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
   // Submit state
   // v0.6.1 数据真实性：不再默认虚构 '/files/my-homework.pdf'（同伴侧渲染为 404 链接）
   const [filePath, setFilePath] = useState('');
+  /** 当前正在预览的附件（null = 未打开预览） */
+  const [previewFile, setPreviewFile] = useState<{
+    id: string;
+    original_name: string;
+    size: number;
+    mime?: string | null;
+  } | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
 
   // Peer review states (mapped by submissionId)
@@ -280,19 +289,39 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                       // Issue #228：进 href 前过协议白名单（附件下载端点是站内相对路径，
                       // 但同一条渲染路径也可能承载外部链接）。
                       const href = sanitizeHref(fileHref(mySubmission, f));
-                      return href ? (
-                        <a
-                          key={f.fileId ?? idx}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block truncate text-indigo-600 hover:underline"
-                        >
-                          {f.name}
-                        </a>
-                      ) : (
-                        <span key={f.name ?? idx} className="block truncate">
-                          {f.name}
+                      const previewable = Boolean(href && mySubmission?.assignment_id && f?.fileId);
+                      return (
+                        <span key={f.fileId ?? idx} className="flex items-center gap-1.5">
+                          {previewable && (
+                            <button
+                              onClick={() =>
+                                setPreviewFile({
+                                  id: String(f.fileId),
+                                  original_name: String(f.name ?? f.fileId),
+                                  size: Number(f.size ?? 0),
+                                  mime: f.mime ?? null,
+                                })
+                              }
+                              className="p-0.5 rounded text-indigo-600 hover:bg-indigo-50 shrink-0"
+                              title={zh ? '预览' : 'Preview'}
+                              aria-label={zh ? `预览 ${f.name}` : `Preview ${f.name}`}
+                              data-testid="student-assignment-file-preview"
+                            >
+                              <Eye size={11} />
+                            </button>
+                          )}
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block truncate text-indigo-600 hover:underline"
+                            >
+                              {f.name}
+                            </a>
+                          ) : (
+                            <span className="block truncate">{f.name}</span>
+                          )}
                         </span>
                       );
                     })}
@@ -589,6 +618,15 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
           </div>
         )}
       </div>
+
+      {previewFile && mySubmission?.assignment_id && (
+        <AssignmentFilePreview
+          assignmentId={String(mySubmission.assignment_id)}
+          file={previewFile}
+          lang={lang}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { ASSIGNMENT_MAX_FILE_SIZE } from '../utils/assignment-upload-policy.js';
+import { isInlineSafeContentType, resolveContentType } from '../../packages/core/assignment/file-preview-policy.js';
 import { AssignmentService } from '../services/assignment-service.js';
 import {
   accessibleClassIds,
@@ -256,6 +257,34 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
 
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'private, no-store');
+
+      // 预览模式（?disposition=inline）：让浏览器把附件当**数据**而不是当**下载**。
+      //
+      // 三条硬约束，缺一不可：
+      // 1. Content-Type 由**服务端按扩展名推导**（`resolveContentType`），绝不采信
+      //    上传时客户端自报的 mime —— 那是客户端说了算的，拿它决定浏览器的解释方式
+      //    等于把「文件被当成什么」交给上传者。
+      // 2. 只有白名单里的类型才允许 inline（PDF / text/plain / 常见位图）；
+      //    text/html、image/svg+xml 这类**可执行文档**一律回落到下载 ——
+      //    inline 回去就等于把学生上传的文件变成同源页面。
+      // 3. `nosniff` 兜底，防止浏览器把 text/plain 嗅探成 HTML。
+      const wantsInline = String(req.query.disposition || '').toLowerCase() === 'inline';
+      const contentType = resolveContentType(originalName);
+      if (wantsInline && isInlineSafeContentType(contentType)) {
+        res.setHeader('Content-Type', contentType);
+        // PDF 不加 sandbox：Chrome 的 PDF 查看器在 sandbox 下会拒绝渲染。
+        // 它本身运行在浏览器的 PDF 沙箱里，不与页面同源（业界通行做法）。
+        // 文本与图片加 sandbox：即便将来出现新的嗅探路径，也没有执行余地。
+        res.setHeader(
+          'Content-Security-Policy',
+          contentType === 'application/pdf' ? 'sandbox allow-scripts' : 'sandbox',
+        );
+        const safeName = encodeURIComponent(originalName).replace(/['()]/g, escape);
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${safeName}`);
+        res.sendFile(absPath);
+        return;
+      }
+
       res.download(absPath, originalName);
     } catch (e: any) {
       sendHubError(res, e);
