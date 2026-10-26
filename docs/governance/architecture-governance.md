@@ -1,6 +1,6 @@
 # Architecture Governance & Policies 架构治理
 
-规范 Platform Kernel 的模块演进机制、Capability 网关三级防线与第三方插件代码沙箱审核标准。同步于 v0.3.22；安全细节的权威页面为 [security-permissions](../architecture/security-permissions) 与 [security-remediation-report](../architecture/security-remediation-report)。
+规范 Platform Kernel 的模块演进机制、Capability 网关三级防线与第三方插件代码沙箱审核标准。同步于 v0.7.4；安全细节的权威页面为 [security-permissions](../architecture/security-permissions) 与 [security-remediation-report](../architecture/security-remediation-report)。
 
 ---
 
@@ -21,7 +21,7 @@
 1. **静态导入扫描（token-enforcer）**：上传 ZIP 后，esbuild 自定义插件 `openlearn-token-enforcer` 扫描入口文件，**只允许相对导入与 `@openlearn/*` 导入**，其余裸 specifier（含 Node 内置模块）直接拒绝（见 [tutorial §11.4](../tutorials/plugin-development-tutorial)）。
 2. **共享模块白名单**：运行时 `ctx.require()` 只放行白名单（`recharts` / `react-markdown` / `jspdf` / `jspdf-autotable` / `exceljs` / `lucide-react` / `uuid`）。
 3. **SQL 注入防护**：插件自建表 `ensureTable` 的表名/schema 强制校验（标识符正则、≤4000 字符、禁分号），详见 [plugin-database-api](../reference/plugin-database-api)。
-4. **Worker 隔离**：默认 Worker Thread 模式运行，插件与宿主仅经结构化克隆 RPC 通信；inline 模式为受控例外。
+4. **隔离原语**：第三方插件**默认 `process`（子进程 + 最小环境变量白名单）**；只有 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 白名单内的 manifest id 或位于内置目录 `packages/plugins` 的插件，才允许 `inline` / `worker`（`node:worker_threads`）。非受信插件请求 inline / worker 会被 `resolvePluginExecutionMode()` 强制改写为 `process`。隔离强度 Process > Worker > Inline，详见 [security-permissions §2](../architecture/security-permissions)。
 5. **HTTP 网关纵深防御**：插件 RESTful 端点统一挂载 `/api/plugins/:pluginId/*`，经 `plugin-api-gateway`（鉴权、角色白名单、限流、响应头清洗、body ≤ 1MB）。
 6. **出站请求校验**：涉及远端 URL 的操作（插件更新、社区市场、AI Provider 连通性测试）统一经 `server/utils/url-safety.ts` 的 `isSafeExternalUrl` SSRF 防护。
 

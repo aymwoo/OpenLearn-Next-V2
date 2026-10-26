@@ -7,7 +7,7 @@
 ## 1. 运行环境要求
 
 - **操作系统**: Linux (Ubuntu 20.04 LTS / Debian 11+ / Rocky Linux 8+ 推荐) / macOS / Windows Server
-- **Node.js 运行时**: `>= 20.0.0` LTS（推荐 Node.js 22 LTS）
+- **Node.js 运行时**: `20.x` / `22.x` / `24.x`（`package.json` 的 `engines` 即此范围，CI 与 Docker 镜像钉 `22.x`，推荐 Node.js 22 LTS）。**不是「≥ 20 即可」**：`preinstall` 钩子（`scripts/assert-node-runtime.mjs`）会对 21/23/25/26 等未验证主版本硬失败 —— 原生模块 `better-sqlite3` 的 ABI 绑定主版本，跨版本复用 `node_modules` 会在运行期 `ERR_DLOPEN_FAILED`
 - **内存与 CPU**: 最低 2 核 2GB RAM，推荐 4 核 8GB RAM（大并发课件与白板同步）
 - **存储权限**: 对数据库持久化目录（默认 `~/openlearn-next/`）具备读写操作权限
 

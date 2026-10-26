@@ -1915,20 +1915,20 @@ Worker 模式的特点：
 
 Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext` API 都可用**。开发时若目标运行模式为 Worker，必须遵守以下约束：
 
-| API                           | Inline 模式                  | Worker 模式                               | 说明                                                                 |
-| ----------------------------- | ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
-| `ctx.services.commandBus`     | 完整                         | `registerHandler` / `execute`             | `execute` 调用不自动加命名空间前缀，见下方                           |
-| `ctx.services.eventBus`       | `on()` / `off()`             | `subscribe()` / `unsubscribe()`           | 方法名不同                                                           |
-| `ctx.services.actionRegistry` | 完整                         | `register()`                              | —                                                                    |
-| `ctx.http`                    | 完整 `PluginHttpRouter`      | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
-| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用       | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**          |
-| `ctx.db.table()`              | 返回 UUID 前缀               | 返回 manifest ID 前缀                     | 两种模式前缀不同，切换执行模式会导致表名变化，详见下方说明           |
-| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步) | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
-| `ctx.config`                  | 可用                         | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
-| `ctx.provide()`               | 可用                         | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
-| `ctx.log`                     | 可用                         | 可用                                      | —                                                                    |
-| `ctx.pluginId`                | `plugins` 表行 UUID          | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                     |
-| `ctx.manifest`                | 可用                         | 可用                                      | —                                                                    |
+| API                           | Inline 模式                   | Worker 模式                               | 说明                                                                 |
+| ----------------------------- | ----------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| `ctx.services.commandBus`     | 完整                          | `registerHandler` / `execute`             | `execute` 调用不自动加命名空间前缀，见下方                           |
+| `ctx.services.eventBus`       | `on()` / `off()`              | `subscribe()` / `unsubscribe()`           | 方法名不同                                                           |
+| `ctx.services.actionRegistry` | 完整                          | `register()`                              | —                                                                    |
+| `ctx.http`                    | 完整 `PluginHttpRouter`       | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
+| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用        | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**          |
+| `ctx.db.table()`              | 返回 `plugin_<scopeId>_` 前缀 | 同左（前缀与执行模式无关）                | 两种模式一致，均基于安装主键 scopeId，详见下方说明                   |
+| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步)  | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
+| `ctx.config`                  | 可用                          | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
+| `ctx.provide()`               | 可用                          | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
+| `ctx.log`                     | 可用                          | 可用                                      | —                                                                    |
+| `ctx.pluginId`                | `plugins` 表行 UUID           | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                     |
+| `ctx.manifest`                | 可用                          | 可用                                      | —                                                                    |
 
 **`ctx.db.table()` 表前缀语义（已统一收敛）：**
 

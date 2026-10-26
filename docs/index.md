@@ -36,6 +36,8 @@ architecture/service-registry
 architecture/whiteboard-subsystems
 architecture/classroom-runtime
 architecture/resource-runtime
+architecture/assignment
+architecture/assessment-model
 architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
 architecture/navigation-audit-report
@@ -303,4 +305,4 @@ trust-boundary-hardening-audit-2026-10-14
 - **[AI Runtime & Tools](ai/ai-runtime)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-10-25 (v0.7.2)
+> 最后更新：2026-10-26 (v0.7.4)

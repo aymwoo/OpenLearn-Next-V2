@@ -1,248 +1,198 @@
 # Classroom Runtime 架构说明
 
-OpenLearn V2 的 **Classroom Runtime**（Sprint P4-01 ~ P4-03）跨前后端各一份实现：
-
-- 前端：`src/features/classroom-runtime/`（343 行 / 7 文件）
-- 后端：`packages/core/classroom-runtime/`
-
-它是 OpenLearn "课堂" 概念的运行时抽象——**9 阶段生命周期状态机 + 6 个底层 runtime 协调器**。
+> **2026-10-26 复核（v0.7.4）**：本页此前描述的「9 阶段状态机 + 前端 `src/features/classroom-runtime/`（343 行 / 7 文件）」实现**在代码中并不存在** —— 该前端目录不存在，`ClassroomSession` / `ClassroomService` / `ClassroomRegistry` / `ClassroomContextFacade` / `ClassroomEventBus` / `IClassroomContext` 等符号全仓无一命中。真实情况是**同一名词指代两套互不相干的系统**。本页已按代码重写。
 
 ---
 
-## 整体定位
+## 0. 先分清两个同名系统
 
-Classroom Runtime 是 Layer 2 中的**顶层领域引擎**，把"一节课从创建到销毁"的全过程抽象为一个有限状态机，并协调 6 个底层 runtime（lesson / whiteboard / ai / plugin / analytics / resource）。
+| 维度     | 内核版（`packages/core/classroom-runtime/`）                                                                               | 服务版（`server/services/classroom-runtime-service.ts`）    |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 定位     | 通用「课堂运行时内核」：状态树 + 事件总线 + 服务/模块注册 + 调度器 + 权限 + 资源 + 快照 + 钩子 + 监控                      | 真实的课堂生命周期：阶段流转、环节门禁、互动组件注册        |
+| 主类     | `ClassroomRuntimeKernel`                                                                                                   | `ClassroomRuntimeService`                                   |
+| 接口     | 无（直接 `new`）                                                                                                           | `IClassroomLifecycleService` / `IInteractionRuntimeService` |
+| 状态模型 | `RuntimeLifecycleState`（**8 态**）                                                                                        | `ClassroomLifecycleStage`（**4 阶段**）                     |
+| 持久化   | 无，纯内存                                                                                                                 | 落库（`classroom_sessions`、课节进度等）                    |
+| 接线     | `packages/core/kernel/index.ts` 实例化为 `classroomRuntime` 并注册 `IClassroomRuntimeServiceToken`，但**全仓零 `resolve`** | `server/routes/classroom.ts` 直接使用                       |
 
-```mermaid
-graph TB
-    UI[课堂 UI] --> CS[ClassroomService]
-    CS -->|createSession| Sess[ClassroomSession]
-    Sess -->|9 阶段状态机| FSM{Stage}
-    Sess -->|attachRuntimes| Ctx[IClassroomContext]
-    Ctx --> Lesson[LessonSession]
-    Ctx --> WB[WhiteboardEngine]
-    Ctx --> AI[AIRuntime]
-    Ctx --> Plugin[PluginHost]
-    Ctx --> Analytics[AnalyticsEngine]
-    Ctx --> Resource[ResourceRegistry]
-    Sess -->|ClassroomEvent| Bus[ClassroomEventBus]
-    Bus -->|classroom.* 命名空间| EB[EventBus]
-    Sess --> Registry[ClassroomRegistry]
-    Registry --> Svc[ClassroomServiceDescriptor]
-    Registry --> Act[ClassroomActionExtension]
-    Registry --> Wgt[Widget slot]
-    Sess --> Facade[ClassroomContextFacade]
-    Facade --> UI
+⚠️ **内核版目前是「已实例化、无人消费」**：它被 `packages/core/kernel/index.ts` 建好后注册进容器，却没有任何模块 `resolve` 这个 Token；唯一构造它的外部代码是 `src/features/student-workspace/student-workspace-context.ts`，而那里是**另起的独立实例**，与容器中的对象不是同一个。这一现状记录在 [`audit-2026-10-15.md`](../../audit-2026-10-15.md)。**要判断「课堂」的真实行为，看服务版。**
+
+---
+
+## 1. 内核版：`ClassroomRuntimeKernel`
+
+一个把十余个基础设施协调起来的编排器（`kernel.ts`，224 行），本身不承载业务规则。
+
+### 1.1 生命周期：8 态
+
+`RuntimeLifecycleState`（`types.ts`）定义了 **8 个**状态，不是 9 个：
+
+```text
+Create → Initialize → Prepare → Running ⇄ Pause / Resume → Stop → Dispose
 ```
 
----
-
-## 9 阶段状态机
-
-`ClassroomSession`（125 行，前端版本）维护课堂生命周期：
+- 构造时置 `Create`；`initialize()` 推进到 `Initialize` 并启动调度器、初始化全部已注册服务；
+- 状态转换统一走 `transitionState()` 校验，非法转换抛错；
+- 对外方法：`initialize()` / `start()` / `pause()` / `resume()` / `stop()` / `dispose()`。
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Create: new ClassroomSession()
-    Create --> Prepare: prepare()
-    Prepare --> Ready: ready()
-    Ready --> Teaching: startTeaching()
-    Resumed --> Teaching: resume() 自动调用 startTeaching()
-    Teaching --> Paused: pause()
-    Paused --> Resumed: resume()
-    Teaching --> Finished: finish()
-    Paused --> Finished: finish()
-    Finished --> Archived: archive()
-    Archived --> [*]: 显式 dispose 后可 GC
-    Create --> Disposed: dispose() 任意阶段
-    Prepare --> Disposed: dispose()
-    Ready --> Disposed: dispose()
-    Teaching --> Disposed: dispose()
-    Paused --> Disposed: dispose()
-    Finished --> Disposed: dispose()
-    Archived --> Disposed: dispose()
-    Disposed --> [*]
+    [*] --> Create
+    Create --> Initialize: initialize()
+    Initialize --> Prepare: start()
+    Prepare --> Running: start()
+    Running --> Pause: pause()
+    Pause --> Resume: resume()
+    Resume --> Running
+    Running --> Stop: stop()
+    Stop --> Dispose: dispose()
+    Pause --> Stop
 ```
 
-每个合法转换都通过 `assertValidTransition(allowedFrom, target)` 校验，非法转换抛 `ClassroomSession Error: Invalid state transition`。
+### 1.2 十一个协作者
 
-转换时自动触发 `ClassroomEvent`（9 种 type 一一对应 9 个 stage）：
-`ClassroomCreated` / `ClassroomPrepared` / `ClassroomReady` / `ClassroomTeaching` / `ClassroomPaused` / `ClassroomResumed` / `ClassroomFinished` / `ClassroomArchived` / `ClassroomDisposed`。
+`ClassroomRuntimeKernel` 在构造时装配下列 11 个子系统，全部以只读属性暴露：
 
-**特殊转换**：
+| 属性                | 实现类                     | 职责                                                      |
+| ------------------- | -------------------------- | --------------------------------------------------------- |
+| `eventBus`          | `RuntimeEventBus`          | 类型化事件通道，支持 `'*'` 通配订阅                       |
+| `stateManager`      | `RuntimeStateManager`      | 唯一的不可变状态树 + 监听器                               |
+| `serviceRegistry`   | `RuntimeServiceRegistry`   | `IRuntimeService` 的注册与生命周期                        |
+| `moduleRegistry`    | `RuntimeModuleRegistry`    | `IRuntimeModule` 的注册与生命周期                         |
+| `scheduler`         | `RuntimeScheduler`         | 带 `TaskPriority` 的任务调度                              |
+| `permissionManager` | `RuntimePermissionManager` | 角色 → 权限集合的映射                                     |
+| `resourceManager`   | `RuntimeResourceManager`   | `RuntimeResource`（图片/视频/音频/PDF/插件/AI）的装载状态 |
+| `snapshotManager`   | `RuntimeSnapshotManager`   | 状态快照与最近快照恢复                                    |
+| `hooksManager`      | `RuntimeHooksManager`      | 8 个具名钩子的注册与触发                                  |
+| `sessionManager`    | `ClassroomSessionManager`  | 课堂会话的创建/查询/归档（`ClassroomSessionData`）        |
+| `monitor`           | `RuntimeMonitor`           | 运行时诊断（`getDiagnostics()`）                          |
 
-- `resume()` 内部会调用 `startTeaching()`——因为 resume = 回到 teaching。
-- `dispose()` 可从任意阶段进入（不校验 `allowedFrom`），是应急逃生口。
+### 1.3 统一上下文
 
----
+`getContext(): RuntimeContextData` 汇总当前会话与用户身份：
 
-## 协调 6 个 Runtime：`IClassroomContext`
-
-`attachRuntimes()` 注入 6 个底层 runtime 引用：
-
-```typescript
-public attachRuntimes(runtimes: {
-  lessonSession?: unknown;
-  whiteboardEngine?: unknown;
-  aiRuntime?: unknown;
-  pluginHost?: unknown;
-  analyticsEngine?: unknown;
-  resourceRegistry?: unknown;
-}): void;
+```text
+runtimeId / sessionId / courseId / lessonId / teacher / currentUser
+role / permissions / lifecycleState
 ```
 
-注意：6 个字段全部是 `unknown`，这是**显式延迟绑定**——前端代码不直接 import 这些 runtime 的具体类型，而是通过 [`ClassroomContextFacade`](#classroomcontextfacade统一门面) 在运行时按需访问。
+角色枚举 `RuntimeRole` 有 **6 个**值：`Teacher` / `Assistant` / `Student` / `Observer` / `Plugin` / `AI`。
+权限枚举 `RuntimePermission` 有 **7 个**值：`lesson:control` / `stage:navigate` / `whiteboard:draw` / `quiz:submit` / `plugin:execute` / `ai:invoke` / `session:manage`。
 
-### ClassroomContextFacade（统一门面）
+### 1.4 状态树
 
-`ClassroomContextFacade`（54 行）把 session 和 context 封装成**单一 facade**，对外暴露只读 getter：
+`RuntimeStateTree` 是内核的唯一真相源，顶层分区：
 
-| Getter         | 返回                             |
-| -------------- | -------------------------------- |
-| `classroomId`  | string                           |
-| `stage`        | ClassroomStage                   |
-| `lesson`       | unknown（lessonSession）         |
-| `whiteboard`   | unknown（whiteboardEngine）      |
-| `ai`           | unknown（aiRuntime）             |
-| `plugin`       | unknown（pluginHost）            |
-| `analytics`    | unknown（analyticsEngine）       |
-| `resource`     | unknown（resourceRegistry）      |
-| `getSession()` | ClassroomSession（用于高级操作） |
+| 分区              | 内容                                                        |
+| ----------------- | ----------------------------------------------------------- |
+| `runtime`         | `id` / `lifecycle` / `startTime` / `elapsedTime`            |
+| `lesson`          | 当前课节信息                                                |
+| `stage`           | `index`（环节序号）                                         |
+| `activity`        | 当前活动                                                    |
+| `whiteboard`      | `objectCount` / `isLocked`                                  |
+| `teachingObjects` | 教学对象列表                                                |
+| `students`        | 参与者列表（`UserParticipant`）                             |
+| `plugin`          | 已加载插件                                                  |
+| `ai`              | `isGenerating`                                              |
+| `analytics`       | `totalInteractions` / `activeStudentCount` / `averageScore` |
 
-**设计意图**：课堂 UI 代码只依赖 `ClassroomContextFacade`，不直接接触 6 个底层 runtime 的类型定义——后者按需懒解析。这样 plugin 或能力扩展可以**替换底层实现**而不需要改 frontend。
+### 1.5 事件、钩子
 
----
+`RuntimeEventMap` 定义了 **12 个**事件通道，**键名是 PascalCase，不是 `classroom.*` 命名空间**：
 
-## 三类扩展点：ClassroomRegistry
-
-`ClassroomRegistry`（55 行）提供 3 类扩展 slot：
-
-| 存储       | Key       | Value                        | 用途                         |
-| ---------- | --------- | ---------------------------- | ---------------------------- |
-| `services` | serviceId | `ClassroomServiceDescriptor` | 业务服务（execute 语义）     |
-| `actions`  | actionId  | `ClassroomActionExtension`   | 课堂动作扩展（handler 语义） |
-| `widgets`  | widgetId  | `{ id, name, slot }`         | 课堂 UI 控件挂载             |
-
-### ClassroomServiceDescriptor vs ClassroomActionExtension
-
-| 维度     | ServiceDescriptor      | ActionExtension      |
-| -------- | ---------------------- | -------------------- |
-| 语义     | 可重用的"业务能力"     | 单次执行的"动作"     |
-| 生命周期 | 注册后可被多次 execute | 注册后被业务按需触发 |
-| 典型用例 | "成绩统计服务"         | "开启投票动作"       |
-
-### ClassroomService（门面层）
-
-`ClassroomService`（52 行）持有 `Map<classroomId, ClassroomSession>`：
-
-```typescript
-public createSession(classroomId: string): ClassroomSession;
-public getSession(classroomId: string): ClassroomSession | undefined;
-public listSessions(): ReadonlyArray<ClassroomSession>;
-public disposeSession(classroomId: string): boolean;  // 调用 session.dispose() 后从 Map 移除
-public clear(): void;                                   // disposeAll + registry.clear()
+```text
+SessionCreated, StudentJoined, StudentLeft, LessonStarted, StageChanged,
+ObjectUpdated, QuizSubmitted, PluginLoaded, AIFinished, NetworkDisconnected,
+RuntimePaused, LifecycleChanged
 ```
 
-注意：重复 `createSession` 同 `classroomId` 会抛 `ClassroomService Error: Classroom session already exists`。
+`RuntimeEventBus` 是**内核自带的独立总线**（`Map<string, Set<subscriber>>`），不复用平台的全局 EventBus。`publish()` 产出带 `id` / `type` / `payload` / `source` / `timestamp` 的 `RuntimeEventEnvelope`，并同时投递给通配订阅者。
+
+`RuntimeHookName` 有 **8 个**：`beforeLessonStart` / `afterLessonStart` / `beforeStageChange` / `afterStageChange` / `beforePluginLoad` / `afterPluginLoad` / `beforeStudentJoin` / `afterStudentJoin`。
+
+### 1.6 其余能力
+
+`registerModule()`、`setUser()`、`hasPermission()`、`takeSnapshot()`、`restoreLatestSnapshot()`、`getDiagnostics()`。
 
 ---
 
-## 事件总线：ClassroomEventBus（Sprint P4-03）
+## 2. 服务版：`ClassroomRuntimeService`（真实课堂生命周期）
 
-`ClassroomEventBus`（59 行）把课堂事件**命名空间化**到全局 `EventBus`（PI-010）：
+`server/services/classroom-runtime-service.ts`，`implements IClassroomLifecycleService, IInteractionRuntimeService`。这才是路由层实际调用、且会落库的课堂实现。
 
-```typescript
-export type ClassroomEventType =
-  | 'classroom.created'
-  | 'classroom.prepared'
-  | 'classroom.ready'
-  | 'classroom.teaching'
-  | 'classroom.paused'
-  | 'classroom.resumed'
-  | 'classroom.finished'
-  | 'classroom.archived'
-  | 'classroom.disposed';
+### 2.1 四阶段（不是 9 阶段）
+
+`ClassroomLifecycleStage`（`packages/core/di/interfaces.ts`）只有 **4 个**值：
+
+```text
+PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPORT
 ```
 
-事件命名遵循 `classroom.<stage>` 风格，便于跨模块按 namespace 订阅：
+`ARCHIVED_REPORT_STAGE = 'ARCHIVED_REPORT'` 是导出常量；`getOrCreateSession` 及动态流查询「活动会话」时会排除该阶段。
 
-```typescript
-const bus = container.resolve(CLASSROOM_EVENT_BUS_TOKEN);
-const unsub = bus.subscribe('classroom.teaching', (event) => {
-  console.log(`classroom ${event.classroomId} started teaching at ${event.timestamp}`);
-});
+### 2.2 生命周期接口
 
-// 或订阅所有课堂事件
-bus.subscribe('*', (event) => { ... });
-```
+| 方法                                                               | 说明                                         |
+| ------------------------------------------------------------------ | -------------------------------------------- |
+| `getStage(lessonId)`                                               | 读取课节当前阶段                             |
+| `transitionStage(lessonId, toStage, actorId, classId?)`            | 流转阶段，返回 `{ success, stage, reason? }` |
+| `registerStageGuard(owner, guard)` / `unregisterStageGuard(owner)` | 注册/注销 `ClassroomStageGuard`              |
 
-`subscribe()` 返回 `() => void` 类型的 unsubscribe 函数（PI-010 风格）。
+**门禁执行策略是 fail-close**：每个 guard 有独立超时（默认 **1500ms**，可用 `OPENLEARN_CLASSROOM_GUARD_TIMEOUT_MS` 覆盖），异常或超时一律**拒绝流转**，不会静默放行。这条策略是有意与 `StageGuardPipeline` 对齐的 —— 环节流转是教师侧单次请求，挂起的插件 guard 不能让接口无限等待。
 
-**与 `ClassroomSession.emitEvent` 的关系**：
+### 2.3 互动运行时
 
-- `ClassroomSession.emitEvent` → 直接回调注册的 `ClassroomEventListener`（in-process，session 范围）
-- `ClassroomEventBus.publish` → 走全局 EventBus（跨模块，跨进程可扩展）
-
-两者**并存**：session listener 用于 session 内部观察者，event bus 用于跨模块协作。
+`registerActivityProvider(owner, descriptor)` / `unregisterActivityProvider(owner, id)` / `listActivityProviders()`，`QuickActivityDescriptor` 带 `id` / `name` / `category` / `icon?` / `description?` / `supportedRoles?`。第三方插件通过它注册自定义互动组件（极速投票、抢答、结课通票等）。
 
 ---
 
-## 跨前后端实现
+## 3. 在 Layer-2 中的位置
 
-| 维度                | 前端 (`src/features/classroom-runtime/`) | 后端 (`packages/core/classroom-runtime/`) |
-| ------------------- | ---------------------------------------- | ----------------------------------------- |
-| 用途                | UI 状态编排、6 个 client runtime 协调    | 服务端权威状态机、持久化、与 DB 同步      |
-| 9 阶段状态机        | ✅                                       | ✅                                        |
-| `IClassroomContext` | ✅ 持有 client runtime 引用              | ✅ 持有 service-side runtime 引用         |
-| EventBus            | 复用全局 EventBus（前端 ESM 版）         | 复用全局 EventBus（后端 Node 版）         |
-| 业务边界            | 不持久化，刷新即失                       | 持久化课堂状态到 DB                       |
+参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`classroomRuntime`）：
 
-**同步机制**（不在本子系统范围内）：前端 `ClassroomService` 通过 WebSocket / RPC 调用后端 `ClassroomRuntimeKernel` 的对应方法，后端事件通过推送（push）反向同步到前端 event bus。前后端 9 阶段状态机**可能暂时不一致**（网络延迟），前端以**乐观更新**为主，最终一致性由后端修正。
+| Kernel 属性        | 实际类型                                           |
+| ------------------ | -------------------------------------------------- |
+| `classroomRuntime` | `ClassroomRuntimeKernel`（内核版，当前零 resolve） |
+
+内核版是 Layer 2 中唯一的「协调型」runtime —— 其他 runtime（lesson-runtime、whiteboard-runtime 等）都是单一职责型。但**它是编排骨架，不是业务实现**：真正的课堂阶段、门禁、互动注册都在 §2 的服务版里。
 
 ---
 
-## 在 Layer-2 中的位置
+## 4. 约束与不变量
 
-参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`ClassroomRuntimeKernel`）：
-
-| Kernel 属性          | 前后端实现                                                  |
-| -------------------- | ----------------------------------------------------------- |
-| `classroomRuntime`   | `ClassroomService` (前端) / `ClassroomRuntimeKernel` (后端) |
-| 6 个被协调的 runtime | lesson / whiteboard / ai / plugin / analytics / resource    |
-
-Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 runtime（lesson-runtime、whiteboard-runtime 等）都是**单一职责型**，只有它负责跨 runtime 编排。
+1. **状态机是封闭的**：内核版 8 态转换必须走 `transitionState()` 校验；服务版 4 阶段转换必须过全部已注册 `ClassroomStageGuard`。
+2. **状态树只读**：`RuntimeStateTree` 的每个字段都是 `readonly`，变更只能经由 `RuntimeStateManager` 产生新树。
+3. **事件通道名固定**：新增事件必须加进 `RuntimeEventMap`，`RuntimeEventType = keyof RuntimeEventMap`，写错名字在编译期就红。
+4. **门禁 fail-close**：超时或抛异常的 guard 等于「不允许」，不是「跳过」。
+5. **内核版与容器实例不同源**：`student-workspace-context.ts` 自建的 `ClassroomRuntimeKernel` 与 `kernel/index.ts` 里的那个互不相通，跨实例共享状态不会生效。
 
 ---
 
-## 约束与不变量
+## 5. 相关源码
 
-1. **9 阶段是封闭的状态机**：除 `dispose()` 应急口外，所有转换都强制走 `assertValidTransition` 校验。
-2. **session id 全局唯一**：在 `ClassroomService` 内重复 `createSession` 抛错。
-3. **context 字段全 `unknown`**：禁止在 `IClassroomContext` 层面做类型断言，所有访问必须通过 facade 或运行时校验。
-4. **`attachRuntimes` 是可重入的**：同一 runtime 字段会被新引用覆盖，但已 dispatch 的事件不会重发。
-5. **事件命名空间严格闭合**：所有 classroom 事件必须 `classroom.<stage>` 9 种之一，不可自定义扩展（避免跨模块消费方 schema 漂移）。
-6. **plugin 不能直接改 stage**：插件只能通过 `ClassroomActionExtension` 注册动作，动作执行由 Classroom 业务代码负责调用 `session.prepare()` 等。
-7. **`dispose()` 清空 listeners**：防止已 dispose 的 session 内存泄漏。
+### 内核版（`packages/core/classroom-runtime/`，14 文件 / 约 1391 行）
 
----
+| 文件                    | 职责                                                               |
+| ----------------------- | ------------------------------------------------------------------ |
+| `kernel.ts`             | `ClassroomRuntimeKernel`，装配 11 个协作者                         |
+| `types.ts`              | 全部类型契约（8 态 / 6 角色 / 7 权限 / 12 事件 / 8 钩子 / 状态树） |
+| `state-manager.ts`      | `RuntimeStateManager`                                              |
+| `event-bus.ts`          | `RuntimeEventBus`                                                  |
+| `service-registry.ts`   | `RuntimeServiceRegistry`                                           |
+| `module-registry.ts`    | `RuntimeModuleRegistry`                                            |
+| `scheduler.ts`          | `RuntimeScheduler` + `TaskPriority`                                |
+| `permission-manager.ts` | `RuntimePermissionManager`                                         |
+| `resource-manager.ts`   | `RuntimeResourceManager`                                           |
+| `snapshot-recovery.ts`  | `RuntimeSnapshotManager`                                           |
+| `hooks-system.ts`       | `RuntimeHooksManager`                                              |
+| `session-manager.ts`    | `ClassroomSessionManager`                                          |
+| `monitor.ts`            | `RuntimeMonitor` / `RuntimeDiagnostics`                            |
+| `index.ts`              | 桶导出                                                             |
 
-## 相关源码
+### 服务版
 
-### 前端（src/features/classroom-runtime/）
-
-- `classroom-types.ts`（46 行）— 类型契约（ClassroomStage / ClassroomEvent / IClassroomContext / ServiceDescriptor / ActionExtension）
-- `classroom-registry.ts`（55 行）— services / actions / widgets 三类 slot
-- `classroom-session.ts`（125 行）— 9 阶段状态机
-- `classroom-service.ts`（52 行）— session Map 门面
-- `classroom-context-facade.ts`（54 行）— 统一 context facade
-- `classroom-event-bus.ts`（59 行）— `classroom.*` 命名空间事件总线
-- `index.ts`（10 行）— 桶导出
-
-合计 343 行 / 7 文件。
-
-### 后端（packages/core/classroom-runtime/）
-
-- 后端 `ClassroomRuntimeKernel` 与 6 个被协调 runtime 由 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点描述；具体内部模块划分待 backend 审计报告补充。
+- `server/services/classroom-runtime-service.ts` —— `ClassroomRuntimeService`、`ARCHIVED_REPORT_STAGE`、门禁执行策略
+- `packages/core/di/interfaces.ts` —— `ClassroomLifecycleStage` / `ClassroomStageGuard` / `IClassroomLifecycleService` / `IInteractionRuntimeService`
 
 ---
 
@@ -261,7 +211,7 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
 
 ### 2. 课中授课与深度互动阶段（In-Class Teaching）
 
-- **智能随机抽问与分层轮盘 (`FairPickerEngine.ts` / `RollCallWrapper.tsx`)**：
+- **智能随机抽问与分层轮盘 (`services/fair-picker-engine.ts` / `widgets/RollCallWrapper.tsx`，均在 `src/features/whiteboard/`)**：
   - 结合历史发言频次进行公平降采样惩罚，支持基础/进阶/拔高难度自适应分层匹配，回答后触发即时成长金币声光特效。
 - **随堂小组协作与画廊互评展台 (`GroupCollabWhiteboardModal.tsx` / `breakout-engine.ts`)**：
   - 支持同质分层与异质互助动态分组，提供组内协作子白板与组间成果画廊互评（Gallery Walk），支持全班点赞送花与思辨标签。

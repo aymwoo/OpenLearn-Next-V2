@@ -958,7 +958,7 @@ export interface AssignmentFilePreviewSlotProps {
 
 | 指标                                                           | 数值                                                |
 | -------------------------------------------------------------- | --------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **119**（2026-10-25 实测；下两行 98/99 为历史记录） |
+| `ExtensionSlot` 联合类型成员                                   | **120**（2026-10-26 实测；下两行 98/99 为历史记录） |
 | 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **99**                                              |
 | 其中属于 `ExtensionSlot` 联合类型                              | 见上行                                              |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                               |
@@ -968,3 +968,4 @@ export interface AssignmentFilePreviewSlotProps {
 
 > 统计更新于 v0.6.0 审计整改与 AI 生态槽位消费批次（2026-10-11）：`ai.prompt.template` 新增渲染消费端（Agent 输入区模板选择器）；`ai.skill.provider` 为**服务端消费**槽位（AI Agent 工具注入，非渲染，不计入渲染调用点）。
 > 2026-10-17 更新（Issue #86）：机房排座新增 `computer_lab.seating.toolbar` / `computer_lab.unassigned.item` / `computer_lab.seating.sidebar` 3 个槽位，并支持拖拽调座与点击/拖拽交换。
+> 2026-10-26 复核（v0.7.4）：`assignment.file.preview` 于 v0.7.4 加入 `ExtensionSlot`，成员数由 119 增至 **120**。该槽位见 §10.1。

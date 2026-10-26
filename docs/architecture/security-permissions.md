@@ -50,7 +50,11 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 
 ## 2. 插件沙箱隔离（Worker Thread）
 
-插件有两条执行路径：**Inline**（主进程内动态 `import()`）与 **Worker**（独立 `node:worker_threads` Worker）。只有 Worker 路径享有以下隔离，**Inline 路径不具备线程隔离**。
+插件有**三档执行模式**（`PluginExecutionMode`）：**Inline**（主进程内动态 `import()`）、**Worker**（`node:worker_threads` 线程）、**Process**（`child_process` 子进程 + 最小环境变量白名单）。
+
+实际落到哪一档由 `packages/core/plugin-host/execution-policy.ts` 的 `resolvePluginExecutionMode()` 决定：**只有**管理员写进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的 manifest id、或插件文件真实位于内置目录 `packages/plugins`，才允许 inline / worker；其余第三方插件请求 inline / worker 一律被**强制改写为 process**（`coerced: true`）。manifest id 以 `@openlearn/` 开头不构成信任依据。
+
+因此隔离强度是 **Process > Worker > Inline**：只有前两档享有下述隔离，**Inline 路径既不隔离线程也不隔离环境变量与网络栈**（`plugin-net-preload.cjs` 对 inline 不生效）。
 
 ### 2.1 Worker 侧资源与模块约束
 
@@ -74,7 +78,9 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 
 两条路径共用 `plugin-net-proxy.ts` 的宿主代发实现（内网/环回/元数据地址阻断、DNS rebinding 防护、10MB 体积上限），批准名单同源于插件出站授权。
 
-> ⚠️ **没有 CPU / 内存采样与自动挂起**。代码中**不存在**「监控 CPU 与内存占用，超限自动挂起」的实现，也没有把插件状态置为 `PAUSED` 的路径 —— `PluginState` 只有 7 个值（`installed` / `activating` / `active` / `deactivating` / `inactive` / `error` / `uninstalled`），其中不含 `PAUSED`。当前唯一的资源约束是上面那条 V8 堆上限（超限表现为 OOM 崩溃，由 Worker `exit` 处理器标记 `crashed`），而非采样驱动的主动挂起。
+> ⚠️ **资源超限是「杀掉」，不是「挂起」**。`packages/core/worker-runtime/plugin-quota.ts` 的 `startProcessQuota()` 会按 `OPENLEARN_PLUGIN_MAX_RSS_MB`（默认 512）与 `OPENLEARN_PLUGIN_CPU_QUOTA_MS` / `_WINDOW_MS`（默认 8000 / 10000）采样，超限直接 `SIGKILL`，随后交给崩溃看门狗（指数退避 + 熔断）。**采样只覆盖 `process` 模式**，且只在 Linux 上读 `/proc` 生效；`thread` 模式目前只有 V8 堆上限（`resourceLimits.maxOldGenerationSizeMb`），超限表现为 OOM 崩溃。`OPENLEARN_PLUGIN_QUOTA=off` 可整体关闭 RSS 与 CPU 采样。
+>
+> 代码中**不存在**「检测到超限后把插件状态置为 `PAUSED`」的路径 —— `PluginState` 只有 7 个值（`installed` / `activating` / `active` / `deactivating` / `inactive` / `error` / `uninstalled`），其中不含 `PAUSED`。所以准确表述是「采样 + 硬终止 + 看门狗」，而非「采样驱动的主动挂起」。
 
 ### 2.2 共享模块白名单
 
@@ -98,7 +104,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
 白名单由 `packages/core/worker-runtime/worker-manager.ts` 的 `computeAllowedWorkerTokens(manifest, serviceTokens)` 计算并注入 `new ServiceHost(..., allowedTokens)`：
 
-- 基础集合 `BASE_WORKER_SERVICE_TOKENS`：`IEventBusService` / `ICommandBusService` / `IActionRegistryService` / `ICapabilityService` / `IProcessService` / `IStorageService` / `IAIService` / `IDatabase` / `IPluginHost`（9 个）；
+- 基础集合 `BASE_WORKER_SERVICE_TOKENS`（`packages/core/worker-runtime/worker-manager.ts`，**9 个**）：`ICommandBusService` / `IEventBusService` / `IActionRegistryService` / `ICapabilityService` / `IProcessService` / `IStorageService` / `IAIService` / `IDatabase` / `INetworkProxyService`；
 - 积分相关 Token（`IPointsDimensionRegistry` / `IPointsLedgerService`）**仅在** manifest 的 `requires` / `optional` 显式声明依赖，或 `capabilitiesProposed` 含 `points` / `points:*` / `*` 时才加入。
 
 ### 2.4 数据库安全屏障与自建表 DDL 白名单
@@ -119,8 +125,8 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
 - **REST 层面**: 插件自身不能直接发 HTTP 请求访问平台 API（浏览器侧 `IFrontendAPI` 走 `same-origin` fetch，但受 §3.3 的方法/路径门禁约束）。
 - **DI 层面**: 插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享的 `better-sqlite3` 句柄（`Token<T>` 绑定的是 `kernelContainer.db`，即平台主库）。**真正的边界不是"拿不到句柄"，而是上面 §2.4 的语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令硬禁、40 张核心表硬禁、`plugin_*` 表仅限本插件命名空间。
-- **Worker 基础白名单**（2026-10-04 收敛为 **8 个** Token）: `ICommandBusService`、`IEventBusService`、`IActionRegistryService`、`ICapabilityService`、`IProcessService`、`IStorageService`、`IAIService`、`IDatabase`。**`IPluginHost` 已移出** —— 它暴露 `installPlugin` / `installPluginFromZip` / `activatePlugin` / `uninstallPlugin`，沙箱化插件本不该能安装并激活**其他**插件（等于给自己留一个能在自身被卸载后继续存活的后门）。内置插件确实需要它，但内置默认 **inline 模式**，不经过 worker 白名单，因此移除无功能影响。
-- **`ctx.db`**: 另有插件命名空间隔离的 `PluginDatabaseAPI`（`ctx.db`），其表前缀在 inline 模式用 DB UUID、worker 模式用 `manifest.id`（两者规则不同，详见 `docs/reference/plugin-database-api.md`）。
+- **Worker 基础白名单**（**9 个** Token，与 §2.3 的 `BASE_WORKER_SERVICE_TOKENS` 同一份）：`ICommandBusService`、`IEventBusService`、`IActionRegistryService`、`ICapabilityService`、`IProcessService`、`IStorageService`、`IAIService`、`IDatabase`、`INetworkProxyService`。**`IPluginHost` 已移出**（2026-10-04）—— 它暴露 `installPlugin` / `installPluginFromZip` / `activatePlugin` / `uninstallPlugin`，沙箱化插件本不该能安装并激活**其他**插件（等于给自己留一个能在自身被卸载后继续存活的后门）。内置插件确实需要它，但内置默认 **inline 模式**，不经过 worker 白名单，因此移除无功能影响；空出的位置由出网代理 `INetworkProxyService` 占位。
+- **`ctx.db`**: 另有插件命名空间隔离的 `PluginDatabaseAPI`（`ctx.db`），其表前缀统一为 `plugin_<scopeId>_`（`pluginTablePrefix(scopeId)`）——**只取决于安装主键，与 inline / worker / process 模式无关**，详见 `docs/reference/plugin-database-api.md`。
 
 因此 RBAC 表中 Plugin 列写「❌（只能用 Plugin DB）」并不准确 —— 更贴切的表述是「受 Token 白名单 + 语句守卫限制，只能操作 `plugin_*` 命名空间内的表」。
 
