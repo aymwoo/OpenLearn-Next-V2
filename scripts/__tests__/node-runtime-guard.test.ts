@@ -288,6 +288,18 @@ describe('Node 支持范围的口径一致性（漂了就红）', () => {
     expect(doctor).not.toContain('>= 20.0.0');
   });
 
+  it('Dockerfile 在 install 之前把守卫脚本放进镜像（否则镜像构建直接失败）', () => {
+    const dockerfile = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+    // 构建阶段：pnpm install 发生在源码 COPY 之前，守卫脚本必须提前单独 COPY。
+    const installAt = dockerfile.indexOf('RUN pnpm install');
+    const copyAt = dockerfile.indexOf('COPY scripts/assert-node-runtime.mjs');
+    expect(installAt, 'Dockerfile 里应仍有 pnpm install').toBeGreaterThan(-1);
+    expect(copyAt, 'Dockerfile 应把守卫脚本 COPY 进镜像').toBeGreaterThan(-1);
+    expect(copyAt, '守卫脚本必须在 pnpm install 之前 COPY，否则 install 时找不到文件').toBeLessThan(installAt);
+    // 生产阶段：package.json 带着 preinstall 钩子，钩子指向的文件也要在镜像里。
+    expect(dockerfile).toContain('COPY --from=build /app/scripts/assert-node-runtime.mjs');
+  });
+
   it('守卫脚本文件确实存在（路径写错时上面所有断言都会是假阳性）', () => {
     expect(existsSync(path.join(ROOT, 'scripts', 'assert-node-runtime.mjs'))).toBe(true);
     expect(existsSync(path.join(ROOT, 'server', 'security', 'runtime-preflight.ts'))).toBe(true);

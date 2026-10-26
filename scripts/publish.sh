@@ -111,11 +111,14 @@ publish_pkg() {
 
 # ── 发布清单核对（dry-run 专用）────────────────────────────────────
 #
-# 断言四件事，缺一即视为「这次发布不能发」：
+# 断言五件事，缺一即视为「这次发布不能发」：
 #   1. package.json 的 version 与待发布版本一致（防止改写错版本号）；
 #   2. @openlearn/plugin-sdk 是**精确 pin**（不是 workspace:* —— 消费者装不上）；
 #   3. files 清单含 dist/plugin-net-preload.cjs（P0-1 的回归护栏）；
-#   4. 该文件在构建产物里真实存在（files 指向空气同样会炸）。
+#   4. 该文件在构建产物里真实存在（files 指向空气同样会炸）；
+#   5. files 清单含 scripts/assert-node-runtime.mjs 且文件真实存在 ——
+#      它是 package.json 的 preinstall 钩子，npm 消费者安装时会执行它；
+#      它不在包里 = 每一个 npm 用户的安装都会 MODULE_NOT_FOUND 失败。
 verify_release_manifest() {
   local dir="$1" expected_version="$2" expected_sdk="$3"
   local report
@@ -128,24 +131,31 @@ verify_release_manifest() {
     const sdk = (pkg.dependencies || {})["@openlearn/plugin-sdk"];
     const files = pkg.files || [];
     const preload = "dist/plugin-net-preload.cjs";
+    const guard = "scripts/assert-node-runtime.mjs";
     out.push(`version=${version}`);
     out.push(`sdk=${sdk}`);
     out.push(`preloadInFiles=${files.includes(preload)}`);
     out.push(`preloadExists=${fs.existsSync(path.join("dist", "plugin-net-preload.cjs"))}`);
+    out.push(`guardInFiles=${files.includes(guard)}`);
+    out.push(`guardExists=${fs.existsSync(guard)}`);
     console.log(out.join(" "));
   ')"
   log "[dry-run] 发布清单核对：${report}"
 
-  local version sdk preload_in_files preload_exists
+  local version sdk preload_in_files preload_exists guard_in_files guard_exists
   version="$(printf '%s' "$report" | sed -n 's/.*version=\([^ ]*\).*/\1/p')"
   sdk="$(printf '%s' "$report" | sed -n 's/.*sdk=\([^ ]*\).*/\1/p')"
   preload_in_files="$(printf '%s' "$report" | sed -n 's/.*preloadInFiles=\([^ ]*\).*/\1/p')"
   preload_exists="$(printf '%s' "$report" | sed -n 's/.*preloadExists=\([^ ]*\).*/\1/p')"
+  guard_in_files="$(printf '%s' "$report" | sed -n 's/.*guardInFiles=\([^ ]*\).*/\1/p')"
+  guard_exists="$(printf '%s' "$report" | sed -n 's/.*guardExists=\([^ ]*\).*/\1/p')"
 
   [ "$version" = "$expected_version" ] || err "发布清单核对失败：version=${version}（期望 ${expected_version}）"
   [ "$sdk" = "$expected_sdk" ] || err "发布清单核对失败：@openlearn/plugin-sdk=${sdk}（期望精确 pin ${expected_sdk}；workspace:* 消费者装不上）"
   [ "$preload_in_files" = "true" ] || err "发布清单核对失败：files 清单缺 dist/plugin-net-preload.cjs（npm 用户的第三方插件会起不来，见 P0-1）"
   [ "$preload_exists" = "true" ] || err "发布清单核对失败：dist/plugin-net-preload.cjs 在构建产物里不存在（files 指向了空气）"
+  [ "$guard_in_files" = "true" ] || err "发布清单核对失败：files 清单缺 scripts/assert-node-runtime.mjs（preinstall 守卫不在包里，npm 消费者安装必失败）"
+  [ "$guard_exists" = "true" ] || err "发布清单核对失败：scripts/assert-node-runtime.mjs 在仓库里不存在（preinstall 守卫指向了空气）"
   log "[dry-run] 发布清单核对通过。"
 }
 

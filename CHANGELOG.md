@@ -165,6 +165,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **两条已知边界（说清楚免得误判）**：
     - **pnpm v10 默认不执行依赖的生命周期脚本**（实测：`pnpm install` 一个带 `preinstall` 的本地包 → 脚本未执行；`npm install` 同一包 → 执行）。因此「从 npm registry 安装本平台」时，安装期那道闸在 **pnpm 下不触发**（npm 下触发），此时兜底的是 CLI 与启动期两道闸。**源码检出时 `pnpm install` 会触发**（根项目自己的 `preinstall` 始终执行，已实测）。
     - 守卫只拦**主版本**：`v20.19.0` 与 `v20.0.0` 同等对待，不做小版本细分。
+  - **⚠️ 一个被 CI 抓出来的连带问题：Docker 构建里 `pnpm install` 发生在源码 COPY 之前**。`Dockerfile` 为复用层缓存，先 COPY `package.json` / 锁文件就执行 `pnpm install --frozen-lockfile`，源码是之后才 `COPY . .` 的 —— 于是 `preinstall` 钩子在镜像里找不到 `scripts/assert-node-runtime.mjs`，直接 `MODULE_NOT_FOUND` 让**整个镜像构建失败**。修法与 Dockerfile 里既有的 `build-plugin-sdk.mjs` 同一手法：把守卫脚本在 install 之前单独 COPY 进镜像。**这条是「安装期硬闸」这个设计第一次真正被外层构建流程检验** —— 闸本身没错，错的是外层没把闸门一起搬进屋。
+  - **发布清单核对补第 5 条断言**（`scripts/publish.sh` 的 `verify_release_manifest`）：`scripts/assert-node-runtime.mjs` 必须在 `files` 清单里**且**在仓库里真实存在。它是 `preinstall` 钩子的入口 —— 不在包里 = **每一个 npm 消费者的安装都会失败**。这与既有的第 3/4 条（`dist/plugin-net-preload.cjs`）是同一类护栏：files 指向空气，同样会炸。
   - **影响面**：`package.json`（`engines` / `preinstall` / `files`）、`cli.mjs`（新增 `checkCliNodeRuntime`）、`cli-doctor.mjs`（Node 版本检查改为与守卫同源）、`server.ts`（首个 import）、新增 `server/security/runtime-check.ts`（纯函数 + 副作用分离）、`server/security/runtime-preflight.ts`、`scripts/assert-node-runtime.mjs`、`.github/workflows/ci.yml`（新矩阵 job）、`README.md` 徽章、`docs/getting-started/installation-guide.md`（新增「Node 版本守卫：拦在哪、拦成什么样」一节）、新增 `scripts/__tests__/node-runtime-guard.test.ts`。
   - **未做**：没有把守卫下沉到**插件宿主 / Worker 运行时**内部（插件 Worker 用的仍是宿主进程同版本 Node，无独立 ABI 问题）；没有对**已安装**的老版本做自动降级/升级迁移（守卫只管「别用错版本」，不管版本间数据格式）。
 

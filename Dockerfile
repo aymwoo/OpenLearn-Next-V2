@@ -16,6 +16,10 @@ RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 # prepare 会调用 scripts/build-plugin-sdk.mjs；源码尚未复制时该脚本会跳过。
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY scripts/build-plugin-sdk.mjs ./scripts/build-plugin-sdk.mjs
+# package.json 的 preinstall 守卫必须在 install 之前可用 —— 它是安装期唯一的
+# 硬闸（engines 默认只是警告）。源码尚未复制时它会因为找不到文件而让 install
+# 直接失败（MODULE_NOT_FOUND），所以这里把它提前放进镜像，与上一行同理。
+COPY scripts/assert-node-runtime.mjs ./scripts/assert-node-runtime.mjs
 COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/
 COPY packages/plugin-test-kit/package.json ./packages/plugin-test-kit/
 COPY packages/bridge-sdk/package.json ./packages/bridge-sdk/
@@ -52,6 +56,9 @@ COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
 COPY --from=build /app/packages/plugin-sdk/dist ./packages/plugin-sdk/dist
 COPY --from=build /app/scripts/verify-plugin-sdk-entry.mjs ./scripts/verify-plugin-sdk-entry.mjs
+# 生产镜像的 package.json 带着 preinstall 钩子，钩子指向的文件就必须一起在镜像里 ——
+# 否则任何在生产镜像里执行 install 的运维动作（临时补依赖）都会 MODULE_NOT_FOUND。
+COPY --from=build /app/scripts/assert-node-runtime.mjs ./scripts/assert-node-runtime.mjs
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY scripts/site-backup.mjs scripts/site-restore.mjs scripts/backfill-class-owners.mjs ./scripts/
 
