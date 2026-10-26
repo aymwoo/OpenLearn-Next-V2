@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **main 的脚手架模板与已发布的 SDK 3.7.1 分叉，照 GitHub 抄模板的第三方插件激活必失败**：
+  - **现象**：`npx @openlearn/plugin-sdk init`（走 npm 3.7.1）生成的是沙箱桥接模板，而 `origin/main` 的
+    `packages/plugin-sdk/scaffold/templates/*/src/frontend.tsx` 仍是 `export default function Component()` 的
+    React 组件版。第三方作者照仓库抄，插件能 install、能 build，**激活时必失败**。
+  - **根因**：模板修复提交落在特性分支上，tag 与 npm 都指向它，**但它从未进过 main** —— npm 领先于主干。
+    宿主加载器逐字判据是 `typeof plugin.activate !== 'function'` → `missing activate function`（`server/utils/plugin-sandbox-frame.ts`），
+    React 组件版 `activate` 为 `undefined`，且顶层 `import react` 在 iframe 内也无法解析。
+  - **改法**：把 3.7.1 实际发布的模板（与 npm tarball 逐字节一致）回填到 main，并补上
+    `packages/plugin-sdk/__tests__/scaffold-frontend-contract.test.ts` —— 真的把模板编译成 CJS 求值，按沙箱加载器
+    同一句判据断言，而不是 grep 文本；同时改正教程 §2 模板表与 §6.4 学生端示例（原文教的就是 React 写法）。
+  - **防复发**：`scripts/assert-publishable.mjs` 增加第 4 条断言「发布提交必须已并入主干」。此前三道断言只要求
+    「HEAD 被发布 tag 指向」，看不见「tag 打在没合并的提交上」这种漂移。确需先发后合时用
+    `ALLOW_UNMERGED_PUBLISH=1` 显式放行。
+  - **验证**：契约测试 7 passed；把 `frontend-only/src/frontend.tsx` 换回 main 旧版 → 3 条用例失败（负向可控）。
+    发布守卫在未合并分支上 exit 1，`ALLOW_UNMERGED_PUBLISH=1` 时放行。
+
 - **课表页课程卡的三处对比度不达标（无障碍门禁带数据扫描时变红）**：
   - **现象**：a11y 门禁「教师端主要工作区」在课表管理上报 3 条 color-contrast/serious：
     课程卡里的时间文本、班级名、以及「正常」状态徽章。

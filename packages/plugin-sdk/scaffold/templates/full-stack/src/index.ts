@@ -25,10 +25,13 @@ export default {
     capabilitiesProposed: ['lesson:read', 'lesson:write'],
     classroomTools: [
       {
-        id: '{{pluginId}}-tool',
+        id: '{{name}}-tool',
         name: '{{pluginName}}',
         icon: 'Puzzle',
         commandType: '{{pluginId}}.open_tool',
+        // $lessonId / $classId 由宿主在点击瞬间替换成当前课堂上下文 ——
+        // 这是工具按钮拿到 lessonId / classId 的唯一通道，别自己瞎猜字段名。
+        payload: { lessonId: '$lessonId', classId: '$classId' },
       },
     ],
     engines: { openlearn: '>=0.2.5' },
@@ -52,7 +55,7 @@ export default {
 
     // Register AI tool
     await actionRegistry.register({
-      id: '{{pluginId}}-process',
+      id: '{{name}}-process',
       commandType: '{{pluginId}}.process',
       description: 'Process data for {{pluginName}}',
       capabilityRequired: 'lesson:write',
@@ -90,7 +93,7 @@ export default {
 
     // Classroom tool handler (opens frontend UI)
     await actionRegistry.register({
-      id: '{{pluginId}}-open-tool',
+      id: '{{name}}-open-tool',
       commandType: '{{pluginId}}.open_tool',
       description: 'Open {{pluginName}} classroom tool UI',
       capabilityRequired: 'lesson:read',
@@ -105,7 +108,16 @@ export default {
 
     await commandBus.registerHandler('{{pluginId}}.open_tool', {
       async execute(command) {
-        return { opened: true, pluginId: '{{pluginId}}' };
+        const payload = command.payload as { lessonId?: string; classId?: string };
+        // 第三方插件的前端跑在隐藏 iframe 里，无法渲染面板 —— 课堂工具只能
+        // 在后端做事（写库、发事件、回一条结果给事件流）。这里把上下文回显，
+        // 便于在「课堂事件流」里确认占位符替换成功。
+        return {
+          opened: true,
+          pluginId: '{{pluginId}}',
+          lessonId: payload?.lessonId ?? null,
+          classId: payload?.classId ?? null,
+        };
       },
     });
 
