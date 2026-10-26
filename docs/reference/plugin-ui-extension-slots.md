@@ -110,6 +110,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay'
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview'
+  | 'assignment.file.preview'
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action'
   | 'statusbar.item'
@@ -278,6 +279,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `admin.tab`（button 形态）           | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                         |
 | `admin.tab`（panel 形态）            | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'panel', adminActiveTab, currentUserId, currentUserRole, lang, siteInfo }`                             |
 | `assignment.submission.preview`      | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ submission, studentId, lessonId, isSelf, lang }`                                                                   |
+| `assignment.file.preview`            | `src/components/AssignmentFilePreview.tsx`                                                                                              | `{ file, fileExtension, assignmentId, downloadUrl, inlineUrl, lang }`                                                 |
 | `header.action`                      | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                      |
 | `statusbar.item`                     | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                            |
 | `whiteboard.renderer`                | `src/features/whiteboard/InteractiveWhiteboard.tsx`                                                                                     | `{ element, elementId, elementType, data, width, height, isSelected, readOnly, userRole, lessonId, onElementUpdate }` |
@@ -794,6 +796,111 @@ export interface WhiteboardRendererSlotProps {
 1. **一等公民画布生命周期**：参与自动平铺布局、缩放定位、层级变换与双击全屏；
 2. **边框与外观定制**：支持 `data.frameless = true` 实现无外壳/无标题栏透明呈现；
 3. **实时数据协同**：调用 `onElementUpdate` 自动向 `frontendEventBus` 广播 `whiteboard.element_updated`，触发全班同步。
+
+---
+
+## 10.1 作业附件预览扩展 (`assignment.file.preview`)
+
+**槽位名称**：`assignment.file.preview`
+**挂载位置**：`src/components/AssignmentFilePreview.tsx`（作业附件预览对话框）
+
+### 它解决什么问题
+
+学生上传的作业附件过去**只有文件名**，没有任何查看内容的方式。宿主现在内置四种预览形态：
+
+| 文件类型                                                      | 渲染方式                                                                           |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 图片（png/jpg/gif/webp/bmp/svg/heic）                         | `<img>`                                                                            |
+| PDF                                                           | `<iframe>`（服务端以 `inline` 返回，浏览器内置查看器渲染）                         |
+| 纯文本 / 代码 / 数据（txt/md/csv/json/xml/html/css/各类源码） | `<pre>`，**按文本渲染，绝不解析成 HTML**                                           |
+| 其它（docx/pptx/xlsx/zip/rtf…）                               | 不内置解析 —— 给出「暂不支持预览」+ 下载入口，并展示本插槽里声明能处理该类型的插件 |
+
+docx / pptx / xlsx 这类格式**故意不内置解析**：要么引入重依赖，要么自己写 OOXML
+解析器（既是安全面也是维护面）。本插槽就是为此准备的扩展点 —— 平台不猜，插件声明
+自己能处理什么类型。
+
+### 契约：数据型插槽（远程插件可用）
+
+远程 / Worker 插件**不能**提供 React 组件，所以本插槽是**数据型**的：插件声明
+「我能处理哪些类型」，宿主负责渲染入口。
+
+```tsx
+async function activate(ctx) {
+  ctx.ui.registerExtensionPoint('assignment.file.preview', {
+    id: 'docx-preview',
+    label: 'Word 预览器',
+    component: () => null, // 数据型贡献：组件位留空
+    slotProps: {
+      extensions: ['.docx'], // 按扩展名匹配
+      mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      commandType: 'ext-docx.preview', // 点击后由宿主派发
+    },
+  });
+}
+```
+
+manifest 声明式写法（`packages/core/esm-loader/manifest-schema.ts` 已收录该键）：
+
+```json
+{
+  "contributes": {
+    "frontendSlots": {
+      "assignment.file.preview": [
+        {
+          "id": "docx-preview",
+          "label": "Word 预览器",
+          "slotProps": { "extensions": [".docx"], "commandType": "ext-docx.preview" }
+        }
+      ]
+    }
+  }
+}
+```
+
+**匹配规则**：宿主拿当前附件的扩展名（`fileExtension`，小写含前导点）去比对贡献声明的
+`extensions` / `mimeTypes`，命中其一才渲染 —— 一个只会处理 `.docx` 的预览器不会出现在
+`.png` 的预览对话框里。声明 `'*'` 表示**通配**（兜底型预览器，对所有类型都匹配）；
+**未声明** `extensions` / `mimeTypes` 的贡献不匹配任何文件 —— 静默出现在每个对话框里的
+预览器比不出现更糟。
+
+**命令派发**：命中后宿主向 `/api/plugins/execute-command` 派发 `commandType`，payload：
+
+```typescript
+{
+  fileId: string; // 附件 id
+  assignmentId: string; // 所属作业 id
+  fileName: string; // 原始文件名
+  downloadUrl: string; // 带鉴权的下载地址（attachment 语义）
+  inlineUrl: string; // 带鉴权的预览地址（仅当服务端判定该类型可内联时才会真的内联）
+}
+```
+
+### Props 规范 (`AssignmentFilePreviewSlotProps`)
+
+```typescript
+export interface AssignmentFilePreviewSlotProps {
+  file: { id: string; name: string; size: number | null; mime: string | null };
+  fileExtension: string; // 小写、含前导点，如 '.docx'
+  assignmentId: string;
+  downloadUrl: string;
+  inlineUrl: string;
+  lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+```
+
+### 安全口径
+
+1. 所有内容都走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+   不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）。
+2. 服务端按**扩展名**推导 Content-Type，绝不采信上传时客户端自报的 mime。
+3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），
+   不允许 inline —— inline 回去等于把学生上传的文件变成同源页面。
+   SVG 仍可预览，但只走 `<img>`（图片上下文不执行 SVG 脚本）。
+4. 文本内容以 `text/plain` 拉取并用 `<pre>` 渲染；预览组件里不出现
+   `dangerouslySetInnerHTML`。
+
+判定规则集中在 `packages/core/assignment/file-preview-policy.ts`（前后端共用同一份）。
 
 ---
 

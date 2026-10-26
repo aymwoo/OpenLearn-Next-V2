@@ -173,6 +173,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay' // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview' // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
+  | 'assignment.file.preview' // 作业**附件**预览扩展（按扩展名/MIME 声明能处理的文件类型，如 docx/pptx/3D 模型）
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
   | 'statusbar.item' // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
@@ -605,6 +606,27 @@ export interface AssignmentSubmissionPreviewSlotProps {
   studentId?: string;
   lessonId?: string;
   isSelf?: boolean;
+  lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assignment.file.preview extensions（作业附件预览） */
+export interface AssignmentFilePreviewSlotProps {
+  /** 当前预览的附件（id / 原始文件名 / 大小）。 */
+  file: {
+    id: string;
+    name: string;
+    size: number | null;
+    mime: string | null;
+  };
+  /** 当前附件的扩展名（小写，含前导点；如 `.docx`）。宿主据此过滤贡献。 */
+  fileExtension: string;
+  /** 所属作业 id。 */
+  assignmentId: string;
+  /** 带鉴权的下载地址（attachment 语义）。 */
+  downloadUrl: string;
+  /** 带鉴权的预览地址（仅当服务端判定该类型可内联时才会真的内联）。 */
+  inlineUrl: string;
   lang?: 'zh' | 'en';
   dispatcher?: IHostActionDispatcher;
 }

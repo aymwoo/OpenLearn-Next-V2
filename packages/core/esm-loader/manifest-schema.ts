@@ -540,6 +540,9 @@ const frontendSlotsShape = {
   'stage.display.overlay': z.array(frontendSlotEntrySchema).optional(),
   'stage.display.action': z.array(frontendSlotEntrySchema).optional(),
   'assignment.submission.preview': z.array(frontendSlotEntrySchema).optional(),
+  // 作业**附件**预览：插件声明自己能处理的文件类型（extensions / mimeTypes），
+  // 宿主在预览对话框里按类型匹配后给出入口。数据型贡献（远程插件可用）。
+  'assignment.file.preview': z.array(frontendSlotEntrySchema).optional(),
   'student.classroom.overlay': z.array(frontendSlotEntrySchema).optional(),
   'student.profile.tab': z.array(frontendSlotEntrySchema).optional(),
   'whiteboard.renderer': z.array(frontendSlotEntrySchema).optional(),

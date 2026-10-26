@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Loader2, RefreshCw, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Eye,
+  FileText,
+  Loader2,
+  RefreshCw,
+  Users,
+} from 'lucide-react';
+import { AssignmentFilePreview } from '../../../components/AssignmentFilePreview';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 /**
  * 学生端互评面板。
@@ -96,6 +107,13 @@ export function AssignmentPeerReviewPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 当前正在预览的同伴附件（null = 未打开预览） */
+  const [previewFile, setPreviewFile] = useState<{
+    id: string;
+    original_name: string;
+    size: number;
+    mime?: string | null;
+  } | null>(null);
 
   const activeIndex = Math.max(
     0,
@@ -307,17 +325,37 @@ export function AssignmentPeerReviewPanel({
               {peerSubmission.files.length > 0 && (
                 <div className="space-y-1">
                   {peerSubmission.files.map((file) => (
-                    <a
+                    <div
                       key={file.id}
-                      href={`/api/assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 rounded-lg border border-theme bg-surface-secondary px-2 py-1.5 text-xs text-main hover:border-orange-300"
+                      className="flex items-center gap-1.5 rounded-lg border border-theme bg-surface-secondary px-2 py-1.5 text-xs text-main"
                     >
-                      <FileText size={12} className="shrink-0" />
-                      <span className="truncate">{file.original_name}</span>
-                      <span className="text-[11px] text-muted shrink-0">{formatBytes(file.size)}</span>
-                    </a>
+                      <button
+                        onClick={() =>
+                          setPreviewFile({
+                            id: file.id,
+                            original_name: file.original_name,
+                            size: file.size,
+                            mime: file.mime ?? null,
+                          })
+                        }
+                        className="flex items-center gap-1.5 flex-1 min-w-0 text-left hover:text-orange-600"
+                        title={zh ? '预览' : 'Preview'}
+                        data-testid="assignment-peer-file-preview"
+                      >
+                        <Eye size={12} className="shrink-0" />
+                        <span className="truncate">{file.original_name}</span>
+                        <span className="text-[11px] text-muted shrink-0">{formatBytes(file.size)}</span>
+                      </button>
+                      <a
+                        href={`/api/assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 text-muted hover:text-orange-600"
+                        title={zh ? '下载' : 'Download'}
+                      >
+                        <Download size={12} />
+                      </a>
+                    </div>
                   ))}
                 </div>
               )}
@@ -442,6 +480,15 @@ export function AssignmentPeerReviewPanel({
           </div>
         </div>
       </div>
+
+      {previewFile && (
+        <AssignmentFilePreview
+          assignmentId={assignmentId}
+          file={previewFile}
+          lang={lang}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }
