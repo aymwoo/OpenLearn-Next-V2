@@ -132,6 +132,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **全量文档语义审计：修掉 12 类「文档描述的实现已不存在」的漂移，并补上第四类机器检查（配置键）**：
+  - **背景**：`audit-tools/` 的三段检查（子系统 / 路径内链 / 符号提示）此前**全部为 0 drift**，但只校验骨架、不校验语义。人工逐篇核对 `docs/` 与代码后，发现 12 类内容性错误，没有一条能被既有检查捕获。
+  - **最严重的三处**：
+    1. **插件私有表前缀**——5 篇文档 7 处声称「inline 用 DB UUID、worker 用 manifestId，两模式前缀相反，切换会找不到表」。代码里 `pluginTablePrefix(scopeId, _manifestId)` **忽略 manifestId**，三档模式前缀完全一致；`plugin-database-api.md` 自身还前后矛盾（第 22 行说一致、第 54 行说相反）。插件作者照文档建表会被 DDL 守卫直接拒绝。
+    2. **`classroom-runtime.md` 整篇描述的对象不存在**——`ClassroomSession` / `ClassroomService` / `IClassroomContext` 等 19 个符号全仓零命中，`src/features/classroom-runtime/` 目录不存在，「9 阶段」实为内核 8 态 + 服务版 4 阶段。已按 `packages/core/classroom-runtime/` 真实内核重写，保留后半段真实的教学四阶段章节。
+    3. **`OPENLEARN_PLUGIN_PERMISSION` 写着「暂无法约束网络」**——Issue #237 早已实现出网管控（preload 拦 socket/DNS，fetch 只放行 `plugin_network_grants`），运维会据此跳过出站授权。同时原文「没有 CPU/内存采样」也已过时：`plugin-quota.ts` 在采样并超限 SIGKILL；正确部分（不存在 `PAUSED` 挂起态）保留。
+  - **其余修订**：`security-permissions.md` 执行路径实为三档非两条、Worker 基础 Token 8 个（原 §2.3/§2.5 自相矛盾 9/8 与 `IPluginHost`）；`system-configuration.md` 补 20+ 个漏登变量与默认值；`api-coverage-report.md` 移除无依据的「19 个 Token / 100% Verified」；`plugin-ui-extension-slots.md` 槽位 119→120；`architecture-governance.md` 默认执行模式与版本戳；`index.md` 补 2 篇侧栏不可达的架构文档。
+  - **新增 `audit-tools/envcheck.py`（配置键三方比对）**：环境变量既不是文件路径也不是代码符号，是第三种引用形态，此前完全靠人工维护。新检查交叉比对**代码读取 / `.env.example` / 注册表文档**，判定收窄到三类高置信 drift（D1 文档登记但零读取、D2 带前缀读取但未登记、D3 无前缀读取且未登记），其余（仅测试作用域、`.env.example` 单向声明、动态键名、平台自写内部传递、`||` 兼容别名）只作提示。首跑即抓出 7 个隐形旋钮（`BACKUP_SCHEDULE` / `BACKUP_KEEP` / `BACKUP_DAILY_AT` / `BACKUP_CHECKPOINT_INTERVAL_MS` / `PRE_MIGRATION_KEEP` / `MIGRATION_CHECKSUM_STRICT` / `MIGRATION_ALLOW_UNKNOWN_LEDGER`），已全部登记。
+  - **验证**：`bash audit-tools/run.sh` → `canonical_drift=0` / `ref_drift=0` / `env_drift=0`，`symbol_hints` 61→42（重写消掉 19 个幽灵符号），`prettier --check docs/` 通过；负向测试注入「文档改错键名 + 代码独有开关」两处漂移，脚本分别报 D1/D2 并 `exit 1`。
+
 - **用 `.nvmrc` / `.node-version` 把 Node 钉到 22，并在 `AGENTS.md` 写清「为什么不能用 26」**：
   - **背景**：仓库只在 `AGENTS.md` 的 Cursor Cloud 小节里提过一句 "Node 22"，`package.json` 的 `engines` 是宽松的 `>=20`，且**没有任何版本锁定文件** —— 本地跑哪个 Node 全靠运气，而 CI 一直钉的是 `node-version: 22`。
   - **两类实际踩到的坑（这次会话都撞到了）**：

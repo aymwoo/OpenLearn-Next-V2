@@ -559,7 +559,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: drift-report
-          path: audit-tools/reports/drift_report.md
+          # 四类检查的报告一起上传：失败原因可能来自 env_report（配置键漂移），
+          # 此时 drift_report.md 显示 0 drift，只看它会误导。
+          path: audit-tools/reports/*.md
 
       - name: Comment drift report on PR
         if: github.event_name == 'pull_request' && always() && steps.audit.outcome == 'failure'
@@ -567,25 +569,39 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const report = fs.existsSync('audit-tools/reports/drift_report.md')
-              ? fs.readFileSync('audit-tools/reports/drift_report.md', 'utf8')
-              : 'No report file produced.';
-            await github.rest.issues.createComment({
-              ...context.repo,
-              issue_number: context.issue.number,
-              body: [
-                '## 📝 Architecture Docs Drift Audit — FAILED',
+            const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
+            const report = read('audit-tools/reports/drift_report.md') || 'No report file produced.';
+            const envReport = read('audit-tools/reports/env_report.md');
+            const body = [
+              '## 📝 Architecture Docs Drift Audit — FAILED',
+              '',
+              'The architecture docs-vs-code audit detected drift. Please update the affected docs (or run `bash audit-tools/run.sh` locally to inspect).',
+              '',
+              '<details><summary>Subsystem / path / link drift</summary>',
+              '',
+              '```',
+              report,
+              '```',
+              '',
+              '</details>',
+            ];
+            // 只有确实存在 D1/D2/D3 行时才贴环境变量段落，避免每次失败都带一段空表
+            if (/\|\s*D[123]\s*\|/.test(envReport)) {
+              body.push(
                 '',
-                'The architecture docs-vs-code audit detected drift. Please update the affected docs (or run `bash audit-tools/run.sh` locally to inspect).',
-                '',
-                '<details><summary>Full drift report</summary>',
+                '<details><summary>Environment variable drift</summary>',
                 '',
                 '```',
-                report,
+                envReport,
                 '```',
                 '',
                 '</details>',
-              ].join('\n'),
+              );
+            }
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: body.join('\n'),
             });
 
   security-audit:

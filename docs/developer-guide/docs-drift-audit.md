@@ -10,14 +10,15 @@
 
 ## 什么时候需要手动跑审计
 
-| 改动类型                  | 是否需要手动跑 | 说明                              |
-| ------------------------- | -------------- | --------------------------------- |
-| 改业务逻辑                | ❌ 不需要      | 架构没变                          |
-| **新增 subsystem 目录**   | ✅ **必须**    | CI 会拦住，先跑一遍确认能写出文档 |
-| **删除 subsystem 目录**   | ✅ **必须**    | CI 会拦住，必须删对应文档         |
-| **重命名 subsystem 目录** | ✅ **必须**    | CI 会拦住，必须改文档 + 改脚本    |
-| 改 plugin 行为            | ❌ 不需要      | plugin 本身有 plugin 文档体系     |
-| 改 capability 名称        | ⚠️ 可能需要    | 看 `normalize.py` 是否仍能归一化  |
+| 改动类型                  | 是否需要手动跑 | 说明                                             |
+| ------------------------- | -------------- | ------------------------------------------------ |
+| 改业务逻辑                | ❌ 不需要      | 架构没变                                         |
+| **新增 subsystem 目录**   | ✅ **必须**    | CI 会拦住，先跑一遍确认能写出文档                |
+| **删除 subsystem 目录**   | ✅ **必须**    | CI 会拦住，必须删对应文档                        |
+| **重命名 subsystem 目录** | ✅ **必须**    | CI 会拦住，必须改文档 + 改脚本                   |
+| **新增/改名环境变量**     | ✅ **必须**    | `envcheck.py` 会拦住：生产读取的键必须进配置清单 |
+| 改 plugin 行为            | ❌ 不需要      | plugin 本身有 plugin 文档体系                    |
+| 改 capability 名称        | ⚠️ 可能需要    | 看 `normalize.py` 是否仍能归一化                 |
 
 ---
 
@@ -28,14 +29,34 @@
 bash audit-tools/run.sh
 
 # 期望输出：
-# docs facts: 102
-# code facts: 55
+# canonical_drift=0
+# ref_drift=0
+# env_drift=0
+# symbol_hints=42  （仅提示，不计入 drift）
 # drift_count=0
 # ✅ No architecture drift detected.
 
 # 出错时看报告
-cat audit-tools/reports/drift_report.md
+cat audit-tools/reports/drift_report.md   # 子系统 / 路径 / 内链
+cat audit-tools/reports/env_report.md     # 环境变量三方比对
 ```
+
+---
+
+## 四类检查分别抓什么
+
+`run.sh` 串起四个脚本，覆盖四种不同形态的「文档引用代码事实」：
+
+| 脚本             | 事实形态        | 抓什么                                                 | 计入 drift |
+| ---------------- | --------------- | ------------------------------------------------------ | ---------- |
+| `extractors.py`  | 子系统名        | 代码有目录但无对应架构文档，反之亦然                   | ✅         |
+| `refchecks.py`   | 文件路径 / 内链 | 文档里反引号包裹的路径不存在、文档间链接失效、重复文档 | ✅         |
+| `envcheck.py`    | 配置键          | 文档登记了但代码从不读取；代码读取但任何清单都没登记   | ✅         |
+| `symbolcheck.py` | 代码符号        | 文档引用的类/函数/Token 在仓内零命中                   | ❌ 仅提示  |
+
+`symbolcheck.py` 刻意不计入门禁：它能抓到枚举改名、Token 消失这类语义漂移，但仍有约
+15–20% 精度问题（JS 全局、第三方包导出、历史文档引用已删子系统）。当门禁会训练团队
+忽略告警，故它的输出只作为**逐篇审阅清单**。
 
 ---
 
@@ -147,13 +168,38 @@ audit-tools/
 ├── extractors.py        # 提取代码侧和 docs 侧的事实点
 ├── normalize.py         # 归一化层：docs 标题 → canonical key
 ├── aligner.py           # 按 canonical key 对比，输出 drift 报告
+├── refchecks.py         # 路径存在性 / 文档内链 / 重复文档
+├── symbolcheck.py       # 代码符号存在性（仅提示，不计入 drift）
+├── envcheck.py          # 环境变量三方比对（代码 / .env.example / 配置文档）
 ├── run.sh               # 一键执行，CI 和 hook 都调它
 ├── install-hook.sh      # 安装 pre-commit hook（开发者本地执行）
 └── reports/
-    ├── extracts.json    # 原始事实（debug 用）
-    ├── drift_report.md  # 人类可读报告（PR 评论贴这个）
-    └── drift_report.json # JSON 格式（CI 解析用）
+    ├── extracts.json     # 原始事实（debug 用）
+    ├── drift_report.md   # 人类可读报告（PR 评论贴这个）
+    ├── drift_report.json # JSON 格式（CI 解析用）
+    ├── ref_report.md     # 引用完整性报告
+    ├── symbol_report.md  # 符号提示清单
+    └── env_report.md     # 环境变量比对报告
 ```
+
+### 新增环境变量时，`envcheck.py` 怎么判
+
+它把三个事实源交叉比对，判定刻意分级（**只有 D1/D2/D3 计入门禁**）：
+
+| 判定 | 含义                                                              |
+| ---- | ----------------------------------------------------------------- |
+| D1   | 配置文档表格登记了，但全仓没有任何读取点（改名/删除后文档没跟上） |
+| D2   | 生产代码读取且带平台前缀，但无任何注册表文档登记                  |
+| D3   | 生产代码读取的无前缀变量，且无任何注册表文档登记                  |
+| H2   | 仅测试作用域读取（生产不生效），文档未提                          |
+| H3   | `.env.example` 声明了但代码不读（预留项或已废弃）                 |
+| H4   | `process.env[变量名]` 动态读取，静态检查覆盖不到                  |
+| H5   | 平台自己写入再读的内部传递变量（如子进程 env 注入），非用户配置   |
+| H6   | `\|\|` 回退链上的兼容别名，无需单独登记                           |
+
+「登记」的口径是**三档**：`docs/configuration/` 的表格（权威清单，D1 只认这档）、
+任何表格行 ≥ 5 的注册表文档、以及全仓任意文档里被反引号包裹的 `KEY` 散文提及。
+目标是「没有隐形旋钮」，而不是「每个旋钮都必须进同一张表」。
 
 ### 新增 subsystem 文档时，必改两处
 

@@ -18,6 +18,8 @@ SYM_MD="${OUT_DIR}/symbol_report.md"
 SYM_JSON="${OUT_DIR}/symbol_report.json"
 REF_MD="${OUT_DIR}/ref_report.md"
 REF_JSON="${OUT_DIR}/ref_report.json"
+ENV_MD="${OUT_DIR}/env_report.md"
+ENV_JSON="${OUT_DIR}/env_report.json"
 
 mkdir -p "${OUT_DIR}"
 
@@ -35,6 +37,16 @@ python3 audit-tools/refchecks.py \
   --out-json "${REF_JSON}"
 
 REF_DRIFT=$(python3 -c "import json;print(json.load(open('${REF_JSON}'))['total'])")
+
+# --- 2.5 环境变量三方比对（配置键漂移）---
+# 配置键既不是文件路径也不是代码符号，前两段检查都覆盖不到。这一段的 D1/D2/D3
+# 判定刻意收得很窄（见 envcheck.py 模块文档），误报率接近 0，故计入 drift。
+python3 audit-tools/envcheck.py \
+  --repo . \
+  --out-md "${ENV_MD}" \
+  --out-json "${ENV_JSON}"
+
+ENV_DRIFT=$(python3 -c "import json;print(json.load(open('${ENV_JSON}'))['drift_count'])" 2>/dev/null || echo 0)
 
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
@@ -86,13 +98,18 @@ print(f\"  文档内链      : {s['doc_link']['links_total']} 条 (失效 {s['do
 print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\")
 "
 
+# 全仓合计：canonical + ref + 环境变量。envcheck 的判定已收窄到近乎无假阳性，
+# 故与另外两段同列门禁；symbolcheck 仍只作提示。
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT))
+
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
+echo "env_drift=${ENV_DRIFT}  （见 ${ENV_MD}）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
-echo "drift_count=${DRIFT_COUNT}"
+echo "drift_count=${TOTAL_DRIFT}"
 
-if [ "${DRIFT_COUNT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${DRIFT_COUNT} item(s). See ${DRIFT_MD}."
+if [ "${TOTAL_DRIFT}" -gt 0 ]; then
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD} and ${ENV_MD}."
   exit 1
 fi
 

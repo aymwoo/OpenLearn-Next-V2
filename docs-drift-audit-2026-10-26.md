@@ -198,6 +198,6 @@ grep -n "startProcessQuota" packages/core/worker-runtime/worker-manager.ts
 
 本次暴露的 12 个问题，**没有一个能被现有 `audit-tools/` 抓到**——它们全部通过了路径与内链检查。若要防复发，建议按性价比排序补三类检查：
 
-1. **环境变量清单比对**（高性价比）：从 `server/`、`packages/core/` 抽出 `process.env.*` / `env.*` 键名，与 `system-configuration.md` 的表格双向比对，缺一报警。这类漂移每个版本都会发生。
+1. ✅ **环境变量清单比对（已落地）**：已实现 `audit-tools/envcheck.py` 并接入 `run.sh` 门禁（代码 / `.env.example` / 注册表文档三方比对，D1–D3 计 drift，H1–H6 仅提示）。**首跑即抓出 7 个从未被文档提及的运维旋钮**（`BACKUP_SCHEDULE`、`BACKUP_KEEP`、`BACKUP_DAILY_AT`、`BACKUP_CHECKPOINT_INTERVAL_MS`、`PRE_MIGRATION_KEEP`、`MIGRATION_CHECKSUM_STRICT`、`MIGRATION_ALLOW_UNKNOWN_LEDGER`），已全部补进 `system-configuration.md`。实现时踩到两个坑，都在工具里写成了规则而非特例：`env: NodeJS.ProcessEnv = process.env` 这种别名参数会让只认 `process.env.` 的提取漏掉整片配额/保留策略变量；`process.env[A || B]` 形的兼容别名与「平台自己写入再交给子进程」的内部传递键（`OPENLEARN_PLUGIN_NET_ALLOW`）都不能要求登记成用户配置项。
 2. **统计数字断言**（中）：`ExtensionSlot` 成员数、DI Token 数、数据表数，改为在文档里写占位符、由脚本注入真实数字，或加单测断言文档中的数字与代码一致。
 3. **文档内自相矛盾检测**（低，成本高）：同一篇文档内出现互斥断言（如「8 个」与「9 个」描述同一集合）。收益明显但实现难度大，可先靠 review。
