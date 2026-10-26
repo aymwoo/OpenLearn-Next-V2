@@ -318,7 +318,9 @@ export default {
     },
   },
   activate: async (ctx: PluginContext) => {
-    ctx.actionRegistry.register({
+    // ⚠️ 是 ctx.services.actionRegistry，不是 ctx.actionRegistry：
+    // PluginContext 只在 services 下挂服务，顶层没有 actionRegistry / commandBus 属性。
+    ctx.services.actionRegistry.register({
       id: 'ext-quiz-gate.judge',
       commandType: 'ext-quiz-gate.judge',
       description: '只读：学生是否达到测验分数',
@@ -326,7 +328,7 @@ export default {
       exposeToAgent: false,
       inputSchema: { type: 'object', additionalProperties: true },
     });
-    ctx.commandBus.registerHandler('ext-quiz-gate.judge', {
+    ctx.services.commandBus.registerHandler('ext-quiz-gate.judge', {
       execute: async (cmd) => {
         const { studentId, lessonId, params } = cmd.payload as {
           studentId: string;

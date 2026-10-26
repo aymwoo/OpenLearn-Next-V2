@@ -20,6 +20,8 @@ REF_MD="${OUT_DIR}/ref_report.md"
 REF_JSON="${OUT_DIR}/ref_report.json"
 ENV_MD="${OUT_DIR}/env_report.md"
 ENV_JSON="${OUT_DIR}/env_report.json"
+PLUGIN_JSON="${OUT_DIR}/plugin_docs_report.json"
+PLUGIN_MD="${OUT_DIR}/plugin_docs_report.md"
 
 mkdir -p "${OUT_DIR}"
 
@@ -47,6 +49,16 @@ python3 audit-tools/envcheck.py \
   --out-json "${ENV_JSON}"
 
 ENV_DRIFT=$(python3 -c "import json;print(json.load(open('${ENV_JSON}'))['drift_count'])" 2>/dev/null || echo 0)
+
+# --- 2.6 插件文档代码示例校验（API 用法漂移）---
+# 前三段都只看"路径/符号/键名是否存在"，不看**代码块里的调用形状**。
+# 而面向插件作者的文档一旦写出 ctx.commandBus 这种宿主没有的入口，
+# 照抄的 Agent 必然编译失败。P1–P4 只比对确定的契约（SDK 导出 / Context 成员），
+# 误报率低，计入 drift；P5 仅提示。
+python3 audit-tools/plugin_docs_check.py \
+  --json "${PLUGIN_JSON}" 2>/dev/null || true
+
+PLUGIN_DRIFT=$(python3 -c "import json;print(json.load(open('${PLUGIN_JSON}'))['stats']['drift'])" 2>/dev/null || echo 0)
 
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
@@ -98,18 +110,20 @@ print(f\"  文档内链      : {s['doc_link']['links_total']} 条 (失效 {s['do
 print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\")
 "
 
-# 全仓合计：canonical + ref + 环境变量。envcheck 的判定已收窄到近乎无假阳性，
-# 故与另外两段同列门禁；symbolcheck 仍只作提示。
-TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT))
+# 全仓合计：canonical + ref + 环境变量 + 插件文档示例。
+# envcheck / plugin_docs_check 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
+# symbolcheck 仍只作提示。
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT))
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
 echo "env_drift=${ENV_DRIFT}  （见 ${ENV_MD}）"
+echo "plugin_docs_drift=${PLUGIN_DRIFT}  （见 ${PLUGIN_MD}）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${TOTAL_DRIFT}"
 
 if [ "${TOTAL_DRIFT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD} and ${ENV_MD}."
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD} and ${PLUGIN_MD}."
   exit 1
 fi
 

@@ -178,16 +178,23 @@ interface PluginInstallWizardProps {
 
 ### 5.1 上下文心跳 API (`ctx.reportProgress`) 与滑动超时
 
-在耗时初始化操作（如大模型加载、复杂 SQL 数据迁移）期间，插件可通过 `PluginContext` 的 `ctx.reportProgress` 主动上报进度并续期超时窗口：
+在耗时初始化操作（如大模型加载、复杂 SQL 数据迁移）期间，插件可通过 `ctx.reportProgress` 主动上报进度并续期超时窗口：
+
+> ⚠️ **两个限制，照抄前必须知道**：
+>
+> 1. **只在 `worker_threads` 模式注入。** 它由 worker bootstrap（`bootstrap/sections/message-handler.ts`）在构建 ctx 时挂上，`process`（第三方默认）与 `inline` 模式下该属性为 `undefined`，所以必须写 `ctx.reportProgress?.(...)`。而第三方插件恰恰被强制为 `process` —— 这条 API 对 ZIP 插件**无效**。
+> 2. **类型里没有这个成员。** `PluginContext` 接口未声明它，直接写 `ctx.reportProgress(...)` 会编译失败。要在这两种模式下都通过类型检查，需 `(ctx as unknown as { reportProgress?: (s: string, m?: string) => void }).reportProgress?.(...)`。
 
 ```typescript
 export async function activate(ctx: PluginContext) {
-  ctx.reportProgress?.('migration', '正在执行数据表结构初始化...');
+  // 类型未声明该成员（仅 worker 运行时注入），故先断言再可选调用
+  const report = (ctx as unknown as { reportProgress?: (stage: string, message?: string) => void }).reportProgress;
+  report?.('migration', '正在执行数据表结构初始化...');
   await ctx.db.migrate(1, async (db) => {
     // 迁移操作
   });
 
-  ctx.reportProgress?.('model-load', '正在加载本地模型权重...');
+  report?.('model-load', '正在加载本地模型权重...');
   // 耗时加载逻辑，自动滑动续期超时，防止被误判超时熔断
 }
 ```

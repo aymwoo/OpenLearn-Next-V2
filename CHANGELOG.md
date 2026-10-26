@@ -132,6 +132,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **插件开发文档可用性审计：按「AI Agent 只读文档能否写出能用的第三方插件」重校，修掉 8 处会直接害人的指引**：
+  - **口径**：此前审计都是「文档 vs 代码」的事实核对；这次换成可用性验证——照着文档实跑 `init → npm install → build → 拆 ZIP`，再对照宿主加载器判断结果能不能用。
+  - **最严重的一条：教程 22% 的内容对目标读者不可用**。§6「前端插件系统」共 580 行（全文 2623 行）教 `ctx.ui.registerExtensionPoint({ component })`，但第三方插件被 `execution-policy.ts` 强制为 `process`，前端跑在 `sandbox="allow-scripts"` 的**隐藏** iframe 里：`component` 是函数、`postMessage` 无法克隆（`DataCloneError`），`import React` 与 `window.HostSharedDeps` 均为 `undefined`。**第三方插件无法提供任何可见 UI**。已在 §2.2 展开三档执行模式与能力边界表、§6 章首加适用范围警示。
+  - **§4.1 旗舰示例点击即报错**：`classroomTools.payload` 只给了 `{ type }`，handler 却读 `payload.lessonId / title / options` → SQLite `NOT NULL constraint failed`。根因是「工具栏按钮获取课堂上下文的唯一通道」——`$lessonId` / `$classId` 占位符——在全仓文档里零提及，已新增 §3.1.1 说明其替换时机与嵌套用法。同时修掉 `'投票「${payload.title}」已创建'`（单引号不插值）与 `manifest.id: '@openlearn/plugin-poll'`（占用官方命名空间，既无信任又误导运维）。
+  - **官方脚手架的前端激活必定失败**：模板导出 `export default function DemoVote()`，而沙箱加载器要求 `plugin.activate` 是函数（`server/utils/plugin-sandbox-frame.ts`），否则抛 `missing activate function` 并置 `PluginState.ERROR`；实测 `dist/frontend.js` 中 `activate` 出现 **0** 次。已写入教程 §11.1 与 `scaffold-cli.md` 的「必须手改」清单，并记录模板侧修复建议（需发 SDK 3.7.1）。
+  - **`docs/sdk/scaffold-cli.md` 仅 15 行**：补全 `init/build/sign` 三命令、`--template` 默认值为 `server-only`、产物命名（`<package.json name>.zip`，非文档所称 `my-plugin.zip`）、ZIP 结构、以及三个模板默认值坑。
+  - **代码示例的 API 用法错误**：`plugin-sdk.md` 的 `ctx.actionRegistry` / `ctx.commandBus`（真实入口为 `ctx.services.*`）；教程 §6.9/§6.10 从 SDK 导入 `FrontendPluginContext`（SDK 从未导出，仅存在于宿主源码）；`plugin-update-distribution.md` 的 `ctx.reportProgress`（仅 worker 注入、且未在 `PluginContext` 声明，直接写会编译失败）。
+  - **版本表述**：§2.6 同段内「现为 `0.2.x`」与表内「当前 `0.5.0`」互相矛盾且都落后于实际 `0.7.4`；`engines.openlearn` 一律推荐 `>=0.2.5` 会在旧版本上装上、用到新 API 才崩 —— 改为按实际用到的 API 声明。
+  - **`audit-tools/plugin_docs_check.py`（新增，第四段门禁）**：前三段只查路径/键名/符号是否存在，不查代码块里的**调用形状**。新工具实时解析 `packages/plugin-sdk/*.d.ts` 与 `PluginContext` / `FrontendPluginContext` 定义，判 P1（SDK 未导出符号）/ P2（`ctx.*` 不存在）/ P3（`ctx.services.*` 不存在）/ P4（`ctx.ui.*` 不存在）计 drift，P5（manifest 缺 `main`）仅提示。首跑抓出上述 4 条真实缺陷；负向测试注入 4 类错误用法后分别命中 P1–P4。
+  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`；`prettier --check docs/` 通过；审计报告见 `docs-plugin-guide-audit-2026-10-26.md`。
+
 - **两份环境变量清单收敛为一份，`architecture/configuration.md` 按 Issue #151 重写**：
   - **背景**：`docs/architecture/configuration.md` 自陈「§1 覆盖面更全」，`docs/configuration/system-configuration.md` 自称「唯一权威来源」，两页并列在侧栏「配置」下。实测：真实可配置项 **71 个**，配置页覆盖 60 个、架构页覆盖 12 个，**两边各自漏各自的**——架构页独有 4 个生产键（`ENABLE_HTTPS` / `FORCE_HTTPS` / `ENABLE_HSTS` / `ALLOW_UNSAFE_PLUGIN_SCRIPTS`）是配置页没有的。
   - **根因**：`envcheck.py` 的 D1 只把 `docs/configuration/` 当权威表，架构页的键表**不在校验范围**，所以它从 25 个一路烂到与代码脱节也无人报警。
