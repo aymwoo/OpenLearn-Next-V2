@@ -2,7 +2,7 @@
 
 > 本文面向部署并维护 OpenLearnV2 实例的系统管理员（`role = administrator`）。每条操作都给出**界面入口或可直接调用的 API 端点**，并标注源码依据文件。
 >
-> 角色权限矩阵见 [安全与权限](../architecture/security-permissions)，插件能力审核见 [插件能力矩阵](../reference/plugin-capability-matrix)，部署步骤见[安装指南](../getting-started/installation-guide) 与 [Docker & Nginx](../deployment/docker-nginx)。
+> 角色权限矩阵见 [安全与权限](../architecture/security-permissions.md)，插件能力审核见 [插件能力矩阵](../reference/plugin-capability-matrix.md)，部署步骤见[安装指南](../getting-started/installation-guide.md) 与 [Docker & Nginx](../deployment/docker-nginx.md)。
 >
 > ⚠️ 本文所列 API 的**鉴权**统一由 `server/middleware/auth.ts` 的 `requireAuth(...roles)` 提供。多数管理端点是 `requireAuth('administrator')`，**不接受教师角色**——用教师账号调会拿到 403。
 
@@ -52,7 +52,7 @@
 | POST   | `/api/auth/avatar`          | 需登录                | 上传头像                                |
 | DELETE | `/api/auth/avatar`          | 需登录                | 删除头像                                |
 
-> ⚠️ **令牌不是 JWT**。`edu_os_token` 是不透明会话 ID，服务端直接查 `client_sessions` 表（见 [安全与权限](../architecture/security-permissions)）。因此**令牌无法离线验证、也无法伪造过期时间**。
+> ⚠️ **令牌不是 JWT**。`edu_os_token` 是不透明会话 ID，服务端直接查 `client_sessions` 表（见 [安全与权限](../architecture/security-permissions.md)）。因此**令牌无法离线验证、也无法伪造过期时间**。
 
 ### 1.2 会话生命周期（`server/middleware/auth.ts` 的 `getValidSession`）
 
@@ -99,7 +99,7 @@
 | 课件成绩录入                    |      ✅       |     ✅     |      ❌      |
 | 学生自身数据                    |      ✅       |     ✅     | ✅（仅自己） |
 
-完整矩阵见 [安全与权限](../architecture/security-permissions) §1。
+完整矩阵见 [安全与权限](../architecture/security-permissions.md) §1。
 
 ### 2.3 强制改密流程
 
@@ -189,7 +189,7 @@
 
 ### 4.3 能力审核
 
-插件在 manifest 中通过 `capabilitiesProposed` 声明所需能力字符串（如 `lesson:read` / `lesson:write` / `whiteboard:write`）。运行时由 `CapabilityGuard` 按 `actorId` 逐条校验。管理员在安装时应核对声明的能力是否与插件功能相符——完整能力字典见 [插件能力矩阵](../reference/plugin-capability-matrix)，槽位清单见 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots)。
+插件在 manifest 中通过 `capabilitiesProposed` 声明所需能力字符串（如 `lesson:read` / `lesson:write` / `whiteboard:write`）。运行时由 `CapabilityGuard` 按 `actorId` 逐条校验。管理员在安装时应核对声明的能力是否与插件功能相符——完整能力字典见 [插件能力矩阵](../reference/plugin-capability-matrix.md)，槽位清单见 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots.md)。
 
 > ⚠️ **第三方插件固定为子进程**。Worker 线程与宿主共享环境变量，不能隔离密钥。manifest id 不以 `@openlearn/` 开头、且未列入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的包，安装、更新、激活和启动恢复时都会改成 `process`。响应里的 `executionMode` / `isolation_mode` 是实际模式；`executionModeCoerced: true` 表示请求被改写。
 >
@@ -275,7 +275,7 @@
 | `LOG_LEVEL`         | 日志级别（compose 默认 `info`）                                                                                                                      | 日志子系统                           |
 | `DISABLE_HMR`       | 置真后关闭 Vite HMR（生产/AI Studio 兼容）                                                                                                           | 前端构建                             |
 
-完整环境变量清单见 [系统配置](../configuration/system-configuration)。
+完整环境变量清单见 [系统配置](../configuration/system-configuration.md)。
 
 ### 6.3 请求层安全门控
 
@@ -331,18 +331,18 @@ node scripts/backfill-class-owners.mjs --assign teacher
 
 ## 7. 排障速查
 
-| 现象                            | 根因与处置                                                                                                                                                                  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 教师账号调管理端点返回 403      | 端点是 `requireAuth('administrator')`，不含 teacher。改用管理员账号。                                                                                                       |
-| 登录后立刻被弹回改密页          | 种子账号带 `mustChangePassword`。走 `POST /api/auth/change-password`。                                                                                                      |
-| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在 AI 提供商管理逐个重存 Key。                                                                            |
-| 登录被限流 429                  | `loginLimiter` 5 次/分钟/IP。等待或从 nginx 层确认不是反向代理把大量用户汇聚成同一 IP。                                                                                     |
-| 写操作 403 `CORS not allowed`   | `ALLOWED_ORIGINS` 未包含实际访问来源。注意未配置时对无 `Origin` 头与同源请求是放行的。                                                                                      |
-| 写操作 403 且响应来自 csrfGuard | `Sec-Fetch-Site: cross-site` 且路径不在豁免清单。检查是否有第三方页面在跨站调用本站写接口。                                                                                 |
-| 上课中途白板同步断掉            | nginx 缺 `proxy_read_timeout`（默认 60s）。见 [Docker & Nginx](../deployment/docker-nginx) §2。                                                                             |
-| 课件 iframe 一直「加载中」      | `GET /api/courseware/:id` 需要 `?ct=` 短时令牌（父页面经 `GET /api/courseware/:id/access-token` 铸造）。检查父页面是否被拦截。                                              |
-| 插件安装后功能不出现            | 核对 manifest 的 `capabilitiesProposed` 与 `contributes`；用 `GET /api/plugins/:id/contributions` 查看实际注册的贡献。                                                      |
-| 容器重启后数据全没              | 卷挂错路径。容器数据卷是 **`/data`**（数据库/密钥/上传件都在其中）与 **`/backups`**，见 `docker-compose.yml` volumes 与 [Docker & Nginx](../deployment/docker-nginx) §1.2。 |
+| 现象                            | 根因与处置                                                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 教师账号调管理端点返回 403      | 端点是 `requireAuth('administrator')`，不含 teacher。改用管理员账号。                                                                                                          |
+| 登录后立刻被弹回改密页          | 种子账号带 `mustChangePassword`。走 `POST /api/auth/change-password`。                                                                                                         |
+| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在 AI 提供商管理逐个重存 Key。                                                                               |
+| 登录被限流 429                  | `loginLimiter` 5 次/分钟/IP。等待或从 nginx 层确认不是反向代理把大量用户汇聚成同一 IP。                                                                                        |
+| 写操作 403 `CORS not allowed`   | `ALLOWED_ORIGINS` 未包含实际访问来源。注意未配置时对无 `Origin` 头与同源请求是放行的。                                                                                         |
+| 写操作 403 且响应来自 csrfGuard | `Sec-Fetch-Site: cross-site` 且路径不在豁免清单。检查是否有第三方页面在跨站调用本站写接口。                                                                                    |
+| 上课中途白板同步断掉            | nginx 缺 `proxy_read_timeout`（默认 60s）。见 [Docker & Nginx](../deployment/docker-nginx.md) §2。                                                                             |
+| 课件 iframe 一直「加载中」      | `GET /api/courseware/:id` 需要 `?ct=` 短时令牌（父页面经 `GET /api/courseware/:id/access-token` 铸造）。检查父页面是否被拦截。                                                 |
+| 插件安装后功能不出现            | 核对 manifest 的 `capabilitiesProposed` 与 `contributes`；用 `GET /api/plugins/:id/contributions` 查看实际注册的贡献。                                                         |
+| 容器重启后数据全没              | 卷挂错路径。容器数据卷是 **`/data`**（数据库/密钥/上传件都在其中）与 **`/backups`**，见 `docker-compose.yml` volumes 与 [Docker & Nginx](../deployment/docker-nginx.md) §1.2。 |
 
 ---
 

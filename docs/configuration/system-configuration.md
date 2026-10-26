@@ -2,7 +2,7 @@
 
 本页汇总平台全部服务端配置入口：环境变量、SQLite 数据库路径、会话密钥与插件 `manifest.configuration`。**当前唯一真源是代码**（`server.ts`、`cli.mjs`、`packages/core/worker-runtime/worker-manager.ts`、`packages/core/worker-runtime/plugin-quota.ts`、`packages/core/db/retention-policy.ts`），本页与其同步于 v0.7.4。
 
-> **本页是全平台唯一的环境变量清单。** 其他文档（含[系统配置架构规范](../architecture/configuration)）只描述设计形态与约束，不再并列维护第二份变量表——两份清单必然分叉。清单完整性由 `audit-tools/envcheck.py` 守：代码读取、`.env.example`、本页表格三方比对，任一侧缺失即报 drift。
+> **本页是全平台唯一的环境变量清单。** 其他文档（含[系统配置架构规范](../architecture/configuration.md)）只描述设计形态与约束，不再并列维护第二份变量表——两份清单必然分叉。清单完整性由 `audit-tools/envcheck.py` 守：代码读取、`.env.example`、本页表格三方比对，任一侧缺失即报 drift。
 
 ---
 
@@ -34,7 +34,7 @@
 | `BACKUP_KEEP`                                 | `10`                                         | 每日全量备份保留份数（仅修剪 `backup_` 前缀，人工快照不受影响）                                                                                                                                                                                                                                                                              |
 | `BACKUP_DAILY_AT`                             | `3`                                          | 每日全量快照触发小时（0–23，越界夹回边界；非法值回落 `3`）                                                                                                                                                                                                                                                                                   |
 | `BACKUP_CHECKPOINT_INTERVAL_MS`               | `3600000`                                    | WAL 检查点巡检间隔（毫秒）。WAL 超过阈值时立即触发一次全量检查点                                                                                                                                                                                                                                                                             |
-| `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）                                                                                                                                                                                                                                |
+| `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry.md)）                                                                                                                                                                                                                             |
 | `OPENLEARN_COMMUNITY_INSTALL`                 | 关闭                                         | 只有显式设为 `1` 才允许从社区注册表安装或更新插件                                                                                                                                                                                                                                                                                            |
 | `OPENLEARN_COMMUNITY_PUBKEY`                  | 无                                           | 社区包签名校验用的 Ed25519 公钥 PEM（换行写作 `\n`）。缺省时拒绝安装社区包                                                                                                                                                                                                                                                                   |
 | `OPENLEARN_TRUSTED_PUBKEYS`                   | 无                                           | 受信任公钥集合（`OPENLEARN_COMMUNITY_PUBKEY` 的复数形式），任一命中即通过签名校验                                                                                                                                                                                                                                                            |
@@ -109,7 +109,7 @@
 
 ## 4. 插件 `manifest.configuration`
 
-插件在 manifest 中声明配置 schema（[plugin-manifest-spec §2.5](../plugin/plugin-manifest-spec)），由 `IConfigService`（`ctx.config`）提供读取与变更订阅：
+插件在 manifest 中声明配置 schema（[plugin-manifest-spec §2.5](../plugin/plugin-manifest-spec.md)），由 `IConfigService`（`ctx.config`）提供读取与变更订阅：
 
 - 属性类型：`string | number | boolean | integer`，支持 `default` / `enum` / `minimum` / `maximum` / `description` / `scope`（共 7 个字段）；
 - `scope` 决定该键允许在哪一层被覆盖（`platform` / `school` / `class`），缺省只有平台层；解析顺序为 **班级 > 学校 > 平台 > manifest 默认值**；
@@ -118,7 +118,7 @@
 
 > ⚠️ **`showInDashboard` 不是框架识别的保留键。** 插件卡片上的「总览」开关对**所有**插件都存在，状态保存在浏览器 `localStorage`（`openlearn:dashboardVisibility`，见 `src/plugin-host/plugin-host-store.ts`），与插件配置无关。在 manifest 里声明 `showInDashboard` 只会得到一个普通配置项，既不影响开关可用性，也不影响小部件显隐。
 
-完整的声明字段、存储结构、校验与失败语义、REST 入口见[系统配置架构规范 §2](../architecture/configuration#2-插件级配置三级作用域)。
+完整的声明字段、存储结构、校验与失败语义、REST 入口见[系统配置架构规范 §2](../architecture/configuration.md#2-插件级配置三级作用域)。
 
 ## 5. 启动期环境变量强校验（P1）
 

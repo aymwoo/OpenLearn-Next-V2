@@ -15,7 +15,7 @@
 | 持久化   | 无，纯内存                                                                                                                 | 落库（`classroom_sessions`、课节进度等）                    |
 | 接线     | `packages/core/kernel/index.ts` 实例化为 `classroomRuntime` 并注册 `IClassroomRuntimeServiceToken`，但**全仓零 `resolve`** | `server/routes/classroom.ts` 直接使用                       |
 
-⚠️ **内核版目前是「已实例化、无人消费」**：它被 `packages/core/kernel/index.ts` 建好后注册进容器，却没有任何模块 `resolve` 这个 Token；唯一构造它的外部代码是 `src/features/student-workspace/student-workspace-context.ts`，而那里是**另起的独立实例**，与容器中的对象不是同一个。这一现状记录在 [`audit-2026-10-15.md`](../../audit-2026-10-15.md)。**要判断「课堂」的真实行为，看服务版。**
+⚠️ **内核版目前是「已实例化、无人消费」**：它被 `packages/core/kernel/index.ts` 建好后注册进容器，却没有任何模块 `resolve` 这个 Token；唯一构造它的外部代码是 `src/features/student-workspace/student-workspace-context.ts`，而那里是**另起的独立实例**，与容器中的对象不是同一个。这一现状记录在 [`audit-2026-10-15.md`](https://github.com/aymwoo/OpenLearn-Next-V2/blob/main/audit-2026-10-15.md)。**要判断「课堂」的真实行为，看服务版。**
 
 ---
 

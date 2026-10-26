@@ -115,7 +115,7 @@ my-plugin/
    - 文件名约定：`NNN_name.sql`（`NNN` 为前导正整数序列号，如 `001_`、`02_`、`10_`）。宿主按数字版本号自然序升序排列执行。
 2. **语法标记**：
    - 与平台核心迁移对齐，支持 `-- UP` 与 `-- DOWN` 分段注释。若省略标记，整篇文件默认作为 `-- UP` 执行：
-     ```sql
+     ```text
      -- UP
      CREATE TABLE IF NOT EXISTS {{prefix}}homework (
        id TEXT PRIMARY KEY,

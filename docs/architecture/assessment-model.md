@@ -35,7 +35,7 @@ question_bank_items                          （题库，独立于试卷）
   `packages/core/assessment/serialize.ts` 的白名单视图；`server/__tests__/assessment-api.test.ts`
   用哨兵字符串对每个学生端响应做全量断言。
 - **匿名问卷**：`assessment_attempts.student_id = NULL`、
-  `anon_key = HMAC-SHA256(ENCRYPTION_KEY, `${assignmentId}:${studentId}`)`；
+  `anon_key = HMAC-SHA256(ENCRYPTION_KEY, "$assignmentId:$studentId")`；
   唯一索引 `(assignment_id, coalesce(student_id,''), coalesce(anon_key,''), attempt_no)`
   同时承担「同一学生不能重复提交」。
 - **不落冗余聚合列**：多次作答的 `first/last/highest/average` 实时计算
@@ -242,7 +242,7 @@ interface QuestionTypeDefinition<TConfig, TAnswer> {
 
 JSON 协议：
 
-```jsonc
+```json
 {
   "schema": "openlearn.assessment.paper/v1",
   "exportedAt": 1730000000000,
@@ -255,9 +255,9 @@ JSON 协议：
       "stem": "请实现累加函数",
       "config": { "testCases": [], "rubric": "…" }, // 插件自定义结构，原样保留
       "answerKey": "def add(n): …", // 教师可见，导入时由题型校验
-      "maxScore": 10,
-    },
-  ],
+      "maxScore": 10
+    }
+  ]
 }
 ```
 

@@ -4,8 +4,8 @@
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.1` / 平台 `v0.7.4+`
 >
-> 本页是[插件开发完全指南](plugin-development-tutorial) §6 的正文，讲**前端 bundle 怎么被加载、拿到什么上下文、能注册哪些扩展点**。
-> 备课画板图元、教学环节类型、环节进入条件属于「课件内容扩展」，见配套篇：[课件与教学环节扩展](plugin-courseware-extensions)。
+> 本页是[插件开发完全指南](plugin-development-tutorial.md) §6 的正文，讲**前端 bundle 怎么被加载、拿到什么上下文、能注册哪些扩展点**。
+> 备课画板图元、教学环节类型、环节进入条件属于「课件内容扩展」，见配套篇：[课件与教学环节扩展](plugin-courseware-extensions.md)。
 
 ---
 
@@ -24,8 +24,8 @@
 > 因此本页 §2–§5 里的 `component` / `uiService.showModal` / `socketService` 等成员对第三方插件**不存在**。
 > 第三方插件的前端能做的只有五件事：`frontendApi` 调后端、`storageService` 存键值、
 > `invokeCommand` 派发命令、`ui.showToast` 弹提示、`ui.registerExtensionPoint` 注册**数据型**条目。
-> 完整能力边界与路线见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)，
-> 档位判定见[教程 §2.2](plugin-development-tutorial#execution-modes)。
+> 完整能力边界与路线见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)，
+> 档位判定见 {ref}`教程 §2.2 三档执行模式 <execution-modes>`。
 
 ---
 
@@ -85,7 +85,7 @@ export default {
 **唯一的跨档硬契约**：`default export` 必须是**带 `activate` 函数的对象**。
 沙箱加载器逐字检查 `typeof plugin.activate !== 'function'`，不满足直接抛
 `missing activate function` 并把插件置为错误态 —— 第三方插件把组件当 default 导出是本仓库出现过的
-真实事故（脚手架模板曾这样生成，见 [Scaffold CLI §3](../sdk/scaffold-cli)）。
+真实事故（脚手架模板曾这样生成，见 [Scaffold CLI §3](../sdk/scaffold-cli.md)）。
 
 ---
 
@@ -181,24 +181,24 @@ bridge.context.get() // → Promise<{ lessonId, classId }>
 
 ## 4. 可用的 UI 扩展槽位
 
-| Slot                       | 用途                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| `teacher.tab`              | 教师标签页                                                                         |
-| `teacher.panel`            | 教师独立全宽管理面板（v3.2）                                                       |
-| `teacher.dashboard.widget` | 教师仪表盘小部件                                                                   |
-| `student.view`             | 学生视图                                                                           |
-| `student.fullscreen`       | 学生全屏视图/考试模式（v3.2）                                                      |
-| `student.lesson.tool`      | 学生学习工具                                                                       |
-| `classroom.tool`           | 课堂工具                                                                           |
-| `global.setting`           | 全局设置页扩展（v3.2）                                                             |
-| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x）                                                 |
-| `command_palette.item`     | 全局命令面板（Ctrl+K）条目（**数据型**，第三方插件可用）                           |
-| `editor.palette_item`      | 备课画板组件面板（v0.3.17，Palette Item 见[配套篇](plugin-courseware-extensions)） |
-| `editor.timeline_segment`  | 备课环节类型（Segment Type，见[配套篇](plugin-courseware-extensions)）             |
-| `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`）  |
+| Slot                       | 用途                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| `teacher.tab`              | 教师标签页                                                                            |
+| `teacher.panel`            | 教师独立全宽管理面板（v3.2）                                                          |
+| `teacher.dashboard.widget` | 教师仪表盘小部件                                                                      |
+| `student.view`             | 学生视图                                                                              |
+| `student.fullscreen`       | 学生全屏视图/考试模式（v3.2）                                                         |
+| `student.lesson.tool`      | 学生学习工具                                                                          |
+| `classroom.tool`           | 课堂工具                                                                              |
+| `global.setting`           | 全局设置页扩展（v3.2）                                                                |
+| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x）                                                    |
+| `command_palette.item`     | 全局命令面板（Ctrl+K）条目（**数据型**，第三方插件可用）                              |
+| `editor.palette_item`      | 备课画板组件面板（v0.3.17，Palette Item 见[配套篇](plugin-courseware-extensions.md)） |
+| `editor.timeline_segment`  | 备课环节类型（Segment Type，见[配套篇](plugin-courseware-extensions.md)）             |
+| `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`）     |
 
 > 上表只是演示用子集 —— `ExtensionSlot` 联合类型现有 **100+ 个成员**，完整清单与各槽位 Props 见
-> [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots)。
+> [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 >
 > ⚠️ 常见误写：备课画板组件的槽位名是 **`editor.palette_item`**，**不是** `palette.item`（后者不是合法槽位）。
 
@@ -215,7 +215,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 }
 ```
 
-**所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots)。
+**所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
 ---
 
@@ -318,7 +318,7 @@ const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
 > 因此**本节的 external 指引只适用于「与宿主同 realm 执行」的插件**；
 > 远程沙箱插件照做会**必然激活失败**（`Cannot read properties of undefined (reading 'React')`）。
 > 远程插件的正确构建方式见 §7.2，完整能力边界见
-> [`docs/plugin/frontend-sandbox-capability-boundary.md`](../plugin/frontend-sandbox-capability-boundary)。
+> [`docs/plugin/frontend-sandbox-capability-boundary.md`](../plugin/frontend-sandbox-capability-boundary.md)。
 
 ### 7.1 inline / worker：共享运行时 + 裸导入转译
 
@@ -479,8 +479,8 @@ esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.c
 
 ## 相关文档
 
-- [插件开发完全指南](plugin-development-tutorial) —— 主教程（manifest、命令、事件、安全、发布）
-- [课件与教学环节扩展](plugin-courseware-extensions) —— 备课画板图元 / 环节类型 / 进入条件
-- [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary) —— 第三方插件真实能力与路线
-- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots) —— 55 个槽位与 Props
-- [Scaffold CLI](../sdk/scaffold-cli) —— 脚手架模板与构建产物
+- [插件开发完全指南](plugin-development-tutorial.md) —— 主教程（manifest、命令、事件、安全、发布）
+- [课件与教学环节扩展](plugin-courseware-extensions.md) —— 备课画板图元 / 环节类型 / 进入条件
+- [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md) —— 第三方插件真实能力与路线
+- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots.md) —— 55 个槽位与 Props
+- [Scaffold CLI](../sdk/scaffold-cli.md) —— 脚手架模板与构建产物

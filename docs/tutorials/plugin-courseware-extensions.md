@@ -4,9 +4,9 @@
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.1` / 平台 `v0.7.4+`
 >
-> 本页是[插件开发完全指南](plugin-development-tutorial) §6 的配套篇，讲**怎么把教学内容塞进备课与授课流程**：
+> 本页是[插件开发完全指南](plugin-development-tutorial.md) §6 的配套篇，讲**怎么把教学内容塞进备课与授课流程**：
 > 备课画板图元（Palette Item）、自定义教学环节（Segment Type）、以及学生能否看到某个环节的进入条件（Gate）。
-> 前端 bundle 的加载机制与上下文见[前端插件指南](plugin-frontend-guide)。
+> 前端 bundle 的加载机制与上下文见[前端插件指南](plugin-frontend-guide.md)。
 >
 > ⚠️ 三节里的 `ctx.ui.register*` API 都需要**与宿主同 realm** 执行（`inline` / `worker` 模式的插件）。
 > 第三方 ZIP 插件的 `frontend.js` 跑在隐藏 iframe 里，只能用**声明式**写法（`manifest.contributes`）；
@@ -28,10 +28,10 @@ import type { PaletteItemComponentProps } from '@openlearn/plugin-sdk';
 // 不要写 `import type { FrontendPluginContext } from '@openlearn/plugin-sdk'`，那是编译错误。
 interface PluginFrontendCtx {
   pluginId: string;
-  invokeCommand<T = unknown>(type: string, payload?: unknown): Promise<T>;
+  invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
   ui: {
     registerPaletteItem(item: unknown): void;
-    registerExtensionPoint(slot: string, config: Record<string, unknown>): void;
+    registerExtensionPoint(slot: string, config: unknown): void;
   };
 }
 
@@ -166,9 +166,13 @@ export default { activate, deactivate };
 import { FlaskConical } from 'lucide-react';
 
 // SDK 未导出 FrontendPluginContext（见 §1 说明），插件侧自行声明最小接口
+interface PluginUi {
+  registerSegmentType(meta: unknown): void;
+}
+
 interface PluginFrontendCtx {
   pluginId: string;
-  ui: { registerSegmentType(type: Record<string, unknown>): void };
+  ui: PluginUi;
 }
 
 async function activate(ctx: PluginFrontendCtx) {
@@ -237,7 +241,7 @@ guard 是另一条通道，与环节 gate 不通用。
 
 ## 相关文档
 
-- [插件开发完全指南](plugin-development-tutorial) —— 主教程（manifest、命令、事件、安全、发布）
-- [前端插件指南](plugin-frontend-guide) —— 前端 bundle 加载、上下文、扩展点、构建配置
-- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots) —— 各槽位与 Props
-- [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary) —— 第三方插件为什么不能带组件
+- [插件开发完全指南](plugin-development-tutorial.md) —— 主教程（manifest、命令、事件、安全、发布）
+- [前端插件指南](plugin-frontend-guide.md) —— 前端 bundle 加载、上下文、扩展点、构建配置
+- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots.md) —— 各槽位与 Props
+- [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md) —— 第三方插件为什么不能带组件

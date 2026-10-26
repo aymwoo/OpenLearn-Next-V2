@@ -2,7 +2,7 @@
 
 本文描述 OpenLearn V2 配置体系的**设计形态与约束**：为什么没有统一的配置子系统、平台级与插件级各自如何工作、有哪些必须先知道的坑。
 
-> **环境变量的完整清单（变量名 / 默认值 / 说明）只维护一处**：[系统配置规范](../configuration/system-configuration) §1。本文不再保留变量表——历史上本文曾并列维护第二份清单，两边各自漂移，2026-10-26 收敛为单一清单。
+> **环境变量的完整清单（变量名 / 默认值 / 说明）只维护一处**：[系统配置规范](../configuration/system-configuration.md) §1。本文不再保留变量表——历史上本文曾并列维护第二份清单，两边各自漂移，2026-10-26 收敛为单一清单。
 
 ---
 
@@ -43,7 +43,7 @@
 
 正因如此，仓库有两道防线，都不在运行时：
 
-- **启动期强校验** `server/security/env-validation.ts` 的 `assertStartupEnv()`，只覆盖「配了但值非法」这一档（端口越界、枚举拼错、带单位的数值等），见[系统配置规范 §5](../configuration/system-configuration#5-启动期环境变量强校验p1)；
+- **启动期强校验** `server/security/env-validation.ts` 的 `assertStartupEnv()`，只覆盖「配了但值非法」这一档（端口越界、枚举拼错、带单位的数值等），见[系统配置规范 §5](../configuration/system-configuration.md#5-启动期环境变量强校验p1)；
 - **文档-代码一致性门禁** `audit-tools/envcheck.py`，比对「代码读取」「`.env.example` 声明」「配置页登记」三方，任一侧缺失即报 drift。它守的是**清单完整性**，不是运行期正确性。
 
 ### 1.2 部署形态与注入优先级

@@ -250,7 +250,7 @@ unregisterAIPersona?(id: string): void;
 
 ### `IDatabaseToken` → 原生 SQLite 句柄（`SqliteDatabase`）
 
-无接口包装，插件直接拿到原始 `Database` 对象（SDK 以自包含的 `SqliteDatabase` 类型描述其表面，运行时即 better-sqlite3 `Database`）。查询/插入/更新/删除/事务请使用 better-sqlite3 原生 API（详见 [插件数据库 API 与 Migration 规范](../reference/plugin-database-api)）。
+无接口包装，插件直接拿到原始 `Database` 对象（SDK 以自包含的 `SqliteDatabase` 类型描述其表面，运行时即 better-sqlite3 `Database`）。查询/插入/更新/删除/事务请使用 better-sqlite3 原生 API（详见 [插件数据库 API 与 Migration 规范](../reference/plugin-database-api.md)）。
 
 ### `IPluginHostToken` → `PluginHost` 类（`packages/core/plugin-host/index.ts`）
 
@@ -351,7 +351,7 @@ metadata(): IntegrationDescriptor;
 
 ### `ICapabilityRegistryToken` → `CapabilityRegistry`
 
-AI 能力注册表（与 `resource:action` 权限字符串无关，见 [能力权限矩阵](../reference/plugin-capability-matrix)）。
+AI 能力注册表（与 `resource:action` 权限字符串无关，见 [能力权限矩阵](../reference/plugin-capability-matrix.md)）。
 
 ### `ISemesterGradeServiceToken` → `ISemesterGradeService`（`packages/core/di/interfaces.ts`）
 
@@ -412,7 +412,7 @@ interface PointLogItem {
 }
 ```
 
-> 后端表为 `student_point_logs`，列对应关系见[平台数据表参考](../reference/platform-data-tables)。
+> 后端表为 `student_point_logs`，列对应关系见[平台数据表参考](../reference/platform-data-tables.md)。
 
 ### 引擎门面接口（均为单方法，`interfaces.ts`）
 

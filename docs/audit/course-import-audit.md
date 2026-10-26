@@ -181,7 +181,7 @@ setImportStatus('idle');   // ← 预览态被立刻清掉
 
 一个自包含的 JSON 文档（`server/services/course-package.ts`）：
 
-```jsonc
+```json
 {
   "format": "openlearn.course-package",
   "version": 1,
@@ -190,7 +190,7 @@ setImportStatus('idle');   // ← 预览态被立刻清掉
     "title": "...",
     "content": "# Markdown 教学大纲",
     "progressMode": "manual",
-    "timeline": [{ "id": "seg-1", "title": "...", "type": "lecture", "duration": "20m", "gates": [] }],
+    "timeline": [{ "id": "seg-1", "title": "...", "type": "lecture", "duration": "20m", "gates": [] }]
   },
   "assets": [{ "id": "asset-deck", "filename": "deck.pptx", "contentType": "pptx", "base64": "..." }],
   "elements": [
@@ -200,9 +200,9 @@ setImportStatus('idle');   // ← 预览态被立刻清掉
       "page": 0,
       "x": 40,
       "y": 150,
-      "data": { "fileUrl": "${asset:asset-deck}", "fileType": "pptx" },
-    },
-  ],
+      "data": { "fileUrl": "${asset:asset-deck}", "fileType": "pptx" }
+    }
+  ]
 }
 ```
 

@@ -26,8 +26,8 @@ PORT=9001 pnpm dev   # npx 场景：npx openlearn-next -p 9001
 
 - 确保**只有一个**服务进程指向同一数据库文件（多个 `pnpm dev` / npx 实例指向同一路径是常见根因）；
 - 检查 `OPENLEARN_DB_PATH` 是否被残留环境变量指向了错误文件；
-- 备份/重置方法见 [installation-guide FAQ](../getting-started/installation-guide)（开发库位于 `packages/core/db/educational_os.db`）；
-- 测试并发场景不适用此问题——Vitest 使用 per-worker 临时库（见 [testing-strategy](../developer-guide/testing-strategy)）。
+- 备份/重置方法见 [installation-guide FAQ](../getting-started/installation-guide.md)（开发库位于 `packages/core/db/educational_os.db`）；
+- 测试并发场景不适用此问题——Vitest 使用 per-worker 临时库（见 [testing-strategy](../developer-guide/testing-strategy.md)）。
 
 ## 3. Worker 插件激活失败 / 超时
 
@@ -35,10 +35,10 @@ PORT=9001 pnpm dev   # npx 场景：npx openlearn-next -p 9001
 
 **A:**
 
-- Worker 模式激活默认 **60 秒**超时（inline 为 5 秒）；耗时初始化在插件内周期调用 `ctx.reportProgress(stage, message)` 滑动续期（见 [plugin-update-distribution §5](../reference/plugin-update-distribution)）；
+- Worker 模式激活默认 **60 秒**超时（inline 为 5 秒）；耗时初始化在插件内周期调用 `ctx.reportProgress(stage, message)` 滑动续期（见 [plugin-update-distribution §5](../reference/plugin-update-distribution.md)）；
 - 可用环境变量 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 调大超时排查；
 - 报错含 `could not be cloned`：Worker RPC 只能传结构化克隆数据——不要在 Worker 模式下 `ctx.provide()` 函数/类实例，也不要把回调经命令总线跨线程传递；
-- Worker 模式 `ctx.resolve(IDatabaseToken)` 的返回是异步代理：`exec()` 等需 `await`，且**不可用 `db.transaction(fn)` 同步回调**（见 [tutorial §8.1](../tutorials/plugin-development-tutorial)）。
+- Worker 模式 `ctx.resolve(IDatabaseToken)` 的返回是异步代理：`exec()` 等需 `await`，且**不可用 `db.transaction(fn)` 同步回调**（见 [tutorial §8.1](../tutorials/plugin-development-tutorial.md)）。
 
 ## 4. 插件 Manifest 格式错误（Zod 校验失败）
 
@@ -49,7 +49,7 @@ PORT=9001 pnpm dev   # npx 场景：npx openlearn-next -p 9001
 - Manifest 经 Zod 强校验（`packages/core/esm-loader/manifest-schema.ts`），常见错误：缺 `main`、`api.routes.method` 使用了不支持的 `ALL`、`requires` Token 名不满足 `domain:Name` 格式；
 - `ctx.resolve` 只接受 `Token<T>` 实例，不接受普通对象；自定义服务 Token 名必须满足 `(@scope/)?domain:Name`；
 - `updateSource` 不在 Zod 强校验范围（passthrough），其 `repo` 白名单校验发生在服务端更新检测时；
-- 完整字段规范见 [plugin-manifest-spec](../plugin/plugin-manifest-spec)。
+- 完整字段规范见 [plugin-manifest-spec](../plugin/plugin-manifest-spec.md)。
 
 ## 5. iframe 课件报错 `SyntaxError: Failed to execute 'postMessage' on 'Window': Invalid target origin 'null'`
 

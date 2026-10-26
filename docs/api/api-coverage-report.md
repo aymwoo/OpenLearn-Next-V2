@@ -18,15 +18,15 @@
 
 ## 文档索引
 
-| 契约                    | 权威文档                                                            |
-| ----------------------- | ------------------------------------------------------------------- |
-| DI Token 与 Service API | [di-tokens](di-tokens)                                              |
-| TypeScript 接口         | [typescript-interfaces](typescript-interfaces)                      |
-| 课件作答契约            | [courseware-attempts-contract](courseware-attempts-contract)        |
-| 白板事件槽位契约        | [whiteboard-event-slot-contract](whiteboard-event-slot-contract)    |
-| 插件扩展槽位            | [plugin-ui-extension-slots](../reference/plugin-ui-extension-slots) |
-| 数据表                  | [platform-data-tables](../reference/platform-data-tables)           |
+| 契约                    | 权威文档                                                               |
+| ----------------------- | ---------------------------------------------------------------------- |
+| DI Token 与 Service API | [di-tokens](di-tokens.md)                                              |
+| TypeScript 接口         | [typescript-interfaces](typescript-interfaces.md)                      |
+| 课件作答契约            | [courseware-attempts-contract](courseware-attempts-contract.md)        |
+| 白板事件槽位契约        | [whiteboard-event-slot-contract](whiteboard-event-slot-contract.md)    |
+| 插件扩展槽位            | [plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md) |
+| 数据表                  | [platform-data-tables](../reference/platform-data-tables.md)           |
 
 ## 维护方式
 
-本页**不做逐项勾选**——逐 Token / 逐接口的覆盖情况由 [di-tokens](di-tokens) 与各契约页承担，避免两处清单互相漂移。新增或删除 Token 时请同步更新字典页，并复算上表数字。
+本页**不做逐项勾选**——逐 Token / 逐接口的覆盖情况由 [di-tokens](di-tokens.md) 与各契约页承担，避免两处清单互相漂移。新增或删除 Token 时请同步更新字典页，并复算上表数字。

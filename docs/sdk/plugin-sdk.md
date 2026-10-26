@@ -65,7 +65,7 @@ import {
 - **`migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>`**: 声明式版本迁移。`upgradeFn` **可以是同步或异步**（返回 `Promise<void> | void`），但 `migrate` 本身**一定返回 `Promise<void>`，必须 `await`**。版本号记录在 `plugin_migrations` 表，插件重启后不重复执行已应用的版本。
 
   > ⚠️ worker 执行模式下 `db` 是 RPC 代理（不是 better-sqlite3 实例），**没有 `transaction()`**。需要事务时先探测再调用：`typeof db.transaction === 'function' ? db.transaction(fn)() : fn(db)`。平台自身代码就这么做（见 `server/utils/auto-record-score.ts` 的 `promoteAttemptToGrade`）。
-  > ℹ️ 表名前缀规范：平台已统一收敛表前缀为 `plugin_<scopeId>_`（统一使用插件安装主键/UUID，内置插件使用规范 scopeId）。详见[插件数据库 API](../reference/plugin-database-api)。
+  > ℹ️ 表名前缀规范：平台已统一收敛表前缀为 `plugin_<scopeId>_`（统一使用插件安装主键/UUID，内置插件使用规范 scopeId）。详见[插件数据库 API](../reference/plugin-database-api.md)。
 
 #### `ctx.log`
 
@@ -153,7 +153,7 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 
 激活期心跳上报与超时滑动续期函数。耗时初始化（如大模型加载、数据结构批量迁移）期间周期性调用，向宿主汇报阶段状态并自动延长激活等待窗口，防止被误判超时。
 
-> ⚠️ 该函数**不在 `PluginContext` 类型上**，只由 `worker-manager.ts` 的引导脚本动态注入到 worker 侧 `ctx`：inline 模式下为 `undefined`，直接调用会抛 `TypeError`。详见[插件生命周期](../plugin/plugin-lifecycle)的相关警告。
+> ⚠️ 该函数**不在 `PluginContext` 类型上**，只由 `worker-manager.ts` 的引导脚本动态注入到 worker 侧 `ctx`：inline 模式下为 `undefined`，直接调用会抛 `TypeError`。详见[插件生命周期](../plugin/plugin-lifecycle.md)的相关警告。
 
 ---
 
@@ -163,37 +163,37 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 
 ### 导出 Token 清单
 
-> 当前 SDK 值导出 **32 个** Token（`packages/plugin-sdk/index.ts` 实测）。方法签名与标识字符串以 [DI Token 字典](../api/di-tokens) 为权威；下表为速查。**随版本增减，新增 Token（如 `INetworkProxyServiceToken`、`IClassroomCountdownServiceToken` 等）以 SDK 导出为准**。
+> 当前 SDK 值导出 **32 个** Token（`packages/plugin-sdk/index.ts` 实测）。方法签名与标识字符串以 [DI Token 字典](../api/di-tokens.md) 为权威；下表为速查。**随版本增减，新增 Token（如 `INetworkProxyServiceToken`、`IClassroomCountdownServiceToken` 等）以 SDK 导出为准**。
 
-| Token 常量名                         | 服务接口类型                      | 说明                                                                                 |
-| :----------------------------------- | :-------------------------------- | :----------------------------------------------------------------------------------- |
-| `IAuthSessionBridgeToken`            | `IAuthSessionBridgeService`       | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+）                                 |
-| `IDatabaseToken`                     | `Database`                        | 原生 SQLite 数据库只读/写连接                                                        |
-| `ICommandBusServiceToken`            | `ICommandBusService`              | 命令总线服务                                                                         |
-| `IEventBusServiceToken`              | `IEventBusService`                | 事件总线服务                                                                         |
-| `IActionRegistryServiceToken`        | `IActionRegistryService`          | AI Action 注册表                                                                     |
-| `ICapabilityServiceToken`            | `ICapabilityService`              | 权限能力服务                                                                         |
-| `IProcessServiceToken`               | `IProcessService`                 | 受控后台进程                                                                         |
-| `IStorageServiceToken`               | `IStorageService`                 | 键值存储                                                                             |
-| `IAIServiceToken`                    | `IAIService`                      | AI 文本生成                                                                          |
-| `IPluginHostToken`                   | `PluginHost`                      | 插件宿主对象（仅限管理插件）                                                         |
-| `ILessonEngineServiceToken`          | `ILessonEngineService`            | 课程引擎控制接口                                                                     |
-| `IClassroomRuntimeServiceToken`      | `IClassroomRuntimeService`        | 课堂实时运行时                                                                       |
-| `IPresenceEngineServiceToken`        | `IPresenceEngineService`          | 在线状态感知引擎                                                                     |
-| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService`   | 协同教学引擎                                                                         |
-| `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | 学习分析与指标引擎                                                                   |
-| `IPluginLifecycleManagerToken`       | `PluginLifecycleManager`          | 插件生命周期统一接口                                                                 |
-| `IPluginDistributionManagerToken`    | `PluginDistributionManager`       | 插件分发与仓库管理                                                                   |
-| `ICapabilityRegistryToken`           | `CapabilityRegistry`              | AI 能力注册表                                                                        |
-| `ISemesterGradeServiceToken`         | `ISemesterGradeService`           | 学期成绩                                                                             |
-| `IPointsDimensionRegistryToken`      | `IPointsDimensionRegistry`        | 积分维度注册表                                                                       |
-| `IPointsLedgerServiceToken`          | `IPointsLedgerService`            | 积分流水                                                                             |
-| `IAICapabilityServiceToken`          | `IAICapabilityService`            | AI 能力网关                                                                          |
-| `ICapabilityRuntimeServiceToken`     | `ICapabilityRuntimeService`       | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework)） |
-| `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | 能力治理内核                                                                         |
-| `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | 平台服务注册表                                                                       |
-| `IActivityRegistryToken`             | `ActivityRegistry`                | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem)）                    |
-| `IStageGuardServiceToken`            | `IStageGuardService`              | 教学环节流转门禁服务（自定义测试/作业/探究达标守卫）                                 |
+| Token 常量名                         | 服务接口类型                      | 说明                                                                                    |
+| :----------------------------------- | :-------------------------------- | :-------------------------------------------------------------------------------------- |
+| `IAuthSessionBridgeToken`            | `IAuthSessionBridgeService`       | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+）                                    |
+| `IDatabaseToken`                     | `Database`                        | 原生 SQLite 数据库只读/写连接                                                           |
+| `ICommandBusServiceToken`            | `ICommandBusService`              | 命令总线服务                                                                            |
+| `IEventBusServiceToken`              | `IEventBusService`                | 事件总线服务                                                                            |
+| `IActionRegistryServiceToken`        | `IActionRegistryService`          | AI Action 注册表                                                                        |
+| `ICapabilityServiceToken`            | `ICapabilityService`              | 权限能力服务                                                                            |
+| `IProcessServiceToken`               | `IProcessService`                 | 受控后台进程                                                                            |
+| `IStorageServiceToken`               | `IStorageService`                 | 键值存储                                                                                |
+| `IAIServiceToken`                    | `IAIService`                      | AI 文本生成                                                                             |
+| `IPluginHostToken`                   | `PluginHost`                      | 插件宿主对象（仅限管理插件）                                                            |
+| `ILessonEngineServiceToken`          | `ILessonEngineService`            | 课程引擎控制接口                                                                        |
+| `IClassroomRuntimeServiceToken`      | `IClassroomRuntimeService`        | 课堂实时运行时                                                                          |
+| `IPresenceEngineServiceToken`        | `IPresenceEngineService`          | 在线状态感知引擎                                                                        |
+| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService`   | 协同教学引擎                                                                            |
+| `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | 学习分析与指标引擎                                                                      |
+| `IPluginLifecycleManagerToken`       | `PluginLifecycleManager`          | 插件生命周期统一接口                                                                    |
+| `IPluginDistributionManagerToken`    | `PluginDistributionManager`       | 插件分发与仓库管理                                                                      |
+| `ICapabilityRegistryToken`           | `CapabilityRegistry`              | AI 能力注册表                                                                           |
+| `ISemesterGradeServiceToken`         | `ISemesterGradeService`           | 学期成绩                                                                                |
+| `IPointsDimensionRegistryToken`      | `IPointsDimensionRegistry`        | 积分维度注册表                                                                          |
+| `IPointsLedgerServiceToken`          | `IPointsLedgerService`            | 积分流水                                                                                |
+| `IAICapabilityServiceToken`          | `IAICapabilityService`            | AI 能力网关                                                                             |
+| `ICapabilityRuntimeServiceToken`     | `ICapabilityRuntimeService`       | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework.md)） |
+| `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | 能力治理内核                                                                            |
+| `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | 平台服务注册表                                                                          |
+| `IActivityRegistryToken`             | `ActivityRegistry`                | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem.md)）                    |
+| `IStageGuardServiceToken`            | `IStageGuardService`              | 教学环节流转门禁服务（自定义测试/作业/探究达标守卫）                                    |
 
 ### 代码使用范例
 

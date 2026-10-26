@@ -1,6 +1,6 @@
 # OpenLearnV2 插件开发完全指南
 
-> 📅 **最后更新**：2026-10-26（§6 前端与课件扩展拆分为 [前端插件指南](plugin-frontend-guide) 与 [课件与教学环节扩展](plugin-courseware-extensions)）
+> 📅 **最后更新**：2026-10-26（§6 前端与课件扩展拆分为 [前端插件指南](plugin-frontend-guide.md) 与 [课件与教学环节扩展](plugin-courseware-extensions.md)）
 >
 > 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
 
@@ -122,7 +122,7 @@ export default {
 > - 渲染任何可见 UI（沙箱 iframe 是 `display: none` 的隐藏执行体）；
 > - `import React` 或用 `window.HostSharedDeps`。
 >
-> 你能做的是：**manifest 声明式贡献 + 服务端命令**。[前端插件指南](plugin-frontend-guide) 与 [课件与教学环节扩展](plugin-courseware-extensions) 里凡标「仅 inline / worker」的 API，第三方插件都用不了。第三方前端的真实边界见 [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary)。
+> 你能做的是：**manifest 声明式贡献 + 服务端命令**。[前端插件指南](plugin-frontend-guide.md) 与 [课件与教学环节扩展](plugin-courseware-extensions.md) 里凡标「仅 inline / worker」的 API，第三方插件都用不了。第三方前端的真实边界见 [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary.md)。
 
 ### 2.3 依赖注入
 
@@ -878,7 +878,7 @@ poll.get_results  — 查询结果
 
 1. 由 AI Agent 代劳（教师下达指令、AI 读取 `poll.get_results` 并把结果讲出来）；
 2. 等平台的声明式 slot DSL 落地（manifest 描述视图、宿主用自身组件渲染，见
-   [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary) §4，状态：**待立项**）。
+   [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary.md) §4，状态：**待立项**）。
 
 若你的插件必须自带交互界面，那它只能是**内置/受信插件**（放 `packages/plugins` 或进 `OPENLEARN_TRUSTED_INLINE_PLUGINS`），不能走 ZIP 分发。
 
@@ -1357,15 +1357,15 @@ export default {
 前端与课件扩展的细节量已超过「教程」该承担的篇幅，且读者前提不同：一篇讲**代码怎么跑起来**，
 一篇讲**内容怎么进课堂**。因此本章只留导航：
 
-| 子指南                                             | 讲什么                                                                                                                                        | 什么时候需要它                                            |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [前端插件指南](plugin-frontend-guide)              | `FrontendPluginHost` 三档加载、`FrontendPluginContext`、前端服务接口、UI 扩展槽位、图标与导航栏、`invokeCommand`、`HostSharedDeps` 与构建排查 | 你要写 `frontend.tsx`、注册扩展点，或排查「插件激活失败」 |
-| [课件与教学环节扩展](plugin-courseware-extensions) | 备课画板图元（Palette Item）、备课环节类型（Segment Type）、教学环节进入条件（Gate）                                                          | 你要往备课画板 / 时间线 / 授课流程里塞教学内容            |
+| 子指南                                                | 讲什么                                                                                                                                        | 什么时候需要它                                            |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [前端插件指南](plugin-frontend-guide.md)              | `FrontendPluginHost` 三档加载、`FrontendPluginContext`、前端服务接口、UI 扩展槽位、图标与导航栏、`invokeCommand`、`HostSharedDeps` 与构建排查 | 你要写 `frontend.tsx`、注册扩展点，或排查「插件激活失败」 |
+| [课件与教学环节扩展](plugin-courseware-extensions.md) | 备课画板图元（Palette Item）、备课环节类型（Segment Type）、教学环节进入条件（Gate）                                                          | 你要往备课画板 / 时间线 / 授课流程里塞教学内容            |
 
 > 🚩 **读之前先确认档位**：第三方 ZIP 插件的前端跑在**隐藏**的不透明源 iframe 里，
 > **不能提供任何可见 UI**（`component` 是函数，`postMessage` 无法结构化克隆）。
 > 可见交互只能来自 manifest 的声明式贡献，由宿主渲染。
-> 边界见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)，档位判定见 [2.2](#execution-modes)。
+> 边界见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)，档位判定见 [2.2](#execution-modes)。
 > 两篇里凡标注「仅 inline / worker」的 API，第三方插件都用不了。
 
 ---
@@ -1756,7 +1756,7 @@ describe('my-plugin', () => {
 
 - [ ] `tsconfig.json` 中 `jsx` 为 `"react"`（非 `"react-jsx"`）
 - [ ] **内联插件**：`react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
-- [ ] **第三方 ZIP 插件**：不要为"渲染 UI"而打包 React —— 沙箱 iframe 里 `import React` 求值为 `undefined`，组件也传不进宿主。前端只留 `activate(ctx)` + 数据/命令调用（见 [前端插件指南](plugin-frontend-guide)）
+- [ ] **第三方 ZIP 插件**：不要为"渲染 UI"而打包 React —— 沙箱 iframe 里 `import React` 求值为 `undefined`，组件也传不进宿主。前端只留 `activate(ctx)` + 数据/命令调用（见 [前端插件指南](plugin-frontend-guide.md)）
 - [ ] `frontend.tsx` 的 `default export` 是 `{ activate, deactivate }` 对象，不是组件（沙箱加载器会检查 `typeof plugin.activate === 'function'`）
 - [ ] 不直接 import React hooks 之外的 React 子路径（如 `react/jsx-runtime`）
 - [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#version-compat-table)）
@@ -1811,7 +1811,7 @@ npx openlearn-plugin-sdk sign <zip> --key ./private.pem --publisher your-name
 > `export default { activate, deactivate }` 的**桥接入口**（隐藏 iframe 内的无 UI 执行体），
 > 不再生成 React 组件 —— 后者会被沙箱加载器判为 `missing activate function`。
 > 仍用 3.7.0 请手工改这一行，或升级：`npm i -D @openlearn/plugin-sdk@3.7.1`。
-> 细节见 [Scaffold CLI §3.1](../sdk/scaffold-cli)。
+> 细节见 [Scaffold CLI §3.1](../sdk/scaffold-cli.md)。
 >
 > ⚠️ **仍需你自己确认的两处**：
 >

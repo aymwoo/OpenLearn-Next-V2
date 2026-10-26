@@ -11,6 +11,9 @@ build:
 
 sphinx:
   configuration: docs/conf.py
+  # 把构建警告变成失败：文档站是正式发布渠道，死链/死锚点/未知 lexer 不该静默上线。
+  # 本地复现：见 docs/contributing/contributing.md §4.1（需要 PYTHONPATH 指向 sphinx 安装目录）。
+  fail_on_warning: true
 
 python:
   install:

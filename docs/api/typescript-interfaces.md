@@ -10,7 +10,7 @@
 
 ### `PluginContext`（后端）
 
-插件 `activate(ctx)` 收到的上下文，完整定义见 [DI Token 字典](di-tokens) 第 1 节。核心成员：
+插件 `activate(ctx)` 收到的上下文，完整定义见 [DI Token 字典](di-tokens.md) 第 1 节。核心成员：
 
 ```typescript
 interface PluginContext {
@@ -46,7 +46,7 @@ interface PluginContext {
 
 ### `FrontendPluginContext`（前端）
 
-前端插件 `activate(ctx)` 收到的上下文，见 [UI 扩展槽位](../reference/plugin-ui-extension-slots) 第 3 节：
+前端插件 `activate(ctx)` 收到的上下文，见 [UI 扩展槽位](../reference/plugin-ui-extension-slots.md) 第 3 节：
 
 ```typescript
 interface FrontendPluginContext {
@@ -65,7 +65,7 @@ interface FrontendPluginContext {
 
 ## 2. 服务接口（`packages/core/di/interfaces.ts`）
 
-完整方法签名见 [DI Token 字典](di-tokens) 第 3 节：
+完整方法签名见 [DI Token 字典](di-tokens.md) 第 3 节：
 
 | 接口                        | 用途                                                                                                                                                                                                                                                                                                                              |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,7 +88,7 @@ interface FrontendPluginContext {
 
 ### `PluginDatabaseAPI`（`ctx.db`）
 
-见 [插件数据库 API](../reference/plugin-database-api)。
+见 [插件数据库 API](../reference/plugin-database-api.md)。
 
 ### `SqliteDatabase` / `SqliteStatement`（`IDatabaseToken` 解析类型）
 
@@ -98,22 +98,22 @@ interface FrontendPluginContext {
 
 ## 4. 插件平台接口（P7-A2）
 
-`IPluginLifecycleManager` / `IPluginDistributionManager` / `IPluginRuntimeComposition` / `IUnifiedExtensionRegistry` / `IPluginCapabilityGateway` 及其类实现，完整方法签名见 [DI Token 字典](di-tokens) 第 3 节。
+`IPluginLifecycleManager` / `IPluginDistributionManager` / `IPluginRuntimeComposition` / `IUnifiedExtensionRegistry` / `IPluginCapabilityGateway` 及其类实现，完整方法签名见 [DI Token 字典](di-tokens.md) 第 3 节。
 
 ---
 
 ## 5. Manifest / 贡献点
 
-- `Manifest` / `ManifestV3` —— 见 [插件 Manifest 规范](../plugin/plugin-manifest-spec)。
-- `ContributionConfig` 联合类型（`ClassroomToolConfig` / `TeacherTabConfig` / `DashboardWidgetConfig` / `StudentViewConfig` / `StudentLessonToolConfig` / `HelpDocConfig`）—— 见 [UI 扩展槽位](../reference/plugin-ui-extension-slots)。
-- `ExtensionSlot` / `ExtensionPointConfig` —— 见 [UI 扩展槽位](../reference/plugin-ui-extension-slots)。
+- `Manifest` / `ManifestV3` —— 见 [插件 Manifest 规范](../plugin/plugin-manifest-spec.md)。
+- `ContributionConfig` 联合类型（`ClassroomToolConfig` / `TeacherTabConfig` / `DashboardWidgetConfig` / `StudentViewConfig` / `StudentLessonToolConfig` / `HelpDocConfig`）—— 见 [UI 扩展槽位](../reference/plugin-ui-extension-slots.md)。
+- `ExtensionSlot` / `ExtensionPointConfig` —— 见 [UI 扩展槽位](../reference/plugin-ui-extension-slots.md)。
 
 ---
 
 ## 6. 活动生态 / 能力框架
 
-- 活动生态：`ActivityProvider` / `ActivityProviderDescriptor` / `ActivityContext` / `ActivityRegistry` / `BaseActivityProvider` / `defineActivityProvider` —— 见 [活动生态开发指南](../reference/activity-ecosystem)。
-- 能力框架：`CapabilityDescriptor` / `ICapabilityProviderHandler` / `CapabilityContext` / `InvocationRequest` / `CapabilityResult` —— 见 [能力 Provider 框架](../reference/capability-provider-framework)。
+- 活动生态：`ActivityProvider` / `ActivityProviderDescriptor` / `ActivityContext` / `ActivityRegistry` / `BaseActivityProvider` / `defineActivityProvider` —— 见 [活动生态开发指南](../reference/activity-ecosystem.md)。
+- 能力框架：`CapabilityDescriptor` / `ICapabilityProviderHandler` / `CapabilityContext` / `InvocationRequest` / `CapabilityResult` —— 见 [能力 Provider 框架](../reference/capability-provider-framework.md)。
 
 ---
 
@@ -136,6 +136,6 @@ SDK 额外导出了各引擎的**纯类型**（仅供类型断言，无对应 `T
 
 ## 8. 不存在的 Token（切勿捏造）
 
-见 [DI Token 字典](di-tokens) 第 4 节：`IWhiteboardToken` / `IAuthToken` / `ILoggerToken` / `IPluginRuntimeToken` / `IUnifiedPluginContextToken` 等均**不存在**。
+见 [DI Token 字典](di-tokens.md) 第 4 节：`IWhiteboardToken` / `IAuthToken` / `ILoggerToken` / `IPluginRuntimeToken` / `IUnifiedPluginContextToken` 等均**不存在**。
 
 > 最后更新：2026-09-18

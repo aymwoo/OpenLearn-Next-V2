@@ -76,9 +76,9 @@ export default function MyPanel() {
 > （或直接用 `--template server-only`）；升级到 `npm i -D @openlearn/plugin-sdk@3.7.1` 则无需手改。
 
 > 第三方插件的前端是**隐藏 iframe** 里的无 UI 执行体，写 React 组件既不会被渲染、也无法跨
-> `postMessage` 传递。为什么以及能做什么，见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)
-> 与 [前端插件指南](../tutorials/plugin-frontend-guide)。
+> `postMessage` 传递。为什么以及能做什么，见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)
+> 与 [前端插件指南](../tutorials/plugin-frontend-guide.md)。
 
 ## 4. 完整流程
 
-见 [插件开发教程 §11 发布与分发](../tutorials/plugin-development-tutorial)。
+见 [插件开发教程 §11 发布与分发](../tutorials/plugin-development-tutorial.md)。
