@@ -93,7 +93,20 @@ Copy `.env.example` to `.env`. AI features are configured via **AI Providers** i
 
 ## Plugin Development
 
-See [docs/plugin-development-tutorial.md](docs/plugin-development-tutorial.md) for the full guide. Plugins are ESM modules registered via the `@openlearn/plugin-sdk` types. Use the mock context from `@openlearn/plugin-test-kit` for isolated testing.
+See [docs/tutorials/plugin-development-tutorial.md](docs/tutorials/plugin-development-tutorial.md) for the full guide. Plugins are ESM modules registered via the `@openlearn/plugin-sdk` types. Use the mock context from `@openlearn/plugin-test-kit` for isolated testing.
+
+Documentation map (read the one that matches your goal; the whole tree is published at https://openlearn-next-v2.readthedocs.io/zh-cn/latest/):
+
+| Goal                                          | Read                                                                                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Write a third-party plugin (server side)      | [tutorial](docs/tutorials/plugin-development-tutorial.md) → [manifest spec](docs/plugin/plugin-manifest-spec.md)                      |
+| Add a frontend to a third-party plugin        | [frontend guide](docs/tutorials/plugin-frontend-guide.md) + [sandbox boundaries](docs/plugin/frontend-sandbox-capability-boundary.md) |
+| Extend courseware / palette / segment types   | [courseware extensions](docs/tutorials/plugin-courseware-extensions.md)                                                               |
+| Generate a project from scratch               | [scaffold CLI](docs/sdk/scaffold-cli.md)                                                                                              |
+| Understand the kernel / plugin host internals | [docs/index.md](docs/index.md) → `architecture/`, `plugin/`                                                                           |
+| Deploy or operate                             | [production guide](docs/deployment/production-guide.md)                                                                               |
+
+> Do not trust an audit/report page inside `docs/` as current fact — they are dated snapshots (e.g. `docs/AUDIT_REPORT.md` describes 0.6.0).
 
 ## Cursor Cloud specific instructions
 
