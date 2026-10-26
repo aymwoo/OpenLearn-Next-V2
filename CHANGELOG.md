@@ -132,6 +132,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **文档站在 GitHub 与 RTD 上行为不一致：146 条链接在 GitHub 上 404、22 条锚点在站内跳不动**：
+  - **背景**：文档已发布在 Read the Docs（仓库根的 `.readthedocs.yaml`，每次 push 自动构建），但站内链接存在两套写法 —— 73 条带 `.md`、148 条不带。不带的只有 Sphinx 认，GitHub 上全部 404，而 GitHub 是 AI Agent 与开发者读仓库的实际入口。
+  - **锚点根因**：docutils 0.22 起 `make_id()` 用 `encode('ascii','ignore')` 剥掉全部非 ASCII，**纯中文标题的 section id 退化成 `id1`/`id2`**（线上页面已核实 `id="id1"`）；而作者是按 GitHub 规则写锚点的（`#4-公测上线检查清单`），于是 28 条带锚点链接里 22 条是死的。新增 `docs/_slug.py` 复刻 GitHub 的 slug 算法并 patch `make_id`，死锚 22 → 0，且两边锚点从此一致。两个实现细节都实际踩过：函数必须放独立模块（config 要 pickle，`__main__` 里的函数会让构建直接崩）、用可调用对象而非函数（`is_serializable()` 拦 `FunctionType`）。
+  - **警告**：Sphinx 构建从 18 warnings 降到 **0**（`-W --keep-going` exit=0）。含 6 条未收录文档挂进 toctree、2 条指到 docs 树外的引用改 GitHub 绝对地址、`jsonc`/`dotenv` 换成 Pygments 认识的 lexer、`${studentId}` 被嵌套反引号误当 MyST role、以及 `(label)=` 注册成功但 `file.md#label` 被当锚点而非 label 查（改用 `{ref}`）。
+  - **顺带定位的 Pygments 缺陷**：TS/TSX lexer 遇到**接口方法参数里的泛型逗号**（`Record<string, unknown>`）会产 Error token —— 连放在 `type` 别名里也触发，二分定位到具体行。示例改用 `unknown` / 拆独立 interface 绕过。
+  - **门禁**：`.readthedocs.yaml` 开 `fail_on_warning: true`，死链/死锚点/未知 lexer 不再能静默上线；`docs/contributing/contributing.md` 新增 §4.1 本地构建（含 `/tmp` 是 10MB tmpfs 时必须改 `TMPDIR` 的坑）与 §4.2 三条写作硬约束。
+  - **入口**：`AGENTS.md` 里 `docs/plugin-development-tutorial.md` 是死路径（实际在 `docs/tutorials/`），而它是 AI Agent 进仓库的第一个入口；一并补了「按目标找文档」的路由表，并提醒 `docs/` 下的审计页是带日期的快照。
+
 - **发布 tag 有了命名约定，SDK 的 tag 门禁从「空转」变成真的**：
   - **现状**：50 个 tag 里 26 个 annotated、24 个 lightweight；SDK 从 3.3 到 3.7.0 **一个 tag 都没有**。`publish.sh` 里对 SDK 也调了 `assert_version_not_taken`，但它内部查的是 `refs/tags/v3.7.1` —— 一个按约定永远不会出现的 ref，实际是零保护。
   - **约定**：平台 `v<X.Y.Z>`（`docker-rehearsal` 的 `v*` / `upgrade-regression` 的 `v*.*.*` 认它）、SDK `plugin-sdk-v<X.Y.Z>`、test-kit `plugin-test-kit-v<X.Y.Z>`；一律 annotated；tag 必须先于发布、指向 bump 提交；同源用 npm 自动记录的 `gitHead` 对账（不往 tag message 里塞 shasum —— tag 打在发布之前，那时还没有 shasum）。前缀不以 `v` 开头，顺带保证 SDK 发版不会误触发平台那两个发版作业。

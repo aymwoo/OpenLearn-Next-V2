@@ -61,3 +61,42 @@ type(scope): message
 - 测试与源码同目录 `__tests__/`，`*.test.ts(x)`；插件测试用 `@openlearn/plugin-test-kit` 的 `createMockContext()`；
 - 文档改动会触发 `audit-tools/` 一致性检查（CI `docs-drift-audit` job + pre-commit 钩子），文档中引用代码事实时使用「文件 + 符号名」而非行号；
 - 提交信息中不要跳过钩子（`--no-verify`）。
+
+### 4.1 在本地构建文档站（提交前建议跑一遍）
+
+`docs/` 由 Sphinx + MyST 构建，发布在 [Read the Docs](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/)。
+`.readthedocs.yaml` 已开 `fail_on_warning: true` —— **任何警告都会让线上构建失败**，所以推送前先在本地用同样的严格模式验一遍：
+
+```bash
+# 1) 装依赖（用 --target 到临时目录，避免污染本机 python）
+python3 -m pip install --target=/tmp/pylibs -r docs/requirements.txt
+
+# 2) 构建（-W 等价于 fail_on_warning，--keep-going 让所有问题一次暴露）
+PYTHONPATH=/tmp/pylibs python3 -m sphinx -b html docs /tmp/docs-build -W --keep-going
+```
+
+两个环境相关的坑：
+
+- **`/tmp` 是 tmpfs（10 MB）时装不下**，`pip` 会报 `No space left on device`。
+  把 `--target` 与构建输出都指到大分区，并显式设 `TMPDIR`（pip 默认仍写 `/tmp`）：
+  ```bash
+  TMPDIR=$HOME/.cache/pip-tmp python3 -m pip install --target=$HOME/.cache/pylibs -r docs/requirements.txt
+  PYTHONPATH=$HOME/.cache/pylibs TMPDIR=$HOME/.cache/pip-tmp python3 -m sphinx -b html docs $HOME/.cache/docs-build -W
+  ```
+- 内网镜像可能没有 sphinx 9：加 `-i https://pypi.org/simple`。
+
+### 4.2 写文档时的三条硬约束
+
+| 约束                     | 原因                                                          | 怎么做                                                      |
+| ------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------- |
+| 内链必须带 `.md` 后缀    | 不带后缀只有 Sphinx 认，GitHub 上 404                         | `[x](../architecture/configuration.md)`                     |
+| 标题锚点按 GitHub 规则写 | `conf.py` 已 patch `docutils.make_id`，站点锚点与 GitHub 一致 | `#4-公测上线检查清单`（小写、去标点、空格转 `-`、保留中文） |
+| 代码块必须标注语言       | 未标注的块在站点上无法高亮，AI Agent 也分不清是代码还是输出   | 围栏后紧跟语言标识：`ts`、`bash`、`text`                    |
+
+跨文档引用带显式 label 的章节时用 `{ref}`，别写成「Markdown 链接 + `#label`」的形式 —— MyST 会把 `#label` 当锚点查而不是当 label 查，必然落空：
+
+```markdown
+档位判定见 {ref}`教程 §2.2 三档执行模式 <execution-modes>`。
+```
+
+> 已知的 Pygments 坑：TS/TSX 的 lexer 遇到**接口方法参数里的泛型逗号**（`Record<string, unknown>`）会产 Error token 并触发警告，连放在 `type` 别名里也触发。示例里改用 `unknown` 或拆出独立 interface。
