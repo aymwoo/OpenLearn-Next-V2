@@ -228,20 +228,22 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
               <Clock size={11} className="text-slate-400" />
               {sch.time_slot || (lang === 'zh' ? '全天' : 'All-day')}
             </span>
+            {/* 对比度：slate-400 on slate-100 仅 2.4:1 → slate-600（6.6:1）。 */}
             {viewMode === 'cycle' && (
-              <span className="text-xs text-slate-400 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
+              <span className="text-xs text-slate-600 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
                 {sch.scheduled_date}
               </span>
             )}
           </div>
           <div
-            className={`font-extrabold text-sm text-slate-805 tracking-tight leading-snug mt-1 ${isCancel ? 'line-through opacity-60 text-slate-400' : ''}`}
+            className={`font-extrabold text-sm text-slate-805 tracking-tight leading-snug mt-1 ${isCancel ? 'line-through text-slate-500' : ''}`}
             title={sch.lesson_title || ''}
           >
             {sch.class_name}
           </div>
+          {/* 对比度：amber-600 on 白底 3.2:1 → amber-700（5.0:1）。 */}
           {sch.notes && (
-            <div className="text-xs text-amber-600 font-medium mt-1 truncate" title={sch.notes}>
+            <div className="text-xs text-amber-700 font-medium mt-1 truncate" title={sch.notes}>
               📌 {sch.notes}
             </div>
           )}
@@ -251,13 +253,16 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           <div className="flex items-center gap-1 flex-wrap">
             <span
               className={`inline-block text-xs px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+                // 对比度：-600 档文字配 -50 档底色只有 3.1:1（green-600 on green-50），
+                // 低于 WCAG AA 的 4.5:1。一律降到 -700 档（4.8~6.3:1），
+                // 与列表视图（下方 rg-100 底 + 700 档文字）的既有约定对齐。
                 sch.status === 'cancelled'
-                  ? 'bg-red-50 border-red-100 text-red-600'
+                  ? 'bg-red-50 border-red-100 text-red-700'
                   : sch.status === 'holiday'
-                    ? 'bg-amber-50 border-amber-100 text-amber-600'
+                    ? 'bg-amber-50 border-amber-100 text-amber-700'
                     : sch.status === 'swap'
-                      ? 'bg-blue-50 border-blue-100 text-blue-600'
-                      : 'bg-green-50 border-green-100 text-green-600'
+                      ? 'bg-blue-50 border-blue-100 text-blue-700'
+                      : 'bg-green-50 border-green-100 text-green-700'
               }`}
             >
               {sch.status === 'cancelled'
@@ -461,7 +466,9 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             <div className="text-sm font-bold text-slate-800">
               {focusSchedule.lesson_title || focusSchedule.class_name}
             </div>
-            <div className="text-xs text-slate-500 flex flex-wrap gap-x-3">
+            {/* 对比度：这张卡片的底色是有色底（emerald-50/60 或 indigo-50/60），
+                slate-500 落在有色底上只有 4.4:1，低于 AA 的 4.5:1 → slate-600（7.0:1）。 */}
+            <div className="text-xs text-slate-600 flex flex-wrap gap-x-3">
               <span className="font-mono">{focusSchedule.time_slot}</span>
               <span>{focusSchedule.class_name}</span>
             </div>
@@ -633,7 +640,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                         </span>
                         {sch.notes && (
                           <span
-                            className={`text-xs italic mt-0.5 ${sch.status === 'holiday' ? 'text-amber-600 font-medium' : sch.status === 'cancelled' ? 'text-red-500 font-medium' : 'text-slate-400'}`}
+                            className={`text-xs italic mt-0.5 ${sch.status === 'holiday' ? 'text-amber-700 font-medium' : sch.status === 'cancelled' ? 'text-red-700 font-medium' : 'text-slate-500'}`}
                           >
                             📌 {sch.notes}
                           </span>
