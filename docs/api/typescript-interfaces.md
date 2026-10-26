@@ -1,8 +1,8 @@
 # TypeScript Interfaces 规范
 
-<!-- doc-version: sdk=3.7.0 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-汇总 `@openlearn/plugin-sdk@3.7.0` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
+汇总 `@openlearn/plugin-sdk@3.7.2` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
 
 ---
 

@@ -36,6 +36,35 @@ await esbuild.build({
   treeShaking: true,
 });
 
+/**
+ * 产物不得含 `node:` 静态导入（3.7.2 回归守卫）。
+ *
+ * `packages: 'external'` 只外置 **npm 包名**，node 内置模块（`node:fs` 等）会被
+ * esbuild 原样留在 ESM 产物里。对宿主没问题，但对**第三方插件是致命的**：
+ * 插件构建普遍用 `external: []` 把 SDK 内联进 worker bundle，随后做
+ * 「产物不得残留 import」自检 —— 一见到 `import fs from "node:fs"` 就判失败。
+ * class_manager 就是这样在 CI 作业 `Third-party plugin compatibility` 上连红的。
+ *
+ * 触发路径：`index.ts` 只要值导出一个宿主内部类，整条 `packages/core` 实现链
+ * （含 `core/version.ts` 的 `import fs from 'node:fs'`）就会被内联进产物。
+ * 13 KB → 75 KB 的膨胀就是这个信号的伴生现象。
+ */
+const bundleOutput = fs.readFileSync(path.join(distDir, 'index.js'), 'utf8');
+const NODE_BUILTIN_RE = /^\s*import\s[^;]*?from\s*["']node:[^"']+["']/m;
+if (NODE_BUILTIN_RE.test(bundleOutput)) {
+  const offenders = bundleOutput
+    .split('\n')
+    .filter((l) => NODE_BUILTIN_RE.test(l))
+    .slice(0, 10);
+  console.error('[plugin-sdk] ✗ dist/index.js 含 node: 静态导入，第三方插件内联打包会失败：');
+  for (const l of offenders) console.error(`  ${l.trim()}`);
+  console.error(
+    '[plugin-sdk] 常见成因：index.ts 值导出了宿主内部类（PluginRuntimeAdapter 等）。' +
+      '宿主侧请从 packages/core/plugin-host/*.js 直接导入；对外只给类型。',
+  );
+  process.exit(1);
+}
+
 // 2. Assemble standalone type declarations.
 //
 //    `openlearn.d.ts` holds the hand-written host contract (Token, PluginContext,

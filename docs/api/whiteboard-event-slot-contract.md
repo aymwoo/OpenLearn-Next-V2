@@ -1,6 +1,6 @@
 # Whiteboard Event Slot Contract
 
-<!-- doc-version: sdk=3.7.0 -->
+<!-- doc-version: sdk=3.7.2 -->
 
 > 白板内**前端事件采集 / 队列 / 分发**层的契约文档。
 >

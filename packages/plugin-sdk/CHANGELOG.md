@@ -57,6 +57,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 用途：互动课件运行在不透明源（opaque origin）iframe（`credentialless`、无 `allow-same-origin`）中，父窗口读不到其内部状态、也无法注入代码；插件可用本扩展点注册「随课件 HTML 一起下发、在课件 iframe 内部执行」的脚本，由宿主 `injectLmsSdk()` 在渲染时拼接（head 脚本紧随 Bridge SDK，body-end 脚本插在 `</body>` 前）。
   - 插件既可从 `@openlearn/plugin-sdk` 导入该 Token，也可用 `ctx.resolve(new Token('@openlearn/core:ICoursewareRuntimeScriptRegistry'))` 按名字解析 —— 后者不依赖 SDK 构建产物是否已包含该 Token，部署/升级顺序更安全。
 
+## [3.7.2] - 2026-10-27
+
+### Fixes
+
+- **`dist/index.js` 不再含 `node:` 静态导入 —— 修复 3.7.1 引入的打包回归，所有把 SDK 内联进 worker bundle 的第三方插件从此能构建通过。**
+
+  3.7.1 把 7 个**宿主内部类**（`PluginRuntimeAdapter` / `PluginRuntimeComposition` / `PluginContextAdapter` / `PluginLifecycleManager` / `PluginCapabilityGateway` / `UnifiedExtensionRegistry` / `PluginDistributionManager`）改成了值导出。代价是 esbuild 把整条 `packages/core` 实现链内联进产物，其中 `core/version.ts` 静态 `import fs from 'node:fs'`：
+
+  |                   | 3.7.0 | 3.7.1                                     | 3.7.2 |
+  | ----------------- | ----- | ----------------------------------------- | ----- |
+  | `dist/index.js`   | 13 KB | **75 KB**                                 | 18 KB |
+  | 顶层 `node:` 导入 | 0     | **4**（`fs` / `path` / `url` / `crypto`） | 0     |
+
+  插件构建普遍用 `external: []` 把 SDK 打进 worker bundle，随后做「产物不得残留 import」自检 —— 一见到 `node:fs` 就判失败。CI 作业 `Third-party plugin compatibility` 的 class_manager 构建即因此连续红。
+
+  **这 7 个类改回类型导出**。取舍：类型导出会让 `new X()` 报 `TS1362`（编译期、可定位）；把 node 内置模块打进插件产物是运行期崩溃，插件作者无从判断。宿主侧请从 `packages/core/plugin-host/*.js` 直接导入（`packages/core/kernel/index.ts` 就是这么做的）—— SDK 不是宿主的内部依赖通道。
+
+  `dist/index.d.ts` 同步降级为 `export type`：否则 d.ts 会告诉消费者「这是值」，编译通过、运行期 `undefined`。`generate-dts.mjs` 新增 `FORCED_TYPE_ONLY` 名单，覆盖导出分类与 `handExportGaps` 两条路径。
+
+### 守卫
+
+- `build.mjs` 在 esbuild 之后断言产物不含 `node:` 静态导入，命中即 `exit 1` 并打印成因。
+- `dist-entrypoint.test.ts` 新增一条独立契约用例（不复用 build.mjs 的断言，避免后者被删就失守）：产物零 `node:` 导入、体积 < 40 KB、7 个类在 d.ts 里只以类型导出。
+- 负向验证：把 `PluginRuntimeAdapter` / `PluginLifecycleManager` 改回值导出 → `build.mjs` `exit 1`、契约用例失败；还原后归零。
+
+## [3.7.1] - 2026-10-27
+
+> 补记：3.7.1 当时漏写 CHANGELOG。
+
+### Fixes
+
+- **脚手架模板的 `src/frontend.tsx` 改为沙箱桥接入口**：由 `export default function Component(props)` 改为 `export default { activate, deactivate }`。第三方插件的前端运行在 iframe 沙箱里，`plugin-sandbox-frame.ts` 只认 `activate` 函数；照旧模板抄会得到 `missing activate function`，插件状态卡在 `ERROR`。
+- `scaffold create` 的 `--author` 缺省回落为 `OpenLearn Developer`。
+
 ## [3.7.0] - 2026-09-19
 
 ### Features & Types
