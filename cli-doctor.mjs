@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 import { scanNpxCacheEntries, runClean } from './cli-cleaner.mjs';
+import { SUPPORTED_NODE_TEXT, checkNodeVersion, buildFixGuidance } from './scripts/assert-node-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -547,20 +548,32 @@ export async function runDoctor(options = {}) {
   const silent = Boolean(options.silent);
   const fix = Boolean(options.fix);
 
-  // 1. Node.js 版本检查 (>= 20.0.0)
+  // 1. Node.js 版本检查
+  //
+  // 口径来自 `scripts/assert-node-runtime.mjs`（与安装期 preinstall 守卫、
+  // CLI 入口守卫、服务启动期守卫**同一份** SUPPORTED_NODE_MAJORS）。
+  //
+  // 此前这里是独立写死的一条「20.0.0 以上即可」规则，与守卫的口径不一致 ——
+  // 后果很具体：
+  // 客户在 Node 25 上跑 doctor，doctor 告诉他「一切正常」，紧接着 CLI 守卫
+  // 却拒绝执行；两份结论互相打架，客户只能怀疑工具本身坏了。
+  // 一个 doctor 报告必须和平台真实执行的规则说同一句话。
   const nodeVersion = process.versions.node;
-  const majorNodeVersion = parseInt(nodeVersion.split('.')[0], 10);
-  if (majorNodeVersion >= 20) {
+  const nodeRuntimeCheck = checkNodeVersion(nodeVersion);
+  if (nodeRuntimeCheck.ok) {
     checks.push({
       name: 'Node.js Runtime',
       status: 'ok',
-      message: `v${nodeVersion} (满足 >= 20.0.0 要求)`,
+      message: `v${nodeVersion}（受支持：${SUPPORTED_NODE_TEXT}）`,
     });
   } else {
     checks.push({
       name: 'Node.js Runtime',
       status: 'err',
-      message: `v${nodeVersion} 过低！OpenLearn 核心需要 Node.js >= 20.0.0，请升级。`,
+      message:
+        `v${nodeVersion} 不受支持！\n` +
+        `  ${nodeRuntimeCheck.message}\n` +
+        `  ${buildFixGuidance(nodeRuntimeCheck.major).split('\n').join('\n  ')}`,
     });
   }
 

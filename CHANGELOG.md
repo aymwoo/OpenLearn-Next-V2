@@ -142,6 +142,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **Node 版本不再是「装得上、起不来」：安装期硬闸 + 启动期可读兜底，支持范围收敛到实测过的 20.x / 22.x / 24.x**：
+  - **问题**：平台的硬依赖 `better-sqlite3` 是**原生模块** —— 它的 `.node` 二进制按 Node 的 ABI（`process.versions.modules`）编译，**不是**跨 Node 版本通用的 JS 包。客户机换了 Node 版本、复用同一份 `node_modules`，运行期第一句就炸：
+
+    ```
+    ERR_DLOPEN_FAILED
+    The module '.../better_sqlite3.node' was compiled against a different Node.js version
+    using NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 137.
+    ```
+
+    这条原生报错对客户**不可操作**：它只说「二进制不匹配」，不说「该重建还是该换版本」，更没说「你的 Node 版本本来就不被支持」。而 `package.json` 此前写的是 `engines.node: ">=20.0.0"` —— 放行 Node 21 / 23 / 25 / 26，其中 21.x 连 better-sqlite3 官方都没有预编译产物（客户机必须自带编译工具链），25/26 未验证（实测 Node 26 复用 Node 22 装的 `node_modules` 直接 `ERR_DLOPEN_FAILED`）。**装得上、起不来**。
+
+  - **支持范围**：**20.x**（仍在现场的旧 LTS）/ **22.x**（CI、Docker `node:22-alpine`、`.nvmrc` / `.node-version` 全程钉它）/ **24.x**（当前 LTS，本项目有全量单测通过的记录）。**不含 21.x / 23.x**（非 LTS 奇数版本，且 better-sqlite3 官方 `engines` 不含 21.x）、**不含 25.x / 26.x**（未验证）。对**未验证**的版本采取「拦住并说清楚」，而不是「放行然后在运行期炸」。
+  - **三道闸（同一份口径、同一份修复指引）**：
+    1. **安装期** —— `package.json` 的 `preinstall` 钩子跑 `scripts/assert-node-runtime.mjs`（零依赖、可独立执行）：版本不受支持就**当场中止安装**，客户看到的是可执行指引，而不是半小时后的运行期栈。`engines.node` 同步收紧为 `20.x || 22.x || 24.x`。
+    2. **CLI 入口** —— `cli.mjs` 在执行子命令前先查版本，非诊断类命令直接拒绝执行（退出码 1）。**只读诊断命令（`doctor` / `compat-report` / `check-update`）刻意放行** —— 客户在环境有问题时最需要能跑起来的恰恰是它们，把它们一起拦住等于在客户最需要帮助时把帮助也关掉了。
+    3. **服务启动期** —— `server/security/runtime-preflight.ts` 以 **`server.ts` 的第一个 import** 挂载。这是必须的：`packages/core/db/index.ts` 顶层静态 `import Database from 'better-sqlite3'`，原生绑定在**模块求值期**就加载，ABI 不匹配时进程在 `startServer()` 被调用**之前**就抛异常退出 —— 任何写在 `startServer` 里的检查都没机会执行。ESM 的依赖求值顺序保证 preflight 先跑。这一层还负责把 `ERR_DLOPEN_FAILED` **翻译成一条可执行的修复指引**（给出模块 ABI 与运行时 ABI 两个数字，并区分「重建」与「换版本」两种修法）。
+  - **⚠️ 一个必须记下来的坑：better-sqlite3 v12 是懒加载绑定的**。`lib/index.js` 只是 `require('./database')`，`.node` 的加载发生在 `Database` **构造函数**里（`lib/database.js`：`addon = DEFAULT_ADDON || (DEFAULT_ADDON = require('bindings')('better_sqlite3.node'))`）。因此**只 `require('better-sqlite3')` 永远探不到 ABI 失配** —— 它会正常返回，直到客户第一次开库才炸出 ERR_DLOPEN_FAILED，那正是这道闸要消灭的那条原生报错。实测（Node 24 跑 Node 22 编译的 node_modules）：`require()` 成功、`new Database(':memory:')` 报 `ERR_DLOPEN_FAILED / NODE_MODULE_VERSION 127 vs 137`。所以探针必须**构造一个内存库**（`:memory:` 不落盘、无副作用、毫秒级）让绑定真正被加载 —— 这一条已写成单测钉死（探针若退回成裸 `require` 立即变红）。
+  - **顺带收口了「第二份口径」**：`cli-doctor.mjs` 的 Node 版本检查此前是**独立写死的**一条「20.0.0 以上即可」规则，与守卫不一致。后果很具体 —— 客户在 Node 25 上跑 `doctor`，doctor 告诉他「一切正常」，紧接着 CLI 守卫却拒绝执行；两份结论互相打架，客户只能怀疑工具本身坏了。现在 doctor 与守卫**同源**（都读 `SUPPORTED_NODE_MAJORS`），doctor 也会给出同样的修复指引。**一个 doctor 报告必须和平台真实执行的规则说同一句话。**
+  - **口径一致性由单测钉死**（新增 `scripts/__tests__/node-runtime-guard.test.ts`）：「受支持范围」同时写在 6 个地方 —— `engines.node`、`SUPPORTED_NODE_MAJORS`、`.nvmrc` / `.node-version`、Dockerfile、README 徽章、安装指南。只要其中一处漂移，就会出现「文档说支持 20、守卫拦掉 20」这类**静默失配**（不会让任何测试变红，只会让客户机上的某个人在某个下午崩溃）。断言包括：`engines` 与守卫列表**双向一致**、`.nvmrc` / `.node-version` / Dockerfile 与钉住主版本一致、README / 安装指南不再宣称「>=20」这种无上限写法、CI 里确实存在覆盖全部受支持版本的矩阵 job、守卫脚本确实被打进发布包（否则客户机上的 `preinstall` 会找不到文件）、doctor 不再自带一份独立口径。
+  - **CI 新增 Node 版本矩阵 job**（`node-runtime-compat`，Node 20 / 22 / 24）：证明三件事 —— ① 安装期守卫在该版本放行；② **better-sqlite3 原生绑定在该版本上能加载**（ABI 真的匹配，这是「该版本真的可用」的判据，安装期守卫查不到这一层）；③ 守卫单测在该版本通过。只跑这三件事，不重复全量套件（全量已在 Node 22 上跑）。
+  - **两条已知边界（说清楚免得误判）**：
+    - **pnpm v10 默认不执行依赖的生命周期脚本**（实测：`pnpm install` 一个带 `preinstall` 的本地包 → 脚本未执行；`npm install` 同一包 → 执行）。因此「从 npm registry 安装本平台」时，安装期那道闸在 **pnpm 下不触发**（npm 下触发），此时兜底的是 CLI 与启动期两道闸。**源码检出时 `pnpm install` 会触发**（根项目自己的 `preinstall` 始终执行，已实测）。
+    - 守卫只拦**主版本**：`v20.19.0` 与 `v20.0.0` 同等对待，不做小版本细分。
+  - **影响面**：`package.json`（`engines` / `preinstall` / `files`）、`cli.mjs`（新增 `checkCliNodeRuntime`）、`cli-doctor.mjs`（Node 版本检查改为与守卫同源）、`server.ts`（首个 import）、新增 `server/security/runtime-check.ts`（纯函数 + 副作用分离）、`server/security/runtime-preflight.ts`、`scripts/assert-node-runtime.mjs`、`.github/workflows/ci.yml`（新矩阵 job）、`README.md` 徽章、`docs/getting-started/installation-guide.md`（新增「Node 版本守卫：拦在哪、拦成什么样」一节）、新增 `scripts/__tests__/node-runtime-guard.test.ts`。
+  - **未做**：没有把守卫下沉到**插件宿主 / Worker 运行时**内部（插件 Worker 用的仍是宿主进程同版本 Node，无独立 ABI 问题）；没有对**已安装**的老版本做自动降级/升级迁移（守卫只管「别用错版本」，不管版本间数据格式）。
+
 - **组件属性编辑器：保存成功/失败就地提示（按钮下方），不再“点了没反应”**：
   - **问题**：属性侧栏的「保存」按钮只在提交期间显示「正在保存…」，请求结束后按钮又变回「保存」—— 成功没任何反馈，老师无法确认到底存住没存住；**更糟的是失败也看不出来**：`InteractiveWhiteboard.handleUpdateElementData` 的 catch 只 `console.error`，界面上与成功完全一样。
   - **改法**：

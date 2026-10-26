@@ -3,7 +3,7 @@
 > 插件驱动的下一代在线教育操作系统（LMS），集成微内核架构、双运行模式插件沙箱、零信任课件隔离与 AI 伴随教学。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](package.json)
-[![Node: >=20](https://img.shields.io/badge/Node-%3E%3D20.0.0-green.svg)](package.json)
+[![Node: 20.x / 22.x / 24.x](https://img.shields.io/badge/Node-20.x%20%2F%2022.x%20%2F%2024.x-green.svg)](package.json)
 [![pnpm: >=9](https://img.shields.io/badge/pnpm-%3E%3D9.0.0-orange.svg)](package.json)
 [![Tests](https://img.shields.io/badge/Tests-1282%20passed-brightgreen.svg)]()
 

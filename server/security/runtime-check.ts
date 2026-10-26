@@ -107,10 +107,29 @@ function resolveRequire(): NodeRequire {
 /**
  * 加载 better-sqlite3 原生绑定（探针）。
  *
+ * ## 为什么必须真的 new 一个库
+ *
+ * better-sqlite3 v12 **懒加载**原生绑定：`lib/index.js` 只是 `require('./database')`，
+ * 而 `.node` 的加载发生在 `Database` 构造函数里（`lib/database.js`：
+ * `addon = DEFAULT_ADDON || (DEFAULT_ADDON = require('bindings')('better_sqlite3.node'))`）。
+ * 因此**只 `require('better-sqlite3')` 永远探不到 ABI 失配** —— 它会正常返回，
+ * 直到客户第一次开库才炸出 ERR_DLOPEN_FAILED，那正是我们要消灭的那条原生报错。
+ *
+ * 实测（Node 24 跑 Node 22 编译的 node_modules）：
+ * - `require('better-sqlite3')` → 成功，不报错；
+ * - `new Database(':memory:')` → `ERR_DLOPEN_FAILED / NODE_MODULE_VERSION 127 vs 137`。
+ *
+ * 所以探针必须**构造一个内存库**（`:memory:` 不落盘、无副作用、毫秒级），
+ * 让绑定真正被加载。
+ *
+ * @param {(id: string) => unknown} [loadModule] 模块加载器（测试注入用）
  * @returns {void} 加载成功则正常返回；失败则抛出原始异常
  */
-export function loadBetterSqlite3Binding(): void {
-  resolveRequire()('better-sqlite3');
+export function loadBetterSqlite3Binding(loadModule?: (id: string) => unknown): void {
+  const load = loadModule ?? resolveRequire();
+  const Database = load('better-sqlite3') as new (filename: string) => { close(): void };
+  const probe = new Database(':memory:');
+  probe.close();
 }
 
 /**

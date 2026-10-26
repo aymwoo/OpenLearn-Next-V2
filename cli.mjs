@@ -17,8 +17,49 @@ import {
   runMigrateStatus,
   runMigrateRollback,
 } from './cli-data.mjs';
+import { checkNodeVersion, formatUnsupportedMessage } from './scripts/assert-node-runtime.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * CLI 入口的 Node 运行时守卫。
+ *
+ * ## 为什么 CLI 需要单独一道
+ *
+ * 安装期那道闸（`package.json` 的 `preinstall`）只在**装包**时生效。而真实客户机
+ * 上更常见的路径是：包早就装好了，后来换了 Node 版本（或者 node_modules 是从别的
+ * 机器 / 别的版本拷来的）。这时 `openlearn-next` 命令会直接拿一份 ABI 不匹配的
+ * better-sqlite3 去开数据库 —— 客户看到的是一段 `ERR_DLOPEN_FAILED` 的原生栈。
+ *
+ * CLI 是客户主动敲的第一条命令，是把「二进制不匹配」翻译成「该怎么修」的最佳位置。
+ *
+ * ## 哪些命令放行
+ *
+ * `doctor` / `compat-report` / `check-update` 是**只读诊断**命令：不碰数据库，
+ * 恰恰是客户在环境有问题时最需要能跑起来的命令 —— 把它们一起拦住，等于在客户
+ * 最需要帮助的时候把帮助也关掉了。`--version` / `--help` 同理。
+ *
+ * 其余命令（start / backup / restore / migrate / reset-admin / clean …）会读写
+ * 真实数据，必须在 Node 版本不受支持时**先拦下来**：与其在写库途中炸掉、留下
+ * 半截状态，不如一开始就说明白。
+ *
+ * @param {string} command 已解析出的子命令名
+ * @param {{version?: boolean, help?: boolean}} [flags] 已解析出的选项
+ * @param {string} [version] 当前 Node 版本串（测试注入用）
+ * @returns {boolean} true 表示放行；false 表示已打印原因并以退出码 1 终止
+ */
+export function checkCliNodeRuntime(command, flags = {}, version = process.version) {
+  const DIAGNOSTIC_COMMANDS = new Set(['doctor', 'compat-report', 'check-update']);
+  if (flags.version || flags.help) return true;
+  if (command && DIAGNOSTIC_COMMANDS.has(command)) return true;
+
+  const result = checkNodeVersion(version);
+  if (result.ok) return true;
+
+  console.error(formatUnsupportedMessage(version, result));
+  console.error('[openlearn-next] 诊断类命令（doctor / compat-report / check-update）仍可运行。');
+  process.exit(1);
+}
 
 /**
  * 启动期环境校验的 CLI 前置检查（审计残余风险 R-05）。
@@ -533,5 +574,13 @@ const isMain =
     (existsSync(process.argv[1]) && resolve(process.argv[1]) === fileURLToPath(import.meta.url)));
 
 if (isMain) {
+  // Node 运行时守卫：命令真正要动数据之前先拦一道。
+  // 参数解析失败时不在这里下结论 —— 交给 runCli 去报更准确的错（那也是退出码 1）。
+  try {
+    const parsed = parseCliArgs(process.argv.slice(2));
+    checkCliNodeRuntime(parsed.command, parsed.flags);
+  } catch {
+    // 忽略：非法参数由 runCli 统一报错
+  }
   runCli();
 }
