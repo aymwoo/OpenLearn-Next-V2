@@ -47,30 +47,48 @@ pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Vers
 # **两者可以指向两批不同的代码** —— 已发布的 npm 版本不可覆盖、不可逆。
 # npm 侧有自己的保护（不允许覆盖已发布版本），git 侧没有。
 #
-# 判据不是「tag 不能存在」，而是「**tag 必须与本次发布的提交同源**」：
+# 判据是「**tag 必须存在，且与本次发布的提交同源**」：
 #
-#   · tag 不存在             → 通过（尚未打 tag，允许先发后补）
+#   · tag 不存在             → 拒绝（先打 tag 再发布，见下）
 #   · tag 存在且指向本次提交 → 通过（正是想要的状态：tag 与 npm 包同源）
 #   · tag 存在但指向别的提交 → 拒绝（同一个版本号会指向两批不同的代码）
 #
 # 为什么不能简单写成「tag 存在即拒绝」：仓库既定的发布顺序是
-# 「提交（含版本提升）→ 打 tag → 执行 publish.sh」（见审计报告的发布流程）。
+# 「提交（含版本提升）→ 打 tag → 执行 publish.sh」。
 # 若按「tag 存在即拒绝」，**tag 一打就再也发不出去** —— 门禁与流程自相矛盾。
 # v0.7.2 首次实现的就是后者，直到 v0.7.3 真正执行发布时才暴露出来。
 #
+# 为什么不再容忍「tag 不存在 → 先发后补」：根包的 prepublishOnly
+# （scripts/assert-publishable.mjs）本来就要求 HEAD 已被发布 tag 指向，
+# 对平台包而言「没 tag 也能发」已是死代码；对 SDK / test-kit 而言，
+# 那条容错正是「发了但没人知道对应哪个提交」的来源（3.7.0 及更早全无 tag）。
+# 现在统一成**先打 tag 再发布**，失败点前移到最省事的位置。
+#
+# tag 命名空间（见 docs/contributing/contributing.md「发布 tag 约定」）：
+#   · 平台     v<X.Y.Z>                ← CI 的 tags: ['v*'] / ['v*.*.*'] 认它
+#   · SDK      plugin-sdk-v<X.Y.Z>
+#   · test-kit plugin-test-kit-v<X.Y.Z>
+# 前缀不以 v 开头，SDK 发版就不会被平台的 docker-rehearsal / upgrade-regression 误触发；
+# 三个包共用一个 ref 空间也不会撞号。
+#
 # 只对**即将发布**的包调用：已发布且版本未变的包走「跳过发布」分支，不该被拦。
 assert_version_not_taken() {
-  local pkg_name="$1" version="$2"
+  local pkg_name="$1" version="$2" tag_prefix="${3:-v}"
+  local tag_name="${tag_prefix}${version}"
 
   local tag_commit head_commit
-  tag_commit="$(git rev-parse -q --verify "refs/tags/v${version}^{commit}" 2>/dev/null || true)"
+  tag_commit="$(git rev-parse -q --verify "refs/tags/${tag_name}^{commit}" 2>/dev/null || true)"
   head_commit="$(git rev-parse HEAD 2>/dev/null || true)"
-  if [ -n "$tag_commit" ]; then
-    if [ "$tag_commit" != "$head_commit" ]; then
-      err "版本占用：git tag v${version} 已存在但指向 ${tag_commit:0:12}，与本次发布的提交 ${head_commit:0:12} 不同 —— 同一个版本号会指向两批不同的代码。请提升版本号。"
-    fi
-    log "git tag v${version} 与本次发布的提交同源（${tag_commit:0:12}）—— tag 与 npm 包指向同一批代码，允许发布。"
+  if [ -z "$tag_commit" ]; then
+    err "缺少发布 tag：${pkg_name}@${version} 还没有 ${tag_name}。请先打 tag 再发布：
+      git tag -a ${tag_name} -m 'release(${pkg_name}): ${version}'
+      git push origin ${tag_name}
+    npm 只在打 tag 的提交上发布时才会把 gitHead 记成该提交 —— tag 与版本必须同源。"
   fi
+  if [ "$tag_commit" != "$head_commit" ]; then
+    err "版本占用：git tag ${tag_name} 已存在但指向 ${tag_commit:0:12}，与本次发布的提交 ${head_commit:0:12} 不同 —— 同一个版本号会指向两批不同的代码。请提升版本号，或把发布切回 tag 指向的那个提交。"
+  fi
+  log "git tag ${tag_name} 与本次发布的提交同源（${tag_commit:0:12}）—— tag 与 npm 包指向同一批代码，允许发布。"
 
   local remote_versions
   # 必须查权威 registry：本机的默认 registry 是 npmmirror，镜像滞后会让「已发布」误判成「未占用」
@@ -83,7 +101,7 @@ assert_version_not_taken() {
 log "Checking version occupancy (git tags & npm registry)..."
 APP_VER="$(node -p "require('./package.json').version")"
 # 平台包每次都会发布 → 占用检查在预检阶段就做（早失败，别等 build 完才发现）。
-assert_version_not_taken openlearn-next "$APP_VER"
+assert_version_not_taken openlearn-next "$APP_VER" v
 
 # npm 采集 gitHead 要求包目录下的 .git 是**目录**；linked worktree 里 .git 是一个
 # 指向真实 gitdir 的文本文件 → 采集落空，registry 上该版本没有 gitHead 字段，
@@ -164,7 +182,7 @@ log "Checking @openlearn/plugin-sdk..."
 REMOTE_SDK_VER="$(npm view @openlearn/plugin-sdk version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$SDK_VER" != "$REMOTE_SDK_VER" ]; then
   # 即将发布 → 才需要占用检查（已发布且版本不变的包走下面的跳过分支，不该被拦）。
-  assert_version_not_taken @openlearn/plugin-sdk "$SDK_VER"
+  assert_version_not_taken @openlearn/plugin-sdk "$SDK_VER" plugin-sdk-v
   publish_pkg "$SDK_DIR" "@openlearn/plugin-sdk@${SDK_VER}"
   log "@openlearn/plugin-sdk@${SDK_VER} published"
 else
@@ -175,7 +193,7 @@ fi
 log "Checking @openlearn/plugin-test-kit..."
 REMOTE_TK_VER="$(npm view @openlearn/plugin-test-kit version --registry=https://registry.npmjs.org 2>/dev/null || echo "")"
 if [ "$TK_VER" != "$REMOTE_TK_VER" ]; then
-  assert_version_not_taken @openlearn/plugin-test-kit "$TK_VER"
+  assert_version_not_taken @openlearn/plugin-test-kit "$TK_VER" plugin-test-kit-v
   # workspace 协议改写为精确 SDK 版本后再发布（发布后还原）。
   sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' "$TK_DIR/package.json"
   publish_pkg "$TK_DIR" "@openlearn/plugin-test-kit@${TK_VER}"

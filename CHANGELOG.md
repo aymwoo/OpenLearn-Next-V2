@@ -132,6 +132,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **发布 tag 有了命名约定，SDK 的 tag 门禁从「空转」变成真的**：
+  - **现状**：50 个 tag 里 26 个 annotated、24 个 lightweight；SDK 从 3.3 到 3.7.0 **一个 tag 都没有**。`publish.sh` 里对 SDK 也调了 `assert_version_not_taken`，但它内部查的是 `refs/tags/v3.7.1` —— 一个按约定永远不会出现的 ref，实际是零保护。
+  - **约定**：平台 `v<X.Y.Z>`（`docker-rehearsal` 的 `v*` / `upgrade-regression` 的 `v*.*.*` 认它）、SDK `plugin-sdk-v<X.Y.Z>`、test-kit `plugin-test-kit-v<X.Y.Z>`；一律 annotated；tag 必须先于发布、指向 bump 提交；同源用 npm 自动记录的 `gitHead` 对账（不往 tag message 里塞 shasum —— tag 打在发布之前，那时还没有 shasum）。前缀不以 `v` 开头，顺带保证 SDK 发版不会误触发平台那两个发版作业。
+  - **门禁**：`publish.sh` 的占用检查改为按包名取前缀，缺 tag 直接拒绝并打印该执行的两行命令；`assert-publishable.mjs` 挂到 SDK 与 test-kit 的 `prepublishOnly`（前缀由包名自动推导，`--tag-prefix` 仅作例外），绕过脚本直接 `npm publish` 也会被同一套判据拦下 —— 实测 test-kit 的 `workspace:*` 就地被抓出。指向不同提交、缺 tag、正常放行三条路径都做了负向/正向验证。
+  - **补记**：`@openlearn/plugin-sdk@3.7.1` 补打 `plugin-sdk-v3.7.1`（annotated，指向发布提交 `c77b6fe`，与 registry 的 `gitHead` 一致）。历史欠账（14 处 tag/npm 双向漏配，含 `0.7.0`–`0.7.2` 有 tag 但 npm 上 404）只登记不回填，理由见 `docs/contributing/contributing.md` §2.1。
+
 - **`@openlearn/plugin-sdk@3.7.1` 已发布到 npm**（脚手架 `frontend.tsx` 契约修复，详见该包 CHANGELOG）：
   - 文档侧同步：26 篇的 `<!-- doc-version: sdk=3.7.0 -->` 与「适用范围」升到 `3.7.1`；`scaffold-cli` / 教程里两处「3.7.0 上仍需手改」的提示改为「3.7.1 起已修好，升级即免手改」。
   - 顺带修正 `version-migration.md` 头部的版本快照（平台 `0.7.2` → `0.7.4`，SDK `3.7.0` → `3.7.1`）。

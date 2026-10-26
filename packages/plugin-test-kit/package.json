@@ -8,6 +8,9 @@
   "exports": {
     ".": "./index.ts"
   },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/assert-publishable.mjs"
+  },
   "dependencies": {
     "@openlearn/plugin-sdk": "workspace:*"
   },

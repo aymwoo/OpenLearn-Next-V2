@@ -14,7 +14,15 @@
  * 三道断言：
  *   ① 依赖里不允许出现本地协议（workspace: / link: / file:）——消费者装不上
  *   ② packages/core/version.ts 的 FALLBACK_VERSION 必须等于 package.json 的 version
- *   ③ 当前 HEAD 必须正好被 v<version> 这个 tag 指向——发布必须发生在打了 tag 的提交上
+ *      （仅平台包；SDK / test-kit 没有这一层版本常量，跳过）
+ *   ③ 当前 HEAD 必须正好被发布 tag 指向——发布必须发生在打了 tag 的提交上
+ *
+ * tag 命名空间按包名自动推导（见 docs/contributing/contributing.md「发布 tag 约定」）：
+ *   openlearn-next              → v<X.Y.Z>
+ *   @openlearn/plugin-sdk       → plugin-sdk-v<X.Y.Z>
+ *   @openlearn/plugin-test-kit  → plugin-test-kit-v<X.Y.Z>
+ * 推导而非「由调用方传前缀」是刻意的：少一个能被忘记的参数，就少一条绕过门禁的路径。
+ * 需要例外时用 --tag-prefix=<prefix> 显式覆盖。
  *
  * 退出码：0 放行；1 拦下并逐条打印原因。
  */
@@ -28,6 +36,18 @@ const errors = [];
 const readJson = (p) => JSON.parse(fs.readFileSync(path.join(root, p), 'utf8'));
 const pkg = readJson('package.json');
 const version = pkg.version;
+
+// ── tag 命名空间：按包名推导，允许 --tag-prefix 覆盖 ────────────────────────
+const TAG_PREFIX_BY_PKG = {
+  'openlearn-next': 'v',
+  '@openlearn/plugin-sdk': 'plugin-sdk-v',
+  '@openlearn/plugin-test-kit': 'plugin-test-kit-v',
+};
+const argv = process.argv.slice(2);
+const argIdx = argv.findIndex((a) => a === '--tag-prefix' || a.startsWith('--tag-prefix='));
+const tagPrefixArg = argIdx === -1 ? null : argv[argIdx].includes('=') ? argv[argIdx].split('=')[1] : argv[argIdx + 1];
+const tagPrefix = tagPrefixArg || TAG_PREFIX_BY_PKG[pkg.name] || 'v';
+const isPlatform = pkg.name === 'openlearn-next';
 
 // ── 断言 1：依赖里不得有本地协议 ────────────────────────────────────────────
 const LOCAL_PROTOCOLS = ['workspace:', 'link:', 'file:'];
@@ -46,21 +66,23 @@ for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']
   }
 }
 
-// ── 断言 2：FALLBACK_VERSION 必须与 package.json 的 version 一致 ─────────────
-try {
-  const src = fs.readFileSync(path.join(root, 'packages/core/version.ts'), 'utf8');
-  const m = src.match(/FALLBACK_VERSION\s*=\s*['"]([^'"]+)['"]/);
-  if (!m) {
-    errors.push('packages/core/version.ts 里找不到 FALLBACK_VERSION 字面量，无法核对版本一致性。');
-  } else if (m[1] !== version) {
-    errors.push(`版本不一致：package.json 是 ${version}，packages/core/version.ts 的 FALLBACK_VERSION 是 ${m[1]}。`);
+// ── 断言 2：FALLBACK_VERSION 必须与 package.json 的 version 一致（仅平台包）──
+if (isPlatform) {
+  try {
+    const src = fs.readFileSync(path.join(root, 'packages/core/version.ts'), 'utf8');
+    const m = src.match(/FALLBACK_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    if (!m) {
+      errors.push('packages/core/version.ts 里找不到 FALLBACK_VERSION 字面量，无法核对版本一致性。');
+    } else if (m[1] !== version) {
+      errors.push(`版本不一致：package.json 是 ${version}，packages/core/version.ts 的 FALLBACK_VERSION 是 ${m[1]}。`);
+    }
+  } catch (e) {
+    errors.push(`读取 packages/core/version.ts 失败：${e.message}`);
   }
-} catch (e) {
-  errors.push(`读取 packages/core/version.ts 失败：${e.message}`);
 }
 
-// ── 断言 3：HEAD 必须正好被 v<version> 指向 ─────────────────────────────────
-const expectedTag = `v${version}`;
+// ── 断言 3：HEAD 必须正好被发布 tag 指向 ────────────────────────────────────
+const expectedTag = `${tagPrefix}${version}`;
 try {
   const tags = execFileSync('git', ['tag', '--points-at', 'HEAD'], {
     cwd: root,
@@ -86,10 +108,11 @@ try {
 if (errors.length > 0) {
   console.error('[assert-publishable] ✗ 发布被守卫拦下：');
   for (const e of errors) console.error(`  • ${e}`);
-  console.error('[assert-publishable] 如需发布，请走 scripts/publish.sh（它会完成 SDK 依赖改写与 tag 同源校验）。');
+  console.error(
+    `[assert-publishable] 正确顺序：提交（含版本 bump）→ git tag -a ${expectedTag} -m 'release(${pkg.name}): ${version}' → git push origin ${expectedTag} → scripts/publish.sh`,
+  );
   process.exit(1);
 }
 
-console.log(
-  `[assert-publishable] ✓ 版本 ${version} 满足发布前提（依赖无本地协议 / FALLBACK_VERSION 一致 / HEAD 已被 ${expectedTag} 指向）`,
-);
+const checks = ['依赖无本地协议', ...(isPlatform ? ['FALLBACK_VERSION 一致'] : []), `HEAD 已被 ${expectedTag} 指向`];
+console.log(`[assert-publishable] ✓ ${pkg.name}@${version} 满足发布前提（${checks.join(' / ')}）`);

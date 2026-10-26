@@ -41,7 +41,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "prepublishOnly": "node build.mjs"
+    "prepublishOnly": "node ../../scripts/assert-publishable.mjs && node build.mjs"
   },
   "dependencies": {
     "esbuild": "^0.25.0",
