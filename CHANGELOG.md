@@ -132,6 +132,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **扩展槽位文档补齐 20 个缺口，并把「新增槽位必须写文档」变成第五段门禁**：
+  - **问题**：`docs/reference/plugin-ui-extension-slots.md` 是插件作者查槽位的唯一入口，但它只列了 **100** 个成员，而 `src/plugin-host/types.ts` 的 `ExtensionSlot` 实际有 **120** 个 —— 页面正文写「115 个」、代码块只有 100 个、§2 的 props 表更少。缺的 20 个里包括整个测评子系统（`assessment.list.card` / `.attempt.toolbar` / `.stats.card`）、整个教师批改面板（`assignment.grade.toolbar.action` / `.item.addon` / `.rubric.addon`）、命令面板与斜杠菜单（`command_palette.item` / `quick_insert.item`）、AI 生态（`ai.prompt.template` / `ai.skill.provider`）等。**这 20 个槽位在 docs/ 里一次都没提过**，插件作者只能读宿主源码猜 props。
+  - **为什么数字会漂**：槽位是逐批加进联合类型的，每次只改代码不补文档，而既有四段门禁（子系统 / 路径内链 / 符号 / 插件示例）**没有一段关心槽位覆盖**。上一轮把数字从「119」改成「115」时也只是换了个错的数——真正缺的是**逐条比对**，不是再猜一次总数。
+  - **补法**：①§1 代码块与 `types.ts` 逐条对齐（100 → 120，含分组注释）；②§2 props 表补 20 行，每行标真实调用点与实际注入的 props；③新增 **§12「后续新增槽位的使用说明」**（7 小节），写清语义与坑，而不是只列名字：
+    - `assessment.list.card` 的 `viewer` **恒为 `'teacher'`**（类型声明含 `'student'`，但学生端从不渲染，按学生分支写就是死代码）；三个测评槽位均走白名单投影，`answerKey` / 学生身份永不进入 props；
+    - `assignment.grade.item.addon` 的评分必须经 `onScoreChange` / `onCommentChange` 写入，直接改 `submission` 无效；`rubric.addon` 的学生权重**没有**回调；
+    - `editor.segment.type_config` **不做类型过滤**，插件必须自己判 `segmentType` 并返回 `null`，否则配置面板会出现在每个环节上；`editor.timeline.node_badge` 在 `SegmentEditorCard` 调用点的 `isActive` 恒 `true`；
+    - `classroom.active_segment.main` 是**并列**渲染而非替换内置工作区，且容器高度受限（全屏要走 `registerFullscreenRenderer`）；
+    - `timetable.entry.action` 在周历卡片与列表行**各渲染一次**，action 必须幂等；`timetable.import.source` 只调 `onImportEntries`，不要自己写库；
+    - `course.wizard.quick_apply` 的 `setWizardCourseTimeline` 是**覆盖式赋值**，追加要基于传入值自己拼；
+    - `command_palette.item` / `quick_insert.item` 是数据型槽位，给出完整 `slotProps` 契约与 manifest 等价写法，并说明 `shortcut` 只用于展示、`commandType` 未注册会点不动；
+  - ④§1 新增「`contributes` 键 ≠ `ExtensionSlot`」表，登记 4 个只在 manifest schema 里的声明式键（`timeline.segments` / `palette.items` / `teacher.cockpit.widget` / `workspace.view`），其中 **`teacher.cockpit.widget` 有 schema 有类型但前端零消费点**，写进 manifest 不会生效。
+  - **第五段门禁（新增 `audit-tools/extract_slots.py` + `slots_coverage.py`）**：前者从 `types.ts` 联合类型、`<ExtensionPointRenderer slot=…>` 生产调用点、`contributes` 注册表三处生成槽位清单真值；后者把 128 个槽位（120 固定 + 8 锚点）逐个按 **L0 不存在 / L1 仅提及 / L2 有说明无示例 / L3 说明+示例** 四级比对 docs/。**只有 L0 计入 drift**，L1/L2 仅提示——按「文档能不能让人用起来」判定，该拦的是「一个字都没有」，不是「写得不够漂亮」。锚点单列规则：8 个锚点注册契约同构（名字 + `placement`/`position` + `component`），一个有具体锚点名的示例即可覆盖，不要求 8 份复制粘贴（理由写在脚本注释里）。
+  - **顺带修正的三处口径**：§1 正文「115 个」→ **120**；§12（现 §13）统计表「生产调用点固定名槽位 **99**」→ **116**，并单列「无渲染器的成员 **4**」——此前把 `ai.skill.provider` 一并算进「声明但无渲染器 = 0」是错的；计数口径那段原写「`grep -c` 会把数字虚高到 **120**」，在真值就是 120 之后这句话会误导，改为说明该命令为何不准并给出可复跑的脚本路径。
+  - **验证**：`slot_drift=0` / `slot_hints=0`（128/128 全 L3）；`bash audit-tools/run.sh` → `drift_count=0`（canonical / ref / env / plugin_docs / slot 五段全绿）；`sphinx-build -b html docs -W --keep-going` exit=0、**0 警告**；`prettier --check` 通过。负向测试两条：把文档里的 `assessment.stats.card` 整名替换 → `slot_drift=1`、`run.sh` exit 1；替换成 `assessment.stats.card_REMOVED`（**原名变成前缀**）→ 同样判 L0。后者是首轮测试才暴露的真 bug：判定原本用 `slot in text`，把「写了 `class.tabX` 这种不存在的槽位」也算成已覆盖，已改为带词边界的正则。
+
 - **文档站在 GitHub 与 RTD 上行为不一致：146 条链接在 GitHub 上 404、22 条锚点在站内跳不动**：
   - **背景**：文档已发布在 Read the Docs（仓库根的 `.readthedocs.yaml`，每次 push 自动构建），但站内链接存在两套写法 —— 73 条带 `.md`、148 条不带。不带的只有 Sphinx 认，GitHub 上全部 404，而 GitHub 是 AI Agent 与开发者读仓库的实际入口。
   - **锚点根因**：docutils 0.22 起 `make_id()` 用 `encode('ascii','ignore')` 剥掉全部非 ASCII，**纯中文标题的 section id 退化成 `id1`/`id2`**（线上页面已核实 `id="id1"`）；而作者是按 GitHub 规则写锚点的（`#4-公测上线检查清单`），于是 28 条带锚点链接里 22 条是死的。新增 `docs/_slug.py` 复刻 GitHub 的 slug 算法并 patch `make_id`，死锚 22 → 0，且两边锚点从此一致。两个实现细节都实际踩过：函数必须放独立模块（config 要 pickle，`__main__` 里的函数会让构建直接崩）、用可调用对象而非函数（`is_serializable()` 拦 `FunctionType`）。

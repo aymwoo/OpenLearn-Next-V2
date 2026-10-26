@@ -60,6 +60,23 @@ python3 audit-tools/plugin_docs_check.py \
 
 PLUGIN_DRIFT=$(python3 -c "import json;print(json.load(open('${PLUGIN_JSON}'))['stats']['drift'])" 2>/dev/null || echo 0)
 
+# --- 2.7 扩展槽文档覆盖（新增槽位必须写进 reference/plugin-ui-extension-slots.md）---
+# 槽位是插件作者唯一的接入面。代码里声明了槽位而文档没有对应说明，作者只能靠猜
+# props —— 这正是 2026-10-27 发现 20 个槽位（含 assessment.* / assignment.grade.*）
+# 从未进过文档的原因。本段生成槽位清单真值并逐个比对文档覆盖：
+#   仅 L0（文档中完全不存在）计入 drift；L1/L2 只作提示，避免门禁被噪声训练掉。
+python3 audit-tools/extract_slots.py --repo . --out "${OUT_DIR}/slots_inventory.json" >/dev/null
+python3 audit-tools/slots_coverage.py --repo . \
+  --out "${OUT_DIR}/slots_coverage.json" \
+  --md "${OUT_DIR}/slots_coverage.md" >/dev/null || true
+
+SLOT_DRIFT=$(python3 -c "import json;print(json.load(open('${OUT_DIR}/slots_coverage.json'))['grades'].get('L0',0))" 2>/dev/null || echo 0)
+SLOT_HINTS=$(python3 -c "
+import json
+g = json.load(open('${OUT_DIR}/slots_coverage.json'))['grades']
+print(g.get('L1', 0) + g.get('L2', 0))
+" 2>/dev/null || echo 0)
+
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
 # 15-20% 精度（JS 全局、第三方包导出、历史文档引用已删除子系统）。
@@ -110,20 +127,22 @@ print(f\"  文档内链      : {s['doc_link']['links_total']} 条 (失效 {s['do
 print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\")
 "
 
-# 全仓合计：canonical + ref + 环境变量 + 插件文档示例。
-# envcheck / plugin_docs_check 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
+# 全仓合计：canonical + ref + 环境变量 + 插件文档示例 + 扩展槽覆盖。
+# envcheck / plugin_docs_check / slots_coverage 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
 # symbolcheck 仍只作提示。
-TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT))
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT))
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
 echo "env_drift=${ENV_DRIFT}  （见 ${ENV_MD}）"
 echo "plugin_docs_drift=${PLUGIN_DRIFT}  （见 ${PLUGIN_MD}）"
+echo "slot_drift=${SLOT_DRIFT}  （见 ${OUT_DIR}/slots_coverage.md）"
+echo "slot_hints=${SLOT_HINTS}  （仅提示，不计入 drift）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${TOTAL_DRIFT}"
 
 if [ "${TOTAL_DRIFT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD} and ${PLUGIN_MD}."
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD} and ${OUT_DIR}/slots_coverage.md."
   exit 1
 fi
 
