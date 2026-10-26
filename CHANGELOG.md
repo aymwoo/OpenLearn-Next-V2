@@ -132,6 +132,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **两份环境变量清单收敛为一份，`architecture/configuration.md` 按 Issue #151 重写**：
+  - **背景**：`docs/architecture/configuration.md` 自陈「§1 覆盖面更全」，`docs/configuration/system-configuration.md` 自称「唯一权威来源」，两页并列在侧栏「配置」下。实测：真实可配置项 **71 个**，配置页覆盖 60 个、架构页覆盖 12 个，**两边各自漏各自的**——架构页独有 4 个生产键（`ENABLE_HTTPS` / `FORCE_HTTPS` / `ENABLE_HSTS` / `ALLOW_UNSAFE_PLUGIN_SCRIPTS`）是配置页没有的。
+  - **根因**：`envcheck.py` 的 D1 只把 `docs/configuration/` 当权威表，架构页的键表**不在校验范围**，所以它从 25 个一路烂到与代码脱节也无人报警。
+  - **收敛方式**：环境变量表只保留在 `configuration/system-configuration.md`（补齐上述 4 个漏登键 + `DEBUG`）；`architecture/configuration.md` 删除 §1 键表，改为「四个设计特性 + 部署形态 + 禁止再抄」并链出。两页仍在，但**只有一份清单**。
+  - **架构页 §2 重写（停留在 Issue #151 之前）**：配置值已独立建表 `plugin_config`（迁移 037，主键 `plugin_id + scope_type + scope_id + key`），`plugin_storage` 的 `config:` 前缀只剩旧库回退；属性字段 6 → **7**（新增 `scope`）；`get(key, options?)` / `getAll(options?)` / `set(key, value, scope?)`；解析链变为 **班级 > 学校 > 平台 > manifest 默认值**；REST 补 `GET ?classId=&schoolId=` 与 `POST ?scopeType=&scopeId=`。原文按「复用 `plugin_storage`、只有一层」描述，插件作者照做会建错位置、漏声明 `scope`。
+  - **同时修掉的 5 处事实错误**：§1「共 25 个」（实为 71）；§1.5「`LOG_LEVEL` 是 logger.ts 唯一读取的变量」（还读 `LOG_CONSOLE_LEVEL` / `LOG_DIR` / `HTTP_ACCESS_LOG` / `NODE_ENV`）；§1.9「`BACKUP_DIR` 全仓未见读取点，待确认」（`server/utils/paths.ts` 的 `getBackupsDir()`、`migrator.ts`、`cli-data.mjs` 都在读）；§3「Worker 资源限制不可配置」（5 个配额变量均生效）；§3 速查表末行被 `||` 撑成四列的 Markdown 损坏。
+  - **`showInDashboard` 是文档虚构的「保留键」**：`src/` 与 `packages/` 零实现。插件卡片的「总览」开关对所有插件一律存在，状态存浏览器 `localStorage`（`openlearn:dashboardVisibility`），与插件配置无关。已修正 `system-configuration.md` §4 与教程两处表述。
+  - **`envcheck.py` 新增 D4（第二份清单检测）**：`docs/configuration/` 之外出现 ≥10 行的变量表即报 drift，拦住「再抄一份清单」的复发路径。判定从三类扩为四类。
+  - **验证**：`env_drift=0`（配置页覆盖 64/71，其余 7 个为 `||` 兼容别名）；注入 12 行第二清单 → 报 D4 且恢复归零；`prettier --check docs/` 通过。
+
 - **全量文档语义审计：修掉 12 类「文档描述的实现已不存在」的漂移，并补上第四类机器检查（配置键）**：
   - **背景**：`audit-tools/` 的三段检查（子系统 / 路径内链 / 符号提示）此前**全部为 0 drift**，但只校验骨架、不校验语义。人工逐篇核对 `docs/` 与代码后，发现 12 类内容性错误，没有一条能被既有检查捕获。
   - **最严重的三处**：

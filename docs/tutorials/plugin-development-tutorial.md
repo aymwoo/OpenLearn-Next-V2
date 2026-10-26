@@ -294,7 +294,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 **典型模式：导航页 = 管理界面，白板组件 = 交互工具。** 例如作业中心应在 `teacher.tab` 注册作业列表管理页，在 `teacher.dashboard.widget` 注册具体某次作业的提交/批改面板。两者共享 `elementId`/`lessonId` 即可通过后端 API 打通数据。
 
-> **控制 Dashboard 可见性**：插件可在 `manifest.configuration.properties` 中声明 `showInDashboard`（`boolean`，默认 `true`）。用户可在插件中心的每张卡片上切换此开关，系统将自动隐藏/显示该插件的 Dashboard 小部件。详见 [5.11 IConfigService](#511-iconfigservicev32-新增)。
+> **控制 Dashboard 可见性**：插件**无需**为此声明任何配置键。插件中心的每张卡片上都有「总览」开关，对所有插件一律可用；用户切换后状态存在浏览器 `localStorage`（`openlearn:dashboardVisibility`），关闭即隐藏该插件 `teacher.dashboard.widget` 注册的小部件。详见 [5.11 IConfigService](#511-iconfigservicev32-新增)。
 
 ---
 
@@ -1079,7 +1079,7 @@ ctx.config.onChange((key, newVal, oldVal) => {
 // 回调对所有已声明配置键都会触发，需在回调内按 key 过滤。
 ```
 
-> **系统内置配置键**：`showInDashboard`（`boolean`）是一个被框架识别的特殊键。当插件在 `configuration.properties` 中声明此键后，插件卡片的「总览」开关可用，关闭后将隐藏 `teacher.dashboard.widget` 注册的小部件。此行为由框架在渲染层实现，无需插件自行处理。
+> **关于 `showInDashboard`**：这个键**不是**框架识别的保留键，也没有任何运行时实现。插件卡的「总览」开关对每个插件都存在，状态保存在浏览器 `localStorage`，与插件配置无关。在 `configuration.properties` 里声明它只会得到一个普通布尔配置项，既不会解锁开关，也不会控制小部件显隐。
 
 ### 5.12 共享模块 require（V2.5）
 

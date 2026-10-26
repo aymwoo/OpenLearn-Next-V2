@@ -26,13 +26,17 @@ C. 配置文档    docs/configuration/*.md 表格首列登记的键
 判定分级（刻意窄化门禁）
 ------------------------
 沿用 run.sh 的既有哲学：「当门禁会训练团队忽略告警」就不要设成门禁。
-故**只有两类计入 drift**：
+故**只有四类计入 drift**：
 
   D1  DOC_NOT_READ   文档表格登记了,但全仓任何作用域都不读取 —— 改名/删除后
                      文档没跟上,运维照着设了却毫无作用。误报率接近 0。
   D2  CODE_NOT_DOC   生产作用域读取且符合平台命名前缀（OPENLEARN_ / PLUGIN_ /
                      BRIDGE_ / METRICS_）,但配置文档全篇未提。前缀已经宣告了
                      "这是平台自己的开关",故不需要人工判断归属。
+  D3  UNPREFIXED     生产读取、无平台前缀、且任何注册表文档都没登记的运维开关
+                     （BACKUP_SCHEDULE / MIGRATION_* 之类）。
+  D4  SECOND_LIST    在 docs/configuration/ 之外又出现一份成规模的变量表。
+                     两份清单无法被同一道门禁守住,必须收敛为一份。
 
 其余全部降为 hint（不计入 drift,但进报告）：
   - 无前缀的平台变量（BACKUP_DIR / LOG_LEVEL / RETENTION_* 等历史命名）
@@ -71,10 +75,15 @@ SKIP_DIR_PARTS = (
 CONFIG_DOC_DIR = "docs/configuration"
 
 # 「注册表文档」判定：表格首列出现 >= 5 个 `KEY` 行的 .md 即视为一份环境变量清单。
-# 本仓刻意存在两份清单（docs/configuration/system-configuration.md 与
-# docs/architecture/configuration.md），后者自陈"覆盖更全"。只认单文件会把
-# 另一份里已登记的键误报成未登记，故 documented 取全仓注册表文档的并集。
+# 历史上本仓存在两份并列清单（docs/configuration/system-configuration.md 与
+# docs/architecture/configuration.md），后者自陈"覆盖更全"，2026-10-26 已收敛为单清单。
+# 判定仍取全仓注册表文档的并集，避免把别处已登记的键误报成未登记。
 REGISTRY_MIN_ROWS = 5
+
+# 「第二份清单」判定：非配置目录下，一张表里出现 >= 10 个变量行。
+# 阈值取 10 而非 5，是为了放过部署/排障页里的"场景子集"（通常 5~8 行），
+# 只拦真正想当全集的抄件。命中即 D4。
+SECOND_REGISTRY_MIN_ROWS = 10
 
 # 测试作用域：这些路径下的读取不算"生产读取"
 TEST_MARKERS = ("__tests__", "/e2e/", "e2e/")
@@ -362,6 +371,27 @@ def collect_docs(repo: Path) -> tuple[dict[str, str], dict[str, str], dict[str, 
     return table, registry, prose
 
 
+def scan_secondary_registries(repo: Path) -> dict[str, list[str]]:
+    """找出 `docs/configuration/` 之外规模足以构成「第二份清单」的变量表。
+
+    返回 `{文档相对路径: [键...]}`。只统计看起来像环境变量的表格首列，
+    避免把 REST 方法表、字段表之类误判成清单。
+    """
+    out: dict[str, list[str]] = {}
+    docs_root = repo / "docs"
+    if not docs_root.exists():
+        return out
+    for path in sorted(docs_root.rglob("*.md")):
+        rel = path.relative_to(repo).as_posix()
+        if rel.startswith(CONFIG_DOC_DIR + "/"):
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        keys = [k for k in DOC_TABLE_RE.findall(text) if looks_like_env(k)]
+        if len(keys) >= SECOND_REGISTRY_MIN_ROWS:
+            out[rel] = keys
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 比对
 # ---------------------------------------------------------------------------
@@ -481,6 +511,22 @@ def compare(repo: Path) -> EnvReport:
             )
         )
 
+    # --- D4: 出现第二份环境变量清单 ---
+    # 单一清单是这套检查成立的前提：两份清单必然分叉，而门禁只守得住其中一份。
+    # 同一份键表被抄到别处后，抄件会一路烂下去且无人察觉（本仓库真实发生过）。
+    for rel, keys in sorted(scan_secondary_registries(repo).items()):
+        rep.drift.append(
+            Finding(
+                code="D4",
+                key=rel,
+                detail=(
+                    f"该页维护了第二份环境变量清单（{len(keys)} 行）。清单只应存在于 {CONFIG_DOC_DIR}/，"
+                    "请改为链接权威页——并列清单无法被门禁同时守住"
+                ),
+                evidence=[f"{rel}: {', '.join(keys[:4])}…"],
+            )
+        )
+
     # --- H2: 仅测试作用域读取，且文档没提 ---
     for key in sorted(test):
         if key in prod or key in EXTERNAL or key in documented:
@@ -586,7 +632,8 @@ def render_md(rep: EnvReport) -> str:
     block(
         "drift（计入门禁）",
         d,
-        "D1 = 文档登记但从不读取；D2 = 生产读取且带平台前缀但文档未登记。",
+        "D1 = 文档登记但从不读取；D2 = 生产读取且带平台前缀但文档未登记；"
+        "D3 = 生产读取的无前缀变量未登记；D4 = 出现第二份环境变量清单。",
     )
     for code, title in (
         ("H2", "hint H2：仅测试作用域读取"),
