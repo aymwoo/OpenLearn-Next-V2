@@ -9,8 +9,10 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **119** 个成员，2026-10-25 实测；本节表格仅列最早一批核心槽位）
+### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **115** 个字符串字面量成员，2026-10-26 实测；`anchor:*` 是**另一套**开放命名空间，见 `AnchorSlot`。本节表格仅列最早一批核心槽位）
 
+> 计数口径（可复跑）：取 `export type ExtensionSlot =` 到其结尾 `;` 之间的所有 `  | '...'` 行去重计数。**不要**用 `grep -c "^  | '" src/plugin-host/types.ts` —— 该文件里还有别的联合类型用了同样的缩进，会把数字虚高到 120。
+>
 > 旧文档写 55 个、且把 `palette.item` 列为合法槽位名——**`palette.item` 不是合法槽位名**。备课画板组件扩展的真实槽位名是 **`editor.palette_item`**，已于 `SegmentEditorCard` 与 `LessonPalette` 中完整挂载并与 `paletteItemRegistry` 协同。
 
 ```typescript

@@ -1,6 +1,6 @@
 # OpenLearnV2 插件开发完全指南
 
-> 📅 **最后更新**：2026-09-25
+> 📅 **最后更新**：2026-10-26（§6 前端与课件扩展拆分为 [前端插件指南](plugin-frontend-guide) 与 [课件与教学环节扩展](plugin-courseware-extensions)）
 >
 > 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
 
@@ -122,7 +122,7 @@ export default {
 > - 渲染任何可见 UI（沙箱 iframe 是 `display: none` 的隐藏执行体）；
 > - `import React` 或用 `window.HostSharedDeps`。
 >
-> 你能做的是：**manifest 声明式贡献 + 服务端命令**。第 6 章「前端插件系统」全部内容、以及第 6.9/6.10 节的画板组件与环节类型扩展，**只适用 `inline`/受信插件**。第三方前端的真实边界见 [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary)。
+> 你能做的是：**manifest 声明式贡献 + 服务端命令**。[前端插件指南](plugin-frontend-guide) 与 [课件与教学环节扩展](plugin-courseware-extensions) 里凡标「仅 inline / worker」的 API，第三方插件都用不了。第三方前端的真实边界见 [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary)。
 
 ### 2.3 依赖注入
 
@@ -336,7 +336,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.7.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
 | 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
-| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。                    |
+| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (沙箱桥接入口，非 React 组件) 的标准项目工程。      |
 | 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
 | 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.3` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                 |
 | 📦 **一键打包与发布**       | 提供 `npx @openlearn/plugin-sdk build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。                                                    |
@@ -348,7 +348,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
   → Skill 自动载入 @openlearn/plugin-sdk@3.7.0 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
-  → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
+  → 生成项目结构与代码 (Action/Command/Event + 桥接式 frontend.tsx)
   → 自动生成 @openlearn/plugin-test-kit 单元测试
   → 执行 npx @openlearn/plugin-sdk build 编译生成 ZIP 扩展包
   → 提示在 OpenLearn V2 后台管理中上传激活并测试
@@ -356,11 +356,11 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 **支持的标准插件模板：**
 
-| 模板类型        | 运行环境                   | 生成的核心文件                                                      |
-| --------------- | -------------------------- | ------------------------------------------------------------------- |
-| `server-only`   | Node.js Worker Thread      | `package.json`, `tsconfig.json`, `src/index.ts`                     |
-| `full-stack`    | Worker Thread + 前端微前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
-| `frontend-only` | 前端 React 19 渲染层       | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| 模板类型        | 运行环境                         | 生成的核心文件                                                      |
+| --------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `server-only`   | Node.js Worker Thread            | `package.json`, `tsconfig.json`, `src/index.ts`                     |
+| `full-stack`    | Worker Thread + 隐藏 iframe 前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| `frontend-only` | 隐藏 iframe 前端（无可见 UI）    | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 
 **官方 Skill 资源与存储库**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
 
@@ -1352,583 +1352,21 @@ export default {
 
 ---
 
-## 6. 前端插件系统
-
-> 🚩 **本章只适用 `inline` / `worker_threads` 模式的插件**（内置插件，或管理员显式加入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的插件）。
->
-> **第三方 ZIP 插件读到这里请先停下**：你的前端运行在 `sandbox="allow-scripts"` 的不透明源**隐藏** iframe 里，`component` 是函数、`postMessage` 无法结构化克隆，传进去直接 `DataCloneError`；`import React` 与 `window.HostSharedDeps` 在 iframe 内都是 `undefined`。**你无法提供任何可见 UI。**
->
-> 第三方插件的前端能做的只有三件事：`ctx.services.frontendApi` 调后端、`ctx.services.storageService` 存键值、`ctx.invokeCommand` 派发命令。可见交互全部来自 manifest 的声明式贡献（`classroomTools` / `contributes`），由宿主自己渲染。完整边界见 [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary)，档位判定见 [2.2](#execution-modes)。
-
-### 6.1 FrontendPluginHost
-
-前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块，支持 inline 和 worker 两种执行模式（后端另有 `process` 子进程隔离模式，见 `src/plugin-host/types.ts` 的 `executionMode` 与 `.env.example` L-1 节；`legacy` 为 vm 时代残留，勿用）：
-
-```typescript
-// 前端插件结构
-export default {
-  manifest: {
-    id: '@scope/frontend-plugin',
-    name: '前端插件',
-    version: '1.0.0',
-    author: 'Author',
-    capabilitiesProposed: [],
-    classroomTools: [
-      {
-        id: 'my-tool',
-        name: '🔧 我的工具',
-        icon: 'Wrench',
-        commandType: 'myplugin.tool_action',
-        payload: {},
-      },
-    ],
-  },
-
-  activate: async (ctx: FrontendPluginContext) => {
-    // ctx.services.frontendApi   — HTTP API 调用
-    // ctx.services.socketService  — WebSocket 通信
-    // ctx.services.uiService      — Toast/Modal UI
-    // ctx.services.storageService  — localStorage
-
-    ctx.ui.registerExtensionPoint('teacher.tab', {
-      id: 'my-tab',
-      label: '我的面板',
-      icon: 'Layout',
-      component: () => import('./MyPanel'),
-      position: 10,
-      pluginId: ctx.pluginId,
-    });
-  },
-};
-```
-
-### 6.2 FrontendPluginContext
-
-```typescript
-interface FrontendPluginContext {
-  services: {
-    frontendApi: IFrontendAPI; // HTTP API 调用
-    socketService: ISocketService; // WebSocket 通信
-    uiService: IUIService; // Toast/Modal/文件下载
-    storageService: IStorageService; // localStorage
-  };
-  pluginId: string;
-  manifest: FrontendPluginManifest;
-  ui: {
-    registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
-    unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
-    registerPaletteItem(config: PaletteItemConfig): void; // v0.3.17: 注册备课画板组件
-    unregisterPaletteItem(type: string): void;
-    registerSegmentType(type: SegmentTypeMeta): void; // 注册自定义教学环节类型
-    unregisterSegmentType(id: string): void;
-  };
-  invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V2.5: 调用后端 Command Handler
-  // 页面导航与 Tab 订阅控制
-  navigation?: {
-    getTeacherTab(): string;
-    setTeacherTab(tab: string): void;
-    subscribeTeacherTab(callback: (tab: string) => void): () => void;
-  };
-  // 向后兼容 shim
-  registerPanel?(config: any): void;
-  registerMenu?(config: any): void;
-  registerToolbarButton?(config: any): void;
-}
-```
-
-### 6.3 前端服务接口
-
-```typescript
-interface IFrontendAPI {
-  get<T>(path: string): Promise<{ success: boolean; result?: T; error?: string }>;
-  post<T>(path: string, body?: any): Promise<{ success: boolean; result?: T; error?: string }>;
-  del<T>(path: string): Promise<{ success: boolean; result?: T; error?: string }>;
-}
-
-interface ISocketService {
-  emit(event: string, ...args: any[]): void;
-  on(event: string, handler: (...args: any[]) => void): void;
-  off(event: string, handler: (...args: any[]) => void): void;
-  disconnect(): void;
-}
-
-interface IUIService {
-  showToast(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error'): void;
-  showModal(title: string, content: React.ReactNode): void;
-  closeModal(): void;
-  downloadFile(data: Blob | string, filename: string, mimeType?: string): void;
-}
-
-interface IStorageService {
-  get(key: string): string | null; // localStorage 读取
-  set(key: string, value: string): void;
-  delete(key: string): void;
-  clear(): void;
-}
-```
-
-### 6.4 可用的 UI 扩展槽位
-
-| Slot                       | 用途                                                                              |
-| -------------------------- | --------------------------------------------------------------------------------- |
-| `teacher.tab`              | 教师标签页                                                                        |
-| `teacher.panel`            | 教师独立全宽管理面板（v3.2）                                                      |
-| `teacher.dashboard.widget` | 教师仪表盘小部件                                                                  |
-| `student.view`             | 学生视图                                                                          |
-| `student.fullscreen`       | 学生全屏视图/考试模式（v3.2）                                                     |
-| `student.lesson.tool`      | 学生学习工具                                                                      |
-| `classroom.tool`           | 课堂工具                                                                          |
-| `global.setting`           | 全局设置页扩展（v3.2）                                                            |
-| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x）                                                |
-| `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
-| `palette.item`             | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17）                             |
-
-> 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 55 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
-
-**学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。插件组件通过 props 接收：
-
-```tsx
-// 前端插件入口 frontend.tsx
-export default function MyStudentPlugin(props: { studentId?: string }) {
-  const studentId = props.studentId;
-  if (!studentId) return <div>请先登录学生账号</div>;
-
-  // 使用 studentId 获取该学生的个人数据
-  return <div>当前学生 ID: {studentId}</div>;
-}
-```
-
-**所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
-
-### 6.5 插件自定义图标与左侧导航栏展示（v0.5.1+）
-
-每个插件在开发时，都可以设置专属于自己的不同图标，并直接展示在系统左侧边栏导航（`NavigationSidebar`）的「扩展应用」列表中。
-
-#### 1. 配置途径与优先级
-
-系统支持声明式配置与动态编程式配置，优先级如下：
-
-1. **动态注册传参（最高优先级）**：调用 `ctx.ui.registerExtensionPoint('teacher.tab', { icon: 'BookOpen', ... })` 时传入；
-2. **Manifest 贡献点声明**：在 `manifest.json` 的 `contributes['teacher.tab'][i].icon` 中配置；
-3. **Manifest 插件主图标**：在 `manifest.json` 根级声明 `"icon": "BookOpen"`；
-4. **默认安全回退**：若未配置或解析失败，自动回退到系统标准的 `<Puzzle />` 图标。
-
-#### 2. 支持的图标格式
-
-- **Lucide 图标名称（推荐）**：支持常用的 Lucide 图标字符串（PascalCase 或 kebab-case 均可，如 `'BookOpen'`, `'Award'`, `'BarChart'`, `'GraduationCap'`, `'Calculator'`, `'FileText'`, `'HelpCircle'` 等）。
-- **Emoji 符号**：直接使用 Emoji 字符（如 `'📚'`, `'🧪'`, `'📊'`, `'⚡'`, `'🎯'`）。
-- **图片 / SVG 资源路径**：以 `http://`、`https://`、`data:image/` 或 `/` 开头的 URL 字符串。
-- **React 组件**：在前端代码中直接作为组件传入（如 `import { Award } from 'lucide-react'; ctx.ui.registerExtensionPoint('teacher.tab', { icon: Award })`）。
-
-#### 3. 示例代码
-
-**方式 A：前端动态注册时指定图标与展示排序：**
-
-```typescript
-export default {
-  activate: async (ctx: FrontendPluginContext) => {
-    ctx.ui.registerExtensionPoint('teacher.tab', {
-      id: 'quiz-hub',
-      label: '随堂测验中心',
-      icon: 'BookOpen', // 指定 Lucide 图标名，或使用 Emoji '📚'
-      position: 15, // 决定在左侧导航栏扩展应用中的排列次序（数值越小越靠前）
-      component: () => import('./QuizHubView'),
-    });
-  },
-};
-```
-
-**方式 B：在 `manifest.json` 中配置：**
-
-```json
-{
-  "id": "@openlearn/plugin-quiz-hub",
-  "name": "随堂测验中心",
-  "version": "1.0.0",
-  "main": "index.js",
-  "icon": "BookOpen",
-  "contributes": {
-    "teacher.tab": [
-      {
-        "id": "quiz-hub",
-        "label": "随堂测验中心",
-        "icon": "BookOpen",
-        "position": 15
-      }
-    ]
-  }
-}
-```
-
-#### 4. 侧边栏交互与视觉特性
-
-- **与系统内置导航无缝对齐**：采用相同的 18px 矢量比例、圆角、悬停交互与主题动态变色；
-- **折叠态居中展示**：当用户点击侧边栏收起按钮时，文本自动隐藏，插件自定义图标居中对齐，鼠标悬浮时展示带有插件名称的浮窗提示（Tooltip）；
-- **按 `position` 升序排列**：多个已激活的第三方插件将依据开发者设置的 `position` 数值从小到大平滑排序。
-
-### 6.6 invokeCommand（自 V2.5 起可用）
-
-前端插件可以通过 `ctx.invokeCommand()` 调用后端已注册的 Command Handler：
-
-```typescript
-// 前端插件中调用后端命令
-const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
-// 命令类型会自动添加插件命名空间前缀
-```
-
-### 6.7 宿主依赖共享网关 (HostSharedDeps) 与动态转译
-
-> ⚠️ **先读这一条（v0.7.0 勘误）**：`window.HostSharedDeps` **只注入到宿主父页面**。
-> 远程（process 沙箱）插件的前端代码跑在 `sandbox="allow-scripts"` 的不透明源 iframe 里，
-> iframe 与父页面不共享 `window` → 它拿不到 `HostSharedDeps`，读到的值是 `undefined`。
-> 因此**本节的 external 指引只适用于「与宿主同 realm 执行」的插件**；
-> 远程沙箱插件照做会**必然激活失败**（`Cannot read properties of undefined (reading 'React')`）。
-> 远程插件的正确构建方式见本节末尾的「远程沙箱插件」小节，
-> 完整能力边界见 `docs/plugin/frontend-sandbox-capability-boundary.md`。
-
-为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)** 以及 **全形态 ESM 裸模块导入转译器 (`transformBareModuleImports`)**。全局 `window.HostSharedDeps` 暴露以下共享运行时：
-
-- `React` / `'react'`: React 核心与 Hooks API
-- `ReactDOM` / `'react-dom'`: DOM 渲染与 `createPortal`
-- `ReactDOMClient` / `'react-dom/client'`: 现代 Root API (`createRoot`)
-- `jsxRuntime` / `'react/jsx-runtime'`: 现代 JSX 运行时 (`jsx`, `jsxs`)
-- `Recharts` / `'recharts'`: Recharts 图表库
-- `LucideReact` / `'lucide-react'`: Lucide 图标库
-
-插件前端构建时可安心将这些库配置为 external，宿主在执行 Blob URL 动态导入前会自动完成解构语法转译与别名对齐（如 `import React, { useState } from 'react'`、`import { createPortal } from 'react-dom'`、`import { jsx as _jsx } from 'react/jsx-runtime'`）：
-
-```javascript
-import esbuild from 'esbuild';
-
-esbuild.build({
-  entryPoints: ['src/frontend.tsx'],
-  bundle: true,
-  outfile: 'dist/frontend.js',
-  external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'recharts', 'lucide-react'],
-  format: 'esm',
-});
-```
-
-#### 远程沙箱插件：把 React 打进自己的 bundle
-
-远程（process 沙箱）插件的 iframe 是**隐藏**的（`display: none`）执行体 —— 它不渲染任何
-用户可见 UI，可见界面只能来自 manifest 声明式贡献（`contributes`），由宿主渲染。
-由于 iframe 取不到 `HostSharedDeps`，远程插件**不要**把 react 系列库设为 external：
-
-```javascript
-import esbuild from 'esbuild';
-
-esbuild.build({
-  entryPoints: ['src/frontend.tsx'],
-  bundle: true,
-  outfile: 'dist/frontend.js',
-  // 注意：这里**不要**把 react / react-dom 列进 external —— 沙箱 iframe 取不到
-  // 宿主的 window.HostSharedDeps，external 会导致激活时求值为 undefined 而失败。
-  external: ['@openlearn/plugin-sdk'],
-  format: 'esm',
-  platform: 'browser',
-});
-```
-
-> ⚠️ SDK CLI（`openlearn-plugin-sdk build`）对前端构建**强制**注入
-> `external: ['react','react-dom','recharts','lucide-react']` —— 该预置只对内联执行环境成立。
-> 远程插件需要自建前端 bundle。相关工具链修复已登记，见
-> `docs/plugin/frontend-sandbox-capability-boundary.md` §5。
-
-### 6.7 前端 JSX 转换配置
-
-宿主通过 `window.HostSharedDeps` 与转译器提供的完整共享库：
-
-| 共享对象                        | NPM 包              | 提供的内容                              | 转换支持                        |
-| ------------------------------- | ------------------- | --------------------------------------- | ------------------------------- |
-| `HostSharedDeps.React`          | `react`             | React 核心 API (`createElement`, Hooks) | 经典模式 (`"jsx": "react"`)     |
-| `HostSharedDeps.ReactDOM`       | `react-dom`         | ReactDOM 对象及 Portal                  | 支持                            |
-| `HostSharedDeps.ReactDOMClient` | `react-dom/client`  | 现代 DOM Root 创建 (`createRoot`)       | 支持                            |
-| `HostSharedDeps.jsxRuntime`     | `react/jsx-runtime` | 自动 JSX 工厂函数 (`jsx`, `jsxs`)       | 现代模式 (`"jsx": "react-jsx"`) |
-| `HostSharedDeps.Recharts`       | `recharts`          | Recharts 图表组件库                     | 支持                            |
-| `HostSharedDeps.LucideReact`    | `lucide-react`      | Lucide 图标库                           | 支持                            |
-
-> **提示**：从平台 `v0.3.15+` 起，宿主已内置 `react/jsx-runtime` 映射，现代 `tsconfig.json` 的 `"jsx": "react-jsx"`（自动模式）与经典 `"jsx": "react"`（经典模式）均可原生支持。
-
-**推荐 esbuild 构建配置（内联执行环境）：**
-
-```javascript
-import esbuild from 'esbuild';
-
-esbuild.build({
-  entryPoints: ['src/frontend.tsx'],
-  bundle: true,
-  outfile: 'dist/frontend.js',
-  external: ['react', 'react-dom', 'recharts', 'lucide-react'],
-  format: 'esm',
-  platform: 'browser',
-  jsxFactory: 'React.createElement',
-  jsxFragment: 'React.Fragment',
-});
-```
-
-**常见错误排查：**
-
-| 错误信息                                                 | 原因                                                                         | 解决方法                                                                |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `Failed to resolve module specifier "react/jsx-runtime"` | `tsconfig.json` 中 `jsx` 为 `"react-jsx"`                                    | 改为 `"react"`                                                          |
-| `React is not defined`                                   | 前端未声明 `react` 为 `peerDependency` 或 `external`                         | 内联插件：加 `external: ['react']`；远程插件：去掉 external，改为自打包 |
-| `Cannot read properties of undefined (reading 'React')`  | 远程插件把 react 设为 external，但沙箱 iframe 读不到 `window.HostSharedDeps` | 远程插件去掉 react 的 external，改为自打包                              |
-| `process is not defined`                                 | 构建 `platform` 未设为 `browser`                                             | 设置 `platform: 'browser'`                                              |
-
-### 6.8 前端组件如何获取通信能力（完整示例）
-
-前端插件的组件通过**模块级变量**拿到 `invokeCommand` 和扩展点注册能力。关键点：
-
-- `registerExtensionPoint` 的 `component` 必须用**普通函数**声明（`function MyPanel() {}`），不要用箭头函数（esbuild 打包后闭包可能出问题）
-- 组件通过模块级变量拿 `ctx`，因为扩展点组件不是由你的组件树渲染，props 不可控
-- `default export` 是 `{ activate, deactivate }` 对象，不是组件本身
-
-**完整示例：**
-
-```typescript
-// src/frontend.tsx
-
-let ctx: any = null;
-
-// ① 组件必须用普通 function 声明（不要用箭头函数）
-function MyPanel() {
-  const [data, setData] = React.useState([]);
-
-  React.useEffect(() => {
-    // 通过模块级变量拿到 invokeCommand
-    ctx.invokeCommand('myplugin.list').then(setData);
-  }, []);
-
-  return React.createElement(
-    'div',
-    null,
-    data.map((item: any) => React.createElement('div', { key: item.id }, item.name)),
-  );
-}
-
-function MyWidget() {
-  return React.createElement('div', null, '仪表盘卡片');
-}
-
-// ② activate 接收 host 传入的 FrontendPluginContext，存到模块变量
-async function activate(hostCtx: any) {
-  ctx = hostCtx; // ← 关键：hostCtx 自带 invokeCommand、ui.registerExtensionPoint 等
-
-  hostCtx.ui.registerExtensionPoint('teacher.tab', {
-    id: 'my-tab',
-    label: '我的面板',
-    icon: 'Layout',
-    component: MyPanel, // ← 普通函数引用，不是 () => <MyPanel/>
-    position: 10,
-  });
-
-  hostCtx.ui.registerExtensionPoint('teacher.dashboard.widget', {
-    id: 'my-widget',
-    label: '我的卡片',
-    icon: 'BarChart3',
-    component: MyWidget,
-    position: 0,
-  });
-}
-
-function deactivate() {}
-
-// ③ default export 必须是 { activate, deactivate } 对象
-export default { activate, deactivate };
-```
-
-**为什么 component 不能用箭头函数？**
-
-esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.createElement` 引用丢失。使用 `function` 声明可保证构建后的函数引用稳定。
-
-**为什么通过模块级变量拿 ctx 而不是 props？**
-
-扩展点组件由宿主渲染，props 由宿主控制。宿主向扩展点组件传递的 props 是宿主定义的（如 `studentId`、`lessonId` 等业务数据），不包含 `invokeCommand`。因此 API 调用能力必须通过模块级闭包变量传递。
-
-### 6.9 备课画板组件扩展 (Palette Item)（v0.3.17）
-
-如果你想为教师课程设计（备课画板）开发专用的教学内容卡片（例如物理仿真模拟器、3D 分子结构、AI 生成习题卡等），可以通过 `ctx.ui.registerPaletteItem()` 注册画板组件：
-
-```tsx
-// src/frontend.tsx
-import React, { useState } from 'react';
-import type { PaletteItemComponentProps } from '@openlearn/plugin-sdk';
-
-// ⚠️ SDK 目前**没有**导出 FrontendPluginContext（只在宿主源码 src/plugin-host/types.ts 里）。
-// 插件侧要类型安全，就按实际用到的方法自己声明一个最小接口——
-// 不要写 `import type { FrontendPluginContext } from '@openlearn/plugin-sdk'`，那是编译错误。
-interface PluginFrontendCtx {
-  pluginId: string;
-  invokeCommand<T = unknown>(type: string, payload?: unknown): Promise<T>;
-  ui: {
-    registerPaletteItem(item: unknown): void;
-    registerExtensionPoint(slot: string, config: Record<string, unknown>): void;
-  };
-}
-
-// 1. 画布渲染组件（教师与学生双端均可见）
-function MoleculeViewerCanvas({ elementId, lessonId, data, userRole, onElementUpdate }: PaletteItemComponentProps) {
-  const [activeTab, setActiveTab] = useState<'view' | 'info'>('view');
-
-  return (
-    <div className="w-full h-full flex flex-col bg-slate-900 text-white select-none">
-      <div className="p-2 border-b border-slate-800 flex justify-between items-center text-xs">
-        <span className="font-semibold text-emerald-400">{data.title || '分子探究'}</span>
-        <div className="flex gap-1">
-          <button
-            onClick={() => setActiveTab('view')}
-            className={`px-2 py-0.5 rounded ${activeTab === 'view' ? 'bg-emerald-600' : 'bg-slate-800'}`}
-          >
-            3D 视口
-          </button>
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`px-2 py-0.5 rounded ${activeTab === 'info' ? 'bg-emerald-600' : 'bg-slate-800'}`}
-          >
-            结构参数
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 flex items-center justify-center p-4">
-        {activeTab === 'view' ? (
-          <div className="text-center">
-            <div className="text-2xl font-mono text-emerald-300 mb-1">{data.smiles || 'H2O'}</div>
-            <div className="text-xs text-slate-400">渲染模式: {data.renderMode || '球棍模型'}</div>
-          </div>
-        ) : (
-          <div className="text-xs text-slate-300 space-y-1">
-            <div>分子式: {data.formula || 'H₂O'}</div>
-            <div>摩尔质量: 18.015 g/mol</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// 2. 插件生命周期入口
-async function activate(ctx: PluginFrontendCtx) {
-  ctx.ui.registerPaletteItem({
-    type: 'ext-chem/molecule-viewer',
-    labelZh: '3D 分子探究器',
-    labelEn: '3D Molecule Viewer',
-    descriptionZh: '支持高保真 3D 分子轨道与化学键可视化交互',
-    descriptionEn: 'Interactive 3D molecule model viewer',
-    color: 'emerald',
-    group: 'media', // 可放入 'media'、'interaction'、'quiz'、'code' 或自定义扩展分组
-    defaultData: {
-      title: '水分子结构模型',
-      smiles: 'O',
-      formula: 'H₂O',
-      renderMode: 'ball-and-stick',
-    },
-    // 教师在备课画板点击卡片时，弹出的初始参数配置表单
-    editFields: [
-      {
-        key: 'title',
-        labelZh: '模型名称',
-        labelEn: 'Title',
-        kind: 'input',
-        placeholderZh: '输入模型名称...',
-      },
-      {
-        key: 'smiles',
-        labelZh: 'SMILES 结构式',
-        labelEn: 'SMILES Code',
-        kind: 'input',
-        placeholderZh: '例如 O, CCO, c1ccccc1...',
-      },
-      {
-        key: 'renderMode',
-        labelZh: '渲染样式',
-        labelEn: 'Render Mode',
-        kind: 'select',
-        options: [
-          { value: 'ball-and-stick', label: '球棍模型 (Ball & Stick)' },
-          { value: 'cpk', label: '空间比例模型 (CPK)' },
-          { value: 'wireframe', label: '线框网格 (Wireframe)' },
-        ],
-      },
-    ],
-    // 挂载到白板画布的渲染组件
-    component: MoleculeViewerCanvas,
-  });
-}
-
-async function deactivate() {
-  // 宿主会在插件停用/卸载时自动清理已注册的 palette items
-}
-
-export default { activate, deactivate };
-```
-
-也可在 `manifest.contributes['editor.palette_item']` 中声明数据型图元（`type` / `labelZh` / `labelEn` 等），宿主会桥接到同一 `paletteItemRegistry`，进入备课组件网格（搜索、收藏、分组）。需要自定义画布 `component` 时仍优先用 `ctx.ui.registerPaletteItem`。
-
-### 6.10 备课环节类型扩展（Segment Type）
-
-向备课时间线贡献自定义教学形态（如「科学探究实验」「随堂辩论」）：
-
-```tsx
-import { FlaskConical } from 'lucide-react';
-
-// SDK 未导出 FrontendPluginContext（见 §6.9 说明），插件侧自行声明最小接口
-interface PluginFrontendCtx {
-  pluginId: string;
-  ui: { registerSegmentType(type: Record<string, unknown>): void };
-}
-
-async function activate(ctx: PluginFrontendCtx) {
-  ctx.ui.registerSegmentType({
-    id: 'scientific_experiment',
-    labelZh: '科学探究实验',
-    labelEn: 'Scientific Experiment',
-    icon: FlaskConical,
-  });
-}
-```
-
-注册后会出现在 `SegmentEditorCard` 的「教学形态」下拉中；插件停用时宿主按 `pluginId` 自动回收。
-
-声明式等价写法（需同时提供 `labelZh` 与 `labelEn`）：
-
-```json
-{
-  "contributes": {
-    "editor.timeline_segment": [
-      {
-        "id": "scientific_experiment",
-        "labelZh": "科学探究实验",
-        "labelEn": "Scientific Experiment",
-        "icon": "FlaskConical"
-      }
-    ]
-  }
-}
-```
-
-> `editor.timeline_segment` 作为 **UI 附加面板** 槽位时，在 `activate` 里 `registerExtensionPoint` 挂载 React 组件即可；仅当 contributes 条目含双语 label 时才会桥接为环节类型。
-
-### 6.11 教学环节进入条件
-
-自定义环节**类型**只影响备课下拉和附加面板。学生能不能看到教师推进到的环节，由环节对象上的 `gates` 决定。插件用声明式贡献加只读命令参与判定，这样在进程内和子进程隔离下都能工作：
-
-```json
-{
-  "contributes": {
-    "segment.gate_type": [
-      {
-        "id": "lab_report_ready",
-        "labelZh": "实验报告已交",
-        "labelEn": "Lab report submitted",
-        "commandType": "judge"
-      }
-    ]
-  }
-}
-```
-
-`activate` 里 `actionRegistry.register`（`capabilityRequired: 'segment:gate_eval'`，`exposeToAgent: false`）并 `commandBus.registerHandler`。处理函数只读，返回 `{ allowed, reason?, progress? }`。宿主超时 1500ms，超时或异常都拒绝进入。不要调用 `registerGuard` 来拦直播环节。
+## 6. 前端与课件扩展（分两篇）
+
+前端与课件扩展的细节量已超过「教程」该承担的篇幅，且读者前提不同：一篇讲**代码怎么跑起来**，
+一篇讲**内容怎么进课堂**。因此本章只留导航：
+
+| 子指南                                             | 讲什么                                                                                                                                        | 什么时候需要它                                            |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [前端插件指南](plugin-frontend-guide)              | `FrontendPluginHost` 三档加载、`FrontendPluginContext`、前端服务接口、UI 扩展槽位、图标与导航栏、`invokeCommand`、`HostSharedDeps` 与构建排查 | 你要写 `frontend.tsx`、注册扩展点，或排查「插件激活失败」 |
+| [课件与教学环节扩展](plugin-courseware-extensions) | 备课画板图元（Palette Item）、备课环节类型（Segment Type）、教学环节进入条件（Gate）                                                          | 你要往备课画板 / 时间线 / 授课流程里塞教学内容            |
+
+> 🚩 **读之前先确认档位**：第三方 ZIP 插件的前端跑在**隐藏**的不透明源 iframe 里，
+> **不能提供任何可见 UI**（`component` 是函数，`postMessage` 无法结构化克隆）。
+> 可见交互只能来自 manifest 的声明式贡献，由宿主渲染。
+> 边界见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)，档位判定见 [2.2](#execution-modes)。
+> 两篇里凡标注「仅 inline / worker」的 API，第三方插件都用不了。
 
 ---
 
@@ -2318,7 +1756,8 @@ describe('my-plugin', () => {
 
 - [ ] `tsconfig.json` 中 `jsx` 为 `"react"`（非 `"react-jsx"`）
 - [ ] **内联插件**：`react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
-- [ ] **第三方 ZIP 插件**：不要为"渲染 UI"而打包 React —— 沙箱 iframe 里 `import React` 求值为 `undefined`，组件也传不进宿主。前端只留 `activate(ctx)` + 数据/命令调用（见第 6 章章首说明）
+- [ ] **第三方 ZIP 插件**：不要为"渲染 UI"而打包 React —— 沙箱 iframe 里 `import React` 求值为 `undefined`，组件也传不进宿主。前端只留 `activate(ctx)` + 数据/命令调用（见 [前端插件指南](plugin-frontend-guide)）
+- [ ] `frontend.tsx` 的 `default export` 是 `{ activate, deactivate }` 对象，不是组件（沙箱加载器会检查 `typeof plugin.activate === 'function'`）
 - [ ] 不直接 import React hooks 之外的 React 子路径（如 `react/jsx-runtime`）
 - [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#version-compat-table)）
 - [ ] 前端调用的命令在服务端有对应的 handler
@@ -2362,18 +1801,24 @@ npx openlearn-plugin-sdk sign <zip> --key ./private.pem --publisher your-name
 
 **三种模板的产出：**
 
-| 模板            | 生成文件                                            | `manifest.id` 生成规则                 |
-| --------------- | --------------------------------------------------- | -------------------------------------- |
-| `server-only`   | `package.json`、`tsconfig.json`、`src/index.ts`     | `@<author>/<name>`（无 author 时见下） |
-| `full-stack`    | 上述 + `src/frontend.tsx`、`src/contracts/index.ts` | 同上                                   |
-| `frontend-only` | 上述前端部分                                        | 同上                                   |
+| 模板            | 生成文件                                            | `manifest.id` 生成规则 |
+| --------------- | --------------------------------------------------- | ---------------------- |
+| `server-only`   | `package.json`、`tsconfig.json`、`src/index.ts`     | `@<author>/<name>`     |
+| `full-stack`    | 上述 + `src/frontend.tsx`、`src/contracts/index.ts` | 同上                   |
+| `frontend-only` | 上述前端部分                                        | 同上                   |
 
-> ⚠️ **脚手架生成后必须自己改两处**（CLI 3.7.0 的默认值不适合直接分发）：
+> ✅ `frontend.tsx` 的导出契约已修正：仓库内模板现在生成
+> `export default { activate, deactivate }` 的**桥接入口**（隐藏 iframe 内的无 UI 执行体），
+> 不再生成 React 组件 —— 后者会被沙箱加载器判为 `missing activate function`。
+> 修复随 `@openlearn/plugin-sdk@3.7.1` 发布；装的是 npm 3.7.0 的话仍需手工改。
+> 细节见 [Scaffold CLI §3.1](../sdk/scaffold-cli)。
 >
-> 1. **不传 `--author` 时 `manifest.id` 会变成 `@/<name>`**（`@/` 不是合法 scope）。传了作者则是 `@<author-slug>/<name>`，也建议改成 `ext-<name>` 或 `@your-scope/<name>` —— 别用 `@openlearn/`，那不会带来任何信任。
-> 2. **`frontend.tsx` 默认导出的是 React 组件，没有 `activate`**。而沙箱 iframe 的加载器要求 `plugin.activate` 是函数，否则报 `missing activate function` 并把插件置为 ERROR。第三方插件请把 `frontend.tsx` 改成 `export default { activate: async (ctx) => { ... } }`（或直接删掉前端文件、用 `server-only` 模板）。
+> ⚠️ **仍需你自己确认的两处**：
 >
-> 版本兼容性提醒：`engines.openlearn` 默认 `>=0.2.5`，按你用到的 API 调高。
+> 1. **`manifest.id` 的 scope**：传了 `--author` 是 `@<author-slug>/<name>`；不传则回落默认作者。
+>    建议改成 `ext-<name>` 或 `@your-scope/<name>` —— 别用 `@openlearn/`，那不会带来任何信任。
+>    `manifest.id` 同时是命令命名空间前缀（`@scope/name.some_command`）。
+> 2. **`engines.openlearn`** 默认 `>=0.2.5`，按你用到的 API 调高。
 
 ### 11.2 手动打包为 ZIP
 

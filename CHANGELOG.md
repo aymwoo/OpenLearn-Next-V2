@@ -132,6 +132,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **插件教程 §6 拆成两篇：`plugin-frontend-guide` 与 `plugin-courseware-extensions`**：
+  - **动因**：§6 单章 580 行、占全文 22%，且混了两类读者前提不同的内容——「前端 bundle 怎么被加载」与「教学内容怎么进课堂」。上一轮审计已指出这 580 行里的 React 组件写法对第三方插件不可用，留在主教程里只会继续误导。
+  - **拆法**：`plugin-frontend-guide.md`（三档加载、`FrontendPluginContext`、前端服务接口、扩展槽位、图标与导航、`invokeCommand`、`HostSharedDeps` 与构建排查）；`plugin-courseware-extensions.md`（Palette Item / Segment Type / Gate，每节补**声明式等价写法**）。主教程 §6 收敛为导航表 + 档位警示（580 → 21 行）。
+  - **顺带修掉**：原文两个 `### 6.7` 重号（现分别落在前端指南 §7.1 / §7.2）；`docs/index.md` 侧栏补两篇（此前只在教程内可达）；`plugin_docs_check.py` 的 glob 补两篇新文档（docs 20 → 22），新文档的示例同样过 P1–P4；`plugin-ui-extension-slots.md` 的槽位总数从「119 个」（且复现不出来）改为实测 **115** 个字符串字面量成员，并写清可复跑的计数口径（`grep -c "^  | '"` 会把别的联合类型算进去，虚高到 120）。
+  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`，`prettier --check docs/` 通过；首跑新文档时 `ctx.ui.showToast` 被 P4 判为「不是 FrontendPluginContext 的方法」——该块讲的正是**沙箱 RPC 上下文**（另一份契约），已改用 `bridge` 命名消除歧义。
+
 - **插件开发文档可用性审计：按「AI Agent 只读文档能否写出能用的第三方插件」重校，修掉 8 处会直接害人的指引**：
   - **口径**：此前审计都是「文档 vs 代码」的事实核对；这次换成可用性验证——照着文档实跑 `init → npm install → build → 拆 ZIP`，再对照宿主加载器判断结果能不能用。
   - **最严重的一条：教程 22% 的内容对目标读者不可用**。§6「前端插件系统」共 580 行（全文 2623 行）教 `ctx.ui.registerExtensionPoint({ component })`，但第三方插件被 `execution-policy.ts` 强制为 `process`，前端跑在 `sandbox="allow-scripts"` 的**隐藏** iframe 里：`component` 是函数、`postMessage` 无法克隆（`DataCloneError`），`import React` 与 `window.HostSharedDeps` 均为 `undefined`。**第三方插件无法提供任何可见 UI**。已在 §2.2 展开三档执行模式与能力边界表、§6 章首加适用范围警示。

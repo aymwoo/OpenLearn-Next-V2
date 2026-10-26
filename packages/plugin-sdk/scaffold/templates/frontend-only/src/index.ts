@@ -1,6 +1,12 @@
 /**
- * {{pluginName}} — Frontend-only plugin manifest.
- * No server-side handlers; pure UI extension.
+ * {{pluginName}} — 前端型插件 manifest。
+ *
+ * 纯前端模板不注册任何服务端命令处理器，因此 manifest 里**不声明**
+ * classroomTools / contributes 中的命令型贡献 —— 声明了没有 handler 接，
+ * 用户点按钮只会得到 "No handler registered" 错误。
+ *
+ * 需要可见入口时请改用 `--template full-stack`：课堂工具、命令面板条目等
+ * 声明式贡献都必须配一个服务端命令处理器。
  */
 
 export default {
@@ -15,15 +21,6 @@ export default {
     author: '{{author}}',
     requires: [],
     capabilitiesProposed: [],
-    classroomTools: [
-      {
-        id: '{{pluginId}}-tool',
-        name: '{{pluginName}}',
-        icon: 'Palette',
-        commandType: '{{pluginId}}.open',
-        payload: {},
-      },
-    ],
     engines: { openlearn: '>=0.2.5' },
   },
 

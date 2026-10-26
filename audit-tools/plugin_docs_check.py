@@ -35,6 +35,8 @@ REPO = Path(__file__).resolve().parent.parent
 # 面向插件作者的文档（不含 release-notes / audit 快照）
 DOC_GLOBS = [
     "docs/tutorials/plugin-development-tutorial.md",
+    "docs/tutorials/plugin-frontend-guide.md",
+    "docs/tutorials/plugin-courseware-extensions.md",
     "docs/plugin/*.md",
     "docs/sdk/*.md",
     "docs/reference/plugin-*.md",

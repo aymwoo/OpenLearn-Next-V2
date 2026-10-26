@@ -35,17 +35,49 @@ ZIP 内部固定为**根级** `index.js` + `manifest.json` +（可选）`fronten
 
 **包名 = `package.json` 的 `name`**。`--name demo-vote` 生成的包名是 `openlearn-plugin-demo-vote`，ZIP 因此叫 `openlearn-plugin-demo-vote.zip`。CI 中请按 `dist/*.zip` 取文件，不要硬编码名字。
 
-## 3. 脚手架默认值的三处坑
+## 3. 模板默认值还需要你确认的项
 
-CLI 3.7.0 的模板能编译通过，但默认值不适合直接分发：
+模板能直接编译、直接装、直接激活（含 `frontend.js` 的导出契约），但下面两项是**猜不出来**的业务决定：
 
-| 位置                | 默认值                                | 问题                                                                          | 怎么改                                                   |
-| ------------------- | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `manifest.id`       | `@/<name>`（未传 `--author` 时）      | `@/` 不是合法的 scope 写法                                                    | 改 `ext-<name>` 或 `@scope/<name>`                       |
-| `src/frontend.tsx`  | `export default function Component()` | 沙箱 iframe 要求 `plugin.activate` 是函数，否则报 `missing activate function` | 改为 `export default { activate }`，或改用 `server-only` |
-| `engines.openlearn` | `>=0.2.5`                             | 声称兼容 0.2.5，但你可能用到 `ctx.http`(0.3.11+) 等新 API                     | 按实际用到的 API 调高                                    |
+| 位置                | 默认值             | 说明                                                      | 怎么改                                 |
+| ------------------- | ------------------ | --------------------------------------------------------- | -------------------------------------- |
+| `manifest.id`       | `@<author>/<name>` | scope 由 `--author` 推导（如 `@ext-openlearn/demo-vote`） | 换成你自己的 scope（模板内引用已统一） |
+| `engines.openlearn` | `>=0.2.5`          | 声称兼容 0.2.5，但你可能用到 `ctx.http`(0.3.11+) 等新 API | 按实际用到的 API 调高                  |
 
-> 前两条是 CLI 模板与运行时契约不一致导致的**已知缺陷**，修模板需要发新版 SDK；在那之前请在脚手架生成后手动改正。第三方插件为什么不能保留 React 组件，见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)。
+> `manifest.id` 是**命令命名空间前缀的唯一来源**（`resolvePluginCommandType`）：写 `@scope/name`，
+> 命令就是 `@scope/name.some_command`。别用 `@/name` 这种空 scope。
+
+### 3.1 各模板的 `frontend.tsx` 契约（已修正，见下方版本说明）
+
+三个模板的前端位置如下 —— 这块曾经是**已知缺陷**（模板生成 `export default function Component()`，
+沙箱加载器要求 `plugin.activate` 是函数，装完直接报 `missing activate function`），
+仓库内已改为正确的桥接入口：
+
+| 模板            | `src/frontend.tsx` | 产物 `frontend.js` | 行为                                                                                   |
+| --------------- | ------------------ | ------------------ | -------------------------------------------------------------------------------------- |
+| `server-only`   | 无                 | 无                 | 服务端专用；不带 `frontend.js` 的插件不会被前端激活路径拉起                            |
+| `full-stack`    | 有                 | 有                 | 隐藏 iframe 里跑 `activate`：读课堂上下文、记激活次数、注册一个 `command_palette.item` |
+| `frontend-only` | 有                 | 有                 | 只演示桥接（首次激活 toast + 命名空间存储），**不声明**课堂工具                        |
+
+三个模板共同遵守的硬契约：
+
+```ts
+// ✅ 正确：default export 带 activate 的对象
+export default { activate, deactivate };
+
+// ❌ 错误：把组件当 default —— 宿主沙箱加载器会抛 "missing activate function"
+export default function MyPanel() {
+  /* … */
+}
+```
+
+> **版本说明**：修复已在仓库内完成，将随 **`@openlearn/plugin-sdk@3.7.1`** 发布。
+> 如果你装的是 npm 上的 **3.7.0**，`init` 生成的仍是旧模板 —— 脚手架跑完请手工把
+> `src/frontend.tsx` 改成上面的形状（或直接用 `--template server-only`）。
+
+> 第三方插件的前端是**隐藏 iframe** 里的无 UI 执行体，写 React 组件既不会被渲染、也无法跨
+> `postMessage` 传递。为什么以及能做什么，见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary)
+> 与 [前端插件指南](../tutorials/plugin-frontend-guide)。
 
 ## 4. 完整流程
 

@@ -169,6 +169,8 @@ administrator-guide/demo-data
 :caption: 🎓 完全教程 (Tutorials)
 
 tutorials/plugin-development-tutorial
+tutorials/plugin-frontend-guide
+tutorials/plugin-courseware-extensions
 ```
 
 ```{toctree}
