@@ -56,6 +56,7 @@ import type {
   IClassroomLifecycleService,
   IInteractionRuntimeService,
   ClassroomStageGuard,
+  ClassroomLifecycleStage,
   QuickActivityDescriptor,
 } from '../di/interfaces.js';
 import { bindPluginCommand, pluginActorIdFor } from '../command-bus/plugin-command.js';
@@ -591,8 +592,9 @@ function wrapClassroomLifecycleService(
 ): IClassroomLifecycleService {
   return {
     getStage: createSafeFunction((lessonId: string) => service.getStage(lessonId)),
-    transitionStage: createSafeFunction((lessonId: string, toStage: any, actorId: string, classId?: string) =>
-      service.transitionStage(lessonId, toStage, actorId, classId),
+    transitionStage: createSafeFunction(
+      (lessonId: string, toStage: ClassroomLifecycleStage, actorId: string, classId?: string) =>
+        service.transitionStage(lessonId, toStage, actorId, classId),
     ),
     registerStageGuard: createSafeFunction((owner: string, guard: ClassroomStageGuard) => {
       service.registerStageGuard(owner, guard);

@@ -30,6 +30,11 @@ import {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
 } from '../../di/interfaces.js';
+import type {
+  IClassroomLifecycleService as ClassroomLifecycleServiceShape,
+  IInteractionRuntimeService as InteractionRuntimeServiceShape,
+  QuickActivityDescriptor,
+} from '../../di/interfaces.js';
 import { AssessmentGraderRegistry } from '../../assessment/registry-service.js';
 import { CommandBus } from '../../command-bus/index.js';
 import { EventBus } from '../../event-bus/index.js';
@@ -72,6 +77,14 @@ function createTables(db: Database.Database): void {
     );
   `);
 }
+
+/**
+ * Issue #327 回归用：宿主侧注册表快照。
+ *
+ * 每轮 `setupServiceRegistry` 重置，测试断言「停用后这里还剩什么」。
+ */
+let stageGuardsRef = new Map<string, unknown>();
+const activityProvidersRef = new Map<string, unknown>();
 
 interface MakeModuleOpts {
   id: string;
@@ -118,6 +131,8 @@ function makePluginModule(opts: MakeModuleOpts): PluginModule {
 }
 
 async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegistry> {
+  stageGuardsRef = new Map<string, unknown>();
+  activityProvidersRef.clear();
   const sr = new ServiceRegistry();
   const eventBus = new EventBus();
   const capabilityGuard = new CapabilityGuard();
@@ -177,32 +192,31 @@ async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegis
   // IAssessmentGraderRegistry: 服务端题型注册表（Issue #320 回归用真实实现）
   await sr.register(IAssessmentGraderRegistryToken, new AssessmentGraderRegistry());
 
-  // IClassroomLifecycleService / IInteractionRuntimeService：课堂运行时扩展点（Issue #327 回归用）
-  // 两者都用**带状态**的实现 —— 回收断言要看注册表里还剩什么。
-  const stageGuards = new Map<string, unknown>();
-  await sr.register(IClassroomLifecycleServiceToken, {
+  // IClassroomLifecycleService / IInteractionRuntimeService：课堂运行时扩展点（Issue #327 回归用）。
+  // 两者都用**带状态**的实现 —— 回收断言要看注册表里还剩什么；
+  // Map 通过模块级 ref 暴露（不往 registry 上挂私有字段，也不引入 any）。
+  const lifecycleMock: ClassroomLifecycleServiceShape = {
     getStage: async () => 'PRE_CLASS_READY',
-    transitionStage: async () => ({ success: true, stage: 'IN_CLASS_TEACHING' }),
-    registerStageGuard: (owner: string, guard: unknown) => {
-      stageGuards.set(owner, guard);
+    transitionStage: async (_lessonId, toStage) => ({ success: true, stage: toStage }),
+    registerStageGuard: (owner, guard) => {
+      stageGuardsRef.set(owner, guard);
     },
-    unregisterStageGuard: (owner: string) => {
-      stageGuards.delete(owner);
+    unregisterStageGuard: (owner) => {
+      stageGuardsRef.delete(owner);
     },
-  } as any);
-  (sr as any).__stageGuards = stageGuards;
+  };
+  await sr.register(IClassroomLifecycleServiceToken, lifecycleMock);
 
-  const activityProviders = new Map<string, unknown>();
-  await sr.register(IInteractionRuntimeServiceToken, {
-    registerActivityProvider: (owner: string, descriptor: any) => {
-      activityProviders.set(`${owner}:${descriptor.id}`, descriptor);
+  const interactionMock: InteractionRuntimeServiceShape = {
+    registerActivityProvider: (owner, descriptor) => {
+      activityProvidersRef.set(`${owner}:${descriptor.id}`, descriptor);
     },
-    unregisterActivityProvider: (owner: string, id: string) => {
-      activityProviders.delete(`${owner}:${id}`);
+    unregisterActivityProvider: (owner, id) => {
+      activityProvidersRef.delete(`${owner}:${id}`);
     },
-    listActivityProviders: () => Array.from(activityProviders.values()),
-  } as any);
-  (sr as any).__activityProviders = activityProviders;
+    listActivityProviders: () => Array.from(activityProvidersRef.values()) as QuickActivityDescriptor[],
+  };
+  await sr.register(IInteractionRuntimeServiceToken, interactionMock);
 
   return sr;
 }
@@ -591,17 +605,25 @@ describe('E2E Plugin Lifecycle', () => {
      * 这两个 token **不在 `ctx.services` 里**，插件只能经 ctx.resolve 拿到 ——
      * 宿主的回收拦截也必须落在 ctx.resolve 上，且字符串与 Token 两条路径都要覆盖。
      */
+    /** 插件侧看到的 resolve 只有这一个能力；用 `as` 收窄而不是 `any`。 */
+    type RuntimeExtensionCtx = { resolve(token: string | object): Promise<unknown> };
+
     function makeRuntimeExtensionPlugin(id: string, opts: { byName?: boolean } = {}): PluginModule {
       return {
         default: {
           manifest: { id, name: id, version: '1.0.0', main: 'index.js' },
-          activate: async (ctx: any) => {
-            const lifecycle = opts.byName
-              ? await ctx.resolve('@openlearn/core:IClassroomLifecycleService')
-              : await ctx.resolve(IClassroomLifecycleServiceToken);
-            const interaction = opts.byName
-              ? await ctx.resolve('@openlearn/core:IInteractionRuntimeService')
-              : await ctx.resolve(IInteractionRuntimeServiceToken);
+          activate: async (ctx) => {
+            const pluginCtx = ctx as RuntimeExtensionCtx;
+            const lifecycle = (
+              opts.byName
+                ? await pluginCtx.resolve('@openlearn/core:IClassroomLifecycleService')
+                : await pluginCtx.resolve(IClassroomLifecycleServiceToken)
+            ) as ClassroomLifecycleServiceShape;
+            const interaction = (
+              opts.byName
+                ? await pluginCtx.resolve('@openlearn/core:IInteractionRuntimeService')
+                : await pluginCtx.resolve(IInteractionRuntimeServiceToken)
+            ) as InteractionRuntimeServiceShape;
 
             lifecycle.registerStageGuard(OWNER, async () => true);
             interaction.registerActivityProvider(OWNER, {
@@ -620,8 +642,8 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.installPlugin('src-rt');
       await pluginHost.activatePlugin('ext-rt');
 
-      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
-      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
       expect(stageGuards.has(OWNER)).toBe(true);
       expect(providers.has(`${OWNER}:matrix_voting`)).toBe(true);
 
@@ -637,8 +659,8 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.installPlugin('src-rt-name');
       await pluginHost.activatePlugin('ext-rt-name');
 
-      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
-      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
       expect(stageGuards.has(OWNER)).toBe(true);
 
       await pluginHost.deactivatePlugin('ext-rt-name');
@@ -652,8 +674,8 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.installPlugin('src-rt-uninstall');
       await pluginHost.activatePlugin('ext-rt-uninstall');
 
-      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
-      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
       expect(stageGuards.has(OWNER)).toBe(true);
 
       await pluginHost.uninstallPlugin('ext-rt-uninstall');
@@ -668,7 +690,7 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.activatePlugin('ext-rt-reactivate');
       await pluginHost.deactivatePlugin('ext-rt-reactivate');
 
-      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
+      const stageGuards = stageGuardsRef;
       expect(stageGuards.has(OWNER)).toBe(false);
 
       await expect(pluginHost.activatePlugin('ext-rt-reactivate')).resolves.toBeUndefined();
