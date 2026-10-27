@@ -26,7 +26,9 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IDatabaseToken,
+  IAssessmentGraderRegistryToken,
 } from '../../di/interfaces.js';
+import { AssessmentGraderRegistry } from '../../assessment/registry-service.js';
 import { CommandBus } from '../../command-bus/index.js';
 import { EventBus } from '../../event-bus/index.js';
 import { ActionRegistry } from '../../registry/index.js';
@@ -169,6 +171,9 @@ async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegis
     getStudentTotalByDimension: async () => 0,
     getStudentDimensionSummary: async () => ({}),
   } as any);
+
+  // IAssessmentGraderRegistry: 服务端题型注册表（Issue #320 回归用真实实现）
+  await sr.register(IAssessmentGraderRegistryToken, new AssessmentGraderRegistry());
 
   return sr;
 }
@@ -474,6 +479,73 @@ describe('E2E Plugin Lifecycle', () => {
       // 卸载插件 3
       await pluginHost.uninstallPlugin('ext-concurrent-3');
       expect(pluginHost.getPluginState(uuid3)).toBe(PluginState.UNINSTALLED);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Issue #320: 服务端题型注册表随停用/卸载回收
+  // ══════════════════════════════════════════════════════════════════
+
+  describe('Issue #320 服务端题型回收', () => {
+    const PLUGIN_TYPE = 'ext-quiz:demo';
+
+    /** 插件 activate 里用 ctx.resolve 拿到服务端题型注册表并注册一个题型。 */
+    function makeQuestionTypePlugin(id: string): PluginModule {
+      return {
+        default: {
+          manifest: { id, name: id, version: '1.0.0', main: 'index.js' },
+          activate: async (ctx: any) => {
+            const registry = await ctx.resolve(IAssessmentGraderRegistryToken);
+            registry.registerQuestionType(
+              {
+                type: PLUGIN_TYPE,
+                label: { zh: '演示题型', en: 'Demo question type' },
+                category: 'objective',
+                supports: ['quiz'],
+                autoGradable: false,
+                createDefaultConfig: () => ({}),
+                validateConfig: () => null,
+                grade: () => ({ score: null, needsManualReview: true }),
+              },
+              { pluginId: id },
+            );
+          },
+          deactivate: async () => {},
+        },
+      };
+    }
+
+    it('停用后题型从服务端注册表消失，且再次激活不抛 duplicate', async () => {
+      loadMap.set('src-qt', makeQuestionTypePlugin('ext-qt'));
+      await pluginHost.installPlugin('src-qt');
+      await pluginHost.activatePlugin('ext-qt');
+
+      const registry = await serviceRegistry.resolve(IAssessmentGraderRegistryToken);
+      expect(registry.getQuestionType(PLUGIN_TYPE)).toBeDefined();
+
+      await pluginHost.deactivatePlugin('ext-qt');
+
+      // 旧行为：停用后题型残留（幽灵题型），要重启进程才消失
+      expect(registry.getQuestionType(PLUGIN_TYPE)).toBeUndefined();
+      // 内置题型不受影响
+      expect(registry.getQuestionType('single_choice')).toBeDefined();
+
+      // 旧行为：这里会抛 "duplicate question type"，表现为「升级/重启后插件激活失败」
+      await expect(pluginHost.activatePlugin('ext-qt')).resolves.toBeUndefined();
+      expect(registry.getQuestionType(PLUGIN_TYPE)).toBeDefined();
+    });
+
+    it('卸载时同样回收题型（含非 ACTIVE 态）', async () => {
+      loadMap.set('src-qt-uninstall', makeQuestionTypePlugin('ext-qt-uninstall'));
+      await pluginHost.installPlugin('src-qt-uninstall');
+      await pluginHost.activatePlugin('ext-qt-uninstall');
+
+      const registry = await serviceRegistry.resolve(IAssessmentGraderRegistryToken);
+      expect(registry.getQuestionType(PLUGIN_TYPE)).toBeDefined();
+
+      await pluginHost.uninstallPlugin('ext-qt-uninstall');
+
+      expect(registry.getQuestionType(PLUGIN_TYPE)).toBeUndefined();
     });
   });
 });

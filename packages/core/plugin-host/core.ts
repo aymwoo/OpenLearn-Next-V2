@@ -28,7 +28,7 @@ import {
   type ExecutionModeDecision,
 } from './execution-policy.js';
 import { IllegalStateTransitionError, SemverMismatchError } from './errors.js';
-import { IStageGuardServiceToken, IProcessServiceToken } from '../di/interfaces.js';
+import { IStageGuardServiceToken, IProcessServiceToken, IAssessmentGraderRegistryToken } from '../di/interfaces.js';
 import type { IProcessService } from '../di/interfaces.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import {
@@ -1044,6 +1044,38 @@ export abstract class PluginHostCore extends PluginHostBase {
       }
     } catch (e) {
       console.warn(`[PluginHost] Failed to revoke stage guards for "${pluginId}":`, e);
+    }
+  }
+
+  /**
+   * 回收该插件注册的服务端题型（Issue #320）。
+   *
+   * 题型注册表（`IAssessmentGraderRegistry`）是插件用 `ctx.resolve(token)` 直取的
+   * **裸注册表**，不像 `ctx.services.*` 那样经过 `ResourceTracker` 包装 —— 所以
+   * `disposeAll()` 拿它没办法。不清理的后果已验证为真：
+   *
+   * 1. 停用插件后题型仍留在注册表里 —— 教师继续能出题、继续按旧闭包判分（“幽灵题型”），
+   *    `GET /api/assessment-question-types` 也继续把它列给前端；
+   * 2. 重装/升级插件时 `registerQuestionType` 抛 `duplicate question type`，
+   *    表现为「升级后插件激活失败」，必须重启宿主才能恢复。
+   *
+   * 与 `revokePluginStageGuards` 同构：注册方可能传安装行 UUID，也可能传
+   * manifest.id（文档约定的就是后者），两侧都清一遍（幂等）。
+   */
+  protected async revokePluginQuestionTypes(pluginId: string, manifestId: string): Promise<void> {
+    try {
+      const registry = await this.serviceRegistry.tryResolve(IAssessmentGraderRegistryToken);
+      if (!registry || typeof registry.clearOwnedQuestionTypes !== 'function') return;
+      let removed = 0;
+      for (const owner of new Set([pluginId, manifestId])) {
+        if (!owner) continue;
+        removed += registry.clearOwnedQuestionTypes(owner) ?? 0;
+      }
+      if (removed > 0) {
+        console.log(`[PluginHost] Revoked ${removed} question type(s) for plugin "${pluginId}"`);
+      }
+    } catch (e) {
+      console.warn(`[PluginHost] Failed to revoke question types for "${pluginId}":`, e);
     }
   }
 
