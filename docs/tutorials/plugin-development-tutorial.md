@@ -1811,6 +1811,9 @@ npx openlearn-plugin-sdk sign <zip> --key ./private.pem --publisher your-name
 > `export default { activate, deactivate }` 的**桥接入口**（隐藏 iframe 内的无 UI 执行体），
 > 不再生成 React 组件 —— 后者会被沙箱加载器判为 `missing activate function`。
 > 仍用 3.7.0 请手工改这一行，或升级：`npm i -D @openlearn/plugin-sdk@3.7.2`。
+>
+> ⚠️ **不要停在 3.7.1**：它修好了模板，但产物里残留 `node:` 内置模块静态导入，插件打完包运行期就失败，
+> 已在 npm 弃用。模板修复在 3.7.2 中完整保留，直接装 3.7.2。
 > 细节见 [Scaffold CLI §3.1](../sdk/scaffold-cli.md)。
 >
 > ⚠️ **仍需你自己确认的两处**：

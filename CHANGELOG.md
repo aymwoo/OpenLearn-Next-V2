@@ -3,7 +3,7 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.1**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.7.2**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixes
+
+- **在 npm 上弃用 `@openlearn/plugin-sdk@3.7.1`**（`npm deprecate`，不撤包）：3.7.1 的 `dist/index.js`
+  残留 5 处 `node:` 静态导入（`fs` / `path` / `url` / `crypto`），凡是把 SDK 打进插件包体的第三方插件运行期必失败，
+  而 `npm i -D @openlearn/plugin-sdk` 装到的就是它。弃用后安装会打印告警并指向 3.7.2 —— 不撤包是因为已发布版本
+  不可覆盖，且撤包会让已锁定该版本的人直接装不上。文档侧同步：`scaffold-cli` §3.1 与教程的前端契约提示里
+  补「不要用 3.7.1」，`docs/sdk/plugin-sdk.md` 顶部加版本红线。
 
 - **`@openlearn/plugin-sdk` 发布到 3.7.2，修掉 3.7.1 把 `node:` 静态导入打进产物的回归**：3.7.1 值导出了 7 个宿主内部类，导致 `packages/core` 实现链（含 `core/version.ts` 的 `import fs from 'node:fs'`）被内联，`dist/index.js` 从 13 KB 涨到 75 KB。第三方插件用 `external: []` 把 SDK 打进 worker bundle 后做「产物不得残留 import」自检，必然失败 —— CI 作业 `Third-party plugin compatibility` 的 class_manager 构建连续红（main 之所以显示绿，只是因为 3.7.1 发布后 main 再没跑过 CI）。修复方式是把这 7 个类改回类型导出，并在 `build.mjs` 与契约测试里各加一道守卫。详见 `packages/plugin-sdk/CHANGELOG.md` 的 `[3.7.2]`。
 
