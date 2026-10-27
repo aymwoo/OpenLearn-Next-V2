@@ -11,12 +11,13 @@
  * 这道守卫把「发布必须满足的前提」从「只在某个脚本里」变成「npm 自己也会检查」，
  * 因此任何直接 npm publish 的路径都会被拦下。
  *
- * 三道断言：
+ * 五道断言：
  *   ① 依赖里不允许出现本地协议（workspace: / link: / file:）——消费者装不上
  *   ② packages/core/version.ts 的 FALLBACK_VERSION 必须等于 package.json 的 version
  *      （仅平台包；SDK / test-kit 没有这一层版本常量，跳过）
  *   ③ 当前 HEAD 必须正好被发布 tag 指向——发布必须发生在打了 tag 的提交上
  *   ④ 当前 HEAD 必须已经并入主干（origin/main）——registry 不得领先于 main
+ *   ⑤ CHANGELOG 必须与本次版本对得上——有 `## [<version>]` 段，且 `[Unreleased]` 已折叠
  *
  * tag 命名空间按包名自动推导（见 docs/contributing/contributing.md「发布 tag 约定」）：
  *   openlearn-next              → v<X.Y.Z>
@@ -183,6 +184,94 @@ if (allowUnmerged) {
   }
 }
 
+// ── 断言 5：CHANGELOG 必须与本次发布的版本对得上 ──────────────────────────
+//
+// 为什么需要它：2026-10-27 实测过 —— `scripts/publish.sh` 与整个 `audit-tools/`
+// 里 grep `CHANGELOG` / `Unreleased` **零命中**，也就是说发布链路完全不看
+// CHANGELOG，它是纯人工维护的。于是「代码进了 main、能力没进 npm」这种漂移
+// 没有任何信号：PR #326 已经把 build 期裸说明符守卫合进 main，可 npm latest
+// 仍是 3.7.3（发在守卫合入之前），第三方 `npm i -D @openlearn/plugin-sdk`
+// 装到的包里没有这道守卫，而文档已经写了它。装的人、写插件的人都不会得到
+// 任何提示。
+//
+// 断言 3、4 都防不住这个形态：tag 打对了、HEAD 也在 main 上，只是**发布这一
+// 刻截取的快照里没有某项改动**。补一条「版本号必须在 CHANGELOG 里有对应段、
+// 且待发布内容必须已折叠进该段」，就把「发版前整理 CHANGELOG」从人工纪律
+// 变成硬断言 —— 没折叠就发不出去，也就不会有人以为发出去了。
+//
+// 加了这条之后，平台包（根 CHANGELOG）下一次发版会被拦，直到有人把
+// `[Unreleased]` 里的条目折叠进新的版本段。**这是预期行为**：那些条目确实
+// 尚未出现在任何已发布的版本里，先折叠是对的做法。
+//
+// 确需例外（例如给已发布版本补发、CI 环境无 CHANGELOG 语义）时显式放行：
+//   ALLOW_UNRELEASED_CHANGELOG=1 npm publish --registry=https://registry.npmjs.org
+// 也可传 --allow-unreleased-changelog。
+const allowUnreleasedChangelog =
+  argv.includes('--allow-unreleased-changelog') || process.env.ALLOW_UNRELEASED_CHANGELOG === '1';
+
+function parseChangelogSections(text) {
+  // 只认 `## ` 二级标题（Keep a Changelog 的版本段级别），标题里的版本取方括号内内容：
+  // `## [3.7.4] - 2026-10-27` → '3.7.4'；`## [Unreleased]` → 'Unreleased'。
+  const sections = new Map();
+  let current = null;
+  for (const line of text.split('\n')) {
+    const heading = line.match(/^##\s+(.*)$/);
+    if (heading) {
+      const bracket = heading[1].match(/\[([^\]]+)\]/);
+      current = bracket ? bracket[1].trim() : heading[1].trim();
+      if (!sections.has(current)) sections.set(current, []);
+      continue;
+    }
+    if (current !== null) sections.get(current).push(line);
+  }
+  return sections;
+}
+
+try {
+  const changelogPath = path.join(root, 'CHANGELOG.md');
+  if (!fs.existsSync(changelogPath)) {
+    errors.push(
+      `找不到 ${path.relative(root, changelogPath) || 'CHANGELOG.md'}，无法核对版本与 CHANGELOG 是否一致。` +
+        `发版前请先建一个，并补上 \`## [${version}]\` 段。`,
+    );
+  } else {
+    const sections = parseChangelogSections(fs.readFileSync(changelogPath, 'utf8'));
+    if (!sections.has(version)) {
+      const known = [...sections.keys()].filter((k) => /^\d+\.\d+\.\d+/.test(k));
+      errors.push(
+        `CHANGELOG.md 里没有 \`## [${version}]\` 段 —— 版本号凭空抬了，发布出去的版本没有任何变更说明。` +
+          `请把 ${version} 的改动写进 CHANGELOG（已有的版本段：${known.slice(0, 6).join(' / ') || '无'}）。`,
+      );
+    }
+
+    const unreleased = (sections.get('Unreleased') || []).join('\n');
+    // 「有条目」的判据是存在列表项。`## [Unreleased]` 下写「_（下一版本待补充）_」
+    // 这类占位说明不算条目，不该拦。
+    if (/^\s*[-*+]\s+\S/m.test(unreleased)) {
+      const firstEntries = unreleased
+        .split('\n')
+        .filter((l) => /^\s*[-*+]\s+\S/.test(l))
+        .slice(0, 5)
+        .map((l) => l.trim())
+        .join('\n      ');
+      if (allowUnreleasedChangelog) {
+        console.warn(
+          '[assert-publishable] ! ALLOW_UNRELEASED_CHANGELOG 已放行「CHANGELOG 的 [Unreleased] 仍有条目」—— 那些改动不会出现在本次发布的版本说明里。',
+        );
+      } else {
+        errors.push(
+          `CHANGELOG.md 的 \`## [Unreleased]\` 里还有条目没折叠进 \`## [${version}]\` ——` +
+            `这些改动不会出现在本次发布的版本说明里，正是「代码在 main 上、能力不在 npm 上」的来源。` +
+            `发版前请把它们移到 \`## [${version}]\` 段下。` +
+            `\n    未折叠的条目：\n      ${firstEntries}`,
+        );
+      }
+    }
+  }
+} catch (e) {
+  errors.push(`读取 CHANGELOG.md 失败：${e.message}`);
+}
+
 // ── 结论 ─────────────────────────────────────────────────────────────────────
 if (errors.length > 0) {
   console.error('[assert-publishable] ✗ 发布被守卫拦下：');
@@ -198,5 +287,6 @@ const checks = [
   ...(isPlatform ? ['FALLBACK_VERSION 一致'] : []),
   `HEAD 已被 ${expectedTag} 指向`,
   allowUnmerged ? '未并入主干（已显式放行）' : '已并入主干',
+  allowUnreleasedChangelog ? 'CHANGELOG 未折叠（已显式放行）' : 'CHANGELOG 已对上版本',
 ];
 console.log(`[assert-publishable] ✓ ${pkg.name}@${version} 满足发布前提（${checks.join(' / ')}）`);

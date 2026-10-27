@@ -24,6 +24,8 @@ PLUGIN_JSON="${OUT_DIR}/plugin_docs_report.json"
 PLUGIN_MD="${OUT_DIR}/plugin_docs_report.md"
 EXTPT_JSON="${OUT_DIR}/extension_points_report.json"
 EXTPT_MD="${OUT_DIR}/extension_points_report.md"
+DOCVER_JSON="${OUT_DIR}/doc_version_report.json"
+DOCVER_MD="${OUT_DIR}/doc_version_report.md"
 
 mkdir -p "${OUT_DIR}"
 
@@ -94,6 +96,19 @@ python3 audit-tools/extension_points_coverage.py \
 
 EXTPT_DRIFT=$(python3 -c "import json;print(json.load(open('${EXTPT_JSON}'))['stats']['drift'])" 2>/dev/null || echo 0)
 
+# --- 2.9 doc-version 一致性（文档声明的包版本必须等于 package.json）---
+#
+# `<!-- doc-version: sdk=X.Y.Z -->` 此前**全仓零校验** —— 除 docs/ 外没有任何脚本读它，
+# 它只是个注释。于是它安静地烂掉：2026-10-27 实测 SDK 已发到 3.7.3，26 篇文档仍写
+# `sdk=3.7.2`，其中 scaffold-cli.md 顶着旧版本号描述着当时 npm 上根本没有的构建期
+# 守卫。这不是「文档过时」，是**文档承诺了 registry 上不存在的能力**，而门禁、CI、
+# 发版三处都不报。
+#
+# 判据就一条：标记里的版本号 == 对应包 package.json 的 version。抬版本就得抬标记，
+# 一件本该在发版 PR 里顺手做完的事。误报率为零，故计入 drift。
+node scripts/check-doc-version.mjs --json "${DOCVER_JSON}" --md "${DOCVER_MD}" || true
+DOCVER_DRIFT=$(python3 -c "import json;print(json.load(open('${DOCVER_JSON}'))['drift'])" 2>/dev/null || echo 0)
+
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
 # 15-20% 精度（JS 全局、第三方包导出、历史文档引用已删除子系统）。
@@ -147,7 +162,7 @@ print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\"
 # 全仓合计：canonical + ref + 环境变量 + 插件文档示例 + 扩展槽覆盖。
 # envcheck / plugin_docs_check / slots_coverage 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
 # symbolcheck 仍只作提示。
-TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT + EXTPT_DRIFT))
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT + EXTPT_DRIFT + DOCVER_DRIFT))
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
@@ -155,12 +170,13 @@ echo "env_drift=${ENV_DRIFT}  （见 ${ENV_MD}）"
 echo "plugin_docs_drift=${PLUGIN_DRIFT}  （见 ${PLUGIN_MD}）"
 echo "slot_drift=${SLOT_DRIFT}  （见 ${OUT_DIR}/slots_coverage.md）"
 echo "ext_point_drift=${EXTPT_DRIFT}  （见 ${EXTPT_MD}）"
+echo "doc_version_drift=${DOCVER_DRIFT}  （见 ${DOCVER_MD}）"
 echo "slot_hints=${SLOT_HINTS}  （仅提示，不计入 drift）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${TOTAL_DRIFT}"
 
 if [ "${TOTAL_DRIFT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD}, ${OUT_DIR}/slots_coverage.md and ${EXTPT_MD}."
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD}, ${OUT_DIR}/slots_coverage.md, ${EXTPT_MD} and ${DOCVER_MD}."
   exit 1
 fi
 

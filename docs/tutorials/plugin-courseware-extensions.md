@@ -1,8 +1,8 @@
 # 课件与教学环节扩展：画板图元、环节类型与进入条件
 
-<!-- doc-version: sdk=3.7.2 -->
+<!-- doc-version: sdk=3.7.4 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.2` / 平台 `v0.7.4+`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.4` / 平台 `v0.7.4+`
 >
 > 本页是[插件开发完全指南](plugin-development-tutorial.md) §6 的配套篇，讲**怎么把教学内容塞进备课与授课流程**：
 > 备课画板图元（Palette Item）、自定义教学环节（Segment Type）、以及学生能否看到某个环节的进入条件（Gate）。

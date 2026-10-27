@@ -3,7 +3,7 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.2**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.7.4**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
@@ -11,6 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixes
+
+- **`@openlearn/plugin-sdk` 发布到 3.7.4，把 PR #326 的构建期守卫真正送到 npm 上**：这道守卫（frontend 产物
+  不得残留裸模块说明符）刚随 #326 合进 main，但 npm `latest` 是 3.7.3 —— 那条发版发生在守卫合入之前。
+  这暴露的不是某次疏忽，而是**没有任何机制提示「main 上有未发布改动」**：实测 `scripts/publish.sh` 与整个
+  `audit-tools/` 里 grep `CHANGELOG` / `Unreleased` **零命中**，发布链路完全不看 CHANGELOG。
+  所以这次同时补两道闸，避免下一次重演：
+  - `scripts/assert-publishable.mjs` 加第 ⑤ 条断言：发布的版本必须在 CHANGELOG 里有同名段，
+    且 `[Unreleased]` 已折叠 —— 把「发版前整理 CHANGELOG」从人工纪律变成硬断言。
+  - 新增 `scripts/check-doc-version.mjs` 并接入 `audit-tools/run.sh`：文档的 `<!-- doc-version: sdk=... -->`
+    必须等于 `package.json` 的 version。此前该标记**全仓零校验**，于是 26 篇文档停在 `sdk=3.7.2`，
+    其中 `scaffold-cli.md` 顶着旧版本号描述着 npm 上根本没有的守卫 —— 文档承诺了 registry 上不存在的能力。
+  - 26 篇文档的 `doc-version` 与正文里写死的版本号一并同步到 3.7.4。
 
 - **停用/卸载插件时不清理服务端题型注册表，题型变成「幽灵扩展点」（Issue #320）**：
   - **现象**：插件用 `ctx.resolve(IAssessmentGraderRegistryToken)` 注册的题型，在插件停用后仍留在注册表里 ——

@@ -1,11 +1,11 @@
 # `@openlearn/plugin-sdk` API 参考手册
 
-<!-- doc-version: sdk=3.7.2 -->
+<!-- doc-version: sdk=3.7.4 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 >
 > ⚠️ **不要用 3.7.1**：该版本的 `dist/index.js` 残留 `node:` 内置模块静态导入，把 SDK 打进插件包体后运行期必失败，
-> 已在 npm 标记弃用。装 SDK 一律写 `npm i -D @openlearn/plugin-sdk@3.7.2`（或直接 `@latest`）。
+> 已在 npm 标记弃用。装 SDK 一律写 `npm i -D @openlearn/plugin-sdk@3.7.4`（或直接 `@latest`）。
 
 `@openlearn/plugin-sdk` 包是 OpenLearn V2 插件开发者使用的官方类型定义与 Token 契约库（定义于 `packages/plugin-sdk/index.ts`）。它仅包含 TypeScript 类型定义与 `Token<T>` 值，不含运行时逻辑，确保编译产物轻量。
 
