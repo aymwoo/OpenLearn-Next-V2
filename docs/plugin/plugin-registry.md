@@ -1,8 +1,8 @@
 # 插件注册表与分发管理 (Plugin Registry & Distribution)
 
-<!-- doc-version: sdk=3.7.0 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 
 OpenLearn V2 的插件注册表由 **SQLite 数据库持久化层** 与 **`PluginDistributionManager` 分发管理层** 共同构成，负责插件元数据管理、版本控制、本地与远程仓库包安装及动态热更新。
 

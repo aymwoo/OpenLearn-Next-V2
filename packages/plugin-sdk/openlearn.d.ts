@@ -1398,8 +1398,15 @@ export type {
   AuthBridgeUser,
   IAuthSessionBridgeService,
   INetworkProxyService,
+  // 宿主内部类：只有类型，没有运行时值（3.7.2）。宿主侧请从
+  // packages/core/plugin-host/*.js 导入。
+  PluginRuntimeComposition,
 };
 
+// ⚠️ PluginRuntimeComposition **不在下面这个值块里**（3.7.2 起）：
+// 它是宿主内部类，只以类型对外（见 generate-dts.mjs 的 FORCED_TYPE_ONLY）。
+// 放进值块会让消费者 `new PluginRuntimeComposition(...)` 编译通过、运行期 undefined，
+// 比直接报 TS1362 更难查。
 export {
   PluginHttpRouter,
   Token,
@@ -1441,7 +1448,6 @@ export {
   BaseActivityProvider,
   defineActivityProvider,
   PluginState,
-  PluginRuntimeComposition,
   CapabilityRegistry,
 };
 

@@ -18,7 +18,7 @@ type(scope): message
 | Plugin SDK（`@openlearn/plugin-sdk`）      | `packages/plugin-sdk/CHANGELOG.md`                                                                                                     |
 | 内置插件（`packages/plugins/<plugin>.ts`） | 无独立 CHANGELOG —— 变更记入平台 `CHANGELOG.md`（`v2_plugins/` 为独立仓库，其插件维护各自的 `CHANGELOG.md`，不在本仓）                 |     |
 
-发版流程：bump 根 `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → 打 tag `vX.Y.Z`。SDK 版本独立演进（当前 3.7.0），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
+发版流程：bump 根 `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → 打 tag `vX.Y.Z`。SDK 版本独立演进（当前 3.7.2），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
 
 ## 3. 数据库迁移规范
 

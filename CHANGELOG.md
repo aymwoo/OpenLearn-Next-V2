@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **`@openlearn/plugin-sdk` 发布到 3.7.2，修掉 3.7.1 把 `node:` 静态导入打进产物的回归**：3.7.1 值导出了 7 个宿主内部类，导致 `packages/core` 实现链（含 `core/version.ts` 的 `import fs from 'node:fs'`）被内联，`dist/index.js` 从 13 KB 涨到 75 KB。第三方插件用 `external: []` 把 SDK 打进 worker bundle 后做「产物不得残留 import」自检，必然失败 —— CI 作业 `Third-party plugin compatibility` 的 class_manager 构建连续红（main 之所以显示绿，只是因为 3.7.1 发布后 main 再没跑过 CI）。修复方式是把这 7 个类改回类型导出，并在 `build.mjs` 与契约测试里各加一道守卫。详见 `packages/plugin-sdk/CHANGELOG.md` 的 `[3.7.2]`。
+
 - **main 的脚手架模板与已发布的 SDK 3.7.1 分叉，照 GitHub 抄模板的第三方插件激活必失败**：
   - **现象**：`npx @openlearn/plugin-sdk init`（走 npm 3.7.1）生成的是沙箱桥接模板，而 `origin/main` 的
     `packages/plugin-sdk/scaffold/templates/*/src/frontend.tsx` 仍是 `export default function Component()` 的

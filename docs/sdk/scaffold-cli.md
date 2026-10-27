@@ -1,8 +1,8 @@
 # Scaffold CLI 脚手架指南
 
-<!-- doc-version: sdk=3.7.0 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 
 使用命令行工具初始化和构建插件项目：
 
