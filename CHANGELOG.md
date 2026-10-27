@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     （uninstall 一路覆盖「非 ACTIVE 态、停用分支不跑」的情况）。失败只告警、不阻断停用。
   - **验证**：新增回归测试 2 条（停用后题型消失、内置题型不受影响、再次激活不抛 duplicate；卸载后同样回收）；
     负向对照 —— 临时移除本改动的 3 个源文件后跑同两条用例 → 2 failed
-     （`AssertionError: expected { type: 'ext-quiz:demo', … } to be undefined`），恢复后 2 passed。
+    （`AssertionError: expected { type: 'ext-quiz:demo', … } to be undefined`），恢复后 2 passed。
 
 - **插件 SDK 的 `build` 新增构建期守卫：frontend 产物不得残留裸模块说明符**。远程插件前端跑在不透明源
   iframe（只有 `allow-scripts`）里，没有 React / `window.HostSharedDeps` / importmap，加载方式是
