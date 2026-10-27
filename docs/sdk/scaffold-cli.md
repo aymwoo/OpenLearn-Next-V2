@@ -31,6 +31,11 @@
 
 ZIP 内部固定为**根级** `index.js` + `manifest.json` +（可选）`frontend.js`，无嵌套目录。
 
+> ⚠️ **ZIP 里只有这三件套**：`migrations/`、`assets/`、`README.md` 等内容**不会**进包。
+> 建表/升级请用 `ctx.db.ensureTable()` + `ctx.db.migrate(version, fn)`；
+> 声明式 `migrations/*.sql` 仅对内置插件、源码目录直装生效，
+> 详见 [插件数据库 API](../reference/plugin-database-api.md) §3.1 的 ZIP 说明。
+
 `manifest.json` 由 CLI 从打包后的代码里抽取 `export default { manifest }` 生成；若项目根目录已有 `manifest.json`，CLI 会优先使用它。
 
 **包名 = `package.json` 的 `name`**。`--name demo-vote` 生成的包名是 `openlearn-plugin-demo-vote`，ZIP 因此叫 `openlearn-plugin-demo-vote.zip`。CI 中请按 `dist/*.zip` 取文件，不要硬编码名字。

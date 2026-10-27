@@ -615,6 +615,21 @@ ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
   例如 `poll.create`，不要手写命名空间前缀 —— 宿主会自动加前缀）。
   可用 `node scripts/plugin-command-audit.mjs` 列出仓库内所有「有 handler 无 action」的命令。
 
+#### 3.3.5 同一个 commandType，四种位置三种前缀语义
+
+这是继 default-deny 之后第二高频的 `COMMAND_NOT_REGISTERED` 来源：**写短名还是全限定名，取决于写在哪里**。写错不会报错，只在运行期 403。
+
+| 写在哪里                                                                                                         | 写什么                                    | 宿主是否加 `manifest.id` 前缀           |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
+| `commandBus.registerHandler(type, …)` 、`actionRegistry.register({ commandType })`（及 manifest 里声明的那一份） | 短名，如 `poll.create`                    | ✅ 自动加                               |
+| `manifest.classroomTools[].commandType` / `manifest.contributes.*`                                               | 短名，如 `poll.create`                    | ✅ 自动加                               |
+| 运行期 `ctx.ui.registerExtensionPoint(slot, { slotProps: { commandType } })`                                     | **必须全限定** `{{pluginId}}.poll.create` | ❌ 原样透传（`ui.register` 不做前缀化） |
+| `commandBus.execute()`                                                                                           | 同上一条的对应形态                        | inline 自动加；process 沙箱需全限定     |
+
+> 判断方法：**短名只在你交给宿主存储/索引的位置生效**（manifest、`registerHandler`）；
+> 一旦你自己把命令名写进 `slotProps` 或 `execute()`，就没人替你补前缀了。
+> 不确定时一律写全限定名：它在四处都能解析。
+
 ---
 
 ## 4. 手把手实例项目

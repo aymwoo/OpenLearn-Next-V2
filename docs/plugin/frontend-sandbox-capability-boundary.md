@@ -54,6 +54,50 @@ manifest 声明式贡献（由宿主渲染），而不是它自己的前端代�
 | 使用宿主的 `window.HostSharedDeps`  | realm 隔离，iframe 内为 `undefined`（详见 `plugin-host-shared-deps.md` §0）                                                                       |
 | 让 `import React from 'react'` 生效 | 宿主转译成 `window.HostSharedDeps.React` 后在 iframe 内求值为 `undefined` → 激活抛 `Cannot read properties of undefined`                          |
 
+### 3.2.1 网络与实时性：iframe 内没有网络，实时性只能轮询
+
+上文表只回答「能不能渲染 UI」。还有一条同样致命、但更容易踩的边界：**iframe 内没有网络**。
+
+沙箱页面的 CSP 由宿主写死（`server.ts` 的 `/plugin-sandbox/frame` 路由）：
+
+```text
+default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; style-src 'none'; img-src 'none'; frame-ancestors 'self'
+```
+
+`connect-src 'none'` 的结果很直接：
+
+| 想做的事                           | 实际结果                                                                          |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `fetch(...)` / `XMLHttpRequest`    | 被 CSP 拦下，控制台报 `Refused to connect`；宿主的 API 也连不上                   |
+| 自带 `socket.io-client` 建立长连接 | 同样被拦；沙箱里没有任何可用的出站通道                                            |
+| 等宿主把课堂事件推给 iframe        | 宿主只向 iframe 发三种消息：`load` / `reply` / `deactivate`，**没有事件推送通道** |
+| 调用桥接层未登记的 op              | 抛 `Unsupported sandbox bridge op "<op>"`                                         |
+
+可用的替代只有一条路 —— **全部经宿主代发**。沙箱桥接层只接受 10 个 op
+（`api.get|post|del`、`storage.get|set|delete`、`ui.register`、`ui.toast`、`command.invoke`、`context.get`）：
+
+- 读写数据：`ctx.services.frontendApi.get/post/del`、`ctx.services.storageService.*`
+- 派发命令：`ctx.invokeCommand(type, payload)`
+
+**因此「实时同步」只能轮询**（建议 2–5 秒，按命令成本权衡）：
+
+```ts
+async function startPolling(ctx: SandboxFrontendContext, onState: (s: unknown) => void) {
+  const tick = async () => {
+    const r = await ctx.services.frontendApi.get('/my-plugin/state');
+    if (r.success) onState(r.result);
+  };
+  await tick();
+  const timer = setInterval(tick, 3000);
+  // activate 的返回值不会被沙箱回收，定时器必须在 deactivate() 里清掉
+  return () => clearInterval(timer);
+}
+```
+
+用户反馈同理：iframe 内唯一可用的提示通道是 `ctx.ui.showToast(...)`（宿主代发），
+可见界面只能来自 manifest 声明式贡献。设计「课堂实时互动」类插件时，
+请先在架构上接受「轮询 + 宿主代发」这一前提，而不是事后把它当 bug 排查。
+
 ### 3.3 与「层 2」的矛盾（能力边界 vs 沙箱安全）
 
 要让插件的 **React 组件**出现在宿主页面，插件代码必须回到**父 realm** 执行 ——

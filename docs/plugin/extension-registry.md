@@ -11,6 +11,33 @@ OpenLearn V2 提供了双层扩展点架构：
 
 ---
 
+## 0. 先分清三类扩展面（插件能注册的东西不止 UI 槽位）
+
+| 类别                 | 形态                                            | 典型 API                                                                                                                                                    | 宿主何时消费                 |
+| -------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| UI 槽位 / 声明式贡献 | manifest 声明，或运行期注册**数据型** slotProps | `manifest.contributes`、`ctx.ui.registerExtensionPoint(slot, { slotProps })`                                                                                | 渲染页面时                   |
+| 前端注册表           | 插件提供组件或数据，宿主渲染/调用               | `ctx.ui.registerAssessmentQuestionType` / `registerAssignmentQuestionRenderer` / `registerCoursewareSource` / `registerPaletteItem` / `registerSegmentType` | 对应界面打开时               |
+| 服务端注册表         | 插件往内核注册表里塞定义对象（DI token）        | `ctx.resolve(IToken).register*(...)`                                                                                                                        | 派发命令 / 判分 / 环节流转时 |
+
+### 0.1 服务端与前端注册表总索引
+
+这张表是「非槽位型扩展点」的目录：每个都在 SDK 里导出、插件确实可调。
+
+| 扩展点            | 获取方式                                                  | 注册 / 注销                                                                                                                                    | 宿主自动回收                                                                | 详细文档                                           |
+| ----------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- |
+| 题库题型          | `ctx.resolve(IAssessmentGraderRegistryToken)`             | `registerQuestionType(def, { pluginId })` / `unregisterQuestionType(type, pluginId)`；前端配套 `ctx.ui.registerAssessmentQuestionType(config)` | 前端 ✅（停用时 `clearOwned`）；**服务端 ❌，需在 `deactivate()` 手动注销** | [测评模型](../architecture/assessment-model.md) §4 |
+| 教学环节进入条件  | `ctx.resolve(IStageGuardServiceToken)`                    | `registerGuard(guard, owner)`（返回注销函数）/ `unregisterGuard(id, owner)`                                                                    | ⚠️ 未见宿主自动注销，需自行清理                                             | 本文首次收录                                       |
+| 积分维度          | `ctx.services.pointsDimension`（非 inline 模式为 `null`） | `registerDimension(spec)` / `unregisterDimension(id)`                                                                                          | ✅ 经 `ctx.services` 自动回收；`ctx.resolve()` 拿裸注册表则需自管           | [插件架构](plugin-architecture.md)                 |
+| AI 人格           | `ctx.services.ai`                                         | `registerAIPersona(definition)` / `unregisterAIPersona(id)`                                                                                    | ❌ 插件自管                                                                 | 本文首次收录                                       |
+| 作业题型渲染器    | `ctx.ui`                                                  | `registerAssignmentQuestionRenderer(config)` / `unregisterAssignmentQuestionRenderer(quizType)`                                                | ✅ 停用时 `clearOwned`                                                      | 本文首次收录                                       |
+| 课件内容源 loader | `ctx.ui`                                                  | `registerCoursewareSource(loader)` / `unregisterCoursewareSource(id)`                                                                          | ✅ 停用时 `clearOwned`                                                      | 本文首次收录                                       |
+
+> 🔑 **一条判据能解释上表所有 ✅/❌**：经 `ctx.services.*` 拿到的注册表是宿主包装过的，注册项会自动进
+> `ResourceTracker`，停用/卸载时统一 `disposeAll`；经 `ctx.resolve(token)` 拿到的是**裸注册表**，宿主不知道你注册了什么。
+> 注册这类扩展点时，请自己保存注销函数并在 `deactivate()` 里调用。
+
+---
+
 ## 1. `ContributionRegistry` 声明式贡献点
 
 实现位置：`packages/core/plugin-host/contribution-registry.ts`
