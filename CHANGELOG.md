@@ -3,12 +3,99 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.4**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.7.3**) and `@openlearn/plugin-test-kit` (currently **3.3.3**).
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.7.5] - 2026-10-27
+
+### Features
+
+- **学生上传的作业附件终于能预览了，并留出扩展插槽给插件接管冷门格式**：
+  - **问题**：学生上传的作业附件过去**只有文件名** —— 待提交列表只能看到名字和大小，
+    已归档提交（`files_json` 快照）里连附件名都没渲染；想看内容只能下载下来自己打开。
+    而 docx/pptx/xlsx/zip 这些格式，浏览器原生**根本渲染不了**。
+  - **内置预览（四种形态，判定规则前后端共用同一份）**：
+    - 图片（png/jpg/gif/webp/bmp/svg/heic）→ `<img>`；
+    - PDF → `<iframe>`（服务端以 `inline` 返回，浏览器内置查看器渲染）；
+    - 纯文本 / 代码 / 数据（txt/md/csv/json/xml/html/css/各类源码）→ `<pre>`，
+      **按文本渲染，绝不解析成 HTML**；
+    - 其余（docx/pptx/xlsx/zip/rtf…）→ 明确提示「暂不支持预览」+ 下载入口，
+      并展示扩展插槽里声明能处理该类型的插件。
+  - **docx/pptx/xlsx 故意不内置解析**：要么引入重依赖，要么自己写 OOXML 解析器
+    （既是安全面也是维护面）。平台不猜，插件声明自己能处理什么类型 ——
+    这就是新增的 `assignment.file.preview` **数据型扩展插槽**。
+  - **插槽契约**：`extensions` / `mimeTypes` 声明能处理的类型（宿主按当前附件的
+    扩展名比对，命中才渲染 —— 只会处理 `.docx` 的预览器不会出现在 `.png` 的对话框里）；
+    点击后由宿主派发 `commandType`，payload 带 `fileId` / `assignmentId` /
+    `downloadUrl` / `inlineUrl`。远程插件也能用（数据型贡献不依赖 React 组件）。
+  - **接入三个真实入口**：学生「提交作业」弹窗（待提交附件 + 已归档提交里的附件快照）、
+    作业互评面板（同伴附件）、学生作业评估面板。
+  - **安全口径（三条铁律）**：
+    1. 内容一律走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+       不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）；
+    2. 服务端按**扩展名**推导 Content-Type，**绝不采信上传时客户端自报的 mime**
+       （那是客户端说了算的，拿它决定浏览器的解释方式等于把「文件被当成什么」
+       交给上传者）；
+    3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），
+       不允许 inline —— inline 回去等于把学生上传的文件变成同源页面，能读 cookie、
+       能调本平台 API。SVG 仍可预览，但只走 `<img>`（图片上下文不执行 SVG 脚本）。
+  - **判定规则单点化**：`packages/core/assignment/file-preview-policy.ts`（前后端共用），
+    避免前端认为是图片、后端按 text/plain 返回这类漂移。
+  - **验证**：策略单测 13 例；作业中心路由单测 25 例（含 inline 的 Content-Type 推导、
+    可执行文档强制下载、预览模式不放水鉴权）；预览组件单测 7 例（渲染形态选择、
+    文本不进 innerHTML、插槽按类型匹配）。
+  - **影响面**：新增 `packages/core/assignment/file-preview-policy.ts`、
+    `src/components/AssignmentFilePreview.tsx`；
+    改动 `server/routes/assignment-hub.ts`（下载端点支持 `?disposition=inline`）、
+    `src/plugin-host/types.ts`（新增槽位与 props）、`packages/core/esm-loader/manifest-schema.ts`
+    （manifest 收录新槽位）、`src/plugin-host/extension-point-renderer.tsx`（按扩展名过滤）、
+    三个前端接入点。
+
+- **C 组立项并启动实施：Student Workspace 迁移 P1（特性开关并行预览）**
+  - **立项前先纠正了前提 —— 这不是"搬迁"，是"重建"**。代码级对齐的结论与直觉相反：
+
+    |              | 现行学生端                                                | C 组壳                         |
+    | ------------ | --------------------------------------------------------- | ------------------------------ |
+    | 真实面板组件 | **25 个**                                                 | **0 个**                       |
+    | 单测文件     | **31 个**                                                 | 3 个（测注册表/会话，不测 UI） |
+    | E2E 覆盖     | **22 条 spec**                                            | **0**（从未挂载过）            |
+    | 业务逻辑     | 课堂跟随/环节门禁/答题/作业/进度/成绩/点名/破冰/成长档案… | 无                             |
+
+    C 组那 1,403 行主要是**基础设施**（context / slot registry / session / layout 底座）。
+    `student-default-widgets.tsx` 的 9 个 wrapper 里 **3 个是明确占位**（资源、公告，
+    以及通知 —— `useState<any[]>([])`，**恒为空数组**，不是接真数据），其余是薄包装。
+    所以真实工作量 = **把 25 个面板移植到新布局底座**；按"搬 1,403 行"估工会严重低估。
+
+  - **P1 只做一件事：让壳"能被打开、能被测"**，不改变任何现有行为。
+    - 入口是显式 URL `?studentShell=workspace`（`src/components/StudentWorkspacePreview.tsx`）；
+    - `AppShell` 用**独立 `lazy()`**，默认路径不会把它打进学生端 chunk；
+    - 预览页顶部显示「功能不等价于现有学生端」横幅，避免被误认为已完成；
+    - 无学生身份时不渲染（不造假身份去跑壳）；
+    - 不碰 `AppDataContext` 的课堂状态、不发 socket 事件 → 现行学生端**零影响**。
+  - **首次验证了壳能真的渲染**：它此前从未进入可达图，崩溃与否是未知数。新增
+    `e2e/student-workspace-preview.spec.ts` 2 例（默认关闭时预览壳不出现；显式开启时
+    渲染成功且**无未捕获页面错误**）—— 两条均通过。
+  - **新增 `docs/student-workspace-migration.md`**：分期计划（P1 并行挂载 → P2 按
+    "只读优先"分 4 批迁移面板 → P3 灰度切流 → P4 删除旧壳）、每期门禁、
+    风险对策（实时链路双跑 / 环节门禁语义漂移 / 插件插槽兼容 / 回滚不彻底）。
+    关键约束：P2 每批都必须**面板在旧壳与新壳同时可用**，确认等价后才摘旧的；
+    实时 + 服务端门禁的 `StudentLesson*` 排最后。
+  - **验证**：全量单测 **604 files / 4,983 passed / 0 failed**（+2 新文件）；`tsc` 通过；
+    ESLint 6243（=基线未新增）；格式门禁 1,892 文件 0 不合规；全量 e2e 36 passed
+    （34 基线 + 2 新增），2 条失败是 #306 正在修的既有问题（课表对比度 / 机房选中态），
+    与本 PR 无关。
+
+- **把三个「已实现、有单测、但零生产引用」的前端模块接进产品**（审计收尾项）：
+  - **导航注册表（`src/features/navigation`）成为侧边栏唯一数据源**：此前 9 个入口的组标题、顺序、图标、文案、角色可见性全硬编码在 `NavigationSidebar.tsx` 的 JSX 里，插件贡献的 tab 又走另一条渲染路径（`ExtensionPointRenderer` + slot `teacher.tab`），两套机制各自为政。现改为按 registry 数据渲染；plugin 贡献仍走扩展槽 —— 那要渲染插件自带的 React 组件，与内置按钮不是一回事，不硬塞进同一份数据。同时把 registry 里那套**从未被任何组件使用过**的草案模型（`'admin'`/`'student'` 角色词表、`management`/`analytics` 分组、插件合并函数）改成**已上线**的真实模型（只出现在教师工作区的 4 个分组、9 个入口、`administratorOnly`）。
+  - **全局命令面板（`src/features/command-palette`）**：`Cmd/Ctrl + K` 唤起。内置跳转命令**由 navigation registry 生成**，与侧边栏同源 —— 新增入口只改一处，两处同时出现，不会漂移；另含界面开关与 4 个主题切换，共 18 条。命令面板组件本身早已被插件贡献用法（`command_palette.item`）复用，所以另做一个宿主 `CommandPaletteHost` 去读 AppDataContext，不把上下文依赖塞进可复用组件。
+  - **「/」快速插入（`src/features/quick-insert`）**：在组件面板搜索框输入 `/` 唤起伏层。插入项**由 `paletteConfig.PALETTE_ITEMS` 派生** —— 可插入内容的唯一事实来源是画板组件清单，绝不另立一份（两份必然漂移，插入的元素类型会对不上）。
+  - **没有接的 14 个（有意为之，见 PR 说明）**：`ai-teaching-workflow` / `lesson-workflow` 是 36L/42L 的 getter-setter 空壳，且与**已在跑**的 `packages/core/lesson-engine` + `server/services/classroom-runtime-service.ts`（真实的 9 阶段状态机 + 服务端门禁）重叠；`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context` 是一套没有任何生产消费方的 AI 注册层（`server/ai-agent.ts` 并不查它们）；`classroom-runtime` / `interaction-runtime` 分别与已上线的课堂链路、白板 DOM 事件重叠；`student-workspace`(+`workspace`/`resource-runtime`/`ai-teacher-workspace`) 是**第二套学生端壳**，与当前在跑的 `src/features/student`（6 个引用方、63 个文件）互斥。强行接线 = 替换已验证可用的子系统，应单独立项。
+  - **测试**：`navigation-registry.test.ts` 重写为 8 例（守真实模型：分组顺序、9 个 tab 清单、id/tab 唯一、管理员可见性、排序、双语解析、highlight）；新增 `builtin-commands.test.tsx` 9 例、`builtin-items.test.tsx` 5 例、`e2e/command-palette.spec.ts` 2 例（真实浏览器里唤起→搜索→执行→侧边栏进入选中态）。
+  - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
 
 ### Fixes
 
@@ -109,210 +196,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     `slate-400`（`opacity-60` 会把对比度进一步压到 2:1 以下）。
   - **验证**：本地跑 `e2e/a11y-gate.spec.ts` —— 修前 1 failed（3 条违规），
     修后 **5 passed / 0 违规**。
-
-### Features
-
-- **学生上传的作业附件终于能预览了，并留出扩展插槽给插件接管冷门格式**：
-  - **问题**：学生上传的作业附件过去**只有文件名** —— 待提交列表只能看到名字和大小，
-    已归档提交（`files_json` 快照）里连附件名都没渲染；想看内容只能下载下来自己打开。
-    而 docx/pptx/xlsx/zip 这些格式，浏览器原生**根本渲染不了**。
-  - **内置预览（四种形态，判定规则前后端共用同一份）**：
-    - 图片（png/jpg/gif/webp/bmp/svg/heic）→ `<img>`；
-    - PDF → `<iframe>`（服务端以 `inline` 返回，浏览器内置查看器渲染）；
-    - 纯文本 / 代码 / 数据（txt/md/csv/json/xml/html/css/各类源码）→ `<pre>`，
-      **按文本渲染，绝不解析成 HTML**；
-    - 其余（docx/pptx/xlsx/zip/rtf…）→ 明确提示「暂不支持预览」+ 下载入口，
-      并展示扩展插槽里声明能处理该类型的插件。
-  - **docx/pptx/xlsx 故意不内置解析**：要么引入重依赖，要么自己写 OOXML 解析器
-    （既是安全面也是维护面）。平台不猜，插件声明自己能处理什么类型 ——
-    这就是新增的 `assignment.file.preview` **数据型扩展插槽**。
-  - **插槽契约**：`extensions` / `mimeTypes` 声明能处理的类型（宿主按当前附件的
-    扩展名比对，命中才渲染 —— 只会处理 `.docx` 的预览器不会出现在 `.png` 的对话框里）；
-    点击后由宿主派发 `commandType`，payload 带 `fileId` / `assignmentId` /
-    `downloadUrl` / `inlineUrl`。远程插件也能用（数据型贡献不依赖 React 组件）。
-  - **接入三个真实入口**：学生「提交作业」弹窗（待提交附件 + 已归档提交里的附件快照）、
-    作业互评面板（同伴附件）、学生作业评估面板。
-  - **安全口径（三条铁律）**：
-    1. 内容一律走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
-       不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）；
-    2. 服务端按**扩展名**推导 Content-Type，**绝不采信上传时客户端自报的 mime**
-       （那是客户端说了算的，拿它决定浏览器的解释方式等于把「文件被当成什么」
-       交给上传者）；
-    3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），
-       不允许 inline —— inline 回去等于把学生上传的文件变成同源页面，能读 cookie、
-       能调本平台 API。SVG 仍可预览，但只走 `<img>`（图片上下文不执行 SVG 脚本）。
-  - **判定规则单点化**：`packages/core/assignment/file-preview-policy.ts`（前后端共用），
-    避免前端认为是图片、后端按 text/plain 返回这类漂移。
-  - **验证**：策略单测 13 例；作业中心路由单测 25 例（含 inline 的 Content-Type 推导、
-    可执行文档强制下载、预览模式不放水鉴权）；预览组件单测 7 例（渲染形态选择、
-    文本不进 innerHTML、插槽按类型匹配）。
-  - **影响面**：新增 `packages/core/assignment/file-preview-policy.ts`、
-    `src/components/AssignmentFilePreview.tsx`；
-    改动 `server/routes/assignment-hub.ts`（下载端点支持 `?disposition=inline`）、
-    `src/plugin-host/types.ts`（新增槽位与 props）、`packages/core/esm-loader/manifest-schema.ts`
-    （manifest 收录新槽位）、`src/plugin-host/extension-point-renderer.tsx`（按扩展名过滤）、
-    三个前端接入点。
-
-- **C 组立项并启动实施：Student Workspace 迁移 P1（特性开关并行预览）**
-  - **立项前先纠正了前提 —— 这不是"搬迁"，是"重建"**。代码级对齐的结论与直觉相反：
-
-    |              | 现行学生端                                                | C 组壳                         |
-    | ------------ | --------------------------------------------------------- | ------------------------------ |
-    | 真实面板组件 | **25 个**                                                 | **0 个**                       |
-    | 单测文件     | **31 个**                                                 | 3 个（测注册表/会话，不测 UI） |
-    | E2E 覆盖     | **22 条 spec**                                            | **0**（从未挂载过）            |
-    | 业务逻辑     | 课堂跟随/环节门禁/答题/作业/进度/成绩/点名/破冰/成长档案… | 无                             |
-
-    C 组那 1,403 行主要是**基础设施**（context / slot registry / session / layout 底座）。
-    `student-default-widgets.tsx` 的 9 个 wrapper 里 **3 个是明确占位**（资源、公告，
-    以及通知 —— `useState<any[]>([])`，**恒为空数组**，不是接真数据），其余是薄包装。
-    所以真实工作量 = **把 25 个面板移植到新布局底座**；按"搬 1,403 行"估工会严重低估。
-
-  - **P1 只做一件事：让壳"能被打开、能被测"**，不改变任何现有行为。
-    - 入口是显式 URL `?studentShell=workspace`（`src/components/StudentWorkspacePreview.tsx`）；
-    - `AppShell` 用**独立 `lazy()`**，默认路径不会把它打进学生端 chunk；
-    - 预览页顶部显示「功能不等价于现有学生端」横幅，避免被误认为已完成；
-    - 无学生身份时不渲染（不造假身份去跑壳）；
-    - 不碰 `AppDataContext` 的课堂状态、不发 socket 事件 → 现行学生端**零影响**。
-  - **首次验证了壳能真的渲染**：它此前从未进入可达图，崩溃与否是未知数。新增
-    `e2e/student-workspace-preview.spec.ts` 2 例（默认关闭时预览壳不出现；显式开启时
-    渲染成功且**无未捕获页面错误**）—— 两条均通过。
-  - **新增 `docs/student-workspace-migration.md`**：分期计划（P1 并行挂载 → P2 按
-    "只读优先"分 4 批迁移面板 → P3 灰度切流 → P4 删除旧壳）、每期门禁、
-    风险对策（实时链路双跑 / 环节门禁语义漂移 / 插件插槽兼容 / 回滚不彻底）。
-    关键约束：P2 每批都必须**面板在旧壳与新壳同时可用**，确认等价后才摘旧的；
-    实时 + 服务端门禁的 `StudentLesson*` 排最后。
-  - **验证**：全量单测 **604 files / 4,983 passed / 0 failed**（+2 新文件）；`tsc` 通过；
-    ESLint 6243（=基线未新增）；格式门禁 1,892 文件 0 不合规；全量 e2e 36 passed
-    （34 基线 + 2 新增），2 条失败是 #306 正在修的既有问题（课表对比度 / 机房选中态），
-    与本 PR 无关。
-
-### Refactor / Performance
-
-- **清点 `src/features/` 下 12 个「有实现、有单测、但生产零引用」的孤儿模块，按风险分三组处置**：
-  - **怎么发现的**：从真实入口（`src/App.tsx` / `src/main.tsx` / `server.ts` / `cli-data.mjs`）做可达性分析（解析相对路径、`@/` 别名、`.js`→`.ts`、动态 `import()`）：859 / 983 个文件可达，**124 个不可达，其中 17 个是整模块**。
-  - **⚠️ 一个必须记住的陷阱**：只统计「有没有外部 import」会把死模块误判成活的 —— `workspace` / `resource-runtime` / `ai-teacher-workspace` 的引用方只有彼此和 `student-workspace` 这个**自洽循环**，从入口出发根本到不了。判断「活的」必须从入口做可达性。
-  - **A 组 · 删除（4 个，共 1,029 行源码 + 6 个测试文件）**：`lesson-workflow` / `ai-teaching-workflow` / `classroom-runtime` / `interaction-runtime`。
-    - 前两个是 61L/55L 的裸 setter（`advanceStage(target)` 不校验、不落库、不发事件）—— 接线等于给服务端门禁（`CLASS_LOCKED`→409 / `Illegal transition`→400）开后门；
-    - `classroom-runtime` 自带的 9 阶段（`Create/Prepare/Ready/Teaching/Paused/Resumed/Finished/Archived/Disposed`）与在用的 `classroom_sessions.stage`（含 `ARCHIVED_REPORT`）词表不兼容，且有独立的 `classroom.created/paused/…` 事件命名空间，接上会与 socket 事件流**双写**；
-    - `interaction-runtime` 是第二个 Keyboard/Mouse/Touch 派发器，而白板已自接管 DOM 事件（111 文件、E2E 覆盖最重）—— 接它=双处理，或得拆掉白板的 handler。
-  - **B 组 · 标注 `@experimental` 不接线（4 个）**：`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context`。理由：`server/ai-agent.ts` 并不查它们，插件贡献 AI 能力已走活的扩展槽位（`ai_sidebar.tab`、`anchor:whiteboard-toolbar:ai-tutor`）与通用通道 `/api/plugins/execute-command` —— **功能上是冗余的**；而接线要重写一条正在工作的 AI 链路，且 AI 功能需配 provider 才能验证，CI 覆盖不到。每个 `index.ts` 头部写明「为什么保留」与「接线前置条件」（首要一条：不能让新注册表绕过 `action.capabilityRequired` 的授权）。
-  - **C 组 · 留待产品决策（4 个）**：`student-workspace` + 依赖它的 `workspace` / `resource-runtime` / `ai-teacher-workspace`。它们是**第二套学生端壳**，接通 = 替换现在能跑的 `src/features/student`（63 文件、6 个引用方）；25 条 E2E 里 22 条涉及学生端。已写入迁移前置条件（功能对齐 / 全量学生端 E2E 重验 / 插件槽位兼容 / 可一键回滚）。
-  - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
-  - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
-
-### Features
-
-- **把三个「已实现、有单测、但零生产引用」的前端模块接进产品**（审计收尾项）：
-  - **导航注册表（`src/features/navigation`）成为侧边栏唯一数据源**：此前 9 个入口的组标题、顺序、图标、文案、角色可见性全硬编码在 `NavigationSidebar.tsx` 的 JSX 里，插件贡献的 tab 又走另一条渲染路径（`ExtensionPointRenderer` + slot `teacher.tab`），两套机制各自为政。现改为按 registry 数据渲染；plugin 贡献仍走扩展槽 —— 那要渲染插件自带的 React 组件，与内置按钮不是一回事，不硬塞进同一份数据。同时把 registry 里那套**从未被任何组件使用过**的草案模型（`'admin'`/`'student'` 角色词表、`management`/`analytics` 分组、插件合并函数）改成**已上线**的真实模型（只出现在教师工作区的 4 个分组、9 个入口、`administratorOnly`）。
-  - **全局命令面板（`src/features/command-palette`）**：`Cmd/Ctrl + K` 唤起。内置跳转命令**由 navigation registry 生成**，与侧边栏同源 —— 新增入口只改一处，两处同时出现，不会漂移；另含界面开关与 4 个主题切换，共 18 条。命令面板组件本身早已被插件贡献用法（`command_palette.item`）复用，所以另做一个宿主 `CommandPaletteHost` 去读 AppDataContext，不把上下文依赖塞进可复用组件。
-  - **「/」快速插入（`src/features/quick-insert`）**：在组件面板搜索框输入 `/` 唤起伏层。插入项**由 `paletteConfig.PALETTE_ITEMS` 派生** —— 可插入内容的唯一事实来源是画板组件清单，绝不另立一份（两份必然漂移，插入的元素类型会对不上）。
-  - **没有接的 14 个（有意为之，见 PR 说明）**：`ai-teaching-workflow` / `lesson-workflow` 是 36L/42L 的 getter-setter 空壳，且与**已在跑**的 `packages/core/lesson-engine` + `server/services/classroom-runtime-service.ts`（真实的 9 阶段状态机 + 服务端门禁）重叠；`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context` 是一套没有任何生产消费方的 AI 注册层（`server/ai-agent.ts` 并不查它们）；`classroom-runtime` / `interaction-runtime` 分别与已上线的课堂链路、白板 DOM 事件重叠；`student-workspace`(+`workspace`/`resource-runtime`/`ai-teacher-workspace`) 是**第二套学生端壳**，与当前在跑的 `src/features/student`（6 个引用方、63 个文件）互斥。强行接线 = 替换已验证可用的子系统，应单独立项。
-  - **测试**：`navigation-registry.test.ts` 重写为 8 例（守真实模型：分组顺序、9 个 tab 清单、id/tab 唯一、管理员可见性、排序、双语解析、highlight）；新增 `builtin-commands.test.tsx` 9 例、`builtin-items.test.tsx` 5 例、`e2e/command-palette.spec.ts` 2 例（真实浏览器里唤起→搜索→执行→侧边栏进入选中态）。
-  - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
-
-### Docs
-
-- **插件文档补一份「非 UI 型扩展点总索引」，并把「新增扩展点必须写文档」变成第六段门禁（Issue #322）**：
-  - **现象**：9 个真实的「插件可注册领域扩展点」里，有 6 个在 `docs/plugin/` 与 `docs/tutorials/` 下**一次都没出现**
-    （题库题型只散落在 `docs/architecture/assessment-model.md`），其中 3 个更只出现在 `docs/architecture/` 下。
-    第三方作者据此形成的合理结论是「平台只支持 UI 槽位」。
-  - **文档改法**：`docs/plugin/extension-registry.md` 新增 §0 三类扩展面、§0.1 九行注册表总索引
-    （获取方式 / 注册注销 API / 回收路径 / 可用范围）、§0.3 九节逐个上手（最小示例 + 回收时机 + 常见错用），
-    并补一条维护约定：新增插件可注册的注册表时必须在同一 PR 登记一行。
-  - **门禁改法**：新增 `audit-tools/extension_points_coverage.py` + `audit-tools/extension-point-policy.json`，
-    接入 `audit-tools/run.sh` 第 2.8 段（与既有的槽位覆盖门禁同构）。
-    **真值从源码推导**（`PLUGIN_RESOLVABLE_TOKENS` + 各接口体里的 `register*` 方法），
-    不靠人手维护 token 清单 —— 上一版索引表本身就是漏的，人工清单必然腐化。
-    分级沿用槽位门禁的 L0/L1/L2/L3：L0（插件文档里从未出现）计 drift，其余仅提示；
-    豁免必须指明覆盖文档且门禁核对该文档确实提到该方法，豁免指向的 (token, method) 在源码里已不存在则计 drift。
-  - **验证**：门禁上线当天即抓出 3 个漏登记的扩展点（`registerStageGuard` / `registerActivityProvider` /
-    `registerAIContextProvider`）与 1 条失效豁免；新增 `scripts/__tests__/extension-points-coverage.test.ts` 5 条
-    （含两条负向对照）。`bash audit-tools/run.sh` → `drift_count=0`（新增 `ext_point_drift=0`）。
-  - **顺带发现**：`registerStageGuard` 与 `unregisterActivityProvider` 生产代码零调用方 —— 宿主同样不清理这两个扩展点，
-    已另开 Issue #327，并在后续修复中通过 `ctx.resolve` 层代理解决（见本段上方的 #327 条目）。
-
-- **扩展槽位文档补齐 20 个缺口，并把「新增槽位必须写文档」变成第五段门禁**：
-  - **问题**：`docs/reference/plugin-ui-extension-slots.md` 是插件作者查槽位的唯一入口，但它只列了 **100** 个成员，而 `src/plugin-host/types.ts` 的 `ExtensionSlot` 实际有 **120** 个 —— 页面正文写「115 个」、代码块只有 100 个、§2 的 props 表更少。缺的 20 个里包括整个测评子系统（`assessment.list.card` / `.attempt.toolbar` / `.stats.card`）、整个教师批改面板（`assignment.grade.toolbar.action` / `.item.addon` / `.rubric.addon`）、命令面板与斜杠菜单（`command_palette.item` / `quick_insert.item`）、AI 生态（`ai.prompt.template` / `ai.skill.provider`）等。**这 20 个槽位在 docs/ 里一次都没提过**，插件作者只能读宿主源码猜 props。
-  - **为什么数字会漂**：槽位是逐批加进联合类型的，每次只改代码不补文档，而既有四段门禁（子系统 / 路径内链 / 符号 / 插件示例）**没有一段关心槽位覆盖**。上一轮把数字从「119」改成「115」时也只是换了个错的数——真正缺的是**逐条比对**，不是再猜一次总数。
-  - **补法**：①§1 代码块与 `types.ts` 逐条对齐（100 → 120，含分组注释）；②§2 props 表补 20 行，每行标真实调用点与实际注入的 props；③新增 **§12「后续新增槽位的使用说明」**（7 小节），写清语义与坑，而不是只列名字：
-    - `assessment.list.card` 的 `viewer` **恒为 `'teacher'`**（类型声明含 `'student'`，但学生端从不渲染，按学生分支写就是死代码）；三个测评槽位均走白名单投影，`answerKey` / 学生身份永不进入 props；
-    - `assignment.grade.item.addon` 的评分必须经 `onScoreChange` / `onCommentChange` 写入，直接改 `submission` 无效；`rubric.addon` 的学生权重**没有**回调；
-    - `editor.segment.type_config` **不做类型过滤**，插件必须自己判 `segmentType` 并返回 `null`，否则配置面板会出现在每个环节上；`editor.timeline.node_badge` 在 `SegmentEditorCard` 调用点的 `isActive` 恒 `true`；
-    - `classroom.active_segment.main` 是**并列**渲染而非替换内置工作区，且容器高度受限（全屏要走 `registerFullscreenRenderer`）；
-    - `timetable.entry.action` 在周历卡片与列表行**各渲染一次**，action 必须幂等；`timetable.import.source` 只调 `onImportEntries`，不要自己写库；
-    - `course.wizard.quick_apply` 的 `setWizardCourseTimeline` 是**覆盖式赋值**，追加要基于传入值自己拼；
-    - `command_palette.item` / `quick_insert.item` 是数据型槽位，给出完整 `slotProps` 契约与 manifest 等价写法，并说明 `shortcut` 只用于展示、`commandType` 未注册会点不动；
-  - ④§1 新增「`contributes` 键 ≠ `ExtensionSlot`」表，登记 4 个只在 manifest schema 里的声明式键（`timeline.segments` / `palette.items` / `teacher.cockpit.widget` / `workspace.view`），其中 **`teacher.cockpit.widget` 有 schema 有类型但前端零消费点**，写进 manifest 不会生效。
-  - **第五段门禁（新增 `audit-tools/extract_slots.py` + `slots_coverage.py`）**：前者从 `types.ts` 联合类型、`<ExtensionPointRenderer slot=…>` 生产调用点、`contributes` 注册表三处生成槽位清单真值；后者把 128 个槽位（120 固定 + 8 锚点）逐个按 **L0 不存在 / L1 仅提及 / L2 有说明无示例 / L3 说明+示例** 四级比对 docs/。**只有 L0 计入 drift**，L1/L2 仅提示——按「文档能不能让人用起来」判定，该拦的是「一个字都没有」，不是「写得不够漂亮」。锚点单列规则：8 个锚点注册契约同构（名字 + `placement`/`position` + `component`），一个有具体锚点名的示例即可覆盖，不要求 8 份复制粘贴（理由写在脚本注释里）。
-  - **顺带修正的三处口径**：§1 正文「115 个」→ **120**；§12（现 §13）统计表「生产调用点固定名槽位 **99**」→ **116**，并单列「无渲染器的成员 **4**」——此前把 `ai.skill.provider` 一并算进「声明但无渲染器 = 0」是错的；计数口径那段原写「`grep -c` 会把数字虚高到 **120**」，在真值就是 120 之后这句话会误导，改为说明该命令为何不准并给出可复跑的脚本路径。
-  - **验证**：`slot_drift=0` / `slot_hints=0`（128/128 全 L3）；`bash audit-tools/run.sh` → `drift_count=0`（canonical / ref / env / plugin_docs / slot 五段全绿）；`sphinx-build -b html docs -W --keep-going` exit=0、**0 警告**；`prettier --check` 通过。负向测试两条：把文档里的 `assessment.stats.card` 整名替换 → `slot_drift=1`、`run.sh` exit 1；替换成 `assessment.stats.card_REMOVED`（**原名变成前缀**）→ 同样判 L0。后者是首轮测试才暴露的真 bug：判定原本用 `slot in text`，把「写了 `class.tabX` 这种不存在的槽位」也算成已覆盖，已改为带词边界的正则。
-
-- **文档站在 GitHub 与 RTD 上行为不一致：146 条链接在 GitHub 上 404、22 条锚点在站内跳不动**：
-  - **背景**：文档已发布在 Read the Docs（仓库根的 `.readthedocs.yaml`，每次 push 自动构建），但站内链接存在两套写法 —— 73 条带 `.md`、148 条不带。不带的只有 Sphinx 认，GitHub 上全部 404，而 GitHub 是 AI Agent 与开发者读仓库的实际入口。
-  - **锚点根因**：docutils 0.22 起 `make_id()` 用 `encode('ascii','ignore')` 剥掉全部非 ASCII，**纯中文标题的 section id 退化成 `id1`/`id2`**（线上页面已核实 `id="id1"`）；而作者是按 GitHub 规则写锚点的（`#4-公测上线检查清单`），于是 28 条带锚点链接里 22 条是死的。新增 `docs/_slug.py` 复刻 GitHub 的 slug 算法并 patch `make_id`，死锚 22 → 0，且两边锚点从此一致。两个实现细节都实际踩过：函数必须放独立模块（config 要 pickle，`__main__` 里的函数会让构建直接崩）、用可调用对象而非函数（`is_serializable()` 拦 `FunctionType`）。
-  - **警告**：Sphinx 构建从 18 warnings 降到 **0**（`-W --keep-going` exit=0）。含 6 条未收录文档挂进 toctree、2 条指到 docs 树外的引用改 GitHub 绝对地址、`jsonc`/`dotenv` 换成 Pygments 认识的 lexer、`${studentId}` 被嵌套反引号误当 MyST role、以及 `(label)=` 注册成功但 `file.md#label` 被当锚点而非 label 查（改用 `{ref}`）。
-  - **顺带定位的 Pygments 缺陷**：TS/TSX lexer 遇到**接口方法参数里的泛型逗号**（`Record<string, unknown>`）会产 Error token —— 连放在 `type` 别名里也触发，二分定位到具体行。示例改用 `unknown` / 拆独立 interface 绕过。
-  - **门禁**：`.readthedocs.yaml` 开 `fail_on_warning: true`，死链/死锚点/未知 lexer 不再能静默上线；`docs/contributing/contributing.md` 新增 §4.1 本地构建（含 `/tmp` 是 10MB tmpfs 时必须改 `TMPDIR` 的坑）与 §4.2 三条写作硬约束。
-  - **入口**：`AGENTS.md` 里 `docs/plugin-development-tutorial.md` 是死路径（实际在 `docs/tutorials/`），而它是 AI Agent 进仓库的第一个入口；一并补了「按目标找文档」的路由表，并提醒 `docs/` 下的审计页是带日期的快照。
-
-- **发布 tag 有了命名约定，SDK 的 tag 门禁从「空转」变成真的**：
-  - **现状**：50 个 tag 里 26 个 annotated、24 个 lightweight；SDK 从 3.3 到 3.7.0 **一个 tag 都没有**。`publish.sh` 里对 SDK 也调了 `assert_version_not_taken`，但它内部查的是 `refs/tags/v3.7.1` —— 一个按约定永远不会出现的 ref，实际是零保护。
-  - **约定**：平台 `v<X.Y.Z>`（`docker-rehearsal` 的 `v*` / `upgrade-regression` 的 `v*.*.*` 认它）、SDK `plugin-sdk-v<X.Y.Z>`、test-kit `plugin-test-kit-v<X.Y.Z>`；一律 annotated；tag 必须先于发布、指向 bump 提交；同源用 npm 自动记录的 `gitHead` 对账（不往 tag message 里塞 shasum —— tag 打在发布之前，那时还没有 shasum）。前缀不以 `v` 开头，顺带保证 SDK 发版不会误触发平台那两个发版作业。
-  - **门禁**：`publish.sh` 的占用检查改为按包名取前缀，缺 tag 直接拒绝并打印该执行的两行命令；`assert-publishable.mjs` 挂到 SDK 与 test-kit 的 `prepublishOnly`（前缀由包名自动推导，`--tag-prefix` 仅作例外），绕过脚本直接 `npm publish` 也会被同一套判据拦下 —— 实测 test-kit 的 `workspace:*` 就地被抓出。指向不同提交、缺 tag、正常放行三条路径都做了负向/正向验证。
-  - **补记**：`@openlearn/plugin-sdk@3.7.1` 补打 `plugin-sdk-v3.7.1`（annotated，指向发布提交 `c77b6fe`，与 registry 的 `gitHead` 一致）。历史欠账（14 处 tag/npm 双向漏配，含 `0.7.0`–`0.7.2` 有 tag 但 npm 上 404）只登记不回填，理由见 `docs/contributing/contributing.md` §2.1。
-
-- **`@openlearn/plugin-sdk@3.7.1` 已发布到 npm**（脚手架 `frontend.tsx` 契约修复，详见该包 CHANGELOG）：
-  - 文档侧同步：26 篇的 `<!-- doc-version: sdk=3.7.0 -->` 与「适用范围」升到 `3.7.1`；`scaffold-cli` / 教程里两处「3.7.0 上仍需手改」的提示改为「3.7.1 起已修好，升级即免手改」。
-  - 顺带修正 `version-migration.md` 头部的版本快照（平台 `0.7.2` → `0.7.4`，SDK `3.7.0` → `3.7.1`）。
-  - **发布前按消费者视角实测**：`npm pack` → 空项目 `npm i <tarball>` → 装到的 CLI 跑 `init`/`build` → `import dist/frontend.js` 断言 `activate` 是函数。包内 17 个文件，`scaffold/templates/` 12 个文件齐全。
-
-- **插件教程 §6 拆成两篇：`plugin-frontend-guide` 与 `plugin-courseware-extensions`**：
-  - **动因**：§6 单章 580 行、占全文 22%，且混了两类读者前提不同的内容——「前端 bundle 怎么被加载」与「教学内容怎么进课堂」。上一轮审计已指出这 580 行里的 React 组件写法对第三方插件不可用，留在主教程里只会继续误导。
-  - **拆法**：`plugin-frontend-guide.md`（三档加载、`FrontendPluginContext`、前端服务接口、扩展槽位、图标与导航、`invokeCommand`、`HostSharedDeps` 与构建排查）；`plugin-courseware-extensions.md`（Palette Item / Segment Type / Gate，每节补**声明式等价写法**）。主教程 §6 收敛为导航表 + 档位警示（580 → 21 行）。
-  - **顺带修掉**：原文两个 `### 6.7` 重号（现分别落在前端指南 §7.1 / §7.2）；`docs/index.md` 侧栏补两篇（此前只在教程内可达）；`plugin_docs_check.py` 的 glob 补两篇新文档（docs 20 → 22），新文档的示例同样过 P1–P4；`plugin-ui-extension-slots.md` 的槽位总数从「119 个」（且复现不出来）改为实测 **115** 个字符串字面量成员，并写清可复跑的计数口径（`grep -c "^  | '"` 会把别的联合类型算进去，虚高到 120）。
-  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`，`prettier --check docs/` 通过；首跑新文档时 `ctx.ui.showToast` 被 P4 判为「不是 FrontendPluginContext 的方法」——该块讲的正是**沙箱 RPC 上下文**（另一份契约），已改用 `bridge` 命名消除歧义。
-
-- **插件开发文档可用性审计：按「AI Agent 只读文档能否写出能用的第三方插件」重校，修掉 8 处会直接害人的指引**：
-  - **口径**：此前审计都是「文档 vs 代码」的事实核对；这次换成可用性验证——照着文档实跑 `init → npm install → build → 拆 ZIP`，再对照宿主加载器判断结果能不能用。
-  - **最严重的一条：教程 22% 的内容对目标读者不可用**。§6「前端插件系统」共 580 行（全文 2623 行）教 `ctx.ui.registerExtensionPoint({ component })`，但第三方插件被 `execution-policy.ts` 强制为 `process`，前端跑在 `sandbox="allow-scripts"` 的**隐藏** iframe 里：`component` 是函数、`postMessage` 无法克隆（`DataCloneError`），`import React` 与 `window.HostSharedDeps` 均为 `undefined`。**第三方插件无法提供任何可见 UI**。已在 §2.2 展开三档执行模式与能力边界表、§6 章首加适用范围警示。
-  - **§4.1 旗舰示例点击即报错**：`classroomTools.payload` 只给了 `{ type }`，handler 却读 `payload.lessonId / title / options` → SQLite `NOT NULL constraint failed`。根因是「工具栏按钮获取课堂上下文的唯一通道」——`$lessonId` / `$classId` 占位符——在全仓文档里零提及，已新增 §3.1.1 说明其替换时机与嵌套用法。同时修掉 `'投票「${payload.title}」已创建'`（单引号不插值）与 `manifest.id: '@openlearn/plugin-poll'`（占用官方命名空间，既无信任又误导运维）。
-  - **官方脚手架的前端激活必定失败**：模板导出 `export default function DemoVote()`，而沙箱加载器要求 `plugin.activate` 是函数（`server/utils/plugin-sandbox-frame.ts`），否则抛 `missing activate function` 并置 `PluginState.ERROR`；实测 `dist/frontend.js` 中 `activate` 出现 **0** 次。已写入教程 §11.1 与 `scaffold-cli.md` 的「必须手改」清单，并记录模板侧修复建议（需发 SDK 3.7.1）。
-  - **`docs/sdk/scaffold-cli.md` 仅 15 行**：补全 `init/build/sign` 三命令、`--template` 默认值为 `server-only`、产物命名（`<package.json name>.zip`，非文档所称 `my-plugin.zip`）、ZIP 结构、以及三个模板默认值坑。
-  - **代码示例的 API 用法错误**：`plugin-sdk.md` 的 `ctx.actionRegistry` / `ctx.commandBus`（真实入口为 `ctx.services.*`）；教程 §6.9/§6.10 从 SDK 导入 `FrontendPluginContext`（SDK 从未导出，仅存在于宿主源码）；`plugin-update-distribution.md` 的 `ctx.reportProgress`（仅 worker 注入、且未在 `PluginContext` 声明，直接写会编译失败）。
-  - **版本表述**：§2.6 同段内「现为 `0.2.x`」与表内「当前 `0.5.0`」互相矛盾且都落后于实际 `0.7.4`；`engines.openlearn` 一律推荐 `>=0.2.5` 会在旧版本上装上、用到新 API 才崩 —— 改为按实际用到的 API 声明。
-  - **`audit-tools/plugin_docs_check.py`（新增，第四段门禁）**：前三段只查路径/键名/符号是否存在，不查代码块里的**调用形状**。新工具实时解析 `packages/plugin-sdk/*.d.ts` 与 `PluginContext` / `FrontendPluginContext` 定义，判 P1（SDK 未导出符号）/ P2（`ctx.*` 不存在）/ P3（`ctx.services.*` 不存在）/ P4（`ctx.ui.*` 不存在）计 drift，P5（manifest 缺 `main`）仅提示。首跑抓出上述 4 条真实缺陷；负向测试注入 4 类错误用法后分别命中 P1–P4。
-  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`；`prettier --check docs/` 通过；审计报告见 `docs-plugin-guide-audit-2026-10-26.md`。
-
-- **两份环境变量清单收敛为一份，`architecture/configuration.md` 按 Issue #151 重写**：
-  - **背景**：`docs/architecture/configuration.md` 自陈「§1 覆盖面更全」，`docs/configuration/system-configuration.md` 自称「唯一权威来源」，两页并列在侧栏「配置」下。实测：真实可配置项 **71 个**，配置页覆盖 60 个、架构页覆盖 12 个，**两边各自漏各自的**——架构页独有 4 个生产键（`ENABLE_HTTPS` / `FORCE_HTTPS` / `ENABLE_HSTS` / `ALLOW_UNSAFE_PLUGIN_SCRIPTS`）是配置页没有的。
-  - **根因**：`envcheck.py` 的 D1 只把 `docs/configuration/` 当权威表，架构页的键表**不在校验范围**，所以它从 25 个一路烂到与代码脱节也无人报警。
-  - **收敛方式**：环境变量表只保留在 `configuration/system-configuration.md`（补齐上述 4 个漏登键 + `DEBUG`）；`architecture/configuration.md` 删除 §1 键表，改为「四个设计特性 + 部署形态 + 禁止再抄」并链出。两页仍在，但**只有一份清单**。
-  - **架构页 §2 重写（停留在 Issue #151 之前）**：配置值已独立建表 `plugin_config`（迁移 037，主键 `plugin_id + scope_type + scope_id + key`），`plugin_storage` 的 `config:` 前缀只剩旧库回退；属性字段 6 → **7**（新增 `scope`）；`get(key, options?)` / `getAll(options?)` / `set(key, value, scope?)`；解析链变为 **班级 > 学校 > 平台 > manifest 默认值**；REST 补 `GET ?classId=&schoolId=` 与 `POST ?scopeType=&scopeId=`。原文按「复用 `plugin_storage`、只有一层」描述，插件作者照做会建错位置、漏声明 `scope`。
-  - **同时修掉的 5 处事实错误**：§1「共 25 个」（实为 71）；§1.5「`LOG_LEVEL` 是 logger.ts 唯一读取的变量」（还读 `LOG_CONSOLE_LEVEL` / `LOG_DIR` / `HTTP_ACCESS_LOG` / `NODE_ENV`）；§1.9「`BACKUP_DIR` 全仓未见读取点，待确认」（`server/utils/paths.ts` 的 `getBackupsDir()`、`migrator.ts`、`cli-data.mjs` 都在读）；§3「Worker 资源限制不可配置」（5 个配额变量均生效）；§3 速查表末行被 `||` 撑成四列的 Markdown 损坏。
-  - **`showInDashboard` 是文档虚构的「保留键」**：`src/` 与 `packages/` 零实现。插件卡片的「总览」开关对所有插件一律存在，状态存浏览器 `localStorage`（`openlearn:dashboardVisibility`），与插件配置无关。已修正 `system-configuration.md` §4 与教程两处表述。
-  - **`envcheck.py` 新增 D4（第二份清单检测）**：`docs/configuration/` 之外出现 ≥10 行的变量表即报 drift，拦住「再抄一份清单」的复发路径。判定从三类扩为四类。
-  - **验证**：`env_drift=0`（配置页覆盖 64/71，其余 7 个为 `||` 兼容别名）；注入 12 行第二清单 → 报 D4 且恢复归零；`prettier --check docs/` 通过。
-
-- **全量文档语义审计：修掉 12 类「文档描述的实现已不存在」的漂移，并补上第四类机器检查（配置键）**：
-  - **背景**：`audit-tools/` 的三段检查（子系统 / 路径内链 / 符号提示）此前**全部为 0 drift**，但只校验骨架、不校验语义。人工逐篇核对 `docs/` 与代码后，发现 12 类内容性错误，没有一条能被既有检查捕获。
-  - **最严重的三处**：
-    1. **插件私有表前缀**——5 篇文档 7 处声称「inline 用 DB UUID、worker 用 manifestId，两模式前缀相反，切换会找不到表」。代码里 `pluginTablePrefix(scopeId, _manifestId)` **忽略 manifestId**，三档模式前缀完全一致；`plugin-database-api.md` 自身还前后矛盾（第 22 行说一致、第 54 行说相反）。插件作者照文档建表会被 DDL 守卫直接拒绝。
-    2. **`classroom-runtime.md` 整篇描述的对象不存在**——`ClassroomSession` / `ClassroomService` / `IClassroomContext` 等 19 个符号全仓零命中，`src/features/classroom-runtime/` 目录不存在，「9 阶段」实为内核 8 态 + 服务版 4 阶段。已按 `packages/core/classroom-runtime/` 真实内核重写，保留后半段真实的教学四阶段章节。
-    3. **`OPENLEARN_PLUGIN_PERMISSION` 写着「暂无法约束网络」**——Issue #237 早已实现出网管控（preload 拦 socket/DNS，fetch 只放行 `plugin_network_grants`），运维会据此跳过出站授权。同时原文「没有 CPU/内存采样」也已过时：`plugin-quota.ts` 在采样并超限 SIGKILL；正确部分（不存在 `PAUSED` 挂起态）保留。
-  - **其余修订**：`security-permissions.md` 执行路径实为三档非两条、Worker 基础 Token 8 个（原 §2.3/§2.5 自相矛盾 9/8 与 `IPluginHost`）；`system-configuration.md` 补 20+ 个漏登变量与默认值；`api-coverage-report.md` 移除无依据的「19 个 Token / 100% Verified」；`plugin-ui-extension-slots.md` 槽位 119→120；`architecture-governance.md` 默认执行模式与版本戳；`index.md` 补 2 篇侧栏不可达的架构文档。
-  - **新增 `audit-tools/envcheck.py`（配置键三方比对）**：环境变量既不是文件路径也不是代码符号，是第三种引用形态，此前完全靠人工维护。新检查交叉比对**代码读取 / `.env.example` / 注册表文档**，判定收窄到三类高置信 drift（D1 文档登记但零读取、D2 带前缀读取但未登记、D3 无前缀读取且未登记），其余（仅测试作用域、`.env.example` 单向声明、动态键名、平台自写内部传递、`||` 兼容别名）只作提示。首跑即抓出 7 个隐形旋钮（`BACKUP_SCHEDULE` / `BACKUP_KEEP` / `BACKUP_DAILY_AT` / `BACKUP_CHECKPOINT_INTERVAL_MS` / `PRE_MIGRATION_KEEP` / `MIGRATION_CHECKSUM_STRICT` / `MIGRATION_ALLOW_UNKNOWN_LEDGER`），已全部登记。
-  - **验证**：`bash audit-tools/run.sh` → `canonical_drift=0` / `ref_drift=0` / `env_drift=0`，`symbol_hints` 61→42（重写消掉 19 个幽灵符号），`prettier --check docs/` 通过；负向测试注入「文档改错键名 + 代码独有开关」两处漂移，脚本分别报 D1/D2 并 `exit 1`。
-
-- **用 `.nvmrc` / `.node-version` 把 Node 钉到 22，并在 `AGENTS.md` 写清「为什么不能用 26」**：
-  - **背景**：仓库只在 `AGENTS.md` 的 Cursor Cloud 小节里提过一句 "Node 22"，`package.json` 的 `engines` 是宽松的 `>=20`，且**没有任何版本锁定文件** —— 本地跑哪个 Node 全靠运气，而 CI 一直钉的是 `node-version: 22`。
-  - **两类实际踩到的坑（这次会话都撞到了）**：
-    1. **原生模块 ABI**：`better-sqlite3` 按主版本编译（22 → ABI 127 / 24 → 137 / 26 → 147）。混用版本会启动即崩，报 `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` 不匹配；
-    2. **Node 26 跑不了测试**：26 内置了实验性 Web Storage，`globalThis.localStorage` 存在但值为 `undefined`（需 `--localstorage-file`，否则访问会打 `ExperimentalWarning`）。vitest 的 jsdom 环境会跳过 Node 已定义的全局，于是留下坏掉的 `localStorage` —— 实测 213 个测试文件 / 298 条用例全红（`Cannot read properties of undefined (reading 'clear')`），换回 22/24 立刻恢复。
-  - **改法**：新增 `.nvmrc` 与 `.node-version`（都是 `22`，`fnm` / `nvm` / `asdf` / `mise` 都认），`AGENTS.md` 的 Environment 段补上这两类问题的成因与修法（`pnpm rebuild better-sqlite3`），并说明「本地对齐 CI 的 22 就是对齐合并门禁」。
-  - **验证**：Node 22 上全量单测 **601 files / 4975 passed**（与 24 同水平，仅剩 1 条 `proxy-addr` 符号链接缺失的环境问题）；E2E 冒烟集（黄金旅程 / 课程开课 / 环节门禁 / 外壳请求卫生）**5 passed**。
-
-### Fixes
 
 - **Node 版本不再是「装得上、起不来」：安装期硬闸 + 启动期可读兜底，支持范围收敛到实测过的 20.x / 22.x / 24.x**：
   - **问题**：平台的硬依赖 `better-sqlite3` 是**原生模块** —— 它的 `.node` 二进制按 Node 的 ABI（`process.versions.modules`）编译，**不是**跨 Node 版本通用的 JS 包。客户机换了 Node 版本、复用同一份 `node_modules`，运行期第一句就炸：
@@ -426,6 +309,121 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证**：该用例由失败转为通过（且耗时从 18.7s 降到 3.7s —— 不再需要在错误的机房里空等 15s 超时）。
 
 - **全量 e2e 至此 36 passed / 0 failed**（此前长期挂着上述 2 条既有失败）。
+
+### Refactor / Performance
+
+- **清点 `src/features/` 下 12 个「有实现、有单测、但生产零引用」的孤儿模块，按风险分三组处置**：
+  - **怎么发现的**：从真实入口（`src/App.tsx` / `src/main.tsx` / `server.ts` / `cli-data.mjs`）做可达性分析（解析相对路径、`@/` 别名、`.js`→`.ts`、动态 `import()`）：859 / 983 个文件可达，**124 个不可达，其中 17 个是整模块**。
+  - **⚠️ 一个必须记住的陷阱**：只统计「有没有外部 import」会把死模块误判成活的 —— `workspace` / `resource-runtime` / `ai-teacher-workspace` 的引用方只有彼此和 `student-workspace` 这个**自洽循环**，从入口出发根本到不了。判断「活的」必须从入口做可达性。
+  - **A 组 · 删除（4 个，共 1,029 行源码 + 6 个测试文件）**：`lesson-workflow` / `ai-teaching-workflow` / `classroom-runtime` / `interaction-runtime`。
+    - 前两个是 61L/55L 的裸 setter（`advanceStage(target)` 不校验、不落库、不发事件）—— 接线等于给服务端门禁（`CLASS_LOCKED`→409 / `Illegal transition`→400）开后门；
+    - `classroom-runtime` 自带的 9 阶段（`Create/Prepare/Ready/Teaching/Paused/Resumed/Finished/Archived/Disposed`）与在用的 `classroom_sessions.stage`（含 `ARCHIVED_REPORT`）词表不兼容，且有独立的 `classroom.created/paused/…` 事件命名空间，接上会与 socket 事件流**双写**；
+    - `interaction-runtime` 是第二个 Keyboard/Mouse/Touch 派发器，而白板已自接管 DOM 事件（111 文件、E2E 覆盖最重）—— 接它=双处理，或得拆掉白板的 handler。
+  - **B 组 · 标注 `@experimental` 不接线（4 个）**：`ai-action-api` / `ai-skill-registry` / `ai-prompt-registry` / `ai-classroom-context`。理由：`server/ai-agent.ts` 并不查它们，插件贡献 AI 能力已走活的扩展槽位（`ai_sidebar.tab`、`anchor:whiteboard-toolbar:ai-tutor`）与通用通道 `/api/plugins/execute-command` —— **功能上是冗余的**；而接线要重写一条正在工作的 AI 链路，且 AI 功能需配 provider 才能验证，CI 覆盖不到。每个 `index.ts` 头部写明「为什么保留」与「接线前置条件」（首要一条：不能让新注册表绕过 `action.capabilityRequired` 的授权）。
+  - **C 组 · 留待产品决策（4 个）**：`student-workspace` + 依赖它的 `workspace` / `resource-runtime` / `ai-teacher-workspace`。它们是**第二套学生端壳**，接通 = 替换现在能跑的 `src/features/student`（63 文件、6 个引用方）；25 条 E2E 里 22 条涉及学生端。已写入迁移前置条件（功能对齐 / 全量学生端 E2E 重验 / 插件槽位兼容 / 可一键回滚）。
+  - **新增 `docs/experimental-modules.md`**：登记全部 12 个模块的结论、理由，以及「怎么判断一个模块是不是活的」的方法论（含上面那个循环引用的坑）。
+  - **验证**：`tsc` 通过；全量单测 **596 files / 4,961 passed / 0 failed**（删除 6 个死测试文件后）；ESLint 告警 **6241（低于 6243 基线 2 条）**；格式门禁 1,863 文件 0 不合规；覆盖率棘轮 **62.54% vs 基线 62.55% —— 通过**（删除高覆盖的死代码理论上会拉低聚合值，实测只差 0.01pp，在 0.5pp 容差内，**无需下调基线**）。
+
+### Docs
+
+- **插件文档补一份「非 UI 型扩展点总索引」，并把「新增扩展点必须写文档」变成第六段门禁（Issue #322）**：
+  - **现象**：9 个真实的「插件可注册领域扩展点」里，有 6 个在 `docs/plugin/` 与 `docs/tutorials/` 下**一次都没出现**
+    （题库题型只散落在 `docs/architecture/assessment-model.md`），其中 3 个更只出现在 `docs/architecture/` 下。
+    第三方作者据此形成的合理结论是「平台只支持 UI 槽位」。
+  - **文档改法**：`docs/plugin/extension-registry.md` 新增 §0 三类扩展面、§0.1 九行注册表总索引
+    （获取方式 / 注册注销 API / 回收路径 / 可用范围）、§0.3 九节逐个上手（最小示例 + 回收时机 + 常见错用），
+    并补一条维护约定：新增插件可注册的注册表时必须在同一 PR 登记一行。
+  - **门禁改法**：新增 `audit-tools/extension_points_coverage.py` + `audit-tools/extension-point-policy.json`，
+    接入 `audit-tools/run.sh` 第 2.8 段（与既有的槽位覆盖门禁同构）。
+    **真值从源码推导**（`PLUGIN_RESOLVABLE_TOKENS` + 各接口体里的 `register*` 方法），
+    不靠人手维护 token 清单 —— 上一版索引表本身就是漏的，人工清单必然腐化。
+    分级沿用槽位门禁的 L0/L1/L2/L3：L0（插件文档里从未出现）计 drift，其余仅提示；
+    豁免必须指明覆盖文档且门禁核对该文档确实提到该方法，豁免指向的 (token, method) 在源码里已不存在则计 drift。
+  - **验证**：门禁上线当天即抓出 3 个漏登记的扩展点（`registerStageGuard` / `registerActivityProvider` /
+    `registerAIContextProvider`）与 1 条失效豁免；新增 `scripts/__tests__/extension-points-coverage.test.ts` 5 条
+    （含两条负向对照）。`bash audit-tools/run.sh` → `drift_count=0`（新增 `ext_point_drift=0`）。
+  - **顺带发现**：`registerStageGuard` 与 `unregisterActivityProvider` 生产代码零调用方 —— 宿主同样不清理这两个扩展点，
+    已另开 Issue #327，并在后续修复中通过 `ctx.resolve` 层代理解决（见本段上方的 #327 条目）。
+
+- **扩展槽位文档补齐 20 个缺口，并把「新增槽位必须写文档」变成第五段门禁**：
+  - **问题**：`docs/reference/plugin-ui-extension-slots.md` 是插件作者查槽位的唯一入口，但它只列了 **100** 个成员，而 `src/plugin-host/types.ts` 的 `ExtensionSlot` 实际有 **120** 个 —— 页面正文写「115 个」、代码块只有 100 个、§2 的 props 表更少。缺的 20 个里包括整个测评子系统（`assessment.list.card` / `.attempt.toolbar` / `.stats.card`）、整个教师批改面板（`assignment.grade.toolbar.action` / `.item.addon` / `.rubric.addon`）、命令面板与斜杠菜单（`command_palette.item` / `quick_insert.item`）、AI 生态（`ai.prompt.template` / `ai.skill.provider`）等。**这 20 个槽位在 docs/ 里一次都没提过**，插件作者只能读宿主源码猜 props。
+  - **为什么数字会漂**：槽位是逐批加进联合类型的，每次只改代码不补文档，而既有四段门禁（子系统 / 路径内链 / 符号 / 插件示例）**没有一段关心槽位覆盖**。上一轮把数字从「119」改成「115」时也只是换了个错的数——真正缺的是**逐条比对**，不是再猜一次总数。
+  - **补法**：①§1 代码块与 `types.ts` 逐条对齐（100 → 120，含分组注释）；②§2 props 表补 20 行，每行标真实调用点与实际注入的 props；③新增 **§12「后续新增槽位的使用说明」**（7 小节），写清语义与坑，而不是只列名字：
+    - `assessment.list.card` 的 `viewer` **恒为 `'teacher'`**（类型声明含 `'student'`，但学生端从不渲染，按学生分支写就是死代码）；三个测评槽位均走白名单投影，`answerKey` / 学生身份永不进入 props；
+    - `assignment.grade.item.addon` 的评分必须经 `onScoreChange` / `onCommentChange` 写入，直接改 `submission` 无效；`rubric.addon` 的学生权重**没有**回调；
+    - `editor.segment.type_config` **不做类型过滤**，插件必须自己判 `segmentType` 并返回 `null`，否则配置面板会出现在每个环节上；`editor.timeline.node_badge` 在 `SegmentEditorCard` 调用点的 `isActive` 恒 `true`；
+    - `classroom.active_segment.main` 是**并列**渲染而非替换内置工作区，且容器高度受限（全屏要走 `registerFullscreenRenderer`）；
+    - `timetable.entry.action` 在周历卡片与列表行**各渲染一次**，action 必须幂等；`timetable.import.source` 只调 `onImportEntries`，不要自己写库；
+    - `course.wizard.quick_apply` 的 `setWizardCourseTimeline` 是**覆盖式赋值**，追加要基于传入值自己拼；
+    - `command_palette.item` / `quick_insert.item` 是数据型槽位，给出完整 `slotProps` 契约与 manifest 等价写法，并说明 `shortcut` 只用于展示、`commandType` 未注册会点不动；
+  - ④§1 新增「`contributes` 键 ≠ `ExtensionSlot`」表，登记 4 个只在 manifest schema 里的声明式键（`timeline.segments` / `palette.items` / `teacher.cockpit.widget` / `workspace.view`），其中 **`teacher.cockpit.widget` 有 schema 有类型但前端零消费点**，写进 manifest 不会生效。
+  - **第五段门禁（新增 `audit-tools/extract_slots.py` + `slots_coverage.py`）**：前者从 `types.ts` 联合类型、`<ExtensionPointRenderer slot=…>` 生产调用点、`contributes` 注册表三处生成槽位清单真值；后者把 128 个槽位（120 固定 + 8 锚点）逐个按 **L0 不存在 / L1 仅提及 / L2 有说明无示例 / L3 说明+示例** 四级比对 docs/。**只有 L0 计入 drift**，L1/L2 仅提示——按「文档能不能让人用起来」判定，该拦的是「一个字都没有」，不是「写得不够漂亮」。锚点单列规则：8 个锚点注册契约同构（名字 + `placement`/`position` + `component`），一个有具体锚点名的示例即可覆盖，不要求 8 份复制粘贴（理由写在脚本注释里）。
+  - **顺带修正的三处口径**：§1 正文「115 个」→ **120**；§12（现 §13）统计表「生产调用点固定名槽位 **99**」→ **116**，并单列「无渲染器的成员 **4**」——此前把 `ai.skill.provider` 一并算进「声明但无渲染器 = 0」是错的；计数口径那段原写「`grep -c` 会把数字虚高到 **120**」，在真值就是 120 之后这句话会误导，改为说明该命令为何不准并给出可复跑的脚本路径。
+  - **验证**：`slot_drift=0` / `slot_hints=0`（128/128 全 L3）；`bash audit-tools/run.sh` → `drift_count=0`（canonical / ref / env / plugin_docs / slot 五段全绿）；`sphinx-build -b html docs -W --keep-going` exit=0、**0 警告**；`prettier --check` 通过。负向测试两条：把文档里的 `assessment.stats.card` 整名替换 → `slot_drift=1`、`run.sh` exit 1；替换成 `assessment.stats.card_REMOVED`（**原名变成前缀**）→ 同样判 L0。后者是首轮测试才暴露的真 bug：判定原本用 `slot in text`，把「写了 `class.tabX` 这种不存在的槽位」也算成已覆盖，已改为带词边界的正则。
+
+- **文档站在 GitHub 与 RTD 上行为不一致：146 条链接在 GitHub 上 404、22 条锚点在站内跳不动**：
+  - **背景**：文档已发布在 Read the Docs（仓库根的 `.readthedocs.yaml`，每次 push 自动构建），但站内链接存在两套写法 —— 73 条带 `.md`、148 条不带。不带的只有 Sphinx 认，GitHub 上全部 404，而 GitHub 是 AI Agent 与开发者读仓库的实际入口。
+  - **锚点根因**：docutils 0.22 起 `make_id()` 用 `encode('ascii','ignore')` 剥掉全部非 ASCII，**纯中文标题的 section id 退化成 `id1`/`id2`**（线上页面已核实 `id="id1"`）；而作者是按 GitHub 规则写锚点的（`#4-公测上线检查清单`），于是 28 条带锚点链接里 22 条是死的。新增 `docs/_slug.py` 复刻 GitHub 的 slug 算法并 patch `make_id`，死锚 22 → 0，且两边锚点从此一致。两个实现细节都实际踩过：函数必须放独立模块（config 要 pickle，`__main__` 里的函数会让构建直接崩）、用可调用对象而非函数（`is_serializable()` 拦 `FunctionType`）。
+  - **警告**：Sphinx 构建从 18 warnings 降到 **0**（`-W --keep-going` exit=0）。含 6 条未收录文档挂进 toctree、2 条指到 docs 树外的引用改 GitHub 绝对地址、`jsonc`/`dotenv` 换成 Pygments 认识的 lexer、`${studentId}` 被嵌套反引号误当 MyST role、以及 `(label)=` 注册成功但 `file.md#label` 被当锚点而非 label 查（改用 `{ref}`）。
+  - **顺带定位的 Pygments 缺陷**：TS/TSX lexer 遇到**接口方法参数里的泛型逗号**（`Record<string, unknown>`）会产 Error token —— 连放在 `type` 别名里也触发，二分定位到具体行。示例改用 `unknown` / 拆独立 interface 绕过。
+  - **门禁**：`.readthedocs.yaml` 开 `fail_on_warning: true`，死链/死锚点/未知 lexer 不再能静默上线；`docs/contributing/contributing.md` 新增 §4.1 本地构建（含 `/tmp` 是 10MB tmpfs 时必须改 `TMPDIR` 的坑）与 §4.2 三条写作硬约束。
+  - **入口**：`AGENTS.md` 里 `docs/plugin-development-tutorial.md` 是死路径（实际在 `docs/tutorials/`），而它是 AI Agent 进仓库的第一个入口；一并补了「按目标找文档」的路由表，并提醒 `docs/` 下的审计页是带日期的快照。
+
+- **发布 tag 有了命名约定，SDK 的 tag 门禁从「空转」变成真的**：
+  - **现状**：50 个 tag 里 26 个 annotated、24 个 lightweight；SDK 从 3.3 到 3.7.0 **一个 tag 都没有**。`publish.sh` 里对 SDK 也调了 `assert_version_not_taken`，但它内部查的是 `refs/tags/v3.7.1` —— 一个按约定永远不会出现的 ref，实际是零保护。
+  - **约定**：平台 `v<X.Y.Z>`（`docker-rehearsal` 的 `v*` / `upgrade-regression` 的 `v*.*.*` 认它）、SDK `plugin-sdk-v<X.Y.Z>`、test-kit `plugin-test-kit-v<X.Y.Z>`；一律 annotated；tag 必须先于发布、指向 bump 提交；同源用 npm 自动记录的 `gitHead` 对账（不往 tag message 里塞 shasum —— tag 打在发布之前，那时还没有 shasum）。前缀不以 `v` 开头，顺带保证 SDK 发版不会误触发平台那两个发版作业。
+  - **门禁**：`publish.sh` 的占用检查改为按包名取前缀，缺 tag 直接拒绝并打印该执行的两行命令；`assert-publishable.mjs` 挂到 SDK 与 test-kit 的 `prepublishOnly`（前缀由包名自动推导，`--tag-prefix` 仅作例外），绕过脚本直接 `npm publish` 也会被同一套判据拦下 —— 实测 test-kit 的 `workspace:*` 就地被抓出。指向不同提交、缺 tag、正常放行三条路径都做了负向/正向验证。
+  - **补记**：`@openlearn/plugin-sdk@3.7.1` 补打 `plugin-sdk-v3.7.1`（annotated，指向发布提交 `c77b6fe`，与 registry 的 `gitHead` 一致）。历史欠账（14 处 tag/npm 双向漏配，含 `0.7.0`–`0.7.2` 有 tag 但 npm 上 404）只登记不回填，理由见 `docs/contributing/contributing.md` §2.1。
+
+- **`@openlearn/plugin-sdk@3.7.1` 已发布到 npm**（脚手架 `frontend.tsx` 契约修复，详见该包 CHANGELOG）：
+  - 文档侧同步：26 篇的 `<!-- doc-version: sdk=3.7.0 -->` 与「适用范围」升到 `3.7.1`；`scaffold-cli` / 教程里两处「3.7.0 上仍需手改」的提示改为「3.7.1 起已修好，升级即免手改」。
+  - 顺带修正 `version-migration.md` 头部的版本快照（平台 `0.7.2` → `0.7.4`，SDK `3.7.0` → `3.7.1`）。
+  - **发布前按消费者视角实测**：`npm pack` → 空项目 `npm i <tarball>` → 装到的 CLI 跑 `init`/`build` → `import dist/frontend.js` 断言 `activate` 是函数。包内 17 个文件，`scaffold/templates/` 12 个文件齐全。
+
+- **插件教程 §6 拆成两篇：`plugin-frontend-guide` 与 `plugin-courseware-extensions`**：
+  - **动因**：§6 单章 580 行、占全文 22%，且混了两类读者前提不同的内容——「前端 bundle 怎么被加载」与「教学内容怎么进课堂」。上一轮审计已指出这 580 行里的 React 组件写法对第三方插件不可用，留在主教程里只会继续误导。
+  - **拆法**：`plugin-frontend-guide.md`（三档加载、`FrontendPluginContext`、前端服务接口、扩展槽位、图标与导航、`invokeCommand`、`HostSharedDeps` 与构建排查）；`plugin-courseware-extensions.md`（Palette Item / Segment Type / Gate，每节补**声明式等价写法**）。主教程 §6 收敛为导航表 + 档位警示（580 → 21 行）。
+  - **顺带修掉**：原文两个 `### 6.7` 重号（现分别落在前端指南 §7.1 / §7.2）；`docs/index.md` 侧栏补两篇（此前只在教程内可达）；`plugin_docs_check.py` 的 glob 补两篇新文档（docs 20 → 22），新文档的示例同样过 P1–P4；`plugin-ui-extension-slots.md` 的槽位总数从「119 个」（且复现不出来）改为实测 **115** 个字符串字面量成员，并写清可复跑的计数口径（`grep -c "^  | '"` 会把别的联合类型算进去，虚高到 120）。
+  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`，`prettier --check docs/` 通过；首跑新文档时 `ctx.ui.showToast` 被 P4 判为「不是 FrontendPluginContext 的方法」——该块讲的正是**沙箱 RPC 上下文**（另一份契约），已改用 `bridge` 命名消除歧义。
+
+- **插件开发文档可用性审计：按「AI Agent 只读文档能否写出能用的第三方插件」重校，修掉 8 处会直接害人的指引**：
+  - **口径**：此前审计都是「文档 vs 代码」的事实核对；这次换成可用性验证——照着文档实跑 `init → npm install → build → 拆 ZIP`，再对照宿主加载器判断结果能不能用。
+  - **最严重的一条：教程 22% 的内容对目标读者不可用**。§6「前端插件系统」共 580 行（全文 2623 行）教 `ctx.ui.registerExtensionPoint({ component })`，但第三方插件被 `execution-policy.ts` 强制为 `process`，前端跑在 `sandbox="allow-scripts"` 的**隐藏** iframe 里：`component` 是函数、`postMessage` 无法克隆（`DataCloneError`），`import React` 与 `window.HostSharedDeps` 均为 `undefined`。**第三方插件无法提供任何可见 UI**。已在 §2.2 展开三档执行模式与能力边界表、§6 章首加适用范围警示。
+  - **§4.1 旗舰示例点击即报错**：`classroomTools.payload` 只给了 `{ type }`，handler 却读 `payload.lessonId / title / options` → SQLite `NOT NULL constraint failed`。根因是「工具栏按钮获取课堂上下文的唯一通道」——`$lessonId` / `$classId` 占位符——在全仓文档里零提及，已新增 §3.1.1 说明其替换时机与嵌套用法。同时修掉 `'投票「${payload.title}」已创建'`（单引号不插值）与 `manifest.id: '@openlearn/plugin-poll'`（占用官方命名空间，既无信任又误导运维）。
+  - **官方脚手架的前端激活必定失败**：模板导出 `export default function DemoVote()`，而沙箱加载器要求 `plugin.activate` 是函数（`server/utils/plugin-sandbox-frame.ts`），否则抛 `missing activate function` 并置 `PluginState.ERROR`；实测 `dist/frontend.js` 中 `activate` 出现 **0** 次。已写入教程 §11.1 与 `scaffold-cli.md` 的「必须手改」清单，并记录模板侧修复建议（需发 SDK 3.7.1）。
+  - **`docs/sdk/scaffold-cli.md` 仅 15 行**：补全 `init/build/sign` 三命令、`--template` 默认值为 `server-only`、产物命名（`<package.json name>.zip`，非文档所称 `my-plugin.zip`）、ZIP 结构、以及三个模板默认值坑。
+  - **代码示例的 API 用法错误**：`plugin-sdk.md` 的 `ctx.actionRegistry` / `ctx.commandBus`（真实入口为 `ctx.services.*`）；教程 §6.9/§6.10 从 SDK 导入 `FrontendPluginContext`（SDK 从未导出，仅存在于宿主源码）；`plugin-update-distribution.md` 的 `ctx.reportProgress`（仅 worker 注入、且未在 `PluginContext` 声明，直接写会编译失败）。
+  - **版本表述**：§2.6 同段内「现为 `0.2.x`」与表内「当前 `0.5.0`」互相矛盾且都落后于实际 `0.7.4`；`engines.openlearn` 一律推荐 `>=0.2.5` 会在旧版本上装上、用到新 API 才崩 —— 改为按实际用到的 API 声明。
+  - **`audit-tools/plugin_docs_check.py`（新增，第四段门禁）**：前三段只查路径/键名/符号是否存在，不查代码块里的**调用形状**。新工具实时解析 `packages/plugin-sdk/*.d.ts` 与 `PluginContext` / `FrontendPluginContext` 定义，判 P1（SDK 未导出符号）/ P2（`ctx.*` 不存在）/ P3（`ctx.services.*` 不存在）/ P4（`ctx.ui.*` 不存在）计 drift，P5（manifest 缺 `main`）仅提示。首跑抓出上述 4 条真实缺陷；负向测试注入 4 类错误用法后分别命中 P1–P4。
+  - **验证**：`canonical_drift=0` / `ref_drift=0` / `env_drift=0` / `plugin_docs_drift=0`；`prettier --check docs/` 通过；审计报告见 `docs-plugin-guide-audit-2026-10-26.md`。
+
+- **两份环境变量清单收敛为一份，`architecture/configuration.md` 按 Issue #151 重写**：
+  - **背景**：`docs/architecture/configuration.md` 自陈「§1 覆盖面更全」，`docs/configuration/system-configuration.md` 自称「唯一权威来源」，两页并列在侧栏「配置」下。实测：真实可配置项 **71 个**，配置页覆盖 60 个、架构页覆盖 12 个，**两边各自漏各自的**——架构页独有 4 个生产键（`ENABLE_HTTPS` / `FORCE_HTTPS` / `ENABLE_HSTS` / `ALLOW_UNSAFE_PLUGIN_SCRIPTS`）是配置页没有的。
+  - **根因**：`envcheck.py` 的 D1 只把 `docs/configuration/` 当权威表，架构页的键表**不在校验范围**，所以它从 25 个一路烂到与代码脱节也无人报警。
+  - **收敛方式**：环境变量表只保留在 `configuration/system-configuration.md`（补齐上述 4 个漏登键 + `DEBUG`）；`architecture/configuration.md` 删除 §1 键表，改为「四个设计特性 + 部署形态 + 禁止再抄」并链出。两页仍在，但**只有一份清单**。
+  - **架构页 §2 重写（停留在 Issue #151 之前）**：配置值已独立建表 `plugin_config`（迁移 037，主键 `plugin_id + scope_type + scope_id + key`），`plugin_storage` 的 `config:` 前缀只剩旧库回退；属性字段 6 → **7**（新增 `scope`）；`get(key, options?)` / `getAll(options?)` / `set(key, value, scope?)`；解析链变为 **班级 > 学校 > 平台 > manifest 默认值**；REST 补 `GET ?classId=&schoolId=` 与 `POST ?scopeType=&scopeId=`。原文按「复用 `plugin_storage`、只有一层」描述，插件作者照做会建错位置、漏声明 `scope`。
+  - **同时修掉的 5 处事实错误**：§1「共 25 个」（实为 71）；§1.5「`LOG_LEVEL` 是 logger.ts 唯一读取的变量」（还读 `LOG_CONSOLE_LEVEL` / `LOG_DIR` / `HTTP_ACCESS_LOG` / `NODE_ENV`）；§1.9「`BACKUP_DIR` 全仓未见读取点，待确认」（`server/utils/paths.ts` 的 `getBackupsDir()`、`migrator.ts`、`cli-data.mjs` 都在读）；§3「Worker 资源限制不可配置」（5 个配额变量均生效）；§3 速查表末行被 `||` 撑成四列的 Markdown 损坏。
+  - **`showInDashboard` 是文档虚构的「保留键」**：`src/` 与 `packages/` 零实现。插件卡片的「总览」开关对所有插件一律存在，状态存浏览器 `localStorage`（`openlearn:dashboardVisibility`），与插件配置无关。已修正 `system-configuration.md` §4 与教程两处表述。
+  - **`envcheck.py` 新增 D4（第二份清单检测）**：`docs/configuration/` 之外出现 ≥10 行的变量表即报 drift，拦住「再抄一份清单」的复发路径。判定从三类扩为四类。
+  - **验证**：`env_drift=0`（配置页覆盖 64/71，其余 7 个为 `||` 兼容别名）；注入 12 行第二清单 → 报 D4 且恢复归零；`prettier --check docs/` 通过。
+
+- **全量文档语义审计：修掉 12 类「文档描述的实现已不存在」的漂移，并补上第四类机器检查（配置键）**：
+  - **背景**：`audit-tools/` 的三段检查（子系统 / 路径内链 / 符号提示）此前**全部为 0 drift**，但只校验骨架、不校验语义。人工逐篇核对 `docs/` 与代码后，发现 12 类内容性错误，没有一条能被既有检查捕获。
+  - **最严重的三处**：
+    1. **插件私有表前缀**——5 篇文档 7 处声称「inline 用 DB UUID、worker 用 manifestId，两模式前缀相反，切换会找不到表」。代码里 `pluginTablePrefix(scopeId, _manifestId)` **忽略 manifestId**，三档模式前缀完全一致；`plugin-database-api.md` 自身还前后矛盾（第 22 行说一致、第 54 行说相反）。插件作者照文档建表会被 DDL 守卫直接拒绝。
+    2. **`classroom-runtime.md` 整篇描述的对象不存在**——`ClassroomSession` / `ClassroomService` / `IClassroomContext` 等 19 个符号全仓零命中，`src/features/classroom-runtime/` 目录不存在，「9 阶段」实为内核 8 态 + 服务版 4 阶段。已按 `packages/core/classroom-runtime/` 真实内核重写，保留后半段真实的教学四阶段章节。
+    3. **`OPENLEARN_PLUGIN_PERMISSION` 写着「暂无法约束网络」**——Issue #237 早已实现出网管控（preload 拦 socket/DNS，fetch 只放行 `plugin_network_grants`），运维会据此跳过出站授权。同时原文「没有 CPU/内存采样」也已过时：`plugin-quota.ts` 在采样并超限 SIGKILL；正确部分（不存在 `PAUSED` 挂起态）保留。
+  - **其余修订**：`security-permissions.md` 执行路径实为三档非两条、Worker 基础 Token 8 个（原 §2.3/§2.5 自相矛盾 9/8 与 `IPluginHost`）；`system-configuration.md` 补 20+ 个漏登变量与默认值；`api-coverage-report.md` 移除无依据的「19 个 Token / 100% Verified」；`plugin-ui-extension-slots.md` 槽位 119→120；`architecture-governance.md` 默认执行模式与版本戳；`index.md` 补 2 篇侧栏不可达的架构文档。
+  - **新增 `audit-tools/envcheck.py`（配置键三方比对）**：环境变量既不是文件路径也不是代码符号，是第三种引用形态，此前完全靠人工维护。新检查交叉比对**代码读取 / `.env.example` / 注册表文档**，判定收窄到三类高置信 drift（D1 文档登记但零读取、D2 带前缀读取但未登记、D3 无前缀读取且未登记），其余（仅测试作用域、`.env.example` 单向声明、动态键名、平台自写内部传递、`||` 兼容别名）只作提示。首跑即抓出 7 个隐形旋钮（`BACKUP_SCHEDULE` / `BACKUP_KEEP` / `BACKUP_DAILY_AT` / `BACKUP_CHECKPOINT_INTERVAL_MS` / `PRE_MIGRATION_KEEP` / `MIGRATION_CHECKSUM_STRICT` / `MIGRATION_ALLOW_UNKNOWN_LEDGER`），已全部登记。
+  - **验证**：`bash audit-tools/run.sh` → `canonical_drift=0` / `ref_drift=0` / `env_drift=0`，`symbol_hints` 61→42（重写消掉 19 个幽灵符号），`prettier --check docs/` 通过；负向测试注入「文档改错键名 + 代码独有开关」两处漂移，脚本分别报 D1/D2 并 `exit 1`。
+
+- **用 `.nvmrc` / `.node-version` 把 Node 钉到 22，并在 `AGENTS.md` 写清「为什么不能用 26」**：
+  - **背景**：仓库只在 `AGENTS.md` 的 Cursor Cloud 小节里提过一句 "Node 22"，`package.json` 的 `engines` 是宽松的 `>=20`，且**没有任何版本锁定文件** —— 本地跑哪个 Node 全靠运气，而 CI 一直钉的是 `node-version: 22`。
+  - **两类实际踩到的坑（这次会话都撞到了）**：
+    1. **原生模块 ABI**：`better-sqlite3` 按主版本编译（22 → ABI 127 / 24 → 137 / 26 → 147）。混用版本会启动即崩，报 `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` 不匹配；
+    2. **Node 26 跑不了测试**：26 内置了实验性 Web Storage，`globalThis.localStorage` 存在但值为 `undefined`（需 `--localstorage-file`，否则访问会打 `ExperimentalWarning`）。vitest 的 jsdom 环境会跳过 Node 已定义的全局，于是留下坏掉的 `localStorage` —— 实测 213 个测试文件 / 298 条用例全红（`Cannot read properties of undefined (reading 'clear')`），换回 22/24 立刻恢复。
+  - **改法**：新增 `.nvmrc` 与 `.node-version`（都是 `22`，`fnm` / `nvm` / `asdf` / `mise` 都认），`AGENTS.md` 的 Environment 段补上这两类问题的成因与修法（`pnpm rebuild better-sqlite3`），并说明「本地对齐 CI 的 22 就是对齐合并门禁」。
+  - **验证**：Node 22 上全量单测 **601 files / 4975 passed**（与 24 同水平，仅剩 1 条 `proxy-addr` 符号链接缺失的环境问题）；E2E 冒烟集（黄金旅程 / 课程开课 / 环节门禁 / 外壳请求卫生）**5 passed**。
 
 ## [0.7.4] - 2026-10-25
 
