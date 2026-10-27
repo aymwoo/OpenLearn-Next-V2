@@ -9,13 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_（下一版本待补充）_
+- **3.7.1 已在 npm 上弃用**（`npm deprecate`，不撤包）：该版本 `dist/index.js` 残留 5 处 `node:` 静态导入，
+  把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.2，详见 `[3.7.1]` 段首的红线提示。
 
 ## [3.7.1] - 2026-10-27
 
+> ⚠️ **本版本已弃用，不要安装**：`dist/index.js` 里残留 5 处 `node:` 静态导入
+> （`fs` / `path` / `url` / `crypto`，产物 75 KB，3.7.2 为 18 KB）。凡是把 SDK 内联进 worker bundle 的
+> 第三方插件，运行期必然失败。已在 npm 标记 deprecated，安装时会打印告警。
+> **装法改为：`npm i -D @openlearn/plugin-sdk@3.7.2`**（本段的模板与类型修复在 3.7.2 中全部保留）。
+
 > **升级理由**：`init` 生成的插件此前**装得上、构建得过、一激活就报 `missing activate function`**。
 > 3.7.1 修掉了这个模板缺陷，并把 3.7.0 之后累积的类型契约一并发布（全部为新增导出，向后兼容）。
-> 装法：`npm i -D @openlearn/plugin-sdk@3.7.1`。
 
 ### Fixes
 

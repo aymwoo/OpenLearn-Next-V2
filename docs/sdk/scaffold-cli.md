@@ -72,6 +72,9 @@ export default function MyPanel() {
 ```
 
 > **版本说明**：`@openlearn/plugin-sdk@3.7.1`（已发 npm）起，`init` 直接生成上面的形状。
+>
+> ⚠️ **3.7.1 本身不要装**：它的产物残留 `node:` 内置模块静态导入，插件打包后运行期失败，已在 npm 弃用。
+> 本段的模板修复在 3.7.2 中完整保留 —— 升到 `npm i -D @openlearn/plugin-sdk@3.7.2` 才是既拿到新模板、又不踩坑的那一个。
 > 若你仍停在 **3.7.0**，生成的是旧模板 —— 脚手架跑完请手工把 `src/frontend.tsx` 改成上面的形状
 > （或直接用 `--template server-only`）；升级到 `npm i -D @openlearn/plugin-sdk@3.7.2` 则无需手改。
 
