@@ -214,22 +214,57 @@ describe('community plugin registry routes', () => {
       return await zip.generateAsync({ type: 'nodebuffer' });
     }
 
-    it('B2: 未签名本地包直接上传默认被拦截拒绝 (400 COMMUNITY_ATTESTATION_REQUIRED)', async () => {
-      const zipBuf = await makePluginZip({ id: 'ext-unsigned-test', version: '1.0.0' }, false);
-      const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
-        method: 'POST',
-        headers: {
-          ...cookie(adminToken),
-          'Content-Type': 'application/zip',
-          'x-plugin-filename': 'ext-unsigned-test.zip',
-        },
-        body: zipBuf,
-      });
+    it('B2: OPENLEARN_ALLOW_UNSIGNED=0 时未签名本地包被拦截拒绝 (400 COMMUNITY_ATTESTATION_REQUIRED)', async () => {
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
+      try {
+        const zipBuf = await makePluginZip({ id: 'ext-unsigned-test', version: '1.0.0' }, false);
+        const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-unsigned-test.zip',
+          },
+          body: zipBuf,
+        });
 
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { code?: string; error: string };
-      expect(body.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
-      expect(body.error).toContain('allowUnsigned');
+        expect(res.status).toBe(400);
+        const body = (await res.json()) as { code?: string; error: string };
+        expect(body.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+        expect(body.error).toContain('allowUnsigned');
+      } finally {
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
+    it('B2-default: 未设置 OPENLEARN_ALLOW_UNSIGNED 时未签名本地包默认放行（审计记旁路）', async () => {
+      auditEvents = [];
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+      try {
+        const zipBuf = await makePluginZip({ id: 'ext-unsigned-default-test', version: '1.0.0' }, false);
+        const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-unsigned-default-test.zip',
+          },
+          body: zipBuf,
+        });
+
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as { success: boolean };
+        expect(body.success).toBe(true);
+        const bypassEvent = auditEvents.find(
+          (e) => e.event === 'plugin.unverified_local_bypassed' && e.manifestId === 'ext-unsigned-default-test',
+        );
+        expect(bypassEvent).toBeDefined();
+      } finally {
+        if (saved !== undefined) process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
     });
 
     it('B5: 未签名本地包携带 x-allow-unsigned: true 时放行并记录旁路审计', async () => {
