@@ -46,7 +46,9 @@ type(scope): message
 两道门禁（硬失败，不靠自觉）：
 
 - `scripts/publish.sh` 的版本占用检查按包名取 tag 前缀：tag 不存在直接拒绝，并打印该执行的那两行命令；
-- `scripts/assert-publishable.mjs` 挂在三个包的 `prepublishOnly` 上，任何绕过 `publish.sh` 的直接 `npm publish` 同样被拦（前缀由包名自动推导，`--tag-prefix` 只用于例外场景）。它一共查五条：① 依赖无本地协议、② 平台包 `FALLBACK_VERSION` 一致、③ HEAD 正好被发布 tag 指向、④ HEAD 已并入 `origin/main`、⑤ **CHANGELOG 与版本对得上**。
+- `scripts/assert-publishable.mjs` 挂在三个包的 `prepublishOnly` 上，任何绕过 `publish.sh` 的直接 `npm publish` 同样被拦
+  （前缀由包名自动推导，`--tag-prefix` 只用于例外场景）。**新增包或改 `prepublishOnly` 时要记得挂上** ——
+  `scripts/__tests__/publish-guard-wiring.test.ts` 会盯住这件事（SDK 曾经悄悄丢过一次，正好是它漏掉了 3.7.3 的守卫）。它一共查五条：① 依赖无本地协议、② 平台包 `FALLBACK_VERSION` 一致、③ HEAD 正好被发布 tag 指向、④ HEAD 已并入 `origin/main`、⑤ **CHANGELOG 与版本对得上**。
 - **第 ⑤ 条查两件事**：CHANGELOG 里必须有 `## [<版本号>]` 段；`## [Unreleased]` 下不能再有条目。
   加它的原因是 2026-10-27 的一次实测：PR #326 把构建期守卫合进了 main，可 npm `latest` 仍是 3.7.3 ——
   那条发版发生在守卫合入之前，而**没有任何机制提示「main 上有未发布改动」**（`publish.sh` 与整个

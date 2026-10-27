@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   注意：`import React` 若**根本没用到**，esbuild 会 tree-shake 掉，那属于真干净，不会报错。
   官方脚手架模板是纯桥接，不受影响。
 
+- **`prepublishOnly` 补回发布守卫**：本包的 `prepublishOnly` 是 `node build.mjs`，
+  **不跑 `scripts/assert-publishable.mjs`** —— 那道守卫此前只挂在根包与 test-kit 上。
+  也就是说「CHANGELOG 没折叠就发版」这类问题，SDK 发布时根本没人拦，而漏掉守卫的恰恰是 SDK。
+  现改为 `node build.mjs && node ../../scripts/assert-publishable.mjs`。
+  新增 `scripts/__tests__/publish-guard-wiring.test.ts` 盯住「每个可发布包都挂上了」，
+  免得这道守卫哪天又被覆盖掉。
+- **`assert-publishable.mjs` 第 ⑤ 条断言**：发布的版本必须在 CHANGELOG 里有同名段，
+  且 `[Unreleased]` 已折叠（判据是「有没有列表项」，`_（下一版本待补充）_` 这类占位不算）。
+  没有 CHANGELOG 的包（test-kit）**只告警不拦** —— 它不存在「对不上」，那是另一件事。
+  例外：`ALLOW_UNRELEASED_CHANGELOG=1` / `--allow-unreleased-changelog`。
+
 ## [3.7.3] - 2026-10-27
 
 ### Fixes

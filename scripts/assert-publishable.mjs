@@ -230,9 +230,13 @@ function parseChangelogSections(text) {
 try {
   const changelogPath = path.join(root, 'CHANGELOG.md');
   if (!fs.existsSync(changelogPath)) {
-    errors.push(
-      `找不到 ${path.relative(root, changelogPath) || 'CHANGELOG.md'}，无法核对版本与 CHANGELOG 是否一致。` +
-        `发版前请先建一个，并补上 \`## [${version}]\` 段。`,
+    // 没有 CHANGELOG 的包（当前是 @openlearn/plugin-test-kit）**只告警、不拦**。
+    // 这道断言守的是「版本号与 CHANGELOG 对得上」，而一个根本没有 CHANGELOG 的包
+    // 不存在「对不上」，那是另一件事（该不该补 CHANGELOG），不该由发布门禁顺手决定 ——
+    // 否则会让这个包再也发不出去，逼出一次 `ALLOW_*` 放行，那才是真正废掉门禁。
+    console.warn(
+      `[assert-publishable] ! ${pkg.name} 没有 CHANGELOG.md，跳过第 ⑤ 条（版本与 CHANGELOG 一致性）。` +
+        `建议补一个，否则「这次发了什么」只能靠 git log 反推。`,
     );
   } else {
     const sections = parseChangelogSections(fs.readFileSync(changelogPath, 'utf8'));
