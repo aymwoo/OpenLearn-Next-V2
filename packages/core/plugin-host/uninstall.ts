@@ -145,6 +145,10 @@ export abstract class PluginHostUninstall extends PluginHostInstall {
       }
     })();
 
+    // Issue #320：服务端题型注册表不进 ResourceTracker，卸载时（含非 ACTIVE 态、
+    // 上面的停用分支不会跑的情况）必须独立回收，否则残留题型会阻挠下一次安装。
+    await this.revokePluginQuestionTypes(pluginId, manifestId);
+
     // 幂等：已卸载且 DB 无残留记录时直接返回，避免 uninstalled → uninstalled 非法转换
     if (state === PluginState.UNINSTALLED && !row) {
       this.pluginStates.delete(pluginId);

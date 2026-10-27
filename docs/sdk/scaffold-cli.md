@@ -31,6 +31,11 @@
 
 ZIP 内部固定为**根级** `index.js` + `manifest.json` +（可选）`frontend.js`，无嵌套目录。
 
+> ⚠️ **ZIP 里只有这三件套**：`migrations/`、`assets/`、`README.md` 等内容**不会**进包。
+> 建表/升级请用 `ctx.db.ensureTable()` + `ctx.db.migrate(version, fn)`；
+> 声明式 `migrations/*.sql` 仅对内置插件、源码目录直装生效，
+> 详见 [插件数据库 API](../reference/plugin-database-api.md) §3.1 的 ZIP 说明。
+
 > 🛡️ **`build` 会检查 `frontend.js` 有没有残留裸模块说明符**（`from "react"` 这类非相对/绝对路径的导入），
 > 有就直接 `exit 1`。原因：远程插件前端跑在不透明源 iframe 里，没有 React / `window.HostSharedDeps` /
 > importmap，加载方式是 `Blob` + 动态 `import()`，裸说明符无从解析 —— 构建能过，装上也正常，一激活就崩，

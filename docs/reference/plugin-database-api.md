@@ -99,6 +99,18 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 
 插件包根目录下可提供 `migrations/` 目录，宿主在插件激活（无论是 Inline 还是 Worker 隔离模式）前自动执行尚未应用的增量迁移：
 
+> ⚠️ **ZIP 分发必须先读这一段**：官方 CLI 的 `build` **只打包** `index.js` + `manifest.json`
+> （+ 可选 `frontend.js`），`migrations/` 目录**不会进 ZIP**（见 `packages/plugin-sdk/cli.mjs` 的打包段与
+> [脚手架指南](../sdk/scaffold-cli.md) §2）。因此本节描述的分工是：
+>
+> | 分发方式                            | `migrations/` 是否生效 | 推荐做法                                                                     |
+> | ----------------------------------- | ---------------------- | ---------------------------------------------------------------------------- |
+> | 内置插件 / 源码目录直装             | ✅ 生效                | 按本节声明式迁移                                                             |
+> | **第三方 ZIP 插件（npm CLI 打包）** | ❌ 不会执行            | 改用命令式 `ctx.db.ensureTable()` + `ctx.db.migrate(version, fn)`（见 §3.2） |
+>
+> 宿主侧执行逻辑见 `packages/core/plugin-host/lifecycle.ts` 的 `runPluginDeclarativeMigrations`。
+> 写了一份永远不会被执行的 `migrations/` 是本页历史上最常见的无效配置，故单独提示。
+
 ```text
 my-plugin/
 ├── manifest.json

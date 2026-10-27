@@ -775,6 +775,9 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
           // contributionRegistry 长期滞留已停用插件的条目，
           // listContributions() 的 allSummaries / stats() 继续把它们算进去。
           this.revokePluginContributions(pluginId);
+          // Issue #320：服务端题型注册表是 `ctx.resolve()` 直取的裸注册表，
+          // 不进 ResourceTracker，必须在这里显式回收。
+          await this.revokePluginQuestionTypes(pluginId, deactManifest.id);
           this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
           // 热重载注销
@@ -798,6 +801,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
       this.revokePluginContributions(pluginId); // D-1/D-2：注销声明式贡献
+      await this.revokePluginQuestionTypes(pluginId, deactManifest.id); // Issue #320
       this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
       if (actorId) {
         await this.revokeCapabilities(actorId);
@@ -841,6 +845,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
       this.revokePluginContributions(pluginId); // D-1/D-2：注销声明式贡献
+      await this.revokePluginQuestionTypes(pluginId, instance?.manifest?.id ?? pluginId); // Issue #320
       this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: true });
 
       if (actorId) {

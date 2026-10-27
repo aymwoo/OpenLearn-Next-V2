@@ -165,13 +165,23 @@ export interface PluginContext {
 
 实现位置：`packages/core/plugin-host/resource-tracker.ts`
 
-插件在运行期间创建的所有资源（如注册的命令 Handler、事件 Subscription、定时器与网络连接）必须实现 `Disposable` 接口：
+先分清两类资源——混在一起会让人去找一个**不存在的返回值**：
+
+| 类别         | 例子                                                                                                                                     | 谁负责回收                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 宿主自动回收 | `commandBus.registerHandler()`、`eventBus.subscribe()`、`ctx.ui.*` 前端注册表、`ctx.services.pointsDimension.registerDimension()`       | 停用/卸载时宿主统一注销；插件拿不到也无需持有 Disposable       |
+| 插件自管     | 自建定时器、子进程 / Worker、第三方连接（DB/HTTP/Redis 客户端）、`ctx.resolve()` 拿到的**裸注册表**注册项                                 | 必须在 `deactivate()` 里显式清理，否则泄漏                      |
+
+`Disposable` 契约只约束第二类（宿主包装层会把通过 `ctx` 包装 API 注册的资源自动包成 Disposable）：
 
 ```typescript
 export interface Disposable {
   dispose(): void;
 }
 ````
+
+> `eventBus.subscribe(type, handler)` 返回 `Promise<void>`，**没有** Disposable 可拿；
+> 主动退订用 `eventBus.unsubscribe(type, handler)`（需自己保留 handler 引用）。宿主停用时也会自动退订。
 
 当插件触发停用（`deactivatePlugin`）或卸载（`uninstallPlugin`）时，`PluginHost` 自动调用：
 
