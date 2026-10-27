@@ -9,8 +9,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.7.3] - 2026-10-27
+
+### Fixes
+
+- **`build` 检测到 `migrations/` 目录时告警（Issue #321）**：宿主确实会在插件激活前执行 `<pluginDir>/migrations`
+  （`packages/core/plugin-host/lifecycle.ts` 的 `runPluginDeclarativeMigrations`），但官方 CLI 的 ZIP **只打包**
+  `index.js` / `manifest.json` / `frontend.js`。两边都对，是**分发链路**把中间截断了 —— 作者按
+  `docs/reference/plugin-database-api.md` §3.1 写了 `migrations/001_*.sql`，会经历「构建成功 → 安装成功 →
+  激活成功 → 首次执行 SQL 才报 `no such table`」，故障点被推迟到最难排查的时刻且全程零提示。
+  - **改法**：`cmdBuild` 在确认 `src/index.ts` 存在后检查 `<cwd>/migrations`，存在则打印一条 warning，
+    直接给出替代路径（`ctx.db.ensureTable()` + `ctx.db.migrate(version, fn)`）并从构建期指向文档。
+    **刻意不改变打包契约**（ZIP 仍是三件套）—— 这是提示，不是静默改行为；
+    真要把该目录打进 ZIP 需要宿主侧解压落地，属后续独立决策。
+  - **验证**：新增 `packages/plugin-sdk/__tests__/cli-build-migrations-warning.test.ts`（真跑 CLI，不 mock），
+    覆盖「有 `migrations/` → 告警且解包后 ZIP 条目仍是三件套」「无 `migrations/` → 不告警（不许变成噪音）」；
+    负向对照 —— 撤掉告警代码后第 1 条用例失败（`expected '…Building openlea…' to contain 'migrations/'`），
+    恢复后 2 passed。
+
+### Docs
+
+- **`migrations/` 的分发口径写进脚手架指南与数据库 API 页**：官方 ZIP 只含三件套这件事此前只在
+  `docs/reference/plugin-database-api.md` §3.1 补了警示框，第三方作者仍可能先写 `migrations/` 再发现不生效；
+  `docs/sdk/scaffold-cli.md` §2 现在也写明「ZIP 里只有这三件套」。
+
+### 弃用
+
 - **3.7.1 已在 npm 上弃用**（`npm deprecate`，不撤包）：该版本 `dist/index.js` 残留 5 处 `node:` 静态导入，
-  把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.2，详见 `[3.7.1]` 段首的红线提示。
+  把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.3，详见 `[3.7.1]` 段首的红线提示。
 
 ## [3.7.1] - 2026-10-27
 
