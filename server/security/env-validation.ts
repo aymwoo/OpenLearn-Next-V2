@@ -259,12 +259,24 @@ export function validateStartupEnv(env: NodeJS.ProcessEnv = process.env): EnvVal
         severity: 'warning',
         message: 'OPENLEARN_TRUSTED_INLINE_PLUGINS 只含空白/逗号，等同于未配置。',
       });
+    } else if (ids.includes('*')) {
+      // 通配符 `*` = 全部插件都拿到进程内身份。这是比列举几个 id 严重得多的决定，
+      // 所以**不分环境**都要告警：出站网络拦截、环境变量隔离、崩溃爆炸半径全部失效。
+      warnings.push({
+        key: 'OPENLEARN_TRUSTED_INLINE_PLUGINS',
+        severity: 'warning',
+        message:
+          'OPENLEARN_TRUSTED_INLINE_PLUGINS 含通配符 `*`：**所有**插件都被视为受信，' +
+          '可在进程内以 inline/worker 运行（含日后安装的任意第三方包）。' +
+          '它们与宿主共享环境变量与网络栈，出站网络拦截对它们不生效，未捕获异常可拖垮服务。' +
+          '仅限本地开发；生产环境请改为精确 id 或前缀式（如 `@ext/*`）。',
+      });
     } else if (isProduction) {
       warnings.push({
         key: 'OPENLEARN_TRUSTED_INLINE_PLUGINS',
         severity: 'warning',
         message:
-          `生产环境信任了 ${ids.length} 个插件在**进程内**运行：${ids.join(', ')}。` +
+          `生产环境信任了 ${ids.length} 个条目在**进程内**运行：${ids.join(', ')}。` +
           ' 它们与宿主共享环境变量与网络栈，出站网络拦截对它们不生效。' +
           ' 确认这是有意为之；否则清空该变量让它们回到 process 子进程隔离。',
       });

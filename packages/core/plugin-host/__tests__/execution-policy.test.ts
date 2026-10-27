@@ -2,7 +2,12 @@
  * 审计 H-4：未受信任插件不能留在宿主进程里。
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { isTrustedInProcessPlugin, resolvePluginExecutionMode } from '../execution-policy.js';
+import {
+  isInTrustedInlineAllowlist,
+  isTrustedInProcessPlugin,
+  matchesTrustedInlinePattern,
+  resolvePluginExecutionMode,
+} from '../execution-policy.js';
 import { PluginState } from '../types.js';
 import { createDb, makeHost, makeTmpDir, removeTmpDir, insertPluginRow } from './helpers/audit-host.js';
 
@@ -49,6 +54,72 @@ describe('第三方插件执行模式策略', () => {
     );
     expect(resolvePluginExecutionMode('ext-other', 'worker').mode).toBe('worker');
     expect(resolvePluginExecutionMode('ext-unlisted', 'inline').mode).toBe('process');
+  });
+
+  it('名单支持通配：`*` 全部受信，`前缀*` 前缀匹配，其余精确', () => {
+    rememberEnv();
+    delete process.env.VITEST;
+    delete process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
+
+    // 纯函数级：匹配规则本身
+    expect(matchesTrustedInlinePattern('*', 'any-third-party')).toBe(true);
+    expect(matchesTrustedInlinePattern('@ext/*', '@ext/attendance-record')).toBe(true);
+    expect(matchesTrustedInlinePattern('@ext/*', '@ext-other/thing')).toBe(false);
+    expect(matchesTrustedInlinePattern('exact-id', 'exact-id')).toBe(true);
+    expect(matchesTrustedInlinePattern('exact-id', 'exact-id-2')).toBe(false);
+    // 空 manifestId 永远不匹配（避免 undefined 被 startsWith('') 全命中）
+    expect(matchesTrustedInlinePattern('*', undefined)).toBe(false);
+    expect(matchesTrustedInlinePattern('*', '')).toBe(false);
+
+    // 端到端：`*` ⇒ 任意第三方都能进程内运行
+    process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = '*';
+    expect(isInTrustedInlineAllowlist('ext-anything')).toBe(true);
+    expect(isTrustedInProcessPlugin('ext-anything')).toBe(true);
+    expect(resolvePluginExecutionMode('ext-anything', 'inline')).toEqual(
+      expect.objectContaining({ mode: 'inline', coerced: false }),
+    );
+    expect(resolvePluginExecutionMode('ext-anything', 'worker').mode).toBe('worker');
+
+    // 前缀式：只放行该前缀
+    process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = '@ext/*,openlearn-plugin-*';
+    expect(isInTrustedInlineAllowlist('@ext/attendance-record')).toBe(true);
+    expect(isInTrustedInlineAllowlist('openlearn-plugin-interactive-courseware')).toBe(true);
+    expect(isInTrustedInlineAllowlist('@other/thing')).toBe(false);
+    expect(resolvePluginExecutionMode('@other/thing', 'inline')).toEqual(
+      expect.objectContaining({ mode: 'process', coerced: true }),
+    );
+
+    // 通配符不影响「不需要信任」的那一档
+    process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = '';
+    expect(isInTrustedInlineAllowlist('ext-anything')).toBe(false);
+    expect(resolvePluginExecutionMode('ext-anything', 'process')).toEqual(
+      expect.objectContaining({ mode: 'process', coerced: false }),
+    );
+  });
+
+  it('`*` 只放宽「进程内信任」，不会把第三方插件变成系统插件（否则不可更新/卸载）', async () => {
+    rememberEnv();
+    process.env.VITEST = 'true';
+    process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = '1';
+    process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = '*';
+
+    const db = createDb();
+    const pluginsDir = makeTmpDir('exec-policy-system-');
+    try {
+      const host = await makeHost(db, pluginsDir);
+      const manifest = { id: 'ext-community', name: 'Community', version: '1.0.0', main: 'index.js' };
+      insertPluginRow(db, { id: 'p-community', manifest, executionMode: 'inline' });
+
+      // 信任：可以进程内运行
+      expect(isTrustedInProcessPlugin('ext-community')).toBe(true);
+      // 但不是「系统插件」—— install.ts / uninstall.ts 会因此拒绝更新与卸载
+      expect(host.isOfficialPlugin('p-community', 'ext-community')).toBe(false);
+      // 精确 id 命中时仍算系统插件（保持既有语义：白名单 = 官方/自研内置）
+      process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = 'ext-community';
+      expect(host.isOfficialPlugin('p-community', 'ext-community')).toBe(true);
+    } finally {
+      removeTmpDir(pluginsDir);
+    }
   });
 
   it('Vitest 默认放行夹具，OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1 时恢复生产策略', () => {

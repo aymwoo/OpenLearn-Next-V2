@@ -26,6 +26,41 @@ export function trustedInlineAllowlist(env: NodeJS.ProcessEnv = process.env): Se
   );
 }
 
+/**
+ * 名单条目的匹配规则（**仅用于进程内信任判定**）。
+ *
+ * - `*` —— 匹配任意 manifest id，即「所有插件都允许进程内运行」；
+ * - `前缀*` —— 前缀匹配，如 `@ext/*`、`openlearn-plugin-*`；
+ * - 其它 —— 精确相等。
+ *
+ * 为什么需要通配：精确名单在「本地反覆装/卸若干自研插件」的开发场景里维护成本很高，
+ * 而写错的后果是**静默降档**（插件被改成子进程，前端 iframe 沙箱里缺宿主上下文，
+ * 表现为「装了但页面不出来」，且不报任何错）。宁可将「全部信任」写成一个显式、
+ * 可 grep、启动时会被大声告警的 `*`，也不要逼人去维护一串容易漏项的 id。
+ *
+ * 注意：本函数**不**参与 `isSystemPluginRecord()`（系统插件判定，会阻断更新与卸载）
+ * —— 那里继续用精确 `has()`。「允许进程内运行」与「官方/系统插件」是两件事，
+ * 否则一个 `*` 会把所有第三方插件变成不可更新、不可卸载。
+ */
+export function matchesTrustedInlinePattern(pattern: string, manifestId: string | null | undefined): boolean {
+  if (!manifestId) return false;
+  if (pattern === '*') return true;
+  if (pattern.endsWith('*')) return manifestId.startsWith(pattern.slice(0, -1));
+  return pattern === manifestId;
+}
+
+/** 该 manifest id 是否命中信任名单（支持 `*` 与前缀通配）。 */
+export function isInTrustedInlineAllowlist(
+  manifestId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!manifestId) return false;
+  for (const pattern of trustedInlineAllowlist(env)) {
+    if (matchesTrustedInlinePattern(pattern, manifestId)) return true;
+  }
+  return false;
+}
+
 /** 仓库内置插件源码目录。安装到 `plugins/<uuid>` 的包不在这里。 */
 export function builtinPluginsDir(): string {
   try {
@@ -59,7 +94,8 @@ export function isTrustedInProcessPlugin(
   sourcePath?: string | null,
 ): boolean {
   if (isInsideBuiltinPluginsDir(sourcePath)) return true;
-  if (manifestId && trustedInlineAllowlist(env).has(manifestId)) return true;
+  // 名单支持通配（`*` / `前缀*`），见 matchesTrustedInlinePattern 的注释。
+  if (isInTrustedInlineAllowlist(manifestId, env)) return true;
   if (env.VITEST && env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1') return true;
   return false;
 }

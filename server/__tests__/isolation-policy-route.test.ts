@@ -118,6 +118,26 @@ describe('GET /api/plugins/isolation-policy', () => {
     });
   });
 
+  it('白名单写成 `*` 时，任意第三方 id 都判为受信（安装向导因此展示三档）', async () => {
+    const savedAllowlist = process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS;
+    process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = '*';
+    try {
+      const res = await get(
+        `?manifestId=whatever-third-party&requestedMode=inline`,
+        cookie(adminToken) as Record<string, string>,
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        success: true,
+        trusted: true,
+        resolvedMode: 'inline',
+        coerced: false,
+      });
+    } finally {
+      process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS = savedAllowlist;
+    }
+  });
+
   it('白名单 id：trusted=true，可保留 inline', async () => {
     const res = await get(
       `?manifestId=${TRUSTED_ID}&requestedMode=inline`,

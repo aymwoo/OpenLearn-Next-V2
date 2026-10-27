@@ -34,6 +34,23 @@ describe('进程内身份开关（R-01 的运营面）', () => {
     expect(warning?.message).toContain('出站网络拦截');
   });
 
+  it('通配符 `*` 不分环境都必须大声告警（等于放弃全部隔离）', () => {
+    // 非生产环境也要告警：`*` 让日后安装的任意第三方包都拿到进程内身份
+    const dev = validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: '*' });
+    const devWarning = dev.warnings.find((w) => w.key === 'OPENLEARN_TRUSTED_INLINE_PLUGINS');
+    expect(devWarning?.severity).toBe('warning');
+    expect(devWarning?.message).toContain('所有');
+    expect(devWarning?.message).toContain('仅限本地开发');
+
+    // 混在列表里的 `*` 同样触发
+    const mixed = validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a, *' });
+    expect(mixed.warnings.map((w) => w.key)).toContain('OPENLEARN_TRUSTED_INLINE_PLUGINS');
+
+    // 前缀式通配不算「全部信任」，维持原有的「仅生产环境告警」口径
+    const prefixOnly = validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: '@ext/*' });
+    expect(prefixOnly.warnings.map((w) => w.key)).not.toContain('OPENLEARN_TRUSTED_INLINE_PLUGINS');
+  });
+
   it('非生产环境不过度告警；只含空白的名单会被指出等同未配置', () => {
     expect(validateStartupEnv({ OPENLEARN_TRUSTED_INLINE_PLUGINS: 'ext-a' }).warnings.map((w) => w.key)).not.toContain(
       'OPENLEARN_TRUSTED_INLINE_PLUGINS',

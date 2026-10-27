@@ -951,6 +951,11 @@ export abstract class PluginHostCore extends PluginHostBase {
 
   protected isSystemPluginRecord(pluginId: string, manifestId?: string): boolean {
     if (this.preloadedPlugins.has(pluginId)) return true;
+    // ⚠ 这里**只能用精确匹配**（不能用 execution-policy 的通配版）：
+    // 本判定会阻断安装/更新（install.ts）与卸载（uninstall.ts）—— 一旦生效，
+    // 插件就变成「系统核心插件」。若让 `OPENLEARN_TRUSTED_INLINE_PLUGINS=*`
+    // 也淌到这里，所有第三方插件会瞬间不可更新、不可卸载。
+    // 「允许进程内运行」与「官方/系统插件」是两件事。
     const allowlist = trustedInlineAllowlist();
     if (allowlist.has(pluginId) || (manifestId ? allowlist.has(manifestId) : false)) return true;
     try {

@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **`OPENLEARN_TRUSTED_INLINE_PLUGINS` 支持通配符**：此前只做**精确** manifest id
+  匹配，本地反复装卸若干自研插件时维护成本很高，而写错的后果是**静默降档**
+  （插件被强制改成 `process`，前端只剩 iframe 沙箱、拿不到宿主上下文，表现为
+  「装了但页面不出来」且不报错）。
+  - 现在支持 `*`（任意 id，= 全部插件都允许进程内运行）与 `前缀*`
+    （如 `@ext/*`、`openlearn-plugin-*`），其余仍精确匹配；
+    匹配逻辑收敛在 `matchesTrustedInlinePattern()`。
+  - **不会**影响 `isSystemPluginRecord()`（系统插件判定，会阻断更新与卸载）——
+    那里继续用精确 `has()`，否则一个 `*` 会让所有第三方插件变成不可更新、不可卸载。
+  - 启动告警：写 `*` 时**不分环境**都告警（等于放弃全部隔离），前缀式仍只在生产告警。
+  - 影响面：`packages/core/plugin-host/execution-policy.ts`、`core.ts`、
+    `server/security/env-validation.ts`、`.env.example`。
+  - 验证：`execution-policy.test.ts`（匹配规则、`*`/前缀端到端、信任≠系统插件）、
+    `env-validation.test.ts`（`*` 必须告警）、`isolation-policy-route.test.ts`
+    （`*` 下任意 id 判为受信）。
+
 - **白板放行插件贡献的图元类型**：`whiteboard.draw` / `whiteboard.batch_draw` 此前只认
   `KNOWN_ELEMENT_TYPES` 硬编码清单，插件经 `editor.palette_item` /
   `whiteboard.renderer` 声明并在画板上投放的图元（如
