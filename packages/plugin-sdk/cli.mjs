@@ -290,6 +290,20 @@ async function cmdBuild(args) {
     process.exit(1);
   }
 
+  // Issue #321：migrations/ 不会被打进 ZIP（只打 index.js / manifest.json / frontend.js），
+  // 但宿主侧确实会在激活前执行 <pluginDir>/migrations（lifecycle.ts 的
+  // runPluginDeclarativeMigrations）。两边都对，只是分发链路把它截断了 —— 作者会得到
+  // 「构建成功、安装成功、表不存在」的静默失效。在构建期把话说清楚。
+  const migrationsDir = join(cwd, 'migrations');
+  if (existsSync(migrationsDir)) {
+    console.warn(
+      `${c.yellow}⚠  Warning:${c.reset} 检测到 migrations/ 目录，但官方 ZIP 只打包 ` +
+        `index.js / manifest.json / frontend.js —— 该目录不会进包，声明式迁移在 ZIP 插件上不会执行。\n` +
+        `   第三方插件请在 activate() 里用 ctx.db.ensureTable() + ctx.db.migrate(version, fn) 建表，\n` +
+        `   详见 docs/reference/plugin-database-api.md §3.1。`,
+    );
+  }
+
   const watchMode = args.includes('--watch') || args.includes('-w');
 
   if (!watchMode) {
