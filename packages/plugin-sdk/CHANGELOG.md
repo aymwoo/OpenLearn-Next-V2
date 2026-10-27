@@ -9,8 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [3.7.1] - 2026-10-27
+
+> **升级理由**：`init` 生成的插件此前**装得上、构建得过、一激活就报 `missing activate function`**。
+> 3.7.1 修掉了这个模板缺陷，并把 3.7.0 之后累积的类型契约一并发布（全部为新增导出，向后兼容）。
+> 装法：`npm i -D @openlearn/plugin-sdk@3.7.1`。
+
 ### Fixes
 
+- **脚手架模板的前端入口改为沙箱桥接（`frontend.tsx` 不再导出 React 组件）**：
+  - **问题**：`full-stack` / `frontend-only` 模板生成 `export default function Component()`，而宿主沙箱加载器（`server/utils/plugin-sandbox-frame.ts`）要求 `typeof plugin.activate === 'function'` —— 新建插件一装就报 `missing activate function` 并进入错误态。第三方插件的前端本来就跑在隐藏的不透明源 iframe 里，那个组件既不会被渲染、也无法跨 `postMessage` 传递。
+  - **改法**：两个模板统一生成 `export default { activate, deactivate }`，iframe 内只做桥接：读课堂上下文（`context.get()`）、写命名空间存储、注册**数据型**扩展点。`full-stack` 额外注册一个 `command_palette.item`（由宿主渲染，是第三方插件唯一可见的入口形态）；`frontend-only` 改为「首次激活 toast + 存储」的纯桥接演示，并删掉原先声明的悬空 `classroomTool`（有 `commandType` 无 handler，点了只会报 No handler registered）。
+  - **模板小坑**：`classroomTools[].payload` 补 `$lessonId` / `$classId` 占位符并把回显写进 handler 结果；`--author` 缺省时回落 `OpenLearn Developer`（原来拼出 `@/name` 空 scope）；扩展点 / Action 的 `id` 从 `{{pluginId}}-x` 改为 `{{name}}-x`（原值形如 `@scope/name-tool`，带斜杠）。
 - **补上 `INetworkProxyServiceToken` 的手写声明**。`index.ts` 已导出该 Token，`openlearn.d.ts` 同步 `declare` 与导出块，插件 `import { INetworkProxyServiceToken }` 不再 TS2305。出站请求仍由宿主代理。
 
 ### Features & Types

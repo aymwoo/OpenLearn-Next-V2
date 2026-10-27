@@ -338,7 +338,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 ### 开发自己的插件
 
-参见 [插件开发完全指南](../tutorials/plugin-development-tutorial) 和 [插件脚手架开发指南](../sdk/scaffold-cli)。
+参见 [插件开发完全指南](../tutorials/plugin-development-tutorial.md) 和 [插件脚手架开发指南](../sdk/scaffold-cli.md)。
 
 ---
 
@@ -455,7 +455,7 @@ docker build -t openlearnv2 .
 docker-compose up -d
 ```
 
-> **注意（重要）**：数据在容器内的 `/data`（库、课件、插件、上传）和 `/backups`。不要挂到 `/app/packages/core/db` 或 `/app/storage`，那是旧布局，和当前 `OPENLEARN_DATA_DIR` 对不上。完整步骤、反代和健康检查见 [Docker & Nginx](../deployment/docker-nginx)。
+> **注意（重要）**：数据在容器内的 `/data`（库、课件、插件、上传）和 `/backups`。不要挂到 `/app/packages/core/db` 或 `/app/storage`，那是旧布局，和当前 `OPENLEARN_DATA_DIR` 对不上。完整步骤、反代和健康检查见 [Docker & Nginx](../deployment/docker-nginx.md)。
 >
 > ```bash
 > docker compose up -d --build
@@ -507,7 +507,7 @@ docker compose exec app node scripts/site-backup.mjs
 >
 > SQLite 在线复制可能拿到不一致快照。脚本用 `VACUUM INTO`。不要直接 `cp` 正在写入的 db 文件。
 >
-> 恢复须先停服：`node scripts/site-restore.mjs --i-understand-downtime`。详见[系统管理员手册](../administrator-guide/admin-manual) §6.4。
+> 恢复须先停服：`node scripts/site-restore.mjs --i-understand-downtime`。详见[系统管理员手册](../administrator-guide/admin-manual.md) §6.4。
 
 ### Q: 如何重置系统？
 
@@ -519,11 +519,11 @@ rm packages/core/db/educational_os.db
 pnpm run dev
 ```
 
-> 重置后到启动日志或 `storage/bootstrap-credentials.txt` 取初始口令。若仍配置成与用户名相同，登录后必须改密，期间业务 API 读请求也会被拦截。详见[系统管理员手册](../administrator-guide/admin-manual) §0.2。
+> 重置后到启动日志或 `storage/bootstrap-credentials.txt` 取初始口令。若仍配置成与用户名相同，登录后必须改密，期间业务 API 读请求也会被拦截。详见[系统管理员手册](../administrator-guide/admin-manual.md) §0.2。
 >
 > Docker 部署要重置得删卷：`docker compose down -v`（⚠️ 这会清掉 `openlearn_data` 与 `openlearn_backups`，务必先备份）。
 
 ---
 
-> **相关文档**：[插件开发完全指南](../tutorials/plugin-development-tutorial) · [核心架构与设计](../architecture/platform-kernel) · [插件脚手架开发指南](../sdk/scaffold-cli)
+> **相关文档**：[插件开发完全指南](../tutorials/plugin-development-tutorial.md) · [核心架构与设计](../architecture/platform-kernel.md) · [插件脚手架开发指南](../sdk/scaffold-cli.md)
 > 最后更新：2026-07-15

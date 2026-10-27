@@ -30,7 +30,7 @@
 
 每个实例必须有自己的 `.env`（不要共用）：
 
-```dotenv
+```ini
 # 实例 A（school-a）
 OPENLEARN_DATA_DIR=/srv/openlearn/school-a/data
 OPENLEARN_DB_PATH=/srv/openlearn/school-a/data/educational_os.db
@@ -85,7 +85,7 @@ server {
 ```
 
 - 每校独立证书（或统一泛域名证书）。
-- `/socket.io/` 与 `/runtime/` 的注意事项与单实例部署相同，见 [Docker & Nginx 反向代理配置](docker-nginx)。
+- `/socket.io/` 与 `/runtime/` 的注意事项与单实例部署相同，见 [Docker & Nginx 反向代理配置](docker-nginx.md)。
 - 代理后面必须给对应实例设置 `TRUST_PROXY`，否则限流桶会按代理地址合并。
 
 ## 4. 升级、备份、恢复（逐实例执行）
@@ -96,7 +96,7 @@ server {
 | ------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | 升级         | 每实例拉新镜像/新代码后重启                                                                      | 先在 1 个实例试点；观察 `/health/ready` 与 `openlearn_plugin_*` 指标 |
 | 升级前快照   | 启动日志里的 `pre_migration_*.db`（`BACKUP_DIR`）                                                | 每实例一份，互不覆盖                                                 |
-| 迁移失败恢复 | `npx openlearn-next restore --snapshot <pre_migration_*.db>`                                     | 见 [运维手册 · 快照恢复](../beta/operations)                         |
+| 迁移失败恢复 | `npx openlearn-next restore --snapshot <pre_migration_*.db>`                                     | 见 [运维手册 · 快照恢复](../beta/operations.md)                      |
 | 整站备份     | `scripts/site-backup.mjs`（容器内 `docker compose exec app node scripts/site-backup.mjs`）       | 含数据库、`storage/`、`plugins/`、`uploads/`                         |
 | 恢复演练     | 迁移失败 → 快照恢复 → 启动的 CI 演练；本地 `pnpm exec tsx scripts/db/migration-restore-drill.ts` | 建议每学期在预发实例跑一次                                           |
 

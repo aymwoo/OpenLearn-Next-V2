@@ -2,7 +2,7 @@
 
 > 本文覆盖两部分：① 基于仓库内 `Dockerfile` + `docker-compose.yml` 的容器化部署；② 支撑 Socket.IO 白板实时同步的 Nginx 反向代理配置。
 >
-> 裸机 / PM2 部署见[安装指南](../getting-started/installation-guide)。
+> 裸机 / PM2 部署见[安装指南](../getting-started/installation-guide.md)。
 
 ---
 

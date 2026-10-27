@@ -147,7 +147,7 @@ export interface PluginContext {
 }
 ```
 
-> ⚠️ 以上为节选快照（`packages/core/plugin-host/types.ts` 为权威，字段随版本增减——如 worker 模式还有动态注入的 `ctx.reportProgress`，见[插件生命周期](plugin-lifecycle)）。
+> ⚠️ 以上为节选快照（`packages/core/plugin-host/types.ts` 为权威，字段随版本增减——如 worker 模式还有动态注入的 `ctx.reportProgress`，见[插件生命周期](plugin-lifecycle.md)）。
 
 ````
 

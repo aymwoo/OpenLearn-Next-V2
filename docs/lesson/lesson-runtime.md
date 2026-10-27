@@ -143,7 +143,7 @@ stateDiagram-v2
 - `active → active`（重复开课）被显式拒绝并抛 `InvalidLessonStateTransitionError`。
 - 每次跃迁由 `LessonRuntime` 注册的监听器发布 `LessonStateChanged` 事件。
 
-> 完整状态语义、监听器与异常字段见 [课程生命周期状态机](lesson-lifecycle)。
+> 完整状态语义、监听器与异常字段见 [课程生命周期状态机](lesson-lifecycle.md)。
 
 ---
 

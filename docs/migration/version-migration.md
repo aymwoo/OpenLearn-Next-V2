@@ -1,6 +1,6 @@
 # Version Migration Guide 版本迁移指南
 
-> **当前版本**：`package.json` 为 **`0.7.2`**，`@openlearn/plugin-sdk` 为 **`3.7.0`**。
+> **当前版本**：`package.json` 为 **`0.7.4`**，`@openlearn/plugin-sdk` 为 **`3.7.2`**。
 >
 > 本文覆盖两类迁移：
 >
@@ -199,13 +199,13 @@ DROP TABLE IF EXISTS foo;
 
 `plugins.execution_mode` 默认 `inline`。存量插件全部落在 `inline`——**即旧行为不变**。若要把第三方插件切到 worker 隔离模式，需管理员显式改值并重启。
 
-> ⚠️ 两种模式的 `db.table()` 表前缀语义**相反**（inline 用 DB UUID，worker 用 manifestId）。切换模式会让插件私有表「找不到」。详见[插件数据库 API](../reference/plugin-database-api)。
+> ℹ️ 两种模式的 `db.table()` 表前缀**是一致的**（均为 `plugin_<scopeId>_`，取决于安装主键而非执行模式）。历史版本曾按 `manifestId` 建表，那些旧表只在卸载清理时兼容识别。详见[插件数据库 API](../reference/plugin-database-api.md)。
 
 ### 3.3 随堂练习作答改用关系表（`007`）
 
 `lesson_quiz_submissions` 成为**唯一权威数据源**。升级前把 `submissions` 写回 `whiteboard_elements.data` JSON 的历史数据**不会被自动搬迁**——那些数据仅作为存量展示兜底保留。
 
-**升级后必须做**：若依赖历史随堂练习统计，需自行从 `whiteboard_elements.data.submissions` 抽取数据导入新表。表结构与唯一约束见[平台数据表参考](../reference/platform-data-tables)。
+**升级后必须做**：若依赖历史随堂练习统计，需自行从 `whiteboard_elements.data.submissions` 抽取数据导入新表。表结构与唯一约束见[平台数据表参考](../reference/platform-data-tables.md)。
 
 ### 3.4 课堂事件进入内核总线（`006`）
 
@@ -288,7 +288,7 @@ export default {
 
 > ⚠️ **worker 模式下 `db` 是 RPC 代理，不是 better-sqlite3 实例**。它支持 `prepare().run/get/all` 与 `exec`，但**没有 `transaction()`**。需要事务时用 `db.transaction(fn)()` 的形式调用（保留 `this` 绑定），并在 `typeof db.transaction === 'function'` 时才使用——平台自身的代码就是这么做的（如 `server/utils/auto-record-score.ts` 的 `promoteAttemptToGrade`）。
 >
-> ⚠️ **表名前缀在两种执行模式下相反**：inline 用 `plugin_{pluginId}_`（`pluginId` = DB 行 UUID），worker 用 `plugin_{manifestId}_`。同一插件换模式会「找不到表」。详见[插件数据库 API](../reference/plugin-database-api)与[插件开发教程](../tutorials/plugin-development-tutorial)。
+> ℹ️ **表名前缀与执行模式无关**：统一为 `plugin_<scopeId>_` —— 外部插件取 `plugins` 表行 UUID，内置插件取规范 id。切换执行模式**不会**让表名变化。历史上按 `manifestId` 建的表只用于卸载清理与兼容放行。详见[插件数据库 API](../reference/plugin-database-api.md)与[插件开发教程](../tutorials/plugin-development-tutorial.md)。
 
 ### 4.3 平台数据库 vs 插件私有数据
 
@@ -298,7 +298,7 @@ export default {
 | 简单键值                 | `ctx.services.storage`（`plugin_storage` 表）            | 自建 KV 表                |
 | 读平台核心表（只读查询） | `ctx.resolve(IDatabaseToken)`                            | ——                        |
 
-⚠️ 平台核心表的完整清单与权限边界见[平台数据表参考](../reference/platform-data-tables)——那里明确标注了「插件能否访问 `IDatabaseToken`」在文档层尚有矛盾，依赖前请先确认。
+⚠️ 平台核心表的完整清单与权限边界见[平台数据表参考](../reference/platform-data-tables.md)——那里明确标注了「插件能否访问 `IDatabaseToken`」在文档层尚有矛盾，依赖前请先确认。
 
 ---
 

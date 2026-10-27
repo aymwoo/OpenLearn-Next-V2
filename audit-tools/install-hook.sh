@@ -20,15 +20,17 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 
-# Only run when docs or source code under packages/core/ or src/features/
-# is staged. This keeps unrelated commits (style fixes, README typos) fast.
+# Only run when docs or source code that the audit reads is staged.
+# `server/` 与 `.env.example` 必须在内：envcheck 的配置键比对要扫服务端代码，
+# 漏掉它们就会出现「新增了环境变量但钩子没跑」的缺口。
+# This keeps unrelated commits (style fixes, README typos) fast.
 STAGED="$(git diff --cached --name-only)"
-if echo "${STAGED}" | grep -qE '^(docs/|packages/core/|src/features/|packages/plugins/)'; then
+if echo "${STAGED}" | grep -qE '^(docs/|packages/|server/|src/|scripts/|\.env\.example)'; then
   echo "[pre-commit] Architecture docs drift audit..."
   if ! bash audit-tools/run.sh; then
     echo ""
     echo "::error::Commit blocked: docs drift detected."
-    echo "  Fix the drift (see audit-tools/reports/drift_report.md) and re-commit."
+    echo "  Fix the drift (see audit-tools/reports/drift_report.md / env_report.md) and re-commit."
     echo "  To bypass in an emergency: git commit --no-verify"
     exit 1
   fi

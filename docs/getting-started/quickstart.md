@@ -54,7 +54,7 @@ pnpm dev
 - 否则启动时随机生成，写入 `storage/bootstrap-credentials.txt`（权限 600）并在日志打印一次；
 - 首次登录会强制改密（至少 8 位、含字母数字、不得与用户名相同），改密前业务写请求会被拦截。
 
-详见 [安装指南](./installation-guide) §首次启动与初始口令。
+详见 [安装指南](./installation-guide.md) §首次启动与初始口令。
 
 ---
 

@@ -5,7 +5,7 @@
 > **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 > 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 82 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
 >
-> ⚠️ **权限边界待澄清（文档层矛盾，非本页可单方面裁定）**：`docs/architecture/security-permissions.md` §1 的 RBAC 表把「访问 SQLite 数据库」对 Plugin 标为 ❌「只能用 Plugin DB」，而本页描述的 `IDatabaseToken` 能力恰好是**整个平台共享数据库句柄**。两处口径冲突：**在你依赖本页做跨表读写前，请先确认平台是否对插件开放 `IDatabaseToken`**。保守做法是优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
+> ✅ **权限边界已澄清（2026-10-26 复核）**：早期版本此处曾标注与 [`security-permissions.md`](../architecture/security-permissions.md) §1 的 RBAC 表冲突（那份表格把 Plugin 的「访问 SQLite 数据库」标为 ❌）。该冲突已在 `security-permissions.md` 侧修正：RBAC 表改指向 §2.5「插件与数据库的权限边界」，并明确插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享库句柄。**真正的边界不是「拿不到句柄」，而是语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令（`ATTACH`/`DETACH`/`PRAGMA`/`VACUUM`）禁用、**40 张核心表硬禁**、`plugin_*` 表仅限本插件命名空间。仍建议优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
 >
 > ⚠️ **本页不是完整字典**：插件安装后会按需动态创建 `plugin_{pluginId}_*` 私有表（数量随安装的插件而变），且各类表仍可能随迁移加列。**结构权威清单是 `migrations/schema-golden.json`（金样）与 `sqlite_master`**——改迁移后跑 `pnpm db:gen-golden && pnpm db:gen-tables` 同步金样与本页文末清单：
 >
@@ -18,7 +18,7 @@
 > ORDER BY name;
 > ```
 >
-> ⚠️ 若只想做插件私有数据，优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`（`plugin_storage` 键值），见[插件数据库 API](plugin-database-api)。
+> ⚠️ 若只想做插件私有数据，优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`（`plugin_storage` 键值），见[插件数据库 API](plugin-database-api.md)。
 
 ---
 
@@ -39,20 +39,20 @@
 
 插件注册表。
 
-| 列               | 类型    | 说明                                                                         |
-| ---------------- | ------- | ---------------------------------------------------------------------------- |
-| `id`             | TEXT PK | 插件 UUID（**不是** `manifest.id`，见[插件数据库 API](plugin-database-api)） |
-| `name`           | TEXT    | 名称                                                                         |
-| `manifest`       | TEXT    | manifest JSON 字符串                                                         |
-| `source_code`    | TEXT    | 源码                                                                         |
-| `status`         | TEXT    | `active` / `inactive` / `error` 等                                           |
-| `created_at`     | INTEGER | 时间戳                                                                       |
-| `execution_mode` | TEXT    | `inline` / `worker` / `process`（第三方插件强制 `process`）                  |
-| `version`        | TEXT    | 插件版本（迁移 `019`）                                                       |
-| `loader_version` | TEXT    | 加载器版本（迁移执行器选择与兼容性判定用）                                   |
-| `zip_package`    | TEXT    | 原始 ZIP 包的 base64；**in-place update 依赖此列**定位回滚源                 |
-| `file_path`      | TEXT    | 磁盘源码路径（`plugins/{uuid}/index.js`）                                    |
-| `updated_at`     | INTEGER | 最后更新时间                                                                 |
+| 列               | 类型    | 说明                                                                            |
+| ---------------- | ------- | ------------------------------------------------------------------------------- |
+| `id`             | TEXT PK | 插件 UUID（**不是** `manifest.id`，见[插件数据库 API](plugin-database-api.md)） |
+| `name`           | TEXT    | 名称                                                                            |
+| `manifest`       | TEXT    | manifest JSON 字符串                                                            |
+| `source_code`    | TEXT    | 源码                                                                            |
+| `status`         | TEXT    | `active` / `inactive` / `error` 等                                              |
+| `created_at`     | INTEGER | 时间戳                                                                          |
+| `execution_mode` | TEXT    | `inline` / `worker` / `process`（第三方插件强制 `process`）                     |
+| `version`        | TEXT    | 插件版本（迁移 `019`）                                                          |
+| `loader_version` | TEXT    | 加载器版本（迁移执行器选择与兼容性判定用）                                      |
+| `zip_package`    | TEXT    | 原始 ZIP 包的 base64；**in-place update 依赖此列**定位回滚源                    |
+| `file_path`      | TEXT    | 磁盘源码路径（`plugins/{uuid}/index.js`）                                       |
+| `updated_at`     | INTEGER | 最后更新时间                                                                    |
 
 > `version`（迁移 `019`）等增量列均经由迁移 `ALTER TABLE plugins ADD COLUMN` 加入。按本文清单做 INSERT 会丢更新时刻与 ZIP 来源；装插件时**务必带上 `zip_package`**，否则 in-place 更新无法回滚。
 
@@ -258,7 +258,7 @@
 
 ### 作业中枢四表（迁移 `005`，`packages/core/db/index.ts`）
 
-⚠️ 这四张表名字带 `plugin_` 前缀，但它们是**内核表**（在 `packages/core/db/index.ts` 与 `migrations/005_assignment_hub.sql` 中创建），**不是**插件私有表。插件私有表的判据是 `plugin_{pluginId}_`（UUID 或 manifestId 前缀，见[插件数据库 API](plugin-database-api)）。
+⚠️ 这四张表名字带 `plugin_` 前缀，但它们是**内核表**（在 `packages/core/db/index.ts` 与 `migrations/005_assignment_hub.sql` 中创建），**不是**插件私有表。插件私有表的判据是 `plugin_<scopeId>_`（安装主键前缀，与执行模式无关，见[插件数据库 API](plugin-database-api.md)）。
 
 | 表                           | 用途与关键列                                                                                                                                                                                                                                                                                                            |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -419,7 +419,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 ### `plugin_config`
 
-插件配置键值（`scope_type` 见 [ADR-001](../architecture/adr-001-tenant-and-db-abstraction)：`school` 为预留枚举位，一校一实例下无自动来源）。
+插件配置键值（`scope_type` 见 [ADR-001](../architecture/adr-001-tenant-and-db-abstraction.md)：`school` 为预留枚举位，一校一实例下无自动来源）。
 
 `key` / `plugin_id` / `scope_id` / `scope_type` / `updated_at` / `value`
 

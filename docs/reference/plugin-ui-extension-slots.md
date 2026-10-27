@@ -9,8 +9,12 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **119** 个成员，2026-10-25 实测；本节表格仅列最早一批核心槽位）
+### 前端 `ExtensionSlot` 联合类型（`src/plugin-host/types.ts` 的 `ExtensionSlot`，共 **120** 个字符串字面量成员，2026-10-27 实测；`anchor:*` 是**另一套**开放命名空间，见 `AnchorSlot`。本节代码块与 `types.ts` 逐条对齐）
 
+> 计数口径（可复跑）：取 `export type ExtensionSlot =` 到其结尾 `;` 之间的所有 `  | '...'` 行去重计数。**不要**用 `grep -c "^  | '" src/plugin-host/types.ts` —— 该文件里还有别的联合类型用了同样的缩进，会把数字虚高。
+>
+> 权威口径由 `python3 audit-tools/extract_slots.py --repo .` 生成（写入 `audit-tools/reports/slots_inventory.json`），本页清单再与之比对：`python3 audit-tools/slots_coverage.py --repo .`。两个脚本都已接入 `bash audit-tools/run.sh`，新增槽位若没写进本页，门禁会直接报错。
+>
 > 旧文档写 55 个、且把 `palette.item` 列为合法槽位名——**`palette.item` 不是合法槽位名**。备课画板组件扩展的真实槽位名是 **`editor.palette_item`**，已于 `SegmentEditorCard` 与 `LessonPalette` 中完整挂载并与 `paletteItemRegistry` 协同。
 
 ```typescript
@@ -144,7 +148,35 @@ export type ExtensionSlot =
   | 'admin.user.action'
   | 'header.status_pill'
   // ── AI 助手侧边栏 ──
-  | 'ai_sidebar.tab';
+  | 'ai_sidebar.tab'
+  // ── 全局命令面板与快捷插入（数据型槽位，宿主渲染入口）──
+  | 'command_palette.item'
+  | 'quick_insert.item'
+  // ── AI 智能体生态 ──
+  | 'ai.prompt.template'
+  | 'ai.skill.provider'
+  // ── 课程向导 ──
+  | 'course.wizard.quick_apply'
+  // ── 测评子系统（Issue #183）──
+  | 'assessment.list.card'
+  | 'assessment.attempt.toolbar'
+  | 'assessment.stats.card'
+  // ── 教师作业批改面板 ──
+  | 'assignment.grade.toolbar.action'
+  | 'assignment.grade.item.addon'
+  | 'assignment.grade.rubric.addon'
+  // ── 备课端与学生端教学环节 ──
+  | 'editor.segment.type_config'
+  | 'editor.timeline.node_badge'
+  | 'student.segment.badge'
+  | 'student.segment.gate_fallback'
+  | 'student.academic_year.metric_card'
+  // ── 课堂主工作区接管与课表导入 ──
+  | 'classroom.active_segment.main'
+  | 'timetable.import.source'
+  | 'timetable.entry.action'
+  // ── 全局壳层后台任务 ──
+  | 'header.async_task.item';
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -192,11 +224,22 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - `header.status_pill` → `HeaderStatusPillConfig`
   - `ai_sidebar.tab` → `AiSidebarTabConfig`
 
+> **注意两套命名空间**：`contributes` 的键**不全是** `ExtensionSlot` 成员。以下 4 个键是**声明式贡献键**，只存在于 manifest schema / `ContributionRegistry`，没有同名渲染槽位：
+>
+> | contributes 键           | 类型                      | 落点                                                                                 |
+> | ------------------------ | ------------------------- | ------------------------------------------------------------------------------------ |
+> | `timeline.segments`      | `TimelineSegmentConfig[]` | 桥接为备课端**环节类型**（等价于命令式 `ctx.ui.registerSegmentType`）                |
+> | `palette.items`          | `PaletteItemConfig[]`     | 桥接为备课画板**图元**（等价于命令式 `ctx.ui.registerPaletteItem`，见 §9）           |
+> | `teacher.cockpit.widget` | `CockpitWidgetConfig[]`   | **当前无任何前端消费点**（schema 与类型已定义，宿主不渲染）—— 写进 manifest 不会生效 |
+> | `workspace.view`         | `FrontendSlotEntry[]`     | 仅在 `PluginInstallWizard` 的槽位白名单里出现，无渲染器                              |
+>
+> 反过来也不等价：`editor.timeline_segment` / `editor.palette_item` 是**渲染槽位**，与上面两个声明式键是同一业务能力的两条不同入口，不要混用。若插件只需要「让组件出现在画板里」，用 `palette.items`；若还需要自定义 UI 交互，用 `editor.palette_item` 槽位。
+
 #### 已实际挂载渲染器（存在 `ExtensionPointRenderer` 调用点）的槽位
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 119 个成员，新增如 `command_palette.item` / `quick_insert.item` 等。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 120 个成员，其中 **116 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                 | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                              |
@@ -309,6 +352,24 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `ai_sidebar.tab`（panel 形态）       | `src/features/shared/RightSidebar.tsx`                                                                                                  | `{ renderType: 'panel', activeTab, lang }`                                                                            |
 | `ai.prompt.template`                 | `src/features/shared/AiPromptTemplatePicker.tsx`（Agent 输入区模板选择器）                                                              | `{ title, description, category, prompt, parameters[{name,label,default}] }`（slotProps 即完整模板配置）              |
 | `ai.skill.provider`                  | `server/ai-agent.ts`（Agent 工具注入，非渲染槽位）                                                                                      | `{ id, name, description, commandType, parametersSchema? }`（经 commandBus 以插件 actor 派发）                        |
+| `course.wizard.quick_apply`          | `src/features/modals/CourseWizardModal.tsx`                                                                                             | `{ lang, wizardCourseTitle, wizardCourseCategory, wizardCourseTimeline, setWizardCourseTimeline, addToast }`          |
+| `assessment.list.card`               | `src/features/assessment/AssessmentCenter.tsx`（**仅教师端**；`viewer` 恒为 `'teacher'`）                                               | `{ assessment, viewer, lang }`                                                                                        |
+| `assessment.attempt.toolbar`         | `src/features/assessment/student/StudentAssessmentsView.tsx`                                                                            | `{ assignmentId, attemptId, lang }`                                                                                   |
+| `assessment.stats.card`              | `src/features/assessment/StatsPanel.tsx`                                                                                                | `{ assignmentId, stats, lang }`                                                                                       |
+| `assignment.grade.toolbar.action`    | `src/components/TeacherAssignmentGradePanel.tsx`                                                                                        | `{ lessonId, submissions, refresh, lang }`                                                                            |
+| `assignment.grade.item.addon`        | `src/components/TeacherAssignmentGradePanel.tsx`（每个学生作答卡片内）                                                                  | `{ submission, studentId, lessonId, score, comment, isConfirmed, onScoreChange, onCommentChange, lang }`              |
+| `assignment.grade.rubric.addon`      | `src/components/TeacherAssignmentGradePanel.tsx`（评分权重区）                                                                          | `{ lessonId, defaultTeacherWeight, defaultPeerWeight, onTeacherWeightChange, lang }`                                  |
+| `editor.segment.type_config`         | `src/features/teacher/lesson-editor/SegmentEditorCard.tsx`                                                                              | `{ segmentType, segment, lang, readOnly, onPatch }`                                                                   |
+| `editor.timeline.node_badge`         | `SegmentEditorCard.tsx`（`isActive` 恒 `true`）、`TimelineRail.tsx`                                                                     | `{ segment, lang, isActive, isCompleted }`（`TimelineRail` 另传 `idx`）                                               |
+| `student.segment.badge`              | `src/features/student/StudentLessonContentPanel.tsx`                                                                                    | `{ segment, idx, isActive, isLocked, studentId, lessonId, lang }`                                                     |
+| `student.segment.gate_fallback`      | `src/features/student/StudentLessonInteractionPanel.tsx`                                                                                | `{ lessonId, activeSegmentId, studentId, contentSegmentId, lang }`                                                    |
+| `student.academic_year.metric_card`  | `src/features/student/StudentAcademicYearComparison.tsx`                                                                                | `{ studentId, comparisonData, selectedYears, lang }`                                                                  |
+| `classroom.active_segment.main`      | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh }`                                                                     |
+| `timetable.import.source`            | `src/components/timetable/sub-views/TimetableOcrView.tsx`                                                                               | `{ lang, onImportEntries }`                                                                                           |
+| `timetable.entry.action`             | `src/components/timetable/sub-views/TimetableCalendarView.tsx`（周历卡片 + 列表行两处）                                                 | `{ schedule, lang, onEdit }`                                                                                          |
+| `header.async_task.item`             | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                     |
+| `command_palette.item`               | `src/features/command-palette/command-palette.tsx`（数据型，宿主渲染命令项）                                                            | `{ title, description, category, keywords, commandType, payload, shortcut }`                                          |
+| `quick_insert.item`                  | `src/features/quick-insert/quick-insert-menu.tsx`（数据型，宿主渲染斜杠菜单项）                                                         | `{ title, description, category, keywords, commandType, payload }`                                                    |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -954,17 +1015,210 @@ export interface AssignmentFilePreviewSlotProps {
 
 ---
 
-## 12. 统计口径
+## 12. 后续新增槽位的使用说明
 
-| 指标                                                           | 数值                                                |
-| -------------------------------------------------------------- | --------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **119**（2026-10-25 实测；下两行 98/99 为历史记录） |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **99**                                              |
-| 其中属于 `ExtensionSlot` 联合类型                              | 见上行                                              |
-| 不在联合类型内但有渲染器的字符串槽位                           | **0**                                               |
-| 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                               |
-| 声明但无渲染器的 `ExtensionSlot` 成员                          | **0**                                               |
-| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）               |
+> 本节补齐 §1 清单中在 §11 之后新增、但此前没有展开说明的槽位。每个槽位标注**真实调用点**与**实际注入的 props**；props 以 §2 表格和 `src/plugin-host/types.ts` 的 `*SlotProps` 接口为准，本节只解释语义与易踩的坑。
+> 前提：除 §12.7 的数据型槽位外，所有经 `ExtensionPointRenderer` 渲染的槽位都额外收到宿主统一注入的 `lessonId` / `classId`（见 §3）。
 
+### 12.1 测评子系统（`assessment.*`，Issue #183）
+
+三个槽位全部走**白名单投影**：`answerKey` / 学生身份 / 逐个学生作答**永不进入 props**（实现见 `src/features/assessment/extension-slot-props.ts`，回归测试 `assessment-extension-slots.test.tsx` 用哨兵字段断言）。新增字段默认不可见，不要指望宿主后续自动透传。
+
+| 槽位                         | 渲染位置                                 | 适合做什么                             |
+| ---------------------------- | ---------------------------------------- | -------------------------------------- |
+| `assessment.list.card`       | 测评列表每张卡片内（`AssessmentCenter`） | 卡片角标、资源入口、状态补充           |
+| `assessment.attempt.toolbar` | 学生作答页底栏「交卷」按钮旁             | 计算器、草稿纸、草稿暂存、题型专用工具 |
+| `assessment.stats.card`      | 统计页逐题表格上方                       | 自定义图表、分析结论、导出入口         |
+
+**`assessment.list.card` 的 `viewer` 目前恒为 `'teacher'`。** 类型声明是 `'teacher' | 'student'`，但学生端从未渲染该槽位——按 `viewer === 'student'` 写分支是死代码。学生端要注入内容，请用 `student.assignment.toolbar.action`。
+
+```tsx
+ctx.ui.registerExtensionPoint('assessment.list.card', {
+  id: 'ext-question-bank/bank-badge',
+  label: '题库来源',
+  component: () => import('./BankBadge'),
+  // 组件收到: { assessment, viewer, lang, lessonId, classId }
+});
+```
+
+`assessment.stats.card` 的 `stats` 结构：
+
+```typescript
+{
+  attemptCount, submittedCount, gradedCount, needsManualReviewCount,
+  averageScore: number | null, averagePercent: number | null, maxScore: number,
+  items: Array<{
+    itemId, type, stem, maxScore, answered, graded, correct,
+    correctRate: number | null, avgScore: number | null, distribution: Record<string, number>
+  }>
+}
+```
+
+`distribution` 是「选项键 → 选择人数」映射，**没有选项文案**；选项 label 需要插件按 `type` 自行推断或让教师配置。
+
+### 12.2 教师作业批改（`assignment.grade.*`）
+
+三个槽位都挂在 `TeacherAssignmentGradePanel`，属于**教师侧**闭环；学生侧的 `assignment.file.preview`（§10.1）与 `assignment.submission.preview` 是另一条链路，别混用。
+
+- **`assignment.grade.toolbar.action`** —— 批改面板顶部操作区、「刷新」按钮左侧。`{ lessonId, submissions, refresh, lang }`。`submissions` 是全量提交数组，适合批量 AI 初评、报告导出。**写完数据后要自己调 `refresh()`**，宿主不会替你重取。
+- **`assignment.grade.item.addon`** —— 每个学生作答卡片内部、评分表单下方。`{ submission, studentId, lessonId, score, comment, isConfirmed, onScoreChange, onCommentChange, lang }`。适合代码测试报告、AI 评语推荐、查重诊断。**评分状态由宿主表单持有**：必须调 `onScoreChange(n)` / `onCommentChange(s)` 才生效，直接改 `submission` 无效。
+- **`assignment.grade.rubric.addon`** —— 评分权重区（「学生互评: N%」之后）。`{ lessonId, defaultTeacherWeight, defaultPeerWeight, onTeacherWeightChange, lang }`。教师权重只能经 `onTeacherWeightChange` 写入；学生权重当前**没有**对应回调。
+
+```tsx
+ctx.ui.registerExtensionPoint('assignment.grade.item.addon', {
+  id: 'ext-plagiarism/report',
+  label: '查重报告',
+  component: () => import('./PlagiarismReport'),
+  // 组件收到: { submission, studentId, lessonId, score, comment, isConfirmed, onScoreChange, onCommentChange, lang }
+});
+```
+
+### 12.3 备课端环节（`editor.segment.type_config` / `editor.timeline.node_badge`）
+
+这两个槽位与已有的两个 `editor.*` 槽位容易混淆，按「在环节卡片的哪一层」区分：
+
+| 槽位                         | 位置                                        | 用途                                        |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------- |
+| `editor.timeline.node_badge` | 卡片标题右侧（`TimelineRail` 节点导轨复用） | **只读**微徽章：器材标识、AI 就绪、难度标签 |
+| `editor.segment.type_config` | 环节类型专属配置区（门禁字段下方）          | 按 `segmentType` 渲染专属配置面板           |
+| `editor.segment.action`      | 卡片工具栏                                  | 单次动作按钮（课标对齐、配时预测）          |
+| `editor.timeline_segment`    | 卡片底部附加面板                            | 自定义表单 / 资源插入                       |
+
+**`editor.segment.type_config` 不做类型过滤。** 宿主把 `segmentType` 传给你，但该槽位的**每个**扩展都会在**每个**环节上渲染一次——插件必须自己判类型返回 `null`，否则「编程实战预设」会出现在语文朗读环节里。
+
+```tsx
+// 注册
+ctx.ui.registerExtensionPoint('editor.segment.type_config', {
+  id: 'ext-code-sandbox/config',
+  label: '代码沙盒配置',
+  component: () => import('./SandboxConfig'),
+});
+
+// SandboxConfig.tsx
+export default function SandboxConfig({ segmentType, segment, readOnly, onPatch }) {
+  if (segmentType !== 'code_lab') return null; // 必须自己判类型
+  return <input disabled={readOnly} onBlur={(e) => onPatch({ runtime: e.target.value })} />;
+}
+```
+
+`editor.timeline.node_badge` 在 `SegmentEditorCard` 里传入的 `isActive` **恒为 `true`**、`isCompleted` **恒为 `false`**（该调用点没有真实进度语义）；只有在 `TimelineRail` 里这两个值才反映真实状态（并额外传 `idx`）。徽章若依赖「是否当前环节」，请在导轨场景使用，或改读 `segment` 自身字段。
+
+### 12.4 学生端环节与学业对比
+
+- **`student.segment.badge`** —— 学生端环节列表每行标题后。`{ segment, idx, isActive, isLocked, studentId, lessonId, lang }`。用于素养徽标、探究难度标识。**`isLocked` 为 `true` 时宿主已渲染锁图标**，别再重复「未解锁」语义。
+- **`student.segment.gate_fallback`** —— 门禁未通过时，兜底提示文案下方。`{ lessonId, activeSegmentId, studentId, contentSegmentId, lang }`。用于补测卡片、补签到、解锁任务。这是「学生卡在门外」时唯一带完整门禁上下文的可交互位置——解锁类按钮放这里，不要放 `student.segment.badge`（那里没有门禁上下文，且可能在锁定态被渲染）。
+- **`student.academic_year.metric_card`** —— 多学年对比页的指标卡区。`{ studentId, comparisonData, selectedYears, lang }`。`selectedYears` 是用户当前勾选的学年数组，卡片要跟随它重算，**不要缓存全量结果**。
+
+### 12.5 课堂主工作区接管与课表导入
+
+**`classroom.active_segment.main`** 是本页**最需要谨慎**的槽位：它渲染在活跃教学环节的**主工作区容器**内（`LiveClassroomView` 的 `classroom-active-segment-main-container`），与该容器的内置内容**并列**，不是替换。props `{ segment, lessonId, classId, lang, onRefresh }`。适用于「环节本身就是插件」的形态（探究仿真、代码竞技）。
+
+> 不要把主工作区做成 `h-screen` 全屏——容器是受限高度的 `flex-grow` 区域。需要全屏就用 `ctx.ui.registerFullscreenRenderer`（§5）。
+
+**`timetable.import.source`** —— 课表「AI 识别导入」子页，识别按钮下方的外部导入区。`{ lang, onImportEntries }`。插件解析完 Excel/CSV/第三方教务 API 后调 `onImportEntries(entries)`，宿主把结果灌进识别结果表格交给教师审核——**插件不要自己写库**，统一走审核后导入。
+
+```ts
+onImportEntries([{ class_name: '高一(3)班', subject: '信息技术', day_of_week: 2, period: 3, teacher_name: '张老师' }]);
+```
+
+**`timetable.entry.action`** —— 周历卡片与列表行右侧的悬浮操作区，**两处调用点都会渲染**。`{ schedule, lang, onEdit }`。用于「一键备课」「调课申请」等单节课操作。同一份 action 会出现两次，组件必须幂等——不要在挂载时触发副作用。
+
+### 12.6 全局壳层与课程向导
+
+**`header.async_task.item`** —— 全局顶栏的后台任务指示区（课表识别进度条右侧）。`{ lang, activeRole, teacherTab, setTeacherTab }`。宿主自身的任务状态在 `useAsyncTaskStore`（`src/store/asyncTaskStore.ts`），**不通过 props 注入**：插件展示自己的任务需自管状态；`setTeacherTab` 可用来跳转到自建的进度页。
+
+**`course.wizard.quick_apply`** —— 建课向导「课堂脉络」步骤、流程时间卡编辑区下方。`{ lang, wizardCourseTitle, wizardCourseCategory, wizardCourseTimeline, setWizardCourseTimeline, addToast }`。插件提供「课堂框架模板」按钮，点击后把模板环节整体写入时间线。
+
+环节对象形状（`WizardSegment`，`src/features/modals/CourseWizardModal.tsx`）：
+
+```typescript
+interface WizardSegment {
+  id: string;
+  title: string;
+  type: string; // 对应环节类型
+  duration: string; // 如 '10m'
+  color: string; // Tailwind class 串，宿主原样用于卡片配色
+  notes: string;
+}
+```
+
+**`setWizardCourseTimeline` 是覆盖式赋值，不是追加。** 想追加要基于传入值自己拼：`setWizardCourseTimeline([...wizardCourseTimeline, ...template])`。`id` 必须唯一，重复会导致 React key 冲突。
+
+### 12.7 命令面板与快捷插入（数据型槽位）
+
+这两个槽位**不由插件提供 React 组件**：插件声明一条命令元数据，宿主渲染成命令项 / 斜杠菜单项。注册时仍要导出 `component: () => null` 占位，宿主只读 `slotProps`。
+
+| 槽位                   | 消费端                                             | 触发方式         |
+| ---------------------- | -------------------------------------------------- | ---------------- |
+| `command_palette.item` | `src/features/command-palette/command-palette.tsx` | `Ctrl/Cmd + K`   |
+| `quick_insert.item`    | `src/features/quick-insert/quick-insert-menu.tsx`  | 编辑器内输入 `/` |
+
+`slotProps` 契约：
+
+```typescript
+{
+  title?: string; // 缺省回落 ext.label，再回落 ext.id
+  description?: string;
+  category?: string; // 不在宿主枚举内时归入 'Plugin'
+  keywords?: string[];
+  commandType?: string; // 命中后 POST /api/plugins/execute-command
+  payload?: Record<string, unknown>; // 与运行时 context 二选一，payload 优先
+  shortcut?: string; // 仅 command_palette.item 读取
+}
+```
+
+```tsx
+ctx.ui.registerExtensionPoint('command_palette.item', {
+  id: 'ext-grade-export/export',
+  label: '导出成绩单',
+  icon: 'download',
+  component: () => null, // 数据型：组件位留空
+  slotProps: {
+    description: '导出当前班级全部作业成绩为 Excel',
+    category: 'Management',
+    keywords: ['导出', '成绩', 'export'],
+    commandType: 'ext-grade-export.run',
+    payload: { format: 'xlsx' },
+    shortcut: 'Ctrl+Shift+E',
+  },
+});
+```
+
+执行链路：宿主 POST `/api/plugins/execute-command`，失败时**必定**弹 toast（v0.6.0 审计要求：插件命令失败不静默）。因此 `commandType` 必须在后端注册，否则点击无反应并报错。`shortcut` 只是**展示**——宿主不会真的注册全局快捷键。
+
+manifest 声明式写法同样可用（`contributes` 已收录这两个键）：
+
+```json
+{
+  "contributes": {
+    "command_palette.item": [
+      { "id": "export", "title": "导出成绩单", "commandType": "ext-grade-export.run", "category": "Management" }
+    ],
+    "quick_insert.item": [{ "id": "insert-rubric", "title": "插入评分量规", "commandType": "ext-rubric.insert" }]
+  }
+}
+```
+
+> **远程 / Worker 插件唯一可见的 UI 入口就是这两个槽位。** 它们不渲染插件自己的 UI，因此无法借它们绕过前端沙箱能力边界——宿主只按声明的 `commandType` 派发命令。
+
+---
+
+## 13. 统计口径
+
+| 指标                                                           | 数值                                  |
+| -------------------------------------------------------------- | ------------------------------------- |
+| `ExtensionSlot` 联合类型成员                                   | **120**                               |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **116**（`99` / `98` 为历史记录）     |
+| 其中属于 `ExtensionSlot` 联合类型                              | **116**                               |
+| 不在联合类型内但有渲染器的字符串槽位                           | **0**                                 |
+| 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                 |
+| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **4**（见 §12.7、§11.6）              |
+| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点） |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **128 / 128**                         |
+
+> 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
+>
 > 统计更新于 v0.6.0 审计整改与 AI 生态槽位消费批次（2026-10-11）：`ai.prompt.template` 新增渲染消费端（Agent 输入区模板选择器）；`ai.skill.provider` 为**服务端消费**槽位（AI Agent 工具注入，非渲染，不计入渲染调用点）。
+> 2026-10-27 复核：补齐 20 个此前未进入本页清单的成员（`command_palette.item`、`quick_insert.item`、`ai.prompt.template`、`ai.skill.provider`、`course.wizard.quick_apply`、3 个 `assessment.*`、3 个 `assignment.grade.*`、`editor.segment.type_config`、`editor.timeline.node_badge`、`student.segment.badge`、`student.segment.gate_fallback`、`student.academic_year.metric_card`、`classroom.active_segment.main`、`timetable.import.source`、`timetable.entry.action`、`header.async_task.item`），并新增 §12 使用说明。清单此前只列 100 个，正文却写 115 —— 两处数字都已按代码真值校正。
 > 2026-10-17 更新（Issue #86）：机房排座新增 `computer_lab.seating.toolbar` / `computer_lab.unassigned.item` / `computer_lab.seating.sidebar` 3 个槽位，并支持拖拽调座与点击/拖拽交换。
+> 2026-10-26 复核（v0.7.4）：`assignment.file.preview` 于 v0.7.4 加入 `ExtensionSlot`，成员数由 119 增至 **120**。该槽位见 §10.1。

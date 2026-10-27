@@ -36,6 +36,8 @@ architecture/service-registry
 architecture/whiteboard-subsystems
 architecture/classroom-runtime
 architecture/resource-runtime
+architecture/assignment
+architecture/assessment-model
 architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
 architecture/navigation-audit-report
@@ -152,6 +154,8 @@ developer-guide/testing-strategy
 developer-guide/upgrade-regression
 developer-guide/sync-report
 developer-guide/docs-drift-audit
+experimental-modules
+feature-sweep
 ```
 
 ```{toctree}
@@ -167,6 +171,8 @@ administrator-guide/demo-data
 :caption: 🎓 完全教程 (Tutorials)
 
 tutorials/plugin-development-tutorial
+tutorials/plugin-frontend-guide
+tutorials/plugin-courseware-extensions
 ```
 
 ```{toctree}
@@ -241,6 +247,7 @@ release-notes/v0.1.10
 :caption: 🔄 迁移指南 (Migration)
 
 migration/version-migration
+student-workspace-migration
 ```
 
 ```{toctree}
@@ -287,6 +294,9 @@ governance/architecture-governance
 classroom-time-flow-audit
 whiteboard-realtime-sync-audit
 trust-boundary-hardening-audit-2026-10-14
+audit/course-import-audit
+AUDIT_REPORT
+PLUGIN_AUDIT_REPORT
 ```
 
 ---
@@ -295,12 +305,12 @@ trust-boundary-hardening-audit-2026-10-14
 
 ### 核心子系统导览
 
-- **[Platform Kernel](architecture/platform-kernel)**: 4 层递进初始化 (Layer 0~3)，零依赖基础设施到 Worker 宿主管理器。
-- **[Composition Root](architecture/composition-root)**: `server.ts` 统一组装根，Express API 路由与 Socket.IO 服务整合。
-- **[Bootstrap Pipeline](architecture/bootstrap-pipeline)**: 5 阶段启动流水线（Startup -> Registration -> Initialization -> Activation -> Ready）。
-- **[Plugin Host & Sandbox](plugin/plugin-architecture)**: Worker Thread 进程隔离、ESM 加载器与完整生命周期状态机。
-- **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk`（版本随平台 release 同步，发布流程统一重写，勿在文档中写死）强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
-- **[AI Runtime & Tools](ai/ai-runtime)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
-- **[CLI & Operations](getting-started/installation-guide)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
+- **[Platform Kernel](architecture/platform-kernel.md)**: 4 层递进初始化 (Layer 0~3)，零依赖基础设施到 Worker 宿主管理器。
+- **[Composition Root](architecture/composition-root.md)**: `server.ts` 统一组装根，Express API 路由与 Socket.IO 服务整合。
+- **[Bootstrap Pipeline](architecture/bootstrap-pipeline.md)**: 5 阶段启动流水线（Startup -> Registration -> Initialization -> Activation -> Ready）。
+- **[Plugin Host & Sandbox](plugin/plugin-architecture.md)**: Worker Thread 进程隔离、ESM 加载器与完整生命周期状态机。
+- **[Plugin SDK](sdk/plugin-sdk.md)**: `@openlearn/plugin-sdk`（版本随平台 release 同步，发布流程统一重写，勿在文档中写死）强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
+- **[AI Runtime & Tools](ai/ai-runtime.md)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
+- **[CLI & Operations](getting-started/installation-guide.md)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-10-25 (v0.7.2)
+> 最后更新：2026-10-26 (v0.7.4)

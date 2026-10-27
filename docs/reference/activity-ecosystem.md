@@ -49,22 +49,22 @@ export async function activate(ctx: PluginContext) {
 
 ## 3. `ActivityProviderDescriptor` 字段全解
 
-| 字段               | 类型                      | 必填 | 说明                                                                                     |
-| ------------------ | ------------------------- | ---- | ---------------------------------------------------------------------------------------- |
-| `id`               | `string`                  | ✅   | 全局唯一 ID，如 `official_quiz` 或 `ext-foo:poll`                                        |
-| `name`             | `string`                  | ✅   | 展示名称                                                                                 |
-| `description`      | `string`                  |      | 简介                                                                                     |
-| `icon`             | `string`                  |      | 图标提示（lucide 名或 emoji）                                                            |
-| `category`         | `ActivityCategory`        | ✅   | `assessment` / `engagement` / `collaboration` / `management` / `ai` / `media` / `custom` |
-| `permissions`      | `string[]`                |      | 启动活动所需权限（`resource:action` 字符串，见[能力权限矩阵](plugin-capability-matrix)） |
-| `supportedRoles`   | `ActivityRole[]`          | ✅   | 可见/参与角色；`all` = 全员                                                              |
-| `supportedDevices` | `ActivityDevice[]`        |      | `desktop` / `tablet` / `mobile` / `all`                                                  |
-| `tags`             | `string[]`                |      | 检索标签                                                                                 |
-| `version`          | `string`                  | ✅   | Provider 语义版本                                                                        |
-| `provider`         | `string`                  | ✅   | 内置活动填 `official`，插件填自身插件 ID                                                 |
-| `commandType`      | `string`                  |      | 复用已有课堂命令（`start` 时执行）                                                       |
-| `aiAction`         | `ActionDescriptor`        |      | 可选 AI Action 贡献（注册进 ActionRegistry）                                             |
-| `aiContext`        | `Record<string, unknown>` |      | 可选 AI 上下文贡献                                                                       |
+| 字段               | 类型                      | 必填 | 说明                                                                                        |
+| ------------------ | ------------------------- | ---- | ------------------------------------------------------------------------------------------- |
+| `id`               | `string`                  | ✅   | 全局唯一 ID，如 `official_quiz` 或 `ext-foo:poll`                                           |
+| `name`             | `string`                  | ✅   | 展示名称                                                                                    |
+| `description`      | `string`                  |      | 简介                                                                                        |
+| `icon`             | `string`                  |      | 图标提示（lucide 名或 emoji）                                                               |
+| `category`         | `ActivityCategory`        | ✅   | `assessment` / `engagement` / `collaboration` / `management` / `ai` / `media` / `custom`    |
+| `permissions`      | `string[]`                |      | 启动活动所需权限（`resource:action` 字符串，见[能力权限矩阵](plugin-capability-matrix.md)） |
+| `supportedRoles`   | `ActivityRole[]`          | ✅   | 可见/参与角色；`all` = 全员                                                                 |
+| `supportedDevices` | `ActivityDevice[]`        |      | `desktop` / `tablet` / `mobile` / `all`                                                     |
+| `tags`             | `string[]`                |      | 检索标签                                                                                    |
+| `version`          | `string`                  | ✅   | Provider 语义版本                                                                           |
+| `provider`         | `string`                  | ✅   | 内置活动填 `official`，插件填自身插件 ID                                                    |
+| `commandType`      | `string`                  |      | 复用已有课堂命令（`start` 时执行）                                                          |
+| `aiAction`         | `ActionDescriptor`        |      | 可选 AI Action 贡献（注册进 ActionRegistry）                                                |
+| `aiContext`        | `Record<string, unknown>` |      | 可选 AI 上下文贡献                                                                          |
 
 ---
 
