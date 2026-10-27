@@ -1,8 +1,8 @@
 # 平台数据表参考（Platform Data Tables）
 
-<!-- doc-version: sdk=3.7.2 -->
+<!-- doc-version: sdk=3.7.4 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 > 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 82 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
 >
 > ✅ **权限边界已澄清（2026-10-26 复核）**：早期版本此处曾标注与 [`security-permissions.md`](../architecture/security-permissions.md) §1 的 RBAC 表冲突（那份表格把 Plugin 的「访问 SQLite 数据库」标为 ❌）。该冲突已在 `security-permissions.md` 侧修正：RBAC 表改指向 §2.5「插件与数据库的权限边界」，并明确插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享库句柄。**真正的边界不是「拿不到句柄」，而是语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令（`ATTACH`/`DETACH`/`PRAGMA`/`VACUUM`）禁用、**40 张核心表硬禁**、`plugin_*` 表仅限本插件命名空间。仍建议优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。

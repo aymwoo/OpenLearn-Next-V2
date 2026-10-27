@@ -259,7 +259,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 > | ------------- | ------- | ----------------------------------------------------------------- |
 > | 平台发行版本  | `0.7.4` | 主应用平台发布版本（根目录 `package.json`）                       |
 > | 宿主 API 版本 | `0.7.4` | `engines.openlearn` 检查所用的版本，运行时读同一份 `package.json` |
-> | SDK 版本      | `3.7.2` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理            |
+> | SDK 版本      | `3.7.4` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理            |
 >
 > 三者不同步：宿主版本随平台发版走 `0.x`，SDK 走自己的 `3.x` 线。`engines.openlearn` 填**宿主版本**，不是 SDK 版本。
 
@@ -317,7 +317,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了 OpenLearn V2（平台 `0.7.x`、SDK `@openlearn/plugin-sdk@3.7.2` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了 OpenLearn V2（平台 `0.7.x`、SDK `@openlearn/plugin-sdk@3.7.4` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 > 🚩 **给 AI Agent 的提示**：Skill 生成的是**代码骨架**，它不能替你判断本次目标插件是否能拿到自定义 UI。装完脚手架后请先回到 [2.2 三档执行模式](#execution-modes) 确认前端能力边界，再决定要不要写 `frontend.tsx`。
 
@@ -334,7 +334,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 | 能力维度                    | 最新架构适配说明                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.7.2` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
+| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.7.4` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
 | 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (沙箱桥接入口，非 React 组件) 的标准项目工程。      |
 | 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
@@ -345,7 +345,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 ```
 用户提出需求：「帮我开发一个随堂互动小测验插件」
-  → Skill 自动载入 @openlearn/plugin-sdk@3.7.2 规格与核心 Token
+  → Skill 自动载入 @openlearn/plugin-sdk@3.7.4 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
   → 生成项目结构与代码 (Action/Command/Event + 桥接式 frontend.tsx)
@@ -1790,7 +1790,7 @@ describe('my-plugin', () => {
 
 ### 11.1 使用 CLI 脚手架
 
-`@openlearn/plugin-sdk` 自带 CLI（当前 `3.7.2`，已发布到 npm），三个子命令：`init` / `build` / `sign`。
+`@openlearn/plugin-sdk` 自带 CLI（当前 `3.7.4`，已发布到 npm），三个子命令：`init` / `build` / `sign`。
 
 ```bash
 # 1. 脚手架（--template 可选：server-only | full-stack | frontend-only，默认 server-only）
@@ -1825,10 +1825,10 @@ npx openlearn-plugin-sdk sign <zip> --key ./private.pem --publisher your-name
 > ✅ `frontend.tsx` 的导出契约自 `@openlearn/plugin-sdk@3.7.1` 起已修正（该版本已发 npm）：模板直接生成
 > `export default { activate, deactivate }` 的**桥接入口**（隐藏 iframe 内的无 UI 执行体），
 > 不再生成 React 组件 —— 后者会被沙箱加载器判为 `missing activate function`。
-> 仍用 3.7.0 请手工改这一行，或升级：`npm i -D @openlearn/plugin-sdk@3.7.2`。
+> 仍用 3.7.0 请手工改这一行，或升级：`npm i -D @openlearn/plugin-sdk@3.7.4`。
 >
 > ⚠️ **不要停在 3.7.1**：它修好了模板，但产物里残留 `node:` 内置模块静态导入，插件打完包运行期就失败，
-> 已在 npm 弃用。模板修复在 3.7.2 中完整保留，直接装 3.7.2。
+> 已在 npm 弃用。模板修复在 3.7.4 中完整保留，直接装 3.7.4。
 > 细节见 [Scaffold CLI §3.1](../sdk/scaffold-cli.md)。
 >
 > ⚠️ **仍需你自己确认的两处**：

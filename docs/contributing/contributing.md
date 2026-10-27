@@ -18,7 +18,7 @@ type(scope): message
 | Plugin SDK（`@openlearn/plugin-sdk`）      | `packages/plugin-sdk/CHANGELOG.md`                                                                                                  |
 | 内置插件（`packages/plugins/<plugin>.ts`） | 无独立 CHANGELOG —— 变更记入平台 `CHANGELOG.md`（`v2_plugins/` 为独立仓库，其插件维护各自的 `CHANGELOG.md`，不在本仓）              |     |
 
-发版流程：bump `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → 打 tag（命名见 §2.1）→ `scripts/publish.sh`。SDK 版本独立演进（当前 3.7.2），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
+发版流程：bump `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → **合并进 `main`** → 打 tag（命名见 §2.1）→ `scripts/publish.sh`。SDK 版本独立演进（当前 3.7.4），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
 
 ### 2.1 发布 tag 约定
 
@@ -27,26 +27,37 @@ type(scope): message
 | 包                           | tag 形式                   | 例                       | 谁认它                                                                                   |
 | ---------------------------- | -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
 | `openlearn-next`（平台）     | `v<X.Y.Z>`                 | `v0.7.4`                 | `docker-rehearsal.yml`（`tags: ['v*']`）、`upgrade-regression.yml`（`tags: ['v*.*.*']`） |
-| `@openlearn/plugin-sdk`      | `plugin-sdk-v<X.Y.Z>`      | `plugin-sdk-v3.7.2`      | 不触发 CI，只作「npm 上的版本 ↔ 仓库代码」的同源凭证                                     |
+| `@openlearn/plugin-sdk`      | `plugin-sdk-v<X.Y.Z>`      | `plugin-sdk-v3.7.4`      | 不触发 CI，只作「npm 上的版本 ↔ 仓库代码」的同源凭证                                     |
 | `@openlearn/plugin-test-kit` | `plugin-test-kit-v<X.Y.Z>` | `plugin-test-kit-v3.3.4` | 同上                                                                                     |
 
 五条硬规则：
 
 1. **一律 annotated**（`git tag -a`）。lightweight tag 不记 tagger、日期和说明，事后无法证明它对应哪一次发布。
-2. **SDK / test-kit 的 tag 不要用 `v` 开头**。`v3.7.2` 会同时命中上面两条平台 CI 的 glob —— 拿 SDK 的发版去跑平台的 docker rehearsal 与升级回归，既无意义又占 runner。
+2. **SDK / test-kit 的 tag 不要用 `v` 开头**。`v3.7.4` 会同时命中上面两条平台 CI 的 glob —— 拿 SDK 的发版去跑平台的 docker rehearsal 与升级回归，既无意义又占 runner。
 3. **指向「版本 bump + CHANGELOG 转正」的那个提交**，打完不要再往它上面叠提交（叠了就只能提版本号，见下条）。
 4. **顺序固定**：提交 → **合并进 `main`** → 打 tag → push tag → `scripts/publish.sh`。npm 的 `gitHead` 记的是「发布时所在的提交」，tag 先于发布才能保证两者是同一个提交；反过来说，tag 打完又提交了任何东西，这个版本就发不出去了（`publish.sh` 与 `prepublishOnly` 都会拒绝指向不同提交的情况）。先合进 `main` 是第 ④ 条前提：**registry 不得领先于主干**，否则第三方照 `main` 抄到的代码和 npm 上的包不是同一份。
 5. **同源用 `gitHead` 对账**，不要把 shasum 写进 tag message（tag 在发布前就打好了，那时还没有 shasum）：
 
    ```bash
-   git rev-list -n1 plugin-sdk-v3.7.2                                    # tag 指向的提交
-   npm view @openlearn/plugin-sdk@3.7.2 gitHead --registry=https://registry.npmjs.org
+   git rev-list -n1 plugin-sdk-v3.7.4                                    # tag 指向的提交
+   npm view @openlearn/plugin-sdk@3.7.4 gitHead --registry=https://registry.npmjs.org
    ```
 
 两道门禁（硬失败，不靠自觉）：
 
 - `scripts/publish.sh` 的版本占用检查按包名取 tag 前缀：tag 不存在直接拒绝，并打印该执行的那两行命令；
-- `scripts/assert-publishable.mjs` 挂在三个包的 `prepublishOnly` 上，任何绕过 `publish.sh` 的直接 `npm publish` 同样被拦（前缀由包名自动推导，`--tag-prefix` 只用于例外场景）。它一共查四条：① 依赖无本地协议、② 平台包 `FALLBACK_VERSION` 一致、③ HEAD 正好被发布 tag 指向、④ HEAD 已并入 `origin/main`。
+- `scripts/assert-publishable.mjs` 挂在三个包的 `prepublishOnly` 上，任何绕过 `publish.sh` 的直接 `npm publish` 同样被拦（前缀由包名自动推导，`--tag-prefix` 只用于例外场景）。它一共查五条：① 依赖无本地协议、② 平台包 `FALLBACK_VERSION` 一致、③ HEAD 正好被发布 tag 指向、④ HEAD 已并入 `origin/main`、⑤ **CHANGELOG 与版本对得上**。
+- **第 ⑤ 条查两件事**：CHANGELOG 里必须有 `## [<版本号>]` 段；`## [Unreleased]` 下不能再有条目。
+  加它的原因是 2026-10-27 的一次实测：PR #326 把构建期守卫合进了 main，可 npm `latest` 仍是 3.7.3 ——
+  那条发版发生在守卫合入之前，而**没有任何机制提示「main 上有未发布改动」**（`publish.sh` 与整个
+  `audit-tools/` 里 grep `CHANGELOG` / `Unreleased` 零命中，发布链路完全不看 CHANGELOG）。
+  折叠 Unreleased 这一步本来就在流程里，只是没人强制；现在没折叠就发不出去。
+  例外用 `ALLOW_UNRELEASED_CHANGELOG=1`（或 `--allow-unreleased-changelog`）显式放行。
+- **`scripts/check-doc-version.mjs`**（接入 `audit-tools/run.sh`，计入 drift）校验文档的
+  `<!-- doc-version: sdk=X.Y.Z -->` 等于 `packages/plugin-sdk/package.json` 的 version。
+  这个标记此前**全仓零校验**，只是个注释，于是安静地烂掉：SDK 已到 3.7.3 时 26 篇文档仍写 `sdk=3.7.2`，
+  其中 `scaffold-cli.md` 顶着旧版本号描述着当时 npm 上根本没有的守卫。**抬了版本就得抬标记**，
+  否则文档会承诺 registry 上不存在的能力。批量修法见脚本报错里给出的 `sed` 命令。
 
 > **先鸡后蛋怎么破**：第 ④ 条会遇到「不发版 CI 就转不了绿、CI 不绿就合不进 main」的循环（兼容性作业装的是**已发布**的 SDK）。此时用 `ALLOW_UNMERGED_PUBLISH=1 scripts/publish.sh` 显式放行一次，发布后再重跑那条 CI —— 放行是**显式**的，会打印在成功输出里（`未并入主干（已显式放行）`），不会悄悄变成常态。
 

@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.7.4] - 2026-10-27
+
+### Fixes
+
 - **`build` 新增构建期守卫：frontend 产物不得残留裸模块说明符**。远程插件的前端跑在不透明源 iframe
   （`sandbox="allow-scripts"`）里，那里没有 React、没有 `window.HostSharedDeps`、也没有 importmap，
   加载方式是 `Blob` + 动态 `import()` —— 裸说明符无从解析。宿主的 `transformBareModuleImports` 会把
@@ -47,7 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### 弃用
 
 - **3.7.1 已在 npm 上弃用**（`npm deprecate`，不撤包）：该版本 `dist/index.js` 残留 5 处 `node:` 静态导入，
-  把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.3，详见 `[3.7.1]` 段首的红线提示。
+  把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.4，详见 `[3.7.1]` 段首的红线提示。
 
 ## [3.7.1] - 2026-10-27
 
