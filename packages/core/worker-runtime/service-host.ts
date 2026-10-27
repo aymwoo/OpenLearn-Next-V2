@@ -996,11 +996,35 @@ export class ServiceHost {
         const actionRegistry = service as any;
         if (msg.method === 'register') {
           const [descriptor] = effectiveArgs as [any];
-          await actionRegistry.register(descriptor);
-          this.registeredActionIds.add(descriptor.id);
-          if (typeof descriptor?.commandType === 'string') {
-            this.registeredActionCommandTypes.set(descriptor.id, descriptor.commandType);
+          const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+          const isKernel = pluginId.startsWith('@openlearn/');
+          const rawCommandType = descriptor.commandType;
+          const prefixed =
+            isKernel || !rawCommandType || rawCommandType.startsWith(`${pluginId}.`)
+              ? rawCommandType
+              : resolvePluginCommandType(rawCommandType, pluginId);
+          const effectiveDescriptor =
+            prefixed !== rawCommandType ? { ...descriptor, commandType: prefixed } : descriptor;
+
+          await actionRegistry.register(effectiveDescriptor);
+          this.registeredActionIds.add(effectiveDescriptor.id);
+          if (typeof effectiveDescriptor?.commandType === 'string') {
+            this.registeredActionCommandTypes.set(effectiveDescriptor.id, effectiveDescriptor.commandType);
           }
+
+          if (prefixed !== rawCommandType) {
+            try {
+              const aliasId = `${descriptor.id}__raw_alias`;
+              await actionRegistry.register({
+                ...descriptor,
+                id: aliasId,
+                exposeToAgent: false,
+              });
+              this.registeredActionIds.add(aliasId);
+              this.registeredActionCommandTypes.set(aliasId, rawCommandType);
+            } catch {}
+          }
+
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,
@@ -1010,8 +1034,13 @@ export class ServiceHost {
         } else if (msg.method === 'unregister') {
           const [actionId] = msg.args as [string];
           await actionRegistry.unregister(actionId);
+          try {
+            await actionRegistry.unregister(`${actionId}__raw_alias`);
+          } catch {}
           this.registeredActionIds.delete(actionId);
+          this.registeredActionIds.delete(`${actionId}__raw_alias`);
           this.registeredActionCommandTypes.delete(actionId);
+          this.registeredActionCommandTypes.delete(`${actionId}__raw_alias`);
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,

@@ -59,6 +59,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **Worker 运行时的插件 action 补齐命名空间前缀与裸名别名**：`worker` 模式下插件
+  action 由 `ServiceHost` 直接写进宿主 `ActionRegistry`，不经
+  `context-builder` 的 `wrapActionRegistry` —— 同一处前缀化/别名逻辑此前只补了
+  inline/process 路径。后果相同：描述符停在裸 `commandType` 上，内核拦截器
+  `getActionByCommandType(实际派发名)` 命不中，`inputSchema` 校验与
+  `capabilityRequired` 对 worker 插件命令静默失效；AI 侧第三方技能（强制前缀化）
+  也查不到描述符。
+  - 影响面：`packages/core/worker-runtime/service-host.ts`。`register` 按 manifest.id
+    补 `resolvePluginCommandType` 前缀并额外注册 `<id>__raw_alias`
+    （`exposeToAgent: false`）；`unregister` 两条一起摘，
+    `registeredActionIds` / `registeredActionCommandTypes` 同步清理。
+    前缀取 ServiceHost 第 7 个构造参数（=`manifest.id`，不是 DB UUID），与前端
+    `ctx.invokeCommand`、宿主 `commandBus` 保持同一命名空间。
+  - 验证：`packages/core/worker-runtime/__tests__/service-host.test.ts`。
+
 - **`exposeToAgent: false` 在大模型工具箱里真正生效**：运行时真正生效的工具清单是
   `buildOpenAITools()`（`runOpenAIAgentChat` 直接用它），此前只有
   `ActionRegistry.getAgentTools()`（Gemini 格式，运行期无调用方）做了这条过滤。

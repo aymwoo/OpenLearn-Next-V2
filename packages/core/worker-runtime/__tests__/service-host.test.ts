@@ -598,6 +598,11 @@ describe('ServiceHost ActionRegistry tracking', () => {
 
     expect(actionRegistry.register).toHaveBeenCalledWith({
       id: 'action-bar',
+      commandType: 'test.demo.run',
+      exposeToAgent: false,
+    });
+    expect(actionRegistry.register).toHaveBeenCalledWith({
+      id: 'action-bar__raw_alias',
       commandType: 'demo.run',
       exposeToAgent: false,
     });
