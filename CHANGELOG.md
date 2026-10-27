@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-10-27
+
 ### Fixes
 
 - **管理端改插件配置后，运行中的插件立即生效并触发 `onChange`**：
@@ -24,6 +26,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     新增 10 例测试（跨实例读、广播与 `oldValue`、分层写入、不同 manifest/DB 隔离、
     校验与持久化失败不广播、监听器抛错隔离、`loadFromDB` 重建缓存）。
   - 文档：`docs/architecture/configuration.md` §2.5–§2.7 与速查表同步更新。
+
+- **`doc-version` 门禁补上根 `CHANGELOG.md` 的版本注记**：
+  此前脚本只扫 `docs/**` 的 `<!-- doc-version: ... -->` 标记，CHANGELOG 顶部那句人读的
+  `@openlearn/plugin-sdk` / `@openlearn/plugin-test-kit` 版本注记不在任何门禁覆盖内 ——
+  v0.7.5 发版准备时把注记改错，门禁、CI、发版三处都没有报错。
+  现在按包名匹配 `currently **X.Y.Z**` 并与对应 `package.json` 比对；
+  注记**缺失**同样失败（`changelog-note-missing`），校验口径为 26 篇文档 + 2 条注记 = 28。
+  - 影响面：`scripts/check-doc-version.mjs`（接入 `audit-tools/run.sh`）。
+  - 验证：`scripts/__tests__/doc-version.test.ts` 覆盖注记漂移 / 缺失 / 格式容错。
+
+### Docs
+
+- **审计快照归档 + 文档与代码对齐**：带日期的审计 / 演练 / 同步报告统一迁入 `docs/audit/`
+  并新增归档索引，同步 toctree 与交叉链接；按源码校正 PluginContext、DI Token 导出面、
+  UI 扩展槽位（120 个成员）、平台数据表、插件生命周期与 Worker / 子进程隔离模式的描述；
+  补全 manifest 能力清单中遗漏的 `assignment:write`。
 
 ## [0.7.5] - 2026-10-27
 
