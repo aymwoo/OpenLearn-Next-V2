@@ -28,6 +28,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     负向对照 —— 临时移除本改动的 3 个源文件后跑同两条用例 → 2 failed
     （`AssertionError: expected { type: 'ext-quiz:demo', … } to be undefined`），恢复后 2 passed。
 
+- **插件 SDK 的 `build` 新增构建期守卫：frontend 产物不得残留裸模块说明符**。远程插件前端跑在不透明源
+  iframe（只有 `allow-scripts`）里，没有 React / `window.HostSharedDeps` / importmap，加载方式是
+  `Blob` + 动态 `import()`，裸说明符无从解析。宿主的 `transformBareModuleImports` 把 `import React`
+  改写成 `window.HostSharedDeps.React`，但改写后的源码在**没有该对象的 iframe 内**求值 → 激活即
+  TypeError。此前这类错误只在运行期以「插件一点就崩」的形式暴露，且错误信息完全不指向根因。
+  现在构建期 `exit 1` 并给出四条改法。详见 `packages/plugin-sdk/CHANGELOG.md` 的 `[Unreleased]`。
+
 - **在 npm 上弃用 `@openlearn/plugin-sdk@3.7.1`**（`npm deprecate`，不撤包）：3.7.1 的 `dist/index.js`
   残留 5 处 `node:` 静态导入（`fs` / `path` / `url` / `crypto`），凡是把 SDK 打进插件包体的第三方插件运行期必失败，
   而 `npm i -D @openlearn/plugin-sdk` 装到的就是它。弃用后安装会打印告警并指向 3.7.2 —— 不撤包是因为已发布版本

@@ -36,6 +36,12 @@ ZIP 内部固定为**根级** `index.js` + `manifest.json` +（可选）`fronten
 > 声明式 `migrations/*.sql` 仅对内置插件、源码目录直装生效，
 > 详见 [插件数据库 API](../reference/plugin-database-api.md) §3.1 的 ZIP 说明。
 
+> 🛡️ **`build` 会检查 `frontend.js` 有没有残留裸模块说明符**（`from "react"` 这类非相对/绝对路径的导入），
+> 有就直接 `exit 1`。原因：远程插件前端跑在不透明源 iframe 里，没有 React / `window.HostSharedDeps` /
+> importmap，加载方式是 `Blob` + 动态 `import()`，裸说明符无从解析 —— 构建能过，装上也正常，一激活就崩，
+> 而且报错完全不指向根因。改法见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)：
+> 入口只做桥接、删掉 React 导入、对 SDK 只 `import type`、可见 UI 改用声明式贡献。
+
 `manifest.json` 由 CLI 从打包后的代码里抽取 `export default { manifest }` 生成；若项目根目录已有 `manifest.json`，CLI 会优先使用它。
 
 **包名 = `package.json` 的 `name`**。`--name demo-vote` 生成的包名是 `openlearn-plugin-demo-vote`，ZIP 因此叫 `openlearn-plugin-demo-vote.zip`。CI 中请按 `dist/*.zip` 取文件，不要硬编码名字。

@@ -73,3 +73,7 @@ server/__tests__/canary/.tmp-plugins-*
 *.zip
 # codegraph 索引与缓存
 /.codegraph
+# 桌面环境生成的回收站目录（freedesktop 规范：.Trash-<uid>）。
+# 在仓库根出现时会被 `git ls-files -co --exclude-standard` 扫进格式预算，
+# 而里面是别人（或工具）删掉的临时文件，不该由本仓库的格式门禁负责。
+.Trash-*/
