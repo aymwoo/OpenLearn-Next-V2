@@ -106,7 +106,7 @@ Documentation map (read the one that matches your goal; the whole tree is publis
 | Understand the kernel / plugin host internals | [docs/index.md](docs/index.md) → `architecture/`, `plugin/`                                                                           |
 | Deploy or operate                             | [production guide](docs/deployment/production-guide.md)                                                                               |
 
-> Do not trust an audit/report page inside `docs/` as current fact — they are dated snapshots (e.g. `docs/AUDIT_REPORT.md` describes 0.6.0).
+> Do not trust an audit/report page inside `docs/` as current fact — they are dated snapshots (e.g. `docs/audit/AUDIT_REPORT.md` describes 0.6.0). Archived snapshots live in `docs/audit/`.
 
 ## Cursor Cloud specific instructions
 

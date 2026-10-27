@@ -116,7 +116,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
    > ⚠️ 这仍是一张**黑名单**：任何将来新增的核心表若未登记，默认对插件开放。彻底解法是改为白名单（只允许 `plugin_*` 自有表 + 少量显式共享表），但那会改变现有插件的可见面，需单独评估。
 
-3. **DML 命名空间隔离**（SEC-DB-03，2026-10-04 新增）: 此前命名空间校验**只作用于 DDL**（`CREATE/DROP/ALTER TABLE`），DML（`SELECT/INSERT/UPDATE/DELETE`）完全没有约束 —— 任何 worker 插件都能任意读写**其他插件的私有表**（实测库中 19 张 `plugin_<id>_*` 表，跨插件读写畅通无阻）。现改为：从 `FROM / INTO / UPDATE / JOIN / TABLE` 位置提取**表名**（不能用全文搜 `plugin_`，否则 `plugin_id` 这类**列名**会被误判），凡 `plugin_` 前缀且不在本插件命名空间内的一律拒绝。`plugin_migrations` / `plugin_storage` 作为共享表豁免。
+3. **DML 命名空间隔离**（SEC-DB-03，2026-10-04 新增）: 此前命名空间校验**只作用于 DDL**（`CREATE/DROP/ALTER TABLE`），DML（`SELECT/INSERT/UPDATE/DELETE`）完全没有约束 —— 任何 worker 插件都能任意读写**其他插件的私有表**（实测库中 19 张 `plugin_<id>_*` 表，跨插件读写畅通无阻）。现改为：从 `FROM / INTO / UPDATE / JOIN / TABLE` 位置提取**表名**（不能用全文搜 `plugin_`，否则 `plugin_id` 这类**列名**会被误判），凡 `plugin_` 前缀且不在本插件命名空间内的一律拒绝。**只有 `plugin_migrations` 是共享表豁免**；`plugin_storage` 在核心表黑名单里，插件不能直接读写，请改用 `ctx.services.storage`（见[插件数据库 API](../reference/plugin-database-api.md)）。
 4. **DDL 命名空间白名单**: `CREATE|DROP|ALTER TABLE` 的目标表名必须以插件专属前缀开头（`plugin_<dbPluginId>_` 或 `plugin_<pluginId>_`，特殊字符转义为 `_`），或为 `plugin_migrations`；另有为 `lianyun-course` 插件放行的 `plugin_research_` 前缀。这既允许插件在自己作用域内建表，也防止表名拦截本身引发的 Supervisor 重启崩溃循环。
 
 ### 2.5 插件与数据库的权限边界

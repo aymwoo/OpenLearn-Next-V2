@@ -279,6 +279,5 @@ NORMALIZE_MAP = {
 ## 相关文档
 
 - `audit-tools/reports/drift_report.md` — 当前 drift 状态（运行后自动生成）
-- [`architecture-synchronization-report.md`](../architecture/architecture-synchronization-report.md) — 历史同步报告（已废弃，仅供参考）
 - [`platform-kernel.md`](../architecture/platform-kernel.md) — Layer 0-3 架构全景图
 - [`system-overview.md`](../architecture/system-overview.md) — 系统总览

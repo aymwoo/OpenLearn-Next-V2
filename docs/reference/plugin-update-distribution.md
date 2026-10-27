@@ -174,7 +174,7 @@ interface PluginInstallWizardProps {
 | 环境变量                                              | 默认值                 | 说明                                            |
 | ----------------------------------------------------- | ---------------------- | ----------------------------------------------- |
 | `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`                | `60000`                | 初始激活等待窗口（最小 5000ms）                 |
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` | `min(30000, 初始窗口)` | 每次收到进度心跳后重置的滑动窗口（最小 3000ms） |
+| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS`         | `min(30000, 初始窗口)` | 每次收到进度心跳后重置的滑动窗口（最小 3000ms） |
 
 ### 5.1 上下文心跳 API (`ctx.reportProgress`) 与滑动超时
 
@@ -182,8 +182,8 @@ interface PluginInstallWizardProps {
 
 > ⚠️ **两个限制，照抄前必须知道**：
 >
-> 1. **只在 `worker_threads` 模式注入。** 它由 worker bootstrap（`bootstrap/sections/message-handler.ts`）在构建 ctx 时挂上，`process`（第三方默认）与 `inline` 模式下该属性为 `undefined`，所以必须写 `ctx.reportProgress?.(...)`。而第三方插件恰恰被强制为 `process` —— 这条 API 对 ZIP 插件**无效**。
-> 2. **类型里没有这个成员。** `PluginContext` 接口未声明它，直接写 `ctx.reportProgress(...)` 会编译失败。要在这两种模式下都通过类型检查，需 `(ctx as unknown as { reportProgress?: (s: string, m?: string) => void }).reportProgress?.(...)`。
+> 1. **只在隔离模式注入（worker / process）。** 它由 bootstrap（`bootstrap/sections/message-handler.ts`）在构建 ctx 时挂上，`inline` 模式下该属性为 `undefined`，所以必须写 `ctx.reportProgress?.(...)`。第三方 ZIP 插件默认 `process`，可以使用；若被强制改写为 inline（仅受信插件），则不可用。
+> 2. **类型里没有这个成员。** `PluginContext` 接口未声明它，直接写 `ctx.reportProgress(...)` 会编译失败。需要通过类型断言按可选成员访问：`(ctx as unknown as { reportProgress?: (s: string, m?: string) => void }).reportProgress?.(...)`。
 
 ```typescript
 export async function activate(ctx: PluginContext) {

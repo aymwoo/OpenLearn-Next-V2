@@ -2,7 +2,7 @@
 /**
  * R-02：安装向导必须把「清单申请的出站域名」摆到管理员面前。
  *
- * 背景（`docs/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
+ * 背景（`docs/audit/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
  * 插件的 `network.outbound` 声明此前在安装界面上完全不可见，管理员既不知道
  * 这个插件想访问哪些外部主机，也没有任何批准入口 —— `approvePluginNetHosts`
  * 在整个仓库里没有任何调用方，等于这条路根本走不通。

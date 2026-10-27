@@ -1,7 +1,7 @@
 /**
  * 出站域名授权（R-02）：分类、批准、撤销的真实行为。
  *
- * 背景（`docs/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
+ * 背景（`docs/audit/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
  * 清单的 `network.outbound` 只是申请，运行时唯一真相源是 `plugin_network_grants`。
  * 但 `approvePluginNetHosts` 此前**没有任何调用方** —— 也就是这条路根本走不通，
  * 管理员既无法授权也看不到插件想访问什么。

@@ -1783,7 +1783,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
    * 自行分组的 —— **两套互不相通的数据源**，且本事件的 payload 不含分组数据。
    * 把它接到那个 UI 上会是虚构的集成（刷了也读不到新数据），只会造成
    * 「已经打通」的错觉。故在数据模型对齐之前不接线。
-   * 详见 docs/classroom-time-flow-audit.md。
+   * 详见 docs/audit/classroom-time-flow-audit.md。
    */
   const publishGroupsChanged = (payload: { classId: string; scope: 'default' | 'temporary'; source?: string }) => {
     if (io) {

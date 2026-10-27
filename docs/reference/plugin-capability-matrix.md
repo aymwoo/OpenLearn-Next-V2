@@ -7,14 +7,14 @@
 >
 > **关键事实**：代码库中存在**四套互不相干的 "capability" 机制**，请勿混淆：
 >
-> | #   | 机制                   | 载体                                                                                  | 鉴权维度                                     | 拒绝信号                                                            |
-> | --- | ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
-> | 1   | **字符串权限 / RBAC**  | `CapabilityGuard`（`packages/core/capability-system/index.ts`）                       | `resource:action` 字符串                     | `[CapabilityGuard] Access Denied: ...`                              |
-> | 2   | **课堂运行时角色权限** | `RuntimePermissionManager`（`packages/core/classroom-runtime/permission-manager.ts`） | `RuntimePermission` 枚举（7 成员）           | 见 [capability-gateway](../architecture/capability-gateway.md)      |
-> | 3   | **能力 Provider 框架** | `PermissionChecker`（`packages/core/capability/pipeline/permission-checker.ts`）      | `CapabilityRole` 角色数组（6 成员）          | `Access Denied: Role '<r>' is not authorized for capability '<id>'` |
-> | 4   | **AI 功能 ID**         | `packages/core/ai-capability/capabilities/`                                           | `capability_*` 功能 ID（**不是**权限字符串） | —                                                                   |
+> | #   | 机制                   | 载体                                                                                  | 鉴权维度                                     | 拒绝信号                                                                                             |
+> | --- | ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+> | 1   | **字符串权限 / RBAC**  | `CapabilityGuard`（`packages/core/capability-system/index.ts`）                       | `resource:action` 字符串                     | `[CapabilityGuard] Access Denied: ...`，`err.status = 403`，`err.code = 'COMMAND_CAPABILITY_DENIED'` |
+> | 2   | **课堂运行时角色权限** | `RuntimePermissionManager`（`packages/core/classroom-runtime/permission-manager.ts`） | `RuntimePermission` 枚举（7 成员）           | 见 [capability-gateway](../architecture/capability-gateway.md)                                       |
+> | 3   | **能力 Provider 框架** | `PermissionChecker`（`packages/core/capability/pipeline/permission-checker.ts`）      | `CapabilityRole` 角色数组（6 成员）          | `Access Denied: Role '<r>' is not authorized for capability '<id>'`                                  |
+> | 4   | **AI 功能 ID**         | `packages/core/ai-capability/capabilities/`                                           | `capability_*` 功能 ID（**不是**权限字符串） | —                                                                                                    |
 >
-> **不存在**名为 `CAPABILITY_DENIED` 的常量。唯一的 `PERMISSION_DENIED` 出现在**活动生态**（`packages/activity-ecosystem/registry.ts` 的 `startActivity`），与本页第 1 套机制无关——详见 §1.3。
+> **不存在**名为 `CAPABILITY_DENIED` 的常量。内核在权限拒绝时设置的是错误码字符串 `err.code = 'COMMAND_CAPABILITY_DENIED'`（`packages/core/kernel/index.ts`）；未注册 action descriptor 时则是 `COMMAND_NOT_REGISTERED`。唯一的 `PERMISSION_DENIED` 出现在**活动生态**（`packages/activity-ecosystem/registry.ts` 的 `startActivity`），与本页第 1 套机制无关——详见 §1.3。
 
 ---
 
@@ -24,8 +24,9 @@
 
 实测口径（`grep -rh "capabilityRequired: *'" --include=*.ts`，排除 `__tests__` 与 `node_modules`）：
 
-- **20 个**不同的权限字符串（2026-10-25 实测：新增 `segment:gate_eval`；实测口径为排除 `__tests__` 后的 `capabilityRequired` 上下文行）
-- **101 处** `capabilityRequired` 相关声明行
+- **20 个**不同权限字符串：其中 **19 个**用作 `ActionDescriptor.capabilityRequired`（`packages/plugins/*.ts` 口径），另一个是 `server/services/segment-gate-service.ts` 的 `GATE_CAPABILITY` 常量 `segment:gate_eval`
+- `capabilityRequired` 在生产源码中约 **100 处**引用（`grep -rn capabilityRequired` 排除 `__tests__` / `.test.`），随代码增长，不必精确到个位
+- `segment:gate_eval` **不是** `ActionDescriptor.capabilityRequired`；SDK 注释里建议片段命令同时声明它，见 §1.1 的口径说明
 
 ### 1.1 作为 `capabilityRequired` 使用的 19 个字符串（当前实测；逐项以 `grep -rn capabilityRequired` 为准）
 
@@ -181,7 +182,17 @@ throw err;
 []
 ```
 
-**激活期强制**：`packages/core/plugin-host/index.ts` 的 `activatePlugin` 在构建 context 之后、进入中间件管道之前，解析 `ICapabilityServiceToken` 并把 `mergedManifest.capabilitiesProposed` 中的每个字符串 `grant(actorId, cap)`；`actorId` 为 `plugin:${manifest.id}`。同一文件中的 worker 模式分支（`createWorker` 之前）执行同样的授予逻辑。授予失败会 rethrow，中止激活。
+**激活期授予**：`packages/core/plugin-host/lifecycle.ts` 的 `grantCapabilities()` 在构建 context 之后、进入激活管道之前，按 `mergedManifest.capabilitiesProposed` 逐项授予；`actorId` 为 `plugin:${manifest.id}`。ESM（`process` / `worker`）、preloaded 两条路径都会调用它（`activateWorker()` 内也有一处）。
+
+授予规则：
+
+- **官方 / 可信插件**（`isTrustedInProcessPlugin(manifest.id, env, file_path)`）自动授予所有**非通配**能力；
+- **第三方插件**只授予管理员已写入 `plugin_capability_grants` 表的项（`plugin-grants.ts` 的 `isCapabilityApproved()`，按 `plugin_key` 匹配 `plugins` 行 UUID 或 `manifest.id`）；
+- 未获批准的项**不会导致激活失败**，只会 `console.warn('[PluginHost] Capability "..." awaits administrator approval')` 并跳过；
+- `*` / `*:*` / `*:*:*` 永远拒绝授予；
+- 只有 `capService.grant()` 本身抛错时才会 rethrow 中止激活。
+
+因此：**清单里的 `capabilitiesProposed` 只是申请，不是授权**。第三方插件安装在管理员审批页确认之前，相关命令会因缺少能力而被内核拒绝。
 
 插件运行期可通过 `ctx.capability`（`packages/core/plugin-host/context-builder.ts` 的 `wrapCapability` 包装 `ICapabilityService`）调用 `grant` / `revokeAll` / `check`，但这是**运行期授权/校验**，**不是**声明新权限。
 
@@ -213,8 +224,9 @@ throw err;
 **决策逻辑**（`packages/core/kernel/index.ts` 的 `commandBus.setInterceptor` 回调）：
 
 ```typescript
-if (action.isHighRisk && command.metadata?.approved !== true) {
-  if (isAdmin) {
+const pluginSuppliedApproval = command.actorId.startsWith('plugin:');
+if (action.isHighRisk && (command.metadata?.approved !== true || pluginSuppliedApproval)) {
+  if (isAdmin && !pluginSuppliedApproval) {
     // 管理员直接绕过人工审批（仅 console.log 记录）
   } else {
     // INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at)
@@ -226,7 +238,7 @@ if (action.isHighRisk && command.metadata?.approved !== true) {
 }
 ```
 
-即：非管理员且 `command.metadata?.approved !== true` 的高危动作会被写入 `pending_commands` 表、发布 `approval.requested` 事件并抛出异常；管理员 actor 直接绕过队列。
+即：非管理员、或 actor 以 `plugin:` 开头（即使 `metadata.approved === true`），高危动作都会被写入 `pending_commands` 表、发布 `approval.requested` 事件并抛出异常；只有非插件 actor 的管理员能直接绕过队列。插件 actor **不能**自己带 `metadata.approved` 跳过人工审批。
 
 拦截器内 `isAdmin` 的判定（`packages/core/kernel/index.ts` 内联，非委托 `CapabilityGuard`）：
 
@@ -236,11 +248,11 @@ const isAdmin =
   command.actorId === 'admin' ||
   command.actorId === 'usr_admin' ||
   command.actorId === 'admin-demo' ||
-  command.actorId?.endsWith(':administrator') ||
-  command.actorId?.endsWith(':admin');
+  (command.actorId.startsWith('user:') &&
+    (command.actorId.endsWith(':administrator') || command.actorId.endsWith(':admin')));
 ```
 
-> 注意此处用的是**字符串后缀匹配** `endsWith(':administrator')`，而 `CapabilityGuard.check` 用的是**白名单角色解析** `extractRole`。两者判定口径不同。
+> 注意此处只对 `user:` 前缀的 actor 做角色尾段判定（v0.6.1 起）；`plugin:` 等其他前缀一律走能力表。`CapabilityGuard.check` 则用白名单角色解析 `extractRole`，两者判定口径不同。
 
 ---
 
@@ -254,17 +266,21 @@ const isAdmin =
 if (action.capabilityRequired && !isAdmin) {
   const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);
   if (!allowed) {
-    throw new Error(
+    const err = new Error(
       `[CapabilityGuard] Access Denied: Actor ${command.actorId} missing capability ${action.capabilityRequired} for ${command.type}`,
-    );
+    ) as any;
+    err.status = 403;
+    err.code = 'COMMAND_CAPABILITY_DENIED';
+    throw err;
   }
 }
 ```
 
 拦截器在权限检查**之前**还有一步 JSON Schema 校验：若 `action.inputSchema` 存在，用 `validateJsonSchema(command.payload, action.inputSchema)` 校验 payload，失败抛 `[PayloadValidationError] Invalid command payload for <type>: <errors>`。该函数是 `packages/core/kernel/index.ts` 内的模块级递归校验器，只处理 `OBJECT`（含 `required` / `properties` 递归）、`ARRAY`、`STRING`、`NUMBER`、`BOOLEAN` 五种 `type`；**其他 `type` 值（如 `GENERIC`）或缺省 `type` 一律返回 `[]` 即放行**。
 
-- 整个拦截器**只在 `actionRegistry.getActionByCommandType(command.type)` 能查到 action 时生效**。命令总线上的任何命令都必须先有对应 action 注册，否则完全绕过权限与高危检查。
-- 因宿主仅授予 `capabilitiesProposed` 中的字符串，未声明的 `capabilityRequired` 必然在此处 `Access Denied`。
+- 拦截器是**默认拒绝**的：`actionRegistry.getActionByCommandType(command.type)` 查不到 action descriptor 时直接抛 `COMMAND_NOT_REGISTERED`（`err.status = 403`）。插件只调 `commandBus.registerHandler()` 而不注册 `ActionDescriptor` 的命令无法派发。
+- 因宿主只为已批准（或官方自动授予）的 `capabilitiesProposed` 授予字符串，未声明的 `capabilityRequired` 必然在此处 `Access Denied`。
+- 管理员 actor 跳过能力检查；`plugin:` 前缀的 actor 永远不会被 `isAdmin` 匹配，也无法用 `metadata.approved` 绕过高危审批（见下节代码）。
 
 ### 副路径：Provider 框架按角色鉴权
 

@@ -1,7 +1,7 @@
 /**
  * R-05：CLI 子命令复用启动期环境校验。
  *
- * 背景（`docs/trust-boundary-hardening-audit-2026-10-14.md` R-05）：
+ * 背景（`docs/audit/trust-boundary-hardening-audit-2026-10-14.md` R-05）：
  * `assertStartupEnv()` 只在 `server.ts` 的 `startServer()` 里跑；CLI 子命令
  * （`backup` / `restore` / `migrate` / `reset-admin` / `clean`）不经过那一层，
  * 于是拼错的环境变量在服务入口 fail-fast，在 CLI 里却静默沿用更宽的策略 ——

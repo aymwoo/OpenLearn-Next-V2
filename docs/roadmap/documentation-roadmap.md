@@ -24,7 +24,7 @@
 ## 文档维护机制（防漂移）
 
 1. **行号引用失效检测**（计划 §B5）：CI 检查 md 中 `file.ts:NNN` 与 HEAD diff，失效即阻断 PR。
-2. **过期报告自动标注**：审计类文档（如 `architecture/platform-foundation-audit-report.md`）已加"⚠️ 已过时"banner，未来归档到 `architecture/_archive/`。
+2. **过期报告自动标注**：审计类文档（如 `trust-boundary-hardening-audit-2026-10-14.md`）已加"归档快照"banner，并统一归档到 `docs/audit/`（见 [审计归档](../audit/audit-index.md)）。
 3. **版本对齐规则**：docs 中的平台/SDK 版本号以 `package.json` 为准，发布时同步更新（`docs/conf.py` + release-notes + index toctree）。
 
 > 最后更新：2026-08-30

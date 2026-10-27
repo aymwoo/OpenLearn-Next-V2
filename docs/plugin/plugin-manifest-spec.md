@@ -27,7 +27,7 @@
   "optional": ["@openlearn/core:IAIService@^2.0.0"],
   "pluginDependencies": ["@openlearn/plugin-vfs"],
   "provides": ["IHomeworkAnalysisService"],
-  "capabilitiesProposed": ["storage:read", "storage:write", "ai:chat"],
+  "capabilitiesProposed": ["assignment:read", "assignment:submit", "assignment:manage", "lesson:read"],
   "configuration": {
     "properties": {
       "autoGradeEnabled": {
@@ -130,12 +130,26 @@
 
 ### 2.3 权限与能力声明 (`capabilitiesProposed`)
 
-字符串数组，声明插件运行所需的受控能力凭证。宿主仅在插件清单显式声明了对应 Capability 时才会通过 `ICapabilityService` 授权：
+字符串数组，声明插件运行所需的 `resource:action` 能力。**清单只是申请，不是授权**：
 
-- `"vfs:read"`, `"vfs:write"`: 虚拟文件系统读写
-- `"storage:read"`, `"storage:write"`: 持久化存储
-- `"ai:chat"`, `"ai:completion"`: AI 大模型调用权限
-- `"process:execute"`: 子进程与系统任务触发权限
+- 官方 / 可信插件由宿主自动授予所有非通配能力；
+- 第三方插件只有在管理员把对应项写入 `plugin_capability_grants` 表后才会被授予；
+- 未获批准的项不会阻止激活，只会被跳过（`console.warn`），插件 actor 调用相关命令时会被内核拒绝（`COMMAND_CAPABILITY_DENIED`）。
+
+可用的字符串**只能**取自[能力权限矩阵](../reference/plugin-capability-matrix.md) 的 19 个真实值，例如：
+
+- `"lesson:read"`, `"lesson:write"`, `"lesson:delete"`：课程读写与删除
+- `"vfs:read"`, `"vfs:write"`：虚拟文件系统
+- `"process:read"`, `"process:write"`：后台进程
+- `"assignment:read"`, `"assignment:submit"`, `"assignment:review"`, `"assignment:manage"`：作业
+- `"whiteboard:read"`, `"whiteboard:write"`：白板
+- `"management:read"`, `"management:write"`：管理
+- `"plugin:read"`, `"plugin:write"`：插件生命周期
+- `"student:write"`：学生数据写入
+
+`storage:*`、`ai:chat`、`ai:completion`、`process:execute` 等**不存在**。注入的 `ctx.services.storage` / `ctx.services.ai` 不受 `capabilityRequired` 约束；真正的约束点在命令的 `ActionDescriptor.capabilityRequired`。
+
+> 第三方插件声明的 `capabilityRequired` 还必须落在**执行该命令的角色**已有能力集合内（教师 / 学生 / AI 代理各自的内置回退集合见矩阵 §5），否则命令一律 403。
 
 ---
 
@@ -306,7 +320,7 @@ await ctx.config.set('weight', 30, { scopeType: 'class', scopeId }); // 班级�
 
 ### 2.7 静态 RESTful API 路由与安全配置 (`api`)（v0.3.11 新增）
 
-用于声明插件对外暴露的 HTTP RESTful 路由清单及其前置安全审计规则。主平台网关（`PluginApiGateway`）依据此处声明在将流量分发至插件前执行安全与 RBAC 拦截：
+用于声明插件对外暴露的 HTTP RESTful 路由清单及其前置安全审计规则。主平台网关（`server/routes/plugin-api-gateway.ts`）依据此处声明在将流量分发至插件前执行安全与 RBAC 拦截：
 
 ```json
 "api": {
@@ -411,7 +425,7 @@ await ctx.config.set('weight', 30, { scopeType: 'class', scopeId }); // 班级�
 - **命令总线 (`CommandBus`)**：注册遗留处理器或执行弃用命令时触发；
 - **事件总线 (`EventBus`)**：订阅或发布弃用事件时触发；
 - **贡献注册表 (`ContributionRegistry`)**：遍历插件 manifest 声明的弃用 UI 插槽（`contributes`）时触发；
-- **上下文构造器 (`ContextBuilder`)**：为插件依赖注入注入声明的弃用服务（`requires`/`optional`）时触发。
+- **上下文构造器 (`buildContext()`)**：为插件依赖注入注入声明的弃用服务（`requires`/`optional`）时触发。
 
 告警输出范式：
 

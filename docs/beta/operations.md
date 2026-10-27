@@ -2,7 +2,7 @@
 
 日期：2026-10-14。读者是看管公测服务器的人。教师公告在 [announcement.md](announcement.md)。学生数据的法律表述在 [privacy.md](privacy.md)，发出前要学校确认。
 
-命令以仓库里的脚本和 compose 为准。演练记录是 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。
+命令以仓库里的脚本和 compose 为准。演练记录是 [DEPLOY_REHEARSAL.md](../audit/DEPLOY_REHEARSAL.md)。
 
 ## 1. 上线前
 

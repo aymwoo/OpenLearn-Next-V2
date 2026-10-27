@@ -84,9 +84,9 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 - **进程内模式 (Inline Mode)**：超时限制为 **5000 毫秒**（`packages/core/plugin-host/base.ts` 的 `ACTIVATION_TIMEOUT_MS`）；
 - **Worker 隔离模式 (Worker Mode)**：初始等待窗口为 **60000 毫秒**（`packages/core/worker-runtime/worker-manager.ts` 的 `ACTIVATE_TIMEOUT_MS`，可用环境变量 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 覆盖，非法值回落默认 60s）。Worker 侧 `error` / `exit` 事件会在等待期内**立即 reject** 激活（`WorkerActivateError`），不等到超时才失败。
 
-> ⚠️ **`ctx.reportProgress` 不是 `PluginContext` 的成员**。`packages/core/plugin-host/types.ts` 的 `PluginContext` 接口**没有** `reportProgress`；它只由 `worker-manager.ts` 在 Worker 引导脚本里**动态注入**到 worker 侧的 `ctx` 对象上（全仓唯一出现处是该引导脚本）。后果：
+> ⚠️ **`ctx.reportProgress` 不是 `PluginContext` 的成员**。`packages/core/plugin-host/types.ts` 的 `PluginContext` 接口**没有** `reportProgress`；它只由 `packages/core/worker-runtime/bootstrap/sections/message-handler.ts` 在组装 Worker / 子进程侧 `ctx` 时**动态注入**（`worker_threads` 与 `process` 两种模式共用该 bootstrap）。后果：
 >
-> - **Inline 模式**：`ctx.reportProgress` 为 `undefined`，直接调用会抛 `TypeError`；
+> - **Inline 模式**：宿主不注入该字段，`ctx.reportProgress` 为 `undefined`，直接调用会抛 `TypeError`；
 > - **类型层面**：若 `activate(ctx: PluginContext)`，TypeScript 会因属性不存在而报错，需 `(ctx as any).reportProgress?.(...)` 之类的写法。
 >
 > 滑动续期窗口另由 `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` 控制（默认 `Math.min(30_000, ACTIVATE_TIMEOUT_MS)`，小于 3000 的值被忽略）。主线程在收到 `activate-progress` 消息时以该窗口重新武装计时器（`armActivationTimer`）。**调优 Worker 激活超时只改 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 而不同步调整续期窗口，实际行为可能与预期不符。**

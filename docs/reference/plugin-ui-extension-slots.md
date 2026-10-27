@@ -220,9 +220,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - `header.status_pill` → `HeaderStatusPillConfig`
   - `ai.prompt.template` → `AIPromptTemplateConfig`（消费端：Agent 输入区模板选择器，见 11.6）
   - `ai.skill.provider` → `AISkillProviderConfig`（消费端：服务端 AI Agent 工具注入，见 11.6）
-  - `admin.user.action` → `AdminUserActionConfig`
-  - `header.status_pill` → `HeaderStatusPillConfig`
-  - `ai_sidebar.tab` → `AiSidebarTabConfig`
+  - `ai_sidebar.tab` → `AISidebarTabConfig`
 
 > **注意两套命名空间**：`contributes` 的键**不全是** `ExtensionSlot` 成员。以下 4 个键是**声明式贡献键**，只存在于 manifest schema / `ContributionRegistry`，没有同名渲染槽位：
 >
@@ -386,9 +384,9 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `anchor:whiteboard-toolbar:grid`         | 同上                                                                                               |
 | `anchor:classroom-attribution:awards`    | `src/features/classroom/ClassroomAttributionModal.tsx`（`slotProps={{ student, onAwardPoints }}`） |
 
-#### 1.2 历史幽灵槽位激活与归零记录（记录时点：全量槽位均已消费）
+#### 1.2 历史幽灵槽位激活与归零记录（记录时点：120 个声明 / 116 个有渲染调用点）
 
-平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位。目前已在系统性重构中全量挂载，并于本次全域扩展升级中新增 20 个高价值业务扩展槽位（包含与“国家智慧教育公共服务平台”直连对接能力），全部在 14 个前端核心视图中完成真实消费：
+平台在早期版本中曾存在 14 个在 `ExtensionSlot` 中声明但未挂载渲染的幽灵槽位，现已全部挂载；本次全域扩展另新增 20 个业务扩展槽位（含与国家智慧教育平台直连的能力）。当前 120 个声明槽位中，116 个有 `<ExtensionPointRenderer>` 生产调用点，剩余 4 个是数据型 / 服务端消费槽位（`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider`），不经过渲染器：
 
 - **基础与课堂历史槽位全面激活**：`nav.user_menu`（顶部用户菜单）、`student.lesson.tool`（学生随堂工具）、`teacher.panel`（教师独立全宽面板）、`global.setting`（全局设置页）、`classroom.header.action`（中控顶栏动作）、`classroom.collab.canvas`（小组协作画布工具）、`classroom.barometer.metric`（晴雨表指标）、`classroom.agenda.action`（环节操作卡片）、`whiteboard.dock.plugin`（白板左下悬浮坞）、`whiteboard.canvas.widget`（白板画布任务卡片）、`classroom.audit.event`（审计事件流）、`classroom.seating.seat_actions`（机房座位右键菜单）、`editor.timeline_segment`（步骤形态扩展）、`editor.palette_item`（白板扩展图元卡片）；
 - **全域 20 个业务槽位全新落地（含国家智慧教育平台直连）**：
@@ -398,7 +396,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - 学生学习门户与作业闭环：`student.dashboard.hero_widget`、`student.assignment.toolbar.action`、`student.lesson.notes_addon`、`student.lesson.toolbox`；
   - 管理后台与全域底座：`admin.dashboard.card`、`admin.user.action`、`header.status_pill`；
   - AI 助手侧边栏：`ai_sidebar.tab`；
-- **声明但无渲染器的 `ExtensionSlot` 成员数量为 0**（记录时点）：联合类型槽位均具备明确的前端宿主消费方、响应式 Props 透传与上下文隔离机制。
+- **无渲染调用点的 `ExtensionSlot` 成员：4 个**（记录时点）：均为数据型或服务端消费槽位，契约见 §12.7；其余 116 个均具备前端宿主消费方、Props 透传与上下文隔离。
 
 ---
 
@@ -505,7 +503,7 @@ interface HelpDocConfig {
 }
 ```
 
-> `manifest.contributes` 仅存入 `ContributionRegistry` 供管理端预览，前端 `ExtensionPointRenderer` 读取的是 zustand `ExtensionPointRegistry`，**不是** contribution registry。
+> `manifest.contributes` 仅存入 `ContributionRegistry` 供管理端预览，前端 `ExtensionPointRenderer` 读取的是 zustand `usePluginHostStore`（`src/plugin-host/plugin-host-store.ts`），**不是** contribution registry。
 
 ---
 
@@ -717,7 +715,7 @@ async function activate(ctx) {
 | `LMS.on(event, cb)` / `off`            | 宿主→课件 | 订阅宿主下发指令              |
 | `LMS.getStudent()` / `getCourseware()` | 同步      | 读取上下文                    |
 
-宿主侧 `sendCommandToCourseware(iframe, event, payload)`（`src/services/lms-bridge.ts`）可向指定 iframe 下发 `LMS_HOST_COMMAND`。课件事件会发布到前端 `EventBus`（`courseware.submitted` / `progress_saved` / `event_logged` / `config_reported`），`courseware.` 前缀会经 Socket 转发到后端 EventBus 供 AI Agent 与插件订阅。
+宿主侧 `sendCommandToCourseware(iframe, event, payload)`（`src/services/lms-bridge.ts`）可向指定 iframe 下发 `LMS_HOST_COMMAND`。课件事件（`courseware.submitted` / `progress_saved` / `event_logged` / `config_reported`）发布到前端 `EventBus`，并写入 `WhiteboardEventSlot` 供 TeacherPanel / 调试面板实时订阅。成绩提交等关键事件由服务端 HTTP 路由处理后，再经 Socket 广播 `courseware-attempt-updated` 回来；**不存在**“前端 `courseware.*` 事件按前缀原样经 Socket 转发到后端 EventBus”的通道。
 
 ---
 
@@ -821,7 +819,9 @@ interface PaletteItemComponentProps {
 在插件激活阶段调用 `ctx.ui.registerExtensionPoint('whiteboard.renderer', ...)`：
 
 ```tsx
-import type { WhiteboardRendererSlotProps } from '@/plugin-host/types';
+// WhiteboardRendererSlotProps 是宿主类型（src/plugin-host/types.ts），
+// `@/` 别名在插件打包时不可解析，SDK 也未导出该类型。
+// 需要类型提示时，把下方「Props 规范」的接口声明复制进插件自己的类型文件。
 
 async function activate(ctx) {
   ctx.ui.registerExtensionPoint('whiteboard.renderer', {

@@ -71,6 +71,10 @@
 
 插件 `ctx.db.migrate` 的版本追踪（`plugin_id` 主键 + `version INTEGER`）。
 
+### `plugin_declared_migrations`
+
+声明式迁移（`migrations/*.sql`）的版本追踪，由内核 `declarative-migrator.ts` 在首次执行时通过 `CREATE TABLE IF NOT EXISTS` 建立，因此不在 `migrations/` 清单与 `schema-golden.json` 中。列为 `plugin_id` / `version` / `name` / `checksum` / `applied_at`。
+
 ### `processes`
 
 受控后台进程。`id` / `name` / `plugin_id`（归属插件，迁移 `018`） / `status` / `task_type` / `payload` / `state` / `logs` / `created_at` / `updated_at`。
@@ -339,21 +343,21 @@
 
 ---
 
-## 7. 插件扩展数据表（示例插件自建）
+## 7. 作业中心扩展数据表
 
-以下表由内置示例插件创建（非内核），供参考其范式：
+以下表由平台迁移创建（`000_initial_schema.sql` + `005_assignment_hub.sql`），供 assignment 相关内置插件使用。列清单以 `migrations/schema-golden.json` 为准：
 
-### `plugin_submissions`（作业提交插件）
+### `plugin_submissions`（作业提交，8 列）
 
-`id` / `lesson_id` / `student_id` / `file_path` / `version` / `created_at` / `updated_at`；`UNIQUE(lesson_id, student_id)`。
+`id` / `assignment_id` / `lesson_id` / `student_id` / `file_path` / `version` / `created_at` / `updated_at`。唯一约束为 `(assignment_id, student_id)`；历史数据 `assignment_id IS NULL` 的走部分唯一索引 `(lesson_id, student_id)`。
 
-### `plugin_peer_reviews`（同伴互评）
+### `plugin_peer_reviews`（同伴互评，11 列）
 
-`id` / `submission_id` / `reviewer_id` / `score` / `comment` / `created_at`；`UNIQUE(submission_id, reviewer_id)`。
+`id` / `submission_id` / `reviewer_id` / `assignment_id` / `task_id` / `score` / `comment` / `status` / `anonymous` / `created_at` / `updated_at`。
 
-### `plugin_grades`（综合评分）
+### `plugin_grades`（综合评分，14 列）
 
-`id` / `submission_id`(UNIQUE) / `teacher_score` / `teacher_comment` / `teacher_weight` / `peer_weight` / `calculated_final_score` / `status` / `graded_at`。
+`id` / `submission_id`(UNIQUE) / `assignment_id` / `teacher_score` / `teacher_comment` / `teacher_weight` / `peer_weight` / `peer_average_score` / `calculated_final_score` / `status` / `source` / `graded_by` / `graded_at` / `published_at`。
 
 ---
 

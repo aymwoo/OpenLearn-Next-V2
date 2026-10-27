@@ -174,7 +174,7 @@ npx openlearn-next clean
 
 ## 4. 公测上线检查清单
 
-按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md)。2026-10-14 的完成情况见下文 [4.1](#41-清单状态2026-10-14)。公测说明、已知问题、反馈、隐私草稿和运营手册在 [docs/beta](../beta/README.md)。
+按顺序做。任何一项失败都不要对外放量。演练记录见 [DEPLOY_REHEARSAL.md](../audit/DEPLOY_REHEARSAL.md)。2026-10-14 的完成情况见下文 [4.1](#41-清单状态2026-10-14)。公测说明、已知问题、反馈、隐私草稿和运营手册在 [docs/beta](../beta/README.md)。
 
 1. **构建**：`pnpm lint`、`pnpm lint:strict`、`pnpm lint:eslint`（0 error）、`pnpm test`、`pnpm build`、`pnpm audit`（无 high / critical）都通过。CI 里的 `Public beta journey` 必须绿（`pnpm exec playwright test --config=playwright.beta.config.ts`）。镜像用仓库 `Dockerfile` 构建，不要在构建机上临时改锁文件。
 2. **密钥**：`ENCRYPTION_KEY` 是 64 位 hex，已离线备份。它同时加密 AI Provider API Key 和班级临时口令 `classes.class_passcode`（AES-256-GCM，口令密文带 `olenc1:` 前缀）。设置了环境变量就用环境变量。没设置时，首次启动会用 `crypto.randomBytes` 生成钥匙，写到数据目录的 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次启动都读这个文件。启动日志和管理后台会出现醒目警告，提示正在使用自动生成的密钥，应改设 `ENCRYPTION_KEY` 并离线备份该文件。环境变量若与这个文件不一致，进程会报错并给出处理步骤，不会静默换钥匙。换机器时带上同一把密钥，否则已保存的 API Key 和班级口令都解不开。
@@ -190,7 +190,7 @@ npx openlearn-next clean
 
 ### 4.1 清单状态（2026-10-14）
 
-「演练已通过」指 [DEPLOY_REHEARSAL.md](../DEPLOY_REHEARSAL.md) 那次镜像演练，不是公测服务器已经对外开放。「CI 有此门禁」指 `.github/workflows/ci.yml` 里失败会红的 job。起草公测材料时没有重跑 `pnpm lint:eslint`、`pnpm build` 和 `pnpm audit`。
+「演练已通过」指 [DEPLOY_REHEARSAL.md](../audit/DEPLOY_REHEARSAL.md) 那次镜像演练，不是公测服务器已经对外开放。「CI 有此门禁」指 `.github/workflows/ci.yml` 里失败会红的 job。起草公测材料时没有重跑 `pnpm lint:eslint`、`pnpm build` 和 `pnpm audit`。
 
 | 项           | 状态                                           | 已经对上的事实                                                                                                                                                                                                                                                   | 还缺                                                                                                                                                             |
 | ------------ | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -62,7 +62,9 @@ Mock 上下文为测试便利**刻意放宽**了部分生产校验，以下差�
 | `ctx.db.ensureTable` / `table()`   | **无 SEC 校验**                               | 强制表名正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/`、schema ≤ 4000 字符、禁分号（见 [插件数据库 API](../reference/plugin-database-api.md)） |
 | `ctx.db`                           | 内存 SQLite（per-test 隔离）                  | 平台共享库 + `plugin_<pluginId>_` 前缀命名空间                                                                                         |
 | `ctx.require`                      | 直接抛错                                      | 白名单共享模块（`recharts` / `exceljs` / `jspdf` / …）                                                                                 |
-| `pointsDimension` / `pointsLedger` | 恒为 `null`                                   | Inline 模式注入真实服务；**Worker 模式同样为 `null`**（见 worker-manager 白名单说明）                                                  |
+| `pointsDimension` / `pointsLedger` | 恒为 `null`                                   | Inline 模式注入真实服务；**Worker / Process 模式同样为 `null`**（见 worker-manager 白名单说明）                                        |
+| `commandBus.registerHandler`       | 原样保存命令名，**不补插件前缀**              | 自动补 `manifest.id.` 前缀（如 `poll.create` → `ext-poll.poll.create`），见[命令命名空间](#4-命令命名空间与-mock-的差异)               |
+| 能力校验 / 默认拒绝                | **不校验**，任何命令都会交给已注册的 handler | 校验 `capabilityRequired`、`ActionDescriptor` 与管理员授权，未通过时抛 `COMMAND_CAPABILITY_DENIED`                                     |
 
 因此：涉及 `ensureTable` 命名/分号、`provide` 未声明、`require` 白名单的代码路径，请额外用「上传真实 ZIP → 插件中心安装 → 激活」做一次集成验证（或对照 [examples/verifiable-examples](../examples/verifiable-examples.md) 的契约断言）。
 
@@ -82,9 +84,11 @@ describe('Command Tests', () => {
   it('should register and execute poll.create command', async () => {
     const ctx = createMockContext({ pluginId: 'ext-poll' });
 
-    // 插件注册命令
-    ctx.services.commandBus.registerHandler('poll.create', async (cmd: any) => {
-      return { pollId: 'poll-101', title: cmd.payload.title };
+    // 插件注册命令：宿主契约是 { execute(cmd) } 对象，而不是裸函数
+    ctx.services.commandBus.registerHandler('poll.create', {
+      execute: async (cmd: any) => {
+        return { pollId: 'poll-101', title: cmd.payload.title };
+      },
     });
 
     // 模拟调度执行
@@ -221,7 +225,19 @@ describe('RESTful API Tests', () => {
 
 ---
 
-## 4. 最佳实践建议
+## 4. 命令命名空间与 Mock 的差异
+
+生产宿主通过 `resolvePluginCommandType(type, manifest.id)` 自动给插件命令补前缀（`poll.create` → `ext-poll.poll.create`），前端 `ctx.commands.execute()` 也走同一条规则。Mock 不会补前缀，因此：
+
+- 单测里断言的是**未加前缀**的命令名，与生产日志中的实际命令名不同；
+- 需要与平台其他模块联调时，应以 `manifest.id` 拼出完整命令名再断言，例如 `ext-poll.poll.create`；
+- 命令注册的 handler 必须是 `{ execute(cmd) }` 对象：Mock 直接调用 `handler.execute(command)`，传裸函数会在执行期报 `handler.execute is not a function`。Inline 宿主虽然兼容裸函数，但 Worker / Process 与 Mock 都按对象契约读取 `execute`。
+
+完整的命名空间规则见[插件开发教程 §7.3 指令隔离与命名空间保护](../tutorials/plugin-development-tutorial.md#73-指令隔离与命名空间保护)。
+
+---
+
+## 5. 最佳实践建议
 
 1. **测试隔离**：在每个测试用例中使用 `beforeEach` 重新调用 `createMockContext()`，防止状态在用例间产生交叉污染。
 2. **生命周期对齐**：若插件实现了 `deactivate`，在用例的 `afterEach` 或测试末尾调用 `await plugin.deactivate()` 验证资源释放。

@@ -1031,7 +1031,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   // ── 插件出站域名（R-02）：提案 / 已批准 / 已拒绝三项分开返回 ────────────────
   //
-  // 背景（`docs/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
+  // 背景（`docs/audit/trust-boundary-hardening-audit-2026-10-14.md` R-02）：
   // 清单里的 `network.outbound` **只是申请**，真正放行的是管理员写入
   // `plugin_network_grants` 的域名（运行时 `listApprovedNetHosts` 是唯一真相源）。
   // 此前 `approvePluginNetHosts` 没有任何调用方 —— 第三方插件无论如何都拿不到

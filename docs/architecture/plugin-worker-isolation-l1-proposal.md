@@ -1,6 +1,6 @@
 # L-1 立项提案：插件 Worker 的隔离原语升级
 
-- **状态**：待排期
+- **状态**：部分落地 —— P0 看门狗已实现（`packages/core/worker-runtime/plugin-quota.ts`，环境变量见 [系统配置](../configuration/system-configuration.md)）；P1 子进程模式已上线，第三方 ZIP 插件默认强制 `process`（见 `execution-policy.ts`）；P2 Node Permission Model 已完成
 - **提出日期**：2026-10-07
 - **来源**：插件系统专项审计（2026-10-06）审计项 **C-1 / H-9 / L-1**
 - **决策依据**：D-1（2026-10-07）—— 平台要做**第三方开发者生态**，故此项从「可延后」升为**必立项**

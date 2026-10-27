@@ -125,7 +125,7 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 | `params`  | `Record<string, string>`                                    | 动态路由提取参数（如 `{ id: '101' }`）                                                    |
 | `query`   | `Record<string, string \| string[]>`                        | 解析后的查询参数                                                                          |
 | `headers` | `Record<string, string>`                                    | **经白名单清洗后**的安全请求头（只读）                                                    |
-| `body`    | `TBody`（默认 `unknown`）                                   | 已解析的请求体；实际请求体上限由全局 `express.json({ limit: '10mb' })`（`server.ts`）决定 |
+| `body`    | `TBody`（默认 `unknown`）                                   | 已解析的请求体；**插件网关硬限制 1MB**（`server/routes/plugin-api-gateway.ts` 的 `MAX_PAYLOAD_BYTES`），超限返回 413 |
 | `ip`      | `string`                                                    | 客户端 IP                                                                                 |
 | `actor`   | 内联匿名对象（只读）                                        | 宿主注入的发起者上下文，**不可伪造**                                                      |
 
@@ -329,7 +329,7 @@ export default {
       description: '只读：学生是否达到测验分数',
       capabilityRequired: 'segment:gate_eval',
       exposeToAgent: false,
-      inputSchema: { type: 'object', additionalProperties: true },
+      inputSchema: { type: 'OBJECT', additionalProperties: true },
     });
     ctx.services.commandBus.registerHandler('ext-quiz-gate.judge', {
       execute: async (cmd) => {

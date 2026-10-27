@@ -258,7 +258,7 @@ ctx.services.ai.registerAIContextProvider?.('ext-quiz:progress', (lessonId) => {
 | `student.lesson.tool`      | 学生端课中互动小工具                       | `id`, `label`, `icon`                                  |
 | `anchor:*`                 | 宿主原生按钮/元素前后（锚点槽位，v0.2.6+） | `id`, `label`, `icon`, `placement`（`before`/`after`） |
 
-> **注意**：上表仅列举最早一批核心槽位，**并非全集**。截至当前版本，`ContributionRegistry` 的 `ContributionConfig` 联合类型已定义 **109 种**槽位类型（含 `classroom.quick_activity`、`palette.items`、`timeline.segments`、`stage.display.card`、`command_palette.item`、`quick_insert.item` 等），完整清单与配置字段以 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots.md) 为权威。
+> **注意**：上表仅列举最早一批核心槽位，**并非全集**。截至当前版本，`ContributionConfig` 联合类型已定义 **109 种**贡献配置（对应 manifest `contributes` 的 108 个键），而前端 `ExtensionSlot` 联合类型有 **120 个**成员 —— 两套数量口径不同，不可混用。完整清单与配置字段以 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots.md) 为权威。
 
 > 锚点槽位是开放命名空间，具体锚点 id 由宿主定义并公布，见 [`anchor-slots.md`](./anchor-slots.md)。
 

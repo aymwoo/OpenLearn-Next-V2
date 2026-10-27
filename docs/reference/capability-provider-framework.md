@@ -135,7 +135,7 @@ clear(): void;
 ## 7. 何时用哪套能力机制
 
 - 要**拦截/放行命令** → 用 `resource:action` 权限 + `capabilitiesProposed`。
-- 要**调用 AI 能力**（聊天/补全/工具/课程/白板/分析）→ 用 `IPluginCapabilityGatewayToken`（AI 能力层）。
+- 要**调用 AI 能力**（文本生成 / AI 角色模板 / 上下文切片）→ 用 `ctx.services.ai`（`IAIService`；`IPluginCapabilityGatewayToken` 已从 SDK 撤回，见[DI Token 字典](../api/di-tokens.md)）。
 - 要**注册自定义"按角色鉴权"的能力提供方** → 用本页的 `ICapabilityRuntimeServiceToken` → `kernel.registry.register(handler)`。
 
 > 最后更新：2026-08-29
