@@ -14,12 +14,13 @@ export function PaletteCardEditModal({ config, lang, initialData, onConfirm, onC
   const [data, setData] = useState<Record<string, any>>(() => ({ ...initialData }));
   const [selectOptions, setSelectOptions] = useState<Record<string, SelectOption[]>>({});
   const Icon = config.icon;
-  const theme = COLOR_THEME[config.color];
+  const theme = COLOR_THEME[config.color] || COLOR_THEME.indigo;
+  const editFields = Array.isArray(config.editFields) ? config.editFields : [];
 
   // 动态加载 select 字段的选项
   useEffect(() => {
     let cancelled = false;
-    const selectFields = config.editFields.filter((f) => f.kind === 'select' && f.loadOptions);
+    const selectFields = editFields.filter((f) => f.kind === 'select' && f.loadOptions);
     if (selectFields.length === 0) return;
     Promise.all(
       selectFields.map(async (f) => {
@@ -69,14 +70,14 @@ export function PaletteCardEditModal({ config, lang, initialData, onConfirm, onC
 
         {/* Body */}
         <div className="p-5 space-y-4">
-          {config.editFields.length === 0 ? (
+          {editFields.length === 0 ? (
             <p className="text-sm text-gray-500 leading-relaxed">
               {lang === 'zh'
                 ? '该组件无需预编辑内容，确认后即可添加到画板。'
                 : 'No content to edit for this component. Confirm to add it to the board.'}
             </p>
           ) : (
-            config.editFields.map((f) => (
+            editFields.map((f) => (
               <div key={f.key} className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-600">{lang === 'zh' ? f.labelZh : f.labelEn}</label>
                 {f.kind === 'options' ? (

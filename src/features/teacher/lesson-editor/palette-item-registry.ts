@@ -17,9 +17,14 @@ export class PaletteItemRegistry {
    */
   register(config: PaletteItemConfig, pluginId?: string): void {
     const resolvedPluginId = pluginId || config.pluginId;
+    const normalizedConfig: PaletteItemConfig = {
+      ...config,
+      editFields: Array.isArray(config.editFields) ? config.editFields : [],
+      pluginId: resolvedPluginId,
+    };
     this.store.setState((state) => {
       const next = new Map(state.items);
-      next.set(config.type, { config: { ...config, pluginId: resolvedPluginId }, pluginId: resolvedPluginId });
+      next.set(config.type, { config: normalizedConfig, pluginId: resolvedPluginId });
       return { items: next };
     });
   }

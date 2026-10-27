@@ -70,6 +70,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **调色板贡献缺省字段不再打挂编辑弹窗**：manifest 声明式 `editor.palette_item`
+  桥接进 `paletteItemRegistry` 时不一定带 `editFields` / `color`，而
+  `PaletteCardEditModal` 直接 `config.editFields.filter(...)`、
+  `COLOR_THEME[config.color]` —— 弹窗一渲染就 TypeError，插件贡献的画板图元因此
+  完全无法添加到画板。
+  - 影响面：`palette-item-registry.ts`（注册时归一化，`editFields` 缺失补 `[]`）、
+    `PaletteCardEditModal.tsx`（读取侧再防御一次 `Array.isArray`，主题色回退 `indigo`）。
+  - 验证：`src/features/teacher/lesson-editor/__tests__/palette-item-registry.test.ts`。
+
 - **Worker 运行时的插件 action 补齐命名空间前缀与裸名别名**：`worker` 模式下插件
   action 由 `ServiceHost` 直接写进宿主 `ActionRegistry`，不经
   `context-builder` 的 `wrapActionRegistry` —— 同一处前缀化/别名逻辑此前只补了
