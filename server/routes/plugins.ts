@@ -53,6 +53,11 @@ import {
 } from '../../packages/core/plugin-host/public-routes.js';
 import { bindPluginCommand, pluginActorIdFor } from '../../packages/core/command-bus/plugin-command.js';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace.js';
+import {
+  isTrustedInProcessPlugin,
+  resolvePluginExecutionMode,
+  trustedInlineAllowlist,
+} from '../../packages/core/plugin-host/execution-policy.js';
 import type { ServerContext } from '../context.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 
@@ -563,6 +568,38 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     );
   });
 
+  /**
+   * 安装向导用：问「这个 manifest.id 允许以什么隔离档运行」。
+   *
+   * 为什么需要它：信任判定只能在服务端做（白名单 + 内置目录）。向导若自己猜，
+   * 只会落到两种坏结果 —— 要么撒谎（单选按钮可选，但服务端必然改写为 process），
+   * 要么把选项直接焊死（此前 `trustedInProcess = false` 硬编码，UI 里永远装不出 inline）。
+   *
+   * 只对管理员开放：返回值会暴露部署的信任名单内幕（某个 id 是否被加白）。
+   * 前端对该接口的任何失败（403 / 网络错误 / 非 200）一律按不可信处理。
+   */
+  app.get('/api/plugins/isolation-policy', requireAuth('administrator'), (req, res) => {
+    const manifestId = String(req.query.manifestId || '').trim();
+    if (!manifestId) {
+      return res.status(400).json({ success: false, error: 'manifestId is required' });
+    }
+    const requestedRaw = String(req.query.requestedMode || '').toLowerCase();
+    const requested = isValidExecutionMode(requestedRaw) ? requestedRaw : undefined;
+    // 尚未安装的包没有 file_path，所以内置目录这条信任依据在这里不适用；
+    // 只按白名单判 —— 与安装时的判定一致（安装时 file_path 在临时目录）。
+    const trusted = isTrustedInProcessPlugin(manifestId);
+    const decision = resolvePluginExecutionMode(manifestId, requested);
+    res.json({
+      success: true,
+      manifestId,
+      trusted,
+      requestedMode: requested ?? null,
+      resolvedMode: decision.mode,
+      coerced: decision.coerced,
+      allowlistSize: trustedInlineAllowlist().size,
+    });
+  });
+
   // Lookup installed plugin by logical manifest.id (for upgrade detection in the wizard)
   // MUST be registered before /api/plugins/:id(*)
   app.get('/api/plugins/by-manifest/:manifestId(*)', requireScopedAuth('authenticated'), (req, res) => {
@@ -582,6 +619,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         state: found.state,
         manifest: found.manifest,
         isSystem: kernelContainer.pluginHost.isOfficialPlugin(found.pluginId, manifestId),
+        // 升级路径的回填：按库里存的请求值 + 当前信任策略算出**实际会用的**档位。
+        isolationMode: resolvePluginExecutionMode(
+          manifestId,
+          (
+            kernelContainer.db.prepare('SELECT execution_mode FROM plugins WHERE id = ?').get(found.pluginId) as
+              { execution_mode?: string } | undefined
+          )?.execution_mode,
+        ).mode,
       });
     } catch (e: any) {
       sendSafeError(res, e);

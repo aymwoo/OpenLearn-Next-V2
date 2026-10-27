@@ -38,6 +38,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     `getActionByCommandType(实际派发名)` 命不中描述符 —— `inputSchema` 校验与
     `capabilityRequired` 对第三方插件命令**静默失效**，`ai-agent` 侧第三方技能
     （强制前缀化）也查不到描述符，报 `Command not registered`。
+- **安装向导的隔离档不再"可选但其实不可选"**：`PluginInstallWizard` 曾把
+  `trustedInProcess` 硬编码为 `false`、`effectiveMode` 恒为 `'process'` —— 三个单选
+  按钮（子进程 / Worker / 主进程）永远不渲染，且上传固定带 `x-execution-mode: process`，
+  **通过 UI 装的包永远是子进程，受信 inline 插件也装不成 inline**。
+  现在向导在解析完 manifest 后问新增的 `GET /api/plugins/isolation-policy`
+  （仅管理员）：受信 → 展示三档、按选择如实上报；不受信 / 接口失败 / 403 → 保持锁定态
+  并给出「加进 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 后重启」的可操作提示。
+  升级路径按该插件当前实际档回填（`by-manifest` 新增 `isolationMode`），避免每次升级
+  把 inline 静默降回 process。
+  - 影响面：`src/components/PluginInstallWizard.tsx`、`server/routes/plugins.ts`。
+  - 验证：`src/components/__tests__/PluginInstallWizard.isolation-choice.test.tsx`
+    （受信可选/选别的档如实上报/接口失败 fail-closed/升级回填，4 例；把
+    `trustedInProcess` 改回 `false` 后 2 例失败）、
+    `server/__tests__/isolation-policy-route.test.ts`（鉴权 401/403、400、
+    未受信 inline→process 且 `coerced: true`、白名单保留 inline，5 例）。
 - **`ecosystem.config.cjs` 补两个部署开关**：`OPENLEARN_ALLOW_UNSIGNED`（默认 `1`，
   与 v0.7.5 起的新默认一致）与 `OPENLEARN_TRUSTED_INLINE_PLUGINS`。PM2 的 `env`
   块只传白名单内的键，此前这两个变量在 `.env` 里写了也到不了进程。

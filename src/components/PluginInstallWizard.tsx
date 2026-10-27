@@ -28,6 +28,13 @@ interface InstalledPluginSummary {
   status: string;
   manifest: string;
   version?: string;
+  /** 服务端求值后的实际隔离档（`inline` / `worker` / `process`），用于升级回填。 */
+  isolation_mode?: string;
+}
+
+/** 把服务端下发的档位字符串收窄成向导可用的单选值。 */
+function toSandboxChoice(raw: unknown): SandboxChoice | null {
+  return raw === 'inline' || raw === 'worker' || raw === 'process' ? raw : null;
 }
 
 interface PluginInstallWizardProps {
@@ -211,6 +218,18 @@ export function PluginInstallWizard({
   const [hasFrontend, setHasFrontend] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [executionMode, setExecutionMode] = useState<SandboxChoice>('process');
+  /**
+   * 服务端对这个 manifest.id 的信任结论。
+   *
+   * - `'unknown'`：还没问到 / 问失败 —— 一律按**不可信**展示（fail-closed）。
+   * - `'trusted'`：命中 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 或内置目录，可选三档。
+   * - `'untrusted'`：固定子进程，只展示锁定说明。
+   *
+   * 前端不自己猜：判定在服务端（`GET /api/plugins/isolation-policy`），否则要么
+   * 撒谎（单选可选但安装时必被改写），要么把选项焊死（此前硬编码
+   * `trustedInProcess = false`，UI 里永远装不出 inline）。
+   */
+  const [isolationTrust, setIsolationTrust] = useState<'unknown' | 'trusted' | 'untrusted'>('unknown');
   const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   const [approveCapabilities, setApproveCapabilities] = useState(false);
   const [approveNetworkHosts, setApproveNetworkHosts] = useState(false);
@@ -247,6 +266,7 @@ export function PluginInstallWizard({
       setHasFrontend(false);
       setAgreedToTerms(false);
       setExecutionMode('process');
+      setIsolationTrust('unknown');
       setApprovePublicRoutes(false);
       setZipObj(null);
       setError(null);
@@ -290,15 +310,44 @@ export function PluginInstallWizard({
       // Seed extension points from manifest immediately (UTF-8 labels)
       setRegisteredPanels(extractFromManifest(parsed));
 
-      // 上传的 ZIP 一律请求子进程。内置目录和白名单只由服务端识别。
+      // 上传的 ZIP 默认请求子进程。是否允许主进程/Worker 由服务端信任策略决定。
       setExecutionMode('process');
 
       // Detect same-id install for upgrade path
-      await detectExistingInstall(parsed);
+      await Promise.all([detectExistingInstall(parsed), resolveIsolationTrust(parsed.id)]);
     } catch (err: any) {
       setError(err.message || 'ZIP parse error');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  /**
+   * 升级回填：把该插件**当前实际**的隔离档预先选上。
+   *
+   * 否则管理员每次升级都会被默认的“子进程隔离”覆盖回去 —— 受信 inline 插件
+   * 就是这样被静默降档的。不可信时 UI 走锁定态，回填值不参与上报。
+   */
+  const prefillExecutionMode = (current: unknown) => {
+    const choice = toSandboxChoice(current);
+    if (choice) setExecutionMode(choice);
+  };
+
+  /**
+   * 问服务端：这个 manifest.id 允许以什么隔离档运行。
+   *
+   * 任何失败（非 200 / 403 / 网络错误 / 字段缺失）一律留不可信态 —— 宁可少给
+   * 一个选项，也不能让 UI 承诺一个服务端必然会改写的档位。
+   */
+  const resolveIsolationTrust = async (manifestId: string) => {
+    setIsolationTrust('unknown');
+    try {
+      const res = await fetch(`/api/plugins/isolation-policy?manifestId=${encodeURIComponent(manifestId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setIsolationTrust(data?.success === true && data?.trusted === true ? 'trusted' : 'untrusted');
+    } catch {
+      /* 保留 unknown → 按不可信展示 */
     }
   };
 
@@ -333,6 +382,7 @@ export function PluginInstallWizard({
         isSystem: false,
         manifestId: parsed.id,
       });
+      prefillExecutionMode(local?.isolation_mode);
       return;
     }
 
@@ -359,6 +409,7 @@ export function PluginInstallWizard({
         isSystem: false,
         manifestId: parsed.id,
       });
+      prefillExecutionMode(fromList.isolation_mode);
       return;
     }
 
@@ -379,6 +430,7 @@ export function PluginInstallWizard({
           isSystem: !!data.isSystem,
           manifestId: parsed.id,
         });
+        prefillExecutionMode(data.isolationMode);
       }
     } catch (e) {
       console.warn('Failed to detect existing plugin install', e);
@@ -430,8 +482,10 @@ export function PluginInstallWizard({
     return matched.length > 0 ? matched : registeredPanels;
   }, [registeredPanels, previewRole]);
 
-  const trustedInProcess = false;
-  const effectiveMode: SandboxChoice = 'process';
+  // 信任结论只由服务端给；未知（含问失败）按不可信处理。
+  const trustedInProcess = isolationTrust === 'trusted';
+  // 不可信时一律上报 process —— 即使 UI 状态里残留了别的值。
+  const effectiveMode: SandboxChoice = trustedInProcess ? executionMode : 'process';
 
   const isUpgrade = !!existingInstall;
   const isDowngrade = isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
@@ -1042,7 +1096,13 @@ export function PluginInstallWizard({
                     </div>
                   )}
                   <p className="text-xs text-slate-500 font-medium">
-                    {lang === 'zh' ? '设置该插件启动时的执行隔离：' : 'Choose how this plugin is isolated at startup:'}
+                    {isolationTrust === 'trusted'
+                      ? lang === 'zh'
+                        ? '该插件的 id 已在服务端受信名单（OPENLEARN_TRUSTED_INLINE_PLUGINS 或内置目录），可选执行隔离档位：'
+                        : 'This id is on the server-side trusted list (OPENLEARN_TRUSTED_INLINE_PLUGINS or the built-in directory); you may choose the isolation tier:'
+                      : lang === 'zh'
+                        ? '设置该插件启动时的执行隔离：'
+                        : 'Choose how this plugin is isolated at startup:'}
                   </p>
 
                   {!trustedInProcess ? (
@@ -1057,6 +1117,11 @@ export function PluginInstallWizard({
                         {lang === 'zh'
                           ? '上传的包固定以独立子进程运行，不继承密钥类环境变量。id 前缀不能证明它是内置插件。只有内置目录或 OPENLEARN_TRUSTED_INLINE_PLUGINS 白名单里的包才可以进程内运行，而且那一步由服务端决定。'
                           : 'Uploaded packages stay in a child process and do not inherit secret environment variables. An id prefix does not make a package built-in. Only the built-in directory or OPENLEARN_TRUSTED_INLINE_PLUGINS can run in-process, and the server makes that decision.'}
+                      </p>
+                      <p className="mt-2 text-sky-900/80">
+                        {lang === 'zh'
+                          ? '需要主进程或 Worker 运行？把该包的 manifest.id 加进 OPENLEARN_TRUSTED_INLINE_PLUGINS 并重启服务，然后重新选择档位。'
+                          : 'Need in-process or worker execution? Add this package’s manifest.id to OPENLEARN_TRUSTED_INLINE_PLUGINS, restart the server, then re-select the tier.'}
                       </p>
                     </div>
                   ) : (
