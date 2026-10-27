@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "note": "插件可注册的『领域扩展点』门禁策略。清单本身不是真值 —— 真值从源码推导（packages/core/di/interfaces.ts 的 PLUGIN_RESOLVABLE_TOKENS + 各接口的 register* 方法）。本文件只声明策略与豁免，豁免必须给出『覆盖该方法的文档』，门禁会核对该文档确实含有该方法名，杜绝一刀切豁免。",
+  "canonicalIndexDoc": "docs/plugin/extension-registry.md",
+  "indexTableMarker": "0.1 注册表总索引",
+  "pluginDocGlobs": [
+    "docs/plugin/*.md",
+    "docs/tutorials/plugin-*.md",
+    "docs/sdk/*.md",
+    "docs/reference/plugin-*.md",
+    "docs/api/di-tokens.md"
+  ],
+  "exemptions": [
+    {
+      "token": "ICommandBusServiceToken",
+      "method": "registerHandler",
+      "coveredBy": "docs/tutorials/plugin-development-tutorial.md",
+      "reason": "命令 handler 注册有专门章节（教程 §3.3 命令与 ActionDescriptor 配对），并受 default-deny 语义约束，不是『注册一个领域扩展点』。"
+    },
+    {
+      "token": "IProcessServiceToken",
+      "method": "registerHandler",
+      "coveredBy": "docs/tutorials/plugin-development-tutorial.md",
+      "reason": "子进程 handler 注册属于进程沙箱能力说明，教程与执行模式表已覆盖。"
+    },
+    {
+      "token": "IProcessServiceToken",
+      "method": "registerInterval",
+      "coveredBy": "docs/api/di-tokens.md",
+      "reason": "interval 注册是进程沙箱 API 的一部分（di-tokens 字典已列该方法），非领域扩展点。"
+    }
+  ]
+}

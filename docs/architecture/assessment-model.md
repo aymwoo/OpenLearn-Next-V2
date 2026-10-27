@@ -94,7 +94,10 @@ registry.registerQuestionType(
   },
   { pluginId: 'ext-code' },
 );
-// 卸载时宿主调用 registry.clearOwnedQuestionTypes('ext-code')
+// 回收：停用/卸载时宿主按「安装行 UUID」与 manifest.id 两个 owner 各清一次
+// （revokePluginQuestionTypes，Issue #320）。需要提前撤销时再手动调用：
+// await registry.unregisterQuestionType('ext-code:python', 'ext-code');
+// 注：在接入该修复之前的旧版本上，题型会残留到进程重启，需自行在 deactivate() 注销。
 ```
 
 内置 5 种题型走**同一个注册路径**（`createQuestionTypeRegistry()` 只是预先 register 它们），
