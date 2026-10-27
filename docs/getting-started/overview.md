@@ -74,5 +74,5 @@ graph TD
     B --> H["Analytics Engine"]
 
     G --> I["Builtin Plugins"]
-    G --> J["Third-Party Plugins (SDK V3.7.1)"]
+    G --> J["Third-Party Plugins (SDK V3.7.2)"]
 ```

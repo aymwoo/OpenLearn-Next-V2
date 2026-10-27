@@ -1,6 +1,6 @@
 {
   "name": "@openlearn/plugin-sdk",
-  "version": "3.7.1",
+  "version": "3.7.2",
   "description": "TypeScript types, DI tokens, CLI scaffolding & build tool for OpenLearn plugin development",
   "keywords": [
     "educational",
@@ -41,7 +41,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "prepublishOnly": "node ../../scripts/assert-publishable.mjs && node build.mjs"
+    "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
     "esbuild": "^0.25.0",

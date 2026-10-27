@@ -1,6 +1,6 @@
 # 插件信任边界矩阵（Trust Boundary）
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
 > **适用范围**：OpenLearnV2 插件宿主，`inline` / `worker_threads` / `child_process(process)` 三种执行模式。
 >

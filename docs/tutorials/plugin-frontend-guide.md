@@ -1,8 +1,8 @@
 # 前端插件指南：加载、上下文与扩展点
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.1` / 平台 `v0.7.4+`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2` / 平台 `v0.7.4+`
 >
 > 本页是[插件开发完全指南](plugin-development-tutorial.md) §6 的正文，讲**前端 bundle 怎么被加载、拿到什么上下文、能注册哪些扩展点**。
 > 备课画板图元、教学环节类型、环节进入条件属于「课件内容扩展」，见配套篇：[课件与教学环节扩展](plugin-courseware-extensions.md)。

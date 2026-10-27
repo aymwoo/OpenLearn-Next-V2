@@ -53,24 +53,32 @@ export type {
   ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
 
-// 以下 8 个在源码里是 **class**（运行时值）。早期被误放进上面的 `export type` 块，
-// 于是消费侧写 `new PluginLifecycleManager(...)` / `PluginRuntimeComposition` 作为值时
-// 报 `TS1362: cannot be used as a value because it was exported using 'export type'`。
-// 由 generate-dts.mjs 的反向体检发现。
+// ⚠️ 7 个宿主内部类：**只以类型形式**对外暴露（3.7.2 起）。
 //
-// ⚠️ 必须从**各自的模块**导入，不能走 `../core/plugin-host/index.js`：
-// 那个入口会实例化 `PluginHost extends PluginHostInstall`，一路把 `base.js`
-// 里的 `import express from 'express'` 拖进 SDK 产物。于是**任何**第三方插件
-// 只要 import 一次 SDK，就会在隔离进程里加载 express → body-parser → depd
-// 的 `new Function`，被 `--disallow-code-generation-from-strings` 打成
-// `EvalError: Code generation from strings disallowed`（Issue #147 实测）。
-export { PluginRuntimeAdapter } from '../core/plugin-host/plugin-runtime-adapter.js';
-export { PluginRuntimeComposition } from '../core/plugin-host/plugin-runtime-composition.js';
-export { PluginContextAdapter } from '../core/plugin-host/plugin-context-adapter.js';
-export { PluginLifecycleManager } from '../core/plugin-host/plugin-lifecycle-manager.js';
-export { PluginCapabilityGateway } from '../core/plugin-host/plugin-capability-gateway.js';
-export { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
-export { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
+// 历史：它们一度被放进上面的 `export type` 块，于是消费侧写 `new X(...)` 时拿到
+// `TS1362: cannot be used as a value because it was exported using 'export type'`。
+// 为消除该报错，曾改成值导出 —— 代价是把整条 `packages/core` 实现链（含
+// `core/version.ts` 的 `import fs from 'node:fs'`）内联进 `dist/index.js`：
+// 产物 13 KB → 75 KB，开头出现 `node:fs` / `node:path` / `node:url` / `node:crypto`
+// 静态导入。任何把 SDK 打进 worker bundle 的第三方插件（`external: []`）都会在
+// 「产物不得残留 import」自检上失败 —— class_manager 实测，CI 作业
+// `Third-party plugin compatibility` 连续红。
+//
+// 权衡：TS1362 是**编译期**报错（看得见、可定位）；把 node 内置模块打进插件产物
+// 是**运行期**崩溃（插件作者完全无从判断）。所以选类型导出。
+//
+// 宿主侧要用这些类请从 `packages/core/plugin-host/*.js` 直接导入 ——
+// `packages/core/kernel/index.ts` 就是这么做的，SDK 不是宿主的内部依赖通道。
+//
+// 若将来真的出现「仓库外消费者需要 new 出来」的场景，正确做法是把该类下沉到
+// 独立包，而不是重新值导出。
+export type { PluginRuntimeAdapter } from '../core/plugin-host/plugin-runtime-adapter.js';
+export type { PluginRuntimeComposition } from '../core/plugin-host/plugin-runtime-composition.js';
+export type { PluginContextAdapter } from '../core/plugin-host/plugin-context-adapter.js';
+export type { PluginLifecycleManager } from '../core/plugin-host/plugin-lifecycle-manager.js';
+export type { PluginCapabilityGateway } from '../core/plugin-host/plugin-capability-gateway.js';
+export type { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
+export type { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 

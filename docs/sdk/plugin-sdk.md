@@ -1,8 +1,8 @@
 # `@openlearn/plugin-sdk` API 参考手册
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 
 `@openlearn/plugin-sdk` 包是 OpenLearn V2 插件开发者使用的官方类型定义与 Token 契约库（定义于 `packages/plugin-sdk/index.ts`）。它仅包含 TypeScript 类型定义与 `Token<T>` 值，不含运行时逻辑，确保编译产物轻量。
 

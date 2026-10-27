@@ -1,8 +1,8 @@
 # 统一扩展点与 UI 贡献点注册表 (Extension & Contribution Registry)
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 
 OpenLearn V2 提供了双层扩展点架构：
 

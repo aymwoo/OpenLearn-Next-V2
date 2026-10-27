@@ -1,8 +1,8 @@
 # 插件宿主架构与沙箱隔离机制 (Plugin Architecture)
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`
 
 OpenLearn V2 的插件系统为全栈、可伸缩、多租户隔离的微前端与 Worker 进程隔离架构。本文档详细解析插件宿主的物理结构、模块职责、沙箱机制、组件通信与服务代理模型。
 

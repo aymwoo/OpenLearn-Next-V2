@@ -1,8 +1,8 @@
 # Scaffold CLI 脚手架指南
 
-<!-- doc-version: sdk=3.7.1 -->
+<!-- doc-version: sdk=3.7.2 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.1`（CLI 随该包一起发布，已上 npm）
+> **适用范围**：`@openlearn/plugin-sdk@3.7.2`（CLI 随该包一起发布，已上 npm）
 
 ## 1. 命令一览
 
@@ -73,7 +73,7 @@ export default function MyPanel() {
 
 > **版本说明**：`@openlearn/plugin-sdk@3.7.1`（已发 npm）起，`init` 直接生成上面的形状。
 > 若你仍停在 **3.7.0**，生成的是旧模板 —— 脚手架跑完请手工把 `src/frontend.tsx` 改成上面的形状
-> （或直接用 `--template server-only`）；升级到 `npm i -D @openlearn/plugin-sdk@3.7.1` 则无需手改。
+> （或直接用 `--template server-only`）；升级到 `npm i -D @openlearn/plugin-sdk@3.7.2` 则无需手改。
 
 > 第三方插件的前端是**隐藏 iframe** 里的无 UI 执行体，写 React 组件既不会被渲染、也无法跨
 > `postMessage` 传递。为什么以及能做什么，见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)

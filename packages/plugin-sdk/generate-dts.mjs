@@ -797,11 +797,35 @@ const header = `/**
  * `export type` 导出一个 enum，消费侧写 `PluginState.ACTIVE` 会拿到
  * `TS1362: cannot be used as a value because it was exported using 'export type'`。
  */
+/**
+ * 强制类型导出的宿主内部类（3.7.2）。
+ *
+ * 这些在源码里是 `class`，`isValueSymbol()` 判 true，默认会进值导出块 ——
+ * 那样 d.ts 会告诉消费者「这是值」，而 `dist/index.js` 里根本没有这个导出，
+ * 编译过了、运行 `new X()` 直接 undefined 崩溃。比 TS1362 更糟：TS1362 至少
+ * 在编译期拦住。所以这里显式压到类型导出块，与 `index.ts` 的 `export type` 对齐。
+ *
+ * 原因见 `index.ts` 同段注释：值导出会把 `core/version.ts` 的 `node:fs` 等
+ * 静态导入内联进 SDK 产物（13 KB → 75 KB），把所有把 SDK 打进 worker bundle 的
+ * 第三方插件在自检阶段打挂。
+ */
+const FORCED_TYPE_ONLY = Object.freeze([
+  'PluginRuntimeAdapter',
+  'PluginRuntimeComposition',
+  'PluginContextAdapter',
+  'PluginLifecycleManager',
+  'PluginCapabilityGateway',
+  'UnifiedExtensionRegistry',
+  'PluginDistributionManager',
+]);
+
 const valueExports = [];
 const typeExports = [];
 for (const { name } of entryExports) {
   if (!need.has(name)) continue;
-  (isValueSymbol(name) ? valueExports : typeExports).push(name);
+  // FORCED_TYPE_ONLY 优先：isValueSymbol() 只反映「源码里是 class」，
+  // 不代表「SDK 承诺它是运行时值」。
+  (FORCED_TYPE_ONLY.includes(name) ? typeExports : isValueSymbol(name) ? valueExports : typeExports).push(name);
 }
 
 /**
@@ -812,8 +836,10 @@ for (const { name } of entryExports) {
  * not exported`。这里机械补齐，而不是手改导出块：手改的东西会随源码继续漂移。
  */
 const handExportGaps = entryExports.map((e) => e.name).filter((n) => handDeclared.has(n) && !handExported.has(n));
-const gapValues = handExportGaps.filter(isValueSymbol);
-const gapTypes = handExportGaps.filter((n) => !isValueSymbol(n));
+// FORCED_TYPE_ONLY 同样要在这里生效：这条补漏路径按 `isValueSymbol()` 分类，
+// 否则刚从 typeExports 挪走的 7 个类会从这个口子重新掉回值导出块。
+const gapValues = handExportGaps.filter((n) => isValueSymbol(n) && !FORCED_TYPE_ONLY.includes(n));
+const gapTypes = handExportGaps.filter((n) => !isValueSymbol(n) || FORCED_TYPE_ONLY.includes(n));
 
 /**
  * 已收回对外承诺的符号（D-2 / D-6 决策，SDK 3.8.0）。
@@ -845,8 +871,11 @@ const WITHDRAWN_FROM_SDK = Object.freeze([
 /** 撤回名单里的符号若重新出现在 index.ts 导出面，说明消费方已就位，提示移除名单 */
 const reinstated = WITHDRAWN_FROM_SDK.filter((n) => entryExports.some((e) => e.name === n));
 
-// 反向体检：index.ts 用 `export type` 导出了值符号 → 消费侧会踩 TS1362
+// 反向体检：index.ts 用 `export type` 导出了值符号 → 消费侧会踩 TS1362。
+// FORCED_TYPE_ONLY 里的 7 个是**有意为之**（TS1362 正是期望行为），单独分开记，
+// 免得后来者把它当成 bug 又改回值导出 —— 那就把 node: 导入带回来了。
 const typeExportedValues = entryExports.filter((e) => !e.isValue && isValueSymbol(e.name)).map((e) => e.name);
+const unintendedTypeExportedValues = typeExportedValues.filter((n) => !FORCED_TYPE_ONLY.includes(n));
 
 function renderExportBlock(kind, names) {
   if (names.length === 0) return '';
@@ -877,9 +906,11 @@ if (process.argv.includes('--report')) {
   if (missing.length === 0) process.stderr.write('  （无）\n');
   else process.stderr.write(`  ${missing.join(', ')}\n`);
   // index.ts 用 `export type` 导出了运行时值符号 —— 消费侧踩 TS1362
-  process.stderr.write('\nindex.ts 用 export type 导出了值符号（消费侧 TS1362）：\n');
-  if (typeExportedValues.length === 0) process.stderr.write('  （无）\n');
-  else for (const n of typeExportedValues) process.stderr.write(`  ${n}\n`);
+  process.stderr.write('\nindex.ts 用 export type 导出了值符号（消费侧 TS1362），非预期：\n');
+  if (unintendedTypeExportedValues.length === 0) process.stderr.write('  （无）\n');
+  else for (const n of unintendedTypeExportedValues) process.stderr.write(`  ${n}\n`);
+  process.stderr.write(`  有意如此（FORCED_TYPE_ONLY，共 ${FORCED_TYPE_ONLY.length} 个宿主内部类）：\n`);
+  for (const n of FORCED_TYPE_ONLY) process.stderr.write(`  ${n}\n`);
   process.stderr.write(
     `\n生成符号：${need.size}｜type 导出 ${typeExports.length + gapTypes.length}｜value 导出 ${valueExports.length + gapValues.length}\n`,
   );
