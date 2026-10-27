@@ -245,8 +245,7 @@ async function assertCommunityZipAttestation(
   // 部署可用 OPENLEARN_ALLOW_UNSIGNED=0/false 收紧为 B2 基线——
   // 那时未签名包必须由管理员逐次传 x-allow-unsigned: true。
   const allowUnsignedEnv = String(process.env.OPENLEARN_ALLOW_UNSIGNED ?? '').toLowerCase();
-  const allowUnsignedEffective =
-    allowUnsigned || !['0', 'false'].includes(allowUnsignedEnv);
+  const allowUnsignedEffective = allowUnsigned || !['0', 'false'].includes(allowUnsignedEnv);
   if (!allowUnsignedEffective) {
     return {
       ok: false,
