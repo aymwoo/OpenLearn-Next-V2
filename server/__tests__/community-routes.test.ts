@@ -262,6 +262,36 @@ describe('community plugin registry routes', () => {
       expect(bypassEvent).toBeDefined();
     });
 
+    it('B5b: OPENLEARN_ALLOW_UNSIGNED=1 时未签名包免逐次头部放行，审计仍记旁路', async () => {
+      auditEvents = [];
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      process.env.OPENLEARN_ALLOW_UNSIGNED = '1';
+      try {
+        const zipBuf = await makePluginZip({ id: 'ext-env-bypass-test', version: '1.0.0' }, false);
+        const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-env-bypass-test.zip',
+          },
+          body: zipBuf,
+        });
+
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as { success: boolean };
+        expect(body.success).toBe(true);
+
+        const bypassEvent = auditEvents.find(
+          (e) => e.event === 'plugin.unverified_local_bypassed' && e.manifestId === 'ext-env-bypass-test',
+        );
+        expect(bypassEvent).toBeDefined();
+      } finally {
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
     it('B3: 签名版本与包内 manifest 不匹配时拒绝', async () => {
       const zip = new JSZip();
       const manifest = { id: 'ext-mismatch-test', name: 'ext-mismatch-test', version: '2.0.0' };
