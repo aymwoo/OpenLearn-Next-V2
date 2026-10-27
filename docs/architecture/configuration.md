@@ -180,7 +180,7 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 
 ### 2.5 校验与失败语义
 
-写入顺序为：`validate()` → `assertScopeAllowed()` → 更新内存缓存 → 写库 → 通知监听器。
+写入顺序为：`validate()` → `assertScopeAllowed()` → 更新共享缓存 → 写库 → 广播给所有活跃实例的监听器。
 
 - `validate()` 按 §2.1 的约束逐条检查，**未声明的 key 直接抛错**并提示去 manifest 声明；`integer` 额外要求 `Number.isInteger`；`minimum` / `maximum` 只在数值分支检查；`enum` 在类型检查之后单独校验。
 - `assertScopeAllowed()` 对应 `scope` 声明：向未允许的层写入会抛错，并回显「manifest 声明允许：platform, class」。
@@ -192,10 +192,15 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 
 `ConfigService` 实例由 `packages/core/plugin-host/context-builder.ts` 的 `buildContext()` 创建，顺序固定为：构造 → `loadFromDB()` → 作为 `ctx.config` 挂到插件上下文。因此**插件 `activate()` 里读到的值已经是 DB 合并后的最终值**，不存在先读默认、后异步刷新的窗口。
 
-需要注意缓存的两个方向：
+需要注意缓存的作用域与刷新方式：
 
-- 激活时**已存在**的行被写入缓存，此后即使管理端改了值，**运行中的插件实例也读不到新值**（它的 `values` 缓存不会失效）；
-- 激活时**尚不存在**的作用域行，会在首次 `get(key, { classId })` 时因缓存未命中而查库，因此**后来新增的班级覆盖能被读到**。
+- 缓存由**同一 `db` 对象 + `manifest.id` 的所有实例共享**（模块级 `WeakMap<db, Map<manifestId, { values, instances }>>`）。管理端通过临时实例写入后，运行中插件实例的缓存立即被刷新，`get()` 马上读到新值；
+- 写入会**广播给所有活跃实例**，运行中插件的 `onChange` 回调因此也会被触发；`oldValue` 取该 key 在共享缓存中的上一个值（此前从未缓存过则为 `undefined`）；
+- 激活时**尚不存在**的作用域行，会在首次 `get(key, { classId })` 时因缓存未命中而查库，因此后来新增的班级覆盖能被读到；
+- `loadFromDB()` 会**清空并以 DB 为准重建**共享缓存：重装插件、恢复备份或直接在库里改值后，下次管理端读取或重启插件都不会残留旧缓存；
+- 实例用 `WeakRef` 登记，插件卸载后其 `ConfigService` 可被回收，广播不会把事件送进已废弃的插件上下文。
+
+需要注意的边界：广播**不带作用域参数**（见 §2.4 第 2 点），班级层与平台层的写入在回调里长得一样；`oldValue` 是共享缓存里的上一个值，不是数据库里的历史值。
 
 ### 2.7 平台侧访问路径与 REST
 
@@ -204,7 +209,7 @@ export type ConfigChangeCallback = (key: string, newValue: unknown, oldValue: un
 - `getPluginConfig(pluginId, manifest?, options?)` —— 内部**临时 new 一个 `ConfigService`**、`loadFromDB()`、返回 `getAll(options)`，不持有内存引用；`options` 支持 `{ classId, schoolId }`。
 - `setPluginConfig(pluginId, manifest, updates, scope?)` —— 同样临时实例，逐个 `setSync(key, value, scope)`。
 
-这意味着**管理端写入不会触发运行中插件的 `onChange` 回调**：写操作用的是另一个 `ConfigService` 实例，其 `listeners` 集合与插件持有的实例不相通。插件只在下次读取（且该条目未被缓存）时才看到新值。这是当前实现的一个已知限制（跨实例的变更广播未实现），此处如实记录。
+这两个方法创建的临时实例与运行中插件的 `ctx.config` **共享同一份缓存与变更广播**（按 `db` 对象 + `manifest.id` 归属）：管理端写入后，运行中插件立即读到新值，并收到 `onChange` 回调。`getPluginConfig()` 调用的 `loadFromDB()` 会以 DB 为准重建共享缓存，因此外部对库的修改（恢复备份、换库）也会在下次管理端读取时同步给运行中实例。
 
 `resolvePluginUuid()` 负责把「数据库 UUID 或 manifest.id 别名」解析为真实主键（先直查主键，再回退到 SQLite `json_extract(manifest, '$.id')`），上述两个方法与下面的 REST 路由都依赖它。
 
@@ -229,7 +234,7 @@ REST 定义在 `server/routes/plugins.ts`，路径参数 `:id(*)` 允许 manifes
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 有 `PlatformConfiguration` 吗？ | **没有**。目录已于 2026-10-01 作为死代码整体删除（`207ca36`）                                                                                                                                  |
 | Worker 资源上限可配吗？         | **可配**。`OPENLEARN_PLUGIN_MAX_HEAP_MB`（默认 128）、`OPENLEARN_PLUGIN_MAX_RSS_MB`（512）、`OPENLEARN_PLUGIN_CPU_QUOTA_MS`（8000）/`CPU_WINDOW_MS`（10000）、`OPENLEARN_PLUGIN_QUOTA`（总闸） |
-| 配置会热更新吗？                | 插件配置**不热更新**；环境变量**永不热更新**，改后须重启                                                                                                                                       |
+| 配置会热更新吗？                | 插件配置**会热更新**（管理端写入即时同步到运行中实例并触发 `onChange`）；环境变量**永不热更新**，改后须重启                                                                                    |
 | 插件配置存哪？                  | `plugin_config` 表，主键 `(plugin_id, scope_type, scope_id, key)`；`plugin_storage` 的 `config:` 前缀仅作旧库回退                                                                              |
 | 配置能分层吗？                  | 能。`class > school > platform > manifest 默认值`，可覆盖哪些层由 manifest 的 `scope` 声明决定                                                                                                 |
 | 改一个不存在的环境变量会怎样？  | 静默失效，该处回落到代码里的兜底值，无任何告警                                                                                                                                                 |

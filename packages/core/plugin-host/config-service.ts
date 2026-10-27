@@ -101,6 +101,43 @@ function scopedId(scopeType: ConfigScopeType, scopeId: string, key: string): str
   return `${scopeType}\u0000${scopeId}\u0000${key}`;
 }
 
+/**
+ * 同一 `db` + `manifest.id` 的所有 `ConfigService` 实例共享缓存与实例表。
+ *
+ * `getPluginConfig` / `setPluginConfig` 每次调用都会 new 一个临时实例；若不共享，
+ * 管理端写入后运行中的 `ctx.config` 既读不到新值，也不会触发 `onChange`。
+ *
+ * 实例用 `WeakRef` 登记：插件被卸载后其 `ConfigService` 可被回收，
+ * 广播不会把事件送进已废弃的插件上下文。
+ */
+interface SharedConfigState {
+  /** scoped key → value；`null` 表示「已确认没有值」，避免反复查库。 */
+  values: Map<string, unknown>;
+  instances: Set<WeakRef<ConfigService>>;
+}
+
+const sharedStates = new WeakMap<object, Map<string, SharedConfigState>>();
+
+const instanceCleanup = new FinalizationRegistry<{ state: SharedConfigState; ref: WeakRef<ConfigService> }>(
+  ({ state, ref }) => {
+    state.instances.delete(ref);
+  },
+);
+
+function getSharedState(db: object, manifestId: string): SharedConfigState {
+  let byManifest = sharedStates.get(db);
+  if (!byManifest) {
+    byManifest = new Map();
+    sharedStates.set(db, byManifest);
+  }
+  let state = byManifest.get(manifestId);
+  if (!state) {
+    state = { values: new Map(), instances: new Set() };
+    byManifest.set(manifestId, state);
+  }
+  return state;
+}
+
 function normalizeWriteScope(scope?: ConfigWriteScope): { scopeType: ConfigScopeType; scopeId: string } {
   const scopeType = scope?.scopeType ?? 'platform';
   const scopeId = scope?.scopeId?.trim() ?? '';
@@ -113,9 +150,9 @@ function normalizeWriteScope(scope?: ConfigWriteScope): { scopeType: ConfigScope
 export class ConfigService implements IConfigService {
   /** Schema from manifest.configuration.properties. */
   private schema: Record<string, ConfigProperty>;
-  /** In-memory cache (scoped key → value). `null` 表示「明确没有值」，避免反复查询。 */
-  private values = new Map<string, unknown>();
-  /** Change listeners. */
+  /** 与同 db + manifest.id 的其他实例共享的缓存与实例表。 */
+  private state: SharedConfigState;
+  /** Change listeners（每个实例独立，广播时按实例分发）。 */
   private listeners = new Set<ConfigChangeCallback>();
   /** DB reference for persistence. */
   private db: any;
@@ -130,6 +167,10 @@ export class ConfigService implements IConfigService {
     this.db = db;
     this.manifestId = manifest.id;
     this.schema = (manifest.configuration?.properties as Record<string, ConfigProperty>) ?? {};
+    this.state = getSharedState(db, manifest.id);
+    const ref = new WeakRef(this);
+    this.state.instances.add(ref);
+    instanceCleanup.register(this, { state: this.state, ref });
   }
 
   // ── Schema helpers ────────────────────────────────────────────────────
@@ -202,22 +243,22 @@ export class ConfigService implements IConfigService {
 
   private readScoped(key: string, scopeType: ConfigScopeType, scopeId: string): { found: boolean; value?: unknown } {
     const cacheKey = scopedId(scopeType, scopeId, key);
-    if (this.values.has(cacheKey)) {
-      const cached = this.values.get(cacheKey);
+    if (this.state.values.has(cacheKey)) {
+      const cached = this.state.values.get(cacheKey);
       return cached === null ? { found: false } : { found: true, value: cached };
     }
 
     const row = this.queryScoped(key, scopeType, scopeId);
     if (!row) {
-      this.values.set(cacheKey, null);
+      this.state.values.set(cacheKey, null);
       return { found: false };
     }
     try {
       const parsed = JSON.parse(row.value);
-      this.values.set(cacheKey, parsed);
+      this.state.values.set(cacheKey, parsed);
       return { found: true, value: parsed };
     } catch {
-      this.values.set(cacheKey, row.value);
+      this.state.values.set(cacheKey, row.value);
       return { found: true, value: row.value };
     }
   }
@@ -238,8 +279,8 @@ export class ConfigService implements IConfigService {
 
   private readLegacyPlatformValue(key: string): { found: boolean; value?: unknown } {
     const cacheKey = scopedId('platform', '', `legacy:${key}`);
-    if (this.values.has(cacheKey)) {
-      const cached = this.values.get(cacheKey);
+    if (this.state.values.has(cacheKey)) {
+      const cached = this.state.values.get(cacheKey);
       return cached === null ? { found: false } : { found: true, value: cached };
     }
     try {
@@ -247,14 +288,14 @@ export class ConfigService implements IConfigService {
         .prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
         .get(this.manifestId, ConfigService.KEY_PREFIX + key) as { value: string } | undefined;
       if (!row) {
-        this.values.set(cacheKey, null);
+        this.state.values.set(cacheKey, null);
         return { found: false };
       }
       const parsed = JSON.parse(row.value);
-      this.values.set(cacheKey, parsed);
+      this.state.values.set(cacheKey, parsed);
       return { found: true, value: parsed };
     } catch {
-      this.values.set(cacheKey, null);
+      this.state.values.set(cacheKey, null);
       return { found: false };
     }
   }
@@ -322,8 +363,8 @@ export class ConfigService implements IConfigService {
     this.assertScopeAllowed(key, scopeType);
 
     const cacheKey = scopedId(scopeType, scopeId, key);
-    const previous = this.values.get(cacheKey);
-    this.values.set(cacheKey, value);
+    const previous = this.state.values.get(cacheKey);
+    this.state.values.set(cacheKey, value);
 
     try {
       this.ensureTable();
@@ -338,9 +379,9 @@ export class ConfigService implements IConfigService {
     } catch (e) {
       // Rollback cache on persistence failure
       if (previous === undefined) {
-        this.values.delete(cacheKey);
+        this.state.values.delete(cacheKey);
       } else {
-        this.values.set(cacheKey, previous);
+        this.state.values.set(cacheKey, previous);
       }
       throw e;
     }
@@ -348,11 +389,28 @@ export class ConfigService implements IConfigService {
     // 同 key 的其他作用域缓存可能仍有效，但清单/默认值没变；
     // 只有「本作用域」被改，无需全清。保留 legacy 与待覆盖层。
 
-    for (const listener of this.listeners) {
-      try {
-        listener(key, value, previous === null ? undefined : previous);
-      } catch {
-        // silent — listener errors shouldn't break config writes
+    this.broadcast(key, value, previous ?? undefined);
+  }
+
+  /**
+   * 通知所有共享同一 db + manifest.id 的活跃实例（含自身）。
+   *
+   * 管理端通过临时实例写入时，运行中插件的 `onChange` 也因此能收到。
+   * 已回收的实例在遍历时顺手清理。
+   */
+  private broadcast(key: string, newValue: unknown, oldValue: unknown): void {
+    for (const ref of this.state.instances) {
+      const instance = ref.deref();
+      if (!instance) {
+        this.state.instances.delete(ref);
+        continue;
+      }
+      for (const listener of instance.listeners) {
+        try {
+          listener(key, newValue, oldValue);
+        } catch {
+          // silent — listener errors shouldn't break config writes
+        }
       }
     }
   }
@@ -390,13 +448,15 @@ export class ConfigService implements IConfigService {
    * 插件在 `activate()` 里通常会马上读配置，提前填充避免每条配置一次查询。
    */
   loadFromDB(): void {
+    // 以 DB 为准重建共享缓存：重装/删除配置行后不会残留旧值。
+    this.state.values.clear();
     try {
       const rows = this.db
         .prepare(`SELECT scope_type, scope_id, key, value FROM ${ConfigService.TABLE} WHERE plugin_id = ?`)
         .all(this.manifestId) as Array<{ scope_type: ConfigScopeType; scope_id: string; key: string; value: string }>;
       for (const row of rows) {
         const scopeType: ConfigScopeType = CONFIG_SCOPE_TYPES.includes(row.scope_type) ? row.scope_type : 'platform';
-        this.values.set(scopedId(scopeType, row.scope_id ?? '', row.key), this.parseStored(row.value));
+        this.state.values.set(scopedId(scopeType, row.scope_id ?? '', row.key), this.parseStored(row.value));
       }
     } catch {
       // 表尚不存在 —— 继续读 legacy。
@@ -409,7 +469,7 @@ export class ConfigService implements IConfigService {
         .all(this.manifestId, prefix + '%') as Array<{ key: string; value: string }>;
       for (const row of rows) {
         const key = row.key.slice(prefix.length);
-        this.values.set(scopedId('platform', '', `legacy:${key}`), this.parseStored(row.value));
+        this.state.values.set(scopedId('platform', '', `legacy:${key}`), this.parseStored(row.value));
       }
     } catch {
       // plugin_storage 可能不存在 —— 全部走默认值
@@ -424,8 +484,8 @@ export class ConfigService implements IConfigService {
     }
   }
 
-  /** 测试/诊断：当前缓存里的作用域条目数。 */
+  /** 测试/诊断：当前共享缓存里的作用域条目数。 */
   cachedEntryCount(): number {
-    return this.values.size;
+    return this.state.values.size;
   }
 }

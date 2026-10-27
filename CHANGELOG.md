@@ -10,6 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **管理端改插件配置后，运行中的插件立即生效并触发 `onChange`**：
+  此前 `getPluginConfig` / `setPluginConfig` 每次都 new 一个临时 `ConfigService`，
+  写入只落库 —— 运行中插件实例的缓存不失效、`onChange` 也收不到，管理端改了值要等重启才生效
+  （`docs/architecture/configuration.md` 把这条记为已知限制）。
+  现在同一 `db` 对象 + `manifest.id` 的实例共享缓存与广播表（`WeakMap` + `WeakRef`）：
+  任一实例写入后，所有活跃实例立即读到新值并收到回调；实例按 `WeakRef` 登记，
+  插件卸载后不会把事件送进已废弃的上下文，也不阻止其回收。
+  `loadFromDB()` 改为**以 DB 为准重建**共享缓存，重装/恢复备份后不残留旧值。
+  - 影响面：`packages/core/plugin-host/config-service.ts`（行为不变，仅缓存归属与通知范围）；
+    新增 10 例测试（跨实例读、广播与 `oldValue`、分层写入、不同 manifest/DB 隔离、
+    校验与持久化失败不广播、监听器抛错隔离、`loadFromDB` 重建缓存）。
+  - 文档：`docs/architecture/configuration.md` §2.5–§2.7 与速查表同步更新。
+
 ## [0.7.5] - 2026-10-27
 
 ### Features

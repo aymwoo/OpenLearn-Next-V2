@@ -313,3 +313,186 @@ describe('ConfigService · 分层设置（Issue #151）', () => {
     expect(upgraded.get('weight')).toBe(88);
   });
 });
+
+describe('ConfigService · 跨实例变更广播（管理端写入 → 运行中插件）', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS plugin_storage (
+        plugin_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (plugin_id, key)
+      );
+    `);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('另一实例写入后，已缓存旧值的实例读到新值', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const admin = new ConfigService(db, manifest);
+    const live = new ConfigService(db, manifest);
+
+    await admin.set('maxQuestions', 100);
+    live.loadFromDB();
+    expect(live.get('maxQuestions')).toBe(100); // 旧值已进缓存
+
+    await admin.set('maxQuestions', 200);
+    expect(live.get('maxQuestions')).toBe(200); // 缓存被共享写入刷新
+  });
+
+  it('另一实例写入触发运行中实例的 onChange，并带正确 oldValue', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const admin = new ConfigService(db, manifest);
+    const live = new ConfigService(db, manifest);
+
+    await admin.set('maxQuestions', 100);
+    live.loadFromDB();
+    expect(live.get('maxQuestions')).toBe(100);
+
+    const calls: Array<{ key: string; newValue: unknown; oldValue: unknown }> = [];
+    live.onChange((key, newValue, oldValue) => calls.push({ key, newValue, oldValue }));
+
+    await admin.set('maxQuestions', 200);
+    expect(calls).toEqual([{ key: 'maxQuestions', newValue: 200, oldValue: 100 }]);
+  });
+
+  it('分层配置：班级层写入只影响该班级的解析结果', async () => {
+    const manifest = makeManifest({
+      weight: { type: 'number', default: 10, scope: ['platform', 'school', 'class'] },
+    });
+    const admin = new ConfigService(db, manifest);
+    const live = new ConfigService(db, manifest);
+    live.loadFromDB();
+
+    const seen: Array<{ key: string; newValue: unknown }> = [];
+    live.onChange((key, newValue) => seen.push({ key, newValue }));
+
+    await admin.set('weight', 55, { scopeType: 'class', scopeId: 'cls-1' });
+
+    expect(live.get('weight', { classId: 'cls-1' })).toBe(55);
+    expect(live.get('weight', { classId: 'cls-2' })).toBe(10);
+    expect(seen).toEqual([{ key: 'weight', newValue: 55 }]);
+  });
+
+  it('不同 manifest.id 的实例互不干扰', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const otherManifest: Manifest = { ...manifest, id: 'ext-other' };
+    const admin = new ConfigService(db, manifest);
+    const other = new ConfigService(db, otherManifest);
+    other.loadFromDB();
+
+    const calls: string[] = [];
+    other.onChange((key) => calls.push(key));
+
+    await admin.set('maxQuestions', 100);
+
+    expect(calls).toHaveLength(0);
+    expect(other.get('maxQuestions')).toBe(50);
+  });
+
+  it('不同数据库的实例互不干扰', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const otherDb = new Database(':memory:');
+    try {
+      const live = new ConfigService(db, manifest);
+      const foreign = new ConfigService(otherDb, manifest);
+      live.loadFromDB();
+      foreign.loadFromDB();
+
+      const calls: string[] = [];
+      live.onChange((key) => calls.push(key));
+
+      await foreign.set('maxQuestions', 100);
+
+      expect(calls).toHaveLength(0);
+      expect(live.get('maxQuestions')).toBe(50);
+    } finally {
+      otherDb.close();
+    }
+  });
+
+  it('校验失败时不广播、不污染缓存', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const admin = new ConfigService(db, manifest);
+    const live = new ConfigService(db, manifest);
+    live.loadFromDB();
+
+    const calls: string[] = [];
+    live.onChange((key) => calls.push(key));
+
+    await expect(admin.set('maxQuestions', 'nope')).rejects.toThrow('must be number');
+
+    expect(calls).toHaveLength(0);
+    expect(live.get('maxQuestions')).toBe(50);
+  });
+
+  it('持久化失败时回滚缓存且不广播', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const live = new ConfigService(db, manifest);
+    live.loadFromDB();
+    await live.set('maxQuestions', 100); // 建表并落库
+
+    const calls: string[] = [];
+    live.onChange((key) => calls.push(key));
+
+    db.close();
+    expect(() => live.setSync('maxQuestions', 200)).toThrow();
+
+    expect(calls).toHaveLength(0);
+    expect(live.get('maxQuestions')).toBe(100);
+  });
+
+  it('unsubscribe 后不再收到其他实例的广播', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const admin = new ConfigService(db, manifest);
+    const live = new ConfigService(db, manifest);
+    live.loadFromDB();
+
+    const calls: string[] = [];
+    const off = live.onChange((key) => calls.push(key));
+    off();
+
+    await admin.set('maxQuestions', 100);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('一个实例的监听器抛错不影响其他实例收到广播', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const live = new ConfigService(db, manifest);
+    const admin = new ConfigService(db, manifest);
+    live.loadFromDB();
+    admin.loadFromDB();
+
+    live.onChange(() => {
+      throw new Error('boom');
+    });
+    const calls: string[] = [];
+    admin.onChange((key) => calls.push(key));
+
+    await live.set('maxQuestions', 100);
+    expect(calls).toEqual(['maxQuestions']);
+  });
+
+  it('重新 loadFromDB 会以 DB 为准重建共享缓存', async () => {
+    const manifest = makeManifest({ maxQuestions: { type: 'number', default: 50 } });
+    const live = new ConfigService(db, manifest);
+    live.loadFromDB();
+    await live.set('maxQuestions', 100);
+    expect(live.get('maxQuestions')).toBe(100);
+
+    // 模拟库被外部改动（换库/恢复备份）
+    db.prepare(
+      "UPDATE plugin_config SET value = '150' WHERE plugin_id = 'ext-test' AND scope_type = 'platform' AND scope_id = '' AND key = 'maxQuestions'",
+    ).run();
+
+    new ConfigService(db, manifest).loadFromDB();
+    expect(live.get('maxQuestions')).toBe(150);
+  });
+});
