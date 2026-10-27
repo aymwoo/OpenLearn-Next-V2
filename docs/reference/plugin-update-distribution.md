@@ -171,10 +171,10 @@ interface PluginInstallWizardProps {
 
 全栈插件在 Worker 内需动态 `import`、IPC 解析多个 Token、执行 `schema migrate/建表`；主线程繁忙时 RPC 会排队，固定短超时易误杀。平台提供了完善的超时配置、心跳续期与快速失败机制：
 
-| 环境变量                                              | 默认值                 | 说明                                            |
-| ----------------------------------------------------- | ---------------------- | ----------------------------------------------- |
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`                | `60000`                | 初始激活等待窗口（最小 5000ms）                 |
-| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS`         | `min(30000, 初始窗口)` | 每次收到进度心跳后重置的滑动窗口（最小 3000ms） |
+| 环境变量                                      | 默认值                 | 说明                                            |
+| --------------------------------------------- | ---------------------- | ----------------------------------------------- |
+| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                | 初始激活等待窗口（最小 5000ms）                 |
+| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | `min(30000, 初始窗口)` | 每次收到进度心跳后重置的滑动窗口（最小 3000ms） |
 
 ### 5.1 上下文心跳 API (`ctx.reportProgress`) 与滑动超时
 

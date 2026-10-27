@@ -2,15 +2,15 @@
 
 OpenLearn V2 在 `packages/plugins/` 目录中内置了 7 个带 `manifest` 的生产级插件。它们遵循标准的 API 契约与三件套（Action -> Command -> Event）模式，是开发者理解平台命令边界的最佳参考实现。
 
-| 插件 | 文件 | 定位 |
-| --- | --- | --- |
-| `@openlearn/plugin-builtin` | `packages/plugins/builtin.ts` | 平台核心命令：用户、班级、课件、白板、插件安装/启停、系统运维 |
-| `@openlearn/plugin-vfs` | `packages/plugins/vfs.ts` | 虚拟文件系统读写 |
-| `@openlearn/plugin-process` | `packages/plugins/process.ts` | 后台进程与日志 |
-| `@openlearn/plugin-management` | `packages/plugins/management.ts` | 班级 / 学生 / 作业 / 课表 / 考勤 / 实验室管理 |
-| `@openlearn/plugin-ai-planner` | `packages/plugins/ai-planner.ts` | AI 备课、推荐应用、AI 批改 |
-| `@openlearn/plugin-assignment-eval` | `packages/plugins/assignment-eval.ts` | 作业创建、提交、互评、评分 |
-| `@openlearn/plugin-ai-submit-injector` | `packages/plugins/ai-submit-injector.ts` | 向课件 HTML 注入 AI 提交/成绩采集逻辑 |
+| 插件                                   | 文件                                     | 定位                                                          |
+| -------------------------------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `@openlearn/plugin-builtin`            | `packages/plugins/builtin.ts`            | 平台核心命令：用户、班级、课件、白板、插件安装/启停、系统运维 |
+| `@openlearn/plugin-vfs`                | `packages/plugins/vfs.ts`                | 虚拟文件系统读写                                              |
+| `@openlearn/plugin-process`            | `packages/plugins/process.ts`            | 后台进程与日志                                                |
+| `@openlearn/plugin-management`         | `packages/plugins/management.ts`         | 班级 / 学生 / 作业 / 课表 / 考勤 / 实验室管理                 |
+| `@openlearn/plugin-ai-planner`         | `packages/plugins/ai-planner.ts`         | AI 备课、推荐应用、AI 批改                                    |
+| `@openlearn/plugin-assignment-eval`    | `packages/plugins/assignment-eval.ts`    | 作业创建、提交、互评、评分                                    |
+| `@openlearn/plugin-ai-submit-injector` | `packages/plugins/ai-submit-injector.ts` | 向课件 HTML 注入 AI 提交/成绩采集逻辑                         |
 
 > `courseware-score.ts`、`score-monitor-script.ts` 是 `builtin.ts` 引用的**内部模块**，不单独注册插件。
 

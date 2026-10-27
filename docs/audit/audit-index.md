@@ -10,16 +10,16 @@
 
 ## 归档清单
 
-| 文档                                                                             | 日期                    | 对象 / 基线                      | 内容                                        |
-| -------------------------------------------------------------------------------- | ----------------------- | -------------------------------- | ------------------------------------------- |
-| [AUDIT_REPORT.md](AUDIT_REPORT.md)                                               | 2026-10-13              | `openlearn-next@0.6.0`           | 全系统结构梳理与代码审计（首轮基线）        |
-| [PLUGIN_AUDIT_REPORT.md](PLUGIN_AUDIT_REPORT.md)                                 | 2026-10-14              | `@0.6.1`                         | 插件子系统专项审计，PL-01～PL-08 的修复记录 |
-| [trust-boundary-hardening-audit-2026-10-14.md](trust-boundary-hardening-audit-2026-10-14.md) | 2026-10-14              | `main@9244703`                   | 插件信任边界与部署链路加固，含残余风险清单  |
-| [classroom-time-flow-audit.md](classroom-time-flow-audit.md)                     | 2026-09-30              | —                                | 上课时间流（教师端 → 学生端）事件链路走查   |
-| [whiteboard-realtime-sync-audit.md](whiteboard-realtime-sync-audit.md)           | 2026-09-30 / 10-03 复核 | —                                | 白板实时同步通路；触发随机点名不同步问题    |
-| [course-import-audit.md](course-import-audit.md)                                 | 2026-10-21              | —                                | 课程导入（CSV / 课程包）流程审计            |
-| [security-remediation-report.md](security-remediation-report.md)                 | 2026-09-25              | `@0.3.21`                        | 安全审计与修复（SEC-01～SEC-17）            |
-| [DEPLOY_REHEARSAL.md](DEPLOY_REHEARSAL.md)                                       | 2026-10-14              | `main@cc0b56e`（对照 `v0.6.1`）  | 公测上线演练记录与镜像验证                  |
+| 文档                                                                                         | 日期                    | 对象 / 基线                     | 内容                                        |
+| -------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------- | ------------------------------------------- |
+| [AUDIT_REPORT.md](AUDIT_REPORT.md)                                                           | 2026-10-13              | `openlearn-next@0.6.0`          | 全系统结构梳理与代码审计（首轮基线）        |
+| [PLUGIN_AUDIT_REPORT.md](PLUGIN_AUDIT_REPORT.md)                                             | 2026-10-14              | `@0.6.1`                        | 插件子系统专项审计，PL-01～PL-08 的修复记录 |
+| [trust-boundary-hardening-audit-2026-10-14.md](trust-boundary-hardening-audit-2026-10-14.md) | 2026-10-14              | `main@9244703`                  | 插件信任边界与部署链路加固，含残余风险清单  |
+| [classroom-time-flow-audit.md](classroom-time-flow-audit.md)                                 | 2026-09-30              | —                               | 上课时间流（教师端 → 学生端）事件链路走查   |
+| [whiteboard-realtime-sync-audit.md](whiteboard-realtime-sync-audit.md)                       | 2026-09-30 / 10-03 复核 | —                               | 白板实时同步通路；触发随机点名不同步问题    |
+| [course-import-audit.md](course-import-audit.md)                                             | 2026-10-21              | —                               | 课程导入（CSV / 课程包）流程审计            |
+| [security-remediation-report.md](security-remediation-report.md)                             | 2026-09-25              | `@0.3.21`                       | 安全审计与修复（SEC-01～SEC-17）            |
+| [DEPLOY_REHEARSAL.md](DEPLOY_REHEARSAL.md)                                                   | 2026-10-14              | `main@cc0b56e`（对照 `v0.6.1`） | 公测上线演练记录与镜像验证                  |
 
 ## 已清理的快照
 
@@ -42,12 +42,12 @@ git show <commit>^:docs/architecture/platform-foundation-audit-report.md
 
 | 主题             | 当前权威页面                                                                     |
 | ---------------- | -------------------------------------------------------------------------------- |
-| 安全与权限模型   | [architecture/security-permissions](../architecture/security-permissions.md)      |
-| 插件信任边界     | [reference/plugin-trust-boundary](../reference/plugin-trust-boundary.md)          |
-| Plugin SDK Token | [api/di-tokens](../api/di-tokens.md)                                              |
-| UI 扩展槽位      | [reference/plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md)  |
-| 部署与上线检查   | [deployment/production-guide](../deployment/production-guide.md)                  |
-| 版本变更         | [release-notes](../release-notes/v0.7.5.md) 与根目录 `CHANGELOG.md`                |
+| 安全与权限模型   | [architecture/security-permissions](../architecture/security-permissions.md)     |
+| 插件信任边界     | [reference/plugin-trust-boundary](../reference/plugin-trust-boundary.md)         |
+| Plugin SDK Token | [api/di-tokens](../api/di-tokens.md)                                             |
+| UI 扩展槽位      | [reference/plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md) |
+| 部署与上线检查   | [deployment/production-guide](../deployment/production-guide.md)                 |
+| 版本变更         | [release-notes](../release-notes/v0.7.5.md) 与根目录 `CHANGELOG.md`              |
 
 ## 未归档的报告型文档
 

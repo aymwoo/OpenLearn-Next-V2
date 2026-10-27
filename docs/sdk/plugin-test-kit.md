@@ -64,7 +64,7 @@ Mock 上下文为测试便利**刻意放宽**了部分生产校验，以下差�
 | `ctx.require`                      | 直接抛错                                      | 白名单共享模块（`recharts` / `exceljs` / `jspdf` / …）                                                                                 |
 | `pointsDimension` / `pointsLedger` | 恒为 `null`                                   | Inline 模式注入真实服务；**Worker / Process 模式同样为 `null`**（见 worker-manager 白名单说明）                                        |
 | `commandBus.registerHandler`       | 原样保存命令名，**不补插件前缀**              | 自动补 `manifest.id.` 前缀（如 `poll.create` → `ext-poll.poll.create`），见[命令命名空间](#4-命令命名空间与-mock-的差异)               |
-| 能力校验 / 默认拒绝                | **不校验**，任何命令都会交给已注册的 handler | 校验 `capabilityRequired`、`ActionDescriptor` 与管理员授权，未通过时抛 `COMMAND_CAPABILITY_DENIED`                                     |
+| 能力校验 / 默认拒绝                | **不校验**，任何命令都会交给已注册的 handler  | 校验 `capabilityRequired`、`ActionDescriptor` 与管理员授权，未通过时抛 `COMMAND_CAPABILITY_DENIED`                                     |
 
 因此：涉及 `ensureTable` 命名/分号、`provide` 未声明、`require` 白名单的代码路径，请额外用「上传真实 ZIP → 插件中心安装 → 激活」做一次集成验证（或对照 [examples/verifiable-examples](../examples/verifiable-examples.md) 的契约断言）。
 
