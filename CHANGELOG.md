@@ -45,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     必须等于 `package.json` 的 version。此前该标记**全仓零校验**，于是 26 篇文档停在 `sdk=3.7.2`，
     其中 `scaffold-cli.md` 顶着旧版本号描述着 npm 上根本没有的守卫 —— 文档承诺了 registry 上不存在的能力。
   - 26 篇文档的 `doc-version` 与正文里写死的版本号一并同步到 3.7.4。
+  - **补一个同类的洞**：`packages/plugin-sdk` 的 `prepublishOnly` 是 `node build.mjs`，
+    **不跑 `scripts/assert-publishable.mjs`** —— 那道守卫此前只挂在根包与 test-kit 上。
+    也就是说「CHANGELOG 没折叠就发版」SDK 发布时根本没人拦，**而漏掉守卫的恰恰是 SDK**。
+    现已补上，并新增 `scripts/__tests__/publish-guard-wiring.test.ts` 盯住「每个可发布包都挂上了」。
 
 - **停用/卸载插件时不清理服务端题型注册表，题型变成「幽灵扩展点」（Issue #320）**：
   - **现象**：插件用 `ctx.resolve(IAssessmentGraderRegistryToken)` 注册的题型，在插件停用后仍留在注册表里 ——
