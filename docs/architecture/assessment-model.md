@@ -94,12 +94,10 @@ registry.registerQuestionType(
   },
   { pluginId: 'ext-code' },
 );
-// ⚠️ 宿主目前不会自动清理服务端题型：插件停用后注册表里仍留着这个题型，
-//    要等进程重启才消失（前端 UI 注册表 `ctx.ui.registerAssessmentQuestionType`
-//    由宿主 `clearOwned` 自动回收，服务端这一侧尚未接入 lifecycle 清理链，
-//    跟踪 issue #320）。
-//    因此请自己保存注销函数，在 deactivate() 里显式调用：
+// 回收：停用/卸载时宿主按「安装行 UUID」与 manifest.id 两个 owner 各清一次
+// （revokePluginQuestionTypes，Issue #320）。需要提前撤销时再手动调用：
 // await registry.unregisterQuestionType('ext-code:python', 'ext-code');
+// 注：在接入该修复之前的旧版本上，题型会残留到进程重启，需自行在 deactivate() 注销。
 ```
 
 内置 5 种题型走**同一个注册路径**（`createQuestionTypeRegistry()` 只是预先 register 它们），
