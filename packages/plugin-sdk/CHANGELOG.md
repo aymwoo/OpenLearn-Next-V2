@@ -9,6 +9,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **`build` 新增构建期守卫：frontend 产物不得残留裸模块说明符**。远程插件的前端跑在不透明源 iframe
+  （`sandbox="allow-scripts"`）里，那里没有 React、没有 `window.HostSharedDeps`、也没有 importmap，
+  加载方式是 `Blob` + 动态 `import()` —— 裸说明符无从解析。宿主的 `transformBareModuleImports` 会把
+  `import React from 'react'` 改写成 `window.HostSharedDeps.React`，但改写后的源码是在**没有
+  HostSharedDeps 的 iframe 里**求值的，结果是激活即 TypeError，而报错完全不指向真正原因。
+  现在只要 `frontend.js` 里还有 `from "react"` 这类非相对/非绝对路径的静态导入、`require(...)`
+  或动态 `import(...)` 字面量，构建直接 `exit 1` 并打印改法（桥接入口 / 删 React / 只 `import type` /
+  改用声明式贡献）。`--watch` 下每次重建都会检查，但不中断监听。
+  注意：`import React` 若**根本没用到**，esbuild 会 tree-shake 掉，那属于真干净，不会报错。
+  官方脚手架模板是纯桥接，不受影响。
+
 - **3.7.1 已在 npm 上弃用**（`npm deprecate`，不撤包）：该版本 `dist/index.js` 残留 5 处 `node:` 静态导入，
   把 SDK 打进插件包体的第三方插件运行期必失败。改用 3.7.2，详见 `[3.7.1]` 段首的红线提示。
 

@@ -268,6 +268,92 @@ async function signZip({ zip, manifest, privKeyPem, publisherName }) {
   };
 }
 
+/**
+ * 前端产物不得残留「裸模块说明符」（bare specifier）。
+ *
+ * 为什么必须有这道守卫：
+ * 远程插件的前端跑在**不透明源 iframe**（`sandbox="allow-scripts"`）里，
+ * 那个环境没有 React、没有 `window.HostSharedDeps`、也没有 importmap；
+ * 加载方式是 `Blob` + `createObjectURL` + 动态 `import()`，**裸说明符无从解析**。
+ *
+ * 宿主确实有一段 `transformBareModuleImports` 会把 `import React from 'react'`
+ * 改写成 `const React = window.HostSharedDeps.React`，但改写发生在**父页面**，
+ * 改写后的源码被送进 iframe 执行 —— iframe 的 `window` 上没有 HostSharedDeps，
+ * 于是求值阶段直接 TypeError。用户看到的是「插件一点就报错」，报错信息却完全不
+ * 指向真正原因。
+ *
+ * 所以在这里拦住：frontend.js 里只要还有非相对 / 非绝对路径的静态导入、
+ * `require(...)` 或动态 `import(...)` 字面量，就让构建失败并给出改法。
+ */
+const BARE_SPECIFIER_PATTERNS = [
+  /\bfrom\s*["']([^"']+)["']/g,
+  /\bimport\s*["']([^"']+)["']/g,
+  /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+];
+
+/** 扫出产物里的裸说明符（相对路径 ./x、绝对路径 /x 是允许的）。 */
+function findBareSpecifiers(code) {
+  // 内联 sourcemap 是 base64，正常不会命中；但整段丢掉更快也更稳
+  const stripped = code.replace(/\/\/# sourceMappingURL=data:[^\n]*/g, '');
+  const found = new Set();
+  for (const re of BARE_SPECIFIER_PATTERNS) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(stripped)) !== null) {
+      const spec = m[1];
+      if (!spec) continue;
+      if (spec.startsWith('.') || spec.startsWith('/')) continue;
+      found.add(spec);
+    }
+  }
+  return [...found].sort();
+}
+
+/**
+ * @param {string} outfile frontend 产物路径
+ * @param {{fatal?: boolean}} [opts] watch 模式下不 exit，只置 exitCode
+ */
+function assertFrontendHasNoBareSpecifiers(outfile, opts = {}) {
+  const fatal = opts.fatal !== false;
+  if (!existsSync(outfile)) return;
+  const bare = findBareSpecifiers(readFileSync(outfile, 'utf8'));
+  if (bare.length === 0) return;
+
+  const rel = relative(process.cwd(), outfile) || outfile;
+  console.error(`\n${c.red}✖ frontend 产物里有裸模块说明符${c.reset}  (${rel})`);
+  console.error(`  ${bare.map((s) => `"${s}"`).join(', ')}`);
+  console.error(`
+  远程插件的前端跑在不透明源 iframe（sandbox="allow-scripts"）里，那里没有 React、
+  也没有 window.HostSharedDeps / importmap，加载方式是 Blob + 动态 import()。
+  裸说明符在那里无从解析 —— 插件一激活就会抛错，而错误信息完全不指向真正原因。
+
+  怎么改：
+    1. frontend 入口只做桥接：export default { activate, deactivate }
+    2. 删掉 import React / react-dom / recharts / lucide-react
+    3. 对 @openlearn/plugin-sdk 只能 import type（值导入同样会残留裸说明符）
+    4. 可见 UI 改用 manifest 的声明式贡献（teacher.dashboard.widget / classroomTools /
+       command_palette.item 等），由宿主渲染
+  详见 docs/plugin/frontend-sandbox-capability-boundary.md
+`);
+
+  if (fatal) process.exit(1);
+  process.exitCode = 1;
+}
+
+/** watch 模式用的 esbuild 插件：每次重建后检查，不中断监听。 */
+function frontendBareSpecifierGuard(outfile) {
+  return {
+    name: 'openlearn-frontend-bare-specifier-guard',
+    setup(build) {
+      build.onEnd((result) => {
+        if (result.errors.length > 0) return;
+        assertFrontendHasNoBareSpecifiers(outfile, { fatal: false });
+      });
+    },
+  };
+}
+
 async function cmdBuild(args) {
   const cwd = process.cwd();
   const pkgPath = join(cwd, 'package.json');
@@ -353,6 +439,7 @@ async function cmdBuild(args) {
           ...buildOpts(frontendEntry, join(distDir, 'frontend.js'), ['react', 'react-dom', 'recharts', 'lucide-react']),
           platform: 'browser',
           target: 'es2020',
+          plugins: [frontendBareSpecifierGuard(join(distDir, 'frontend.js'))],
         });
         await feCtx.watch();
         console.log(`${tick} Watching frontend entry...`);
@@ -370,6 +457,7 @@ async function cmdBuild(args) {
           platform: 'browser',
           target: 'es2020',
         });
+        assertFrontendHasNoBareSpecifiers(join(distDir, 'frontend.js'));
         hasFrontend = true;
       }
       console.log(`${tick} Bundled server${hasFrontend ? ' + frontend' : ''}`);
