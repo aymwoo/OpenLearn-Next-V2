@@ -20,6 +20,18 @@ import type { SessionType } from '../types/app';
 
 import type { useToast } from './useToast';
 
+/**
+ * `GET /api/plugins` 的 `execution_mode` 是**服务端求值后的实际沙箱**
+ * （`resolvePluginExecutionMode`，见 packages/core/plugin-host/execution-policy.ts），
+ * 是前端决定「进 iframe 沙箱还是父页面 inline」的唯一可信依据。
+ *
+ * 这里只做收窄：无法识别的取值回退 `process`（沙箱），与历史行为一致 ——
+ * 宁可多套一层沙箱，也不要因为拼写差异把第三方代码放进宿主页面。
+ */
+function normalizeStoreExecutionMode(raw: unknown): 'inline' | 'worker' | 'process' | 'legacy' {
+  return raw === 'inline' || raw === 'worker' || raw === 'legacy' ? raw : 'process';
+}
+
 export interface ClassroomSliceParams {
   lang: 'zh' | 'en';
   t: Record<string, string>;
@@ -68,6 +80,8 @@ export interface ClassroomSliceParams {
     status: string;
     has_frontend?: boolean;
     manifest: string;
+    /** 服务端求值后的实际沙箱（`inline` / `worker` / `process`），见 GET /api/plugins。 */
+    execution_mode?: string;
   }>;
 }
 
@@ -246,7 +260,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
             name: plugin.name,
             version: plugin.version ?? '',
             state: PluginState.INSTALLED,
-            executionMode: 'process',
+            executionMode: normalizeStoreExecutionMode(plugin.execution_mode),
             // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
             // 决定是否放行非 get* 方法；缺失则回退为空数组（只读）。
             capabilitiesProposed: resolveDeclaredCapabilities(plugin),

@@ -10,6 +10,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **前端插件支持 `inline` 执行模式（远程插件在宿主页面内运行）**：
+  `activateRemotePlugin` 此前无论 `execution_mode` 为何都只会挂一个
+  `/plugin-sandbox/frame` 沙箱 iframe —— 声明 `inline` 的插件（需要直接使用
+  `window.HostSharedDeps` 里的 React、或需要与宿主共享渲染树的插件）根本没有执行路径。
+  现在按**服务端求值后的** `execution_mode` 分派：`inline` → `frontend.js` 经 Blob URL
+  在父页面 `import()` 并调用 `activate(ctx)`（5s 超时，模块入口记入 `pluginModules`
+  以便 `deactivate` 回调）；其余取值仍走沙箱 iframe。
+  - 影响面：`src/plugin-host/plugin-host.ts`（`activateRemotePlugin`）、
+    `src/hooks/useClassroomSlice.ts`（store 不再写死 `executionMode: 'process'`，
+    改读 `GET /api/plugins` 的 `execution_mode`，无法识别的取值收窄回 `process`，
+    即“宁可多套一层沙箱”）。
+  - 运维：远程插件要从沙箱切到 inline，必须同时满足
+    ①`OPENLEARN_TRUSTED_INLINE_PLUGINS` 命中其 `manifest.id`；②DB `execution_mode`
+    列确为 `inline`。后者**不会自动回迁**（`coerceStoredExecutionModes()` 只向上收窄），
+    历史上被改写成 `process` 的行需要重装/升级该包并在安装向导里选 `inline`。
+- **服务端 action 描述符跟上命令命名空间规则**：插件 `ctx.actionRegistry.register()`
+  的 `commandType` 现在会自动加 `manifest.id.` 前缀（内核插件 `@openlearn/*` 不变），
+  与 `ctx.commandBus.registerHandler()` 一直以来的前缀化行为对齐；同时补注册一条
+  `<id>__raw_alias` 裸名别名（`exposeToAgent: false`）保住“按原始命令名查描述符”的调用方。
+  - 影响面：`packages/core/plugin-host/context-builder.ts`。修复前内核拦截器
+    `getActionByCommandType(实际派发名)` 命不中描述符 —— `inputSchema` 校验与
+    `capabilityRequired` 对第三方插件命令**静默失效**，`ai-agent` 侧第三方技能
+    （强制前缀化）也查不到描述符，报 `Command not registered`。
+- **`ecosystem.config.cjs` 补两个部署开关**：`OPENLEARN_ALLOW_UNSIGNED`（默认 `1`，
+  与 v0.7.5 起的新默认一致）与 `OPENLEARN_TRUSTED_INLINE_PLUGINS`。PM2 的 `env`
+  块只传白名单内的键，此前这两个变量在 `.env` 里写了也到不了进程。
+
+### Fixes
+
+- **`exposeToAgent: false` 在大模型工具箱里真正生效**：运行时真正生效的工具清单是
+  `buildOpenAITools()`（`runOpenAIAgentChat` 直接用它），此前只有
+  `ActionRegistry.getAgentTools()`（Gemini 格式，运行期无调用方）做了这条过滤。
+  后果：`courseware.save_score_config` 这类作者显式声明“不应由 agent 自主决策”的命令
+  仍会出现在工具列表里；经 `method-policy` 降级为 `false` 的未授权插件 action 也仍然漏进去。
+  - 影响面：`server/ai-agent.ts`；新增 `__raw_alias` 别名也不再让同一能力在工具箱里出两条。
+  - 验证：`server/__tests__/ai-agent.test.ts` 新增 `exposeToAgent: false` 过滤用例。
+- **插件 Tab 面板不再白屏（manifest 占位项抢先生效）**：`teacher.tab` 上 manifest
+  声明式贡献（`component` 是 `NullExtensionComponent` 占位）先于运行时
+  `ctx.ui.registerExtensionPoint` 注册，朴素的 `find(pluginId)` 会拿到占位项。
+  选取优先级改为：真实组件 > `render` 渲染函数 > 占位项，都没有时给显式空态。
+  - 影响面：`src/components/PluginTabPanel.tsx`；`NullExtensionComponent` 由
+    `plugin-host.ts` 导出供引用相等比较。
+  - 验证：`src/components/__tests__/PluginTabPanel.test.tsx`（3 例，去掉修复后 2 例失败）。
+- **扩展点探针不再污染宿主 fiber（React error #300）**：`resolveExtensionComponent`
+  识别漏打标 lazy 工厂时会无参调用一次组件；若它是用 hooks 的普通函数组件，hooks 会挂到
+  `ExtensionPointRenderer` 自己的 fiber 上，而结果被 WeakMap 缓存 —— 第二次渲染跳过探针，
+  hooks 数量前后不一致，直接抛 `Rendered fewer hooks than expected`。
+  实测形态：第三方插件注册的 `CoursewareGradePanel` 首屏能画出来，任何一次重渲染即整块崩溃。
+  现在探针期间把 React 的 current dispatcher（19：`__CLIENT_INTERNALS….H`；18：
+  `ReactCurrentDispatcher.current`）临时置 `null`，hooks 立即抛错 → 归入“直组件”分支，
+  `finally` 还原。
+  - 影响面：`src/plugin-host/extension-point-renderer.tsx`。
+  - 验证：`src/plugin-host/__tests__/extension-point-probe.test.tsx`
+    （去掉隔离后复现出 `Rendered fewer hooks than expected`）。
+- **`inline` 远程插件的“重试”不再必定失败**：`retryPlugin` 只看 store 的执行模式，
+  `inline` → `activatePlugin()`，而它依赖 `this.sourceCodes`（仅本地 `installPlugin()`
+  会填）→ 抛 `No source code found for plugin`。改为「有 manifest 缓存优先走
+  `activateRemotePlugin()`」，worker 仍优先走 Worker 激活以保持原语义。
+  - 影响面：`src/plugin-host/plugin-host.ts`（`retryPlugin`）。
+
+### Security
+
+- **`manifest.executionMode` 不再构成信任依据**：前端此前用
+  `manifest.executionMode === 'inline'` 判断是否进沙箱，而 manifest JSON 是插件作者
+  原文落库（`install.ts`），服务端只把**求值后**的模式写进 `execution_mode` 列。
+  等于任何第三方包只要写一行 `"executionMode": "inline"` 就能把自己的 `frontend.js`
+  放进父页面同源执行，绕过 `sandbox="allow-scripts"`、无 `allow-same-origin` 的
+  不透明源与 CSP frame 规则。现仅采信服务端求值值。
+  - 影响面：`src/plugin-host/plugin-host.ts`（`isInline`）。
+  - 验证：`src/plugin-host/__tests__/inline-activation.test.ts`
+    （manifest 自述 inline + store 为 process ⇒ 必须建沙箱 iframe，且父页面从未
+    `URL.createObjectURL`）。
+- **`vite build` 默认不再产出 sourcemap**：`dist/assets/*.js.map` 会被 express 静态
+  服务原样发出去，等于公开整个前端源码。需要调试线上产物时显式
+  `SOURCE_MAP=1 pnpm build`。
+
+### Docs
+
+- `.gitignore` 补 `/openlearn.db*` 与 `/plugin-data-exports/`：前者是未设
+  `OPENLEARN_DB_PATH` 时误落在仓库根的 SQLite；后者是插件数据归档目录
+  （`<data>/plugin-data-exports`），未设 `OPENLEARN_DATA_DIR` 时会写进仓库根。
+
 ## [0.7.6] - 2026-10-27
 
 ### Fixes

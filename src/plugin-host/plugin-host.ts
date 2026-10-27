@@ -139,7 +139,7 @@ function bridgeTimelineSegmentContribution(entry: Record<string, unknown>, plugi
  * `__isLazyFactory` 标记的工厂走 React.lazy，未打标的 Promise 工厂会被当作
  * 直接组件渲染并永久悬挂 Suspense（v0.6.0 smart-edu 事故）。
  */
-const NullExtensionComponent = () => null;
+export const NullExtensionComponent = () => null;
 
 /**
  * 把激活异常归一成一句可展示给用户的短描述（v0.7.0）。
@@ -228,7 +228,7 @@ export function registerManifestContributions(
       for (const rawEntry of entries) {
         if (!rawEntry || typeof rawEntry !== 'object') continue;
         const entry = rawEntry as Record<string, unknown>;
-        const entryId = String(entry.id ?? '');
+        const entryId = String(entry.id ?? entry.type ?? '');
         if (!entryId) continue; // id 是 store 主键，schema 虽强制 min(1) 这里再兜一层
         store.registerExtensionPoint(slotName as AnyExtensionSlot, {
           id: entryId,
@@ -688,17 +688,54 @@ export class FrontendPluginHost {
         sourceCode = transformBareModuleImports(sourceCode);
       }
 
-      // manifest 声明式贡献留在父页面。插件代码只在不透明源 iframe 里执行。
+      // manifest 声明式贡献留在父页面。
       this.registerManifestContributions(pluginId, manifest);
-      await this.mountSandboxFrame(pluginId, manifest, sourceCode);
 
-      this.pluginModules.set(pluginId, {
-        manifest,
-        activate: async () => undefined,
-        deactivate: async () => {
-          this.destroySandboxFrame(pluginId);
-        },
-      });
+      // 实际执行模式只看**服务端求值后的** store 值（来源：GET /api/plugins 的
+      // execution_mode 列，由 resolvePluginExecutionMode 计算）。
+      //
+      // 不要把 `manifest.executionMode` 加回这个判断：manifest JSON 是插件
+      // 作者原文落库（install.ts），服务端只把改写结果写进 execution_mode 列 ——
+      // 拿 manifest 自述做判断，等于让任意第三方包靠写一行
+      // `"executionMode": "inline"` 就把自己的 frontend.js 放进宿主页面
+      // 同源执行，完整绕过 iframe 沙箱与 CSP 边界。
+      const isInline = existingPlugin?.executionMode === 'inline';
+      if (isInline) {
+        const blob = new Blob([sourceCode], { type: 'text/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
+        try {
+          const mod = await import(/* @vite-ignore */ blobUrl);
+          const plugin = mod.default ?? mod;
+          const activate = plugin.activate ?? mod.activate;
+          const deactivate = plugin.deactivate ?? mod.deactivate;
+          if (typeof activate === 'function') {
+            const ctx = await this.buildContext(pluginId, manifest);
+            await Promise.race([
+              activate(ctx),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000),
+              ),
+            ]);
+            this.pluginModules.set(pluginId, {
+              manifest,
+              activate,
+              deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+            });
+          }
+        } finally {
+          URL.revokeObjectURL(blobUrl);
+        }
+      } else {
+        await this.mountSandboxFrame(pluginId, manifest, sourceCode);
+
+        this.pluginModules.set(pluginId, {
+          manifest,
+          activate: async () => undefined,
+          deactivate: async () => {
+            this.destroySandboxFrame(pluginId);
+          },
+        });
+      }
 
       // 激活成功即复位熔断 —— v0.6.1 审计 C-2：此前 resetPluginBreaker 是
       // 死代码，blown 标志永驻，重新激活后扩展点被 isPluginBlown 全部跳过
@@ -946,10 +983,17 @@ export class FrontendPluginHost {
 
     try {
       const manifest = this.manifests.get(pluginId);
-      if (pluginInfo.executionMode === 'inline' || pluginInfo.executionMode === 'worker') {
+      // 顺序有讲究：远程插件（inline 与子进程沙箱都一样）没有本地 sourceCode ——
+      // 只有本地 installPlugin() 才会填 this.sourceCodes。所以必须先看 manifest
+      // 缓存，inline 远程插件才不会掉进 activatePlugin() 抛的
+      // "No source code found for plugin"（此前 retry 对 inline 远程插件 100% 失败）。
+      // worker 仍优先走 activatePlugin()，保持原有 Worker 激活语义不变。
+      if (pluginInfo.executionMode === 'worker') {
         await this.activatePlugin(pluginId);
       } else if (manifest) {
         await this.activateRemotePlugin(pluginId, manifest);
+      } else if (pluginInfo.executionMode === 'inline') {
+        await this.activatePlugin(pluginId);
       } else {
         throw new Error(`无法重试插件 "${pluginId}"：缺少 manifest 缓存`);
       }

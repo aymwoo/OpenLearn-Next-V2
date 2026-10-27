@@ -33,6 +33,8 @@ module.exports = {
         BACKUP_DIR: process.env.BACKUP_DIR || '',
         OPENLEARN_ADMIN_PASSWORD: process.env.OPENLEARN_ADMIN_PASSWORD || '',
         OPENLEARN_TEACHER_PASSWORD: process.env.OPENLEARN_TEACHER_PASSWORD || '',
+        OPENLEARN_ALLOW_UNSIGNED: process.env.OPENLEARN_ALLOW_UNSIGNED || '1',
+        OPENLEARN_TRUSTED_INLINE_PLUGINS: process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS || '',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       error_file: 'logs/err.log',

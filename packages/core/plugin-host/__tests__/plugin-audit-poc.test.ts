@@ -568,16 +568,29 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     expect(gateway).toContain('tokenName');
   });
 
-  it('远程前端进沙箱 iframe，/plugins 需要会话；开发面板已改为静态解析（PL-15 已在 main 关闭）', () => {
+  it('远程前端默认进沙箱 iframe；仅服务端判定的受信插件可 inline；/plugins 需要会话（PL-15 已在 main 关闭）', () => {
     const host = fs.readFileSync(path.join(REPO_ROOT, 'src/plugin-host/plugin-host.ts'), 'utf8');
     const remoteStart = host.indexOf('async activateRemotePlugin');
     const remoteEnd = host.indexOf('async activatePlugin', remoteStart);
     const remote = host.slice(remoteStart, remoteEnd);
     expect(remote).toContain('mountSandboxFrame');
-    expect(remote).not.toContain('import(/* @vite-ignore */ blobUrl)');
+    // PL-15 的原始结论是「远程插件前端不得在父页面 import()」。
+    // v0.7.x 放开为：**仅服务端求值为 inline 的受信插件**（执行模式来自
+    // resolvePluginExecutionMode：`OPENLEARN_TRUSTED_INLINE_PLUGINS` 命中或源码位于
+    // packages/plugins）可在父页面 import()。沙箱仍是默认路径，故下列三条必须同时成立：
+    //   ① 存在沙箱兜底分支；② inline 判定只看 store 里服务端求值后的值；
+    //   ③ 插件自述的 manifest.executionMode **不得**参与判定（否则任何包写一行就绕过沙箱）。
+    expect(remote).toContain('import(/* @vite-ignore */ blobUrl)');
+    expect(remote).toContain("const isInline = existingPlugin?.executionMode === 'inline'");
+    // 只看「用作判定」的形态：注释里提这个字段名是刻意的（防止有人加回来）。
+    expect(remote).not.toContain("manifest.executionMode === 'inline'");
     expect(host).toContain("sandbox', PLUGIN_SANDBOX_ATTR");
     const slice = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/useClassroomSlice.ts'), 'utf8');
+    // 执行模式必须来自服务端字段，不能写死 —— 写死 'process' 会让受信 inline 插件
+    // 永远进沙箱；写死 'inline' 会让所有插件绕过沙箱。两者都钉住。
+    expect(slice).toContain('execution_mode');
     expect(slice).not.toContain("executionMode: 'inline'");
+    expect(slice).not.toContain("executionMode: 'process'");
     const dev = fs.readFileSync(
       path.join(REPO_ROOT, 'src/components/plugin-center/utils/pluginCenterUtils.ts'),
       'utf8',

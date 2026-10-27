@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   buildAgentSystemInstruction,
   buildAgentFinalMessage,
   normalizeToolSchema,
   buildOpenAITools,
 } from '../ai-agent.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 import type { AgentChatAttachment } from '../context.js';
 
 /**
@@ -120,6 +121,34 @@ describe('AI-agent pure helpers', () => {
       expect(tools[0].function).toHaveProperty('name');
       expect(tools[0].function).toHaveProperty('parameters');
     }
+  });
+
+  describe('exposeToAgent 过滤（ActionDescriptor 契约）', () => {
+    const HIDDEN_ID = '__test_hidden_action__';
+    const HIDDEN_CMD = '__test_hidden_command__';
+    const VISIBLE_ID = '__test_visible_action__';
+    const VISIBLE_CMD = '__test_visible_command__';
+
+    afterEach(() => {
+      kernelContainer.actionRegistry.unregister(HIDDEN_ID);
+      kernelContainer.actionRegistry.unregister(VISIBLE_ID);
+    });
+
+    it('exposeToAgent: false 的命令不进大模型工具箱（仅程序化可达）', () => {
+      const base = { description: 'test', inputSchema: null, capabilityRequired: '' };
+      // 测试用的最小描述符
+      kernelContainer.actionRegistry.register({
+        ...base,
+        id: HIDDEN_ID,
+        commandType: HIDDEN_CMD,
+        exposeToAgent: false,
+      });
+      kernelContainer.actionRegistry.register({ ...base, id: VISIBLE_ID, commandType: VISIBLE_CMD });
+
+      const names = buildOpenAITools('teacher').map((t) => t.function.name);
+      expect(names).toContain(VISIBLE_CMD);
+      expect(names).not.toContain(HIDDEN_CMD);
+    });
   });
 });
 

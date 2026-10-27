@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { PluginTabPanel } from '../PluginTabPanel';
+import { NullExtensionComponent } from '../../plugin-host/plugin-host';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { appStore } from '../../store/appStore';
 
@@ -37,5 +38,97 @@ describe('PluginTabPanel', () => {
     });
     render(<PluginTabPanel activeNavPlugin={null} />);
     expect(screen.getByText('Plugin Content')).toBeTruthy();
+  });
+});
+
+/**
+ * 同一插件的 Tab 条目选取优先级。
+ *
+ * 背景：一个插件在 `teacher.tab` 上可能留下**两条**条目 ——
+ * 1. manifest 声明式贡献（`registerManifestContributions`），component 是
+ *    `NullExtensionComponent` 占位（贡献本体是数据：label / icon / commandType）；
+ * 2. 运行时 `ctx.ui.registerExtensionPoint`，component 是真实组件（或 `render`）。
+ *
+ * manifest 先注册，所以朴素的 `find(pluginId === active)` 会拿到占位项 → 面板白屏。
+ * 修复后优先级为：真实组件 > render 渲染函数 > 占位项。
+ */
+describe('PluginTabPanel — Tab 条目选取优先级', () => {
+  const PLUGIN_ID = 'p-courseware';
+
+  function RealPanel() {
+    return <div data-testid="real-panel">real</div>;
+  }
+
+  beforeEach(() => {
+    usePluginHostStore.setState({ extensionPoints: new Map(), activePlugins: [], pluginErrors: new Map() });
+    appStore.setState({ lang: 'zh', selectedLesson: null, liveClassSelectedClassId: null });
+  });
+
+  it('manifest 占位项与运行时真实组件并存时，渲染真实组件', () => {
+    const register = usePluginHostStore.getState().registerExtensionPoint;
+    // manifest 声明式贡献（先注册，component 是占位空组件）
+    register('teacher.tab' as never, {
+      id: 'tab_grade',
+      label: '互动网页课件',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      origin: 'manifest',
+    });
+    // 运行时注册（真实组件，id 不同）
+    register('teacher.tab' as never, {
+      id: 'tab_grade_panel',
+      label: '互动网页课件',
+      pluginId: PLUGIN_ID,
+      component: RealPanel as never,
+      origin: 'runtime',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByTestId('real-panel')).toBeTruthy();
+    expect(screen.queryByText('此插件未提供页面组件')).toBeNull();
+  });
+
+  it('只有占位项 + 同插件 render 函数时，优先走 render（DOMExtensionWrapper）', () => {
+    const register = usePluginHostStore.getState().registerExtensionPoint;
+    register('teacher.tab' as never, {
+      id: 'tab_grade',
+      label: '互动网页课件',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      origin: 'manifest',
+    });
+    register('teacher.tab' as never, {
+      id: 'tab_grade_panel',
+      label: '互动网页课件',
+      pluginId: PLUGIN_ID,
+      // 非组件式扩展点：把 DOM 画进宿主容器
+      component: NullExtensionComponent,
+      render: (container?: unknown) => {
+        const el = document.createElement('div');
+        el.setAttribute('data-testid', 'dom-panel');
+        (container as HTMLElement | undefined)?.appendChild?.(el);
+        return null;
+      },
+      origin: 'runtime',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByTestId('dom-panel')).toBeTruthy();
+  });
+
+  it('既无真实组件也无 render 时，给出显式空态而不是白屏', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab' as never, {
+      id: 'tab_grade',
+      label: '互动网页课件',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      origin: 'manifest',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByText('此插件未提供页面组件')).toBeTruthy();
   });
 });

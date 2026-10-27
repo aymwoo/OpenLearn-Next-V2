@@ -51,6 +51,16 @@ export interface FrontendPluginManifest {
   author?: string;
   icon?: string;
   capabilitiesProposed?: string[];
+  /**
+   * 插件**自己声明**的执行模式（manifest.json 原样落库，见 install.ts）。
+   *
+   * ⚠️ 这不是信任依据：服务端 `resolvePluginExecutionMode` 会把未受信包的
+   * `inline` / `worker` 改写成 `process`，但改写只落 DB 的 `execution_mode`
+   * 列，manifest JSON 仍是作者原文。前端判断「要不要进 iframe 沙箱」必须用
+   * 服务端求值后的 `PluginType.execution_mode`（store 里的
+   * `FrontendPluginInfo.executionMode`），**不要**读本字段。
+   */
+  executionMode?: 'inline' | 'worker' | 'process' | 'legacy';
   classroomTools?: Array<{
     id: string;
     name: string;

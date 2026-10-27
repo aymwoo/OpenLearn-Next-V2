@@ -81,6 +81,10 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // 默认**不开** sourcemap：`dist/assets/*.js.map` 会被 express 静态服务原样发出去，
+    // 等于把整个前端源码（含注释与内部接口名）公开。需要调试线上构建产物时
+    // 显式 `SOURCE_MAP=1 pnpm build`；`pnpm dev` 本来就有 devtools 源码。
+    sourcemap: process.env.SOURCE_MAP === '1',
     modulePreload: {
       polyfill: false,
       resolveDependencies(_filename, deps) {
