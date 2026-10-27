@@ -241,11 +241,12 @@ async function assertCommunityZipAttestation(
   }
 
   // 没有签名，且未声明社区安装
-  // 按照 B2 安全基线：必须由管理员显式传入 x-allow-unsigned: true。
-  // 部署级临时放行：OPENLEARN_ALLOW_UNSIGNED=1 时跳过逐次头部确认——供内网/受信
-  // 环境在签名分发流程落地前过渡使用；放行的安装/更新审计仍记
-  // unverified_local_acknowledged，撤销该环境变量即收回。
-  const allowUnsignedEffective = allowUnsigned || process.env.OPENLEARN_ALLOW_UNSIGNED === '1';
+  // 默认放行未签名本地包（审计仍记 unverified_local_acknowledged）；
+  // 部署可用 OPENLEARN_ALLOW_UNSIGNED=0/false 收紧为 B2 基线——
+  // 那时未签名包必须由管理员逐次传 x-allow-unsigned: true。
+  const allowUnsignedEnv = String(process.env.OPENLEARN_ALLOW_UNSIGNED ?? '').toLowerCase();
+  const allowUnsignedEffective =
+    allowUnsigned || !['0', 'false'].includes(allowUnsignedEnv);
   if (!allowUnsignedEffective) {
     return {
       ok: false,
