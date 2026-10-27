@@ -141,7 +141,7 @@
 - `"lesson:read"`, `"lesson:write"`, `"lesson:delete"`：课程读写与删除
 - `"vfs:read"`, `"vfs:write"`：虚拟文件系统
 - `"process:read"`, `"process:write"`：后台进程
-- `"assignment:read"`, `"assignment:submit"`, `"assignment:review"`, `"assignment:manage"`：作业
+- `"assignment:read"`, `"assignment:write"`, `"assignment:submit"`, `"assignment:review"`, `"assignment:manage"`：作业
 - `"whiteboard:read"`, `"whiteboard:write"`：白板
 - `"management:read"`, `"management:write"`：管理
 - `"plugin:read"`, `"plugin:write"`：插件生命周期
