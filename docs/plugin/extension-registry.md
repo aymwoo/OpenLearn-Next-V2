@@ -24,20 +24,25 @@ OpenLearn V2 提供了双层扩展点架构：
 > 表里其余 `ctx.ui.register*` 属于**前端 inline** 的 `FrontendPluginContext`：它们的值里带函数/JSX，
 > 远程插件调用会直接 `TypeError: ctx.ui.registerAssignmentQuestionRenderer is not a function`。
 
-### 0.1 注册表总索引（6 个，回收全部由宿主兜底）
+### 0.1 注册表总索引（9 个）
 
-| 扩展点            | 获取方式                                                  | 注册 / 注销                                                                                     | 回收路径                                                 | 可用范围                         | 详细文档                                           |
-| ----------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------- | -------------------------------------------------- |
-| 题库题型          | `ctx.resolve(IAssessmentGraderRegistryToken)`             | `registerQuestionType(def, { pluginId })` / `unregisterQuestionType(type, pluginId)`            | 服务端停用链 `revokePluginQuestionTypes`（Issue #320）   | 服务端；前端编辑器仅 inline      | [测评模型](../architecture/assessment-model.md) §4 |
-| 教学环节进入条件  | `ctx.resolve(IStageGuardServiceToken)`                    | `registerGuard(guard, owner)`（返回注销函数）/ `unregisterGuard(id, owner)`                     | 停用链 `revokePluginStageGuards` → `unregisterByOwner`   | 服务端                           | §0.3.2                                             |
-| 积分维度          | `ctx.services.pointsDimension`（非 inline 模式为 `null`） | `registerDimension(spec)` / `unregisterDimension(id)`                                           | `ResourceTracker`（`ctx.services` 包装层）               | 服务端（**只有 inline 拿得到**） | §0.3.3                                             |
-| AI 人格           | `ctx.services.ai`                                         | `registerAIPersona(persona)` / `unregisterAIPersona(id)`                                        | `ResourceTracker`                                        | 服务端                           | §0.3.4                                             |
-| 作业题型渲染器    | `ctx.ui`                                                  | `registerAssignmentQuestionRenderer(config)` / `unregisterAssignmentQuestionRenderer(quizType)` | 前端停用 `assignmentQuestionRendererRegistry.clearOwned` | **仅前端 inline**                | §0.3.5                                             |
-| 课件内容源 loader | `ctx.ui`                                                  | `registerCoursewareSource(loader)` / `unregisterCoursewareSource(id)`                           | 前端停用 `coursewareSourceRegistry.unregisterPlugin`     | **仅前端 inline**                | §0.3.6                                             |
+| 扩展点            | 获取方式                                                  | 注册 / 注销                                                                                     | 回收路径                                                 | 可用范围                            | 详细文档                                           |
+| ----------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------- | -------------------------------------------------- |
+| 题库题型          | `ctx.resolve(IAssessmentGraderRegistryToken)`             | `registerQuestionType(def, { pluginId })` / `unregisterQuestionType(type, pluginId)`            | 服务端停用链 `revokePluginQuestionTypes`（Issue #320）   | 服务端；前端编辑器仅 inline         | [测评模型](../architecture/assessment-model.md) §4 |
+| 教学环节进入条件  | `ctx.resolve(IStageGuardServiceToken)`                    | `registerGuard(guard, owner)`（返回注销函数）/ `unregisterGuard(id, owner)`                     | 停用链 `revokePluginStageGuards` → `unregisterByOwner`   | 服务端                              | §0.3.2                                             |
+| 积分维度          | `ctx.services.pointsDimension`（非 inline 模式为 `null`） | `registerDimension(spec)` / `unregisterDimension(id)`                                           | `ResourceTracker`（`ctx.services` 包装层）               | 服务端（**只有 inline 拿得到**）    | §0.3.3                                             |
+| AI 人格           | `ctx.services.ai`                                         | `registerAIPersona(persona)` / `unregisterAIPersona(id)`                                        | `ResourceTracker`                                        | 服务端                              | §0.3.4                                             |
+| 作业题型渲染器    | `ctx.ui`                                                  | `registerAssignmentQuestionRenderer(config)` / `unregisterAssignmentQuestionRenderer(quizType)` | 前端停用 `assignmentQuestionRendererRegistry.clearOwned` | **仅前端 inline**                   | §0.3.5                                             |
+| 课件内容源 loader | `ctx.ui`                                                  | `registerCoursewareSource(loader)` / `unregisterCoursewareSource(id)`                           | 前端停用 `coursewareSourceRegistry.unregisterPlugin`     | **仅前端 inline**                   | §0.3.6                                             |
+| 课堂阶段门禁      | `ctx.resolve(IClassroomLifecycleServiceToken)`            | `registerStageGuard(owner, guard)` / `unregisterStageGuard(owner)`                              | ⚠️ **宿主不清理**，需自行在 `deactivate()` 注销（#327）  | 服务端（**仅 inline**，守卫是函数） | §0.3.7                                             |
+| 课堂互动提供者    | `ctx.resolve(IInteractionRuntimeServiceToken)`            | `registerActivityProvider(owner, descriptor)` / `unregisterActivityProvider(owner, id)`         | ⚠️ **宿主不清理**，需自行在 `deactivate()` 注销（#327）  | 服务端                              | §0.3.8                                             |
+| AI 上下文提供者   | `ctx.services.ai`                                         | `registerAIContextProvider(id, fn)` / `unregisterAIContextProvider(id)`                         | `ResourceTracker`                                        | 服务端（**仅 inline**，fn 是函数）  | §0.3.9                                             |
 
 > 🔑 **一条判据**：经 `ctx.services.*` 拿到的注册表是宿主包装过的，注册项自动进 `ResourceTracker`；
-> 经 `ctx.resolve(token)` 拿到的是**裸注册表**，必须由停用链里的显式 revoke 兜底（上表前两行就是这样，
-> 其中题型曾经漏了这一环，见 Issue #320）。注册裸注册表时**仍建议自己保存注销函数**并在 `deactivate()` 调用 ——
+> 经 `ctx.resolve(token)` 拿到的是**裸注册表**，必须由停用链里的显式 revoke 兜底 —— 但**兜底不是自动的**：
+> 题型已补（#320）、环节 Gate 已补（`revokePluginStageGuards`），而「课堂阶段门禁」与「课堂互动提供者」
+> 目前**宿主仍不清理**（#327），只能自己在 `deactivate()` 里注销。
+> 即使宿主已兜底，也**仍建议自己保存注销函数**并在 `deactivate()` 调用 ——
 > 宿主兜底是为了防止泄漏，不是为了替你表达「提前撤销」的意图。
 
 ### 0.2 维护约定：新增注册表必须登记
@@ -168,6 +173,73 @@ ctx.ui.registerCoursewareSource({
 
 - **回收**：停用时 `coursewareSourceRegistry.unregisterPlugin(pluginId)`。
 - **错用**：同上 —— 远程插件无法注册（函数不可跨沙箱传递），只能让宿主按扩展名兜底渲染。
+
+#### 0.3.7 课堂阶段门禁（四阶段流转）
+
+课堂生命周期是四阶段：`PRE_CLASS_READY` → `IN_CLASS_TEACHING` → `WRAP_UP_EXIT_TICKET` → `ARCHIVED_REPORT`。
+`registerStageGuard` 让你在这条流转上追加一条**准入判定**。
+
+```ts
+const lifecycle = await ctx.resolve(IClassroomLifecycleServiceToken);
+lifecycle.registerStageGuard('ext-quiz', async (fromStage, toStage, { lessonId, classId, actorId }) => {
+  if (toStage !== 'IN_CLASS_TEACHING') return true; // 只关心进入授课阶段
+  const answered = await ctx.services.storage.get(`poll-answered:${lessonId}`);
+  return answered ? true : { allowed: false, reason: '请先完成课前投票' };
+});
+```
+
+- **形状**：`ClassroomStageGuard = (fromStage, toStage, context) => boolean | StageGuardResult | Promise<…>`；
+  返回 `false` 或 `{ allowed: false, reason }` 都会阻断流转。
+- **可用范围**：⚠️ **仅 inline**。守卫是**函数**，无法跨 Worker / process 边界传递，
+  在非 inline 模式注册会拿不到可调用的实现。
+- **回收**：⚠️ **宿主目前不清理**（`unregisterStageGuard` 无生产调用方，见 #327）。
+  必须自己在 `deactivate()` 里调用 `unregisterStageGuard('ext-quiz')`。
+- **错用 1**：每个 `owner` **只能有一个**守卫（`Map.set(owner, guard)` 是覆盖式），
+  同一插件注册两个会静默顶掉前一个。
+- **错用 2**：把它当成「教学环节（timeline segment）进入条件」用 ——
+  环节条件由 `SegmentGateService` 单独判定，不走这条链。
+
+#### 0.3.8 课堂互动提供者
+
+注册一个自定义课堂互动（极速投票、抢答、结课通票那一类），让宿主把互动入口渲染出来。
+
+```ts
+const runtime = await ctx.resolve(IInteractionRuntimeServiceToken);
+runtime.registerActivityProvider('ext-quiz', {
+  id: 'matrix_voting', // 同一 owner 下可注册多个 id
+  name: '矩阵投票',
+  category: 'vote',
+  icon: 'Vote',
+  description: '支持多选矩阵的即时投票',
+  supportedRoles: ['teacher', 'student'],
+});
+```
+
+- **形状**：`QuickActivityDescriptor = { id, name, category, icon?, description?, supportedRoles? }`，
+  是纯数据 —— 因此**可跨进程**（worker / process 模式都能用）。
+- **回收**：⚠️ **宿主目前不清理**（`unregisterActivityProvider` 无生产调用方，见 #327）。
+  必须自己在 `deactivate()` 里调用 `unregisterActivityProvider('ext-quiz', 'matrix_voting')`。
+- **错用 1**：`id` 不带插件命名空间 → 不同插件的 id 会撞在同一个键空间里
+  （实际键是 `${owner}:${id}`，所以只要 owner 不同就安全；但同一 owner 下 id 必须唯一）。
+- **错用 2**：以为注册完宿主会自动渲染出完整 UI —— 这里只提供**元数据**，
+  实际互动界面仍需走 manifest 声明式贡献或宿主自带的那几类互动。
+
+#### 0.3.9 AI 上下文切片提供者
+
+让 AI Agent 在每次对话前拿到一段由你生成的上下文（按 `lessonId` 注入）。
+
+```ts
+ctx.services.ai.registerAIContextProvider?.('ext-quiz:progress', (lessonId) => {
+  // 返回要注入的文本；返回 null 表示本次不注入
+  return lessonId ? `本课进度：${readProgress(lessonId)}` : null;
+});
+```
+
+- **可用范围**：⚠️ **仅 inline**。`fn` 是**函数**，Worker 序列化边界无法传递。
+- **回收**：`ResourceTracker` 自动 `unregisterAIContextProvider(id)`。
+- **错用**：把大段内容塞进返回值 —— 它会进每一次 AI 请求的上下文，token 成本按对话次数放大。
+
+---
 
 ---
 

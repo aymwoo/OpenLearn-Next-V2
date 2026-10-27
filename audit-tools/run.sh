@@ -22,6 +22,8 @@ ENV_MD="${OUT_DIR}/env_report.md"
 ENV_JSON="${OUT_DIR}/env_report.json"
 PLUGIN_JSON="${OUT_DIR}/plugin_docs_report.json"
 PLUGIN_MD="${OUT_DIR}/plugin_docs_report.md"
+EXTPT_JSON="${OUT_DIR}/extension_points_report.json"
+EXTPT_MD="${OUT_DIR}/extension_points_report.md"
 
 mkdir -p "${OUT_DIR}"
 
@@ -77,6 +79,21 @@ g = json.load(open('${OUT_DIR}/slots_coverage.json'))['grades']
 print(g.get('L1', 0) + g.get('L2', 0))
 " 2>/dev/null || echo 0)
 
+# --- 2.8 插件可注册的领域扩展点覆盖（新增扩展点必须写进文档）---
+#
+# 槽位（2.7）只覆盖 UI 那一类接入面。插件还能往**内核注册表**里注册领域扩展点
+# （题库题型、课堂阶段门禁、课堂互动提供者…），这一类此前没有任何门禁：
+# 2026-10-27 实测 9 个真实扩展点里有 6 个在插件文档中从未出现，其中 3 个只出现在
+# docs/architecture/ 下。第三方作者的合理结论是「平台只支持 UI 槽位」。
+#
+# 真值从源码推导（PLUGIN_RESOLVABLE_TOKENS + 接口体里的 register* 方法），
+# 不靠人手维护清单；豁免必须指明覆盖文档，门禁核对该文档确实提到该方法。
+# 判定与 2.7 同构：L0（文档中完全不存在）计入 drift，L1/L2 只作提示。
+python3 audit-tools/extension_points_coverage.py \
+  --json "${EXTPT_JSON}" --md "${EXTPT_MD}" 2>/dev/null || true
+
+EXTPT_DRIFT=$(python3 -c "import json;print(json.load(open('${EXTPT_JSON}'))['stats']['drift'])" 2>/dev/null || echo 0)
+
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
 # 15-20% 精度（JS 全局、第三方包导出、历史文档引用已删除子系统）。
@@ -130,19 +147,20 @@ print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\"
 # 全仓合计：canonical + ref + 环境变量 + 插件文档示例 + 扩展槽覆盖。
 # envcheck / plugin_docs_check / slots_coverage 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
 # symbolcheck 仍只作提示。
-TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT))
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT + EXTPT_DRIFT))
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
 echo "env_drift=${ENV_DRIFT}  （见 ${ENV_MD}）"
 echo "plugin_docs_drift=${PLUGIN_DRIFT}  （见 ${PLUGIN_MD}）"
 echo "slot_drift=${SLOT_DRIFT}  （见 ${OUT_DIR}/slots_coverage.md）"
+echo "ext_point_drift=${EXTPT_DRIFT}  （见 ${EXTPT_MD}）"
 echo "slot_hints=${SLOT_HINTS}  （仅提示，不计入 drift）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${TOTAL_DRIFT}"
 
 if [ "${TOTAL_DRIFT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD} and ${OUT_DIR}/slots_coverage.md."
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD}, ${OUT_DIR}/slots_coverage.md and ${EXTPT_MD}."
   exit 1
 fi
 
