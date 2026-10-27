@@ -19,8 +19,24 @@ import path from 'node:path';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-/** 所有候选 package.json：根 + pnpm-workspace 声明的 packages/* */
-function publishablePackages(): { file: string; name: string; prepublishOnly?: string }[] {
+interface PackageJson {
+  name?: string;
+  publishConfig?: unknown;
+  scripts?: Record<string, string>;
+}
+
+interface PublishablePackage {
+  file: string;
+  name: string;
+  prepublishOnly: string;
+}
+
+function readPackageJson(file: string): PackageJson {
+  return JSON.parse(fs.readFileSync(file, 'utf8')) as PackageJson;
+}
+
+/** 所有候选 package.json：根 + packages/* */
+function publishablePackages(): PublishablePackage[] {
   const files = [path.join(REPO_ROOT, 'package.json')];
   const packagesDir = path.join(REPO_ROOT, 'packages');
   for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
@@ -29,12 +45,12 @@ function publishablePackages(): { file: string; name: string; prepublishOnly?: s
     if (fs.existsSync(p)) files.push(p);
   }
   return files
-    .map((file) => ({ file, ...JSON.parse(fs.readFileSync(file, 'utf8')) }))
-    .filter((p: any) => p.publishConfig)
-    .map((p: any) => ({
-      file: path.relative(REPO_ROOT, p.file),
-      name: p.name,
-      prepublishOnly: p.scripts?.prepublishOnly,
+    .map((file) => ({ file, pkg: readPackageJson(file) }))
+    .filter(({ pkg }) => pkg.publishConfig !== undefined)
+    .map(({ file, pkg }) => ({
+      file: path.relative(REPO_ROOT, file),
+      name: pkg.name ?? file,
+      prepublishOnly: pkg.scripts?.prepublishOnly ?? '',
     }));
 }
 
@@ -49,7 +65,7 @@ describe('assert-publishable 挂载', () => {
   });
 
   it('每个可发布包的 prepublishOnly 都要跑 assert-publishable.mjs', () => {
-    const missing = publishablePackages().filter((p) => !p.prepublishOnly?.includes('assert-publishable.mjs'));
-    expect(missing.map((p) => `${p.file}（${p.name}）prepublishOnly=${p.prepublishOnly ?? '（无）'}`)).toEqual([]);
+    const missing = publishablePackages().filter((p) => !p.prepublishOnly.includes('assert-publishable.mjs'));
+    expect(missing.map((p) => `${p.file}（${p.name}）prepublishOnly=${p.prepublishOnly || '（无）'}`)).toEqual([]);
   });
 });
