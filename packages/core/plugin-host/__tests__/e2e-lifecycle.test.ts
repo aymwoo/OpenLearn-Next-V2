@@ -27,6 +27,13 @@ import {
   IPointsLedgerServiceToken,
   IDatabaseToken,
   IAssessmentGraderRegistryToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
+} from '../../di/interfaces.js';
+import type {
+  IClassroomLifecycleService as ClassroomLifecycleServiceShape,
+  IInteractionRuntimeService as InteractionRuntimeServiceShape,
+  QuickActivityDescriptor,
 } from '../../di/interfaces.js';
 import { AssessmentGraderRegistry } from '../../assessment/registry-service.js';
 import { CommandBus } from '../../command-bus/index.js';
@@ -70,6 +77,14 @@ function createTables(db: Database.Database): void {
     );
   `);
 }
+
+/**
+ * Issue #327 回归用：宿主侧注册表快照。
+ *
+ * 每轮 `setupServiceRegistry` 重置，测试断言「停用后这里还剩什么」。
+ */
+let stageGuardsRef = new Map<string, unknown>();
+const activityProvidersRef = new Map<string, unknown>();
 
 interface MakeModuleOpts {
   id: string;
@@ -116,6 +131,8 @@ function makePluginModule(opts: MakeModuleOpts): PluginModule {
 }
 
 async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegistry> {
+  stageGuardsRef = new Map<string, unknown>();
+  activityProvidersRef.clear();
   const sr = new ServiceRegistry();
   const eventBus = new EventBus();
   const capabilityGuard = new CapabilityGuard();
@@ -174,6 +191,32 @@ async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegis
 
   // IAssessmentGraderRegistry: 服务端题型注册表（Issue #320 回归用真实实现）
   await sr.register(IAssessmentGraderRegistryToken, new AssessmentGraderRegistry());
+
+  // IClassroomLifecycleService / IInteractionRuntimeService：课堂运行时扩展点（Issue #327 回归用）。
+  // 两者都用**带状态**的实现 —— 回收断言要看注册表里还剩什么；
+  // Map 通过模块级 ref 暴露（不往 registry 上挂私有字段，也不引入 any）。
+  const lifecycleMock: ClassroomLifecycleServiceShape = {
+    getStage: async () => 'PRE_CLASS_READY',
+    transitionStage: async (_lessonId, toStage) => ({ success: true, stage: toStage }),
+    registerStageGuard: (owner, guard) => {
+      stageGuardsRef.set(owner, guard);
+    },
+    unregisterStageGuard: (owner) => {
+      stageGuardsRef.delete(owner);
+    },
+  };
+  await sr.register(IClassroomLifecycleServiceToken, lifecycleMock);
+
+  const interactionMock: InteractionRuntimeServiceShape = {
+    registerActivityProvider: (owner, descriptor) => {
+      activityProvidersRef.set(`${owner}:${descriptor.id}`, descriptor);
+    },
+    unregisterActivityProvider: (owner, id) => {
+      activityProvidersRef.delete(`${owner}:${id}`);
+    },
+    listActivityProviders: () => Array.from(activityProvidersRef.values()) as QuickActivityDescriptor[],
+  };
+  await sr.register(IInteractionRuntimeServiceToken, interactionMock);
 
   return sr;
 }
@@ -546,6 +589,112 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.uninstallPlugin('ext-qt-uninstall');
 
       expect(registry.getQuestionType(PLUGIN_TYPE)).toBeUndefined();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Issue #327: 课堂阶段门禁 / 课堂互动提供者随停用回收
+  // ══════════════════════════════════════════════════════════════════
+
+  describe('Issue #327 课堂运行时扩展点回收', () => {
+    const OWNER = 'ext-runtime:demo';
+
+    /**
+     * 插件通过 `ctx.resolve(token)` 注册两类扩展点。
+     *
+     * 这两个 token **不在 `ctx.services` 里**，插件只能经 ctx.resolve 拿到 ——
+     * 宿主的回收拦截也必须落在 ctx.resolve 上，且字符串与 Token 两条路径都要覆盖。
+     */
+    /** 插件侧看到的 resolve 只有这一个能力；用 `as` 收窄而不是 `any`。 */
+    type RuntimeExtensionCtx = { resolve(token: string | object): Promise<unknown> };
+
+    function makeRuntimeExtensionPlugin(id: string, opts: { byName?: boolean } = {}): PluginModule {
+      return {
+        default: {
+          manifest: { id, name: id, version: '1.0.0', main: 'index.js' },
+          activate: async (ctx) => {
+            const pluginCtx = ctx as RuntimeExtensionCtx;
+            const lifecycle = (
+              opts.byName
+                ? await pluginCtx.resolve('@openlearn/core:IClassroomLifecycleService')
+                : await pluginCtx.resolve(IClassroomLifecycleServiceToken)
+            ) as ClassroomLifecycleServiceShape;
+            const interaction = (
+              opts.byName
+                ? await pluginCtx.resolve('@openlearn/core:IInteractionRuntimeService')
+                : await pluginCtx.resolve(IInteractionRuntimeServiceToken)
+            ) as InteractionRuntimeServiceShape;
+
+            lifecycle.registerStageGuard(OWNER, async () => true);
+            interaction.registerActivityProvider(OWNER, {
+              id: 'matrix_voting',
+              name: '矩阵投票',
+              category: 'vote',
+            });
+          },
+          deactivate: async () => {},
+        },
+      };
+    }
+
+    it('停用后阶段门禁与互动提供者都从宿主注册表消失', async () => {
+      loadMap.set('src-rt', makeRuntimeExtensionPlugin('ext-rt'));
+      await pluginHost.installPlugin('src-rt');
+      await pluginHost.activatePlugin('ext-rt');
+
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
+      expect(stageGuards.has(OWNER)).toBe(true);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(true);
+
+      await pluginHost.deactivatePlugin('ext-rt');
+
+      // 旧行为：两者都残留 —— 插件代码已不在，门禁却还在阻断课堂阶段流转
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('按名字 resolve 的插件同样被回收（字符串路径不能绕过拦截）', async () => {
+      loadMap.set('src-rt-name', makeRuntimeExtensionPlugin('ext-rt-name', { byName: true }));
+      await pluginHost.installPlugin('src-rt-name');
+      await pluginHost.activatePlugin('ext-rt-name');
+
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
+      expect(stageGuards.has(OWNER)).toBe(true);
+
+      await pluginHost.deactivatePlugin('ext-rt-name');
+
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('卸载时同样回收（含非 ACTIVE 态）', async () => {
+      loadMap.set('src-rt-uninstall', makeRuntimeExtensionPlugin('ext-rt-uninstall'));
+      await pluginHost.installPlugin('src-rt-uninstall');
+      await pluginHost.activatePlugin('ext-rt-uninstall');
+
+      const stageGuards = stageGuardsRef;
+      const providers = activityProvidersRef;
+      expect(stageGuards.has(OWNER)).toBe(true);
+
+      await pluginHost.uninstallPlugin('ext-rt-uninstall');
+
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('再激活并重新注册不会因残留而冲突', async () => {
+      loadMap.set('src-rt-reactivate', makeRuntimeExtensionPlugin('ext-rt-reactivate'));
+      await pluginHost.installPlugin('src-rt-reactivate');
+      await pluginHost.activatePlugin('ext-rt-reactivate');
+      await pluginHost.deactivatePlugin('ext-rt-reactivate');
+
+      const stageGuards = stageGuardsRef;
+      expect(stageGuards.has(OWNER)).toBe(false);
+
+      await expect(pluginHost.activatePlugin('ext-rt-reactivate')).resolves.toBeUndefined();
+      expect(stageGuards.has(OWNER)).toBe(true);
     });
   });
 });
