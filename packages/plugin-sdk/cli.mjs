@@ -127,14 +127,19 @@ async function cmdInit(args) {
 
     console.log(`\n${c.dim}Available templates:${c.reset}`);
     console.log(`  ${c.bold}server-only${c.reset}   — Backend plugin (commands, events, AI tools)`);
-    console.log(`  ${c.bold}full-stack${c.reset}    — Full plugin (server + React frontend)`);
-    console.log(`  ${c.bold}frontend-only${c.reset} — Pure UI extension (React component)`);
+    console.log(`  ${c.bold}full-stack${c.reset}    — Backend + hidden-iframe frontend bundle (bridge + palette item)`);
+    console.log(`  ${c.bold}frontend-only${c.reset} — Frontend bundle only (bridge demo, no visible entry point)`);
 
     template = await ask(rl, `\nTemplate (default: server-only):`);
     if (!template) template = 'server-only';
 
     rl.close();
   }
+
+  // 非交互模式（只给了 --name）也要落默认值 —— 否则 manifest.id 会拼成
+  // "@/name"（空 scope），既是非法 scope 写法，也让命令命名空间前缀难读。
+  if (!description) description = `${name} plugin`;
+  if (!author) author = 'OpenLearn Developer';
 
   if (!['server-only', 'full-stack', 'frontend-only'].includes(template)) {
     console.error(
@@ -560,7 +565,7 @@ ${c.bold}Init options:${c.reset}
   --name <name>          Plugin package name (kebab-case)
   --description <desc>   Short description
   --author <author>      Plugin author
-  --template <tpl>       Template: server-only | full-stack | frontend-only
+  --template <tpl>       Template: server-only (default) | full-stack | frontend-only
 
 ${c.bold}Build options:${c.reset}
   --watch, -w            Watch for changes and rebuild

@@ -317,7 +317,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.7.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
 | 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
-| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。                    |
+| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (沙箱桥接入口) 的标准项目工程。                     |
 | 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
 | 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.3` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                 |
 | 📦 **一键打包与发布**       | 提供 `npx @openlearn/plugin-sdk build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。                                                    |
@@ -337,11 +337,17 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 **支持的标准插件模板：**
 
-| 模板类型        | 运行环境                   | 生成的核心文件                                                      |
-| --------------- | -------------------------- | ------------------------------------------------------------------- |
-| `server-only`   | Node.js Worker Thread      | `package.json`, `tsconfig.json`, `src/index.ts`                     |
-| `full-stack`    | Worker Thread + 前端微前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
-| `frontend-only` | 前端 React 19 渲染层       | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| 模板类型        | 运行环境                        | 生成的核心文件                                                      |
+| --------------- | ------------------------------- | ------------------------------------------------------------------- |
+| `server-only`   | Node.js Worker Thread           | `package.json`, `tsconfig.json`, `src/index.ts`                     |
+| `full-stack`    | Worker Thread + 沙箱前端 bundle | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| `frontend-only` | 沙箱前端 bundle（无可见入口）   | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+
+> ⚠️ **`src/frontend.tsx` 不是 React 组件**（`@openlearn/plugin-sdk@3.7.1` 起）。第三方插件的 `frontend.js` 跑在
+> `sandbox="allow-scripts"` 的隐藏 iframe 里，那里没有 `React`、没有 `window.HostSharedDeps`，函数型 `component`
+> 也无法跨 `postMessage` 传递。它的唯一硬契约是 **default export 一个带 `activate` 函数的对象**，否则宿主加载器抛
+> `missing activate function`，插件直接进错误态。能力边界见 [`docs/plugin/frontend-sandbox-capability-boundary.md`](../plugin/frontend-sandbox-capability-boundary.md)。
+> 若你手上是 3.7.0 及更早版本生成的模板，请重跑 `npx @openlearn/plugin-sdk init` 或按上句改写 `frontend.tsx`。
 
 **官方 Skill 资源与存储库**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
 
@@ -1410,10 +1416,10 @@ interface IStorageService {
 
 > 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 55 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
-**学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。插件组件通过 props 接收：
+**学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。**只有 inline / worker 模式的插件**（内置插件、管理员加入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 的受信插件）才会收到组件 props：
 
 ```tsx
-// 前端插件入口 frontend.tsx
+// 前端插件入口 frontend.tsx（仅 inline / worker —— 第三方 ZIP 插件不可用，见下）
 export default function MyStudentPlugin(props: { studentId?: string }) {
   const studentId = props.studentId;
   if (!studentId) return <div>请先登录学生账号</div>;
@@ -1422,6 +1428,12 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
   return <div>当前学生 ID: {studentId}</div>;
 }
 ```
+
+> 🚩 **第三方 ZIP 插件不要照抄上面这段。** 你的 `frontend.js` 跑在隐藏的不透明源 iframe 里，那里没有 React，
+> 也不存在「宿主渲染你的组件」这条路径 —— 上面的写法会让插件激活失败（`DataCloneError` 或
+> `missing activate function`）。第三方前端的 default export 必须是一个带 `activate` 的对象，只能注册
+> **数据型**扩展点条目（宿主用自己的 React 渲染），并靠 `ctx.context.get()` / `ctx.services.frontendApi`
+> 取上下文与数据。执行环境分档与能力边界见 [`docs/plugin/frontend-sandbox-capability-boundary.md`](../plugin/frontend-sandbox-capability-boundary.md)。
 
 **所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
