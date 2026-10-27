@@ -97,6 +97,7 @@ python3 audit-tools/extension_points_coverage.py \
 EXTPT_DRIFT=$(python3 -c "import json;print(json.load(open('${EXTPT_JSON}'))['stats']['drift'])" 2>/dev/null || echo 0)
 
 # --- 2.9 doc-version 一致性（文档声明的包版本必须等于 package.json）---
+# 覆盖 docs/ 的 doc-version 标记 + 根 CHANGELOG 顶部的版本注记（后者 2026-10-27 补入）。
 #
 # `<!-- doc-version: sdk=X.Y.Z -->` 此前**全仓零校验** —— 除 docs/ 外没有任何脚本读它，
 # 它只是个注释。于是它安静地烂掉：2026-10-27 实测 SDK 已发到 3.7.3，26 篇文档仍写

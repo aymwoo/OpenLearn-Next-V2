@@ -14,6 +14,14 @@
  * 判据很简单：标记里写的版本号，必须等于对应包 package.json 的 version。
  * 发版抬了版本号就得同步抬标记 —— 一件本来就该在发版 PR 里做完的事。
  *
+ * 覆盖两类声明（2026-10-27 起）：
+ *   1. `docs/**` 里的 `<!-- doc-version: sdk=X.Y.Z -->` 标记；
+ *   2. 根 `CHANGELOG.md` 顶部那句人读的版本注记
+ *      （`\`@openlearn/plugin-sdk\` (currently **X.Y.Z**) ...`）。
+ *
+ * 第 2 类是补上的洞：v0.7.5 发版准备时把这句的 3.7.4 手改成 3.7.3（用了版本 bump
+ * 之前的过期测量），而第 1 类只管 `docs/` —— 于是门禁、CI、发版三处都不报。
+ *
  * 退出码：0 一致；1 有漂移并逐条打印文件与修复命令。
  */
 import fs from 'node:fs';
@@ -96,6 +104,57 @@ for (const file of walk(path.join(root, 'docs'))) {
   }
 }
 
+// ── 根 CHANGELOG 的版本注记 ───────────────────────────────────────────────
+//
+// doc-version 标记只管 docs/。根 CHANGELOG 顶部那句
+//
+//   > `@openlearn/plugin-sdk` (currently **X.Y.Z**) and `@openlearn/plugin-test-kit` (currently **X.Y.Z**).
+//
+// 此前不在任何门禁覆盖内 —— 实测后果：v0.7.5 发版准备时把这句里的 3.7.4 手改成 3.7.3
+// （用了版本 bump 之前的过期测量），门禁、CI、发版三处**都不报**。
+// 它和 doc-version 是同一类漂移：文档对「registry 上有什么版本」的承诺。
+//
+// 容错解析：包名之后 60 字符内出现 `currently **X.Y.Z**` 即视为该包的声明，
+// 这样改标点/换行不会误报，改数字才会。
+const CHANGELOG_FILE = 'CHANGELOG.md';
+const NOTE_PKGS = [
+  { key: 'sdk', pkg: '@openlearn/plugin-sdk' },
+  { key: 'test-kit', pkg: '@openlearn/plugin-test-kit' },
+];
+
+if (fs.existsSync(path.join(root, CHANGELOG_FILE))) {
+  const text = fs.readFileSync(path.join(root, CHANGELOG_FILE), 'utf8');
+  for (const { key, pkg } of NOTE_PKGS) {
+    const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('`' + escaped + '`[^\\n]{0,60}?currently\\s*\\*{0,2}([0-9]+\\.[0-9]+\\.[0-9]+)');
+    const m = re.exec(text);
+    if (!m) {
+      unparsable++;
+      items.push({
+        file: CHANGELOG_FILE,
+        line: 1,
+        key,
+        declared: null,
+        expected: actualVersion[key],
+        kind: 'changelog-note-missing',
+      });
+      continue;
+    }
+    const line = text.slice(0, m.index).split('\n').length;
+    checked++;
+    if (m[1] !== actualVersion[key]) {
+      items.push({
+        file: CHANGELOG_FILE,
+        line,
+        key,
+        declared: m[1],
+        expected: actualVersion[key],
+        kind: 'changelog-note-drift',
+      });
+    }
+  }
+}
+
 const drift = items.filter((i) => i.kind !== 'unknown-key');
 
 // ── 报告 ──────────────────────────────────────────────────────────────────
@@ -140,8 +199,11 @@ console.error(
   `[doc-version] 这些文档声明的包版本已经和 package.json 不一致，读者会照着文档去用 registry 上不存在的（或不存在的）能力。` +
     `\n  修法（把对应标记抬到实际版本）：`,
 );
+const markerDrift = drift.filter((i) => i.file !== CHANGELOG_FILE);
+const noteDrift = drift.filter((i) => i.file === CHANGELOG_FILE);
+
 const byKey = new Map();
-for (const i of drift) {
+for (const i of markerDrift) {
   if (!byKey.has(i.key)) byKey.set(i.key, { expected: i.expected, files: [] });
   byKey.get(i.key).files.push(i.file);
 }
@@ -153,6 +215,19 @@ for (const [key, { expected, files }] of byKey) {
   console.error(
     `      | xargs sed -i 's/doc-version: ${key}=[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/doc-version: ${key}=${expected}/'`,
   );
+}
+if (noteDrift.length) {
+  console.error(`\n    # ${CHANGELOG_FILE} 顶部的版本注记（人读的那句）`);
+  for (const i of noteDrift) {
+    if (i.declared === null) {
+      console.error(
+        `    ${CHANGELOG_FILE}: 缺少 \`${i.key === 'sdk' ? '@openlearn/plugin-sdk' : '@openlearn/plugin-test-kit'}\` 的 ` +
+          `\`(currently **X.Y.Z**)\` 注记 → 补上 ${i.expected}`,
+      );
+    } else {
+      console.error(`    ${CHANGELOG_FILE}:${i.line}  ${i.declared} → ${i.expected}`);
+    }
+  }
 }
 console.error(`\n  报告：${mdOut}`);
 process.exit(1);
