@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **停用/卸载插件时不清理服务端题型注册表，题型变成「幽灵扩展点」（Issue #320）**：
+  - **现象**：插件用 `ctx.resolve(IAssessmentGraderRegistryToken)` 注册的题型，在插件停用后仍留在注册表里 ——
+    教师继续能出题、继续按**旧闭包**判分，`GET /api/assessment-question-types` 也继续把它列给前端；
+    重装/升级插件时 `registerQuestionType` 抛 `duplicate question type`，表现为「升级后插件激活失败」，
+    必须重启宿主才能恢复。
+  - **根因**：题型注册表是**裸注册表**（经 `ctx.resolve` 直取），不像 `ctx.services.*` 那样经 `ResourceTracker` 包装，
+    注册项因此不会进 `disposeAll()` 的回收范围；全仓 `clearOwnedQuestionTypes` / `unregisterQuestionType`
+    此前只有定义、零调用方。前端一侧本来就会 `clearOwned`，服务端不清理形成「同一扩展点两种回收语义」。
+  - **改法**：新增 `revokePluginQuestionTypes(pluginId, manifestId)`（与既有 `revokePluginStageGuards` 同构），
+    按「安装行 UUID」与 `manifest.id` 两个 owner 各清一次（幂等，兼容注册方传哪个 id）；
+    接到 inline 正常停用 `finally`、inline pipeline 崩溃兜底、worker/process 停用 `finally`、uninstall 四条清理链
+    （uninstall 一路覆盖「非 ACTIVE 态、停用分支不跑」的情况）。失败只告警、不阻断停用。
+  - **验证**：新增回归测试 2 条（停用后题型消失、内置题型不受影响、再次激活不抛 duplicate；卸载后同样回收）；
+    负向对照 —— 临时移除本改动的 3 个源文件后跑同两条用例 → 2 failed
+     （`AssertionError: expected { type: 'ext-quiz:demo', … } to be undefined`），恢复后 2 passed。
+
 - **插件 SDK 的 `build` 新增构建期守卫：frontend 产物不得残留裸模块说明符**。远程插件前端跑在不透明源
   iframe（只有 `allow-scripts`）里，没有 React / `window.HostSharedDeps` / importmap，加载方式是
   `Blob` + 动态 `import()`，裸说明符无从解析。宿主的 `transformBareModuleImports` 把 `import React`
@@ -162,6 +178,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证**：全量单测 4977 passed / 0 failed；全量 e2e 38 passed / 0 failed；`tsc` 通过；ESLint 告警 6237（低于 6243 基线）。
 
 ### Docs
+
+- **插件文档补一份「非 UI 型扩展点总索引」，并把「新增扩展点必须写文档」变成第六段门禁（Issue #322）**：
+  - **现象**：9 个真实的「插件可注册领域扩展点」里，有 6 个在 `docs/plugin/` 与 `docs/tutorials/` 下**一次都没出现**
+    （题库题型只散落在 `docs/architecture/assessment-model.md`），其中 3 个更只出现在 `docs/architecture/` 下。
+    第三方作者据此形成的合理结论是「平台只支持 UI 槽位」。
+  - **文档改法**：`docs/plugin/extension-registry.md` 新增 §0 三类扩展面、§0.1 九行注册表总索引
+    （获取方式 / 注册注销 API / 回收路径 / 可用范围）、§0.3 九节逐个上手（最小示例 + 回收时机 + 常见错用），
+    并补一条维护约定：新增插件可注册的注册表时必须在同一 PR 登记一行。
+  - **门禁改法**：新增 `audit-tools/extension_points_coverage.py` + `audit-tools/extension-point-policy.json`，
+    接入 `audit-tools/run.sh` 第 2.8 段（与既有的槽位覆盖门禁同构）。
+    **真值从源码推导**（`PLUGIN_RESOLVABLE_TOKENS` + 各接口体里的 `register*` 方法），
+    不靠人手维护 token 清单 —— 上一版索引表本身就是漏的，人工清单必然腐化。
+    分级沿用槽位门禁的 L0/L1/L2/L3：L0（插件文档里从未出现）计 drift，其余仅提示；
+    豁免必须指明覆盖文档且门禁核对该文档确实提到该方法，豁免指向的 (token, method) 在源码里已不存在则计 drift。
+  - **验证**：门禁上线当天即抓出 3 个漏登记的扩展点（`registerStageGuard` / `registerActivityProvider` /
+    `registerAIContextProvider`）与 1 条失效豁免；新增 `scripts/__tests__/extension-points-coverage.test.ts` 5 条
+    （含两条负向对照）。`bash audit-tools/run.sh` → `drift_count=0`（新增 `ext_point_drift=0`）。
+  - **顺带发现**：`registerStageGuard` 与 `unregisterActivityProvider` 生产代码零调用方 —— 宿主同样不清理这两个扩展点，
+    已另开 Issue #327，文档如实标注「宿主目前不清理，需自行在 `deactivate()` 注销」。
 
 - **扩展槽位文档补齐 20 个缺口，并把「新增槽位必须写文档」变成第五段门禁**：
   - **问题**：`docs/reference/plugin-ui-extension-slots.md` 是插件作者查槽位的唯一入口，但它只列了 **100** 个成员，而 `src/plugin-host/types.ts` 的 `ExtensionSlot` 实际有 **120** 个 —— 页面正文写「115 个」、代码块只有 100 个、§2 的 props 表更少。缺的 20 个里包括整个测评子系统（`assessment.list.card` / `.attempt.toolbar` / `.stats.card`）、整个教师批改面板（`assignment.grade.toolbar.action` / `.item.addon` / `.rubric.addon`）、命令面板与斜杠菜单（`command_palette.item` / `quick_insert.item`）、AI 生态（`ai.prompt.template` / `ai.skill.provider`）等。**这 20 个槽位在 docs/ 里一次都没提过**，插件作者只能读宿主源码猜 props。
