@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.4 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.3.15+`。
+> **适用范围**：`@openlearn/plugin-sdk@3.7.4`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.7.5`。
 > 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts` 统一导出。
 > **重要**：插件 SDK 发布的 `dist/index.d.ts`（由 `openlearn.d.ts` 复制而来）由 `node packages/plugin-sdk/build.mjs` 生成，需在 SDK 源码变更后**重新构建**；若你在 `tsc` 下遇到 `TS2305 "has no exported member"`，即为 SDK 声明文件未同步所致，运行 `node packages/plugin-sdk/build.mjs` 重新生成即可。
 
@@ -28,34 +28,36 @@
 
 ```typescript
 interface PluginContext {
-  // (a) 预接线的 9 个核心服务代理
+  // (a) 预接线的 9 个核心服务代理。每个 key 的运行时契约都是 T | null：
+  //     D-12 降级（manifest.optional 的 Token 版本不兼容）会把它置 null，
+  //     消费前必须判空。见 packages/core/plugin-host/types.ts。
   services: {
-    commandBus: ICommandBusService;
-    eventBus: IEventBusService;
-    actionRegistry: IActionRegistryService;
-    capability: ICapabilityService;
-    processManager: IProcessService;
-    storage: IStorageService;
-    ai: IAIService | null; // Provider 未配置时为 null
+    commandBus: ICommandBusService | null;
+    eventBus: IEventBusService | null;
+    actionRegistry: IActionRegistryService | null;
+    capability: ICapabilityService | null;
+    processManager: IProcessService | null;
+    storage: IStorageService | null;
+    ai: IAIService | null; // Provider 未配置时也为 null
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
-  pluginId: string;
+  pluginId: string; // plugins 表的行 UUID，不是 manifest.id
   manifest: Manifest;
   // (b) 解析任意已注册的 Token
   resolve<T>(token: Token<T>): Promise<T>;
-  // (c) 向容器注入插件自有服务
+  // (c) 向容器注入插件自有服务 —— 仅 inline 模式可用
   provide<T>(token: Token<T>, instance: T): Promise<void>;
-  // (d) 其它上下文能力（非 Token）
   db: PluginDatabaseAPI; // 插件命名空间隔离表
   log: IPluginLogger; // ctx.log.info(...)
-  config: IConfigService;
-  contributions: ContributionAccessor;
+  config: IConfigService; // 仅 inline 模式可用
+  contributions: ContributionAccessor; // 仅 inline 模式可用
   http: IPluginHttpRouter; // RESTful & SSE 流式路由
-  require(moduleName: string): unknown; // 仅白名单内的共享模块
-  // ⚠️ 以下成员不在 `PluginContext` 接口中，仅由 worker 引导脚本运行时注入：
+  i18n: PluginI18nAPI; // 仅 inline 模式可用
+  require(moduleName: string): any; // 仅白名单内的共享模块
+  // ⚠️ 以下成员不在 `PluginContext` 接口中，仅由 worker / process 引导脚本运行时注入：
   // reportProgress?(stage?: string, message?: string): void;
-  // Inline 模式下为 undefined，按 PluginContext 标注会类型报错。见 docs/plugin/plugin-lifecycle.md。
+  // inline 模式下为 undefined，按 PluginContext 标注会类型报错。见 docs/plugin/plugin-lifecycle.md。
 }
 ```
 
@@ -79,7 +81,7 @@ interface PluginContext {
 | `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | `@openlearn/core:IPointsDimensionRegistry` |
 | `IPointsLedgerServiceToken`     | `IPointsLedgerService`     | `@openlearn/core:IPointsLedgerService`     |
 
-> `pointsDimension` 和 `pointsLedger` 通过 `tryResolve` 获取，未注册时值为 `null`（插件可检查 `=== null` 降级）。
+> 这 9 个 key 的运行时契约一律是 `T | null`：除 `pointsDimension` / `pointsLedger` / `ai` 外，其余服务在 D-12 降级时同样可能被置 `null`。消费前统一按 `ctx.services.x === null` 判空降级。
 
 ### B. 内核 / 基础设施 Token
 
@@ -96,7 +98,7 @@ interface PluginContext {
 | `IPluginDistributionManagerToken` | `PluginDistributionManager` | `@openlearn/core:IPluginDistributionManager` |
 | `ICapabilityRegistryToken`        | `CapabilityRegistry`        | `@openlearn/core:ICapabilityRegistry`        |
 
-> **⚠️ 已收回对外承诺的 Token（SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出）**
+> **⚠️ 已收回对外承诺的 Token（当前 SDK 3.7.4 已不再从 `@openlearn/plugin-sdk` 导出）**
 >
 > 审计项 M-10 / F-3：`kernel/index.ts` 把它们注册进 `ServiceRegistry`，但**零生产
 > resolve** —— 全仓唯一提及是一段注释示例，`v2_plugins/` 与 `assets/` 均无引用。
@@ -296,7 +298,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 > **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
-> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 当前 SDK 3.7.4 已**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
 > 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
 > 详见本文 C 区表格下方的撤回说明。
 
@@ -316,7 +318,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 > **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
-> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 当前 SDK 3.7.4 已**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
 > 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
 > 详见本文 C 区表格下方的撤回说明。
 
@@ -333,7 +335,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 > **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
-> 自 SDK 3.8.0 起**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
+> 当前 SDK 3.7.4 已**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
 > 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
 > 详见本文 C 区表格下方的撤回说明。
 
@@ -424,7 +426,7 @@ ITeachingCollaborationService { getCollaborationEngine(): Promise<unknown>; }
 ILearningAnalyticsService     { getAnalyticsEngine(): Promise<unknown>; }
 IAICapabilityService          { getCapabilityKernel(): Promise<unknown>; }
 ICapabilityRuntimeService     { getRuntimeKernel(): Promise<unknown>; }
-ICapabilityGovernanceService  { getGovernanceKernel(): Promise<unknown>; }
+ICapabilityGovernanceService  { getGovernanceKernel(): Promise<unknown>; } // @experimental，Token 不导出，插件勿用
 IPlatformServiceRegistryService { getServiceRegistryKernel(): Promise<unknown>; }
 ```
 
@@ -509,4 +511,4 @@ interface IPluginLogger {
 
 > ⚠️ **已知缺口**：`IClassroomCountdownServiceToken` 目前**只有 Token 与接口定义，尚无内核实现与注册**（课堂倒计时实际由 `server/routes/classroom.ts` 的 HTTP/Socket 路由实现）。在服务端补齐注册前，`ctx.resolve(IClassroomCountdownServiceToken)` 会失败——请勿在插件中使用该 Token，倒计时请消费 `classroom:countdown_updated` Socket 事件。
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-27

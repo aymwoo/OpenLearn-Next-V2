@@ -1,6 +1,6 @@
 # Architecture Governance & Policies 架构治理
 
-规范 Platform Kernel 的模块演进机制、Capability 网关三级防线与第三方插件代码沙箱审核标准。同步于 v0.7.4；安全细节的权威页面为 [security-permissions](../architecture/security-permissions.md) 与 [security-remediation-report](../architecture/security-remediation-report.md)。
+规范 Platform Kernel 的模块演进机制、Capability 网关三级防线与第三方插件代码沙箱审核标准。同步于 v0.7.4；安全细节的权威页面为 [security-permissions](../architecture/security-permissions.md)。历史修复记录见 [审计归档](../audit/security-remediation-report.md)（2026-09-25，快照）。
 
 ---
 

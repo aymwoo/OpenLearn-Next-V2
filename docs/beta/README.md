@@ -22,7 +22,7 @@
 
 仓库和演练已经具备的，不在这里重复。下面这些还不能打勾。完整对照表在生产指南 4.1 节。
 
-1. **目标环境的当次构建。** CI 会阻断 `pnpm lint`、`pnpm lint:strict`、`pnpm test`、`pnpm audit --audit-level high` 和 `Public beta journey`。清单第 1 项还要求 `pnpm lint:eslint`（0 error）和当次 `pnpm build`。这两条不在 CI 里。2026-10-14 的演练用仓库 `Dockerfile` 构建过镜像。ESLint 最近一次有记录的结果在 [审计报告](../AUDIT_REPORT.md)（2026-10-13：0 error、5060 warning）。起草本目录时没有重跑 ESLint、`pnpm build` 和 `pnpm audit`。
+1. **目标环境的当次构建。** CI 会阻断 `pnpm lint`、`pnpm lint:strict`、`pnpm test`、`pnpm audit --audit-level high` 和 `Public beta journey`。清单第 1 项还要求 `pnpm lint:eslint`（0 error）和当次 `pnpm build`。这两条不在 CI 里。2026-10-14 的演练用仓库 `Dockerfile` 构建过镜像。ESLint 最近一次有记录的结果在 [审计报告](../audit/AUDIT_REPORT.md)（2026-10-13：0 error、5060 warning）。起草本目录时没有重跑 ESLint、`pnpm build` 和 `pnpm audit`。
 2. **`ENCRYPTION_KEY`。** 目标环境要自己生成 64 位 hex，设成环境变量并离线备份。空着不会拒绝启动，也不再使用临时内存钥匙：首次启动写入 `storage/encryption-key`（权限 600，与 `bootstrap-credentials.txt` 同目录），之后每次读取。启动日志和管理后台会警告正在使用自动生成的密钥。环境变量与该文件不一致时进程报错退出。
 3. **种子口令。** 强制改密在演练和公测旅程里通过了。目标机器上的 `OPENLEARN_ADMIN_PASSWORD`、`OPENLEARN_TEACHER_PASSWORD`、删除 `storage/bootstrap-credentials.txt`、确认没有 `PLAYWRIGHT_TEST`，都还没做。
 4. **数据卷、反代、证书、健康检查的现场确认。** compose 与演练已经按 `/data`、`/backups` 跑通。目标机的卷、Nginx、`TRUST_PROXY` 跳数、`docker inspect` 的 Health，要在那台机器上再看一次。`docker-compose.yml` 的 `app` 服务发布了 `9000:9000`；启用 `proxy` profile 时，公网只应暴露 Nginx。

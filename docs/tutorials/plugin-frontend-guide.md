@@ -197,7 +197,7 @@ bridge.context.get() // → Promise<{ lessonId, classId }>
 | `editor.timeline_segment`  | 备课环节类型（Segment Type，见[配套篇](plugin-courseware-extensions.md)）             |
 | `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`）     |
 
-> 上表只是演示用子集 —— `ExtensionSlot` 联合类型现有 **100+ 个成员**，完整清单与各槽位 Props 见
+> 上表只是演示用子集 —— `ExtensionSlot` 联合类型现有 **120 个声明槽位（其中 116 个已被宿主渲染）**，完整清单与各槽位 Props 见
 > [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 >
 > ⚠️ 常见误写：备课画板组件的槽位名是 **`editor.palette_item`**，**不是** `palette.item`（后者不是合法槽位）。
@@ -383,7 +383,8 @@ esbuild.build({
   outfile: 'dist/frontend.js',
   // 注意：这里**不要**把 react / react-dom 列进 external —— 沙箱 iframe 取不到
   // 宿主的 window.HostSharedDeps，external 会导致激活时求值为 undefined 而失败。
-  external: ['@openlearn/plugin-sdk'],
+  // 对 @openlearn/plugin-sdk 只用 `import type`，类型导入会被 esbuild 擦除，无需 external；
+  // 任何值导入都会残留裸说明符，被构建门禁拒绝。
   format: 'esm',
   platform: 'browser',
 });
@@ -482,5 +483,5 @@ esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.c
 - [插件开发完全指南](plugin-development-tutorial.md) —— 主教程（manifest、命令、事件、安全、发布）
 - [课件与教学环节扩展](plugin-courseware-extensions.md) —— 备课画板图元 / 环节类型 / 进入条件
 - [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md) —— 第三方插件真实能力与路线
-- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots.md) —— 55 个槽位与 Props
+- [UI 扩展槽位参考](../reference/plugin-ui-extension-slots.md) —— 120 个声明槽位、116 个已渲染槽位与 Props
 - [Scaffold CLI](../sdk/scaffold-cli.md) —— 脚手架模板与构建产物

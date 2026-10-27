@@ -1,8 +1,10 @@
 # OpenLearn V2 插件系统专项审计
 
+> **归档快照**：本文是带日期的历史记录，不随代码更新。当前事实请以 [审计归档索引](audit-index.md) 列出的权威页面或源码为准。
+
 > **审计日期**：2026-10-14
 > **审计对象**：`openlearn-next@0.6.1`（仓库 `OpenLearn-Next-V2`，对照 `main` @ `6ebfc84`）
-> **依据**：`docs/AUDIT_REPORT.md`（2026-10-13 全系统审计）里与插件相关的结论，本次只复核插件子系统，并补上那份报告没有展开的信任边界。
+> **依据**：`docs/audit/AUDIT_REPORT.md`（2026-10-13 全系统审计）里与插件相关的结论，本次只复核插件子系统，并补上那份报告没有展开的信任边界。
 > **方法**：读当前树的安装、策略、worker、网关和前端宿主；能用 Vitest 或 Node 权限模型探针复现的都复现了。PL-01 到 PL-08 已在本分支修复，对应 PoC 改为回归断言。
 > **环境**：Node.js v22.14.0，pnpm 10.33.4，Linux。权限模型探针用的就是这个 Node，不是文档里写的 v24。
 > **PoC**：`packages/core/plugin-host/__tests__/plugin-audit-poc.test.ts`。PL-01 到 PL-08 断言漏洞已被阻断。PL-09、PL-10、PL-12、PL-15 的用例仍锁定未修复行为。

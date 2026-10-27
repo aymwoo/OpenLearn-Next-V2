@@ -2,7 +2,7 @@
 
 **Project**: OpenLearn V2
 **Module**: Core Services & Plugin SDK APIs
-**Last verified**: 2026-10-26（v0.7.4）
+**Last verified**: 2026-10-27（v0.7.5）
 
 ## 覆盖面实测
 
@@ -11,7 +11,7 @@
 | 维度                              | 数值   | 说明                                                              |
 | --------------------------------- | ------ | ----------------------------------------------------------------- |
 | `packages/core/` 定义的服务 Token | 35     | 分布在 `packages/core/di/`、`worker-runtime/`、`security/` 等模块 |
-| `@openlearn/plugin-sdk` 对外导出  | 33     | `packages/plugin-sdk/index.ts` 重导出的部分                       |
+| `@openlearn/plugin-sdk` 对外导出  | 32     | 31 个内核 Token + `IActivityRegistryToken`（4 个已收回的不计入）  |
 | `docs/api/di-tokens.md` 收录      | 见该页 | 该页是 Token 的**唯一权威字典**，含已停用 Token 的历史说明        |
 
 > 早期版本此处写作「所有 19 个公共 DI Token」，该数字已严重滞后于代码。

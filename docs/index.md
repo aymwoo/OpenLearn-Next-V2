@@ -38,10 +38,6 @@ architecture/classroom-runtime
 architecture/resource-runtime
 architecture/assignment
 architecture/assessment-model
-architecture/architecture-synchronization-report
-architecture/platform-foundation-audit-report
-architecture/navigation-audit-report
-architecture/security-remediation-report
 architecture/plugin-worker-isolation-l1-proposal
 ```
 
@@ -57,7 +53,6 @@ plugin/community-plugin-registry
 plugin/extension-registry
 plugin/anchor-slots
 plugin/frontend-sandbox-capability-boundary
-plugin/plugin-documentation-report
 plugin/plugin-security-migration
 ```
 
@@ -77,7 +72,6 @@ sdk/scaffold-cli
 ai/ai-runtime
 ai/ai-capability
 ai/ai-teacher-workspace
-ai/ai-documentation-report
 ```
 
 ```{toctree}
@@ -118,7 +112,6 @@ analytics/learning-analytics-engine
 deployment/production-guide
 deployment/docker-nginx
 deployment/multi-school
-DEPLOY_REHEARSAL
 beta/README
 beta/announcement
 beta/known-issues
@@ -152,7 +145,6 @@ api/whiteboard-event-slot-contract
 developer-guide/developer-guide
 developer-guide/testing-strategy
 developer-guide/upgrade-regression
-developer-guide/sync-report
 developer-guide/docs-drift-audit
 experimental-modules
 feature-sweep
@@ -278,7 +270,6 @@ contributing/contributing
 :caption: 🔍 故障排查 (Troubleshooting)
 
 troubleshooting/troubleshooting-faq
-troubleshooting/broken-reference-report
 ```
 
 ```{toctree}
@@ -290,14 +281,9 @@ governance/architecture-governance
 
 ```{toctree}
 :maxdepth: 2
-:caption: 📑 专项审计报告 (Audit Reports)
+:caption: 📑 审计归档 (Audit Archive)
 
-classroom-time-flow-audit
-whiteboard-realtime-sync-audit
-trust-boundary-hardening-audit-2026-10-14
-audit/course-import-audit
-AUDIT_REPORT
-PLUGIN_AUDIT_REPORT
+audit/audit-index
 ```
 
 ---
@@ -314,4 +300,4 @@ PLUGIN_AUDIT_REPORT
 - **[AI Runtime & Tools](ai/ai-runtime.md)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide.md)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-10-26 (v0.7.4)
+> 最后更新：2026-10-27 (v0.7.5)

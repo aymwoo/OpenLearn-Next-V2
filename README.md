@@ -1,6 +1,6 @@
 # OpenLearnV2 — Educational OS
 
-> 插件驱动的下一代在线教育操作系统（LMS），集成微内核架构、双运行模式插件沙箱、零信任课件隔离与 AI 伴随教学。
+> 插件驱动的下一代在线教育操作系统（LMS），集成微内核架构、三档隔离插件沙箱、零信任课件隔离与 AI 伴随教学。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](package.json)
 [![Node: 20.x / 22.x / 24.x](https://img.shields.io/badge/Node-20.x%20%2F%2022.x%20%2F%2024.x-green.svg)](package.json)
@@ -16,8 +16,8 @@
 - 🧩 **微内核与事件驱动架构 (Educational OS Kernel)**
   - 核心子系统基于 CQRS `CommandBus`、强类型 DI 依赖注入容器与 SQLite 关系型存储。
   - `EventBus` 支持内核级事件发布/订阅，关键审计事件（如学生端异常、权限变更、课件提交）持久化落盘至 `events` 表。
-- 🛡️ **双运行模式插件沙箱 (Plugin Host & Sandboxing)**
-  - 支持 **Inline 原生模式** 与 **Worker 独立进程沙箱**。Worker 模式具备独立的 Node.js 进程、RPC 代理、看门狗自动拉起（Watchdog）与 5 分钟崩溃 4 次熔断保护（Circuit Breaker）。
+- 🛡️ **三档隔离插件沙箱 (Plugin Host & Sandboxing)**
+  - 支持 **Inline 原生模式**、**Worker 线程沙箱** 与 **子进程沙箱**（`process`）。第三方 ZIP 插件被强制使用 `process` 模式；隔离模式下经 RPC 代理访问内核服务，并具备看门狗自动拉起（Watchdog）与 5 分钟崩溃 4 次熔断保护（Circuit Breaker）。
   - 严谨的 7 态插件生命周期管理（`INSTALLED` ➔ `ACTIVATING` ➔ `ACTIVE` ➔ `DEACTIVATING` ➔ `INACTIVE` ➔ `ERROR` ➔ `UNINSTALLED`），卸载与停用自动触发资源与权限彻底回收。
   - 插件专属 REST API 安全网关：命名空间路由隔离、滑动窗口限流、SSE 并发连接配额与响应头清洗。
 - 📦 **零信任课件沙箱与透明 Bridge SDK**

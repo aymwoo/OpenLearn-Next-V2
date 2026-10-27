@@ -1,8 +1,8 @@
 # OpenLearnV2 插件开发完全指南
 
-> 📅 **最后更新**：2026-10-26（§6 前端与课件扩展拆分为 [前端插件指南](plugin-frontend-guide.md) 与 [课件与教学环节扩展](plugin-courseware-extensions.md)）
+> 📅 **最后更新**：2026-10-27（§8.1.1 改为 Inline 与隔离模式对比，覆盖 Worker Thread 与子进程两种隔离运行时）
 >
-> 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
+> 本文档描述 Worker Thread / 子进程隔离模式与 Inline 模式的 API 差异。第三方 ZIP 插件会被强制落到 `process` 模式，请务必阅读 [§8.1.1 Inline 与隔离模式 API 差异](#inline-mode-api)。
 
 ## 1. 系统架构概述
 
@@ -35,7 +35,7 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 │  └──────────────────────┬───────────────────────────┘      │
 │                         │                                   │
 │  ┌──────────────────────▼───────────────────────────┐      │
-│  │     SQLite Database (30+ 表) + ServiceRegistry    │      │
+│  │     SQLite Database (80+ 表) + ServiceRegistry    │      │
 │  └───────────────────────────────────────────────────┘      │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -155,15 +155,18 @@ const qb = await ctx.resolve({ name: '@my-scope/IQuestionBankService' } as any);
 
 ```typescript
 interface PluginContext {
-  // 9 个内核服务接口（直接访问）
+  // 9 个内核服务接口（直接访问）。注意运行时契约是 `T | null`：
+  // 依赖降级或隔离模式未注入时，对应 key 为 null，消费前必须判空。
   services: {
-    commandBus: ICommandBusService; // 命令执行、注册
-    eventBus: IEventBusService; // 事件发布/订阅
-    actionRegistry: IActionRegistryService; // AI 工具注册
-    capability: ICapabilityService; // 权限管理
-    processManager: IProcessService; // 后台进程
-    storage: IStorageService; // K-V 存储
-    ai: IAIService; // AI 文本生成
+    commandBus: ICommandBusService | null; // 命令执行、注册
+    eventBus: IEventBusService | null; // 事件发布/订阅
+    actionRegistry: IActionRegistryService | null; // AI 工具注册
+    capability: ICapabilityService | null; // 权限管理
+    processManager: IProcessService | null; // 后台进程
+    storage: IStorageService | null; // K-V 存储
+    ai: IAIService | null; // AI 文本生成
+    pointsDimension: IPointsDimensionRegistry | null; // 积分维度注册表
+    pointsLedger: IPointsLedgerService | null; // 积分账本
   };
   pluginId: string; // 插件 ID
   manifest: Manifest; // 插件 manifest
@@ -192,7 +195,7 @@ interface PluginContext {
 }
 ```
 
-> ⚠️ **Worker 模式限制**：以上接口为 Inline 模式的完整 API。在 Worker Thread 隔离模式下，`ctx.config`、`ctx.provide()` 不可用，`ctx.db.migrate()` 回调仅暴露 `prepare()`，`eventBus` 使用 `subscribe()/unsubscribe()` 而非 `on()/off()`。详见 [8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
+> ⚠️ **隔离模式限制**：以上接口为 Inline 模式的完整 API。在 Worker Thread / 子进程（`process`）隔离模式下，`ctx.config`、`ctx.provide()` **均不可用**，`ctx.db.migrate()` 回调仅暴露 `prepare()`，`eventBus` 使用 `subscribe()/unsubscribe()` 而非 `on()/off()`。第三方 ZIP 插件会被强制落到 `process` 模式，因此不要在插件里依赖 `ctx.config`。详见 [8.1.1 Inline 与隔离模式的 API 差异](#inline-mode-api)。
 >
 > ⚠️ **`ctx.pluginId` 的语义**：无论 Inline 还是 Worker 模式，`ctx.pluginId` 都是 **`plugins` 表的行 UUID**（如 `019fa0d4-2e31-76d9-...`），**不是** `manifest.id`。需要人类可读的稳定标识时读 `ctx.manifest.id`。该差异直接影响 `ctx.db.table()` 的表前缀，详见 §8.1.1 与 §8.6。
 
@@ -405,6 +408,7 @@ interface ConfigProperty {
   enum?: string[];
   minimum?: number;
   maximum?: number;
+  scope?: Array<'platform' | 'school' | 'class'>; // 缺省只有 platform
 }
 
 interface ClassroomTool {
@@ -494,20 +498,22 @@ interface ClassroomTool {
 
 ### 3.2 PluginContext — 插件上下文的完整 API
 
-插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 7 个内核核心服务，同时还直接提供了内置的日志、自建表数据库与 HTTP 路由器：
+插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 9 个内核核心服务，同时还直接提供了内置的日志、自建表数据库与 HTTP 路由器：
 
-| 功能 / 服务     | 访问方式                      | 用途                                                           |
-| --------------- | ----------------------------- | -------------------------------------------------------------- |
-| CommandBus      | `ctx.services.commandBus`     | 注册/执行命令                                                  |
-| EventBus        | `ctx.services.eventBus`       | 发布/订阅事件                                                  |
-| ActionRegistry  | `ctx.services.actionRegistry` | 注册 AI 工具                                                   |
-| Capability      | `ctx.services.capability`     | 权限管理                                                       |
-| Process         | `ctx.services.processManager` | 后台进程                                                       |
-| Storage         | `ctx.services.storage`        | 专属键值存储                                                   |
-| AI              | `ctx.services.ai`             | 文本与大模型生成                                               |
-| **HTTP Router** | `ctx.http`                    | **（v0.3.11 新增）注册 RESTful API（GET/POST/PUT/DELETE 等）** |
-| Database API    | `ctx.db`                      | 命名空间自建表操作与版本迁移 (`migrate`)                       |
-| Structured Log  | `ctx.log`                     | 自动携带 pluginId 与时间戳的结构化日志                         |
+| 功能 / 服务     | 访问方式                       | 用途                                                           |
+| --------------- | ------------------------------ | -------------------------------------------------------------- |
+| CommandBus      | `ctx.services.commandBus`      | 注册/执行命令                                                  |
+| EventBus        | `ctx.services.eventBus`        | 发布/订阅事件                                                  |
+| ActionRegistry  | `ctx.services.actionRegistry`  | 注册 AI 工具                                                   |
+| Capability      | `ctx.services.capability`      | 权限管理                                                       |
+| Process         | `ctx.services.processManager`  | 后台进程                                                       |
+| Storage         | `ctx.services.storage`         | 专属键值存储                                                   |
+| AI              | `ctx.services.ai`              | 文本与大模型生成                                               |
+| PointsDimension | `ctx.services.pointsDimension` | 积分维度注册；Worker / Process 模式为 `null`                   |
+| PointsLedger    | `ctx.services.pointsLedger`    | 积分账本读写；Worker / Process 模式为 `null`                   |
+| **HTTP Router** | `ctx.http`                     | **（v0.3.11 新增）注册 RESTful API（GET/POST/PUT/DELETE 等）** |
+| Database API    | `ctx.db`                       | 命名空间自建表操作与版本迁移 (`migrate`)                       |
+| Structured Log  | `ctx.log`                      | 自动携带 pluginId 与时间戳的结构化日志                         |
 
 通过 DI 解析更多服务（`IDatabaseToken`、`IPluginHostToken` 等）：
 
@@ -525,12 +531,14 @@ const db = await ctx.resolve(IDatabaseToken);
 ```typescript
 await actionRegistry.register({
   id: 'my-plugin-action', // 唯一 ID
-  commandType: 'myplugin.action', // 对应的命令类型
+  commandType: 'myplugin.action', // 对应的命令类型（宿主会自动补 manifest.id 前缀）
   description: '用中文描述此工具的功能和参数',
   capabilityRequired: 'myplugin:write', // 所需权限
   isHighRisk: false, // 是否高危（需教师审批）
+  // 是否出现在 AI Agent 的工具箱；默认 true。设为 false 后仍可经 HTTP / commandBus 调用
+  exposeToAgent: true,
   inputSchema: {
-    // JSON Schema（Google GenAI 格式）
+    // JSON Schema（Google GenAI 格式，type 必须大写）
     type: 'OBJECT',
     properties: {
       param1: { type: 'STRING', description: '参数说明' },
@@ -619,12 +627,12 @@ ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
 
 这是继 default-deny 之后第二高频的 `COMMAND_NOT_REGISTERED` 来源：**写短名还是全限定名，取决于写在哪里**。写错不会报错，只在运行期 403。
 
-| 写在哪里                                                                                                         | 写什么                                    | 宿主是否加 `manifest.id` 前缀           |
-| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
-| `commandBus.registerHandler(type, …)` 、`actionRegistry.register({ commandType })`（及 manifest 里声明的那一份） | 短名，如 `poll.create`                    | ✅ 自动加                               |
-| `manifest.classroomTools[].commandType` / `manifest.contributes.*`                                               | 短名，如 `poll.create`                    | ✅ 自动加                               |
-| 运行期 `ctx.ui.registerExtensionPoint(slot, { slotProps: { commandType } })`                                     | **必须全限定** `{{pluginId}}.poll.create` | ❌ 原样透传（`ui.register` 不做前缀化） |
-| `commandBus.execute()`                                                                                           | 同上一条的对应形态                        | inline 自动加；process 沙箱需全限定     |
+| 写在哪里                                                                                                         | 写什么                                       | 宿主是否加 `manifest.id` 前缀            |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| `commandBus.registerHandler(type, …)` 、`actionRegistry.register({ commandType })`（及 manifest 里声明的那一份） | 短名，如 `poll.create`                       | ✅ 自动加                                |
+| `manifest.classroomTools[].commandType` / `manifest.contributes.*`                                               | 短名，如 `poll.create`                       | ✅ 自动加                                |
+| 运行期 `ctx.ui.registerExtensionPoint(slot, { slotProps: { commandType } })`                                     | **必须全限定** `{{manifest.id}}.poll.create` | ❌ 原样透传（`ui.register` 不做前缀化）  |
+| `commandBus.execute()`                                                                                           | 同上一条的对应形态                           | inline 自动加；worker / process 需全限定 |
 
 > 判断方法：**短名只在你交给宿主存储/索引的位置生效**（manifest、`registerHandler`）；
 > 一旦你自己把命令名写进 `slotProps` 或 `execute()`，就没人替你补前缀了。
@@ -658,7 +666,12 @@ export default {
       '@openlearn/core:IDatabase@^1.0.0',
       '@openlearn/core:IProcessService@^1.0.0',
     ],
-    capabilitiesProposed: ['lesson:write', 'poll:write', 'poll:read'],
+    // 命令的 capabilityRequired 必须落在执行角色已有的能力集合内：
+    // - lesson:write  → 教师
+    // - student:write → 教师 / 学生
+    // - lesson:read   → 教师 / 学生
+    // 平台不存在 poll:* 能力；发明新 resource 不会给教师/学生授权，命令会 403。
+    capabilitiesProposed: ['lesson:write', 'student:write', 'lesson:read'],
     classroomTools: [
       {
         id: 'poll-tool',
@@ -718,7 +731,7 @@ export default {
       id: 'poll-create',
       commandType: 'poll.create',
       description: '在课程中创建一个随堂投票，教师可选择单选或多选模式',
-      capabilityRequired: 'poll:write',
+      capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
@@ -761,7 +774,7 @@ export default {
       id: 'poll-vote',
       commandType: 'poll.vote',
       description: '学生对投票进行选择',
-      capabilityRequired: 'poll:read',
+      capabilityRequired: 'student:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
@@ -812,7 +825,7 @@ export default {
       id: 'poll-results',
       commandType: 'poll.get_results',
       description: '查询指定投票的实时统计结果',
-      capabilityRequired: 'poll:read',
+      capabilityRequired: 'lesson:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
@@ -866,16 +879,17 @@ export default {
 1. 进入「系统设置」→「插件中心」
 2. 将上述代码粘贴到代码编辑器
 3. 点击「安装插件」
-4. 在插件列表中找到 `ext-poll`，点击激活
+4. 在插件列表中找到 `ext-poll`。第三方插件声明的能力**不会自动生效**：先由管理员在审批页确认 `capabilitiesProposed`（写入 `plugin_capability_grants` 表），再点击激活
+5. 若跳过审批直接激活，插件仍能激活，但 `plugin:ext-poll` actor 缺少对应能力；由教师/学生发起的命令不受影响（它们按自身角色鉴权）
 
 #### 4.1.3 使用 AI Agent 调用
 
-安装后，AI Agent 自动获得以下工具：
+安装后，AI Agent 自动获得以下工具（工具名是 `ActionDescriptor.id` 对应的 `commandType`，宿主会补 `ext-poll.` 前缀）：
 
 ```
-poll.create       — 创建随堂投票
-poll.vote         — 学生投票
-poll.get_results  — 查询结果
+poll.create       — 创建随堂投票（实际命令类型 ext-poll.poll.create）
+poll.vote         — 学生投票（ext-poll.poll.vote）
+poll.get_results  — 查询结果（ext-poll.poll.get_results）
 ```
 
 教师可以直接对 AI 说：**"在今天的物理课上创建一个投票，问题是'光速是否为宇宙中最快的速度？'，选项为：是、否、不确定"**
@@ -1346,7 +1360,7 @@ export default {
   - Handler 直接返回普通对象或基本类型时，路由器自动将其作为 200 OK 封装为 `{ status: 200, body: 返回值 }`。
   - 需要自定义状态码或响应头时，显式返回 `{ status: 400, headers: { ... }, body: { ... } }`。
 
-#### 4. 平台统一安全网关 (`PluginApiGateway`) 的六道纵深防御
+#### 4. 平台统一安全网关（`server/routes/plugin-api-gateway.ts`）的六道纵深防御
 
 外部发往插件的每一笔 HTTP 请求，均在主线程网关前置执行强力安全过滤：
 
@@ -1455,25 +1469,26 @@ Worker 模式的特点：
 - 崩溃后自动清理（dispose 强制回收）
 
 (worker-inline-mode-api)=
+(inline-mode-api)=
 
-#### 8.1.1 Worker 与 Inline 模式 API 差异 ⚠️
+#### 8.1.1 Inline 与隔离模式（Worker / 子进程）API 差异 ⚠️
 
-Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext` API 都可用**。开发时若目标运行模式为 Worker，必须遵守以下约束：
+Worker Thread 与子进程（`process`）共用同一套 bootstrap 与 RPC 代理，因此下表的「隔离模式」列对两者都成立。**第三方 ZIP 插件会被强制落到 `process`**，开发时不要假设 `ctx.config`、`ctx.provide()` 可用。
 
-| API                           | Inline 模式                   | Worker 模式                               | 说明                                                                 |
-| ----------------------------- | ----------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
-| `ctx.services.commandBus`     | 完整                          | `registerHandler` / `execute`             | `execute` 调用不自动加命名空间前缀，见下方                           |
-| `ctx.services.eventBus`       | `on()` / `off()`              | `subscribe()` / `unsubscribe()`           | 方法名不同                                                           |
-| `ctx.services.actionRegistry` | 完整                          | `register()`                              | —                                                                    |
-| `ctx.http`                    | 完整 `PluginHttpRouter`       | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
-| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用        | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**          |
-| `ctx.db.table()`              | 返回 `plugin_<scopeId>_` 前缀 | 同左（前缀与执行模式无关）                | 两种模式一致，均基于安装主键 scopeId，详见下方说明                   |
-| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步)  | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
-| `ctx.config`                  | 可用                          | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
-| `ctx.provide()`               | 可用                          | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
-| `ctx.log`                     | 可用                          | 可用                                      | —                                                                    |
-| `ctx.pluginId`                | `plugins` 表行 UUID           | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                     |
-| `ctx.manifest`                | 可用                          | 可用                                      | —                                                                    |
+| API                           | Inline 模式                             | 隔离模式（Worker / Process）              | 说明                                                                 |
+| ----------------------------- | --------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| `ctx.services.commandBus`     | 完整                                    | `registerHandler` / `execute`             | `execute` 调用不自动加命名空间前缀，见下方                           |
+| `ctx.services.eventBus`       | `publish` / `subscribe` / `unsubscribe` | 同左（经 `EventBusProxy`）                | 没有 `on()` / `off()`，SDK 接口只有 `subscribe()` / `unsubscribe()`  |
+| `ctx.services.actionRegistry` | 完整                                    | `register()`                              | —                                                                    |
+| `ctx.http`                    | 完整 `PluginHttpRouter`                 | 完整支持 (GET/POST 等)                    | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
+| `ctx.db.migrate(fn)`          | `sqliteDb.exec()` 可用                  | 仅 `prepare().run/get/all`                | `upgradeFn` 收到受限代理，**无 `exec()`、无 `transaction`**          |
+| `ctx.db.table()`              | 返回 `plugin_<scopeId>_` 前缀           | 同左（前缀与执行模式无关）                | 两种模式一致，均基于安装主键 scopeId，详见下方说明                   |
+| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步)            | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction`                  |
+| `ctx.config`                  | 可用                                    | ❌ 不可用                                 | 需通过 `ctx.manifest.configuration.properties` 读取默认值            |
+| `ctx.provide()`               | 可用                                    | ❌ 不可用                                 | 需 `typeof` 守卫跳过                                                 |
+| `ctx.log`                     | 可用                                    | 可用                                      | —                                                                    |
+| `ctx.pluginId`                | `plugins` 表行 UUID                     | `plugins` 表行 UUID                       | 两种模式一致；`ctx.manifest.id` 才是 manifest ID                     |
+| `ctx.manifest`                | 可用                                    | 可用                                      | —                                                                    |
 
 **`ctx.db.table()` 表前缀语义（已统一收敛）：**
 

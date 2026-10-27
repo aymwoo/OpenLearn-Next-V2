@@ -88,11 +88,10 @@ graph TD
 
 > `CapabilityGovernanceKernel` 在 `packages/core/kernel/index.ts` 中除实例化并经 `ICapabilityGovernanceServiceToken` 暴露外，**无其他生产消费者**（审计项 M-9）。
 >
-> **⚠️ 未接入真实调用路径**：本子系统（529 行）自 SDK 3.8.0 起已标 `@experimental`
-> 并**移出 `@openlearn/plugin-sdk` 导出面**（审计项 F-2 / D-2 决策）。插件不要依赖
-> `ICapabilityGovernanceServiceToken`。若将来接入真实消费者并稳定，去掉
+> **⚠️ 未接入真实调用路径**：本子系统（529 行）已标 `@experimental`，且
+> `ICapabilityGovernanceServiceToken` **已移出 `@openlearn/plugin-sdk` 的值导出面**（接口类型仍可导入，但 Token 不再导出；审计项 F-2 / D-2 决策）。插件不要依赖该 Token。若将来接入真实消费者并稳定，去掉
 > `packages/core/capability-governance/index.ts` 顶部的 `@experimental` 注释、
-> 把 `export type { … }` 加回 `packages/plugin-sdk/index.ts` 即可。
+> 把 Token 的 value export 加回 `packages/plugin-sdk/index.ts` 即可。
 
 ---
 

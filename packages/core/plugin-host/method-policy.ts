@@ -114,7 +114,7 @@ export function isReadOnlyMethod(method: string): boolean {
  *
  * ## 为什么不再直接抛错
  *
- * `agent:tool` 在能力模型里必须由管理员逐项勾选（见 `docs/PLUGIN_AUDIT_REPORT.md`），
+ * `agent:tool` 在能力模型里必须由管理员逐项勾选（见 `docs/audit/PLUGIN_AUDIT_REPORT.md`），
  * 而 `ActionDescriptor.exposeToAgent` 的默认值是 `true` —— 于是**任何不知道
  * 这条新规则的旧插件**（第三方插件普遍如此，它们按 SDK 文档注册 action 即可）
  * 在 worker / process 隔离模式下调用 `actionRegistry.register()` 都会拿到

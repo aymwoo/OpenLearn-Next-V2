@@ -1,12 +1,14 @@
 # 公测上线演练记录
 
+> **归档快照**：本文是带日期的历史记录，不随代码更新。当前事实请以 [审计归档索引](audit-index.md) 列出的权威页面或源码为准。
+
 日期：2026-10-14。基线是当时的 `main`（`cc0b56e`，已包含 PR #12）。演练在本分支上边做边修，最后用修过的镜像重跑了失败的步骤。
 
 镜像：`docker build -t openlearn-rehearsal:latest .`（仓库 `Dockerfile`，`node:22-alpine`）。本环境的 Docker CLI 没有 `compose` 子命令，所以没有执行 `docker compose up`。服务参数与 `docker-compose.yml` 一致：卷 `/data`、`/backups`，环境变量 `OPENLEARN_DATA_DIR`、`OPENLEARN_DB_PATH`、`BACKUP_DIR`、`OPENLEARN_PLUGINS_DIR`、`ENCRYPTION_KEY`、种子口令、`TRUST_PROXY`。反代使用 compose profile 会挂载的 `deploy/nginx/openlearn.conf`。
 
 旧库对照的是标签 `v0.6.1`（`d735db63`）。`git diff v0.6.1 -- migrations` 只多出 `021`、`022` 和 README，`000`–`020` 的 SQL 与该标签相同。
 
-上线前按 [公测上线检查清单](deployment/production-guide.md#4-公测上线检查清单) 再走一遍。
+上线前按 [公测上线检查清单](../deployment/production-guide.md#4-公测上线检查清单) 再走一遍。
 
 ---
 
@@ -153,7 +155,7 @@ node scripts/site-restore.mjs --i-understand-downtime
 **结果：通过**
 
 - 三个业务容器的 Health 都到过 `healthy`。`/health` 为 200。
-- 演练当时的 `/health/ready` 还带 `db: connected`。随后的公测运维改动把就绪响应收成 `{"status":"ready"}`，不再返回数据库、WAL 或错误文本。上线检查以 [生产指南](deployment/production-guide.md#4-公测上线检查清单) 的现行合同为准。
+- 演练当时的 `/health/ready` 还带 `db: connected`。随后的公测运维改动把就绪响应收成 `{"status":"ready"}`，不再返回数据库、WAL 或错误文本。上线检查以 [生产指南](../deployment/production-guide.md#4-公测上线检查清单) 的现行合同为准。
 - `docker restart` 之后 `/health` 恢复，`keep.txt` 还在。
 - 主进程被宿主机杀掉后：`RestartCount` 从 0 变为 1，`StartedAt` 更新，几秒内 `/health` 再次 200，课件文件还在。
 - `docker kill` 会把容器停住且 **不会** 自动拉起。这是 Docker 对「人为停止」的策略，`unless-stopped` 只处理进程自己退出。

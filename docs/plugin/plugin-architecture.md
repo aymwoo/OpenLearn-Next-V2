@@ -33,9 +33,9 @@ OpenLearn V2 的插件系统为全栈、可伸缩、多租户隔离的微前端�
 
 ---
 
-## 2. 双重物理运行模式 (Dual Execution Modes)
+## 2. 三档物理运行模式 (Three Execution Modes)
 
-OpenLearn V2 插件系统支持两种互补充的物理执行模式：
+OpenLearn V2 插件系统支持三种执行模式：`inline`（进程内）、`worker`（Worker Thread）、`process`（子进程）。**未受信的第三方 ZIP 插件一律被强制为 `process`**。
 
 ```mermaid
 graph TD
@@ -52,8 +52,13 @@ graph TD
     end
 
     subgraph "Worker Thread Sandbox Isolation Mode"
-        W1["Worker Thread 1: Third-Party Plugin A"]
-        W2["Worker Thread 2: Third-Party Plugin B"]
+        W1["Worker Thread 1: Trusted Plugin A"]
+        W2["Worker Thread 2: Trusted Plugin B"]
+    end
+
+    subgraph "Child Process Sandbox Isolation Mode"
+        P1["Child Process 1: Third-Party Plugin A"]
+        P2["Child Process 2: Third-Party Plugin B"]
     end
 
     PH -->|Direct Activation| Preloaded
@@ -62,9 +67,13 @@ graph TD
     PH -->|Launch & Manage| WM
     WM -->|Spawn| W1
     WM -->|Spawn| W2
+    WM -->|Spawn| P1
+    WM -->|Spawn| P2
 
     W1 <-->|IPC / MessageChannel Proxy| PH
     W2 <-->|IPC / MessageChannel Proxy| PH
+    P1 <-->|IPC Proxy| PH
+    P2 <-->|IPC Proxy| PH
 ```
 
 ### A. 内联模式 (Inline Mode)
