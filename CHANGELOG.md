@@ -12,6 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **白板放行插件贡献的图元类型**：`whiteboard.draw` / `whiteboard.batch_draw` 此前只认
+  `KNOWN_ELEMENT_TYPES` 硬编码清单，插件经 `editor.palette_item` /
+  `whiteboard.renderer` 声明并在画板上投放的图元（如
+  `openlearn-plugin-interactive-courseware/interactive-board`）一律被拒
+  —— 第三方互动课件图元根本画不上画板，只能报「不支持的元素类型」。
+  - 影响面：`packages/plugins/builtin.ts` 抽出 `isAllowedElementType()`：放行
+    ① 核心已知类型 ② 命名空间形式（含 `/`，或 `plugin:` / `ext-` / `plugin-` 前缀）
+    ③ 插件宿主贡献注册表里声明过的 `type` / `id`；`server/services/course-package-import.ts`
+    沿用同一放行规则（否则导出再导入仍会被拒）。
+  - 验证：`packages/plugins/__tests__/builtin.test.ts` 覆盖命名空间图元落库。
+
 - **前端插件支持 `inline` 执行模式（远程插件在宿主页面内运行）**：
   `activateRemotePlugin` 此前无论 `execution_mode` 为何都只会挂一个
   `/plugin-sandbox/frame` 沙箱 iframe —— 声明 `inline` 的插件（需要直接使用

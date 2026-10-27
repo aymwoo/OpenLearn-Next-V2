@@ -218,6 +218,26 @@ describe('BuiltinPlugin', () => {
     const element = db.prepare('SELECT * FROM whiteboard_elements WHERE id = ?').get(elementId) as any;
     expect(element).toBeDefined();
     expect(element.lesson_id).toBe(lessonId);
+
+    // 2b. Draw plugin-contributed namespaced element on whiteboard
+    const pluginElementRes = (await commandBus.execute({
+      id: 'cmd-whiteboard-draw-plugin',
+      type: 'whiteboard.draw',
+      actorId,
+      payload: {
+        lessonId,
+        type: 'openlearn-plugin-interactive-courseware/interactive-board',
+        data: JSON.stringify({ title: '互动课件测试', scorePolicy: 'LATEST' }),
+      },
+      timestamp: Date.now(),
+    })) as any;
+
+    expect(pluginElementRes.elementId).toBeDefined();
+    const pluginElement = db
+      .prepare('SELECT * FROM whiteboard_elements WHERE id = ?')
+      .get(pluginElementRes.elementId) as any;
+    expect(pluginElement).toBeDefined();
+    expect(pluginElement.type).toBe('openlearn-plugin-interactive-courseware/interactive-board');
   });
 
   it('activate 时向课件运行时脚本注册点注册平台原生分数监视器', async () => {

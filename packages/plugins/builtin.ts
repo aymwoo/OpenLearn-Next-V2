@@ -530,6 +530,34 @@ export const BuiltinPlugin = {
       'plugin', // 小组件
       'page_meta', // 分页与大纲元数据
     ];
+
+    /**
+     * 校验白板元素类型是否合法。
+     * 支持核心已知类型、插件命名空间图元（如 "plugin-id/item"）及插件注册表贡献图元。
+     */
+    const isAllowedElementType = (type: string): boolean => {
+      if (!type || typeof type !== 'string') return false;
+      if (KNOWN_ELEMENT_TYPES.includes(type)) return true;
+      // 允许插件命名空间图元（包含 '/' 如 "openlearn-plugin-interactive-courseware/interactive-board"，或特定前缀）
+      if (type.includes('/') || type.startsWith('plugin:') || type.startsWith('ext-') || type.startsWith('plugin-')) {
+        return true;
+      }
+      // 检查插件宿主贡献点声明（editor.palette_item 与 whiteboard.renderer）
+      try {
+        const reg = (pluginHost as any)?.getContributionRegistry?.();
+        if (reg) {
+          const paletteItems = (reg.getBySlot('editor.palette_item') || []) as any[];
+          if (paletteItems.some((item: any) => item.type === type || item.id === type)) return true;
+          const renderers = (reg.getBySlot('whiteboard.renderer') || []) as any[];
+          if (
+            renderers.some((item: any) => item.targetType === type || item.id === type || item.elementType === type)
+          ) {
+            return true;
+          }
+        }
+      } catch {}
+      return false;
+    };
     await actionRegistry.register({
       id: 'core-whiteboard-draw',
       commandType: drawWhiteboardCmdType,
@@ -561,14 +589,14 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
 
-        // 类型白名单校验：拒绝未知类型，引导调用方使用正确工具
-        if (!KNOWN_ELEMENT_TYPES.includes(payload.type)) {
+        // 类型白名单校验：放行已知核心类型与插件贡献类型，拒绝未知类型并引导调用方使用正确工具
+        if (!isAllowedElementType(payload.type)) {
           const hint =
             payload.type === 'quiz'
               ? ''
               : payload.type && (payload.type.includes('quiz') || payload.type.includes('question'))
                 ? ` 提示：创建测验请使用 quiz.create 或 quiz_pro.create 工具。`
-                : ` 已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}。`;
+                : ` 已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}，或插件扩展图元 (如 ext-xxx/yyy)。`;
           throw new Error(`不支持的元素类型 "${payload.type}"。${hint}`);
         }
 
@@ -856,7 +884,7 @@ export const BuiltinPlugin = {
         // 单次事务批量插入
         const batchInsert = db.transaction(() => {
           for (const el of elements) {
-            if (!KNOWN_ELEMENT_TYPES.includes(el.type)) {
+            if (!isAllowedElementType(el.type)) {
               throw new Error(`不支持的元素类型 "${el.type}"。已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}`);
             }
             const elementId = uuidv7();

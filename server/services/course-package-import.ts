@@ -207,7 +207,14 @@ export async function importCoursePackage(
   try {
     // ── 3. 组装白板元素 ───────────────────────────────────────────────────
     elements = pkg.elements.map((element) => {
-      if (!KNOWN_ELEMENT_TYPES.has(element.type)) {
+      const isAllowed =
+        KNOWN_ELEMENT_TYPES.has(element.type) ||
+        (typeof element.type === 'string' &&
+          (element.type.includes('/') ||
+            element.type.startsWith('plugin:') ||
+            element.type.startsWith('ext-') ||
+            element.type.startsWith('plugin-')));
+      if (!isAllowed) {
         throw new Error(`课程包包含不支持的白板元素类型：${element.type}`);
       }
       const data = resolveAssetPlaceholders(element.data, materialized) as Record<string, unknown>;
