@@ -27,6 +27,8 @@ import {
   IPointsLedgerServiceToken,
   IDatabaseToken,
   IAssessmentGraderRegistryToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
 } from '../../di/interfaces.js';
 import { AssessmentGraderRegistry } from '../../assessment/registry-service.js';
 import { CommandBus } from '../../command-bus/index.js';
@@ -174,6 +176,33 @@ async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegis
 
   // IAssessmentGraderRegistry: 服务端题型注册表（Issue #320 回归用真实实现）
   await sr.register(IAssessmentGraderRegistryToken, new AssessmentGraderRegistry());
+
+  // IClassroomLifecycleService / IInteractionRuntimeService：课堂运行时扩展点（Issue #327 回归用）
+  // 两者都用**带状态**的实现 —— 回收断言要看注册表里还剩什么。
+  const stageGuards = new Map<string, unknown>();
+  await sr.register(IClassroomLifecycleServiceToken, {
+    getStage: async () => 'PRE_CLASS_READY',
+    transitionStage: async () => ({ success: true, stage: 'IN_CLASS_TEACHING' }),
+    registerStageGuard: (owner: string, guard: unknown) => {
+      stageGuards.set(owner, guard);
+    },
+    unregisterStageGuard: (owner: string) => {
+      stageGuards.delete(owner);
+    },
+  } as any);
+  (sr as any).__stageGuards = stageGuards;
+
+  const activityProviders = new Map<string, unknown>();
+  await sr.register(IInteractionRuntimeServiceToken, {
+    registerActivityProvider: (owner: string, descriptor: any) => {
+      activityProviders.set(`${owner}:${descriptor.id}`, descriptor);
+    },
+    unregisterActivityProvider: (owner: string, id: string) => {
+      activityProviders.delete(`${owner}:${id}`);
+    },
+    listActivityProviders: () => Array.from(activityProviders.values()),
+  } as any);
+  (sr as any).__activityProviders = activityProviders;
 
   return sr;
 }
@@ -546,6 +575,104 @@ describe('E2E Plugin Lifecycle', () => {
       await pluginHost.uninstallPlugin('ext-qt-uninstall');
 
       expect(registry.getQuestionType(PLUGIN_TYPE)).toBeUndefined();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Issue #327: 课堂阶段门禁 / 课堂互动提供者随停用回收
+  // ══════════════════════════════════════════════════════════════════
+
+  describe('Issue #327 课堂运行时扩展点回收', () => {
+    const OWNER = 'ext-runtime:demo';
+
+    /**
+     * 插件通过 `ctx.resolve(token)` 注册两类扩展点。
+     *
+     * 这两个 token **不在 `ctx.services` 里**，插件只能经 ctx.resolve 拿到 ——
+     * 宿主的回收拦截也必须落在 ctx.resolve 上，且字符串与 Token 两条路径都要覆盖。
+     */
+    function makeRuntimeExtensionPlugin(id: string, opts: { byName?: boolean } = {}): PluginModule {
+      return {
+        default: {
+          manifest: { id, name: id, version: '1.0.0', main: 'index.js' },
+          activate: async (ctx: any) => {
+            const lifecycle = opts.byName
+              ? await ctx.resolve('@openlearn/core:IClassroomLifecycleService')
+              : await ctx.resolve(IClassroomLifecycleServiceToken);
+            const interaction = opts.byName
+              ? await ctx.resolve('@openlearn/core:IInteractionRuntimeService')
+              : await ctx.resolve(IInteractionRuntimeServiceToken);
+
+            lifecycle.registerStageGuard(OWNER, async () => true);
+            interaction.registerActivityProvider(OWNER, {
+              id: 'matrix_voting',
+              name: '矩阵投票',
+              category: 'vote',
+            });
+          },
+          deactivate: async () => {},
+        },
+      };
+    }
+
+    it('停用后阶段门禁与互动提供者都从宿主注册表消失', async () => {
+      loadMap.set('src-rt', makeRuntimeExtensionPlugin('ext-rt'));
+      await pluginHost.installPlugin('src-rt');
+      await pluginHost.activatePlugin('ext-rt');
+
+      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
+      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      expect(stageGuards.has(OWNER)).toBe(true);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(true);
+
+      await pluginHost.deactivatePlugin('ext-rt');
+
+      // 旧行为：两者都残留 —— 插件代码已不在，门禁却还在阻断课堂阶段流转
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('按名字 resolve 的插件同样被回收（字符串路径不能绕过拦截）', async () => {
+      loadMap.set('src-rt-name', makeRuntimeExtensionPlugin('ext-rt-name', { byName: true }));
+      await pluginHost.installPlugin('src-rt-name');
+      await pluginHost.activatePlugin('ext-rt-name');
+
+      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
+      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      expect(stageGuards.has(OWNER)).toBe(true);
+
+      await pluginHost.deactivatePlugin('ext-rt-name');
+
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('卸载时同样回收（含非 ACTIVE 态）', async () => {
+      loadMap.set('src-rt-uninstall', makeRuntimeExtensionPlugin('ext-rt-uninstall'));
+      await pluginHost.installPlugin('src-rt-uninstall');
+      await pluginHost.activatePlugin('ext-rt-uninstall');
+
+      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
+      const providers = (serviceRegistry as any).__activityProviders as Map<string, unknown>;
+      expect(stageGuards.has(OWNER)).toBe(true);
+
+      await pluginHost.uninstallPlugin('ext-rt-uninstall');
+
+      expect(stageGuards.has(OWNER)).toBe(false);
+      expect(providers.has(`${OWNER}:matrix_voting`)).toBe(false);
+    });
+
+    it('再激活并重新注册不会因残留而冲突', async () => {
+      loadMap.set('src-rt-reactivate', makeRuntimeExtensionPlugin('ext-rt-reactivate'));
+      await pluginHost.installPlugin('src-rt-reactivate');
+      await pluginHost.activatePlugin('ext-rt-reactivate');
+      await pluginHost.deactivatePlugin('ext-rt-reactivate');
+
+      const stageGuards = (serviceRegistry as any).__stageGuards as Map<string, unknown>;
+      expect(stageGuards.has(OWNER)).toBe(false);
+
+      await expect(pluginHost.activatePlugin('ext-rt-reactivate')).resolves.toBeUndefined();
+      expect(stageGuards.has(OWNER)).toBe(true);
     });
   });
 });

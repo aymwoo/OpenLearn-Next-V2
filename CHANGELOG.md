@@ -12,6 +12,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **停用/卸载插件时不清理「课堂阶段门禁」与「课堂互动提供者」（Issue #327）**：
+  - **现象**：插件注册的课堂四阶段门禁（`registerStageGuard`）与课堂互动提供者
+    （`registerActivityProvider`）在插件停用后仍留在宿主注册表里 —— 插件代码已不在，
+    门禁却继续阻断课堂阶段流转且无法在界面上解释原因；互动提供者仍出现在
+    `listActivityProviders()` 里，教师点进去发现没有功能。
+  - **根因**：两者与 #320 同类 —— 注册表是插件用 `ctx.resolve(token)` 直取的**裸注册表**，
+    不经 `ctx.services.*` 包装层，注册项不进 `ResourceTracker`。但比 #320 更难修：
+    `registerStageGuard(owner, guard)` 的 owner 是**插件自选**的字符串，且
+    `QuickActivityDescriptor` **不带 owner 字段**、`listActivityProviders()` 只返回 descriptor 值，
+    宿主拿到它**无法反查归属** —— 所以「停用时按 owner 批量清」在当前公开 API 下做不到
+    （这正是该问题一直挂着的原因）。
+  - **改法**：这两个 token **都不在 `ctx.services` 里**，插件拿它们的唯一途径是 `ctx.resolve` ——
+    所以拦截点只能在 resolve。新增 per-plugin 代理（`wrapClassroomLifecycleService` /
+    `wrapInteractionRuntimeService`），记下插件**实际传入的** owner 与 id 并登记进 `ResourceTracker`，
+    停用/卸载时精确注销，无需猜 owner、**零漏网**。
+    Token 对象与字符串名**两条路径都接入**，否则按名字解析的插件会绕过拦截。
+    不改任何公开类型，插件侧零改动。
+  - **验证**：新增回归测试 4 条（停用后两者消失、按名字 resolve 同样被回收、卸载回收、再激活不冲突）；
+    负向对照 —— 撤掉 `context-builder.ts` 的代理后同 4 条全失败（`expected true to be false`），
+    恢复后 18 passed。`npx vitest run packages/core/plugin-host` → 45 files / 377 tests passed；
+    `pnpm lint` → 0 error。
+
 - **停用/卸载插件时不清理服务端题型注册表，题型变成「幽灵扩展点」（Issue #320）**：
   - **现象**：插件用 `ctx.resolve(IAssessmentGraderRegistryToken)` 注册的题型，在插件停用后仍留在注册表里 ——
     教师继续能出题、继续按**旧闭包**判分，`GET /api/assessment-question-types` 也继续把它列给前端；
@@ -196,7 +218,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     `registerAIContextProvider`）与 1 条失效豁免；新增 `scripts/__tests__/extension-points-coverage.test.ts` 5 条
     （含两条负向对照）。`bash audit-tools/run.sh` → `drift_count=0`（新增 `ext_point_drift=0`）。
   - **顺带发现**：`registerStageGuard` 与 `unregisterActivityProvider` 生产代码零调用方 —— 宿主同样不清理这两个扩展点，
-    已另开 Issue #327，文档如实标注「宿主目前不清理，需自行在 `deactivate()` 注销」。
+    已另开 Issue #327，并在后续修复中通过 `ctx.resolve` 层代理解决（见本段上方的 #327 条目）。
 
 - **扩展槽位文档补齐 20 个缺口，并把「新增槽位必须写文档」变成第五段门禁**：
   - **问题**：`docs/reference/plugin-ui-extension-slots.md` 是插件作者查槽位的唯一入口，但它只列了 **100** 个成员，而 `src/plugin-host/types.ts` 的 `ExtensionSlot` 实际有 **120** 个 —— 页面正文写「115 个」、代码块只有 100 个、§2 的 props 表更少。缺的 20 个里包括整个测评子系统（`assessment.list.card` / `.attempt.toolbar` / `.stats.card`）、整个教师批改面板（`assignment.grade.toolbar.action` / `.item.addon` / `.rubric.addon`）、命令面板与斜杠菜单（`command_palette.item` / `quick_insert.item`）、AI 生态（`ai.prompt.template` / `ai.skill.provider`）等。**这 20 个槽位在 docs/ 里一次都没提过**，插件作者只能读宿主源码猜 props。

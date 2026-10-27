@@ -37,6 +37,8 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
   PLUGIN_RESOLVABLE_TOKEN_NAMES,
 } from '../di/interfaces.js';
 import type {
@@ -51,6 +53,10 @@ import type {
   IPointsDimensionRegistry,
   IPointsLedgerService,
   PointsDimensionSpec,
+  IClassroomLifecycleService,
+  IInteractionRuntimeService,
+  ClassroomStageGuard,
+  QuickActivityDescriptor,
 } from '../di/interfaces.js';
 import { bindPluginCommand, pluginActorIdFor } from '../command-bus/plugin-command.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
@@ -564,6 +570,96 @@ function wrapPointsDimensionRegistry(
 }
 
 /**
+/**
+ * 包装 IClassroomLifecycleService：拦截课堂阶段门禁的注册，使它随插件停用而回收。
+ *
+ * 为什么必须在 `ctx.resolve` 层拦截（Issue #327）：这个服务**不在 `ctx.services` 里**
+ * （那 9 个键里没有它），插件拿它的唯一途径是 `ctx.resolve(token)` ——
+ * 所以 `ctx.services` 层的包装对它完全无效，唯一的拦截点就是 resolve。
+ *
+ * 为什么不能「停用时猜 owner」：`registerStageGuard(owner, guard)` 的 owner 是
+ * **插件自选**的字符串（不像题型注册表的 pluginId 由宿主注入），宿主无法枚举
+ * 「这个插件注册了哪些 owner」。拦截后我们记下插件**实际传进来的** owner，清理零漏网。
+ *
+ * 已知歧义（owner 语义本身带来的，不是本包装引入）：两个插件若用了同一个 owner 字符串，
+ * 后注册者会覆盖先注册者；先注册者停用时会把后者的门禁一并注销。
+ */
+function wrapClassroomLifecycleService(
+  service: IClassroomLifecycleService,
+  tracker: ResourceTracker,
+  pluginId: string,
+): IClassroomLifecycleService {
+  return {
+    getStage: createSafeFunction((lessonId: string) => service.getStage(lessonId)),
+    transitionStage: createSafeFunction((lessonId: string, toStage: any, actorId: string, classId?: string) =>
+      service.transitionStage(lessonId, toStage, actorId, classId),
+    ),
+    registerStageGuard: createSafeFunction((owner: string, guard: ClassroomStageGuard) => {
+      service.registerStageGuard(owner, guard);
+      tracker.track(pluginId, {
+        dispose: () => {
+          service.unregisterStageGuard(owner);
+        },
+      });
+    }),
+    unregisterStageGuard: createSafeFunction((owner: string) => {
+      service.unregisterStageGuard(owner);
+    }),
+  } as IClassroomLifecycleService;
+}
+
+/**
+ * 包装 IInteractionRuntimeService：拦截互动提供者的注册，使它随插件停用而回收。
+ *
+ * 这里的难点比阶段门禁更硬：内部键是 `${owner}:${id}`，但
+ * **`QuickActivityDescriptor` 不带 owner 字段**，`listActivityProviders()` 只返回
+ * descriptor 值 —— 宿主拿到它**无法反查归属**。所以「停用时按 owner 批量清」
+ * 在当前公开 API 下根本做不到，这也是 #327 迟迟未修的原因。
+ *
+ * 拦截后记下插件实际传入的 (owner, id)，dispose 时精确注销。
+ */
+function wrapInteractionRuntimeService(
+  service: IInteractionRuntimeService,
+  tracker: ResourceTracker,
+  pluginId: string,
+): IInteractionRuntimeService {
+  return {
+    registerActivityProvider: createSafeFunction((owner: string, descriptor: QuickActivityDescriptor) => {
+      service.registerActivityProvider(owner, descriptor);
+      const providerId = descriptor?.id;
+      if (providerId) {
+        tracker.track(pluginId, {
+          dispose: () => {
+            service.unregisterActivityProvider(owner, providerId);
+          },
+        });
+      }
+    }),
+    unregisterActivityProvider: createSafeFunction((owner: string, id: string) => {
+      service.unregisterActivityProvider(owner, id);
+    }),
+    listActivityProviders: createSafeFunction(() => service.listActivityProviders()),
+  } as IInteractionRuntimeService;
+}
+
+/**
+ * `ctx.resolve` 的分派器：只对「插件可注册领域扩展点」的那两个 token 返回代理，
+ * 其余 token 原样返回宿主实例。
+ *
+ * 两条路径（Token 对象 / 字符串名）**必须都走这里** —— 否则按名字解析的插件会绕过代理，
+ * 回收拦截形同虚设。
+ */
+function wrapPluginRuntimeService<T>(raw: T, tokenName: string, tracker: ResourceTracker, pluginId: string): T {
+  if (tokenName === IClassroomLifecycleServiceToken.name) {
+    return wrapClassroomLifecycleService(raw as IClassroomLifecycleService, tracker, pluginId) as T;
+  }
+  if (tokenName === IInteractionRuntimeServiceToken.name) {
+    return wrapInteractionRuntimeService(raw as IInteractionRuntimeService, tracker, pluginId) as T;
+  }
+  return raw;
+}
+
+/**
  * 包装 IPointsLedgerService：透传积分账本读写。
  *
  * addPoints 会持久化到 events 表，插件上下文调用的所有写入都需经过此包装。
@@ -983,9 +1079,16 @@ export async function buildContext(
               `SDK-exported Token names.`,
           );
         }
-        return serviceRegistry.resolveByName(token) as Promise<T>;
+        // Issue #327：字符串路径也必须过代理 —— 否则按名字解析的插件会绕过回收拦截。
+        return serviceRegistry
+          .resolveByName(token)
+          .then((raw) => wrapPluginRuntimeService(raw, token, tracker, pluginId) as T);
       }
-      return serviceRegistry.resolve(token);
+      // Issue #327：课堂阶段门禁 / 课堂互动提供者只能经 ctx.resolve 拿到，
+      // 它们不进 ResourceTracker —— 在这里做 per-plugin 代理，dispose 时精确注销。
+      return serviceRegistry
+        .resolve(token)
+        .then((raw) => wrapPluginRuntimeService(raw, token.name, tracker, pluginId) as T);
     },
     // V3.2: 插件向 DI 容器提供服务（对应 manifest.provides）
     provide: async <T>(token: Token<T>, instance: T): Promise<void> => {
