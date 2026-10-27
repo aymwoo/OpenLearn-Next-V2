@@ -525,3 +525,106 @@ describe('buildContext', () => {
     );
   });
 });
+
+// ── actionRegistry 命名空间前缀化 ────────────────────────────────────────
+
+/**
+ * `wrapActionRegistry` 的前缀化行为。
+ *
+ * 为什么重要：`wrapCommandBus.registerHandler` 一直会自动给第三方插件的命令
+ * 加 `manifest.id.` 前缀，但 action **描述符**此前原样入库。于是内核拦截器
+ * `getActionByCommandType(实际派发名)` 命不中描述符 —— `inputSchema` 校验与
+ * `capabilityRequired` 静默失效，AI 侧第三方技能（强制前缀化）也拿不到
+ * 描述符，报 `Command not registered`。
+ */
+describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
+  const remoteManifest: Manifest = {
+    id: 'openlearn-plugin-demo',
+    name: 'Demo',
+    version: '1.0.0',
+    main: 'index.js',
+  };
+
+  async function setupWithActionMock(manifest: Manifest = remoteManifest) {
+    const registry = await setupRegistry();
+    const actionRegistry = await registry.resolve(IActionRegistryServiceToken);
+    const ctx = await buildContext(registry, new ResourceTracker(), 'db-uuid-1', manifest, mockDb());
+    return { ctx, register: actionRegistry.register as unknown as ReturnType<typeof vi.fn> };
+  }
+
+  const descriptor = {
+    id: 'demo-list',
+    commandType: 'grade.list_configs',
+    description: 'list',
+    inputSchema: { type: 'OBJECT', properties: {} },
+    capabilityRequired: 'lesson:read',
+  };
+
+  it('第三方插件的 commandType 自动加 manifest.id 前缀', async () => {
+    const { ctx, register } = await setupWithActionMock();
+
+    await ctx.services.actionRegistry!.register(descriptor as any);
+
+    expect(register).toHaveBeenCalledTimes(2);
+    expect(register.mock.calls[0][0]).toMatchObject({
+      id: 'demo-list',
+      commandType: 'openlearn-plugin-demo.grade.list_configs',
+    });
+  });
+
+  it('同时注册裸名兼容别名，且别名不进 AI 工具箱（exposeToAgent: false）', async () => {
+    const { ctx, register } = await setupWithActionMock();
+
+    await ctx.services.actionRegistry!.register(descriptor as any);
+
+    const alias = register.mock.calls[1][0];
+    expect(alias).toMatchObject({
+      id: 'demo-list__raw_alias',
+      commandType: 'grade.list_configs',
+      // 裸名在 commandBus 里没有 handler，模型选中只会拿到「命令未注册」
+      exposeToAgent: false,
+    });
+  });
+
+  it('已带前缀的 commandType 不重复加前缀，也不注册别名', async () => {
+    const { ctx, register } = await setupWithActionMock();
+
+    await ctx.services.actionRegistry!.register({
+      ...descriptor,
+      commandType: 'openlearn-plugin-demo.grade.list_configs',
+    } as any);
+
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register.mock.calls[0][0].commandType).toBe('openlearn-plugin-demo.grade.list_configs');
+  });
+
+  it('内核插件（@openlearn/*）保持全局命名空间，不加前缀也不加别名', async () => {
+    const kernelManifest: Manifest = {
+      id: '@openlearn/plugin-demo',
+      name: 'Kernel Demo',
+      version: '1.0.0',
+      main: 'index.js',
+    };
+    const { ctx, register } = await setupWithActionMock(kernelManifest);
+
+    await ctx.services.actionRegistry!.register(descriptor as any);
+
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register.mock.calls[0][0]).toMatchObject({ id: 'demo-list', commandType: 'grade.list_configs' });
+  });
+
+  it('dispose 时前缀描述符与裸名别名一并反注册', async () => {
+    const registry = await setupRegistry();
+    const actionRegistry = await registry.resolve(IActionRegistryServiceToken);
+    const unregister = actionRegistry.unregister as unknown as ReturnType<typeof vi.fn>;
+    const tracker = new ResourceTracker();
+    const ctx = await buildContext(registry, tracker, 'db-uuid-1', remoteManifest, mockDb());
+
+    await ctx.services.actionRegistry!.register(descriptor as any);
+    tracker.disposeAll('db-uuid-1');
+
+    expect(unregister.mock.calls.map((c) => c[0])).toEqual(
+      expect.arrayContaining(['demo-list', 'demo-list__raw_alias']),
+    );
+  });
+});

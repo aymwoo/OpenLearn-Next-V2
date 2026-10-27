@@ -109,6 +109,15 @@ export const normalizeToolSchema = (schema: any): any => {
 
 export const buildOpenAITools = (callerRole?: string) => {
   let actions = kernelContainer.actionRegistry.getAllActions();
+  // `exposeToAgent: false` 的 action 仅**程序化可达**（HTTP / commandBus /
+  // ctx.invokeCommand），不进 AI 工具箱 —— 这是 ActionDescriptor 上该字段的契约。
+  //
+  // 此前只有 `ActionRegistry.getAgentTools()`（Gemini 格式）做了这条过滤，
+  // 而**运行时真正生效的工具清单是本函数**（runOpenAIAgentChat 直接用它）。
+  // 结果是：`courseware.save_score_config` 这类作者显式声明「不应由 agent
+  // 自主决策」的命令仍会出现在大模型工具箱里；插件 action 经 method-policy
+  // 降级为 false 后也仍然漏进来。一并在此收口。
+  actions = actions.filter((action) => action.exposeToAgent !== false);
   if (callerRole === 'student') {
     // SEC-01: 学生角色下，严格剔除一切具有管理、修改、删除或系统副作用的工具
     actions = actions.filter((action) => {

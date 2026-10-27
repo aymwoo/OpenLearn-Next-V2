@@ -17,6 +17,11 @@ client_debug.log
 !.env.example
 /packages/core/db/educational_os.db*
 !/packages/core/db/index.ts
+# 仓库根误落的 SQLite（未设 OPENLEARN_DB_PATH 时的一次性产物）
+/openlearn.db*
+# 插件数据归档（uninstall / orphan-data 的 purge 导出）默认写在
+# `<data>/plugin-data-exports`；没设 OPENLEARN_DATA_DIR 时会落在仓库根。
+/plugin-data-exports/
 .mf/
 .__mf__temp/
 .pnpmfile.cjs

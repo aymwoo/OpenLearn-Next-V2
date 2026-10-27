@@ -483,13 +483,39 @@ function wrapActionRegistry(
   actionRegistry: IActionRegistryService,
   tracker: ResourceTracker,
   pluginId: string,
+  manifestId?: string,
 ): IActionRegistryService {
+  const prefix = manifestId || pluginId;
+  const isKernel = prefix.startsWith('@openlearn/');
   return {
     register: createSafeFunction((descriptor: ActionDescriptor) => {
-      return Promise.resolve(actionRegistry.register(descriptor)).then(() => {
+      const commandType = descriptor.commandType;
+      const prefixed =
+        isKernel || !commandType || commandType.startsWith(`${prefix}.`) ? commandType : `${prefix}.${commandType}`;
+      const effectiveDescriptor = prefixed !== commandType ? { ...descriptor, commandType: prefixed } : descriptor;
+      return Promise.resolve(actionRegistry.register(effectiveDescriptor)).then(() => {
+        if (prefixed !== commandType) {
+          // 裸名兼容别名：只服务「按原始 commandType 查描述符」的调用方
+          // （`getActionByCommandType('grade.list_configs')`）。
+          //
+          // `exposeToAgent: false` 是必需的：别名与原描述符的 commandType 不同
+          // （一个裸名、一个前缀名），不加这个标志就会把**同一个能力**在 AI 工具
+          // 列表里出成两条 —— 而裸名在 commandBus 里没有 handler（handler 只按
+          // 前缀名注册），模型选中它只会拿到「命令未注册」。
+          Promise.resolve(
+            actionRegistry.register({
+              ...descriptor,
+              id: `${descriptor.id}__raw_alias`,
+              exposeToAgent: false,
+            }),
+          ).catch(() => {});
+        }
         tracker.track(pluginId, {
           dispose: () => {
-            Promise.resolve(actionRegistry.unregister(descriptor.id)).catch(() => {});
+            Promise.resolve(actionRegistry.unregister(effectiveDescriptor.id)).catch(() => {});
+            if (prefixed !== commandType) {
+              Promise.resolve(actionRegistry.unregister(`${descriptor.id}__raw_alias`)).catch(() => {});
+            }
           },
         });
       });
@@ -870,7 +896,7 @@ export async function buildContext(
       ? (processId: string) => processService.getProcessOwner!(processId)
       : undefined,
   );
-  const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId);
+  const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId, manifest.id);
   const wrappedCapability = wrapCapability(capabilityService);
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
   const wrappedAI = wrapAI(aiService, pluginId, tracker);

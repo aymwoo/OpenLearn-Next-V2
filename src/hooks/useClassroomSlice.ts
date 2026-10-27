@@ -20,6 +20,29 @@ import type { SessionType } from '../types/app';
 
 import type { useToast } from './useToast';
 
+/**
+ * 从 `GET /api/plugins` 的一行记录里取出**前端该用的执行档**。
+ *
+ * 注意两个字段的区别（`packages/core/plugin-host/core.ts` `listPlugins()`）：
+ * - `execution_mode` —— 历史字段，返回的是**加载器代际**（`esm` / `legacy`），
+ *   前端旧徽章读它；拿它当沙箱档用会永远得到一个无法识别的值。
+ * - `isolation_mode` —— 服务端求值后的**实际沙箱档**
+ *   （`resolvePluginExecutionMode`，见 packages/core/plugin-host/execution-policy.ts）。
+ *
+ * 所以本函数以 `isolation_mode` 为准；只有它缺失时（旧服务端）才回退读
+ * `execution_mode`，且仍然只接受三个合法沙箱值。
+ *
+ * 无法识别的取值一律回退 `process`（沙箱），与历史行为一致 ——
+ * 宁可多套一层沙箱，也不要因为拼写差异把第三方代码放进宿主页面。
+ */
+export function resolveFrontendExecutionMode(plugin: {
+  isolation_mode?: string;
+  execution_mode?: string;
+}): 'inline' | 'worker' | 'process' | 'legacy' {
+  const raw = plugin.isolation_mode ?? plugin.execution_mode;
+  return raw === 'inline' || raw === 'worker' || raw === 'legacy' ? raw : 'process';
+}
+
 export interface ClassroomSliceParams {
   lang: 'zh' | 'en';
   t: Record<string, string>;
@@ -68,6 +91,13 @@ export interface ClassroomSliceParams {
     status: string;
     has_frontend?: boolean;
     manifest: string;
+    /**
+     * 服务端求值后的**实际沙箱档**（`inline` / `worker` / `process`）。
+     * 注意不是 `execution_mode` —— 后者返回的是加载器代际（`esm` / `legacy`）。
+     */
+    isolation_mode?: string;
+    /** 历史字段：加载器代际（`esm` / `legacy`），不能当沙箱档用。 */
+    execution_mode?: string;
   }>;
 }
 
@@ -246,7 +276,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
             name: plugin.name,
             version: plugin.version ?? '',
             state: PluginState.INSTALLED,
-            executionMode: 'process',
+            executionMode: resolveFrontendExecutionMode(plugin),
             // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
             // 决定是否放行非 get* 方法；缺失则回退为空数组（只读）。
             capabilitiesProposed: resolveDeclaredCapabilities(plugin),

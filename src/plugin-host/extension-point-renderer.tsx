@@ -343,13 +343,32 @@ function resolveExtensionComponent(ext: any): React.ComponentType<any> {
   // - memo/forwardRef/lazy 产物是对象而非函数 → 不进探针。
   if (typeof fn === 'function' && !(fn as any).prototype?.isReactComponent) {
     let looksLikeFactory = false;
+    // React 19 使用 __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H，
+    // React 18 使用 __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher.current。
+    const internals =
+      (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE ||
+      (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+    const prevDispatcher = internals?.H ?? internals?.ReactCurrentDispatcher?.current;
     try {
+      // 隔离当前渲染上下文：若 fn 为直接函数组件（使用 hooks），
+      // 必须阻止其 hooks 挂载到外层 ExtensionPointRenderer 的 Fiber 上，
+      // 否则外层组件在后续重渲染时因缓存跳过 probe 导致 hooks 数量不一致，
+      // 触发 React error #300 (Rendered fewer hooks than expected)。
+      if (internals) {
+        if ('H' in internals) internals.H = null;
+        if (internals.ReactCurrentDispatcher) internals.ReactCurrentDispatcher.current = null;
+      }
       const probe = (fn as any)();
       if (probe && typeof probe.then === 'function') {
         looksLikeFactory = true;
       }
     } catch {
       // 直接组件的无参调用（hooks/类组件/必选 props 解构）会抛错 —— 按直组件处理
+    } finally {
+      if (internals) {
+        if ('H' in internals) internals.H = prevDispatcher;
+        if (internals.ReactCurrentDispatcher) internals.ReactCurrentDispatcher.current = prevDispatcher;
+      }
     }
     if (looksLikeFactory) {
       console.error(
