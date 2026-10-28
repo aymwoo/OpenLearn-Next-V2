@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-10-28
+
 ### Features
 
 - **第三方插件可视沙箱容器与视图桥接 (Dual-Track UI Architecture Phase 1)**：
