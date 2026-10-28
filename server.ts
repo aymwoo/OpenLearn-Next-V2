@@ -28,7 +28,6 @@ import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
 import {
-  ISemesterGradeServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
 } from './packages/core/di/interfaces.js';
@@ -36,14 +35,11 @@ import { ClassroomRuntimeService } from './server/services/classroom-runtime-ser
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
 import { bindAIPersonaRegistry } from './server/ai-persona-registry.js';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import { createAiLimiter, createLoginLimiter, createWriteLimiter } from './server/security/rate-limit.js';
 import { resolveTrustProxy } from './server/security/trust-proxy.js';
 import { assertStartupEnv } from './server/security/env-validation.js';
 import { warnSensitiveFilePermissions } from './server/security/file-permissions.js';
-import { filterXSS } from 'xss';
 import {
   hasDataSubmission,
   hasScoreDisplay,
@@ -281,13 +277,22 @@ async function startServer() {
   // 登录按账号分桶（含学号），写请求按 trust proxy 解析后的客户端地址分桶。
   // 不把可伪造的 X-Forwarded-For 放进 key；开发环境同样收紧，仅 PLAYWRIGHT_TEST 放宽。
   const loginLimiter = createLoginLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 5);
-  const writeLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : 60);
+  const isDev = process.env.NODE_ENV !== 'production';
+  // 生产环境基础写限流放宽至 180 次/分（3 req/s），开发环境放宽至 600 次/分，避免课堂高频协作（白板/课件提交/互动）误撞 429
+  const defaultWriteLimit = process.env.PLAYWRIGHT_TEST ? 10000 : isDev ? 600 : 180;
+  const writeLimiter = createWriteLimiter(defaultWriteLimit);
+  // 课堂视图状态同步专用限流：每分钟允许 120 次（dev 600 次），独立于通用写请求桶，保障白板切页/环节同步不卡顿
+  const viewStateLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : isDev ? 600 : 120);
   const aiLimiter = createAiLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 10);
 
   // SEC-03 防御加固：
   // 1. 写请求限流前置：在解析任何请求体前执行，阻止超频与恶意请求消耗 CPU/内存解析 JSON
   app.use((req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+      // 课堂视图状态同步端点（轻量级断网/离开恢复快照）走独立限流，不占用全站通用写限流配额
+      if (/^\/api\/classroom\/sessions\/[^/]+\/view-state\/?$/.test(req.path)) {
+        return viewStateLimiter(req, res, next);
+      }
       return writeLimiter(req, res, next);
     }
     next();

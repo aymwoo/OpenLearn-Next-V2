@@ -202,8 +202,9 @@ export function LiveClassroomView({
   const studentWindowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isStudentWindowOpen, setIsStudentWindowOpen] = useState(false);
   const syncChannelRef = useRef<ClassroomSyncChannel | null>(null);
-  /** 环节切换回写 view-state 的防抖定时器 */
+  /** 环节切换回写 view-state 的防抖定时器与去重比较 */
   const segWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPersistedSegmentRef = useRef<string | null>(null);
   const drawTickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const drawRecoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
@@ -1058,20 +1059,42 @@ export function LiveClassroomView({
   }, [selectedLesson, liveClassSelectedClassId]);
 
   useEffect(() => {
+    lastPersistedSegmentRef.current = null;
+  }, [selectedLesson]);
+
+  useEffect(() => {
     syncChannelRef.current?.broadcastChangeSegment(activeSegmentId);
     // 会话保存：环节切换防抖回写（恢复协议的 activeSegmentId 来源）
-    // 仅在**确有进行中会话**时回写：无会话时该端点按契约返回 404，
-    // 回写只会平白刷出控制台错误（见 hasActiveSession 声明处的说明）。
-    if (selectedLesson && hasActiveSession && segWriteTimerRef.current) clearTimeout(segWriteTimerRef.current);
-    if (selectedLesson && hasActiveSession) {
+    // 仅在**确有进行中会话**且环节发生实际变更时回写：
+    // 无会话时该端点按契约返回 404，未变更时避免重复回写挤占写限流配额。
+    if (selectedLesson && hasActiveSession && segWriteTimerRef.current) {
+      clearTimeout(segWriteTimerRef.current);
+      segWriteTimerRef.current = null;
+    }
+    if (selectedLesson && hasActiveSession && activeSegmentId !== lastPersistedSegmentRef.current) {
       segWriteTimerRef.current = setTimeout(() => {
+        const targetSegmentId = activeSegmentId;
         fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/view-state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeSegmentId: activeSegmentId }),
-        }).catch(() => {});
+          body: JSON.stringify({ activeSegmentId: targetSegmentId }),
+        })
+          .then((res) => {
+            if (res.ok) {
+              lastPersistedSegmentRef.current = targetSegmentId;
+            } else if (res.status === 429) {
+              console.warn('[LiveClassroomView] view-state rate-limited (HTTP 429), skipping transient update.');
+            }
+          })
+          .catch(() => {});
       }, 500);
     }
+    return () => {
+      if (segWriteTimerRef.current) {
+        clearTimeout(segWriteTimerRef.current);
+        segWriteTimerRef.current = null;
+      }
+    };
   }, [activeSegmentId, selectedLesson, hasActiveSession]);
 
   // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染。

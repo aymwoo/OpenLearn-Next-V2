@@ -489,16 +489,37 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
     const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastPersistedPageRef = useRef<number | null>(null);
+
+    useEffect(() => {
+      lastPersistedPageRef.current = null;
+      return () => {
+        if (viewStateTimerRef.current) {
+          clearTimeout(viewStateTimerRef.current);
+          viewStateTimerRef.current = null;
+        }
+      };
+    }, [lessonId]);
+
     const persistPageChange = useCallback(
       (page: number) => {
         if (userRole !== 'teacher' || !lessonId) return;
+        if (lastPersistedPageRef.current === page) return;
         if (viewStateTimerRef.current) clearTimeout(viewStateTimerRef.current);
         viewStateTimerRef.current = setTimeout(() => {
           fetch(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/view-state`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ currentPage: page }),
-          }).catch(() => {});
+          })
+            .then((res) => {
+              if (res.ok) {
+                lastPersistedPageRef.current = page;
+              } else if (res.status === 429) {
+                console.warn('[InteractiveWhiteboard] view-state rate-limited (HTTP 429), skipping transient update.');
+              }
+            })
+            .catch(() => {});
         }, 500);
       },
       [userRole, lessonId],
@@ -2603,6 +2624,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       widgetId={widgetId}
                       elementId={el.id}
                       lessonId={lessonId}
+                      classId={classId}
                     />
                   </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}

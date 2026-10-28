@@ -149,4 +149,41 @@ describe('课堂视图状态回写的前端门控', () => {
       timeout: 5_000,
     });
   });
+
+  it('同一环节不重复回写 view-state，环节切换时才触发新回写', async () => {
+    const calls = installFetchStub(true);
+
+    const { rerender } = render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => expect(calls.filter((url) => url.includes('/view-state')).length).toBe(1), {
+      timeout: 5_000,
+    });
+
+    // 触发组件重渲染，但环节未变（仍为 'seg-1'）
+    rerender(
+      <AppDataProvider value={{ ...baseProps, liveClassTimeRemaining: 200 } as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    // view-state 调用次数依然为 1，没有重复回写
+    expect(calls.filter((url) => url.includes('/view-state'))).toHaveLength(1);
+
+    // 切换到新环节 'seg-2'
+    rerender(
+      <AppDataProvider value={{ ...baseProps, activeSegmentId: 'seg-2' } as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    // 等待防抖后触发第二次回写
+    await waitFor(() => expect(calls.filter((url) => url.includes('/view-state')).length).toBe(2), {
+      timeout: 5_000,
+    });
+  });
 });
