@@ -23,8 +23,8 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import type { SpotlightWorkItem, TeacherPeerAnnotation, ShowcaseWorkFile } from './types';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 export interface SpotlightDualWorkArenaProps {
-  workA: SpotlightWorkItem;
-  workB: SpotlightWorkItem;
+  workA?: SpotlightWorkItem | null;
+  workB?: SpotlightWorkItem | null;
   annotations: TeacherPeerAnnotation[];
   isAnonymous?: boolean;
   onFullscreenCanvas?: () => void;
@@ -45,6 +45,10 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
   const [showAddNote, setShowAddNote] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
+
+  if (!workA && !workB) {
+    return null;
+  }
 
   const maskName = (name: string, isAnon: boolean) => {
     if (!isAnon) return name;
@@ -212,8 +216,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
               </span>
             </div>
             <span className="text-xs text-[#c7c4d7] mt-0.5">
-              标杆创新解法 ({maskName(workA.studentName, isAnonymous)}) ⟷ 经典逆风翻盘解法 (
-              {maskName(workB.studentName, isAnonymous)})
+              标杆创新解法 ({workA ? maskName(workA.studentName, isAnonymous) : '作品 A 待就绪'}) ⟷ 经典逆风翻盘解法 (
+              {workB ? maskName(workB.studentName, isAnonymous) : '作品 B 待就绪'})
             </span>
           </div>
         </div>
@@ -247,136 +251,162 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
       {/* 2. Dual Work Sandbox Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* SUB-CARD A：作品 A */}
-        <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
-          {/* Card Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-[#8083ff] text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                {isAnonymous ? 'A' : workA.studentInitial}
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-sm font-semibold text-[#dae2fd]">
-                    {maskName(workA.studentName, isAnonymous)} (作品 A)
-                  </span>
-                  {workA.sourceLabel && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                        workA.source === 'plugin'
-                          ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
-                          : workA.source === 'assignment'
-                            ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
-                            : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
-                      }`}
-                    >
-                      {workA.sourceLabel}
-                    </span>
-                  )}
+        {workA ? (
+          <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
+            {/* Card Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#8083ff] text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  {isAnonymous ? 'A' : workA.studentInitial}
                 </div>
-                <span className="text-[11px] font-mono text-[#908fa0]">{workA.workSubtitle}</span>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold text-[#dae2fd]">
+                      {maskName(workA.studentName, isAnonymous)} (作品 A)
+                    </span>
+                    {workA.sourceLabel && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                          workA.source === 'plugin'
+                            ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
+                            : workA.source === 'assignment'
+                              ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
+                              : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
+                        }`}
+                      >
+                        {workA.sourceLabel}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-mono text-[#908fa0]">{workA.workSubtitle}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
+                <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
+                <span className="font-mono text-xs font-semibold">
+                  {typeof workA.rating === 'number' ? workA.rating.toFixed(1) : '—'}
+                </span>
+                <span className="text-[10px] text-[#908fa0]">({workA.reviewCount ?? 0}评)</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
-              <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
-              <span className="font-mono text-xs font-semibold">
-                {typeof workA.rating === 'number' ? workA.rating.toFixed(1) : '—'}
-              </span>
-              <span className="text-[10px] text-[#908fa0]">({workA.reviewCount ?? 0}评)</span>
+            {/* Badges */}
+            <div className="flex flex-wrap gap-1.5">
+              {workA.badges?.map((b, idx) => (
+                <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
+                  {b.label}
+                </span>
+              ))}
             </div>
+
+            {/* Multimodal Preview */}
+            {renderWorkContentBody(workA)}
+
+            {workA.codeLines?.some((l) => l.comment) ? (
+              <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
+                <div className="text-[#908fa0] mb-1"># {workA.codeTitle ?? ''}</div>
+                {workA.codeLines
+                  .filter((l) => l.comment)
+                  .map((line, idx) => (
+                    <div key={idx} className={line.isHighlight ? 'bg-[#8083ff]/20 px-1 rounded -mx-1' : ''}>
+                      <span className="text-[#908fa0]">{line.comment}</span>
+                    </div>
+                  ))}
+              </div>
+            ) : null}
           </div>
-
-          {/* Badges */}
-          <div className="flex flex-wrap gap-1.5">
-            {workA.badges.map((b, idx) => (
-              <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
-                {b.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Multimodal Preview */}
-          {renderWorkContentBody(workA)}
-
-          {workA.codeLines?.some((l) => l.comment) ? (
-            <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-              <div className="text-[#908fa0] mb-1"># {workA.codeTitle ?? ''}</div>
-              {workA.codeLines
-                .filter((l) => l.comment)
-                .map((line, idx) => (
-                  <div key={idx} className={line.isHighlight ? 'bg-[#8083ff]/20 px-1 rounded -mx-1' : ''}>
-                    <span className="text-[#908fa0]">{line.comment}</span>
-                  </div>
-                ))}
+        ) : (
+          <div
+            data-testid="work-slot-a-placeholder"
+            className="bg-[#131b2e]/60 rounded-xl p-6 flex flex-col items-center justify-center gap-2 border border-dashed border-[#2d3449] min-h-[280px] text-center"
+          >
+            <div className="w-10 h-10 rounded-full bg-[#8083ff]/10 text-[#8083ff] flex items-center justify-center font-bold text-sm">
+              A
             </div>
-          ) : null}
-        </div>
+            <span className="text-xs font-semibold text-[#dae2fd]">待选作品 A</span>
+            <span className="text-[11px] text-[#908fa0]">请在上方全班作品池中点击「设为焦点 A」进行对比</span>
+          </div>
+        )}
 
         {/* SUB-CARD B：作品 B */}
-        <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
-          {/* Card Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-[#00a572] text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                {isAnonymous ? 'B' : workB.studentInitial}
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-sm font-semibold text-[#dae2fd]">
-                    {maskName(workB.studentName, isAnonymous)} (作品 B)
-                  </span>
-                  {workB.sourceLabel && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                        workB.source === 'plugin'
-                          ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
-                          : workB.source === 'assignment'
-                            ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
-                            : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
-                      }`}
-                    >
-                      {workB.sourceLabel}
-                    </span>
-                  )}
+        {workB ? (
+          <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
+            {/* Card Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#00a572] text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  {isAnonymous ? 'B' : workB.studentInitial}
                 </div>
-                <span className="text-[11px] font-mono text-[#908fa0]">{workB.workSubtitle}</span>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold text-[#dae2fd]">
+                      {maskName(workB.studentName, isAnonymous)} (作品 B)
+                    </span>
+                    {workB.sourceLabel && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                          workB.source === 'plugin'
+                            ? 'bg-[#8083ff]/15 text-[#c0c1ff] border-[#8083ff]/30'
+                            : workB.source === 'assignment'
+                              ? 'bg-[#00a572]/15 text-[#4edea3] border-[#00a572]/30'
+                              : 'bg-[#ca8100]/15 text-[#ffb95f] border-[#ca8100]/30'
+                        }`}
+                      >
+                        {workB.sourceLabel}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-mono text-[#908fa0]">{workB.workSubtitle}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
+                <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
+                <span className="font-mono text-xs font-semibold">
+                  {typeof workB.rating === 'number' ? workB.rating.toFixed(1) : '—'}
+                </span>
+                <span className="text-[10px] text-[#908fa0]">({workB.reviewCount ?? 0}评)</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
-              <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
-              <span className="font-mono text-xs font-semibold">
-                {typeof workB.rating === 'number' ? workB.rating.toFixed(1) : '—'}
-              </span>
-              <span className="text-[10px] text-[#908fa0]">({workB.reviewCount ?? 0}评)</span>
+            {/* Badges */}
+            <div className="flex flex-wrap gap-1.5">
+              {workB.badges?.map((b, idx) => (
+                <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
+                  {b.label}
+                </span>
+              ))}
             </div>
+
+            {/* Multimodal Preview */}
+            {renderWorkContentBody(workB)}
+
+            {workB.codeLines?.some((l) => l.comment) ? (
+              <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
+                <div className="text-[#908fa0] mb-1"># {workB.codeTitle ?? ''}</div>
+                {workB.codeLines
+                  .filter((l) => l.comment)
+                  .map((line, idx) => (
+                    <div key={idx} className={line.isSuccess ? 'bg-[#00a572]/20 px-1 rounded -mx-1' : ''}>
+                      <span className="text-[#4edea3] text-[10px]">{line.comment}</span>
+                    </div>
+                  ))}
+              </div>
+            ) : null}
           </div>
-
-          {/* Badges */}
-          <div className="flex flex-wrap gap-1.5">
-            {workB.badges.map((b, idx) => (
-              <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
-                {b.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Multimodal Preview */}
-          {renderWorkContentBody(workB)}
-
-          {workB.codeLines?.some((l) => l.comment) ? (
-            <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-              <div className="text-[#908fa0] mb-1"># {workB.codeTitle ?? ''}</div>
-              {workB.codeLines
-                .filter((l) => l.comment)
-                .map((line, idx) => (
-                  <div key={idx} className={line.isSuccess ? 'bg-[#00a572]/20 px-1 rounded -mx-1' : ''}>
-                    <span className="text-[#4edea3] text-[10px]">{line.comment}</span>
-                  </div>
-                ))}
+        ) : (
+          <div
+            data-testid="work-slot-b-placeholder"
+            className="bg-[#131b2e]/60 rounded-xl p-6 flex flex-col items-center justify-center gap-2 border border-dashed border-[#2d3449] min-h-[280px] text-center"
+          >
+            <div className="w-10 h-10 rounded-full bg-[#00a572]/10 text-[#00a572] flex items-center justify-center font-bold text-sm">
+              B
             </div>
-          ) : null}
-        </div>
+            <span className="text-xs font-semibold text-[#dae2fd]">待选作品 B</span>
+            <span className="text-[11px] text-[#908fa0]">请在上方全班作品池中点击「设为焦点 B」进行并排对比</span>
+          </div>
+        )}
       </div>
 
       {/* 3. Floating Teacher / Student Annotation Layer */}

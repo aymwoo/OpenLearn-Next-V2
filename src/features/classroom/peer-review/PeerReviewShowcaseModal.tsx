@@ -138,8 +138,8 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   // ── Controlled / Props Sync State ─────────────────────────────────────
   const [matchingItems, setMatchingItems] = useState<PeerMatchingItem[]>(matchingItemsProp ?? []);
   const [badges, setBadges] = useState<LivePeerBadge[]>(badgesProp ?? []);
-  const [workA, setWorkA] = useState<SpotlightWorkItem>(workAProp ?? (null as unknown as SpotlightWorkItem));
-  const [workB, setWorkB] = useState<SpotlightWorkItem>(workBProp ?? (null as unknown as SpotlightWorkItem));
+  const [workA, setWorkA] = useState<SpotlightWorkItem | null>(workAProp ?? null);
+  const [workB, setWorkB] = useState<SpotlightWorkItem | null>(workBProp ?? null);
   const [annotations, setAnnotations] = useState<TeacherPeerAnnotation[]>(annotationsProp ?? []);
   const [dimensions, setDimensions] = useState<RubricDimensionItem[]>(rubricDimensionsProp ?? []);
   const [reactions, setReactions] = useState<ReactionCountItem[]>(reactionsProp ?? []);
@@ -147,11 +147,11 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>(danmakuProp ?? []);
 
   useEffect(() => {
-    if (workAProp !== undefined) setWorkA(workAProp as SpotlightWorkItem);
+    if (workAProp !== undefined) setWorkA(workAProp ?? null);
   }, [workAProp]);
 
   useEffect(() => {
-    if (workBProp !== undefined) setWorkB(workBProp as SpotlightWorkItem);
+    if (workBProp !== undefined) setWorkB(workBProp ?? null);
   }, [workBProp]);
 
   useEffect(() => {
@@ -504,7 +504,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
             )}
             {workA || workB ? (
               <SpotlightDualWorkArena
-                workA={workA as SpotlightWorkItem}
+                workA={workA}
                 workB={workB}
                 annotations={annotations}
                 isAnonymous={reviewState.isAnonymous}
