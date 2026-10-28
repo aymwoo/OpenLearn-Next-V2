@@ -23,6 +23,7 @@ export interface StudentInteractiveOverlayProps {
   lessonId: string | null;
   studentId?: string;
   studentName?: string;
+  classId?: string;
   lang?: 'zh' | 'en';
 }
 
@@ -30,6 +31,7 @@ export function StudentInteractiveOverlay({
   lessonId,
   studentId, // v0.6.1 数据真实性：无真实学号时不兜底假 id（假 id 会让真赢家在轮询中被翻成 MISSED）
   studentName = '我',
+  classId,
   lang = 'zh',
 }: StudentInteractiveOverlayProps) {
   const [activePoll, setActivePoll] = useState<any>(null);
@@ -445,7 +447,7 @@ export function StudentInteractiveOverlay({
 
       {/* 课中插件浮层槽位：插件可在此渲染随堂答题等模态弹窗
           （学生上课中被锁定在课节视图，仪表盘的 student.view 槽位不可见） */}
-      <ExtensionPointRenderer slot="student.classroom.overlay" slotProps={{ studentId, lessonId }} />
+      <ExtensionPointRenderer slot="student.classroom.overlay" slotProps={{ studentId, lessonId, classId }} />
 
       {/* 考试模式全屏视图（v5.1 休眠槽位接线）：插件全屏接管（锁定退出 + 倒计时），
           由插件组件自行决定渲染时机（仅考试模式的卷激活时） */}

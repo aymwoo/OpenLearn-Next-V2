@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
+import { NullExtensionComponent } from '../../../plugin-host/plugin-host';
+import { PluginSandboxIframeView } from '../../../components/PluginSandboxIframeView';
 
 export function PluginCardRenderer({
   pluginId,
@@ -8,12 +10,14 @@ export function PluginCardRenderer({
   widgetId,
   elementId,
   lessonId,
+  classId,
 }: {
   pluginId: string;
   slot: string;
   widgetId: string;
   elementId: string;
   lessonId: string;
+  classId?: string | null;
 }) {
   const extensionPoints = usePluginHostStore((state) => state.extensionPoints);
   const extensions = extensionPoints.get(slot as any) || [];
@@ -25,19 +29,25 @@ export function PluginCardRenderer({
   const ext =
     extensions.find((e) => e.id === widgetId) ?? extensions.find((e) => e.pluginId === pluginId && e.id === widgetId);
 
+  // NullExtensionComponent 是 manifest 数据型贡献的占位组件（() => null），
+  // 不代表可渲染的 React UI。与 ExtensionPointRenderer 保持同一判定，
+  // 否则 manifest 声明的 view（沙箱页面）永远走不到下面的分支。
+  const hasReactComponent =
+    !!ext && typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
+
   // Create container ref and use useEffect to call render
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ext) return;
-    if (containerRef.current) {
+    if (containerRef.current && !hasReactComponent) {
       containerRef.current.innerHTML = '';
-      if (!ext.component && (ext as any).render) {
+      if ((ext as any).render) {
         // If it is a DOM render function, pass elementId and lessonId context
         Promise.resolve((ext as any).render(containerRef.current, { elementId, lessonId })).catch(console.error);
       }
     }
-  }, [ext, pluginId, widgetId, elementId, lessonId]);
+  }, [ext, hasReactComponent, pluginId, widgetId, elementId, lessonId]);
 
   if (!ext) {
     return (
@@ -48,8 +58,23 @@ export function PluginCardRenderer({
     );
   }
 
-  if (ext.component) {
+  if (hasReactComponent) {
     return React.createElement(ext.component as any, { elementId, lessonId });
+  }
+
+  const viewPath = (ext as any).slotProps?.view || ext.view;
+  if (viewPath) {
+    return (
+      <PluginSandboxIframeView
+        pluginId={ext.pluginId}
+        view={String(viewPath)}
+        label={ext.label}
+        slot={slot}
+        lessonId={lessonId}
+        classId={classId}
+        variant="panel"
+      />
+    );
   }
 
   return <div ref={containerRef} className="w-full h-full min-h-0" />;

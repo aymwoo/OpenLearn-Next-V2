@@ -494,6 +494,11 @@ const teacherPanelSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   icon: z.string().optional(),
+  // v0.7.6 双轨制 UI：第三方 ZIP 插件在 process 模式下无法传 React 组件，
+  // 只能声明可视沙箱 HTML 的相对路径。此处必须显式列出 —— zod 的 object
+  // 默认 strip 未声明键，漏声明会让 view 在 parse() 后被静默丢弃，
+  // 宿主便退回「占位空态」，插件作者看到的是空白面板且无任何报错。
+  view: z.string().min(1).optional(),
 });
 
 const studentFullscreenSchema = z.object({
@@ -597,6 +602,10 @@ const contributesSchema = z
           label: z.string().min(1),
           icon: z.string().optional(),
           position: z.number().int().optional(),
+          // 可视沙箱视图（v0.7.6+）。同 teacherPanelSchema.view：漏声明 = 被 strip，
+          // 第三方插件的教师页签会退化成空白占位。
+          view: z.string().min(1).optional(),
+          route: z.string().optional(),
         }),
       )
       .optional(),
@@ -607,6 +616,7 @@ const contributesSchema = z
           label: z.string().min(1),
           icon: z.string().optional(),
           position: z.number().int().optional(),
+          view: z.string().min(1).optional(),
         }),
       )
       .optional(),
@@ -617,6 +627,8 @@ const contributesSchema = z
           label: z.string().min(1),
           icon: z.string().optional(),
           route: z.string().optional(),
+          // 可视沙箱视图（v0.7.6+）。学生端同理：process 模式只能走 HTML 页面。
+          view: z.string().min(1).optional(),
         }),
       )
       .optional(),
@@ -626,6 +638,7 @@ const contributesSchema = z
           id: z.string().min(1),
           label: z.string().min(1),
           icon: z.string().optional(),
+          view: z.string().min(1).optional(),
         }),
       )
       .optional(),

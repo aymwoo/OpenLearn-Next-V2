@@ -13,7 +13,20 @@ export interface PluginSandboxIframeViewProps {
   classId?: string | null;
   className?: string;
   onResize?: (height: number) => void;
+  /**
+   * 容器布局语义。
+   * - `panel`（默认）：占满父容器，用于 `teacher.tab` / `teacher.panel` / `student.view` 等页面级槽位。
+   * - `floating`：固定定位的小浮层，**不参与父级 flex 布局**，用于 `student.classroom.overlay`
+   *   这类「浮在课堂视图之上」的槽位。
+   *
+   * 背景：父级 `App.tsx` 是 `flex h-screen` 横向容器，若把带 `w-full h-full` 的块级视图
+   * 直接插进去，它会成为 flex item 并占满整行宽，把 `flex-1` 的主内容（白板）挤成 0 宽。
+   */
+  variant?: PluginViewVariant;
+  style?: React.CSSProperties;
 }
+
+export type PluginViewVariant = 'panel' | 'floating';
 
 /**
  * 校验并净化插件自定义页面路径，防止跨目录遍历或协议注入。
@@ -48,6 +61,8 @@ export function PluginSandboxIframeView({
   classId: propClassId,
   className,
   onResize,
+  variant = 'panel',
+  style,
 }: PluginSandboxIframeViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -236,10 +251,25 @@ export function PluginSandboxIframeView({
 
   const srcUrl = `/plugins/${encodeURIComponent(pluginId)}/${cleanView}`;
 
+  // panel：铺满父容器（页面级槽位）；floating：固定小浮层，不占父级布局。
+  const isFloating = variant === 'floating';
+  const containerClassName = isFloating
+    ? `fixed bottom-6 left-6 z-40 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 ${className || ''}`
+    : `relative w-full h-full flex flex-col min-h-0 bg-white dark:bg-slate-900 ${className || ''}`;
+  const containerStyle: React.CSSProperties = {
+    ...(style || {}),
+    ...(isFloating
+      ? { height: `${iframeHeight ?? 180}px` }
+      : iframeHeight
+        ? { minHeight: `${iframeHeight}px` }
+        : {}),
+  };
+
   return (
     <div
-      className={`relative w-full h-full flex flex-col min-h-0 bg-white dark:bg-slate-900 ${className || ''}`}
-      style={iframeHeight ? { minHeight: `${iframeHeight}px` } : undefined}
+      className={containerClassName}
+      style={containerStyle}
+      data-plugin-view-variant={variant}
     >
       {!isLoaded && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-2xs transition-opacity duration-200">

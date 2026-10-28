@@ -288,3 +288,47 @@ describe('manifestSchemaV3 — Phase 3 backward compatibility', () => {
     expect(() => manifestSchemaV3.parse(manifest)).not.toThrow();
   });
 });
+
+/**
+ * v0.7.6 双轨制 UI 的 view 字段必须**穿过** zod 校验。
+ *
+ * 背景：第三方 ZIP 插件被强制 process 模式，无法把 React 组件函数交给宿主
+ * （DataCloneError），可见 UI 只能靠 contributes[*].view 指向沙箱 HTML。
+ * 而 zod 的 z.object 默认 strip 未声明键 —— 一旦漏声明 view，parse() 会把它
+ * 静默删掉，装进 DB 的 manifest 就丢了 view，宿主退回「占位空态」，表现为
+ * 插件页签白屏且日志无任何报错。本组用例防止该字段再次被漏掉。
+ */
+describe('manifestSchema — 声明式可视沙箱视图 view 不被 strip', () => {
+  const base = {
+    id: 'ext-view-probe',
+    name: 'View Probe',
+    version: '1.0.0',
+    main: 'index.js',
+  };
+
+  it.each([
+    ['teacher.tab', { id: 'tab_1', label: '看板', view: 'storage/dashboard.html' }],
+    ['teacher.panel', { id: 'panel_1', title: '面板', view: 'storage/panel.html' }],
+    ['student.view', { id: 'sv_1', label: '学生视图', view: 'storage/student.html' }],
+    ['student.lesson.tool', { id: 'tool_1', label: '求助', view: 'storage/overlay.html' }],
+    ['teacher.dashboard.widget', { id: 'w_1', label: '小组件', view: 'storage/widget.html' }],
+    // 该槽位由 frontendSlotEntrySchema(.passthrough) 校验，view 本就应保留
+    ['student.classroom.overlay', { id: 'ov_1', label: '求助', view: 'storage/overlay.html' }],
+  ])('keeps view for contributes["%s"]', (slot, entry) => {
+    const parsed = manifestSchema.parse({
+      ...base,
+      contributes: { [slot]: [entry] },
+    }) as Record<string, Record<string, Array<Record<string, unknown>>>>;
+
+    expect(parsed.contributes[slot][0].view).toBe(entry.view);
+  });
+
+  it('rejects empty view so a typo cannot silently disable the iframe', () => {
+    expect(() =>
+      manifestSchema.parse({
+        ...base,
+        contributes: { 'teacher.tab': [{ id: 'tab_1', label: '看板', view: '' }] },
+      }),
+    ).toThrow();
+  });
+});

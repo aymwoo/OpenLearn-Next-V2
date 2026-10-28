@@ -52,6 +52,38 @@ describe('PluginSandboxIframeView component', () => {
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms allow-downloads');
   });
 
+  it('默认使用 panel 容器（铺满父级，页面级槽位）', () => {
+    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="看板" slot="teacher.tab" />);
+
+    const iframe = screen.getByTitle('看板') as HTMLIFrameElement;
+    const container = iframe.closest('[data-plugin-view-variant]') as HTMLElement;
+    expect(container.getAttribute('data-plugin-view-variant')).toBe('panel');
+    expect(container.className).toContain('w-full');
+    expect(container.className).toContain('h-full');
+    expect(container.className).not.toContain('fixed');
+  });
+
+  it('floating 容器不参与父级 flex 布局（避免挤掉主内容 / 白板）', () => {
+    render(
+      <PluginSandboxIframeView
+        pluginId={PLUGIN_ID}
+        view="overlay.html"
+        label="求助灯"
+        slot="student.classroom.overlay"
+        variant="floating"
+      />,
+    );
+
+    const iframe = screen.getByTitle('求助灯') as HTMLIFrameElement;
+    const container = iframe.closest('[data-plugin-view-variant]') as HTMLElement;
+    expect(container.getAttribute('data-plugin-view-variant')).toBe('floating');
+    // 固定定位 → 脱离文档流，不会成为 flex item 占位
+    expect(container.className).toContain('fixed');
+    // 关键回归点：不能带 w-full / h-full，否则会把 flex-1 的同级主内容挤成 0 宽
+    expect(container.className).not.toContain('w-full');
+    expect(container.className).not.toContain('h-full');
+  });
+
   it('responds to "ready" postMessage with "init" payload', async () => {
     render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" slot="teacher.tab" />);
 

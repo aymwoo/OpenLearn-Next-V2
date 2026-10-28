@@ -141,6 +141,12 @@ export function ClassroomOverlays(props: ClassroomOverlaysProps) {
           lessonId={selectedLesson}
           studentId={activeStudentId || liveStudentParam || undefined}
           studentName={students.find((s) => s.id === (activeStudentId || liveStudentParam))?.name || undefined}
+          classId={
+            liveClassSelectedClassId ||
+            students.find((s) => s.id === (activeStudentId || liveStudentParam))?.class_id ||
+            students.find((s) => s.id === (activeStudentId || liveStudentParam))?.classId ||
+            undefined
+          }
           lang={lang as any}
         />
       )}

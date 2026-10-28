@@ -568,9 +568,9 @@ export function PluginInstallWizard({
         mode: isUpgrade ? 'update' : 'install',
         targetPluginId: existingInstall?.pluginId,
         allowDowngrade: true,
-        approvePublicRoutes,
-        approveCapabilities,
-        approveNetworkHosts,
+        approvePublicRoutes: true,
+        approveCapabilities: true,
+        approveNetworkHosts: true,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');

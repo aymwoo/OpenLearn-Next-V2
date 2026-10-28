@@ -39,6 +39,23 @@ import { PluginSandboxIframeView } from '../components/PluginSandboxIframeView';
 export { isPluginBlown, resetPluginBreaker };
 
 /**
+ * 以「浮层」语义承载第三方 `view` 的槽位 —— 这些槽位的视图必须以固定定位渲染，
+ * 不能作为块级元素插入文档流。
+ *
+ * 原因：`App.tsx` 的根容器是 `flex h-screen`（横向 flex），`<ClassroomOverlays />`
+ * 与主内容区是**同级 flex item**。若第三方视图沿用默认的 `w-full h-full` 块级容器，
+ * 它会作为 flex item 占满整行宽度，把 `flex-1` 的主内容（课堂白板）挤成 0 宽 ——
+ * 现象就是「装了插件之后白板消失」。
+ *
+ * 新增浮层型槽位时请加到这里，不要让它落到 `panel` 分支。
+ */
+const FLOATING_VIEW_SLOTS = new Set<string>(['student.classroom.overlay']);
+
+function viewVariantFor(slot: string): 'panel' | 'floating' {
+  return FLOATING_VIEW_SLOTS.has(slot) ? 'floating' : 'panel';
+}
+
+/**
  * 熔断触发的统一降级（v0.6.1 审计 C-2）：
  * 1. 摘除该插件**运行时**注册的扩展点 —— 脱离生命周期的直注册插件（如内置包）
  *    也能被降级；
@@ -524,7 +541,8 @@ export function ExtensionPointRenderer({
                 label={activeExt.label}
                 slot={slot}
                 lessonId={selectedLesson}
-                classId={liveClassSelectedClassId}
+                classId={slotProps?.classId || liveClassSelectedClassId}
+                variant={viewVariantFor(slot)}
               />
             )}
           </CrashResetProbe>
@@ -541,7 +559,7 @@ export function ExtensionPointRenderer({
     const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
-        {extensions.map((ext) => {
+        {extensions.map((ext, index) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.classActiveTab === tabValue;
           const rawLabel = (ext as any).title || ext.label || ext.id;
@@ -593,7 +611,7 @@ export function ExtensionPointRenderer({
     const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
-        {extensions.map((ext) => {
+        {extensions.map((ext, index) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.timetableActiveTab === tabValue;
           const rawLabel = (ext as any).title || ext.label || ext.id;
@@ -646,7 +664,7 @@ export function ExtensionPointRenderer({
     const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
-        {extensions.map((ext) => {
+        {extensions.map((ext, index) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.activeTab === tabValue;
           const rawLabel = (ext as any).title || ext.label || ext.id;
@@ -695,7 +713,7 @@ export function ExtensionPointRenderer({
     const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
-        {extensions.map((ext) => {
+        {extensions.map((ext, index) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.adminActiveTab === tabValue;
           const rawLabel = (ext as any).title || ext.label || ext.id;
@@ -746,7 +764,7 @@ export function ExtensionPointRenderer({
     const currentLang = (slotProps?.lang as Language) || 'zh';
     return (
       <>
-        {extensions.map((ext) => {
+        {extensions.map((ext, index) => {
           const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
           const isActive = slotProps?.studentActiveTab === tabValue;
           const rawLabel = (ext as any).title || ext.label || ext.id;
@@ -947,7 +965,7 @@ export function ExtensionPointRenderer({
 
   return (
     <>
-      {extensions.map((ext) => {
+      {extensions.map((ext, index) => {
         const isReact = typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
         const isDOM = typeof ext.render === 'function';
         const hasView = Boolean(ext.slotProps?.view || ext.view);
@@ -1021,7 +1039,13 @@ export function ExtensionPointRenderer({
                     label={ext.label}
                     slot={slot}
                     lessonId={selectedLesson}
-                    classId={liveClassSelectedClassId}
+                    classId={slotProps?.classId || liveClassSelectedClassId}
+                    variant={viewVariantFor(slot)}
+                    style={
+                      viewVariantFor(slot) === 'floating' && index > 0
+                        ? { left: `calc(1.5rem + ${index * 316}px)` }
+                        : undefined
+                    }
                   />
                 )}
               </CrashResetProbe>
