@@ -131,4 +131,94 @@ describe('PluginTabPanel — Tab 条目选取优先级', () => {
 
     expect(screen.getByText('此插件未提供页面组件')).toBeTruthy();
   });
+
+  it('manifest 声明 view 时，渲染沙箱 iframe 且优先级高于纯占位项', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab' as never, {
+      id: 'tab_dashboard',
+      label: '插件看板',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      view: 'dashboard.html',
+      slotProps: { view: 'dashboard.html' },
+      origin: 'manifest',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.queryByText('此插件未提供页面组件')).toBeNull();
+    const iframe = screen.getByTitle('插件看板') as HTMLIFrameElement;
+    expect(iframe).toBeTruthy();
+    expect(iframe.tagName.toLowerCase()).toBe('iframe');
+    expect(iframe.getAttribute('src')).toBe(`/plugins/${PLUGIN_ID}/dashboard.html`);
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms allow-downloads');
+  });
+
+  it('真实组件存在时，优先级高于 manifest 声明式 view', () => {
+    const register = usePluginHostStore.getState().registerExtensionPoint;
+    register('teacher.tab' as never, {
+      id: 'tab_view',
+      label: '插件看板',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      view: 'dashboard.html',
+      origin: 'manifest',
+    });
+    register('teacher.tab' as never, {
+      id: 'tab_real',
+      label: '插件看板',
+      pluginId: PLUGIN_ID,
+      component: RealPanel as never,
+      origin: 'runtime',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByTestId('real-panel')).toBeTruthy();
+    expect(screen.queryByTitle('插件看板')).toBeNull();
+  });
+
+  it('render 函数存在时，优先级高于 manifest 声明式 view', () => {
+    const register = usePluginHostStore.getState().registerExtensionPoint;
+    register('teacher.tab' as never, {
+      id: 'tab_view',
+      label: '插件看板',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      view: 'dashboard.html',
+      origin: 'manifest',
+    });
+    register('teacher.tab' as never, {
+      id: 'tab_render',
+      label: '插件看板',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      render: (container?: unknown) => {
+        const el = document.createElement('div');
+        el.setAttribute('data-testid', 'dom-panel');
+        (container as HTMLElement | undefined)?.appendChild?.(el);
+        return null;
+      },
+      origin: 'runtime',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByTestId('dom-panel')).toBeTruthy();
+    expect(screen.queryByTitle('插件看板')).toBeNull();
+  });
+
+  it('view 包含目录遍历字符时展示非法路径错误', () => {
+    usePluginHostStore.getState().registerExtensionPoint('teacher.tab' as never, {
+      id: 'tab_attack',
+      label: '恶意看板',
+      pluginId: PLUGIN_ID,
+      component: NullExtensionComponent,
+      view: '../../etc/passwd',
+      origin: 'manifest',
+    });
+
+    render(<PluginTabPanel activeNavPlugin={PLUGIN_ID} />);
+
+    expect(screen.getByText('非法的插件视图路径')).toBeTruthy();
+  });
 });

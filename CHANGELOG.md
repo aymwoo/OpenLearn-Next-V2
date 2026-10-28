@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **第三方插件可视沙箱容器与视图桥接 (Dual-Track UI Architecture Phase 1)**：
+  第三方插件在沙箱环境（远程/进程模式）下受限于不透明源（opaque origin），此前声明式贡献在 `teacher.tab` 等面板槽位中只能展示空态占位。现引入独立的轻量级可视化沙箱容器：
+  - **声明式视图挂载**：Manifest contributions（如 `teacher.tab`、`teacher.panel` 等）支持配置 `view` 属性（相对路径如 `view: "dashboard.html"`），并在 `PluginTabPanel` 与 `ExtensionPointRenderer` 中以严格沙箱 iframe（`sandbox="allow-scripts allow-forms allow-downloads"`，无 `allow-same-origin`）呈现。
+  - **优先级解析链**：遵循 `React 组件 > DOM render 函数 > 沙箱视图 (view) > 占位空态`，兼顾内置高权限插件与第三方安全插件。
+  - **双向视图桥接**：提供客户端轻量桥接脚本 `/plugin-sandbox/view-bridge.js`（`window.OpenLearnPluginBridge`），在父子窗口间基于 `ol-plugin-view` channel 实现上下文同步（`onInit`、`onContextUpdate`、`getContext`）、UI 提示（`ui.toast`）、容器高度自适应（`ui.resize`）、命令透传（`invokeCommand` 经服务端插件专用通道执行）与隔离存储（`storage.get/set/delete`）。
+  - **静态资源安全防线**：`/plugins` 静态服务支持 Cookie、`?token=` 与沙箱子资源（`Sec-Fetch-Dest !== 'document'`）多维鉴权放行，并强制为 HTML 视图注入 `PLUGIN_VIEW_CSP` 与 `frame-ancestors 'self'`。
+
 - **`OPENLEARN_TRUSTED_INLINE_PLUGINS` 支持通配符**：此前只做**精确** manifest id
   匹配，本地反复装卸若干自研插件时维护成本很高，而写错的后果是**静默降档**
   （插件被强制改成 `process`，前端只剩 iframe 沙箱、拿不到宿主上下文，表现为
