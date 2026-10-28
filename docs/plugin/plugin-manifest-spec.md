@@ -162,6 +162,11 @@
   - `label`: 展示文本
   - `icon`: Lucide 图标名称
   - `position`: 排序权重数值
+  - `view`（`v0.7.6+` 新增）: 相对插件根目录的 HTML 页面路径（如 `"dashboard.html"`），用于第三方插件以可视沙箱容器渲染自定义页面。
+- **`teacher.panel`**: 教师端嵌入式功能面板/抽屉。
+  - `id`: 面板 ID
+  - `title` / `label`: 面板展示标题
+  - `view`（`v0.7.6+` 新增）: 相对插件根目录的 HTML 页面路径（如 `"panel.html"`）。
 - **`classroom.tool`**: 课堂互动工具箱工具。
   - `id`: 工具 ID
   - `name`: 工具名称
@@ -169,6 +174,13 @@
 - **`teacher.dashboard.widget`**: 教师仪表盘小组件。
 - **`student.view`**: 学生端导航视图。
 - **`student.lesson.tool`**: 学生课中互动小工具。
+
+> 💡 **声明式可视沙箱视图 (`view`)**（`v0.7.6+` 新增）：
+> 对于第三方 ZIP 插件，由于运行在无 `allow-same-origin` 的隔离环境，直接向宿主传递 React 组件函数会导致 `DataCloneError`。因此推荐在 `contributes["teacher.tab"]` 或 `contributes["teacher.panel"]` 等槽位中配置 `view` 相对路径（如 `"dashboard.html"`）。
+> 宿主会自动以严格沙箱容器（`sandbox="allow-scripts allow-forms allow-downloads"`，无 `allow-same-origin`）挂载该页面，并提供 `/plugin-sandbox/view-bridge.js`（`window.OpenLearnPluginBridge`）实现与宿主的双向 RPC 通信。
+> 宿主在渲染面板时的优先级判定链为：
+> $$\text{React 真实组件} \succ \text{DOM render 函数} \succ \text{声明式沙箱视图 (view)} \succ \text{占位空态}$$
+
 - **`anchor:*`（锚点槽位，v0.2.6+）**: 在宿主某个原生按钮/元素**前后**插入插件按钮。
   - 槽位名遵循 `anchor:{页面或区域}:{锚点 id}` 约定，锚点 id 由宿主定义并公布（如 `anchor:whiteboard-toolbar:rollcall`）。
   - `id`: 扩展 ID

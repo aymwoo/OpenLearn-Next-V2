@@ -171,6 +171,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   （`<data>/plugin-data-exports`），未设 `OPENLEARN_DATA_DIR` 时会写进仓库根。
 - **清理根目录历史审计报告快照**：移除根目录下 9 个过时的阶段性审计报告快照（`audit-2026-*.md` 等），历史版本记录可由 Git 提交树追溯（对齐 `docs/audit/audit-index.md` 归档规范）。
 - **重构根目录 README**：精简核心特性至微内核、三档沙箱、零信任课件容器、实时协同遥测、原生 AI 引擎与工业级运维 6 大维度，并同步至最新系统能力；移除 ASCII 架构拓扑、易漂移的环境变量表与过期的演进路线图。
+- **补充第三方插件可视沙箱开发指引**：在 `docs/tutorials/plugin-frontend-guide.md`、`docs/plugin/frontend-sandbox-capability-boundary.md` 与 `docs/plugin/plugin-manifest-spec.md` 中全面同步双轨制 UI 架构规范，新增《第三方插件可视沙箱视图开发指南》，提供端到端 manifest 配置、HTML 模板、`window.OpenLearnPluginBridge` API 速查表及严格沙箱安全基线，指导 AI Agent 与开发者按规范交付自定义视图。
 
 ## [0.7.6] - 2026-10-27
 
