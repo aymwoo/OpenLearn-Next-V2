@@ -296,6 +296,8 @@ export interface ExtensionPointConfig {
   placement?: 'before' | 'after';
   /** v3: 可选自定义渲染函数（返回 React 节点，用于非组件式扩展点） */
   render?: (props?: Record<string, any>) => React.ReactNode;
+  /** 可选自定义沙箱 HTML 页面相对路径（如 'index.html' 或 'dashboard.html'），用于独立可视沙箱渲染 */
+  view?: string;
   /**
    * 注册来源。决定「插件前端出问题时该扩展点是否被摘除」：
    *

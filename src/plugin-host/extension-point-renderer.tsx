@@ -32,6 +32,8 @@ import {
 } from './extension-breaker';
 import type { ExtensionSlot } from './types';
 import { matchesDeclaredExtension } from '../../packages/core/assignment/file-preview-policy.js';
+import { NullExtensionComponent } from './plugin-host';
+import { PluginSandboxIframeView } from '../components/PluginSandboxIframeView';
 
 // 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
 export { isPluginBlown, resetPluginBreaker };
@@ -476,9 +478,10 @@ export function ExtensionPointRenderer({
         />
       );
     }
-    const isReact = typeof activeExt.component === 'function';
+    const isReact = typeof activeExt.component === 'function' && activeExt.component !== NullExtensionComponent;
     const isDOM = typeof activeExt.render === 'function';
-    if (!isReact && !isDOM) return null;
+    const hasView = Boolean(activeExt.slotProps?.view || activeExt.view);
+    if (!isReact && !isDOM && !hasView) return null;
 
     const mergedProps = {
       ...activeExt.slotProps,
@@ -499,12 +502,21 @@ export function ExtensionPointRenderer({
           <CrashResetProbe pluginId={activeExt.pluginId}>
             {isReact ? (
               React.createElement(resolveExtensionComponent(activeExt), mergedProps)
-            ) : (
+            ) : isDOM ? (
               <DOMExtensionWrapper
                 ext={activeExt}
                 route={activeExt.route || route}
                 slotProps={mergedProps}
                 slot={slot}
+              />
+            ) : (
+              <PluginSandboxIframeView
+                pluginId={activeExt.pluginId}
+                view={String(activeExt.slotProps?.view || activeExt.view)}
+                label={activeExt.label}
+                slot={slot}
+                lessonId={selectedLesson}
+                classId={liveClassSelectedClassId}
               />
             )}
           </CrashResetProbe>
@@ -928,10 +940,11 @@ export function ExtensionPointRenderer({
   return (
     <>
       {extensions.map((ext) => {
-        const isReact = typeof ext.component === 'function';
+        const isReact = typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
         const isDOM = typeof ext.render === 'function';
+        const hasView = Boolean(ext.slotProps?.view || ext.view);
         if (slot === 'teacher.dashboard.widget' && visibility.get(ext.pluginId) === false) return null;
-        if (!isReact && !isDOM) return null;
+        if (!isReact && !isDOM && !hasView) return null;
 
         // v0.7.0：显式错误态优先 —— 插件前端失败/被熔断时给出「错误 + 重试」
         const extError = pluginErrors.get(ext.pluginId);
@@ -980,7 +993,7 @@ export function ExtensionPointRenderer({
                     ...ext.slotProps,
                     ...slotProps,
                   })
-                ) : (
+                ) : isDOM ? (
                   <DOMExtensionWrapper
                     ext={ext}
                     route={ext.route || route}
@@ -992,6 +1005,15 @@ export function ExtensionPointRenderer({
                       ...slotProps,
                     }}
                     slot={slot}
+                  />
+                ) : (
+                  <PluginSandboxIframeView
+                    pluginId={ext.pluginId}
+                    view={String(ext.slotProps?.view || ext.view)}
+                    label={ext.label}
+                    slot={slot}
+                    lessonId={selectedLesson}
+                    classId={liveClassSelectedClassId}
                   />
                 )}
               </CrashResetProbe>

@@ -4,6 +4,7 @@
  */
 
 export const PLUGIN_FRAME_CHANNEL = 'ol-plugin-frame';
+export const PLUGIN_VIEW_CHANNEL = 'ol-plugin-view';
 export const PLUGIN_SANDBOX_ATTR = 'allow-scripts';
 export const PLUGIN_FRAME_PATH = '/plugin-sandbox/frame';
 

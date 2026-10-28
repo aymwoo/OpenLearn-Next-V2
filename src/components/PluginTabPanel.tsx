@@ -4,6 +4,7 @@ import { usePluginHostStore } from '../plugin-host/plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { DOMExtensionWrapper, PluginErrorState } from '../plugin-host/extension-point-renderer';
 import { NullExtensionComponent } from '../plugin-host/plugin-host';
+import { PluginSandboxIframeView } from './PluginSandboxIframeView';
 
 function ActiveTabComponent({
   component,
@@ -32,11 +33,12 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
   // 同一插件可能注册多条同槽位条目：manifest 声明式贡献（`component` 是占位空组件，
   // 见 registerManifestContributions）与运行时 `ctx.ui.registerExtensionPoint`（真实组件 /
   // render 函数）。manifest 先注册，直接 find 会拿到占位项 —— 面板白屏。
-  // 优先级：真实组件 > render 渲染函数 > 占位项（至少保留 label 与错误态语义）。
+  // 优先级：真实组件 > render 渲染函数 > 声明式沙箱视图 (view) > 占位项（至少保留 label 与错误态语义）。
   const pluginTabs = tabs.filter((t) => t.pluginId === effectiveActive);
   const activeTab =
     pluginTabs.find((t) => t.component && t.component !== NullExtensionComponent) ??
     pluginTabs.find((t) => typeof t.render === 'function') ??
+    pluginTabs.find((t) => t.slotProps?.view || t.view) ??
     pluginTabs[0];
   // v0.7.0：插件前端失败时给出显式错误态（错误 + 重试），而不是渲染空白面板
   const pluginError = activeTab ? pluginErrors.get(activeTab.pluginId) : undefined;
@@ -54,6 +56,15 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
             ext={activeTab}
             slot="teacher.tab"
             slotProps={{ renderType: 'panel', lessonId, classId }}
+          />
+        ) : activeTab && (activeTab.slotProps?.view || activeTab.view) ? (
+          <PluginSandboxIframeView
+            pluginId={activeTab.pluginId}
+            view={String(activeTab.slotProps?.view || activeTab.view)}
+            label={activeTab.label}
+            slot="teacher.tab"
+            lessonId={lessonId}
+            classId={classId}
           />
         ) : (
           <div className="flex items-center justify-center h-full">

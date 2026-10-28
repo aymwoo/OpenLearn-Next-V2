@@ -234,6 +234,7 @@ export function registerManifestContributions(
           id: entryId,
           label: String(entry.title ?? entry.label ?? entry.name ?? entryId),
           icon: typeof entry.icon === 'string' ? entry.icon : undefined,
+          view: typeof entry.view === 'string' ? entry.view : undefined,
           slotProps: entry.commandType
             ? {
                 ...entry,

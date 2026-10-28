@@ -91,6 +91,7 @@ import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/ut
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
 import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
+import { PLUGIN_VIEW_CSP, PLUGIN_VIEW_BRIDGE_JS } from './server/utils/plugin-view-bridge.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -335,18 +336,43 @@ async function startServer() {
   app.use(
     '/plugins',
     (req: any, res: any, next: any) => {
-      const token = getCookieToken(req);
-      if (!token) {
-        return res.status(401).json({ error: 'Authentication required' });
+      const token =
+        getCookieToken(req) ||
+        (typeof req.query.token === 'string' ? req.query.token : null) ||
+        (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : null);
+      if (token) {
+        const session = getValidSession(token);
+        if (session) {
+          return next();
+        }
       }
-      const session = getValidSession(token);
-      if (!session) {
-        return res.status(401).json({ error: 'Session expired or invalid' });
+      // 允许不透明源沙箱 iframe 内发起的子资源请求（CSS/JS/图片等）
+      const dest = req.headers['sec-fetch-dest'];
+      const site = req.headers['sec-fetch-site'];
+      if (site === 'same-origin' || (typeof dest === 'string' && dest !== '' && dest !== 'document')) {
+        return next();
       }
-      next();
+      return res.status(401).json({ error: 'Authentication required' });
     },
-    express.static(getPluginsDir(), { index: false, dotfiles: 'ignore', fallthrough: false, maxAge: 0 }),
+    express.static(getPluginsDir(), {
+      index: false,
+      dotfiles: 'ignore',
+      fallthrough: false,
+      maxAge: 0,
+      setHeaders: (res: any, filePath: string) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
+          res.setHeader('Content-Security-Policy', PLUGIN_VIEW_CSP);
+        }
+      },
+    }),
   );
+  app.get('/plugin-sandbox/view-bridge.js', (_req: any, res: any) => {
+    res
+      .status(200)
+      .setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=3600')
+      .send(PLUGIN_VIEW_BRIDGE_JS);
+  });
   app.get('/plugin-sandbox/frame', (req: any, res: any) => {
     const token = getCookieToken(req);
     const session = token ? getValidSession(token) : null;
