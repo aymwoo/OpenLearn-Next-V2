@@ -16,8 +16,8 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2, Puzzle, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
-import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
+import { Loader2, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { PluginIconRenderer } from '../components/PluginIconRenderer';
@@ -343,13 +343,21 @@ function resolveExtensionComponent(ext: any): React.ComponentType<any> {
   //   按直组件处理）；返回 JSX 元素（非 thenable）→ 按直组件处理；
   // - 类组件无 new 调用直接抛错（捕获）→ 按直组件处理；
   // - memo/forwardRef/lazy 产物是对象而非函数 → 不进探针。
-  if (typeof fn === 'function' && !(fn as any).prototype?.isReactComponent) {
+  if (typeof fn === 'function' && !(fn as { prototype?: { isReactComponent?: boolean } }).prototype?.isReactComponent) {
     let looksLikeFactory = false;
     // React 19 使用 __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H，
     // React 18 使用 __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher.current。
+    type ReactInternals = {
+      H?: unknown;
+      ReactCurrentDispatcher?: { current?: unknown };
+    };
+    const reactInternals = React as unknown as {
+      __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?: ReactInternals;
+      __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: ReactInternals;
+    };
     const internals =
-      (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE ||
-      (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+      reactInternals.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE ||
+      reactInternals.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
     const prevDispatcher = internals?.H ?? internals?.ReactCurrentDispatcher?.current;
     try {
       // 隔离当前渲染上下文：若 fn 为直接函数组件（使用 hooks），
@@ -360,8 +368,8 @@ function resolveExtensionComponent(ext: any): React.ComponentType<any> {
         if ('H' in internals) internals.H = null;
         if (internals.ReactCurrentDispatcher) internals.ReactCurrentDispatcher.current = null;
       }
-      const probe = (fn as any)();
-      if (probe && typeof probe.then === 'function') {
+      const probe = (fn as () => { then?: unknown })() as unknown;
+      if (probe && typeof (probe as { then?: unknown }).then === 'function') {
         looksLikeFactory = true;
       }
     } catch {

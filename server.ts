@@ -359,21 +359,21 @@ async function startServer() {
       dotfiles: 'ignore',
       fallthrough: false,
       maxAge: 0,
-      setHeaders: (res: any, filePath: string) => {
+      setHeaders: (res: { setHeader: (name: string, value: string) => void }, filePath: string) => {
         if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
           res.setHeader('Content-Security-Policy', PLUGIN_VIEW_CSP);
         }
       },
     }),
   );
-  app.get('/plugin-sandbox/view-bridge.js', (_req: any, res: any) => {
+  app.get('/plugin-sandbox/view-bridge.js', (_req: express.Request, res: express.Response) => {
     res
       .status(200)
       .setHeader('Content-Type', 'application/javascript; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=3600')
       .send(PLUGIN_VIEW_BRIDGE_JS);
   });
-  app.get('/plugin-sandbox/frame', (req: any, res: any) => {
+  app.get('/plugin-sandbox/frame', (req: express.Request, res: express.Response) => {
     const token = getCookieToken(req);
     const session = token ? getValidSession(token) : null;
     if (!session) {

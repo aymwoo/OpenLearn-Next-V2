@@ -28,6 +28,7 @@ import {
   IPointsLedgerServiceToken,
 } from '../../di/interfaces.js';
 import { Token } from '../../di/token.js';
+import type { ActionDescriptor } from '../../registry/index.js';
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
 import type { PluginContext } from '../types.js';
 
@@ -552,7 +553,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
     return { ctx, register: actionRegistry.register as unknown as ReturnType<typeof vi.fn> };
   }
 
-  const descriptor = {
+  const descriptor: ActionDescriptor = {
     id: 'demo-list',
     commandType: 'grade.list_configs',
     description: 'list',
@@ -563,7 +564,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
   it('第三方插件的 commandType 自动加 manifest.id 前缀', async () => {
     const { ctx, register } = await setupWithActionMock();
 
-    await ctx.services.actionRegistry!.register(descriptor as any);
+    await ctx.services.actionRegistry!.register(descriptor);
 
     expect(register).toHaveBeenCalledTimes(2);
     expect(register.mock.calls[0][0]).toMatchObject({
@@ -575,7 +576,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
   it('同时注册裸名兼容别名，且别名不进 AI 工具箱（exposeToAgent: false）', async () => {
     const { ctx, register } = await setupWithActionMock();
 
-    await ctx.services.actionRegistry!.register(descriptor as any);
+    await ctx.services.actionRegistry!.register(descriptor);
 
     const alias = register.mock.calls[1][0];
     expect(alias).toMatchObject({
@@ -592,7 +593,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
     await ctx.services.actionRegistry!.register({
       ...descriptor,
       commandType: 'openlearn-plugin-demo.grade.list_configs',
-    } as any);
+    });
 
     expect(register).toHaveBeenCalledTimes(1);
     expect(register.mock.calls[0][0].commandType).toBe('openlearn-plugin-demo.grade.list_configs');
@@ -607,7 +608,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
     };
     const { ctx, register } = await setupWithActionMock(kernelManifest);
 
-    await ctx.services.actionRegistry!.register(descriptor as any);
+    await ctx.services.actionRegistry!.register(descriptor);
 
     expect(register).toHaveBeenCalledTimes(1);
     expect(register.mock.calls[0][0]).toMatchObject({ id: 'demo-list', commandType: 'grade.list_configs' });
@@ -620,7 +621,7 @@ describe('actionRegistry 命名空间前缀化（wrapActionRegistry）', () => {
     const tracker = new ResourceTracker();
     const ctx = await buildContext(registry, tracker, 'db-uuid-1', remoteManifest, mockDb());
 
-    await ctx.services.actionRegistry!.register(descriptor as any);
+    await ctx.services.actionRegistry!.register(descriptor);
     tracker.disposeAll('db-uuid-1');
 
     expect(unregister.mock.calls.map((c) => c[0])).toEqual(

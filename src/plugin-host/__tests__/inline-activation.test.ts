@@ -59,10 +59,15 @@ function seedStore(executionMode: 'inline' | 'worker' | 'process') {
   });
 }
 
+const testGlobal = globalThis as unknown as {
+  __inlineActivated?: string;
+  __inlineDeactivated?: boolean;
+};
+
 beforeEach(() => {
   usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map(), pluginErrors: new Map() });
-  delete (globalThis as any).__inlineActivated;
-  delete (globalThis as any).__inlineDeactivated;
+  delete testGlobal.__inlineActivated;
+  delete testGlobal.__inlineDeactivated;
 });
 
 afterEach(() => {
@@ -102,7 +107,7 @@ describe('activateRemotePlugin — inline / 沙箱判定', () => {
 
     // 关键断言：父页面从未把插件代码当模块 import
     expect(createObjectURL).not.toHaveBeenCalled();
-    expect((globalThis as any).__inlineActivated).toBeUndefined();
+    expect(testGlobal.__inlineActivated).toBeUndefined();
     expect(usePluginHostStore.getState().activePlugins.find((p) => p.id === REMOTE_ID)?.state).toBe(PluginState.ACTIVE);
   });
 
@@ -126,12 +131,12 @@ describe('activateRemotePlugin — inline / 沙箱判定', () => {
       executionMode: 'inline',
     });
 
-    expect((globalThis as any).__inlineActivated).toBe(REMOTE_ID);
+    expect(testGlobal.__inlineActivated).toBe(REMOTE_ID);
     expect(document.querySelector(`iframe[src="${PLUGIN_FRAME_PATH}"]`)).toBeNull();
     expect(usePluginHostStore.getState().activePlugins.find((p) => p.id === REMOTE_ID)?.state).toBe(PluginState.ACTIVE);
 
     // 反注册走插件自己的 deactivate（内联分支必须把模块入口记进 pluginModules）
     await host.deactivatePlugin(REMOTE_ID);
-    expect((globalThis as any).__inlineDeactivated).toBe(true);
+    expect(testGlobal.__inlineDeactivated).toBe(true);
   });
 });
