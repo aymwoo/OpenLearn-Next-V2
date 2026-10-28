@@ -1,96 +1,64 @@
 # OpenLearnV2 — Educational OS
 
-> 插件驱动的下一代在线教育操作系统（LMS），集成微内核架构、三档隔离插件沙箱、零信任课件隔离与 AI 伴随教学。
+> 插件驱动的下一代在线教育操作系统（LMS），融合微内核架构、三档沙箱隔离插件生态、零信任课件容器与原生 AI 伴随教学。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](package.json)
 [![Node: 20.x / 22.x / 24.x](https://img.shields.io/badge/Node-20.x%20%2F%2022.x%20%2F%2024.x-green.svg)](package.json)
-[![pnpm: >=9](https://img.shields.io/badge/pnpm-%3E%3D9.0.0-orange.svg)](package.json)
-[![Tests](https://img.shields.io/badge/Tests-1282%20passed-brightgreen.svg)]()
+[![pnpm: 10.x](https://img.shields.io/badge/pnpm-10.33.4-orange.svg)](package.json)
+[![CI](https://github.com/aymwoo/OpenLearn-Next-V2/actions/workflows/ci.yml/badge.svg)](https://github.com/aymwoo/OpenLearn-Next-V2/actions/workflows/ci.yml)
 
-📚 **完整文档**：[openlearn-next-v2.readthedocs.io](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [快速开始](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html) · [安装指南](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/installation-guide.html) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [版本迁移](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/migration/version-migration.html)
+📚 **官方文档**：[在线文档库 (ReadTheDocs)](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [快速上手](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [部署运维手册](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)
 
 ---
 
 ## 🌟 核心特性
 
-- 🧩 **微内核与事件驱动架构 (Educational OS Kernel)**
-  - 核心子系统基于 CQRS `CommandBus`、强类型 DI 依赖注入容器与 SQLite 关系型存储。
-  - `EventBus` 支持内核级事件发布/订阅，关键审计事件（如学生端异常、权限变更、课件提交）持久化落盘至 `events` 表。
-- 🛡️ **三档隔离插件沙箱 (Plugin Host & Sandboxing)**
-  - 支持 **Inline 原生模式**、**Worker 线程沙箱** 与 **子进程沙箱**（`process`）。第三方 ZIP 插件被强制使用 `process` 模式；隔离模式下经 RPC 代理访问内核服务，并具备看门狗自动拉起（Watchdog）与 5 分钟崩溃 4 次熔断保护（Circuit Breaker）。
-  - 严谨的 7 态插件生命周期管理（`INSTALLED` ➔ `ACTIVATING` ➔ `ACTIVE` ➔ `DEACTIVATING` ➔ `INACTIVE` ➔ `ERROR` ➔ `UNINSTALLED`），卸载与停用自动触发资源与权限彻底回收。
-  - 插件专属 REST API 安全网关：命名空间路由隔离、滑动窗口限流、SSE 并发连接配额与响应头清洗。
-- 📦 **零信任课件沙箱与透明 Bridge SDK**
-  - HTML5 课件与小程序在严格 `iframe`（`sandbox="allow-scripts allow-forms allow-downloads"`，严格禁止 `allow-same-origin`）中运行。
-  - 独创 **Bridge SDK** 透明代理跨域通讯，内置 `ResultWatcher` 强信号监听器，实现无需题目作者适配即可自动识别「结算页/通关页」并抓取分数自动回写。
-- 📡 **课堂实时协同与学生端多维遥测**
-  - 在线感知（Presence Engine）：实时捕获学生专注度（Focused/Unfocused）、离屏状态与班级专注率。
-  - 多人协同（Collaboration Engine）：支持分组协作、共享对象锁（ObjectLock）与白板事件插槽（WhiteboardEventSlot）。
-  - **学生端极简低干扰异常遥测**：端侧左下角极简感叹号图标+红色角标，降低课堂认知负荷；异常秒级上报至教师端大屏并落盘审计日志。
-  - **班级上课临时密码与双轨登录**：课前就绪一键设定与动态时效管控，学生可凭班级临时口令或个人密码快速入课；预留第三方插件扩展插槽与标准获取接口。
+- 🧩 **微内核与事件驱动底座 (Educational OS Microkernel)**
+  - 基于 CQRS `CommandBus`、强类型 DI 依赖注入与 SQLite 关系型存储（WAL 高并发模式）。
+  - 内核级 `EventBus` 支持精准事件订阅与审计追溯，搭载 Schema Golden 结构守卫，杜绝数据库版本漂移。
+
+- 🛡️ **三档隔离插件生态 (Extensible Plugin Architecture)**
+  - 支持 **Inline 原生模式**、**Worker 线程** 与 **独立子进程 (Process)** 三档隔离沙箱，具备崩溃看门狗自动重启与熔断保护。
+  - 支持 ESM ZIP 热插拔分发、独立 REST API 命名空间路由隔离、出网权限白名单（Net Grants）与精细化资源配额。
+  - 声明式 UI 扩展槽位：画板图元、管理端侧栏、教学工具箱、课件类型等均可由插件任意扩展。
+
+- 📦 **零信任课件容器与透明 Bridge SDK**
+  - HTML5 / 网页应用课件运行于极严沙箱容器（无 `allow-same-origin`），彻底阻断越权窥探。
+  - 独创 **Bridge SDK** 跨域通讯代理，内置 `ResultWatcher` 自动感知通关与结算信号，无需课件改造即可自动回写成绩。
+
+- 📡 **课堂实时协同与低干扰多维遥测**
+  - **实时在线与专注度感知**：毫秒级捕获学生离屏、切台与活跃状态，呈现全班专注度热力图。
+  - **低干扰健康遥测**：学生端极简角标异常上报（不中断正常教学），故障秒级推向教师端并持久化审计。
+  - **多端实时互动白板**：基于 Konva 的高帧率协同画板，支持区域对象锁、随堂测验卡片投送与生生互评。
+
 - 🤖 **原生 AI 伴随教学引擎**
-  - 兼容 OpenAI 协议（DeepSeek、Qwen、Ollama、OpenAI 等任意兼容提供商），密钥多重加密存储。
-  - 赋能教师工作台：一键智能生成结构化教案、自动出题与随堂小测、学情诊断与个性化学习规划。
+  - 兼容 OpenAI 开放标准（DeepSeek、Qwen、Ollama、OpenAI 等任意兼容提供商），密钥多重加密落盘。
+  - 深度赋能备课与授课：一键生成结构化互动教案、随堂出题与测评建议、学情智能诊断与个性化干预。
+
+- 🧰 **开箱即用与生产级可靠运维**
+  - 内置命令行诊断看护：`npx openlearn-next doctor --fix` 一键健康体检、依赖自愈与在线冷备/快照还原。
+  - 严格的主机安全基线：密码强制安全初始化、CSP 防注入、LTI 1.3 标准对接兼容。
 
 ---
 
-## 🏗️ 架构拓扑 (Architecture Topology)
+## 🚀 快速开始
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Frontend UI Shell (React 19)                    │
-│   Teacher Workspace  │  Live Classroom  │  Whiteboard  │  Student Live │
-└────────────────────────────────────┬───────────────────────────────────┘
-                                     │ WebSocket / REST API
-┌────────────────────────────────────▼───────────────────────────────────┐
-│                   Realtime Gateway & Security Barrier                   │
-│   Socket.IO (Presence / Telemetry) │ Helmet CSP │ Session Auth Guard   │
-│   Plugin REST API Gateway (Rate Limit / SSE Quota / Header Sanitizer)  │
-└────────────────────────────────────┬───────────────────────────────────┘
-                                     │
-┌────────────────────────────────────▼───────────────────────────────────┐
-│                     Platform Kernel (packages/core)                    │
-│  ┌─────────────────┐   ┌─────────────────┐   ┌──────────────────────┐  │
-│  │   Command Bus   │   │    Event Bus    │   │ DI Container (Tokens)│  │
-│  └────────┬────────┘   └────────┬────────┘   └──────────┬───────────┘  │
-│           │                     │                       │              │
-│  ┌────────▼─────────────────────▼───────────────────────▼───────────┐  │
-│  │     SQLite Database (WAL Mode / Migration / Audit Log Events)    │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────┬───────────────────────────────────┘
-                                     │
-┌────────────────────────────────────▼───────────────────────────────────┐
-│                     Plugin Runtime & Sandbox Subsystem                 │
-│  ┌───────────────────────────────┐   ┌──────────────────────────────┐  │
-│  │ Inline Mode Runtime           │   │ Worker Process Sandbox       │  │
-│  │ (Direct In-Memory Execution)  │   │ (RPC / Watchdog / Breaker)   │  │
-│  └───────────────────────────────┘   └──────────────────────────────┘  │
-│  ┌───────────────────────────────┐   ┌──────────────────────────────┐  │
-│  │ Dynamic ESM ZIP Loader        │   │ Capability Guard (RBAC/ABAC) │  │
-│  └───────────────────────────────┘   └──────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 快速开始
-
-### 一键运行（无需 clone 项目）
+### 方式 A：一键试用（无需克隆代码）
 
 ```bash
-# 推荐使用 @latest 强制校验最新发布版本，规避本地历史缓存版本漂移：
+# 启动最新发布版体验
 npx openlearn-next@latest
 
-# 自定义端口 / 启动后自动唤起浏览器 (-o) / 临时沙盒演示模式 (--demo)
+# 自定义端口 / 启动后自动唤起浏览器 (-o) / 演示模式 (--demo)
 npx openlearn-next@latest -p 3000 -o
 npx openlearn-next@latest --demo -o
 
-# 运维诊断与一键自愈 / 在线冷备
+# 运维诊断自愈与在线冷备
 npx openlearn-next@latest doctor --fix
 npx openlearn-next@latest backup
 ```
 
-### 全局安装
+### 方式 B：全局安装运行
 
 ```bash
 npm install -g openlearn-next   # 安装
@@ -98,116 +66,64 @@ openlearn-next                  # 启动
 npm update -g openlearn-next    # 更新
 ```
 
-种子账号用户名仍是 `admin`（管理员）和 `teacher`（教师），但**不再使用与用户名相同的默认密码**。首次空库启动时：
-
-- 若设置了 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，使用该口令。口令若仍等于用户名，登录后必须立刻修改，期间除改密、登出和会话查询外，其余 `/api` 请求（含 GET）返回 403。
-- 未设置时随机生成 20 位口令，明文只打印一次，并写入 `storage/bootstrap-credentials.txt`（权限 600）。请在首次登录后修改并删除该文件。
-- 已有数据库若口令仍是 `admin` / `teacher`，可以登录，但同样被强制改密拦住，直到 `POST /api/auth/change-password` 成功。不要在生产环境设置 `PLAYWRIGHT_TEST`（该变量会保留测试用默认口令并跳过改密门禁）。
-
-### 本地开发
+### 方式 C：源码本地开发
 
 ```bash
-# 推荐使用 pnpm
+# 1. 克隆仓库并安装依赖（建议 Node 22 + pnpm）
+git clone https://github.com/aymwoo/OpenLearn-Next-V2.git
+cd openlearnv2
 pnpm install
 
-# 启动开发服务器（端口 9000，支持 Vite HMR）
+# 2. 启动开发服务器（支持 Vite HMR，默认端口 9000）
 pnpm dev
 
-# 浏览器访问
+# 3. 浏览器打开
 open http://localhost:9000
 ```
 
-> 首次启动后，可在管理后台「AI Provider 管理」中配置您的大模型 API 密钥（DeepSeek、OpenAI、Ollama 等）。
+> 🔐 **初始凭据安全说明**：
+> 平台内置种子管理员账号 `admin` 与教师账号 `teacher`。首次启动若未预设环境变量口令，系统将在 `storage/bootstrap-credentials.txt` 生成随机一次性口令。登录后系统将强制引导修改密码。
 
 ---
 
-## 生产部署
+## 🛠️ 常用命令
+
+| 命令               | 说明                                              |
+| :----------------- | :------------------------------------------------ |
+| `pnpm dev`         | 启动开发服务（Express + Vite 前端热更新）         |
+| `pnpm build`       | 全量生产构建（Vite 构建 ➔ 插件打包 ➔ 服务端打包） |
+| `pnpm start`       | 运行生产打包产物（`dist/server.cjs`）             |
+| `pnpm test`        | 执行 Vitest 自动化单元与集成测试套件              |
+| `pnpm lint`        | TypeScript 静态类型检查（`tsc --noEmit`）         |
+| `pnpm lint:strict` | 严格模式类型检查                                  |
+| `pnpm format`      | Prettier 代码自动格式化                           |
+
+---
+
+## 🚢 生产部署
+
+推荐通过项目自带的自动化部署脚本完成生产部署：
 
 ```bash
 chmod +x deploy.sh
 ./deploy.sh
 ```
 
-脚本自动完成：依赖校验 ➔ 生产构建 ➔ 生成 Nginx 配置 ➔ PM2 进程守护 ➔ 生成 API Key 加密密钥。
-详细部署方案可参阅 [生产部署指南](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)。
+脚本将自动执行：环境依赖预检 ➔ 生产构建 ➔ Nginx 反向代理配置 ➔ PM2 进程守护与加密密钥初始化。  
+更多部署方式（Docker Compose、多实例集群与环境变量全集）请查阅 [生产部署指南](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html) 与 [系统配置手册](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/configuration/system-configuration.html)。
 
 ---
 
-## 常用开发命令 (CLI Scripts)
+## 📖 更多文档
 
-| 命令               | 说明                                                             |
-| :----------------- | :--------------------------------------------------------------- |
-| `pnpm dev`         | 启动全栈开发服务（Express + Vite HMR，端口 9000）                |
-| `pnpm build`       | 生产级全量构建（Vite 前端构建 ➔ 插件打包 ➔ esbuild 服务端打包）  |
-| `pnpm start`       | 运行生产打包服务（从 `dist/server.cjs` 启动）                    |
-| `pnpm test`        | 执行 Vitest 自动化测试套件（支持并行 worker 隔离 SQLite 测试库） |
-| `pnpm lint`        | TypeScript 静态类型检查（`tsc --noEmit`）                        |
-| `pnpm lint:eslint` | ESLint 代码规范检查                                              |
-| `pnpm format`      | Prettier 代码自动化格式化                                        |
-| `pnpm db:backup`   | 数据库安全在线冷备                                               |
-| `pnpm db:reset`    | 重置本地测试数据库环境                                           |
-
----
-
-## ⚙️ 环境变量
-
-| 变量                | 必需 |                 默认值                 | 说明                                                                      |
-| :------------------ | :--: | :------------------------------------: | :------------------------------------------------------------------------ |
-| `ENCRYPTION_KEY`    |  ✅  |                   —                    | 64 位 Hex 字符串，用于 AI Provider API Key 加密（`deploy.sh` 会自动生成） |
-| `PORT`              |  —   |                 `9000`                 | HTTP 服务监听端口                                                         |
-| `OPENLEARN_DB_PATH` |  —   | `./packages/core/db/educational_os.db` | SQLite 数据库文件路径（npx 运行时默认为 `~/openlearn-next/data.db`）      |
-| `ALLOWED_ORIGINS`   |  —   |                  `*`                   | CORS 跨域白名单（逗号分隔）                                               |
-| `LOG_LEVEL`         |  —   |                 `info`                 | 系统日志输出级别（`debug` / `info` / `warn` / `error`）                   |
-
----
-
-## 🗺️ 项目演进路线图 (Roadmap)
-
-根据平台近期代码与架构深度审计结果（相关一致性由 [架构文档漂移审计](docs/developer-guide/docs-drift-audit.md) 在 CI 中持续看守），OpenLearn 制定了分阶段的演进路线：
-
-### 🎯 阶段一：稳固与安全收敛 (v0.3.21 - 当前阶段)
-
-- [x] **P0 严重安全缺陷彻底闭环**：
-  - [x] 为 `/api/plugins/execute-command` 挂载全局有效会话鉴权（`requireAuth()`），消除未授权命令执行面
-  - [x] 插件更新检查器（`version-fetcher.ts`）消除 Shell 命令注入，采用安全参数化执行（`execFileSync`）与仓库白名单正则校验
-  - [x] 插件数据库建表（`ensureTable`）在 Inline 与 Worker 双模式下全面引入 SQL 标识符与 DDL 结构校验，防御 SQL 注入
-  - [x] 规范插件停用与卸载生命周期，非 ACTIVE 状态下无条件回收宿主资源（`resourceTracker.disposeAll`）与能力注销（`capService.revokeAll`）
-- [x] **端侧异常健康遥测与审计体系**：
-  - [x] 实现学生端 React 运行时、未捕获 Promise、网络请求故障的自动捕获与多通道秒级上报（WebSocket 优先 + HTTP 兜底）
-  - [x] 教师端互动课堂大屏与学生卡片集成红色脉冲告警、异常堆栈诊断与 Markdown 报告一键导出
-  - [x] 服务端事件总线统一写入 SQLite `events` 审计日志，内置学生 ID 防冒用验证与上报频率限制
-  - [x] 学生端 UI 实施低干扰改造（左下角微型图标+数字角标），保障课堂学习专注度
-- [ ] **SDK 契约一致性治理**：重新构建打包 `@openlearn/plugin-sdk`，补齐 `STORAGE_TOKEN` 等缺失导出的 Token 与类型定义
-- [ ] **自动化测试体系清理**：解耦对未提交外部目录的物理路径硬依赖，使 215 个套件的全量测试达到 100% 绿灯
-
-### 🚀 阶段二：K12 课堂交互与智能伴随深化 (v0.4.0 - 中期演进)
-
-- [ ] **课件状态双向镜像与远程协助**：
-  - 教师端可按需拉取单个学生的课件作答实时快照（DOM/Canvas 镜像）
-  - 支持教师端一键向指定学生或全班推送课件交互指令（如强制锁屏、重置题目、跳转指定页）
-- [ ] **弱网自适应与离线断点续传**：
-  - 学生端在网络波动或断网状态下自动切换至离线缓存模式，答题数据暂存 IndexedDB
-  - 网络恢复后触发幂等对账上报，保障农村/边远地区学校课堂的无缝教学体验
-- [ ] **多学生白板分组协同微内核完善**：
-  - 生产化 `CollaborationEngineKernel` 中的区域对象锁（ObjectLock），避免多人同时绘制冲突
-  - 支持多白板画板并行动态分发与学生分组讨论室一键合并展示
-- [ ] **AI 伴随助教深度赋能**：
-  - 聚合全班随堂测验实时答题热力图与学生端异常/离屏遥测，自动向教师推送「教学干预建议」
-  - 针对薄弱学生自动生成分层递进练习题并直接推送到学生互动端
-- [ ] **插件 Worker 沙箱默认化**：全面推广独立 Worker 进程沙箱，实现插件与宿主主线程的硬隔离
-
----
-
-## 📖 相关文档
-
-- 📚 [官方完整文档](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/)
-
-- 🔍 [架构文档漂移审计](docs/developer-guide/docs-drift-audit.md)
-- 🤝 [贡献指南与开发规范](AGENTS.md)
-- 📝 [版本更新日志](CHANGELOG.md)
+- 📚 [完整官方文档库](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/)
+- ⚙️ [系统环境变量配置规范](docs/configuration/system-configuration.md)
+- 🔌 [插件系统与 SDK 规范](docs/tutorials/plugin-development-tutorial.md)
+- 🤝 [贡献指南与开发规范 (AGENTS.md)](AGENTS.md)
+- 📝 [版本更新日志 (CHANGELOG.md)](CHANGELOG.md)
 
 ---
 
 ## 📄 开源许可证
 
-本项目基于 MIT License 开源发布（声明见 [package.json](package.json) 的 `license` 字段）。
+本项目基于 [MIT License](package.json) 开源发布。
