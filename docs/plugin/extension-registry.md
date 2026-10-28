@@ -241,8 +241,6 @@ ctx.services.ai.registerAIContextProvider?.('ext-quiz:progress', (lessonId) => {
 
 ---
 
----
-
 ## 1. `ContributionRegistry` 声明式贡献点
 
 实现位置：`packages/core/plugin-host/contribution-registry.ts`
