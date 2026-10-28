@@ -10,6 +10,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **焦点作品对比大屏（SpotlightDualWorkArena）单份作品空指针异常修复**：
+  - **空安全兜底与插槽占位**：当课堂提交作品仅有 1 份时，`usePeerReviewData` 将 `workA` 赋为该作品、`workB` 赋为 `null`；此前 `SpotlightDualWorkArena` 在顶部副标题及卡片渲染时无条件解构 `workB.studentName`，导致教师在大屏开启生生互评赏析弹窗时触发 `Cannot read properties of null (reading 'studentName')` 致命渲染异常。
+  - **优雅降级与防御性渲染**：在 `SpotlightDualWorkArena` 中为 `workA` 与 `workB` 提供空安全断言与虚线占位卡片（`待选作品 A/B` 提示并引导通过作品池切换设为焦点），顶部副标题加入缺失作品兜底文案，`PeerReviewShowcaseModal` 同步移除强制类型转换。
+  - 测试：`src/features/classroom/peer-review/__tests__/PeerReviewShowcase.test.tsx`（新增单作品/无作品兜底测试，共 18 例全绿）。
+
+- **PPTX 课件渲染死循环 Maximum update depth exceeded 修复**：
+  - **PowerPointViewer 配置常驻单例化**：`pptx-react-viewer` 的 `useViewerCustomization` 在 `useLayoutEffect` 中使用全等 `===` 比对入参配置对象；此前向 `<PowerPointViewer>` 传入内联对象字面量 `customization={{ hiddenPanels: ['inspector'] }}` 与浅拷贝数组 `[...LOCALE_CATALOG]`，导致每次组件渲染或 portal 更新时均触发 `controller.api.setCustomization()` 与 `useSyncExternalStore` 强制重渲染，形成微秒级死循环并突破 React 最大更新深度上限。
+  - **稳定化治理**：提取模块顶层静态单例 `PPTX_VIEWER_CUSTOMIZATION` 与 `PPTX_AVAILABLE_LOCALES`，同时将 `handlePptxActiveSlideChange` 与 `handlePptxSlideCountChange` 收敛至 `useCallback`，彻底阻断重渲染死循环。
+  - 测试：`src/features/whiteboard/__tests__/reveal-presentation-wrapper.test.tsx`（PPTX 异步解析、翻页与挂载回归 5 例全绿）。
+
+- **课堂视图状态回写（POST view-state）偶发 429 治理与写限流分级**：
+  - **服务端写限流分级调优**：为高频会话同步端点（`POST /api/classroom/sessions/:lessonId/view-state`）配置独立的 `viewStateLimiter` 桶（120 次/分，开发环境 600 次/分），不再与通用破坏性写入争抢配额；通用写限流 `writeLimiter` 阈值从 60 调整为生产 180 次/分、开发 600 次/分，杜绝课堂协同高频互动（白板翻页/互动提交/打卡）中的假阳性 429。
+  - **前端视图状态回写防抖与去重治理**：`LiveClassroomView` 与 `InteractiveWhiteboard` 引入 `lastPersistedRef` 针对教学环节与白板页码进行前置变更 Diff，未变更时不再无谓回写；`view-state` 捕获 429 静默降级，避免控制台刷屏。
+  - 测试：`server/__tests__/rate-limit-view-state.test.ts`（view-state 独立限流 1 例）、`src/components/__tests__/live-classroom-view-state-write.test.tsx`（环节未变去重门控 3 例）。
+
 ## [0.7.7] - 2026-10-28
 
 ### Features
