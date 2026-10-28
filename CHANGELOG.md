@@ -162,6 +162,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `.gitignore` 补 `/openlearn.db*` 与 `/plugin-data-exports/`：前者是未设
   `OPENLEARN_DB_PATH` 时误落在仓库根的 SQLite；后者是插件数据归档目录
   （`<data>/plugin-data-exports`），未设 `OPENLEARN_DATA_DIR` 时会写进仓库根。
+- **清理根目录历史审计报告快照**：移除根目录下 9 个过时的阶段性审计报告快照（`audit-2026-*.md` 等），历史版本记录可由 Git 提交树追溯（对齐 `docs/audit/audit-index.md` 归档规范）。
 
 ## [0.7.6] - 2026-10-27
 
