@@ -55,3 +55,16 @@ git show <commit>^:docs/architecture/platform-foundation-audit-report.md
 
 - [developer-guide/docs-drift-audit](../developer-guide/docs-drift-audit.md)：文档漂移门禁的**操作规范**，说明新增 subsystem 时必须同步更新哪些页面。
 - [api/api-coverage-report](../api/api-coverage-report.md)：数字由脚本统计、可随代码复算，按版本校准后作为覆盖度参考。
+
+```{toctree}
+:hidden:
+
+AUDIT_REPORT
+DEPLOY_REHEARSAL
+PLUGIN_AUDIT_REPORT
+classroom-time-flow-audit
+course-import-audit
+security-remediation-report
+trust-boundary-hardening-audit-2026-10-14
+whiteboard-realtime-sync-audit
+```
