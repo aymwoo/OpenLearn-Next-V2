@@ -10,12 +10,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Fixes
-
-- **CI / typecheck-and-test 告警预算门禁治理**：
-  - 清理近期引入的 35 处 ESLint 告警（主要集中在可视沙箱、内置插件图元放行与测试中的 `no-explicit-any`），全仓告警数由 6267 降至 6232。
-  - 收紧 ESLint 告警基线（`config/lint-budget.json`：6243 → 6232），恢复 CI `typecheck-and-test` 门禁正常绿通。
-
 ## [0.7.7] - 2026-10-28
 
 ### Features
@@ -100,6 +94,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   块只传白名单内的键，此前这两个变量在 `.env` 里写了也到不了进程。
 
 ### Fixes
+
+- **CI / typecheck-and-test 告警预算门禁治理 (#348)**：
+  - 清理近期引入的 35 处 ESLint 告警（主要集中在可视沙箱、内置插件图元放行与测试中的 `no-explicit-any`），全仓告警数由 6267 降至 6232。
+  - 收紧 ESLint 告警基线（`config/lint-budget.json`：6243 → 6232），恢复 CI `typecheck-and-test` 门禁正常绿通。
+
+- **Sphinx 文档构建告警修复 (Read the Docs) (#347)**：
+  - 修复 `docs/plugin/extension-registry.md` 中相邻横线分割线引发的 docutils transition 警告。
+  - 在 `docs/audit/audit-index.md` 底部增加 `:hidden:` 的 toctree 索引归档报告，消除 `toc.not_included` 警告，确保 Read the Docs 构建成功。
 
 - **调色板贡献缺省字段不再打挂编辑弹窗**：manifest 声明式 `editor.palette_item`
   桥接进 `paletteItemRegistry` 时不一定带 `editFields` / `color`，而
