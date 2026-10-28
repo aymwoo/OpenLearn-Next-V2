@@ -10,25 +10,25 @@
 
 ## 1. 一句话结论
 
-**远程前端插件目前是一个「隐藏的、无 UI 的逻辑执行体」。** 它的可见价值来自
-manifest 声明式贡献（由宿主渲染），而不是它自己的前端代码。
+**第三方前端插件采用「双轨制 UI 架构」：后台逻辑在隐藏沙箱执行，自定义 UI 经独立可视沙箱（Visual Sandbox Container）安全呈现。**
+
+插件不能向宿主直接注入 React 组件函数（防范 XSS 与 DOM 污染），但可以在 `manifest.json` 声明 `view` 相对路径（如 `"dashboard.html"`），由宿主在面板区以严格安全沙箱 iframe 挂载，并通过客户端桥接 SDK（`/plugin-sandbox/view-bridge.js`，`window.OpenLearnPluginBridge`）与宿主进行双向通信与状态同步。
 
 ---
 
 ## 2. 执行环境
 
-| 维度           | 事实                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| 宿主页面       | `frontend.js` 源码由父页面 fetch 后经 postMessage 送入 iframe                                   |
-| iframe 源      | `/plugin-sandbox/frame`，`sandbox="allow-scripts"`（**无** `allow-same-origin`）→ opaque origin |
-| `window` realm | **与父页面隔离** —— iframe 内 `window.HostSharedDeps` 为 `undefined`                            |
-| 可见性         | `frame.style.display = 'none'` —— **隐藏**，插件不能渲染任何用户可见内容                        |
-| DOM 访问       | 无权读取或改写宿主 DOM                                                                          |
-| 网络           | iframe CSP 禁止 `connect`；插件自身不能发请求，只能经 RPC 桥调用宿主代发                        |
-| 加载机制       | 父页面送源码 → iframe 内 `new Blob([source])` → `import(url)`（CSP 已允许 `blob:`）             |
+| 维度           | 后台逻辑沙箱 (`frontend.js`)                               | 可视视图沙箱 (`view` HTML)                                                                         |
+| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 宿主容器       | 隐藏 iframe（`/plugin-sandbox/frame`）                     | 可视沙箱 iframe（`<PluginSandboxIframeView />`）                                                   |
+| iframe 属性    | `sandbox="allow-scripts"` (opaque origin)                  | `sandbox="allow-scripts allow-forms allow-downloads"`（opaque origin，**无** `allow-same-origin`） |
+| `window` realm | **与父页面隔离** —— iframe 内 `window.HostSharedDeps` 为空 | **与父页面隔离** —— 独立 DOM 树，不污染宿主样式与全局对象                                          |
+| 可见性         | `display: none`（隐藏执行后台逻辑）                        | **可见**（嵌入 `teacher.tab` / `teacher.panel` 等面板区）                                          |
+| DOM 访问       | 无权读取或改写宿主 DOM                                     | 无权读取或改写宿主 DOM（但可自由操作自身页面内的 DOM）                                             |
+| 通信机制       | `ol-plugin-frame` postMessage RPC                          | `ol-plugin-view` postMessage RPC（`window.OpenLearnPluginBridge`）                                 |
+| 网络与 CSP     | `default-src 'none'; connect-src 'none'`（无网络）         | `PLUGIN_VIEW_CSP`（允许自身脚本/样式/媒体，强制 `frame-ancestors 'self'`）                         |
 
-源码：`server/utils/plugin-sandbox-frame.ts`、`src/plugin-host/plugin-host.ts` 的
-`mountSandboxFrame` / `activateRemotePlugin`。
+源码：`server/utils/plugin-sandbox-frame.ts`、`server/utils/plugin-view-bridge.ts`、`src/components/PluginSandboxIframeView.tsx`。
 
 ---
 
@@ -36,23 +36,24 @@ manifest 声明式贡献（由宿主渲染），而不是它自己的前端代�
 
 ### 3.1 远程插件**能**做的（iframe 内 ctx 全量）
 
-| 能力                            | 说明                                                                |
-| ------------------------------- | ------------------------------------------------------------------- |
-| `ctx.services.frontendApi`      | `get` / `post` / `del`，经父页面代发，受方法策略与能力声明约束      |
-| `ctx.services.storageService`   | 按 `manifest.id` 命名空间隔离的键值存储                             |
-| `ctx.invokeCommand`             | 经 `POST /api/plugins/:id/sandbox-command` 派发，actor 由服务端绑定 |
-| `ctx.ui.showToast`              | 宿主代发 toast                                                      |
-| `ctx.ui.registerExtensionPoint` | **仅数据型**（见 3.2）                                              |
-| `ctx.context.get`               | 当前 `lessonId` / `classId`                                         |
+| 能力                            | 说明                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| 可视沙箱视图 (`view: "..."`)    | 经 manifest `contributes` 声明相对路径 HTML，在独立可视沙箱 iframe 中呈现完整 UI |
+| `ctx.services.frontendApi`      | `get` / `post` / `del`，经父页面代发，受方法策略与能力声明约束                   |
+| `ctx.services.storageService`   | 按 `manifest.id` 命名空间隔离的键值存储                                          |
+| `ctx.invokeCommand`             | 经 `POST /api/plugins/:id/sandbox-command` 派发，actor 由服务端绑定              |
+| `ctx.ui.showToast`              | 宿主代发 toast                                                                   |
+| `ctx.ui.registerExtensionPoint` | **仅数据型**（见 3.2）                                                           |
+| `ctx.context.get`               | 当前 `lessonId` / `classId`                                                      |
 
 ### 3.2 远程插件**不能**做的
 
-| 不能做                              | 原因                                                                                                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 提供**自定义 React 组件**           | `ctx.ui.registerExtensionPoint(slot, { component })` 的 `component` 是函数，postMessage 无法结构化克隆 → 传函数直接 `DataCloneError` 导致激活失败 |
-| 渲染任何**可见 UI**                 | 沙箱 iframe 是 `display: none` 的隐藏执行体；插件无权访问宿主 DOM                                                                                 |
-| 使用宿主的 `window.HostSharedDeps`  | realm 隔离，iframe 内为 `undefined`（详见 `plugin-host-shared-deps.md` §0）                                                                       |
-| 让 `import React from 'react'` 生效 | 宿主转译成 `window.HostSharedDeps.React` 后在 iframe 内求值为 `undefined` → 激活抛 `Cannot read properties of undefined`                          |
+| 不能做                              | 原因                                                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 直接向宿主传递**自定义 React 组件** | `ctx.ui.registerExtensionPoint(slot, { component })` 的 `component` 是函数，postMessage 无法结构化克隆 → 传函数直接 `DataCloneError`。第三方插件的自定义界面应使用独立的 `view` 可视沙箱页面交付 |
+| 突破 iframe 沙箱访问宿主 DOM        | 沙箱 iframe 受限于严格浏览上下文，无权读取或改写父页面 DOM（保障宿主系统级安全）                                                                                                                 |
+| 使用宿主的 `window.HostSharedDeps`  | realm 隔离，iframe 内为 `undefined`（详见 `plugin-host-shared-deps.md` §0）                                                                                                                      |
+| 让 `import React from 'react'` 生效 | 宿主转译成 `window.HostSharedDeps.React` 后在 iframe 内求值为 `undefined` → 激活抛 `Cannot read properties of undefined`                                                                         |
 
 ### 3.2.1 网络与实时性：iframe 内没有网络，实时性只能轮询
 
@@ -130,16 +131,14 @@ schema，宿主用自己的 React 渲染；插件只提供数据与命令，不�
 
 ## 5. 待修项清单（按优先级）
 
-| 编号 | 事项                                                                                    | 状态                  |
-| ---- | --------------------------------------------------------------------------------------- | --------------------- |
-| A    | 熔断/激活失败时**保留** manifest 声明式贡献，给出显式错误态与重试（不再「闪现后消失」） | ✅ 已于 v0.7.0 落地   |
-| B    | 文档纠偏：不再教用户把 remote 插件的 react 设为 external                                | ✅ 已于 v0.7.0 落地   |
-| C    | 层 1 依赖注入：父页面按需把 React 运行时送入 iframe，或改走「插件自打包」               | ⏳ 待立项             |
-| D    | 层 2 声明式 slot DSL：manifest 描述 UI，宿主渲染                                        | ⏳ 待立项（方向已定） |
-| E    | SDK CLI 前端 externals 预置可配置（默认按执行环境给出正确建议，或直接自打包）           | ⏳ 待立项             |
-
-> 关于 C 的取舍：若 D 走声明式路线，插件不再需要 React 运行时，
-> 「宿主注入」与「插件自打包」都不再是必需品 —— 可只保留 C 作为 D 之前的过渡方案。
+| 编号 | 事项                                                                                    | 状态                 |
+| ---- | --------------------------------------------------------------------------------------- | -------------------- |
+| A    | 熔断/激活失败时**保留** manifest 声明式贡献，给出显式错误态与重试（不再「闪现后消失」） | ✅ 已于 v0.7.0 落地  |
+| B    | 文档纠偏：不再教用户把 remote 插件的 react 设为 external                                | ✅ 已于 v0.7.0 落地  |
+| C    | 层 1 依赖注入：父页面按需把 React 运行时送入 iframe，或改走「插件自打包」               | ⏳ 待立项            |
+| D    | 层 2 双轨制 UI：独立可视沙箱容器与双向视图桥接（Phase 1）                               | ✅ 已于 v0.7.6+ 落地 |
+| D2   | 层 2 声明式结构化 DSL 渲染（Phase 2，复杂数据项按需推进）                               | ⏳ 待立项            |
+| E    | SDK CLI 前端 externals 预置可配置（默认按执行环境给出正确建议，或直接自打包）           | ⏳ 待立项            |
 
 ---
 
@@ -150,4 +149,4 @@ schema，宿主用自己的 React 渲染；插件只提供数据与命令，不�
 - `docs/plugin/plugin-security-migration.md` —— 前端沙箱安全边界。
 - `docs/plugin/plugin-manifest-spec.md` —— manifest schema。
 
-> 最后更新：2026-10-24（v0.7.0：能力边界与路线定稿）
+> 最后更新：2026-10-28（v0.7.6+：双轨制 UI 架构 Phase 1 落地）

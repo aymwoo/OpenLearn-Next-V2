@@ -13,19 +13,17 @@
 
 前端代码的执行环境由**插件来源**决定，不是由你的构建配置决定：
 
-| 插件来源                                      | 前端执行环境                                              | 能给可见 UI 吗                    |
-| --------------------------------------------- | --------------------------------------------------------- | --------------------------------- |
-| 内置插件（`packages/plugins/*`）              | `inline`：与宿主同 realm，`import()` 直接加载             | ✅ 能（正常 React 组件）          |
-| 管理员加入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` | `worker_threads` / `inline`                               | ✅ 能                             |
-| **第三方 ZIP 插件（绝大多数开发者）**         | `process`：不透明源隐藏 iframe（`/plugin-sandbox/frame`） | ❌ **不能**（只能声明数据型贡献） |
+| 插件来源                                      | 前端执行环境                                                                                       | 能给可见 UI 吗                                                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 内置插件（`packages/plugins/*`）              | `inline`：与宿主同 realm，`import()` 直接加载                                                      | ✅ 能（正常 React 组件）                                                                                |
+| 管理员加入 `OPENLEARN_TRUSTED_INLINE_PLUGINS` | `worker_threads` / `inline`                                                                        | ✅ 能（正常 React 组件）                                                                                |
+| **第三方 ZIP 插件（绝大多数开发者）**         | `process`：双轨制 —— 逻辑在隐藏 iframe；**可见 UI 经可视沙箱容器渲染**（`view: "dashboard.html"`） | ✅ **能**（通过独立可视沙箱 HTML/JS，详见 [§6](#6-第三方插件可视沙箱视图开发指南-visual-sandbox-view)） |
 
-> 🚩 **第三方插件的硬边界**（`v0.7.0` 起）：你的 `frontend.js` 跑在 `sandbox="allow-scripts"` 的**隐藏** iframe 里 ——
-> 没有 `allow-same-origin`，没有 `window.HostSharedDeps`，没有 `React`，`component` 是函数因而**无法**跨 postMessage 传递（`DataCloneError`）。
-> 因此本页 §2–§5 里的 `component` / `uiService.showModal` / `socketService` 等成员对第三方插件**不存在**。
-> 第三方插件的前端能做的只有五件事：`frontendApi` 调后端、`storageService` 存键值、
-> `invokeCommand` 派发命令、`ui.showToast` 弹提示、`ui.registerExtensionPoint` 注册**数据型**条目。
-> 完整能力边界与路线见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)，
-> 档位判定见 {ref}`教程 §2.2 三档执行模式 <execution-modes>`。
+> 💡 **第三方插件的双轨制 UI 支持**（`v0.7.6+` 起）：
+>
+> - **逻辑沙箱 (`frontend.js`)**：跑在隐藏的后台 iframe（`/plugin-sandbox/frame`）中，承载后台激活逻辑、命令派发与存储；
+> - **可视沙箱 (`view`)**：第三方插件可在 `manifest.json` 的 `contributes` 中声明 `view: "dashboard.html"`（或其它相对路径 HTML）。宿主在 `teacher.tab` 或 `teacher.panel` 等面板槽位中自动以独立严格沙箱 iframe（`sandbox="allow-scripts allow-forms allow-downloads"`，无 `allow-same-origin`）渲染该页面，并通过客户端桥接脚本 `/plugin-sandbox/view-bridge.js`（`window.OpenLearnPluginBridge`）赋予插件与宿主双向交互能力（Toast、命令调用、API、隔离存储、课堂/班级上下文同步）。
+>   详见本页 [§6 第三方插件可视沙箱视图开发指南](#6-第三方插件可视沙箱视图开发指南-visual-sandbox-view)。完整能力边界见 [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md)。
 
 ---
 
@@ -474,7 +472,176 @@ esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.c
 
 **为什么通过模块级变量拿 ctx 而不是 props？**
 
-扩展点组件由宿主渲染，props 由宿主控制。宿主向扩展点组件传递的 props 是宿主定义的（如 `studentId`、`lessonId` 等业务数据），不包含 `invokeCommand`。因此 API 调用能力必须通过模块级闭包变量传递。
+---
+
+## 6. 第三方插件可视沙箱视图开发指南 (Visual Sandbox View)
+
+> **适用版本**：平台 `v0.7.6+`
+
+对于第三方 ZIP 插件，由于运行在无 `allow-same-origin` 的隔离环境，直接向宿主注入 React 组件函数会导致 `DataCloneError`。为此平台采用**双轨制 UI 架构**：第三方插件通过编写静态 HTML/JS 页面，并将其声明为槽位的 `view` 属性，宿主通过独立安全的可视沙箱容器将其挂载到教师端 Tab（`teacher.tab`）或面板（`teacher.panel`）中。
+
+### 6.1 Manifest 声明 (`contributes`)
+
+在插件的 `manifest.json` 中，为你想要挂载视图的扩展槽位增加 `view` 字段（指向插件根目录下的相对路径 HTML 文件）：
+
+```json
+{
+  "id": "ext-student-analytics",
+  "name": "学情看板",
+  "version": "1.0.0",
+  "main": "index.js",
+  "contributes": {
+    "teacher.tab": [
+      {
+        "id": "analytics-dashboard",
+        "label": "学情看板",
+        "icon": "BarChart3",
+        "view": "dashboard.html"
+      }
+    ],
+    "teacher.panel": [
+      {
+        "id": "quick-stat-panel",
+        "title": "快捷统计",
+        "view": "panel.html"
+      }
+    ]
+  }
+}
+```
+
+宿主解析渲染的优先级顺序为：
+$$\text{React 真实组件} \succ \text{DOM render 函数} \succ \text{声明式沙箱视图 (view)} \succ \text{占位空态}$$
+
+### 6.2 页面编写与桥接 SDK 引入
+
+在插件项目中创建对应的 HTML 页面（例如 `dashboard.html`）。在 `<head>` 中引入平台提供的桥接脚本：
+
+```html
+<script src="/plugin-sandbox/view-bridge.js"></script>
+```
+
+引入后，全局对象 `window.OpenLearnPluginBridge` 即处于就绪状态。
+
+#### 端到端页面代码示例
+
+```html
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>学情看板</title>
+    <!-- 必须引入宿主统一提供的视图桥接脚本 -->
+    <script src="/plugin-sandbox/view-bridge.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        padding: 1.5rem;
+        color: #1e293b;
+        background: #f8fafc;
+      }
+      .card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      button {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      button:hover {
+        background: #4338ca;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>学情看板可视化分析</h2>
+      <div id="ctx-display">正在同步课堂上下文...</div>
+      <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+        <button id="toast-btn">弹出宿主 Toast</button>
+        <button id="cmd-btn">派发后端命令</button>
+      </div>
+    </div>
+
+    <script>
+      const bridge = window.OpenLearnPluginBridge;
+
+      // 1. 初始化回调：宿主加载完毕后派发
+      bridge.onInit((ctx) => {
+        // ctx 包含: { pluginId, slot, lessonId, classId, lang, theme }
+        renderContext(ctx);
+      });
+
+      // 2. 宿主上下文变更监听（教师切换了当前授课课堂、班级、语言或主题模式）
+      bridge.onContextUpdate((ctx) => {
+        renderContext(ctx);
+      });
+
+      function renderContext(ctx) {
+        document.getElementById('ctx-display').innerHTML = `
+        <p><strong>插件 ID:</strong> ${ctx.pluginId}</p>
+        <p><strong>当前课堂 ID:</strong> ${ctx.lessonId || '(未选择)'}</p>
+        <p><strong>当前班级 ID:</strong> ${ctx.classId || '(未选择)'}</p>
+        <p><strong>宿主语言:</strong> ${ctx.lang} | <strong>主题:</strong> ${ctx.theme}</p>
+      `;
+      }
+
+      // 3. 调用宿主 Toast 消息提醒
+      document.getElementById('toast-btn').onclick = () => {
+        bridge.ui.toast('数据已成功刷新！', 'success');
+      };
+
+      // 4. 调用后端命令（通过服务端命令总线与 actor 校验执行）
+      document.getElementById('cmd-btn').onclick = async () => {
+        try {
+          const result = await bridge.invokeCommand('analytics.calculate', { scope: 'class' });
+          bridge.ui.toast(`计算成功: ${JSON.stringify(result)}`, 'info');
+        } catch (err) {
+          bridge.ui.toast(`调用失败: ${err.message}`, 'error');
+        }
+      };
+    </script>
+  </body>
+</html>
+```
+
+### 6.3 桥接 API 参考 (`window.OpenLearnPluginBridge`)
+
+| 方法                           | 参数                                                        | 返回值             | 说明                                                                             |
+| :----------------------------- | :---------------------------------------------------------- | :----------------- | :------------------------------------------------------------------------------- |
+| `onInit(callback)`             | `(ctx) => void`                                             | `bridge`           | 注册视图初始化回调，接收上下文数据（若宿主已就绪则立即触发）                     |
+| `onContextUpdate(callback)`    | `(ctx) => void`                                             | `bridge`           | 监听课堂（`lessonId`）、班级（`classId`）、语言（`lang`）、主题（`theme`）的变动 |
+| `getContext()`                 | 无                                                          | `ctx` \| `null`    | 同步获取当前已缓存的最新宿主上下文                                               |
+| `ui.toast(msg, type)`          | `msg: string, type?: 'info'\|'success'\|'warning'\|'error'` | `Promise<boolean>` | 在宿主主界面触发全局 Toast 通知                                                  |
+| `ui.resize(height)`            | `height: number`                                            | `void`             | 通知宿主容器自适应当前高度（主要用于嵌入式面板/挂件）                            |
+| `invokeCommand(type, payload)` | `type: string, payload: unknown`                            | `Promise<unknown>` | 通过安全通道代发插件命令（强制绑定插件自身 actor，防范提权）                     |
+| `api.get(path)`                | `path: string`                                              | `Promise<unknown>` | 发起 GET 请求至插件后端路由（带父页面登录态）                                    |
+| `api.post(path, body)`         | `path: string, body: unknown`                               | `Promise<unknown>` | 发起 POST 请求至插件后端路由                                                     |
+| `api.del(path)`                | `path: string`                                              | `Promise<unknown>` | 发起 DELETE 请求至插件后端路由                                                   |
+| `storage.get(key)`             | `key: string`                                               | `Promise<unknown>` | 获取插件隔离命名空间下的存储数据                                                 |
+| `storage.set(key, val)`        | `key: string, val: unknown`                                 | `Promise<boolean>` | 写入插件隔离命名空间下的存储数据                                                 |
+| `storage.delete(key)`          | `key: string`                                               | `Promise<boolean>` | 删除指定键的插件存储数据                                                         |
+
+### 6.4 安全边界与开发者规范
+
+1. **零信任严格沙箱**：
+   - 视图 iframe 强制具备 `sandbox="allow-scripts allow-forms allow-downloads"`；
+   - **绝对不授予** `allow-same-origin`，以保障主平台存储、Cookie 与 DOM 免受第三方代码篡改。
+2. **禁止跨目录遍历与协议注入**：
+   - `view` 声明必须是相对路径（如 `"views/index.html"`）；
+   - 严禁包含 `..`、`//` 或以 `javascript:`、`data:` 等伪协议开头，否则宿主将直接阻断并展示安全警告。
+3. **静态资源鉴权**：
+   - `/plugins/*` 文件请求默认校验会话有效性；沙箱内的 HTML 页面将自动施加平台 `PLUGIN_VIEW_CSP` 并强制 `frame-ancestors 'self'`。
 
 ---
 
