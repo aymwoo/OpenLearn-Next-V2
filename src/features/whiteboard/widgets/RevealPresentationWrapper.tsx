@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown from 'react-markdown';
 import { FileDown } from 'lucide-react';
@@ -22,11 +22,23 @@ async function getUploadLimitMb(): Promise<number> {
   }
   return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
 }
-import { PowerPointViewer, type PowerPointViewerHandle, LOCALE_CATALOG } from 'pptx-react-viewer';
+import { PowerPointViewer, type PowerPointViewerHandle, type LocaleCatalogEntry, LOCALE_CATALOG } from 'pptx-react-viewer';
 import { translationsEn, keyToLabel } from 'pptx-react-viewer/i18n';
 import 'pptx-react-viewer/styles';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+
+/**
+ * PowerPointViewer 配置单例：
+ * 必须常驻模块顶层以保持稳定引用（pptx-react-viewer 的 useViewerCustomization 内部
+ * 采用 appliedRef.current === customization 全等比对，若传入内联对象字面量会在
+ * useLayoutEffect -> setCustomization -> useSyncExternalStore -> forceStoreRerender
+ * 之间形成无限死循环，触发 React 的 Maximum update depth exceeded 崩溃）。
+ */
+const PPTX_VIEWER_CUSTOMIZATION = { hiddenPanels: ['inspector'] } as const;
+
+/** PowerPointViewer 可用语言包列表单例：避免每次渲染生成新数组破坏浅比较 */
+const PPTX_AVAILABLE_LOCALES: LocaleCatalogEntry[] = [...LOCALE_CATALOG];
 
 // 确保 i18next 实例安全初始化，防止 pptx-react-viewer 内部访问 i18n.options.resources 时报错。
 // 必须喂入 viewer 自带的英文词典（扁平 `pptx.*` 键）：否则 react-i18next 查不到词条会直接
@@ -214,26 +226,32 @@ export function RevealPresentationWrapper({
   }, [slideIndex, fileType, isContainerFullscreen]);
 
   // Handlers for PowerPointViewer callbacks
-  const handlePptxActiveSlideChange = (newIndex: number) => {
-    if (newIndex !== slideIndex) {
-      setSlideIndex(newIndex);
-      if (isTeacher && onElementUpdate) {
+  const handlePptxActiveSlideChange = useCallback(
+    (newIndex: number) => {
+      if (newIndex !== slideIndex) {
+        setSlideIndex(newIndex);
+        if (isTeacher && onElementUpdate) {
+          onElementUpdate(elementId, {
+            ...data,
+            slideX: newIndex,
+          });
+        }
+      }
+    },
+    [slideIndex, isTeacher, onElementUpdate, elementId, data],
+  );
+
+  const handlePptxSlideCountChange = useCallback(
+    (count: number) => {
+      if (count > 0 && isTeacher && onElementUpdate && data.slideCount !== count) {
         onElementUpdate(elementId, {
           ...data,
-          slideX: newIndex,
+          slideCount: count,
         });
       }
-    }
-  };
-
-  const handlePptxSlideCountChange = (count: number) => {
-    if (count > 0 && isTeacher && onElementUpdate && data.slideCount !== count) {
-      onElementUpdate(elementId, {
-        ...data,
-        slideCount: count,
-      });
-    }
-  };
+    },
+    [isTeacher, onElementUpdate, data, elementId],
+  );
 
   const renderPptxViewer = (fullscreen: boolean) => {
     if (pptxLoading) {
@@ -280,10 +298,10 @@ export function RevealPresentationWrapper({
           showThumbnails={fullscreen}
           showCompatibilityToasts={false}
           // 默认收起右侧「属性/检查器」边栏：授课/演示时避免其自动占用右侧空间。
-          customization={{ hiddenPanels: ['inspector'] }}
+          customization={PPTX_VIEWER_CUSTOMIZATION}
           initialSlide={slideIndex}
           defaultLocale="zh-CN"
-          availableLocales={[...LOCALE_CATALOG]}
+          availableLocales={PPTX_AVAILABLE_LOCALES}
           onActiveSlideChange={handlePptxActiveSlideChange}
           onSlideCountChange={handlePptxSlideCountChange}
           className="w-full h-full"
