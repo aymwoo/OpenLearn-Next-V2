@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.4 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.7.6`。
+> **适用范围**：`@openlearn/plugin-sdk@3.7.4`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.7.7`。
 > 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts` 统一导出。
 > **重要**：插件 SDK 发布的 `dist/index.d.ts`（由 `openlearn.d.ts` 复制而来）由 `node packages/plugin-sdk/build.mjs` 生成，需在 SDK 源码变更后**重新构建**；若你在 `tsc` 下遇到 `TS2305 "has no exported member"`，即为 SDK 声明文件未同步所致，运行 `node packages/plugin-sdk/build.mjs` 重新生成即可。
 
