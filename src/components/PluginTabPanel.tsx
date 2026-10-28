@@ -25,7 +25,7 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
   const lang = useAppStore((state) => state.lang);
   const lessonId = useAppStore((state) => state.selectedLesson);
   const classId = useAppStore((state) => state.liveClassSelectedClassId);
-  const tabs = extensionPoints.get('teacher.tab' as any) || [];
+  const tabs = extensionPoints.get('teacher.tab') || [];
 
   // Auto-select first tab if none active
   const effectiveActive = activeNavPlugin || (tabs.length > 0 ? tabs[0].pluginId : null);

@@ -122,7 +122,8 @@ export function PluginSandboxIframeView({
         try {
           if (op === 'ui.toast') {
             const message = String(args[0] ?? '');
-            const type = (args[1] as any) || 'info';
+            const rawType = args[1];
+            const type = rawType === 'success' || rawType === 'warning' || rawType === 'error' ? rawType : 'info';
             appStore.getState().addToast({
               id: Math.random().toString(16).slice(2),
               title: label || pluginId,
@@ -164,13 +165,11 @@ export function PluginSandboxIframeView({
               json = await res.text();
             }
             if (!res.ok) {
-              reply(
-                false,
-                undefined,
-                typeof json === 'object' && json && 'error' in (json as any)
-                  ? (json as any).error
-                  : `Request failed with HTTP ${res.status}`,
-              );
+              const errDetail =
+                typeof json === 'object' && json !== null && 'error' in json
+                  ? String((json as Record<string, unknown>).error)
+                  : `Request failed with HTTP ${res.status}`;
+              reply(false, undefined, errDetail);
             } else {
               reply(true, json);
             }
@@ -194,8 +193,9 @@ export function PluginSandboxIframeView({
           } else {
             reply(false, undefined, `Unsupported op "${op}"`);
           }
-        } catch (err: any) {
-          reply(false, undefined, err?.message || String(err));
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          reply(false, undefined, errMsg);
         }
       }
     };

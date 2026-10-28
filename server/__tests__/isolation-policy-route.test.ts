@@ -67,7 +67,7 @@ describe('GET /api/plugins/isolation-policy', () => {
 
     app = express();
     app.use(express.json());
-    registerPluginsRoutes({ app, io: { emit: () => {} } } as any);
+    registerPluginsRoutes({ app, io: { emit: () => {} } } as unknown as Parameters<typeof registerPluginsRoutes>[0]);
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, '127.0.0.1', () => resolve());

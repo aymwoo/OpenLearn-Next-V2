@@ -544,14 +544,20 @@ export const BuiltinPlugin = {
       }
       // 检查插件宿主贡献点声明（editor.palette_item 与 whiteboard.renderer）
       try {
-        const reg = (pluginHost as any)?.getContributionRegistry?.();
+        const reg = (
+          pluginHost as {
+            getContributionRegistry?: () => {
+              getBySlot: (
+                slot: string,
+              ) => Array<{ type?: string; id?: string; targetType?: string; elementType?: string }>;
+            };
+          }
+        )?.getContributionRegistry?.();
         if (reg) {
-          const paletteItems = (reg.getBySlot('editor.palette_item') || []) as any[];
-          if (paletteItems.some((item: any) => item.type === type || item.id === type)) return true;
-          const renderers = (reg.getBySlot('whiteboard.renderer') || []) as any[];
-          if (
-            renderers.some((item: any) => item.targetType === type || item.id === type || item.elementType === type)
-          ) {
+          const paletteItems = reg.getBySlot('editor.palette_item') || [];
+          if (paletteItems.some((item) => item.type === type || item.id === type)) return true;
+          const renderers = reg.getBySlot('whiteboard.renderer') || [];
+          if (renderers.some((item) => item.targetType === type || item.id === type || item.elementType === type)) {
             return true;
           }
         }

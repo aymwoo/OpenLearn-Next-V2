@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { PluginTabPanel } from '../PluginTabPanel';
 import { NullExtensionComponent } from '../../plugin-host/plugin-host';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import type { ExtensionPointConfig } from '../../plugin-host/types';
 import { appStore } from '../../store/appStore';
 
 beforeEach(() => {
@@ -32,8 +33,11 @@ describe('PluginTabPanel', () => {
 
   it('renders the active tab component when provided', () => {
     usePluginHostStore.setState({
-      extensionPoints: new Map<string, any>([
-        ['teacher.tab', [{ pluginId: 'p1', component: () => <div>Plugin Content</div> }]],
+      extensionPoints: new Map<string, ExtensionPointConfig[]>([
+        [
+          'teacher.tab',
+          [{ id: 'p1-tab', pluginId: 'p1', label: 'Plugin Tab', component: () => <div>Plugin Content</div> }],
+        ],
       ]),
     });
     render(<PluginTabPanel activeNavPlugin={null} />);

@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **CI / typecheck-and-test 告警预算门禁治理**：
+  - 清理近期引入的 35 处 ESLint 告警（主要集中在可视沙箱、内置插件图元放行与测试中的 `no-explicit-any`），全仓告警数由 6267 降至 6232。
+  - 收紧 ESLint 告警基线（`config/lint-budget.json`：6243 → 6232），恢复 CI `typecheck-and-test` 门禁正常绿通。
+
 ## [0.7.7] - 2026-10-28
 
 ### Features
