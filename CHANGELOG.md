@@ -163,6 +163,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `OPENLEARN_DB_PATH` 时误落在仓库根的 SQLite；后者是插件数据归档目录
   （`<data>/plugin-data-exports`），未设 `OPENLEARN_DATA_DIR` 时会写进仓库根。
 - **清理根目录历史审计报告快照**：移除根目录下 9 个过时的阶段性审计报告快照（`audit-2026-*.md` 等），历史版本记录可由 Git 提交树追溯（对齐 `docs/audit/audit-index.md` 归档规范）。
+- **重构根目录 README**：精简核心特性至微内核、三档沙箱、零信任课件容器、实时协同遥测、原生 AI 引擎与工业级运维 6 大维度，并同步至最新系统能力；移除 ASCII 架构拓扑、易漂移的环境变量表与过期的演进路线图。
 
 ## [0.7.6] - 2026-10-27
 
