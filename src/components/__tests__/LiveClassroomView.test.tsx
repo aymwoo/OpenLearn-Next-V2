@@ -673,11 +673,10 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.getByText('张小明')).toBeTruthy();
     expect(screen.getByText('李华')).toBeTruthy();
 
-    // 姓名必须完整呈现：不套 truncate（圆头像里只放首字缩写）
+    // 姓名必须完整呈现：不套 truncate
     const zhNameNode = screen.getByText('张小明');
     expect(zhNameNode.className).not.toContain('truncate');
     expect(zhNameNode.className).toContain('break-words');
-    expect(screen.getByText('张')).toBeTruthy();
 
     // 2. Live feed header, count & clear button
     expect(screen.getByText('课堂互动反馈流')).toBeTruthy();
@@ -752,8 +751,56 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(nameNode.className).not.toContain('truncate');
     expect(nameNode.className).toContain('break-words');
     expect(nameNode.getAttribute('title')).toBe(longName);
-    // 圆头像内只放一个首字，避免 34px 宽度内出省略号
-    expect(screen.getByText('欧')).toBeTruthy();
+  });
+
+  it('头像优先用照片，其次按性别渲染，无性别时用中性人像（不再塞姓名缩写）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    const roster = [
+      { id: 's-photo', name: '有照片生', class_id: 'class-g1', avatar: '/uploads/avatars/a.png', gender: 'female' },
+      { id: 's-male', name: '男生甲', class_id: 'class-g1', gender: 'male' },
+      { id: 's-female', name: '女生乙', class_id: 'class-g1', gender: 'female' },
+      { id: 's-unknown', name: '未知生', class_id: 'class-g1' },
+    ];
+
+    const { container } = render(
+      <AppDataProvider
+        value={
+          { ...defaultProps, students: roster, classStudentsMap: { 'class-g1': roster }, onlineStudentIds: [] } as any
+        }
+      >
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('学生专注力监控')).toBeTruthy();
+    });
+
+    // 1. 有照片：渲染 img，src 为本人头像
+    const photo = container.querySelector('img[alt="有照片生"]') as HTMLImageElement | null;
+    expect(photo).toBeTruthy();
+    expect(photo?.getAttribute('src')).toBe('/uploads/avatars/a.png');
+
+    // 2. 性别：男性 Mars、女性 Venus，未设置中性人像
+    expect(container.querySelectorAll('.lucide-mars').length).toBe(1);
+    expect(container.querySelectorAll('.lucide-venus').length).toBe(1);
+    expect(container.querySelectorAll('.lucide-user-round').length).toBe(1);
   });
 
   it('supports clicking a student card to pin the overview panel and keeps displaying on mouse leave (#115)', async () => {

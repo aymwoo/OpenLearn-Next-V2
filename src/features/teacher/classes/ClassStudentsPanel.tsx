@@ -234,6 +234,19 @@ export function ClassStudentsPanel({
                   : 'Enter student number (optional, leave blank to auto-generate):',
               );
               const student_number = studentNumberPrompt ? studentNumberPrompt.trim() : undefined;
+              // 性别只用于课堂专注力监控的头像（见 LiveClassroomView 的 StudentAvatarVisual），
+              // 服务端会归一化 male/female，无法识别则落 NULL。
+              const genderPrompt =
+                window.prompt(
+                  lang === 'zh'
+                    ? '请输入性别 (男/女，可选，留空则显示默认头像):'
+                    : 'Enter gender (male/female, optional, blank for default avatar):',
+                ) || '';
+              const gender = /^(男|male|m|男生)$/i.test(genderPrompt.trim())
+                ? 'male'
+                : /^(女|female|f|女生)$/i.test(genderPrompt.trim())
+                  ? 'female'
+                  : undefined;
               const email =
                 window.prompt(lang === 'zh' ? '请输入学生邮箱 (可选):' : 'Enter student email (optional):') || '';
               const password =
@@ -248,7 +261,13 @@ export function ClassStudentsPanel({
               const createRes = await fetch('/api/students', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password, ...(student_number ? { student_number } : {}) }),
+                body: JSON.stringify({
+                  name,
+                  email,
+                  password,
+                  ...(student_number ? { student_number } : {}),
+                  ...(gender ? { gender } : {}),
+                }),
               });
               if (createRes.ok) {
                 const newStudent = await createRes.json();

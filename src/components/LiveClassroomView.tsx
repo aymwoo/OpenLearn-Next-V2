@@ -44,6 +44,9 @@ import {
   X,
   Lock,
   FileEdit,
+  Mars,
+  Venus,
+  UserRound,
 } from 'lucide-react';
 import type { LockMode } from '../types/app';
 import * as Icons from 'lucide-react';
@@ -87,15 +90,29 @@ import {
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
 
 /**
- * 学生头像里的缩写字符。
- *
- * 圆形头像内宽只有 ~34px，塞不下完整姓名（中文两个字就开始出省略号），
- * 所以头像只放一个首字/首字母，完整姓名渲染在卡片下方（见学生专注力监控卡片）。
+ * 学生头像内容：优先用本人照片（students.avatar），没有照片时按性别渲染，
+ * 性别未设置则退到中性人像 —— 不再把姓名塞进 34px 的圆里（必然被省略号截断）。
  */
-function avatarInitial(name?: string | null): string {
-  const trimmed = (name || '').trim();
-  if (!trimmed) return '?';
-  return /^[A-Za-z]/.test(trimmed) ? trimmed[0].toUpperCase() : trimmed.slice(0, 1);
+function StudentAvatarVisual({
+  avatar,
+  gender,
+  name,
+}: {
+  avatar?: string | null;
+  gender?: string | null;
+  name: string;
+}) {
+  if (avatar) {
+    return <img src={avatar} alt={name} className="w-full h-full object-cover" draggable={false} />;
+  }
+  const normalized = typeof gender === 'string' ? gender.trim().toLowerCase() : '';
+  if (normalized === 'male' || normalized === 'm' || normalized === '男') {
+    return <Mars size={16} className="text-sky-600" aria-hidden="true" />;
+  }
+  if (normalized === 'female' || normalized === 'f' || normalized === '女') {
+    return <Venus size={16} className="text-rose-500" aria-hidden="true" />;
+  }
+  return <UserRound size={16} className="text-slate-400" aria-hidden="true" />;
 }
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -2885,17 +2902,13 @@ export function LiveClassroomView({
                               isSelectedDraw ? 'bg-amber-100/90' : ''
                             }`}
                           >
-                            {/* 头像首字：完整姓名在卡片下方单独一行，这里不再截断姓名 */}
+                            {/* 头像：照片 → 性别图标 → 中性人像；悬停时让位给操作按钮 */}
                             <span
-                              className={`text-[11px] font-bold tracking-tight group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
-                                isSelectedDraw
-                                  ? 'text-amber-900 font-extrabold'
-                                  : !isOnline
-                                    ? 'text-slate-400'
-                                    : 'text-slate-700 dark:text-slate-200'
+                              className={`flex items-center justify-center w-full h-full group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                                !isOnline ? 'opacity-60' : ''
                               }`}
                             >
-                              {avatarInitial(st.name)}
+                              <StudentAvatarVisual avatar={st.avatar} gender={st.gender} name={st.name} />
                             </span>
 
                             {/* Hover action overlay */}

@@ -5,6 +5,8 @@ export interface ParsedStudent {
   student_number: string;
   password: string;
   private_notes: string;
+  /** 性别（男/女 或 male/female）；空串表示未提供，服务端落 NULL */
+  gender: string;
 }
 
 /**
@@ -125,6 +127,7 @@ function normalizeStudentRecord(st: any): ParsedStudent {
     student_number: st?.student_number || st?.studentNumber || st?.studentNo || '',
     password: st?.password || st?.initialPassword || st?.initial_password || '',
     private_notes: st?.private_notes || st?.privateNotes || st?.notes || st?.note || '',
+    gender: st?.gender || st?.sex || '',
   };
 }
 
@@ -166,6 +169,7 @@ const TEMPLATE_COLUMNS = {
     studentEmail: '学生邮箱',
     password: '初始密码',
     notes: '学生备注',
+    gender: '性别',
   },
   en: {
     className: 'Class Name',
@@ -175,6 +179,7 @@ const TEMPLATE_COLUMNS = {
     studentEmail: 'Student Email',
     password: 'Initial Password',
     notes: 'Student Notes',
+    gender: 'Gender',
   },
 } as const;
 
@@ -205,6 +210,7 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
       col.studentEmail,
       col.password,
       col.notes,
+      col.gender,
     ]);
     sampleRows =
       lang === 'zh'
@@ -218,7 +224,7 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
           ];
   } else {
     filename = lang === 'zh' ? '学生批量导入模板.csv' : 'student_import_template.csv';
-    headers = csvRow([col.studentNumber, col.studentName, col.studentEmail, col.password, col.notes]);
+    headers = csvRow([col.studentNumber, col.studentName, col.studentEmail, col.password, col.notes, col.gender]);
     sampleRows =
       lang === 'zh'
         ? [
@@ -344,6 +350,7 @@ export async function parseAndImportClassesOrStudents(
             'note',
             'remark',
           ]);
+          const genderIdx = findHeaderIdx(headers, ['性别', 'gender', 'sex', '学生性别']);
 
           if (studentNameIdx === -1) {
             throw new Error('CSV is missing column: "Student Name" (学生姓名/姓名/学生)');
@@ -356,6 +363,7 @@ export async function parseAndImportClassesOrStudents(
             student_number: studentNumberIdx !== -1 ? cells[studentNumberIdx] || '' : '',
             password: passwordIdx !== -1 ? cells[passwordIdx] || '' : '',
             private_notes: notesIdx !== -1 ? cells[notesIdx] || '' : '',
+            gender: genderIdx !== -1 ? cells[genderIdx] || '' : '',
           });
 
           if (classNameIdx !== -1) {

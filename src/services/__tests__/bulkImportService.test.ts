@@ -83,19 +83,19 @@ describe('downloadCSVTemplate', () => {
   it('班级模板应包含学号、初始密码、学生备注列', async () => {
     const text = await templateText('class', 'zh');
     const header = text.replace(/^\uFEFF/, '').split('\n')[0];
-    expect(header).toBe('班级名称,班级描述,学生学号,学生姓名,学生邮箱,初始密码,学生备注');
+    expect(header).toBe('班级名称,班级描述,学生学号,学生姓名,学生邮箱,初始密码,学生备注,性别');
   });
 
   it('独立学生模板应包含学号、初始密码、学生备注列', async () => {
     const text = await templateText('student', 'zh');
     const header = text.replace(/^\uFEFF/, '').split('\n')[0];
-    expect(header).toBe('学生学号,学生姓名,学生邮箱,初始密码,学生备注');
+    expect(header).toBe('学生学号,学生姓名,学生邮箱,初始密码,学生备注,性别');
   });
 
   it('英文模板使用英文表头', async () => {
     const text = await templateText('student', 'en');
     const header = text.replace(/^\uFEFF/, '').split('\n')[0];
-    expect(header).toBe('Student Number,Student Name,Student Email,Initial Password,Student Notes');
+    expect(header).toBe('Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender');
   });
 
   it('示例行的密码与备注列留空，避免教师直接沿用示例密码', async () => {
@@ -182,8 +182,14 @@ describe('parseAndImportClassesOrStudents —— CSV 字段透传', () => {
         student_number: '20260101',
         password: 'Pw@2026',
         private_notes: '数学较弱',
+        gender: '',
       },
     ]);
+  });
+
+  it('「性别」列被识别并透传（迁移 044：供课堂头像按性别渲染）', async () => {
+    const students = await importStudentsCsv('学生学号,学生姓名,学生邮箱,性别\n20260103,王芳,wangfang@example.com,女');
+    expect(students[0].gender).toBe('女');
   });
 
   it('「学生备注」列不得被误判为「学生姓名」列', async () => {

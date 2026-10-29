@@ -94,6 +94,10 @@ export type StudentType = {
   name: string;
   email: string;
   password?: string;
+  /** 性别（迁移 044）：课堂专注力监控头像据此渲染，未设置为 null */
+  gender?: 'male' | 'female' | null;
+  /** 头像 URL（/uploads/avatars/...），未设置时为 undefined */
+  avatar?: string | null;
   locked_lesson_id?: string | null;
   lock_mode?: LockMode | null;
   lock_target?: string | null;
