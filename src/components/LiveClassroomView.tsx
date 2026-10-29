@@ -2912,7 +2912,8 @@ export function LiveClassroomView({
                             </span>
 
                             {/* Hover action overlay */}
-                            <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-surface/95 rounded-full shadow-inner">
+                            {/* 圆头像只有 34px：三个按钮必须零内边距 + 极小间距，否则会被 overflow-hidden 裁掉 */}
+                            <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-surface/95 rounded-full shadow-inner">
                               {/* Alert / Warning button */}
                               {selectedLesson && onPingStudent && (
                                 <button
@@ -2930,7 +2931,7 @@ export function LiveClassroomView({
                                       'success',
                                     );
                                   }}
-                                  className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
+                                  className={`p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                     isBehind
                                       ? 'text-amber-500 hover:text-amber-600 animate-pulse'
                                       : 'text-slate-400 hover:text-primary-ink'
@@ -2948,7 +2949,7 @@ export function LiveClassroomView({
                                   handleOverrideSegmentGate(st.id);
                                 }}
                                 disabled={!selectedLesson || !activeSegmentId}
-                                className="p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
+                                className="p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
                                 title={lang === 'zh' ? '放行当前环节' : 'Allow this segment'}
                               >
                                 <Unlock size={9} />
@@ -2961,7 +2962,7 @@ export function LiveClassroomView({
                                   handleToggleStudentLock(st.id, st.locked_lesson_id, st.lock_mode);
                                 }}
                                 disabled={!selectedLesson}
-                                className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
+                                className={`p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                   isStudentLocked
                                     ? studentLockMode === 'navigation'
                                       ? 'text-amber-500 hover:text-amber-600'
