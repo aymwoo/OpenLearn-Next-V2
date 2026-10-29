@@ -234,7 +234,7 @@ const FORBIDDEN_OPERATIONS = [
 ];
 ```
 
-```{danger} `PRAGMA` 被无条件禁掉
+```{danger} PRAGMA 被无条件禁掉
 这意味着插件不能用 `PRAGMA table_info(...)` 探查列结构。
 改判列是否存在请查 `sqlite_master`（见 §5.5 的精准前缀查询）或在 `migrate` 里容错。
 
@@ -346,7 +346,7 @@ ctx.services.storage.delete(key): Promise<void>      // 不存在则 no-op
 适合简单键值、无需建表的场景。值经 `JSON.parse` / `JSON.stringify`，**支持任意可序列化结构**（不是字符串 KV）。
 错误会被 `console.error('[Plugin:<manifestId>] Error getting storage key "<key>":', ...)` 记录后 **rethrow**。
 
-```{note} `config:<key>` 兼容回落
+```{note} config:<key> 兼容回落
 `ctx.config` 在新表 `plugin_config` 缺行时会回退读 `plugin_storage` 的 `config:<key>`，
 以保证「迁移未执行 / 手工恢复」的库也能读到旧配置。别把自己的 key 起成 `config:` 前缀。
 

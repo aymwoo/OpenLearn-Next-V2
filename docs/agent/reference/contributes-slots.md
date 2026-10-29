@@ -71,7 +71,7 @@
 | `classroom.tool`           | 见 `manifest.md` 的 `classroomTools` 章节                         |
 | `help.plugin_docs`         | `id`_，`title`_，`description?`，`markdownUrl?`                   |
 
-```{danger} `view` 必须显式声明在 schema 里（v0.7.6 双轨制 UI）
+```{danger} view 必须显式声明在 schema 里（v0.7.6 双轨制 UI）
 第三方 ZIP 插件在 process 模式下无法传 React 组件，只能声明可视沙箱 HTML 的相对路径。
 Zod object **默认 strip 未声明键**：一旦 `view` 没进 schema，`parse()` 后会被静默丢弃，
 宿主退回「占位空态」—— 插件作者看到的是**空白面板且无任何报错**。

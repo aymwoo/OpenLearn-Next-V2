@@ -238,7 +238,7 @@ api: {
 }
 ```
 
-```{danger} `baseRoute` 是历史遗留的误导性字段
+```{danger} baseRoute 是历史遗留的误导性字段
 全仓**没有任何代码**按 `baseRoute` 挂载或匹配路由。插件 REST 端点的真实路径固定为：
 
     /api/plugins/{manifest.id}/*

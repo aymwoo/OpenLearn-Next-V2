@@ -275,7 +275,7 @@ interface IPluginLogger {
 
 内部 logger scope 是 `` `Plugin:${manifest.id || pluginId}` ``，`meta` 被包成 `{ meta }` 一层。
 
-```{warning} 不要用 `system.log` 命令
+```{warning} 不要用 system.log 命令
 `IPluginLogger` 是 V2.5 引入来**替代** `system.log` 命令的，V3.0 已移除该命令。
 
 ````

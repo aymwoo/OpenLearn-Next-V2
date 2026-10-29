@@ -19,7 +19,7 @@
 `package.json` 里写 `"@openlearn/plugin-sdk": "^3.7.5"`。
 ```
 
-```{danger} ⚠ 与 LLM 先验冲突 2：`engines.openlearn` 不写 = 不检查
+```{danger} ⚠ 与 LLM 先验冲突 2：engines.openlearn 不写 = 不检查
 宿主在安装时用 `semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)` 判断，
 **但整个判断包在 `if (manifest.engines?.openlearn)` 里** ——
 **不写这个字段，等于放弃兼容性声明，装上任何版本都不拦你**。
@@ -27,7 +27,7 @@
 → 一定要写。它是唯一的「装不上」的防线，也是唯一的「装上了但跑不动」预警。
 ```
 
-```{warning} ⚠ 与 LLM 先验冲突 3：迁移写在 `activate` 里，不是独立步骤
+```{warning} ⚠ 与 LLM 先验冲突 3：迁移写在 activate 里，不是独立步骤
 插件的数据迁移**没有**框架级「迁移钩子」。唯一受支持的方式是在
 `activate`（或首次访问时）调用 `ctx.db.migrate(targetVersion, upgradeFn)`，
 由宿主记录版本号、保证幂等。

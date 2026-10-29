@@ -826,9 +826,9 @@ function wrapPointsLedgerService(service, pluginId, capabilities?) {
    排查时别把它当成成功调用；
 3. `callerPluginId` 是第 6 个参数且**由包装层自动填**本插件 id，
    你手动传值会被覆盖（详见 {doc}`platform-services` 2.6）。
-```
+````
 
-```{warning}
+````{warning}
 ### 文档仍在描述「兼容期放行」，代码已经改成硬拒
 
 `docs/reference/plugin-capability-matrix.md` §5.3 的第 2 条原文：

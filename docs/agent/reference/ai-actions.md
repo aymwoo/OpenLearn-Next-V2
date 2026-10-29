@@ -160,7 +160,7 @@ register(descriptor) {
 actionRegistry.register({ ...descriptor, id: `${descriptor.id}__raw_alias`, exposeToAgent: false });
 ```
 
-```{important} 别名必须 `exposeToAgent: false`
+```{important} 别名必须 exposeToAgent: false
 别名与原描述符的 `commandType` 不同（一个裸名、一个前缀名），不加这个标志就会把
 **同一个能力**在 AI 工具列表里出成两条 —— 而裸名在 commandBus 里**没有 handler**
 （handler 只按前缀名注册），模型选中它只会拿到「命令未注册」。
@@ -206,7 +206,7 @@ action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_')
 4. map → { type: 'function', function: { name, description, parameters: normalizeToolSchema(inputSchema) } }
 ```
 
-```{danger} `isHighRisk` 挡不住 AI
+```{danger} isHighRisk 挡不住 AI
 回归测试专门锁了这条：`isHighRisk` 不影响工具箱暴露（两者正交，防止误以为 `isHighRisk` 能挡 AI）。
 要挡 AI，只有 `exposeToAgent: false`。
 

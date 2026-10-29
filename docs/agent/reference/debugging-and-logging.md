@@ -7,7 +7,7 @@
 
 ## 0. 先纠正四个先验
 
-```{danger} ⚠ 与 LLM 先验冲突 1：日志接口叫 `ctx.log`，不是 `ctx.logger`
+````{danger} ⚠ 与 LLM 先验冲突 1：日志接口叫 ctx.log，不是 ctx.logger
 `PluginContext` 上**没有** `logger` 这个成员，**有** `log`：
 
 ```typescript
@@ -30,9 +30,9 @@ export interface IPluginLogger {
 
 写 `ctx.logger.info(...)` → `TypeError: Cannot read properties of undefined`。
 这是手册 {doc}`../playbook/pitfalls` P-09 专门列的反例。
-```
+````
 
-```{danger} ⚠ 与 LLM 先验冲突 2：日志不是 `console.log`
+```{danger} ⚠ 与 LLM 先验冲突 2：日志不是 console.log
 `ctx.log` 底层是 **pino**（结构化日志），每条带 `Plugin:<manifest.id>` 的命名空间，
 并经过**脱敏兜底**与**按大小轮转**。
 
@@ -41,7 +41,7 @@ export interface IPluginLogger {
 后者混在宿主输出里、无法归因、**且可能把敏感值直接打进日志文件**。
 ```
 
-```{warning} ⚠ 与 LLM 先验冲突 3：插件日志不落 `plugin_logs` 表
+```{warning} ⚠ 与 LLM 先验冲突 3：插件日志不落 plugin_logs 表
 平台**没有**插件日志表。`ctx.log` 的去向是：
 
 - **stdout**（生产）；开发环境下是 **pino-pretty** 彩色输出；

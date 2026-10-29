@@ -21,20 +21,20 @@
 `build` 命令不做「目录打包」，它只逐个 `zip.file(...)` 那三个文件。
 ```
 
-```{danger} ⚠ 与 LLM 先验冲突 2：`storage/` 里的静态资源不会自动进包
+```{danger} ⚠ 与 LLM 先验冲突 2：storage/ 里的静态资源不会自动进包
 宿主安装时**会**解出 ZIP 里 `storage/` 开头的条目（`install.ts` 的 `storageEntries` 过滤），
 但 **SDK 的 `build` 不会把 `storage/` 塞进 ZIP**。
 → 想让图片/字体/模板随插件分发，**必须自己把 `storage/` 加进 ZIP**，否则运行期
 读不到资源，且**没有任何报错**。
 ```
 
-```{warning} ⚠ 与 LLM 先验冲突 3：`@openlearn/plugin-sdk` 不会被打进包
+```{warning} ⚠ 与 LLM 先验冲突 3：@openlearn/plugin-sdk 不会被打进包
 后端 bundle **不包含 SDK**，也不包含宿主提供的 `pino` / `express` / `uuid` / `semver`。
 这些由宿主在运行期提供。所以**不要**把 SDK 设成 `dependencies` 想「打进包里带过去」——
 那会让产物重复且可能版本冲突。SDK 应该留在 `devDependencies`。
 ```
 
-```{warning} ⚠ 与 LLM 先验冲突 4：`sign` 要 Ed25519 私钥，不是任意密钥
+```{warning} ⚠ 与 LLM 先验冲突 4：sign 要 Ed25519 私钥，不是任意密钥
 签名用的是 **Ed25519** 私钥（PEM 文件）。用 RSA 密钥会在 `createPrivateKey` 阶段直接抛错。
 `build --key <pem>` 会在打包时顺手签；`sign --key <pem> <zip>` 则对已有 ZIP 单独签。
 ```

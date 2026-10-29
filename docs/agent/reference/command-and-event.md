@@ -439,7 +439,7 @@ caps.some((c) => {
 | `teacher`                 | `lesson:*` `whiteboard:*` `management:*` `quiz:*` `vfs:*` `process:*` `plugin:*` `student:write` `assignment:read` `assignment:submit` `assignment:review` `assignment:manage` |
 | `student`                 | `student:write` `lesson:read` `whiteboard:read` `assignment:read` `assignment:submit` `assignment:review`                                                                      |
 
-```{note} 学生为什么不含 `lesson:write`
+```{note} 学生为什么不含 lesson:write
 `assignment:submit` / `assignment:review` 是学生唯一能发起作业写入的入口，
 因此**不含** `lesson:write`（避免学生改课时内容）；命令处理器内部再按 `actorId`
 与 `payload.studentId` 校验所属权，防止代交/代评。
@@ -455,7 +455,7 @@ caps.some((c) => {
 
 ## 8. 注册顺序与告警
 
-```{important} 先 `actionRegistry.register()`，再 `commandBus.registerHandler()`
+```{important} 先 actionRegistry.register()，再 commandBus.registerHandler()
 顺序反了**不会报错**，但插件加载时会打印：
 
 ````
