@@ -230,4 +230,34 @@ describe('ClassStudentsPanel', () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('可在教学控制里为已有学生补录/清除性别（PUT /api/students/:id）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const props = baseProps({
+      expandedStudentId: 's-1',
+      studentActiveTabs: { 's-1': 'settings' },
+    });
+    render(<ClassStudentsPanel {...props} />);
+
+    const select = screen.getByTitle('Avatar follows gender') as HTMLSelectElement;
+    expect(select.value).toBe('');
+
+    fireEvent.change(select, { target: { value: 'female' } });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/students/s-1',
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ gender: 'female' }) }),
+      ),
+    );
+
+    // 清空选择 => 落 NULL（未设置），退回中性人像
+    fireEvent.change(select, { target: { value: '' } });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/students/s-1',
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ gender: null }) }),
+      ),
+    );
+  });
 });

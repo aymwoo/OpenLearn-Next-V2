@@ -859,6 +859,36 @@ export function ClassStudentsPanel({
                                     </div>
                                   </div>
 
+                                  {/* 性别：只影响课堂专注力监控的头像（有照片时优先用照片） */}
+                                  <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
+                                    <span className="font-semibold text-gray-600">
+                                      {lang === 'zh' ? '性别（课堂头像）:' : 'Gender (classroom avatar):'}
+                                    </span>
+                                    <select
+                                      value={st.gender === 'male' || st.gender === 'female' ? st.gender : ''}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={async (e) => {
+                                        e.stopPropagation();
+                                        const gender = e.target.value === '' ? null : e.target.value;
+                                        const gRes = await fetch(`/api/students/${st.id}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ gender }),
+                                        });
+                                        if (gRes.ok) {
+                                          await fetchStudents();
+                                          await fetchClassStudents(cls.id);
+                                        }
+                                      }}
+                                      className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 cursor-pointer text-gray-700"
+                                      title={lang === 'zh' ? '按性别显示课堂头像' : 'Avatar follows gender'}
+                                    >
+                                      <option value="">{lang === 'zh' ? '未设置' : 'Not set'}</option>
+                                      <option value="male">{lang === 'zh' ? '男' : 'Male'}</option>
+                                      <option value="female">{lang === 'zh' ? '女' : 'Female'}</option>
+                                    </select>
+                                  </div>
+
                                   <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
                                     <span className="font-semibold text-gray-600">
                                       {lang === 'zh' ? '该生个人登录密码:' : 'Personal Login Password:'}

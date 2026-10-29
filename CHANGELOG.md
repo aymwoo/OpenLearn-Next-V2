@@ -45,7 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **姓名**：圆头像不再承载文字，完整姓名在头像下方单独一行渲染，`w-full` + `break-words` 自然换行、不 `truncate`，附 `title` 悬停可看全名；卡片高度由 `auto-rows-max` 网格自动撑开。
   - **头像**：新增 `StudentAvatarVisual` —— 有本人照片（`students.avatar`）显示照片，否则按性别渲染（男 `Mars` / 女 `Venus`），性别未设置时显示中性人像（`UserRound`）；离线时整体降透明度。
   - **数据模型补性别**：新增迁移 `044_students_gender.sql` 给 `students` 加 `gender` 列（`male` / `female` / NULL），`RosterService.createStudent` / `updateStudent` / `importStudents` 均按 `normalizeStudentGender()` 归一（`男`/`M`/`boy` → male，`女`/`F`/`girl` → female，无法识别落 NULL），学生列表与班级花名册查询一并下发 `gender`；`schema-golden.json` 已重新生成。
-  - **录入入口**：新建学生对话框新增性别输入（可留空）；CSV/JSON 批量导入新增可选「性别 / Gender / sex」列（模板列追加在末尾，旧模板仍兼容）。
+  - **录入与补录入口**：新建学生对话框新增性别输入（可留空）；CSV/JSON 批量导入新增可选「性别 / Gender / sex」列（模板列追加在末尾，旧模板仍兼容）；已有学生可在「班级 → 学生卡片 → 教学控制」里的「性别（课堂头像）」下拉直接补录或清空（清空即落 NULL，退回中性人像）。
   - 测试：`src/components/__tests__/LiveClassroomView.test.tsx`（长姓名完整显示 + 照片/性别/中性人像头像）、`server/services/__tests__/roster-service.test.ts`（性别落库与归一化，含更新路径）、`src/services/__tests__/bulkImportService.test.ts`（性别列透传与模板表头）全绿。
 
 - **开发态 Vite 依赖预打包缓存请求刷屏访问日志修复**：`pnpm dev` 冷启动时，Vite 把依赖预打包产物放在仓库根的 `.vite-cache/deps/`（见 `vite.config.ts` 的 `cacheDir`），这些请求由 Express 的 `requestObservability` 统一记录；单文件首次编译常超过 `HTTP_SLOW_MS`（默认 1000ms），于是每条 `/.vite-cache/deps/*.js` 都以 `WARN: http.request` 打印，控制台被大量 200 日志淹没。现将 `/.vite-cache/` 补进 `isQuietRequest` 的开发环境静默前缀名单（与 `/@vite/`、`/src/` 同级），状态码 <400 时不再写访问日志；`>=400` 仍严格保留，指标计数与安全审计不受影响。
