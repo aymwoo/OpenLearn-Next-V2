@@ -138,7 +138,7 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       const female = service.createStudent({ name: '性别女生', gender: 'female' });
       const unknown = service.createStudent({ name: '性别未知', gender: '???' });
 
-      const rows = service.listStudents({ limit: 200, offset: 0, sort: 'desc' } as any).data;
+      const rows = service.listStudents({ page: 1, pageSize: 200, offset: 0, isAll: true }).data;
       expect(rows.find((r) => r.id === male.id)?.gender).toBe('male');
       expect(rows.find((r) => r.id === female.id)?.gender).toBe('female');
       expect(rows.find((r) => r.id === unknown.id)?.gender).toBeNull();
@@ -146,7 +146,7 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       // 更新路径同样走归一化
       service.updateStudent(male.id, { gender: '女' });
       const afterUpdate = service
-        .listStudents({ limit: 200, offset: 0, sort: 'desc' } as any)
+        .listStudents({ page: 1, pageSize: 200, offset: 0, isAll: true })
         .data.find((r) => r.id === male.id);
       expect(afterUpdate?.gender).toBe('female');
 

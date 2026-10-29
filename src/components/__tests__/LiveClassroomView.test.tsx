@@ -731,14 +731,14 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     );
 
     const longName = '欧阳娜娜娜娜';
-    const props: Record<string, any> = {
+    const props = {
       ...defaultProps,
       students: [{ id: 's101', name: longName, class_id: 'class-g1' }],
       classStudentsMap: { 'class-g1': [{ id: 's101', name: longName, class_id: 'class-g1' }] },
-    };
+    } as unknown as React.ComponentProps<typeof AppDataProvider>['value'];
 
     render(
-      <AppDataProvider value={props as any}>
+      <AppDataProvider value={props}>
         <LiveClassroomView initialPortalOpen={false} />
       </AppDataProvider>,
     );
@@ -781,7 +781,12 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const { container } = render(
       <AppDataProvider
         value={
-          { ...defaultProps, students: roster, classStudentsMap: { 'class-g1': roster }, onlineStudentIds: [] } as any
+          {
+            ...defaultProps,
+            students: roster,
+            classStudentsMap: { 'class-g1': roster },
+            onlineStudentIds: [],
+          } as unknown as React.ComponentProps<typeof AppDataProvider>['value']
         }
       >
         <LiveClassroomView initialPortalOpen={false} />
