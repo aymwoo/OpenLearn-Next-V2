@@ -86,6 +86,18 @@ import {
 } from '../features/classroom/LiveSubmissionsPanel';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
 
+/**
+ * 学生头像里的缩写字符。
+ *
+ * 圆形头像内宽只有 ~34px，塞不下完整姓名（中文两个字就开始出省略号），
+ * 所以头像只放一个首字/首字母，完整姓名渲染在卡片下方（见学生专注力监控卡片）。
+ */
+function avatarInitial(name?: string | null): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '?';
+  return /^[A-Za-z]/.test(trimmed) ? trimmed[0].toUpperCase() : trimmed.slice(0, 1);
+}
+
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
   const IconComponent = (Icons as any)[name];
@@ -2873,9 +2885,9 @@ export function LiveClassroomView({
                               isSelectedDraw ? 'bg-amber-100/90' : ''
                             }`}
                           >
-                            {/* Name view: Visible by default, hidden on hover */}
+                            {/* 头像首字：完整姓名在卡片下方单独一行，这里不再截断姓名 */}
                             <span
-                              className={`text-[11px] font-bold tracking-tight truncate max-w-[32px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                              className={`text-[11px] font-bold tracking-tight group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
                                 isSelectedDraw
                                   ? 'text-amber-900 font-extrabold'
                                   : !isOnline
@@ -2883,7 +2895,7 @@ export function LiveClassroomView({
                                     : 'text-slate-700 dark:text-slate-200'
                               }`}
                             >
-                              {st.name}
+                              {avatarInitial(st.name)}
                             </span>
 
                             {/* Hover action overlay */}
@@ -2988,6 +3000,20 @@ export function LiveClassroomView({
                             />
                           )}
                         </div>
+
+                        {/* 完整姓名：不截断、不加省略号，超长名字自然换行 */}
+                        <span
+                          className={`mt-1 w-full px-0.5 text-center text-[10px] font-semibold leading-tight break-words select-none ${
+                            isSelectedDraw
+                              ? 'text-amber-800 dark:text-amber-300'
+                              : !isOnline
+                                ? 'text-slate-400'
+                                : 'text-slate-700 dark:text-slate-200'
+                          }`}
+                          title={st.name}
+                        >
+                          {st.name}
+                        </span>
 
                         {/* Small Progress Label or Draw Winner Label */}
                         <span

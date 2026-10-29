@@ -41,6 +41,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学生专注力监控卡片完整显示学生姓名与性别/照片头像**：live_class 右侧「学生专注力监控」的学生卡片此前把姓名塞在 48px 圆形头像内并带 `truncate max-w-[32px]`，中文名字从第二个字起就被省略号吃掉（`张…`）。现将完整姓名移至头像下方独立一行渲染（`w-full break-words leading-tight`，超长自然换行，附 `title` 悬停提示）；头像采用「照片 → 性别图标（男 Mars / 女 Venus）→ 中性人像」多级兜底；修复悬停操作按钮在 34px 圆形容器内的溢出裁剪问题。
+  - 测试：`src/components/__tests__/LiveClassroomView.test.tsx`、`server/services/__tests__/roster-service.test.ts`。
+
 - **开发态 Vite 依赖预打包缓存请求刷屏访问日志修复**：`pnpm dev` 冷启动时，Vite 把依赖预打包产物放在仓库根的 `.vite-cache/deps/`（见 `vite.config.ts` 的 `cacheDir`），这些请求由 Express 的 `requestObservability` 统一记录；单文件首次编译常超过 `HTTP_SLOW_MS`（默认 1000ms），于是每条 `/.vite-cache/deps/*.js` 都以 `WARN: http.request` 打印，控制台被大量 200 日志淹没。现将 `/.vite-cache/` 补进 `isQuietRequest` 的开发环境静默前缀名单（与 `/@vite/`、`/src/` 同级），状态码 <400 时不再写访问日志；`>=400` 仍严格保留，指标计数与安全审计不受影响。
   - 测试：`server/__tests__/request-observability.test.ts`（新增「慢速 `/.vite-cache/` 请求不写访问日志」回归 1 例，共 14 例全绿）。
 

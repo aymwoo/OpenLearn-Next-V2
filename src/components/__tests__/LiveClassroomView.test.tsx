@@ -673,6 +673,12 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.getByText('张小明')).toBeTruthy();
     expect(screen.getByText('李华')).toBeTruthy();
 
+    // 姓名必须完整呈现：不套 truncate（圆头像里只放首字缩写）
+    const zhNameNode = screen.getByText('张小明');
+    expect(zhNameNode.className).not.toContain('truncate');
+    expect(zhNameNode.className).toContain('break-words');
+    expect(screen.getByText('张')).toBeTruthy();
+
     // 2. Live feed header, count & clear button
     expect(screen.getByText('课堂互动反馈流')).toBeTruthy();
     expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(1); // feed length badge
@@ -705,6 +711,49 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
         message: '反馈流已清空。',
       }),
     ]);
+  });
+
+  it('学生专注力卡片完整显示长姓名，不再从第二个字起被省略号截断', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    const longName = '欧阳娜娜娜娜';
+    const props: Record<string, any> = {
+      ...defaultProps,
+      students: [{ id: 's101', name: longName, class_id: 'class-g1' }],
+      classStudentsMap: { 'class-g1': [{ id: 's101', name: longName, class_id: 'class-g1' }] },
+    };
+
+    render(
+      <AppDataProvider value={props as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('学生专注力监控')).toBeTruthy();
+    });
+
+    const nameNode = screen.getByText(longName);
+    expect(nameNode.className).not.toContain('truncate');
+    expect(nameNode.className).toContain('break-words');
+    expect(nameNode.getAttribute('title')).toBe(longName);
+    // 圆头像内只放一个首字，避免 34px 宽度内出省略号
+    expect(screen.getByText('欧')).toBeTruthy();
   });
 
   it('supports clicking a student card to pin the overview panel and keeps displaying on mouse leave (#115)', async () => {
