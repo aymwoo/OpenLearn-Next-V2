@@ -1,6 +1,6 @@
 # 统一扩展点与 UI 贡献点注册表 (Extension & Contribution Registry)
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 

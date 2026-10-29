@@ -65,6 +65,48 @@ if (NODE_BUILTIN_RE.test(bundleOutput)) {
   process.exit(1);
 }
 
+/**
+ * 产物中所有的外部裸模块导入必须在 package.json 的 dependencies 或 peerDependencies 中声明（3.7.5 依赖完整性守卫）。
+ *
+ * 历史：3.6.0 起值导出 BaseActivityProvider，其实现链引入了 `import { v7 as uuidv7 } from 'uuid'`。
+ * 由于 esbuild 设置了 `packages: 'external'`，裸导入说明符保留在 dist/index.js 中。
+ * 但 package.json 漏声明了 uuid 依赖，导致第三方消费按 npm 包直接 import SDK 时
+ * 抛出 ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'（Issue #349）。
+ */
+const pkgJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+const declaredDeps = new Set([
+  ...Object.keys(pkgJson.dependencies || {}),
+  ...Object.keys(pkgJson.peerDependencies || {}),
+]);
+
+const IMPORT_SPECIFIER_RE = /(?:import\s+(?:[^;]+?\s+from\s+)?|export\s+[^;]+?\s+from\s+)["']([^"']+)["']/g;
+const undeclaredDeps = new Map();
+
+for (const match of bundleOutput.matchAll(IMPORT_SPECIFIER_RE)) {
+  const specifier = match[1];
+  if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+  if (specifier.startsWith('node:')) continue;
+
+  const pkgName = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+
+  if (!declaredDeps.has(pkgName)) {
+    if (!undeclaredDeps.has(pkgName)) undeclaredDeps.set(pkgName, []);
+    undeclaredDeps.get(pkgName).push(specifier);
+  }
+}
+
+if (undeclaredDeps.size > 0) {
+  console.error('[plugin-sdk] ✗ dist/index.js 含未在 package.json 声明的外部依赖导入：');
+  for (const [pkgName, specs] of undeclaredDeps.entries()) {
+    console.error(`  • 包名: "${pkgName}"（导入说明符: ${specs.map((s) => `"${s}"`).join(', ')}）`);
+  }
+  console.error(
+    '[plugin-sdk] 请在 packages/plugin-sdk/package.json 的 dependencies 或 peerDependencies 中补齐声明。' +
+      '否则第三方按 npm 包消费时将抛出 ERR_MODULE_NOT_FOUND。',
+  );
+  process.exit(1);
+}
+
 // 2. Assemble standalone type declarations.
 //
 //    `openlearn.d.ts` holds the hand-written host contract (Token, PluginContext,

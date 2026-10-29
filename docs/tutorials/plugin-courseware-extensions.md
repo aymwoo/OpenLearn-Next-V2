@@ -1,6 +1,6 @@
 # 课件与教学环节扩展：画板图元、环节类型与进入条件
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4` / 平台 `v0.7.4+`
 >

@@ -27,10 +27,7 @@ import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
-import {
-  IClassroomLifecycleServiceToken,
-  IInteractionRuntimeServiceToken,
-} from './packages/core/di/interfaces.js';
+import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from './packages/core/di/interfaces.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';

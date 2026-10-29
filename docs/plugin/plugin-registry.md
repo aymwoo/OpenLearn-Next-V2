@@ -1,6 +1,6 @@
 # 插件注册表与分发管理 (Plugin Registry & Distribution)
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 
