@@ -32,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **live_class 顶栏倒计时设置浮层改为 Portal + fixed 定位，不再撑高/裁剪顶栏**：顶栏胶囊（`05:00 ▶ +1m ⌄`）展开设置面板时，面板虽为 `absolute`，但所在顶栏行带 `overflow-x-auto`（`overflow-y` 随之计算为 `auto`），导致面板被裁剪且撑高顶栏行。现改为 `createPortal` 挂载到 `document.body` 并以 `fixed` 定位（`z-[9999]`），按触发按钮 `getBoundingClientRect()` 计算 `top / right / width / maxHeight`：右边缘对齐按钮、限制在视口内、下方空间不足时面板内部滚动；视口 `resize` / `scroll`（capture）时以 rAF 节流重新定位，支持 `Escape` 关闭，点击外部判断同时覆盖锚点与 Portal 面板（避免误判）。
+  - 测试：`src/features/classroom/__tests__/ClassroomCountdownWidget.test.tsx`（新增“Portal 父节点为 `body`、class 含 `fixed` 与 `z-[9999]`”断言，5 例全绿）。
+
 - **插件声明式贡献（contributes/view）注册时序前移与纯 view 插件支持（Issue #350）**：
   - **时序前移与贡献保全**：`FrontendPluginHost.activateRemotePlugin` 此前在 `fetch('/plugins/:id/frontend.js')` 之后才调用 `registerManifestContributions`；当 `frontend.js` 请求失败（如 404）时直接跳转到 `catch` 块，导致 `preserveManifestContributions: true` 尝试保留的声明式贡献从未注册，插件 Tab / 浮层静默消失。现将声明式贡献注册提升至 `fetch` 之前，确保失败时贡献依然得以保留，并展示显式错误重试态（对齐 #292 契约）。
   - **纯 view / 声明式插件激活打通**：解开 `useClassroomSlice.ts` 中的 `!plugin.has_frontend` 硬拦截，无前端 bundle 的纯 view 插件在激活时透传 `{ hasFrontend: false }`，直接完成声明式贡献挂载并置为 `ACTIVE` 状态，无需发起多余的 `frontend.js` 网络请求；反激活时同步执行清理。
