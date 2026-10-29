@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **AI 插件开发手册子树（`docs/agent/`）与源码抽取事实表**：
+  - 新增 `docs/agent/` 手册子树（27 个页面），面向「让 AI 写出装得上、跑得起的插件」：入口 `agent-handbook.md`、`playbook/`（排查路径与 pitfalls）与 `reference/`（manifest、plugin-context、命令与事件、数据库、HTTP、前端沙箱、发布分发、版本迁移、token 速查等），各页顶部统一给出「与 LLM 先验冲突」提示框。
+  - `docs/agent/contracts/` 收录机器可读契约（`capabilities` / `contributes-groups` / `tokens`），由 `audit-tools/agent_facts.py` 从源码抽取并支持 `--check` 防漂移；`audit-tools/plugin_docs_check.py` 校验文档内代码块与源码是否一致，二者均接入 `docs-drift-audit`。
+  - 修正 MyST 指令块语法：指令标题不再写行内代码（反引号会让 fenced directive 解析失败并吞掉后续内容），内部含代码块的指令统一改用 4 个反引号围栏。修复后 `docs/agent` 的 admonition 节点由 41 个恢复到 245 个，字面围栏残留 0 处。
+
 - **AI Agent 与第三方插件开发 6 大架构契约与防护规范规范化沉淀 (Issue #351)**：
   - **布局与伸缩契约**：在 `docs/reference/plugin-ui-extension-slots.md` 与全新 `docs/reference/plugin-architecture-contracts.md` 中完备收录 `layoutVariant`（`Panel`、`WhiteboardWidget`、`FloatingOverlay`、`ActionItem`）四档布局语义矩阵，以及 `window.OpenLearnPluginBridge.ui.resize` 父子容器高度防抖伸缩通信协议。
   - **白板卡片双轨扩展**：明确白板业务扩展的双轨技术选型（声明式 `whiteboard.draw` 矢量命令 vs `view: "storage/*.html"` 沙箱卡片微应用），严禁通过 SQL 直写 `whiteboard_elements` 核心表。

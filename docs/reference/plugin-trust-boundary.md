@@ -62,7 +62,7 @@ flowchart TD
    - **设计规则**：若插件清单中的 `capabilitiesProposed` 为空数组 `[]`（或管理员未审批授予任何能力），插件将受到强制只读降级锁定 —— **只允许调用名称以 `get*` 开头的方法**；
    - **错误现象**：若插件尝试调用任何非 `get*` 前缀的写入/修改方法（如 `set*`、`create*`、`register*`、`delete*`、`save*` 等），宿主直接抛出：
      `WorkerCapabilityError: Capability denied for actor plugin:<id>: empty manifestCapabilities, only 'get' methods allowed`；
-   - **规避方案**：任何需要写数据库、注册路由、发送总线指令或操作白板的插件，必须在 `manifest.json` 中显式声明所需能力（例如 `storage:readwrite`、`classroom:write`、`whiteboard:draw` 等）。
+   - **规避方案**：任何需要写数据库、注册路由、发送总线指令或操作白板的插件，必须在 `manifest.json` 中显式声明所需能力（例如 `lesson:write`、`whiteboard:write`、`vfs:write` 等；能力名必须逐字取自真实能力表，不存在 `storage:readwrite` / `classroom:write` 这类写法）。
 3. **Security Barrier 3：方法与路径级策略门禁（纵深防御）**
    - 由 `packages/core/plugin-host/method-policy.ts` 集中判定，双端（Node Worker / Browser Worker）共享同一规则逻辑；
    - 包含 Action 注册降级（未获 `agent:tool` 权限时将 `exposeToAgent` 强制重写为 `false` 而不直接崩溃）、敏感数据读写范围校验等。
@@ -74,13 +74,16 @@ flowchart TD
 除后端/Worker 沙箱外，平台前端扩展视图（如白板卡片、浮动面板、独立 Page）运行在严格隔离的 HTML5 `<iframe>` 沙箱中：
 
 1. **沙箱属性配置**：
-   - 强制使用 `sandbox="allow-scripts allow-forms allow-downloads"`；
+   - **view 通道**（可视沙箱页）强制使用 `sandbox="allow-scripts allow-forms allow-downloads"`；
+     注意这与 **frame 通道**（隐藏 iframe，跑 `frontend.js`）不同 —— 后者只有 `sandbox="allow-scripts"`
+     （`src/plugin-host/sandbox-frame.ts` 的 `PLUGIN_SANDBOX_ATTR`）。两个 iframe 的沙箱属性不要混用。
    - **严格禁止 `allow-same-origin`**，杜绝第三方视图窃取宿主 Cookie、DOM 或越权向主站同源接口发起请求。
 2. **Opaque Origin (`null`) 的浏览器行为红线**：
    - 由于缺失 `allow-same-origin`，iframe 的运行源为 **Opaque Origin（`origin: "null"`）**；
    - **禁止直接访问本地存储**：在 iframe 内部直接调用 `window.localStorage` 或 `window.sessionStorage` 会直接触发浏览器 DOMException `SecurityError` 崩溃；
    - **禁止直接相对路径 `fetch()` / XHR**：由于没有同源域名，直接 `fetch('/api/...')` 会因为无 Host 导致请求失败，或被浏览器 CORS 策略直接拦截；
-   - **统一通信介质**：所有视图逻辑必须且只能通过平台注入的 `window.OpenLearnPluginBridge` 接口（`bridge.api.*`、`bridge.state.*`、`bridge.ui.*`）与宿主进行双向通信与状态同步。
+   - **统一通信介质**：所有视图逻辑必须且只能通过平台注入的 `window.OpenLearnPluginBridge` 接口（`bridge.api.*`、`bridge.storage.*`、`bridge.ui.*`、`bridge.invokeCommand`、`bridge.getContext`）
+     —— **没有** `bridge.state.*`；view 通道不提供状态子对象与宿主进行双向通信与状态同步。
 
 ---
 

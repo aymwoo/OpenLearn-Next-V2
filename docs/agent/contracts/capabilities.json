@@ -1,0 +1,45 @@
+{
+  "_note": "三套登记互不相干，混用即错：command_required 管命令闸门，method_policy 管具体 ctx 方法，runtime_permission 是活动生态的第三套权限。",
+  "_no_global_whitelist": "manifest-schema.ts 的 capabilitiesProposed 是 z.array(z.string())，不存在全局能力白名单。杜撰的能力名会被安静地授予，真正致命的失败是「少声明」——目标命令要的 capabilityRequired 与你声明的字符串必须逐字相等，否则 403 COMMAND_CAPABILITY_DENIED。",
+  "command_required": [
+    "assignment:manage",
+    "assignment:read",
+    "assignment:review",
+    "assignment:submit",
+    "assignment:write",
+    "lesson:delete",
+    "lesson:read",
+    "lesson:write",
+    "management:read",
+    "management:write",
+    "plugin:read",
+    "plugin:write",
+    "process:read",
+    "process:write",
+    "student:write",
+    "vfs:read",
+    "vfs:write",
+    "whiteboard:read",
+    "whiteboard:write"
+  ],
+  "method_policy": {
+    "CAP_API_WRITE": "api:write",
+    "CAP_API_ADMIN": "api:admin",
+    "CAP_GRADES_WRITE": "grades:write",
+    "CAP_AGENT_TOOL": "agent:tool",
+    "CAP_AI_INVOKE": "ai:invoke",
+    "CAP_TASK_REGISTER": "task:register",
+    "CAP_STUDENT_DATA_READ": "student-data:read",
+    "CAP_STUDENT_DATA_WRITE": "student-data:write"
+  },
+  "runtime_permission": [
+    "ai:invoke",
+    "lesson:control",
+    "plugin:execute",
+    "quiz:submit",
+    "session:manage",
+    "stage:navigate",
+    "whiteboard:draw"
+  ],
+  "blocked_wildcard": ["*", "*:*", "*:*:*"]
+}

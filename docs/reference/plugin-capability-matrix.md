@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.5 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5`
 > 本页是插件声明与校验 `resource:action` 权限的**唯一权威字典**，用于避免 AI 捏造权限名导致 `Access Denied`。
 >
 > **关键事实**：代码库中存在**四套互不相干的 "capability" 机制**，请勿混淆：

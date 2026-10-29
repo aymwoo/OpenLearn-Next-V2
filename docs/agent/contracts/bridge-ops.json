@@ -1,0 +1,28 @@
+{
+  "_note": "两套通道不是一回事。frame（隐藏 iframe）用 op 字符串，宿主侧在 src/plugin-host/plugin-host.ts 分发，越界抛 `Unsupported sandbox bridge op \"xxx\"`；view（可视沙箱页）拿到的是 window.OpenLearnPluginBridge 对象，方法名与 frame op 不同名（invokeCommand ↔ command.invoke、getContext ↔ context.get）。view 通道没有 Barrier 3 方法级能力门禁。",
+  "_source": "src/plugin-host/plugin-host.ts / server/utils/plugin-view-bridge.ts",
+  "frame_ops": [
+    "api.del",
+    "api.get",
+    "api.post",
+    "command.invoke",
+    "context.get",
+    "storage.delete",
+    "storage.get",
+    "storage.set",
+    "ui.register",
+    "ui.toast"
+  ],
+  "view_wire_ops": [
+    "api.del",
+    "api.get",
+    "api.post",
+    "command.invoke",
+    "storage.delete",
+    "storage.get",
+    "storage.set",
+    "ui.toast"
+  ],
+  "frame_total": 10,
+  "view_total": 8
+}

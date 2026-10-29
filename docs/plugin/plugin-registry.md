@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.5 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5`
 
 OpenLearn V2 的插件注册表由 **SQLite 数据库持久化层** 与 **`PluginDistributionManager` 分发管理层** 共同构成，负责插件元数据管理、版本控制、本地与远程仓库包安装及动态热更新。
 

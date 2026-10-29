@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.5 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4` / 平台 `v0.3.15+`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / 平台 `v0.3.15+`
 > 本页说明插件可用的两条数据库路径、事务支持、以及插件版本升级时的表结构迁移范式。
 
 ---
@@ -70,7 +70,7 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 
 为防止第三方插件通过手写 SQL 或注入绕过权限模型窃取系统凭证、破坏课堂数据或越权操控核心状态，宿主在 `packages/core/plugin-host/sql-guard.ts` 中部署了严格的 Fail-Closed SQL 审计器：
 
-#### 1. 36 张核心安全表黑名单（`FORBIDDEN_CORE_TABLES`）
+#### 1. 40 张核心安全表黑名单（`FORBIDDEN_CORE_TABLES`）
 
 第三方与隔离模式插件**绝对禁止**在 SQL（含 `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `DROP` / `CREATE` / `ALTER` 以及任意嵌套子查询、JOIN）中引用以下核心表：
 

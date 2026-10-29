@@ -110,6 +110,29 @@ EXTPT_DRIFT=$(python3 -c "import json;print(json.load(open('${EXTPT_JSON}'))['st
 node scripts/check-doc-version.mjs --json "${DOCVER_JSON}" --md "${DOCVER_MD}" || true
 DOCVER_DRIFT=$(python3 -c "import json;print(json.load(open('${DOCVER_JSON}'))['drift'])" 2>/dev/null || echo 0)
 
+# --- 2.10 AI 手册事实表漂移（枚举表必须与源码一致）---
+# docs/agent/contracts/*.json 是「AI 插件开发手册」（docs/agent/）正文引用的 7 张
+# 枚举表：能力 / Token / 槽位 / contributes 分组 / bridge op / 禁写表 / 版本。
+# 它们由 audit-tools/agent_facts.py 从源码抽出 —— 手册正文与门禁共用同一份来源，
+# 所以这里只需校验一件事：**源码变了但产物没重新生成**。
+#
+# 这段门禁堵的是最阴的一类漂移：能力名、槽位名、op 名一旦与源码脱节，
+# 照着文档写的 Agent 会写出「看起来合理但根本不存在」的调用，而且不报错。
+python3 audit-tools/agent_facts.py --check > "${OUT_DIR}/agent_facts_report.md" 2>&1 || true
+# grep -c 在无匹配时也会打印 0（但退出码为 1），所以这里用 `|| true` 而不是 `|| echo 0`，
+# 否则会得到 "0\n0" 这种两行值，进 arithmetic 时直接炸。
+FACTS_DRIFT=$(grep -c '^\[drift\]' "${OUT_DIR}/agent_facts_report.md" 2>/dev/null || true)
+FACTS_DRIFT=${FACTS_DRIFT:-0}
+if [ "${FACTS_DRIFT}" -eq 0 ] && ! grep -q '事实表与源码一致' "${OUT_DIR}/agent_facts_report.md"; then
+  # 报告里既没有漂移也没有「一致」，说明是「跳过」分支（contracts 目录不存在）。
+  # 这不是漂移，但必须显式提示 —— 否则「手册没纳入仓库」会被误读成「已校验通过」。
+  if grep -q '跳过' "${OUT_DIR}/agent_facts_report.md"; then
+    echo "::warning::AI 手册事实表未校验（contracts 目录不存在，手册可能尚未纳入本仓库）"
+  else
+    FACTS_DRIFT=1
+  fi
+fi
+
 # --- 3. 符号存在性提示（L2 语义层）---
 # 刻意**不计入** drift：它能抓到枚举改名/Token 消失这类语义漂移，但仍有约
 # 15-20% 精度（JS 全局、第三方包导出、历史文档引用已删除子系统）。
@@ -163,7 +186,7 @@ print(f\"  重复文档分组  : {s['duplicate_docs']['duplicate_groups']} 组\"
 # 全仓合计：canonical + ref + 环境变量 + 插件文档示例 + 扩展槽覆盖。
 # envcheck / plugin_docs_check / slots_coverage 的判定都已收窄到近乎无假阳性，故与另两段同列门禁；
 # symbolcheck 仍只作提示。
-TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT + EXTPT_DRIFT + DOCVER_DRIFT))
+TOTAL_DRIFT=$((DRIFT_COUNT + ENV_DRIFT + PLUGIN_DRIFT + SLOT_DRIFT + EXTPT_DRIFT + DOCVER_DRIFT + FACTS_DRIFT))
 
 echo "canonical_drift=$(python3 -c "import json;print(json.load(open('${DRIFT_JSON}'))['total'])")"
 echo "ref_drift=${REF_DRIFT}"
@@ -172,12 +195,13 @@ echo "plugin_docs_drift=${PLUGIN_DRIFT}  （见 ${PLUGIN_MD}）"
 echo "slot_drift=${SLOT_DRIFT}  （见 ${OUT_DIR}/slots_coverage.md）"
 echo "ext_point_drift=${EXTPT_DRIFT}  （见 ${EXTPT_MD}）"
 echo "doc_version_drift=${DOCVER_DRIFT}  （见 ${DOCVER_MD}）"
+echo "agent_facts_drift=${FACTS_DRIFT}  （见 ${OUT_DIR}/agent_facts_report.md）"
 echo "slot_hints=${SLOT_HINTS}  （仅提示，不计入 drift）"
 echo "symbol_hints=${SYM_HINTS}  （仅提示，不计入 drift）"
 echo "drift_count=${TOTAL_DRIFT}"
 
 if [ "${TOTAL_DRIFT}" -gt 0 ]; then
-  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD}, ${OUT_DIR}/slots_coverage.md, ${EXTPT_MD} and ${DOCVER_MD}."
+  echo "::error::Architecture docs drift detected: ${TOTAL_DRIFT} item(s). See ${DRIFT_MD}, ${ENV_MD}, ${PLUGIN_MD}, ${OUT_DIR}/slots_coverage.md, ${EXTPT_MD}, ${DOCVER_MD} and ${OUT_DIR}/agent_facts_report.md."
   exit 1
 fi
 
