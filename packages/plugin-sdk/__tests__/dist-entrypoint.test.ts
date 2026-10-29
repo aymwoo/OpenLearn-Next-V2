@@ -126,4 +126,39 @@ describe('@openlearn/plugin-sdk 构建产物', () => {
     const dist = fs.readFileSync(path.join(root, 'packages/plugin-sdk/dist/index.js'), 'utf8');
     expect(dist, 'SDK 产物不应再 import express —— 插件运行时不需要宿主 HTTP 栈').not.toMatch(/from\s+["']express["']/);
   });
+
+  it('产物中的所有裸模块导入均在 package.json dependencies 或 peerDependencies 中声明（含 uuid，Issue #349 回归）', () => {
+    execFileSync(process.execPath, [path.join(root, 'scripts/build-plugin-sdk.mjs')], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+
+    const sdkPkg = JSON.parse(fs.readFileSync(path.join(root, 'packages/plugin-sdk/package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    expect(sdkPkg.dependencies?.uuid, 'package.json dependencies 必须声明 uuid').toBeDefined();
+
+    const declared = new Set([
+      ...Object.keys(sdkPkg.dependencies || {}),
+      ...Object.keys(sdkPkg.peerDependencies || {}),
+    ]);
+
+    const dist = fs.readFileSync(path.join(root, 'packages/plugin-sdk/dist/index.js'), 'utf8');
+    const IMPORT_RE = /(?:import\s+(?:[^;]+?\s+from\s+)?|export\s+[^;]+?\s+from\s+)["']([^"']+)["']/g;
+
+    const bareImports: string[] = [];
+    for (const match of dist.matchAll(IMPORT_RE)) {
+      const specifier = match[1];
+      if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('node:')) continue;
+      const pkgName = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+      bareImports.push(pkgName);
+      expect(
+        declared.has(pkgName),
+        `dist/index.js 引入了裸模块 "${specifier}" (包名 "${pkgName}")，但未在 package.json 中声明`,
+      ).toBe(true);
+    }
+
+    expect(bareImports).toContain('uuid');
+  });
 });

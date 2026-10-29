@@ -1,6 +1,6 @@
 # `@openlearn/plugin-sdk` API 参考手册
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 >

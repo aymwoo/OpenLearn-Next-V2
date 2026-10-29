@@ -1,6 +1,6 @@
 # Scaffold CLI 脚手架指南
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`（CLI 随该包一起发布，已上 npm）
 

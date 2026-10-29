@@ -1,6 +1,6 @@
 # `@openlearn/plugin-test-kit` 插件测试套件
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4` / `@openlearn/plugin-test-kit@3.3.3`
 

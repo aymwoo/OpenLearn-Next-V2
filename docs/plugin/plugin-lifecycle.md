@@ -1,6 +1,6 @@
 # 插件生命周期状态机与执行流程 (Plugin Lifecycle)
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 
