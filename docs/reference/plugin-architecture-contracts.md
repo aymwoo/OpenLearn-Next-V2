@@ -21,16 +21,16 @@ OpenLearn V2 是一套基于分布式沙箱与强类型微内核架构的教育�
 ```mermaid
 graph TD
     subgraph UI ["契约 1: UI 布局与尺寸"]
-        C1["layoutVariant (Panel/WhiteboardWidget/...)<br/>window.OpenLearnPluginBridge.ui.resize"]
+        C1["槽位容器语义 (Panel/WhiteboardWidget/...)<br/>window.OpenLearnPluginBridge.ui.resize"]
     end
     subgraph WB ["契约 2: 白板双轨扩展"]
-        C2["白板卡片 (view: storage/*.html)<br/>vs 声明式 whiteboard.draw 命令<br/>(严禁 SQL 直写 whiteboard_elements)"]
+        C2["白板卡片 (contributes[...].view: dashboard.html)<br/>vs 声明式 whiteboard.draw 命令<br/>(严禁 SQL 直写 whiteboard_elements)"]
     end
     subgraph CTX ["契约 3: 课堂上下文契约"]
         C3["classId || 'default' 容错<br/>onContextUpdate 生命周期响应"]
     end
     subgraph DB ["契约 4: SQL-Guard 数据库隔离"]
-        C4["36 张平台核心表黑名单<br/>强制 plugin_<scopeId>_* 私有前缀"]
+        C4["40 张平台核心表黑名单<br/>强制 plugin_<scopeId>_* 私有前缀"]
     end
     subgraph RPC ["契约 5: ServiceHost 门禁"]
         C5["Barrier 1: Token 白名单<br/>Barrier 2: 空能力只读锁定 (非 get* 抛错)<br/>Barrier 3: 方法/路径细粒度策略"]
@@ -46,16 +46,20 @@ graph TD
 
 ### 契约 1：UI Extension Slots 布局形态与尺寸伸缩协议
 
-在 `manifest.json` 中向 `contributions.views` 或 `contributions.slots` 声明 UI 扩展点时，必须遵循明确的布局形态矩阵与双向高度伸缩通信协议：
+在 `manifest.json` 的 **`contributes`** 顶层键下声明 UI 扩展点时（**键名即槽位名**，如 `teacher.tab` / `teacher.panel` / `whiteboard.canvas.widget`），必须遵循明确的槽位容器形态矩阵与双向高度伸缩通信协议：
 
-#### 1.1 四大布局形态（`layoutVariant`）
+> ⚠️ **顶层键就叫 `contributes`**（校验见 `packages/core/esm-loader/manifest-schema.ts` 的 `contributesSchema`）。**没有** `contributions.views` / `contributions.slots` 这种写法 —— 那是本文早期版本的笔误，照抄会被 zod 静默 `strip`，插件在宿主里表现为「声明了但不渲染」。
+
+#### 1.1 四大槽位容器形态（`layoutVariant` 语义分类）
+
+> 📌 **`layoutVariant` 不是 manifest 字段**。`manifest-schema.ts` 里没有任何 `layout` / `variant` 键 —— 它是[插件 UI 扩展槽位参考](./plugin-ui-extension-slots.md) §1.1.1 对 120 个槽位做的**文档层容器语义分类**，用来提示你的组件该占多大、能不能撑满、该不该 `position: fixed`。**不要**在 `manifest.json` 里写 `"layoutVariant": "Panel"`（写了会被 `strip`）。容器形态由**槽位名**决定。
 
 | 形态（layoutVariant）  | 典型槽位 / 宿主容器                       | 渲染行为与尺寸策略                                                       | 最佳实践场景                         |
 | :--------------------- | :---------------------------------------- | :----------------------------------------------------------------------- | :----------------------------------- |
-| **`Panel`**            | `classroom.right-drawer`, `admin.sidebar` | **宽度固定**（通常为 360px–480px），**高度根据内容纵向撑开或自适应滚动** | 随堂测验列表、互动答题榜单、设置面板 |
-| **`WhiteboardWidget`** | `whiteboard.card-overlay`, 白板画布卡片   | **宽高完全受限在白板矩形卡片或浮动卡片盒内**；宿主提供可缩放的卡片容器   | 互动抽奖卡片、白板投票器、随堂草稿纸 |
-| **`FloatingOverlay`**  | 全局右下角/白板悬浮工具条                 | 绝对定位悬浮层，默认收折为图标，展开时覆盖局部区域                       | 课堂即时反馈悬浮球、倒计时挂件       |
-| **`ActionItem`**       | `classroom.toolbar`, `whiteboard.toolbar` | **无独立视图主体**，仅注册一个可点击的按钮/菜单项；点击后触发命令派遣    | 一键截屏、快速发起随机提问按钮       |
+| **`Panel`**            | `teacher.panel`, `teacher.tab`, `admin.tab` | **占满容器视口**（宿主提供外层滚动容器与尺寸约束），高度由内容撑开或自适应滚动 | 随堂测验列表、互动答题榜单、设置面板 |
+| **`WhiteboardWidget`** | `whiteboard.canvas.widget`, `teacher.dashboard.widget` | **宽高完全受限在白板矩形卡片或浮动卡片盒内**；宿主提供可缩放的卡片容器   | 互动抽奖卡片、白板投票器、随堂草稿纸 |
+| **`FloatingOverlay`**  | `student.classroom.overlay`, `stage.display.overlay`, `student.quick_actions.fab` | 绝对定位悬浮层，默认收折为图标，展开时覆盖局部区域                       | 课堂即时反馈悬浮球、倒计时挂件       |
+| **`ActionItem`**       | `classroom.topbar.action`, `header.action`, `classroom.tool` | **无独立视图主体**，仅注册一个可点击的按钮/菜单项；点击后触发命令派遣    | 一键截屏、快速发起随机提问按钮       |
 
 #### 1.2 高度双向同步协议（`ui.resize`）
 
@@ -65,7 +69,7 @@ graph TD
   ```javascript
   const reportHeight = () => {
     const height = Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight);
-    window.OpenLearnPluginBridge?.ui?.resize?.({ height });
+    window.OpenLearnPluginBridge?.ui?.resize?.(height);
   };
   window.addEventListener('load', reportHeight);
   ```
@@ -82,9 +86,9 @@ graph TD
 | 扩展维度     | 路径 A：声明式矢量命令（`whiteboard.draw`）            | 路径 B：自定义白板富应用卡片（Custom Sandbox HTML）                    |
 | :----------- | :----------------------------------------------------- | :--------------------------------------------------------------------- |
 | **适用场景** | 绘制原生矩形、文本、图片、几何图形、简易箭头           | 完整的交互式游戏、实时计分板、带复杂状态机的测验卡片                   |
-| **前端实现** | 纯数据驱动，派遣 `whiteboard.draw` 总线命令            | 部署完整 HTML 文件，在 `manifest.json` 中声明 `view: "storage/*.html"` |
-| **沙箱隔离** | 无 iframe 开销，直接进入 Fabric.js 渲染管线            | 运行在独立 Opaque Origin iframe 沙箱内，保障崩溃隔离                   |
-| **所需权限** | 必须在 `capabilitiesProposed` 中声明 `whiteboard:draw` | 需要 `view:render` 与卡片关联的交互数据权限                            |
+| **前端实现** | 纯数据驱动，派遣 `whiteboard.draw` 总线命令            | 部署完整 HTML 文件，在 `manifest.json` 的 `contributes` 里声明 `view: "dashboard.html"`（插件根目录下的相对路径） |
+| **沙箱隔离** | 无 iframe 开销，直接进入 Konva / react-konva 渲染管线（平台白板用的是 Konva，不是 Fabric.js） | 运行在独立 Opaque Origin iframe 沙箱内，保障崩溃隔离                   |
+| **所需权限** | 必须在 `capabilitiesProposed` 中声明 `whiteboard:write`（`whiteboard.draw` 命令的 `capabilityRequired`） | 无独立白板能力：卡片页本身不需额外能力声明，若卡片也要派发白板命令，同样需要 `whiteboard:write` |
 
 #### 2.2 ⚠️ 绝对红线：严禁原生 SQL 操作平台白板表
 
@@ -116,7 +120,9 @@ graph TD
 
 - 插件前端必须注册上下文变更监听：
   ```javascript
-  window.OpenLearnPluginBridge?.classroom?.onContextUpdate?.((newContext) => {
+  // onContextUpdate 是 window.OpenLearnPluginBridge 的**顶层**成员，
+  // 不在 bridge.classroom.* 命名空间下（view 通道没有 classroom 命名空间）。
+  window.OpenLearnPluginBridge?.onContextUpdate?.((newContext) => {
     console.log('Classroom switched to:', newContext.classId);
     // 重置本地临时状态、重新拉取新班级专属数据
     reloadPluginDataForClass(newContext.classId || 'default');
@@ -129,9 +135,9 @@ graph TD
 
 对于隔离模式插件（`process` / `worker_threads`），平台数据库访问遵循**零信任与白名单命名空间原则**：
 
-#### 4.1 36 张核心安全表静态黑名单（`FORBIDDEN_CORE_TABLES`）
+#### 4.1 40 张核心安全表静态黑名单（`FORBIDDEN_CORE_TABLES`）
 
-无论任何 SQL 语法结构（包括简单查询、多层子查询、JOIN、视图展开），只要触及以下 36 张核心表中的任何一张，SQL-Guard 立即阻断并记录安全审计事件：
+无论任何 SQL 语法结构（包括简单查询、多层子查询、JOIN、视图展开），只要触及以下 40 张核心表中的任何一张，SQL-Guard 立即阻断并记录安全审计事件：
 
 ```text
 users, client_sessions, agent_conversations,
@@ -143,6 +149,8 @@ courseware, courseware_attempt, student_lesson_progress, lesson_quiz_submissions
 assignments, assignment_submissions, exams, exam_scores, student_semester_reports,
 lianyun_research_activities, lianyun_research_groups, lianyun_research_submissions, lianyun_research_reviews
 ```
+
+> 机器抽取的权威清单见 [`docs/agent/contracts/forbidden-tables.json`](../agent/contracts/forbidden-tables.json)（与 `packages/core/plugin-host/sql-guard.ts:13` 的 `FORBIDDEN_CORE_TABLES` 同步，`python3 audit-tools/agent_facts.py --check` 可校验是否漂移）。
 
 #### 4.2 语法与操作封禁
 
@@ -214,17 +222,17 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
       "id": "CTR-001-UI-LAYOUT-RESIZE",
       "category": "UI",
       "targetFiles": ["src/**/views/**/*.html", "src/**/components/**/*.tsx"],
-      "rule": "Every view in contributions must adhere to a defined layoutVariant and report height changes via window.OpenLearnPluginBridge.ui.resize({ height }).",
+      "rule": "Every view declared under manifest.contributes must target a real slot key and report height changes via window.OpenLearnPluginBridge.ui.resize(height) (positional number argument, not an object).",
       "antiPattern": "Hardcoded iframe height or missing resize event listener on dynamic content change.",
-      "remedy": "Add window.OpenLearnPluginBridge.ui.resize({ height: document.documentElement.scrollHeight }) inside ResizeObserver."
+      "remedy": "Add window.OpenLearnPluginBridge.ui.resize(document.documentElement.scrollHeight) inside ResizeObserver."
     },
     {
       "id": "CTR-002-WHITEBOARD-DUAL-TRACK",
       "category": "Whiteboard",
       "targetFiles": ["manifest.json", "src/**/*.ts"],
-      "rule": "Interactive whiteboard cards must be registered via custom view (storage/*.html). Pure shapes must use whiteboard.draw command. Direct SQL on whiteboard_elements is forbidden.",
+      "rule": "Interactive whiteboard cards must be registered via a custom view declared under manifest.contributes (e.g. contributes['teacher.dashboard.widget'][].view = 'dashboard.html'). Pure shapes must use the whiteboard.draw command. Direct SQL on whiteboard_elements is forbidden.",
       "antiPattern": "Writing SQL: INSERT INTO whiteboard_elements ...",
-      "remedy": "Dispatch command: await commandBus.dispatch('whiteboard.draw', { elements: [...] }) with whiteboard:draw capability."
+      "remedy": "Dispatch command: await commandBus.execute({ type: 'whiteboard.draw', payload: { elements: [...] } }) with the whiteboard:write capability declared in capabilitiesProposed."
     },
     {
       "id": "CTR-003-CLASSROOM-CONTEXT-NULLABLE",
@@ -238,7 +246,7 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
       "id": "CTR-004-SQL-GUARD-FORBIDDEN-TABLES",
       "category": "Database",
       "targetFiles": ["src/**/*.ts", "migrations/*.sql"],
-      "rule": "Worker/process plugins are restricted to plugin_<scopeId>_* tables. Accessing 36 core tables or using ATTACH/PRAGMA/VACUUM is blocked by SQL-Guard.",
+      "rule": "Worker/process plugins are restricted to plugin_<scopeId>_* tables. Accessing 40 core tables or using ATTACH/PRAGMA/VACUUM is blocked by SQL-Guard.",
       "antiPattern": "SELECT * FROM users; or UPDATE lessons SET status='closed';",
       "remedy": "Store private plugin data in ctx.db.table('data') or request core state mutations via CommandBus."
     },
@@ -256,7 +264,7 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
       "targetFiles": ["src/**/views/**/*.html", "src/**/views/**/*.js"],
       "rule": "High-frequency state synchronization from iframe views must be debounced (>= 500ms) with pre-diff checks. Direct localStorage/fetch is forbidden under opaque origin null.",
       "antiPattern": "Saving state on every mousemove/input without debounce, or calling window.localStorage.setItem().",
-      "remedy": "Use debounced bridge.state.set() with deep comparison against previous state."
+      "remedy": "Use debounced bridge.storage.set(key, value) with deep comparison against the previously persisted value."
     }
   ]
 }
@@ -268,12 +276,12 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
 
 | 异常现象 / 错误日志                                                                                            | 根因分析                                                                                     | 对应契约            | 纠正方案                                                                                         |
 | :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- | :------------------ | :----------------------------------------------------------------------------------------------- |
-| `WorkerCapabilityError: Capability denied ... empty manifestCapabilities, only 'get' methods allowed`          | 插件 `manifest.json` 的 `capabilitiesProposed` 声明为空数组，触发 Barrier 2 强制只读锁定     | **契约 5**          | 在 `manifest.json` 中声明业务所需的写入/执行能力（如 `storage:readwrite`、`classroom:write` 等） |
+| `WorkerCapabilityError: Capability denied ... empty manifestCapabilities, only 'get' methods allowed`          | 插件 `manifest.json` 的 `capabilitiesProposed` 声明为空数组，触发 Barrier 2 强制只读锁定     | **契约 5**          | 在 `manifest.json` 中声明业务所需的写入/执行能力（如 `vfs:write`、`whiteboard:write`、`plugin:write` 等合法 `capabilityRequired` 字符串） |
 | `Worker plugin is not permitted to access table "whiteboard_elements"`                                         | 插件直接通过 SQL 读写白板核心数据表，被 SQL-Guard 静态审计硬拦截                             | **契约 2 / 契约 4** | 改用命令总线派遣 `whiteboard.draw` 命令，由白板子系统统一执行                                    |
 | `HTTP 429 Too many requests, please slow down`                                                                 | 视图在学生输入或答题时未加防抖，连续发起写请求击穿全局写限流（180/min）或端点限流（120/min） | **契约 6**          | 增加 `>= 500ms` 的输入防抖，并在写操作前执行新旧值 diff 检查                                     |
-| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储           | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.state.get/set()`            |
-| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                               | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize({ height })`                        |
-| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                               | **契约 3**          | 使用空值合并语法：`const classId = context?.classId                                              |     | 'default'` |
+| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储           | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.storage.get/set(key, value)`（view 通道没有 `state` 命名空间） |
+| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                               | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize(height)`（**位置参数**）              |
+| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                               | **契约 3**          | 使用空值合并语法：`const classId = context?.classId \|\| 'default'` |
 
 ---
 

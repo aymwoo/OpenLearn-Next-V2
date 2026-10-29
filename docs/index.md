@@ -169,6 +169,13 @@ tutorials/plugin-courseware-extensions
 
 ```{toctree}
 :maxdepth: 2
+:caption: 🤖 AI 插件开发手册 (Agent Plugin Handbook)
+
+agent/agent-handbook
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: 💡 编译示例 (Examples)
 
 examples/verifiable-examples

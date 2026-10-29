@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.5 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5`
 
 OpenLearn V2 插件系统使用严密的 7 状态确定性有限状态机（Deterministic Finite State Machine）管理插件从安装到卸载的全生命周期。本文档详细记录插件的状态转换图、校验规则、转换流程以及中间件机制。
 
@@ -51,7 +51,7 @@ stateDiagram-v2
 
 ### 合法转换矩阵 (`VALID_TRANSITIONS`，实现在 `packages/core/plugin-host/base.ts`)
 
-实现在 `packages/core/plugin-host/index.ts`。任意未列在表中的状态转换均会被 `validatePluginStateTransition()` 拦截并抛出 `IllegalStateTransitionError`：
+实现在 `packages/core/plugin-host/base.ts`（`index.ts` 只是再导出）。任意未列在表中的状态转换均会被 `validatePluginStateTransition()` 拦截并抛出 `IllegalStateTransitionError`：
 
 ```typescript
 const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {

@@ -2,7 +2,7 @@
 
 <!-- doc-version: sdk=3.7.5 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.4`
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5`
 
 OpenLearn V2 提供了双层扩展点架构：
 

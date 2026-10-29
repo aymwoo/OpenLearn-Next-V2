@@ -67,6 +67,9 @@ audit-tools/reports/
 audit-tools/__pycache__/
 .qoder/
 
+# Sphinx 构建时在 docs/ 下产生的 Python 缓存（conf.py 的 _slug 模块）
+docs/__pycache__/
+
 
 # 金丝雀测试临时插件目录（崩溃残留防护）
 server/__tests__/canary/.tmp-plugins-*
