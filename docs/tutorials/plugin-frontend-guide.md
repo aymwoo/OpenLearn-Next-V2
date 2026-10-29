@@ -1,6 +1,6 @@
 # 前端插件指南：加载、上下文与扩展点
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4` / 平台 `v0.7.4+`
 >

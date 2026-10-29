@@ -1,6 +1,6 @@
 # 完整 DI Token 与 Service API 字典
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.7.7`。
 > 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts` 统一导出。

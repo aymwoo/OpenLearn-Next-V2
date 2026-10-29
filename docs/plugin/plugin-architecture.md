@@ -1,6 +1,6 @@
 # 插件宿主架构与沙箱隔离机制 (Plugin Architecture)
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 
