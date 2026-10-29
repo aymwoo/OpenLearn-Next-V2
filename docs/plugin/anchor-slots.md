@@ -1,6 +1,6 @@
 # 锚点扩展槽目录 (Anchor Extension Slots)
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4` / 平台 `v0.2.6+`
 >

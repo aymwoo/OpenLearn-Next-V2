@@ -527,6 +527,21 @@ async function cmdBuild(args) {
         }
       }
 
+      // Check if manifest declares contributes or view but no src/frontend.tsx
+      if (!hasFrontend && manifest) {
+        const contributes = manifest.contributes;
+        const hasContributes = contributes && typeof contributes === 'object' && Object.keys(contributes).length > 0;
+        const hasView =
+          !!manifest.view ||
+          (hasContributes &&
+            Object.values(contributes).some((items) => Array.isArray(items) && items.some((item) => !!item?.view)));
+        if (hasContributes || hasView) {
+          console.log(
+            `  ${info} Manifest declares contributes/view without src/frontend.tsx (building as declarative view-only plugin)`,
+          );
+        }
+      }
+
       // Package ZIP
       const zip = new JSZip();
       zip.file('index.js', readFileSync(join(distDir, 'index.js'), 'utf8'));

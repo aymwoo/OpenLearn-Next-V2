@@ -271,19 +271,11 @@ export function PluginSandboxIframeView({
     : `relative w-full h-full flex flex-col min-h-0 bg-white dark:bg-slate-900 ${className || ''}`;
   const containerStyle: React.CSSProperties = {
     ...(style || {}),
-    ...(isFloating
-      ? { height: `${iframeHeight ?? 180}px` }
-      : iframeHeight
-        ? { minHeight: `${iframeHeight}px` }
-        : {}),
+    ...(isFloating ? { height: `${iframeHeight ?? 180}px` } : iframeHeight ? { minHeight: `${iframeHeight}px` } : {}),
   };
 
   return (
-    <div
-      className={containerClassName}
-      style={containerStyle}
-      data-plugin-view-variant={variant}
-    >
+    <div className={containerClassName} style={containerStyle} data-plugin-view-variant={variant}>
       {!isLoaded && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-2xs transition-opacity duration-200">
           <Loader2 size={24} className="animate-spin text-indigo-500 mb-2" />

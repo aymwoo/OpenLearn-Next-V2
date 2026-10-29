@@ -1,6 +1,6 @@
 # Courseware Attempts API Contract
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > 本文档汇总 **互动课件 (courseware) / 学生作答 (attempt) / 成绩提交流水** 的全部 HTTP 端点契约快照。
 >

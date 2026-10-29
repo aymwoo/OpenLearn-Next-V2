@@ -1,6 +1,6 @@
 # 平台数据表参考（Platform Data Tables）
 
-<!-- doc-version: sdk=3.7.4 -->
+<!-- doc-version: sdk=3.7.5 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.4`
 > 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 82 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。

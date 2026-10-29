@@ -36,8 +36,7 @@ export function PluginCardRenderer({
   // NullExtensionComponent 是 manifest 数据型贡献的占位组件（() => null），
   // 不代表可渲染的 React UI。与 ExtensionPointRenderer 保持同一判定，
   // 否则 manifest 声明的 view（沙箱页面）永远走不到下面的分支。
-  const hasReactComponent =
-    !!ext && typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
+  const hasReactComponent = !!ext && typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
 
   // Create container ref and use useEffect to call render
   const containerRef = useRef<HTMLDivElement>(null);

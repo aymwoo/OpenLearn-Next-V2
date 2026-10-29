@@ -654,7 +654,11 @@ export class FrontendPluginHost {
     }
   }
 
-  async activateRemotePlugin(pluginId: string, manifest: FrontendPluginManifest): Promise<void> {
+  async activateRemotePlugin(
+    pluginId: string,
+    manifest: FrontendPluginManifest,
+    options?: { hasFrontend?: boolean },
+  ): Promise<void> {
     const store = usePluginHostStore.getState();
 
     if (!manifest || typeof manifest.id !== 'string' || !manifest.id) {
@@ -676,6 +680,24 @@ export class FrontendPluginHost {
     // （必须在 try 之前缓存：失败的 manifest 同样要留给重试路径用）
     this.manifests.set(pluginId, manifest);
 
+    // manifest 声明式贡献留在父页面（提前注册：同 (slot, id) 幂等覆盖，且不依赖前端 bundle 结果）。
+    // 即使前端 bundle 404 或无前端产物，声明式贡献也能正常展示，并在 catch 块中被 preserveManifestContributions 正确保留。
+    this.registerManifestContributions(pluginId, manifest);
+
+    // 若无前端产物（如纯 view 沙箱插件或纯声明式插件），无需请求 frontend.js
+    const hasFrontend = options?.hasFrontend ?? existingPlugin?.hasFrontend ?? true;
+    if (!hasFrontend) {
+      this.pluginModules.set(pluginId, {
+        manifest,
+        activate: async () => undefined,
+        deactivate: async () => undefined,
+      });
+      store.updatePluginState(pluginId, PluginState.ACTIVE);
+      resetPluginBreaker(pluginId);
+      store.clearPluginError(pluginId);
+      return;
+    }
+
     try {
       const url = `/plugins/${pluginId}/frontend.js`;
       const res = await fetch(url, { credentials: 'same-origin' });
@@ -688,9 +710,6 @@ export class FrontendPluginHost {
       if ((window as any).HostSharedDeps) {
         sourceCode = transformBareModuleImports(sourceCode);
       }
-
-      // manifest 声明式贡献留在父页面。
-      this.registerManifestContributions(pluginId, manifest);
 
       // 实际执行模式只看**服务端求值后的** store 值（来源：GET /api/plugins 的
       // execution_mode 列，由 resolvePluginExecutionMode 计算）。
@@ -992,7 +1011,7 @@ export class FrontendPluginHost {
       if (pluginInfo.executionMode === 'worker') {
         await this.activatePlugin(pluginId);
       } else if (manifest) {
-        await this.activateRemotePlugin(pluginId, manifest);
+        await this.activateRemotePlugin(pluginId, manifest, { hasFrontend: pluginInfo.hasFrontend });
       } else if (pluginInfo.executionMode === 'inline') {
         await this.activatePlugin(pluginId);
       } else {

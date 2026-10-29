@@ -78,6 +78,8 @@ export interface FrontendPluginInfo {
   /** L-1 P1 阶段 3：新增 'process'（子进程隔离）。'legacy' 是 vm 时代的残留取值。 */
   executionMode: 'inline' | 'worker' | 'process' | 'legacy';
   icon?: string;
+  /** 是否包含独立前端 bundle（frontend.js）。无前端 bundle 的纯 view 插件设为 false */
+  hasFrontend?: boolean;
   /**
    * 插件 manifest 声明的 `capabilitiesProposed`（字符串数组）。
    *
