@@ -46,9 +46,7 @@ export function ClassroomOverlays(props: ClassroomOverlaysProps) {
   const liveStudentParam =
     props.liveStudentParam !== undefined ? props.liveStudentParam : (appData?.liveStudentParam ?? null);
   const isInteractionLocked =
-    props.isInteractionLocked !== undefined
-      ? props.isInteractionLocked
-      : (appData?.isInteractionLocked ?? false);
+    props.isInteractionLocked !== undefined ? props.isInteractionLocked : (appData?.isInteractionLocked ?? false);
   const addToast = props.addToast ?? appData?.addToast ?? (() => {});
   const setReadNotifications = props.setReadNotifications ?? appData?.setReadNotifications ?? (() => {});
 

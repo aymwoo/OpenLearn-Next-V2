@@ -115,7 +115,13 @@ describe('PluginSandboxIframeView component', () => {
 
   it('锁定时页面级 panel 槽位覆盖拦截罩（不下滑收起）', () => {
     render(
-      <PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="学生看板" slot="student.view" locked />,
+      <PluginSandboxIframeView
+        pluginId={PLUGIN_ID}
+        view="dashboard.html"
+        label="学生看板"
+        slot="student.view"
+        locked
+      />,
     );
 
     const iframe = screen.getByTitle('学生看板') as HTMLIFrameElement;
@@ -144,7 +150,8 @@ describe('PluginSandboxIframeView component', () => {
     expect(screen.queryByTestId('plugin-view-lock-collapsed')).toBeNull();
   });
 
-  it('responds to "ready" postMessage with "init" payload', async () => {    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" slot="teacher.tab" />);
+  it('responds to "ready" postMessage with "init" payload', async () => {
+    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" slot="teacher.tab" />);
 
     const iframe = screen.getByTitle('测试看板') as HTMLIFrameElement;
     expect(iframe.contentWindow).toBeTruthy();
