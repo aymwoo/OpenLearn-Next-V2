@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **插件声明式贡献（contributes/view）注册时序前移与纯 view 插件支持（Issue #350）**：
+  - **时序前移与贡献保全**：`FrontendPluginHost.activateRemotePlugin` 此前在 `fetch('/plugins/:id/frontend.js')` 之后才调用 `registerManifestContributions`；当 `frontend.js` 请求失败（如 404）时直接跳转到 `catch` 块，导致 `preserveManifestContributions: true` 尝试保留的声明式贡献从未注册，插件 Tab / 浮层静默消失。现将声明式贡献注册提升至 `fetch` 之前，确保失败时贡献依然得以保留，并展示显式错误重试态（对齐 #292 契约）。
+  - **纯 view / 声明式插件激活打通**：解开 `useClassroomSlice.ts` 中的 `!plugin.has_frontend` 硬拦截，无前端 bundle 的纯 view 插件在激活时透传 `{ hasFrontend: false }`，直接完成声明式贡献挂载并置为 `ACTIVE` 状态，无需发起多余的 `frontend.js` 网络请求；反激活时同步执行清理。
+  - **CLI 构建友好提示**：SDK `cli.mjs` 在打包时若检测到 manifest 包含 `contributes` 或 `view` 但缺少 `src/frontend.tsx`，主动输出告知信息，标明按纯 view 声明式插件打包。
+  - 测试：新增 `src/plugin-host/__tests__/declarative-and-view-only-activation.test.ts`（纯 view 插件激活/反激活、404 保留声明式贡献、retry 恢复共 3 例全绿）。
+
 - **焦点作品对比大屏（SpotlightDualWorkArena）单份作品空指针异常修复**：
   - **空安全兜底与插槽占位**：当课堂提交作品仅有 1 份时，`usePeerReviewData` 将 `workA` 赋为该作品、`workB` 赋为 `null`；此前 `SpotlightDualWorkArena` 在顶部副标题及卡片渲染时无条件解构 `workB.studentName`，导致教师在大屏开启生生互评赏析弹窗时触发 `Cannot read properties of null (reading 'studentName')` 致命渲染异常。
   - **优雅降级与防御性渲染**：在 `SpotlightDualWorkArena` 中为 `workA` 与 `workB` 提供空安全断言与虚线占位卡片（`待选作品 A/B` 提示并引导通过作品池切换设为焦点），顶部副标题加入缺失作品兜底文案，`PeerReviewShowcaseModal` 同步移除强制类型转换。

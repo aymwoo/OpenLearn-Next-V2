@@ -253,9 +253,6 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
     // 1. Activate active plugins (re-activate when version changes after in-place update)
     const activePluginsFromServer = plugins.filter((p) => p.status === 'active');
     for (const plugin of activePluginsFromServer) {
-      if (!plugin.has_frontend) {
-        continue;
-      }
       if (activatingPluginsRef.current.has(plugin.id)) {
         continue;
       }
@@ -280,6 +277,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
             // Worker 模式激活时，ServiceHost Barrier 2 依赖这份能力声明来
             // 决定是否放行非 get* 方法；缺失则回退为空数组（只读）。
             capabilitiesProposed: resolveDeclaredCapabilities(plugin),
+            hasFrontend: plugin.has_frontend,
           });
         } else if (versionChanged) {
           // Keep store entry but refresh version stamp
@@ -293,6 +291,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
                       version: plugin.version ?? '',
                       name: plugin.name,
                       capabilitiesProposed: declaredCapabilities,
+                      hasFrontend: plugin.has_frontend,
                     }
                   : p,
               ),
@@ -304,7 +303,7 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
         try {
           const manifest = JSON.parse(plugin.manifest);
           host
-            .activateRemotePlugin(plugin.id, manifest)
+            .activateRemotePlugin(plugin.id, manifest, { hasFrontend: plugin.has_frontend })
             .catch((err) => {
               console.error(`[App] Failed to activate remote plugin "${plugin.name}":`, err);
             })
@@ -330,9 +329,6 @@ export function useClassroomSlice(params: ClassroomSliceParams) {
     // 2. Deactivate deactivated plugins
     const deactivatedPluginsFromServer = plugins.filter((p) => p.status !== 'active');
     for (const plugin of deactivatedPluginsFromServer) {
-      if (!plugin.has_frontend) {
-        continue;
-      }
       const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
       if (localPlugin && localPlugin.state === PluginState.ACTIVE) {
         host.deactivatePlugin(plugin.id).catch((err) => {
