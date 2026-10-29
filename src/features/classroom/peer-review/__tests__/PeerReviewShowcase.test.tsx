@@ -345,12 +345,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
 
     it('当只有一份作品（workB 为 null）时安全渲染作品 A 及待选作品 B 占位卡片，不抛异常', () => {
       render(
-        <SpotlightDualWorkArena
-          workA={sampleWorkA}
-          workB={null}
-          annotations={sampleAnnotations}
-          isAnonymous={false}
-        />,
+        <SpotlightDualWorkArena workA={sampleWorkA} workB={null} annotations={sampleAnnotations} isAnonymous={false} />,
       );
 
       expect(screen.getByText('大屏焦点作品对比赏析')).toBeDefined();
@@ -362,13 +357,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
     });
 
     it('当两份作品均为空时安全返回空，不抛异常', () => {
-      const { container } = render(
-        <SpotlightDualWorkArena
-          workA={null}
-          workB={null}
-          annotations={[]}
-        />,
-      );
+      const { container } = render(<SpotlightDualWorkArena workA={null} workB={null} annotations={[]} />);
       expect(container.firstChild).toBeNull();
     });
   });

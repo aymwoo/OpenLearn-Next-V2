@@ -22,7 +22,7 @@ async function getUploadLimitMb(): Promise<number> {
   }
   return cachedUploadLimitMb ?? DEFAULT_UPLOAD_LIMIT_MB;
 }
-import { PowerPointViewer, type PowerPointViewerHandle, type LocaleCatalogEntry, LOCALE_CATALOG } from 'pptx-react-viewer';
+import { PowerPointViewer, type PowerPointViewerHandle, type LocaleCatalogEntry } from 'pptx-react-viewer';
 import { translationsEn, keyToLabel } from 'pptx-react-viewer/i18n';
 import 'pptx-react-viewer/styles';
 import i18n from 'i18next';
@@ -38,7 +38,13 @@ import { initReactI18next } from 'react-i18next';
 const PPTX_VIEWER_CUSTOMIZATION = { hiddenPanels: ['inspector'] } as const;
 
 /** PowerPointViewer 可用语言包列表单例：避免每次渲染生成新数组破坏浅比较 */
-const PPTX_AVAILABLE_LOCALES: LocaleCatalogEntry[] = [...LOCALE_CATALOG];
+const PPTX_AVAILABLE_LOCALES: LocaleCatalogEntry[] = [
+  { code: 'en', label: 'English', nativeLabel: 'English' },
+  { code: 'fr', label: 'French', nativeLabel: 'Français' },
+  { code: 'es', label: 'Spanish', nativeLabel: 'Español' },
+  { code: 'de', label: 'German', nativeLabel: 'Deutsch' },
+  { code: 'zh-CN', label: 'Chinese (Simplified)', nativeLabel: '简体中文' },
+];
 
 // 确保 i18next 实例安全初始化，防止 pptx-react-viewer 内部访问 i18n.options.resources 时报错。
 // 必须喂入 viewer 自带的英文词典（扁平 `pptx.*` 键）：否则 react-i18next 查不到词条会直接
