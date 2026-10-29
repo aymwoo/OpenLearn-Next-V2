@@ -278,15 +278,17 @@ interface IPluginLogger {
 ```{warning} 不要用 system.log 命令
 `IPluginLogger` 是 V2.5 引入来**替代** `system.log` 命令的，V3.0 已移除该命令。
 
-````
+```
 
 ---
 
 ## 10. `ctx.contributions`（`ContributionAccessor`）
 
 ```typescript
-interface ContributionAccessor { list(): ContributionSummary[]; }
-````
+interface ContributionAccessor {
+  list(): ContributionSummary[];
+}
+```
 
 有 `contributionRegistry` 时返回 `registry.summary(manifest.id)`；没有（如测试环境）则从 `manifest.contributes`
 直接构建：

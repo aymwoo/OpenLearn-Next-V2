@@ -60,11 +60,11 @@ npx @openlearn/plugin-sdk build --key publisher.pem
 npx @openlearn/plugin-sdk sign --key publisher.pem my-plugin.zip
 ```
 
-| 参数 | 含义 |
-| :--- | :--- |
-| `--watch` / `-w` | 监听源码变化自动重建 |
-| `--key <file>` / `--sign <file>` / `-k <file>` | Ed25519 私钥 PEM 路径；`build` 时给则一并签名 |
-| `--publisher <name>` | 签名里的发布者名；不给则取 `manifest.author`，再不给则 `community` |
+| 参数                                           | 含义                                                               |
+| :--------------------------------------------- | :----------------------------------------------------------------- |
+| `--watch` / `-w`                               | 监听源码变化自动重建                                               |
+| `--key <file>` / `--sign <file>` / `-k <file>` | Ed25519 私钥 PEM 路径；`build` 时给则一并签名                      |
+| `--publisher <name>`                           | 签名里的发布者名；不给则取 `manifest.author`，再不给则 `community` |
 
 > `build` 需要 `jszip`（作为 devDependency）。缺了会明确报错
 > `Error: jszip not found. Install it: npm install --save-dev jszip`。
@@ -135,9 +135,9 @@ function walk(dir) {
 }
 if (statSync(root).isDirectory()) walk(root);
 
-await zip.generateAsync({ type: 'nodebuffer' }).then((b) =>
-  import('node:fs').then((fs) => fs.writeFileSync(zipPath, b)),
-);
+await zip
+  .generateAsync({ type: 'nodebuffer' })
+  .then((b) => import('node:fs').then((fs) => fs.writeFileSync(zipPath, b)));
 ```
 
 > 宿主安装时会对 `storage/` 条目做 **Zip Slip 校验**（路径含 `..` 直接拒绝），
@@ -192,21 +192,21 @@ npx @openlearn/plugin-sdk build --key publisher.pem
 
 ## 6. 排障速查
 
-| 现象 | 根因 | 修法 |
-| :--- | :--- | :--- |
-| `Error: jszip not found` | 缺 `jszip` 依赖 | `npm i -D jszip` |
-| `Error: Private key file not found: xxx.pem` | `--key` 路径相对 cwd 解析 | 用相对项目根的路径，或先 `cd` 到项目根 |
-| `createPrivateKey` 抛错 | 用的是 RSA 密钥 | 换成 Ed25519：`openssl genpkey -algorithm ed25519` |
-| 装上后前端白屏，控制台 `Uncaught SyntaxError: Cannot use import statement` | `frontend.js` 里有裸模块说明符 | 用 SDK ≥ 3.7.4 构建；自检产物里有没有 `import 'xxx'` |
-| 装上后报 `missing activate function` | SDK 版本太老，生成的是 `export default function Component()` 模板 | 升到 SDK ≥ 3.7.5 并重新 `init` |
-| `ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'` | SDK < 3.7.5 缺 `uuid` 运行时依赖 | 升 SDK 到 3.7.5；临时绕过是手工在 `package.json` 补 `"uuid": "^14.0.2"` |
-| 插件装上了但界面空白，**无任何报错** | manifest 里声明的 `view` HTML 没进 ZIP（`build` 不收 `views/`） | 见 §3，手工把视图 HTML 加进 ZIP；并确认 `manifest.contributes` 的键没被 zod strip |
-| 图片/模板读不到，404 | `storage/` 资源没进 ZIP | 同上 |
-| `Security Violation: Zip Slip detected in asset path "..."` | ZIP 条目路径含 `..` | 重新打包，路径不要带 `..` |
-| `ZIP bomb prevention: storage assets total N bytes exceeds limit` | `storage/` 解压后超限 | 压缩资源体积或改用外链 |
-| `manifest.id 不能包含 ":"` | actor 命名空间保护 | 改 id（详见 {doc}`manifest`） |
-| 安装后插件状态是 `ERROR` | manifest 校验失败 | 看安装日志的具体字段错误，对照 {doc}`manifest` §1 字段表 |
-| 签名校验失败 | 产物在签名之后被改过 | 重新 `build --key` 一次，或先 `sign` 再上传 |
+| 现象                                                                       | 根因                                                              | 修法                                                                              |
+| :------------------------------------------------------------------------- | :---------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `Error: jszip not found`                                                   | 缺 `jszip` 依赖                                                   | `npm i -D jszip`                                                                  |
+| `Error: Private key file not found: xxx.pem`                               | `--key` 路径相对 cwd 解析                                         | 用相对项目根的路径，或先 `cd` 到项目根                                            |
+| `createPrivateKey` 抛错                                                    | 用的是 RSA 密钥                                                   | 换成 Ed25519：`openssl genpkey -algorithm ed25519`                                |
+| 装上后前端白屏，控制台 `Uncaught SyntaxError: Cannot use import statement` | `frontend.js` 里有裸模块说明符                                    | 用 SDK ≥ 3.7.4 构建；自检产物里有没有 `import 'xxx'`                              |
+| 装上后报 `missing activate function`                                       | SDK 版本太老，生成的是 `export default function Component()` 模板 | 升到 SDK ≥ 3.7.5 并重新 `init`                                                    |
+| `ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'`                         | SDK < 3.7.5 缺 `uuid` 运行时依赖                                  | 升 SDK 到 3.7.5；临时绕过是手工在 `package.json` 补 `"uuid": "^14.0.2"`           |
+| 插件装上了但界面空白，**无任何报错**                                       | manifest 里声明的 `view` HTML 没进 ZIP（`build` 不收 `views/`）   | 见 §3，手工把视图 HTML 加进 ZIP；并确认 `manifest.contributes` 的键没被 zod strip |
+| 图片/模板读不到，404                                                       | `storage/` 资源没进 ZIP                                           | 同上                                                                              |
+| `Security Violation: Zip Slip detected in asset path "..."`                | ZIP 条目路径含 `..`                                               | 重新打包，路径不要带 `..`                                                         |
+| `ZIP bomb prevention: storage assets total N bytes exceeds limit`          | `storage/` 解压后超限                                             | 压缩资源体积或改用外链                                                            |
+| `manifest.id 不能包含 ":"`                                                 | actor 命名空间保护                                                | 改 id（详见 {doc}`manifest`）                                                     |
+| 安装后插件状态是 `ERROR`                                                   | manifest 校验失败                                                 | 看安装日志的具体字段错误，对照 {doc}`manifest` §1 字段表                          |
+| 签名校验失败                                                               | 产物在签名之后被改过                                              | 重新 `build --key` 一次，或先 `sign` 再上传                                       |
 
 ---
 
@@ -238,18 +238,18 @@ unzip -p dist/my-plugin.zip manifest.json | grep -q '"version"'
 
 ## 取证
 
-| 结论 | 位置 |
-| :--- | :--- |
-| CLI 的三个子命令与参数 | `packages/plugin-sdk/cli.mjs` → `main`（L669–L712） |
-| ZIP 只装 `index.js` / `manifest.json` / `frontend.js` | `packages/plugin-sdk/cli.mjs` → `build`（L546–L551） |
-| 私钥参数 `--key` / `--sign` / `-k`，缺失即报错 | `packages/plugin-sdk/cli.mjs` → `build`（L557–L566） |
-| `--publisher` 与发布者回退顺序 | `packages/plugin-sdk/cli.mjs` → `build`（L559–L560） |
-| 签名流程与 attestation 载荷格式 | `packages/plugin-sdk/cli.mjs` → `signZip` / `buildAttestationPayload`（L227–L259） |
-| attestation 前缀 `openlearn-plugin-attestation-v2` | `packages/plugin-sdk/cli.mjs` → `ATTESTATION_V2_PREFIX`（L227） |
-| 后端 external 依赖与 SDK 不打包 | `packages/plugin-sdk/cli.mjs` → `build`（L411–L420 注释段） |
-| 前端 external：react / react-dom / recharts / lucide-react | `packages/plugin-sdk/cli.mjs` → `build`（L451 附近） |
-| 前端裸模块守卫 | `packages/plugin-sdk/cli.mjs` → `frontendBareSpecifierGuard` |
-| 宿主解出 `storage/` 条目 | `packages/core/plugin-host/install.ts` → `storageEntries`（L358–L360） |
-| Zip Slip 校验与 ZIP bomb 限额 | `packages/core/plugin-host/install.ts`（L365–L400） |
-| `manifest.id` 禁止含 `:` | `packages/core/esm-loader/manifest-schema.ts` → `manifestSchema`（L795） |
-| SDK 版本沿革（3.7.0/3.7.1/3.7.4/3.7.5） | `packages/plugin-sdk/CHANGELOG.md` |
+| 结论                                                       | 位置                                                                               |
+| :--------------------------------------------------------- | :--------------------------------------------------------------------------------- |
+| CLI 的三个子命令与参数                                     | `packages/plugin-sdk/cli.mjs` → `main`（L669–L712）                                |
+| ZIP 只装 `index.js` / `manifest.json` / `frontend.js`      | `packages/plugin-sdk/cli.mjs` → `build`（L546–L551）                               |
+| 私钥参数 `--key` / `--sign` / `-k`，缺失即报错             | `packages/plugin-sdk/cli.mjs` → `build`（L557–L566）                               |
+| `--publisher` 与发布者回退顺序                             | `packages/plugin-sdk/cli.mjs` → `build`（L559–L560）                               |
+| 签名流程与 attestation 载荷格式                            | `packages/plugin-sdk/cli.mjs` → `signZip` / `buildAttestationPayload`（L227–L259） |
+| attestation 前缀 `openlearn-plugin-attestation-v2`         | `packages/plugin-sdk/cli.mjs` → `ATTESTATION_V2_PREFIX`（L227）                    |
+| 后端 external 依赖与 SDK 不打包                            | `packages/plugin-sdk/cli.mjs` → `build`（L411–L420 注释段）                        |
+| 前端 external：react / react-dom / recharts / lucide-react | `packages/plugin-sdk/cli.mjs` → `build`（L451 附近）                               |
+| 前端裸模块守卫                                             | `packages/plugin-sdk/cli.mjs` → `frontendBareSpecifierGuard`                       |
+| 宿主解出 `storage/` 条目                                   | `packages/core/plugin-host/install.ts` → `storageEntries`（L358–L360）             |
+| Zip Slip 校验与 ZIP bomb 限额                              | `packages/core/plugin-host/install.ts`（L365–L400）                                |
+| `manifest.id` 禁止含 `:`                                   | `packages/core/esm-loader/manifest-schema.ts` → `manifestSchema`（L795）           |
+| SDK 版本沿革（3.7.0/3.7.1/3.7.4/3.7.5）                    | `packages/plugin-sdk/CHANGELOG.md`                                                 |

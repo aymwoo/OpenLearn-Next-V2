@@ -255,7 +255,7 @@ site_settings agent_conversations classroom_sessions lesson_quiz_submissions
 courseware_score_config demo_data_registry whiteboard_elements student_point_logs
 lianyun_research_activities lianyun_research_groups lianyun_research_submissions lianyun_research_reviews
 
-````
+```
 
 ```{warning} 读也不行
 黑名单分两种文案但**读写一律拒**：
@@ -265,7 +265,7 @@ lianyun_research_activities lianyun_research_groups lianyun_research_submissions
 
 要拿学生/课时/作业数据，走**命令总线**（`ctx.services.commandBus.execute`）或平台服务，
 不要直查这些表。守卫做**全词比对**，注释混淆绕不过去。
-````
+```
 
 ### 5.4 命名空间判定
 
@@ -356,11 +356,11 @@ ctx.services.storage.delete(key): Promise<void>      // 不存在则 no-op
 
 ## 8. 卸载与数据策略
 
-| 事件 | 行为 |
-| :--- | :--- |
-| 卸载选 `keep`（默认） | 私有表与 `plugin_declared_migrations` 记录**保留**，重装可增量续跑 |
-| 卸载选 `purge` | `dropAllTables()` + 元表一并清理 |
-| `dropAllTables()` | 只删 `LIKE '<ownPrefix>%'` 的表，且逐个二次校验 `/^plugin_[A-Za-z0-9_]+$/` |
+| 事件                  | 行为                                                                       |
+| :-------------------- | :------------------------------------------------------------------------- |
+| 卸载选 `keep`（默认） | 私有表与 `plugin_declared_migrations` 记录**保留**，重装可增量续跑         |
+| 卸载选 `purge`        | `dropAllTables()` + 元表一并清理                                           |
+| `dropAllTables()`     | 只删 `LIKE '<ownPrefix>%'` 的表，且逐个二次校验 `/^plugin_[A-Za-z0-9_]+$/` |
 
 `plugin_storage` 与 `plugin_config` 的清理走 `orphan-data.ts` / `uninstall-data-policy` 路径。
 
@@ -382,15 +382,18 @@ ctx.services.storage.delete(key): Promise<void>      // 不存在则 no-op
 
 ## 取证
 
-| 论断 | 来源 |
-| :--- | :--- |
-| `PluginDatabaseAPI` 4 方法签名 | `packages/core/plugin-host/types.ts` |
-| 表前缀规则、`ensureTable`/`migrate` 实现、`dropAllTables` 二次校验 | `packages/core/plugin-host/context-builder.ts`（`dbApi`）+ `plugin-tables.ts`（`pluginTablePrefix` / `listAllowedPluginTablePrefixes` / `isSafePluginTablePrefix`） |
-| SEC 标识符与 schema 校验文案 | `context-builder.ts`（`SQL_IDENTIFIER_PATTERN` / `assertSafeSqlIdentifier` / `assertSafeCreateTableSchema`） |
-| 两条路径对照、事务仅 Inline、Worker `exec`/`pendingPromises`/无事务 | `docs/reference/plugin-database-api.md` §1–§2、§4–§5 |
-| 声明式迁移 7 项规范、ZIP 不打包 `migrations/` 的分工表 | 同上 §3 + `packages/plugin-sdk/cli.mjs` 打包段 + `plugin-host/lifecycle.ts`（`runPluginDeclarativeMigrations`）+ `plugin-host/declarative-migrator.ts` |
-| `FORBIDDEN_CORE_TABLES`、`FORBIDDEN_OPERATIONS`、`assertPluginSqlAllowed` 全流程、元数据表精准放行 | `packages/core/plugin-host/sql-guard.ts` |
-| `whiteboard_elements` 必须走 `whiteboard.draw` | `docs/tutorials/plugin-development-tutorial.md` §3.3 警示框 |
-| `wrapStorage` 用 `manifest.id` 作 `plugin_id` | `context-builder.ts` + `docs/reference/plugin-database-api.md` §4 |
-| 卸载 keep/purge 策略 | `packages/core/plugin-host/uninstall.ts`、`orphan-data.ts`、`__tests__/uninstall-data-policy.test.ts` |
+| 论断                                                                                               | 来源                                                                                                                                                                |
+| :------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PluginDatabaseAPI` 4 方法签名                                                                     | `packages/core/plugin-host/types.ts`                                                                                                                                |
+| 表前缀规则、`ensureTable`/`migrate` 实现、`dropAllTables` 二次校验                                 | `packages/core/plugin-host/context-builder.ts`（`dbApi`）+ `plugin-tables.ts`（`pluginTablePrefix` / `listAllowedPluginTablePrefixes` / `isSafePluginTablePrefix`） |
+| SEC 标识符与 schema 校验文案                                                                       | `context-builder.ts`（`SQL_IDENTIFIER_PATTERN` / `assertSafeSqlIdentifier` / `assertSafeCreateTableSchema`）                                                        |
+| 两条路径对照、事务仅 Inline、Worker `exec`/`pendingPromises`/无事务                                | `docs/reference/plugin-database-api.md` §1–§2、§4–§5                                                                                                                |
+| 声明式迁移 7 项规范、ZIP 不打包 `migrations/` 的分工表                                             | 同上 §3 + `packages/plugin-sdk/cli.mjs` 打包段 + `plugin-host/lifecycle.ts`（`runPluginDeclarativeMigrations`）+ `plugin-host/declarative-migrator.ts`              |
+| `FORBIDDEN_CORE_TABLES`、`FORBIDDEN_OPERATIONS`、`assertPluginSqlAllowed` 全流程、元数据表精准放行 | `packages/core/plugin-host/sql-guard.ts`                                                                                                                            |
+| `whiteboard_elements` 必须走 `whiteboard.draw`                                                     | `docs/tutorials/plugin-development-tutorial.md` §3.3 警示框                                                                                                         |
+| `wrapStorage` 用 `manifest.id` 作 `plugin_id`                                                      | `context-builder.ts` + `docs/reference/plugin-database-api.md` §4                                                                                                   |
+| 卸载 keep/purge 策略                                                                               | `packages/core/plugin-host/uninstall.ts`、`orphan-data.ts`、`__tests__/uninstall-data-policy.test.ts`                                                               |
+
+```
+
 ```

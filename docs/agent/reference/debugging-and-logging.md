@@ -73,12 +73,12 @@ export async function activate(ctx: PluginContext): Promise<void> {
 
 **级别怎么选**
 
-| 级别 | 用途 | 会不会被脱敏后仍保留 |
-| :--- | :--- | :--- |
-| `debug` | 排查用的细节，正常跑时不该刷屏 | 会（与所有级别一样） |
-| `info` | 关键生命周期事件（激活、注册、迁移完成） | 会 |
-| `warn` | 降级、兜底、边界情况 | 会 |
-| `error` | 真的失败了 | 会 |
+| 级别    | 用途                                     | 会不会被脱敏后仍保留 |
+| :------ | :--------------------------------------- | :------------------- |
+| `debug` | 排查用的细节，正常跑时不该刷屏           | 会（与所有级别一样） |
+| `info`  | 关键生命周期事件（激活、注册、迁移完成） | 会                   |
+| `warn`  | 降级、兜底、边界情况                     | 会                   |
+| `error` | 真的失败了                               | 会                   |
 
 **`meta` 是第二参数**，不要拼进 message 字符串 ——
 `ctx.log.info('加载了 ' + n + ' 条')` 无法按字段检索，
@@ -162,10 +162,10 @@ ORDER BY created_at DESC;
 
 平台为插件收集**命令级指标**（不需要插件配合）：
 
-| 指标 | 采集点 |
-| :--- | :--- |
+| 指标                         | 采集点                                          |
+| :--------------------------- | :---------------------------------------------- |
 | 命令执行次数 / 成功率 / 耗时 | `recordPluginCommand(pluginId, ok, durationMs)` |
-| 事件发布次数 | `recordPluginEvent(source)` |
+| 事件发布次数                 | `recordPluginEvent(source)`                     |
 
 指标条目上限 **200**（`MAX_PLUGIN_METRIC_ENTRIES`），超出用 `__overflow__` 桶聚合。
 `pluginId` 从 actor id 或命令类型里反解
@@ -192,12 +192,12 @@ import { recordSecurityAudit } from '@openlearn/plugin-sdk';
 
 ## 7. 开发环境开关
 
-| 环境变量 | 作用 |
-| :--- | :--- |
-| `DEBUG_COMMAND_BUS=true` | 打印命令总线执行日志 |
-| `DEBUG=commandbus` | 同上（`DEBUG` 含 `commandbus` 即可） |
-| `NODE_ENV=development` | 启用**热重载**；日志走 pino-pretty 彩色输出 |
-| `LOG_DIR=<dir>` | 日志落盘目录 |
+| 环境变量                 | 作用                                        |
+| :----------------------- | :------------------------------------------ |
+| `DEBUG_COMMAND_BUS=true` | 打印命令总线执行日志                        |
+| `DEBUG=commandbus`       | 同上（`DEBUG` 含 `commandbus` 即可）        |
+| `NODE_ENV=development`   | 启用**热重载**；日志走 pino-pretty 彩色输出 |
+| `LOG_DIR=<dir>`          | 日志落盘目录                                |
 
 **热重载**只在 `NODE_ENV=development` 下启用（`packages/core/plugin-host/hot-reload.ts`）。
 生产环境设成 `development` 会**意外开启热重载** —— 别这么干。
@@ -206,22 +206,22 @@ import { recordSecurityAudit } from '@openlearn/plugin-sdk';
 
 ## 8. 排障速查
 
-| 现象 | 根因 | 修法 |
-| :--- | :--- | :--- |
-| `TypeError: Cannot read properties of undefined (reading 'info')` | 写了 `ctx.logger` | 改 `ctx.log`；见 P-09 |
-| `ctx.log is not a function` | 用了旧版 SDK 的接口 | 升 SDK ≥ 3.7.5 |
-| 日志全在，筛不出单个插件 | 没用命名空间过滤 | 按 `Plugin:<manifest.id>` 前缀过滤 |
-| 日志文件不增长 | `LOG_DIR` 不可写 | 宿主会降级为只写 stdout；检查目录权限 |
-| 命令执行了但控制台毫无反应 | 命令总线默认静默 | 开 `DEBUG_COMMAND_BUS=true` |
-| `No handler registered for command: X` | 没注册 handler | 检查注册时机（是否在 `activate` 里注册） |
-| `COMMAND_CAPABILITY_DENIED` | 能力没声明 / 没批准 | 见 {doc}`capabilities` §4 |
-| `COMMAND_NOT_REGISTERED` | 只注册了 handler，没注册 descriptor | 补 `ctx.services.actionRegistry.register(...)` |
-| 任务被判定为卡死 | 长时间没写 `logs` | 定期往 `logs` 写进度 |
-| `database is locked` | 长事务占着写锁 | 缩短事务；见 {doc}`database` |
-| 敏感字段在日志里变成 `***` | 宿主脱敏 | 正常行为，不要依赖敏感值原样出现 |
-| 生产环境日志没有颜色 | 非 development | 正常；pino-pretty 只在开发用 |
-| 改了代码没生效 | 热重载只在 development 开 | 设 `NODE_ENV=development`，或手动重启 |
-| 生产环境意外热重载 | 误设 `NODE_ENV=development` | 改回 `production` |
+| 现象                                                              | 根因                                | 修法                                           |
+| :---------------------------------------------------------------- | :---------------------------------- | :--------------------------------------------- |
+| `TypeError: Cannot read properties of undefined (reading 'info')` | 写了 `ctx.logger`                   | 改 `ctx.log`；见 P-09                          |
+| `ctx.log is not a function`                                       | 用了旧版 SDK 的接口                 | 升 SDK ≥ 3.7.5                                 |
+| 日志全在，筛不出单个插件                                          | 没用命名空间过滤                    | 按 `Plugin:<manifest.id>` 前缀过滤             |
+| 日志文件不增长                                                    | `LOG_DIR` 不可写                    | 宿主会降级为只写 stdout；检查目录权限          |
+| 命令执行了但控制台毫无反应                                        | 命令总线默认静默                    | 开 `DEBUG_COMMAND_BUS=true`                    |
+| `No handler registered for command: X`                            | 没注册 handler                      | 检查注册时机（是否在 `activate` 里注册）       |
+| `COMMAND_CAPABILITY_DENIED`                                       | 能力没声明 / 没批准                 | 见 {doc}`capabilities` §4                      |
+| `COMMAND_NOT_REGISTERED`                                          | 只注册了 handler，没注册 descriptor | 补 `ctx.services.actionRegistry.register(...)` |
+| 任务被判定为卡死                                                  | 长时间没写 `logs`                   | 定期往 `logs` 写进度                           |
+| `database is locked`                                              | 长事务占着写锁                      | 缩短事务；见 {doc}`database`                   |
+| 敏感字段在日志里变成 `***`                                        | 宿主脱敏                            | 正常行为，不要依赖敏感值原样出现               |
+| 生产环境日志没有颜色                                              | 非 development                      | 正常；pino-pretty 只在开发用                   |
+| 改了代码没生效                                                    | 热重载只在 development 开           | 设 `NODE_ENV=development`，或手动重启          |
+| 生产环境意外热重载                                                | 误设 `NODE_ENV=development`         | 改回 `production`                              |
 
 ---
 
@@ -242,17 +242,17 @@ import { recordSecurityAudit } from '@openlearn/plugin-sdk';
 
 ## 取证
 
-| 结论 | 位置 |
-| :--- | :--- |
-| `IPluginLogger` 的四个方法与签名 | `packages/core/plugin-host/types.ts` → `IPluginLogger`（L91–L96） |
-| `ctx.log` 的实现（pino，命名空间 `Plugin:<id>`） | `packages/core/plugin-host/context-builder.ts`（L1029–L1034、L1142） |
-| `ctx.log` 与 `ctx.logger` 的区分 | `packages/core/plugin-host/types.ts` → `PluginContext`（L227–L300） |
-| 日志输出通道（stdout / pino-pretty / 轮转文件） | `packages/core/observability/logger.ts`（L28–L55） |
-| 轮转实现 | `packages/core/observability/rotating-file-stream.ts` |
-| 脱敏兜底 | `packages/core/observability/redaction.ts`、`sanitize.ts` |
-| 命令总线调试开关与静默默认 | `packages/core/command-bus/index.ts`（L29、L128） |
-| `No handler registered for command` 抛出处 | `packages/core/command-bus/index.ts`（L123） |
-| 进程表与 `logs` 列 | `packages/core/process-manager/index.ts`（L79、L171） |
-| 插件指标与 200 条上限 | `packages/core/observability/plugin-metrics.ts`（L24–L25、L161、L175） |
-| 安全审计入口 | `packages/core/observability/audit-log.ts` → `recordSecurityAudit`（L58） |
-| 热重载仅在 development 启用 | `packages/core/plugin-host/hot-reload.ts`（L144–L147） |
+| 结论                                             | 位置                                                                      |
+| :----------------------------------------------- | :------------------------------------------------------------------------ |
+| `IPluginLogger` 的四个方法与签名                 | `packages/core/plugin-host/types.ts` → `IPluginLogger`（L91–L96）         |
+| `ctx.log` 的实现（pino，命名空间 `Plugin:<id>`） | `packages/core/plugin-host/context-builder.ts`（L1029–L1034、L1142）      |
+| `ctx.log` 与 `ctx.logger` 的区分                 | `packages/core/plugin-host/types.ts` → `PluginContext`（L227–L300）       |
+| 日志输出通道（stdout / pino-pretty / 轮转文件）  | `packages/core/observability/logger.ts`（L28–L55）                        |
+| 轮转实现                                         | `packages/core/observability/rotating-file-stream.ts`                     |
+| 脱敏兜底                                         | `packages/core/observability/redaction.ts`、`sanitize.ts`                 |
+| 命令总线调试开关与静默默认                       | `packages/core/command-bus/index.ts`（L29、L128）                         |
+| `No handler registered for command` 抛出处       | `packages/core/command-bus/index.ts`（L123）                              |
+| 进程表与 `logs` 列                               | `packages/core/process-manager/index.ts`（L79、L171）                     |
+| 插件指标与 200 条上限                            | `packages/core/observability/plugin-metrics.ts`（L24–L25、L161、L175）    |
+| 安全审计入口                                     | `packages/core/observability/audit-log.ts` → `recordSecurityAudit`（L58） |
+| 热重载仅在 development 启用                      | `packages/core/plugin-host/hot-reload.ts`（L144–L147）                    |

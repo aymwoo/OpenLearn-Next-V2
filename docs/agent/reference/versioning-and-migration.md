@@ -40,13 +40,13 @@
 
 ## 1. 两条版本线
 
-| | 宿主版本 | SDK 版本 |
-| :--- | :--- | :--- |
-| 声明位置 | `manifest.json` 的 `engines.openlearn` | `package.json` 的 `dependencies` / `devDependencies` |
-| 当前值 | `0.7.7` | `3.7.5` |
-| 约束方式 | `semver.satisfies` 在**安装时**检查 | npm 解析 + `engines` 字段自检 |
-| 不满足的后果 | **装不上**，报 `requires OpenLearn <range>, current version is <ver>` | 运行时才暴露（缺 API、缺依赖） |
-| 谁能变 | 随宿主发布 | 随时可发新版，**不需要**宿主配合 |
+|              | 宿主版本                                                              | SDK 版本                                             |
+| :----------- | :-------------------------------------------------------------------- | :--------------------------------------------------- |
+| 声明位置     | `manifest.json` 的 `engines.openlearn`                                | `package.json` 的 `dependencies` / `devDependencies` |
+| 当前值       | `0.7.7`                                                               | `3.7.5`                                              |
+| 约束方式     | `semver.satisfies` 在**安装时**检查                                   | npm 解析 + `engines` 字段自检                        |
+| 不满足的后果 | **装不上**，报 `requires OpenLearn <range>, current version is <ver>` | 运行时才暴露（缺 API、缺依赖）                       |
+| 谁能变       | 随宿主发布                                                            | 随时可发新版，**不需要**宿主配合                     |
 
 **`engines.openlearn` 的取值**是标准 semver range：
 
@@ -90,12 +90,12 @@
 
 ## 3. SDK 版本沿革与迁移动作
 
-| SDK 版本 | 变化 | 你需要做什么 |
-| :--- | :--- | :--- |
-| `3.7.0` | 脚手架生成**旧模板**：`export default function Component()`。沙箱加载器要求 `plugin.activate` 是函数 → 装完直接 `missing activate function` | 重新 `init` 或手工把导出改成 `export async function activate(ctx)` |
-| `3.7.1` | **已在 npm 弃用**。产物残留 `node:` 内置模块静态导入，运行期失败 | 不要装；升到 `3.7.5` |
-| `3.7.4` | 引入**前端构建守卫**：产物不得残留裸模块说明符（`import 'xxx'`），因为 frame 沙箱按浏览器原生模块执行 | 重新构建；不要手工往 `frontend.js` 里塞裸导入 |
-| `3.7.5` | 补齐 SDK 自身缺失的 **`uuid` 运行时依赖**，并加固裸导入构建守卫 | 升到 `3.7.5`。**这是当前唯一推荐版本** |
+| SDK 版本 | 变化                                                                                                                                        | 你需要做什么                                                       |
+| :------- | :------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------- |
+| `3.7.0`  | 脚手架生成**旧模板**：`export default function Component()`。沙箱加载器要求 `plugin.activate` 是函数 → 装完直接 `missing activate function` | 重新 `init` 或手工把导出改成 `export async function activate(ctx)` |
+| `3.7.1`  | **已在 npm 弃用**。产物残留 `node:` 内置模块静态导入，运行期失败                                                                            | 不要装；升到 `3.7.5`                                               |
+| `3.7.4`  | 引入**前端构建守卫**：产物不得残留裸模块说明符（`import 'xxx'`），因为 frame 沙箱按浏览器原生模块执行                                       | 重新构建；不要手工往 `frontend.js` 里塞裸导入                      |
+| `3.7.5`  | 补齐 SDK 自身缺失的 **`uuid` 运行时依赖**，并加固裸导入构建守卫                                                                             | 升到 `3.7.5`。**这是当前唯一推荐版本**                             |
 
 ### 3.1 迁到 3.7.5 要做什么
 
@@ -132,10 +132,10 @@ export async function activate(ctx: PluginContext): Promise<void> {
 
 **契约**（`PluginDatabaseAPI.migrate`）
 
-| 参数 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `targetVersion` | `number` | 目标版本号，**单调递增** |
-| `upgradeFn` | `(db) => Promise<void> \| void` | 升级函数；**可 async** |
+| 参数            | 类型                            | 说明                     |
+| :-------------- | :------------------------------ | :----------------------- |
+| `targetVersion` | `number`                        | 目标版本号，**单调递增** |
+| `upgradeFn`     | `(db) => Promise<void> \| void` | 升级函数；**可 async**   |
 
 **宿主行为**
 
@@ -170,20 +170,20 @@ worker 侧是 `dbService` 的异步封装），**迁移代码要按运行形态�
 
 ## 5. 排障速查
 
-| 现象 | 根因 | 修法 |
-| :--- | :--- | :--- |
-| 安装报 `requires OpenLearn >=0.8.0, current version is 0.7.7` | `engines.openlearn` 范围太窄 | 放宽范围，或等宿主升级；确认 `OPENLEARN_VERSION` 真值 |
-| 装到了**明显不兼容**的宿主上 | 压根没写 `engines.openlearn` | 补上，永远别省 |
-| manifest 校验失败：`requires/optional 条目格式无效` | 用了 `>=1.0.0` / `1.0` / 带 `@latest` | 只接受 `@^1.0.0` / `@~1.0.0` / `@1.0.0` 三段式 |
-| 同一个 `@version` 后缀在 V3 schema 下不被接受 | 用了 `manifestSchemaV3` | 宿主当前用 `manifestSchema`；确认调用方 |
-| 装上后 `missing activate function` | SDK ≤ 3.7.0 的旧模板 | 升 SDK ≥ 3.7.5 并重新 `init`；导出改成 `export async function activate(ctx)` |
-| `ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'` | SDK < 3.7.5 缺运行时依赖 | 升到 `3.7.5`；临时可手工补 `"uuid": "^14.0.2"` |
-| 前端报 `Cannot use import statement` | `frontend.js` 有裸模块说明符 | 用 SDK ≥ 3.7.4 重建；见 §3 |
-| `ctx.services.xxx` 是 `null` | `optional` 依赖版本不匹配 | 判空；或改用 `requires`（不匹配会直接装不上） |
-| 迁移函数每次激活都重跑 | `targetVersion` 没递增，或 `upgradeFn` 抛错被吞 | 递增 `targetVersion`；检查 `upgradeFn` 是否抛异常（抛了会 ROLLBACK） |
-| 迁移报 `database is locked` | 迁移期拿写锁，却在 `upgradeFn` 里调了别的写事务 | `upgradeFn` 里只碰 `db`，不要调宿主服务 |
-| 数据升了但版本号没升 | 直接改了表结构而没走 `migrate` | 统一走 `ctx.db.migrate`；手工改表后要手动更新 `plugin_migrations` 的版本号 |
-| 插件被重装后数据没了 | 卸载时 `dropAllTables()` 删了插件自有表 | 重要数据不要放插件自有表；用宿主存储或 `ctx.db` 之外的持久化方案 |
+| 现象                                                          | 根因                                            | 修法                                                                         |
+| :------------------------------------------------------------ | :---------------------------------------------- | :--------------------------------------------------------------------------- |
+| 安装报 `requires OpenLearn >=0.8.0, current version is 0.7.7` | `engines.openlearn` 范围太窄                    | 放宽范围，或等宿主升级；确认 `OPENLEARN_VERSION` 真值                        |
+| 装到了**明显不兼容**的宿主上                                  | 压根没写 `engines.openlearn`                    | 补上，永远别省                                                               |
+| manifest 校验失败：`requires/optional 条目格式无效`           | 用了 `>=1.0.0` / `1.0` / 带 `@latest`           | 只接受 `@^1.0.0` / `@~1.0.0` / `@1.0.0` 三段式                               |
+| 同一个 `@version` 后缀在 V3 schema 下不被接受                 | 用了 `manifestSchemaV3`                         | 宿主当前用 `manifestSchema`；确认调用方                                      |
+| 装上后 `missing activate function`                            | SDK ≤ 3.7.0 的旧模板                            | 升 SDK ≥ 3.7.5 并重新 `init`；导出改成 `export async function activate(ctx)` |
+| `ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'`            | SDK < 3.7.5 缺运行时依赖                        | 升到 `3.7.5`；临时可手工补 `"uuid": "^14.0.2"`                               |
+| 前端报 `Cannot use import statement`                          | `frontend.js` 有裸模块说明符                    | 用 SDK ≥ 3.7.4 重建；见 §3                                                   |
+| `ctx.services.xxx` 是 `null`                                  | `optional` 依赖版本不匹配                       | 判空；或改用 `requires`（不匹配会直接装不上）                                |
+| 迁移函数每次激活都重跑                                        | `targetVersion` 没递增，或 `upgradeFn` 抛错被吞 | 递增 `targetVersion`；检查 `upgradeFn` 是否抛异常（抛了会 ROLLBACK）         |
+| 迁移报 `database is locked`                                   | 迁移期拿写锁，却在 `upgradeFn` 里调了别的写事务 | `upgradeFn` 里只碰 `db`，不要调宿主服务                                      |
+| 数据升了但版本号没升                                          | 直接改了表结构而没走 `migrate`                  | 统一走 `ctx.db.migrate`；手工改表后要手动更新 `plugin_migrations` 的版本号   |
+| 插件被重装后数据没了                                          | 卸载时 `dropAllTables()` 删了插件自有表         | 重要数据不要放插件自有表；用宿主存储或 `ctx.db` 之外的持久化方案             |
 
 ---
 
@@ -205,15 +205,15 @@ worker 侧是 `dbService` 的异步封装），**迁移代码要按运行形态�
 
 ## 取证
 
-| 结论 | 位置 |
-| :--- | :--- |
-| `engines.openlearn` 用 `semver.satisfies` 在安装时校验 | `packages/core/plugin-host/install.ts`（L116–L120、L291–L295） |
-| 宿主版本来源 | `packages/core/version.ts` → `OPENLEARN_VERSION`（L44） |
-| `requires` 条目正则与错误文案 | `packages/core/esm-loader/manifest-schema.ts` → `requiresItemSchema`（L776–L778） |
-| `manifestSchema` 与 `manifestSchemaV3` 的差异（是否支持 `@version`） | `packages/core/esm-loader/manifest-schema.ts`（L781–L786、L870） |
-| `ctx.db.migrate` 的接口签名 | `packages/core/plugin-host/types.ts` → `PluginDatabaseAPI`（L107） |
-| `migrate` 的事务与版本记录实现 | `packages/core/plugin-host/context-builder.ts`（L1003–L1021） |
-| worker 运行时同语义实现 | `packages/core/worker-runtime/bootstrap/sections/message-handler.ts`（L383–L416） |
-| SDK 3.7.x 沿革与 3.7.5 的 uuid 修复 | `packages/plugin-sdk/CHANGELOG.md` |
-| ZIP 只装三个文件（`migrations/*.sql` 不在内） | `packages/plugin-sdk/cli.mjs`（L546–L551） |
-| `optional` 版本不匹配 → 服务置 `null` | `packages/core/plugin-host/context-builder.ts`（`buildContext`） |
+| 结论                                                                 | 位置                                                                              |
+| :------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `engines.openlearn` 用 `semver.satisfies` 在安装时校验               | `packages/core/plugin-host/install.ts`（L116–L120、L291–L295）                    |
+| 宿主版本来源                                                         | `packages/core/version.ts` → `OPENLEARN_VERSION`（L44）                           |
+| `requires` 条目正则与错误文案                                        | `packages/core/esm-loader/manifest-schema.ts` → `requiresItemSchema`（L776–L778） |
+| `manifestSchema` 与 `manifestSchemaV3` 的差异（是否支持 `@version`） | `packages/core/esm-loader/manifest-schema.ts`（L781–L786、L870）                  |
+| `ctx.db.migrate` 的接口签名                                          | `packages/core/plugin-host/types.ts` → `PluginDatabaseAPI`（L107）                |
+| `migrate` 的事务与版本记录实现                                       | `packages/core/plugin-host/context-builder.ts`（L1003–L1021）                     |
+| worker 运行时同语义实现                                              | `packages/core/worker-runtime/bootstrap/sections/message-handler.ts`（L383–L416） |
+| SDK 3.7.x 沿革与 3.7.5 的 uuid 修复                                  | `packages/plugin-sdk/CHANGELOG.md`                                                |
+| ZIP 只装三个文件（`migrations/*.sql` 不在内）                        | `packages/plugin-sdk/cli.mjs`（L546–L551）                                        |
+| `optional` 版本不匹配 → 服务置 `null`                                | `packages/core/plugin-host/context-builder.ts`（`buildContext`）                  |

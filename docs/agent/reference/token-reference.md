@@ -828,7 +828,7 @@ function wrapPointsLedgerService(service, pluginId, capabilities?) {
    你手动传值会被覆盖（详见 {doc}`platform-services` 2.6）。
 ````
 
-````{warning}
+```{warning}
 ### 文档仍在描述「兼容期放行」，代码已经改成硬拒
 
 `docs/reference/plugin-capability-matrix.md` §5.3 的第 2 条原文：
@@ -842,7 +842,7 @@ function wrapPointsLedgerService(service, pluginId, capabilities?) {
 
 按代码为准。这条漂移本身就是本页存在的理由之一 ——
 `docs/` 下的参考文档不保证与源码同步。
-````
+```
 
 ---
 

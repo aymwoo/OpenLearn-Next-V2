@@ -165,7 +165,7 @@ actionRegistry.register({ ...descriptor, id: `${descriptor.id}__raw_alias`, expo
 **同一个能力**在 AI 工具列表里出成两条 —— 而裸名在 commandBus 里**没有 handler**
 （handler 只按前缀名注册），模型选中它只会拿到「命令未注册」。
 
-````
+```
 
 别名只服务「按原始 commandType 查描述符」的调用方
 （如 `getActionByCommandType('grade.list_configs')`）。
@@ -174,8 +174,8 @@ actionRegistry.register({ ...descriptor, id: `${descriptor.id}__raw_alias`, expo
 工具名 sanitization 在**注册表与两个 builder 里是三份同源实现**：
 
 ```typescript
-action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_')
-````
+action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_');
+```
 
 所以 `@myteam/poll.poll.create` → `@myteam_poll_poll_create`（`@`、`.`、`/` 全变 `_`）。
 `getActionByToolName(toolName)` 用同一规则反查。
@@ -210,7 +210,7 @@ action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_')
 回归测试专门锁了这条：`isHighRisk` 不影响工具箱暴露（两者正交，防止误以为 `isHighRisk` 能挡 AI）。
 要挡 AI，只有 `exposeToAgent: false`。
 
-````
+```
 
 ### 5.1 actor 与权限（SEC-01）
 
@@ -218,11 +218,9 @@ action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_')
 
 ```typescript
 const isAdmin = callerRole === 'administrator' || callerRole === 'admin';
-const actorId = isAdmin
-  ? 'user-frontend'
-  : realActorId || (callerRole ? `user:agent:${callerRole}` : 'agent-system-0');
+const actorId = isAdmin ? 'user-frontend' : realActorId || (callerRole ? `user:agent:${callerRole}` : 'agent-system-0');
 const metadata = isAdmin ? { approved: true } : undefined;
-````
+```
 
 **不再无条件把普通调用者提升为具有全局写权限的 `agent-system-0`** ——
 严格使用调用方真实 actorId（如 `user:studentId:student`），由 `CapabilityGuard` 校验。

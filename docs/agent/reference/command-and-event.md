@@ -444,7 +444,7 @@ caps.some((c) => {
 因此**不含** `lesson:write`（避免学生改课时内容）；命令处理器内部再按 `actorId`
 与 `payload.studentId` 校验所属权，防止代交/代评。
 
-````
+```
 
 内置默认授予（构造期）：`user-demo` → `['*:*:*']`；`user-frontend` → 7 个 `*` 通配；
 `anonymous` → `[]`；`teacher-demo` / `student-demo` 各一组；`agent-system-0` → 11 项显式能力。
@@ -458,7 +458,7 @@ caps.some((c) => {
 ```{important} 先 actionRegistry.register()，再 commandBus.registerHandler()
 顺序反了**不会报错**，但插件加载时会打印：
 
-````
+```
 
 [PluginHost] Plugin "<id>" registered command "<prefixed>" without a matching ActionDescriptor
 (commandType: "<raw>"). The kernel default-deny policy will reject this command.

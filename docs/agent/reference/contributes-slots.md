@@ -78,7 +78,7 @@ Zod object **默认 strip 未声明键**：一旦 `view` 没进 schema，`parse(
 `teacher.panel` / `teacher.tab` / `teacher.dashboard.widget` / `student.view` / `student.lesson.tool`
 五处源码里都写了这条注释，不是巧合。
 
-````
+```
 
 ### 1.2 课堂互动与大屏展台
 
@@ -132,7 +132,7 @@ Zod object **默认 strip 未声明键**：一旦 `view` 没进 schema，`parse(
 
 ```typescript
 const frontendSlotEntrySchema = z.object({ id: z.string().min(1) }).passthrough();
-````
+```
 
 `header.action` · `statusbar.item` · `stage.display.overlay` · `stage.display.action` · `assignment.submission.preview` · `assignment.file.preview` · `student.classroom.overlay` · `student.profile.tab` · `whiteboard.renderer` · `timetable.tab` · `admin.tab` · `workspace.view` · `course.list.toolbar.action` · `course.card.action` · `course.card.badge` · `editor.segment.action` · `classroom.cockpit.drawer.item` · `classroom.alert.banner` · `classroom.stage.display.ticker` · `classroom.post_class.exporter` · `timetable.toolbar.action` · `timetable.card.badge` · `computer_lab.toolbar.action` · `computer_lab.seat.overlay` · `computer_lab.seating.toolbar` · `computer_lab.unassigned.item` · `computer_lab.seating.sidebar` · `student.dashboard.hero_widget` · `student.assignment.toolbar.action` · `student.lesson.notes_addon` · `student.lesson.toolbox` · `admin.dashboard.card` · `admin.user.action` · `header.status_pill` · `ai_sidebar.tab` · `assessment.list.card` · `assessment.attempt.toolbar` · `assessment.stats.card`
 

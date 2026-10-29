@@ -255,11 +255,11 @@ api: {
 
 ## 6. `deploy`
 
-| 字段 | 约束 | 用途 |
-| :--- | :--- | :--- |
-| `script` | `min(1)`，为空则报 `deploy.script 不能为空` | 部署脚本 |
-| `staticRoute` | optional | 静态资源对外路由前缀 |
-| `staticDir` | optional | 静态资源目录 |
+| 字段          | 约束                                        | 用途                 |
+| :------------ | :------------------------------------------ | :------------------- |
+| `script`      | `min(1)`，为空则报 `deploy.script 不能为空` | 部署脚本             |
+| `staticRoute` | optional                                    | 静态资源对外路由前缀 |
+| `staticDir`   | optional                                    | 静态资源目录         |
 
 ---
 
@@ -276,15 +276,18 @@ api: {
 
 ## 取证
 
-| 内容 | 位置 |
-| :--- | :--- |
-| `manifestSchema` / `manifestSchemaV3` 全部字段与约束 | `packages/core/esm-loader/manifest-schema.ts` |
-| `requiresItemSchema` 正则与解析 | `packages/core/esm-loader/manifest-schema.ts`、`manifest-utils.ts` |
-| id 禁冒号（审计 C-3） | `manifest-schema.ts`（`manifestSchema.id.refine`） |
-| `configuration.scope`（Issue #151） | `manifest-schema.ts` |
-| `baseRoute` 无路由作用（审计 P1） | `manifest-schema.ts`（`apiSchema` 注释） |
-| contributes 校验强度（审计 E-1） | `manifest-schema.ts`（contributes 段注释） |
-| `$lessonId` 占位符 | `packages/plugin-sdk/scaffold/templates/full-stack/src/index.ts` |
-| optional → `null` 降级（D-12） | `packages/core/plugin-host/types.ts`、`docs/plugin/plugin-manifest-spec.md` §2.2 |
-| 能力必须来自 19 个真值 | `docs/plugin/plugin-manifest-spec.md` §2.3 |
+| 内容                                                 | 位置                                                                             |
+| :--------------------------------------------------- | :------------------------------------------------------------------------------- |
+| `manifestSchema` / `manifestSchemaV3` 全部字段与约束 | `packages/core/esm-loader/manifest-schema.ts`                                    |
+| `requiresItemSchema` 正则与解析                      | `packages/core/esm-loader/manifest-schema.ts`、`manifest-utils.ts`               |
+| id 禁冒号（审计 C-3）                                | `manifest-schema.ts`（`manifestSchema.id.refine`）                               |
+| `configuration.scope`（Issue #151）                  | `manifest-schema.ts`                                                             |
+| `baseRoute` 无路由作用（审计 P1）                    | `manifest-schema.ts`（`apiSchema` 注释）                                         |
+| contributes 校验强度（审计 E-1）                     | `manifest-schema.ts`（contributes 段注释）                                       |
+| `$lessonId` 占位符                                   | `packages/plugin-sdk/scaffold/templates/full-stack/src/index.ts`                 |
+| optional → `null` 降级（D-12）                       | `packages/core/plugin-host/types.ts`、`docs/plugin/plugin-manifest-spec.md` §2.2 |
+| 能力必须来自 19 个真值                               | `docs/plugin/plugin-manifest-spec.md` §2.3                                       |
+
+```
+
 ```
