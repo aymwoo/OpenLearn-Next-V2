@@ -14,7 +14,7 @@ import { captureError } from '../../packages/core/observability/error-reporter.j
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,64}$/;
 const QUIET_PATHS = new Set(['/health', '/health/ready', '/', '/index.html', '/favicon.ico', '/robots.txt']);
 
-const DEV_QUIET_PREFIXES = ['/@vite/', '/@fs/', '/src/', '/node_modules/', '/@id/'];
+const DEV_QUIET_PREFIXES = ['/@vite/', '/@fs/', '/src/', '/node_modules/', '/@id/', '/.vite-cache/'];
 
 export type HttpAccessLogMode = 'off' | 'errors' | 'all';
 export const DEFAULT_HTTP_SLOW_MS = 1000;
@@ -51,7 +51,8 @@ export function resolveHttpAccessLogIgnorePrefixes(envIgnore = process.env.HTTP_
 /**
  * 判定请求是否静默（不打印 http.request 访问日志）：
  * - 正常探活（/health, /health/ready）与公共静态入口（/, /index.html, /favicon.ico, /robots.txt）在 <400 时静默；
- * - 开发环境下的 Vite 内部资源与源码加载（/@vite/, /src/ 等）在 <400 时静默；
+ * - 开发环境下的 Vite 内部资源与源码加载（/@vite/, /src/, /.vite-cache/ 等）在 <400 时静默；
+ *   其中 /.vite-cache/ 是 Vite 依赖预打包缓存（cacheDir 在仓库根），首次冷启动单文件常超过慢请求阈值；
  * - 命中 HTTP_ACCESS_LOG_IGNORE 前缀名单的正常请求在 <400 时静默；
  * - 任何 >=400 的异常响应（404, 500 等）严格保留日志与错误收集，绝不静默。
  */

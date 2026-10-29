@@ -37,6 +37,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **开发态 Vite 依赖预打包缓存请求刷屏访问日志修复**：`pnpm dev` 冷启动时，Vite 把依赖预打包产物放在仓库根的 `.vite-cache/deps/`（见 `vite.config.ts` 的 `cacheDir`），这些请求由 Express 的 `requestObservability` 统一记录；单文件首次编译常超过 `HTTP_SLOW_MS`（默认 1000ms），于是每条 `/.vite-cache/deps/*.js` 都以 `WARN: http.request` 打印，控制台被大量 200 日志淹没。现将 `/.vite-cache/` 补进 `isQuietRequest` 的开发环境静默前缀名单（与 `/@vite/`、`/src/` 同级），状态码 <400 时不再写访问日志；`>=400` 仍严格保留，指标计数与安全审计不受影响。
+  - 测试：`server/__tests__/request-observability.test.ts`（新增「慢速 `/.vite-cache/` 请求不写访问日志」回归 1 例，共 14 例全绿）。
+
 - **live_class 顶栏倒计时设置浮层改为 Portal + fixed 定位，不再撑高/裁剪顶栏**：顶栏胶囊（`05:00 ▶ +1m ⌄`）展开设置面板时，面板虽为 `absolute`，但所在顶栏行带 `overflow-x-auto`（`overflow-y` 随之计算为 `auto`），导致面板被裁剪且撑高顶栏行。现改为 `createPortal` 挂载到 `document.body` 并以 `fixed` 定位（`z-[9999]`），按触发按钮 `getBoundingClientRect()` 计算 `top / right / width / maxHeight`：右边缘对齐按钮、限制在视口内、下方空间不足时面板内部滚动；视口 `resize` / `scroll`（capture）时以 rAF 节流重新定位，支持 `Escape` 关闭，点击外部判断同时覆盖锚点与 Portal 面板（避免误判）。
   - 测试：`src/features/classroom/__tests__/ClassroomCountdownWidget.test.tsx`（新增“Portal 父节点为 `body`、class 含 `fixed` 与 `z-[9999]`”断言，5 例全绿）。
 

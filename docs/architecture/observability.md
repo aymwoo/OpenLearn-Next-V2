@@ -78,7 +78,7 @@ HTTP 入口不在这个目录里：
 - 该 ID 放进 `requestLogContext`，同一条异步调用链里的 `recordSecurityAudit` 可以读到它，不必改命令载荷。
 - 响应结束时 `recordHttpResponse(status)`，并在判定需要记录时写一条 `http.request`。字段只有 `requestId`、`userId`、`method`、`path`、`status`、`durationMs`。不写查询串，不写请求体。
 - `userId` 来自已挂上的会话，否则从会话 cookie 解析；没有则是 `anonymous`。截断到 64 字符。
-- **静默白名单 (`isQuietRequest`)**：公共入口（`/`、`/index.html`、`/favicon.ico`、`/robots.txt`）、探活（`/health`、`/health/ready`）以及开发环境 Vite 内部资源（`/@vite/`、`/src/` 等）在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。通过环境变量 `HTTP_ACCESS_LOG_IGNORE` 可配置额外的逗号分隔前缀名单（如 `/api/vfs,/api/classroom/sessions/`）以静默特定高频接口。
+- **静默白名单 (`isQuietRequest`)**：公共入口（`/`、`/index.html`、`/favicon.ico`、`/robots.txt`）、探活（`/health`、`/health/ready`）以及开发环境 Vite 内部资源（`/@vite/`、`/src/`、`/.vite-cache/` 等）在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。通过环境变量 `HTTP_ACCESS_LOG_IGNORE` 可配置额外的逗号分隔前缀名单（如 `/api/vfs,/api/classroom/sessions/`）以静默特定高频接口。
 - **访问日志分级与降噪 (`HTTP_ACCESS_LOG`)**：
   - 默认模式 `HTTP_ACCESS_LOG=errors`（未配置且 `LOG_LEVEL` 不是 `debug`/`trace` 时）：正常的成功请求（`< 400` 且未超出慢请求阈值）默认静默，彻底消除前端轮询刷屏；
   - `status >= 500` 时以 `error` 级别输出；
