@@ -64,3 +64,29 @@ packages/core/esm-loader/__tests__/fixtures/syntax-error.js
 # 结论：生成物由生成器负责，prettier 不碰。真正需要人维护的是
 # packages/plugin-sdk/openlearn.d.ts（手写契约），那个文件照常参与格式化。
 packages/plugin-sdk/generated.d.ts
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MyST 指令围栏内含嵌套代码块的手册页：prettier 会把围栏改坏
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# 这些页面用 MyST 指令写「先验冲突」提示框，框内又嵌 ```typescript 代码块：
+#
+#   ```{danger} 标题        ← 外层指令围栏（3 个反引号）
+#   ...说明文字...
+#   ```typescript            ← 内层代码块（3 个反引号）
+#   ctx.log.info(...)
+#   ```
+#   ```                      ← 外层闭合
+#
+# prettier 把外层围栏当成普通代码块，发现块内有 ``` 就把**闭合**围栏抬到 4 个
+# 反引号，但**开启**围栏仍是 3 个 —— 结构立刻失衡。实测（2026-10-29）：
+#   · MyST/Sphinx 会把整段后续内容吞进指令里（该页解析全错）；
+#   · audit-tools/plugin_docs_check.py 的代码块扫描随之移位，凭空报出一条
+#     P1 漂移（`docs/agent/reference/debugging-and-logging.md` 的
+#     `recordSecurityAudit` 导入），使 docs-drift-audit 由 pass 变 fail；
+#   · 再跑一次 prettier，闭合围栏又被抬到 5 个 —— 3→4→5 逐轮升级，不收敛。
+#
+# 结论：这三页按 MyST 语义手工维护，不交给 prettier。其余手册页照常参与格式化。
+docs/agent/reference/debugging-and-logging.md
+docs/agent/reference/publishing-and-distribution.md
+docs/agent/reference/versioning-and-migration.md

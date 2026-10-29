@@ -45,11 +45,11 @@ graph TD
     E -- 是 --> T3["frontend-only（仍必须 default export { activate }）"]
 ```
 
-| 模板            | 产物                             | 适用                                                                | 照做教程                       |
-| :-------------- | :------------------------------- | :------------------------------------------------------------------ | :----------------------------- |
-| `server-only`   | `index.js` + zip                 | 后端能力扩展、数据落库、AI Action、批处理任务                       | {doc}`../tutorial/server-only` |
-| `full-stack`    | `index.js` + `frontend.js` + zip | 需要运行期前端桥接（轮询、命令面板条目、命名空间存储）+ `view` 页面 | {doc}`../tutorial/full-stack`  |
-| `frontend-only` | `index.js` + `frontend.js` + zip | 只做前端桥接；**不能**渲染 React 组件，也没有任何服务端 handler     | {doc}`../tutorial/agent-tutorial` §2    |
+| 模板            | 产物                             | 适用                                                                | 照做教程                             |
+| :-------------- | :------------------------------- | :------------------------------------------------------------------ | :----------------------------------- |
+| `server-only`   | `index.js` + zip                 | 后端能力扩展、数据落库、AI Action、批处理任务                       | {doc}`../tutorial/server-only`       |
+| `full-stack`    | `index.js` + `frontend.js` + zip | 需要运行期前端桥接（轮询、命令面板条目、命名空间存储）+ `view` 页面 | {doc}`../tutorial/full-stack`        |
+| `frontend-only` | `index.js` + `frontend.js` + zip | 只做前端桥接；**不能**渲染 React 组件，也没有任何服务端 handler     | {doc}`../tutorial/agent-tutorial` §2 |
 
 **默认选 `server-only`。** 只有确实需要前端运行期桥接或自定义页面时才升级模板。
 自定义可见界面的完整走法在 {doc}`../tutorial/sandbox-view`。

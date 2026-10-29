@@ -101,15 +101,15 @@ graph TD
 `contracts/` 下的 JSON 由 `audit-tools/agent_facts.py` 从源码抽取，CI 校验不漂移。
 **要写枚举值，先查这里，不要凭印象。**
 
-| 文件                                | 内容                                         | 数量       |
-| :---------------------------------- | :------------------------------------------- | :--------- |
+| 文件                                | 内容                                           | 数量       |
+| :---------------------------------- | :--------------------------------------------- | :--------- |
 | `contracts/capabilities.json`       | 能力的三套登记：命令闸门 / 方法级 / 运行时权限 | 19 / 8 / 7 |
-| `contracts/tokens.json`             | 可解析 Token；SDK 导出与可解析集合的差       | 31 / 32    |
-| `contracts/slots.json`              | `ExtensionSlot` 成员 + 有渲染调用点的 anchor | 120 / 8    |
-| `contracts/contributes-groups.json` | `contributes` 的 A 严格键 / B 宽松键         | 71 / 38    |
-| `contracts/bridge-ops.json`         | frame 通道 op / view 通道 wire op            | 10 / 8     |
-| `contracts/forbidden-tables.json`   | SQL 禁写表黑名单                             | 40         |
-| `contracts/versions.json`           | 版本基线                                     | —          |
+| `contracts/tokens.json`             | 可解析 Token；SDK 导出与可解析集合的差         | 31 / 32    |
+| `contracts/slots.json`              | `ExtensionSlot` 成员 + 有渲染调用点的 anchor   | 120 / 8    |
+| `contracts/contributes-groups.json` | `contributes` 的 A 严格键 / B 宽松键           | 71 / 38    |
+| `contracts/bridge-ops.json`         | frame 通道 op / view 通道 wire op              | 10 / 8     |
+| `contracts/forbidden-tables.json`   | SQL 禁写表黑名单                               | 40         |
+| `contracts/versions.json`           | 版本基线                                       | —          |
 
 ---
 

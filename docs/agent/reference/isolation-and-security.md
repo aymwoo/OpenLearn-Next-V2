@@ -549,7 +549,7 @@ Downgrading plugin database schema is not permitted.`
 | 强制 process + `executionModeCoerced` + worker 不再是隔离方式   | 变更日志 L412503                                                                           |
 | `manifest.executionMode` 不可信注释                             | ``src/plugin-host/types.ts`→`FrontendPluginManifest`（L63） 段）                           |
 | POC 断言 `not.toContain("manifest.executionMode === 'inline'")` | ``packages/core/plugin-host/**tests**/plugin-audit-poc.test.ts`→`gateway`（L571–L607）     |
-| `ENV_ALLOWLIST` / `ENV_DENYLIST` 逐字                           | `packages/core/worker-runtime/child-isolate.ts`、`child-spawn.ts` L126879–126894                     |
+| `ENV_ALLOWLIST` / `ENV_DENYLIST` 逐字                           | `packages/core/worker-runtime/child-isolate.ts`、`child-spawn.ts` L126879–126894           |
 | 白名单优于「先继承再删」的理由                                  | 同上 `buildMinimalEnv` 注释 L126907–126915                                                 |
 | `/proc/self/environ` 与 I-4 遮蔽无效                            | 同上 L126840–126855                                                                        |
 | `WORKER_DATA_ENV` 与 `PluginWorkerData` 字段                    | 同上 L126896–126910                                                                        |

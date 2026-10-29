@@ -54,12 +54,12 @@ graph TD
 
 > 📌 **`layoutVariant` 不是 manifest 字段**。`manifest-schema.ts` 里没有任何 `layout` / `variant` 键 —— 它是[插件 UI 扩展槽位参考](./plugin-ui-extension-slots.md) §1.1.1 对 120 个槽位做的**文档层容器语义分类**，用来提示你的组件该占多大、能不能撑满、该不该 `position: fixed`。**不要**在 `manifest.json` 里写 `"layoutVariant": "Panel"`（写了会被 `strip`）。容器形态由**槽位名**决定。
 
-| 形态（layoutVariant）  | 典型槽位 / 宿主容器                       | 渲染行为与尺寸策略                                                       | 最佳实践场景                         |
-| :--------------------- | :---------------------------------------- | :----------------------------------------------------------------------- | :----------------------------------- |
-| **`Panel`**            | `teacher.panel`, `teacher.tab`, `admin.tab` | **占满容器视口**（宿主提供外层滚动容器与尺寸约束），高度由内容撑开或自适应滚动 | 随堂测验列表、互动答题榜单、设置面板 |
-| **`WhiteboardWidget`** | `whiteboard.canvas.widget`, `teacher.dashboard.widget` | **宽高完全受限在白板矩形卡片或浮动卡片盒内**；宿主提供可缩放的卡片容器   | 互动抽奖卡片、白板投票器、随堂草稿纸 |
-| **`FloatingOverlay`**  | `student.classroom.overlay`, `stage.display.overlay`, `student.quick_actions.fab` | 绝对定位悬浮层，默认收折为图标，展开时覆盖局部区域                       | 课堂即时反馈悬浮球、倒计时挂件       |
-| **`ActionItem`**       | `classroom.topbar.action`, `header.action`, `classroom.tool` | **无独立视图主体**，仅注册一个可点击的按钮/菜单项；点击后触发命令派遣    | 一键截屏、快速发起随机提问按钮       |
+| 形态（layoutVariant）  | 典型槽位 / 宿主容器                                                               | 渲染行为与尺寸策略                                                             | 最佳实践场景                         |
+| :--------------------- | :-------------------------------------------------------------------------------- | :----------------------------------------------------------------------------- | :----------------------------------- |
+| **`Panel`**            | `teacher.panel`, `teacher.tab`, `admin.tab`                                       | **占满容器视口**（宿主提供外层滚动容器与尺寸约束），高度由内容撑开或自适应滚动 | 随堂测验列表、互动答题榜单、设置面板 |
+| **`WhiteboardWidget`** | `whiteboard.canvas.widget`, `teacher.dashboard.widget`                            | **宽高完全受限在白板矩形卡片或浮动卡片盒内**；宿主提供可缩放的卡片容器         | 互动抽奖卡片、白板投票器、随堂草稿纸 |
+| **`FloatingOverlay`**  | `student.classroom.overlay`, `stage.display.overlay`, `student.quick_actions.fab` | 绝对定位悬浮层，默认收折为图标，展开时覆盖局部区域                             | 课堂即时反馈悬浮球、倒计时挂件       |
+| **`ActionItem`**       | `classroom.topbar.action`, `header.action`, `classroom.tool`                      | **无独立视图主体**，仅注册一个可点击的按钮/菜单项；点击后触发命令派遣          | 一键截屏、快速发起随机提问按钮       |
 
 #### 1.2 高度双向同步协议（`ui.resize`）
 
@@ -83,12 +83,12 @@ graph TD
 
 #### 2.1 技术选型双轨对照
 
-| 扩展维度     | 路径 A：声明式矢量命令（`whiteboard.draw`）            | 路径 B：自定义白板富应用卡片（Custom Sandbox HTML）                    |
-| :----------- | :----------------------------------------------------- | :--------------------------------------------------------------------- |
-| **适用场景** | 绘制原生矩形、文本、图片、几何图形、简易箭头           | 完整的交互式游戏、实时计分板、带复杂状态机的测验卡片                   |
-| **前端实现** | 纯数据驱动，派遣 `whiteboard.draw` 总线命令            | 部署完整 HTML 文件，在 `manifest.json` 的 `contributes` 里声明 `view: "dashboard.html"`（插件根目录下的相对路径） |
-| **沙箱隔离** | 无 iframe 开销，直接进入 Konva / react-konva 渲染管线（平台白板用的是 Konva，不是 Fabric.js） | 运行在独立 Opaque Origin iframe 沙箱内，保障崩溃隔离                   |
-| **所需权限** | 必须在 `capabilitiesProposed` 中声明 `whiteboard:write`（`whiteboard.draw` 命令的 `capabilityRequired`） | 无独立白板能力：卡片页本身不需额外能力声明，若卡片也要派发白板命令，同样需要 `whiteboard:write` |
+| 扩展维度     | 路径 A：声明式矢量命令（`whiteboard.draw`）                                                              | 路径 B：自定义白板富应用卡片（Custom Sandbox HTML）                                                               |
+| :----------- | :------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| **适用场景** | 绘制原生矩形、文本、图片、几何图形、简易箭头                                                             | 完整的交互式游戏、实时计分板、带复杂状态机的测验卡片                                                              |
+| **前端实现** | 纯数据驱动，派遣 `whiteboard.draw` 总线命令                                                              | 部署完整 HTML 文件，在 `manifest.json` 的 `contributes` 里声明 `view: "dashboard.html"`（插件根目录下的相对路径） |
+| **沙箱隔离** | 无 iframe 开销，直接进入 Konva / react-konva 渲染管线（平台白板用的是 Konva，不是 Fabric.js）            | 运行在独立 Opaque Origin iframe 沙箱内，保障崩溃隔离                                                              |
+| **所需权限** | 必须在 `capabilitiesProposed` 中声明 `whiteboard:write`（`whiteboard.draw` 命令的 `capabilityRequired`） | 无独立白板能力：卡片页本身不需额外能力声明，若卡片也要派发白板命令，同样需要 `whiteboard:write`                   |
 
 #### 2.2 ⚠️ 绝对红线：严禁原生 SQL 操作平台白板表
 
@@ -274,14 +274,14 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
 
 ## 4. 常见排障与反模式速查表 (Troubleshooting Quick Reference)
 
-| 异常现象 / 错误日志                                                                                            | 根因分析                                                                                     | 对应契约            | 纠正方案                                                                                         |
-| :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- | :------------------ | :----------------------------------------------------------------------------------------------- |
+| 异常现象 / 错误日志                                                                                            | 根因分析                                                                                     | 对应契约            | 纠正方案                                                                                                                                  |
+| :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- | :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
 | `WorkerCapabilityError: Capability denied ... empty manifestCapabilities, only 'get' methods allowed`          | 插件 `manifest.json` 的 `capabilitiesProposed` 声明为空数组，触发 Barrier 2 强制只读锁定     | **契约 5**          | 在 `manifest.json` 中声明业务所需的写入/执行能力（如 `vfs:write`、`whiteboard:write`、`plugin:write` 等合法 `capabilityRequired` 字符串） |
-| `Worker plugin is not permitted to access table "whiteboard_elements"`                                         | 插件直接通过 SQL 读写白板核心数据表，被 SQL-Guard 静态审计硬拦截                             | **契约 2 / 契约 4** | 改用命令总线派遣 `whiteboard.draw` 命令，由白板子系统统一执行                                    |
-| `HTTP 429 Too many requests, please slow down`                                                                 | 视图在学生输入或答题时未加防抖，连续发起写请求击穿全局写限流（180/min）或端点限流（120/min） | **契约 6**          | 增加 `>= 500ms` 的输入防抖，并在写操作前执行新旧值 diff 检查                                     |
-| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储           | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.storage.get/set(key, value)`（view 通道没有 `state` 命名空间） |
-| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                               | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize(height)`（**位置参数**）              |
-| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                               | **契约 3**          | 使用空值合并语法：`const classId = context?.classId \|\| 'default'` |
+| `Worker plugin is not permitted to access table "whiteboard_elements"`                                         | 插件直接通过 SQL 读写白板核心数据表，被 SQL-Guard 静态审计硬拦截                             | **契约 2 / 契约 4** | 改用命令总线派遣 `whiteboard.draw` 命令，由白板子系统统一执行                                                                             |
+| `HTTP 429 Too many requests, please slow down`                                                                 | 视图在学生输入或答题时未加防抖，连续发起写请求击穿全局写限流（180/min）或端点限流（120/min） | **契约 6**          | 增加 `>= 500ms` 的输入防抖，并在写操作前执行新旧值 diff 检查                                                                              |
+| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储           | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.storage.get/set(key, value)`（view 通道没有 `state` 命名空间）       |
+| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                               | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize(height)`（**位置参数**）                                                     |
+| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                               | **契约 3**          | 使用空值合并语法：`const classId = context?.classId \|\| 'default'`                                                                       |
 
 ---
 
