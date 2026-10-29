@@ -133,6 +133,28 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       service.deleteStudentCascade(res.id);
     });
 
+    it('性别随新建落库并在学生列表下发，非法值归一为 NULL（迁移 044）', () => {
+      const male = service.createStudent({ name: '性别男生', gender: '男' });
+      const female = service.createStudent({ name: '性别女生', gender: 'female' });
+      const unknown = service.createStudent({ name: '性别未知', gender: '???' });
+
+      const rows = service.listStudents({ page: 1, pageSize: 200, offset: 0, isAll: true }).data;
+      expect(rows.find((r) => r.id === male.id)?.gender).toBe('male');
+      expect(rows.find((r) => r.id === female.id)?.gender).toBe('female');
+      expect(rows.find((r) => r.id === unknown.id)?.gender).toBeNull();
+
+      // 更新路径同样走归一化
+      service.updateStudent(male.id, { gender: '女' });
+      const afterUpdate = service
+        .listStudents({ page: 1, pageSize: 200, offset: 0, isAll: true })
+        .data.find((r) => r.id === male.id);
+      expect(afterUpdate?.gender).toBe('female');
+
+      service.deleteStudentCascade(male.id);
+      service.deleteStudentCascade(female.id);
+      service.deleteStudentCascade(unknown.id);
+    });
+
     it('deleteStudentCascade 必须在单事务中彻底级联清理 12 张关联表', () => {
       const student = service.createStudent({
         name: '李四关联测试',

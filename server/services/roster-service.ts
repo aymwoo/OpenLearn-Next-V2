@@ -16,6 +16,22 @@ import type { Pagination } from '../utils/pagination.js';
 import { openClassPasscode, sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
 import { sanitizePrivateNotes } from '../../packages/core/security/html-sanitize.js';
 
+/**
+ * 归一化学生性别。
+ *
+ * 教师输入与 CSV 里可能写成 `male` / `M` / `男` / `boy` 等形态，
+ * 统一收敛到 'male' | 'female'；无法识别一律落 NULL（未设置），
+ * 避免脏值进入数据库后前端头像判定不了。
+ */
+export function normalizeStudentGender(value: unknown): 'male' | 'female' | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim().toLowerCase();
+  if (!v) return null;
+  if (['male', 'm', 'boy', '男', '男生'].includes(v)) return 'male';
+  if (['female', 'f', 'girl', '女', '女生'].includes(v)) return 'female';
+  return null;
+}
+
 export interface ClassItem {
   id: string;
   name: string;
@@ -33,6 +49,8 @@ export interface StudentItem {
   name: string;
   email?: string | null;
   avatar?: string | null;
+  /** 学生性别：'male' | 'female'，NULL 表示未设置（见迁移 044） */
+  gender?: 'male' | 'female' | null;
   locked_lesson_id?: string | null;
   lock_mode?: 'full' | 'navigation' | null;
   lock_target?: string | null;
@@ -78,6 +96,8 @@ export interface RosterImportInput {
   student_number?: string;
   password?: string;
   private_notes?: string;
+  /** 性别：'male' | 'female' | '男' | '女' 等，服务端归一化后落库 */
+  gender?: string;
 }
 
 /**
@@ -508,7 +528,7 @@ export class RosterService {
     const total = (this.reader.prepare(`SELECT COUNT(*) AS n FROM students s ${where}`).get(...params) as any).n;
     const students = this.reader
       .prepare(
-        `SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.lock_mode, s.lock_target, s.private_notes, s.created_at
+        `SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.gender, s.locked_lesson_id, s.lock_mode, s.lock_target, s.private_notes, s.created_at
          FROM students s ${where}
          ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
       )
@@ -548,12 +568,19 @@ export class RosterService {
     return row ?? null;
   }
 
-  public createStudent(params: { name: string; email?: string; student_number?: string; password?: string }): {
+  public createStudent(params: {
+    name: string;
+    email?: string;
+    student_number?: string;
+    password?: string;
+    gender?: string | null;
+  }): {
     id: string;
     student_number: string;
     initial_password?: string;
   } {
     const { name, email, student_number, password } = params;
+    const gender = normalizeStudentGender(params.gender);
     if (!name?.trim()) throw new Error('Student name is required');
 
     const studentId = randomId();
@@ -574,8 +601,10 @@ export class RosterService {
     const hashedPassword = bcryptHashPassword(finalPlain);
 
     this.db
-      .prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(studentId, finalNum, name.trim(), email || '', hashedPassword, Date.now());
+      .prepare(
+        'INSERT INTO students (id, student_number, name, email, password, gender, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(studentId, finalNum, name.trim(), email || '', hashedPassword, gender, Date.now());
 
     return {
       id: studentId,
@@ -595,9 +624,13 @@ export class RosterService {
       lock_mode?: 'full' | 'navigation' | null;
       lock_target?: string | object | null;
       private_notes?: string | null;
+      gender?: string | null;
     },
   ): void {
     const { name, email, student_number, password, locked_lesson_id, lock_mode, lock_target, private_notes } = params;
+    if (params.gender !== undefined) {
+      this.db.prepare('UPDATE students SET gender = ? WHERE id = ?').run(normalizeStudentGender(params.gender), id);
+    }
     if (name) this.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name.trim(), id);
     if (email !== undefined)
       this.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email?.trim() || null, id);
@@ -749,7 +782,7 @@ export class RosterService {
     return this.reader
       .prepare(
         `
-      SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.lock_mode, s.lock_target, s.private_notes, s.created_at, cs.joined_at
+      SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.gender, s.locked_lesson_id, s.lock_mode, s.lock_target, s.private_notes, s.created_at, cs.joined_at
       FROM students s
       INNER JOIN class_students cs ON s.id = cs.student_id
       WHERE cs.class_id = ?
@@ -813,6 +846,7 @@ export class RosterService {
       email: string;
       studentNumber: string;
       notes: string;
+      gender: 'male' | 'female' | null;
       /** 明文初始密码，仅当 autoPassword 为 true 时才回传给教师 */
       plainPassword: string;
       autoPassword: boolean;
@@ -836,6 +870,7 @@ export class RosterService {
         email,
         studentNumber,
         notes,
+        gender: normalizeStudentGender(st?.gender),
         plainPassword,
         autoPassword,
         hashedPassword: bcryptHashPassword(plainPassword),
@@ -843,7 +878,7 @@ export class RosterService {
     }
 
     const insertStudent = this.db.prepare(
-      'INSERT INTO students (id, student_number, name, email, password, private_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO students (id, student_number, name, email, password, private_notes, gender, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     );
     const findByEmail = this.db.prepare('SELECT id, student_number, name, email FROM students WHERE email = ?');
     const findByNumber = this.db.prepare(
@@ -880,7 +915,16 @@ export class RosterService {
         const studentId = randomId('stu_');
         const finalNum = row.studentNumber || generateStudentNumber(this.db) || `ST_${studentId}`;
 
-        insertStudent.run(studentId, finalNum, row.name, row.email || null, row.hashedPassword, row.notes || null, now);
+        insertStudent.run(
+          studentId,
+          finalNum,
+          row.name,
+          row.email || null,
+          row.hashedPassword,
+          row.notes || null,
+          row.gender,
+          now,
+        );
 
         results.push({
           id: studentId,

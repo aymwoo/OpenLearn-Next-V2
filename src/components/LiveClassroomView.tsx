@@ -44,6 +44,9 @@ import {
   X,
   Lock,
   FileEdit,
+  Mars,
+  Venus,
+  UserRound,
 } from 'lucide-react';
 import type { LockMode } from '../types/app';
 import * as Icons from 'lucide-react';
@@ -85,6 +88,32 @@ import {
   IN_PROGRESS_STATUSES,
 } from '../features/classroom/LiveSubmissionsPanel';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
+
+/**
+ * 学生头像内容：优先用本人照片（students.avatar），没有照片时按性别渲染，
+ * 性别未设置则退到中性人像 —— 不再把姓名塞进 34px 的圆里（必然被省略号截断）。
+ */
+function StudentAvatarVisual({
+  avatar,
+  gender,
+  name,
+}: {
+  avatar?: string | null;
+  gender?: string | null;
+  name: string;
+}) {
+  if (avatar) {
+    return <img src={avatar} alt={name} className="w-full h-full object-cover" draggable={false} />;
+  }
+  const normalized = typeof gender === 'string' ? gender.trim().toLowerCase() : '';
+  if (normalized === 'male' || normalized === 'm' || normalized === '男') {
+    return <Mars size={16} className="text-sky-600" aria-hidden="true" />;
+  }
+  if (normalized === 'female' || normalized === 'f' || normalized === '女') {
+    return <Venus size={16} className="text-rose-500" aria-hidden="true" />;
+  }
+  return <UserRound size={16} className="text-slate-400" aria-hidden="true" />;
+}
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
@@ -2873,21 +2902,18 @@ export function LiveClassroomView({
                               isSelectedDraw ? 'bg-amber-100/90' : ''
                             }`}
                           >
-                            {/* Name view: Visible by default, hidden on hover */}
+                            {/* 头像：照片 → 性别图标 → 中性人像；悬停时让位给操作按钮 */}
                             <span
-                              className={`text-[11px] font-bold tracking-tight truncate max-w-[32px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
-                                isSelectedDraw
-                                  ? 'text-amber-900 font-extrabold'
-                                  : !isOnline
-                                    ? 'text-slate-400'
-                                    : 'text-slate-700 dark:text-slate-200'
+                              className={`flex items-center justify-center w-full h-full group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                                !isOnline ? 'opacity-60' : ''
                               }`}
                             >
-                              {st.name}
+                              <StudentAvatarVisual avatar={st.avatar} gender={st.gender} name={st.name} />
                             </span>
 
                             {/* Hover action overlay */}
-                            <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-surface/95 rounded-full shadow-inner">
+                            {/* 圆头像只有 34px：三个按钮必须零内边距 + 极小间距，否则会被 overflow-hidden 裁掉 */}
+                            <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-surface/95 rounded-full shadow-inner">
                               {/* Alert / Warning button */}
                               {selectedLesson && onPingStudent && (
                                 <button
@@ -2905,7 +2931,7 @@ export function LiveClassroomView({
                                       'success',
                                     );
                                   }}
-                                  className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
+                                  className={`p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                     isBehind
                                       ? 'text-amber-500 hover:text-amber-600 animate-pulse'
                                       : 'text-slate-400 hover:text-primary-ink'
@@ -2923,7 +2949,7 @@ export function LiveClassroomView({
                                   handleOverrideSegmentGate(st.id);
                                 }}
                                 disabled={!selectedLesson || !activeSegmentId}
-                                className="p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
+                                className="p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-emerald-600"
                                 title={lang === 'zh' ? '放行当前环节' : 'Allow this segment'}
                               >
                                 <Unlock size={9} />
@@ -2936,7 +2962,7 @@ export function LiveClassroomView({
                                   handleToggleStudentLock(st.id, st.locked_lesson_id, st.lock_mode);
                                 }}
                                 disabled={!selectedLesson}
-                                className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
+                                className={`p-0 leading-none rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                   isStudentLocked
                                     ? studentLockMode === 'navigation'
                                       ? 'text-amber-500 hover:text-amber-600'
@@ -2988,6 +3014,20 @@ export function LiveClassroomView({
                             />
                           )}
                         </div>
+
+                        {/* 完整姓名：不截断、不加省略号，超长名字自然换行 */}
+                        <span
+                          className={`mt-1 w-full px-0.5 text-center text-[10px] font-semibold leading-tight break-words select-none ${
+                            isSelectedDraw
+                              ? 'text-amber-800 dark:text-amber-300'
+                              : !isOnline
+                                ? 'text-slate-400'
+                                : 'text-slate-700 dark:text-slate-200'
+                          }`}
+                          title={st.name}
+                        >
+                          {st.name}
+                        </span>
 
                         {/* Small Progress Label or Draw Winner Label */}
                         <span

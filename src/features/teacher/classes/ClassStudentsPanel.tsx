@@ -234,6 +234,19 @@ export function ClassStudentsPanel({
                   : 'Enter student number (optional, leave blank to auto-generate):',
               );
               const student_number = studentNumberPrompt ? studentNumberPrompt.trim() : undefined;
+              // 性别只用于课堂专注力监控的头像（见 LiveClassroomView 的 StudentAvatarVisual），
+              // 服务端会归一化 male/female，无法识别则落 NULL。
+              const genderPrompt =
+                window.prompt(
+                  lang === 'zh'
+                    ? '请输入性别 (男/女，可选，留空则显示默认头像):'
+                    : 'Enter gender (male/female, optional, blank for default avatar):',
+                ) || '';
+              const gender = /^(男|male|m|男生)$/i.test(genderPrompt.trim())
+                ? 'male'
+                : /^(女|female|f|女生)$/i.test(genderPrompt.trim())
+                  ? 'female'
+                  : undefined;
               const email =
                 window.prompt(lang === 'zh' ? '请输入学生邮箱 (可选):' : 'Enter student email (optional):') || '';
               const password =
@@ -248,7 +261,13 @@ export function ClassStudentsPanel({
               const createRes = await fetch('/api/students', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password, ...(student_number ? { student_number } : {}) }),
+                body: JSON.stringify({
+                  name,
+                  email,
+                  password,
+                  ...(student_number ? { student_number } : {}),
+                  ...(gender ? { gender } : {}),
+                }),
               });
               if (createRes.ok) {
                 const newStudent = await createRes.json();
@@ -838,6 +857,36 @@ export function ClassStudentsPanel({
                                         </button>
                                       )}
                                     </div>
+                                  </div>
+
+                                  {/* 性别：只影响课堂专注力监控的头像（有照片时优先用照片） */}
+                                  <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
+                                    <span className="font-semibold text-gray-600">
+                                      {lang === 'zh' ? '性别（课堂头像）:' : 'Gender (classroom avatar):'}
+                                    </span>
+                                    <select
+                                      value={st.gender === 'male' || st.gender === 'female' ? st.gender : ''}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={async (e) => {
+                                        e.stopPropagation();
+                                        const gender = e.target.value === '' ? null : e.target.value;
+                                        const gRes = await fetch(`/api/students/${st.id}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ gender }),
+                                        });
+                                        if (gRes.ok) {
+                                          await fetchStudents();
+                                          await fetchClassStudents(cls.id);
+                                        }
+                                      }}
+                                      className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 cursor-pointer text-gray-700"
+                                      title={lang === 'zh' ? '按性别显示课堂头像' : 'Avatar follows gender'}
+                                    >
+                                      <option value="">{lang === 'zh' ? '未设置' : 'Not set'}</option>
+                                      <option value="male">{lang === 'zh' ? '男' : 'Male'}</option>
+                                      <option value="female">{lang === 'zh' ? '女' : 'Female'}</option>
+                                    </select>
                                   </div>
 
                                   <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
