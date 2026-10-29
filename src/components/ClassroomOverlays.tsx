@@ -18,6 +18,8 @@ export interface ClassroomOverlaysProps {
   activeRole?: 'teacher' | 'student';
   isStudentLiveMode?: boolean;
   liveStudentParam?: string | null;
+  /** 全班专注锁定（full 模式）：学生端浮层内的自服务组件必须转为只读 */
+  isInteractionLocked?: boolean;
   addToast?: any;
   setReadNotifications?: any;
 }
@@ -43,6 +45,10 @@ export function ClassroomOverlays(props: ClassroomOverlaysProps) {
   const isStudentLiveMode = props.isStudentLiveMode ?? appData?.isStudentLiveMode ?? false;
   const liveStudentParam =
     props.liveStudentParam !== undefined ? props.liveStudentParam : (appData?.liveStudentParam ?? null);
+  const isInteractionLocked =
+    props.isInteractionLocked !== undefined
+      ? props.isInteractionLocked
+      : (appData?.isInteractionLocked ?? false);
   const addToast = props.addToast ?? appData?.addToast ?? (() => {});
   const setReadNotifications = props.setReadNotifications ?? appData?.setReadNotifications ?? (() => {});
 
@@ -148,6 +154,7 @@ export function ClassroomOverlays(props: ClassroomOverlaysProps) {
             undefined
           }
           lang={lang as any}
+          interactionLocked={isInteractionLocked}
         />
       )}
     </>

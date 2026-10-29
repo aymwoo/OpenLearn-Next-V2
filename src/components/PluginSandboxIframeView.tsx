@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronUp, Loader2 } from 'lucide-react';
 import { PLUGIN_VIEW_CHANNEL } from '../plugin-host/sandbox-frame';
 import { useAppStore, appStore } from '../store/appStore';
 import { useThemeStore } from '../store/themeStore';
@@ -31,6 +31,17 @@ export interface PluginSandboxIframeViewProps {
    */
   variant?: PluginViewVariant;
   style?: React.CSSProperties;
+  /**
+   * 全班专注锁定（只读跟随）期间为 true。
+   *
+   * iframe 始终保持挂载（插件内未提交的状态不丢），但必须不可操作：
+   * - `panel` 槽位：视图留在原地，覆盖一层拦截罩并禁用指针/键盘事件；
+   * - `floating` 槽位：整体下滑收起，原位只留一个「已收起」提示图标。
+   *
+   * 否则学生会继续点得动浮层里的便签输入框、抢答球等组件 ——
+   * 锁定只锁了白板，`student.classroom.overlay` 这类浮层完全不受影响。
+   */
+  locked?: boolean;
 }
 
 export type PluginViewVariant = 'panel' | 'floating';
@@ -72,6 +83,7 @@ export function PluginSandboxIframeView({
   onResize,
   variant = 'panel',
   style,
+  locked = false,
 }: PluginSandboxIframeViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -266,39 +278,113 @@ export function PluginSandboxIframeView({
 
   // panel：铺满父容器（页面级槽位）；floating：固定小浮层，不占父级布局。
   const isFloating = variant === 'floating';
+  // 浮层型槽位（如 student.classroom.overlay）锁定后整体下滑收起，
+  // 原位只留一个「已收起」的展开图标；页面级 panel 槽位仍用拦截罩。
+  const collapsed = locked && isFloating;
   const containerClassName = isFloating
-    ? `fixed bottom-6 left-6 z-40 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 ${className || ''}`
+    ? `fixed bottom-6 left-6 z-40 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out dark:border-slate-700 dark:bg-slate-900 ${className || ''}`
     : `relative w-full h-full flex flex-col min-h-0 bg-white dark:bg-slate-900 ${className || ''}`;
   const containerStyle: React.CSSProperties = {
     ...(style || {}),
     ...(isFloating ? { height: `${iframeHeight ?? 180}px` } : iframeHeight ? { minHeight: `${iframeHeight}px` } : {}),
+    ...(collapsed ? { transform: 'translateY(calc(100% + 1.5rem))' } : {}),
   };
 
   return (
-    <div className={containerClassName} style={containerStyle} data-plugin-view-variant={variant}>
-      {!isLoaded && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-2xs transition-opacity duration-200">
-          <Loader2 size={24} className="animate-spin text-indigo-500 mb-2" />
-          <span className="text-xs font-medium text-slate-500">
-            {lang === 'zh' ? '正在加载插件视图...' : 'Loading plugin view...'}
-          </span>
-        </div>
+    <>
+      <div
+        className={`${containerClassName}${collapsed ? ' pointer-events-none' : ''}`}
+        style={containerStyle}
+        data-plugin-view-variant={variant}
+        data-plugin-view-locked={locked ? 'true' : undefined}
+        data-plugin-view-collapsed={collapsed ? 'true' : undefined}
+        aria-hidden={collapsed ? true : undefined}
+      >
+        {!isLoaded && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-2xs transition-opacity duration-200">
+            <Loader2 size={24} className="animate-spin text-indigo-500 mb-2" />
+            <span className="text-xs font-medium text-slate-500">
+              {lang === 'zh' ? '正在加载插件视图...' : 'Loading plugin view...'}
+            </span>
+          </div>
+        )}
+        <iframe
+          ref={iframeRef}
+          src={srcUrl}
+          title={label || `${pluginId} view`}
+          sandbox="allow-scripts allow-forms allow-downloads"
+          referrerPolicy="no-referrer"
+          onLoad={() => {
+            setIsLoaded(true);
+            postInit();
+          }}
+          // 锁定时连键盘焦点也挡掉：pointer-events 只拦鼠标/触摸
+          inert={locked ? true : undefined}
+          className={`w-full flex-1 border-none transition-opacity duration-200 ${
+            isLoaded ? 'opacity-100' : 'opacity-0'
+          }${locked ? ' pointer-events-none' : ''}`}
+        />
+        {/* 专注锁定拦截罩：仅页面级 panel 槽位使用（浮层型已整体收起） */}
+        {locked && !isFloating && (
+          <div
+            data-testid="plugin-view-lock-cover"
+            className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/15 backdrop-blur-[1px] cursor-not-allowed select-none"
+            title={
+              lang === 'zh'
+                ? '老师已开启全班专注锁定，当前为只读跟随'
+                : 'Classroom focus lock is on — read-only follow mode'
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            <span className="px-2 py-1 rounded-full bg-slate-900/70 text-white text-[10px] font-bold tracking-wide">
+              🔒 {lang === 'zh' ? '专注锁定中' : 'Focus locked'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 收起后的原位提示：点击只解释「为什么收起了」，不会打开浮层 */}
+      {collapsed && (
+        <button
+          type="button"
+          data-testid="plugin-view-lock-collapsed"
+          aria-expanded={false}
+          aria-label={
+            lang === 'zh'
+              ? `${label || pluginId} 已收起：老师已开启全班专注锁定`
+              : `${label || pluginId} collapsed: classroom focus lock is on`
+          }
+          title={
+            lang === 'zh'
+              ? '老师已开启全班专注锁定，互动浮层已收起'
+              : 'Classroom focus lock is on — the floating panel is collapsed'
+          }
+          className="fixed bottom-6 left-6 z-40 flex items-center gap-1 rounded-full border border-slate-300 bg-white/95 px-2.5 py-1.5 text-slate-500 shadow-lg backdrop-blur-xs transition-colors hover:text-slate-700 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-300"
+          style={style}
+          onClick={() =>
+            appStore.getState().addToast({
+              id: Math.random().toString(16).slice(2),
+              title: label || pluginId,
+              message:
+                lang === 'zh'
+                  ? '老师已开启全班专注锁定，互动浮层暂时收起，解锁后自动恢复。'
+                  : 'Classroom focus lock is on — the floating panel is collapsed and will return after unlock.',
+              type: 'info',
+            })
+          }
+        >
+          <ChevronUp size={14} />
+          <span className="text-[10px] font-bold">🔒</span>
+        </button>
       )}
-      <iframe
-        ref={iframeRef}
-        src={srcUrl}
-        title={label || `${pluginId} view`}
-        sandbox="allow-scripts allow-forms allow-downloads"
-        referrerPolicy="no-referrer"
-        onLoad={() => {
-          setIsLoaded(true);
-          postInit();
-        }}
-        className={`w-full flex-1 border-none transition-opacity duration-200 ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
-    </div>
+    </>
   );
 }
 

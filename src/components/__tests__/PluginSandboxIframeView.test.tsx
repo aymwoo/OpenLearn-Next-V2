@@ -84,8 +84,67 @@ describe('PluginSandboxIframeView component', () => {
     expect(container.className).not.toContain('h-full');
   });
 
-  it('responds to "ready" postMessage with "init" payload', async () => {
-    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" slot="teacher.tab" />);
+  it('锁定时浮层下滑收起，原位只留展开图标（全班专注锁定）', () => {
+    render(
+      <PluginSandboxIframeView
+        pluginId={PLUGIN_ID}
+        view="overlay.html"
+        label="便签浮层"
+        slot="student.classroom.overlay"
+        variant="floating"
+        locked
+      />,
+    );
+
+    const iframe = screen.getByTitle('便签浮层') as HTMLIFrameElement;
+    const container = iframe.closest('[data-plugin-view-variant]') as HTMLElement;
+    expect(container.getAttribute('data-plugin-view-locked')).toBe('true');
+    expect(container.getAttribute('data-plugin-view-collapsed')).toBe('true');
+    // 整体下滑到视口外（bottom-6 之上再让出一个 1.5rem）
+    expect(container.style.transform).toContain('translateY');
+    // 双重防线：指针事件剥离 + 键盘焦点剥离（inert），插件 iframe 保持挂载不丢状态
+    expect(iframe.className).toContain('pointer-events-none');
+    expect(iframe.hasAttribute('inert')).toBe(true);
+    // 浮层型不再盖拦截罩，原位换成「已收起」的展开图标
+    expect(screen.queryByTestId('plugin-view-lock-cover')).toBeNull();
+    const chip = screen.getByTestId('plugin-view-lock-collapsed');
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    expect(chip.className).toContain('fixed');
+    expect(chip.className).toContain('bottom-6');
+  });
+
+  it('锁定时页面级 panel 槽位覆盖拦截罩（不下滑收起）', () => {
+    render(
+      <PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="学生看板" slot="student.view" locked />,
+    );
+
+    const iframe = screen.getByTitle('学生看板') as HTMLIFrameElement;
+    const container = iframe.closest('[data-plugin-view-variant]') as HTMLElement;
+    expect(container.getAttribute('data-plugin-view-collapsed')).toBeNull();
+    expect(container.style.transform).toBe('');
+    expect(screen.getByTestId('plugin-view-lock-cover')).toBeTruthy();
+    expect(screen.queryByTestId('plugin-view-lock-collapsed')).toBeNull();
+  });
+
+  it('默认不渲染锁定罩与收起图标', () => {
+    render(
+      <PluginSandboxIframeView
+        pluginId={PLUGIN_ID}
+        view="overlay.html"
+        label="便签浮层"
+        slot="student.classroom.overlay"
+        variant="floating"
+      />,
+    );
+
+    const iframe = screen.getByTitle('便签浮层') as HTMLIFrameElement;
+    expect(iframe.className).not.toContain('pointer-events-none');
+    expect(iframe.hasAttribute('inert')).toBe(false);
+    expect(screen.queryByTestId('plugin-view-lock-cover')).toBeNull();
+    expect(screen.queryByTestId('plugin-view-lock-collapsed')).toBeNull();
+  });
+
+  it('responds to "ready" postMessage with "init" payload', async () => {    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" slot="teacher.tab" />);
 
     const iframe = screen.getByTitle('测试看板') as HTMLIFrameElement;
     expect(iframe.contentWindow).toBeTruthy();

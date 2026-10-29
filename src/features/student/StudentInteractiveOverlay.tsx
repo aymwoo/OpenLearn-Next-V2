@@ -25,6 +25,12 @@ export interface StudentInteractiveOverlayProps {
   studentName?: string;
   classId?: string;
   lang?: 'zh' | 'en';
+  /**
+   * 全班专注锁定（full 模式）期间为 true：本浮层内的学生自服务组件
+   * （插件浮层、节奏信号条）全部转为只读，避免「白板锁了、浮层还能点」。
+   * 答题锁定（navigation 模式）时为 false —— 那时学生需要继续作答。
+   */
+  interactionLocked?: boolean;
 }
 
 export function StudentInteractiveOverlay({
@@ -33,6 +39,7 @@ export function StudentInteractiveOverlay({
   studentName = '我',
   classId,
   lang = 'zh',
+  interactionLocked = false,
 }: StudentInteractiveOverlayProps) {
   const [activePoll, setActivePoll] = useState<any>(null);
   const [activeBuzzer, setActiveBuzzer] = useState<any>(null);
@@ -450,6 +457,7 @@ export function StudentInteractiveOverlay({
       <ExtensionPointRenderer
         slot="student.classroom.overlay"
         slotProps={{ studentId, studentName, lessonId, classId }}
+        locked={interactionLocked}
       />
 
       {/* 考试模式全屏视图（v5.1 休眠槽位接线）：插件全屏接管（锁定退出 + 倒计时），
@@ -479,9 +487,28 @@ export function StudentInteractiveOverlay({
           </span>
         )}
 
-        <div className="flex items-center gap-1">
+        {/* 专注锁定期间：节奏信号条只做状态展示，学生不能再发信号 */}
+        {interactionLocked && (
+          <span
+            data-testid="student-overlay-lock-chip"
+            className="px-2 py-1 rounded-xl bg-slate-900/70 text-white text-2xs font-bold whitespace-nowrap"
+            title={
+              lang === 'zh'
+                ? '老师已开启全班专注锁定，互动组件已暂停'
+                : 'Classroom focus lock is on — interactions are paused'
+            }
+          >
+            🔒 {lang === 'zh' ? '专注锁定中' : 'Focus locked'}
+          </span>
+        )}
+
+        <div
+          className={`flex items-center gap-1${interactionLocked ? ' pointer-events-none opacity-40' : ''}`}
+          aria-disabled={interactionLocked || undefined}
+        >
           <button
             type="button"
+            disabled={interactionLocked}
             onClick={() => sendPacingSignal('CLEAR')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CLEAR'
@@ -497,6 +524,7 @@ export function StudentInteractiveOverlay({
 
           <button
             type="button"
+            disabled={interactionLocked}
             onClick={() => sendPacingSignal('CONFUSED')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CONFUSED'
@@ -512,6 +540,7 @@ export function StudentInteractiveOverlay({
 
           <button
             type="button"
+            disabled={interactionLocked}
             onClick={() => sendPacingSignal('TOO_FAST')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'TOO_FAST'
@@ -527,6 +556,7 @@ export function StudentInteractiveOverlay({
 
           <button
             type="button"
+            disabled={interactionLocked}
             onClick={() => sendPacingSignal('SLOW')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'SLOW'

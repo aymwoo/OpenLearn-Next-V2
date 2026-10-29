@@ -274,6 +274,12 @@ export interface ExtensionPointRendererProps {
    * 不传时渲染该槽位全部扩展（兼容固定槽位行为）。
    */
   placement?: 'before' | 'after';
+  /**
+   * 全班专注锁定期间为 true：第三方 `view` 沙箱视图转为只读
+   * （panel 槽位覆盖拦截罩，floating 槽位下滑收起）。
+   * 仅对 iframe 视图生效，内建 React 组件自行处理锁定。
+   */
+  locked?: boolean;
 }
 
 /**
@@ -434,6 +440,7 @@ export function ExtensionPointRenderer({
   route,
   slotProps,
   placement,
+  locked = false,
 }: ExtensionPointRendererProps) {
   // 熔断降级告警去重（每个组件实例只告警一次/插件）
   const warnedPluginsRef = React.useRef<Set<string>>(new Set());
@@ -545,6 +552,7 @@ export function ExtensionPointRenderer({
                 studentId={slotProps?.studentId ?? null}
                 studentName={slotProps?.studentName ?? null}
                 variant={viewVariantFor(slot)}
+                locked={locked}
               />
             )}
           </CrashResetProbe>
@@ -1045,6 +1053,7 @@ export function ExtensionPointRenderer({
                     studentId={slotProps?.studentId ?? null}
                     studentName={slotProps?.studentName ?? null}
                     variant={viewVariantFor(slot)}
+                    locked={locked}
                     style={
                       viewVariantFor(slot) === 'floating' && index > 0
                         ? { left: `calc(1.5rem + ${index * 316}px)` }

@@ -179,6 +179,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
               activeSegmentId,
               lang,
             }}
+            locked={interactionLocked}
           />
 
           <button
