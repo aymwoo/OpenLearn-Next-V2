@@ -154,5 +154,12 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
 
     expect(screen.getByText('课堂倒计时设置')).toBeDefined();
     expect(screen.getByText('快捷预设')).toBeDefined();
+
+    // 浮层通过 portal 挂到 body 且使用 fixed 定位：不参与父级布局（不撑高顶栏）、不被 overflow 裁剪
+    const popover = document.getElementById('classroom-countdown-header-popover');
+    expect(popover).not.toBeNull();
+    expect(popover?.parentElement).toBe(document.body);
+    expect(popover?.className).toContain('fixed');
+    expect(popover?.className).toContain('z-[9999]');
   });
 });

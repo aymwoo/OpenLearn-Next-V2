@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Clock,
   Play,
@@ -119,17 +120,85 @@ export function ClassroomCountdownWidget({
   // 顶栏胶囊展开浮层控制
   const [isHeaderPopoverOpen, setIsHeaderPopoverOpen] = useState(false);
   const headerPopoverRef = useRef<HTMLDivElement | null>(null);
+  const headerPopoverPanelRef = useRef<HTMLDivElement | null>(null);
+  const headerPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+  // 浮层采用 fixed 定位并挂载到 body，避免被顶栏的 overflow-x-auto 裁剪 / 撑高
+  const [headerPopoverStyles, setHeaderPopoverStyles] = useState<React.CSSProperties | null>(null);
+
+  const computeHeaderPopoverStyles = useCallback((): React.CSSProperties => {
+    const anchor = headerPopoverAnchorRef.current ?? headerPopoverRef.current;
+    if (!anchor || typeof window === 'undefined') return {};
+    const rect = anchor.getBoundingClientRect();
+    const viewportW = window.innerWidth || 1024;
+    const viewportH = window.innerHeight || 768;
+    const gap = 6;
+    const margin = 8;
+    const panelWidth = Math.min(288, Math.max(200, viewportW - margin * 2));
+
+    // 面板右边缘对齐触发按钮右边缘，并保证不超出视口
+    let right = viewportW - rect.right;
+    right = Math.max(margin, Math.min(right, viewportW - panelWidth - margin));
+    const top = Math.max(margin, rect.bottom + gap);
+    const maxHeight = Math.max(180, viewportH - top - margin);
+
+    return { top, right, width: panelWidth, maxHeight };
+  }, []);
+
+  const toggleHeaderPopover = useCallback(() => {
+    if (!isHeaderPopoverOpen) {
+      setHeaderPopoverStyles(computeHeaderPopoverStyles());
+    }
+    setIsHeaderPopoverOpen((prev) => !prev);
+  }, [isHeaderPopoverOpen, computeHeaderPopoverStyles]);
 
   useEffect(() => {
-    if (!isHeaderPopoverOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (headerPopoverRef.current && !headerPopoverRef.current.contains(e.target as Node)) {
-        setIsHeaderPopoverOpen(false);
+    if (!isHeaderPopoverOpen) {
+      setHeaderPopoverStyles(null);
+      return;
+    }
+
+    // 视口滚动 / 尺寸变化时跟随锚点重新定位（rAF 节流）
+    let rafId = 0;
+    let scheduled = false;
+    const reposition = () => {
+      if (scheduled) return;
+      scheduled = true;
+      const run = () => {
+        scheduled = false;
+        setHeaderPopoverStyles(computeHeaderPopoverStyles());
+      };
+      if (typeof window.requestAnimationFrame === 'function') {
+        rafId = window.requestAnimationFrame(run);
+      } else {
+        run();
       }
     };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (headerPopoverRef.current?.contains(target)) return;
+      if (headerPopoverPanelRef.current?.contains(target)) return;
+      setIsHeaderPopoverOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsHeaderPopoverOpen(false);
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isHeaderPopoverOpen]);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+
+    return () => {
+      if (rafId && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(rafId);
+      }
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [isHeaderPopoverOpen, computeHeaderPopoverStyles]);
 
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef(countdown);
@@ -681,8 +750,11 @@ export function ClassroomCountdownWidget({
             {/* 展开浮层设置 */}
             <button
               type="button"
+              ref={headerPopoverAnchorRef}
               id="classroom-countdown-settings-toggle"
-              onClick={() => setIsHeaderPopoverOpen(!isHeaderPopoverOpen)}
+              onClick={toggleHeaderPopover}
+              aria-expanded={isHeaderPopoverOpen}
+              aria-haspopup="dialog"
               className={`w-5 h-5 rounded flex items-center justify-center text-muted hover:text-main hover:bg-surface-secondary transition-colors cursor-pointer ${
                 isHeaderPopoverOpen ? 'bg-surface-secondary text-main' : ''
               }`}
@@ -696,135 +768,141 @@ export function ClassroomCountdownWidget({
           </div>
         </div>
 
-        {/* 悬浮设置浮层 */}
-        {isHeaderPopoverOpen && (
-          <div
-            id="classroom-countdown-header-popover"
-            className="absolute right-0 top-full mt-1.5 w-72 bg-surface border border-theme rounded-2xl shadow-xl p-3 z-40 flex flex-col gap-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
-          >
-            <div className="flex items-center justify-between border-b border-theme/60 pb-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-main">
-                <Clock size={13} className="text-primary-theme" />
-                <span>{lang === 'zh' ? '课堂倒计时设置' : 'Countdown Settings'}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`p-1 rounded-md text-xs transition-colors cursor-pointer border border-theme ${
-                    soundEnabled ? 'text-primary-theme bg-surface' : 'text-muted bg-surface/50'
-                  }`}
-                  title={
-                    soundEnabled
-                      ? lang === 'zh'
-                        ? '提示音已开启'
-                        : 'Sound On'
-                      : lang === 'zh'
-                        ? '提示音已静音'
-                        : 'Muted'
-                  }
-                >
-                  {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFullModalOpen(true);
-                    setIsHeaderPopoverOpen(false);
-                  }}
-                  className="p-1 rounded-md text-xs text-muted hover:text-main bg-surface hover:bg-surface-secondary transition-colors cursor-pointer border border-theme"
-                  title={lang === 'zh' ? '大屏全屏投放' : 'Projector Mode'}
-                >
-                  <Maximize2 size={12} />
-                </button>
-              </div>
-            </div>
-
-            {/* 活动标签选择 */}
-            <div className="flex items-center justify-between gap-1 text-[11px]">
-              <span className="text-muted font-medium">{lang === 'zh' ? '当前任务:' : 'Task:'}</span>
-              <div className="flex items-center gap-1">
-                <select
-                  value={countdown.label}
-                  onChange={(e) => syncAndBroadcast({ ...countdown, label: e.target.value })}
-                  className="px-2 py-0.5 rounded-lg bg-surface border border-theme text-xs font-semibold text-main outline-none cursor-pointer"
-                >
-                  {DEFAULT_LABELS.map((lbl) => (
-                    <option key={lbl} value={lbl}>
-                      {lbl}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* 预设与快速时长选择 */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] text-muted font-semibold uppercase tracking-wider">
-                {lang === 'zh' ? '快捷预设' : 'Presets'}
-              </span>
-              <div className="grid grid-cols-3 gap-1">
-                {allPresets.slice(0, 6).map((preset) => (
+        {/* 悬浮设置浮层（portal + fixed 定位：不参与父级布局、不被顶栏 overflow 裁剪） */}
+        {isHeaderPopoverOpen &&
+          createPortal(
+            <div
+              ref={headerPopoverPanelRef}
+              id="classroom-countdown-header-popover"
+              role="dialog"
+              aria-label={lang === 'zh' ? '课堂倒计时设置' : 'Countdown Settings'}
+              style={headerPopoverStyles ?? undefined}
+              className="fixed z-[9999] bg-surface border border-theme rounded-2xl shadow-xl p-3 flex flex-col gap-2.5 overflow-y-auto overflow-x-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+            >
+              <div className="flex items-center justify-between border-b border-theme/60 pb-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-main">
+                  <Clock size={13} className="text-primary-theme" />
+                  <span>{lang === 'zh' ? '课堂倒计时设置' : 'Countdown Settings'}</span>
+                </div>
+                <div className="flex items-center gap-1">
                   <button
-                    key={preset.id}
+                    type="button"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`p-1 rounded-md text-xs transition-colors cursor-pointer border border-theme ${
+                      soundEnabled ? 'text-primary-theme bg-surface' : 'text-muted bg-surface/50'
+                    }`}
+                    title={
+                      soundEnabled
+                        ? lang === 'zh'
+                          ? '提示音已开启'
+                          : 'Sound On'
+                        : lang === 'zh'
+                          ? '提示音已静音'
+                          : 'Muted'
+                    }
+                  >
+                    {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                  </button>
+                  <button
                     type="button"
                     onClick={() => {
-                      handleStart(preset.duration, preset.label);
+                      setIsFullModalOpen(true);
                       setIsHeaderPopoverOpen(false);
                     }}
-                    className={`px-1.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border flex items-center justify-center gap-1 ${
-                      countdown.totalDuration === preset.duration && countdown.isRunning
-                        ? 'bg-primary-theme text-white border-primary-theme shadow-2xs'
-                        : 'bg-surface hover:bg-surface-secondary text-main border-theme'
-                    }`}
-                    title={preset.label}
+                    className="p-1 rounded-md text-xs text-muted hover:text-main bg-surface hover:bg-surface-secondary transition-colors cursor-pointer border border-theme"
+                    title={lang === 'zh' ? '大屏全屏投放' : 'Projector Mode'}
                   >
-                    <span>{preset.icon || '⏱️'}</span>
-                    <span>{preset.duration / 60}m</span>
+                    <Maximize2 size={12} />
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
 
-            {/* 调整与重置操作 */}
-            <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-theme/60">
-              <button
-                type="button"
-                id="classroom-countdown-header-reset-btn"
-                onClick={handleReset}
-                className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-semibold text-muted hover:text-main transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <RotateCcw size={11} />
-                <span>{lang === 'zh' ? '重置' : 'Reset'}</span>
-              </button>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleAddTime(-60)}
-                  disabled={countdown.timeRemaining <= 60}
-                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main disabled:opacity-40 transition-colors cursor-pointer"
-                >
-                  -1m
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddTime(60)}
-                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main transition-colors cursor-pointer"
-                >
-                  +1m
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddTime(300)}
-                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-primary-theme hover:bg-primary-theme/10 transition-colors cursor-pointer"
-                >
-                  +5m
-                </button>
+              {/* 活动标签选择 */}
+              <div className="flex items-center justify-between gap-1 text-[11px]">
+                <span className="text-muted font-medium">{lang === 'zh' ? '当前任务:' : 'Task:'}</span>
+                <div className="flex items-center gap-1">
+                  <select
+                    value={countdown.label}
+                    onChange={(e) => syncAndBroadcast({ ...countdown, label: e.target.value })}
+                    className="px-2 py-0.5 rounded-lg bg-surface border border-theme text-xs font-semibold text-main outline-none cursor-pointer"
+                  >
+                    {DEFAULT_LABELS.map((lbl) => (
+                      <option key={lbl} value={lbl}>
+                        {lbl}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+
+              {/* 预设与快速时长选择 */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] text-muted font-semibold uppercase tracking-wider">
+                  {lang === 'zh' ? '快捷预设' : 'Presets'}
+                </span>
+                <div className="grid grid-cols-3 gap-1">
+                  {allPresets.slice(0, 6).map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        handleStart(preset.duration, preset.label);
+                        setIsHeaderPopoverOpen(false);
+                      }}
+                      className={`px-1.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border flex items-center justify-center gap-1 ${
+                        countdown.totalDuration === preset.duration && countdown.isRunning
+                          ? 'bg-primary-theme text-white border-primary-theme shadow-2xs'
+                          : 'bg-surface hover:bg-surface-secondary text-main border-theme'
+                      }`}
+                      title={preset.label}
+                    >
+                      <span>{preset.icon || '⏱️'}</span>
+                      <span>{preset.duration / 60}m</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 调整与重置操作 */}
+              <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-theme/60">
+                <button
+                  type="button"
+                  id="classroom-countdown-header-reset-btn"
+                  onClick={handleReset}
+                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-semibold text-muted hover:text-main transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw size={11} />
+                  <span>{lang === 'zh' ? '重置' : 'Reset'}</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleAddTime(-60)}
+                    disabled={countdown.timeRemaining <= 60}
+                    className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    -1m
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddTime(60)}
+                    className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main transition-colors cursor-pointer"
+                  >
+                    +1m
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddTime(300)}
+                    className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-primary-theme hover:bg-primary-theme/10 transition-colors cursor-pointer"
+                  >
+                    +5m
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
 
         {/* 大屏全屏投影模态框 */}
         {renderFullModal()}
