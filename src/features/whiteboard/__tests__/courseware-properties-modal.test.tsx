@@ -51,8 +51,13 @@ describe('CoursewarePropertiesModal Component Tests', () => {
 
     expect(screen.getByText('课堂课件属性临时调整')).toBeDefined();
     expect(screen.getByDisplayValue('力学探究实验课件')).toBeDefined();
-    expect(screen.getByDisplayValue('800')).toBeDefined();
-    expect(screen.getByDisplayValue('600')).toBeDefined();
+
+    // 尺寸不再由属性弹窗编辑：画布上拖拽缩放 / 平铺决定
+    expect(screen.queryByText(/画布中窗口尺寸/)).toBeNull();
+    expect(screen.queryByText('宽度 (Width, px)')).toBeNull();
+    expect(screen.queryByText('高度 (Height, px)')).toBeNull();
+    expect(screen.queryByDisplayValue('800')).toBeNull();
+    expect(screen.queryByDisplayValue('600')).toBeNull();
 
     // 默认开启仅本次课堂临时生效保护机制
     const tempCheckbox = screen.getByLabelText(/仅在本次课堂临时生效/) as HTMLInputElement;
@@ -61,22 +66,39 @@ describe('CoursewarePropertiesModal Component Tests', () => {
     expect(screen.getByText(/不会修改原教案数据库/)).toBeDefined();
   });
 
-  it('点击快速预设尺寸按钮可以同步更新宽度和高度', () => {
+  it('不再提供尺寸输入与预设快捷按钮，且应用时原样保留既有宽高', () => {
     render(<CoursewarePropertiesModal {...defaultProps} />);
 
-    // 点击 960×540 (16:9)
-    const btn960 = screen.getByText('960×540 (16:9)');
-    fireEvent.click(btn960);
+    expect(screen.queryByText('960×540 (16:9)')).toBeNull();
+    expect(screen.queryByText('1200×675 (大屏)')).toBeNull();
+    expect(screen.queryByText('800×600 (4:3)')).toBeNull();
 
-    expect(screen.getByDisplayValue('960')).toBeDefined();
-    expect(screen.getByDisplayValue('540')).toBeDefined();
+    fireEvent.click(screen.getByText('临时应用至本课'));
 
-    // 点击 1200×675 (大屏)
-    const btn1200 = screen.getByText('1200×675 (大屏)');
-    fireEvent.click(btn1200);
+    // 弹窗不改写尺寸：沿用画布上已有的 width/height
+    expect(defaultProps.onApplyTemporary).toHaveBeenCalledWith(
+      'el-courseware-1',
+      expect.objectContaining({ width: 800, height: 600 }),
+    );
+  });
 
-    expect(screen.getByDisplayValue('1200')).toBeDefined();
-    expect(screen.getByDisplayValue('675')).toBeDefined();
+  it('元素原本没有宽高时，应用后也不会凭空写入尺寸（交给 DEFAULT_ELEMENT_SIZE 兜底）', () => {
+    render(
+      <CoursewarePropertiesModal
+        {...defaultProps}
+        element={{
+          id: 'el-courseware-2',
+          type: 'html-applet',
+          data: JSON.stringify({ title: '无尺寸课件', coursewareUuid: 'uuid-circuit' }),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('临时应用至本课'));
+
+    const payload = vi.mocked(defaultProps.onApplyTemporary).mock.calls.at(-1)?.[1];
+    expect(payload?.width).toBeUndefined();
+    expect(payload?.height).toBeUndefined();
   });
 
   it('在默认临时保护模式下点击应用：仅触发 onApplyTemporary，严禁触发 onSavePermanent', () => {

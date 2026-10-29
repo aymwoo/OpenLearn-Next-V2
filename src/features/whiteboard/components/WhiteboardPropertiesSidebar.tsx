@@ -7,6 +7,24 @@ import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
 
 /**
+ * 系统内置的组件类元素类型（与图形/手绘区分）。
+ *
+ * 判定用途：组件在画布上以「窗口卡片」渲染，尺寸由拖拽缩放与自动平铺决定，
+ * 因此属性编辑器不再为它们提供宽高输入；图形类（rect / text / circle ...）保留尺寸编辑。
+ */
+const WIDGET_ELEMENT_TYPES = [
+  'plugin',
+  'hello-world',
+  'rollcall',
+  'quiz',
+  'assignment',
+  'html-applet',
+  'code-sandbox',
+  'math-graph',
+  'presentation',
+];
+
+/**
  * 属性保存的结果。
  *
  * 为什么不用 `boolean`：这里要区分三种状态 ——
@@ -119,18 +137,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
   };
 
   // 窗体类小组件仅在用户显式点击标题栏“属性图标”或右键菜单“配置组件属性”时展开侧栏
-  const isWidget =
-    [
-      'plugin',
-      'hello-world',
-      'rollcall',
-      'quiz',
-      'assignment',
-      'html-applet',
-      'code-sandbox',
-      'math-graph',
-      'presentation',
-    ].includes(selectedEl.type) || paletteItemRegistry.has(selectedEl.type);
+  const isWidget = WIDGET_ELEMENT_TYPES.includes(selectedEl.type) || paletteItemRegistry.has(selectedEl.type);
   if (isWidget && activePropertiesElementId !== selectedShapeId) {
     return null;
   }
@@ -223,51 +230,55 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           </div>
         </div>
 
-        {/* 通用属性: 尺寸（位置仅通过画布拖动调整，不再提供 X/Y 坐标输入 —— Issue #97） */}
-        <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-          <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">尺寸</h4>
+        {/* 通用属性: 尺寸（位置仅通过画布拖动调整，不再提供 X/Y 坐标输入 —— Issue #97）
+            组件类元素（quiz / assignment / rollcall / 课件 / 插件组件等）的宽高由画布拖拽缩放与自动平铺决定，
+            属性栏不再提供宽高输入，避免手填数值与平铺布局互相打架。 */}
+        {!isWidget && (
+          <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+            <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">尺寸</h4>
 
-          {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <div>
-                <label className="block text-xs text-muted font-semibold mb-1">宽度 (Width)</label>
+            {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="block text-xs text-muted font-semibold mb-1">宽度 (Width)</label>
+                  <input
+                    type="number"
+                    min="50"
+                    value={Math.round(editingProperties.width ?? 300)}
+                    onChange={(e) => handleLocalPropChange('width', parseFloat(e.target.value) || 50)}
+                    onBlur={(e) => handleNumericPropBlur('width', e.target.value)}
+                    className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted font-semibold mb-1">高度 (Height)</label>
+                  <input
+                    type="number"
+                    min="50"
+                    value={Math.round(editingProperties.height ?? 300)}
+                    onChange={(e) => handleLocalPropChange('height', parseFloat(e.target.value) || 50)}
+                    onBlur={(e) => handleNumericPropBlur('height', e.target.value)}
+                    className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedEl.type === 'circle' && (
+              <div className="mt-2">
+                <label className="block text-xs text-muted font-semibold mb-1">半径 (Radius)</label>
                 <input
                   type="number"
-                  min="50"
-                  value={Math.round(editingProperties.width ?? 300)}
-                  onChange={(e) => handleLocalPropChange('width', parseFloat(e.target.value) || 50)}
-                  onBlur={(e) => handleNumericPropBlur('width', e.target.value)}
+                  min="5"
+                  value={Math.round(editingProperties.radius ?? 50)}
+                  onChange={(e) => handleLocalPropChange('radius', parseFloat(e.target.value) || 5)}
+                  onBlur={(e) => handleNumericPropBlur('radius', e.target.value)}
                   className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-muted font-semibold mb-1">高度 (Height)</label>
-                <input
-                  type="number"
-                  min="50"
-                  value={Math.round(editingProperties.height ?? 300)}
-                  onChange={(e) => handleLocalPropChange('height', parseFloat(e.target.value) || 50)}
-                  onBlur={(e) => handleNumericPropBlur('height', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedEl.type === 'circle' && (
-            <div className="mt-2">
-              <label className="block text-xs text-muted font-semibold mb-1">半径 (Radius)</label>
-              <input
-                type="number"
-                min="5"
-                value={Math.round(editingProperties.radius ?? 50)}
-                onChange={(e) => handleLocalPropChange('radius', parseFloat(e.target.value) || 5)}
-                onBlur={(e) => handleNumericPropBlur('radius', e.target.value)}
-                className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
-              />
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* 插件注册的属性编辑器 —— 优先于硬编码编辑器 */}
         {(() => {

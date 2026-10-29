@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, Save, Globe, Upload, Maximize2, RefreshCw, Code, FileCode, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, Save, Globe, Upload, RefreshCw, Code, FileCode, AlertCircle } from 'lucide-react';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 
 export type HtmlAppletData = HtmlAppletPayload & {
@@ -39,8 +39,6 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
 
   // 表单状态
   const [title, setTitle] = useState(parsedData.title || 'Interactive Courseware');
-  const [width, setWidth] = useState<number>(Number(parsedData.width) || 800);
-  const [height, setHeight] = useState<number>(Number(parsedData.height) || 600);
   const [coursewareUuid, setCoursewareUuid] = useState(parsedData.coursewareUuid || '');
   const [code, setCode] = useState(parsedData.code || '');
   const [isTemporary, setIsTemporary] = useState(true); // 默认保护模式：仅本次课堂临时生效
@@ -51,8 +49,6 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
   useEffect(() => {
     if (isOpen && element) {
       setTitle(parsedData.title || 'Interactive Courseware');
-      setWidth(Number(parsedData.width) || 800);
-      setHeight(Number(parsedData.height) || 600);
       setCoursewareUuid(parsedData.coursewareUuid || '');
       setCode(parsedData.code || '');
       setIsTemporary(true); // 每次打开重置为安全的临时模式
@@ -115,8 +111,8 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
     const updatedData: HtmlAppletData = {
       ...parsedData,
       title: title.trim() || 'Interactive Courseware',
-      width: Math.max(300, width),
-      height: Math.max(200, height),
+      // 宽高不在这里改写：课件在画布上的尺寸由拖拽缩放与自动平铺决定，
+      // 保留 parsedData 里的既有值（没有则由 DEFAULT_ELEMENT_SIZE 兜底）。
       coursewareUuid: coursewareUuid || undefined,
       code: !coursewareUuid ? code : undefined,
     };
@@ -180,75 +176,6 @@ export const CoursewarePropertiesModal: React.FC<CoursewarePropertiesModalProps>
               placeholder="请输入课件窗口标题..."
               className="w-full px-3 py-2 text-xs bg-surface border border-theme hover:border-primary-theme/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-theme/20 text-main transition-all font-medium"
             />
-          </div>
-
-          {/* 2. 窗口尺寸与预设快捷调整 */}
-          <div className="bg-surface-secondary/40 p-3.5 rounded-xl border border-theme space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-main flex items-center gap-1.5">
-                <Maximize2 size={13} className="text-muted" />
-                画布中窗口尺寸 (宽 × 高)
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWidth(800);
-                    setHeight(600);
-                  }}
-                  className="px-2 py-0.5 rounded-md text-2xs bg-surface border border-theme text-muted hover:text-primary-theme hover:border-primary-theme/50 transition-colors"
-                >
-                  800×600 (4:3)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWidth(960);
-                    setHeight(540);
-                  }}
-                  className="px-2 py-0.5 rounded-md text-2xs bg-surface border border-theme text-muted hover:text-primary-theme hover:border-primary-theme/50 transition-colors"
-                >
-                  960×540 (16:9)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWidth(1200);
-                    setHeight(675);
-                  }}
-                  className="px-2 py-0.5 rounded-md text-2xs bg-surface border border-theme text-muted hover:text-primary-theme hover:border-primary-theme/50 transition-colors"
-                >
-                  1200×675 (大屏)
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-2xs text-muted mb-1">宽度 (Width, px)</label>
-                <input
-                  type="number"
-                  min={300}
-                  max={2400}
-                  step={20}
-                  value={width}
-                  onChange={(e) => setWidth(parseInt(e.target.value, 10) || 300)}
-                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-surface border border-theme rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-theme text-main"
-                />
-              </div>
-              <div>
-                <label className="block text-2xs text-muted mb-1">高度 (Height, px)</label>
-                <input
-                  type="number"
-                  min={200}
-                  max={1800}
-                  step={20}
-                  value={height}
-                  onChange={(e) => setHeight(parseInt(e.target.value, 10) || 200)}
-                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-surface border border-theme rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-theme text-main"
-                />
-              </div>
-            </div>
           </div>
 
           {/* 3. 课件数据源选择 */}

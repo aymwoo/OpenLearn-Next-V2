@@ -318,6 +318,32 @@ describe('WhiteboardPropertiesSidebar Component Tests', () => {
     expect(screen.queryByText('未设置正确答案将无法自动判分')).toBeNull();
   });
 
+  it('11. 系统内置组件（quiz）不展示尺寸设置：宽高由画布拖拽/平铺决定', () => {
+    render(
+      <WhiteboardPropertiesSidebar
+        {...defaultProps}
+        selectedShapeId="el-quiz-size"
+        activePropertiesElementId="el-quiz-size"
+        safeElements={[
+          {
+            id: 'el-quiz-size',
+            type: 'quiz',
+            data: JSON.stringify({ question: 'Q', options: ['A', 'B'] }),
+          },
+        ]}
+        editingProperties={{ question: 'Q', options: ['A', 'B'], width: 340, height: 380 }}
+      />,
+    );
+
+    // 侧栏本身照常渲染，只是不再提供尺寸编辑
+    expect(screen.getByText('属性编辑器')).toBeDefined();
+    expect(screen.queryByText('尺寸')).toBeNull();
+    expect(screen.queryByText('宽度 (Width)')).toBeNull();
+    expect(screen.queryByText('高度 (Height)')).toBeNull();
+    expect(screen.queryByDisplayValue('340')).toBeNull();
+    expect(screen.queryByDisplayValue('380')).toBeNull();
+  });
+
   it('8. 点击“删除当前组件”按钮触发 handleElementDelete 并清除选中态', () => {
     const handleDelete = vi.fn();
     const setSelectedShapeId = vi.fn();
