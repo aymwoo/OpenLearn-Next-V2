@@ -280,7 +280,8 @@ describe('请求观测', () => {
       await fetch(`${base}/.vite-cache/deps/react.js`);
 
       const hit = [...warnSpy.mock.calls, ...infoSpy.mock.calls, ...debugSpy.mock.calls].find(
-        (call) => call[1] === 'http.request' && (call[0] as Record<string, unknown>)?.path === '/.vite-cache/deps/react.js',
+        (call) =>
+          call[1] === 'http.request' && (call[0] as Record<string, unknown>)?.path === '/.vite-cache/deps/react.js',
       );
       expect(hit).toBeUndefined();
 
