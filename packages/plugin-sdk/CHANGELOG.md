@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.7.5] - 2026-10-29
+
+### Fixes
+
+- **`dependencies` 补齐 `uuid` 运行时依赖与裸导入构建守卫（Issue #349）**：
+  - **根因修复**：SDK `dist/index.js` 导出链因 `BaseActivityProvider` 包含 `import { v7 as uuidv7 } from "uuid"`，但 `package.json` 之前未声明 `uuid` 依赖。第三方开发者按 npm 包直接消费 SDK 时触发 `ERR_MODULE_NOT_FOUND: Cannot find package 'uuid'`，连带导致 `@openlearn/plugin-test-kit` 的单元测试默认不可用。现已在 `package.json` 的 `dependencies` 补齐 `"uuid": "^14.0.0"`。
+  - **构建守卫**：在 `packages/plugin-sdk/build.mjs` 新增裸导入依赖完整性守卫，自动扫描产物中的所有裸模块导入，若未在 `dependencies` 或 `peerDependencies` 中声明则构建直接报错退出，杜绝同类未声明裸导入外泄。
+  - **回归测试**：在 `packages/plugin-sdk/__tests__/dist-entrypoint.test.ts` 补充针对产物全部裸模块说明符在 `package.json` 声明的断言与回归守门。
+
 ## [3.7.4] - 2026-10-27
 
 ### Fixes

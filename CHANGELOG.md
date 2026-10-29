@@ -3,7 +3,7 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.4**) and `@openlearn/plugin-test-kit` (currently **3.3.3**).
+> `@openlearn/plugin-sdk` (currently **3.7.5**) and `@openlearn/plugin-test-kit` (currently **3.3.3**).
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
