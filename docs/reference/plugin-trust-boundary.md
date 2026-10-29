@@ -37,19 +37,50 @@
 
 ---
 
-## 3. 服务 RPC 白名单（宿主 vs Worker）
+## 3. 服务 RPC 门禁与三重安全防线（ServiceHost）
 
-宿主端 `ServiceHost` 在两个版本中都使用 `allowedServiceTokens`：
+宿主主线程通过 `ServiceHost` 处理来自 Worker/Process 插件的 RPC 远程方法调用。无论是服务端 Worker 还是浏览器端 Worker，均统一由**三重安全防线（3-Tier Security Barriers）**严密守护：
 
-| 平台               | Token 集合                                                                               | 允许插件额外授予的 Service                                                                           |
-| ------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 后端进程（worker） | `BASE_WORKER_SERVICE_TOKENS` + 按 `manifest.requires/optional/capabilitiesProposed` 计算 | 例如 `@openlearn/core:IPointsDimensionRegistry`、`IPointsLedgerService` 等仅在显式 points 声明时授予 |
-| 浏览器 worker      | 受 `SENSITIVE_FRONTEND_SERVICE_TOKENS` 与 DependencyGuide 约束                           | 前端服务 Token                                                                                       |
+```mermaid
+flowchart TD
+    Msg["RPC 远程方法调用 (invoke)"] --> B1{"Barrier 1: Token 白名单<br/>allowedTokens.has(token)?"}
+    B1 -- "否 (未授权 Token)" --> Deny1["抛出 WorkerCapabilityError 拒绝"]
+    B1 -- "是" --> B2{"Barrier 2: 空能力防线<br/>effectiveCapabilities 为空?"}
+    B2 -- "是且方法不是 get* 前缀" --> Deny2["抛出 WorkerCapabilityError 降级只读拒绝"]
+    B2 -- "否 (声明了能力或为 get*)" --> B3{"Barrier 3: 细粒度方法与路径门禁<br/>checkMethodPolicy(token, method, args)?"}
+    B3 -- "被策略拒绝" --> Deny3["抛出 WorkerCapabilityError"]
+    B3 -- "通过" --> Exec["执行宿主服务实例方法并返回结果"]
+```
 
-** invariant**：
+### 3.1 三重安全防线详解
 
-- `allowedServiceTokens` 为 `undefined` 时，必须等价于**只读/禁止 RPC**，不能静默放行全部 token。
-- Token 白名单是 RPC 边界，不等于 Node 文件系统权限；文件权限仍必须由 `--permission` 控制。
+1. **Security Barrier 1：Token 级别白名单门禁**
+   - 宿主依据插件清单计算出的 `allowedServiceTokens` 实施硬门禁；
+   - 任何未显式授权给该插件的 Token（例如试图访问未声明的私有服务），在进入反射前即刻被拦截；
+   - 若 `allowedServiceTokens` 为空集合，按 Fail-Closed 原则彻底拒绝一切 RPC。
+2. **Security Barrier 2：空 manifest 能力兜底只读门禁（高频踩坑点！）**
+   - **设计规则**：若插件清单中的 `capabilitiesProposed` 为空数组 `[]`（或管理员未审批授予任何能力），插件将受到强制只读降级锁定 —— **只允许调用名称以 `get*` 开头的方法**；
+   - **错误现象**：若插件尝试调用任何非 `get*` 前缀的写入/修改方法（如 `set*`、`create*`、`register*`、`delete*`、`save*` 等），宿主直接抛出：
+     `WorkerCapabilityError: Capability denied for actor plugin:<id>: empty manifestCapabilities, only 'get' methods allowed`；
+   - **规避方案**：任何需要写数据库、注册路由、发送总线指令或操作白板的插件，必须在 `manifest.json` 中显式声明所需能力（例如 `storage:readwrite`、`classroom:write`、`whiteboard:draw` 等）。
+3. **Security Barrier 3：方法与路径级策略门禁（纵深防御）**
+   - 由 `packages/core/plugin-host/method-policy.ts` 集中判定，双端（Node Worker / Browser Worker）共享同一规则逻辑；
+   - 包含 Action 注册降级（未获 `agent:tool` 权限时将 `exposeToAgent` 强制重写为 `false` 而不直接崩溃）、敏感数据读写范围校验等。
+
+---
+
+## 3.2 前端视图 Iframe 沙箱与 Opaque Origin 边界
+
+除后端/Worker 沙箱外，平台前端扩展视图（如白板卡片、浮动面板、独立 Page）运行在严格隔离的 HTML5 `<iframe>` 沙箱中：
+
+1. **沙箱属性配置**：
+   - 强制使用 `sandbox="allow-scripts allow-forms allow-downloads"`；
+   - **严格禁止 `allow-same-origin`**，杜绝第三方视图窃取宿主 Cookie、DOM 或越权向主站同源接口发起请求。
+2. **Opaque Origin (`null`) 的浏览器行为红线**：
+   - 由于缺失 `allow-same-origin`，iframe 的运行源为 **Opaque Origin（`origin: "null"`）**；
+   - **禁止直接访问本地存储**：在 iframe 内部直接调用 `window.localStorage` 或 `window.sessionStorage` 会直接触发浏览器 DOMException `SecurityError` 崩溃；
+   - **禁止直接相对路径 `fetch()` / XHR**：由于没有同源域名，直接 `fetch('/api/...')` 会因为无 Host 导致请求失败，或被浏览器 CORS 策略直接拦截；
+   - **统一通信介质**：所有视图逻辑必须且只能通过平台注入的 `window.OpenLearnPluginBridge` 接口（`bridge.api.*`、`bridge.state.*`、`bridge.ui.*`）与宿主进行双向通信与状态同步。
 
 ---
 

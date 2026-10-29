@@ -61,10 +61,50 @@ interface PluginDatabaseAPI {
 const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline) / 异步 RPC Proxy (Worker)
 ```
 
-- 注册于 `packages/core/kernel/index.ts`，是**整个平台共享数据库**，可读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。
-- **无命名空间隔离**。所有内置核心插件的数据操作实际走此路径。
-- 这是唯一能直接执行平台级 `SELECT` / `INSERT` / `UPDATE` / `DELETE` 的路径。
+- 注册于 `packages/core/kernel/index.ts`，是**整个平台共享数据库**。
+- **内置核心插件（Inline 模式）**：无命名空间隔离，可直接调用 better-sqlite3 读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。
+- **隔离进程与第三方插件（Worker / Process 模式）**：必须经由主线程 RPC 代理转发，受到 `packages/core/plugin-host/sql-guard.ts` 中 **SQL-Guard 安全守卫的硬拦截**。**严格禁止直接读写或 DDL 任何平台核心表**。
 - **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果的类型为自包含的 `SqliteDatabase`（运行时即 better-sqlite3 `Database`），Inline 模式下可直接使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
+
+### 1.1 ⚠️ SQL-Guard 核心数据表硬黑名单与隔离机制（安全红线）
+
+为防止第三方插件通过手写 SQL 或注入绕过权限模型窃取系统凭证、破坏课堂数据或越权操控核心状态，宿主在 `packages/core/plugin-host/sql-guard.ts` 中部署了严格的 Fail-Closed SQL 审计器：
+
+#### 1. 36 张核心安全表黑名单（`FORBIDDEN_CORE_TABLES`）
+
+第三方与隔离模式插件**绝对禁止**在 SQL（含 `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `DROP` / `CREATE` / `ALTER` 以及任意嵌套子查询、JOIN）中引用以下核心表：
+
+| 分类                 | 核心表名单（命中即拒绝并抛出 `Worker plugin is not permitted to access table ...`）                                                                      |
+| :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **用户与凭据**       | `users`, `client_sessions`, `agent_conversations`                                                                                                        |
+| **插件与系统元数据** | `plugins`, `plugin_storage`, `processes`, `pending_commands`, `system_resources`, `site_settings`, `_migrations`, `events`, `demo_data_registry`         |
+| **AI 模型接入**      | `ai_providers`                                                                                                                                           |
+| **班级与学生档案**   | `classes`, `students`, `class_students`, `schedules`, `class_grade_weights`, `student_point_logs`                                                        |
+| **课堂教学与协作**   | `lessons`, `classroom_sessions`, `whiteboard_elements`, `student_seats`, `student_rollcalls`, `attendance`, `student_read_notifications`                 |
+| **课件与作答评估**   | `courseware`, `courseware_attempt`, `student_lesson_progress`, `lesson_quiz_submissions`, `courseware_score_config`                                      |
+| **作业与考试测评**   | `assignments`, `assignment_submissions`, `exams`, `exam_scores`, `student_semester_reports`                                                              |
+| **科研教学活动**     | `lianyun_research_activities`, `lianyun_research_groups`, `lianyun_research_submissions`, `lianyun_research_reviews`（仅授权 manifest 白名单插件可访问） |
+
+#### 2. 底层高危操作与多语句绝对禁止
+
+SQL 语句中一旦匹配以下危险特征（`FORBIDDEN_OPERATIONS`），直接拒绝执行：
+
+- `ATTACH [DATABASE]` / `DETACH [DATABASE]`（阻断外挂跨库读取）；
+- `PRAGMA`（阻断读取数据库内省信息或修改引擎参数）；
+- `VACUUM`（阻断高开销全局锁表操作）；
+- `CREATE / DROP [TEMPORARY] TRIGGER`（阻断注入触发器旁路窥探其他表更新）；
+- `CREATE / DROP [TEMPORARY] VIEW`（阻断构造虚假视图混淆权限提取）。
+
+#### 3. 元数据表严格受限
+
+- 禁止直接查询 `sqlite_master` / `sqlite_schema` / `sqlite_temp_master`。
+- 仅放行带有自身表名前缀的精确模式匹配查询，例如：
+  `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'plugin_<scopeId>_%'`。
+
+#### 4. 合法数据库交互准则
+
+- **插件私有数据**：必须使用**路径 A（`ctx.db`）**，所有表自动归入 `plugin_<scopeId>_*` 前缀；
+- **平台核心实体**：如需在白板上画图、新建课程或打分，**必须调用命令总线（`CommandBus`）由平台内核命令统一执行**（例如派遣 `whiteboard.draw` 命令），严禁尝试直接对 `whiteboard_elements` 等平台表执行原生 SQL。
 
 ---
 

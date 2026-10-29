@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+
+- **AI Agent 与第三方插件开发 6 大架构契约与防护规范规范化沉淀 (Issue #351)**：
+  - **布局与伸缩契约**：在 `docs/reference/plugin-ui-extension-slots.md` 与全新 `docs/reference/plugin-architecture-contracts.md` 中完备收录 `layoutVariant`（`Panel`、`WhiteboardWidget`、`FloatingOverlay`、`ActionItem`）四档布局语义矩阵，以及 `window.OpenLearnPluginBridge.ui.resize` 父子容器高度防抖伸缩通信协议。
+  - **白板卡片双轨扩展**：明确白板业务扩展的双轨技术选型（声明式 `whiteboard.draw` 矢量命令 vs `view: "storage/*.html"` 沙箱卡片微应用），严禁通过 SQL 直写 `whiteboard_elements` 核心表。
+  - **课堂运行时上下文生命周期**：规范化 `classId || 'default'` 空值防御范式与 `onContextUpdate` 动态切班数据重新拉取。
+  - **SQL-Guard 核心表硬黑名单**：在 `docs/reference/plugin-database-api.md` 中完整公开 36 张受保护核心表清单（`users`, `students`, `lessons`, `whiteboard_elements` 等）与 `ATTACH`/`PRAGMA`/`VACUUM`/`TRIGGER`/`VIEW` 等危险语法拦截规则，明确私有表强制前缀 `plugin_<scopeId>_*`。
+  - **ServiceHost 三重安全门禁**：在 `docs/reference/plugin-trust-boundary.md` 中公开 Barrier 1（Token 白名单）、Barrier 2（空 `capabilitiesProposed` 降级只读锁定，非 `get*` 前缀即刻抛错）、Barrier 3（方法/路径细粒度策略）机制与 `iframe` Opaque Origin (`null`) 沙箱红线。
+  - **网关流控与客户端节流范式**：梳理平台全局写限流（180/min）、课堂视图独立桶（120/min）与插件网关分桶（120/min），确立客户端 `>= 500ms` 防抖与前置 diff 比对规范。
+  - **机器可读规则清单**：提供可供 AI 智能体直接消费的 JSON Schema 与常见反模式速查表。
+
 ### Fixes
 
 - **焦点作品对比大屏（SpotlightDualWorkArena）单份作品空指针异常修复**：
