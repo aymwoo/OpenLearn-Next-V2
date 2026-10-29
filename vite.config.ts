@@ -8,7 +8,20 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const targetPort = parseInt(process.env.PORT || '9000', 10);
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      /**
+       * cacheDir 移出 node_modules 之后，@vitejs/plugin-react 默认的 exclude (/\/node_modules\//)
+       * 不会自动过滤 .vite-cache/deps 中的预打包产物。如果不显式排除，Babel 会在 dev 时重新解析
+       * 这些体积超 500KB 的 vendor chunk 并打印 deoptimised styling 警告，同时拖慢首屏。
+       */
+      exclude: [/[\\/]node_modules[\\/]/, /[\\/]\.vite-cache[\\/]/],
+      babel: {
+        compact: true,
+      },
+    }),
+    tailwindcss(),
+  ],
   /**
    * 依赖预打包缓存目录：**按仓库根隔离，且不放在 node_modules 下**。
    *
