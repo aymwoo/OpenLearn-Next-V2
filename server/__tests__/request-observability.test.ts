@@ -112,6 +112,7 @@ describe('请求观测', () => {
       expect(isQuietRequest('/src/main.tsx', 200, false)).toBe(true);
       expect(isQuietRequest('/node_modules/react/index.js', 200, false)).toBe(true);
       expect(isQuietRequest('/@fs/some/path', 200, false)).toBe(true);
+      expect(isQuietRequest('/.vite-cache/deps/react.js', 200, false)).toBe(true);
 
       // 异常状态码一律不静默
       expect(isQuietRequest('/src/main.tsx', 500, false)).toBe(false);
@@ -257,6 +258,32 @@ describe('请求观测', () => {
       expect((slowCall?.[0] as any)?.durationMs).toBeGreaterThanOrEqual(50);
 
       errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      infoSpy.mockRestore();
+      debugSpy.mockRestore();
+    });
+
+    it('开发环境 Vite 依赖预打包缓存（/.vite-cache/）即使超过慢请求阈值也不写访问日志', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const infoSpy = vi.spyOn(logger, 'info');
+      const debugSpy = vi.spyOn(logger, 'debug');
+
+      const app = express();
+      app.use(requestObservability());
+      app.get('/.vite-cache/deps/react.js', async (_req, res) => {
+        await new Promise((r) => setTimeout(r, 40));
+        res.status(200).type('application/javascript').send('export default {}');
+      });
+      const base = await listen(app);
+
+      process.env.HTTP_SLOW_MS = '1';
+      await fetch(`${base}/.vite-cache/deps/react.js`);
+
+      const hit = [...warnSpy.mock.calls, ...infoSpy.mock.calls, ...debugSpy.mock.calls].find(
+        (call) => call[1] === 'http.request' && (call[0] as Record<string, unknown>)?.path === '/.vite-cache/deps/react.js',
+      );
+      expect(hit).toBeUndefined();
+
       warnSpy.mockRestore();
       infoSpy.mockRestore();
       debugSpy.mockRestore();
