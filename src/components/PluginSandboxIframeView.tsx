@@ -11,6 +11,13 @@ export interface PluginSandboxIframeViewProps {
   slot?: string;
   lessonId?: string | null;
   classId?: string | null;
+  /**
+   * 当前视图的使用者身份（学生端槽位才有）。
+   * 沙箱 iframe 无法访问宿主会话，插件只能通过该字段拿到「我是谁」，
+   * 用于在共享数据（如便签、投票）中标注作者。
+   */
+  studentId?: string | null;
+  studentName?: string | null;
   className?: string;
   onResize?: (height: number) => void;
   /**
@@ -59,6 +66,8 @@ export function PluginSandboxIframeView({
   slot,
   lessonId: propLessonId,
   classId: propClassId,
+  studentId,
+  studentName,
   className,
   onResize,
   variant = 'panel',
@@ -90,13 +99,15 @@ export function PluginSandboxIframeView({
           slot,
           lessonId,
           classId,
+          studentId: studentId ?? null,
+          studentName: studentName ?? null,
           lang,
           theme,
         },
       },
       '*',
     );
-  }, [pluginId, slot, lessonId, classId, lang, theme]);
+  }, [pluginId, slot, lessonId, classId, studentId, studentName, lang, theme]);
 
   // 处理 iframe 内部发送来的消息与 RPC 调度
   useEffect(() => {
@@ -231,13 +242,15 @@ export function PluginSandboxIframeView({
         payload: {
           lessonId,
           classId,
+          studentId: studentId ?? null,
+          studentName: studentName ?? null,
           lang,
           theme,
         },
       },
       '*',
     );
-  }, [lessonId, classId, lang, theme, isLoaded]);
+  }, [lessonId, classId, studentId, studentName, lang, theme, isLoaded]);
 
   if (!cleanView) {
     return (

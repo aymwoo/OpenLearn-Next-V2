@@ -109,10 +109,49 @@ describe('PluginSandboxIframeView component', () => {
           slot: 'teacher.tab',
           lessonId: 'lesson-123',
           classId: 'class-456',
+          studentId: null,
+          studentName: null,
           lang: 'zh',
           theme: 'light',
         },
       },
+      '*',
+    );
+  });
+
+  it('下发 studentId 与 studentName 给学生端沙箱视图', async () => {
+    render(
+      <PluginSandboxIframeView
+        pluginId={PLUGIN_ID}
+        view="dashboard.html"
+        label="学生看板"
+        slot="student.view"
+        studentId="stu-001"
+        studentName="张同学"
+      />,
+    );
+
+    const iframe = screen.getByTitle('学生看板') as HTMLIFrameElement;
+    const postMessageSpy = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { channel: PLUGIN_VIEW_CHANNEL, type: 'ready' },
+          source: iframe.contentWindow,
+        }),
+      );
+    });
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: PLUGIN_VIEW_CHANNEL,
+        type: 'init',
+        payload: expect.objectContaining({
+          studentId: 'stu-001',
+          studentName: '张同学',
+        }),
+      }),
       '*',
     );
   });

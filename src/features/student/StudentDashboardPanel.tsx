@@ -456,7 +456,13 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'extension-views'}
           >
-            <ExtensionPointRenderer slot="student.view" slotProps={{ studentId: activeStudentId }} />
+            <ExtensionPointRenderer
+              slot="student.view"
+              slotProps={{
+                studentId: activeStudentId,
+                studentName: students.find((s) => s.id === activeStudentId)?.name ?? null,
+              }}
+            />
           </DashboardWidgetCard>
         );
 

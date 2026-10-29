@@ -278,6 +278,12 @@ export interface InteractiveWhiteboardProps {
    */
   classId?: string | null;
   /**
+   * 学生端查看者身份（供白板内的插件挂件在共享数据中标注作者）。
+   * 教师端不传。
+   */
+  studentId?: string | null;
+  studentName?: string | null;
+  /**
    * 教师端（互动课堂实时授课）：最大化 / 退出最大化组件时广播给同课节的学生端，
    * 让学生的屏幕与教师保持一致。
    */
@@ -376,6 +382,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       isEditMode = true,
       readOnly = false,
       classId,
+      studentId,
+      studentName,
       broadcastFullscreen = false,
       fullscreenBroadcastClassId = null,
       followRemoteFullscreen = false,
@@ -2625,6 +2633,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       elementId={el.id}
                       lessonId={lessonId}
                       classId={classId}
+                      studentId={studentId}
+                      studentName={studentName}
                     />
                   </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}

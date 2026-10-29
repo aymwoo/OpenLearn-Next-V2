@@ -208,6 +208,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           studentSelectedCourseware={studentSelectedCourseware}
           setStudentSelectedCourseware={setStudentSelectedCourseware}
           activeStudentId={activeStudentId}
+          studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
+          classId={effectiveClassId}
           addToast={addToast}
         />
       </div>

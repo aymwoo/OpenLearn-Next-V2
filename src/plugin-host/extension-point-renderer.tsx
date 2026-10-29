@@ -542,6 +542,8 @@ export function ExtensionPointRenderer({
                 slot={slot}
                 lessonId={selectedLesson}
                 classId={slotProps?.classId || liveClassSelectedClassId}
+                studentId={slotProps?.studentId ?? null}
+                studentName={slotProps?.studentName ?? null}
                 variant={viewVariantFor(slot)}
               />
             )}
@@ -1040,6 +1042,8 @@ export function ExtensionPointRenderer({
                     slot={slot}
                     lessonId={selectedLesson}
                     classId={slotProps?.classId || liveClassSelectedClassId}
+                    studentId={slotProps?.studentId ?? null}
+                    studentName={slotProps?.studentName ?? null}
                     variant={viewVariantFor(slot)}
                     style={
                       viewVariantFor(slot) === 'floating' && index > 0

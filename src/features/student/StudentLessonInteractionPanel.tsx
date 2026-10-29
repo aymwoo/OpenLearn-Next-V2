@@ -38,6 +38,10 @@ export interface StudentLessonInteractionPanelProps {
   studentSelectedCourseware: string | null;
   setStudentSelectedCourseware: (id: string | null) => void;
   activeStudentId: string | null;
+  /** 当前学生姓名（供白板内的插件挂件标注作者） */
+  studentName?: string | null;
+  /** 当前课堂所属班级（白板内插件挂件的作用域） */
+  classId?: string | null;
   addToast: (title: string, description: string, type: string) => void;
 }
 
@@ -68,6 +72,8 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
     studentSelectedCourseware,
     setStudentSelectedCourseware,
     activeStudentId,
+    studentName,
+    classId,
     addToast,
   } = props;
 
@@ -220,6 +226,9 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
       {!hideSegmentBody && studentLessonTab === 'whiteboard' && (
         <LazyWhiteboard
           lessonId={selectedLesson}
+          classId={classId ?? null}
+          studentId={activeStudentId}
+          studentName={studentName ?? null}
           elements={elements}
           userRole={activeRole}
           readOnly={interactionLocked}

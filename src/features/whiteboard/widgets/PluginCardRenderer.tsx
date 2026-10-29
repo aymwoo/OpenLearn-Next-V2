@@ -11,6 +11,8 @@ export function PluginCardRenderer({
   elementId,
   lessonId,
   classId,
+  studentId,
+  studentName,
 }: {
   pluginId: string;
   slot: string;
@@ -18,6 +20,8 @@ export function PluginCardRenderer({
   elementId: string;
   lessonId: string;
   classId?: string | null;
+  studentId?: string | null;
+  studentName?: string | null;
 }) {
   const extensionPoints = usePluginHostStore((state) => state.extensionPoints);
   const extensions = extensionPoints.get(slot as any) || [];
@@ -72,6 +76,8 @@ export function PluginCardRenderer({
         slot={slot}
         lessonId={lessonId}
         classId={classId}
+        studentId={studentId}
+        studentName={studentName}
         variant="panel"
       />
     );

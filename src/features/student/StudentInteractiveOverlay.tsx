@@ -447,11 +447,14 @@ export function StudentInteractiveOverlay({
 
       {/* 课中插件浮层槽位：插件可在此渲染随堂答题等模态弹窗
           （学生上课中被锁定在课节视图，仪表盘的 student.view 槽位不可见） */}
-      <ExtensionPointRenderer slot="student.classroom.overlay" slotProps={{ studentId, lessonId, classId }} />
+      <ExtensionPointRenderer
+        slot="student.classroom.overlay"
+        slotProps={{ studentId, studentName, lessonId, classId }}
+      />
 
       {/* 考试模式全屏视图（v5.1 休眠槽位接线）：插件全屏接管（锁定退出 + 倒计时），
           由插件组件自行决定渲染时机（仅考试模式的卷激活时） */}
-      <ExtensionPointRenderer slot="student.fullscreen" slotProps={{ studentId, lessonId }} />
+      <ExtensionPointRenderer slot="student.fullscreen" slotProps={{ studentId, studentName, lessonId }} />
 
       {/* 悬浮学习节奏信号条 (底部浮动) */}
       <aside
