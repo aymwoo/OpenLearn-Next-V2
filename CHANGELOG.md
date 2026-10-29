@@ -29,7 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Refactor / Performance
 
 - **白板属性编辑器不再为系统内置组件提供尺寸输入（quiz / assignment / rollcall / 课件 / 插件组件等）**：这些组件在画布上以窗口卡片渲染，宽高由拖拽缩放手柄与自动平铺决定；属性栏里手填 width/height 既与平铺布局互相覆盖，也容易把组件卡到 50px 的畸形尺寸。现在 `WhiteboardPropertiesSidebar` 把内置组件类型收敛为模块级常量 `WIDGET_ELEMENT_TYPES`（原先散落在 `isWidget` 内联数组），并据此隐藏整个「尺寸」卡片；图形类（`rect` / `text` / `circle` 等）与手绘笔迹的现有行为不变，圆形的半径输入照常保留。
-  - 测试：`src/features/whiteboard/__tests__/whiteboard-properties-sidebar.test.tsx`（新增「quiz 不展示尺寸设置」回归 1 例，共 16 例全绿）。
+  - **课件属性弹窗同步收敛**：`CoursewarePropertiesModal`（插入/配置互动课件时的「课堂课件属性临时调整」）移除「画布中窗口尺寸（宽 × 高）」整块与 800×600 / 960×540 / 1200×675 三个预设按钮；应用时不再写 `width`/`height`，沿用元素既有值，缺失则由 `DEFAULT_ELEMENT_SIZE` 兜底（不再无条件把无尺寸课件改写成 800×600）。
+  - 测试：`src/features/whiteboard/__tests__/whiteboard-properties-sidebar.test.tsx`（新增「quiz 不展示尺寸设置」回归 1 例，共 16 例全绿）、`courseware-properties-modal.test.tsx`（改写为「无尺寸输入/预设」与「缺失宽高不被凭空写入」2 例，共 7 例全绿）。
 
 - **中文排版可读性与最小字号基线全面提升**：
   - **最小字号底线提升至 13px**：在 `src/index.css` 中将全站微型字号（`text-[6px]` ~ `text-[12.5px]`、`text-2xs`、`text-3xs`）的兜底物理防线下限由 12px 提升至 13px，彻底解决汉字笔画密集粘连模糊的痛点；
