@@ -231,8 +231,8 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
       "category": "Classroom",
       "targetFiles": ["src/**/*.ts", "src/**/*.js"],
       "rule": "Classroom classId must be defensively defaulted (classId || 'default') to support standalone preview.",
-      "antiPattern": "const url = `/api/classes/${ctx.classId}/students` without null check.",
-      "remedy": "const classId = ctx?.classId || 'default';"
+      "antiPattern": "const url = `/api/classes/${classroomContext.classId}/students` without null check.",
+      "remedy": "const classId = classroomContext?.classId || 'default';"
     },
     {
       "id": "CTR-004-SQL-GUARD-FORBIDDEN-TABLES",
