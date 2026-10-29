@@ -400,6 +400,38 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ---
 
+## 1.1 扩展槽位的宿主布局上下文与容器契约（Layout & Container Contracts）
+
+在开发第三方插件 UI 或沙箱视图（`view`）时，**必须严格遵守目标槽位的宿主布局上下文与容器契约**。若忽略宿主 Flex/Grid 布局环境，直接编写默认块级样式，会导致宿主关键工作区被挤压坍塌（例如白板宽度被压缩至 0px）或多插件组件相互遮挡。
+
+### 1.1.1 槽位容器语义分类（layoutVariant）
+
+平台将 120 个扩展槽位按照挂载上下文的容器模型划分为 4 种语义类型：
+
+| 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
+| :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Panel`（页面级 / Tab 内部面板）**                     | 独占 Tab 视口或宿主主展示区，宿主提供外层滚动容器与尺寸约束                                                           | `teacher.tab`<br/>`teacher.panel`<br/>`admin.tab`<br/>`class.tab`<br/>`timetable.tab`             | • **规范**：占满容器视口（`w-full h-full`），推荐使用 `flex flex-col min-h-0` 组织内部滚动。<br/>• **沙箱视图**：沙箱 iframe 自带 `w-full h-full` 挂载。                                                                                                                                                                                                                                           |
+| **`WhiteboardWidget`（白板画布卡片挂件）**               | 挂载于白板画布内的图元卡片，必须由白板外框 `WidgetFrame` 承载                                                         | `teacher.dashboard.widget`<br/>`student.view`<br/>`whiteboard.canvas.widget`                      | • **规范**：内部尺寸由卡片图元配置或用户拖拽拉伸决定，必须适配不同缩放级别。<br/>• **沙箱视图**：从 v0.7.7+ 起由 `PluginCardRenderer` 自动渲染为 `<PluginSandboxIframeView variant="panel" />`，第三方 process 模式插件无需加入白名单即可原生呈现。                                                                                                                                                |
+| **`FloatingOverlay`（视口浮层 / HUD / 抽屉）**           | 悬浮于当前视口之上的辅助窗口，与主工作区（白板/课件）处于并列 DOM 树（如 `App.tsx` 的横向 Flex 容器 `flex h-screen`） | `student.classroom.overlay`<br/>`stage.display.overlay`<br/>`student.quick_actions.fab`           | • **铁律约束**：**严禁**写撑满整行/整列的块级面板（如 `w-full h-full`、`flex-1`）！作为 Flex Item 会将并列的主白板工作区挤占至 0 宽度（恶性 Bug：“学生端一弹浮层，白板就消失了”）。<br/>• **规范**：**必须**使用固定定位（`position: fixed`，如 `fixed right-4 bottom-4 z-50`），彻底脱离常规 Flex 流。<br/>• **多插件避让**：同槽位挂载多个插件时，视图应设计为收起态/小浮标，提供展开/拖拽避让。 |
+| **`ActionItem` / `Badge` / `Toolbar`（行内工具与徽章）** | 行内或工具栏 Flex 容器内部的小型操作按钮、指示徽章或胶囊                                                              | `classroom.topbar.action`<br/>`header.action`<br/>`course.card.badge`<br/>`editor.segment.action` | • **规范**：保持紧凑内联尺寸（如 `h-8 px-2 flex items-center`），避免破坏工具栏高度与折行。                                                                                                                                                                                                                                                                                                        |
+
+### 1.1.2 浮层页面高度通信契约（window.OpenLearnPluginBridge.ui.resize）
+
+沙箱视图（`view`）运行在独立的不透明源 `<iframe>` 中，宿主无法直接根据 iframe 内部 DOM 树计算其自适应高度。为了防止浮层内容出现截断或内外双重滚动条，浮层视图必须遵循如下高度伸缩契约：
+
+1. **高度通信调用**：当浮层从折叠态展开、切换 Tab、或列表条目动态增减时，插件在视图中调用：
+   ```javascript
+   // 参数为像素数值（例如 180、360、520）
+   window.OpenLearnPluginBridge.ui.resize(heightInPixels);
+   ```
+2. **宿主响应机制**：宿主 `PluginSandboxIframeView` 监听 `ol-plugin-view` 通道派发的 `resize` 消息后，动态同步更新外层 iframe 容器的 `containerStyle.height`（默认保底 180px）。
+3. **最佳实践**：
+   - 浮层折叠为微型按钮或胶囊时，调用 `resize(40)` 或 `resize(48)`；
+   - 浮层展开为便签面板或答题面板时，调用 `resize(420)`；
+   - 折叠时恢复高度，实现与宿主界面的流畅响应式契约。
+
+---
+
 ## 2. 各槽位组件收到的 Props（实际注入）
 
 渲染机制（`src/plugin-host/extension-point-renderer.tsx`）：

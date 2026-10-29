@@ -251,6 +251,7 @@ student-workspace-migration
 
 reference/plugin-capability-matrix
 reference/plugin-trust-boundary
+reference/plugin-architecture-contracts
 reference/plugin-ui-extension-slots
 reference/plugin-database-api
 reference/platform-data-tables

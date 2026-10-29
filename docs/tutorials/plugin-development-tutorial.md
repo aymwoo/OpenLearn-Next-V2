@@ -286,7 +286,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 
 2. **props 不同**：白板组件额外接收 `elementId`（当前白板元素 ID）和 `lessonId`（当前课节 ID），可用于数据隔离和持久化。
 
-3. **ID 匹配机制**：`teacher.dashboard.widget` 的 `id` 必须与 `manifest.classroomTools[].payload.data.teacherWidgetId` 一致，`PluginCardRenderer` 通过这个 ID 查找对应组件：
+3. **ID 匹配机制与双轨制沙箱渲染**：`teacher.dashboard.widget` 的 `id` 必须与 `manifest.classroomTools[].payload.data.teacherWidgetId` 一致，`PluginCardRenderer` 通过这个 ID 查找对应组件：
 
 ```json
 // manifest.json — classroomTools 声明
@@ -297,20 +297,37 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
       "commandType": "whiteboard.draw",
       "payload": {
         "type": "plugin",
-        "data": "{ \"teacherWidgetId\": \"my-widget\", \"width\": 960 }"
+        "data": "{ \"teacherWidgetId\": \"my-widget\", \"studentWidgetId\": \"my-widget\", \"width\": 960 }"
       }
     }
   ]
 }
 ```
 
-```js
-// frontend.js — 组件注册，id 必须与 payload 中的 teacherWidgetId 一致
-ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
-  id: 'my-widget', // ← 匹配 payload.data.teacherWidgetId
-  component: MyWidget,
-});
-```
+从平台 **v0.7.7+** 起，白板自定义卡片全面支持**双轨制渲染架构**，第三方插件无需进入白名单即可在白板画布中展示原生级卡片：
+
+- **轨 A：声明式沙箱 HTML（双轨制推荐，无需白名单）**：
+  在 `manifest.json` 的 `contributes` 中直接声明 `view`（映射至插件包内的 `storage/*.html`），平台白板渲染器 `PluginCardRenderer` 会自动将其作为严格沙箱 `<PluginSandboxIframeView variant="panel" />` 挂载，第三方 `process` 隔离模式插件可直接使用 HTML + `/plugin-sandbox/view-bridge.js` 编写原生白板卡片，**无需配置 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 白名单**！
+
+  ```json
+  // manifest.json — 声明式白板挂件
+  {
+    "contributes": {
+      "teacher.dashboard.widget": [{ "id": "my-widget", "label": "教师控制卡", "view": "storage/teacher.html" }],
+      "student.view": [{ "id": "my-widget", "label": "学生互动卡", "view": "storage/student.html" }]
+    }
+  }
+  ```
+
+- **轨 B：React 内联组件（仅限受信任插件）**：
+  在 `src/frontend.tsx` 中编写 React 组件并调用 `ctx.ui.registerExtensionPoint`，只有在平台配置了 `OPENLEARN_TRUSTED_INLINE_PLUGINS` 信任名单（或内置核心插件）时才允许以父页面 Inline 形式同源渲染：
+  ```js
+  // src/frontend.tsx — 仅受信任 inline 插件支持
+  ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
+    id: 'my-widget', // ← 匹配 payload.data.teacherWidgetId
+    component: MyWidget,
+  });
+  ```
 
 **典型模式：导航页 = 管理界面，白板组件 = 交互工具。** 例如作业中心应在 `teacher.tab` 注册作业列表管理页，在 `teacher.dashboard.widget` 注册具体某次作业的提交/批改面板。两者共享 `elementId`/`lessonId` 即可通过后端 API 打通数据。
 
@@ -590,19 +607,72 @@ await eventBus.publish({
 });
 ```
 
-**⚠️ classroomTools 必须注册 Handler：**
+### 3.3.3 课堂工具下发与白板投射闭环（classroomTools 架构深度解析）
 
-`classroomTools[].commandType` 声明了教师点击工具按钮时执行的命令。**必须**在服务端 `activate()` 中用 `commandBus.registerHandler()` 注册对应的处理器，否则系统会报 `No handler registered for command: xxx`。
+很多开发者和 AI Agent 在开发课堂工具时存在误区：以为前端 Toast 提示「✓ 工具下发成功：工具 [xxx] 已成功在当前白板上部署并投射」就意味着白板画布上必定出现了图元。**实际上，该 Toast 仅代表 `/api/commands` 接收端点返回了 HTTP 200**。真正的白板图元生成取决于命令派发链路。
 
-即使命令不执行实际业务逻辑（仅用于触发前端面板打开），也需注册一个空 handler：
+#### A. 模式一：声明式白板投射（官方推荐标准范式，零后端代码）
+
+如果工具的目标是在白板画布上生成一张卡片挂件（如课堂便签、计时器、随堂测等），**强烈推荐直接使用平台内置命令 `whiteboard.draw`**，无需在服务端编写任何 Handler：
+
+```json
+// manifest.json — 声明式白板卡片下发
+{
+  "classroomTools": [
+    {
+      "id": "sticky-note-tool",
+      "name": "互动便签",
+      "icon": "StickyNote",
+      "commandType": "whiteboard.draw",
+      "payload": {
+        "type": "plugin",
+        "data": "{\"teacherWidgetId\": \"sticky-teacher\", \"studentWidgetId\": \"sticky-student\", \"width\": 400, \"height\": 320}"
+      }
+    }
+  ]
+}
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor T as 教师端 (浏览器)
+    participant Host as 平台前端 (LiveClassroomView)
+    participant Srv as 平台后端 (/api/commands)
+    participant CB as 内核 CommandBus / WhiteboardHandler
+    participant DB as SQLite (whiteboard_elements)
+    participant S as 学生端 (浏览器)
+
+    Note over T,Srv: 模式一：声明式白板投射（官方推荐）
+    T->>Host: 点击白板工具栏 🧩「互动工具」
+    Host->>Srv: POST /api/commands (commandType: "whiteboard.draw")
+    Note right of Host: 携带 teacherWidgetId、studentWidgetId、type: "plugin"
+    Srv->>CB: 执行平台内置 whiteboard.draw Handler
+    CB->>DB: 写入图元记录 (whiteboard_elements)
+    CB-->>Srv: 200 OK + elementId
+    Srv-->>Host: 广播 Socket.IO: whiteboard:element:added
+    Srv-->>S: 广播 Socket.IO: whiteboard:element:added
+    Host->>Host: PluginCardRenderer 渲染 teacher.dashboard.widget
+    S->>S: PluginCardRenderer 渲染 student.view
+```
+
+#### B. 模式二：私有业务命令（自定义 Handler）
+
+仅当教师点击工具按钮时需要执行复杂的后端计算、跨系统同步或鉴权逻辑时，才使用私有命令（如 `myplugin.launch`）。此时必须配套在 `activate()` 中注册处理器：
 
 ```typescript
-await commandBus.registerHandler('myplugin.open_panel', {
-  async execute() {
-    return { panel: 'teacher' };
+await commandBus.registerHandler('myplugin.launch', {
+  async execute(cmd, ctx) {
+    // 执行私有后端业务
+    return { ok: true };
   },
 });
 ```
+
+> [!CAUTION] 🚨 严正警示：严禁通过 SQL 直接写 `whiteboard_elements`！
+> 子进程沙箱插件（`process` 模式）如果试图在自定义 Handler 中通过 `rawDb.prepare("INSERT INTO whiteboard_elements ...")` 手动向白板落库，会被 **`sql-guard` 零信任表黑名单强行拦截报错**！
+> 现象为：前端虽弹窗显示「下发成功」（HTTP 200 接收成功），但控制台抛出 SQL-Guard 异常，白板画布空无一物。
+> **正确白板投射方式**：在 `manifest.json` 申请 `whiteboard:write` 权限，在 Handler 中调用 `ctx.services.commandBus.execute({ type: 'whiteboard.draw', payload: { ... } })` 由内核安全代发！
 
 #### 3.3.4 命令必须有 ActionDescriptor（内核 default-deny）
 
@@ -2029,6 +2099,34 @@ Bridge SDK 在初始化时，会自动将以下上下文对象挂载至全局：
 - `LMS.getStudent()`: 动态获取当前学生信息
 - `LMS.getCourseware()`: 动态获取课件信息
 - `LMS.log(event, data)`: 发送自定义行为日志
+
+### 12.3 课堂上下文生命周期与空值契约（Nullability Contract）
+
+在编写师生互动插件、白板挂件或沙箱浮层时，**绝不能假设课堂环境总是具备完整的班级上下文**：
+
+1. **参数可空性现实**：
+   - 教师在**单课备课试调**、**教案预览**、或者从课程库直接启动课件而**未选定上课班级**时，宿主注入的 `classId` 为 `null` 或 `undefined`。
+   - ❌ **严重反模式**：直接编写硬断言：
+     ```javascript
+     // ❌ 错误示范：会导致单课备课/预览时整个组件或沙箱白屏崩溃
+     if (!classId) throw new Error('缺少班级上下文，无法加载数据');
+     ```
+   - ✅ **防御性降级契约**：必须支持默认防御性兜底：
+     ```javascript
+     // ✅ 规范示范：未选班级时优雅降级为单机/通用作用域
+     const activeClassId = classId || 'default';
+     ```
+2. **热更新与重载契约（bridge.onContextUpdate）**：
+   - 教师在授课过程中可能临时切换执教班级或跳转课节，宿主不会重新销毁重建 iframe 沙箱，而是通过 `window.OpenLearnPluginBridge` 下发热更新。
+   - 插件必须监听 `onContextUpdate` 以执行数据重新加载：
+     ```javascript
+     // 监听宿主课堂上下文变更（换班 / 换课）
+     window.OpenLearnPluginBridge.onContextUpdate((newContext) => {
+       console.log('课堂上下文已变更:', newContext);
+       currentClassId = newContext.classId || 'default';
+       refreshData(); // 重新拉取新班级下的互动数据
+     });
+     ```
 
 ---
 
