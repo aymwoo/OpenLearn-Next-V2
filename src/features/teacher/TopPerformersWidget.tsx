@@ -586,7 +586,7 @@ export function TopPerformersWidget({
                   <XAxis
                     type="number"
                     domain={[0, metricMode === 'accuracy' ? 100 : 'auto']}
-                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tick={{ fontSize: 12, fill: 'currentColor' }}
                     className="text-muted"
                     unit={metricMode === 'accuracy' ? '%' : ''}
                   />

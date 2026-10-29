@@ -185,7 +185,7 @@ export function LearningProgressTrendChart({
 
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+              tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
               axisLine={{ stroke: '#e2e8f0' }}
               tickLine={false}
               interval={chartData.length > 8 ? Math.floor(chartData.length / 6) : 0}
@@ -193,7 +193,7 @@ export function LearningProgressTrendChart({
             <YAxis
               domain={[0, 100]}
               ticks={[0, 25, 50, 75, 100]}
-              tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+              tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
               axisLine={{ stroke: '#e2e8f0' }}
               tickLine={false}
               tickFormatter={(val: number) => `${val}%`}
@@ -208,7 +208,7 @@ export function LearningProgressTrendChart({
               label={{
                 value: lang === 'zh' ? '完成 100%' : '100% Complete',
                 fill: '#059669',
-                fontSize: 9,
+                fontSize: 12,
                 fontWeight: 700,
                 position: 'insideTopRight',
               }}

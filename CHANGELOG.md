@@ -21,6 +21,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **网关流控与客户端节流范式**：梳理平台全局写限流（180/min）、课堂视图独立桶（120/min）与插件网关分桶（120/min），确立客户端 `>= 500ms` 防抖与前置 diff 比对规范。
   - **机器可读规则清单**：提供可供 AI 智能体直接消费的 JSON Schema 与常见反模式速查表。
 
+### Refactor / Performance
+
+- **中文排版可读性与最小字号基线全面提升**：
+  - **最小字号底线提升至 13px**：在 `src/index.css` 中将全站微型字号（`text-[6px]` ~ `text-[12.5px]`、`text-2xs`、`text-3xs`）的兜底物理防线下限由 12px 提升至 13px，彻底解决汉字笔画密集粘连模糊的痛点；
+  - **全站 `text-xs` (2,655 处) 平滑升级**：在 Tailwind v4 `@theme` 令牌中将 `--text-xs` 从 `0.75rem` (12px) 统一升级为 `0.8125rem` (13px)，以零破坏、不溢出容器的方式实现全系统主流文字清晰度质的飞跃；
+  - **缩放防跌破兜底**：在全局 CSS 中对 `.text-xs` 增加防缩下限保护（`max(12px, ...)`），即使用户选择 90% 紧凑缩放模式，文本亦绝不下探跌破 12px；
+  - **图表 SVG 刻度清晰化**：将 `LearningProgressTrendChart`、`WeeklyProgressTrendChart`、`ClassroomMoodTracker`、`TopPerformersWidget` 中的坐标轴与刻度字号由 9px~11px 垫高至 12px；
+  - **优质中文首选字体栈**：在 `@theme` 中显式指定现代无衬线中文字体栈（苹方、冬青黑体、微软雅黑、文泉驿微米黑等），并将 `index.html` 的 `lang` 属性修正为 `zh-CN`。
+
 ### Fixes
 
 - **插件声明式贡献（contributes/view）注册时序前移与纯 view 插件支持（Issue #350）**：

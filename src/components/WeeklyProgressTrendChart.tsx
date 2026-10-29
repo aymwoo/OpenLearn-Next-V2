@@ -546,14 +546,14 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
 
                 <XAxis
                   dataKey="weekLabel"
-                  tick={{ fontSize: 11, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[0, 100]}
                   ticks={[0, 20, 40, 60, 80, 100]}
-                  tick={{ fontSize: 11, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                   tickFormatter={(val) => `${val}%`}
@@ -569,7 +569,7 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
                     label={{
                       value: lang === 'zh' ? '目标 80%' : 'Target 80%',
                       fill: '#059669',
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 700,
                       position: 'insideTopRight',
                     }}
@@ -654,7 +654,7 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
                 )}
 
                 <Legend
-                  wrapperStyle={{ paddingTop: 10, fontSize: 11 }}
+                  wrapperStyle={{ paddingTop: 10, fontSize: 12 }}
                   formatter={(value) => <span className="text-gray-600 font-medium">{value}</span>}
                 />
               </LineChart>

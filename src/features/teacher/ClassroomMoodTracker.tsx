@@ -666,8 +666,8 @@ export function ClassroomMoodTracker({
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#64748b' }} stroke="#cbd5e1" tickLine={false} />
-                <YAxis domain={[20, 100]} tick={{ fontSize: 11, fill: '#64748b' }} stroke="#cbd5e1" tickLine={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 12, fill: '#64748b' }} stroke="#cbd5e1" tickLine={false} />
+                <YAxis domain={[20, 100]} tick={{ fontSize: 12, fill: '#64748b' }} stroke="#cbd5e1" tickLine={false} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
@@ -704,7 +704,7 @@ export function ClassroomMoodTracker({
                   label={{
                     value: lang === 'zh' ? '黄金心流区间 70%' : 'Optimal Flow 70%',
                     fill: '#059669',
-                    fontSize: 10,
+                    fontSize: 12,
                     position: 'insideTopLeft',
                   }}
                 />
@@ -755,7 +755,7 @@ export function ClassroomMoodTracker({
                   <YAxis
                     type="category"
                     dataKey="name"
-                    tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }}
+                    tick={{ fontSize: 12, fill: '#334155', fontWeight: 600 }}
                     width={85}
                     axisLine={false}
                     tickLine={false}
