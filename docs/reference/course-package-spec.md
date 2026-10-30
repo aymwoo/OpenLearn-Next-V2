@@ -152,7 +152,7 @@
 所有附件引用统一写成占位符：
 
 - 白板元素：`data.fileUrl = "${asset:asset-sample-handout}"`
-- 课程正文（Markdown）：`![示意图](${asset:img-1})`、`[下载讲义](${asset:doc-1})`
+- 课程正文（Markdown）：图片写 `![示意图](${asset:img-1})`；下载链接则是普通超链接，把圆括号里的地址写成 `${asset:doc-1}`。
 
 导入时，占位符会被替换成**导入方实例上真实落盘后的** `/uploads/<随机名>.<ext>`：
 

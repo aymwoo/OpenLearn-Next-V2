@@ -166,8 +166,8 @@ export async function exportCoursePackage(lessonId: string): Promise<CoursePacka
       assets: Number.isFinite(assets) ? assets : 0,
       skipped: Number.isFinite(skipped) ? skipped : 0,
     };
-  } catch (err: any) {
-    return { ok: false, error: err?.message || String(err) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

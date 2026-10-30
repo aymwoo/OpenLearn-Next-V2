@@ -148,7 +148,7 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
       res.setHeader('X-Course-Package-Assets', String(stats.assets));
       res.setHeader('X-Course-Package-Skipped', String(stats.skipped.length + stats.skippedElements));
       res.send(JSON.stringify(pkg, null, 2));
-    } catch (e: any) {
+    } catch (e) {
       if (e instanceof CoursePackageExportError) {
         return res.status(e.status).json({ success: false, code: e.code, error: e.message });
       }

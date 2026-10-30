@@ -635,7 +635,9 @@ describe('course package routes', () => {
     const body = await res.json();
     recordImport(body);
 
-    const lesson = db.prepare('SELECT content FROM lessons WHERE id = ?').get(body.result.lessonId) as any;
+    const lesson = db.prepare('SELECT content FROM lessons WHERE id = ?').get(body.result.lessonId) as {
+      content: string;
+    };
     // 占位符必须被替换成落盘后的真实 URL，而不是原样写进数据库
     expect(lesson.content).not.toContain('${asset:');
     const urls = Array.from(String(lesson.content).matchAll(/\/uploads\/[^\s)"']+/g)).map((m) => m[0]);
@@ -694,7 +696,7 @@ describe('course package routes', () => {
     expect(pkg.assets).toHaveLength(2);
     expect(pkg.lesson.content).toContain('${asset:');
     expect(pkg.lesson.content).not.toContain('/uploads/');
-    for (const asset of pkg.assets as any[]) {
+    for (const asset of pkg.assets as Array<{ base64: string }>) {
       expect(Buffer.from(asset.base64, 'base64').length).toBeGreaterThan(0);
     }
 
@@ -710,7 +712,10 @@ describe('course package routes', () => {
     recordImport(reimportedBody);
     const copyLessonId = reimportedBody.result.lessonId as string;
 
-    const copy = db.prepare('SELECT content, timeline FROM lessons WHERE id = ?').get(copyLessonId) as any;
+    const copy = db.prepare('SELECT content, timeline FROM lessons WHERE id = ?').get(copyLessonId) as {
+      content: string;
+      timeline: string;
+    };
     expect(copy.content).not.toContain('${asset:');
     expect(copy.content).toContain('/uploads/');
     expect(JSON.parse(copy.timeline)).toHaveLength(pkg.lesson.timeline.length);
