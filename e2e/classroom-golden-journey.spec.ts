@@ -366,10 +366,18 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       await expect(closePollBtn).toBeVisible({ timeout: 15_000 });
       await closePollBtn.click();
 
+      // 教师端解除专注锁定，放开学生节奏信号与互动
+      logEvidence('Stage 2: 教师端解除专注锁定');
+      const unlockClassBtn = teacherPage.locator('button:has-text("锁定 · 解锁")').first();
+      if (await unlockClassBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await unlockClassBtn.click();
+      }
+
       // 3. 学生端反馈学习节奏晴雨表 (Too Fast)
       logEvidence('Stage 2: 学生发送节奏信号');
       const tooFastBtn = studentPage.locator('button:has-text("讲太快")');
       await expect(tooFastBtn).toBeVisible();
+      await expect(tooFastBtn).toBeEnabled({ timeout: 10_000 });
       await tooFastBtn.click();
 
       // 截图存盘：Stage 2 课中授课
