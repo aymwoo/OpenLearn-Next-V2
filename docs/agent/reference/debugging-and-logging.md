@@ -1,6 +1,6 @@
 # 调试与日志
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.7
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.8
 > 解决一个问题：**插件跑起来之后，怎么看到它到底干了什么？**
 
 ---

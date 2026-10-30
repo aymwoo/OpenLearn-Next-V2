@@ -47,7 +47,7 @@ git show <commit>^:docs/architecture/platform-foundation-audit-report.md
 | Plugin SDK Token | [api/di-tokens](../api/di-tokens.md)                                             |
 | UI 扩展槽位      | [reference/plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md) |
 | 部署与上线检查   | [deployment/production-guide](../deployment/production-guide.md)                 |
-| 版本变更         | [release-notes](../release-notes/v0.7.7.md) 与根目录 `CHANGELOG.md`              |
+| 版本变更         | [release-notes](../release-notes/v0.7.8.md) 与根目录 `CHANGELOG.md`              |
 
 ## 未归档的报告型文档
 

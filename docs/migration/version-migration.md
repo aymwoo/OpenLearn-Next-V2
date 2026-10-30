@@ -1,10 +1,10 @@
 # Version Migration Guide 版本迁移指南
 
-> **当前版本**：`package.json` 为 **`0.7.7`**，`@openlearn/plugin-sdk` 为 **`3.7.5`**。
+> **当前版本**：`package.json` 为 **`0.7.8`**，`@openlearn/plugin-sdk` 为 **`3.7.5`**。
 >
 > 本文覆盖两类迁移：
 >
-> 1. **平台数据库 schema 迁移**（`migrations/000`–`043`，以 `migrations/` 目录为准）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
+> 1. **平台数据库 schema 迁移**（`migrations/000`–`044`，以 `migrations/` 目录为准）—— 服务启动时自动执行。迁移失败进程会退出，不会带着半迁移的库继续服务。
 > 2. **插件侧迁移**（`ctx.db.migrate`）—— 插件作者在自己插件的 `activate` 中调用
 >
 > 跨版本升级时：自动迁移之外的人工步骤见下文各节；班级口令在 0.4 由启动过程加密，`ENCRYPTION_KEY`（或 `storage/encryption-key`）必须和库一起带走。迁移清单以 `migrations/README.md` 为准；下文第 2 节的表只覆盖到 `014`，是历史说明。

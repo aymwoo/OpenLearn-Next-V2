@@ -1,6 +1,6 @@
 # UI 扩展槽位（`contributes`）全集
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.7
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.8
 > 本页给出**四组彼此不正交的命名空间**的完整清单，以及每个槽位在当前版本下真正能拿到的 `slotProps`。
 > 生成 UI 扩展代码前必读：绝大多数「插件装上了但界面上什么都没有」的问题，根因都在这里。
 >

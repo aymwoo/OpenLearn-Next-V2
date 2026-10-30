@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-10-30
+
+### Features
+
+- **插件中心卡片布局优化与响应式操作栏 (#360)**：
+  - **主次操作分级**：插件商店卡片主操作栏聚焦「启用/禁用」与「总览」开关，一键更新仅在检测到新版本时显式呈现；次级及低频操作（插件设置、上传更新包、一键迁移、卸载插件）优雅收敛至右侧「更多操作 (···)」下拉菜单。
+  - **信息展示与元数据紧凑排布**：单行 nowrap 紧凑呈现开发者与安装时间，消除文字折行；针对具有配置能力（configuration）、更新源或旧版迁移模式的插件动态生成菜单选项。
+  - **测试覆盖**：更新单元测试验证解耦徽章、日期格式化与下拉菜单交互操作。
+
 ### Docs
 
 - **AI 插件开发手册子树（`docs/agent/`）与源码抽取事实表**：
@@ -44,6 +53,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **优质中文首选字体栈**：在 `@theme` 中显式指定现代无衬线中文字体栈（苹方、冬青黑体、微软雅黑、文泉驿微米黑等），并将 `index.html` 的 `lang` 属性修正为 `zh-CN`。
 
 ### Fixes
+
+- **全班专注锁定时停用学生端浮层与插件视图保护**：
+  此前 `isInteractionLocked` 仅作用于白板画布，全班专注锁定（`full` 模式）期间学生仍可操作抢答球、便签浮层（`student.classroom.overlay`）与 `student.lesson.tool` 里的插件视图。
+  - `ExtensionPointRenderer` 透传 `locked` 状态给沙箱 iframe 视图：panel 槽位覆盖交互拦截罩，floating 槽位自动下滑收起并在原位保留展开提示（iframe 保持挂载，未提交的插件状态不丢）；
+  - `StudentInteractiveOverlay` 在锁定期间禁用节奏晴雨表的四个反馈按钮并展示锁定标识，并在 E2E 黄金旅程测试中补齐教师端解锁交互闭环。
+
+- **测试断言与 CI 黄金旅程端到端闭环修复**：
+  - 对齐 `src/plugin-host/__tests__/plugin-center-integration.test.tsx` 插件中心集成测试，适配下拉菜单结构并改用 Testing Library 交互式断言；
+  - 修复 `e2e/classroom-golden-journey.spec.ts` 课中授课流程，在结束投票后由教师端先解除全班专注锁定，确保学生端节奏晴雨表反馈按钮正常激活与点击。
 
 - **学生专注力监控卡片：姓名完整显示 + 头像改为「照片 / 性别 / 中性人像」**：live_class 右侧「学生专注力监控」的学生卡片把姓名塞在 48px 的圆形头像里，并带 `truncate max-w-[32px]`，中文名字从第二个字起就被省略号吃掉（`张…`）。现改为：
   - **姓名**：圆头像不再承载文字，完整姓名在头像下方单独一行渲染，`w-full` + `break-words` 自然换行、不 `truncate`，附 `title` 悬停可看全名；卡片高度由 `auto-rows-max` 网格自动撑开。

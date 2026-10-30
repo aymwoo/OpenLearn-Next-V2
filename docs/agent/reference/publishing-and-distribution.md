@@ -1,6 +1,6 @@
 # 发布与分发
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.7
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.8
 > 解决一个问题：**插件写完了，怎么变成一个能被装上的 ZIP？ZIP 里到底该有什么？**
 
 ---

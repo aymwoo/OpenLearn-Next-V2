@@ -1,6 +1,6 @@
 # 版本兼容与迁移
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.7
+> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.8
 > 解决两个问题：**宿主版本和 SDK 版本是同一条线吗？** 插件升级后，老用户的数据怎么办？
 
 ---
@@ -8,12 +8,12 @@
 ## 0. 先纠正三个先验
 
 ```{danger} ⚠ 与 LLM 先验冲突 1：两条版本线，彼此独立
-**宿主版本**（`engines.openlearn`，当前 `0.7.7`）和 **SDK 版本**
+**宿主版本**（`engines.openlearn`，当前 `0.7.8`）和 **SDK 版本**
 （`@openlearn/plugin-sdk`，当前 `3.7.5`）是**两条互不相干的版本线**。
 
 - 宿主升级 **不必然** 要求插件换 SDK 版本；SDK 升到 `3.7.5` 也不要求宿主升到某个版本。
 - SDK 是**独立发版**的 npm 包，它的版本号与宿主版本号没有对应关系。
-- 所以「宿主 0.7.7 就该用 SDK 3.7.5」是巧合，不是规则。
+- 所以「宿主 0.7.8 就该用 SDK 3.7.5」是巧合，不是规则。
 
 → **两个都要显式声明**：manifest 里写 `engines.openlearn`，
 `package.json` 里写 `"@openlearn/plugin-sdk": "^3.7.5"`。
@@ -43,7 +43,7 @@
 |              | 宿主版本                                                              | SDK 版本                                             |
 | :----------- | :-------------------------------------------------------------------- | :--------------------------------------------------- |
 | 声明位置     | `manifest.json` 的 `engines.openlearn`                                | `package.json` 的 `dependencies` / `devDependencies` |
-| 当前值       | `0.7.7`                                                               | `3.7.5`                                              |
+| 当前值       | `0.7.8`                                                               | `3.7.5`                                              |
 | 约束方式     | `semver.satisfies` 在**安装时**检查                                   | npm 解析 + `engines` 字段自检                        |
 | 不满足的后果 | **装不上**，报 `requires OpenLearn <range>, current version is <ver>` | 运行时才暴露（缺 API、缺依赖）                       |
 | 谁能变       | 随宿主发布                                                            | 随时可发新版，**不需要**宿主配合                     |
@@ -172,7 +172,7 @@ worker 侧是 `dbService` 的异步封装），**迁移代码要按运行形态�
 
 | 现象                                                          | 根因                                            | 修法                                                                         |
 | :------------------------------------------------------------ | :---------------------------------------------- | :--------------------------------------------------------------------------- |
-| 安装报 `requires OpenLearn >=0.8.0, current version is 0.7.7` | `engines.openlearn` 范围太窄                    | 放宽范围，或等宿主升级；确认 `OPENLEARN_VERSION` 真值                        |
+| 安装报 `requires OpenLearn >=0.8.0, current version is 0.7.8` | `engines.openlearn` 范围太窄                    | 放宽范围，或等宿主升级；确认 `OPENLEARN_VERSION` 真值                        |
 | 装到了**明显不兼容**的宿主上                                  | 压根没写 `engines.openlearn`                    | 补上，永远别省                                                               |
 | manifest 校验失败：`requires/optional 条目格式无效`           | 用了 `>=1.0.0` / `1.0` / 带 `@latest`           | 只接受 `@^1.0.0` / `@~1.0.0` / `@1.0.0` 三段式                               |
 | 同一个 `@version` 后缀在 V3 schema 下不被接受                 | 用了 `manifestSchemaV3`                         | 宿主当前用 `manifestSchema`；确认调用方                                      |

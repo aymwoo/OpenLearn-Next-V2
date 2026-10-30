@@ -70,7 +70,7 @@ export default {
 | `main`                 | 必填，值必须是 `index.js`（esbuild 单文件 bundle 的产物名）        | 缺失报 `manifest.main 必须指定入口文件路径`                   |
 | `requires`             | 条目格式受 zod 正则约束，见 {doc}`../reference/token-reference` §1 | 少一个 `@scope/` 报「requires 条目格式无效」                  |
 | `capabilitiesProposed` | `'lesson:read'` 是 19 个内建能力名之一，**不是杜撰串**             | 未知能力名不会报错，但命令会被 `COMMAND_CAPABILITY_DENIED` 拒 |
-| `engines.openlearn`    | `'>=0.2.5'`，平台实际 `0.7.7`                                      | 写高了会在安装期被引擎检查拦                                  |
+| `engines.openlearn`    | `'>=0.2.5'`，平台实际 `0.7.8`                                      | 写高了会在安装期被引擎检查拦                                  |
 
 ```{warning}
 ### 模板声明了 `IDatabase` 却没用

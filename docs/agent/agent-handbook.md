@@ -8,7 +8,7 @@
 
 | 项          | 值                                      | 取证                                    |
 | :---------- | :-------------------------------------- | :-------------------------------------- |
-| 平台版本    | `0.7.7`                                 | `package.json`                          |
+| 平台版本    | `0.7.8`                                 | `package.json`                          |
 | 插件 SDK    | `@openlearn/plugin-sdk@3.7.5`           | `packages/plugin-sdk/package.json`      |
 | 测试工具包  | `@openlearn/plugin-test-kit@3.3.3`      | `packages/plugin-test-kit/package.json` |
 | 宿主运行时  | Node.js `20.x / 22.x / 24.x`（推荐 22） | `AGENTS.md`                             |

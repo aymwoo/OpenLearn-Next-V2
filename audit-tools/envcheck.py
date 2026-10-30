@@ -68,6 +68,7 @@ SKIP_DIR_PARTS = (
     "__pycache__",
     ".vite-cache",
     ".venv",
+    "plugins",  # 运行时安装的插件（含构建产物与第三方代码），不属平台源码面
     "v2_plugins",  # 第三方插件，不属平台配置面
 )
 

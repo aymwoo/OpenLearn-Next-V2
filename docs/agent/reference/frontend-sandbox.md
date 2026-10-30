@@ -540,6 +540,14 @@ const FLOATING_VIEW_SLOTS = new Set<string>(['student.classroom.overlay']);
 `style={ viewVariantFor(slot) === 'floating' && index > 0 ? { left: \`calc(1.5rem + ${index * 316}px)\` } : undefined }`
 —— **316px 是硬编码步长**，不是配置。
 
+### 8.1 全班专注锁定与沙箱视图拦截契约
+
+`ExtensionPointRenderer` 接受可选的 `locked?: boolean` 属性（由课堂状态机在全班专注锁定 `mode: 'full'` 时下发）：
+
+- **panel 槽位**：沙箱视图上方覆盖半透明拦截遮罩，提示「全班专注锁定中，插件视图已暂停交互」；
+- **floating 槽位**（如 `student.classroom.overlay`）：浮层卡片自动下滑折叠收起，原位保留展开提示徽标；
+- **沙箱生命周期**：iframe 容器在锁定期间保持挂载，不触发组件卸载，未提交的内部临时输入或状态不丢失。
+
 ---
 
 ## 9. 扩展点注册与 store
