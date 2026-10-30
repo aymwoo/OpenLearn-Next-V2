@@ -536,7 +536,7 @@ export function ClassroomInteractiveCockpit({
                 }`}
               >
                 <span
-                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[11px] font-bold ${
                     isActive ? 'bg-white/20' : canTransition ? 'bg-foreground/10' : 'bg-muted/20'
                   }`}
                 >
@@ -695,32 +695,32 @@ export function ClassroomInteractiveCockpit({
               <TrendingUp size={12} className="text-primary-ink" />
               <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
               {activeSegmentId && segmentTitles[activeSegmentId] && (
-                <span className="text-[10px] text-primary-ink font-medium truncate max-w-[90px]">
+                <span className="text-xs text-primary-ink font-medium truncate max-w-[100px]">
                   [{segmentTitles[activeSegmentId]}]
                 </span>
               )}
             </div>
             <div className="flex items-center gap-1.5">
               <span
-                className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[10px]"
+                className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]"
                 title="理解 / 节奏适宜"
               >
                 💡 {pacingSignals.CLEAR || 0}
               </span>
               <span
-                className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[10px]"
+                className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[11px]"
                 title="困惑"
               >
                 ❓ {pacingSignals.CONFUSED || 0}
               </span>
               <span
-                className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold text-[10px]"
+                className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold text-[11px]"
                 title="慢一点（讲太快）"
               >
                 🐇 {pacingSignals.TOO_FAST || 0}
               </span>
               <span
-                className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[10px]"
+                className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px]"
                 title="快一点（讲太慢）"
               >
                 🐢 {pacingSignals.SLOW || 0}
@@ -844,7 +844,7 @@ export function ClassroomInteractiveCockpit({
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{preset.title}</div>
                           <div className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
-                            <span className="px-1.5 py-0.5 rounded bg-surface-secondary border border-border text-[10px] font-bold">
+                            <span className="px-1.5 py-0.5 rounded bg-surface-secondary border border-border text-[11px] font-bold">
                               {preset.questionType === 'TF'
                                 ? '判断'
                                 : preset.questionType === 'ABCD'
@@ -1073,22 +1073,20 @@ export function ClassroomInteractiveCockpit({
                   <span className="text-xs font-bold text-muted mb-1">
                     {lang === 'zh' ? '随堂测验正确率' : 'Quiz Accuracy'}
                   </span>
-                  <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                  <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 font-mono">
                     {panoramicSummary.metrics?.quizAccuracy || 0}%
                   </span>
-                  <span className="text-[10px] text-muted mt-1">
-                    {panoramicSummary.metrics?.quizCount || 0} 题次提交
-                  </span>
+                  <span className="text-xs text-muted mt-1">{panoramicSummary.metrics?.quizCount || 0} 题次提交</span>
                 </div>
 
                 <div className="p-4 bg-surface-secondary rounded-2xl border border-border/80 flex flex-col items-center text-center">
                   <span className="text-xs font-bold text-muted mb-1">
                     {lang === 'zh' ? '课堂互动参与人次' : 'Poll Interactions'}
                   </span>
-                  <span className="text-3xl font-black text-amber-700 dark:text-amber-400 font-mono">
+                  <span className="text-2xl font-bold text-amber-700 dark:text-amber-400 font-mono">
                     {panoramicSummary.metrics?.pollVotesTotal || 0}
                   </span>
-                  <span className="text-[10px] text-muted mt-1">口播投票互动</span>
+                  <span className="text-xs text-muted mt-1">口播投票互动</span>
                 </div>
 
                 <div className="p-4 bg-surface-secondary rounded-2xl border border-border/80 flex flex-col items-center text-center">
@@ -1096,12 +1094,12 @@ export function ClassroomInteractiveCockpit({
                     {lang === 'zh' ? '结课通票综合评分' : 'Exit Ticket Rating'}
                   </span>
                   {/* v0.6.1 数据真实性：无提交显示「—」，不再回退假 5.0 */}
-                  <span className="text-3xl font-black text-indigo-500 font-mono">
+                  <span className="text-2xl font-bold text-indigo-500 font-mono">
                     {panoramicSummary.metrics?.exitTicketsAvgRating != null
                       ? `${panoramicSummary.metrics.exitTicketsAvgRating} ★`
                       : '—'}
                   </span>
-                  <span className="text-[10px] text-muted mt-1">
+                  <span className="text-xs text-muted mt-1">
                     {panoramicSummary.metrics?.exitTicketsCount || 0} 人提交
                   </span>
                 </div>

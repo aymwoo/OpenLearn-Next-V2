@@ -1838,7 +1838,7 @@ export function LiveClassroomView({
             </span>
             <span
               data-testid="live-class-lock-hint"
-              className="text-2xs font-semibold text-muted truncate max-w-[140px]"
+              className="text-xs font-semibold text-muted truncate max-w-[140px]"
             >
               {classLockHint(lang)}
             </span>
@@ -1854,7 +1854,7 @@ export function LiveClassroomView({
               setShowSessionPicker(false);
               setShowEntryPortal(true);
             }}
-            className="inline-flex items-center text-2xs font-semibold px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+            className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
             title={
               lang === 'zh'
                 ? '回到起始门户。进行中的课不能换班'
@@ -1867,7 +1867,7 @@ export function LiveClassroomView({
             type="button"
             id="live-classroom-open-sessions"
             onClick={() => setShowSessionManager(true)}
-            className="inline-flex items-center text-2xs font-semibold px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+            className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
             title={lang === 'zh' ? '管理课堂历史与进行中会话' : 'Manage classroom sessions'}
           >
             {lang === 'zh' ? '会话档案' : 'Sessions'}
@@ -2201,7 +2201,7 @@ export function LiveClassroomView({
                     <h3 className="text-xs font-black text-main uppercase tracking-wider truncate">
                       {lang === 'zh' ? '教学步骤与页面大纲' : 'Lesson Flow & Outline'}
                     </h3>
-                    <div className="text-[10px] text-muted flex items-center gap-1.5 font-medium">
+                    <div className="text-xs text-muted flex items-center gap-1.5 font-medium">
                       <span>
                         {timelineSegments.length} {lang === 'zh' ? '环节' : 'steps'}
                       </span>
@@ -2233,7 +2233,7 @@ export function LiveClassroomView({
                     >
                       <LayoutGrid size={13} className="text-primary-ink" />
                       <span>{lang === 'zh' ? '白板页面大纲' : 'Whiteboard Outline'}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-theme/10 text-primary-ink font-mono font-bold">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary-theme/10 text-primary-ink font-mono font-bold">
                         {whiteboardPages.length || 1}
                       </span>
                       <ChevronDown
@@ -2254,15 +2254,13 @@ export function LiveClassroomView({
                   {isOutlineCollapsed ? (
                     <div
                       onClick={() => setIsOutlineCollapsed(false)}
-                      className="flex items-center justify-between text-2xs px-2.5 py-1.5 bg-surface-secondary/60 rounded-lg text-muted hover:text-main cursor-pointer transition-colors"
+                      className="flex items-center justify-between text-xs px-2.5 py-1.5 bg-surface-secondary/60 rounded-lg text-muted hover:text-main cursor-pointer transition-colors"
                     >
                       <span className="truncate max-w-[170px] font-medium">
                         {lang === 'zh' ? '当前' : 'Active'}:{' '}
                         {whiteboardPages[currentWhiteboardPage]?.title || `P${currentWhiteboardPage + 1}`}
                       </span>
-                      <span className="text-[10px] text-primary-ink font-bold">
-                        {lang === 'zh' ? '展开' : 'Expand'}
-                      </span>
+                      <span className="text-xs text-primary-ink font-bold">{lang === 'zh' ? '展开' : 'Expand'}</span>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-0.5 no-scrollbar">
@@ -2289,7 +2287,7 @@ export function LiveClassroomView({
                             >
                               <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
                                 <span
-                                  className={`text-[10px] px-1 py-0.2 rounded font-mono shrink-0 ${
+                                  className={`text-[11px] px-1.5 py-0.5 rounded font-mono shrink-0 ${
                                     isActive ? 'bg-primary-solid/85 text-white' : 'bg-surface-secondary text-muted'
                                   }`}
                                 >
@@ -2298,7 +2296,7 @@ export function LiveClassroomView({
                                 <span className="truncate tracking-tight">{p.title || `页面 ${idx + 1}`}</span>
                               </div>
                               <span
-                                className={`text-[9px] px-1.5 py-0.2 rounded shrink-0 ${
+                                className={`text-[11px] px-1.5 py-0.5 rounded shrink-0 ${
                                   isActive ? 'bg-primary-solid/85 text-white' : 'text-muted'
                                 }`}
                               >
@@ -2321,7 +2319,7 @@ export function LiveClassroomView({
                         {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
                       </h4>
                     </div>
-                    <span className="text-[10px] text-muted font-medium">
+                    <span className="text-xs text-muted font-medium">
                       {timelineSegments.findIndex((s) => s.id === activeSegmentId) >= 0
                         ? `${lang === 'zh' ? '进行中: ' : 'Active: '}#${timelineSegments.findIndex((s) => s.id === activeSegmentId) + 1}`
                         : ''}
@@ -2347,7 +2345,7 @@ export function LiveClassroomView({
                             <div className="flex justify-between items-center pl-1">
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <span
-                                  className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                                  className={`w-4 h-4 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 ${
                                     isActive ? 'bg-primary-solid text-white' : 'bg-surface-secondary text-muted'
                                   }`}
                                 >
@@ -2359,13 +2357,13 @@ export function LiveClassroomView({
                                   {seg.title}
                                 </span>
                               </div>
-                              <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-surface-secondary text-muted border border-theme/60 shrink-0">
+                              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-secondary text-muted border border-theme/60 shrink-0">
                                 {seg.duration}
                               </span>
                             </div>
 
                             <div
-                              className={`text-2xs line-clamp-2 leading-relaxed pl-1 ${
+                              className={`text-xs line-clamp-2 leading-relaxed pl-1 ${
                                 isActive ? 'text-primary-ink/90' : 'text-muted'
                               }`}
                             >
@@ -2728,14 +2726,14 @@ export function LiveClassroomView({
                   )}
                 </div>
                 <span
-                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
+                  className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
                   title={lang === 'zh' ? '已锁定学生屏幕人数 (专注 / 答题)' : 'Locked count (Focus / Answer)'}
                 >
                   <span>
                     🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
                   </span>
                   {students.some((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation') && (
-                    <span className="text-amber-600 text-[9px] font-sans">✏️答题</span>
+                    <span className="text-amber-600 text-[11px] font-semibold font-sans">✏️答题</span>
                   )}
                 </span>
               </div>
@@ -3017,7 +3015,7 @@ export function LiveClassroomView({
 
                         {/* 完整姓名：不截断、不加省略号，超长名字自然换行 */}
                         <span
-                          className={`mt-1 w-full px-0.5 text-center text-[10px] font-semibold leading-tight break-words select-none ${
+                          className={`mt-1 w-full px-0.5 text-center text-xs font-semibold leading-tight break-words select-none ${
                             isSelectedDraw
                               ? 'text-amber-800 dark:text-amber-300'
                               : !isOnline
@@ -3031,7 +3029,7 @@ export function LiveClassroomView({
 
                         {/* Small Progress Label or Draw Winner Label */}
                         <span
-                          className={`text-[10px] font-mono mt-1 truncate max-w-[48px] select-none font-bold ${
+                          className={`text-[11px] font-mono mt-0.5 truncate max-w-[54px] select-none font-bold ${
                             isSelectedDraw
                               ? 'text-amber-700 dark:text-amber-400 font-extrabold animate-bounce'
                               : !isOnline
@@ -3070,13 +3068,13 @@ export function LiveClassroomView({
                       </div>
                       <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
                         <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                          <span className="text-muted font-medium text-[10px]">在线/总数</span>
+                          <span className="text-muted font-medium text-xs">在线/总数</span>
                           <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400 text-xs mt-0.5">
                             {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
                           </span>
                         </div>
                         <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                          <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
+                          <span className="text-muted font-medium text-xs">屏幕锁定</span>
                           <span className="font-bold font-mono text-xs mt-0.5">
                             <span className="text-rose-600" title="专注锁定">
                               {
@@ -3096,7 +3094,7 @@ export function LiveClassroomView({
                           </span>
                         </div>
                         <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
-                          <span className="text-muted font-medium text-[10px]">平均进度</span>
+                          <span className="text-muted font-medium text-xs">平均进度</span>
                           <span className="font-bold font-mono text-primary-ink text-xs mt-0.5">
                             {(() => {
                               const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
@@ -3146,7 +3144,7 @@ export function LiveClassroomView({
                         </span>
                         {st.locked_lesson_id === selectedLesson && (
                           <span
-                            className={`text-[9px] px-1 py-0.2 rounded font-bold border shrink-0 ${
+                            className={`text-[11px] px-1.5 py-0.5 rounded font-bold border shrink-0 ${
                               st.lock_mode === 'navigation'
                                 ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-200 dark:border-amber-800'
                                 : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border-rose-200 dark:border-rose-800'
@@ -3157,7 +3155,7 @@ export function LiveClassroomView({
                         )}
                         {isPinned && !isHoverPreview && (
                           <span
-                            className="text-[10px] font-semibold text-primary-ink bg-primary-theme/10 border border-primary-theme/20 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0"
+                            className="text-[11px] font-semibold text-primary-ink bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0"
                             title="已固定显示该学生概况，点击空白处或 Esc 取消"
                           >
                             <Pin size={8} className="rotate-45" />
@@ -3166,7 +3164,7 @@ export function LiveClassroomView({
                         )}
                         {isHoverPreview && (
                           <span
-                            className="text-[10px] font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded shrink-0"
+                            className="text-[11px] font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0"
                             title="临时悬浮预览中，鼠标移开后恢复已固定学生"
                           >
                             预览
@@ -3180,7 +3178,7 @@ export function LiveClassroomView({
                               errorStore.getState().setActiveTab('student');
                               errorStore.getState().setIsErrorCenterOpen(true);
                             }}
-                            className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                            className="flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1.5 py-0.5 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
                             title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
                           >
                             <AlertTriangle size={10} className="text-rose-700 dark:text-rose-400 animate-pulse" />
@@ -3202,7 +3200,7 @@ export function LiveClassroomView({
                                   st.lock_mode === 'navigation' ? 'full' : 'navigation',
                                 );
                               }}
-                              className="text-[9px] px-1 py-0.2 rounded bg-surface hover:bg-surface-secondary border border-theme text-primary-ink font-bold transition-colors cursor-pointer"
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-surface hover:bg-surface-secondary border border-theme text-primary-ink font-bold transition-colors cursor-pointer"
                               title={st.lock_mode === 'navigation' ? '切换为专注锁定' : '切换为答题锁定'}
                             >
                               {st.lock_mode === 'navigation' ? '切专注' : '切答题'}
@@ -3214,7 +3212,7 @@ export function LiveClassroomView({
                                 e.stopPropagation();
                                 handleToggleStudentLock(st.id, null, null, 'navigation');
                               }}
-                              className="text-[9px] px-1 py-0.2 rounded bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:border-amber-800 font-bold transition-colors cursor-pointer"
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:border-amber-800 font-bold transition-colors cursor-pointer"
                               title="对该学生开启答题锁定"
                             >
                               答题锁
@@ -3240,7 +3238,7 @@ export function LiveClassroomView({
 
                     <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                        <span className="text-muted font-bold text-[10px]">随堂测验</span>
+                        <span className="text-muted font-bold text-xs">随堂测验</span>
                         <span
                           className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-ink' : 'text-muted'}`}
                         >
@@ -3251,7 +3249,7 @@ export function LiveClassroomView({
                       </div>
 
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                        <span className="text-muted font-bold text-[10px]">教学环节进度</span>
+                        <span className="text-muted font-bold text-xs">教学环节进度</span>
                         <span className="font-bold text-main text-xs">
                           {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
                         </span>
@@ -3266,7 +3264,7 @@ export function LiveClassroomView({
                           return (
                             <span
                               key={seg.id}
-                              className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
+                              className={`mr-1 px-1.5 py-0.5 rounded font-mono text-[11px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
                               title={seg.title}
                             >
                               {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
@@ -3312,7 +3310,7 @@ export function LiveClassroomView({
                   <span className="font-extrabold text-main text-xs truncate">
                     {lang === 'zh' ? '课堂互动反馈流' : 'Live Feed'}
                   </span>
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-surface-secondary border border-theme text-muted shrink-0">
+                  <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded-full bg-surface-secondary border border-theme text-muted shrink-0">
                     {liveClassFeed.length}
                   </span>
                 </div>
@@ -3333,7 +3331,7 @@ export function LiveClassroomView({
                           },
                         ])
                       }
-                      className="text-[10px] font-bold hover:text-rose-700 dark:hover:text-rose-400 text-muted transition-colors flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-surface-secondary cursor-pointer"
+                      className="text-xs font-semibold hover:text-rose-700 dark:hover:text-rose-400 text-muted transition-colors flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-surface-secondary cursor-pointer"
                       title={lang === 'zh' ? '清空互动反馈记录' : 'Clear feed'}
                     >
                       <Trash2 size={10} />
@@ -3343,7 +3341,7 @@ export function LiveClassroomView({
                   <button
                     type="button"
                     onClick={() => setIsFeedCollapsed((prev) => !prev)}
-                    className="text-[10px] text-muted hover:text-primary-ink font-medium cursor-pointer"
+                    className="text-xs text-muted hover:text-primary-ink font-medium cursor-pointer"
                   >
                     {isFeedCollapsed ? (lang === 'zh' ? '展开' : 'Expand') : lang === 'zh' ? '收起' : 'Collapse'}
                   </button>
@@ -3351,13 +3349,13 @@ export function LiveClassroomView({
               </div>
 
               {!isFeedCollapsed && (
-                <div className="flex-1 bg-surface-secondary/70 border border-theme rounded-xl p-2 font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1.5 select-text text-left text-main shadow-inner scrollbar-thin">
+                <div className="flex-1 bg-surface-secondary/70 border border-theme rounded-xl p-2 font-mono text-xs leading-relaxed overflow-y-auto space-y-1.5 select-text text-left text-main shadow-inner scrollbar-thin">
                   {liveClassFeed.map((f) => (
                     <div key={f.id} className="border-b border-theme pb-1 last:border-b-0">
                       <div className="flex justify-between items-center text-muted font-bold mb-0.5">
-                        <span className="text-[10px]">{f.time}</span>
+                        <span className="text-[11px] font-mono">{f.time}</span>
                         <span
-                          className={`px-1 rounded uppercase tracking-wide text-[9px] ${
+                          className={`px-1.5 py-0.5 rounded uppercase tracking-wide text-[11px] ${
                             f.type === 'success'
                               ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
                               : f.type === 'warning'

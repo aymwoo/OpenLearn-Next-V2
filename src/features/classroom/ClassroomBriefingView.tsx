@@ -334,53 +334,53 @@ export function ClassroomBriefingView({
       {/* 2. Key Metrics 5-Card Bento Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '全班出勤率' : 'Attendance'}
           </span>
           <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-1">
             {attendanceRate != null ? `${attendanceRate}%` : '—'}
           </div>
-          <span className="text-[10px] text-muted mt-1">
+          <span className="text-xs text-muted mt-1">
             {attendanceCount} / {totalStudents} 人到课
           </span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '随堂测验正确率' : 'Quiz Accuracy'}
           </span>
           <div className="text-2xl font-black text-primary-theme font-mono mt-1">{quizAccuracy}%</div>
-          <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '交互题作答均分' : 'Interactive Avg'}</span>
+          <span className="text-xs text-muted mt-1">{lang === 'zh' ? '交互题作答均分' : 'Interactive Avg'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '口播投票与抢答' : 'Interactions'}
           </span>
           <div className="text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">
             {pollVotes} <span className="text-xs font-normal">人次</span>
           </div>
-          <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '高参与度活跃' : 'High engagement'}</span>
+          <span className="text-xs text-muted mt-1">{lang === 'zh' ? '高参与度活跃' : 'High engagement'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '结课通票评分' : 'Exit Rating'}
           </span>
           <div className="text-2xl font-black text-indigo-500 font-mono mt-1">
             {exitRating != null ? `${exitRating} ★` : '—'}
           </div>
-          <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '掌握度 5.0 满分制' : 'Out of 5.0'}</span>
+          <span className="text-xs text-muted mt-1">{lang === 'zh' ? '掌握度 5.0 满分制' : 'Out of 5.0'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             {lang === 'zh' ? '教学节奏晴雨表' : 'Pacing Score'}
           </span>
           <div className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono mt-1">
             {hasPacingData ? `${clearPercent}%` : '—'}
           </div>
-          <span className="text-[10px] text-muted mt-1">
+          <span className="text-xs text-muted mt-1">
             {hasPacingData
               ? lang === 'zh'
                 ? '反馈节奏适宜'
@@ -637,7 +637,7 @@ export function ClassroomBriefingView({
                     <span>{str.title}</span>
                   </span>
                   {str.metricTag && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded">
                       {str.metricTag}
                     </span>
                   )}
@@ -658,7 +658,7 @@ export function ClassroomBriefingView({
                     <span>{btn.title}</span>
                   </span>
                   {btn.metricTag && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/15 text-amber-700 dark:text-amber-300 rounded">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 rounded">
                       {btn.metricTag}
                     </span>
                   )}
@@ -681,7 +681,7 @@ export function ClassroomBriefingView({
                     <Lightbulb size={13} />
                     <span>{act.title}</span>
                   </span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 rounded">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 rounded">
                     {act.timing === 'next_pre_class'
                       ? '下节课前预热'
                       : act.timing === 'next_in_class'
