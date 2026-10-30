@@ -28,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **互动课堂 (live_class) 中文字体层级与排版视觉均衡优化**：
+  - **消除微小发虚字号**：将右侧学生监控区（学情概况、学生姓名、锁屏状态徽章如 `✏️答题锁` / `🔒专注锁`）、左侧大纲区（环节步骤、页面大纲、组件类型）原本仅 9px~~10px 的微小中文字符统一提升至 11px~~12px（`text-xs` / `text-[11px]`），配合微紧凑内边距（`px-1.5 py-0.5`），既保证中文笔画清晰不发虚，又保持高密度网格展现。
+  - **收敛断崖式过大字体与说明失衡**：针对 `ClassroomInteractiveCockpit` 与 `ClassroomBriefingView` 中的统计卡片，收敛 `text-3xl` 过大数字为黄金比例 `text-2xl font-bold`，将下方原本仅 `text-[10px]` 的中文说明标签（`口播投票互动`、`题次提交`、`高参与度活跃` 等）统一规范为 `text-xs` (12px)，彻底消除视觉重心断层与压迫感。
+
 - **白板属性编辑器不再为系统内置组件提供尺寸输入（quiz / assignment / rollcall / 课件 / 插件组件等）**：这些组件在画布上以窗口卡片渲染，宽高由拖拽缩放手柄与自动平铺决定；属性栏里手填 width/height 既与平铺布局互相覆盖，也容易把组件卡到 50px 的畸形尺寸。现在 `WhiteboardPropertiesSidebar` 把内置组件类型收敛为模块级常量 `WIDGET_ELEMENT_TYPES`（原先散落在 `isWidget` 内联数组），并据此隐藏整个「尺寸」卡片；图形类（`rect` / `text` / `circle` 等）与手绘笔迹的现有行为不变，圆形的半径输入照常保留。
   - **课件属性弹窗同步收敛**：`CoursewarePropertiesModal`（插入/配置互动课件时的「课堂课件属性临时调整」）移除「画布中窗口尺寸（宽 × 高）」整块与 800×600 / 960×540 / 1200×675 三个预设按钮；应用时不再写 `width`/`height`，沿用元素既有值，缺失则由 `DEFAULT_ELEMENT_SIZE` 兜底（不再无条件把无尺寸课件改写成 800×600）。
   - 测试：`src/features/whiteboard/__tests__/whiteboard-properties-sidebar.test.tsx`（新增「quiz 不展示尺寸设置」回归 1 例，共 16 例全绿）、`courseware-properties-modal.test.tsx`（改写为「无尺寸输入/预设」与「缺失宽高不被凭空写入」2 例，共 7 例全绿）。

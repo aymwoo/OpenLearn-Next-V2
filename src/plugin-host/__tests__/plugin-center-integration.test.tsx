@@ -11,9 +11,10 @@
  * - Plugin name, description, author rendered from manifest
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { render, fireEvent, cleanup } from '@testing-library/react';
 import { PluginCenter } from '../../components/PluginCenter';
 import type { PluginType } from '../../components/PluginCenter';
 
@@ -48,6 +49,10 @@ const defaultProps = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('PluginCenter grid rendering', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it('renders plugin cards for each plugin in the store tab', () => {
     const plugins: PluginType[] = [
       createPlugin({ id: 'plugin-a' }),
@@ -78,11 +83,14 @@ describe('PluginCenter grid rendering', () => {
 
   it('renders Enable/Disable and Delete buttons for each plugin card', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'test-plugin', status: 'active' })];
-    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
+    const { getByText, getByLabelText } = render(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Active plugin shows "Disable" button
-    expect(html).toContain('Disable');
-    // Delete button present
-    expect(html).toContain('Delete');
+    expect(getByText('Disable')).toBeDefined();
+    // More actions dropdown contains Uninstall (Delete) button
+    const moreBtn = getByLabelText('More actions');
+    expect(moreBtn).toBeDefined();
+    fireEvent.click(moreBtn);
+    expect(getByText('Uninstall')).toBeDefined();
   });
 });
 
@@ -115,6 +123,10 @@ describe('PluginCenter tab switching', () => {
 });
 
 describe('Legacy plugin card features', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it('renders LegacyPluginBadge inside legacy plugin cards in store tab', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'legacy-p', execution_mode: 'legacy' })];
     const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
@@ -122,24 +134,31 @@ describe('Legacy plugin card features', () => {
     expect(html).toContain('Migratable');
   });
 
-  it('renders Migrate button for legacy plugins', () => {
+  it('renders Migrate button for legacy plugins in more actions menu', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'legacy-p', execution_mode: 'legacy' })];
-    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
-    // Migrate button text
-    expect(html).toContain('Migrate');
+    const { getByText, getByLabelText } = render(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
+    const moreBtn = getByLabelText('More actions');
+    fireEvent.click(moreBtn);
+    expect(getByText('Migrate')).toBeDefined();
   });
 
   it('does not render Migrate button for modern plugins', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'modern-p', execution_mode: 'inline' })];
-    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
-    // Migrate button should not appear for non-legacy plugins
-    expect(html).not.toContain('Migrate');
+    const { queryByText, getByLabelText } = render(
+      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
+    );
+    const moreBtn = getByLabelText('More actions');
+    fireEvent.click(moreBtn);
+    expect(queryByText('Migrate')).toBeNull();
   });
 
   it('renders Migrate button for worker-mode plugins (not legacy)', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'worker-p', execution_mode: 'worker' })];
-    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
-    // Worker mode is not legacy, so Migrate button should not appear
-    expect(html).not.toContain('Migrate');
+    const { queryByText, getByLabelText } = render(
+      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
+    );
+    const moreBtn = getByLabelText('More actions');
+    fireEvent.click(moreBtn);
+    expect(queryByText('Migrate')).toBeNull();
   });
 });
