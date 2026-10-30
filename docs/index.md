@@ -88,6 +88,7 @@ workspace/layout-manager
 
 lesson/lesson-runtime
 lesson/lesson-lifecycle
+reference/course-package-spec
 ```
 
 ```{toctree}

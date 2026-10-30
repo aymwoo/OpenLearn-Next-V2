@@ -14,6 +14,7 @@ import {
 import { fetchLibraryResources as fetchLibraryResourcesApi } from '../services/sessionService.js';
 import {
   downloadCourseTemplate as downloadCourseTemplateApi,
+  exportCoursePackage as exportCoursePackageApi,
   importCoursePackage as importCoursePackageApi,
   readCoursePackageFile,
   formatMegabytes,
@@ -188,6 +189,37 @@ export function useResourceLibrary(deps: {
   };
 
   /**
+   * 把已有课程导出为课程包（教学环节 + 白板元素 + 内联附件）。
+   *
+   * 失败时（无权限 / 课程不存在 / 附件超过 20MB）用 toast 说明原因，
+   * 不静默失败 —— 导出按钮点下去没反应会让教师以为功能坏了。
+   */
+  const exportCoursePackage = async (lessonId: string) => {
+    const result = await exportCoursePackageApi(lessonId);
+    if (!result.ok) {
+      addToast(
+        lang === 'zh' ? '课程包导出失败' : 'Course package export failed',
+        result.error || (lang === 'zh' ? '请稍后重试' : 'Please try again later'),
+        'error',
+      );
+      return result;
+    }
+    const skipped = result.skipped ?? 0;
+    addToast(
+      lang === 'zh' ? '课程包已导出' : 'Course package exported',
+      lang === 'zh'
+        ? `${result.filename}（内联 ${result.assets ?? 0} 个附件${
+            skipped > 0 ? `，${skipped} 个引用未内联` : ''
+          }）可直接拖回导入框复用。`
+        : `${result.filename} (${result.assets ?? 0} embedded assets${
+            skipped > 0 ? `, ${skipped} reference(s) skipped` : ''
+          }). Drop it back into the import dialog to reuse.`,
+      skipped > 0 ? 'warning' : 'success',
+    );
+    return result;
+  };
+
+  /**
    * 提交课程包导入。
    *
    * @param allowDuplicate 命中去重时仍然导入一份副本（教师确认后的显式选择）。
@@ -321,6 +353,7 @@ export function useResourceLibrary(deps: {
     handleImportFileChange,
     handlePackageImportSubmit,
     downloadCourseTemplate,
+    exportCoursePackage,
     // 班级/学生批量导入
     showImportModal,
     setShowImportModal,

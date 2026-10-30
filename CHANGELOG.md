@@ -10,8 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **课程包（Course Package）导出与内容占位符解析 (Issue #363)**：
+  - **导出为自包含课程包**：新增 `GET /api/lessons/:id/export-package` 与 `server/services/course-package-export.ts`，把课节的 `content`、`timeline` 与全部 `whiteboard_elements` 打包为 `openlearn.course-package` v1；引用的 `/uploads/*` 文件以 base64 内嵌进 `assets[]`，正文与元素里的 URL 反向替换为 `${asset:<id>}`，导出文件可直接被导入端还原成一节完整的课。导出前会用 `parseCoursePackage` 自检，结构不合法则拒绝产出文件。
+  - **导出权限与容错**：沿用 `checkLessonOwnership`，仅课程创建教师或管理员可导出；无法解析的 `/uploads` 引用保持原样并通过 `X-Course-Package-Skipped` 头与前端警告提示；单包附件总量超过 20MB 返回 `413 COURSE_PACKAGE_EXPORT_TOO_LARGE`；`snapshot_marker`、未知元素类型与孤儿 `segmentId` 在导出时安全跳过。
+  - **导入侧解析正文占位符**：导入课程包时对 `lesson.content` 调用 `resolveAssetPlaceholders`，Markdown 里的 `![图](${asset:id})` / `[文档](${asset:id})` 现在会解析为真实的 `/uploads` URL（此前只解析白板元素数据）。
+  - **前端入口**：课程卡片操作栏与课节编辑器顶栏新增「导出为课程包」按钮（`src/services/coursePackageService.ts` + `useResourceLibrary`），导出过程有 loading 态，跳过资源时给出 warning toast。
+
 ### Docs
 
+- **新增《课程包规范》参考页**：`docs/reference/course-package-spec.md` 说明 CSV 与课程包的通道选择、完整 JSON schema、多媒体 base64 内嵌示例（Node / Python）、安全与体积限额（20MB 浏览器上限、32MB 请求体、Magic Bytes 校验、409 幂等、失败补偿）、三个端点（模板 / 导入 / 导出）与常见问题；已挂载到 `docs/index.md` 目录树与 `docs/audit/audit-index.md` 现行权威页面。
+- **课程导入弹窗模板指引增强**：`ImportLessonsModal` 的模板按钮改名为「下载完整课程模板（含图片 / 示例文档）」，说明文案补齐 10 种附件类型、20MB 上限与 `${asset:<id>}` 的用法，明确 CSV 只建空壳、完整课程走课程包通道。
 - **文档站纳入 CI 严格构建：`docs-drift-audit` 从「文本级」补到「解析级」**：
   - **补的是什么漏洞**：`audit-tools/run.sh` 的各段检查都只看「路径/符号/键名/代码块里的调用形状是否还在文档中」，看不见 Markdown 的**解析结果**。2026-10-29 的 MyST 指令块事故（指令标题里写了行内代码，整块退化成普通代码围栏并吞掉后续内容，`docs/agent` 27 页里 204 个提示框从未渲染）发生时，该 job 是**全绿**的。
   - **新增 `scripts/build-docs.sh`**：以 `sphinx -b html docs <out> -W --keep-going` 严格构建，参数与 `.readthedocs.yaml` 的 `fail_on_warning: true` 一一对应；CI 与本地「提交前自检」共用这一个入口，避免两处参数漂移。

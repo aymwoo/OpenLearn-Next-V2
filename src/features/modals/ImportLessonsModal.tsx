@@ -166,13 +166,13 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                         className="flex items-center gap-1 p-2 text-xs font-bold text-emerald-700 bg-white border border-emerald-200 rounded-lg shadow-3xs hover:bg-emerald-50 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
                       >
                         <FileJson size={12} />
-                        {lang === 'zh' ? '下载课程模板（JSON）' : 'Download Course Template (JSON)'}
+                        {lang === 'zh' ? '下载完整课程模板（含图片 / 示例文档）' : 'Download Full Course Template'}
                       </button>
                     </div>
                     <p className="text-[11px] text-indigo-800/80 mt-2.5 leading-relaxed">
                       {lang === 'zh'
-                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的 PDF / PPTX 课件附件 —— 拖回本对话框即可导入成一节完整的课。完整课程统一走这条通道，CSV 只做批量建空壳。'
-                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded PDF/PPTX assets — drop it back here to import a complete lesson. Complete lessons go through this path; CSV only creates shells in bulk.'}
+                        ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的图片 / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV 附件（解码后合计不超过 20MB）—— 拖回本对话框即可导入成一节完整的课。大纲中可用 ${asset:<id>} 引用内嵌素材，例如 ![示意图](${asset:img-1}) 或 [参考讲义](${asset:doc-1})，导入后会自动替换为真实文件地址。'
+                        : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded images / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV assets (up to 20MB decoded in total) — drop it back here to import a complete lesson. Reference embedded assets from the outline with ${asset:<id>}, e.g. ![diagram](${asset:img-1}) or [handout](${asset:doc-1}); the placeholders are resolved to real file URLs on import.'}
                     </p>
                   </div>
 

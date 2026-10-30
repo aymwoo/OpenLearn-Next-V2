@@ -3,7 +3,7 @@ import type { Lesson, WhiteboardElement } from '../../store/appStore';
 import type { SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
-import { Wand2, Loader2, CheckCircle2, X, Database, PenTool, AlertTriangle, Copy } from 'lucide-react';
+import { Wand2, Loader2, CheckCircle2, X, Database, PenTool, AlertTriangle, Copy, FileDown } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
 import { LessonPalette } from './lesson-editor/LessonPalette';
@@ -47,6 +47,7 @@ export function LessonEditorView() {
     paletteEdit,
     handlePaletteConfirm,
     setPaletteEdit,
+    exportCoursePackage,
   } = useAppData();
   const appSession = useAppStore((s) => s.session);
   const effectiveSession = session || appSession;
@@ -65,7 +66,18 @@ export function LessonEditorView() {
 
   const canEdit = isAdmin || isOwner;
   const isReadOnly = !canEdit || activeRole !== 'teacher';
+
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [exportingPackage, setExportingPackage] = useState(false);
+  const handleExportPackage = async () => {
+    if (!selectedLesson || exportingPackage) return;
+    setExportingPackage(true);
+    try {
+      await exportCoursePackage(selectedLesson);
+    } finally {
+      setExportingPackage(false);
+    }
+  };
   const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPageItem[]>([]);
   const [currentWhiteboardPage, setCurrentWhiteboardPage] = useState<number>(0);
   const [whiteboardDragState, setWhiteboardDragState] = useState<WhiteboardDragState | null>(null);
@@ -355,6 +367,24 @@ export function LessonEditorView() {
               onSave: handleSaveElementToServer,
             }}
           />
+
+          {canEdit && currentLesson && (
+            <button
+              type="button"
+              onClick={() => void handleExportPackage()}
+              disabled={exportingPackage}
+              className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-102 flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-wait"
+              title={
+                lang === 'zh'
+                  ? '导出为课程包（教学环节 + 白板元素 + 内联附件，可拖回导入框复用）'
+                  : 'Export as course package (segments + whiteboard elements + embedded assets)'
+              }
+              data-testid="editor-export-package-btn"
+            >
+              {exportingPackage ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+              <span>{lang === 'zh' ? '导出课程包' : 'Export Package'}</span>
+            </button>
+          )}
 
           <button
             type="button"
