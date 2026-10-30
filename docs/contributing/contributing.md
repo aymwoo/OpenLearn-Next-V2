@@ -80,24 +80,28 @@ type(scope): message
 ### 4.1 在本地构建文档站（提交前建议跑一遍）
 
 `docs/` 由 Sphinx + MyST 构建，发布在 [Read the Docs](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/)。
-`.readthedocs.yaml` 已开 `fail_on_warning: true` —— **任何警告都会让线上构建失败**，所以推送前先在本地用同样的严格模式验一遍：
+`.readthedocs.yaml` 已开 `fail_on_warning: true` —— **任何警告都会让线上构建失败**。CI 的
+`docs-drift-audit` job 会用同一组参数（`scripts/build-docs.sh`）再构建一遍，所以这类问题在 PR 阶段
+就会暴露，不必等合进 main 后 RTD 才报红。推送前先在本地验一遍：
 
 ```bash
 # 1) 装依赖（用 --target 到临时目录，避免污染本机 python）
-python3 -m pip install --target=/tmp/pylibs -r docs/requirements.txt
+python3 -m pip install --target=$HOME/.cache/pylibs -r docs/requirements.txt
 
-# 2) 构建（-W 等价于 fail_on_warning，--keep-going 让所有问题一次暴露）
-PYTHONPATH=/tmp/pylibs python3 -m sphinx -b html docs /tmp/docs-build -W --keep-going
+# 2) 严格构建（-W 等价于 fail_on_warning，--keep-going 让所有问题一次暴露）
+PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-build
 ```
+
+**为什么必须真构建一次**：`audit-tools/run.sh` 的检查全是文本级比对（路径是否存在、符号是否在源码里、
+代码块的调用形状），它看不见 Markdown 的**解析结果**。2026-10-29 踩过：MyST 指令块的标题里写了一对
+反引号，`docs/agent` 27 页手册的 204 个提示框从未渲染出来，而当时的漂移审计是**全绿**的。判据与排查
+路径见 [文档漂移门禁](../developer-guide/docs-drift-audit.md)。
 
 两个环境相关的坑：
 
-- **`/tmp` 是 tmpfs（10 MB）时装不下**，`pip` 会报 `No space left on device`。
-  把 `--target` 与构建输出都指到大分区，并显式设 `TMPDIR`（pip 默认仍写 `/tmp`）：
-  ```bash
-  TMPDIR=$HOME/.cache/pip-tmp python3 -m pip install --target=$HOME/.cache/pylibs -r docs/requirements.txt
-  PYTHONPATH=$HOME/.cache/pylibs TMPDIR=$HOME/.cache/pip-tmp python3 -m sphinx -b html docs $HOME/.cache/docs-build -W
-  ```
+- **`/tmp` 是 tmpfs（10 MB）时装不下**：`pip` 会把下载物解到 `TMPDIR`，默认就是 `/tmp`，
+  于是报 `No space left on device`。上面两处路径已指到 `$HOME`，若仍失败再显式设一次
+  `TMPDIR=$HOME/.cache/pip-tmp`。
 - 内网镜像可能没有 sphinx 9：加 `-i https://pypi.org/simple`。
 
 ### 4.2 写文档时的三条硬约束

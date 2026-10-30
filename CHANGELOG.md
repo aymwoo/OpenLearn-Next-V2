@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+
+- **文档站纳入 CI 严格构建：`docs-drift-audit` 从「文本级」补到「解析级」**：
+  - **补的是什么漏洞**：`audit-tools/run.sh` 的各段检查都只看「路径/符号/键名/代码块里的调用形状是否还在文档中」，看不见 Markdown 的**解析结果**。2026-10-29 的 MyST 指令块事故（指令标题里写了行内代码，整块退化成普通代码围栏并吞掉后续内容，`docs/agent` 27 页里 204 个提示框从未渲染）发生时，该 job 是**全绿**的。
+  - **新增 `scripts/build-docs.sh`**：以 `sphinx -b html docs <out> -W --keep-going` 严格构建，参数与 `.readthedocs.yaml` 的 `fail_on_warning: true` 一一对应；CI 与本地「提交前自检」共用这一个入口，避免两处参数漂移。
+  - **CI 改动**：`docs-drift-audit` job 增加安装 `docs/requirements.txt`、严格构建、失败时上传构建日志并在 PR 评论中贴出 `WARNING:` / `ERROR:` 行的三个步骤；构建步骤用 `if: always()`，使审计与构建的问题在同一次 CI 里同时暴露。`setup-python` 由 3.11 提到 3.12，对齐 RTD 构建镜像。
+  - **文档**：`docs/contributing/contributing.md` §4.1 与 `docs/developer-guide/docs-drift-audit.md` 的 L1 段同步说明两道门禁的分工与本地复现命令。
+
 ## [0.7.8] - 2026-10-30
 
 ### Features

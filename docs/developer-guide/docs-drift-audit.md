@@ -10,23 +10,24 @@
 
 ## 什么时候需要手动跑审计
 
-| 改动类型                  | 是否需要手动跑 | 说明                                                           |
-| ------------------------- | -------------- | -------------------------------------------------------------- |
-| 改业务逻辑                | ❌ 不需要      | 架构没变                                                       |
-| **新增 subsystem 目录**   | ✅ **必须**    | CI 会拦住，先跑一遍确认能写出文档                              |
-| **删除 subsystem 目录**   | ✅ **必须**    | CI 会拦住，必须删对应文档                                      |
-| **重命名 subsystem 目录** | ✅ **必须**    | CI 会拦住，必须改文档 + 改脚本                                 |
-| **新增/改名环境变量**     | ✅ **必须**    | `envcheck.py` 会拦住：生产读取的键必须进配置清单               |
-| **改插件文档里的代码块**  | ✅ **必须**    | `plugin_docs_check.py` 会拦住：示例里的 `ctx.xxx` 必须真实存在 |
-| 改 plugin 行为            | ❌ 不需要      | plugin 本身有 plugin 文档体系                                  |
-| 改 capability 名称        | ⚠️ 可能需要    | 看 `normalize.py` 是否仍能归一化                               |
+| 改动类型                  | 是否需要手动跑 | 说明                                                            |
+| ------------------------- | -------------- | --------------------------------------------------------------- |
+| 改业务逻辑                | ❌ 不需要      | 架构没变                                                        |
+| **新增 subsystem 目录**   | ✅ **必须**    | CI 会拦住，先跑一遍确认能写出文档                               |
+| **删除 subsystem 目录**   | ✅ **必须**    | CI 会拦住，必须删对应文档                                       |
+| **重命名 subsystem 目录** | ✅ **必须**    | CI 会拦住，必须改文档 + 改脚本                                  |
+| **新增/改名环境变量**     | ✅ **必须**    | `envcheck.py` 会拦住：生产读取的键必须进配置清单                |
+| **改插件文档里的代码块**  | ✅ **必须**    | `plugin_docs_check.py` 会拦住：示例里的 `ctx.xxx` 必须真实存在  |
+| **改文档的块结构**        | ✅ **必须**    | 指令块 / 围栏 / 内链 / 代码块语言改坏了，只有 Sphinx 构建看得见 |
+| 改 plugin 行为            | ❌ 不需要      | plugin 本身有 plugin 文档体系                                   |
+| 改 capability 名称        | ⚠️ 可能需要    | 看 `normalize.py` 是否仍能归一化                                |
 
 ---
 
 ## 快速命令
 
 ```bash
-# 跑审计（应在 openlearnv2/ 目录下执行）
+# 1) 文本级审计（应在 openlearnv2/ 目录下执行）
 bash audit-tools/run.sh
 
 # 期望输出：
@@ -40,6 +41,9 @@ bash audit-tools/run.sh
 # 出错时看报告
 cat audit-tools/reports/drift_report.md   # 子系统 / 路径 / 内链
 cat audit-tools/reports/env_report.md     # 环境变量三方比对
+
+# 2) 再真构建一次文档站（-W，与 .readthedocs.yaml 的 fail_on_warning 等价）
+bash scripts/build-docs.sh
 ```
 
 ---
@@ -73,13 +77,30 @@ cat audit-tools/reports/env_report.md     # 环境变量三方比对
 
 ### L1 — CI 自动检查（最关键，必备）
 
-`.github/workflows/ci.yml` 中新增了 `docs-drift-audit` job：
+`.github/workflows/ci.yml` 中的 `docs-drift-audit` job 有**两道**门禁，抓的是不同层的问题：
+
+| 步骤                         | 抓什么                                      | 判据                                                      |
+| ---------------------------- | ------------------------------------------- | --------------------------------------------------------- |
+| `bash audit-tools/run.sh`    | 文本级：路径 / 符号 / 键名 / 代码块调用形状 | drift > 0 即失败                                          |
+| `bash scripts/build-docs.sh` | 解析级：这些 Markdown 渲染成了什么          | Sphinx `-W`（等价 `fail_on_warning: true`），有警告即失败 |
 
 - 触发：所有 PR 和 push 到 main
-- 行为：跑 `audit-tools/run.sh`，drift > 0 时 **PR 合并被阻止**
-- 失败时：自动上传 `audit-tools/reports/drift_report.md` 到 PR Artifacts，并在 PR 评论中贴出报告
+- 失败时：自动上传报告 / 构建日志到 PR Artifacts，并在 PR 评论里贴出要点
+  （漂移贴 `drift_report.md`，构建失败贴 `WARNING:` / `ERROR:` 行）
+
+**为什么两道都要**：第一道只看「这些字还在不在文档里」。2026-10-29 的实例是它**全绿**的同时，
+`docs/agent` 27 页手册的 204 个提示框从未渲染出来 —— 起因是 MyST 指令块的标题里写了行内代码
+（反引号），整个 fenced directive 解析失败、退化成普通代码围栏并吞掉后续内容。页面上的每个路径、
+每个符号、每段代码都还在，只是显示成了一堆字面 ` ```{danger} `。这类错误只有真构建一次才看得见。
 
 **这是最强约束**——只要文档没跟上，PR 合并按钮变灰。
+
+改了文档的**块结构**（指令块、围栏、内链、代码块语言标注）时，本地必跑：
+
+```bash
+python3 -m pip install -r docs/requirements.txt
+bash scripts/build-docs.sh
+```
 
 ### L2 — Pre-commit Hook（本地拦截，CI 之前的兜底）
 
