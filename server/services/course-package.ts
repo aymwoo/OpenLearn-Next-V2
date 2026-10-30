@@ -207,6 +207,40 @@ export const PRESET_COMPONENT_TYPES = [
   'circle',
 ] as const;
 
+/**
+ * 课程包元素类型白名单 —— 与 whiteboard.draw 的 KNOWN_ELEMENT_TYPES 对齐。
+ *
+ * 导入与导出共用：导入端据此拒绝未知类型，导出端据此跳过（例如快照标记）
+ * 只有数据库里有、但课程包格式不承载的元素。
+ */
+export const KNOWN_ELEMENT_TYPES = new Set([
+  'pen',
+  'highlighter',
+  'rectangle',
+  'circle',
+  'text',
+  'quiz',
+  'rollcall',
+  'timer',
+  'assignment',
+  'hello-world',
+  'html-applet',
+  'code-sandbox',
+  'math-graph',
+  'presentation',
+  'plugin',
+  'page_meta',
+]);
+
+/** 元素类型是否可写入课程包（插件/第三方元素按命名约定放行）。 */
+export function isSupportedElementType(type: string): boolean {
+  if (KNOWN_ELEMENT_TYPES.has(type)) return true;
+  return (
+    typeof type === 'string' &&
+    (type.includes('/') || type.startsWith('plugin:') || type.startsWith('ext-') || type.startsWith('plugin-'))
+  );
+}
+
 /** 模板中的教学环节 id —— 供白板元素引用。 */
 const SEG = {
   intro: 'seg-intro',

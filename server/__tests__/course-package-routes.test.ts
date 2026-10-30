@@ -612,4 +612,195 @@ describe('course package routes', () => {
       db.exec('DROP TRIGGER IF EXISTS cpkg_test_fail_quiz;');
     }
   });
+
+  // ── 课程正文（lesson.content）的附件占位符 ─────────────────────────────────
+
+  it('resolves ${asset:...} placeholders in lesson.content', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】正文占位符';
+    template.lesson.content = [
+      '## 课前材料',
+      '',
+      '![讲义示意图](${asset:asset-sample-handout})',
+      '',
+      '[下载课件](${asset:asset-sample-deck})',
+    ].join('\n');
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+
+    const lesson = db.prepare('SELECT content FROM lessons WHERE id = ?').get(body.result.lessonId) as {
+      content: string;
+    };
+    // 占位符必须被替换成落盘后的真实 URL，而不是原样写进数据库
+    expect(lesson.content).not.toContain('${asset:');
+    const urls = Array.from(String(lesson.content).matchAll(/\/uploads\/[^\s)"']+/g)).map((m) => m[0]);
+    expect(urls).toHaveLength(2);
+    for (const url of urls) {
+      const filePath = path.join(getUploadsDir(), path.basename(url));
+      expect(fs.existsSync(filePath), 'content asset was not written: ' + url).toBe(true);
+    }
+  });
+
+  it('rejects a content placeholder that points to a missing asset (no half-written lesson)', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】正文坏引用';
+    template.lesson.content = '![坏图](${asset:no-such-asset})';
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.ok).toBe(false);
+    expect(db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】正文坏引用'").get()).toBeUndefined();
+  });
+
+  // ── 导出：已有课程 → 课程包 → 再导入 ──────────────────────────────────────
+
+  it('exports an existing lesson as a self-contained package and re-imports it', async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】导出往返';
+    template.lesson.content = '![讲义](${asset:asset-sample-handout})';
+
+    const imported = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(imported.status).toBe(200);
+    const importedBody = await imported.json();
+    recordImport(importedBody);
+    const sourceLessonId = importedBody.result.lessonId as string;
+
+    const exported = await fetch(baseUrl + '/api/lessons/' + sourceLessonId + '/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('content-disposition')).toContain('.openlearn-package.json');
+    const pkg = await exported.json();
+
+    expect(pkg.format).toBe(COURSE_PACKAGE_FORMAT);
+    // 自行创建的课程用 lesson id 作为包身份：改标题再导出，身份不变。
+    expect(pkg.meta.id).toBe(sourceLessonId);
+    expect(pkg.lesson.title).toBe('【CPKG-TEST】导出往返');
+    expect(pkg.lesson.timeline).toHaveLength(template.lesson.timeline.length);
+    expect(pkg.elements).toHaveLength(template.elements.length);
+    // 附件被逆向内联，正文里的 /uploads URL 被换回占位符
+    expect(pkg.assets).toHaveLength(2);
+    expect(pkg.lesson.content).toContain('${asset:');
+    expect(pkg.lesson.content).not.toContain('/uploads/');
+    for (const asset of pkg.assets as Array<{ base64: string }>) {
+      expect(Buffer.from(asset.base64, 'base64').length).toBeGreaterThan(0);
+    }
+
+    // 导出物必须能原样导回去（这是「教师之间交换教案」的闭环）
+    pkg.lesson.title = '【CPKG-TEST】导出往返副本';
+    const reimported = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: pkg }),
+    });
+    expect(reimported.status).toBe(200);
+    const reimportedBody = await reimported.json();
+    recordImport(reimportedBody);
+    const copyLessonId = reimportedBody.result.lessonId as string;
+
+    const copy = db.prepare('SELECT content, timeline FROM lessons WHERE id = ?').get(copyLessonId) as {
+      content: string;
+      timeline: string;
+    };
+    expect(copy.content).not.toContain('${asset:');
+    expect(copy.content).toContain('/uploads/');
+    expect(JSON.parse(copy.timeline)).toHaveLength(pkg.lesson.timeline.length);
+
+    const presentations = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
+      .all(copyLessonId) as Array<{ data: string }>;
+    const fileUrls = presentations.map((row) => JSON.parse(row.data).fileUrl).filter(Boolean);
+    expect(fileUrls.length).toBeGreaterThanOrEqual(2);
+    for (const url of fileUrls) {
+      expect(fs.existsSync(path.join(getUploadsDir(), path.basename(url)))).toBe(true);
+    }
+  });
+
+  it('keeps unresolvable /uploads references as-is and reports them as skipped', async () => {
+    const lessonId = 'cpkg-test-export-skipped';
+    const now = Date.now();
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, content, timeline, progress_mode, creator_id, created_at, updated_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      lessonId,
+      '【CPKG-TEST】导出跳过',
+      '![丢失的图](/uploads/definitely-missing.png)\n\n![不支持的类型](/uploads/anim.gif)',
+      '[]',
+      'manual',
+      teacherId,
+      now,
+      now,
+    );
+
+    const res = await fetch(baseUrl + '/api/lessons/' + lessonId + '/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(res.status).toBe(200);
+    const pkg = await res.json();
+    expect(pkg.assets).toHaveLength(0);
+    expect(Number(res.headers.get('x-course-package-skipped'))).toBe(2);
+    // 无法内联的引用保持原样：导出不应因一条失效链接而整体失败
+    expect(pkg.lesson.content).toContain('/uploads/definitely-missing.png');
+    expect(pkg.lesson.content).toContain('/uploads/anim.gif');
+  });
+
+  it("forbids exporting another teacher's lesson", async () => {
+    const template = await buildTemplateCoursePackage();
+    template.lesson.title = '【CPKG-TEST】他人课程';
+    const imported = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(imported.status).toBe(200);
+    const importedBody = await imported.json();
+    recordImport(importedBody);
+
+    const otherToken = 'tok-cpkg-export-other';
+    const otherId = 'usr-cpkg-export-other';
+    const now = Date.now();
+    db.prepare(
+      'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(otherId, 'cpkg_export_other', 'hash_placeholder', 'teacher', '其他教师', now);
+    db.prepare(
+      'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+    ).run(
+      otherToken,
+      JSON.stringify({ userId: otherId, role: 'teacher', username: 'cpkg_export_other' }),
+      now,
+      now + 60 * 60 * 1000,
+    );
+
+    try {
+      const res = await fetch(baseUrl + '/api/lessons/' + importedBody.result.lessonId + '/export-package', {
+        headers: cookie(otherToken),
+      });
+      expect(res.status).toBe(403);
+    } finally {
+      db.prepare('DELETE FROM client_sessions WHERE id = ?').run(otherToken);
+      db.prepare('DELETE FROM users WHERE id = ?').run(otherId);
+    }
+  });
+
+  it('returns 404 when exporting a missing lesson', async () => {
+    const res = await fetch(baseUrl + '/api/lessons/does-not-exist/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(res.status).toBe(404);
+  });
 });

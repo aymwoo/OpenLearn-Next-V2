@@ -3,6 +3,7 @@
  *
  * - `GET  /api/course-packages/template`      下载内置课程模板（JSON，自包含附件）
  * - `POST /api/course-packages/import`        导入一个课程包（单事务写入）
+ * - `GET  /api/lessons/:id/export-package`    把已有课程导出为课程包（自包含附件）
  *
  * 与 `POST /api/lessons`（CSV 批量导入的落点）并列，但走的是**完整**的导入语义：
  * 教学环节 + 白板元素 + 课件附件一起落库，失败整体回滚。
@@ -15,6 +16,12 @@ import {
   COURSE_PACKAGE_MAX_FILE_BYTES,
 } from '../services/course-package.js';
 import { importCoursePackage, CoursePackageDuplicateError } from '../services/course-package-import.js';
+import {
+  buildExportFilename,
+  CoursePackageExportError,
+  exportLessonAsCoursePackage,
+} from '../services/course-package-export.js';
+import { checkLessonOwnership } from './lessons.js';
 import type { ServerContext } from '../context.js';
 
 /** 模板下载文件名（Content-Disposition 用）。 */
@@ -108,6 +115,44 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
         });
       }
       console.error('[CoursePackage] 导入失败:', e);
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * 把已有课程导出为课程包。
+   *
+   * 与模板下载不同，这里的内容来自教师自己编排的课程：教学环节、白板元素
+   * 以及它们引用的 `/uploads/*` 附件都会被逆向打包成自包含 JSON。
+   *
+   * 权限与白板写操作一致：仅课程创建教师或管理员可导出。
+   */
+  app.get('/api/lessons/:id/export-package', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const ownership = checkLessonOwnership(req, id);
+      if (!ownership.allowed) {
+        return res.status(ownership.status).json({ success: false, error: ownership.error });
+      }
+
+      const { package: pkg, stats } = await exportLessonAsCoursePackage(id);
+      const filename = buildExportFilename(pkg.lesson.title);
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      // filename 用 ASCII 兜底，filename* 携带 UTF-8 中文名（RFC 5987）。
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="course-package.json"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      res.setHeader('X-Course-Package-Filename', encodeURIComponent(filename));
+      res.setHeader('X-Course-Package-Assets', String(stats.assets));
+      res.setHeader('X-Course-Package-Skipped', String(stats.skipped.length + stats.skippedElements));
+      res.send(JSON.stringify(pkg, null, 2));
+    } catch (e) {
+      if (e instanceof CoursePackageExportError) {
+        return res.status(e.status).json({ success: false, code: e.code, error: e.message });
+      }
+      console.error('[CoursePackage] 导出失败:', e);
       sendSafeError(res, e);
     }
   });

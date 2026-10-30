@@ -106,18 +106,81 @@ export async function downloadCourseTemplate(): Promise<{ ok: boolean; error?: s
       return { ok: false, error: detail || `模板下载失败（HTTP ${res.status}）` };
     }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'openlearn-course-template.json');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    saveBlob(blob, 'openlearn-course-template.json');
     return { ok: true };
   } catch (err: any) {
     return { ok: false, error: err?.message || String(err) };
   }
+}
+
+/** 导出结果摘要（供 toast 文案使用）。 */
+export interface CoursePackageExportSummary {
+  ok: boolean;
+  /** 保存到本地的文件名。 */
+  filename?: string;
+  /** 内联的附件数。 */
+  assets?: number;
+  /** 因文件缺失/类型不支持而未内联的引用数。 */
+  skipped?: number;
+  error?: string;
+}
+
+/**
+ * 把已有课程导出为课程包（自包含 JSON）。
+ *
+ * 服务端会把课程正文与白板元素里引用的 `/uploads/*` 附件读盘、base64 内联，
+ * 并把 URL 逆向替换成 `${asset:<id>}` —— 下载的文件可以直接拖回导入框。
+ */
+export async function exportCoursePackage(lessonId: string): Promise<CoursePackageExportSummary> {
+  try {
+    const res = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/export-package`);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json();
+        detail = body?.error || '';
+      } catch {
+        /* 忽略非 JSON 响应体 */
+      }
+      return { ok: false, error: detail || `课程包导出失败（HTTP ${res.status}）` };
+    }
+
+    const encodedName = res.headers.get('X-Course-Package-Filename');
+    let filename = 'course-package.openlearn-package.json';
+    if (encodedName) {
+      try {
+        filename = decodeURIComponent(encodedName);
+      } catch {
+        /* 保留默认文件名 */
+      }
+    }
+
+    const blob = await res.blob();
+    saveBlob(blob, filename);
+
+    const assets = Number(res.headers.get('X-Course-Package-Assets') || '0');
+    const skipped = Number(res.headers.get('X-Course-Package-Skipped') || '0');
+    return {
+      ok: true,
+      filename,
+      assets: Number.isFinite(assets) ? assets : 0,
+      skipped: Number.isFinite(skipped) ? skipped : 0,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** 触发浏览器下载一个 Blob（临时 a 标签，下载后立即回收 URL）。 */
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /**

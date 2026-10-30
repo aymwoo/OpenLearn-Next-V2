@@ -40,14 +40,15 @@ git show <commit>^:docs/architecture/platform-foundation-audit-report.md
 
 ## 现行权威页面
 
-| 主题             | 当前权威页面                                                                     |
-| ---------------- | -------------------------------------------------------------------------------- |
-| 安全与权限模型   | [architecture/security-permissions](../architecture/security-permissions.md)     |
-| 插件信任边界     | [reference/plugin-trust-boundary](../reference/plugin-trust-boundary.md)         |
-| Plugin SDK Token | [api/di-tokens](../api/di-tokens.md)                                             |
-| UI 扩展槽位      | [reference/plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md) |
-| 部署与上线检查   | [deployment/production-guide](../deployment/production-guide.md)                 |
-| 版本变更         | [release-notes](../release-notes/v0.7.8.md) 与根目录 `CHANGELOG.md`              |
+| 主题                | 当前权威页面                                                                     |
+| ------------------- | -------------------------------------------------------------------------------- |
+| 安全与权限模型      | [architecture/security-permissions](../architecture/security-permissions.md)     |
+| 插件信任边界        | [reference/plugin-trust-boundary](../reference/plugin-trust-boundary.md)         |
+| Plugin SDK Token    | [api/di-tokens](../api/di-tokens.md)                                             |
+| UI 扩展槽位         | [reference/plugin-ui-extension-slots](../reference/plugin-ui-extension-slots.md) |
+| 课程包（导入/导出） | [reference/course-package-spec](../reference/course-package-spec.md)             |
+| 部署与上线检查      | [deployment/production-guide](../deployment/production-guide.md)                 |
+| 版本变更            | [release-notes](../release-notes/v0.7.8.md) 与根目录 `CHANGELOG.md`              |
 
 ## 未归档的报告型文档
 

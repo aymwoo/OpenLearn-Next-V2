@@ -16,6 +16,7 @@ import {
   UserCheck,
   Eye,
   FileJson,
+  FileDown,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
@@ -58,6 +59,7 @@ export function CourseManagement() {
     copyingLessonId,
     fetchLessons,
     downloadCourseTemplate,
+    exportCoursePackage,
   } = useAppData();
 
   // 原回调 prop 的闭包封装（onClick 直接传 setter 会把 MouseEvent 误写入状态）
@@ -76,6 +78,16 @@ export function CourseManagement() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteStatsLoading, setDeleteStatsLoading] = useState(false);
   const [copiedLessonId, setCopiedLessonId] = useState<string | null>(null);
+  const [exportingLessonId, setExportingLessonId] = useState<string | null>(null);
+
+  const handleExportPackage = async (lesson: Lesson) => {
+    setExportingLessonId(lesson.id);
+    try {
+      await exportCoursePackage(lesson.id);
+    } finally {
+      setExportingLessonId(null);
+    }
+  };
 
   const handleCopyId = (lessonId: string) => {
     navigator.clipboard.writeText(lessonId).then(() => {
@@ -398,6 +410,24 @@ export function CourseManagement() {
                           >
                             <Copy size={14} />
                           </button>
+                          {canManage && (
+                            <button
+                              onClick={() => void handleExportPackage(lesson)}
+                              disabled={exportingLessonId === lesson.id}
+                              className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                              title={
+                                lang === 'zh'
+                                  ? '导出为课程包（教学环节 + 白板元素 + 内联附件，可拖回导入框）'
+                                  : 'Export as course package (segments + whiteboard elements + embedded assets)'
+                              }
+                            >
+                              {exportingLessonId === lesson.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <FileDown size={14} />
+                              )}
+                            </button>
+                          )}
                           {canManage ? (
                             <button
                               onClick={() => handleOpenDeleteConfirm(lesson)}

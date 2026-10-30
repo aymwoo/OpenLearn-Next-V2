@@ -554,7 +554,7 @@ export function resolveAssetPlaceholders(value: unknown, assets: Map<string, Mat
     return value.replace(ASSET_PLACEHOLDER_PATTERN, (match, assetId: string) => {
       const asset = assets.get(assetId);
       if (!asset) {
-        throw new Error(`元素数据引用了不存在的课程包资产：${assetId}`);
+        throw new Error(`课程内容引用了不存在的课程包资产：${assetId}`);
       }
       return asset.fileUrl;
     });

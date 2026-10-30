@@ -35,7 +35,7 @@ import {
   type MaterializedAsset,
 } from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
-import type { CoursePackage } from './course-package.js';
+import { isSupportedElementType, type CoursePackage } from './course-package.js';
 
 /** 导入结果摘要（回给前端展示）。 */
 export interface ImportCoursePackageResult {
@@ -122,26 +122,6 @@ export interface ImportCoursePackageOptions {
   allowDuplicate?: boolean;
 }
 
-/** 课程包元素类型白名单 —— 与 whiteboard.draw 的 KNOWN_ELEMENT_TYPES 对齐。 */
-const KNOWN_ELEMENT_TYPES = new Set([
-  'pen',
-  'highlighter',
-  'rectangle',
-  'circle',
-  'text',
-  'quiz',
-  'rollcall',
-  'timer',
-  'assignment',
-  'hello-world',
-  'html-applet',
-  'code-sandbox',
-  'math-graph',
-  'presentation',
-  'plugin',
-  'page_meta',
-]);
-
 /**
  * 导入一个课程包。
  *
@@ -207,14 +187,7 @@ export async function importCoursePackage(
   try {
     // ── 3. 组装白板元素 ───────────────────────────────────────────────────
     elements = pkg.elements.map((element) => {
-      const isAllowed =
-        KNOWN_ELEMENT_TYPES.has(element.type) ||
-        (typeof element.type === 'string' &&
-          (element.type.includes('/') ||
-            element.type.startsWith('plugin:') ||
-            element.type.startsWith('ext-') ||
-            element.type.startsWith('plugin-')));
-      if (!isAllowed) {
+      if (!isSupportedElementType(element.type)) {
         throw new Error(`课程包包含不支持的白板元素类型：${element.type}`);
       }
       const data = resolveAssetPlaceholders(element.data, materialized) as Record<string, unknown>;
@@ -247,6 +220,12 @@ export async function importCoursePackage(
     });
 
     // ── 4. 单事务写入 ─────────────────────────────────────────────────────
+    //
+    // 课程正文（Markdown 大纲）里的 `${asset:<id>}` 同样要解析成落盘后的 URL ——
+    // 教师可以在大纲里写 `![示意图](${asset:img-1})` 或 `[参考讲义](${asset:doc-1})`。
+    // 此前这里直接写入原始占位符，导入后图片与下载链接都是坏的。
+    const lessonContent = resolveAssetPlaceholders(pkg.lesson.content ?? '', materialized) as string;
+
     const write = db.transaction(() => {
       // 事务内再查一次：前面的预检查与真正写入之间存在时间窗口，
       // 两个并发导入可能都通过了预检查。事务内这次才是权威判定。
@@ -265,7 +244,7 @@ export async function importCoursePackage(
       insertLesson.run(
         lessonId,
         pkg.lesson.title,
-        pkg.lesson.content ?? '',
+        lessonContent,
         JSON.stringify(timeline),
         pkg.lesson.progressMode ?? 'manual',
         creatorId,
