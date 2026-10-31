@@ -17,17 +17,17 @@ node scripts/plugin-command-audit.mjs
 # 有 handler 无 action: 0 个   有 action 无 handler: 0 个
 ```
 
-| 文件 | 命令 handler | ActionDescriptor | 配对 |
-| --- | --- | --- | --- |
-| `packages/plugins/builtin.ts` | 35 | 35 | ✅ |
-| `packages/plugins/management.ts` | 25 | 25 | ✅ |
-| `packages/plugins/assignment-eval.ts` | 7 | 7 | ✅ |
-| `packages/plugins/process.ts` | 4 | 4 | ✅ |
-| `packages/plugins/vfs.ts` | 4 | 4 | ✅ |
-| `packages/plugins/ai-planner.ts` | 3 | 3 | ✅ |
-| `server/routes/classroom.ts` | 5（1 个调用点循环注册） | 5 | ✅ |
-| `server/routes/resources.ts` | 4（1 个调用点循环注册） | 4 | ✅ |
-| **合计** | **84**（87 处注册 − 3 处同名重复） | **84** | **0 缺口** |
+| 文件                                  | 命令 handler                       | ActionDescriptor | 配对       |
+| ------------------------------------- | ---------------------------------- | ---------------- | ---------- |
+| `packages/plugins/builtin.ts`         | 35                                 | 35               | ✅         |
+| `packages/plugins/management.ts`      | 25                                 | 25               | ✅         |
+| `packages/plugins/assignment-eval.ts` | 7                                  | 7                | ✅         |
+| `packages/plugins/process.ts`         | 4                                  | 4                | ✅         |
+| `packages/plugins/vfs.ts`             | 4                                  | 4                | ✅         |
+| `packages/plugins/ai-planner.ts`      | 3                                  | 3                | ✅         |
+| `server/routes/classroom.ts`          | 5（1 个调用点循环注册）            | 5                | ✅         |
+| `server/routes/resources.ts`          | 4（1 个调用点循环注册）            | 4                | ✅         |
+| **合计**                              | **84**（87 处注册 − 3 处同名重复） | **84**           | **0 缺口** |
 
 **87 与 84 的差额**：`assignment.create` / `.submit` / `.grade` 在 `management.ts`
 （L619/656/697）与 `assignment-eval.ts`（L417/710/1058）各注册一份，descriptor id 不同
@@ -51,32 +51,32 @@ node scripts/plugin-command-audit.mjs
 
 命令名一律 `namespace.action`，命名空间取**领域**而非文件：
 
-| 命名空间 | 命令数 | 代表命令 | 归属文件 |
-| --- | --- | --- | --- |
-| `courseware` | 10 | `courseware.submit_attempt`、`.save_score_config`、`.regrade_attempts` | `packages/plugins/builtin.ts` |
-| `class` | 8 | `class.create`、`.add_student`、`.template_download` | `packages/plugins/management.ts` |
-| `whiteboard` | 8 | `whiteboard.draw`、`.batch_draw`、`.query` | `packages/plugins/builtin.ts` |
-| `assignment` | 7 | `assignment.create`、`.submit`、`.peer_review`、`.grade` | `packages/plugins/assignment-eval.ts`（3 条与 `management.ts` 重复） |
-| `student` | 7 | `student.create`、`.set_progress`、`.add_note` | `packages/plugins/management.ts` |
-| `lesson` | 6 | `lesson.create`、`.update_timeline`、`.add_segment`、`.delete` | `packages/plugins/builtin.ts` |
-| `plugin` | 6 | `plugin.install`、`.install_zip`、`.toggle`、`.uninstall` | `packages/plugins/builtin.ts` |
-| `classroom.countdown` | 5 | `.start`、`.pause`、`.resume`、`.reset`、`.add_time` | `server/routes/classroom.ts` |
-| `process` | 4 | spawn / kill / list / logs | `packages/plugins/process.ts` |
-| `vfs` | 4 | `vfs.write_file`、`.read_file`、`.list_dir`、`.mkdir` | `packages/plugins/vfs.ts` |
-| `user` | 4 | `user.create`、`.update`、`.delete`、`.list` | `packages/plugins/builtin.ts` |
-| `resource` | 4 | `.list`、`.get`、`.create`、`.delete` | `server/routes/resources.ts` |
-| `ai` | 3 | `ai.start_generation`、`.apply_recommendation`、`.apply_grade` | `packages/plugins/ai-planner.ts` |
-| `schedule` | 3 | `schedule.create`、`.list`、`.cancel` | `packages/plugins/management.ts` |
-| `lab` | 3 | `lab.create`、`.list`、`.assign_seat` | `packages/plugins/management.ts` |
-| `attendance` | 1 | `attendance.record` | `packages/plugins/management.ts` |
-| `hello` | 1 | `hello.say` | `packages/plugins/builtin.ts`（连通性探针） |
+| 命名空间              | 命令数 | 代表命令                                                               | 归属文件                                                             |
+| --------------------- | ------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `courseware`          | 10     | `courseware.submit_attempt`、`.save_score_config`、`.regrade_attempts` | `packages/plugins/builtin.ts`                                        |
+| `class`               | 8      | `class.create`、`.add_student`、`.template_download`                   | `packages/plugins/management.ts`                                     |
+| `whiteboard`          | 8      | `whiteboard.draw`、`.batch_draw`、`.query`                             | `packages/plugins/builtin.ts`                                        |
+| `assignment`          | 7      | `assignment.create`、`.submit`、`.peer_review`、`.grade`               | `packages/plugins/assignment-eval.ts`（3 条与 `management.ts` 重复） |
+| `student`             | 7      | `student.create`、`.set_progress`、`.add_note`                         | `packages/plugins/management.ts`                                     |
+| `lesson`              | 6      | `lesson.create`、`.update_timeline`、`.add_segment`、`.delete`         | `packages/plugins/builtin.ts`                                        |
+| `plugin`              | 6      | `plugin.install`、`.install_zip`、`.toggle`、`.uninstall`              | `packages/plugins/builtin.ts`                                        |
+| `classroom.countdown` | 5      | `.start`、`.pause`、`.resume`、`.reset`、`.add_time`                   | `server/routes/classroom.ts`                                         |
+| `process`             | 4      | spawn / kill / list / logs                                             | `packages/plugins/process.ts`                                        |
+| `vfs`                 | 4      | `vfs.write_file`、`.read_file`、`.list_dir`、`.mkdir`                  | `packages/plugins/vfs.ts`                                            |
+| `user`                | 4      | `user.create`、`.update`、`.delete`、`.list`                           | `packages/plugins/builtin.ts`                                        |
+| `resource`            | 4      | `.list`、`.get`、`.create`、`.delete`                                  | `server/routes/resources.ts`                                         |
+| `ai`                  | 3      | `ai.start_generation`、`.apply_recommendation`、`.apply_grade`         | `packages/plugins/ai-planner.ts`                                     |
+| `schedule`            | 3      | `schedule.create`、`.list`、`.cancel`                                  | `packages/plugins/management.ts`                                     |
+| `lab`                 | 3      | `lab.create`、`.list`、`.assign_seat`                                  | `packages/plugins/management.ts`                                     |
+| `attendance`          | 1      | `attendance.record`                                                    | `packages/plugins/management.ts`                                     |
+| `hello`               | 1      | `hello.say`                                                            | `packages/plugins/builtin.ts`（连通性探针）                          |
 
 **命名规则**（由 `plugin-host/plugin-namespace.ts → resolvePluginCommandType`，L62 强制）：
 
-| 输入 | 结果 |
-| --- | --- |
-| 已带前缀 `@acme/x.foo.bar` | 原样（UUID v7 前缀也原样） |
-| 短名 `lesson.create`（平台内置） | 原样 |
+| 输入                                   | 结果                                                      |
+| -------------------------------------- | --------------------------------------------------------- |
+| 已带前缀 `@acme/x.foo.bar`             | 原样（UUID v7 前缀也原样）                                |
+| 短名 `lesson.create`（平台内置）       | 原样                                                      |
 | 短名 `lab_seat.check_in`（插件内注册） | 前置插件 id → `@aymwoo/plugin-lab-seat.lab_seat.check_in` |
 
 **前端派发时必须用全限定名**，后端注册时用短名。写反了就是「点按钮没反应」。
@@ -89,19 +89,19 @@ node scripts/plugin-command-audit.mjs
 `capabilityRequired` 是**自由字符串**，不在 19 条真值内的值不会报错，只会让所有非管理员
 调用静默失败 —— 所以下表的值必须逐字抄，不能"顾名思义"。
 
-| 命令 | `capabilityRequired` | 其他闸门 | 说明 |
-| --- | --- | --- | --- |
-| `assignment.grade` | `assignment:manage` | — | 终评。**不是** `assignment:grade`（该值不存在） |
-| `assignment.submit` | `assignment:submit` | — | 学生可发起（唯一允许学生写入的入口） |
-| `lesson.create` | `lesson:write` | — | 建课 |
-| `lesson.delete` | `lesson:delete` | `isHighRisk` | 删课，需人工审批 |
-| `classroom.countdown.start` | `lesson:write` | — | 课堂控制复用 lesson 域。**不是** `classroom:control` |
-| `vfs.write_file` | `vfs:write` | — | 虚拟文件系统写。**不是** `storage:write` |
-| `courseware.save_score_config` | `lesson:write` | `exposeToAgent: false` | 改成绩规则，不进 AI 工具箱 |
-| `resource.create` | `management:write` | — | 建教学资源 |
-| `resource.delete` | `management:write` | `isHighRisk` | 删资源 + 磁盘缓存，需人工审批 |
-| `plugin.install` | `plugin:write` | `isHighRisk` | 装任意 JS 源码 |
-| `user.delete` | `management:write` | `isHighRisk` | 删账号 |
+| 命令                           | `capabilityRequired` | 其他闸门               | 说明                                                 |
+| ------------------------------ | -------------------- | ---------------------- | ---------------------------------------------------- |
+| `assignment.grade`             | `assignment:manage`  | —                      | 终评。**不是** `assignment:grade`（该值不存在）      |
+| `assignment.submit`            | `assignment:submit`  | —                      | 学生可发起（唯一允许学生写入的入口）                 |
+| `lesson.create`                | `lesson:write`       | —                      | 建课                                                 |
+| `lesson.delete`                | `lesson:delete`      | `isHighRisk`           | 删课，需人工审批                                     |
+| `classroom.countdown.start`    | `lesson:write`       | —                      | 课堂控制复用 lesson 域。**不是** `classroom:control` |
+| `vfs.write_file`               | `vfs:write`          | —                      | 虚拟文件系统写。**不是** `storage:write`             |
+| `courseware.save_score_config` | `lesson:write`       | `exposeToAgent: false` | 改成绩规则，不进 AI 工具箱                           |
+| `resource.create`              | `management:write`   | —                      | 建教学资源                                           |
+| `resource.delete`              | `management:write`   | `isHighRisk`           | 删资源 + 磁盘缓存，需人工审批                        |
+| `plugin.install`               | `plugin:write`       | `isHighRisk`           | 装任意 JS 源码                                       |
+| `user.delete`                  | `management:write`   | `isHighRisk`           | 删账号                                               |
 
 19 条能力真值全表见 [../plugin-system/capabilities-and-security.md](../plugin-system/capabilities-and-security.md) §1。
 
@@ -121,11 +121,11 @@ kernel 的 interceptor 是 default-deny（`packages/core/kernel/index.ts` L372-4
 
 **修复时的三个取舍**（改这 4 条命令前先读，否则容易重犯）：
 
-| 取舍 | 选定 | 理由 |
-| --- | --- | --- |
-| 能力前缀 | 复用 `management:read` / `management:write`，不新造 `resource:*` | `CapabilityGuard` 的角色回退只认既有词汇表（`packages/core/capability/guard/capability-guard.ts` L84-97）。teacher 持 `management:*`、`agent-system-0` 持 `management:read+write`；新造前缀会让教师与 AI 助教**双双被拒** |
-| `resource.delete` 是否高危 | `isHighRisk: true` | 同时删 `system_resources` 行与 `storage/courseware` 磁盘缓存，不可回滚。与 `lesson.delete`、`user.delete`、`plugin.uninstall` 同档：非管理员调用进 `pending_commands` 等人工审批 |
-| 无参命令的 schema | `{ type: 'OBJECT', properties: {} }`（同 `courseware.list`） | `validateJsonSchema` 见到 `type: 'OBJECT'` 就要求 payload 是对象。**调用方必须传 `{}`**，省略 payload 会被拒为 `Expected object, got undefined` |
+| 取舍                       | 选定                                                             | 理由                                                                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 能力前缀                   | 复用 `management:read` / `management:write`，不新造 `resource:*` | `CapabilityGuard` 的角色回退只认既有词汇表（`packages/core/capability/guard/capability-guard.ts` L84-97）。teacher 持 `management:*`、`agent-system-0` 持 `management:read+write`；新造前缀会让教师与 AI 助教**双双被拒** |
+| `resource.delete` 是否高危 | `isHighRisk: true`                                               | 同时删 `system_resources` 行与 `storage/courseware` 磁盘缓存，不可回滚。与 `lesson.delete`、`user.delete`、`plugin.uninstall` 同档：非管理员调用进 `pending_commands` 等人工审批                                          |
+| 无参命令的 schema          | `{ type: 'OBJECT', properties: {} }`（同 `courseware.list`）     | `validateJsonSchema` 见到 `type: 'OBJECT'` 就要求 payload 是对象。**调用方必须传 `{}`**，省略 payload 会被拒为 `Expected object, got undefined`                                                                           |
 
 回归测试：`server/__tests__/resource-commands.test.ts`（7 例）—— 描述符存在性、能力标注、
 教师派发放行、学生 403、`undefined` payload 被拒、create→get 往返、delete 触发审批。
@@ -138,25 +138,25 @@ kernel 的 interceptor 是 default-deny（`packages/core/kernel/index.ts` L372-4
 
 ### 5.1 划分
 
-| 类别 | 前缀 | 例子 |
-| --- | --- | --- |
-| 领域事实 | `<domain>.<past_tense>` | `lesson.created`、`assignment.graded`、`courseware.uploaded` |
-| 课堂 | `classroom.*` / `segment.*` | `classroom.lock_changed`、`segment.gate_overridden` |
-| 白板 | `whiteboard.*` | `whiteboard.element_drawn`、`whiteboard.batch_drawn` |
-| 学生侧 | `student.*` | `student.progress_updated`、`student.notification_acknowledged` |
-| 积分 | `points.*` | `points.awarded` |
-| 系统 | `process.*` / `approval.*` | `process.spawned`、`approval.requested` |
-| 插件自定义 | `<plugin_ns>.*` | `lab_seat.student_checked_in` |
+| 类别       | 前缀                        | 例子                                                            |
+| ---------- | --------------------------- | --------------------------------------------------------------- |
+| 领域事实   | `<domain>.<past_tense>`     | `lesson.created`、`assignment.graded`、`courseware.uploaded`    |
+| 课堂       | `classroom.*` / `segment.*` | `classroom.lock_changed`、`segment.gate_overridden`             |
+| 白板       | `whiteboard.*`              | `whiteboard.element_drawn`、`whiteboard.batch_drawn`            |
+| 学生侧     | `student.*`                 | `student.progress_updated`、`student.notification_acknowledged` |
+| 积分       | `points.*`                  | `points.awarded`                                                |
+| 系统       | `process.*` / `approval.*`  | `process.spawned`、`approval.requested`                         |
+| 插件自定义 | `<plugin_ns>.*`             | `lab_seat.student_checked_in`                                   |
 
 **命名约束**：过去时（`created` 而非 `create`），点分命名空间。这条与命令的现在时（`create`）刻意区分。
 
 ### 5.2 订阅的三条路径
 
-| 路径 | 谁用 | 特点 |
-| --- | --- | --- |
-| `eventBus.subscribe(type, fn)` | 服务端业务（如积分发放） | 进程内，同步/异步皆可 |
-| `SOCKET_ROUTES` 一行声明 | 需要推给前端的事件 | 声明式，自动带 `_meta`，可枚举可单测 |
-| `ClassroomFeedService` | 课堂动态流 | 独立订阅，落 `classroom_feed` 表 |
+| 路径                           | 谁用                     | 特点                                 |
+| ------------------------------ | ------------------------ | ------------------------------------ |
+| `eventBus.subscribe(type, fn)` | 服务端业务（如积分发放） | 进程内，同步/异步皆可                |
+| `SOCKET_ROUTES` 一行声明       | 需要推给前端的事件       | 声明式，自动带 `_meta`，可枚举可单测 |
+| `ClassroomFeedService`         | 课堂动态流               | 独立订阅，落 `classroom_feed` 表     |
 
 **同一事件可以同时走三条**（`assignment.graded` 就同时进 toast 路由、成绩历史、动态流）。
 

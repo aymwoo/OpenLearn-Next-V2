@@ -10,19 +10,19 @@
 
 ## 0. 汇总
 
-| # | 缺口 | 状态 | 阻塞什么 |
-| --- | --- | --- | --- |
-| U-01 | `socketService` 在运行期是否会出现缺失 | `OPEN` | 前端事件订阅要不要写轮询兜底 |
-| U-02 | `INetworkProxyServiceToken` 为何不可解析 | `CLOSED` | — （结论：沙箱专用，`inline` 下拿不到） |
-| U-03 | 前端与服务端两套 `method-policy` 规则是否等价 | `OPEN` | 同一调用在两端判定不一致的风险 |
-| U-04 | `exposeToAgent: false` 对 HTTP 路由可达性的影响 | `OPEN` | 隐藏命令能否仍被前端调用 |
-| U-05 | 空 `capabilitiesProposed` 激活失败的外层状态码 | `PARTIAL` | 排障文案与前端提示 |
-| U-06 | `view` 通道 `ui.resize` 是否受方法级门禁 | `OPEN` | 视口高度策略 |
-| U-07 | 熔断后 `origin: 'manifest'` 数据是否真的保留 | `PARTIAL` | 崩溃插件的数据可见性 |
-| U-08 | `plugin.contract.json` 是否有平台消费方 | `OPEN` | 它是不是「写了也没用」的文件 |
-| U-09 | 生产反向代理下 504 的真实触发边界 | `OPEN` | 网关超时配置 |
-| U-10 | SDK 裸说明符守卫的起始版本 | `PARTIAL` | 老插件升级是否会突然构建失败 |
-| U-11 | `resource.*` 4 条命令缺描述符是否为有意设计 | `CLOSED` | — （结论：是遗漏，已补 4 条 descriptor） |
+| #    | 缺口                                            | 状态      | 阻塞什么                                 |
+| ---- | ----------------------------------------------- | --------- | ---------------------------------------- |
+| U-01 | `socketService` 在运行期是否会出现缺失          | `OPEN`    | 前端事件订阅要不要写轮询兜底             |
+| U-02 | `INetworkProxyServiceToken` 为何不可解析        | `CLOSED`  | — （结论：沙箱专用，`inline` 下拿不到）  |
+| U-03 | 前端与服务端两套 `method-policy` 规则是否等价   | `OPEN`    | 同一调用在两端判定不一致的风险           |
+| U-04 | `exposeToAgent: false` 对 HTTP 路由可达性的影响 | `OPEN`    | 隐藏命令能否仍被前端调用                 |
+| U-05 | 空 `capabilitiesProposed` 激活失败的外层状态码  | `PARTIAL` | 排障文案与前端提示                       |
+| U-06 | `view` 通道 `ui.resize` 是否受方法级门禁        | `OPEN`    | 视口高度策略                             |
+| U-07 | 熔断后 `origin: 'manifest'` 数据是否真的保留    | `PARTIAL` | 崩溃插件的数据可见性                     |
+| U-08 | `plugin.contract.json` 是否有平台消费方         | `OPEN`    | 它是不是「写了也没用」的文件             |
+| U-09 | 生产反向代理下 504 的真实触发边界               | `OPEN`    | 网关超时配置                             |
+| U-10 | SDK 裸说明符守卫的起始版本                      | `PARTIAL` | 老插件升级是否会突然构建失败             |
+| U-11 | `resource.*` 4 条命令缺描述符是否为有意设计     | `CLOSED`  | — （结论：是遗漏，已补 4 条 descriptor） |
 
 ---
 
@@ -161,7 +161,7 @@
      因此**调用方必须传 `{}`**：`validateJsonSchema` 见到 `type: 'OBJECT'` 就要求 payload 是对象，
      省略会得到 `Expected object, got undefined`。
 - **验证**：`node scripts/plugin-command-audit.mjs` → `registerHandler 84 / actionRegistry 84 /
-  有 handler 无 action 0 / 有 action 无 handler 0`；
+有 handler 无 action 0 / 有 action 无 handler 0`；
   回归测试 `server/__tests__/resource-commands.test.ts`（7 例）。
 - **顺带修掉的工具缺陷**：`scripts/plugin-command-audit.mjs` 原先看不见两种注册写法
   （`for (const spec of SPECS) register({ commandType: spec.commandType })` 与
@@ -177,14 +177,14 @@
 
 这些不是「信息不足」，而是**在信息充足前提下选择了某一种表述**。列出以便复核。
 
-| # | 取舍 | 理由 | 若你不同意 |
-| --- | --- | --- | --- |
-| A-01 | 所有计数（120 / 40 / 19 / 8 / 7 / 71 / 38 / 10 / 8 / 31）以 `docs/agent/contracts/*.json` 为准，不逐个数源码 | 契约文件是平台为 AI 准备的机器可读真源，且已与源码同步过一次；数源码成本高且易错 | 用 [source-index.md](source-index.md) §1 的 6 条命令复核，冲突则以源码为准并回改本目录 |
-| A-02 | 把 `lab-seat` 的 `computer_labs` 建表定为「反例」而非「可用技巧」 | 它在 `inline` 模式下未被拦，只是守卫作用面没覆盖到，不是被允许 | 若你的插件确定永远 `inline` 且愿意承担平台加黑名单的风险，可自行采纳 |
-| A-03 | `ctx.config[key]` 判定为「静默失效缺陷」，并在正文给出替代写法 | `ConfigService` 确无按 key 的属性（`config-service.ts` L150 起只有方法），`cfg[key]` 恒 `undefined` | 若平台后续加了属性 getter，回改 [context-and-services.md](../plugin-system/context-and-services.md) §5 |
-| A-04 | `inputSchema` 一律按「大写类型名才校验」表述 | `validateJsonSchema` 的 `if/else if` 分支只匹配 `'OBJECT'/'ARRAY'/'STRING'/'NUMBER'/'BOOLEAN'` | 若平台改用标准 JSON Schema 库，此结论整段作废 |
-| A-05 | 不收录旧文档 `docs/tutorials/plugin-development-tutorial.md` 的任何结论 | 1959 行叙述式教程、无检索锚点、部分版本已过期，逐条核验成本高于重写 | 需要时以源码为准重写，不要搬运 |
-| A-06 | 「已对齐 7 个契约文件」仅指**计数与名称**对齐，未逐字段比对 | 逐字段比对 7 个 JSON 与全文档的收益低于成本 | 需要逐字段校验时，另起一轮专项 |
+| #    | 取舍                                                                                                         | 理由                                                                                                | 若你不同意                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| A-01 | 所有计数（120 / 40 / 19 / 8 / 7 / 71 / 38 / 10 / 8 / 31）以 `docs/agent/contracts/*.json` 为准，不逐个数源码 | 契约文件是平台为 AI 准备的机器可读真源，且已与源码同步过一次；数源码成本高且易错                    | 用 [source-index.md](source-index.md) §1 的 6 条命令复核，冲突则以源码为准并回改本目录                 |
+| A-02 | 把 `lab-seat` 的 `computer_labs` 建表定为「反例」而非「可用技巧」                                            | 它在 `inline` 模式下未被拦，只是守卫作用面没覆盖到，不是被允许                                      | 若你的插件确定永远 `inline` 且愿意承担平台加黑名单的风险，可自行采纳                                   |
+| A-03 | `ctx.config[key]` 判定为「静默失效缺陷」，并在正文给出替代写法                                               | `ConfigService` 确无按 key 的属性（`config-service.ts` L150 起只有方法），`cfg[key]` 恒 `undefined` | 若平台后续加了属性 getter，回改 [context-and-services.md](../plugin-system/context-and-services.md) §5 |
+| A-04 | `inputSchema` 一律按「大写类型名才校验」表述                                                                 | `validateJsonSchema` 的 `if/else if` 分支只匹配 `'OBJECT'/'ARRAY'/'STRING'/'NUMBER'/'BOOLEAN'`      | 若平台改用标准 JSON Schema 库，此结论整段作废                                                          |
+| A-05 | 不收录旧文档 `docs/tutorials/plugin-development-tutorial.md` 的任何结论                                      | 1959 行叙述式教程、无检索锚点、部分版本已过期，逐条核验成本高于重写                                 | 需要时以源码为准重写，不要搬运                                                                         |
+| A-06 | 「已对齐 7 个契约文件」仅指**计数与名称**对齐，未逐字段比对                                                  | 逐字段比对 7 个 JSON 与全文档的收益低于成本                                                         | 需要逐字段校验时，另起一轮专项                                                                         |
 
 ---
 

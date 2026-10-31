@@ -8,16 +8,16 @@
 
 ## 0. 为什么拿它当样本
 
-| 维度 | 值 | 取证 |
-| --- | --- | --- |
-| 代码量 | 后端 1461 行 + 前端 1556 行 + 2 个纯函数模块（184 + 23 行） | `[P] src/index.ts`、`src/frontend.tsx`、`src/smart-assign.ts`、`src/csv.ts` |
-| 执行模式 | `inline`（受信内置插件） | `[P] plugin.contract.json` → `executionMode` |
-| UI 通道 | `inline-react` | 同上 → `uiChannel` |
-| 槽位 | 4 个：`classroom.tool`、`student.view`、`teacher.dashboard.widget`、`teacher.tab` | 同上 → `slots[]`，实现见 `[P] src/frontend.tsx` L1518-1552 |
-| 命令 | 27 个 `registerHandler` | `grep -c "commandBus.registerHandler" src/index.ts` → 27 |
-| Action 描述符 | 27 条（8 条具名 + 19 条批量补齐） | `[P] src/index.ts` L397/476/778/873/960/983/1115/1149 + `MISSING_ACTIONS` L1419 |
-| 自建表 | 5 张（全部经 `ctx.db.table()`，真实前缀 `plugin_<scopeId>_`，上传插件的 scopeId 是 UUID） | `[P] src/index.ts` L193-277 |
-| 读写的平台表 | 1 张写（`computer_labs`，反例）+ 3 张只读 JOIN（`lessons` / `users` / `class_students`） | `[P] src/index.ts` L175、L347、L355 |
+| 维度          | 值                                                                                        | 取证                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 代码量        | 后端 1461 行 + 前端 1556 行 + 2 个纯函数模块（184 + 23 行）                               | `[P] src/index.ts`、`src/frontend.tsx`、`src/smart-assign.ts`、`src/csv.ts`     |
+| 执行模式      | `inline`（受信内置插件）                                                                  | `[P] plugin.contract.json` → `executionMode`                                    |
+| UI 通道       | `inline-react`                                                                            | 同上 → `uiChannel`                                                              |
+| 槽位          | 4 个：`classroom.tool`、`student.view`、`teacher.dashboard.widget`、`teacher.tab`         | 同上 → `slots[]`，实现见 `[P] src/frontend.tsx` L1518-1552                      |
+| 命令          | 27 个 `registerHandler`                                                                   | `grep -c "commandBus.registerHandler" src/index.ts` → 27                        |
+| Action 描述符 | 27 条（8 条具名 + 19 条批量补齐）                                                         | `[P] src/index.ts` L397/476/778/873/960/983/1115/1149 + `MISSING_ACTIONS` L1419 |
+| 自建表        | 5 张（全部经 `ctx.db.table()`，真实前缀 `plugin_<scopeId>_`，上传插件的 scopeId 是 UUID） | `[P] src/index.ts` L193-277                                                     |
+| 读写的平台表  | 1 张写（`computer_labs`，反例）+ 3 张只读 JOIN（`lessons` / `users` / `class_students`）  | `[P] src/index.ts` L175、L347、L355                                             |
 
 选它的理由：它同时踩过**「有 handler 无描述符 → 403」**、**「worker 下 `ctx.config` 不存在」**、
 **「`provide` 只在主进程可用」**、**「React 必须运行期注入」**这四类真实坑，且每处都在注释里留了复盘。
@@ -64,18 +64,18 @@ ZIP 内**不含** `src/`、`test/`、`storage/`、`migrations/`（`packages/*/sd
 
 ## 2. manifest 逐项（`[P] src/index.ts` L96-161）
 
-| 字段 | 真实值 | 说明 |
-| --- | --- | --- |
-| `id` | `@aymwoo/plugin-lab-seat` | 含 `/` 含 `@`，**不含 `:`**（`:` 被 zod refine 拦） |
-| `version` | `0.6.3` | 与 `plugin.contract.json`、`package.json` 三处同步 |
-| `main` | `index.js` | 相对 ZIP 根；必填 |
-| `engines.openlearn` | `>= 0.1.0` | 宽松下限，宿主 0.7.8 满足 |
-| `requires` | 4 条：`ICommandBusService` / `IActionRegistryService` / `IEventBusService` / `IDatabase` | 全是 `@^1.0.0`，全部 `@openlearn/core:` 命名空间 |
-| `optional` | 1 条：`IPointsLedgerService@^1.0.0` | 缺失不阻塞激活 |
-| `provides` | `@aymwoo/plugin-lab-seat:ILabSeatService` | 自己命名空间下的服务名 |
-| `capabilitiesProposed` | `lesson:read` / `lesson:write` / `management:read` / `student:write` | 4 条，全部在 19 条真值内 |
-| `configuration.properties` | 5 个 integer：`points_per_check_in`(5)、`late_threshold_minutes`(10)、`auto_mark_leave_after_minutes`(0)、`late_auto_promote_after_minutes`(0)、`auto_scan_interval_seconds`(60, min10 max3600) | 全部带 `default` |
-| `updateSource` | `{ type: 'github-release', repo: 'aymwoo/OpenLearn-Next-V2' }` | 自行更新通道 |
+| 字段                       | 真实值                                                                                                                                                                                          | 说明                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `id`                       | `@aymwoo/plugin-lab-seat`                                                                                                                                                                       | 含 `/` 含 `@`，**不含 `:`**（`:` 被 zod refine 拦） |
+| `version`                  | `0.6.3`                                                                                                                                                                                         | 与 `plugin.contract.json`、`package.json` 三处同步  |
+| `main`                     | `index.js`                                                                                                                                                                                      | 相对 ZIP 根；必填                                   |
+| `engines.openlearn`        | `>= 0.1.0`                                                                                                                                                                                      | 宽松下限，宿主 0.7.8 满足                           |
+| `requires`                 | 4 条：`ICommandBusService` / `IActionRegistryService` / `IEventBusService` / `IDatabase`                                                                                                        | 全是 `@^1.0.0`，全部 `@openlearn/core:` 命名空间    |
+| `optional`                 | 1 条：`IPointsLedgerService@^1.0.0`                                                                                                                                                             | 缺失不阻塞激活                                      |
+| `provides`                 | `@aymwoo/plugin-lab-seat:ILabSeatService`                                                                                                                                                       | 自己命名空间下的服务名                              |
+| `capabilitiesProposed`     | `lesson:read` / `lesson:write` / `management:read` / `student:write`                                                                                                                            | 4 条，全部在 19 条真值内                            |
+| `configuration.properties` | 5 个 integer：`points_per_check_in`(5)、`late_threshold_minutes`(10)、`auto_mark_leave_after_minutes`(0)、`late_auto_promote_after_minutes`(0)、`auto_scan_interval_seconds`(60, min10 max3600) | 全部带 `default`                                    |
+| `updateSource`             | `{ type: 'github-release', repo: 'aymwoo/OpenLearn-Next-V2' }`                                                                                                                                  | 自行更新通道                                        |
 
 **三个值得抄的点**
 
@@ -98,23 +98,23 @@ const ILabSeatServiceToken = new Token<ILabSeatService>('@aymwoo/plugin-lab-seat
 `activate` 从 L163 到 L1451，约 1290 行。它不是线性流程，而是「先建表 → 再注册」的瀑布。
 下表按源码顺序给出职责与坐标，供改写时对照。
 
-| # | 段落 | 行范围 | 做什么 | 可抄 |
-| --- | --- | --- | --- | --- |
-| 0 | 取服务 | L164-170 | `ctx.services.{commandBus,actionRegistry,eventBus}` + `ctx.resolve(IDatabaseToken)` 拿原生 sqlite 句柄 | ✅ |
-| 1 | 平台表补列 | L175-191 | `CREATE TABLE IF NOT EXISTS computer_labs` + 3 条 `ALTER TABLE` 幂等补列 | ⚠️ 见 §4.3 |
-| 2 | 迁移 v1 | L193-247 | 4 张表：`seat_assignments` / `attendance_records` / `check_in_sessions` / `seat_templates` | ✅ |
-| 3 | 迁移 v2 | L248-277 | `lesson_room_map` + 6 个索引 | ✅ |
-| 4 | 配置读取器 | L281-285 | `ctx.config` 缺失时回落 manifest 默认值（**取值方式有缺陷，见 §7**） | ⚠️ |
-| 5 | 表名常量 | L287-292 | 1 张平台表字面量 + 5 个 `ctx.db.table()` | ✅ |
-| 6 | 辅助函数 | L295-391 | `uid()`、`getResearchGroups()`、`getStudentsByLesson()`、`getLabLayout()`、`getStudentSeatForLesson()` | ✅ |
-| 7 | 机房 CRUD + 排座 | L397-659 | 5 命令；排座支持 `sequential/random/grouped` 三策略 | ✅ |
-| 8 | 多机房 + 座位调整 | L660-739 | `add/remove/move/unassign/list_lesson_labs` | ✅ |
-| 9 | 签到会话 | L740-869 | open/close/check_in/manual/active | ✅ |
-| 10 | 考勤查询与导出 | L873-1114 | 含 CSV 导出、按班出勤趋势 | ✅ |
-| 11 | 模板与智能排座 | L1115-1246 | `shuffle_seats`、`smart_assign_seats`（AI 约束）、模板存取 | ✅ |
-| 12 | 事件 → 积分 | L1272-1289 | 订阅自己发的 `student_checked_in`，加积分 | ⚠️ 见 §5.4 |
-| 13 | `provide` 跨插件服务 | L1291-1337 | 4 个方法，`typeof ctx.provide === 'function'` 守卫 | ✅ |
-| 14 | 定时扫描 + 批量补描述符 | L1339-1450 | `auto_mark_absent` + 19 条 `MISSING_ACTIONS` 注册 | ✅ 见 §5.2 |
+| #   | 段落                    | 行范围     | 做什么                                                                                                 | 可抄       |
+| --- | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------ | ---------- |
+| 0   | 取服务                  | L164-170   | `ctx.services.{commandBus,actionRegistry,eventBus}` + `ctx.resolve(IDatabaseToken)` 拿原生 sqlite 句柄 | ✅         |
+| 1   | 平台表补列              | L175-191   | `CREATE TABLE IF NOT EXISTS computer_labs` + 3 条 `ALTER TABLE` 幂等补列                               | ⚠️ 见 §4.3 |
+| 2   | 迁移 v1                 | L193-247   | 4 张表：`seat_assignments` / `attendance_records` / `check_in_sessions` / `seat_templates`             | ✅         |
+| 3   | 迁移 v2                 | L248-277   | `lesson_room_map` + 6 个索引                                                                           | ✅         |
+| 4   | 配置读取器              | L281-285   | `ctx.config` 缺失时回落 manifest 默认值（**取值方式有缺陷，见 §7**）                                   | ⚠️         |
+| 5   | 表名常量                | L287-292   | 1 张平台表字面量 + 5 个 `ctx.db.table()`                                                               | ✅         |
+| 6   | 辅助函数                | L295-391   | `uid()`、`getResearchGroups()`、`getStudentsByLesson()`、`getLabLayout()`、`getStudentSeatForLesson()` | ✅         |
+| 7   | 机房 CRUD + 排座        | L397-659   | 5 命令；排座支持 `sequential/random/grouped` 三策略                                                    | ✅         |
+| 8   | 多机房 + 座位调整       | L660-739   | `add/remove/move/unassign/list_lesson_labs`                                                            | ✅         |
+| 9   | 签到会话                | L740-869   | open/close/check_in/manual/active                                                                      | ✅         |
+| 10  | 考勤查询与导出          | L873-1114  | 含 CSV 导出、按班出勤趋势                                                                              | ✅         |
+| 11  | 模板与智能排座          | L1115-1246 | `shuffle_seats`、`smart_assign_seats`（AI 约束）、模板存取                                             | ✅         |
+| 12  | 事件 → 积分             | L1272-1289 | 订阅自己发的 `student_checked_in`，加积分                                                              | ⚠️ 见 §5.4 |
+| 13  | `provide` 跨插件服务    | L1291-1337 | 4 个方法，`typeof ctx.provide === 'function'` 守卫                                                     | ✅         |
+| 14  | 定时扫描 + 批量补描述符 | L1339-1450 | `auto_mark_absent` + 19 条 `MISSING_ACTIONS` 注册                                                      | ✅ 见 §5.2 |
 
 ---
 
@@ -124,8 +124,8 @@ const ILabSeatServiceToken = new Token<ILabSeatService>('@aymwoo/plugin-lab-seat
 
 ```ts
 // [P] src/index.ts L288-292
-const T_ASSIGN   = ctx.db.table('seat_assignments');
-const T_ATTEND   = ctx.db.table('attendance_records');
+const T_ASSIGN = ctx.db.table('seat_assignments');
+const T_ATTEND = ctx.db.table('attendance_records');
 const T_SESSIONS = ctx.db.table('check_in_sessions');
 const T_TEMPLATES = ctx.db.table('seat_templates');
 const T_LESSON_ROOMS = ctx.db.table('lesson_room_map');
@@ -138,7 +138,7 @@ const T_LESSON_ROOMS = ctx.db.table('lesson_room_map');
 
 > 注：`[P] test/plugin.test.mjs` 的 mock 把前缀写成 `plugin_lab_seat_`，那是测试里的简化，
 > **真实安装下不成立** —— 这是「自建 mock 会漂移」的具体例证（见 §10）。
-所有 DDL 与 DML 都用插值写：`CREATE TABLE IF NOT EXISTS ${ctx.db.table('seat_assignments')} (...)`。
+> 所有 DDL 与 DML 都用插值写：`CREATE TABLE IF NOT EXISTS ${ctx.db.table('seat_assignments')} (...)`。
 
 **不要在 SQL 里手拼前缀** —— `ctx.db.table()` 同时承担 uninstall 的 `dropAllTables()` 回收清单登记。
 
@@ -153,11 +153,11 @@ await ctx.db.migrate(1, async (sqliteDb: any) => { ... });   // L248: await ctx.
 本插件**两者混用**：DDL 走 `ctx.db.migrate`，DML 走 `ctx.resolve(IDatabaseToken)` 拿到的 `rawDb`。
 混用是合法的，但必须清楚区别：
 
-| 入口 | 同步/异步 | 事务边界 | 用途 |
-| --- | --- | --- | --- |
-| `ctx.db.migrate(v, fn)` | `await` | 整体一个事务，抛错回滚 | 建表/建索引，只增不改 |
-| `ctx.db.table(name)` | 同步 | — | 取限域表名 |
-| `rawDb.prepare().run/get/all` | 同步 | 每条语句自动提交 | 业务读写、跨表 JOIN |
+| 入口                          | 同步/异步 | 事务边界               | 用途                  |
+| ----------------------------- | --------- | ---------------------- | --------------------- |
+| `ctx.db.migrate(v, fn)`       | `await`   | 整体一个事务，抛错回滚 | 建表/建索引，只增不改 |
+| `ctx.db.table(name)`          | 同步      | —                      | 取限域表名            |
+| `rawDb.prepare().run/get/all` | 同步      | 每条语句自动提交       | 业务读写、跨表 JOIN   |
 
 详细签名见 [context-and-services.md](../plugin-system/context-and-services.md) §5。
 
@@ -165,8 +165,10 @@ await ctx.db.migrate(1, async (sqliteDb: any) => { ... });   // L248: await ctx.
 
 ```ts
 // [P] src/index.ts L175-191 —— 反例
-rawDb.exec(`CREATE TABLE IF NOT EXISTS computer_labs (...)`)
-try { rawDb.prepare("ALTER TABLE computer_labs ADD COLUMN name TEXT DEFAULT ''").run(); } catch {}
+rawDb.exec(`CREATE TABLE IF NOT EXISTS computer_labs (...)`);
+try {
+  rawDb.prepare("ALTER TABLE computer_labs ADD COLUMN name TEXT DEFAULT ''").run();
+} catch {}
 ```
 
 问题有三层：
@@ -183,12 +185,16 @@ try { rawDb.prepare("ALTER TABLE computer_labs ADD COLUMN name TEXT DEFAULT ''")
 
 ```ts
 // [P] src/index.ts L355-361 —— 只读 JOIN 平台表，可抄
-rawDb.prepare(`
+rawDb
+  .prepare(
+    `
   SELECT u.id, u.name FROM class_students cs
   JOIN users u ON u.id = cs.student_id
   WHERE cs.class_id IN (${placeholders}) AND u.role = 'student'
   GROUP BY u.id
-`).all(...classIds);
+`,
+  )
+  .all(...classIds);
 ```
 
 ---
@@ -197,11 +203,11 @@ rawDb.prepare(`
 
 ### 5.1 配比真相
 
-| 项 | 数量 | 证据 |
-| --- | --- | --- |
+| 项                                     | 数量   | 证据                                                                                                                                          |
+| -------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `commandBus.registerHandler(...)` 调用 | **27** | L415, 443, 454, 467, 495, 660, 681, 690, 700, 711, 721, 740, 762, 792, 841, 854, 887, 914, 973, 998, 1064, 1129, 1167, 1225, 1238, 1247, 1397 |
-| `actionRegistry.register(...)` 调用点 | **9** | 8 处具名（L397, 476, 778, 873, 960, 983, 1115, 1149）+ 1 处循环（L1441） |
-| 最终描述符条数 | **27** | 8 + `MISSING_ACTIONS.length`(19) |
+| `actionRegistry.register(...)` 调用点  | **9**  | 8 处具名（L397, 476, 778, 873, 960, 983, 1115, 1149）+ 1 处循环（L1441）                                                                      |
+| 最终描述符条数                         | **27** | 8 + `MISSING_ACTIONS.length`(19)                                                                                                              |
 
 「9 个调用点 ≠ 9 条描述符」，是因为最后一处是 `for (const a of MISSING_ACTIONS) register(...)`。
 
@@ -223,7 +229,11 @@ rawDb.prepare(`
 
 ```ts
 const MISSING_ACTIONS: Array<{ commandType: string; description: string; capabilityRequired: string }> = [
-  { commandType: 'lab_seat.update_layout', description: '更新机房的行列布局与座位编号', capabilityRequired: 'lesson:write' },
+  {
+    commandType: 'lab_seat.update_layout',
+    description: '更新机房的行列布局与座位编号',
+    capabilityRequired: 'lesson:write',
+  },
   // … 共 19 条
 ];
 for (const a of MISSING_ACTIONS) {
@@ -232,7 +242,7 @@ for (const a of MISSING_ACTIONS) {
     commandType: a.commandType,
     description: a.description,
     capabilityRequired: a.capabilityRequired,
-    inputSchema: { type: 'OBJECT', properties: {} },   // 只做对象形状守卫
+    inputSchema: { type: 'OBJECT', properties: {} }, // 只做对象形状守卫
   });
 }
 ```
@@ -274,12 +284,14 @@ payload 是调用方（含 AI Agent）可控的；`actorId` 由宿主 `server/mi
 export class LabSeatError extends Error {
   code: LabSeatErrorCode;
   constructor(code: LabSeatErrorCode, message: string) {
-    super(`[lab_seat:${code}] ${message}`);   // 前缀 = 可 grep 的稳定锚点
+    super(`[lab_seat:${code}] ${message}`); // 前缀 = 可 grep 的稳定锚点
     this.name = 'LabSeatError';
     this.code = code;
   }
 }
-export function labError(code: LabSeatErrorCode, message: string): never { throw new LabSeatError(code, message); }
+export function labError(code: LabSeatErrorCode, message: string): never {
+  throw new LabSeatError(code, message);
+}
 ```
 
 11 个 code 全在类型联合里（L62-73），拼错即编译失败。message 用中文保持对最终用户可读。
@@ -289,7 +301,8 @@ export function labError(code: LabSeatErrorCode, message: string): never { throw
 
 ```ts
 // [P] src/index.ts L806-811
-const existing = rawDb.prepare(`SELECT * FROM ${T_ATTEND} WHERE lesson_id = ? AND student_id = ?`)
+const existing = rawDb
+  .prepare(`SELECT * FROM ${T_ATTEND} WHERE lesson_id = ? AND student_id = ?`)
   .get(lessonId, studentId);
 if (existing) return { message: '已签到', status: existing.status, checkedInAt: existing.checked_in_at };
 ```
@@ -299,9 +312,12 @@ if (existing) return { message: '已签到', status: existing.status, checkedInA
 ```ts
 // [P] src/index.ts L831-835
 await eventBus.publish({
-  id: uid(), type: 'lab_seat.student_checked_in', source: `plugin.${pluginId}`,
+  id: uid(),
+  type: 'lab_seat.student_checked_in',
+  source: `plugin.${pluginId}`,
   payload: { lessonId, studentId, status, checkedInAt: now },
-  timestamp: now, correlationId: command.id,
+  timestamp: now,
+  correlationId: command.id,
 });
 ```
 
@@ -348,7 +364,7 @@ provide<T>(token: Token<T>, instance: T): Promise<void>;
 ```
 
 ```ts
-const svc = await ctx.resolve(ILabSeatServiceToken);   // 需自己复刻同名 Token
+const svc = await ctx.resolve(ILabSeatServiceToken); // 需自己复刻同名 Token
 ```
 
 Token 标识符必须**逐字相同**，见 [context-and-services.md](../plugin-system/context-and-services.md) §7。
@@ -378,7 +394,7 @@ catch { /* 表不存在或权限不足 → 返回空数组 */ }
 // Worker runtime 不提供 ctx.config，fallback 到 manifest 默认值
 const getConfigValue = (key: string): any => {
   const cfg = (ctx as any).config;
-  if (cfg && typeof cfg[key] !== 'undefined') return cfg[key];   // ← 恒为 undefined
+  if (cfg && typeof cfg[key] !== 'undefined') return cfg[key]; // ← 恒为 undefined
   return (ctx.manifest as any)?.configuration?.properties?.[key]?.default;
 };
 ```
@@ -399,7 +415,7 @@ const getConfigValue = (key: string): any => {
 const getConfigValue = (key: string): any => {
   const cfg: any = (ctx as any).config;
   if (cfg && typeof cfg.get === 'function') {
-    const v = cfg.get(key);                       // ← 走 IConfigService.get()
+    const v = cfg.get(key); // ← 走 IConfigService.get()
     if (typeof v !== 'undefined') return v;
   }
   return (ctx.manifest as any)?.configuration?.properties?.[key]?.default;
@@ -461,13 +477,17 @@ export default { activate, deactivate };
 实现（L17-45）：
 
 ```tsx
-import type * as ReactTypes from 'react';        // ← 只 import type，编译后被擦除
+import type * as ReactTypes from 'react'; // ← 只 import type，编译后被擦除
 
 function resolveReact(): typeof ReactTypes {
-  return (globalThis as any).React ||
+  return (
+    (globalThis as any).React ||
     (typeof window !== 'undefined' &&
-      (window.HostSharedDeps?.React?.default ?? window.HostSharedDeps?.React ??
-       window.React ?? window.HostSharedDeps?.react));
+      (window.HostSharedDeps?.React?.default ??
+        window.HostSharedDeps?.React ??
+        window.React ??
+        window.HostSharedDeps?.react))
+  );
 }
 
 const React: typeof ReactTypes = new Proxy({} as any, {
@@ -536,12 +556,12 @@ async deactivate() {
 
 本插件**没有**用 `@openlearn/plugin-test-kit`，而是自建 harness：
 
-| 文件 | 作用 |
-| --- | --- |
-| `test/build-test-bundle.mjs` | 用 esbuild 把 `src/index.ts` 打成 `tmp/plugin-test-bundle.mjs`，把 `pino`/`express`/`jszip`/`semver`/`uuid` 等 alias 到 `_mock-pino.mjs` 空桩 |
-| `test/plugin.test.mjs` | 手写 `createMockContext(db, extraConfig)`：`commandHandlers` Map、`actionDescriptors` 数组、`publishedEvents` 数组、`providedServices` Map、`eventSubs` Map |
-| `test/csv.test.mjs` / `smart-assign.test.mjs` | 纯函数单测（无需 mock） |
-| `test-harness/static-check.mjs` | 52 KB L0 静态检查：槽位名对照 `slot-registry.json` 白名单、manifest 字段、裸说明符等 |
+| 文件                                          | 作用                                                                                                                                                        |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/build-test-bundle.mjs`                  | 用 esbuild 把 `src/index.ts` 打成 `tmp/plugin-test-bundle.mjs`，把 `pino`/`express`/`jszip`/`semver`/`uuid` 等 alias 到 `_mock-pino.mjs` 空桩               |
+| `test/plugin.test.mjs`                        | 手写 `createMockContext(db, extraConfig)`：`commandHandlers` Map、`actionDescriptors` 数组、`publishedEvents` 数组、`providedServices` Map、`eventSubs` Map |
+| `test/csv.test.mjs` / `smart-assign.test.mjs` | 纯函数单测（无需 mock）                                                                                                                                     |
+| `test-harness/static-check.mjs`               | 52 KB L0 静态检查：槽位名对照 `slot-registry.json` 白名单、manifest 字段、裸说明符等                                                                        |
 
 `test/plugin.test.mjs` 开头列了 5 个边界场景，全部是**迁移相关**：
 
@@ -567,28 +587,28 @@ async deactivate() {
 
 ### ✅ 直接抄
 
-| 范式 | 坐标 |
-| --- | --- |
-| `labError(code, msg)` + `never` 返回 + code 联合类型 | `[P]` L62-86 |
-| 配置回落 + `Number() \|\| 兜底` 三层保险 | `[P]` L280-285、L1346-1348（**取值改 `ctx.config.get(key)`**，见 §7） |
-| `typeof ctx.provide === 'function'` 守卫 | `[P]` L1293-1296 |
-| 批量 `MISSING_ACTIONS` 补描述符 | `[P]` L1419-1448 |
-| `actorId` 取身份 / 幂等先查后写 / 事件带 `correlationId` | `[P]` L793-836 |
-| 前端 `resolveReact()` + Proxy + hooks 转发 | `[P] frontend.tsx` L17-45 |
-| `deactivate` 清模块级 timer | `[P]` L1453-1460 |
-| 纯函数抽独立文件 + 独立单测 | `[P] csv.ts` / `smart-assign.ts` |
+| 范式                                                     | 坐标                                                                  |
+| -------------------------------------------------------- | --------------------------------------------------------------------- |
+| `labError(code, msg)` + `never` 返回 + code 联合类型     | `[P]` L62-86                                                          |
+| 配置回落 + `Number() \|\| 兜底` 三层保险                 | `[P]` L280-285、L1346-1348（**取值改 `ctx.config.get(key)`**，见 §7） |
+| `typeof ctx.provide === 'function'` 守卫                 | `[P]` L1293-1296                                                      |
+| 批量 `MISSING_ACTIONS` 补描述符                          | `[P]` L1419-1448                                                      |
+| `actorId` 取身份 / 幂等先查后写 / 事件带 `correlationId` | `[P]` L793-836                                                        |
+| 前端 `resolveReact()` + Proxy + hooks 转发               | `[P] frontend.tsx` L17-45                                             |
+| `deactivate` 清模块级 timer                              | `[P]` L1453-1460                                                      |
+| 纯函数抽独立文件 + 独立单测                              | `[P] csv.ts` / `smart-assign.ts`                                      |
 
 ### ❌ 明确别抄
 
-| 反模式 | 位置 | 为什么 |
-| --- | --- | --- |
-| 对平台表 `computer_labs` 做 `CREATE/ALTER` | L175-191 | 违反表归属；只因 `inline` 无 SQL 守卫才成立，改非受信模式即被拒 |
-| `try { … } catch {}` 空捕获无日志 | L187-191、L312、L322 | 排障时无法区分「表不存在」与「权限不足」 |
-| 直接读别的插件的表 `plugin_research_groups` | L316 | 应优先走 `IActivityRegistryToken`；SQL 仅作兜底且必须可空 |
-| 前端 `subscribeToEvents` 70 行 | `frontend.tsx` L66-136 | 除非确实要做跨宿主版本兼容，否则过度设计 |
-| 自建 mock 而非 `createMockContext()` | `test/plugin.test.mjs` | 与真实内核的偏差会累积 |
-| `inputSchema: { type: 'OBJECT', properties: {} }` 当作「不校验」 | L1446 | 实际校验对象形状；必填项靠 handler 兜底是**主动选择**，不是「反正不校验」 |
-| `ctx.config[key]` 取配置值 | L283 | `IConfigService` 无按 key 的属性，恒 `undefined` → 后台配置静默不生效；应 `ctx.config.get(key)` |
+| 反模式                                                           | 位置                   | 为什么                                                                                          |
+| ---------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| 对平台表 `computer_labs` 做 `CREATE/ALTER`                       | L175-191               | 违反表归属；只因 `inline` 无 SQL 守卫才成立，改非受信模式即被拒                                 |
+| `try { … } catch {}` 空捕获无日志                                | L187-191、L312、L322   | 排障时无法区分「表不存在」与「权限不足」                                                        |
+| 直接读别的插件的表 `plugin_research_groups`                      | L316                   | 应优先走 `IActivityRegistryToken`；SQL 仅作兜底且必须可空                                       |
+| 前端 `subscribeToEvents` 70 行                                   | `frontend.tsx` L66-136 | 除非确实要做跨宿主版本兼容，否则过度设计                                                        |
+| 自建 mock 而非 `createMockContext()`                             | `test/plugin.test.mjs` | 与真实内核的偏差会累积                                                                          |
+| `inputSchema: { type: 'OBJECT', properties: {} }` 当作「不校验」 | L1446                  | 实际校验对象形状；必填项靠 handler 兜底是**主动选择**，不是「反正不校验」                       |
+| `ctx.config[key]` 取配置值                                       | L283                   | `IConfigService` 无按 key 的属性，恒 `undefined` → 后台配置静默不生效；应 `ctx.config.get(key)` |
 
 ---
 
@@ -613,10 +633,10 @@ async deactivate() {
 
 ## 13. 交叉引用
 
-| 想知道 | 去哪 |
-| --- | --- |
-| `PluginContext` 全字段与 9 个服务签名 | [context-and-services.md](../plugin-system/context-and-services.md) |
-| 19 条能力真值与 3 道 Barrier | [capabilities-and-security.md](../plugin-system/capabilities-and-security.md) |
+| 想知道                                 | 去哪                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| `PluginContext` 全字段与 9 个服务签名  | [context-and-services.md](../plugin-system/context-and-services.md)             |
+| 19 条能力真值与 3 道 Barrier           | [capabilities-and-security.md](../plugin-system/capabilities-and-security.md)   |
 | 120 槽位如何选、`layoutVariant` 怎么填 | [extension-points-and-slots.md](../plugin-system/extension-points-and-slots.md) |
-| `COMMAND_NOT_REGISTERED` 的完整归因链 | [troubleshooting.md](../development/troubleshooting.md) §3 |
-| 从零起一个更小的插件 | [minimal-plugin.md](minimal-plugin.md) |
+| `COMMAND_NOT_REGISTERED` 的完整归因链  | [troubleshooting.md](../development/troubleshooting.md) §3                      |
+| 从零起一个更小的插件                   | [minimal-plugin.md](minimal-plugin.md)                                          |

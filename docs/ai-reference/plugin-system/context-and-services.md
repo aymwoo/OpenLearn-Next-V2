@@ -21,7 +21,7 @@ interface PluginContext {
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
   };
-  pluginId: string;               // ⚠ 是 DB 行 UUID，不是 manifest.id
+  pluginId: string; // ⚠ 是 DB 行 UUID，不是 manifest.id
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;
   provide<T>(token: Token<T>, instance: T): Promise<void>;
@@ -41,12 +41,12 @@ interface PluginContext {
 
 ### 1.1 `pluginId` vs `manifest.id`
 
-| 用途 | 用哪个 | 证据 |
-| --- | --- | --- |
-| 命令命名空间前缀 | `manifest.id` | `plugin-namespace.ts`（L30-43 注释） |
-| `db.table()` 表前缀 | 由宿主计算，**不要自己拼** | `types.ts`（L254-256） |
-| 前端 `frontendApi.post('/api/plugins/:id/...')` | DB id（`ctx.pluginId`） | `plugin-host.ts`（L627） |
-| 扩展点 `slotProps.commandType` | `manifest.id` 全限定 | 见 [extension-points-and-slots.md](extension-points-and-slots.md) §2.2 |
+| 用途                                            | 用哪个                     | 证据                                                                   |
+| ----------------------------------------------- | -------------------------- | ---------------------------------------------------------------------- |
+| 命令命名空间前缀                                | `manifest.id`              | `plugin-namespace.ts`（L30-43 注释）                                   |
+| `db.table()` 表前缀                             | 由宿主计算，**不要自己拼** | `types.ts`（L254-256）                                                 |
+| 前端 `frontendApi.post('/api/plugins/:id/...')` | DB id（`ctx.pluginId`）    | `plugin-host.ts`（L627）                                               |
+| 扩展点 `slotProps.commandType`                  | `manifest.id` 全限定       | 见 [extension-points-and-slots.md](extension-points-and-slots.md) §2.2 |
 
 ```ts
 // 唯一正确写法
@@ -102,7 +102,9 @@ getActionByCommandType(commandType: string): ... ;
 `ActionDescriptor` 五个必填字段：
 
 ```ts
-{ id, commandType, description, inputSchema, capabilityRequired }
+{
+  (id, commandType, description, inputSchema, capabilityRequired);
+}
 // 可选：isHighRisk?: boolean（人工审批）；exposeToAgent?: boolean（默认 true）
 ```
 
@@ -133,11 +135,11 @@ registerInterval(name, intervalMs, tickFn, ownerHint?): string | Promise<string>
 restore(): void | Promise<void>;
 ```
 
-| 方法 | 门禁 | 说明 |
-| --- | --- | --- |
-| `registerHandler` / `registerInterval` | 需 `task:register` | 否则 `checkMethodPolicy` 拒绝 |
-| `restore()` | 需 `task:register` | 它会重放**所有插件**的 running 进程（无 owner 过滤），故单独设门 |
-| `spawn` | 需 `process:write`（命令侧） | `process` 沙箱下子进程被禁 |
+| 方法                                   | 门禁                         | 说明                                                             |
+| -------------------------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `registerHandler` / `registerInterval` | 需 `task:register`           | 否则 `checkMethodPolicy` 拒绝                                    |
+| `restore()`                            | 需 `task:register`           | 它会重放**所有插件**的 running 进程（无 owner 过滤），故单独设门 |
+| `spawn`                                | 需 `process:write`（命令侧） | `process` 沙箱下子进程被禁                                       |
 
 证据：`packages/core/plugin-host/method-policy.ts`（L249-263）。
 
@@ -189,10 +191,10 @@ getStudentDimensionSummary(studentId, classId): Promise<Record<string, number>>;
 
 ## 3. Token：三个数字，别混
 
-| 口径 | 数量 | 来源 |
-| --- | --- | --- |
-| SDK **值导出**的 Token 对象 | **32** | `packages/plugin-sdk/index.ts` 的 `export { …Token }` |
-| 可按 **Token 对象** resolve | **30** | `packages/core/di/interfaces.ts → PLUGIN_RESOLVABLE_TOKENS`（L946） |
+| 口径                        | 数量   | 来源                                                                                       |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| SDK **值导出**的 Token 对象 | **32** | `packages/plugin-sdk/index.ts` 的 `export { …Token }`                                      |
+| 可按 **Token 对象** resolve | **30** | `packages/core/di/interfaces.ts → PLUGIN_RESOLVABLE_TOKENS`（L946）                        |
 | 可按 **名字字符串** resolve | **31** | 同上 `PLUGIN_RESOLVABLE_TOKEN_NAMES`（+`@openlearn/activity-ecosystem:IActivityRegistry`） |
 
 两个陷阱（都有确定解释，不是 bug）：
@@ -212,26 +214,26 @@ getStudentDimensionSummary(studentId, classId): Promise<Record<string, number>>;
 
 ### 3.1 常用 Token 的标识符（resolve 失败时对照）
 
-| Token | 标识符 |
-| --- | --- |
-| `ICommandBusServiceToken` | `@openlearn/core:ICommandBusService` |
-| `IEventBusServiceToken` | `@openlearn/core:IEventBusService` |
-| `IActionRegistryServiceToken` | `@openlearn/core:IActionRegistryService` |
-| `ICapabilityServiceToken` | `@openlearn/core:ICapabilityService` |
-| `IProcessServiceToken` | `@openlearn/core:IProcessService` |
-| `IStorageServiceToken` | `@openlearn/core:IStorageService` |
-| `IAIServiceToken` | `@openlearn/core:IAIService` |
-| `IDatabaseToken` | `@openlearn/core:IDatabase` |
-| `ISemesterGradeServiceToken` | `@openlearn/core:ISemesterGradeService` |
-| `IPointsDimensionRegistryToken` | `@openlearn/core:IPointsDimensionRegistry` |
-| `IPointsLedgerServiceToken` | `@openlearn/core:IPointsLedgerService` |
-| `IClassroomLifecycleServiceToken` | `@openlearn/core:IClassroomLifecycleService` |
-| `IClassroomCountdownServiceToken` | `@openlearn/core:IClassroomCountdownService` |
-| `IAssessmentGraderRegistryToken` | `@openlearn/core:IAssessmentGraderRegistry` |
-| `IStageGuardServiceToken` | `@openlearn/core:IStageGuardService` |
-| `ICoursewareRuntimeScriptRegistryToken` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` |
-| `IInteractionRuntimeServiceToken` | `@openlearn/core:IInteractionRuntimeService` |
-| `IActivityRegistryToken` | `@openlearn/activity-ecosystem:IActivityRegistry`（只能按名字） |
+| Token                                   | 标识符                                                          |
+| --------------------------------------- | --------------------------------------------------------------- |
+| `ICommandBusServiceToken`               | `@openlearn/core:ICommandBusService`                            |
+| `IEventBusServiceToken`                 | `@openlearn/core:IEventBusService`                              |
+| `IActionRegistryServiceToken`           | `@openlearn/core:IActionRegistryService`                        |
+| `ICapabilityServiceToken`               | `@openlearn/core:ICapabilityService`                            |
+| `IProcessServiceToken`                  | `@openlearn/core:IProcessService`                               |
+| `IStorageServiceToken`                  | `@openlearn/core:IStorageService`                               |
+| `IAIServiceToken`                       | `@openlearn/core:IAIService`                                    |
+| `IDatabaseToken`                        | `@openlearn/core:IDatabase`                                     |
+| `ISemesterGradeServiceToken`            | `@openlearn/core:ISemesterGradeService`                         |
+| `IPointsDimensionRegistryToken`         | `@openlearn/core:IPointsDimensionRegistry`                      |
+| `IPointsLedgerServiceToken`             | `@openlearn/core:IPointsLedgerService`                          |
+| `IClassroomLifecycleServiceToken`       | `@openlearn/core:IClassroomLifecycleService`                    |
+| `IClassroomCountdownServiceToken`       | `@openlearn/core:IClassroomCountdownService`                    |
+| `IAssessmentGraderRegistryToken`        | `@openlearn/core:IAssessmentGraderRegistry`                     |
+| `IStageGuardServiceToken`               | `@openlearn/core:IStageGuardService`                            |
+| `ICoursewareRuntimeScriptRegistryToken` | `@openlearn/core:ICoursewareRuntimeScriptRegistry`              |
+| `IInteractionRuntimeServiceToken`       | `@openlearn/core:IInteractionRuntimeService`                    |
+| `IActivityRegistryToken`                | `@openlearn/activity-ecosystem:IActivityRegistry`（只能按名字） |
 
 完整 31 条：`openlearn-next docs/agent/contracts/tokens.json`。
 
@@ -266,13 +268,13 @@ dropAllTables(): Promise<void>;                                  // 卸载时宿
 migrate(targetVersion: number, upgradeFn: (db) => Promise<void> | void): Promise<void>;
 ```
 
-| 事实 | 值 |
-| --- | --- |
-| 表前缀 | `plugin_<DB-UUID>_`（**不是** `manifest.id`） |
-| `ctx.db` 有 `prepare()` 吗 | **没有** |
-| 要跑裸 SQL 怎么办 | `const raw = await ctx.resolve(IDatabaseToken)`，再 `raw.prepare(sql).run(...)` |
-| 迁移版本存哪 | `plugin_migrations` 表（按 plugin_id 一行） |
-| 声明式 `migrations/*.sql` | **官方 CLI 不打包该目录**（`cli.mjs` L379-387），ZIP 插件上不会执行 |
+| 事实                       | 值                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| 表前缀                     | `plugin_<DB-UUID>_`（**不是** `manifest.id`）                                   |
+| `ctx.db` 有 `prepare()` 吗 | **没有**                                                                        |
+| 要跑裸 SQL 怎么办          | `const raw = await ctx.resolve(IDatabaseToken)`，再 `raw.prepare(sql).run(...)` |
+| 迁移版本存哪               | `plugin_migrations` 表（按 plugin_id 一行）                                     |
+| 声明式 `migrations/*.sql`  | **官方 CLI 不打包该目录**（`cli.mjs` L379-387），ZIP 插件上不会执行             |
 
 **同步/异步差异**：inline 下 `better-sqlite3` 是同步的，`process` 沙箱是 Promise 代理。
 **统一写成 `await`** 可同时兼容（`await` 同步值合法）。
@@ -316,13 +318,13 @@ isStream(method, path): boolean
 
 请求/响应 DTO 见 [api-reference.md](../development/api-reference.md) §5。三条运行时约束：
 
-| 约束 | 值 | 证据 |
-| --- | --- | --- |
-| 真实挂载路径 | `/api/plugins/{manifest.id}/*`，`api.baseRoute` **无效** | `manifest-schema.ts`（L747-758 注释） |
-| 请求体上限 | **1MB**，超出 413 | `plugin-api-gateway.ts`（L58 / L310） |
-| 默认限流 | 每端点 120 次/分钟（键含 `clientIp`） | 同文件（L369-371） |
-| SSE 单 IP 并发 | 默认 5，超出 429 | 同文件（L418-421） |
-| `auth:false` | 只是**申请**匿名，需管理员批准后才放行 | `openlearn.d.ts`（L77-81） |
+| 约束           | 值                                                       | 证据                                  |
+| -------------- | -------------------------------------------------------- | ------------------------------------- |
+| 真实挂载路径   | `/api/plugins/{manifest.id}/*`，`api.baseRoute` **无效** | `manifest-schema.ts`（L747-758 注释） |
+| 请求体上限     | **1MB**，超出 413                                        | `plugin-api-gateway.ts`（L58 / L310） |
+| 默认限流       | 每端点 120 次/分钟（键含 `clientIp`）                    | 同文件（L369-371）                    |
+| SSE 单 IP 并发 | 默认 5，超出 429                                         | 同文件（L418-421）                    |
+| `auth:false`   | 只是**申请**匿名，需管理员批准后才放行                   | `openlearn.d.ts`（L77-81）            |
 
 ---
 
@@ -373,14 +375,14 @@ interface FrontendPluginContext {
 }
 ```
 
-| 差异点 | 后端 | 前端 |
-| --- | --- | --- |
-| `storage` | 异步、任意值 | **同步、仅字符串** |
-| `socket` | 无 | `ISocketService`（4 个方法） |
-| `config` | 有 | **无** |
-| `db` | 有 | **无** |
-| `dispatcher` | 无 | 有（受控宿主动作） |
-| `context` | 通过命令参数 | `ctx.context.get()` |
+| 差异点       | 后端         | 前端                         |
+| ------------ | ------------ | ---------------------------- |
+| `storage`    | 异步、任意值 | **同步、仅字符串**           |
+| `socket`     | 无           | `ISocketService`（4 个方法） |
+| `config`     | 有           | **无**                       |
+| `db`         | 有           | **无**                       |
+| `dispatcher` | 无           | 有（受控宿主动作）           |
+| `context`    | 通过命令参数 | `ctx.context.get()`          |
 
 兼容 shim 的默认槽位：`registerPanel` → `teacher.dashboard.widget`，`registerMenu` → `teacher.panel`，
 `registerToolbarButton` → `classroom.tool`（`plugin-host.ts` L700 起）。**新代码不要用**。
@@ -398,13 +400,13 @@ use(middleware): Disposable;
 
 内置 `HostAction` 六种：
 
-| type | payload 关键字段 | 返回 |
-| --- | --- | --- |
-| `host:refresh` | `target: 'timetable'\|'classes'\|'lessons'\|'students'\|'all'` | `{success, refreshed[]}` |
-| `host:modal:confirm` | `title`, `message`, `variant?` | `{confirmed}` |
-| `host:modal:open` | `title`, `content`, `size?`, `actions?` | `{actionId?, closed}` |
-| `host:modal:close` | `id?`, `result?` | — |
-| `host:toast` | `title`, `message`, `type?`, `duration?` | `{delivered}` |
-| `host:navigate` | `tab`, `subTab?`, `params?` | `{navigated}` |
+| type                 | payload 关键字段                                               | 返回                     |
+| -------------------- | -------------------------------------------------------------- | ------------------------ |
+| `host:refresh`       | `target: 'timetable'\|'classes'\|'lessons'\|'students'\|'all'` | `{success, refreshed[]}` |
+| `host:modal:confirm` | `title`, `message`, `variant?`                                 | `{confirmed}`            |
+| `host:modal:open`    | `title`, `content`, `size?`, `actions?`                        | `{actionId?, closed}`    |
+| `host:modal:close`   | `id?`, `result?`                                               | —                        |
+| `host:toast`         | `title`, `message`, `type?`, `duration?`                       | `{delivered}`            |
+| `host:navigate`      | `tab`, `subTab?`, `params?`                                    | `{navigated}`            |
 
 证据：`types.ts`（L358-520）。渲染器会自动给每个扩展点注入 `dispatcher`（已绑定 `sourcePluginId`）。

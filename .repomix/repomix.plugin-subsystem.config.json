@@ -34,13 +34,7 @@
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
-    "customPatterns": [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/__snapshots__/**",
-      "**/*.snap",
-      "**/pnpm-lock.yaml"
-    ]
+    "customPatterns": ["**/node_modules/**", "**/dist/**", "**/__snapshots__/**", "**/*.snap", "**/pnpm-lock.yaml"]
   },
   "security": {
     "enableSecurityCheck": true

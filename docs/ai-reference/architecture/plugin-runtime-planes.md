@@ -53,12 +53,12 @@ flowchart TB
   RD --> IR
 ```
 
-| 层 | 代码位置 | 信任假设 | 崩溃影响 |
-| --- | --- | --- | --- |
-| ① 内核 | `packages/core/**`、`server/routes/plugins.ts`、`server/routes/plugin-api-gateway.ts` | 可信 | 全站 |
-| ② 隔离 | `packages/core/worker-runtime/**`、`packages/core/plugin-host/plugin-lifecycle-manager.ts` | 不可信 | 仅该插件 |
-| ③ 前端宿主 | `src/plugin-host/**` | 可信 | 页面级 |
-| ④ 前端插件 | `dist/frontend.js`、`storage/*.html` | 不可信 | 该扩展点被摘除 |
+| 层         | 代码位置                                                                                   | 信任假设 | 崩溃影响       |
+| ---------- | ------------------------------------------------------------------------------------------ | -------- | -------------- |
+| ① 内核     | `packages/core/**`、`server/routes/plugins.ts`、`server/routes/plugin-api-gateway.ts`      | 可信     | 全站           |
+| ② 隔离     | `packages/core/worker-runtime/**`、`packages/core/plugin-host/plugin-lifecycle-manager.ts` | 不可信   | 仅该插件       |
+| ③ 前端宿主 | `src/plugin-host/**`                                                                       | 可信     | 页面级         |
+| ④ 前端插件 | `dist/frontend.js`、`storage/*.html`                                                       | 不可信   | 该扩展点被摘除 |
 
 **证据**：`packages/core/plugin-host/types.ts → PluginExecutionMode（L390）` 用三行表格定义了 `inline / worker / process` 的隔离强度；`packages/core/plugin-host/execution-policy.ts → resolvePluginExecutionMode（L116）` 是唯一把「请求的模式」收成「实际模式」的函数。
 
@@ -79,12 +79,12 @@ flowchart TB
         └── context-builder          构造 PluginContext，包装每个服务调用
 ```
 
-| 事实 | 值 | 证据 |
-| --- | --- | --- |
-| 安装目录 | `plugins/<DB-UUID>/`（仓库根，`.gitignore` 显式忽略 `/plugins/`） | `packages/core/plugin-host/install.ts → getPluginDir（L160 调用点）` |
-| 只解压的前缀 | `storage/` | `install.ts` 解压谓词 `name.startsWith('storage/')`（L359 / L756） |
-| ZIP 落盘副本 | `plugins/<UUID>/package.zip` | `install.ts`（L327 / L716） |
-| DB 主键 | UUID v7，**不等于** `manifest.id` | `packages/core/plugin-host/plugin-namespace.ts → 注释（L27-43）` |
+| 事实         | 值                                                                | 证据                                                                 |
+| ------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 安装目录     | `plugins/<DB-UUID>/`（仓库根，`.gitignore` 显式忽略 `/plugins/`） | `packages/core/plugin-host/install.ts → getPluginDir（L160 调用点）` |
+| 只解压的前缀 | `storage/`                                                        | `install.ts` 解压谓词 `name.startsWith('storage/')`（L359 / L756）   |
+| ZIP 落盘副本 | `plugins/<UUID>/package.zip`                                      | `install.ts`（L327 / L716）                                          |
+| DB 主键      | UUID v7，**不等于** `manifest.id`                                 | `packages/core/plugin-host/plugin-namespace.ts → 注释（L27-43）`     |
 
 ---
 
@@ -116,15 +116,15 @@ flowchart TB
 
 ## 4. 两套前端通道（不是一回事）
 
-| 维度 | `frame` 通道 | `view` 通道 |
-| --- | --- | --- |
-| 载体 | 隐藏 iframe（`display:none`），载入 `PLUGIN_FRAME_PATH` | 可视沙箱 iframe，载入插件 `storage/*.html` |
-| 日志可见 | 否 | 是（用户能看见） |
-| 协议 | `{channel, type:'call', op, args}` → `{type:'reply'}` | `window.OpenLearnPluginBridge` 对象方法 |
-| op 数 | **10** | **8**（wire op）+ `ui.resize` 独立消息 |
-| 方法级门禁（Barrier 3） | **有**（`checkMethodPolicy`） | **无** |
-| 越界错误 | `Unsupported sandbox bridge op "xxx"` | 由桥接侧抛错 |
-| 证据 | `src/plugin-host/plugin-host.ts → answerSandboxCall（L585）` | `docs/agent/contracts/bridge-ops.json` |
+| 维度                    | `frame` 通道                                                 | `view` 通道                                |
+| ----------------------- | ------------------------------------------------------------ | ------------------------------------------ |
+| 载体                    | 隐藏 iframe（`display:none`），载入 `PLUGIN_FRAME_PATH`      | 可视沙箱 iframe，载入插件 `storage/*.html` |
+| 日志可见                | 否                                                           | 是（用户能看见）                           |
+| 协议                    | `{channel, type:'call', op, args}` → `{type:'reply'}`        | `window.OpenLearnPluginBridge` 对象方法    |
+| op 数                   | **10**                                                       | **8**（wire op）+ `ui.resize` 独立消息     |
+| 方法级门禁（Barrier 3） | **有**（`checkMethodPolicy`）                                | **无**                                     |
+| 越界错误                | `Unsupported sandbox bridge op "xxx"`                        | 由桥接侧抛错                               |
+| 证据                    | `src/plugin-host/plugin-host.ts → answerSandboxCall（L585）` | `docs/agent/contracts/bridge-ops.json`     |
 
 frame 的 10 个 op（穷举，`answerSandboxCall` L604-649 逐条分发）：
 
@@ -172,9 +172,9 @@ sequenceDiagram
 
 ## 6. 系统边界（本仓库不覆盖什么）
 
-| 边界 | 说明 | 状态 |
-| --- | --- | --- |
-| 白板图元渲染器扩展 | 宿主 React 侧实现，非插件公开 API；`whiteboard.renderer` 槽位可注册但契约随版本变动 | `待确认` |
-| 插件市场审核/运营 | 仓库内只有签名校验（`PluginSignatureError` 家族），无审核流程 | `不适用` |
-| 课程包/courseware 运行时注入 | `ICoursewareRuntimeScriptRegistry` 存在，但 ZIP 插件无法声明式使用 | `待确认` |
-| 内核内置插件（`packages/plugins/**`） | 属平台代码，走 preload 路径，不受 `resolvePluginExecutionMode` 约束 | `已验证` |
+| 边界                                  | 说明                                                                                | 状态     |
+| ------------------------------------- | ----------------------------------------------------------------------------------- | -------- |
+| 白板图元渲染器扩展                    | 宿主 React 侧实现，非插件公开 API；`whiteboard.renderer` 槽位可注册但契约随版本变动 | `待确认` |
+| 插件市场审核/运营                     | 仓库内只有签名校验（`PluginSignatureError` 家族），无审核流程                       | `不适用` |
+| 课程包/courseware 运行时注入          | `ICoursewareRuntimeScriptRegistry` 存在，但 ZIP 插件无法声明式使用                  | `待确认` |
+| 内核内置插件（`packages/plugins/**`） | 属平台代码，走 preload 路径，不受 `resolvePluginExecutionMode` 约束                 | `已验证` |

@@ -9,17 +9,17 @@
 
 `packages/core/db/index.ts`（608 行）暴露两套读写入口：
 
-| 导出 | 类型 | 用途 |
-| --- | --- | --- |
-| `db` | 单例 `better-sqlite3` Database（L394） | **所有写与事务** |
-| `readPool` | `ReadConnectionPool` 实例（L491） | 只读查询池，WAL 下并发读 |
-| `getReadDb()` | 取一个只读连接（L497） | 长只读任务 |
-| `queryRead<T>(sql, ...params)` | 返回行数组（L504） | 推荐给普通只读 |
-| `queryReadOne<T>(sql, ...params)` | 返回单行（L512） | 推荐给单行查询 |
-| `checkpoint(mode)` | `PASSIVE`/`FULL`/`RESTART`/`TRUNCATE`（L529） | 手动 WAL checkpoint |
-| `applyPragmas` / `applyReadPragmas` | L155 / L170 | 写库与读库的 PRAGMA 分开设置 |
-| `initializeDatabase(instance)` | L233 | 建表/校验 |
-| `createDatabase(customPath?)` | L364 | 测试用独立库 |
+| 导出                                | 类型                                          | 用途                         |
+| ----------------------------------- | --------------------------------------------- | ---------------------------- |
+| `db`                                | 单例 `better-sqlite3` Database（L394）        | **所有写与事务**             |
+| `readPool`                          | `ReadConnectionPool` 实例（L491）             | 只读查询池，WAL 下并发读     |
+| `getReadDb()`                       | 取一个只读连接（L497）                        | 长只读任务                   |
+| `queryRead<T>(sql, ...params)`      | 返回行数组（L504）                            | 推荐给普通只读               |
+| `queryReadOne<T>(sql, ...params)`   | 返回单行（L512）                              | 推荐给单行查询               |
+| `checkpoint(mode)`                  | `PASSIVE`/`FULL`/`RESTART`/`TRUNCATE`（L529） | 手动 WAL checkpoint          |
+| `applyPragmas` / `applyReadPragmas` | L155 / L170                                   | 写库与读库的 PRAGMA 分开设置 |
+| `initializeDatabase(instance)`      | L233                                          | 建表/校验                    |
+| `createDatabase(customPath?)`       | L364                                          | 测试用独立库                 |
 
 **选型判据**：**写操作一律用 `db`**；只读列表/统计优先 `queryRead`。
 混用会导致「刚写完读不到」（读连接看到的是 WAL 快照）。
@@ -75,15 +75,15 @@ return `plugin_${scopeId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
 
 平台级的插件元数据表（跨插件共享、不属于任何单个插件）：
 
-| 表 | 作用 |
-| --- | --- |
-| `plugin_migrations` | 每个插件的迁移版本记录（按 plugin_id 一行） |
-| `plugin_config` | 插件配置值（`ConfigService.TABLE`，key 前缀 `config:`） |
-| `plugin_storage` | 插件 KV 存储（`ctx.services.storage`） |
-| `plugin_capability_grants` | 能力授予记录 |
-| `plugin_network_grants` | 出站网络授权 |
-| `plugin_public_routes` | 公开路由声明 |
-| `plugin_orphan_data` | 卸载时的孤儿数据快照 |
+| 表                         | 作用                                                    |
+| -------------------------- | ------------------------------------------------------- |
+| `plugin_migrations`        | 每个插件的迁移版本记录（按 plugin_id 一行）             |
+| `plugin_config`            | 插件配置值（`ConfigService.TABLE`，key 前缀 `config:`） |
+| `plugin_storage`           | 插件 KV 存储（`ctx.services.storage`）                  |
+| `plugin_capability_grants` | 能力授予记录                                            |
+| `plugin_network_grants`    | 出站网络授权                                            |
+| `plugin_public_routes`     | 公开路由声明                                            |
+| `plugin_orphan_data`       | 卸载时的孤儿数据快照                                    |
 
 ---
 
@@ -93,21 +93,21 @@ return `plugin_${scopeId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
 
 `packages/core/db/migrator.ts`：
 
-| 函数 | 行 | 说明 |
-| --- | --- | --- |
-| `loadMigrationsFromDirectory(dir)` | L59 | 读 `NNN_name.sql` |
-| `parseMigrationSql(name, content)` | L42 | 解析 up / down 段 |
+| 函数                                     | 行   | 说明                              |
+| ---------------------------------------- | ---- | --------------------------------- |
+| `loadMigrationsFromDirectory(dir)`       | L59  | 读 `NNN_name.sql`                 |
+| `parseMigrationSql(name, content)`       | L42  | 解析 up / down 段                 |
 | `runMigrations(db, migrations, options)` | L116 | 按序执行，记录 `_migrations` 账本 |
-| `rollbackMigration(db, migration)` | L250 | 回滚单条 |
-| `simpleChecksum(text)` | L93 | 校验和防篡改 |
+| `rollbackMigration(db, migration)`       | L250 | 回滚单条                          |
+| `simpleChecksum(text)`                   | L93  | 校验和防篡改                      |
 
 三个相关环境变量（缺一不可理解）：
 
-| 变量 | 作用 |
-| --- | --- |
+| 变量                             | 作用                               |
+| -------------------------------- | ---------------------------------- |
 | `MIGRATION_ALLOW_UNKNOWN_LEDGER` | 允许账本里存在源码中没有的迁移记录 |
-| `MIGRATION_CHECKSUM_STRICT` | 校验和不符时直接失败（否则只告警） |
-| `FORCE_MIGRATION_SNAPSHOT` | 迁移前强制快照 |
+| `MIGRATION_CHECKSUM_STRICT`      | 校验和不符时直接失败（否则只告警） |
+| `FORCE_MIGRATION_SNAPSHOT`       | 迁移前强制快照                     |
 
 **改已有迁移文件会被校验和拦下**。正确做法是新加一个 `0NN_xxx.sql`。
 
@@ -129,14 +129,14 @@ await ctx.db.migrate(2, async (sqliteDb) => { ... });
 
 `packages/core/db/retention-policy.ts → DEFAULT_RETENTION_DAYS`（L22）：
 
-| 类别 | 默认天数 | 环境变量 | 清理函数 |
-| --- | --- | --- | --- |
-| `events` | 90 | `OPENLEARN_EVENT_RETENTION_DAYS` / `RETENTION_EVENTS_DAYS` | `purgeExpiredEvents`（L114） |
-| `attendance` | 365 | `OPENLEARN_ATTENDANCE_RETENTION_DAYS` | `purgeExpiredAttendance`（L150） |
-| `notifications` | 30 | `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS` | `purgeExpiredNotifications`（L188） |
-| `rollcalls` | 180 | `OPENLEARN_ROLLCALLS_RETENTION_DAYS` | `purgeExpiredRollcalls`（L243） |
-| `sessions` | 30 | `OPENLEARN_SESSIONS_RETENTION_DAYS` | `purgeExpiredSessions`（L281） |
-| `pendingCommands` | 14 | `OPENLEARN_PENDING_COMMANDS_RETENTION_DAYS` | — |
+| 类别              | 默认天数 | 环境变量                                                   | 清理函数                            |
+| ----------------- | -------- | ---------------------------------------------------------- | ----------------------------------- |
+| `events`          | 90       | `OPENLEARN_EVENT_RETENTION_DAYS` / `RETENTION_EVENTS_DAYS` | `purgeExpiredEvents`（L114）        |
+| `attendance`      | 365      | `OPENLEARN_ATTENDANCE_RETENTION_DAYS`                      | `purgeExpiredAttendance`（L150）    |
+| `notifications`   | 30       | `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS`                   | `purgeExpiredNotifications`（L188） |
+| `rollcalls`       | 180      | `OPENLEARN_ROLLCALLS_RETENTION_DAYS`                       | `purgeExpiredRollcalls`（L243）     |
+| `sessions`        | 30       | `OPENLEARN_SESSIONS_RETENTION_DAYS`                        | `purgeExpiredSessions`（L281）      |
+| `pendingCommands` | 14       | `OPENLEARN_PENDING_COMMANDS_RETENTION_DAYS`                | —                                   |
 
 `resolveRetentionDecision`（L71）支持「设为 0 或负数即禁用该类别」。
 **写依赖 `events` / `attendance` 长期留存的逻辑前，先确认保留天数够不够**。
@@ -145,12 +145,12 @@ await ctx.db.migrate(2, async (sqliteDb) => { ... });
 
 ## 5. 备份
 
-| 组件 | 位置 | 说明 |
-| --- | --- | --- |
-| `BackupManager` | `packages/core/db/backup-manager.ts` | `validateBackup`（L80）、`listBackups`（L136）、备份/恢复 |
-| 定时调度 | `server/backup-scheduler.ts` | `BACKUP_SCHEDULE`、`BACKUP_DAILY_AT`、`BACKUP_KEEP`、`BACKUP_CHECKPOINT_INTERVAL_MS` |
-| 目录 | `BACKUP_DIR` 或默认 `backups/` | 仓库根已有 `backups/` 目录 |
-| 迁移前快照 | `PRE_MIGRATION_KEEP` | 控制保留份数 |
+| 组件            | 位置                                 | 说明                                                                                 |
+| --------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `BackupManager` | `packages/core/db/backup-manager.ts` | `validateBackup`（L80）、`listBackups`（L136）、备份/恢复                            |
+| 定时调度        | `server/backup-scheduler.ts`         | `BACKUP_SCHEDULE`、`BACKUP_DAILY_AT`、`BACKUP_KEEP`、`BACKUP_CHECKPOINT_INTERVAL_MS` |
+| 目录            | `BACKUP_DIR` 或默认 `backups/`       | 仓库根已有 `backups/` 目录                                                           |
+| 迁移前快照      | `PRE_MIGRATION_KEEP`                 | 控制保留份数                                                                         |
 
 ---
 

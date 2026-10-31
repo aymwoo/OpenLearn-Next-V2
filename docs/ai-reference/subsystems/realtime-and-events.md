@@ -7,13 +7,13 @@
 
 ## 1. 房间命名：五类，全部由 `server/presence.ts` 定义
 
-| 房间 | 构造函数 | 行 | 用途 |
-| --- | --- | --- | --- |
-| 班级 | `classRoom(classId)` → `class-<id>` | L56 | 班级级广播（锁状态、积分、动态流） |
-| 员工/管理 | `PRESENCE_STAFF_ROOM` = `presence-staff` | L66 | 在线状态面板，仅教师/管理员 |
-| 白板广播 | `WHITEBOARD_BROADCAST_ROOM` = `whiteboard-broadcast` | L76 | 跨课节白板同步 |
-| 用户 | `userRoom(userId)` → `user-<id>`（前缀常量 `USER_ROOM_PREFIX` L84） | L85 | 个人通知（成绩、进度） |
-| 课节 | 房间名 = `lessonId` 字面量 | — | 课堂内广播 |
+| 房间      | 构造函数                                                            | 行  | 用途                               |
+| --------- | ------------------------------------------------------------------- | --- | ---------------------------------- |
+| 班级      | `classRoom(classId)` → `class-<id>`                                 | L56 | 班级级广播（锁状态、积分、动态流） |
+| 员工/管理 | `PRESENCE_STAFF_ROOM` = `presence-staff`                            | L66 | 在线状态面板，仅教师/管理员        |
+| 白板广播  | `WHITEBOARD_BROADCAST_ROOM` = `whiteboard-broadcast`                | L76 | 跨课节白板同步                     |
+| 用户      | `userRoom(userId)` → `user-<id>`（前缀常量 `USER_ROOM_PREFIX` L84） | L85 | 个人通知（成绩、进度）             |
+| 课节      | 房间名 = `lessonId` 字面量                                          | —   | 课堂内广播                         |
 
 **铁律**：房间名只能通过这 4 个构造函数 + 课节 id 字面量产生。
 `event-routing.ts` 的注释明确要求「房间名不能出现两份来源」（L28-31）——
@@ -21,12 +21,12 @@
 
 辅助函数：
 
-| 函数 | 行 | 用途 |
-| --- | --- | --- |
-| `isRealLessonRoom(roomId)` | L100 | 区分真实课节房间与伪房间 |
-| `pseudoRoomStudentId(roomId)` | L108 | 从伪房间反解学生 id |
+| 函数                                    | 行   | 用途                                         |
+| --------------------------------------- | ---- | -------------------------------------------- |
+| `isRealLessonRoom(roomId)`              | L100 | 区分真实课节房间与伪房间                     |
+| `pseudoRoomStudentId(roomId)`           | L108 | 从伪房间反解学生 id                          |
 | `classroomEventRooms(lessonId, target)` | L140 | 一次算出「课节 + 班级 + 指定角色」的房间集合 |
-| `emitClassroomEvent(...)` | L171 | 统一发射器，自动补 `_meta` |
+| `emitClassroomEvent(...)`               | L171 | 统一发射器，自动补 `_meta`                   |
 
 ---
 
@@ -36,13 +36,13 @@
 
 ```ts
 interface SocketRoute {
-  eventType: string;                 // 内核事件名
-  socketEvent: string;               // 前端监听名（可与内核名不同）
+  eventType: string; // 内核事件名
+  socketEvent: string; // 前端监听名（可与内核名不同）
   rooms: (event) => string[] | null; // 目标房间
-  map?: (event, deps) => unknown;    // 载荷整形（可查库补标题）
-  effect?: (event, deps) => void;    // 副作用（落库、写通知）
-  description: string;               // 人类可读用途
-  mirrorToStaffRoom?: boolean;       // 额外把全量 payload 镜像到 presence-staff
+  map?: (event, deps) => unknown; // 载荷整形（可查库补标题）
+  effect?: (event, deps) => void; // 副作用（落库、写通知）
+  description: string; // 人类可读用途
+  mirrorToStaffRoom?: boolean; // 额外把全量 payload 镜像到 presence-staff
 }
 ```
 
@@ -69,10 +69,10 @@ interface SocketRoute {
 
 ## 3. 课堂动态流（Feed）
 
-| 组件 | 位置 | 作用 |
-| --- | --- | --- |
-| `ClassroomFeedService` | `packages/core/classroom-runtime/` 侧 | 订阅内核事件 → 落 `classroom_feed` 表 → 广播 `classroom:feed` |
-| 挂载 | `server.ts` L459-461 | `attachClassroomFeedService(feedService, kernelContainer.eventBus)` |
+| 组件                   | 位置                                  | 作用                                                                |
+| ---------------------- | ------------------------------------- | ------------------------------------------------------------------- |
+| `ClassroomFeedService` | `packages/core/classroom-runtime/` 侧 | 订阅内核事件 → 落 `classroom_feed` 表 → 广播 `classroom:feed`       |
+| 挂载                   | `server.ts` L459-461                  | `attachClassroomFeedService(feedService, kernelContainer.eventBus)` |
 
 它订阅的是**内核事件总线**而非路由表，所以 Feed 与实时推送是两条并行消费路径：
 改了 `SOCKET_ROUTES` 不影响 Feed 落库，反之亦然。
@@ -83,12 +83,12 @@ interface SocketRoute {
 
 `packages/core/presence-engine/`（13 文件 / 1,029 行）+ `server/presence.ts`（socket 处理器）。
 
-| 关注点 | 实现 |
-| --- | --- |
-| 在线判定 | socket 连接 + 心跳；断线后按 `OPENLEARN_CLASSROOM_GUARD_TIMEOUT_MS` 宽限 |
-| 身份绑定 | `socketAuthMiddleware`（`server.ts` L421）握手期确定，之后不可改 |
-| 学生端可见性 | 学生只能进自己的 `user-<id>` 与所在课节房间 |
-| 员工面板 | `PRESENCE_STAFF_ROOM`，`mirrorToStaffRoom: true` 的路由会把全量 payload 镜像过来 |
+| 关注点       | 实现                                                                             |
+| ------------ | -------------------------------------------------------------------------------- |
+| 在线判定     | socket 连接 + 心跳；断线后按 `OPENLEARN_CLASSROOM_GUARD_TIMEOUT_MS` 宽限         |
+| 身份绑定     | `socketAuthMiddleware`（`server.ts` L421）握手期确定，之后不可改                 |
+| 学生端可见性 | 学生只能进自己的 `user-<id>` 与所在课节房间                                      |
+| 员工面板     | `PRESENCE_STAFF_ROOM`，`mirrorToStaffRoom: true` 的路由会把全量 payload 镜像过来 |
 
 **安全要点**：`mustChangePassword` 会话在握手阶段就被拒（`server/middleware/auth.ts`），
 所以在线列表里不会出现「待改密」的种子账号。
@@ -109,15 +109,15 @@ icebreaker_checkins       lesson_checkins        lesson_preset_polls
 segment_gate_overrides    segment_visits
 ```
 
-| 能力 | 说明 |
-| --- | --- |
-| 随机点名 | `student_rollcalls` 表 + `rollcall` 类型白板元素；`persistRollcallPick`（`event-routing.ts` L189）落库 |
-| 抢答器 | `classroom_buzzers` |
-| 弹幕 | `classroom_danmaku` |
-| 快速投票 | `classroom_quick_polls` + `classroom_poll_votes` |
-| 出门条 | `classroom_exit_tickets` |
-| 课堂节奏信号 | `classroom_pacing_signals` |
-| 同伴互评 | `classroom_peer_review_tasks` / `reviews` / `rubric_dimensions` / `nominations` / `badges` |
+| 能力         | 说明                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| 随机点名     | `student_rollcalls` 表 + `rollcall` 类型白板元素；`persistRollcallPick`（`event-routing.ts` L189）落库 |
+| 抢答器       | `classroom_buzzers`                                                                                    |
+| 弹幕         | `classroom_danmaku`                                                                                    |
+| 快速投票     | `classroom_quick_polls` + `classroom_poll_votes`                                                       |
+| 出门条       | `classroom_exit_tickets`                                                                               |
+| 课堂节奏信号 | `classroom_pacing_signals`                                                                             |
+| 同伴互评     | `classroom_peer_review_tasks` / `reviews` / `rubric_dimensions` / `nominations` / `badges`             |
 
 **改动提示**：这些表都在 40 张黑名单之外，但**不等于插件可以写**。
 正确路径是调对应命令或 HTTP 路由，由服务层处理事务与广播。
@@ -139,11 +139,11 @@ segment_gate_overrides    segment_visits
 
 ## 7. 排障速查
 
-| 现象 | 首查 |
-| --- | --- |
-| 前端收不到事件 | 该事件是否在 `SOCKET_ROUTES` 里；`rooms` 是否返回了空数组 |
+| 现象                           | 首查                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| 前端收不到事件                 | 该事件是否在 `SOCKET_ROUTES` 里；`rooms` 是否返回了空数组                    |
 | 全班都收到了本该只给个人的消息 | `rooms` 用错了 `classRoom` 而非 `userRoom`（`assignment.graded` 是反例参照） |
-| 消息收到但没有 `_meta` | 走了手写 `io.to(...).emit(...)` 而非 `emitClassroomEvent` |
-| 白板拖动卡顿/闪烁 | `LAYOUT_ONLY_ELEMENT_TYPES` 缺新类型，导致每次布局变化都全量刷新 |
-| 在线列表缺人 | 握手期被 `socketAuthMiddleware` 拒绝（`mustChangePassword` / 无 session） |
-| 断线重连后状态不对 | 该状态是否只走 socket 未落库；正确做法是同时落表并由前端 `get_active_*` 补齐 |
+| 消息收到但没有 `_meta`         | 走了手写 `io.to(...).emit(...)` 而非 `emitClassroomEvent`                    |
+| 白板拖动卡顿/闪烁              | `LAYOUT_ONLY_ELEMENT_TYPES` 缺新类型，导致每次布局变化都全量刷新             |
+| 在线列表缺人                   | 握手期被 `socketAuthMiddleware` 拒绝（`mustChangePassword` / 无 session）    |
+| 断线重连后状态不对             | 该状态是否只走 socket 未落库；正确做法是同时落表并由前端 `get_active_*` 补齐 |

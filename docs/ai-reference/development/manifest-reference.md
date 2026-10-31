@@ -7,28 +7,28 @@
 
 ## 1. 顶层字段总表
 
-| 字段 | 类型 | 必填 | zod 约束 | 用途 |
-| --- | --- | --- | --- | --- |
-| `id` | `string` | ✅ | `.min(1)` + **不得含 `:`** | 全局唯一标识；命令命名空间前缀 |
-| `name` | `string` | ✅ | `.min(1)` | 显示名（支持中文） |
-| `version` | `string` | ✅ | `.min(1)`（不校验 semver 格式） | 版本 |
-| `main` | `string` | ✅ | `.min(1)` | 入口文件，ZIP 内相对路径，通常 `index.js` |
-| `icon` | `string` | ❌ | — | 图标名（Lucide）或 URL |
-| `description` | `string` | ❌ | — | 简介 |
-| `author` | `string` | ❌ | — | 作者 |
-| `requires` | `string[]` | ❌ | 正则见 §2 | 硬依赖的服务 Token |
-| `optional` | `string[]` | ❌ | 同上 | 软依赖；不满足时对应服务为 `null` |
-| `capabilitiesProposed` | `string[]` | ❌ | `z.array(z.string())` **无白名单** | 申请的能力 |
-| `network` | `{ outbound?: string[] }` | ❌ | — | 出站域名申请 |
-| `engines` | `{ openlearn: string }` | ❌ | `.min(1)` | 宿主版本范围（**不是** SDK 版本） |
-| `pluginDependencies` | `string[]` | ❌ | `.min(1)` | 依赖的其他插件 id |
-| `provides` | `string[]` | ❌ | `.min(1)` | 对外提供的服务 |
-| `configuration` | `{ properties?: Record<string, ConfigProperty> }` | ❌ | 见 §3 | 声明式配置项 |
-| `contributes` | `Record<string, Array<…>>` | ❌ | 见 §4 | 声明式贡献 |
-| `classroomTools` | `unknown[]` | ❌ | **无校验** | 旧式课堂工具（仍支持） |
-| `deploy` | `{ script?, staticRoute?, staticDir? }` | ❌ | — | 部署脚本 / 静态路由 |
-| `api` | `{ baseRoute?, routes? }` | ❌ | 见 §5 | REST 路由声明 |
-| `updateSource` | `{ type, repo }` | ❌ | 类型层有，**schema 无**（passthrough 保留） | 自动更新来源 |
+| 字段                   | 类型                                              | 必填 | zod 约束                                    | 用途                                      |
+| ---------------------- | ------------------------------------------------- | ---- | ------------------------------------------- | ----------------------------------------- |
+| `id`                   | `string`                                          | ✅   | `.min(1)` + **不得含 `:`**                  | 全局唯一标识；命令命名空间前缀            |
+| `name`                 | `string`                                          | ✅   | `.min(1)`                                   | 显示名（支持中文）                        |
+| `version`              | `string`                                          | ✅   | `.min(1)`（不校验 semver 格式）             | 版本                                      |
+| `main`                 | `string`                                          | ✅   | `.min(1)`                                   | 入口文件，ZIP 内相对路径，通常 `index.js` |
+| `icon`                 | `string`                                          | ❌   | —                                           | 图标名（Lucide）或 URL                    |
+| `description`          | `string`                                          | ❌   | —                                           | 简介                                      |
+| `author`               | `string`                                          | ❌   | —                                           | 作者                                      |
+| `requires`             | `string[]`                                        | ❌   | 正则见 §2                                   | 硬依赖的服务 Token                        |
+| `optional`             | `string[]`                                        | ❌   | 同上                                        | 软依赖；不满足时对应服务为 `null`         |
+| `capabilitiesProposed` | `string[]`                                        | ❌   | `z.array(z.string())` **无白名单**          | 申请的能力                                |
+| `network`              | `{ outbound?: string[] }`                         | ❌   | —                                           | 出站域名申请                              |
+| `engines`              | `{ openlearn: string }`                           | ❌   | `.min(1)`                                   | 宿主版本范围（**不是** SDK 版本）         |
+| `pluginDependencies`   | `string[]`                                        | ❌   | `.min(1)`                                   | 依赖的其他插件 id                         |
+| `provides`             | `string[]`                                        | ❌   | `.min(1)`                                   | 对外提供的服务                            |
+| `configuration`        | `{ properties?: Record<string, ConfigProperty> }` | ❌   | 见 §3                                       | 声明式配置项                              |
+| `contributes`          | `Record<string, Array<…>>`                        | ❌   | 见 §4                                       | 声明式贡献                                |
+| `classroomTools`       | `unknown[]`                                       | ❌   | **无校验**                                  | 旧式课堂工具（仍支持）                    |
+| `deploy`               | `{ script?, staticRoute?, staticDir? }`           | ❌   | —                                           | 部署脚本 / 静态路由                       |
+| `api`                  | `{ baseRoute?, routes? }`                         | ❌   | 见 §5                                       | REST 路由声明                             |
+| `updateSource`         | `{ type, repo }`                                  | ❌   | 类型层有，**schema 无**（passthrough 保留） | 自动更新来源                              |
 
 > 顶层是 `.passthrough()`（L841）：**未知字段保留**，所以 `icon`/`author`/`updateSource`/`executionMode` 等都能通过。
 > 但**不要依赖这一点**做校验 —— 缺字段不会被拦，错字段也不会被报。
@@ -41,15 +41,15 @@
 ^@[\w-]+\/[\w-]+:I\w+(?:@[\^~]?\d+\.\d+\.\d+(?:-[\w.]+)?)?$
 ```
 
-| 写法 | 合法 | 说明 |
-| --- | --- | --- |
-| `@openlearn/core:ICommandBusService` | ✅ | 无版本 |
-| `@openlearn/core:IDatabase@^1.0.0` | ✅ | caret 范围 |
-| `@acme/x:IFoo@1.2.3-pre.1` | ✅ | 预发布 |
-| `ICommandBusService` | ❌ | 缺 `@scope/domain` |
-| `@openlearn:ICommandBusService` | ❌ | 缺 `/domain` |
-| `@openlearn/core:CommandBus` | ❌ | 接口名必须以 `I` 开头 |
-| `@openlearn/core:IDatabase@1.0` | ❌ | 必须三段版本号 |
+| 写法                                 | 合法 | 说明                  |
+| ------------------------------------ | ---- | --------------------- |
+| `@openlearn/core:ICommandBusService` | ✅   | 无版本                |
+| `@openlearn/core:IDatabase@^1.0.0`   | ✅   | caret 范围            |
+| `@acme/x:IFoo@1.2.3-pre.1`           | ✅   | 预发布                |
+| `ICommandBusService`                 | ❌   | 缺 `@scope/domain`    |
+| `@openlearn:ICommandBusService`      | ❌   | 缺 `/domain`          |
+| `@openlearn/core:CommandBus`         | ❌   | 接口名必须以 `I` 开头 |
+| `@openlearn/core:IDatabase@1.0`      | ❌   | 必须三段版本号        |
 
 常用 Token 名对照见 [context-and-services.md](../plugin-system/context-and-services.md) §3.1。
 
@@ -73,14 +73,14 @@
 }
 ```
 
-| 键 | 允许值 | 说明 |
-| --- | --- | --- |
-| `type` | `string` \| `number` \| `boolean` \| `integer` | 必填 |
-| `default` | 任意 | 读取时的兜底值 |
-| `description` | string | 管理端展示 |
-| `enum` | `unknown[]` | 枚举约束 |
-| `minimum` / `maximum` | number | 数值范围 |
-| `scope` | `('platform'\|'school'\|'class')[]` | 允许覆盖的作用域，缺省 `['platform']` |
+| 键                    | 允许值                                         | 说明                                  |
+| --------------------- | ---------------------------------------------- | ------------------------------------- |
+| `type`                | `string` \| `number` \| `boolean` \| `integer` | 必填                                  |
+| `default`             | 任意                                           | 读取时的兜底值                        |
+| `description`         | string                                         | 管理端展示                            |
+| `enum`                | `unknown[]`                                    | 枚举约束                              |
+| `minimum` / `maximum` | number                                         | 数值范围                              |
+| `scope`               | `('platform'\|'school'\|'class')[]`            | 允许覆盖的作用域，缺省 `['platform']` |
 
 读取（`ctx.config.get(key, { classId })`）的优先级：**class > school > platform > default**。
 
@@ -92,10 +92,10 @@
 
 ### 4.1 两组键，行为不同
 
-| 组 | 数量 | 校验强度 | 未声明字段的处置 |
-| --- | --- | --- | --- |
-| A 严格键 | 71 | 每个键有专属 zod 对象 | **被 strip** |
-| B 宽松键 | 38 | `.object({id}).passthrough()` | 保留 |
+| 组       | 数量 | 校验强度                      | 未声明字段的处置 |
+| -------- | ---- | ----------------------------- | ---------------- |
+| A 严格键 | 71   | 每个键有专属 zod 对象         | **被 strip**     |
+| B 宽松键 | 38   | `.object({id}).passthrough()` | 保留             |
 
 来源：`manifest-schema.ts → contributesSchema`（L594）/ `frontendSlotsShape`（L542）。
 
@@ -104,29 +104,29 @@
 
 ### 4.2 常用 A 组条目的字段
 
-| 槽位键 | 字段 |
-| --- | --- |
-| `classroom.tool` | `id`*, `name`*, `icon`, `description`, `commandType`*, `payload` |
-| `teacher.tab` | `id`*, `label`*, `icon`, `position`, `view`, `route` |
-| `teacher.panel` | `id`*, `title`*, `icon`, `view` |
-| `teacher.dashboard.widget` | `id`*, `label`*, `icon`, `position`, `view` |
-| `student.view` | `id`*, `label`*, `icon`, `route`, `view` |
-| `student.lesson.tool` | `id`*, `label`*, `icon`, `view` |
-| `help.plugin_docs` | `id`*, `title`*, `description`, `markdownUrl` |
-| `command_palette.item` | `id`*, `title`*, `category`, `description`, `keywords`, `commandType`, `shortcut`, `payload` |
-| `quick_insert.item` | `id`*, `title`*, `category`, `description`, `icon`, `keywords`, `commandType`, `payload` |
-| `ai.prompt.template` | `id`*, `title`*, `description`, `category`, `prompt`*, `parameters[]` |
-| `ai.skill.provider` | `id`*, `name`*, `description`*, `parametersSchema`, `commandType` |
-| `classroom.seating.toolbar` | `id`*, `label`*, `icon`, `commandType` |
-| `classroom.seating.legend` | `id`*, `label`*, `color`, `icon` |
-| `classroom.seating.seat_badge` | `id`*, `label`*, `icon` |
-| `classroom.seating.seat_actions` | `id`*, `label`*, `icon`, `commandType` |
-| `classroom.seating.summary` | `id`*, `title`*, `icon` |
-| `timeline.segments` | `id`*, `labelZh`*, `labelEn`*, `icon`, `color`, `defaultDurationMin` |
-| `palette.items` | `id`*, `type`*, `labelZh`*, `labelEn`*, `icon`, `category`, `defaultData` |
-| `locales` | `Record<lang, string \| Record<string,string>>` |
-| `classroom.attribution.award` | `id`*, `dimensionId`*, `name`*, `description`*, `icon`, `defaultDeltaPoints`* |
-| `student.profile.dimension` | `id`*, `label`*, `key`*, `maxScore`, `defaultWeight`, `icon`, `category` |
+| 槽位键                           | 字段                                                                                         |
+| -------------------------------- | -------------------------------------------------------------------------------------------- |
+| `classroom.tool`                 | `id`_, `name`_, `icon`, `description`, `commandType`*, `payload`                             |
+| `teacher.tab`                    | `id`_, `label`_, `icon`, `position`, `view`, `route`                                         |
+| `teacher.panel`                  | `id`_, `title`_, `icon`, `view`                                                              |
+| `teacher.dashboard.widget`       | `id`_, `label`_, `icon`, `position`, `view`                                                  |
+| `student.view`                   | `id`_, `label`_, `icon`, `route`, `view`                                                     |
+| `student.lesson.tool`            | `id`_, `label`_, `icon`, `view`                                                              |
+| `help.plugin_docs`               | `id`_, `title`_, `description`, `markdownUrl`                                                |
+| `command_palette.item`           | `id`_, `title`_, `category`, `description`, `keywords`, `commandType`, `shortcut`, `payload` |
+| `quick_insert.item`              | `id`_, `title`_, `category`, `description`, `icon`, `keywords`, `commandType`, `payload`     |
+| `ai.prompt.template`             | `id`_, `title`_, `description`, `category`, `prompt`*, `parameters[]`                        |
+| `ai.skill.provider`              | `id`_, `name`_, `description`*, `parametersSchema`, `commandType`                            |
+| `classroom.seating.toolbar`      | `id`_, `label`_, `icon`, `commandType`                                                       |
+| `classroom.seating.legend`       | `id`_, `label`_, `color`, `icon`                                                             |
+| `classroom.seating.seat_badge`   | `id`_, `label`_, `icon`                                                                      |
+| `classroom.seating.seat_actions` | `id`_, `label`_, `icon`, `commandType`                                                       |
+| `classroom.seating.summary`      | `id`_, `title`_, `icon`                                                                      |
+| `timeline.segments`              | `id`_, `labelZh`_, `labelEn`*, `icon`, `color`, `defaultDurationMin`                         |
+| `palette.items`                  | `id`_, `type`_, `labelZh`_, `labelEn`_, `icon`, `category`, `defaultData`                    |
+| `locales`                        | `Record<lang, string \| Record<string,string>>`                                              |
+| `classroom.attribution.award`    | `id`_, `dimensionId`_, `name`_, `description`_, `icon`, `defaultDeltaPoints`*                |
+| `student.profile.dimension`      | `id`_, `label`_, `key`*, `maxScore`, `defaultWeight`, `icon`, `category`                     |
 
 `*` = 必填。完整 71 组见源码 L594-720；不要凭记忆猜字段名。
 
@@ -141,9 +141,7 @@
 
 ```json
 {
-  "classroomTools": [
-    { "id": "lab-seat", "name": "机房座位", "icon": "Armchair", "commandType": "lab_seat.open_panel" }
-  ]
+  "classroomTools": [{ "id": "lab-seat", "name": "机房座位", "icon": "Armchair", "commandType": "lab_seat.open_panel" }]
 }
 ```
 
@@ -159,20 +157,20 @@
 {
   "api": {
     "routes": [
-      { "method": "GET",  "path": "/roster/:classId", "auth": true, "roles": ["teacher","administrator"] },
+      { "method": "GET", "path": "/roster/:classId", "auth": true, "roles": ["teacher", "administrator"] },
       { "method": "POST", "path": "/check-in", "rateLimit": { "windowMs": 60000, "max": 300 } }
     ]
   }
 }
 ```
 
-| 字段 | 约束 | 说明 |
-| --- | --- | --- |
-| `method` | `GET\|POST\|PUT\|PATCH\|DELETE` | 枚举 |
-| `path` | `.min(1)` | 相对路径（以 `/` 开头） |
-| `auth` | boolean，默认 true | `false` = **申请**匿名，需管理员批准 |
-| `roles` | `string[]` | 允许角色，不匹配 403 |
-| `rateLimit` | `{ windowMs?, max? }` | 默认 60000ms / 120 次 |
+| 字段        | 约束                            | 说明                                 |
+| ----------- | ------------------------------- | ------------------------------------ |
+| `method`    | `GET\|POST\|PUT\|PATCH\|DELETE` | 枚举                                 |
+| `path`      | `.min(1)`                       | 相对路径（以 `/` 开头）              |
+| `auth`      | boolean，默认 true              | `false` = **申请**匿名，需管理员批准 |
+| `roles`     | `string[]`                      | 允许角色，不匹配 403                 |
+| `rateLimit` | `{ windowMs?, max? }`           | 默认 60000ms / 120 次                |
 
 **`api.baseRoute` 是 no-op**：真实挂载路径恒为 `/api/plugins/{manifest.id}/*`（`manifest-schema.ts` L747-758 注释）。
 install 时会对声明 `baseRoute` 的 manifest 输出一次告警。
@@ -183,12 +181,12 @@ install 时会对声明 `baseRoute` 的 manifest 输出一次告警。
 
 按**实际用到的 API 的最低宿主版本**填，不要一律抄旧值。
 
-| 用到的能力 | 最低宿主版本 |
-| --- | --- |
-| `ctx.log` / `ctx.config` / `ctx.db` | `>=0.2.3` |
-| `ctx.http`（`api.routes`） | `>=0.3.11` |
-| 声明式 `contributes` / 前端沙箱行为 | `>=0.7.0` |
-| `view` 字段（双轨制 UI） | `>=0.7.6` |
+| 用到的能力                          | 最低宿主版本 |
+| ----------------------------------- | ------------ |
+| `ctx.log` / `ctx.config` / `ctx.db` | `>=0.2.3`    |
+| `ctx.http`（`api.routes`）          | `>=0.3.11`   |
+| 声明式 `contributes` / 前端沙箱行为 | `>=0.7.0`    |
+| `view` 字段（双轨制 UI）            | `>=0.7.6`    |
 
 写低了不会报错，但插件会在旧宿主上装着、用到新 API 时才崩。写高了会被拒装 —— 这是想要的行为。
 
@@ -223,9 +221,7 @@ install 时会对声明 `baseRoute` 的 manifest 输出一次告警。
     "classroom.seating.toolbar": [
       { "id": "assign", "label": "一键排座", "icon": "Armchair", "commandType": "lab_seat.assign_seats" }
     ],
-    "teacher.tab": [
-      { "id": "seat-panel", "label": "机房座位", "icon": "Armchair", "view": "storage/seat.html" }
-    ]
+    "teacher.tab": [{ "id": "seat-panel", "label": "机房座位", "icon": "Armchair", "view": "storage/seat.html" }]
   }
 }
 ```

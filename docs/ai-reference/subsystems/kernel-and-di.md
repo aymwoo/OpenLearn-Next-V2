@@ -9,13 +9,13 @@
 `packages/core/kernel/index.ts`（749 行）是整个后端的中枢。它**不是**服务定位器，而是装配器：
 构造时把各子系统实例注册进 DI，并把命令拦截器接上。
 
-| 职责 | 位置 |
-| --- | --- |
-| 构造 `EventBus` / `CommandBus` / `ActionRegistry` / `CapabilityGuard` / `ProcessManager` / `NodeEsmLoader` | L2-14 |
-| 注册 20+ 内核服务到 `ServiceRegistry` | L30-60 的 Token 导入 + `serviceRegistry.register(...)` 序列 |
-| 安装命令拦截器（4 道闸门） | L303-401 `commandBus.setInterceptor` |
-| 引导内置系统插件 | L435 `bootstrapSystemPlugins()` |
-| 注册测评题型注册表 | L300（`IAssessmentGraderRegistryToken`） |
+| 职责                                                                                                       | 位置                                                        |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 构造 `EventBus` / `CommandBus` / `ActionRegistry` / `CapabilityGuard` / `ProcessManager` / `NodeEsmLoader` | L2-14                                                       |
+| 注册 20+ 内核服务到 `ServiceRegistry`                                                                      | L30-60 的 Token 导入 + `serviceRegistry.register(...)` 序列 |
+| 安装命令拦截器（4 道闸门）                                                                                 | L303-401 `commandBus.setInterceptor`                        |
+| 引导内置系统插件                                                                                           | L435 `bootstrapSystemPlugins()`                             |
+| 注册测评题型注册表                                                                                         | L300（`IAssessmentGraderRegistryToken`）                    |
 
 **为什么测评注册表在这里注册而不是 `server.ts`**：`server/__tests__/canary/` 会断言
 `PLUGIN_RESOLVABLE_TOKENS` 全部可解析，注册点必须早于 canary 检查。
@@ -25,17 +25,17 @@
 `packages/plugins/` 下 9 个文件，全部在 `bootstrapSystemPlugins()` 里被 `import` 并注册
 （路径：`packages/plugins/`，与 `packages/core` 同属内核侧，不是"第三方"）：
 
-| 文件 | 行数 | 作用 |
-| --- | --- | --- |
-| `builtin.ts` | 2,174 | 基础业务命令（课节、班级、考勤等） |
-| `assignment-eval.ts` | 1,263 | 作业批改（含 AI 评分） |
-| `management.ts` | 1,180 | 管理类命令（用户、导入导出） |
-| `courseware-score.ts` | 757 | 课件评分 |
-| `ai-planner.ts` | 269 | AI 教学规划 |
-| `score-monitor-script.ts` | 247 | 成绩监控脚本 |
-| `vfs.ts` | 215 | 虚拟文件系统 |
-| `process.ts` | 170 | 进程管理命令 |
-| `ai-submit-injector.ts` | 173 | 提交注入 |
+| 文件                      | 行数  | 作用                               |
+| ------------------------- | ----- | ---------------------------------- |
+| `builtin.ts`              | 2,174 | 基础业务命令（课节、班级、考勤等） |
+| `assignment-eval.ts`      | 1,263 | 作业批改（含 AI 评分）             |
+| `management.ts`           | 1,180 | 管理类命令（用户、导入导出）       |
+| `courseware-score.ts`     | 757   | 课件评分                           |
+| `ai-planner.ts`           | 269   | AI 教学规划                        |
+| `score-monitor-script.ts` | 247   | 成绩监控脚本                       |
+| `vfs.ts`                  | 215   | 虚拟文件系统                       |
+| `process.ts`              | 170   | 进程管理命令                       |
+| `ai-submit-injector.ts`   | 173   | 提交注入                           |
 
 这些插件都在 `packages/plugins/` 内 ⇒ 命中「文件位置即信任」⇒ 走 `inline` 模式（见
 [plugin-runtime-planes.md](../architecture/plugin-runtime-planes.md) §2）。
@@ -52,7 +52,7 @@
 const TOKEN_NAME_RE = /^(?:@[a-zA-Z0-9_-]+\/)?([a-zA-Z0-9_-]+:[a-zA-Z0-9_]+)$/;
 
 export class Token<T> {
-  readonly __serviceType?: T;   // 幻影类型，运行期不存在
+  readonly __serviceType?: T; // 幻影类型，运行期不存在
 }
 ```
 
@@ -66,20 +66,20 @@ export class Token<T> {
 
 `packages/core/di/service-registry.ts → class ServiceRegistry`（L33）：
 
-| 方法 | 行为 |
-| --- | --- |
+| 方法                               | 行为                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------- |
 | `register(token, instance, opts?)` | 重复注册抛 `DuplicateRegistrationError`；缺依赖抛 `MissingDependencyError` |
-| `resolve(token)` | 未注册抛 `ServiceNotFoundError` |
-| 依赖图 | 注册时双向登记 `requires` / `dependents`（`depGraph`，L42） |
+| `resolve(token)`                   | 未注册抛 `ServiceNotFoundError`                                            |
+| 依赖图                             | 注册时双向登记 `requires` / `dependents`（`depGraph`，L42）                |
 
 ### 2.3 三个 Token 口径（务必分清）
 
-| 口径 | 数量 | 含义 |
-| --- | --- | --- |
-| SDK **值导出** | 32 | `packages/plugin-sdk/index.ts` 的 `export { ...Token }` |
-| 主进程可按对象 resolve | 30 | `packages/core/di/interfaces.ts → PLUGIN_RESOLVABLE_TOKENS`（L946） |
-| 主进程可按名字 resolve | 31 | 同上 + `@openlearn/activity-ecosystem:IActivityRegistry` |
-| 沙箱内可用 | 9 | `packages/core/worker-runtime/worker-manager.ts → BASE_WORKER_SERVICE_TOKENS`（L77-87） |
+| 口径                   | 数量 | 含义                                                                                    |
+| ---------------------- | ---- | --------------------------------------------------------------------------------------- |
+| SDK **值导出**         | 32   | `packages/plugin-sdk/index.ts` 的 `export { ...Token }`                                 |
+| 主进程可按对象 resolve | 30   | `packages/core/di/interfaces.ts → PLUGIN_RESOLVABLE_TOKENS`（L946）                     |
+| 主进程可按名字 resolve | 31   | 同上 + `@openlearn/activity-ecosystem:IActivityRegistry`                                |
+| 沙箱内可用             | 9    | `packages/core/worker-runtime/worker-manager.ts → BASE_WORKER_SERVICE_TOKENS`（L77-87） |
 
 两个已定性的例外：
 
@@ -95,13 +95,13 @@ export class Token<T> {
 
 `packages/core/command-bus/index.ts`（156 行，精简）。
 
-| 方法 | 说明 |
-| --- | --- |
-| `createCommand(type, payload, actorId)` | 生成 `id`（uuid）、`timestamp` |
-| `registerHandler(type, handler)` | handler 形如 `{ execute(command) }` |
-| `execute(command)` | 先跑 interceptor，再找 handler |
-| `setInterceptor(fn)` | **全局唯一**，内核在 L303 设置；前端/插件不可再设 |
-| `registerMiddleware(fn)` | 中间件链，`MiddlewareError` 在 `plugin-host/errors.ts` L174 |
+| 方法                                    | 说明                                                        |
+| --------------------------------------- | ----------------------------------------------------------- |
+| `createCommand(type, payload, actorId)` | 生成 `id`（uuid）、`timestamp`                              |
+| `registerHandler(type, handler)`        | handler 形如 `{ execute(command) }`                         |
+| `execute(command)`                      | 先跑 interceptor，再找 handler                              |
+| `setInterceptor(fn)`                    | **全局唯一**，内核在 L303 设置；前端/插件不可再设           |
+| `registerMiddleware(fn)`                | 中间件链，`MiddlewareError` 在 `plugin-host/errors.ts` L174 |
 
 **注意**：`setInterceptor` 是单值不是数组 —— 后设置的会覆盖前面的。
 这是 default-deny 能生效的前提，也意味着**不要**在业务代码里调它。
@@ -124,12 +124,12 @@ unsubscribe(eventType: string, subscriber: EventSubscriber): void | Promise<void
 { id: string; type: string; source: string; payload: T; timestamp: number; correlationId?: string }
 ```
 
-| 事实 | 说明 |
-| --- | --- |
-| 支持通配 `*` | `publish` 会投给精确匹配 + `*` 订阅者 |
-| `source` 约定 | 插件用 `plugin.${ctx.pluginId}`（DB 行 UUID），内核用 `kernel.*` |
-| `correlationId` | 由命令派发时应传 `command.id`，用于把「一条命令引发的所有事件」串起来 |
-| 事件保留 | `packages/core/db/event-retention.ts`，天数由 `OPENLEARN_EVENT_RETENTION_DAYS` 控制 |
+| 事实            | 说明                                                                                |
+| --------------- | ----------------------------------------------------------------------------------- |
+| 支持通配 `*`    | `publish` 会投给精确匹配 + `*` 订阅者                                               |
+| `source` 约定   | 插件用 `plugin.${ctx.pluginId}`（DB 行 UUID），内核用 `kernel.*`                    |
+| `correlationId` | 由命令派发时应传 `command.id`，用于把「一条命令引发的所有事件」串起来               |
+| 事件保留        | `packages/core/db/event-retention.ts`，天数由 `OPENLEARN_EVENT_RETENTION_DAYS` 控制 |
 
 ---
 
@@ -137,11 +137,11 @@ unsubscribe(eventType: string, subscriber: EventSubscriber): void | Promise<void
 
 `packages/core/capability/index.ts`（776 行内）。
 
-| 方法 | 说明 |
-| --- | --- |
-| `grant(actorId, cap)` | 激活插件时由 `lifecycle.ts → grantCapabilities` 调用 |
-| `check(actorId, requiredCap)` | 拦截器第 3 道闸门调用 |
-| `revokeAll(actorId)` | 停用时回收 |
+| 方法                          | 说明                                                 |
+| ----------------------------- | ---------------------------------------------------- |
+| `grant(actorId, cap)`         | 激活插件时由 `lifecycle.ts → grantCapabilities` 调用 |
+| `check(actorId, requiredCap)` | 拦截器第 3 道闸门调用                                |
+| `revokeAll(actorId)`          | 停用时回收                                           |
 
 19 条真值 + 8 条方法级 `CAP_*` + 7 条运行时权限的完整表在
 [../plugin-system/capabilities-and-security.md](../plugin-system/capabilities-and-security.md) §1-§3。

@@ -9,15 +9,15 @@
 
 ## 0. 版本与取证坐标
 
-| 项 | 值 | 取证方式 |
-| --- | --- | --- |
-| 平台版本 | `openlearn-next` **0.7.8** | 仓库根 `package.json` → `version` |
-| Git commit | `4f41c9b` | `git log -1 --oneline` |
-| Plugin SDK | **3.7.5** | `packages/plugin-sdk/package.json` |
-| plugin-test-kit | **3.3.3** | `packages/plugin-test-kit/package.json` |
-| Node | **22**（`.nvmrc`） | CI 与 Dockerfile 均钉 22 |
-| 分析日期 | 2026-10-31 | — |
-| 索引产物 | `.repomix/openlearn-next.repo.pack.md`（1,688 文件 / 4.46M tokens）+ `.repomix/plugin-subsystem.pack.md`（193 文件 / 628k tokens） | repomix 1.18.1 |
+| 项              | 值                                                                                                                                 | 取证方式                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 平台版本        | `openlearn-next` **0.7.8**                                                                                                         | 仓库根 `package.json` → `version`       |
+| Git commit      | `4f41c9b`                                                                                                                          | `git log -1 --oneline`                  |
+| Plugin SDK      | **3.7.5**                                                                                                                          | `packages/plugin-sdk/package.json`      |
+| plugin-test-kit | **3.3.3**                                                                                                                          | `packages/plugin-test-kit/package.json` |
+| Node            | **22**（`.nvmrc`）                                                                                                                 | CI 与 Dockerfile 均钉 22                |
+| 分析日期        | 2026-10-31                                                                                                                         | —                                       |
+| 索引产物        | `.repomix/openlearn-next.repo.pack.md`（1,688 文件 / 4.46M tokens）+ `.repomix/plugin-subsystem.pack.md`（193 文件 / 628k tokens） | repomix 1.18.1                          |
 
 **取证坐标制式**（全文档统一）：
 
@@ -32,12 +32,12 @@
 
 **证据状态标记**（逐条结论必带其一）：
 
-| 标记 | 含义 |
-| --- | --- |
+| 标记     | 含义                              |
+| -------- | --------------------------------- |
 | `已验证` | 有实现代码 + 调用链，或有测试证据 |
-| `推断` | 由类型/调用关系推导，未运行验证 |
-| `待确认` | 未找到足够证据，不得据此编码 |
-| `不适用` | 经检查该机制在目标仓库不存在 |
+| `推断`   | 由类型/调用关系推导，未运行验证   |
+| `待确认` | 未找到足够证据，不得据此编码      |
+| `不适用` | 经检查该机制在目标仓库不存在      |
 
 ---
 
@@ -48,35 +48,35 @@
 
 ### 1.1 平台开发任务
 
-| 我要做的事 | 先读 | 再读 |
-| --- | --- | --- |
-| 搞清整体分层与进程边界 | [architecture/platform-overview.md](architecture/platform-overview.md) | [architecture/plugin-runtime-planes.md](architecture/plugin-runtime-planes.md) |
-| 找一个模块在哪 | [architecture/module-map.md](architecture/module-map.md) | — |
-| 排查「接口为什么 403 / 500 / 点了没反应」 | [architecture/request-lifecycle.md](architecture/request-lifecycle.md) | [plugin-system/error-handling-and-cleanup.md](plugin-system/error-handling-and-cleanup.md) |
-| 改内核 / 加一个 DI 服务 | [subsystems/kernel-and-di.md](subsystems/kernel-and-di.md) | [api/configuration.md](api/configuration.md) |
-| 改表 / 写迁移 / 查保留策略 | [subsystems/data-and-migrations.md](subsystems/data-and-migrations.md) | — |
-| 加一条实时推送 | [subsystems/realtime-and-events.md](subsystems/realtime-and-events.md) | [architecture/request-lifecycle.md](architecture/request-lifecycle.md) §4 |
-| 改 AI / 测评 / 作业评分 | [subsystems/ai-and-assessment.md](subsystems/ai-and-assessment.md) | — |
-| 改课堂 / 课节 / 白板 | [subsystems/classroom-and-whiteboard.md](subsystems/classroom-and-whiteboard.md) | — |
-| 动安全策略 / 限流 / 数据范围 | [subsystems/observability-and-security.md](subsystems/observability-and-security.md) | — |
-| 查 HTTP 端点 | [api/http-api.md](api/http-api.md) | — |
-| 查命令 / 事件 | [api/commands-and-events.md](api/commands-and-events.md) | — |
-| 查环境变量 | [api/configuration.md](api/configuration.md) | — |
-| 构建 / 测试 / 部署 | [development/build-and-deploy.md](development/build-and-deploy.md) | — |
+| 我要做的事                                | 先读                                                                                 | 再读                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 搞清整体分层与进程边界                    | [architecture/platform-overview.md](architecture/platform-overview.md)               | [architecture/plugin-runtime-planes.md](architecture/plugin-runtime-planes.md)             |
+| 找一个模块在哪                            | [architecture/module-map.md](architecture/module-map.md)                             | —                                                                                          |
+| 排查「接口为什么 403 / 500 / 点了没反应」 | [architecture/request-lifecycle.md](architecture/request-lifecycle.md)               | [plugin-system/error-handling-and-cleanup.md](plugin-system/error-handling-and-cleanup.md) |
+| 改内核 / 加一个 DI 服务                   | [subsystems/kernel-and-di.md](subsystems/kernel-and-di.md)                           | [api/configuration.md](api/configuration.md)                                               |
+| 改表 / 写迁移 / 查保留策略                | [subsystems/data-and-migrations.md](subsystems/data-and-migrations.md)               | —                                                                                          |
+| 加一条实时推送                            | [subsystems/realtime-and-events.md](subsystems/realtime-and-events.md)               | [architecture/request-lifecycle.md](architecture/request-lifecycle.md) §4                  |
+| 改 AI / 测评 / 作业评分                   | [subsystems/ai-and-assessment.md](subsystems/ai-and-assessment.md)                   | —                                                                                          |
+| 改课堂 / 课节 / 白板                      | [subsystems/classroom-and-whiteboard.md](subsystems/classroom-and-whiteboard.md)     | —                                                                                          |
+| 动安全策略 / 限流 / 数据范围              | [subsystems/observability-and-security.md](subsystems/observability-and-security.md) | —                                                                                          |
+| 查 HTTP 端点                              | [api/http-api.md](api/http-api.md)                                                   | —                                                                                          |
+| 查命令 / 事件                             | [api/commands-and-events.md](api/commands-and-events.md)                             | —                                                                                          |
+| 查环境变量                                | [api/configuration.md](api/configuration.md)                                         | —                                                                                          |
+| 构建 / 测试 / 部署                        | [development/build-and-deploy.md](development/build-and-deploy.md)                   | —                                                                                          |
 
 ### 1.2 插件开发任务
 
-| 我要做的事 | 先读 | 再读 |
-| --- | --- | --- |
-| 从零建一个插件 | [development/getting-started.md](development/getting-started.md) | [examples/minimal-plugin.md](examples/minimal-plugin.md) |
-| 写 `manifest.json` | [development/manifest-reference.md](development/manifest-reference.md) | [plugin-system/registration-and-loading.md](plugin-system/registration-and-loading.md) |
-| 查某个 API 的签名 | [development/api-reference.md](development/api-reference.md) | [plugin-system/context-and-services.md](plugin-system/context-and-services.md) |
-| 往界面上塞 UI | [development/ui-extension-guide.md](development/ui-extension-guide.md) | [plugin-system/extension-points-and-slots.md](plugin-system/extension-points-and-slots.md) |
-| 搞清插件何时激活/停用 | [plugin-system/lifecycle.md](plugin-system/lifecycle.md) | [architecture/execution-flows.md](architecture/execution-flows.md) |
-| 激活报 capability denied | [plugin-system/capabilities-and-security.md](plugin-system/capabilities-and-security.md) | [development/troubleshooting.md](development/troubleshooting.md) |
-| 写插件测试 | [development/testing-guide.md](development/testing-guide.md) | — |
-| 抄一个真实插件 | [examples/lab-seat-walkthrough.md](examples/lab-seat-walkthrough.md) | — |
-| 核实一条结论 | [evidence/source-index.md](evidence/source-index.md) | [evidence/unresolved-questions.md](evidence/unresolved-questions.md) |
+| 我要做的事               | 先读                                                                                     | 再读                                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 从零建一个插件           | [development/getting-started.md](development/getting-started.md)                         | [examples/minimal-plugin.md](examples/minimal-plugin.md)                                   |
+| 写 `manifest.json`       | [development/manifest-reference.md](development/manifest-reference.md)                   | [plugin-system/registration-and-loading.md](plugin-system/registration-and-loading.md)     |
+| 查某个 API 的签名        | [development/api-reference.md](development/api-reference.md)                             | [plugin-system/context-and-services.md](plugin-system/context-and-services.md)             |
+| 往界面上塞 UI            | [development/ui-extension-guide.md](development/ui-extension-guide.md)                   | [plugin-system/extension-points-and-slots.md](plugin-system/extension-points-and-slots.md) |
+| 搞清插件何时激活/停用    | [plugin-system/lifecycle.md](plugin-system/lifecycle.md)                                 | [architecture/execution-flows.md](architecture/execution-flows.md)                         |
+| 激活报 capability denied | [plugin-system/capabilities-and-security.md](plugin-system/capabilities-and-security.md) | [development/troubleshooting.md](development/troubleshooting.md)                           |
+| 写插件测试               | [development/testing-guide.md](development/testing-guide.md)                             | —                                                                                          |
+| 抄一个真实插件           | [examples/lab-seat-walkthrough.md](examples/lab-seat-walkthrough.md)                     | —                                                                                          |
+| 核实一条结论             | [evidence/source-index.md](evidence/source-index.md)                                     | [evidence/unresolved-questions.md](evidence/unresolved-questions.md)                       |
 
 ---
 
@@ -132,10 +132,10 @@ docs/ai-reference/
 本仓库 `docs/` 下已有一套**面向人**的 Sphinx 文档（发布到 readthedocs），
 本目录是**面向 AI** 的平行层，两者不是替代关系。
 
-| 场景 | 用哪个 |
-| --- | --- |
-| 给新同事讲架构、写方案 | `docs/architecture/*.md`（Sphinx，有图有叙事） |
-| AI Agent 定位代码、核对签名、查错误码 | **本目录**（有坐标、有真值表、有排错树） |
+| 场景                                     | 用哪个                                            |
+| ---------------------------------------- | ------------------------------------------------- |
+| 给新同事讲架构、写方案                   | `docs/architecture/*.md`（Sphinx，有图有叙事）    |
+| AI Agent 定位代码、核对签名、查错误码    | **本目录**（有坐标、有真值表、有排错树）          |
 | 查机器可读真值（槽位数、能力数、禁写表） | `docs/agent/contracts/*.json`（本文档的共同上游） |
 
 **冲突裁决优先级**：
@@ -184,13 +184,13 @@ docs/ai-reference/
 
 ## 6. 一页速查
 
-| 问题 | 答案 | 出处 |
-| --- | --- | --- |
-| 规模 | 约 228k 行 TS/TSX；86 张表；313 HTTP 端点；84 命令（84 描述符）；19 条 socket 路由 | [platform-overview.md](architecture/platform-overview.md) §1 |
-| 内核在哪个文件 | `packages/core/kernel/index.ts`（749 行） | [kernel-and-di.md](subsystems/kernel-and-di.md) §1 |
-| 命令入口 | `POST /api/commands`（`server/routes/os.ts` L112） | [request-lifecycle.md](architecture/request-lifecycle.md) §3 |
-| 命令超时 | 路由层 10s；插件激活/停用 5s | 同上 / [plugin-system/lifecycle.md](plugin-system/lifecycle.md) |
-| 前端入口 | `src/App.tsx`（157 行）+ `src/components/AppShell.tsx`（35 行） | [platform-overview.md](architecture/platform-overview.md) §6 |
-| 开发端口 | 9000 | [development/build-and-deploy.md](development/build-and-deploy.md) |
-| 数据库文件 | `packages/core/db/educational_os.db` | [data-and-migrations.md](subsystems/data-and-migrations.md) §1 |
-| 真值来源 | `docs/agent/contracts/*.json`（7 个） | [module-map.md](architecture/module-map.md) §5 |
+| 问题           | 答案                                                                               | 出处                                                               |
+| -------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 规模           | 约 228k 行 TS/TSX；86 张表；313 HTTP 端点；84 命令（84 描述符）；19 条 socket 路由 | [platform-overview.md](architecture/platform-overview.md) §1       |
+| 内核在哪个文件 | `packages/core/kernel/index.ts`（749 行）                                          | [kernel-and-di.md](subsystems/kernel-and-di.md) §1                 |
+| 命令入口       | `POST /api/commands`（`server/routes/os.ts` L112）                                 | [request-lifecycle.md](architecture/request-lifecycle.md) §3       |
+| 命令超时       | 路由层 10s；插件激活/停用 5s                                                       | 同上 / [plugin-system/lifecycle.md](plugin-system/lifecycle.md)    |
+| 前端入口       | `src/App.tsx`（157 行）+ `src/components/AppShell.tsx`（35 行）                    | [platform-overview.md](architecture/platform-overview.md) §6       |
+| 开发端口       | 9000                                                                               | [development/build-and-deploy.md](development/build-and-deploy.md) |
+| 数据库文件     | `packages/core/db/educational_os.db`                                               | [data-and-migrations.md](subsystems/data-and-migrations.md) §1     |
+| 真值来源       | `docs/agent/contracts/*.json`（7 个）                                              | [module-map.md](architecture/module-map.md) §5                     |

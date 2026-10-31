@@ -75,10 +75,7 @@ plugin-hello/
   "author": "acme",
   "main": "index.js",
   "engines": { "openlearn": ">=0.7.0" },
-  "requires": [
-    "@openlearn/core:ICommandBusService@^1.0.0",
-    "@openlearn/core:IActionRegistryService@^1.0.0"
-  ],
+  "requires": ["@openlearn/core:ICommandBusService@^1.0.0", "@openlearn/core:IActionRegistryService@^1.0.0"],
   "capabilitiesProposed": ["lesson:read"],
   "contributes": {
     "command_palette.item": [
@@ -96,14 +93,14 @@ plugin-hello/
 
 逐条说明：
 
-| 字段 | 为什么这么写 |
-| --- | --- |
-| `main` | **必填**，指向 ZIP 内入口；CLI 产出 `index.js` |
-| `engines` | 用了 `contributes`（0.7.0+）与命令面板，故最低 0.7.0 |
-| `requires` | 用到的两个服务 Token，格式必须过 `^@[\w-]+\/[\w-]+:I\w+…$` |
-| `capabilitiesProposed` | **非空**是关键：`process` 模式下 `actionRegistry.register` 属于非 `get*` RPC，空能力会 500 |
-| `lesson:read` | 19 条命令能力之一，语义最轻，够用即可 |
-| `contributes['command_palette.item']` | A 组严格键；`commandType` 写短名，宿主自动加前缀 |
+| 字段                                  | 为什么这么写                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `main`                                | **必填**，指向 ZIP 内入口；CLI 产出 `index.js`                                             |
+| `engines`                             | 用了 `contributes`（0.7.0+）与命令面板，故最低 0.7.0                                       |
+| `requires`                            | 用到的两个服务 Token，格式必须过 `^@[\w-]+\/[\w-]+:I\w+…$`                                 |
+| `capabilitiesProposed`                | **非空**是关键：`process` 模式下 `actionRegistry.register` 属于非 `get*` RPC，空能力会 500 |
+| `lesson:read`                         | 19 条命令能力之一，语义最轻，够用即可                                                      |
+| `contributes['command_palette.item']` | A 组严格键；`commandType` 写短名，宿主自动加前缀                                           |
 
 ---
 
@@ -119,10 +116,7 @@ export default {
     version: '0.1.0',
     main: 'index.js',
     engines: { openlearn: '>=0.7.0' },
-    requires: [
-      '@openlearn/core:ICommandBusService@^1.0.0',
-      '@openlearn/core:IActionRegistryService@^1.0.0',
-    ],
+    requires: ['@openlearn/core:ICommandBusService@^1.0.0', '@openlearn/core:IActionRegistryService@^1.0.0'],
     capabilitiesProposed: ['lesson:read'],
     contributes: {
       'command_palette.item': [
@@ -150,15 +144,15 @@ export default {
     // ① 描述符：default-deny 的放行凭据
     await registry.register({
       id: 'hello.ping',
-      commandType: 'hello.ping',          // 短名；宿主补成 @acme/plugin-hello.hello.ping
+      commandType: 'hello.ping', // 短名；宿主补成 @acme/plugin-hello.hello.ping
       description: '连通性自检：回显传入的 msg',
       inputSchema: {
         type: 'object',
         properties: { msg: { type: 'string', description: '要回显的文本' } },
         required: [],
       },
-      capabilityRequired: 'lesson:read',  // 必须是 19 条真值之一
-      exposeToAgent: true,                // 进 AI 工具箱（需 agent:tool 才不降级）
+      capabilityRequired: 'lesson:read', // 必须是 19 条真值之一
+      exposeToAgent: true, // 进 AI 工具箱（需 agent:tool 才不降级）
     });
 
     // ② handler：必须是 { execute } 对象
@@ -230,22 +224,22 @@ curl -X POST http://localhost:9000/api/plugins/execute-command \
 
 ## 7. 常见偏差
 
-| 偏差 | 结果 | 修法 |
-| --- | --- | --- |
-| 删掉 `actionRegistry.register` | 403 `COMMAND_NOT_REGISTERED` | 加回来 |
-| `capabilitiesProposed` 留空数组 | 激活 500 `only 'get' methods allowed` | 至少一条真实能力 |
-| `commandType` 写 `@acme/plugin-hello.hello.ping` | 也能工作（已带前缀分支），但不要混用两种写法 | 统一短名 |
-| 只写 `manifest.json` 不写 `src/index.ts` 的 manifest | **可以**（CLI 优先读文件） | — |
-| 只写 `src/index.ts` 的 manifest | CLI 会从源码提取；但提取失败会告警 | 建议两份都写 |
-| 用 `lesson:read` 做写操作 | 语义不符但不拦（命令闸门只看字符串） | 换成 `lesson:write` |
+| 偏差                                                 | 结果                                         | 修法                |
+| ---------------------------------------------------- | -------------------------------------------- | ------------------- |
+| 删掉 `actionRegistry.register`                       | 403 `COMMAND_NOT_REGISTERED`                 | 加回来              |
+| `capabilitiesProposed` 留空数组                      | 激活 500 `only 'get' methods allowed`        | 至少一条真实能力    |
+| `commandType` 写 `@acme/plugin-hello.hello.ping`     | 也能工作（已带前缀分支），但不要混用两种写法 | 统一短名            |
+| 只写 `manifest.json` 不写 `src/index.ts` 的 manifest | **可以**（CLI 优先读文件）                   | —                   |
+| 只写 `src/index.ts` 的 manifest                      | CLI 会从源码提取；但提取失败会告警           | 建议两份都写        |
+| 用 `lesson:read` 做写操作                            | 语义不符但不拦（命令闸门只看字符串）         | 换成 `lesson:write` |
 
 ---
 
 ## 8. 从最小插件往下走的下一步
 
-| 需求 | 追加内容 | 文档 |
-| --- | --- | --- |
-| 存数据 | `await ctx.db.ensureTable('notes', 'id TEXT PRIMARY KEY, body TEXT')` | [context-and-services](../plugin-system/context-and-services.md) §4 |
-| 出 UI | 加 `storage/panel.html` + 自写打包 | [ui-extension-guide](../development/ui-extension-guide.md) §3 |
-| 被其他插件调用 | `Token` + `provides` + `ctx.provide()` | [context-and-services](../plugin-system/context-and-services.md) §3.2 |
-| 写测试 | `createMockContext()` | [testing-guide](../development/testing-guide.md) §2 |
+| 需求           | 追加内容                                                              | 文档                                                                  |
+| -------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 存数据         | `await ctx.db.ensureTable('notes', 'id TEXT PRIMARY KEY, body TEXT')` | [context-and-services](../plugin-system/context-and-services.md) §4   |
+| 出 UI          | 加 `storage/panel.html` + 自写打包                                    | [ui-extension-guide](../development/ui-extension-guide.md) §3         |
+| 被其他插件调用 | `Token` + `provides` + `ctx.provide()`                                | [context-and-services](../plugin-system/context-and-services.md) §3.2 |
+| 写测试         | `createMockContext()`                                                 | [testing-guide](../development/testing-guide.md) §2                   |

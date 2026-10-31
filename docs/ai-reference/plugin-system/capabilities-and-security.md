@@ -8,11 +8,11 @@
 
 ## 1. 三套能力登记（混用即错）
 
-| # | 登记 | 字段 / 常量 | 管什么 | 取值数量 | 真源 |
-| --- | --- | --- | --- | --- | --- |
-| ① | 命令闸门 | `ActionDescriptor.capabilityRequired` | 谁能执行这条命令 | **19** | `docs/agent/contracts/capabilities.json → command_required` |
-| ② | 方法级闸门 | `method-policy.ts` 的 `CAP_*` | 某个 `ctx` 方法能否调 | **8** | 同上 `method_policy` |
-| ③ | 运行时权限 | `RuntimePermission`（classroom-runtime） | 课堂活动生态的权限 | **7** | 同上 `runtime_permission` |
+| #   | 登记       | 字段 / 常量                              | 管什么                | 取值数量 | 真源                                                        |
+| --- | ---------- | ---------------------------------------- | --------------------- | -------- | ----------------------------------------------------------- |
+| ①   | 命令闸门   | `ActionDescriptor.capabilityRequired`    | 谁能执行这条命令      | **19**   | `docs/agent/contracts/capabilities.json → command_required` |
+| ②   | 方法级闸门 | `method-policy.ts` 的 `CAP_*`            | 某个 `ctx` 方法能否调 | **8**    | 同上 `method_policy`                                        |
+| ③   | 运行时权限 | `RuntimePermission`（classroom-runtime） | 课堂活动生态的权限    | **7**    | 同上 `runtime_permission`                                   |
 
 ### 1.1 命令能力全集（19 条，逐字）
 
@@ -26,25 +26,25 @@ vfs:write           whiteboard:read     whiteboard:write
 
 **不在这 19 条里的都是错**。三个高频错误写法：
 
-| 写了 | 实际归属 | 正确做法 |
-| --- | --- | --- |
-| `user:read` | 不存在 | `management:read` |
-| `ai:invoke` | ②方法级（`CAP_AI_INVOKE`），不是命令能力 | `ai.generateText` 的授权走 `capabilitiesProposed` 声明 `ai:invoke` |
-| `quiz:write` | ③运行时权限 | 不属于 `capabilityRequired` |
-| `segment:gate_eval` | 真实存在但**不是** `capabilityRequired` | 仅作为 `capabilityRequired` 的**建议值**写在 JSDoc 里，`await` 校验时不算 |
+| 写了                | 实际归属                                 | 正确做法                                                                  |
+| ------------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
+| `user:read`         | 不存在                                   | `management:read`                                                         |
+| `ai:invoke`         | ②方法级（`CAP_AI_INVOKE`），不是命令能力 | `ai.generateText` 的授权走 `capabilitiesProposed` 声明 `ai:invoke`        |
+| `quiz:write`        | ③运行时权限                              | 不属于 `capabilityRequired`                                               |
+| `segment:gate_eval` | 真实存在但**不是** `capabilityRequired`  | 仅作为 `capabilityRequired` 的**建议值**写在 JSDoc 里，`await` 校验时不算 |
 
 ### 1.2 方法级 8 个（`CAP_*`）
 
-| 常量 | 字符串 | 拦截的行为 |
-| --- | --- | --- |
-| `CAP_API_WRITE` | `api:write` | 前端 `frontendApi.post/del` 的普通写入 |
-| `CAP_API_ADMIN` | `api:admin` | 高危路径 / 不可逆操作 / 实体级删除 |
-| `CAP_GRADES_WRITE` | `grades:write` | `saveSemesterGrade` 等写成绩 |
-| `CAP_AGENT_TOOL` | `agent:tool` | 注册 `exposeToAgent !== false` 的 action |
-| `CAP_AI_INVOKE` | `ai:invoke` | `ai.generateText` / `chat` / `complete` |
-| `CAP_TASK_REGISTER` | `task:register` | `processManager.registerHandler/registerInterval/restore` |
-| `CAP_STUDENT_DATA_READ` | `student-data:read` | 读学生积分/敏感数据 |
-| `CAP_STUDENT_DATA_WRITE` | `student-data:write` | 写学生积分/敏感数据 |
+| 常量                     | 字符串               | 拦截的行为                                                |
+| ------------------------ | -------------------- | --------------------------------------------------------- |
+| `CAP_API_WRITE`          | `api:write`          | 前端 `frontendApi.post/del` 的普通写入                    |
+| `CAP_API_ADMIN`          | `api:admin`          | 高危路径 / 不可逆操作 / 实体级删除                        |
+| `CAP_GRADES_WRITE`       | `grades:write`       | `saveSemesterGrade` 等写成绩                              |
+| `CAP_AGENT_TOOL`         | `agent:tool`         | 注册 `exposeToAgent !== false` 的 action                  |
+| `CAP_AI_INVOKE`          | `ai:invoke`          | `ai.generateText` / `chat` / `complete`                   |
+| `CAP_TASK_REGISTER`      | `task:register`      | `processManager.registerHandler/registerInterval/restore` |
+| `CAP_STUDENT_DATA_READ`  | `student-data:read`  | 读学生积分/敏感数据                                       |
+| `CAP_STUDENT_DATA_WRITE` | `student-data:write` | 写学生积分/敏感数据                                       |
 
 证据：`packages/core/plugin-host/method-policy.ts`（L28-49）。
 
@@ -63,17 +63,17 @@ session:manage   stage:navigate   whiteboard:draw
 
 ```ts
 // packages/core/esm-loader/manifest-schema.ts
-capabilitiesProposed: z.array(z.string()).optional()   // 自由字符串数组（L804）
+capabilitiesProposed: z.array(z.string()).optional(); // 自由字符串数组（L804）
 ```
 
 推论（逐条可验证）：
 
-| 结论 | 后果 |
-| --- | --- |
-| 声明杜撰的能力名**不会报错**，会被安静地授予 | 浪费时间但不会挂 |
-| 声明**通配符**会**被拒**：仅 `*`、`*:*`、`*:*:*` 三种形态被硬拒 | 用具体串 |
+| 结论                                                                                 | 后果                                 |
+| ------------------------------------------------------------------------------------ | ------------------------------------ |
+| 声明杜撰的能力名**不会报错**，会被安静地授予                                         | 浪费时间但不会挂                     |
+| 声明**通配符**会**被拒**：仅 `*`、`*:*`、`*:*:*` 三种形态被硬拒                      | 用具体串                             |
 | 真正致命的是**少声明**：目标命令的 `capabilityRequired` 必须与已授予集合**逐字相等** | 否则 403 `COMMAND_CAPABILITY_DENIED` |
-| 授予集合 = `capsProposed ∩ 管理员审批` | 安装了但没勾选 = 没授予 |
+| 授予集合 = `capsProposed ∩ 管理员审批`                                               | 安装了但没勾选 = 没授予              |
 
 证据：`docs/agent/contracts/capabilities.json → _no_global_whitelist`、`blocked_wildcard`。
 
@@ -92,30 +92,30 @@ flowchart TD
   D -- 通过 --> F["真实服务方法执行"]
 ```
 
-| Barrier | 判定 | 实现 | 错误 |
-| --- | --- | --- | --- |
-| 1 | Token 是否在 `allowedTokens`（按 manifest 计算） | `src/plugin-host/service-host.ts`（L237-243） | `WorkerCapabilityError: Access to service token 'x' denied` |
-| 2 | `manifestCapabilities.length === 0` 且方法不以 `get` 开头 | 同文件（L245-252） | `Capability denied for actor …: empty manifestCapabilities, only 'get' methods allowed` |
-| 3 | 方法 / 路径级策略 | `method-policy.ts → checkMethodPolicy`（L197） | `Call denied for actor …: <token>.<method>() — <原因>` |
+| Barrier | 判定                                                      | 实现                                           | 错误                                                                                    |
+| ------- | --------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1       | Token 是否在 `allowedTokens`（按 manifest 计算）          | `src/plugin-host/service-host.ts`（L237-243）  | `WorkerCapabilityError: Access to service token 'x' denied`                             |
+| 2       | `manifestCapabilities.length === 0` 且方法不以 `get` 开头 | 同文件（L245-252）                             | `Capability denied for actor …: empty manifestCapabilities, only 'get' methods allowed` |
+| 3       | 方法 / 路径级策略                                         | `method-policy.ts → checkMethodPolicy`（L197） | `Call denied for actor …: <token>.<method>() — <原因>`                                  |
 
 **Barrier 2 的实操含义**：`process` 插件如果 `capabilitiesProposed` 是空数组，
 `activate()` 里连 `ctx.db.ensureTable()` 都会 500。最小声明一条（如 `lesson:read`）即可解除只读锁。
 
 ### 3.1 Barrier 3 的具体判定表
 
-| Token | 方法 | 条件 | 拒绝文案要点 |
-| --- | --- | --- | --- |
-| `IFrontendAPI` | `get*` | 直接放行 | — |
-| `IFrontendAPI` | `post` / `del` | 需要 `api:write` | 「写操作（post）需要 manifest 声明 'api:write'」 |
-| `IFrontendAPI` | 路径命中高危前缀 | 需要 `api:admin` | 「写入高危路径 '/api/plugins'」 |
-| `IFrontendAPI` | 路径以 `/gdpr-delete` 结尾 | 需要 `api:admin` | 「不可逆操作」 |
-| `IFrontendAPI` | `del` 且路径恰为 `/api/<ns>/<id>` | 需要 `api:admin` | 「实体级删除」 |
-| `ISocketService` | `disconnect` / `destroy` | **永远拒绝** | 「断开课堂实时通道会中断正在进行的教学」 |
-| `ISemesterGradeService` | `save*` / `write*` / `set*` | 需要 `grades:write` | 「'grades:read' 不足以解锁写入」 |
-| `IProcessService` | `registerHandler` / `registerInterval` / `restore` | 需要 `task:register` | — |
-| `IAIService` | `generateText` / `chat` / `complete` | 需要 `ai:invoke` | — |
-| `IActionRegistryService` | `register`（且 `exposeToAgent !== false`） | 需要 `agent:tool`，否则**降级** | 见 §3.2 |
-| `IStorageService` / `IUIService` | 任意 | 放行 | — |
+| Token                            | 方法                                               | 条件                            | 拒绝文案要点                                     |
+| -------------------------------- | -------------------------------------------------- | ------------------------------- | ------------------------------------------------ |
+| `IFrontendAPI`                   | `get*`                                             | 直接放行                        | —                                                |
+| `IFrontendAPI`                   | `post` / `del`                                     | 需要 `api:write`                | 「写操作（post）需要 manifest 声明 'api:write'」 |
+| `IFrontendAPI`                   | 路径命中高危前缀                                   | 需要 `api:admin`                | 「写入高危路径 '/api/plugins'」                  |
+| `IFrontendAPI`                   | 路径以 `/gdpr-delete` 结尾                         | 需要 `api:admin`                | 「不可逆操作」                                   |
+| `IFrontendAPI`                   | `del` 且路径恰为 `/api/<ns>/<id>`                  | 需要 `api:admin`                | 「实体级删除」                                   |
+| `ISocketService`                 | `disconnect` / `destroy`                           | **永远拒绝**                    | 「断开课堂实时通道会中断正在进行的教学」         |
+| `ISemesterGradeService`          | `save*` / `write*` / `set*`                        | 需要 `grades:write`             | 「'grades:read' 不足以解锁写入」                 |
+| `IProcessService`                | `registerHandler` / `registerInterval` / `restore` | 需要 `task:register`            | —                                                |
+| `IAIService`                     | `generateText` / `chat` / `complete`               | 需要 `ai:invoke`                | —                                                |
+| `IActionRegistryService`         | `register`（且 `exposeToAgent !== false`）         | 需要 `agent:tool`，否则**降级** | 见 §3.2                                          |
+| `IStorageService` / `IUIService` | 任意                                               | 放行                            | —                                                |
 
 高危路径前缀（`HIGH_RISK_PATH_PREFIXES`，L60-69）：
 
@@ -140,12 +140,12 @@ action "<type>" 的 exposeToAgent=true 需要 'agent:tool' 能力；
 
 ## 4. SQL 守卫
 
-| 规则 | 内容 |
-| --- | --- |
-| 禁写表 | **40 张**核心表，命中即拒（`FORBIDDEN_CORE_TABLES`，`sql-guard.ts` L13-54） |
-| 禁写语句 | `ATTACH` / `DETACH` / `PRAGMA` / `VACUUM` / `CREATE|DROP TRIGGER` / `CREATE|DROP VIEW`（L58-66） |
-| 表名解析 | 先 `sanitizeSql` 剥注释与字符串字面量，再 `extractReferencedTables` 覆盖 `FROM`/`JOIN`/`INTO`/`UPDATE`/`TABLE` |
-| 元数据表 | `sqlite_master` / `sqlite_schema` 仅放行**精确前缀**查询 |
+| 规则     | 内容                                                                                                                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 禁写表   | **40 张**核心表，命中即拒（`FORBIDDEN_CORE_TABLES`，`sql-guard.ts` L13-54）                                                                                                    |
+| 禁写语句 | `ATTACH` / `DETACH` / `PRAGMA` / `VACUUM` / `CREATE TRIGGER` / `DROP TRIGGER` / `CREATE VIEW` / `DROP VIEW`（`FORBIDDEN_OPERATIONS`，L58-64；`TEMP`/`TEMPORARY` 变体同样命中） |
+| 表名解析 | 先 `sanitizeSql` 剥注释与字符串字面量，再 `extractReferencedTables` 覆盖 `FROM`/`JOIN`/`INTO`/`UPDATE`/`TABLE`                                                                 |
+| 元数据表 | `sqlite_master` / `sqlite_schema` 仅放行**精确前缀**查询                                                                                                                       |
 
 40 张禁写表（全列，务必逐字比对）：
 
@@ -168,10 +168,10 @@ lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 **作用面（关键，容易误判）**：`assertPluginSqlAllowed` 全仓只有一个调用方 ——
 `packages/core/worker-runtime/service-host.ts` L81 导入、L1216 调用。因此：
 
-| 执行模式 | SQL 守卫是否生效 |
-| --- | --- |
-| `process`（未受信插件的强制模式） | ✅ 生效（走 `child-isolate` → `service-host`） |
-| `worker`（`worker_threads`） | ✅ 生效（同一 `service-host`） |
+| 执行模式                                | SQL 守卫是否生效                                      |
+| --------------------------------------- | ----------------------------------------------------- |
+| `process`（未受信插件的强制模式）       | ✅ 生效（走 `child-isolate` → `service-host`）        |
+| `worker`（`worker_threads`）            | ✅ 生效（同一 `service-host`）                        |
 | `inline`（受信内置插件，如 `lab-seat`） | ❌ **不生效** —— 直接拿到主进程 `better-sqlite3` 实例 |
 
 `lab-seat` 之所以能对 `computer_labs` 建表，**根本原因是它在 `inline` 模式跑**，
@@ -186,12 +186,12 @@ lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 
 ## 5. 出站网络
 
-| 事实 | 值 |
-| --- | --- |
-| 声明方式 | `manifest.network.outbound: string[]`（域名） |
-| 生效条件 | 管理员批准后，由**宿主代为发起** |
-| 插件内直接 `fetch` | `process` 沙箱下被 CSP / Node 权限裁剪阻断 |
-| 代理服务 | `INetworkProxyService`（`0.7.2+`），但 `INetworkProxyServiceToken` **不可 resolve** |
+| 事实               | 值                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| 声明方式           | `manifest.network.outbound: string[]`（域名）                                       |
+| 生效条件           | 管理员批准后，由**宿主代为发起**                                                    |
+| 插件内直接 `fetch` | `process` 沙箱下被 CSP / Node 权限裁剪阻断                                          |
+| 代理服务           | `INetworkProxyService`（`0.7.2+`），但 `INetworkProxyServiceToken` **不可 resolve** |
 
 `INetworkProxyServiceToken` 导出与可解析状态矛盾是已知坑，`docs/agent/contracts/tokens.json` 的
 `_count_trap` 明确记录。插件需要联网时优先走 `ctx.http` 由宿主代发，或声明 outbound 后由管理员放行。
@@ -200,12 +200,12 @@ lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 
 ## 6. 信任与隔离的判定表
 
-| 条件 | 结果 |
-| --- | --- |
-| 源码在 `packages/plugins/**` | 可用请求的模式（含 `inline`） |
-| `manifest.id` 命中 `OPENLEARN_TRUSTED_INLINE_PLUGINS`（支持 `*` / `前缀*`） | 同上 |
-| `VITEST` 且未设 `OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1` | 同上（仅测试） |
-| 其他一切情况 | **强制 `process`**，`coerced: true` |
+| 条件                                                                        | 结果                                |
+| --------------------------------------------------------------------------- | ----------------------------------- |
+| 源码在 `packages/plugins/**`                                                | 可用请求的模式（含 `inline`）       |
+| `manifest.id` 命中 `OPENLEARN_TRUSTED_INLINE_PLUGINS`（支持 `*` / `前缀*`） | 同上                                |
+| `VITEST` 且未设 `OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1`                      | 同上（仅测试）                      |
+| 其他一切情况                                                                | **强制 `process`**，`coerced: true` |
 
 **不构成信任**：`@openlearn/` 前缀、`manifest.author`、ZIP 文件名、`manifest.executionMode` 字段、安装者角色。
 
@@ -213,13 +213,13 @@ lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 
 ## 7. 前端侧的安全差异（必须知道）
 
-| 项 | 后端（隔离） | 前端 |
-| --- | --- | --- |
-| `caps` 来源 | 声明 ∩ 审批 | **仅声明**（无 CapabilityGuard） |
-| 声明 `api:admin` 的效果 | 需管理员批准 | 浏览器侧**真的拿到了** |
-| `socket.disconnect` | — | 被 Barrier 3 拒绝 |
-| 事件推送 | 有 | 沙箱 iframe **收不到**，只能轮询 |
-| `fetch` | 被裁剪 | iframe CSP `connect-src 'none'` |
+| 项                      | 后端（隔离） | 前端                             |
+| ----------------------- | ------------ | -------------------------------- |
+| `caps` 来源             | 声明 ∩ 审批  | **仅声明**（无 CapabilityGuard） |
+| 声明 `api:admin` 的效果 | 需管理员批准 | 浏览器侧**真的拿到了**           |
+| `socket.disconnect`     | —            | 被 Barrier 3 拒绝                |
+| 事件推送                | 有           | 沙箱 iframe **收不到**，只能轮询 |
+| `fetch`                 | 被裁剪       | iframe CSP `connect-src 'none'`  |
 
 证据：`method-policy.ts` 残留风险第 3 条（L317-320）。
 
