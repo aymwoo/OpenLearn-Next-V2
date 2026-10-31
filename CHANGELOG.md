@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **导入侧解析正文占位符**：导入课程包时对 `lesson.content` 调用 `resolveAssetPlaceholders`，Markdown 里的 `![图](${asset:id})` / `[文档](${asset:id})` 现在会解析为真实的 `/uploads` URL（此前只解析白板元素数据）。
   - **前端入口**：课程卡片操作栏与课节编辑器顶栏新增「导出为课程包」按钮（`src/services/coursePackageService.ts` + `useResourceLibrary`），导出过程有 loading 态，跳过资源时给出 warning toast。
 
+### Refactor / Performance
+
+- **作业命令收敛到单一 owner，`ActionRegistry` 拒绝同 `commandType` 重复注册**：
+  - `packages/plugins/management.ts` 删除 `assignment.create` / `assignment.submit` / `assignment.grade` 的 action 与 handler，三条命令只由 `assignment-eval` 提供。此前依赖「后激活的插件撤销先注册的描述符」的隐式接管，注册顺序一变就会退回 `classId` 必填的旧 schema，并在 AI 工具箱里出现同名工具。
+  - `packages/core/registry/index.ts` 增加不变量：同一个 `commandType` 注册第二条描述符时，测试环境直接抛错，生产环境告警并保留先注册的那条；`getAgentTools()` 因此不再可能输出两条同名工具。
+  - 停用 `@openlearn/plugin-assignment-eval` 时，作业中心命令端点返回 `503 ASSIGNMENT_SERVICE_UNAVAILABLE`（`server/routes/assignment-hub.ts`），不再把「命令未注册」暴露成 500。
+
 ### Docs
 
 - **新增《课程包规范》参考页**：`docs/reference/course-package-spec.md` 说明 CSV 与课程包的通道选择、完整 JSON schema、多媒体 base64 内嵌示例（Node / Python）、安全与体积限额（20MB 浏览器上限、32MB 请求体、Magic Bytes 校验、409 幂等、失败补偿）、三个端点（模板 / 导入 / 导出）与常见问题；已挂载到 `docs/index.md` 目录树与 `docs/audit/audit-index.md` 现行权威页面。
@@ -27,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **新增 `scripts/build-docs.sh`**：以 `sphinx -b html docs <out> -W --keep-going` 严格构建，参数与 `.readthedocs.yaml` 的 `fail_on_warning: true` 一一对应；CI 与本地「提交前自检」共用这一个入口，避免两处参数漂移。
   - **CI 改动**：`docs-drift-audit` job 增加安装 `docs/requirements.txt`、严格构建、失败时上传构建日志并在 PR 评论中贴出 `WARNING:` / `ERROR:` 行的三个步骤；构建步骤用 `if: always()`，使审计与构建的问题在同一次 CI 里同时暴露。`setup-python` 由 3.11 提到 3.12，对齐 RTD 构建镜像。
   - **文档**：`docs/contributing/contributing.md` §4.1 与 `docs/developer-guide/docs-drift-audit.md` 的 L1 段同步说明两道门禁的分工与本地复现命令。
+- **命令归属文档同步**：`docs/architecture/command-event-bus.md` 新增「ActionDescriptor 与命令归属」说明 `commandType` 单一 owner 不变量；`docs/architecture/assignment.md`、`docs/reference/plugin-capability-matrix.md`、`docs/examples/existing-plugins-guide.md` 与插件开发教程同步移除 management 插件对 `assignment.*` 的归属描述。
 
 ## [0.7.8] - 2026-10-30
 

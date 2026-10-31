@@ -2182,14 +2182,14 @@ export default {
 
 ## 附录 B：现有内置插件参考
 
-| 插件         | 文件                                  | 命令示例                                               |
-| ------------ | ------------------------------------- | ------------------------------------------------------ |
-| 课堂核心     | `packages/plugins/builtin.ts`         | `lesson.create`, `whiteboard.draw`, `whiteboard.query` |
-| 虚拟文件系统 | `packages/plugins/vfs.ts`             | `vfs.write_file`, `vfs.read_file`, `vfs.list_dir`      |
-| 管理插件     | `packages/plugins/management.ts`      | `class.create`, `student.enroll`, `assignment.create`  |
-| AI 规划器    | `packages/plugins/ai-planner.ts`      | `ai.start_generation`, `ai.apply_recommendation`       |
-| 作业评估     | `packages/plugins/assignment-eval.ts` | `assignment.evaluate`, `peer_review.create`            |
-| 进程管理     | `packages/plugins/process.ts`         | `process.spawn`, `process.kill`, `process.list`        |
+| 插件         | 文件                                  | 命令示例                                                     |
+| ------------ | ------------------------------------- | ------------------------------------------------------------ |
+| 课堂核心     | `packages/plugins/builtin.ts`         | `lesson.create`, `whiteboard.draw`, `whiteboard.query`       |
+| 虚拟文件系统 | `packages/plugins/vfs.ts`             | `vfs.write_file`, `vfs.read_file`, `vfs.list_dir`            |
+| 管理插件     | `packages/plugins/management.ts`      | `class.create`, `student.create`, `schedule.create`          |
+| AI 规划器    | `packages/plugins/ai-planner.ts`      | `ai.start_generation`, `ai.apply_recommendation`             |
+| 作业评估     | `packages/plugins/assignment-eval.ts` | `assignment.create`, `assignment.submit`, `assignment.grade` |
+| 进程管理     | `packages/plugins/process.ts`         | `process.spawn`, `process.kill`, `process.list`              |
 
 ---
 

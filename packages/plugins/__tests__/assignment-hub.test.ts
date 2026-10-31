@@ -494,27 +494,29 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(graded.peerWeight).toBe(0.4);
   });
 
-  it('接管 management.ts 的 core-assignment-create 描述符：不挂班级的作业也能创建，写入的是用户 ID', async () => {
-    // 模拟 management.ts 在内核 bootstrap 阶段先注册的同名描述符（`required` 含 classId）。
-    // `ActionRegistry.getActionByCommandType()` 返回**最先注册**的那条，由它决定
-    // 内核的 payload 校验；若插件不接管，不挂班级的作业会被误判为缺少 classId。
-    actionRegistry.register({
-      id: 'core-assignment-create',
-      commandType: 'assignment.create',
-      description: '为指定班级创建课后作业（旧）',
-      capabilityRequired: 'management:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: { classId: { type: 'STRING' }, title: { type: 'STRING' } },
-        required: ['classId', 'title'],
-      },
-    } as any);
+  it('assignment.create 单一 owner：同 commandType 重复注册直接失败，重激活后仍只有 eval 描述符', async () => {
+    expect(actionRegistry.getActionByCommandType('assignment.create')?.id).toBe('eval-assignment-create');
+
+    // 一个 commandType 只允许一个 owner。否则 `getActionByCommandType()` 会按
+    // 「最先注册」的那条做 payload 校验，AI 工具箱里也会出两条同名工具。
+    expect(() =>
+      actionRegistry.register({
+        id: 'core-assignment-create',
+        commandType: 'assignment.create',
+        description: '为指定班级创建课后作业（旧）',
+        capabilityRequired: 'management:write',
+        inputSchema: {
+          type: 'OBJECT',
+          properties: { classId: { type: 'STRING' }, title: { type: 'STRING' } },
+          required: ['classId', 'title'],
+        },
+      } as any),
+    ).toThrow(/already registered by action eval-assignment-create/);
 
     // 停用再激活：PluginHost 的 DB 恢复与内核 bootstrap 会各自触发一次激活，
-    // 因此「第二次激活」必须自己清掉旧描述符（PluginHost 不允许 active → active）
+    // 第二次激活必须清掉自己上一次注册的描述符，否则会被上面的不变量拒绝。
     await pluginHost.deactivatePlugin(AssignmentEvalPlugin.manifest.id);
     await pluginHost.activatePlugin(AssignmentEvalPlugin.manifest.id);
-
     expect(actionRegistry.getActionByCommandType('assignment.create')?.id).toBe('eval-assignment-create');
 
     const created: any = await execute('assignment.create', 'user:teacher-1:teacher', {

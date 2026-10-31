@@ -7,7 +7,7 @@
  * 背景：`getAgentTools()` 此前**不过滤**全部 action，因此「补 action descriptor」等价于
  * 「把该命令加进 AI 工具箱」。这是 D-5 决策引入 `exposeToAgent` 的直接原因。
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ActionRegistry } from '../index.js';
 
 function descriptor(id: string, extra: Record<string, unknown> = {}) {
@@ -74,5 +74,38 @@ describe('ActionRegistry — exposeToAgent（D-5）', () => {
   it('isHighRisk 不影响工具箱暴露（两者正交，防止误以为 isHighRisk 能挡 AI）', () => {
     registry.register(descriptor('high_risk_visible', { isHighRisk: true }));
     expect(agentToolNames()).toContain('high_risk_visible');
+  });
+});
+
+describe('ActionRegistry — commandType 单一 owner', () => {
+  let registry: ActionRegistry;
+
+  beforeEach(() => {
+    registry = new ActionRegistry();
+  });
+
+  it('同 commandType 的第二条描述符在测试环境直接失败', () => {
+    registry.register(descriptor('owner_x'));
+
+    expect(() => registry.register(descriptor('second_x', { commandType: 'owner_x' }))).toThrow(
+      /Command type "owner_x" is already registered by action owner_x/,
+    );
+    expect(registry.getAllActions()).toHaveLength(1);
+  });
+
+  it('非测试环境只告警，先注册的描述符仍是唯一 owner', () => {
+    registry.register(descriptor('owner_x'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('VITEST', '');
+    vi.stubEnv('NODE_ENV', 'production');
+
+    try {
+      expect(() => registry.register(descriptor('second_x', { commandType: 'owner_x' }))).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('already registered by action owner_x'));
+      expect(registry.getActionByCommandType('owner_x')?.id).toBe('owner_x');
+    } finally {
+      warn.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 });

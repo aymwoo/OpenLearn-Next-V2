@@ -51,12 +51,12 @@ manifest: {
 ## 2. 平台管理与运维插件 (`@openlearn/plugin-management`)
 
 - **源码目录**: `packages/plugins/management.ts`
-- **主要用途**: 班级、学生、作业、课表、考勤与实验室等教学管理命令。
+- **主要用途**: 班级、学生、课表、考勤与实验室等教学管理命令。
 
 ### 核心功能
 
 - **班级 / 学生**: `class.create`、`class.list`、`class.get_students`、`student.create`、`student.list`、`student.update`、`student.delete`、`class.add_student`、`class.remove_student`、`student.add_note`、`student.set_progress`。
-- **作业与课表**: `assignment.create`、`assignment.submit`、`assignment.grade`、`schedule.create`、`schedule.cancel`、`schedule.list`。
+- **课表**: `schedule.create`、`schedule.cancel`、`schedule.list`。（作业命令 `assignment.*` 归属作业评估插件，见第 4 节。）
 - **考勤与实验室**: `attendance.record`、`lab.create`、`lab.list`、`lab.assign_seat`。
 - 插件安装 / 启停 / 系统运维命令（`plugin.install`、`plugin.install_zip`、`plugin.update_zip`、`plugin.toggle`、`plugin.uninstall`、`plugin.info`、`user.*`、`courseware.*`）在 `builtin.ts`，不在本插件。
 

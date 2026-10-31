@@ -28,6 +28,17 @@ export class ActionRegistry {
     if (this.actions.has(descriptor.id)) {
       throw new Error(`Action ${descriptor.id} is already registered.`);
     }
+    const owner = this.getActionByCommandType(descriptor.commandType);
+    if (owner) {
+      // 一个 commandType 只能有一个 owner：重复注册会让 `getActionByCommandType()`
+      // 按「最先注册」的那条做 payload 校验，并在 `getAgentTools()` 里出两条同名工具。
+      // 测试环境直接失败，生产至少留痕，避免这类漂移静默存活到运行期。
+      const message = `Command type "${descriptor.commandType}" is already registered by action ${owner.id}; ${descriptor.id} cannot claim it again.`;
+      if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+        throw new Error(message);
+      }
+      console.warn(`[ActionRegistry] ${message}`);
+    }
     this.actions.set(descriptor.id, descriptor);
   }
 
