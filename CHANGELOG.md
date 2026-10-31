@@ -10,7 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_（下一版本待补充）_
+### Features
+
+- **初始口令默认等于用户名（`admin` / `admin`），登录页直接给出首次安装提示**：
+  - **问题**：旧版空库首次启动会生成 20 位随机口令并写入 `storage/bootstrap-credentials.txt`。自托管用户（Nas / 群晖 / 宝塔 / Docker 卷）既找不到那个路径，也拿不到启动日志，装完进不去后台，只能删库重来 —— 这是社区反馈最高的一条安装摩擦。
+  - **新行为**：`resolveSeedCredential()` 在没有任何环境变量时返回「口令 = 用户名」（`admin` / `admin`、`teacher` / `teacher`），`must_change_password = 1`。可预期的口令配上原有的强制改密门：改密前除 `POST /api/auth/change-password`、`POST /api/auth/logout`、`GET /api/auth/session`、`GET /api/auth/me` 外的 `/api`（含 GET）一律 403 `FORBIDDEN_DEFAULT_PASSWORD`，所以「人人皆知」的窗口只到第一次登录为止。
+  - **旧行为仍可要回**：新增 `OPENLEARN_SEED_PASSWORD_MODE`（`default` | `random`，默认 `default`）。设为 `random` 即恢复随机口令 + `storage/bootstrap-credentials.txt`；该变量只在首次建库（`users` 表为空）时生效，已有库不受影响。拼错时由启动期环境校验直接拒绝启动，不会静默回落到更弱的默认分支。
+  - **登录页首次安装提示**：新增公开只读端点 `GET /api/auth/seed-status`，返回 `{ active, accounts }` —— 只说明「种子账号是否仍在使用默认口令」，不返回口令本身。`LoginPage` 只在 `active` 为真时渲染琥珀色提示条（`admin / admin`），改密后服务端立刻转 `active:false`，提示自动消失，不会对公网永久广播默认口令。判定基于真实 bcrypt 校验（而不是 `must_change_password` 标记），因此环境变量口令恰好等于用户名时同样正确；结果缓存 15 秒，改密路径主动失效，避免匿名调用把 bcrypt 变成 CPU 放大器。
+  - **环境校验降级**：生产环境把 `OPENLEARN_ADMIN_PASSWORD` 设成 `admin` 由 **error 改为 warning**。原规则已经自相矛盾 —— 不设置该变量同样得到 `admin` / `admin`，阻断显式设置既挡不住弱口令，又让「我就想固定成 admin」的部署无从下手；真正的防线是改密门，因此改为可见告警并提示确认已改密。
+  - **启动日志**：建库时打印账号与口令（口令 = 用户名），并说明改密前哪些接口会被拒绝、如何切回随机口令。
+
+### Docs
+
+- **初始凭据口径全量对齐**：`README.md`、`AGENTS.md`、`docs/getting-started/quickstart.md`、`docs/getting-started/installation-guide.md`、`docs/administrator-guide/admin-manual.md`、`docs/configuration/system-configuration.md`、`docs/ai-reference/api/configuration.md`、`docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`docs/migration/version-migration.md`、`docs/beta/operations.md` 与 `.env.example` 统一改述为「默认口令 = 用户名 + 强制改密 + `OPENLEARN_SEED_PASSWORD_MODE` 可切回随机」；环境校验的 error / warning 分档说明同步更新。
 
 ## [0.7.9] - 2026-10-31
 

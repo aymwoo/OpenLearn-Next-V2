@@ -18,13 +18,14 @@
 
 `packages/core/db/index.ts` 在用户表为空时插入两个账号：
 
-| 用户名    | 初始口令           | 角色            | user id       |
-| --------- | ------------------ | --------------- | ------------- |
-| `admin`   | 环境变量或随机生成 | `administrator` | `usr_admin`   |
-| `teacher` | 环境变量或随机生成 | `teacher`       | `usr_teacher` |
+| 用户名    | 初始口令                             | 角色            | user id       |
+| --------- | ------------------------------------ | --------------- | ------------- |
+| `admin`   | 环境变量，否则 = 用户名（`admin`）   | `administrator` | `usr_admin`   |
+| `teacher` | 环境变量，否则 = 用户名（`teacher`） | `teacher`       | `usr_teacher` |
 
 - `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 有值时使用该值。
-- 未设置时生成 20 位随机口令，打印一次，并写入数据目录下的 `storage/bootstrap-credentials.txt`（容器里是 `/data/storage/bootstrap-credentials.txt`）。
+- 未设置时初始口令等于用户名（`admin` / `admin`、`teacher` / `teacher`），登录页会显示「首次安装」提示，装完即可登录。
+- 想要旧行为（20 位随机口令 + 写入数据目录下的 `storage/bootstrap-credentials.txt`，容器里是 `/data/storage/bootstrap-credentials.txt`）：设 `OPENLEARN_SEED_PASSWORD_MODE=random`。该变量只在首次建库（`users` 表为空）时生效。
 - 已经用 `admin` / `teacher` 当密码的存量库不会被改写哈希，但会把 `must_change_password` 置 1，登录后必须修改。
 
 **改密**：`POST /api/auth/change-password`（见 §2.3）。新密码不能与用户名相同。带 `mustChangePassword` 的会话除改密、登出、`/api/auth/session`、`/api/auth/me` 外，**包括 GET 在内的** `/api` 请求一律 403 `FORBIDDEN_DEFAULT_PASSWORD`。静态页面仍可加载。生产环境不要设置 `PLAYWRIGHT_TEST`。
