@@ -7,7 +7,7 @@
 
 ---
 
-## 1. 查配置的四个入口
+## 1. 查配置的入口
 
 | 你要找什么                                   | 去哪儿                                                                                                             |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -38,6 +38,11 @@ OPENLEARN_WORKER_LIVENESS=on
 复制为 `.env` 即可 `pnpm dev`。**生产必须额外设置**：`OPENLEARN_ADMIN_PASSWORD`、
 `OPENLEARN_TEACHER_PASSWORD`、`TRUST_PROXY`、`ENCRYPTION_KEY`（若用到加密字段）。
 
+> ⚠️ 这份样例里的 `APP_URL` 是**脚手架遗留**：全仓没有任何 `process.env.APP_URL` 读取点
+> （`grep -r APP_URL server/ packages/ cli.mjs server.ts` 为空），`.env.example` 里给的是占位值
+> `MY_APP_URL`。写进 `.env` 不会改变任何回调或邮件链接的基址——别在这里改部署域名。
+> 它留在样例里只因为 `.env.example` 还留着它。
+
 ---
 
 ## 3. 按用途索引（变量族 → 权威页）
@@ -67,7 +72,7 @@ OPENLEARN_WORKER_LIVENESS=on
 - **数据保留**：`OPENLEARN_EVENT_RETENTION_DAYS`、`OPENLEARN_ATTENDANCE_RETENTION_DAYS`、
   `OPENLEARN_NOTIFICATIONS_RETENTION_DAYS`、`OPENLEARN_ROLLCALLS_RETENTION_DAYS`、
   `OPENLEARN_SESSIONS_RETENTION_DAYS`、`OPENLEARN_RETENTION_PENDING_COMMANDS_DAYS`
-  （均有 `RETENTION_*` 历史别名，见 §4）。
+  （均有 `RETENTION_*` 历史别名，见 §4.3）。
 - **迁移**：`MIGRATION_ALLOW_UNKNOWN_LEDGER`、`MIGRATION_CHECKSUM_STRICT`、`FORCE_MIGRATION_SNAPSHOT`。
 - **课堂与业务**：`OPENLEARN_CLASSROOM_GUARD_TIMEOUT_MS`。
 - **测试专用（不得在生产设置）**：`VITEST`、`VITEST_POOL_ID`、`PLAYWRIGHT_TEST`。
