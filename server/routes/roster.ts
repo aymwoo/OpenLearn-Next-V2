@@ -65,6 +65,41 @@ function resolveWritableStudentId(session: AccessSession | null | undefined, raw
   return null;
 }
 
+/**
+ * 初始口令状态缓存（`GET /api/auth/seed-status`）。
+ *
+ * 只回答「种子账号是否仍在使用默认口令（口令 = 用户名）」，不回答口令是什么；
+ * 口令一改 active 立即变 false，登录页提示随之消失，不会长期对外广播默认口令。
+ * 判定要跑 bcrypt，匿名可无限次调用就成了 CPU 放大器，所以结果缓存 15 秒。
+ */
+const SEED_STATUS_TTL_MS = 15_000;
+let seedStatusCache: { payload: { active: boolean; accounts: string[] }; expiresAt: number } | null = null;
+
+/** 种子账号默认口令是否仍然生效（供登录页显示首次安装提示）。 */
+export function readSeedDefaultStatus(): { active: boolean; accounts: string[] } {
+  const now = Date.now();
+  if (seedStatusCache && seedStatusCache.expiresAt > now) return seedStatusCache.payload;
+  const accounts: string[] = [];
+  try {
+    const rows = kernelContainer.db
+      .prepare('SELECT username, password_hash FROM users WHERE username IN (?, ?)')
+      .all('admin', 'teacher') as { username: string; password_hash: string }[];
+    for (const row of rows) {
+      if (verifyPassword(row.username, row.password_hash).valid) accounts.push(row.username);
+    }
+  } catch {
+    /* users 表还不存在等异常：当作没有默认口令，前端不显示提示 */
+  }
+  const payload = { active: accounts.length > 0, accounts };
+  seedStatusCache = { payload, expiresAt: now + SEED_STATUS_TTL_MS };
+  return payload;
+}
+
+/** 改密 / 重置口令后清空缓存，避免提示多留 15 秒。 */
+export function invalidateSeedStatusCache(): void {
+  seedStatusCache = null;
+}
+
 export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
   const rosterService = new RosterService(kernelContainer.db, kernelContainer.getReadDb());
@@ -411,6 +446,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.userId);
+        // 种子账号的默认口令已退役，登录页的首次安装提示应立刻消失
+        invalidateSeedStatusCache();
         // 使该用户所有其他 session 失效
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
@@ -637,6 +674,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
 
       res.json({ success: true });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // ── 初始口令状态（公开只读）──
+  app.get('/api/auth/seed-status', (_req, res) => {
+    try {
+      res.json(readSeedDefaultStatus());
     } catch (e: any) {
       sendSafeError(res, e);
     }

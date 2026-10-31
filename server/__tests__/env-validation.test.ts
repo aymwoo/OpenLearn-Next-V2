@@ -158,13 +158,24 @@ describe('startup env validation', () => {
     expect(errorKeys({ ENCRYPTION_KEY: '"' + 'b'.repeat(64) + '"' })).not.toContain('ENCRYPTION_KEY');
   });
 
-  it('生产环境弱口令直接拒绝，开发环境不阻断', () => {
-    expect(errorKeys({ NODE_ENV: 'production', OPENLEARN_ADMIN_PASSWORD: 'admin' })).toContain(
-      'OPENLEARN_ADMIN_PASSWORD',
-    );
-    expect(errorKeys({ NODE_ENV: 'development', OPENLEARN_ADMIN_PASSWORD: 'admin' })).not.toContain(
-      'OPENLEARN_ADMIN_PASSWORD',
-    );
+  it('生产环境弱口令只告警（初始口令本来就是口令 = 用户名），开发环境不告警', () => {
+    // 语义变更：初始口令的默认值就是 admin/admin，把「显式设成 admin」判为 error
+    // 既挡不住弱口令（不设置照样是 admin/admin），又让想「固定成 admin」的部署无从下手。
+    // 真正的防线是登录后的强制改密门，这里降级为让人能看见的告警。
+    const prod = validateStartupEnv({ NODE_ENV: 'production', OPENLEARN_ADMIN_PASSWORD: 'admin' });
+    expect(prod.errors.map((issue) => issue.key)).not.toContain('OPENLEARN_ADMIN_PASSWORD');
+    expect(prod.warnings.map((issue) => issue.key)).toContain('OPENLEARN_ADMIN_PASSWORD');
+
+    const dev = validateStartupEnv({ NODE_ENV: 'development', OPENLEARN_ADMIN_PASSWORD: 'admin' });
+    expect(dev.warnings.map((issue) => issue.key)).not.toContain('OPENLEARN_ADMIN_PASSWORD');
+  });
+
+  it('OPENLEARN_SEED_PASSWORD_MODE 只接受 default / random，拼错不能静默回落', () => {
+    // 回落方向恰好是更弱的默认口令，静默回落等于把运维的意图悄悄改掉
+    expect(errorKeys({ OPENLEARN_SEED_PASSWORD_MODE: 'randmo' })).toContain('OPENLEARN_SEED_PASSWORD_MODE');
+    expect(errorKeys({ OPENLEARN_SEED_PASSWORD_MODE: 'default' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_SEED_PASSWORD_MODE: 'random' })).toEqual([]);
+    expect(errorKeys({ OPENLEARN_SEED_PASSWORD_MODE: ' RANDOM ' })).toEqual([]);
   });
 
   it('非法 ALLOWED_ORIGINS 报 error，通配 * 给 warning', () => {

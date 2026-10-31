@@ -35,7 +35,7 @@ curl -sS -b /tmp/ol.cj -H 'Content-Type: application/json' \
   http://127.0.0.1:9000/api/auth/change-password
 ```
 
-新口令不能与用户名相同。容器首次空库不要依赖 `admin` / `admin`：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，或到数据目录的 `storage/bootstrap-credentials.txt` 读取随机口令。
+新口令不能与用户名相同。空库首次启动的初始口令默认等于用户名（`admin` / `admin`、`teacher` / `teacher`），装完即可登录、登录即强制改密；想换口令就设 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`，想恢复旧版随机口令就设 `OPENLEARN_SEED_PASSWORD_MODE=random`。
 
 ### 0.2 回填班级归属
 

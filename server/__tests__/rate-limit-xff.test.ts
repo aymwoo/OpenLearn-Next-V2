@@ -81,10 +81,21 @@ describe('伪造 X-Forwarded-For 不能绕过限流', () => {
 });
 
 describe('种子口令与 proxy-addr', () => {
-  it('默认不发放与用户名相同的口令，只有显式允许时才保留', () => {
-    const generated = resolveSeedCredential('admin');
-    expect(generated.password).not.toBe('admin');
-    expect(generated.mustChange).toBe(true);
+  it('默认发放「口令 = 用户名」的初始口令，且必须改密', () => {
+    // 语义变更：旧版默认随机生成并写入 bootstrap-credentials.txt，
+    // 自托管用户常常拿不到口令。现在默认口令 = 用户名，靠强制改密门兜底。
+    const fallback = resolveSeedCredential('admin', { mode: 'default' });
+    expect(fallback.password).toBe('admin');
+    expect(fallback.mustChange).toBe(true);
+    expect(fallback.generated).toBe(false);
+    expect(fallback.source).toBe('default');
+
+    // 想要旧行为可显式选 random：随机口令 + 写文件
+    const random = resolveSeedCredential('admin', { mode: 'random' });
+    expect(random.password).not.toBe('admin');
+    expect(random.mustChange).toBe(true);
+    expect(random.generated).toBe(true);
+
     const fromEnv = resolveSeedCredential('teacher', { envValue: 'teacher' });
     expect(fromEnv.password).toBe('teacher');
     expect(fromEnv.mustChange).toBe(true);

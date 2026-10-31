@@ -81,8 +81,10 @@ pnpm dev
 open http://localhost:9000
 ```
 
-> 🔐 **初始凭据安全说明**：
-> 平台内置种子管理员账号 `admin` 与教师账号 `teacher`。首次启动若未预设环境变量口令，系统将在 `storage/bootstrap-credentials.txt` 生成随机一次性口令。登录后系统将强制引导修改密码。
+> 🔐 **初始凭据说明**：
+> 平台内置种子管理员账号 `admin` 与教师账号 `teacher`。首次启动若未预设环境变量口令，**初始口令就是用户名本身**（`admin` / `admin`、`teacher` / `teacher`）——装完即可登录，不需要去翻日志或 `storage/bootstrap-credentials.txt`。登录后系统会强制引导修改密码，改密前除「改密 / 登出」外的接口一律返回 403。
+>
+> 想换初始口令：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`。想恢复旧版「随机口令 + 写入 `storage/bootstrap-credentials.txt`」行为：设置 `OPENLEARN_SEED_PASSWORD_MODE=random`（只在首次建库时生效）。
 
 ---
 

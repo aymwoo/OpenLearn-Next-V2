@@ -39,29 +39,60 @@ export interface SeedCredential {
   password: string;
   mustChange: boolean;
   generated: boolean;
+  /** 口令来源，仅用于决定启动日志的文案（不参与鉴权判定）。 */
+  source: 'playwright' | 'env' | 'vitest' | 'default' | 'random';
+}
+
+/**
+ * 初始口令模式。
+ *
+ * - `default`（默认）：口令即用户名（`admin`/`admin`、`teacher`/`teacher`），首次登录强制改密。
+ * - `random`：每个实例生成 20 位随机口令并写入 `storage/bootstrap-credentials.txt`。
+ *
+ * 默认值从 `random` 改成 `default` 的原因：自托管场景下随机口令几乎不可达 ——
+ * 文件落在容器卷/`OPENLEARN_DATA_DIR` 里，用户装在 NAS、群晖、宝塔面板上时既找不到路径、
+ * 也拿不到启动日志，最后只能删库重来。可预期的初始口令 + 强制改密门（改密前除改密/登出
+ * 外全部接口 403）在「能登录」与「不能拿默认口令干坏事」之间取了平衡。
+ * 仍想要旧行为的部署设置 `OPENLEARN_SEED_PASSWORD_MODE=random` 即可。
+ */
+export type SeedPasswordMode = 'default' | 'random';
+
+/** 解析 `OPENLEARN_SEED_PASSWORD_MODE`；无法识别的值回落到 `default`（由 env 校验负责报错）。 */
+export function resolveSeedPasswordMode(env: NodeJS.ProcessEnv = process.env): SeedPasswordMode {
+  return env.OPENLEARN_SEED_PASSWORD_MODE?.trim().toLowerCase() === 'random' ? 'random' : 'default';
 }
 
 /**
  * 种子口令。
  * - allowWellKnown：仅测试运行器（PLAYWRIGHT_TEST）保留与用户名相同的口令。
  * - 显式环境变量：使用调用方提供的值；若仍等于用户名，则必须改密。
- * - 否则随机生成，并要求首次登录后修改。
+ * - vitest 兜底：单元测试用固定非默认口令，避免污染默认口令相关断言。
+ * - 否则按 `mode` 取默认口令（口令=用户名）或随机口令；两者都要求首次登录后修改。
  */
 export function resolveSeedCredential(
   username: string,
-  options?: { envValue?: string | null; allowWellKnown?: boolean; vitestFallback?: boolean },
+  options?: {
+    envValue?: string | null;
+    allowWellKnown?: boolean;
+    vitestFallback?: boolean;
+    mode?: SeedPasswordMode;
+  },
 ): SeedCredential {
   if (options?.allowWellKnown) {
-    return { password: username, mustChange: false, generated: false };
+    return { password: username, mustChange: false, generated: false, source: 'playwright' };
   }
   const envValue = options?.envValue?.trim();
   if (envValue) {
-    return { password: envValue, mustChange: envValue === username, generated: false };
+    return { password: envValue, mustChange: envValue === username, generated: false, source: 'env' };
   }
   if (options?.vitestFallback) {
-    return { password: `Vitest-${username}-NotDefault9`, mustChange: false, generated: false };
+    return { password: `Vitest-${username}-NotDefault9`, mustChange: false, generated: false, source: 'vitest' };
   }
-  return { password: generateUnambiguousPassword(20), mustChange: true, generated: true };
+  const mode = options?.mode ?? resolveSeedPasswordMode();
+  if (mode === 'random') {
+    return { password: generateUnambiguousPassword(20), mustChange: true, generated: true, source: 'random' };
+  }
+  return { password: username, mustChange: true, generated: false, source: 'default' };
 }
 
 /**
@@ -91,6 +122,16 @@ function persistGeneratedSeedCredentials(lines: string[]): void {
   } catch (err) {
     console.warn(`[SECURITY] 无法写入 ${filePath}，请从上方日志抄录初始口令。`, err);
   }
+}
+
+/** 默认口令（口令 = 用户名）的启动提示：明说账号口令，并说清改密前什么也做不了。 */
+function logDefaultSeedCredentials(usernames: string[]): void {
+  console.warn(
+    '[SECURITY] 首次启动已创建种子账号，初始口令 = 用户名（首次登录后必须修改）：\n' +
+      usernames.map((name) => `  ${name} / ${name}`).join('\n') +
+      '\n  改密前，除「改密 / 登出」以外的所有接口都会被拒绝（403 FORBIDDEN_DEFAULT_PASSWORD）。' +
+      '\n  如需随机初始口令，设置 OPENLEARN_SEED_PASSWORD_MODE=random 后重建数据库。',
+  );
 }
 
 /** 验证密码（支持 bcrypt 和旧 SHA-256 双模式） */
@@ -266,22 +307,26 @@ export function initializeDatabase(instance: Database.Database): void {
     throw err;
   }
 
-  // 种子数据：管理员与教师。不再写入人人皆知的 admin/admin、teacher/teacher
-  // （PLAYWRIGHT_TEST 除外，供既有端到端套件登录）。
+  // 种子数据：管理员与教师。
+  // 初始口令默认等于用户名（admin/admin、teacher/teacher），首次登录强制改密；
+  // PLAYWRIGHT_TEST 下同样等于用户名但不强制改密（供既有端到端套件登录）。
   try {
     const countObj = instance.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
     const allowWellKnown = isPlaywrightTestFlag(process.env.PLAYWRIGHT_TEST);
     const vitestFallback = Boolean(process.env.VITEST) && !allowWellKnown;
+    const seedMode = resolveSeedPasswordMode();
     if (countObj && countObj.cnt === 0) {
       const adminCred = resolveSeedCredential('admin', {
         envValue: process.env.OPENLEARN_ADMIN_PASSWORD,
         allowWellKnown,
         vitestFallback,
+        mode: seedMode,
       });
       const teacherCred = resolveSeedCredential('teacher', {
         envValue: process.env.OPENLEARN_TEACHER_PASSWORD,
         allowWellKnown,
         vitestFallback,
+        mode: seedMode,
       });
       const insertStmt = instance.prepare(
         'INSERT INTO users (id, username, password_hash, role, name, created_at, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -308,10 +353,18 @@ export function initializeDatabase(instance: Database.Database): void {
       if (adminCred.generated) generated.push(`admin ${adminCred.password}`);
       if (teacherCred.generated) generated.push(`teacher ${teacherCred.password}`);
       if (generated.length > 0) persistGeneratedSeedCredentials(generated);
-    } else if (!allowWellKnown) {
-      const seeded = instance
-        .prepare('SELECT id, username, password_hash FROM users WHERE username IN (?, ?)')
-        .all('admin', 'teacher') as { id: string; username: string; password_hash: string }[];
+      const defaulted: string[] = [];
+      if (adminCred.source === 'default') defaulted.push('admin');
+      if (teacherCred.source === 'default') defaulted.push('teacher');
+      if (defaulted.length > 0) logDefaultSeedCredentials(defaulted);
+    } else {
+      // 已有库：把仍是默认口令的种子账号补打改密标（老版本升级上来的库可能缺这个标记）。
+      // PLAYWRIGHT_TEST 豁免 —— 端到端套件就是拿 admin/admin 登录的。
+      const seeded = allowWellKnown
+        ? []
+        : (instance
+            .prepare('SELECT id, username, password_hash FROM users WHERE username IN (?, ?)')
+            .all('admin', 'teacher') as { id: string; username: string; password_hash: string }[]);
       for (const user of seeded) {
         if (!verifyPassword(user.username, user.password_hash).valid) continue;
         instance.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(user.id);
