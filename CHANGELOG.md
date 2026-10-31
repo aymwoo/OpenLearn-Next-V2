@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [0.7.9] - 2026-10-31
+
 ### Features
 
 - **课程包（Course Package）导出与内容占位符解析 (Issue #363)**：
