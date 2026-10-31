@@ -107,9 +107,29 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     return row?.class_id;
   };
 
+  /**
+   * assignment.* 命令由 assignment-eval 插件独家提供。插件被停用或未激活时命令总线
+   * 只会抛「No handler registered」，调用方看到的是 500 噪音；这里显式返回 503，
+   * 让前端区分「服务不可用」与「请求有问题」。
+   */
+  const requireAssignmentCommand = (res: express.Response, ...types: string[]): boolean => {
+    for (const type of types) {
+      if (!kernelContainer.commandBus.hasHandler(type)) {
+        res.status(503).json({
+          success: false,
+          code: 'ASSIGNMENT_SERVICE_UNAVAILABLE',
+          error: 'Assignment service is unavailable: the assignment-eval plugin is not active.',
+        });
+        return true;
+      }
+    }
+    return false;
+  };
+
   // ── 作业实体 ─────────────────────────────────────────────────────────────
   app.post('/api/assignments', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
+      if (requireAssignmentCommand(res, 'assignment.create')) return;
       const classId = (req.body || {}).classId || (req.body || {}).class_id;
       if (classId && rejectUnlessHubClass(req, res, String(classId), 'staff')) return;
       const cmd = kernelContainer.commandBus.createCommand('assignment.create', req.body || {}, getActorId(req));
@@ -122,6 +142,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
 
   app.get('/api/assignments', requireScopedAuth('class-member'), async (req, res) => {
     try {
+      if (requireAssignmentCommand(res, 'assignment.list')) return;
       const payload: Record<string, unknown> = {
         lessonId: req.query.lessonId,
         classId: req.query.classId,
@@ -155,6 +176,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
 
   app.get('/api/assignments/:assignmentId', requireScopedAuth('class-member'), async (req, res) => {
     try {
+      if (requireAssignmentCommand(res, 'assignment.get')) return;
       const { isPrivileged, studentId } = describeRequester(req);
       const payload: Record<string, unknown> = { assignmentId: req.params.assignmentId };
       const requestedStudent = typeof req.query.studentId === 'string' ? req.query.studentId : undefined;
@@ -308,6 +330,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   // ── 提交 / 互评 / 评分（透传命令总线，校验在插件内完成）─────────────────
   app.post('/api/assignments/:assignmentId/submit', requireScopedAuth('class-member'), async (req, res) => {
     try {
+      if (requireAssignmentCommand(res, 'assignment.submit')) return;
       const { isPrivileged, studentId } = describeRequester(req);
       const body = req.body || {};
       const targetStudentId = isPrivileged ? String(body.studentId || '') : String(studentId || '');
@@ -339,6 +362,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
 
   app.post('/api/assignments/:assignmentId/peer-review', requireScopedAuth('class-member'), async (req, res) => {
     try {
+      if (requireAssignmentCommand(res, 'assignment.peer_review')) return;
       const { isPrivileged, studentId } = describeRequester(req);
       const body = req.body || {};
       const reviewerId = isPrivileged ? String(body.reviewerId || body.studentId || '') : String(studentId || '');
@@ -377,6 +401,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     requireAuth('teacher', 'administrator'),
     async (req, res) => {
       try {
+        if (requireAssignmentCommand(res, 'assignment.assign_peer_reviews')) return;
         if (rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), 'staff')) return;
         const body = req.body || {};
         const cmd = kernelContainer.commandBus.createCommand(

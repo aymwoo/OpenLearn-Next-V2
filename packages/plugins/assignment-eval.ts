@@ -119,7 +119,7 @@ export const AssignmentEvalPlugin = {
     const gradeService = await ctx.resolve(ISemesterGradeServiceToken);
 
     // 让激活可重复调用（PluginHost 的 DB 恢复与内核 bootstrap 都可能触发同一次激活）：
-    // 先撤掉本插件自己的命令与 action，再撤掉 management.ts 的同名命令/action。
+    // 先撤掉本插件自己的命令与 action，再重新注册。
     const OWNED_COMMAND_TYPES = [
       'assignment.create',
       'assignment.list',
@@ -145,22 +145,6 @@ export const AssignmentEvalPlugin = {
     for (const id of OWNED_ACTION_IDS) {
       actionRegistry.unregister(id);
     }
-
-    // Unregister existing core command handlers to avoid conflict
-    commandBus.unregisterHandler('assignment.submit');
-    commandBus.unregisterHandler('assignment.grade');
-
-    // Unregister existing action descriptors to avoid ID conflicts
-    //
-    // 注意：`ActionRegistry.getActionByCommandType()` 返回**最先注册**的那条描述符，
-    // 由它决定内核的 payloadSchema 校验。management.ts 早在内核 bootstrap 阶段就注册了
-    // `core-assignment-create`（`required: ['classId','title']`），若不撤销，作业中心
-    // 的 `POST /api/assignments` 会在创建「不挂班级、只挂课时」的作业时被误判为
-    // `Missing required property "classId"`。`server/routes/assignments.ts` 的旧班级作业页
-    // 直接写 `assignments` 表、不经命令总线，因此这里接管 `assignment.create` 不影响旧链路。
-    actionRegistry.unregister('core-assignment-create');
-    actionRegistry.unregister('core-assignment-submit');
-    actionRegistry.unregister('core-assignment-grade');
 
     // ── 内部工具 ───────────────────────────────────────────────────────────
     interface AssignmentRow {
