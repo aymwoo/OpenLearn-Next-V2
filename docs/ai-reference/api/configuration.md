@@ -78,10 +78,11 @@ OPENLEARN_WORKER_LIVENESS=on
 
 ## 5. 安全
 
-| 变量                          | 说明                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `OPENLEARN_ADMIN_PASSWORD`    | `admin` 种子密码；未设则随机生成并写入 `storage/bootstrap-credentials.txt` |
-| `OPENLEARN_TEACHER_PASSWORD`  | `teacher` 种子密码，同上                                                   |
+| 变量                          | 说明                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `OPENLEARN_ADMIN_PASSWORD`    | `admin` 种子密码；未设则等于用户名（`admin`），首次登录强制改密                                        |
+| `OPENLEARN_TEACHER_PASSWORD`  | `teacher` 种子密码，同上                                                                              |
+| `OPENLEARN_SEED_PASSWORD_MODE` | `default`（默认，口令 = 用户名）/ `random`（随机口令写入 `storage/bootstrap-credentials.txt`），仅首次建库生效 |
 | `ENCRYPTION_KEY`              | 字段级加密密钥（班级口令等）                                               |
 | `ROUTE_SCOPE_ENFORCE`         | `true` 时未声明数据范围的路由让启动失败（CI 建议开）                       |
 | `ALLOW_UNSAFE_PLUGIN_SCRIPTS` | 允许插件安装期执行脚本，**仅开发环境**                                     |

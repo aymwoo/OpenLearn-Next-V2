@@ -377,23 +377,38 @@ export function validateStartupEnv(env: NodeJS.ProcessEnv = process.env): EnvVal
   }
 
   // ── 生产环境种子口令 / 指标令牌 ──────────────────────────────────────
+  // 初始口令的默认值本身就是「口令 = 用户名」（见 packages/core/db 的 resolveSeedCredential），
+  // 所以这里对 `OPENLEARN_ADMIN_PASSWORD=admin` 只告警、不阻断启动 —— 阻断也挡不住，
+  // 不设置该变量同样会得到 admin/admin。真正的防线是登录后的强制改密门。
   if (isProduction) {
     const adminPassword = trimmed(env, 'OPENLEARN_ADMIN_PASSWORD');
     if (adminPassword && adminPassword.toLowerCase() === 'admin') {
-      errors.push({
+      warnings.push({
         key: 'OPENLEARN_ADMIN_PASSWORD',
-        severity: 'error',
-        message: '生产环境禁止把 OPENLEARN_ADMIN_PASSWORD 设为用户名 "admin"。请设置强口令。',
+        severity: 'warning',
+        message:
+          'OPENLEARN_ADMIN_PASSWORD 与用户名相同。这不比留空更弱（留空时初始口令同样是 admin），' +
+          '但请确认首次登录后立即改密；生产部署建议直接设置为强口令。',
       });
     }
     const teacherPassword = trimmed(env, 'OPENLEARN_TEACHER_PASSWORD');
     if (teacherPassword && teacherPassword.toLowerCase() === 'teacher') {
-      errors.push({
+      warnings.push({
         key: 'OPENLEARN_TEACHER_PASSWORD',
-        severity: 'error',
-        message: '生产环境禁止把 OPENLEARN_TEACHER_PASSWORD 设为用户名 "teacher"。请设置强口令。',
+        severity: 'warning',
+        message: 'OPENLEARN_TEACHER_PASSWORD 与用户名相同。请确认首次登录后立即改密，生产部署建议设置为强口令。',
       });
     }
+  }
+
+  // 初始口令模式：拼错不能静默回落（回落方向恰好是更弱的默认口令）。
+  const seedMode = trimmed(env, 'OPENLEARN_SEED_PASSWORD_MODE');
+  if (seedMode && !['default', 'random'].includes(seedMode.toLowerCase())) {
+    errors.push({
+      key: 'OPENLEARN_SEED_PASSWORD_MODE',
+      severity: 'error',
+      message: `只支持 "default"（口令 = 用户名，首次登录强制改密）或 "random"（随机口令写入 bootstrap-credentials.txt），收到 "${seedMode}"。`,
+    });
   }
 
   const metricsToken = trimmed(env, 'METRICS_TOKEN');

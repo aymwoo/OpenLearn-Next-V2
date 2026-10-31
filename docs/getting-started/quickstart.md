@@ -48,11 +48,14 @@ pnpm dev
 ```
 
 访问 `http://localhost:9000` 即可进入系统控制台。种子账户为 `admin`（管理员）与
-`teacher`（教师）——**没有人人皆知的默认口令**：
+`teacher`（教师），**初始口令等于用户名**：
 
+- 不配置任何东西：`admin` / `admin`、`teacher` / `teacher`，登录页会直接把这对口令提示出来；
 - 设置了 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD` 则用环境变量口令；
-- 否则启动时随机生成，写入 `storage/bootstrap-credentials.txt`（权限 600）并在日志打印一次；
-- 首次登录会强制改密（至少 8 位、含字母数字、不得与用户名相同），改密前业务写请求会被拦截。
+- 需要旧版的「随机口令」：设 `OPENLEARN_SEED_PASSWORD_MODE=random`，口令写入 `storage/bootstrap-credentials.txt`（权限 600）并在日志打印一次；
+- 首次登录会强制改密（至少 8 位、含字母数字、不得与用户名相同），改密前除改密 / 登出外的接口一律 403。
+
+详见 [安装指南](./installation-guide.md) §首次启动与初始口令。
 
 详见 [安装指南](./installation-guide.md) §首次启动与初始口令。
 
