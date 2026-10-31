@@ -16,7 +16,7 @@
 | `packages/plugins/`            | 9 / 6,448             | 内置插件（`inline` 模式）                                                                                |
 | `packages/plugin-sdk/`         | 10 / 9,209            | 插件公开契约 + CLI                                                                                       |
 | `packages/plugin-test-kit/`    | 1 / 645               | `createMockContext()` 等测试工具                                                                         |
-| `packages/bridge-sdk/`         | —                     | 沙箱 iframe 桥源（`src/bridge.js`，构建产物落到 `server/utils/bridge-sdk.ts`）                           |
+| `packages/bridge-sdk/`         | —                     | 沙箱 iframe 桥源（`packages/bridge-sdk/src/bridge.js`，构建产物落到 `server/utils/bridge-sdk.ts`）       |
 | `packages/activity-ecosystem/` | 7 / 768               | 活动注册表                                                                                               |
 | `migrations/`                  | 45 SQL                | 数据库迁移（当前 86 张表）                                                                               |
 | `e2e/`                         | 32 / 7,796            | Playwright 端到端                                                                                        |
@@ -56,7 +56,7 @@
 | `demo-data.ts`             | 92    | 演示数据 seed/cleanup                                                 | —                                                                                       |
 | `client-errors.ts`         | 32    | 前端错误上报                                                          | —                                                                                       |
 
-端点全表见 [../api/http-api.md](../api/http-api.md)。
+端点全表见 [../api/http-endpoints.md](../api/http-endpoints.md)。
 
 ### 1.2 中间件与安全
 

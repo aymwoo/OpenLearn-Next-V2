@@ -216,4 +216,4 @@ Socket 握手鉴权：`io.use(socketAuthMiddleware)`（`server.ts` L421），`mu
 | 命令与事件的完整目录         | [../api/commands-and-events.md](../api/commands-and-events.md)                                   |
 | 19 条能力真值 / 3 道 Barrier | [../plugin-system/capabilities-and-security.md](../plugin-system/capabilities-and-security.md)   |
 | 错误码全表                   | [../plugin-system/error-handling-and-cleanup.md](../plugin-system/error-handling-and-cleanup.md) |
-| 路由清单与鉴权级别           | [../api/http-api.md](../api/http-api.md)                                                         |
+| 路由清单与鉴权级别           | [../api/http-endpoints.md](../api/http-endpoints.md)                                             |
