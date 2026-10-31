@@ -85,3 +85,7 @@ server/__tests__/canary/.tmp-plugins-*
 # 在仓库根出现时会被 `git ls-files -co --exclude-standard` 扫进格式预算，
 # 而里面是别人（或工具）删掉的临时文件，不该由本仓库的格式门禁负责。
 .Trash-*/
+
+# repomix 生成的代码库索引包（单文件 16MB，纯派生产物，不入库）。
+# 配置随仓库保留：.repomix/*.config.json 可提交，.pack.md 不入库。
+/.repomix/*.pack.md

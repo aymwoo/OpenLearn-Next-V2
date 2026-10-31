@@ -1,0 +1,72 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".repomix/openlearn-next.repo.pack.md",
+    "style": "markdown",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "showLineNumbers": true,
+    "compress": false,
+    "headerText": "OpenLearn-Next-V2 全仓源码索引包（供 AI Agent 检索）。路径均相对于仓库根；行号由 repomix 附加，仅作辅助定位，代码变动后以符号名为准。"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.css",
+    "server/**/*.ts",
+    "server.ts",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "packages/**/*.d.ts",
+    "packages/plugin-sdk/scaffold/**/*",
+    "packages/*/package.json",
+    "packages/plugins/*/manifest.json",
+    "config/**/*.json",
+    "migrations/**/*.sql",
+    "docs/agent/contracts/*.json",
+    "e2e/**/*.ts",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "tsconfig.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "playwright.config.ts"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
+      "**/*.db",
+      "**/*.db-*",
+      "**/*.sqlite",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.svg",
+      "**/*.zip",
+      "**/*.map",
+      "**/*.min.js",
+      "**/pnpm-lock.yaml",
+      "**/package-lock.json",
+      "**/yarn.lock",
+      "docs/**",
+      "!docs/agent/contracts/**",
+      "artifacts/**",
+      "storage/**",
+      "backups/**",
+      "logs/**",
+      "audit-tools/**",
+      "**/__snapshots__/**",
+      "**/*.snap"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}

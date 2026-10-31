@@ -313,3 +313,21 @@ audit/audit-index
 - **[CLI & Operations](getting-started/installation-guide.md)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
 > 最后更新：2026-10-30 (v0.7.8)
+
+---
+
+## 给 AI Agent 的另一套文档
+
+本站是**面向人**的叙述式文档。仓库里还有一套**面向 AI 编程 Agent** 的技术参考层：
+
+```text
+docs/ai-reference/INDEX.md
+```
+
+它按「结论 → 源码坐标（路径 → 符号 → 行号）→ 约束」组织，覆盖全平台分层、29 个内核子系统、
+313 个 HTTP 端点、84 条命令（84 条描述符）、19 条实时路由、120 个扩展槽位与环境变量全表，
+并对每条结论标注 `已验证 / 推断 / 待确认`。
+
+该目录**不加入本 Sphinx 构建**（`conf.py` 的 `exclude_patterns` 已排除），
+因为它按符号名高频增删，纳入构建会持续产生 toctree 告警。
+需要让 AI 定位代码、核对签名、查错误码时读它；需要给人讲架构时读本站。

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".repomix/plugin-subsystem.pack.md",
+    "style": "markdown",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "showLineNumbers": true,
+    "compress": false,
+    "headerText": "OpenLearn-Next-V2 插件子系统聚焦索引包：宿主 kernel + SDK + 前端扩展宿主 + 机器可读契约。用于精确检索 API 签名、错误码与扩展点定义。"
+  },
+  "include": [
+    "packages/plugin-sdk/**/*.ts",
+    "packages/plugin-sdk/**/*.d.ts",
+    "packages/plugin-sdk/cli.mjs",
+    "packages/plugin-sdk/build.mjs",
+    "packages/plugin-sdk/scaffold/**/*",
+    "packages/plugin-sdk/package.json",
+    "packages/plugin-test-kit/**/*.ts",
+    "packages/core/plugin-host/**/*.ts",
+    "packages/core/esm-loader/**/*.ts",
+    "packages/core/errors/*.ts",
+    "src/plugin-host/**/*.ts",
+    "src/plugin-host/**/*.tsx",
+    "server/routes/plugins.ts",
+    "server/routes/plugin-api-gateway.ts",
+    "server/middleware/**/*.ts",
+    "docs/agent/contracts/*.json",
+    "config/**/*.json",
+    "package.json"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/__snapshots__/**",
+      "**/*.snap",
+      "**/pnpm-lock.yaml"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}
