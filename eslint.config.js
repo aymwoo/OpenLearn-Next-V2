@@ -90,6 +90,11 @@ export default [
       // 是纯生成物且已进 .gitignore —— 不忽略它，本地跑过 dev 之后 ESLint 的文件集合
       // 与 CI 就不再是同一份，告警预算棘轮会凭空多出噪音。
       '.vite-cache/**',
+      // Qoder/Cursor 一类 IDE 的工作区快照目录（`.gitignore` L68 已忽略）。
+      // 里面的 worktree 副本是整棵源码树的拷贝，实测在本机贡献 6,226 条告警
+      // （占全仓 12,466 条的 50%），把 ESLint 告警预算棘轮从 6,237 顶到 12,477 ——
+      // 本地门禁直接不可用，而 CI 上根本不存在这个目录。
+      '.qoder/**',
       '*.cjs',
       '*.min.js',
       '**/*.min.js',
