@@ -1,4 +1,7 @@
-# manifest 规范
+# manifest.json 安装期校验
+
+> 逐字段转写（zod schema 的字段级参考）见 [ai-reference/development/manifest-reference.md](../../ai-reference/development/manifest-reference.md)。
+> 本文面向**写 manifest 的插件作者**：只讲哪些写法会被拒绝、哪些会被静默保留，以及为什么。
 
 `manifest.json` 是插件唯一的**安装期校验点**。平台用 zod schema（`packages/core/esm-loader/manifest-schema.ts`
 的 `manifestSchema`）在**安装与激活时**校验，遵循「早失败 + 精确错误消息」原则。

@@ -91,18 +91,18 @@ CI 合入门禁全部走这些命令，本地对齐即可。
 
 ## 6. 数据库运维
 
-| 命令                             | 作用                                                     |
-| -------------------------------- | -------------------------------------------------------- |
-| `pnpm db:backup`                 | 备份                                                     |
-| `pnpm db:restore`                | 恢复                                                     |
-| `pnpm db:gen-golden`             | 生成 `packages/core/db/schema-golden.json`（表结构基线） |
-| `pnpm db:gen-tables`             | 生成表清单                                               |
-| `pnpm db:seed` / `db:clean-demo` | 演示数据                                                 |
-| `pnpm db:reset`                  | 删库（下次启动自动重建）                                 |
-| `pnpm db:clean-test-data`        | 清测试残留数据                                           |
-| `pnpm ops:check-perms`           | 检查敏感文件权限                                         |
+| 命令                             | 作用                                               |
+| -------------------------------- | -------------------------------------------------- |
+| `pnpm db:backup`                 | 备份                                               |
+| `pnpm db:restore`                | 恢复                                               |
+| `pnpm db:gen-golden`             | 生成 `migrations/schema-golden.json`（表结构基线） |
+| `pnpm db:gen-tables`             | 生成表清单                                         |
+| `pnpm db:seed` / `db:clean-demo` | 演示数据                                           |
+| `pnpm db:reset`                  | 删库（下次启动自动重建）                           |
+| `pnpm db:clean-test-data`        | 清测试残留数据                                     |
+| `pnpm ops:check-perms`           | 检查敏感文件权限                                   |
 
-`schema-golden.json` 是表结构快照，改表后必须重新生成，否则 CI 会报漂移。
+`migrations/schema-golden.json` 是表结构快照，改表后必须重新生成，否则 CI 会报漂移。
 
 ---
 

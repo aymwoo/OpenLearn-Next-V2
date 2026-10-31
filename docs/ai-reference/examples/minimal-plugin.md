@@ -104,7 +104,7 @@ plugin-hello/
 
 ---
 
-## 5. `src/index.ts`
+## 5. `plugin-hello/src/index.ts`
 
 ```ts
 import type { PluginContext } from '@openlearn/plugin-sdk';
@@ -174,7 +174,7 @@ export default {
 
 **三个必须**：
 
-1. `manifest` 两处（`manifest.json` 与 `src/index.ts`）要么一致，要么只留 `manifest.json`（CLI 优先读文件）；
+1. `manifest` 两处（`manifest.json` 与 `plugin-hello/src/index.ts`）要么一致，要么只留 `manifest.json`（CLI 优先读文件）；
 2. `register` 与 `registerHandler` 的 `commandType` **逐字一致**；
 3. `capabilityRequired` 与 `capabilitiesProposed` 有交集（本例都是 `lesson:read`）。
 
@@ -224,14 +224,14 @@ curl -X POST http://localhost:9000/api/plugins/execute-command \
 
 ## 7. 常见偏差
 
-| 偏差                                                 | 结果                                         | 修法                |
-| ---------------------------------------------------- | -------------------------------------------- | ------------------- |
-| 删掉 `actionRegistry.register`                       | 403 `COMMAND_NOT_REGISTERED`                 | 加回来              |
-| `capabilitiesProposed` 留空数组                      | 激活 500 `only 'get' methods allowed`        | 至少一条真实能力    |
-| `commandType` 写 `@acme/plugin-hello.hello.ping`     | 也能工作（已带前缀分支），但不要混用两种写法 | 统一短名            |
-| 只写 `manifest.json` 不写 `src/index.ts` 的 manifest | **可以**（CLI 优先读文件）                   | —                   |
-| 只写 `src/index.ts` 的 manifest                      | CLI 会从源码提取；但提取失败会告警           | 建议两份都写        |
-| 用 `lesson:read` 做写操作                            | 语义不符但不拦（命令闸门只看字符串）         | 换成 `lesson:write` |
+| 偏差                                                              | 结果                                         | 修法                |
+| ----------------------------------------------------------------- | -------------------------------------------- | ------------------- |
+| 删掉 `actionRegistry.register`                                    | 403 `COMMAND_NOT_REGISTERED`                 | 加回来              |
+| `capabilitiesProposed` 留空数组                                   | 激活 500 `only 'get' methods allowed`        | 至少一条真实能力    |
+| `commandType` 写 `@acme/plugin-hello.hello.ping`                  | 也能工作（已带前缀分支），但不要混用两种写法 | 统一短名            |
+| 只写 `manifest.json` 不写 `plugin-hello/src/index.ts` 的 manifest | **可以**（CLI 优先读文件）                   | —                   |
+| 只写 `plugin-hello/src/index.ts` 的 manifest                      | CLI 会从源码提取；但提取失败会告警           | 建议两份都写        |
+| 用 `lesson:read` 做写操作                                         | 语义不符但不拦（命令闸门只看字符串）         | 换成 `lesson:write` |
 
 ---
 

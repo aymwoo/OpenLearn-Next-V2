@@ -149,7 +149,7 @@ def _sdk_token_meta() -> dict:
                     {
                         "interface": m.group(2),
                         "identifier": m.group(3),
-                        "file": str(f.relative_to(REPO)),
+                        "file": f.relative_to(REPO).as_posix(),
                     },
                 )
     return meta

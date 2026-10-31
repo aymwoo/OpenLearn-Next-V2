@@ -174,12 +174,12 @@ activeRole === 'student' ? useWorkspacePreview ? <StudentWorkspacePreview /> : <
 
 ## 8. 本文与其它文档的边界
 
-| 想知道                                       | 去哪                                                 |
-| -------------------------------------------- | ---------------------------------------------------- |
-| 目录 → 职责 → 关键符号                       | [module-map.md](module-map.md)                       |
-| 一个 HTTP 请求如何变成命令、如何被拦         | [request-lifecycle.md](request-lifecycle.md)         |
-| 插件四层运行面（内核/传输/前端/沙箱）        | [plugin-runtime-planes.md](plugin-runtime-planes.md) |
-| 5 条端到端调用链（安装/激活/派发/渲染/停用） | [execution-flows.md](execution-flows.md)             |
-| 内核子系统逐个说明                           | [../subsystems/](../subsystems/)                     |
-| HTTP 路由清单                                | [../api/http-api.md](../api/http-api.md)             |
-| 环境变量                                     | [../api/configuration.md](../api/configuration.md)   |
+| 想知道                                       | 去哪                                                       |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| 目录 → 职责 → 关键符号                       | [module-map.md](module-map.md)                             |
+| 一个 HTTP 请求如何变成命令、如何被拦         | [request-lifecycle.md](request-lifecycle.md)               |
+| 插件四层运行面（内核/传输/前端/沙箱）        | [plugin-runtime-planes.md](plugin-runtime-planes.md)       |
+| 5 条端到端调用链（安装/激活/派发/渲染/停用） | [execution-flows.md](execution-flows.md)                   |
+| 内核子系统逐个说明                           | [../subsystems/](../subsystems/)                           |
+| HTTP 路由清单                                | [../api/http-endpoints.md](../api/http-endpoints.md)       |
+| 环境变量                                     | [../api/configuration-map.md](../api/configuration-map.md) |
