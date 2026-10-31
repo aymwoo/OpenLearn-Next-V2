@@ -6,8 +6,6 @@ import {
   IDatabaseToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
-import { applyGradeChange, isPrivilegedGradeActor } from '../core/db/assignment-grade-writer.js';
-import { applyResubmission } from '../core/db/assignment-resubmit.js';
 
 function parseUserActor(actorId: unknown): { userId: string; role: string } | null {
   const match = /^user:([^:]+):(administrator|admin|teacher|student)$/.exec(String(actorId || ''));
@@ -615,156 +613,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 14. ASSIGNMENT CREATE
-    const assignmentCreateCmd = 'assignment.create';
-    await actionRegistry.register({
-      id: 'core-assignment-create',
-      commandType: assignmentCreateCmd,
-      description: '为指定班级创建课后作业',
-      capabilityRequired: 'management:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          classId: { type: 'STRING', description: '目标班级 ID' },
-          title: { type: 'STRING', description: '作业标题' },
-          description: { type: 'STRING', description: '作业的简短摘要或概述' },
-          content: { type: 'STRING', description: '详细的作业说明或要求' },
-        },
-        required: ['classId', 'title'],
-      },
-    });
-
-    await commandBus.registerHandler(assignmentCreateCmd, {
-      async execute(command) {
-        const payload = command.payload as any;
-        const assignmentId = uuidv7();
-        db.prepare(
-          'INSERT INTO assignments (id, class_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        ).run(
-          assignmentId,
-          payload.classId,
-          payload.title,
-          payload.description || '',
-          payload.content || '',
-          Date.now(),
-        );
-        return { assignmentId, classId: payload.classId, title: payload.title };
-      },
-    });
-
-    // 15. ASSIGNMENT SUBMIT
-    const assignmentSubmitCmd = 'assignment.submit';
-    await actionRegistry.register({
-      id: 'core-assignment-submit',
-      commandType: assignmentSubmitCmd,
-      description: '代表学生提交作业内容（文本、Markdown 或代码）',
-      capabilityRequired: 'management:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          assignmentId: { type: 'STRING', description: '作业 ID' },
-          studentId: { type: 'STRING', description: '学生 ID' },
-          content: { type: 'STRING', description: '提交内容（文本、Markdown 或代码）' },
-        },
-        required: ['assignmentId', 'studentId', 'content'],
-      },
-    });
-
-    await commandBus.registerHandler(assignmentSubmitCmd, {
-      async execute(command) {
-        const payload = command.payload as any;
-        // 重交走唯一入口（packages/core/db/assignment-resubmit.ts）：
-        // 「重交不降级」（#215）由它保证，「内容替换要留痕」（#248）也由它保证。
-        // 此前这条路径与 server 侧各写一份 ON CONFLICT，口径迟早会漂。
-        const result = applyResubmission(db as any, {
-          assignmentId: payload.assignmentId,
-          studentId: payload.studentId,
-          content: payload.content,
-          actorId: `user:${payload.studentId}:student`,
-          actorRole: 'student',
-        });
-        return {
-          success: true,
-          assignmentId: payload.assignmentId,
-          studentId: payload.studentId,
-          /** 本次重交是否替换了已批改行的作答内容（内容替换已记入审计历史）。 */
-          contentReplaced: result.contentReplaced,
-        };
-      },
-    });
-
-    // 16. ASSIGNMENT GRADE
-    const assignmentGradeCmd = 'assignment.grade';
-    await actionRegistry.register({
-      id: 'core-assignment-grade',
-      commandType: assignmentGradeCmd,
-      description: '为学生作业打分并给出反馈意见',
-      capabilityRequired: 'management:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          assignmentId: { type: 'STRING', description: 'ID of the assignment' },
-          studentId: { type: 'STRING', description: 'ID of the student' },
-          score: { type: 'INTEGER', description: '满分 100 的得分' },
-          feedback: { type: 'STRING', description: '有建设性的反馈评语' },
-        },
-        required: ['assignmentId', 'studentId', 'score'],
-      },
-    });
-
-    await commandBus.registerHandler(assignmentGradeCmd, {
-      async execute(command) {
-        const payload = command.payload as any;
-        const actorId = command.actorId || null;
-        const result = applyGradeChange(db, {
-          assignmentId: payload.assignmentId,
-          studentId: payload.studentId,
-          score: payload.score,
-          feedback: payload.feedback || '',
-          status: 'graded',
-          source: 'manual',
-          actorId,
-          reason: 'management-grade',
-          createIfMissing: true,
-          overrideProtected: isPrivilegedGradeActor(actorId),
-        });
-        if (!result.ok) {
-          const err: any = new Error(
-            result.reason === 'invalid-score'
-              ? '成绩必须是 0~100 的数值'
-              : result.reason === 'assignment-not-found'
-                ? '作业不存在，无法录入成绩'
-                : '成绩写入被拒绝',
-          );
-          err.reason = result.reason;
-          throw err;
-        }
-
-        await eventBus.publish({
-          id: uuidv7(),
-          type: 'assignment.graded',
-          source: 'management.student',
-          payload: {
-            assignmentId: payload.assignmentId,
-            studentId: payload.studentId,
-            score: result.newScore,
-            feedback: payload.feedback || '',
-          },
-          timestamp: Date.now(),
-          correlationId: command.id,
-        });
-
-        return {
-          success: true,
-          assignmentId: payload.assignmentId,
-          studentId: payload.studentId,
-          score: result.newScore,
-          historyId: result.historyId,
-        };
-      },
-    });
-
-    // 17. SCHEDULE CREATE
+    // 14. SCHEDULE CREATE
     const scheduleCreateCmd = 'schedule.create';
     await actionRegistry.register({
       id: 'core-schedule-create',
@@ -872,7 +721,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 18. ATTENDANCE RECORD
+    // 15. ATTENDANCE RECORD
     const attendanceRecordCmd = 'attendance.record';
     await actionRegistry.register({
       id: 'core-attendance-record',
@@ -909,7 +758,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 19. STUDENT SET PROGRESS
+    // 16. STUDENT SET PROGRESS
     const studentSetProgressCmd = 'student.set_progress';
     await actionRegistry.register({
       id: 'core-student-set-progress',
@@ -969,7 +818,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 20. COMPUTER LAB CREATE
+    // 17. COMPUTER LAB CREATE
     const labCreateCmd = 'lab.create';
     await actionRegistry.register({
       id: 'core-lab-create',
@@ -1002,7 +851,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 21. COMPUTER LAB LIST
+    // 18. COMPUTER LAB LIST
     const labListCmd = 'lab.list';
     await actionRegistry.register({
       id: 'core-lab-list',
@@ -1022,7 +871,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 22. SEAT ASSIGN
+    // 19. SEAT ASSIGN
     const labAssignSeatCmd = 'lab.assign_seat';
     await actionRegistry.register({
       id: 'core-lab-assign-seat',
@@ -1072,7 +921,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 23. SCHEDULE CANCEL / SUSPEND
+    // 20. SCHEDULE CANCEL / SUSPEND
     const scheduleCancelCmd = 'schedule.cancel';
     await actionRegistry.register({
       id: 'core-schedule-cancel',
@@ -1127,7 +976,7 @@ export const ManagementPlugin = {
       },
     });
 
-    // 24. SCHEDULE LIST
+    // 21. SCHEDULE LIST
     const scheduleListCmd = 'schedule.list';
     await actionRegistry.register({
       id: 'core-schedule-list',

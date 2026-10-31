@@ -81,6 +81,20 @@ export interface PlatformCommand<T = unknown> {
 
 `setInterceptor(fn)` 注册的拦截器在 handler 查找**之前**执行，用于权限校验与高危操作审批。handler 抛出的错误会被 `console.error('[CommandBus] Failed to execute ...')` 记录后**继续向调用方抛出**。
 
+### ActionDescriptor 与命令归属
+
+`ActionRegistry` 为每条命令注册一份 `ActionDescriptor`（payload schema + 所需能力），
+内核派发前按 `commandType` 取描述符做校验。**一个 `commandType` 只允许一个 owner**：
+
+- `ActionRegistry.register()` 发现同 `commandType` 已存在时会拒绝第二条描述符
+  （测试环境直接抛错；生产环境打印告警并保留先注册的那条）；
+- 重复注册会让 `getActionByCommandType()` 按「最先注册」静默选择，`getAgentTools()`
+  还会在 AI 工具箱里输出两条同名工具 —— 这正是该约束要消除的漂移。
+
+命令归属因此必须显式：例如 `assignment.create` / `assignment.submit` / `assignment.grade`
+只由 `@openlearn/plugin-assignment-eval` 注册。插件停用时对应命令一并消失，HTTP 入口应返回
+明确的 503（作业中心即 `ASSIGNMENT_SERVICE_UNAVAILABLE`），而不是把「命令未注册」暴露成 500。
+
 ### 指令元数据与高频静默 (Command Metadata & Quiet Filtering)
 
 每个指令均支持挂载可选的 `CommandMetadata`：

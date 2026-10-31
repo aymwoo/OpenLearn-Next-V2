@@ -449,9 +449,8 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
   });
 
   it('教师新建作业：不挂班级也能创建（POST /api/assignments 返回 assignmentId 供白板绑定）', async () => {
-    // 回归：`ActionRegistry.getActionByCommandType()` 取的是最先注册的描述符，
-    // management.ts 的 `core-assignment-create` 要求 classId。若插件未接管该描述符，
-    // 这里会得到 `[PayloadValidationError] ... Missing required property "classId"`。
+    // 回归：`assignment.create` 由 assignment-eval 独家注册（不再有 management.ts 的
+    // `core-assignment-create` 竞争），其描述符不要求 classId，只挂课时的作业必须能创建。
     const created = await fetch(`${baseUrl}/api/assignments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
@@ -977,6 +976,22 @@ describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () =
     expect(m, 'ACCEPT_EXT not found in dialog source').toBeTruthy();
     const clientExts = new Set((m![0].match(/\.[a-z0-9]+/g) ?? []).map((e) => e.toLowerCase()));
     expect(clientExts).toEqual(ALLOWED_ASSIGNMENT_EXT);
+  });
+
+  // ── 单一 owner：插件停用时的语义 ────────────────────────────────────────
+  it('assignment-eval 停用时，作业命令端点返回 503（而不是命令未注册的 500）', async () => {
+    const pluginId = '@openlearn/plugin-assignment-eval';
+    await kernelContainer.pluginHost.deactivatePlugin(pluginId);
+    try {
+      const res = await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+        headers: cookie(memberToken),
+      });
+      expect(res.status).toBe(503);
+      const body: any = await res.json();
+      expect(body.code).toBe('ASSIGNMENT_SERVICE_UNAVAILABLE');
+    } finally {
+      await kernelContainer.pluginHost.activatePlugin(pluginId);
+    }
   });
 });
 

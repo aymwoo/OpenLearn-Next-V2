@@ -26,6 +26,19 @@ graph LR
 
 ---
 
+## 命令归属与插件停用
+
+作业中心的 `assignment.*` 命令由 `packages/plugins/assignment-eval.ts` **独家**注册
+（`assignment.create` / `list` / `get` / `submit` / `peer_review` / `assign_peer_reviews` / `grade`），
+`management.ts` 不再注册同名命令。`ActionRegistry` 拒绝同一个 `commandType` 的第二次注册，
+归属漂移会在测试环境直接失败。
+
+因此停用 `@openlearn/plugin-assignment-eval` 等于关闭作业中心的服务端能力：命令总线不再有
+对应 handler，作业中心路由会在派发前返回 `503 ASSIGNMENT_SERVICE_UNAVAILABLE`。附件上传 / 下载
+走 `AssignmentService`，不依赖命令总线，但列表与提交流程均不可用，生产环境不要停用该插件。
+
+---
+
 ## 核心数据结构
 
 ### `plugin_assignment_files` —— 附件本体
