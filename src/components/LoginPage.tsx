@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle } from 'lucide-react';
+import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import { listFromEnvelope } from '../utils/listEnvelope.js';
 
 interface Student {
@@ -31,6 +31,8 @@ interface LoginSiteInfo {
 export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
   const [siteInfo, setSiteInfo] = useState<LoginSiteInfo | null>(null);
+  // 种子账号仍在用默认口令（口令 = 用户名）时才为真 —— 服务端判定，改密后自动转 false
+  const [defaultSeedAccounts, setDefaultSeedAccounts] = useState<string[]>([]);
 
   // Teacher credentials state
   const [username, setUsername] = useState('');
@@ -79,6 +81,24 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
       }
     };
     fetchSiteInfo();
+  }, []);
+
+  // 首次安装提示：仅当种子账号仍在使用默认口令（口令 = 用户名）时显示，
+  // 改密之后服务端返回 active:false，提示自然消失，不会对公网永久广播默认口令。
+  useEffect(() => {
+    const fetchSeedStatus = async () => {
+      try {
+        const res = await fetch('/api/auth/seed-status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.active && Array.isArray(data.accounts)) {
+          setDefaultSeedAccounts(data.accounts.filter((name: unknown) => typeof name === 'string'));
+        }
+      } catch {
+        // 提示只是辅助信息，取不到就安静地不显示
+      }
+    };
+    fetchSeedStatus();
   }, []);
 
   const handleTeacherLogin = async (e: React.FormEvent) => {
@@ -195,6 +215,29 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
               (lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform')}
           </p>
         </div>
+
+        {/* 首次安装提示：只在种子账号还没改过默认口令时出现 */}
+        {defaultSeedAccounts.length > 0 && (
+          <div
+            className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex items-start gap-2"
+            id="login_default_credential_hint"
+          >
+            <KeyRound size={14} className="shrink-0 mt-0.5" />
+            <div className="space-y-1 min-w-0">
+              <p className="font-bold">
+                {lang === 'zh' ? '首次安装？可以直接用默认口令登录' : 'First run? Sign in with the default password'}
+              </p>
+              <p className="font-mono text-amber-100 break-all">
+                {defaultSeedAccounts.map((name) => `${name} / ${name}`).join('  ·  ')}
+              </p>
+              <p className="text-amber-300/80 leading-relaxed">
+                {lang === 'zh'
+                  ? '口令与账号名相同。登录后会强制你改密，改完这条提示自动消失。'
+                  : 'Password equals the username. You will be required to change it right after signing in.'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Custom Tab Switcher */}
         <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1 mb-6">

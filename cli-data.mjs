@@ -503,7 +503,7 @@ export async function runResetAdmin(newPassword, options = {}) {
   const password = generated ? generateResetPassword() : String(newPassword);
 
   if (!fs.existsSync(dbPath)) {
-    const msg = `数据库尚未初始化 (${dbPath})。请先启动一次平台，口令来自环境变量或 storage/bootstrap-credentials.txt。`;
+    const msg = `数据库尚未初始化 (${dbPath})。请先启动一次平台：初始口令默认等于用户名（admin / admin），首次登录后强制改密。`;
     log(`ℹ ${msg}`);
     return { ok: false, error: msg };
   }

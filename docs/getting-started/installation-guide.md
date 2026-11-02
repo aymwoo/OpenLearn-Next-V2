@@ -196,10 +196,11 @@ ALLOWED_ORIGINS=http://localhost:5173
 | `admin`   | 见下方   | 系统管理员 | 全部功能：用户管理、插件管理、系统配置 |
 | `teacher` | 见下方   | 教师       | 课程管理、班级管理、课堂直播、课件分发 |
 
-口令来源（二选一）：
+口令来源（按优先级）：
 
 1. 启动前设置 `OPENLEARN_ADMIN_PASSWORD`、`OPENLEARN_TEACHER_PASSWORD`。
-2. 留空则随机生成，启动日志打印一次，并写入 `storage/bootstrap-credentials.txt`（权限 600）。登录后请修改密码并删除该文件。
+2. 都没设时，**初始口令等于用户名**：`admin` / `admin`、`teacher` / `teacher`。登录页顶部会显示这条提示，装完就能进。
+3. 要旧版的随机口令：设 `OPENLEARN_SEED_PASSWORD_MODE=random`，则随机生成 20 位口令，启动日志打印一次并写入 `storage/bootstrap-credentials.txt`（权限 600）。
 
 若口令仍与用户名相同（含升级前就在用 `admin` / `admin` 的库），登录会被标记为必须改密：除 `POST /api/auth/change-password`、`POST /api/auth/logout`、`GET /api/auth/session`、`GET /api/auth/me` 外，其余 `/api` 请求（含读请求）返回 403 `FORBIDDEN_DEFAULT_PASSWORD`。页面本身仍可打开。
 
@@ -515,11 +516,11 @@ docker compose exec app node scripts/site-backup.mjs
 # 停止服务后删除数据库文件（本地开发 / PM2 裸机）
 rm packages/core/db/educational_os.db
 
-# 重新启动。空库会创建 admin / teacher，口令来自环境变量或 storage/bootstrap-credentials.txt
+# 重新启动。空库会创建 admin / teacher，初始口令默认等于用户名（admin / admin）
 pnpm run dev
 ```
 
-> 重置后到启动日志或 `storage/bootstrap-credentials.txt` 取初始口令。若仍配置成与用户名相同，登录后必须改密，期间业务 API 读请求也会被拦截。详见[系统管理员手册](../administrator-guide/admin-manual.md) §0.2。
+> 重置后直接用 `admin` / `admin` 登录（或用环境变量 / `OPENLEARN_SEED_PASSWORD_MODE=random` 指定的口令）。只要口令仍等于用户名，登录后必须改密，期间除改密 / 登出外的 API（含读请求）一律 403。详见[系统管理员手册](../administrator-guide/admin-manual.md) §0.2。
 >
 > Docker 部署要重置得删卷：`docker compose down -v`（⚠️ 这会清掉 `openlearn_data` 与 `openlearn_backups`，务必先备份）。
 

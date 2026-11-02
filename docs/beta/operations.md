@@ -11,7 +11,7 @@
 开放给教师之前，在目标环境再确认这几件：
 
 1. `ENCRYPTION_KEY` 是 64 位十六进制，已抄到学校的离线位置。换机器、做恢复，都用这一把。若未设置，进程使用数据目录 `storage/encryption-key`（没有就现场生成，权限 600）。日志或管理后台出现「正在使用自动生成的加密密钥」时，先把该文件离线备份，再把同一内容写入 `ENCRYPTION_KEY`。出现这行警告时，不要接入真实 AI 密钥后就放着不管。
-2. `OPENLEARN_ADMIN_PASSWORD` 与 `OPENLEARN_TEACHER_PASSWORD` 已设置，且都不等于用户名。数据目录里的 `storage/bootstrap-credentials.txt` 若存在，抄走后删除。环境里没有 `PLAYWRIGHT_TEST`。
+2. 种子口令已确认：要么提前设置 `OPENLEARN_ADMIN_PASSWORD` 与 `OPENLEARN_TEACHER_PASSWORD`（都不等于用户名），要么接受默认的「口令 = 用户名」（`admin` / `admin`）并确认首次登录后已改密 —— 改密之后 `GET /api/auth/seed-status` 应返回 `{"active":false,"accounts":[]}`。用 `OPENLEARN_SEED_PASSWORD_MODE=random` 时，把数据目录里的 `storage/bootstrap-credentials.txt` 抄走后删除。环境里没有 `PLAYWRIGHT_TEST`。
 3. 卷只有 `/data` 和 `/backups`。课件在 `/data/storage`，插件在 `/data/plugins`，日志在 `/data/logs`。
 4. 前面有 Nginx 时 `TRUST_PROXY` 等于真实层数（演练是 `1`）。应用端口 9000 不对公网。compose 的 `app` 默认发布 `9000:9000`，启用 `proxy` profile 时改掉这行，只留 Nginx 的端口。
 5. `GET /health` 为 `{"status":"ok"}`，可带 `uptime` 与 `version`。`GET /health/ready` 为 `{"status":"ready"}`。未就绪是 503，正文只有 `{"status":"not_ready"}`。
