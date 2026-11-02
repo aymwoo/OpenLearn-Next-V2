@@ -644,6 +644,38 @@ export function LiveClassroomView({
     [],
   );
 
+  /**
+   * 白板写入失败的可见化（限流 429 是最常见的一种）。
+   *
+   * 背景：课堂里所有设备共享一个出口 IP，白板保存与插件轮询都走按 IP 的
+   * 写限流桶；配额被打满时服务端返回 429，而此处此前**静默忽略**失败响应，
+   * 教师看到的是「切了演示文稿但没生效」，反复重试又继续被限流。
+   *
+   * 失败必须让教师知道（否则等于丢改动），但要限流提示频率：
+   * 演示文稿自动播放等场景可能每秒触发一次失败，弹窗刷屏比不弹更糟。
+   */
+  const lastSaveFailureToastAtRef = useRef(0);
+  const notifyWhiteboardSaveFailure = useCallback(
+    (status: number) => {
+      const now = Date.now();
+      if (now - lastSaveFailureToastAtRef.current < 5000) return;
+      lastSaveFailureToastAtRef.current = now;
+      const isRateLimited = status === 429;
+      stableAddToast(
+        lang === 'zh' ? '白板保存失败' : 'Whiteboard save failed',
+        lang === 'zh'
+          ? isRateLimited
+            ? '请求过于频繁，本次改动未保存。请稍后重试（课堂内多台设备共用同一出口 IP 时容易触发）。'
+            : `服务端返回 HTTP ${status}，本次改动未保存，请稍后重试。`
+          : isRateLimited
+            ? 'Too many requests — the change was not saved. Please retry in a moment.'
+            : `Server returned HTTP ${status}; the change was not saved.`,
+        'warning',
+      );
+    },
+    [lang, stableAddToast],
+  );
+
   // 稳定化：内部只用 setState（引用恒定），可安全作为 useCallback 依赖，
   // 否则会连带让 runAutoRecord 每次渲染重建。
   const fetchAttempts = useCallback(async () => {
@@ -2590,25 +2622,40 @@ export function LiveClassroomView({
                           setCurrentWhiteboardPage(currentPage);
                         }}
                         onElementAdd={async (type: string, data: any) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ type, data }),
                           });
+                          if (!res.ok) {
+                            notifyWhiteboardSaveFailure(res.status);
+                            return;
+                          }
                           fetchElements(selectedLesson);
                         }}
                         onElementUpdate={async (elementId: string, data: any) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ data }),
                           });
+                          if (!res.ok) {
+                            // 保存失败必须可见：此前这里静默忽略失败响应，
+                            // 限流（429）时教师看到的是「切了页但没生效」，
+                            // 演示文稿等高频写场景下会反复丢改动。
+                            notifyWhiteboardSaveFailure(res.status);
+                            return;
+                          }
                           fetchElements(selectedLesson);
                         }}
                         onElementDelete={async (elementId: string) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
                             method: 'DELETE',
                           });
+                          if (!res.ok) {
+                            notifyWhiteboardSaveFailure(res.status);
+                            return;
+                          }
                           fetchElements(selectedLesson);
                         }}
                         onRefresh={() => fetchElements(selectedLesson)}
