@@ -57,8 +57,6 @@ pnpm dev
 
 详见 [安装指南](./installation-guide.md) §首次启动与初始口令。
 
-详见 [安装指南](./installation-guide.md) §首次启动与初始口令。
-
 ---
 
 ## 演示数据模式（`pnpm dev:demo`）
