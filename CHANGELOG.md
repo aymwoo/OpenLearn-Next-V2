@@ -20,9 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **环境校验降级**：生产环境把 `OPENLEARN_ADMIN_PASSWORD` 设成 `admin` 由 **error 改为 warning**。原规则已经自相矛盾 —— 不设置该变量同样得到 `admin` / `admin`，阻断显式设置既挡不住弱口令，又让「我就想固定成 admin」的部署无从下手；真正的防线是改密门，因此改为可见告警并提示确认已改密。
   - **启动日志**：建库时打印账号与口令（口令 = 用户名），并说明改密前哪些接口会被拒绝、如何切回随机口令。
 
+### Fixes
+
+- **白板 plugin 挂件双端 id 缺一时不再静默失败**（Issue #370）：`whiteboard.draw` / `whiteboard.batch_draw` 现在统一走 `buildElementData()` —— 只声明 `teacherWidgetId` 或 `studentWidgetId` 之一时，用另一端补齐（双端复用同一挂件）并打 WARN；两端都缺、或 plugin 元素的 `data` 不是合法 JSON 时直接报错、不写入图元。前端渲染侧对缺 id 的历史图元显示「挂件未正确配置」错误态，不再永远停在「正在加载」；渲染时也补了「本端 id 缺失则回退对端」的逻辑。
+
 ### Docs
 
-- **初始凭据口径全量对齐**：`README.md`、`AGENTS.md`、`docs/getting-started/quickstart.md`、`docs/getting-started/installation-guide.md`、`docs/administrator-guide/admin-manual.md`、`docs/configuration/system-configuration.md`、`docs/ai-reference/api/configuration.md`、`docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`docs/migration/version-migration.md`、`docs/beta/operations.md` 与 `.env.example` 统一改述为「默认口令 = 用户名 + 强制改密 + `OPENLEARN_SEED_PASSWORD_MODE` 可切回随机」；环境校验的 error / warning 分档说明同步更新。
+- **初始凭据口径全量对齐**：`README.md`、`AGENTS.md`、`docs/getting-started/quickstart.md`、`docs/getting-started/installation-guide.md`、`docs/administrator-guide/admin-manual.md`、`docs/configuration/system-configuration.md`、`docs/ai-reference/api/configuration-map.md`、`docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`docs/migration/version-migration.md`、`docs/beta/operations.md` 与 `.env.example` 统一改述为「默认口令 = 用户名 + 强制改密 + `OPENLEARN_SEED_PASSWORD_MODE` 可切回随机」；环境校验的 error / warning 分档说明同步更新。
 
 ## [0.7.9] - 2026-10-31
 

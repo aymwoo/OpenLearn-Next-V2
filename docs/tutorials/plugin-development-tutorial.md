@@ -633,6 +633,14 @@ await eventBus.publish({
 }
 ```
 
+**双端挂件 id 的契约（`teacherWidgetId` / `studentWidgetId`）**
+
+- 两个 id 分别对应 `teacher.dashboard.widget` / `student.view` slot 里注册的组件 `id`；
+- **至少声明一个**。只声明一端时，平台在写入白板前会把同一 id 补齐到另一端并打 `WARN`（适用于双端复用同一挂件）；
+- 两端都缺，或 plugin 元素的 `data` 不是合法 JSON 时，`whiteboard.draw` 直接报错、不写入图元 —— 不会出现「教师端正常、学生端永久转圈」；
+- 建议同时声明 `pluginId`（插件 manifest id）：widgetId 重名时用于消歧与日志定位，缺失只告警；
+- 已写入的历史图元若缺 id，前端会渲染「挂件未正确配置」错误态，而不是无限加载。
+
 ```mermaid
 sequenceDiagram
     autonumber

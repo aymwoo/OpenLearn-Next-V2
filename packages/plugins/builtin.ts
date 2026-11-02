@@ -532,6 +532,61 @@ export const BuiltinPlugin = {
     ];
 
     /**
+     * plugin 元素的 payload 契约（Issue #370）。
+     *
+     * 挂件按「教师端 / 学生端」两个 widgetId 取组件，缺一个就会静默变成 undefined，
+     * 对端只看到卡片永远停在「正在加载」。这里在写入前统一收口：
+     * - `pluginId` 建议声明（仅用于 widgetId 同名时的消歧与日志定位），缺失只告警；
+     *   历史上声明式 classroomTools 的 payload 普遍没写它，直接报错会打断存量插件；
+     * - `teacherWidgetId` / `studentWidgetId` 至少一个，缺的一端用另一端补齐并告警（双端复用同一挂件）；
+     * - 两端都缺直接抛错，让调用方在写的时候就知道漏了。
+     */
+    const normalizePluginElementData = (dataObj: Record<string, unknown>): void => {
+      const pluginId = typeof dataObj.pluginId === 'string' ? dataObj.pluginId.trim() : '';
+      if (!pluginId) {
+        console.warn('[Whiteboard] plugin 元素未声明 pluginId，将只能按 widgetId 查找组件；建议补上 manifest id。');
+      }
+      const teacher = typeof dataObj.teacherWidgetId === 'string' ? dataObj.teacherWidgetId.trim() : '';
+      const student = typeof dataObj.studentWidgetId === 'string' ? dataObj.studentWidgetId.trim() : '';
+      if (!teacher && !student) {
+        throw new Error(
+          'plugin 元素必须至少声明 teacherWidgetId 或 studentWidgetId 之一，否则教师端 / 学生端都会停在加载态。',
+        );
+      }
+      if (!teacher) {
+        dataObj.teacherWidgetId = student;
+        console.warn(`[Whiteboard] plugin 元素只声明了 studentWidgetId，已回退 teacherWidgetId="${student}"。`);
+      } else if (!student) {
+        dataObj.studentWidgetId = teacher;
+        console.warn(`[Whiteboard] plugin 元素只声明了 teacherWidgetId，已回退 studentWidgetId="${teacher}"。`);
+      }
+    };
+
+    /**
+     * 合并 segmentId / page 元数据，并对 plugin 元素做双端 widgetId 校验。
+     * 非 plugin 元素的 `data` 不是合法 JSON 时保持原样写入（历史行为）。
+     */
+    const buildElementData = (type: string, rawData: string, segmentId?: unknown, page?: unknown): string => {
+      let dataObj: Record<string, unknown> | null = null;
+      try {
+        const parsed = JSON.parse(rawData);
+        dataObj = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch {
+        if (type === 'plugin') {
+          throw new Error(
+            'plugin 元素的 data 必须是合法 JSON 字符串（例如 {"pluginId":"ext-x","teacherWidgetId":"w"}）。',
+          );
+        }
+      }
+      if (!dataObj) return rawData;
+      if (segmentId && !dataObj.segmentId) dataObj.segmentId = segmentId;
+      if (page !== undefined && dataObj.page === undefined) dataObj.page = page;
+      else if (dataObj.page === undefined) dataObj.page = 0;
+      if (type === 'plugin') normalizePluginElementData(dataObj);
+      return JSON.stringify(dataObj);
+    };
+
+    /**
      * 校验白板元素类型是否合法。
      * 支持核心已知类型、插件命名空间图元（如 "plugin-id/item"）及插件注册表贡献图元。
      */
@@ -611,23 +666,8 @@ export const BuiltinPlugin = {
         // 方案 C：在 whiteboard.draw 层面补齐 segmentId 和 page 元数据。
         // 优先使用调用方显式传入的值，否则尝试从现有上下文中推导。
         // 这确保所有元素——无论通过插件、前端还是 AI Agent 创建——都携带正确的上下文信息。
-        let dataStr = payload.data;
-        try {
-          const dataObj = JSON.parse(dataStr);
-          // segmentId: 调用方传入 > 已有 > 不设置（让前端回退到分段过滤或全局可见）
-          if (payload.segmentId && !dataObj.segmentId) {
-            dataObj.segmentId = payload.segmentId;
-          }
-          // page: 调用方传入 > 已有 > 默认 0
-          if (payload.page !== undefined && dataObj.page === undefined) {
-            dataObj.page = payload.page;
-          } else if (dataObj.page === undefined) {
-            dataObj.page = 0;
-          }
-          dataStr = JSON.stringify(dataObj);
-        } catch {
-          // 如果 data 不是合法 JSON，保持原样存入
-        }
+        // segmentId / page 补齐 + plugin 元素双端 widgetId 校验（Issue #370）
+        const dataStr = buildElementData(payload.type, payload.data, payload.segmentId, payload.page);
 
         const stmt = db.prepare(
           'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -894,16 +934,8 @@ export const BuiltinPlugin = {
               throw new Error(`不支持的元素类型 "${el.type}"。已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}`);
             }
             const elementId = uuidv7();
-            let dataStr = el.data;
-            try {
-              const dataObj = JSON.parse(dataStr);
-              if (el.segmentId && !dataObj.segmentId) dataObj.segmentId = el.segmentId;
-              if (el.page !== undefined && dataObj.page === undefined) dataObj.page = el.page;
-              else if (dataObj.page === undefined) dataObj.page = 0;
-              dataStr = JSON.stringify(dataObj);
-            } catch {
-              /* 保持原样 */
-            }
+            // 与 whiteboard.draw 共用同一份补齐 / 校验逻辑，批量路径也不能漏（Issue #370）
+            const dataStr = buildElementData(el.type, el.data, el.segmentId, el.page);
             insertStmt.run(elementId, payload.lessonId, el.type, dataStr, Date.now());
             elementIds.push(elementId);
           }
