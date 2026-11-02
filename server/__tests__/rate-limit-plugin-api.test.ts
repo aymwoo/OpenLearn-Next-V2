@@ -23,7 +23,7 @@ import type { AddressInfo } from 'net';
 
 // 桩掉会话解析：测试只关心「分桶键」，不关心真实会话表
 vi.mock('../middleware/auth.js', () => ({
-  getCookieToken: (req: any) => {
+  getCookieToken: (req: { headers: { cookie?: string } }) => {
     const rc = req.headers.cookie;
     if (!rc) return null;
     for (const part of rc.split(';')) {
