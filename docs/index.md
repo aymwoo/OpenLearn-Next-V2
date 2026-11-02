@@ -2,12 +2,15 @@
 
 欢迎使用 **OpenLearn V2** 官方技术文档中心。OpenLearn V2 是一套全栈、分布式、基于插件沙箱隔离（inline / worker_threads / 子进程三档执行模式）架构的智能教育操作系统（Educational OS）。
 
+> 🚀 **第一次使用？** 先读 [快速上手手册](getting-started/quickstart-handbook.md)：安装 → 运行 → 上一节课 → 写第一个插件，一页走完，关键步骤配截图。
+
 ---
 
 ```{toctree}
 :maxdepth: 2
 :caption: 🚀 快速入门 (Getting Started)
 
+getting-started/quickstart-handbook
 getting-started/overview
 getting-started/installation-guide
 getting-started/quickstart
