@@ -62,8 +62,9 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 ```
 
 - 注册于 `packages/core/kernel/index.ts`，是**整个平台共享数据库**。
-- **内置核心插件（Inline 模式）**：无命名空间隔离，可直接调用 better-sqlite3 读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。
+- **内置核心插件（Inline 模式）**：无命名空间隔离，可直接调用 better-sqlite3 读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。**默认不经过 SQL-Guard** —— 这是历史行为，不是承诺。
 - **隔离进程与第三方插件（Worker / Process 模式）**：必须经由主线程 RPC 代理转发，受到 `packages/core/plugin-host/sql-guard.ts` 中 **SQL-Guard 安全守卫的硬拦截**。**严格禁止直接读写或 DDL 任何平台核心表**。
+- **想在 inline 下自查**（Issue #367）：设 `OPENLEARN_SQL_GUARD_ALL_MODES=1`，`ctx.resolve(IDatabaseToken)` 返回的句柄会套一层 `inline-db-guard`，判定与 worker 完全相同（`prepare` / `exec` / `pragma` 三个入口）。抛出的错误带 `code = 'PLUGIN_SQL_REJECTED'`。默认关闭，因为存量 inline 插件普遍存在核心表直查与裸 DDL，默认开启会让它们整批炸掉 —— 插件作者应在**开发期**打开这个开关跑一遍。
 - **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果的类型为自包含的 `SqliteDatabase`（运行时即 better-sqlite3 `Database`），Inline 模式下可直接使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
 
 ### 1.1 ⚠️ SQL-Guard 核心数据表硬黑名单与隔离机制（安全红线）

@@ -678,7 +678,8 @@ await commandBus.registerHandler('myplugin.launch', {
 ```
 
 > [!CAUTION] 🚨 严正警示：严禁通过 SQL 直接写 `whiteboard_elements`！
-> 子进程沙箱插件（`process` 模式）如果试图在自定义 Handler 中通过 `rawDb.prepare("INSERT INTO whiteboard_elements ...")` 手动向白板落库，会被 **`sql-guard` 零信任表黑名单强行拦截报错**！
+> 子进程沙箱插件（`process` / `worker` 模式）如果试图在自定义 Handler 中通过 `rawDb.prepare("INSERT INTO whiteboard_elements ...")` 手动向白板落库，会被 **`sql-guard` 零信任表黑名单强行拦截报错**！
+> inline 插件默认**不走**这道守卫（存量插件兼容），本地自查请设 `OPENLEARN_SQL_GUARD_ALL_MODES=1` —— 打开后 `ctx.resolve(IDatabaseToken)` 的 `prepare` / `exec` / `pragma` 与 worker 同一口径，错误码 `PLUGIN_SQL_REJECTED`。
 > 现象为：前端虽弹窗显示「下发成功」（HTTP 200 接收成功），但控制台抛出 SQL-Guard 异常，白板画布空无一物。
 > **正确白板投射方式**：在 `manifest.json` 申请 `whiteboard:write` 权限，在 Handler 中调用 `ctx.services.commandBus.execute({ type: 'whiteboard.draw', payload: { ... } })` 由内核安全代发！
 
