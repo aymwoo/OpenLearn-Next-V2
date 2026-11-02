@@ -26,6 +26,7 @@ import { createLogger } from '../observability/logger.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
 import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
 import { PluginCapabilityDeniedError } from './errors.js';
+import { createGuardedPluginDatabase, isSqlGuardAllModesEnabled } from './inline-db-guard.js';
 import { warnDeprecation } from '../extension-points/index.js';
 import {
   ICommandBusServiceToken,
@@ -677,12 +678,22 @@ function wrapInteractionRuntimeService(
  * 两条路径（Token 对象 / 字符串名）**必须都走这里** —— 否则按名字解析的插件会绕过代理，
  * 回收拦截形同虚设。
  */
-function wrapPluginRuntimeService<T>(raw: T, tokenName: string, tracker: ResourceTracker, pluginId: string): T {
+function wrapPluginRuntimeService<T>(
+  raw: T,
+  tokenName: string,
+  tracker: ResourceTracker,
+  pluginId: string,
+  manifestId?: string,
+): T {
   if (tokenName === IClassroomLifecycleServiceToken.name) {
     return wrapClassroomLifecycleService(raw as IClassroomLifecycleService, tracker, pluginId) as T;
   }
   if (tokenName === IInteractionRuntimeServiceToken.name) {
     return wrapInteractionRuntimeService(raw as IInteractionRuntimeService, tracker, pluginId) as T;
+  }
+  // Issue #367：inline 默认不拦 SQL（存量插件会整批炸），打开开关后与 worker 同一口径。
+  if (tokenName === '@openlearn/core:IDatabase' && isSqlGuardAllModesEnabled()) {
+    return createGuardedPluginDatabase(raw, pluginId, manifestId);
   }
   return raw;
 }
@@ -1110,13 +1121,13 @@ export async function buildContext(
         // Issue #327：字符串路径也必须过代理 —— 否则按名字解析的插件会绕过回收拦截。
         return serviceRegistry
           .resolveByName(token)
-          .then((raw) => wrapPluginRuntimeService(raw, token, tracker, pluginId) as T);
+          .then((raw) => wrapPluginRuntimeService(raw, token, tracker, pluginId, manifest.id) as T);
       }
       // Issue #327：课堂阶段门禁 / 课堂互动提供者只能经 ctx.resolve 拿到，
       // 它们不进 ResourceTracker —— 在这里做 per-plugin 代理，dispose 时精确注销。
       return serviceRegistry
         .resolve(token)
-        .then((raw) => wrapPluginRuntimeService(raw, token.name, tracker, pluginId) as T);
+        .then((raw) => wrapPluginRuntimeService(raw, token.name, tracker, pluginId, manifest.id) as T);
     },
     // V3.2: 插件向 DI 容器提供服务（对应 manifest.provides）
     provide: async <T>(token: Token<T>, instance: T): Promise<void> => {
