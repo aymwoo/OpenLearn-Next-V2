@@ -69,7 +69,7 @@ TRUST_PROXY=1 docker compose --profile proxy up -d --build
 
 1. **初始口令 = 用户名**：种子账号是 `admin`（管理员）和 `teacher`（教师），口令同样是 `admin` / `teacher`。首次登录会强制改密（≥8 位、含字母和数字、不能等于用户名），**改密前除改密/登出外的接口一律 403**。登录页顶部会直接给出这条提示：
 
-   ![登录页：首次安装可以用默认口令登录，登录后强制改密](images/quickstart/01-login.png)
+   ![登录页：首次安装可以用默认口令登录，登录后强制改密](images/quickstart/quickstart-01-login.png)
 
    - 想换初始口令：设置 `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`；
    - 想恢复旧版随机口令：`OPENLEARN_SEED_PASSWORD_MODE=random`（只对首次建库生效，口令写入 `storage/bootstrap-credentials.txt`）。
@@ -123,7 +123,7 @@ pnpm dev:demo -- --reset  # 丢弃旧演示数据重来
 
 教师登录后落在 **互动课堂 · 授课控制台**，这也是最常用的主界面。左侧是功能导航，中间自上而下是三件事：今日排期 → 选课程 → 选班级 → 开始上课；右侧是本节课的教学蓝图、学生状态与开课自检。
 
-![教师主界面：互动课堂 · 授课控制台](images/quickstart/02-portal.png)
+![教师主界面：互动课堂 · 授课控制台](images/quickstart/quickstart-02-portal.png)
 
 ### 3.3 开始上课
 
@@ -137,7 +137,7 @@ pnpm dev:demo -- --reset  # 丢弃旧演示数据重来
 
 ### 3.4 课中常用操作
 
-![课中授课：白板、课堂互动工具、教学环节与学生状态](images/quickstart/03-classroom.png)
+![课中授课：白板、课堂互动工具、教学环节与学生状态](images/quickstart/quickstart-03-classroom.png)
 
 | 想做的事             | 位置                                                        | 说明                                                                  |
 | -------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -156,7 +156,7 @@ pnpm dev:demo -- --reset  # 丢弃旧演示数据重来
 2. 在「结课通票」阶段可做随堂作业评定、60s 通票反馈、课后任务下发；
 3. 切到「学情简报」，会弹出全景概要，点 **完成归档** 结束本次课堂（会话进入已归档战报，才能开始下一节课）。
 
-![学情简报：全景概要，完成归档即下课](images/quickstart/04-briefing.png)
+![学情简报：全景概要，完成归档即下课](images/quickstart/quickstart-04-briefing.png)
 
 > 从其它路径进入「学情简报」时，页头也常驻「归档并结束课堂」入口，效果相同。
 
@@ -284,7 +284,7 @@ node ../packages/plugin-sdk/cli.mjs build
    - 第 5 步：`确认授予清单申请的能力。不勾选则这些能力不会生效。`
 4. 点 **确认安装并上传**。安装成功后会自动启用，卡片上显示 `已启用`、`1 个课堂工具`、`1 项权限`。
 
-![插件中心：Hello Tool 已安装并启用](images/quickstart/05-plugin-center.png)
+![插件中心：Hello Tool 已安装并启用](images/quickstart/quickstart-05-plugin-center.png)
 
 > 卡片右下角的按钮写的是「点它会做什么」：显示 **禁用** 表示当前已启用（显示「启用」则说明已停用，多半是激活失败）。
 
@@ -295,7 +295,7 @@ node ../packages/plugin-sdk/cli.mjs build
 3. 白板工具栏右侧的拼图图标（tooltip **互动工具 (插件扩展)**，右上角角标 `1`）；
 4. 展开 **互动工具 · 1 个插件** → 点 **Hello 课堂工具**，右下角弹出 `✓ 工具下发成功`，左侧课堂互动反馈出现 `插件工具 [Hello 课堂工具] 执行完毕，数据成功下发。`
 
-![课堂工具：插件提供的 Hello 课堂工具出现在互动工具面板，点击后下发成功](images/quickstart/06-plugin-effect.png)
+![课堂工具：插件提供的 Hello 课堂工具出现在互动工具面板，点击后下发成功](images/quickstart/quickstart-06-plugin-effect.png)
 
 ### 4.7 接着往下学
 

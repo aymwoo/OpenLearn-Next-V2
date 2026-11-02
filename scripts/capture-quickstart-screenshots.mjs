@@ -120,7 +120,7 @@ try {
   const loginInputs = page.locator('input');
   await waitFor(loginInputs.first(), '登录表单');
   await page.waitForTimeout(600); // 等字体与首次引导提示稳定
-  await shot(page, '01-login.png');
+  await shot(page, 'quickstart-01-login.png');
 
   // ── 2. 登录（演示教师）─────────────────────────────────────────────────
   await loginInputs.nth(0).fill(TEACHER_USER);
@@ -153,7 +153,7 @@ try {
   }
   if (!(await startBtn.isEnabled())) fail('「开始上课」仍处于禁用状态：课程/班级未就绪。');
   await page.waitForTimeout(600);
-  await shot(page, '02-portal.png');
+  await shot(page, 'quickstart-02-portal.png');
 
   // ── 4. 课中授课（白板）───────────────────────────────────────────────────
   await startBtn.click();
@@ -162,7 +162,7 @@ try {
   await enterBoard.click();
   await waitFor(page.getByRole('button', { name: /完成授课，进入课后/ }), '白板阶段的「完成授课」按钮');
   await page.waitForTimeout(1200); // 白板初始化 + 学生在线状态刷新
-  await shot(page, '03-classroom.png');
+  await shot(page, 'quickstart-03-classroom.png');
 
   // ── 5. 学情简报 / 归档（下课）────────────────────────────────────────────
   await page.getByRole('button', { name: /完成授课，进入课后/ }).click();
@@ -172,7 +172,7 @@ try {
   const briefingDialog = page.getByText('全景课堂学情简报').first();
   await waitFor(briefingDialog, '「全景课堂学情简报」弹窗');
   await page.waitForTimeout(5000); // 等「课堂阶段已切换」toast 自动消失，避免遮住截图
-  await shot(page, '04-briefing.png');
+  await shot(page, 'quickstart-04-briefing.png');
 
   // ── 6. 清理：完成归档，让演示库回到「无进行中课堂」状态 ────────────────
   const archiveBtn = page.getByRole('button', { name: /完成归档/ });
