@@ -58,16 +58,11 @@ def extract_capabilities() -> dict:
                     re.findall(r"capabilityRequired:\s*" + _quoted(r"[^'\"]+"), text)
                 )
 
-    # 1b. 方法级策略闸门：唯一权威清单是 capability/catalog.ts 的 CAP（Issue #368）。
-    #     method-policy.ts 现在只做别名（= CAP.X），再去那里抓字面量会得到空表。
+    # 1b. 方法级策略闸门：唯一权威清单是 capability/catalog.ts 的 CAP_* 常量（Issue #368）。
+    #     这些常量以 export const CAP_X = 'literal' 声明（字面量类型），再由 CAP 对象引用；
+    #     method-policy.ts 现在只做 re-export，去那里抓字面量会得到空表。
     catalog = (REPO / "packages/core/capability/catalog.ts").read_text(encoding="utf-8")
-    method_block = ""
-    if "── 方法级" in catalog:
-        method_block = catalog.split("── 方法级", 1)[1].split("── 平台内部", 1)[0]
-    method_policy = {
-        f"CAP_{key}": value
-        for key, value in re.findall(r"^\s*([A-Z_]+):\s*'([^']+)'", method_block, re.M)
-    }
+    method_policy = dict(re.findall(r"export const (CAP_\w+)\s*=\s*'([^']+)'", catalog))
 
     # 1c. 第三套：classroom-runtime 的 RuntimePermission（与上面两套正交）
     #     定义在 packages/core/classroom-runtime/types.ts 的 `RuntimePermission` 联合类型。
