@@ -7,7 +7,7 @@
 [![pnpm: 10.x](https://img.shields.io/badge/pnpm-10.33.4-orange.svg)](package.json)
 [![CI](https://github.com/aymwoo/OpenLearn-Next-V2/actions/workflows/ci.yml/badge.svg)](https://github.com/aymwoo/OpenLearn-Next-V2/actions/workflows/ci.yml)
 
-📚 **官方文档**：[在线文档库 (ReadTheDocs)](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [快速上手](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [部署运维手册](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)
+📚 **官方文档**：[在线文档库 (ReadTheDocs)](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [**快速上手手册**（安装 → 运行 → 上课 → 写插件，含截图）](docs/getting-started/quickstart-handbook.md) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [部署运维手册](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)
 
 ---
 
@@ -42,6 +42,8 @@
 ---
 
 ## 🚀 快速开始
+
+> 第一次使用？先看 [**快速上手手册**](docs/getting-started/quickstart-handbook.md)：安装 → 运行 → 上一节课 → 写第一个插件，一步一图。下面是命令速查。
 
 ### 方式 A：一键试用（无需克隆代码）
 

@@ -34,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **回归**：`server/__tests__/rate-limit-plugin-api.test.ts` 覆盖「同 IP 不同会话互不抢配额」「插件轮询不占用通用写桶」「匿名回落 IP 分桶」三条。
   - **验证**（同一生产构建 + 同一负载）：修复后 14 个客户端 560 次轮询 **0 次 429**，教师端 90 次白板保存 **0 次 429**。
 
+### Docs
+
+- **新增《快速上手手册》**（Issue #384）：`docs/getting-started/quickstart-handbook.md` 用一页走完「安装 → 运行确认 → 教师上课最短路径 → 写第一个插件」，关键步骤配截图（`docs/getting-started/images/quickstart/`），并新增 `scripts/capture-quickstart-screenshots.mjs` 从干净的演示实例自动重拍截图（对关键文案做断言，界面改版后重跑即可）。根 `README`、文档首页与 `quickstart.md` 均加入口；细节仍链接到 `installation-guide.md` 与 `docs/reference/`，不复制契约文档。
+
 ## [0.7.10] - 2026-11-02
 
 ### Features
