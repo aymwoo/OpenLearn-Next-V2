@@ -11,7 +11,7 @@
 > python3 audit-tools/agent_facts.py --check   # 校验是否与源码漂移（CI 用）
 > ```
 >
-> 基线：平台 `0.7.8` / `@openlearn/plugin-sdk@3.7.5` / `@openlearn/plugin-test-kit@3.3.3`
+> 基线：平台 `0.7.8` / `@openlearn/plugin-sdk@3.8.0` / `@openlearn/plugin-test-kit@3.3.3`
 > 裁决日期：2026-10-30
 
 ---

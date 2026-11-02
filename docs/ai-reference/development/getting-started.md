@@ -17,7 +17,7 @@
 ### 1.1 依赖版本
 
 ```bash
-npm i -D @openlearn/plugin-sdk@3.7.5   # 运行时类型 + CLI
+npm i -D @openlearn/plugin-sdk@3.8.0   # 运行时类型 + CLI
 npm i -D esbuild jszip                  # CLI 的构建期依赖
 npm i -D vitest @openlearn/plugin-test-kit
 npm i -D uuid zod                       # SDK 自身运行期引用，必须显式装

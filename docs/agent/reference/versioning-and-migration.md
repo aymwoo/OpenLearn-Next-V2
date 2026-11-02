@@ -1,6 +1,6 @@
 # 版本兼容与迁移
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5` / OpenLearnV2 v0.7.8
+> **适用范围**：`@openlearn/plugin-sdk@3.8.0` / OpenLearnV2 v0.7.8
 > 解决两个问题：**宿主版本和 SDK 版本是同一条线吗？** 插件升级后，老用户的数据怎么办？
 
 ---
@@ -13,7 +13,7 @@
 
 - 宿主升级 **不必然** 要求插件换 SDK 版本；SDK 升到 `3.7.5` 也不要求宿主升到某个版本。
 - SDK 是**独立发版**的 npm 包，它的版本号与宿主版本号没有对应关系。
-- 所以「宿主 0.7.8 就该用 SDK 3.7.5」是巧合，不是规则。
+- 所以「宿主 0.7.8 就该用 SDK 3.8.0」是巧合，不是规则。
 
 → **两个都要显式声明**：manifest 里写 `engines.openlearn`，
 `package.json` 里写 `"@openlearn/plugin-sdk": "^3.7.5"`。
@@ -100,7 +100,7 @@
 ### 3.1 迁到 3.7.5 要做什么
 
 ```bash
-npm i -D @openlearn/plugin-sdk@3.7.5
+npm i -D @openlearn/plugin-sdk@3.8.0
 rm -rf node_modules package-lock.json && npm i
 npx @openlearn/plugin-sdk build
 ```

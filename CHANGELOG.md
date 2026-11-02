@@ -3,15 +3,20 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.7.5**) and `@openlearn/plugin-test-kit` (currently **3.3.3**).
+> `@openlearn/plugin-sdk` (currently **3.8.0**) and `@openlearn/plugin-test-kit` (currently **3.3.3**).
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [0.7.10] - 2026-11-02
+
 ### Features
 
+- **`@openlearn/plugin-sdk` 升至 3.8.0（全部为新增导出，无破坏性变更）**：能力字符串清单与校验函数（`CAP` / `validateManifestCapabilities` / `assertValidManifestCapabilities`）、`IActionRegistryService.listRegisteredCommandTypes` / `listMissingDescriptors`、受管名册 `IClassRosterService` 与 `IClassRosterServiceToken`、`PluginContext.services.roster`。平台发布时按精确版本 pin 3.8.0；细节见 `packages/plugin-sdk/CHANGELOG.md`。
 - **插件激活后自动自检「有 handler、没有 ActionDescriptor」的命令**（Issue #369）：`PluginHost` 在 inline 激活前后比对宿主 CommandBus 的命令类型，把本次新增但没登记描述符的命令以 WARN 列出（含 403 `COMMAND_NOT_REGISTERED` 后果与修复指引）。运行时差集能覆盖 `for` 循环、对象表、`regHandler()` 包装这类静态扫描抓不到的动态注册；worker / process 模式不适用（handler 在隔离进程内）。同时给 `ActionRegistry` 增加只读的 `listRegisteredCommandTypes()` / `listMissingDescriptors()`，插件 smoke test 可直接断言；SDK 类型同步。
 - **能力字符串收敛为单一权威清单 + 加载期校验**（Issue #368）：新增 `packages/core/capability/catalog.ts`（`CAP` / `CAPABILITIES`），`CapabilityGuard`、`method-policy`、SDK 与 manifest 校验全部从它取值，不再各写一份。SDK 导出 `validateManifestCapabilities()` / `assertValidManifestCapabilities()`，插件构建期即可拦住拼错 / 捏造的权限串；平台在授权前对未知能力打 ERROR 日志，并在 `pointsLedger` 因缺能力被拒时补一条 ERROR 日志（插件侧 try/catch 吞掉异常后仍可定位）。能力矩阵文档与代码清单的一致性由 `catalog.test.ts` 守住。
 - **初始口令默认等于用户名（`admin` / `admin`），登录页直接给出首次安装提示**：

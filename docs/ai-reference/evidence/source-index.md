@@ -23,7 +23,7 @@
 | 结论             | 核对命令                                                                                               | 期望值  |
 | ---------------- | ------------------------------------------------------------------------------------------------------ | ------- |
 | 平台版本         | `node -p "require('./package.json').version"`                                                          | `0.7.8` |
-| SDK 版本         | `node -p "require('./packages/plugin-sdk/package.json').version"`                                      | `3.7.5` |
+| SDK 版本         | `node -p "require('./packages/plugin-sdk/package.json').version"`                                      | `3.8.0` |
 | test-kit 版本    | `node -p "require('./packages/plugin-test-kit/package.json').version"`                                 | `3.3.3` |
 | 槽位总数         | `node -p "JSON.parse(require('fs').readFileSync('docs/agent/contracts/slots.json')).total"`            | `120`   |
 | 禁写表总数       | `node -p "JSON.parse(require('fs').readFileSync('docs/agent/contracts/forbidden-tables.json')).total"` | `40`    |
@@ -264,15 +264,15 @@ grep -c 'actionRegistry\.register(' packages/plugins/*.ts server/routes/*.ts
 
 位置：`docs/agent/contracts/`
 
-| 文件                      | 顶层键                                                                                                    | 已核对的计数          |
-| ------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------- |
-| `versions.json`           | `platform` / `plugin_sdk` / `plugin_test_kit`                                                             | 0.7.8 / 3.7.5 / 3.3.3 |
-| `slots.json`              | `extension_slots` / `anchor_slots` / `total`                                                              | 120 / 8 / 120         |
-| `capabilities.json`       | `command_required` / `method_policy` / `runtime_permission` / `blocked_wildcard` / `_no_global_whitelist` | 19 / 8 / 7            |
-| `tokens.json`             | `tokens` / `extra_names` / `total` / `_count_trap`                                                        | 30 / 1 / 31           |
-| `forbidden-tables.json`   | `tables` / `total`                                                                                        | 40 / 40               |
-| `contributes-groups.json` | `a_strict_keys` / `b_loose_keys` / `a_total` / `b_total`                                                  | 71 / 38               |
-| `bridge-ops.json`         | `frame_ops` / `view_wire_ops` / `frame_total` / `view_total`                                              | 10 / 8                |
+| 文件                      | 顶层键                                                                                                    | 已核对的计数           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `versions.json`           | `platform` / `plugin_sdk` / `plugin_test_kit`                                                             | 0.7.10 / 3.8.0 / 3.3.3 |
+| `slots.json`              | `extension_slots` / `anchor_slots` / `total`                                                              | 120 / 8 / 120          |
+| `capabilities.json`       | `command_required` / `method_policy` / `runtime_permission` / `blocked_wildcard` / `_no_global_whitelist` | 19 / 8 / 7             |
+| `tokens.json`             | `tokens` / `extra_names` / `total` / `_count_trap`                                                        | 30 / 1 / 31            |
+| `forbidden-tables.json`   | `tables` / `total`                                                                                        | 40 / 40                |
+| `contributes-groups.json` | `a_strict_keys` / `b_loose_keys` / `a_total` / `b_total`                                                  | 71 / 38                |
+| `bridge-ops.json`         | `frame_ops` / `view_wire_ops` / `frame_total` / `view_total`                                              | 10 / 8                 |
 
 **冲突裁决顺序**：
 
