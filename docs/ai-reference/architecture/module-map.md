@@ -239,14 +239,14 @@
 7 个 JSON 由 `audit-tools/agent_facts.py` 从源码抽取，`--check` 在 CI 校验漂移。
 **AI 应优先读它们，而不是数文档里的数字。**
 
-| 文件                      | 内容                                     | 关键计数              |
-| ------------------------- | ---------------------------------------- | --------------------- |
-| `slots.json`              | `ExtensionSlot` 全集 + 有渲染点的 anchor | 120 / 8               |
-| `capabilities.json`       | 三套能力登记 + 被硬拒的通配符            | 19 / 8 / 7            |
-| `tokens.json`             | SDK 导出 Token、可解析 Token             | 32 / 31               |
-| `contributes-groups.json` | `contributes` 严格键 / 宽松键            | 71 / 38               |
-| `bridge-ops.json`         | frame / view 两套 op                     | 10 / 8                |
-| `forbidden-tables.json`   | SQL 禁写表                               | 40                    |
+| 文件                      | 内容                                     | 关键计数               |
+| ------------------------- | ---------------------------------------- | ---------------------- |
+| `slots.json`              | `ExtensionSlot` 全集 + 有渲染点的 anchor | 120 / 8                |
+| `capabilities.json`       | 三套能力登记 + 被硬拒的通配符            | 19 / 8 / 7             |
+| `tokens.json`             | SDK 导出 Token、可解析 Token             | 32 / 31                |
+| `contributes-groups.json` | `contributes` 严格键 / 宽松键            | 71 / 38                |
+| `bridge-ops.json`         | frame / view 两套 op                     | 10 / 8                 |
+| `forbidden-tables.json`   | SQL 禁写表                               | 40                     |
 | `versions.json`           | 版本基线                                 | 0.7.10 / 3.8.0 / 3.3.3 |
 
 ---
