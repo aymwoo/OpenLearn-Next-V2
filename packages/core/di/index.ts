@@ -55,6 +55,7 @@ export {
 export { StorageService } from './storage-service.js';
 export { AIService } from './ai-service.js';
 export { CoursewareRuntimeScriptRegistry } from './courseware-runtime-script-registry.js';
+export * from './ai-provider-resolver.js';
 
 // ── Platform DI Container (PI-008) ──────────────────────────────────────
 

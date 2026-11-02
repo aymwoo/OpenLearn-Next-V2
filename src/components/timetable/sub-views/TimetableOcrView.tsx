@@ -20,7 +20,7 @@ export interface TimetableOcrViewProps {
   lang: 'zh' | 'en';
   ocrProviderId: string;
   setOcrProviderId: (id: string) => void;
-  aiProviders: { id: string; name: string; model_name: string }[];
+  aiProviders: { id: string; name: string; model_name: string; is_shared?: boolean | number }[];
   ocrFileInputRef: React.RefObject<HTMLInputElement | null>;
   handleOcrDrop: (e: React.DragEvent<HTMLDivElement>) => void;
   handleOcrImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -117,11 +117,20 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                 {lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider'}
               </option>
             ) : (
-              aiProviders.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.model_name})
-                </option>
-              ))
+              aiProviders.map((p) => {
+                const scopeLabel = p.is_shared
+                  ? lang === 'zh'
+                    ? '· 平台共享'
+                    : '· Shared'
+                  : lang === 'zh'
+                    ? '· 私有'
+                    : '· Private';
+                return (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.model_name}) {scopeLabel}
+                  </option>
+                );
+              })
             )}
           </select>
           <span className="text-xs text-gray-400 mt-1 block">

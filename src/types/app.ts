@@ -174,6 +174,8 @@ export type AIProvider = {
   api_url: string;
   api_key: string;
   model_name: string;
+  owner_id?: string | null;
+  is_shared?: boolean | number;
   created_at: number;
   updated_at: number;
 };
@@ -181,6 +183,7 @@ export type AIProvider = {
 // ── Session ────────────────────────────────────────────────────────────────
 
 export interface SessionType {
+  id?: string;
   role: 'teacher' | 'student';
   userId?: string;
   username?: string;

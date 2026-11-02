@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Blocks, Check, Globe, Loader2, Plus, Puzzle, Settings2, X } from 'lucide-react';
+import { Blocks, Check, Globe, Loader2, Plus, Puzzle, Settings2, X, ShieldCheck, User } from 'lucide-react';
 
 export interface AIProvider {
   id: string;
@@ -7,6 +7,8 @@ export interface AIProvider {
   api_url: string;
   api_key?: string;
   model_name: string;
+  owner_id?: string | null;
+  is_shared?: boolean | number;
   created_at?: number;
   updated_at?: number;
 }
@@ -15,15 +17,24 @@ interface AiProvidersPanelProps {
   lang: 'zh' | 'en';
   aiProviders: AIProvider[];
   onAIProvidersChanged: () => void;
+  currentUserId?: string;
+  currentUserRole?: string;
 }
 
-export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: AiProvidersPanelProps) {
+export function AiProvidersPanel({
+  lang,
+  aiProviders,
+  onAIProvidersChanged,
+  currentUserId,
+  currentUserRole,
+}: AiProvidersPanelProps) {
   const [isAIProviderModalOpen, setIsAIProviderModalOpen] = useState(false);
   const [editingAIProvider, setEditingAIProvider] = useState<AIProvider | null>(null);
   const [providerName, setProviderName] = useState('');
   const [providerApiUrl, setProviderApiUrl] = useState('');
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerModelName, setProviderModelName] = useState('');
+  const [providerIsShared, setProviderIsShared] = useState(false);
   const [providerSaving, setProviderSaving] = useState(false);
 
   const handleAddProvider = () => {
@@ -32,6 +43,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
     setProviderApiUrl('');
     setProviderApiKey('');
     setProviderModelName('');
+    setProviderIsShared(false);
     setIsAIProviderModalOpen(true);
   };
 
@@ -41,6 +53,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
     setProviderApiUrl(provider.api_url);
     setProviderApiKey(provider.api_key || '');
     setProviderModelName(provider.model_name);
+    setProviderIsShared(Boolean(provider.is_shared));
     setIsAIProviderModalOpen(true);
   };
 
@@ -55,15 +68,19 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
       const isEditing = !!editingAIProvider;
       const url = isEditing ? `/api/ai-providers/${editingAIProvider!.id}` : '/api/ai-providers';
       const method = isEditing ? 'PUT' : 'POST';
+      const bodyPayload: Record<string, unknown> = {
+        name: providerName.trim(),
+        api_url: providerApiUrl.trim(),
+        api_key: providerApiKey,
+        model_name: providerModelName.trim(),
+      };
+      if (currentUserRole === 'administrator') {
+        bodyPayload.is_shared = providerIsShared ? 1 : 0;
+      }
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: providerName.trim(),
-          api_url: providerApiUrl.trim(),
-          api_key: providerApiKey,
-          model_name: providerModelName.trim(),
-        }),
+        body: JSON.stringify(bodyPayload),
       });
       if (res.ok) {
         setIsAIProviderModalOpen(false);
@@ -73,8 +90,9 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
         const errData = await res.json().catch(() => ({}));
         alert(errData.error || 'Server error');
       }
-    } catch (err: any) {
-      alert(err.message || 'Error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(message || 'Error');
     } finally {
       setProviderSaving(false);
     }
@@ -90,8 +108,9 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
       } else {
         alert('Delete failed');
       }
-    } catch (err: any) {
-      alert(err.message || 'Error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(message || 'Error');
     }
   };
 
@@ -101,6 +120,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: provider.id,
           api_url: provider.api_url,
           api_key: provider.api_key,
           model_name: provider.model_name,
@@ -116,8 +136,9 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
             : `Test failed: ${errData.error || 'Unknown error'}`,
         );
       }
-    } catch (err: any) {
-      alert(lang === 'zh' ? `网络异常: ${err.message}` : `Network error: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(lang === 'zh' ? `网络异常: ${message}` : `Network error: ${message}`);
     }
   };
 
@@ -134,8 +155,8 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
               </h3>
               <p className="text-xs text-gray-400 mt-0.5">
                 {lang === 'zh'
-                  ? '配置好的端点将可被测验生成器、讲座生成器和 AI Agent 进行热切调用。'
-                  : 'Configured backends accessible by Quiz Generator, Lecture Generator and AI Agent.'}
+                  ? '支持 OpenAI 兼容 API。私有模型仅您个人可用，平台共享模型供全校教师共用。'
+                  : 'OpenAI-compatible APIs. Private models are exclusive to your account; shared models are available to all teachers.'}
               </p>
             </div>
             <button
@@ -164,6 +185,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
                   <thead>
                     <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider">
                       <th className="py-3.5 px-4">{lang === 'zh' ? '名称' : 'Name'}</th>
+                      <th className="py-3.5 px-4">{lang === 'zh' ? '类型 / 范围' : 'Scope'}</th>
                       <th className="py-3.5 px-4">{lang === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}</th>
                       <th className="py-3.5 px-4">{lang === 'zh' ? '模型代号' : 'Model Identifier'}</th>
                       <th className="py-3.5 px-4">{lang === 'zh' ? '密钥状态' : 'API Key'}</th>
@@ -171,57 +193,107 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
-                    {aiProviders.map((provider) => (
-                      <tr key={provider.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                            <span className="font-extrabold text-gray-800 text-sm">{provider.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">{provider.api_url}</td>
-                        <td className="py-4 px-4">
-                          <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-xs border border-slate-200">
-                            {provider.model_name}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4">
-                          {provider.api_key ? (
-                            <span className="text-emerald-600 font-bold flex items-center gap-1 font-mono">
-                              <Check size={12} /> Key Saved
+                    {aiProviders.map((provider) => {
+                      const isShared = Boolean(provider.is_shared);
+                      const canManage = Boolean(
+                        isShared
+                          ? currentUserRole === 'administrator'
+                          : !provider.owner_id || !currentUserId || provider.owner_id === currentUserId,
+                      );
+
+                      return (
+                        <tr key={provider.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${isShared ? 'bg-purple-500' : 'bg-indigo-500'}`} />
+                              <span className="font-extrabold text-gray-800 text-sm">{provider.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            {isShared ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                <ShieldCheck size={12} />
+                                {lang === 'zh' ? '平台共享' : 'Platform Shared'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <User size={12} />
+                                {lang === 'zh' ? '个人私有' : 'Private'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">
+                            {provider.api_url}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-xs border border-slate-200">
+                              {provider.model_name}
                             </span>
-                          ) : (
-                            <span className="text-amber-500/90 font-mono italic">Not Set</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleTestProvider(provider)}
-                              className="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                              title={lang === 'zh' ? '测试连通性' : 'Test Connection'}
-                            >
-                              <Globe size={11} />
-                              <span>{lang === 'zh' ? '测试' : 'Test'}</span>
-                            </button>
-                            <button
-                              onClick={() => handleEditProvider(provider)}
-                              className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg bg-indigo-50 cursor-pointer font-semibold transition-all shadow-3xs"
-                              title={lang === 'zh' ? '编辑配置' : 'Edit'}
-                            >
-                              {lang === 'zh' ? '编辑' : 'Edit'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProvider(provider.id, provider.name)}
-                              className="px-2.5 py-1 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg bg-rose-50 cursor-pointer font-semibold transition-all shadow-3xs"
-                              title={lang === 'zh' ? '删除' : 'Delete'}
-                            >
-                              {lang === 'zh' ? '删除' : 'Delete'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-4 px-4">
+                            {provider.api_key ? (
+                              <span className="text-emerald-600 font-bold flex items-center gap-1 font-mono">
+                                <Check size={12} /> Key Saved
+                              </span>
+                            ) : (
+                              <span className="text-amber-500/90 font-mono italic">Not Set</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleTestProvider(provider)}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                title={lang === 'zh' ? '测试连通性' : 'Test Connection'}
+                              >
+                                <Globe size={11} />
+                                <span>{lang === 'zh' ? '测试' : 'Test'}</span>
+                              </button>
+                              <button
+                                onClick={() => handleEditProvider(provider)}
+                                disabled={!canManage}
+                                className={`px-2.5 py-1 rounded-lg border font-semibold transition-all shadow-3xs ${
+                                  canManage
+                                    ? 'text-indigo-700 hover:bg-indigo-100 border-indigo-200 bg-indigo-50 cursor-pointer'
+                                    : 'text-gray-400 border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                }`}
+                                title={
+                                  !canManage
+                                    ? lang === 'zh'
+                                      ? '平台共享配置仅管理员可修改'
+                                      : 'Shared provider can only be modified by administrator'
+                                    : lang === 'zh'
+                                      ? '编辑配置'
+                                      : 'Edit'
+                                }
+                              >
+                                {lang === 'zh' ? '编辑' : 'Edit'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteProvider(provider.id, provider.name)}
+                                disabled={!canManage}
+                                className={`px-2.5 py-1 rounded-lg border font-semibold transition-all shadow-3xs ${
+                                  canManage
+                                    ? 'text-rose-600 hover:bg-rose-100 border-rose-200 bg-rose-50 cursor-pointer'
+                                    : 'text-gray-400 border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                }`}
+                                title={
+                                  !canManage
+                                    ? lang === 'zh'
+                                      ? '平台共享配置仅管理员可修改'
+                                      : 'Shared provider can only be modified by administrator'
+                                    : lang === 'zh'
+                                      ? '删除'
+                                      : 'Delete'
+                                }
+                              >
+                                {lang === 'zh' ? '删除' : 'Delete'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -231,7 +303,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
       </div>
 
       {isAIProviderModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[60] overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200/60 w-full max-w-md overflow-hidden text-gray-800 text-left">
             <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50/70">
               <h3 className="font-extrabold text-sm sm:text-base text-gray-800 flex items-center gap-2">
@@ -249,7 +321,7 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
                   setIsAIProviderModalOpen(false);
                   setEditingAIProvider(null);
                 }}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -312,6 +384,31 @@ export function AiProvidersPanel({ lang, aiProviders, onAIProvidersChanged }: Ai
                   className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
                 />
               </div>
+
+              {currentUserRole === 'administrator' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={providerIsShared}
+                      onChange={(e) => setProviderIsShared(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-purple-600" />
+                        {lang === 'zh' ? '设为平台共享模型 (全校教师可用)' : 'Set as Platform Shared (All teachers)'}
+                      </span>
+                      <span className="text-xs text-gray-400 mt-0.5 block leading-relaxed">
+                        {lang === 'zh'
+                          ? '勾选后，所有教师可直接在侧栏与课表中使用该模型，但无法查看或篡改您的 API Key。不勾选则仅为您个人私有。'
+                          : 'If enabled, all teachers can use this model without seeing your API key. Otherwise it remains private.'}
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="button"

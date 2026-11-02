@@ -257,7 +257,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [ocrImporting, setOcrImporting] = useState<boolean>(false);
   const [ocrSelectedEntries, setOcrSelectedEntries] = useState<Set<number>>(new Set());
   const ocrFileInputRef = useRef<HTMLInputElement>(null);
-  const [aiProviders, setAiProviders] = useState<{ id: string; name: string; model_name: string }[]>([]);
+  const [aiProviders, setAiProviders] = useState<
+    { id: string; name: string; model_name: string; is_shared?: boolean | number }[]
+  >([]);
   const [ocrProviderId, setOcrProviderId] = useState<string>('');
   const timetableOcrTask = useAsyncTaskStore((s) => s.timetableOcrTask);
   const pendingTimetableSubTab = useUIStore((s) => s.pendingTimetableSubTab);

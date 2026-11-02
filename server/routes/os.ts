@@ -4,7 +4,7 @@ import { execFile } from 'child_process';
 import crypto from 'crypto';
 import { filterXSS } from 'xss';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { decryptApiKey, detectPromptInjection } from '../utils/crypto.js';
+import { detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
@@ -12,10 +12,11 @@ import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { listAIPersonas } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getUploadsDir } from '../utils/paths.js';
+import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
-  const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
+  const { app, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
 
   // 轻量连通性探测端点：课堂启动门户的顶部遥测岛用它测 HTTP 往返时延。
   // 刻意不鉴权、不访问数据库、无副作用，以便在登录页等未认证场景也能复用。
@@ -299,16 +300,13 @@ export function registerOsRoutes(ctx: ServerContext) {
         });
       }
 
-      // Determine the caller's role (and identity) from the session cookie
+      // Determine the caller's role (and identity) from session
       let callerRole: string | undefined;
       let userId: string | undefined;
-      const token = getCookieToken(req);
-      if (token) {
-        const session = getValidSession(token);
-        if (session) {
-          callerRole = session.role;
-          userId = session.userId;
-        }
+      const session = (req as any).session || (getCookieToken(req) ? getValidSession(getCookieToken(req)!) : null);
+      if (session) {
+        callerRole = session.role;
+        userId = session.userId || session.username;
       }
 
       // Build a per-user / per-lesson memory key and load prior turns
@@ -323,32 +321,20 @@ export function registerOsRoutes(ctx: ServerContext) {
       }));
 
       // Resolve which AI backend handles this request:
-      //   1. An explicit provider chosen in the UI (providerId)
-      //   2. A provider configured in the admin panel
-      let provider: StoredAIProvider | undefined;
-      if (providerId) {
-        provider = kernelContainer.db
-          .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-          .get(providerId) as StoredAIProvider | undefined;
-      } else {
-        provider = kernelContainer.db
-          .prepare(
-            "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
-          )
-          .get() as StoredAIProvider | undefined;
-      }
-
-      // SEC-DATA-01: 解密 API Key
-      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
-
-      if (!provider || !provider.api_key || !provider.api_key.trim()) {
-        return res.status(400).json({
+      //   1. An explicit provider chosen in the UI (providerId, checked for ownership / shared)
+      //   2. Fallback to current user's accessible active provider (private > shared)
+      let provider: StoredAIProvider;
+      try {
+        provider = resolveAccessibleAiProvider(kernelContainer.db, {
+          providerId,
+          userId,
+          lang,
+        });
+      } catch (err: any) {
+        return res.status(err.status || 400).json({
           success: false,
-          error: 'NO_AI_PROVIDER',
-          message:
-            lang === 'zh'
-              ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
-              : 'No active AI Provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
+          error: err.code || 'NO_AI_PROVIDER',
+          message: err.message,
         });
       }
 

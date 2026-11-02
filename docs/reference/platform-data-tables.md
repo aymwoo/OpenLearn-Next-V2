@@ -475,14 +475,14 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **82** 张表（迁移 44 个，金样生成于 2026-10-25T04:30:00.287Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **82** 张表（迁移 46 个，金样生成于 2026-11-02T16:07:15.878Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
 - `_lesson_think_cleanup`: id, note
 - `_migrations`: applied_at, checksum, name
 - `agent_conversations`: content, conv_key, created_at, id, role
-- `ai_providers`: api_key, api_url, created_at, id, model_name, name, updated_at
+- `ai_providers`: api_key, api_url, created_at, id, is_shared, model_name, name, owner_id, updated_at
 - `assessment_answers`: ai_suggestion_json, answer_json, attempt_id, feedback, graded_at, graded_by, grader, is_correct, item_id, manual_override, max_score, score, updated_at
 - `assessment_assignments`: academic_year, assessment_id, class_id, closes_at, created_at, created_by, duration_sec, exam_id, id, lesson_id, opens_at, schedule_id, score_released, session_id, status
 - `assessment_attempts`: academic_year, anon_key, assignment_id, attempt_no, deadline_at, id, max_score, needs_manual_review, paper_json, proctor_json, score, started_at, status, student_id, submitted_at
@@ -551,7 +551,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `student_rollcalls`: class_id, difficulty, id, lesson_id, picked_time, rating, reward_coins, score, student_id
 - `student_seats`: class_id, col_idx, lab_id, row_idx, student_id
 - `student_semester_reports`: academic_year, ai_evaluation, assignment_score, attendance_score, class_id, created_at, dimension_scores, exam_score, grade_level, id, progress_score, semester_name, student_id, teacher_evaluation, total_score, updated_at
-- `students`: avatar, created_at, email, id, lock_mode, lock_target, locked_lesson_id, name, password, private_notes, student_number
+- `students`: avatar, created_at, email, gender, id, lock_mode, lock_target, locked_lesson_id, name, password, private_notes, student_number
 - `submission_raw`: attempt_id, created_at, event_type, id, payload_json
 - `submission_result`: attempt_id, comment, completion, extra_json, id, score
 - `system_resources`: content, created_at, id, name, type
