@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：264 个（入口导出但手写 d.ts 未声明的 264 项及其类型引用闭包）
+ * 覆盖符号：271 个（入口导出但手写 d.ts 未声明的 271 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -170,10 +170,16 @@ interface BarometerMetricConfig {
     tooltip?: string;
 }
 
-/** @see packages/core/plugin-host/method-policy.ts */
+/** @see packages/core/capability/catalog.ts */
+declare const CAP: any; // 初始化器非字面量，未收敛
+
+/** @see packages/core/capability/catalog.ts */
+declare const CAPABILITIES: readonly Capability[];
+
+/** @see packages/core/capability/catalog.ts */
 declare const CAP_STUDENT_DATA_READ: 'student-data:read';
 
-/** @see packages/core/plugin-host/method-policy.ts */
+/** @see packages/core/capability/catalog.ts */
 declare const CAP_STUDENT_DATA_WRITE: 'student-data:write';
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -188,6 +194,9 @@ interface CanvasWidgetConfig {
     defaultHeight?: number;
     resizable?: boolean;
 }
+
+/** @see packages/core/capability/catalog.ts */
+type Capability = (typeof CAP)[keyof typeof CAP];
 
 /** @see packages/core/capability/types/index.ts */
 type CapabilityCategory = 'lesson' | 'whiteboard' | 'notebook' | 'plugin' | 'analytics' | 'ai' | string;
@@ -987,6 +996,9 @@ interface InvocationRequest {
     readonly context: CapabilityContext;
     readonly timeoutMs?: number;
 }
+
+/** @see packages/core/capability/catalog.ts */
+declare const KNOWN_CAPABILITIES: any; // 初始化器非字面量，未收敛
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the classroom.leaderboard.action slot. */
@@ -2392,6 +2404,8 @@ interface WhiteboardDockPluginConfig {
 /** @see packages/core/presence-engine/types.ts */
 type WhiteboardStatus = 'Editing' | 'Presenting' | 'Locked' | 'ReadOnly' | 'Collaborating';
 
+declare function assertValidManifestCapabilities(capabilities: readonly unknown[], pluginId?: string): void;
+
 declare function buildAttestationPayload(integrity: string, metadata?: {
     id?: string;
     version?: string;
@@ -2418,6 +2432,8 @@ declare function hasCapability(caps: readonly string[], name: string): boolean;
 
 declare function hashMatches(input: Buffer | string, integrity: string): boolean;
 
+declare function isKnownCapability(value: unknown): value is Capability;
+
 declare function isRedactionEnabled(env: NodeJS.ProcessEnv): boolean;
 
 /** @see packages/core/observability/logger.ts */
@@ -2429,6 +2445,11 @@ declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString
 declare function removeTempZip(zipPath: string | undefined): void;
 
 declare function resolveTrustedPublicKeys(explicitKeys?: string[], env: NodeJS.ProcessEnv): string[];
+
+declare function validateManifestCapabilities(capabilities: readonly unknown[]): {
+    valid: boolean;
+    unknown: string[];
+};
 
 declare function verifyPluginPackage(options: VerifyPluginPackageOptions): Promise<VerifyPluginPackageResult>;
 
@@ -2464,6 +2485,7 @@ export type {
   AttributionActionConfig,
   BarometerMetricConfig,
   CanvasWidgetConfig,
+  Capability,
   CapabilityCategory,
   CapabilityContext,
   CapabilityDescriptor,
@@ -2670,7 +2692,13 @@ export type {
   WhiteboardStatus,
 };
 export {
+  CAP,
+  CAPABILITIES,
   CAP_STUDENT_DATA_READ,
   CAP_STUDENT_DATA_WRITE,
+  KNOWN_CAPABILITIES,
   ServiceScope,
+  assertValidManifestCapabilities,
+  isKnownCapability,
+  validateManifestCapabilities,
 };

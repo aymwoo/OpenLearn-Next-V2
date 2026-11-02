@@ -724,6 +724,12 @@ function wrapPointsLedgerService(
       ...(hasCap ? {} : { denied: true }),
     });
     if (!hasCap) {
+      // Issue #368 第 4 条：插件侧普遍 try/catch 吞异常，抛错后日志里查不到痕迹。
+      // 平台侧再落一条 ERROR，让宿主管理员不用读插件源码就能定位「加分没反应」。
+      console.error(
+        `[Security] 插件 "${pluginId}" 调用 pointsLedger.${method} 被拒：缺少能力 "${requiredCap}"` +
+          `（${operation} / student=${studentId}）。请在 manifest.capabilitiesProposed 声明它。`,
+      );
       throw new PluginCapabilityDeniedError(pluginId, requiredCap, operation, method);
     }
   };

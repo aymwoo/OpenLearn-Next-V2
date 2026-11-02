@@ -543,6 +543,11 @@ const db = await ctx.resolve(IDatabaseToken);
 
 这是插件开发的核心模式。每个业务功能需要三样东西：
 
+> **能力串只认一份清单**：`capabilitiesProposed` 与 `capabilityRequired` 的取值必须来自
+> `packages/core/capability/catalog.ts`（SDK 已导出 `CAP` / `CAPABILITIES`）。构建期可调用
+> `assertValidManifestCapabilities(manifest.capabilitiesProposed)` —— 未知串直接抛错，
+> 不会等到运行时才表现为「点了没反应」。平台在插件激活时也会对未知串打 ERROR 日志。
+
 #### 3.3.1 Action 注册（AI Agent 可调用）
 
 ```typescript
@@ -550,7 +555,9 @@ await actionRegistry.register({
   id: 'my-plugin-action', // 唯一 ID
   commandType: 'myplugin.action', // 对应的命令类型（宿主会自动补 manifest.id 前缀）
   description: '用中文描述此工具的功能和参数',
-  capabilityRequired: 'lesson:write', // 所需权限（必须逐字取自真实能力表）
+  // 所需权限（必须逐字取自真实能力表：capability/catalog.ts 的 CAP，或 SDK 导出的 CAP.*；
+  // 人类可读版见 docs/reference/plugin-capability-matrix.md）
+  capabilityRequired: 'lesson:write',
   isHighRisk: false, // 是否高危（需教师审批）
   // 是否出现在 AI Agent 的工具箱；默认 true。设为 false 后仍可经 HTTP / commandBus 调用
   exposeToAgent: true,

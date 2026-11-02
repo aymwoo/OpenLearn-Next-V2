@@ -491,3 +491,16 @@ export {
 } from '../core/di/interfaces.js';
 export type { INetworkProxyService } from '../core/di/interfaces.js';
 export { INetworkProxyServiceToken } from '../core/di/interfaces.js';
+
+// ── 能力字符串清单（Issue #368）─────────────────────────────────────────
+// 唯一权威来源是 core/capability/catalog.ts；插件构建脚本可调用
+// assertValidManifestCapabilities() 在打包期拦住拼错 / 捏造的权限串。
+export type { Capability } from '../core/capability/catalog.js';
+export {
+  CAP,
+  CAPABILITIES,
+  KNOWN_CAPABILITIES,
+  isKnownCapability,
+  validateManifestCapabilities,
+  assertValidManifestCapabilities,
+} from '../core/capability/catalog.js';

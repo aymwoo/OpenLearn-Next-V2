@@ -136,7 +136,9 @@
 - 第三方插件只有在管理员把对应项写入 `plugin_capability_grants` 表后才会被授予；
 - 未获批准的项不会阻止激活，只会被跳过（`console.warn`），插件 actor 调用相关命令时会被内核拒绝（`COMMAND_CAPABILITY_DENIED`）。
 
-可用的字符串**只能**取自[能力权限矩阵](../reference/plugin-capability-matrix.md) 的 19 个真实值，例如：
+可用的字符串**只能**取自[能力权限矩阵](../reference/plugin-capability-matrix.md) 的 19 个真实值
+（代码侧唯一权威来源是 `packages/core/capability/catalog.ts`；构建期可用 SDK 的
+`assertValidManifestCapabilities(manifest.capabilitiesProposed)` 自检，未知串会直接抛错）。例如：
 
 - `"lesson:read"`, `"lesson:write"`, `"lesson:delete"`：课程读写与删除
 - `"vfs:read"`, `"vfs:write"`：虚拟文件系统
