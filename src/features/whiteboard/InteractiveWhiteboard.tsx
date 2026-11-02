@@ -2569,7 +2569,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
         if (el.type === 'plugin') {
           const isTeacherView = userRole === 'teacher';
-          const widgetId = isTeacherView ? data.teacherWidgetId : data.studentWidgetId;
+          // 双端 id 只声明一端时回退到另一端（Issue #370）：否则缺的一侧会拿到 undefined，
+          // 卡片永远停在「正在加载」。两端都缺时由 PluginCardRenderer 渲染明确的错误态。
+          const widgetId =
+            (isTeacherView ? data.teacherWidgetId : data.studentWidgetId) ??
+            (isTeacherView ? data.studentWidgetId : data.teacherWidgetId);
           const slot = isTeacherView ? 'teacher.dashboard.widget' : 'student.view';
 
           return (

@@ -240,6 +240,62 @@ describe('BuiltinPlugin', () => {
     expect(pluginElement?.type).toBe('openlearn-plugin-interactive-courseware/interactive-board');
   });
 
+  it('plugin 元素双端 widgetId 写漏时补齐或显式报错（Issue #370）', async () => {
+    const pluginId = '@openlearn/plugin-builtin';
+    pluginHost.registerPreloadedPlugin(
+      pluginId,
+      BuiltinPlugin as unknown as Parameters<PluginHost['registerPreloadedPlugin']>[1],
+    );
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');
+
+    await pluginHost.activatePlugin(pluginId);
+
+    const actorId = `plugin:${BuiltinPlugin.manifest.id}`;
+    capabilityGuard.grant(actorId, 'whiteboard:write');
+    capabilityGuard.grant(actorId, 'lesson:write');
+    capabilityGuard.grant(actorId, 'lesson:read');
+
+    const lessonId = 'lesson-widget-contract';
+    let seq = 0;
+    const draw = (data: unknown) =>
+      commandBus.execute({
+        id: `cmd-widget-${seq++}`,
+        type: 'whiteboard.draw',
+        actorId,
+        payload: { lessonId, type: 'plugin', data: typeof data === 'string' ? data : JSON.stringify(data) },
+        timestamp: Date.now(),
+      }) as Promise<{ elementId: string }>;
+
+    const readData = (elementId: string) =>
+      JSON.parse(
+        (db.prepare('SELECT data FROM whiteboard_elements WHERE id = ?').get(elementId) as { data: string }).data,
+      );
+
+    // 只写教师端：学生端回退到同一 id，两端都能渲染
+    const teacherOnly = await draw({ pluginId: 'ext-demo', teacherWidgetId: 'w-teacher' });
+    expect(readData(teacherOnly.elementId)).toMatchObject({
+      teacherWidgetId: 'w-teacher',
+      studentWidgetId: 'w-teacher',
+    });
+
+    // 只写学生端：教师端回退
+    const studentOnly = await draw({ pluginId: 'ext-demo', studentWidgetId: 'w-student' });
+    expect(readData(studentOnly.elementId)).toMatchObject({
+      teacherWidgetId: 'w-student',
+      studentWidgetId: 'w-student',
+    });
+
+    // 两端都缺：写入时就报错，而不是等学生端永久转圈
+    await expect(draw({ pluginId: 'ext-demo' })).rejects.toThrow(/teacherWidgetId 或 studentWidgetId/);
+    // pluginId 缺失不阻断（存量声明式工具普遍没写），只告警
+    const noPluginId = await draw({ teacherWidgetId: 'w-only' });
+    expect(readData(noPluginId.elementId)).toMatchObject({ studentWidgetId: 'w-only' });
+    // plugin 元素的 data 必须是合法 JSON
+    await expect(draw('not-json')).rejects.toThrow(/合法 JSON/);
+  });
+
   it('activate 时向课件运行时脚本注册点注册平台原生分数监视器', async () => {
     const pluginId = '@openlearn/plugin-builtin';
     pluginHost.registerPreloadedPlugin(

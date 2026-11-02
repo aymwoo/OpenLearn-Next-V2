@@ -128,7 +128,14 @@ await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, 
 主组件 `InteractiveWhiteboard.tsx` 有 **4,555 行**。改动前先确认落在哪个引擎，
 直接改主组件会导致渲染与交互耦合。
 
-### 4.3 广播的三条经验规则
+### 4.3 插件挂件的双端 id
+
+`type: "plugin"` 的元素由 `PluginCardRenderer` 按 slot 取组件：教师端读 `teacherWidgetId`，
+学生端读 `studentWidgetId`。写入侧（`whiteboard.draw` / `whiteboard.batch_draw`）在落库前统一走
+`buildElementData()`：只声明一端时用另一端补齐并告警，两端都缺或 `data` 非法 JSON 时直接报错。
+渲染侧对缺失 id 渲染「挂件未正确配置」错误态（Issue #370）—— 缺 id 是配置错误，不能伪装成加载中。
+
+### 4.4 广播的三条经验规则
 
 1. **只改布局的元素类型不要触发重绘** —— 登记进
    `server/event-routing.ts → LAYOUT_ONLY_ELEMENT_TYPES`（L157）。

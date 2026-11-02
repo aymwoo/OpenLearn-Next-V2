@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
 import { NullExtensionComponent } from '../../../plugin-host/plugin-host';
 import { PluginSandboxIframeView } from '../../../components/PluginSandboxIframeView';
@@ -14,9 +14,9 @@ export function PluginCardRenderer({
   studentId,
   studentName,
 }: {
-  pluginId: string;
+  pluginId?: string;
   slot: string;
-  widgetId: string;
+  widgetId?: string;
   elementId: string;
   lessonId: string;
   classId?: string | null;
@@ -51,6 +51,25 @@ export function PluginCardRenderer({
       }
     }
   }, [ext, hasReactComponent, pluginId, widgetId, elementId, lessonId]);
+
+  // 缺 id 是配置错误，不是「加载慢」：必须给出可见错误态，否则用户只能看到永久转圈（Issue #370）。
+  // 放在 hooks 之后，避免条件返回破坏 hooks 顺序。
+  if (!widgetId) {
+    return (
+      <div
+        data-testid="plugin-widget-misconfigured"
+        className="flex h-full flex-col items-center justify-center gap-1 p-3 text-center text-xs text-amber-600"
+      >
+        <AlertTriangle size={16} />
+        <p className="font-bold">挂件未正确配置</p>
+        <p className="text-amber-700/80">
+          缺少 {slot === 'teacher.dashboard.widget' ? 'teacherWidgetId' : 'studentWidgetId'}
+          ，请检查插件写入的 payload。
+        </p>
+        {pluginId && <p className="font-mono text-[10px] text-gray-400">plugin: {pluginId}</p>}
+      </div>
+    );
+  }
 
   if (!ext) {
     return (
