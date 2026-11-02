@@ -58,11 +58,11 @@ def extract_capabilities() -> dict:
                     re.findall(r"capabilityRequired:\s*" + _quoted(r"[^'\"]+"), text)
                 )
 
-    # 1b. 方法级策略闸门：method-policy.ts 的 CAP_* 常量
-    mp = (REPO / "packages/core/plugin-host/method-policy.ts").read_text(encoding="utf-8")
-    method_policy = dict(
-        re.findall(r"export const (CAP_\w+)\s*=\s*" + _quoted(r"[^'\"]+"), mp)
-    )
+    # 1b. 方法级策略闸门：唯一权威清单是 capability/catalog.ts 的 CAP_* 常量（Issue #368）。
+    #     这些常量以 export const CAP_X = 'literal' 声明（字面量类型），再由 CAP 对象引用；
+    #     method-policy.ts 现在只做 re-export，去那里抓字面量会得到空表。
+    catalog = (REPO / "packages/core/capability/catalog.ts").read_text(encoding="utf-8")
+    method_policy = dict(re.findall(r"export const (CAP_\w+)\s*=\s*'([^']+)'", catalog))
 
     # 1c. 第三套：classroom-runtime 的 RuntimePermission（与上面两套正交）
     #     定义在 packages/core/classroom-runtime/types.ts 的 `RuntimePermission` 联合类型。
@@ -83,9 +83,12 @@ def extract_capabilities() -> dict:
     return {
         "_note": "三套登记互不相干，混用即错：command_required 管命令闸门，"
                  "method_policy 管具体 ctx 方法，runtime_permission 是活动生态的第三套权限。",
-        "_no_global_whitelist": "manifest-schema.ts 的 capabilitiesProposed 是 z.array(z.string())，"
-                                "不存在全局能力白名单。杜撰的能力名会被安静地授予，"
-                                "真正致命的失败是「少声明」——目标命令要的 capabilityRequired "
+        "_no_global_whitelist": "manifest-schema.ts 的 capabilitiesProposed 仍是 z.array(z.string())，"
+                                "schema 层不存在全局通配白名单。但字符串的权威清单是 "
+                                "packages/core/capability/catalog.ts 的 CAP：SDK 导出 "
+                                "validateManifestCapabilities / assertValidManifestCapabilities，"
+                                "平台在授权前对未知串打 ERROR 日志。杜撰的能力名拿不到任何约束力，"
+                                "真正致命的失败仍是「少声明」——目标命令要的 capabilityRequired "
                                 "与你声明的字符串必须逐字相等，否则 403 COMMAND_CAPABILITY_DENIED。",
         "command_required": sorted(required),
         "method_policy": method_policy,

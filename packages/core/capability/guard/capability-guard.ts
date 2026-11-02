@@ -5,6 +5,8 @@
  * for all platform operations, plugins, and worker isolation contexts.
  */
 
+import { CAP } from '../catalog.js';
+
 export class CapabilityGuard {
   private actorCapabilities = new Map<string, string[]>();
 
@@ -22,20 +24,20 @@ export class CapabilityGuard {
     ]);
     this.actorCapabilities.set('anonymous', []); // Anonymous has no permissions
     this.actorCapabilities.set('agent-system-0', [
-      'lesson:write',
-      'lesson:delete',
-      'whiteboard:write',
+      CAP.LESSON_WRITE,
+      CAP.LESSON_DELETE,
+      CAP.WHITEBOARD_WRITE,
       'quiz:write',
-      'plugin:read',
-      'vfs:read',
-      'vfs:write',
-      'management:write',
-      'management:read',
-      'process:write',
-      'process:read',
+      CAP.PLUGIN_READ,
+      CAP.VFS_READ,
+      CAP.VFS_WRITE,
+      CAP.MANAGEMENT_WRITE,
+      CAP.MANAGEMENT_READ,
+      CAP.PROCESS_WRITE,
+      CAP.PROCESS_READ,
     ]);
     this.actorCapabilities.set('teacher-demo', ['lesson:*', 'whiteboard:*', 'management:*', 'quiz:*', 'vfs:*']);
-    this.actorCapabilities.set('student-demo', ['student:write', 'lesson:read', 'whiteboard:read']);
+    this.actorCapabilities.set('student-demo', [CAP.STUDENT_WRITE, CAP.LESSON_READ, CAP.WHITEBOARD_READ]);
   }
 
   public grant(actorId: string, cap: string) {
@@ -89,11 +91,11 @@ export class CapabilityGuard {
         'vfs:*',
         'process:*',
         'plugin:*',
-        'student:write',
-        'assignment:read',
-        'assignment:submit',
-        'assignment:review',
-        'assignment:manage',
+        CAP.STUDENT_WRITE,
+        CAP.ASSIGNMENT_READ,
+        CAP.ASSIGNMENT_SUBMIT,
+        CAP.ASSIGNMENT_REVIEW,
+        CAP.ASSIGNMENT_MANAGE,
       ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (
@@ -111,12 +113,12 @@ export class CapabilityGuard {
       // 因此**不含** lesson:write（避免学生改课时内容）；命令处理器内部再按
       // actorId 与 payload.studentId 校验所属权，防止代交/代评。
       const studentCaps = [
-        'student:write',
-        'lesson:read',
-        'whiteboard:read',
-        'assignment:read',
-        'assignment:submit',
-        'assignment:review',
+        CAP.STUDENT_WRITE,
+        CAP.LESSON_READ,
+        CAP.WHITEBOARD_READ,
+        CAP.ASSIGNMENT_READ,
+        CAP.ASSIGNMENT_SUBMIT,
+        CAP.ASSIGNMENT_REVIEW,
       ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (

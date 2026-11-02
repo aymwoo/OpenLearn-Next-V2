@@ -79,6 +79,10 @@ export default [
       'packages/mfe-*/node_modules/**',
       'packages/core/esm-loader/__tests__/fixtures/**',
       'packages/plugin-sdk/scaffold/templates/**',
+      // 生成物：由 generate-dts.mjs 从 core 源码抽取，build 时会被覆盖。
+      // 它自身的告警数随导出面变化而波动（每多一个 SDK 导出就可能多几条），
+      // 把生成物算进「不许欠新债」的预算里，等于让正常的 API 扩展顶爆 lint 门禁。
+      'packages/plugin-sdk/generated.d.ts',
       'scratch/**',
       'artifacts/**',
       // 覆盖率报告是生成物（.gitignore 已忽略）。漏掉这里会让「本地跑过 --coverage

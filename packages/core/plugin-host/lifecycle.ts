@@ -36,6 +36,7 @@ import {
 import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
 import { isTrustedInProcessPlugin } from './execution-policy.js';
 import { isBlockedPluginCapability, isCapabilityApproved } from './plugin-grants.js';
+import { validateManifestCapabilities } from '../capability/catalog.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { ACTIVATION_TIMEOUT_MS, DEACTIVATION_TIMEOUT_MS } from './base.js';
 import type { PluginHost } from './index.js';
@@ -537,6 +538,16 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
   ): Promise<void> {
     if (caps.length === 0) return;
     try {
+      // Issue #368：未知能力串（拼错 / 捏造）不会获得任何约束力，静默批准只会让人
+      // 以为「声明了就生效」。这里在授权前把它打成 ERROR，附上合法清单入口。
+      const { unknown } = validateManifestCapabilities(caps);
+      if (unknown.length > 0) {
+        console.error(
+          `[PluginHost] "${actorId}" 的 manifest 声明了未知能力：${unknown.join(', ')}。` +
+            `这些串不会生效（守卫只认 ActionDescriptor.capabilityRequired）。` +
+            `合法清单见 packages/core/capability/catalog.ts 与 docs/reference/plugin-capability-matrix.md。`,
+        );
+      }
       const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
       for (const cap of caps) {
         if (typeof cap !== 'string' || isBlockedPluginCapability(cap)) {

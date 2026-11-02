@@ -5,6 +5,12 @@
 > **适用范围**：`@openlearn/plugin-sdk@3.7.5`
 > 本页是插件声明与校验 `resource:action` 权限的**唯一权威字典**，用于避免 AI 捏造权限名导致 `Access Denied`。
 >
+> **唯一权威来源是代码**：`packages/core/capability/catalog.ts` 的 `CAP` / `CAPABILITIES`。
+> `CapabilityGuard`、`method-policy`、SDK 与 manifest 校验全部从那里取值，本页是它的可读镜像
+> （`packages/core/capability/__tests__/catalog.test.ts` 会断言 §1.1 / §1.2 的每个字符串都在代码清单里）。
+> 插件构建期可以直接调用 SDK 的 `assertValidManifestCapabilities(manifest.capabilitiesProposed)`
+> 把拼错 / 捏造的权限串拦在打包阶段；`validateManifestCapabilities()` 是不抛错的版本。
+>
 > **关键事实**：代码库中存在**四套互不相干的 "capability" 机制**，请勿混淆：
 >
 > | #   | 机制                   | 载体                                                                                  | 鉴权维度                                     | 拒绝信号                                                                                             |

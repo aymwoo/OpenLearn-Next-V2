@@ -1,6 +1,6 @@
 {
   "_note": "三套登记互不相干，混用即错：command_required 管命令闸门，method_policy 管具体 ctx 方法，runtime_permission 是活动生态的第三套权限。",
-  "_no_global_whitelist": "manifest-schema.ts 的 capabilitiesProposed 是 z.array(z.string())，不存在全局能力白名单。杜撰的能力名会被安静地授予，真正致命的失败是「少声明」——目标命令要的 capabilityRequired 与你声明的字符串必须逐字相等，否则 403 COMMAND_CAPABILITY_DENIED。",
+  "_no_global_whitelist": "manifest-schema.ts 的 capabilitiesProposed 仍是 z.array(z.string())，schema 层不存在全局通配白名单。但字符串的权威清单是 packages/core/capability/catalog.ts 的 CAP：SDK 导出 validateManifestCapabilities / assertValidManifestCapabilities，平台在授权前对未知串打 ERROR 日志。杜撰的能力名拿不到任何约束力，真正致命的失败仍是「少声明」——目标命令要的 capabilityRequired 与你声明的字符串必须逐字相等，否则 403 COMMAND_CAPABILITY_DENIED。",
   "command_required": [
     "assignment:manage",
     "assignment:read",

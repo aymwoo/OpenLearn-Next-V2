@@ -23,30 +23,33 @@
  */
 
 // ── capability 名称 ───────────────────────────────────────────────────────────
+//
+// 字面量只在 `packages/core/capability/catalog.ts` 维护（Issue #368），
+// 这里只做别名导出，保持既有 import 面不变。
 
-/** 授予「写操作」所需。 */
-export const CAP_API_WRITE = 'api:write';
+// 具名常量在 catalog 里以字面量声明，这里既 import 又再导出：
+// 若写成 `= CAP.API_WRITE`，d.ts 生成器会退化成 `any`（字面量类型丢失）。
+import {
+  CAP_AGENT_TOOL,
+  CAP_AI_INVOKE,
+  CAP_API_ADMIN,
+  CAP_API_WRITE,
+  CAP_GRADES_WRITE,
+  CAP_STUDENT_DATA_READ,
+  CAP_STUDENT_DATA_WRITE,
+  CAP_TASK_REGISTER,
+} from '../capability/catalog.js';
 
-/** 授予高危路径 / 不可逆操作所需。 */
-export const CAP_API_ADMIN = 'api:admin';
-
-/** 授予学期成绩**写入**（`grades:read` 不足以解锁写入）。 */
-export const CAP_GRADES_WRITE = 'grades:write';
-
-/** 授予「注册对外暴露给 AI Agent 的 action」所需。 */
-export const CAP_AGENT_TOOL = 'agent:tool';
-
-/** 授予「驱动 AI 生成」所需。 */
-export const CAP_AI_INVOKE = 'ai:invoke';
-
-/** 授予「注册后台常驻任务」所需。 */
-export const CAP_TASK_REGISTER = 'task:register';
-
-/** 授予读取学生个人敏感数据（积分流水、维度汇总等）所需。 */
-export const CAP_STUDENT_DATA_READ = 'student-data:read';
-
-/** 授予写入/变更学生个人敏感数据（积分变动等）所需。 */
-export const CAP_STUDENT_DATA_WRITE = 'student-data:write';
+export {
+  CAP_AGENT_TOOL,
+  CAP_AI_INVOKE,
+  CAP_API_ADMIN,
+  CAP_API_WRITE,
+  CAP_GRADES_WRITE,
+  CAP_STUDENT_DATA_READ,
+  CAP_STUDENT_DATA_WRITE,
+  CAP_TASK_REGISTER,
+};
 
 // ── 高危 API 路径前缀（浏览器侧 IFrontendAPI 使用）────────────────────────────
 

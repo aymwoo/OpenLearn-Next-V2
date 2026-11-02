@@ -491,6 +491,31 @@ describe('E2E Plugin Lifecycle', () => {
     });
   });
 
+  // Issue #368: manifest 能力清单校验
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('Issue #368 能力清单校验', () => {
+    it('manifest 声明未知能力 → 授权前打 ERROR 并给出合法清单入口（Issue #368）', async () => {
+      const mod = makePluginModule({
+        id: 'ext-bad-caps',
+        capabilitiesProposed: ['lesson:read', 'storage:write'],
+      });
+      loadMap.set('src-bad-caps', mod);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await pluginHost.installPlugin('src-bad-caps');
+        await pluginHost.activatePlugin('ext-bad-caps');
+      } finally {
+        const messages = error.mock.calls.map((call) => String(call[0]));
+        error.mockRestore();
+        expect(messages.some((m) => m.includes('storage:write') && m.includes('未知能力'))).toBe(true);
+        // 已知能力不能被误报
+        expect(messages.some((m) => m.includes('lesson:read'))).toBe(false);
+      }
+    });
+  });
+
   // ══════════════════════════════════════════════════════════════════════
   // 完整生命周期
   // ══════════════════════════════════════════════════════════════════════
