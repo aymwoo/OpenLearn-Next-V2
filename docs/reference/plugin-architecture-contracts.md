@@ -1,8 +1,8 @@
 # AI Agent 与第三方插件开发架构契约与防护规范（Architecture Contracts & Guardrails RFC）
 
-<!-- doc-version: sdk=3.7.5 -->
+<!-- doc-version: sdk=3.8.0 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5+` / 平台 `v0.7.7+`  
+> **适用范围**：`@openlearn/plugin-sdk@3.8.0+` / 平台 `v0.7.7+`  
 > **面向对象**：AI 编码智能体（AI Agent / CodeBuddy / Copilot）、第三方插件开发者、系统架构师。  
 > **核心目标**：明确 OpenLearn V2 在前端视图注入、白板协作、课堂上下文、数据库隔离、RPC 权限门禁与网关流控等方面的 6 大架构契约，杜绝因对沙箱底层机制认知偏差导致的功能异常与安全违例。
 

@@ -485,7 +485,7 @@ pnpm test:e2e             # Playwright
 ```bash
 # 1. 脚手架
 npx @openlearn/plugin-sdk init --name demo-vote --template full-stack
-npm i -D @openlearn/plugin-sdk@3.7.5     # ⚠ 不要装 3.7.1，见下
+npm i -D @openlearn/plugin-sdk@3.8.0     # ⚠ 不要装 3.7.1，见下
 
 # 2. 编译 + 打 ZIP
 npx @openlearn/plugin-sdk build

@@ -31,7 +31,7 @@ plugin-hello/
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@openlearn/plugin-sdk": "^3.7.5"
+    "@openlearn/plugin-sdk": "^3.8.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

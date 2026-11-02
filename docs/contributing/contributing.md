@@ -18,7 +18,7 @@ type(scope): message
 | Plugin SDK（`@openlearn/plugin-sdk`）      | `packages/plugin-sdk/CHANGELOG.md`                                                                                                  |
 | 内置插件（`packages/plugins/<plugin>.ts`） | 无独立 CHANGELOG —— 变更记入平台 `CHANGELOG.md`（`v2_plugins/` 为独立仓库，其插件维护各自的 `CHANGELOG.md`，不在本仓）              |     |
 
-发版流程：bump `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → **合并进 `main`** → 打 tag（命名见 §2.1）→ `scripts/publish.sh`。SDK 版本独立演进（当前 3.7.5），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
+发版流程：bump `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → **合并进 `main`** → 打 tag（命名见 §2.1）→ `scripts/publish.sh`。SDK 版本独立演进（当前 3.8.0），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
 
 ### 2.1 发布 tag 约定
 
@@ -40,7 +40,7 @@ type(scope): message
 
    ```bash
    git rev-list -n1 plugin-sdk-v3.7.5                                    # tag 指向的提交
-   npm view @openlearn/plugin-sdk@3.7.5 gitHead --registry=https://registry.npmjs.org
+   npm view @openlearn/plugin-sdk@3.8.0 gitHead --registry=https://registry.npmjs.org
    ```
 
 两道门禁（硬失败，不靠自觉）：

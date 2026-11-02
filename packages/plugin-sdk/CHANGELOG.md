@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-11-02
+
+### Features
+
+- **能力字符串清单与校验函数**（平台 Issue #368）：新增 `CAP`（具名常量）、`CAPABILITIES`、`KNOWN_CAPABILITIES`、`isKnownCapability()`、`validateManifestCapabilities()`、`assertValidManifestCapabilities()`。唯一权威来源是平台的 `packages/core/capability/catalog.ts`；插件构建脚本可调用 `assertValidManifestCapabilities(manifest.capabilitiesProposed)` 在打包期拦住拼错 / 捏造的权限串。
+- **`IActionRegistryService` 新增只读自检接口**（平台 Issue #369）：`listRegisteredCommandTypes()` / `listMissingDescriptors(commandTypes)`，用于断言「注册了 handler 但忘了登记 ActionDescriptor」的命令（default-deny 会以 403 `COMMAND_NOT_REGISTERED` 拒绝）。
+- **受管名册读取服务**（平台 Issue #366）：新增 `IClassRosterService`（`listClasses` / `listClassStudents` / `getStudent`）、`RosterClassSummary`、`RosterStudentRef` 与 `IClassRosterServiceToken`；`PluginContext.services.roster` 暴露同一服务（需 manifest 声明 `management:read`）。返回体只含 id / 姓名 / 学号 / 班级人数，不含 email、私人备注、口令。
+- **`PluginContext.services.roster` 字段**：与其余服务一致，运行时可能为 `null`（D-12 降级），消费前请判空。
+
+### Notes
+
+- 全部为**新增**导出，无破坏性变更；`openlearn.d.ts` 与 `generated.d.ts` 已同步。
+
 ## [3.7.5] - 2026-10-29
 
 ### Fixes

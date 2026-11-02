@@ -1,8 +1,8 @@
 # 能力权限矩阵全集 (Capabilities Permission Matrix)
 
-<!-- doc-version: sdk=3.7.5 -->
+<!-- doc-version: sdk=3.8.0 -->
 
-> **适用范围**：`@openlearn/plugin-sdk@3.7.5`
+> **适用范围**：`@openlearn/plugin-sdk@3.8.0`
 > 本页是插件声明与校验 `resource:action` 权限的**唯一权威字典**，用于避免 AI 捏造权限名导致 `Access Denied`。
 >
 > **唯一权威来源是代码**：`packages/core/capability/catalog.ts` 的 `CAP` / `CAPABILITIES`。

@@ -247,7 +247,7 @@
 | `contributes-groups.json` | `contributes` 严格键 / 宽松键            | 71 / 38               |
 | `bridge-ops.json`         | frame / view 两套 op                     | 10 / 8                |
 | `forbidden-tables.json`   | SQL 禁写表                               | 40                    |
-| `versions.json`           | 版本基线                                 | 0.7.8 / 3.7.5 / 3.3.3 |
+| `versions.json`           | 版本基线                                 | 0.7.10 / 3.8.0 / 3.3.3 |
 
 ---
 

@@ -1,8 +1,8 @@
 # TypeScript Interfaces 规范
 
-<!-- doc-version: sdk=3.7.5 -->
+<!-- doc-version: sdk=3.8.0 -->
 
-汇总 `@openlearn/plugin-sdk@3.7.5` 与 `packages/core/` 定义的核心 TS 接口。SDK 以导出**类型 + DI Token 值**为主，另含少量运行时值（`PluginState` 枚举、`CapabilityRegistry` / `ServiceScope`、活动生态的 `BaseActivityProvider` / `defineActivityProvider` 等）。
+汇总 `@openlearn/plugin-sdk@3.8.0` 与 `packages/core/` 定义的核心 TS 接口。SDK 以导出**类型 + DI Token 值**为主，另含少量运行时值（`PluginState` 枚举、`CapabilityRegistry` / `ServiceScope`、活动生态的 `BaseActivityProvider` / `defineActivityProvider` 等）。
 
 ---
 
