@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ServiceRegistry } from '../../di/service-registry.js';
 import { EsmLoader } from '../../esm-loader/esm-loader.js';
 import type { PluginModule } from '../../esm-loader/esm-loader.js';
@@ -438,6 +438,56 @@ describe('E2E Plugin Lifecycle', () => {
       const all = svc.getAll();
       expect(all.a).toBe(1);
       expect(all.b).toBe('x');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Issue #369: 命令契约自检
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('Issue #369 命令契约自检', () => {
+    it('只有 handler 没有 ActionDescriptor → 激活后 WARN 列出缺口', async () => {
+      const mod = makePluginModule({
+        id: 'ext-cmd-audit',
+        commands: [{ type: 'audit.cmd_missing', desc: '漏登记描述符', cap: 'lesson:read' }],
+      });
+      loadMap.set('src-cmd-audit', mod);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        await pluginHost.installPlugin('src-cmd-audit');
+        await pluginHost.activatePlugin('ext-cmd-audit');
+      } finally {
+        const messages = warn.mock.calls.map((call) => String(call[0]));
+        warn.mockRestore();
+        expect(messages.some((m) => m.includes('audit.cmd_missing') && m.includes('ActionDescriptor'))).toBe(true);
+      }
+    });
+
+    it('登记了 ActionDescriptor → 不告警', async () => {
+      const registry = (await serviceRegistry.resolve(IActionRegistryServiceToken)) as ActionRegistry;
+      registry.register({
+        id: 'audit-cmd-ok',
+        commandType: 'audit.cmd_ok',
+        description: '已登记描述符',
+        inputSchema: { type: 'OBJECT', properties: {} },
+        capabilityRequired: 'lesson:read',
+      });
+      const mod = makePluginModule({
+        id: 'ext-cmd-ok',
+        commands: [{ type: 'audit.cmd_ok', desc: '已登记描述符', cap: 'lesson:read' }],
+      });
+      loadMap.set('src-cmd-ok', mod);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        await pluginHost.installPlugin('src-cmd-ok');
+        await pluginHost.activatePlugin('ext-cmd-ok');
+      } finally {
+        const messages = warn.mock.calls.map((call) => String(call[0]));
+        warn.mockRestore();
+        expect(messages.some((m) => m.includes('audit.cmd_ok'))).toBe(false);
+      }
     });
   });
 

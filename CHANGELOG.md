@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件激活后自动自检「有 handler、没有 ActionDescriptor」的命令**（Issue #369）：`PluginHost` 在 inline 激活前后比对宿主 CommandBus 的命令类型，把本次新增但没登记描述符的命令以 WARN 列出（含 403 `COMMAND_NOT_REGISTERED` 后果与修复指引）。运行时差集能覆盖 `for` 循环、对象表、`regHandler()` 包装这类静态扫描抓不到的动态注册；worker / process 模式不适用（handler 在隔离进程内）。同时给 `ActionRegistry` 增加只读的 `listRegisteredCommandTypes()` / `listMissingDescriptors()`，插件 smoke test 可直接断言；SDK 类型同步。
 - **初始口令默认等于用户名（`admin` / `admin`），登录页直接给出首次安装提示**：
   - **问题**：旧版空库首次启动会生成 20 位随机口令并写入 `storage/bootstrap-credentials.txt`。自托管用户（Nas / 群晖 / 宝塔 / Docker 卷）既找不到那个路径，也拿不到启动日志，装完进不去后台，只能删库重来 —— 这是社区反馈最高的一条安装摩擦。
   - **新行为**：`resolveSeedCredential()` 在没有任何环境变量时返回「口令 = 用户名」（`admin` / `admin`、`teacher` / `teacher`），`must_change_password = 1`。可预期的口令配上原有的强制改密门：改密前除 `POST /api/auth/change-password`、`POST /api/auth/logout`、`GET /api/auth/session`、`GET /api/auth/me` 外的 `/api`（含 GET）一律 403 `FORBIDDEN_DEFAULT_PASSWORD`，所以「人人皆知」的窗口只到第一次登录为止。

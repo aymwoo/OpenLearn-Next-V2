@@ -171,6 +171,10 @@ interface IActionRegistryService {
   getAgentTools(): unknown[] | Promise<unknown[]>;
   getActionByToolName(toolName: string): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
   getActionByCommandType(commandType: string): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
+  /** 已登记描述符覆盖的 commandType（去重）。用于插件自检 handler / descriptor 缺口。 */
+  listRegisteredCommandTypes?(): string[] | Promise<string[]>;
+  /** 给定命令类型里没有 ActionDescriptor 的那些 —— default-deny 会以 403 拒绝。 */
+  listMissingDescriptors?(commandTypes: Iterable<string>): string[] | Promise<string[]>;
 }
 
 interface ICapabilityService {
