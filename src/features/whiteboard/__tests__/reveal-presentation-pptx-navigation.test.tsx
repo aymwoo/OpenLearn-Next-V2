@@ -16,8 +16,19 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  */
 const viewerTrace = vi.hoisted(() => ({ callbacks: [] as number[] }));
 
+/** 与 `pptx-react-viewer` 交互所需的最小 props 形状（只取本用例用到的字段） */
+type FakeViewerProps = {
+  initialSlide?: number;
+  onActiveSlideChange?: (index: number) => void;
+};
+
+/** `onElementUpdate` 的回写载荷形状：本用例只关心 `slideX` */
+type UpdatedElementData = { slideX?: number };
+
+type ElementUpdateHandler = (id: string, data: UpdatedElementData) => Promise<void>;
+
 vi.mock('pptx-react-viewer', () => {
-  const FakeViewer = React.forwardRef((props: any, ref: any) => {
+  const FakeViewer = React.forwardRef<unknown, FakeViewerProps>((props, ref) => {
     const { initialSlide, onActiveSlideChange } = props;
     const [idx, setIdx] = React.useState(initialSlide ?? 0);
     const idxRef = React.useRef(idx);
@@ -65,7 +76,7 @@ vi.mock('pptx-react-viewer/styles', () => ({}));
 
 import { RevealPresentationWrapper } from '../widgets/RevealPresentationWrapper';
 
-function renderPptx(onElementUpdate: (id: string, data: any) => Promise<void>) {
+function renderPptx(onElementUpdate: ElementUpdateHandler) {
   return render(
     <RevealPresentationWrapper
       elementId="pres-pptx-nav"
@@ -85,7 +96,7 @@ describe('RevealPresentationWrapper PPTX 翻页（Issue #381）', () => {
         ok: true,
         status: 200,
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(32)),
-      } as any),
+      }),
     );
   });
 
@@ -97,8 +108,8 @@ describe('RevealPresentationWrapper PPTX 翻页（Issue #381）', () => {
 
   it('点击下一页后稳定停留在下一页，不会来回闪动', async () => {
     const slideXUpdates: number[] = [];
-    const onElementUpdate = vi.fn(async (_id: string, d: any) => {
-      slideXUpdates.push(d.slideX);
+    const onElementUpdate = vi.fn(async (_id: string, d: UpdatedElementData) => {
+      slideXUpdates.push(d.slideX as number);
     });
 
     renderPptx(onElementUpdate);
@@ -120,8 +131,8 @@ describe('RevealPresentationWrapper PPTX 翻页（Issue #381）', () => {
 
   it('viewer 内部真实换页（缩略图/键盘）仍会回写父级', async () => {
     const slideXUpdates: number[] = [];
-    const onElementUpdate = vi.fn(async (_id: string, d: any) => {
-      slideXUpdates.push(d.slideX);
+    const onElementUpdate = vi.fn(async (_id: string, d: UpdatedElementData) => {
+      slideXUpdates.push(d.slideX as number);
     });
 
     renderPptx(onElementUpdate);
