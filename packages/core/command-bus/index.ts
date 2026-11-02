@@ -88,6 +88,16 @@ export class CommandBus {
     return this.handlers.has(commandType) || this.legacyHandlers.has(commandType);
   }
 
+  /**
+   * 只读枚举已注册的命令类型（modern + legacy）。
+   *
+   * 供插件激活后的「handler 有、ActionDescriptor 没有」自检使用（Issue #369）：
+   * 自检要能看清「这次激活新增了哪些命令」，而不是去读私有 Map。
+   */
+  public listRegisteredCommandTypes(): string[] {
+    return Array.from(new Set([...this.handlers.keys(), ...this.legacyHandlers.keys()]));
+  }
+
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
     const actorId = typeof command.actorId === 'string' ? command.actorId.trim() : '';
     if (!actorId) {

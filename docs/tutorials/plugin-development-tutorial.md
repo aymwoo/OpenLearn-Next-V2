@@ -682,8 +682,24 @@ await commandBus.registerHandler('myplugin.launch', {
 **只 `registerHandler()` 而漏了描述符的命令，一律被拒绝**，安全策略不会被绕过。
 
 - **注册顺序**：先 `actionRegistry.register()`，再 `commandBus.registerHandler()`。
-  顺序反了不会报错，但插件加载时会打印一条 `[PluginHost] ... without a matching
-ActionDescriptor ...` 警告，提示该命令会被 default-deny 拒绝。
+  顺序反了不会报错，但插件**激活成功后宿主会打印一条 WARN**：
+
+  ```text
+  [PluginHost] 插件 "<id>" 有 N 个命令 handler 没有 ActionDescriptor：<type-a>, <type-b>。
+  这些命令会被 default-deny 以 403 COMMAND_NOT_REGISTERED 拒绝，请为每个 registerHandler 同时注册 actionRegistry.register(...)。
+  ```
+
+  这条日志是激活后的**运行时差集**（激活前后比对宿主 CommandBus 的命令类型），
+  所以 `for` 循环 / 对象表 / `regHandler()` 包装这类静态扫描抓不到的动态注册也能覆盖。
+  限制：只适用于 inline 插件 —— worker / process 的 handler 在隔离进程内，宿主看不到。
+
+- **自检接口**：`actionRegistry.listMissingDescriptors(commandTypes)` 返回其中没有描述符的命令，
+  `listRegisteredCommandTypes()` 返回已登记的 commandType。插件自带 smoke test 可以直接断言：
+
+  ```ts
+  expect(ctx.services.actionRegistry.listMissingDescriptors(['poll.create', 'poll.vote'])).toEqual([]);
+  ```
+
 - **HTTP 表现**：经 `/api/commands` 派发被拒时返回 **HTTP 403**，
   响应体为 `{ "success": false, "code": "COMMAND_NOT_REGISTERED", "error": "…" }`。
   前端应按 `code` 分支处理，不要把它当作 500 服务端崩溃上报。
@@ -1107,6 +1123,10 @@ interface IActionRegistryService {
   getAgentTools(): Promise<unknown[]>;
   getActionByToolName(toolName: string): Promise<ActionDescriptor | undefined>;
   getActionByCommandType(commandType: string): Promise<ActionDescriptor | undefined>;
+  /** 已登记描述符覆盖的 commandType */
+  listRegisteredCommandTypes(): Promise<string[]>;
+  /** 给定命令里没有 ActionDescriptor 的那些（default-deny 会拒绝） */
+  listMissingDescriptors(commandTypes: Iterable<string>): Promise<string[]>;
 }
 ```
 

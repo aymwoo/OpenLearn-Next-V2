@@ -82,4 +82,22 @@ export class ActionRegistry {
   public getActionByCommandType(commandType: string): ActionDescriptor | undefined {
     return Array.from(this.actions.values()).find((a) => a.commandType === commandType);
   }
+
+  /** 已登记描述符覆盖的 commandType（去重、只读）。 */
+  public listRegisteredCommandTypes(): string[] {
+    return Array.from(new Set(Array.from(this.actions.values()).map((a) => a.commandType))).sort();
+  }
+
+  /**
+   * 给定命令类型里**没有** ActionDescriptor 的那些。
+   *
+   * 命令总线是 default-deny：这种命令会在用户点击时被 403 `COMMAND_NOT_REGISTERED` 拒绝。
+   * 插件激活后用它把「注册了 handler 却忘了登记描述符」提前打成一条 WARN（Issue #369）。
+   */
+  public listMissingDescriptors(commandTypes: Iterable<string>): string[] {
+    const registered = new Set(Array.from(this.actions.values()).map((a) => a.commandType));
+    return Array.from(new Set(commandTypes))
+      .filter((type) => !registered.has(type))
+      .sort();
+  }
 }
