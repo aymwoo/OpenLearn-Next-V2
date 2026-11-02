@@ -10,6 +10,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **AI Provider 账号级数据隔离与越权调用防护（Issue #383）**：
+  - **背景与漏洞根因**：原 `ai_providers` 数据表无归属标识（无 `owner_id`），系统把所有配置的 OpenAI/自定义模型提供商（包含 AES-256 加密的 API Key）全局暴露给所有教师与管理员。任何登录用户均可通过下拉选框、`/api/agent/chat`、OCR 课表识别、学期综评、教案大纲生成等直接调用其它账号甚至全校私密的大模型 Token，并可在连通性探测接口传入掩码密钥 `****` 探测其它账号的 Key。
+  - **数据库迁移（045）**：`ai_providers` 增加 `owner_id TEXT`（归属账号 ID）和 `is_shared INTEGER NOT NULL DEFAULT 0`（是否全校共享），建立联合索引 `idx_ai_providers_owner_shared`。存量数据平滑归属至系统首位超级管理员（默认为私有），兼容旧库回落。
+  - **核心解析器（`packages/core/di/ai-provider-resolver.ts`）**：封装 `resolveAccessibleAiProvider(db, options)` 与 `AiProviderError`，按「个人私有（`owner_id = userId`）> 平台共享（`is_shared = 1`）> 存量空归属」优先级决议可用 Provider；显式指定 `providerId` 时严格校验归属，越权返回 403 `PROVIDER_ACCESS_DENIED`，无可用 Provider 友好返回 400 `NO_AI_PROVIDER`，彻底阻断越权调用与 Token 盗刷。
+  - **API 端点鉴权与防御**：
+    - `GET /api/ai-providers`：只返回当前用户拥有（`owner_id = userId`）或平台共享（`is_shared = 1`）的模型列表，脱敏输出 API Key，跨账号不可见。
+    - `POST /api/ai-providers`：强制绑定 `owner_id = currentUserId`；仅管理员（`administrator`）有权将 `is_shared` 设为 1，普通教师尝试创建共享模型返回 403。
+    - `PUT /api/ai-providers/:id` 与 `DELETE /api/ai-providers/:id`：私有模型仅归属人可修改/删除；共享模型仅管理员可修改/删除。普通教师无法提权或篡改。
+    - `POST /api/ai-providers/test`：掩码密钥 `****` 校验严格限制在当前用户可访问的 Provider 范围内，杜绝跨账号 Key 盲测探测。
+    - 业务调用端点（`/api/agent/chat`、课表 OCR、学期评价、教案大纲）：均提取会话 `userId` 并透传至解析器安全决议。
+  - **前端交互与设置支持**：
+    - `ProfileModal`（个人设置）：教师与管理员弹窗新增「AI 模型设置」选项卡，教师可在个人账户中心自主增删改查、测试私有模型，无需管理员介入。
+    - `AiProvidersPanel`：表格显式区分「平台共享」与「个人私有」状态徽章；普通教师对管理员共享的模型仅保留测试权限，禁用编辑/删除；管理员创建/编辑时提供「设为平台共享模型」开关。
+    - 下拉选择器（`RightSidebar` 与课表 OCR `TimetableOcrView`）：模型名称后自动标注 `· 平台共享` 或 `· 私有`，让教师明确知晓调用来源。
+  - **自动化测试回归**：
+    - 新增 `server/__tests__/ai-provider-isolation.test.ts`（10 项集成测试），覆盖 Teacher A/B、Admin 1/2 间模型列表隔离、跨账号越权调用/修改/删除/探测防护、Fallback 降级隔离。
+    - 新增 `src/components/__tests__/ProfileModal.test.tsx`（2 项前端单测），覆盖学生端/教师端 Tab 隔离与共享/私有模型管理权限。
+    - 数据库黄金架构测试 `schema-golden.test.ts` 及全套关联测试全部通过。
+
 ### Features
 
 - **学情简报页面固定提供「归档并结束课堂」提示与入口**：此前「归档」提示只在「结课通票 → 学情简报」这一次阶段切换时以瞬时通知出现（大屏展台的 `diffStageNotices`），教师若从其它路径进入学情简报页面就看不到任何归档入口，只能回到「课堂会话与档案管理」手动处理。现于 `ClassroomBriefingView` 页头操作区常驻「归档并结束课堂」按钮：

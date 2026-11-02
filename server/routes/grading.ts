@@ -309,12 +309,15 @@ export function registerGradingRoutes(ctx: ServerContext) {
         const { classId, studentId } = req.params;
         if (gate(req, res, classId, 'staff')) return;
         const { semesterName = '2026年春季学期', providerId } = req.body;
+        const session = (req as any).session;
+        const userId = session?.userId || session?.username;
 
         const aiEvaluation = await gradingService.generateSemesterAiEvaluation({
           classId,
           studentId,
           semesterName,
           providerId,
+          userId,
         });
 
         res.json({ success: true, aiEvaluation });

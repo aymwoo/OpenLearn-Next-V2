@@ -721,8 +721,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     description?: string;
     timeline?: { title?: string; type?: string; duration?: string; notes?: string }[];
     lang?: string;
+    providerId?: string;
+    userId?: string;
   }): Promise<string> {
-    const { title, category, description, timeline, lang = 'zh' } = params;
+    const { title, category, description, timeline, lang = 'zh', providerId, userId } = params;
 
     const trimmedTitle = (title || '').trim();
     if (!trimmedTitle) {
@@ -768,7 +770,12 @@ ${timelineText ? `- 课堂时间轴环节：\n${timelineText}` : '- 课堂时间
 4. 内容必须紧扣课题本身，禁止使用"公式 A""模块 1"之类的占位符或与课题无关的通用套话。
 5. 篇幅控制在 600-1000 字，语言${lang === 'zh' ? '使用简体中文' : 'use English'}。`;
 
-    const raw = await this.aiService.generateText(prompt, { temperature: 0.6, maxTokens: 2048 });
+    const raw = await this.aiService.generateText(prompt, {
+      temperature: 0.6,
+      maxTokens: 2048,
+      userId,
+      providerId,
+    });
     const outline = stripReasoningArtifacts(stripOuterCodeFence(String(raw || '').trim()));
 
     if (!outline) {

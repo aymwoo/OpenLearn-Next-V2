@@ -166,11 +166,20 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                           onChange={(e) => setAgentProviderId(e.target.value)}
                           className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                         >
-                          {aiProviders.map((provider) => (
-                            <option key={provider.id} value={provider.id}>
-                              {provider.name}
-                            </option>
-                          ))}
+                          {aiProviders.map((provider) => {
+                            const scopeLabel = provider.is_shared
+                              ? lang === 'zh'
+                                ? '· 平台共享'
+                                : '· Shared'
+                              : lang === 'zh'
+                                ? '· 私有'
+                                : '· Private';
+                            return (
+                              <option key={provider.id} value={provider.id}>
+                                {provider.name} ({scopeLabel.trim()})
+                              </option>
+                            );
+                          })}
                         </select>
                       )}
                       <ChevronDown

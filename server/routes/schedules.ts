@@ -185,7 +185,9 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     const startTime = Date.now();
     try {
       const { imageBase64, lang = 'zh', providerId } = req.body;
-      const result = await scheduleService.processTimetableOcr(imageBase64, { lang, providerId });
+      const session = (req as any).session;
+      const userId = session?.userId || session?.username;
+      const result = await scheduleService.processTimetableOcr(imageBase64, { lang, providerId, userId });
       res.json({
         success: true,
         entries: result.entries,

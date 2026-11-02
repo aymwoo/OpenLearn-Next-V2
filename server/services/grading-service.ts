@@ -9,6 +9,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
 import { decryptApiKey } from '../utils/crypto.js';
+import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import type { StoredAIProvider } from '../context.js';
 
@@ -627,8 +628,9 @@ export class GradingService {
     studentId: string;
     semesterName?: string;
     providerId?: string;
+    userId?: string;
   }): Promise<string> {
-    const { classId, studentId, semesterName = '2026年春季学期', providerId } = params;
+    const { classId, studentId, semesterName = '2026年春季学期', providerId, userId } = params;
 
     const student = this.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as
       { name: string } | undefined;
@@ -710,21 +712,10 @@ ${examsText}
    - 对未来的期许，激励学生在下学期继续努力。
 3. 长度控制在 150-250 字之间。不要包含任何 Markdown 格式，只返回纯文本评语。`;
 
-    const provider = providerId
-      ? (this.db
-          .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-          .get(providerId) as StoredAIProvider | undefined)
-      : (this.db
-          .prepare(
-            "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
-          )
-          .get() as StoredAIProvider | undefined);
-
-    if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
-
-    if (!provider || !provider.api_key || !provider.api_key.trim()) {
-      throw new Error('未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。');
-    }
+    const provider = resolveAccessibleAiProvider(this.db, {
+      providerId,
+      userId,
+    });
 
     let chatUrl = provider.api_url.trim();
     if (!chatUrl.endsWith('/chat/completions')) {

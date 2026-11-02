@@ -382,13 +382,17 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     safeAiLimiter,
     async (req, res) => {
       try {
-        const { title, category, description, timeline, lang } = req.body || {};
+        const { title, category, description, timeline, lang, providerId } = req.body || {};
+        const session = (req as any).session;
+        const userId = session?.userId || session?.username;
         const content = await lessonService.generateOutlineWithAi({
           title,
           category,
           description,
           timeline,
           lang,
+          providerId,
+          userId,
         });
         res.json({ success: true, content });
       } catch (e: any) {

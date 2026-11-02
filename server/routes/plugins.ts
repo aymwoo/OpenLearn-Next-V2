@@ -15,6 +15,7 @@ import { checkVersion, type UpdateSource } from '../services/version-fetcher.js'
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
+import { isAdministrator } from '../services/class-access.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
@@ -1770,12 +1771,16 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // 命名空间强制挂载在 /api/plugins/:pluginId/*，支持任意 HTTP 动词
   app.all('/api/plugins/:pluginId/*', pluginApiGatewayMiddleware);
 
-  // AI Provider Endpoints (仅教师和管理员有权查看配置的模型提供方)
-  app.get('/api/ai-providers', requireAuth('teacher', 'administrator'), (req, res) => {
+  // AI Provider Endpoints (教师与管理员管理各自的私有提供商或平台共享提供商 - Issue #383)
+  app.get('/api/ai-providers', requireScopedAuth('self', 'teacher', 'administrator'), (req, res) => {
     try {
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.username;
       const providers = kernelContainer.db
-        .prepare('SELECT * FROM ai_providers ORDER BY created_at DESC')
-        .all() as any[];
+        .prepare(
+          'SELECT id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at FROM ai_providers WHERE (owner_id = ? OR is_shared = 1) ORDER BY created_at DESC',
+        )
+        .all(currentUserId) as any[];
       // SEC-DATA-01: 掩码 API Key 后返回（解密失败fail-closed：展示不可用标识，不抛 500）
       const masked = providers.map((p) => {
         let apiKey: string;
@@ -1784,7 +1789,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         } catch {
           apiKey = '[UNDECRYPTABLE]';
         }
-        return { ...p, api_key: apiKey };
+        return {
+          ...p,
+          api_key: apiKey,
+          is_shared: Number(p.is_shared) === 1,
+        };
       });
       res.json(masked);
     } catch (e: any) {
@@ -1792,57 +1801,121 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/ai-providers', requireAuth('administrator'), (req, res) => {
+  app.post('/api/ai-providers', requireScopedAuth('self', 'teacher', 'administrator'), (req, res) => {
     try {
-      const { name, api_url, api_key, model_name } = req.body;
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.username;
+      const isAdmin = isAdministrator(session);
+      const { name, api_url, api_key, model_name, is_shared } = req.body;
       if (!name || !api_url || !model_name) {
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
+
+      const wantsShared = is_shared === 1 || is_shared === true || is_shared === '1';
+      if (wantsShared && !isAdmin) {
+        return res.status(403).json({ error: 'Only administrators can create platform shared providers' });
+      }
+
       const id = 'prov_' + Date.now();
       const now = Date.now();
       // SEC-DATA-01: 加密存储 API Key
       const encryptedKey = api_key ? encryptApiKey(api_key) : '';
       kernelContainer.db
         .prepare(
-          'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(id, name, api_url, encryptedKey, model_name, now, now);
+        .run(id, name.trim(), api_url.trim(), encryptedKey, model_name.trim(), currentUserId, wantsShared && isAdmin ? 1 : 0, now, now);
       res.json({ success: true, id });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  app.put('/api/ai-providers/:id', requireAuth('administrator'), (req, res) => {
+  app.put('/api/ai-providers/:id', requireScopedAuth('self', 'teacher', 'administrator'), (req, res) => {
     try {
-      const { name, api_url, api_key, model_name } = req.body;
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.username;
+      const isAdmin = isAdministrator(session);
+      const { name, api_url, api_key, model_name, is_shared } = req.body;
       if (!name || !api_url || !model_name) {
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
+
+      const existing = kernelContainer.db
+        .prepare('SELECT id, api_key, owner_id, is_shared FROM ai_providers WHERE id = ?')
+        .get(req.params.id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: 'AI provider not found' });
+      }
+
+      const isExistingShared = Number(existing.is_shared) === 1;
+      if (isExistingShared) {
+        if (!isAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Only administrators can modify platform shared providers' });
+        }
+      } else {
+        if (existing.owner_id !== currentUserId) {
+          return res.status(403).json({
+            error: "Forbidden: You do not have permission to modify another user's private AI provider",
+          });
+        }
+      }
+
+      let nextShared = existing.is_shared ?? 0;
+      if (is_shared !== undefined) {
+        const wantsShared = is_shared === 1 || is_shared === true || is_shared === '1';
+        if (wantsShared !== (Number(existing.is_shared) === 1)) {
+          if (!isAdmin) {
+            return res.status(403).json({ error: 'Forbidden: Only administrators can change platform shared status' });
+          }
+          nextShared = wantsShared ? 1 : 0;
+        }
+      }
+
       const now = Date.now();
       // SEC-DATA-01: 对 **** 的掩码密码，保留原值；纯明文加密存储
       let finalKey: string;
       if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
       } else {
-        const existing = kernelContainer.db
-          .prepare('SELECT api_key FROM ai_providers WHERE id = ?')
-          .get(req.params.id) as any;
         finalKey = existing?.api_key || '';
       }
       kernelContainer.db
         .prepare(
-          'UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, updated_at = ? WHERE id = ?',
+          'UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, is_shared = ?, updated_at = ? WHERE id = ?',
         )
-        .run(name, api_url, finalKey, model_name, now, req.params.id);
+        .run(name.trim(), api_url.trim(), finalKey, model_name.trim(), nextShared, now, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  app.delete('/api/ai-providers/:id', requireAuth('administrator'), (req, res) => {
+  app.delete('/api/ai-providers/:id', requireScopedAuth('self', 'teacher', 'administrator'), (req, res) => {
     try {
+      const session = (req as any).session;
+      const currentUserId = session?.userId || session?.username;
+      const isAdmin = isAdministrator(session);
+      const existing = kernelContainer.db
+        .prepare('SELECT id, owner_id, is_shared FROM ai_providers WHERE id = ?')
+        .get(req.params.id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: 'AI provider not found' });
+      }
+
+      const isExistingShared = Number(existing.is_shared) === 1;
+      if (isExistingShared) {
+        if (!isAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Only administrators can delete platform shared providers' });
+        }
+      } else {
+        if (existing.owner_id !== currentUserId) {
+          return res.status(403).json({
+            error: "Forbidden: You do not have permission to delete another user's private AI provider",
+          });
+        }
+      }
+
       kernelContainer.db.prepare('DELETE FROM ai_providers WHERE id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -1940,24 +2013,41 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/ai-providers/test', requireAuth('administrator'), safeAiLimiter, async (req, res) => {
-    try {
-      const { api_url, api_key: providedKey, model_name } = req.body;
-      if (!api_url || !model_name) {
-        return res.status(400).json({ error: 'api_url and model_name are required' });
-      }
+  app.post(
+    '/api/ai-providers/test',
+    requireScopedAuth('self', 'teacher', 'administrator'),
+    safeAiLimiter,
+    async (req, res) => {
+      try {
+        const session = (req as any).session;
+        const currentUserId = session?.userId || session?.username;
+        const { api_url, api_key: providedKey, model_name, id } = req.body;
+        if (!api_url || !model_name) {
+          return res.status(400).json({ error: 'api_url and model_name are required' });
+        }
 
-      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需要从 DB 获取）
-      let api_key = '';
-      if (providedKey && providedKey.includes('****')) {
-        // 掩码密钥：用户未输入新 key，尝试从 DB 查询
-        const existing = kernelContainer.db
-          .prepare('SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1')
-          .get(api_url, model_name) as { api_key: string } | undefined;
-        api_key = existing ? decryptApiKey(existing.api_key) : '';
-      } else if (providedKey) {
-        api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
-      }
+        // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需要从 DB 获取，必须校验归属）
+        let api_key = '';
+        if (providedKey && providedKey.includes('****')) {
+          let existing: { api_key: string } | undefined;
+          if (id) {
+            existing = kernelContainer.db
+              .prepare('SELECT api_key FROM ai_providers WHERE id = ? AND (owner_id = ? OR is_shared = 1)')
+              .get(id, currentUserId) as { api_key: string } | undefined;
+          } else {
+            existing = kernelContainer.db
+              .prepare(
+                'SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? AND (owner_id = ? OR is_shared = 1) LIMIT 1',
+              )
+              .get(api_url, model_name, currentUserId) as { api_key: string } | undefined;
+          }
+          if (!existing) {
+            return res.status(403).json({ error: 'Forbidden: Cannot access key for this provider' });
+          }
+          api_key = decryptApiKey(existing.api_key);
+        } else if (providedKey) {
+          api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
+        }
 
       let cleanUrl = api_url.trim();
       if (!cleanUrl.endsWith('/chat/completions')) {

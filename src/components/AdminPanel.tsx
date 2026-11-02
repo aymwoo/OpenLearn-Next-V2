@@ -560,7 +560,13 @@ export function AdminPanel({
       )}
 
       {activeAdminTab === 'ai_providers' ? (
-        <AiProvidersPanel lang={lang} aiProviders={aiProviders} onAIProvidersChanged={onAIProvidersChanged} />
+        <AiProvidersPanel
+          lang={lang}
+          aiProviders={aiProviders}
+          onAIProvidersChanged={onAIProvidersChanged}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+        />
       ) : activeAdminTab === 'sqlite' ? (
         <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
           {/* System Version & Upgrade Maintenance Card */}

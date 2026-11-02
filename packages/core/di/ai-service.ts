@@ -24,6 +24,7 @@ import { AIProviderGateway } from '../ai/provider/provider-gateway.js';
 import { AIEventBus } from '../ai/event/ai-event-bus.js';
 import { AIProviderConfig } from '../ai/types/index.js';
 import { decryptApiKey, looksLikeCiphertext } from './api-key-crypto.js';
+import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 
 export class AIService implements IAIService {
   private gateway: AIProviderGateway;
@@ -96,25 +97,20 @@ export class AIService implements IAIService {
 
   async generateText(
     prompt: string,
-    options?: { systemInstruction?: string; temperature?: number; maxTokens?: number },
+    options?: {
+      systemInstruction?: string;
+      temperature?: number;
+      maxTokens?: number;
+      userId?: string;
+      providerId?: string;
+    },
   ): Promise<string> {
-    // Query active third-party provider from DB
-    const provider = this.db
-      .prepare(
-        "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
-      )
-      .get() as { id: string; name: string; api_url: string; api_key: string; model_name: string } | undefined;
+    const provider = resolveAccessibleAiProvider(this.db, {
+      userId: options?.userId,
+      providerId: options?.providerId,
+    });
 
-    if (!provider || !provider.api_key) {
-      throw new Error('未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。');
-    }
-
-    // 与 server/utils/crypto.ts 共用同一套密钥解析（含 .env 回退），避免
-    // “AI Provider 测试通过、插件调用 401” 的解密分叉。
-    const apiKey = decryptApiKey(provider.api_key);
-    if (!apiKey || !apiKey.trim()) {
-      throw new Error('AI Provider API Key 解密为空，请前往「系统管理 -> AI 提供商管理」重新保存密钥。');
-    }
+    const apiKey = provider.api_key;
     if (looksLikeCiphertext(apiKey)) {
       // 解密失败时 decryptApiKey 会原样返回密文；此处显式报错，避免把密文当 Bearer
       // 发给上游后得到一个难以定位的 401。

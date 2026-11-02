@@ -17,6 +17,7 @@ import { randomId } from '../utils/id.js';
 import { normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import type { Pagination } from '../utils/pagination.js';
 import type { StoredAIProvider } from '../context.js';
+import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 
 export interface ScheduleRecord {
@@ -760,9 +761,9 @@ export class ScheduleService {
    */
   public async processTimetableOcr(
     imageBase64: string,
-    options: { lang?: string; providerId?: string } = {},
+    options: { lang?: string; providerId?: string; userId?: string } = {},
   ): Promise<{ entries: any[]; providerUsed: { id: string; name: string; model_name: string } }> {
-    const { lang = 'zh', providerId } = options;
+    const { lang = 'zh', providerId, userId } = options;
 
     if (!imageBase64) {
       throw new Error('imageBase64 is required');
@@ -797,29 +798,11 @@ export class ScheduleService {
 返回格式示例：
 [{"dayOfWeek":1,"periodNumber":1,"className":"高一(13)","subject":"信息","timeSlot":"08:00-08:40","location":"312","teacherName":""}]`;
 
-    let provider: StoredAIProvider | undefined;
-    if (providerId) {
-      provider = this.db
-        .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-        .get(providerId) as StoredAIProvider | undefined;
-    }
-    if (!provider) {
-      provider = this.db
-        .prepare(
-          "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' ORDER BY created_at DESC LIMIT 1",
-        )
-        .get() as StoredAIProvider | undefined;
-    }
-
-    if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
-
-    if (!provider || !provider.api_key || !provider.api_key.trim()) {
-      throw new Error(
-        lang === 'zh'
-          ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
-          : 'No AI provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
-      );
-    }
+    const provider = resolveAccessibleAiProvider(this.db, {
+      providerId,
+      userId,
+      lang,
+    });
 
     let chatUrl = provider.api_url.trim();
     if (!chatUrl.endsWith('/chat/completions')) {
