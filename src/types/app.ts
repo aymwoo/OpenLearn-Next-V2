@@ -183,6 +183,7 @@ export type AIProvider = {
 // ── Session ────────────────────────────────────────────────────────────────
 
 export interface SessionType {
+  id?: string;
   role: 'teacher' | 'student';
   userId?: string;
   username?: string;

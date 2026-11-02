@@ -4,7 +4,7 @@ import { execFile } from 'child_process';
 import crypto from 'crypto';
 import { filterXSS } from 'xss';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { decryptApiKey, detectPromptInjection } from '../utils/crypto.js';
+import { detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
@@ -16,7 +16,7 @@ import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
-  const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
+  const { app, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
 
   // 轻量连通性探测端点：课堂启动门户的顶部遥测岛用它测 HTTP 往返时延。
   // 刻意不鉴权、不访问数据库、无副作用，以便在登录页等未认证场景也能复用。

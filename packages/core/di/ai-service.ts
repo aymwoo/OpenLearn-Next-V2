@@ -23,7 +23,7 @@ import { AIProviderGateway } from '../ai/provider/provider-gateway.js';
 
 import { AIEventBus } from '../ai/event/ai-event-bus.js';
 import { AIProviderConfig } from '../ai/types/index.js';
-import { decryptApiKey, looksLikeCiphertext } from './api-key-crypto.js';
+import { looksLikeCiphertext } from './api-key-crypto.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 
 export class AIService implements IAIService {

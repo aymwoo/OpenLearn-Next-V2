@@ -71,9 +71,8 @@ export function resolveAccessibleAiProvider(
             'SELECT id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at FROM ai_providers WHERE id = ?',
           )
           .get(providerId) as StoredAIProvider | undefined)
-      : (db
-          .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
-          .get(providerId) as StoredAIProvider | undefined);
+      : (db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as
+          StoredAIProvider | undefined);
 
     if (!row) {
       throw new AiProviderError(

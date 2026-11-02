@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import { randomUUID } from 'node:crypto';
 import { isValidExecutionMode, type PluginExecutionMode } from '../../packages/core/plugin-host/types.js';
 import {
@@ -21,7 +21,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
-import { fetchWithRetry, AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
+import { AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import {
   COMMUNITY_REGISTRY_ENV,
   fetchCommunityRegistry,
@@ -467,16 +467,9 @@ function listInstalledManifestVersions(): Map<string, string> {
 }
 
 export function registerPluginsRoutes(ctx: ServerContext) {
-  const {
-    app,
-    aiLimiter,
-    buildOpenAITools,
-    executeAgentToolCall,
-    buildOpenAIChatUrl,
-    runGeminiAgentChat,
-    runOpenAIAgentChat,
-  } = ctx;
-  const safeAiLimiter = typeof aiLimiter === 'function' ? aiLimiter : (_req: any, _res: any, next: any) => next();
+  const { app, aiLimiter } = ctx;
+  const noopMiddleware: RequestHandler = (_req, _res, next) => next();
+  const safeAiLimiter = typeof aiLimiter === 'function' ? aiLimiter : noopMiddleware;
 
   app.get('/api/docs/plugin-guide', (req, res) => {
     try {
@@ -1824,7 +1817,17 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         .prepare(
           'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(id, name.trim(), api_url.trim(), encryptedKey, model_name.trim(), currentUserId, wantsShared && isAdmin ? 1 : 0, now, now);
+        .run(
+          id,
+          name.trim(),
+          api_url.trim(),
+          encryptedKey,
+          model_name.trim(),
+          currentUserId,
+          wantsShared && isAdmin ? 1 : 0,
+          now,
+          now,
+        );
       res.json({ success: true, id });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -2049,66 +2052,67 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
         }
 
-      let cleanUrl = api_url.trim();
-      if (!cleanUrl.endsWith('/chat/completions')) {
-        cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
-      }
+        let cleanUrl = api_url.trim();
+        if (!cleanUrl.endsWith('/chat/completions')) {
+          cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
+        }
 
-      const urlSafety = isSafeExternalUrl(cleanUrl);
-      if (!urlSafety.safe) {
-        return res.status(400).json({ error: `Blocked unsafe AI provider URL: ${urlSafety.reason}` });
-      }
+        const urlSafety = isSafeExternalUrl(cleanUrl);
+        if (!urlSafety.safe) {
+          return res.status(400).json({ error: `Blocked unsafe AI provider URL: ${urlSafety.reason}` });
+        }
 
-      let response: Response;
-      try {
-        // G-4c：fetchWithRetry 内部用裸 fetch（默认 redirect:'follow'），对
-        // 已过字面量校验的 URL 同样不做 DNS 校验与重定向复检 —— 同一类 SSRF。
-        // 这里改用 fetchWithSafeRedirects；该端点仅管理员可访问，风险面较小，
-        // 但修法一致，避免留一个「管理员可探测内网」的通道。
-        response = await fetchWithSafeRedirects(cleanUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${api_key || ''}`,
-          },
-          body: JSON.stringify({
-            model: model_name,
-            messages: [{ role: 'user', content: 'Say connected' }],
-            max_tokens: 5,
-          }),
-          timeoutMs: 10_000,
-        } as SafeFetchOptions);
-      } catch (err: any) {
-        // 超时判定不能只认 AIFetchTimeoutError —— G-4c 换成 fetchWithSafeRedirects 后，
-        // 超时由 AbortSignal.timeout 产生，错误形态是 DOMException：
-        //   · name === 'TimeoutError'（AbortSignal.timeout）
-        //   · name === 'AbortError'（测试注入的形态 / 手动 abort）
-        // 按错误形态判定比按错误类判定更稳，也保留了原有 504 契约。
-        const isTimeout =
-          err instanceof AIFetchTimeoutError ||
-          err?.name === 'TimeoutError' ||
-          err?.name === 'AbortError' ||
-          /abort|timeout/i.test(err?.message ?? '');
-        if (isTimeout) {
-          return res.status(504).json({
+        let response: Response;
+        try {
+          // G-4c：fetchWithRetry 内部用裸 fetch（默认 redirect:'follow'），对
+          // 已过字面量校验的 URL 同样不做 DNS 校验与重定向复检 —— 同一类 SSRF。
+          // 这里改用 fetchWithSafeRedirects；该端点仅管理员可访问，风险面较小，
+          // 但修法一致，避免留一个「管理员可探测内网」的通道。
+          response = await fetchWithSafeRedirects(cleanUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${api_key || ''}`,
+            },
+            body: JSON.stringify({
+              model: model_name,
+              messages: [{ role: 'user', content: 'Say connected' }],
+              max_tokens: 5,
+            }),
+            timeoutMs: 10_000,
+          } as SafeFetchOptions);
+        } catch (err: any) {
+          // 超时判定不能只认 AIFetchTimeoutError —— G-4c 换成 fetchWithSafeRedirects 后，
+          // 超时由 AbortSignal.timeout 产生，错误形态是 DOMException：
+          //   · name === 'TimeoutError'（AbortSignal.timeout）
+          //   · name === 'AbortError'（测试注入的形态 / 手动 abort）
+          // 按错误形态判定比按错误类判定更稳，也保留了原有 504 契约。
+          const isTimeout =
+            err instanceof AIFetchTimeoutError ||
+            err?.name === 'TimeoutError' ||
+            err?.name === 'AbortError' ||
+            /abort|timeout/i.test(err?.message ?? '');
+          if (isTimeout) {
+            return res.status(504).json({
+              success: false,
+              error: 'AI Provider request timed out after 10000ms. Please verify the URL or provider availability.',
+            });
+          }
+          throw err;
+        }
+
+        const responseText = await response.text();
+        if (response.ok) {
+          res.json({ success: true, message: 'Successfully connected and received response.' });
+        } else {
+          res.status(response.status).json({
             success: false,
-            error: 'AI Provider request timed out after 10000ms. Please verify the URL or provider availability.',
+            error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
           });
         }
-        throw err;
+      } catch (e: any) {
+        sendSafeError(res, e, 500, 'Connection failed');
       }
-
-      const responseText = await response.text();
-      if (response.ok) {
-        res.json({ success: true, message: 'Successfully connected and received response.' });
-      } else {
-        res.status(response.status).json({
-          success: false,
-          error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
-        });
-      }
-    } catch (e: any) {
-      sendSafeError(res, e, 500, 'Connection failed');
-    }
-  });
+    },
+  );
 }

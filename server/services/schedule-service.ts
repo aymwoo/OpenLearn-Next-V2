@@ -12,11 +12,9 @@
  */
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { decryptApiKey } from '../utils/crypto.js';
 import { randomId } from '../utils/id.js';
 import { normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import type { Pagination } from '../utils/pagination.js';
-import type { StoredAIProvider } from '../context.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 

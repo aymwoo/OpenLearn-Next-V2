@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import Database from 'better-sqlite3';
@@ -52,30 +52,58 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
     const expiresAt = now + 86400000;
 
     // 清理并注入测试用户
-    db.prepare("INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'teacher', ?, ?)")
-      .run(TEACHER_A_ID, 'teacher_a', 'Teacher A', now);
-    db.prepare("INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'teacher', ?, ?)")
-      .run(TEACHER_B_ID, 'teacher_b', 'Teacher B', now);
-    db.prepare("INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'administrator', ?, ?)")
-      .run(ADMIN_1_ID, 'admin_1', 'Admin 1', now);
-    db.prepare("INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'administrator', ?, ?)")
-      .run(ADMIN_2_ID, 'admin_2', 'Admin 2', now);
+    db.prepare(
+      "INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'teacher', ?, ?)",
+    ).run(TEACHER_A_ID, 'teacher_a', 'Teacher A', now);
+    db.prepare(
+      "INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'teacher', ?, ?)",
+    ).run(TEACHER_B_ID, 'teacher_b', 'Teacher B', now);
+    db.prepare(
+      "INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'administrator', ?, ?)",
+    ).run(ADMIN_1_ID, 'admin_1', 'Admin 1', now);
+    db.prepare(
+      "INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, 'hash', 'administrator', ?, ?)",
+    ).run(ADMIN_2_ID, 'admin_2', 'Admin 2', now);
 
     // 注入会话
-    const insertSession = db.prepare('INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)');
-    insertSession.run(TOK_TEACHER_A, JSON.stringify({ userId: TEACHER_A_ID, username: 'teacher_a', role: 'teacher', subRole: 'teacher' }), now, expiresAt);
-    insertSession.run(TOK_TEACHER_B, JSON.stringify({ userId: TEACHER_B_ID, username: 'teacher_b', role: 'teacher', subRole: 'teacher' }), now, expiresAt);
-    insertSession.run(TOK_ADMIN_1, JSON.stringify({ userId: ADMIN_1_ID, username: 'admin_1', role: 'teacher', subRole: 'administrator' }), now, expiresAt);
-    insertSession.run(TOK_ADMIN_2, JSON.stringify({ userId: ADMIN_2_ID, username: 'admin_2', role: 'teacher', subRole: 'administrator' }), now, expiresAt);
+    const insertSession = db.prepare(
+      'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+    );
+    insertSession.run(
+      TOK_TEACHER_A,
+      JSON.stringify({ userId: TEACHER_A_ID, username: 'teacher_a', role: 'teacher', subRole: 'teacher' }),
+      now,
+      expiresAt,
+    );
+    insertSession.run(
+      TOK_TEACHER_B,
+      JSON.stringify({ userId: TEACHER_B_ID, username: 'teacher_b', role: 'teacher', subRole: 'teacher' }),
+      now,
+      expiresAt,
+    );
+    insertSession.run(
+      TOK_ADMIN_1,
+      JSON.stringify({ userId: ADMIN_1_ID, username: 'admin_1', role: 'teacher', subRole: 'administrator' }),
+      now,
+      expiresAt,
+    );
+    insertSession.run(
+      TOK_ADMIN_2,
+      JSON.stringify({ userId: ADMIN_2_ID, username: 'admin_2', role: 'teacher', subRole: 'administrator' }),
+      now,
+      expiresAt,
+    );
 
     app = express();
     app.use(express.json());
 
+    const noopMiddleware: RequestHandler = (_req, _res, next) => next();
+
     const mockCtx = {
       app,
-      io: { emit: vi.fn(), to: () => ({ emit: vi.fn() }) } as any,
-      loginLimiter: ((_req: any, _res: any, next: any) => next()) as any,
-      aiLimiter: ((_req: any, _res: any, next: any) => next()) as any,
+      io: { emit: vi.fn(), to: () => ({ emit: vi.fn() }) } as unknown as ServerContext['io'],
+      loginLimiter: noopMiddleware,
+      aiLimiter: noopMiddleware,
       activityRegistry: new ActivityRegistry(),
       lessonActiveSegments: new Map(),
       buildAgentSystemInstruction: () => '',
@@ -101,7 +129,12 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?, ?)').run(TOK_TEACHER_A, TOK_TEACHER_B, TOK_ADMIN_1, TOK_ADMIN_2);
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?, ?)').run(
+      TOK_TEACHER_A,
+      TOK_TEACHER_B,
+      TOK_ADMIN_1,
+      TOK_ADMIN_2,
+    );
     db.prepare('DELETE FROM users WHERE id IN (?, ?, ?, ?)').run(TEACHER_A_ID, TEACHER_B_ID, ADMIN_1_ID, ADMIN_2_ID);
     db.prepare("DELETE FROM ai_providers WHERE id NOT IN ('prov_deepseek', 'prov_minimax')").run();
   });
@@ -116,23 +149,53 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       // 教师 A 的私有模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'Provider A', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'Provider A',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       // 管理员 1 的私有模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_admin_priv', 'Admin Private', 'https://api.adm.com', encryptApiKey('key-adm'), 'model-adm', ADMIN_1_ID, 0, now + 1, now + 1);
+      ).run(
+        'prov_test_admin_priv',
+        'Admin Private',
+        'https://api.adm.com',
+        encryptApiKey('key-adm'),
+        'model-adm',
+        ADMIN_1_ID,
+        0,
+        now + 1,
+        now + 1,
+      );
 
       // 平台共享模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_shared', 'Shared Provider', 'https://api.shared.com', encryptApiKey('key-shared'), 'model-shared', ADMIN_1_ID, 1, now + 2, now + 2);
+      ).run(
+        'prov_test_shared',
+        'Shared Provider',
+        'https://api.shared.com',
+        encryptApiKey('key-shared'),
+        'model-shared',
+        ADMIN_1_ID,
+        1,
+        now + 2,
+        now + 2,
+      );
 
       // 1) 教师 A 查看：应看到 prov_test_a 与 prov_test_shared，看不到 prov_test_admin_priv
       const resA = await fetch(`${baseUrl}/api/ai-providers`, { headers: cookie(TOK_TEACHER_A) });
       expect(resA.status).toBe(200);
-      const dataA = await resA.json();
-      const idsA = dataA.map((p: any) => p.id);
+      const dataA = (await resA.json()) as Array<{ id: string; api_key?: string }>;
+      const idsA = dataA.map((p) => p.id);
       expect(idsA).toContain('prov_test_a');
       expect(idsA).toContain('prov_test_shared');
       expect(idsA).not.toContain('prov_test_admin_priv');
@@ -140,8 +203,8 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       // 2) 教师 B 查看：只能看到 prov_test_shared，看不到 prov_test_a 和 prov_test_admin_priv
       const resB = await fetch(`${baseUrl}/api/ai-providers`, { headers: cookie(TOK_TEACHER_B) });
       expect(resB.status).toBe(200);
-      const dataB = await resB.json();
-      const idsB = dataB.map((p: any) => p.id);
+      const dataB = (await resB.json()) as Array<{ id: string }>;
+      const idsB = dataB.map((p) => p.id);
       expect(idsB).not.toContain('prov_test_a');
       expect(idsB).not.toContain('prov_test_admin_priv');
       expect(idsB).toContain('prov_test_shared');
@@ -149,8 +212,8 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       // 3) 管理员 2 查看：能看到 prov_test_shared，但看不到管理员 1 或教师 A 的私有模型
       const resAdmin2 = await fetch(`${baseUrl}/api/ai-providers`, { headers: cookie(TOK_ADMIN_2) });
       expect(resAdmin2.status).toBe(200);
-      const dataAdmin2 = await resAdmin2.json();
-      const idsAdmin2 = dataAdmin2.map((p: any) => p.id);
+      const dataAdmin2 = (await resAdmin2.json()) as Array<{ id: string }>;
+      const idsAdmin2 = dataAdmin2.map((p) => p.id);
       expect(idsAdmin2).not.toContain('prov_test_a');
       expect(idsAdmin2).not.toContain('prov_test_admin_priv');
       expect(idsAdmin2).toContain('prov_test_shared');
@@ -181,7 +244,10 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       expect(bodyPrivate.success).toBe(true);
       const newId = bodyPrivate.id;
 
-      const row = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(newId) as any;
+      const row = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(newId) as {
+        owner_id: string;
+        is_shared: number;
+      };
       expect(row.owner_id).toBe(TEACHER_A_ID);
       expect(row.is_shared).toBe(0);
 
@@ -214,7 +280,10 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       });
       expect(res.status).toBe(200);
       const body = await res.json();
-      const row = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(body.id) as any;
+      const row = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(body.id) as {
+        owner_id: string;
+        is_shared: number;
+      };
       expect(row.owner_id).toBe(ADMIN_1_ID);
       expect(row.is_shared).toBe(1);
     });
@@ -223,7 +292,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       const now = Date.now();
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_teacher_a', 'Teacher A Private', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_teacher_a',
+        'Teacher A Private',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       // 1) 教师 B 尝试修改 -> 403
       const resPutTeacherB = await fetch(`${baseUrl}/api/ai-providers/prov_test_teacher_a`, {
@@ -275,7 +354,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       const now = Date.now();
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_shared_1', 'Global Model', 'https://api.shared.com', encryptApiKey('key-s'), 'model-s', ADMIN_1_ID, 1, now, now);
+      ).run(
+        'prov_test_shared_1',
+        'Global Model',
+        'https://api.shared.com',
+        encryptApiKey('key-s'),
+        'model-s',
+        ADMIN_1_ID,
+        1,
+        now,
+        now,
+      );
 
       // 教师 A 尝试修改 -> 403
       const resPutTeacher = await fetch(`${baseUrl}/api/ai-providers/prov_test_shared_1`, {
@@ -314,7 +403,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       const now = Date.now();
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'A Model', 'https://api.openai.com/v1', encryptApiKey('sk-real-secret'), 'gpt-4o', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'A Model',
+        'https://api.openai.com/v1',
+        encryptApiKey('sk-real-secret'),
+        'gpt-4o',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       // 教师 B 试图通过传递掩码 Key 和目标参数测试教师 A 的 Provider
       const resTestB = await fetch(`${baseUrl}/api/ai-providers/test`, {
@@ -337,7 +436,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       const now = Date.now();
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'Provider A', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'Provider A',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       const resChat = await fetch(`${baseUrl}/api/agent/chat`, {
         method: 'POST',
@@ -358,7 +467,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       // 数据库中仅有账号 A 的私有模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'Provider A', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'Provider A',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       // 账号 B 发起对话，未传 providerId
       const resChat = await fetch(`${baseUrl}/api/agent/chat`, {
@@ -380,12 +499,32 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       // 账号 A 私有模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'Provider A', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'Provider A',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       // 平台共享模型
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_shared', 'Provider Shared', 'https://api.s.com', encryptApiKey('key-s'), 'model-s', ADMIN_1_ID, 1, now + 1, now + 1);
+      ).run(
+        'prov_test_shared',
+        'Provider Shared',
+        'https://api.s.com',
+        encryptApiKey('key-s'),
+        'model-s',
+        ADMIN_1_ID,
+        1,
+        now + 1,
+        now + 1,
+      );
 
       // 账号 A 解析
       const resolved = resolveAccessibleAiProvider(db, { userId: TEACHER_A_ID });
@@ -402,7 +541,17 @@ describe('Issue #383: AI Provider 账号隔离与越权防护', () => {
       const now = Date.now();
       db.prepare(
         'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run('prov_test_a', 'Provider A', 'https://api.a.com', encryptApiKey('key-a'), 'model-a', TEACHER_A_ID, 0, now, now);
+      ).run(
+        'prov_test_a',
+        'Provider A',
+        'https://api.a.com',
+        encryptApiKey('key-a'),
+        'model-a',
+        TEACHER_A_ID,
+        0,
+        now,
+        now,
+      );
 
       const resChat = await fetch(`${baseUrl}/api/agent/chat`, {
         method: 'POST',

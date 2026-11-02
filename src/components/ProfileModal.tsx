@@ -55,7 +55,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
     fetchLocalProviders();
   };
 
-  const currentUserId = session.userId || (session as any).id;
+  const currentUserId = session.userId || session.id;
   const currentUserRole = session.subRole === 'administrator' ? 'administrator' : session.role;
 
   // 头像上传
@@ -205,9 +205,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                 type="button"
                 onClick={() => setActiveTab('profile')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'profile'
-                    ? 'bg-white text-indigo-700 shadow-3xs'
-                    : 'text-gray-600 hover:text-gray-900'
+                  activeTab === 'profile' ? 'bg-white text-indigo-700 shadow-3xs' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 <UserIcon size={13} />

@@ -68,7 +68,7 @@ export function AiProvidersPanel({
       const isEditing = !!editingAIProvider;
       const url = isEditing ? `/api/ai-providers/${editingAIProvider!.id}` : '/api/ai-providers';
       const method = isEditing ? 'PUT' : 'POST';
-      const bodyPayload: any = {
+      const bodyPayload: Record<string, unknown> = {
         name: providerName.trim(),
         api_url: providerApiUrl.trim(),
         api_key: providerApiKey,
@@ -90,8 +90,9 @@ export function AiProvidersPanel({
         const errData = await res.json().catch(() => ({}));
         alert(errData.error || 'Server error');
       }
-    } catch (err: any) {
-      alert(err.message || 'Error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(message || 'Error');
     } finally {
       setProviderSaving(false);
     }
@@ -107,8 +108,9 @@ export function AiProvidersPanel({
       } else {
         alert('Delete failed');
       }
-    } catch (err: any) {
-      alert(err.message || 'Error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(message || 'Error');
     }
   };
 
@@ -134,8 +136,9 @@ export function AiProvidersPanel({
             : `Test failed: ${errData.error || 'Unknown error'}`,
         );
       }
-    } catch (err: any) {
-      alert(lang === 'zh' ? `网络异常: ${err.message}` : `Network error: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert(lang === 'zh' ? `网络异常: ${message}` : `Network error: ${message}`);
     }
   };
 
@@ -195,7 +198,7 @@ export function AiProvidersPanel({
                       const canManage = Boolean(
                         isShared
                           ? currentUserRole === 'administrator'
-                          : (!provider.owner_id || !currentUserId || provider.owner_id === currentUserId)
+                          : !provider.owner_id || !currentUserId || provider.owner_id === currentUserId,
                       );
 
                       return (
@@ -219,7 +222,9 @@ export function AiProvidersPanel({
                               </span>
                             )}
                           </td>
-                          <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">{provider.api_url}</td>
+                          <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">
+                            {provider.api_url}
+                          </td>
                           <td className="py-4 px-4">
                             <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-xs border border-slate-200">
                               {provider.model_name}

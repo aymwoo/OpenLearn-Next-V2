@@ -22,15 +22,7 @@ describe('ProfileModal AI Provider Isolation & Settings UI', () => {
   };
 
   it('does not display AI Provider tab for student session', () => {
-    render(
-      <ProfileModal
-        open={true}
-        session={studentSession}
-        lang="zh"
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-      />
-    );
+    render(<ProfileModal open={true} session={studentSession} lang="zh" onClose={vi.fn()} onSaved={vi.fn()} />);
 
     expect(screen.getByText('个人资料')).toBeTruthy();
     expect(screen.queryByText('AI 模型设置')).toBeNull();
@@ -59,26 +51,21 @@ describe('ProfileModal AI Provider Isolation & Settings UI', () => {
       },
     ];
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
-      const url = typeof input === 'string' ? input : input.url;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : 'url' in input ? input.url : input.toString();
       if (url === '/api/ai-providers') {
-        return {
-          ok: true,
-          json: async () => mockProviders,
-        } as any;
+        return new Response(JSON.stringify(mockProviders), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
-      return { ok: true, json: async () => ({}) } as any;
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     });
 
-    render(
-      <ProfileModal
-        open={true}
-        session={teacherSession}
-        lang="zh"
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-      />
-    );
+    render(<ProfileModal open={true} session={teacherSession} lang="zh" onClose={vi.fn()} onSaved={vi.fn()} />);
 
     // Both tabs should be visible
     expect(screen.getByRole('button', { name: /个人资料/ })).toBeTruthy();
