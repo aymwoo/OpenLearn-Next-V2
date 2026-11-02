@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileBarChart2,
   Award,
@@ -18,6 +18,8 @@ import {
   ChevronRight,
   Filter,
   FileText,
+  Archive,
+  Loader2,
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
 import { escapeCSV } from '../../utils/csv';
@@ -66,6 +68,115 @@ export function ClassroomBriefingView({
   });
   const [segmentNames, setSegmentNames] = useState<Record<string, string>>({});
   const [selectedStudentForDigest, setSelectedStudentForDigest] = useState<StudentPersonalDigest | null>(null);
+
+  // ── 「归档并结束课堂」常驻提示 ─────────────────────────────────────────
+  //
+  // 需求：学情简报页面**固定**提供「归档 / 结束课堂」的提示与入口，而不是
+  // 只有「结课通票 → 学情简报」那一次阶段切换时才出现一次瞬时提示。
+  //
+  // 归档目标 = 本课节最新一条课堂会话（GET /api/classroom/sessions/:lessonId
+  // 返回最近会话，含 stage 与 ended_at）。归档动作走服务端既有接口
+  // POST /api/classroom/sessions/:sessionId/archive（幂等：补齐 ended_at
+  // 封存时间戳、置 stage=ARCHIVED_REPORT、广播课堂事件）。
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; archived: boolean } | null>(null);
+  const [archiving, setArchiving] = useState(false);
+
+  /** GET /api/classroom/sessions/:lessonId 返回的会话快照（只取归档判定所需字段） */
+  interface ArchiveSessionSnapshot {
+    id?: string;
+    stage?: string;
+    ended_at?: number | null;
+  }
+
+  const loadArchiveTarget = useCallback(async () => {
+    if (!selectedLesson) {
+      setArchiveTarget(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}`);
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => null)) as { session?: ArchiveSessionSnapshot } | null;
+      const session = json?.session;
+      if (!session?.id) {
+        setArchiveTarget(null);
+        return;
+      }
+      const fetchedId = String(session.id);
+      // sessionId 由外部显式传入时优先用它（父组件可能持有特定会话）；
+      // 但「是否已归档」只在二者指向同一会话时才采信服务端状态。
+      const id = sessionId ? String(sessionId) : fetchedId;
+      const archived =
+        sessionId && fetchedId !== String(sessionId)
+          ? false
+          : session.stage === 'ARCHIVED_REPORT' && !!session.ended_at;
+      setArchiveTarget({ id, archived });
+    } catch {
+      // 拉取失败不阻断页面渲染：按钮保留，点击时给出明确提示
+    }
+  }, [selectedLesson, sessionId]);
+
+  useEffect(() => {
+    void loadArchiveTarget();
+  }, [loadArchiveTarget]);
+
+  const handleArchiveSession = async () => {
+    const target = archiveTarget;
+    if (!target?.id) {
+      addToast(
+        lang === 'zh' ? '暂时无法归档' : 'Cannot Archive Yet',
+        lang === 'zh'
+          ? '未找到本课节的课堂会话，请稍后重试，或到「课堂会话与档案管理」中处理。'
+          : 'No classroom session found for this lesson. Try again later.',
+        'warning',
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      lang === 'zh'
+        ? '归档并结束课堂？\n归档后本次课堂会话将被封存，并移入「已归档战报」库。'
+        : 'Archive and end this class?\nThe classroom session will be sealed and moved to the archived reports.',
+    );
+    if (!confirmed) return;
+
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(target.id)}/archive`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      addToast(
+        target.archived
+          ? lang === 'zh'
+            ? '本课节已归档'
+            : 'Already Archived'
+          : lang === 'zh'
+            ? '归档成功'
+            : 'Archived successfully',
+        target.archived
+          ? lang === 'zh'
+            ? '该课节课堂会话已封存并移入「已归档战报」库，无需重复归档。'
+            : 'This session is already sealed in the archived reports.'
+          : lang === 'zh'
+            ? '课堂会话已封存并移入「已归档战报」库，课堂已结束。'
+            : 'Session sealed and moved to the archived reports. The class is now closed.',
+        target.archived ? 'info' : 'success',
+      );
+    } catch (err) {
+      addToast(
+        lang === 'zh' ? '归档失败' : 'Failed to archive',
+        err instanceof Error ? err.message : lang === 'zh' ? '未知错误' : 'Unknown error',
+        'error',
+      );
+    } finally {
+      setArchiving(false);
+      void loadArchiveTarget();
+    }
+  };
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -317,6 +428,26 @@ export function ClassroomBriefingView({
           >
             <Clock size={13} />
             <span>{lang === 'zh' ? '新课节准备 (课前)' : 'Next Lesson (Pre-Class)'}</span>
+          </button>
+
+          <button
+            id="briefing-archive-session-btn"
+            type="button"
+            onClick={handleArchiveSession}
+            disabled={archiving}
+            title={
+              archiveTarget?.archived
+                ? lang === 'zh'
+                  ? '本课节已归档，点击可再次确认归档状态'
+                  : 'Already archived — click to confirm the archive state'
+                : lang === 'zh'
+                  ? '封存本次课堂会话并结束课堂'
+                  : 'Seal the classroom session and end the class'
+            }
+            className="px-3 py-2 text-xs font-bold rounded-xl border border-theme bg-surface hover:bg-surface-secondary text-main transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {archiving ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
+            <span>{lang === 'zh' ? '归档并结束课堂' : 'Archive & End Class'}</span>
           </button>
 
           <button
