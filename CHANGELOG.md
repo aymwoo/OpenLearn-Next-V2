@@ -10,7 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_（下一版本待补充）_
+### Features
+
+- **学情简报页面固定提供「归档并结束课堂」提示与入口**：此前「归档」提示只在「结课通票 → 学情简报」这一次阶段切换时以瞬时通知出现（大屏展台的 `diffStageNotices`），教师若从其它路径进入学情简报页面就看不到任何归档入口，只能回到「课堂会话与档案管理」手动处理。现于 `ClassroomBriefingView` 页头操作区常驻「归档并结束课堂」按钮：
+  - 点击 → 二次确认（「归档并结束课堂？归档后本次课堂会话将被封存，并移入「已归档战报」库。」）→ 确认后才调用 `POST /api/classroom/sessions/:sessionId/archive`（服务端既有接口，幂等：补齐 `ended_at` 封存时间戳、置 `stage=ARCHIVED_REPORT`、广播 `classroom.session.archived` 事件）；取消则不发请求。
+  - 归档目标取本课节最新一条课堂会话（`GET /api/classroom/sessions/:lessonId`），会话缺失时按钮仍在但点击给出明确告警，不静默失败。
+  - 归档结果按会话原状态分流提示：本次真正封存 → 「归档成功」；本已是归档态 → 「本课节已归档」（info），并刷新本地会话状态。
+  - 按钮在归档请求进行中禁用并显示 loading，避免重复提交。
 
 ## [0.7.10] - 2026-11-02
 
