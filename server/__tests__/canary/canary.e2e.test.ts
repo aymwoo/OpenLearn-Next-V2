@@ -30,6 +30,7 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
@@ -274,6 +275,11 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
         getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
         getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
       },
+      roster: {
+        listClasses: vi.fn().mockResolvedValue([]),
+        listClassStudents: vi.fn().mockResolvedValue([]),
+        getStudent: vi.fn().mockResolvedValue(null),
+      },
     };
 
     const basePairs: Array<[any, unknown]> = [
@@ -286,6 +292,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       [IAIServiceToken, services.ai],
       [IPointsDimensionRegistryToken, services.pointsDimension],
       [IPointsLedgerServiceToken, services.pointsLedger],
+      [IClassRosterServiceToken, services.roster],
     ];
 
     const extra = createExtraServices();

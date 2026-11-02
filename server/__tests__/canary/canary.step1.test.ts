@@ -31,6 +31,7 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   IDatabaseToken,
 } from '../../../packages/core/di/interfaces.js';
 import { buildCanaryZip } from './canary.builder';
@@ -117,6 +118,11 @@ function createMockServices(): Record<string, unknown> {
       getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
       getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
     },
+    roster: {
+      listClasses: vi.fn().mockResolvedValue([]),
+      listClassStudents: vi.fn().mockResolvedValue([]),
+      getStudent: vi.fn().mockResolvedValue(null),
+    },
   } as Record<string, unknown>;
 }
 
@@ -142,6 +148,7 @@ describe('金丝雀第 1 步：最小 ZIP 安装闭环（inline）', () => {
     await sr.register(IAIServiceToken, services.ai);
     await sr.register(IPointsDimensionRegistryToken, services.pointsDimension);
     await sr.register(IPointsLedgerServiceToken, services.pointsLedger);
+    await sr.register(IClassRosterServiceToken, services.roster);
     // 生产内核（kernel/index.ts）同样把原生 db 注册为 IDatabaseToken —— 金丝雀的
     // ctx.resolve(IDatabaseToken) 探针依赖它（与宿主共享同一 SQLite 实例）
     await sr.register(IDatabaseToken, db);

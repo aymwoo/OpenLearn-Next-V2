@@ -582,6 +582,43 @@ export interface IPointsLedgerService {
 export const IPointsLedgerServiceToken = new Token<IPointsLedgerService>('@openlearn/core:IPointsLedgerService');
 
 /**
+ * 班级摘要（受管名册，Issue #366）。刻意只含插件真正需要的字段。
+ */
+export interface RosterClassSummary {
+  id: string;
+  name: string;
+  studentCount: number;
+}
+
+/**
+ * 学生引用（受管名册）。**不含** email / private_notes / password ——
+ * 插件没有理由拿到这些字段，直查 students 表也正因如此被 sql-guard 禁止。
+ */
+export interface RosterStudentRef {
+  id: string;
+  name: string;
+  studentNumber: string | null;
+}
+
+/**
+ * 受管名册读取服务（Issue #366）。
+ *
+ * 为什么需要：`classes` / `students` / `class_students` 在 sql-guard 的
+ * `FORBIDDEN_CORE_TABLES` 里，插件不许直查，但此前又没有任何替代读取接口 ——
+ * 「不许走这条路，也没给桥」。本服务就是那座桥：只暴露 id / 姓名 / 学号 / 班级规模。
+ *
+ * 门禁：调用方 manifest 必须声明 `management:read`（教师角色默认具备）；
+ * 拒绝时抛 `PluginCapabilityDeniedError`，与 pointsLedger 同口径。
+ */
+export interface IClassRosterService {
+  listClasses(): Promise<RosterClassSummary[]>;
+  listClassStudents(classId: string): Promise<RosterStudentRef[]>;
+  getStudent(studentId: string): Promise<RosterStudentRef | null>;
+}
+
+export const IClassRosterServiceToken = new Token<IClassRosterService>('@openlearn/core:IClassRosterService');
+
+/**
  * Interface for LessonEngineService.
  */
 export interface ILessonEngineService {
@@ -968,6 +1005,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   ISemesterGradeServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,

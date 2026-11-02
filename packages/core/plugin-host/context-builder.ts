@@ -38,6 +38,7 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   PLUGIN_RESOLVABLE_TOKEN_NAMES,
@@ -53,6 +54,7 @@ import type {
   AIPersonaDefinition,
   IPointsDimensionRegistry,
   IPointsLedgerService,
+  IClassRosterService,
   PointsDimensionSpec,
   IClassroomLifecycleService,
   IInteractionRuntimeService,
@@ -699,6 +701,56 @@ function wrapPluginRuntimeService<T>(
 }
 
 /**
+ * 包装 IClassRosterService：受管名册读取（Issue #366）。
+ *
+ * 这是插件读取班级 / 学生信息的**唯一受支持通道** —— `classes` / `students` /
+ * `class_students` 在 sql-guard 的禁读清单里，直查要么在 worker 下被拒，
+ * 要么在 inline 下埋一颗「切执行模式就炸」的雷。
+ *
+ * 门禁与 pointsLedger 同口径：缺 `management:read` 时先落审计、再 ERROR 日志、最后抛错。
+ */
+function wrapRosterService(
+  service: IClassRosterService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IClassRosterService {
+  const CAP_ROSTER_READ = 'management:read';
+  // createSafeFunction 的返回类型是宽泛的 Function，这里收窄回具体签名，免得调用方丢类型
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assertReadable = (method: string, detail: Record<string, unknown>) => {
+    const hasCap = hasCapability(capabilities ?? [], CAP_ROSTER_READ);
+    recordSecurityAudit('plugin.roster_read', {
+      pluginId,
+      method,
+      ...detail,
+      hasCapability: hasCap,
+      ...(hasCap ? {} : { denied: true }),
+    });
+    if (hasCap) return;
+    console.error(
+      `[Security] 插件 "${pluginId}" 调用 roster.${method} 被拒：缺少能力 "${CAP_ROSTER_READ}"。` +
+        `请在 manifest.capabilitiesProposed 声明它（教师角色默认具备）。`,
+    );
+    throw new PluginCapabilityDeniedError(pluginId, CAP_ROSTER_READ, 'read', method);
+  };
+
+  return {
+    listClasses: safe(async () => {
+      assertReadable('listClasses', {});
+      return service.listClasses();
+    }),
+    listClassStudents: safe(async (classId: string) => {
+      assertReadable('listClassStudents', { classId });
+      return service.listClassStudents(classId);
+    }),
+    getStudent: safe(async (studentId: string) => {
+      assertReadable('getStudent', { studentId });
+      return service.getStudent(studentId);
+    }),
+  };
+}
+
+/**
  * 包装 IPointsLedgerService：透传积分账本读写。
  *
  * addPoints 会持久化到 events 表，插件上下文调用的所有写入都需经过此包装。
@@ -899,6 +951,7 @@ export async function buildContext(
   // 测试或部分部署可能不启用积分子系统；生产环境 kernel 会注册。
   const pointsDimensionRegistry = await serviceRegistry.tryResolve(IPointsDimensionRegistryToken);
   const pointsLedgerService = await serviceRegistry.tryResolve(IPointsLedgerServiceToken);
+  const rosterService = await serviceRegistry.tryResolve(IClassRosterServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
   const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id, actionRegistryService);
@@ -923,6 +976,9 @@ export async function buildContext(
     : null;
   const wrappedPointsLedger = pointsLedgerService
     ? wrapPointsLedgerService(pointsLedgerService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedRoster = rosterService
+    ? wrapRosterService(rosterService, pluginId, manifest.capabilitiesProposed)
     : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
@@ -957,6 +1013,7 @@ export async function buildContext(
     ai: wrappedAI,
     pointsDimension: wrappedPointsDimension,
     pointsLedger: wrappedPointsLedger,
+    roster: wrappedRoster,
   };
 
   // === Phase 6: Null out incompatible optional service keys (D-12) =============
@@ -975,6 +1032,7 @@ export async function buildContext(
       '@openlearn/core:IAIService': 'ai',
       '@openlearn/core:IPointsDimensionRegistry': 'pointsDimension',
       '@openlearn/core:IPointsLedgerService': 'pointsLedger',
+      '@openlearn/core:IClassRosterService': 'roster',
     };
     for (const tokenName of skipTokens) {
       const serviceKey = TOKEN_TO_SERVICE_KEY[tokenName];
