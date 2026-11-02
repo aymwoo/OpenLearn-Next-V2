@@ -365,8 +365,16 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
   }
 
   // 7. 速率限制守卫（Rate Limiter 防刷防 DoS）
+  //
+  // 分桶键优先用**登录身份**而不是客户端 IP：教室里的学生机共享同一个出口
+  // IP，按 IP 分桶会让「一个学生的插件轮询」把「全班学生的插件轮询」和
+  // 「插件网关的其它调用」一起限掉（实测 14 客户端 × 3s 轮询即稳定 429）。
+  // 按登录身份分桶后，每个客户端独享预算；未登录请求回落到 IP，防刷不被削弱。
   const clientIp = req.ip || req.socket?.remoteAddress || 'unknown-ip';
-  const rateLimitKey = `${clientIp}:${resolvedUuid || pluginId}:${method}:${normalizedSubPath}`;
+  const identityKey = auth.isAuthenticated
+    ? `u:${String(auth.userId || auth.username || auth.actorId).slice(0, 64)}`
+    : `ip:${clientIp}`;
+  const rateLimitKey = `${identityKey}:${resolvedUuid || pluginId}:${method}:${normalizedSubPath}`;
   const windowMs = matchedRule?.rateLimit?.windowMs ?? 60 * 1000;
   const maxRequests = matchedRule?.rateLimit?.max ?? 120; // 默认单个端点每分钟最多 120 次请求
 

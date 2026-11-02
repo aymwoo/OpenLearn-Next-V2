@@ -33,7 +33,12 @@ import { ClassroomFeedService, attachClassroomFeedService } from './server/servi
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
 import { bindAIPersonaRegistry } from './server/ai-persona-registry.js';
 import helmet from 'helmet';
-import { createAiLimiter, createLoginLimiter, createWriteLimiter } from './server/security/rate-limit.js';
+import {
+  createAiLimiter,
+  createLoginLimiter,
+  createSessionWriteLimiter,
+  createWriteLimiter,
+} from './server/security/rate-limit.js';
 import { resolveTrustProxy } from './server/security/trust-proxy.js';
 import { assertStartupEnv } from './server/security/env-validation.js';
 import { warnSensitiveFilePermissions } from './server/security/file-permissions.js';
@@ -280,6 +285,17 @@ async function startServer() {
   const writeLimiter = createWriteLimiter(defaultWriteLimit);
   // 课堂视图状态同步专用限流：每分钟允许 120 次（dev 600 次），独立于通用写请求桶，保障白板切页/环节同步不卡顿
   const viewStateLimiter = createWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : isDev ? 600 : 120);
+  // 插件 API 通道专用限流：**按会话分桶**（登录用户/学号各自一份预算）。
+  //
+  // 为什么必须独立于通用写桶：教室里的学生机共享同一个出口 IP，
+  // 通用写桶按 IP 分桶（生产 180 次/分），于是「N 个学生端的插件轮询」
+  // 会把整个班级的写配额吃光 —— 连带教师端的白板保存（演示文稿切页等）
+  // 一起被 429 打断，且失败是静默的（前端不检查响应）。
+  // 实测 14 个客户端每 3s 轮询一次插件命令即可稳定触发（实测 120s 内 142~188 次 429）。
+  //
+  // 按会话分桶后每个客户端独享预算，客户端数量不再影响彼此；
+  // 未登录请求回落到 IP 分桶，防刷保护不被削弱。
+  const pluginApiLimiter = createSessionWriteLimiter(process.env.PLAYWRIGHT_TEST ? 10000 : 600);
   const aiLimiter = createAiLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 10);
 
   // SEC-03 防御加固：
@@ -289,6 +305,12 @@ async function startServer() {
       // 课堂视图状态同步端点（轻量级断网/离开恢复快照）走独立限流，不占用全站通用写限流配额
       if (/^\/api\/classroom\/sessions\/[^/]+\/view-state\/?$/.test(req.path)) {
         return viewStateLimiter(req, res, next);
+      }
+      // 插件 API 通道（网关 REST + 沙箱命令）走**会话级**独立限流：
+      // 插件前端普遍有 3s 级的定时轮询，若与业务写请求共用按 IP 的桶，
+      // 一个班级的轮询会把教师端的白板保存一起限掉（见上方注释）。
+      if (req.path.startsWith('/api/plugins/')) {
+        return pluginApiLimiter(req, res, next);
       }
       return writeLimiter(req, res, next);
     }
