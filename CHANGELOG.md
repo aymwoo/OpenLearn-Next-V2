@@ -20,6 +20,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **白板「演示文稿」PPTX 翻页在相邻两页之间无限闪动（Issue #381）**：
+  - **根因**：`RevealPresentationWrapper` 把当前页下发给 `pptx-react-viewer`，同时又接收它的 `onActiveSlideChange` 回写；而该回调依赖 `slideIndex`，导致每次翻页回调身份都会变化。查看器的回调 effect 依赖 `onActiveSlideChange`（`pptx-react-viewer@4.33.1`），身份一变就立刻把**内部尚未更新的旧页码**回报回来，包装组件被拽回上一页后再把查看器推向下一页，形成死循环。
+  - **修复**：`handlePptxActiveSlideChange` 不再依赖 `slideIndex`（改用 `slideIndexRef` / `dataRef` 读取最新值），回调身份保持稳定；程序化翻页时记录目标页 `pendingPptxTargetRef`，查看器追上目标前回报的旧页码直接忽略。查看器内部真实换页（缩略图/键盘）仍会正常回写父级。
+  - **回归**：新增 `src/features/whiteboard/__tests__/reveal-presentation-pptx-navigation.test.tsx`，用与查看器语义一致的 mock 断言「点击一次下一页只前进一页且只写一次 `slideX`」「查看器内部换页仍会同步」。修复前该用例会触发现象为 `onActiveSlideChange` 循环调用的失败。
+
 - **教室内插件轮询把全班写配额吃光，导致白板保存被 429 打断（课堂互动白板闪动）**：
   - **根因**：全站通用写限流按**客户端 IP** 分桶（生产 180 次/分，开发 600 次/分），而一间教室里的学生机共享同一个出口 IP。插件前端普遍带 3s 级定时轮询（实测用户环境的 `@openlearn-ext/whiteboard-sticky-notes`：`setInterval(fetchNotes, 3000)` → `POST /api/plugins/<id>/sandbox-command`），于是「N 个学生端的插件轮询」把整个班级的写配额吃光，**连带教师端的白板保存（演示文稿切页等）一起被 429 打断**；而互动课堂的白板写入此前**静默忽略**失败响应，教师只看到「切了没生效 / 白板异常闪动」。
   - **实测**（生产构建 + 用户真实插件与数据，14 个客户端每 3s 轮询一次，120s）：574 次请求里 **142~188 次 429**，且**教师自己的浏览器也收到 11 次 429**（同一端点 `POST /api/plugins/<id>/sandbox-command`）。

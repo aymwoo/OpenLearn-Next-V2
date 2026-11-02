@@ -97,6 +97,15 @@ export function RevealPresentationWrapper({
   const [mode, setMode] = useState<'ppt' | 'doc' | 'edit'>('ppt');
   const [markdown, setMarkdown] = useState(data.markdown || '# Title Slide\n---\n## Slide 2');
   const [slideIndex, setSlideIndex] = useState(data.slideX || 0);
+  // 与 slideIndex 同源的最新值：给事件回调/异步 effect 读取，避免把 slideIndex 塞进
+  // `handlePptxActiveSlideChange` 的依赖里 —— 那会让回调身份每次翻页都变化，而
+  // pptx-react-viewer 的回调 effect 依赖 onActiveSlideChange，会立刻把旧页码回报回来。
+  const slideIndexRef = useRef(slideIndex);
+  // 包装组件主动翻页的目标页码。viewer 内部 state 会落后一帧，在它追上目标前
+  // 回报的仍是旧页码，必须忽略，否则会形成「下一页 ↔ 当前页」的无限闪动。
+  const pendingPptxTargetRef = useRef<number | null>(null);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [autoplay, setAutoplay] = useState(false);
   const [autoplayInterval, setAutoplayInterval] = useState(4); // seconds
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -144,10 +153,19 @@ export function RevealPresentationWrapper({
 
   // Sync index from parents
   useEffect(() => {
-    if (data.slideX !== undefined && data.slideX !== slideIndex) {
-      setSlideIndex(data.slideX);
-    }
+    if (data.slideX === undefined) return;
+    // 父级与本地已一致时不做任何事：程序化翻页的等待标记只由 viewer 追上目标页来解除，
+    // 否则父级数据先到达会过早撤销护栏，迟到的旧页码又能把页面拽回去。
+    if (data.slideX === slideIndexRef.current) return;
+    slideIndexRef.current = data.slideX;
+    pendingPptxTargetRef.current = null;
+    setSlideIndex(data.slideX);
   }, [data.slideX]);
+
+  // 卸载或切换课件时，旧的目标页码不再有意义。
+  useEffect(() => {
+    pendingPptxTargetRef.current = null;
+  }, [fileUrl, fileType, isContainerFullscreen]);
 
   // Sync markdown from parents (if updated by someone else)
   useEffect(() => {
@@ -221,8 +239,15 @@ export function RevealPresentationWrapper({
       if (activeRef) {
         try {
           const currentIdx = activeRef.getActiveSlideIndex?.();
-          if (currentIdx !== undefined && currentIdx !== slideIndex) {
-            activeRef.setActiveSlideIndex?.(slideIndex);
+          if (currentIdx !== undefined) {
+            if (currentIdx === slideIndex) {
+              // viewer 已经在目标页：程序化翻页完成，撤销护栏。
+              if (pendingPptxTargetRef.current === slideIndex) {
+                pendingPptxTargetRef.current = null;
+              }
+            } else {
+              activeRef.setActiveSlideIndex?.(slideIndex);
+            }
           }
         } catch (e) {
           console.warn('[RevealPresentationWrapper] Failed to sync PPTX slide index:', e);
@@ -234,17 +259,28 @@ export function RevealPresentationWrapper({
   // Handlers for PowerPointViewer callbacks
   const handlePptxActiveSlideChange = useCallback(
     (newIndex: number) => {
-      if (newIndex !== slideIndex) {
-        setSlideIndex(newIndex);
-        if (isTeacher && onElementUpdate) {
-          onElementUpdate(elementId, {
-            ...data,
-            slideX: newIndex,
-          });
-        }
+      // 包装组件刚发起过程序化翻页：viewer 内部 state 会晚一帧才更新，
+      // 期间它回报的旧页码不能用来回写 slideIndex（否则来回闪动）。
+      const pendingTarget = pendingPptxTargetRef.current;
+      if (pendingTarget !== null) {
+        if (newIndex !== pendingTarget) return;
+        pendingPptxTargetRef.current = null;
+      }
+
+      if (newIndex === slideIndexRef.current) return;
+
+      // viewer 内部真正换页（缩略图 / 键盘）：采纳并同步给其他人。
+      slideIndexRef.current = newIndex;
+      setSlideIndex(newIndex);
+      if (isTeacher && onElementUpdate) {
+        onElementUpdate(elementId, {
+          ...dataRef.current,
+          slideX: newIndex,
+        });
       }
     },
-    [slideIndex, isTeacher, onElementUpdate, elementId, data],
+    // 不能依赖 slideIndex：回调身份变化会触发 viewer 重新回报当前页，形成循环。
+    [isTeacher, onElementUpdate, elementId],
   );
 
   const handlePptxSlideCountChange = useCallback(
@@ -322,8 +358,9 @@ export function RevealPresentationWrapper({
     const interval = setInterval(() => {
       setSlideIndex((prev: number) => {
         const next = (prev + 1) % Math.max(1, slides.length);
+        slideIndexRef.current = next;
         if (onElementUpdate) {
-          onElementUpdate(elementId, { ...data, slideX: next });
+          onElementUpdate(elementId, { ...dataRef.current, slideX: next });
         }
         return next;
       });
@@ -353,6 +390,11 @@ export function RevealPresentationWrapper({
   const handleSlideChange = (index: number) => {
     if (isStudent && isFullscreenSynced && isFullscreenForced) return;
     const validIndex = Math.min(Math.max(0, index), totalSlides - 1);
+    slideIndexRef.current = validIndex;
+    if (fileType === 'pptx') {
+      // 记录目标页：在 viewer 追上之前忽略它回报的旧页码。
+      pendingPptxTargetRef.current = validIndex;
+    }
     setSlideIndex(validIndex);
     if (isTeacher && onElementUpdate) {
       onElementUpdate(elementId, { ...data, slideX: validIndex });
@@ -433,6 +475,8 @@ export function RevealPresentationWrapper({
           isFullscreenSynced: data.isFullscreenSynced !== undefined ? data.isFullscreenSynced : true,
           isFullscreenForced: false,
         });
+        slideIndexRef.current = 0;
+        pendingPptxTargetRef.current = null;
         setSlideIndex(0);
       }
     } catch (err: any) {
@@ -455,6 +499,8 @@ export function RevealPresentationWrapper({
           slideCount: 0,
           isFullscreenForced: false,
         });
+        slideIndexRef.current = 0;
+        pendingPptxTargetRef.current = null;
         setSlideIndex(0);
       }
     }
@@ -1129,6 +1175,8 @@ export function RevealPresentationWrapper({
                         window.confirm(`确定要加载模板 “${preset.name}” 吗？这将会覆盖当前白板课件中的所有编辑内容。`)
                       ) {
                         handleMarkdownChange(preset.content);
+                        slideIndexRef.current = 0;
+                        pendingPptxTargetRef.current = null;
                         setSlideIndex(0);
                       }
                     }}
