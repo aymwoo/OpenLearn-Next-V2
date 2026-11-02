@@ -183,11 +183,14 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
 
 #### 6.1 平台全局限流配额
 
-| 限流桶名称              | 作用端点 / 范围                           | 生产限流配额                | 开发环境配额 | 溢出响应与行为                           |
-| :---------------------- | :---------------------------------------- | :-------------------------- | :----------- | :--------------------------------------- |
-| **`writeLimiter`**      | 全局所有 `POST` / `PUT` / `DELETE` 写请求 | **180 次/分钟**（~3 req/s） | 600 次/分钟  | HTTP 429 Too Many Requests               |
-| **`viewStateLimiter`**  | `/api/classroom/sessions/:id/view-state`  | **120 次/分钟**（独立桶）   | 600 次/分钟  | 专门保障课堂断线恢复快照不被主写流饿死   |
-| **`PluginRateLimiter`** | `/api/plugins/:pluginId/*` 网关端点       | **默认 120 次/分钟/端点**   | 独立滑动窗口 | 针对每个客户端 IP + 插件 ID 分组隔离流控 |
+| 限流桶名称              | 作用端点 / 范围                                    | 生产限流配额                                      | 开发环境配额                           | 溢出响应与行为                                                        |
+| :---------------------- | :------------------------------------------------- | :------------------------------------------------ | :------------------------------------- | :-------------------------------------------------------------------- |
+| **`writeLimiter`**      | 下列独立桶之外的所有 `POST` / `PUT` / `DELETE`     | **180 次/分钟**（~3 req/s）                       | 600 次/分钟                            | HTTP 429；按出口 IP 分桶（同教室多设备共享同一份额度）                |
+| **`viewStateLimiter`**  | `/api/classroom/sessions/:id/view-state`           | **120 次/分钟**（独立桶）                         | 600 次/分钟                            | 专门保障课堂断线恢复快照不被主写流饿死                                |
+| **`pluginApiLimiter`**  | `/api/plugins/*`（网关 REST + `/sandbox-command`） | **600 次/分钟/会话**（登录身份分桶，匿名回落 IP） | 600 次/分钟（`PLAYWRIGHT_TEST` 10000） | 独立桶：插件前端 3s 级轮询不再占用 `writeLimiter`，同教室设备互不抢占 |
+| **`PluginRateLimiter`** | `/api/plugins/:pluginId/*` 网关端点                | **默认 120 次/分钟/端点**                         | 独立滑动窗口                           | 按「登录身份优先、匿名回落客户端 IP」+ 插件 ID + 方法 + 端点分桶      |
+
+> **为什么 `/api/plugins/*` 单独开一个按会话分桶的桶**：教室里的学生机共享同一个出口 IP，若与业务写请求共用按 IP 的 `writeLimiter`，**N 个客户端 × 3s 级插件轮询**（实测 14 客户端即稳定触发）就会把整间教室的写配额吃光，连带教师端的白板保存一起 429。改为按会话分桶后每个登录身份独享预算，未登录请求仍回落到 IP，防刷保护不变。插件侧仍应把 HTTP 轮询改为事件驱动（见 6.2 第 3 条）。
 
 #### 6.2 客户端节流最佳实践
 
@@ -274,14 +277,14 @@ lianyun_research_activities, lianyun_research_groups, lianyun_research_submissio
 
 ## 4. 常见排障与反模式速查表 (Troubleshooting Quick Reference)
 
-| 异常现象 / 错误日志                                                                                            | 根因分析                                                                                     | 对应契约            | 纠正方案                                                                                                                                  |
-| :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- | :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| `WorkerCapabilityError: Capability denied ... empty manifestCapabilities, only 'get' methods allowed`          | 插件 `manifest.json` 的 `capabilitiesProposed` 声明为空数组，触发 Barrier 2 强制只读锁定     | **契约 5**          | 在 `manifest.json` 中声明业务所需的写入/执行能力（如 `vfs:write`、`whiteboard:write`、`plugin:write` 等合法 `capabilityRequired` 字符串） |
-| `Worker plugin is not permitted to access table "whiteboard_elements"`                                         | 插件直接通过 SQL 读写白板核心数据表，被 SQL-Guard 静态审计硬拦截                             | **契约 2 / 契约 4** | 改用命令总线派遣 `whiteboard.draw` 命令，由白板子系统统一执行                                                                             |
-| `HTTP 429 Too many requests, please slow down`                                                                 | 视图在学生输入或答题时未加防抖，连续发起写请求击穿全局写限流（180/min）或端点限流（120/min） | **契约 6**          | 增加 `>= 500ms` 的输入防抖，并在写操作前执行新旧值 diff 检查                                                                              |
-| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储           | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.storage.get/set(key, value)`（view 通道没有 `state` 命名空间）       |
-| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                               | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize(height)`（**位置参数**）                                                     |
-| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                               | **契约 3**          | 使用空值合并语法：`const classId = context?.classId \|\| 'default'`                                                                       |
+| 异常现象 / 错误日志                                                                                            | 根因分析                                                                                                                                                         | 对应契约            | 纠正方案                                                                                                                                  |
+| :------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| `WorkerCapabilityError: Capability denied ... empty manifestCapabilities, only 'get' methods allowed`          | 插件 `manifest.json` 的 `capabilitiesProposed` 声明为空数组，触发 Barrier 2 强制只读锁定                                                                         | **契约 5**          | 在 `manifest.json` 中声明业务所需的写入/执行能力（如 `vfs:write`、`whiteboard:write`、`plugin:write` 等合法 `capabilityRequired` 字符串） |
+| `Worker plugin is not permitted to access table "whiteboard_elements"`                                         | 插件直接通过 SQL 读写白板核心数据表，被 SQL-Guard 静态审计硬拦截                                                                                                 | **契约 2 / 契约 4** | 改用命令总线派遣 `whiteboard.draw` 命令，由白板子系统统一执行                                                                             |
+| `HTTP 429 Too many requests, please slow down`                                                                 | 视图在学生输入或答题时未加防抖，连续发起写请求击穿全局写限流（180/min）或端点限流（120/min）；或插件前端用 `setInterval` 高频 HTTP 轮询打满会话限流桶（600/min） | **契约 6**          | 增加 `>= 500ms` 的输入防抖，并在写操作前执行新旧值 diff 检查；插件侧改用事件驱动而非轮询                                                  |
+| `SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.` | 视图运行在 `sandbox` 未包含 `allow-same-origin` 的 `null` 域下，直接调用浏览器存储                                                                               | **契约 6**          | 移除所有原生 `localStorage` 调用，改用 `window.OpenLearnPluginBridge.storage.get/set(key, value)`（view 通道没有 `state` 命名空间）       |
+| 白板卡片或抽屉面板内部出现双重滚动条或内容被截断                                                               | 视图在异步加载后未通过 Bridge 上报实际渲染高度                                                                                                                   | **契约 1**          | 在内容完成渲染后调用 `window.OpenLearnPluginBridge.ui.resize(height)`（**位置参数**）                                                     |
+| `TypeError: Cannot read properties of null (reading 'classId')`                                                | 视图在独立沙盒预览或未开课状态下运行，直接访问了未定义的上下文                                                                                                   | **契约 3**          | 使用空值合并语法：`const classId = context?.classId \|\| 'default'`                                                                       |
 
 ---
 

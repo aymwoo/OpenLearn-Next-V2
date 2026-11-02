@@ -1475,7 +1475,7 @@ export default {
 1. **系统保留端点避让**：核心管理动作（如 `/config`, `/toggle`, `/contributions`）自动避让至系统路由，防止插件拦截管理能力；
 2. **路径遍历防护 (Path Traversal)**：对原始子路径与规范化路径双重检测 `..`，命中直接阻断并返回 `400 Bad Request`；
 3. **Payload 体积硬限制**：请求体限制为 **1MB**（超限直接拒绝并返回 `413 Payload Too Large`），有效防范恶意刷大报文造成主线程或 Worker 线程 OOM；大文件必须通过 `IStorageService` 进行切片或流式传输；
-4. **内存滑动窗口限流器 (Rate Limiting)**：以客户端 IP + 插件 ID 为键执行滑动窗口计数，默认单端点 120 req/min，超限返回 `429 Too Many Requests`；可在 `manifest.json` 的 `rateLimit` 中自定义调优；
+4. **内存滑动窗口限流器 (Rate Limiting)**：以「**登录身份优先、匿名回落客户端 IP**」+ 插件 ID + 请求方法 + 端点路径为键执行滑动窗口计数，默认单端点 120 req/min，超限返回 `429 Too Many Requests`；可在 `manifest.json` 的 `rateLimit` 中自定义调优。注意：`/api/plugins/*` 的整体流量走的是**按会话分桶**的 `pluginApiLimiter`（600 req/min/会话，未登录回落 IP），不再占用全站 `writeLimiter` 的额度；
 5. **前置认证与细粒度 RBAC 拦截**：支持 Cookie 会话（`edu_os_token`）与 Bearer Token 鉴权。未登录返回 `401 Unauthorized`，角色不符返回 `403 Forbidden`。清单中的 `auth: false` 只是申请公开，管理员还须通过安装参数 `approvePublicRoutes: true`、请求头 `x-approve-public-routes: true` 或 `POST /api/plugins/:id/public-routes` 把该方法与路径写入 `plugin_public_routes` 后，匿名访问才会放行；
 6. **响应脱敏清洗**：插件出站响应会被强制清洗，剥离 `Set-Cookie`、`Content-Security-Policy`、`Access-Control-Allow-Origin` 等高危标头，杜绝插件尝试劫持主域 Cookie 或篡改全站安全策略。
 
