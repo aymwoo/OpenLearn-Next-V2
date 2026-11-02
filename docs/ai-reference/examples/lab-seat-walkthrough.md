@@ -8,16 +8,16 @@
 
 ## 0. 为什么拿它当样本
 
-| 维度          | 值                                                                                        | 取证                                                                            |
-| ------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 代码量        | 后端 1461 行 + 前端 1556 行 + 2 个纯函数模块（184 + 23 行）                               | `[P] src/index.ts`、`src/frontend.tsx`、`src/smart-assign.ts`、`src/csv.ts`     |
-| 执行模式      | `inline`（受信内置插件）                                                                  | `[P] plugin.contract.json` → `executionMode`                                    |
-| UI 通道       | `inline-react`                                                                            | 同上 → `uiChannel`                                                              |
-| 槽位          | 4 个：`classroom.tool`、`student.view`、`teacher.dashboard.widget`、`teacher.tab`         | 同上 → `slots[]`，实现见 `[P] src/frontend.tsx` L1518-1552                      |
-| 命令          | 27 个 `registerHandler`                                                                   | `grep -c "commandBus.registerHandler" src/index.ts` → 27                        |
-| Action 描述符 | 27 条（8 条具名 + 19 条批量补齐）                                                         | `[P] src/index.ts` L397/476/778/873/960/983/1115/1149 + `MISSING_ACTIONS` L1419 |
-| 自建表        | 5 张（全部经 `ctx.db.table()`，真实前缀 `plugin_<scopeId>_`，上传插件的 scopeId 是 UUID） | `[P] src/index.ts` L193-277                                                     |
-| 读写的平台表  | 1 张写（`computer_labs`，反例）+ 3 张只读 JOIN（`lessons` / `users` / `class_students`）  | `[P] src/index.ts` L175、L347、L355                                             |
+| 维度          | 值                                                                                        | 取证                                                                                    |
+| ------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 代码量        | 后端 1461 行 + 前端 1556 行 + 2 个纯函数模块（184 + 23 行）                               | `[P] src/index.ts`、`[P] src/frontend.tsx`、`[P] src/smart-assign.ts`、`[P] src/csv.ts` |
+| 执行模式      | `inline`（受信内置插件）                                                                  | `[P] plugin.contract.json` → `executionMode`                                            |
+| UI 通道       | `inline-react`                                                                            | 同上 → `uiChannel`                                                                      |
+| 槽位          | 4 个：`classroom.tool`、`student.view`、`teacher.dashboard.widget`、`teacher.tab`         | 同上 → `slots[]`，实现见 `[P] src/frontend.tsx` L1518-1552                              |
+| 命令          | 27 个 `registerHandler`                                                                   | `grep -c "commandBus.registerHandler" src/index.ts` → 27                                |
+| Action 描述符 | 27 条（8 条具名 + 19 条批量补齐）                                                         | `[P] src/index.ts` L397/476/778/873/960/983/1115/1149 + `MISSING_ACTIONS` L1419         |
+| 自建表        | 5 张（全部经 `ctx.db.table()`，真实前缀 `plugin_<scopeId>_`，上传插件的 scopeId 是 UUID） | `[P] src/index.ts` L193-277                                                             |
+| 读写的平台表  | 1 张写（`computer_labs`，反例）+ 3 张只读 JOIN（`lessons` / `users` / `class_students`）  | `[P] src/index.ts` L175、L347、L355                                                     |
 
 选它的理由：它同时踩过**「有 handler 无描述符 → 403」**、**「worker 下 `ctx.config` 不存在」**、
 **「`provide` 只在主进程可用」**、**「React 必须运行期注入」**这四类真实坑，且每处都在注释里留了复盘。
@@ -558,7 +558,7 @@ async deactivate() {
 
 | 文件                                          | 作用                                                                                                                                                        |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test/build-test-bundle.mjs`                  | 用 esbuild 把 `src/index.ts` 打成 `tmp/plugin-test-bundle.mjs`，把 `pino`/`express`/`jszip`/`semver`/`uuid` 等 alias 到 `_mock-pino.mjs` 空桩               |
+| `test/build-test-bundle.mjs`                  | 用 esbuild 把 `[P] src/index.ts` 打成 `tmp/plugin-test-bundle.mjs`，把 `pino`/`express`/`jszip`/`semver`/`uuid` 等 alias 到 `_mock-pino.mjs` 空桩           |
 | `test/plugin.test.mjs`                        | 手写 `createMockContext(db, extraConfig)`：`commandHandlers` Map、`actionDescriptors` 数组、`publishedEvents` 数组、`providedServices` Map、`eventSubs` Map |
 | `test/csv.test.mjs` / `smart-assign.test.mjs` | 纯函数单测（无需 mock）                                                                                                                                     |
 | `test-harness/static-check.mjs`               | 52 KB L0 静态检查：槽位名对照 `slot-registry.json` 白名单、manifest 字段、裸说明符等                                                                        |

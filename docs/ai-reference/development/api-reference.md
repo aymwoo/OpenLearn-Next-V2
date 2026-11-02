@@ -84,7 +84,7 @@ UnifiedExtensionRegistry
 
 `ICapabilityGovernanceServiceToken`、`IPluginCapabilityGatewayToken`、`IUnifiedExtensionRegistryToken`、
 `IPluginRuntimeCompositionToken` —— d.ts 中标注 `@deprecated`（L1144-1170）。内核侧仍可从
-`packages/core/di/interfaces.js` 导入，但**插件不该用**。
+`packages/core/di/interfaces.ts` 导入，但**插件不该用**。
 
 ---
 

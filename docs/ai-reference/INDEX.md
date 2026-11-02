@@ -53,15 +53,15 @@
 | 搞清整体分层与进程边界                    | [architecture/platform-overview.md](architecture/platform-overview.md)               | [architecture/plugin-runtime-planes.md](architecture/plugin-runtime-planes.md)             |
 | 找一个模块在哪                            | [architecture/module-map.md](architecture/module-map.md)                             | —                                                                                          |
 | 排查「接口为什么 403 / 500 / 点了没反应」 | [architecture/request-lifecycle.md](architecture/request-lifecycle.md)               | [plugin-system/error-handling-and-cleanup.md](plugin-system/error-handling-and-cleanup.md) |
-| 改内核 / 加一个 DI 服务                   | [subsystems/kernel-and-di.md](subsystems/kernel-and-di.md)                           | [api/configuration.md](api/configuration.md)                                               |
+| 改内核 / 加一个 DI 服务                   | [subsystems/kernel-and-di.md](subsystems/kernel-and-di.md)                           | [api/configuration-map.md](api/configuration-map.md)                                       |
 | 改表 / 写迁移 / 查保留策略                | [subsystems/data-and-migrations.md](subsystems/data-and-migrations.md)               | —                                                                                          |
 | 加一条实时推送                            | [subsystems/realtime-and-events.md](subsystems/realtime-and-events.md)               | [architecture/request-lifecycle.md](architecture/request-lifecycle.md) §4                  |
 | 改 AI / 测评 / 作业评分                   | [subsystems/ai-and-assessment.md](subsystems/ai-and-assessment.md)                   | —                                                                                          |
 | 改课堂 / 课节 / 白板                      | [subsystems/classroom-and-whiteboard.md](subsystems/classroom-and-whiteboard.md)     | —                                                                                          |
 | 动安全策略 / 限流 / 数据范围              | [subsystems/observability-and-security.md](subsystems/observability-and-security.md) | —                                                                                          |
-| 查 HTTP 端点                              | [api/http-api.md](api/http-api.md)                                                   | —                                                                                          |
+| 查 HTTP 端点                              | [api/http-endpoints.md](api/http-endpoints.md)                                       | —                                                                                          |
 | 查命令 / 事件                             | [api/commands-and-events.md](api/commands-and-events.md)                             | —                                                                                          |
-| 查环境变量                                | [api/configuration.md](api/configuration.md)                                         | —                                                                                          |
+| 查环境变量                                | [api/configuration-map.md](api/configuration-map.md)                                 | —                                                                                          |
 | 构建 / 测试 / 部署                        | [development/build-and-deploy.md](development/build-and-deploy.md)                   | —                                                                                          |
 
 ### 1.2 插件开发任务
@@ -99,9 +99,9 @@ docs/ai-reference/
 │   ├── classroom-and-whiteboard.md        课节引擎 / 课堂运行时 / 白板（前端主导）
 │   └── observability-and-security.md      日志指标 / 四层防线 / 6 档数据范围 / 签名治理
 ├── api/
-│   ├── http-api.md                        313 端点分布 / 鉴权写法 / 插件 REST 网关
+│   ├── http-endpoints.md                  313 端点分布 / 鉴权写法 / 插件 REST 网关
 │   ├── commands-and-events.md             84 命令 / 84 描述符 / 事件目录
-│   └── configuration.md                   68 个环境变量分组 + 部署检查清单
+│   └── configuration-map.md               配置查表入口 / 易错点 / 部署检查清单
 ├── plugin-system/
 │   ├── lifecycle.md                       7 态状态机 + 超时 + 清理顺序
 │   ├── registration-and-loading.md        发现 → 解压 → 校验 → 载入 → 模式求值
