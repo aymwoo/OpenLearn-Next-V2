@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件激活后自动自检「有 handler、没有 ActionDescriptor」的命令**（Issue #369）：`PluginHost` 在 inline 激活前后比对宿主 CommandBus 的命令类型，把本次新增但没登记描述符的命令以 WARN 列出（含 403 `COMMAND_NOT_REGISTERED` 后果与修复指引）。运行时差集能覆盖 `for` 循环、对象表、`regHandler()` 包装这类静态扫描抓不到的动态注册；worker / process 模式不适用（handler 在隔离进程内）。同时给 `ActionRegistry` 增加只读的 `listRegisteredCommandTypes()` / `listMissingDescriptors()`，插件 smoke test 可直接断言；SDK 类型同步。
 - **初始口令默认等于用户名（`admin` / `admin`），登录页直接给出首次安装提示**：
   - **问题**：旧版空库首次启动会生成 20 位随机口令并写入 `storage/bootstrap-credentials.txt`。自托管用户（Nas / 群晖 / 宝塔 / Docker 卷）既找不到那个路径，也拿不到启动日志，装完进不去后台，只能删库重来 —— 这是社区反馈最高的一条安装摩擦。
   - **新行为**：`resolveSeedCredential()` 在没有任何环境变量时返回「口令 = 用户名」（`admin` / `admin`、`teacher` / `teacher`），`must_change_password = 1`。可预期的口令配上原有的强制改密门：改密前除 `POST /api/auth/change-password`、`POST /api/auth/logout`、`GET /api/auth/session`、`GET /api/auth/me` 外的 `/api`（含 GET）一律 403 `FORBIDDEN_DEFAULT_PASSWORD`，所以「人人皆知」的窗口只到第一次登录为止。
@@ -22,9 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **inline 插件也能走 SQL-Guard（`OPENLEARN_SQL_GUARD_ALL_MODES`）**（Issue #367）：此前守卫只在 worker / process 路径调用，inline 受信插件直查核心表、执行裸 DDL、PRAGMA 全部放行 —— 同一份插件代码在两种执行模式下安全口径不一致，一旦收紧信任名单就会整批炸掉。新增 `packages/core/plugin-host/inline-db-guard.ts`：开关打开后 `ctx.resolve(IDatabaseToken)` 的 `prepare` / `exec` / `pragma` 与 worker 同口径，错误码 `PLUGIN_SQL_REJECTED`；默认关闭以兼容存量插件，插件作者在开发期自行打开。数据库 API 文档与教程同步说明「inline 默认不拦」这一事实。
 
+### Fixes
+
+- **白板 plugin 挂件双端 id 缺一时不再静默失败**（Issue #370）：`whiteboard.draw` / `whiteboard.batch_draw` 现在统一走 `buildElementData()` —— 只声明 `teacherWidgetId` 或 `studentWidgetId` 之一时，用另一端补齐（双端复用同一挂件）并打 WARN；两端都缺、或 plugin 元素的 `data` 不是合法 JSON 时直接报错、不写入图元。前端渲染侧对缺 id 的历史图元显示「挂件未正确配置」错误态，不再永远停在「正在加载」；渲染时也补了「本端 id 缺失则回退对端」的逻辑。
+
 ### Docs
 
-- **初始凭据口径全量对齐**：`README.md`、`AGENTS.md`、`docs/getting-started/quickstart.md`、`docs/getting-started/installation-guide.md`、`docs/administrator-guide/admin-manual.md`、`docs/configuration/system-configuration.md`、`docs/ai-reference/api/configuration.md`、`docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`docs/migration/version-migration.md`、`docs/beta/operations.md` 与 `.env.example` 统一改述为「默认口令 = 用户名 + 强制改密 + `OPENLEARN_SEED_PASSWORD_MODE` 可切回随机」；环境校验的 error / warning 分档说明同步更新。
+- **初始凭据口径全量对齐**：`README.md`、`AGENTS.md`、`docs/getting-started/quickstart.md`、`docs/getting-started/installation-guide.md`、`docs/administrator-guide/admin-manual.md`、`docs/configuration/system-configuration.md`、`docs/ai-reference/api/configuration-map.md`、`docs/deployment/production-guide.md`、`docs/deployment/docker-nginx.md`、`docs/migration/version-migration.md`、`docs/beta/operations.md` 与 `.env.example` 统一改述为「默认口令 = 用户名 + 强制改密 + `OPENLEARN_SEED_PASSWORD_MODE` 可切回随机」；环境校验的 error / warning 分档说明同步更新。
 
 ## [0.7.9] - 2026-10-31
 

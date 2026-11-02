@@ -27,7 +27,12 @@ import { compose } from './middleware.js';
 import { PluginState } from './types.js';
 import type { PluginContext, MiddlewareContext } from './types.js';
 import { IllegalStateTransitionError, PluginActivateError, PluginDeactivateTimeoutError } from './errors.js';
-import { ICapabilityServiceToken, IEventBusServiceToken } from '../di/interfaces.js';
+import {
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+} from '../di/interfaces.js';
 import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
 import { isTrustedInProcessPlugin } from './execution-policy.js';
 import { isBlockedPluginCapability, isCapabilityApproved } from './plugin-grants.js';
@@ -130,13 +135,62 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
     // 现拆为「编排（本节）+ activatePreloaded + activateFromDatabase +
     // loadPluginModule + resolveActivationGuards + runActivatePipeline +
     // grant/revokeCapabilities」，各方法单一职责、独立可测。
+    // Issue #369：命令契约自检。只有 inline 路径的 handler 才注册在宿主 CommandBus 上，
+    // 所以 worker / process 路径不做（那里的 handler 在隔离进程内，看不见也不必看）。
+    // 激活前拍快照，激活后做差集 —— 这样动态注册（循环、对象表、包装函数）也能被抓到。
+    const commandTypesBefore = this.listHostCommandTypes();
+
     const preloaded = this.preloadedPlugins.get(pluginId);
     if (preloaded) {
       await this.activatePreloaded(pluginId, preloaded);
+      this.auditMissingActionDescriptors(pluginId, commandTypesBefore);
       return;
     }
 
     await this.activateFromDatabase(pluginId, currentState);
+    this.auditMissingActionDescriptors(pluginId, commandTypesBefore);
+  }
+
+  /** 宿主 CommandBus 当前注册的命令类型；解析失败返回空集（自检不能影响激活）。 */
+  private listHostCommandTypes(): Set<string> {
+    try {
+      const bus = this.serviceRegistry.resolve(ICommandBusServiceToken) as unknown as {
+        listRegisteredCommandTypes?: () => string[];
+      };
+      return new Set(bus.listRegisteredCommandTypes?.() ?? []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  /**
+   * 插件激活后的命令契约自检（Issue #369）。
+   *
+   * 命令总线是 default-deny：handler 有、ActionDescriptor 没有的命令会在用户点击时
+   * 403 `COMMAND_NOT_REGISTERED`。静态扫描抓不到循环注册 / 对象表 / `regHandler()` 包装，
+   * 所以改为激活后做一次运行时差集，把缺口提前打成立即可见的 WARN。
+   *
+   * 自检只服务可观测性：任何异常都不能影响激活结果，故整体 try/catch 且只打日志。
+   */
+  private auditMissingActionDescriptors(pluginId: string, before: Set<string>): void {
+    try {
+      // 并发激活时差集会把别的插件的 handler 算到本插件头上，直接跳过（顺序重启不受影响）。
+      if (this.inflightActivate.size > 1) return;
+      const added = Array.from(this.listHostCommandTypes()).filter((type) => !before.has(type));
+      if (added.length === 0) return;
+      const registry = this.serviceRegistry.resolve(IActionRegistryServiceToken) as unknown as {
+        listMissingDescriptors?: (types: Iterable<string>) => string[];
+      };
+      const missing = registry.listMissingDescriptors?.(added) ?? [];
+      if (missing.length === 0) return;
+      console.warn(
+        `[PluginHost] 插件 "${pluginId}" 有 ${missing.length} 个命令 handler 没有 ActionDescriptor：` +
+          `${missing.join(', ')}。这些命令会被 default-deny 以 403 COMMAND_NOT_REGISTERED 拒绝，` +
+          `请为每个 registerHandler 同时注册 actionRegistry.register(...)。`,
+      );
+    } catch {
+      /* 自检失败不影响激活 */
+    }
   }
 
   /**

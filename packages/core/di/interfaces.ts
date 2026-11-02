@@ -138,6 +138,18 @@ export interface IActionRegistryService {
    * Corresponds to ActionRegistry.getActionByCommandType() — made async for cross-runtime compatibility.
    */
   getActionByCommandType(commandType: string): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
+
+  /**
+   * 已登记描述符覆盖的 commandType（去重）。
+   * 供插件自检「注册了 handler 但忘了登记描述符」（Issue #369）。
+   */
+  listRegisteredCommandTypes?(): string[] | Promise<string[]>;
+
+  /**
+   * 给定命令类型里**没有** ActionDescriptor 的那些 —— 命令总线 default-deny 会以 403 拒绝。
+   * 插件 smoke test 可直接断言返回空数组。
+   */
+  listMissingDescriptors?(commandTypes: Iterable<string>): string[] | Promise<string[]>;
 }
 
 // ── 4. ICapabilityService ─────────────────────────────────────────────────
