@@ -104,10 +104,12 @@ export default {
           'pointsDimension',
           'pointsLedger',
           'processManager',
+          'roster',
           'storage',
         ];
         if (JSON.stringify(keys) !== JSON.stringify(want)) throw new Error(keys.join(','));
-        return `keys=9, pointsDimension=${(ctx.services as any).pointsDimension === null ? 'null' : 'set'}`;
+        // 键数由实际集合推导：硬编码 9 在新增服务（Issue #366 的 roster）时会静默失配
+        return `keys=${keys.length}, pointsDimension=${(ctx.services as any).pointsDimension === null ? 'null' : 'set'}`;
       } else {
         return 'keys=worker, pointsDimension=null';
       }

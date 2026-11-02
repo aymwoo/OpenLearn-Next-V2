@@ -26,6 +26,7 @@ import {
   IAIServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
 } from '../../di/interfaces.js';
 import { Token } from '../../di/token.js';
 import type { ActionDescriptor } from '../../registry/index.js';
@@ -107,6 +108,11 @@ async function setupRegistry(): Promise<ServiceRegistry> {
     getDimension: vi.fn().mockReturnValue(undefined),
     listDimensions: vi.fn().mockReturnValue([]),
   };
+  const mockRoster = {
+    listClasses: vi.fn().mockResolvedValue([]),
+    listClassStudents: vi.fn().mockResolvedValue([]),
+    getStudent: vi.fn().mockResolvedValue(null),
+  };
   const mockPointsLedger = {
     addPoints: vi.fn().mockResolvedValue({
       studentId: '',
@@ -130,6 +136,7 @@ async function setupRegistry(): Promise<ServiceRegistry> {
   await registry.register(IAIServiceToken, mockAi as any);
   await registry.register(IPointsDimensionRegistryToken, mockPointsDimension as any);
   await registry.register(IPointsLedgerServiceToken, mockPointsLedger as any);
+  await registry.register(IClassRosterServiceToken, mockRoster);
 
   return registry;
 }
@@ -162,9 +169,9 @@ describe('buildContext', () => {
     expect(ctx.pluginId).toBe('plugin-id-123');
     expect(ctx.manifest).toBe(testManifest);
 
-    // 验证 9 个 services 键（7 个核心 + 2 个积分 v0.1.12）
+    // 验证 10 个 services 键（7 个核心 + 2 个积分 + 受管名册）
     const keys = Object.keys(ctx.services);
-    expect(keys).toHaveLength(9);
+    expect(keys).toHaveLength(10);
     expect(keys).toContain('commandBus');
     expect(keys).toContain('eventBus');
     expect(keys).toContain('actionRegistry');
@@ -174,6 +181,31 @@ describe('buildContext', () => {
     expect(keys).toContain('ai');
     expect(keys).toContain('pointsDimension');
     expect(keys).toContain('pointsLedger');
+    expect(keys).toContain('roster');
+  });
+
+  // ── 受管名册（Issue #366）─────────────────────────────────────────────
+
+  describe('services.roster', () => {
+    it('声明 management:read 后可读，且只拿到最小字段', async () => {
+      const manifest: Manifest = { ...testManifest, capabilitiesProposed: ['management:read'] };
+      const ctx = await setupContext({ manifest });
+
+      expect(ctx.services.roster).not.toBeNull();
+      await expect(ctx.services.roster!.listClasses()).resolves.toEqual([]);
+      await expect(ctx.services.roster!.getStudent('stu-1')).resolves.toBeNull();
+    });
+
+    it('未声明 management:read 时拒绝，并落 ERROR 日志', async () => {
+      const ctx = await setupContext();
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(ctx.services.roster!.listClassStudents('class-1')).rejects.toThrow(/management:read/);
+        expect(error.mock.calls.some((call) => String(call[0]).includes('roster.listClassStudents'))).toBe(true);
+      } finally {
+        error.mockRestore();
+      }
+    });
   });
 
   // ── Test 2 ──────────────────────────────────────────────────────────

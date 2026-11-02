@@ -469,6 +469,11 @@ interface PluginContext {
     pointsDimension: IPointsDimensionRegistry | null;
     /** 积分流水服务（Worker 模式插件恒为 null） */
     pointsLedger: IPointsLedgerService | null;
+    /**
+     * 受管名册读取（Issue #366）。需在 manifest 声明 `management:read`；
+     * 这是插件读取班级 / 学生信息的唯一受支持通道（直查核心表会被 sql-guard 拒绝）。
+     */
+    roster: IClassRosterService | null;
   };
   pluginId: string;
   manifest: Manifest;
@@ -587,6 +592,32 @@ interface IPointsLedgerService {
   getLogs(studentId: string, classId?: string): Promise<PointLogItem[]>;
   getStudentTotalByDimension(studentId: string, classId: string, dimensionId: string): Promise<number>;
   getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<string, number>>;
+}
+
+/** 班级摘要（受管名册）。 */
+interface RosterClassSummary {
+  id: string;
+  name: string;
+  studentCount: number;
+}
+
+/** 学生引用（受管名册）。不含 email / private_notes / password。 */
+interface RosterStudentRef {
+  id: string;
+  name: string;
+  studentNumber: string | null;
+}
+
+/**
+ * 受管名册读取服务（Issue #366）。
+ *
+ * `classes` / `students` / `class_students` 是 sql-guard 的禁读表，
+ * 插件读取班级与成员信息走这里。门禁：manifest 声明 `management:read`。
+ */
+interface IClassRosterService {
+  listClasses(): Promise<RosterClassSummary[]>;
+  listClassStudents(classId: string): Promise<RosterStudentRef[]>;
+  getStudent(studentId: string): Promise<RosterStudentRef | null>;
 }
 
 interface ILessonEngineService {
@@ -1138,6 +1169,7 @@ declare const IPluginHostToken: Token<PluginHost>;
 declare const ISemesterGradeServiceToken: Token<ISemesterGradeService>;
 declare const IPointsDimensionRegistryToken: Token<IPointsDimensionRegistry>;
 declare const IPointsLedgerServiceToken: Token<IPointsLedgerService>;
+declare const IClassRosterServiceToken: Token<IClassRosterService>;
 declare const ILessonEngineServiceToken: Token<ILessonEngineService>;
 declare const IClassroomRuntimeServiceToken: Token<IClassroomRuntimeService>;
 declare const IPresenceEngineServiceToken: Token<IPresenceEngineService>;
@@ -1331,6 +1363,9 @@ export type {
   GradeWriteSummary,
   IPointsDimensionRegistry,
   IPointsLedgerService,
+  IClassRosterService,
+  RosterClassSummary,
+  RosterStudentRef,
   ILessonEngineService,
   IClassroomRuntimeService,
   IPresenceEngineService,
@@ -1426,6 +1461,7 @@ export {
   ISemesterGradeServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,

@@ -31,6 +31,7 @@ import {
   ISemesterGradeServiceToken,
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
+  IClassRosterServiceToken,
   ILessonEngineServiceToken,
   IStageGuardServiceToken,
   IAssessmentGraderRegistryToken,
@@ -54,6 +55,7 @@ import {
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
 import { SemesterGradeService } from '../di/semester-grade-service.js';
+import { ClassRosterService } from '../di/roster-service.js';
 import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
 import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
@@ -259,6 +261,8 @@ export class Kernel {
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
     this.serviceRegistry.register(IPointsDimensionRegistryToken, new PointsDimensionRegistry());
     this.serviceRegistry.register(IPointsLedgerServiceToken, new PointsLedgerService(this.db as any));
+    // Issue #366：受管名册读取（插件禁止直查 classes / students / class_students 的替代通道）
+    this.serviceRegistry.register(IClassRosterServiceToken, new ClassRosterService(this.db));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, {
       getRuntimeKernel: async () => this.classroomRuntime,

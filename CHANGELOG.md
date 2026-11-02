@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **启动日志**：建库时打印账号与口令（口令 = 用户名），并说明改密前哪些接口会被拒绝、如何切回随机口令。
 
 - **inline 插件也能走 SQL-Guard（`OPENLEARN_SQL_GUARD_ALL_MODES`）**（Issue #367）：此前守卫只在 worker / process 路径调用，inline 受信插件直查核心表、执行裸 DDL、PRAGMA 全部放行 —— 同一份插件代码在两种执行模式下安全口径不一致，一旦收紧信任名单就会整批炸掉。新增 `packages/core/plugin-host/inline-db-guard.ts`：开关打开后 `ctx.resolve(IDatabaseToken)` 的 `prepare` / `exec` / `pragma` 与 worker 同口径，错误码 `PLUGIN_SQL_REJECTED`；默认关闭以兼容存量插件，插件作者在开发期自行打开。数据库 API 文档与教程同步说明「inline 默认不拦」这一事实。
+- **新增受管名册读取服务 `ctx.services.roster`**（Issue #366）：`classes` / `students` / `class_students` 在 sql-guard 的禁读清单里，插件此前却没有任何受支持的读取通道 —— 「不许走这条路，也没给桥」。新增 `IClassRosterService`（`listClasses` / `listClassStudents` / `getStudent`），只返回 id / 姓名 / 学号 / 班级人数，**不含** email、private_notes、password、班级口令；门禁为 manifest 声明 `management:read`，拒绝时与 pointsLedger 同口径（审计 + ERROR 日志 + `PluginCapabilityDeniedError`）。SDK 类型与 Token 已导出。
 
 ### Fixes
 

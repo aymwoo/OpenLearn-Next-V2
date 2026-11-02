@@ -504,3 +504,8 @@ export {
   validateManifestCapabilities,
   assertValidManifestCapabilities,
 } from '../core/capability/catalog.js';
+// ── 受管名册（Issue #366）────────────────────────────────────────────────
+// 插件读取班级 / 学生信息的唯一受支持通道；直查 classes / students / class_students
+// 会被 sql-guard 拒绝。需在 manifest 声明 management:read。
+export type { IClassRosterService, RosterClassSummary, RosterStudentRef } from '../core/di/interfaces.js';
+export { IClassRosterServiceToken } from '../core/di/interfaces.js';

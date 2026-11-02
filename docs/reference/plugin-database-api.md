@@ -67,6 +67,20 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 - **想在 inline 下自查**（Issue #367）：设 `OPENLEARN_SQL_GUARD_ALL_MODES=1`，`ctx.resolve(IDatabaseToken)` 返回的句柄会套一层 `inline-db-guard`，判定与 worker 完全相同（`prepare` / `exec` / `pragma` 三个入口）。抛出的错误带 `code = 'PLUGIN_SQL_REJECTED'`。默认关闭，因为存量 inline 插件普遍存在核心表直查与裸 DDL，默认开启会让它们整批炸掉 —— 插件作者应在**开发期**打开这个开关跑一遍。
 - **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果的类型为自包含的 `SqliteDatabase`（运行时即 better-sqlite3 `Database`），Inline 模式下可直接使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
 
+> **班级 / 学生信息不要直查**（Issue #366）：`classes`、`students`、`class_students` 在
+> `FORBIDDEN_CORE_TABLES` 里，受支持的读取通道是 `ctx.services.roster`（需在 manifest
+> 声明 `management:read`）：
+>
+> ```ts
+> // 只需 id / 姓名 / 学号 / 班级人数，就别碰 SQL
+> const classes = await ctx.services.roster!.listClasses(); // [{ id, name, studentCount }]
+> const students = await ctx.services.roster!.listClassStudents(classId); // [{ id, name, studentNumber }]
+> const student = await ctx.services.roster!.getStudent(studentId); // 或 null
+> ```
+>
+> 返回体刻意不含 email / private_notes / password / 班级口令；需要更多字段请提 issue，
+> 不要在插件里退回直查。
+
 ### 1.1 ⚠️ SQL-Guard 核心数据表硬黑名单与隔离机制（安全红线）
 
 为防止第三方插件通过手写 SQL 或注入绕过权限模型窃取系统凭证、破坏课堂数据或越权操控核心状态，宿主在 `packages/core/plugin-host/sql-guard.ts` 中部署了严格的 Fail-Closed SQL 审计器：
