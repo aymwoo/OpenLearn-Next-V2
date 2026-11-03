@@ -180,4 +180,27 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 - **测试套件**：Vitest 运行于 jsdom 环境，全面覆盖核心内核、总线、插件宿主与各前端功能模块。
 - **并发测试隔离**：Vitest 配置利用独立的临时数据库（根据 `VITEST_POOL_ID` 分配于 `/tmp/openlearn_test_dbs/`）实现完全零干扰的并行测试。
 - **代码规范**：统一遵循 Prettier 格式化（2 空格缩进，单引号）与 ESLint 规范。
-- **Git 提交**：严格遵守 Conventional Commits 标准，如 `feat:`, `fix:`, `refactor:`, `test:`, `docs:`。
+- **Git 提交**：严格遵守 Conventional Commits 标准，如 `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`。
+
+## AI Agent 开发与协作规范 (AI Agent Workflow)
+
+所有在此代码库工作的 AI Agent 必须遵守严格的协作生命周期：
+
+1. **问题驱动（Issue-First 流程）**：
+   - 发现系统缺陷、性能瓶颈、潜在风险或新需求时，**推荐首先通过 GitHub Issue 记录追踪**（`gh issue create` 或 Web 端）；
+   - 包含背景、复现路径、根因分析及建议方案；复杂任务先对齐方案再进入实现。
+2. **分支隔离与 PR 驱动（PR-Driven 协作）**：
+   - **严禁直接向 `main` / `master` 提交或推送代码**；
+   - 每次改动必须创建专用分支（如 `codebuddy/<issue-id>-<slug>`、`claude/<slug>`）；
+   - 遵循 Conventional Commits 提交，并通过 `gh pr create` 发起 Pull Request；
+   - PR 正文中必须绑定 Issue（`Fixes #xxx`）、提供改动要点与详细测试计划；UI 变更必须附带截图证据。
+3. **本地全套质量门禁（Pre-PR Quality Gates）**：
+   - 发起 PR 前必须在本地运行并确认通过：
+     - `pnpm format:check`（格式检查）
+     - `pnpm lint` 与 `pnpm lint:strict`（类型检查）
+     - `node scripts/check-lint-budget.mjs`（ESLint 告警预算控制）
+     - `pnpm test`（Vitest 自动化测试套件）
+     - 若修改文档需通过 `bash scripts/build-docs.sh` 与 `bash audit-tools/run.sh`。
+4. **人类授权合并（Human Authorization for Merge）**：
+   - **严禁 AI Agent 自行合并 PR**。必须在人类开发者审查并发出明确指令后方可执行合并；
+   - 推荐使用 Squash Merge（`gh pr merge <pr-number> --squash --delete-branch`），合并后切回 `main` 并拉取对齐。

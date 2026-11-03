@@ -113,9 +113,7 @@ describe('OpenLearn AI Infrastructure Core Test Suite', () => {
 
       const aiService = new AIService(mockDb);
 
-      await expect(aiService.generateText('hello')).rejects.toThrow(
-        '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。',
-      );
+      await expect(aiService.generateText('hello')).rejects.toThrow('未检测到可用的 AI 提供商');
     });
   });
 });

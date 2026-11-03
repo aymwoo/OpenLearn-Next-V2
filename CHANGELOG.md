@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.11] - 2026-11-03
+
+### Governance
+
+- **AI Agent 规范化协作与研发准则**：在 `AGENTS.md`、`CLAUDE.md` 与 `docs/contributing/contributing.md` 中确立 AI Agent 规范化协作生命周期：
+  - **Issue-First 驱动**：推荐在发现系统缺陷、安全隐患、性能退化或规划新特性时，优先通过 GitHub Issue（命令行 `gh issue create` 或 Web 端）进行问题背景、复现路径、根因分析及技术方案记录，建立清晰的追踪与对齐上下文；
+  - **PR-Driven 协作与分支隔离**：严禁直接向 `main` / `master` 主干分支提交或推送代码；必须基于最新主干创建独立特性分支（如 `codebuddy/<issue-id>-<slug>`），遵循 Conventional Commits 格式规范；PR 描述中必须绑定 Issue、说明改动与测试计划，UI 变动强制包含截图证据；
+  - **本地全套质量门禁**：发起 PR 前必须在本地完整运行并通过 `format:check`、`lint`、`lint:strict`、`check-lint-budget`、`test` 及文档严格构建；
+  - **人类授权合并守卫**：严禁 AI Agent 擅自合并任何 PR，必须在人类开发者审查并给出明确指令后，方可采用 Squash Merge 方式合入主干并清理分支。
+
 ### Security
 
 - **AI Provider 账号级数据隔离与越权调用防护（Issue #383）**：
@@ -58,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Docs
 
 - **新增《快速上手手册》**（Issue #384）：`docs/getting-started/quickstart-handbook.md` 用一页走完「安装 → 运行确认 → 教师上课最短路径 → 写第一个插件」，关键步骤配截图（`docs/getting-started/images/quickstart/`），并新增 `scripts/capture-quickstart-screenshots.mjs` 从干净的演示实例自动重拍截图（对关键文案做断言，界面改版后重跑即可）。根 `README`、文档首页与 `quickstart.md` 均加入口；细节仍链接到 `installation-guide.md` 与 `docs/reference/`，不复制契约文档。
+- **贡献者与 AI 协作规范文档同步**：`docs/contributing/contributing.md` 新增《AI Agent 协作开发规范》，覆盖 Issue-First、分支隔离、质量门禁与授权合并等全流程规则。
 
 ## [0.7.10] - 2026-11-02
 
