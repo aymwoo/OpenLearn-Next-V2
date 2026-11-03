@@ -61,7 +61,7 @@ pnpm dev
 > git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
 > ```
 >
-> 日常 `git fetch origin`（GitHub 优先，不通就 `git fetch gitee`）。**把镜像快进到最新是维护者专属动作**（需 Gitee 写权限）：`git push gitee main --tags`，只快进、不 force-push。
+> 日常 `git fetch origin`（GitHub 优先，不通就 `git fetch gitee`）。镜像由 GitHub Actions 自动快进（`.github/workflows/sync-gitee-mirror.yml`，单向、只快进、分叉即停），**你不需要手动推镜像**。
 
 > 版本不一致时，`preinstall` 守卫会在安装阶段直接拦住，并告诉你该换 Node 还是该 `pnpm rebuild better-sqlite3` —— 不用等启动时才撞上 `ERR_DLOPEN_FAILED`。
 

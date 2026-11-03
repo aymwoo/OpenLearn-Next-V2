@@ -24,7 +24,7 @@
 
 > 工作副本建议配两个远端：`origin`=GitHub、`gitee`=镜像（`git remote add gitee https://gitee.com/aymwoo/openlearn-next.git`）。拉取 GitHub 优先、失败回退 Gitee。
 >
-> **镜像快进是维护者专属动作**（需 Gitee 写权限）：合并后 `git push gitee main --tags`（只快进，**永远不 force-push、不开自动双向镜像**）。普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可。一个变更只在一个平台开 Issue / PR。
+> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 单向、只快进，分叉即停（**永不 force-push、不开自动双向镜像**）。普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可。一个变更只在一个平台开 Issue / PR。
 
 > **枚举表是机器生成的，不要凭记忆或凭训练语料写。**
 > 7 张权威事实表在 `contracts/`，由 `python3 audit-tools/agent_facts.py` 从源码抽取，

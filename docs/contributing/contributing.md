@@ -127,7 +127,9 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 > 🔁 **仓库托管双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（**国内网络访问 GitHub 受限**时用于克隆源码与提 Issue，**单向同步**，不跑 CI / 不发 Release）。
 > 迁移规则：**一个变更只在一个平台开一份 Issue / PR**；**禁止在 Gitee 侧开启自动双向镜像**；issue / PR 编号不跨平台复用。
 >
-> **镜像快进是维护者专属动作**（需要 Gitee 写权限），合并后执行：
+> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 在 `main` 推送后自动同步（单向、只快进，发现分叉就停下并报错，绝不 force-push）；未配 `GITEE_USERNAME` / `GITEE_TOKEN` 时自动跳过，不阻塞主干 CI。
+>
+> 需要手动兜底时（维护者，需 Gitee 写权限）：
 >
 > ```bash
 > git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
