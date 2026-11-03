@@ -45,9 +45,9 @@ export function ImportModal({
         </p>
 
         <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-pre overflow-x-auto select-all text-left leading-relaxed">
-          班级名称, 班级描述, 学生学号, 学生姓名, 学生邮箱, 初始密码, 学生备注
-          {'\n'}
-          高一A班, 基础英语课程, 20260101, 李明, liming@example.com, , 数学较弱
+          {lang === 'zh'
+            ? '班级名称, 班级描述, 学生学号, 学生姓名, 学生邮箱, 初始密码, 学生备注, 性别\n高一A班, 基础英语课程, 20260101, 李明, liming@example.com, , 数学较弱, 男'
+            : 'Class Name, Class Desc, Student Number, Student Name, Student Email, Initial Password, Student Notes, Gender\nClass 101, Introduction to English, 20260101, John Doe, john@example.com, , , Male'}
         </div>
 
         <ul className="mb-4 text-xs text-gray-500 space-y-1 list-disc pl-5 font-sans text-left">
@@ -64,6 +64,10 @@ export function ImportModal({
               <li>
                 <strong className="text-gray-700">学生备注</strong>：仅本平台教师可见的私有备注。
               </li>
+              <li>
+                <strong className="text-gray-700">性别</strong>：选填（男/女 或
+                male/female）。用于课堂头像按性别呈现，留空则显示中性人像。
+              </li>
             </>
           ) : (
             <>
@@ -78,6 +82,10 @@ export function ImportModal({
               </li>
               <li>
                 <strong className="text-gray-700">Student Notes</strong> is a teacher-only private note.
+              </li>
+              <li>
+                <strong className="text-gray-700">Gender</strong>: optional (Male/Female or 男/女). Used for student
+                avatar rendering in classroom focus monitor; defaults to neutral avatar if blank.
               </li>
             </>
           )}

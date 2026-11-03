@@ -215,12 +215,30 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
     sampleRows =
       lang === 'zh'
         ? [
-            csvRow(['高一A班', '基础英语课程', '20260101', '李明', 'liming@example.com', '', '']),
-            csvRow(['高一A班', '基础英语课程', '20260102', '王华', 'wanghua@example.com', '', '数学较弱']),
+            csvRow(['高一A班', '基础英语课程', '20260101', '李明', 'liming@example.com', '', '', '男']),
+            csvRow(['高一A班', '基础英语课程', '20260102', '王华', 'wanghua@example.com', '', '数学较弱', '女']),
           ]
         : [
-            csvRow(['Class 101', 'Introduction to English', '20260101', 'John Doe', 'john@example.com', '', '']),
-            csvRow(['Class 101', 'Introduction to English', '20260102', 'Jane Smith', 'jane@example.com', '', '']),
+            csvRow([
+              'Class 101',
+              'Introduction to English',
+              '20260101',
+              'John Doe',
+              'john@example.com',
+              '',
+              '',
+              'Male',
+            ]),
+            csvRow([
+              'Class 101',
+              'Introduction to English',
+              '20260102',
+              'Jane Smith',
+              'jane@example.com',
+              '',
+              '',
+              'Female',
+            ]),
           ];
   } else {
     filename = lang === 'zh' ? '学生批量导入模板.csv' : 'student_import_template.csv';
@@ -228,12 +246,12 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
     sampleRows =
       lang === 'zh'
         ? [
-            csvRow(['20260101', '张三', 'zhangsan@example.com', '', '']),
-            csvRow(['20260102', '李四', 'lisi@example.com', '', '']),
+            csvRow(['20260101', '张三', 'zhangsan@example.com', '', '', '男']),
+            csvRow(['20260102', '李四', 'lisi@example.com', '', '', '女']),
           ]
         : [
-            csvRow(['20260101', 'Alice Cooper', 'alice@example.com', '', '']),
-            csvRow(['20260102', 'Bob Dylan', 'bob@example.com', '', '']),
+            csvRow(['20260101', 'Alice Cooper', 'alice@example.com', '', '', 'Male']),
+            csvRow(['20260102', 'Bob Dylan', 'bob@example.com', '', '', 'Female']),
           ];
   }
 

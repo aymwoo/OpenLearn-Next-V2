@@ -523,9 +523,10 @@ export const ManagementPlugin = {
 
     await commandBus.registerHandler(classTemplateDownloadCmd, {
       async execute() {
-        const headers = 'Class Name,Class Desc,Student Name,Student Email';
+        const headers =
+          'Class Name,Class Desc,Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender';
         const sampleRow =
-          'Class 101,Introduction to English,John Doe,john@example.com\nClass 101,Introduction to English,Jane Smith,jane@example.com';
+          'Class 101,Introduction to English,20260101,John Doe,john@example.com,,,Male\nClass 101,Introduction to English,20260102,Jane Smith,jane@example.com,,,Female';
         const content = `${headers}\n${sampleRow}`;
 
         const fileId = uuidv7();
@@ -561,8 +562,8 @@ export const ManagementPlugin = {
 
     await commandBus.registerHandler(studentTemplateDownloadCmd, {
       async execute() {
-        const headers = 'Student Name,Student Email';
-        const sampleRow = 'Alice Cooper,alice@example.com\nBob Dylan,bob@example.com';
+        const headers = 'Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender';
+        const sampleRow = '20260101,Alice Cooper,alice@example.com,,,Male\n20260102,Bob Dylan,bob@example.com,,,Female';
         const content = `${headers}\n${sampleRow}`;
 
         const fileId = uuidv7();

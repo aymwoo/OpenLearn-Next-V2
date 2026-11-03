@@ -42,6 +42,25 @@ describe('parseCSV', () => {
     expect(cnResult).toEqual([{ name: '张三', student_number: '20260101', email: 'zhangsan@example.com' }]);
   });
 
+  it('parses gender (性别 / gender) and notes/passwords (Issue #389)', () => {
+    const text = '学生姓名,学生学号,学生邮箱,初始密码,学生备注,性别\n李明,20260101,liming@test.com,Pw123,备忘,男';
+    const result = parseCSV(text);
+    expect(result).toEqual([
+      {
+        name: '李明',
+        student_number: '20260101',
+        email: 'liming@test.com',
+        password: 'Pw123',
+        private_notes: '备忘',
+        gender: '男',
+      },
+    ]);
+
+    const enText = 'Student Name,Student Email,Gender\nAlice,alice@test.com,Female';
+    const enResult = parseCSV(enText);
+    expect(enResult).toEqual([{ name: 'Alice', email: 'alice@test.com', gender: 'Female' }]);
+  });
+
   it('returns empty array when fewer than 2 lines', () => {
     expect(parseCSV('name,email')).toEqual([]);
     expect(parseCSV('')).toEqual([]);

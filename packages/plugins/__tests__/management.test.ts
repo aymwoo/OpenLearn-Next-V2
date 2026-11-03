@@ -46,6 +46,16 @@ describe('ManagementPlugin', () => {
         execution_mode TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS vfs_nodes (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        content TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS classes (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -283,5 +293,31 @@ describe('ManagementPlugin', () => {
     expect(getStudentsRes.students.length).toBe(1);
     expect(getStudentsRes.students[0].id).toBe(studentId);
     expect(getStudentsRes.students[0].name).toBe('Alice');
+
+    // 5. Download class import template (Issue #389)
+    const classTmplRes = (await commandBus.execute({
+      id: 'cmd-class-tmpl',
+      type: 'class.template_download',
+      actorId,
+      payload: {},
+      timestamp: Date.now(),
+    })) as { content: string };
+    expect(classTmplRes.content).toContain(
+      'Class Name,Class Desc,Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender',
+    );
+    expect(classTmplRes.content).toContain('Male');
+
+    // 6. Download student import template (Issue #389)
+    const studentTmplRes = (await commandBus.execute({
+      id: 'cmd-student-tmpl',
+      type: 'student.template_download',
+      actorId,
+      payload: {},
+      timestamp: Date.now(),
+    })) as { content: string };
+    expect(studentTmplRes.content).toContain(
+      'Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender',
+    );
+    expect(studentTmplRes.content).toContain('Female');
   });
 });

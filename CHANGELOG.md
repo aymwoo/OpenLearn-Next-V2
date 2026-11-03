@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **班级与学生导入模板示例列数脱节与多链路性别字段同步（Issue #389）**：
+  - **模板示例数据列数对齐**：修复 `src/services/bulkImportService.ts` 中 `downloadCSVTemplate` 在引入「性别」列后，示例数据行（`sampleRows`）缺少性别占位符的问题。补全班级模板（8 列）与独立学生模板（6 列）的中英文示例值（男/女、Male/Female），确保数据行列数与表头列数严格一致；
+  - **导入弹窗 i18n 示范与性别提示**：`src/features/modals/ImportModal.tsx` 内嵌代码块支持按用户语言渲染中/英文示例，并补充「性别」列的取值说明（支持男/女、male/female，用于课堂头像展示）；
+  - **班级内批量招生支持性别**：`src/utils/pluginParsers.ts` 中的 `parseCSV` 增加 `gender` 列解析，并在 `server/services/roster-service.ts` 的 `BulkEnrollInput` 类型中显式声明 `gender?: string`，确保班级内通过 CSV 批量加入学生时性别数据不被丢失；
+  - **系统管理插件模板命令同步**：`packages/plugins/management.ts` 中的 `class.template_download` 与 `student.template_download` 模板命令同步升级至包含学号、密码、备注、性别的完整标准规范；
+  - **质量回归断言**：在 `bulkImportService.test.ts` 中补充表头与每一行示例数据列数完全一致的断言守护，并在 `pluginParsers.test.ts` 中增加性别列解析测试。
+
 ## [0.7.11] - 2026-11-03
 
 ### Governance

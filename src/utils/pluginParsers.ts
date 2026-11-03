@@ -95,7 +95,14 @@ const parsePluginSource = (sourceCode: string) => {
  */
 const parseCSV = (
   text: string,
-): { name: string; email: string; student_number?: string; password?: string; private_notes?: string }[] => {
+): {
+  name: string;
+  email: string;
+  student_number?: string;
+  password?: string;
+  private_notes?: string;
+  gender?: string;
+}[] => {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
 
@@ -156,13 +163,20 @@ const parseCSV = (
     'notes',
     'remark',
   ]);
+  const genderIdx = findHeaderIdx(headers, ['性别', 'gender', 'sex', '学生性别']);
 
   // 无表头时沿用「第一列姓名、第二列邮箱」的位置兜底（教师随手粘贴的常见形态）
   const finalNameIdx = nameIdx >= 0 ? nameIdx : 0;
   const finalEmailIdx = emailIdx >= 0 ? emailIdx : 1;
 
-  const list: { name: string; email: string; student_number?: string; password?: string; private_notes?: string }[] =
-    [];
+  const list: {
+    name: string;
+    email: string;
+    student_number?: string;
+    password?: string;
+    private_notes?: string;
+    gender?: string;
+  }[] = [];
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const cols = splitCsvLine(lines[i], sep);
@@ -174,6 +188,7 @@ const parseCSV = (
     const student_number = clean(studentNumIdx);
     const password = clean(passwordIdx);
     const private_notes = clean(notesIdx);
+    const gender = clean(genderIdx);
 
     list.push({
       name,
@@ -181,6 +196,7 @@ const parseCSV = (
       ...(student_number ? { student_number } : {}),
       ...(password ? { password } : {}),
       ...(private_notes ? { private_notes } : {}),
+      ...(gender ? { gender } : {}),
     });
   }
   return list;
