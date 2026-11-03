@@ -63,10 +63,54 @@
 ## Commit & Pull Request Guidelines
 
 - **Commit format**: [Conventional Commits](https://www.conventionalcommits.org/) — `type(scope): message`
-- **Types used**: `feat`, `fix`, `docs`, `refactor`, `tool`, `test`
-- **Scopes**: Component or domain — `plugin`, `kernel`, `worker`, `whiteboard`, `PluginCenter`, `db`, etc.
+- **Types used**: `feat`, `fix`, `docs`, `refactor`, `tool`, `test`, `chore`
+- **Scopes**: Component or domain — `plugin`, `kernel`, `worker`, `whiteboard`, `PluginCenter`, `db`, `release`, `auth`, `ai`, etc.
 - **PR descriptions**: Describe what changed and why, link related issues, include screenshots for UI changes.
-- **AI agents must submit every change via a Pull Request (never push to `main`)**: This applies to all AI coding agents (CodeBuddy, Cursor, Copilot, etc.) working in this repository. For each change: create a dedicated branch (e.g. `codebuddy/<slug>` or `cursor/<slug>`), commit with the Conventional Commits format above, push the branch, then open a PR with `gh pr create` describing what changed, why, and a test plan (with screenshots for UI changes). Do **not** commit or `git push` directly to `main`/`master`, and do not merge your own PR unless a human explicitly asks you to.
+
+## AI Agent Collaboration & Development Workflow (AI Agent 协作与开发规范)
+
+All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Copilot, etc.) working in this repository MUST strictly abide by the following collaboration lifecycle:
+
+### 1. Issue-First 驱动流程 (Issue-Driven Workflow)
+
+- **推荐优先提 Issue**：当发现系统缺陷（Bug）、潜在安全漏洞、性能退化、代码坏味道或构想新功能时，**推荐首先通过 GitHub Issue（命令行 `gh issue create` 或 Web 端）进行完整记录与方案对齐**。
+- **Issue 结构要素**：
+  - 清晰准确的标题（如 `fix(whiteboard): ...` 或 `feat(ai-provider): ...`）；
+  - 问题背景与复现步骤（Reproduction Steps / Impact Scope）；
+  - 预期表现与实际异常行为对比；
+  - 根因分析（Root Cause）与建议技术方案设计。
+- **方案对齐再编码**：对于复杂改动或架构调整，建议先在 Issue 或会话中向人类维护者提供设计方案/工件（Artifact-First），达成一致后再切入代码编写。
+
+### 2. PR-Driven 协作与分支隔离 (Branch Isolation & Pull Requests)
+
+- **严禁直接推送到主干**：AI Agent **绝对不得**直接向 `main` / `master` 分支执行 `git commit` 或 `git push`。
+- **专用特性分支**：每次改动必须基于最新的主干（`origin/main`）创建独立的工作分支，分支命名遵循规范：
+  - 格式：`<agent-or-tool>/<issue-id>-<slug>` 或 `<agent-or-tool>/<slug>`
+  - 示例：`codebuddy/issue-383-ai-provider-isolation`、`cursor/fix-whiteboard-loop`、`codebuddy/release-v0.7.11`。
+- **常规提交规范**：提交信息必须严格遵循 Conventional Commits 格式。
+- **规范化 PR 交付（`gh pr create`）**：
+  - PR 标题使用 Conventional Commits 格式；
+  - 关联 Issue 关键词：在正文中通过 `Fixes #xxx`、`Closes #xxx` 或 `Refs #xxx` 绑定问题跟踪；
+  - 阐述改动要点：简要罗列变更内容（What）与设计取舍（Why）；
+  - 完整的测试计划（Test Plan）：列出执行并通过的单元测试、集成测试或端到端验证；
+  - **UI 变更强制附图**：凡修改前端、界面或交互，PR 描述中必须包含实拍截图（Screenshot）或操作录屏证据。
+
+### 3. 本地全套质量门禁 (Pre-PR Quality Gates)
+
+在发起 PR 或推送代码前，AI Agent 必须在本地按顺序完整运行并通过以下质量门禁，**严禁带错提交**：
+
+1. **代码格式**：`pnpm format:check`（Prettier 格式化检查，必要时运行 `pnpm format`）；
+2. **类型检查**：`pnpm lint`（`tsc --noEmit` 基础类型检查）；
+3. **严格类型检查**：`pnpm lint:strict`（严苛模式类型检查）；
+4. **Lint 预算守卫**：`node scripts/check-lint-budget.mjs`（ESLint 告警数严禁超出预算基线）；
+5. **单元与集成测试**：`pnpm test`（Vitest 测试套件必须全绿通过）；
+6. **文档与代码一致性（若修改了文档）**：`bash scripts/build-docs.sh`（Sphinx 严格构建，禁止任何警告）及 `bash audit-tools/run.sh`（一致性审计）。
+
+### 4. 人类授权合并与闭环守卫 (Human-Authorized Merge & Close)
+
+- **严禁擅自合并**：AI Agent **绝对不得自主合并（Merge）任何 Pull Request**。所有 PR 的合并必须等待人类开发者/维护者的明确授权指令（如「确认合并」、「合并这个 PR」）。
+- **合并策略**：在获得人类明确授权后，推荐采用 Squash Merge 方式合并入 `main`（`gh pr merge <pr-number> --squash --delete-branch`），保持主干历史线性清晰。
+- **分支生命周期闭环**：合并完成后，切回本地 `main` 分支，执行 `git pull` 对齐最新代码，并清理已合入的本地及远程临时分支。
 
 ## Release & CHANGELOG Workflow
 

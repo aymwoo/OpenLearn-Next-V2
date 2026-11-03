@@ -119,3 +119,49 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 ```
 
 > 已知的 Pygments 坑：TS/TSX 的 lexer 遇到**接口方法参数里的泛型逗号**（`Record<string, unknown>`）会产 Error token 并触发警告，连放在 `type` 别名里也触发。示例里改用 `unknown` 或拆出独立 interface。
+
+## 5. AI Agent 协作开发规范 (AI Agent Guidelines)
+
+为了保障代码库的长期演进质量、保证变更可追溯并避免自动化工具污染主干分支，所有参与本项目开发的 AI Agent（包括 Antigravity、CodeBuddy、Cursor、Claude Code、GitHub Copilot 等）均须遵守以下规范：
+
+### 5.1 问题驱动（Issue-First 流程）
+
+- **优先提 Issue**：无论是发现系统缺陷、安全隐患、性能退化，还是设计新特性，推荐优先在 GitHub 上发起 Issue（使用 `gh issue create` 或 Web 界面）。
+- **完整记录上下文**：Issue 应阐明问题现象、影响范围、复现步骤、根本原因分析及预期的解决方案。
+- **方案对齐**：对于涉及跨模块、架构变动或公共 API 的复杂任务，先就方案与人类维护者达成一致，再切入实现。
+
+### 5.2 分支隔离与 PR 驱动（PR-Driven 协作）
+
+- **严禁直推主干**：AI Agent **绝对禁止**直接向 `main` / `master` 分支 push 代码。
+- **专用特性分支**：每次开发任务必须创建专用分支，命名推荐遵循 `<agent-name>/<issue-id>-<slug>`（例如 `codebuddy/issue-383-ai-provider-isolation`）。
+- **提交规范**：严格执行 Conventional Commits 格式（如 `feat(kernel): ...`、`fix(whiteboard): ...`、`chore(release): ...`）。
+- **规范发起 PR**：使用 `gh pr create` 发起 Pull Request，说明改动内容、原因、绑定 Issue（如 `Fixes #383`），并附带清晰的测试计划；涉及前端界面的修改强制提供截图或操作证据。
+
+### 5.3 本地全套质量门禁（Pre-PR Quality Gates）
+
+在发起 PR 或推送代码前，AI Agent 必须在本地按顺序完整运行并通过以下门禁：
+
+```bash
+# 1. 代码格式检查
+pnpm format:check
+
+# 2. 基础与严格 TypeScript 类型检查
+pnpm lint
+pnpm lint:strict
+
+# 3. ESLint 告警预算控制（不得超过 baseline 阈值）
+node scripts/check-lint-budget.mjs
+
+# 4. 单元与集成测试套件
+pnpm test
+
+# 5. 文档与代码一致性验证（若涉及文档修改）
+PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-build
+bash audit-tools/run.sh
+```
+
+### 5.4 人类授权合并与分支生命周期闭环
+
+- **严禁自主合并**：AI Agent **不得自行合并任何 PR**。必须在人类维护者进行代码审查并给出明确指令后，方可执行合并。
+- **推荐 Squash Merge**：授权合并时推荐采用 `gh pr merge <pr_number> --squash --delete-branch`，保持主分支 git 历史扁平清晰。
+- **分支清理与对齐**：合并后及时切回 `main` 分支拉取最新代码，并清理已合入的本地临时分支。
