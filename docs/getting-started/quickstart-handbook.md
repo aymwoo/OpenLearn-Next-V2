@@ -51,7 +51,17 @@ pnpm dev
 
 `pnpm dev` 会同时起 Express 与 Vite（HMR），默认端口 **9000**。
 
-> 🔁 **源在哪里拉？** 主仓是 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；国内网络访问 GitHub 受限时用镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)，内容与 `main` 一致，但 CI、Release 与 npm 发布仍只在 GitHub 侧跑。克隆后可保留两个远端（`origin`=GitHub、`gitee`=镜像），换源时 `git push gitee main` 手动快进，**不要**在 Gitee 侧开自动双向镜像。
+> 🔁 **源在哪里拉？** 主仓是 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；国内网络访问 GitHub 受限时用镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)，内容与 `main` 一致，但 CI、Release 与 npm 发布仍只在 GitHub 侧跑。**不要**在 Gitee 侧开自动双向镜像（会覆盖分支 / 标签 / 提交）。
+>
+> 想两边都留着（推荐，GitHub 不通时可切源）：
+>
+> ```bash
+> git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
+> cd OpenLearn-Next-V2
+> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
+> ```
+>
+> 日常 `git fetch origin`（GitHub 优先，不通就 `git fetch gitee`）。**把镜像快进到最新是维护者专属动作**（需 Gitee 写权限）：`git push gitee main --tags`，只快进、不 force-push。
 
 > 版本不一致时，`preinstall` 守卫会在安装阶段直接拦住，并告诉你该换 Node 还是该 `pnpm rebuild better-sqlite3` —— 不用等启动时才撞上 `ERR_DLOPEN_FAILED`。
 

@@ -125,7 +125,16 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 为了保障代码库的长期演进质量、保证变更可追溯并避免自动化工具污染主干分支，所有参与本项目开发的 AI Agent（包括 Antigravity、CodeBuddy、Cursor、Claude Code、GitHub Copilot 等）均须遵守以下规范：
 
 > 🔁 **仓库托管双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（**国内网络访问 GitHub 受限**时用于克隆源码与提 Issue，**单向同步**，不跑 CI / 不发 Release）。
-> 迁移规则：**一个变更只在一个平台开一份 Issue / PR**；合并后把 `main` 快进到另一侧（`git push gitee main`，绝不 force-push）；**禁止在 Gitee 侧开启自动双向镜像**；issue / PR 编号不跨平台复用。
+> 迁移规则：**一个变更只在一个平台开一份 Issue / PR**；**禁止在 Gitee 侧开启自动双向镜像**；issue / PR 编号不跨平台复用。
+>
+> **镜像快进是维护者专属动作**（需要 Gitee 写权限），合并后执行：
+>
+> ```bash
+> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
+> git push gitee main --tags                                        # 只快进，不 force-push
+> ```
+>
+> 普通贡献者只管在 GitHub 提 Issue 与 PR，镜像由维护者同步。若你本来是从 Gitee 克隆的（`origin` 已是镜像），`git push origin main --tags` 即为快进。
 
 ### 5.1 问题驱动（Issue-First 流程）
 

@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Docs
 
 - **GitHub 主仓 / Gitee 镜像双入口对齐（面向国内开发者）**：仓库新增 Gitee 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（GitHub → Gitee 单向同步、不跑 CI / 不发 Release），并在所有开发者入口补齐双地址与镜像口径：`README.md`（双平台说明 + 克隆命令）、`docs/index.md`、`docs/getting-started/quickstart.md` / `quickstart-handbook.md` / `installation-guide.md`、`docs/deployment/production-guide.md`、`docs/tutorials/plugin-development-tutorial.md` §2.8（插件开发 Skill 的 GitHub 与 Gitee 安装命令、离线兜底）、`docs/agent/agent-handbook.md`（Agent 侧仓库与镜像事实表）、`.github/ISSUE_TEMPLATE/config.yml`（Gitee Issue 通道）；
-- **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。
+- **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main --tags` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。镜像快进为**维护者专属动作**（需 Gitee 写权限），普通贡献者只需在 GitHub 提 Issue / PR；文档同时给出 `git remote add gitee ...` 的远端配置步骤，避免全新克隆的工作副本执行 `git push gitee main` 时报 `does not appear to be a git repository`。
 
 ## [0.7.11] - 2026-11-03
 
