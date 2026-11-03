@@ -89,3 +89,6 @@ server/__tests__/canary/.tmp-plugins-*
 # repomix 生成的代码库索引包（单文件 16MB，纯派生产物，不入库）。
 # 配置随仓库保留：.repomix/*.config.json 可提交，.pack.md 不入库。
 /.repomix/*.pack.md
+
+# PDF 手册制品：不进版本控制，改走 GitHub Release 附件（scripts/export-handbooks-pdf.mjs 生成）
+docs/**/*.pdf

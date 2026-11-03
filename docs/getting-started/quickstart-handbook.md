@@ -4,11 +4,11 @@
 >
 > 本页只讲最短路径，不展开契约与原理；每一步都指向对应的深度文档，需要细节时再跳过去。
 
-| 你的目标                 | 建议从哪一节开始                                 | 预计耗时 |
-| ------------------------ | ------------------------------------------------ | -------- |
-| 只想看看这个系统长什么样 | [1.1 npx 一键试用](#11-npx-一键试用)             | 1 分钟   |
-| 要长期部署 / 二次开发    | [1.2 源码本地开发](#12-源码本地开发)             | 5 分钟   |
-| 想写一个插件             | 先跑通 1.2，再读 [第 4 节](#4-写第一个插件hello) | 15 分钟  |
+| 你的目标                 | 建议从哪一节开始                                                     | 预计耗时 |
+| ------------------------ | -------------------------------------------------------------------- | -------- |
+| 只想看看这个系统长什么样 | [1.1 npx 一键试用](#11-npx-一键试用)                                 | 1 分钟   |
+| 要长期部署 / 二次开发    | [1.2 源码本地开发](#12-源码本地开发)                                 | 5 分钟   |
+| 想用 AI 开发一个课堂插件 | 先跑通 1.1 或 1.2，再读 [第 4 节](#4-用-ai-skill-开发第一个课堂插件) | 10 分钟  |
 
 ---
 
@@ -169,152 +169,75 @@ pnpm dev:demo -- --reset  # 丢弃旧演示数据重来
 
 ---
 
-## 4. 写第一个插件（Hello）
+## 4. 用 AI Skill 开发第一个课堂插件
 
-目标：15 分钟内做出一个能在课堂工具里看到的插件，而不是只停留在「能构建」。
+目标：**不需要手写一行代码、不需要背诵底层 API**，通过官方 `openlearn-next-plugin-dev` AI Skill，用自然语言对话在 10 分钟内生成一个能在课堂白板里使用的插件，并完成上传安装与课堂验证。
 
-### 4.1 前置条件
+> 💡 **为什么不需要看底层代码？**
+> OpenLearn V2 的插件契约（如 `manifest.json` 规范、内核三件套登记、子进程沙箱边界、桥接通信等）已全部封装在 `openlearn-next-plugin-dev` Skill 中，由 **AI Agent 自动阅读并执行**。你只需要负责：**装好 Skill → 告诉 AI 教学需求 → 回答几道单选题 → 把生成的 `.zip` 上传到插件中心**。
 
-- 已按 [1.2 源码本地开发](#12-源码本地开发) 跑起服务（Node 22）；
-- 用管理员账号进「插件中心」安装插件（第三方插件需要管理员勾选授权）。
+### 4.1 安装插件开发 Skill
 
-### 4.2 脚手架
-
-在仓库根目录执行（直接用仓库自带的 SDK CLI，不需要联网）：
+在你的 AI 编程助手（Claude Code / Cursor / CodeBuddy / Codex 等）终端里，任选一种通道安装 Skill：
 
 ```bash
-node packages/plugin-sdk/cli.mjs init \
-  --name hello-tool \
-  --template server-only \
-  --author "Quickstart Demo"
-cd hello-tool
+# 方式 A：GitHub 主源（海外或直连 GitHub 顺畅时推荐）
+npx skills add aymwoo/openlearn-skills@openlearn-next-plugin-dev -g -y
+
+# 方式 B：Gitee 国内镜像（国内网络访问 GitHub 受限时推荐，注意必须带完整 https:// 与 .git 后缀）
+npx skills add https://gitee.com/aymwoo/openlearn-skills.git --skill openlearn-next-plugin-dev -g -y
 ```
 
-> 安装了发布版 CLI 时，等价命令是 `npx @openlearn/plugin-sdk init --name hello-tool --template server-only --author "Quickstart Demo"`，再在插件目录里 `npm install`。
+> 若处于完全离线环境，也可以直接克隆仓库并拷贝 Skill 目录：
+>
+> ```bash
+> git clone https://gitee.com/aymwoo/openlearn-skills.git
+> mkdir -p ~/.claude/skills/ && cp -r openlearn-skills/openlearn-next-plugin-dev ~/.claude/skills/
+> ```
 
-生成的结构很小：
+### 4.2 对话唤醒 Skill 并回答单选题（Grilling）
 
-```
-hello-tool/
-├── package.json        # build 脚本、SDK 版本
-├── tsconfig.json
-└── src/index.ts        # manifest + activate —— 只改这一个文件
-```
+1. **一句话唤醒 AI**：在新建的空目录中打开 AI 助手，直接发送自然语言需求：
+   > 「用 `openlearn-next-plugin-dev` 帮我做一个课堂插件 **Hello 课堂工具**，在课中白板的互动工具栏里加一个按钮，点击后向课堂下发一条问候通知。」
+2. **源码健康检查选 `1`**：若本地尚未缓存平台源码，Skill 会弹出 4 个选项询问如何获取契约参考，直接回复 **`1`**（后台异步克隆源码，当前立即使用内置快照继续）。
+3. **回答交互式单选题（Q1–Q6）**：Skill 会每次只问一道单选题（标注了 `[A] (推荐)`），例如插件显示位置、是否需要持久化存储、所需最小权限等。你只需一路回复字母（如 `A`）或补充一句话，最后回复 **「确认」**。
+4. **AI 自动交付 `.zip` 产物**：确认后，AI 会自动生成工程、运行双阶段单测与契约审计，并在项目根目录下打包出可直接安装的 **`openlearn-plugin-hello-tool.zip`**。
 
-`--author` 决定插件 id 的 scope：这里会生成 `manifest.id = @quickstart-demo/hello-tool`。**不要**为了「拿权限」把 id 写成 `@openlearn/…`：`@openlearn/` 前缀不带来任何信任，`id` 也不改变执行模式（上传的第三方包一律以子进程运行，由服务端锁定）。
-
-### 4.3 改成「课堂里看得见」的最小插件
-
-把 `src/index.ts` 换成下面这份。相对模板只多了**课堂工具声明**，并把命令换成「能被点击触发、有返回值」的形态：
-
-```ts
-import type { PluginContext } from '@openlearn/plugin-sdk';
-
-export default {
-  manifest: {
-    id: '@quickstart-demo/hello-tool',
-    name: 'Hello Tool',
-    version: '0.1.0',
-    main: 'index.js', // 必填：缺失会导致插件装不上
-    description: '快速上手示例：一个最小可用的课堂工具',
-    author: 'Quickstart Demo',
-    engines: { openlearn: '>=0.7.0' }, // 用到了 0.7.x 的课堂工具槽位
-    capabilitiesProposed: ['lesson:read'], // 第三方插件的能力是「申请」，管理员勾选后才生效
-    requires: ['@openlearn/core:ICommandBusService@^1.0.0', '@openlearn/core:IActionRegistryService@^1.0.0'],
-    // 课堂工具入口：宿主渲染成白板工具栏的「互动工具」下拉项
-    classroomTools: [
-      {
-        id: 'hello-tool',
-        name: 'Hello 课堂工具',
-        description: '点击后在课堂信息流里回显一条问候',
-        icon: 'Sparkles',
-        commandType: 'hello.greet',
-        payload: { lessonId: '$lessonId' },
-      },
-    ],
-  },
-
-  async activate(ctx: PluginContext) {
-    // 三件套之二：ActionDescriptor —— 内核 default-deny，缺它命令会被拒（HTTP 403）
-    await ctx.services.actionRegistry.register({
-      id: 'hello-tool-greet',
-      commandType: 'hello.greet',
-      description: '打招呼 —— Hello Tool 的示例课堂动作',
-      capabilityRequired: 'lesson:read',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: { lessonId: { type: 'STRING', description: '当前课节 ID' } },
-        required: [],
-      },
-    });
-
-    // 三件套之三：handler —— 必须是 { execute } 对象，不能是裸函数
-    await ctx.services.commandBus.registerHandler('hello.greet', {
-      async execute(command) {
-        const payload = (command.payload ?? {}) as { lessonId?: string };
-        const message = `Hello from Hello Tool! lessonId=${payload.lessonId ?? '(none)'}`;
-        ctx.log.info(message);
-        return { message };
-      },
-    });
-
-    ctx.log.info('Hello Tool activated successfully');
-  },
-
-  async deactivate() {
-    // 宿主停用时会自动注销 handler / action，这里无需手工清理。
-  },
-};
-```
-
-两个容易踩的点，提前说清：
-
-- **`commandType` 在两处写同一个短名**（`hello.greet`）：manifest 与 `registerHandler()` 都会被宿主自动补上 `manifest.id.` 前缀（实际派发的是 `@quickstart-demo/hello-tool.hello.greet`）。
-- **三件套缺一不可**：manifest 声明入口、handler 处理命令、`actionRegistry.register()` 登记描述符。只做前两件时，点按钮会得到 403 `COMMAND_NOT_REGISTERED`。
-
-### 4.4 构建出可分发的 ZIP
-
-```bash
-# 在 hello-tool/ 里；仓库内构建无需先 npm install
-node ../packages/plugin-sdk/cli.mjs build
-# 用发布版 CLI 时等价于：npx openlearn-plugin-sdk build
-```
-
-产物在 `dist/` 与项目根目录：`openlearn-plugin-hello-tool.zip`（约 10 KB）。ZIP 根目录固定是 `manifest.json` + `index.js`，**不要**手工 `zip -r` 出嵌套目录。
-
-### 4.5 安装并启用（管理员）
+### 4.3 在插件中心上传并授权（管理员）
 
 1. 用管理员账号登录系统，在左侧主导航中点击 **系统管理 → 插件中心**；
-2. 点击右上角 **从 ZIP 安装** 按钮，选中刚才构建出来的 `openlearn-plugin-hello-tool.zip`；
-3. 安装向导共 5 步，有两处安全防线必须勾选，否则插件无法正常运行：
-   - **第 2 步（提供商信任）**：勾选 `我已了解并信任此插件的提供商，愿意授予上述高级系统权限。`（第三方插件强制以子进程隔离沙箱运行，需管理员明示信任）；
-   - **第 5 步（能力授予授权）**：勾选 `确认授予清单申请的能力。不勾选则这些能力不会生效。`（平台遵循严格的 Default-Deny 最小权限原则，未授予的能力在运行时调用会被拦截）。
+2. 点击右上角 **从 ZIP 安装** 按钮，选中 AI 刚刚为你打包好的 `.zip` 文件；
+3. 安装向导共 5 步，其中**第 2 步与第 5 步的两处安全授权复选框必须全部勾选**，否则插件无法激活或运行：
+   - **第 2 步（提供商信任）**：勾选 `我已了解并信任此插件的提供商，愿意授予上述高级系统权限。`（第三方插件强制在子进程沙箱中隔离运行，需管理员明示信任）；
+   - **第 5 步（能力授予授权）**：勾选 `确认授予清单申请的能力。不勾选则这些能力不会生效。`（平台遵循 Default-Deny 最小权限原则，未勾选的能力在运行时会被直接拦截）。
 
-![插件安装向导：两道关键权限与能力授权勾选防线](images/quickstart/quickstart-05a-permissions.png)
+![插件安装向导：第 2 步与第 5 步两道关键权限与能力授权勾选防线](images/quickstart/quickstart-05a-permissions.png)
 
-4. 点击 **确认安装并上传**。安装成功后系统会自动激活并启用该插件。返回插件中心列表后，卡片上将显示 `已启用` 徽标，并统计 `1 个课堂工具`、`1 项权限`：
+4. 点击右下角 **确认安装并上传**。安装成功后系统会自动激活并启用该插件。返回插件中心列表后，卡片上将显示绿色的 `已启用` 徽标，并统计 `1 个课堂工具`、`1 项权限`：
 
-![插件中心：Hello Tool 已安装并启用](images/quickstart/quickstart-05-plugin-center.png)
+![插件中心：插件已安装并启用](images/quickstart/quickstart-05-plugin-center.png)
 
-> 💡 **提示**：插件卡片右下角的按钮文案代表「点击后将执行的操作」——显示红色 **禁用** 说明当前已处于启用运行状态；若显示 **启用** 则说明当前处于停用状态。
+> 💡 **按钮状态辨析**：插件卡片右下角的按钮文字代表「点击后将执行的动作」——显示红色 **禁用** 说明当前正处于**已启用运行状态**；若显示 **启用** 则说明当前处于停用状态。
 
-### 4.6 确认有可见效果
+### 4.4 在课中白板验证插件效果
 
-1. 进 **互动课堂**，选好课程与班级后 **开始上课**（或对进行中的课堂点 **继续上课**）；
-2. 点 **一键开启课中授课（进入白板）** —— 白板只在「课中授课」阶段渲染；
-3. 白板工具栏右侧的拼图图标（tooltip **互动工具 (插件扩展)**，右上角角标 `1`）；
-4. 展开 **互动工具 · 1 个插件** → 点 **Hello 课堂工具**，右下角弹出 `✓ 工具下发成功`，左侧课堂互动反馈出现 `插件工具 [Hello 课堂工具] 执行完毕，数据成功下发。`
+1. 点击左侧导航 **互动课堂**，选择课程与班级后点击 **开始上课**（或对进行中的课堂点击 **继续上课**）；
+2. 在课前就绪页点击右上角 **一键开启课中授课（进入白板）** —— 互动白板与插件工具栏仅在「课中授课」阶段渲染；
+3. 找到白板顶部工具栏最右侧的**拼图图标**（悬停提示 **互动工具 (插件扩展)**，右上角带有数字角标 `1`）；
+4. 点击展开 **互动工具 · 1 个插件** 下拉面板 → 点击 **Hello 课堂工具**，右下角即刻弹出绿色提示 `✓ 工具下发成功`，左侧课堂互动反馈流同步记录 `插件工具 [Hello 课堂工具] 执行完毕，数据成功下发。`
 
-![课堂工具：插件提供的 Hello 课堂工具出现在互动工具面板，点击后下发成功](images/quickstart/quickstart-06-plugin-effect.png)
+![课堂工具：插件提供的课堂工具出现在白板互动工具面板，点击后下发成功](images/quickstart/quickstart-06-plugin-effect.png)
 
-### 4.7 接着往下学
+### 4.5 想改功能或遇到报错？继续跟 AI 说
 
-| 想做的事                       | 读什么                                                                                                                           |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| 系统学插件开发（命令/事件/表） | [插件开发完全指南](../tutorials/plugin-development-tutorial.md)                                                                  |
-| manifest 每个字段的含义与限制  | [插件 Manifest 规范](../plugin/plugin-manifest-spec.md)                                                                          |
-| 给插件加页面 / 侧栏 / 画板卡片 | [UI 扩展槽位](../reference/plugin-ui-extension-slots.md) + [前端沙箱能力边界](../plugin/frontend-sandbox-capability-boundary.md) |
-| 写测试、在本地把问题炸出来     | [插件测试工具包](../sdk/plugin-test-kit.md) + [测试策略](../developer-guide/testing-strategy.md)                                 |
+- **改功能**：直接对 AI 说「帮我把问候语改成随机抽取一名已签到学生提问，并重新打包 ZIP」，然后在插件中心再次点击 **从 ZIP 安装** 上传新包即可原地升级。
+- **排障修复**：如果上传或点击时遇到报错，直接把界面提示或插件中心「开发者工具」里的报错信息贴给 AI，Skill 会自动定位并修复后重新给你打包 `.zip`。
+- **完整图文手册**：更详细的十步实操（含侧边栏独立页面插件、课中下发、卸载清理全流程截图）请查阅配套的 **《OpenLearn V2 插件开发手册（AI Skill 版）》**。
+  PDF 制品**不进版本控制**（避免仓库被二进制胀大），统一挂在 GitHub Release 附件，链接指向最新版本：
+  [OpenLearnV2-Plugin-Skill-Guide.pdf](https://github.com/aymwoo/OpenLearn-Next-V2/releases/latest/download/OpenLearnV2-Plugin-Skill-Guide.pdf) ·
+  [OpenLearnV2-Plugin-Handbook.pdf](https://github.com/aymwoo/OpenLearn-Next-V2/releases/latest/download/OpenLearnV2-Plugin-Handbook.pdf) ·
+  [OpenLearnV2-Quickstart-Handbook.pdf](https://github.com/aymwoo/OpenLearn-Next-V2/releases/latest/download/OpenLearnV2-Quickstart-Handbook.pdf)
+  > 重新生成：`npm run docs:pdf`（需先 `bash scripts/build-docs.sh`）→ `npm run docs:pdf:upload` 上传覆盖。
 
 ---
 

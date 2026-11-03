@@ -3,16 +3,25 @@
  * 将 Sphinx 构建生成的 HTML 手册导出为精美排版的 A4 PDF，
  * 并同步拷贝至 ~/Downloads/ 供离线阅读与分发。
  *
+ * ⚠️ **产物不进版本控制**：PDF 写入 `docs/_build/handbooks/`（已被 .gitignore 忽略），
+ * 仓库只保留生成脚本与截图源图。分发走 **GitHub Release 附件**：
+ *   npm run docs:pdf            # 生成到 docs/_build/handbooks/
+ *   npm run docs:pdf:upload     # 上传为 Release 附件（releases/latest/download/… 稳定链接）
+ * 原因：一份手册 PDF 约 3–6 MB，而每次文档改动都可能重新导出；
+ * 二进制制品入 git 会永久胀大仓库（历史不可追回），且容易与源码版本脱节。
+ *
  * @module
  */
 import { chromium } from '@playwright/test';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const CHROMIUM = '/usr/bin/chromium';
 const HTML_DIR = path.resolve('docs/_build/html');
 const DOWNLOADS_DIR = path.join(os.homedir(), 'Downloads');
+/** PDF 产物目录（gitignored）：不进版本控制，只作为上传 Release 附件的中间产物 */
+const OUT_DIR = path.resolve('docs/_build/handbooks');
 
 const PRINT_CSS = `
   @media print {
@@ -111,21 +120,24 @@ const PRINT_CSS = `
 const TARGETS = [
   {
     html: path.join(HTML_DIR, 'getting-started/quickstart-handbook.html'),
-    outDoc: path.resolve('docs/getting-started/quickstart-handbook.pdf'),
+    outDoc: path.join(OUT_DIR, 'OpenLearnV2-Quickstart-Handbook.pdf'),
     outDownload: path.join(DOWNLOADS_DIR, 'OpenLearnV2-快速上手手册.pdf'),
     title: 'OpenLearn V2 · 快速上手手册',
   },
   {
     html: path.join(HTML_DIR, 'tutorials/plugin-development-tutorial.html'),
-    outDoc: path.resolve('docs/tutorials/plugin-development-tutorial.pdf'),
-    outDownload: path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发完全指南.pdf'),
-    title: 'OpenLearn V2 · 插件开发完全指南',
+    outDoc: path.join(OUT_DIR, 'OpenLearnV2-Plugin-Handbook.pdf'),
+    outDownload: path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发手册.pdf'),
+    title: 'OpenLearn V2 · 插件开发手册',
   },
 ];
 
 async function main() {
   if (!existsSync(DOWNLOADS_DIR)) {
     mkdirSync(DOWNLOADS_DIR, { recursive: true });
+  }
+  if (!existsSync(OUT_DIR)) {
+    mkdirSync(OUT_DIR, { recursive: true });
   }
 
   const launchOptions = {
@@ -187,12 +199,38 @@ async function main() {
       await page.close();
     }
 
-    // 同时将 PR #388 的插件开发 Skill 使用指南 PDF 复制到 ~/Downloads/
-    const skillGuidePdf = path.resolve('docs/tutorials/plugin-skill-guide.pdf');
+    // 渲染以人类如何使用 AI Skill 为核心的《OpenLearn V2 插件开发手册》并同步到 ~/Downloads/
+    const skillGuideHtml = path.resolve('docs/tutorials/plugin-skill-guide.html');
+    const skillGuidePdf = path.join(OUT_DIR, 'OpenLearnV2-Plugin-Skill-Guide.pdf');
+    if (existsSync(skillGuideHtml)) {
+      console.log('\n正在渲染 PDF: OpenLearn V2 · 插件开发手册（如何使用 AI Skill 零门槛开发课堂插件） ...');
+      const skillPage = await context.newPage();
+      await skillPage.goto(`file://${skillGuideHtml}`, { waitUntil: 'networkidle' });
+      await skillPage.emulateMedia({ media: 'print' });
+      await skillPage.waitForTimeout(800);
+      await skillPage.pdf({
+        path: skillGuidePdf,
+        format: 'A4',
+        printBackground: true,
+      });
+      await skillPage.close();
+      console.log(`✔ 生成文档 PDF: ${skillGuidePdf}`);
+    }
+
     if (existsSync(skillGuidePdf)) {
-      const skillDownload = path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发Skill使用指南.pdf');
-      copyFileSync(skillGuidePdf, skillDownload);
-      console.log(`✔ 已复制至 Downloads: ${skillDownload}`);
+      const pluginHandbookDownload = path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发手册.pdf');
+      const skillGuideDownload = path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发Skill使用指南.pdf');
+      copyFileSync(skillGuidePdf, pluginHandbookDownload);
+      copyFileSync(skillGuidePdf, skillGuideDownload);
+      console.log(`✔ 已复制至 Downloads: ${pluginHandbookDownload}`);
+      console.log(`✔ 已复制至 Downloads: ${skillGuideDownload}`);
+    }
+
+    // 清理旧版 59 页底层 API 参考手册，避免与面向人类的 Skill 开发手册混淆
+    const legacyApiPdf = path.join(DOWNLOADS_DIR, 'OpenLearnV2-插件开发完全指南.pdf');
+    if (existsSync(legacyApiPdf)) {
+      unlinkSync(legacyApiPdf);
+      console.log(`✔ 已移除旧版底层 API 手册: ${legacyApiPdf}`);
     }
 
     console.log('\n🎉 所有最新手册 PDF 均已成功生成并存放到 ~/Downloads/ 下！');

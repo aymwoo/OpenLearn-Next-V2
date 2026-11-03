@@ -80,6 +80,22 @@ def extract_capabilities() -> dict:
     grants = (REPO / "packages/core/plugin-host/plugin-grants.ts").read_text(encoding="utf-8")
     blocked = re.findall(r"value\s*===\s*" + _quoted(r"[^'\"]+"), grants)
 
+    # 1e. **可声明能力全集** = catalog.ts 里 CAP 对象的全部取值（Issue #368 之后的唯一真源）。
+    #     CAP 对象里既有字面量（19 资源型 + 3 仅可声明 + 1 平台内部），
+    #     也有对方法级常量的引用（API_WRITE: CAP_API_WRITE …），后者要解引用成字面量。
+    #     之所以要单独导出这一份：command_required / method_policy / runtime_permission
+    #     是**三套正交**的登记，插件作者与 L0 静态检查都需要一份「哪些串能写进
+    #     capabilitiesProposed」的封闭答案；缺了它就只能靠猜，于是出现
+    #     「student-data:write 被误判为不存在」（技能仓 Issue #1）。
+    declarable: set[str] = set()
+    cap_obj = re.search(r"export const CAP = \{(.*?)\n\} as const;", catalog, re.S)
+    if cap_obj:
+        body = cap_obj.group(1)
+        declarable.update(re.findall(r":\s*" + _quoted(r"[^'\"]+"), body))
+        for ref in re.findall(r":\s*(CAP_\w+)\s*,", body):
+            if ref in method_policy:
+                declarable.add(method_policy[ref])
+
     return {
         "_note": "三套登记互不相干，混用即错：command_required 管命令闸门，"
                  "method_policy 管具体 ctx 方法，runtime_permission 是活动生态的第三套权限。",
@@ -90,6 +106,12 @@ def extract_capabilities() -> dict:
                                 "平台在授权前对未知串打 ERROR 日志。杜撰的能力名拿不到任何约束力，"
                                 "真正致命的失败仍是「少声明」——目标命令要的 capabilityRequired "
                                 "与你声明的字符串必须逐字相等，否则 403 COMMAND_CAPABILITY_DENIED。",
+        "_declarable_note": "declarable = catalog.ts 的 CAP 对象全量取值，也就是"
+                            "「可以写进 manifest.capabilitiesProposed」的封闭集合"
+                            "（= SDK 的 CAPABILITIES）。断言失败时的报错文案把它当作合法值来源，"
+                            "因此这份清单必须与源码逐字一致。runtime_permission 不在其中："
+                            "那是活动生态的运行时开关，写进 capabilitiesProposed 会被判未知串。",
+        "declarable": sorted(declarable),
         "command_required": sorted(required),
         "method_policy": method_policy,
         "runtime_permission": sorted(runtime_permissions),
@@ -314,6 +336,38 @@ def extract_versions() -> dict:
     }
 
 
+def check_agent_handbook_versions(versions: dict[str, str]) -> list[str]:
+    """校验 agent-handbook 正文的版本基线表与 versions.json 一致。
+
+    为什么需要这一层：versions.json 有 `--check` 兜底（比对源码），但
+    `docs/agent/agent-handbook.md` 顶部那张表是**纯文本**，历史上出现过
+    「表里写 0.7.8、契约里是 0.7.11」而没人发现 —— 恰恰因为它是 AI 手册的
+    第一屏，版本号错了会一路误导下去。
+    """
+    path = REPO / "docs/agent/agent-handbook.md"
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    drift: list[str] = []
+    patterns = {
+        "platform": r"\|\s*平台版本\s*\|\s*`([\d.]+)`",
+        "plugin_sdk": r"\|\s*插件 SDK\s*\|\s*`@openlearn/plugin-sdk@([\d.]+)`",
+        "plugin_test_kit": r"\|\s*测试工具包\s*\|\s*`@openlearn/plugin-test-kit@([\d.]+)`",
+    }
+    for key, pat in patterns.items():
+        want = versions.get(key)
+        if not want:
+            continue
+        m = re.search(pat, text)
+        if not m:
+            drift.append(f"agent-handbook.md 缺少版本表行：{key}（源码为 {want}）")
+        elif m.group(1) != want:
+            drift.append(
+                f"agent-handbook.md 版本表的 {key} 写着 {m.group(1)}，源码是 {want}"
+            )
+    return drift
+
+
 # ──────────────────────────────────────────────────────────────────────────
 
 BUILDERS = {
@@ -357,6 +411,10 @@ def main() -> int:
                 drift.append(f"{name}: 与源码不一致")
         for d in drift:
             print(f"[drift] {d}")
+        handbook_drift = check_agent_handbook_versions(facts["versions.json"])
+        for d in handbook_drift:
+            print(f"[drift] {d}")
+        drift += handbook_drift
         if drift:
             print(f"事实表漂移 {len(drift)} 处 —— 请重新生成：python3 audit-tools/agent_facts.py")
             return 1
