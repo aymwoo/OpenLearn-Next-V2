@@ -26,13 +26,25 @@
 
 ## 1. 完整权限字符串全集（按模块）
 
-权限字符串**没有**集中的枚举或注册表，它们散落在各 `ActionDescriptor.capabilityRequired` 与 `CapabilityGuard` 的默认授权中。以下为从 `packages/core` / `packages/plugins` / `packages/activity-ecosystem` / `server.ts` 的**非测试源码**中收集到的**每一个真实字符串**。
+权限字符串的**唯一权威清单是 `packages/core/capability/catalog.ts` 的 `CAP` / `CAPABILITIES`**（Issue #368 收敛后的单点真源）：守卫、方法策略、SDK 校验与 manifest 校验全部从那里取值，`assertValidManifestCapabilities` 报错时列出的合法值就是 `CAPABILITIES`（**31** 条）。本页是它的可读镜像。
 
-实测口径（`grep -rh "capabilityRequired: *'" --include=*.ts`，排除 `__tests__` 与 `node_modules`）：
+> ⚠️ 若你只查到其中一部分（只查 `ActionDescriptor.capabilityRequired`，或只查 `method-policy` 的常量），就会把另一部分的**真实权限**误判成「捏造串」并删掉——删掉后运行期是**静默 403 / `PluginCapabilityDeniedError`**，比误报更难排查。真实事故见 Issue #368：4 个插件的 `pointsLedger.addPoints` 因此全部失效。
 
-- **20 个**不同权限字符串：其中 **19 个**用作 `ActionDescriptor.capabilityRequired`（`packages/plugins/*.ts` 口径），另一个是 `server/services/segment-gate-service.ts` 的 `GATE_CAPABILITY` 常量 `segment:gate_eval`
-- `capabilityRequired` 在生产源码中约 **100 处**引用（`grep -rn capabilityRequired` 排除 `__tests__` / `.test.`），随代码增长，不必精确到个位
-- `segment:gate_eval` **不是** `ActionDescriptor.capabilityRequired`；SDK 注释里建议片段命令同时声明它，见 §1.1 的口径说明
+可声明全集分四组，下面 §1.1 ~ §1.2.2 逐组列出：
+
+| 组         | 条数 | 闸门                                            | 写进 `capabilitiesProposed` |
+| ---------- | ---- | ----------------------------------------------- | --------------------------- |
+| 资源型     | 19   | `ActionDescriptor.capabilityRequired`           | ✅                          |
+| 方法级     | 8    | `method-policy` 的服务代理 / Security Barrier 3 | ✅                          |
+| 仅可声明项 | 3    | 无闸门（声明无害，也不构成约束）                | ✅                          |
+| 平台内部   | 1    | 片段命令 gate                                   | ✅（插件片段可声明）        |
+
+实测口径（`python3 audit-tools/agent_facts.py --check` 校验契约 `docs/agent/contracts/capabilities.json`）：
+
+- **19 个**字符串用作 `ActionDescriptor.capabilityRequired`（`packages/plugins/*.ts` 口径）
+- **8 个**方法级字符串用于 `method-policy` 的方法闸门（§1.2.1）
+- **3 个**仅可声明项（§1.2）+ **1 个**平台内部字符串 `segment:gate_eval`（§1.2.2）
+- `segment:gate_eval` **不是** `ActionDescriptor.capabilityRequired`（它只出现在 SDK 注释里）；SDK 注释建议片段命令同时声明它，见 §1.1 的口径说明
 
 ### 1.1 作为 `capabilityRequired` 使用的 19 个字符串（当前实测；逐项以 `grep -rn capabilityRequired` 为准）
 
@@ -83,6 +95,29 @@
 > 因此**不存在** `class:*` 这个权限模块。`packages/plugins/management.ts` 的所有读写动作实际用的是 `management:read` / `management:write`。
 
 `packages/plugins/ai-submit-injector.ts` 的 `capabilitiesProposed` 是**空数组** `[]`——该插件不声明任何权限。
+
+#### 1.2.1 方法级能力字符串（8 条 · `method-policy` 闸门）
+
+这 8 条**不是** `ActionDescriptor.capabilityRequired`，而是 `packages/core/plugin-host/method-policy.ts` 的方法级常量（Security Barrier 3）。它们**同样可以写进 `capabilitiesProposed`**，否则调用对应 `ctx` 方法会被拒：
+
+| 权限                 | 常量                     | 含义与典型消费点                                             |
+| -------------------- | ------------------------ | ------------------------------------------------------------ |
+| `api:write`          | `CAP_API_WRITE`          | 授予「写操作」所需（`ctx` 的写方法）                         |
+| `api:admin`          | `CAP_API_ADMIN`          | 授予高危路径 / 不可逆操作所需                                |
+| `grades:write`       | `CAP_GRADES_WRITE`       | 授予学期成绩**写入**所需（`grades:read` 不足以解锁写入）     |
+| `agent:tool`         | `CAP_AGENT_TOOL`         | 授予「注册对外暴露给 AI Agent 的 action」所需                |
+| `ai:invoke`          | `CAP_AI_INVOKE`          | 授予「驱动 AI 生成」所需                                     |
+| `task:register`      | `CAP_TASK_REGISTER`      | 授予「注册后台常驻任务」所需                                 |
+| `student-data:read`  | `CAP_STUDENT_DATA_READ`  | 授予读取学生个人敏感数据（积分流水、维度汇总等）所需（§5.3） |
+| `student-data:write` | `CAP_STUDENT_DATA_WRITE` | 授予写入 / 变更学生个人敏感数据（积分变动等）所需（§5.3）    |
+
+> ⚠️ `ai:invoke` **同时**也是第 2 套 `RuntimePermission` 的成员（§1.3）。两个登记互不相干、但字符串同名：写进 `capabilitiesProposed` 是声明「插件可驱动 AI 生成」（方法级闸门）；活动生态的 `permissions: ['ai:invoke']` 是运行时开关。**两处都要写才都有权限**。
+
+#### 1.2.2 平台内部可声明（1 条）
+
+| 权限                | 常量位置                                                       | 用途                                                 |
+| ------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| `segment:gate_eval` | `server/services/segment-gate-service.ts` 的 `GATE_CAPABILITY` | 片段命令的 gate 校验；SDK 注释建议片段命令同时声明它 |
 
 ### 1.3 第 2 套机制：`RuntimePermission`（与 `capabilityRequired` 无关）
 
@@ -157,8 +192,8 @@ throw err;
 - **`courseware:*`** —— 不存在。课件命令由 `lesson:read` / `lesson:write`（教师侧）与 `student:write`（`courseware.submit_attempt`）覆盖。
 - **`classroom:*`** —— 不存在。也没有 `class:*`（见 §1.2）。
 - **`analytics:*`** —— 不存在。唯一的 "analytics 能力" 是第 3 套机制的 descriptor id `cap_analytics_insight`。
-- **`ai:*`** —— 不存在。AI 层使用 `capability_*` ID（`packages/core/ai-capability/capabilities/` 下实测 7 个：`capability_analytics`、`capability_chat`、`capability_completion`、`capability_lesson`、`capability_plugin`、`capability_tool`、`capability_whiteboard`），而非 `ai:read` / `ai:write`。
-- **`lesson:control` / `stage:navigate` / `whiteboard:draw` / `quiz:submit` / `plugin:execute` / `ai:invoke` / `session:manage`** —— 属于第 2 套 `RuntimePermission`（见 §1.3），**不是** `capabilityRequired` 字符串。
+- **`ai:*`** —— 除 `ai:invoke` 外不存在。AI 层使用 `capability_*` ID（`packages/core/ai-capability/capabilities/` 下实测 7 个：`capability_analytics`、`capability_chat`、`capability_completion`、`capability_lesson`、`capability_plugin`、`capability_tool`、`capability_whiteboard`），而非 `ai:read` / `ai:write`。⚠️ **`ai:invoke` 是真实权限串**（方法级，§1.2.1），写进 `capabilitiesProposed` 表示「插件可驱动 AI 生成」；它同时也是 `RuntimePermission` 成员（§1.3），两者都要写。
+- **`lesson:control` / `stage:navigate` / `whiteboard:draw` / `quiz:submit` / `plugin:execute` / `session:manage`** —— 属于第 2 套 `RuntimePermission`（见 §1.3），**不是** `capabilityRequired` 字符串，写进 `capabilitiesProposed` 会被 `assertValidManifestCapabilities` 判为未知串。
 - **`storage:write`** —— 仅出现在 `packages/core/__tests__/plugin-http-streaming.test.ts` 的测试 manifest 中，生产代码无任何消费点。
 - **`network:*` / `net:*`** —— 不存在。出站网络访问不属于 `resource:action` 字符串机制，而是由独立的 `plugin_network_grants` 域名白名单与 manifest `network.outbound` 共同管控，并由宿主代发执行（详见 [信任边界矩阵](./plugin-trust-boundary.md)）。
 
@@ -306,7 +341,7 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 
 ### 5.3 学生个人数据隐私与安全审计能力声明（Issue #145）
 
-平台在 `packages/core/plugin-host/method-policy.ts` 中引入了两项专用的学生个人数据能力常量：
+平台在 `packages/core/plugin-host/method-policy.ts` 中引入了两项专用的学生个人数据能力常量（完整方法级清单见 §1.2.1）：
 
 - `CAP_STUDENT_DATA_READ = 'student-data:read'`：声明插件有权读取学生个人数据（如通过 `pointsLedger` 访问积分日志、统计与维度汇总）。
 - `CAP_STUDENT_DATA_WRITE = 'student-data:write'`：声明插件有权写入或修改学生个人数据（如通过 `pointsLedger.addPoints` 记录积分）。
@@ -320,12 +355,14 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 
 ## 6. 统计口径
 
-- `capabilityRequired` 不同的权限字符串：**20** 个（2026-10-25 实测，新增 `segment:gate_eval`）。
+- **可声明权限全集（`CAPABILITIES`）**：**31** 条 = 资源型 19 + 方法级 8 + 仅可声明 3 + 平台内部 1（`python3 audit-tools/agent_facts.py --check` 可校验）。
+- 其中用作 `capabilityRequired` 的：**19** 条（⚠️ 旧版本文档写「20」是错的——多出来的那条来自 SDK `.d.ts` 的 JSDoc 注释 `capabilityRequired: 'segment:gate_eval'`，不是真声明；见 `audit-tools/agent_facts.py` 里的排除规则）。
+- 方法级（`method-policy` 闸门）：**8** 条（§1.2.1）。
 - 专有学生数据能力声明（隐私审计）：**2** 个（`student-data:read` / `student-data:write`）。
-- `capabilityRequired` 声明点（后端非测试源码）：**101** 行（2026-10-25 实测）。
+- `capabilityRequired` 声明点（后端非测试源码）：约 **100** 行（随代码增长，不必精确到个位）。
 - `isHighRisk: true`：**9** 处；显式 `isHighRisk: false`：**1** 处（`plugin.info`）。
 - `CapabilityGuard` 构造函数预置默认 actor：**6** 个；`check()` 内角色兜底表：**2** 张（`teacher` / `student`）。
 - `RuntimePermission` 成员：**7** 个；`CapabilityRole` 成员：**6** 个。
 - 内置插件 manifest 中 `capabilitiesProposed` 声明：**7** 个插件，其中 1 个为空数组。
 
-> 统计更新至 Issue #145 学生个人数据能力声明与审计策略落地。
+> 统计更新至 Issue #368 权限清单收敛为单一权威来源（`catalog.ts`）后的口径。

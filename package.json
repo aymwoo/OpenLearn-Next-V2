@@ -81,7 +81,9 @@
     "db:seed": "npx tsx scripts/seed-demo-data.ts",
     "db:clean-demo": "npx tsx scripts/seed-demo-data.ts --clean",
     "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run npm run dev to regenerate.\"",
-    "db:gen-tables": "node scripts/gen-table-inventory.mjs"
+    "db:gen-tables": "node scripts/gen-table-inventory.mjs",
+    "docs:pdf": "node scripts/export-handbooks-pdf.mjs",
+    "docs:pdf:upload": "node scripts/upload-handbooks.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -27,8 +27,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **插件开发全流程实操图解（9 步法）**：在插件开发手册 §4.2 融入真实实测的 9 张高清实拍截图，覆盖登录认证、ZIP 上传向导、高危权限与能力审批、插件中心状态确认、教师端扩展导航、隐藏沙箱 iframe 安全通信、开发者工具与实时日志、白板互动工具协同、以及生命周期干净卸载；
   - **官方 Skill (v2.16.1) 全通道对齐**：全面梳理官方插件开发 Skill 的三大安装通道（GitHub 注册表、Gitee 完整 URL 直连、离线目录拷贝），确保国内网络与离线开发者均可一键起步；
   - **A4 打印级 PDF 导出与本地分发**：新增 `scripts/export-handbooks-pdf.mjs`，通过 Chromium 打印管道将 Sphinx HTML 手册导出为精美排版的 A4 PDF，并同步生成至 `~/Downloads/` 目录下（包含《快速上手手册》、《插件开发完全指南》以及《插件开发 Skill 使用指南》）。
+- **PDF 手册制品迁出版本控制，改走 GitHub Release 附件**：此前三份 PDF 直接入库（`quickstart-handbook.pdf` 2.9 MB + `plugin-development-tutorial.pdf` 6.0 MB + `plugin-skill-guide.pdf` 4.4 MB，合计 **13.3 MB**），每次文档改动重新导出都会再叠一份二进制进 git 历史（历史不可追回），且制品容易与源码版本脱节。现改为：
+  - 仓库只保留**生成脚本 + 截图源图**（截图是正文引用的，必须留）；PDF 产物写入 `docs/_build/handbooks/`（已被 `.gitignore` 忽略）；
+  - `scripts/export-handbooks-pdf.mjs` 补上**插件开发手册**的目标（此前 `plugin-development-tutorial.pdf` 没有任何脚本能生成，属于不可复现的一次性产物），三份手册现在都可一键重出；
+  - 新增 `scripts/upload-handbooks.mjs` 与 `npm run docs:pdf` / `npm run docs:pdf:upload`，上传为 Release 附件（`--clobber` 覆盖）；
+  - 文档改用 `releases/latest/download/<资产名>` **稳定链接**（永远指向最新 Release 的同名资产），后续发版只需重新上传，不必再改文档链接；
+  - 已创建 **v0.7.11 Release** 并挂载三份 PDF 附件，链接即已生效。
 - **GitHub 主仓 / Gitee 镜像双入口对齐（面向国内开发者）**：仓库新增 Gitee 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（GitHub → Gitee 单向同步、不跑 CI / 不发 Release），并在所有开发者入口补齐双地址与镜像口径：`README.md`（双平台说明 + 克隆命令）、`docs/index.md`、`docs/getting-started/quickstart.md` / `quickstart-handbook.md` / `installation-guide.md`、`docs/deployment/production-guide.md`、`docs/tutorials/plugin-development-tutorial.md` §2.8（插件开发 Skill 的 GitHub 与 Gitee 安装命令、离线兜底）、`docs/agent/agent-handbook.md`（Agent 侧仓库与镜像事实表）、`.github/ISSUE_TEMPLATE/config.yml`（Gitee Issue 通道）；
 - **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main --tags` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。镜像快进为**维护者专属动作**（需 Gitee 写权限），普通贡献者只需在 GitHub 提 Issue / PR；文档同时给出 `git remote add gitee ...` 的远端配置步骤，避免全新克隆的工作副本执行 `git push gitee main` 时报 `does not appear to be a git repository`。
+
+### Fixes
+
+- **权限清单单一权威来源（平台 Issue #368）落到契约层**：`docs/agent/contracts/capabilities.json` 新增 **`declarable`** 字段（= `packages/core/capability/catalog.ts` 的 `CAP` 全量取值，也就是 SDK 的 `CAPABILITIES`，**31** 条），由 `audit-tools/agent_facts.py` 从源码抽取。缺了这份清单，插件作者与 L0 静态检查只能猜「哪些串能写进 `capabilitiesProposed`」，于是把真实的方法型权限（`student-data:write` / `task:register` / `grades:write` …）误判为「捏造串」并删掉——真实事故：4 个插件的 `pointsLedger.addPoints` 全部失效（平台 Issue #368）。
+- **`docs/reference/plugin-capability-matrix.md` 补全方法级权限**：此前只列了资源型 19 条 + 仅可声明 3 条，漏掉方法级 8 条与平台内部 1 条（`segment:gate_eval`），而 `assertValidManifestCapabilities` 的报错文案恰恰把本页当作「合法值来源」——用户按提示去查会查不到自己写的那一条。同时修正两处口径错误：`ai:invoke` 被写成「不是 RBAC 字符串」（它**是**真实权限串，同时属于第 2 套 `RuntimePermission`）、统计口径里的「20 个 `capabilityRequired`」（真值是 **19**，第 20 个来自 SDK `.d.ts` 的 JSDoc 注释而非真声明）。
+- **AI 手册基线漂移可被门禁发现**：`docs/agent/agent-handbook.md` 顶部的版本表此前写着平台 `0.7.8`，而契约 `versions.json` 是 `0.7.11`——因为前者是纯文本、没有任何校验。现已对齐到 `0.7.11`，并让 `agent_facts.py --check` **一并校验该表与源码一致**（此前只有 `versions.json` 被校验），避免同类漂移再次静默发生。
 
 ## [0.7.11] - 2026-11-03
 
