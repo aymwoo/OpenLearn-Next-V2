@@ -16,7 +16,6 @@
  */
 
 import { FrontendServiceRegistry } from './service-registry';
-import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore, appStore } from '../store/appStore';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
@@ -297,8 +296,6 @@ export class FrontendPluginHost {
   private sourceCodes = new Map<string, string>();
   private pluginModules = new Map<string, PluginModule>();
   private moduleLoader: ModuleLoader;
-  /** BrowserWorkerManager for worker-mode plugin execution. */
-  private workerManager: BrowserWorkerManager | null = null;
   private dispatcher: IHostActionDispatcher = defaultHostActionDispatcher;
 
   /**
@@ -353,15 +350,6 @@ export class FrontendPluginHost {
   /** Sets a custom IHostActionDispatcher instance. */
   setDispatcher(dispatcher: IHostActionDispatcher): void {
     this.dispatcher = dispatcher;
-  }
-
-  /**
-   * Set the BrowserWorkerManager for worker-mode plugin execution.
-   * Mirrors backend PluginHost.setWorkerManager pattern.
-   * Must be called before activating any worker-mode plugins.
-   */
-  setWorkerManager(wm: BrowserWorkerManager): void {
-    this.workerManager = wm;
   }
 
   // ── Initialization ───────────────────────────────────────────────────
@@ -782,10 +770,6 @@ export class FrontendPluginHost {
       throw new Error(`Plugin not found: ${pluginId}`);
     }
 
-    if (pluginInfo.executionMode === 'worker') {
-      return this.activateWorkerPlugin(pluginId, pluginInfo);
-    }
-
     if (pluginInfo.executionMode !== 'inline') {
       throw new Error(`Unsupported execution mode for activation: ${pluginInfo.executionMode}`);
     }
@@ -834,78 +818,6 @@ export class FrontendPluginHost {
       resetPluginBreaker(pluginId);
       store.clearPluginError(pluginId);
       this.manifests.set(pluginId, manifest);
-    } catch (err) {
-      store.updatePluginState(pluginId, PluginState.ERROR);
-      // v0.7.0 熔断越权修复：保留 manifest 声明式贡献（服务端执行，与前端无关）
-      this.unregisterPluginResources(pluginId, { preserveManifestContributions: true });
-      store.setPluginError(pluginId, describeActivationError(err));
-      throw err;
-    }
-  }
-
-  /**
-   * Activate a plugin in worker execution mode via BrowserWorkerManager.
-   *
-   * Creates a Web Worker, loads the plugin inside it, and sets up
-   * the ServiceProxy RPC channel.
-   */
-  private async activateWorkerPlugin(pluginId: string, pluginInfo: FrontendPluginInfo): Promise<void> {
-    if (!this.workerManager) {
-      throw new Error(
-        `Cannot activate plugin "${pluginId}" in worker mode: BrowserWorkerManager not set. ` +
-          'Call setWorkerManager() first.',
-      );
-    }
-
-    const store = usePluginHostStore.getState();
-    const sourceCode = this.sourceCodes.get(pluginId);
-    if (!sourceCode) {
-      throw new Error(`No source code found for plugin: ${pluginId}`);
-    }
-
-    // Build manifest from source or stored data
-    // 关键：必须带上插件真实声明的 capabilitiesProposed ——
-    // ServiceHost 的 Security Barrier 2 按此判定（为空时只允许 get* 只读方法），
-    // BrowserWorkerManager.createWorker 也据此计算 Token 白名单。
-    // 缺失时安全回退为空数组（= 最严只读分支）。
-    const manifest: FrontendPluginManifest = {
-      id: pluginId,
-      name: pluginInfo.name,
-      version: pluginInfo.version,
-      capabilitiesProposed: Array.isArray(pluginInfo.capabilitiesProposed) ? [...pluginInfo.capabilitiesProposed] : [],
-    };
-
-    store.updatePluginState(pluginId, PluginState.ACTIVATING);
-
-    try {
-      // Resolve ISocketService for event forwarding if available
-      let socketService: ISocketService | undefined;
-      if (this.registry) {
-        try {
-          socketService = await this.registry.resolve<ISocketService>('@openlearn/frontend:ISocketService');
-        } catch {
-          // No socket service registered — event forwarding disabled
-        }
-      }
-
-      const { serviceHost } = await this.workerManager.createWorker(
-        pluginId,
-        manifest,
-        sourceCode,
-        FRONTEND_SERVICE_TOKENS,
-        socketService,
-      );
-
-      this.pluginModules.set(pluginId, {
-        manifest,
-        activate: async () => {}, // Already activated via Worker bootstrap
-        deactivate: async () => {
-          await this.workerManager!.terminateWorker(pluginId);
-        },
-      });
-
-      store.updatePluginState(pluginId, PluginState.ACTIVE);
-      store.clearPluginError(pluginId);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
       // v0.7.0 熔断越权修复：保留 manifest 声明式贡献（服务端执行，与前端无关）
@@ -1007,10 +919,7 @@ export class FrontendPluginHost {
       // 只有本地 installPlugin() 才会填 this.sourceCodes。所以必须先看 manifest
       // 缓存，inline 远程插件才不会掉进 activatePlugin() 抛的
       // "No source code found for plugin"（此前 retry 对 inline 远程插件 100% 失败）。
-      // worker 仍优先走 activatePlugin()，保持原有 Worker 激活语义不变。
-      if (pluginInfo.executionMode === 'worker') {
-        await this.activatePlugin(pluginId);
-      } else if (manifest) {
+      if (manifest) {
         await this.activateRemotePlugin(pluginId, manifest, { hasFrontend: pluginInfo.hasFrontend });
       } else if (pluginInfo.executionMode === 'inline') {
         await this.activatePlugin(pluginId);

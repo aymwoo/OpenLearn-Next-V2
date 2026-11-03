@@ -100,57 +100,6 @@ describe('Barrier 3 · 未列入策略的 Token 不在此处裁决', () => {
   });
 });
 
-describe('Barrier 顺序 · Barrier 1 优先于 Barrier 3', () => {
-  it('即使声明全部能力，未授权 Token 仍在 Barrier 1 被拒', async () => {
-    const { ServiceHost } = await import('../service-host');
-    const registry = {
-      resolve: async () => ({ get: () => 'ok', post: () => 'ok' }),
-    };
-    // 传入空白名单 → Barrier 1 对任何 token 都拒绝
-    const host = new ServiceHost(registry as never, 'plugin:test', ['*'], undefined, []);
-
-    const msgs: unknown[] = [];
-    await host.handleInvoke(
-      {
-        invokeId: '1',
-        token: FRONTEND_API_TOKEN,
-        method: 'post',
-        args: ['/api/plugins/x'],
-      } as never,
-      { postMessage: (m: unknown) => msgs.push(m) } as never,
-    );
-
-    const err = msgs[0] as { type: string; code?: string; message?: string };
-    expect(err.type).toBe('error');
-    // 报的是 Barrier 1 的措辞，而不是 Barrier 3 的
-    expect(err.message).toContain('not in worker allowedTokens');
-  });
-});
-
-describe('Barrier 顺序 · Barrier 2 先于 Barrier 3', () => {
-  it('未声明任何 capability 时，Barrier 2 先拦下写操作', async () => {
-    const { ServiceHost } = await import('../service-host');
-    const registry = { resolve: async () => ({ get: () => 'ok', post: () => 'ok' }) };
-    const host = new ServiceHost(
-      registry as never,
-      'plugin:test',
-      [], // 空 capabilities → Barrier 2 生效
-      undefined,
-      [FRONTEND_API_TOKEN],
-    );
-
-    const msgs: unknown[] = [];
-    await host.handleInvoke(
-      { invokeId: '1', token: FRONTEND_API_TOKEN, method: 'post', args: ['/api/lessons'] } as never,
-      { postMessage: (m: unknown) => msgs.push(m) } as never,
-    );
-
-    const err = msgs[0] as { type: string; message?: string };
-    expect(err.type).toBe('error');
-    expect(err.message).toContain('empty manifestCapabilities');
-  });
-});
-
 describe('Barrier 3 · 不可逆操作（形状规则）', () => {
   it('GDPR 数据抹除需 api:admin', () => {
     denied(checkMethodPolicy(FRONTEND_API_TOKEN, 'del', ['/api/students/u1/gdpr-delete'], [CAP_API_WRITE]));

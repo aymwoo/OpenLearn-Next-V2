@@ -9,7 +9,6 @@
 
 export * from './types';
 export * from './service-registry';
-export * from './allowed-tokens';
 export * from './method-policy';
 export * from './capabilities';
 export * from './plugin-host-store';
