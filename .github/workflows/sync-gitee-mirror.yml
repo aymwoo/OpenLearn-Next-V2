@@ -1,0 +1,101 @@
+name: Sync Gitee Mirror
+
+# 目的：把 GitHub 主仓的 main **单向**快进到 Gitee 镜像
+# （gitee.com/aymwoo/openlearn-next），让国内网络访问 GitHub 受限的开发者
+# 仍能克隆源码、提交 Issue。
+#
+# 三条铁律（与 AGENTS.md / docs/contributing/contributing.md 的口径一致）：
+#   ① **单向**：只从 GitHub 推往 Gitee，绝不反向；
+#   ② **只快进**：镜像的 main 必须是当前 HEAD 的祖先，否则**停止并报错**，
+#      绝不 force-push（否则会冲掉 GitHub 上的合并结果）；
+#   ③ **不阻塞主干**：token 缺失 / 网络不通 / 镜像分叉都只让本 job 失败，
+#      不影响主干的其它 CI（continue-on-error）。
+#
+# 一次性配置（仓库维护者做一次即可，缺 secret 时本 workflow 自动跳过）：
+#   1. 在 Gitee 生成「私人访问令牌」：设置 → 私人令牌 → 勾选 `projects` 权限；
+#   2. 在 GitHub 仓库添加两个 Secret：
+#        GITEE_USERNAME = Gitee 用户名（aymwoo）
+#        GITEE_TOKEN    = 上一步生成的令牌
+#   3. 本 workflow 会在每次 main 推送后自动同步；也可手动触发（workflow_dispatch）。
+#
+# 本地验证过的三种情形（2026-11-03）：
+#   · 镜像落后        → 正常快进，main 与 tag 同步；
+#   · 镜像分叉        → 退出码 1，镜像 SHA 未变（确认没有 force-push）；
+#   · 镜像无 main      → 首次同步成功，并带上全部 tag。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # 兜底：push 时的同步可能因网络抖动失败，每 6 小时补一次
+    - cron: '17 */6 * * *'
+
+concurrency:
+  group: gitee-mirror-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: 快进 Gitee 镜像
+    runs-on: ubuntu-latest
+    # 镜像同步是「尽力而为」：失败只体现在本 job，不影响主干 CI
+    continue-on-error: true
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_USER: ${{ secrets.GITEE_USERNAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要完整历史与 tag：快进判定要祖先关系，tag 同步要完整引用
+          fetch-depth: 0
+
+      - name: 准备远端与凭据
+        run: |
+          if [ -z "$GITEE_TOKEN" ] || [ -z "$GITEE_USER" ]; then
+            echo "SKIP_SYNC=1" >> "$GITHUB_ENV"
+            echo "::notice title=跳过镜像同步::未配置 GITEE_TOKEN / GITEE_USERNAME secret。镜像同步是可选项，未配置不影响主干 CI。配置方法见本文件头部注释。"
+            exit 0
+          fi
+          git remote add gitee https://gitee.com/aymwoo/openlearn-next.git
+          # 用 extraheader 传凭据，避免把 token 写进 .git/config
+          echo "GITEE_AUTH=$(printf '%s' "$GITEE_USER:$GITEE_TOKEN" | base64 -w0)" >> "$GITHUB_ENV"
+
+      - name: 快进 main 与 tag
+        if: env.SKIP_SYNC != '1'
+        env:
+          EXPECTED: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: Basic $GITEE_AUTH"
+          git -c http.extraheader="$auth" fetch gitee --tags --prune --force
+
+          # 铁律 ②：只快进。镜像的 main 必须是当前 HEAD 的祖先，否则停下来交给人。
+          if git rev-parse --verify --quiet gitee/main >/dev/null; then
+            if ! git merge-base --is-ancestor gitee/main HEAD; then
+              echo "::error title=镜像分叉，已停止同步::Gitee 镜像的 main 不是当前 HEAD 的祖先（镜像可能被改写或回退）。已停止，**绝不 force-push**。请人工核对 gitee.com/aymwoo/openlearn-next 的历史后再决定如何处理。"
+              exit 1
+            fi
+          fi
+
+          git -c http.extraheader="$auth" push gitee HEAD:main
+          git -c http.extraheader="$auth" push gitee --tags
+          echo "✅ 已推送 $(git rev-parse --short HEAD)"
+
+      - name: 复核镜像 HEAD
+        if: env.SKIP_SYNC != '1'
+        env:
+          EXPECTED: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: Basic $GITEE_AUTH"
+          # 回读远端，确认镜像真的落在预期提交上（push 成功但落错分支的情况要被发现）
+          actual="$(git -c http.extraheader="$auth" ls-remote gitee refs/heads/main | cut -f1)"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error title=镜像未对齐::期望 $EXPECTED，实际 $actual"
+            exit 1
+          fi
+          echo "✅ 镜像 main = ${actual:0:7}（与 GitHub main 一致）"

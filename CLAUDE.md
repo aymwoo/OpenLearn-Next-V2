@@ -189,7 +189,8 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 > 🔁 **仓库双平台**：主仓 [GitHub](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [Gitee](https://gitee.com/aymwoo/openlearn-next)（国内访问 GitHub 受限时用于克隆与提 Issue）。
 > 镜像由 GitHub **单向同步**（不跑 CI、不发 Release）；**一个变更只在一个平台开一份 Issue / PR**；**禁止在 Gitee 侧开启自动双向镜像**。
 >
-> **镜像快进由维护者执行**（需 Gitee 写权限），普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可：
+> **镜像快进已自动化**（`.github/workflows/sync-gitee-mirror.yml`：单向、只快进，分叉即停），普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可。
+> 手动兜底：
 >
 > ```bash
 > git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过

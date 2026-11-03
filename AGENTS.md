@@ -80,7 +80,11 @@ All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Cop
 >
 > 镜像由 GitHub **单向同步**（绝不 force-push）。规则：**一个变更只在一个平台开一份 Issue / PR**（不要两边各提一份）；**禁止在 Gitee 侧开启自动双向镜像**（会覆盖分支 / 标签 / 提交，冲掉 GitHub 上的 PR 合并结果）；issue / PR 编号不跨平台复用（GitHub 是整数，Gitee issue 是 `I...` 字符串）。
 >
-> **镜像快进是维护者专属动作**（需要 Gitee 仓库写权限）。普通贡献者 / Agent 只管在 GitHub 提 Issue 与 PR —— 镜像里的内容由维护者同步，不需要你做任何操作。维护者在 PR 合并后执行：
+> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 在每次 `main` 推送后自动快进镜像（单向、只快进；发现分叉就停下，**绝不 force-push**）。普通贡献者 / Agent 只管在 GitHub 提 Issue 与 PR，**不需要你做任何镜像相关操作**。
+>
+> 维护者只需一次性配置 Secret：`GITEE_USERNAME` + `GITEE_TOKEN`（Gitee → 设置 → 私人令牌 → 勾 `projects`）。未配置时该 workflow 自动跳过，不影响主干 CI。
+>
+> 自动同步失败 / 需手动兜底时：
 >
 > ```bash
 > # 从 GitHub 克隆的仓库：origin=GitHub，需要先把镜像加成第二个远端

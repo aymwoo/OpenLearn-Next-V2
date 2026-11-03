@@ -42,6 +42,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`docs/reference/plugin-capability-matrix.md` 补全方法级权限**：此前只列了资源型 19 条 + 仅可声明 3 条，漏掉方法级 8 条与平台内部 1 条（`segment:gate_eval`），而 `assertValidManifestCapabilities` 的报错文案恰恰把本页当作「合法值来源」——用户按提示去查会查不到自己写的那一条。同时修正两处口径错误：`ai:invoke` 被写成「不是 RBAC 字符串」（它**是**真实权限串，同时属于第 2 套 `RuntimePermission`）、统计口径里的「20 个 `capabilityRequired`」（真值是 **19**，第 20 个来自 SDK `.d.ts` 的 JSDoc 注释而非真声明）。
 - **AI 手册基线漂移可被门禁发现**：`docs/agent/agent-handbook.md` 顶部的版本表此前写着平台 `0.7.8`，而契约 `versions.json` 是 `0.7.11`——因为前者是纯文本、没有任何校验。现已对齐到 `0.7.11`，并让 `agent_facts.py --check` **一并校验该表与源码一致**（此前只有 `versions.json` 被校验），避免同类漂移再次静默发生。
 
+### Features
+
+- **Gitee 镜像同步自动化**（`.github/workflows/sync-gitee-mirror.yml`）：此前文档要求维护者在每次合并后手工执行 `git remote add gitee` + `git push gitee main --tags` —— 一次疏忽就断链，而「镜像过期」对国内开发者是隐形故障（他们看到的是旧文档、旧契约）。现改为 GitHub Actions 自动同步，三条约束写进 workflow：
+  - **单向**：只从 GitHub 推往 Gitee，绝不反向；
+  - **只快进**：推送前用 `git merge-base --is-ancestor gitee/main HEAD` 判定，镜像分叉就**停下并报错，绝不 force-push**（否则会冲掉 GitHub 上的合并结果）；
+  - **不阻塞主干**：`continue-on-error` + 未配 Secret 时自动跳过，镜像同步失败不会拖红无关 PR。
+
+  推送后还会**回读远端**比对 `refs/heads/main` 与本次提交 SHA，避免「push 成功但没落到 main」的假成功。触发时机：`main` 推送 + 每 6 小时兑底 + 手动 `workflow_dispatch`。
+
+  本地已用临时裸仓库模拟过四种情形：镜像落后 → 快进成功；镜像分叉 → 退出码 1 且镜像 SHA 未变；镜像无 `main` → 首次同步并带上全部 tag；回读校验 → 正确 SHA 通过、错误 SHA 报错。
+
 ## [0.7.11] - 2026-11-03
 
 ### Governance
