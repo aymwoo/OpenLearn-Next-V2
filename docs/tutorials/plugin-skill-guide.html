@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>OpenLearn 插件开发 Skill 使用指南 · 第三方插件从零到课堂落地</title>
+    <title>OpenLearn V2 插件开发手册 · 如何使用 AI Skill 辅助开发</title>
     <style>
       @page {
         size: 210mm 297mm;
@@ -14,7 +14,7 @@
         padding: 0;
         width: 210mm;
         background: #0f2233;
-        font-family: 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', sans-serif;
+        font-family: 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
         color: #1e293b;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -51,46 +51,46 @@
         font-weight: 700;
       }
       h2 {
-        font-size: 15.5pt;
+        font-size: 15pt;
         color: #0f2233;
-        margin: 0 0 4mm 0;
+        margin: 0 0 3.5mm 0;
         padding-left: 3.5mm;
         border-left: 3.5pt solid #1f6f54;
         line-height: 1.3;
       }
       h3 {
-        font-size: 11pt;
+        font-size: 10.8pt;
         color: #134e35;
-        margin: 3.6mm 0 1.6mm 0;
+        margin: 3.2mm 0 1.5mm 0;
       }
       h4 {
-        font-size: 9.8pt;
+        font-size: 9.6pt;
         color: #134e35;
-        margin: 3mm 0 1.2mm 0;
+        margin: 2.5mm 0 1mm 0;
       }
       p,
       li {
-        font-size: 9.3pt;
-        line-height: 1.65;
-        margin: 0 0 1.8mm 0;
+        font-size: 9.2pt;
+        line-height: 1.62;
+        margin: 0 0 1.6mm 0;
       }
       ul,
       ol {
         margin: 0 0 2mm 0;
-        padding-left: 6mm;
+        padding-left: 5.5mm;
       }
       li {
-        margin-bottom: 1.2mm;
+        margin-bottom: 1mm;
       }
       strong {
         color: #0f2233;
       }
       code {
         font-family: 'WenQuanYi Micro Hei Mono', 'DejaVu Sans Mono', monospace;
-        font-size: 8.4pt;
+        font-size: 8.3pt;
         background: #e8eef2;
         color: #0f3a2c;
-        padding: 0.4mm 1.4mm;
+        padding: 0.3mm 1.3mm;
         border-radius: 2px;
       }
       .codeblock {
@@ -99,16 +99,17 @@
         line-height: 1.45;
         background: #0f2233;
         color: #dbe9e2;
-        border-radius: 2.6mm;
+        border-radius: 2.4mm;
         padding: 2.4mm 3.4mm;
-        margin: 1.6mm 0 2.4mm 0;
+        margin: 1.5mm 0 2.2mm 0;
         white-space: pre-wrap;
         word-break: break-word;
         break-inside: avoid;
       }
       .codeblock.tight {
-        font-size: 7.4pt;
+        font-size: 7.5pt;
         line-height: 1.38;
+        padding: 2mm 3mm;
       }
       .codeblock .ok {
         color: #5fd3a6;
@@ -120,13 +121,17 @@
         color: #7fa391;
       }
       .codeblock .cmt {
-        color: #6f8ea0;
+        color: #7fa391;
         font-style: italic;
+      }
+      .codeblock .usr {
+        color: #7dd3fc;
+        font-weight: 700;
       }
       table {
         width: 100%;
         border-collapse: collapse;
-        margin: 1.6mm 0 2.8mm 0;
+        margin: 1.5mm 0 2.5mm 0;
         font-size: 8.5pt;
         break-inside: avoid;
       }
@@ -134,13 +139,13 @@
         background: #134e35;
         color: #ffffff;
         font-weight: 600;
-        padding: 1.5mm 2mm;
+        padding: 1.5mm 2.2mm;
         text-align: left;
-        line-height: 1.4;
+        line-height: 1.38;
       }
       td {
         border-bottom: 0.4pt solid #d6dfe6;
-        padding: 1.3mm 2mm;
+        padding: 1.3mm 2.2mm;
         line-height: 1.42;
         vertical-align: top;
       }
@@ -152,7 +157,7 @@
         border-left: 3pt solid #1f6f54;
         border-radius: 0 2mm 2mm 0;
         padding: 2mm 3.4mm;
-        margin: 1.8mm 0 2.6mm 0;
+        margin: 1.6mm 0 2.2mm 0;
         break-inside: avoid;
       }
       .callout.warn {
@@ -165,13 +170,15 @@
       }
       .callout p {
         margin: 0;
-        font-size: 9.4pt;
+        font-size: 9pt;
+        line-height: 1.55;
       }
       .callout .ct {
         font-weight: 700;
         color: #134e35;
         display: block;
-        margin-bottom: 1mm;
+        margin-bottom: 0.8mm;
+        font-size: 9.2pt;
       }
       .callout.warn .ct {
         color: #8a5410;
@@ -187,6 +194,7 @@
         padding: 0;
         display: block;
         position: relative;
+        overflow: hidden;
       }
       .cover-inner {
         position: absolute;
@@ -196,71 +204,71 @@
       }
       .cover .kicker {
         font-size: 11pt;
-        letter-spacing: 5pt;
-        color: rgba(242, 247, 245, 0.65);
-        margin-top: 26mm;
+        letter-spacing: 4pt;
+        color: rgba(242, 247, 245, 0.68);
+        margin-top: 22mm;
       }
       .cover .hero {
-        font-size: 31pt;
+        font-size: 30pt;
         font-weight: 700;
-        line-height: 1.38;
-        margin: 10mm 0 0 0;
-        max-width: 160mm;
+        line-height: 1.36;
+        margin: 9mm 0 0 0;
+        max-width: 165mm;
       }
       .cover .hero-rule {
         width: 38mm;
         height: 1.2mm;
         background: #2e9e77;
-        margin: 9mm 0 0 0;
+        margin: 8mm 0 0 0;
       }
       .cover .summary {
-        font-size: 11.5pt;
-        line-height: 1.85;
-        color: rgba(242, 247, 245, 0.85);
-        max-width: 152mm;
-        margin-top: 10mm;
+        font-size: 11pt;
+        line-height: 1.82;
+        color: rgba(242, 247, 245, 0.88);
+        max-width: 158mm;
+        margin-top: 9mm;
       }
       .cover .meta {
-        font-size: 10.5pt;
-        color: rgba(242, 247, 245, 0.6);
-        line-height: 2;
-        margin-top: 10mm;
+        font-size: 10pt;
+        color: rgba(242, 247, 245, 0.65);
+        line-height: 1.9;
+        margin-top: 8mm;
       }
       .cover .toc-card {
         position: absolute;
-        bottom: 18mm;
+        bottom: 16mm;
         left: 18mm;
         right: 18mm;
         background: rgba(255, 255, 255, 0.06);
-        border: 0.5pt solid rgba(255, 255, 255, 0.14);
+        border: 0.5pt solid rgba(255, 255, 255, 0.15);
         border-radius: 3mm;
-        padding: 6mm 8mm;
+        padding: 5.5mm 8mm;
       }
       .cover .toc-card h3 {
         color: #9fd8c2;
-        font-size: 10.5pt;
+        font-size: 10.2pt;
         letter-spacing: 2pt;
-        margin: 0 0 3mm 0;
+        margin: 0 0 2.5mm 0;
       }
       .cover .toc-card ol {
         margin: 0;
         padding-left: 6mm;
         columns: 2;
-        column-gap: 12mm;
+        column-gap: 10mm;
       }
       .cover .toc-card li {
-        font-size: 9.6pt;
-        color: rgba(242, 247, 245, 0.9);
-        line-height: 1.85;
+        font-size: 9.2pt;
+        color: rgba(242, 247, 245, 0.92);
+        line-height: 1.8;
         break-inside: avoid;
       }
       .cover-watermark {
         position: absolute;
         right: -6mm;
         bottom: 56mm;
-        font-size: 76pt;
+        font-size: 72pt;
         font-weight: 700;
-        color: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.045);
         transform: rotate(-90deg);
         transform-origin: right bottom;
         white-space: nowrap;
@@ -272,11 +280,11 @@
         break-inside: avoid;
       }
       figure.fig-sm img {
-        width: 84%;
+        width: 82%;
         margin: 0 auto;
       }
       figure.fig-xs img {
-        width: 74%;
+        width: 72%;
         margin: 0 auto;
       }
       figure img {
@@ -286,21 +294,21 @@
         border-radius: 2mm;
       }
       figcaption {
-        font-size: 8pt;
-        color: #64748b;
-        margin-top: 1.4mm;
-        line-height: 1.55;
+        font-size: 8.1pt;
+        color: #475569;
+        margin-top: 1.3mm;
+        line-height: 1.5;
       }
       figcaption b {
         color: #134e35;
       }
 
-      /* ---------- flow ---------- */
+      /* ---------- flow & steps ---------- */
       .flow {
         display: flex;
         flex-wrap: wrap;
         gap: 2mm;
-        margin: 3mm 0 4mm 0;
+        margin: 2mm 0 3mm 0;
         break-inside: avoid;
       }
       .flow .fitem {
@@ -313,63 +321,64 @@
       }
       .flow .fitem .ft {
         font-weight: 700;
-        font-size: 9pt;
+        font-size: 8.9pt;
         color: #0f2233;
-        margin-bottom: 0.8mm;
+        margin-bottom: 0.6mm;
       }
       .flow .fitem .fd {
-        font-size: 8.1pt;
+        font-size: 8pt;
         color: #475569;
-        line-height: 1.55;
+        line-height: 1.5;
       }
       .flow .fitem .fn {
         display: inline-block;
-        font-size: 8pt;
+        font-size: 7.5pt;
         background: #1f6f54;
         color: #fff;
-        border-radius: 2mm;
-        padding: 0.3mm 1.6mm;
-        margin-bottom: 1.2mm;
+        border-radius: 1.5mm;
+        padding: 0.2mm 1.5mm;
+        margin-bottom: 1mm;
       }
       .step {
         display: flex;
-        gap: 4mm;
-        margin: 3mm 0 1mm 0;
+        gap: 3.5mm;
+        margin: 2mm 0 1.5mm 0;
+        break-inside: avoid;
       }
       .step .num {
         flex: 0 0 auto;
-        width: 7mm;
-        height: 7mm;
+        width: 6.5mm;
+        height: 6.5mm;
         border-radius: 50%;
         background: #1f6f54;
         color: #fff;
-        font-size: 10pt;
+        font-size: 9.2pt;
         font-weight: 700;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0.8mm;
+        margin-top: 0.5mm;
       }
       .step .body {
         flex: 1;
       }
       .step .body p {
-        margin-bottom: 1.5mm;
+        margin-bottom: 1.2mm;
       }
       .spacer {
         flex: 1;
       }
       .sec-label {
-        font-size: 8.5pt;
-        letter-spacing: 2.5pt;
+        font-size: 8.2pt;
+        letter-spacing: 2.2pt;
         color: #6b8a7c;
         font-weight: 700;
-        margin-bottom: 2mm;
+        margin-bottom: 1.5mm;
       }
       .kpi {
         display: flex;
-        gap: 3mm;
-        margin: 3mm 0 4mm 0;
+        gap: 2.8mm;
+        margin: 2mm 0 3mm 0;
       }
       .kpi .k {
         flex: 1;
@@ -379,16 +388,16 @@
         padding: 2mm 2.4mm;
       }
       .kpi .k .kn {
-        font-size: 13.5pt;
+        font-size: 12.5pt;
         font-weight: 700;
         color: #1f6f54;
-        line-height: 1.1;
+        line-height: 1.15;
       }
       .kpi .k .kt {
         font-size: 8pt;
         color: #64748b;
         margin-top: 1mm;
-        line-height: 1.45;
+        line-height: 1.42;
       }
     </style>
   </head>
@@ -397,1228 +406,804 @@
     <div class="page cover">
       <div class="cover-watermark">PLUGIN SKILL</div>
       <div class="cover-inner">
-        <div class="kicker">OPENLEARN V2 · 第三方插件开发</div>
-        <div class="hero">用插件开发 Skill<br />写一个真正能上课的第三方插件</div>
+        <div class="kicker">OPENLEARN V2 · 插件开发手册</div>
+        <div class="hero">如何使用 AI Skill<br />零门槛开发课堂插件</div>
         <div class="hero-rule"></div>
         <div class="summary">
-          本手册把 <code>openlearn-next-plugin-dev</code> 这个 AI 插件开发技能， 拆成一条可复现的工程流水线：探活 →
-          判通道 → 生成骨架 → 写代码 → 测护栏 → 打包 → 安装 → 课堂验收。全文所有截图与终端输出，
-          都是在真实平台（openlearn-next v0.7.10）上跑出来的一个第三方插件 「课堂便签墙」的完整过程。
+          本手册专为<strong>使用 AI 编程助手开发 OpenLearn V2 插件的人</strong>编写。 平台的底层架构、Manifest
+          规范、沙箱通信契约与单元测试护栏，全部由 AI Agent 通过
+          <code>openlearn-next-plugin-dev</code> 技能自动掌握。你不需要手写代码，只需按照本手册：
+          <strong>装好 Skill → 跟 AI 聊清楚需求 → 拿到 ZIP 包上传后台 → 进课堂点开使用</strong>。
         </div>
         <div class="meta">
-          实测环境：openlearn-next v0.7.10 · @openlearn/plugin-sdk 3.8.0 · Node 22<br />
-          完整周期：约 45 分钟（含读文档）；首个可用插件约 20 分钟
+          适用环境：Node.js 22 本地运行（无需 Docker） · 支持 GitHub 主仓与 Gitee 国内镜像<br />
+          实测案例：「课堂便签墙」插件从一句话需求到课堂落地全流程（关键步骤步步配图）
         </div>
         <div class="toc-card">
           <h3>目录 CONTENTS</h3>
           <ol>
-            <li>Skill 是什么、能替你做什么</li>
-            <li>开工前的三件事（探活 / 基线 / 需求）</li>
-            <li>第 1 步：一键生成项目骨架</li>
-            <li>第 2 步：P0 门禁，判 UI 通道</li>
-            <li>第 3 步：写后端（manifest 与三件套）</li>
-            <li>第 4 步：写可见界面（沙箱 view）</li>
-            <li>第 5 步：铺测试护栏（L0–L3）</li>
-            <li>第 6 步：打包成可安装的 ZIP</li>
-            <li>第 7 步：后台上传与授权</li>
-            <li>第 8 步：课堂验收与交付清单</li>
-            <li>踩坑清单（4 个真实翻车点）</li>
-            <li>报错速查表与附录</li>
+            <li>人机分工：你做什么 vs AI 自动做什么</li>
+            <li>环境准备：启动平台与安装 Skill（双源 + 离线）</li>
+            <li>第 1 步：唤醒 Skill 与源码就绪确认</li>
+            <li>第 2 步：像做选择题一样确认需求（Grilling 问答）</li>
+            <li>第 3 步：AI 自动生成、自测与打包 ZIP</li>
+            <li>第 4 步：登录管理后台与启动安装向导（配图）</li>
+            <li>第 5 步：勾选两道权限防线与启用插件（配图）</li>
+            <li>第 6 步：在教师工作台打开并使用插件（配图）</li>
+            <li>第 7 步：在课堂白板中调用插件工具（配图）</li>
+            <li>第 8 步：开发者页签预览与装后一键自检（配图）</li>
+            <li>第 9 步：对话式改功能、平滑升级与卸载（配图）</li>
+            <li>第 10 步：遇到问题怎么让 AI 排障与全流程速查卡</li>
           </ol>
         </div>
       </div>
     </div>
 
-    <!-- ================= PAGE 2 : WHAT IS THE SKILL ================= -->
+    <!-- ================= PAGE 2 : HUMAN VS AI ================= -->
     <div class="page">
-      <div class="sec-label">SECTION 01</div>
-      <h2>一、这个 Skill 是什么，能替你做什么</h2>
+      <div class="sec-label">SECTION 01 · OVERVIEW</div>
+      <h2>一、人机分工：你做什么 vs AI 自动做什么</h2>
 
       <p>
-        <code>openlearn-next-plugin-dev</code> 是一个<strong>装在 AI 编程助手里的插件开发技能</strong>。 它不是
-        SDK，也不是模板集合，而是「开发 OpenLearn 第三方插件时该知道的一切」的知识包：
-        模板代码、探活脚本、契约静态检查器、故障归因速查表、以及一套踩坑清单。 典型用法是让 AI
-        助手加载这个技能后，按它的流程帮你把一个想法变成可安装的 ZIP。
+        传统插件开发需要开发者自己去读几万字的 API 文档、背权限字符串、研究沙箱桥接与打包结构。 而在装上
+        <code>openlearn-next-plugin-dev</code> 技能后，<strong
+          >所有底层原理与编码规则都由 AI Agent 自己去读取和遵守</strong
+        >， 你只需要扮演「产品经理 + 课堂验收人」的角色。
       </p>
 
       <div class="kpi">
         <div class="k">
-          <div class="kn">5</div>
-          <div class="kt">
-            套可生成的项目模板<br />server-only / full-stack / frontend-only / sandbox-view / inline-react
-          </div>
+          <div class="kn">0 行</div>
+          <div class="kt">你需要手写的底层代码<br />代码、配置、测试全部由 AI 生成</div>
         </div>
         <div class="k">
-          <div class="kn">4</div>
-          <div class="kt">层测试护栏<br />L0 静态契约 → L1 契约 → L2 冒烟 → L3 真实宿主</div>
+          <div class="kn">6 道单选题</div>
+          <div class="kt">需求梳理交互（Grilling）<br />AI 逐题提问，你只需回复 A / B / C</div>
         </div>
         <div class="k">
-          <div class="kn">9</div>
-          <div class="kt">个可执行脚本<br />生成 / 校验 / 打包 / 漂移检测 / 装后自检</div>
+          <div class="kn">1 个 ZIP 包</div>
+          <div class="kt">AI 交付的最终产物<br />自带静态校验与单元测试通过证明</div>
         </div>
         <div class="k">
-          <div class="kn">20+</div>
-          <div class="kt">份参考资料<br />manifest 字典、权限全集、桥接协议、故障归因</div>
+          <div class="kn">5 分钟</div>
+          <div class="kt">后台上传与课堂验收<br />点选上传、勾选授权、进课堂使用</div>
         </div>
       </div>
 
-      <h3>1.1 它替你挡掉的坑</h3>
+      <h3>1.1 清晰边界：哪些事归你操作，哪些事交给 AI？</h3>
       <table>
         <tr>
-          <th style="width: 34%">你本来会踩的坑</th>
-          <th>Skill 里的对应机制</th>
+          <th style="width: 24%">阶段</th>
+          <th style="width: 38%">你（人）需要做的操作</th>
+          <th>AI Agent（通过 Skill）在幕后自动完成的事</th>
         </tr>
         <tr>
-          <td>manifest 少写 <code>main</code>，插件装不上</td>
-          <td>L0 静态检查直接报 <code>MANIFEST_MAIN_MISSING</code></td>
+          <td><strong>① 准备阶段</strong></td>
+          <td>启动本地平台；用一行命令给 AI 助手装上 Skill</td>
+          <td>自动探活本地端口（如 9000）、核对平台与 SDK 版本、检查平台源码或启用离线快照</td>
         </tr>
         <tr>
-          <td>注册了 handler 却没注册 Action，点了没反应</td>
-          <td>L0「三件套配对」双向比对，缺一个就红</td>
+          <td><strong>② 需求阶段</strong></td>
+          <td>说出一句话教学想法；依次回答 AI 提出的单选题（选 A/B/C）</td>
+          <td>按 Grilling 决策树逐题引导，自动拦截不合规方案，生成 <code>plugin.contract.json</code> 设计契约</td>
         </tr>
         <tr>
-          <td>申请了权限但管理员没勾选，激活直接 500</td>
-          <td>L1 用 Proxy 复现隔离模式能力门禁，提前红</td>
+          <td><strong>③ 开发与打包</strong></td>
+          <td>回复一句「确认，开始生成并打包」，等待约 1～2 分钟</td>
+          <td>
+            选模板生成骨架、编写前后端代码、跑通 L0 静态检查与 L1/L2 单元测试、打包出含 <code>storage/**</code> 的
+            <code>.zip</code>
+          </td>
         </tr>
         <tr>
-          <td>ZIP 里漏了 <code>storage/</code>，页面 404 但不报错</td>
-          <td>打包脚本强制校验 + 装后自检脚本逐项核对</td>
+          <td><strong>④ 安装与授权</strong></td>
+          <td>登录后台「插件中心」→ 点「从 ZIP 安装」→ <strong>勾选两处权限确认框</strong></td>
+          <td>可选运行 <code>post-install-check.sh</code>，自动帮你核对数据库中插件激活状态与静态文件落盘</td>
         </tr>
         <tr>
-          <td>用错命令命名空间，报 <code>No handler registered</code></td>
-          <td>命名空间规则表 + 模板里前后端使用同一常量</td>
-        </tr>
-        <tr>
-          <td>中文正文 12px，投影上根本看不清</td>
-          <td>L0 <code>FONT_TOO_SMALL</code> 拦截（阈值 13px）</td>
+          <td><strong>⑤ 课堂验收</strong></td>
+          <td>在左侧「扩展应用」或课堂白板「互动工具」里点开试用</td>
+          <td>若你想改界面或遇到报错，把想法或报错粘给 AI，AI 自动归因、改代码、升版本号并重打新包</td>
         </tr>
       </table>
 
-      <h3>1.2 技能目录长什么样</h3>
-      <div class="codeblock">
-        <span class="cmt">~/.pi/agent/skills/openlearn-next-plugin-dev/</span> ├── SKILL.md
-        <span class="cmt">← 主流程：六步法 + 红线</span> ├── assets/
-        <span class="cmt">← 五套模板 + 测试护栏 + 缺陷报告模板</span> │ ├── server-only/ full-stack/ frontend-only/ │
-        ├── sandbox-view/ <span class="cmt">← 第三方插件拿自定义界面的推荐模板</span> │ ├── inline-react/
-        <span class="cmt">← 唯一可写 React 的模板（需宿主白名单）</span> │ └── test-harness/
-        <span class="cmt">← L0/L1/L2 测试护栏源码</span> ├── references/
-        <span class="cmt">← manifest 字典、权限全集、桥接协议、归因表</span> └── scripts/
-        <span class="cmt">← 可直接执行：生成 / 校验 / 打包 / 自检</span> ├── new-plugin.sh
-        <span class="cmt">← 一键生成项目骨架</span> ├── facts-check.sh
-        <span class="cmt">← 核对 skill 事实与平台源码是否漂移</span> ├── platform-drift-check.sh
-        <span class="cmt">← 平台事实漂移检测</span> ├── post-install-check.sh
-        <span class="cmt">← 装完之后的 10 项自检</span> └── verify-templates-build.sh
-        <span class="cmt">← 模板真实构建验证</span>
-      </div>
-
-      <div class="callout">
-        <span class="ct">一句话记住它的边界</span>
-        <p>
-          Skill 负责「第三方 ZIP 插件」的全流程；<strong>不负责</strong>平台本体开发（packages/core）、
-          宿主内置插件、插件市场运营与发布流程，也不覆盖插件前端的深度定制 （第三方没有自定义 React 组件通道，只有沙箱
-          <code>view</code>）。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>01</span></div>
-    </div>
-
-    <!-- ================= PAGE 3 : HOW TO TRIGGER ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 02</div>
-      <h2>二、怎么让 AI 助手用上这个 Skill</h2>
-
-      <h3>2.1 三种触发说法</h3>
-      <p>
-        Skill 是靠语义触发的，不需要记命令。下面任一句话都能让助手加载它 （<code>description</code> 里列出的关键词：开发
-        OpenLearn 插件、课堂工具、白屏、装不上…）。
-      </p>
-      <div class="codeblock">
-        <span class="cmt"># 说法一：直接开发</span>
-        "帮我用 OpenLearn 插件开发技能做一个课堂投票插件"
-
-        <span class="cmt"># 说法二：从零开始</span>
-        "我要开发一个第三方插件装到 OpenLearn 平台，请使用 openlearn-next-plugin-dev 技能"
-
-        <span class="cmt"># 说法三：排障（技能会自动切到归因模式）</span>
-        "我上传的插件装上了但面板空白，日志里报 No handler registered for command type ..."
-      </div>
-
-      <h3>2.2 助手的标准工作流（Skill 的六步法）</h3>
+      <h3>1.2 你只需走完这 6 步</h3>
       <div class="flow">
         <div class="fitem">
-          <div class="fn">STEP 1</div>
-          <div class="ft">探活 + 比对版本</div>
-          <div class="fd">确认平台版本、SDK 版本、端口、数据库、插件目录；跑 facts-check 看文档是否漂移。</div>
+          <div class="fn">你做 · 第 1 步</div>
+          <div class="ft">装好平台与 Skill</div>
+          <div class="fd">本地起好 9000 端口服务，把 Skill 装进 Claude Code / Antigravity / Cursor / pi。</div>
         </div>
         <div class="fitem">
-          <div class="fn">STEP 2</div>
-          <div class="ft">需求 + P0 门禁</div>
-          <div class="fd">判插件类型、谁会看、UI 通道、执行模式、权限、落成 plugin.contract.json。</div>
+          <div class="fn">你做 · 第 2 步</div>
+          <div class="ft">一句话唤醒 AI</div>
+          <div class="fd">告诉 AI 你想做什么课堂工具，首次运行时选 <code>[1]</code> 后台同步或快照模式。</div>
         </div>
         <div class="fitem">
-          <div class="fn">STEP 3</div>
-          <div class="ft">生成代码</div>
-          <div class="fd">选模板生成骨架，写 manifest 与业务逻辑，遵守 13 条编码护栏。</div>
+          <div class="fn">你做 · 第 3 步</div>
+          <div class="ft">回答几道单选题</div>
+          <div class="fd">告诉 AI 给老师用还是学生用、要不要存数据、要不要给课堂 AI 调用。</div>
         </div>
         <div class="fitem">
-          <div class="fn">STEP 4</div>
-          <div class="ft">构建 + 测试护栏</div>
-          <div class="fd">构建产物预检清单；铺 L0–L2 护栏，L0 必须 0 error。</div>
+          <div class="fn">AI 做 · 第 4 步</div>
+          <div class="ft">AI 生成并交出 ZIP</div>
+          <div class="fd">AI 自己写代码、跑护栏测试、打好 <code>.zip</code> 包，把文件路径交给你。</div>
         </div>
         <div class="fitem">
-          <div class="fn">STEP 5</div>
-          <div class="ft">安装 + 验证</div>
-          <div class="fd">后台上传、勾选授权、激活、跑 post-install-check、L3 课堂冒烟。</div>
+          <div class="fn">你做 · 第 5 步</div>
+          <div class="ft">后台上传与勾选授权</div>
+          <div class="fd">在插件中心上传 ZIP，在安装向导第 2 步和第 5 步勾上授权框。</div>
         </div>
         <div class="fitem">
-          <div class="fn">STEP 6</div>
-          <div class="ft">交付或归因</div>
-          <div class="fd">按交付格式汇报；报错先分「插件侧 / 系统侧」再决定是否提 Issue。</div>
+          <div class="fn">你做 · 第 6 步</div>
+          <div class="ft">进课堂点开使用</div>
+          <div class="fd">在教师端导航或课堂白板里直接使用；不满意就继续跟 AI 对话迭代。</div>
         </div>
       </div>
-
-      <h3>2.3 你要提供什么，助手才能一次做对</h3>
-      <table>
-        <tr>
-          <th style="width: 26%">你要说清</th>
-          <th style="width: 38%">示例</th>
-          <th>助手据此产出</th>
-        </tr>
-        <tr>
-          <td>给谁用</td>
-          <td>「教师在讲台上投，学生在座位上看」</td>
-          <td>决定槽位：<code>teacher.tab</code> + <code>student.view</code></td>
-        </tr>
-        <tr>
-          <td>要什么界面</td>
-          <td>「一个能点选项、能看到结果的页面」</td>
-          <td>通道判定：沙箱 <code>view</code>（HTML+桥接），而不是 React</td>
-        </tr>
-        <tr>
-          <td>要不要存数据</td>
-          <td>「投票结果要留下来，下次上课还能看」</td>
-          <td>插件类型：full-stack，建表 + 迁移</td>
-        </tr>
-        <tr>
-          <td>要不要 AI 参与</td>
-          <td>「老师说一句就能投」</td>
-          <td>注册 Action，让 AI Agent 可自然语言触发</td>
-        </tr>
-        <tr>
-          <td>目标宿主版本</td>
-          <td>「要能装到 0.7.10 的平台」</td>
-          <td><code>engines.openlearn</code> 取实际用到的 API 最低版本</td>
-        </tr>
-      </table>
-
-      <div class="callout warn">
-        <span class="ct">不要跳过的一句话</span>
-        <p>
-          直接对助手说「<strong>先别写代码，先帮我做 P0 门禁判定</strong>」。 UI 通道一旦判错（最常见：以为要写 React
-          就去要白名单），后面所有工作都是白做。 判据见第 4 页。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>02</span></div>
-    </div>
-
-    <!-- ================= PAGE 4 : STEP 0 LIVENESS ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 03</div>
-      <h2>三、开工前的三件事</h2>
-
-      <h3>3.1 第一件：探活（30 秒，别猜）</h3>
-      <p>
-        端口、数据库路径、插件目录这三样缺一样，后面所有排查都会变成猜。 下面这段命令就是 Skill
-        的标准探活脚本，直接粘给助手或自己跑：
-      </p>
-      <div class="codeblock">
-        PLATFORM="${PLATFORM_REPO:-$HOME/Develop/openlearnv2}" node -p "require('$PLATFORM/package.json').version"
-        <span class="cmt"># 平台版本</span> npm view @openlearn/plugin-sdk version
-        <span class="cmt"># SDK latest（生成代码以它为准）</span> ss -ltnp 2>/dev/null | grep -E ':(9000|3000|5173)\b'
-        <span class="cmt"># 真实端口</span> ls -1 "$PLATFORM"/packages/core/db/*.db 2>/dev/null
-        <span class="cmt"># 数据库</span> ls -d "$PLATFORM"/plugins/*/ 2>/dev/null | head
-        <span class="cmt"># 已安装插件目录</span> curl -s localhost:9000/health <span class="cmt"># 服务是否就绪</span>
-      </div>
-
-      <div class="codeblock">
-        <span class="dim">$</span> node -p "require('$PLATFORM/package.json').version"
-        <span class="ok">0.7.10</span>
-        <span class="dim">$</span> npm view @openlearn/plugin-sdk version
-        <span class="ok">3.8.0</span>
-        <span class="dim">$</span> curl -s localhost:9000/health {"status":"ok","uptime":36323,"version":"0.7.10"}
-      </div>
-
-      <div class="callout danger">
-        <span class="ct">实测提醒：Skill 里的版本基线已经滞后</span>
-        <p>
-          本机实测平台是 <strong>v0.7.10</strong>、npm 上 SDK 是 <strong>3.8.0</strong>， 而 Skill
-          正文里记录的基线仍写着「平台 0.7.7 / SDK 3.7.5」。 这正是 Skill 把「每次开工先探活」列为第一步的原因：
-          <strong>版本号不能用来判断行为变化</strong>，只能看源码与契约文件。 拿不准时以
-          <code>packages/core/</code>、<code>packages/plugin-sdk/</code> 的源码为准。
-        </p>
-      </div>
-
-      <h3>3.2 第二件：判断这件事是「写代码」还是「修 bug」</h3>
-      <table>
-        <tr>
-          <th style="width: 40%">你说的话</th>
-          <th>助手进入的模式</th>
-        </tr>
-        <tr>
-          <td>「帮我做一个 XX 插件」</td>
-          <td>模式 A：开发（第一～第五步）</td>
-        </tr>
-        <tr>
-          <td>「插件装了但面板空白 / 点了没反应 / 报这个错」</td>
-          <td>模式 A′：先归因（插件侧 / 系统侧 / 配置 / 产品边界），再决定动作</td>
-        </tr>
-        <tr>
-          <td>「帮我处理 GitHub issue #123」</td>
-          <td>模式 B：仓库协作（占位 → worktree → PR）</td>
-        </tr>
-      </table>
-
-      <h3>3.3 第三件：确认目标宿主</h3>
-      <p>
-        插件里 <code>engines.openlearn</code> 写的是<strong>宿主版本</strong>（不是 SDK 版本）， 而且要按「实际用到的
-        API 的最低版本」填，不要一律抄 <code>&gt;=0.2.5</code>：
-      </p>
-      <div class="codeblock">
-        <span class="cmt">// 速查（来自 references/manifest-0.7.md §11）</span> 只用 ctx.log / ctx.config →
-        engines.openlearn: '>=0.2.3' 用 ctx.http（api.routes） → engines.openlearn: '>=0.3.11' 用声明式 contributes /
-        沙箱 view → engines.openlearn: '>=0.7.0'
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>03</span></div>
-    </div>
-
-    <!-- ================= PAGE 5 : STEP 1 SCAFFOLD ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 04</div>
-      <h2>四、第 1 步：一键生成项目骨架</h2>
-
-      <p>
-        不要手敲目录结构，用 Skill 自带的生成脚本。它比官方 CLI 多做两件事： 把
-        <code>{{commandPrefix}}</code> 这类占位符也一并替换掉（官方 CLI 只替换一部分）， 并且拒绝覆盖非空目录。
-      </p>
-
-      <div class="codeblock">
-        bash ~/.pi/agent/skills/openlearn-next-plugin-dev/scripts/new-plugin.sh \ sandbox-view \
-        ~/Develop/openlearn-plugins/classroom-wall \ --id "@demo/classroom-wall" \ --name "课堂便签墙" \ --prefix "wall"
-        \ --description "教师在课堂中发布便签，学生端实时查看的课堂互动插件" \ --author "OpenLearn 社区"
-      </div>
-
-      <div class="codeblock">
-        <span class="ok">✔</span> 已生成 /home/wuxf/Develop/openlearn-plugins/classroom-wall（模板 sandbox-view）
-        pluginId @demo/classroom-wall commandPrefix wall view 文件 storage/*.html（安装器只解压 storage/**） 下一步： cd
-        /home/wuxf/Develop/openlearn-plugins/classroom-wall cp -r .../assets/test-harness ./test-harness && npm i npm
-        run pack <span class="cmt"># build + 补 storage/**</span> node test-harness/static-check.mjs .
-        <span class="cmt"># L0：先让它 0 error</span>
-      </div>
-
-      <h3>4.1 五套模板怎么选</h3>
-      <table>
-        <tr>
-          <th style="width: 20%">模板</th>
-          <th style="width: 30%">适用</th>
-          <th>关键特征</th>
-        </tr>
-        <tr>
-          <td><code>server-only</code></td>
-          <td>只要 AI 工具 / 后端逻辑，不要界面</td>
-          <td>最小骨架，manifest + activate</td>
-        </tr>
-        <tr>
-          <td><code>full-stack</code></td>
-          <td>要后端命令 + 数据库（多数课堂插件）</td>
-          <td>多一个 <code>frontend.tsx</code> 桥接入口与 contracts</td>
-        </tr>
-        <tr>
-          <td><code>frontend-only</code></td>
-          <td>只要轻量前端能力（存储 / 提示）</td>
-          <td>无后端命令，注意能力声明为空时的门禁</td>
-        </tr>
-        <tr>
-          <td><code>sandbox-view</code></td>
-          <td><strong>第三方插件要自定义界面（推荐）</strong></td>
-          <td>HTML 页面 + 宿主注入的桥接脚本，<strong>process 模式即可，不需要白名单</strong></td>
-        </tr>
-        <tr>
-          <td><code>inline-react</code></td>
-          <td>确实要写 React 组件（如白板画布卡片）</td>
-          <td>必须进宿主白名单，React 只能来自 <code>globalThis.HostSharedDeps</code></td>
-        </tr>
-      </table>
 
       <div class="callout">
-        <span class="ct">选模板的第一判据是执行模式，不是功能多少</span>
+        <span class="ct">阅读提示：本手册不讲底层代码</span>
         <p>
-          第三方 ZIP 默认跑在 <code>process</code> 沙箱：没有 DOM、没有 React、没有网络。 只要不写 React，<code
-            >sandbox-view</code
-          >
-          就够了；只有真要自定义 React 组件才需要 <code>inline-react</code>，并接受「必须进宿主白名单」这个前提。
+          你不需要去记 <code>ActionDescriptor</code>、<code>CommandBus</code> 或沙箱桥接函数怎么写——那是 Skill 教给 AI
+          Agent 的内容。 接下来每一章，我们只展示<strong>你在终端和浏览器里每一步具体怎么操作</strong>。
         </p>
       </div>
 
-      <h3>4.2 生成后的目录</h3>
-      <div class="codeblock">
-        classroom-wall/ ├── package.json <span class="cmt"># 依赖 @openlearn/plugin-sdk</span> ├── tsconfig.json
-        <span class="cmt"># 刻意不配 jsx（沙箱里没有 React）</span> ├── plugin.contract.json
-        <span class="cmt"># P0 门禁结论落盘，L0/L2 会校验</span> ├── scripts/pack.mjs
-        <span class="cmt"># 把 storage/** 补进官方 CLI 产出的 ZIP</span> ├── src/ │ ├── index.ts
-        <span class="cmt"># manifest + activate：后端逻辑</span> │ └── frontend.tsx
-        <span class="cmt"># 空桥接入口：让 CLI 产出 frontend.js</span> └── storage/{teacher,student}.html
-        <span class="cmt"># 教师端 / 学生端界面</span>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>04</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>01</span></div>
     </div>
 
-    <!-- ================= PAGE 6 : P0 GATE ================= -->
+    <!-- ================= PAGE 3 : SETUP ================= -->
     <div class="page">
-      <div class="sec-label">SECTION 05</div>
-      <h2>五、第 2 步：P0 门禁，判 UI 通道</h2>
+      <div class="sec-label">SECTION 02 · ENVIRONMENT SETUP</div>
+      <h2>二、环境准备：启动平台与安装 Skill（无需 Docker）</h2>
 
       <p>
-        写代码前必须回答五个问题。答错一个，后面全是返工。判据写在
-        <code>plugin.contract.json</code> 里，L0/L2 会强制校验， <strong>不要只在对话里口头约定</strong>。
+        首批开发与试用完全基于本地 <strong>Node.js 22</strong> 环境，<strong>不需要安装或配置 Docker</strong>。
+        同时，平台与 Skill 均已提供 <strong>GitHub 主仓 + Gitee 国内镜像</strong>双通道，国内网络也能顺畅拉取。
       </p>
 
-      <table>
-        <tr>
-          <th style="width: 30%">问题</th>
-          <th style="width: 34%">怎么判</th>
-          <th>判错的后果</th>
-        </tr>
-        <tr>
-          <td><strong>谁看？</strong></td>
-          <td>教师 / 学生 / 两者。学生可见时必须有 <code>student.*</code> 槽位或白板挂件</td>
-          <td>学生端永远空白</td>
-        </tr>
-        <tr>
-          <td><strong>要什么 UI？</strong></td>
-          <td>宿主可渲染的声明式组件 / 自定义页面（<code>view</code>）/ 自定义 React 组件</td>
-          <td>白屏，且没有任何报错</td>
-        </tr>
-        <tr>
-          <td><strong>执行模式？</strong></td>
-          <td>第三方 ZIP 默认 <code>process</code>；自定义 React 组件必须 <code>inline</code></td>
-          <td>process 里写 React → 激活即炸</td>
-        </tr>
-        <tr>
-          <td><strong>凭什么 inline？</strong></td>
-          <td>
-            只有「文件位于 <code>packages/plugins</code>」或「id 在 <code>OPENLEARN_TRUSTED_INLINE_PLUGINS</code>」
-          </td>
-          <td>以为 id 前缀带 <code>@openlearn/</code> 就能信任 → 被降级 process</td>
-        </tr>
-        <tr>
-          <td><strong>数据怎么到学生端？</strong></td>
-          <td>白板挂件必须派发 <code>whiteboard.draw(type:'plugin')</code></td>
-          <td>只 <code>return { opened: true }</code>，学生端什么都没有</td>
-        </tr>
-      </table>
+      <h3>2.1 启动本地 OpenLearn V2 平台（二选一）</h3>
 
-      <h3>5.1 通道选择表</h3>
-      <table>
-        <tr>
-          <th style="width: 36%">需要什么</th>
-          <th style="width: 38%">用什么通道</th>
-          <th>执行模式</th>
-        </tr>
-        <tr>
-          <td>教师按钮 / Tab / 命令面板条目</td>
-          <td><code>manifest.classroomTools</code> / <code>contributes</code></td>
-          <td>process 即可</td>
-        </tr>
-        <tr>
-          <td>前端读后端数据、弹提示</td>
-          <td>桥接 <code>invokeCommand</code> / <code>api.*</code> + 轮询</td>
-          <td>process 即可</td>
-        </tr>
-        <tr>
-          <td><strong>自定义界面（页面级）</strong></td>
-          <td><code>contributes.&lt;slot&gt;.view = 'storage/x.html'</code>（沙箱 iframe + 桥接）</td>
-          <td><strong>process 即可，无需白名单</strong></td>
-        </tr>
-        <tr>
-          <td>白板卡片（画布内 <code>type:'plugin'</code>）</td>
-          <td>
-            配 <code>view: 'storage/xxx.html'</code>（推荐）；或 <code>registerExtensionPoint({component})</code>（仅
-            inline）
-          </td>
-          <td>view 走 process / React 仅 inline</td>
-        </tr>
-        <tr>
-          <td>学生端浮层页面</td>
-          <td>优先 <code>view</code>，调 <code>bridge.ui.resize()</code> 自适应</td>
-          <td>process / inline</td>
-        </tr>
-      </table>
+      <div class="step">
+        <div class="num">A</div>
+        <div class="body">
+          <p><strong>方式 A：npx 一键启动（最快，不克隆源码也能装插件）</strong></p>
+          <p>只要电脑装有 Node.js（推荐 v22），在终端运行下面任一命令即可直接拉起完整平台：</p>
+          <div class="codeblock">
+            <span class="cmt"># 启动正式实例（默认访问 http://localhost:9000）</span>
+            npx openlearn-next@latest -o
 
-      <h3>5.2 本次实例的判定结果</h3>
-      <div class="codeblock">
-        { <span class="dim">"executionMode"</span>: <span class="ok">"process"</span>,
-        <span class="dim">"uiChannel"</span>: <span class="ok">"sandbox-view"</span>,
-        <span class="dim">"studentVisible"</span>: true, <span class="dim">"whiteboardWidget"</span>: false,
-        <span class="dim">"slots"</span>: [<span class="ok">"teacher.tab"</span>,
-        <span class="ok">"student.view"</span>], <span class="dim">"viewFiles"</span>: [<span class="ok"
-          >"storage/teacher.html"</span
-        >, <span class="ok">"storage/student.html"</span>] }
+            <span class="cmt"># 或：启动自带课程/班级/学生的演示实例（含演示教师账号 demo_teacher / Demo@2026）</span>
+            npx openlearn-next@latest --demo -o
+          </div>
+        </div>
       </div>
 
-      <div class="callout warn">
-        <span class="ct">浮层槽位的额外铁律</span>
+      <div class="step">
+        <div class="num">B</div>
+        <div class="body">
+          <p><strong>方式 B：克隆源码本地运行（适合长期开发，AI 可直接读取本地源码核对契约）</strong></p>
+          <div class="codeblock">
+            <span class="cmt"># ① 克隆仓库（GitHub 主仓；国内网络受限时直接用下方第 2 行的 Gitee 镜像，内容一致）</span>
+            git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
+            <span class="cmt"># git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2</span>
+
+            <span class="cmt"># ② 安装依赖并启动开发服（默认端口 9000；也可跑 pnpm dev:demo 启动带数据的演示服）</span>
+            cd OpenLearn-Next-V2 corepack enable &amp;&amp; corepack prepare pnpm@10.33.4 --activate pnpm install
+            &amp;&amp; cp .env.example .env pnpm dev
+          </div>
+        </div>
+      </div>
+
+      <h3>2.2 给你的 AI 编程助手安装插件开发 Skill（三种通道任选）</h3>
+      <p>
+        打开终端，根据你的网络情况选择以下任一方式，将 <code>openlearn-next-plugin-dev</code> 技能装入你的 AI 助手：
+      </p>
+
+      <div class="codeblock">
+        <span class="cmt"># 通道 ①：通过 skills.sh 官方注册表安装（能正常访问 GitHub 时使用）</span>
+        npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
+
+        <span class="cmt"># 通道 ②：国内网络首选 —— 直连 Gitee 镜像安装</span>
+        <span class="cmt"># 注意：必须写完整的 https://gitee.com/...git 地址，不要用简写（简写会默认连向 GitHub）</span>
+        npx skills add https://gitee.com/aymwoo/openlearn-skills.git
+
+        <span class="cmt"># 通道 ③：完全离线 / 手动拷贝兜底（100% 稳妥，不依赖 skills CLI）</span>
+        git clone https://gitee.com/aymwoo/openlearn-skills.git cp -r openlearn-skills/openlearn-next-plugin-dev
+        ~/.claude/skills/ <span class="cmt"># Claude Code 用户</span> cp -r openlearn-skills/openlearn-next-plugin-dev
+        ~/.pi/agent/skills/ <span class="cmt"># pi Agent 用户</span> cp -r openlearn-skills/openlearn-next-plugin-dev
+        ~/.gemini/antigravity-cli/skills/ <span class="cmt"># Antigravity 用户</span>
+      </div>
+
+      <div class="callout">
+        <span class="ct">怎么确认平台和 Skill 都准备好了？</span>
         <p>
-          <code>student.classroom.overlay</code> 上的 <code>view</code> 必须固定定位 （<code
-            >fixed right-4 bottom-4 z-50</code
-          >），<strong>严禁</strong> <code>w-full</code> / <code>h-full</code> / <code>flex-1</code>：它作为 Flex Item
-          会把白板挤成 0 宽， 现象是「插件面板正常、白板整块消失」。
+          ① 浏览器打开 <code>http://localhost:9000</code> 能看到登录页（或终端执行
+          <code>curl localhost:9000/health</code> 返回 <code>"status":"ok"</code>）；<br />
+          ② 你的 AI 助手 skills 目录下已经有了
+          <code>openlearn-next-plugin-dev/SKILL.md</code> 文件。满足这两条就可以开始跟 AI 对话了！
         </p>
       </div>
 
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>05</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>02</span></div>
     </div>
 
-    <!-- ================= PAGE 7 : BACKEND CODE ================= -->
+    <!-- ================= PAGE 4 : STEP 1 WAKE UP SKILL ================= -->
     <div class="page">
-      <div class="sec-label">SECTION 06</div>
-      <h2>六、第 3 步：写后端（manifest 与「三件套」）</h2>
+      <div class="sec-label">SECTION 03 · STEP 1: WAKE UP THE SKILL</div>
+      <h2>三、第 1 步：唤醒 Skill 与环境就绪确认</h2>
 
-      <h3>6.1 manifest：声明身份、版本、权限与入口</h3>
+      <h3>3.1 你该怎么对 AI 说第一句话？</h3>
+      <p>
+        不需要记任何特殊指令。只要你在与 AI Agent 的对话中提到「<strong>开发 OpenLearn 插件</strong
+        >」、「<strong>课堂工具</strong>」或说出技能名， AI 就会自动激活
+        <code>openlearn-next-plugin-dev</code> 技能。可以直接复制下面三种话术之一：
+      </p>
+
+      <div class="codeblock">
+        <span class="cmt"># 话术模板 1：做一个带教师端和学生端界面的互动插件（最常用）</span>
+        <span class="usr">你对 AI 说：</span>"请使用 openlearn-next-plugin-dev
+        技能，帮我开发一个「课堂便签墙」插件：老师可以在讲台发布便签，学生在自己的页面能实时看到本节课的便签列表。"
+
+        <span class="cmt"># 话术模板 2：做一个课堂白板工具栏上的轻量快捷工具</span>
+        <span class="usr">你对 AI 说：</span>"帮我用 OpenLearn
+        插件开发技能做一个「随机抽问点名」课堂工具，老师在白板工具栏点一下就能触发。"
+
+        <span class="cmt"># 话术模板 3：手里已有插件但遇到报错，让 AI 排查修复</span>
+        <span class="usr">你对 AI 说：</span>"我把插件上传到 OpenLearn
+        后面板显示空白，服务端日志报错如下：[粘贴日志]，请用插件开发技能帮我排查并修复。"
+      </div>
+
+      <h3>3.2 首次运行时，AI 会问你「平台源码怎么处理」—— 怎么选？</h3>
+      <p>
+        唤醒技能后，AI 在幕后做的第一件事是检查你电脑上有没有 OpenLearnV2 的平台源码（用来核对最新契约）。 如果你是用
+        <code>npx</code> 启动的平台、或者源码不在默认目录，AI 会在对话框里给你弹出下面 4 个选项：
+      </p>
+
+      <div class="codeblock">
+        <span class="ok">AI 助手提示你：</span>
+        💡 检测到本地尚未配置/下载 OpenLearnV2 平台源代码（推荐用于一手 API 与真实行为核对）。 请选择您的处置方式： 1.
+        [推荐] 空闲/后台下载：在后台异步浅克隆，当前会话立刻以「快照模式」继续开发，无需等待。 2.
+        立即前台浅克隆：快速同步下载当前主干后再继续（支持 GitHub 与 Gitee 镜像自动回退）。 3.
+        指定已有源码路径：若您已在其他目录克隆过仓库，请告诉我路径。 4. 暂不下载（快照模式）：仅依赖 Skill
+        自带的离线快照与 npm 最新版规则开发。
+
+        <span class="usr">你的操作：</span>直接回复 <span class="ok">"选 1"</span>（如果完全没网就回复
+        <span class="ok">"选 4"</span>；如果你按 2.1B 克隆了源码，直接把源码路径发给它）。
+      </div>
+
+      <h3>3.3 如果本地有源码且远端有更新，AI 会提示同步 —— 怎么选？</h3>
+      <div class="codeblock">
+        <span class="ok">AI 助手提示你：</span>
+        🔄 检测到 OpenLearnV2 平台源码有更新（来源: GitHub / Gitee 镜像）。是否需要更新本地平台代码？ 1. [推荐]
+        立即更新并复核契约 2. 稍后更新 / 本次跳过
+
+        <span class="usr">你的操作：</span>平时直接回复 <span class="ok">"选 1"</span> 让 AI
+        自动同步最新契约；如果你正在改一半不想动环境，回复 <span class="ok">"选 2"</span> 即可。
+      </div>
+
+      <div class="callout">
+        <span class="ct">幕后探活完全自动，无需你插手</span>
+        <p>
+          选完上面这一步后，AI 会自动运行探活命令，自己去确认你的平台跑在哪个端口（如
+          <code>9000</code>）、平台版本是多少（如 <code>0.7.11</code>）、SDK 版本是多少（如
+          <code>3.8.0</code>）。確認无误后，AI 就会进入下一步：向你提问确认插件细节。
+        </p>
+      </div>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>03</span></div>
+    </div>
+
+    <!-- ================= PAGE 5 : STEP 2 GRILLING ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 04 · STEP 2: INTERACTIVE REQUIREMENTS (GRILLING)</div>
+      <h2>四、第 2 步：像做选择题一样确认需求（Grilling 问答）</h2>
+
+      <p>
+        你不需要懂什么是「执行模式」、什么是「沙箱通道」。Skill 内置了 <strong>Grilling 交互式决策树协议</strong>： AI
+        不会一次性抛给你一堆专业术语，而是<strong>每次只问你 1 道单选题，并标出（推荐）选项</strong
+        >。你只需要回答字母即可。
+      </p>
+
+      <h3>4.1 真实对话实录：你只需要这样回答 A / B / C</h3>
+
       <div class="codeblock tight">
-        manifest: { <span class="dim">id</span>: <span class="ok">'@demo/classroom-wall'</span>,
-        <span class="cmt">// 全局唯一，作者的身份</span> <span class="dim">name</span>:
-        <span class="ok">'课堂便签墙'</span>, <span class="dim">version</span>: <span class="ok">'0.1.0'</span>,
-        <span class="dim">main</span>: <span class="ok">'index.js'</span>, <span class="cmt">// 必填！缺了装不上</span>
-        <span class="dim">engines</span>: { <span class="dim">openlearn</span>: <span class="ok">'>=0.7.0'</span> },
-        <span class="cmt">// 宿主版本，不是 SDK 版本</span> <span class="dim">requires</span>: [<span class="ok"
-          >'@openlearn/core:ICommandBusService@^1.0.0'</span
-        >, <span class="ok">'@openlearn/core:IActionRegistryService@^1.0.0'</span>,
-        <span class="ok">'@openlearn/core:IEventBusService@^1.0.0'</span>,
-        <span class="ok">'@openlearn/core:IDatabase@^1.0.0'</span>], <span class="cmt">// 按需声明</span>
-        <span class="dim">capabilitiesProposed</span>: [<span class="ok">'lesson:read'</span>,
-        <span class="ok">'lesson:write'</span>], <span class="dim">contributes</span>: {
-        <span class="dim">'teacher.tab'</span>: [{ <span class="dim">id</span>: <span class="ok">'wall-teacher'</span>,
-        <span class="dim">label</span>: <span class="ok">'课堂便签墙'</span>, <span class="dim">view</span>:
-        <span class="ok">'storage/teacher.html'</span> }], <span class="dim">'student.view'</span>: [{
-        <span class="dim">id</span>: <span class="ok">'wall-student'</span>, <span class="dim">label</span>:
-        <span class="ok">'课堂便签墙'</span>, <span class="dim">view</span>:
-        <span class="ok">'storage/student.html'</span> }], }, }
-      </div>
+        <span class="ok">【第 1 问 · 问受众】AI 问你：</span>
+        Q1：插件主要面向谁使用？解决什么课堂业务场景？ [A] (推荐) 师生互动型：教师发起/控制，学生端实时接收、互动或作答
+        [B] 教师专属工具：仅教师可见与操作（如备课辅助、课堂计时器控制台） [C]
+        学生专属工具：仅学生可见与使用（如随堂实验笔记、自测练习器） [D] 纯后台 / 系统能力：无界面，仅用于后台处理或给
+        AI 助手增加工具
+        <span class="usr">你回复：</span><span class="ok">A</span>
 
-      <div class="callout">
-        <span class="ct">capabilitiesProposed 是「申请」，不是「授予」</span>
-        <p>
-          第三方插件声明的能力只是申请清单。管理员在安装向导里<strong>勾选授予</strong>后， 平台才会把能力发给你；不勾 =
-          授予集合为空 = 激活期任何非 get 调用都会被拒 （<code>Capability denied … only 'get' methods allowed</code>）。
-        </p>
-      </div>
+        <span class="ok">【第 2 问 · 问数据】AI 问你：</span>
+        Q2：该插件是否需要把数据保存下来（例如下节课还能查看历史便签）？ [A] (推荐)
+        需要独立数据库持久化：新建专属数据表保存记录（关闭重启不丢失） [B] 仅需内存状态：只在当前课堂临时有效，无需建表
+        [C] 纯轻量前端小工具：不需要后端命令与数据库
+        <span class="usr">你回复：</span><span class="ok">A</span>
 
-      <h3>6.2 三件套：Action 描述符 + Handler + manifest 入口</h3>
-      <p>
-        内核对命令派发实行 <strong>default-deny</strong>：只有注册了 ActionDescriptor 的命令才会被派发。 每个
-        commandType 必须同时满足两件事，缺一即失败：
-      </p>
-      <div class="codeblock tight">
-        <span class="cmt">// ① ActionDescriptor：告诉内核「这个命令是干什么的、需要什么权限」</span>
-        await actionRegistry.register({
-        <span class="dim">id</span>: <span class="ok">'wall-add-note'</span>, <span class="dim">commandType</span>:
-        <span class="ok">'wall.add_note'</span>, <span class="dim">description</span>:
-        <span class="ok">'在便签墙新增一条便签'</span>, <span class="dim">capabilityRequired</span>:
-        <span class="ok">'lesson:write'</span>, <span class="dim">inputSchema</span>: { <span class="dim">type</span>:
-        <span class="ok">'OBJECT'</span>, <span class="dim">properties</span>: { <span class="dim">lessonId</span>: {
-        <span class="dim">type</span>: <span class="ok">'STRING'</span>, <span class="dim">description</span>:
-        <span class="ok">'课节 ID'</span> }, <span class="dim">text</span>: { <span class="dim">type</span>:
-        <span class="ok">'STRING'</span>, <span class="dim">description</span>: <span class="ok">'便签内容'</span> } },
-        <span class="dim">required</span>: [<span class="ok">'lessonId'</span>, <span class="ok">'text'</span>] }, });
+        <span class="ok">【第 3 问 · 问界面呈现】AI 问你：</span>
+        Q3：插件打算采用哪种方式在平台中呈现界面？ [A] (推荐) 双轨制沙箱页面
+        (sandbox-view)：拥有独立的自定义教师页与学生页，安全免白名单，开箱即用 [B]
+        宿主原生声明式按钮：只在工具栏放一个按钮，点击触发动作，不需要单独页面 [C]
+        白板互动卡片：直接投射在电子白板画布上的互动小挂件
+        <span class="usr">你回复：</span><span class="ok">A</span>
 
-        <span class="cmt">// ② Handler：必须是 { execute } 对象，不是裸函数</span>
-        await commandBus.registerHandler(<span class="ok">'wall.add_note'</span>, {
-        <span class="dim">async execute</span>(command) {
-        <span class="cmt">// process 沙箱里 prepare()/run()/all() 返回 Promise，inline 下是同步值 —— 一律 await</span>
-        const rawDb = await (ctx.resolve as any)(<span class="ok">'@openlearn/core:IDatabase'</span>); const notesTable
-        = ctx.db.table(<span class="ok">'notes'</span>); <span class="cmt">// 自动带表名前缀</span> await rawDb
-        .prepare(`INSERT INTO ${notesTable} (id, lesson_id, text, author, created_at) VALUES (?, ?, ?, ?, ?)`)
-        .run(row.id, row.lesson_id, row.text, row.author, row.created_at); return { <span class="dim">id</span>: row.id
-        }; }, });
-
-        <span class="cmt">// ③ manifest 入口：contributes / classroomTools 里引用的 commandType 必须与上面同名</span>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>06</span></div>
-    </div>
-
-    <!-- ================= PAGE 8 : FRONTEND VIEW ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 07</div>
-      <h2>七、第 4 步：写可见界面（沙箱 view）</h2>
-
-      <p>
-        第三方插件的自定义界面 = 一个 HTML 文件 + 宿主注入的桥接脚本。 宿主用不透明源 iframe 加载
-        <code>/plugins/&lt;id&gt;/storage/xxx.html</code>， 并注入 <code>/plugin-sandbox/view-bridge.js</code>，页面通过
-        <code>window.OpenLearnPluginBridge</code> 调命令、接口、存储与提示。
-      </p>
-
-      <div class="codeblock">
-        &lt;!-- storage/teacher.html --&gt; &lt;script src="/plugin-sandbox/view-bridge.js"&gt;&lt;/script&gt;
-        <span class="cmt">&lt;!-- 必须引，否则没有桥接 --&gt;</span>
-        &lt;script&gt; const bridge = window.OpenLearnPluginBridge; let lessonId = null;
-
-        <span class="cmt">// ① 取上下文：宿主动态下发 lessonId / lang 等</span>
-        bridge.onInit((ctx) =&gt; { lessonId = ctx.lessonId || null; refresh(); setInterval(refresh, 3000);
-        <span class="cmt">// 沙箱内无推送，只能轮询</span>
-        });
-
-        <span class="cmt">// ② 调后端命令：命令名必须与 registerHandler 的字符串完全一致</span>
-        async function refresh() { const res = await bridge.invokeCommand(<span class="ok">'wall.list_notes'</span>, {
-        lessonId }); notesEl.innerHTML = (res?.notes ?? []).map(n =&gt; `&lt;li&gt;${esc(n.text)}&lt;/li&gt;`).join('');
-        } async function send() { await bridge.invokeCommand(<span class="ok">'wall.add_note'</span>, { lessonId, text:
-        inputEl.value.trim() }); await refresh(); }
-
-        <span class="cmt">// ③ 高度自适应：宿主按这个值撑开容器</span>
-        new ResizeObserver(() =&gt; bridge.ui.resize(document.body.scrollHeight)).observe(document.body);
-        &lt;/script&gt;
-      </div>
-
-      <h3>7.1 命令命名空间：最容易翻车的一处</h3>
-      <p>
-        平台的统一规则是：<strong>凡是插件自己发出的命令，宿主都会用 <code>manifest.id</code> 加前缀</strong>。
-        所以「注册端」和「调用端」必须写<strong>同一个字符串</strong>：
-      </p>
-      <div class="codeblock">
-        <span class="cmt">// 注册端</span> commandBus.registerHandler(<span class="ok">'wall.list_notes'</span>, { ...
-        })
-        <span class="cmt">// → 宿主存成 @demo/classroom-wall.wall.list_notes</span>
-
-        <span class="cmt">// 调用端（沙箱页面）</span>
-        bridge.invokeCommand(<span class="ok">'wall.list_notes'</span>, { ... })
-        <span class="cmt">// → 解析成 @demo/classroom-wall.wall.list_notes ✅ 对上了</span>
-
-        <span class="cmt">// 如果调用端写成 'list_notes'</span>
-        bridge.invokeCommand(<span class="ok">'list_notes'</span>, { ... })
-        <span class="cmt">// → 解析成 @demo/classroom-wall.list_notes ✗ 404：No handler registered</span>
-      </div>
-
-      <div class="callout danger">
-        <span class="ct">本次实测踩到的坑</span>
-        <p>
-          Skill 自带的 <code>sandbox-view</code> 模板里，注册端写的是
-          <code>{{commandPrefix}}.list_notes</code>，而页面里却写成了 <code>'list_notes'</code>—— 两者不一致，直接导致
-          404。已修复模板：页面统一改成 <code>{{commandPrefix}}.list_notes</code>。
-          <strong>你自研插件时，请把命令名定义成单一常量，前后端共用。</strong>
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>07</span></div>
-    </div>
-
-    <!-- ================= PAGE 9 : FRONTEND VIEW 2 ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 07 · CONT.</div>
-      <h2>七（续）：沙箱里的硬约束</h2>
-
-      <table>
-        <tr>
-          <th style="width: 32%">不能做</th>
-          <th>原因与替代</th>
-        </tr>
-        <tr>
-          <td><code>import React</code> / <code>document.</code> / <code>window.</code>（在 frontend.tsx 里）</td>
-          <td>process 沙箱跑在隐藏 iframe，没有 DOM / React；要界面就写 <code>view</code> 页面</td>
-        </tr>
-        <tr>
-          <td><code>fetch()</code> / WebSocket</td>
-          <td>沙箱 CSP 是 <code>connect-src 'none'</code>；要走网络用后端 <code>ctx.http</code></td>
-        </tr>
-        <tr>
-          <td>期望宿主推送事件</td>
-          <td>宿主不往 iframe 推事件；实时同步靠轮询 <code>invokeCommand</code></td>
-        </tr>
-        <tr>
-          <td><code>alert()</code></td>
-          <td>用 <code>bridge.ui.showToast(msg,'error')</code></td>
-        </tr>
-        <tr>
-          <td>裸模块说明符（<code>from 'x'</code>）</td>
-          <td>SDK CLI 3.7.2+ 构建期直接失败；依赖必须打进 bundle</td>
-        </tr>
-        <tr>
-          <td>自己 bundle 一份 React 渲染宿主组件</td>
-          <td>会触发 <code>Invalid hook call</code>；React 只能来自 <code>globalThis.HostSharedDeps</code></td>
-        </tr>
-      </table>
-
-      <div class="callout">
-        <span class="ct">身份敏感请求不要走 invokeCommand</span>
-        <p>
-          沙箱命令通道强制使用「插件自己的 actor」，拿不到 <code>userId</code> / <code>role</code>。 要认人，走
-          <code>bridge.api.*</code> → <code>ctx.http</code>（服务端从 <code>req.actor</code> 取身份）。
-        </p>
-      </div>
-
-      <div class="sec-label">SECTION 08</div>
-      <h2>八、第 5 步：铺测试护栏（L0–L3）</h2>
-
-      <p>
-        平台的 default-deny、能力校验、沙箱边界只在运行期生效， 「能 build、能装上」≠「能用」。Skill
-        把这些坑做成了四层护栏，
-        <strong>L0 不过就不要进下一步</strong>。
-      </p>
-
-      <table>
-        <tr>
-          <th style="width: 12%">层</th>
-          <th style="width: 34%">手段</th>
-          <th style="width: 12%">耗时</th>
-          <th>抓什么</th>
-        </tr>
-        <tr>
-          <td><strong>L0</strong></td>
-          <td><code>node test-harness/static-check.mjs .</code></td>
-          <td>&lt;1s</td>
-          <td>manifest 必填项 / 权限串真伪 / 隔离模式空能力门禁 / 三件套配对 / UI 通道契约 / 裸导入 / 中文 13px</td>
-        </tr>
-        <tr>
-          <td><strong>L1</strong></td>
-          <td>vitest <code>contract.test.ts</code> + <code>view-smoke.test.ts</code></td>
-          <td>~0.3s</td>
-          <td>声明的入口与实际注册是否一致 / handler 形状 / activate 期间是否误调非 get RPC</td>
-        </tr>
-        <tr>
-          <td><strong>L2</strong></td>
-          <td>vitest <code>smoke.test.ts</code></td>
-          <td>~0.3s</td>
-          <td>重复激活状态泄漏 / 命令执行期 TypeError / 事件 payload 形状 / 停用未退订</td>
-        </tr>
-        <tr>
-          <td><strong>L3</strong></td>
-          <td>真实宿主机：上传 → 激活 → 点入口 → 停用</td>
-          <td>3–10min</td>
-          <td>Mock 与生产宿主的差异（能力审批 / process 沙箱 / 熔断 / 全限定命令名）</td>
-        </tr>
-      </table>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>08</span></div>
-    </div>
-
-    <!-- ================= PAGE 10 : TEST HARNESS ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 08 · CONT.</div>
-      <h3>8.1 铺设命令</h3>
-      <div class="codeblock">
-        cd ~/Develop/openlearn-plugins/classroom-wall cp -r
-        ~/.pi/agent/skills/openlearn-next-plugin-dev/assets/test-harness ./test-harness npm i -D vitest
-        @openlearn/plugin-test-kit better-sqlite3 uuid zod jsdom npm pkg set scripts.test:contract="node
-        test-harness/static-check.mjs ." \ scripts.test="vitest run --config test-harness/vitest.config.ts"
+        <span class="ok"
+          >【第 4 问 · 问权限与 AI 联动】AI 依次问你 Q5（所需权限）与 Q6（是否允许课堂 AI 助手一句话调用）：</span
+        >
+        <span class="usr">你回复：</span
+        ><span class="ok">直接选你推荐的默认项即可（需要数据库读写权限 + 允许课堂 AI 调用）</span>
       </div>
 
       <div class="callout warn">
-        <span class="ct">两个必装依赖与一个易错点</span>
+        <span class="ct">AI 的自动防呆保护：选错了也不用怕</span>
         <p>
-          <code>uuid</code> 与 <code>zod</code> 不是可选项：SDK 3.7.4 的 <code>dist/index.js</code> 引用了未声明的
-          <code>uuid</code>（<code>zod</code> 是 peerDep）， 不装会在
-          <code>import('@openlearn/plugin-sdk')</code> 时直接报 <code>Cannot find package 'uuid'</code>。<br />
-          另外 <code>cp -r</code> 到<strong>已存在</strong>的目录会套娃成
-          <code>test-harness/test-harness/</code>，测试会以「找不到 <code>../src/index.js</code>」失败。 复制前先
-          <code>rm -rf ./test-harness</code>。
+          如果你在对话里提出了一个平台安全机制不允许的做法（比如「我想在第三方 ZIP 插件里直接改宿主的 React
+          导航栏」或「直接改系统的学生表」）， AI 的 Skill
+          护栏会当场温和地拦住你，向你解释原因，并自动帮你切换到安全合规的<strong>沙箱页面（sandbox-view）</strong>方案。
         </p>
       </div>
 
-      <h3>8.2 实测输出</h3>
-      <div class="codeblock">
-        <span class="dim">$</span> npm run test:contract 【L0 契约静态检查】.
-        <span class="warn">⚠</span> [MANIFEST_SOURCE_ONLY] 未找到 manifest.json：按 src 源码推导
-        manifest（构建后再跑一次可获产物级校验） <span class="ok">✔</span> [CONTRACT_FOUND] 设计契约:
-        plugin.contract.json 结果：<span class="ok">0 error，1 warn</span>
+      <h3>4.2 问答结束：你看一眼汇总表，说一句「确认」</h3>
+      <p>答完几道题后，AI 会给你列出一张清晰的设计确认单：</p>
+      <table>
+        <tr>
+          <th style="width: 22%">确认项</th>
+          <th style="width: 34%">AI 为你选定的方案</th>
+          <th>对你的意义</th>
+        </tr>
+        <tr>
+          <td><strong>插件名称与 ID</strong></td>
+          <td>课堂便签墙（<code>@demo/classroom-wall</code>）</td>
+          <td>在插件中心与左侧菜单里显示的名字</td>
+        </tr>
+        <tr>
+          <td><strong>界面位置</strong></td>
+          <td>教师端左侧「扩展应用」+ 学生端课堂视图</td>
+          <td>老师和学生都能看到各自的专属页面</td>
+        </tr>
+        <tr>
+          <td><strong>申请的权限</strong></td>
+          <td>课程读取与写入（<code>lesson:read</code> / <code>lesson:write</code>）</td>
+          <td><strong>记住这两项：稍后上传安装时需要你打勾确认</strong></td>
+        </tr>
+      </table>
+      <p>你只需回复一句：<strong>「确认无误，请帮我生成代码、跑完测试并打包成 ZIP。」</strong></p>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>04</span></div>
+    </div>
+
+    <!-- ================= PAGE 6 : STEP 3 AI BUILD & PACK ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 05 · STEP 3: AI AUTO-BUILD &amp; VERIFY</div>
+      <h2>五、第 3 步：AI 自动生成、自测与打包 ZIP（你只需等结果）</h2>
+
+      <p>
+        当你回复「确认」后，接力棒就完全交给了 AI
+        Agent。在这个阶段，<strong>你不需要敲任何命令，也不需要去改任何代码文件</strong>。 AI 会严格按照 Skill
+        的工程流水线在后台自动完成以下 4 件事：
+      </p>
+
+      <div class="step">
+        <div class="num">1</div>
+        <div class="body">
+          <p>
+            <strong>自动调用脚手架生成标准工程</strong>：AI 自动运行 Skill 自带的
+            <code>new-plugin.sh</code>，在独立目录（如
+            <code>~/Develop/openlearn-plugins/classroom-wall</code>）下生成完整项目。
+          </p>
+        </div>
       </div>
 
+      <div class="step">
+        <div class="num">2</div>
+        <div class="body">
+          <p>
+            <strong>自动编写后端命令、数据库表与前端页面</strong>：AI 自动把便签的增删查改逻辑、课堂 AI
+            助手工具声明（三件套）以及教师端/学生端的网页界面全部写好，并确保中文字号在教室投影仪上清晰可读（≥13px）。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div class="body">
+          <p>
+            <strong>自动运行测试护栏（L0 静态契约 + L1/L2 单元测试）</strong>：AI
+            会自己跑检查器。如果它自己写漏了字段或配错了命令名，测试护栏会当场报错，<strong
+              >AI 会在后台自己修到全绿（0 error）为止</strong
+            >，不会把半成品交给你。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">4</div>
+        <div class="body">
+          <p>
+            <strong>自动打包出可安装的 <code>.zip</code> 分发包</strong>：AI
+            运行打包脚本，将后端代码与前端页面一起打成标准的 ZIP 包，并自动检查包内文件是否齐全。
+          </p>
+        </div>
+      </div>
+
+      <h3>5.1 AI 完工后交给你看的「交付成绩单」</h3>
+      <p>大约 1～2 分钟后，AI 会在对话框里向你汇报类似下面这样的结果。你只需要看懂标绿色的那三行：</p>
+
       <div class="codeblock">
-        <span class="dim">$</span> npm test Test Files <span class="ok">3 passed (3)</span> Tests
-        <span class="ok">21 passed</span> | 4 skipped (25) Duration 901ms
+        <span class="ok">AI 助手向你汇报：</span>
+        ✔ 插件「课堂便签墙」（@demo/classroom-wall v0.1.0）已开发并验证完毕！ 1. 【自动测试结果】 - L0
+        静态契约检查：<span class="ok">0 error（全部通过）</span> - L1 / L2 单元测试：<span class="ok"
+          >3 个测试文件 / 21 项断言全部通过 (passed)</span
+        >
+
+        2. 【安装包位置】（下一步上传就选这个文件！） 👉
+        <span class="ok"
+          >/home/wuxf/Develop/openlearn-plugins/classroom-wall/openlearn-plugin-classroom-wall-view.zip</span
+        >
+
+        3. 【你需要做的下一步操作】 请使用管理员账号登录 OpenLearn 后台 → 进入「插件中心」→ 点击「从 ZIP
+        安装」上传上述文件。 ⚠️
+        <span class="warn"
+          >重要提醒：在安装向导中，请务必勾选「信任此插件提供商」与「确认授予申请的能力（lesson:read,
+          lesson:write）」！</span
+        >
       </div>
 
       <div class="callout">
-        <span class="ct">反向验证护栏本身</span>
-        <p>护栏没红过，就等于没有护栏。养成习惯：故意删掉一个 ActionDescriptor， 确认 L0/L1 真的变红，再改回来。</p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>09</span></div>
-    </div>
-
-    <!-- ================= PAGE 11 : PACK ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 09</div>
-      <h2>九、第 6 步：打包成可安装的 ZIP</h2>
-
-      <p>
-        官方 CLI 只打三个文件（<code>manifest.json</code> / <code>index.js</code> / <code>frontend.js</code>），
-        <code>storage/**</code> 不会进包。而安装器<strong>只解压 <code>storage/</code> 前缀的条目</strong>， 于是 view
-        页面在安装后 404 —— 但构建期零报错，运行期也只有「面板空白」。 所以模板带了
-        <code>scripts/pack.mjs</code> 补这一步。
-      </p>
-
-      <div class="codeblock">
-        <span class="dim">$</span> npm run pack ℹ Building openlearn-plugin-classroom-wall-view... ✔ Bundled server +
-        frontend ✔ Packaged openlearn-plugin-classroom-wall-view.zip (21.2 KB) <span class="ok">✔</span> 已重打包
-        openlearn-plugin-classroom-wall-view.zip（5 个文件，其中 2 个在 storage/ 下）
-      </div>
-
-      <div class="codeblock">
-        <span class="dim">$</span> unzip -l openlearn-plugin-classroom-wall-view.zip Length Date Time Name 17665
-        2026-11-03 00:14 index.js 944 2026-11-03 00:14 manifest.json 2794 2026-11-03 00:14 frontend.js 0 2026-11-03
-        00:14 storage/ 3401 2026-11-03 00:14 storage/student.html 3869 2026-11-03 00:14 storage/teacher.html
-      </div>
-
-      <h3>9.1 ZIP 结构速查</h3>
-      <table>
-        <tr>
-          <th style="width: 34%">条目</th>
-          <th style="width: 16%">必需</th>
-          <th>说明</th>
-        </tr>
-        <tr>
-          <td><code>manifest.json</code></td>
-          <td>必需</td>
-          <td>必须在 ZIP 根目录；套一层目录会安装失败</td>
-        </tr>
-        <tr>
-          <td><code>index.js</code></td>
-          <td>必需</td>
-          <td>后端入口，名字要与 <code>manifest.main</code> 一致</td>
-        </tr>
-        <tr>
-          <td><code>frontend.js</code></td>
-          <td>建议</td>
-          <td>纯声明式 / 纯 view 插件可缺；但缺了会少一条注册路径，保守起见都带上</td>
-        </tr>
-        <tr>
-          <td><code>storage/**</code></td>
-          <td>用到 view 时必需</td>
-          <td>
-            <strong>必须保留 <code>storage/</code> 前缀</strong>，否则安装器不认
-          </td>
-        </tr>
-        <tr>
-          <td><code>migrations/</code></td>
-          <td>不需要</td>
-          <td>官方 CLI 不打包该目录；用 <code>ctx.db.migrate()</code> 做版本迁移</td>
-        </tr>
-      </table>
-
-      <div class="callout danger">
-        <span class="ct">本次实测踩到的坑（已修模板）</span>
+        <span class="ct">你唯一要拿走的东西：那个 .zip 文件的路径</span>
         <p>
-          Skill 自带 <code>pack.mjs</code> 原来把 <code>storage/</code> 下的文件按 <strong>根级路径</strong>写进
-          ZIP（<code>teacher.html</code> 而不是 <code>storage/teacher.html</code>），安装器因此完全不解压， 页面直接
-          404（<code>ENOENT: no such file or directory ... /storage/teacher.html</code>）。 模板已改为保留
-          <code>storage/</code> 前缀，并在打完包后校验「ZIP 里确有 storage/ 条目」， 没有就直接退出非零。
+          看到 AI 输出上面的汇报后，代码开发就已经 100% 结束了！复制好 AI 给你的那个 <code>.zip</code> 文件路径，
+          接下来我们打开浏览器，手把手带你把这个插件装进系统里（<strong>下面每一步都有真实截图对照</strong>）。
         </p>
       </div>
 
-      <div class="callout">
-        <span class="ct">安装前的最后一道人工预检</span>
-        <p>
-          <code>manifest.main</code> 存在 · 每个 commandType 都有同名 ActionDescriptor · 前端产物无裸说明符 ·
-          <code>view</code> 以 <code>storage/</code> 开头且文件真在包里 · 中文正文 ≥ 13px。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>10</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>05</span></div>
     </div>
 
-    <!-- ================= PAGE 12 : INSTALL ================= -->
+    <!-- ================= PAGE 7 : STEP 4 LOGIN & UPLOAD WIZARD ================= -->
     <div class="page">
-      <div class="sec-label">SECTION 10</div>
-      <h2>十、第 7 步：后台上传与授权</h2>
+      <div class="sec-label">SECTION 06 · STEP 4: LOGIN &amp; UPLOAD ZIP</div>
+      <h2>六、第 4 步：登录管理后台与启动安装向导</h2>
 
+      <h3>6.1 步骤一：用管理员账号登录平台</h3>
       <p>
-        登录管理端 → 左侧「插件中心」→ 右上角「从 ZIP 安装」→ 选包 → 走完 5 步向导。 下面两张图是本次实拍的向导界面。
+        打开浏览器访问 <code>http://localhost:9000</code>。因为安装第三方插件需要管理员审批权限，请确认顶部停留在
+        <strong>「教师与管理端」</strong>，输入管理员账号密码登录（全新安装的默认账号密码均为
+        <code>admin</code>，首次登录会引导你修改为一个至少 8 位的新密码）：
       </p>
 
       <figure class="fig-sm">
-        <img src="media/plugin-skill/02-install-wizard.png" alt="三方插件安装向导第 1 步" />
+        <img src="media/plugin-skill/01-login.png" alt="登录教师与管理端" />
         <figcaption>
-          <b>图 1 · 安装向导第 1 步。</b>向导会先解析 manifest 并回显插件身份、描述、主程序入口与前端沙箱包； 若检测到同
-          ID 插件已安装，会转为「更新向导」并提示热更新可能导致课堂 UI 短暂异常。
+          <b>图 1 · 登录页面实拍。</b>确保选中左侧的「教师与管理端」入口，输入管理员账号与密码后点击「安全验证登录」。
         </figcaption>
       </figure>
 
-      <figure class="fig-sm">
-        <img src="media/plugin-skill/03-permissions.png" alt="权限申请与授权" />
-        <figcaption>
-          <b>图 2 · 第 2 步：权限申请与授权。</b>插件声明的每一条能力都会列出风险等级。
-          <strong>不勾选「我已了解并信任…」就没有任何授权</strong>， 激活时任何非 get 调用都会被拒（<code
-            >Capability denied … only 'get' methods allowed</code
-          >）。
-        </figcaption>
-      </figure>
-
-      <div class="callout warn">
-        <span class="ct">第三方插件必被强制为 process 模式</span>
-        <p>
-          无论 manifest 怎么写，第三方 ZIP 在平台上一律以 <code>process</code> 执行。 日志里看到
-          <code>[Plugin:&lt;id&gt;]</code> 前缀的输出是正常的； 如果激活失败，第一件事是看服务端日志，而不是反复改前端。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>11</span></div>
-    </div>
-
-    <!-- ================= PAGE 13 : VERIFY ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 11</div>
-      <h2>十一、第 8 步：课堂验收与交付</h2>
-
-      <h3>11.1 装完立刻自检（别等页面报错）</h3>
+      <h3>6.2 步骤二：进入插件中心，点击「从 ZIP 安装」</h3>
       <p>
-        安装成功后马上跑 Skill 的装后自检脚本。它一次核对十项：安装行状态、DB 里的 manifest 是否保住了每个
-        <code>view</code>、<code>view</code> 对应文件是否真落盘、ZIP 与 DB 是否一致。
-        这些失败在运行期<strong>全部静默</strong>（无异常日志，只有入口不出现）。
-      </p>
-      <div class="codeblock">
-        <span class="dim">$</span> bash ~/.pi/agent/skills/openlearn-next-plugin-dev/scripts/post-install-check.sh \
-        "@demo/classroom-wall" --zip ./openlearn-plugin-classroom-wall-view.zip ✔ 找到安装行
-        01a19ebe-6ed5-75f9-94b0-9cc7382452fb @demo/classroom-wall v0.1.0 status=active mode=process ✔ 状态 active ✔ DB
-        中的 manifest 声明了 2 个 view teacher.tab[0], student.view[0] ✔ teacher.tab[0].view 已落盘 storage/teacher.html
-        (3879 B) ✔ student.view[0].view 已落盘 storage/student.html (3411 B) ✔ frontend.js 存在 2794 B ✔ ZIP 共 6 个条目
-        ✔ ZIP 内含 frontend.js ✔ ZIP 声明的 view 全部落进了 DB ✔ ZIP 内 view 文件齐全 ▲ /api/plugins 返回 401
-        需要登录态，跳过接口核对；静态资源仍可单独验 —— <span class="ok">10 通过</span> / 1 提醒 /
-        <span class="ok">0 失败</span> 结论：结构完整。剩余 ▲ 多为环境提示，按 detail 处理。
-      </div>
-
-      <h3>11.2 入口出现在哪：扩展应用分组</h3>
-      <figure class="fig-sm">
-        <img src="media/plugin-skill/05-nav-entry.png" alt="教师端导航中的扩展应用分组" />
-        <figcaption>
-          <b>图 3 · 教师工作台左侧导航。</b>插件声明的 <code>teacher.tab</code> 会自动出现在
-          「扩展应用」分组里（图中「课堂便签」「课堂闯关」「课堂便签墙」三行均为插件贡献）， 不需要改宿主任何代码。
-        </figcaption>
-      </figure>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>12</span></div>
-    </div>
-
-    <!-- ================= PAGE 14 : RUNNING 1 ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 11 · CONT.</div>
-      <h2>十一（续）：安装结果与插件实际运行效果</h2>
-
-      <figure>
-        <img src="media/plugin-skill/04-plugin-center.png" alt="插件中心中的已安装插件" />
-        <figcaption>
-          <b>图 4 · 插件中心「发现」页。</b>第三方插件以卡片形式出现，标注执行模式（ESM / 子进程）、
-          权限数量与贡献点数量；「禁用 / 总览」用于停用与查看详情。
-        </figcaption>
-      </figure>
-
-      <figure>
-        <img src="media/plugin-skill/06-plugin-running.png" alt="插件在教师端运行" />
-        <figcaption>
-          <b>图 5 · 插件在教师端的真实运行界面。</b>这是 <code>storage/teacher.html</code> 被宿主沙箱 iframe
-          加载后的样子：输入框、便签列表、当前课节 ID 全部来自桥接。 页面写的便签落进了插件自建表，刷新后仍在——说明
-          <code>invokeCommand</code> → handler → 数据库 整条链路是通的。
-        </figcaption>
-      </figure>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>13</span></div>
-    </div>
-
-    <!-- ================= PAGE 15 : RUNNING 2 ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 12</div>
-      <h2>十二、插件跑起来之后</h2>
-
-      <figure class="fig-sm">
-        <img src="media/plugin-skill/07-developer-tab.png" alt="开发者工具页" />
-        <figcaption>
-          <b>图 6 · 插件中心「开发者」页。</b>内置的开发者工具可以旁路加载插件 JS 源码、 实时解析 manifest
-          并做权限合法性校验，适合快速验证 manifest 写法，不必每次都打包上传。
-        </figcaption>
-      </figure>
-
-      <figure class="fig-sm">
-        <img src="media/plugin-skill/08-classroom.png" alt="课堂界面" />
-        <figcaption>
-          <b>图 7 · 课堂现场。</b>顶部工具条上的「极速投票 / 发起抢答 / 60s 通票 / 打开大屏展台 / 随机抽问 /
-          积分榜」等按钮，全部来自插件的 <code>classroomTools</code> 声明式贡献——
-          插件不需要碰宿主代码，也不需要自己画按钮。
-        </figcaption>
-      </figure>
-
-      <div class="callout">
-        <span class="ct">L3 真实宿主冒烟的 5 个必测点</span>
-        <p>
-          ① 课堂工具按钮点击有反应 · ② Ctrl+K 命令面板能派发（全限定命令名） · ③ AI 自然语言能触发 Action · ④
-          停用再激活无重复订阅 · ⑤ <code>view</code> 页面 200、桥接脚本 200、<code>bridge.invokeCommand</code> 通、
-          <code>ui.resize</code> 生效。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>14</span></div>
-    </div>
-
-    <!-- ================= PAGE 16 : PITFALLS ================= -->
-    <div class="page">
-      <div class="sec-label">SECTION 13</div>
-      <h2>十三、踩坑清单：本次实测翻车的四个点</h2>
-
-      <p>
-        这四条不是理论推演，是用 Skill 的模板从零做出「课堂便签墙」时真实踩到的， 而且其中两条就藏在 Skill 自带模板里。
+        登录后，在左侧导航栏底部找到 <strong>「系统管理 → 插件中心」</strong>，点击页面右上角的
+        <strong>「从 ZIP 安装」</strong> 按钮， 在弹出的文件选择框中选中刚才 AI 为你生成的
+        <code>openlearn-plugin-classroom-wall-view.zip</code>。
       </p>
 
-      <table>
-        <tr>
-          <th style="width: 22%">症状</th>
-          <th style="width: 30%">真正的原因</th>
-          <th>修复</th>
-        </tr>
-        <tr>
-          <td>面板显示 <code>ENOENT … /storage/teacher.html</code>，白屏无日志</td>
-          <td>ZIP 里 <code>storage/</code> 前缀丢了，文件被写成根级条目，安装器不解压</td>
-          <td>打包时保留 <code>storage/</code> 前缀；装后跑自检脚本核对</td>
-        </tr>
-        <tr>
-          <td><code>No handler registered for command type "@demo/classroom-wall.list_notes"</code></td>
-          <td>调用端与注册端命令名不一致（注册 <code>wall.list_notes</code>，调用 <code>list_notes</code>）</td>
-          <td>命令名定义成单一常量，前后端共用；或调用时写全 <code>wall.list_notes</code></td>
-        </tr>
-        <tr>
-          <td><code>#&lt;Promise&gt; could not be cloned</code></td>
-          <td>
-            handler 返回了 Promise：process 沙箱里 <code>prepare().all()</code> 是异步的，模板漏了 <code>await</code>
-          </td>
-          <td>所有 DB 调用一律 <code>await</code>（inline 同步、process 异步都兼容）</td>
-        </tr>
-        <tr>
-          <td>vitest 报「找不到 <code>../src/index.js</code>」</td>
-          <td><code>cp -r</code> 套娃成 <code>test-harness/test-harness/</code></td>
-          <td>复制前先 <code>rm -rf ./test-harness</code></td>
-        </tr>
-      </table>
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/02-install-wizard.png" alt="安装向导第 1 步" />
+        <figcaption>
+          <b>图 2 · 安装向导第 1 步（清单解析预览）。</b>选中 ZIP
+          包后，系统会自动解析插件名称（课堂便签墙）、版本号（v0.1.0）、插件 ID
+          与包含的前后端文件。核对无误后点击右下角「下一步」。
+        </figcaption>
+      </figure>
 
-      <h3>13.1 高频报错速查（先归因，再动手）</h3>
-      <table>
-        <tr>
-          <th style="width: 40%">报错 / 现象</th>
-          <th style="width: 20%">归属</th>
-          <th>机制层缘由</th>
-        </tr>
-        <tr>
-          <td><code>✖ frontend 产物里有裸模块说明符</code>（构建失败）</td>
-          <td>插件侧</td>
-          <td>沙箱 iframe 用 Blob + 动态 import 加载，无 importmap，裸说明符无从解析</td>
-        </tr>
-        <tr>
-          <td><code>COMMAND_NOT_REGISTERED</code> / 403</td>
-          <td>插件侧</td>
-          <td>内核 default-deny：该 commandType 没有 ActionDescriptor</td>
-        </tr>
-        <tr>
-          <td><code>Capability denied … only 'get' methods allowed</code></td>
-          <td>配置</td>
-          <td>0.7.2 起按<strong>已授予</strong>集合判定：声明了但管理员没勾</td>
-        </tr>
-        <tr>
-          <td><code>Import of "x" is not allowed</code></td>
-          <td>插件侧</td>
-          <td>token-enforcer 拦截裸导入（<code>crypto</code> / <code>fs</code> / 第三方裸包）</td>
-        </tr>
-        <tr>
-          <td><code>Cannot read properties of undefined (reading 'React')</code></td>
-          <td>插件侧</td>
-          <td>远程前端用了 React，沙箱内没有 <code>HostSharedDeps</code></td>
-        </tr>
-        <tr>
-          <td><code>DataCloneError</code>（传 <code>component</code>）</td>
-          <td>产品边界</td>
-          <td>postMessage 无法克隆函数；远程插件没有自定义 React 组件通道</td>
-        </tr>
-        <tr>
-          <td>插件被自动停用</td>
-          <td>产品边界</td>
-          <td>熔断器：5 分钟滑窗内 3 次异常即停用，属设计行为</td>
-        </tr>
-        <tr>
-          <td>装上了但入口不出现</td>
-          <td>多因</td>
-          <td>manifest 字段被 zod strip / view 未落盘 / 权限没授予 / frontend.js 404</td>
-        </tr>
-      </table>
-
-      <div class="callout">
-        <span class="ct">判断「系统侧还是插件侧」的四个必要条件</span>
-        <p>
-          ① 官方脚手架原始产物或 ≤50 行最小插件能稳定复现 · ② 版本号、复现步骤、完整堆栈齐全 · ③ 报错点位于宿主 / 内核 /
-          SDK 范围内 · ④ 已排除版本不匹配、产物没重建、浏览器缓存、 权限未审批、被强制 process
-          等因素。缺任何一条，只能判「待定」，不要去提 Issue。
-        </p>
-      </div>
-
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>15</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>06</span></div>
     </div>
 
-    <!-- ================= PAGE 17 : DELIVERY ================= -->
+    <!-- ================= PAGE 8 : STEP 5 PERMISSIONS & ENABLE ================= -->
     <div class="page">
-      <div class="sec-label">SECTION 14</div>
-      <h2>十四、交付清单与更新 / 卸载</h2>
+      <div class="sec-label">SECTION 07 · STEP 5: GRANT PERMISSIONS &amp; ENABLE</div>
+      <h2>七、第 5 步：勾选两道权限防线与启用插件（最关键！）</h2>
 
-      <h3>14.1 Skill 定义的「完成」标准</h3>
-      <table>
-        <tr>
-          <th style="width: 8%"></th>
-          <th>验收项</th>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td>构建成功，产出 ZIP；<code>manifest.json</code> 通过平台 schema 校验</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td>每个 commandType 都有同名 ActionDescriptor</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td><code>capabilitiesProposed</code> 覆盖 activate 期所有非 get RPC，且安装时已勾选授予</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td><code>post-install-check.sh</code> 0 失败</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td>可见入口按槽位类型分别验证（页面级 / 浮层 / 白板卡片 / 行内按钮）；中文正文 ≥ 13px</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td><code>engines.openlearn</code> 与实际用到的 API 匹配</td>
-        </tr>
-        <tr>
-          <td>□</td>
-          <td>L0 静态契约检查 0 error；L1/L2 全绿；L3 真实宿主冒烟通过</td>
-        </tr>
-      </table>
+      <p>
+        为了保护学校教学数据安全，OpenLearn V2 对所有第三方插件实行<strong>「默认零权限（Default-Deny）」</strong>机制。
+        插件在代码里写的权限只是「申请表」，<strong>必须由你在安装向导里亲手打勾批准，插件才能正常工作</strong>！
+      </p>
 
-      <h3>14.2 助手的交付汇报格式</h3>
-      <div class="codeblock">
-        【插件】@demo/classroom-wall · sandbox-view · engines &gt;=0.7.0 文件：manifest.json / src/index.ts /
-        src/frontend.tsx / storage/{teacher,student}.html 构建：npm install &amp;&amp; npm run pack → 上传
-        openlearn-plugin-classroom-wall-view.zip 已实现：教师端贴便签、学生端查看、按课节持久化、事件广播 测试：L0 0
-        error · L1/L2 21 passed · L3 已跑（教师端面板 + 写便签 + 回读） 已核对：main / ActionDescriptor 配对 / 权限串 /
-        可见入口 / 中文字号 ≥ 13px 自检：post-install-check 10 通过 / 0 失败
-        待办：管理员在安装向导勾选能力授予（lesson:read / lesson:write）
-      </div>
+      <h3>7.1 步骤三：在安装向导中勾选信任与权限授予</h3>
+      <p>
+        在 5 步安装向导中，随着你点击「下一步」，请务必注意<strong>第 2 步</strong>和<strong>第 5 步</strong
+        >底部的复选框，<strong>两处都必须打勾</strong>：
+      </p>
+      <ul>
+        <li><strong>第 2 步必勾</strong>：<code>我已了解并信任此插件的提供商，愿意授予上述高级系统权限。</code></li>
+        <li><strong>第 5 步必勾</strong>：<code>确认授予清单申请的能力。不勾选则这些能力不会生效。</code></li>
+      </ul>
 
-      <h3>14.3 更新与卸载</h3>
       <figure class="fig-xs">
-        <img src="media/plugin-skill/09-uninstall.png" alt="卸载插件时选择是否保留数据" />
+        <img src="media/plugin-skill/03-permissions.png" alt="权限申请与授权勾选" />
         <figcaption>
-          <b>图 8 · 卸载时的数据处置。</b>「保留插件数据」会把插件表与迁移版本导出到
-          <code>plugin-data-exports/</code>，重新安装同一插件时自动接回旧数据；
-          「卸载并清除」不可恢复，只写审计日志。开发迭代时选前者。
+          <b>图 3 · 安装向导权限勾选实拍（核心必做）。</b
+          >向导会清晰列出该插件申请的每一项能力（如读取课程、修改课程）及风险等级。务必勾选底部的确认框，然后一路点击「下一步」直至「确认安装并上传」。
         </figcaption>
       </figure>
 
-      <div class="callout warn">
-        <span class="ct">迭代时的推荐节奏</span>
+      <h3>7.2 步骤四：在插件中心确认插件已处于「启用」状态</h3>
+      <p>
+        点击确认安装后，系统会自动完成解压、授权入库并激活插件。回到插件中心的「发现」列表，你会看到刚刚装好的「课堂便签墙」卡片：
+      </p>
+
+      <figure class="fig-xs">
+        <img src="media/plugin-skill/04-plugin-center.png" alt="插件中心已安装卡片" />
+        <figcaption>
+          <b>图 4 · 插件中心卡片实拍。</b>看到卡片显示「2 项权限」「2
+          个贡献点」，且右下角按钮显示为红色的<b>「禁用」</b>，就代表插件当前<strong>已经成功启用并正在运行</strong>！（注：按钮写「禁用」意思是“点它会停用”，说明当前是开启状态）。
+        </figcaption>
+      </figure>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>07</span></div>
+    </div>
+
+    <!-- ================= PAGE 9 : STEP 6 TEACHER WORKSPACE ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 08 · STEP 6: USE IN TEACHER WORKSPACE</div>
+      <h2>八、第 6 步：在教师工作台打开并使用插件</h2>
+
+      <p>
+        插件启用后<strong>不需要重启服务器，也不需要重新登录</strong>。它会自动挂载到教师工作台的左侧导航栏中，现在就可以直接点开验收！
+      </p>
+
+      <h3>8.1 步骤五：在左侧导航栏「扩展应用」分组找到插件入口</h3>
+      <p>
+        将视线移到屏幕左侧的主导航栏，向下滚动到 <strong>「扩展应用」</strong> 分组，你会看到新出现的
+        <strong>「课堂便签墙」</strong> 菜单项：
+      </p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/05-nav-entry.png" alt="教师端左侧导航扩展应用分组" />
+        <figcaption>
+          <b>图 5 · 左侧导航栏「扩展应用」实拍。</b
+          >所有由插件提供的教师端页面都会自动归集在「扩展应用」分组下（如图中的「课堂便签墙」），点击即可进入插件专属工作区。
+        </figcaption>
+      </figure>
+
+      <h3>8.2 步骤六：在插件页面中实测发布便签与数据保存</h3>
+      <p>
+        点击「课堂便签墙」菜单，右侧主区域就会加载出 AI 为你编写的插件界面。你可以立刻做一次真实交互验收：
+        在输入框里敲入一句话（如“第一组讨论完成，准备展示”），点击
+        <strong>「发布便签」</strong
+        >，下方列表会立刻出现这条便签；按浏览器刷新（F5）后便签依然存在，说明前后端通信与数据库存储全部畅通！
+      </p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/06-plugin-running.png" alt="插件在教师端真实运行界面" />
+        <figcaption>
+          <b>图 6 · 插件运行界面实拍。</b
+          >这是插件在安全沙箱中渲染出的真实界面：支持输入便签、实时刷新列表、手动刷新，且底部已持久保存了刚刚发布的课堂便签。
+        </figcaption>
+      </figure>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>08</span></div>
+    </div>
+
+    <!-- ================= PAGE 10 : STEP 7 CLASSROOM WHITEBOARD ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 09 · STEP 7: USE IN LIVE CLASSROOM</div>
+      <h2>九、第 7 步：在课堂白板现场调用插件互动工具</h2>
+
+      <p>
+        除了左侧的独立菜单页，如果你让 AI 开发的是<strong>随堂互动工具</strong>（例如抽问、投票、计时或一键下发便签），
+        它会出现在<strong>课中授课白板</strong>的工具栏里，供老师在上课讲 PPT 或写板书时随时一键调用。
+      </p>
+
+      <h3>9.1 步骤七：开始上课并进入「课中授课」白板</h3>
+      <p>
+        点击左侧导航回到「互动课堂」，选好课程与班级后点击「开始上课」，接着点击右上角
+        <strong>「一键开启课中授课（进入白板）」</strong>。 此时顶部会展示快捷互动条，白板工具栏最右侧会出现一个<strong
+          >拼图图标「互动工具 (插件扩展)」</strong
+        >：
+      </p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/08-classroom.png" alt="课堂白板现场与顶部互动工具" />
+        <figcaption>
+          <b>图 7 · 课中授课白板实拍。</b
+          >进入课中阶段后，顶部红框上方的快捷互动条以及白板工具栏右侧的拼图图标，都是插件在课堂现场的触发入口（注意：课前就绪阶段不显示白板，必须点进「课中授课」才能看到）。
+        </figcaption>
+      </figure>
+
+      <h3>9.2 步骤八：点开拼图图标，一键下发插件工具</h3>
+      <p>
+        点击白板工具栏最右侧的<strong>拼图图标</strong>，会展开当前已启用的所有课堂工具插件列表。点击你要使用的插件工具，
+        右上/右下角会立即弹出绿色的
+        <code>✓ 工具下发成功</code> 提示，同时左侧「课堂互动反馈」信息流也会实时记录本次下发结果：
+      </p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/10-classroom-tool-dropdown.png" alt="展开互动工具下拉并点击下发" />
+        <figcaption>
+          <b>图 8 · 展开「互动工具」面板并点击触发实拍。</b>点击拼图图标展开下拉菜单 → 点击插件提供的课堂工具 →
+          系统自动将当前课节 ID 传给插件执行，并在左侧反馈流与右下角弹窗提示执行成功。
+        </figcaption>
+      </figure>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>09</span></div>
+    </div>
+
+    <!-- ================= PAGE 11 : STEP 8 DEVELOPER TAB & POST-CHECK ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 10 · STEP 8: DEVELOPER TOOLS &amp; SELF-CHECK</div>
+      <h2>十、第 8 步：开发者页签预览与 AI 装后一键自检</h2>
+
+      <h3>10.1 插件中心的「开发者」标签页怎么用？</h3>
+      <p>
+        在「系统管理 → 插件中心」顶部，除了「发现（已安装列表）」和「插件市场」外，还有一个
+        <strong>「开发者」</strong> 标签页。 当你或 AI
+        想要快速验证一段插件脚本或查看清单结构时，可以在这里直接粘贴或加载插件源码，系统会实时解析它的 Manifest
+        清单并检查权限声明是否合法：
+      </p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/07-developer-tab.png" alt="插件中心开发者标签页" />
+        <figcaption>
+          <b>图 9 · 插件中心「开发者」页签实拍。</b>提供内置的插件沙箱调试台，可随时检验插件脚本的清单字段与权限合规性。
+        </figcaption>
+      </figure>
+
+      <h3>10.2 让 AI 帮你跑一次「装后 10 项体检」（推荐习惯）</h3>
+      <p>
+        有时候你在后台装完了插件，想百分之百确认「数据库里状态对不对、页面文件有没有真正解压落盘、前后端包是否齐全」，
+        你不需要自己去查数据库，只需回到 AI 对话框里对 AI 说一句话：
+      </p>
+
+      <div class="codeblock">
+        <span class="usr">你对 AI 说：</span>
+        "我已经在后台把插件安装并启用好了，请帮我运行一下装后自检脚本确认状态。"
+
+        <span class="ok">AI 自动执行 post-install-check.sh 并向你汇报：</span>
+        ✔ 找到安装行 @demo/classroom-wall v0.1.0 status=active mode=process ✔ 状态 active（已激活） ✔ 数据库中的
+        manifest 声明了 2 个页面视图 (teacher.tab, student.view) ✔ 教师端页面已落盘 storage/teacher.html ✔
+        学生端页面已落盘 storage/student.html ✔ 前端桥接入口 frontend.js 存在 ——
+        <span class="ok">10 项检查全部通过 / 0 失败！插件可以放心投入正式课堂使用。</span>
+      </div>
+
+      <div class="callout">
+        <span class="ct">为什么推荐让 AI 跑这一下？</span>
         <p>
-          改代码 → <code>test:contract</code> + <code>npm test</code> → <code>npm run pack</code> → 后台「从 ZIP
-          安装」（同 ID 走更新向导）→ 勾选授权 → <code>post-install-check.sh</code> → 课堂点一遍。 热更新时正在上课的 UI
-          可能短暂异常，选课间时段更新最稳。
+          如果安装时不小心漏勾了激活、或者上传错了旧版本的 ZIP 包，这个 3
+          秒钟的装后体检会立刻替你指出来，避免等到真正上课时才发现页面打不开。
         </p>
       </div>
 
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>16</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>10</span></div>
     </div>
 
-    <!-- ================= PAGE 18 : APPENDIX ================= -->
+    <!-- ================= PAGE 12 : STEP 9 ITERATE, UPDATE & UNINSTALL ================= -->
     <div class="page">
-      <div class="sec-label">APPENDIX</div>
-      <h2>附录：资料索引与术语</h2>
+      <div class="sec-label">SECTION 11 · STEP 9: ITERATE, UPDATE &amp; UNINSTALL</div>
+      <h2>十一、第 9 步：对话式改功能、平滑升级与卸载</h2>
 
-      <h3>A.1 该去哪查什么</h3>
+      <h3>11.1 想改界面或加新功能？继续跟 AI 说话就行</h3>
+      <p>
+        试用后如果你觉得「字想再大一点」、「想加一个按学生姓名筛选的按钮」或者「想加一个导出 Excel 的功能」，
+        <strong>千万不要自己去翻代码文件</strong>。直接在原来的 AI 对话窗口里说出你的修改意见：
+      </p>
+
+      <div class="codeblock">
+        <span class="usr">你对 AI 说：</span>
+        "便签墙用起来不错！现在帮我加两个小功能： 1. 每条便签旁边显示发布时间； 2. 右上角加一个「清空本课便签」按钮。
+        改好后请自动升一下版本号，跑完测试重新打包成 ZIP 给我。"
+
+        <span class="ok">AI 自动完成的事：</span>
+        ① 修改前后端代码 → ② 把 manifest.json 的版本号从 0.1.0 升到 0.1.1 → ③ 重跑测试护栏确保没改坏 → ④ 重新打包出新的
+        .zip 文件。
+      </div>
+
+      <h3>11.2 怎么把新版本更新到平台上？</h3>
+      <p>
+        拿到新打包的 <code>.zip</code> 后，<strong>不需要先卸载旧插件</strong>！直接去「插件中心 → 从 ZIP
+        安装」上传这个新包： 系统识别到插件 ID 相同且版本号更高（<code>0.1.0 → 0.1.1</code
+        >），会自动进入<strong>「平滑更新向导」</strong>，保留你原来已经建好的数据库表和历史便签数据，无缝切换到新版本！
+      </p>
+
+      <h3>11.3 插件停用与卸载：怎么保护已有数据？</h3>
+      <p>在插件中心卡片上点击「卸载」图标时，系统会弹出贴心的数据处置询问框，请根据你的场景选择：</p>
+
+      <figure class="fig-sm">
+        <img src="media/plugin-skill/09-uninstall.png" alt="卸载插件弹窗选择是否保留数据" />
+        <figcaption>
+          <b>图 10 · 卸载插件时的数据保留选项实拍。</b
+          >系统会展示该插件已创建的数据库表及行数，并提供「保留插件数据」与「卸载并清除」两个按钮。
+        </figcaption>
+      </figure>
+
+      <ul>
+        <li>
+          <strong>点绿色「保留插件数据」（日常调试与重装必选）</strong
+          >：系统只移除插件程序，把你的便签数据打包备份好；下次你再安装同一个插件时，历史数据会自动接回来，一条都不会丢！
+        </li>
+        <li><strong>点红色「卸载并清除」（彻底废弃时才选）</strong>：连同插件创建的数据库表一起永久清空，不可恢复。</li>
+      </ul>
+
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>11</span></div>
+    </div>
+
+    <!-- ================= PAGE 13 : STEP 10 TROUBLESHOOTING ================= -->
+    <div class="page">
+      <div class="sec-label">SECTION 12 · STEP 10: AI TROUBLESHOOTING &amp; CHEAT SHEET</div>
+      <h2>十二、第 10 步：遇到问题怎么让 AI 排障与全流程速查</h2>
+
+      <h3>12.1 遇到任何异常：直接复制现象给 AI，触发「归因模式」</h3>
+      <p>
+        Skill 内置了专门的<strong>故障归因引擎（模式 A′）</strong
+        >。万一你遇到「上传失败」、「点了按钮没反应」或「页面报错」，
+        不需要自己百度或猜原因，直接把截图文字或终端日志粘给 AI：
+      </p>
+      <div class="codeblock">
+        <span class="usr">你对 AI 说：</span>
+        "我装好插件后点击启用报了 500 错误，终端日志显示：Capability denied ... only 'get' methods
+        allowed，请帮我看看是怎么回事？"
+
+        <span class="ok">AI 会先给你明确归因，再给解决步骤：</span>
+        "【原因归属：后台安装配置漏勾】这是因为第三方插件运行在隔离沙箱中，您在安装向导第 5
+        步漏勾了『确认授予清单申请的能力』，导致插件没有拿到权限。
+        【解决办法】不需要改代码，请直接在插件中心重新上传一次该 ZIP 包，在向导第 2 步和第 5
+        步把两个授权复选框都勾上即可！"
+      </div>
+
+      <h3>12.2 人类操作最常见的 5 个小问题速查表</h3>
       <table>
         <tr>
-          <th style="width: 40%">我想知道…</th>
-          <th>去哪里</th>
+          <th style="width: 34%">你看到的现象</th>
+          <th style="width: 28%">99% 的原因</th>
+          <th>你只需要怎么做</th>
         </tr>
         <tr>
-          <td>manifest 每个字段怎么写</td>
-          <td>Skill <code>references/manifest-0.7.md</code>；平台 <code>docs/plugin/plugin-manifest-spec.md</code></td>
+          <td>登录后台后干什么都报 403</td>
+          <td>还在使用初始默认密码</td>
+          <td>按页面顶部黄条提示，先修改一次密码即可恢复正常</td>
         </tr>
         <tr>
-          <td>平台到底有哪些能力字符串</td>
-          <td>Skill <code>references/capability-matrix-0.7.md</code>；平台 <code>docs/agent/contracts/</code></td>
+          <td>激活插件失败，或日志报 <code>only 'get' methods allowed</code></td>
+          <td>安装向导里<strong>漏勾了权限授予复选框</strong></td>
+          <td>重新点「从 ZIP 安装」再传一次，把第 2 步和第 5 步底部的框都勾上</td>
         </tr>
         <tr>
-          <td>沙箱桥接能调什么、不能调什么</td>
-          <td>
-            Skill <code>references/frontend-bridge-0.7.md</code>；平台
-            <code>docs/plugin/frontend-sandbox-capability-boundary.md</code>
-          </td>
+          <td>插件中心右下角按钮写着红色的「禁用」</td>
+          <td>这不是报错！按钮写的是「点它会做什么」</td>
+          <td>显示「禁用」恰恰说明<strong>当前已经启用成功</strong>，不用再点它</td>
         </tr>
         <tr>
-          <td>四类槽位分别怎么渲染</td>
-          <td>平台 <code>docs/reference/plugin-ui-extension-slots.md</code> §1.1.1</td>
+          <td>进了课堂，找不到白板和「互动工具」拼图图标</td>
+          <td>当前还停留在「课前就绪」点名页</td>
+          <td>点击右上角<strong>「一键开启课中授课（进入白板）」</strong>即可看到白板工具栏</td>
         </tr>
         <tr>
-          <td>报错该怎么归因</td>
-          <td>Skill <code>references/troubleshooting.md</code>；平台 <code>docs/beta/known-issues.md</code></td>
-        </tr>
-        <tr>
-          <td>文档与源码冲突时听谁的</td>
-          <td>源码 &gt; <code>contracts/*.json</code> / facts-ledger &gt; 平台 docs &gt; Skill 快照</td>
+          <td>打开插件页面提示 404 或点击按钮报 <code>No handler</code></td>
+          <td>打包或命令名未对齐</td>
+          <td>把报错粘给 AI，对它说：「请按 Skill 的打包与命名空间规则修复并重打 ZIP」</td>
         </tr>
       </table>
 
-      <h3>A.2 本手册涉及的核心术语</h3>
-      <table>
-        <tr>
-          <th style="width: 26%">术语</th>
-          <th>含义</th>
-        </tr>
-        <tr>
-          <td><strong>manifest</strong></td>
-          <td>插件的身份说明书：id、版本、入口、权限申请、贡献点</td>
-        </tr>
-        <tr>
-          <td><strong>capabilitiesProposed</strong></td>
-          <td>插件申请的系统能力清单（申请 ≠ 授予）</td>
-        </tr>
-        <tr>
-          <td><strong>contributes</strong></td>
-          <td>声明式贡献：往宿主槽位里放页面、按钮、视图</td>
-        </tr>
-        <tr>
-          <td><strong>view</strong></td>
-          <td>沙箱 HTML 页面（<code>storage/xxx.html</code>），第三方拿自定义界面的推荐方式</td>
-        </tr>
-        <tr>
-          <td><strong>三件套</strong></td>
-          <td>manifest 入口 + ActionDescriptor + registerHandler，三者命令名必须一致</td>
-        </tr>
-        <tr>
-          <td><strong>process / inline</strong></td>
-          <td>两种执行模式：process 是子进程沙箱（第三方默认），inline 是宿主内联（需白名单）</td>
-        </tr>
-        <tr>
-          <td><strong>L0–L3</strong></td>
-          <td>四层测试护栏：静态契约 / 契约与沙箱冒烟 / 冒烟 / 真实宿主</td>
-        </tr>
-      </table>
+      <h3>12.3 一页纸全流程速查卡（日常开发只看这 4 行）</h3>
+      <div class="codeblock">
+        <span class="cmt"># ① 装好 Skill（只需装一次，国内网络直接用第二行 Gitee 镜像）：</span>
+        npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev npx skills add
+        https://gitee.com/aymwoo/openlearn-skills.git
 
-      <div class="callout">
-        <span class="ct">下一步建议</span>
-        <p>
-          先用 <code>server-only</code> 模板做一只 30 行的「Hello World」插件跑通全链路 （探活 → 生成 → 打包 → 上传 →
-          激活 → 卸载），再回到 <code>sandbox-view</code> 做界面。 分两步走，两次踩坑的定位难度完全不同。
-        </p>
+        <span class="cmt"># ② 启动本地平台（无需 Docker，浏览器打开 http://localhost:9000）：</span>
+        npx openlearn-next@latest --demo -o
+
+        <span class="cmt"># ③ 跟 AI 对话生成插件（在 Claude Code / Antigravity / Cursor / pi 中发送）：</span>
+        "请用 openlearn-next-plugin-dev 技能帮我做一个
+        [你的插件想法]，先向我提问确认需求，确认后自动生成代码、跑通测试并打包成 ZIP。"
+
+        <span class="cmt"># ④ 后台安装口诀：</span>
+        系统管理 → 插件中心 → 从 ZIP 安装 → <span class="ok">勾第 2 步信任 + 勾第 5 步授予能力</span> →
+        左侧「扩展应用」或课堂白板「互动工具」验收！
       </div>
 
       <div class="spacer"></div>
-      <div class="page-footer"><span>OpenLearn V2 · 插件开发 Skill 使用指南</span><span>17</span></div>
+      <div class="page-footer"><span>OpenLearn V2 · 插件开发手册（AI Skill 辅助开发）</span><span>12</span></div>
     </div>
   </body>
 </html>
