@@ -342,12 +342,25 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 
 > 🚩 **给 AI Agent 的提示**：Skill 生成的是**代码骨架**，它不能替你判断本次目标插件是否能拿到自定义 UI。装完脚手架后请先回到 [2.2 三档执行模式](#execution-modes) 确认前端能力边界，再决定要不要写 `frontend.tsx`。
 
-**安装与配置：**
+**安装与配置（GitHub / Gitee 双入口）：**
 
 ```bash
-# 使用 Antigravity CLI 或 npx 快捷添加官方开发 Skill
+# ① skills.sh 注册表安装（主仓在 GitHub，registry 只索引 GitHub 仓库）
 npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
+
+# ② 国内网络访问 GitHub 受限时，直连 Gitee 镜像
+#    skills CLI 会把非 GitHub 的完整 URL 当作 git 仓库克隆，因此必须写全仓库地址，
+#    不要用 owner/repo 简写（简写会固定拼成 https://github.com/...）。
+npx skills add https://gitee.com/aymwoo/openlearn-skills.git
+
+# ③ 彻底离线兜底：自己克隆后拷进 Agent 的 skills 目录
+#    git clone https://gitee.com/aymwoo/openlearn-skills.git
+#    cp -r openlearn-skills/openlearn-next-plugin-dev <Agent skills 目录>
+#    （Claude Code: ~/.claude/skills/；pi: ~/.pi/agent/skills/；Codex / Antigravity 同理）
 ```
+
+> 🔁 **Skill 仓库双平台**：主仓 [github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)（Issue / PR / Release / CI 主入口）｜ 镜像 [gitee.com/aymwoo/openlearn-skills](https://gitee.com/aymwoo/openlearn-skills)。
+> 镜像由 GitHub **单向同步**，不跑 CI、不发 Release；提 Issue / PR 请只在一个平台开一份。
 
 安装后，在 Agent 对话中提及 OpenLearn 插件开发相关需求（例如：“_帮我写一个基于 Node 隔离沙箱的课堂互动抽奖插件_”），Skill 将会自动激活。
 
@@ -383,7 +396,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 | `full-stack`    | Worker Thread + 隐藏 iframe 前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 | `frontend-only` | 隐藏 iframe 前端（无可见 UI）    | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 
-**官方 Skill 资源与存储库**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
+**官方 Skill 资源与存储库**：GitHub [github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills) ｜ Gitee 镜像 [gitee.com/aymwoo/openlearn-skills](https://gitee.com/aymwoo/openlearn-skills)
 
 > 💡 **提示**：在开发复杂插件时，直接使用 AI Skill 生成的基础代码天然遵循平台的 5 阶段启动流水线、DI Token 依赖注入与沙箱隔离规范，可提升 5~10 倍的开发效率。
 

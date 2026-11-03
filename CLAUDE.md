@@ -186,13 +186,16 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 
 所有在此代码库工作的 AI Agent 必须遵守严格的协作生命周期：
 
+> 🔁 **仓库双平台**：主仓 [GitHub](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [Gitee](https://gitee.com/aymwoo/openlearn-next)（国内访问 GitHub 受限时用于克隆与提 Issue）。
+> 镜像由 GitHub **单向同步**（`git push gitee main`），不跑 CI、不发 Release；**一个变更只在一个平台开一份 Issue / PR**，合并后把 `main` 快进到另一侧，**禁止在 Gitee 侧开启自动双向镜像**。
+
 1. **问题驱动（Issue-First 流程）**：
-   - 发现系统缺陷、性能瓶颈、潜在风险或新需求时，**推荐首先通过 GitHub Issue 记录追踪**（`gh issue create` 或 Web 端）；
+   - 发现系统缺陷、性能瓶颈、潜在风险或新需求时，**推荐首先通过 GitHub Issue 记录追踪**（`gh issue create` 或 Web 端）；国内无法访问 GitHub 时改在 Gitee 镜像提（`gitee issue create -R aymwoo/openlearn-next`），同一问题只提一处；
    - 包含背景、复现路径、根因分析及建议方案；复杂任务先对齐方案再进入实现。
 2. **分支隔离与 PR 驱动（PR-Driven 协作）**：
    - **严禁直接向 `main` / `master` 提交或推送代码**；
    - 每次改动必须创建专用分支（如 `codebuddy/<issue-id>-<slug>`、`claude/<slug>`）；
-   - 遵循 Conventional Commits 提交，并通过 `gh pr create` 发起 Pull Request；
+   - 遵循 Conventional Commits 提交，并通过 `gh pr create` 发起 Pull Request（**同一分支 / PR 只在一个平台创建**，GitHub 不可达时才走 Gitee）；
    - PR 正文中必须绑定 Issue（`Fixes #xxx`）、提供改动要点与详细测试计划；UI 变更必须附带截图证据。
 3. **本地全套质量门禁（Pre-PR Quality Gates）**：
    - 发起 PR 前必须在本地运行并确认通过：

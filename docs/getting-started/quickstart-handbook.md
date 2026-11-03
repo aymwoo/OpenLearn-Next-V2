@@ -38,7 +38,9 @@ npx openlearn-next@latest --demo -o    # 一次性演示数据，退出即销毁
 | pnpm | 10.33.4            | 仓库是 pnpm workspace，`npm i` 会装出第二棵依赖树并漏编原生模块 |
 
 ```bash
-git clone https://github.com/aymwoo/OpenLearn-Next-V2.git
+git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
+# 国内网络访问 GitHub 受限时改用 Gitee 镜像（内容一致，GitHub → Gitee 单向同步）：
+# git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2
 cd OpenLearn-Next-V2
 
 corepack enable && corepack prepare pnpm@10.33.4 --activate
@@ -48,6 +50,8 @@ pnpm dev
 ```
 
 `pnpm dev` 会同时起 Express 与 Vite（HMR），默认端口 **9000**。
+
+> 🔁 **源在哪里拉？** 主仓是 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；国内网络访问 GitHub 受限时用镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)，内容与 `main` 一致，但 CI、Release 与 npm 发布仍只在 GitHub 侧跑。克隆后可保留两个远端（`origin`=GitHub、`gitee`=镜像），换源时 `git push gitee main` 手动快进，**不要**在 Gitee 侧开自动双向镜像。
 
 > 版本不一致时，`preinstall` 守卫会在安装阶段直接拦住，并告诉你该换 Node 还是该 `pnpm rebuild better-sqlite3` —— 不用等启动时才撞上 `ERR_DLOPEN_FAILED`。
 

@@ -15,6 +15,15 @@
 | 课件 Bridge | `@openlearn/bridge-sdk`                 | `packages/bridge-sdk/src/bridge.js`     |
 | 数据库      | SQLite（`better-sqlite3`，同步 API）    | `packages/core/db/`                     |
 
+**仓库与镜像**
+
+| 平台           | 地址                                          | 用途                                                           |
+| :------------- | :-------------------------------------------- | :------------------------------------------------------------- |
+| GitHub（主仓） | `https://github.com/aymwoo/OpenLearn-Next-V2` | Issue / PR / CI / Release 主入口                               |
+| Gitee（镜像）  | `https://gitee.com/aymwoo/openlearn-next`     | 国内访问 GitHub 受限时的克隆与 Issue 通道（单向同步，不跑 CI） |
+
+> 工作副本建议配两个远端（`origin`=GitHub、`gitee`=镜像）：拉取 GitHub 优先、失败回退 Gitee；推送与合并完成后用 `git push gitee main` 快进镜像，**永远不 force-push、不开自动双向镜像**。一个变更只在一个平台开 Issue / PR。
+
 > **枚举表是机器生成的，不要凭记忆或凭训练语料写。**
 > 7 张权威事实表在 `contracts/`，由 `python3 audit-tools/agent_facts.py` 从源码抽取，
 > CI 会校验它们与源码不漂移。你要写的每一个能力名 / Token 名 / 槽位名 / op 名，

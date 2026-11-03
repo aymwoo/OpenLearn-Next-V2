@@ -3,3 +3,6 @@ contact_links:
   - name: 公测反馈怎么报
     url: https://github.com/aymwoo/OpenLearn-Next-V2/blob/main/docs/beta/feedback.md
     about: 教师先联系学校值班人。该链接在本文档合并进 main 之后才能打开。
+  - name: Gitee 镜像（国内网络无法访问 GitHub 时）
+    url: https://gitee.com/aymwoo/openlearn-next/issues
+    about: 镜像与 GitHub main 单向同步，可在此提交 Issue。同一问题只在一个平台提一份；CI 与 Release 仍在 GitHub 侧运行。

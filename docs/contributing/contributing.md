@@ -124,9 +124,12 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 
 为了保障代码库的长期演进质量、保证变更可追溯并避免自动化工具污染主干分支，所有参与本项目开发的 AI Agent（包括 Antigravity、CodeBuddy、Cursor、Claude Code、GitHub Copilot 等）均须遵守以下规范：
 
+> 🔁 **仓库托管双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（**国内网络访问 GitHub 受限**时用于克隆源码与提 Issue，**单向同步**，不跑 CI / 不发 Release）。
+> 迁移规则：**一个变更只在一个平台开一份 Issue / PR**；合并后把 `main` 快进到另一侧（`git push gitee main`，绝不 force-push）；**禁止在 Gitee 侧开启自动双向镜像**；issue / PR 编号不跨平台复用。
+
 ### 5.1 问题驱动（Issue-First 流程）
 
-- **优先提 Issue**：无论是发现系统缺陷、安全隐患、性能退化，还是设计新特性，推荐优先在 GitHub 上发起 Issue（使用 `gh issue create` 或 Web 界面）。
+- **优先提 Issue**：无论是发现系统缺陷、安全隐患、性能退化，还是设计新特性，推荐优先在 GitHub 上发起 Issue（使用 `gh issue create` 或 Web 界面）；国内网络无法访问 GitHub 时，改为在 Gitee 镜像发起（`gitee issue create -R aymwoo/openlearn-next`，编号为 `I...` 字符串），**同一问题不要两边各提一份**。
 - **完整记录上下文**：Issue 应阐明问题现象、影响范围、复现步骤、根本原因分析及预期的解决方案。
 - **方案对齐**：对于涉及跨模块、架构变动或公共 API 的复杂任务，先就方案与人类维护者达成一致，再切入实现。
 

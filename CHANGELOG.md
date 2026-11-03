@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **系统管理插件模板命令同步**：`packages/plugins/management.ts` 中的 `class.template_download` 与 `student.template_download` 模板命令同步升级至包含学号、密码、备注、性别的完整标准规范；
   - **质量回归断言**：在 `bulkImportService.test.ts` 中补充表头与每一行示例数据列数完全一致的断言守护，并在 `pluginParsers.test.ts` 中增加性别列解析测试。
 
+### Docs
+
+- **GitHub 主仓 / Gitee 镜像双入口对齐（面向国内开发者）**：仓库新增 Gitee 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（GitHub → Gitee 单向同步、不跑 CI / 不发 Release），并在所有开发者入口补齐双地址与镜像口径：`README.md`（双平台说明 + 克隆命令）、`docs/index.md`、`docs/getting-started/quickstart.md` / `quickstart-handbook.md` / `installation-guide.md`、`docs/deployment/production-guide.md`、`docs/tutorials/plugin-development-tutorial.md` §2.8（插件开发 Skill 的 GitHub 与 Gitee 安装命令、离线兜底）、`docs/agent/agent-handbook.md`（Agent 侧仓库与镜像事实表）、`.github/ISSUE_TEMPLATE/config.yml`（Gitee Issue 通道）；
+- **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。
+
 ## [0.7.11] - 2026-11-03
 
 ### Governance
