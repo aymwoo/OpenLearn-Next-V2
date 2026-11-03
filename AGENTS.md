@@ -71,9 +71,28 @@
 
 All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Copilot, etc.) working in this repository MUST strictly abide by the following collaboration lifecycle:
 
+> 🔁 **仓库双平台（GitHub 主仓 / Gitee 镜像）**
+>
+> | 平台           | 地址                                        | 用途                                                                                 |
+> | -------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
+> | GitHub（主仓） | https://github.com/aymwoo/OpenLearn-Next-V2 | **Issue / PR / CI / Release / npm 发布的主入口**                                     |
+> | Gitee（镜像）  | https://gitee.com/aymwoo/openlearn-next     | 国内网络访问 GitHub 受限时的**克隆与 Issue 通道**（只读镜像，不跑 CI、不发 Release） |
+>
+> 镜像由 GitHub **单向同步**（绝不 force-push）。规则：**一个变更只在一个平台开一份 Issue / PR**（不要两边各提一份）；**禁止在 Gitee 侧开启自动双向镜像**（会覆盖分支 / 标签 / 提交，冲掉 GitHub 上的 PR 合并结果）；issue / PR 编号不跨平台复用（GitHub 是整数，Gitee issue 是 `I...` 字符串）。
+>
+> **镜像快进是维护者专属动作**（需要 Gitee 仓库写权限）。普通贡献者 / Agent 只管在 GitHub 提 Issue 与 PR —— 镜像里的内容由维护者同步，不需要你做任何操作。维护者在 PR 合并后执行：
+>
+> ```bash
+> # 从 GitHub 克隆的仓库：origin=GitHub，需要先把镜像加成第二个远端
+> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过（git remote -v 可查）
+> git push gitee main --tags                                        # 只快进，不 force-push；--tags 同步 release tag
+> ```
+>
+> 若你本来就是从 Gitee 克隆的（`origin` 已是镜像），则 `git push origin main --tags` 即为快进；想同时保留 GitHub 再 `git remote add github https://github.com/aymwoo/OpenLearn-Next-V2.git`。
+
 ### 1. Issue-First 驱动流程 (Issue-Driven Workflow)
 
-- **推荐优先提 Issue**：当发现系统缺陷（Bug）、潜在安全漏洞、性能退化、代码坏味道或构想新功能时，**推荐首先通过 GitHub Issue（命令行 `gh issue create` 或 Web 端）进行完整记录与方案对齐**。
+- **推荐优先提 Issue**：当发现系统缺陷（Bug）、潜在安全漏洞、性能退化、代码坏味道或构想新功能时，**推荐首先通过 GitHub Issue（命令行 `gh issue create` 或 Web 端）进行完整记录与方案对齐**。国内网络无法访问 GitHub 时，改为在 Gitee 镜像提 Issue（`gitee issue create -R aymwoo/openlearn-next`，注意编号是 `I...` 字符串）；**同一问题只提一处**。
 - **Issue 结构要素**：
   - 清晰准确的标题（如 `fix(whiteboard): ...` 或 `feat(ai-provider): ...`）；
   - 问题背景与复现步骤（Reproduction Steps / Impact Scope）；
@@ -87,6 +106,7 @@ All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Cop
 - **专用特性分支**：每次改动必须基于最新的主干（`origin/main`）创建独立的工作分支，分支命名遵循规范：
   - 格式：`<agent-or-tool>/<issue-id>-<slug>` 或 `<agent-or-tool>/<slug>`
   - 示例：`codebuddy/issue-383-ai-provider-isolation`、`cursor/fix-whiteboard-loop`、`codebuddy/release-v0.7.11`。
+- **共用一个分支**：同一变更对应的分支与 PR **只在一个平台创建**（默认 GitHub；GitHub 不可达时才走 Gitee），另一个平台只接收 `main` 快进，不接收同名分支。
 - **常规提交规范**：提交信息必须严格遵循 Conventional Commits 格式。
 - **规范化 PR 交付（`gh pr create`）**：
   - PR 标题使用 Conventional Commits 格式；

@@ -37,6 +37,8 @@ pm2 start openlearn-next --name "openlearn-core" -- -p 9000 -H 0.0.0.0
 ```bash
 # 1. 克隆源码与拉取依赖
 git clone https://github.com/aymwoo/OpenLearn-Next-V2.git /opt/openlearn
+# 国内网络访问 GitHub 受限时，改用 Gitee 镜像（内容一致，单向同步）：
+# git clone https://gitee.com/aymwoo/openlearn-next.git /opt/openlearn
 cd /opt/openlearn
 # prepare 会构建 @openlearn/plugin-sdk 的 dist/。若使用 --ignore-scripts，
 # 请在 lint / 启动前另执行：node scripts/build-plugin-sdk.mjs

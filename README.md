@@ -9,6 +9,9 @@
 
 📚 **官方文档**：[在线文档库 (ReadTheDocs)](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [**快速上手手册**（安装 → 运行 → 上课 → 写插件，含截图）](docs/getting-started/quickstart-handbook.md) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [部署运维手册](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)
 
+> 🔁 **仓库双平台**：主仓 [GitHub](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [Gitee](https://gitee.com/aymwoo/openlearn-next)（**国内网络访问 GitHub 受限**时用于克隆源码与提交 Issue）。
+> 镜像是 **GitHub → Gitee 单向同步**：内容与 `main` 对齐，但 **CI、Release、npm 发布仍只在 GitHub 侧运行**；提 Issue / PR 请只在一个平台开一份，避免两边分叉。
+
 ---
 
 ## 🌟 核心特性
@@ -72,7 +75,9 @@ npm update -g openlearn-next    # 更新
 
 ```bash
 # 1. 克隆仓库并安装依赖（建议 Node 22 + pnpm）
-git clone https://github.com/aymwoo/OpenLearn-Next-V2.git
+git clone https://github.com/aymwoo/OpenLearn-Next-V2.git openlearnv2
+# 国内网络访问 GitHub 受限时，改用 Gitee 镜像（内容一致，单向同步）：
+# git clone https://gitee.com/aymwoo/openlearn-next.git openlearnv2
 cd openlearnv2
 pnpm install
 

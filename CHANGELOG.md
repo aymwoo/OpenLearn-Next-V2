@@ -19,6 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **系统管理插件模板命令同步**：`packages/plugins/management.ts` 中的 `class.template_download` 与 `student.template_download` 模板命令同步升级至包含学号、密码、备注、性别的完整标准规范；
   - **质量回归断言**：在 `bulkImportService.test.ts` 中补充表头与每一行示例数据列数完全一致的断言守护，并在 `pluginParsers.test.ts` 中增加性别列解析测试。
 
+### Docs
+
+- **快速上手手册与插件开发完全指南去 Docker 化与关键步骤全流程图解**：
+  - **彻底去 Docker 化**：在《快速上手手册》（`quickstart-handbook.md`）中移除 `1.3 Docker Compose` 章节及数据卷容器路径说明，首批全面聚焦 Node 22 + pnpm / npx 的开箱即用体验；确保《插件开发完全指南》（`plugin-development-tutorial.md`）完全基于本地原生沙箱；
+  - **关键步骤步步有图**：快速上手手册扩充至 8 张关键实拍图，新增「课前就绪页（临时上课密码、全班签到监控、一键进入课中授课）」与「插件安装向导（提供商信任与 CapabilityGuard 能力双重勾选防线）」；
+  - **插件开发全流程实操图解（9 步法）**：在插件开发手册 §4.2 融入真实实测的 9 张高清实拍截图，覆盖登录认证、ZIP 上传向导、高危权限与能力审批、插件中心状态确认、教师端扩展导航、隐藏沙箱 iframe 安全通信、开发者工具与实时日志、白板互动工具协同、以及生命周期干净卸载；
+  - **官方 Skill (v2.16.1) 全通道对齐**：全面梳理官方插件开发 Skill 的三大安装通道（GitHub 注册表、Gitee 完整 URL 直连、离线目录拷贝），确保国内网络与离线开发者均可一键起步；
+  - **A4 打印级 PDF 导出与本地分发**：新增 `scripts/export-handbooks-pdf.mjs`，通过 Chromium 打印管道将 Sphinx HTML 手册导出为精美排版的 A4 PDF，并同步生成至 `~/Downloads/` 目录下（包含《快速上手手册》、《插件开发完全指南》以及《插件开发 Skill 使用指南》）。
+- **GitHub 主仓 / Gitee 镜像双入口对齐（面向国内开发者）**：仓库新增 Gitee 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（GitHub → Gitee 单向同步、不跑 CI / 不发 Release），并在所有开发者入口补齐双地址与镜像口径：`README.md`（双平台说明 + 克隆命令）、`docs/index.md`、`docs/getting-started/quickstart.md` / `quickstart-handbook.md` / `installation-guide.md`、`docs/deployment/production-guide.md`、`docs/tutorials/plugin-development-tutorial.md` §2.8（插件开发 Skill 的 GitHub 与 Gitee 安装命令、离线兜底）、`docs/agent/agent-handbook.md`（Agent 侧仓库与镜像事实表）、`.github/ISSUE_TEMPLATE/config.yml`（Gitee Issue 通道）；
+- **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main --tags` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。镜像快进为**维护者专属动作**（需 Gitee 写权限），普通贡献者只需在 GitHub 提 Issue / PR；文档同时给出 `git remote add gitee ...` 的远端配置步骤，避免全新克隆的工作副本执行 `git push gitee main` 时报 `does not appear to be a git repository`。
+
 ## [0.7.11] - 2026-11-03
 
 ### Governance

@@ -25,6 +25,7 @@
  *
  *   01-login.png       登录页（含首次安装的默认口令提示）
  *   02-portal.png      教师主界面：互动课堂 · 授课控制台（选课 / 选班 / 开始上课）
+ *   02b-pre-class.png  课前就绪阶段（班级临时密码 / 学生签到 / 一键开启课中授课）
  *   03-classroom.png   课中授课：白板、课堂互动工具与教学环节
  *   04-briefing.png    「学情简报」全景概要弹窗（完成归档即下课）
  *
@@ -155,16 +156,20 @@ try {
   await page.waitForTimeout(600);
   await shot(page, 'quickstart-02-portal.png');
 
-  // ── 4. 课中授课（白板）───────────────────────────────────────────────────
+  // ── 4. 课前就绪阶段 ─────────────────────────────────────────────────────
   await startBtn.click();
   const enterBoard = page.getByRole('button', { name: /一键开启课中授课/ });
   await waitFor(enterBoard, '「一键开启课中授课」按钮');
+  await page.waitForTimeout(1000); // 等待临时密码与学生签到状态稳定
+  await shot(page, 'quickstart-02b-pre-class.png');
+
+  // ── 5. 课中授课（白板）───────────────────────────────────────────────────
   await enterBoard.click();
   await waitFor(page.getByRole('button', { name: /完成授课，进入课后/ }), '白板阶段的「完成授课」按钮');
   await page.waitForTimeout(1200); // 白板初始化 + 学生在线状态刷新
   await shot(page, 'quickstart-03-classroom.png');
 
-  // ── 5. 学情简报 / 归档（下课）────────────────────────────────────────────
+  // ── 6. 学情简报 / 归档（下课）────────────────────────────────────────────
   await page.getByRole('button', { name: /完成授课，进入课后/ }).click();
   await page.waitForTimeout(2500);
   await page.getByText('学情简报', { exact: true }).last().click();
@@ -174,7 +179,7 @@ try {
   await page.waitForTimeout(5000); // 等「课堂阶段已切换」toast 自动消失，避免遮住截图
   await shot(page, 'quickstart-04-briefing.png');
 
-  // ── 6. 清理：完成归档，让演示库回到「无进行中课堂」状态 ────────────────
+  // ── 7. 清理：完成归档，让演示库回到「无进行中课堂」状态 ────────────────
   const archiveBtn = page.getByRole('button', { name: /完成归档/ });
   await waitFor(archiveBtn, '「完成归档」按钮');
   await archiveBtn.click();

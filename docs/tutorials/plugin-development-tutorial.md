@@ -338,29 +338,42 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了 OpenLearn V2（平台 `0.7.x`、SDK `@openlearn/plugin-sdk@3.8.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，强烈推荐使用官方更新的 **OpenLearn 插件开发 Skill（v2.16.1）** 来辅助开发。Skill 是运行在 Antigravity / Claude Code / Codex 等智能编码代理中的专属工具包，深度对齐 OpenLearn V2（平台 `0.7.x`、SDK `@openlearn/plugin-sdk@3.8.0` 与测试套件 `@openlearn/plugin-test-kit`）的内核架构与安全规范，能自动化插件工程的大部分设计与生成流程。
 
-> 🚩 **给 AI Agent 的提示**：Skill 生成的是**代码骨架**，它不能替你判断本次目标插件是否能拿到自定义 UI。装完脚手架后请先回到 [2.2 三档执行模式](#execution-modes) 确认前端能力边界，再决定要不要写 `frontend.tsx`。
+> 🚩 **给 AI Agent 的提示**：Skill 负责根据需求设计架构并生成**规范的代码工程**。第三方插件分发默认落入 `process` 子进程沙箱，前端运行于无 DOM 权限的隐藏 iframe，装完脚手架后请先对照 [2.2 三档执行模式](#execution-modes) 确认能力边界。
 
-**安装与配置：**
+**安装与配置（支持 GitHub 主仓 / Gitee 镜像 / 离线目录拷贝三通道）：**
 
 ```bash
-# 使用 Antigravity CLI 或 npx 快捷添加官方开发 Skill
+# ① skills.sh 注册表安装（GitHub 主仓网络通畅时推荐）
 npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
+
+# ② Gitee 镜像直连安装（国内网络访问 GitHub 受限时首选）
+#    skills CLI 会把完整 Git URL 识别为远程仓库克隆，必须写全 .git 地址，避免使用简写
+npx skills add https://gitee.com/aymwoo/openlearn-skills.git
+
+# ③ 离线目录拷贝（完全离线或无网络连接时的通用兜底方案）
+#    克隆或解压 openlearn-skills 仓库后，直接将技能子目录复制到本地 Agent 的 skills 路径中：
+#    git clone https://gitee.com/aymwoo/openlearn-skills.git
+#    cp -r openlearn-skills/openlearn-next-plugin-dev ~/.gemini/antigravity-cli/skills/  # Antigravity
+#    （Claude Code 对应 ~/.claude/skills/；pi agent 对应 ~/.pi/agent/skills/）
 ```
 
-安装后，在 Agent 对话中提及 OpenLearn 插件开发相关需求（例如：“_帮我写一个基于 Node 隔离沙箱的课堂互动抽奖插件_”），Skill 将会自动激活。
+> 🔁 **Skill 仓库双平台**：主仓 [github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)（Issue / PR / Release / CI 主入口）｜ 镜像 [gitee.com/aymwoo/openlearn-skills](https://gitee.com/aymwoo/openlearn-skills)。
+> 镜像由 GitHub **单向同步**，不跑 CI、不发 Release；提 Issue / PR 请只在一个平台开一份。
 
-**Skill 核心能力（适配 OpenLearn V2 最新架构）：**
+安装完成后，在与 AI Agent 的对话中提及 OpenLearn 插件开发需求（例如：“_帮我开发一个随堂投票抽奖插件，需要注册课堂工具和命令处理器_”），Skill 将会自动识别意图并激活。
 
-| 能力维度                    | 最新架构适配说明                                                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.8.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
-| 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
-| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (沙箱桥接入口，非 React 组件) 的标准项目工程。      |
-| 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
-| 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.3` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                 |
-| 📦 **一键打包与发布**       | 提供 `npx @openlearn/plugin-sdk build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。                                                    |
+**Skill 核心能力（全面适配 OpenLearn V2 最新架构）：**
+
+| 能力维度                    | 最新架构适配说明                                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.8.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。                       |
+| 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread / Process 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
+| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (沙箱桥接入口，非 React 组件) 的标准项目工程。                |
+| 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。                        |
+| 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.3` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                           |
+| 📦 **一键打包与发布**       | 提供 `npx @openlearn/plugin-sdk build` 或仓库自带 `cli.mjs build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。                                   |
 
 **AI 辅助开发标准化工作流：**
 
@@ -372,7 +385,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
   → 生成项目结构与代码 (Action/Command/Event + 桥接式 frontend.tsx)
   → 自动生成 @openlearn/plugin-test-kit 单元测试
   → 执行 npx @openlearn/plugin-sdk build 编译生成 ZIP 扩展包
-  → 提示在 OpenLearn V2 后台管理中上传激活并测试
+  → 引导在 OpenLearn V2 后台管理中上传激活并测试
 ```
 
 **支持的标准插件模板：**
@@ -383,7 +396,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 | `full-stack`    | Worker Thread + 隐藏 iframe 前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 | `frontend-only` | 隐藏 iframe 前端（无可见 UI）    | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 
-**官方 Skill 资源与存储库**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
+**官方 Skill 资源与存储库**：GitHub [github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills) ｜ Gitee 镜像 [gitee.com/aymwoo/openlearn-skills](https://gitee.com/aymwoo/openlearn-skills)
 
 > 💡 **提示**：在开发复杂插件时，直接使用 AI Skill 生成的基础代码天然遵循平台的 5 阶段启动流水线、DI Token 依赖注入与沙箱隔离规范，可提升 5~10 倍的开发效率。
 
@@ -1014,6 +1027,95 @@ poll.get_results  — 查询结果（ext-poll.poll.get_results）
    [frontend-sandbox-capability-boundary](../plugin/frontend-sandbox-capability-boundary.md) §4，状态：**待立项**）。
 
 若你的插件必须自带交互界面，那它只能是**内置/受信插件**（放 `packages/plugins` 或进 `OPENLEARN_TRUSTED_INLINE_PLUGINS`），不能走 ZIP 分发。
+
+---
+
+### 4.2 第三方插件实装与验收全流程图解（从安装到卸载 9 步法）
+
+为了让开发者能够完整掌握第三方插件的分发、安装、调试与课堂验收全过程，本节基于官方真实实测环境（平台 `openlearn-next v0.7.10+`、`@openlearn/plugin-sdk 3.8.0`、Node 22），提供一套从零到实装验收的**九步图解操作指引**。每一个关键步骤均配有真实的系统操作截图与防错要点。
+
+#### 步骤 1：管理员身份安全登录
+
+打开平台首页（默认 `http://localhost:9000`），点击「教师与管理端」入口，使用管理员账号登录。
+
+![步骤 1：管理端登录界面](media/plugin-skill/01-login.png)
+
+- **安全提醒**：种子管理员账号初始密码等于用户名 `admin`。首次安装系统后登录会触发强制改密（须 ≥8 位且包含字母与数字），改密完成后方可进入系统管理面板。
+
+#### 步骤 2：启动 ZIP 安装向导
+
+在左侧主导航栏中选择 **系统管理 → 插件中心**，点击右上角的 **从 ZIP 安装** 按钮，选择构建出的 `.zip` 插件包。
+
+![步骤 2：从 ZIP 安装向导与 Manifest 静态校验](media/plugin-skill/02-install-wizard.png)
+
+- **向导校验**：安装向导包含 5 步流水线，系统会在第 1 步解压 ZIP 并对 `manifest.json` 进行 JSON Schema 严格校验。此时如果 `manifest.id` 或依赖项格式不符合规范，向导会在第 1 步直接标红报错并中断流程。
+
+#### 步骤 3：提供商信任与权限能力审批（关键双重防线）
+
+安装向导推进至第 2 步与第 5 步时，管理员必须**显式勾选安全授权确认框**：
+
+![步骤 3：权限确认与能力授予双重勾选](media/plugin-skill/03-permissions.png)
+
+- **第 2 步（系统信任确认）**：勾选 `我已了解并信任此插件的提供商，愿意授予上述高级系统权限。`。由于第三方插件强制在隔离子进程（`process` 模式）中运行，该选项确保管理员知悉插件提供商背景；
+- **第 5 步（能力授予授权）**：勾选 `确认授予清单申请的能力。不勾选则这些能力不会生效。`。平台采用 Default-Deny 最小权限安全模型，即使 manifest 中声明了 `capabilitiesProposed`，若管理员未在此处勾选，运行时调用对应内核服务依然会被拦截抛出 403。
+
+#### 步骤 4：插件中心状态与隔离模式确认
+
+点击 **确认安装并上传** 后，系统完成子进程引导与热加载。返回插件中心列表，对应插件卡片将立即呈现在列表中：
+
+![步骤 4：插件中心卡片与已启用状态](media/plugin-skill/04-plugin-center.png)
+
+- **卡片要素解读**：
+  - **状态徽标**：显示绿色的 `已启用`；
+  - **运行模式**：右侧标注 `强制 process`（表明子进程沙箱已就绪，网络出站默认拦截）；
+  - **功能注册**：清晰展示注册的视图、扩展槽位与授予的权限数量；
+  - **操作按钮**：右下角红色按钮显示 **禁用**，表明当前正处于激活运行中。
+
+#### 步骤 5：教师端扩展导航入口
+
+若插件在 manifest 中声明了全屏管理视图（`teacher.tab`），系统左侧导航栏的「扩展应用」分组中会自动挂载该插件的入口：
+
+![步骤 5：教师端扩展应用导航菜单](media/plugin-skill/05-nav-entry.png)
+
+- **多租户隔离**：导航菜单的显示由教师账号的课堂状态与插件激活状态动态控制，未启用的插件不会产生幽灵菜单项。
+
+#### 步骤 6：沙箱视图运行与安全数据交互
+
+点击导航进入插件页面，第三方插件的视图将在严格隔离的隐藏沙箱 iframe 中渲染：
+
+![步骤 6：沙箱视图运行与数据交互](media/plugin-skill/06-plugin-running.png)
+
+- **沙箱通信**：第三方插件的前端页面与宿主之间通过 Bridge SDK 建立通信通道，所有对数据库、课节或命令总线的调用均经过平台统一网关与 CapabilityGuard 鉴权。
+
+#### 步骤 7：开发者工具与内核排错观测
+
+在插件中心点击卡片上的 **开发者** 标签页，可以直观查看插件底层的实时运行指标与日志：
+
+![步骤 7：开发者工具与日志排查](media/plugin-skill/07-developer-tab.png)
+
+- **排错利器**：在此面板中可实时观测：
+  - 插件注册的命令处理器（`registeredHandlers`）；
+  - ActionDescriptor 规范与入参 Schema；
+  - 事件总线订阅列表与监听状态；
+  - 插件子进程输出的实时日志流（包含详细的错误栈），无需登录服务器查看终端日志。
+
+#### 步骤 8：课堂白板现场协同验收
+
+进入 **互动课堂**，选择班级开启上课并点击「一键开启课中授课」，在课中白板工具栏右侧展开 **互动工具**：
+
+![步骤 8：课堂现场协同与互动工具调用](media/plugin-skill/08-classroom.png)
+
+- **协同生效**：插件贡献的课堂工具（如投票、抽答、便签墙等）会出现在白板下拉菜单中。点击工具项后，系统自动装配当前课节 ID（`$lessonId`）并向内核命令总线派发指令，右下角弹出成功提示，学生端实时接收同步数据。
+
+#### 步骤 9：插件安全停用与干净卸载
+
+当测试完毕或需要升级维护时，可在插件中心执行停用与安全卸载：
+
+![步骤 9：插件停用与安全卸载](media/plugin-skill/09-uninstall.png)
+
+- **资源闭环回收**：
+  1. 点击卡片右下角的 **禁用**，系统触发 `deactivate()` 并向子进程发送终止信号；
+  2. 点击 **卸载插件** 并二次确认，系统将彻底清除注册的命令、注销事件监听、删除解压的静态资源目录并回收数据库隔离空间，保证系统内核零残留。
 
 ---
 

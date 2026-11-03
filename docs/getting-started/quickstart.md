@@ -12,7 +12,9 @@
 ### 步骤 1：克隆仓库与安装依赖
 
 ```bash
-git clone https://github.com/aymwoo/OpenLearn-Next-V2.git
+git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
+# 国内网络访问 GitHub 受限时改用 Gitee 镜像（内容一致，GitHub → Gitee 单向同步）：
+# git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2
 cd OpenLearn-Next-V2
 pnpm install
 ```

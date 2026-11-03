@@ -3,6 +3,8 @@
 欢迎使用 **OpenLearn V2** 官方技术文档中心。OpenLearn V2 是一套全栈、分布式、基于插件沙箱隔离（inline / worker_threads / 子进程三档执行模式）架构的智能教育操作系统（Educational OS）。
 
 > 🚀 **第一次使用？** 先读 [快速上手手册](getting-started/quickstart-handbook.md)：安装 → 运行 → 上一节课 → 写第一个插件，一页走完，关键步骤配截图。
+>
+> 🔁 **仓库双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（国内网络访问 GitHub 受限时用于克隆与提 Issue；单向同步，不跑 CI）。
 
 ---
 
