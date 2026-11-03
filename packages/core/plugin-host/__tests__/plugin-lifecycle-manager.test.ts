@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { PluginLifecycleManager } from '../plugin-lifecycle-manager.js';
 import type { PluginHost } from '../index.js';
 import { PluginState } from '../types.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('PluginLifecycleManager (P7-B3 EU-01)', () => {
   const createMockPluginHost = () => {
@@ -49,18 +48,5 @@ describe('PluginLifecycleManager (P7-B3 EU-01)', () => {
 
     await manager.uninstallPlugin('plugin-vote');
     expect(mockHost.uninstallPlugin).toHaveBeenCalledWith('plugin-vote', undefined);
-  });
-
-  it('should register srv_plugin_lifecycle_manager in PluginCompositionModule', () => {
-    const mockHost = createMockPluginHost();
-    const manager = new PluginLifecycleManager(mockHost);
-    const module = new PluginCompositionModule();
-
-    const refs = new Map<string, unknown>();
-    refs.set('lifecycleManager', manager);
-
-    expect(() => {
-      module.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 });

@@ -258,7 +258,8 @@ Worker 里的 `ctx.log` 由 `packages/core/worker-runtime/bootstrap/sections/mes
 
 `packages/core/ai-capability/logging/capability-logger.ts` 的 `CapabilityLogger` 是进程内环形缓冲，与 pino 无关。默认最多 200 条（`AI_CAPABILITY_LOG_MAX_ENTRIES`），30 分钟过期（`AI_CAPABILITY_LOG_TTL_MS`，小于等于 0 表示不过期）。默认只保留载荷的形状摘要；`AI_CAPABILITY_LOG_CAPTURE_PAYLOAD=true` 时才保存全文。进程退出即丢失。
 
-生产构造点在 `packages/core/ai-capability/ai-capability-kernel.ts` 与 `packages/core/bootstrap/composition/whiteboard-composition-module.ts`。
+生产构造点只有一处：`packages/core/ai-capability/ai-capability-kernel.ts`。
+（原先此处还列了 `bootstrap/composition/whiteboard-composition-module.ts` —— 那是一个在临时注册表里单独 `new CapabilityLogger()` 的演示模块，随 `bootstrap/composition/` 于 Phase 0 删除。）
 
 ---
 

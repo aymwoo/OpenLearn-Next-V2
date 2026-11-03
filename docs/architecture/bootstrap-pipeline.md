@@ -147,4 +147,4 @@ await ServerBootstrapAdapter.bootstrap({
 
 ## 其余子系统（本文不展开）
 
-`packages/core/bootstrap/` 下还有 `builder/`（`PlatformBuilder` 流式装配）、`composition/`（`PlatformCompositionRoot` + 各 `CompositionModule`）、`integration/`、`module-registry/`、`domain-registry/`、`lesson-session/`、`permission/` 等子目录。`PlatformCompositionRoot` 在 `Kernel` 构造函数中被调用一次（注册 `PluginCompositionModule`），失败仅告警不阻断启动。
+`packages/core/bootstrap/` 下还有 `builder/`（`PlatformBuilder` 流式装配）、`integration/`、`module-registry/`、`domain-registry/`、`lesson-session/`、`permission/` 等子目录。原 `composition/`（`PlatformCompositionRoot` + 各 `CompositionModule`）已于 Phase 0 删除 —— 它在 `Kernel` 构造函数中被调用一次，但写入的注册表无人读取。
