@@ -10,6 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [0.7.12] - 2026-11-03
+
+### Features
+
+- **Gitee 镜像同步自动化**（`.github/workflows/sync-gitee-mirror.yml`）：此前文档要求维护者在每次合并后手工执行 `git remote add gitee` + `git push gitee main --tags` —— 一次疏忽就断链，而「镜像过期」对国内开发者是隐形故障（他们看到的是旧文档、旧契约）。现改为 GitHub Actions 自动同步，三条约束写进 workflow：
+  - **单向**：只从 GitHub 推往 Gitee，绝不反向；
+  - **只快进**：推送前用 `git merge-base --is-ancestor gitee/main HEAD` 判定，镜像分叉就**停下并报错，绝不 force-push**（否则会冲掉 GitHub 上的合并结果）；
+  - **不阻塞主干**：`continue-on-error` + 未配 Secret 时自动跳过，镜像同步失败不会拖红无关 PR。
+
+  推送后还会**回读远端**比对 `refs/heads/main` 与本次提交 SHA，避免「push 成功但没落到 main」的假成功。触发时机：`main` 推送 + 每 6 小时兑底 + 手动 `workflow_dispatch`。
+
+  本地已用临时裸仓库模拟过四种情形：镜像落后 → 快进成功；镜像分叉 → 退出码 1 且镜像 SHA 未变；镜像无 `main` → 首次同步并带上全部 tag；回读校验 → 正确 SHA 通过、错误 SHA 报错。
+
 ### Fixes
 
 - **班级与学生导入模板示例列数脱节与多链路性别字段同步（Issue #389）**：
@@ -18,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **班级内批量招生支持性别**：`src/utils/pluginParsers.ts` 中的 `parseCSV` 增加 `gender` 列解析，并在 `server/services/roster-service.ts` 的 `BulkEnrollInput` 类型中显式声明 `gender?: string`，确保班级内通过 CSV 批量加入学生时性别数据不被丢失；
   - **系统管理插件模板命令同步**：`packages/plugins/management.ts` 中的 `class.template_download` 与 `student.template_download` 模板命令同步升级至包含学号、密码、备注、性别的完整标准规范；
   - **质量回归断言**：在 `bulkImportService.test.ts` 中补充表头与每一行示例数据列数完全一致的断言守护，并在 `pluginParsers.test.ts` 中增加性别列解析测试。
+
+- **权限清单单一权威来源（平台 Issue #368）落到契约层**：`docs/agent/contracts/capabilities.json` 新增 **`declarable`** 字段（= `packages/core/capability/catalog.ts` 的 `CAP` 全量取值，也就是 SDK 的 `CAPABILITIES`，**31** 条），由 `audit-tools/agent_facts.py` 从源码抽取。缺了这份清单，插件作者与 L0 静态检查只能猜「哪些串能写进 `capabilitiesProposed`」，于是把真实的方法型权限（`student-data:write` / `task:register` / `grades:write` …）误判为「捏造串」并删掉——真实事故：4 个插件的 `pointsLedger.addPoints` 全部失效（平台 Issue #368）。
+- **`docs/reference/plugin-capability-matrix.md` 补全方法级权限**：此前只列了资源型 19 条 + 仅可声明 3 条，漏掉方法级 8 条与平台内部 1 条（`segment:gate_eval`），而 `assertValidManifestCapabilities` 的报错文案恰恰把本页当作「合法值来源」——用户按提示去查会查不到自己写的那一条。同时修正两处口径错误：`ai:invoke` 被写成「不是 RBAC 字符串」（它**是**真实权限串，同时属于第 2 套 `RuntimePermission`）、统计口径里的「20 个 `capabilityRequired`」（真值是 **19**，第 20 个来自 SDK `.d.ts` 的 JSDoc 注释而非真声明）。
+- **AI 手册基线漂移可被门禁发现**：`docs/agent/agent-handbook.md` 顶部的版本表此前写着平台 `0.7.8`，而契约 `versions.json` 是 `0.7.11`——因为前者是纯文本、没有任何校验。现已对齐到 `0.7.11`，并让 `agent_facts.py --check` **一并校验该表与源码一致**（此前只有 `versions.json` 被校验），避免同类漂移再次静默发生。
 
 ### Docs
 
@@ -35,23 +54,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 已创建 **v0.7.11 Release** 并挂载三份 PDF 附件，链接即已生效。
 - **GitHub 主仓 / Gitee 镜像双入口对齐（面向国内开发者）**：仓库新增 Gitee 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（GitHub → Gitee 单向同步、不跑 CI / 不发 Release），并在所有开发者入口补齐双地址与镜像口径：`README.md`（双平台说明 + 克隆命令）、`docs/index.md`、`docs/getting-started/quickstart.md` / `quickstart-handbook.md` / `installation-guide.md`、`docs/deployment/production-guide.md`、`docs/tutorials/plugin-development-tutorial.md` §2.8（插件开发 Skill 的 GitHub 与 Gitee 安装命令、离线兜底）、`docs/agent/agent-handbook.md`（Agent 侧仓库与镜像事实表）、`.github/ISSUE_TEMPLATE/config.yml`（Gitee Issue 通道）；
 - **协作规范双平台化**：`AGENTS.md` / `CLAUDE.md` / `docs/contributing/contributing.md` 增加「一个变更只在一个平台开一份 Issue / PR」「合并后 `git push gitee main --tags` 快进镜像」「禁止在 Gitee 侧开启自动双向镜像」「issue / PR 编号不跨平台复用」四条红线，并注明镜像仅用于国内克隆与 Issue 通道。镜像快进为**维护者专属动作**（需 Gitee 写权限），普通贡献者只需在 GitHub 提 Issue / PR；文档同时给出 `git remote add gitee ...` 的远端配置步骤，避免全新克隆的工作副本执行 `git push gitee main` 时报 `does not appear to be a git repository`。
-
-### Fixes
-
-- **权限清单单一权威来源（平台 Issue #368）落到契约层**：`docs/agent/contracts/capabilities.json` 新增 **`declarable`** 字段（= `packages/core/capability/catalog.ts` 的 `CAP` 全量取值，也就是 SDK 的 `CAPABILITIES`，**31** 条），由 `audit-tools/agent_facts.py` 从源码抽取。缺了这份清单，插件作者与 L0 静态检查只能猜「哪些串能写进 `capabilitiesProposed`」，于是把真实的方法型权限（`student-data:write` / `task:register` / `grades:write` …）误判为「捏造串」并删掉——真实事故：4 个插件的 `pointsLedger.addPoints` 全部失效（平台 Issue #368）。
-- **`docs/reference/plugin-capability-matrix.md` 补全方法级权限**：此前只列了资源型 19 条 + 仅可声明 3 条，漏掉方法级 8 条与平台内部 1 条（`segment:gate_eval`），而 `assertValidManifestCapabilities` 的报错文案恰恰把本页当作「合法值来源」——用户按提示去查会查不到自己写的那一条。同时修正两处口径错误：`ai:invoke` 被写成「不是 RBAC 字符串」（它**是**真实权限串，同时属于第 2 套 `RuntimePermission`）、统计口径里的「20 个 `capabilityRequired`」（真值是 **19**，第 20 个来自 SDK `.d.ts` 的 JSDoc 注释而非真声明）。
-- **AI 手册基线漂移可被门禁发现**：`docs/agent/agent-handbook.md` 顶部的版本表此前写着平台 `0.7.8`，而契约 `versions.json` 是 `0.7.11`——因为前者是纯文本、没有任何校验。现已对齐到 `0.7.11`，并让 `agent_facts.py --check` **一并校验该表与源码一致**（此前只有 `versions.json` 被校验），避免同类漂移再次静默发生。
-
-### Features
-
-- **Gitee 镜像同步自动化**（`.github/workflows/sync-gitee-mirror.yml`）：此前文档要求维护者在每次合并后手工执行 `git remote add gitee` + `git push gitee main --tags` —— 一次疏忽就断链，而「镜像过期」对国内开发者是隐形故障（他们看到的是旧文档、旧契约）。现改为 GitHub Actions 自动同步，三条约束写进 workflow：
-  - **单向**：只从 GitHub 推往 Gitee，绝不反向；
-  - **只快进**：推送前用 `git merge-base --is-ancestor gitee/main HEAD` 判定，镜像分叉就**停下并报错，绝不 force-push**（否则会冲掉 GitHub 上的合并结果）；
-  - **不阻塞主干**：`continue-on-error` + 未配 Secret 时自动跳过，镜像同步失败不会拖红无关 PR。
-
-  推送后还会**回读远端**比对 `refs/heads/main` 与本次提交 SHA，避免「push 成功但没落到 main」的假成功。触发时机：`main` 推送 + 每 6 小时兑底 + 手动 `workflow_dispatch`。
-
-  本地已用临时裸仓库模拟过四种情形：镜像落后 → 快进成功；镜像分叉 → 退出码 1 且镜像 SHA 未变；镜像无 `main` → 首次同步并带上全部 tag；回读校验 → 正确 SHA 通过、错误 SHA 报错。
 
 ## [0.7.11] - 2026-11-03
 
