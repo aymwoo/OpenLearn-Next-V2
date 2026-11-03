@@ -98,7 +98,25 @@ describe('downloadCSVTemplate', () => {
     expect(header).toBe('Student Number,Student Name,Student Email,Initial Password,Student Notes,Gender');
   });
 
-  it('示例行的密码与备注列留空，避免教师直接沿用示例密码', async () => {
+  it('示例行与表头列数必须完全一致（Issue #389 回归）', async () => {
+    for (const type of ['class', 'student'] as const) {
+      for (const lang of ['zh', 'en'] as const) {
+        const text = await templateText(type, lang);
+        const rows = text
+          .replace(/^\uFEFF/, '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const headerCols = splitCsvLine(rows[0]);
+        for (let i = 1; i < rows.length; i++) {
+          const sampleCols = splitCsvLine(rows[i]);
+          expect(sampleCols.length, `${type} (${lang}) 第 ${i} 行示例数据列数应与表头一致`).toBe(headerCols.length);
+        }
+      }
+    }
+  });
+
+  it('示例行的密码与备注列留空，且性别列正常填写示例值', async () => {
     const text = await templateText('student', 'zh');
     const rows = text
       .replace(/^\uFEFF/, '')
@@ -109,6 +127,7 @@ describe('downloadCSVTemplate', () => {
     const first = splitCsvLine(rows[1]);
     expect(first[3]).toBe(''); // 初始密码留空 → 系统自动生成
     expect(first[4]).toBe(''); // 备注留空
+    expect(first[5]).toBe('男'); // 性别列示例
   });
 
   it('示例行带 UTF-8 BOM，保证 Excel 打开中文表头不乱码', async () => {

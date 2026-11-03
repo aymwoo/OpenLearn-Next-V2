@@ -77,6 +77,7 @@ export interface BulkEnrollInput {
   student_number?: string;
   password?: string;
   private_notes?: string;
+  gender?: string;
 }
 
 export interface BulkEnrollResultItem {
