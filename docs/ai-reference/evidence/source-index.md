@@ -214,8 +214,8 @@ grep -c 'actionRegistry\.register(' packages/plugins/*.ts server/routes/*.ts
 | frame 沙箱                                                        | `src/plugin-host/sandbox-frame.ts`                                                                      |
 | host action 派发（6 种）                                          | `src/plugin-host/host-action-dispatcher.ts`                                                             |
 | 前端服务注册表                                                    | `src/plugin-host/service-registry.ts`                                                                   |
-| 浏览器 worker                                                     | `src/plugin-host/browser-worker-manager.ts`、`browser-worker-transport.ts`                              |
-| 前端可解析 Token 白名单                                           | `src/plugin-host/allowed-tokens.ts`                                                                     |
+| ~~浏览器 worker~~                                                 | 已删除（Phase 0）：浏览器 Worker 车道从未接线                                                           |
+| ~~前端可解析 Token 白名单~~                                       | 已删除（Phase 0）；白名单现仅后端 `packages/core/worker-runtime/worker-manager.ts`                      |
 | 前端 ctx Provider / store                                         | `src/plugin-host/plugin-host-context.tsx`、`plugin-host-store.ts`                                       |
 | 前端方法门禁                                                      | `src/plugin-host/method-policy.ts`                                                                      |
 | bridge op：frame 10 / view 8                                      | `docs/agent/contracts/bridge-ops.json`（`frame_total` / `view_total`）                                  |

@@ -134,11 +134,11 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 
 前端有**独立实现**的一套门禁（`src/plugin-host/`），与后端同名同规则但**不共享代码**（后端 `worker-manager.ts` 依赖 `node:worker_threads` / `better-sqlite3`，浏览器无法直接 import）：
 
-| 顺序 | 门禁              | 实现位置                                                                                                                                                                                                                                               |
-| ---- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1    | Token 白名单      | `src/plugin-host/allowed-tokens.ts` 的 `computeAllowedWorkerTokens` + `BASE_FRONTEND_WORKER_SERVICE_TOKENS`（4 项：`IFrontendAPI` / `ISocketService` / `IUIService` / `IStorageService`），在 `src/plugin-host/service-host.ts` 的 `handleInvoke` 校验 |
-| 2    | manifest 能力检查 | 同文件 `handleInvoke`：空能力集时只允许 `'get'`                                                                                                                                                                                                        |
-| 3    | 方法 / 路径门禁   | `src/plugin-host/method-policy.ts` 的 `checkMethodPolicy`                                                                                                                                                                                              |
+| 顺序 | 门禁              | 实现位置                                                                                                                                                                                                                             |
+| ---- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Token 白名单      | `packages/core/worker-runtime/worker-manager.ts` 的 `computeAllowedWorkerTokens` + `BASE_WORKER_SERVICE_TOKENS`（9 项），在 `packages/core/worker-runtime/service-host.ts` 的 `handleInvoke` 校验。浏览器侧同名实现已于 Phase 0 删除 |
+| 2    | manifest 能力检查 | 同文件 `handleInvoke`：空能力集时只允许 `'get'`                                                                                                                                                                                      |
+| 3    | 方法 / 路径门禁   | `src/plugin-host/method-policy.ts` 的 `checkMethodPolicy`                                                                                                                                                                            |
 
 前端第 3 道的具体判定（`method-policy.ts`）：
 

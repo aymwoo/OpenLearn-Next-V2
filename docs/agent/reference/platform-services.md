@@ -576,31 +576,23 @@ interface SqliteDatabase {
 
 ---
 
-## 5. 前端 Worker 插件的 Token 白名单（与后端**不同的一套**）
+## 5. 插件 Token 白名单（仅后端一份）
 
-`src/plugin-host/allowed-tokens.ts` 是后端 `worker-manager.ts` 的**前端重新实现**
-（后端依赖 `node:worker_threads` / `fs` / `path` / `better-sqlite3`，浏览器打包会直接失败，
-故保持**同名常量、同名函数、相同判定规则**；**规则变更时必须两端同步修改**）。
+> **Phase 0 变更（2026-11）**：浏览器侧 Worker 车道已整体删除 —— 前端 token 白名单、
+> Worker 管理器、浏览器 ServiceHost 三个文件一并移除（`setWorkerManager()` 全仓无调用方，服务端
+> execution-policy 又把未受信插件强制 `process`、内置插件 `inline`，该分支在默认
+> 配置下永远不可达）。因此「前后端两套白名单、规则变更必须两端同步」的约束**已经消失**。
 
-| 语义       | 后端（权威）                                                   | 前端                                              |
-| ---------- | -------------------------------------------------------------- | ------------------------------------------------- |
-| 基础白名单 | `BASE_WORKER_SERVICE_TOKENS`（9 个）                           | `BASE_FRONTEND_WORKER_SERVICE_TOKENS`（**4 个**） |
-| 动态计算   | `computeAllowedWorkerTokens()`                                 | 同名函数                                          |
-| 门禁校验   | `service-host.ts` `handleInvoke` Barrier 1                     | 同                                                |
-| 注入点     | `worker-manager.ts` 传给 `new ServiceHost(..., allowedTokens)` | `browser-worker-manager.ts`                       |
+Token 白名单现在只有一处实现：`packages/core/worker-runtime/worker-manager.ts` 的
+`computeAllowedWorkerTokens`；校验点在 `packages/core/worker-runtime/service-host.ts`
+的 `handleInvoke`（Barrier 1 Token 白名单 + Barrier 2 只读降级）。
 
-```typescript
-// 前端基础白名单（所有 Worker 插件默认可用，均为 UI/事件/本地存储类基础设施，不含业务写操作）
-BASE_FRONTEND_WORKER_SERVICE_TOKENS = [
-  '@openlearn/frontend:IFrontendAPI',
-  '@openlearn/frontend:ISocketService',
-  '@openlearn/frontend:IUIService',
-  '@openlearn/frontend:IStorageService',
-];
-// 敏感领域服务：必须显式声明
-SENSITIVE_FRONTEND_SERVICE_TOKENS = ['@openlearn/frontend:ISemesterGradeService'];
-SENSITIVE_CAPABILITY_NAMES = ['grades']; // 授予 'grades' / 'grades:*' / '*'
-```
+| 语义       | 实现位置                                                        |
+| ---------- | --------------------------------------------------------------- |
+| 基础白名单 | `BASE_WORKER_SERVICE_TOKENS`（9 个，含 `INetworkProxyService`） |
+| 动态计算   | `computeAllowedWorkerTokens()`                                  |
+| 门禁校验   | 后端 `service-host.ts` `handleInvoke` Barrier 1                 |
+| 注入点     | `worker-manager.ts` 传给 `new ServiceHost(..., allowedTokens)`  |
 
 `computeAllowedWorkerTokens(manifest, requestedTokens?)` 三条规则：
 
@@ -618,12 +610,12 @@ SENSITIVE_CAPABILITY_NAMES = ['grades']; // 授予 'grades' / 'grades:*' / '*'
 ⇒ 你的 `requires` 条目必须逐字符正确；拼错不会更宽，只会**拿不到**。
 ```
 
-**威胁模型 T-FE-01**（该文件原文）：浏览器端插件只要在 manifest 声明任意一条 capability，
-就能 `ctx.resolve()` 到容器内任意服务并调用其任意方法（包括写成绩等敏感领域服务）——
-所以拦截点放在 **RPC 入口最前面**，未命中即拒绝。
-
-前端 Worker 可用的 4 个 Token 对应能力，与 ZIP 插件 iframe 沙箱的 10 个桥接操作
-是**两套不同的东西**（后者见 [前端沙箱](frontend-sandbox.md)）。
+> **原「前端 Worker 可用的 4 个 Token」与前后端对照表已随浏览器 Worker 车道删除**
+> （Phase 0，2026-11）。与之相关的威胁模型 T-FE-01（"浏览器插件声明任意 capability
+> 即可解析任意服务"）在浏览器侧不再适用；同样的「在 RPC 入口最前面拦截」原则现在
+> 只作用于后端 `process` 隔离插件。ZIP 插件 iframe 沙箱的 10 个桥接操作是另一套
+> 机制，见 [前端沙箱](frontend-sandbox.md)。
+> 是**两套不同的东西**（后者见 [前端沙箱](frontend-sandbox.md)）。
 
 ---
 
@@ -703,11 +695,11 @@ SENSITIVE_CAPABILITY_NAMES = ['grades']; // 授予 'grades' / 'grades:*' / '*'
 | 「能拿句柄，边界在语句级守卫」统一结论（2026-10-26 复核）                                                        | `docs/reference/platform-data-tables.md` ✅ 段落                                                                                                                                                                                                           |
 | 核心表 82 张 / 40 张硬禁                                                                                         | `docs/reference/platform-data-tables.md`、`plugin-trust-boundary.md` §2.3                                                                                                                                                                                  |
 | `SqliteDatabase` 自包含窄接口（避免暴露 better-sqlite3 类型）                                                    | `packages/core/di/interfaces.ts` 注释                                                                                                                                                                                                                      |
-| 前端白名单是后端的前端重实现及其四条对应关系表                                                                   | `src/plugin-host/allowed-tokens.ts` 文件头                                                                                                                                                                                                                 |
-| `BASE_FRONTEND_WORKER_SERVICE_TOKENS` 4 项 / `SENSITIVE_*`                                                       | 同上                                                                                                                                                                                                                                                       |
-| `computeAllowedWorkerTokens` 三规则 + 取交集                                                                     | 同上                                                                                                                                                                                                                                                       |
+| 白名单规则集中在一处（原前后端两份已收敛）                                                                       | `packages/core/worker-runtime/worker-manager.ts`                                                                                                                                                                                                           |
+| ~~`BASE_FRONTEND_WORKER_SERVICE_TOKENS` 4 项~~                                                                   | 已随 Phase 0 删除（浏览器 Worker 车道从未接线）                                                                                                                                                                                                            |
+| `computeAllowedWorkerTokens` 三规则 + 取交集                                                                     | `packages/core/worker-runtime/worker-manager.ts`                                                                                                                                                                                                           |
 | B-2 子串匹配可被 `MyISemesterGradeServiceThing` 绕过                                                             | 同上 `normalizeDepEntry` 注释                                                                                                                                                                                                                              |
-| 威胁模型 T-FE-01                                                                                                 | 同上文件头                                                                                                                                                                                                                                                 |
+| ~~威胁模型 T-FE-01~~                                                                                             | 已随 Phase 0 删除（原针对浏览器侧 Worker）                                                                                                                                                                                                                 |
 | 前端 Token 字符串值                                                                                              | `src/plugin-host/types.ts` 的 5 个 `*_TOKEN` 常量                                                                                                                                                                                                          |
 | Issue #327 两个课堂服务的 Worker RPC 代理                                                                        | `docs/` Issue #327 条目 + `plugin-context` §4                                                                                                                                                                                                              |
 | 事件总线常量 2000 / 3 / 50 与「超时后订阅者继续跑」                                                              | `packages/core/plugin-host`（见 [命令总线与事件总线](command-and-event.md) §5）                                                                                                                                                                            |

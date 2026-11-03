@@ -92,11 +92,13 @@ flowchart TD
   D -- 通过 --> F["真实服务方法执行"]
 ```
 
-| Barrier | 判定                                                      | 实现                                           | 错误                                                                                    |
-| ------- | --------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 1       | Token 是否在 `allowedTokens`（按 manifest 计算）          | `src/plugin-host/service-host.ts`（L237-243）  | `WorkerCapabilityError: Access to service token 'x' denied`                             |
-| 2       | `manifestCapabilities.length === 0` 且方法不以 `get` 开头 | 同文件（L245-252）                             | `Capability denied for actor …: empty manifestCapabilities, only 'get' methods allowed` |
-| 3       | 方法 / 路径级策略                                         | `method-policy.ts → checkMethodPolicy`（L197） | `Call denied for actor …: <token>.<method>() — <原因>`                                  |
+> 浏览器侧 Worker 车道已于 Phase 0 删除，下表三道闸现仅存在于后端。
+
+| Barrier | 判定                                                      | 实现                                                        | 错误                                                                                    |
+| ------- | --------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1       | Token 是否在 `allowedTokens`（按 manifest 计算）          | `packages/core/worker-runtime/service-host.ts`（Barrier 1） | `WorkerCapabilityError: Access to service token 'x' denied`                             |
+| 2       | `manifestCapabilities.length === 0` 且方法不以 `get` 开头 | 同文件（Barrier 2）                                         | `Capability denied for actor …: empty manifestCapabilities, only 'get' methods allowed` |
+| 3       | 方法 / 路径级策略                                         | `method-policy.ts → checkMethodPolicy`（L197）              | `Call denied for actor …: <token>.<method>() — <原因>`                                  |
 
 **Barrier 2 的实操含义**：`process` 插件如果 `capabilitiesProposed` 是空数组，
 `activate()` 里连 `ctx.db.ensureTable()` 都会 500。最小声明一条（如 `lesson:read`）即可解除只读锁。

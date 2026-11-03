@@ -36,7 +36,10 @@ export interface CanvasObject<T = Record<string, unknown>> {
 }
 ```
 
-> 完整定义见 `src/features/whiteboard/canvas-model/types.ts` 的 `CanvasObject`。
+> 该接口是**文档层的模型说明**：仓库中并不存在同名 TS 接口的实现文件（原
+> `src/features/whiteboard/canvas-model/types.ts` 已于 Phase 0 删除，它从未被生产代码引用）。
+> 运行时落库结构见 `migrations/000_initial_schema.sql` 的 `whiteboard_elements` 表；
+> 前端元素类型见 `src/types/app.ts` 的 `WhiteboardElement`。
 > 两个最易遗漏的字段：`layerId`（渲染必需，缺失则元素不渲染）与 `createdBy`（权限必需，缺失则无法做归属校验）。
 
 ---

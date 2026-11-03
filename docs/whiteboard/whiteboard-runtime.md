@@ -29,19 +29,37 @@ InteractiveWhiteboard.tsx (主组件)
 │   └── index.ts                        # Barrel export
 ├── utils/
 │   └── bridgeUtils.ts               # Bridge SDK 封装（wrapSrcDocWithBridge）
-├── canvas-model/                    # 画布对象模型（CanvasObject, CanvasPage, Layer, Selection）
-├── interaction-engine/              # 交互引擎（Pointer, Tool, Transform, Snap, Guide, ContextMenu）
-├── rendering-engine/                # 渲染引擎（RendererRegistry, LayerRender, Cache, HitTest, Animation）
-└── teaching-object/                 # 教学引擎（TeacherContext, StudentContext, Assessment, AI）
+├── theme.ts                         # 主题令牌与 ThemeManager
+└── types/payloads.ts                # 图元 payload 类型（宿主对外契约）
 ```
+
+> **Phase 0 变更（2026-11）**：此前的 `canvas-model/`、`interaction-engine/`、
+> `rendering-engine/`、`teaching-object/`、`tool-system/` 五个目录已整体删除
+> （61 文件 / 4,042 行）。它们声明了 6 个「引擎」，但 `InteractiveWhiteboard.tsx`
+> 只把符号 import 进来、从未调用，构建产物中也不存在对应代码（这些模块的专有
+> 字符串在 `dist/` 里 0 命中）。唯一真正被使用的 `theme-manager` 与
+> `HtmlAppletPayload` 已就地提升为 `theme.ts` / `types/payloads.ts`。
 
 ## 渲染器扩展
 
-### Konva 图元渲染 (`rendererRegistry`)
+### Konva 图元渲染（`renderElement`，**非**注册制）
 
-平台实际使用的是 `src/features/whiteboard/rendering-engine/registry/renderer-registry.ts` 的 `rendererRegistry`（由 `InteractiveWhiteboard.tsx` 从 `./rendering-engine/index.js` 导入）。所有可渲染到 Konva `<Stage>` 的图元通过 `rendererRegistry.registerRenderer(renderer)` 注册 —— 签名接收**单个 `IRenderer<T>` 对象**（含 `type` 与 `render` 字段），不是 `(type, renderer)` 两参数。
+> **Phase 0 变更（2026-11）**：本节曾记录 `rendering-engine` 与 `canvas-model` 下
+> **两套同名 `rendererRegistry`**（前者单参数 `IRenderer<T>`、后者两参数 React 组件），
+> 并声称「平台实际使用的是 rendering-engine 那份」。该说法与代码不符：两份实现都
+> 只被 import、从未被调用，构建产物中均不存在，现已随目录删除。
+>
+> 结论：**白板图元渲染没有可用的注册表机制**。新增图元不要恢复上述 registry。
 
-> ⚠️ **同名双份**：`src/features/whiteboard/canvas-model/registry/renderer-registry.ts` 另有一份同名导出 `rendererRegistry`，其 `registerRenderer(type, renderer)` 是**两参数**签名且渲染器为 React 组件。两者互不相干，按 `type` 值分派时用的是 `rendering-engine` 那份；`teaching-object/plugin-sdk/teaching-plugin-sdk.ts` 的 `registerRenderer(type, renderer)` 会包装后转调 `rendering-engine` 版本。
+当前实际实现是宿主内的**硬编码分支**：`InteractiveWhiteboard.tsx` 的 `renderElement()`
+（约 1,457 行）用 16 个 `el.type === '…'` 分支分派 15 种图元 ——
+`pen` / `highlighter` / `rectangle` / `circle` / `text` / `shape` / `quiz` /
+`assignment` / `rollcall` / `presentation` / `html-applet` / `code-sandbox` /
+`math-graph` / `plugin` / `hello-world`。
+
+新增图元的正确入口是**已存在的插件贡献点** `whiteboard.renderer`
+（宿主侧由 `<ExtensionPointRenderer slot="whiteboard.renderer" />` 消费）；
+把 9 个 LMS 图元从 `renderElement` 迁到该贡献点是 Phase 1 的计划项。
 
 ### 全屏渲染器 (`fullscreenRendererRegistry`)
 

@@ -790,7 +790,7 @@ ExtensionErrorBoundary key=`${pluginId}/${id}`
 - `activateWorkerPlugin` 合成的 manifest 必须带 `capabilitiesProposed`，
   否则触发 Barrier 2 只读降级；其 `activate` 是 `async () => {}`（注释 `Already activated via Worker bootstrap`）。
 
-前端 `ServiceHost` 的三道闸（`src/plugin-host/service-host.ts`）：
+后端 `ServiceHost` 的三道闸（`packages/core/worker-runtime/service-host.ts`）——浏览器侧同名实现已于 Phase 0 删除：
 
 | Barrier        | 消息                                                                                                                      |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -937,8 +937,8 @@ const SHARED_MODULE_MAP = {
 | store 形状、排序、跨插件拒绝文案、origin 语义                   | `src/plugin-host/plugin-host-store.ts` L395684–395964（R-2 L395839/395868）                         |
 | `rolesAllowed`/`group`/`badge` 无消费者                         | 全 `src/` grep 无读取点                                                                             |
 | dispatcher 单例、6 内置、无默认超时、last-wins                  | `src/plugin-host/host-action-dispatcher.ts` L394865–L395286                                         |
-| worker 常量与错误文案                                           | `src/plugin-host/browser-worker-manager.ts` L393209–L393651                                         |
-| 前端 ServiceHost 三道闸消息                                     | `src/plugin-host/service-host.ts` L397492–L397834                                                   |
+| ~~worker 常量与错误文案~~                                       | 已随 Phase 0 删除（浏览器 Worker 车道从未接线）                                                     |
+| ~~前端 ServiceHost 三道闸消息~~                                 | 已随 Phase 0 删除；三道闸现仅存在于后端 `packages/core/worker-runtime/service-host.ts`              |
 | `SHARED_MODULE_MAP` 6 项与 E-3 注释                             | ``src/plugin-host/plugin-host.ts`→`slot`（L1323–L1331）                                             |
 | `transformBareModuleImports` 覆盖面                             | 同上；测试 `__tests__/transform-imports.test.ts` L392432                                            |
 | `window.HostSharedDeps` 注入点                                  | ``src/main.tsx`（L16）                                                                              |
