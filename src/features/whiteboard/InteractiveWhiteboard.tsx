@@ -1,5 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { createPortal } from 'react-dom';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+  lazy,
+  Suspense,
+} from 'react';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
 import {
   MousePointer2,
@@ -7,71 +16,32 @@ import {
   Circle as CircleIcon,
   PenTool,
   Type,
-  Eraser,
-  Loader2,
   Presentation,
-  ChevronLeft,
-  ChevronRight,
-  Wand2,
-  Terminal,
-  Activity,
   Trash2,
-  Settings,
   Plus,
-  X,
-  Paintbrush,
-  ChevronDown,
-  Undo2,
-  Redo2,
-  RotateCcw,
-  Play,
-  Pause,
-  Maximize2,
-  Minimize2,
-  Edit3,
-  BookOpen,
-  Eye,
   FileText,
   Highlighter,
   Sparkles,
   HelpCircle,
-  Shuffle,
-  UserCheck,
   Upload,
-  Grid,
-  LayoutGrid,
-  Copy,
   Blocks,
   Globe,
   SlidersHorizontal,
 } from 'lucide-react';
 import { Html } from 'react-konva-utils';
-import Reveal from 'reveal.js';
-import 'reveal.js/reveal.css';
-import 'reveal.js/theme/white.css';
-import RevealMarkdown from 'reveal.js/plugin/markdown';
 import { v7 as uuidv7 } from 'uuid';
-import Markdown from 'react-markdown';
 import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
-import { appStore } from '../../store/appStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useFontSizeStore } from '../../store/fontSizeStore';
 import {
-  computeTiling,
   toTileCandidate,
-  toTiledGeometry,
   isTileableType,
-  geometryKeys,
   extractGeometry,
   sameGeometry,
   findNeighborInDirection,
   findTileUnderPoint,
-  sortCandidatesForTiling,
-  detectTilingSplitters,
-  applySplitterDrag,
   detectDropZoneAction,
-  applyContainerSplit,
   type TileCandidate,
   type BoxWithId,
   type TilingDirection,
@@ -93,72 +63,17 @@ import {
 import { whiteboardViewStore, useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
-import {
-  legacyAdapter,
-  objectRegistry,
-  commandManager,
-  layerManager,
-  selectionManager,
-  canvasEventBus,
-} from './canvas-model/index.js';
-import type { CanvasObject, CanvasPage } from './canvas-model/index.js';
-import {
-  interactionManager,
-  pointerStateMachine,
-  toolManager,
-  viewportController,
-  transformManager,
-  snapEngine,
-  guideEngine,
-  shortcutEngine,
-  clipboardService,
-  contextMenuManager,
-  cursorManager,
-  textEditingManager,
-} from './interaction-engine/index.js';
-import {
-  renderingEngine,
-  rendererRegistry,
-  renderScheduler,
-  virtualRenderer,
-  dirtyRegionManager,
-  layerRenderer,
-  cacheManager,
-  imageManager,
-  textEngine,
-  hitTestEngine,
-  animationManager,
-  performanceMonitor,
-  highDPIController,
-  exportService,
-  themeManager,
-  devToolsPanel,
-} from './rendering-engine/index.js';
-import {
-  teachingEngine,
-  teachingObjectRegistry,
-  teachingLifecycleManager,
-  teachingRuntimeManager,
-  teachingEventBus,
-  teacherContextManager,
-  studentContextManager,
-  assessmentInterface,
-  learningAnalyticsEngine,
-  aiInterface,
-  teachingPluginSDK,
-} from './teaching-object/index.js';
+import { themeManager } from './theme';
 
 import { WidgetTitleBar } from './widgets/WidgetTitleBar';
 import { WidgetFrame } from './widgets/WidgetFrame';
 import { useBrowserFullscreen } from './widgets/useBrowserFullscreen';
-import { BrowserFullscreenHost, BROWSER_FULLSCREEN_PADDING } from './widgets/BrowserFullscreenHost';
-import { WidgetFullscreenStage } from './widgets/WidgetFullscreenStage';
+import { BrowserFullscreenHost } from './widgets/BrowserFullscreenHost';
 import { PluginCardRenderer } from './widgets/PluginCardRenderer';
 import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
-import { RevealPresentationWrapper } from './widgets/RevealPresentationWrapper';
 import { HtmlAppletFrame } from './components/HtmlAppletFrame';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
@@ -169,16 +84,23 @@ import { WhiteboardEmptyState } from './components/WhiteboardEmptyState';
 import { WhiteboardFullscreenOverlay } from './components/WhiteboardFullscreenOverlay';
 import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
 import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTilingState';
-import { AssignmentBindingField } from './components/AssignmentBindingField';
-import { AssignmentPeerProgressPanel } from './components/AssignmentPeerProgressPanel';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
 import { CoursewarePropertiesModal } from './components/CoursewarePropertiesModal';
-import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
-import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
+import { fullscreenRendererRegistry } from './fullscreen/FullscreenRendererRegistry';
 import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
 import { WhiteboardEventPanel, useWhiteboardEventListener } from './events';
-import { propertyEditorRegistry } from './properties/PropertyEditorRegistry';
 import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-registry';
+
+/**
+ * PPTX 演示图元按需加载。
+ *
+ * `pptx-react-viewer` 及其依赖在生产构建中约 8.4 MB，是白板依赖闭包里最大的单项，
+ * 但它只服务 `presentation` 一种图元。静态引入意味着**任何打开白板的课堂都会下载它**。
+ * 改为 lazy 后，只有画布上真正出现演示图元时才加载这部分体积。
+ */
+const RevealPresentationWrapper = lazy(() =>
+  import('./widgets/RevealPresentationWrapper').then((m) => ({ default: m.RevealPresentationWrapper })),
+);
 
 // ── 自定义全屏渲染器注册 ─────────────────────────────────────────────────
 
@@ -3600,26 +3522,37 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       className="flex-1 min-h-0 relative bg-white"
                       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
                     >
-                      <RevealPresentationWrapper
-                        elementId={el.id}
-                        data={data}
-                        userRole={userRole}
-                        onElementUpdate={
-                          onElementUpdate
-                            ? async (id, d) => {
-                                await onElementUpdate(id, d);
-                                frontendEventBus.publish({
-                                  id: uuidv7(),
-                                  type: 'whiteboard.element_updated',
-                                  source: 'whiteboard',
-                                  payload: { lessonId },
-                                  timestamp: Date.now(),
-                                  correlationId: lessonId,
-                                });
-                              }
-                            : undefined
+                      <Suspense
+                        fallback={
+                          <div
+                            className="absolute inset-0 flex items-center justify-center bg-white"
+                            data-testid="presentation-loading"
+                          >
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500" />
+                          </div>
                         }
-                      />
+                      >
+                        <RevealPresentationWrapper
+                          elementId={el.id}
+                          data={data}
+                          userRole={userRole}
+                          onElementUpdate={
+                            onElementUpdate
+                              ? async (id, d) => {
+                                  await onElementUpdate(id, d);
+                                  frontendEventBus.publish({
+                                    id: uuidv7(),
+                                    type: 'whiteboard.element_updated',
+                                    source: 'whiteboard',
+                                    payload: { lessonId },
+                                    timestamp: Date.now(),
+                                    correlationId: lessonId,
+                                  });
+                                }
+                              : undefined
+                          }
+                        />
+                      </Suspense>
                     </div>
                   )}
                   {readOnly && <ReadOnlyLockCover />}

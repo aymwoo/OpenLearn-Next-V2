@@ -10,5 +10,4 @@ export type {
 } from './types';
 export { useWhiteboardEvents, useWhiteboardEventListener, useEmitWhiteboardEvent } from './useWhiteboardEvents';
 export { WhiteboardEventPanel } from './WhiteboardEventPanel';
-export { RecentSubmissionsCard } from './RecentSubmissionsCard';
 export { DEFAULT_QUEUE_CAPACITY, toPlatformEvent } from './types';
