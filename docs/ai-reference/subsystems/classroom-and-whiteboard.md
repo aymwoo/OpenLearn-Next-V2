@@ -113,20 +113,19 @@ await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, 
 
 `src/features/whiteboard/` 下的子目录按引擎划分：
 
-| 目录                   | 职责                              |
-| ---------------------- | --------------------------------- |
-| `canvas-model/`        | 画布数据模型                      |
-| `rendering-engine/`    | 渲染                              |
-| `interaction-engine/`  | 命中测试、拖拽、缩放              |
-| `courseware/`          | 课件元素（PDF/图片/视频）         |
-| `fullscreen/`          | 全屏与展台                        |
-| `stage-view-bridge.ts` | 与 `StageDisplayView`（大屏）的桥 |
-| `properties/`          | 属性面板                          |
-| `events/`              | 事件适配                          |
-| `services/`            | 与后端交互                        |
+| 目录 / 文件         | 职责                               |
+| ------------------- | ---------------------------------- |
+| `courseware/`       | 课件元素（PDF/图片/视频）          |
+| `fullscreen/`       | 全屏与展台                         |
+| `properties/`       | 属性面板                           |
+| `events/`           | 事件适配与插槽                     |
+| `services/`         | 与后端交互                         |
+| `widgets/`          | 内嵌部件（PPTX 演示器/代码沙箱等） |
+| `components/`       | 白板浮层、工具栏与分页组件         |
+| `theme.ts`          | 白板主题令牌与主题管理器           |
+| `types/payloads.ts` | 图元 payload 宿主对外契约          |
 
-主组件 `InteractiveWhiteboard.tsx` 有 **4,555 行**。改动前先确认落在哪个引擎，
-直接改主组件会导致渲染与交互耦合。
+> 💡 **Phase 0 说明**：历史上的 `canvas-model/`、`rendering-engine/`、`interaction-engine/`、`teaching-object/`、`tool-system/` 与 `stage-view-bridge.ts` 已整体删除。主组件 `InteractiveWhiteboard.tsx` 集中负责视图布局与硬编码图元分派。
 
 ### 4.3 插件挂件的双端 id
 
@@ -167,12 +166,12 @@ await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, 
 
 ## 6. 改动决策表
 
-| 我要做的事                         | 改哪                                                              | 不要改哪                                      |
-| ---------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
-| 加一种课堂互动（投票/抢答/弹幕类） | 新表 + `classroom-runtime` 模块 + 路由 + `SOCKET_ROUTES` 一行     | 不要塞进 `classroom.ts` 单文件                |
-| 加一种白板元素                     | `canvas-model` + `rendering-engine` + `LAYOUT_ONLY_ELEMENT_TYPES` | 不要改 `InteractiveWhiteboard.tsx` 的 switch  |
-| 改课节阶段判定                     | `stage-guard-pipeline.ts`                                         | 不要在路由里 `if (stage === ...)`             |
-| 加一种题型                         | 实现评分器 → 注册 `IAssessmentGraderRegistryToken`                | 不要改 `assessment/question-types/builtin.ts` |
-| 让学生端看到新视图                 | 注册 `student.view` 槽位                                          | 不要在 `StudentView` 里加 if 分支             |
+| 我要做的事                         | 改哪                                                                                                                            | 不要改哪                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 加一种课堂互动（投票/抢答/弹幕类） | 新表 + `classroom-runtime` 模块 + 路由 + `SOCKET_ROUTES` 一行                                                                   | 不要塞进 `classroom.ts` 单文件                |
+| 加一种白板元素                     | 走插件 `whiteboard.renderer` 贡献点；或宿主 `InteractiveWhiteboard.tsx` 的 `renderElement()` 分支 + `LAYOUT_ONLY_ELEMENT_TYPES` | 不要凭空恢复已删除的纸面引擎注册表            |
+| 改课节阶段判定                     | `stage-guard-pipeline.ts`                                                                                                       | 不要在路由里 `if (stage === ...)`             |
+| 加一种题型                         | 实现评分器 → 注册 `IAssessmentGraderRegistryToken`                                                                              | 不要改 `assessment/question-types/builtin.ts` |
+| 让学生端看到新视图                 | 注册 `student.view` 槽位                                                                                                        | 不要在 `StudentView` 里加 if 分支             |
 
 最后一行是本仓库的核心约定：**前端页面的扩展靠槽位，不靠条件分支**。

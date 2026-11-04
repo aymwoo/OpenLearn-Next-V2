@@ -100,7 +100,7 @@ flowchart TB
 ### 3.2 worker（独立 V8，同进程）
 
 - `worker_threads.Worker`，共享 `process.env` 与内存空间。
-- 前端 side 对应 `BrowserWorkerManager` + `ServiceHost`（`src/plugin-host/service-host.ts → ServiceHost（L74）`）。
+- 服务端由 `packages/core/worker-runtime/service-host.ts` 承载（浏览器端历史规划的 Worker 车道全仓未接通，已于 Phase 0 整体删除）。
 - 证据：`packages/core/plugin-host/types.ts → PluginExecutionMode` 注释表格。
 
 ### 3.3 process（独立子进程，第三方默认）

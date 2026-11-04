@@ -1,6 +1,6 @@
 # Canvas Object Model 画布对象模型
 
-画布对象的类型定义与坐标/变换原语。实现位于 `src/features/whiteboard/canvas-model/`。
+画布对象的概念模型与字段语义说明（运行时由 SQLite `whiteboard_elements` 表持久化，前端对应 `src/types/app.ts` 的 `WhiteboardElement`）。
 
 > 📌 白板**子系统机制**（渲染器注册、协同同步、html-applet、防抖自动保存、公平抽问）见
 > [architecture/whiteboard-subsystems.md](../architecture/whiteboard-subsystems.md)。
@@ -56,6 +56,6 @@ export interface CanvasObject<T = Record<string, unknown>> {
 | 教学组件 | `quiz`、`assignment`、`rollcall`、`code-sandbox`、`math-graph`、`presentation`、`html-applet`、`hello-world`              |
 | 扩展     | `plugin`（`PluginCardRenderer`）、`page_meta`（页面配置元数据，非可见元素）                                               |
 
-> ⚠️ **不存在**的取值（勿凭直觉捏造）：`custom`、`geogebra-widget`、`timer` 在代码中零命中。`path` / `image` 仅作为**渲染缓存分类**（`rendering-engine/cache/cache-manager.ts` 的 `CacheManager.get/set` 参数）与**工具栏图标名**（`tool-system/default-tools.ts` 的 `createDefaultTool`）出现，**不是** `CanvasObject.type` 的取值。新增 `type` 取值需同时补上 `buildElementData` 的 `switch` 分支与 `renderElement` 的渲染分支。
+> ⚠️ **不存在**的取值（勿凭直觉捏造）：`custom`、`geogebra-widget`、`timer` 在代码中零命中。历史上曾提及的 `path` / `image` 并非合法 `type` 取值。新增 `type` 取值需同时补上 `buildElementData` 的 `switch` 分支与 `renderElement` 的渲染分支。
 
 渲染/工具栏侧的组件能力对照见 [whiteboard-runtime.md](whiteboard-runtime.md) §白板组件类型。

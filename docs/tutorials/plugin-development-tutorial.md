@@ -1728,9 +1728,11 @@ Worker Thread 与子进程（`process`）共用同一套 bootstrap 与 RPC 代�
 - `WorkerCapabilityError` — 跨边界能力检查拒绝
 - `WorkerNotSupportedError` — 运行时不支持的功能
 
-### 8.2 前端 Worker 模式
+### 8.2 前端执行模式（Inline 与 Sandbox-View）
 
-前端同样支持 Worker 隔离，通过 `BrowserWorkerManager` 将插件运行在 Web Worker 中，与后端一致的隔离保证。插件需在安装时指定 `executionMode: 'worker'`。
+前端插件支持 **`inline`** 执行模式（内置受信任扩展直接在主线程运行，受插件熔断器与白名单约束），以及完全隔离的 **`sandbox-view`** 独立页面（运行在标准严格无同源的 `<iframe>` 沙箱中）。
+
+> 💡 **架构注记（Phase 0）**：历史上设计的浏览器端 Web Worker 隔离车道（`BrowserWorkerManager`）全仓从未实际接入，现已彻底移除。第三方不信任插件由服务端 Node.js 隔离子进程（`process` 模式）承载，前端仅负责渲染声明式 UI 槽位与沙箱页面。
 
 ### 8.3 热重载（开发模式）
 

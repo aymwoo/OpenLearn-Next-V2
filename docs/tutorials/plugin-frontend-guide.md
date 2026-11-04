@@ -29,21 +29,20 @@
 
 ## 1. FrontendPluginHost
 
-前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块。三档执行模式在前端侧的落点：
+前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块。执行模式在前端侧的落点：
 
 | 前端执行模式 | 加载方式                                    | 适用                       |
 | ------------ | ------------------------------------------- | -------------------------- |
 | `inline`     | 父页面 Blob URL + `import()`                | 内置插件                   |
-| `worker`     | 前端 Worker（`browser-worker-manager.ts`）  | 受信插件                   |
 | `process`    | 隐藏 iframe + postMessage RPC（**第三方**） | ZIP 插件（默认，不可绕过） |
 
-`legacy`（vm 时代残留）勿用。判定逻辑在 `src/plugin-host/plugin-host.ts` 的
-`activatePlugin` / `activateRemotePlugin`，模式来源见 `src/plugin-host/types.ts` 的 `executionMode`。
+> 💡 **架构注记（Phase 0）**：历史上设计的浏览器端 `worker` 模式因从未接通已于 Phase 0 整体移除，第三方插件一律在服务端子进程隔离运行，前端负责可视沙箱与声明式槽位渲染。`legacy`（vm 时代残留）勿用。判定逻辑在 `src/plugin-host/plugin-host.ts` 的
+> `activatePlugin` / `activateRemotePlugin`，模式来源见 `src/plugin-host/types.ts` 的 `executionMode`。
 
 **inline 插件的模块形状**（一个可运行的最小示例）：
 
 ```typescript
-// frontend.tsx —— 仅 inline / worker 模式成立
+// frontend.tsx —— 仅 inline 模式成立
 export default {
   manifest: {
     id: '@scope/frontend-plugin',

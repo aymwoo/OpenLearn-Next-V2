@@ -3,7 +3,7 @@
 > **权威源码**：`server/utils/plugin-sandbox-frame.ts`、`server/utils/plugin-view-bridge.ts`、
 > `server.ts`（`app.get('/plugin-sandbox/frame')`）、`src/plugin-host/plugin-host.ts`、
 > `src/plugin-host/sandbox-frame.ts`、`src/components/PluginSandboxIframeView.tsx`、
-> `src/plugin-host/{plugin-host-store,extension-breaker,extension-point-renderer,host-action-dispatcher,browser-worker-manager}.ts`
+> `src/plugin-host/{plugin-host-store,extension-breaker,extension-point-renderer,host-action-dispatcher}.ts`
 
 ---
 

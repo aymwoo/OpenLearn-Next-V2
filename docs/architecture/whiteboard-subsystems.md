@@ -8,18 +8,14 @@ Whiteboard 引擎位于 `src/features/whiteboard/` 与 `packages/core/` 微前�
 
 ---
 
-## 渲染器注册体系 (Renderer Registry)
+## 图元渲染与扩展机制 (Element Rendering & Extension Points)
 
-白板渲染采用插件化注册模式，任何新增的图形或富媒体组件均通过 `rendererRegistry` 动态扩充：
+> **Phase 0 说明**：历史上的 `canvas-model/` 与 `rendering-engine/` 注册表（`rendererRegistry`）从未被实际调用，构建产物中也不存在，已于 Phase 0 整体删除。
 
-```typescript
-import { rendererRegistry } from '../features/whiteboard/canvas-model';
+白板目前采用两种图元渲染机制：
 
-// 注册渲染器
-rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
-```
-
-> ⚠️ 历史上此处存在**两份 `rendererRegistry`**（`canvas-model/` 与 `rendering-engine/`），引用时须确认使用哪一份；当前以 `canvas-model/` 导出为准。
+1. **宿主内置图元**：由 `src/features/whiteboard/InteractiveWhiteboard.tsx` 的 `renderElement()` 以硬编码分支分发 15 种基础图元（画笔、几何图形、文本、课件等）；
+2. **插件扩展图元**：通过已有的 `whiteboard.renderer` 贡献点进行扩展，宿主侧由 `<ExtensionPointRenderer slot="whiteboard.renderer" />` 消费，实现安全可隔离的图元扩充。详细架构见 [whiteboard-runtime.md](../whiteboard/whiteboard-runtime.md)。
 
 ---
 
