@@ -92,11 +92,23 @@ describe('openlearn.d.ts ↔ index.ts Token parity', () => {
   });
 
   it('撤回名单必须与实际撤回情况一致（不得多列）', () => {
-    // 反向约束：名单里的名字若既不在 index.ts 导出、也不在 d.ts 声明，
+    // 反向约束：名单里的名字若既不在 index.ts 导出、也不在 DI 声明（或 d.ts 残留）中定义，
     // 说明它根本不存在，纯属噪音。
+    // 注：Stage 1 (Issue #398) 已从 openlearn.d.ts 清理幽灵声明，但 Stage 2 物理删除前
+    // 它们仍存在于 core/di/interfaces.ts 中。
     const { declared: dtsDeclared } = extractTokenSurfaceFromDts();
-    const phantom = [...WITHDRAWN_TOKENS].filter((t) => !dtsDeclared.has(t));
-    expect(phantom, '撤回名单里的 Token 在 openlearn.d.ts 中并无声明 —— 请清理名单').toEqual([]);
+    const diSources = [
+      path.resolve(sdkDir, '../core/di/interfaces.ts'),
+      path.resolve(sdkDir, '../activity-ecosystem/index.ts'),
+    ];
+    const diDeclared = new Set<string>();
+    for (const src of diSources) {
+      const text = fs.readFileSync(src, 'utf-8');
+      for (const m of text.matchAll(/^export const (\w+Token)\s*=/gm)) diDeclared.add(m[1]);
+    }
+
+    const phantom = [...WITHDRAWN_TOKENS].filter((t) => !dtsDeclared.has(t) && !diDeclared.has(t));
+    expect(phantom, '撤回名单里的 Token 在 openlearn.d.ts 与 DI 声明中均无定义 —— 请清理名单').toEqual([]);
   });
 
   it('openlearn.d.ts 的 export 列表不得包含未声明的 Token', () => {

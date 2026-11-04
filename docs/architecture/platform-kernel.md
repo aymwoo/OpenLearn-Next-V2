@@ -47,10 +47,10 @@ graph TD
     end
 
     subgraph Layer3["Layer 3: 插件生态统一 facade"]
-        L3_1["PluginRuntimeComposition"]
+        L3_1["PluginRuntimeComposition（已弃用）"]
         L3_2["PluginLifecycleManager"]
         L3_3["PluginDistributionManager"]
-        L3_4["UnifiedExtensionRegistry"]
+        L3_4["UnifiedExtensionRegistry（已弃用）"]
         L3_5["PluginCapabilityGateway"]
     end
 
@@ -74,37 +74,37 @@ graph TD
 
 `Kernel` 类共暴露 **29 个 `public readonly` 属性**（下表按声明顺序），以及 1 个公开方法 `initAuditLog()`。
 
-| #   | 属性                            | 类型                                                           | 层  |
-| --- | ------------------------------- | -------------------------------------------------------------- | --- |
-| 1   | `eventBus`                      | `EventBus`                                                     | 0   |
-| 2   | `commandBus`                    | `CommandBus`                                                   | 1→0 |
-| 3   | `actionRegistry`                | `ActionRegistry`                                               | 1→0 |
-| 4   | `capabilityGuard`               | `CapabilityGuard`                                              | 0   |
-| 5   | `processManager`                | `ProcessManager`                                               | 2   |
-| 6   | `esmLoader`                     | `NodeEsmLoader`                                                | 0   |
-| 7   | `db`                            | `Database`（`packages/core/db/index.ts` 的 `db` 单例）         | 0   |
-| 8   | `serviceRegistry`               | `ServiceRegistry`（`packages/core/di/service-registry.ts`）    | 0   |
-| 9   | `storageService`                | `StorageService`                                               | 0   |
-| 10  | `aiService`                     | `AIService`                                                    | 0   |
-| 11  | `pluginHost`                    | `PluginHost`                                                   | 2   |
-| 12  | `workerManager`                 | `WorkerManager`                                                | 2   |
-| 13  | `pluginRuntimeComposition`      | `PluginRuntimeComposition`                                     | 3   |
-| 14  | `pluginLifecycleManager`        | `PluginLifecycleManager`                                       | 3   |
-| 15  | `pluginDistributionManager`     | `PluginDistributionManager`                                    | 3   |
-| 16  | `unifiedExtensionRegistry`      | `UnifiedExtensionRegistry`                                     | 3   |
-| 17  | `capabilityRegistry`            | `CapabilityRegistry`（取自 `aiCapability.registry`，非新实例） | 3   |
-| 18  | `pluginCapabilityGateway`       | `PluginCapabilityGateway`                                      | 3   |
-| 19  | `lessonRuntime`                 | `LessonRuntime`                                                | 1   |
-| 20  | `classroomRuntime`              | `ClassroomRuntimeKernel`                                       | 1   |
-| 21  | `presenceEngine`                | `PresenceEngineKernel`                                         | 1   |
-| 22  | `collaborationEngine`           | `CollaborationEngineKernel`                                    | 1   |
-| 23  | `analyticsEngine`               | `AnalyticsEngineKernel`                                        | 1   |
-| 24  | `aiRuntime`                     | `AIRuntimeKernel`                                              | 1   |
-| 25  | `aiCapability`                  | `AICapabilityKernel`                                           | 1   |
-| 26  | `capabilityFrameworkRuntime`    | `CapabilityRuntimeKernel`                                      | 1   |
-| 27  | `capabilityGovernance`          | `CapabilityGovernanceKernel`                                   | 1   |
-| 28  | `platformServiceRegistryKernel` | `ServiceRegistryKernel`                                        | 1   |
-| 29  | `ready`                         | `Promise<void>`                                                | —   |
+| #   | 属性                            | 类型                                                              | 层  |
+| --- | ------------------------------- | ----------------------------------------------------------------- | --- |
+| 1   | `eventBus`                      | `EventBus`                                                        | 0   |
+| 2   | `commandBus`                    | `CommandBus`                                                      | 1→0 |
+| 3   | `actionRegistry`                | `ActionRegistry`                                                  | 1→0 |
+| 4   | `capabilityGuard`               | `CapabilityGuard`                                                 | 0   |
+| 5   | `processManager`                | `ProcessManager`                                                  | 2   |
+| 6   | `esmLoader`                     | `NodeEsmLoader`                                                   | 0   |
+| 7   | `db`                            | `Database`（`packages/core/db/index.ts` 的 `db` 单例）            | 0   |
+| 8   | `serviceRegistry`               | `ServiceRegistry`（`packages/core/di/service-registry.ts`）       | 0   |
+| 9   | `storageService`                | `StorageService`                                                  | 0   |
+| 10  | `aiService`                     | `AIService`                                                       | 0   |
+| 11  | `pluginHost`                    | `PluginHost`                                                      | 2   |
+| 12  | `workerManager`                 | `WorkerManager`                                                   | 2   |
+| 13  | `pluginRuntimeComposition`      | `PluginRuntimeComposition`（已弃用 @deprecated，计划 4.0.0 移除） | 3   |
+| 14  | `pluginLifecycleManager`        | `PluginLifecycleManager`                                          | 3   |
+| 15  | `pluginDistributionManager`     | `PluginDistributionManager`                                       | 3   |
+| 16  | `unifiedExtensionRegistry`      | `UnifiedExtensionRegistry`（已弃用 @deprecated，计划 4.0.0 移除） | 3   |
+| 17  | `capabilityRegistry`            | `CapabilityRegistry`（取自 `aiCapability.registry`，非新实例）    | 3   |
+| 18  | `pluginCapabilityGateway`       | `PluginCapabilityGateway`                                         | 3   |
+| 19  | `lessonRuntime`                 | `LessonRuntime`                                                   | 1   |
+| 20  | `classroomRuntime`              | `ClassroomRuntimeKernel`                                          | 1   |
+| 21  | `presenceEngine`                | `PresenceEngineKernel`                                            | 1   |
+| 22  | `collaborationEngine`           | `CollaborationEngineKernel`                                       | 1   |
+| 23  | `analyticsEngine`               | `AnalyticsEngineKernel`                                           | 1   |
+| 24  | `aiRuntime`                     | `AIRuntimeKernel`                                                 | 1   |
+| 25  | `aiCapability`                  | `AICapabilityKernel`                                              | 1   |
+| 26  | `capabilityFrameworkRuntime`    | `CapabilityRuntimeKernel`                                         | 1   |
+| 27  | `capabilityGovernance`          | `CapabilityGovernanceKernel`                                      | 1   |
+| 28  | `platformServiceRegistryKernel` | `ServiceRegistryKernel`                                           | 1   |
+| 29  | `ready`                         | `Promise<void>`                                                   | —   |
 
 **公开方法**：`initAuditLog()` —— 订阅 `eventBus` 的 `'*'` 通配事件，把每个事件写入 SQLite `events` 表（`packages/core/kernel/index.ts` 的 `initAuditLog`）。
 

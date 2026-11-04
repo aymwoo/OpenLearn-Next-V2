@@ -1237,6 +1237,9 @@ declare class PluginCapabilityGateway implements IPluginCapabilityGateway {
   readonly capabilityRegistry: CapabilityRegistry;
 }
 
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，当前零生产 resolve；非插件开发者 API，计划于 SDK 4.0.0 移除。若接入真实消费者请移除标记。
+ */
 /** @see packages/core/plugin-host/plugin-context-adapter.ts */
 declare class PluginContextAdapter implements IUnifiedPluginContext {
   readonly environment: 'development' | 'production' | 'test';
@@ -1342,6 +1345,9 @@ declare class PluginLifecycleManager implements IPluginLifecycleManager {
   readonly pluginHost: PluginHost;
 }
 
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，当前零生产 resolve；非插件开发者 API，计划于 SDK 4.0.0 移除。若接入真实消费者请移除标记。
+ */
 /** @see packages/core/plugin-host/plugin-runtime-adapter.ts */
 declare class PluginRuntimeAdapter implements IPluginRuntime {
   readonly id: any;
@@ -2241,6 +2247,9 @@ interface TopbarPillConfig {
     icon?: string;
 }
 
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，当前零生产 resolve；非插件开发者 API，计划于 SDK 4.0.0 移除。若接入真实消费者请移除标记。
+ */
 /** @see packages/core/plugin-host/unified-extension-registry.ts */
 declare class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   readonly id: any;

@@ -7,7 +7,7 @@
 OpenLearn V2 提供了双层扩展点架构：
 
 1. **`ContributionRegistry` (静态声明式)**：在插件未激活时解析 `manifest.json` 中的 `contributes` 配置，用于管理后台和主界面静态呈现图标与菜单。
-2. **`UnifiedExtensionRegistry` (内核统一索引)**：对所有类型的扩展点（UI 插件组件、Activity 活动提供者、AI Actions、命令与 Capability）进行统一分类聚合索引。
+2. **`UnifiedExtensionRegistry`（宿主内部实现 · 已弃用 @deprecated）**：早期设计的内核统一索引门面，目前零生产消费者，计划于 SDK 4.0.0 移除。全系统扩展与贡献点统一由 `ContributionRegistry`（及各具体领域注册表）承载。
 
 ---
 
@@ -274,7 +274,11 @@ const allTeacherTabs = contributions.getBySlot('teacher.tab');
 
 ---
 
-## 2. `UnifiedExtensionRegistry` 统一扩展索引
+## 2. `UnifiedExtensionRegistry` 统一扩展索引（宿主内部实现 · 已弃用）
+
+> [!WARNING]
+> **已弃用 (Deprecated)**：`UnifiedExtensionRegistry` 为内核历史遗留门面，生产环境中零消费者。该门面及其 SDK 导出类型已在 SDK 3.9.0 标记弃用（Refs #398），并计划在 SDK 4.0.0 彻底移除。
+> 平台贡献点注册请直接使用 `ContributionRegistry`（`IContributionRegistryToken`）或通过 `PluginContext.contributions` 访问。
 
 实现位置：`packages/core/plugin-host/unified-extension-registry.ts`
 

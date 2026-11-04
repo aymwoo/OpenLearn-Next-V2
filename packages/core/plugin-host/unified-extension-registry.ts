@@ -36,6 +36,9 @@ export interface IUnifiedExtensionRegistry {
   metadata(): IntegrationDescriptor;
 }
 
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，当前零生产 resolve；非插件开发者 API，计划于 SDK 4.0.0 移除。若接入真实消费者请移除标记。
+ */
 export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   public readonly id = 'srv_unified_extension_registry';
   public readonly name = 'UnifiedExtensionRegistry';

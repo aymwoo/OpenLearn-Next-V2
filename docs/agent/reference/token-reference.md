@@ -302,13 +302,13 @@ version 只参与 `Token` 的 `toString()`，**不参与** `resolveByName` 的�
 以下 Token 在 `interfaces.ts` 里定义，但**不在** `PLUGIN_RESOLVABLE_TOKENS`，
 用字符串名 resolve 会被拒：
 
-| Token 常量                          | Token 名                                       |
-| ----------------------------------- | ---------------------------------------------- |
-| `ICapabilityGovernanceServiceToken` | `@openlearn/core:ICapabilityGovernanceService` |
-| `INetworkProxyServiceToken`         | `@openlearn/core:INetworkProxyService`         |
-| `IPluginCapabilityGatewayToken`     | `@openlearn/core:IPluginCapabilityGateway`     |
-| `IPluginRuntimeCompositionToken`    | `@openlearn/core:IPluginRuntimeComposition`    |
-| `IUnifiedExtensionRegistryToken`    | `@openlearn/core:IUnifiedExtensionRegistry`    |
+| Token 常量                          | Token 名                                       | 状态说明                                 |
+| ----------------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| `ICapabilityGovernanceServiceToken` | `@openlearn/core:ICapabilityGovernanceService` | 内核内部                                 |
+| `INetworkProxyServiceToken`         | `@openlearn/core:INetworkProxyService`         | 代理特判                                 |
+| `IPluginCapabilityGatewayToken`     | `@openlearn/core:IPluginCapabilityGateway`     | 内核内部                                 |
+| `IPluginRuntimeCompositionToken`    | `@openlearn/core:IPluginRuntimeComposition`    | 已弃用（`@deprecated`，计划 4.0.0 移除） |
+| `IUnifiedExtensionRegistryToken`    | `@openlearn/core:IUnifiedExtensionRegistry`    | 已弃用（`@deprecated`，计划 4.0.0 移除） |
 
 ```{note}
 `INetworkProxyService` 看起来矛盾：它在 `BASE_WORKER_SERVICE_TOKENS`（§4）里，
