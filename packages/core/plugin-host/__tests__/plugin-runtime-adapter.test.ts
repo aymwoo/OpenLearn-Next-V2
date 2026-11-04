@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PluginRuntimeAdapter } from '../plugin-runtime-adapter.js';
 import type { PluginHost } from '../index.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('PluginRuntimeAdapter & Unified Plugin Runtime', () => {
   const createMockPluginHost = () => {
@@ -66,19 +65,5 @@ describe('PluginRuntimeAdapter & Unified Plugin Runtime', () => {
 
     await adapter.reloadPlugin('plugin-quiz', 'new code');
     expect(mockHost.reloadPlugin).toHaveBeenCalledWith('plugin-quiz', 'new code');
-  });
-
-  it('should wire real singletons into PluginCompositionModule via infrastructureRefs', () => {
-    const mockHost = createMockPluginHost();
-    const adapter = new PluginRuntimeAdapter(mockHost);
-    const compositionModule = new PluginCompositionModule();
-
-    const refs = new Map<string, unknown>();
-    refs.set('pluginHost', adapter);
-    refs.set('contributionRegistry', { slotsCount: 5 });
-
-    expect(() => {
-      compositionModule.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 });

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { UnifiedExtensionRegistry } from '../unified-extension-registry.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('UnifiedExtensionRegistry (P7-B5 EU-01)', () => {
   it('should register and resolve extensions across categories', () => {
@@ -50,23 +49,6 @@ describe('UnifiedExtensionRegistry (P7-B5 EU-01)', () => {
     expect(() => {
       registry.registerExtension('panel', 'p1', {});
     }).toThrow(/Duplicate extension registration/);
-  });
-
-  it('should report health and register in PluginCompositionModule', () => {
-    const registry = new UnifiedExtensionRegistry();
-    registry.registerExtension('menu', 'm1', {});
-
-    const health = registry.health();
-    expect(health.isHealthy).toBe(true);
-    expect(health.details?.totalExtensions).toBe(1);
-
-    const module = new PluginCompositionModule();
-    const refs = new Map<string, unknown>();
-    refs.set('extensionRegistry', registry);
-
-    expect(() => {
-      module.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 
   it('should sync contributions and activity providers via bridge methods', () => {

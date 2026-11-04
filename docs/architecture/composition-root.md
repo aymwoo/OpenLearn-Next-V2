@@ -1,6 +1,12 @@
 # Composition Root & Server 服务组装
 
-Composition Root（服务组装根）是 OpenLearn V2 应用程序的入口点，定义在项目根目录的 `server.ts` 以及 `packages/core/bootstrap/composition/` 中。
+Composition Root（服务组装根）是 OpenLearn V2 应用程序的入口点，定义在项目根目录的 `server.ts` 与 `packages/core/kernel/index.ts` 的 `Kernel` 构造函数中。
+
+> **Phase 0 变更（2026-11）**：`packages/core/bootstrap/composition/` 目录已删除
+> （`PlatformCompositionRoot` + 4 个 `CompositionModule` + validator，7 文件 518 行）。
+> 该组装根在 `Kernel` 构造函数里被调用一次，但 `compose()` 写入的
+> `PlatformServiceRegistry` 全仓无人读取，失败也仅 `console.warn` —— 属「组装了但没人用」。
+> 真正的装配顺序仍在 `Kernel` 构造函数中，见下节。
 
 > **架构演变（v0.2.0）**：`server.ts` 已从 ~1000 行瘦身（当前 672 行），现在只承担"组装根"职责——装载环境、初始化 `kernelContainer`、调用 `ServerBootstrapAdapter`、组装 Express + Socket.IO，并把所有领域行为委托给 `server/` 下的独立模块。各模块均携带"逐字搬移 + 特征测试"保证行为不变：
 >
@@ -31,16 +37,18 @@ Composition Root 负责：
 
 **大部分 Token 绑定并不在 `server.ts` 里**，而在 `packages/core/kernel/index.ts` 的 `Kernel` 构造函数中按分层顺序完成：
 
-| 层             | 顺序与内容                                                                                                                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Layer 0        | `eventBus`、`capabilityGuard`、`serviceRegistry`、`storageService`、`aiService`、`esmLoader`（均无依赖）                                                                                                                                                                            |
-| Layer 1        | 领域内核：`aiRuntime` → `aiCapability` → `capabilityFrameworkRuntime` → `capabilityGovernance` → `platformServiceRegistryKernel` → `analyticsEngine` → `collaborationEngine` → `presenceEngine` → `classroomRuntime` → `lessonRuntime`                                              |
-| 依赖 L0/L1     | `commandBus`（依赖 `eventBus`）、`actionRegistry`、`processManager`、`pluginHost`（依赖 `serviceRegistry` + `esmLoader` + `db`，并 `mkdirSync` 出 `plugins/` 目录）                                                                                                                 |
-| Layer 3        | `workerManager`（依赖 `serviceRegistry` + `capabilityGuard` + `db`），随后 `pluginHost.setWorkerManager(workerManager)` 反向接线                                                                                                                                                    |
-| 插件 facade    | `pluginRuntimeComposition`、`pluginLifecycleManager`、`pluginDistributionManager`、`unifiedExtensionRegistry`、`pluginCapabilityGateway`；并调用 `PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose(...)`（失败仅 `console.warn`，不阻断启动） |
-| **Token 注册** | 一次性 `serviceRegistry.register(...)` 注册全部 DI Token：7 个基础服务 + 5 个插件 facade + `IDatabaseToken` + `ICapabilityRegistryToken` + 学期成绩/积分三件套 + 8 个引擎门面 + `IAuthSessionBridgeToken` + `ICoursewareRuntimeScriptRegistryToken`                                 |
-| 拦截器         | `commandBus.setInterceptor(...)`：JSON Schema 入参校验 → 能力检查（admin 角色豁免）→ 高危操作人工审批（`pending_commands` 表 + `approval.requested` 事件）                                                                                                                          |
-| 收尾           | `bootstrapSharedModules()` 异步注册 `ctx.require` 白名单；`this.ready = this.bootstrapSystemPlugins()`（7 个内置插件，critical 失败 `process.exit(1)`）；开发模式下挂 `HotReloadController`                                                                                         |
+| 层          | 顺序与内容                                                                                                                                                                                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layer 0     | `eventBus`、`capabilityGuard`、`serviceRegistry`、`storageService`、`aiService`、`esmLoader`（均无依赖）                                                                                                                                       |
+| Layer 1     | 领域内核：`aiRuntime` → `aiCapability` → `capabilityFrameworkRuntime` → `capabilityGovernance` → `platformServiceRegistryKernel` → `analyticsEngine` → `collaborationEngine` → `presenceEngine` → `classroomRuntime` → `lessonRuntime`         |
+| 依赖 L0/L1  | `commandBus`（依赖 `eventBus`）、`actionRegistry`、`processManager`、`pluginHost`（依赖 `serviceRegistry` + `esmLoader` + `db`，并 `mkdirSync` 出 `plugins/` 目录）                                                                            |
+| Layer 3     | `workerManager`（依赖 `serviceRegistry` + `capabilityGuard` + `db`），随后 `pluginHost.setWorkerManager(workerManager)` 反向接线                                                                                                               |
+| 插件 facade | `pluginRuntimeComposition`、`pluginLifecycleManager`、`pluginDistributionManager`、`unifiedExtensionRegistry`、`pluginCapabilityGateway`（`IPluginLifecycleManagerToken` 与 `IPluginCapabilityGatewayToken` 有真实消费者；其余为零消费者门面） |
+
+> 原先此层还会调用 `PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose(...)`；该调用随 `bootstrap/composition/` 于 Phase 0 删除。
+> | **Token 注册** | 一次性 `serviceRegistry.register(...)` 注册全部 DI Token：7 个基础服务 + 5 个插件 facade + `IDatabaseToken` + `ICapabilityRegistryToken` + 学期成绩/积分三件套 + 8 个引擎门面 + `IAuthSessionBridgeToken` + `ICoursewareRuntimeScriptRegistryToken` |
+> | 拦截器 | `commandBus.setInterceptor(...)`：JSON Schema 入参校验 → 能力检查（admin 角色豁免）→ 高危操作人工审批（`pending_commands` 表 + `approval.requested` 事件） |
+> | 收尾 | `bootstrapSharedModules()` 异步注册 `ctx.require` 白名单；`this.ready = this.bootstrapSystemPlugins()`（7 个内置插件，critical 失败 `process.exit(1)`）；开发模式下挂 `HotReloadController` |
 
 `server.ts` 只在其上**追加** 3 个 Token：`IActivityRegistryToken`（`startServer()` 内）、`IClassroomLifecycleServiceToken` 与 `IInteractionRuntimeServiceToken`（二者绑定同一个 `classroomRuntimeService` 实例）。
 

@@ -81,7 +81,6 @@ import { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gatewa
 import { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
-import { PlatformCompositionRoot, PluginCompositionModule } from '../bootstrap/composition/index.js';
 import path from 'path';
 
 export class Kernel {
@@ -220,23 +219,6 @@ export class Kernel {
     this.unifiedExtensionRegistry = new UnifiedExtensionRegistry();
     this.capabilityRegistry = capabilityRegistry;
     this.pluginCapabilityGateway = new PluginCapabilityGateway(capabilityRegistry);
-
-    // P7-A2 Stage 2: 通过基础设施引用将真实实例接入平台组合根。
-    // 组合失败仅告警、绝不阻断 Kernel 启动（保持可回退、低风险）。
-    const infrastructureRefs = new Map<string, unknown>([
-      ['pluginHost', this.pluginHost],
-      ['contributionRegistry', this.pluginHost.getContributionRegistry()],
-      ['runtimeComposition', this.pluginRuntimeComposition],
-      ['lifecycleManager', this.pluginLifecycleManager],
-      ['capabilityGateway', this.pluginCapabilityGateway],
-      ['extensionRegistry', this.unifiedExtensionRegistry],
-      ['distributionManager', this.pluginDistributionManager],
-    ]);
-    try {
-      PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose({ infrastructureRefs });
-    } catch (e) {
-      console.warn('[P7-A2] Plugin composition failed (non-fatal):', (e as Error).message);
-    }
 
     // No more pluginRuntime (Phase 8 cleanup)
 

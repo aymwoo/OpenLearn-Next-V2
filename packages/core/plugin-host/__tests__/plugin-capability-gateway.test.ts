@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { PluginCapabilityGateway } from '../plugin-capability-gateway.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
 import type { IAICapability } from '../../ai-capability/types/index.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.ts';
 
 describe('PluginCapabilityGateway (P7-B4 EU-01)', () => {
   const createMockCapability = (id: string, name: string): IAICapability => ({
@@ -60,18 +59,5 @@ describe('PluginCapabilityGateway (P7-B4 EU-01)', () => {
 
     const meta = gateway.metadata();
     expect(meta.id).toBe('srv_plugin_capability_gateway');
-  });
-
-  it('should register srv_plugin_capability_gateway in PluginCompositionModule', () => {
-    const registry = new CapabilityRegistry();
-    const gateway = new PluginCapabilityGateway(registry);
-    const module = new PluginCompositionModule();
-
-    const refs = new Map<string, unknown>();
-    refs.set('capabilityGateway', gateway);
-
-    expect(() => {
-      module.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 });

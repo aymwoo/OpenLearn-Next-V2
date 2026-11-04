@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { PluginRuntimeComposition } from '../plugin-runtime-composition.js';
 import type { PluginHost } from '../index.js';
 import type { WorkerManager } from '../../worker-runtime/worker-manager.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('PluginRuntimeComposition (EU-01)', () => {
   const createMocks = () => {
@@ -44,18 +43,5 @@ describe('PluginRuntimeComposition (EU-01)', () => {
 
     expect(composition.isStarted).toBe(false);
     expect(mockWorkerManager.shutdownAll).toHaveBeenCalled();
-  });
-
-  it('should register srv_plugin_runtime_composition in PluginCompositionModule', () => {
-    const { mockHost, mockWorkerManager } = createMocks();
-    const composition = new PluginRuntimeComposition(mockHost, mockWorkerManager);
-    const module = new PluginCompositionModule();
-
-    const refs = new Map<string, unknown>();
-    refs.set('runtimeComposition', composition);
-
-    expect(() => {
-      module.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 });

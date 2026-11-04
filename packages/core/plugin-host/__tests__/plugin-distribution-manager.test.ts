@@ -5,7 +5,6 @@ import {
   type PluginPackageMetadata,
 } from '../plugin-distribution-manager.js';
 import type { PluginHost } from '../index.js';
-import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('PluginDistributionManager (P7-B7 EU-01)', () => {
   const createMockPluginHost = () =>
@@ -106,21 +105,5 @@ describe('PluginDistributionManager (P7-B7 EU-01)', () => {
     await expect(manager.installFromRepository('repo_tampered', 'ext-tampered')).rejects.toThrow(
       /Integrity verification failed for plugin "ext-tampered"/i,
     );
-  });
-
-  it('should report health and register in PluginCompositionModule', () => {
-    const mockHost = createMockPluginHost();
-    const manager = new PluginDistributionManager(mockHost);
-
-    const health = manager.health();
-    expect(health.isHealthy).toBe(true);
-
-    const module = new PluginCompositionModule();
-    const refs = new Map<string, unknown>();
-    refs.set('distributionManager', manager);
-
-    expect(() => {
-      module.compose({ infrastructureRefs: refs });
-    }).not.toThrow();
   });
 });
