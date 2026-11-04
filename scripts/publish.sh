@@ -221,14 +221,48 @@ fi
 # Restore workspace protocol for local dev
 sed -i 's|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|"@openlearn/plugin-sdk": "workspace:\*"|' package.json
 
-# ── 4. Sync to npmmirror ──────────────────────────────────────────
+# ── 4. Sync to npmmirror ────────────────────────────────────────
+#
+# 为什么这里需要一层前置检查与回查：
+# 2026-11-03 发布 0.7.12 时，本机没装 `cnpm`，三条 `cnpm: command not found`
+# 被 `|| log "... failed (non-fatal)"` 吞成普通日志，脚本依旧打印
+# "Done. Packages published and synced." —— 于是国内用户（默认 registry 是
+# npmmirror）拿不到新版本，而发布方以为已经同步过了。
+#
+# 两个坑：
+#   ① 「工具没装」与「同步失败」要分开报，否则 `command not found` 会被
+#      误读成网络/权限问题，排查方向直接跑偏；
+#   ② `cnpm sync` 返回 0 ≠ npmmirror 立刻可见，必须回查实际版本。
 if [ "$DRY_RUN" = true ]; then
   warn "[dry-run] 跳过 npmmirror 同步（镜像同步只对已发布版本有意义）。"
 else
   log "Syncing to npmmirror..."
-  cnpm sync openlearn-next        || log "sync openlearn-next failed (non-fatal)"
-  cnpm sync @openlearn/plugin-sdk || log "sync @openlearn/plugin-sdk failed (non-fatal)"
-  cnpm sync @openlearn/plugin-test-kit || log "sync @openlearn/plugin-test-kit failed (non-fatal)"
+  if ! command -v cnpm >/dev/null 2>&1; then
+    warn "cnpm 未安装 —— 本次**没有**同步 npmmirror，国内用户会拿不到 ${APP_VER}。"
+    warn "  安装：npm i -g cnpm --registry=https://registry.npmmirror.com"
+    warn "  补同步：cnpm sync openlearn-next @openlearn/plugin-sdk @openlearn/plugin-test-kit"
+  else
+    for pkg in openlearn-next @openlearn/plugin-sdk @openlearn/plugin-test-kit; do
+      if cnpm sync "$pkg"; then
+        log "synced ${pkg}"
+      else
+        warn "npmmirror 同步失败：${pkg}（npmmirror 侧问题；重试：cnpm sync ${pkg}）"
+      fi
+    done
+
+    # 回查：npmmirror 上是否真的能查到这些版本（同步成功 ≠ 立即可见）
+    for spec in "openlearn-next@${APP_VER}" "@openlearn/plugin-sdk@${SDK_VER}" "@openlearn/plugin-test-kit@${TK_VER}"; do
+      pkg="${spec%@*}"
+      ver="${spec##*@}"
+      got="$(npm view "${pkg}@${ver}" version --registry=https://registry.npmmirror.com 2>/dev/null || true)"
+      if [ "$got" = "$ver" ]; then
+        log "npmmirror 已验证：${pkg}@${ver}"
+      else
+        warn "npmmirror 暂未查到 ${pkg}@${ver}（实际：${got:-无}）—— 可能仍在同步，稍后用以下命令复核："
+        warn "  npm view ${pkg}@${ver} version --registry=https://registry.npmmirror.com"
+      fi
+    done
+  fi
 fi
 
 if [ "$DRY_RUN" = true ]; then
