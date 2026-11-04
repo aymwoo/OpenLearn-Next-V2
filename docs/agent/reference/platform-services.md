@@ -505,6 +505,8 @@ HTTP 侧的配套约束（网关会校验①）：`PluginApiResponse.sessionToke
 @openlearn/core:IUnifiedExtensionRegistry
 ```
 
+> **注意**：其中 `@openlearn/core:IPluginRuntimeComposition` 与 `@openlearn/core:IUnifiedExtensionRegistry` 对应的宿主门面已在 SDK 3.9.0 标记弃用（`@deprecated`），计划于 4.0.0 彻底移除（Refs #398）。扩展注册请一律使用 `ContributionRegistry`（`IContributionRegistryToken`）。
+
 ```{note}
 `INetworkProxyService` 有点绕，值得单独说：
 

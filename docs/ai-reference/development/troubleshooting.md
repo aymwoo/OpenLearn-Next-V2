@@ -19,13 +19,13 @@
 
 ## 1. 构建期
 
-| 现象                                                       | 归属 | 原因                                                   | 修法                                                                               |
-| ---------------------------------------------------------- | ---- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `✖ frontend 产物里有裸模块说明符`                          | 插件 | 沙箱 iframe 用 `Blob` + 动态 `import()`，无 importmap  | 删掉 `import React` / 第三方包的裸导入；依赖必须打进 bundle                        |
-| `TS2305: Module has no exported member`                    | 插件 | 用了 3.8.0 才移除的导出，或拼错名                      | 查 [api-reference.md](api-reference.md) §1                                         |
-| `Cannot find package 'uuid'`                               | 环境 | SDK 未声明 `uuid` 运行时依赖（3.7.4 缺陷，3.7.5 已修） | `npm i -D uuid zod` 或升 SDK                                                       |
-| `TS2693: 'PluginRuntimeComposition' only refers to a type` | 插件 | 3.7.2 起该符号 type-only                               | 改 `import type`；宿主内部类从 `packages/core/plugin-host/*.js` 取（插件本不该用） |
-| esbuild 报 `Could not resolve "x"`                         | 插件 | 依赖未安装或拼错                                       | 装依赖，或改用 `ctx.require` 白名单模块                                            |
+| 现象                                                       | 归属 | 原因                                                            | 修法                                                                                      |
+| ---------------------------------------------------------- | ---- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `✖ frontend 产物里有裸模块说明符`                          | 插件 | 沙箱 iframe 用 `Blob` + 动态 `import()`，无 importmap           | 删掉 `import React` / 第三方包的裸导入；依赖必须打进 bundle                               |
+| `TS2305: Module has no exported member`                    | 插件 | 用了 3.8.0 才移除的导出，或拼错名                               | 查 [api-reference.md](api-reference.md) §1                                                |
+| `Cannot find package 'uuid'`                               | 环境 | SDK 未声明 `uuid` 运行时依赖（3.7.4 缺陷，3.7.5 已修）          | `npm i -D uuid zod` 或升 SDK                                                              |
+| `TS2693: 'PluginRuntimeComposition' only refers to a type` | 插件 | 3.7.2 起该符号 type-only，SDK 3.9.0 标记弃用（计划 4.0.0 移除） | 插件不应使用该内部门面；生命周期调度请直接依赖 `WorkerManager` / `PluginLifecycleManager` |
+| esbuild 报 `Could not resolve "x"`                         | 插件 | 依赖未安装或拼错                                                | 装依赖，或改用 `ctx.require` 白名单模块                                                   |
 
 ---
 

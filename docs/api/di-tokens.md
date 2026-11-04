@@ -299,7 +299,7 @@ metadata(): IntegrationDescriptor;
 > 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
 > 详见本文 C 区表格下方的撤回说明。
 
-### `IPluginRuntimeCompositionToken` → `PluginRuntimeComposition`（`packages/core/plugin-host/plugin-runtime-composition.ts`）
+### `IPluginRuntimeCompositionToken` → `PluginRuntimeComposition`（已弃用 @deprecated，计划 4.0.0 移除）
 
 ```typescript
 readonly id: string;
@@ -314,12 +314,9 @@ health(): IntegrationHealthStatus;
 metadata(): IntegrationDescriptor;
 ```
 
-> **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
-> 当前 SDK 3.8.0 已**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
-> 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
-> 详见本文 C 区表格下方的撤回说明。
+> **⚠️ 内部门面 · 已弃用（Refs #398）**：已不再从 `@openlearn/plugin-sdk` 导出，d.ts 残留也已于 SDK 3.9.0 清除；对应宿主门面类计划于 SDK 4.0.0 彻底移除。生命周期管理请直接依赖 `WorkerManager` / `PluginLifecycleManager`。
 
-### `IUnifiedExtensionRegistryToken` → `UnifiedExtensionRegistry`（`packages/core/plugin-host/unified-extension-registry.ts`）
+### `IUnifiedExtensionRegistryToken` → `UnifiedExtensionRegistry`（已弃用 @deprecated，计划 4.0.0 移除）
 
 ```typescript
 registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
@@ -331,10 +328,7 @@ health(): IntegrationHealthStatus;
 metadata(): IntegrationDescriptor;
 ```
 
-> **⚠️ 非插件 API（D-3/F-3 审计结论）**：以下三个 Token 与 `ICapabilityGovernanceServiceToken`
-> 当前 SDK 3.8.0 已**不再从 `@openlearn/plugin-sdk` 导出** —— 它们在内核里已注册，
-> 但**零生产 resolve**。此处保留签名说明仅供内核内部阅读，**插件不要 import 它们**。
-> 详见本文 C 区表格下方的撤回说明。
+> **⚠️ 内部门面 · 已弃用（Refs #398）**：已不再从 `@openlearn/plugin-sdk` 导出，d.ts 残留也已于 SDK 3.9.0 清除；对应宿主门面类计划于 SDK 4.0.0 彻底移除。平台扩展注册请一律使用 `ContributionRegistry`（`IContributionRegistryToken`）。
 
 ### `IPluginCapabilityGatewayToken` → `PluginCapabilityGateway`（`packages/core/plugin-host/plugin-capability-gateway.ts`）
 

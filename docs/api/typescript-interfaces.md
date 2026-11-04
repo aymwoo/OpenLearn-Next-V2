@@ -111,7 +111,7 @@ interface FrontendPluginContext {
 
 `IPluginLifecycleManager` / `IPluginDistributionManager` / `ICapabilityRegistry` 及其类实现，完整方法签名见 [DI Token 字典](di-tokens.md) 第 3 节。
 
-> `IPluginRuntimeComposition` / `IUnifiedExtensionRegistry` / `IPluginCapabilityGateway` 仍是 SDK 导出的**类型**，但对应 Token 已收回（SDK 3.7.4 起不再导出）且**零生产消费**，插件无法 `ctx.resolve` 它们，请勿在设计中使用。需要 AI 能力请用 `ctx.services.ai`（见 [能力提供方框架](../reference/capability-provider-framework.md)）。
+> `PluginRuntimeComposition` / `UnifiedExtensionRegistry` / `PluginRuntimeAdapter` / `PluginContextAdapter` 等门面类型已在 SDK 3.9.0 标记弃用（`@deprecated`，计划于 4.0.0 移除，Refs #398），对应 Token 已收回且**零生产消费**，插件无法且不应 `ctx.resolve` 它们。扩展注册请使用 `ContributionRegistry`（`IContributionRegistryToken`），生命周期使用 `PluginLifecycleManager`，需要 AI 能力请用 `ctx.services.ai`（见 [能力提供方框架](../reference/capability-provider-framework.md)）。
 
 ---
 

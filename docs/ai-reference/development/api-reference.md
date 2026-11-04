@@ -69,21 +69,21 @@ import {
 } from '@openlearn/plugin-sdk';
 ```
 
-### 1.1 只有类型、没有运行期值的 7 个符号（3.7.2 起）
+### 1.1 只有类型、没有运行期值的符号（3.7.2 起）
 
 ```text
-PluginRuntimeComposition   PluginCapabilityGateway   PluginContextAdapter
-PluginDistributionManager  PluginLifecycleManager    PluginRuntimeAdapter
-UnifiedExtensionRegistry
+PluginRuntimeComposition（已弃用）  PluginCapabilityGateway   PluginContextAdapter（已弃用）
+PluginDistributionManager         PluginLifecycleManager    PluginRuntimeAdapter（已弃用）
+UnifiedExtensionRegistry（已弃用）
 ```
 
 写成值导入会**编译通过、运行期 `undefined`**（比 TS1362 更难查）。
-证据：`openlearn.d.ts` L1401-1409 的注释与 `export type` 块。
+其中 `PluginRuntimeComposition`、`PluginContextAdapter`、`PluginRuntimeAdapter`、`UnifiedExtensionRegistry` 4 个零消费者宿主门面已在 SDK 3.9.0 标记弃用（`@deprecated`，计划于 4.0.0 移除，Refs #398）。
 
 ### 1.2 已弃用（3.8.0 起从导出面移除）
 
 `ICapabilityGovernanceServiceToken`、`IPluginCapabilityGatewayToken`、`IUnifiedExtensionRegistryToken`、
-`IPluginRuntimeCompositionToken` —— d.ts 中标注 `@deprecated`（L1144-1170）。内核侧仍可从
+`IPluginRuntimeCompositionToken` —— 已收回对外承诺，其中后两者幽灵声明已于 SDK 3.9.0 从 d.ts 清理。内核侧仍可从
 `packages/core/di/interfaces.ts` 导入，但**插件不该用**。
 
 ---
@@ -530,7 +530,7 @@ interface ExtensionPointConfig {
 | `IPluginLifecycleManager`    | L849                                           | `getPluginState` / `reloadPlugin` / `health`                                                              |
 | `IPluginDistributionManager` | L935                                           | `installFromZip` / `updateFromZip` / `uninstallPlugin`                                                    |
 | `IPluginCapabilityGateway`   | L862                                           | `executeCapability`                                                                                       |
-| `IUnifiedExtensionRegistry`  | L873                                           | `registerExtension` / `unregisterProvider`                                                                |
+| `IUnifiedExtensionRegistry`  | L873                                           | `registerExtension` / `unregisterProvider`（已弃用 `@deprecated`，计划 4.0.0 移除）                       |
 | `PluginHttpRouter`           | L428                                           | `match` / `handle` / `handleStream` / `getRegisteredRoutes`                                               |
 | `CapabilityRegistry`         | L818                                           | `registerCapability` / `resolveCapability`                                                                |
 | `descriptor`/`token` 兼容层  | `packages/core/worker-runtime/service-host.ts` | RPC 服务端                                                                                                |

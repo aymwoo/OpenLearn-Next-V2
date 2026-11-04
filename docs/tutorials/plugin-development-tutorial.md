@@ -1173,10 +1173,10 @@ P7-A2 将原本分散在插件宿主内部的能力收敛为一组统一的门�
 | --------------------------------- | -------------------------------------------- | --------------------------- | --------------------------------------------- |
 | `IPluginLifecycleManagerToken`    | `@openlearn/core:IPluginLifecycleManager`    | `PluginLifecycleManager`    | 插件的安装 / 卸载 / 启用 / 停用等生命周期管理 |
 | `IPluginDistributionManagerToken` | `@openlearn/core:IPluginDistributionManager` | `PluginDistributionManager` | 插件分发：ZIP 上传、版本与市场                |
-| `IPluginRuntimeCompositionToken`  | `@openlearn/core:IPluginRuntimeComposition`  | `PluginRuntimeComposition`  | 统一运行时组合（内核 + 插件运行时适配）       |
-| `IUnifiedExtensionRegistryToken`  | `@openlearn/core:IUnifiedExtensionRegistry`  | `UnifiedExtensionRegistry`  | 扩展点统一注册表                              |
 | `IPluginCapabilityGatewayToken`   | `@openlearn/core:IPluginCapabilityGateway`   | `PluginCapabilityGateway`   | 插件能力网关：列举 / 查询能力                 |
 | `ICapabilityRegistryToken`        | `@openlearn/core:ICapabilityRegistry`        | `CapabilityRegistry`        | 能力注册表：底层能力元数据                    |
+
+> **注意（已弃用说明）**：历史设计中的 `IPluginRuntimeCompositionToken`（统一运行时组合）与 `IUnifiedExtensionRegistryToken`（统一扩展注册表）因零生产消费者已从 SDK 导出面移除，其类型在 SDK 3.9.0 标记弃用（`@deprecated`）并计划于 4.0.0 移除（Refs #398）。平台扩展点注册请直接使用 `ContributionRegistry`（`IContributionRegistryToken`）。
 
 在 `manifest.requires` 中声明依赖，格式为 `@openlearn/core:TokenName@^1.0.0`，例如：
 

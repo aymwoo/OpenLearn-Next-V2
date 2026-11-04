@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Deprecated
+
+- **零消费者宿主门面类型导出弃用（Issue #398，Stage 1）**：
+  - 标记 `@deprecated [SDK 3.9.0]`：`PluginRuntimeAdapter`、`PluginRuntimeComposition`、`PluginContextAdapter`、`UnifiedExtensionRegistry` 4 个类类型导出。这些门面为宿主内部实现层，生产代码中零消费者，计划在 SDK 4.0.0 彻底移除。
+  - 插件开发者替代方案：
+    - 运行时上下文直接消费 `PluginContext`（由系统通过 `context-builder` 注入，或通过 `@openlearn/plugin-sdk` 引用相关接口）；
+    - 扩展注册使用 `ContributionRegistry`（`IContributionRegistryToken`）；
+    - 生命周期管理直接依赖 `WorkerManager` / `PluginLifecycleManager`。
+  - 清理生成产物残留：从 `openlearn.d.ts` 与 `dist/index.d.ts` 中移除已收回对外承诺的 `IPluginRuntimeCompositionToken` 与 `IUnifiedExtensionRegistryToken` 的幽灵 `declare const` 声明，杜绝类型命名空间污染。
+
 ## [3.8.0] - 2026-11-02
 
 ### Features

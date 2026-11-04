@@ -904,7 +904,10 @@ interface IPluginCapabilityGateway {
   metadata(): IntegrationDescriptor;
 }
 
-/** 统一扩展注册表：所有平台扩展点（widget / command / AI action / activity 等）的单一管理层 */
+/**
+ * 统一扩展注册表：所有平台扩展点（widget / command / AI action / activity 等）的单一管理层
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。扩展注册请使用 `ContributionRegistry`。
+ */
 interface IUnifiedExtensionRegistry {
   registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
   hasExtension(category: string, id: string): boolean;
@@ -985,7 +988,10 @@ interface IPluginDistributionManager {
   metadata(): IntegrationDescriptor;
 }
 
-/** 插件运行时组合：插件宿主与 Worker 管理器的有序启停编排 */
+/**
+ * 插件运行时组合：插件宿主与 Worker 管理器的有序启停编排
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。生命周期调度请直接依赖 `WorkerManager` / `PluginLifecycleManager`。
+ */
 declare class PluginRuntimeComposition {
   readonly pluginHost: PluginHost;
   readonly workerManager?: unknown;
@@ -1192,19 +1198,7 @@ declare const IPluginLifecycleManagerToken: Token<IPluginLifecycleManager>;
  * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
  */
 declare const IPluginCapabilityGatewayToken: Token<IPluginCapabilityGateway>;
-/**
- * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
- * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
- * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
- */
-declare const IUnifiedExtensionRegistryToken: Token<IUnifiedExtensionRegistry>;
 declare const IPluginDistributionManagerToken: Token<IPluginDistributionManager>;
-/**
- * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
- * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
- * 内核侧仍可从 `packages/core/di/interfaces.js` 正常 import。
- */
-declare const IPluginRuntimeCompositionToken: Token<PluginRuntimeComposition>;
 declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScriptRegistry>;
 declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;

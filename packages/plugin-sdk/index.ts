@@ -72,11 +72,30 @@ export type {
 //
 // 若将来真的出现「仓库外消费者需要 new 出来」的场景，正确做法是把该类下沉到
 // 独立包，而不是重新值导出。
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
+ * 插件运行时上下文已由平台直接注入 `PluginContext`；内核侧请从 `packages/core/plugin-host/` 导入。
+ */
 export type { PluginRuntimeAdapter } from '../core/plugin-host/plugin-runtime-adapter.js';
+
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
+ * 生命周期调度请直接依赖 `WorkerManager` / `PluginLifecycleManager`；内核侧请从 `packages/core/plugin-host/` 导入。
+ */
 export type { PluginRuntimeComposition } from '../core/plugin-host/plugin-runtime-composition.js';
+
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
+ * 插件上下文已通过 `context-builder` 直接构造 `PluginContext`；内核侧请从 `packages/core/plugin-host/` 导入。
+ */
 export type { PluginContextAdapter } from '../core/plugin-host/plugin-context-adapter.js';
 export type { PluginLifecycleManager } from '../core/plugin-host/plugin-lifecycle-manager.js';
 export type { PluginCapabilityGateway } from '../core/plugin-host/plugin-capability-gateway.js';
+
+/**
+ * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
+ * 扩展注册请使用 `ContributionRegistry`（`IContributionRegistryToken`）；内核侧请从 `packages/core/plugin-host/` 导入。
+ */
 export type { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
 export type { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
 

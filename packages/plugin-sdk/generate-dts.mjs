@@ -709,6 +709,12 @@ function renderClass(name, node) {
   const typeParams = node.typeParameters?.length ? '<' + node.typeParameters.map((t) => print(t)).join(', ') + '>' : '';
   const heritage = node.heritageClauses?.map((h) => ' ' + print(h).trim()).join('') ?? '';
   const lines = [];
+  const sourceText = node.getSourceFile().text;
+  const comments = ts.getLeadingCommentRanges(sourceText, node.pos) ?? [];
+  const depComment = comments.map((c) => sourceText.slice(c.pos, c.end)).find((t) => t.includes('@deprecated'));
+  if (depComment) {
+    lines.push(depComment);
+  }
   lines.push(`/** @see ${path.relative(ROOT, symbolIndex.get(name)?.file ?? '')} */`);
   lines.push(`declare ${abstractKw}class ${name}${typeParams}${heritage} {`);
   /** 参数属性 → 类体属性 */
