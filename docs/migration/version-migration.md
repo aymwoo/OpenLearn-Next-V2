@@ -240,16 +240,16 @@ DROP TABLE IF EXISTS foo;
 
 这些不走 `migrations/`，但跨版本升级时行为有变：
 
-| 变更                                      | 现状                                                                                 | 源码位置                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| 密码哈希升级为 bcrypt                     | `verifyPassword` 兼容旧 SHA-256，`needsUpgrade: true` 时自动重算                     | `packages/core/db/index.ts`                                          |
-| 会话改为不透明 Cookie + 查表              | 令牌是 `client_sessions` 表主键，**不是 JWT**                                        | `server/middleware/auth.ts`                                          |
-| 强制改密门控                              | 种子账号带 `mustChangePassword`，除改密、登出、会话查询外的 `/api`（含 GET）一律 403 | `enforcePasswordChanged`                                             |
-| CSRF 门控                                 | 写请求按 `Sec-Fetch-Site` 判定，`cross-site` 走豁免清单                              | `server/middleware/csrf.ts`                                          |
-| 前端 `setSocketBridge` 死代码被删除       | 白板事件**不再跨端转发**（从来就没生效过）                                           | `src/services/event-bus.ts`                                          |
-| 课件 HTML 改用 `?ct=` 短时令牌鉴权        | 沙箱 iframe 不带 cookie 的替代方案                                                   | `server/utils/courseware-access.ts`                                  |
-| 成绩榜对学生脱敏 `extra_json` / `comment` | 学生只拿榜单信息                                                                     | `server/routes/courseware.ts`                                        |
-| 插件 Token 白名单（前后端）               | worker / inline 两条链路都按 manifest 计算允许访问的 Token                           | `packages/core/worker-runtime/`、`src/plugin-host/allowed-tokens.ts` |
+| 变更                                      | 现状                                                                                 | 源码位置                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 密码哈希升级为 bcrypt                     | `verifyPassword` 兼容旧 SHA-256，`needsUpgrade: true` 时自动重算                     | `packages/core/db/index.ts`                                                       |
+| 会话改为不透明 Cookie + 查表              | 令牌是 `client_sessions` 表主键，**不是 JWT**                                        | `server/middleware/auth.ts`                                                       |
+| 强制改密门控                              | 种子账号带 `mustChangePassword`，除改密、登出、会话查询外的 `/api`（含 GET）一律 403 | `enforcePasswordChanged`                                                          |
+| CSRF 门控                                 | 写请求按 `Sec-Fetch-Site` 判定，`cross-site` 走豁免清单                              | `server/middleware/csrf.ts`                                                       |
+| 前端 `setSocketBridge` 死代码被删除       | 白板事件**不再跨端转发**（从来就没生效过）                                           | `src/services/event-bus.ts`                                                       |
+| 课件 HTML 改用 `?ct=` 短时令牌鉴权        | 沙箱 iframe 不带 cookie 的替代方案                                                   | `server/utils/courseware-access.ts`                                               |
+| 成绩榜对学生脱敏 `extra_json` / `comment` | 学生只拿榜单信息                                                                     | `server/routes/courseware.ts`                                                     |
+| 插件 Token 白名单                         | worker / inline 两条链路都按 manifest 计算允许访问的 Token                           | `packages/core/worker-runtime/`（浏览器侧 `allowed-tokens.ts` 已于 Phase 0 删除） |
 
 > ⚠️ **升级前务必核对 `ENCRYPTION_KEY`**：从 v0.3.x 起 AI Provider API Key 一律 AES-256-GCM 加密。迁移 `023` 起，班级临时口令也用同一把钥匙加密（前缀 `olenc1:`）。未设置环境变量时，钥匙在 `storage/encryption-key`。密钥变更会导致 API Key 和班级口令都无法解密。`site-backup` 不包含该文件，要单独备份。
 

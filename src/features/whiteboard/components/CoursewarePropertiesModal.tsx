@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ShieldCheck, Save, Globe, Upload, RefreshCw, Code, FileCode, AlertCircle } from 'lucide-react';
-import type { HtmlAppletPayload } from '../canvas-model/types';
+import type { HtmlAppletPayload } from '../types/payloads';
 
 export type HtmlAppletData = HtmlAppletPayload & {
   width?: number;

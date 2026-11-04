@@ -1,4 +1,4 @@
-import type { HtmlAppletPayload } from '../canvas-model/types';
+import type { HtmlAppletPayload } from '../types/payloads';
 
 /**
  * 课件内容源 loader —— 允许第三方插件为 html-applet 接入自定义内容后端。

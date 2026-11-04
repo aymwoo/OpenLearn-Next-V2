@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ThemeManager } from '../rendering-engine/theme/theme-manager.js';
-import type { ThemeTokens } from '../rendering-engine/types.js';
+import { ThemeManager, type ThemeTokens } from '../theme.js';
 
 describe('ThemeManager', () => {
   let themeMgr: ThemeManager;

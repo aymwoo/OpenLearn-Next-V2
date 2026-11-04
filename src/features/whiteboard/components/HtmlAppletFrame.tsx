@@ -12,7 +12,7 @@ import {
   registerManagedIframe,
 } from '../../../services/lms-bridge';
 import { getSocketInstance } from '../../../services/socket-service';
-import type { HtmlAppletPayload } from '../canvas-model/types';
+import type { HtmlAppletPayload } from '../types/payloads';
 import { whiteboardEventSlot } from '../events/WhiteboardEventSlot';
 
 function pickNumber(v: unknown): number | undefined {

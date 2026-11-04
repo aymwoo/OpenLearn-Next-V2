@@ -66,53 +66,42 @@ describe('B-2：积分服务白名单必须精确匹配', () => {
 });
 
 /**
- * B-3：两端 Barrier 2 语义一致性。
+ * B-3：Barrier 2 只读降级语义。
  *
- * 直接断言**前端源码**里的判定表达式与后端一致 —— 因为前端的 ServiceHost
- * 依赖浏览器 Worker 基础设施，无法在 Node 测试里实例化。
- * 这类「跨运行时规则」只能靠共享测试向量 + 源码断言来防漂移。
+ * 该规则历史上在前后端各写一遍，靠「源码断言两端一致」防漂移。
+ * Phase 0 删除了浏览器侧 Worker 车道（`src/plugin-host/service-host.ts` 全仓从未被
+ * `setWorkerManager()` 接线，属死代码），因此现在只剩后端一处实现 ——
+ * parity 断言的对象不存在了，改断言后端源码约束 + 纯语义向量。
  */
-describe('B-3：Barrier 2 两端语义一致', () => {
-  it("后端与前端都用 startsWith('get') 判定只读降级", async () => {
+describe('B-3：Barrier 2 只读降级语义（单运行时）', () => {
+  it("后端用 startsWith('get') 判定只读降级", async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
 
     const read = (rel: string) => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf-8');
-
     const backend = read('packages/core/worker-runtime/service-host.ts');
-    const frontend = read('src/plugin-host/service-host.ts');
 
-    // 后端判定的是**已授予（管理员已审批）**的能力集合（Issue #224），
-    // 前端浏览器侧没有 CapabilityGuard，仍以清单声明值为准 ——
-    // 两端左值不同是**有意为之**，需要一致的是右侧的方法名判定。
+    // 后端判定的是**已授予（管理员已审批）**的能力集合（Issue #224）。
     const backendGuard = backend.match(/effectiveCapabilities\.length === 0 && ([^\n]+)/)?.[1]?.trim();
-    const frontendGuard = frontend.match(/manifestCapabilities\.length === 0 && ([^\n]+)/)?.[1]?.trim();
 
     expect(backendGuard).toBeTruthy();
-    expect(frontendGuard).toBeTruthy();
-    expect(backendGuard).toBe(frontendGuard);
     expect(backendGuard).toContain("startsWith('get')");
   });
 
-  it('后端读的是已授予集合，前端读的是声明集合（Issue #224 的有意差异）', async () => {
+  it('后端读的是已授予集合（声明 ∩ 审批）', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
 
     const read = (rel: string) => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf-8');
-
     const backend = read('packages/core/worker-runtime/service-host.ts');
-    const frontend = read('src/plugin-host/service-host.ts');
 
-    // 后端：运行时能力 = 声明 ∩ 已授予（管理员审批）
     expect(backend).toContain('effectiveCapabilities');
     // 用正则而非字面量：全仓 prettier（`arrowParens: "always"`）会把
     // `cap =>` 改写成 `(cap) =>`，字面量断言会被纯格式化改动打断。
     expect(backend).toMatch(/declared\.filter\(\(?cap\)?\s*=>\s*guard\.check/);
-    // 前端：浏览器侧无 CapabilityGuard，仍是清单声明值
-    expect(frontend).toContain('manifestCapabilities');
   });
 
-  it('getUserList / getAllActions 两端判定结果相同（只读降级放行）', () => {
+  it('getUserList / getAllActions 判定结果相同（只读降级放行）', () => {
     const isReadOnlyAllowed = (method: string) => method.startsWith('get');
     for (const m of ['get', 'getUserList', 'getAllActions', 'getActionByCommandType']) {
       expect(isReadOnlyAllowed(m), m).toBe(true);

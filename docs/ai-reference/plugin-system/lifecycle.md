@@ -189,5 +189,5 @@ process / worker 模式下：
     └─ 声明了且已授予                   → 放行
 ```
 
-证据：`src/plugin-host/service-host.ts → handleInvoke`（L245-252）的 Barrier 2 分支。
+证据：`packages/core/worker-runtime/service-host.ts → handleInvoke` 的 Barrier 2 分支（浏览器端同名文件已于 Phase 0 删除）。
 完整机制见 [capabilities-and-security.md](capabilities-and-security.md) §3。

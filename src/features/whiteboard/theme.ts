@@ -1,4 +1,22 @@
-import type { ThemeTokens } from '../types.js';
+/**
+ * 白板主题令牌与主题管理器。
+ *
+ * 原先位于 `rendering-engine/theme/theme-manager.ts`。`rendering-engine` 整个目录
+ * 的 15 个子目录中有 14 个从未被任何生产代码调用（构建产物中不存在），
+ * 只有这个文件真正被画布使用，因此就地提升为白板顶层模块，不再保留
+ * “渲染引擎”这层空壳。
+ */
+
+export interface ThemeTokens {
+  primary: string;
+  background: string;
+  gridDot: string;
+  selectionBorder: string;
+  selectionHandle: string;
+  textPrimary: string;
+  borderDefault: string;
+  guideLine: string;
+}
 
 export type WhiteboardThemeId = 'light' | 'dark' | 'eyecare' | 'chalkboard' | 'teaching' | string;
 

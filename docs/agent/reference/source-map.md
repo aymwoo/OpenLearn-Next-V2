@@ -101,23 +101,21 @@
 
 ### 2.4 前端
 
-| 主题                               | 权威文件                                                                   | repomix 区间                     | 看什么                                                                 |
-| :--------------------------------- | :------------------------------------------------------------------------- | :------------------------------- | :--------------------------------------------------------------------- |
-| 隐藏逻辑帧                         | `src/plugin-host/sandbox-frame.ts`                                         | L397461–L397491                  | 加载器契约、`missing activate function`、`Activation timeout (5000ms)` |
-| 前端类型（另一套 `PluginContext`） | `src/plugin-host/types.ts`                                                 | L397902–L398853                  | 前端 ctx 与后端 ctx 的成员差异                                         |
-| 扩展点渲染                         | `src/plugin-host/extension-point-renderer.tsx`                             | L393800–L394864                  | `__isLazyFactory`、未知 slot → `null`                                  |
-| 熔断                               | `src/plugin-host/extension-breaker.ts`                                     | L393743–L393799                  | 3 次 / 5 分钟                                                          |
-| 宿主动作分发                       | `src/plugin-host/host-action-dispatcher.ts`                                | L394865–L395284                  | 模块级单例、last-wins、不自动清理                                      |
-| 状态存储                           | `src/plugin-host/plugin-host-store.ts`                                     | L395684–L395963                  | zustand、`position ?? 100`                                             |
-| slot props 读取                    | `src/plugin-host/read-slot-props.ts`                                       | L397413–L397460                  | 每个槽实际透传的字段                                                   |
-| 前端 token 白名单                  | `src/plugin-host/allowed-tokens.ts`                                        | L393059–L393208                  | 与后端不对称（Issue #224）                                             |
-| 前端方法策略                       | `src/plugin-host/method-policy.ts`                                         | L395542–L395615                  | 浏览器侧能力集                                                         |
-| 前端 worker                        | `src/plugin-host/browser-worker-manager.ts`、`browser-worker-transport.ts` | L393209–L393650、L393651–L393663 | 32 workers、10000/3000ms                                               |
-| 插件主机                           | `src/plugin-host/plugin-host.ts`                                           | L395964–L397412                  | `invokeCommand` 前缀、`defaultHostActionDispatcher`                    |
-| view 桥接（服务端）                | `server/utils/plugin-view-bridge.ts`                                       | L237721–L237868                  | op 集合、CSP、`sec-fetch-dest`                                         |
-| 沙箱页组件                         | `src/components/PluginSandboxIframeView.tsx`                               | L266332–L266647                  | `FLOATING_VIEW_SLOTS`、316px                                           |
-| 插件中心 UI                        | `src/components/PluginCenter.tsx` + `src/components/plugin-center/*`       | L264196–L264763、L248852–L251291 | 审批、网络授权、日志、开发面板                                         |
-| 安装向导                           | `src/components/PluginInstallWizard.tsx`                                   | L264905–L266331                  | `approveCapabilities` / `approvePublicRoutes` 的 UI 入口               |
+| 主题                               | 权威文件                                                             | repomix 区间                     | 看什么                                                                 |
+| :--------------------------------- | :------------------------------------------------------------------- | :------------------------------- | :--------------------------------------------------------------------- |
+| 隐藏逻辑帧                         | `src/plugin-host/sandbox-frame.ts`                                   | L397461–L397491                  | 加载器契约、`missing activate function`、`Activation timeout (5000ms)` |
+| 前端类型（另一套 `PluginContext`） | `src/plugin-host/types.ts`                                           | L397902–L398853                  | 前端 ctx 与后端 ctx 的成员差异                                         |
+| 扩展点渲染                         | `src/plugin-host/extension-point-renderer.tsx`                       | L393800–L394864                  | `__isLazyFactory`、未知 slot → `null`                                  |
+| 熔断                               | `src/plugin-host/extension-breaker.ts`                               | L393743–L393799                  | 3 次 / 5 分钟                                                          |
+| 宿主动作分发                       | `src/plugin-host/host-action-dispatcher.ts`                          | L394865–L395284                  | 模块级单例、last-wins、不自动清理                                      |
+| 状态存储                           | `src/plugin-host/plugin-host-store.ts`                               | L395684–L395963                  | zustand、`position ?? 100`                                             |
+| slot props 读取                    | `src/plugin-host/read-slot-props.ts`                                 | L397413–L397460                  | 每个槽实际透传的字段                                                   |
+| 前端方法策略                       | `src/plugin-host/method-policy.ts`                                   | L395542–L395615                  | 浏览器侧能力集                                                         |
+| 插件主机                           | `src/plugin-host/plugin-host.ts`                                     | L395964–L397412                  | `invokeCommand` 前缀、`defaultHostActionDispatcher`                    |
+| view 桥接（服务端）                | `server/utils/plugin-view-bridge.ts`                                 | L237721–L237868                  | op 集合、CSP、`sec-fetch-dest`                                         |
+| 沙箱页组件                         | `src/components/PluginSandboxIframeView.tsx`                         | L266332–L266647                  | `FLOATING_VIEW_SLOTS`、316px                                           |
+| 插件中心 UI                        | `src/components/PluginCenter.tsx` + `src/components/plugin-center/*` | L264196–L264763、L248852–L251291 | 审批、网络授权、日志、开发面板                                         |
+| 安装向导                           | `src/components/PluginInstallWizard.tsx`                             | L264905–L266331                  | `approveCapabilities` / `approvePublicRoutes` 的 UI 入口               |
 
 对应参考页：[前端沙箱](frontend-sandbox.md)、[Agent 工作手册](../playbook/agent-playbook.md)。
 

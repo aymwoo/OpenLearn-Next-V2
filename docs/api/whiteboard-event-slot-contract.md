@@ -346,7 +346,8 @@ import { WhiteboardEventPanel } from '@/features/whiteboard/events';
 ## 11. 配套 UI 组件
 
 - `WhiteboardEventPanel` (`src/features/whiteboard/events/WhiteboardEventPanel.tsx`) — 右下角调试浮窗
-- `RecentSubmissionsCard` (`src/features/whiteboard/events/RecentSubmissionsCard.tsx`) — 顶部"最近提交"小卡，按 `lessonId` 过滤；按事件类型分色（`quiz.answered` 答对/答错；`courseware.submitted` 课件提交），教师面板内嵌用
+
+> `RecentSubmissionsCard`（"最近提交"小卡）已于 Phase 0 删除 —— 它只被 `events/index.ts` 导出、全仓零渲染。
 
 ---
 
