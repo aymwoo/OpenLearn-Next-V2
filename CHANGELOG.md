@@ -10,7 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_（下一版本待补充）_
+### Fixes
+
+- **多媒体与 Base64 请求体体积限制放宽与 413 错误语义规范化**：
+  - **白名单补齐（`server/middleware/body-limits.ts`）**：在全局 2MB 请求体限制前，新增中等体量上传白名单（`MEDIUM_UPLOAD_ENDPOINTS`，上限 30MB），覆盖 `/api/auth/avatar`（头像上传）、`/api/timetable/ocr`（课表多模态 OCR 拍照识别）、`/api/site-settings`（站点品牌 Logo 上传）与 `/api/agent/chat`（智能助手带附件对话）；并将系统交互课件资源端点 `/api/resources` 纳入大文件上传白名单（110MB）；
+  - **修复头像合规文件被拒**：解决教师与学生在上传符合业务要求（≤ 2MB）的头像图片时，因 Base64 编码体积膨胀 ~33%（达到 ~2.1MB）被全局 2MB JSON 解析器提前抛出 `PayloadTooLargeError: request entity too large`（HTTP 413）而无法触达业务校验层的问题；
+  - **统一错误码机器语义（`server/utils/error-handler.ts`）**：在统一错误处理中将 body-parser 抛出的 `type: 'entity.too.large'` 错误映射为机器可读错误码 `PAYLOAD_TOO_LARGE`，便于前端统一识别并友好展示。
 
 ## [0.7.12] - 2026-11-03
 

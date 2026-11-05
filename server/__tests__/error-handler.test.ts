@@ -118,6 +118,21 @@ describe('sendSafeError · 机器可读错误码透传（Issue #71）', () => {
     expect(captured.status).toBe(500);
     expect(captured.body).toEqual({ success: false, error: 'db boom' });
   });
+
+  it('413 PayloadTooLargeError（带 type: entity.too.large）透传 PAYLOAD_TOO_LARGE code', () => {
+    const { res, captured } = mockRes();
+    const payloadErr = Object.assign(new Error('request entity too large'), {
+      status: 413,
+      type: 'entity.too.large',
+    });
+    sendSafeError(res, payloadErr);
+    expect(captured.status).toBe(413);
+    expect(captured.body).toEqual({
+      success: false,
+      code: 'PAYLOAD_TOO_LARGE',
+      error: 'request entity too large',
+    });
+  });
 });
 
 describe('sendSafeError · 生产环境的暴露策略', () => {

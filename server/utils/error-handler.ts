@@ -68,10 +68,13 @@ export function sendSafeError(
   // 机器可读错误码（2026-10-16，Issue #71）：仅对 4xx 透传 `err.code`。
   // 权限/业务类拒绝（如 COMMAND_NOT_REGISTERED）需要让前端按 code 分支处理，
   // 而不是从本地化文案里做字符串嗅探。5xx 不透传，避免泄露内部错误码。
+  // 对 body-parser 的 entity.too.large 异常自动补充标准错误码 PAYLOAD_TOO_LARGE。
   const rawCode =
     err && typeof err === 'object' && typeof (err as { code?: unknown }).code === 'string'
       ? (err as { code: string }).code
-      : undefined;
+      : err && typeof err === 'object' && (err as { type?: unknown }).type === 'entity.too.large'
+        ? 'PAYLOAD_TOO_LARGE'
+        : undefined;
   const errorCode = effectiveStatus >= 400 && effectiveStatus < 500 && rawCode ? rawCode : undefined;
 
   return res

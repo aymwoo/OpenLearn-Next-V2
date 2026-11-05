@@ -11,7 +11,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
-import { mountLargeBodyParsers } from '../middleware/body-limits.js';
+import { mountLargeBodyParsers, MEDIUM_UPLOAD_ENDPOINTS, LARGE_UPLOAD_ENDPOINTS } from '../middleware/body-limits.js';
+import { sendSafeError } from '../utils/error-handler.js';
 import {
   COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES,
   COURSE_PACKAGE_IMPORT_PATH,
@@ -22,7 +23,7 @@ let app: express.Express;
 let server: Server;
 let baseUrl = '';
 
-/** 构造一个「贴着生产装配」的 app：大体积解析器 → 全局 2MB parser → 路由。 */
+/** 构造一个「贴着生产装配」的 app：大体积解析器 → 全局 2MB parser → 路由 → 错误中间件。 */
 function buildApp() {
   const instance = express();
   mountLargeBodyParsers(instance);
@@ -32,8 +33,22 @@ function buildApp() {
   instance.post(COURSE_PACKAGE_IMPORT_PATH, (req, res) => {
     res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body ?? {})) });
   });
+  instance.post('/api/auth/avatar', (req, res) => {
+    res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body ?? {})) });
+  });
+  instance.post('/api/timetable/ocr', (req, res) => {
+    res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body ?? {})) });
+  });
+  instance.post('/api/resources', (req, res) => {
+    res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body ?? {})) });
+  });
   instance.post('/api/ordinary-endpoint', (req, res) => {
     res.json({ ok: true });
+  });
+
+  // 全局错误处理兜底（与 server.ts 一致，走 sendSafeError）
+  instance.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    sendSafeError(res, err, 500);
   });
   return instance;
 }
@@ -65,13 +80,52 @@ describe('请求体体积上限装配（Issue #246）', () => {
     expect(res.status).toBe(200);
   });
 
-  it('普通业务端点仍然受 2MB 全局上限保护', async () => {
+  it('普通业务端点仍然受 2MB 全局上限保护，且通过 sendSafeError 给出 PAYLOAD_TOO_LARGE 机器码', async () => {
     const res = await fetch(`${baseUrl}/api/ordinary-endpoint`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(makeBody(5 * 1024 * 1024)),
     });
     expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
+  it('个人头像上传端点放行合规文件 base64 膨胀后的请求体（> 2MB）', async () => {
+    // 1.6MB 图片经 base64 膨胀后约 2.2MB，此前在全局 2MB parser 处直接 413
+    const res = await fetch(`${baseUrl}/api/auth/avatar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeBody(2.5 * 1024 * 1024)),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('课表多模态 OCR 端点放行拍摄/高清大图请求体（5MB）', async () => {
+    const res = await fetch(`${baseUrl}/api/timetable/ocr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeBody(5 * 1024 * 1024)),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('交互资源库端点放行包含整包/目录文件的大请求体（5MB）', async () => {
+    const res = await fetch(`${baseUrl}/api/resources`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeBody(5 * 1024 * 1024)),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('白名单端点定义完整性校验', () => {
+    expect(MEDIUM_UPLOAD_ENDPOINTS).toContain('/api/auth/avatar');
+    expect(MEDIUM_UPLOAD_ENDPOINTS).toContain('/api/timetable/ocr');
+    expect(MEDIUM_UPLOAD_ENDPOINTS).toContain('/api/site-settings');
+    expect(MEDIUM_UPLOAD_ENDPOINTS).toContain('/api/agent/chat');
+    expect(LARGE_UPLOAD_ENDPOINTS).toContain('/api/resources');
   });
 
   it('课程包导入超限时给出能指到真实原因的错误（不是裸 entity.too.large）', async () => {

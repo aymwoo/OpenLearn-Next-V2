@@ -22,17 +22,37 @@ import {
 /**
  * 允许接收超大请求体的端点（解析上限 110MB）。
  *
- * 这些端点的共同点是「请求体本身就是文件内容」：课件上传、插件 zip 等。
+ * 这些端点的共同点是「请求体本身就是文件内容」：课件上传、插件 zip、系统交互课件资源等。
  */
 export const LARGE_UPLOAD_ENDPOINTS = [
   '/api/upload',
   '/api/courseware/upload',
   '/api/courseware/inline',
   '/api/plugins/upload-zip',
+  '/api/resources',
 ];
 
 /** 大文件上传端点的解析上限。 */
 export const LARGE_UPLOAD_LIMIT = '110mb';
+
+/**
+ * 允许接收中等体量多媒体与 Base64 请求的端点（解析上限 30MB）。
+ *
+ * 这些端点传输由业务侧管控上限的文件或图片：
+ * - /api/auth/avatar: 个人头像上传（后端业务校验文件 ≤ 2MB，但 base64 编码后约 2.8MB，必须放行至业务校验层）
+ * - /api/timetable/ocr: 课表多模态 OCR 视觉识别（用户手机拍摄或截屏的课表原图常在 3MB~15MB）
+ * - /api/site-settings: 站点品牌 Logo（支持 DataURL 上传）
+ * - /api/agent/chat: 智能助手对话附件传输
+ */
+export const MEDIUM_UPLOAD_ENDPOINTS = [
+  '/api/auth/avatar',
+  '/api/timetable/ocr',
+  '/api/site-settings',
+  '/api/agent/chat',
+];
+
+/** 中等体量上传端点的解析上限。 */
+export const MEDIUM_UPLOAD_LIMIT = '30mb';
 
 /**
  * 挂载大体积请求体解析器。
@@ -48,7 +68,14 @@ export function mountLargeBodyParsers(app: express.Express): void {
     express.urlencoded({ limit: LARGE_UPLOAD_LIMIT, extended: true }),
   );
 
-  // 2) 课程包导入（Issue #246）：请求体是「自包含 JSON + base64 内联附件」，
+  // 2) 中等体量多媒体与 OCR 端点：30MB
+  app.use(
+    MEDIUM_UPLOAD_ENDPOINTS,
+    express.json({ limit: MEDIUM_UPLOAD_LIMIT }),
+    express.urlencoded({ limit: MEDIUM_UPLOAD_LIMIT, extended: true }),
+  );
+
+  // 3) 课程包导入（Issue #246）：请求体是「自包含 JSON + base64 内联附件」，
   //    体积天然远超普通业务请求，但不能照搬到 110MB —— 课程包有明确的产品上限，
   //    这里按 COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES 单独开一个口子。
   //    此前该端点只吃全局 2MB 解析器：模板自带的极小课件能过，
@@ -59,7 +86,7 @@ export function mountLargeBodyParsers(app: express.Express): void {
     express.urlencoded({ limit: COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES, extended: true }),
   );
 
-  // 3) 课程包导入超限：给出能指到真实原因的错误，而不是裸的 "request entity too large"
+  // 4) 课程包导入超限：给出能指到真实原因的错误，而不是裸的 "request entity too large"
   app.use(
     COURSE_PACKAGE_IMPORT_PATH,
     (err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
