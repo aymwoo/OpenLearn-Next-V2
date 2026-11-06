@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **第三方教学增强套件插件 `ext-interactive-lab`（虚拟探究实验与班级对抗竞赛套件）**：
+  - **白板自定义图元与交互微课件（`packages/interactive-lab`）**：在 manifest 中声明 `editor.palette_item` 与 `palette.items`（图元 `ext-lab/circuit-simulator`），并在沙箱视口 `public/sim-view.html` 中实现虚拟电路欧姆定律交互仿真（支持电源电压、负载电阻、电键通断及电流实时动态测算与灯泡发光特效），集成 LMS Bridge SDK 支持通过 `postMessage` 向宿主白板回写图元数据与实验通关成绩；
+  - **自定义教学环节与准入门禁判定（Segment Gate）**：声明环节 `segment-inquiry-lab`（科学探究实验）与门禁规则 `gate-circuit-verified`（电路闭合通电判定），服务端命令总线注册只读命令 `circuit.verify_gate`、`circuit.submit_lab` 与 `circuit.query_status`，严格遵循 fail-closed 原则对跨环节学生进行准入校验与拦截引导；
+  - **自定义教学模式（Teaching Mode）**：套件激活时自动向平台 `teaching_modes` 表注册 `mode-arena-compete`（班级对抗竞赛模式），并在开课门户 `classroom.portal.teaching_mode` 挂载展示；
+  - **标准打包脚本与全链路端到端集成测试**：提供 `builder.ts` 与 `scripts/build-interactive-lab.mjs`，一键编译产出符合规范的 `ext-interactive-lab-1.0.0.zip`；在 `server/__tests__/ext-interactive-lab-plugin.test.ts` 中实现全流程覆盖（ZIP 结构校验、REST `/api/plugins/upload-zip-raw` 上传安装、激活、教学模式落库、沙箱视口 CSP 头检验、门禁拦截与通关放行闭环、停用回收）。
+
 ### Fixes
 
 - **多媒体与 Base64 请求体体积限制放宽与 413 错误语义规范化**：

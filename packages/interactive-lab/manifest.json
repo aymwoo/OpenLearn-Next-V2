@@ -1,0 +1,93 @@
+{
+  "id": "ext-interactive-lab",
+  "name": "虚拟探究实验与竞赛模式增强套件",
+  "version": "1.0.0",
+  "description": "提供虚拟电路探究白板图元、科学实验环节与准入门禁判定、以及班级对抗竞赛教学模式",
+  "main": "index.js",
+  "engines": {
+    "openlearn": ">=0.3.0"
+  },
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0",
+    "@openlearn/core:IEventBusService@^1.0.0",
+    "@openlearn/core:IDatabase@^1.0.0",
+    "@openlearn/core:IStorageService@^1.0.0"
+  ],
+  "capabilitiesProposed": ["segment:gate_eval", "lesson:read", "student-data:read"],
+  "contributes": {
+    "editor.palette_item": [
+      {
+        "id": "ext-lab-circuit-simulator",
+        "type": "ext-lab/circuit-simulator",
+        "labelZh": "虚拟电路探究器",
+        "labelEn": "Circuit Simulator",
+        "descriptionZh": "电阻、电表、电源与开关动态电路仿真实验",
+        "color": "amber",
+        "group": "interactive",
+        "defaultData": {
+          "title": "闭合电路欧姆定律实验",
+          "voltage": 12,
+          "resistance": 10,
+          "isClosed": false
+        }
+      }
+    ],
+    "palette.items": [
+      {
+        "id": "circuit-simulator-item",
+        "type": "ext-lab/circuit-simulator",
+        "labelZh": "虚拟电路探究器",
+        "labelEn": "Circuit Simulator",
+        "category": "interactive",
+        "icon": "Zap",
+        "defaultData": {
+          "title": "闭合电路欧姆定律实验",
+          "voltage": 12,
+          "resistance": 10,
+          "isClosed": false
+        }
+      }
+    ],
+    "editor.timeline_segment": [
+      {
+        "id": "segment-inquiry-lab",
+        "labelZh": "科学探究实验",
+        "labelEn": "Inquiry Lab",
+        "icon": "FlaskConical"
+      }
+    ],
+    "timeline.segments": [
+      {
+        "id": "segment-inquiry-lab",
+        "labelZh": "科学探究实验",
+        "labelEn": "Inquiry Lab",
+        "icon": "FlaskConical",
+        "color": "#f59e0b",
+        "defaultDurationMin": 15
+      }
+    ],
+    "segment.gate_type": [
+      {
+        "id": "gate-circuit-verified",
+        "name": "电路闭合通电判定",
+        "labelZh": "电路无短路且通过欧姆定律验证",
+        "labelEn": "Circuit Verified and Closed",
+        "commandType": "circuit.verify_gate",
+        "description": "学生必须在白板虚拟电路探究器中完成闭合电路并验证欧姆定律方可进入下一教学环节"
+      }
+    ],
+    "classroom.portal.teaching_mode": [
+      {
+        "id": "mode-arena-compete",
+        "title": "班级对抗竞赛模式",
+        "description": "小组对抗、抢答限时争锋、实时大屏积分榜与多维战报",
+        "icon": "Trophy"
+      }
+    ]
+  },
+  "deploy": {
+    "staticRoute": "/ext/interactive-lab",
+    "staticDir": "storage/dist"
+  }
+}

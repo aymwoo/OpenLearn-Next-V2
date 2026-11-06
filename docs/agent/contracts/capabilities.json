@@ -50,6 +50,7 @@
     "plugin:write",
     "process:read",
     "process:write",
+    "segment:gate_eval",
     "student:write",
     "vfs:read",
     "vfs:write",

@@ -1,0 +1,13 @@
+{
+  "name": "openlearn-plugin-interactive-lab",
+  "version": "1.0.0",
+  "description": "OpenLearn V2 Virtual Inquiry Lab & Arena Competition Enhancement Suite",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node ../../scripts/build-interactive-lab.mjs"
+  },
+  "devDependencies": {
+    "@openlearn/plugin-sdk": "workspace:*"
+  }
+}

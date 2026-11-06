@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>虚拟电路探究实验微课件 - OpenLearn V2</title>
+    <style>
+      :root {
+        --bg-color: #0b1120;
+        --card-bg: #1e293b;
+        --card-border: #334155;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-glow: rgba(56, 189, 248, 0.35);
+        --success: #22c55e;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+
+      body {
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 480px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow:
+          0 10px 25px -5px rgba(0, 0, 0, 0.5),
+          0 8px 10px -6px rgba(0, 0, 0, 0.4);
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 12px;
+      }
+
+      .badge {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 9999px;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        font-weight: 600;
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .canvas-panel {
+        background: #020617;
+        border: 1px solid #1e293b;
+        border-radius: 12px;
+        padding: 20px;
+        position: relative;
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .bulb-container {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: #334155;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        margin-bottom: 16px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .bulb-container.lit {
+        background: #fef08a;
+        box-shadow:
+          0 0 35px #eab308,
+          0 0 10px #facc15;
+        transform: scale(1.08);
+      }
+
+      .meter-display {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--text-muted);
+        background: #090d16;
+        border: 1px solid #1e293b;
+        padding: 10px 24px;
+        border-radius: 8px;
+        letter-spacing: 1px;
+        transition: color 0.25s ease;
+      }
+
+      .meter-display.active {
+        color: var(--accent);
+        text-shadow: 0 0 12px var(--accent-glow);
+      }
+
+      .control-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .control-item {
+        background: #0f172a;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid #1e293b;
+      }
+
+      .control-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .control-input {
+        width: 100%;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text-main);
+        font-size: 15px;
+        font-weight: 600;
+        font-family: monospace;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 11px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.15s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-switch {
+        background: #1e3a8a;
+        color: #93c5fd;
+        border: 1px solid #3b82f6;
+        margin-bottom: 12px;
+      }
+
+      .btn-switch:hover {
+        background: #1d4ed8;
+        color: #ffffff;
+      }
+
+      .btn-switch.closed {
+        background: #065f46;
+        color: #a7f3d0;
+        border-color: #10b981;
+      }
+
+      .btn-submit {
+        background: #0284c7;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+      }
+
+      .btn-submit:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+      }
+
+      .btn-submit:active {
+        transform: translateY(0);
+      }
+
+      .status-alert {
+        margin-top: 14px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        display: none;
+        animation: fadeIn 0.2s ease;
+      }
+
+      .status-alert.success {
+        display: block;
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+      }
+
+      .status-alert.warning {
+        display: block;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <h2 class="title">⚡ 闭合回路欧姆定律探究实验</h2>
+            <span class="badge">互动沙箱</span>
+          </div>
+          <p class="subtitle">闭合电键测算电流，通过欧姆定律验证即可放行教学环节门禁</p>
+        </div>
+      </div>
+
+      <div class="canvas-panel">
+        <div id="bulbIcon" class="bulb-container">💡</div>
+        <div id="meterDisplay" class="meter-display">0.00 A (断路)</div>
+      </div>
+
+      <div class="control-grid">
+        <div class="control-item">
+          <div class="control-label">电源电压 U (V)</div>
+          <input
+            type="number"
+            id="voltageInput"
+            class="control-input"
+            value="12"
+            min="1"
+            max="220"
+            onchange="onParamChange()"
+          />
+        </div>
+        <div class="control-item">
+          <div class="control-label">负载电阻 R (Ω)</div>
+          <input
+            type="number"
+            id="resistanceInput"
+            class="control-input"
+            value="10"
+            min="1"
+            max="1000"
+            onchange="onParamChange()"
+          />
+        </div>
+      </div>
+
+      <button id="switchBtn" class="btn btn-switch" onclick="toggleSwitch()">🔌 闭合电键 (形成回路)</button>
+
+      <button id="submitBtn" class="btn btn-submit" onclick="submitResult()">✓ 提交实验数据并通过环节门禁</button>
+
+      <div id="statusAlert" class="status-alert"></div>
+    </div>
+
+    <script src="sim-app.js"></script>
+  </body>
+</html>
