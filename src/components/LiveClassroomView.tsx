@@ -92,6 +92,23 @@ import {
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
 
 /**
+ * 清除 HTML 标签与实体，转换为紧凑纯文本（用于 tooltip / hover 提示）
+ */
+function stripHtml(html?: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * 学生头像内容：优先用本人照片（students.avatar），没有照片时按性别渲染，
  * 性别未设置则退到中性人像 —— 不再把姓名塞进 34px 的圆里（必然被省略号截断）。
  */
@@ -2317,12 +2334,12 @@ export function LiveClassroomView({
             <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs">
               {/* 顶栏控制：标题、统计与快捷操作 */}
               <div className="p-2.5 border-b border-theme/60 flex items-center justify-between shrink-0 bg-surface-secondary/25 gap-1.5">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-ink flex items-center justify-center shrink-0">
                     <Clock size={13} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-xs font-black text-main tracking-tight truncate whitespace-nowrap">
+                    <h3 className="text-xs font-black text-main tracking-tight whitespace-nowrap">
                       {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
                     </h3>
                     <div className="text-[11px] text-muted flex items-center gap-1.5 font-medium whitespace-nowrap">
@@ -2373,6 +2390,7 @@ export function LiveClassroomView({
                       const isActive = activeSegmentId === seg.id;
                       const isOpen = expandedSegmentMap[seg.id] ?? seg.id === activeSegmentId;
                       const segPages = getPagesForSegment(seg, idx);
+                      const cleanNotes = stripHtml(seg.notes);
 
                       return (
                         <div
@@ -2383,23 +2401,24 @@ export function LiveClassroomView({
                               : 'bg-surface border-theme/60 hover:border-primary-theme/40'
                           }`}
                         >
-                          {/* 抽屉头部 Header：环节概览、状态与折叠开关 */}
+                          {/* 抽屉头部 Header：两行式排版（行1：展开折叠+序号+标题+Hover简介；行2：时间+加页+演示广播） */}
                           <div
                             onClick={() => toggleSegmentExpand(seg.id)}
-                            className={`p-2 transition-all cursor-pointer flex items-center justify-between gap-1.5 select-none ${
+                            className={`p-2 transition-all cursor-pointer flex flex-col gap-1.5 select-none ${
                               isActive
                                 ? 'bg-primary-theme/10 text-primary-ink'
                                 : 'bg-surface hover:bg-surface-secondary/60 text-main'
                             }`}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {/* 第一行：折叠箭头 + 序号 + 环节标题 + Hover Notes 提示 */}
+                            <div className="flex items-center gap-1.5 min-w-0 w-full">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   toggleSegmentExpand(seg.id);
                                 }}
-                                className="p-0.5 rounded text-muted hover:text-main transition-transform cursor-pointer"
+                                className="p-0.5 rounded text-muted hover:text-main transition-transform cursor-pointer shrink-0"
                                 title={
                                   isOpen
                                     ? lang === 'zh'
@@ -2425,64 +2444,85 @@ export function LiveClassroomView({
                                 {idx + 1}
                               </span>
                               <span
-                                className={`text-xs font-bold truncate ${isActive ? 'text-primary-ink' : 'text-main'}`}
+                                className={`text-xs font-bold truncate flex-1 min-w-0 ${
+                                  isActive ? 'text-primary-ink' : 'text-main'
+                                }`}
+                                title={cleanNotes ? `${seg.title}\n${cleanNotes}` : seg.title}
                               >
                                 {seg.title}
                               </span>
+                              {cleanNotes && (
+                                <span
+                                  className="text-muted/70 hover:text-primary-ink cursor-help p-0.5 rounded shrink-0 transition-colors"
+                                  title={cleanNotes}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <HelpCircle size={12} />
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-surface-secondary/70 text-muted border border-theme/40">
-                                {seg.duration}
-                              </span>
-                              <span
-                                className="text-[10px] font-mono px-1 py-0.2 rounded bg-primary-theme/10 text-primary-ink font-semibold"
-                                title={
-                                  lang === 'zh'
-                                    ? `本环节关联 ${segPages.length} 个白板页面`
-                                    : `${segPages.length} pages`
-                                }
-                              >
-                                {segPages.length} {lang === 'zh' ? '页' : 'p'}
-                              </span>
-                              {isActive ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-theme/20 text-primary-ink text-[10px] font-bold">
-                                  <span className="relative flex h-1.5 w-1.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-theme opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-theme"></span>
-                                  </span>
-                                  <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
+                            {/* 第二行：时间、页面数、加页、演示中/广播 */}
+                            <div className="flex items-center justify-between gap-1 pl-5.5 text-[10px]">
+                              <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                                <span className="font-mono px-1 py-0.2 rounded bg-surface-secondary/80 text-muted border border-theme/40 flex items-center gap-0.5 shrink-0">
+                                  <Clock size={9} />
+                                  <span>{seg.duration}</span>
                                 </span>
-                              ) : (
+                                <span
+                                  className="font-mono px-1 py-0.2 rounded bg-primary-theme/10 text-primary-ink font-semibold shrink-0"
+                                  title={
+                                    lang === 'zh'
+                                      ? `本环节关联 ${segPages.length} 个白板页面`
+                                      : `${segPages.length} pages`
+                                  }
+                                >
+                                  {segPages.length} {lang === 'zh' ? '页' : 'p'}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStartSegment(seg);
+                                    whiteboardRef.current?.addPage?.();
                                   }}
-                                  className="px-1.5 py-0.5 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 transition-colors flex items-center gap-0.5 cursor-pointer"
-                                  title={lang === 'zh' ? '广播此环节' : 'Broadcast Step'}
+                                  className="px-1 py-0.2 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer shrink-0"
+                                  title={lang === 'zh' ? '在此环节加页' : 'Add page to segment'}
                                 >
-                                  <Presentation size={10} />
-                                  <span>{lang === 'zh' ? '广播' : 'Start'}</span>
+                                  <Plus size={9} />
+                                  <span>{lang === 'zh' ? '加页' : 'Add'}</span>
                                 </button>
-                              )}
+                              </div>
+
+                              <div className="flex items-center shrink-0">
+                                {isActive ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-theme/20 text-primary-ink text-[10px] font-bold">
+                                    <span className="relative flex h-1.5 w-1.5">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-theme opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-theme"></span>
+                                    </span>
+                                    <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartSegment(seg);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer"
+                                    title={lang === 'zh' ? '广播此环节' : 'Broadcast Step'}
+                                  >
+                                    <Presentation size={10} />
+                                    <span>{lang === 'zh' ? '广播' : 'Start'}</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {/* 抽屉展开内容 Body：备注、白板页面大纲与插件动作扩展 */}
+                          {/* 抽屉展开内容 Body：白板页面大纲与插件动作扩展 */}
                           {isOpen && (
                             <div className="px-2 pb-2 pt-1 border-t border-theme/40 flex flex-col gap-1.5 bg-surface-secondary/20">
-                              {/* 环节备注（若有） */}
-                              {seg.notes && (
-                                <div
-                                  className="text-[11px] text-muted leading-tight px-1.5 py-1 bg-surface/60 rounded-md border border-theme/30 truncate"
-                                  title={seg.notes}
-                                >
-                                  {seg.notes}
-                                </div>
-                              )}
-
                               {/* 白板页面大纲 */}
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">

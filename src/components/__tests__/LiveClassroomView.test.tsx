@@ -338,6 +338,66 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.getAllByText('白板页面大纲').length).toBeGreaterThan(0);
   });
 
+  it('splits segment drawer header into two rows and displays cleaned notes as hover tooltip', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const propsWithHtmlNotes = {
+      ...defaultProps,
+      timelineSegments: [
+        {
+          id: 'seg-1',
+          title: '文明上网导学',
+          duration: 300,
+          notes: '<h3>第3课 互联网文明与使用规范</h3><p>重点讨论网络安全</p>',
+        },
+      ],
+      activeSegmentId: 'seg-1',
+    };
+
+    render(
+      <AppDataProvider value={propsWithHtmlNotes as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('教学环节进度表')).toBeTruthy();
+    });
+
+    // Row 1: Title is visible
+    const titleEl = screen.getByText('文明上网导学');
+    expect(titleEl).toBeTruthy();
+
+    // Notes HTML is cleaned and set on title hover attribute
+    expect(titleEl.getAttribute('title')).toContain('第3课 互联网文明与使用规范 重点讨论网络安全');
+    // Raw HTML tags do NOT leak into DOM text content
+    expect(screen.queryByText(/<h3>/)).toBeNull();
+
+    // Row 2: Add page button in drawer header row 2 is present
+    expect(screen.getByTitle('在此环节加页')).toBeTruthy();
+
+    // Live status indicator is present
+    expect(screen.getByText('演示中')).toBeTruthy();
+  });
+
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
     render(
       <AppDataProvider value={defaultProps as any}>
