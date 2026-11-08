@@ -289,6 +289,57 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(addPageButton).toBeTruthy();
   });
 
+  it('supports switching between timeline segments and whiteboard pages via segmented controller and bottom link bar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('教学环节进度表')).toBeTruthy();
+    });
+
+    // Default tab is segments: step titles are visible
+    expect(screen.getByText('导入环节')).toBeTruthy();
+
+    // Click Whiteboard Outline tab
+    const pagesTab = screen.getByText('白板页面大纲');
+    fireEvent.click(pagesTab);
+
+    // After switching, the whiteboard pages panel should be visible
+    expect(screen.getByText('白板页面切换')).toBeTruthy();
+    expect(screen.getByText('看环节')).toBeTruthy();
+
+    // Click bottom bar button to switch back to timeline segments
+    const toTimelineBtn = screen.getByText('看环节');
+    fireEvent.click(toTimelineBtn);
+
+    // After switching back, segments flow is visible again
+    expect(screen.getByText('环节进度与广播')).toBeTruthy();
+    expect(screen.getByText('切换页')).toBeTruthy();
+  });
+
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
     render(
       <AppDataProvider value={defaultProps as any}>
