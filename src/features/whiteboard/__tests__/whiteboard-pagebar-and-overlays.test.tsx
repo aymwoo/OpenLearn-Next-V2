@@ -106,12 +106,7 @@ describe('Whiteboard PageBar & Overlays Component Tests', () => {
       ];
 
       render(
-        <WhiteboardPageBar
-          {...defaultPageBarProps}
-          pages={multiSegPages}
-          activeSegmentId="seg-b"
-          currentPage={1}
-        />,
+        <WhiteboardPageBar {...defaultPageBarProps} pages={multiSegPages} activeSegmentId="seg-b" currentPage={1} />,
       );
 
       // 大纲徽标显示 2 页，而不是 3 页
