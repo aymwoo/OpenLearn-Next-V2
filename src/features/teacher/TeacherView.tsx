@@ -53,11 +53,14 @@ export function TeacherView(_props: TeacherViewProps = {}) {
     teacherTab === 'live_class' || Boolean(appData?.liveClassIsActive),
   );
 
+  const shouldRenderLiveClass =
+    hasMountedLiveClass || teacherTab === 'live_class' || Boolean(appData?.liveClassIsActive);
+
   useEffect(() => {
-    if (teacherTab === 'live_class' || appData?.liveClassIsActive) {
+    if (shouldRenderLiveClass && !hasMountedLiveClass) {
       setHasMountedLiveClass(true);
     }
-  }, [teacherTab, appData?.liveClassIsActive]);
+  }, [shouldRenderLiveClass, hasMountedLiveClass]);
 
   return (
     <div className="flex-1 overflow-hidden flex bg-gray-50 relative">
@@ -93,7 +96,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
           }
         >
           {/* Keep-Alive 互动白板常驻保活容器 */}
-          {hasMountedLiveClass && (
+          {shouldRenderLiveClass && (
             <div
               id="live-class-keep-alive-wrapper"
               data-testid="live-class-keep-alive-wrapper"

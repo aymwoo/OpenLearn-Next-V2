@@ -80,6 +80,13 @@ export function LessonEditorView() {
   };
   const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPageItem[]>([]);
   const [currentWhiteboardPage, setCurrentWhiteboardPage] = useState<number>(0);
+  const handleWhiteboardPagesStateChange = useCallback(
+    ({ pages, currentPage }: { pages: WhiteboardPageItem[]; currentPage: number }) => {
+      setWhiteboardPages(pages);
+      setCurrentWhiteboardPage(currentPage);
+    },
+    [],
+  );
   const [whiteboardDragState, setWhiteboardDragState] = useState<WhiteboardDragState | null>(null);
   const hoveredPageDropTargetRef = useRef<{ type: 'page'; pageIndex: number } | null>(null);
   const hoveredSegmentDropTargetRef = useRef<{ type: 'segment'; segmentId: string } | null>(null);
@@ -507,16 +514,7 @@ export function LessonEditorView() {
                     elements={elements}
                     activeSegmentId={activeSegmentId}
                     hidePageBar={true}
-                    onPagesStateChange={({
-                      pages,
-                      currentPage,
-                    }: {
-                      pages: WhiteboardPageItem[];
-                      currentPage: number;
-                    }) => {
-                      setWhiteboardPages(pages);
-                      setCurrentWhiteboardPage(currentPage);
-                    }}
+                    onPagesStateChange={handleWhiteboardPagesStateChange}
                     onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
                     onElementDragChange={setWhiteboardDragState}
                     onElementDropCheck={handleElementDropCheck}

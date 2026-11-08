@@ -193,5 +193,16 @@ describe('Interactive Whiteboard Pagination System', () => {
       const emptySegPages = getSegmentVisiblePages(multiSegmentPages, 'seg-unknown');
       expect(emptySegPages.map((p) => p.id)).toEqual(['page-global']);
     });
+
+    it('finds initial segment page index correctly to prevent first-frame hopping', () => {
+      const exploreIdx = multiSegmentPages.findIndex((p) => p.segmentId === 'seg-explore');
+      expect(exploreIdx).toBe(1);
+
+      const introIdx = multiSegmentPages.findIndex((p) => p.segmentId === 'seg-intro');
+      expect(introIdx).toBe(0);
+
+      const summaryIdx = multiSegmentPages.findIndex((p) => p.segmentId === 'seg-summary');
+      expect(summaryIdx).toBe(3);
+    });
   });
 });

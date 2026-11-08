@@ -252,6 +252,13 @@ export function LiveClassroomView({
   const whiteboardRef = useRef<WhiteboardHandle | null>(null);
   const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPageItem[]>([]);
   const [currentWhiteboardPage, setCurrentWhiteboardPage] = useState<number>(0);
+  const handleWhiteboardPagesStateChange = useCallback(
+    ({ pages, currentPage }: { pages: WhiteboardPageItem[]; currentPage: number }) => {
+      setWhiteboardPages(pages);
+      setCurrentWhiteboardPage(currentPage);
+    },
+    [],
+  );
   const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
@@ -2623,16 +2630,7 @@ export function LiveClassroomView({
                         classroomTools={classroomTools}
                         onExecuteTool={handleExecuteTool}
                         hidePageBar={true}
-                        onPagesStateChange={({
-                          pages,
-                          currentPage,
-                        }: {
-                          pages: WhiteboardPageItem[];
-                          currentPage: number;
-                        }) => {
-                          setWhiteboardPages(pages);
-                          setCurrentWhiteboardPage(currentPage);
-                        }}
+                        onPagesStateChange={handleWhiteboardPagesStateChange}
                         onElementAdd={async (type: string, data: any) => {
                           const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
                             method: 'POST',

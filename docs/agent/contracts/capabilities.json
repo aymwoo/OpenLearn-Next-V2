@@ -76,5 +76,9 @@
     "stage:navigate",
     "whiteboard:draw"
   ],
-  "blocked_wildcard": ["*", "*:*", "*:*:*"]
+  "blocked_wildcard": [
+    "*",
+    "*:*",
+    "*:*:*"
+  ]
 }

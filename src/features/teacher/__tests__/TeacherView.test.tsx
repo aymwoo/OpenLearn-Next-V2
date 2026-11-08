@@ -322,4 +322,26 @@ describe('TeacherView', () => {
     // The wrapper is back to display: flex instantly without remounting
     expect(screen.getByTestId('live-class-keep-alive-wrapper').style.display).toBe('flex');
   });
+
+  it('synchronously mounts LiveClassroomView on the first frame when navigating from dashboard to live_class', async () => {
+    const { rerender } = renderView({ teacherTab: 'dashboard' });
+
+    // Initially dashboard tab: live class wrapper is not mounted yet
+    expect(screen.queryByTestId('live-class-keep-alive-wrapper')).toBeNull();
+
+    // Teacher navigates to live_class
+    const liveClassMerged = { ...baseProps, teacherTab: 'live_class' };
+    rerender(
+      <PluginHostProvider host={new FrontendPluginHost()}>
+        <AppDataProvider value={liveClassMerged as any}>
+          <TeacherView teacherTab="live_class" />
+        </AppDataProvider>
+      </PluginHostProvider>,
+    );
+
+    // LiveClassroomView wrapper is mounted immediately on the first frame (no blank frame)
+    const wrapper = screen.getByTestId('live-class-keep-alive-wrapper');
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.style.display).toBe('flex');
+  });
 });

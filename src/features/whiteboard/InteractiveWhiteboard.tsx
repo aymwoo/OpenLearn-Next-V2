@@ -2,6 +2,7 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
   forwardRef,
@@ -342,7 +343,37 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       'cursor',
     );
     const [highlighterColor, setHighlighterColor] = useState('#facc15');
-    const [currentPage, setCurrentPage] = useState(0);
+
+    const [pages, setPages] = useState<WhiteboardPageItem[]>(() => {
+      const metaEl = (Array.isArray(elements) ? elements : []).find((el) => el.type === 'page_meta');
+      if (metaEl) {
+        const parsed = parseElementData(metaEl);
+        if (Array.isArray(parsed?.pages) && parsed.pages.length > 0) {
+          return parsed.pages;
+        }
+      }
+      return DEFAULT_WHITEBOARD_PAGES;
+    });
+
+    const [currentPage, setCurrentPage] = useState<number>(() => {
+      const target = Number(initialPage);
+      if (Number.isFinite(target) && target >= 0) {
+        return target;
+      }
+      // 如果没有指定 initialPage，但指定了 activeSegmentId，优先选用属于该环节的首个页面，避免首帧跳页闪烁
+      if (activeSegmentId) {
+        const metaEl = (Array.isArray(elements) ? elements : []).find((el) => el.type === 'page_meta');
+        const parsed = metaEl ? parseElementData(metaEl) : null;
+        const candidatePages =
+          Array.isArray(parsed?.pages) && parsed.pages.length > 0 ? parsed.pages : DEFAULT_WHITEBOARD_PAGES;
+        const targetIdx = candidatePages.findIndex((p: WhiteboardPageItem) => p.segmentId === activeSegmentId);
+        if (targetIdx !== -1) {
+          return targetIdx;
+        }
+      }
+      return 0;
+    });
+
     const [showGrid, setShowGrid] = useState(true);
     /** 平铺拖拽互换目标组件 ID（用于视觉指示与松手交换） */
     const [dragOverTileId, setDragOverTileId] = useState<string | null>(null);
@@ -370,14 +401,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     }, [tileSplitPreference]);
 
     const [isDragOverBoard, setIsDragOverBoard] = useState(false);
-    const [pages, setPages] = useState<WhiteboardPageItem[]>(DEFAULT_WHITEBOARD_PAGES);
     const [showPageDrawer, setShowPageDrawer] = useState(false);
     const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
     const [editingPageTitle, setEditingPageTitle] = useState('');
     const [activeMenuPageIdx, setActiveMenuPageIdx] = useState<number | null>(null);
 
     // 同步给外部监听者（如备课组件边栏的大纲）
+    const lastReportedPagesStateRef = useRef<{ pages: WhiteboardPageItem[]; currentPage: number } | null>(null);
     useEffect(() => {
+      if (
+        lastReportedPagesStateRef.current?.currentPage === currentPage &&
+        lastReportedPagesStateRef.current?.pages === pages
+      ) {
+        return;
+      }
+      lastReportedPagesStateRef.current = { pages, currentPage };
       onPagesStateChange?.({ pages, currentPage });
     }, [pages, currentPage, onPagesStateChange]);
 
@@ -390,19 +428,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           setPages(parsed.pages);
         }
       }
-    }, [elements]);
+    }, [safeElements]);
 
-    // 会话恢复：教师重进课堂后，跳回离开时的白板页（只应用一次，避免覆盖后续手动切页）
-    const initialPageAppliedRef = useRef(false);
+    // 会话恢复：若 initialPage 为异步拉取（初始为 undefined），在恢复值到达后只跳转一次
+    const initialPageAppliedRef = useRef(
+      Number.isFinite(Number(initialPage)) && Number(initialPage) >= 0,
+    );
     useEffect(() => {
       if (initialPageAppliedRef.current) return;
       if (!Array.isArray(pages) || pages.length === 0) return;
+      if (initialPage === undefined || initialPage === null) return;
       const target = Number(initialPage);
       if (Number.isFinite(target) && target > 0 && target < pages.length) {
         setCurrentPage(target);
       }
       initialPageAppliedRef.current = true;
-    }, [pages]);
+    }, [pages, initialPage]);
 
     const belongsToCurrentPage = useCallback(
       (el: WhiteboardElement): boolean => belongsToPage(el, currentPage, pages),
@@ -2089,13 +2130,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           //     它已经扣掉边框与滚动条占位，画布取它才不会比可视区多出边框那 2px
           //     （多出来的 2px 会凭空冒出一条横向滚动范围）。
           if (containerRef.current) {
-            setContainerSize({
-              width: containerRef.current.offsetWidth,
-              height: containerRef.current.offsetHeight,
+            const w = containerRef.current.clientWidth;
+            const h = containerRef.current.clientHeight;
+            // 避免在 keep-alive 隐藏（display: none 测出 0x0）时重置尺寸，导致切回白板时发生重排闪烁
+            setContainerSize((prev) => {
+              if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
+              return {
+                width: containerRef.current!.offsetWidth,
+                height: containerRef.current!.offsetHeight,
+              };
             });
-            setCanvasBox({
-              width: containerRef.current.clientWidth,
-              height: containerRef.current.clientHeight,
+            setCanvasBox((prev) => {
+              if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
+              return { width: w, height: h };
             });
           }
         }
@@ -2105,13 +2152,18 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       // Fallback: also run an initial resize and register window resize
       const handleWindowResize = () => {
         if (containerRef.current) {
-          setContainerSize({
-            width: containerRef.current.offsetWidth,
-            height: containerRef.current.offsetHeight,
+          const w = containerRef.current.clientWidth;
+          const h = containerRef.current.clientHeight;
+          setContainerSize((prev) => {
+            if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
+            return {
+              width: containerRef.current!.offsetWidth,
+              height: containerRef.current!.offsetHeight,
+            };
           });
-          setCanvasBox({
-            width: containerRef.current.clientWidth,
-            height: containerRef.current.clientHeight,
+          setCanvasBox((prev) => {
+            if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
+            return { width: w, height: h };
           });
         }
       };
@@ -2239,9 +2291,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     }, [activeSegmentId, lessonId]);
 
-    // 当 activeSegmentId 变更时，如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
+    // 当 activeSegmentId 变更时（如授课时切换教学环节），如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
+    const prevActiveSegmentIdRef = useRef<string | null | undefined>(activeSegmentId);
     useEffect(() => {
-      if (!activeSegmentId || !Array.isArray(pages) || pages.length === 0) return;
+      const prevSegmentId = prevActiveSegmentIdRef.current;
+      prevActiveSegmentIdRef.current = activeSegmentId;
+
+      // 仅当 activeSegmentId 真正发生变化时才响应联动切页，避免首帧闪烁以及阻断用户在环节内手动切页浏览
+      if (!activeSegmentId || prevSegmentId === activeSegmentId || !Array.isArray(pages) || pages.length === 0) {
+        return;
+      }
       const currentObj = pages[currentPage];
       if (currentObj?.segmentId && currentObj.segmentId !== activeSegmentId) {
         const targetIdx = pages.findIndex((p) => p.segmentId === activeSegmentId);

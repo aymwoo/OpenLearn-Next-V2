@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-11-08
+
+### Fixes
+
+- **消除教师端进入白板及切换环节时的跳页与首帧闪动缺陷**：
+  - **白板首帧页面与分页数据同步解析（`src/features/whiteboard/InteractiveWhiteboard.tsx`）**：在状态延迟初始化中直接同步解析 `elements` 中的 `page_meta`；若传入 `activeSegmentId` 或 `initialPage`，在首帧初始化时直接命中目标页索引，彻底消除“先挂载渲染第 0 页、再由 Effect 跳到目标页”引起的首帧瞬移与画面闪烁；
+  - **环节自动联动切页增加引用守卫**：引入 `prevActiveSegmentIdRef` 记录环节变更历史，仅当教师在时间轴上**真正切换了不同环节**时才执行切页联动；初次进入以及教师在同一环节内手动翻页浏览其他历史页面时不再被强制弹回，避免操作死锁与反复闪动；
+  - **白板尺寸保活防归零保护**：在 `ResizeObserver` 回调与窗口缩放处理中增加尺寸保护，当处于 Keep-Alive 后台（`display: none` 测出 `0×0`）时保留既有有效逻辑宽高，避免从其他功能 Tab 切回互动课堂时因画布尺寸从 `0×0` 重排而引发二次拉伸闪烁；
+  - **Keep-Alive 容器首帧同步挂载（`src/features/teacher/TeacherView.tsx`）**：在渲染阶段同步派生 `shouldRenderLiveClass`，教师从工作台等 Tab 切到互动课堂的首帧即渲染 DOM 容器，消除原先等待 `useEffect` 导致的 1 帧空白画面；
+  - **大纲状态回调引用稳定化（`src/components/LiveClassroomView.tsx`、`src/features/teacher/LessonEditorView.tsx`）**：`onPagesStateChange` 外部监听函数统一使用 `useCallback` 稳定引用，并在白板端增加上一次上报状态值比对，阻断父子组件间的无效重渲染级联。
+
 ## [0.7.13] - 2026-11-08
 
 ### Features
