@@ -81,6 +81,7 @@ import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
 
 import { ClassroomToolbarQuickActions } from '../features/classroom/ClassroomToolbarQuickActions';
+import { ClassroomInContextDrawer } from '../features/classroom/ClassroomInContextDrawer';
 import { classLockHint, isInProgressClassLocked } from '../features/classroom/class-session-lock';
 import {
   LiveSubmissionsPanel,
@@ -1904,6 +1905,16 @@ export function LiveClassroomView({
           >
             {lang === 'zh' ? '会话档案' : 'Sessions'}
           </button>
+          <button
+            type="button"
+            id="live-classroom-open-drawer"
+            onClick={() => uiStore.getState().setClassroomDrawerTab('plugins')}
+            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-primary-theme hover:bg-surface shrink-0 cursor-pointer"
+            title={lang === 'zh' ? '课中快捷设置抽屉（插件/班级/系统设置免切白板）' : 'In-Class Settings Drawer'}
+          >
+            <span>⚙️</span>
+            <span>{lang === 'zh' ? '课中设置' : 'Settings'}</span>
+          </button>
 
           {/* 课程选择与切换操作 */}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -2094,6 +2105,7 @@ export function LiveClassroomView({
             onOpenParentNotification={() => setIsParentNotificationOpen(true)}
             onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
             onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
+            onOpenInContextDrawer={(tab) => uiStore.getState().setClassroomDrawerTab(tab || 'plugins')}
             selectedLesson={selectedLesson}
             syncChannel={syncChannelRef.current}
             onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
@@ -3671,6 +3683,9 @@ export function LiveClassroomView({
           </div>
         </div>
       )}
+
+      {/* 课中快捷设置工作台侧滑抽屉 */}
+      <ClassroomInContextDrawer />
     </div>
   );
 }
