@@ -289,7 +289,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(addPageButton).toBeTruthy();
   });
 
-  it('supports switching between timeline segments and whiteboard pages via segmented controller and bottom link bar', async () => {
+  it('supports collapsible accordion drawers for timeline segments with embedded whiteboard outline', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
@@ -320,24 +320,22 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       expect(screen.getByText('教学环节进度表')).toBeTruthy();
     });
 
-    // Default tab is segments: step titles are visible
+    // Step titles are visible
     expect(screen.getByText('导入环节')).toBeTruthy();
+    expect(screen.getByText('探究环节')).toBeTruthy();
 
-    // Click Whiteboard Outline tab
-    const pagesTab = screen.getByText('白板页面大纲');
-    fireEvent.click(pagesTab);
+    // Default active segment shows embedded Whiteboard Outline
+    expect(screen.getAllByText('白板页面大纲').length).toBeGreaterThan(0);
 
-    // After switching, the whiteboard pages panel should be visible
-    expect(screen.getByText('白板页面切换')).toBeTruthy();
-    expect(screen.getByText('看环节')).toBeTruthy();
+    // Toggle all drawers button exists
+    const toggleAllBtn = screen.getByTitle('全部展开/折叠抽屉');
+    expect(toggleAllBtn).toBeTruthy();
+    fireEvent.click(toggleAllBtn);
 
-    // Click bottom bar button to switch back to timeline segments
-    const toTimelineBtn = screen.getByText('看环节');
-    fireEvent.click(toTimelineBtn);
-
-    // After switching back, segments flow is visible again
-    expect(screen.getByText('环节进度与广播')).toBeTruthy();
-    expect(screen.getByText('切换页')).toBeTruthy();
+    // Clicking segment title toggles drawer
+    const exploreSeg = screen.getByText('探究环节');
+    fireEvent.click(exploreSeg);
+    expect(screen.getAllByText('白板页面大纲').length).toBeGreaterThan(0);
   });
 
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
