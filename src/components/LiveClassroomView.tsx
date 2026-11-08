@@ -30,6 +30,7 @@ import {
   Edit3,
   LayoutGrid,
   Plus,
+  SquarePlus,
   ChevronDown,
   ChevronsUpDown,
   Radio,
@@ -2539,17 +2540,17 @@ export function LiveClassroomView({
                                   <span>{segPages.length}</span>
                                 </span>
 
-                                {/* 加页 iconfont 按钮 */}
+                                {/* 加页 iconfont 按钮（带边框图标更直观） */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     whiteboardRef.current?.addPage?.();
                                   }}
-                                  className="p-0.5 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                                  className="p-0.5 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/60 transition-colors flex items-center justify-center cursor-pointer shrink-0"
                                   title={lang === 'zh' ? '在此环节加页' : 'Add page to segment'}
                                 >
-                                  <Plus size={11} />
+                                  <SquarePlus size={12} className="shrink-0" />
                                 </button>
                               </div>
 
