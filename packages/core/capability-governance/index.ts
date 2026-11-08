@@ -13,8 +13,6 @@
  *   对外承诺一个零消费者的 API，比不承诺更糟。
  * - 内核侧引用不受影响（直接走 `packages/core` 相对路径）。
  * - 若将来接入真实调用路径并稳定，去掉本注释并把导出加回 `index.ts`。
- *
- * 详见 `plugin-system-remediation-tracker.md` 的 F-2 / D-2。
  */
 
 export * from './types/index.js';

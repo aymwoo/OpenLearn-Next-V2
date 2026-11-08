@@ -158,10 +158,6 @@
 | **B 中**（口径正确但有历史残留）                   | `docs/sdk/plugin-sdk.md` L28217、`docs/sdk/plugin-test-kit.md` L28577、`docs/sdk/scaffold-cli.md` L28824、`docs/tutorials/plugin-development-tutorial.md` L30079、`docs/tutorials/plugin-frontend-guide.md` L32282、`docs/plugin/plugin-lifecycle.md` L20688      | 用前抽查源码 |
 | **C 低**（含已知错误/已过期声称）                  | `packages/plugin-sdk/CHANGELOG.md` L134551、`docs/reference/plugin-ui-extension-slots.md` L23277（曾漏 20 个槽位）、`docs/reference/activity-ecosystem.md` L21494（`RuntimePermission` 易与 `capabilityRequired` 混）                                             | 只当线索     |
 
-`plugin-system-remediation-plan.md` 与 `plugin-system-remediation-tracker.md`
-是**审计结论原件**（H-1 / E-2 / E-4 / B-2 / B-5 / C-3 / I-3 / P1 / Issue #147/#194/#224/#225/#232/#289 等编号都出自这里），
-全站引用这些编号时可以回这两份文件核对。
-
 ---
 
 ## 4. 回源核验的四条命令
@@ -235,4 +231,3 @@ grep -n 'assertPluginSqlAllowed' repomix-output.xml
 | `BASE_WORKER_SERVICE_TOKENS` 9 项                    | `worker-runtime/worker-manager.ts` L131118–L131135                 |
 | Vitest per-worker 临时库与 env 清理                  | `vitest.setup.ts` L423648 起                                       |
 | 覆盖率阈值与 include/exclude                         | `vitest.config.ts` L423551–L423647                                 |
-| 审计编号（H-1/E-2/E-4/B-2/B-5/C-3/I-3/P1/#224/#225） | `plugin-system-remediation-tracker.md` L14844、L14894–L14914       |

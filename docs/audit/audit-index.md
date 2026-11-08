@@ -23,7 +23,7 @@
 
 ## 已清理的快照
 
-以下文档的结论已被现行文档或代码取代、且没有外部引用，已于 2026-10-27 从工作区移除。需要查历史时按文件名从 git 历史恢复：
+以下文档的结论已被现行文档或代码取代、且没有外部引用，已从工作区移除。需要查历史时按文件名从 git 历史恢复：
 
 ```bash
 git log --diff-filter=D --oneline -- docs/
@@ -37,6 +37,7 @@ git show <commit>^:docs/architecture/platform-foundation-audit-report.md
 - `ai-documentation-report.md`（AI 文档同步状态）
 - `sync-report.md`（2026-07-24 文档结构报告）
 - `broken-reference-report.md`（链接检查快照）
+- 2026-11-08 另移除 6 份根目录过程文档：`docs-drift-audit-2026-10-03.md`、`docs-drift-audit-2026-10-26.md`、`docs-drift-remediation-tracker.md`、`docs-plugin-guide-audit-2026-10-26.md`、`plugin-system-remediation-plan.md`、`plugin-system-remediation-tracker.md`
 
 ## 现行权威页面
 

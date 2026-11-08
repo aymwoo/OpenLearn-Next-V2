@@ -613,7 +613,6 @@ ZIP 插件建表/升级只能用 `ctx.db.ensureTable()` + `ctx.db.migrate(versio
 | `BACKUP_DIR` 清除、per-worker 库、24h 回收                                        | 同上                                                  | L423760–L423790 |
 | `OPENLEARN_DATA_DIR` 与插件目录重定向                                             | 同上                                                  | L423810–L423850 |
 | 测试命令、棘轮、e2e、per-worker SQLite 规范                                       | `docs/developer-guide/testing-strategy.md`            | L17866–L17905   |
-| `VITEST` 与 `OPENLEARN_ENFORCE_PLUGIN_ISOLATION` 判定                             | `plugin-system-remediation-tracker.md`                | L14902、L16679  |
 | CLI 命令表、ZIP 三件套、裸说明符 exit 1、模板契约、3.7.1 弃用                     | `docs/sdk/scaffold-cli.md`                            | L28824–L28923   |
 | `EADDRINUSE` / `SQLITE_BUSY` / worker 超时 / `could not be cloned` / manifest zod | `docs/troubleshooting/troubleshooting-faq.md`         | L28925–L28983   |
 | sweep 用法、5 轮顺序、DOM 发现导航                                                | `docs/feature-sweep.md`                               | L33456–L33560   |
