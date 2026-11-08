@@ -30,6 +30,8 @@ export interface UIState {
   isSystemResourceLibraryOpen: boolean;
   batchPicker: 'schedule' | 'lock' | 'transfer' | null;
   isExportWeightModalOpen: boolean;
+  /** 课中快捷工作台侧滑抽屉选中的 Tab（null 表示关闭） */
+  classroomDrawerTab: 'plugins' | 'classes' | 'computer_labs' | 'help' | null;
 
   // Toast & Branding
   toasts: Toast[];
@@ -50,6 +52,7 @@ export interface UIState {
   setIsSystemResourceLibraryOpen: (open: boolean) => void;
   setBatchPicker: (batchPicker: 'schedule' | 'lock' | 'transfer' | null) => void;
   setIsExportWeightModalOpen: (open: boolean) => void;
+  setClassroomDrawerTab: (tab: 'plugins' | 'classes' | 'computer_labs' | 'help' | null) => void;
   addToast: (toast: Toast) => void;
   removeToast: (id: string) => void;
   setSiteInfo: (info: { siteName: string; slogan: string; logoUrl: string | null }) => void;
@@ -70,6 +73,7 @@ export const uiStore = createStore<UIState>((set) => ({
   isSystemResourceLibraryOpen: false,
   batchPicker: null,
   isExportWeightModalOpen: false,
+  classroomDrawerTab: null,
 
   toasts: [],
   siteInfo: { siteName: '', slogan: '', logoUrl: null },
@@ -86,6 +90,7 @@ export const uiStore = createStore<UIState>((set) => ({
   setIsSystemResourceLibraryOpen: (isSystemResourceLibraryOpen) => set({ isSystemResourceLibraryOpen }),
   setBatchPicker: (batchPicker) => set({ batchPicker }),
   setIsExportWeightModalOpen: (isExportWeightModalOpen) => set({ isExportWeightModalOpen }),
+  setClassroomDrawerTab: (classroomDrawerTab) => set({ classroomDrawerTab }),
   addToast: (toast) => set((s) => ({ toasts: [...s.toasts, toast] })),
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setSiteInfo: (siteInfo) => set({ siteInfo }),

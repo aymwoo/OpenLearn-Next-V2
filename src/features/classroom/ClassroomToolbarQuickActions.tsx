@@ -13,6 +13,7 @@ export interface ClassroomToolbarQuickActionsProps {
   onOpenParentNotification: () => void;
   onOpenMacroRunner: () => void;
   onOpenHardwareSettings: () => void;
+  onOpenInContextDrawer?: (tab?: 'plugins' | 'classes' | 'computer_labs' | 'help') => void;
   selectedLesson: string | null;
   syncChannel: ClassroomSyncChannel | null;
   onlineStudentCount: number;
@@ -29,6 +30,7 @@ export function ClassroomToolbarQuickActions({
   onOpenParentNotification,
   onOpenMacroRunner,
   onOpenHardwareSettings,
+  onOpenInContextDrawer,
   selectedLesson,
   syncChannel,
   onlineStudentCount,
@@ -117,6 +119,17 @@ export function ClassroomToolbarQuickActions({
       >
         🎛️
       </button>
+      {onOpenInContextDrawer && (
+        <button
+          id="btn-open-in-context-drawer"
+          onClick={() => onOpenInContextDrawer('plugins')}
+          className="w-7 h-7 sm:w-8 sm:h-8 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+          title={lang === 'zh' ? '课中设置抽屉（插件/班级/系统设置免切白板）' : 'In-Class Settings Drawer'}
+          aria-label={lang === 'zh' ? '课中设置抽屉' : 'In-Class Settings Drawer'}
+        >
+          ⚙️
+        </button>
+      )}
       <EdgeLanStatusIndicator className="ml-1 shrink-0" />
       <ClassroomCountdownWidget
         variant="header"

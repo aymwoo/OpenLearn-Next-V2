@@ -285,4 +285,41 @@ describe('TeacherView', () => {
     expect(() => renderView({ teacherTab: 'timetable' })).not.toThrow();
     expect(() => renderView({ teacherTab: 'computer_labs' })).not.toThrow();
   });
+
+  it('keeps LiveClassroomView mounted (display: none) when switching away to another tab to preserve whiteboard and iframe state', async () => {
+    const { rerender } = renderView({ teacherTab: 'live_class' });
+
+    // LiveClassroomView wrapper is rendered with display: flex
+    const keepAliveWrapper = await screen.findByTestId('live-class-keep-alive-wrapper', {}, { timeout: 5000 });
+    expect(keepAliveWrapper).toBeTruthy();
+    expect(keepAliveWrapper.style.display).toBe('flex');
+
+    // Switch to plugins tab
+    const baseMerged = { ...baseProps, teacherTab: 'plugins' };
+    rerender(
+      <PluginHostProvider host={new FrontendPluginHost()}>
+        <AppDataProvider value={baseMerged as any}>
+          <TeacherView teacherTab="plugins" />
+        </AppDataProvider>
+      </PluginHostProvider>,
+    );
+
+    // The wrapper must STILL be present in the DOM (not unmounted!), but hidden with display: none
+    const preservedWrapper = screen.getByTestId('live-class-keep-alive-wrapper');
+    expect(preservedWrapper).toBeTruthy();
+    expect(preservedWrapper.style.display).toBe('none');
+
+    // Switch back to live_class
+    const backMerged = { ...baseProps, teacherTab: 'live_class' };
+    rerender(
+      <PluginHostProvider host={new FrontendPluginHost()}>
+        <AppDataProvider value={backMerged as any}>
+          <TeacherView teacherTab="live_class" />
+        </AppDataProvider>
+      </PluginHostProvider>,
+    );
+
+    // The wrapper is back to display: flex instantly without remounting
+    expect(screen.getByTestId('live-class-keep-alive-wrapper').style.display).toBe('flex');
+  });
 });
