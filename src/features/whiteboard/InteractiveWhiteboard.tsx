@@ -498,7 +498,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     };
 
     const handleAddPage = (customTitle?: string) => {
-      const { newPages, newIndex } = createPageItem(pages, customTitle);
+      const { newPages, newIndex } = createPageItem(pages, customTitle, Date.now(), activeSegmentId);
       setPages(newPages);
       setCurrentPage(newIndex);
       savePagesConfig(newPages);
@@ -2238,6 +2238,18 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         });
       }
     }, [activeSegmentId, lessonId]);
+
+    // 当 activeSegmentId 变更时，如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
+    useEffect(() => {
+      if (!activeSegmentId || !Array.isArray(pages) || pages.length === 0) return;
+      const currentObj = pages[currentPage];
+      if (currentObj?.segmentId && currentObj.segmentId !== activeSegmentId) {
+        const targetIdx = pages.findIndex((p) => p.segmentId === activeSegmentId);
+        if (targetIdx !== -1) {
+          setCurrentPage(targetIdx);
+        }
+      }
+    }, [activeSegmentId, pages, currentPage]);
 
     const renderDrawingRaw = (drawing: any) => {
       if (!drawing) return null;
@@ -4395,6 +4407,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               <WhiteboardPageBar
                 pages={pages}
                 currentPage={currentPage}
+                activeSegmentId={activeSegmentId}
                 showPageDrawer={showPageDrawer}
                 setShowPageDrawer={setShowPageDrawer}
                 editingPageIdx={editingPageIdx}

@@ -9,6 +9,7 @@ import {
   movePageItem,
   belongsToPage,
   filterCurrentPageElements,
+  getSegmentVisiblePages,
 } from '../utils/pagination-utils';
 
 describe('Interactive Whiteboard Pagination System', () => {
@@ -36,6 +37,13 @@ describe('Interactive Whiteboard Pagination System', () => {
       const { newPage, newIndex } = createPageItem(DEFAULT_WHITEBOARD_PAGES);
       expect(newIndex).toBe(3);
       expect(newPage.title).toBe('P4 · 备课页面');
+      expect(newPage.segmentId).toBeUndefined();
+    });
+
+    it('attaches segmentId to newly created page when specified', () => {
+      const { newPage } = createPageItem(DEFAULT_WHITEBOARD_PAGES, 'P4 · 探究活动', Date.now(), 'seg-explore');
+      expect(newPage.segmentId).toBe('seg-explore');
+      expect(newPage.title).toBe('P4 · 探究活动');
     });
   });
 
@@ -54,7 +62,12 @@ describe('Interactive Whiteboard Pagination System', () => {
 
   describe('duplicatePageItem', () => {
     it('duplicates target page, appends 副本 and shifts following orders', () => {
-      const result = duplicatePageItem(DEFAULT_WHITEBOARD_PAGES, 1);
+      const pagesWithSegment: WhiteboardPageItem[] = [
+        ...DEFAULT_WHITEBOARD_PAGES.slice(0, 1),
+        { id: 'page-1', title: 'P2 · 核心讲解', order: 1, segmentId: 'seg-explore' },
+        DEFAULT_WHITEBOARD_PAGES[2],
+      ];
+      const result = duplicatePageItem(pagesWithSegment, 1);
       expect(result).not.toBeNull();
       const { newPages, newIndex, newPage } = result!;
 
@@ -62,6 +75,7 @@ describe('Interactive Whiteboard Pagination System', () => {
       expect(newIndex).toBe(2);
       expect(newPage.title).toBe('P2 · 核心讲解 (副本)');
       expect(newPage.order).toBe(2);
+      expect(newPage.segmentId).toBe('seg-explore');
       expect(newPages[3].title).toBe('P3 · 互动练习');
       expect(newPages[3].order).toBe(3);
     });
@@ -146,6 +160,38 @@ describe('Interactive Whiteboard Pagination System', () => {
     it('safely handles corrupted JSON by falling back to page 0', () => {
       expect(belongsToPage({ id: 'bad', type: 'pen', data: '{bad' }, 0, DEFAULT_WHITEBOARD_PAGES)).toBe(true);
       expect(belongsToPage({ id: 'bad', type: 'pen', data: '{bad' }, 1, DEFAULT_WHITEBOARD_PAGES)).toBe(false);
+    });
+  });
+
+  describe('getSegmentVisiblePages (Issue #402 大纲环节隔离)', () => {
+    const multiSegmentPages: WhiteboardPageItem[] = [
+      { id: 'page-intro', title: 'P1 · 课前导入', order: 0, segmentId: 'seg-intro' },
+      { id: 'page-explore-1', title: 'P1 · 互动课件', order: 1, segmentId: 'seg-explore' },
+      { id: 'page-explore-2', title: 'P2 · 作品提交', order: 2, segmentId: 'seg-explore' },
+      { id: 'page-summary', title: 'P1 · 课后小结', order: 3, segmentId: 'seg-summary' },
+      { id: 'page-global', title: '通用页面', order: 4 }, // 无 segmentId
+    ];
+
+    it('returns all pages when activeSegmentId is null or undefined', () => {
+      expect(getSegmentVisiblePages(multiSegmentPages)).toHaveLength(5);
+      expect(getSegmentVisiblePages(multiSegmentPages, null)).toHaveLength(5);
+    });
+
+    it('filters pages strictly matching activeSegmentId plus universal pages', () => {
+      const explorePages = getSegmentVisiblePages(multiSegmentPages, 'seg-explore');
+      const ids = explorePages.map((p) => p.id);
+      expect(ids).toEqual(['page-explore-1', 'page-explore-2', 'page-global']);
+
+      const introPages = getSegmentVisiblePages(multiSegmentPages, 'seg-intro');
+      expect(introPages.map((p) => p.id)).toEqual(['page-intro', 'page-global']);
+
+      const summaryPages = getSegmentVisiblePages(multiSegmentPages, 'seg-summary');
+      expect(summaryPages.map((p) => p.id)).toEqual(['page-summary', 'page-global']);
+    });
+
+    it('returns only universal pages if a segment has no dedicated pages', () => {
+      const emptySegPages = getSegmentVisiblePages(multiSegmentPages, 'seg-unknown');
+      expect(emptySegPages.map((p) => p.id)).toEqual(['page-global']);
     });
   });
 });

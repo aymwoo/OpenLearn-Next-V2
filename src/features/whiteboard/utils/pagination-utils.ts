@@ -40,6 +40,19 @@ export function belongsToPage(el: WhiteboardElementLike, targetPage: number, pag
 }
 
 /**
+ * 过滤出当前活跃教学环节 (activeSegmentId) 应展示的页面列表
+ * 若未指定 activeSegmentId，返回全量 pages；
+ * 若指定 activeSegmentId，返回未绑定环节（通用页）或 segmentId 等于 activeSegmentId 的页面。
+ */
+export function getSegmentVisiblePages(
+  pages: WhiteboardPageItem[],
+  activeSegmentId?: string | null,
+): WhiteboardPageItem[] {
+  if (!activeSegmentId) return pages;
+  return pages.filter((p) => !p.segmentId || p.segmentId === activeSegmentId);
+}
+
+/**
  * 过滤出当前页 + 当前环节 (activeSegmentId) 下应渲染的画布元素
  * 保证跨环节元素隔离（MUT-M6 的直接防线）
  */
@@ -49,6 +62,10 @@ export function filterCurrentPageElements<T extends WhiteboardElementLike>(
   pages: WhiteboardPageItem[],
   activeSegmentId?: string | null,
 ): T[] {
+  const currentPageObj = pages[currentPage];
+  if (activeSegmentId && currentPageObj?.segmentId && currentPageObj.segmentId !== activeSegmentId) {
+    return [];
+  }
   return elements.filter((el) => {
     if (!belongsToPage(el, currentPage, pages)) return false;
     try {
@@ -69,12 +86,14 @@ export function createPageItem(
   pages: WhiteboardPageItem[],
   customTitle?: string,
   now = Date.now(),
+  segmentId?: string | null,
 ): { newPages: WhiteboardPageItem[]; newIndex: number; newPage: WhiteboardPageItem } {
   const nextIdx = pages.length;
   const newPage: WhiteboardPageItem = {
     id: `page-${now}-${nextIdx}`,
     title: customTitle || `P${nextIdx + 1} · 备课页面`,
     order: nextIdx,
+    ...(segmentId ? { segmentId } : {}),
   };
   const newPages = [...pages, newPage];
   return { newPages, newIndex: nextIdx, newPage };
@@ -104,6 +123,7 @@ export function duplicatePageItem(
     id: `page-${now}-${newIdx}`,
     title: `${targetPage.title} (副本)`,
     order: newIdx,
+    ...(targetPage.segmentId ? { segmentId: targetPage.segmentId } : {}),
   };
   const newPages = [
     ...pages.slice(0, newIdx),
