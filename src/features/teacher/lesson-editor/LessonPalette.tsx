@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Blocks,
   Search,
@@ -31,6 +31,7 @@ export interface LessonPaletteProps {
   onToggleCollapse?: (collapsed: boolean) => void;
   pages?: WhiteboardPageItem[];
   currentPage?: number;
+  activeSegmentId?: string | null;
   onSwitchPage?: (idx: number) => void;
   onAddPage?: (customTitle?: string) => void;
   onDeletePage?: (idx: number) => void;
@@ -47,6 +48,7 @@ export function LessonPalette({
   onToggleCollapse,
   pages,
   currentPage = 0,
+  activeSegmentId,
   onSwitchPage,
   onAddPage,
   onDeletePage,
@@ -56,6 +58,13 @@ export function LessonPalette({
 }: LessonPaletteProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+
+  const visiblePages = useMemo(() => {
+    if (!pages) return [];
+    return pages
+      .map((p, globalIdx) => ({ page: p, globalIdx }))
+      .filter(({ page }) => !activeSegmentId || !page.segmentId || page.segmentId === activeSegmentId);
+  }, [pages, activeSegmentId]);
 
   const toggleCollapse = () => {
     const next = !isCollapsed;
@@ -347,7 +356,7 @@ export function LessonPalette({
             >
               <LayoutGrid size={14} className="text-primary-theme" />
               <span>
-                {lang === 'zh' ? '页面大纲' : 'Outline'} ({pages.length})
+                {lang === 'zh' ? '页面大纲' : 'Outline'} ({visiblePages.length})
               </span>
               <ChevronDown
                 size={13}
@@ -388,106 +397,112 @@ export function LessonPalette({
           ) : (
             /* 展开列表 */
             <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-0.5 no-scrollbar">
-              {pages.map((p, idx) => {
-                const isActive = idx === currentPage;
-                const isEditing = editingPageIdx === idx;
-                const isDropTarget = hoveredDropPageIdx === idx;
-                return (
-                  <div
-                    key={p.id || idx}
-                    data-page-index={idx}
-                    onClick={() => {
-                      if (!isEditing) onSwitchPage?.(idx);
-                    }}
-                    className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                      isDropTarget
-                        ? 'ring-2 ring-primary-theme ring-offset-1 border-dashed border-2 border-primary-theme bg-primary-theme/15 animate-pulse'
-                        : isActive
-                          ? 'bg-primary-theme text-white font-semibold shadow-xs'
-                          : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
-                      <span
-                        className={`text-[10px] px-1 py-0.2 rounded font-mono shrink-0 ${
-                          isDropTarget
-                            ? 'bg-primary-theme text-white font-bold'
-                            : isActive
-                              ? 'bg-white/20 text-white'
-                              : 'bg-surface-secondary text-muted'
-                        }`}
-                      >
-                        P{idx + 1}
-                      </span>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          autoFocus
-                          value={editingPageTitle}
-                          onChange={(e) => setEditingPageTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              if (editingPageTitle.trim()) onRenamePage?.(idx, editingPageTitle.trim());
-                              setEditingPageIdx(null);
-                            }
-                            if (e.key === 'Escape') setEditingPageIdx(null);
-                          }}
-                          onBlur={() => {
-                            if (editingPageTitle.trim()) onRenamePage?.(idx, editingPageTitle.trim());
-                            setEditingPageIdx(null);
-                          }}
-                          className="px-1.5 py-0.5 text-xs bg-surface border border-primary-theme rounded text-main outline-none w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span className="truncate">{p.title}</span>
-                      )}
-                    </div>
-
-                    {isDropTarget && (
-                      <span className="text-[10px] font-bold text-primary-theme animate-bounce shrink-0 flex items-center gap-1 pl-1">
-                        <span>📥</span>
-                        <span>{lang === 'zh' ? '松开移入' : 'Drop'}</span>
-                      </span>
-                    )}
-
-                    {!readOnly && !isEditing && (
-                      <div
-                        className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {onRenamePage && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingPageIdx(idx);
-                              setEditingPageTitle(p.title);
-                            }}
-                            className={`p-0.5 rounded hover:bg-black/10 cursor-pointer ${isActive ? 'text-white' : 'text-muted hover:text-main'}`}
-                            title="重命名"
-                          >
-                            <Edit3 size={11} />
-                          </button>
-                        )}
-                        {pages.length > 1 && onDeletePage && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm(`确定删除页面"${p.title}"吗？页面内的组件也将被清理。`)) {
-                                onDeletePage(idx);
+              {visiblePages.length === 0 ? (
+                <div className="text-2xs text-muted text-center py-2 bg-surface-secondary/50 rounded-lg border border-dashed border-theme">
+                  {lang === 'zh' ? '当前教学环节暂无独立页面' : 'No pages for this segment'}
+                </div>
+              ) : (
+                visiblePages.map(({ page: p, globalIdx }, localIdx) => {
+                  const isActive = globalIdx === currentPage;
+                  const isEditing = editingPageIdx === globalIdx;
+                  const isDropTarget = hoveredDropPageIdx === globalIdx;
+                  return (
+                    <div
+                      key={p.id || globalIdx}
+                      data-page-index={globalIdx}
+                      onClick={() => {
+                        if (!isEditing) onSwitchPage?.(globalIdx);
+                      }}
+                      className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                        isDropTarget
+                          ? 'ring-2 ring-primary-theme ring-offset-1 border-dashed border-2 border-primary-theme bg-primary-theme/15 animate-pulse'
+                          : isActive
+                            ? 'bg-primary-theme text-white font-semibold shadow-xs'
+                            : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                        <span
+                          className={`text-[10px] px-1 py-0.2 rounded font-mono shrink-0 ${
+                            isDropTarget
+                              ? 'bg-primary-theme text-white font-bold'
+                              : isActive
+                                ? 'bg-white/20 text-white'
+                                : 'bg-surface-secondary text-muted'
+                          }`}
+                        >
+                          P{localIdx + 1}
+                        </span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingPageTitle}
+                            onChange={(e) => setEditingPageTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (editingPageTitle.trim()) onRenamePage?.(globalIdx, editingPageTitle.trim());
+                                setEditingPageIdx(null);
                               }
+                              if (e.key === 'Escape') setEditingPageIdx(null);
                             }}
-                            className={`p-0.5 rounded hover:bg-rose-500/20 text-rose-500 cursor-pointer ${isActive ? 'text-white hover:bg-white/20' : ''}`}
-                            title="删除此页"
-                          >
-                            <Trash2 size={11} />
-                          </button>
+                            onBlur={() => {
+                              if (editingPageTitle.trim()) onRenamePage?.(globalIdx, editingPageTitle.trim());
+                              setEditingPageIdx(null);
+                            }}
+                            className="px-1.5 py-0.5 text-xs bg-surface border border-primary-theme rounded text-main outline-none w-full"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className="truncate">{p.title}</span>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {isDropTarget && (
+                        <span className="text-[10px] font-bold text-primary-theme animate-bounce shrink-0 flex items-center gap-1 pl-1">
+                          <span>📥</span>
+                          <span>{lang === 'zh' ? '松开移入' : 'Drop'}</span>
+                        </span>
+                      )}
+
+                      {!readOnly && !isEditing && (
+                        <div
+                          className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {onRenamePage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPageIdx(globalIdx);
+                                setEditingPageTitle(p.title);
+                              }}
+                              className={`p-0.5 rounded hover:bg-black/10 cursor-pointer ${isActive ? 'text-white' : 'text-muted hover:text-main'}`}
+                              title="重命名"
+                            >
+                              <Edit3 size={11} />
+                            </button>
+                          )}
+                          {pages.length > 1 && onDeletePage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`确定删除页面"${p.title}"吗？页面内的组件也将被清理。`)) {
+                                  onDeletePage(globalIdx);
+                                }
+                              }}
+                              className={`p-0.5 rounded hover:bg-rose-500/20 text-rose-500 cursor-pointer ${isActive ? 'text-white hover:bg-white/20' : ''}`}
+                              title="删除此页"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>

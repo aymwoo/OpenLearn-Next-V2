@@ -427,6 +427,7 @@ export function LessonEditorView() {
           onToggleCollapse={setPaletteCollapsed}
           pages={whiteboardPages}
           currentPage={currentWhiteboardPage}
+          activeSegmentId={activeSegmentId}
           onSwitchPage={(idx) => whiteboardRef.current?.switchPage?.(idx)}
           onAddPage={(customTitle) => whiteboardRef.current?.addPage?.(customTitle)}
           onDeletePage={(idx) => whiteboardRef.current?.deletePage?.(idx)}

@@ -158,6 +158,27 @@ describe('LessonEditor Drag To Outline & Timeline (Auto-expand & Drop Targeting)
       // Outline should now automatically be expanded!
       expect(screen.getByText('P2 · 探究环节')).toBeDefined();
     });
+
+    it('filters outline pages when activeSegmentId is provided (Issue #402)', () => {
+      const multiSegPages = [
+        { id: 'page-intro', title: 'P1 · 课前导入', order: 0, segmentId: 'seg-intro' },
+        { id: 'page-explore', title: 'P1 · 课堂探究', order: 1, segmentId: 'seg-explore' },
+      ];
+
+      render(
+        <LessonPalette
+          lang="zh"
+          onActivate={vi.fn()}
+          pages={multiSegPages}
+          currentPage={1}
+          activeSegmentId="seg-explore"
+        />,
+      );
+
+      expect(screen.getByText('页面大纲 (1)')).toBeDefined();
+      expect(screen.queryByText('P1 · 课前导入')).toBeNull();
+      expect(screen.getByText('P1 · 课堂探究')).toBeDefined();
+    });
   });
 
   describe('TimelineRail - Segment hover auto-expand & drop targeting', () => {

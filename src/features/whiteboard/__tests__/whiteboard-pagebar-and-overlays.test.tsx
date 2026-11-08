@@ -97,6 +97,29 @@ describe('Whiteboard PageBar & Overlays Component Tests', () => {
       fireEvent.keyDown(input, { key: 'Escape' });
       expect(setEditingIdx).toHaveBeenCalledWith(null);
     });
+
+    it('5. 传入 activeSegmentId 时仅展示该环节与未绑定环节的页面（Issue #402 隔离防线）', () => {
+      const multiSegPages = [
+        { id: 'page-0', title: '环节A专属页', order: 0, segmentId: 'seg-a' },
+        { id: 'page-1', title: '环节B专属页1', order: 1, segmentId: 'seg-b' },
+        { id: 'page-2', title: '环节B专属页2', order: 2, segmentId: 'seg-b' },
+      ];
+
+      render(
+        <WhiteboardPageBar
+          {...defaultPageBarProps}
+          pages={multiSegPages}
+          activeSegmentId="seg-b"
+          currentPage={1}
+        />,
+      );
+
+      // 大纲徽标显示 2 页，而不是 3 页
+      expect(screen.getByText('大纲 (2)')).toBeDefined();
+      expect(screen.queryByText('环节A专属页')).toBeNull();
+      expect(screen.getByText('环节B专属页1')).toBeDefined();
+      expect(screen.getByText('环节B专属页2')).toBeDefined();
+    });
   });
 
   describe('WhiteboardEmptyState', () => {

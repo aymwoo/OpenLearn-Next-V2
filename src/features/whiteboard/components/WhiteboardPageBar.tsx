@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   LayoutGrid,
   ChevronLeft,
@@ -16,6 +16,7 @@ import type { WhiteboardPageItem } from '../InteractiveWhiteboard';
 export interface WhiteboardPageBarProps {
   pages: WhiteboardPageItem[];
   currentPage: number;
+  activeSegmentId?: string | null;
   showPageDrawer: boolean;
   setShowPageDrawer: (show: boolean) => void;
   editingPageIdx: number | null;
@@ -36,6 +37,7 @@ export interface WhiteboardPageBarProps {
 export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
   pages,
   currentPage,
+  activeSegmentId,
   showPageDrawer,
   setShowPageDrawer,
   editingPageIdx,
@@ -52,6 +54,13 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
   handleDeletePage,
   handleAddPage,
 }) => {
+  const visiblePages = useMemo(() => {
+    return pages
+      .map((p, globalIdx) => ({ page: p, globalIdx }))
+      .filter(({ page }) => !activeSegmentId || !page.segmentId || page.segmentId === activeSegmentId);
+  }, [pages, activeSegmentId]);
+
+  const currentVisibleIdx = visiblePages.findIndex(({ globalIdx }) => globalIdx === currentPage);
   return (
     <>
       {/* Top Floating Page Navigation Bar */}
@@ -67,16 +76,20 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
           title="页面大纲与预览 (Pages Outline)"
         >
           <LayoutGrid size={15} />
-          <span className="hidden sm:inline text-xs font-semibold">大纲 ({pages.length})</span>
+          <span className="hidden sm:inline text-xs font-semibold">大纲 ({visiblePages.length})</span>
         </button>
 
         <div className="h-4 w-px bg-border-theme mx-0.5" />
 
         {/* Previous Page */}
         <button
-          onClick={() => handleSwitchPage(Math.max(0, currentPage - 1))}
+          onClick={() => {
+            if (currentVisibleIdx > 0) {
+              handleSwitchPage(visiblePages[currentVisibleIdx - 1].globalIdx);
+            }
+          }}
           className="p-1 hover:bg-surface-secondary rounded-full text-muted hover:text-main disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
-          disabled={currentPage === 0}
+          disabled={currentVisibleIdx <= 0}
           title="上一页"
         >
           <ChevronLeft size={16} />
@@ -84,11 +97,11 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 
         {/* Page Tabs */}
         <div className="flex items-center gap-1 max-w-[500px] overflow-x-auto no-scrollbar py-0.5">
-          {pages.map((pageItem, idx) => {
-            const isActive = idx === currentPage;
-            const isEditing = editingPageIdx === idx;
+          {visiblePages.map(({ page: pageItem, globalIdx }, localIdx) => {
+            const isActive = globalIdx === currentPage;
+            const isEditing = editingPageIdx === globalIdx;
             return (
-              <div key={pageItem.id || idx} className="relative group flex items-center">
+              <div key={pageItem.id || globalIdx} className="relative group flex items-center">
                 {isEditing ? (
                   <input
                     type="text"
@@ -96,17 +109,17 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     value={editingPageTitle}
                     onChange={(e) => setEditingPageTitle(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleRenamePage(idx, editingPageTitle);
+                      if (e.key === 'Enter') handleRenamePage(globalIdx, editingPageTitle);
                       if (e.key === 'Escape') setEditingPageIdx(null);
                     }}
-                    onBlur={() => handleRenamePage(idx, editingPageTitle)}
+                    onBlur={() => handleRenamePage(globalIdx, editingPageTitle)}
                     className="px-2 py-0.5 text-xs font-bold bg-surface border border-primary-theme rounded-full outline-none w-28 text-main shadow-2xs"
                   />
                 ) : (
                   <button
-                    onClick={() => handleSwitchPage(idx)}
+                    onClick={() => handleSwitchPage(globalIdx)}
                     onDoubleClick={() => {
-                      setEditingPageIdx(idx);
+                      setEditingPageIdx(globalIdx);
                       setEditingPageTitle(pageItem.title);
                     }}
                     className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
@@ -124,7 +137,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActiveMenuPageIdx(activeMenuPageIdx === idx ? null : idx);
+                    setActiveMenuPageIdx(activeMenuPageIdx === globalIdx ? null : globalIdx);
                   }}
                   className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ml-[-4px] z-10 ${
                     isActive ? 'text-white/80 hover:text-white' : 'text-muted hover:text-main'
@@ -135,14 +148,14 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                 </button>
 
                 {/* Dropdown Options Menu */}
-                {activeMenuPageIdx === idx && (
+                {activeMenuPageIdx === globalIdx && (
                   <div
                     className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-surface rounded-xl shadow-xl border border-theme py-1 w-36 z-50 text-xs font-normal text-main"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
                       onClick={() => {
-                        setEditingPageIdx(idx);
+                        setEditingPageIdx(globalIdx);
                         setEditingPageTitle(pageItem.title);
                         setActiveMenuPageIdx(null);
                       }}
@@ -152,7 +165,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        handleDuplicatePage(idx);
+                        handleDuplicatePage(globalIdx);
                         setActiveMenuPageIdx(null);
                       }}
                       className="w-full px-3 py-1.5 text-left text-main hover:bg-primary-theme-light hover:text-primary-theme flex items-center gap-2 cursor-pointer"
@@ -160,10 +173,10 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                       <Copy size={13} /> 复制页面
                     </button>
 
-                    {idx > 0 && (
+                    {localIdx > 0 && (
                       <button
                         onClick={() => {
-                          handleMovePage(idx, 'left');
+                          handleMovePage(globalIdx, 'left');
                           setActiveMenuPageIdx(null);
                         }}
                         className="w-full px-3 py-1.5 text-left text-main hover:bg-primary-theme-light hover:text-primary-theme flex items-center gap-2 cursor-pointer"
@@ -172,10 +185,10 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                       </button>
                     )}
 
-                    {idx < pages.length - 1 && (
+                    {localIdx < visiblePages.length - 1 && (
                       <button
                         onClick={() => {
-                          handleMovePage(idx, 'right');
+                          handleMovePage(globalIdx, 'right');
                           setActiveMenuPageIdx(null);
                         }}
                         className="w-full px-3 py-1.5 text-left text-main hover:bg-primary-theme-light hover:text-primary-theme flex items-center gap-2 cursor-pointer"
@@ -187,7 +200,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     <div className="my-1 border-t border-theme" />
                     <button
                       onClick={() => {
-                        handleDeletePage(idx);
+                        handleDeletePage(globalIdx);
                         setActiveMenuPageIdx(null);
                       }}
                       className="w-full px-3 py-1.5 text-left text-rose-500 hover:bg-rose-500/10 flex items-center gap-2 cursor-pointer disabled:opacity-30"
@@ -213,9 +226,13 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 
         {/* Next Page */}
         <button
-          onClick={() => handleSwitchPage(Math.min(pages.length - 1, currentPage + 1))}
+          onClick={() => {
+            if (currentVisibleIdx >= 0 && currentVisibleIdx < visiblePages.length - 1) {
+              handleSwitchPage(visiblePages[currentVisibleIdx + 1].globalIdx);
+            }
+          }}
           className="p-1 hover:bg-surface-secondary rounded-full text-muted hover:text-main disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
-          disabled={currentPage >= pages.length - 1}
+          disabled={currentVisibleIdx === -1 || currentVisibleIdx >= visiblePages.length - 1}
           title="下一页"
         >
           <ChevronRight size={16} />
@@ -237,7 +254,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                 <LayoutGrid className="w-5 h-5 text-primary-theme" />
                 <h3 className="font-bold text-main text-sm">白板页面大纲与预览</h3>
                 <span className="px-2 py-0.5 bg-primary-theme-light text-primary-theme text-xs rounded-full font-semibold">
-                  共 {pages.length} 页
+                  共 {visiblePages.length} 页
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -258,26 +275,27 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 
             {/* Pages Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 py-4 overflow-y-auto max-h-[50vh]">
-              {pages.map((p, idx) => {
-                const isActive = idx === currentPage;
+              {visiblePages.map(({ page: p, globalIdx }, localIdx) => {
+                const isActive = globalIdx === currentPage;
                 const pageElementCount = safeElements.filter(
                   (el) =>
                     el.type !== 'page_meta' &&
                     (() => {
                       try {
                         const d = JSON.parse(el.data);
-                        return (d.page ?? 0) === idx || d.pageId === p.id;
+                        if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
+                        return (d.page ?? 0) === globalIdx || d.pageId === p.id;
                       } catch {
-                        return idx === 0;
+                        return globalIdx === 0;
                       }
                     })(),
                 ).length;
 
                 return (
                   <div
-                    key={p.id || idx}
+                    key={p.id || globalIdx}
                     onClick={() => {
-                      handleSwitchPage(idx);
+                      handleSwitchPage(globalIdx);
                       setShowPageDrawer(false);
                     }}
                     className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer group bg-surface ${
@@ -292,7 +310,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                           isActive ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-muted'
                         }`}
                       >
-                        P{idx + 1}
+                        P{localIdx + 1}
                       </span>
                       {isActive && (
                         <span className="text-xs font-bold text-primary-theme bg-primary-theme-light px-1.5 py-0.5 rounded">
@@ -316,7 +334,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     >
                       <button
                         onClick={() => {
-                          setEditingPageIdx(idx);
+                          setEditingPageIdx(globalIdx);
                           setEditingPageTitle(p.title);
                         }}
                         className="hover:text-primary-theme p-1 rounded hover:bg-surface-secondary transition-colors"
@@ -325,24 +343,24 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                         <Edit3 size={13} />
                       </button>
                       <button
-                        onClick={() => handleDuplicatePage(idx)}
+                        onClick={() => handleDuplicatePage(globalIdx)}
                         className="hover:text-primary-theme p-1 rounded hover:bg-surface-secondary transition-colors"
                         title="复制页面"
                       >
                         <Copy size={13} />
                       </button>
-                      {idx > 0 && (
+                      {localIdx > 0 && (
                         <button
-                          onClick={() => handleMovePage(idx, 'left')}
+                          onClick={() => handleMovePage(globalIdx, 'left')}
                           className="hover:text-primary-theme p-1 rounded hover:bg-surface-secondary transition-colors"
                           title="向左移"
                         >
                           <ChevronLeft size={13} />
                         </button>
                       )}
-                      {idx < pages.length - 1 && (
+                      {localIdx < visiblePages.length - 1 && (
                         <button
-                          onClick={() => handleMovePage(idx, 'right')}
+                          onClick={() => handleMovePage(globalIdx, 'right')}
                           className="hover:text-primary-theme p-1 rounded hover:bg-surface-secondary transition-colors"
                           title="向右移"
                         >
@@ -350,7 +368,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                         </button>
                       )}
                       <button
-                        onClick={() => handleDeletePage(idx)}
+                        onClick={() => handleDeletePage(globalIdx)}
                         className="hover:text-rose-500 p-1 rounded hover:bg-rose-500/10 transition-colors disabled:opacity-30"
                         disabled={pages.length <= 1}
                         title="删除页面"
