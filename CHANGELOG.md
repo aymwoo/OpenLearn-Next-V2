@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-11-08
+
 ### Features
 
 - **第三方教学增强套件插件 `ext-interactive-lab`（虚拟探究实验与班级对抗竞赛套件）**：
@@ -24,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **白名单补齐（`server/middleware/body-limits.ts`）**：在全局 2MB 请求体限制前，新增中等体量上传白名单（`MEDIUM_UPLOAD_ENDPOINTS`，上限 30MB），覆盖 `/api/auth/avatar`（头像上传）、`/api/timetable/ocr`（课表多模态 OCR 拍照识别）、`/api/site-settings`（站点品牌 Logo 上传）与 `/api/agent/chat`（智能助手带附件对话）；并将系统交互课件资源端点 `/api/resources` 纳入大文件上传白名单（110MB）；
   - **修复头像合规文件被拒**：解决教师与学生在上传符合业务要求（≤ 2MB）的头像图片时，因 Base64 编码体积膨胀 ~33%（达到 ~2.1MB）被全局 2MB JSON 解析器提前抛出 `PayloadTooLargeError: request entity too large`（HTTP 413）而无法触达业务校验层的问题；
   - **统一错误码机器语义（`server/utils/error-handler.ts`）**：在统一错误处理中将 body-parser 抛出的 `type: 'entity.too.large'` 错误映射为机器可读错误码 `PAYLOAD_TOO_LARGE`，便于前端统一识别并友好展示。
+
+### Docs
+
+- **根目录文档整理与历史快照清理**：新增 `DOCS_INDEX.md` 说明根目录各文档用途与阅读顺序；移除 6 份已完成的历史审计 / 整改计划与台账（`docs-drift-audit-*`、`docs-drift-remediation-tracker`、`docs-plugin-guide-audit-*`、`plugin-system-remediation-*`），同步清理 `docs/agent/` 指针、代码注释、`.prettierignore` 与 `audit-index.md` 归档清单；保留 `docs_plugin_guide.md`（`/api/docs/plugin-guide` 运行时按文件名读取）。
 
 ## [0.7.12] - 2026-11-03
 
