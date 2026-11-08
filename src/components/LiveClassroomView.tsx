@@ -260,6 +260,24 @@ export function LiveClassroomView({
     },
     [],
   );
+  const handleFullscreenSync = useCallback(
+    (elId: string | null) => {
+      setLiveClassFullscreenElementId(elId);
+      syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
+    },
+    [selectedLesson],
+  );
+  const handleSegmentSync = useCallback(
+    (segId: string) => {
+      setActiveSegmentId(segId);
+    },
+    [setActiveSegmentId],
+  );
+  const handleWhiteboardRefresh = useCallback(() => {
+    if (selectedLesson) {
+      fetchElements(selectedLesson);
+    }
+  }, [selectedLesson, fetchElements]);
   const [expandedSegmentMap, setExpandedSegmentMap] = useState<Record<string, boolean>>({});
   const toggleSegmentExpand = (segId: string) => {
     setExpandedSegmentMap((prev) => {
@@ -2296,7 +2314,7 @@ export function LiveClassroomView({
         <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
           {/* Left Column: Timeline & Whiteboard Outline Control */}
           {!isLeftSidebarCollapsed && (
-            <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs transition-all duration-200">
+            <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs">
               {/* 顶栏控制：标题、统计与快捷操作 */}
               <div className="p-2.5 border-b border-theme/60 flex items-center justify-between shrink-0 bg-surface-secondary/25 gap-1.5">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -2495,7 +2513,12 @@ export function LiveClassroomView({
                                     return (
                                       <div
                                         key={p.id || globalIdx}
-                                        onClick={() => whiteboardRef.current?.switchPage?.(globalIdx)}
+                                        onClick={() => {
+                                          whiteboardRef.current?.switchPage?.(globalIdx);
+                                          if (seg.id && seg.id !== activeSegmentId) {
+                                            setActiveSegmentId(seg.id);
+                                          }
+                                        }}
                                         className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
                                           isPageActive
                                             ? 'bg-primary-solid text-white font-semibold shadow-2xs'
@@ -2747,13 +2770,10 @@ export function LiveClassroomView({
                         isEditMode={false}
                         broadcastFullscreen
                         fullscreenBroadcastClassId={liveClassSelectedClassId}
-                        onFullscreenSync={(elId: string | null) => {
-                          setLiveClassFullscreenElementId(elId);
-                          syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
-                        }}
+                        onFullscreenSync={handleFullscreenSync}
                         elements={elements}
                         activeSegmentId={activeSegmentId}
-                        onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                        onSegmentSync={handleSegmentSync}
                         classroomTools={classroomTools}
                         onExecuteTool={handleExecuteTool}
                         hidePageBar={true}
@@ -2795,7 +2815,7 @@ export function LiveClassroomView({
                           }
                           fetchElements(selectedLesson);
                         }}
-                        onRefresh={() => fetchElements(selectedLesson)}
+                        onRefresh={handleWhiteboardRefresh}
                       />
                     </div>
                   </>
