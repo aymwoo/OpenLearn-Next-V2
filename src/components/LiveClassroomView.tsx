@@ -773,6 +773,55 @@ export function LiveClassroomView({
     [lang, stableAddToast],
   );
 
+  const handleElementAdd = useCallback(
+    async (type: string, data: any) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data }),
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
+  );
+
+  const handleElementUpdate = useCallback(
+    async (elementId: string, data: any) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
+  );
+
+  const handleElementDelete = useCallback(
+    async (elementId: string) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
+  );
+
   // 稳定化：内部只用 setState（引用恒定），可安全作为 useCallback 依赖，
   // 否则会连带让 runAutoRecord 每次渲染重建。
   const fetchAttempts = useCallback(async () => {
@@ -1544,113 +1593,116 @@ export function LiveClassroomView({
   };
 
   // Execute interactive tool via command bus
-  const handleExecuteTool = async (tool: any) => {
-    if (!selectedLesson) {
-      addToast(
-        lang === 'zh' ? '⚠️ 请选择课节' : '⚠️ Select Lesson',
-        lang === 'zh' ? '请先选择要授课的课节。' : 'Please select a lesson first.',
-        'warning',
-      );
-      return;
-    }
-
-    // Check if $classId replacement is required but no class selected
-    const needsClass = JSON.stringify(tool.payload || '').includes('$classId');
-    if (needsClass && !liveClassSelectedClassId) {
-      addToast(
-        lang === 'zh' ? '⚠️ 请选择班级' : '⚠️ Select Class',
-        lang === 'zh' ? '该工具需要指定上课班级，请在顶部先选择班级。' : 'Please select class first for this tool.',
-        'warning',
-      );
-      return;
-    }
-
-    setLiveClassFeed((prev) => [
-      {
-        id: Math.random().toString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        type: 'info',
-        message: `正在运行插件工具 [${tool.name}]...`,
-      },
-      ...prev,
-    ]);
-
-    try {
-      // Substitute placeholders in payload
-      const resolvedPayload = JSON.parse(
-        JSON.stringify(tool.payload || {})
-          .replace(/\$classId/g, liveClassSelectedClassId || '')
-          .replace(/\$lessonId/g, selectedLesson || ''),
-      );
-
-      // Auto-append active segment ID into plugin elements
-      if (resolvedPayload.type === 'plugin' && resolvedPayload.data) {
-        try {
-          const dataObj = JSON.parse(resolvedPayload.data);
-          if (!dataObj.segmentId && activeSegmentId) {
-            dataObj.segmentId = activeSegmentId;
-            resolvedPayload.data = JSON.stringify(dataObj);
-          }
-        } catch {}
-      }
-
-      // Only prefix plugin-internal commands (e.g. courseware.open_panel).
-      // Kernel commands like whiteboard.draw must pass through unmodified.
-      const KERNEL_COMMAND_RE = /^(whiteboard|lesson|assignment|class|student|vfs|plugin|ai|agent|system)\./;
-      const prefixedCommandType =
-        !KERNEL_COMMAND_RE.test(tool.commandType) && tool.manifestId
-          ? resolvePluginCommandType(tool.commandType, tool.manifestId)
-          : tool.commandType;
-      const res = await fetch('/api/commands', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          commandType: prefixedCommandType,
-          payload: resolvedPayload,
-        }),
-      });
-
-      if (res.ok) {
-        if (
-          onOpenCoursewareHub &&
-          (tool.id === 'courseware-hub-teacher' || tool.commandType === 'courseware.open_panel')
-        ) {
-          onOpenCoursewareHub();
-        }
-        setLiveClassFeed((prev) => [
-          {
-            id: Math.random().toString(),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            type: 'success',
-            message: `插件工具 [${tool.name}] 执行完毕，数据成功下发。`,
-          },
-          ...prev,
-        ]);
+  const handleExecuteTool = useCallback(
+    async (tool: any) => {
+      if (!selectedLesson) {
         addToast(
-          lang === 'zh' ? '✓ 工具下发成功' : '✓ Tool Synchronized',
-          lang === 'zh'
-            ? `工具 [${tool.name}] 已成功在当前白板上部署并投射。`
-            : `Tool [${tool.name}] synchronized successfully.`,
-          'success',
+          lang === 'zh' ? '⚠️ 请选择课节' : '⚠️ Select Lesson',
+          lang === 'zh' ? '请先选择要授课的课节。' : 'Please select a lesson first.',
+          'warning',
         );
-        await fetchElements(selectedLesson);
-      } else {
-        const data = await res.json();
-        throw new Error(data.error || 'Server error');
+        return;
       }
-    } catch (err: any) {
+
+      // Check if $classId replacement is required but no class selected
+      const needsClass = JSON.stringify(tool.payload || '').includes('$classId');
+      if (needsClass && !liveClassSelectedClassId) {
+        addToast(
+          lang === 'zh' ? '⚠️ 请选择班级' : '⚠️ Select Class',
+          lang === 'zh' ? '该工具需要指定上课班级，请在顶部先选择班级。' : 'Please select class first for this tool.',
+          'warning',
+        );
+        return;
+      }
+
       setLiveClassFeed((prev) => [
         {
           id: Math.random().toString(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          type: 'error',
-          message: `运行插件工具 [${tool.name}] 失败: ${err.message}`,
+          type: 'info',
+          message: `正在运行插件工具 [${tool.name}]...`,
         },
         ...prev,
       ]);
-      addToast(lang === 'zh' ? '❌ 运行失败' : '❌ Tool Failed', err.message || 'Execution error', 'warning');
-    }
-  };
+
+      try {
+        // Substitute placeholders in payload
+        const resolvedPayload = JSON.parse(
+          JSON.stringify(tool.payload || {})
+            .replace(/\$classId/g, liveClassSelectedClassId || '')
+            .replace(/\$lessonId/g, selectedLesson || ''),
+        );
+
+        // Auto-append active segment ID into plugin elements
+        if (resolvedPayload.type === 'plugin' && resolvedPayload.data) {
+          try {
+            const dataObj = JSON.parse(resolvedPayload.data);
+            if (!dataObj.segmentId && activeSegmentId) {
+              dataObj.segmentId = activeSegmentId;
+              resolvedPayload.data = JSON.stringify(dataObj);
+            }
+          } catch {}
+        }
+
+        // Only prefix plugin-internal commands (e.g. courseware.open_panel).
+        // Kernel commands like whiteboard.draw must pass through unmodified.
+        const KERNEL_COMMAND_RE = /^(whiteboard|lesson|assignment|class|student|vfs|plugin|ai|agent|system)\./;
+        const prefixedCommandType =
+          !KERNEL_COMMAND_RE.test(tool.commandType) && tool.manifestId
+            ? resolvePluginCommandType(tool.commandType, tool.manifestId)
+            : tool.commandType;
+        const res = await fetch('/api/commands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            commandType: prefixedCommandType,
+            payload: resolvedPayload,
+          }),
+        });
+
+        if (res.ok) {
+          if (
+            onOpenCoursewareHub &&
+            (tool.id === 'courseware-hub-teacher' || tool.commandType === 'courseware.open_panel')
+          ) {
+            onOpenCoursewareHub();
+          }
+          setLiveClassFeed((prev) => [
+            {
+              id: Math.random().toString(),
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              type: 'success',
+              message: `插件工具 [${tool.name}] 执行完毕，数据成功下发。`,
+            },
+            ...prev,
+          ]);
+          addToast(
+            lang === 'zh' ? '✓ 工具下发成功' : '✓ Tool Synchronized',
+            lang === 'zh'
+              ? `工具 [${tool.name}] 已成功在当前白板上部署并投射。`
+              : `Tool [${tool.name}] synchronized successfully.`,
+            'success',
+          );
+          await fetchElements(selectedLesson);
+        } else {
+          const data = await res.json();
+          throw new Error(data.error || 'Server error');
+        }
+      } catch (err: any) {
+        setLiveClassFeed((prev) => [
+          {
+            id: Math.random().toString(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type: 'error',
+            message: `运行插件工具 [${tool.name}] 失败: ${err.message}`,
+          },
+          ...prev,
+        ]);
+        addToast(lang === 'zh' ? '❌ 运行失败' : '❌ Tool Failed', err.message || 'Execution error', 'warning');
+      }
+    },
+    [selectedLesson, addToast, lang, liveClassSelectedClassId, activeSegmentId, onOpenCoursewareHub, fetchElements],
+  );
 
   const handleRandomPick = () => {
     if (students.length === 0 || isDrawing) return;
@@ -2462,44 +2514,52 @@ export function LiveClassroomView({
                               )}
                             </div>
 
-                            {/* 第二行：时间、页面数、加页、演示中/广播 */}
-                            <div className="flex items-center justify-between gap-1 pl-5.5 text-[10px]">
-                              <div className="flex items-center gap-1 min-w-0 flex-wrap">
-                                <span className="font-mono px-1 py-0.2 rounded bg-surface-secondary/80 text-muted border border-theme/40 flex items-center gap-0.5 shrink-0">
-                                  <Clock size={9} />
+                            {/* 第二行：时间、页面数、加页、演示中/广播（纯 iconfont 精简排列，禁止换行） */}
+                            <div className="flex items-center justify-between gap-1.5 pl-5.5 pr-0.5 text-[11px] flex-nowrap whitespace-nowrap overflow-hidden">
+                              <div className="flex items-center gap-2 min-w-0 flex-nowrap shrink-0">
+                                {/* 时长 iconfont */}
+                                <span
+                                  className="inline-flex items-center gap-0.5 font-mono text-[10px] text-muted shrink-0"
+                                  title={lang === 'zh' ? `预计时长: ${seg.duration}` : `Duration: ${seg.duration}`}
+                                >
+                                  <Clock size={11} className="shrink-0 text-muted/70" />
                                   <span>{seg.duration}</span>
                                 </span>
+
+                                {/* 页数 iconfont */}
                                 <span
-                                  className="font-mono px-1 py-0.2 rounded bg-primary-theme/10 text-primary-ink font-semibold shrink-0"
+                                  className="inline-flex items-center gap-0.5 font-mono text-[10px] text-primary-ink font-semibold shrink-0"
                                   title={
                                     lang === 'zh'
                                       ? `本环节关联 ${segPages.length} 个白板页面`
                                       : `${segPages.length} pages`
                                   }
                                 >
-                                  {segPages.length} {lang === 'zh' ? '页' : 'p'}
+                                  <FileText size={11} className="shrink-0 text-primary-ink/70" />
+                                  <span>{segPages.length}</span>
                                 </span>
+
+                                {/* 加页 iconfont 按钮 */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     whiteboardRef.current?.addPage?.();
                                   }}
-                                  className="px-1 py-0.2 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer shrink-0"
+                                  className="p-0.5 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center justify-center cursor-pointer shrink-0"
                                   title={lang === 'zh' ? '在此环节加页' : 'Add page to segment'}
                                 >
-                                  <Plus size={9} />
-                                  <span>{lang === 'zh' ? '加页' : 'Add'}</span>
+                                  <Plus size={11} />
                                 </button>
                               </div>
 
                               <div className="flex items-center shrink-0">
                                 {isActive ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-theme/20 text-primary-ink text-[10px] font-bold">
-                                    <span className="relative flex h-1.5 w-1.5">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-theme opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-theme"></span>
-                                    </span>
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-primary-theme/15 text-primary-ink font-semibold text-[10px] shrink-0"
+                                    title={lang === 'zh' ? '当前环节正在同步演示中' : 'Live Syncing'}
+                                  >
+                                    <Radio size={10} className="shrink-0 text-primary-ink" />
                                     <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
                                   </span>
                                 ) : (
@@ -2509,10 +2569,10 @@ export function LiveClassroomView({
                                       e.stopPropagation();
                                       handleStartSegment(seg);
                                     }}
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer"
+                                    className="px-1.5 py-0.2 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer shrink-0"
                                     title={lang === 'zh' ? '广播此环节' : 'Broadcast Step'}
                                   >
-                                    <Presentation size={10} />
+                                    <Presentation size={11} />
                                     <span>{lang === 'zh' ? '广播' : 'Start'}</span>
                                   </button>
                                 )}
@@ -2818,43 +2878,9 @@ export function LiveClassroomView({
                         onExecuteTool={handleExecuteTool}
                         hidePageBar={true}
                         onPagesStateChange={handleWhiteboardPagesStateChange}
-                        onElementAdd={async (type: string, data: any) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type, data }),
-                          });
-                          if (!res.ok) {
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
-                        onElementUpdate={async (elementId: string, data: any) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ data }),
-                          });
-                          if (!res.ok) {
-                            // 保存失败必须可见：此前这里静默忽略失败响应，
-                            // 限流（429）时教师看到的是「切了页但没生效」，
-                            // 演示文稿等高频写场景下会反复丢改动。
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
-                        onElementDelete={async (elementId: string) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'DELETE',
-                          });
-                          if (!res.ok) {
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
+                        onElementAdd={handleElementAdd}
+                        onElementUpdate={handleElementUpdate}
+                        onElementDelete={handleElementDelete}
                         onRefresh={handleWhiteboardRefresh}
                       />
                     </div>

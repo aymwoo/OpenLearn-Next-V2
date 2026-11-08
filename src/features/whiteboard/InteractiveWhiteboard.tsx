@@ -522,7 +522,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     };
 
+    const programmaticPageSwitchRef = useRef(false);
     const handleSwitchPage = (idx: number) => {
+      programmaticPageSwitchRef.current = true;
       setCurrentPage(idx);
       setActiveMenuPageIdx(null);
       if (socketRef.current) {
@@ -2300,6 +2302,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 当 activeSegmentId 变更时（如授课时切换教学环节），如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
     const prevActiveSegmentIdRef = useRef<string | null | undefined>(activeSegmentId);
     useEffect(() => {
+      if (programmaticPageSwitchRef.current) {
+        programmaticPageSwitchRef.current = false;
+        prevActiveSegmentIdRef.current = activeSegmentId;
+        return;
+      }
       const prevSegmentId = prevActiveSegmentIdRef.current;
       prevActiveSegmentIdRef.current = activeSegmentId;
 
