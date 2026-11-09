@@ -116,13 +116,6 @@
   ],
   "a_total": 71,
   "b_total": 38,
-  "a_not_in_extension_slot": [
-    "locales",
-    "palette.items",
-    "teacher.cockpit.widget",
-    "timeline.segments"
-  ],
-  "b_not_in_extension_slot": [
-    "workspace.view"
-  ]
+  "a_not_in_extension_slot": ["locales", "palette.items", "teacher.cockpit.widget", "timeline.segments"],
+  "b_not_in_extension_slot": ["workspace.view"]
 }

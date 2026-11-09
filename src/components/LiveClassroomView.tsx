@@ -30,7 +30,9 @@ import {
   Edit3,
   LayoutGrid,
   Plus,
+  SquarePlus,
   ChevronDown,
+  ChevronsUpDown,
   Radio,
   School,
   ArrowLeftRight,
@@ -89,6 +91,23 @@ import {
   IN_PROGRESS_STATUSES,
 } from '../features/classroom/LiveSubmissionsPanel';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
+
+/**
+ * 清除 HTML 标签与实体，转换为紧凑纯文本（用于 tooltip / hover 提示）
+ */
+function stripHtml(html?: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /**
  * 学生头像内容：优先用本人照片（students.avatar），没有照片时按性别渲染，
@@ -259,8 +278,78 @@ export function LiveClassroomView({
     },
     [],
   );
-  const [sidebarActiveTab, setSidebarActiveTab] = useState<'segments' | 'pages'>('segments');
-  const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
+  const handleFullscreenSync = useCallback(
+    (elId: string | null) => {
+      setLiveClassFullscreenElementId(elId);
+      syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
+    },
+    [selectedLesson],
+  );
+  const handleSegmentSync = useCallback(
+    (segId: string) => {
+      setActiveSegmentId(segId);
+    },
+    [setActiveSegmentId],
+  );
+  const handleWhiteboardRefresh = useCallback(() => {
+    if (selectedLesson) {
+      fetchElements(selectedLesson);
+    }
+  }, [selectedLesson, fetchElements]);
+  const [expandedSegmentMap, setExpandedSegmentMap] = useState<Record<string, boolean>>({});
+  const toggleSegmentExpand = (segId: string) => {
+    setExpandedSegmentMap((prev) => {
+      const isCurrentOpen = prev[segId] ?? segId === activeSegmentId;
+      return { ...prev, [segId]: !isCurrentOpen };
+    });
+  };
+  const handleToggleAllSegments = () => {
+    const anyCollapsed = timelineSegments.some((s) => !(expandedSegmentMap[s.id] ?? s.id === activeSegmentId));
+    const newMap: Record<string, boolean> = {};
+    timelineSegments.forEach((s) => {
+      newMap[s.id] = anyCollapsed;
+    });
+    setExpandedSegmentMap(newMap);
+  };
+  const getPagesForSegment = useCallback(
+    (seg: any, segIdx: number) => {
+      // 1. 若有页面显式绑定该 segmentId
+      const explicitMatches = whiteboardPages
+        .map((p, globalIdx) => ({ page: p, globalIdx }))
+        .filter(({ page }) => page.segmentId === seg.id);
+
+      if (explicitMatches.length > 0) {
+        return explicitMatches;
+      }
+
+      // 2. 若全量页面中没有任何页面配置过 segmentId（标准老课件或通用教案）
+      const hasAnySegmentBinding = whiteboardPages.some((p) => Boolean(p.segmentId));
+      if (!hasAnySegmentBinding) {
+        if (whiteboardPages.length === 0) return [];
+        // 若页面数量与环节数量一致，严格 1:1 归属
+        if (whiteboardPages.length === timelineSegments.length) {
+          const p = whiteboardPages[segIdx];
+          return p ? [{ page: p, globalIdx: segIdx }] : [];
+        }
+        // 若页面数量小于环节数量，按索引顺延分配，超出为空
+        if (whiteboardPages.length < timelineSegments.length) {
+          const p = whiteboardPages[segIdx];
+          return p ? [{ page: p, globalIdx: segIdx }] : [];
+        }
+        // 若页面数量多于环节数量，平均分段
+        const perSeg = Math.ceil(whiteboardPages.length / (timelineSegments.length || 1));
+        const start = segIdx * perSeg;
+        const end = Math.min(start + perSeg, whiteboardPages.length);
+        return whiteboardPages.slice(start, end).map((p, offset) => ({
+          page: p,
+          globalIdx: start + offset,
+        }));
+      }
+
+      return [];
+    },
+    [whiteboardPages, timelineSegments],
+  );
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
   const [classroomStage, setClassroomStage] = useState<string>('PRE_CLASS_READY');
@@ -683,6 +772,55 @@ export function LiveClassroomView({
       );
     },
     [lang, stableAddToast],
+  );
+
+  const handleElementAdd = useCallback(
+    async (type: string, data: any) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data }),
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
+  );
+
+  const handleElementUpdate = useCallback(
+    async (elementId: string, data: any) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
+  );
+
+  const handleElementDelete = useCallback(
+    async (elementId: string) => {
+      if (!selectedLesson) return;
+      const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        notifyWhiteboardSaveFailure(res.status);
+        return;
+      }
+      fetchElements(selectedLesson);
+    },
+    [selectedLesson, notifyWhiteboardSaveFailure, fetchElements],
   );
 
   // 稳定化：内部只用 setState（引用恒定），可安全作为 useCallback 依赖，
@@ -1286,6 +1424,7 @@ export function LiveClassroomView({
 
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
+    setExpandedSegmentMap((prev) => ({ ...prev, [seg.id]: true }));
     const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
@@ -1455,113 +1594,116 @@ export function LiveClassroomView({
   };
 
   // Execute interactive tool via command bus
-  const handleExecuteTool = async (tool: any) => {
-    if (!selectedLesson) {
-      addToast(
-        lang === 'zh' ? '⚠️ 请选择课节' : '⚠️ Select Lesson',
-        lang === 'zh' ? '请先选择要授课的课节。' : 'Please select a lesson first.',
-        'warning',
-      );
-      return;
-    }
-
-    // Check if $classId replacement is required but no class selected
-    const needsClass = JSON.stringify(tool.payload || '').includes('$classId');
-    if (needsClass && !liveClassSelectedClassId) {
-      addToast(
-        lang === 'zh' ? '⚠️ 请选择班级' : '⚠️ Select Class',
-        lang === 'zh' ? '该工具需要指定上课班级，请在顶部先选择班级。' : 'Please select class first for this tool.',
-        'warning',
-      );
-      return;
-    }
-
-    setLiveClassFeed((prev) => [
-      {
-        id: Math.random().toString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        type: 'info',
-        message: `正在运行插件工具 [${tool.name}]...`,
-      },
-      ...prev,
-    ]);
-
-    try {
-      // Substitute placeholders in payload
-      const resolvedPayload = JSON.parse(
-        JSON.stringify(tool.payload || {})
-          .replace(/\$classId/g, liveClassSelectedClassId || '')
-          .replace(/\$lessonId/g, selectedLesson || ''),
-      );
-
-      // Auto-append active segment ID into plugin elements
-      if (resolvedPayload.type === 'plugin' && resolvedPayload.data) {
-        try {
-          const dataObj = JSON.parse(resolvedPayload.data);
-          if (!dataObj.segmentId && activeSegmentId) {
-            dataObj.segmentId = activeSegmentId;
-            resolvedPayload.data = JSON.stringify(dataObj);
-          }
-        } catch {}
-      }
-
-      // Only prefix plugin-internal commands (e.g. courseware.open_panel).
-      // Kernel commands like whiteboard.draw must pass through unmodified.
-      const KERNEL_COMMAND_RE = /^(whiteboard|lesson|assignment|class|student|vfs|plugin|ai|agent|system)\./;
-      const prefixedCommandType =
-        !KERNEL_COMMAND_RE.test(tool.commandType) && tool.manifestId
-          ? resolvePluginCommandType(tool.commandType, tool.manifestId)
-          : tool.commandType;
-      const res = await fetch('/api/commands', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          commandType: prefixedCommandType,
-          payload: resolvedPayload,
-        }),
-      });
-
-      if (res.ok) {
-        if (
-          onOpenCoursewareHub &&
-          (tool.id === 'courseware-hub-teacher' || tool.commandType === 'courseware.open_panel')
-        ) {
-          onOpenCoursewareHub();
-        }
-        setLiveClassFeed((prev) => [
-          {
-            id: Math.random().toString(),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            type: 'success',
-            message: `插件工具 [${tool.name}] 执行完毕，数据成功下发。`,
-          },
-          ...prev,
-        ]);
+  const handleExecuteTool = useCallback(
+    async (tool: any) => {
+      if (!selectedLesson) {
         addToast(
-          lang === 'zh' ? '✓ 工具下发成功' : '✓ Tool Synchronized',
-          lang === 'zh'
-            ? `工具 [${tool.name}] 已成功在当前白板上部署并投射。`
-            : `Tool [${tool.name}] synchronized successfully.`,
-          'success',
+          lang === 'zh' ? '⚠️ 请选择课节' : '⚠️ Select Lesson',
+          lang === 'zh' ? '请先选择要授课的课节。' : 'Please select a lesson first.',
+          'warning',
         );
-        await fetchElements(selectedLesson);
-      } else {
-        const data = await res.json();
-        throw new Error(data.error || 'Server error');
+        return;
       }
-    } catch (err: any) {
+
+      // Check if $classId replacement is required but no class selected
+      const needsClass = JSON.stringify(tool.payload || '').includes('$classId');
+      if (needsClass && !liveClassSelectedClassId) {
+        addToast(
+          lang === 'zh' ? '⚠️ 请选择班级' : '⚠️ Select Class',
+          lang === 'zh' ? '该工具需要指定上课班级，请在顶部先选择班级。' : 'Please select class first for this tool.',
+          'warning',
+        );
+        return;
+      }
+
       setLiveClassFeed((prev) => [
         {
           id: Math.random().toString(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          type: 'error',
-          message: `运行插件工具 [${tool.name}] 失败: ${err.message}`,
+          type: 'info',
+          message: `正在运行插件工具 [${tool.name}]...`,
         },
         ...prev,
       ]);
-      addToast(lang === 'zh' ? '❌ 运行失败' : '❌ Tool Failed', err.message || 'Execution error', 'warning');
-    }
-  };
+
+      try {
+        // Substitute placeholders in payload
+        const resolvedPayload = JSON.parse(
+          JSON.stringify(tool.payload || {})
+            .replace(/\$classId/g, liveClassSelectedClassId || '')
+            .replace(/\$lessonId/g, selectedLesson || ''),
+        );
+
+        // Auto-append active segment ID into plugin elements
+        if (resolvedPayload.type === 'plugin' && resolvedPayload.data) {
+          try {
+            const dataObj = JSON.parse(resolvedPayload.data);
+            if (!dataObj.segmentId && activeSegmentId) {
+              dataObj.segmentId = activeSegmentId;
+              resolvedPayload.data = JSON.stringify(dataObj);
+            }
+          } catch {}
+        }
+
+        // Only prefix plugin-internal commands (e.g. courseware.open_panel).
+        // Kernel commands like whiteboard.draw must pass through unmodified.
+        const KERNEL_COMMAND_RE = /^(whiteboard|lesson|assignment|class|student|vfs|plugin|ai|agent|system)\./;
+        const prefixedCommandType =
+          !KERNEL_COMMAND_RE.test(tool.commandType) && tool.manifestId
+            ? resolvePluginCommandType(tool.commandType, tool.manifestId)
+            : tool.commandType;
+        const res = await fetch('/api/commands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            commandType: prefixedCommandType,
+            payload: resolvedPayload,
+          }),
+        });
+
+        if (res.ok) {
+          if (
+            onOpenCoursewareHub &&
+            (tool.id === 'courseware-hub-teacher' || tool.commandType === 'courseware.open_panel')
+          ) {
+            onOpenCoursewareHub();
+          }
+          setLiveClassFeed((prev) => [
+            {
+              id: Math.random().toString(),
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              type: 'success',
+              message: `插件工具 [${tool.name}] 执行完毕，数据成功下发。`,
+            },
+            ...prev,
+          ]);
+          addToast(
+            lang === 'zh' ? '✓ 工具下发成功' : '✓ Tool Synchronized',
+            lang === 'zh'
+              ? `工具 [${tool.name}] 已成功在当前白板上部署并投射。`
+              : `Tool [${tool.name}] synchronized successfully.`,
+            'success',
+          );
+          await fetchElements(selectedLesson);
+        } else {
+          const data = await res.json();
+          throw new Error(data.error || 'Server error');
+        }
+      } catch (err: any) {
+        setLiveClassFeed((prev) => [
+          {
+            id: Math.random().toString(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type: 'error',
+            message: `运行插件工具 [${tool.name}] 失败: ${err.message}`,
+          },
+          ...prev,
+        ]);
+        addToast(lang === 'zh' ? '❌ 运行失败' : '❌ Tool Failed', err.message || 'Execution error', 'warning');
+      }
+    },
+    [selectedLesson, addToast, lang, liveClassSelectedClassId, activeSegmentId, onOpenCoursewareHub, fetchElements],
+  );
 
   const handleRandomPick = () => {
     if (students.length === 0 || isDrawing) return;
@@ -2242,63 +2384,38 @@ export function LiveClassroomView({
         <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
           {/* Left Column: Timeline & Whiteboard Outline Control */}
           {!isLeftSidebarCollapsed && (
-            <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs transition-all duration-200">
-              {/* 顶栏控制与 Tab 分段切换器 */}
-              <div className="p-2 border-b border-theme/60 flex items-center justify-between shrink-0 bg-surface-secondary/25 gap-1.5">
-                <div className="flex-1 grid grid-cols-2 p-0.5 bg-surface-secondary/80 rounded-lg border border-theme/40 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarActiveTab('segments')}
-                    className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md font-bold transition-all cursor-pointer ${
-                      sidebarActiveTab === 'segments'
-                        ? 'bg-surface text-primary-ink shadow-2xs'
-                        : 'text-muted hover:text-main'
-                    }`}
-                    title={lang === 'zh' ? '切换至教学环节流程' : 'Switch to timeline'}
-                  >
-                    <Radio
-                      size={11}
-                      className={sidebarActiveTab === 'segments' ? 'text-primary-ink shrink-0' : 'text-muted shrink-0'}
-                    />
-                    <span className="truncate whitespace-nowrap">{lang === 'zh' ? '教学环节进度表' : 'Timeline'}</span>
-                    <span
-                      className={`text-[10px] px-1 py-0.2 rounded-full font-mono shrink-0 ${
-                        sidebarActiveTab === 'segments'
-                          ? 'bg-primary-theme/15 text-primary-ink font-bold'
-                          : 'bg-surface/80 text-muted'
-                      }`}
-                    >
-                      {timelineSegments.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarActiveTab('pages')}
-                    className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md font-bold transition-all cursor-pointer ${
-                      sidebarActiveTab === 'pages'
-                        ? 'bg-surface text-primary-ink shadow-2xs'
-                        : 'text-muted hover:text-main'
-                    }`}
-                    title={lang === 'zh' ? '切换至白板页面大纲' : 'Switch to outline'}
-                  >
-                    <LayoutGrid
-                      size={11}
-                      className={sidebarActiveTab === 'pages' ? 'text-primary-ink shrink-0' : 'text-muted shrink-0'}
-                    />
-                    <span className="truncate whitespace-nowrap">{lang === 'zh' ? '白板页面大纲' : 'Outline'}</span>
-                    <span
-                      className={`text-[10px] px-1 py-0.2 rounded-full font-mono shrink-0 ${
-                        sidebarActiveTab === 'pages'
-                          ? 'bg-primary-theme/15 text-primary-ink font-bold'
-                          : 'bg-surface/80 text-muted'
-                      }`}
-                    >
-                      {whiteboardPages.length || 1}
-                    </span>
-                  </button>
+            <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs">
+              {/* 顶栏控制：标题、统计与快捷操作 */}
+              <div className="p-2.5 border-b border-theme/60 flex items-center justify-between shrink-0 bg-surface-secondary/25 gap-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-ink flex items-center justify-center shrink-0">
+                    <Clock size={13} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-black text-main tracking-tight whitespace-nowrap">
+                      {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
+                    </h3>
+                    <div className="text-[11px] text-muted flex items-center gap-1.5 font-medium whitespace-nowrap">
+                      <span>
+                        {timelineSegments.length} {lang === 'zh' ? '环节' : 'steps'}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {whiteboardPages.length || 1} {lang === 'zh' ? '页面' : 'pages'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleToggleAllSegments}
+                    className="p-1 rounded-md text-muted hover:text-main hover:bg-surface border border-theme/40 transition-colors cursor-pointer"
+                    title={lang === 'zh' ? '全部展开/折叠抽屉' : 'Expand/Collapse All Drawers'}
+                  >
+                    <ChevronsUpDown size={13} />
+                  </button>
                   <button
                     type="button"
                     onClick={() => whiteboardRef.current?.addPage?.()}
@@ -2318,103 +2435,239 @@ export function LiveClassroomView({
                 </div>
               </div>
 
-              {/* 滚动容器 */}
-              <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin">
-                {sidebarActiveTab === 'segments' ? (
-                  /* 模块：教学环节进度流程表 */
-                  <div className="p-2.5 flex flex-col gap-2">
-                    <div className="flex items-center justify-between px-0.5 text-xs select-none">
-                      <span className="text-muted font-bold tracking-tight">
-                        {lang === 'zh' ? '环节进度与广播' : 'Segment Flow'}
-                      </span>
-                      {timelineSegments.findIndex((s) => s.id === activeSegmentId) >= 0 ? (
-                        <span className="text-[11px] text-primary-ink font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary-theme animate-ping" />
-                          <span>
-                            {lang === 'zh' ? '进行中' : 'Active'} #
-                            {timelineSegments.findIndex((s) => s.id === activeSegmentId) + 1}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-muted">{lang === 'zh' ? '未开始广播' : 'Not started'}</span>
-                      )}
-                    </div>
+              {/* 滚动容器：教学环节抽屉列表 */}
+              <div className="flex-1 overflow-y-auto min-h-0 p-2.5 flex flex-col gap-2 scrollbar-thin">
+                {selectedLesson ? (
+                  <div className="space-y-2">
+                    {timelineSegments.map((seg, idx) => {
+                      const isActive = activeSegmentId === seg.id;
+                      const isOpen = expandedSegmentMap[seg.id] ?? seg.id === activeSegmentId;
+                      const segPages = getPagesForSegment(seg, idx);
+                      const cleanNotes = stripHtml(seg.notes);
 
-                    {selectedLesson ? (
-                      <div className="space-y-1.5">
-                        {timelineSegments.map((seg, idx) => {
-                          const isActive = activeSegmentId === seg.id;
-                          return (
-                            <div
-                              key={seg.id}
-                              onClick={() => handleStartSegment(seg)}
-                              className={`group p-2 rounded-xl border transition-all cursor-pointer relative overflow-hidden flex flex-col gap-1.5 ${
-                                isActive
-                                  ? 'bg-primary-theme/10 border-primary-theme shadow-xs ring-1 ring-primary-theme/25'
-                                  : 'bg-surface border-theme/60 hover:border-primary-theme/40 hover:bg-surface-secondary/40'
-                              }`}
-                              title={
-                                seg.notes
-                                  ? `${seg.title} (${seg.duration}): ${seg.notes}`
-                                  : `${seg.title} (${seg.duration})`
-                              }
-                            >
-                              {isActive && <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary-theme" />}
-                              <div className="flex items-center justify-between gap-1.5 pl-0.5 min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                  <span
-                                    className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                                      isActive
-                                        ? 'bg-primary-solid text-white'
-                                        : 'bg-surface-secondary text-muted border border-theme/50'
-                                    }`}
-                                  >
-                                    {idx + 1}
-                                  </span>
-                                  <span
-                                    className={`text-xs font-bold truncate ${isActive ? 'text-primary-ink' : 'text-main'}`}
-                                  >
-                                    {seg.title}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-surface-secondary/70 text-muted border border-theme/40">
-                                    {seg.duration}
-                                  </span>
-                                  {isActive ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-theme/20 text-primary-ink text-[10px] font-bold">
-                                      <span className="relative flex h-1.5 w-1.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-theme opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-theme"></span>
-                                      </span>
-                                      <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
-                                    </span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleStartSegment(seg);
-                                      }}
-                                      className="px-1.5 py-0.5 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 transition-colors flex items-center gap-0.5 cursor-pointer"
-                                      title={lang === 'zh' ? '广播此环节' : 'Broadcast Step'}
-                                    >
-                                      <Presentation size={10} />
-                                      <span>{lang === 'zh' ? '广播' : 'Start'}</span>
-                                    </button>
-                                  )}
-                                </div>
+                      return (
+                        <div
+                          key={seg.id}
+                          className={`rounded-xl border transition-all overflow-hidden ${
+                            isActive
+                              ? 'bg-surface border-primary-theme shadow-xs ring-1 ring-primary-theme/25'
+                              : 'bg-surface border-theme/60 hover:border-primary-theme/40'
+                          }`}
+                        >
+                          {/* 抽屉头部 Header：两行式排版（行1：展开折叠+序号+标题+Hover简介；行2：时间+加页+演示广播） */}
+                          <div
+                            onClick={() => toggleSegmentExpand(seg.id)}
+                            className={`p-2 transition-all cursor-pointer flex flex-col gap-1.5 select-none ${
+                              isActive
+                                ? 'bg-primary-theme/10 text-primary-ink'
+                                : 'bg-surface hover:bg-surface-secondary/60 text-main'
+                            }`}
+                          >
+                            {/* 第一行：折叠箭头 + 序号 + 环节标题 + Hover Notes 提示 */}
+                            <div className="flex items-center gap-1.5 min-w-0 w-full">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSegmentExpand(seg.id);
+                                }}
+                                className="p-0.5 rounded text-muted hover:text-main transition-transform cursor-pointer shrink-0"
+                                title={
+                                  isOpen
+                                    ? lang === 'zh'
+                                      ? '折叠抽屉'
+                                      : 'Collapse'
+                                    : lang === 'zh'
+                                      ? '展开抽屉'
+                                      : 'Expand'
+                                }
+                              >
+                                <ChevronDown
+                                  size={12}
+                                  className={`transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`}
+                                />
+                              </button>
+                              <span
+                                className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                                  isActive
+                                    ? 'bg-primary-solid text-white'
+                                    : 'bg-surface-secondary text-muted border border-theme/50'
+                                }`}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span
+                                className={`text-xs font-bold truncate flex-1 min-w-0 ${
+                                  isActive ? 'text-primary-ink' : 'text-main'
+                                }`}
+                                title={cleanNotes ? `${seg.title}\n${cleanNotes}` : seg.title}
+                              >
+                                {seg.title}
+                              </span>
+                              {cleanNotes && (
+                                <span
+                                  className="text-muted/70 hover:text-primary-ink cursor-help p-0.5 rounded shrink-0 transition-colors"
+                                  title={cleanNotes}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <HelpCircle size={12} />
+                                </span>
+                              )}
+                            </div>
+
+                            {/* 第二行：时间、页面数、加页、演示中/广播（纯 iconfont 精简排列，禁止换行） */}
+                            <div className="flex items-center justify-between gap-1.5 pl-5.5 pr-0.5 text-[11px] flex-nowrap whitespace-nowrap overflow-hidden">
+                              <div className="flex items-center gap-2 min-w-0 flex-nowrap shrink-0">
+                                {/* 时长 iconfont */}
+                                <span
+                                  className="inline-flex items-center gap-0.5 font-mono text-[10px] text-muted shrink-0"
+                                  title={lang === 'zh' ? `预计时长: ${seg.duration}` : `Duration: ${seg.duration}`}
+                                >
+                                  <Clock size={11} className="shrink-0 text-muted/70" />
+                                  <span>{seg.duration}</span>
+                                </span>
+
+                                {/* 页数 iconfont */}
+                                <span
+                                  className="inline-flex items-center gap-0.5 font-mono text-[10px] text-primary-ink font-semibold shrink-0"
+                                  title={
+                                    lang === 'zh'
+                                      ? `本环节关联 ${segPages.length} 个白板页面`
+                                      : `${segPages.length} pages`
+                                  }
+                                >
+                                  <FileText size={11} className="shrink-0 text-primary-ink/70" />
+                                  <span>{segPages.length}</span>
+                                </span>
+
+                                {/* 加页 iconfont 按钮（带边框图标更直观） */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    whiteboardRef.current?.addPage?.();
+                                  }}
+                                  className="p-0.5 rounded text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/60 transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                                  title={lang === 'zh' ? '在此环节加页' : 'Add page to segment'}
+                                >
+                                  <SquarePlus size={12} className="shrink-0" />
+                                </button>
                               </div>
 
-                              {seg.notes && (
-                                <div
-                                  className={`text-[11px] truncate leading-tight pl-0.5 ${
-                                    isActive ? 'text-primary-ink/80' : 'text-muted'
-                                  }`}
-                                >
-                                  {seg.notes}
+                              <div className="flex items-center shrink-0">
+                                {isActive ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-bold text-[10px] shrink-0 shadow-2xs"
+                                    title={lang === 'zh' ? '当前环节正在同步演示中' : 'Live Syncing'}
+                                  >
+                                    <Radio size={10} className="shrink-0 text-white" />
+                                    <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartSegment(seg);
+                                    }}
+                                    className="px-1.5 py-0.2 rounded text-[10px] font-medium text-muted hover:text-primary-ink hover:bg-primary-theme/10 border border-theme/40 transition-colors flex items-center gap-0.5 cursor-pointer shrink-0"
+                                    title={lang === 'zh' ? '广播此环节' : 'Broadcast Step'}
+                                  >
+                                    <Presentation size={11} />
+                                    <span>{lang === 'zh' ? '广播' : 'Start'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 抽屉展开内容 Body：白板页面大纲与插件动作扩展 */}
+                          {isOpen && (
+                            <div className="px-2 pb-2 pt-1 border-t border-theme/40 flex flex-col gap-1.5 bg-surface-secondary/20">
+                              {/* 白板页面大纲 */}
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">
+                                  <span>{lang === 'zh' ? '白板页面大纲' : 'Whiteboard Outline'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => whiteboardRef.current?.addPage?.()}
+                                    className="text-primary-ink hover:underline font-bold flex items-center gap-0.5 cursor-pointer text-[10px]"
+                                    title={lang === 'zh' ? '在此环节新建页面' : 'Add page to segment'}
+                                  >
+                                    <Plus size={10} />
+                                    <span>{lang === 'zh' ? '加页' : 'Add Page'}</span>
+                                  </button>
                                 </div>
-                              )}
+
+                                {segPages.length > 0 ? (
+                                  segPages.map(({ page: p, globalIdx }) => {
+                                    const isPageActive = globalIdx === currentWhiteboardPage;
+                                    const pageElementsCount = elements.filter((el) => {
+                                      try {
+                                        const d = JSON.parse(el.data);
+                                        return (d.page ?? 0) === globalIdx;
+                                      } catch {
+                                        return false;
+                                      }
+                                    }).length;
+
+                                    return (
+                                      <div
+                                        key={p.id || globalIdx}
+                                        onClick={() => {
+                                          whiteboardRef.current?.switchPage?.(globalIdx);
+                                          if (seg.id && seg.id !== activeSegmentId) {
+                                            setActiveSegmentId(seg.id);
+                                          }
+                                        }}
+                                        className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                                          isPageActive
+                                            ? 'bg-primary-solid text-white font-semibold shadow-2xs'
+                                            : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
+                                        }`}
+                                        title={
+                                          lang === 'zh'
+                                            ? `切换至 P${globalIdx + 1} ${p.title || ''}`
+                                            : `Switch to P${globalIdx + 1}`
+                                        }
+                                      >
+                                        <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                                          <span
+                                            className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold shrink-0 ${
+                                              isPageActive
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-surface-secondary text-muted'
+                                            }`}
+                                          >
+                                            P{globalIdx + 1}
+                                          </span>
+                                          <span className="truncate tracking-tight font-medium">
+                                            {p.title || `${lang === 'zh' ? '页面' : 'Page'} ${globalIdx + 1}`}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <span
+                                            className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                                              isPageActive ? 'bg-white/20 text-white' : 'text-muted'
+                                            }`}
+                                          >
+                                            {pageElementsCount} {lang === 'zh' ? '组件' : 'items'}
+                                          </span>
+                                          {isPageActive && (
+                                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-white/25 text-white">
+                                              {lang === 'zh' ? '当前' : 'Active'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
+                                    {lang === 'zh' ? '本环节暂无独立页面' : 'No pages for this segment'}
+                                  </div>
+                                )}
+                              </div>
 
                               {/* 环节步骤卡片动作扩展 */}
                               <ExtensionPointRenderer
@@ -2428,156 +2681,42 @@ export function LiveClassroomView({
                                 }}
                               />
                             </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted italic py-6 text-center">
-                        {lang === 'zh' ? '请选择一个课节加载流程表' : 'Select a lesson to view schedule.'}
-                      </div>
-                    )}
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  /* 模块：白板页面大纲导航 */
-                  <div className="p-2.5 flex flex-col gap-2">
-                    <div className="flex items-center justify-between px-0.5 text-xs select-none">
-                      <span className="text-muted font-bold tracking-tight">
-                        {lang === 'zh' ? '白板页面切换' : 'Whiteboard Pages'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => whiteboardRef.current?.addPage?.()}
-                        className="text-[11px] text-primary-ink hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                        title={lang === 'zh' ? '新建白板页面' : 'Add Whiteboard Page'}
-                      >
-                        <Plus size={12} />
-                        <span>{lang === 'zh' ? '新建页面' : 'New Page'}</span>
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      {(whiteboardPages.length > 0 ? whiteboardPages : [{ id: 'p0', title: 'P1 · 默认页' }]).map(
-                        (p, idx) => {
-                          const isActive = idx === currentWhiteboardPage;
-                          const pageElementsCount = elements.filter((el) => {
-                            try {
-                              const d = JSON.parse(el.data);
-                              return (d.page ?? 0) === idx;
-                            } catch {
-                              return false;
-                            }
-                          }).length;
-                          return (
-                            <div
-                              key={p.id || idx}
-                              onClick={() => whiteboardRef.current?.switchPage?.(idx)}
-                              className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-                                isActive
-                                  ? 'bg-primary-theme/10 text-primary-ink font-semibold border border-primary-theme shadow-2xs ring-1 ring-primary-theme/25'
-                                  : 'bg-surface hover:bg-surface-secondary text-main border border-theme/60'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate min-w-0 flex-1">
-                                <span
-                                  className={`text-[11px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0 ${
-                                    isActive
-                                      ? 'bg-primary-solid text-white shadow-2xs'
-                                      : 'bg-surface-secondary text-muted border border-theme/40'
-                                  }`}
-                                >
-                                  P{idx + 1}
-                                </span>
-                                <span className="truncate tracking-tight font-medium">
-                                  {p.title || `${lang === 'zh' ? '页面' : 'Page'} ${idx + 1}`}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span
-                                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                                    isActive
-                                      ? 'bg-primary-theme/20 text-primary-ink font-bold'
-                                      : 'bg-surface-secondary text-muted'
-                                  }`}
-                                >
-                                  {pageElementsCount} {lang === 'zh' ? '组件' : 'items'}
-                                </span>
-                                {isActive && (
-                                  <span className="text-[10px] font-bold text-primary-ink px-1 py-0.2 rounded bg-primary-theme/15">
-                                    {lang === 'zh' ? '当前' : 'Active'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        },
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => whiteboardRef.current?.addPage?.()}
-                        className="mt-1 py-2 px-3 border border-dashed border-theme hover:border-primary-theme/60 rounded-xl text-xs text-muted hover:text-primary-ink hover:bg-primary-theme/5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                        title={lang === 'zh' ? '新建白板页面' : 'Add Whiteboard Page'}
-                      >
-                        <Plus size={13} />
-                        <span>{lang === 'zh' ? '新建白板页面' : 'Add Whiteboard Page'}</span>
-                      </button>
-                    </div>
+                  <div className="text-xs text-muted italic py-6 text-center">
+                    {lang === 'zh' ? '请选择一个课节加载流程表' : 'Select a lesson to view schedule.'}
                   </div>
                 )}
               </div>
 
-              {/* 底部常驻联动指示条 */}
+              {/* 底部轻量状态指示条 */}
               <div className="p-2 border-t border-theme/60 bg-surface-secondary/20 flex items-center justify-between text-xs shrink-0 select-none">
-                {sidebarActiveTab === 'segments' ? (
-                  <>
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1 text-muted">
-                      <LayoutGrid size={12} className="shrink-0 text-primary-ink/70" />
-                      <span className="text-[11px] truncate">
-                        {lang === 'zh' ? '白板:' : 'Page:'}{' '}
-                        <span className="font-semibold text-main">
-                          P{currentWhiteboardPage + 1}
-                          {whiteboardPages[currentWhiteboardPage]?.title
-                            ? ` (${whiteboardPages[currentWhiteboardPage].title})`
-                            : ''}
-                        </span>
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarActiveTab('pages')}
-                      className="text-[11px] text-primary-ink font-bold hover:underline flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
-                      title={lang === 'zh' ? '查看白板页面大纲' : 'View whiteboard outline'}
-                    >
-                      <span>{lang === 'zh' ? '切换页' : 'Pages'}</span>
-                      <ChevronRight size={11} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1 text-muted">
-                      <Radio size={12} className="shrink-0 text-primary-ink animate-pulse" />
-                      <span className="text-[11px] truncate">
-                        {lang === 'zh' ? '广播:' : 'Active:'}{' '}
-                        <span className="font-semibold text-main">
-                          {timelineSegments.find((s) => s.id === activeSegmentId)
-                            ? `#${timelineSegments.findIndex((s) => s.id === activeSegmentId) + 1} ${timelineSegments.find((s) => s.id === activeSegmentId)?.title}`
-                            : lang === 'zh'
-                              ? '未开始'
-                              : 'Idle'}
-                        </span>
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarActiveTab('segments')}
-                      className="text-[11px] text-primary-ink font-bold hover:underline flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
-                      title={lang === 'zh' ? '查看教学环节进度表' : 'View timeline segments'}
-                    >
-                      <span>{lang === 'zh' ? '看环节' : 'Timeline'}</span>
-                      <ChevronRight size={11} />
-                    </button>
-                  </>
-                )}
+                <div className="flex items-center gap-1.5 min-w-0 flex-1 text-muted">
+                  <LayoutGrid size={12} className="shrink-0 text-primary-ink/70" />
+                  <span className="text-[11px] truncate">
+                    {lang === 'zh' ? '白板:' : 'Page:'}{' '}
+                    <span className="font-semibold text-main">
+                      P{currentWhiteboardPage + 1}
+                      {whiteboardPages[currentWhiteboardPage]?.title
+                        ? ` (${whiteboardPages[currentWhiteboardPage].title})`
+                        : ''}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted shrink-0 text-[11px]">
+                  <Radio size={11} className="shrink-0 text-primary-ink" />
+                  <span className="font-semibold text-main truncate max-w-[90px]">
+                    {timelineSegments.find((s) => s.id === activeSegmentId)
+                      ? `#${timelineSegments.findIndex((s) => s.id === activeSegmentId) + 1} ${timelineSegments.find((s) => s.id === activeSegmentId)?.title}`
+                      : lang === 'zh'
+                        ? '未广播'
+                        : 'Idle'}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -2732,55 +2871,18 @@ export function LiveClassroomView({
                         isEditMode={false}
                         broadcastFullscreen
                         fullscreenBroadcastClassId={liveClassSelectedClassId}
-                        onFullscreenSync={(elId: string | null) => {
-                          setLiveClassFullscreenElementId(elId);
-                          syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
-                        }}
+                        onFullscreenSync={handleFullscreenSync}
                         elements={elements}
                         activeSegmentId={activeSegmentId}
-                        onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                        onSegmentSync={handleSegmentSync}
                         classroomTools={classroomTools}
                         onExecuteTool={handleExecuteTool}
                         hidePageBar={true}
                         onPagesStateChange={handleWhiteboardPagesStateChange}
-                        onElementAdd={async (type: string, data: any) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type, data }),
-                          });
-                          if (!res.ok) {
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
-                        onElementUpdate={async (elementId: string, data: any) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ data }),
-                          });
-                          if (!res.ok) {
-                            // 保存失败必须可见：此前这里静默忽略失败响应，
-                            // 限流（429）时教师看到的是「切了页但没生效」，
-                            // 演示文稿等高频写场景下会反复丢改动。
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
-                        onElementDelete={async (elementId: string) => {
-                          const res = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'DELETE',
-                          });
-                          if (!res.ok) {
-                            notifyWhiteboardSaveFailure(res.status);
-                            return;
-                          }
-                          fetchElements(selectedLesson);
-                        }}
-                        onRefresh={() => fetchElements(selectedLesson)}
+                        onElementAdd={handleElementAdd}
+                        onElementUpdate={handleElementUpdate}
+                        onElementDelete={handleElementDelete}
+                        onRefresh={handleWhiteboardRefresh}
                       />
                     </div>
                   </>
