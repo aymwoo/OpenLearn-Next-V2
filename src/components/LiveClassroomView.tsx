@@ -2557,10 +2557,10 @@ export function LiveClassroomView({
                               <div className="flex items-center shrink-0">
                                 {isActive ? (
                                   <span
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-primary-theme/15 text-primary-ink font-semibold text-[10px] shrink-0"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-bold text-[10px] shrink-0 shadow-2xs"
                                     title={lang === 'zh' ? '当前环节正在同步演示中' : 'Live Syncing'}
                                   >
-                                    <Radio size={10} className="shrink-0 text-primary-ink" />
+                                    <Radio size={10} className="shrink-0 text-white" />
                                     <span>{lang === 'zh' ? '演示中' : 'Live'}</span>
                                   </span>
                                 ) : (
