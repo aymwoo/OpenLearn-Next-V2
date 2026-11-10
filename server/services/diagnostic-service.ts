@@ -545,29 +545,36 @@ export class DiagnosticService {
     // 写入成功后立即失效当前课节及相关聚合缓存
     this.invalidateLessonCache(lessonId);
 
-    // 4. 派发白板测验作答事件
-    try {
-      await this.eventPublisher(
-        CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED,
-        {
-          lessonId,
-          elementId,
-          studentId,
-          studentName: studentName || null,
-          answer,
-          score,
-          isCorrect,
-          time: Date.now(),
-          // 不下发答案（Issue #223）：该事件投递给**课节房间 + 班级房间**，全班学生都会收到。
-          // 带着 correctAnswer / correctIndex 广播，等于把答案实时发给每一个学生 ——
-          // 学生只要等别人答完就能拿到正确答案，在自己作答前抢先提交。
-          // 教师大屏的「正确答案」高亮来自白板元素 payload（教师端不脱敏），不依赖本事件。
-          question: dataObj.question || null,
-        },
-        { correlationId: lessonId },
-      );
-    } catch (e: any) {
-      console.warn('[DiagnosticService] Failed to publish quiz answered event:', e?.message);
+    // 4. 派发随堂作答事件
+    //
+    // Issue #414：whiteboard.quiz_answered 自 v0.6.0 起标为弃用，但平台此前
+    // 只发旧事件、从未发布过声明的替代品 quiz.answered —— 按弃用提示迁移的
+    // 插件会收不到任何事件。这里在兼容窗口内双发：
+    //   - quiz.answered            规范化事件（新插件订阅）
+    //   - whiteboard.quiz_answered 旧事件（0.8.0 移除）
+    // Socket 投递仍由 event-routing 的旧事件路由负责，客户端不会收到重复推送。
+    const quizAnsweredPayload = {
+      lessonId,
+      elementId,
+      studentId,
+      studentName: studentName || null,
+      answer,
+      score,
+      isCorrect,
+      time: Date.now(),
+      // 不下发答案（Issue #223）：该事件投递给**课节房间 + 班级房间**，全班学生都会收到。
+      // 带着 correctAnswer / correctIndex 广播，等于把答案实时发给每一个学生 ——
+      // 学生只要等别人答完就能拿到正确答案，在自己作答前抢先提交。
+      // 教师大屏的「正确答案」高亮来自白板元素 payload（教师端不脱敏），不依赖本事件。
+      question: dataObj.question || null,
+    };
+
+    for (const eventType of [CLASSROOM_EVENTS.QUIZ_ANSWERED, CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED]) {
+      try {
+        await this.eventPublisher(eventType, quizAnsweredPayload, { correlationId: lessonId });
+      } catch (e: any) {
+        console.warn(`[DiagnosticService] Failed to publish ${eventType}:`, e?.message);
+      }
     }
 
     return {

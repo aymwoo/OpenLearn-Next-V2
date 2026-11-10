@@ -14,7 +14,7 @@
 | [CLAUDE.md](CLAUDE.md)                       | 给 Claude Code 的专属指引：项目概述、常用命令、技术栈、目录结构                                                                       | 使用 Claude Code 时        |
 | [docs_plugin_guide.md](docs_plugin_guide.md) | 自包含的第三方插件 SDK 权威参考（API 契约、类型声明、安全规范、DB 设计、UI 槽位、双运行时），可整篇作为提示词上下文喂给大模型生成插件 | 写第三方插件、查 API 契约  |
 
-> ⚠️ `docs_plugin_guide.md` 由 `server/routes/plugins.ts` 的 `GET /api/docs/plugin-guide` 在进程工作目录按**文件名**读取，**请勿移动或改名**。另注意 `docs/reference/plugin-host-shared-deps.md` 已指出其中部分内容（如 `HostSharedDeps.socketService` / React UI 扩展）与运行时不符，契约请以代码与 `docs/` 官方教程为准。
+> ⚠️ `docs_plugin_guide.md` 由 `server/routes/plugins.ts` 的 `GET /api/docs/plugin-guide` 读取，解析顺序为：发布包根目录（`dist/../`）→ 源码仓库根目录 → 进程工作目录。该文件已列入 `package.json` 的 `files`，**请勿移动或改名**。另注意 `docs/reference/plugin-host-shared-deps.md` 已指出其中部分内容（如 `HostSharedDeps.socketService` / React UI 扩展）与运行时不符，契约请以代码与 `docs/` 官方教程为准。
 
 ## 阅读顺序建议
 

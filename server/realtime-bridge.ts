@@ -35,6 +35,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
   const dispatch = createRouteDispatcher(SOCKET_ROUTES, { io, db: db as RouteDb });
 
   for (const route of SOCKET_ROUTES) {
-    eventBus.subscribe(route.eventType, dispatch);
+    // 平台自己的路由表不是插件调用方，避免弃用事件在启动时误报「Plugin ...」。
+    eventBus.subscribe(route.eventType, dispatch, 'server.event-routing');
   }
 }

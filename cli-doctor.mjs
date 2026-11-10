@@ -854,7 +854,8 @@ export const CORE_EXTENSION_POINTS = [
     kind: 'event',
     since: '0.1.0',
     deprecated: '0.6.0',
-    removedIn: '0.7.0',
+    // Issue #414：平台仍在发布旧事件，0.7.0 移除声明与实际不符，顺延到 0.8.0。
+    removedIn: '0.8.0',
     replacement: "Use 'quiz.answered' instead",
   },
 

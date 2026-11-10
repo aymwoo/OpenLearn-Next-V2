@@ -144,10 +144,12 @@ export const CORE_EXTENSION_POINTS: ReadonlyArray<ExtensionPointMetadata> = [
   {
     id: 'whiteboard.quiz_answered',
     kind: 'event',
-    description: 'Legacy quiz answered event without correctIndex standardization',
+    description: 'Legacy quiz answered event. The platform still emits it for compatibility until 0.8.0',
     since: '0.1.0',
     deprecated: '0.6.0',
-    removedIn: '0.7.0',
+    // Issue #414：此前声明 0.7.0 移除，但平台仍在发布、替代事件也未落地。
+    // 推到 0.8.0，给已经按旧提示迁移的插件一个真实可用的迁移窗口。
+    removedIn: '0.8.0',
     replacement: "Use 'quiz.answered' instead",
   },
 
@@ -274,6 +276,13 @@ export function resetDeprecationWarnings(): void {
 export function warnDeprecation(kind: ExtensionPointKind, name: string, callerPluginId?: string): string | null {
   const meta = getExtensionPointMetadata(name);
   if (!meta || !meta.deprecated) {
+    return null;
+  }
+
+  // 平台自身（server.* / kernel.* / platform.*）不是「插件调用方」：
+  // 兼容窗口内平台会继续发布旧事件，此时不应打印「Plugin "server.classroom" ...」
+  // 这类误导性的弃用告警。插件与外部调用方仍照常提示。
+  if (callerPluginId && /^(server|kernel|platform|core|plugin-host)\./.test(callerPluginId)) {
     return null;
   }
 

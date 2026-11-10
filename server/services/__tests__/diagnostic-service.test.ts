@@ -137,11 +137,13 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(row.is_correct).toBe(1);
       expect(row.student_name).toBe('张小明');
 
-      // 验证事件派发
-      const lastEvent = publishedEvents[publishedEvents.length - 1];
-      expect(lastEvent).toBeDefined();
-      expect(lastEvent.payload.isCorrect).toBe(true);
-      expect(lastEvent.payload.score).toBe(100);
+      // 验证事件派发：规范化事件与兼容旧事件都要发布（Issue #414）
+      const publishedTypes = publishedEvents.map((e) => e.type);
+      expect(publishedTypes).toContain('quiz.answered');
+      expect(publishedTypes).toContain('whiteboard.quiz_answered');
+      const canonical = publishedEvents.find((e) => e.type === 'quiz.answered');
+      expect(canonical?.payload.isCorrect).toBe(true);
+      expect(canonical?.payload.score).toBe(100);
     });
 
     it('提交错误答案时判定 0 分，重复提交不覆盖首次成绩', async () => {

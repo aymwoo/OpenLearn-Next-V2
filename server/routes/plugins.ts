@@ -18,6 +18,8 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import { isAdministrator } from '../services/class-access.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { resolvePluginGuidePath } from '../utils/docs-paths.js';
+import { resolveLogFilePath } from '../../packages/core/observability/log-paths.js';
 import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
@@ -473,8 +475,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   app.get('/api/docs/plugin-guide', (req, res) => {
     try {
-      const docPath = path.join(process.cwd(), 'docs_plugin_guide.md');
-      if (!fs.existsSync(docPath)) {
+      // 指南随 npm 包发布在包根目录，不能只按 cwd 找：npx/全局安装时 cwd 是用户目录。
+      const docPath = resolvePluginGuidePath();
+      if (!docPath) {
         return res.status(404).json({ success: false, error: 'Document not found' });
       }
       const content = fs.readFileSync(docPath, 'utf-8');
@@ -491,7 +494,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const component = req.query.component as string | undefined;
       const levelFilter = req.query.level as string | undefined;
 
-      const logFile = path.resolve(process.cwd(), 'logs', 'openlearn.log');
+      const logFile = resolveLogFilePath();
       if (!fs.existsSync(logFile)) {
         return res.json({ success: true, logs: [] });
       }

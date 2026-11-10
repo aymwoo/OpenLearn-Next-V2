@@ -112,7 +112,7 @@ describe('Extension Points Metadata & Lifecycle Contract (Issue #146)', () => {
       const quizAnswered = getExtensionPointMetadata('whiteboard.quiz_answered');
       expect(quizAnswered).toBeDefined();
       expect(quizAnswered?.deprecated).toBe('0.6.0');
-      expect(quizAnswered?.removedIn).toBe('0.7.0');
+      expect(quizAnswered?.removedIn).toBe('0.8.0');
       expect(quizAnswered?.replacement).toContain('quiz.answered');
 
       const legacyTab = getExtensionPointMetadata('legacy.classroom.tab');
@@ -153,6 +153,19 @@ describe('Extension Points Metadata & Lifecycle Contract (Issue #146)', () => {
       const noWarn = warnDeprecation('command', 'lesson.create', 'test-plugin');
       expect(noWarn).toBeNull();
       expect(warnSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not warn when the caller is the platform itself', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        resetDeprecationWarnings();
+        // 平台在兼容窗口内仍会发布旧事件，来源形如 server.classroom。
+        expect(warnDeprecation('event', 'whiteboard.quiz_answered', 'server.classroom')).toBeNull();
+        expect(warnDeprecation('event', 'whiteboard.quiz_answered', 'kernel.event-bus')).toBeNull();
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 
