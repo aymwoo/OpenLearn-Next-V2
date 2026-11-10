@@ -230,6 +230,12 @@ importers:
 
   packages/bridge-sdk: {}
 
+  packages/interactive-lab:
+    devDependencies:
+      '@openlearn/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+
   packages/plugin-sdk:
     dependencies:
       esbuild:
