@@ -18,7 +18,7 @@ import { tmpZipPath } from '../../../packages/core/esm-loader/__tests__/helpers/
 import { PluginState } from '../../../packages/core/plugin-host/types.js';
 import type { PluginApiRequest } from '../../../packages/core/plugin-host/types.js';
 import { bootstrapSharedModules } from '../../../packages/core/plugin-host/context-builder.js';
-import { CapabilityGuard } from '../../../packages/core/capability-system/index.js';
+import { CapabilityGuard } from '../../../packages/core/capability/index.js';
 import { WorkerManager } from '../../../packages/core/worker-runtime/worker-manager.js';
 import {
   ICommandBusServiceToken,

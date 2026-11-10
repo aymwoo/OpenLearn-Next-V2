@@ -11,7 +11,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
  * 历史缺陷（学生端 HTTP 500）：
  *   路由把 `session.userId`（裸 UUID）直接当作 actorId 传给 `courseware.submit_attempt`，
  *   而 CapabilityGuard 的角色兜底依赖 `user:<id>:<role>` 的 `:role` 后缀（见
- *   packages/core/capability-system/index.ts 的 actorId.endsWith(':student')），
+ *   packages/core/capability/guard/capability-guard.ts 的 actorId.endsWith(':student')），
  *   于是学生真实提交、教师课件预览提交都被判为缺少 `student:write` 而失败。
  *
  * 本用例**刻意不手工 grant 能力**（与 courseware-e2e-flow.test.ts 的规避写法相反），

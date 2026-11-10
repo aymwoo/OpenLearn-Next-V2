@@ -130,7 +130,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
       next();
     });
     // 不再手工 grant 能力：CapabilityGuard 会按 actorId 的 `:student` 后缀兜底授予
-    // student:write / lesson:read（见 packages/core/capability-system/index.ts）。
+    // student:write / lesson:read（见 packages/core/capability/guard/capability-guard.ts）。
     // 历史上这里靠 grant 绕过，掩盖了 /submit 路由 actorId 未归一化的缺陷。
     const ctx: any = {
       app,
