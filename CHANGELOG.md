@@ -27,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - 大屏公开脱敏数据接口 (`/api/classroom/stage/:lessonId/data`)：将 6 表联合扫描的到课聚合及考勤动态沉淀至 2 秒只读缓存，与高频在线 presence 心跳无缝缝合；
     - 节奏晴雨表汇总 (`/api/classroom/sessions/:lessonId/pacing-summary`)：聚合结果短期缓存 2 秒，学生提交新信号时即时失效；
     - 结课通票汇总 (`/api/classroom/sessions/:lessonId/exit-ticket-summary`) 与全景简报 (`/api/classroom/sessions/:lessonId/panoramic-report`)：引入 3 秒短期缓存，消除多端刷新/大屏轮询引起的 SQLite 读锁与 CPU 争抢。
+- **只读连接池 (ReadConnectionPool) 弹性扩容、分级借用与健康度观测 (Issue #410)**：
+  - **CPU 核心数自适应与环境变量弹性调优**：将只读连接池上限由历史固定 4 连接改为按 CPU 核心数自适应弹性分配（`Math.min(16, Math.max(4, Math.floor(cpuCount * 0.75)))`），并新增环境变量 `OPENLEARN_READ_POOL_SIZE`（支持 1–32），允许高并发与高速 NVMe 生产环境灵活超调；
+  - **重型慢查与轻量点查连接泳道隔离**：将池内连接划分为 `general`（轻量高频点查，如课时列表、权限鉴定、会话维持）与 `heavy`（重型多表聚合慢查，如学情报表、全景分析）两个优先级泳道，杜绝复杂聚合查询排队占用连接而饿死前台交互交互请求；
+  - **连接作用域借用安全封装与耗时观测**：提供 `withConnection` 与 `withConnectionAsync` 生命周期上下文管理器，自动管理连接借用与安全释放，精准记录每次借用执行延迟并暴露全景连接池监控指标（`getMetrics()`，包含总借用数、借用中连接数、累计与平均借用耗时及各连接健康分布）。
 
 ### Docs
 

@@ -140,7 +140,7 @@ export class DiagnosticService {
   }
 
   private get reader(): Database.Database {
-    return this.readDb || kernelContainer.getReadDb() || this.db;
+    return this.readDb || kernelContainer.getReadDb({ priority: 'heavy' }) || this.db;
   }
 
   /**

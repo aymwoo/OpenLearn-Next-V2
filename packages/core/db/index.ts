@@ -465,63 +465,255 @@ if (!process.env.VITEST) {
 console.log('Database initialized at', dbPath);
 
 // ============================================================================
-// 读写分离连接池与并发 I/O 隔离设施 (P1-1)
+// 读写分离连接池与并发 I/O 隔离设施 (P1-1 / Issue #410)
 // ============================================================================
+
+export type ReadQueryPriority = 'normal' | 'heavy';
 
 export interface ReadPoolOptions {
   size?: number;
+  reserveHeavyRatio?: number;
+}
+
+export interface PoolConnectionItem {
+  id: number;
+  conn: Database.Database;
+  inUse: boolean;
+  lane: 'general' | 'heavy';
+  borrowCount: number;
+  totalDurationMs: number;
+  lastBorrowedAt: number;
+}
+
+export interface ReadPoolMetrics {
+  capacity: number;
+  currentSize: number;
+  activeBorrows: number;
+  totalBorrows: number;
+  totalBorrowTimeMs: number;
+  avgBorrowDurationMs: number;
+  generalConnections: number;
+  heavyConnections: number;
+  connections: Array<{
+    id: number;
+    open: boolean;
+    inUse: boolean;
+    lane: 'general' | 'heavy';
+    borrowCount: number;
+    totalDurationMs: number;
+    avgDurationMs: number;
+  }>;
 }
 
 export class ReadConnectionPool {
-  private pool: Database.Database[] = [];
-  private rrIndex = 0;
+  private pool: PoolConnectionItem[] = [];
   private readonly targetPath: string;
   private readonly poolSize: number;
+  private readonly heavyCount: number;
+  private nextConnId = 1;
+  private totalBorrowsCount = 0;
+  private totalBorrowDurationMs = 0;
 
   constructor(targetPath: string, options?: ReadPoolOptions) {
     this.targetPath = targetPath;
     const cpuCount = typeof os.cpus === 'function' ? os.cpus().length : 2;
-    const defaultSize = Math.min(4, Math.max(2, cpuCount || 2));
-    this.poolSize = options?.size ?? defaultSize;
+    // 自适应 CPU 核心数：至少 4 连接，根据 0.75 核配比，上限 16
+    const autoSize = Math.min(16, Math.max(4, Math.floor((cpuCount || 2) * 0.75)));
+    let envSize: number | undefined;
+    if (process.env.OPENLEARN_READ_POOL_SIZE) {
+      const parsed = parseInt(process.env.OPENLEARN_READ_POOL_SIZE, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        envSize = Math.min(32, Math.max(1, parsed));
+      }
+    }
+    this.poolSize = options?.size ?? envSize ?? autoSize;
+    // 重型慢查连接隔离：池容量 >= 4 时，按 reserveHeavyRatio 保留 1~4 个连接作为 heavy lane
+    if (this.poolSize >= 4) {
+      const ratio = options?.reserveHeavyRatio ?? 0.25;
+      this.heavyCount = Math.max(1, Math.min(4, Math.floor(this.poolSize * ratio)));
+    } else {
+      this.heavyCount = 0;
+    }
   }
 
-  /** 获取只读数据库连接实例（基于轮询调度复用池化连接） */
-  public getConnection(): Database.Database {
-    // 延迟初始化连接
+  private createConnection(lane: 'general' | 'heavy'): PoolConnectionItem | null {
+    try {
+      const conn = new Database(this.targetPath, { readonly: true, fileMustExist: true });
+      applyReadPragmas(conn);
+      const item: PoolConnectionItem = {
+        id: this.nextConnId++,
+        conn,
+        inUse: false,
+        lane,
+        borrowCount: 0,
+        totalDurationMs: 0,
+        lastBorrowedAt: 0,
+      };
+      this.pool.push(item);
+      return item;
+    } catch {
+      return null;
+    }
+  }
+
+  private pickItem(priority: ReadQueryPriority): PoolConnectionItem | null {
+    const targetLane: 'general' | 'heavy' = priority === 'heavy' && this.heavyCount > 0 ? 'heavy' : 'general';
+
+    // 1. 扩容阶段：若池未满，优先按泳道配比创建新连接
     if (this.pool.length < this.poolSize) {
-      try {
-        const conn = new Database(this.targetPath, { readonly: true, fileMustExist: true });
-        applyReadPragmas(conn);
-        this.pool.push(conn);
-        return conn;
-      } catch {
-        // 如果文件未就绪或受限，优雅回退到主连接
-        return db;
+      const currentHeavy = this.pool.filter((i) => i.lane === 'heavy').length;
+      let desiredLane: 'general' | 'heavy' = 'general';
+      if (
+        targetLane === 'heavy' ||
+        (currentHeavy < this.heavyCount && this.poolSize - this.pool.length <= this.heavyCount - currentHeavy)
+      ) {
+        desiredLane = 'heavy';
       }
+      const created = this.createConnection(desiredLane);
+      if (created) return created;
     }
 
-    const activeConns = this.pool.filter((c) => c.open);
-    if (activeConns.length === 0) {
-      try {
-        const conn = new Database(this.targetPath, { readonly: true, fileMustExist: true });
-        applyReadPragmas(conn);
-        this.pool = [conn];
-        return conn;
-      } catch {
-        return db;
-      }
+    // 2. 存量活跃连接
+    const active = this.pool.filter((i) => i.conn.open);
+    if (active.length === 0) {
+      return this.createConnection('general');
     }
 
-    const conn = activeConns[this.rrIndex % activeConns.length];
-    this.rrIndex = (this.rrIndex + 1) % activeConns.length;
-    return conn;
+    // 3. 优先选择同泳道中空闲（inUse = false）的连接
+    const laneCandidates = active.filter((i) => i.lane === targetLane);
+    const idleLane = laneCandidates.find((i) => !i.inUse);
+    if (idleLane) return idleLane;
+
+    // 4. 若为普通查询且同泳道全忙，尝试借用空闲的 heavy 连接（跨泳道弹性互补）
+    if (targetLane === 'general') {
+      const idleHeavy = active.find((i) => i.lane === 'heavy' && !i.inUse);
+      if (idleHeavy) return idleHeavy;
+    }
+
+    // 5. 若全忙，使用同泳道内借用计数最少（Least-Loaded）的连接
+    const searchPool = laneCandidates.length > 0 ? laneCandidates : active;
+    let leastLoaded = searchPool[0];
+    for (let k = 1; k < searchPool.length; k++) {
+      if (searchPool[k].borrowCount < leastLoaded.borrowCount) {
+        leastLoaded = searchPool[k];
+      }
+    }
+    return leastLoaded;
+  }
+
+  /** 获取只读数据库连接实例（基于轮询与空闲优先复用池化连接，支持指定 priority 分级借用） */
+  public getConnection(options?: { priority?: ReadQueryPriority }): Database.Database {
+    const priority = options?.priority ?? 'normal';
+    const item = this.pickItem(priority);
+    if (!item) {
+      // 如果文件未就绪或受限，优雅回退到主连接
+      return db;
+    }
+    item.borrowCount++;
+    item.lastBorrowedAt = Date.now();
+    this.totalBorrowsCount++;
+    return item.conn;
+  }
+
+  /**
+   * 基于生命周期作用域借用连接，执行完毕自动释放并记录执行延迟与指标
+   */
+  public withConnection<T>(fn: (conn: Database.Database) => T, options?: { priority?: ReadQueryPriority }): T {
+    const priority = options?.priority ?? 'normal';
+    const item = this.pickItem(priority);
+    const conn = item ? item.conn : db;
+    if (item) {
+      item.inUse = true;
+      item.borrowCount++;
+      item.lastBorrowedAt = Date.now();
+      this.totalBorrowsCount++;
+    }
+
+    const start = performance.now();
+    try {
+      return fn(conn);
+    } finally {
+      const duration = performance.now() - start;
+      if (item) {
+        item.inUse = false;
+        item.totalDurationMs += duration;
+      }
+      this.totalBorrowDurationMs += duration;
+    }
+  }
+
+  /**
+   * 异步连接借用封装
+   */
+  public async withConnectionAsync<T>(
+    fn: (conn: Database.Database) => Promise<T>,
+    options?: { priority?: ReadQueryPriority },
+  ): Promise<T> {
+    const priority = options?.priority ?? 'normal';
+    const item = this.pickItem(priority);
+    const conn = item ? item.conn : db;
+    if (item) {
+      item.inUse = true;
+      item.borrowCount++;
+      item.lastBorrowedAt = Date.now();
+      this.totalBorrowsCount++;
+    }
+
+    const start = performance.now();
+    try {
+      return await fn(conn);
+    } finally {
+      const duration = performance.now() - start;
+      if (item) {
+        item.inUse = false;
+        item.totalDurationMs += duration;
+      }
+      this.totalBorrowDurationMs += duration;
+    }
+  }
+
+  /** 获取只读连接池运行指标 */
+  public getMetrics(): ReadPoolMetrics {
+    const openItems = this.pool.filter((i) => i.conn.open);
+    const activeBorrows = openItems.filter((i) => i.inUse).length;
+    const avgDuration = this.totalBorrowsCount > 0 ? this.totalBorrowDurationMs / this.totalBorrowsCount : 0;
+
+    return {
+      capacity: this.poolSize,
+      currentSize: openItems.length,
+      activeBorrows,
+      totalBorrows: this.totalBorrowsCount,
+      totalBorrowTimeMs: Math.round(this.totalBorrowDurationMs * 100) / 100,
+      avgBorrowDurationMs: Math.round(avgDuration * 100) / 100,
+      generalConnections: openItems.filter((i) => i.lane === 'general').length,
+      heavyConnections: openItems.filter((i) => i.lane === 'heavy').length,
+      connections: this.pool.map((i) => ({
+        id: i.id,
+        open: i.conn.open,
+        inUse: i.inUse,
+        lane: i.lane,
+        borrowCount: i.borrowCount,
+        totalDurationMs: Math.round(i.totalDurationMs * 100) / 100,
+        avgDurationMs: i.borrowCount > 0 ? Math.round((i.totalDurationMs / i.borrowCount) * 100) / 100 : 0,
+      })),
+    };
+  }
+
+  /** 重置连接池观测指标 */
+  public resetMetrics(): void {
+    this.totalBorrowsCount = 0;
+    this.totalBorrowDurationMs = 0;
+    for (const item of this.pool) {
+      item.borrowCount = 0;
+      item.totalDurationMs = 0;
+    }
   }
 
   /** 关闭池内所有只读连接 */
   public closeAll(): void {
-    for (const conn of this.pool) {
+    for (const item of this.pool) {
       try {
-        if (conn.open) conn.close();
+        if (item.conn.open) item.conn.close();
       } catch {
         // 忽略关闭异常
       }
@@ -531,12 +723,22 @@ export class ReadConnectionPool {
 
   /** 当前活跃连接数 */
   public get size(): number {
-    return this.pool.filter((c) => c.open).length;
+    return this.pool.filter((i) => i.conn.open).length;
   }
 
   /** 连接池容量 */
   public get capacity(): number {
     return this.poolSize;
+  }
+
+  /** 当前处于借用中的连接数 */
+  public get activeBorrows(): number {
+    return this.pool.filter((i) => i.conn.open && i.inUse).length;
+  }
+
+  /** 累计借用次数 */
+  public get totalBorrows(): number {
+    return this.totalBorrowsCount;
   }
 }
 
@@ -544,27 +746,49 @@ export class ReadConnectionPool {
 export const readPool = new ReadConnectionPool(dbPath);
 
 /**
- * 获取只读数据库连接（从连接池轮询分配）
+ * 获取只读数据库连接（从连接池分配）
  * 适合用于只读查询，避免占用主写连接的排他句柄
  */
-export function getReadDb(): Database.Database {
-  return readPool.getConnection();
+export function getReadDb(options?: { priority?: ReadQueryPriority }): Database.Database {
+  return readPool.getConnection(options);
 }
 
 /**
  * 快速执行只读查询（返回列表），无锁并发不阻塞写事务
  */
-export function queryRead<T = any>(sql: string, ...params: any[]): T[] {
-  const readConn = getReadDb();
-  return readConn.prepare(sql).all(...params) as T[];
+export function queryRead<T = unknown>(sql: string, ...params: unknown[]): T[] {
+  return readPool.withConnection(
+    (conn) => conn.prepare(sql).all(...(params as (string | number | bigint | null)[])) as T[],
+  );
 }
 
 /**
  * 快速执行只读单行查询
  */
-export function queryReadOne<T = any>(sql: string, ...params: any[]): T | undefined {
-  const readConn = getReadDb();
-  return readConn.prepare(sql).get(...params) as T | undefined;
+export function queryReadOne<T = unknown>(sql: string, ...params: unknown[]): T | undefined {
+  return readPool.withConnection(
+    (conn) => conn.prepare(sql).get(...(params as (string | number | bigint | null)[])) as T | undefined,
+  );
+}
+
+/**
+ * 在慢查专用泳道执行重型只读查询，避免占用高频轻量点查连接
+ */
+export function queryReadHeavy<T = unknown>(sql: string, ...params: unknown[]): T[] {
+  return readPool.withConnection(
+    (conn) => conn.prepare(sql).all(...(params as (string | number | bigint | null)[])) as T[],
+    { priority: 'heavy' },
+  );
+}
+
+/**
+ * 在慢查专用泳道执行重型单行只读查询
+ */
+export function queryReadOneHeavy<T = unknown>(sql: string, ...params: unknown[]): T | undefined {
+  return readPool.withConnection(
+    (conn) => conn.prepare(sql).get(...(params as (string | number | bigint | null)[])) as T | undefined,
+    { priority: 'heavy' },
+  );
 }
 
 export type CheckpointMode = 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE';

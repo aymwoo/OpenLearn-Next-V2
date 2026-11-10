@@ -5,9 +5,13 @@ import {
   getReadDb,
   queryRead,
   queryReadOne,
+  queryReadHeavy,
+  queryReadOneHeavy,
   checkpoint,
   batchExecute,
   createDatabase,
+  ReadConnectionPool,
+  getDbPath,
 } from '../index.js';
 import path from 'path';
 import os from 'os';
@@ -141,5 +145,103 @@ describe('Database WAL & Connection Pool (P1-1)', () => {
         } catch {}
       }
     }
+  });
+
+  describe('ReadConnectionPool 弹性扩容、分级借用与健康度观测 (Issue #410)', () => {
+    it('支持按 CPU 核心数与 OPENLEARN_READ_POOL_SIZE 环境变量弹性配置容量上限', () => {
+      // 显式指定 size
+      const customPool = new ReadConnectionPool(getDbPath(), { size: 6 });
+      expect(customPool.capacity).toBe(6);
+      customPool.closeAll();
+
+      // 环境变量超调
+      const oldEnv = process.env.OPENLEARN_READ_POOL_SIZE;
+      try {
+        process.env.OPENLEARN_READ_POOL_SIZE = '10';
+        const envPool = new ReadConnectionPool(getDbPath());
+        expect(envPool.capacity).toBe(10);
+        envPool.closeAll();
+      } finally {
+        if (oldEnv === undefined) {
+          delete process.env.OPENLEARN_READ_POOL_SIZE;
+        } else {
+          process.env.OPENLEARN_READ_POOL_SIZE = oldEnv;
+        }
+      }
+    });
+
+    it('根据 priority: "heavy" 与 "normal" 实现重型慢查与轻量点查的连接泳道隔离', () => {
+      const pool = new ReadConnectionPool(getDbPath(), { size: 4 });
+      try {
+        // 借用 normal 连接
+        const normalConn = pool.getConnection({ priority: 'normal' });
+        expect(normalConn).toBeDefined();
+
+        // 借用 heavy 连接
+        const heavyConn = pool.getConnection({ priority: 'heavy' });
+        expect(heavyConn).toBeDefined();
+
+        const metrics = pool.getMetrics();
+        expect(metrics.capacity).toBe(4);
+        expect(metrics.heavyConnections).toBe(1);
+        expect(metrics.generalConnections).toBe(pool.size - 1);
+
+        // 验证 heavy 连接与 general 连接在泳道上区分
+        const heavyItem = metrics.connections.find((c) => c.lane === 'heavy');
+        expect(heavyItem).toBeDefined();
+        expect(heavyItem?.borrowCount).toBeGreaterThanOrEqual(1);
+      } finally {
+        pool.closeAll();
+      }
+    });
+
+    it('支持 withConnection 与 withConnectionAsync 生命周期包裹，并在执行后自动释放连接与记录耗时', async () => {
+      readPool.resetMetrics();
+
+      const syncResult = readPool.withConnection((conn) => {
+        expect(readPool.activeBorrows).toBe(1);
+        return conn.prepare('SELECT 1 + 1 as res').get() as { res: number };
+      });
+      expect(syncResult.res).toBe(2);
+      expect(readPool.activeBorrows).toBe(0);
+
+      const asyncResult = await readPool.withConnectionAsync(async (conn) => {
+        expect(readPool.activeBorrows).toBe(1);
+        await new Promise((r) => setTimeout(r, 5));
+        return conn.prepare('SELECT 2 + 2 as res').get() as { res: number };
+      });
+      expect(asyncResult.res).toBe(4);
+      expect(readPool.activeBorrows).toBe(0);
+
+      const metrics = readPool.getMetrics();
+      expect(metrics.totalBorrows).toBeGreaterThanOrEqual(2);
+      expect(metrics.totalBorrowTimeMs).toBeGreaterThan(0);
+      expect(metrics.avgBorrowDurationMs).toBeGreaterThan(0);
+    });
+
+    it('支持 queryReadHeavy 与 queryReadOneHeavy 专用慢查便捷查询函数', () => {
+      const users = queryReadHeavy<{ username: string }>('SELECT username FROM users ORDER BY created_at ASC');
+      expect(Array.isArray(users)).toBe(true);
+      expect(users.length).toBeGreaterThan(0);
+
+      const admin = queryReadOneHeavy<{ username: string }>('SELECT username FROM users WHERE username = ?', 'admin');
+      expect(admin?.username).toBe('admin');
+    });
+
+    it('支持 getMetrics 指标全景感知与 resetMetrics 重置操作', () => {
+      readPool.resetMetrics();
+      const initial = readPool.getMetrics();
+      expect(initial.totalBorrows).toBe(0);
+      expect(initial.totalBorrowTimeMs).toBe(0);
+
+      queryRead('SELECT COUNT(*) FROM users');
+      const updated = readPool.getMetrics();
+      expect(updated.totalBorrows).toBe(1);
+      expect(updated.connections.length).toBeGreaterThan(0);
+
+      readPool.resetMetrics();
+      const reset = readPool.getMetrics();
+      expect(reset.totalBorrows).toBe(0);
+    });
   });
 });
