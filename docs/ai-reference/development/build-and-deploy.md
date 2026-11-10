@@ -150,7 +150,7 @@ docker compose up -d --build
 | SSE           | 插件 SSE 与 AI 流式都需要关闭代理缓冲                                 |
 | 静态资源      | `dist/` 由 Nginx 直出，`/uploads` 与 `/plugins` 必须走 Node（有鉴权） |
 
-`nginx.conf` 与 `nginx.generated.conf` 两个文件并存：前者是模板，后者由 `deploy.sh` 生成，
+`nginx.conf` 是模板（入库），`nginx.generated.conf` 由 `deploy.sh` 生成（不入库），
 **改配置改模板**。
 
 ---

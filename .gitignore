@@ -1,6 +1,8 @@
 node_modules/
 build/
 dist/
+# deploy.sh 生成的 Nginx 配置（含本机绝对路径，不入库）
+nginx.generated.conf
 /plugins/
 coverage/
 # Vite 依赖预打包缓存（见 vite.config.ts 的 cacheDir）：
