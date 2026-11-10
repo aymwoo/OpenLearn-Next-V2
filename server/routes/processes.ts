@@ -27,7 +27,10 @@ export function registerProcessesRoutes(ctx: ServerContext) {
 
   app.get('/api/approvals', requireAuth('administrator'), (req, res) => {
     try {
-      const list = kernelContainer.db.prepare('SELECT * FROM pending_commands ORDER BY created_at DESC').all();
+      // 待审批队列只增不减时会把整表读进内存；管理端一次最多展示最近 500 条。
+      const list = kernelContainer.db
+        .prepare('SELECT * FROM pending_commands ORDER BY created_at DESC LIMIT 500')
+        .all();
       res.json(list);
     } catch (e: any) {
       sendSafeError(res, e, 500);
@@ -87,7 +90,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
       // Only return currently active running processes to ensure real-time accuracy
       const list = kernelContainer.db
         .prepare(
-          "SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC",
+          "SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC LIMIT 200",
         )
         .all();
       res.json(list);

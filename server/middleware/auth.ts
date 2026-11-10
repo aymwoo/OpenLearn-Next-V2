@@ -31,7 +31,10 @@ const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 分钟内不重复刷新
 export function getValidSession(token: string): Session | null {
   let sessionRow: any;
   try {
-    sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token);
+    // 只取会话校验与解析所需列，避免把整行（含审计字段）读进内存。
+    sessionRow = kernelContainer.db
+      .prepare('SELECT session_data, expires_at, updated_at FROM client_sessions WHERE id = ?')
+      .get(token);
   } catch {
     return null;
   }

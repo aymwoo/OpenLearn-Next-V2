@@ -1729,7 +1729,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const currentUserId = session?.userId || session?.username;
       const providers = kernelContainer.db
         .prepare(
-          'SELECT id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at FROM ai_providers WHERE (owner_id = ? OR is_shared = 1) ORDER BY created_at DESC',
+          'SELECT id, name, api_url, api_key, model_name, owner_id, is_shared, created_at, updated_at FROM ai_providers WHERE (owner_id = ? OR is_shared = 1) ORDER BY created_at DESC LIMIT 500',
         )
         .all(currentUserId) as any[];
       // SEC-DATA-01: 掩码 API Key 后返回（解密失败fail-closed：展示不可用标识，不抛 500）
