@@ -69,6 +69,9 @@ SKIP_DIR_PARTS = (
     ".vite-cache",
     ".venv",
     ".qoder",
+    ".codebuddy",
+    ".workbuddy",
+    ".pi",
     "plugins",  # 运行时安装的插件（含构建产物与第三方代码），不属平台源码面
     "v2_plugins",  # 第三方插件，不属平台配置面
 )
@@ -214,7 +217,7 @@ class EnvReport:
 
 def _skip(path: Path, repo: Path) -> bool:
     rel = path.relative_to(repo)
-    if any(part in SKIP_DIR_PARTS for part in rel.parts):
+    if any(part in SKIP_DIR_PARTS or (part.startswith(".") and part != ".") for part in rel.parts[:-1]):
         return True
     return path.suffix not in SCAN_SUFFIXES
 

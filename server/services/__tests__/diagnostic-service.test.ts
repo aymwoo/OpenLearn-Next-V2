@@ -322,4 +322,89 @@ describe('DiagnosticService / MistakeService 领域服务单元测试 (E3 深化
       expect(cleanList.topPerformers.every((s) => !String(s.studentId).startsWith('sim-quiz'))).toBe(true);
     });
   });
+
+  describe('5. 只读缓存 (TTL Read Cache) 穿透防护与写事件主动失效 (Issue #409)', () => {
+    it('连续查询卓越榜单时复用只读缓存，命中率提升且避免穿透 SQLite', () => {
+      service.clearCache();
+      service.resetCacheStats();
+      const initialStats = service.getCacheStats();
+      expect(initialStats.hits).toBe(0);
+      expect(initialStats.misses).toBe(0);
+
+      // 第 1 次查询：冷启动未命中，执行 DB 扫描并沉淀缓存
+      const res1 = service.getTopPerformers(testLessonId, 5);
+      const afterFirst = service.getCacheStats();
+      expect(afterFirst.misses).toBe(1);
+      expect(afterFirst.hits).toBe(0);
+
+      // 第 2 次与第 3 次查询：同一参数立即返回缓存结果，无需穿透只读池
+      const res2 = service.getTopPerformers(testLessonId, 5);
+      const res3 = service.getTopPerformers(testLessonId, 5);
+      expect(res2).toEqual(res1);
+      expect(res3).toEqual(res1);
+
+      const afterWarm = service.getCacheStats();
+      expect(afterWarm.hits).toBe(2);
+      expect(afterWarm.misses).toBe(1);
+      expect(afterWarm.hitRatio).toBeGreaterThanOrEqual(0.66);
+    });
+
+    it('学生提交随堂测验 (submitQuiz) 触发写事件主动失效，下一次查询读取最新事实', async () => {
+      service.clearCache();
+      service.resetCacheStats();
+      // 预热缓存
+      service.getTopPerformers(testLessonId, 5);
+      service.getQuizCounts(testLessonId);
+
+      const cachedStats = service.getCacheStats();
+      expect(cachedStats.misses).toBe(2);
+
+      // 再次读取确认命中缓存
+      service.getTopPerformers(testLessonId, 5);
+      service.getQuizCounts(testLessonId);
+      expect(service.getCacheStats().hits).toBe(2);
+
+      // 学生提交新作答
+      const newStudentId = `stu-cache-invalidate-${Date.now()}`;
+      db.prepare('INSERT OR REPLACE INTO students (id, name, created_at) VALUES (?, ?, ?)').run(
+        newStudentId,
+        '新交卷学生',
+        Date.now(),
+      );
+
+      await service.submitQuiz({
+        lessonId: testLessonId,
+        elementId: testElementId1,
+        studentId: newStudentId,
+        studentName: '新交卷学生',
+        answer: 'A',
+        timeSpentMs: 1200,
+      });
+
+      // 验证写操作触发了主动失效
+      const statsAfterWrite = service.getCacheStats();
+      expect(statsAfterWrite.invalidations).toBeGreaterThan(0);
+
+      // 提交后再次查询榜单：因缓存已失效，穿透重新计算并包含新交卷学生
+      const freshRes = service.getTopPerformers(testLessonId, 10);
+      expect(service.getCacheStats().misses).toBe(3); // 重新计算一次
+      expect(freshRes.topPerformers.some((p) => p.studentId === newStudentId)).toBe(true);
+    });
+
+    it('支持针对课节维度手动失效 (invalidateLessonCache) 与全局清空 (clearCache)', () => {
+      service.getTopPerformers(testLessonId, 5);
+      service.getQuizCounts(testLessonId);
+      expect(service.getCacheStats().size).toBeGreaterThan(0);
+
+      service.invalidateLessonCache(testLessonId);
+      // 课节相关 key 已失效，再次查询榜单将重新穿透
+      const missesBefore = service.getCacheStats().misses;
+      service.getTopPerformers(testLessonId, 5);
+      expect(service.getCacheStats().misses).toBe(missesBefore + 1);
+
+      // 全局清空
+      service.clearCache();
+      expect(service.getCacheStats().size).toBe(0);
+    });
+  });
 });

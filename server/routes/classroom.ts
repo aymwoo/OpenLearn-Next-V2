@@ -13,6 +13,8 @@ import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds, getPresentStudentIds } from '../presence.js';
 import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
+import { classroomReadCache, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
+export { classroomReadCache, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
 import {
   lessonActiveSegments,
   activeCountdowns,
@@ -1326,6 +1328,10 @@ export function registerClassroomRoutes(
             },
           );
         }
+
+        // 签到写入后立即失效大屏与报表只读缓存
+        invalidateClassroomReadCache(lessonId, cs.id);
+
         res.json({ success: true, attendanceScheduled });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -1395,6 +1401,9 @@ export function registerClassroomRoutes(
             classId: session.class_id,
           });
         }
+
+        // 开启新投票后失效大屏与报表只读缓存
+        invalidateClassroomReadCache(lessonId, session.id);
 
         res.json({ success: true, poll: pollData });
       } catch (e: any) {
@@ -1495,6 +1504,9 @@ export function registerClassroomRoutes(
           });
         }
 
+        // 失效大屏与报表只读缓存
+        invalidateClassroomReadCache(lessonId, poll.session_id);
+
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -1546,6 +1558,9 @@ export function registerClassroomRoutes(
             { classId: pollSession?.class_id },
           );
         }
+
+        // 失效大屏与报表只读缓存
+        invalidateClassroomReadCache(lessonId, poll.session_id);
 
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {
@@ -2020,6 +2035,9 @@ export function registerClassroomRoutes(
           );
         }
 
+        // 失效节奏聚合与相关大屏缓存
+        invalidateClassroomReadCache(lessonId, sessionId);
+
         res.json({
           success: true,
           activeSegmentId: targetSegmentId,
@@ -2085,14 +2103,19 @@ export function registerClassroomRoutes(
 
         let segmentsRows: { segment_id: string | null; signal_type: string; count: number }[] = [];
         try {
-          segmentsRows = db
-            .prepare(
-              `SELECT segment_id, signal_type, COUNT(*) as count
+          segmentsRows = classroomReadCache.getOrCompute(
+            `pacing-agg:${sessionId}`,
+            () =>
+              db
+                .prepare(
+                  `SELECT segment_id, signal_type, COUNT(*) as count
                FROM classroom_pacing_signals
                WHERE session_id = ?
                GROUP BY segment_id, signal_type`,
-            )
-            .all(sessionId) as any[];
+                )
+                .all(sessionId) as any[],
+            2000,
+          );
         } catch (_) {
           segmentsRows = [];
         }
@@ -2249,6 +2272,9 @@ export function registerClassroomRoutes(
           );
         }
 
+        // 失效结课通票聚合与大屏只读缓存
+        invalidateClassroomReadCache(lessonId, sessionId);
+
         res.json({ success: true, totalSubmitted: countRow?.count || 1 });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -2279,50 +2305,62 @@ export function registerClassroomRoutes(
 
         const sessionId = activeSession.id;
 
-        let rows: any[] = [];
-        try {
-          rows = db
-            .prepare(
-              `
-          SELECT student_id, student_name, rating, puzzled_concept, feedback, core_answer, is_correct, tier_level, challenge_answer, created_at
-          FROM classroom_exit_tickets
-          WHERE session_id = ?
-        `,
-            )
-            .all(sessionId) as any[];
-        } catch {
-          rows = db
-            .prepare(
-              `
-          SELECT student_id, student_name, rating, puzzled_concept, feedback, created_at
-          FROM classroom_exit_tickets
-          WHERE session_id = ?
-        `,
-            )
-            .all(sessionId) as any[];
-        }
+        const summaryData = classroomReadCache.getOrCompute(
+          `exit-ticket-summary:${sessionId}`,
+          () => {
+            let rows: any[] = [];
+            try {
+              rows = db
+                .prepare(
+                  `
+              SELECT student_id, student_name, rating, puzzled_concept, feedback, core_answer, is_correct, tier_level, challenge_answer, created_at
+              FROM classroom_exit_tickets
+              WHERE session_id = ?
+            `,
+                )
+                .all(sessionId) as any[];
+            } catch {
+              rows = db
+                .prepare(
+                  `
+              SELECT student_id, student_name, rating, puzzled_concept, feedback, created_at
+              FROM classroom_exit_tickets
+              WHERE session_id = ?
+            `,
+                )
+                .all(sessionId) as any[];
+            }
 
-        const totalCount = rows.length;
-        const avgRating =
-          totalCount > 0 ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1)) : 0;
+            const totalCount = rows.length;
+            const avgRating =
+              totalCount > 0
+                ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
+                : 0;
 
-        const tierDistribution = {
-          passed: rows.filter((r) => r.tier_level === 'passed').length,
-          remediation: rows.filter((r) => r.tier_level === 'remediation').length,
-          challenge_done: rows.filter((r) => r.tier_level === 'challenge_done').length,
-        };
+            const tierDistribution = {
+              passed: rows.filter((r) => r.tier_level === 'passed').length,
+              remediation: rows.filter((r) => r.tier_level === 'remediation').length,
+              challenge_done: rows.filter((r) => r.tier_level === 'challenge_done').length,
+            };
 
-        const puzzledConcepts = rows.map((r) => (r.puzzled_concept || '').trim()).filter(Boolean);
+            const puzzledConcepts = rows.map((r) => (r.puzzled_concept || '').trim()).filter(Boolean);
+
+            return {
+              totalCount,
+              avgRating,
+              tierDistribution,
+              puzzledConcepts,
+              submissions: rows,
+            };
+          },
+          3000,
+        );
 
         res.json({
           success: true,
           sessionId,
           lessonId,
-          totalCount,
-          avgRating,
-          tierDistribution,
-          puzzledConcepts,
-          submissions: rows,
+          ...summaryData,
         });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -2345,162 +2383,226 @@ export function registerClassroomRoutes(
         if (rejectUnless(res, readAuth)) return;
       }
 
-      // 提取活动投票（仅聚合，脱敏）
-      let activePollData = null;
-      if (session) {
-        const poll = db
-          .prepare(
-            'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .get(session.id, 'ACTIVE') as any;
+      // 提取大屏数据库聚合指标（只读缓存 2 秒，隔离高频学生轮询慢查询穿透）
+      const stageDbData = classroomReadCache.getOrCompute(
+        `stage-db:${lessonId}:${session ? session.id : 'none'}`,
+        () => {
+          // 提取活动投票（仅聚合，脱敏）
+          let activePollData = null;
+          if (session) {
+            const poll = db
+              .prepare(
+                'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+              )
+              .get(session.id, 'ACTIVE') as any;
 
-        if (poll) {
-          const rows = db
-            .prepare(
-              'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
-            )
-            .all(poll.id) as { selected_option: string; count: number }[];
-          const distribution: Record<string, number> = {};
-          let total = 0;
-          rows.forEach((r) => {
-            distribution[r.selected_option] = r.count;
-            total += r.count;
+            if (poll) {
+              const rows = db
+                .prepare(
+                  'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
+                )
+                .all(poll.id) as { selected_option: string; count: number }[];
+              const distribution: Record<string, number> = {};
+              let total = 0;
+              rows.forEach((r) => {
+                distribution[r.selected_option] = r.count;
+                total += r.count;
+              });
+
+              let parsedOptions = [];
+              try {
+                parsedOptions = JSON.parse(poll.options_json);
+              } catch (_) {}
+
+              activePollData = {
+                id: poll.id,
+                title: poll.title,
+                questionType: poll.question_type,
+                options: parsedOptions,
+                distribution,
+                totalVotes: total,
+              };
+            }
+          }
+
+          // 提取活动抢答器（仅展示胜出者昵称，不暴露敏感身份）
+          let activeBuzzerData = null;
+          if (session) {
+            const buzzer = db
+              .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+              .get(session.id) as any;
+            if (buzzer) {
+              activeBuzzerData = {
+                id: buzzer.id,
+                title: buzzer.title,
+                status: buzzer.status,
+                winnerName: buzzer.winner_student_name || null,
+                responseTimeMs: buzzer.winner_response_time_ms || null,
+              };
+            }
+          }
+
+          // 提取课堂节奏晴雨表（过去 10 分钟脱敏汇总）
+          const tenMinsAgo = Date.now() - 10 * 60 * 1000;
+          const pacingRows = session
+            ? (db
+                .prepare(
+                  `
+                SELECT signal_type, COUNT(*) as count
+                FROM classroom_pacing_signals
+                WHERE session_id = ? AND created_at > ?
+                GROUP BY signal_type
+              `,
+                )
+                .all(session.id, tenMinsAgo) as { signal_type: string; count: number }[])
+            : [];
+
+          // v0.6.1：补 SLOW 键 —— 学生提交含 SLOW，此前聚合漏键致「快一点」在大屏不可见
+          const pacingSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+          pacingRows.forEach((r) => {
+            pacingSummary[r.signal_type] = r.count;
           });
 
-          let parsedOptions = [];
-          try {
-            parsedOptions = JSON.parse(poll.options_json);
-          } catch (_) {}
+          let expectedStudents = 0;
+          let attendedStudents = 0;
+          if (session?.class_id) {
+            try {
+              const row = db
+                .prepare('SELECT COUNT(*) AS n FROM class_students WHERE class_id = ?')
+                .get(session.class_id) as any;
+              expectedStudents = Number(row?.n) || 0;
+            } catch (_) {
+              expectedStudents = 0;
+            }
 
-          activePollData = {
-            id: poll.id,
-            title: poll.title,
-            questionType: poll.question_type,
-            options: parsedOptions,
-            distribution,
-            totalVotes: total,
-          };
-        }
-      }
-
-      // 提取活动抢答器（仅展示胜出者昵称，不暴露敏感身份）
-      let activeBuzzerData = null;
-      if (session) {
-        const buzzer = db
-          .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
-          .get(session.id) as any;
-        if (buzzer) {
-          activeBuzzerData = {
-            id: buzzer.id,
-            title: buzzer.title,
-            status: buzzer.status,
-            winnerName: buzzer.winner_student_name || null,
-            responseTimeMs: buzzer.winner_response_time_ms || null,
-          };
-        }
-      }
-
-      // 提取课堂节奏晴雨表（过去 10 分钟脱敏汇总）
-      const tenMinsAgo = Date.now() - 10 * 60 * 1000;
-      const pacingRows = session
-        ? (db
-            .prepare(
-              `
-            SELECT signal_type, COUNT(*) as count
-            FROM classroom_pacing_signals
-            WHERE session_id = ? AND created_at > ?
-            GROUP BY signal_type
-          `,
-            )
-            .all(session.id, tenMinsAgo) as { signal_type: string; count: number }[])
-        : [];
-
-      // v0.6.1：补 SLOW 键 —— 学生提交含 SLOW，此前聚合漏键致「快一点」在大屏不可见
-      const pacingSummary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
-      pacingRows.forEach((r) => {
-        pacingSummary[r.signal_type] = r.count;
-      });
-
-      // ── 7. 出勤（在线 / 应到 / 实到） ──────────────────────────────────
-      // 在线名单来自 presence 的内存态（真实心跳），不是从 DB 推算 ——
-      // DB 里没有「当前在线」这个概念，离线学生也会留着历史记录。
-      const onlineIds = getOnlineStudentIds();
-      let expectedStudents = 0;
-      let attendedStudents = 0;
-      if (session?.class_id) {
-        // 两个查询各自独立 try：合并写会导致后者的失败把前者的真实结果一起清零
-        // （曾因 ?1 具名参数不被 better-sqlite3 支持，导致 expected 永远为 0）
-        try {
-          const row = db
-            .prepare('SELECT COUNT(*) AS n FROM class_students WHERE class_id = ?')
-            .get(session.class_id) as any;
-          expectedStudents = Number(row?.n) || 0;
-        } catch (_) {
-          expectedStudents = 0;
-        }
-
-        // 实到 = 至少产生过一条课堂痕迹的学生
-        // 「痕迹」包含扫码签到（Issue #245）——此前签到完全不在聚合里，
-        // 只扫码不互动的学生会被算成「没来」。
-        // 注意：classroom_poll_votes 只有 poll_id，没有 session_id，必须 join 投票表过滤
-        if (expectedStudents > 0) {
-          try {
-            const touched = db
-              .prepare(
-                `
-              SELECT COUNT(DISTINCT student_id) AS n FROM (
-                SELECT pv.student_id
-                  FROM classroom_poll_votes pv
-                  JOIN classroom_quick_polls p ON p.id = pv.poll_id
-                 WHERE p.session_id = ?
-                UNION
-                SELECT student_id FROM classroom_pacing_signals WHERE session_id = ?
-                UNION
-                SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
-                UNION
-                SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
-                UNION
-                -- Issue #245：扫码签到此前完全不被「实到」消费 —— 只扫码不参与
-                -- 任何互动的学生被漏计（恰恰是最安静的那批）。
-                -- 1) lesson_checkins：签到成功时必定写入的课节级到课事实
-                --    （没有排课时也会写，见 /checkin 的 recordCheckin 调用）
-                SELECT lc.student_id
-                  FROM lesson_checkins lc
-                  JOIN class_students lc_cs ON lc_cs.class_id = ? AND lc_cs.student_id = lc.student_id
-                 WHERE lc.lesson_id = ?
-                UNION
-                -- 2) attendance：教师在考勤台账登记的到课事实（挂 schedule_id，
-                --    需经 schedules 关联课节）。关联口径与签到写侧一致：排课归属
-                --    本班 + 课节直配或班级级排课（lesson_id 为空串）；
-                --    只认「到场」状态 —— absent（缺考）与 excused（请假）不算实到。
-                SELECT sa.student_id
-                  FROM attendance sa
-                  JOIN schedules sch ON sch.id = sa.schedule_id
-                  JOIN class_students sa_cs ON sa_cs.class_id = sch.class_id AND sa_cs.student_id = sa.student_id
-                 WHERE sa.status IN ('present', 'late', 'leave_early')
-                   AND sch.class_id = ?
-                   AND (sch.lesson_id = ? OR sch.lesson_id = '')
-              )
-            `,
-              )
-              .get(
-                session.id,
-                session.id,
-                session.id,
-                lessonId,
-                session.class_id,
-                lessonId,
-                session.class_id,
-                lessonId,
-              ) as any;
-            attendedStudents = Number(touched?.n) || 0;
-          } catch (e) {
-            console.warn('[classroom.stage] attended query failed:', e);
-            attendedStudents = 0;
+            // 实到 = 至少产生过一条课堂痕迹的学生
+            if (expectedStudents > 0) {
+              try {
+                const touched = db
+                  .prepare(
+                    `
+                  SELECT COUNT(DISTINCT student_id) AS n FROM (
+                    SELECT pv.student_id
+                      FROM classroom_poll_votes pv
+                      JOIN classroom_quick_polls p ON p.id = pv.poll_id
+                     WHERE p.session_id = ?
+                    UNION
+                    SELECT student_id FROM classroom_pacing_signals WHERE session_id = ?
+                    UNION
+                    SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
+                    UNION
+                    SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
+                    UNION
+                    SELECT lc.student_id
+                      FROM lesson_checkins lc
+                      JOIN class_students lc_cs ON lc_cs.class_id = ? AND lc_cs.student_id = lc.student_id
+                     WHERE lc.lesson_id = ?
+                    UNION
+                    SELECT sa.student_id
+                      FROM attendance sa
+                      JOIN schedules sch ON sch.id = sa.schedule_id
+                      JOIN class_students sa_cs ON sa_cs.class_id = sch.class_id AND sa_cs.student_id = sa.student_id
+                     WHERE sa.status IN ('present', 'late', 'leave_early')
+                       AND sch.class_id = ?
+                       AND (sch.lesson_id = ? OR sch.lesson_id = '')
+                  )
+                `,
+                  )
+                  .get(
+                    session.id,
+                    session.id,
+                    session.id,
+                    lessonId,
+                    session.class_id,
+                    lessonId,
+                    session.class_id,
+                    lessonId,
+                  ) as any;
+                attendedStudents = Number(touched?.n) || 0;
+              } catch (e) {
+                console.warn('[classroom.stage] attended query failed:', e);
+                attendedStudents = 0;
+              }
+            }
           }
-        }
-      }
-      // 实到与在线取较大值：只看在线会漏掉「已交卷但刚断线」的学生
+
+          // ── 课堂动态流（最近 12 条，脱敏） ────────────────────────────
+          let feed: Array<{ id: string; type: string; message: string; actorName: string | null; at: number }> = [];
+          try {
+            const rows = db
+              .prepare(
+                `SELECT id, type, message, actor_name, created_at
+                 FROM classroom_feed WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 12`,
+              )
+              .all(lessonId) as any[];
+            feed = (rows || []).map((r) => ({
+              id: String(r.id),
+              type: String(r.type),
+              message: String(r.message ?? ''),
+              actorName: r.actor_name ?? null,
+              at: Number(r.created_at) || 0,
+            }));
+          } catch (_) {
+            feed = [];
+          }
+
+          // ── 互动课件参与（提交 / 参与人数 / 完成度） ────────────────────
+          let courseware: { attempts: number; participants: number; completed: number; avgCompletion: number } | null =
+            null;
+          try {
+            const row = db
+              .prepare(
+                `SELECT COUNT(*) AS attempts,
+                        COUNT(DISTINCT student_id) AS participants,
+                        SUM(CASE WHEN status IN ('completed','submitted','finished') THEN 1 ELSE 0 END) AS completed,
+                        AVG(COALESCE(r.completion, 0)) AS avg_completion
+                 FROM courseware_attempt a
+                 LEFT JOIN submission_result r ON r.attempt_id = a.id
+                 WHERE a.student_id NOT IN ('guest','teacher','teacher_preview','')`,
+              )
+              .get() as any;
+            courseware = {
+              attempts: Number(row?.attempts) || 0,
+              participants: Number(row?.participants) || 0,
+              completed: Number(row?.completed) || 0,
+              avgCompletion: Math.round((Number(row?.avg_completion) || 0) * 100),
+            };
+          } catch (_) {
+            courseware = { attempts: 0, participants: 0, completed: 0, avgCompletion: 0 };
+          }
+
+          // ── 本节已交结课通票人数 ──────────────────────────────────────
+          let exitTicketSubmitted = 0;
+          try {
+            if (session) {
+              exitTicketSubmitted = Number(
+                (
+                  db
+                    .prepare('SELECT COUNT(*) AS n FROM classroom_exit_tickets WHERE session_id = ?')
+                    .get(session.id) as any
+                )?.n || 0,
+              );
+            }
+          } catch (_) {
+            exitTicketSubmitted = 0;
+          }
+
+          return {
+            activePollData,
+            activeBuzzerData,
+            pacingSummary,
+            expectedStudents,
+            attendedStudents,
+            feed,
+            courseware,
+            exitTicketSubmitted,
+          };
+        },
+        2000,
+      );
+
+      // 在线名单来自 presence 的内存态（实时心跳）
+      const onlineIds = getOnlineStudentIds();
       const attendance = {
         online: onlineIds.length,
         onlineInClass: session?.class_id
@@ -2514,71 +2616,9 @@ export function registerClassroomRoutes(
               }
             }).length
           : onlineIds.length,
-        expected: expectedStudents,
-        attended: Math.max(attendedStudents, 0),
+        expected: stageDbData.expectedStudents,
+        attended: Math.max(stageDbData.attendedStudents, 0),
       };
-
-      // ── 8. 课堂动态流（最近 12 条，脱敏） ────────────────────────────
-      // 大屏是投给全班看的：只给动作与成果，不给敏感明细。
-      let feed: Array<{ id: string; type: string; message: string; actorName: string | null; at: number }> = [];
-      try {
-        const rows = db
-          .prepare(
-            `SELECT id, type, message, actor_name, created_at
-             FROM classroom_feed WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 12`,
-          )
-          .all(lessonId) as any[];
-        feed = (rows || []).map((r) => ({
-          id: String(r.id),
-          type: String(r.type),
-          message: String(r.message ?? ''),
-          actorName: r.actor_name ?? null,
-          at: Number(r.created_at) || 0,
-        }));
-      } catch (_) {
-        feed = [];
-      }
-
-      // ── 9. 互动课件参与（提交 / 参与人数 / 完成度） ────────────────────
-      // v0.6.1 数据真实性：courseware_attempt 无 lesson 关联列，本指标为
-      // **平台累计口径**（此前 SQL 无过滤却在前端标为「本课节」）——客户端
-      // 文案已同步改为「累计」。待 courseware_attempt 增加 lesson_id 后可升级。
-      let courseware: { attempts: number; participants: number; completed: number; avgCompletion: number } | null =
-        null;
-      try {
-        const row = db
-          .prepare(
-            `SELECT COUNT(*) AS attempts,
-                    COUNT(DISTINCT student_id) AS participants,
-                    SUM(CASE WHEN status IN ('completed','submitted','finished') THEN 1 ELSE 0 END) AS completed,
-                    AVG(COALESCE(r.completion, 0)) AS avg_completion
-             FROM courseware_attempt a
-             LEFT JOIN submission_result r ON r.attempt_id = a.id
-             WHERE a.student_id NOT IN ('guest','teacher','teacher_preview','')`,
-          )
-          .get() as any;
-        courseware = {
-          attempts: Number(row?.attempts) || 0,
-          participants: Number(row?.participants) || 0,
-          completed: Number(row?.completed) || 0,
-          avgCompletion: Math.round((Number(row?.avg_completion) || 0) * 100),
-        };
-      } catch (_) {
-        courseware = { attempts: 0, participants: 0, completed: 0, avgCompletion: 0 };
-      }
-
-      // ── 10. 本节已交结课通票人数 ──────────────────────────────────────
-      let exitTicketSubmitted = 0;
-      try {
-        if (session) {
-          exitTicketSubmitted = Number(
-            (db.prepare('SELECT COUNT(*) AS n FROM classroom_exit_tickets WHERE session_id = ?').get(session.id) as any)
-              ?.n || 0,
-          );
-        }
-      } catch (_) {
-        exitTicketSubmitted = 0;
-      }
 
       res.json({
         lessonId,
@@ -2587,13 +2627,13 @@ export function registerClassroomRoutes(
         stage: session?.stage || 'PRE_CLASS_READY',
         stageStartedAt: session?.started_at ?? null,
         checkinCode: session?.checkin_code || null,
-        activePoll: activePollData,
-        activeBuzzer: activeBuzzerData,
-        pacing: pacingSummary,
+        activePoll: stageDbData.activePollData,
+        activeBuzzer: stageDbData.activeBuzzerData,
+        pacing: stageDbData.pacingSummary,
         attendance,
-        feed,
-        courseware,
-        exitTicketSubmitted,
+        feed: stageDbData.feed,
+        courseware: stageDbData.courseware,
+        exitTicketSubmitted: stageDbData.exitTicketSubmitted,
       });
     } catch (e: any) {
       sendSafeError(res, e, 500);
@@ -2627,81 +2667,87 @@ export function registerClassroomRoutes(
           return res.status(403).json({ error: 'Forbidden' });
         }
 
-        // 测验表现汇总
-        // v0.6.1 数据真实性：排除「模拟答题」产生的假记录（id 前缀 sim-quiz-），
-        // 模拟数据不得混入真实学情统计
-        const quizSubmissions = db
-          .prepare(
-            "SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'",
-          )
-          .all(lessonId) as { score: number; is_correct: number; time_spent_ms: number }[];
+        const targetClassId = (req.query.classId as string) || session.class_id || 'all';
+        const cacheKey = `panoramic:${lessonId}:${session.id}:${targetClassId}`;
 
-        const totalQuizSubmissions = quizSubmissions.length;
-        const correctQuizSubmissions = quizSubmissions.filter((s) => s.is_correct === 1).length;
-        const avgQuizAccuracy =
-          totalQuizSubmissions > 0 ? Math.round((correctQuizSubmissions / totalQuizSubmissions) * 100) : 0;
-
-        // 投票参与汇总
-        const pollVotesCount =
-          (
-            db
+        const report = classroomReadCache.getOrCompute(
+          cacheKey,
+          () => {
+            // 测验表现汇总
+            // v0.6.1 数据真实性：排除「模拟答题」产生的假记录（id 前缀 sim-quiz-），
+            // 模拟数据不得混入真实学情统计
+            const quizSubmissions = db
               .prepare(
-                `
+                "SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'",
+              )
+              .all(lessonId) as { score: number; is_correct: number; time_spent_ms: number }[];
+
+            const totalQuizSubmissions = quizSubmissions.length;
+            const correctQuizSubmissions = quizSubmissions.filter((s) => s.is_correct === 1).length;
+            const avgQuizAccuracy =
+              totalQuizSubmissions > 0 ? Math.round((correctQuizSubmissions / totalQuizSubmissions) * 100) : 0;
+
+            // 投票参与汇总
+            const pollVotesCount =
+              (
+                db
+                  .prepare(
+                    `
           SELECT COUNT(*) as count
           FROM classroom_poll_votes v
           JOIN classroom_quick_polls p ON v.poll_id = p.id
           WHERE p.session_id = ?
         `,
-              )
-              .get(session.id) as any
-          )?.count || 0;
+                  )
+                  .get(session.id) as any
+              )?.count || 0;
 
-        const pollOptionRows = db
-          .prepare(
-            `SELECT v.selected_option AS option, COUNT(*) AS count
+            const pollOptionRows = db
+              .prepare(
+                `SELECT v.selected_option AS option, COUNT(*) AS count
              FROM classroom_poll_votes v
              JOIN classroom_quick_polls p ON v.poll_id = p.id
              WHERE p.session_id = ?
              GROUP BY v.selected_option
              ORDER BY count DESC, v.selected_option ASC`,
-          )
-          .all(session.id) as Array<{ option: string; count: number }>;
+              )
+              .all(session.id) as Array<{ option: string; count: number }>;
 
-        const pollOptionBreakdown = pollOptionRows.map((row) => ({
-          option: row.option,
-          count: row.count,
-          percent: pollVotesCount > 0 ? Math.round((row.count / pollVotesCount) * 100) : 0,
-        }));
+            const pollOptionBreakdown = pollOptionRows.map((row) => ({
+              option: row.option,
+              count: row.count,
+              percent: pollVotesCount > 0 ? Math.round((row.count / pollVotesCount) * 100) : 0,
+            }));
 
-        // 结课通票汇总
-        const exitTickets = db
-          .prepare(
-            'SELECT student_id, rating, puzzled_concept, feedback FROM classroom_exit_tickets WHERE session_id = ?',
-          )
-          .all(session.id) as { student_id: string; rating: number; puzzled_concept: string; feedback: string }[];
+            // 结课通票汇总
+            const exitTickets = db
+              .prepare(
+                'SELECT student_id, rating, puzzled_concept, feedback FROM classroom_exit_tickets WHERE session_id = ?',
+              )
+              .all(session.id) as { student_id: string; rating: number; puzzled_concept: string; feedback: string }[];
 
-        // v0.6.1 数据真实性：无评分票据时返回 null（此前写死 '5.0' 满分，
-        // 三个消费端在 0 人提交时也展示「5.0★」）；|| 5 的缺省补值一并移除，
-        // 只聚合携带真实 rating 的票据。
-        const ratedTickets = exitTickets.filter((t) => typeof t.rating === 'number');
-        const avgRating =
-          ratedTickets.length > 0
-            ? Number((ratedTickets.reduce((sum, t) => sum + (t.rating ?? 0), 0) / ratedTickets.length).toFixed(1))
-            : null;
+            // v0.6.1 数据真实性：无评分票据时返回 null（此前写死 '5.0' 满分，
+            // 三个消费端在 0 人提交时也展示「5.0★」）；|| 5 的缺省补值一并移除，
+            // 只聚合携带真实 rating 的票据。
+            const ratedTickets = exitTickets.filter((t) => typeof t.rating === 'number');
+            const avgRating =
+              ratedTickets.length > 0
+                ? Number((ratedTickets.reduce((sum, t) => sum + (t.rating ?? 0), 0) / ratedTickets.length).toFixed(1))
+                : null;
 
-        const puzzledConcepts = exitTickets.map((t) => t.puzzled_concept?.trim()).filter((c) => Boolean(c));
+            const puzzledConcepts = exitTickets.map((t) => t.puzzled_concept?.trim()).filter((c) => Boolean(c));
 
-        // ── 逐生真实明细（供学情简报 / CSV 导出） ──────────────────────
-        // 口径：
-        //   quizScore   = 该生本节所有随堂测得分的平均值（无作答 → null）
-        //   accuracy    = 该生本节随堂测正确率（无作答 → null）
-        //   pollsAnswered = 该生在本次会话中的投票次数（真实计数）
-        //   exitRating  = 该生结课通票评分（未提交 → null）
-        //   attendance  = 是否出现在投票/测验/通票任一真实互动记录中
-        // 绝不使用前端伪计算（旧版曾用 score = 80 + ((i * 7) % 21)）。
-        const quizByStudent = db
-          .prepare(
-            `SELECT student_id,
+            // ── 逐生真实明细（供学情简报 / CSV 导出） ──────────────────────
+            // 口径：
+            //   quizScore   = 该生本节所有随堂测得分的平均值（无作答 → null）
+            //   accuracy    = 该生本节随堂测正确率（无作答 → null）
+            //   pollsAnswered = 该生在本次会话中的投票次数（真实计数）
+            //   exitRating  = 该生结课通票评分（未提交 → null）
+            //   attendance  = 是否出现在投票/测验/通票任一真实互动记录中
+            // 绝不使用前端伪计算（旧版曾用 score = 80 + ((i * 7) % 21)）。
+            const quizByStudent = db
+              .prepare(
+                `SELECT student_id,
                   MAX(student_name) as student_name,
                   ROUND(AVG(score), 1) as avg_score,
                   ROUND(AVG(is_correct) * 100, 1) as accuracy,
@@ -2709,134 +2755,141 @@ export function registerClassroomRoutes(
            FROM lesson_quiz_submissions
            WHERE lesson_id = ? AND id NOT LIKE 'sim-quiz-%'
            GROUP BY student_id`,
-          )
-          .all(lessonId) as Array<{
-          student_id: string;
-          student_name: string | null;
-          avg_score: number | null;
-          accuracy: number | null;
-          quiz_count: number;
-        }>;
+              )
+              .all(lessonId) as Array<{
+              student_id: string;
+              student_name: string | null;
+              avg_score: number | null;
+              accuracy: number | null;
+              quiz_count: number;
+            }>;
 
-        const votesByStudent = db
-          .prepare(
-            `SELECT v.student_id, COUNT(*) as votes
+            const votesByStudent = db
+              .prepare(
+                `SELECT v.student_id, COUNT(*) as votes
            FROM classroom_poll_votes v
            JOIN classroom_quick_polls p ON v.poll_id = p.id
            WHERE p.session_id = ?
            GROUP BY v.student_id`,
-          )
-          .all(session.id) as Array<{ student_id: string; votes: number }>;
+              )
+              .all(session.id) as Array<{ student_id: string; votes: number }>;
 
-        const exitByStudent = new Map<string, { rating: number | null; puzzledConcept: string | null }>();
-        for (const t of exitTickets as Array<any>) {
-          exitByStudent.set(t.student_id, {
-            rating: typeof t.rating === 'number' ? t.rating : null,
-            puzzledConcept: t.puzzled_concept ?? null,
-          });
-        }
+            const exitByStudent = new Map<string, { rating: number | null; puzzledConcept: string | null }>();
+            for (const t of exitTickets as Array<any>) {
+              exitByStudent.set(t.student_id, {
+                rating: typeof t.rating === 'number' ? t.rating : null,
+                puzzledConcept: t.puzzled_concept ?? null,
+              });
+            }
 
-        // 以「本节有真实互动记录的学生」为主键集合，并集上班级花名册
-        const targetClassId = (req.query.classId as string) || session.class_id;
-        const roster = targetClassId
-          ? (db
-              .prepare(
-                `SELECT s.id, s.name, s.student_number
+            // 以「本节有真实互动记录的学生」为主键集合，并集上班级花名册
+            const roster =
+              targetClassId && targetClassId !== 'all'
+                ? (db
+                    .prepare(
+                      `SELECT s.id, s.name, s.student_number
                FROM students s
                JOIN class_students cs ON s.id = cs.student_id
                WHERE cs.class_id = ?
                ORDER BY s.student_number, s.name`,
-              )
-              .all(targetClassId) as Array<{ id: string; name: string; student_number: string | null }>)
-          : [];
+                    )
+                    .all(targetClassId) as Array<{ id: string; name: string; student_number: string | null }>)
+                : [];
 
-        const votesMap = new Map(votesByStudent.map((v) => [v.student_id, v.votes]));
-        const quizMap = new Map(quizByStudent.map((q) => [q.student_id, q]));
+            const votesMap = new Map(votesByStudent.map((v) => [v.student_id, v.votes]));
+            const quizMap = new Map(quizByStudent.map((q) => [q.student_id, q]));
 
-        const seen = new Set<string>();
-        const studentBreakdown: any[] = [];
-        const pushStudent = (studentId: string, fallbackName?: string | null) => {
-          if (seen.has(studentId)) return;
-          seen.add(studentId);
-          const q = quizMap.get(studentId);
-          const votes = votesMap.get(studentId) ?? 0;
-          const exit = exitByStudent.get(studentId);
-          studentBreakdown.push({
-            studentId,
-            studentName: q?.student_name || fallbackName || studentId,
-            attendance: Boolean(q) || votes > 0 || Boolean(exit),
-            quizScore: q?.avg_score ?? null,
-            quizCount: q?.quiz_count ?? 0,
-            accuracy: q?.accuracy ?? null,
-            pollsAnswered: votes,
-            exitRating: exit?.rating ?? null,
-            puzzledConcept: exit?.puzzledConcept ?? null,
-          });
-        };
+            const seen = new Set<string>();
+            const studentBreakdown: any[] = [];
+            const pushStudent = (studentId: string, fallbackName?: string | null) => {
+              if (seen.has(studentId)) return;
+              seen.add(studentId);
+              const q = quizMap.get(studentId);
+              const votes = votesMap.get(studentId) ?? 0;
+              const exit = exitByStudent.get(studentId);
+              studentBreakdown.push({
+                studentId,
+                studentName: q?.student_name || fallbackName || studentId,
+                attendance: Boolean(q) || votes > 0 || Boolean(exit),
+                quizScore: q?.avg_score ?? null,
+                quizCount: q?.quiz_count ?? 0,
+                accuracy: q?.accuracy ?? null,
+                pollsAnswered: votes,
+                exitRating: exit?.rating ?? null,
+                puzzledConcept: exit?.puzzledConcept ?? null,
+              });
+            };
 
-        // 1) 先放有真实互动记录的学生（按成绩降序，便于简报排序）
-        const interacted = new Set<string>([
-          ...quizByStudent.map((q) => q.student_id),
-          ...votesByStudent.map((v) => v.student_id),
-          ...exitByStudent.keys(),
-        ]);
-        for (const id of Array.from(interacted).sort((a, b) => {
-          const sa = quizMap.get(a)?.avg_score ?? -1;
-          const sb = quizMap.get(b)?.avg_score ?? -1;
-          return sb - sa;
-        })) {
-          pushStudent(id, quizMap.get(id)?.student_name);
-        }
-        // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
-        for (const st of roster) pushStudent(st.id, st.name);
+            // 1) 先放有真实互动记录的学生（按成绩降序，便于简报排序）
+            const interacted = new Set<string>([
+              ...quizByStudent.map((q) => q.student_id),
+              ...votesByStudent.map((v) => v.student_id),
+              ...exitByStudent.keys(),
+            ]);
+            for (const id of Array.from(interacted).sort((a, b) => {
+              const sa = quizMap.get(a)?.avg_score ?? -1;
+              const sb = quizMap.get(b)?.avg_score ?? -1;
+              return sb - sa;
+            })) {
+              pushStudent(id, quizMap.get(id)?.student_name);
+            }
+            // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
+            for (const st of roster) pushStudent(st.id, st.name);
 
-        let pacingBreakdown: Record<string, Record<string, number>> = {};
-        const pacingOverall: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
-        try {
-          const pRows = db
-            .prepare(
-              `SELECT segment_id, signal_type, COUNT(*) as count
+            let pacingBreakdown: Record<string, Record<string, number>> = {};
+            const pacingOverall: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+            try {
+              const pRows = db
+                .prepare(
+                  `SELECT segment_id, signal_type, COUNT(*) as count
                FROM classroom_pacing_signals
                WHERE session_id = ?
                GROUP BY segment_id, signal_type`,
-            )
-            .all(session.id) as any[];
-          for (const pr of pRows) {
-            const seg = pr.segment_id || 'default';
-            if (!pacingBreakdown[seg]) {
-              pacingBreakdown[seg] = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+                )
+                .all(session.id) as any[];
+              for (const pr of pRows) {
+                const seg = pr.segment_id || 'default';
+                if (!pacingBreakdown[seg]) {
+                  pacingBreakdown[seg] = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+                }
+                pacingBreakdown[seg][pr.signal_type] = pr.count;
+                pacingOverall[pr.signal_type] = (pacingOverall[pr.signal_type] || 0) + pr.count;
+              }
+            } catch (_) {
+              pacingBreakdown = {};
             }
-            pacingBreakdown[seg][pr.signal_type] = pr.count;
-            pacingOverall[pr.signal_type] = (pacingOverall[pr.signal_type] || 0) + pr.count;
-          }
-        } catch (_) {
-          pacingBreakdown = {};
-        }
 
-        res.json({
-          success: true,
-          session: {
-            id: session.id,
-            lessonId,
-            stage: session.stage,
-            startedAt: session.started_at,
-            endedAt: session.ended_at,
-            durationMin:
-              session.started_at && session.ended_at ? Math.round((session.ended_at - session.started_at) / 60000) : 0,
+            return {
+              success: true,
+              session: {
+                id: session.id,
+                lessonId,
+                stage: session.stage,
+                startedAt: session.started_at,
+                endedAt: session.ended_at,
+                durationMin:
+                  session.started_at && session.ended_at
+                    ? Math.round((session.ended_at - session.started_at) / 60000)
+                    : 0,
+              },
+              metrics: {
+                quizCount: totalQuizSubmissions,
+                quizAccuracy: avgQuizAccuracy,
+                pollVotesTotal: pollVotesCount,
+                pollOptionBreakdown,
+                exitTicketsCount: exitTickets.length,
+                exitTicketsAvgRating: avgRating,
+                topPuzzledConcepts: puzzledConcepts.slice(0, 10),
+                pacingOverall,
+                pacingBySegment: pacingBreakdown,
+              },
+              students: studentBreakdown,
+            };
           },
-          metrics: {
-            quizCount: totalQuizSubmissions,
-            quizAccuracy: avgQuizAccuracy,
-            pollVotesTotal: pollVotesCount,
-            pollOptionBreakdown,
-            exitTicketsCount: exitTickets.length,
-            exitTicketsAvgRating: avgRating,
-            topPuzzledConcepts: puzzledConcepts.slice(0, 10),
-            pacingOverall,
-            pacingBySegment: pacingBreakdown,
-          },
-          students: studentBreakdown,
-        });
+          3000,
+        );
+
+        res.json(report);
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
