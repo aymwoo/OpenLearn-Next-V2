@@ -11,9 +11,9 @@
 
 OpenLearn V2 平台采用 **SQLite（基于 `better-sqlite3` 原生驱动）** 作为持久化存储。其核心并发架构为 **「WAL (Write-Ahead Logging) + 读写分离连接池」**：
 
-- **写操作**：进程内保留单一主写连接句柄 `db`（[`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts)），配置 `busy_timeout = 5000ms`、`synchronous = NORMAL`、`cache_size = -64000`（64MB 缓存页）；
+- **写操作**：进程内保留单一主写连接句柄 `db`（[`packages/core/db/index.ts`](../../packages/core/db/index.ts)），配置 `busy_timeout = 5000ms`、`synchronous = NORMAL`、`cache_size = -64000`（64MB 缓存页）；
 - **读操作**：由 `ReadConnectionPool` 维护池化只读连接（`query_only = ON`、`cache_size = -32000`），无锁并发读取，不阻塞写事务；
-- **历史问题**：此前文档（如 [`docs/deployment/multi-school.md`](file:///home/wuxf/Develop/openlearnv2/docs/deployment/multi-school.md)）仅定性描述「单校数千学生、并发写集中在课堂环节通常足够」，缺乏严谨、可复现的量化压测基准数据。
+- **历史问题**：此前文档（如 [`docs/deployment/multi-school.md`](../deployment/multi-school.md)）仅定性描述「单校数千学生、并发写集中在课堂环节通常足够」，缺乏严谨、可复现的量化压测基准数据。
 
 本报告旨在给出 **100 并发虚拟学生在真实课堂高频混合读写负载下的精确量化指标**，并探查并发阶梯扩展至 **300 并发** 时的吞吐饱和点、延迟拐点与锁竞争特征，为多校区部署与容量架构决策提供数据支撑。
 
@@ -23,14 +23,14 @@ OpenLearn V2 平台采用 **SQLite（基于 `better-sqlite3` 原生驱动）** �
 
 本次压测在推荐规格（4核8GB以上）的主机上进行，测试环境完全对齐生产推荐规范：
 
-| 规格维度           | 本次实测机型规格                        | 生产基线参考规格（[`docs/deployment/production-guide.md`](file:///home/wuxf/Develop/openlearnv2/docs/deployment/production-guide.md)） |
-| :----------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
-| **CPU 型号与核心** | AMD Ryzen 9 5900HS (16 vCPUs)           | 4 核 (推荐规格) / 2 核 (最低规格)                                                                                                      |
-| **内存容量**       | 15.0 GB RAM                             | 8 GB RAM (推荐规格) / 2 GB RAM (最低规格)                                                                                              |
-| **持久化存储介质** | Samsung NVMe SSD (ROTA = 0)             | 本地 SSD / NVMe 高速云盘                                                                                                               |
-| **操作系统**       | Linux 6.18.9-arch1-1-g14 (x64)          | Ubuntu 22.04 LTS / Debian 12 / Linux 6.x                                                                                               |
-| **Node.js 运行时** | **v22.16.0** (对齐 `.nvmrc` 与 CI 门禁) | Node.js 22 LTS                                                                                                                         |
-| **SQLite 驱动**    | better-sqlite3 12.x                     | better-sqlite3 12.x                                                                                                                    |
+| 规格维度           | 本次实测机型规格                        | 生产基线参考规格（[`docs/deployment/production-guide.md`](../deployment/production-guide.md)） |
+| :----------------- | :-------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| **CPU 型号与核心** | AMD Ryzen 9 5900HS (16 vCPUs)           | 4 核 (推荐规格) / 2 核 (最低规格)                                                              |
+| **内存容量**       | 15.0 GB RAM                             | 8 GB RAM (推荐规格) / 2 GB RAM (最低规格)                                                      |
+| **持久化存储介质** | Samsung NVMe SSD (ROTA = 0)             | 本地 SSD / NVMe 高速云盘                                                                       |
+| **操作系统**       | Linux 6.18.9-arch1-1-g14 (x64)          | Ubuntu 22.04 LTS / Debian 12 / Linux 6.x                                                       |
+| **Node.js 运行时** | **v22.16.0** (对齐 `.nvmrc` 与 CI 门禁) | Node.js 22 LTS                                                                                 |
+| **SQLite 驱动**    | better-sqlite3 12.x                     | better-sqlite3 12.x                                                                            |
 
 ---
 
@@ -167,7 +167,7 @@ xychart-beta
    - **扩容与分拆信号**：
      - 当单实例聚合报表慢查询延迟 p95 持续超出 30ms；
      - 或写操作峰值排队导致事件循环延迟出现波动；
-   - **推荐架构解法**：遵循 [`docs/deployment/multi-school.md`](file:///home/wuxf/Develop/openlearnv2/docs/deployment/multi-school.md) 原则，**按校区/学段分拆为独立的 OpenLearn 实例**，实行「一校/一区一库」，而非多校共库；
+   - **推荐架构解法**：遵循 [`docs/deployment/multi-school.md`](../deployment/multi-school.md) 原则，**按校区/学段分拆为独立的 OpenLearn 实例**，实行「一校/一区一库」，而非多校共库；
 3. **磁盘 I/O 部署底线**：
    - WAL 模式依赖快速的内存映射与文件同步，生产环境必须使用 **本地 SSD / NVMe 固态硬盘**；
    - 严禁将 SQLite 数据库放在 NFS / SMB / CIFS 等网络共享文件系统上（网络文件锁延迟会导致 `SQLITE_BUSY` 暴增并破坏 ACID 保证）。
