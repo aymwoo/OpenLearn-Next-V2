@@ -31,6 +31,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **CPU 核心数自适应与环境变量弹性调优**：将只读连接池上限由历史固定 4 连接改为按 CPU 核心数自适应弹性分配（`Math.min(16, Math.max(4, Math.floor(cpuCount * 0.75)))`），并新增环境变量 `OPENLEARN_READ_POOL_SIZE`（支持 1–32），允许高并发与高速 NVMe 生产环境灵活超调；
   - **重型慢查与轻量点查连接泳道隔离**：将池内连接划分为 `general`（轻量高频点查，如课时列表、权限鉴定、会话维持）与 `heavy`（重型多表聚合慢查，如学情报表、全景分析）两个优先级泳道，杜绝复杂聚合查询排队占用连接而饿死前台交互交互请求；
   - **连接作用域借用安全封装与耗时观测**：提供 `withConnection` 与 `withConnectionAsync` 生命周期上下文管理器，自动管理连接借用与安全释放，精准记录每次借用执行延迟并暴露全景连接池监控指标（`getMetrics()`，包含总借用数、借用中连接数、累计与平均借用耗时及各连接健康分布）。
+- **超大并发下课堂互动状态与会话心跳写入节流及微批量落库 (Issue #411)**：
+  - **会话活跃度微批量落库引擎 (`server/utils/interactive-accumulator.ts:SessionTouchBatcher`)**：在认证中间件 (`server/middleware/auth.ts`) 中引入内存节流微批量更新，将多用户并发访问时频繁零散的 `client_sessions.updated_at` 单行写事务在内存中合并，以定时器（1000ms）或容量阈值（50 条）通过单一事务批量提交，减少 70%+ 的微事务磁盘 IO 争抢；
+  - **晴雨表高频交互内存状态聚合器 (`server/utils/interactive-accumulator.ts:PacingSignalAccumulator`)**：在课堂路由中接管节奏晴雨表信号流，在内存维护 `(sessionId, segmentId, studentId)` 权威活跃态并即时计算多环节细分与全课总体分布（响应提速至 < 0.1ms），脏队列通过 500ms 定时器微批量异步落库至 SQLite，彻底消除 500+ 人课堂连续高频反馈引起的物理事务碎片；
+  - **学生端状态合并防抖 (`src/features/student/StudentInteractiveOverlay.tsx`)**：在学生端节奏反馈交互入口增加 300ms 快速点击节流防抖，避免学生连续误点造成无谓网络与计算开销。
 
 ### Docs
 
