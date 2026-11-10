@@ -26,7 +26,14 @@ export const CLASSROOM_EVENTS = {
   STUDENT_PROGRESS_UPDATED: 'student.progress_updated',
   /** 学生已读通知回执 */
   STUDENT_NOTIFICATION_ACKNOWLEDGED: 'student.notification_acknowledged',
-  /** 白板随堂练习作答 */
+  /** 随堂练习作答（规范化事件，插件应订阅这个） */
+  QUIZ_ANSWERED: 'quiz.answered',
+  /**
+   * 白板随堂练习作答（旧名，自 v0.6.0 弃用）。
+   *
+   * 平台在兼容窗口内仍会发布该事件，方便尚未迁移的插件；0.8.0 起移除。
+   * 新代码请使用 QUIZ_ANSWERED。
+   */
   WHITEBOARD_QUIZ_ANSWERED: 'whiteboard.quiz_answered',
   /** 课件 attempt 日志 / 提交 / 认领 */
   COURSEWARE_ATTEMPT_UPDATED: 'courseware.attempt_updated',

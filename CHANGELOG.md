@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **插件开发指南在 npm/npx 安装下不再 404（Issue #412）**：`docs_plugin_guide.md` 纳入发布清单，路由改为按包内路径解析（`dist/../` → 源码根 → cwd 兜底），不再只依赖 `process.cwd()`。
+- **管理端系统日志正确读取 `LOG_DIR`（Issue #413）**：日志写入端与管理端 `/api/admin/logs` 共用 `packages/core/observability/log-paths.ts` 的路径解析，修复容器部署（`LOG_DIR=/data/logs`）下日志页恒为空的问题。
+- **随堂作答补发规范化事件 `quiz.answered`（Issue #414）**：平台在兼容窗口内同时发布 `quiz.answered`（新）与 `whiteboard.quiz_answered`（旧），并把旧事件 `removedIn` 顺延到 0.8.0；平台自身作为发布方不再触发「Plugin ...」弃用告警。
+
 ### Features
 
 - **SQLite 高并发容量验证压测套件（`scripts/stress/`，Issue #407）**：

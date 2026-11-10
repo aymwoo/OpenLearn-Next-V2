@@ -1,7 +1,7 @@
 import pino from 'pino';
 import fs from 'node:fs';
-import path from 'node:path';
 import { buildRedactOptions } from './redaction.js';
+import { resolveLogDir, resolveLogFilePath } from './log-paths.js';
 import { RotatingFileStream, resolveRotationConfig } from './rotating-file-stream.js';
 
 /**
@@ -35,8 +35,9 @@ function minPinoLevel(a: string, b: string): string {
 const rootLevel = minPinoLevel(consoleLevel, fileLevel);
 
 // LOG_DIR 允许部署与测试把日志写到别处。目录在下面按可写性创建，失败则只留 stdout。
-const logDir = path.resolve(process.env.LOG_DIR || path.join(process.cwd(), 'logs'));
-const logFile = path.join(logDir, 'openlearn.log');
+// 路径解析收敛在 log-paths.ts：管理端 /api/admin/logs 读同一份，避免 LOG_DIR 下读到空目录。
+const logDir = resolveLogDir();
+const logFile = resolveLogFilePath();
 
 function consoleStream(): NodeJS.WritableStream {
   if (process.env.NODE_ENV === 'production') return process.stdout;

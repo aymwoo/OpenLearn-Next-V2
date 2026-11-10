@@ -24,7 +24,11 @@ export interface EventBusPort {
    * Phase B4: 返回取消订阅函数（原先返回 void）。原有调用方忽略返回值不受影响；
    * 长生命周期调用方应持有并在销毁时调用，防订阅者无限累积（内存泄漏）。
    */
-  subscribe(eventType: string, handler: EventSubscriber): () => void;
+  /**
+   * @param callerId 可选调用方标识。平台内部订阅（server.* / kernel.*）传入后
+   *   不会再触发「Plugin ... 使用弃用事件」的告警。
+   */
+  subscribe(eventType: string, handler: EventSubscriber, callerId?: string): () => void;
 }
 
 export interface EventBusOptions {
@@ -127,8 +131,8 @@ export class EventBus {
    * 同一类型会导致监听器无限累积。返回的函数内部即 {@link unsubscribe}，
    * 忽略返回值的既有调用方完全兼容。
    */
-  public subscribe(eventType: string, subscriber: EventSubscriber): () => void {
-    warnDeprecation('event', eventType);
+  public subscribe(eventType: string, subscriber: EventSubscriber, callerId?: string): () => void {
+    warnDeprecation('event', eventType, callerId);
     if (!this.subscribers.has(eventType)) {
       this.subscribers.set(eventType, new Set());
     }

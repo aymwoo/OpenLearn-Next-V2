@@ -37,7 +37,8 @@
     "cli-data.mjs",
     "scripts/assert-node-runtime.mjs",
     "package.json",
-    "README.md"
+    "README.md",
+    "docs_plugin_guide.md"
   ],
   "type": "module",
   "publishConfig": {

@@ -226,12 +226,12 @@ export class ClassroomFeedService {
 export function attachClassroomFeedService(
   feedService: ClassroomFeedService,
   eventBus: {
-    subscribe(type: string, handler: (e: PlatformEvent) => void): unknown;
+    subscribe(type: string, handler: (e: PlatformEvent) => void, callerId?: string): unknown;
     unsubscribe?(type: string, handler: (e: PlatformEvent) => void): unknown;
   },
 ): () => void {
   for (const type of Object.keys(FEED_EVENT_TYPES)) {
-    eventBus.subscribe(type, feedService.handleEvent);
+    eventBus.subscribe(type, feedService.handleEvent, 'server.classroom-feed');
   }
   // 返回取消订阅函数；宿主 eventBus 若支持 unsubscribe 则真正撤销（进程生命周期内
   // feed 服务与宿主同生命周期，通常不调用）。

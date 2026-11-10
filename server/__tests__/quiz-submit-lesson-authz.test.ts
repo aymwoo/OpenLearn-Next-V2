@@ -206,11 +206,13 @@ describe('随堂测验提交的归属与答案防泄漏（#223）', () => {
       skipStageGuard: true,
     });
 
-    expect(published).toHaveLength(1);
-    const payload = published[0].payload;
-    expect(payload.isCorrect).toBe(true);
-    // 事件投递给课节房间 + 班级房间，全班学生都会收到 —— 里面不能带答案
-    expect(payload.correctAnswer).toBeUndefined();
-    expect(payload.correctIndex).toBeUndefined();
+    // Issue #414：规范化事件与兼容旧事件都会发布，但两者都不得携带答案。
+    expect(published.map((e) => e.type)).toEqual(['quiz.answered', 'whiteboard.quiz_answered']);
+    for (const event of published) {
+      expect(event.payload.isCorrect).toBe(true);
+      // 事件投递给课节房间 + 班级房间，全班学生都会收到 —— 里面不能带答案
+      expect(event.payload.correctAnswer).toBeUndefined();
+      expect(event.payload.correctIndex).toBeUndefined();
+    }
   });
 });
