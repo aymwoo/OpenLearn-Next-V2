@@ -101,7 +101,7 @@ export default defineConfig({
     modulePreload: {
       polyfill: false,
       resolveDependencies(_filename, deps) {
-        return deps.filter((dep) => !/vendor-(pdf|charts|pptx|reveal|konva)/i.test(dep));
+        return deps.filter((dep) => !/vendor-(pdf|charts|pptx|konva)/i.test(dep));
       },
     },
     rollupOptions: {
@@ -133,9 +133,6 @@ export default defineConfig({
               return 'vendor-konva';
             }
             // Presentations & Previews
-            if (id.includes('/reveal.js/')) {
-              return 'vendor-reveal';
-            }
             if (id.includes('/pptx-react-viewer/') || id.includes('/ooxml-core/') || id.includes('/ooxml-ui/')) {
               return 'vendor-pptx';
             }
