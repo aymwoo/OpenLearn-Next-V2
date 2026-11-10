@@ -1,8 +1,6 @@
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
-@source "../packages/mfe-*/**/*.{ts,tsx}";
-
 /* ── Tailwind v4 设计令牌补齐 ─────────────────────────────────
    历史代码中使用了 shadow-3xs / border-border / text-foreground，但这三个
    token 从未定义：95 处阴影、22 处边框、16 处文字色因此静默失效（元素完全
