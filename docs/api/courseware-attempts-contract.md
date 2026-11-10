@@ -433,7 +433,7 @@ socket.on('courseware-attempt-updated', async (payload) => {
 | `server/event-routing.ts`                                | 内核事件 → Socket.IO 投递的声明式路由表                                                                                   |
 | `packages/plugins/courseware-score.ts`                   | `aggregateAttemptScore` / `describeAggregation` 成绩归集策略                                                              |
 | `packages/plugins/builtin.ts`                            | `courseware.submit_attempt` / `courseware.get_attempt_raw_data` / `courseware.list` / `courseware.delete` command handler |
-| `packages/core/capability-system/index.ts`               | 学生需具备 `student:write` capability 才能 submit_attempt                                                                 |
+| `packages/core/capability/guard/capability-guard.ts`     | 学生需具备 `student:write` capability 才能 submit_attempt                                                                 |
 | `server/utils/bridge-sdk.ts`                             | LMS Bridge SDK 服务端代理                                                                                                 |
 | `src/features/whiteboard/utils/bridgeUtils.ts`           | LMS Bridge SDK 前端注入（`wrapSrcDocWithBridge`）                                                                         |
 | `src/features/whiteboard/components/HtmlAppletFrame.tsx` | 白板课件 iframe + 实时成绩浮层                                                                                            |

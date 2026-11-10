@@ -42,19 +42,19 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 
 ### 1.2 核心子系统
 
-| 子系统                 | 文件                                             | 职责                                                                                    |
-| ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| **Kernel**             | `packages/core/kernel/index.ts`                  | 全局单例容器，分层组装所有子系统（Layer 0-3），引导系统插件启动                         |
-| **CommandBus**         | `packages/core/command-bus/index.ts`             | 命令执行管线：注册 handler → 拦截器链（JSON Schema校验→CapabilityGuard→高危审批）→ 执行 |
-| **EventBus**           | `packages/core/event-bus/index.ts`               | 发布/订阅事件，支持通配符 `*`，异步并行通知                                             |
-| **ActionRegistry**     | `packages/core/registry/index.ts`                | 注册 AI Agent 可发现的工具                                                              |
-| **CapabilityGuard**    | `packages/core/capability-system/index.ts`       | 基于字符串的 RBAC 权限控制                                                              |
-| **ProcessManager**     | `packages/core/process-manager/index.ts`         | 后台进程和定时任务管理                                                                  |
-| **PluginHost**         | `packages/core/plugin-host/index.ts`             | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道                                    |
-| **ServiceRegistry**    | `packages/core/di/service-registry.ts`           | 依赖注入容器，Token 驱动，依赖图验证                                                    |
-| **ResourceTracker**    | `packages/core/plugin-host/resource-tracker.ts`  | 按 pluginId 管理 Disposable 资源，保证精确清理                                          |
-| **WorkerManager**      | `packages/core/worker-runtime/worker-manager.ts` | Worker Thread 隔离模式管理（`ACTIVATE_TIMEOUT_MS` 常量、dbApi 构造、Worker 引导脚本）   |
-| **FrontendPluginHost** | `src/plugin-host/plugin-host.ts`                 | 前端插件生命周期管理，支持 inline/worker 模式                                           |
+| 子系统                 | 文件                                                 | 职责                                                                                    |
+| ---------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Kernel**             | `packages/core/kernel/index.ts`                      | 全局单例容器，分层组装所有子系统（Layer 0-3），引导系统插件启动                         |
+| **CommandBus**         | `packages/core/command-bus/index.ts`                 | 命令执行管线：注册 handler → 拦截器链（JSON Schema校验→CapabilityGuard→高危审批）→ 执行 |
+| **EventBus**           | `packages/core/event-bus/index.ts`                   | 发布/订阅事件，支持通配符 `*`，异步并行通知                                             |
+| **ActionRegistry**     | `packages/core/registry/index.ts`                    | 注册 AI Agent 可发现的工具                                                              |
+| **CapabilityGuard**    | `packages/core/capability/guard/capability-guard.ts` | 基于字符串的 RBAC 权限控制                                                              |
+| **ProcessManager**     | `packages/core/process-manager/index.ts`             | 后台进程和定时任务管理                                                                  |
+| **PluginHost**         | `packages/core/plugin-host/index.ts`                 | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道                                    |
+| **ServiceRegistry**    | `packages/core/di/service-registry.ts`               | 依赖注入容器，Token 驱动，依赖图验证                                                    |
+| **ResourceTracker**    | `packages/core/plugin-host/resource-tracker.ts`      | 按 pluginId 管理 Disposable 资源，保证精确清理                                          |
+| **WorkerManager**      | `packages/core/worker-runtime/worker-manager.ts`     | Worker Thread 隔离模式管理（`ACTIVATE_TIMEOUT_MS` 常量、dbApi 构造、Worker 引导脚本）   |
+| **FrontendPluginHost** | `src/plugin-host/plugin-host.ts`                     | 前端插件生命周期管理，支持 inline/worker 模式                                           |
 
 ### 1.3 数据流
 
