@@ -4128,7 +4128,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         if (!payloadStr) payloadStr = e.dataTransfer.getData('text');
         if (!payloadStr) payloadStr = e.dataTransfer.getData('Text');
 
-        console.log('Whiteboard drop triggered. Payload:', payloadStr);
         if (!payloadStr) return;
 
         let payload;
@@ -4150,7 +4149,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         let dropX = e.clientX - stageBox.left + containerRef.current.scrollLeft;
         let dropY = e.clientY - stageBox.top + containerRef.current.scrollTop;
 
-        console.log(`Adding whiteboard element of type ${payload.type} at (${dropX}, ${dropY})`);
         setIsSyncing(true);
         try {
           await onElementAdd(payload.type, buildElementData(payload.type, payload, dropX, dropY));
