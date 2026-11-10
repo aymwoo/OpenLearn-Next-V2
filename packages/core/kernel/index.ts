@@ -4,7 +4,16 @@ import { ActionRegistry } from '../registry/index.js';
 import { CapabilityGuard } from '../capability/index.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { NodeEsmLoader } from '../esm-loader/index.js';
-import { db, readPool, getReadDb, queryRead, queryReadOne, checkpoint } from '../db/index.js';
+import {
+  db,
+  readPool,
+  getReadDb,
+  queryRead,
+  queryReadOne,
+  queryReadHeavy,
+  queryReadOneHeavy,
+  checkpoint,
+} from '../db/index.js';
 import { redactPasscodeMaterial } from '../db/class-passcode-crypto.js';
 import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
@@ -95,6 +104,8 @@ export class Kernel {
   public readonly getReadDb = getReadDb;
   public readonly queryRead = queryRead;
   public readonly queryReadOne = queryReadOne;
+  public readonly queryReadHeavy = queryReadHeavy;
+  public readonly queryReadOneHeavy = queryReadOneHeavy;
   public readonly checkpoint = checkpoint;
   public readonly serviceRegistry: ServiceRegistry;
   public readonly storageService: StorageService;
