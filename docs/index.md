@@ -118,6 +118,7 @@ analytics/learning-analytics-engine
 deployment/production-guide
 deployment/docker-nginx
 deployment/multi-school
+ops/sqlite-capacity
 beta/README
 beta/announcement
 beta/known-issues
