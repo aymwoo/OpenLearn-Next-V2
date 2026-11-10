@@ -50,7 +50,6 @@ import {
   ILearningAnalyticsServiceToken,
   IAICapabilityServiceToken,
   ICapabilityRuntimeServiceToken,
-  ICapabilityGovernanceServiceToken,
   IPlatformServiceRegistryToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
@@ -82,7 +81,6 @@ import { AnalyticsEngineKernel } from '../analytics-engine/index.js';
 import { AIRuntimeKernel } from '../ai/index.js';
 import { AICapabilityKernel } from '../ai-capability/index.js';
 import { CapabilityRuntimeKernel } from '../capability/index.js';
-import { CapabilityGovernanceKernel } from '../capability-governance/index.js';
 import { ServiceRegistryKernel } from '../service-registry/index.js';
 import { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
 import { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
@@ -128,7 +126,6 @@ export class Kernel {
   public readonly aiRuntime: AIRuntimeKernel;
   public readonly aiCapability: AICapabilityKernel;
   public readonly capabilityFrameworkRuntime: CapabilityRuntimeKernel;
-  public readonly capabilityGovernance: CapabilityGovernanceKernel;
   public readonly platformServiceRegistryKernel: ServiceRegistryKernel;
   public readonly ready: Promise<void>;
 
@@ -166,9 +163,6 @@ export class Kernel {
 
     // CapabilityRuntimeKernel — Layer 1 (Platform Capability Framework)
     this.capabilityFrameworkRuntime = new CapabilityRuntimeKernel(this.aiCapability);
-
-    // CapabilityGovernanceKernel — Layer 1 (Platform Capability Governance)
-    this.capabilityGovernance = new CapabilityGovernanceKernel();
 
     // ServiceRegistryKernel — Layer 1 (Platform Service Registry)
     this.platformServiceRegistryKernel = new ServiceRegistryKernel();
@@ -274,9 +268,6 @@ export class Kernel {
     } as any);
     this.serviceRegistry.register(ICapabilityRuntimeServiceToken, {
       getRuntimeKernel: async () => this.capabilityFrameworkRuntime,
-    } as any);
-    this.serviceRegistry.register(ICapabilityGovernanceServiceToken, {
-      getGovernanceKernel: async () => this.capabilityGovernance,
     } as any);
     this.serviceRegistry.register(IPlatformServiceRegistryToken, {
       getServiceRegistryKernel: async () => this.platformServiceRegistryKernel,

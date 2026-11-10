@@ -333,8 +333,9 @@ export type {
 
 // ── Capability Governance (@experimental，已移出 SDK 导出) ────────────────
 //
-// 审计项 M-9 / F-2：capability-governance 子系统（529 行）在内核启动时被实例化并
-// 注册进 DI，但**零生产 resolve**。D-2 决策：标 `@experimental` 并收回对外承诺。
+// 审计项 M-9 / F-2：capability-governance 子系统（529 行）零生产 resolve。
+// #426 已停止在内核启动时实例化/注册 DI；代码保留为 `@experimental` 参考实现，
+// 并继续收回对外承诺。若将来接入真实调用路径并稳定，再把导出加回。
 //
 // 这段导出在 SDK 3.8.0 中移除。外部插件若曾 import 这些类型会编译失败 —— 这是有意的：
 // 对外承诺一个零消费者的 API 比不承诺更糟。若将来接入真实调用路径并稳定，把
