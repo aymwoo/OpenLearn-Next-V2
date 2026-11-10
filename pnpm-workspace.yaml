@@ -5,7 +5,6 @@ allowBuilds:
   protobufjs: true
 
 packages:
-  - 'packages/core'
   - 'packages/plugin-sdk'
   - 'packages/plugin-test-kit'
   - 'packages/bridge-sdk'
