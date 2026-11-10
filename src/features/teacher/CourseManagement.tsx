@@ -322,6 +322,7 @@ export function CourseManagement() {
                     >
                       <div className="flex items-center justify-between mb-2 gap-2">
                         <div
+                          data-testid="course-title"
                           className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
                           title={lesson.title}
                           onClick={() => onViewCourse(lesson.id)}
