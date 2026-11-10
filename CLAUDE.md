@@ -34,13 +34,13 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台。基于
 ## 项目结构
 
 ```
-├── server.ts              # 后端启动入口与核心集成（模块化重构为 ~670 行）
+├── server.ts              # 后端启动入口与核心集成（~773 行）
 ├── server/                # 服务端模块化子系统
 │   ├── middleware/        # 认证 (auth.ts) 与安全/速率限制中间件
 │   ├── routes/            # 领域路由拆分 (agent, auth, courseware, export, exams, etc.)
 │   └── utils/             # 服务端工具集与沙箱 Bridge SDK Proxy
 ├── src/                   # React 19 前端架构
-│   ├── App.tsx            # 主应用框架壳（~130 行，无冗余 useState）
+│   ├── App.tsx            # 主应用框架壳（157 行，无冗余 useState）
 │   ├── components/        # 通用 UI 组件（PascalCase）
 │   ├── features/          # 领域功能特性模块（activity-ecosystem, courseware, teacher, whiteboard, etc.）
 │   ├── services/          # API 客户端与通信适配层
@@ -53,15 +53,16 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台。基于
 │   │   ├── command-bus/   # 命令总线：注册 handler，拦截管线与执行
 │   │   ├── event-bus/     # 事件总线：发布/订阅，支持内存及持久化审计
 │   │   ├── registry/      # Action 注册表：供 AI Agent 发现可用工具
-│   │   ├── capability-system/ # 权限守卫与 RBAC 控制
+│   │   ├── capability/    # 权限守卫与 RBAC 控制
 │   │   ├── worker-runtime/    # 插件 Worker 线程运行时与沙箱隔离
 │   │   ├── plugin-host/       # 插件宿主环境与生命周期管理器
 │   │   ├── process-manager/   # 进程与定时任务管理器
-│   │   └── db/            # SQLite 数据库核心、30+ 数据表迁移与备份灾备管理器
+│   │   └── db/            # SQLite 数据库核心、40+ 迁移脚本与备份灾备管理器
 │   ├── plugin-sdk/        # 插件开发类型与 DI 依赖注入 Token
 │   ├── plugin-test-kit/   # 插件测试 Mock 上下文套件
 │   ├── plugins/           # 平台内置插件（builtin, vfs, process, management, ai-planner 等）
-│   └── mfe-*/             # 微前端包（whiteboard, courseware 等）
+│   ├── bridge-sdk/        # 课件 iframe 的 LMS Bridge SDK
+│   └── interactive-lab/   # 虚拟实验室示例插件（插件兼容性测试夹具）
 ├── docs/                  # 架构设计、报告与插件开发教程
 ├── migrations/            # 数据库结构版本迁移脚本
 ├── assets/                # 静态资源（插件 zip 等）
@@ -72,7 +73,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台。基于
 
 ### 内核设计
 
-`kernelContainer` 是全局单例，组装了 6 个核心子系统：
+`kernelContainer` 是全局单例，组装了 7 个核心子系统：
 
 1. **EventBus** — 发布/订阅事件，所有事件自动写入 SQLite 审计日志（`events` 表）
 2. **CommandBus** — 命令执行管线。注册 handler → 执行命令。内置拦截器做权限检查和高危操作审批
@@ -171,7 +172,7 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 
 前端彻底摆脱早期巨石单体设计：
 
-- `App.tsx` 保持极简装配（~130 行），根据当前用户角色和路由渲染对应的 Feature 容器。
+- `App.tsx` 保持极简装配（157 行），根据当前用户角色和路由渲染对应的 Feature 容器。
 - 状态集中于 `src/store/` 的各个 Zustand Store（如 `useUserStore`, `useClassroomStore`, `useThemeStore` 等）。
 - 复杂业务模块高度自治在 `src/features/` 下。
 
