@@ -773,14 +773,15 @@ export default {
 /**
  * 全栈随堂测验前端 UI 界面组件
  *
- * 必须 default export 一个 React 组件。
+ * 前端模块必须 default export 一个 { manifest, activate(ctx) } 对象（不是裸组件）。
+ * UI 组件在 activate 中通过 ctx.ui.registerExtensionPoint 挂到扩展槽位。
  * React, Recharts, LucideReact 不需要打包在 ZIP 内，由 Host 平台运行时全局注入。
  */
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Play, Award, CheckCircle, XCircle } from 'lucide-react';
 
-export default function ClassroomQuizWidget({ context }: { context: any }) {
+function ClassroomQuizWidget({ context, ctx }: { context?: any; ctx: any }) {
   // context 会由宿主渲染插件时传入，例如包含当前 { lessonId, userRole, userId }
   const lessonId = context?.lessonId || 'default-lesson-id';
   const isTeacher = context?.userRole === 'teacher';
@@ -791,8 +792,9 @@ export default function ClassroomQuizWidget({ context }: { context: any }) {
   const [resultMsg, setResultMsg] = useState<string>('');
   const [chartData, setChartData] = useState<any[]>([]);
 
-  // 跨运行时通信：使用 window.HostSharedDeps 的 API
-  const { uiService, socketService } = (window as any).HostSharedDeps;
+  // 跨运行时通信：由 activate(ctx) 注入的 FrontendPluginContext 提供，
+  // 不存在 window.HostSharedDeps.socketService / window.FrontendHost。
+  const { uiService, socketService } = ctx.services;
 
   useEffect(() => {
     // 监听实时 WebSocket 推送过来的新题目创建事件
@@ -830,7 +832,7 @@ export default function ClassroomQuizWidget({ context }: { context: any }) {
     if (!activeQuiz) return;
     try {
       // 通过 invokeCommand 执行服务端对应的 Handler
-      const res = await (window as any).FrontendHost.invokeCommand('ext-classroom-quiz.get_stats', {
+      const res = await ctx.invokeCommand('ext-classroom-quiz.get_stats', {
         questionId: activeQuiz.quizId,
       });
       if (res && res.stats) {
@@ -848,7 +850,7 @@ export default function ClassroomQuizWidget({ context }: { context: any }) {
       return;
     }
     try {
-      const res = await (window as any).FrontendHost.invokeCommand('ext-classroom-quiz.submit_answer', {
+      const res = await ctx.invokeCommand('ext-classroom-quiz.submit_answer', {
         questionId: activeQuiz.quizId,
         answer: selectedAnswer,
       });
@@ -947,6 +949,29 @@ export default function ClassroomQuizWidget({ context }: { context: any }) {
     </div>
   );
 }
+
+/**
+ * 前端插件入口：default export 必须是 { manifest, activate(ctx) } 对象。
+ * activate 里把组件注册到宿主扩展槽位；宿主会注入 pluginId 与统一 props。
+ */
+export default {
+  manifest: {
+    id: 'ext-classroom-quiz',
+    name: '课堂互动小测验',
+    version: '1.0.0',
+    main: 'frontend.js',
+    engines: { openlearn: '>=0.7.0' },
+  },
+  async activate(ctx: any) {
+    ctx.ui.registerExtensionPoint('teacher.tab', {
+      id: 'ext-classroom-quiz.tab',
+      label: '随堂测验',
+      pluginId: ctx.pluginId,
+      position: 20,
+      component: (props: any) => <ClassroomQuizWidget {...props} ctx={ctx} />,
+    });
+  },
+};
 ```
 
 ---
