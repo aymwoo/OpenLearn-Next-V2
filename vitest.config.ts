@@ -49,7 +49,6 @@ export default defineConfig({
     alias: {
       '@openlearn/plugin-sdk': fromRepoRoot('./packages/plugin-sdk/index.ts'),
       '@openlearn/plugin-test-kit': fromRepoRoot('./packages/plugin-test-kit/index.ts'),
-      exceljs: fromRepoRoot('./packages/core/__mocks__/xlsx.ts'),
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s
     testTimeout: 60000,
