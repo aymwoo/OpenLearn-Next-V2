@@ -101,7 +101,9 @@ async function openCourseEditor(page: Page, courseTitle: string): Promise<void> 
   const search = page.getByPlaceholder('Search courses by title...');
   await expect(search).toBeVisible();
   await search.fill(courseTitle);
-  await page.getByText(courseTitle, { exact: true }).click();
+  // 侧边栏改版后同一标题会同时出现在课程卡片、课堂侧栏与大屏 header；
+  // 用课程卡片标题的 test id 定位，避免 strict mode 命中多个节点。
+  await page.getByTestId('course-title').filter({ hasText: courseTitle }).first().click();
   await expect(page.getByText(`课程编辑器: ${courseTitle}`)).toBeVisible();
 }
 
