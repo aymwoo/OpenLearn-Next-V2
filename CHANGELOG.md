@@ -1959,7 +1959,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Breaking Changes
 
 - **移除「国家智慧教育公共服务平台连接器」（@openlearn/plugin-smart-edu）及其全部基础设施**（用户决策：国家平台不提供公开的第三方网关，该连接器在可预见的时期内无法产生真实价值，整体移除而非默认停用）：
-  - **内核**：删除 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts)（含 4 个 `smart_edu.*` 命令、ActionRegistry descriptor 与 manifest 技能声明）及其测试；从系统内核插件链（`packages/core/kernel/index.ts`）摘除注册；CapabilityGuard 角色回退表移除 `smart_edu:*` 授权（capability 表随之回归诚实——不存在的能力不再预授）；
+  - **内核**：删除 `./packages/plugins/national-smart-edu.ts`（含 4 个 `smart_edu.*` 命令、ActionRegistry descriptor 与 manifest 技能声明）及其测试；从系统内核插件链（`packages/core/kernel/index.ts`）摘除注册；CapabilityGuard 角色回退表移除 `smart_edu:*` 授权（capability 表随之回归诚实——不存在的能力不再预授）；
   - **服务端**：删除 `/api/external/smart-edu/*` 四条网关路由（resources/import/report/status）；`ai.skill.provider` 的**通用消费机制**（工具注入 / 插件 actor 派发 / fail-closed）保留——它是面向任意第三方插件的槽位契约，非连接器专属；
   - **前端**：删除 `src/features/smart-edu/`（9 个业务组件 + 状态 Hook + 2 个测试套件）；`main.tsx` 开机注册摘除；9 个宿主槽位挂载点（`course.list.toolbar.action`、`course.card.badge`、`header.status_pill` 等）**保留**——它们是通用宿主面，第三方插件仍可贡献；
   - **内置扩展包机制随包清退**：`builtin-bundles.ts`、Plugin Center「内置扩展包」卡片、store 的启停覆盖表与 storage 同步一并移除（该机制为承载此连接器而建，现无任何注册包；未来需要时按 R-5/R-8 整改后的成熟形态重建）；熔断降级路径改回「摘除扩展点 + 宿主停用」双通道；
@@ -1985,17 +1985,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **v0.6.0 审计整改：连接器可用性与诚实性 + 插件桥接加固**（四条 Critical 与配套 Required 的修复）：
   - **C-1 扩展组件永久悬挂**：`ExtensionPointConfig.component` 类型契约修正为「直接组件 | 已打标 lazy 工厂」联合（[`src/plugin-host/types.ts`](./src/plugin-host/types.ts)）；`registerSmartEduExtensions` 的 9 处注册与 plugin-host 静态桥接占位改为直接组件——此前未打标的 `() => Promise.resolve({default})` 工厂被渲染器当作直组件渲染，React 19 下 Suspense 永久悬挂且不抛错，ErrorBoundary/熔断器全程失效，9 个 smart-edu 扩展上线即骨架屏。同步修复熔断器复位时序（`componentDidMount` 在错误挂载路径清零计数 → 改为 `CrashResetProbe` 仅在子树真实提交后复位）与熔断触发的恢复路径（`onBreakerTrip` 现同步摘除该插件全部扩展点，脱离生命周期的内置注册不再是 no-op）；
-  - **C-2 网关端点对教师全体 Access Denied**：[`CapabilityGuard`](./packages/core/capability/guard/capability-guard.ts) 角色回退表补授 `smart_edu:*`（教师全量）与 `smart_edu:read`（学生只读）——此前四条 `/api/external/smart-edu/*` 端点对除硬编码管理员外的所有用户拒绝；新增 [`packages/core/capability/__tests__/smart-edu-capability.test.ts`](./packages/core/capability/__tests__/smart-edu-capability.test.ts) 回归钉；
+  - **C-2 网关端点对教师全体 Access Denied**：[`CapabilityGuard`](./packages/core/capability/guard/capability-guard.ts) 角色回退表补授 `smart_edu:*`（教师全量）与 `smart_edu:read`（学生只读）——此前四条 `/api/external/smart-edu/*` 端点对除硬编码管理员外的所有用户拒绝；新增 `./packages/core/capability/__tests__/smart-edu-capability.test.ts` 回归钉；
   - **C-3 声明式 commandType 绕过插件命名空间**：`command_palette.item` / `quick_insert.item` 静态桥接注册时按 `resolvePluginCommandType` 前缀化（与 `ctx.invokeCommand` 同一规则），manifest 作者可写裸命令名且只能命中本插件 handler；命令面板/斜杠菜单的 `execute` 现检查返回值并以 toast 反馈失败（此前 404/500 完全静默）；
-  - **C-4 连接器真实对接（替换纯模拟实现）**：[`national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts) 重写为真实网关 HTTP 客户端——`SMARTEDU_API_BASE/APP_KEY/APP_SECRET/TIMEOUT_MS` 配置（[`.env.example`](./.env.example)）、HMAC-SHA256 请求签名、真实 SHA-256 提交体哈希（`X-SE-Payload-Hash` 头）、真实健康探测（计时 `/health`，失败如实报告 UNREACHABLE）；**删除全部虚构数据**（3 门假精品课、假回执 `SHA256:`+UUID、恒真 `connected:true/rtt 16ms`/伪造证书）；网关契约文档见 [`docs/plugin/smart-edu-gateway.md`](./docs/plugin/smart-edu-gateway.md)；
+  - **C-4 连接器真实对接（替换纯模拟实现）**：`./packages/plugins/national-smart-edu.ts` 重写为真实网关 HTTP 客户端——`SMARTEDU_API_BASE/APP_KEY/APP_SECRET/TIMEOUT_MS` 配置（[`.env.example`](./.env.example)）、HMAC-SHA256 请求签名、真实 SHA-256 提交体哈希（`X-SE-Payload-Hash` 头）、真实健康探测（计时 `/health`，失败如实报告 UNREACHABLE）；**删除全部虚构数据**（3 门假精品课、假回执 `SHA256:`+UUID、恒真 `connected:true/rtt 16ms`/伪造证书）；网关契约文档见 `./docs/plugin/smart-edu-gateway.md`；
   - **prop 错位四连修复**：`course.card.badge`/`action` 宿主传 `course`（原 `lesson`，徽标/按钮永不渲染）、`course.list.toolbar.action` 传 `onRefresh`（原 `refreshLessons`，导入后列表不刷新）、`SegmentEditorCard` 补传 `onPatch`/`readOnly`（原只读模式出按钮、点击假成功）；`AdminDashboardCardSlotProps`/`HeaderStatusPillSlotProps`/`ClassroomPostClassExporterSlotProps` 类型对齐宿主实际传参；
   - **课后导出与看板去假数据**：`SmartEduPostClassExporter` 只导出真实统计（`attemptsCount`/`exitTicketStats`），缺失维度显式置 `null` 并标注 dataCompleteness（此前恒回退硬编码 '100%'/36/88.5/18）；`SmartEduAdminCard` 改为真实网关探测 + 宿主 `sqliteStats`（此前"3 门/100%/16ms"纯假数据）；顶栏胶囊/课堂横幅/大屏跑马灯改为诚实三态（未配置/在线/离线），故障绝不渲染为健康；
   - **导入弹窗请求竞态修复**：搜索请求加 300ms 防抖 + AbortController + 过期响应守卫 + `res.ok` 检查，未配置/失败状态如实呈现；
-  - **端到端回归测试**：新增 [`smart-edu-e2e-slot.test.tsx`](./src/features/smart-edu/__tests__/smart-edu-e2e-slot.test.tsx)（真实注册路径 → 真实 ExtensionPointRenderer 渲染，拦截"组件直测 + store 直塞"模式漏过的全链路回归）；内核插件测试重写为网关契约测试（stub fetch，覆盖未配置/检索/导入/上报哈希/健康探测/签名头）。
+  - **端到端回归测试**：新增 `./src/features/smart-edu/__tests__/smart-edu-e2e-slot.test.tsx`（真实注册路径 → 真实 ExtensionPointRenderer 渲染，拦截"组件直测 + store 直塞"模式漏过的全链路回归）；内核插件测试重写为网关契约测试（stub fetch，覆盖未配置/检索/导入/上报哈希/健康探测/签名头）。
 
 - **v0.6.0 审计遗留债务清理**（插件可扩展性与管理能力收尾）：
   - **manifest contributes 通用声明式桥接**：`plugin-host.ts` 的 5 个硬编码槽位 if 块替换为通用循环——任何数组型 `contributes` 键一律注册进 store（slotProps 携带完整条目、commandType 按插件命名空间前缀化、label 按 title→label→name 解析、legacy `classroomTools` 存在时跳过 `classroom.tool` 防双注册）。此前 schema 放行的 40+ 槽位声明被静默丢弃，第三方插件照 manifest schema 声明必然白写；
-  - **内置扩展包接入管理生命周期**：`plugin-host-store` 新增 `builtinBundlesDisabled`（localStorage 持久）与 `isBuiltinBundleEnabled`/`setBuiltinBundleEnabled`；`registerSmartEduExtensions` 受门控；Plugin Center「商店」页新增 [`BuiltinExtensionBundlesCard`](./src/components/BuiltinExtensionBundlesCard.tsx)——内置扩展包（smart-edu）此前开机直注册、管理台不可见不可停用，现与已安装插件同等可启停（停用即注销其全部扩展点）；
+  - **内置扩展包接入管理生命周期**：`plugin-host-store` 新增 `builtinBundlesDisabled`（localStorage 持久）与 `isBuiltinBundleEnabled`/`setBuiltinBundleEnabled`；`registerSmartEduExtensions` 受门控；Plugin Center「商店」页新增 `./src/components/BuiltinExtensionBundlesCard.tsx`——内置扩展包（smart-edu）此前开机直注册、管理台不可见不可停用，现与已安装插件同等可启停（停用即注销其全部扩展点）；
   - **`ai_sidebar.tab` 双形态渲染分支**：渲染器补 button（紧凑 tab 按钮，点击写回 `setActiveTab('plugin:{pluginId}/{extId}')`）与 panel（仅渲染 activeTab 命中的单面板）分支——此前 button 态把插件完整组件内联进 tab 条、panel 态多插件时全部堆叠；
   - **`computer_lab.seat.overlay` 点击冒泡隔离**：座位单元内的扩展 overlay 包裹 `stopPropagation` 容器——座位根节点 onClick 是座位安排/移除入口，插件 overlay 内点击不得误触；
   - **10 个槽位补 SlotProps 类型契约**：`timetable.toolbar.action`/`timetable.card.badge`/`computer_lab.toolbar.action`/`computer_lab.seat.overlay`/`student.dashboard.hero_widget`/`student.assignment.toolbar.action`/`student.lesson.notes_addon`/`student.lesson.toolbox`/`admin.user.action`/`ai_sidebar.tab`（与各宿主实际传参逐一核对），第三方插件不再需要猜宿主形状；
@@ -2031,18 +2031,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
-- 新增 [`docs/AUDIT_REPORT.md`](./docs/AUDIT_REPORT.md)：对 `openlearn-next@0.6.0` 的结构梳理与代码审计（只读，未改业务代码）。记录安全、依赖、类型、测试与构建的实测结果。
+- 新增 [`docs/AUDIT_REPORT.md`](./docs/audit/AUDIT_REPORT.md)：对 `openlearn-next@0.6.0` 的结构梳理与代码审计（只读，未改业务代码）。记录安全、依赖、类型、测试与构建的实测结果。
 
 ## [0.6.0] - 2026-10-11
 
 ### Features
 
 - **官方《国家智慧教育公共服务平台连接器》（@openlearn/plugin-smart-edu）标杆插件落地**：
-  - **核心命令总线与内核事务落库**：在 [`packages/plugins/national-smart-edu.ts`](./packages/plugins/national-smart-edu.ts) 实现内核级连接器插件，支持精品课分类检索 (`smart_edu.search_resources`)、课程与白板图元原子化事务落库 (`smart_edu.import_course`)、学情数据国家平台 CELTS-3 规范回执签发与广播 (`smart_edu.report_metrics`) 以及多活健康心跳检测 (`smart_edu.get_status`)；并在 [`packages/core/kernel/index.ts`](./packages/core/kernel/index.ts) 系统内核插件链注册；
+  - **核心命令总线与内核事务落库**：在 `./packages/plugins/national-smart-edu.ts` 实现内核级连接器插件，支持精品课分类检索 (`smart_edu.search_resources`)、课程与白板图元原子化事务落库 (`smart_edu.import_course`)、学情数据国家平台 CELTS-3 规范回执签发与广播 (`smart_edu.report_metrics`) 以及多活健康心跳检测 (`smart_edu.get_status`)；并在 [`packages/core/kernel/index.ts`](./packages/core/kernel/index.ts) 系统内核插件链注册；
   - **开放外部网关 REST API**：在 [`server/routes/plugins.ts`](./server/routes/plugins.ts) 暴露 `/api/external/smart-edu/resources`、`/import`、`/report`、`/status` 四组直连网关路由；
-  - **全域扩展槽位 10 个端点全覆盖装配**：在 [`src/features/smart-edu/`](./src/features/smart-edu/) 实现完整业务连接组件，包括 `SmartEduImportModal`（精品课检索与导入弹窗）、`SmartEduCourseToolbarAction` (`course.list.toolbar.action`)、`SmartEduCourseBadge` (`course.card.badge`)、`SmartEduCourseCardAction` (`course.card.action`)、`SmartEduSegmentAction` (`editor.segment.action`)、`SmartEduAlertBanner` (`classroom.alert.banner`)、`SmartEduStageTicker` (`classroom.stage.display.ticker`)、`SmartEduPostClassExporter` (`classroom.post_class.exporter`)、`SmartEduHeaderStatusPill` (`header.status_pill`) 以及 `SmartEduAdminCard` (`admin.dashboard.card`)；
+  - **全域扩展槽位 10 个端点全覆盖装配**：在 `./src/features/smart-edu/` 实现完整业务连接组件，包括 `SmartEduImportModal`（精品课检索与导入弹窗）、`SmartEduCourseToolbarAction` (`course.list.toolbar.action`)、`SmartEduCourseBadge` (`course.card.badge`)、`SmartEduCourseCardAction` (`course.card.action`)、`SmartEduSegmentAction` (`editor.segment.action`)、`SmartEduAlertBanner` (`classroom.alert.banner`)、`SmartEduStageTicker` (`classroom.stage.display.ticker`)、`SmartEduPostClassExporter` (`classroom.post_class.exporter`)、`SmartEduHeaderStatusPill` (`header.status_pill`) 以及 `SmartEduAdminCard` (`admin.dashboard.card`)；
   - **开箱即用自动注册与类型安全**：在 [`src/main.tsx`](./src/main.tsx) 开箱调用 `registerSmartEduExtensions()`；在 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 严格导出全部对应 SlotProps 类型；
-  - **端到端专项测试矩阵**：新增 [`packages/plugins/__tests__/national-smart-edu.test.ts`](./packages/plugins/__tests__/national-smart-edu.test.ts) (4/4) 与 [`src/features/smart-edu/__tests__/smart-edu-connector.test.tsx`](./src/features/smart-edu/__tests__/smart-edu-connector.test.tsx) (8/8) 自动化测试，配合全域扩展槽测试（合计 30/30 项全绿）。
+  - **端到端专项测试矩阵**：新增 `./packages/plugins/__tests__/national-smart-edu.test.ts` (4/4) 与 `./src/features/smart-edu/__tests__/smart-edu-connector.test.tsx` (8/8) 自动化测试，配合全域扩展槽测试（合计 30/30 项全绿）。
 
 - **全域 20 个业务扩展槽位全量落地与国家智慧教育公共服务平台直连支持**：
   - **架构契约双源一致性（SSOT）与防漂移**：在 [`src/plugin-host/types.ts`](./src/plugin-host/types.ts) 中将 `ExtensionSlot` 联合类型扩充至 95 个；在 [`packages/core/esm-loader/manifest-schema.ts`](./packages/core/esm-loader/manifest-schema.ts) 为 20 个槽位声明完整 Zod 校验 Schema；在 [`packages/core/plugin-host/contribution-registry.ts`](./packages/core/plugin-host/contribution-registry.ts) 与 [`packages/plugin-sdk/index.ts`](./packages/plugin-sdk/index.ts) 同步配置接口，并通过 `generate-dts.mjs` 更新 [`packages/plugin-sdk/generated.d.ts`](./packages/plugin-sdk/generated.d.ts)；
@@ -3981,7 +3981,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **SDK 依赖版本对齐与发版脚本加固 (Dependency & Publish Hardening)**：
   - 升级根目录 `package.json` 对 `@openlearn/plugin-sdk` 的依赖为 `^3.5.2`；
   - 加固 [`scripts/publish.sh`](./scripts/publish.sh)，前置注入 `pnpm lint` 与防漂移测试强制门禁；
-  - 完善发版指南 [`.agents/skills/openlearn-release-workflow/SKILL.md`](./.agents/skills/openlearn-release-workflow/SKILL.md) 标准操作规程。
+  - 完善发版指南 `./.agents/skills/openlearn-release-workflow/SKILL.md` 标准操作规程。
 - **生态与插件开发规范文档纠偏 (Ecosystem Doc Fixes)**：
   - 修正 [`docs/plugin/plugin-manifest-spec.md`](./docs/plugin/plugin-manifest-spec.md) 与插件开发教程中的 SemVer 示范，全面替换为 `">=0.2.5"` 并详细阐述 SemVer 0.x 规则。
 
@@ -4115,7 +4115,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **微前端沙箱与互动课件主题同步 (MFE & Courseware Theme Bridge)**：升级 [`src/services/lms-bridge.ts`](./src/services/lms-bridge.ts) 与 [`server/utils/bridge-sdk.ts`](./server/utils/bridge-sdk.ts)，宿主向所有课件沙箱 `iframe` 跨域广播 `theme:changed` 与 `LMS_THEME_CHANGED` 消息；沙箱内部自动响应式写入 `data-theme` 属性与 CSS 变量，并为第三方课件提供 `window.LMS.getTheme()` 查询 API。
   - **课件加载主动握手**：在 [`InteractiveCoursewareViewer.tsx`](./src/features/courseware/InteractiveCoursewareViewer.tsx) 与 [`HtmlAppletFrame.tsx`](./src/features/whiteboard/components/HtmlAppletFrame.tsx) 的 iframe `onLoad` 时主动下发当前主题，保障各类多文件互动课件与动态 HTML 小应用首屏样式无缝匹配。
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 2)**：
-  - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](./src/features/whiteboard/rendering-engine/theme/theme-manager.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
+  - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](./src/features/whiteboard/theme.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
   - **白板悬浮控件 Token 化**：白板悬浮工具栏 [`WhiteboardToolbar.tsx`](./src/features/whiteboard/components/WhiteboardToolbar.tsx) 与底部分页导航胶囊 [`WhiteboardPageBar.tsx`](./src/features/whiteboard/components/WhiteboardPageBar.tsx) 全面语义化，支持选取、画笔、几何图形、荧光笔色盘与大纲抽屉无缝随全局换肤。
   - **核心教学主视图容器适配**：课堂控制中心 [`LiveClassroomView.tsx`](./src/components/LiveClassroomView.tsx)、备课工作台 [`LessonEditorView.tsx`](./src/features/teacher/LessonEditorView.tsx)（及画板组件库 [`LessonPalette.tsx`](./src/features/teacher/lesson-editor/LessonPalette.tsx)）与学生端工作台 [`StudentView.tsx`](./src/features/student/StudentView.tsx) 全面接入设计 Token。
   - **单测护航**：新增 [`theme-manager.test.ts`](./src/features/whiteboard/__tests__/theme-manager.test.ts)，全量 174 个测试套件、976 个用例持续保持 100% 绿灯。
