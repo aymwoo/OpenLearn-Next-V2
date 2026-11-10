@@ -1,6 +1,6 @@
 # 可观测性架构（Observability）
 
-本文以当前代码为唯一真源，描述 OpenLearn V2 已经落地的日志、审计、错误上报、探针和指标。核对范围：`packages/core/observability/`、`server/routes/health.ts`、`server/middleware/request-observability.ts`、`server/routes/client-errors.ts`、`server/utils/logger.ts`、`server/utils/error-handler.ts`、`packages/core/kernel/index.ts`、`packages/core/ai-capability/logging/capability-logger.ts`、`docker-compose.yml`、`Dockerfile`。
+本文以当前代码为唯一真源，描述 OpenLearn V2 已经落地的日志、审计、错误上报、探针和指标。核对范围：`packages/core/observability/`、`server/routes/health.ts`、`server/middleware/request-observability.ts`、`server/routes/client-errors.ts`、`server/utils/error-handler.ts`、`packages/core/kernel/index.ts`、`packages/core/ai-capability/logging/capability-logger.ts`、`docker-compose.yml`、`Dockerfile`。
 
 没有分布式追踪。Prometheus 文本只包含下面 §4 列出的序列。进程内计数器随进程重启归零。
 
@@ -32,7 +32,7 @@ HTTP 入口不在这个目录里：
 | 路由 `sendSafeError` 的 5xx                        | `server/utils/error-handler.ts`              |
 | 进程级 `uncaughtException` / `unhandledRejection`  | `server.ts`                                  |
 
-`server/utils/logger.ts` 只 re-export `logger` 与 `createLogger`。生产代码直接 import `packages/core/observability/logger.ts`。`packages/core/__tests__/layering.test.ts` 禁止 `packages/core` 再去 import `server/`。
+早期的 server/utils 下 logger 兼容 re-export 已随 #419 删除；生产代码直接 import `packages/core/observability/logger.ts`。`packages/core/__tests__/layering.test.ts` 禁止 `packages/core` 再去 import `server/`。
 
 `packages/core/di/token.ts` 没有日志 Token。插件日志是上下文属性，见 §6。
 

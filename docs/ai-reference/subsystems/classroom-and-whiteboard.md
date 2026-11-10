@@ -102,7 +102,7 @@ await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, 
 
 ### 4.1 后端只有两件事
 
-`packages/core/whiteboard/index.ts`（约 200 行）：
+`server/services/whiteboard-service.ts`（packages/core/whiteboard 只保留 quiz-answer 纯函数）：
 
 1. 把元素写进 `whiteboard_elements` 表。
 2. 发事件（`whiteboard.element_drawn` / `element_updated` / `batch_drawn` / `element_deleted` / `cleared`）。

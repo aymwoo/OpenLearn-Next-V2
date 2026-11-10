@@ -43,7 +43,7 @@ graph TD
 
 ### 1. CapabilityGuard（权限防护）
 
-`packages/core/capability-system/index.ts` 中的 `CapabilityGuard` 是 Layer 0 安全设施。它被 `Kernel` 构造函数的 `commandBus.setInterceptor(...)` 调用，为每个已注册 action 的 `capabilityRequired` 字符串做校验。
+`packages/core/capability/guard/capability-guard.ts` 中的 `CapabilityGuard` 是 Layer 0 安全设施。它被 `Kernel` 构造函数的 `commandBus.setInterceptor(...)` 调用，为每个已注册 action 的 `capabilityRequired` 字符串做校验。
 
 其 API 只有 4 个方法：
 

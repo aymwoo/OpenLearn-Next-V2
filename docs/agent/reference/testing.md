@@ -420,7 +420,7 @@ afterEach(async () => {
 | `environment`                 | `'jsdom'`                                                                         | 全局 `TextEncoder` 等被 `vitest.setup.ts` 换成 Node 实现                                          |
 | `include`                     | `packages/**` `server/**` `src/**` `scripts/**` 下 `__tests__/**/*.test.{ts,tsx}` | **通配**（旧版是 20 条白名单，新目录会被静默跳过）                                                |
 | `exclude`                     | `packages/core/__tests__/lti-provider-plugin.test.ts`                             | 依赖被 gitignore 的 `v2_plugins/`，新克隆必红，属预期                                             |
-| `alias`                       | `@openlearn/plugin-sdk` → 仓库源码；`exceljs` → `packages/core/__mocks__/xlsx.ts` | 仓库内测试走源码，不走 npm 产物                                                                   |
+| `alias`                       | `@openlearn/plugin-sdk` → 仓库源码                                                | 仓库内测试走源码，不走 npm 产物；exceljs 不再全局 mock（#436）                                    |
 | `testTimeout` / `hookTimeout` | `60000`                                                                           | ZIP 装载类集成测试可 >5s                                                                          |
 | coverage thresholds           | lines 57 / branches 46 / functions 52 / statements 55                             | 底线；真棘轮在 `scripts/coverage-ratchet.mjs` + `coverage-baseline.json`（-0.5pp 容差，只升不降） |
 

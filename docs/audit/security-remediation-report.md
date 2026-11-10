@@ -175,7 +175,7 @@
 
 #### 3.3.1 xlsx → exceljs 替换（ARCH-01）
 
-**涉及文件**：`package.json`, `packages/core/plugin-host/context-builder.ts`, `packages/core/worker-runtime/worker-manager.ts`, `packages/core/plugin-host/types.ts`, `vitest.config.ts`, `packages/core/__mocks__/xlsx.ts`
+**涉及文件**：`package.json`, `packages/core/plugin-host/context-builder.ts`, `packages/core/worker-runtime/worker-manager.ts`, `packages/core/plugin-host/types.ts`, `vitest.config.ts`（该 mock 已随 #436 删除，需要时在测试内 `vi.mock('exceljs')`）
 
 **变更**：
 
@@ -244,28 +244,28 @@
 
 ## 4. 修改文件清单
 
-| 文件路径                                         | 修改类型        | 关联编号                       |
-| ------------------------------------------------ | --------------- | ------------------------------ |
-| `server/routes/os.ts`                            | 安全修复        | SEC-01, SEC-02, SEC-07, SEC-11 |
-| `server/routes/roster.ts`                        | 安全修复        | SEC-03, SEC-09, SEC-10         |
-| `server/routes/workspace.ts`                     | 安全修复        | SEC-04, SEC-05                 |
-| `server/routes/plugins.ts`                       | 安全修复        | SEC-05                         |
-| `server/routes/admin.ts`                         | 安全修复        | SEC-06                         |
-| `server/routes/assignments.ts`                   | 安全修复        | SEC-08                         |
-| `server.ts`                                      | 安全修复 + 配置 | SEC-11, SEC-12, MED-02, MED-03 |
-| `server/context.ts`                              | 接口扩展        | SEC-11                         |
-| `server/middleware/auth.ts`                      | 无修改（参考）  | —                              |
-| `packages/core/plugin-host/context-builder.ts`   | 依赖替换        | ARCH-01                        |
-| `packages/core/worker-runtime/worker-manager.ts` | 依赖替换        | ARCH-01                        |
-| `packages/core/plugin-host/types.ts`             | 依赖替换        | ARCH-01                        |
-| `packages/core/__mocks__/xlsx.ts`                | Mock 更新       | ARCH-01                        |
-| `package.json`                                   | 依赖管理        | ARCH-01, ARCH-02               |
-| `tsconfig.json`                                  | 类型安全        | ARCH-06                        |
-| `vite.config.ts`                                 | 构建配置        | ARCH-03, ARCH-04, ARCH-05      |
-| `vitest.config.ts`                               | 测试配置        | ARCH-01                        |
-| `src/store/appStore.ts`                          | 死代码清理      | ARCH-07                        |
-| `src/store/index.ts`                             | 死代码清理      | ARCH-07                        |
-| `migrations/README.md`                           | 文档补全        | ARCH-08                        |
+| 文件路径                                               | 修改类型        | 关联编号                       |
+| ------------------------------------------------------ | --------------- | ------------------------------ |
+| `server/routes/os.ts`                                  | 安全修复        | SEC-01, SEC-02, SEC-07, SEC-11 |
+| `server/routes/roster.ts`                              | 安全修复        | SEC-03, SEC-09, SEC-10         |
+| `server/routes/workspace.ts`                           | 安全修复        | SEC-04, SEC-05                 |
+| `server/routes/plugins.ts`                             | 安全修复        | SEC-05                         |
+| `server/routes/admin.ts`                               | 安全修复        | SEC-06                         |
+| `server/routes/assignments.ts`                         | 安全修复        | SEC-08                         |
+| `server.ts`                                            | 安全修复 + 配置 | SEC-11, SEC-12, MED-02, MED-03 |
+| `server/context.ts`                                    | 接口扩展        | SEC-11                         |
+| `server/middleware/auth.ts`                            | 无修改（参考）  | —                              |
+| `packages/core/plugin-host/context-builder.ts`         | 依赖替换        | ARCH-01                        |
+| `packages/core/worker-runtime/worker-manager.ts`       | 依赖替换        | ARCH-01                        |
+| `packages/core/plugin-host/types.ts`                   | 依赖替换        | ARCH-01                        |
+| `vitest.config.ts`（exceljs 全局 mock 已随 #436 移除） | Mock 调整       | ARCH-01                        |
+| `package.json`                                         | 依赖管理        | ARCH-01, ARCH-02               |
+| `tsconfig.json`                                        | 类型安全        | ARCH-06                        |
+| `vite.config.ts`                                       | 构建配置        | ARCH-03, ARCH-04, ARCH-05      |
+| `vitest.config.ts`                                     | 测试配置        | ARCH-01                        |
+| `src/store/appStore.ts`                                | 死代码清理      | ARCH-07                        |
+| `src/store/index.ts`                                   | 死代码清理      | ARCH-07                        |
+| `migrations/README.md`                                 | 文档补全        | ARCH-08                        |
 
 ---
 
