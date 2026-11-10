@@ -99,6 +99,8 @@ export default [
       // （占全仓 12,466 条的 50%），把 ESLint 告警预算棘轮从 6,237 顶到 12,477 ——
       // 本地门禁直接不可用，而 CI 上根本不存在这个目录。
       '.qoder/**',
+      '.codebuddy/**',
+      '.workbuddy/**',
       '*.cjs',
       '*.min.js',
       '**/*.min.js',

@@ -14,6 +14,7 @@ import { resolveElementStageId, enforceStageAccess } from '../../packages/core/l
 import { defaultStageGuardPipeline } from '../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { IStageGuardServiceToken } from '../../packages/core/di/interfaces.js';
 import { gradeQuizSubmission, resolveCorrectIndex } from '../../packages/core/whiteboard/quiz-answer.js';
+import { TtlReadCache, type CacheStats, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
 
 export const VALID_ICEBREAKER_MOODS = ['fullPower', 'needCoffee', 'needHelp'] as const;
 export type IcebreakerMood = (typeof VALID_ICEBREAKER_MOODS)[number];
@@ -124,15 +125,56 @@ export interface TopPerformersResult {
 
 export class DiagnosticService {
   private readonly classIcebreakerMap = new Map<string, IcebreakerStats>();
+  private readonly cache: TtlReadCache<any>;
 
   constructor(
     private readonly db: Database.Database = kernelContainer.db,
     private readonly eventPublisher: typeof publishClassroomEvent = publishClassroomEvent,
     private readonly readDb?: Database.Database,
-  ) {}
+    cacheOptions?: { defaultTtlMs?: number; maxEntries?: number },
+  ) {
+    this.cache = new TtlReadCache<any>({
+      defaultTtlMs: cacheOptions?.defaultTtlMs ?? 3000,
+      maxEntries: cacheOptions?.maxEntries ?? 1024,
+    });
+  }
 
   private get reader(): Database.Database {
     return this.readDb || kernelContainer.getReadDb() || this.db;
+  }
+
+  /**
+   * 获取当前缓存统计与命中率（供运维与压测观测）
+   */
+  public getCacheStats(): CacheStats {
+    return this.cache.getStats();
+  }
+
+  /**
+   * 失效课节级相关聚合与学情只读缓存（写事件主动失效）
+   */
+  public invalidateLessonCache(lessonId: string): void {
+    this.cache.invalidatePrefix(`tp:${lessonId}:`);
+    this.cache.invalidatePrefix('tp:global:');
+    this.cache.invalidate(`quiz-counts:${lessonId}`);
+    this.cache.invalidate(`quiz-subs:${lessonId}`);
+    this.cache.invalidatePrefix(`preclass:${lessonId}:`);
+    this.cache.invalidate(`mistakes:${lessonId}`);
+    invalidateClassroomReadCache(lessonId);
+  }
+
+  /**
+   * 清空全部只读缓存
+   */
+  public clearCache(): void {
+    this.cache.clear();
+  }
+
+  /**
+   * 重置只读缓存计数器
+   */
+  public resetCacheStats(): void {
+    this.cache.resetStats();
   }
 
   // ── 1. 课前学情诊断与错题卡点归集 (Pre-Class Diagnostic & Top Mistakes) ────────
@@ -141,60 +183,62 @@ export class DiagnosticService {
    * 获取课前学情诊断综合报表（课前完成度、错题排行、分层掌握、破冰心态）
    */
   public getPreClassDiagnostic(lessonId: string, classId?: string): PreClassDiagnosticResult {
-    const lesson = this.reader.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as
-      { id: string; title: string; content?: string } | undefined;
+    const cacheKey = `preclass:${lessonId}:${classId || 'all'}`;
+    return this.cache.getOrCompute(cacheKey, () => {
+      const lesson = this.reader.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as
+        { id: string; title: string; content?: string } | undefined;
 
-    if (!lesson) {
-      const err = new Error('Lesson not found') as any;
-      err.status = 404;
-      throw err;
-    }
-
-    // 获取班级总学生数：无 classId 或班级无名单时分母为 0，完成率随之 0 ——
-    // 不再凭空回退 32 人（Issue #244，编造分母会让完成率呈现貌似真实的统计）
-    let totalStudents = 0;
-    if (classId) {
-      const countRow = this.reader
-        .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
-        .get(classId) as { count: number } | undefined;
-      if (countRow && countRow.count > 0) {
-        totalStudents = countRow.count;
+      if (!lesson) {
+        const err = new Error('Lesson not found') as any;
+        err.status = 404;
+        throw err;
       }
-    }
 
-    // 查询学生真实预习进度记录
-    let completedCount = 0;
-    try {
-      const progRows = this.reader
-        .prepare(
-          `
+      // 获取班级总学生数：无 classId 或班级无名单时分母为 0，完成率随之 0 ——
+      // 不再凭空回退 32 人（Issue #244，编造分母会让完成率呈现貌似真实的统计）
+      let totalStudents = 0;
+      if (classId) {
+        const countRow = this.reader
+          .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
+          .get(classId) as { count: number } | undefined;
+        if (countRow && countRow.count > 0) {
+          totalStudents = countRow.count;
+        }
+      }
+
+      // 查询学生真实预习进度记录
+      let completedCount = 0;
+      try {
+        const progRows = this.reader
+          .prepare(
+            `
         SELECT COUNT(*) as completed
         FROM student_lesson_progress
         WHERE lesson_id = ? AND progress_percent >= 80
       `,
-        )
-        .get(lessonId) as { completed?: number } | undefined;
-      completedCount = Math.min(totalStudents, Number(progRows?.completed) || 0);
-    } catch {
-      completedCount = 0;
-    }
+          )
+          .get(lessonId) as { completed?: number } | undefined;
+        completedCount = Math.min(totalStudents, Number(progRows?.completed) || 0);
+      } catch {
+        completedCount = 0;
+      }
 
-    const completionRate = totalStudents > 0 ? Math.round((completedCount / totalStudents) * 100) : 0;
+      const completionRate = totalStudents > 0 ? Math.round((completedCount / totalStudents) * 100) : 0;
 
-    // 真实聚合该课节对应的前置答题错题卡点（无错题则返回空数组）
-    const topMistakes = this.getLessonMistakes(lessonId);
+      // 真实聚合该课节对应的前置答题错题卡点（无错题则返回空数组）
+      const topMistakes = this.getLessonMistakes(lessonId);
 
-    // 班级真实破冰心态统计
-    const icebreakerStats = this.getIcebreakerStats(classId, lessonId);
+      // 班级真实破冰心态统计
+      const icebreakerStats = this.getIcebreakerStats(classId, lessonId);
 
-    // 真实分层分布统计
-    let tierA_mastered = 0;
-    let tierB_consolidating = 0;
-    let tierC_needSupport = 0;
-    try {
-      const tiers = this.reader
-        .prepare(
-          `
+      // 真实分层分布统计
+      let tierA_mastered = 0;
+      let tierB_consolidating = 0;
+      let tierC_needSupport = 0;
+      try {
+        const tiers = this.reader
+          .prepare(
+            `
         SELECT 
           SUM(CASE WHEN progress_percent >= 90 THEN 1 ELSE 0 END) as tier_a,
           SUM(CASE WHEN progress_percent >= 60 AND progress_percent < 90 THEN 1 ELSE 0 END) as tier_b,
@@ -202,44 +246,46 @@ export class DiagnosticService {
         FROM student_lesson_progress
         WHERE lesson_id = ?
       `,
-        )
-        .get(lessonId) as { tier_a?: number; tier_b?: number; tier_c?: number } | undefined;
-      tierA_mastered = Number(tiers?.tier_a) || 0;
-      tierB_consolidating = Number(tiers?.tier_b) || 0;
-      tierC_needSupport = Number(tiers?.tier_c) || 0;
-    } catch {
-      // 容错默认 0
-    }
+          )
+          .get(lessonId) as { tier_a?: number; tier_b?: number; tier_c?: number } | undefined;
+        tierA_mastered = Number(tiers?.tier_a) || 0;
+        tierB_consolidating = Number(tiers?.tier_b) || 0;
+        tierC_needSupport = Number(tiers?.tier_c) || 0;
+      } catch {
+        // 容错默认 0
+      }
 
-    return {
-      lessonId,
-      lessonTitle: lesson.title,
-      prepSummary: {
-        totalStudents,
-        completedCount,
-        pendingCount: Math.max(0, totalStudents - completedCount),
-        completionRate,
-        // 白板事件流没有真实用时来源：置 null 而非写死 15 分钟（Issue #244）
-        averageTimeSpentMins: null,
-      },
-      topMistakes,
-      studentDistribution: {
-        tierA_mastered,
-        tierB_consolidating,
-        tierC_needSupport,
-      },
-      icebreakerStats,
-    };
+      return {
+        lessonId,
+        lessonTitle: lesson.title,
+        prepSummary: {
+          totalStudents,
+          completedCount,
+          pendingCount: Math.max(0, totalStudents - completedCount),
+          completionRate,
+          // 白板事件流没有真实用时来源：置 null 而非写死 15 分钟（Issue #244）
+          averageTimeSpentMins: null,
+        },
+        topMistakes,
+        studentDistribution: {
+          tierA_mastered,
+          tierB_consolidating,
+          tierC_needSupport,
+        },
+        icebreakerStats,
+      };
+    });
   }
 
   /**
    * 聚合课节答题错题卡点 Top 3
    */
   public getLessonMistakes(lessonId: string): TopMistakeItem[] {
-    try {
-      const mistakeRows = this.reader
-        .prepare(
-          `
+    return this.cache.getOrCompute(`mistakes:${lessonId}`, () => {
+      try {
+        const mistakeRows = this.reader
+          .prepare(
+            `
         SELECT 
           s.element_id,
           we.data as element_data,
@@ -253,47 +299,48 @@ export class DiagnosticService {
         ORDER BY (wrong_count * 1.0 / total_attempts) DESC
         LIMIT 3
       `,
-        )
-        .all(lessonId) as Array<{
-        element_id: string;
-        element_data: string | null;
-        total_attempts: number;
-        wrong_count: number;
-      }>;
+          )
+          .all(lessonId) as Array<{
+          element_id: string;
+          element_data: string | null;
+          total_attempts: number;
+          wrong_count: number;
+        }>;
 
-      if (!Array.isArray(mistakeRows) || mistakeRows.length === 0) {
-        return [];
-      }
-
-      return mistakeRows.map((r, idx) => {
-        let concept = `难点题 #${idx + 1}`;
-        if (r.element_data) {
-          try {
-            const parsed = JSON.parse(r.element_data);
-            if (parsed.question && typeof parsed.question === 'string') {
-              concept = parsed.question;
-            }
-          } catch {
-            // fallback
-          }
+        if (!Array.isArray(mistakeRows) || mistakeRows.length === 0) {
+          return [];
         }
 
-        const mistakeRate = Math.round((r.wrong_count / r.total_attempts) * 100);
-        return {
-          rank: idx + 1,
-          concept,
-          mistakeRate,
-          sampleQuestion: `前置测验错题（共 ${r.total_attempts} 人作答，${r.wrong_count} 人出错）`,
-          pedagogicalAdvice:
-            mistakeRate >= 50
-              ? '建议课中开篇安排 3-5 分钟微探究直击前置卡点'
-              : '建议在讲解对应环节利用白板进行针对性答疑',
-          status: mistakeRate >= 50 ? 'high_priority' : mistakeRate >= 30 ? 'medium_priority' : 'low_priority',
-        };
-      });
-    } catch {
-      return [];
-    }
+        return mistakeRows.map((r, idx) => {
+          let concept = `难点题 #${idx + 1}`;
+          if (r.element_data) {
+            try {
+              const parsed = JSON.parse(r.element_data);
+              if (parsed.question && typeof parsed.question === 'string') {
+                concept = parsed.question;
+              }
+            } catch {
+              // fallback
+            }
+          }
+
+          const mistakeRate = Math.round((r.wrong_count / r.total_attempts) * 100);
+          return {
+            rank: idx + 1,
+            concept,
+            mistakeRate,
+            sampleQuestion: `前置测验错题（共 ${r.total_attempts} 人作答，${r.wrong_count} 人出错）`,
+            pedagogicalAdvice:
+              mistakeRate >= 50
+                ? '建议课中开篇安排 3-5 分钟微探究直击前置卡点'
+                : '建议在讲解对应环节利用白板进行针对性答疑',
+            status: mistakeRate >= 50 ? 'high_priority' : mistakeRate >= 30 ? 'medium_priority' : 'low_priority',
+          };
+        });
+      } catch {
+        return [];
+      }
+    });
   }
 
   /**
@@ -337,9 +384,15 @@ export class DiagnosticService {
       else if (mood === 'needCoffee') current.needCoffee += 1;
       else if (mood === 'needHelp') current.needHelp += 1;
       this.classIcebreakerMap.set(classId, current);
+      if (resolvedLessonId) {
+        this.cache.invalidatePrefix(`preclass:${resolvedLessonId}:`);
+      }
       return { ...current };
     }
 
+    if (resolvedLessonId) {
+      this.cache.invalidatePrefix(`preclass:${resolvedLessonId}:`);
+    }
     return this.getIcebreakerStats(classId, resolvedLessonId || undefined);
   }
 
@@ -489,6 +542,9 @@ export class DiagnosticService {
         Date.now(),
       );
 
+    // 写入成功后立即失效当前课节及相关聚合缓存
+    this.invalidateLessonCache(lessonId);
+
     // 4. 派发白板测验作答事件
     try {
       await this.eventPublisher(
@@ -528,94 +584,100 @@ export class DiagnosticService {
    * 获取课节所有测验题目的作答人数统计（轻量安全查询）
    */
   public getQuizCounts(lessonId: string): QuizCountItem[] {
-    const rows = this.reader
-      .prepare('SELECT element_id, COUNT(*) AS n FROM lesson_quiz_submissions WHERE lesson_id = ? GROUP BY element_id')
-      .all(lessonId) as Array<{ element_id: string; n: number }>;
+    return this.cache.getOrCompute(`quiz-counts:${lessonId}`, () => {
+      const rows = this.reader
+        .prepare(
+          'SELECT element_id, COUNT(*) AS n FROM lesson_quiz_submissions WHERE lesson_id = ? GROUP BY element_id',
+        )
+        .all(lessonId) as Array<{ element_id: string; n: number }>;
 
-    return rows.map((r) => ({
-      elementId: r.element_id,
-      submissionCount: r.n,
-    }));
+      return rows.map((r) => ({
+        elementId: r.element_id,
+        submissionCount: r.n,
+      }));
+    });
   }
 
   /**
    * 获取课节测验题目的详细作答记录（教师/管理员视角，包含答案与逐生详情）
    */
   public getQuizSubmissions(lessonId: string): QuizDetailItem[] {
-    const elements = this.reader
-      .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
-      .all(lessonId, 'quiz') as Array<{ id: string; type: string; data: string }>;
+    return this.cache.getOrCompute(`quiz-subs:${lessonId}`, () => {
+      const elements = this.reader
+        .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
+        .all(lessonId, 'quiz') as Array<{ id: string; type: string; data: string }>;
 
-    let relationalRows: Array<{
-      element_id: string;
-      student_id: string;
-      student_name: string | null;
-      answer: string;
-      score: number;
-      is_correct: number;
-      time_spent_ms: number;
-      submitted_at: number;
-    }> = [];
+      let relationalRows: Array<{
+        element_id: string;
+        student_id: string;
+        student_name: string | null;
+        answer: string;
+        score: number;
+        is_correct: number;
+        time_spent_ms: number;
+        submitted_at: number;
+      }> = [];
 
-    try {
-      relationalRows = this.reader
-        .prepare(
-          `SELECT element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at
-           FROM lesson_quiz_submissions
-           WHERE lesson_id = ?`,
-        )
-        .all(lessonId) as any[];
-    } catch {
-      // 容错回退
-    }
-
-    const relByElement = new Map<string, typeof relationalRows>();
-    for (const row of relationalRows) {
-      let list = relByElement.get(row.element_id);
-      if (!list) {
-        list = [];
-        relByElement.set(row.element_id, list);
-      }
-      list.push(row);
-    }
-
-    return elements.map((el) => {
-      let parsed: any = {};
       try {
-        parsed = JSON.parse(el.data);
+        relationalRows = this.reader
+          .prepare(
+            `SELECT element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at
+             FROM lesson_quiz_submissions
+             WHERE lesson_id = ?`,
+          )
+          .all(lessonId) as any[];
       } catch {
-        parsed = {};
+        // 容错回退
       }
 
-      const submissions: Record<string, QuizDetailSubmission> = { ...(parsed.submissions || {}) };
-      const rows = relByElement.get(el.id) || [];
-      for (const row of rows) {
-        let parsedAnswer: any = row.answer;
-        try {
-          parsedAnswer = JSON.parse(row.answer);
-        } catch {
-          // 保持原字符串
+      const relByElement = new Map<string, typeof relationalRows>();
+      for (const row of relationalRows) {
+        let list = relByElement.get(row.element_id);
+        if (!list) {
+          list = [];
+          relByElement.set(row.element_id, list);
         }
-        submissions[row.student_id] = {
-          answer: parsedAnswer,
-          score: row.score,
-          time: row.submitted_at,
-          studentName: row.student_name,
-          isCorrect: row.is_correct === 1,
-          timeSpentMs: row.time_spent_ms,
-        };
+        list.push(row);
       }
 
-      return {
-        elementId: el.id,
-        question: parsed.question || '',
-        options: parsed.options || [],
-        // Issue #107：索引为权威，correctAnswer 保持向后兼容（可能由索引推导）
-        correctIndex: resolveCorrectIndex(parsed),
-        correctAnswer: parsed.correctAnswer || null,
-        submissions,
-        submissionCount: Object.keys(submissions).length,
-      };
+      return elements.map((el) => {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(el.data);
+        } catch {
+          parsed = {};
+        }
+
+        const submissions: Record<string, QuizDetailSubmission> = { ...(parsed.submissions || {}) };
+        const rows = relByElement.get(el.id) || [];
+        for (const row of rows) {
+          let parsedAnswer: any = row.answer;
+          try {
+            parsedAnswer = JSON.parse(row.answer);
+          } catch {
+            // 保持原字符串
+          }
+          submissions[row.student_id] = {
+            answer: parsedAnswer,
+            score: row.score,
+            time: row.submitted_at,
+            studentName: row.student_name,
+            isCorrect: row.is_correct === 1,
+            timeSpentMs: row.time_spent_ms,
+          };
+        }
+
+        return {
+          elementId: el.id,
+          question: parsed.question || '',
+          options: parsed.options || [],
+          // Issue #107：索引为权威，correctAnswer 保持向后兼容（可能由索引推导）
+          correctIndex: resolveCorrectIndex(parsed),
+          correctAnswer: parsed.correctAnswer || null,
+          submissions,
+          submissionCount: Object.keys(submissions).length,
+        };
+      });
     });
   }
 
@@ -626,11 +688,14 @@ export class DiagnosticService {
    */
   public getTopPerformers(lessonId?: string, limit = 5, classId?: string): TopPerformersResult {
     const safeLimit = Math.min(20, Math.max(1, limit));
+    const cacheKey = `tp:${lessonId || 'global'}:${classId || 'all'}:${safeLimit}`;
 
-    if (lessonId) {
-      return this.getLessonTopPerformers(lessonId, safeLimit, classId);
-    }
-    return this.getGlobalTopPerformers(safeLimit, classId);
+    return this.cache.getOrCompute(cacheKey, () => {
+      if (lessonId) {
+        return this.getLessonTopPerformers(lessonId, safeLimit, classId);
+      }
+      return this.getGlobalTopPerformers(safeLimit, classId);
+    });
   }
 
   private getLessonTopPerformers(lessonId: string, limit: number, classId?: string): TopPerformersResult {
@@ -918,6 +983,9 @@ export class DiagnosticService {
 
       results.push({ studentId: st.id, name: st.name, score, isCorrect });
     }
+
+    // 模拟数据写入后失效相关聚合只读缓存
+    this.invalidateLessonCache(lessonId);
 
     return results;
   }

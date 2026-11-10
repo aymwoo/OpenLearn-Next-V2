@@ -18,6 +18,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **全链路 HTTP 业务压测 (`scripts/stress/http-load.mjs`)**：基于 Node 原生 fetch 实现高并发压测，覆盖健康轮询、学生登录、会话 Cookie 维持、拉课件列表 (50%)、互动晴雨表 (25%)、作业提交 (10%)、会话刷新 (10%) 与慢查聚合 (5%)；
   - **一键调度主脚本 (`scripts/stress/run-all.mjs`)**：支持 `--quick`、`--full`、`--inflection`（并发梯度扫描）与 `--compare`（模型对比），并提供 `pnpm stress`、`pnpm stress:db`、`pnpm stress:http` 快捷命令。
 
+### Refactor / Performance
+
+- **课堂高频聚合与多表慢查只读内存缓存 (TTL Read Cache，Issue #409)**：
+  - **通用 TTL 只读缓存引擎 (`server/utils/ttl-cache.ts`)**：实现高效内存级缓存 `TtlReadCache<T>`，支持毫秒级 TTL 自动过期、LRU / FIFO 容量上限淘汰守护（默认 2048 条目）、精确失效、前缀批量失效 (`invalidatePrefix`) 与命中率指标观测 (`getStats()`)；
+  - **学情诊断榜单与错题归集只读缓存 (`server/services/diagnostic-service.ts`)**：为随堂测验卓越榜单 (`getTopPerformers`)、课前诊断与错题卡点 (`getPreClassDiagnostic`、`getLessonMistakes`)、作答统计与逐生详情引入 3 秒 TTL 内存缓存；当学生提交新答卷 (`submitQuiz`) 或模拟作答 (`simulateQuizResponses`) 时主动失效对应课节命名空间，实现强读写一致性与零穿透；
+  - **课堂高频轮询路由接入与写侧主动失效 (`server/routes/classroom.ts`)**：
+    - 大屏公开脱敏数据接口 (`/api/classroom/stage/:lessonId/data`)：将 6 表联合扫描的到课聚合及考勤动态沉淀至 2 秒只读缓存，与高频在线 presence 心跳无缝缝合；
+    - 节奏晴雨表汇总 (`/api/classroom/sessions/:lessonId/pacing-summary`)：聚合结果短期缓存 2 秒，学生提交新信号时即时失效；
+    - 结课通票汇总 (`/api/classroom/sessions/:lessonId/exit-ticket-summary`) 与全景简报 (`/api/classroom/sessions/:lessonId/panoramic-report`)：引入 3 秒短期缓存，消除多端刷新/大屏轮询引起的 SQLite 读锁与 CPU 争抢。
+
 ### Docs
 
 - **SQLite 容量验证与基准测试报告 (`docs/ops/sqlite-capacity.md`)**：
