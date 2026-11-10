@@ -113,7 +113,7 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       );
 
     // 不再手工 grant 能力：CapabilityGuard 会按 actorId 的 `:student` 后缀兜底授予
-    // student:write / lesson:read（见 packages/core/capability-system/index.ts）。
+    // student:write / lesson:read（见 packages/core/capability/guard/capability-guard.ts）。
 
     // Seed a real session for the student so requireAuth passes.
     // Schema mirrors packages/core/__tests__/plugin-rest-api.test.ts:345.
