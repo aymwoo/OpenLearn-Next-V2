@@ -8,6 +8,8 @@ packages:
   - 'packages/plugin-sdk'
   - 'packages/plugin-test-kit'
   - 'packages/bridge-sdk'
+  # 虚拟实验室示例插件：有 package.json + workspace:* 依赖，且被兼容性测试消费
+  - 'packages/interactive-lab'
 
 overrides:
   proxy-addr: '>=2.0.8'
