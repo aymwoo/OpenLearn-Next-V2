@@ -13,6 +13,7 @@
  * - 惰性超时结算
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import ExcelJS from 'exceljs';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -40,7 +41,7 @@ async function call(
   path: string,
   token: string | null,
   body?: unknown,
-): Promise<{ status: number; text: string; json: any; headers: Headers }> {
+): Promise<{ status: number; text: string; json: any; headers: Headers; buffer: Buffer }> {
   const res = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
@@ -49,14 +50,15 @@ async function call(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const text = await res.text();
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const text = buffer.toString('utf-8');
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
     json = null;
   }
-  return { status: res.status, text, json, headers: res.headers };
+  return { status: res.status, text, json, headers: res.headers, buffer };
 }
 
 function seedSession(token: string, session: Record<string, unknown>) {
@@ -384,7 +386,13 @@ describe('Issue #120 · 测评 API', () => {
       );
       expect(xlsx.status).toBe(200);
       expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
-      expect(xlsx.text.length).toBeGreaterThan(0);
+      // 用真实 exceljs 回读，确认导出的是可打开的 XLSX，而不是任意二进制。
+      expect(xlsx.buffer.subarray(0, 2).toString()).toBe('PK');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsx.buffer);
+      const sheet = workbook.worksheets[0];
+      expect(sheet).toBeDefined();
+      expect(sheet.rowCount).toBeGreaterThan(1);
 
       const bad = await call(
         'GET',
