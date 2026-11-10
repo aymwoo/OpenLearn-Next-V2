@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **SQLite 高并发容量验证压测套件（`scripts/stress/`，Issue #407）**：
+  - **核心压测引擎 (`scripts/stress/sqlite-load.mjs`)**：参数化支持并发虚拟用户数、压测时长、爬坡期、思考时间范围与三种负载分布（混合 `mixed`、纯读 `read-only`、纯写 `write-only`）；
+  - **真实的连接竞争与对比模型**：支持多 Worker 线程真实连接竞争模型（`node:worker_threads`，跨连接物理争抢 WAL 锁与文件句柄）与单进程异步事件循环模型（`async`），提供精确对照；
+  - **全链路 HTTP 业务压测 (`scripts/stress/http-load.mjs`)**：基于 Node 原生 fetch 实现高并发压测，覆盖健康轮询、学生登录、会话 Cookie 维持、拉课件列表 (50%)、互动晴雨表 (25%)、作业提交 (10%)、会话刷新 (10%) 与慢查聚合 (5%)；
+  - **一键调度主脚本 (`scripts/stress/run-all.mjs`)**：支持 `--quick`、`--full`、`--inflection`（并发梯度扫描）与 `--compare`（模型对比），并提供 `pnpm stress`、`pnpm stress:db`、`pnpm stress:http` 快捷命令。
+
+### Docs
+
+- **SQLite 容量验证与基准测试报告 (`docs/ops/sqlite-capacity.md`)**：
+  - 记录 100 并发虚拟用户高频读写混合负载实测数据（写操作 p95 0.14ms，读操作 p95 5.05ms，全流程 0 次 `SQLITE_BUSY` 与超时，事件循环 p99 11.06ms，WAL 稳定自回收）；
+  - 完整记录 25 至 300 并发阶梯压测数据与首个延迟拐点（复杂多表聚合查询）分析；
+  - 给出单校区安全水位（≤ 200 并发学生）与多校区分拆架构决策指导；
+  - 将实测数字写回 `docs/deployment/multi-school.md`「容量与限制」一节，替换「通常足够」等模糊表述；Sphinx 文档大纲同步挂载。
+
 ## [0.7.14] - 2026-11-08
 
 ### Fixes
