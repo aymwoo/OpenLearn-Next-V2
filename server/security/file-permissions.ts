@@ -11,6 +11,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveBackupDirForDb } from '../../packages/core/db/backup-paths.js';
 
 export interface FilePermissionIssue {
   path: string;
@@ -47,9 +48,7 @@ function defaultPaths() {
   const dbPath = process.env.OPENLEARN_DB_PATH
     ? path.resolve(process.cwd(), process.env.OPENLEARN_DB_PATH)
     : path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
-  const backupDir = process.env.BACKUP_DIR
-    ? path.resolve(process.cwd(), process.env.BACKUP_DIR)
-    : path.join(path.dirname(dbPath), 'backups');
+  const backupDir = resolveBackupDirForDb(dbPath);
   return {
     envPath: path.resolve(process.cwd(), '.env'),
     dbPath,

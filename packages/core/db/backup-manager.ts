@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureSecureDir, hardenFile } from './secure-files.js';
+import { resolveBackupDir } from './backup-paths.js';
 
 export interface BackupValidationResult {
   ok: boolean;
@@ -70,10 +71,7 @@ export function getDefaultDbPath(): string {
 
 /** 获取默认备份存储目录 */
 export function getDefaultBackupDir(): string {
-  if (process.env.BACKUP_DIR) {
-    return path.resolve(process.cwd(), process.env.BACKUP_DIR);
-  }
-  return path.resolve(process.cwd(), 'backups');
+  return resolveBackupDir();
 }
 
 /** 校验候选文件是否为合法、未损坏且包含必要结构的 OpenLearn 数据库 */

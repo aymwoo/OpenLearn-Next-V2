@@ -1,4 +1,5 @@
 import path from 'path';
+import { resolveBackupDir, resolveDataDir } from '../../packages/core/db/backup-paths.js';
 
 /**
  * 获取统一数据根目录 (OPENLEARN_DATA_DIR SSOT)
@@ -9,13 +10,7 @@ import path from 'path';
  * 3. 回退到 `process.cwd()`（开发环境或测试环境兼容）
  */
 export function getDataDir(): string {
-  if (process.env.OPENLEARN_DATA_DIR) {
-    return path.resolve(process.env.OPENLEARN_DATA_DIR);
-  }
-  if (process.env.OPENLEARN_DB_PATH) {
-    return path.dirname(path.resolve(process.env.OPENLEARN_DB_PATH));
-  }
-  return process.cwd();
+  return resolveDataDir();
 }
 
 /**
@@ -46,8 +41,5 @@ export function getPluginsDir(): string {
  * 数据库冷备存储目录
  */
 export function getBackupsDir(): string {
-  if (process.env.BACKUP_DIR) {
-    return path.resolve(process.env.BACKUP_DIR);
-  }
-  return path.join(getDataDir(), 'backups');
+  return resolveBackupDir();
 }

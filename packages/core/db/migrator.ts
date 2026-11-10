@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pruneMigratorSnapshots } from './backup-manager.js';
+import { resolveBackupDirForDb } from './backup-paths.js';
 import { ensureSecureDir, hardenFile } from './secure-files.js';
 
 export interface Migration {
@@ -191,7 +192,7 @@ export function runMigrations(
     (process.env.FORCE_MIGRATION_SNAPSHOT === 'true' || !process.env.VITEST)
   ) {
     try {
-      const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(db.name), 'backups');
+      const backupDir = resolveBackupDirForDb(db.name);
       // 快照目录装着全量学生数据副本：创建即 0700，不依赖 umask（审计 P1-2）
       ensureSecureDir(backupDir);
       const now = new Date();
