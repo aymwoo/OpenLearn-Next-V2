@@ -123,7 +123,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
 
       if (parentId === 'virtual-lessons') {
         // P2 分页收敛：上限 200 防全表阻塞 event loop（content 仍随行，后续迭代再拆延迟加载）
-        const lessons = kernelContainer.queryRead(
+        const lessons = kernelContainer.queryRead<{ id: number | string; title: string; content?: string }>(
           'SELECT id, title, content FROM lessons ORDER BY created_at DESC LIMIT 200',
         );
         nodes = lessons.map((l) => ({

@@ -86,15 +86,15 @@ describe('Database WAL & Connection Pool (P1-1)', () => {
       );
 
       // 在写事务内部，使用只读池并发查询：由于事务未提交，只读连接不应该被锁死（不会抛出 SQLITE_BUSY）
-      const readResult = queryReadOne('SELECT id FROM events WHERE id = ?', testId);
+      const readResult = queryReadOne<{ id: string }>('SELECT id FROM events WHERE id = ?', testId);
       // WAL 隔离级别下，未提交的数据对外部只读连接不可见或不影响读
-      expect(readResult === undefined || readResult.id === testId).toBe(true);
+      expect(readResult === undefined || readResult?.id === testId).toBe(true);
     });
 
     expect(() => tx()).not.toThrow();
 
     // 事务完成后立即对只读池可见
-    const committedRow = queryReadOne('SELECT id FROM events WHERE id = ?', testId);
+    const committedRow = queryReadOne<{ id: string }>('SELECT id FROM events WHERE id = ?', testId);
     expect(committedRow).toBeDefined();
 
     // 清理测试数据

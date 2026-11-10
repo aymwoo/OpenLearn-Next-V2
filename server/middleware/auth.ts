@@ -6,6 +6,7 @@ import type { Socket } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { markAuthMiddleware } from '../security/route-scope.js';
 import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
+import { sessionTouchBatcher } from '../utils/interactive-accumulator.js';
 // Issue #226：会话角色的唯一真源 —— requireAuth / getActorId / checkIsTeacherOrAdmin 共用。
 import { resolveSessionRole } from '../services/session-role.js';
 
@@ -48,9 +49,9 @@ export function getValidSession(token: string): Session | null {
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
     return null;
   }
-  // 节流刷新 updated_at（仅当距离上次更新超过 5 分钟）
+  // 节流刷新 updated_at（仅当距离上次更新超过 5 分钟，通过微批量合并落库，降低写放大，Issue #411）
   if (!sessionRow.updated_at || now - sessionRow.updated_at > SESSION_REFRESH_INTERVAL_MS) {
-    kernelContainer.db.prepare('UPDATE client_sessions SET updated_at = ? WHERE id = ?').run(now, token);
+    sessionTouchBatcher.touch(token, now);
   }
   let session: Session;
   try {

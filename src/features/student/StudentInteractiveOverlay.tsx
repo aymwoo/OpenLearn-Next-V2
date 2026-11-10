@@ -111,6 +111,7 @@ export function StudentInteractiveOverlay({
   const activePollRef = useRef<any>(null);
   const activeBuzzerRef = useRef<any>(null);
   const exitTicketSubmittedRef = useRef(false);
+  const lastPacingClickRef = useRef<number>(0);
 
   // 轮询活跃互动与阶段
   useEffect(() => {
@@ -315,8 +316,13 @@ export function StudentInteractiveOverlay({
 
   if (!lessonId) return null;
 
-  // 发送、切换或取消节奏信号（按当前环节去重）
+  // 发送、切换或取消节奏信号（按当前环节去重，前台 300ms 快速点击节流防抖）
   const sendPacingSignal = async (signalType: 'TOO_FAST' | 'SLOW' | 'CONFUSED' | 'CLEAR') => {
+    const now = Date.now();
+    if (now - lastPacingClickRef.current < 300) {
+      return;
+    }
+    lastPacingClickRef.current = now;
     try {
       const isToggleCancel = currentPacingSignal === signalType;
       const res = await fetch(`/api/classroom/sessions/${lessonId}/pacing`, {
