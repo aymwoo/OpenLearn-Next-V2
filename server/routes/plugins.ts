@@ -9,7 +9,6 @@ import {
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import semver from 'semver';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
@@ -415,33 +414,6 @@ async function streamHttpBodyToFile(resp: Response, maxBytes: number): Promise<s
   }
 
   return zipPath;
-}
-
-/**
- * 在本地 v2_plugins 源目录中按 manifest id 查找最新的插件版本。
- * 避免已安装插件长期停留在安装时刻的旧版本快照上。
- */
-function findLocalPluginSource(manifestId: string): { dir: string; version: string } | null {
-  const root = path.resolve(process.cwd(), 'v2_plugins');
-  if (!fs.existsSync(root)) return null;
-  let best: { dir: string; version: string } | null = null;
-  try {
-    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const manifestPath = path.join(root, entry.name, 'manifest.json');
-      if (!fs.existsSync(manifestPath)) continue;
-      try {
-        const m = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-        if (m?.id !== manifestId || !m?.version) continue;
-        if (!best || semver.gt(m.version, best.version)) best = { dir: entry.name, version: m.version };
-      } catch {
-        // 单个目录的 manifest 损坏不影响整体扫描
-      }
-    }
-  } catch {
-    // 目录不可读时视作无本地源
-  }
-  return best;
 }
 
 /**
@@ -858,23 +830,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       const src: UpdateSource | undefined = manifest.updateSource;
       if (!src?.type || !src?.repo) {
-        // 回退本地源：对比 v2_plugins/*/manifest.json 的版本
-        const local = findLocalPluginSource(manifest.id);
-        if (local) {
-          const installed = manifest.version || '0.0.0';
-          const hasUpdate = semver.gt(local.version, installed);
-          return res.json({
-            success: true,
-            hasUpdate,
-            installedVersion: installed,
-            latestVersion: local.version,
-            downloadUrl: null,
-            updateSource: 'local-v2_plugins',
-            changelog: hasUpdate
-              ? `本地源 v2_plugins/${local.dir} 提供新版本 v${local.version}，请重新构建 ZIP 后通过上传更新`
-              : undefined,
-          });
-        }
         return res.json({ success: true, hasUpdate: false, message: '该插件未声明更新源' });
       }
 
