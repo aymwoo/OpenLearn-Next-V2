@@ -621,9 +621,9 @@ export function registerClassroomRoutes(
     async (req: Request, res: Response) => {
       try {
         const { lessonId } = req.params;
-        const session = db
-          .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
-          .get(lessonId) as any;
+        // 取数收敛在 ClassroomSessionService（#427）：会话整行 + 活动投票 + 活动抢答器。
+        const detail = classroomSessionService.getSessionDetail(lessonId);
+        const session = detail.session;
 
         if (!session) {
           return res.json({
@@ -637,31 +637,8 @@ export function registerClassroomRoutes(
         if (rejectUnless(res, readAuth)) return;
 
         // 附加当前活动互动（如果有）
-        let activePoll = db
-          .prepare(
-            'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .get(session.id, 'ACTIVE') as any;
-
-        if (activePoll) {
-          try {
-            activePoll.options = JSON.parse(activePoll.options_json);
-          } catch (_) {
-            activePoll.options = [];
-          }
-          // v0.6.1 数据真实性：中控「结束投票 (N人)」此前读不存在的字段恒为 0
-          try {
-            activePoll.totalVotes =
-              (db.prepare('SELECT COUNT(*) AS n FROM classroom_poll_votes WHERE poll_id = ?').get(activePoll.id) as any)
-                ?.n ?? 0;
-          } catch (_) {
-            activePoll.totalVotes = 0;
-          }
-        }
-
-        const activeBuzzer = db
-          .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
-          .get(session.id) as any;
+        let activePoll = detail.activePoll;
+        const activeBuzzer = detail.activeBuzzer;
 
         const activeCountdown = getCountdownForLesson(lessonId);
 
@@ -672,7 +649,8 @@ export function registerClassroomRoutes(
         let exitTicketChallengeQuestion: any = null;
         let activeAssessment: any = null;
         try {
-          const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
+          const settings =
+            typeof session.settings_json === 'string' && session.settings_json ? JSON.parse(session.settings_json) : {};
           viewState = settings.viewState ?? {};
           exitTicketCoreQuestion = settings.exitTicketCoreQuestion ?? null;
           exitTicketChallengeQuestion = settings.exitTicketChallengeQuestion ?? null;
@@ -685,7 +663,7 @@ export function registerClassroomRoutes(
         if (readAuth.ok && readAuth.level === 'student') {
           // 答案字段不随课堂对象下发；学生端只消费显式字段，不下发整列 settings_json。
           // 动态流回放是教师端恢复现场用的，含其他学生姓名，学生端不返回。
-          if (activePoll) activePoll = redactAnswerKeys(activePoll) as any;
+          if (activePoll) activePoll = redactAnswerKeys(activePoll) as Record<string, unknown>;
           delete session.settings_json;
           // Issue #239：签到码对学生的会话视图一并剥离 —— 此前随 SELECT * 下发，
           // 学生读码即可远程 POST /checkin 伪造在场出勤
@@ -2562,38 +2540,10 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: 'studentId is required' });
         }
 
-        const row = db
-          .prepare(
-            `
-            SELECT cs.id AS session_id, cs.lesson_id, cs.class_id, cs.stage, cs.started_at, cs.created_at,
-                   l.title AS lesson_title, c.name AS class_name
-            FROM classroom_sessions cs
-            INNER JOIN class_students cst ON cst.class_id = cs.class_id
-            LEFT JOIN lessons l ON l.id = cs.lesson_id
-            LEFT JOIN classes c ON c.id = cs.class_id
-            WHERE cst.student_id = ? AND cs.stage != ?
-            ORDER BY
-              CASE WHEN cs.stage IN ('IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET') THEN 0 ELSE 1 END,
-              cs.created_at DESC
-            LIMIT 1
-          `,
-          )
-          .get(studentId, ARCHIVED_REPORT_STAGE) as any;
+        // 取数收敛在 ClassroomSessionService（#427）。
+        const activeSession = classroomSessionService.getStudentActiveSession(studentId);
 
-        res.json({
-          success: true,
-          activeSession: row
-            ? {
-                sessionId: row.session_id,
-                lessonId: row.lesson_id,
-                lessonTitle: row.lesson_title || '',
-                classId: row.class_id,
-                className: row.class_name || '',
-                stage: row.stage,
-                startedAt: row.started_at ?? null,
-              }
-            : null,
-        });
+        res.json({ success: true, activeSession });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }

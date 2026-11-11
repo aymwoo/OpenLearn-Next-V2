@@ -76,6 +76,24 @@ export interface ClassroomSessionListResult {
   totalPages: number;
 }
 
+/** 会话现场：原始整行 + 当前活动投票 / 抢答器，由调用方按角色裁剪。 */
+export interface ClassroomSessionDetail {
+  session: Record<string, unknown> | null;
+  activePoll: Record<string, unknown> | null;
+  activeBuzzer: Record<string, unknown> | null;
+}
+
+/** 学生端「当前可进入的课堂」DTO。 */
+export interface ClassroomStudentActiveSession {
+  sessionId: string;
+  lessonId: string;
+  lessonTitle: string;
+  classId: string;
+  className: string;
+  stage: string;
+  startedAt: number | null;
+}
+
 /** 活跃会话端点使用的显式投影（不含 checkin_code / settings_json）。 */
 export interface ClassroomActiveSessionRow {
   id: string;
@@ -331,6 +349,95 @@ export class ClassroomSessionService {
           LIMIT ?`,
       )
       .all(...params, limit) as ClassroomActiveSessionRow[];
+  }
+
+  /**
+   * 读取某课节的最新会话现场（会话整行 + 当前活动投票 + 活动抢答器）。
+   *
+   * 返回**未裁剪**的原始行：调用方必须按角色剥离 `settings_json` / `checkin_code` /
+   * 答案字段（教师与学生的可见范围不同）。服务层只负责取数，不掺授权判定。
+   */
+  getSessionDetail(lessonId: string): ClassroomSessionDetail {
+    const session = this.db
+      .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(lessonId) as Record<string, unknown> | undefined;
+    if (!session) return { session: null, activePoll: null, activeBuzzer: null };
+
+    const sessionId = String(session.id ?? '');
+    const activePoll =
+      (this.db
+        .prepare(
+          'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+        )
+        .get(sessionId, 'ACTIVE') as Record<string, unknown> | undefined) ?? null;
+
+    if (activePoll) {
+      try {
+        activePoll.options = JSON.parse(String(activePoll.options_json));
+      } catch {
+        activePoll.options = [];
+      }
+      // v0.6.1 数据真实性：中控「结束投票 (N人)」此前读不存在的字段恒为 0。
+      try {
+        const counted = this.db
+          .prepare('SELECT COUNT(*) AS n FROM classroom_poll_votes WHERE poll_id = ?')
+          .get(String(activePoll.id ?? '')) as { n: number } | undefined;
+        activePoll.totalVotes = counted?.n ?? 0;
+      } catch {
+        activePoll.totalVotes = 0;
+      }
+    }
+
+    const activeBuzzer =
+      (this.db
+        .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+        .get(sessionId) as Record<string, unknown> | undefined) ?? null;
+
+    return { session, activePoll, activeBuzzer };
+  }
+
+  /**
+   * 学生当前可进入的课堂会话：优先 IN_CLASS_TEACHING / WRAP_UP_EXIT_TICKET，
+   * 其次其他非归档阶段；同一班级可能并行多个课节，取最新创建的一个。
+   */
+  getStudentActiveSession(studentId: string): ClassroomStudentActiveSession | null {
+    const row = this.db
+      .prepare(
+        `SELECT cs.id AS session_id, cs.lesson_id, cs.class_id, cs.stage, cs.started_at, cs.created_at,
+                l.title AS lesson_title, c.name AS class_name
+           FROM classroom_sessions cs
+           INNER JOIN class_students cst ON cst.class_id = cs.class_id
+           LEFT JOIN lessons l ON l.id = cs.lesson_id
+           LEFT JOIN classes c ON c.id = cs.class_id
+          WHERE cst.student_id = ? AND cs.stage != ?
+          ORDER BY
+            CASE WHEN cs.stage IN ('IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET') THEN 0 ELSE 1 END,
+            cs.created_at DESC
+          LIMIT 1`,
+      )
+      .get(studentId, ARCHIVED_REPORT_STAGE) as
+      | {
+          session_id: string;
+          lesson_id: string;
+          class_id: string;
+          stage: string;
+          started_at: number | null;
+          created_at: number;
+          lesson_title: string | null;
+          class_name: string | null;
+        }
+      | undefined;
+
+    if (!row) return null;
+    return {
+      sessionId: row.session_id,
+      lessonId: row.lesson_id,
+      lessonTitle: row.lesson_title || '',
+      classId: row.class_id,
+      className: row.class_name || '',
+      stage: row.stage,
+      startedAt: row.started_at ?? null,
+    };
   }
 
   /**

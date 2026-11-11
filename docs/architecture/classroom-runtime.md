@@ -143,8 +143,9 @@ PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPOR
 ### 2.3 只读查询：`ClassroomSessionService`
 
 会话的**读路径**单独收敛在 `server/services/classroom-session-service.ts`（#427）：
-`listSessions()`（分页 / 班级 / 课节 / 阶段 / 关键词 / 学年 + 互动计数）与
-`listActiveSessions()`（最近活跃会话）共用同一份归属裁剪 SQL —— 非管理员按
+`listSessions()`（分页 / 班级 / 课节 / 阶段 / 关键词 / 学年 + 互动计数）、
+`listActiveSessions()`（最近活跃会话）、`getSessionDetail()`（会话现场 + 活动投票 /
+抢答器）与 `getStudentActiveSession()` 共用同一份归属裁剪 SQL —— 非管理员按
 `teacher_id` / 班级 `owner_user_id` / 课节 `creator_id` 判定，历史数据三者皆空时
 保留可见，避免老会话整体消失。
 
