@@ -271,7 +271,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       if (!verifyCoursewareToken(req.params.id, typeof req.query.ct === 'string' ? req.query.ct : null)) {
         return res.status(401).send('Courseware access token missing or invalid');
       }
-      const node = kernelContainer.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get(req.params.id) as any;
+      const node = kernelContainer.db
+        .prepare('SELECT id, parent_id, type, name, content, created_at, updated_at FROM vfs_nodes WHERE id = ?')
+        .get(req.params.id) as any;
       if (!node || node.type !== 'file') return res.status(404).send('Courseware not found');
 
       const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(node.id);
