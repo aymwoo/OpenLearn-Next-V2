@@ -763,11 +763,7 @@ export function registerClassroomRoutes(
           }
         }
 
-        const activeSession = db
-          .prepare(
-            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+        const activeSession = classroomSessionService.getActiveSessionForLesson(lessonId);
         if (activeSession && !canManageClassroomSession(req, activeSession)) {
           return res.status(403).json({ error: 'Forbidden' });
         }
@@ -815,20 +811,8 @@ export function registerClassroomRoutes(
         const { lessonId } = req.params;
         const { currentPage, activeSegmentId } = req.body || {};
 
-        const session = db
-          .prepare(
-            'SELECT id, lesson_id, class_id, teacher_id, stage, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .get(lessonId, ARCHIVED_REPORT_STAGE) as
-          | {
-              id: string;
-              lesson_id: string;
-              class_id: string | null;
-              teacher_id: string | null;
-              stage: string;
-              settings_json: string | null;
-            }
-          | undefined;
+        // 活动会话查找收敛在 ClassroomSessionService（#427）。
+        const session = classroomSessionService.getActiveSessionForLesson(lessonId);
         if (!session) {
           return res.status(404).json({ error: 'No active session for this lesson' });
         }
@@ -836,30 +820,23 @@ export function registerClassroomRoutes(
         const control = controlDecision(req, lessonId, session);
         if (rejectUnless(res, control)) return;
 
+        let page: number | undefined;
         if (currentPage !== undefined) {
-          const page = Number(currentPage);
-          if (!Number.isFinite(page) || page < 0 || page > 10000) {
+          const parsed = Number(currentPage);
+          if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10000) {
             return res.status(400).json({ error: 'Invalid currentPage' });
           }
-          // P1-4 修复：原子更新 $.viewState.currentPage，不读取整列，避免覆盖 countdown
-          db.prepare(
-            `UPDATE classroom_sessions SET settings_json = json_set(coalesce(settings_json, '{}'), '$.viewState.currentPage', ?)
-             WHERE id = ?`,
-          ).run(Math.floor(page), session.id);
+          page = parsed;
         }
 
-        if (activeSegmentId !== undefined) {
-          const segId = activeSegmentId === null ? null : String(activeSegmentId).slice(0, 128);
-          db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segId, session.id);
-        }
+        // P1-4：currentPage 由服务层用 json_set 原子更新，不读整列覆盖并发字段。
+        const viewState = classroomSessionService.updateViewState(String(session.id), {
+          currentPage: page,
+          activeSegmentId:
+            activeSegmentId === undefined ? undefined : activeSegmentId === null ? null : String(activeSegmentId),
+        });
 
-        const fresh = db.prepare('SELECT settings_json FROM classroom_sessions WHERE id = ?').get(session.id) as any;
-        let viewState: Record<string, any> = {};
-        try {
-          viewState = JSON.parse(fresh?.settings_json || '{}').viewState ?? {};
-        } catch (_) {}
-
-        res.json({ success: true, viewState });
+        res.json({ success: true, viewState: viewState ?? {} });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -881,11 +858,7 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: `Invalid stage: ${stage}` });
         }
 
-        const activeSession = db
-          .prepare(
-            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
+        const activeSession = classroomSessionService.getActiveSessionForLesson(lessonId);
         if (activeSession && !canManageClassroomSession(req, activeSession)) {
           return res.status(403).json({ error: 'Forbidden' });
         }

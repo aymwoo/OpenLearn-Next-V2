@@ -150,7 +150,7 @@ PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPOR
 保留可见，避免老会话整体消失。
 
 极速投票的读写（`getQuickPoll()` / `createQuickPoll()` / `voteQuickPoll()` /
-`closeQuickPoll()`）也已收敛到该服务：创建投票的「关闭旧投票 + 插入新投票」
+`closeQuickPoll()`）与会话视图状态回写（`updateViewState()`）也已收敛到该服务：创建投票的「关闭旧投票 + 插入新投票」
 放在同一事务里，避免插入失败留下空窗。会话级写路径（创建、归档、阶段流转、
 通票生命周期）仍由 `ClassroomRuntimeService` 承载，后续按 #427 的计划分批迁移。
 

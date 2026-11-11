@@ -77,6 +77,12 @@ export interface ClassroomSessionListResult {
   totalPages: number;
 }
 
+/** 会话视图状态补丁：currentPage 落 settings_json，activeSegmentId 落独立列。 */
+export interface SessionViewStatePatch {
+  currentPage?: number;
+  activeSegmentId?: string | null;
+}
+
 /** 会话现场：原始整行 + 当前活动投票 / 抢答器，由调用方按角色裁剪。 */
 export interface ClassroomSessionDetail {
   session: Record<string, unknown> | null;
@@ -400,6 +406,47 @@ export class ClassroomSessionService {
           LIMIT ?`,
       )
       .all(...params, limit) as ClassroomActiveSessionRow[];
+  }
+
+  /** 读取某课节当前活动会话整行（`stage != ARCHIVED_REPORT`，取最新一条）。 */
+  getActiveSessionForLesson(lessonId: string): Record<string, unknown> | null {
+    const row = this.db
+      .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
+      .get(lessonId, ARCHIVED_REPORT_STAGE) as Record<string, unknown> | undefined;
+    return row ?? null;
+  }
+
+  /**
+   * 回写会话视图状态（教师切页 / 切环节的防抖落库）。
+   *
+   * currentPage 用 `json_set` 原子更新，避免读整列再写回覆盖掉并发的 countdown
+   * 等其它 settings 字段（P1-4）。返回更新后的 `viewState`；会话不存在返回 null。
+   */
+  updateViewState(sessionId: string, patch: SessionViewStatePatch): Record<string, unknown> | null {
+    if (patch.currentPage !== undefined) {
+      this.db
+        .prepare(
+          `UPDATE classroom_sessions
+              SET settings_json = json_set(coalesce(settings_json, '{}'), '$.viewState.currentPage', ?)
+            WHERE id = ?`,
+        )
+        .run(Math.floor(patch.currentPage), sessionId);
+    }
+
+    if (patch.activeSegmentId !== undefined) {
+      const segmentId = patch.activeSegmentId === null ? null : String(patch.activeSegmentId).slice(0, 128);
+      this.db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segmentId, sessionId);
+    }
+
+    const fresh = this.db.prepare('SELECT settings_json FROM classroom_sessions WHERE id = ?').get(sessionId) as
+      { settings_json: string | null } | undefined;
+    if (!fresh) return null;
+    try {
+      const settings = JSON.parse(fresh.settings_json || '{}') as { viewState?: Record<string, unknown> };
+      return settings.viewState ?? {};
+    } catch {
+      return {};
+    }
   }
 
   /**
