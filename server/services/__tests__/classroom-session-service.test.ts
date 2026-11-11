@@ -32,6 +32,8 @@ describe('ClassroomSessionService', () => {
   const sessionArchived = 'cs-css427-archived';
   const sessionB = 'cs-css427-b';
   const sessionLegacy = 'cs-css427-legacy';
+  const lessonPoll = 'les-css427-poll';
+  const sessionPoll = 'cs-css427-poll';
 
   const now = Date.now();
 
@@ -129,6 +131,21 @@ describe('ClassroomSessionService', () => {
       classA,
       'stu-css427',
       now,
+    );
+
+    // 独立课节用于投票生命周期测试，避免影响上面按 lessonA 断言的分页/统计。
+    insertLesson.run(lessonPoll, '服务层测试投票课节', teacherA, now, now);
+    insertSession.run(
+      sessionPoll,
+      lessonPoll,
+      classA,
+      teacherA,
+      'IN_CLASS_TEACHING',
+      null,
+      null,
+      now - 6000,
+      null,
+      now - 6000,
     );
   });
 
@@ -261,6 +278,76 @@ describe('ClassroomSessionService', () => {
     expect(active!.startedAt).toBe(now - 1000);
 
     expect(service.getStudentActiveSession('stu-css427-not-enrolled')).toBeNull();
+  });
+
+  it('createQuickPoll 关闭同会话旧投票，并把新投票写入库中', () => {
+    const first = service.createQuickPoll({
+      sessionId: sessionPoll,
+      lessonId: lessonPoll,
+      questionType: 'ABCD',
+      title: '第一题',
+      options: ['A', 'B'],
+      correctOption: 'A',
+    });
+    expect(first.status).toBe('ACTIVE');
+    expect(first.correctOption).toBe('A');
+    expect(service.getQuickPoll(first.id)).toMatchObject({
+      id: first.id,
+      sessionId: sessionPoll,
+      lessonId: lessonPoll,
+      status: 'ACTIVE',
+      options: ['A', 'B'],
+    });
+
+    const second = service.createQuickPoll({
+      sessionId: sessionPoll,
+      lessonId: lessonPoll,
+      questionType: 'ABCD',
+      title: '第二题',
+      options: ['A', 'B', 'C'],
+    });
+    expect(service.getQuickPoll(first.id)!.status).toBe('CLOSED');
+    expect(service.getQuickPoll(second.id)!.status).toBe('ACTIVE');
+  });
+
+  it('voteQuickPoll 覆盖同一学生的重复投票并按选项聚合', () => {
+    const poll = service.createQuickPoll({
+      sessionId: sessionPoll,
+      lessonId: lessonPoll,
+      questionType: 'ABCD',
+      title: '投票聚合测试',
+      options: ['A', 'B'],
+    });
+
+    expect(service.voteQuickPoll(poll.id, 'stu-p1', '学生1', 'A')).toEqual({
+      distribution: { A: 1 },
+      totalVotes: 1,
+    });
+    // 同一学生改投：覆盖而非累加。
+    expect(service.voteQuickPoll(poll.id, 'stu-p1', '学生1', 'B')).toEqual({
+      distribution: { B: 1 },
+      totalVotes: 1,
+    });
+    const twoVoters = service.voteQuickPoll(poll.id, 'stu-p2', '学生2', 'A');
+    expect(twoVoters.distribution).toEqual({ A: 1, B: 1 });
+    expect(twoVoters.totalVotes).toBe(2);
+  });
+
+  it('closeQuickPoll 置为 CLOSED 并返回最终聚合', () => {
+    const poll = service.createQuickPoll({
+      sessionId: sessionPoll,
+      lessonId: lessonPoll,
+      questionType: 'ABCD',
+      title: '关闭投票测试',
+      options: ['A', 'B', 'C'],
+    });
+    service.voteQuickPoll(poll.id, 'stu-p3', '学生3', 'C');
+
+    expect(service.closeQuickPoll(poll.id)).toEqual({
+      distribution: { C: 1 },
+      totalVotes: 1,
+    });
+    expect(service.getQuickPoll(poll.id)!.status).toBe('CLOSED');
   });
 
   it('活跃会话排除归档阶段，并遵守归属裁剪', () => {

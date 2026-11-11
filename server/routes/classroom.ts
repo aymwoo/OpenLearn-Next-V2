@@ -1106,35 +1106,15 @@ export function registerClassroomRoutes(
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
-        // 将之前未关闭的投票置为 CLOSED
-        db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE session_id = ? AND status = ?').run(
-          'CLOSED',
-          session.id,
-          'ACTIVE',
-        );
-
-        const pollId = randomId('poll_');
-        const now = Date.now();
-
-        db.prepare(
-          `
-        INSERT INTO classroom_quick_polls (id, session_id, lesson_id, question_type, title, options_json, correct_option, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
-      `,
-        ).run(pollId, session.id, lessonId, questionType, title, JSON.stringify(options), correctOption || null, now);
-
-        const pollData = {
-          id: pollId,
-          sessionId: session.id,
+        // 关闭旧投票 + 插入新投票在同一事务内完成（#427）。
+        const pollData = classroomSessionService.createQuickPoll({
+          sessionId: String(session.id),
           lessonId,
           questionType,
           title,
           options,
-          correctOption: correctOption || null,
-          status: 'ACTIVE',
-          votes: {},
-          totalVotes: 0,
-        };
+          correctOption,
+        });
 
         // 广播给学生端和大屏展台。
         // 正确答案只随 HTTP 响应回到发起教师，不进 socket 广播 ——
@@ -1177,16 +1157,16 @@ export function registerClassroomRoutes(
               ? selectedOption
               : '';
 
-        const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
+        const poll = classroomSessionService.getQuickPoll(pollId);
         if (!poll || poll.status !== 'ACTIVE') {
           return res.status(400).json({ error: 'Poll is closed or not found' });
         }
         // P1-1 修复：校验课节归属，禁止跨课节重放 pollId 注票
-        if (poll.lesson_id && poll.lesson_id !== lessonId) {
+        if (poll.lessonId && poll.lessonId !== lessonId) {
           return res.status(400).json({ error: 'Poll does not belong to this lesson' });
         }
 
-        const pollSession = poll.session_id ? findClassroomSessionById(poll.session_id) : null;
+        const pollSession = poll.sessionId ? findClassroomSessionById(poll.sessionId) : null;
         if (pollSession && pollSession.lesson_id !== lessonId) {
           return res.status(403).json({ error: 'Poll does not belong to this lesson' });
         }
@@ -1198,41 +1178,17 @@ export function registerClassroomRoutes(
         }
 
         // 选项必须是该投票的可选项之一，否则会落库 "undefined" 之类的脏值
-        let allowedOptions: unknown = [];
-        try {
-          allowedOptions = poll.options_json ? JSON.parse(poll.options_json) : [];
-        } catch {
-          allowedOptions = [];
-        }
-        if (Array.isArray(allowedOptions) && allowedOptions.length > 0 && !allowedOptions.includes(votedOption)) {
+        if (poll.options.length > 0 && !poll.options.includes(votedOption)) {
           return res.status(400).json({ error: 'Invalid vote option' });
         }
 
-        const voteId = randomId('vote_');
-        const now = Date.now();
-
-        db.prepare(
-          `
-        INSERT INTO classroom_poll_votes (id, poll_id, student_id, student_name, selected_option, voted_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(poll_id, student_id) DO UPDATE SET
-          selected_option = excluded.selected_option,
-          voted_at = excluded.voted_at
-      `,
-        ).run(voteId, pollId, studentId, studentName, votedOption, now);
-
-        // 计算实时汇总聚合（保护学生隐私）
-        const rows = db
-          .prepare(
-            'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
-          )
-          .all(pollId) as { selected_option: string; count: number }[];
-        const distribution: Record<string, number> = {};
-        let total = 0;
-        rows.forEach((r) => {
-          distribution[r.selected_option] = r.count;
-          total += r.count;
-        });
+        // 写入 + 实时聚合收敛在服务层（#427）。
+        const { distribution, totalVotes: total } = classroomSessionService.voteQuickPoll(
+          pollId,
+          String(studentId),
+          String(studentName),
+          votedOption,
+        );
 
         // 实时广播聚合数据。
         // 不再携带 latestVoter：投票应匿名，聚合分布已足够驱动大屏动画，
@@ -1250,7 +1206,7 @@ export function registerClassroomRoutes(
         }
 
         // 失效大屏与报表只读缓存
-        invalidateClassroomReadCache(lessonId, poll.session_id);
+        invalidateClassroomReadCache(lessonId, poll.sessionId);
 
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {
@@ -1268,31 +1224,19 @@ export function registerClassroomRoutes(
         const { lessonId, pollId } = req.params;
         // v0.6.1 审计 N-4：close 与 vote 同样的课节归属校验 —— 此前仅凭
         // pollId 即可关闭任意课节进行中的投票（多教师部署可误关他班）。
-        const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
+        const poll = classroomSessionService.getQuickPoll(pollId);
         if (!poll) {
           return res.status(404).json({ error: 'Poll not found' });
         }
-        if (poll.lesson_id && poll.lesson_id !== lessonId) {
+        if (poll.lessonId && poll.lessonId !== lessonId) {
           return res.status(403).json({ error: 'Poll does not belong to this lesson' });
         }
 
-        const pollSession = poll.session_id ? findClassroomSessionById(poll.session_id) : null;
+        const pollSession = poll.sessionId ? findClassroomSessionById(poll.sessionId) : null;
         const control = controlDecision(req, lessonId, pollSession ?? null);
         if (rejectUnless(res, control)) return;
 
-        db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
-
-        const rows = db
-          .prepare(
-            'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
-          )
-          .all(pollId) as { selected_option: string; count: number }[];
-        const distribution: Record<string, number> = {};
-        let total = 0;
-        rows.forEach((r) => {
-          distribution[r.selected_option] = r.count;
-          total += r.count;
-        });
+        const { distribution, totalVotes: total } = classroomSessionService.closeQuickPoll(pollId);
 
         if (io) {
           emitClassroomEvent(
@@ -1305,7 +1249,7 @@ export function registerClassroomRoutes(
         }
 
         // 失效大屏与报表只读缓存
-        invalidateClassroomReadCache(lessonId, poll.session_id);
+        invalidateClassroomReadCache(lessonId, poll.sessionId);
 
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {

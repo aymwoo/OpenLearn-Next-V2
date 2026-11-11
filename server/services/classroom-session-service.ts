@@ -17,6 +17,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getPresentStudentIds } from '../presence.js';
 import { normalizeAcademicYear } from '../utils/academic-year.js';
+import { randomId } from '../utils/id.js';
 import { ARCHIVED_REPORT_STAGE } from './classroom-runtime-service.js';
 import { BUILTIN_TEACHING_MODE_MAP } from './teaching-modes.js';
 
@@ -92,6 +93,46 @@ export interface ClassroomStudentActiveSession {
   className: string;
   stage: string;
   startedAt: number | null;
+}
+
+/** 极速投票创建入参（会话 / 课节归属由调用方先鉴权）。 */
+export interface QuickPollInput {
+  sessionId: string;
+  lessonId: string;
+  questionType: string;
+  title: string;
+  options: string[];
+  correctOption?: string | null;
+}
+
+/** 投票快照：只暴露路由判定与统计需要的字段。 */
+export interface QuickPollSnapshot {
+  id: string;
+  sessionId: string;
+  lessonId: string;
+  status: string;
+  options: string[];
+}
+
+/** 投票聚合结果（按选项计数，不含投票人信息）。 */
+export interface QuickPollTally {
+  distribution: Record<string, number>;
+  totalVotes: number;
+}
+
+/** 新建投票后返回给发起教师的数据（含正确答案，不可广播）。 */
+export interface QuickPollCreated {
+  id: string;
+  sessionId: string;
+  lessonId: string;
+  questionType: string;
+  title: string;
+  options: string[];
+  correctOption: string | null;
+  status: 'ACTIVE';
+  totalVotes: number;
+  /** 保留旧响应里的 votes 字段（始终为空对象，历史客户端会读取）。 */
+  votes: Record<string, number>;
 }
 
 /** 活跃会话端点使用的显式投影（不含 checkin_code / settings_json）。 */
@@ -174,6 +215,16 @@ export function buildSessionOwnershipClause(
     )
   )`;
   return { clause, params: [...actor.tokens, ...actor.tokens, ...actor.tokens] };
+}
+
+/** 解析投票 options_json；损坏或非数组一律视为空选项集（保持旧行为的容错口径）。 */
+function parsePollOptions(raw: unknown): string[] {
+  try {
+    const parsed = JSON.parse(String(raw ?? '[]'));
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 export class ClassroomSessionService {
@@ -438,6 +489,111 @@ export class ClassroomSessionService {
       stage: row.stage,
       startedAt: row.started_at ?? null,
     };
+  }
+
+  /** 读取投票快照（选项已解析）。不存在返回 null。 */
+  getQuickPoll(pollId: string): QuickPollSnapshot | null {
+    const row = this.db
+      .prepare('SELECT id, session_id, lesson_id, status, options_json FROM classroom_quick_polls WHERE id = ?')
+      .get(pollId) as
+      { id: string; session_id: string; lesson_id: string; status: string; options_json: string | null } | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      lessonId: row.lesson_id,
+      status: row.status,
+      options: parsePollOptions(row.options_json),
+    };
+  }
+
+  /**
+   * 创建极速投票：先关闭同一会话里仍 ACTIVE 的投票，再插入新投票。
+   * 两条语句放在同一事务里 —— 旧实现先 UPDATE 再 INSERT，插入失败会留下
+   * 「没有任何进行中投票」的空窗。
+   */
+  createQuickPoll(input: QuickPollInput): QuickPollCreated {
+    const pollId = randomId('poll_');
+    const now = Date.now();
+    const correctOption = input.correctOption || null;
+
+    const create = this.db.transaction(() => {
+      this.db
+        .prepare('UPDATE classroom_quick_polls SET status = ? WHERE session_id = ? AND status = ?')
+        .run('CLOSED', input.sessionId, 'ACTIVE');
+      this.db
+        .prepare(
+          `INSERT INTO classroom_quick_polls
+             (id, session_id, lesson_id, question_type, title, options_json, correct_option, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)`,
+        )
+        .run(
+          pollId,
+          input.sessionId,
+          input.lessonId,
+          input.questionType,
+          input.title,
+          JSON.stringify(input.options),
+          correctOption,
+          now,
+        );
+    });
+    create();
+
+    return {
+      id: pollId,
+      sessionId: input.sessionId,
+      lessonId: input.lessonId,
+      questionType: input.questionType,
+      title: input.title,
+      options: input.options,
+      correctOption,
+      status: 'ACTIVE',
+      votes: {},
+      totalVotes: 0,
+    };
+  }
+
+  /**
+   * 学生投票：同一学生对同一投票重复提交时按 (poll_id, student_id) 覆盖。
+   * 选项合法性由调用方用 getQuickPoll().options 校验（错误语义属于 HTTP 层）。
+   */
+  voteQuickPoll(pollId: string, studentId: string, studentName: string, option: string): QuickPollTally {
+    const voteId = randomId('vote_');
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO classroom_poll_votes (id, poll_id, student_id, student_name, selected_option, voted_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(poll_id, student_id) DO UPDATE SET
+           selected_option = excluded.selected_option,
+           voted_at = excluded.voted_at`,
+      )
+      .run(voteId, pollId, studentId, studentName, option, now);
+    return this.tallyQuickPoll(pollId);
+  }
+
+  /** 关闭投票并返回最终聚合结果。 */
+  closeQuickPoll(pollId: string): QuickPollTally {
+    this.db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
+    return this.tallyQuickPoll(pollId);
+  }
+
+  /** 按选项聚合票数（不含投票人身份，保护学生隐私）。 */
+  private tallyQuickPoll(pollId: string): QuickPollTally {
+    const rows = this.db
+      .prepare(
+        'SELECT selected_option, COUNT(*) AS count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
+      )
+      .all(pollId) as { selected_option: string; count: number }[];
+
+    const distribution: Record<string, number> = {};
+    let totalVotes = 0;
+    for (const row of rows) {
+      distribution[row.selected_option] = row.count;
+      totalVotes += row.count;
+    }
+    return { distribution, totalVotes };
   }
 
   /**
