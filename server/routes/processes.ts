@@ -3,6 +3,13 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
+interface PendingCommandRow {
+  id: string;
+  command_type: string;
+  payload: string;
+  created_at: number;
+}
+
 /**
  * 审批单是否已**确定性失效**（再试多少次都不会成功）—— Issue #195。
  *
@@ -32,14 +39,15 @@ export function registerProcessesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM pending_commands ORDER BY created_at DESC LIMIT 500')
         .all();
       res.json(list);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e, 500);
     }
   });
 
   app.post('/api/approvals/:id/approve', requireAuth('administrator'), async (req, res) => {
     try {
-      const pending: any = kernelContainer.db.prepare('SELECT * FROM pending_commands WHERE id = ?').get(req.params.id);
+      const pending = kernelContainer.db.prepare('SELECT * FROM pending_commands WHERE id = ?').get(req.params.id) as
+        PendingCommandRow | undefined;
       if (!pending) return res.status(404).json({ error: 'Not found' });
 
       // SEC-FIX: 严禁允许外部客户端通过 payloadOverride 篡改审批单原始指令参数
@@ -70,7 +78,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(pending.id);
 
       res.json({ success: true, result });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -79,7 +87,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
     try {
       kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(req.params.id);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -94,16 +102,17 @@ export function registerProcessesRoutes(ctx: ServerContext) {
         )
         .all();
       res.json(list);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
 
   app.get('/api/processes/:id/logs', requireAuth('administrator'), (req, res) => {
     try {
-      const dbRow = kernelContainer.db.prepare('SELECT logs FROM processes WHERE id = ?').get(req.params.id) as any;
+      const dbRow = kernelContainer.db.prepare('SELECT logs FROM processes WHERE id = ?').get(req.params.id) as
+        { logs: string } | undefined;
       res.json(dbRow || { logs: '' });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });

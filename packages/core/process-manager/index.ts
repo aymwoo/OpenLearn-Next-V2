@@ -3,11 +3,24 @@ import { Kernel } from '../kernel/index.js';
 
 export type ProcessHandler = (
   processId: string,
-  payload: any,
-  state: any,
+  payload: unknown,
+  state: unknown,
   log: (msg: string) => void,
-  updateState: (newState: any) => void,
+  updateState: (newState: unknown) => void,
 ) => Promise<void>;
+
+interface ProcessRow {
+  id: string;
+  name: string;
+  status: string;
+  task_type?: string;
+  payload?: string;
+  state?: string;
+  logs?: string;
+  created_at: number;
+  updated_at: number;
+  plugin_id?: string | null;
+}
 
 export class ProcessManager {
   private activeTasks: Map<string, NodeJS.Timeout> = new Map();
@@ -59,7 +72,7 @@ export class ProcessManager {
   }
 
   public restore() {
-    const runnings = this.kernel.db.prepare('SELECT * FROM processes WHERE status = ?').all('running') as any[];
+    const runnings = this.kernel.db.prepare('SELECT * FROM processes WHERE status = ?').all('running') as ProcessRow[];
     for (const p of runnings) {
       if (p.task_type) {
         this.resume(p.id, p.task_type, p.payload ? JSON.parse(p.payload) : {}, p.state ? JSON.parse(p.state) : null);
@@ -67,7 +80,7 @@ export class ProcessManager {
     }
   }
 
-  public spawn(name: string, taskType: string, payload: any, ownerHint?: string): string {
+  public spawn(name: string, taskType: string, payload: unknown, ownerHint?: string): string {
     const processId = uuidv7();
 
     // ownerHint 优先于 currentOwner（B-5）：currentOwner 是全局单值，只对
@@ -94,7 +107,7 @@ export class ProcessManager {
     return processId;
   }
 
-  private resume(processId: string, taskType: string, payload: any, initialState: any) {
+  private resume(processId: string, taskType: string, payload: unknown, initialState: unknown) {
     const handler = this.handlers.get(taskType);
     if (!handler) {
       this.failProcess(processId, `No handler found for task_type: ${taskType}`);
@@ -103,7 +116,8 @@ export class ProcessManager {
 
     let currentState = initialState;
     const logger = (msg: string) => {
-      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
+      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as
+        { logs?: string } | undefined;
       if (p) {
         const newLogs = (p.logs || '') + msg + '\n';
         this.kernel.db
@@ -112,7 +126,7 @@ export class ProcessManager {
       }
     };
 
-    const updateState = (newState: any) => {
+    const updateState = (newState: unknown) => {
       currentState = newState;
       this.kernel.db
         .prepare('UPDATE processes SET state = ?, updated_at = ? WHERE id = ?')
@@ -122,7 +136,8 @@ export class ProcessManager {
     Promise.resolve().then(async () => {
       try {
         await handler(processId, payload, currentState, logger, updateState);
-        const p = this.kernel.db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as any;
+        const p = this.kernel.db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as
+          { status?: string } | undefined;
         if (p && p.status !== 'killed') {
           this.kernel.db
             .prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?')
@@ -135,9 +150,10 @@ export class ProcessManager {
             timestamp: Date.now(),
           });
         }
-      } catch (err: any) {
-        logger(`ERROR: ${err.message}`);
-        this.failProcess(processId, err.message);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger(`ERROR: ${msg}`);
+        this.failProcess(processId, msg);
       }
     });
   }
@@ -183,7 +199,8 @@ export class ProcessManager {
     });
 
     const logger = (msg: string) => {
-      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
+      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as
+        { logs?: string } | undefined;
       if (p) {
         const newLogs = (p.logs || '') + msg + '\n';
         this.kernel.db
@@ -195,8 +212,9 @@ export class ProcessManager {
     const timer = setInterval(() => {
       try {
         tickFn(logger);
-      } catch (err: any) {
-        logger(`ERROR: ${err.message}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger(`ERROR: ${msg}`);
       }
     }, intervalMs);
 

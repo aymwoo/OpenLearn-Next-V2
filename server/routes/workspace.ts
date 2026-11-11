@@ -7,6 +7,30 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { PRESENCE_STAFF_ROOM } from '../presence.js';
 
+interface VfsNodeRow {
+  id: string;
+  parent_id: string | null;
+  type: string;
+  name: string;
+  content?: string | null;
+  [key: string]: unknown;
+}
+
+interface AssignmentVfsRow {
+  id: string | number;
+  title: string;
+  cname: string;
+  content?: string;
+}
+
+interface SubmissionVfsRow {
+  id: string | number;
+  content: string;
+  title: string;
+  sname: string;
+  score?: number | string | null;
+}
+
 // ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
 // 该端点每次调用都会写一行 events 审计记录并向全体在线用户广播，
 // 即便通过鉴权也需要限制频率，避免被单个账号放大为写库/广播风暴。
@@ -20,7 +44,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
     try {
       const events = kernelContainer.queryRead('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50');
       res.json(events);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -32,7 +56,9 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   app.post('/api/diagnostics/report', requireScopedAuth('self'), (req, res) => {
     try {
       const data = req.body || {};
-      const session = (req as any).session || {};
+      const session =
+        (req as unknown as { session?: { userId?: string; studentId?: string; role?: string; username?: string } })
+          .session || {};
       const actorId: string = session.userId || session.studentId || 'unknown';
 
       // 无有效载荷时保持静默成功（与历史行为一致，避免触发前端重试）
@@ -107,7 +133,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       }
 
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -119,7 +145,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
     try {
       const parentId = req.query.parentId === 'null' ? null : req.query.parentId || null;
 
-      let nodes: any[] = [];
+      let nodes: VfsNodeRow[] = [];
 
       if (parentId === 'virtual-lessons') {
         // P2 分页收敛：上限 200 防全表阻塞 event loop（content 仍随行，后续迭代再拆延迟加载）
@@ -138,7 +164,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
           .prepare(
             'SELECT a.id, a.title, c.name as cname, a.content FROM assignments a JOIN classes c ON a.class_id = c.id ORDER BY a.created_at DESC LIMIT 200',
           )
-          .all() as any[];
+          .all() as AssignmentVfsRow[];
         nodes = assignments.map((a) => ({
           id: `assgn-${a.id}`,
           parent_id: 'virtual-assignments',
@@ -155,7 +181,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
           JOIN students s ON sub.student_id = s.id
         `,
           )
-          .all() as any[];
+          .all() as SubmissionVfsRow[];
         nodes = submissions.map((sub) => ({
           id: `sub-${sub.id}`,
           parent_id: 'virtual-submissions',
@@ -165,7 +191,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
         }));
       } else {
         let q = 'SELECT * FROM vfs_nodes WHERE parent_id IS ? ORDER BY type ASC, name ASC';
-        nodes = kernelContainer.db.prepare(q).all(parentId);
+        nodes = kernelContainer.db.prepare(q).all(parentId) as VfsNodeRow[];
 
         if (parentId === null) {
           nodes.unshift(
@@ -177,7 +203,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       }
 
       res.json(nodes);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -197,7 +223,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       }
 
       let currentParentId: string | null = null;
-      let foundNode: any = null;
+      let foundNode: VfsNodeRow | null = null;
 
       for (let i = 0; i < parts.length; i++) {
         const name = parts[i];
@@ -206,7 +232,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
 
         const node = kernelContainer.db
           .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
-          .get(currentParentId, name, type) as any;
+          .get(currentParentId, name, type) as VfsNodeRow | undefined;
 
         if (!node) {
           return res.status(404).send(`File not found: ${filePath}`);
@@ -229,18 +255,18 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       const ext = path.extname(filename).toLowerCase();
       const binaryExtensions = ['.pdf', '.xlsx', '.xls', '.zip', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.mp3'];
 
-      const content = foundNode.content || '';
+      const content = (foundNode.content as string) || '';
       if (binaryExtensions.includes(ext)) {
         try {
           const buffer = Buffer.from(content, 'base64');
           return res.send(buffer);
-        } catch (e) {
+        } catch {
           // fallback
         }
       }
 
       res.send(content);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
