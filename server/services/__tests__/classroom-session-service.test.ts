@@ -350,6 +350,33 @@ describe('ClassroomSessionService', () => {
     expect(service.getQuickPoll(poll.id)!.status).toBe('CLOSED');
   });
 
+  it('getActiveSessionForLesson 取最新非归档会话，未知课节返回 null', () => {
+    const active = service.getActiveSessionForLesson(lessonA);
+    expect(active?.id).toBe(sessionA);
+    expect(service.getActiveSessionForLesson('les-css427-missing')).toBeNull();
+  });
+
+  it('updateViewState 原子写入当前页，且不覆盖 settings 里的其它字段', () => {
+    db.prepare('UPDATE classroom_sessions SET settings_json = ?, current_segment_id = NULL WHERE id = ?').run(
+      JSON.stringify({ countdown: { endsAt: 123 } }),
+      sessionPoll,
+    );
+
+    const viewState = service.updateViewState(sessionPoll, { currentPage: 3, activeSegmentId: 'seg-42' });
+    expect(viewState).toEqual({ currentPage: 3 });
+
+    const row = db
+      .prepare('SELECT settings_json, current_segment_id FROM classroom_sessions WHERE id = ?')
+      .get(sessionPoll) as { settings_json: string; current_segment_id: string | null };
+    const settings = JSON.parse(row.settings_json);
+    expect(settings.viewState.currentPage).toBe(3);
+    // 并发写入的其它 settings 字段必须保留（P1-4）。
+    expect(settings.countdown).toEqual({ endsAt: 123 });
+    expect(row.current_segment_id).toBe('seg-42');
+
+    expect(service.updateViewState('cs-css427-missing', { currentPage: 1 })).toBeNull();
+  });
+
   it('活跃会话排除归档阶段，并遵守归属裁剪', () => {
     const adminRows = service.listActiveSessions({ isAdmin: true, tokens: [] });
     const adminIds = adminRows.map((row) => row.id);
