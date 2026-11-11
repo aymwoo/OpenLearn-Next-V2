@@ -140,7 +140,18 @@ PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPOR
 
 **门禁执行策略是 fail-close**：每个 guard 有独立超时（默认 **1500ms**，可用 `OPENLEARN_CLASSROOM_GUARD_TIMEOUT_MS` 覆盖），异常或超时一律**拒绝流转**，不会静默放行。这条策略是有意与 `StageGuardPipeline` 对齐的 —— 环节流转是教师侧单次请求，挂起的插件 guard 不能让接口无限等待。
 
-### 2.3 互动运行时
+### 2.3 只读查询：`ClassroomSessionService`
+
+会话的**读路径**单独收敛在 `server/services/classroom-session-service.ts`（#427）：
+`listSessions()`（分页 / 班级 / 课节 / 阶段 / 关键词 / 学年 + 互动计数）与
+`listActiveSessions()`（最近活跃会话）共用同一份归属裁剪 SQL —— 非管理员按
+`teacher_id` / 班级 `owner_user_id` / 课节 `creator_id` 判定，历史数据三者皆空时
+保留可见，避免老会话整体消失。
+
+写路径（创建、归档、阶段流转、投票与通票生命周期）仍由 `ClassroomRuntimeService`
+承载；后续按 #427 的计划分批迁移。
+
+### 2.4 互动运行时
 
 `registerActivityProvider(owner, descriptor)` / `unregisterActivityProvider(owner, id)` / `listActivityProviders()`，`QuickActivityDescriptor` 带 `id` / `name` / `category` / `icon?` / `description?` / `supportedRoles?`。第三方插件通过它注册自定义互动组件（极速投票、抢答、结课通票等）。
 
@@ -192,6 +203,8 @@ PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPOR
 ### 服务版
 
 - `server/services/classroom-runtime-service.ts` —— `ClassroomRuntimeService`、`ARCHIVED_REPORT_STAGE`、门禁执行策略
+- `server/services/classroom-session-service.ts` —— `ClassroomSessionService`（会话只读查询 + 归属裁剪）、`buildSessionOwnershipClause`、`normalizeSessionPagination`
+- `server/services/teaching-modes.ts` —— `BUILTIN_TEACHING_MODES` / `TeachingMode` 与教学模式 id 规范
 - `packages/core/di/interfaces.ts` —— `ClassroomLifecycleStage` / `ClassroomStageGuard` / `IClassroomLifecycleService` / `IInteractionRuntimeService`
 
 ---

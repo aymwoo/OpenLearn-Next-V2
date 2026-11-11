@@ -8,9 +8,8 @@ import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js'
 import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
-import { emitClassroomEvent, getOnlineStudentIds, getPresentStudentIds } from '../presence.js';
+import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { classroomReadCache, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
@@ -36,87 +35,14 @@ import {
   rejectUnless,
 } from '../services/class-access.js';
 import { assessmentService } from '../services/assessment-service.js';
+import { BUILTIN_TEACHING_MODES, TEACHING_MODE_ID_PATTERN } from '../services/teaching-modes.js';
+import type { TeachingMode } from '../services/teaching-modes.js';
+import { classroomSessionService, type ClassroomActorScope } from '../services/classroom-session-service.js';
 
-/**
- * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
- *
- * 不写进迁移 seed 的原因：模式文案需跟随 i18n 与产品迭代变化，写进迁移会造成
- * 「迁移与业务常量两处维护」。API 读取时以「数据库记录优先 + 本常量兜底」合并返回，
- * 因此管理员可在不发版的情况下改写文案或追加自定义模式。
- * color 存语义色名（非具体色值），由前端映射到主题 token，避免深色主题下失色。
- */
-export interface TeachingMode {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  description: string;
-  descriptionEn: string | null;
-  icon: string;
-  color: string;
-  isBuiltin: boolean;
-  sortOrder: number;
-}
-
-export const BUILTIN_TEACHING_MODES: TeachingMode[] = [
-  {
-    id: 'lecture',
-    name: '讲授式',
-    nameEn: 'Lecture',
-    description: '教师主导讲解，学生跟随听讲与记录',
-    descriptionEn: 'Teacher-led explanation with students following along',
-    icon: 'Presentation',
-    color: 'indigo',
-    isBuiltin: true,
-    sortOrder: 10,
-  },
-  {
-    id: 'inquiry',
-    name: '探究式',
-    nameEn: 'Inquiry',
-    description: '以问题驱动，学生自主提出假设并验证',
-    descriptionEn: 'Question-driven: students form and test their own hypotheses',
-    icon: 'FlaskConical',
-    color: 'emerald',
-    isBuiltin: true,
-    sortOrder: 20,
-  },
-  {
-    id: 'collaborative',
-    name: '协作式',
-    nameEn: 'Collaborative',
-    description: '小组分工协作，共同产出并互评',
-    descriptionEn: 'Group work with division of labour and peer review',
-    icon: 'Users',
-    color: 'amber',
-    isBuiltin: true,
-    sortOrder: 30,
-  },
-  {
-    id: 'experiential',
-    name: '体验式',
-    nameEn: 'Experiential',
-    description: '濉浸式交互体验，在做中学',
-    descriptionEn: 'Immersive hands-on experience: learning by doing',
-    icon: 'Sparkles',
-    color: 'violet',
-    isBuiltin: true,
-    sortOrder: 40,
-  },
-  {
-    id: 'drill',
-    name: '练习式',
-    nameEn: 'Drill',
-    description: '针对性变式练习与即时反馈攻克',
-    descriptionEn: 'Targeted varied practice with immediate feedback',
-    icon: 'Target',
-    color: 'rose',
-    isBuiltin: true,
-    sortOrder: 50,
-  },
-];
-
-/** 教学模式 id 规范：与插件 id 同构，避免路径穿越与非法字符。 */
-const TEACHING_MODE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// 教学模式的领域常量与 id 规范收敛在 service 层；这里 re-export 保持既有导入路径
+// （测试与插件历史上直接从路由模块引用 BUILTIN_TEACHING_MODES）。
+export { BUILTIN_TEACHING_MODES };
+export type { TeachingMode };
 
 export function registerClassroomRoutes(
   ctx: ServerContext,
@@ -126,6 +52,23 @@ export function registerClassroomRoutes(
   const app: Express = ctx.app;
   const io: Server = (ctx as any).io;
   const db = kernelContainer.db;
+
+  /**
+   * 从请求解析会话归属作用域：管理员全量可见；非管理员用 userId / username /
+   * actorId 三类令牌判定 teacher_id / 班级 owner / 课节 creator 的归属。
+   * 会话列表与活跃会话端点共用，避免两处各写一套令牌推导。
+   */
+  const resolveActorScope = (req: Request): ClassroomActorScope => {
+    const httpSession = (req as any).session;
+    if (isAdministrator(httpSession)) return { isAdmin: true, tokens: [] };
+    const uid = actorUserId(httpSession) || '';
+    const username = httpSession?.username ? String(httpSession.username).trim() : '';
+    const actorFull = (getActorId(req) || '').trim();
+    return {
+      isAdmin: false,
+      tokens: Array.from(new Set([uid, username, actorFull].filter(Boolean))),
+    };
+  };
 
   const validateTeachingModeId = (
     value: unknown,
@@ -503,204 +446,26 @@ export function registerClassroomRoutes(
   // ── 1. 课堂会话与生命周期阶段 ──────────────────────────────────────────
 
   // 获取课堂会话列表（支持分页、按班级/课节/状态筛选、关键词搜索与互动指标聚合）
+  //
+  // 查询构造与归属裁剪收敛在 ClassroomSessionService（#427）：此处只做参数
+  // 提取与响应投递，与 /api/classroom/active-sessions 共用同一套归属 SQL。
   app.get('/api/classroom/sessions', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
     try {
-      const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
       const pageSizeParam = String(req.query.pageSize || '20').toLowerCase();
-      const isAll = pageSizeParam === 'all';
-      const pageSize = isAll ? 1000 : Math.max(1, Math.min(100, parseInt(pageSizeParam, 10) || 20));
-      const offset = (page - 1) * pageSize;
-
-      const { classId, lessonId, stage, status, search } = req.query;
-
-      const conditions: string[] = [];
-      const params: any[] = [];
-
-      if (classId && typeof classId === 'string' && classId.trim()) {
-        conditions.push('cs.class_id = ?');
-        params.push(classId.trim());
-      }
-
-      if (lessonId && typeof lessonId === 'string' && lessonId.trim()) {
-        conditions.push('cs.lesson_id = ?');
-        params.push(lessonId.trim());
-      }
-
-      if (stage && typeof stage === 'string' && stage.trim() && stage !== 'all') {
-        conditions.push('cs.stage = ?');
-        params.push(stage.trim());
-      } else if (status === 'active') {
-        conditions.push('cs.stage != ?');
-        params.push(ARCHIVED_REPORT_STAGE);
-      } else if (status === 'archived') {
-        conditions.push('cs.stage = ?');
-        params.push(ARCHIVED_REPORT_STAGE);
-      }
-
-      if (search && typeof search === 'string' && search.trim()) {
-        const kw = `%${search.trim()}%`;
-        conditions.push('(l.title LIKE ? OR c.name LIKE ? OR cs.id LIKE ?)');
-        params.push(kw, kw, kw);
-      }
-
-      if (typeof req.query.academicYear === 'string' && req.query.academicYear.trim()) {
-        const normalized = normalizeAcademicYear(req.query.academicYear);
-        if (normalized) {
-          conditions.push('cs.academic_year = ?');
-          params.push(normalized);
-        } else if (req.query.academicYear.trim().toLowerCase() !== 'all') {
-          // 无效值：不追加条件，避免 500
-        }
-      }
-
-      const httpSession = (req as any).session;
-      if (!isAdministrator(httpSession)) {
-        const uid = actorUserId(httpSession) || '';
-        const username = httpSession?.username ? String(httpSession.username).trim() : '';
-        const actorFull = (getActorId(req) || '').trim();
-        const actorTokens = Array.from(new Set([uid, username, actorFull].filter(Boolean)));
-        if (actorTokens.length === 0) {
-          conditions.push('1 = 0');
-        } else {
-          const ph = actorTokens.map(() => '?').join(',');
-          conditions.push(
-            `(
-              cs.teacher_id IN (${ph})
-              OR c.owner_user_id IN (${ph})
-              OR l.creator_id IN (${ph})
-              OR (
-                (cs.teacher_id IS NULL OR cs.teacher_id = '' OR cs.teacher_id = 'teacher')
-                AND (c.owner_user_id IS NULL OR c.owner_user_id = '')
-                AND (l.creator_id IS NULL OR l.creator_id = '')
-              )
-            )`,
-          );
-          params.push(...actorTokens, ...actorTokens, ...actorTokens);
-        }
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      const countSql = `
-          SELECT COUNT(*) AS total
-          FROM classroom_sessions cs
-          LEFT JOIN lessons l ON cs.lesson_id = l.id
-          LEFT JOIN classes c ON cs.class_id = c.id
-          ${whereClause}
-        `;
-      const totalRow = db.prepare(countSql).get(...params) as { total: number } | undefined;
-      const total = totalRow?.total ?? 0;
-
-      const listSql = `
-          SELECT 
-            cs.id,
-            cs.lesson_id,
-            cs.class_id,
-            cs.teacher_id,
-            cs.stage,
-            cs.current_segment_id,
-            cs.checkin_code,
-            cs.focus_mode,
-            cs.started_at,
-            cs.ended_at,
-            cs.created_at,
-            cs.teaching_mode_id,
-            cs.academic_year,
-            l.title AS lesson_title,
-            c.name AS class_name
-          FROM classroom_sessions cs
-          LEFT JOIN lessons l ON cs.lesson_id = l.id
-          LEFT JOIN classes c ON cs.class_id = c.id
-          ${whereClause}
-          ORDER BY cs.created_at DESC
-          LIMIT ? OFFSET ?
-        `;
-
-      const rows = db.prepare(listSql).all(...params, pageSize, offset) as any[];
-
-      const sessionIds = rows.map((r) => r.id);
-      const statsMap = new Map<string, { pollCount: number; exitTicketCount: number; feedCount: number }>();
-
-      if (sessionIds.length > 0) {
-        const placeholders = sessionIds.map(() => '?').join(',');
-
-        try {
-          const pollCounts = db
-            .prepare(
-              `SELECT session_id, COUNT(*) AS count FROM classroom_quick_polls WHERE session_id IN (${placeholders}) GROUP BY session_id`,
-            )
-            .all(...sessionIds) as { session_id: string; count: number }[];
-          for (const r of pollCounts) {
-            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
-            cur.pollCount = r.count;
-            statsMap.set(r.session_id, cur);
-          }
-        } catch (_) {}
-
-        try {
-          const ticketCounts = db
-            .prepare(
-              `SELECT session_id, COUNT(*) AS count FROM classroom_exit_tickets WHERE session_id IN (${placeholders}) GROUP BY session_id`,
-            )
-            .all(...sessionIds) as { session_id: string; count: number }[];
-          for (const r of ticketCounts) {
-            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
-            cur.exitTicketCount = r.count;
-            statsMap.set(r.session_id, cur);
-          }
-        } catch (_) {}
-
-        try {
-          const feedCounts = db
-            .prepare(
-              `SELECT session_id, COUNT(*) AS count FROM classroom_feed WHERE session_id IN (${placeholders}) GROUP BY session_id`,
-            )
-            .all(...sessionIds) as { session_id: string; count: number }[];
-          for (const r of feedCounts) {
-            const cur = statsMap.get(r.session_id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
-            cur.feedCount = r.count;
-            statsMap.set(r.session_id, cur);
-          }
-        } catch (_) {}
-      }
-
-      const modeMap = new Map<string, { name: string; icon: string }>();
-      for (const m of BUILTIN_TEACHING_MODES) {
-        modeMap.set(m.id, { name: m.name, icon: m.icon });
-      }
-
-      const items = rows.map((r) => {
-        const stats = statsMap.get(r.id) || { pollCount: 0, exitTicketCount: 0, feedCount: 0 };
-        const modeInfo = r.teaching_mode_id ? modeMap.get(r.teaching_mode_id) : undefined;
-        return {
-          id: r.id,
-          lessonId: r.lesson_id,
-          lessonTitle: r.lesson_title || '未命名课程',
-          classId: r.class_id,
-          className: r.class_name || '未绑定班级',
-          teacherId: r.teacher_id,
-          stage: r.stage,
-          teachingModeId: r.teaching_mode_id,
-          teachingModeName: modeInfo?.name || r.teaching_mode_id || null,
-          checkinCode: r.checkin_code,
-          focusMode: Boolean(r.focus_mode),
-          startedAt: r.started_at,
-          endedAt: r.ended_at,
-          createdAt: r.created_at,
-          // 已经进入本节 live class 且仍在线的学生数（Issue #91 会话列表需要）。
-          // 用 getPresentStudentIds 而非在线总人数：历史签到不算，已离开的不算。
-          presentCount: getPresentStudentIds(r.lesson_id).length,
-          stats,
-        };
+      const result = classroomSessionService.listSessions({
+        filters: {
+          classId: typeof req.query.classId === 'string' ? req.query.classId : null,
+          lessonId: typeof req.query.lessonId === 'string' ? req.query.lessonId : null,
+          stage: typeof req.query.stage === 'string' ? req.query.stage : null,
+          status: typeof req.query.status === 'string' ? req.query.status : null,
+          search: typeof req.query.search === 'string' ? req.query.search : null,
+          academicYear: typeof req.query.academicYear === 'string' ? req.query.academicYear : null,
+        },
+        actor: resolveActorScope(req),
+        page: parseInt(String(req.query.page || '1'), 10) || 1,
+        pageSize: pageSizeParam === 'all' ? 'all' : parseInt(pageSizeParam, 10) || 20,
       });
-
-      res.json({
-        items,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      });
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e, 500);
     }
@@ -2838,74 +2603,16 @@ export function registerClassroomRoutes(
   // 获取当前活跃中的授课会话
   //
   // Issue #241：此前 SELECT s.* 且无归属裁剪，任意教师可读取全平台活跃会话整行
-  // （含 checkin_code / settings_json）。现与 /api/classroom/sessions 列表端点
-  // 同口径 —— 非管理员按 teacher/班级/课节归属裁剪，且投影收窄为显式列，
-  // 不再下发 checkin_code 与 settings_json。
+  // （含 checkin_code / settings_json）。现在与 /api/classroom/sessions 走同一份
+  // 归属裁剪与显式投影（ClassroomSessionService，见 #427）。
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
-      const conditions = ["s.stage != 'ARCHIVED_REPORT'"];
-      const params: any[] = [];
-
-      const httpSession = (req as any).session;
-      if (!isAdministrator(httpSession)) {
-        const uid = actorUserId(httpSession) || '';
-        const username = httpSession?.username ? String(httpSession.username).trim() : '';
-        const actorFull = (getActorId(req) || '').trim();
-        const actorTokens = Array.from(new Set([uid, username, actorFull].filter(Boolean)));
-        if (actorTokens.length === 0) {
-          conditions.push('1 = 0');
-        } else {
-          const ph = actorTokens.map(() => '?').join(',');
-          conditions.push(
-            `(
-              s.teacher_id IN (${ph})
-              OR c.owner_user_id IN (${ph})
-              OR l.creator_id IN (${ph})
-              OR (
-                (s.teacher_id IS NULL OR s.teacher_id = '' OR s.teacher_id = 'teacher')
-                AND (c.owner_user_id IS NULL OR c.owner_user_id = '')
-                AND (l.creator_id IS NULL OR l.creator_id = '')
-              )
-            )`,
-          );
-          params.push(...actorTokens, ...actorTokens, ...actorTokens);
-        }
-      }
-
-      const activeSessions = db
-        .prepare(
-          `
-          SELECT
-            s.id,
-            s.lesson_id,
-            s.class_id,
-            s.teacher_id,
-            s.stage,
-            s.current_segment_id,
-            s.focus_mode,
-            s.started_at,
-            s.ended_at,
-            s.created_at,
-            s.teaching_mode_id,
-            s.academic_year,
-            l.title AS lesson_title,
-            c.name AS class_name
-          FROM classroom_sessions s
-          LEFT JOIN lessons l ON s.lesson_id = l.id
-          LEFT JOIN classes c ON s.class_id = c.id
-          WHERE ${conditions.join(' AND ')}
-          ORDER BY s.created_at DESC
-          LIMIT 10
-        `,
-        )
-        .all(...params) as any[];
-
-      res.json({ success: true, sessions: activeSessions });
+      const sessions = classroomSessionService.listActiveSessions(resolveActorScope(req));
+      res.json({ success: true, sessions });
     } catch (e: any) {
       sendSafeError(res, e, 500);
     }
   });
-
   // 手动抽问按日计数（Issue #243）：读侧补齐 —— 写侧（手动抽问 presence.ts、
   // 白板 rollcall event-routing.ts）早已落库 student_rollcalls，但此前没有
   // 任何读取端点按日聚合，归因弹窗的「今日抽中 N 次」只能硬编码 0。
